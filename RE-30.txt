@@ -1,0 +1,450 @@
+根据您的修改意见，我们对需求文档进行如下更新。关键变更已用 **粗体** 标注。
+
+---
+
+# 自动代码方案生成与迭代优化系统——需求文档（修订版）
+
+## 文档版本信息
+
+| 版本 | 日期 | 作者 | 变更说明 |
+|------|------|------|----------|
+| 2.0 | 2026-04-30 | — | 根据用户反馈修订：明确使用 SWE-pro 数据集；Agent 在 Docker 环境中执行；快速原型设计；完整轨迹保存；反思 Agent 直接生成优化 Plan；支持基于现有 Plan 的重跑功能；增强错误处理 |
+
+---
+
+## 1. 项目概述
+
+### 1.1 项目背景
+
+（与初版相同，增加数据集说明）
+
+本项目旨在构建一套**自动化的方案评估与迭代优化系统**，以 **SWE-pro** 数据集为评估基准（因其数据质量更高，避免了验证集已被证实的污染问题），以 DeepSeek V4 为底层模型，通过 Agent 自主探索代码库并生成方案，执行代码生成与测试评估，再基于执行反馈迭代优化方案，最终输出多个方案及其对应的测试通过率。
+
+### 1.2 项目目标
+
+| 目标编号 | 目标描述 | 优先级 | 衡量标准 |
+|----------|----------|--------|----------|
+| G-01 | **快速原型**：实现基于 Agent 的自动化方案生成与评估流程，不考虑未来扩展性 | P0 | 系统能够完成单轮方案生成→代码生成→测试评估全流程 |
+| G-02 | 实现方案的迭代优化能力，**优化方案由反思 Agent 直接生成**（不再使用独立的 plan agent） | P0 | 当参数 n > 1 时，系统能够产生 n 个方案，后序方案基于前序方案的优化反馈由反思 Agent 生成 |
+| G-03 | 支持配置优化信息是否包含测试运行结果和报错信息，**并在输出中记录该配置** | P1 | 可通过配置文件开关控制，输出文件记录该配置 |
+| G-04 | **最小化造轮子**：优先复用现有开源工具（KISS AI、GEPA），**测试评估使用 SWE 官方评估工具** | P0 | 核心功能基于 KISS AI 框架和 GEPA 算法实现，评估直接调用 SWE-bench 官方工具 |
+| G-05 | 在 **SWE-pro** 数据集上验证系统有效性 | P1 | 能够在至少 10 个 SWE-pro 实例上完成端到端运行 |
+| G-06 | **完整保存所有 Agent 轨迹**（方案生成、代码生成、反思优化），作为结果输出的一部分 | P0 | 每个 Agent 的 trajectory 按规范命名并保存 |
+| G-07 | **支持从已有 Plan 重跑**：允许用户修改优化配置（如是否使用测试信息）后从指定 Plan 继续迭代 | P2 | 能够加载已有 Plan 和轨迹，重新执行后续优化循环 |
+
+### 1.3 系统范围
+
+#### 包含范围
+- **数据集限定为 SWE-pro**（不使用 SWE-bench Verified 等其他存在数据污染风险的数据集）
+- Agent 运行环境：**方案的生成、代码的生成均在 Docker 容器中进行**，以防止 Agent 写入文件等操作对宿主环境或后续轮次产生噪声
+- 测试评估主动使用 **SWE 官方评估工具**（swebench 库），不自行实现评估逻辑
+- 自动保存所有 Agent 执行轨迹（包括反思 Agent 的轨迹），并按轮次和角色命名
+- 支持从任意已有 Plan 开始重跑后续迭代（断点重跑）
+- 基本的错误恢复与异常处理：API 不可用等致命错误终止；单个任务环境配置问题则跳过并继续
+
+#### 不包含范围
+- 不考虑任何并发执行能力
+- 不进行严格的非功能性需求验证（如性能测试、压力测试）
+- 不进行模型约束检查（用户自行确保模型可用）
+
+---
+
+## 2. 术语与核心概念
+
+（更新以下定义）
+
+| 术语 | 说明 |
+|------|------|
+| **SWE-pro** | SWE-bench 的数据子集，因其质量更高且未经验证集污染，作为本项目唯一使用的数据集 |
+| **Docker 执行环境** | 每个任务（包括方案生成、代码生成）均在一个独立的 Docker 容器中运行，确保环境隔离，避免 Agent 写入宿主文件系统或产生跨任务干扰 |
+| **反思 Agent** | 负责优化方案的专用 Agent。对于第二轮及之后的 Plan，不再调用原始方案生成 Agent，而是由反思 Agent 基于前一轮的 Optimization Feedback 直接生成新的 Plan。反思 Agent 本质上也是 GEPA 框架中的“变异 + 反思”环节 |
+| **Trajectory** | 每个 Agent（方案生成 Agent、代码生成 Agent、反思 Agent）在任务执行过程中的完整记录。命名规范：`trajectory_{轮次}_{agent_role}_{timestamp}.json`，其中 `agent_role` 为 `plan`、`code`、`reflect` |
+| **Optimization Feedback** | 用于优化 Plan 的信息集合，包括原始 Prompt、当前 Plan、**所有相关 Agent 的 Trajectory**（包括反思 Agent 自身的轨迹）、代码生成结果、测试结果（可选），以及**运行参数配置**（用于区分是否使用测试信息） |
+
+---
+
+## 3. 功能需求
+
+### 3.1 核心功能：自动化方案生成与评估
+
+#### FR-01：任务输入与系统初始化
+
+| 属性 | 内容 |
+|------|------|
+| ID | FR-01 |
+| 名称 | 任务输入与系统初始化 |
+| 描述 | 系统读取配置文件，加载指定 **SWE-pro** 任务实例，为每个任务准备独立的 Docker 容器环境 |
+| 输入 | SWE-pro 实例 ID（或实例列表）、配置文件路径 |
+| 输出 | 一个运行中的 Docker 容器，包含目标代码库和可执行环境 |
+| 验收标准 | 成功启动 Docker 容器，Agent 能够在该容器中执行文件读取、搜索等工具调用，但不能写入宿主环境 |
+
+#### FR-02：Docker 环境下的方案生成
+
+| 属性 | 内容 |
+|------|------|
+| ID | FR-02 |
+| 名称 | Agent 在 Docker 中自主探索与方案生成 |
+| 描述 | Agent 在 Docker 容器内根据 Issue 描述和配置 Prompt，从目标代码库中自主探索并生成方案（Plan）。禁止 Agent 写入代码库（即只读模式），但可以执行临时测试代码（不影响代码库状态） |
+| 输入 | Issue 描述、Docker 容器内的代码库路径、方案生成 Prompt |
+| 输出 | Plan 文档（自然语言字符串，格式由 Prompt 约束） |
+| 验收标准 | 生成的 Plan 是纯自然语言，不包含对代码库的直接修改；Agent 的完整轨迹被保存 |
+| 依赖 | KISS AI Framework、DeepSeek V4 API、Docker Python SDK |
+| 备注 | Agent 在 Docker 内可运行临时命令，但不得修改代码库文件。如果 Agent 试图写入，应被隔离（容器文件系统可设置为 overlay 或临时快照，但本项目不额外实现，仅依赖 Docker 的默认隔离） |
+
+#### FR-03：Docker 环境下的代码生成
+
+| 属性 | 内容 |
+|------|------|
+| ID | FR-03 |
+| 名称 | 根据方案生成代码 |
+| 描述 | 代码生成 Agent 在相同的 Docker 容器内根据 Plan 和代码生成 Prompt，生成符合 SWE-bench 格式的 Patch。同样禁止直接修改代码库，但可模拟修改（输出 diff） |
+| 输入 | Plan 文档、Issue 描述、代码库上下文、代码生成 Prompt |
+| 输出 | Git Patch 格式的代码变更内容 |
+| 验收标准 | 生成的 Patch 可被 SWE 官方评估工具接受 |
+| 备注 | Agent 轨迹同样保存 |
+
+#### FR-04：测试评估（使用官方工具）
+
+| 属性 | 内容 |
+|------|------|
+| ID | FR-04 |
+| 名称 | 代码测试评估 |
+| 描述 | 使用 **SWE 官方评估工具**（`swebench` Python 包或 CLI）在官方推荐的容器环境中评估生成的 Patch。不自行实现评估逻辑 |
+| 输入 | Patch 内容、SWE-pro 实例信息 |
+| 输出 | 测试结果：通过/不通过，详细输出（stdout/stderr），通过率计算 |
+| 验收标准 | 评估结果与 SWE 官方工具的输出完全一致 |
+| 依赖 | swebench 官方库 |
+
+
+### 3.2 核心功能：方案迭代优化（合并 FR-05 与 FR-06）
+
+#### FR-05：方案优化（包含信息收集与反思生成）
+
+| 属性 | 内容 |
+|------|------|
+| ID | FR-05 |
+| 名称 | 方案优化（信息收集 + 反思 Agent 直接生成新 Plan） |
+| 描述 | **合并原 FR-05 和 FR-06**。对于第 i 轮（i ≥ 2），系统收集 Optimization Feedback，然后调用**反思 Agent**（基于 GEPA 的反思与变异）直接生成新的 Plan[i]。不再使用独立的方案生成 Agent。信息收集和反思生成视为一个原子阶段 |
+| 配置参数 | `optimization_info_level`：0=仅基础信息（不含测试结果）；1=包含测试运行结果和报错信息 |
+| 输入（Feedback 来源） | 前一轮（第 i-1 轮）的：原始 Prompt、Plan[i-1]、生成 Plan[i-1] 的 Agent 轨迹（若 i-1=1 则为方案生成 Agent 轨迹，若 i-1≥2 则为反思 Agent 轨迹）、代码生成 Agent 轨迹、生成的 Patch、测试结果（可选） |
+| 输出 | 优化后的新 Plan[i]（自然语言字符串） |
+| 优化方法 | 复用 GEPA 框架的“反思+变异”机制：将 Optimization Feedback 作为上下文，让反思 Agent 进行错误分析并提出改进方案，输出新 Plan。不使用传统进化算法的交叉等操作 |
+| 验收标准 | 新 Plan 能反映对前序方案失败原因的针对性改进；优化过程中反思 Agent 的轨迹被完整保存 |
+| 依赖 | GEPA 框架（或 KISS AI 中的 GEPA 集成） |
+| 备注 | 反思 Agent 的 Prompt 由配置文件 `plan_optimization_prompt` 定义。**反思 Agent 在生成新 Plan 时自身也会产生轨迹，该轨迹必须保存** |
+
+#### FR-06：迭代循环控制
+
+| 属性 | 内容 |
+|------|------|
+| ID | FR-06 |
+| 名称 | 迭代循环控制 |
+| 描述 | 控制系统执行多轮 plan-code-test 流程。第 1 轮使用 FR-02 生成 Plan[1]；第 i 轮（i≥2）使用 FR-05 生成 Plan[i]。每轮均执行代码生成（FR-03）和测试评估（FR-04） |
+| 输入 | 目标 Plan 数量 n |
+| 输出 | n 个 Plan，每个 Plan 对应的测试通过率，每次优化时的反思内容（即反思 Agent 的反思输出部分） |
+| 验收标准 | 1）若 n < 1 则系统报错退出；2）若 n == 1 则只执行单轮后退出；3）若 n > 1 则共执行 n 轮，Plan[1] 由 FR-02 生成，Plan[2..n] 由 FR-05 生成 |
+| 错误处理 | 如果某一轮中 Agent 执行失败（如 API 错误），系统应记录错误并终止当前任务（若为致命错误）或跳过该任务实例（若为环境配置问题）。详见 FR-10 |
+
+#### FR-07：支持从已有 Plan 重跑（断点重跑）
+
+| 属性 | 内容 |
+|------|------|
+| ID | FR-07 |
+| 名称 | 从指定 Plan 开始重跑后续迭代 |
+| 描述 | 用户可修改配置文件（如改变 `optimization_info_level`）后，指定一个已生成的 Plan（例如 `plan_2`）及其所有相关轨迹和代码，系统从该 Plan 开始重新执行后续优化循环（即从该 Plan 作为 `current_plan` 开始，运行 FR-05 生成下一个 Plan，并继续迭代至目标 n） |
+| 适用场景 | 用户希望比较不同优化信息级别（例如从不含测试结果改为含测试结果）的效果，无需重新运行前几轮 |
+| 输入 | 已有 Plan 的 ID、对应的轨迹文件路径、代码 Patch 文件路径、测试结果（可选）、新的运行参数（n、optimization_info_level 等） |
+| 输出 | 从该 Plan 之后的新 Plan 序列及评估结果 |
+| 前置条件 | 已有 Plan 及其相关数据必须完整（Plan 内容、生成它的 Agent 轨迹、代码生成轨迹、Patch、测试结果） |
+| 验收标准 | 系统能够加载已有数据，并从指定的 Plan 开始连续产生后续 Plan，且新产生的 Plan 基于新的配置参数（如测试反馈开关） |
+| 备注 | 该功能通过一个独立的脚本或命令行参数实现，不改变主流程的接口 |
+
+### 3.3 配置功能
+
+#### FR-08：Agent Prompt 配置文件
+
+| 属性 | 内容 |
+|------|------|
+| ID | FR-08 |
+| 名称 | Agent Prompt 配置 |
+| 描述 | 支持通过 YAML/JSON 配置文件修改三个核心 Prompt：方案生成 Prompt（用于 FR-02）、代码生成 Prompt（用于 FR-03）、**方案优化 Prompt（用于反思 Agent，FR-05）** |
+| 验收标准 | 用户修改配置文件后，无需修改代码即可改变对应 Agent 的行为 |
+
+#### FR-09：系统运行参数配置
+
+| 属性 | 内容 |
+|------|------|
+| ID | FR-09 |
+| 名称 | 系统运行参数配置 |
+| 描述 | 支持配置文件配置系统运行的核心参数 |
+| 配置项 | 1）`n`：目标 Plan 数量；2）`optimization_info_level`：0 或 1；3）`model`：使用的 LLM 模型（如 deepseek-v4-flash）；4）`swe_pro_instances`：SWE-pro 实例 ID 列表；5）`resume_from_plan`：可选，用于重跑功能的 Plan ID 及路径；6）其他 KISS 框架参数 |
+| 验收标准 | 系统启动时自动加载配置文件，根据配置执行相应流程 |
+
+### 3.4 输出与数据保存
+
+#### FR-10：完整的轨迹与结果输出
+
+| 属性 | 内容 |
+|------|------|
+| ID | FR-10 |
+| 名称 | 结果输出 |
+| 描述 | 系统输出：1）所有 Plan 及其测试通过率；2）每次优化时的反思内容（来自反思 Agent）；3）**所有 Agent 的完整轨迹**，包括方案生成 Agent、代码生成 Agent、反思 Agent 的轨迹，按轮次和角色命名；4）Errors 日志 |
+| 轨迹命名规范 | `trajectory_{round_num}_{role}_{timestamp}.json`，其中 `round_num` 从 1 开始，`role` ∈ {`plan_gen`, `code_gen`, `reflect`}。对于第 1 轮，反思角色不存在；第 i 轮（i≥2）的反思 Agent 轨迹命名为 `trajectory_{i}_reflect_{timestamp}.json` |
+| 输出格式 | 一个主 JSON 结果文件（见 4.3），外加一个 `trajectories/` 目录存放所有轨迹文件。日志文件（STDERR 记录）单独保存 |
+| 错误记录 | 当遇到可跳过的错误（如单个实例环境问题）时，在结果文件中标记该实例状态为 `error_skipped`，并记录错误信息；当遇到致命错误（如 API key 失效）时，程序退出，错误写入日志文件 |
+| 验收标准 | 输出文件内容完整，轨迹可重现 Agent 的每一步推理和行动 |
+
+#### FR-11：Optimization Feedback 数据结构扩展
+
+| 属性 | 内容 |
+|------|------|
+| ID | FR-11 |
+| 名称 | Optimization Feedback 数据结构定义 |
+| 描述 | 明确优化反馈中必须包含的内容，特别是 **所有相关 Trajectory 的路径或内容** 以及 **运行参数配置快照** |
+| 结构定义 | 见 4.1 |
+| 验收标准 | 程序在调用反思 Agent 前，能够组装出符合该结构的反馈字典 |
+
+### 3.5 错误处理（简化版）
+
+#### FR-12：基本错误处理与恢复
+
+| 属性 | 内容 |
+|------|------|
+| ID | FR-12 |
+| 名称 | 错误处理策略 |
+| 描述 | 系统需要区分两种错误：致命错误（影响数据收集）和任务级错误（单个实例特有） |
+| 致命错误示例 | DeepSeek API 返回 401/429 且重试无效、磁盘空间满、Docker 守护进程崩溃 |
+| 处理方式 | 立即停止整个程序，退出码非零，最后输出的日志中包含错误详情。不进行自动恢复。 |
+| 任务级错误示例 | 某个 SWE-pro 实例的 Docker 镜像拉取失败、代码库构建失败、测试框架不支持 |
+| 处理方式 | 记录错误信息到日志和结果文件，跳过该实例，继续处理下一个实例（如果配置了多个实例） |
+| 验收标准 | 程序在一个实例失败时不会崩溃，能够继续执行下一个实例；日志中清晰记录了跳过原因 |
+
+---
+
+## 4. 数据模型（更新）
+
+### 4.1 Optimization Feedback 数据结构
+
+```json
+{
+  "meta": {
+    "optimization_info_level": 0,          // 0 或 1，记录本次优化是否包含测试结果
+    "target_plan_number": 3,
+    "current_round": 2,
+    "model": "deepseek-v4-flash",
+    "timestamp": "2026-04-30T10:00:00Z"
+  },
+  "original_prompt": "string (用户输入的Issue描述)",
+  "current_plan": {
+    "content": "string",
+    "plan_id": "plan_001",
+    "round_generated": 1
+  },
+  "trajectories": {
+    "plan_generation_trajectory_path": "trajectories/trajectory_1_plan_gen_20260430T100000.json",
+    "code_generation_trajectory_path": "trajectories/trajectory_1_code_gen_20260430T100500.json",
+    "reflection_trajectory_path": null        // 第1轮反思不存在
+  },
+  "generated_code": {
+    "patch_path": "patches/round_1.patch",
+    "content": "diff --git a/..."
+  },
+  "test_results": "string (optional, present if optimization_info_level=1 and test executed)",
+  "error_info": "string (optional)"
+}
+```
+
+对于第 i 轮（i≥2）的反馈，`trajectories.reflection_trajectory_path` 将指向第 i-1 轮反思 Agent 的轨迹（即生成当前 Plan 的那个反思 Agent 的轨迹）。
+
+### 4.2 Trajectory 文件格式（统一规范）
+
+采用 KISS AI 框架默认的轨迹格式（一般为 JSON lines 或嵌套 JSON），至少包含：
+
+```json
+{
+  "round": 2,
+  "role": "reflect",
+  "timestamp": "2026-04-30T10:10:00Z",
+  "steps": [
+    {
+      "step_index": 1,
+      "type": "thought",
+      "content": "The previous plan failed because it modified the wrong file..."
+    },
+    {
+      "step_index": 2,
+      "type": "action",
+      "name": "generate_plan",
+      "input": "Here is the improved plan: ...",
+      "output": "Plan content"
+    }
+  ]
+}
+```
+
+### 4.3 输出结果文件格式（主文件）
+
+```json
+{
+  "run_id": "run_20260430_100000",
+  "swe_pro_instances": ["astropy__astropy-14539"],
+  "model": "deepseek-v4-flash",
+  "parameter_n": 3,
+  "optimization_info_level": 1,
+  "resume_info": null,  // 若非重跑，为 null；若重跑，记录起始 Plan ID
+  "plans": [
+    {
+      "plan_id": "plan_001",
+      "round": 1,
+      "generated_by": "plan_agent",
+      "test_pass_rate": 0.0,
+      "generated_patch_path": "patches/round_1.patch",
+      "trajectory_path": "trajectories/trajectory_1_plan_gen.json",
+      "reflection_log": null
+    },
+    {
+      "plan_id": "plan_002",
+      "round": 2,
+      "generated_by": "reflect_agent",
+      "optimized_from": "plan_001",
+      "test_pass_rate": 0.5,
+      "generated_patch_path": "patches/round_2.patch",
+      "trajectory_path": "trajectories/trajectory_2_reflect.json",
+      "reflection_log": "The previous plan failed because it didn't handle edge case X. I have updated the plan to include a check for Y."
+    }
+  ],
+  "trajectory_directory": "trajectories",
+  "errors": [
+    {
+      "instance_id": "pandas-dev__pandas-12345",
+      "error_type": "docker_image_not_found",
+      "message": "Image swebench/pandas:latest not available",
+      "skipped": true
+    }
+  ]
+}
+```
+
+---
+
+## 5. 非功能性需求（简化）
+
+| 需求 ID | 需求描述 | 备注 |
+|---------|----------|------|
+| NFR-01 | **不做严格的性能要求** | 原型系统可接受长时间运行 |
+| NFR-02 | **不做并发扩展** | 单实例顺序执行即可 |
+| NFR-03 | 错误处理需保证数据完整性 | 致命错误时已产生的轨迹和结果应能保留；任务级错误时跳过不影响其他实例 |
+| NFR-04 | **不进行模型约束检查** | 用户自行确保 DeepSeek API 可用且模型名称正确 |
+
+---
+
+## 6. 配置项规范（更新）
+
+### 6.1 配置文件示例
+
+```yaml
+# config.yaml
+system:
+  n: 3
+  optimization_info_level: 1
+  model: deepseek-v4-flash
+  swe_pro_instances:
+    - astropy__astropy-14539
+    - django__django-12345
+  output_dir: ./output
+  # 以下为重跑配置（可选）
+  resume:
+    enabled: false
+    from_plan_id: "plan_002"
+    from_round: 2
+    trajectories_dir: ./previous_run/trajectories
+    patches_dir: ./previous_run/patches
+
+prompts:
+  plan_generation_prompt: |
+    你是一个软件工程师，请为以下问题设计解决方案方案...
+    输出格式：仅自然语言，不要包含代码块。
+  code_generation_prompt: |
+    根据上述方案，生成 Git patch...
+  plan_optimization_prompt: |
+    你是反思优化专家。以下是先前方案的执行反馈，请分析失败原因并输出一个改进后的方案。输出改进后的方案（纯自然语言）
+
+docker:
+  image: "swebench/swe-pro-env:latest"   # 需预先准备的 Docker 镜像
+  workdir: "/testbed"
+```
+
+### 6.2 参数验证规则
+
+- `n` < 1 时报错退出。
+- `optimization_info_level` 不是 0 或 1 时默认为 0 并警告。
+- 重跑配置若 `enabled: true`，需检查 `from_plan_id` 对应的文件是否存在。
+
+---
+
+## 7. 需求优先级（更新）
+
+| 优先级 | 功能模块 | 需求 ID |
+|--------|----------|---------|
+| P0 | 任务输入与 Docker 初始化 | FR-01 |
+| P0 | Docker 内方案生成（只读） | FR-02 |
+| P0 | Docker 内代码生成 | FR-03 |
+| P0 | 使用 SWE 官方评估 | FR-04 |
+| P0 | 方案优化（合并反思生成） | FR-05 |
+| P0 | 迭代循环控制 | FR-06 |
+| P0 | 完整轨迹保存与命名 | FR-10 |
+| P0 | 基本错误处理 | FR-12 |
+| P1 | Prompt 配置 | FR-08, FR-09 |
+| P1 | 从已有 Plan 重跑 | FR-07 |
+| P1 | 输出 Optimization Feedback 中的运行参数 | FR-11 |
+
+---
+
+## 8. 约束条件（更新）
+
+| 约束类型 | 描述 |
+|----------|------|
+| 技术约束 | Agent 必须基于 KISS AI 框架；优化基于 GEPA；评估使用 SWE 官方工具；所有 Agent 运行在 Docker 容器中（只读或临时文件系统） |
+| 数据集约束 | **仅使用 SWE-pro 数据集** |
+| 开发约束 | 快速原型，不追求扩展性；最小化造轮子，优先调用现有库 |
+| 模型约束 | **不做模型检查**，用户需确保 DeepSeek V4 API 可用 |
+| 运行约束 | 需要 Docker 环境；需要 SWE-pro 官方镜像（或自行构建相似环境） |
+
+---
+
+## 9. 风险与对策（更新）
+
+（新增风险 R-07 关于 Docker 环境隔离）
+
+| 风险项 | 风险描述 | 可能性 | 影响 | 缓解策略 |
+|--------|----------|--------|------|----------|
+| R-07 | Docker 内 Agent 虽然不能修改宿主，但可能修改容器内代码库，影响后续同一轮中的代码生成 | 中 | 中 | 在方案生成和代码生成之间使用同一容器的快照或重置机制？本项目简化：**在同一轮内，方案生成阶段 Agent 被限制为只读**，通过文件系统权限（如挂载为 ro）或 prompt 约束禁止写操作。代码生成阶段只输出 diff，不直接修改。 |
+| …（其他风险与原文档类似，略）… |
+
+
+## 10. 验收标准（更新）
+
+| 测试用例 ID | 测试描述 | 预期结果 |
+|------------|----------|----------|
+| TC-01 | 设置 n=1，使用 SWE-pro 实例运行 | 系统在 Docker 内生成一个 Plan，生成 Patch，评估，输出结果文件包含 plan_1 及其轨迹 |
+| TC-02 | 设置 n=3，optimization_info_level=1 | 依次生成 Plan[1]（由 plan agent 生成）、Plan[2]（由 reflect agent 生成）、Plan[3]（由 reflect agent 生成），每个 Plan 对应一次完整的 code+test，所有轨迹保存，结果文件中包含测试反馈信息 |
+| TC-05 | 修改 Prompt 配置文件后重新运行 | Agent 行为产生预期变化（例如输出更加详细） |
+| TC-06 | 设置 n=0 | 系统报错退出，错误信息包含参数无效 |
+| TC-07 | 运行多个实例，其中一个实例的 Docker 环境失败 | 失败的实例被跳过，其他实例正常执行，结果文件中包含错误记录 |
+| TC-08 | 使用重跑功能：先运行 n=2 结束，修改 optimization_info_level 后从 Plan[2] 重跑至 n=3 | 系统加载 Plan[2] 的轨迹和代码，使用新的 optimization_info_level 生成 Plan[3]，新 Plan[3] 的反思内容中体现了对测试信息（如果启用）的利用 |
+| TC-09 | 检查所有轨迹文件 | `trajectories/` 中包含 `trajectory_1_plan_gen_*.json`、`trajectory_1_code_gen_*.json`、`trajectory_2_reflect_*.json` 等，内容完整可读 |
+
+---
+
+## 11. 参考资料
+
+（增加 SWE-pro 相关链接）
+
+| 编号 | 参考源 | 用途 |
+|------|--------|------|
+| [6] | SWE-pro 数据集说明（https://www.swebench.com/） | 确认数据集版本 |
+| [7] | SWE 官方评估工具（https://github.com/swe-bench/swebench） | 测试评估实现 |
+
+---
+
+以上为根据您的所有修改意见整理的新版需求文档。如有需要进一步调整的细节，请随时提出。
