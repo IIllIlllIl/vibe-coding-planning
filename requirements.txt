@@ -1,0 +1,12 @@
+# Core dependencies
+mini-swe-agent~=1.0
+swebench>=4.1.0
+pyyaml>=6.0.0
+
+# LLM API (DeepSeek via OpenAI-compatible API)
+openai>=2.24.0
+litellm>=1.83.0
+
+# Optional: used only for extracting the reflection prompt template
+# from GEPA during development. Not required at runtime.
+# gepa>=0.1.1
