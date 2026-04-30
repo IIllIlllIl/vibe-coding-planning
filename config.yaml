@@ -1,0 +1,59 @@
+# Plan-Code-Test runtime configuration
+system:
+  n: 3
+  optimization_info_level: 1
+  model: deepseek-v4-flash
+  swe_pro_instances:
+    - astropy__astropy-14539
+  output_dir: ./output
+  use_gepa_reflection_prompt: true
+
+  # Resume configuration (optional)
+  resume:
+    enabled: false
+    from_plan_id: ""
+    from_round: 0
+    trajectories_dir: ""
+    patches_dir: ""
+
+prompts:
+  plan_generation_prompt: |
+    You are a professional software engineer. Your task is to design a solution plan for the following issue.
+    Please analyze the codebase, understand the problem, and output a detailed plan.
+    Do NOT modify any files in the codebase. The codebase is mounted read-only.
+
+  code_generation_prompt: |
+    You are a code generation assistant. Given the following plan and issue description,
+    generate a Git diff format patch that implements the solution.
+    Do NOT directly modify files. Output the patch as diff text.
+
+  plan_optimization_prompt: |
+    You are a reflection optimization expert. Based on the previous plan's execution feedback,
+    analyze the failure reasons and output an improved plan.
+    Output the improved plan in natural language.
+
+  # Plan format template (optional, constrains Agent output structure)
+  plan_format_template: |
+    ## Problem Analysis
+    [Describe the root cause]
+
+    ## Technical Solution
+    [Describe the approach]
+
+    ## Files to Modify
+    - file1: reason
+    - file2: reason
+
+    ## Implementation Steps
+    1. [step 1]
+    2. [step 2]
+
+docker:
+  image_builder_script: "./scripts/build_docker_images.sh"
+  workdir: "/testbed"
+  codebase_mount_options: "ro"
+  timeout: 30
+
+agent:
+  max_steps: 30
+  cost_limit: 3.0

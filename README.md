@@ -25,7 +25,10 @@ pip install -r requirements.txt
 # 3. 设置 API Key
 export DEEPSEEK_API_KEY="your-key"
 
-# 4. 一键运行单个实例（含 Docker 构建、评估、输出）
+# 4. 运行单元测试（含覆盖率报告）
+pytest --cov=src --cov-report=term-missing
+
+# 5. 一键运行单个实例（含 Docker 构建、评估、输出）
 ./scripts/quickstart.sh astropy__astropy-14539 3
 ```
 
