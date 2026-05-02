@@ -3,6 +3,7 @@ system:
   n: 3
   optimization_info_level: 1
   model: deepseek-v4-flash
+  api_base: "https://api.deepseek.com"
   swe_pro_instances:
     - astropy__astropy-14539
   output_dir: ./output
@@ -56,4 +57,15 @@ docker:
 
 agent:
   max_steps: 30
+  # Soft limit. Effective only if mini-swe-agent's DefaultAgent supports
+  # 'cost_limit'; otherwise the value is ignored with a one-time warning
+  # and the hard cap is governed by max_steps × per-step token cost.
+  # Set a budget alert in the DeepSeek dashboard as the real backstop.
   cost_limit: 3.0
+  timeout: 120
+
+evaluator:
+  # Per-evaluation timeout (seconds) passed to swebench.harness.run_evaluation.
+  # Default 1800s (30 min) accommodates large SWE-bench Pro instances such as
+  # numpy/scipy/astropy. Increase if you observe evaluator timeouts in run.log.
+  timeout: 1800

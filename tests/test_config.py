@@ -28,6 +28,7 @@ def valid_config_dict() -> dict[str, Any]:
             "n": 3,
             "optimization_info_level": 1,
             "model": "deepseek-v4-flash",
+            "api_base": "https://api.deepseek.com",
             "swe_pro_instances": ["astropy__astropy-14539"],
             "output_dir": "./output",
             "use_gepa_reflection_prompt": True,
@@ -52,6 +53,7 @@ def valid_config_dict() -> dict[str, Any]:
         "agent": {
             "max_steps": 30,
             "cost_limit": 3.0,
+            "timeout": 120,
         },
     }
 
@@ -72,6 +74,7 @@ class TestLoadConfigSuccess:
         assert config.system.n == 3
         assert config.system.optimization_info_level == 1
         assert config.system.model == "deepseek-v4-flash"
+        assert config.system.api_base == "https://api.deepseek.com"
         assert config.system.swe_pro_instances == ["astropy__astropy-14539"]
         assert config.system.output_dir == "./output"
         assert config.system.use_gepa_reflection_prompt is True
@@ -85,6 +88,7 @@ class TestLoadConfigSuccess:
         assert config.docker.timeout == 30
         assert config.agent.max_steps == 30
         assert config.agent.cost_limit == 3.0
+        assert config.agent.timeout == 120
         assert config.deepseek_api_key == "test-key-123"
 
     def test_api_key_injected(self, monkeypatch, config_file: Path):
@@ -210,6 +214,112 @@ class TestBooleanParsing:
         assert config.system.use_gepa_reflection_prompt is True
 
 
+class TestApiBaseAndTimeout:
+    def test_custom_api_base(self, monkeypatch, tmp_path: Path):
+        monkeypatch.setenv("DEEPSEEK_API_KEY", "test-key")
+        data = {"system": {"api_base": "https://custom.example.com"}}
+        filepath = tmp_path / "api_config.yaml"
+        filepath.write_text(yaml.dump(data), encoding="utf-8")
+        config = load_config(filepath)
+        assert config.system.api_base == "https://custom.example.com"
+
+    def test_custom_agent_timeout(self, monkeypatch, tmp_path: Path):
+        monkeypatch.setenv("DEEPSEEK_API_KEY", "test-key")
+        data = {"agent": {"timeout": 60}}
+        filepath = tmp_path / "timeout_config.yaml"
+        filepath.write_text(yaml.dump(data), encoding="utf-8")
+        config = load_config(filepath)
+        assert config.agent.timeout == 60
+
+
+class TestAgentValidation:
+    def test_max_steps_zero_raises(self, monkeypatch, tmp_path: Path):
+        monkeypatch.setenv("DEEPSEEK_API_KEY", "test-key")
+        data = {"agent": {"max_steps": 0}}
+        filepath = tmp_path / "bad_agent.yaml"
+        filepath.write_text(yaml.dump(data), encoding="utf-8")
+        with pytest.raises(FatalError, match="max_steps.*must be >= 1"):
+            load_config(filepath)
+
+    def test_cost_limit_negative_defaults_to_zero(self, monkeypatch, tmp_path: Path, caplog):
+        monkeypatch.setenv("DEEPSEEK_API_KEY", "test-key")
+        data = {"agent": {"cost_limit": -1.0}}
+        filepath = tmp_path / "warn_agent.yaml"
+        filepath.write_text(yaml.dump(data), encoding="utf-8")
+        with caplog.at_level(logging.WARNING):
+            config = load_config(filepath)
+        assert config.agent.cost_limit == 0.0
+
+    def test_timeout_zero_raises(self, monkeypatch, tmp_path: Path):
+        monkeypatch.setenv("DEEPSEEK_API_KEY", "test-key")
+        data = {"agent": {"timeout": 0}}
+        filepath = tmp_path / "bad_agent.yaml"
+        filepath.write_text(yaml.dump(data), encoding="utf-8")
+        with pytest.raises(FatalError, match="timeout.*must be >= 1"):
+            load_config(filepath)
+
+
+class TestDockerValidation:
+    def test_docker_timeout_zero_raises(self, monkeypatch, tmp_path: Path):
+        monkeypatch.setenv("DEEPSEEK_API_KEY", "test-key")
+        data = {"docker": {"timeout": 0}}
+        filepath = tmp_path / "bad_docker.yaml"
+        filepath.write_text(yaml.dump(data), encoding="utf-8")
+        with pytest.raises(FatalError, match="timeout.*must be >= 1"):
+            load_config(filepath)
+
+
+class TestApiBaseValidation:
+    def test_invalid_api_base_raises(self, monkeypatch, tmp_path: Path):
+        monkeypatch.setenv("DEEPSEEK_API_KEY", "test-key")
+        data = {"system": {"api_base": "not-a-url"}}
+        filepath = tmp_path / "bad_api.yaml"
+        filepath.write_text(yaml.dump(data), encoding="utf-8")
+        with pytest.raises(FatalError, match="Invalid api_base URL"):
+            load_config(filepath)
+
+    def test_missing_scheme_raises(self, monkeypatch, tmp_path: Path):
+        monkeypatch.setenv("DEEPSEEK_API_KEY", "test-key")
+        data = {"system": {"api_base": "deepseek.com"}}
+        filepath = tmp_path / "bad_api.yaml"
+        filepath.write_text(yaml.dump(data), encoding="utf-8")
+        with pytest.raises(FatalError, match="Invalid api_base URL"):
+            load_config(filepath)
+
+
+class TestEvaluatorConfig:
+    def test_default_timeout(self, monkeypatch, tmp_path: Path):
+        monkeypatch.setenv("DEEPSEEK_API_KEY", "test-key")
+        filepath = tmp_path / "empty.yaml"
+        filepath.write_text("{}", encoding="utf-8")
+        config = load_config(filepath)
+        assert config.evaluator.timeout == 1800
+
+    def test_custom_timeout(self, monkeypatch, tmp_path: Path):
+        monkeypatch.setenv("DEEPSEEK_API_KEY", "test-key")
+        data = {"evaluator": {"timeout": 600}}
+        filepath = tmp_path / "eval_config.yaml"
+        filepath.write_text(yaml.dump(data), encoding="utf-8")
+        config = load_config(filepath)
+        assert config.evaluator.timeout == 600
+
+    def test_zero_timeout_raises(self, monkeypatch, tmp_path: Path):
+        monkeypatch.setenv("DEEPSEEK_API_KEY", "test-key")
+        data = {"evaluator": {"timeout": 0}}
+        filepath = tmp_path / "bad_eval.yaml"
+        filepath.write_text(yaml.dump(data), encoding="utf-8")
+        with pytest.raises(FatalError, match="evaluator.timeout.*must be >= 1"):
+            load_config(filepath)
+
+    def test_negative_timeout_raises(self, monkeypatch, tmp_path: Path):
+        monkeypatch.setenv("DEEPSEEK_API_KEY", "test-key")
+        data = {"evaluator": {"timeout": -10}}
+        filepath = tmp_path / "bad_eval.yaml"
+        filepath.write_text(yaml.dump(data), encoding="utf-8")
+        with pytest.raises(FatalError, match="evaluator.timeout.*must be >= 1"):
+            load_config(filepath)
+
+
 class TestDefaults:
     def test_empty_config_uses_defaults(self, monkeypatch, tmp_path: Path):
         monkeypatch.setenv("DEEPSEEK_API_KEY", "test-key")
@@ -219,9 +329,11 @@ class TestDefaults:
 
         assert config.system.n == 3
         assert config.system.model == "deepseek-v4-flash"
+        assert config.system.api_base == "https://api.deepseek.com"
         assert config.system.optimization_info_level == 1
         assert config.system.use_gepa_reflection_prompt is True
         assert config.system.swe_pro_instances == []
         assert config.docker.workdir == "/testbed"
         assert config.agent.max_steps == 30
         assert config.agent.cost_limit == 3.0
+        assert config.agent.timeout == 120

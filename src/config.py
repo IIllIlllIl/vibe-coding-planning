@@ -37,6 +37,7 @@ class SystemConfig:
     n: int = 3
     optimization_info_level: int = 1
     model: str = "deepseek-v4-flash"
+    api_base: str = "https://api.deepseek.com"
     swe_pro_instances: list[str] = field(default_factory=list)
     output_dir: str = "./output"
     use_gepa_reflection_prompt: bool = True
@@ -65,10 +66,28 @@ class DockerConfig:
 
 @dataclass(frozen=True)
 class AgentConfig:
-    """Agent behavior configuration."""
+    """Agent behavior configuration.
+
+    Note on ``cost_limit``: This is a *soft* limit. It is forwarded to
+    ``DefaultAgent`` only if the installed mini-swe-agent version exposes
+    a matching constructor parameter (probed at runtime by
+    ``src.agents._deps.build_default_agent``). When the parameter is not
+    supported, the value is ignored with a one-time warning, and the
+    effective per-agent spend ceiling is governed by
+    ``max_steps × per-step token cost × DeepSeek price``. Always set a
+    budget alert in the DeepSeek dashboard as the real backstop.
+    """
 
     max_steps: int = 30
     cost_limit: float = 3.0
+    timeout: int = 120
+
+
+@dataclass(frozen=True)
+class EvaluatorConfig:
+    """SWE-bench evaluator configuration."""
+
+    timeout: int = 1800
 
 
 @dataclass(frozen=True)
@@ -79,6 +98,7 @@ class Config:
     prompts: PromptConfig = field(default_factory=PromptConfig)
     docker: DockerConfig = field(default_factory=DockerConfig)
     agent: AgentConfig = field(default_factory=AgentConfig)
+    evaluator: EvaluatorConfig = field(default_factory=EvaluatorConfig)
     deepseek_api_key: str = ""
 
 
@@ -162,9 +182,18 @@ def _validate_optimization_info_level(level: int) -> int:
     return level
 
 
-def _validate_use_gepa_reflection_prompt(value: bool) -> bool:
-    """Validate use_gepa_reflection_prompt; default to False if invalid."""
-    # Already converted to bool by _get_bool, but log if the source was ambiguous
+def _validate_positive_int(name: str, value: int) -> int:
+    """Validate that an integer parameter is >= 1."""
+    if value < 1:
+        raise FatalError(f"Parameter '{name}' must be >= 1, got {value}")
+    return value
+
+
+def _validate_non_negative_float(name: str, value: float) -> float:
+    """Validate that a float parameter is >= 0."""
+    if value < 0:
+        logger.warning("Parameter '%s' must be >= 0, got %s. Defaulting to 0.", name, value)
+        return 0.0
     return value
 
 
@@ -191,11 +220,18 @@ def _build_resume_config(data: dict[str, Any]) -> ResumeConfig:
 
 def _build_system_config(data: dict[str, Any]) -> SystemConfig:
     """Build SystemConfig from a dict."""
+    import urllib.parse
+
     n = _validate_n(_get_int(data, "n", 3))
     opt_level = _validate_optimization_info_level(_get_int(data, "optimization_info_level", 1))
-    use_gepa = _validate_use_gepa_reflection_prompt(
-        _get_bool(data, "use_gepa_reflection_prompt", True)
-    )
+    use_gepa = _get_bool(data, "use_gepa_reflection_prompt", True)
+
+    api_base = _get_str(data, "api_base", "https://api.deepseek.com")
+    parsed = urllib.parse.urlparse(api_base)
+    if not parsed.scheme or not parsed.netloc:
+        raise FatalError(
+            f"Invalid api_base URL: {api_base}. Must include scheme and host."
+        )
 
     resume_data = data.get("resume", {})
     if not isinstance(resume_data, dict):
@@ -205,6 +241,7 @@ def _build_system_config(data: dict[str, Any]) -> SystemConfig:
         n=n,
         optimization_info_level=opt_level,
         model=_get_str(data, "model", "deepseek-v4-flash"),
+        api_base=api_base,
         swe_pro_instances=_get_list(data, "swe_pro_instances"),
         output_dir=_get_str(data, "output_dir", "./output"),
         use_gepa_reflection_prompt=use_gepa,
@@ -228,15 +265,23 @@ def _build_docker_config(data: dict[str, Any]) -> DockerConfig:
         image_builder_script=_get_str(data, "image_builder_script", "./scripts/build_docker_images.sh"),
         workdir=_get_str(data, "workdir", "/testbed"),
         codebase_mount_options=_get_str(data, "codebase_mount_options", "ro"),
-        timeout=_get_int(data, "timeout", 30),
+        timeout=_validate_positive_int("docker.timeout", _get_int(data, "timeout", 30)),
     )
 
 
 def _build_agent_config(data: dict[str, Any]) -> AgentConfig:
     """Build AgentConfig from a dict."""
     return AgentConfig(
-        max_steps=_get_int(data, "max_steps", 30),
-        cost_limit=_get_float(data, "cost_limit", 3.0),
+        max_steps=_validate_positive_int("agent.max_steps", _get_int(data, "max_steps", 30)),
+        cost_limit=_validate_non_negative_float("agent.cost_limit", _get_float(data, "cost_limit", 3.0)),
+        timeout=_validate_positive_int("agent.timeout", _get_int(data, "timeout", 120)),
+    )
+
+
+def _build_evaluator_config(data: dict[str, Any]) -> EvaluatorConfig:
+    """Build EvaluatorConfig from a dict."""
+    return EvaluatorConfig(
+        timeout=_validate_positive_int("evaluator.timeout", _get_int(data, "timeout", 1800)),
     )
 
 
@@ -264,6 +309,10 @@ def load_config(path: str | Path) -> Config:
     if not isinstance(agent_data, dict):
         agent_data = {}
 
+    evaluator_data = raw.get("evaluator", {})
+    if not isinstance(evaluator_data, dict):
+        evaluator_data = {}
+
     api_key = os.environ.get("DEEPSEEK_API_KEY", "")
     if not api_key:
         raise FatalError(
@@ -276,5 +325,6 @@ def load_config(path: str | Path) -> Config:
         prompts=_build_prompt_config(prompts_data),
         docker=_build_docker_config(docker_data),
         agent=_build_agent_config(agent_data),
+        evaluator=_build_evaluator_config(evaluator_data),
         deepseek_api_key=api_key,
     )

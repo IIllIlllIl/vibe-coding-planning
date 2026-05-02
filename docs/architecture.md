@@ -76,9 +76,10 @@ plan-code-test/
 | **Reflect Agent** | `src/agents/reflect_agent.py` | 复用 `DefaultAgent` + 空环境（无工具调用），根据 `use_gepa_reflection_prompt` 开关选择 Prompt 模板：使用 GEPA 反射 Prompt 模板（`gepa_reflection.py` 渲染）或 简化反思 Prompt（`config.yaml` 中配置）。将 Optimization Feedback 作为用户消息传入，调用 LLM 生成改进后的 Plan。返回 `(new_plan, trajectory_messages)` |
 
 **Agent 层的统一约定**：
-- 每个 Agent 函数签名：`run(agent_config, task_input, env) -> (result_text, trajectory_messages)`
+- `plan_agent` 与 `code_agent` 函数签名：`run(config, task_input, env) -> (result_text, trajectory_messages)`
+- `reflect_agent` 函数签名：`run(config, optimization_feedback) -> (new_plan, trajectory_messages)`（使用内部 `NullEnvironment`，无需外部注入 Docker 环境）
 - `trajectory_messages` 是 `mini-swe-agent` 的 `DefaultAgent.messages` 列表（`list[dict]`）
-- 不持有 `DockerEnvironment` 引用，由调用方注入
+- `plan_agent` 与 `code_agent` 不持有 `DockerEnvironment` 引用，由调用方注入
 
 ### 3.3 环境层
 
