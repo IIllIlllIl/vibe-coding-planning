@@ -1,6 +1,8 @@
 """Tests for src/agents/code_agent.py."""
 
-from unittest.mock import MagicMock, patch
+from __future__ import annotations
+
+from unittest.mock import patch
 
 import pytest
 
@@ -9,26 +11,54 @@ from src.config import AgentConfig, Config, PromptConfig, SystemConfig
 from src.exceptions import FatalError, TaskError
 
 
-class MockDefaultAgent:
-    def __init__(self, system_prompt: str, model, environment, max_steps: int = 30):
-        self.system_prompt = system_prompt
-        self.model = model
-        self.environment = environment
-        self.max_steps = max_steps
-        self.messages = [
-            {"role": "system", "content": system_prompt},
-            {"role": "user", "content": "user msg"},
-        ]
-
-    def run(self, user_message: str) -> str:
-        return "diff --git a/file.py b/file.py\n--- a/file.py\n+++ b/file.py\n@@ -1 +1 @@\n-fix\n+fixed"
-
-
 class MockLiteLLMModel:
-    def __init__(self, model: str, api_key: str, api_base: str = ""):
-        self.model = model
-        self.api_key = api_key
-        self.api_base = api_base
+    def __init__(self, *, model_name: str, model_kwargs: dict, cost_tracking: str = "ignore_errors"):
+        self.model_name = model_name
+        self.model_kwargs = model_kwargs
+        self.cost_tracking = cost_tracking
+
+    def query(self, messages: list[dict[str, str]]) -> dict:
+        return {
+            "content": (
+                "diff --git a/file.py b/file.py\n"
+                "--- a/file.py\n+++ b/file.py\n"
+                "@@ -1 +1 @@\n-fix\n+fixed"
+            ),
+            "extra": {},
+        }
+
+
+class MockLiteLLMModelEmpty(MockLiteLLMModel):
+    def query(self, messages: list[dict[str, str]]) -> dict:
+        return {"content": "", "extra": {}}
+
+
+class MockLiteLLMModelNoDiff(MockLiteLLMModel):
+    def query(self, messages: list[dict[str, str]]) -> dict:
+        return {"content": "This is just plain text without any diff markers.", "extra": {}}
+
+
+class MockLiteLLMModelHeaderOnly(MockLiteLLMModel):
+    def query(self, messages: list[dict[str, str]]) -> dict:
+        return {"content": "--- old.py\n+++ new.py\n\nNo actual changes here.", "extra": {}}
+
+
+class MockLiteLLMModelDashes(MockLiteLLMModel):
+    def query(self, messages: list[dict[str, str]]) -> dict:
+        return {"content": "--- old.py\n+++ new.py\n@@ -1 +1 @@\n-old\n+new", "extra": {}}
+
+
+class MockLiteLLMModelPlusPlus(MockLiteLLMModel):
+    def query(self, messages: list[dict[str, str]]) -> dict:
+        return {"content": "+++ new.py\n@@ -1 +1 @@\n-old\n+new", "extra": {}}
+
+
+class MockLiteLLMModelSpaces(MockLiteLLMModel):
+    def query(self, messages: list[dict[str, str]]) -> dict:
+        return {
+            "content": "  diff --git a/b\n--- a\n+++ b\n@@ -1 +1 @@\n-old\n+new  ",
+            "extra": {},
+        }
 
 
 @pytest.fixture
@@ -48,52 +78,26 @@ def config() -> Config:
 
 @pytest.fixture
 def mock_env():
-    return MagicMock()
+    return object()
 
 
 class TestRunSuccess:
     @patch("src.agents.code_agent.import_minisweagent")
     def test_returns_patch_and_messages(self, mock_import, config, mock_env):
-        mock_import.return_value = (MockDefaultAgent, MockLiteLLMModel)
+        mock_import.return_value = (object, MockLiteLLMModel, object)
         patch, messages = code_agent.run(
             config, "Plan to fix bug", "Parser fails on input", mock_env
         )
 
         assert "diff --git" in patch
-        assert len(messages) == 2
-
-    @patch("src.agents.code_agent.import_minisweagent")
-    def test_user_message_contains_plan_and_issue(self, mock_import, config, mock_env):
-        captured = {}
-
-        class CapturingAgent(MockDefaultAgent):
-            def run(self, user_message: str) -> str:
-                captured["user_message"] = user_message
-                return super().run(user_message)
-
-        mock_import.return_value = (CapturingAgent, MockLiteLLMModel)
-        code_agent.run(config, "Plan content", "Issue description", mock_env)
-
-        assert "Plan content" in captured["user_message"]
-        assert "Issue description" in captured["user_message"]
-
-    @patch("src.agents.code_agent.import_minisweagent")
-    def test_lite_llm_model_has_api_base(self, mock_import, config, mock_env):
-        mock_import.return_value = (MockDefaultAgent, MockLiteLLMModel)
-        code_agent.run(config, "Plan", "Issue", mock_env)
-
-    @patch("src.agents.code_agent.import_minisweagent")
-    def test_environment_passed_to_agent(self, mock_import, config, mock_env):
-        mock_import.return_value = (MockDefaultAgent, MockLiteLLMModel)
-        code_agent.run(config, "Plan", "Issue", mock_env)
+        assert len(messages) == 3
+        assert messages[0]["role"] == "system"
+        assert messages[1]["role"] == "user"
+        assert messages[2]["role"] == "assistant"
 
     @patch("src.agents.code_agent.import_minisweagent")
     def test_patch_trimmed(self, mock_import, config, mock_env):
-        class ValidSpacesAgent(MockDefaultAgent):
-            def run(self, user_message: str) -> str:
-                return "  diff --git a/b\n--- a\n+++ b\n@@ -1 +1 @@\n-old\n+new  "
-
-        mock_import.return_value = (ValidSpacesAgent, MockLiteLLMModel)
+        mock_import.return_value = (object, MockLiteLLMModelSpaces, object)
         patch, _ = code_agent.run(config, "Plan", "Issue", mock_env)
         assert patch == "diff --git a/b\n--- a\n+++ b\n@@ -1 +1 @@\n-old\n+new"
 
@@ -101,52 +105,32 @@ class TestRunSuccess:
 class TestRunValidation:
     @patch("src.agents.code_agent.import_minisweagent")
     def test_empty_output_raises_task_error(self, mock_import, config, mock_env):
-        class EmptyAgent(MockDefaultAgent):
-            def run(self, user_message: str) -> str:
-                return ""
-
-        mock_import.return_value = (EmptyAgent, MockLiteLLMModel)
+        mock_import.return_value = (object, MockLiteLLMModelEmpty, object)
         with pytest.raises(TaskError, match="empty"):
             code_agent.run(config, "Plan", "Issue", mock_env)
 
     @patch("src.agents.code_agent.import_minisweagent")
     def test_non_diff_output_raises_task_error(self, mock_import, config, mock_env):
-        class NoDiffAgent(MockDefaultAgent):
-            def run(self, user_message: str) -> str:
-                return "This is just plain text without any diff markers."
-
-        mock_import.return_value = (NoDiffAgent, MockLiteLLMModel)
+        mock_import.return_value = (object, MockLiteLLMModelNoDiff, object)
         with pytest.raises(TaskError, match="does not contain valid Git diff"):
             code_agent.run(config, "Plan", "Issue", mock_env)
 
     @patch("src.agents.code_agent.import_minisweagent")
     def test_header_without_hunk_raises_task_error(self, mock_import, config, mock_env):
         """A patch with ---/+++ but no @@ hunk should be rejected."""
-        class HeaderOnlyAgent(MockDefaultAgent):
-            def run(self, user_message: str) -> str:
-                return "--- old.py\n+++ new.py\n\nNo actual changes here."
-
-        mock_import.return_value = (HeaderOnlyAgent, MockLiteLLMModel)
+        mock_import.return_value = (object, MockLiteLLMModelHeaderOnly, object)
         with pytest.raises(TaskError, match="does not contain valid Git diff"):
             code_agent.run(config, "Plan", "Issue", mock_env)
 
     @patch("src.agents.code_agent.import_minisweagent")
     def test_diff_with_three_dashes_marker_passes(self, mock_import, config, mock_env):
-        class DashesAgent(MockDefaultAgent):
-            def run(self, user_message: str) -> str:
-                return "--- old.py\n+++ new.py\n@@ -1 +1 @@\n-old\n+new"
-
-        mock_import.return_value = (DashesAgent, MockLiteLLMModel)
+        mock_import.return_value = (object, MockLiteLLMModelDashes, object)
         patch, _ = code_agent.run(config, "Plan", "Issue", mock_env)
         assert "--- old.py" in patch
 
     @patch("src.agents.code_agent.import_minisweagent")
     def test_diff_with_plus_plus_marker_passes(self, mock_import, config, mock_env):
-        class PlusPlusAgent(MockDefaultAgent):
-            def run(self, user_message: str) -> str:
-                return "+++ new.py\n@@ -1 +1 @@\n-old\n+new"
-
-        mock_import.return_value = (PlusPlusAgent, MockLiteLLMModel)
+        mock_import.return_value = (object, MockLiteLLMModelPlusPlus, object)
         patch, _ = code_agent.run(config, "Plan", "Issue", mock_env)
         assert "+++ new.py" in patch
 

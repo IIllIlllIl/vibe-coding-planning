@@ -65,6 +65,9 @@ def evaluate(
 ) -> dict[str, Any]:
     """Evaluate a patch using the SWE-bench official harness.
 
+    Calls ``swebench.harness.run_evaluation.run_instance`` directly for a
+    single instance, avoiding the overhead of ``run_instances`` batch logic.
+
     Args:
         patch: Git diff format patch content.
         instance_info: Instance metadata dict (from instance_loader).
@@ -80,37 +83,56 @@ def evaluate(
     Raises:
         FatalError: If swebench is not installed or image name cannot be determined.
     """
-    swebench = _import_swebench()
+    try:
+        import docker
+        from swebench.harness.run_evaluation import run_instance
+        from swebench.harness.test_spec.test_spec import make_test_spec
+    except ImportError as exc:
+        raise FatalError(
+            "swebench is not installed. "
+            "Please install it: pip install swebench>=4.1.0"
+        ) from exc
 
     instance_id = instance_info.get("instance_id")
     if not instance_id:
         raise FatalError("instance_info missing 'instance_id' field.")
 
-    image_name = derive_image_name(instance_info)
-
     logger.info(
-        "Running SWE evaluation: instance=%s image=%s timeout=%ss",
+        "Running SWE evaluation: instance=%s timeout=%ss",
         instance_id,
-        image_name,
         timeout,
     )
 
-    # swebench.harness.run_evaluation returns (resolved_status, log_dir, report)
-    # The exact signature may vary; we wrap it defensively.
+    pred = {
+        "instance_id": instance_id,
+        "model_patch": patch,
+        "model_name_or_path": "plan-code-test",
+    }
+    run_id = f"eval_{instance_id}"
+
     try:
-        result = swebench.harness.run_evaluation(
-            predictions=[{
-                "instance_id": instance_id,
-                "model_patch": patch,
-                "model_name_or_path": "plan-code-test",
-            }],
-            run_id=f"eval_{instance_id}",
+        client = docker.from_env()
+        test_spec = make_test_spec(instance_info, namespace="swebench")
+
+        result = run_instance(
+            test_spec=test_spec,
+            pred=pred,
+            rm_image=False,
+            force_rebuild=False,
+            client=client,
+            run_id=run_id,
             timeout=timeout,
+            rewrite_reports=False,
         )
     except FatalError:
         raise
     except KeyboardInterrupt:
         raise
+    except ImportError as exc:
+        raise FatalError(
+            "swebench is not installed. "
+            "Please install it: pip install swebench>=4.1.0"
+        ) from exc
     except Exception as exc:
         logger.error("SWE evaluation failed: %s", exc)
         return {
@@ -120,22 +142,10 @@ def evaluate(
             "log_dir": "",
         }
 
-    # Defensive parsing of result
-    if isinstance(result, tuple) and len(result) >= 2:
-        resolved_status = result[0]
-        log_dir = result[1] if len(result) > 1 else ""
-    elif isinstance(result, dict):
-        resolved_status = result.get("resolved", False)
-        log_dir = result.get("log_dir", "")
-    else:
-        resolved_status = False
-        log_dir = ""
-
-    resolved = bool(resolved_status)
-
+    log_dir = f"logs/run_evaluation/{run_id}/plan-code-test__{instance_id}"
     return {
-        "resolved": resolved,
-        "stdout": "",  # run_evaluation does not return stdout directly
+        "resolved": result.get("resolved", False),
+        "stdout": "",
         "stderr": "",
-        "log_dir": str(log_dir) if log_dir else "",
+        "log_dir": log_dir,
     }

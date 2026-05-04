@@ -2,6 +2,7 @@
 
 import json
 from pathlib import Path
+from unittest.mock import patch
 
 import pytest
 
@@ -63,10 +64,20 @@ class TestMockMode:
 
 
 class TestSwebenchMode:
-    def test_raises_without_mock_dir(self):
+    @patch("swebench.harness.utils.load_swebench_dataset")
+    def test_raises_when_instance_not_found(self, mock_load_dataset):
+        mock_load_dataset.return_value = []
         loader = InstanceLoader()
-        with pytest.raises(TaskError, match="not yet implemented"):
+        with pytest.raises(TaskError, match="not found"):
             loader.load_instance("astropy__astropy-14539")
+
+    @patch("swebench.harness.utils.load_swebench_dataset")
+    def test_loads_real_instance(self, mock_load_dataset, mock_instance_data):
+        mock_load_dataset.return_value = [mock_instance_data]
+        loader = InstanceLoader()
+        result = loader.load_instance("astropy__astropy-14539")
+        assert result["instance_id"] == "astropy__astropy-14539"
+        assert result["repo"] == "astropy/astropy"
 
     def test_list_empty_without_mock_dir(self):
         loader = InstanceLoader()

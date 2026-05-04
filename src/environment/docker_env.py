@@ -1,6 +1,6 @@
 """Docker environment wrapper.
 
-Wraps mini-swe-agent's DockerEnvironment for launching containers with
+Wraps mini-swe-agent 1.17.5 DockerEnvironment for launching containers with
 read-only codebase mounts.
 """
 
@@ -18,20 +18,27 @@ logger = logging.getLogger(__name__)
 def _import_docker_env() -> type:
     """Lazy import DockerEnvironment to fail gracefully if not installed."""
     try:
-        from minisweagent import DockerEnvironment  # type: ignore[import-untyped]
+        from minisweagent.environments.docker import DockerEnvironment  # type: ignore[import-untyped]
 
         return DockerEnvironment  # type: ignore[return-value]
     except ImportError as exc:
         raise FatalError(
             "mini-swe-agent is not installed. "
-            "Please install it: pip install mini-swe-agent~=1.0"
+            "Please install it: pip install mini-swe-agent>=1.17.5"
         ) from exc
 
 
 class DockerEnvWrapper:
-    """Wrapper around mini-swe-agent DockerEnvironment.
+    """Wrapper around mini-swe-agent 1.17.5 DockerEnvironment.
 
-    Usage:
+    1.17.5 DockerEnvironment starts the container immediately upon
+    construction (no explicit ``start()`` method).  Cleanup is via
+    :meth:`cleanup`.  This wrapper preserves the old ``start()`` /
+    ``stop()`` surface so that callers (``pipeline.py``, tests) do not
+    need to change.
+
+    Usage::
+
         env = DockerEnvWrapper(docker_config)
         env.start(image="swebench/astropy:latest", workdir="/testbed")
         result = env.execute("ls /testbed")
@@ -39,8 +46,14 @@ class DockerEnvWrapper:
     """
 
     def __init__(self, docker_config: DockerConfig) -> None:
+        """Initialise the wrapper.
+
+        ``docker_config`` is currently unused internally (1.17.5's
+        DockerEnvironment receives all settings via constructor kwargs),
+        but the parameter is retained for API compatibility with existing
+        tests and callers.
+        """
         self._config = docker_config
-        self._docker_env_class: type | None = None
         self._env: Any = None
 
     def start(
@@ -51,53 +64,78 @@ class DockerEnvWrapper:
     ) -> None:
         """Start a Docker container.
 
+        Under 1.17.5 this constructs a ``DockerEnvironment`` which
+        launches the container immediately.
+
         Args:
             image: Docker image name and tag.
-            workdir: Working directory inside the container.
-            ro_mount_source: Host path to mount read-only into the container
-                at ``workdir``. If None, no extra mount is configured.
+            workdir: Working directory inside the container (maps to
+                ``cwd`` in 1.17.5).
+            ro_mount_source: Host path to mount read-only into the
+                container at ``workdir``. If None, no extra mount is
+                configured.
         """
         DockerEnvironment = _import_docker_env()
-        self._docker_env_class = DockerEnvironment
 
-        run_args: list[str] = []
+        kwargs: dict[str, Any] = {
+            "image": image,
+            "cwd": workdir,
+        }
         if ro_mount_source is not None:
-            # Mount source as read-only at the workdir
-            run_args.extend([
+            kwargs["run_args"] = [
                 "--mount",
                 f"type=bind,source={ro_mount_source},target={workdir},readonly",
-            ])
+            ]
 
-        self._env = DockerEnvironment(
-            image=image,
-            workdir=workdir,
-            run_args=run_args,
-        )
-        logger.info("Starting Docker container: image=%s workdir=%s", image, workdir)
-        self._env.start()
+        self._env = DockerEnvironment(**kwargs)
+        logger.info("Docker container started: image=%s cwd=%s", image, workdir)
 
     def stop(self) -> None:
-        """Stop and remove the running container."""
+        """Stop and remove the running container.
+
+        Under 1.17.5 this calls ``cleanup()`` on the underlying
+        ``DockerEnvironment``.
+        """
         if self._env is not None:
             logger.info("Stopping Docker container")
-            self._env.stop()
+            self._env.cleanup()
             self._env = None
 
-    def execute(self, command: str) -> str:
+    def execute(self, command: str) -> dict[str, Any]:
         """Execute a shell command inside the running container.
 
         Args:
             command: Shell command to execute.
 
         Returns:
-            Command stdout as a string.
+            A dict with at least ``{"output": str, "returncode": int}``.
+            This matches mini-swe-agent 1.17.5's DockerEnvironment
+            return type so that DefaultAgent can merge it with action
+            metadata (``output | {"action": ...}``).
 
         Raises:
             FatalError: If no container is running.
         """
         if self._env is None:
             raise FatalError("Docker environment not started. Call start() first.")
-        return self._env.execute(command)
+        result = self._env.execute(command)
+        # 1.17.5 already returns dict; be defensive for mocks / future changes
+        if isinstance(result, dict):
+            return result
+        return {"output": str(result), "returncode": 0}
+
+    def get_template_vars(self) -> dict[str, Any]:
+        """Return template variables from the underlying environment.
+
+        DefaultAgent.render_template() calls this to inject environment-
+        specific variables into prompt templates.
+
+        Returns:
+            Template variable dict, or empty dict if not started.
+        """
+        if self._env is None:
+            return {}
+        return self._env.get_template_vars()
 
     def __enter__(self) -> "DockerEnvWrapper":
         """Context manager entry (start() must be called separately)."""

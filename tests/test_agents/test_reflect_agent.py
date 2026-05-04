@@ -1,6 +1,6 @@
 """Tests for src/agents/reflect_agent.py."""
 
-from unittest.mock import MagicMock, patch
+from unittest.mock import patch
 
 import pytest
 
@@ -10,26 +10,31 @@ from src.config import AgentConfig, Config, PromptConfig, SystemConfig
 from src.exceptions import FatalError, TaskError
 
 
-class MockDefaultAgent:
-    def __init__(self, system_prompt: str, model, environment, max_steps: int = 30):
-        self.system_prompt = system_prompt
-        self.model = model
-        self.environment = environment
-        self.max_steps = max_steps
-        self.messages = [
-            {"role": "system", "content": system_prompt},
-            {"role": "user", "content": "feedback"},
-        ]
-
-    def run(self, user_message: str) -> str:
-        return "## Improved Plan\n\n1. Analyze the bug\n2. Fix the parser\n3. Add tests\n\nThis is a detailed improved plan with specific steps."
-
-
 class MockLiteLLMModel:
-    def __init__(self, model: str, api_key: str, api_base: str = ""):
-        self.model = model
-        self.api_key = api_key
-        self.api_base = api_base
+    def __init__(self, *, model_name: str, model_kwargs: dict, cost_tracking: str = "ignore_errors"):
+        self.model_name = model_name
+        self.model_kwargs = model_kwargs
+        self.cost_tracking = cost_tracking
+
+    def query(self, messages: list[dict[str, str]]) -> dict:
+        return {
+            "content": (
+                "## Improved Plan\n\n1. Analyze the bug\n"
+                "2. Fix the parser\n3. Add tests\n\n"
+                "This is a detailed improved plan with specific steps."
+            ),
+            "extra": {},
+        }
+
+
+class MockLiteLLMModelEmpty(MockLiteLLMModel):
+    def query(self, messages: list[dict[str, str]]) -> dict:
+        return {"content": "", "extra": {}}
+
+
+class MockLiteLLMModelShort(MockLiteLLMModel):
+    def query(self, messages: list[dict[str, str]]) -> dict:
+        return {"content": "Too short.", "extra": {}}
 
 
 @pytest.fixture
@@ -85,66 +90,36 @@ def feedback_data() -> dict:
 
 
 class TestNullEnvironment:
-    def test_execute_returns_empty(self):
+    def test_execute_returns_empty_dict(self):
         env = NullEnvironment()
-        assert env.execute("ls") == ""
+        assert env.execute("ls") == {"output": "", "returncode": 0}
 
-    def test_get_commands_returns_empty(self):
+    def test_get_template_vars_returns_empty(self):
         env = NullEnvironment()
-        assert env.get_commands() == []
+        assert env.get_template_vars() == {}
 
-    def test_close_is_noop(self):
-        env = NullEnvironment()
-        env.close()  # should not raise
-
-    def test_reset_is_noop(self):
-        env = NullEnvironment()
-        env.reset()  # should not raise
-
-    def test_context_manager(self):
-        with NullEnvironment() as env:
-            assert isinstance(env, NullEnvironment)
-            assert env.execute("test") == ""
-
-    def test_all_methods_compatible_with_mock_defaultagent(self):
-        """Verify NullEnvironment methods don't crash when used like DefaultAgent would."""
+    def test_all_methods_compatible(self):
+        """Verify NullEnvironment methods don't crash."""
         env = NullEnvironment()
         env.execute("cmd")
-        env.get_commands()
-        env.reset()
-        env.close()
-        with env:
-            pass
+        env.get_template_vars()
 
 
 class TestRunWithGepa:
     @patch("src.agents.reflect_agent.import_minisweagent")
     def test_returns_plan_and_messages(self, mock_import, config, feedback_data):
-        mock_import.return_value = (MockDefaultAgent, MockLiteLLMModel)
+        mock_import.return_value = (object, MockLiteLLMModel, object)
         plan, messages = reflect_agent.run(config, feedback_data)
 
         assert len(plan) > 50
         assert "Improved Plan" in plan or "Analyze" in plan
-        assert len(messages) == 2
+        assert len(messages) == 3
+        assert messages[-1]["role"] == "assistant"
 
     @patch("src.agents.reflect_agent.import_minisweagent")
     def test_uses_gepa_template_when_enabled(self, mock_import, config, feedback_data):
-        mock_import.return_value = (MockDefaultAgent, MockLiteLLMModel)
+        mock_import.return_value = (object, MockLiteLLMModel, object)
         reflect_agent.run(config, feedback_data)
-        # GEPA template contains specific phrases from the hard-coded template
-
-    @patch("src.agents.reflect_agent.import_minisweagent")
-    def test_environment_is_null_environment(self, mock_import, config, feedback_data):
-        captured = {}
-
-        class CapturingAgent(MockDefaultAgent):
-            def __init__(self, system_prompt, model, environment, max_steps=30):
-                super().__init__(system_prompt, model, environment, max_steps)
-                captured["env_type"] = type(environment).__name__
-
-        mock_import.return_value = (CapturingAgent, MockLiteLLMModel)
-        reflect_agent.run(config, feedback_data)
-        assert captured["env_type"] == "NullEnvironment"
 
 
 class TestRunWithSimplifiedPrompt:
@@ -162,7 +137,7 @@ class TestRunWithSimplifiedPrompt:
             agent=AgentConfig(max_steps=20),
             deepseek_api_key="test-key",
         )
-        mock_import.return_value = (MockDefaultAgent, MockLiteLLMModel)
+        mock_import.return_value = (object, MockLiteLLMModel, object)
         plan, _ = reflect_agent.run(config, feedback_data)
         assert len(plan) > 50
 
@@ -170,21 +145,13 @@ class TestRunWithSimplifiedPrompt:
 class TestRunValidation:
     @patch("src.agents.reflect_agent.import_minisweagent")
     def test_empty_output_raises_task_error(self, mock_import, config, feedback_data):
-        class EmptyAgent(MockDefaultAgent):
-            def run(self, user_message: str) -> str:
-                return ""
-
-        mock_import.return_value = (EmptyAgent, MockLiteLLMModel)
+        mock_import.return_value = (object, MockLiteLLMModelEmpty, object)
         with pytest.raises(TaskError, match="empty"):
             reflect_agent.run(config, feedback_data)
 
     @patch("src.agents.reflect_agent.import_minisweagent")
     def test_short_output_raises_task_error(self, mock_import, config, feedback_data):
-        class ShortAgent(MockDefaultAgent):
-            def run(self, user_message: str) -> str:
-                return "Too short."
-
-        mock_import.return_value = (ShortAgent, MockLiteLLMModel)
+        mock_import.return_value = (object, MockLiteLLMModelShort, object)
         with pytest.raises(TaskError, match="too short"):
             reflect_agent.run(config, feedback_data)
 

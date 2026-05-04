@@ -1,6 +1,9 @@
-"""Tests for src/environment/docker_env.py."""
+"""Tests for src/environment/docker_env.py (mini-swe-agent 1.17.5)."""
 
-from unittest.mock import MagicMock, patch
+from __future__ import annotations
+
+from typing import Optional
+from unittest.mock import patch
 
 import pytest
 
@@ -10,22 +13,22 @@ from src.exceptions import FatalError
 
 
 class MockDockerEnvironment:
-    """Mock class that mimics mini-swe-agent DockerEnvironment."""
+    """Mock class that mimics mini-swe-agent 1.17.5 DockerEnvironment."""
 
-    def __init__(self, image: str, workdir: str, run_args: list[str]) -> None:
+    def __init__(self, *, image: str, cwd: str, run_args: Optional[list[str]] = None) -> None:
         self.image = image
-        self.workdir = workdir
-        self.run_args = run_args
-        self._started = False
+        self.cwd = cwd
+        self.run_args = run_args or []
+        self._cleaned_up = False
 
-    def start(self) -> None:
-        self._started = True
+    def execute(self, command: str) -> dict:
+        return {"output": f"executed: {command}", "returncode": 0}
 
-    def stop(self) -> None:
-        self._started = False
+    def get_template_vars(self) -> dict[str, str]:
+        return {"cwd": self.cwd}
 
-    def execute(self, command: str) -> str:
-        return f"executed: {command}"
+    def cleanup(self) -> None:
+        self._cleaned_up = True
 
 
 @pytest.fixture
@@ -47,8 +50,7 @@ class TestStart:
 
         assert wrapper._env is not None
         assert wrapper._env.image == "swebench/astropy:latest"
-        assert wrapper._env.workdir == "/testbed"
-        assert wrapper._env._started is True
+        assert wrapper._env.cwd == "/testbed"
 
     @patch("src.environment.docker_env._import_docker_env")
     def test_ro_mount_in_run_args(self, mock_import, docker_config):
@@ -73,7 +75,7 @@ class TestExecute:
         wrapper = DockerEnvWrapper(docker_config)
         wrapper.start(image="swebench/astropy:latest", workdir="/testbed")
         result = wrapper.execute("ls /testbed")
-        assert result == "executed: ls /testbed"
+        assert result == {"output": "executed: ls /testbed", "returncode": 0}
 
     def test_execute_without_start_raises(self, docker_config):
         wrapper = DockerEnvWrapper(docker_config)
@@ -83,13 +85,14 @@ class TestExecute:
 
 class TestStop:
     @patch("src.environment.docker_env._import_docker_env")
-    def test_stop_sets_started_false(self, mock_import, docker_config):
+    def test_stop_calls_cleanup(self, mock_import, docker_config):
         mock_import.return_value = MockDockerEnvironment
         wrapper = DockerEnvWrapper(docker_config)
         wrapper.start(image="swebench/astropy:latest", workdir="/testbed")
         env_ref = wrapper._env
         wrapper.stop()
-        assert env_ref._started is False
+        assert env_ref._cleaned_up is True
+        assert wrapper._env is None
 
     def test_stop_without_start_is_noop(self, docker_config):
         wrapper = DockerEnvWrapper(docker_config)

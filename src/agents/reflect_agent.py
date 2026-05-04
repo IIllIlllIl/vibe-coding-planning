@@ -1,17 +1,17 @@
 """Reflection agent.
 
-Generates an improved Plan from Optimization Feedback using either the GEPA
-reflection prompt template or a simplified optimization prompt.
-
-Runs without a Docker environment (uses NullEnvironment for tool calls).
+Directly queries the LLM with a system + user prompt and returns the
+improved Plan text.  Does not use DefaultAgent's interactive step loop
+because reflection is a single-shot text-completion task.
 """
 
 from __future__ import annotations
 
 import logging
+import time
 from typing import Any
 
-from src.agents._deps import build_default_agent, import_minisweagent
+from src.agents._deps import build_model, import_minisweagent
 from src.config import Config
 from src.exceptions import TaskError
 from src.prompts import gepa_reflection
@@ -21,35 +21,15 @@ logger = logging.getLogger(__name__)
 
 
 class NullEnvironment:
-    """No-op environment for agents that don't need tool calls.
+    """No-op environment (retained for backward compatibility)."""
 
-    DefaultAgent requires an *environment* object.  ``NullEnvironment``
-    satisfies the expected interface without performing any real work.
-    """
+    def execute(self, command: str) -> dict[str, Any]:
+        """Execute a command – returns empty dict matching 1.17.5 format."""
+        return {"output": "", "returncode": 0}
 
-    def execute(self, command: str) -> str:
-        """Execute a command – always returns empty string."""
-        return ""
-
-    def get_commands(self) -> list[dict[str, Any]]:
-        """Return available commands – always returns empty list."""
-        return []
-
-    def close(self) -> None:
-        """Clean up resources – no-op."""
-        pass
-
-    def reset(self) -> None:
-        """Reset environment state – no-op."""
-        pass
-
-    def __enter__(self) -> "NullEnvironment":
-        """Context manager entry."""
-        return self
-
-    def __exit__(self, *args: Any) -> None:
-        """Context manager exit – ensures cleanup."""
-        self.close()
+    def get_template_vars(self) -> dict[str, Any]:
+        """Return template variables – always returns empty dict."""
+        return {}
 
 
 def run(
@@ -69,44 +49,47 @@ def run(
         TaskError: If the agent produces empty or too-short output.
         FatalError: If mini-swe-agent is not installed.
     """
-    DefaultAgent, LiteLLMModel = import_minisweagent()
+    _, LitellmModel, _ = import_minisweagent()
 
     current_plan = optimization_feedback.get("current_plan", {}).get("content", "")
     feedback_text = _format_feedback(optimization_feedback)
 
     if config.system.use_gepa_reflection_prompt:
-        system_prompt = gepa_reflection.render(
+        system_template = gepa_reflection.render(
             current_plan=current_plan,
             feedback_data=feedback_text,
             placeholders="",
         )
     else:
-        system_prompt = render_plan_prompt(
+        system_template = render_plan_prompt(
             config.prompts.plan_optimization_prompt,
             config.prompts.plan_format_template,
         )
 
-    model = LiteLLMModel(
-        model=config.system.model,
+    model = build_model(
+        LitellmModel,
+        model_name=config.system.model,
         api_key=config.deepseek_api_key,
         api_base=config.system.api_base,
     )
 
-    agent = build_default_agent(
-        DefaultAgent,
-        system_prompt=system_prompt,
-        model=model,
-        environment=NullEnvironment(),
-        max_steps=config.agent.max_steps,
-        cost_limit=config.agent.cost_limit,
+    messages: list[dict[str, Any]] = [
+        {"role": "system", "content": system_template, "timestamp": time.time()},
+        {"role": "user", "content": feedback_text, "timestamp": time.time()},
+    ]
+
+    logger.info(
+        "Starting reflect agent: model=%s gepa=%s",
+        config.system.model,
+        config.system.use_gepa_reflection_prompt,
     )
 
-    logger.info("Starting reflect agent: model=%s gepa=%s",
-                config.system.model, config.system.use_gepa_reflection_prompt)
+    response = model.query(messages)
+    plan_text = response.get("content", "")
 
-    # The user message is the formatted feedback
-    plan_text = agent.run(feedback_text)
-    messages = getattr(agent, "messages", [])
+    messages.append(
+        {"role": "assistant", "content": plan_text, "timestamp": time.time()}
+    )
 
     if not plan_text or not plan_text.strip():
         raise TaskError("Reflect agent produced empty output.")

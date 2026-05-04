@@ -1,6 +1,8 @@
 """Tests for src/agents/plan_agent.py."""
 
-from unittest.mock import MagicMock, patch
+from __future__ import annotations
+
+from unittest.mock import patch
 
 import pytest
 
@@ -9,29 +11,34 @@ from src.config import AgentConfig, Config, PromptConfig, SystemConfig
 from src.exceptions import FatalError, TaskError
 
 
-class MockDefaultAgent:
-    """Mock that mimics mini-swe-agent DefaultAgent."""
-
-    def __init__(self, system_prompt: str, model, environment, max_steps: int = 30):
-        self.system_prompt = system_prompt
-        self.model = model
-        self.environment = environment
-        self.max_steps = max_steps
-        self.messages = [
-            {"role": "system", "content": system_prompt},
-            {"role": "user", "content": "test issue"},
-            {"role": "assistant", "content": "plan output"},
-        ]
-
-    def run(self, user_message: str) -> str:
-        return "plan output"
-
-
 class MockLiteLLMModel:
-    def __init__(self, model: str, api_key: str, api_base: str = ""):
-        self.model = model
-        self.api_key = api_key
-        self.api_base = api_base
+    def __init__(self, *, model_name: str, model_kwargs: dict, cost_tracking: str = "ignore_errors"):
+        self.model_name = model_name
+        self.model_kwargs = model_kwargs
+        self.cost_tracking = cost_tracking
+        self.query_calls: list[list[dict]] = []
+
+    def query(self, messages: list[dict[str, str]]) -> dict:
+        self.query_calls.append(messages)
+        return {"content": "plan output", "extra": {}}
+
+
+class MockLiteLLMModelEmpty(MockLiteLLMModel):
+    def query(self, messages: list[dict[str, str]]) -> dict:
+        self.query_calls.append(messages)
+        return {"content": "", "extra": {}}
+
+
+class MockLiteLLMModelWhitespace(MockLiteLLMModel):
+    def query(self, messages: list[dict[str, str]]) -> dict:
+        self.query_calls.append(messages)
+        return {"content": "   \n\n   ", "extra": {}}
+
+
+class MockLiteLLMModelSpaces(MockLiteLLMModel):
+    def query(self, messages: list[dict[str, str]]) -> dict:
+        self.query_calls.append(messages)
+        return {"content": "  plan with spaces  ", "extra": {}}
 
 
 @pytest.fixture
@@ -52,46 +59,33 @@ def config() -> Config:
 
 @pytest.fixture
 def mock_env():
-    return MagicMock()
+    return object()
 
 
 class TestRunSuccess:
     @patch("src.agents.plan_agent.import_minisweagent")
     def test_returns_plan_and_messages(self, mock_import, config, mock_env):
-        mock_import.return_value = (MockDefaultAgent, MockLiteLLMModel)
+        mock_import.return_value = (object, MockLiteLLMModel, object)
         plan, messages = plan_agent.run(config, "Fix parser bug", mock_env)
 
         assert plan == "plan output"
         assert len(messages) == 3
         assert messages[0]["role"] == "system"
+        assert messages[1]["role"] == "user"
+        assert messages[2]["role"] == "assistant"
 
     @patch("src.agents.plan_agent.import_minisweagent")
-    def test_system_prompt_contains_plan_generation_text(self, mock_import, config, mock_env):
-        mock_import.return_value = (MockDefaultAgent, MockLiteLLMModel)
-        plan_agent.run(config, "Fix parser bug", mock_env)
+    def test_system_template_in_messages(self, mock_import, config, mock_env):
+        mock_import.return_value = (object, MockLiteLLMModel, object)
+        _, messages = plan_agent.run(config, "Fix parser bug", mock_env)
 
-    @patch("src.agents.plan_agent.import_minisweagent")
-    def test_lite_llm_model_configured_correctly(self, mock_import, config, mock_env):
-        mock_import.return_value = (MockDefaultAgent, MockLiteLLMModel)
-        plan_agent.run(config, "Fix parser bug", mock_env)
-
-    @patch("src.agents.plan_agent.import_minisweagent")
-    def test_agent_receives_max_steps(self, mock_import, config, mock_env):
-        mock_import.return_value = (MockDefaultAgent, MockLiteLLMModel)
-        plan, _ = plan_agent.run(config, "Fix parser bug", mock_env)
-
-    @patch("src.agents.plan_agent.import_minisweagent")
-    def test_environment_passed_to_agent(self, mock_import, config, mock_env):
-        mock_import.return_value = (MockDefaultAgent, MockLiteLLMModel)
-        plan_agent.run(config, "Fix parser bug", mock_env)
+        # First message is system prompt containing the template
+        assert messages[0]["role"] == "system"
+        assert "You are a planner" in messages[0]["content"]
 
     @patch("src.agents.plan_agent.import_minisweagent")
     def test_plan_trimmed(self, mock_import, config, mock_env):
-        class AgentWithSpaces(MockDefaultAgent):
-            def run(self, user_message: str) -> str:
-                return "  plan with spaces  "
-
-        mock_import.return_value = (AgentWithSpaces, MockLiteLLMModel)
+        mock_import.return_value = (object, MockLiteLLMModelSpaces, object)
         plan, _ = plan_agent.run(config, "Fix parser bug", mock_env)
         assert plan == "plan with spaces"
 
@@ -99,21 +93,13 @@ class TestRunSuccess:
 class TestRunValidation:
     @patch("src.agents.plan_agent.import_minisweagent")
     def test_empty_plan_raises_task_error(self, mock_import, config, mock_env):
-        class EmptyAgent(MockDefaultAgent):
-            def run(self, user_message: str) -> str:
-                return ""
-
-        mock_import.return_value = (EmptyAgent, MockLiteLLMModel)
+        mock_import.return_value = (object, MockLiteLLMModelEmpty, object)
         with pytest.raises(TaskError, match="empty"):
             plan_agent.run(config, "Fix parser bug", mock_env)
 
     @patch("src.agents.plan_agent.import_minisweagent")
     def test_whitespace_only_plan_raises_task_error(self, mock_import, config, mock_env):
-        class WhitespaceAgent(MockDefaultAgent):
-            def run(self, user_message: str) -> str:
-                return "   \n\n   "
-
-        mock_import.return_value = (WhitespaceAgent, MockLiteLLMModel)
+        mock_import.return_value = (object, MockLiteLLMModelWhitespace, object)
         with pytest.raises(TaskError, match="empty"):
             plan_agent.run(config, "Fix parser bug", mock_env)
 
@@ -126,12 +112,3 @@ class TestMissingDependency:
     def test_missing_import_raises_fatal_error(self, mock_import, config, mock_env):
         with pytest.raises(FatalError, match="mini-swe-agent"):
             plan_agent.run(config, "Fix parser bug", mock_env)
-
-
-class TestAgentDoesNotHoldEnvReference:
-    @patch("src.agents.plan_agent.import_minisweagent")
-    def test_function_returns_no_env(self, mock_import, config, mock_env):
-        mock_import.return_value = (MockDefaultAgent, MockLiteLLMModel)
-        plan, messages = plan_agent.run(config, "Fix parser bug", mock_env)
-        assert plan is not None
-        assert messages is not None

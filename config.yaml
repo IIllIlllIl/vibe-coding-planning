@@ -23,10 +23,21 @@ prompts:
     Please analyze the codebase, understand the problem, and output a detailed plan.
     Do NOT modify any files in the codebase. The codebase is mounted read-only.
 
+    {plan_format_template}
+
+    Issue:
+    {issue_description}
+
   code_generation_prompt: |
     You are a code generation assistant. Given the following plan and issue description,
     generate a Git diff format patch that implements the solution.
     Do NOT directly modify files. Output the patch as diff text.
+
+    Plan:
+    {plan}
+
+    Issue:
+    {issue_description}
 
   plan_optimization_prompt: |
     You are a reflection optimization expert. Based on the previous plan's execution feedback,

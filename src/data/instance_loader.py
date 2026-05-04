@@ -80,16 +80,53 @@ class InstanceLoader:
     def _load_from_swebench(self, instance_id: str) -> dict[str, Any]:
         """Load instance via the swebench package.
 
-        This is a placeholder for the real swebench integration. In the full
-        implementation, this will call swebench API functions to load instance
-        metadata from the SWE-bench Pro dataset.
+        Calls ``swebench.harness.utils.load_swebench_dataset`` to fetch
+        instance metadata from the HuggingFace SWE-bench dataset.
+
+        Args:
+            instance_id: The SWE-bench Pro instance identifier.
+
+        Returns:
+            Instance metadata dict compatible with the pipeline and evaluator.
+
+        Raises:
+            TaskError: If the instance cannot be found or swebench is not
+                installed.
         """
-        # TODO: Implement real swebench integration in a later round.
-        # For now, raise TaskError to indicate this requires real data.
-        raise TaskError(
-            f"Real swebench loading not yet implemented for {instance_id}. "
-            "Use mock_data_dir for testing."
-        )
+        try:
+            from swebench.harness.utils import load_swebench_dataset
+        except ImportError as exc:
+            raise TaskError(
+                "swebench is not installed. "
+                "Please install it: pip install swebench>=4.1.0"
+            ) from exc
+
+        try:
+            instances = load_swebench_dataset(instance_ids=[instance_id])
+        except Exception as exc:
+            raise TaskError(
+                f"Failed to load instance {instance_id} from SWE-bench dataset: {exc}"
+            ) from exc
+
+        if not instances:
+            raise TaskError(
+                f"Instance {instance_id} not found in SWE-bench dataset."
+            )
+
+        instance = dict(instances[0])
+
+        # Derive Docker image name from repo if not already present
+        if "image_name" not in instance or not instance["image_name"]:
+            repo = instance.get("repo", "")
+            if repo:
+                instance["image_name"] = f"swebench/{repo.replace('/', '-')}"
+
+        # Ensure problem_statement is present (fallbacks for compatibility)
+        if "problem_statement" not in instance and "text" in instance:
+            instance["problem_statement"] = instance["text"]
+
+        logger.info("Loaded SWE-bench instance: %s (repo=%s)", instance_id, instance.get("repo"))
+        return instance
 
     def list_available_instances(self) -> list[str]:
         """List available instance IDs.

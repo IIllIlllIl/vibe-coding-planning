@@ -8,14 +8,6 @@ from src.evaluator import swe_evaluator
 from src.exceptions import FatalError
 
 
-class MockSwebenchHarness:
-    """Mock swebench.harness module."""
-
-    @staticmethod
-    def run_evaluation(predictions, run_id, timeout):
-        return (True, "/tmp/logs/eval_123")
-
-
 @pytest.fixture
 def instance_info():
     return {
@@ -27,11 +19,13 @@ def instance_info():
 
 
 class TestEvaluateSuccess:
-    @patch.object(swe_evaluator, "_import_swebench")
-    def test_returns_structured_result(self, mock_import, instance_info):
-        swebench_mock = MagicMock()
-        swebench_mock.harness = MockSwebenchHarness()
-        mock_import.return_value = swebench_mock
+    @patch("swebench.harness.run_evaluation.run_instance")
+    @patch("swebench.harness.test_spec.test_spec.make_test_spec")
+    @patch("docker.from_env")
+    def test_returns_structured_result(
+        self, mock_docker, mock_make_spec, mock_run_instance, instance_info
+    ):
+        mock_run_instance.return_value = {"completed": True, "resolved": True}
 
         result = swe_evaluator.evaluate("diff content", instance_info)
 
@@ -40,46 +34,28 @@ class TestEvaluateSuccess:
         assert "stderr" in result
         assert "log_dir" in result
         assert result["resolved"] is True
-        assert result["log_dir"] == "/tmp/logs/eval_123"
+        assert "logs/run_evaluation" in result["log_dir"]
 
-    @patch.object(swe_evaluator, "_import_swebench")
-    def test_uses_instance_id_in_prediction(self, mock_import, instance_info):
-        swebench_mock = MagicMock()
+    @patch("swebench.harness.run_evaluation.run_instance")
+    @patch("swebench.harness.test_spec.test_spec.make_test_spec")
+    @patch("docker.from_env")
+    def test_uses_instance_id_in_prediction(
+        self, mock_docker, mock_make_spec, mock_run_instance, instance_info
+    ):
         calls = []
 
-        class CapturingHarness:
-            @staticmethod
-            def run_evaluation(predictions, run_id, timeout):
-                calls.append(predictions)
-                return (False, "/tmp/logs")
+        def capture_run(test_spec, pred, **kwargs):
+            calls.append(pred)
+            return {"completed": True, "resolved": False}
 
-        swebench_mock.harness = CapturingHarness()
-        mock_import.return_value = swebench_mock
+        mock_run_instance.side_effect = capture_run
 
         swe_evaluator.evaluate("diff content", instance_info)
 
         assert len(calls) == 1
-        assert calls[0][0]["instance_id"] == "astropy__astropy-14539"
-        assert calls[0][0]["model_patch"] == "diff content"
-
-    @patch.object(swe_evaluator, "_import_swebench")
-    def test_derives_image_name_from_repo(self, mock_import):
-        swebench_mock = MagicMock()
-        calls = []
-
-        class CapturingHarness:
-            @staticmethod
-            def run_evaluation(predictions, run_id, timeout):
-                calls.append(run_id)
-                return (True, "/tmp/logs")
-
-        swebench_mock.harness = CapturingHarness()
-        mock_import.return_value = swebench_mock
-
-        info = {"instance_id": "django__django-123", "repo": "django/django"}
-        swe_evaluator.evaluate("diff", info)
-        # Image name derived from repo: swebench/django/django
-        # This is tested indirectly via _get_image_name tests below
+        assert calls[0]["instance_id"] == "astropy__astropy-14539"
+        assert calls[0]["model_patch"] == "diff content"
+        assert calls[0]["model_name_or_path"] == "plan-code-test"
 
 
 class TestGetImageName:
@@ -110,24 +86,19 @@ class TestGetImageName:
 
 
 class TestMissingInstanceId:
-    @patch.object(swe_evaluator, "_import_swebench")
-    def test_raises_when_instance_id_missing(self, mock_import):
+    def test_raises_when_instance_id_missing(self):
         with pytest.raises(FatalError, match="missing 'instance_id'"):
             swe_evaluator.evaluate("diff", {"repo": "test/repo"})
 
 
 class TestEvaluateFailure:
-    @patch.object(swe_evaluator, "_import_swebench")
-    def test_returns_failure_result_on_exception(self, mock_import, instance_info):
-        swebench_mock = MagicMock()
-
-        class FailingHarness:
-            @staticmethod
-            def run_evaluation(predictions, run_id, timeout):
-                raise RuntimeError("Docker not available")
-
-        swebench_mock.harness = FailingHarness()
-        mock_import.return_value = swebench_mock
+    @patch("swebench.harness.run_evaluation.run_instance")
+    @patch("swebench.harness.test_spec.test_spec.make_test_spec")
+    @patch("docker.from_env")
+    def test_returns_failure_result_on_exception(
+        self, mock_docker, mock_make_spec, mock_run_instance, instance_info
+    ):
+        mock_run_instance.side_effect = RuntimeError("Docker not available")
 
         result = swe_evaluator.evaluate("diff content", instance_info)
 
@@ -136,36 +107,36 @@ class TestEvaluateFailure:
 
 
 class TestEvaluateTimeout:
-    @patch.object(swe_evaluator, "_import_swebench")
-    def test_default_timeout_is_300(self, mock_import, instance_info):
+    @patch("swebench.harness.run_evaluation.run_instance")
+    @patch("swebench.harness.test_spec.test_spec.make_test_spec")
+    @patch("docker.from_env")
+    def test_default_timeout_is_300(
+        self, mock_docker, mock_make_spec, mock_run_instance, instance_info
+    ):
         captured = {}
 
-        class CapturingHarness:
-            @staticmethod
-            def run_evaluation(predictions, run_id, timeout):
-                captured["timeout"] = timeout
-                return (False, "/tmp/logs")
+        def capture(test_spec, pred, rm_image, force_rebuild, client, run_id, timeout, rewrite_reports):
+            captured["timeout"] = timeout
+            return {"completed": True, "resolved": False}
 
-        swebench_mock = MagicMock()
-        swebench_mock.harness = CapturingHarness()
-        mock_import.return_value = swebench_mock
+        mock_run_instance.side_effect = capture
 
         swe_evaluator.evaluate("diff", instance_info)
         assert captured["timeout"] == 300
 
-    @patch.object(swe_evaluator, "_import_swebench")
-    def test_custom_timeout_is_propagated(self, mock_import, instance_info):
+    @patch("swebench.harness.run_evaluation.run_instance")
+    @patch("swebench.harness.test_spec.test_spec.make_test_spec")
+    @patch("docker.from_env")
+    def test_custom_timeout_is_propagated(
+        self, mock_docker, mock_make_spec, mock_run_instance, instance_info
+    ):
         captured = {}
 
-        class CapturingHarness:
-            @staticmethod
-            def run_evaluation(predictions, run_id, timeout):
-                captured["timeout"] = timeout
-                return (True, "/tmp/logs")
+        def capture(test_spec, pred, rm_image, force_rebuild, client, run_id, timeout, rewrite_reports):
+            captured["timeout"] = timeout
+            return {"completed": True, "resolved": True}
 
-        swebench_mock = MagicMock()
-        swebench_mock.harness = CapturingHarness()
-        mock_import.return_value = swebench_mock
+        mock_run_instance.side_effect = capture
 
         swe_evaluator.evaluate("diff", instance_info, timeout=1800)
         assert captured["timeout"] == 1800
@@ -187,11 +158,14 @@ class TestDeriveImageName:
 
 
 class TestMissingDependency:
-    @patch.object(
-        swe_evaluator,
-        "_import_swebench",
-        side_effect=FatalError("swebench is not installed"),
-    )
-    def test_missing_import_raises_fatal_error(self, mock_import, instance_info):
-        with pytest.raises(FatalError, match="swebench"):
-            swe_evaluator.evaluate("diff", instance_info)
+    def test_missing_import_raises_fatal_error(self, instance_info):
+        with patch(
+            "swebench.harness.run_evaluation.run_instance",
+            side_effect=ImportError("No module named 'swebench'"),
+        ):
+            with patch(
+                "swebench.harness.test_spec.test_spec.make_test_spec",
+            ):
+                with patch("docker.from_env"):
+                    with pytest.raises(FatalError, match="swebench"):
+                        swe_evaluator.evaluate("diff", instance_info)
