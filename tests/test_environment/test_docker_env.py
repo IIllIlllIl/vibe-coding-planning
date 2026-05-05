@@ -53,7 +53,7 @@ class TestStart:
         assert wrapper._env.cwd == "/testbed"
 
     @patch("src.environment.docker_env._import_docker_env")
-    def test_ro_mount_in_run_args(self, mock_import, docker_config):
+    def test_mount_in_run_args(self, mock_import, docker_config):
         mock_import.return_value = MockDockerEnvironment
         wrapper = DockerEnvWrapper(docker_config)
         wrapper.start(
@@ -63,9 +63,10 @@ class TestStart:
         )
 
         run_args = wrapper._env.run_args
-        assert any("readonly" in arg for arg in run_args)
+        assert not any("readonly" in arg for arg in run_args)
         assert any("/host/code" in arg for arg in run_args)
         assert any("/testbed" in arg for arg in run_args)
+        assert "--rm" in run_args
 
 
 class TestExecute:

@@ -73,13 +73,13 @@ plan-code-test/
 |------|------|------|
 | **Plan Agent** | `src/agents/plan_agent.py` | 创建 `DefaultAgent`（system prompt = `plan_generation_prompt`），在 Docker 环境中自主探索代码库，输出自然语言 Plan。返回 `(plan_content, trajectory_messages)` |
 | **Code Agent** | `src/agents/code_agent.py` | 创建 `DefaultAgent`（system prompt = `code_generation_prompt`），输入 Plan + Issue 描述，输出 Git diff 格式的 Patch。返回 `(patch_content, trajectory_messages)` |
-| **Reflect Agent** | `src/agents/reflect_agent.py` | 复用 `DefaultAgent` + 空环境（无工具调用），根据 `use_gepa_reflection_prompt` 开关选择 Prompt 模板：使用 GEPA 反射 Prompt 模板（`gepa_reflection.py` 渲染）或 简化反思 Prompt（`config.yaml` 中配置）。将 Optimization Feedback 作为用户消息传入，调用 LLM 生成改进后的 Plan。返回 `(new_plan, trajectory_messages)` |
+| **Reflect Agent** | `src/agents/reflect_agent.py` | 复用 `DefaultAgent` + Docker 环境（同 Plan/Code Agent），在 Docker 容器内运行。**所有 Optimization Feedback 内容在主机端读取并组装为纯文本字符串 `feedback_text`，通过 system prompt 注入，不传递文件路径**。Agent 可读取代码库文件验证假设、编写临时测试脚本，但不得修改源代码。使用 GEPA 反射 Prompt 模板或简化反思 Prompt 生成改进 Plan。返回 `(new_plan, trajectory_messages)` |
 
 **Agent 层的统一约定**：
 - `plan_agent` 与 `code_agent` 函数签名：`run(config, task_input, env) -> (result_text, trajectory_messages)`
-- `reflect_agent` 函数签名：`run(config, optimization_feedback) -> (new_plan, trajectory_messages)`（使用内部 `NullEnvironment`，无需外部注入 Docker 环境）
+- `reflect_agent` 函数签名：`run(config, feedback_text, env) -> (new_plan, trajectory_messages)`（`feedback_text` 为主机端预组装的纯文本字符串；`env` 为 Docker 环境，与 Plan/Code Agent 共享同一容器）
 - `trajectory_messages` 是 `mini-swe-agent` 的 `DefaultAgent.messages` 列表（`list[dict]`）
-- `plan_agent` 与 `code_agent` 不持有 `DockerEnvironment` 引用，由调用方注入
+- 所有 Agent 均不长期持有 `DockerEnvironment` 引用，由调用方注入，运行结束后释放
 
 ### 3.3 环境层
 
@@ -135,7 +135,8 @@ main.py
         │   ├── feedback.assemble(plan_{i-1}, traj_plan_{i-1}, traj_code_{i-1},
         │   │                     patch_{i-1}, test_results_{i-1}, config)
         │   │   └── optimization_feedback
-        │   ├── reflect_agent.run(config, optimization_feedback)
+        │   ├── feedback_text = _build_feedback_text(...)
+        │   ├── reflect_agent.run(config, feedback_text, docker_env)
         │   │   └── (plan_i, traj_reflect_i)
         │   ├── code_agent.run(config, plan_i + issue_desc, docker_env)
         │   │   └── (patch_i, traj_code_i)
@@ -192,7 +193,17 @@ TestResults = dict[str, Any]  # {resolved: bool, stdout: str, stderr: str, log_d
 
 这样即使 `gepa` 包未来版本变化，我们的 Prompt 模板也是稳定的。
 
-### 5.4 错误处理策略
+### 5.4 为什么 Reflect Agent 也使用 Docker 环境并通过 Prompt 注入 Feedback？
+
+早期设计曾考虑让 Reflect Agent 在主机端直接调用 LLM（使用 `NullEnvironment`，无工具调用），仅将 Optimization Feedback 作为用户消息传入。这一方案被推翻，原因如下：
+
+1. **隔离性**：Reflect Agent 在优化 Plan 时可能需要读取代码库文件来验证假设（例如确认某函数签名、查看相关模块的实现）。如果 Reflect Agent 运行在主机端，则需要额外实现文件访问机制；运行在 Docker 容器内可直接复用已有的 `DockerEnvironment` 工具调用能力。
+
+2. **防止信息污染（核心设计约束）**：Reflect Agent 不得访问 output_dir 中的 trajectory 文件。如果传递文件路径给 Agent，Agent 可能通过 `cat` 等命令读取到其他轮次的 plan 或 trajectory 内容，导致优化判断受到不相关信息干扰。因此，**主机端在调用前读取所有 trajectory 文件内容，组装为纯文本字符串 `feedback_text`，通过 system prompt 注入**。Reflect Agent 在容器内仅看到已注入的文本，无法访问源文件。
+
+3. **一致性**：Plan Agent、Code Agent、Reflect Agent 均基于同一套 `DefaultAgent` + `DockerEnvironment` 机制，降低心智负担和代码复杂度。
+
+### 5.5 错误处理策略
 
 在 `pipeline.py` 的每个阶段包裹 try/except：
 - **致命错误**（API 401/429、磁盘满、Docker 崩溃）：抛出 FatalError，由 `main.py` 捕获后记录日志、调用 `writer.emergency_save()`、退出（保留已收集数据）
@@ -208,7 +219,7 @@ TestResults = dict[str, Any]  # {resolved: bool, stdout: str, stderr: str, log_d
 | `src/pipeline.py` | 主循环 + 错误处理 | 内部模块 |
 | `src/agents/plan_agent.py` | 实例化 `DefaultAgent` + `LitellmModel` + `DockerEnvironment`，传入 `plan_generation_prompt` | `mini-swe-agent` |
 | `src/agents/code_agent.py` | 同上，使用 `code_generation_prompt` | `mini-swe-agent` |
-| `src/agents/reflect_agent.py` | 复用 `DefaultAgent` + 空环境，组装 Feedback → 选择 Prompt 模板 → 调用 LLM | `mini-swe-agent` |
+| `src/agents/reflect_agent.py` | 复用 `DefaultAgent` + `DockerEnvironment`，`feedback_text` 通过 system prompt 注入，Agent 在容器内可探索代码库但无法访问 trajectory 文件 | `mini-swe-agent` |
 | `src/environment/docker_env.py` | 封装 `DockerEnvironment`，设置 ro 挂载 | `mini-swe-agent` |
 | `src/evaluator/swe_evaluator.py` | 调用 `swebench.harness.run_evaluation` | `swebench` |
 | `src/feedback/assembler.py` | 字典组装 | 无 |
@@ -228,7 +239,7 @@ TestResults = dict[str, Any]  # {resolved: bool, stdout: str, stderr: str, log_d
 | FR-02 Plan 生成 | `src/agents/plan_agent.py` |
 | FR-03 Code 生成 | `src/agents/code_agent.py` |
 | FR-04 测试评估 | `src/evaluator/swe_evaluator.py` |
-| FR-05 方案优化 | `src/agents/reflect_agent.py` + `src/prompts/gepa_reflection.py` |
+| FR-05 方案优化 | `src/agents/reflect_agent.py` + `src/prompts/gepa_reflection.py` + `src/environment/docker_env.py` + `src/pipeline.py`（feedback 组装） |
 | FR-06 迭代循环 | `src/pipeline.py` |
 | FR-07 重跑 | `src/config.py`（resume 配置）+ `src/pipeline.py` |
 | FR-08/09 配置 | `src/config.py` + `config.yaml` |

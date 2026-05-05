@@ -1,37 +1,47 @@
 """Code generation agent.
 
-Directly queries the LLM with a system + user prompt and returns the
-Git diff Patch text.  Does not use DefaultAgent's interactive step loop
-because code generation is a single-shot text-completion task.
+Aligns with the official mini-swe-agent SWE-bench submission protocol:
+the agent edits files in the container with shell commands and finally
+emits ``echo COMPLETE_TASK_AND_SUBMIT_FINAL_OUTPUT && git add -A && git
+diff --cached``. ``DefaultAgent.has_finished`` strips the marker line and
+``Submitted.exception_msg`` carries the canonical ``git diff --cached``
+output verbatim — no fence-stripping, validation, or repair is needed.
 """
 
 from __future__ import annotations
 
 import logging
-import time
 from typing import Any
 
-from src.agents._deps import build_model, import_minisweagent
+from src.agents._deps import (
+    build_default_agent,
+    build_model,
+    import_minisweagent,
+)
 from src.config import Config
 from src.exceptions import TaskError
 from src.prompts.templates import render_code_prompt
 
 logger = logging.getLogger(__name__)
 
-# Markers that indicate a valid Git diff patch
-_DIFF_MARKERS = ("diff --git", "--- ", "+++ ")
 
+def _extract_result(exception_name: str, exception_msg: str) -> str:
+    """Extract the agent's final output based on how it terminated.
 
-def _is_valid_patch(text: str) -> bool:
-    """Check if the text contains Git diff markers and at least one hunk.
-
-    Requires:
-    - At least one diff header marker (diff --git, ---, or +++)
-    - At least one hunk marker (@@) indicating actual code changes
+    Only ``Submitted`` is treated as success — its message is the
+    ``git diff --cached`` output (already with the marker line stripped
+    by ``DefaultAgent.has_finished``). Any other exit status (e.g.
+    ``LimitsExceeded``) means the agent did not produce a real
+    submission; raising :class:`TaskError` lets the pipeline record an
+    explicit failure rather than fabricate a patch from the unfinished
+    conversation history.
     """
-    has_header = any(marker in text for marker in _DIFF_MARKERS)
-    has_hunk = "@@" in text
-    return has_header and has_hunk
+    if exception_name == "Submitted":
+        return exception_msg
+    raise TaskError(
+        f"Code agent terminated without a submission "
+        f"(exit_status={exception_name}): {exception_msg[:200]}"
+    )
 
 
 def run(
@@ -46,19 +56,25 @@ def run(
         config: Full configuration object.
         plan: The plan text produced by the plan agent.
         issue_description: The original SWE-bench issue description.
-        env: Docker environment wrapper (retained for API compatibility).
+        env: Docker environment wrapper (passed to DefaultAgent for tool
+            execution).
 
     Returns:
-        A tuple of ``(patch_text, trajectory_messages)``.
+        A tuple of ``(patch_text, trajectory_messages)``. ``patch_text``
+        is the raw ``git diff --cached`` output captured by the
+        official submission command; no post-processing is applied.
 
     Raises:
-        TaskError: If the agent produces empty or non-diff output.
+        TaskError: If the agent terminates without submitting (e.g.
+            step/cost limit) or produces empty output.
         FatalError: If mini-swe-agent is not installed.
     """
-    _, LitellmModel, _ = import_minisweagent()
+    DefaultAgent, LitellmModel, _ = import_minisweagent()
 
-    system_template = config.prompts.code_generation_prompt
-    user_message = render_code_prompt(system_template, plan, issue_description)
+    system_template = render_code_prompt(
+        config.prompts.code_generation_prompt, plan, issue_description
+    )
+    instance_template = config.prompts.code_instance_template or None
 
     model = build_model(
         LitellmModel,
@@ -67,30 +83,26 @@ def run(
         api_base=config.system.api_base,
     )
 
-    messages: list[dict[str, Any]] = [
-        {"role": "system", "content": system_template, "timestamp": time.time()},
-        {"role": "user", "content": user_message, "timestamp": time.time()},
-    ]
+    agent = build_default_agent(
+        DefaultAgent,
+        model=model,
+        environment=env,
+        system_template=system_template,
+        step_limit=config.agent.max_steps,
+        cost_limit=config.agent.cost_limit,
+        instance_template=instance_template,
+    )
 
     logger.info(
-        "Starting code agent: model=%s",
+        "Starting code agent: model=%s step_limit=%s",
         config.system.model,
+        config.agent.max_steps,
     )
 
-    response = model.query(messages)
-    patch_text = response.get("content", "")
-
-    messages.append(
-        {"role": "assistant", "content": patch_text, "timestamp": time.time()}
-    )
+    exception_name, exception_msg = agent.run(task=issue_description)
+    patch_text = _extract_result(exception_name, exception_msg)
 
     if not patch_text or not patch_text.strip():
         raise TaskError("Code agent produced empty output.")
 
-    if not _is_valid_patch(patch_text):
-        raise TaskError(
-            "Code agent output does not contain valid Git diff markers. "
-            f"Output preview: {patch_text[:200]!r}"
-        )
-
-    return patch_text.strip(), messages
+    return patch_text, agent.messages

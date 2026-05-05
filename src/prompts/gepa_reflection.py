@@ -11,7 +11,7 @@ import re
 #   {prompt_template}          -> current Plan content
 #   {inputs_outputs_feedback}  -> formatted Optimization Feedback
 #   {placeholders}             -> list of placeholders to preserve (or empty)
-_GEPA_REFLECTION_TEMPLATE = """I provided an assistant with the following instructions to perform a task for me:
+_GEPA_REFLECTION_TEMPLATE = """I provided an assistant with the following plan to perform a task for me:
 
 ```
 {prompt_template}
@@ -25,7 +25,7 @@ The following are examples of different task inputs provided to the assistant al
 
 {inputs_outputs_feedback}
 
-Your task is to write a new instruction for the assistant.
+Your task is to write a new plan for the assistant.
 
 Read the inputs carefully and identify the input format and infer a detailed task description about the task I wish to solve with the assistant.
 
@@ -35,16 +35,16 @@ Carefully examine the agent trajectories to understand HOW the assistant is appr
 - Where the assistant makes mistakes or suboptimal choices
 - What information the assistant is missing or misinterpreting
 
-Read all the assistant responses and the corresponding feedback. Identify all niche and domain-specific factual information about the task and include it in the instruction, as a lot of it may not be available to the assistant in the future. The assistant may have utilized a generalizable strategy to solve the task; if so, include that in the instruction as well.
+Read all the assistant responses and the corresponding feedback. Identify all niche and domain-specific factual information about the task and include it in the plan, as a lot of it may not be available to the assistant in the future. The assistant may have utilized a generalizable strategy to solve the task; if so, include that in the plan as well.
 
-Based on the feedback AND the agent trajectories, identify what the assistant is doing wrong or could do better, and incorporate specific guidance to address these issues in the new instruction.
+Based on the feedback AND the agent trajectories, identify what the assistant is doing wrong or could do better, and incorporate specific guidance to address these issues in the new plan.
 
 Important constraints:
-- The instruction must keep these exact placeholders intact: {placeholders}
+- The plan must keep these exact placeholders intact: {placeholders}
 - Do not add new placeholders or remove existing ones
 - Focus on improving clarity, specificity, and actionable guidance
 
-Provide the new instruction within ``` blocks.
+Provide the new plan within ``` blocks.
 """
 
 

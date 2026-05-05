@@ -50,6 +50,7 @@ class PromptConfig:
 
     plan_generation_prompt: str = ""
     code_generation_prompt: str = ""
+    code_instance_template: str = ""
     plan_optimization_prompt: str = ""
     plan_format_template: str = ""
 
@@ -254,6 +255,7 @@ def _build_prompt_config(data: dict[str, Any]) -> PromptConfig:
     return PromptConfig(
         plan_generation_prompt=_get_str(data, "plan_generation_prompt", ""),
         code_generation_prompt=_get_str(data, "code_generation_prompt", ""),
+        code_instance_template=_get_str(data, "code_instance_template", ""),
         plan_optimization_prompt=_get_str(data, "plan_optimization_prompt", ""),
         plan_format_template=_get_str(data, "plan_format_template", ""),
     )

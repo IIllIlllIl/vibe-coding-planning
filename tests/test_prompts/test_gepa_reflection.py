@@ -54,14 +54,14 @@ class TestRender:
         result = render("plan", "feedback", "")
         assert "plan" in result
         assert "feedback" in result
-        assert "The instruction must keep these exact placeholders intact: " in result
+        assert "The plan must keep these exact placeholders intact: " in result
 
     def test_template_content_matches_requirement_doc(self):
         """Verify the hard-coded template contains key phrases from Appendix A."""
-        assert "I provided an assistant with the following instructions" in _GEPA_REFLECTION_TEMPLATE
+        assert "I provided an assistant with the following plan" in _GEPA_REFLECTION_TEMPLATE
         assert "Carefully examine the agent trajectories" in _GEPA_REFLECTION_TEMPLATE
         assert "Do not add new placeholders or remove existing ones" in _GEPA_REFLECTION_TEMPLATE
-        assert "Provide the new instruction within ``` blocks." in _GEPA_REFLECTION_TEMPLATE
+        assert "Provide the new plan within ``` blocks." in _GEPA_REFLECTION_TEMPLATE
 
 
 class TestParseOutput:

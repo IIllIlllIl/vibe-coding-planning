@@ -1,46 +1,87 @@
 """Reflection agent.
 
-Directly queries the LLM with a system + user prompt and returns the
-improved Plan text.  Does not use DefaultAgent's interactive step loop
-because reflection is a single-shot text-completion task.
+Runs inside a Docker container using DefaultAgent's interactive step loop,
+similar to plan_agent. The agent may read files and write temporary test
+scripts to verify its understanding, but must not modify source code files.
+
+All context (original prompt, trajectories, test results, patch) is injected
+into the system prompt by the pipeline on the host. The agent has no access
+to trajectory files in the container.
 """
 
 from __future__ import annotations
 
 import logging
-import time
 from typing import Any
 
-from src.agents._deps import build_model, import_minisweagent
+from src.agents._deps import (
+    build_default_agent,
+    build_model,
+    extract_last_assistant,
+    import_minisweagent,
+)
 from src.config import Config
 from src.exceptions import TaskError
 from src.prompts import gepa_reflection
-from src.prompts.templates import render_plan_prompt
 
 logger = logging.getLogger(__name__)
 
 
-class NullEnvironment:
-    """No-op environment (retained for backward compatibility)."""
+def _read_plan_from_file(env: Any) -> str | None:
+    """Try to read /tmp/plan.md from the Docker container.
 
-    def execute(self, command: str) -> dict[str, Any]:
-        """Execute a command – returns empty dict matching 1.17.5 format."""
-        return {"output": "", "returncode": 0}
+    Returns:
+        The file content if successfully read and non-empty, otherwise None.
+    """
+    try:
+        result = env.execute("cat /tmp/plan.md")
+        if result.get("returncode") == 0:
+            content = result.get("output", "").strip()
+            if content:
+                return content
+    except Exception:
+        pass
+    return None
 
-    def get_template_vars(self) -> dict[str, Any]:
-        """Return template variables – always returns empty dict."""
-        return {}
+
+_REFLECT_SYSTEM_TEMPLATE = """You are a reflection optimization expert. You are operating inside a Docker container with access to the codebase at /testbed. You may read files, run commands, and write temporary test scripts to verify your understanding. Do NOT modify source code files.
+
+{feedback_text}
+
+Your task is to analyze the assistant's execution shown above, identify failures and suboptimal choices, and write a new improved plan.
+
+The plan you output MUST follow the N/R/P/V structure:
+- Navigation (N): how to locate the relevant code
+- Reproduction (R): steps to reproduce or verify the issue
+- Patch (P): specific files and changes needed
+- Validation (V): how to verify the fix works
+
+Write the improved plan to /tmp/plan.md. You may explore the codebase to verify your hypotheses. When you are ready, output the new plan within ``` blocks and then submit:
+
+```bash
+echo COMPLETE_TASK_AND_SUBMIT_FINAL_OUTPUT
+```
+"""
 
 
 def run(
     config: Config,
-    optimization_feedback: dict[str, Any],
+    feedback_text: str,
+    env: Any,
 ) -> tuple[str, list[dict[str, Any]]]:
     """Run the reflection agent to generate an improved Plan.
 
+    The agent executes inside the Docker container via DefaultAgent's
+    interactive step loop.  All necessary context is pre-loaded into the
+    system prompt; the agent has no access to trajectory files.
+
     Args:
         config: Full configuration object.
-        optimization_feedback: Assembled OptimizationFeedback dict (§4.1).
+        feedback_text: Pre-assembled execution context (original prompt,
+            trajectories, test results, patch) built by the pipeline on the
+            host.
+        env: Docker environment wrapper (passed to DefaultAgent for tool
+            execution).
 
     Returns:
         A tuple of ``(new_plan_text, trajectory_messages)``.
@@ -49,22 +90,9 @@ def run(
         TaskError: If the agent produces empty or too-short output.
         FatalError: If mini-swe-agent is not installed.
     """
-    _, LitellmModel, _ = import_minisweagent()
+    DefaultAgent, LitellmModel, _ = import_minisweagent()
 
-    current_plan = optimization_feedback.get("current_plan", {}).get("content", "")
-    feedback_text = _format_feedback(optimization_feedback)
-
-    if config.system.use_gepa_reflection_prompt:
-        system_template = gepa_reflection.render(
-            current_plan=current_plan,
-            feedback_data=feedback_text,
-            placeholders="",
-        )
-    else:
-        system_template = render_plan_prompt(
-            config.prompts.plan_optimization_prompt,
-            config.prompts.plan_format_template,
-        )
+    system_template = _REFLECT_SYSTEM_TEMPLATE.format(feedback_text=feedback_text)
 
     model = build_model(
         LitellmModel,
@@ -73,30 +101,37 @@ def run(
         api_base=config.system.api_base,
     )
 
-    messages: list[dict[str, Any]] = [
-        {"role": "system", "content": system_template, "timestamp": time.time()},
-        {"role": "user", "content": feedback_text, "timestamp": time.time()},
-    ]
+    agent = build_default_agent(
+        DefaultAgent,
+        model=model,
+        environment=env,
+        system_template=system_template,
+        step_limit=config.agent.max_steps,
+        cost_limit=config.agent.cost_limit,
+    )
 
     logger.info(
-        "Starting reflect agent: model=%s gepa=%s",
+        "Starting reflect agent: model=%s step_limit=%s",
         config.system.model,
-        config.system.use_gepa_reflection_prompt,
+        config.agent.max_steps,
     )
 
-    response = model.query(messages)
-    plan_text = response.get("content", "")
+    exception_name, exception_msg = agent.run(task="Improve the plan based on the analysis.")
 
-    messages.append(
-        {"role": "assistant", "content": plan_text, "timestamp": time.time()}
-    )
+    # Try to read plan from the file the agent wrote in the container
+    plan_text = _read_plan_from_file(env)
+    if plan_text is None:
+        if exception_name == "Submitted":
+            plan_text = exception_msg.strip()
+        else:
+            plan_text = extract_last_assistant(agent.messages)
+        # Extract the plan from ```-fenced block (GEPA output format)
+        # only when reading from messages; file content is already plain text
+        if plan_text:
+            plan_text = gepa_reflection.parse_output(plan_text)
 
     if not plan_text or not plan_text.strip():
         raise TaskError("Reflect agent produced empty output.")
-
-    # Parse GEPA output (extract first ``` block) if using GEPA prompt
-    if config.system.use_gepa_reflection_prompt:
-        plan_text = gepa_reflection.parse_output(plan_text)
 
     plan_text = plan_text.strip()
     if len(plan_text) < 50:
@@ -105,41 +140,4 @@ def run(
             "Expected a detailed plan."
         )
 
-    return plan_text, messages
-
-
-def _format_feedback(feedback: dict[str, Any]) -> str:
-    """Format OptimizationFeedback dict into a string for the LLM.
-
-    This is a simplified formatter.  It extracts the key sections that
-    the reflection agent needs to analyze.
-    """
-    parts: list[str] = []
-
-    meta = feedback.get("meta", {})
-    parts.append(f"Round: {meta.get('current_round', '?')}")
-    parts.append(f"Optimization info level: {meta.get('optimization_info_level', '?')}")
-
-    current_plan = feedback.get("current_plan", {})
-    parts.append(f"\nCurrent Plan:\n{current_plan.get('content', '')}")
-
-    test_results = feedback.get("test_results", {})
-    if test_results:
-        parts.append(f"\nTest Results:\nResolved: {test_results.get('resolved')}")
-        stdout = test_results.get("stdout", "")
-        if stdout:
-            parts.append(f"STDOUT:\n{stdout[:2000]}")  # Truncate if too long
-        stderr = test_results.get("stderr", "")
-        if stderr:
-            parts.append(f"STDERR:\n{stderr[:2000]}")
-
-    error_info = feedback.get("error_info")
-    if error_info:
-        parts.append(f"\nError Info:\n{error_info}")
-
-    generated_code = feedback.get("generated_code", {})
-    patch = generated_code.get("content", "")
-    if patch:
-        parts.append(f"\nGenerated Patch:\n{patch[:2000]}")
-
-    return "\n".join(parts)
+    return plan_text, agent.messages

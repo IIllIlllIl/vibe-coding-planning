@@ -5,7 +5,9 @@ Calls swebench.harness.run_evaluation with a patch and instance metadata.
 
 from __future__ import annotations
 
+import json
 import logging
+from pathlib import Path
 from typing import Any
 
 from src.exceptions import FatalError
@@ -29,27 +31,26 @@ def _import_swebench() -> Any:
 def derive_image_name(instance_info: dict[str, Any]) -> str:
     """Derive Docker image name from instance metadata.
 
-    Uses ``image_name`` field if present, otherwise constructs from
-    ``repo`` field as ``swebench/{repo}`` with ``/`` replaced by ``-``
-    (Docker image names cannot contain ``/`` in the second segment).
+    Uses ``image_name`` field if present, otherwise constructs the
+    SWE-bench-standard image key:
+    ``swebench/sweb.eval.x86_64.{instance_id}:latest`` with ``__``
+    replaced by ``_1776_`` (the remote-image namespace convention).
 
     This function is the single source of truth for image-name derivation.
     Both :func:`evaluate` and ``pipeline.run_instance`` import from here
     to avoid drift.
-
-    TODO: Verify the naming convention against the real build_docker_images.sh
-    output. SWE-bench Pro image names may use a different prefix or format.
     """
     if "image_name" in instance_info and instance_info["image_name"]:
         return str(instance_info["image_name"])
 
-    repo = instance_info.get("repo", "")
-    if repo:
-        return f"swebench/{repo.replace('/', '-')}"
+    instance_id = instance_info.get("instance_id", "")
+    if instance_id:
+        key = f"swebench/sweb.eval.x86_64.{instance_id.lower()}:latest"
+        return key.replace("__", "_1776_")
 
     raise FatalError(
         "Cannot determine Docker image name from instance_info. "
-        "Need 'image_name' or 'repo' field."
+        "Need 'image_name' or 'instance_id' field."
     )
 
 
@@ -62,6 +63,8 @@ def evaluate(
     patch: str,
     instance_info: dict[str, Any],
     timeout: int = 300,
+    *,
+    run_id_suffix: str = "",
 ) -> dict[str, Any]:
     """Evaluate a patch using the SWE-bench official harness.
 
@@ -76,9 +79,13 @@ def evaluate(
             pass ``config.evaluator.timeout``. Default 300 retained only for
             direct/unit-test callers; production should always set this
             explicitly to honour user configuration.
+        run_id_suffix: Optional suffix appended to the run_id so that
+            multiple evaluations of the same instance do not collide on
+            cached logs.  Typical value is ``"_r2"`` for round 2.
 
     Returns:
-        A dict with keys ``resolved``, ``stdout``, ``stderr``, ``log_dir``.
+        A dict with keys ``resolved``, ``stdout``, ``stderr``, ``log_dir``,
+        and ``report`` (the parsed swebench report dict when available).
 
     Raises:
         FatalError: If swebench is not installed or image name cannot be determined.
@@ -98,8 +105,9 @@ def evaluate(
         raise FatalError("instance_info missing 'instance_id' field.")
 
     logger.info(
-        "Running SWE evaluation: instance=%s timeout=%ss",
+        "Running SWE evaluation: instance=%s suffix=%s timeout=%ss",
         instance_id,
+        run_id_suffix,
         timeout,
     )
 
@@ -108,7 +116,7 @@ def evaluate(
         "model_patch": patch,
         "model_name_or_path": "plan-code-test",
     }
-    run_id = f"eval_{instance_id}"
+    run_id = f"eval_{instance_id}{run_id_suffix}"
 
     try:
         client = docker.from_env()
@@ -135,17 +143,86 @@ def evaluate(
         ) from exc
     except Exception as exc:
         logger.error("SWE evaluation failed: %s", exc)
+        log_dir_rel = f"logs/run_evaluation/{run_id}/plan-code-test/{instance_id}"
+        # Use str(exc) when safe; fall back to reading the log file directly
+        # when EvaluationError.__str__() crashes (its internal logger may
+        # already be torn down by the time the exception propagates).
+        try:
+            error_msg = str(exc)
+        except Exception:
+            error_msg = ""
+        if not error_msg:
+            try:
+                log_file = Path(log_dir_rel).resolve() / "run_instance.log"
+                if log_file.exists():
+                    log_text = log_file.read_text(encoding="utf-8", errors="replace")
+                    for line in reversed(log_text.splitlines()):
+                        stripped = line.strip()
+                        if stripped and not stripped.startswith("Traceback") and not stripped.startswith("File "):
+                            if any(kw in stripped.lower() for kw in ["failed", "error", "patch", "exception", "apply"]):
+                                error_msg = stripped[:800]
+                                break
+            except Exception:
+                pass
+        if not error_msg:
+            error_msg = f"{type(exc).__name__}: SWE evaluation failed (see {log_dir_rel}/run_instance.log)"
         return {
             "resolved": False,
             "stdout": "",
-            "stderr": str(exc),
-            "log_dir": "",
+            "stderr": error_msg,
+            "log_dir": log_dir_rel,
+            "report": {},
         }
 
-    log_dir = f"logs/run_evaluation/{run_id}/plan-code-test__{instance_id}"
+    log_dir_rel = f"logs/run_evaluation/{run_id}/plan-code-test/{instance_id}"
+    log_dir_abs = Path(log_dir_rel).resolve()
+
+    # Attempt to read the swebench report and test output for richer feedback
+    report_data: dict[str, Any] = {}
+    stdout_text = ""
+    stderr_text = ""
+    try:
+        report_path = log_dir_abs / "report.json"
+        if report_path.exists():
+            report_data = json.loads(report_path.read_text(encoding="utf-8"))
+            inst_report = report_data.get(instance_id, {})
+            stdout_text = inst_report.get("test_output", "")
+            stderr_text = inst_report.get("error", "")
+    except Exception:
+        pass
+
+    # Fallback: read raw test_output.txt
+    if not stdout_text:
+        try:
+            test_output_path = log_dir_abs / "test_output.txt"
+            if test_output_path.exists():
+                stdout_text = test_output_path.read_text(encoding="utf-8", errors="replace")[:4000]
+        except Exception:
+            pass
+
+    # If swebench returned completed=False (e.g. patch apply failed) but did
+    # not raise, extract the failure reason from the log file so that the
+    # caller gets actionable feedback.
+    if not result.get("completed", True) and not stderr_text:
+        try:
+            log_file = log_dir_abs / "run_instance.log"
+            if log_file.exists():
+                log_text = log_file.read_text(encoding="utf-8", errors="replace")
+                for line in reversed(log_text.splitlines()):
+                    stripped = line.strip()
+                    if stripped and not stripped.startswith("Traceback") and not stripped.startswith("File "):
+                        if any(kw in stripped.lower() for kw in ["failed", "error", "patch", "exception", "apply"]):
+                            stderr_text = stripped[:800]
+                            break
+        except Exception:
+            pass
+        if not stderr_text:
+            stderr_text = "SWE evaluation completed=False (patch apply or setup failed)"
+
     return {
         "resolved": result.get("resolved", False),
-        "stdout": "",
-        "stderr": "",
-        "log_dir": log_dir,
+        "stdout": stdout_text[:4000] if stdout_text else "",
+        "stderr": stderr_text[:4000] if stderr_text else "",
+        "log_dir": log_dir_rel,
+        "report": report_data,
     }

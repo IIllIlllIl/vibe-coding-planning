@@ -64,18 +64,18 @@ class TestGetImageName:
         name = swe_evaluator.get_image_name(info)
         assert name == "custom/image:latest"
 
-    def test_derives_from_repo(self):
-        info = {"repo": "pandas-dev/pandas"}
+    def test_derives_from_instance_id(self):
+        info = {"instance_id": "pandas-dev__pandas-1234"}
         name = swe_evaluator.get_image_name(info)
-        assert name == "swebench/pandas-dev-pandas"
+        assert name == "swebench/sweb.eval.x86_64.pandas-dev_1776_pandas-1234:latest"
 
-    def test_prefers_image_name_over_repo(self):
-        info = {"image_name": "custom:latest", "repo": "pandas-dev/pandas"}
+    def test_prefers_image_name_over_instance_id(self):
+        info = {"image_name": "custom:latest", "instance_id": "pandas-dev__pandas-1234"}
         name = swe_evaluator.get_image_name(info)
         assert name == "custom:latest"
 
     def test_raises_when_no_image_info(self):
-        info = {"instance_id": "test-1"}
+        info = {"repo": "pandas-dev/pandas"}
         with pytest.raises(FatalError, match="Cannot determine Docker image"):
             swe_evaluator.get_image_name(info)
 
@@ -148,13 +148,14 @@ class TestDeriveImageName:
         assert swe_evaluator.derive_image_name is swe_evaluator._get_image_name
         assert swe_evaluator.derive_image_name is swe_evaluator.get_image_name
 
-    def test_derive_image_name_replaces_slash(self):
-        info = {"repo": "pandas-dev/pandas"}
+    def test_derive_image_name_replaces_double_underscore(self):
+        info = {"instance_id": "pandas-dev__pandas-1234"}
         result = swe_evaluator.derive_image_name(info)
-        # Slashes in repo path must be replaced with hyphens so the
-        # resulting image name is a valid Docker reference
-        assert "/" not in result.split("/", 1)[1]
-        assert result == "swebench/pandas-dev-pandas"
+        # Double underscores in instance_id are replaced with _1776_ per
+        # the SWE-bench remote-image namespace convention.
+        assert "__" not in result
+        assert "_1776_" in result
+        assert result == "swebench/sweb.eval.x86_64.pandas-dev_1776_pandas-1234:latest"
 
 
 class TestMissingDependency:

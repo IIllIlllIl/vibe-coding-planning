@@ -112,6 +112,7 @@ def build_default_agent(
     system_template: str,
     step_limit: int,
     cost_limit: float | None = None,
+    instance_template: str | None = None,
 ) -> Any:
     """Build a DefaultAgent with explicit config kwargs.
 
@@ -120,9 +121,9 @@ def build_default_agent(
         DefaultAgent(model, env, *, config_class=AgentConfig, **kwargs)
 
     ``config_class`` defaults to ``AgentConfig`` internally; we pass
-    only the config fields (``system_template``, ``step_limit``,
-    ``cost_limit``) as keyword arguments and let DefaultAgent forward
-    them.
+    only the config fields (``system_template``, ``instance_template``,
+    ``step_limit``, ``cost_limit``) as keyword arguments and let
+    DefaultAgent forward them.
 
     ``DefaultAgent`` is passed as an explicit argument so that tests
     can inject a mock class without patching ``_deps`` internals.
@@ -134,6 +135,12 @@ def build_default_agent(
         system_template: System prompt text (was ``system_prompt`` in 1.0.x).
         step_limit: Maximum number of agent steps (was ``max_steps`` in 1.0.x).
         cost_limit: Optional cost limit (supported natively by 1.17.5).
+        instance_template: Optional first-user-message template. When provided,
+            DefaultAgent renders it via Jinja2 with the ``task`` kwarg passed
+            to ``agent.run(task=...)``. Used by ``code_agent`` to feed the
+            official mini-swe-agent SWE-bench instance template (which ends
+            with the ``git diff --cached`` submission command). When omitted,
+            DefaultAgent falls back to its built-in default instance_template.
 
     Returns:
         A ``DefaultAgent`` instance.
@@ -144,6 +151,8 @@ def build_default_agent(
     }
     if cost_limit is not None:
         kwargs["cost_limit"] = cost_limit
+    if instance_template is not None:
+        kwargs["instance_template"] = instance_template
 
     return DefaultAgent(model, environment, **kwargs)
 

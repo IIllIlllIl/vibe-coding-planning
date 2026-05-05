@@ -484,7 +484,7 @@ class TestPipelineUsesDeriveImageName:
     @patch("src.pipeline.evaluate")
     @patch("src.pipeline.save_trajectory")
     @patch("src.pipeline.OutputWriter")
-    def test_repo_with_slash_normalised(
+    def test_instance_id_used_for_image_name(
         self,
         mock_writer_cls,
         mock_save_traj,
@@ -494,8 +494,8 @@ class TestPipelineUsesDeriveImageName:
         mock_loader_cls,
         mock_docker_cls,
     ):
-        """instance_info without explicit image_name but repo='owner/repo'
-        must yield image='swebench/owner-repo' at docker.start()."""
+        """instance_info without explicit image_name must derive image
+        from instance_id using the SWE-bench official naming convention."""
         config = Config(
             system=SystemConfig(
                 model="m", api_base="https://x.y", n=1,
@@ -537,6 +537,6 @@ class TestPipelineUsesDeriveImageName:
         run_instance("i1", config)
 
         _, kwargs = mock_docker.start.call_args
-        assert kwargs["image"] == "swebench/pandas-dev-pandas", (
-            f"Expected swebench/pandas-dev-pandas but got {kwargs['image']!r}"
+        assert kwargs["image"] == "swebench/sweb.eval.x86_64.i1:latest", (
+            f"Expected swebench/sweb.eval.x86_64.i1:latest but got {kwargs['image']!r}"
         )

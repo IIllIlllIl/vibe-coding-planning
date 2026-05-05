@@ -50,7 +50,7 @@
 
 #### 包含范围
 - 数据集限定为 **SWE-bench Pro**（不使用 SWE-bench Verified 等其他存在数据污染风险的数据集）
-- Agent 运行环境：**方案的生成、代码的生成均在 Docker 容器中进行**，以防止 Agent 写入文件等操作对宿主环境或后续轮次产生噪声
+- Agent 运行环境：**方案生成、代码生成、反思优化均在 Docker 容器中进行**，以防止 Agent 写入文件等操作对宿主环境或后续轮次产生噪声
 - 测试评估主动使用 **SWE 官方评估工具**（`swebench` Python 包），不自行实现评估逻辑
 - 自动保存所有 Agent 执行轨迹（包括反思 Agent 的轨迹），并按轮次和角色命名
 - 支持从任意已有 Plan 开始重跑后续迭代（断点重跑）
@@ -139,14 +139,14 @@
 |------|------|
 | ID | FR-05 |
 | 名称 | 方案优化（信息收集 + 反思 Agent 直接生成新 Plan） |
-| 描述 | 对于第 i 轮（i ≥ 2），系统收集 Optimization Feedback，然后调用**反思 Agent**直接生成新的 Plan[i]。反思 Agent 使用 GEPA 反射 Prompt 模板（附录 A）驱动 LLM 分析前一轮的执行轨迹、测试结果和反馈，产出改进方案。不再使用独立的方案生成 Agent。信息收集和反思生成视为一个原子阶段 |
+| 描述 | 对于第 i 轮（i ≥ 2），系统收集 Optimization Feedback，然后调用**反思 Agent**直接生成新的 Plan[i]。反思 Agent 使用 GEPA 反射 Prompt 模板（附录 A）驱动 LLM 分析前一轮的执行轨迹、测试结果和反馈，产出改进方案。不再使用独立的方案生成 Agent。信息收集和反思生成视为一个原子阶段。**反思 Agent 运行在 Docker 容器内（与 Plan/Code Agent 共享同一容器），可读取代码库文件验证假设、编写临时测试脚本，但不得修改源代码。** |
 | 配置参数 | `optimization_info_level`：0 = 仅基础信息（不含测试结果）；1 = 包含测试运行结果和报错信息。`use_gepa_reflection_prompt`：是否使用 GEPA 反射 Prompt 模板（true = 使用提取的 GEPA 模板；false = 使用简化反思 Prompt） |
 | 输入（Feedback 来源） | 前一轮（第 i-1 轮）的：原始 Prompt、Plan[i-1]、生成 Plan[i-1] 的 Agent 轨迹（若 i-1 = 1 则为方案生成 Agent 轨迹，若 i-1 ≥ 2 则为反思 Agent 轨迹）、代码生成 Agent 轨迹、生成的 Patch、测试结果（可选） |
 | 输出 | 优化后的新 Plan[i]（自然语言字符串） |
 | 优化方法 | 当 `use_gepa_reflection_prompt: true` 时，使用从 GEPA 提取的反射 Prompt 模板（含 `<curr_param>` 和 `<side_info>` 占位符），将当前 Plan 和格式化后的 Feedback 填入模板，调用 LLM 生成新 Plan；当为 false 时，使用简化反思 Prompt（基于 `plan_optimization_prompt` 配置）。均不使用 GEPA 的种群交叉、Pareto 选择等模块 |
 | 验收标准 | 新 Plan 能反映对前序方案失败原因的针对性改进；优化过程中反思 Agent 的轨迹被完整保存 |
-| 依赖 | `mini-swe-agent`（`DefaultAgent` + `LiteLLMModel`）、GEPA 反射 Prompt 模板（自行维护） |
-| 备注 | 反思 Agent 的 Prompt 由配置文件 `plan_optimization_prompt` 定义（当 `use_gepa_reflection_prompt: false` 时），或使用 GEPA 反射 Prompt 模板（当为 true 时）。**反思 Agent 在生成新 Plan 时自身也会产生轨迹，该轨迹必须保存** |
+| 依赖 | `mini-swe-agent`（`DefaultAgent` + `DockerEnvironment` + `LiteLLMModel`）、GEPA 反射 Prompt 模板（自行维护） |
+| 备注 | **信息注入方式（关键设计）**：主机端在调用反思 Agent 前，从 trajectory 文件中读取内容并组装为纯文本字符串，通过 system prompt 注入。反思 Agent 在容器内**不持有任何文件路径**，无法访问 output_dir 中的 trajectory 文件，以防止其读取其他轮次的 plan 或 trajectory 内容而影响判断。反思 Agent 的 Prompt 由配置文件 `plan_optimization_prompt` 定义（当 `use_gepa_reflection_prompt: false` 时），或使用 GEPA 反射 Prompt 模板（当为 true 时）。**反思 Agent 在生成新 Plan 时自身也会产生轨迹，该轨迹必须保存** |
 
 #### FR-06：迭代循环控制
 
@@ -218,7 +218,7 @@
 | 名称 | Optimization Feedback 数据结构定义 |
 | 描述 | 明确优化反馈中必须包含的内容，特别是 **所有相关 Trajectory 的路径或内容** 以及 **运行参数配置快照** |
 | 结构定义 | 见 4.1 |
-| 验收标准 | 程序在调用反思 Agent 前，能够组装出符合该结构的反馈字典 |
+| 验收标准 | 程序在调用反思 Agent 前，能够组装出符合该结构的反馈字典。**组装过程在主机端完成：主机读取 trajectory 文件内容，将路径替换为实际文本，以纯文本字符串形式注入反思 Agent 的 prompt。反思 Agent 在容器内不接收任何文件路径** |
 
 ### 3.5 错误处理
 
@@ -277,6 +277,8 @@
 ```
 
 对于第 i 轮（i ≥ 2）的反馈，`trajectories.reflection_trajectory_path` 将指向第 i-1 轮反思 Agent 的轨迹（即生成当前 Plan 的那个反思 Agent 的轨迹）。
+
+**重要说明**：`trajectories` 中的路径字段**仅供主机端使用**。主机端在调用反思 Agent 前，读取这些路径对应的文件内容，将路径替换为实际文本后组装为 `feedback_text` 字符串。反思 Agent 在容器内**不接收任何文件路径**，以防止其访问其他轮次的 plan 或 trajectory 文件。
 
 ### 4.2 Trajectory 文件格式（统一规范）
 
@@ -539,7 +541,7 @@ chmod +x scripts/quickstart.sh
 
 | 约束类型 | 描述 |
 |----------|------|
-| 技术约束 | Agent 基于 `mini-swe-agent` 框架（`DefaultAgent` + `DockerEnvironment` + `LiteLLMModel`）；反思优化复用 GEPA 反射 Prompt 模板（自行维护）；评估使用 SWE 官方工具；所有 Agent 运行在 Docker 容器中（代码库 ro 挂载，`/tmp` 可写） |
+| 技术约束 | Agent 基于 `mini-swe-agent` 框架（`DefaultAgent` + `DockerEnvironment` + `LiteLLMModel`）；反思优化复用 GEPA 反射 Prompt 模板（自行维护）；评估使用 SWE 官方工具；**所有 Agent（含反思 Agent）运行在 Docker 容器中**（代码库 ro 挂载，`/tmp` 可写）；**反思 Agent 所需历史信息由主机端读取后通过 prompt 注入，不传递文件路径**，防止其访问其他轮次的 plan 或 trajectory 文件 |
 | 数据集约束 | **仅使用 SWE-bench Pro 数据集**。使用前需执行 `/scripts/build_docker_images.sh` 构建专用 Docker 镜像 |
 | 开发约束 | 快速原型，不追求扩展性；最小化造轮子，优先调用现有库；Agent 行为通过 Prompt 约束，不修改 `mini-swe-agent` 框架源码 |
 | 模型约束 | **不做模型检查**，用户需确保 DeepSeek V4 API 可用 |
@@ -665,13 +667,14 @@ Provide the new instruction within ``` blocks.
 **在我们的系统中的适配方式**：
 
 - `{prompt_template}` → 填入当前 Plan 的完整内容
-- `{inputs_outputs_feedback}` → 由系统根据 Optimization Feedback 数据结构格式化生成，包含：
+- `{inputs_outputs_feedback}` → **由主机端根据 Optimization Feedback 数据结构读取并格式化生成**，包含：
   - 原始 Issue 描述
   - 当前 Plan 内容
   - Plan Agent 的 trajectory（探索过程、推理步骤）
   - Code Agent 的 trajectory（代码生成过程）
   - 生成的 Patch 内容
   - 测试结果（如 `optimization_info_level=1`）：resolved 状态、stdout、stderr
+  - **注入方式**：主机端读取 trajectory 文件内容后，将路径替换为实际文本，组装为纯文本字符串，通过 **system prompt** 注入反思 Agent。反思 Agent 在容器内**不接收任何文件路径**，无法直接访问 output_dir 中的 trajectory 文件
 - `{placeholders}` → 如需在 Plan 中保留特定占位符（如 `{issue_description}`），则列出；否则为空字符串
 
 **输出解析**：从 LLM 响应中提取第一个 ``` 代码块中的内容作为新 Plan。

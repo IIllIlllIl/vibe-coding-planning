@@ -16,29 +16,47 @@ class MockLiteLLMModel:
         self.model_name = model_name
         self.model_kwargs = model_kwargs
         self.cost_tracking = cost_tracking
-        self.query_calls: list[list[dict]] = []
-
-    def query(self, messages: list[dict[str, str]]) -> dict:
-        self.query_calls.append(messages)
-        return {"content": "plan output", "extra": {}}
 
 
-class MockLiteLLMModelEmpty(MockLiteLLMModel):
-    def query(self, messages: list[dict[str, str]]) -> dict:
-        self.query_calls.append(messages)
-        return {"content": "", "extra": {}}
+class MockDefaultAgent:
+    """Simulates a DefaultAgent that successfully submits a plan."""
+
+    last_kwargs: dict = {}
+
+    def __init__(self, model, env, **kwargs):
+        self.model = model
+        self.env = env
+        MockDefaultAgent.last_kwargs = kwargs
+        self.messages = [
+            {"role": "system", "content": "system prompt"},
+            {"role": "user", "content": "task"},
+            {"role": "assistant", "content": "plan output"},
+        ]
+
+    def run(self, task):
+        return ("Submitted", "plan output")
 
 
-class MockLiteLLMModelWhitespace(MockLiteLLMModel):
-    def query(self, messages: list[dict[str, str]]) -> dict:
-        self.query_calls.append(messages)
-        return {"content": "   \n\n   ", "extra": {}}
+class MockDefaultAgentEmpty(MockDefaultAgent):
+    def run(self, task):
+        return ("Submitted", "")
 
 
-class MockLiteLLMModelSpaces(MockLiteLLMModel):
-    def query(self, messages: list[dict[str, str]]) -> dict:
-        self.query_calls.append(messages)
-        return {"content": "  plan with spaces  ", "extra": {}}
+class MockDefaultAgentWhitespace(MockDefaultAgent):
+    def run(self, task):
+        return ("Submitted", "   \n\n   ")
+
+
+class MockDefaultAgentSpaces(MockDefaultAgent):
+    def run(self, task):
+        return ("Submitted", "  plan with spaces  ")
+
+
+class MockDefaultAgentLimitExceeded(MockDefaultAgent):
+    """Simulates step-limit exhaustion — falls back to last assistant message."""
+
+    def run(self, task):
+        return ("LimitsExceeded", "step limit reached")
 
 
 @pytest.fixture
@@ -65,7 +83,7 @@ def mock_env():
 class TestRunSuccess:
     @patch("src.agents.plan_agent.import_minisweagent")
     def test_returns_plan_and_messages(self, mock_import, config, mock_env):
-        mock_import.return_value = (object, MockLiteLLMModel, object)
+        mock_import.return_value = (MockDefaultAgent, MockLiteLLMModel, object)
         plan, messages = plan_agent.run(config, "Fix parser bug", mock_env)
 
         assert plan == "plan output"
@@ -75,31 +93,37 @@ class TestRunSuccess:
         assert messages[2]["role"] == "assistant"
 
     @patch("src.agents.plan_agent.import_minisweagent")
-    def test_system_template_in_messages(self, mock_import, config, mock_env):
-        mock_import.return_value = (object, MockLiteLLMModel, object)
-        _, messages = plan_agent.run(config, "Fix parser bug", mock_env)
+    def test_system_template_passed_to_agent(self, mock_import, config, mock_env):
+        mock_import.return_value = (MockDefaultAgent, MockLiteLLMModel, object)
+        plan_agent.run(config, "Fix parser bug", mock_env)
 
-        # First message is system prompt containing the template
-        assert messages[0]["role"] == "system"
-        assert "You are a planner" in messages[0]["content"]
+        # DefaultAgent should receive the rendered system template
+        assert "system_template" in MockDefaultAgent.last_kwargs
 
     @patch("src.agents.plan_agent.import_minisweagent")
     def test_plan_trimmed(self, mock_import, config, mock_env):
-        mock_import.return_value = (object, MockLiteLLMModelSpaces, object)
+        mock_import.return_value = (MockDefaultAgentSpaces, MockLiteLLMModel, object)
         plan, _ = plan_agent.run(config, "Fix parser bug", mock_env)
         assert plan == "plan with spaces"
+
+    @patch("src.agents.plan_agent.import_minisweagent")
+    def test_fallback_to_last_assistant(self, mock_import, config, mock_env):
+        """When DefaultAgent hits a limit, we fall back to the last assistant message."""
+        mock_import.return_value = (MockDefaultAgentLimitExceeded, MockLiteLLMModel, object)
+        plan, _ = plan_agent.run(config, "Fix parser bug", mock_env)
+        assert plan == "plan output"
 
 
 class TestRunValidation:
     @patch("src.agents.plan_agent.import_minisweagent")
     def test_empty_plan_raises_task_error(self, mock_import, config, mock_env):
-        mock_import.return_value = (object, MockLiteLLMModelEmpty, object)
+        mock_import.return_value = (MockDefaultAgentEmpty, MockLiteLLMModel, object)
         with pytest.raises(TaskError, match="empty"):
             plan_agent.run(config, "Fix parser bug", mock_env)
 
     @patch("src.agents.plan_agent.import_minisweagent")
     def test_whitespace_only_plan_raises_task_error(self, mock_import, config, mock_env):
-        mock_import.return_value = (object, MockLiteLLMModelWhitespace, object)
+        mock_import.return_value = (MockDefaultAgentWhitespace, MockLiteLLMModel, object)
         with pytest.raises(TaskError, match="empty"):
             plan_agent.run(config, "Fix parser bug", mock_env)
 

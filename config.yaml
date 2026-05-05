@@ -19,46 +19,218 @@ system:
 
 prompts:
   plan_generation_prompt: |
-    You are a professional software engineer. Your task is to design a solution plan for the following issue.
-    Please analyze the codebase, understand the problem, and output a detailed plan.
-    Do NOT modify any files in the codebase. The codebase is mounted read-only.
+    You are a software engineer in planning mode. Your task is to analyze the
+    codebase, understand the problem, and produce a structured plan.
+
+    You may read files, run search commands, and write temporary test scripts
+    to /tmp if needed. Do NOT modify source code files in /testbed.
+
+    Follow this workflow:
+    1. Explore the codebase to understand the issue
+    2. Identify the root cause and affected files
+    3. Produce a plan following the format below
+    4. Write the plan to /tmp/plan.md
+    5. Finish by running: echo COMPLETE_TASK_AND_SUBMIT_FINAL_OUTPUT
 
     {plan_format_template}
 
-    Issue:
-    {issue_description}
-
+  # System prompt for the code-generation agent.
+  # Contains only the plan constraints (external executor style).
+  # All format rules, boundaries, and submission instructions live in the
+  # instance_template below (official mini-swe-agent SWE-bench config).
   code_generation_prompt: |
-    You are a code generation assistant. Given the following plan and issue description,
-    generate a Git diff format patch that implements the solution.
-    Do NOT directly modify files. Output the patch as diff text.
+    You are in execution mode. Follow the approved plan below exactly.
 
-    Plan:
+    PLAN CONSTRAINTS:
+    - This is an approved final execution plan. Do NOT re-plan, do NOT rewrite
+      the plan, do NOT propose alternatives, do NOT restate the plan
+    - Proceed to implement this plan directly
+    - If the plan is unclear, make reasonable assumptions and proceed
+
+    Approved plan:
+    --- plan start ---
     {plan}
+    --- plan end ---
 
-    Issue:
-    {issue_description}
+  # Instance template for the code-generation agent.
+  # Verbatim from the official mini-swe-agent SWE-bench config
+  # (minisweagent/config/extra/swebench.yaml lines 18-171).
+  # Uses Jinja2 `{{task}}` placeholder, which DefaultAgent fills with the
+  # `task` kwarg passed to `agent.run(task=...)`.
+  code_instance_template: |
+    <pr_description>
+    Consider the following PR description:
+    {{task}}
+    </pr_description>
+
+    <instructions>
+    # Task Instructions
+
+    ## Overview
+    You are a software engineer implementing an approved plan to fix the issue
+    described in the PR description. Follow the approved plan exactly.
+
+    IMPORTANT: This is an interactive process where you will think and issue ONE command, see its result, then think and issue your next command.
+
+    For each response:
+    1. Include a THOUGHT section explaining your reasoning and what you're trying to accomplish
+    2. Provide exactly ONE bash command to execute
+
+    ## Important Boundaries
+    - MODIFY: Regular source code files in /testbed (this is the working directory for all your subsequent commands)
+    - DO NOT MODIFY: Tests, configuration files (pyproject.toml, setup.cfg, etc.)
+
+    ## Command Execution Rules
+    You are operating in an environment where
+    1. You write a single command
+    2. The system executes that command in a subshell
+    3. You see the result
+    4. You write your next command
+
+    Each response should include:
+    1. A **THOUGHT** section where you explain your reasoning and plan
+    2. A single bash code block with your command
+
+    Format your responses like this:
+
+    <format_example>
+    THOUGHT: Here I explain my reasoning process, analysis of the current situation,
+    and what I'm trying to accomplish with the command below.
+
+    ```bash
+    your_command_here
+    ```
+    </format_example>
+
+    Commands must be specified in a single bash code block:
+
+    ```bash
+    your_command_here
+    ```
+
+    **CRITICAL REQUIREMENTS:**
+    - Your response SHOULD include a THOUGHT section explaining your reasoning
+    - Your response MUST include EXACTLY ONE bash code block
+    - This bash block MUST contain EXACTLY ONE command (or a set of commands connected with && or ||)
+    - If you include zero or multiple bash blocks, or no command at all, YOUR RESPONSE WILL FAIL
+    - Do NOT try to run multiple independent commands in separate blocks in one response
+    - Directory or environment variable changes are not persistent. Every action is executed in a new subshell.
+    - However, you can prefix any action with `MY_ENV_VAR=MY_VALUE cd /path/to/working/dir && ...` or write/load environment variables from files
+
+    Example of a CORRECT response:
+    <example_response>
+    THOUGHT: I need to understand the structure of the repository first. Let me check what files are in the current directory to get a better understanding of the codebase.
+
+    ```bash
+    ls -la
+    ```
+    </example_response>
+
+    Example of an INCORRECT response:
+    <example_response>
+    THOUGHT: I need to examine the codebase and then look at a specific file. I'll run multiple commands to do this.
+
+    ```bash
+    ls -la
+    ```
+
+    Now I'll read the file:
+
+    ```bash
+    cat file.txt
+    ```
+    </example_response>
+
+    If you need to run multiple commands, either:
+    1. Combine them in one block using && or ||
+    ```bash
+    command1 && command2 || echo "Error occurred"
+    ```
+
+    2. Wait for the first command to complete, see its output, then issue the next command in your following response.
+
+    ## Environment Details
+    - You have a full Linux shell environment
+    - Always use non-interactive flags (-y, -f) for commands
+    - Avoid interactive tools like vi, nano, or any that require user input
+    - If a command isn't available, you can install it
+
+    ## Useful Command Examples
+
+    ### Create a new file:
+    ```bash
+    cat <<'EOF' > newfile.py
+    import numpy as np
+    hello = "world"
+    print(hello)
+    EOF
+    ```
+
+    ### Edit files with sed:
+    ```bash
+    # Replace all occurrences
+    sed -i 's/old_string/new_string/g' filename.py
+
+    # Replace only first occurrence
+    sed -i 's/old_string/new_string/' filename.py
+
+    # Replace first occurrence on line 1
+    sed -i '1s/old_string/new_string/' filename.py
+
+    # Replace all occurrences in lines 1-10
+    sed -i '1,10s/old_string/new_string/g' filename.py
+    ```
+
+    ### View file content:
+    ```bash
+    # View specific lines with numbers
+    nl -ba filename.py | sed -n '10,20p'
+    ```
+
+    ### Any other command you want to run
+    ```bash
+    anything
+    ```
+
+    ## Submission
+    When you've completed your work (reading, editing, testing), and cannot make further progress
+    issue exactly the following command:
+
+    ```bash
+    echo COMPLETE_TASK_AND_SUBMIT_FINAL_OUTPUT && git add -A && git diff --cached
+    ```
+
+    This command will submit your work.
+    You cannot continue working (reading, editing, testing) in any way on this task after submitting.
+    </instructions>
 
   plan_optimization_prompt: |
     You are a reflection optimization expert. Based on the previous plan's execution feedback,
     analyze the failure reasons and output an improved plan.
     Output the improved plan in natural language.
 
-  # Plan format template (optional, constrains Agent output structure)
+  # Plan format template — N/R/P/V structure (required for all plan agents)
   plan_format_template: |
-    ## Problem Analysis
-    [Describe the root cause]
+    Your plan MUST be written to /tmp/plan.md and contain exactly these
+    4 sections in this order:
 
-    ## Technical Solution
-    [Describe the approach]
+    # Plan
 
-    ## Files to Modify
-    - file1: reason
-    - file2: reason
+    ## Navigation (N)
+    - Locate and identify the relevant source files, functions, classes, and modules involved in the issue.
+    - Explain how the codebase is structured around the problematic area.
 
-    ## Implementation Steps
-    1. [step 1]
-    2. [step 2]
+    ## Reproduction (R)
+    - Provide concrete steps to reproduce the bug or verify the issue exists.
+    - Describe the expected vs actual behavior.
+
+    ## Patch (P)
+    - List each file that needs modification and the exact change to make.
+    - Include specific code snippets or logic changes (do NOT write full file contents).
+
+    ## Validation (V)
+    - Describe how to verify the fix is correct (e.g., run specific tests, check edge cases).
+    - Mention any regressions or side effects to watch for.
 
 docker:
   image_builder_script: "./scripts/build_docker_images.sh"
@@ -67,7 +239,11 @@ docker:
   timeout: 30
 
 agent:
-  max_steps: 30
+  # Aligned with mini-swe-agent's official SWE-bench config
+  # (minisweagent/config/extra/swebench.yaml line 212).
+  # Should only truncate runaway/infinite-loop agents — normal work
+  # should finish well below this cap.
+  max_steps: 250
   # Soft limit. Effective only if mini-swe-agent's DefaultAgent supports
   # 'cost_limit'; otherwise the value is ignored with a one-time warning
   # and the hard cap is governed by max_steps × per-step token cost.

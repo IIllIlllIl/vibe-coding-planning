@@ -168,6 +168,101 @@ def _run_instance_core(
     return _finalize_writer(writer, config, instance_id)
 
 
+def _find_latest_trajectory(trajectories_dir: str, round_num: int, role: str) -> str | None:
+    """Find the most recent trajectory file for a given round and role.
+
+    Trajectory filenames follow the convention
+    ``trajectory_{round_num}_{role}_{timestamp}.json`` written by
+    :func:`save_trajectory`.
+    """
+    dir_path = Path(trajectories_dir)
+    if not dir_path.exists():
+        return None
+    pattern = f"trajectory_{round_num}_{role}_*.json"
+    files = sorted(dir_path.glob(pattern))
+    return str(files[-1]) if files else None
+
+
+def _read_trajectory_content(path: str | None) -> str:
+    """Read a trajectory JSON file and return formatted message text.
+
+    Each message is rendered as ``[{role}]:\n{content}`` so the reflect
+    agent can follow the reasoning flow.  Returns empty string if the
+    path is None or the file does not exist.
+    """
+    if not path:
+        return ""
+    filepath = Path(path)
+    if not filepath.exists():
+        return ""
+    try:
+        import json
+
+        data = json.loads(filepath.read_text(encoding="utf-8"))
+        messages = data.get("messages", [])
+        if not messages:
+            return ""
+        parts: list[str] = []
+        for msg in messages:
+            role = msg.get("role", "unknown")
+            content = msg.get("content", "")
+            if content:
+                parts.append(f"[{role}]:\n{content}\n")
+        return "\n".join(parts)
+    except Exception:
+        return ""
+
+
+def _build_feedback_text(
+    *,
+    original_prompt: str,
+    current_plan: str,
+    plan_trajectory: str,
+    code_trajectory: str,
+    reflect_trajectory: str,
+    test_results: dict[str, Any],
+    patch: str,
+    opt_level: int,
+) -> str:
+    """Assemble the feedback text injected into the reflect agent's prompt.
+
+    All content is gathered on the host so the reflect agent inside Docker
+    never needs to read trajectory files.
+    """
+    parts: list[str] = []
+
+    if original_prompt:
+        parts.append(f"Original Task (Problem Statement):\n{original_prompt}")
+
+    if plan_trajectory:
+        parts.append(f"\n=== Plan Agent Trajectory ===\n{plan_trajectory}")
+    if code_trajectory:
+        parts.append(f"\n=== Code Agent Trajectory ===\n{code_trajectory}")
+    if reflect_trajectory:
+        parts.append(f"\n=== Reflect Agent Trajectory ===\n{reflect_trajectory}")
+
+    if current_plan:
+        parts.append(f"\nCurrent Plan:\n{current_plan}")
+
+    if opt_level >= 1:
+        resolved = test_results.get("resolved")
+        stdout = test_results.get("stdout", "")
+        stderr = test_results.get("stderr", "")
+        if resolved is not None or stdout or stderr:
+            parts.append("\nTest Results:")
+            if resolved is not None:
+                parts.append(f"Resolved: {resolved}")
+            if stdout:
+                parts.append(f"STDOUT:\n{stdout[:2000]}")
+            if stderr:
+                parts.append(f"STDERR:\n{stderr[:2000]}")
+
+    if patch:
+        parts.append(f"\nGenerated Patch:\n{patch[:2000]}")
+
+    return "\n".join(parts)
+
+
 def _run_round(
     *,
     round_num: int,
@@ -198,6 +293,38 @@ def _run_round(
         generated_by = "plan_agent"
     else:
         logger.info("[%s] Round %d: reflecting on previous plan", instance_id, round_num)
+        trajectories_dir = str(Path(output_dir) / "trajectories")
+
+        # Locate trajectory files from previous rounds for GEPA analysis.
+        # Round 2: plan agent (r1) + code agent (r1)
+        # Round 3+: previous reflect agent (rN-1) + code agent (rN-1)
+        if round_num == 2:
+            plan_traj_path = _find_latest_trajectory(trajectories_dir, 1, "plan_gen")
+            reflect_traj_path = None
+        else:
+            plan_traj_path = None
+            reflect_traj_path = _find_latest_trajectory(trajectories_dir, round_num - 1, "reflect")
+        code_traj_path = _find_latest_trajectory(trajectories_dir, round_num - 1, "code_gen")
+
+        # Read trajectory contents on the host — the reflect agent inside
+        # Docker will never see these files.
+        plan_traj = _read_trajectory_content(plan_traj_path)
+        code_traj = _read_trajectory_content(code_traj_path)
+        reflect_traj = _read_trajectory_content(reflect_traj_path)
+
+        feedback_text = _build_feedback_text(
+            original_prompt=issue_description,
+            current_plan=previous_plan or "",
+            plan_trajectory=plan_traj,
+            code_trajectory=code_traj,
+            reflect_trajectory=reflect_traj,
+            test_results=previous_test_results,
+            patch=previous_patch,
+            opt_level=config.system.optimization_info_level,
+        )
+
+        # Keep assembling feedback dict for potential downstream use
+        # (writer, resume, etc.) even though reflect agent no longer reads it.
         feedback_data = feedback_assembler.assemble(
             feedback_assembler.FeedbackInput(
                 optimization_info_level=config.system.optimization_info_level,
@@ -209,9 +336,9 @@ def _run_round(
                 current_plan_content=previous_plan or "",
                 current_plan_id=previous_plan_id or "",
                 current_plan_round=round_num - 1,
-                plan_generation_trajectory_path=None,
-                code_generation_trajectory_path=None,
-                reflection_trajectory_path=None,
+                plan_generation_trajectory_path=plan_traj_path,
+                code_generation_trajectory_path=code_traj_path,
+                reflection_trajectory_path=reflect_traj_path,
                 patch_path="",
                 patch_content=previous_patch,
                 test_resolved=previous_test_results.get("resolved", False),
@@ -223,7 +350,7 @@ def _run_round(
         )
         feedback_data["meta"]["timestamp"] = _iso_timestamp()
 
-        plan_text, traj_plan = reflect_agent.run(config, feedback_data)
+        plan_text, traj_plan = reflect_agent.run(config, feedback_text, docker)
         plan_id = f"plan_{instance_id}_r{round_num}"
         generated_by = "reflect_agent"
 
@@ -262,6 +389,7 @@ def _run_round(
         patch_text,
         instance_info,
         timeout=config.evaluator.timeout,
+        run_id_suffix=f"_r{round_num}",
     )
 
     # ------------------------------------------------------------------

@@ -115,12 +115,6 @@ class InstanceLoader:
 
         instance = dict(instances[0])
 
-        # Derive Docker image name from repo if not already present
-        if "image_name" not in instance or not instance["image_name"]:
-            repo = instance.get("repo", "")
-            if repo:
-                instance["image_name"] = f"swebench/{repo.replace('/', '-')}"
-
         # Ensure problem_statement is present (fallbacks for compatibility)
         if "problem_statement" not in instance and "text" in instance:
             instance["problem_statement"] = instance["text"]

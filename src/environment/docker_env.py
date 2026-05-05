@@ -1,7 +1,8 @@
 """Docker environment wrapper.
 
 Wraps mini-swe-agent 1.17.5 DockerEnvironment for launching containers with
-read-only codebase mounts.
+writable codebase mounts so agents can modify files and run tests inside the
+container.
 """
 
 from __future__ import annotations
@@ -71,9 +72,9 @@ class DockerEnvWrapper:
             image: Docker image name and tag.
             workdir: Working directory inside the container (maps to
                 ``cwd`` in 1.17.5).
-            ro_mount_source: Host path to mount read-only into the
-                container at ``workdir``. If None, no extra mount is
-                configured.
+            ro_mount_source: Host path to mount into the container at
+                ``workdir``. If None, no extra mount is configured.
+                The mount is writable so agents can modify files.
         """
         DockerEnvironment = _import_docker_env()
 
@@ -81,10 +82,11 @@ class DockerEnvWrapper:
             "image": image,
             "cwd": workdir,
         }
-        if ro_mount_source is not None:
+        if ro_mount_source:
             kwargs["run_args"] = [
+                "--rm",
                 "--mount",
-                f"type=bind,source={ro_mount_source},target={workdir},readonly",
+                f"type=bind,source={ro_mount_source},target={workdir}",
             ]
 
         self._env = DockerEnvironment(**kwargs)
