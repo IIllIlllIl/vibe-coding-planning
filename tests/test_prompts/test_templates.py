@@ -1,9 +1,7 @@
 """Tests for src/prompts/templates.py."""
 
-import pytest
 
 from src.prompts.templates import (
-    PromptTemplates,
     load_prompt_templates,
     render_code_prompt,
     render_plan_prompt,
@@ -15,13 +13,13 @@ class TestLoadPromptTemplates:
         raw = {
             "plan_generation_prompt": "plan text",
             "code_generation_prompt": "code text",
-            "plan_optimization_prompt": "optimize text",
+            "reflection_prompt_template": "reflection text",
             "plan_format_template": "format text",
         }
         templates = load_prompt_templates(raw)
         assert templates.plan_generation == "plan text"
         assert templates.code_generation == "code text"
-        assert templates.plan_optimization == "optimize text"
+        assert templates.reflection == "reflection text"
         assert templates.plan_format == "format text"
 
     def test_missing_fields_default_to_empty(self):
@@ -29,14 +27,14 @@ class TestLoadPromptTemplates:
         templates = load_prompt_templates(raw)
         assert templates.plan_generation == "only plan"
         assert templates.code_generation == ""
-        assert templates.plan_optimization == ""
+        assert templates.reflection == ""
         assert templates.plan_format == ""
 
     def test_empty_dict_returns_all_empty(self):
         templates = load_prompt_templates({})
         assert templates.plan_generation == ""
         assert templates.code_generation == ""
-        assert templates.plan_optimization == ""
+        assert templates.reflection == ""
         assert templates.plan_format == ""
 
 

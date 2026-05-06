@@ -8,6 +8,7 @@
 | 2.0 | 2026-04-30 | — | 根据用户反馈修订（RE-30） |
 | 3.0 | 2026-04-30 | — | 技术细节确认后定稿（RE-FINAL） |
 | 4.0 | 2026-04-30 | — | 技术栈变更：Agent 层从 KISS AI 转为 mini-swe-agent；GEPA 集成方式从完整组件转为提取 Prompt 模板 |
+| 5.0 | 2026-05-06 | — | 代码审查整改：每轮独立 Docker 容器（`/testbed` 始终从 base_commit 起步）；删除 `use_gepa_reflection_prompt` 开关，反思 Agent 永远走 `gepa_reflection.render()`；硬编码模板外化为 `prompts.reflection_prompt_template`，默认模板按 plan-optimization 语义重写；删除死代码 `feedback_assembler`；FR-07 断点重跑推迟到下一轮迭代 |
 
 ---
 
@@ -140,13 +141,13 @@
 | ID | FR-05 |
 | 名称 | 方案优化（信息收集 + 反思 Agent 直接生成新 Plan） |
 | 描述 | 对于第 i 轮（i ≥ 2），系统收集 Optimization Feedback，然后调用**反思 Agent**直接生成新的 Plan[i]。反思 Agent 使用 GEPA 反射 Prompt 模板（附录 A）驱动 LLM 分析前一轮的执行轨迹、测试结果和反馈，产出改进方案。不再使用独立的方案生成 Agent。信息收集和反思生成视为一个原子阶段。**反思 Agent 运行在 Docker 容器内（与 Plan/Code Agent 共享同一容器），可读取代码库文件验证假设、编写临时测试脚本，但不得修改源代码。** |
-| 配置参数 | `optimization_info_level`：0 = 仅基础信息（不含测试结果）；1 = 包含测试运行结果和报错信息。`use_gepa_reflection_prompt`：是否使用 GEPA 反射 Prompt 模板（true = 使用提取的 GEPA 模板；false = 使用简化反思 Prompt） |
+| 配置参数 | `optimization_info_level`：0 = 仅基础信息（不含测试结果）；1 = 包含测试运行结果和报错信息 |
 | 输入（Feedback 来源） | 前一轮（第 i-1 轮）的：原始 Prompt、Plan[i-1]、生成 Plan[i-1] 的 Agent 轨迹（若 i-1 = 1 则为方案生成 Agent 轨迹，若 i-1 ≥ 2 则为反思 Agent 轨迹）、代码生成 Agent 轨迹、生成的 Patch、测试结果（可选） |
 | 输出 | 优化后的新 Plan[i]（自然语言字符串） |
-| 优化方法 | 当 `use_gepa_reflection_prompt: true` 时，使用从 GEPA 提取的反射 Prompt 模板（含 `<curr_param>` 和 `<side_info>` 占位符），将当前 Plan 和格式化后的 Feedback 填入模板，调用 LLM 生成新 Plan；当为 false 时，使用简化反思 Prompt（基于 `plan_optimization_prompt` 配置）。均不使用 GEPA 的种群交叉、Pareto 选择等模块 |
+| 优化方法 | 反思 Agent 始终通过 `src/prompts/gepa_reflection.py:render()` 渲染 system prompt：将当前 Plan 注入 `{prompt_template}`、Feedback 文本注入 `{inputs_outputs_feedback}`。模板默认使用 `DEFAULT_REFLECTION_TEMPLATE`（plan-optimization 版，要求 LLM 输出包含 N/R/P/V 四节、不再带 `{placeholders}` 约束），可由 `prompts.reflection_prompt_template` 覆盖。不使用 GEPA 的种群交叉、Pareto 选择等模块 |
 | 验收标准 | 新 Plan 能反映对前序方案失败原因的针对性改进；优化过程中反思 Agent 的轨迹被完整保存 |
-| 依赖 | `mini-swe-agent`（`DefaultAgent` + `DockerEnvironment` + `LiteLLMModel`）、GEPA 反射 Prompt 模板（自行维护） |
-| 备注 | **信息注入方式（关键设计）**：主机端在调用反思 Agent 前，从 trajectory 文件中读取内容并组装为纯文本字符串，通过 system prompt 注入。反思 Agent 在容器内**不持有任何文件路径**，无法访问 output_dir 中的 trajectory 文件，以防止其读取其他轮次的 plan 或 trajectory 内容而影响判断。反思 Agent 的 Prompt 由配置文件 `plan_optimization_prompt` 定义（当 `use_gepa_reflection_prompt: false` 时），或使用 GEPA 反射 Prompt 模板（当为 true 时）。**反思 Agent 在生成新 Plan 时自身也会产生轨迹，该轨迹必须保存** |
+| 依赖 | `mini-swe-agent`（`DefaultAgent` + `DockerEnvironment` + `LiteLLMModel`）、本仓库内置的反射模板（`src/prompts/gepa_reflection.py:DEFAULT_REFLECTION_TEMPLATE`） |
+| 备注 | **信息注入方式（关键设计）**：主机端在调用反思 Agent 前，从 trajectory 文件中读取内容并组装为纯文本字符串 `feedback_text`，作为 `gepa_reflection.render()` 的 `feedback_data` 参数注入 system prompt。反思 Agent 在容器内**不持有任何文件路径**，无法访问 output_dir 中的 trajectory 文件，以防止其读取其他轮次的 plan 或 trajectory 内容而影响判断。**反思 Agent 在生成新 Plan 时自身也会产生轨迹，该轨迹必须保存** |
 
 #### FR-06：迭代循环控制
 
@@ -161,6 +162,8 @@
 | 错误处理 | 如果某一轮中 Agent 执行失败（如 API 错误），按 FR-12 的错误分类处理 |
 
 #### FR-07：支持从已有 Plan 重跑（断点重跑）
+
+> **状态：推迟到下一轮迭代实现**。当前 `config.system.resume` 字段已加载并校验，但 `pipeline` 与 `OutputWriter` 尚未消费该配置。详见 `project_issues.md` §6。下一轮按本节及 §6.1 resume 配置、§11 TC-08 实现，并补充端到端测试。
 
 | 属性 | 内容 |
 |------|------|
@@ -182,9 +185,9 @@
 |------|------|
 | ID | FR-08 |
 | 名称 | Agent Prompt 与 Plan 格式配置 |
-| 描述 | 支持通过 YAML/JSON 配置文件修改三个核心 Prompt：方案生成 Prompt（用于 FR-02）、代码生成 Prompt（用于 FR-03）、方案优化 Prompt（用于反思 Agent，FR-05）。同时支持配置 Plan 格式模板，约束 Agent 输出结构 |
-| 配置项 | `plan_generation_prompt`、`code_generation_prompt`、`plan_optimization_prompt`、`plan_format_template`（Plan 格式模板，可选） |
-| 验收标准 | 用户修改配置文件后，无需修改代码即可改变对应 Agent 的行为和 Plan 输出格式 |
+| 描述 | 支持通过 YAML/JSON 配置文件修改三个核心 Prompt：方案生成 Prompt（用于 FR-02）、代码生成 Prompt（用于 FR-03）、反思模板（用于反思 Agent，FR-05）。同时支持配置 Plan 格式模板，约束 Agent 输出结构 |
+| 配置项 | `plan_generation_prompt`、`code_generation_prompt`、`reflection_prompt_template`（反思 Agent 的 system prompt 模板，必须含 `{prompt_template}` 与 `{inputs_outputs_feedback}` 两个占位符；缺省或为空时回退到 `gepa_reflection.DEFAULT_REFLECTION_TEMPLATE`）、`plan_format_template`（Plan 格式模板，可选） |
+| 验收标准 | 用户修改配置文件后，无需修改代码即可改变对应 Agent 的行为和 Plan 输出格式；`reflection_prompt_template` 可被用户自定义覆盖默认模板，亦可显式留空回退到默认 |
 
 #### FR-09：系统运行参数配置
 
@@ -193,7 +196,7 @@
 | ID | FR-09 |
 | 名称 | 系统运行参数配置 |
 | 描述 | 支持配置文件配置系统运行的核心参数 |
-| 配置项 | 1）`n`：目标 Plan 数量；2）`optimization_info_level`：0 或 1；3）`model`：使用的 LLM 模型（如 deepseek-v4-flash）；4）`swe_pro_instances`：SWE-bench Pro 实例 ID 列表；5）`use_gepa_reflection_prompt`：是否使用 GEPA 反射 Prompt 模板（true/false）；6）`resume`：重跑配置（可选）；7）`agent_max_steps`：每个 Agent 的最大步数；8）`agent_cost_limit`：每个 Agent 的 API 调用成本上限（美元） |
+| 配置项 | 1）`n`：目标 Plan 数量；2）`optimization_info_level`：0 或 1；3）`model`：使用的 LLM 模型（如 deepseek-v4-flash）；4）`swe_pro_instances`：SWE-bench Pro 实例 ID 列表；5）`prompts.reflection_prompt_template`：反思模板（可选，缺省落回 `gepa_reflection.DEFAULT_REFLECTION_TEMPLATE`）；6）`resume`：重跑配置（可选，FR-07 推迟实现）；7）`agent.max_steps`：每个 Agent 的最大步数；8）`agent.cost_limit`：每个 Agent 的 API 调用成本上限（美元）；9）`agent.timeout`：每个 Agent 的命令执行超时（秒）；10）`evaluator.timeout`：SWE 评估器单实例超时（秒） |
 | 验收标准 | 系统启动时自动加载配置文件，根据配置执行相应流程 |
 
 ### 3.4 输出与数据保存
@@ -210,15 +213,15 @@
 | 错误记录 | 当遇到可跳过的错误（任务级错误）时，在结果文件中标记该实例状态为 `error_skipped`，并记录错误信息；当遇到致命错误时，程序退出，错误写入日志文件 |
 | 验收标准 | 输出文件内容完整，轨迹可重现 Agent 的每一步推理和行动。所有轨迹文件名统一包含 timestamp |
 
-#### FR-11：Optimization Feedback 数据结构扩展
+#### FR-11：Feedback 文本组装
 
 | 属性 | 内容 |
 |------|------|
 | ID | FR-11 |
-| 名称 | Optimization Feedback 数据结构定义 |
-| 描述 | 明确优化反馈中必须包含的内容，特别是 **所有相关 Trajectory 的路径或内容** 以及 **运行参数配置快照** |
-| 结构定义 | 见 4.1 |
-| 验收标准 | 程序在调用反思 Agent 前，能够组装出符合该结构的反馈字典。**组装过程在主机端完成：主机读取 trajectory 文件内容，将路径替换为实际文本，以纯文本字符串形式注入反思 Agent 的 prompt。反思 Agent 在容器内不接收任何文件路径** |
+| 名称 | Feedback 文本组装（主机端） |
+| 描述 | 在调用反思 Agent 前，pipeline 在主机端组装一个纯文本字符串 `feedback_text`，作为 `gepa_reflection.render(...)` 的 `feedback_data` 参数注入反思 Agent 的 system prompt。组装内容包括：原始 Issue 描述、上一轮 plan/code/reflect 的 trajectory（按 `optimization_info_level` 决定是否含测试输出）、上一轮生成的 Patch、上一轮测试结果。**反思 Agent 在容器内仅接收已注入的字符串，不接收任何文件路径**，无法访问 output_dir 中的轨迹文件 |
+| 实现位置 | `src/pipeline.py:_build_feedback_text` |
+| 验收标准 | 程序在调用反思 Agent 前，能够组装出 `feedback_text` 字符串。组装过程在主机端完成；反思 Agent 在容器内仅接收已注入的字符串，不接收任何文件路径 |
 
 ### 3.5 错误处理
 
@@ -239,46 +242,34 @@
 
 ## 4. 数据模型
 
-### 4.1 Optimization Feedback 数据结构
+### 4.1 Optimization Feedback 文本（feedback_text）
 
-```json
-{
-  "meta": {
-    "optimization_info_level": 0,
-    "target_plan_number": 3,
-    "current_round": 2,
-    "model": "deepseek-v4-flash",
-    "use_gepa_reflection_prompt": true,
-    "timestamp": "2026-04-30T10:00:00Z"
-  },
-  "original_prompt": "string (用户输入的Issue描述)",
-  "current_plan": {
-    "content": "string",
-    "plan_id": "plan_001",
-    "round_generated": 1
-  },
-  "trajectories": {
-    "plan_generation_trajectory_path": "trajectories/trajectory_1_plan_gen_20260430T100000.json",
-    "code_generation_trajectory_path": "trajectories/trajectory_1_code_gen_20260430T100500.json",
-    "reflection_trajectory_path": null
-  },
-  "generated_code": {
-    "patch_path": "patches/round_1_20260430T100500.patch",
-    "content": "diff --git a/..."
-  },
-  "test_results": {
-    "resolved": false,
-    "stdout": "string (test stdout output)",
-    "stderr": "string (test stderr output)",
-    "log_dir": "string (path to evaluation logs)"
-  },
-  "error_info": "string (optional, summary of any execution error)"
-}
+反思 Agent 接收的 Feedback 是 pipeline 在主机端组装的**纯文本字符串**，由 `src/pipeline.py:_build_feedback_text` 产出，作为 `gepa_reflection.render(..., feedback_data=feedback_text)` 的入参注入 system prompt。下面是逻辑结构（仅用于理解组装内容；不会以 JSON/dict 形式持久化）：
+
+```
+=== Original Prompt ===
+{用户输入的 Issue 描述}
+
+=== Plan Generation Trajectory (Round i-1) ===
+{上一轮生成 plan 的 Agent 的 messages 文本}
+
+=== Code Generation Trajectory (Round i-1) ===
+{上一轮 code agent 的 messages 文本}
+
+=== Reflection Trajectory (Round i-1, if any) ===
+{上一轮 reflect agent 的 messages 文本；i-1 == 1 时省略}
+
+=== Generated Patch (Round i-1) ===
+{Git diff 内容}
+
+=== Test Results (Round i-1) ===
+{若 optimization_info_level == 1：resolved / stdout / stderr / log_dir；否则仅 resolved}
 ```
 
-对于第 i 轮（i ≥ 2）的反馈，`trajectories.reflection_trajectory_path` 将指向第 i-1 轮反思 Agent 的轨迹（即生成当前 Plan 的那个反思 Agent 的轨迹）。
-
-**重要说明**：`trajectories` 中的路径字段**仅供主机端使用**。主机端在调用反思 Agent 前，读取这些路径对应的文件内容，将路径替换为实际文本后组装为 `feedback_text` 字符串。反思 Agent 在容器内**不接收任何文件路径**，以防止其访问其他轮次的 plan 或 trajectory 文件。
+**注意事项**：
+- 当前 plan（即需要被改进的 Plan[i-1]）作为 `gepa_reflection.render()` 的独立参数 `current_plan` 注入模板的 `{prompt_template}` 占位符，不在 `feedback_text` 内重复出现，避免上下文冗余。
+- 路径字段（trajectory 文件路径、patch 文件路径）**仅供主机端使用**。组装过程中主机端读取这些路径对应的文件内容、用实际文本替换路径，再拼接成 `feedback_text`。反思 Agent 在容器内**不接收任何文件路径**，以防止其访问其他轮次的 plan 或 trajectory 文件。
+- 运行参数（如 `optimization_info_level`、`model`）不再注入 `feedback_text`；它们体现在主结果 JSON（§4.3）中以保证可复现。
 
 ### 4.2 Trajectory 文件格式（统一规范）
 
@@ -325,7 +316,6 @@
   "model": "deepseek-v4-flash",
   "parameter_n": 3,
   "optimization_info_level": 1,
-  "use_gepa_reflection_prompt": true,
   "resume_info": null,
   "runtime_versions": {
     "mini_swe_agent": "x.y.z",
@@ -405,9 +395,8 @@ system:
     - astropy__astropy-14539
     - django__django-12345
   output_dir: ./output
-  use_gepa_reflection_prompt: true  # true = 使用 GEPA 反射 Prompt 模板；false = 使用简化反思 Prompt
 
-  # 重跑配置（可选）
+  # 重跑配置（可选，FR-07 推迟实现，配置仅占位）
   resume:
     enabled: false
     from_plan_id: "plan_002"
@@ -425,9 +414,29 @@ prompts:
     你是一个代码生成助手，根据以下方案生成代码...
     请输出 Git diff 格式的 Patch，不要直接修改文件。
 
-  plan_optimization_prompt: |
-    你是反思优化专家。以下是先前方案的执行反馈，请分析失败原因并输出一个改进后的方案。
-    输出改进后的方案（纯自然语言）。
+  # 反思模板：将当前 plan 注入 {prompt_template}，feedback_text 注入 {inputs_outputs_feedback}。
+  # 缺省或留空时回退到 src/prompts/gepa_reflection.py:DEFAULT_REFLECTION_TEMPLATE（plan-optimization 版，
+  # 要求 LLM 输出含 Navigation/Reproduction/Patch/Validation 四节，无 {placeholders} 约束）。
+  reflection_prompt_template: |
+    The following is the current plan that a planning agent produced for a software-engineering task:
+
+    ```
+    {prompt_template}
+    ```
+
+    Below is the feedback collected from executing this plan (issue description, agent
+    trajectories, generated patch, and test outcomes):
+
+    {inputs_outputs_feedback}
+
+    Write an improved plan that the next round can execute. The new plan must contain four
+    explicitly labelled sections:
+    - Navigation (N): how to locate the relevant code
+    - Reproduction (R): how to reproduce the failing behaviour
+    - Patch (P): the concrete code changes to make
+    - Validation (V): how to validate the fix passes the failing tests
+
+    Provide the new plan within ``` blocks.
 
   # Plan 格式模板（可选，用于约束 Agent 输出结构）
   plan_format_template: |
@@ -462,10 +471,13 @@ agent:
 |------|----------|----------|
 | n | 必须为整数且 ≥ 1 | n < 1 时系统报错退出 |
 | optimization_info_level | 必须为 0 或 1 | 非法值时默认设为 0 并给出警告 |
-| use_gepa_reflection_prompt | 必须为布尔值 | 非法值时默认设为 false |
+| prompts.reflection_prompt_template | 若用户提供，必须含 `{prompt_template}` 与 `{inputs_outputs_feedback}` 两个占位符 | 缺失或为空时回退到 `gepa_reflection.DEFAULT_REFLECTION_TEMPLATE` |
 | swe_pro_instances | 必须是有效的 SWE-bench Pro 实例 ID | 无效时退出并提示 |
 | model | 必须为 DeepSeek API 支持的模型标识 | 无效时提示可选模型并退出（但不主动检查） |
-| resume.enabled | 为 true 时需检查 from_plan_id 对应的文件是否存在 | 文件缺失时报错退出 |
+| api_base | 必须为合法 URL（含 scheme） | 非法时报错退出 |
+| agent.max_steps / agent.timeout / docker.timeout / evaluator.timeout | 必须 ≥ 1 | 非法时报错退出 |
+| agent.cost_limit | 必须 ≥ 0 | 负值时默认设为 0 并给出警告 |
+| resume.enabled | 为 true 时需检查 from_plan_id 对应的文件是否存在（FR-07 当前推迟，仅校验配置不消费） | 文件缺失时报错退出 |
 
 ### 6.3 快速启动脚本
 
@@ -531,9 +543,9 @@ chmod +x scripts/quickstart.sh
 | P0 | 完整轨迹保存与命名（含 timestamp） | FR-10 |
 | P0 | 基本错误处理 | FR-12 |
 | P1 | Prompt 与 Plan 格式配置 | FR-08, FR-09 |
-| P1 | 从已有 Plan 重跑 | FR-07 |
+| P1 | 反思模板可由 `prompts.reflection_prompt_template` 覆盖 | FR-05, FR-08 |
 | P1 | 输出 Optimization Feedback 中的运行参数 | FR-11 |
-| P1 | GEPA 反射 Prompt 开关 | FR-05（use_gepa_reflection_prompt） |
+| P2 | 从已有 Plan 重跑（推迟，详 `project_issues.md` §6） | FR-07 |
 
 ---
 
@@ -553,7 +565,7 @@ chmod +x scripts/quickstart.sh
 
 | 风险项 | 风险描述 | 可能性 | 影响 | 缓解策略 |
 |--------|----------|--------|------|----------|
-| R-01 | GEPA 反射 Prompt 模板适配到 Plan 优化场景的适配效果不佳 | 中 | 高 | **技术预研（Spike）**：开发前先安排半天时间测试 GEPA 反射 Prompt 模板在我们的 Feedback 数据结构上的效果。若效果不佳，切换至 `use_gepa_reflection_prompt: false` 使用简化反思 Prompt |
+| R-01 | GEPA 反射 Prompt 模板适配到 Plan 优化场景的适配效果不佳 | 中 | 高 | **技术预研（Spike）**：开发前先安排半天时间测试默认反思模板（`gepa_reflection.DEFAULT_REFLECTION_TEMPLATE`，plan-optimization 版）在我们的 Feedback 数据结构上的效果。若效果不佳，调整 `prompts.reflection_prompt_template` 内容或修改 `_build_feedback_text` 的组装策略（增加截断、摘要、强化关键信号等） |
 | R-02 | DeepSeek V4 API 速率限制或成本超支 | 高 | 中 | 在配置文件中设置每轮的最大 Token 和 API 调用次数预算；使用 deepseek-v4-flash 以降低 API 成本 |
 | R-03 | SWE-bench Pro 评估环境构建复杂（需运行 build_docker_images.sh） | 中 | 中 | 开发阶段保留 Mock 评估模式进行初步测试；确保 build 脚本可复现 |
 | R-04 | Agent 的自主探索可能因代码库过大而效率低下 | 中 | 中 | 在 Prompt 中引导 Agent 聚焦于 Issue 相关的目录或文件；设置 Agent 的最大步数限制 |
@@ -598,8 +610,8 @@ chmod +x scripts/quickstart.sh
 | TC-06 | 设置 n=0 或 n=-1 | 系统报错退出，错误信息包含参数无效 |
 | TC-07 | 运行多个实例，其中一个实例的 Docker 环境失败 | 失败的实例被跳过（标记为 `error_skipped`），其他实例正常执行，结果文件中包含错误记录 |
 | TC-08 | 使用重跑功能：先运行 n=2 结束，修改 optimization_info_level 后从 Plan[2] 重跑至 n=3 | 系统加载 Plan[2] 的轨迹和代码（Plan[2] 不被重新生成），使用新的 optimization_info_level 生成 Plan[3]，新 Plan[3] 的反思内容中体现了对测试信息（如果启用）的利用 |
-| TC-09 | 检查输出结果文件结构 | 结果文件中包含 `runtime_versions` 字段（记录 mini-swe-agent、gepa、swebench、openai 版本号）；每个 Plan 的 `test_results` 为结构化对象（含 `resolved`、`stdout`、`stderr`、`log_dir`）；`trajectories/` 中所有轨迹文件名均含 timestamp |
-| TC-10 | 切换 GEPA 反射 Prompt 开关 | 设置 `use_gepa_reflection_prompt: true` 时，系统使用从 GEPA 提取的反射 Prompt 模板生成优化 Plan；设置为 false 时，使用简化反思 Prompt。两种模式均能正常生成优化 Plan |
+| TC-09 | 检查输出结果文件结构 | 结果文件中包含 `runtime_versions` 字段（记录 mini-swe-agent、swebench、litellm 等版本号）；每个 Plan 的 `test_results` 为结构化对象（含 `resolved`、`stdout`、`stderr`、`log_dir`）；`trajectories/` 中所有轨迹文件名均含 timestamp |
+| TC-10 | 反思模板可被 `prompts.reflection_prompt_template` 覆盖 | 用户在 config 中提供自定义模板（含 `{prompt_template}` 与 `{inputs_outputs_feedback}`）后，反思 Agent 的 system prompt 使用自定义模板而非 `DEFAULT_REFLECTION_TEMPLATE`；留空或不提供时回退到默认模板，仍能正常生成新 Plan |
 | TC-11 | 致命错误处理 | 模拟 API key 失效，系统在记录错误后优雅退出，已完成的实例数据和轨迹文件完整保留 |
 
 ---
@@ -616,65 +628,56 @@ chmod +x scripts/quickstart.sh
 
 ---
 
-## 附录 A：GEPA 反射 Prompt 模板（提取版）
+## 附录 A：反思模板（默认 = plan-optimization 版）
 
-以下是从 GEPA (`gepa-ai/gepa` 及 KISS AI 内置版本) 提取的反射 Prompt 模板，用于驱动反思 Agent 生成改进后的 Plan。
+本节文本是反思 Agent 的**默认 system prompt 模板**，由 `src/prompts/gepa_reflection.py:DEFAULT_REFLECTION_TEMPLATE` 实现，可由 `prompts.reflection_prompt_template` 覆盖。模板的结构骨架借鉴自 GEPA (`gepa-ai/gepa` 及 KISS AI 内置版本) 的 prompt-optimization 反射模板，但本项目按 plan-optimization 语义重写，差异如下：
+
+| 维度 | GEPA 原模板（prompt-optimization） | 本项目默认模板（plan-optimization） |
+|------|-----------------------------------|--------------------------------------|
+| 优化目标 | 改进给 assistant 的 prompt | 改进 planning agent 产出的 plan |
+| 用语 | "the assistant"、"new instruction" | "the planning agent"、"new plan" |
+| 占位符 `{placeholders}` | 必须保留；要求 LLM "must keep these exact placeholders intact" | **移除**；plan 没有 placeholders 概念 |
+| 输出结构 | 仅要求 ``` 块包裹 | 要求 ``` 块内含 N/R/P/V 四节（Navigation / Reproduction / Patch / Validation） |
 
 **占位符说明**：
 - `{prompt_template}` — 当前需要改进的 Plan（即 `<curr_param>`）
-- `{inputs_outputs_feedback}` — 格式化后的 Feedback 信息（即 `<side_info>`），包含执行轨迹、测试结果、失败分析等
-- `{placeholders}` — Plan 中需要保留的占位符列表（如有）
+- `{inputs_outputs_feedback}` — 由 `pipeline._build_feedback_text` 在主机端组装的 `feedback_text` 文本（即 `<side_info>`），包含执行轨迹、测试结果、Patch 等
 
-**模板内容**：
+**默认模板内容**（保留 GEPA 骨架，差异部分以中文加粗标注；权威版本以 `src/prompts/gepa_reflection.py:DEFAULT_REFLECTION_TEMPLATE` 为准）：
 
 ```
-I provided an assistant with the following instructions to perform a task for me:
+The following is the current plan that **a planning agent** produced for a software-engineering task:
 
 ```
 {prompt_template}
 ```
 
-The following are examples of different task inputs provided to the assistant along with the assistant's response for each of them. For each example, you will see:
-- The inputs given to the assistant
-- The assistant's final response
-- The agent trajectory (if available) showing the assistant's reasoning process, tool calls, and intermediate steps
-- Feedback on how the response could be better
+The following are the inputs given to the agent, the agent's final response, the agent's
+trajectory (tool calls and reasoning), the resulting patch, and the test feedback:
 
 {inputs_outputs_feedback}
 
-Your task is to write a new instruction for the assistant.
+Your task is to write **a new plan** that the next round can execute.
 
-Read the inputs carefully and identify the input format and infer a detailed task description about the task I wish to solve with the assistant.
+Read the inputs carefully and identify what the agent missed, mis-located, or mis-implemented.
+Examine the trajectory to understand HOW the agent approached the task. Look at:
+- What files / symbols the agent searched and read
+- The reasoning steps the agent took
+- Where the agent made mistakes or suboptimal choices
+- What information the agent missed or misinterpreted
 
-Carefully examine the agent trajectories to understand HOW the assistant is approaching the task. Look at:
-- What tools the assistant is calling and with what arguments
-- The reasoning steps the assistant takes
-- Where the assistant makes mistakes or suboptimal choices
-- What information the assistant is missing or misinterpreting
+Identify all niche, repo-specific facts (file paths, function signatures, edge cases) that
+the next round will need, and bake them into the new plan.
 
-Read all the assistant responses and the corresponding feedback. Identify all niche and domain-specific factual information about the task and include it in the instruction, as a lot of it may not be available to the assistant in the future. The assistant may have utilized a generalizable strategy to solve the task; if so, include that in the instruction as well.
+**The new plan must explicitly contain four labelled sections:**
+- **Navigation (N)** — how to locate the relevant code
+- **Reproduction (R)** — how to reproduce the failing behaviour before patching
+- **Patch (P)** — the concrete code edits to make
+- **Validation (V)** — how to confirm the failing tests now pass
 
-Based on the feedback AND the agent trajectories, identify what the assistant is doing wrong or could do better, and incorporate specific guidance to address these issues in the new instruction.
-
-Important constraints:
-- The instruction must keep these exact placeholders intact: {placeholders}
-- Do not add new placeholders or remove existing ones
-- Focus on improving clarity, specificity, and actionable guidance
-
-Provide the new instruction within ``` blocks.
+Provide the new plan within ``` blocks.
 ```
 
-**在我们的系统中的适配方式**：
+**输出解析**：从 LLM 响应中提取第一个 ``` 代码块中的内容作为新 Plan（实现见 `gepa_reflection.parse_output`）。
 
-- `{prompt_template}` → 填入当前 Plan 的完整内容
-- `{inputs_outputs_feedback}` → **由主机端根据 Optimization Feedback 数据结构读取并格式化生成**，包含：
-  - 原始 Issue 描述
-  - 当前 Plan 内容
-  - Plan Agent 的 trajectory（探索过程、推理步骤）
-  - Code Agent 的 trajectory（代码生成过程）
-  - 生成的 Patch 内容
-  - 测试结果（如 `optimization_info_level=1`）：resolved 状态、stdout、stderr
-  - **注入方式**：主机端读取 trajectory 文件内容后，将路径替换为实际文本，组装为纯文本字符串，通过 **system prompt** 注入反思 Agent。反思 Agent 在容器内**不接收任何文件路径**，无法直接访问 output_dir 中的 trajectory 文件
-- `{placeholders}` → 如需在 Plan 中保留特定占位符（如 `{issue_description}`），则列出；否则为空字符串
-
-**输出解析**：从 LLM 响应中提取第一个 ``` 代码块中的内容作为新 Plan。
+**覆盖方式**：用户可在 `config.yaml` 的 `prompts.reflection_prompt_template` 中提供自定义模板（必须保留 `{prompt_template}` 与 `{inputs_outputs_feedback}` 两个占位符）；缺省或留空时回退到本节描述的 `DEFAULT_REFLECTION_TEMPLATE`。

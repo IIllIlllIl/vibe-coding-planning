@@ -36,7 +36,6 @@ system:
   swe_pro_instances:
     - astropy__astropy-14539
   output_dir: ./output
-  use_gepa_reflection_prompt: true
 
 prompts:
   plan_generation_prompt: |
@@ -46,8 +45,14 @@ prompts:
   code_generation_prompt: |
     You are a code generation assistant. Generate a Git diff patch.
 
-  plan_optimization_prompt: |
-    You are a reflection expert. Improve the plan based on feedback.
+  reflection_prompt_template: |
+    Previous plan:
+    ```
+    {prompt_template}
+    ```
+    Feedback:
+    {inputs_outputs_feedback}
+    Produce an improved plan within a single ``` fence.
 
 docker:
   image_builder_script: "./scripts/build_docker_images.sh"
@@ -98,7 +103,6 @@ def test_single_round_smoke(integration_config_path):
     """
     from src.config import load_config
     from src.pipeline import run_instance
-    import json
     from pathlib import Path
 
     config = load_config(integration_config_path)

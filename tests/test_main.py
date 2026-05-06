@@ -2,11 +2,18 @@
 
 from __future__ import annotations
 
-from unittest.mock import MagicMock, patch
+from unittest.mock import patch
 
 import pytest
 
-from src.config import AgentConfig, Config, DockerConfig, PromptConfig, SystemConfig
+from src.config import (
+    AgentConfig,
+    Config,
+    DockerConfig,
+    EvaluatorConfig,
+    PromptConfig,
+    SystemConfig,
+)
 from src.exceptions import FatalError
 from src.main import _override_config, main, parse_args
 
@@ -20,7 +27,6 @@ def config() -> Config:
             n=3,
             swe_pro_instances=["astropy__astropy-14539"],
             output_dir="./output",
-            use_gepa_reflection_prompt=True,
         ),
         prompts=PromptConfig(),
         docker=DockerConfig(),
@@ -71,6 +77,29 @@ class TestOverrideConfig:
         new_config = _override_config(config, args)
         assert new_config.system.n == 3
         assert new_config.system.output_dir == "./output"
+
+    def test_override_preserves_evaluator(self):
+        """Regression: _override_config used to drop evaluator when rebuilding
+        the frozen Config, silently resetting it to the default timeout."""
+        cfg = Config(
+            system=SystemConfig(
+                model="deepseek-v4-flash",
+                api_base="https://api.deepseek.com",
+                n=3,
+                swe_pro_instances=["i1"],
+                output_dir="./output",
+            ),
+            prompts=PromptConfig(),
+            docker=DockerConfig(),
+            agent=AgentConfig(max_steps=10),
+            evaluator=EvaluatorConfig(timeout=999),
+            deepseek_api_key="test-key",
+        )
+        args = parse_args(["--n", "5"])
+        new_cfg = _override_config(cfg, args)
+        assert new_cfg.system.n == 5
+        # Critical: user-set evaluator.timeout must survive the rebuild
+        assert new_cfg.evaluator.timeout == 999
 
 
 class TestMain:

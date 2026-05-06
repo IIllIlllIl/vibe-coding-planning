@@ -1,50 +1,71 @@
-"""GEPA reflection prompt template.
+"""Reflection prompt template for plan optimization.
 
-Hard-coded prompt template extracted from GEPA (gepa-ai/gepa).
-Provides render() and output parsing utilities.
+The structural skeleton (current artefact + per-example feedback +
+fenced-block output) is borrowed from GEPA (gepa-ai/gepa).  GEPA itself
+optimises *prompt templates* with placeholders; in this project we
+optimise *plans* — natural-language workflows produced by the planning
+agent — so the default template is reworded accordingly and the
+placeholder-preservation constraint is dropped.
+
+The default template lives at module scope as ``DEFAULT_REFLECTION_TEMPLATE``
+so users can override it via ``config.prompts.reflection_prompt_template``
+without touching Python source.
 """
 
 import re
 
-# The reflection prompt template from requirement-document.md Appendix A.
-# Placeholders:
-#   {prompt_template}          -> current Plan content
-#   {inputs_outputs_feedback}  -> formatted Optimization Feedback
-#   {placeholders}             -> list of placeholders to preserve (or empty)
-_GEPA_REFLECTION_TEMPLATE = """I provided an assistant with the following plan to perform a task for me:
+# Default reflection template.  Placeholders (Python ``str.format`` style):
+#   {prompt_template}          -> current plan content (filled by render())
+#   {inputs_outputs_feedback}  -> formatted execution feedback (filled by render())
+#   {placeholders}             -> retained for backwards compatibility with
+#                                custom templates; not used by the default
+#                                wording.  render() always supplies it.
+DEFAULT_REFLECTION_TEMPLATE = """I provided a planning agent with the following plan to guide a downstream code-generation agent toward fixing a software bug:
 
 ```
 {prompt_template}
 ```
 
-The following are examples of different task inputs provided to the assistant along with the assistant's response for each of them. For each example, you will see:
-- The inputs given to the assistant
-- The assistant's final response
-- The agent trajectory (if available) showing the assistant's reasoning process, tool calls, and intermediate steps
-- Feedback on how the response could be better
+The following is feedback from the most recent execution of this plan. You will see:
+- The original task (problem statement) given to the planning agent
+- Trajectories from the plan, code, and (if any) reflect agents showing how each step was carried out
+- Test results and the generated patch
+- Any other diagnostic information collected during the run
 
 {inputs_outputs_feedback}
 
-Your task is to write a new plan for the assistant.
+Your task is to write a NEW plan that the planning agent can hand to the next round's code-generation agent. The plan you write replaces the previous plan in full.
 
-Read the inputs carefully and identify the input format and infer a detailed task description about the task I wish to solve with the assistant.
+Read the feedback carefully and identify:
+- Where the previous plan misled the code agent or left it under-specified
+- Which navigation / reproduction / patch / validation steps were wrong, missing, or out of order
+- Niche, domain-specific facts revealed by the trajectories (file paths, function signatures, edge cases) that should be baked into the new plan so the code agent does not have to rediscover them
+- Any generalisable strategy that worked and should be preserved
 
-Carefully examine the agent trajectories to understand HOW the assistant is approaching the task. Look at:
-- What tools the assistant is calling and with what arguments
-- The reasoning steps the assistant takes
-- Where the assistant makes mistakes or suboptimal choices
-- What information the assistant is missing or misinterpreting
+The new plan MUST follow this exact four-section structure (the downstream agents depend on it):
 
-Read all the assistant responses and the corresponding feedback. Identify all niche and domain-specific factual information about the task and include it in the plan, as a lot of it may not be available to the assistant in the future. The assistant may have utilized a generalizable strategy to solve the task; if so, include that in the plan as well.
+# Plan
 
-Based on the feedback AND the agent trajectories, identify what the assistant is doing wrong or could do better, and incorporate specific guidance to address these issues in the new plan.
+## Navigation (N)
+- Locate and identify the relevant source files, functions, classes, and modules involved in the issue.
+- Explain how the codebase is structured around the problematic area.
+
+## Reproduction (R)
+- Provide concrete steps to reproduce the bug or verify the issue exists.
+- Describe the expected vs. actual behaviour.
+
+## Patch (P)
+- List each file that needs modification and the exact change to make.
+- Include specific code snippets or logic changes (do NOT write full file contents).
+
+## Validation (V)
+- Describe how to verify the fix is correct (e.g., run specific tests, check edge cases).
+- Mention any regressions or side effects to watch for.
 
 Important constraints:
-- The plan must keep these exact placeholders intact: {placeholders}
-- Do not add new placeholders or remove existing ones
-- Focus on improving clarity, specificity, and actionable guidance
-
-Provide the new plan within ``` blocks.
+- Output ONLY the new plan, wrapped inside a single ``` fenced block.
+- Do not summarise the previous plan, do not explain your reasoning outside the fenced block.
+- The plan is natural-language guidance, not source code: do not paste full file contents.
 """
 
 
@@ -52,19 +73,26 @@ def render(
     current_plan: str,
     feedback_data: str,
     placeholders: str = "",
+    template: str | None = None,
 ) -> str:
-    """Render the GEPA reflection prompt template.
+    """Render the reflection prompt template.
 
     Args:
-        current_plan: The current Plan content (fills {prompt_template}).
-        feedback_data: Formatted feedback information (fills {inputs_outputs_feedback}).
+        current_plan: The current Plan content (fills ``{prompt_template}``).
+        feedback_data: Formatted feedback information (fills
+            ``{inputs_outputs_feedback}``).
         placeholders: Comma-separated list of placeholders to preserve
-            (fills {placeholders}). Pass empty string if none.
+            (fills ``{placeholders}``). Retained for backwards compatibility
+            with custom templates that still use it; the default template
+            ignores it.
+        template: Optional override for the template body. When ``None``
+            (default), :data:`DEFAULT_REFLECTION_TEMPLATE` is used.
 
     Returns:
         The fully rendered prompt string ready to send to the LLM.
     """
-    return _GEPA_REFLECTION_TEMPLATE.format(
+    body = template if template is not None else DEFAULT_REFLECTION_TEMPLATE
+    return body.format(
         prompt_template=current_plan,
         inputs_outputs_feedback=feedback_data,
         placeholders=placeholders,

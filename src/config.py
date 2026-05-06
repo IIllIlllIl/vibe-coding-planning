@@ -40,7 +40,6 @@ class SystemConfig:
     api_base: str = "https://api.deepseek.com"
     swe_pro_instances: list[str] = field(default_factory=list)
     output_dir: str = "./output"
-    use_gepa_reflection_prompt: bool = True
     resume: ResumeConfig = field(default_factory=ResumeConfig)
 
 
@@ -51,7 +50,7 @@ class PromptConfig:
     plan_generation_prompt: str = ""
     code_generation_prompt: str = ""
     code_instance_template: str = ""
-    plan_optimization_prompt: str = ""
+    reflection_prompt_template: str = ""
     plan_format_template: str = ""
 
 
@@ -225,7 +224,6 @@ def _build_system_config(data: dict[str, Any]) -> SystemConfig:
 
     n = _validate_n(_get_int(data, "n", 3))
     opt_level = _validate_optimization_info_level(_get_int(data, "optimization_info_level", 1))
-    use_gepa = _get_bool(data, "use_gepa_reflection_prompt", True)
 
     api_base = _get_str(data, "api_base", "https://api.deepseek.com")
     parsed = urllib.parse.urlparse(api_base)
@@ -245,18 +243,33 @@ def _build_system_config(data: dict[str, Any]) -> SystemConfig:
         api_base=api_base,
         swe_pro_instances=_get_list(data, "swe_pro_instances"),
         output_dir=_get_str(data, "output_dir", "./output"),
-        use_gepa_reflection_prompt=use_gepa,
         resume=_build_resume_config(resume_data),
     )
 
 
 def _build_prompt_config(data: dict[str, Any]) -> PromptConfig:
-    """Build PromptConfig from a dict."""
+    """Build PromptConfig from a dict.
+
+    ``reflection_prompt_template`` falls back to
+    :data:`src.prompts.gepa_reflection.DEFAULT_REFLECTION_TEMPLATE` when
+    absent or empty, so users can omit the field and still get the project's
+    default plan-optimization template.
+    """
+    # Local import to avoid a circular import at module load time
+    # (src.prompts.gepa_reflection has no runtime dependency on src.config,
+    # but importing it at module top-level would still tie config loading
+    # to that module — keep it lazy for cleanliness).
+    from src.prompts.gepa_reflection import DEFAULT_REFLECTION_TEMPLATE
+
+    reflection_template = _get_str(data, "reflection_prompt_template", "")
+    if not reflection_template.strip():
+        reflection_template = DEFAULT_REFLECTION_TEMPLATE
+
     return PromptConfig(
         plan_generation_prompt=_get_str(data, "plan_generation_prompt", ""),
         code_generation_prompt=_get_str(data, "code_generation_prompt", ""),
         code_instance_template=_get_str(data, "code_instance_template", ""),
-        plan_optimization_prompt=_get_str(data, "plan_optimization_prompt", ""),
+        reflection_prompt_template=reflection_template,
         plan_format_template=_get_str(data, "plan_format_template", ""),
     )
 

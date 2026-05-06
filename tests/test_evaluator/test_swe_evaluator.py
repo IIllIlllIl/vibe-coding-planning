@@ -1,6 +1,6 @@
 """Tests for src/evaluator/swe_evaluator.py."""
 
-from unittest.mock import MagicMock, patch
+from unittest.mock import patch
 
 import pytest
 

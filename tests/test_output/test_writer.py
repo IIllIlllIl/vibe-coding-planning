@@ -104,7 +104,6 @@ class TestFinalize:
             model="deepseek-v4-flash",
             parameter_n=3,
             optimization_info_level=1,
-            use_gepa_reflection_prompt=True,
         )
         assert result_path.exists()
         data = json.loads(result_path.read_text(encoding="utf-8"))
@@ -113,7 +112,6 @@ class TestFinalize:
         assert data["model"] == "deepseek-v4-flash"
         assert data["parameter_n"] == 3
         assert data["optimization_info_level"] == 1
-        assert data["use_gepa_reflection_prompt"] is True
         assert "plans" in data
         assert len(data["plans"]) == 1
         assert "trajectory_directory" in data
@@ -136,7 +134,6 @@ class TestFinalize:
             model="deepseek-v4-flash",
             parameter_n=1,
             optimization_info_level=0,
-            use_gepa_reflection_prompt=False,
             runtime_versions=versions,
         )
         data = json.loads(result_path.read_text(encoding="utf-8"))

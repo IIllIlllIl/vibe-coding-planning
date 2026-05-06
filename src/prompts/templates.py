@@ -13,7 +13,7 @@ class PromptTemplates:
 
     plan_generation: str = ""
     code_generation: str = ""
-    plan_optimization: str = ""
+    reflection: str = ""
     plan_format: str = ""
 
 
@@ -29,7 +29,7 @@ def load_prompt_templates(config_prompts: dict) -> PromptTemplates:
     return PromptTemplates(
         plan_generation=config_prompts.get("plan_generation_prompt", ""),
         code_generation=config_prompts.get("code_generation_prompt", ""),
-        plan_optimization=config_prompts.get("plan_optimization_prompt", ""),
+        reflection=config_prompts.get("reflection_prompt_template", ""),
         plan_format=config_prompts.get("plan_format_template", ""),
     )
 

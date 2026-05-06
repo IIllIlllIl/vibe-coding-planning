@@ -3,9 +3,7 @@
 from __future__ import annotations
 
 from unittest.mock import MagicMock, patch
-from typing import Any
 import pytest
-import json
 
 from src.config import AgentConfig, Config, DockerConfig, EvaluatorConfig, PromptConfig, SystemConfig
 from src.pipeline import run_instance
@@ -20,12 +18,11 @@ def config() -> Config:
             n=3,
             swe_pro_instances=["astropy__astropy-14539"],
             output_dir="./output",
-            use_gepa_reflection_prompt=True,
         ),
         prompts=PromptConfig(
             plan_generation_prompt="Plan prompt.",
             code_generation_prompt="Code prompt.",
-            plan_optimization_prompt="Optimize prompt.",
+            reflection_prompt_template="Reflect prompt {prompt_template} {inputs_outputs_feedback}.",
         ),
         docker=DockerConfig(
             image_builder_script="./scripts/build.sh",
@@ -64,7 +61,6 @@ class TestPipelineSingleRound:
                 n=1,
                 swe_pro_instances=["astropy__astropy-14539"],
                 output_dir="./output",
-                use_gepa_reflection_prompt=True,
             ),
             prompts=PromptConfig(),
             docker=DockerConfig(),
@@ -164,7 +160,9 @@ class TestPipelineMultiRound:
         assert mock_code.call_count == 3
         assert mock_eval.call_count == 3
         assert mock_writer.save_round.call_count == 3
-        mock_docker.stop.assert_called_once()
+        # Per-round container isolation: start + stop once per round
+        assert mock_docker.start.call_count == 3
+        assert mock_docker.stop.call_count == 3
 
 
 class TestPipelineErrorHandling:
@@ -195,7 +193,6 @@ class TestPipelineErrorHandling:
                 n=3,
                 swe_pro_instances=["astropy__astropy-14539"],
                 output_dir="./output",
-                use_gepa_reflection_prompt=True,
             ),
             prompts=PromptConfig(),
             docker=DockerConfig(),
@@ -244,7 +241,9 @@ class TestPipelineErrorHandling:
         # Should still complete all rounds, with round 2 recording an error
         assert mock_writer.save_round.call_count == 2  # round 1 and 3
         mock_writer.record_error.assert_called_once()
-        mock_docker.stop.assert_called_once()
+        # Per-round container isolation: every round starts/stops, even the failing one
+        assert mock_docker.start.call_count == 3
+        assert mock_docker.stop.call_count == 3
 
     @patch("src.pipeline.DockerEnvWrapper")
     @patch("src.pipeline.InstanceLoader")
@@ -361,7 +360,7 @@ class TestPipelineDockerLifecycle:
     @patch("src.pipeline.evaluate")
     @patch("src.pipeline.save_trajectory")
     @patch("src.pipeline.OutputWriter")
-    def test_docker_start_stop_called_once(
+    def test_docker_start_stop_called_per_round(
         self,
         mock_writer_cls,
         mock_save_traj,
@@ -402,8 +401,9 @@ class TestPipelineDockerLifecycle:
 
         run_instance("astropy__astropy-14539", config)
 
-        mock_docker.start.assert_called_once()
-        mock_docker.stop.assert_called_once()
+        # Per-round container isolation: each of n rounds gets its own start/stop
+        assert mock_docker.start.call_count == config.system.n
+        assert mock_docker.stop.call_count == config.system.n
 
 
 class TestPipelineEvaluatorTimeout:
@@ -432,7 +432,6 @@ class TestPipelineEvaluatorTimeout:
             system=SystemConfig(
                 model="m", api_base="https://x.y", n=1,
                 swe_pro_instances=["i1"], output_dir="./output",
-                use_gepa_reflection_prompt=True,
             ),
             prompts=PromptConfig(),
             docker=DockerConfig(),

@@ -10,12 +10,7 @@ import pytest
 import yaml
 
 from src.config import (
-    AgentConfig,
     Config,
-    DockerConfig,
-    PromptConfig,
-    ResumeConfig,
-    SystemConfig,
     load_config,
 )
 from src.exceptions import FatalError
@@ -31,7 +26,6 @@ def valid_config_dict() -> dict[str, Any]:
             "api_base": "https://api.deepseek.com",
             "swe_pro_instances": ["astropy__astropy-14539"],
             "output_dir": "./output",
-            "use_gepa_reflection_prompt": True,
             "resume": {
                 "enabled": False,
                 "from_plan_id": "",
@@ -41,7 +35,7 @@ def valid_config_dict() -> dict[str, Any]:
         "prompts": {
             "plan_generation_prompt": "Plan prompt here",
             "code_generation_prompt": "Code prompt here",
-            "plan_optimization_prompt": "Optimize prompt here",
+            "reflection_prompt_template": "Reflect template {prompt_template} {inputs_outputs_feedback}",
             "plan_format_template": "Format template here",
         },
         "docker": {
@@ -77,10 +71,12 @@ class TestLoadConfigSuccess:
         assert config.system.api_base == "https://api.deepseek.com"
         assert config.system.swe_pro_instances == ["astropy__astropy-14539"]
         assert config.system.output_dir == "./output"
-        assert config.system.use_gepa_reflection_prompt is True
         assert config.prompts.plan_generation_prompt == "Plan prompt here"
         assert config.prompts.code_generation_prompt == "Code prompt here"
-        assert config.prompts.plan_optimization_prompt == "Optimize prompt here"
+        assert (
+            config.prompts.reflection_prompt_template
+            == "Reflect template {prompt_template} {inputs_outputs_feedback}"
+        )
         assert config.prompts.plan_format_template == "Format template here"
         assert config.docker.image_builder_script == "./scripts/build.sh"
         assert config.docker.workdir == "/testbed"
@@ -188,30 +184,38 @@ class TestResumeConfig:
         assert "from_round < 1" in caplog.text
 
 
-class TestBooleanParsing:
-    def test_use_gepa_string_true(self, monkeypatch, tmp_path: Path):
-        monkeypatch.setenv("DEEPSEEK_API_KEY", "test-key")
-        data = {"system": {"use_gepa_reflection_prompt": "true"}}
-        filepath = tmp_path / "bool_config.yaml"
-        filepath.write_text(yaml.dump(data), encoding="utf-8")
-        config = load_config(filepath)
-        assert config.system.use_gepa_reflection_prompt is True
+class TestReflectionTemplateFallback:
+    """Verify PromptConfig.reflection_prompt_template falls back to
+    DEFAULT_REFLECTION_TEMPLATE when the user omits or empties the field."""
 
-    def test_use_gepa_string_false(self, monkeypatch, tmp_path: Path):
-        monkeypatch.setenv("DEEPSEEK_API_KEY", "test-key")
-        data = {"system": {"use_gepa_reflection_prompt": "false"}}
-        filepath = tmp_path / "bool_config.yaml"
-        filepath.write_text(yaml.dump(data), encoding="utf-8")
-        config = load_config(filepath)
-        assert config.system.use_gepa_reflection_prompt is False
+    def test_missing_falls_back_to_default(self, monkeypatch, tmp_path: Path):
+        from src.prompts.gepa_reflection import DEFAULT_REFLECTION_TEMPLATE
 
-    def test_use_gepa_int_one(self, monkeypatch, tmp_path: Path):
         monkeypatch.setenv("DEEPSEEK_API_KEY", "test-key")
-        data = {"system": {"use_gepa_reflection_prompt": 1}}
-        filepath = tmp_path / "bool_config.yaml"
+        # Empty config — no prompts section at all
+        filepath = tmp_path / "no_prompts.yaml"
+        filepath.write_text("{}", encoding="utf-8")
+        config = load_config(filepath)
+        assert config.prompts.reflection_prompt_template == DEFAULT_REFLECTION_TEMPLATE
+
+    def test_empty_string_falls_back_to_default(self, monkeypatch, tmp_path: Path):
+        from src.prompts.gepa_reflection import DEFAULT_REFLECTION_TEMPLATE
+
+        monkeypatch.setenv("DEEPSEEK_API_KEY", "test-key")
+        data = {"prompts": {"reflection_prompt_template": ""}}
+        filepath = tmp_path / "empty_tpl.yaml"
         filepath.write_text(yaml.dump(data), encoding="utf-8")
         config = load_config(filepath)
-        assert config.system.use_gepa_reflection_prompt is True
+        assert config.prompts.reflection_prompt_template == DEFAULT_REFLECTION_TEMPLATE
+
+    def test_user_template_overrides_default(self, monkeypatch, tmp_path: Path):
+        monkeypatch.setenv("DEEPSEEK_API_KEY", "test-key")
+        custom = "MY-CUSTOM {prompt_template} {inputs_outputs_feedback}"
+        data = {"prompts": {"reflection_prompt_template": custom}}
+        filepath = tmp_path / "custom_tpl.yaml"
+        filepath.write_text(yaml.dump(data), encoding="utf-8")
+        config = load_config(filepath)
+        assert config.prompts.reflection_prompt_template == custom
 
 
 class TestApiBaseAndTimeout:
@@ -331,7 +335,6 @@ class TestDefaults:
         assert config.system.model == "deepseek-v4-flash"
         assert config.system.api_base == "https://api.deepseek.com"
         assert config.system.optimization_info_level == 1
-        assert config.system.use_gepa_reflection_prompt is True
         assert config.system.swe_pro_instances == []
         assert config.docker.workdir == "/testbed"
         assert config.agent.max_steps == 30

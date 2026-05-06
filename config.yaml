@@ -7,7 +7,6 @@ system:
   swe_pro_instances:
     - astropy__astropy-14539
   output_dir: ./output
-  use_gepa_reflection_prompt: true
 
   # Resume configuration (optional)
   resume:
@@ -204,10 +203,63 @@ prompts:
     You cannot continue working (reading, editing, testing) in any way on this task after submitting.
     </instructions>
 
-  plan_optimization_prompt: |
-    You are a reflection optimization expert. Based on the previous plan's execution feedback,
-    analyze the failure reasons and output an improved plan.
-    Output the improved plan in natural language.
+  # Reflection prompt template (rendered host-side by
+  # src/prompts/gepa_reflection.py:render). Two placeholders are required:
+  #   {prompt_template}          -> filled with the previous round's plan
+  #   {inputs_outputs_feedback}  -> filled with assembled execution feedback
+  # The structural skeleton is borrowed from GEPA but reworded for *plan*
+  # optimisation (this project optimises the plan handed to the planning
+  # agent, not the prompt itself). Leave this key absent or empty to fall
+  # back to gepa_reflection.DEFAULT_REFLECTION_TEMPLATE — the literal text
+  # below mirrors that default so users can edit it inline without touching
+  # source code.
+  reflection_prompt_template: |
+    I provided a planning agent with the following plan to guide a downstream code-generation agent toward fixing a software bug:
+
+    ```
+    {prompt_template}
+    ```
+
+    The following is feedback from the most recent execution of this plan. You will see:
+    - The original task (problem statement) given to the planning agent
+    - Trajectories from the plan, code, and (if any) reflect agents showing how each step was carried out
+    - Test results and the generated patch
+    - Any other diagnostic information collected during the run
+
+    {inputs_outputs_feedback}
+
+    Your task is to write a NEW plan that the planning agent can hand to the next round's code-generation agent. The plan you write replaces the previous plan in full.
+
+    Read the feedback carefully and identify:
+    - Where the previous plan misled the code agent or left it under-specified
+    - Which navigation / reproduction / patch / validation steps were wrong, missing, or out of order
+    - Niche, domain-specific facts revealed by the trajectories (file paths, function signatures, edge cases) that should be baked into the new plan so the code agent does not have to rediscover them
+    - Any generalisable strategy that worked and should be preserved
+
+    The new plan MUST follow this exact four-section structure (the downstream agents depend on it):
+
+    # Plan
+
+    ## Navigation (N)
+    - Locate and identify the relevant source files, functions, classes, and modules involved in the issue.
+    - Explain how the codebase is structured around the problematic area.
+
+    ## Reproduction (R)
+    - Provide concrete steps to reproduce the bug or verify the issue exists.
+    - Describe the expected vs. actual behaviour.
+
+    ## Patch (P)
+    - List each file that needs modification and the exact change to make.
+    - Include specific code snippets or logic changes (do NOT write full file contents).
+
+    ## Validation (V)
+    - Describe how to verify the fix is correct (e.g., run specific tests, check edge cases).
+    - Mention any regressions or side effects to watch for.
+
+    Important constraints:
+    - Output ONLY the new plan, wrapped inside a single ``` fenced block.
+    - Do not summarise the previous plan, do not explain your reasoning outside the fenced block.
+    - The plan is natural-language guidance, not source code: do not paste full file contents.
 
   # Plan format template — N/R/P/V structure (required for all plan agents)
   plan_format_template: |

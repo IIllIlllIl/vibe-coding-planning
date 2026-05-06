@@ -32,8 +32,7 @@ Issue 描述 → Plan Agent 生成方案 → Code Agent 生成 Patch → SWE 评
 | 异常定义 | `src/exceptions.py` | FatalError, TaskError |
 | 配置加载 | `src/config.py` | YAML 解析、参数验证、DEEPSEEK_API_KEY 读取 |
 | Prompt 模板 | `src/prompts/templates.py` | 模板加载与占位符渲染 |
-| GEPA 模板 | `src/prompts/gepa_reflection.py` | 硬编码反射 Prompt + 输出解析 |
-| Feedback 组装 | `src/feedback/assembler.py` | OptimizationFeedback 数据结构组装 |
+| GEPA 模板 | `src/prompts/gepa_reflection.py` | 默认反射 Prompt（plan-optimization 版）+ 输出解析 |
 | 输出写入器 | `src/output/writer.py` | result.json / Patch / 错误日志 |
 | 轨迹保存 | `src/output/trajectory.py` | 命名规范: `trajectory_{round}_{role}_{timestamp}.json` |
 | 实例加载器 | `src/data/instance_loader.py` | mock 模式 + swebench 模式（TODO） |
@@ -82,14 +81,12 @@ src/
 │   └── swe_evaluator.py       # SWE 评估
 ├── data/
 │   └── instance_loader.py     # 实例加载
-├── feedback/
-│   └── assembler.py           # Feedback 组装
 ├── output/
 │   ├── writer.py              # 结果输出
 │   └── trajectory.py          # 轨迹保存
 └── prompts/
     ├── templates.py           # Prompt 模板
-    └── gepa_reflection.py     # GEPA 反射模板
+    └── gepa_reflection.py     # GEPA 反射模板（plan-optimization 版，可由 config 覆盖）
 
 scripts/
 └── quickstart.sh              # 一键运行

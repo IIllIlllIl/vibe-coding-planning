@@ -18,16 +18,10 @@ from src.data.instance_loader import InstanceLoader
 from src.environment.docker_env import DockerEnvWrapper
 from src.evaluator.swe_evaluator import derive_image_name, evaluate
 from src.exceptions import FatalError, TaskError
-from src.feedback import assembler as feedback_assembler
 from src.output.trajectory import save_trajectory
 from src.output.writer import OutputWriter
 
 logger = logging.getLogger(__name__)
-
-
-def _iso_timestamp() -> str:
-    """Return current UTC time as ISO 8601 string."""
-    return datetime.now(timezone.utc).isoformat()
 
 
 def run_instance(instance_id: str, config: Config) -> dict[str, Any]:
@@ -80,33 +74,15 @@ def _run_instance_core(
         issue_description = instance_info.get("issue_description", "")
 
     # ------------------------------------------------------------------
-    # 2. Start Docker environment
+    # 2. Prepare Docker wrapper (container is started per-round below)
     # ------------------------------------------------------------------
     docker = DockerEnvWrapper(config.docker)
     image_name = derive_image_name(instance_info)
     repo_path = instance_info.get("repo_path", "")
 
-    logger.info("[%s] Starting Docker env: image=%s", instance_id, image_name)
-    try:
-        docker.start(
-            image=image_name,
-            workdir=config.docker.workdir,
-            ro_mount_source=repo_path,
-        )
-    except FatalError:
-        raise
-    except Exception as exc:
-        logger.error("Docker start failed: %s", exc)
-        writer.record_error(
-            instance_id=instance_id,
-            error_type="docker_start_failed",
-            message=str(exc),
-            skipped=True,
-        )
-        return _finalize_writer(writer, config, instance_id)
-
     # ------------------------------------------------------------------
-    # 3. Run rounds
+    # 3. Run rounds — each round gets a fresh container so every agent
+    #    starts with /testbed at the dataset's base_commit state.
     # ------------------------------------------------------------------
     previous_plan: str | None = None
     previous_plan_id: str | None = None
@@ -117,25 +93,53 @@ def _run_instance_core(
         logger.info("[%s] === Round %d/%d ===", instance_id, round_num, config.system.n)
 
         try:
-            (
-                plan_text,
-                traj_plan,
-                plan_id,
-                patch_text,
-                test_results,
-            ) = _run_round(
-                round_num=round_num,
-                config=config,
-                docker=docker,
-                writer=writer,
-                instance_id=instance_id,
-                instance_info=instance_info,
-                issue_description=issue_description,
-                previous_plan=previous_plan,
-                previous_plan_id=previous_plan_id,
-                previous_patch=previous_patch,
-                previous_test_results=previous_test_results,
+            logger.info(
+                "[%s] Round %d: starting Docker env: image=%s",
+                instance_id,
+                round_num,
+                image_name,
             )
+            try:
+                docker.start(
+                    image=image_name,
+                    workdir=config.docker.workdir,
+                    ro_mount_source=repo_path,
+                )
+            except FatalError:
+                raise
+            except Exception as exc:
+                logger.error("[%s] Round %d: docker start failed: %s", instance_id, round_num, exc)
+                writer.record_error(
+                    instance_id=instance_id,
+                    error_type="docker_start_failed",
+                    message=f"Round {round_num}: {exc}",
+                    skipped=False,
+                )
+                continue
+
+            try:
+                (
+                    plan_text,
+                    traj_plan,
+                    plan_id,
+                    patch_text,
+                    test_results,
+                ) = _run_round(
+                    round_num=round_num,
+                    config=config,
+                    docker=docker,
+                    writer=writer,
+                    instance_id=instance_id,
+                    instance_info=instance_info,
+                    issue_description=issue_description,
+                    previous_plan=previous_plan,
+                    previous_plan_id=previous_plan_id,
+                    previous_patch=previous_patch,
+                    previous_test_results=previous_test_results,
+                )
+            finally:
+                logger.info("[%s] Round %d: stopping Docker env", instance_id, round_num)
+                docker.stop()
         except TaskError as exc:
             logger.warning("[%s] Round %d failed: %s", instance_id, round_num, exc)
             writer.record_error(
@@ -157,13 +161,7 @@ def _run_instance_core(
         previous_test_results = test_results
 
     # ------------------------------------------------------------------
-    # 4. Stop Docker environment
-    # ------------------------------------------------------------------
-    logger.info("[%s] Stopping Docker env", instance_id)
-    docker.stop()
-
-    # ------------------------------------------------------------------
-    # 5. Finalize output
+    # 4. Finalize output
     # ------------------------------------------------------------------
     return _finalize_writer(writer, config, instance_id)
 
@@ -216,7 +214,6 @@ def _read_trajectory_content(path: str | None) -> str:
 def _build_feedback_text(
     *,
     original_prompt: str,
-    current_plan: str,
     plan_trajectory: str,
     code_trajectory: str,
     reflect_trajectory: str,
@@ -227,7 +224,10 @@ def _build_feedback_text(
     """Assemble the feedback text injected into the reflect agent's prompt.
 
     All content is gathered on the host so the reflect agent inside Docker
-    never needs to read trajectory files.
+    never needs to read trajectory files.  The current plan is *not*
+    included here — it is supplied separately to
+    :func:`gepa_reflection.render` as the ``current_plan`` argument so
+    the template can place it in the dedicated slot.
     """
     parts: list[str] = []
 
@@ -240,9 +240,6 @@ def _build_feedback_text(
         parts.append(f"\n=== Code Agent Trajectory ===\n{code_trajectory}")
     if reflect_trajectory:
         parts.append(f"\n=== Reflect Agent Trajectory ===\n{reflect_trajectory}")
-
-    if current_plan:
-        parts.append(f"\nCurrent Plan:\n{current_plan}")
 
     if opt_level >= 1:
         resolved = test_results.get("resolved")
@@ -314,7 +311,6 @@ def _run_round(
 
         feedback_text = _build_feedback_text(
             original_prompt=issue_description,
-            current_plan=previous_plan or "",
             plan_trajectory=plan_traj,
             code_trajectory=code_traj,
             reflect_trajectory=reflect_traj,
@@ -323,34 +319,9 @@ def _run_round(
             opt_level=config.system.optimization_info_level,
         )
 
-        # Keep assembling feedback dict for potential downstream use
-        # (writer, resume, etc.) even though reflect agent no longer reads it.
-        feedback_data = feedback_assembler.assemble(
-            feedback_assembler.FeedbackInput(
-                optimization_info_level=config.system.optimization_info_level,
-                target_plan_number=config.system.n,
-                current_round=round_num,
-                model=config.system.model,
-                use_gepa_reflection_prompt=config.system.use_gepa_reflection_prompt,
-                original_prompt=issue_description,
-                current_plan_content=previous_plan or "",
-                current_plan_id=previous_plan_id or "",
-                current_plan_round=round_num - 1,
-                plan_generation_trajectory_path=plan_traj_path,
-                code_generation_trajectory_path=code_traj_path,
-                reflection_trajectory_path=reflect_traj_path,
-                patch_path="",
-                patch_content=previous_patch,
-                test_resolved=previous_test_results.get("resolved", False),
-                test_stdout=previous_test_results.get("stdout", ""),
-                test_stderr=previous_test_results.get("stderr", ""),
-                test_log_dir=previous_test_results.get("log_dir", ""),
-                error_info="",
-            )
+        plan_text, traj_plan = reflect_agent.run(
+            config, previous_plan or "", feedback_text, docker
         )
-        feedback_data["meta"]["timestamp"] = _iso_timestamp()
-
-        plan_text, traj_plan = reflect_agent.run(config, feedback_text, docker)
         plan_id = f"plan_{instance_id}_r{round_num}"
         generated_by = "reflect_agent"
 
@@ -421,7 +392,6 @@ def _finalize_writer(
         model=config.system.model,
         parameter_n=config.system.n,
         optimization_info_level=config.system.optimization_info_level,
-        use_gepa_reflection_prompt=config.system.use_gepa_reflection_prompt,
     )
     # Load and return the written result
     return json.loads(result_path.read_text(encoding="utf-8"))

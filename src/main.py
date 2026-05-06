@@ -93,6 +93,7 @@ def _override_config(config: Config, args: argparse.Namespace) -> Config:
         prompts=config.prompts,
         docker=config.docker,
         agent=config.agent,
+        evaluator=config.evaluator,
         deepseek_api_key=config.deepseek_api_key,
     )
     return new_config

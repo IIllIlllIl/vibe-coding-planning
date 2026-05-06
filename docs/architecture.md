@@ -38,17 +38,14 @@ plan-code-test/
 │   ├── data/
 │   │   ├── __init__.py
 │   │   └── instance_loader.py     # 从 SWE-bench Pro 加载实例元数据
-│   ├── feedback/
-│   │   ├── __init__.py
-│   │   └── assembler.py           # Optimization Feedback 数据结构组装
 │   ├── output/
 │   │   ├── __init__.py
 │   │   ├── writer.py              # 结果 JSON、Trajectory JSON、Patch 文件输出
 │   │   └── trajectory.py          # Trajectory 保存（从 DefaultAgent.messages 导出）
 │   └── prompts/
 │       ├── __init__.py
-│       ├── templates.py             # Prompt 模板常量（plan / code / reflect）
-│       └── gepa_reflection.py       # GEPA 反射 Prompt 模板（附录 A 的代码化）
+│       ├── templates.py             # Prompt 模板常量（plan / code / reflection）
+│       └── gepa_reflection.py       # 默认反射 Prompt 模板（plan-optimization 版，可由 config 覆盖）
 ├── config.yaml                      # 运行时配置
 ├── requirements.txt                 # Python 依赖
 ├── .gitignore
@@ -73,11 +70,11 @@ plan-code-test/
 |------|------|------|
 | **Plan Agent** | `src/agents/plan_agent.py` | 创建 `DefaultAgent`（system prompt = `plan_generation_prompt`），在 Docker 环境中自主探索代码库，输出自然语言 Plan。返回 `(plan_content, trajectory_messages)` |
 | **Code Agent** | `src/agents/code_agent.py` | 创建 `DefaultAgent`（system prompt = `code_generation_prompt`），输入 Plan + Issue 描述，输出 Git diff 格式的 Patch。返回 `(patch_content, trajectory_messages)` |
-| **Reflect Agent** | `src/agents/reflect_agent.py` | 复用 `DefaultAgent` + Docker 环境（同 Plan/Code Agent），在 Docker 容器内运行。**所有 Optimization Feedback 内容在主机端读取并组装为纯文本字符串 `feedback_text`，通过 system prompt 注入，不传递文件路径**。Agent 可读取代码库文件验证假设、编写临时测试脚本，但不得修改源代码。使用 GEPA 反射 Prompt 模板或简化反思 Prompt 生成改进 Plan。返回 `(new_plan, trajectory_messages)` |
+| **Reflect Agent** | `src/agents/reflect_agent.py` | 复用 `DefaultAgent` + Docker 环境（同 Plan/Code Agent），在 Docker 容器内运行。**所有 feedback 内容在主机端读取并组装为纯文本字符串 `feedback_text`，通过 system prompt 注入，不传递文件路径**。Agent 可读取代码库文件验证假设、编写临时测试脚本，但不得修改源代码。始终走 `gepa_reflection.render()`，模板取自 `config.prompts.reflection_prompt_template`，未配置时回退到 `DEFAULT_REFLECTION_TEMPLATE`（plan-optimization 版默认模板）。返回 `(new_plan, trajectory_messages)` |
 
 **Agent 层的统一约定**：
 - `plan_agent` 与 `code_agent` 函数签名：`run(config, task_input, env) -> (result_text, trajectory_messages)`
-- `reflect_agent` 函数签名：`run(config, feedback_text, env) -> (new_plan, trajectory_messages)`（`feedback_text` 为主机端预组装的纯文本字符串；`env` 为 Docker 环境，与 Plan/Code Agent 共享同一容器）
+- `reflect_agent` 函数签名：`run(config, current_plan, feedback_text, env) -> (new_plan, trajectory_messages)`（`current_plan` 为上一轮 plan，`feedback_text` 为主机端预组装的纯文本字符串；`env` 为 Docker 环境，与 Plan/Code Agent 共享同一镜像但每轮使用独立容器）
 - `trajectory_messages` 是 `mini-swe-agent` 的 `DefaultAgent.messages` 列表（`list[dict]`）
 - 所有 Agent 均不长期持有 `DockerEnvironment` 引用，由调用方注入，运行结束后释放
 
@@ -98,7 +95,7 @@ plan-code-test/
 
 | 模块 | 文件 | 职责 |
 |------|------|
-| **Feedback 组装器** | `src/feedback/assembler.py` | 将原始 Prompt、Plan、trajectories、Patch、test_results（可选）组装成符合规范的 `OptimizationFeedback` dict |
+| **Feedback 组装** | `src/pipeline.py:_build_feedback_text` | 将原始 Issue、plan/code/reflect trajectories、Patch、test_results（按 `optimization_info_level` 决定）拼接成纯文本字符串 `feedback_text`，由 reflect_agent 通过 system prompt 注入容器 |
 | **输出写入器** | `src/output/writer.py` | 写入主结果 JSON、Patch 文件、错误日志 |
 | **Trajectory 保存** | `src/output/trajectory.py` | 将 `DefaultAgent.messages` 列表加上元数据（round, role, timestamp）导出为 `trajectory_{round}_{role}_{timestamp}.json` |
 
@@ -106,8 +103,8 @@ plan-code-test/
 
 | 模块 | 文件 | 职责 |
 |------|------|
-| **配置加载** | `src/prompts/templates.py` | 从 `config.yaml` 读取用户可配置的 Prompt：`plan_generation_prompt`、`code_generation_prompt`、`plan_optimization_prompt`（简化反思时使用）。不存放硬编码常量 |
-| **GEPA 反射模板** | `src/prompts/gepa_reflection.py` | 硬编码从 GEPA 提取的固定 Prompt 模板（附录 A），提供 `render(current_plan, feedback_data, placeholders) -> str` 渲染函数。该模板不通过 `config.yaml` 暴露给用户修改，以保证策略稳定性 |
+| **配置加载** | `src/prompts/templates.py` | 从 `config.yaml` 读取用户可配置的 Prompt：`plan_generation_prompt`、`code_generation_prompt`、`reflection_prompt_template`（反射模板，覆盖 `gepa_reflection.DEFAULT_REFLECTION_TEMPLATE`）。不存放硬编码常量 |
+| **GEPA 反射模板** | `src/prompts/gepa_reflection.py` | 提供 `render(current_plan, feedback_data, placeholders="", template=None) -> str` 渲染函数与 `DEFAULT_REFLECTION_TEMPLATE` 公开常量。默认模板是 plan-optimization 版（与原 GEPA prompt-optimization 模板有差异：移除 `{placeholders}` 约束，加入 N/R/P/V 输出结构要求）。reflect_agent 调用时优先使用 `config.prompts.reflection_prompt_template`，缺失时回退到默认模板 |
 
 ---
 
@@ -118,35 +115,31 @@ plan-code-test/
 ```
 main.py
   └── pipeline.run_instance(instance_id, config)
-        ├── docker_env.start(image, workdir, ro_mount=True)
         │
-        ├── Round 1:
-        │   ├── plan_agent.run(config, issue_desc, docker_env)
-        │   │   └── (plan_1, traj_plan_1)
-        │   ├── code_agent.run(config, plan_1 + issue_desc, docker_env)
-        │   │   └── (patch_1, traj_code_1)
-        │   ├── swe_evaluator.evaluate(patch_1, instance_id)
-        │   │   └── test_results_1
-        │   ├── trajectory.save(traj_plan_1, round=1, role="plan_gen")
-        │   ├── trajectory.save(traj_code_1, round=1, role="code_gen")
-        │   └── writer.save_round(plan_1, patch_1, test_results_1, ...)
+        ├── for round in 1..n:
+        │     ├── docker_env.start(image, workdir, ro_mount=True)   # 每轮独立容器
+        │     │
+        │     ├── if round == 1:
+        │     │   plan_agent.run(config, issue_desc, docker_env)
+        │     │     └── (plan_round, traj_plan_round)
+        │     │   role = "plan_gen"
+        │     ├── else:
+        │     │   feedback_text = pipeline._build_feedback_text(
+        │     │       issue_desc, traj_plan_prev, traj_code_prev, traj_reflect_prev,
+        │     │       test_results_prev, patch_prev, opt_level)
+        │     │   reflect_agent.run(config, plan_prev, feedback_text, docker_env)
+        │     │     └── (plan_round, traj_plan_round)
+        │     │   role = "reflect"
+        │     │
+        │     ├── code_agent.run(config, plan_round + issue_desc, docker_env)
+        │     │   └── (patch_round, traj_code_round)
+        │     ├── swe_evaluator.evaluate(patch_round, instance_info, timeout)
+        │     │   └── test_results_round
+        │     ├── trajectory.save(traj_plan_round, round, role)
+        │     ├── trajectory.save(traj_code_round, round, "code_gen")
+        │     ├── writer.save_round(plan_round, patch_round, test_results_round, ...)
+        │     └── docker_env.stop()                                  # 由 try/finally 保证调用
         │
-        ├── Round 2..n:
-        │   ├── feedback.assemble(plan_{i-1}, traj_plan_{i-1}, traj_code_{i-1},
-        │   │                     patch_{i-1}, test_results_{i-1}, config)
-        │   │   └── optimization_feedback
-        │   ├── feedback_text = _build_feedback_text(...)
-        │   ├── reflect_agent.run(config, feedback_text, docker_env)
-        │   │   └── (plan_i, traj_reflect_i)
-        │   ├── code_agent.run(config, plan_i + issue_desc, docker_env)
-        │   │   └── (patch_i, traj_code_i)
-        │   ├── swe_evaluator.evaluate(patch_i, instance_id)
-        │   │   └── test_results_i
-        │   ├── trajectory.save(traj_reflect_i, round=i, role="reflect")
-        │   ├── trajectory.save(traj_code_i, round=i, role="code_gen")
-        │   └── writer.save_round(plan_i, patch_i, test_results_i, ...)
-        │
-        ├── docker_env.stop()
         └── writer.finalize(instance_id)   # 输出主结果 JSON
 ```
 
@@ -155,11 +148,6 @@ main.py
 **Agent 输出**（每个 Agent 统一返回）：
 ```python
 AgentResult = tuple[str, list[dict]]  # (result_text, messages)
-```
-
-**Optimization Feedback**（`feedback.assembler` 产出）：
-```python
-OptimizationFeedback = dict[str, Any]  # 见需求文档 §4.1
 ```
 
 **测试结果**（`swe_evaluator` 产出）：
@@ -222,7 +210,6 @@ TestResults = dict[str, Any]  # {resolved: bool, stdout: str, stderr: str, log_d
 | `src/agents/reflect_agent.py` | 复用 `DefaultAgent` + `DockerEnvironment`，`feedback_text` 通过 system prompt 注入，Agent 在容器内可探索代码库但无法访问 trajectory 文件 | `mini-swe-agent` |
 | `src/environment/docker_env.py` | 封装 `DockerEnvironment`，设置 ro 挂载 | `mini-swe-agent` |
 | `src/evaluator/swe_evaluator.py` | 调用 `swebench.harness.run_evaluation` | `swebench` |
-| `src/feedback/assembler.py` | 字典组装 | 无 |
 | `src/output/writer.py` | JSON/文件 IO | 标准库 |
 | `src/output/trajectory.py` | 元数据附加 + JSON 写出 | 标准库 |
 | `src/prompts/gepa_reflection.py` | 模板渲染 + 输出解析 | 标准库 |
@@ -239,10 +226,10 @@ TestResults = dict[str, Any]  # {resolved: bool, stdout: str, stderr: str, log_d
 | FR-02 Plan 生成 | `src/agents/plan_agent.py` |
 | FR-03 Code 生成 | `src/agents/code_agent.py` |
 | FR-04 测试评估 | `src/evaluator/swe_evaluator.py` |
-| FR-05 方案优化 | `src/agents/reflect_agent.py` + `src/prompts/gepa_reflection.py` + `src/environment/docker_env.py` + `src/pipeline.py`（feedback 组装） |
+| FR-05 方案优化 | `src/agents/reflect_agent.py` + `src/prompts/gepa_reflection.py`（含 `DEFAULT_REFLECTION_TEMPLATE`）+ `src/environment/docker_env.py` + `src/pipeline.py`（feedback_text 组装） |
 | FR-06 迭代循环 | `src/pipeline.py` |
-| FR-07 重跑 | `src/config.py`（resume 配置）+ `src/pipeline.py` |
-| FR-08/09 配置 | `src/config.py` + `config.yaml` |
+| FR-07 重跑 | `src/config.py`（resume 配置）+ `src/pipeline.py`（**当前轮迭代未实现，详 `project_issues.md` §6**） |
+| FR-08/09 配置 | `src/config.py` + `config.yaml`；`prompts.reflection_prompt_template` 缺失或为空时回退到 `src/prompts/gepa_reflection.py:DEFAULT_REFLECTION_TEMPLATE` |
 | FR-10 轨迹保存 | `src/output/trajectory.py` + `src/output/writer.py` |
-| FR-11 Feedback 结构 | `src/feedback/assembler.py` |
+| FR-11 Feedback 字符串组装 | `src/pipeline.py:_build_feedback_text`（主机端组装为纯文本，注入 reflect_agent 的 system prompt） |
 | FR-12 错误处理 | `src/pipeline.py` 中的 try/except 层级 |

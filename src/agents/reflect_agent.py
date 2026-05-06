@@ -4,8 +4,9 @@ Runs inside a Docker container using DefaultAgent's interactive step loop,
 similar to plan_agent. The agent may read files and write temporary test
 scripts to verify its understanding, but must not modify source code files.
 
-All context (original prompt, trajectories, test results, patch) is injected
-into the system prompt by the pipeline on the host. The agent has no access
+The system prompt is rendered on the host by combining the current plan,
+the assembled feedback text, and the configured reflection prompt template
+(``config.prompts.reflection_prompt_template``).  The agent has no access
 to trajectory files in the container.
 """
 
@@ -44,28 +45,9 @@ def _read_plan_from_file(env: Any) -> str | None:
     return None
 
 
-_REFLECT_SYSTEM_TEMPLATE = """You are a reflection optimization expert. You are operating inside a Docker container with access to the codebase at /testbed. You may read files, run commands, and write temporary test scripts to verify your understanding. Do NOT modify source code files.
-
-{feedback_text}
-
-Your task is to analyze the assistant's execution shown above, identify failures and suboptimal choices, and write a new improved plan.
-
-The plan you output MUST follow the N/R/P/V structure:
-- Navigation (N): how to locate the relevant code
-- Reproduction (R): steps to reproduce or verify the issue
-- Patch (P): specific files and changes needed
-- Validation (V): how to verify the fix works
-
-Write the improved plan to /tmp/plan.md. You may explore the codebase to verify your hypotheses. When you are ready, output the new plan within ``` blocks and then submit:
-
-```bash
-echo COMPLETE_TASK_AND_SUBMIT_FINAL_OUTPUT
-```
-"""
-
-
 def run(
     config: Config,
+    current_plan: str,
     feedback_text: str,
     env: Any,
 ) -> tuple[str, list[dict[str, Any]]]:
@@ -73,10 +55,13 @@ def run(
 
     The agent executes inside the Docker container via DefaultAgent's
     interactive step loop.  All necessary context is pre-loaded into the
-    system prompt; the agent has no access to trajectory files.
+    system prompt by rendering ``config.prompts.reflection_prompt_template``
+    with ``current_plan`` and ``feedback_text``; the agent has no access
+    to trajectory files.
 
     Args:
         config: Full configuration object.
+        current_plan: The plan being optimised (previous round's plan).
         feedback_text: Pre-assembled execution context (original prompt,
             trajectories, test results, patch) built by the pipeline on the
             host.
@@ -92,7 +77,11 @@ def run(
     """
     DefaultAgent, LitellmModel, _ = import_minisweagent()
 
-    system_template = _REFLECT_SYSTEM_TEMPLATE.format(feedback_text=feedback_text)
+    system_template = gepa_reflection.render(
+        current_plan=current_plan,
+        feedback_data=feedback_text,
+        template=config.prompts.reflection_prompt_template,
+    )
 
     model = build_model(
         LitellmModel,
@@ -125,8 +114,9 @@ def run(
             plan_text = exception_msg.strip()
         else:
             plan_text = extract_last_assistant(agent.messages)
-        # Extract the plan from ```-fenced block (GEPA output format)
-        # only when reading from messages; file content is already plain text
+        # Extract the plan from ```-fenced block (template instructs the
+        # LLM to output inside fences) only when reading from messages;
+        # file content is already plain text
         if plan_text:
             plan_text = gepa_reflection.parse_output(plan_text)
 
