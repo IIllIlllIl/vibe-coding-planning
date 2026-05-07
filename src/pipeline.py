@@ -103,7 +103,8 @@ def _run_instance_core(
                 docker.start(
                     image=image_name,
                     workdir=config.docker.workdir,
-                    ro_mount_source=repo_path,
+                    mount_source=repo_path,
+                    timeout=config.agent.timeout,
                 )
             except FatalError:
                 raise
@@ -113,9 +114,9 @@ def _run_instance_core(
                     instance_id=instance_id,
                     error_type="docker_start_failed",
                     message=f"Round {round_num}: {exc}",
-                    skipped=False,
+                    skipped=True,
                 )
-                continue
+                break
 
             try:
                 (
@@ -146,10 +147,10 @@ def _run_instance_core(
                 instance_id=instance_id,
                 error_type="round_failed",
                 message=f"Round {round_num}: {exc}",
-                skipped=False,
+                skipped=True,
             )
-            # Continue to next round if possible
-            continue
+            # Instance-level skip: do not attempt remaining rounds for this instance
+            break
         except FatalError:
             # Re-raise to be caught by outer wrapper
             raise
@@ -336,6 +337,15 @@ def _run_round(
         )
     )
 
+    # Save plan text to plans/ directory
+    plan_role = "plan_gen" if round_num == 1 else "reflect"
+    plan_path_obj = writer.save_plan(
+        round_num=round_num,
+        role=plan_role,
+        plan_content=plan_text,
+    )
+    plan_path = str(plan_path_obj.relative_to(writer.output_dir))
+
     # ------------------------------------------------------------------
     # Generate Code
     # ------------------------------------------------------------------
@@ -374,11 +384,36 @@ def _run_round(
         patch_content=patch_text,
         test_results=test_results,
         trajectory_path=traj_plan_path,
+        plan_path=plan_path,
         reflection_log=None,
         optimized_from=previous_plan_id if round_num > 1 else None,
     )
 
     return plan_text, traj_plan, plan_id, patch_text, test_results
+
+
+def _collect_runtime_versions() -> dict[str, str]:
+    """Collect version info for reproducibility."""
+    versions: dict[str, str] = {}
+    try:
+        import minisweagent
+
+        versions["mini_swe_agent"] = getattr(minisweagent, "__version__", "unknown")
+    except Exception:
+        versions["mini_swe_agent"] = "unknown"
+    try:
+        import swebench
+
+        versions["swebench"] = getattr(swebench, "__version__", "unknown")
+    except Exception:
+        versions["swebench"] = "unknown"
+    try:
+        from importlib.metadata import version
+
+        versions["litellm"] = version("litellm")
+    except Exception:
+        versions["litellm"] = "unknown"
+    return versions
 
 
 def _finalize_writer(
@@ -387,11 +422,13 @@ def _finalize_writer(
     instance_id: str,
 ) -> dict[str, Any]:
     """Finalize the writer and return the result dict."""
+    runtime_versions = _collect_runtime_versions()
     result_path = writer.finalize(
         swe_pro_instances=[instance_id],
         model=config.system.model,
         parameter_n=config.system.n,
         optimization_info_level=config.system.optimization_info_level,
+        runtime_versions=runtime_versions,
     )
     # Load and return the written result
     return json.loads(result_path.read_text(encoding="utf-8"))

@@ -38,8 +38,9 @@ class TestRender:
         assert "Reproduction" in DEFAULT_REFLECTION_TEMPLATE
         assert "Patch" in DEFAULT_REFLECTION_TEMPLATE
         assert "Validation" in DEFAULT_REFLECTION_TEMPLATE
-        # And requires fenced output
-        assert "fenced block" in DEFAULT_REFLECTION_TEMPLATE
+        # And requires writing plan to /tmp/plan.md
+        assert "/tmp/plan.md" in DEFAULT_REFLECTION_TEMPLATE
+        assert "COMPLETE_TASK_AND_SUBMIT_FINAL_OUTPUT" in DEFAULT_REFLECTION_TEMPLATE
 
     def test_render_with_custom_template(self):
         """When the caller supplies an explicit template, render() must

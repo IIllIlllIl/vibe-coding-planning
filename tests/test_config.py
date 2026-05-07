@@ -41,13 +41,12 @@ def valid_config_dict() -> dict[str, Any]:
         "docker": {
             "image_builder_script": "./scripts/build.sh",
             "workdir": "/testbed",
-            "codebase_mount_options": "ro",
             "timeout": 30,
         },
         "agent": {
             "max_steps": 30,
             "cost_limit": 3.0,
-            "timeout": 120,
+            "timeout": 1800,
         },
     }
 
@@ -80,11 +79,10 @@ class TestLoadConfigSuccess:
         assert config.prompts.plan_format_template == "Format template here"
         assert config.docker.image_builder_script == "./scripts/build.sh"
         assert config.docker.workdir == "/testbed"
-        assert config.docker.codebase_mount_options == "ro"
         assert config.docker.timeout == 30
         assert config.agent.max_steps == 30
         assert config.agent.cost_limit == 3.0
-        assert config.agent.timeout == 120
+        assert config.agent.timeout == 1800
         assert config.deepseek_api_key == "test-key-123"
 
     def test_api_key_injected(self, monkeypatch, config_file: Path):

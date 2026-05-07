@@ -24,9 +24,9 @@ class TestSaveRound:
             test_results={"resolved": True},
             trajectory_path="trajectories/t1.json",
         )
-        patch_file = tmp_path / "patches" / "round_1.patch"
-        assert patch_file.exists()
-        assert patch_file.read_text(encoding="utf-8") == "diff --git a/file.py"
+        patch_files = list((tmp_path / "patches").glob("patch_1_*.patch"))
+        assert len(patch_files) == 1
+        assert patch_files[0].read_text(encoding="utf-8") == "diff --git a/file.py"
 
     def test_returns_plan_record(self, writer: OutputWriter):
         record = writer.save_round(

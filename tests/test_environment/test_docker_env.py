@@ -36,7 +36,6 @@ def docker_config() -> DockerConfig:
     return DockerConfig(
         image_builder_script="./scripts/build.sh",
         workdir="/testbed",
-        codebase_mount_options="ro",
         timeout=30,
     )
 
@@ -59,7 +58,7 @@ class TestStart:
         wrapper.start(
             image="swebench/astropy:latest",
             workdir="/testbed",
-            ro_mount_source="/host/code",
+            mount_source="/host/code",
         )
 
         run_args = wrapper._env.run_args

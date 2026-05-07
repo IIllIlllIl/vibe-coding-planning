@@ -61,7 +61,8 @@ class DockerEnvWrapper:
         self,
         image: str,
         workdir: str,
-        ro_mount_source: str | None = None,
+        mount_source: str | None = None,
+        timeout: int | None = None,
     ) -> None:
         """Start a Docker container.
 
@@ -72,9 +73,11 @@ class DockerEnvWrapper:
             image: Docker image name and tag.
             workdir: Working directory inside the container (maps to
                 ``cwd`` in 1.17.5).
-            ro_mount_source: Host path to mount into the container at
+            mount_source: Host path to mount into the container at
                 ``workdir``. If None, no extra mount is configured.
                 The mount is writable so agents can modify files.
+            timeout: Per-command execution timeout in seconds forwarded
+                to ``DockerEnvironment``.
         """
         DockerEnvironment = _import_docker_env()
 
@@ -82,12 +85,14 @@ class DockerEnvWrapper:
             "image": image,
             "cwd": workdir,
         }
-        if ro_mount_source:
+        if mount_source:
             kwargs["run_args"] = [
                 "--rm",
                 "--mount",
-                f"type=bind,source={ro_mount_source},target={workdir}",
+                f"type=bind,source={mount_source},target={workdir}",
             ]
+        if timeout is not None:
+            kwargs["timeout"] = timeout
 
         self._env = DockerEnvironment(**kwargs)
         logger.info("Docker container started: image=%s cwd=%s", image, workdir)

@@ -63,8 +63,8 @@ The new plan MUST follow this exact four-section structure (the downstream agent
 - Mention any regressions or side effects to watch for.
 
 Important constraints:
-- Output ONLY the new plan, wrapped inside a single ``` fenced block.
-- Do not summarise the previous plan, do not explain your reasoning outside the fenced block.
+- Write the improved plan to /tmp/plan.md and finish with: echo COMPLETE_TASK_AND_SUBMIT_FINAL_OUTPUT
+- Do not summarise the previous plan, do not explain your reasoning outside the plan file.
 - The plan is natural-language guidance, not source code: do not paste full file contents.
 """
 

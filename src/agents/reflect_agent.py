@@ -97,6 +97,7 @@ def run(
         system_template=system_template,
         step_limit=config.agent.max_steps,
         cost_limit=config.agent.cost_limit,
+        instance_template="{{task}}",
     )
 
     logger.info(
@@ -112,16 +113,22 @@ def run(
     if plan_text is None:
         if exception_name == "Submitted":
             plan_text = exception_msg.strip()
+            # Extract the plan from ```-fenced block (template instructs the
+            # LLM to output inside fences) only when reading from messages;
+            # file content is already plain text
+            if plan_text:
+                plan_text = gepa_reflection.parse_output(plan_text)
         else:
-            plan_text = extract_last_assistant(agent.messages)
-        # Extract the plan from ```-fenced block (template instructs the
-        # LLM to output inside fences) only when reading from messages;
-        # file content is already plain text
-        if plan_text:
-            plan_text = gepa_reflection.parse_output(plan_text)
+            raise TaskError(
+                f"Reflect agent terminated without a submission (exit_status={exception_name}). "
+                f"Expected the agent to write an improved plan to /tmp/plan.md and finish with: "
+                f"echo COMPLETE_TASK_AND_SUBMIT_FINAL_OUTPUT"
+            )
 
     if not plan_text or not plan_text.strip():
-        raise TaskError("Reflect agent produced empty output.")
+        raise TaskError(
+            "Reflect agent submitted but /tmp/plan.md was empty and no plan text was returned."
+        )
 
     plan_text = plan_text.strip()
     if len(plan_text) < 50:

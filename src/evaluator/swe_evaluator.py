@@ -171,6 +171,7 @@ def evaluate(
             "stdout": "",
             "stderr": error_msg,
             "log_dir": log_dir_rel,
+            "error_info": error_msg,
             "report": {},
         }
 
@@ -219,10 +220,16 @@ def evaluate(
         if not stderr_text:
             stderr_text = "SWE evaluation completed=False (patch apply or setup failed)"
 
+    # error_info is non-null when evaluation did not complete successfully
+    error_info: str | None = None
+    if not result.get("completed", True):
+        error_info = stderr_text[:4000] if stderr_text else "SWE evaluation completed=False"
+
     return {
         "resolved": result.get("resolved", False),
         "stdout": stdout_text[:4000] if stdout_text else "",
         "stderr": stderr_text[:4000] if stderr_text else "",
         "log_dir": log_dir_rel,
+        "error_info": error_info,
         "report": report_data,
     }

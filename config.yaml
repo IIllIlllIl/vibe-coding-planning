@@ -27,9 +27,56 @@ prompts:
     Follow this workflow:
     1. Explore the codebase to understand the issue
     2. Identify the root cause and affected files
-    3. Produce a plan following the format below
-    4. Write the plan to /tmp/plan.md
-    5. Finish by running: echo COMPLETE_TASK_AND_SUBMIT_FINAL_OUTPUT
+    3. Write the complete plan to /tmp/plan.md using a heredoc command
+    4. Submit by running: echo COMPLETE_TASK_AND_SUBMIT_FINAL_OUTPUT && cat /tmp/plan.md
+
+    ## Response Format
+    For EVERY response you MUST include exactly ONE bash command inside a
+    ```bash ... ``` fenced block.  You may also include a brief THOUGHT
+    paragraph before the block, but the actual command must be the ONLY
+    fenced block in your response.
+
+    Example of a correct response:
+
+    THOUGHT: I need to list the files in the current directory.
+
+    ```bash
+    ls -la
+    ```
+
+    CRITICAL RULES:
+    - Step 3 and Step 4 MUST be two separate commands in two separate responses.
+    - In Step 3, use EXACTLY this heredoc format to write the plan file:
+
+      ```bash
+      cat <<'EOF' > /tmp/plan.md
+      # Plan
+
+      ## Navigation (N)
+      - ...
+
+      ## Reproduction (R)
+      - ...
+
+      ## Patch (P)
+      - ...
+
+      ## Validation (V)
+      - ...
+
+      EOF
+      ```
+
+    - Do NOT output the plan content outside the bash code block. The plan MUST
+      be inside the heredoc so it is written to the file.
+    - After the heredoc command succeeds, your NEXT response MUST be:
+
+      ```bash
+      echo COMPLETE_TASK_AND_SUBMIT_FINAL_OUTPUT && cat /tmp/plan.md
+      ```
+
+    - Do not explore, read files, or run any other commands after writing
+      /tmp/plan.md. Once you submit, the task is complete.
 
     {plan_format_template}
 
@@ -257,8 +304,8 @@ prompts:
     - Mention any regressions or side effects to watch for.
 
     Important constraints:
-    - Output ONLY the new plan, wrapped inside a single ``` fenced block.
-    - Do not summarise the previous plan, do not explain your reasoning outside the fenced block.
+    - Write the improved plan to /tmp/plan.md and finish with: echo COMPLETE_TASK_AND_SUBMIT_FINAL_OUTPUT && cat /tmp/plan.md
+    - Do not summarise the previous plan, do not explain your reasoning outside the plan file.
     - The plan is natural-language guidance, not source code: do not paste full file contents.
 
   # Plan format template — N/R/P/V structure (required for all plan agents)
@@ -284,10 +331,19 @@ prompts:
     - Describe how to verify the fix is correct (e.g., run specific tests, check edge cases).
     - Mention any regressions or side effects to watch for.
 
+    ## Submission
+    After writing the plan to /tmp/plan.md, you MUST finish by running exactly:
+
+    ```bash
+    echo COMPLETE_TASK_AND_SUBMIT_FINAL_OUTPUT && cat /tmp/plan.md
+    ```
+
+    This is the submission command. Once issued, the task is complete and you
+    cannot continue working, reading files, or modifying anything.
+
 docker:
   image_builder_script: "./scripts/build_docker_images.sh"
   workdir: "/testbed"
-  codebase_mount_options: "ro"
   timeout: 30
 
 agent:
@@ -301,7 +357,7 @@ agent:
   # and the hard cap is governed by max_steps × per-step token cost.
   # Set a budget alert in the DeepSeek dashboard as the real backstop.
   cost_limit: 3.0
-  timeout: 120
+  timeout: 1800
 
 evaluator:
   # Per-evaluation timeout (seconds) passed to swebench.harness.run_evaluation.

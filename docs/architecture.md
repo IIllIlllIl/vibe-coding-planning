@@ -82,7 +82,7 @@ plan-code-test/
 
 | 模块 | 文件 | 职责 |
 |------|------|------|
-| **Docker 环境** | `src/environment/docker_env.py` | 封装 `mini-swe-agent.DockerEnvironment`：启动/停止容器、通过 `run_args` 传入 `--mount type=bind,source=...,target=...,readonly` 实现代码库 ro 挂载、暴露 `execute(command)` 接口供 Agent 使用 |
+| **Docker 环境** | `src/environment/docker_env.py` | 封装 `mini-swe-agent.DockerEnvironment`：启动/停止容器、代码库以读写（rw）方式挂载到 `/testbed`、暴露 `execute(command)` 接口供 Agent 使用。轮间隔离由「每轮独立容器 + `base_commit` 初始状态」保证，不依赖 ro 挂载 |
 
 ### 3.4 评估层
 
@@ -96,7 +96,8 @@ plan-code-test/
 | 模块 | 文件 | 职责 |
 |------|------|
 | **Feedback 组装** | `src/pipeline.py:_build_feedback_text` | 将原始 Issue、plan/code/reflect trajectories、Patch、test_results（按 `optimization_info_level` 决定）拼接成纯文本字符串 `feedback_text`，由 reflect_agent 通过 system prompt 注入容器 |
-| **输出写入器** | `src/output/writer.py` | 写入主结果 JSON、Patch 文件、错误日志 |
+| **Plan 文件保存** | `src/pipeline.py` | 在容器停止前通过 `docker exec cat /tmp/plan.md` 抓取 Plan 内容，写入 `plans/plan_{round}_{role}_{timestamp}.md`。Plan Agent 与 Reflect Agent 均遵循「将 Plan 写到 `/tmp/plan.md` 并 `echo COMPLETE_TASK_AND_SUBMIT_FINAL_OUTPUT`」的协议 |
+| **输出写入器** | `src/output/writer.py` | 写入主结果 JSON、Patch 文件、Plan 文件引用、错误日志 |
 | **Trajectory 保存** | `src/output/trajectory.py` | 将 `DefaultAgent.messages` 列表加上元数据（round, role, timestamp）导出为 `trajectory_{round}_{role}_{timestamp}.json` |
 
 ### 3.6 Prompt 模板
@@ -117,7 +118,7 @@ main.py
   └── pipeline.run_instance(instance_id, config)
         │
         ├── for round in 1..n:
-        │     ├── docker_env.start(image, workdir, ro_mount=True)   # 每轮独立容器
+        │     ├── docker_env.start(image, workdir)                   # 每轮独立容器，rw 挂载
         │     │
         │     ├── if round == 1:
         │     │   plan_agent.run(config, issue_desc, docker_env)
@@ -130,6 +131,9 @@ main.py
         │     │   reflect_agent.run(config, plan_prev, feedback_text, docker_env)
         │     │     └── (plan_round, traj_plan_round)
         │     │   role = "reflect"
+        │     │
+        │     ├── docker_env.execute("cat /tmp/plan.md")             # 抓取 Plan 内容
+        │     ├── writer.save_plan(plan_text, round, role)           # 持久化到 plans/
         │     │
         │     ├── code_agent.run(config, plan_round + issue_desc, docker_env)
         │     │   └── (patch_round, traj_code_round)
@@ -152,7 +156,7 @@ AgentResult = tuple[str, list[dict]]  # (result_text, messages)
 
 **测试结果**（`swe_evaluator` 产出）：
 ```python
-TestResults = dict[str, Any]  # {resolved: bool, stdout: str, stderr: str, log_dir: str}
+TestResults = dict[str, Any]  # {resolved: bool, stdout: str, stderr: str, log_dir: str, error_info: str | None}
 ```
 
 ---
@@ -177,7 +181,7 @@ TestResults = dict[str, Any]  # {resolved: bool, stdout: str, stderr: str, log_d
 不引入 `gepa` 包作为运行时依赖。`src/prompts/gepa_reflection.py` 中：
 - 硬编码 GEPA 的反射 Prompt 模板文本（附录 A）
 - 提供 `render()` 函数，将 `current_plan` 和 `feedback_data` 填入占位符
-- 输出解析：从 LLM 响应中提取第一个 ``` 代码块
+- 输出解析：优先从容器内 `/tmp/plan.md` 读取新 Plan（pipeline 在 `docker.stop` 前通过 `docker exec cat` 抓取）；若文件为空或不存在，则回退到从 LLM 响应中提取第一个 ``` 代码块
 
 这样即使 `gepa` 包未来版本变化，我们的 Prompt 模板也是稳定的。
 
@@ -195,7 +199,7 @@ TestResults = dict[str, Any]  # {resolved: bool, stdout: str, stderr: str, log_d
 
 在 `pipeline.py` 的每个阶段包裹 try/except：
 - **致命错误**（API 401/429、磁盘满、Docker 崩溃）：抛出 FatalError，由 `main.py` 捕获后记录日志、调用 `writer.emergency_save()`、退出（保留已收集数据）
-- **任务级错误**（Agent 未输出有效 Plan/Patch、Docker 镜像构建失败、评估异常）：记录到 `errors` 列表，跳过当前实例/轮次，继续执行
+- **任务级错误**（Agent 未输出有效 Plan/Patch、Docker 镜像构建失败、评估异常、Agent 命令超时）：记录到 `errors` 列表，**统一跳过当前实例**（不再尝试同实例内后续轮次），继续执行下一个实例
 
 ---
 
@@ -208,7 +212,7 @@ TestResults = dict[str, Any]  # {resolved: bool, stdout: str, stderr: str, log_d
 | `src/agents/plan_agent.py` | 实例化 `DefaultAgent` + `LitellmModel` + `DockerEnvironment`，传入 `plan_generation_prompt` | `mini-swe-agent` |
 | `src/agents/code_agent.py` | 同上，使用 `code_generation_prompt` | `mini-swe-agent` |
 | `src/agents/reflect_agent.py` | 复用 `DefaultAgent` + `DockerEnvironment`，`feedback_text` 通过 system prompt 注入，Agent 在容器内可探索代码库但无法访问 trajectory 文件 | `mini-swe-agent` |
-| `src/environment/docker_env.py` | 封装 `DockerEnvironment`，设置 ro 挂载 | `mini-swe-agent` |
+| `src/environment/docker_env.py` | 封装 `DockerEnvironment`，代码库 rw 挂载，轮间隔离由独立容器保证 | `mini-swe-agent` |
 | `src/evaluator/swe_evaluator.py` | 调用 `swebench.harness.run_evaluation` | `swebench` |
 | `src/output/writer.py` | JSON/文件 IO | 标准库 |
 | `src/output/trajectory.py` | 元数据附加 + JSON 写出 | 标准库 |

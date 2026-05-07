@@ -238,12 +238,14 @@ class TestPipelineErrorHandling:
 
         run_instance("astropy__astropy-14539", config_single)
 
-        # Should still complete all rounds, with round 2 recording an error
-        assert mock_writer.save_round.call_count == 2  # round 1 and 3
+        # Instance-level skip: round 2 fails, remaining rounds are abandoned
+        assert mock_writer.save_round.call_count == 1  # only round 1 succeeded
         mock_writer.record_error.assert_called_once()
-        # Per-round container isolation: every round starts/stops, even the failing one
-        assert mock_docker.start.call_count == 3
-        assert mock_docker.stop.call_count == 3
+        error_call = mock_writer.record_error.call_args
+        assert error_call.kwargs["skipped"] is True
+        # Per-round container isolation: round 1 succeeds, round 2 starts then fails
+        assert mock_docker.start.call_count == 2
+        assert mock_docker.stop.call_count == 2
 
     @patch("src.pipeline.DockerEnvWrapper")
     @patch("src.pipeline.InstanceLoader")

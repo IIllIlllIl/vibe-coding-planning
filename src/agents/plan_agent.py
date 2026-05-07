@@ -23,19 +23,19 @@ from src.prompts.templates import render_plan_prompt
 logger = logging.getLogger(__name__)
 
 
-def _extract_result(agent: Any, exception_name: str, exception_msg: str) -> str:
+def _extract_result(agent: Any, exception_name: str, exception_msg: str) -> str | None:
     """Extract the agent's final output based on how it terminated.
 
     On a clean ``Submitted`` exit, ``exception_msg`` is already the
     submitted text with the ``COMPLETE_TASK_AND_SUBMIT_FINAL_OUTPUT``
     marker line stripped by ``DefaultAgent.has_finished`` — no extra
     sanitisation is needed. Any other exit (e.g. ``LimitsExceeded``)
-    falls back to the last assistant message so a partial plan is still
-    surfaced to the pipeline.
+    returns None so the pipeline can raise a clear error instead of
+    passing an unfinished / invalid plan downstream.
     """
     if exception_name == "Submitted":
         return exception_msg.strip()
-    return extract_last_assistant(agent.messages)
+    return None
 
 
 def _read_plan_from_file(env: Any) -> str | None:
@@ -97,6 +97,7 @@ def run(
         system_template=system_template,
         step_limit=config.agent.max_steps,
         cost_limit=config.agent.cost_limit,
+        instance_template="{{task}}",
     )
 
     logger.info(
@@ -113,6 +114,14 @@ def run(
         plan_text = _extract_result(agent, exception_name, exception_msg)
 
     if not plan_text or not plan_text.strip():
-        raise TaskError("Plan agent produced empty output.")
+        if exception_name == "Submitted":
+            raise TaskError(
+                "Plan agent submitted but /tmp/plan.md was empty and no plan text was returned."
+            )
+        raise TaskError(
+            f"Plan agent terminated without a submission (exit_status={exception_name}). "
+            f"Expected the agent to write a plan to /tmp/plan.md and finish with: "
+            f"echo COMPLETE_TASK_AND_SUBMIT_FINAL_OUTPUT"
+        )
 
     return plan_text.strip(), agent.messages

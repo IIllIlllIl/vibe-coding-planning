@@ -60,7 +60,6 @@ class DockerConfig:
 
     image_builder_script: str = "./scripts/build_docker_images.sh"
     workdir: str = "/testbed"
-    codebase_mount_options: str = "ro"
     timeout: int = 30
 
 
@@ -80,7 +79,7 @@ class AgentConfig:
 
     max_steps: int = 30
     cost_limit: float = 3.0
-    timeout: int = 120
+    timeout: int = 1800
 
 
 @dataclass(frozen=True)
@@ -279,7 +278,6 @@ def _build_docker_config(data: dict[str, Any]) -> DockerConfig:
     return DockerConfig(
         image_builder_script=_get_str(data, "image_builder_script", "./scripts/build_docker_images.sh"),
         workdir=_get_str(data, "workdir", "/testbed"),
-        codebase_mount_options=_get_str(data, "codebase_mount_options", "ro"),
         timeout=_validate_positive_int("docker.timeout", _get_int(data, "timeout", 30)),
     )
 

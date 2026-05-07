@@ -107,11 +107,11 @@ class TestRunSuccess:
         assert plan == "plan with spaces"
 
     @patch("src.agents.plan_agent.import_minisweagent")
-    def test_fallback_to_last_assistant(self, mock_import, config, mock_env):
-        """When DefaultAgent hits a limit, we fall back to the last assistant message."""
+    def test_limit_exceeded_raises_task_error(self, mock_import, config, mock_env):
+        """When DefaultAgent hits a limit without submitting, raise TaskError."""
         mock_import.return_value = (MockDefaultAgentLimitExceeded, MockLiteLLMModel, object)
-        plan, _ = plan_agent.run(config, "Fix parser bug", mock_env)
-        assert plan == "plan output"
+        with pytest.raises(TaskError, match="terminated without a submission"):
+            plan_agent.run(config, "Fix parser bug", mock_env)
 
 
 class TestRunValidation:

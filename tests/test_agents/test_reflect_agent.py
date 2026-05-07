@@ -191,17 +191,17 @@ class TestRunSuccess:
         assert "## Improved Plan" in plan
 
     @patch("src.agents.reflect_agent.import_minisweagent")
-    def test_fallback_to_last_assistant(self, mock_import, config, mock_env):
-        """When DefaultAgent hits a limit, fall back to last assistant message."""
+    def test_limit_exceeded_raises_task_error(self, mock_import, config, mock_env):
+        """When DefaultAgent hits a limit without submitting, raise TaskError."""
         mock_import.return_value = (
             MockDefaultAgentLimitExceeded,
             MockLiteLLMModel,
             object,
         )
-        plan, _ = reflect_agent.run(
-            config, "previous plan", "feedback text", mock_env
-        )
-        assert "Improved Plan" in plan
+        with pytest.raises(TaskError, match="terminated without a submission"):
+            reflect_agent.run(
+                config, "previous plan", "feedback text", mock_env
+            )
 
 
 class TestRunValidation:

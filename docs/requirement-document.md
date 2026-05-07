@@ -9,6 +9,7 @@
 | 3.0 | 2026-04-30 | — | 技术细节确认后定稿（RE-FINAL） |
 | 4.0 | 2026-04-30 | — | 技术栈变更：Agent 层从 KISS AI 转为 mini-swe-agent；GEPA 集成方式从完整组件转为提取 Prompt 模板 |
 | 5.0 | 2026-05-06 | — | 代码审查整改：每轮独立 Docker 容器（`/testbed` 始终从 base_commit 起步）；删除 `use_gepa_reflection_prompt` 开关，反思 Agent 永远走 `gepa_reflection.render()`；硬编码模板外化为 `prompts.reflection_prompt_template`，默认模板按 plan-optimization 语义重写；删除死代码 `feedback_assembler`；FR-07 断点重跑推迟到下一轮迭代 |
+| 5.1 | 2026-05-07 | — | 需求对齐：① Docker 挂载语义从 ro 改为 rw，关键不变量改为"轮间起始状态隔离"（每轮独立容器 + base_commit 初始状态）；② `agent.timeout` 透传到 `DefaultAgent`，默认值统一放宽至宽松值，仅用于筛除严重异常；③ Plan / Patch / Trajectory 三类中间产物统一命名 `{prefix}_{round}_{role?}_{timestamp}.{ext}` 并完整落盘；Plan 文本通过 `/tmp/plan.md` 由 pipeline 在容器停止前抓取持久化到 `plans/` 目录；④ 评估失败补 `error_info` 字段，`test_pass_rate` 维持 0/1；⑤ 任务级错误统一以 instance 为最小回滚粒度（不再 round-skip 续跑）；⑥ 反思 Agent 与 Plan Agent 协议对齐，新 plan 写入 `/tmp/plan.md` 并 `echo COMPLETE_TASK_AND_SUBMIT_FINAL_OUTPUT`；⑦ 配置项清单同步加入 `code_instance_template`，删除已废弃的 `docker.codebase_mount_options` |
 
 ---
 
@@ -51,11 +52,19 @@
 
 #### 包含范围
 - 数据集限定为 **SWE-bench Pro**（不使用 SWE-bench Verified 等其他存在数据污染风险的数据集）
-- Agent 运行环境：**方案生成、代码生成、反思优化均在 Docker 容器中进行**，以防止 Agent 写入文件等操作对宿主环境或后续轮次产生噪声
+- Agent 运行环境：**方案生成、代码生成、反思优化均在 Docker 容器中进行**，以防止 Agent 写入文件等操作对宿主环境产生噪声；**后续轮次的隔离由"每轮独立容器 + base_commit 初始状态"保证**（详见下文"轮间状态隔离不变量"）
 - 测试评估主动使用 **SWE 官方评估工具**（`swebench` Python 包），不自行实现评估逻辑
 - 自动保存所有 Agent 执行轨迹（包括反思 Agent 的轨迹），并按轮次和角色命名
 - 支持从任意已有 Plan 开始重跑后续迭代（断点重跑）
-- 基本的错误恢复与异常处理：API 不可用等致命错误终止；单个任务环境配置问题则跳过并继续
+- 基本的错误恢复与异常处理：API 不可用等致命错误终止；任务级错误（含 Agent 输出无效、Patch 应用失败、评估异常等）以**实例**为最小回滚单位跳过并继续
+
+#### 轮间状态隔离不变量
+
+第 i 轮与第 i-1 轮的 Docker 容器是**两个独立实例**，从同一镜像 + 同一 SWE-bench Pro 实例 `base_commit` 状态启动。这意味着：
+
+- 第 i-1 轮 Agent 对 `/testbed` 或 `/tmp` 的任何文件系统修改对第 i 轮**不可见**
+- 每一轮的所有 Agent（Plan / Code / Reflect）都在 `/testbed` 处于实例初始状态时开始工作
+- 不再依赖"代码库只读挂载"的硬约束来防止轮间污染——隔离由容器生命周期保证，挂载方式可放宽为读写以契合 mini-swe-agent 官方 SWE-bench 提交协议（`git add -A && git diff --cached` 输出 patch）
 
 #### 不包含范围
 - 不考虑任何并发执行能力
@@ -70,13 +79,14 @@
 | 术语 | 说明 |
 |------|------|
 | **SWE-bench Pro** | SWE-bench 的高质量数据子集，由 Scale AI 发布。任务平均修改量远大于 Verified 版本，按 GPL 许可证选择以避免数据污染。使用前需通过 `/scripts/build_docker_images.sh` 构建专用 Docker 镜像 |
-| **Docker 执行环境** | 每个任务（包括方案生成、代码生成）均在一个独立的 Docker 容器中运行，确保环境隔离。代码库文件以只读（ro）方式挂载，Agent 临时文件写入 `/tmp` 目录 |
+| **Docker 执行环境** | 每个任务的每一轮（包括方案生成、代码生成、反思优化）均在一个**独立**的 Docker 容器中运行，从同一镜像 + 同一 SWE-bench Pro 实例 `base_commit` 状态启动，确保轮间无状态污染。代码库以**读写（rw）**方式挂载到 `/testbed`，Agent 可修改源码与读写 `/tmp`；轮间隔离由容器生命周期保证，而非由挂载只读保证 |
 | **GEPA 反射 Prompt 模板** | 从 GEPA (`gepa-ai/gepa`) 提取的反思策略 Prompt 模板（见附录 A）。该模板指导 LLM 分析先前 Plan 的执行轨迹、测试结果和反馈，产出改进后的新 Plan。本项目不依赖 GEPA 的完整进化循环，仅复用其 Prompt 模板和反馈格式化逻辑 |
 | **反思 Agent** | 负责生成优化后的新 Plan。对于第二轮及之后的 Plan，不再调用原始方案生成 Agent，而是由反思 Agent 基于前一轮的 Optimization Feedback 直接生成新的 Plan。反思 Agent 使用 GEPA 反射 Prompt 模板驱动 LLM 进行反思 |
 | **Plan** | Agent 在代码生成前产出的方案文档，为**自然语言字符串**。内容描述解决问题的思路、技术路线、模块修改范围和实现步骤。具体格式由配置文件中的 Prompt 约束 |
 | **Patch** | 根据 Plan 生成的代码变更内容，以 Git diff 格式呈现。Agent 在代码生成阶段输出 diff 文本，不直接修改代码库文件 |
 | **Trajectory** | 每个 Agent（方案生成 Agent、代码生成 Agent、反思 Agent）在任务执行过程中的完整记录。命名规范：`trajectory_{round_num}_{role}_{timestamp}.json`，其中 `agent_role` 为 `plan_gen`、`code_gen`、`reflect` |
 | **Optimization Feedback** | 用于优化 Plan 的信息集合，包括原始 Prompt、当前 Plan、**所有相关 Agent 的 Trajectory**（包括反思 Agent 自身的轨迹）、代码生成结果、测试结果（可选），以及**运行参数配置快照** |
+| **中间产物（Artefacts）** | 每轮产生的可分析产物：1 份 Plan 文件（`plans/`）+ 1 份 Patch 文件（`patches/`）+ 2~3 份 Trajectory（`trajectories/`，含 plan_gen / code_gen / reflect 视轮次而定）。输出层须完整保留三类文件；命名规范见 §4.4 |
 
 ---
 
@@ -90,10 +100,10 @@
 |------|------|
 | ID | FR-01 |
 | 名称 | 任务输入与系统初始化 |
-| 描述 | 系统读取配置文件，加载指定 **SWE-bench Pro** 任务实例，为每个任务准备独立的 Docker 容器环境。SWE-bench Pro 的 Docker 镜像需通过运行 `/scripts/build_docker_images.sh` 预先构建 |
+| 描述 | 系统读取配置文件，加载指定 **SWE-bench Pro** 任务实例，**为每一轮**准备独立的 Docker 容器环境（同镜像 + 同 base_commit 起始状态）。SWE-bench Pro 的 Docker 镜像需通过运行 `/scripts/build_docker_images.sh` 预先构建 |
 | 输入 | SWE-bench Pro 实例 ID（或实例列表）、配置文件路径 |
-| 输出 | 一个运行中的 Docker 容器，包含目标代码库（ro 挂载）和可执行环境 |
-| 验收标准 | 成功启动 Docker 容器，代码库以只读方式挂载，Agent 能够在该容器中执行文件读取、搜索等工具调用，`/tmp` 目录可写 |
+| 输出 | 每轮一个运行中的 Docker 容器，`/testbed` 处于实例 `base_commit` 初始状态（rw 挂载），Agent 可读写 `/testbed` 与 `/tmp` |
+| 验收标准 | 成功启动 Docker 容器；`/testbed` 处于实例 `base_commit` 初始状态；Agent 能在该容器中执行文件读取、搜索、修改与命令执行；`/tmp` 目录可写；**第 i-1 轮对文件系统的任何修改对第 i 轮不可见** |
 
 #### FR-02：Docker 环境下的方案生成
 
@@ -101,12 +111,12 @@
 |------|------|
 | ID | FR-02 |
 | 名称 | Agent 在 Docker 中自主探索与方案生成 |
-| 描述 | Agent 在 Docker 容器内根据 Issue 描述和配置 Prompt，从目标代码库中自主探索并生成方案（Plan）。代码库以只读（ro）方式挂载，Agent 不得修改代码库文件；临时测试代码可写入 `/tmp` 目录执行。Agent 行为由 Prompt 明确约束（"不得修改代码库文件"） |
-| 输入 | Issue 描述、Docker 容器内的代码库路径（ro 挂载）、方案生成 Prompt、Plan 格式模板（可选） |
-| 输出 | Plan 文档（自然语言字符串，格式由 Prompt 约束） |
-| 验收标准 | 生成的 Plan 是纯自然语言，不包含对代码库的直接修改；Agent 的完整轨迹被保存 |
+| 描述 | Plan Agent 在 Docker 容器内根据 Issue 描述和配置 Prompt，从目标代码库中自主探索并生成方案（Plan）。Plan 阶段的产物是**自然语言 Plan 文档**，不是代码变更；通过 Prompt 约束 Agent 不修改源码（业务上无意义）。代码库以读写（rw）方式挂载，因此 Agent 在物理上可写——但每轮独立容器 + base_commit 起始状态保证 Plan 阶段对 `/testbed` 的任何修改不会影响后续轮次（详见 §1.4 轮间状态隔离不变量）。Plan Agent **必须将 Plan 写到容器内 `/tmp/plan.md`** 并以 `echo COMPLETE_TASK_AND_SUBMIT_FINAL_OUTPUT` 收尾，pipeline 在 `docker.stop` 之前从该路径抓取 Plan 内容并持久化到宿主端 `plans/` 目录 |
+| 输入 | Issue 描述、Docker 容器内的代码库路径（rw 挂载，已置于 `base_commit`）、方案生成 Prompt、Plan 格式模板（必含"将 plan 写到 `/tmp/plan.md`"指令） |
+| 输出 | Plan 文档（自然语言字符串，写入容器 `/tmp/plan.md`，由主程序抓取后持久化为 `plans/plan_{round}_plan_gen_{timestamp}.md`） |
+| 验收标准 | 容器停止前 `/tmp/plan.md` 非空；持久化后的 plan 文件命名遵循 §4.4；Agent 完整轨迹被保存 |
 | 依赖 | `mini-swe-agent`（`DefaultAgent` + `DockerEnvironment` + `LiteLLMModel`）、DeepSeek V4 API |
-| 备注 | `mini-swe-agent` 的 `DockerEnvironment` 通过 `docker exec` 子进程执行命令；代码库 ro 挂载由 Docker 容器配置控制；Agent 临时文件写入 `/tmp` |
+| 备注 | `mini-swe-agent` 的 `DockerEnvironment` 通过 `docker exec` 子进程执行命令；轮间隔离由独立容器保证，无需依赖 ro 挂载；Agent 临时文件写入 `/tmp` |
 
 #### FR-03：Docker 环境下的代码生成
 
@@ -114,11 +124,11 @@
 |------|------|
 | ID | FR-03 |
 | 名称 | 根据方案生成代码 |
-| 描述 | 代码生成 Agent 在相同的 Docker 容器内根据 Plan 和代码生成 Prompt，生成 Git diff 格式的 Patch。Agent 读取代码库内容但不修改文件系统，直接输出 diff 文本 |
-| 输入 | Plan 文档、Issue 描述、代码库上下文（ro 挂载）、代码生成 Prompt |
-| 输出 | Git diff 格式的代码变更内容 |
-| 验收标准 | 生成的 Patch 可被 SWE 官方评估工具接受 |
-| 备注 | Agent 轨迹同样保存 |
+| 描述 | Code Agent 在与 Plan Agent 共享镜像（但**独立的新容器**，仍处于 `base_commit` 起始状态）的 Docker 容器内根据 Plan 和代码生成 Prompt，**修改 `/testbed` 中的源码文件**，最终通过 `git add -A && git diff --cached` 收集变更产生 Patch（与 mini-swe-agent 官方 SWE-bench 提交协议一致）。本轮的修改不会影响后续轮次的初始状态（每轮独立容器） |
+| 输入 | Plan 文档（由 pipeline 通过函数参数注入，**非文件读取**）、Issue 描述、代码库上下文（rw 挂载，置于 `base_commit`）、代码生成 Prompt、code_instance_template（mini-swe-agent SWE-bench 协议） |
+| 输出 | Git diff 格式的代码变更内容（`git diff --cached` 输出） |
+| 验收标准 | 生成的 Patch 可被 SWE 官方评估工具接受；Patch 持久化为 `patches/patch_{round}_{timestamp}.patch`（命名见 §4.4） |
+| 备注 | Agent 轨迹同样保存为 `trajectories/trajectory_{round}_code_gen_{timestamp}.json` |
 
 #### FR-04：测试评估（使用官方工具）
 
@@ -128,8 +138,8 @@
 | 名称 | 代码测试评估 |
 | 描述 | 使用 **SWE 官方评估工具**（`swebench` Python 包）执行评估。调用 `swebench.harness.run_evaluation` 函数，传入 Patch 内容、SWE-bench Pro 实例信息和对应的 Docker 镜像。不自行实现评估逻辑 |
 | 输入 | Patch 内容（Git diff 格式）、SWE-bench Pro 实例信息 |
-| 输出 | 测试结果：结构化对象 `{resolved: bool, stdout: string, stderr: string, log_dir: string}`，由 `run_evaluation` 返回的 `(resolved_status, log_dir, report)` 元组组装而成 |
-| 验收标准 | 评估结果与 SWE 官方工具的输出完全一致 |
+| 输出 | 测试结果：结构化对象 `{resolved: bool, stdout: string, stderr: string, log_dir: string, error_info: string \| null}`，由 `run_evaluation` 返回的 `(resolved_status, log_dir, report)` 元组组装而成。`error_info` 仅在评估器抛异常或 `completed=False` 时填写错误摘要，正常完成时为 `null` |
+| 验收标准 | 评估结果与 SWE 官方工具的输出完全一致；评估异常时 `error_info` 非空且 `resolved=false`，正常完成时 `error_info=null` |
 | 依赖 | `swebench` 官方 Python 包、已构建的 SWE-bench Pro Docker 镜像 |
 
 ### 3.2 核心功能：方案迭代优化
@@ -140,14 +150,14 @@
 |------|------|
 | ID | FR-05 |
 | 名称 | 方案优化（信息收集 + 反思 Agent 直接生成新 Plan） |
-| 描述 | 对于第 i 轮（i ≥ 2），系统收集 Optimization Feedback，然后调用**反思 Agent**直接生成新的 Plan[i]。反思 Agent 使用 GEPA 反射 Prompt 模板（附录 A）驱动 LLM 分析前一轮的执行轨迹、测试结果和反馈，产出改进方案。不再使用独立的方案生成 Agent。信息收集和反思生成视为一个原子阶段。**反思 Agent 运行在 Docker 容器内（与 Plan/Code Agent 共享同一容器），可读取代码库文件验证假设、编写临时测试脚本，但不得修改源代码。** |
+| 描述 | 对于第 i 轮（i ≥ 2），系统收集 Optimization Feedback，然后调用**反思 Agent**直接生成新的 Plan[i]。反思 Agent 使用 GEPA 反射 Prompt 模板（附录 A）驱动 LLM 分析前一轮的执行轨迹、测试结果和反馈，产出改进方案。不再使用独立的方案生成 Agent。信息收集和反思生成视为一个原子阶段。**反思 Agent 运行在 Docker 容器内（与 Plan/Code Agent 共用同一镜像，但每轮使用独立容器，处于 base_commit 起始状态）**，可读取代码库文件验证假设、编写临时测试脚本，但需通过 Prompt 约束不修改源代码。 |
 | 配置参数 | `optimization_info_level`：0 = 仅基础信息（不含测试结果）；1 = 包含测试运行结果和报错信息 |
 | 输入（Feedback 来源） | 前一轮（第 i-1 轮）的：原始 Prompt、Plan[i-1]、生成 Plan[i-1] 的 Agent 轨迹（若 i-1 = 1 则为方案生成 Agent 轨迹，若 i-1 ≥ 2 则为反思 Agent 轨迹）、代码生成 Agent 轨迹、生成的 Patch、测试结果（可选） |
-| 输出 | 优化后的新 Plan[i]（自然语言字符串） |
-| 优化方法 | 反思 Agent 始终通过 `src/prompts/gepa_reflection.py:render()` 渲染 system prompt：将当前 Plan 注入 `{prompt_template}`、Feedback 文本注入 `{inputs_outputs_feedback}`。模板默认使用 `DEFAULT_REFLECTION_TEMPLATE`（plan-optimization 版，要求 LLM 输出包含 N/R/P/V 四节、不再带 `{placeholders}` 约束），可由 `prompts.reflection_prompt_template` 覆盖。不使用 GEPA 的种群交叉、Pareto 选择等模块 |
-| 验收标准 | 新 Plan 能反映对前序方案失败原因的针对性改进；优化过程中反思 Agent 的轨迹被完整保存 |
+| 输出 | 优化后的新 Plan[i]（自然语言字符串，由反思 Agent 写入容器内 `/tmp/plan.md`，主程序在容器停止前抓取并持久化为 `plans/plan_{round}_reflect_{timestamp}.md`） |
+| 优化方法 | 反思 Agent 始终通过 `src/prompts/gepa_reflection.py:render()` 渲染 system prompt：将当前 Plan 注入 `{prompt_template}`、Feedback 文本注入 `{inputs_outputs_feedback}`。模板默认使用 `DEFAULT_REFLECTION_TEMPLATE`（plan-optimization 版，要求 LLM 输出包含 N/R/P/V 四节、并以 `Write the plan to /tmp/plan.md && echo COMPLETE_TASK_AND_SUBMIT_FINAL_OUTPUT` 收尾，与 Plan Agent 协议对齐），可由 `prompts.reflection_prompt_template` 覆盖。不使用 GEPA 的种群交叉、Pareto 选择等模块 |
+| 验收标准 | 新 Plan 能反映对前序方案失败原因的针对性改进；优化过程中反思 Agent 的轨迹被完整保存；容器停止前 `/tmp/plan.md` 非空，且持久化后的 plan 文件命名遵循 §4.4 |
 | 依赖 | `mini-swe-agent`（`DefaultAgent` + `DockerEnvironment` + `LiteLLMModel`）、本仓库内置的反射模板（`src/prompts/gepa_reflection.py:DEFAULT_REFLECTION_TEMPLATE`） |
-| 备注 | **信息注入方式（关键设计）**：主机端在调用反思 Agent 前，从 trajectory 文件中读取内容并组装为纯文本字符串 `feedback_text`，作为 `gepa_reflection.render()` 的 `feedback_data` 参数注入 system prompt。反思 Agent 在容器内**不持有任何文件路径**，无法访问 output_dir 中的 trajectory 文件，以防止其读取其他轮次的 plan 或 trajectory 内容而影响判断。**反思 Agent 在生成新 Plan 时自身也会产生轨迹，该轨迹必须保存** |
+| 备注 | **信息注入方式（关键设计）**：主机端在调用反思 Agent 前，从 trajectory 文件中读取内容并组装为纯文本字符串 `feedback_text`，作为 `gepa_reflection.render()` 的 `feedback_data` 参数注入 system prompt。反思 Agent 在容器内**不持有任何文件路径**，无法访问 output_dir 中的 trajectory 文件，以防止其读取其他轮次的 plan 或 trajectory 内容而影响判断。**反思 Agent 在生成新 Plan 时自身也会产生轨迹，该轨迹必须保存。Plan 在 Agent 之间通过函数参数（内存字符串）传递，不通过文件中介；`/tmp/plan.md` 仅为 pipeline 持久化用途** |
 
 #### FR-06：迭代循环控制
 
@@ -186,7 +196,7 @@
 | ID | FR-08 |
 | 名称 | Agent Prompt 与 Plan 格式配置 |
 | 描述 | 支持通过 YAML/JSON 配置文件修改三个核心 Prompt：方案生成 Prompt（用于 FR-02）、代码生成 Prompt（用于 FR-03）、反思模板（用于反思 Agent，FR-05）。同时支持配置 Plan 格式模板，约束 Agent 输出结构 |
-| 配置项 | `plan_generation_prompt`、`code_generation_prompt`、`reflection_prompt_template`（反思 Agent 的 system prompt 模板，必须含 `{prompt_template}` 与 `{inputs_outputs_feedback}` 两个占位符；缺省或为空时回退到 `gepa_reflection.DEFAULT_REFLECTION_TEMPLATE`）、`plan_format_template`（Plan 格式模板，可选） |
+| 配置项 | `plan_generation_prompt`、`code_generation_prompt`、`code_instance_template`（mini-swe-agent SWE-bench 实例级 Prompt 模板，用于 FR-03 代码生成 Agent 的初始化上下文）、`reflection_prompt_template`（反思 Agent 的 system prompt 模板，必须含 `{prompt_template}` 与 `{inputs_outputs_feedback}` 两个占位符；缺省或为空时回退到 `gepa_reflection.DEFAULT_REFLECTION_TEMPLATE`）、`plan_format_template`（Plan 格式模板，**必须包含"将 Plan 写到 `/tmp/plan.md`"的指令**，Plan Agent 与 Reflect Agent 共用此约定） |
 | 验收标准 | 用户修改配置文件后，无需修改代码即可改变对应 Agent 的行为和 Plan 输出格式；`reflection_prompt_template` 可被用户自定义覆盖默认模板，亦可显式留空回退到默认 |
 
 #### FR-09：系统运行参数配置
@@ -196,7 +206,7 @@
 | ID | FR-09 |
 | 名称 | 系统运行参数配置 |
 | 描述 | 支持配置文件配置系统运行的核心参数 |
-| 配置项 | 1）`n`：目标 Plan 数量；2）`optimization_info_level`：0 或 1；3）`model`：使用的 LLM 模型（如 deepseek-v4-flash）；4）`swe_pro_instances`：SWE-bench Pro 实例 ID 列表；5）`prompts.reflection_prompt_template`：反思模板（可选，缺省落回 `gepa_reflection.DEFAULT_REFLECTION_TEMPLATE`）；6）`resume`：重跑配置（可选，FR-07 推迟实现）；7）`agent.max_steps`：每个 Agent 的最大步数；8）`agent.cost_limit`：每个 Agent 的 API 调用成本上限（美元）；9）`agent.timeout`：每个 Agent 的命令执行超时（秒）；10）`evaluator.timeout`：SWE 评估器单实例超时（秒） |
+| 配置项 | 1）`n`：目标 Plan 数量；2）`optimization_info_level`：0 或 1；3）`model`：使用的 LLM 模型（如 deepseek-v4-flash）；4）`swe_pro_instances`：SWE-bench Pro 实例 ID 列表；5）`prompts.reflection_prompt_template`：反思模板（可选，缺省落回 `gepa_reflection.DEFAULT_REFLECTION_TEMPLATE`）；6）`resume`：重跑配置（可选，FR-07 推迟实现）；7）`agent.max_steps`：每个 Agent 的最大步数；8）`agent.cost_limit`：每个 Agent 的 API 调用成本上限（美元）；9）`agent.timeout`：由 pipeline 透传到 `DefaultAgent` 的命令执行超时（秒），**默认 1800 秒，仅用于筛除明显异常**；10）`evaluator.timeout`：SWE 评估器单实例超时（秒） |
 | 验收标准 | 系统启动时自动加载配置文件，根据配置执行相应流程 |
 
 ### 3.4 输出与数据保存
@@ -207,11 +217,11 @@
 |------|------|
 | ID | FR-10 |
 | 名称 | 结果输出 |
-| 描述 | 系统输出：1）所有 Plan 及其测试通过率；2）每次优化时的反思内容（来自反思 Agent）；3）**所有 Agent 的完整轨迹**，包括方案生成 Agent、代码生成 Agent、反思 Agent 的轨迹，按轮次和角色命名；4）Errors 日志 |
+| 描述 | 系统输出：1）所有 Plan 及其测试通过率；2）每次优化时的反思内容（来自反思 Agent）；3）**所有 Agent 的完整轨迹**，包括方案生成 Agent、代码生成 Agent、反思 Agent 的轨迹，按轮次和角色命名；4）Errors 日志；5）**每轮的 Plan 文件**（由 pipeline 在容器停止前通过 `docker exec cat /tmp/plan.md` 抓取后写入 `plans/` 目录） |
 | 轨迹命名规范 | **统一格式**：`trajectory_{round_num}_{role}_{timestamp}.json`，其中 `round_num` 从 1 开始，`role` ∈ {`plan_gen`, `code_gen`, `reflect`}，`timestamp` 为 ISO 8601 格式（如 `20260430T100000`）。对于第 1 轮，反思角色不存在；第 i 轮（i ≥ 2）的反思 Agent 轨迹命名为 `trajectory_{i}_reflect_{timestamp}.json` |
-| 输出格式 | 一个主 JSON 结果文件（见 4.3），外加一个 `trajectories/` 目录存放所有轨迹文件。日志文件（STDERR 记录）单独保存 |
+| 输出格式 | 一个主 JSON 结果文件（见 §4.3），外加三个子目录：`plans/`（存放每轮 Plan 文本）、`patches/`（存放每轮 Patch 文件）、`trajectories/`（存放所有轨迹文件）。日志文件（STDERR 记录）单独保存 |
 | 错误记录 | 当遇到可跳过的错误（任务级错误）时，在结果文件中标记该实例状态为 `error_skipped`，并记录错误信息；当遇到致命错误时，程序退出，错误写入日志文件 |
-| 验收标准 | 输出文件内容完整，轨迹可重现 Agent 的每一步推理和行动。所有轨迹文件名统一包含 timestamp |
+| 验收标准 | 输出文件内容完整，轨迹可重现 Agent 的每一步推理和行动；**`plans/`、`patches/`、`trajectories/` 三个子目录均存在，文件名统一包含 timestamp**；Plan 文件命名遵循 §4.4 规范 |
 
 #### FR-11：Feedback 文本组装
 
@@ -222,6 +232,7 @@
 | 描述 | 在调用反思 Agent 前，pipeline 在主机端组装一个纯文本字符串 `feedback_text`，作为 `gepa_reflection.render(...)` 的 `feedback_data` 参数注入反思 Agent 的 system prompt。组装内容包括：原始 Issue 描述、上一轮 plan/code/reflect 的 trajectory（按 `optimization_info_level` 决定是否含测试输出）、上一轮生成的 Patch、上一轮测试结果。**反思 Agent 在容器内仅接收已注入的字符串，不接收任何文件路径**，无法访问 output_dir 中的轨迹文件 |
 | 实现位置 | `src/pipeline.py:_build_feedback_text` |
 | 验收标准 | 程序在调用反思 Agent 前，能够组装出 `feedback_text` 字符串。组装过程在主机端完成；反思 Agent 在容器内仅接收已注入的字符串，不接收任何文件路径 |
+| 备注 | **Plan 在 Agent 之间通过函数参数（内存字符串）传递，不通过文件中介；`/tmp/plan.md` 仅为 pipeline 持久化用途** |
 
 ### 3.5 错误处理
 
@@ -234,9 +245,9 @@
 | 描述 | 系统需要区分两类错误（详见第 10 节"错误分类矩阵"）：**致命错误**（影响数据收集，系统必须停止）和**任务级错误**（单个实例特有，可跳过继续） |
 | 致命错误示例 | DeepSeek API 返回 401/429 且重试无效、磁盘空间满、Docker 守护进程崩溃 |
 | 处理方式 | 立即停止整个程序，退出码非零，最后输出的日志中包含错误详情。已产生的轨迹和结果文件保留。不进行自动恢复 |
-| 任务级错误示例 | 某个 SWE-bench Pro 实例的 Docker 镜像构建失败、代码库构建失败、测试框架不支持、Agent 生成 Patch 格式非法 |
-| 处理方式 | 记录错误信息到日志和结果文件，跳过该实例，继续处理下一个实例（如果配置了多个实例） |
-| 验收标准 | 程序在一个实例失败时不会崩溃，能够继续执行下一个实例；日志中清晰记录了跳过原因；致命错误时程序优雅退出并保留已收集数据 |
+| 任务级错误示例 | 某个 SWE-bench Pro 实例的 Docker 镜像构建失败、代码库构建失败、测试框架不支持、Agent 生成 Patch 格式非法、Agent 生成 Plan 失败、测试评估异常、Agent 命令超时 |
+| 处理方式 | **统一以 instance 为最小回滚粒度**：记录错误信息到日志和结果文件，跳过当前实例，继续处理下一个实例（如果配置了多个实例）。无论错误发生在 plan、code、reflect 还是 evaluate 阶段，均不再尝试在同实例内继续后续轮次——避免「round-skip 续跑」带来的前序状态退化问题（参见 `project_issues.md` §7 Q-4） |
+| 验收标准 | 程序在一个实例失败时不会崩溃，能够继续执行下一个实例；**任务级错误统一导致 instance skip，不会继续该实例的后续轮次**；日志中清晰记录了跳过原因；致命错误时程序优雅退出并保留已收集数据 |
 
 ---
 
@@ -319,9 +330,8 @@
   "resume_info": null,
   "runtime_versions": {
     "mini_swe_agent": "x.y.z",
-    "gepa": "x.y.z",
     "swebench": "x.y.z",
-    "openai": "x.y.z"
+    "litellm": "x.y.z"
   },
   "plans": [
     {
@@ -333,9 +343,11 @@
         "resolved": false,
         "stdout": "...",
         "stderr": "...",
-        "log_dir": "./logs/round_1_20260430T100500/"
+        "log_dir": "./logs/round_1_20260430T100500/",
+        "error_info": null
       },
-      "generated_patch_path": "patches/round_1_20260430T100500.patch",
+      "plan_path": "plans/plan_1_plan_gen_20260430T100000.md",
+      "generated_patch_path": "patches/patch_1_20260430T100500.patch",
       "trajectory_path": "trajectories/trajectory_1_plan_gen_20260430T100000.json",
       "reflection_log": null
     },
@@ -349,9 +361,11 @@
         "resolved": false,
         "stdout": "...",
         "stderr": "...",
-        "log_dir": "./logs/round_2_20260430T101000/"
+        "log_dir": "./logs/round_2_20260430T101000/",
+        "error_info": null
       },
-      "generated_patch_path": "patches/round_2_20260430T101000.patch",
+      "plan_path": "plans/plan_2_reflect_20260430T101000.md",
+      "generated_patch_path": "patches/patch_2_20260430T101000.patch",
       "trajectory_path": "trajectories/trajectory_2_reflect_20260430T101000.json",
       "reflection_log": "The previous plan failed because it didn't handle edge case X. I have updated the plan to include a check for Y."
     }
@@ -367,6 +381,26 @@
   ]
 }
 ```
+
+### 4.4 中间产物命名规范
+
+所有持久化到磁盘的中间产物（Artefacts）采用统一命名风格，确保同 instance 多次运行不会覆盖，且便于按轮次和角色追溯。
+
+**通用模式**：`{prefix}_{round_num}_{role?}_{timestamp}.{ext}`
+
+- `prefix`：产物类型标识（`plan`、`patch`、`trajectory`）
+- `round_num`：从 1 开始的轮次编号
+- `role`（可选）：产生该产物的 Agent 角色（`plan_gen`、`code_gen`、`reflect`）。Patch 文件不含 role 字段，因为每轮仅有一份 patch
+- `timestamp`：ISO 8601 格式（如 `20260430T100000`）
+- `ext`：文件扩展名
+
+**三类产物具体模式**：
+
+| 产物类型 | 输出目录 | 命名示例 |
+|----------|----------|----------|
+| Plan 文本 | `plans/` | `plan_1_plan_gen_20260430T100000.md` |
+| Patch 文件 | `patches/` | `patch_1_20260430T100500.patch` |
+| Trajectory JSON | `trajectories/` | `trajectory_1_plan_gen_20260430T100000.json` |
 
 ---
 
@@ -416,7 +450,7 @@ prompts:
 
   # 反思模板：将当前 plan 注入 {prompt_template}，feedback_text 注入 {inputs_outputs_feedback}。
   # 缺省或留空时回退到 src/prompts/gepa_reflection.py:DEFAULT_REFLECTION_TEMPLATE（plan-optimization 版，
-  # 要求 LLM 输出含 Navigation/Reproduction/Patch/Validation 四节，无 {placeholders} 约束）。
+  # 要求 LLM 将新 plan 写到 /tmp/plan.md 并以 echo COMPLETE_TASK_AND_SUBMIT_FINAL_OUTPUT 收尾）。
   reflection_prompt_template: |
     The following is the current plan that a planning agent produced for a software-engineering task:
 
@@ -436,9 +470,10 @@ prompts:
     - Patch (P): the concrete code changes to make
     - Validation (V): how to validate the fix passes the failing tests
 
-    Provide the new plan within ``` blocks.
+    Write the improved plan to /tmp/plan.md and finish with:
+    echo COMPLETE_TASK_AND_SUBMIT_FINAL_OUTPUT
 
-  # Plan 格式模板（可选，用于约束 Agent 输出结构）
+  # Plan 格式模板（必须包含将 Plan 写到 /tmp/plan.md 的指令）
   plan_format_template: |
     ## 问题分析
     [描述问题的根本原因]
@@ -454,18 +489,28 @@ prompts:
     1. [步骤1]
     2. [步骤2]
 
+    最后，将上述方案写入 /tmp/plan.md 并以 `echo COMPLETE_TASK_AND_SUBMIT_FINAL_OUTPUT` 收尾。
+
+  code_instance_template: |
+    # SWE-bench 实例信息
+    Repo: {repo}
+    Base commit: {base_commit}
+    Issue: {issue_description}
+
 docker:
   image_builder_script: "./scripts/build_docker_images.sh"  # SWE-bench Pro 镜像构建脚本路径
   workdir: "/testbed"
-  codebase_mount_options: "ro"  # 代码库只读挂载
   timeout: 30                  # Docker 命令执行超时（秒）
 
 agent:
   max_steps: 30                # 每个 Agent 的最大步数
   cost_limit: 3.0              # 每个 Agent 的 API 调用成本上限（美元）
+  timeout: 1800                # 透传到 DefaultAgent 的超时（秒），仅筛除明显异常
 ```
 
 ### 6.2 参数验证规则
+
+**设计原则**：所有 timeout 参数的默认值采用宽松策略（如 `agent.timeout = 1800`），目的是仅筛除明显异常（Agent 命令挂死），而非严格限制正常执行时间。具体取值可在集成测试中根据真实耗时微调，但不应低于 60 秒。
 
 | 参数 | 验证规则 | 错误处理 |
 |------|----------|----------|
@@ -535,7 +580,7 @@ chmod +x scripts/quickstart.sh
 | 优先级 | 功能模块 | 需求 ID |
 |--------|----------|---------|
 | P0 | 任务输入与 Docker 初始化 | FR-01 |
-| P0 | Docker 内方案生成（只读） | FR-02 |
+| P0 | Docker 内方案生成 | FR-02 |
 | P0 | Docker 内代码生成 | FR-03 |
 | P0 | 使用 SWE 官方评估 | FR-04 |
 | P0 | 方案优化（合并反思生成） | FR-05 |
@@ -553,7 +598,7 @@ chmod +x scripts/quickstart.sh
 
 | 约束类型 | 描述 |
 |----------|------|
-| 技术约束 | Agent 基于 `mini-swe-agent` 框架（`DefaultAgent` + `DockerEnvironment` + `LiteLLMModel`）；反思优化复用 GEPA 反射 Prompt 模板（自行维护）；评估使用 SWE 官方工具；**所有 Agent（含反思 Agent）运行在 Docker 容器中**（代码库 ro 挂载，`/tmp` 可写）；**反思 Agent 所需历史信息由主机端读取后通过 prompt 注入，不传递文件路径**，防止其访问其他轮次的 plan 或 trajectory 文件 |
+| 技术约束 | Agent 基于 `mini-swe-agent` 框架（`DefaultAgent` + `DockerEnvironment` + `LiteLLMModel`）；反思优化复用 GEPA 反射 Prompt 模板（自行维护）；评估使用 SWE 官方工具；**所有 Agent（含反思 Agent）运行在 Docker 容器中**，代码库以**读写（rw）**方式挂载到 `/testbed`；**每轮使用独立容器，从同一镜像 + 同一 `base_commit` 初始状态启动**，确保轮间无状态污染；**反思 Agent 所需历史信息由主机端读取后通过 prompt 注入，不传递文件路径**，防止其访问其他轮次的 plan 或 trajectory 文件 |
 | 数据集约束 | **仅使用 SWE-bench Pro 数据集**。使用前需执行 `/scripts/build_docker_images.sh` 构建专用 Docker 镜像 |
 | 开发约束 | 快速原型，不追求扩展性；最小化造轮子，优先调用现有库；Agent 行为通过 Prompt 约束，不修改 `mini-swe-agent` 框架源码 |
 | 模型约束 | **不做模型检查**，用户需确保 DeepSeek V4 API 可用 |
@@ -571,7 +616,7 @@ chmod +x scripts/quickstart.sh
 | R-04 | Agent 的自主探索可能因代码库过大而效率低下 | 中 | 中 | 在 Prompt 中引导 Agent 聚焦于 Issue 相关的目录或文件；设置 Agent 的最大步数限制 |
 | R-05 | Agent 生成的 Plan 结构化程度不足，导致代码生成 Agent 无法有效解析 | 高 | 高 | 通过 `plan_format_template` 约束输出结构；在代码生成 Prompt 中明确说明如何解析 Plan 内容 |
 | R-06 | 反思 Agent 上下文窗口因累积历史而超限 | 中 | 高 | 在组装 Optimization Feedback 时加入截断/摘要策略；在 Prompt 中控制长度 |
-| R-07 | Docker 内代码库 ro 挂载与 Agent 文件操作（bash 命令）的兼容性 | 中 | 中 | `mini-swe-agent` 的 `DockerEnvironment` 通过 `docker exec` 执行 bash 命令；代码库 ro 挂载由 Docker 容器配置控制；Agent 通过 Prompt 约束不得修改代码库文件 |
+| R-07 | 轮间状态污染：第 i-1 轮 Agent 对 `/testbed` 或 `/tmp` 的修改被第 i 轮看到 | 低 | 高 | **每轮独立容器**：第 i 轮从全新容器 + `base_commit` 初始状态启动，与第 i-1 轮容器完全隔离。不再依赖 ro 挂载作为隔离手段；rw 挂载仅服务于 `git add -A && git diff --cached` 的 SWE-bench 提交协议 |
 | R-08 | Plan 重跑时依赖数据不完整（轨迹文件缺失或格式变更） | 低 | 中 | 重跑前校验所需文件完整性；结果文件增加版本字段 |
 
 ---
@@ -588,13 +633,15 @@ chmod +x scripts/quickstart.sh
 | **任务级错误** | Docker 镜像构建失败 | SWE-bench Pro 实例的镜像构建脚本执行失败 | 当前实例 | 跳过当前实例，记录错误，继续下一个 | 零（正常退出） | 已完成的实例数据保留 |
 | **任务级错误** | 代码库构建失败 | 实例的代码库在 Docker 中无法编译/安装 | 当前实例 | 跳过当前实例，记录错误，继续下一个 | 零（正常退出） | 已完成的实例数据保留 |
 | **任务级错误** | Agent 生成 Plan 失败 | Plan Agent 未输出有效 Plan（如空输出、格式完全不符） | 当前实例 | 跳过当前实例，记录错误，继续下一个 | 零（正常退出） | 已完成的实例数据保留 |
-| **任务级错误** | Agent 生成 Patch 失败 | Code Agent 未输出有效 Patch（如非 diff 格式、无法解析） | 当前实例当前轮次 | 跳过当前轮次（记录该轮失败），继续下一轮（如果 n > 当前轮） | 零（正常退出） | 已完成的轮次数据保留 |
-| **任务级错误** | 测试评估失败 | SWE 官方评估工具执行异常（如 Docker 容器内测试环境异常） | 当前实例当前轮次 | 记录错误，该轮 test_pass_rate 标记为 null，继续下一轮 | 零（正常退出） | 已完成的轮次数据保留 |
+| **任务级错误** | Agent 生成 Patch 失败 | Code Agent 未输出有效 Patch（如非 diff 格式、无法解析） | 当前实例 | 跳过当前实例，记录错误，继续下一个 | 零（正常退出） | 已完成的实例数据保留 |
+| **任务级错误** | 测试评估失败 | SWE 官方评估工具执行异常（如 Docker 容器内测试环境异常） | 当前实例 | 跳过当前实例，记录错误，继续下一个 | 零（正常退出） | 已完成的实例数据保留 |
+| **任务级错误** | Agent 命令超时 | Agent 某步命令执行超过 `agent.timeout` 阈值 | 当前实例 | 跳过当前实例，记录错误，继续下一个 | 零（正常退出） | 已完成的实例数据保留 |
 | **任务级错误** | 测试框架不支持 | 实例使用的测试框架在评估环境中不可用 | 当前实例 | 跳过当前实例，记录错误，继续下一个 | 零（正常退出） | 已完成的实例数据保留 |
 
 **判定规则**：
 - 致命错误：影响**数据收集完整性**或导致**系统无法继续运行任何任务**的错误
-- 任务级错误：仅影响**单个实例或单轮次**，其他实例/轮次可以继续正常执行的错误
+- 任务级错误：仅影响**单个实例**，其他实例可以继续正常执行的错误
+- **统一原则**：instance 是最小回滚粒度。无论错误发生在 plan、code、reflect 还是 evaluate 阶段，均不再尝试在同实例内继续后续轮次（参见 `project_issues.md` §7 Q-4）
 
 ---
 
@@ -610,9 +657,11 @@ chmod +x scripts/quickstart.sh
 | TC-06 | 设置 n=0 或 n=-1 | 系统报错退出，错误信息包含参数无效 |
 | TC-07 | 运行多个实例，其中一个实例的 Docker 环境失败 | 失败的实例被跳过（标记为 `error_skipped`），其他实例正常执行，结果文件中包含错误记录 |
 | TC-08 | 使用重跑功能：先运行 n=2 结束，修改 optimization_info_level 后从 Plan[2] 重跑至 n=3 | 系统加载 Plan[2] 的轨迹和代码（Plan[2] 不被重新生成），使用新的 optimization_info_level 生成 Plan[3]，新 Plan[3] 的反思内容中体现了对测试信息（如果启用）的利用 |
-| TC-09 | 检查输出结果文件结构 | 结果文件中包含 `runtime_versions` 字段（记录 mini-swe-agent、swebench、litellm 等版本号）；每个 Plan 的 `test_results` 为结构化对象（含 `resolved`、`stdout`、`stderr`、`log_dir`）；`trajectories/` 中所有轨迹文件名均含 timestamp |
+| TC-09 | 检查输出结果文件结构 | 结果文件中包含 `runtime_versions` 字段（记录 mini-swe-agent、swebench、litellm 等版本号）；每个 Plan 的 `test_results` 为结构化对象（含 `resolved`、`stdout`、`stderr`、`log_dir`、`error_info`）；`plans/`、`patches/`、`trajectories/` 三个子目录均存在，文件名统一含 timestamp 并遵循 §4.4 命名规范 |
 | TC-10 | 反思模板可被 `prompts.reflection_prompt_template` 覆盖 | 用户在 config 中提供自定义模板（含 `{prompt_template}` 与 `{inputs_outputs_feedback}`）后，反思 Agent 的 system prompt 使用自定义模板而非 `DEFAULT_REFLECTION_TEMPLATE`；留空或不提供时回退到默认模板，仍能正常生成新 Plan |
 | TC-11 | 致命错误处理 | 模拟 API key 失效，系统在记录错误后优雅退出，已完成的实例数据和轨迹文件完整保留 |
+| TC-12 | 超时参数生效 | 设置 `agent.timeout = 60`，运行一个已知会触发超时的实例 | Agent 命令超时后该实例被标记为任务级错误并跳过，不会导致整个系统崩溃；结果文件中包含超时错误记录 |
+| TC-13 | 实例级跳过保留已完成轮次数据 | 设置 n=3，第 2 轮 Code Agent 生成 Patch 失败（或评估异常） | 该实例被整体跳过，但第 1 轮已产生的 `plans/plan_1_*`、`patches/patch_1_*`、`trajectories/trajectory_1_*` 等文件仍然保留在输出目录中 |
 
 ---
 
@@ -675,9 +724,10 @@ the next round will need, and bake them into the new plan.
 - **Patch (P)** — the concrete code edits to make
 - **Validation (V)** — how to confirm the failing tests now pass
 
-Provide the new plan within ``` blocks.
+Write the improved plan to `/tmp/plan.md` and finish with:
+`echo COMPLETE_TASK_AND_SUBMIT_FINAL_OUTPUT`
 ```
 
-**输出解析**：从 LLM 响应中提取第一个 ``` 代码块中的内容作为新 Plan（实现见 `gepa_reflection.parse_output`）。
+**输出解析**：pipeline 在容器停止前通过 `docker exec cat /tmp/plan.md` 读取新 Plan 内容。若该文件为空或不存在，则回退到从 LLM 响应中提取第一个 ``` 代码块作为新 Plan（实现见 `gepa_reflection.parse_output`）。
 
 **覆盖方式**：用户可在 `config.yaml` 的 `prompts.reflection_prompt_template` 中提供自定义模板（必须保留 `{prompt_template}` 与 `{inputs_outputs_feedback}` 两个占位符）；缺省或留空时回退到本节描述的 `DEFAULT_REFLECTION_TEMPLATE`。
