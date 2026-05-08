@@ -161,6 +161,22 @@ def _run_instance_core(
         previous_patch = patch_text
         previous_test_results = test_results
 
+        # Optional early exit: when skip_completed_rounds is true and the
+        # instance was resolved this round, stop iterating. The resolved
+        # round's outputs are already persisted by save_round above.
+        # Default behaviour (skip_completed_rounds=false) runs all n
+        # rounds regardless of resolved status.
+        if config.system.skip_completed_rounds and test_results.get("resolved"):
+            if round_num < config.system.n:
+                logger.info(
+                    "[%s] Round %d resolved; skipping remaining %d round(s) "
+                    "(skip_completed_rounds=true).",
+                    instance_id,
+                    round_num,
+                    config.system.n - round_num,
+                )
+            break
+
     # ------------------------------------------------------------------
     # 4. Finalize output
     # ------------------------------------------------------------------
@@ -214,51 +230,84 @@ def _read_trajectory_content(path: str | None) -> str:
 
 def _build_feedback_text(
     *,
-    original_prompt: str,
     plan_trajectory: str,
     code_trajectory: str,
     reflect_trajectory: str,
     test_results: dict[str, Any],
     patch: str,
     opt_level: int,
-) -> str:
-    """Assemble the feedback text injected into the reflect agent's prompt.
+) -> tuple[str, str]:
+    """Assemble the level-aware intro and feedback body for the reflect prompt.
 
     All content is gathered on the host so the reflect agent inside Docker
-    never needs to read trajectory files.  The current plan is *not*
-    included here — it is supplied separately to
-    :func:`gepa_reflection.render` as the ``current_plan`` argument so
-    the template can place it in the dedicated slot.
+    never needs to read trajectory files.  The current plan and the
+    original issue text are NOT part of either return value — the plan is
+    supplied separately to :func:`gepa_reflection.render` (filling
+    ``{prompt_template}``), and the issue is delivered through the
+    reflect agent's instance_template (Jinja-rendered with ``task``).
+
+    The returned tuple is ``(feedback_intro, feedback_body)``:
+
+    * ``feedback_intro`` — a short paragraph naming the feedback fields
+      present this round; varies with ``opt_level`` because not every
+      level supplies test results.
+    * ``feedback_body`` — the assembled trajectories, optional test
+      results, and the patch, in causal order
+      (planner-or-reflector → coder → outcome).
+
+    For round 2 only the plan-agent trajectory is available; for round
+    3+ only the reflect-agent trajectory is available. They are mutually
+    exclusive — the assert guards against an upstream regression that
+    might supply both.
     """
+    assert not (plan_trajectory and reflect_trajectory), (
+        "plan_trajectory and reflect_trajectory are mutually exclusive: "
+        "round 2 has plan_trajectory only, round 3+ has reflect_trajectory only"
+    )
+
+    # ----- intro: list of fields the reflector will see this round -----
+    intro_lines = [
+        "The following is the execution context from the most recent round. You will see:",
+        "- The trajectory of the planning agent (round 2) or reflection agent (round 3+) that produced the plan above",
+        "- The trajectory of the code agent that executed the plan",
+    ]
+    if opt_level >= 1:
+        intro_lines.append("- Test results from running the generated patch")
+    intro_lines.append("- The patch the code agent generated")
+    feedback_intro = "\n".join(intro_lines)
+
+    # ----- body: trajectories first, then outcome ---------------------
     parts: list[str] = []
 
-    if original_prompt:
-        parts.append(f"Original Task (Problem Statement):\n{original_prompt}")
-
+    # Causal order: planner/reflector produced the plan, then coder
+    # executed it. Place the producing-agent trajectory before the
+    # executing-agent trajectory so the reflector reads them in order.
     if plan_trajectory:
-        parts.append(f"\n=== Plan Agent Trajectory ===\n{plan_trajectory}")
+        parts.append(f"=== Plan Agent Trajectory ===\n{plan_trajectory}")
+    elif reflect_trajectory:
+        parts.append(f"=== Reflect Agent Trajectory ===\n{reflect_trajectory}")
     if code_trajectory:
-        parts.append(f"\n=== Code Agent Trajectory ===\n{code_trajectory}")
-    if reflect_trajectory:
-        parts.append(f"\n=== Reflect Agent Trajectory ===\n{reflect_trajectory}")
+        parts.append(f"=== Code Agent Trajectory ===\n{code_trajectory}")
 
     if opt_level >= 1:
         resolved = test_results.get("resolved")
         stdout = test_results.get("stdout", "")
         stderr = test_results.get("stderr", "")
         if resolved is not None or stdout or stderr:
-            parts.append("\nTest Results:")
+            test_lines = ["=== Test Results ==="]
             if resolved is not None:
-                parts.append(f"Resolved: {resolved}")
+                test_lines.append(f"Resolved: {resolved}")
             if stdout:
-                parts.append(f"STDOUT:\n{stdout[:2000]}")
+                test_lines.append(f"STDOUT:\n{stdout[:2000]}")
             if stderr:
-                parts.append(f"STDERR:\n{stderr[:2000]}")
+                test_lines.append(f"STDERR:\n{stderr[:2000]}")
+            parts.append("\n".join(test_lines))
 
     if patch:
-        parts.append(f"\nGenerated Patch:\n{patch[:2000]}")
+        parts.append(f"=== Generated Patch ===\n{patch[:2000]}")
 
-    return "\n".join(parts)
+    feedback_body = "\n\n".join(parts)
+    return feedback_intro, feedback_body
 
 
 def _run_round(
@@ -310,8 +359,7 @@ def _run_round(
         code_traj = _read_trajectory_content(code_traj_path)
         reflect_traj = _read_trajectory_content(reflect_traj_path)
 
-        feedback_text = _build_feedback_text(
-            original_prompt=issue_description,
+        feedback_intro, feedback_body = _build_feedback_text(
             plan_trajectory=plan_traj,
             code_trajectory=code_traj,
             reflect_trajectory=reflect_traj,
@@ -321,7 +369,12 @@ def _run_round(
         )
 
         plan_text, traj_plan = reflect_agent.run(
-            config, previous_plan or "", feedback_text, docker
+            config,
+            previous_plan or "",
+            feedback_intro,
+            feedback_body,
+            issue_description,
+            docker,
         )
         plan_id = f"plan_{instance_id}_r{round_num}"
         generated_by = "reflect_agent"

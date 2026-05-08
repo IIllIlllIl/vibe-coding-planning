@@ -1,13 +1,24 @@
 """Reflection agent.
 
-Runs inside a Docker container using DefaultAgent's interactive step loop,
-similar to plan_agent. The agent may read files and write temporary test
-scripts to verify its understanding, but must not modify source code files.
+Runs inside a Docker container using DefaultAgent's interactive step
+loop, similar to plan_agent. The agent may read files and write
+temporary scripts, but must not modify source under ``/testbed``.
 
-The system prompt is rendered on the host by combining the current plan,
-the assembled feedback text, and the configured reflection prompt template
-(``config.prompts.reflection_prompt_template``).  The agent has no access
-to trajectory files in the container.
+The reflection system prompt is rendered on the host by combining:
+
+* the current plan (previous round's output);
+* a level-aware feedback intro (which fields are present this round);
+* the assembled feedback body (trajectories + optional test results +
+  patch); and
+* the shared NRPV block (single source for the four-section plan
+  structure).
+
+All four pieces are pre-baked into ``system_template`` before the agent
+starts; the agent itself has no access to trajectory files in the
+container. The issue description is delivered separately via the
+configured ``reflect_instance_template`` (Jinja-rendered with the
+``task`` kwarg by DefaultAgent), so the reflection agent sees the same
+``<pr_description>`` wrapper as the plan and code agents.
 """
 
 from __future__ import annotations
@@ -18,7 +29,6 @@ from typing import Any
 from src.agents._deps import (
     build_default_agent,
     build_model,
-    extract_last_assistant,
     import_minisweagent,
 )
 from src.config import Config
@@ -48,23 +58,24 @@ def _read_plan_from_file(env: Any) -> str | None:
 def run(
     config: Config,
     current_plan: str,
-    feedback_text: str,
+    feedback_intro: str,
+    feedback_body: str,
+    issue_description: str,
     env: Any,
 ) -> tuple[str, list[dict[str, Any]]]:
     """Run the reflection agent to generate an improved Plan.
 
-    The agent executes inside the Docker container via DefaultAgent's
-    interactive step loop.  All necessary context is pre-loaded into the
-    system prompt by rendering ``config.prompts.reflection_prompt_template``
-    with ``current_plan`` and ``feedback_text``; the agent has no access
-    to trajectory files.
-
     Args:
         config: Full configuration object.
         current_plan: The plan being optimised (previous round's plan).
-        feedback_text: Pre-assembled execution context (original prompt,
-            trajectories, test results, patch) built by the pipeline on the
-            host.
+        feedback_intro: Level-aware paragraph naming the feedback fields
+            present this round (rendered host-side; varies with
+            ``config.system.optimization_info_level``).
+        feedback_body: Assembled execution context (trajectories + optional
+            test results + patch) built by the pipeline on the host.
+        issue_description: Original SWE-bench issue text. Forwarded to
+            DefaultAgent as ``task`` so the reflection agent sees the same
+            ``<pr_description>`` wrapper as the plan and code agents.
         env: Docker environment wrapper (passed to DefaultAgent for tool
             execution).
 
@@ -72,16 +83,20 @@ def run(
         A tuple of ``(new_plan_text, trajectory_messages)``.
 
     Raises:
-        TaskError: If the agent produces empty or too-short output.
+        TaskError: If the agent produces empty or too-short output, or
+            terminates without a submission.
         FatalError: If mini-swe-agent is not installed.
     """
     DefaultAgent, LitellmModel, _ = import_minisweagent()
 
     system_template = gepa_reflection.render(
         current_plan=current_plan,
-        feedback_data=feedback_text,
+        feedback_intro=feedback_intro,
+        feedback_body=feedback_body,
+        nrpv_block=config.prompts.nrpv_block,
         template=config.prompts.reflection_prompt_template,
     )
+    instance_template = config.prompts.reflect_instance_template or None
 
     model = build_model(
         LitellmModel,
@@ -97,7 +112,7 @@ def run(
         system_template=system_template,
         step_limit=config.agent.max_steps,
         cost_limit=config.agent.cost_limit,
-        instance_template="{{task}}",
+        instance_template=instance_template,
     )
 
     logger.info(
@@ -106,7 +121,7 @@ def run(
         config.agent.max_steps,
     )
 
-    exception_name, exception_msg = agent.run(task="Improve the plan based on the analysis.")
+    exception_name, exception_msg = agent.run(task=issue_description)
 
     # Try to read plan from the file the agent wrote in the container
     plan_text = _read_plan_from_file(env)

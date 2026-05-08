@@ -1,7 +1,9 @@
 """Prompt template management.
 
 Reads prompt templates from the configuration file and provides rendering
-utilities for placeholders.
+utilities for placeholder substitution. The reflection template lives in
+its own module (:mod:`src.prompts.gepa_reflection`) because it has a
+richer placeholder set; this module covers the plan and code agents.
 """
 
 from dataclasses import dataclass
@@ -9,12 +11,20 @@ from dataclasses import dataclass
 
 @dataclass(frozen=True)
 class PromptTemplates:
-    """Collection of all prompt templates used by the system."""
+    """Collection of all prompt templates used by the system.
+
+    Mirrors :class:`src.config.PromptConfig` field-for-field so callers
+    that loaded the raw ``prompts:`` dict (e.g. tests or tooling) can use
+    the same accessors as code paths that go through ``Config``.
+    """
 
     plan_generation: str = ""
+    plan_instance: str = ""
     code_generation: str = ""
+    code_instance: str = ""
     reflection: str = ""
-    plan_format: str = ""
+    reflect_instance: str = ""
+    nrpv_block: str = ""
 
 
 def load_prompt_templates(config_prompts: dict) -> PromptTemplates:
@@ -28,46 +38,49 @@ def load_prompt_templates(config_prompts: dict) -> PromptTemplates:
     """
     return PromptTemplates(
         plan_generation=config_prompts.get("plan_generation_prompt", ""),
+        plan_instance=config_prompts.get("plan_instance_template", ""),
         code_generation=config_prompts.get("code_generation_prompt", ""),
+        code_instance=config_prompts.get("code_instance_template", ""),
         reflection=config_prompts.get("reflection_prompt_template", ""),
-        plan_format=config_prompts.get("plan_format_template", ""),
+        reflect_instance=config_prompts.get("reflect_instance_template", ""),
+        nrpv_block=config_prompts.get("nrpv_block", ""),
     )
 
 
-def render_plan_prompt(template: str, plan_format: str, issue_description: str = "") -> str:
-    """Render the plan generation prompt with format template injected.
+def render_plan_prompt(template: str, nrpv_block: str) -> str:
+    """Render the plan generation system prompt.
 
-    Replaces ``{plan_format_template}`` in the prompt with the actual format
-    template content. Optionally replaces ``{issue_description}`` if present.
-
-    Args:
-        template: The raw plan generation prompt template.
-        plan_format: The plan format template to inject.
-        issue_description: Optional issue description to inject.
-
-    Returns:
-        The fully rendered prompt string.
-    """
-    result = template.replace("{plan_format_template}", plan_format)
-    if issue_description:
-        result = result.replace("{issue_description}", issue_description)
-    return result
-
-
-def render_code_prompt(template: str, plan: str, issue_description: str = "") -> str:
-    """Render the code generation prompt with plan and issue injected.
-
-    Replaces ``{plan}`` and ``{issue_description}`` placeholders.
+    Substitutes ``{nrpv_block}`` in the plan agent's system template with
+    the shared NRPV definition. The issue description is delivered to the
+    agent via the separate ``plan_instance_template``, not via this
+    system-prompt renderer.
 
     Args:
-        template: The raw code generation prompt template.
-        plan: The plan content to inject.
-        issue_description: The issue description to inject.
+        template: Raw plan generation system template
+            (``config.prompts.plan_generation_prompt``).
+        nrpv_block: Shared NRPV section text
+            (``config.prompts.nrpv_block``).
 
     Returns:
-        The fully rendered prompt string.
+        The fully rendered system prompt string.
     """
-    result = template.replace("{plan}", plan)
-    if issue_description:
-        result = result.replace("{issue_description}", issue_description)
-    return result
+    return template.replace("{nrpv_block}", nrpv_block)
+
+
+def render_code_prompt(template: str, plan: str) -> str:
+    """Render the code generation system prompt.
+
+    Substitutes ``{plan}`` with the approved plan text. The issue
+    description is delivered separately through the SWE-official
+    ``code_instance_template`` (Jinja-rendered with the ``task`` kwarg by
+    DefaultAgent), so it is intentionally NOT a parameter here.
+
+    Args:
+        template: Raw code generation system template
+            (``config.prompts.code_generation_prompt``).
+        plan: The approved plan content to inject.
+
+    Returns:
+        The fully rendered system prompt string.
+    """
+    return template.replace("{plan}", plan)

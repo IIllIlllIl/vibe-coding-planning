@@ -67,8 +67,9 @@ def config() -> Config:
             api_base="https://api.deepseek.com",
         ),
         prompts=PromptConfig(
-            plan_generation_prompt="You are a planner.",
-            plan_format_template="## Analysis\n## Steps",
+            plan_generation_prompt="You are a planner.\n{nrpv_block}",
+            plan_instance_template="<pr_description>{{task}}</pr_description>",
+            nrpv_block="## Navigation\n## Reproduction\n## Patch\n## Validation",
         ),
         agent=AgentConfig(max_steps=25),
         deepseek_api_key="test-key",

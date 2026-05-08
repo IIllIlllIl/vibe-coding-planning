@@ -10,7 +10,19 @@ import pytest
 from src.agents import reflect_agent
 from src.config import AgentConfig, Config, PromptConfig, SystemConfig
 from src.exceptions import FatalError, TaskError
-from src.prompts.gepa_reflection import DEFAULT_REFLECTION_TEMPLATE
+
+
+# Reflection template stub used by the test suite.  We do NOT depend on the
+# YAML-resident template here because the agent's behaviour is independent
+# of template wording — render() just needs the four placeholders to be
+# present so str.format succeeds.
+TEST_REFLECTION_TEMPLATE = (
+    "Plan: {prompt_template}\n"
+    "Intro: {feedback_intro}\n"
+    "Body: {inputs_outputs_feedback}\n"
+    "NRPV:\n{nrpv_block}\n"
+    "Navigation Reproduction Patch Validation"
+)
 
 
 class MockLiteLLMModel:
@@ -94,8 +106,9 @@ def config() -> Config:
             api_base="https://api.deepseek.com",
         ),
         prompts=PromptConfig(
-            reflection_prompt_template=DEFAULT_REFLECTION_TEMPLATE,
-            plan_format_template="## Analysis\n## Steps",
+            reflection_prompt_template=TEST_REFLECTION_TEMPLATE,
+            reflect_instance_template="<pr_description>{{task}}</pr_description>",
+            nrpv_block="## Navigation\n## Reproduction\n## Patch\n## Validation",
         ),
         agent=AgentConfig(max_steps=20),
         deepseek_api_key="test-key",
@@ -112,7 +125,12 @@ class TestRunSuccess:
     def test_returns_plan_and_messages(self, mock_import, config, mock_env):
         mock_import.return_value = (MockDefaultAgent, MockLiteLLMModel, object)
         plan, messages = reflect_agent.run(
-            config, "previous plan content", "feedback text", mock_env
+            config,
+            "previous plan content",
+            "feedback intro text",
+            "feedback body text",
+            "Original issue text",
+            mock_env,
         )
 
         assert len(plan) > 50
@@ -121,59 +139,71 @@ class TestRunSuccess:
         assert messages[0]["role"] == "system"
 
     @patch("src.agents.reflect_agent.import_minisweagent")
-    def test_system_template_contains_plan_and_feedback(
+    def test_system_template_contains_all_placeholders(
         self, mock_import, config, mock_env
     ):
         mock_import.return_value = (MockDefaultAgent, MockLiteLLMModel, object)
         reflect_agent.run(
             config,
             "PREVIOUS-PLAN-MARKER",
-            "FEEDBACK-MARKER",
+            "INTRO-MARKER",
+            "BODY-MARKER",
+            "ISSUE-MARKER",
             mock_env,
         )
 
         assert "system_template" in MockDefaultAgent.last_kwargs
         st = MockDefaultAgent.last_kwargs["system_template"]
-        # Both inputs must end up in the rendered system prompt
+        # Plan, intro, body, and the nrpv block must all land in the system prompt
         assert "PREVIOUS-PLAN-MARKER" in st
-        assert "FEEDBACK-MARKER" in st
-        # Default template should also impose the N/R/P/V structure on the LLM
+        assert "INTRO-MARKER" in st
+        assert "BODY-MARKER" in st
+        # NRPV section names must appear (via the nrpv_block field)
         assert "Navigation" in st
         assert "Reproduction" in st
         assert "Patch" in st
         assert "Validation" in st
 
     @patch("src.agents.reflect_agent.import_minisweagent")
-    def test_custom_template_overrides_default(self, mock_import, mock_env):
-        """Users can swap in their own template via config."""
-        mock_import.return_value = (MockDefaultAgent, MockLiteLLMModel, object)
-        custom = (
-            "<<CUSTOM-TEMPLATE>>\n"
-            "Plan: {prompt_template}\n"
-            "Feedback: {inputs_outputs_feedback}\n"
-        )
-        cfg = Config(
-            system=SystemConfig(
-                model="deepseek-v4-flash",
-                api_base="https://api.deepseek.com",
-            ),
-            prompts=PromptConfig(reflection_prompt_template=custom),
-            agent=AgentConfig(max_steps=20),
-            deepseek_api_key="test-key",
-        )
-        reflect_agent.run(cfg, "PLAN-X", "FEEDBACK-Y", mock_env)
+    def test_issue_description_passed_as_task(self, mock_import, config, mock_env):
+        """The reflect agent must receive the original issue via ``task``
+        so its reflect_instance_template can wrap it in <pr_description>."""
 
-        st = MockDefaultAgent.last_kwargs["system_template"]
-        assert "<<CUSTOM-TEMPLATE>>" in st
-        assert "PLAN-X" in st
-        assert "FEEDBACK-Y" in st
-        # The default-template wording must NOT leak through
-        assert "Navigation (N)" not in st
+        captured: dict = {}
+
+        class CapturingAgent(MockDefaultAgent):
+            def run(self, task):
+                captured["task"] = task
+                return MockDefaultAgent.run(self, task)
+
+        mock_import.return_value = (CapturingAgent, MockLiteLLMModel, object)
+        reflect_agent.run(
+            config,
+            "previous plan",
+            "intro",
+            "body",
+            "ISSUE-X",
+            mock_env,
+        )
+        assert captured["task"] == "ISSUE-X"
+
+    @patch("src.agents.reflect_agent.import_minisweagent")
+    def test_reflect_instance_template_passed_to_agent(
+        self, mock_import, config, mock_env
+    ):
+        mock_import.return_value = (MockDefaultAgent, MockLiteLLMModel, object)
+        reflect_agent.run(
+            config, "previous plan", "intro", "body", "issue", mock_env
+        )
+        assert "instance_template" in MockDefaultAgent.last_kwargs
+        assert "{{task}}" in MockDefaultAgent.last_kwargs["instance_template"]
 
     @patch("src.agents.reflect_agent.import_minisweagent")
     def test_passes_docker_environment(self, mock_import, config, mock_env):
         mock_import.return_value = (MockDefaultAgent, MockLiteLLMModel, object)
-        reflect_agent.run(config, "previous plan", "feedback text", mock_env)
+        reflect_agent.run(
+            config, "previous plan", "intro", "body", "issue", mock_env
+        )
 
         # environment is passed as positional arg to DefaultAgent, not in kwargs
         assert MockDefaultAgent.last_env is mock_env
@@ -183,7 +213,7 @@ class TestRunSuccess:
         """LLM output inside ``` blocks is extracted by parse_output."""
         mock_import.return_value = (MockDefaultAgentFenced, MockLiteLLMModel, object)
         plan, _ = reflect_agent.run(
-            config, "previous plan", "feedback text", mock_env
+            config, "previous plan", "intro", "body", "issue", mock_env
         )
 
         # parse_output should strip the ``` fences
@@ -200,7 +230,7 @@ class TestRunSuccess:
         )
         with pytest.raises(TaskError, match="terminated without a submission"):
             reflect_agent.run(
-                config, "previous plan", "feedback text", mock_env
+                config, "previous plan", "intro", "body", "issue", mock_env
             )
 
 
@@ -209,7 +239,9 @@ class TestRunValidation:
     def test_empty_output_raises_task_error(self, mock_import, config, mock_env):
         mock_import.return_value = (MockDefaultAgentEmpty, MockLiteLLMModel, object)
         with pytest.raises(TaskError, match="empty"):
-            reflect_agent.run(config, "previous plan", "feedback text", mock_env)
+            reflect_agent.run(
+                config, "previous plan", "intro", "body", "issue", mock_env
+            )
 
     @patch("src.agents.reflect_agent.import_minisweagent")
     def test_whitespace_only_raises_task_error(self, mock_import, config, mock_env):
@@ -219,13 +251,17 @@ class TestRunValidation:
             object,
         )
         with pytest.raises(TaskError, match="empty"):
-            reflect_agent.run(config, "previous plan", "feedback text", mock_env)
+            reflect_agent.run(
+                config, "previous plan", "intro", "body", "issue", mock_env
+            )
 
     @patch("src.agents.reflect_agent.import_minisweagent")
     def test_short_output_raises_task_error(self, mock_import, config, mock_env):
         mock_import.return_value = (MockDefaultAgentShort, MockLiteLLMModel, object)
         with pytest.raises(TaskError, match="too short"):
-            reflect_agent.run(config, "previous plan", "feedback text", mock_env)
+            reflect_agent.run(
+                config, "previous plan", "intro", "body", "issue", mock_env
+            )
 
 
 class TestMissingDependency:
@@ -235,4 +271,6 @@ class TestMissingDependency:
     )
     def test_missing_import_raises_fatal_error(self, mock_import, config, mock_env):
         with pytest.raises(FatalError, match="mini-swe-agent"):
-            reflect_agent.run(config, "previous plan", "feedback text", mock_env)
+            reflect_agent.run(
+                config, "previous plan", "intro", "body", "issue", mock_env
+            )

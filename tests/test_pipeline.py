@@ -165,6 +165,147 @@ class TestPipelineMultiRound:
         assert mock_docker.stop.call_count == 3
 
 
+class TestSkipCompletedRounds:
+    """Verify the ``skip_completed_rounds`` early-exit hook.
+
+    Default (``False``) preserves the legacy behaviour of running all n
+    rounds regardless of resolved state. Setting it to ``True`` makes the
+    pipeline break out of the round loop the first time
+    ``test_results["resolved"]`` is truthy.
+    """
+
+    def _make_config(self, *, n: int, skip: bool) -> Config:
+        return Config(
+            system=SystemConfig(
+                model="deepseek-v4-flash",
+                api_base="https://api.deepseek.com",
+                n=n,
+                swe_pro_instances=["astropy__astropy-14539"],
+                output_dir="./output",
+                skip_completed_rounds=skip,
+            ),
+            prompts=PromptConfig(),
+            docker=DockerConfig(),
+            agent=AgentConfig(max_steps=10),
+            deepseek_api_key="test-key",
+        )
+
+    def _common_mocks(self, mock_loader_cls, mock_docker_cls, mock_save_traj, mock_writer_cls, suffix):
+        mock_loader = MagicMock()
+        mock_loader.load_instance.return_value = {
+            "instance_id": "astropy__astropy-14539",
+            "repo": "astropy/astropy",
+            "problem_statement": "Fix the parser bug",
+            "image_name": "swebench/astropy-astropy:latest",
+        }
+        mock_loader_cls.return_value = mock_loader
+
+        mock_docker = MagicMock()
+        mock_docker_cls.return_value = mock_docker
+
+        mock_save_traj.return_value = MagicMock()
+        mock_save_traj.return_value.__str__ = lambda self: "trajectory.json"
+
+        mock_writer = MagicMock()
+        from pathlib import Path
+        import tempfile
+        tmp_result = Path(tempfile.gettempdir()) / f"test_result_skip_{suffix}.json"
+        tmp_result.write_text('{"plans": [], "run_id": "test"}', encoding="utf-8")
+        mock_writer.finalize.return_value = tmp_result
+        mock_writer_cls.return_value = mock_writer
+        return mock_docker, mock_writer
+
+    @patch("src.pipeline.DockerEnvWrapper")
+    @patch("src.pipeline.InstanceLoader")
+    @patch("src.pipeline.plan_agent.run")
+    @patch("src.pipeline.code_agent.run")
+    @patch("src.pipeline.reflect_agent.run")
+    @patch("src.pipeline.evaluate")
+    @patch("src.pipeline.save_trajectory")
+    @patch("src.pipeline.OutputWriter")
+    def test_skip_true_breaks_after_resolved_round(
+        self,
+        mock_writer_cls,
+        mock_save_traj,
+        mock_eval,
+        mock_reflect,
+        mock_code,
+        mock_plan,
+        mock_loader_cls,
+        mock_docker_cls,
+    ):
+        cfg = self._make_config(n=4, skip=True)
+        mock_docker, mock_writer = self._common_mocks(
+            mock_loader_cls, mock_docker_cls, mock_save_traj, mock_writer_cls, "true"
+        )
+
+        mock_plan.return_value = ("Plan 1", [])
+        mock_reflect.return_value = ("Plan improved", [])
+        mock_code.return_value = ("diff --git\n--- a\n+++ b\n@@ -1 +1 @@\n-old\n+new", [])
+
+        # Round 1 fails, round 2 resolves; rounds 3/4 must be skipped.
+        eval_results = [
+            {"resolved": False, "stdout": "", "stderr": "", "log_dir": ""},
+            {"resolved": True, "stdout": "", "stderr": "", "log_dir": ""},
+        ]
+        mock_eval.side_effect = eval_results
+
+        run_instance("astropy__astropy-14539", cfg)
+
+        # Round 1 plan + round 2 reflect; rounds 3/4 never executed.
+        assert mock_plan.call_count == 1
+        assert mock_reflect.call_count == 1
+        assert mock_code.call_count == 2
+        assert mock_eval.call_count == 2
+        assert mock_writer.save_round.call_count == 2
+        assert mock_docker.start.call_count == 2
+        assert mock_docker.stop.call_count == 2
+
+    @patch("src.pipeline.DockerEnvWrapper")
+    @patch("src.pipeline.InstanceLoader")
+    @patch("src.pipeline.plan_agent.run")
+    @patch("src.pipeline.code_agent.run")
+    @patch("src.pipeline.reflect_agent.run")
+    @patch("src.pipeline.evaluate")
+    @patch("src.pipeline.save_trajectory")
+    @patch("src.pipeline.OutputWriter")
+    def test_skip_false_runs_all_rounds_even_when_resolved(
+        self,
+        mock_writer_cls,
+        mock_save_traj,
+        mock_eval,
+        mock_reflect,
+        mock_code,
+        mock_plan,
+        mock_loader_cls,
+        mock_docker_cls,
+    ):
+        cfg = self._make_config(n=4, skip=False)
+        mock_docker, mock_writer = self._common_mocks(
+            mock_loader_cls, mock_docker_cls, mock_save_traj, mock_writer_cls, "false"
+        )
+
+        mock_plan.return_value = ("Plan 1", [])
+        mock_reflect.return_value = ("Plan improved", [])
+        mock_code.return_value = ("diff --git\n--- a\n+++ b\n@@ -1 +1 @@\n-old\n+new", [])
+        # Resolved from round 2 onward — but skip=false means all 4 rounds run.
+        mock_eval.side_effect = [
+            {"resolved": False, "stdout": "", "stderr": "", "log_dir": ""},
+            {"resolved": True, "stdout": "", "stderr": "", "log_dir": ""},
+            {"resolved": True, "stdout": "", "stderr": "", "log_dir": ""},
+            {"resolved": True, "stdout": "", "stderr": "", "log_dir": ""},
+        ]
+
+        run_instance("astropy__astropy-14539", cfg)
+
+        # All four rounds execute: plan once, reflect three times.
+        assert mock_plan.call_count == 1
+        assert mock_reflect.call_count == 3
+        assert mock_code.call_count == 4
+        assert mock_eval.call_count == 4
+        assert mock_writer.save_round.call_count == 4
+
+
 class TestPipelineErrorHandling:
     @patch("src.pipeline.DockerEnvWrapper")
     @patch("src.pipeline.InstanceLoader")

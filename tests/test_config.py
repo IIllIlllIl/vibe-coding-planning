@@ -34,9 +34,12 @@ def valid_config_dict() -> dict[str, Any]:
         },
         "prompts": {
             "plan_generation_prompt": "Plan prompt here",
+            "plan_instance_template": "<pr_description>{{task}}</pr_description>",
             "code_generation_prompt": "Code prompt here",
+            "code_instance_template": "<pr_description>{{task}}</pr_description>",
             "reflection_prompt_template": "Reflect template {prompt_template} {inputs_outputs_feedback}",
-            "plan_format_template": "Format template here",
+            "reflect_instance_template": "<pr_description>{{task}}</pr_description>",
+            "nrpv_block": "## Navigation\n## Reproduction\n## Patch\n## Validation",
         },
         "docker": {
             "image_builder_script": "./scripts/build.sh",
@@ -71,12 +74,15 @@ class TestLoadConfigSuccess:
         assert config.system.swe_pro_instances == ["astropy__astropy-14539"]
         assert config.system.output_dir == "./output"
         assert config.prompts.plan_generation_prompt == "Plan prompt here"
+        assert config.prompts.plan_instance_template == "<pr_description>{{task}}</pr_description>"
         assert config.prompts.code_generation_prompt == "Code prompt here"
+        assert config.prompts.code_instance_template == "<pr_description>{{task}}</pr_description>"
         assert (
             config.prompts.reflection_prompt_template
             == "Reflect template {prompt_template} {inputs_outputs_feedback}"
         )
-        assert config.prompts.plan_format_template == "Format template here"
+        assert config.prompts.reflect_instance_template == "<pr_description>{{task}}</pr_description>"
+        assert config.prompts.nrpv_block == "## Navigation\n## Reproduction\n## Patch\n## Validation"
         assert config.docker.image_builder_script == "./scripts/build.sh"
         assert config.docker.workdir == "/testbed"
         assert config.docker.timeout == 30
@@ -182,31 +188,30 @@ class TestResumeConfig:
         assert "from_round < 1" in caplog.text
 
 
-class TestReflectionTemplateFallback:
-    """Verify PromptConfig.reflection_prompt_template falls back to
-    DEFAULT_REFLECTION_TEMPLATE when the user omits or empties the field."""
+class TestReflectionTemplateNoFallback:
+    """The reflection template is now sourced exclusively from config.yaml.
+    There is no Python-side default — an empty/missing field stays empty,
+    and the reflect agent will fail loudly when it tries to render a
+    blank template.
+    """
 
-    def test_missing_falls_back_to_default(self, monkeypatch, tmp_path: Path):
-        from src.prompts.gepa_reflection import DEFAULT_REFLECTION_TEMPLATE
-
+    def test_missing_template_stays_empty(self, monkeypatch, tmp_path: Path):
         monkeypatch.setenv("DEEPSEEK_API_KEY", "test-key")
         # Empty config — no prompts section at all
         filepath = tmp_path / "no_prompts.yaml"
         filepath.write_text("{}", encoding="utf-8")
         config = load_config(filepath)
-        assert config.prompts.reflection_prompt_template == DEFAULT_REFLECTION_TEMPLATE
+        assert config.prompts.reflection_prompt_template == ""
 
-    def test_empty_string_falls_back_to_default(self, monkeypatch, tmp_path: Path):
-        from src.prompts.gepa_reflection import DEFAULT_REFLECTION_TEMPLATE
-
+    def test_empty_string_stays_empty(self, monkeypatch, tmp_path: Path):
         monkeypatch.setenv("DEEPSEEK_API_KEY", "test-key")
         data = {"prompts": {"reflection_prompt_template": ""}}
         filepath = tmp_path / "empty_tpl.yaml"
         filepath.write_text(yaml.dump(data), encoding="utf-8")
         config = load_config(filepath)
-        assert config.prompts.reflection_prompt_template == DEFAULT_REFLECTION_TEMPLATE
+        assert config.prompts.reflection_prompt_template == ""
 
-    def test_user_template_overrides_default(self, monkeypatch, tmp_path: Path):
+    def test_user_template_passed_through(self, monkeypatch, tmp_path: Path):
         monkeypatch.setenv("DEEPSEEK_API_KEY", "test-key")
         custom = "MY-CUSTOM {prompt_template} {inputs_outputs_feedback}"
         data = {"prompts": {"reflection_prompt_template": custom}}
@@ -214,6 +219,37 @@ class TestReflectionTemplateFallback:
         filepath.write_text(yaml.dump(data), encoding="utf-8")
         config = load_config(filepath)
         assert config.prompts.reflection_prompt_template == custom
+
+
+class TestSkipCompletedRounds:
+    """``skip_completed_rounds`` controls whether the pipeline exits the
+    round loop early once an instance is resolved. Default is ``False``
+    so the legacy behaviour (run all n rounds) is preserved unless the
+    user opts in.
+    """
+
+    def test_default_is_false(self, monkeypatch, tmp_path: Path):
+        monkeypatch.setenv("DEEPSEEK_API_KEY", "test-key")
+        filepath = tmp_path / "empty.yaml"
+        filepath.write_text("{}", encoding="utf-8")
+        config = load_config(filepath)
+        assert config.system.skip_completed_rounds is False
+
+    def test_explicit_true_loaded(self, monkeypatch, tmp_path: Path):
+        monkeypatch.setenv("DEEPSEEK_API_KEY", "test-key")
+        data = {"system": {"skip_completed_rounds": True}}
+        filepath = tmp_path / "skip_true.yaml"
+        filepath.write_text(yaml.dump(data), encoding="utf-8")
+        config = load_config(filepath)
+        assert config.system.skip_completed_rounds is True
+
+    def test_string_true_coerced(self, monkeypatch, tmp_path: Path):
+        monkeypatch.setenv("DEEPSEEK_API_KEY", "test-key")
+        data = {"system": {"skip_completed_rounds": "true"}}
+        filepath = tmp_path / "skip_str.yaml"
+        filepath.write_text(yaml.dump(data), encoding="utf-8")
+        config = load_config(filepath)
+        assert config.system.skip_completed_rounds is True
 
 
 class TestApiBaseAndTimeout:

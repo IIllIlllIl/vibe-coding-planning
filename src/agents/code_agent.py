@@ -72,7 +72,7 @@ def run(
     DefaultAgent, LitellmModel, _ = import_minisweagent()
 
     system_template = render_code_prompt(
-        config.prompts.code_generation_prompt, plan, issue_description
+        config.prompts.code_generation_prompt, plan
     )
     instance_template = config.prompts.code_instance_template or None
 

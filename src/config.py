@@ -40,18 +40,28 @@ class SystemConfig:
     api_base: str = "https://api.deepseek.com"
     swe_pro_instances: list[str] = field(default_factory=list)
     output_dir: str = "./output"
+    skip_completed_rounds: bool = False
     resume: ResumeConfig = field(default_factory=ResumeConfig)
 
 
 @dataclass(frozen=True)
 class PromptConfig:
-    """Prompt template configuration."""
+    """Prompt template configuration.
+
+    All prompt strings are sourced from the YAML config file. The
+    ``nrpv_block`` field is the single source of truth for the
+    Navigation/Reproduction/Patch/Validation plan structure and is
+    substituted into both ``plan_generation_prompt`` and
+    ``reflection_prompt_template`` via the ``{nrpv_block}`` placeholder.
+    """
 
     plan_generation_prompt: str = ""
+    plan_instance_template: str = ""
     code_generation_prompt: str = ""
     code_instance_template: str = ""
     reflection_prompt_template: str = ""
-    plan_format_template: str = ""
+    reflect_instance_template: str = ""
+    nrpv_block: str = ""
 
 
 @dataclass(frozen=True)
@@ -242,6 +252,7 @@ def _build_system_config(data: dict[str, Any]) -> SystemConfig:
         api_base=api_base,
         swe_pro_instances=_get_list(data, "swe_pro_instances"),
         output_dir=_get_str(data, "output_dir", "./output"),
+        skip_completed_rounds=_get_bool(data, "skip_completed_rounds", False),
         resume=_build_resume_config(resume_data),
     )
 
@@ -249,27 +260,20 @@ def _build_system_config(data: dict[str, Any]) -> SystemConfig:
 def _build_prompt_config(data: dict[str, Any]) -> PromptConfig:
     """Build PromptConfig from a dict.
 
-    ``reflection_prompt_template`` falls back to
-    :data:`src.prompts.gepa_reflection.DEFAULT_REFLECTION_TEMPLATE` when
-    absent or empty, so users can omit the field and still get the project's
-    default plan-optimization template.
+    All prompt strings come from ``config.yaml``; there is no Python-side
+    default for the reflection template. Missing or empty fields produce
+    an empty string here, and the agent will fail loudly when it tries to
+    render the prompt — keeping ``config.yaml`` as the single source of
+    truth for prompt design.
     """
-    # Local import to avoid a circular import at module load time
-    # (src.prompts.gepa_reflection has no runtime dependency on src.config,
-    # but importing it at module top-level would still tie config loading
-    # to that module — keep it lazy for cleanliness).
-    from src.prompts.gepa_reflection import DEFAULT_REFLECTION_TEMPLATE
-
-    reflection_template = _get_str(data, "reflection_prompt_template", "")
-    if not reflection_template.strip():
-        reflection_template = DEFAULT_REFLECTION_TEMPLATE
-
     return PromptConfig(
         plan_generation_prompt=_get_str(data, "plan_generation_prompt", ""),
+        plan_instance_template=_get_str(data, "plan_instance_template", ""),
         code_generation_prompt=_get_str(data, "code_generation_prompt", ""),
         code_instance_template=_get_str(data, "code_instance_template", ""),
-        reflection_prompt_template=reflection_template,
-        plan_format_template=_get_str(data, "plan_format_template", ""),
+        reflection_prompt_template=_get_str(data, "reflection_prompt_template", ""),
+        reflect_instance_template=_get_str(data, "reflect_instance_template", ""),
+        nrpv_block=_get_str(data, "nrpv_block", ""),
     )
 
 

@@ -1,69 +1,92 @@
 """Tests for src/prompts/gepa_reflection.py."""
 
-from src.prompts.gepa_reflection import (
-    DEFAULT_REFLECTION_TEMPLATE,
-    parse_output,
-    render,
+import pytest
+
+from src.prompts.gepa_reflection import parse_output, render
+
+
+# A representative reflection template covering all four placeholders
+# the YAML template uses.  The wording is irrelevant — the test focuses
+# on placeholder substitution semantics.
+SAMPLE_TEMPLATE = (
+    "Plan:\n```\n{prompt_template}\n```\n\n"
+    "{feedback_intro}\n\n"
+    "{inputs_outputs_feedback}\n\n"
+    "Use this structure:\n{nrpv_block}\n"
 )
 
 
 class TestRender:
-    def test_default_template_fills_required_placeholders(self):
-        """Default template uses {prompt_template} and
-        {inputs_outputs_feedback}; both must be substituted."""
-        plan = "Current plan content"
-        feedback = "The plan failed because..."
-
-        result = render(plan, feedback)
-
-        assert plan in result
-        assert feedback in result
-        # Both required placeholders should be substituted away
-        assert "{prompt_template}" not in result
-        assert "{inputs_outputs_feedback}" not in result
-
-    def test_default_template_drops_placeholder_constraint(self):
-        """The default plan-optimization template no longer enforces
-        GEPA's placeholder-preservation rule (we optimise plans, not
-        prompt templates with placeholders)."""
-        # The default body must not contain the old GEPA wording
-        assert "must keep these exact placeholders intact" not in DEFAULT_REFLECTION_TEMPLATE
-        # And must not contain a {placeholders} slot either
-        assert "{placeholders}" not in DEFAULT_REFLECTION_TEMPLATE
-
-    def test_default_template_requires_nrpv_structure(self):
-        """The default template instructs the LLM to emit the
-        N/R/P/V section structure required by downstream agents."""
-        assert "Navigation" in DEFAULT_REFLECTION_TEMPLATE
-        assert "Reproduction" in DEFAULT_REFLECTION_TEMPLATE
-        assert "Patch" in DEFAULT_REFLECTION_TEMPLATE
-        assert "Validation" in DEFAULT_REFLECTION_TEMPLATE
-        # And requires writing plan to /tmp/plan.md
-        assert "/tmp/plan.md" in DEFAULT_REFLECTION_TEMPLATE
-        assert "COMPLETE_TASK_AND_SUBMIT_FINAL_OUTPUT" in DEFAULT_REFLECTION_TEMPLATE
-
-    def test_render_with_custom_template(self):
-        """When the caller supplies an explicit template, render() must
-        use it instead of DEFAULT_REFLECTION_TEMPLATE."""
-        custom = (
-            "<<CUSTOM>>\n"
-            "Plan: {prompt_template}\n"
-            "Feedback: {inputs_outputs_feedback}\n"
+    def test_fills_all_required_placeholders(self):
+        """All four placeholders must be substituted."""
+        result = render(
+            current_plan="PLAN-MARKER",
+            feedback_intro="INTRO-MARKER",
+            feedback_body="BODY-MARKER",
+            nrpv_block="NRPV-MARKER",
+            template=SAMPLE_TEMPLATE,
         )
-        result = render("PLAN-X", "FEEDBACK-Y", template=custom)
 
-        assert "<<CUSTOM>>" in result
-        assert "PLAN-X" in result
-        assert "FEEDBACK-Y" in result
-        # Default template's hallmark wording must NOT bleed through
-        assert "Navigation (N)" not in result
+        assert "PLAN-MARKER" in result
+        assert "INTRO-MARKER" in result
+        assert "BODY-MARKER" in result
+        assert "NRPV-MARKER" in result
+        # All four placeholders must be substituted away
+        assert "{prompt_template}" not in result
+        assert "{feedback_intro}" not in result
+        assert "{inputs_outputs_feedback}" not in result
+        assert "{nrpv_block}" not in result
 
-    def test_render_accepts_legacy_placeholders_kwarg(self):
-        """`placeholders` kwarg is retained for backwards compatibility
-        with custom templates that still reference {placeholders}."""
-        custom = "Plan: {prompt_template}\nFB: {inputs_outputs_feedback}\nPH: {placeholders}"
-        result = render("plan", "feedback", placeholders="{issue_description}", template=custom)
-        assert "PH: {issue_description}" in result
+    def test_intro_distinct_from_body(self):
+        """``feedback_intro`` and ``feedback_body`` must land in different
+        slots (the YAML template wording is the contract — render() must
+        keep them separable)."""
+        result = render(
+            current_plan="plan",
+            feedback_intro="<<INTRO>>",
+            feedback_body="<<BODY>>",
+            nrpv_block="nrpv",
+            template=SAMPLE_TEMPLATE,
+        )
+        intro_idx = result.index("<<INTRO>>")
+        body_idx = result.index("<<BODY>>")
+        # In the sample template, intro precedes body
+        assert intro_idx < body_idx
+
+    def test_keyword_only_arguments(self):
+        """All arguments must be keyword-only — guards against accidental
+        positional calls that silently pass arguments to the wrong slot."""
+        with pytest.raises(TypeError):
+            # Positional invocation should fail because the signature is
+            # keyword-only.
+            render("plan", "intro", "body", "nrpv", SAMPLE_TEMPLATE)  # type: ignore[misc]
+
+    def test_custom_template_passed_through(self):
+        """When the caller supplies a custom template, render() must use
+        it directly without reaching for any built-in default."""
+        custom = "<<CUSTOM>> P:{prompt_template} I:{feedback_intro} B:{inputs_outputs_feedback} N:{nrpv_block}"
+        result = render(
+            current_plan="P",
+            feedback_intro="I",
+            feedback_body="B",
+            nrpv_block="N",
+            template=custom,
+        )
+        assert result == "<<CUSTOM>> P:P I:I B:B N:N"
+
+    def test_missing_placeholder_in_template_raises(self):
+        """If the template references an unknown placeholder, str.format
+        will raise KeyError — propagating loudly is the right behaviour
+        because the YAML template is a configuration contract."""
+        bad_template = "{prompt_template} {unknown_placeholder}"
+        with pytest.raises(KeyError):
+            render(
+                current_plan="plan",
+                feedback_intro="intro",
+                feedback_body="body",
+                nrpv_block="nrpv",
+                template=bad_template,
+            )
 
 
 class TestParseOutput:

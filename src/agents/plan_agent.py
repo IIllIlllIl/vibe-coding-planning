@@ -1,8 +1,11 @@
 """Plan generation agent.
 
 Uses DefaultAgent's interactive step loop so the agent can explore the
-codebase (via cat, grep, ls, etc.) before producing the natural-language
-Plan text.
+codebase (via cat, grep, ls, etc.) before producing the structured Plan
+text. The agent writes the plan to ``/tmp/plan.md`` and submits with
+``echo COMPLETE_TASK_AND_SUBMIT_FINAL_OUTPUT && cat /tmp/plan.md``;
+the host then reads the file directly so empty/whitespace plans surface
+as TaskError rather than silently passing downstream.
 """
 
 from __future__ import annotations
@@ -13,7 +16,6 @@ from typing import Any
 from src.agents._deps import (
     build_default_agent,
     build_model,
-    extract_last_assistant,
     import_minisweagent,
 )
 from src.config import Config
@@ -64,7 +66,10 @@ def run(
 
     Args:
         config: Full configuration object.
-        issue_description: The SWE-bench issue description.
+        issue_description: The SWE-bench issue description. Forwarded to
+            DefaultAgent as ``task``; the configured
+            ``plan_instance_template`` Jinja-renders ``{{task}}`` into the
+            first user message.
         env: Docker environment wrapper (passed to DefaultAgent for tool
             execution).
 
@@ -79,9 +84,9 @@ def run(
 
     system_template = render_plan_prompt(
         config.prompts.plan_generation_prompt,
-        config.prompts.plan_format_template,
-        issue_description,
+        config.prompts.nrpv_block,
     )
+    instance_template = config.prompts.plan_instance_template or None
 
     model = build_model(
         LitellmModel,
@@ -97,7 +102,7 @@ def run(
         system_template=system_template,
         step_limit=config.agent.max_steps,
         cost_limit=config.agent.cost_limit,
-        instance_template="{{task}}",
+        instance_template=instance_template,
     )
 
     logger.info(
