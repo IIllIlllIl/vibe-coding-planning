@@ -1,15 +1,26 @@
 # Plan-Code-Test: 自动化代码方案迭代优化系统
 
-输入一个 SWE-bench Pro 任务，系统自动生成方案（Plan）、执行代码生成、运行测试评估，并基于反馈迭代优化方案，最终输出多轮 Plan 及其测试表现。
+输入一个 SWE-bench 实例（Verified 或 Pro），系统自动生成方案（Plan）、执行代码生成、运行测试评估，并基于反馈迭代优化方案，最终输出多轮 Plan 及其测试表现 —— 用于研究"plan 演化模式 → 任务通过性"的关系。
 
 ## 核心特性
 
 - **Plan → Code → Test 闭环**：Agent 自主探索代码库生成方案，按方案输出 Patch，经 SWE 官方工具评估
 - **方案迭代优化**：基于执行反馈（含可选测试结果）由反思 Agent 逐轮改进 Plan
-- **完整轨迹留存**：方案生成、代码生成、反思优化三个阶段的全量 Trajectory 均保存，支持后续分析
-- **可选早退**：通过 `skip_completed_rounds` 参数控制 resolved 后是否跳过剩余轮次（默认 `false`，跑满 n 轮）
+- **完整轨迹留存**：方案生成、代码生成、反思优化三个阶段的全量 Trajectory 均保存，作为后续规律分析的研究语料
+- **可选早退**：通过 `skip_completed_rounds` 参数控制 resolved 后是否跳过剩余轮次（默认 `true`，resolved 即停；设为 `false` 跑满 n 轮以采集稳定性数据）
 - **断点重跑（计划中，FR-07）**：配置占位已就绪，pipeline 实现推迟到下一轮迭代
 - **最小化造轮子**：Agent 基于 `mini-swe-agent` 框架，反思复用 GEPA 反射 Prompt 模板，评估直接调用 `swebench` 官方库
+
+## 实验设计：两阶段方法学
+
+| 阶段 | 数据集 | 目的 | 当前状态 |
+|------|--------|------|----------|
+| **Phase 1** | SWE-bench **Verified**（500 实例） | 大批量跑 pipeline，采集 plan / agent trajectory / resolved 结果，归纳"plan → 通过性"的判别规律 | **当前阶段** |
+| **Phase 2** | SWE-bench **Pro** | 把 Phase 1 总结出的判别规律拿到保留集上验证泛化能力 | 后续阶段 |
+
+把 Pro 留作 held-out 测试集是为了**避免在它身上过拟合 prompt / 反思模板**。Phase 1 之所以选 Verified，是因为它的镜像由 SWE-bench 官方在 Docker Hub 公开发布（无需自建），平均压缩 ~1 GB / 实例，迭代成本远低于 Pro。
+
+数据集切换通过 `system.dataset` 配置项控制（默认 `SWE-bench/SWE-bench_Verified`），实例列表在 `system.instances` 中指定，输出自动按 `{dataset_short}/{instance_id}` 分层。详见 [`project_issues.md`](project_issues.md) §3。
 
 ## 快速开始
 
@@ -29,11 +40,11 @@ export DEEPSEEK_API_KEY="your-key"
 # 4. 运行单元测试（含覆盖率报告）
 pytest --cov=src --cov-report=term-missing
 
-# 5. 运行单个实例
-python -m src.main --instance astropy__astropy-14539 --n 3 --config config.yaml
+# 5. 运行单个 Verified 实例（Phase 1 默认入口）
+python -m src.main --instance astropy__astropy-12907 --n 3 --config config.yaml
 ```
 
-输出位于 `./output/<instance_id>/`，包含结果 JSON、所有 Patch、Trajectory 文件和评估日志。
+输出位于 `./output/<dataset_short>/<instance_id>/`，包含结果 JSON、所有 Patch、Trajectory 文件和评估日志。
 
 详细配置说明见 [`docs/requirement-document.md`](docs/requirement-document.md) §6 配置项规范。
 
@@ -44,17 +55,19 @@ python -m src.main --instance astropy__astropy-14539 --n 3 --config config.yaml
 | 参数 | 类型 | 说明 |
 |------|------|------|
 | `--config PATH` | str | 配置文件路径，默认 `config.yaml` |
-| `--instance ID` | str | 单实例 SWE-bench Pro ID，覆盖 `system.swe_pro_instances` 列表 |
+| `--instance ID` | str | 单实例 ID（来自任意 SWE-bench 子集），覆盖 `system.instances` 列表 |
 | `--n N` | int | 迭代轮数，覆盖 `system.n` |
 | `--output-dir DIR` | str | 输出根目录，覆盖 `system.output_dir` |
 | `--verbose`, `-v` | flag | 启用 DEBUG 日志 |
+
+> 注：`config.yaml` 中 `system.dataset` 字段决定 `instances` 的解析空间；默认 `SWE-bench/SWE-bench_Verified`，可切换到 `SWE-bench/SWE-bench_Pro`（Phase 2）。
 
 ## 输出结构
 
 每个实例生成一个独立目录：
 
 ```
-output/<instance_id>/
+output/<dataset_short>/<instance_id>/
 ├── result.json          # 顶层结果：plans 列表、运行元数据、错误记录
 ├── plans/               # 各轮 Plan 文本（plan_<round>_<role>_<ts>.md）
 ├── patches/             # 各轮 git diff
@@ -64,12 +77,16 @@ output/<instance_id>/
 
 `result.json` 中每个 plan 记录包含：`round`、`plan_id`、`generated_by`、`patch_path`、`trajectory_path`、`test_results`（含 `resolved` 布尔值和 SWE-bench 官方评估输出）。
 
+`<dataset_short>` 是 `system.dataset` 的短名（如 `SWE-bench/SWE-bench_Verified` → `SWE-bench_Verified`），避免不同数据集结果混在一起。
+
 ## 文档索引
 
 | 文档 | 内容 |
 |------|------|
 | [`docs/requirement-document.md`](docs/requirement-document.md) | 完整需求文档：功能需求、数据模型、验收标准、风险分析 |
 | [`docs/architecture.md`](docs/architecture.md) | 架构文档：目录结构、模块职责、数据流、设计决策 |
+| [`project_issues.md`](project_issues.md) | 待办与方法学决策（含 §3 数据集分层实施进度） |
+| [`CLAUDE.md`](CLAUDE.md) | Agent 操作守则（仅 3 节：项目索引 / conda env / 清理）—— 不放项目说明 |
 
 ## 技术栈
 
@@ -77,9 +94,22 @@ output/<instance_id>/
 |------|------|
 | [mini-swe-agent](https://github.com/SWE-agent/mini-swe-agent) | Agent 基础框架（Docker 环境、LLM 调用、Trajectory 记录） |
 | GEPA 反射 Prompt 模板 | 方案反思策略（从 `gepa-ai/gepa` 提取，自行维护） |
-| [SWE-bench Pro](https://www.swebench.com/) | 评估数据集 |
+| [SWE-bench Verified](https://huggingface.co/datasets/SWE-bench/SWE-bench_Verified) | Phase 1 探索数据集（500 实例，官方 Docker Hub 镜像） |
+| [SWE-bench Pro](https://www.swebench.com/) | Phase 2 保留验证集（需 `build_docker_images.sh` 自建镜像） |
 | `swebench` 官方 Python 包 | 测试评估（`run_evaluation`） |
 | DeepSeek V4 (Flash) | 底层 LLM |
+
+## 关键依赖
+
+| 包 | 版本 | 用途 |
+|------|------|------|
+| `mini-swe-agent` | `==1.17.5` | Agent 框架（DefaultAgent、DockerEnvironment） |
+| `swebench` | `==4.1.0` | SWE-bench 评估工具 |
+| `litellm` | `>=1.83.0` | LLM API 客户端 |
+| `openai` | `>=2.24.0` | OpenAI 兼容 API（用于 DeepSeek） |
+| `pyyaml` | `>=6.0.0` | YAML 配置解析 |
+
+权威清单是 [`requirements.txt`](requirements.txt)，依赖变更时同步更新。
 
 ## 目录结构
 
@@ -104,7 +134,7 @@ output/<instance_id>/
 │   ├── evaluator/
 │   │   └── swe_evaluator.py       # SWE 官方评估封装
 │   ├── data/
-│   │   └── instance_loader.py     # SWE-bench Pro 实例元数据加载
+│   │   └── instance_loader.py     # SWE-bench 实例元数据加载（Verified / Pro 通用）
 │   ├── output/
 │   │   ├── writer.py              # 结果与 Patch 输出
 │   │   └── trajectory.py          # Trajectory 保存
@@ -120,10 +150,15 @@ output/<instance_id>/
 ## 环境要求
 
 - **Conda**: `mini-swe` 环境（Python 3.12，通过 `conda activate mini-swe` 激活）
-- Docker 守护进程（运行时拉取 SWE-bench Pro 镜像）
+- Docker 守护进程：
+  - **Verified（Phase 1）**：首次评估时由 `swebench` 自动从 Docker Hub 拉取官方镜像（`swebench/sweb.eval.x86_64.<id_with_1776>:latest`），无需自建
+  - **Pro（Phase 2）**：需先执行 `scripts/build_docker_images.sh` 构建专用镜像
 - DeepSeek API Key（环境变量 `DEEPSEEK_API_KEY`）
-- SWE-bench Pro 数据集与对应 Docker 镜像（首次评估时由 `swebench` 自动拉取）
 
 ## 开发状态
 
-代码实现完成，全量单元测试 172 passed / 2 skipped、覆盖率 85.5%。v0.8 已完成 Prompt v3 重构 + n=4 端到端 dry-run 验证（参考开发日志）。FR-07 断点重跑推迟到下一轮迭代。
+代码实现完成，全量单元测试 172 passed / 2 skipped、覆盖率 85.5%。v0.8 已完成 Prompt v3 重构 + n=4 端到端 dry-run 验证（参考开发日志）。
+
+**Phase 1 待办**（详见 `project_issues.md`）：
+- §1 FR-07 断点重跑
+- §2 树形结构候选 plan / 反思模板

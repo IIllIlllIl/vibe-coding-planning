@@ -66,7 +66,7 @@ def config() -> Config:
             code_instance_template="<pr_description>{{task}}</pr_description>",
         ),
         agent=AgentConfig(max_steps=20),
-        deepseek_api_key="test-key",
+        api_key="test-key",
     )
 
 
@@ -110,7 +110,7 @@ class TestRunSuccess:
             system=SystemConfig(model="deepseek-v4-flash", api_base="https://api.deepseek.com"),
             prompts=PromptConfig(code_generation_prompt="x"),  # no code_instance_template
             agent=AgentConfig(max_steps=20),
-            deepseek_api_key="test-key",
+            api_key="test-key",
         )
         mock_import.return_value = (MockDefaultAgent, MockLiteLLMModel, object)
         code_agent.run(cfg, "Plan", "Issue", mock_env)

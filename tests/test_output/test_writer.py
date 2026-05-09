@@ -100,7 +100,7 @@ class TestFinalize:
             trajectory_path="t.json",
         )
         result_path = writer.finalize(
-            swe_pro_instances=["inst-1"],
+            instances=["inst-1"],
             model="deepseek-v4-flash",
             parameter_n=3,
             optimization_info_level=1,
@@ -108,7 +108,7 @@ class TestFinalize:
         assert result_path.exists()
         data = json.loads(result_path.read_text(encoding="utf-8"))
         assert data["run_id"] == "run_test_001"
-        assert data["swe_pro_instances"] == ["inst-1"]
+        assert data["instances"] == ["inst-1"]
         assert data["model"] == "deepseek-v4-flash"
         assert data["parameter_n"] == 3
         assert data["optimization_info_level"] == 1
@@ -117,6 +117,8 @@ class TestFinalize:
         assert "trajectory_directory" in data
         assert "errors" in data
         assert "runtime_versions" in data
+        # dataset is recorded at the top level (None when caller omits it)
+        assert "dataset" in data
 
     def test_includes_runtime_versions(self, writer: OutputWriter, tmp_path: Path):
         writer.save_round(
@@ -130,7 +132,7 @@ class TestFinalize:
         )
         versions = {"mini_swe_agent": "1.0.0", "swebench": "4.1.0"}
         result_path = writer.finalize(
-            swe_pro_instances=["inst-1"],
+            instances=["inst-1"],
             model="deepseek-v4-flash",
             parameter_n=1,
             optimization_info_level=0,

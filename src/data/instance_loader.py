@@ -1,6 +1,8 @@
-"""SWE-bench Pro instance metadata loader.
+"""SWE-bench instance metadata loader.
 
 Supports loading from the swebench package or from local mock JSON files.
+The dataset (Verified vs Pro) is selected via the ``dataset`` constructor
+argument and passed through to ``load_swebench_dataset(name=...)``.
 """
 
 from __future__ import annotations
@@ -16,25 +18,38 @@ logger = logging.getLogger(__name__)
 
 
 class InstanceLoader:
-    """Loads SWE-bench Pro instance metadata."""
+    """Loads SWE-bench instance metadata."""
 
-    def __init__(self, mock_data_dir: str | Path | None = None) -> None:
+    def __init__(
+        self,
+        mock_data_dir: str | Path | None = None,
+        *,
+        dataset: str | None = None,
+    ) -> None:
         """Initialize the loader.
 
         Args:
             mock_data_dir: Directory containing mock instance JSON files.
                 Each file should be named ``{instance_id}.json``.
+            dataset: Hugging Face dataset name forwarded to
+                ``load_swebench_dataset(name=...)``. ``None`` (default)
+                uses swebench's own default (``SWE-bench/SWE-bench``).
+                Pipeline callers should pass ``config.system.dataset``
+                explicitly so Verified vs Pro is unambiguous.
         """
         self.mock_data_dir = Path(mock_data_dir) if mock_data_dir else None
+        self.dataset = dataset
 
     def load_instance(self, instance_id: str) -> dict[str, Any]:
-        """Load metadata for a single SWE-bench Pro instance.
+        """Load metadata for a single SWE-bench instance.
 
         If ``mock_data_dir`` is set, loads from a local JSON file named
-        ``{instance_id}.json``. Otherwise, attempts to load via swebench.
+        ``{instance_id}.json``. Otherwise, attempts to load via swebench
+        from the dataset configured in ``__init__`` (Verified by default
+        when called from the pipeline).
 
         Args:
-            instance_id: The SWE-bench Pro instance identifier.
+            instance_id: The SWE-bench instance identifier.
 
         Returns:
             A dict containing instance metadata (instance_id, repo, base_commit,
@@ -84,7 +99,7 @@ class InstanceLoader:
         instance metadata from the HuggingFace SWE-bench dataset.
 
         Args:
-            instance_id: The SWE-bench Pro instance identifier.
+            instance_id: The SWE-bench instance identifier.
 
         Returns:
             Instance metadata dict compatible with the pipeline and evaluator.
@@ -101,16 +116,22 @@ class InstanceLoader:
                 "Please install it: pip install swebench>=4.1.0"
             ) from exc
 
+        kwargs: dict[str, Any] = {"instance_ids": [instance_id]}
+        if self.dataset is not None:
+            kwargs["name"] = self.dataset
+
         try:
-            instances = load_swebench_dataset(instance_ids=[instance_id])
+            instances = load_swebench_dataset(**kwargs)
         except Exception as exc:
             raise TaskError(
-                f"Failed to load instance {instance_id} from SWE-bench dataset: {exc}"
+                f"Failed to load instance {instance_id} from SWE-bench dataset "
+                f"({self.dataset or 'default'}): {exc}"
             ) from exc
 
         if not instances:
             raise TaskError(
-                f"Instance {instance_id} not found in SWE-bench dataset."
+                f"Instance {instance_id} not found in SWE-bench dataset "
+                f"({self.dataset or 'default'})."
             )
 
         instance = dict(instances[0])
@@ -119,7 +140,12 @@ class InstanceLoader:
         if "problem_statement" not in instance and "text" in instance:
             instance["problem_statement"] = instance["text"]
 
-        logger.info("Loaded SWE-bench instance: %s (repo=%s)", instance_id, instance.get("repo"))
+        logger.info(
+            "Loaded SWE-bench instance: %s (repo=%s, dataset=%s)",
+            instance_id,
+            instance.get("repo"),
+            self.dataset or "default",
+        )
         return instance
 
     def list_available_instances(self) -> list[str]:

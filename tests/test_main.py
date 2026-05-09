@@ -25,13 +25,13 @@ def config() -> Config:
             model="deepseek-v4-flash",
             api_base="https://api.deepseek.com",
             n=3,
-            swe_pro_instances=["astropy__astropy-14539"],
+            instances=["astropy__astropy-12907"],
             output_dir="./output",
         ),
         prompts=PromptConfig(),
         docker=DockerConfig(),
         agent=AgentConfig(max_steps=10),
-        deepseek_api_key="test-key",
+        api_key="test-key",
     )
 
 
@@ -86,14 +86,14 @@ class TestOverrideConfig:
                 model="deepseek-v4-flash",
                 api_base="https://api.deepseek.com",
                 n=3,
-                swe_pro_instances=["i1"],
+                instances=["i1"],
                 output_dir="./output",
             ),
             prompts=PromptConfig(),
             docker=DockerConfig(),
             agent=AgentConfig(max_steps=10),
             evaluator=EvaluatorConfig(timeout=999),
-            deepseek_api_key="test-key",
+            api_key="test-key",
         )
         args = parse_args(["--n", "5"])
         new_cfg = _override_config(cfg, args)
@@ -155,13 +155,13 @@ class TestMain:
             system=SystemConfig(
                 model="deepseek-v4-flash",
                 n=1,
-                swe_pro_instances=[],
+                instances=[],
                 output_dir="./output",
             ),
             prompts=PromptConfig(),
             docker=DockerConfig(),
             agent=AgentConfig(max_steps=10),
-            deepseek_api_key="test-key",
+            api_key="test-key",
         )
         mock_load.return_value = config_no_instances
         exit_code = main([])

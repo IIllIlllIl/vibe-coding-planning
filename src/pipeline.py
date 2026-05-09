@@ -24,18 +24,37 @@ from src.output.writer import OutputWriter
 logger = logging.getLogger(__name__)
 
 
+def _dataset_short(dataset: str) -> str:
+    """Derive a filesystem-friendly short name from a HuggingFace dataset ID.
+
+    ``SWE-bench/SWE-bench_Verified`` → ``SWE-bench_Verified``.
+    Falls back to ``"default"`` for empty input. The full dataset name
+    is always preserved verbatim in ``result.json["dataset"]`` — this
+    helper exists only to keep output directory names readable.
+    """
+    if not dataset:
+        return "default"
+    # HuggingFace dataset names are namespaced as "<owner>/<name>".
+    # We only need the trailing component for the directory layout.
+    return dataset.rsplit("/", 1)[-1]
+
+
 def run_instance(instance_id: str, config: Config) -> dict[str, Any]:
     """Run the full plan-code-test pipeline for a single instance.
 
     Args:
-        instance_id: SWE-bench Pro instance identifier.
+        instance_id: SWE-bench instance identifier.
         config: Full configuration object.
 
     Returns:
         The result dict (same structure as writer.finalize output).
     """
     run_id = datetime.now(timezone.utc).strftime("run_%Y%m%dT%H%M%SZ")
-    output_dir = str(Path(config.system.output_dir) / instance_id)
+    output_dir = str(
+        Path(config.system.output_dir)
+        / _dataset_short(config.system.dataset)
+        / instance_id
+    )
     writer = OutputWriter(output_dir, run_id)
 
     try:
@@ -55,7 +74,7 @@ def _run_instance_core(
     # ------------------------------------------------------------------
     # 1. Load instance metadata
     # ------------------------------------------------------------------
-    loader = InstanceLoader()
+    loader = InstanceLoader(dataset=config.system.dataset)
     try:
         instance_info = loader.load_instance(instance_id)
     except TaskError as exc:
@@ -328,7 +347,10 @@ def _run_round(
 
     For round 1, uses plan_agent.  For rounds >= 2, uses reflect_agent.
     """
-    output_dir = str(Path(config.system.output_dir) / instance_id)
+    # Use the writer's output_dir as the single source of truth for where
+    # trajectories/patches/plans live; otherwise we'd re-derive the path
+    # and risk drifting from the writer's view (e.g. dataset stratification).
+    output_dir = str(writer.output_dir)
 
     # ------------------------------------------------------------------
     # Generate Plan
@@ -477,7 +499,8 @@ def _finalize_writer(
     """Finalize the writer and return the result dict."""
     runtime_versions = _collect_runtime_versions()
     result_path = writer.finalize(
-        swe_pro_instances=[instance_id],
+        instances=[instance_id],
+        dataset=config.system.dataset,
         model=config.system.model,
         parameter_n=config.system.n,
         optimization_info_level=config.system.optimization_info_level,

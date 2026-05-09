@@ -79,7 +79,7 @@ def run(
     model = build_model(
         LitellmModel,
         model_name=config.system.model,
-        api_key=config.deepseek_api_key,
+        api_key=config.api_key,
         api_base=config.system.api_base,
     )
 

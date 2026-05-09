@@ -4,15 +4,23 @@ system:
   optimization_info_level: 1
   model: deepseek-v4-flash
   api_base: "https://api.deepseek.com"
-  swe_pro_instances:
-    - astropy__astropy-14539
+
+  # Hugging Face dataset name passed to swebench's load_swebench_dataset(name=...).
+  # Phase 1 (current) -> SWE-bench/SWE-bench_Verified (default).
+  # Phase 2 (held-out) -> SWE-bench/SWE-bench_Pro.
+  # Single run only ever reads one dataset; instance IDs below are interpreted
+  # within this dataset.
+  dataset: "SWE-bench/SWE-bench_Verified"
+  instances:
+    - astropy__astropy-12907
   output_dir: ./output
 
-  # When true, exit the round loop early once an instance is resolved
-  # (all FAIL_TO_PASS pass + all PASS_TO_PASS pass). Default false:
-  # run all n rounds regardless of resolved status, which is useful for
-  # stability checks and reflection-quality data collection.
-  skip_completed_rounds: false
+  # When true (default), exit the round loop early once an instance is
+  # resolved (all FAIL_TO_PASS pass + all PASS_TO_PASS pass), saving
+  # compute on already-solved instances. Set to false to run all n
+  # rounds regardless of resolved status — useful for stability checks
+  # and reflection-quality data collection.
+  skip_completed_rounds: true
 
   # Resume configuration (optional)
   resume:

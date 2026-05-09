@@ -24,7 +24,8 @@ def valid_config_dict() -> dict[str, Any]:
             "optimization_info_level": 1,
             "model": "deepseek-v4-flash",
             "api_base": "https://api.deepseek.com",
-            "swe_pro_instances": ["astropy__astropy-14539"],
+            "dataset": "SWE-bench/SWE-bench_Verified",
+            "instances": ["astropy__astropy-12907"],
             "output_dir": "./output",
             "resume": {
                 "enabled": False,
@@ -71,7 +72,8 @@ class TestLoadConfigSuccess:
         assert config.system.optimization_info_level == 1
         assert config.system.model == "deepseek-v4-flash"
         assert config.system.api_base == "https://api.deepseek.com"
-        assert config.system.swe_pro_instances == ["astropy__astropy-14539"]
+        assert config.system.dataset == "SWE-bench/SWE-bench_Verified"
+        assert config.system.instances == ["astropy__astropy-12907"]
         assert config.system.output_dir == "./output"
         assert config.prompts.plan_generation_prompt == "Plan prompt here"
         assert config.prompts.plan_instance_template == "<pr_description>{{task}}</pr_description>"
@@ -89,12 +91,12 @@ class TestLoadConfigSuccess:
         assert config.agent.max_steps == 30
         assert config.agent.cost_limit == 3.0
         assert config.agent.timeout == 1800
-        assert config.deepseek_api_key == "test-key-123"
+        assert config.api_key == "test-key-123"
 
     def test_api_key_injected(self, monkeypatch, config_file: Path):
         monkeypatch.setenv("DEEPSEEK_API_KEY", "my-secret-key")
         config = load_config(config_file)
-        assert config.deepseek_api_key == "my-secret-key"
+        assert config.api_key == "my-secret-key"
 
 
 class TestLoadConfigValidation:
@@ -223,33 +225,33 @@ class TestReflectionTemplateNoFallback:
 
 class TestSkipCompletedRounds:
     """``skip_completed_rounds`` controls whether the pipeline exits the
-    round loop early once an instance is resolved. Default is ``False``
-    so the legacy behaviour (run all n rounds) is preserved unless the
-    user opts in.
+    round loop early once an instance is resolved. Default is ``True``
+    so already-solved instances skip the remaining rounds; set to
+    ``False`` to run all n rounds regardless of resolved status.
     """
 
-    def test_default_is_false(self, monkeypatch, tmp_path: Path):
+    def test_default_is_true(self, monkeypatch, tmp_path: Path):
         monkeypatch.setenv("DEEPSEEK_API_KEY", "test-key")
         filepath = tmp_path / "empty.yaml"
         filepath.write_text("{}", encoding="utf-8")
         config = load_config(filepath)
-        assert config.system.skip_completed_rounds is False
-
-    def test_explicit_true_loaded(self, monkeypatch, tmp_path: Path):
-        monkeypatch.setenv("DEEPSEEK_API_KEY", "test-key")
-        data = {"system": {"skip_completed_rounds": True}}
-        filepath = tmp_path / "skip_true.yaml"
-        filepath.write_text(yaml.dump(data), encoding="utf-8")
-        config = load_config(filepath)
         assert config.system.skip_completed_rounds is True
 
-    def test_string_true_coerced(self, monkeypatch, tmp_path: Path):
+    def test_explicit_false_loaded(self, monkeypatch, tmp_path: Path):
         monkeypatch.setenv("DEEPSEEK_API_KEY", "test-key")
-        data = {"system": {"skip_completed_rounds": "true"}}
+        data = {"system": {"skip_completed_rounds": False}}
+        filepath = tmp_path / "skip_false.yaml"
+        filepath.write_text(yaml.dump(data), encoding="utf-8")
+        config = load_config(filepath)
+        assert config.system.skip_completed_rounds is False
+
+    def test_string_false_coerced(self, monkeypatch, tmp_path: Path):
+        monkeypatch.setenv("DEEPSEEK_API_KEY", "test-key")
+        data = {"system": {"skip_completed_rounds": "false"}}
         filepath = tmp_path / "skip_str.yaml"
         filepath.write_text(yaml.dump(data), encoding="utf-8")
         config = load_config(filepath)
-        assert config.system.skip_completed_rounds is True
+        assert config.system.skip_completed_rounds is False
 
 
 class TestApiBaseAndTimeout:
@@ -369,8 +371,32 @@ class TestDefaults:
         assert config.system.model == "deepseek-v4-flash"
         assert config.system.api_base == "https://api.deepseek.com"
         assert config.system.optimization_info_level == 1
-        assert config.system.swe_pro_instances == []
+        assert config.system.dataset == "SWE-bench/SWE-bench_Verified"
+        assert config.system.instances == []
         assert config.docker.workdir == "/testbed"
         assert config.agent.max_steps == 30
         assert config.agent.cost_limit == 3.0
         assert config.agent.timeout == 120
+
+
+class TestDataset:
+    """``system.dataset`` selects the SWE-bench dataset name passed to
+    ``load_swebench_dataset(name=...)``. Phase 1 default is Verified;
+    Phase 2 will override to SWE-bench/SWE-bench_Pro. The instance list
+    is interpreted within the chosen dataset.
+    """
+
+    def test_dataset_default_is_verified(self, monkeypatch, tmp_path: Path):
+        monkeypatch.setenv("DEEPSEEK_API_KEY", "test-key")
+        filepath = tmp_path / "empty.yaml"
+        filepath.write_text("{}", encoding="utf-8")
+        config = load_config(filepath)
+        assert config.system.dataset == "SWE-bench/SWE-bench_Verified"
+
+    def test_custom_dataset_loaded(self, monkeypatch, tmp_path: Path):
+        monkeypatch.setenv("DEEPSEEK_API_KEY", "test-key")
+        data = {"system": {"dataset": "SWE-bench/SWE-bench_Pro"}}
+        filepath = tmp_path / "pro.yaml"
+        filepath.write_text(yaml.dump(data), encoding="utf-8")
+        config = load_config(filepath)
+        assert config.system.dataset == "SWE-bench/SWE-bench_Pro"

@@ -1,7 +1,9 @@
 """Configuration loading, validation, and defaults.
 
-Loads config.yaml and validates parameters. Reads DEEPSEEK_API_KEY from
-environment variables.
+Loads config.yaml and validates parameters. Reads the API key from the
+``DEEPSEEK_API_KEY`` environment variable (the env var name is kept for
+backward compatibility) and stores it in the provider-agnostic
+``Config.api_key`` field.
 """
 
 from __future__ import annotations
@@ -32,15 +34,23 @@ class ResumeConfig:
 
 @dataclass(frozen=True)
 class SystemConfig:
-    """System-level runtime configuration."""
+    """System-level runtime configuration.
+
+    The ``dataset`` field selects which SWE-bench dataset to load from
+    Hugging Face. ``instances`` are interpreted within that dataset:
+    a single run only ever touches one dataset (Phase 1 = Verified,
+    Phase 2 = Pro). The default is the Verified dataset since Phase 1
+    is the current research focus.
+    """
 
     n: int = 3
     optimization_info_level: int = 1
     model: str = "deepseek-v4-flash"
     api_base: str = "https://api.deepseek.com"
-    swe_pro_instances: list[str] = field(default_factory=list)
+    dataset: str = "SWE-bench/SWE-bench_Verified"
+    instances: list[str] = field(default_factory=list)
     output_dir: str = "./output"
-    skip_completed_rounds: bool = False
+    skip_completed_rounds: bool = True
     resume: ResumeConfig = field(default_factory=ResumeConfig)
 
 
@@ -108,7 +118,7 @@ class Config:
     docker: DockerConfig = field(default_factory=DockerConfig)
     agent: AgentConfig = field(default_factory=AgentConfig)
     evaluator: EvaluatorConfig = field(default_factory=EvaluatorConfig)
-    deepseek_api_key: str = ""
+    api_key: str = ""
 
 
 def _load_yaml(path: str | Path) -> dict[str, Any]:
@@ -250,9 +260,10 @@ def _build_system_config(data: dict[str, Any]) -> SystemConfig:
         optimization_info_level=opt_level,
         model=_get_str(data, "model", "deepseek-v4-flash"),
         api_base=api_base,
-        swe_pro_instances=_get_list(data, "swe_pro_instances"),
+        dataset=_get_str(data, "dataset", "SWE-bench/SWE-bench_Verified"),
+        instances=_get_list(data, "instances"),
         output_dir=_get_str(data, "output_dir", "./output"),
-        skip_completed_rounds=_get_bool(data, "skip_completed_rounds", False),
+        skip_completed_rounds=_get_bool(data, "skip_completed_rounds", True),
         resume=_build_resume_config(resume_data),
     )
 
@@ -305,8 +316,10 @@ def _build_evaluator_config(data: dict[str, Any]) -> EvaluatorConfig:
 def load_config(path: str | Path) -> Config:
     """Load configuration from a YAML file.
 
-    Reads DEEPSEEK_API_KEY from the environment. Raises FatalError if the key
-    is not set or if the config file cannot be parsed.
+    Reads the API key from the ``DEEPSEEK_API_KEY`` environment variable
+    (kept as the canonical env var for backward compatibility) and stores
+    it in ``Config.api_key``. Raises FatalError if the key is not set or
+    if the config file cannot be parsed.
     """
     raw = _load_yaml(path)
 
@@ -343,5 +356,5 @@ def load_config(path: str | Path) -> Config:
         docker=_build_docker_config(docker_data),
         agent=_build_agent_config(agent_data),
         evaluator=_build_evaluator_config(evaluator_data),
-        deepseek_api_key=api_key,
+        api_key=api_key,
     )

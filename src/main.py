@@ -40,7 +40,7 @@ def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
         "--instance",
         type=str,
         default=None,
-        help="Single SWE-bench Pro instance ID to run (overrides config file list)",
+        help="Single SWE-bench instance ID to run (overrides config file list)",
     )
     parser.add_argument(
         "--n",
@@ -94,7 +94,7 @@ def _override_config(config: Config, args: argparse.Namespace) -> Config:
         docker=config.docker,
         agent=config.agent,
         evaluator=config.evaluator,
-        deepseek_api_key=config.deepseek_api_key,
+        api_key=config.api_key,
     )
     return new_config
 
@@ -131,14 +131,15 @@ def main(argv: Sequence[str] | None = None) -> int:
     if args.instance:
         instances = [args.instance]
     else:
-        instances = list(config.system.swe_pro_instances)
+        instances = list(config.system.instances)
 
     if not instances:
-        logging.error("No instances specified. Use --instance or set swe_pro_instances in config.")
+        logging.error("No instances specified. Use --instance or set system.instances in config.")
         return 1
 
     logging.info("Starting plan-code-test pipeline")
     logging.info("Model: %s", config.system.model)
+    logging.info("Dataset: %s", config.system.dataset)
     logging.info("Iterations (n): %d", config.system.n)
     logging.info("Instances: %s", instances)
     logging.info("Output dir: %s", config.system.output_dir)

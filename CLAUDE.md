@@ -1,52 +1,53 @@
-# CLAUDE.md — Project Environment Guide
+# CLAUDE.md — Agent Operational Notes
 
-## Python Environment
+> Three sections only. Project information lives in `README.md`; this file
+> holds the operational rules the agent has been tripped on before.
 
-**Always use the `mini-swe` conda environment.** (Python 3.12.13)
+## 1. Project file index — read these to understand the project
 
-The project depends on `mini-swe-agent` which is only installed in this environment. Running code outside this environment will fail with `ModuleNotFoundError: No module named 'minisweagent'`.
+| Path | What's inside |
+|------|---------------|
+| [`README.md`](README.md) | User-facing overview, quick start, CLI args, output layout, tech stack, dev status |
+| [`docs/requirement-document.md`](docs/requirement-document.md) | Functional requirements (FR-01…FR-08), data model, acceptance criteria, error matrix, constraints |
+| [`docs/architecture.md`](docs/architecture.md) | Module layout, data flow, design decisions |
+| [`project_issues.md`](project_issues.md) | Open issues, deferred work, methodology decisions in flight |
+| [`config.yaml`](config.yaml) | Runtime config (system / prompts / docker / agent / evaluator) — single source of truth for prompts |
 
-> Note: `conda init zsh` has been run, so `conda` is available in any new zsh shell. If `conda activate` fails with "shell not initialized", run `source ~/.zshrc` (or open a new terminal) first.
+When you need any project fact (features, CLI usage, file conventions, run commands, dependencies), **read from these files instead of asking the user or guessing**. Do not duplicate their content into this file.
 
-### Activating the environment
+## 2. Python environment — always use the `mini-swe` conda env
+
+Python 3.12.13. The project depends on `mini-swe-agent==1.17.5`, which is only installed in this env. Running outside it fails with `ModuleNotFoundError: No module named 'minisweagent'`.
 
 ```bash
+# Activate
 conda activate mini-swe
-```
 
-### Verify the environment
-
-```bash
+# Verify (expected: 1.17.5)
 python -c "import minisweagent; print(minisweagent.__version__)"
 ```
 
-Expected output: `1.17.5`
+If `conda activate` reports "shell not initialized", run `source ~/.zshrc` first (`conda init zsh` is already done; only `source` is needed in fresh shells). Never install dependencies into `base` or use the macOS system Python.
 
-### Running tests
+## 3. Cleanup checklist — run BEFORE marking the task complete
+
+After finishing a task, before reporting completion to the user, delete these build/test artifacts:
+
+| Path | Origin |
+|------|--------|
+| `.coverage` | `pytest --cov` raw data |
+| `.pytest_cache/` | pytest cache |
+| `.mypy_cache/` | mypy cache (only if mypy was run) |
+| `.ruff_cache/` | ruff cache (only if ruff was run) |
+| `htmlcov/` | `pytest --cov-report=html` output |
+| `logs/` | runtime logs |
+| `**/__pycache__/` | Python bytecode caches |
+
+Single command:
 
 ```bash
-conda activate mini-swe
-python -m pytest tests/ -v
+rm -rf .coverage .pytest_cache .mypy_cache .ruff_cache htmlcov logs
+find . -type d -name __pycache__ -prune -exec rm -rf {} +
 ```
 
-### Running the pipeline
-
-```bash
-conda activate mini-swe
-python -m src.main --instance <INSTANCE_ID> --n 2 --config config.yaml
-```
-
-## Key Dependencies (already installed in `mini-swe`)
-
-- `mini-swe-agent==1.17.5` — Agent framework (DefaultAgent, DockerEnvironment)
-- `swebench==4.1.0` — SWE-bench evaluation harness
-- `litellm>=1.83.0` — LLM API client
-- `openai>=2.24.0` — OpenAI-compatible API client (used for DeepSeek)
-- `pyyaml>=6.0.0` — Config parsing
-
-The authoritative dependency list is `requirements.txt`. Update both files together when dependencies change.
-
-## Do NOT
-
-- Do NOT install dependencies into the `base` conda env or system Python — keep everything inside `mini-swe`.
-- Do NOT use the macOS system Python (`/usr/bin/python3`) for this project.
+**Never delete `.claude/`** — it holds Claude Code's project-level permission settings (`settings.local.json`); removing it forces re-authorization next session.

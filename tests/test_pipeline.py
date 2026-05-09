@@ -16,7 +16,7 @@ def config() -> Config:
             model="deepseek-v4-flash",
             api_base="https://api.deepseek.com",
             n=3,
-            swe_pro_instances=["astropy__astropy-14539"],
+            instances=["astropy__astropy-14539"],
             output_dir="./output",
         ),
         prompts=PromptConfig(
@@ -29,7 +29,7 @@ def config() -> Config:
             workdir="/testbed",
         ),
         agent=AgentConfig(max_steps=10),
-        deepseek_api_key="test-key",
+        api_key="test-key",
     )
 
 
@@ -59,13 +59,13 @@ class TestPipelineSingleRound:
                 model="deepseek-v4-flash",
                 api_base="https://api.deepseek.com",
                 n=1,
-                swe_pro_instances=["astropy__astropy-14539"],
+                instances=["astropy__astropy-14539"],
                 output_dir="./output",
             ),
             prompts=PromptConfig(),
             docker=DockerConfig(),
             agent=AgentConfig(max_steps=10),
-            deepseek_api_key="test-key",
+            api_key="test-key",
         )
 
         mock_loader = MagicMock()
@@ -180,14 +180,14 @@ class TestSkipCompletedRounds:
                 model="deepseek-v4-flash",
                 api_base="https://api.deepseek.com",
                 n=n,
-                swe_pro_instances=["astropy__astropy-14539"],
+                instances=["astropy__astropy-14539"],
                 output_dir="./output",
                 skip_completed_rounds=skip,
             ),
             prompts=PromptConfig(),
             docker=DockerConfig(),
             agent=AgentConfig(max_steps=10),
-            deepseek_api_key="test-key",
+            api_key="test-key",
         )
 
     def _common_mocks(self, mock_loader_cls, mock_docker_cls, mock_save_traj, mock_writer_cls, suffix):
@@ -332,13 +332,13 @@ class TestPipelineErrorHandling:
                 model="deepseek-v4-flash",
                 api_base="https://api.deepseek.com",
                 n=3,
-                swe_pro_instances=["astropy__astropy-14539"],
+                instances=["astropy__astropy-14539"],
                 output_dir="./output",
             ),
             prompts=PromptConfig(),
             docker=DockerConfig(),
             agent=AgentConfig(max_steps=10),
-            deepseek_api_key="test-key",
+            api_key="test-key",
         )
 
         mock_loader = MagicMock()
@@ -467,6 +467,7 @@ class TestPipelineErrorHandling:
                 self.plans = []
                 self.errors = []
                 self.run_id = "test_run"
+                self.output_dir = "./test_output"
 
             def save_round(self, **kwargs):
                 self.plans.append(kwargs)
@@ -574,13 +575,13 @@ class TestPipelineEvaluatorTimeout:
         config = Config(
             system=SystemConfig(
                 model="m", api_base="https://x.y", n=1,
-                swe_pro_instances=["i1"], output_dir="./output",
+                instances=["i1"], output_dir="./output",
             ),
             prompts=PromptConfig(),
             docker=DockerConfig(),
             agent=AgentConfig(max_steps=10),
             evaluator=EvaluatorConfig(timeout=999),
-            deepseek_api_key="k",
+            api_key="k",
         )
 
         mock_loader = MagicMock()
@@ -641,13 +642,13 @@ class TestPipelineUsesDeriveImageName:
         config = Config(
             system=SystemConfig(
                 model="m", api_base="https://x.y", n=1,
-                swe_pro_instances=["i1"], output_dir="./output",
+                instances=["i1"], output_dir="./output",
             ),
             prompts=PromptConfig(),
             docker=DockerConfig(),
             agent=AgentConfig(max_steps=10),
             evaluator=EvaluatorConfig(),
-            deepseek_api_key="k",
+            api_key="k",
         )
 
         mock_loader = MagicMock()

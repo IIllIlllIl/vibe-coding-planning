@@ -4,7 +4,8 @@ This test requires a fully configured environment with:
 - Docker daemon running
 - mini-swe-agent installed
 - swebench installed
-- SWE-bench Pro Docker images built
+- SWE-bench Pro Docker images built (Phase 2; Phase 1 Verified images
+  are pulled from Docker Hub on first use)
 - DEEPSEEK_API_KEY environment variable set
 
 Run with: pytest tests/test_integration.py -v -s --run-integration
@@ -33,8 +34,9 @@ system:
   optimization_info_level: 1
   model: deepseek-v4-flash
   api_base: https://api.deepseek.com
-  swe_pro_instances:
-    - astropy__astropy-14539
+  dataset: SWE-bench/SWE-bench_Verified
+  instances:
+    - astropy__astropy-12907
   output_dir: ./output
 
 prompts:
@@ -91,7 +93,7 @@ def test_single_round_smoke(integration_config_path):
     """Smoke test: run one round of plan-code-test on a real instance.
 
     This test will:
-    1. Load a real SWE-bench Pro instance
+    1. Load a real SWE-bench instance (Verified by default)
     2. Start a Docker container
     3. Generate a plan via plan_agent (calling DeepSeek API)
     4. Generate a patch via code_agent (calling DeepSeek API)
@@ -106,7 +108,7 @@ def test_single_round_smoke(integration_config_path):
     from pathlib import Path
 
     config = load_config(integration_config_path)
-    instance_id = config.system.swe_pro_instances[0]
+    instance_id = config.system.instances[0]
 
     result = run_instance(instance_id, config)
 
@@ -115,8 +117,8 @@ def test_single_round_smoke(integration_config_path):
     assert "plans" in result
     assert len(result["plans"]) >= 1
 
-    # Check that output files exist
-    output_dir = Path(f"./output/{instance_id}")
+    # Check that output files exist (output is stratified by dataset short name)
+    output_dir = Path(f"./output/SWE-bench_Verified/{instance_id}")
     if output_dir.exists():
         result_file = output_dir / "result.json"
         assert result_file.exists(), "result.json should exist after pipeline run"

@@ -72,7 +72,7 @@ def config() -> Config:
             nrpv_block="## Navigation\n## Reproduction\n## Patch\n## Validation",
         ),
         agent=AgentConfig(max_steps=25),
-        deepseek_api_key="test-key",
+        api_key="test-key",
     )
 
 
