@@ -197,7 +197,7 @@ def evaluate(
         try:
             test_output_path = log_dir_abs / "test_output.txt"
             if test_output_path.exists():
-                stdout_text = test_output_path.read_text(encoding="utf-8", errors="replace")[:4000]
+                stdout_text = test_output_path.read_text(encoding="utf-8", errors="replace")
         except Exception:
             pass
 
@@ -223,12 +223,12 @@ def evaluate(
     # error_info is non-null when evaluation did not complete successfully
     error_info: str | None = None
     if not result.get("completed", True):
-        error_info = stderr_text[:4000] if stderr_text else "SWE evaluation completed=False"
+        error_info = stderr_text if stderr_text else "SWE evaluation completed=False"
 
     return {
         "resolved": result.get("resolved", False),
-        "stdout": stdout_text[:4000] if stdout_text else "",
-        "stderr": stderr_text[:4000] if stderr_text else "",
+        "stdout": stdout_text if stdout_text else "",
+        "stderr": stderr_text if stderr_text else "",
         "log_dir": log_dir_rel,
         "error_info": error_info,
         "report": report_data,

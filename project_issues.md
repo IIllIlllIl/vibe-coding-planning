@@ -30,36 +30,59 @@
   4. ✅ `docs/requirement-document.md` §4.3 / §6.1 / §6.2 / FR-09 已与代码同步（v6.1 changelog）。
   5. ⏳ 端到端 dry-run：用一个 Verified 实例（如 `astropy__astropy-12907`）跑 n=1 验证镜像自动拉取 + 评估通过路径。
 
-## 4. Verified 50 实例运行（2026-05-09）暴露的 pipeline 健壮性问题
+## 4. Verified 探索运行（run1 2026-05-09 + run2 2026-05-11）暴露的 pipeline 健壮性问题
 
-> 数据来源：`output/SWE-bench_Verified/run_summary_2026-05-09.json`
-> 采样：seed=42，50 个实例，n=3，skip_completed_rounds=true，model=deepseek-v4-flash
-> 结果：49/50 finalized（result.json 写出），34/49 resolved（69.4%）；33 在 Round 1 解决，1 在 Round 2 解决
+> 数据来源：
+> - run1: `output/SWE-bench_Verified/run_summary_2026-05-09.json`（seed=42，50 实例，n=3，11h，34/49 resolved=69.4%）
+> - run2: `output/SWE-bench_Verified/run_summary_2026-05-11_run2.json`（seed=42 排除 run1，120 实例，n=5，26.7h，76/111 resolved=68.5%）
+> - 累计：170 sampled / 160 finalized / 110 resolved (68.8% of finalized)
 
 ### 4.1 Jinja 模板把 problem_statement 里的 `{student}` 当作变量（致命）
 
 - **状态**：待解决（**优先级最高**：会让整个实例 result.json 写不出来）
 - **现象**：`django__django-12304` 在 Round 1 plan agent 完成后、code agent 启动前抛 `'student' is undefined`，pipeline `Unexpected error` 退出。该实例的 result.json 因此从未写出（FAIL=1，missing=1）。
-- **根因**：mini-swe-agent 的 instance_template 用 Jinja2 渲染（`{{task}}`）。当 `task` 内容（即 SWE-bench 的 `problem_statement`）本身包含字面量 `{student}` / `{...}` 时，Jinja 会把它当成未定义变量并按 strict 模式报错。
-- **影响**：50 个实例丢 1 个（2%）；如果在 500 实例规模上同比率出现，会丢 ~10 个，污染分析数据。
-- **处理建议**：要么在 `code_agent.run` / `plan_agent.run` 把 `task` 作为已渲染的字符串传入（不交给 Jinja 二次处理），要么把 mini-swe-agent 的 environment 切换到 Jinja 的 `Undefined`（非 `StrictUndefined`），或对 problem_statement 做一次 `{`/`}` 转义。
+- **Run2 (n=5) 复现**：120 实例中 **8 个 FAIL 全部命中此类**，错误信息因 problem_statement 内特殊字符不同而不同——`'myform' is undefined`、`Encountered unknown tag 's'`（占 3 例）、`expected token 'end of print statement', got ':'`（2 例）、`unexpected '}'`、`unexpected char '^'`——但根因相同：Jinja2 把 user content 当模板二次渲染。
+- **累计影响**：170 实例（run1 50 + run2 120）中 9 个 FAIL，**8 在 reflect_agent（Round 2+）触发，3 在 code_agent（Round 1）触发**（run1 的 12304 也是 code_agent）。reflect_agent 失败占比上升是因为 reflect 比 plan/code 多走一次 instance_template 渲染。
+- **根因**：mini-swe-agent 的 instance_template 用 Jinja2 渲染（`{{task}}`）。当 `task` 内容（即 SWE-bench 的 `problem_statement`）本身包含字面量 `{student}` / `{...}` / `{%...%}` / `^` 等 Jinja 特殊字符时，Jinja 会把它当成未定义变量或模板语法并按 strict 模式报错。
+- **影响**：170 实例丢 9 个 (5.3%)；500 实例规模上同比率会丢 ~26 个，污染分析数据。
+- **处理建议**：要么在 `code_agent.run` / `plan_agent.run` / `reflect_agent.run` 把 `task` 作为已渲染的字符串传入（不交给 Jinja 二次处理），要么把 mini-swe-agent 的 environment 切换到 Jinja 的 `Undefined`（非 `StrictUndefined`），或对 problem_statement 做一次 `{`/`}`/`%`/`^` 转义。
 
 ### 4.2 Plan / Reflect agent 运行 submission 但 `/tmp/plan.md` 为空
 
 - **状态**：待观察
-- **现象**：2 个实例命中
-  - `pydata__xarray-4687` Round 1 plan agent
-  - `pytest-dev__pytest-10356` Round 2 reflect agent
+- **现象**：run1 命中 2 例（`pydata__xarray-4687` R1、`pytest-dev__pytest-10356` R2）。run2 未单独统计该类，但 run2 result.json 的 errors[] 中可能有同类记录。
 - **错误**：`Plan/Reflect agent submitted but /tmp/plan.md was empty and no plan text was returned.`
 - **行为**：pipeline 将该 round 标 `round_failed`，整个实例 break round 循环，但 result.json 正常 finalize（带 errors[]）。**数据可靠**（不会污染分析），只是该实例没有可分析的 plan。
-- **处理建议**：如果出现频率上升再排查；目前 4% (2/50) 可接受。可考虑在 plan agent 的 `has_finished` 钩子里要求 plan 文件非空才允许提交。
+- **处理建议**：如果出现频率上升再排查；目前 ~4% 可接受。可考虑在 plan agent 的 `has_finished` 钩子里要求 plan 文件非空才允许提交。
 
 ### 4.3 Code agent `LimitsExceeded`（步数超限）
 
 - **状态**：待观察
 - **现象**：`django__django-11734` Round 1 code agent 跑满 250 步未提交，触发 `LimitsExceeded`；记 `round_failed`，instance finalize 时 0 plans。
-- **影响**：1/50 (2%)。属预期失败模式（agent 的硬上限），**数据可靠**。
+- **影响**：1/50 (2%) on run1。属预期失败模式（agent 的硬上限），**数据可靠**。
 - **处理建议**：观察 500 实例规模时这一类是否过多；如果显著高于当前 2%，再考虑提高 `agent.max_steps` 或加更激进的提交提示词。
+
+### 4.4 Reflect agent 上下文窗口超限（n≥4 触发，新发现）
+
+- **状态**：待解决（**n=5 探索运行新暴露**）
+- **现象**：`psf__requests-1142` Round 4 reflect_agent 调用 LiteLLM 时抛 `ContextWindowExceededError`：DeepSeek V4 Flash 上下文上限 1,048,576 tokens，实际请求 1,411,362 tokens（超 35%）。Pipeline `Unexpected error` 退出，result.json 未写出。
+- **根因**：reflect_agent 把所有前序 trajectories（plan + code agents 的全部交互日志）、test_results、patch 拼进 system prompt（`{inputs_outputs_feedback}`）。round 越高累积越多，n=5 时 R4/R5 容易爆 1M 上下文。run1（n=3）从未触发是因为累积量还不够。
+- **累计影响**：1/120 (run2)。在 n=5 配置下出现，**Phase 1 后续运行若维持 n≥4 需要正视**。
+- **处理建议**：在 `_build_feedback_text` 里对每条 trajectory 加 char/token 上限（目前已截 stdout/stderr/patch 到 2000 字符，但 trajectory 本身没截）；或用 summarizer 把 R(N-1) 之前的 trajectory 压缩成要点；或把 R3+ 改用滚动窗口只保留最近一轮的完整 trajectory。
+
+### 4.5 反思 ROI：n=5 下 Round 3+ 几乎不带额外信号（信息项，非 bug）
+
+- **状态**：观察数据，已影响 §2（树形候选 plan）的优先级判定
+- **数据**（run2，n=5，111 finalized）：
+  | 解决轮次 | 实例数 | 占解决总数 |
+  |---|--:|--:|
+  | R1 | 73 | 96.1% |
+  | R2 | 2 | 2.6% |
+  | R3 | 0 | 0% |
+  | R4 | 0 | 0% |
+  | R5 | 1 | 1.3% |
+- **解读**：跑满 5 轮的 28 个未解决实例里只救回 1 个（3.6%）。把 n 从 3 提到 5 多花约 60% 单实例 wall time，**额外救回 1 例**。线性反思链的边际产出在 R3 之后几乎为零。
+- **处理建议**：在 §2 树形候选 plan 落地前，可考虑把默认 n 回到 3，并把节省的算力投入扩样（150→300 实例）以提高判别规律的统计置信度；或保留 n=5 但记录这一观察，作为"为何要尝试非线性反思策略"的实证依据。
 
 ## 5. 迭代遗留问题
 

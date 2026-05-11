@@ -1,6 +1,6 @@
 # Plan-Code-Test runtime configuration
 system:
-  n: 3
+  n: 5
   optimization_info_level: 1
   model: deepseek-v4-flash
   api_base: "https://api.deepseek.com"
@@ -11,6 +11,17 @@ system:
   # Single run only ever reads one dataset; instance IDs below are interpreted
   # within this dataset.
   dataset: "SWE-bench/SWE-bench_Verified"
+
+  # Folder segment between dataset and instance in the output tree:
+  #   output/<dataset_short>/<batch_id>/<instance>/...
+  # Required (FatalError if empty). Use a descriptive name that captures
+  # the experimental intent of the run, e.g.:
+  #   early_test                 — smoke / dry-run before a real batch
+  #   run1, run2, run3           — sequentially numbered exploration runs
+  #   run3_level1_n3_on_run1     — variation on existing sample set
+  # Allowed characters: [A-Za-z0-9_.-]. CLI flag --batch-id overrides this value.
+  batch_id: ""
+
   instances:
     - astropy__astropy-12907
   output_dir: ./output

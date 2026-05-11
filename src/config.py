@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import logging
 import os
+import re
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
@@ -41,6 +42,16 @@ class SystemConfig:
     a single run only ever touches one dataset (Phase 1 = Verified,
     Phase 2 = Pro). The default is the Verified dataset since Phase 1
     is the current research focus.
+
+    ``batch_id`` is a mandatory folder-name segment that isolates one
+    experimental run from another in the output tree:
+    ``output/<dataset>/<batch_id>/<instance_id>/``. It must be passed
+    via ``config.yaml`` (``system.batch_id``) or the CLI flag
+    ``--batch-id``; the YAML loader validates it via
+    :func:`validate_batch_id`. The dataclass default ``"default"`` is a
+    safety net for in-process construction (test fixtures); production
+    flows always go through ``load_config``, which rejects empty or
+    malformed values.
     """
 
     n: int = 3
@@ -50,6 +61,7 @@ class SystemConfig:
     dataset: str = "SWE-bench/SWE-bench_Verified"
     instances: list[str] = field(default_factory=list)
     output_dir: str = "./output"
+    batch_id: str = "default"
     skip_completed_rounds: bool = True
     resume: ResumeConfig = field(default_factory=ResumeConfig)
 
@@ -216,6 +228,48 @@ def _validate_non_negative_float(name: str, value: float) -> float:
     return value
 
 
+# Whitelist for batch_id characters. Constrained to filesystem-safe ASCII so
+# the value can be used directly as a directory name on any platform without
+# escaping. Allows letters, digits, underscore, hyphen, dot. Explicitly
+# excludes path separators ("/", "\"), "..", and whitespace to block path
+# traversal and accidental nesting.
+_BATCH_ID_PATTERN = re.compile(r"^[A-Za-z0-9_.\-]+$")
+
+
+def validate_batch_id(value: str) -> str:
+    """Return ``value`` if it is a valid batch_id, else raise FatalError.
+
+    A batch_id is the folder-name segment between dataset and instance in
+    the output tree. It is mandatory and must be filesystem-safe:
+
+    * non-empty after stripping whitespace
+    * contains only ``[A-Za-z0-9_.-]``
+    * is not ``"."`` or ``".."`` (path-traversal guard)
+
+    Exposed at module scope (not underscored) so that CLI override paths
+    can re-validate after merging command-line flags into the loaded
+    config.
+    """
+    stripped = (value or "").strip()
+    if not stripped:
+        raise FatalError(
+            "system.batch_id is required and must be non-empty. "
+            "Set it in config.yaml (e.g. 'run3_level1_n3') or pass "
+            "--batch-id on the command line."
+        )
+    if stripped in (".", ".."):
+        raise FatalError(
+            f"system.batch_id={stripped!r} is reserved (path traversal). "
+            "Choose a descriptive name like 'run3_level1_n3'."
+        )
+    if not _BATCH_ID_PATTERN.match(stripped):
+        raise FatalError(
+            f"system.batch_id={stripped!r} contains illegal characters. "
+            "Only letters, digits, '_', '-', and '.' are allowed."
+        )
+    return stripped
+
+
 def _build_resume_config(data: dict[str, Any]) -> ResumeConfig:
     """Build ResumeConfig from a dict, validating required fields when enabled."""
     enabled = _get_bool(data, "enabled", False)
@@ -263,6 +317,7 @@ def _build_system_config(data: dict[str, Any]) -> SystemConfig:
         dataset=_get_str(data, "dataset", "SWE-bench/SWE-bench_Verified"),
         instances=_get_list(data, "instances"),
         output_dir=_get_str(data, "output_dir", "./output"),
+        batch_id=validate_batch_id(_get_str(data, "batch_id", "")),
         skip_completed_rounds=_get_bool(data, "skip_completed_rounds", True),
         resume=_build_resume_config(resume_data),
     )

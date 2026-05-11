@@ -53,6 +53,7 @@ def run_instance(instance_id: str, config: Config) -> dict[str, Any]:
     output_dir = str(
         Path(config.system.output_dir)
         / _dataset_short(config.system.dataset)
+        / config.system.batch_id
         / instance_id
     )
     writer = OutputWriter(output_dir, run_id)
@@ -317,13 +318,13 @@ def _build_feedback_text(
             if resolved is not None:
                 test_lines.append(f"Resolved: {resolved}")
             if stdout:
-                test_lines.append(f"STDOUT:\n{stdout[:2000]}")
+                test_lines.append(f"STDOUT:\n{stdout}")
             if stderr:
-                test_lines.append(f"STDERR:\n{stderr[:2000]}")
+                test_lines.append(f"STDERR:\n{stderr}")
             parts.append("\n".join(test_lines))
 
     if patch:
-        parts.append(f"=== Generated Patch ===\n{patch[:2000]}")
+        parts.append(f"=== Generated Patch ===\n{patch}")
 
     feedback_body = "\n\n".join(parts)
     return feedback_intro, feedback_body

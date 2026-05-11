@@ -1,9 +1,10 @@
 #!/usr/bin/env bash
 # Sequentially run sampled SWE-bench Verified instances.
 #
-# Reads instance IDs from output/SWE-bench_Verified/sampled_instances.json,
-# skips any whose result.json already exists (idempotent / resumable across
-# manual restarts), and runs the rest one at a time using config.yaml's n.
+# Reads system.batch_id from config.yaml, then reads instance IDs from
+# output/SWE-bench_Verified/<batch_id>/sampled_instances.json. Skips any
+# whose result.json already exists (idempotent / resumable across manual
+# restarts), and runs the rest one at a time using config.yaml's n.
 #
 # Bash 3.2 compatible (macOS /bin/bash). Tested patterns:
 #   * No `mapfile` / `readarray` (bash 4+ only).
@@ -26,15 +27,9 @@ fi
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$REPO_ROOT"
 
-SAMPLE_FILE="output/SWE-bench_Verified/sampled_instances.json"
 MASTER_LOG="logs/batch_run.log"
 PER_INSTANCE_LOG_DIR="logs/batch"
 mkdir -p "$PER_INSTANCE_LOG_DIR"
-
-if [[ ! -f "$SAMPLE_FILE" ]]; then
-  echo "ERROR: sample file not found: $SAMPLE_FILE" >&2
-  exit 1
-fi
 
 # ---------------------------------------------------------------------------
 # Activate conda env. Always activate (dry-run also validates this path so
@@ -56,6 +51,37 @@ conda activate mini-swe || { echo "ERROR: failed to activate conda env mini-swe"
 # Sanity: required packages must be importable
 python -c "import minisweagent, swebench" 2>/dev/null \
   || { echo "ERROR: minisweagent/swebench not importable in active env" >&2; exit 1; }
+
+# ---------------------------------------------------------------------------
+# Read batch_id from config.yaml. Results are scoped per-batch:
+#   output/SWE-bench_Verified/<BATCH_ID>/<INSTANCE>/result.json
+# The sample file (list of instances for this batch) is also batch-scoped so
+# re-running with a new batch_id naturally targets a different set without
+# editing this script. Falls back to 'default' is NOT done — the loader
+# requires batch_id to be non-empty (FatalError otherwise), so we fail fast
+# here too.
+# ---------------------------------------------------------------------------
+BATCH_ID=$(python -c "
+import sys, yaml
+try:
+    cfg = yaml.safe_load(open('config.yaml'))
+    bid = (cfg.get('system') or {}).get('batch_id') or ''
+    bid = bid.strip()
+    if not bid:
+        sys.stderr.write('ERROR: system.batch_id is empty in config.yaml\n')
+        sys.exit(2)
+    print(bid)
+except Exception as e:
+    sys.stderr.write(f'ERROR: failed to read system.batch_id from config.yaml: {e}\n')
+    sys.exit(2)
+") || exit 1
+
+SAMPLE_FILE="output/SWE-bench_Verified/$BATCH_ID/sampled_instances.json"
+if [[ ! -f "$SAMPLE_FILE" ]]; then
+  echo "ERROR: sample file not found: $SAMPLE_FILE" >&2
+  echo "       (expected manifest for batch_id=$BATCH_ID)" >&2
+  exit 1
+fi
 
 # DEEPSEEK_API_KEY only matters for real runs (pipeline calls the LLM).
 if [[ $DRY_RUN -eq 0 && -z "${DEEPSEEK_API_KEY:-}" ]]; then
@@ -86,7 +112,7 @@ fi
 if [[ $DRY_RUN -eq 1 ]]; then
   echo "[DRY-RUN] $TOTAL instances loaded from $SAMPLE_FILE"
 fi
-echo "[$(date '+%Y-%m-%d %H:%M:%S')] === Batch start: $TOTAL instances (dry_run=$DRY_RUN) ===" \
+echo "[$(date '+%Y-%m-%d %H:%M:%S')] === Batch start: batch_id=$BATCH_ID  $TOTAL instances (dry_run=$DRY_RUN) ===" \
   | tee -a "$MASTER_LOG"
 
 # ---------------------------------------------------------------------------
@@ -95,7 +121,7 @@ echo "[$(date '+%Y-%m-%d %H:%M:%S')] === Batch start: $TOTAL instances (dry_run=
 i=0
 for INSTANCE in "${INSTANCES[@]}"; do
   i=$((i + 1))
-  RESULT_FILE="output/SWE-bench_Verified/$INSTANCE/result.json"
+  RESULT_FILE="output/SWE-bench_Verified/$BATCH_ID/$INSTANCE/result.json"
 
   if [[ -f "$RESULT_FILE" ]]; then
     echo "[$(date '+%Y-%m-%d %H:%M:%S')] [$i/$TOTAL] SKIP $INSTANCE (result.json exists)" \

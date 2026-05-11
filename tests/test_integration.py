@@ -38,6 +38,7 @@ system:
   instances:
     - astropy__astropy-12907
   output_dir: ./output
+  batch_id: integration_test
 
 prompts:
   plan_generation_prompt: |
@@ -117,8 +118,10 @@ def test_single_round_smoke(integration_config_path):
     assert "plans" in result
     assert len(result["plans"]) >= 1
 
-    # Check that output files exist (output is stratified by dataset short name)
-    output_dir = Path(f"./output/SWE-bench_Verified/{instance_id}")
+    # Check that output files exist (output is stratified by dataset short
+    # name AND batch_id: output/<dataset>/<batch_id>/<instance>/).
+    batch_id = config.system.batch_id
+    output_dir = Path(f"./output/SWE-bench_Verified/{batch_id}/{instance_id}")
     if output_dir.exists():
         result_file = output_dir / "result.json"
         assert result_file.exists(), "result.json should exist after pipeline run"

@@ -16,6 +16,24 @@ from src.config import (
 from src.exceptions import FatalError
 
 
+# ---------------------------------------------------------------------------
+# Helper: write a YAML test config with a default ``system.batch_id``.
+#
+# The loader requires ``system.batch_id`` to be non-empty (FatalError
+# otherwise). Most tests focus on other validation paths and don't care
+# what the batch_id is — they go through this helper so they inherit a
+# valid default. Tests that intentionally exercise batch_id validation
+# (TestBatchIdValidation below) write YAML directly to opt out.
+# ---------------------------------------------------------------------------
+def _write_test_config(filepath: Path, data: dict[str, Any] | None = None) -> None:
+    """Write a YAML test config with a default ``system.batch_id`` injected."""
+    payload = dict(data or {})
+    sys_block = dict(payload.get("system", {}))
+    sys_block.setdefault("batch_id", "test_batch")
+    payload["system"] = sys_block
+    filepath.write_text(yaml.dump(payload), encoding="utf-8")
+
+
 @pytest.fixture
 def valid_config_dict() -> dict[str, Any]:
     return {
@@ -27,6 +45,7 @@ def valid_config_dict() -> dict[str, Any]:
             "dataset": "SWE-bench/SWE-bench_Verified",
             "instances": ["astropy__astropy-12907"],
             "output_dir": "./output",
+            "batch_id": "test_batch",
             "resume": {
                 "enabled": False,
                 "from_plan_id": "",
@@ -104,7 +123,7 @@ class TestLoadConfigValidation:
         monkeypatch.setenv("DEEPSEEK_API_KEY", "test-key")
         data = {"system": {"n": 0}}
         filepath = tmp_path / "bad_config.yaml"
-        filepath.write_text(yaml.dump(data), encoding="utf-8")
+        _write_test_config(filepath, data)
 
         with pytest.raises(FatalError, match="n.*must be >= 1"):
             load_config(filepath)
@@ -113,7 +132,7 @@ class TestLoadConfigValidation:
         monkeypatch.setenv("DEEPSEEK_API_KEY", "test-key")
         data = {"system": {"n": -1}}
         filepath = tmp_path / "bad_config.yaml"
-        filepath.write_text(yaml.dump(data), encoding="utf-8")
+        _write_test_config(filepath, data)
 
         with pytest.raises(FatalError, match="n.*must be >= 1"):
             load_config(filepath)
@@ -129,7 +148,7 @@ class TestLoadConfigValidation:
         monkeypatch.setenv("DEEPSEEK_API_KEY", "test-key")
         data = {"system": {"optimization_info_level": 5}}
         filepath = tmp_path / "warn_config.yaml"
-        filepath.write_text(yaml.dump(data), encoding="utf-8")
+        _write_test_config(filepath, data)
 
         with caplog.at_level(logging.WARNING):
             config = load_config(filepath)
@@ -159,7 +178,7 @@ class TestResumeConfig:
             }
         }
         filepath = tmp_path / "resume_config.yaml"
-        filepath.write_text(yaml.dump(data), encoding="utf-8")
+        _write_test_config(filepath, data)
 
         with caplog.at_level(logging.WARNING):
             config = load_config(filepath)
@@ -181,7 +200,7 @@ class TestResumeConfig:
             }
         }
         filepath = tmp_path / "resume_config.yaml"
-        filepath.write_text(yaml.dump(data), encoding="utf-8")
+        _write_test_config(filepath, data)
 
         with caplog.at_level(logging.WARNING):
             config = load_config(filepath)
@@ -201,7 +220,7 @@ class TestReflectionTemplateNoFallback:
         monkeypatch.setenv("DEEPSEEK_API_KEY", "test-key")
         # Empty config — no prompts section at all
         filepath = tmp_path / "no_prompts.yaml"
-        filepath.write_text("{}", encoding="utf-8")
+        _write_test_config(filepath)
         config = load_config(filepath)
         assert config.prompts.reflection_prompt_template == ""
 
@@ -209,7 +228,7 @@ class TestReflectionTemplateNoFallback:
         monkeypatch.setenv("DEEPSEEK_API_KEY", "test-key")
         data = {"prompts": {"reflection_prompt_template": ""}}
         filepath = tmp_path / "empty_tpl.yaml"
-        filepath.write_text(yaml.dump(data), encoding="utf-8")
+        _write_test_config(filepath, data)
         config = load_config(filepath)
         assert config.prompts.reflection_prompt_template == ""
 
@@ -218,7 +237,7 @@ class TestReflectionTemplateNoFallback:
         custom = "MY-CUSTOM {prompt_template} {inputs_outputs_feedback}"
         data = {"prompts": {"reflection_prompt_template": custom}}
         filepath = tmp_path / "custom_tpl.yaml"
-        filepath.write_text(yaml.dump(data), encoding="utf-8")
+        _write_test_config(filepath, data)
         config = load_config(filepath)
         assert config.prompts.reflection_prompt_template == custom
 
@@ -233,7 +252,7 @@ class TestSkipCompletedRounds:
     def test_default_is_true(self, monkeypatch, tmp_path: Path):
         monkeypatch.setenv("DEEPSEEK_API_KEY", "test-key")
         filepath = tmp_path / "empty.yaml"
-        filepath.write_text("{}", encoding="utf-8")
+        _write_test_config(filepath)
         config = load_config(filepath)
         assert config.system.skip_completed_rounds is True
 
@@ -241,7 +260,7 @@ class TestSkipCompletedRounds:
         monkeypatch.setenv("DEEPSEEK_API_KEY", "test-key")
         data = {"system": {"skip_completed_rounds": False}}
         filepath = tmp_path / "skip_false.yaml"
-        filepath.write_text(yaml.dump(data), encoding="utf-8")
+        _write_test_config(filepath, data)
         config = load_config(filepath)
         assert config.system.skip_completed_rounds is False
 
@@ -249,7 +268,7 @@ class TestSkipCompletedRounds:
         monkeypatch.setenv("DEEPSEEK_API_KEY", "test-key")
         data = {"system": {"skip_completed_rounds": "false"}}
         filepath = tmp_path / "skip_str.yaml"
-        filepath.write_text(yaml.dump(data), encoding="utf-8")
+        _write_test_config(filepath, data)
         config = load_config(filepath)
         assert config.system.skip_completed_rounds is False
 
@@ -259,7 +278,7 @@ class TestApiBaseAndTimeout:
         monkeypatch.setenv("DEEPSEEK_API_KEY", "test-key")
         data = {"system": {"api_base": "https://custom.example.com"}}
         filepath = tmp_path / "api_config.yaml"
-        filepath.write_text(yaml.dump(data), encoding="utf-8")
+        _write_test_config(filepath, data)
         config = load_config(filepath)
         assert config.system.api_base == "https://custom.example.com"
 
@@ -267,7 +286,7 @@ class TestApiBaseAndTimeout:
         monkeypatch.setenv("DEEPSEEK_API_KEY", "test-key")
         data = {"agent": {"timeout": 60}}
         filepath = tmp_path / "timeout_config.yaml"
-        filepath.write_text(yaml.dump(data), encoding="utf-8")
+        _write_test_config(filepath, data)
         config = load_config(filepath)
         assert config.agent.timeout == 60
 
@@ -277,7 +296,7 @@ class TestAgentValidation:
         monkeypatch.setenv("DEEPSEEK_API_KEY", "test-key")
         data = {"agent": {"max_steps": 0}}
         filepath = tmp_path / "bad_agent.yaml"
-        filepath.write_text(yaml.dump(data), encoding="utf-8")
+        _write_test_config(filepath, data)
         with pytest.raises(FatalError, match="max_steps.*must be >= 1"):
             load_config(filepath)
 
@@ -285,7 +304,7 @@ class TestAgentValidation:
         monkeypatch.setenv("DEEPSEEK_API_KEY", "test-key")
         data = {"agent": {"cost_limit": -1.0}}
         filepath = tmp_path / "warn_agent.yaml"
-        filepath.write_text(yaml.dump(data), encoding="utf-8")
+        _write_test_config(filepath, data)
         with caplog.at_level(logging.WARNING):
             config = load_config(filepath)
         assert config.agent.cost_limit == 0.0
@@ -294,7 +313,7 @@ class TestAgentValidation:
         monkeypatch.setenv("DEEPSEEK_API_KEY", "test-key")
         data = {"agent": {"timeout": 0}}
         filepath = tmp_path / "bad_agent.yaml"
-        filepath.write_text(yaml.dump(data), encoding="utf-8")
+        _write_test_config(filepath, data)
         with pytest.raises(FatalError, match="timeout.*must be >= 1"):
             load_config(filepath)
 
@@ -304,7 +323,7 @@ class TestDockerValidation:
         monkeypatch.setenv("DEEPSEEK_API_KEY", "test-key")
         data = {"docker": {"timeout": 0}}
         filepath = tmp_path / "bad_docker.yaml"
-        filepath.write_text(yaml.dump(data), encoding="utf-8")
+        _write_test_config(filepath, data)
         with pytest.raises(FatalError, match="timeout.*must be >= 1"):
             load_config(filepath)
 
@@ -314,7 +333,7 @@ class TestApiBaseValidation:
         monkeypatch.setenv("DEEPSEEK_API_KEY", "test-key")
         data = {"system": {"api_base": "not-a-url"}}
         filepath = tmp_path / "bad_api.yaml"
-        filepath.write_text(yaml.dump(data), encoding="utf-8")
+        _write_test_config(filepath, data)
         with pytest.raises(FatalError, match="Invalid api_base URL"):
             load_config(filepath)
 
@@ -322,7 +341,7 @@ class TestApiBaseValidation:
         monkeypatch.setenv("DEEPSEEK_API_KEY", "test-key")
         data = {"system": {"api_base": "deepseek.com"}}
         filepath = tmp_path / "bad_api.yaml"
-        filepath.write_text(yaml.dump(data), encoding="utf-8")
+        _write_test_config(filepath, data)
         with pytest.raises(FatalError, match="Invalid api_base URL"):
             load_config(filepath)
 
@@ -331,7 +350,7 @@ class TestEvaluatorConfig:
     def test_default_timeout(self, monkeypatch, tmp_path: Path):
         monkeypatch.setenv("DEEPSEEK_API_KEY", "test-key")
         filepath = tmp_path / "empty.yaml"
-        filepath.write_text("{}", encoding="utf-8")
+        _write_test_config(filepath)
         config = load_config(filepath)
         assert config.evaluator.timeout == 1800
 
@@ -339,7 +358,7 @@ class TestEvaluatorConfig:
         monkeypatch.setenv("DEEPSEEK_API_KEY", "test-key")
         data = {"evaluator": {"timeout": 600}}
         filepath = tmp_path / "eval_config.yaml"
-        filepath.write_text(yaml.dump(data), encoding="utf-8")
+        _write_test_config(filepath, data)
         config = load_config(filepath)
         assert config.evaluator.timeout == 600
 
@@ -347,7 +366,7 @@ class TestEvaluatorConfig:
         monkeypatch.setenv("DEEPSEEK_API_KEY", "test-key")
         data = {"evaluator": {"timeout": 0}}
         filepath = tmp_path / "bad_eval.yaml"
-        filepath.write_text(yaml.dump(data), encoding="utf-8")
+        _write_test_config(filepath, data)
         with pytest.raises(FatalError, match="evaluator.timeout.*must be >= 1"):
             load_config(filepath)
 
@@ -355,7 +374,7 @@ class TestEvaluatorConfig:
         monkeypatch.setenv("DEEPSEEK_API_KEY", "test-key")
         data = {"evaluator": {"timeout": -10}}
         filepath = tmp_path / "bad_eval.yaml"
-        filepath.write_text(yaml.dump(data), encoding="utf-8")
+        _write_test_config(filepath, data)
         with pytest.raises(FatalError, match="evaluator.timeout.*must be >= 1"):
             load_config(filepath)
 
@@ -364,7 +383,7 @@ class TestDefaults:
     def test_empty_config_uses_defaults(self, monkeypatch, tmp_path: Path):
         monkeypatch.setenv("DEEPSEEK_API_KEY", "test-key")
         filepath = tmp_path / "empty_config.yaml"
-        filepath.write_text("{}", encoding="utf-8")
+        _write_test_config(filepath)
         config = load_config(filepath)
 
         assert config.system.n == 3
@@ -389,7 +408,7 @@ class TestDataset:
     def test_dataset_default_is_verified(self, monkeypatch, tmp_path: Path):
         monkeypatch.setenv("DEEPSEEK_API_KEY", "test-key")
         filepath = tmp_path / "empty.yaml"
-        filepath.write_text("{}", encoding="utf-8")
+        _write_test_config(filepath)
         config = load_config(filepath)
         assert config.system.dataset == "SWE-bench/SWE-bench_Verified"
 
@@ -397,6 +416,62 @@ class TestDataset:
         monkeypatch.setenv("DEEPSEEK_API_KEY", "test-key")
         data = {"system": {"dataset": "SWE-bench/SWE-bench_Pro"}}
         filepath = tmp_path / "pro.yaml"
-        filepath.write_text(yaml.dump(data), encoding="utf-8")
+        _write_test_config(filepath, data)
         config = load_config(filepath)
         assert config.system.dataset == "SWE-bench/SWE-bench_Pro"
+
+
+class TestBatchIdValidation:
+    """``system.batch_id`` is the folder segment between dataset and instance
+    in the output tree: ``output/<dataset>/<batch_id>/<instance>/``.
+
+    The field is *mandatory at load time* — the loader raises FatalError on
+    missing, empty, or character-invalid values. These tests opt out of the
+    ``_write_test_config`` helper (which injects a default) and write YAML
+    directly so they exercise the validator's failure paths.
+    """
+
+    def test_load_config_missing_batch_id_fails(self, monkeypatch, tmp_path: Path):
+        """No ``system.batch_id`` key at all → FatalError."""
+        monkeypatch.setenv("DEEPSEEK_API_KEY", "test-key")
+        # Note: NOT going through _write_test_config — we want a config
+        # with an entirely absent batch_id field.
+        data = {"system": {"n": 3}}
+        filepath = tmp_path / "no_batch.yaml"
+        filepath.write_text(yaml.dump(data), encoding="utf-8")
+        with pytest.raises(FatalError, match="batch_id is required"):
+            load_config(filepath)
+
+    def test_load_config_empty_batch_id_fails(self, monkeypatch, tmp_path: Path):
+        """Explicit ``batch_id: ""`` (or whitespace-only) → FatalError."""
+        monkeypatch.setenv("DEEPSEEK_API_KEY", "test-key")
+        data = {"system": {"batch_id": "   "}}
+        filepath = tmp_path / "empty_batch.yaml"
+        filepath.write_text(yaml.dump(data), encoding="utf-8")
+        with pytest.raises(FatalError, match="batch_id is required"):
+            load_config(filepath)
+
+    def test_load_config_invalid_batch_id_fails(self, monkeypatch, tmp_path: Path):
+        """Path-traversal / illegal characters are rejected.
+
+        The whitelist is ``[A-Za-z0-9_.-]`` plus an explicit ``"."`` / ``".."``
+        block so that the value can be used directly as a directory name
+        without escaping or normalisation.
+        """
+        monkeypatch.setenv("DEEPSEEK_API_KEY", "test-key")
+        # Slash is the canonical path-traversal vector; "../etc" combines a
+        # parent-dir hop with a separator and exercises both guards.
+        data = {"system": {"batch_id": "../etc"}}
+        filepath = tmp_path / "bad_batch.yaml"
+        filepath.write_text(yaml.dump(data), encoding="utf-8")
+        with pytest.raises(FatalError, match="illegal characters"):
+            load_config(filepath)
+
+    def test_load_config_valid_batch_id(self, monkeypatch, tmp_path: Path):
+        """A valid batch_id loads through and is preserved verbatim."""
+        monkeypatch.setenv("DEEPSEEK_API_KEY", "test-key")
+        data = {"system": {"batch_id": "run3_level1_n3"}}
+        filepath = tmp_path / "good_batch.yaml"
+        filepath.write_text(yaml.dump(data), encoding="utf-8")
+        config = load_config(filepath)
+        assert config.system.batch_id == "run3_level1_n3"

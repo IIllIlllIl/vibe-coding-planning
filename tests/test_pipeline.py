@@ -683,3 +683,95 @@ class TestPipelineUsesDeriveImageName:
         assert kwargs["image"] == "swebench/sweb.eval.x86_64.i1:latest", (
             f"Expected swebench/sweb.eval.x86_64.i1:latest but got {kwargs['image']!r}"
         )
+
+
+class TestPipelineOutputDirIncludesBatch:
+    """Verify the output directory path includes the batch_id segment.
+
+    The pipeline derives ``output_dir`` from
+    ``<output_dir>/<dataset_short>/<batch_id>/<instance_id>``. Once batch_id
+    became a mandatory config field, this layout is what isolates one
+    experimental run from another. Regressing on it would cause new runs
+    to overwrite — or collide with — historical results.
+    """
+
+    @patch("src.pipeline.DockerEnvWrapper")
+    @patch("src.pipeline.InstanceLoader")
+    @patch("src.pipeline.plan_agent.run")
+    @patch("src.pipeline.code_agent.run")
+    @patch("src.pipeline.reflect_agent.run")
+    @patch("src.pipeline.evaluate")
+    @patch("src.pipeline.save_trajectory")
+    @patch("src.pipeline.OutputWriter")
+    def test_run_instance_output_dir_includes_batch(
+        self,
+        mock_writer_cls,
+        mock_save_traj,
+        mock_eval,
+        mock_reflect,
+        mock_code,
+        mock_plan,
+        mock_loader_cls,
+        mock_docker_cls,
+    ):
+        from pathlib import Path
+        import tempfile
+
+        instance_id = "astropy__astropy-14539"
+        batch_id = "run3_level1_n3"
+        dataset = "SWE-bench/SWE-bench_Verified"
+        dataset_short = "SWE-bench_Verified"  # what _dataset_short produces
+        output_root = "./output"
+
+        config = Config(
+            system=SystemConfig(
+                model="m",
+                api_base="https://x.y",
+                n=1,
+                instances=[instance_id],
+                output_dir=output_root,
+                dataset=dataset,
+                batch_id=batch_id,
+            ),
+            prompts=PromptConfig(),
+            docker=DockerConfig(),
+            agent=AgentConfig(max_steps=10),
+            api_key="k",
+        )
+
+        mock_loader = MagicMock()
+        mock_loader.load_instance.return_value = {
+            "instance_id": instance_id,
+            "repo": "astropy/astropy",
+            "problem_statement": "p",
+            "image_name": "swebench/img",
+        }
+        mock_loader_cls.return_value = mock_loader
+
+        mock_docker_cls.return_value = MagicMock()
+        mock_plan.return_value = ("Plan", [])
+        mock_code.return_value = ("diff", [])
+        mock_eval.return_value = {"resolved": False, "stdout": "", "stderr": "", "log_dir": ""}
+        mock_save_traj.return_value = MagicMock()
+        mock_save_traj.return_value.__str__ = lambda self: "traj.json"
+
+        tmp_result = Path(tempfile.gettempdir()) / "test_batch_path.json"
+        tmp_result.write_text('{"plans": [], "run_id": "test"}', encoding="utf-8")
+        mock_writer = MagicMock()
+        mock_writer.finalize.return_value = tmp_result
+        mock_writer_cls.return_value = mock_writer
+
+        run_instance(instance_id, config)
+
+        # OutputWriter(output_dir, run_id) — first positional arg is the path.
+        # We don't assert on run_id (it's a timestamp); we want the path shape:
+        #   <output_root>/<dataset_short>/<batch_id>/<instance_id>
+        assert mock_writer_cls.called, "OutputWriter was never constructed"
+        args, _ = mock_writer_cls.call_args
+        actual_path = Path(args[0])
+        expected_suffix = Path(dataset_short) / batch_id / instance_id
+        # The path may be absolute or relative depending on how ./output is
+        # resolved on this platform; compare on the tail to stay portable.
+        assert actual_path.parts[-3:] == expected_suffix.parts, (
+            f"Expected output path to end with {expected_suffix} but got {actual_path}"
+        )

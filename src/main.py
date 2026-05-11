@@ -55,6 +55,17 @@ def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
         help="Output directory (overrides config file value)",
     )
     parser.add_argument(
+        "--batch-id",
+        type=str,
+        default=None,
+        help=(
+            "Batch identifier used as a folder segment between dataset and "
+            "instance (output/<dataset>/<batch_id>/<instance>/). Overrides "
+            "system.batch_id from config.yaml. Required at run time — either "
+            "set it here or in the config file."
+        ),
+    )
+    parser.add_argument(
         "--verbose",
         "-v",
         action="store_true",
@@ -72,6 +83,13 @@ def _override_config(config: Config, args: argparse.Namespace) -> Config:
         overrides["n"] = args.n
     if args.output_dir is not None:
         overrides["output_dir"] = args.output_dir
+    if args.batch_id is not None:
+        # Re-validate the CLI value with the same rules used by the YAML
+        # loader so a malformed --batch-id is rejected eagerly instead of
+        # silently producing a broken path.
+        from src.config import validate_batch_id
+
+        overrides["batch_id"] = validate_batch_id(args.batch_id)
 
     if not overrides:
         return config
@@ -123,8 +141,13 @@ def main(argv: Sequence[str] | None = None) -> int:
         logging.error("Configuration error: %s", exc)
         return 1
 
-    # Apply CLI overrides
-    config = _override_config(config, args)
+    # Apply CLI overrides. Re-running validation (e.g. on --batch-id) can
+    # also raise FatalError, so wrap this in the same handler shape.
+    try:
+        config = _override_config(config, args)
+    except FatalError as exc:
+        logging.error("Configuration error: %s", exc)
+        return 1
 
     # Determine instance list
     instances: list[str] = []
@@ -140,6 +163,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     logging.info("Starting plan-code-test pipeline")
     logging.info("Model: %s", config.system.model)
     logging.info("Dataset: %s", config.system.dataset)
+    logging.info("Batch: %s", config.system.batch_id)
     logging.info("Iterations (n): %d", config.system.n)
     logging.info("Instances: %s", instances)
     logging.info("Output dir: %s", config.system.output_dir)
