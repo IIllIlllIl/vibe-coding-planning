@@ -37,10 +37,13 @@ from pathlib import Path
 CHECK_INTERVAL_SECONDS = 3600         # 1 hour between health checks
 HANG_TIMEOUT_SECONDS = 3 * 3600       # 3 hours with no log change = hung
 API_COOLDOWN_SECONDS = 5 * 3600       # 5 hours for DeepSeek rate-limit recovery
-DOCKER_RETRY_INTERVAL = 300           # 5 min between Docker daemon retries
-DOCKER_MAX_RETRIES = 12               # 12 × 5 min = 60 min, then fatal
+REPAIR_BACKOFF_SECONDS = 10 * 3600    # 10 hours after max repair attempts exceeded
+DOCKER_RETRY_INTERVAL = 300           # base 5 min; exponentiated on repeated failures
+DOCKER_MAX_RETRIES = 12               # 12 retries with backoff, then fatal
 REPAIR_CHECK_INTERVAL = 60            # 1 min while waiting for Claude repair
 DISK_MIN_FREE_GB = 10                 # Pause if less than 10 GB free
+MAX_REPAIR_ATTEMPTS = 3               # Claude repair limit before long cooldown
+DOCKER_PRUNE_INTERVAL_CHECKS = 6      # Run `docker system prune -f` every N checks
 
 BATCH_TMUX_SESSION = "pct-batch"
 REPAIR_TMUX_SESSION = "pct-repair"
@@ -48,13 +51,26 @@ MASTER_LOG = Path("logs/batch_run.log")
 WATCHDOG_LOG = Path("logs/watchdog.log")
 STATE_FILE = Path("output/.watchdog_state.json")
 
-# Patterns that indicate specific failure modes
+# Transient API errors -> cooldown (rate limits, network blips, 5xx)
 API_RATE_LIMIT_PATTERNS = [
     re.compile(r"429\s+Too\s+Many\s+Requests", re.I),
     re.compile(r"RateLimitError", re.I),
     re.compile(r"rate.?limit", re.I),
     re.compile(r"quota\s+exceeded", re.I),
     re.compile(r"insufficient_quota", re.I),
+    # Network / server-side transients that look like API issues
+    re.compile(r"ConnectionError", re.I),
+    re.compile(r"ConnectTimeout", re.I),
+    re.compile(r"ReadTimeout", re.I),
+    re.compile(r"503\s+Service\s+Unavailable", re.I),
+    re.compile(r"502\s+Bad\s+Gateway", re.I),
+    re.compile(r"504\s+Gateway\s+Timeout", re.I),
+    re.compile(r"500\s+Internal\s+Server\s+Error", re.I),
+    re.compile(r"ServiceUnavailableError", re.I),
+    re.compile(r"InternalServerError", re.I),
+    re.compile(r"connection\s+reset\s+by\s+peer", re.I),
+    re.compile(r"temporary\s+failure\s+in\s+name\s+resolution", re.I),
+    re.compile(r"name\s+or\s+service\s+not\s+known", re.I),
 ]
 
 API_AUTH_PATTERNS = [
@@ -179,13 +195,25 @@ def _init_state() -> WatchdogState:
         except Exception:
             pass
 
-    # Count already-completed instances
+    # Count already-completed instances (robust to corrupt JSON)
     completed = 0
     batch_dir = Path(f"output/{dataset_short}/{batch_id}")
     if batch_dir.exists():
         for inst_dir in batch_dir.iterdir():
-            if inst_dir.is_dir() and (inst_dir / "result.json").exists():
-                completed += 1
+            if not inst_dir.is_dir():
+                continue
+            result_file = inst_dir / "result.json"
+            if result_file.exists():
+                try:
+                    json.loads(result_file.read_text(encoding="utf-8"))
+                    completed += 1
+                except json.JSONDecodeError:
+                    logging.warning(
+                        "Corrupt result.json at %s — not counting as complete.",
+                        result_file,
+                    )
+                except Exception:
+                    pass
 
     state = WatchdogState(
         batch_id=batch_id,
@@ -321,7 +349,7 @@ def is_batch_hung() -> bool:
 
 
 # ---------------------------------------------------------------------------
-# Disk monitoring
+# Disk / Docker storage monitoring
 # ---------------------------------------------------------------------------
 
 def check_disk_space() -> bool:
@@ -334,6 +362,46 @@ def check_disk_space() -> bool:
         return True
     except Exception:
         return True
+
+
+def cleanup_docker() -> None:
+    """Prune unused Docker objects to free space and prevent container leaks.
+
+    Runs non-interactively; failures are logged but never fatal.
+    """
+    logging.info("Running docker system prune -f ...")
+    try:
+        result = subprocess.run(
+            ["docker", "system", "prune", "-f"],
+            capture_output=True,
+            text=True,
+            timeout=120,
+        )
+        if result.returncode == 0:
+            out = result.stdout.strip()
+            if out:
+                logging.info("Docker prune output: %s", out)
+            else:
+                logging.info("Docker prune completed (nothing removed).")
+        else:
+            err = result.stderr.strip()[:400]
+            logging.warning("Docker prune failed (rc=%d): %s", result.returncode, err)
+    except FileNotFoundError:
+        logging.warning("Docker CLI not found; skipping prune.")
+    except subprocess.TimeoutExpired:
+        logging.warning("Docker prune timed out (> 120 s).")
+    except Exception as exc:
+        logging.warning("Docker prune unexpected error: %s", exc)
+
+
+def docker_backoff_wait(retry_count: int) -> int:
+    """Exponential backoff for Docker daemon retries.
+
+    Base 5 min, doubling each retry, capped at 60 min.
+    retry_count=1 -> 5 min, retry_count=2 -> 10 min, etc.
+    """
+    wait = DOCKER_RETRY_INTERVAL * (2 ** min(retry_count - 1, 4))
+    return min(wait, 3600)
 
 
 # ---------------------------------------------------------------------------
@@ -454,9 +522,10 @@ def verify_repair() -> bool:
 # Recovery actions
 # ---------------------------------------------------------------------------
 
-def enter_api_cooldown(state: WatchdogState, error_msg: str) -> None:
+def enter_api_cooldown(state: WatchdogState, error_msg: str, duration_seconds: int | None = None) -> None:
     _kill_tmux_session(BATCH_TMUX_SESSION)
-    cooldown_until = datetime.now(timezone.utc).timestamp() + API_COOLDOWN_SECONDS
+    duration = duration_seconds if duration_seconds is not None else API_COOLDOWN_SECONDS
+    cooldown_until = datetime.now(timezone.utc).timestamp() + duration
     state.status = "api_cooldown"
     state.api_cooldown_until = datetime.fromtimestamp(cooldown_until, tz=timezone.utc).isoformat()
     state.last_error = error_msg
@@ -465,7 +534,7 @@ def enter_api_cooldown(state: WatchdogState, error_msg: str) -> None:
     logging.info(
         "Entering API cooldown until %s (%.1f hours from now)",
         state.api_cooldown_until,
-        API_COOLDOWN_SECONDS / 3600,
+        duration / 3600,
     )
 
 
@@ -524,6 +593,7 @@ def main() -> int:
                 state.status = "running"
                 state.api_cooldown_until = None
                 state.docker_retry_count = 0
+                state.claude_repair_count = 0
                 save_state(state)
                 start_batch(state)
             else:
@@ -534,7 +604,9 @@ def main() -> int:
         if state.status == "repairing":
             if is_repair_complete():
                 logging.info("Claude repair session ended.")
-                verify_repair()
+                if verify_repair():
+                    # Successful repair — reset counter so future repairs are allowed
+                    state.claude_repair_count = 0
                 state.status = "running"
                 state.last_error = None
                 save_state(state)
@@ -561,7 +633,7 @@ def main() -> int:
                 continue
 
             if log_analysis["api_rate_limited"]:
-                enter_api_cooldown(state, "DeepSeek API rate limited (429/quota).")
+                enter_api_cooldown(state, "DeepSeek API transient error (rate-limit/network/5xx).")
                 continue
 
             if log_analysis["docker_down"]:
@@ -569,12 +641,13 @@ def main() -> int:
                 if state.docker_retry_count > DOCKER_MAX_RETRIES:
                     enter_fatal(state, f"Docker daemon unreachable after {DOCKER_MAX_RETRIES} retries.")
                     continue
+                wait_sec = docker_backoff_wait(state.docker_retry_count)
                 logging.warning(
                     "Docker daemon not running (retry %d/%d). Waiting %d min...",
-                    state.docker_retry_count, DOCKER_MAX_RETRIES, DOCKER_RETRY_INTERVAL // 60,
+                    state.docker_retry_count, DOCKER_MAX_RETRIES, wait_sec // 60,
                 )
                 save_state(state)
-                time.sleep(DOCKER_RETRY_INTERVAL)
+                time.sleep(wait_sec)
                 continue
 
             # Unknown failure — could be a code bug
@@ -583,6 +656,18 @@ def main() -> int:
             error_lines = [ln for ln in master_tail.splitlines() if "ERROR" in ln or "error" in ln.lower()][-10:]
             if not error_lines:
                 error_lines = ["Batch exited with unknown cause."]
+
+            if state.claude_repair_count >= MAX_REPAIR_ATTEMPTS:
+                logging.error(
+                    "Claude repair exceeded max attempts (%d). Entering long cooldown.",
+                    MAX_REPAIR_ATTEMPTS,
+                )
+                enter_api_cooldown(
+                    state,
+                    f"Repair limit reached ({MAX_REPAIR_ATTEMPTS}). Cooling down before retry.",
+                    duration_seconds=REPAIR_BACKOFF_SECONDS,
+                )
+                continue
 
             logging.error("Unknown batch failure. Invoking Claude repair.")
             invoke_claude_repair(state, error_lines)
@@ -610,6 +695,13 @@ def main() -> int:
             state.status = "completed"
             save_state(state)
             continue
+
+        # Periodic Docker cleanup (container leak prevention)
+        check_counter = getattr(main, "_check_counter", 0)
+        check_counter += 1
+        main._check_counter = check_counter
+        if check_counter % DOCKER_PRUNE_INTERVAL_CHECKS == 0:
+            cleanup_docker()
 
         logging.info(
             "Healthy: completed=%d/%d current=%s",

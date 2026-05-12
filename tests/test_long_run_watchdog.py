@@ -176,13 +176,110 @@ class TestDiskSpace:
         assert watchdog.check_disk_space() is True
 
 
+class TestNetworkErrorPatterns:
+    def test_detect_503_service_unavailable(self, tmp_path: Path):
+        log = tmp_path / "batch_run.log"
+        log.write_text(
+            "[2026-05-12 10:00:00] ERROR: litellm.ServiceUnavailableError: "
+            "DeepSeekException - 503 Service Unavailable\n"
+        )
+        with patch.object(watchdog, "MASTER_LOG", log):
+            analysis = watchdog.analyze_recent_logs()
+        assert analysis["api_rate_limited"] is True
+        assert analysis["api_auth_failed"] is False
+
+    def test_detect_connection_error(self, tmp_path: Path):
+        log = tmp_path / "batch_run.log"
+        log.write_text(
+            "[2026-05-12 10:00:00] ERROR: ConnectionError: "
+            "HTTPSConnectionPool(host='api.deepseek.com', port=443)\n"
+        )
+        with patch.object(watchdog, "MASTER_LOG", log):
+            analysis = watchdog.analyze_recent_logs()
+        assert analysis["api_rate_limited"] is True
+
+    def test_detect_read_timeout(self, tmp_path: Path):
+        log = tmp_path / "batch_run.log"
+        log.write_text(
+            "[2026-05-12 10:00:00] ERROR: ReadTimeout: Request timed out after 120s\n"
+        )
+        with patch.object(watchdog, "MASTER_LOG", log):
+            analysis = watchdog.analyze_recent_logs()
+        assert analysis["api_rate_limited"] is True
+
+    def test_detect_dns_failure(self, tmp_path: Path):
+        log = tmp_path / "batch_run.log"
+        log.write_text(
+            "[2026-05-12 10:00:00] ERROR: Name or service not known: api.deepseek.com\n"
+        )
+        with patch.object(watchdog, "MASTER_LOG", log):
+            analysis = watchdog.analyze_recent_logs()
+        assert analysis["api_rate_limited"] is True
+
+
+class TestRepairLimit:
+    def test_max_repair_attempts_constant(self):
+        assert watchdog.MAX_REPAIR_ATTEMPTS == 3
+
+    def test_repair_backoff_longer_than_api_cooldown(self):
+        assert watchdog.REPAIR_BACKOFF_SECONDS > watchdog.API_COOLDOWN_SECONDS
+
+
+class TestDockerBackoff:
+    def test_backoff_base(self):
+        assert watchdog.docker_backoff_wait(1) == 300
+
+    def test_backoff_doubles(self):
+        assert watchdog.docker_backoff_wait(2) == 600
+
+    def test_backoff_caps_at_60_min(self):
+        assert watchdog.docker_backoff_wait(20) == 3600
+
+    def test_backoff_sequence(self):
+        waits = [watchdog.docker_backoff_wait(i) for i in range(1, 8)]
+        assert waits == [300, 600, 1200, 2400, 3600, 3600, 3600]
+
+
+class TestCleanupDocker:
+    def test_function_exists(self):
+        assert callable(watchdog.cleanup_docker)
+
+
+class TestInitStateCorruptResult:
+    def test_corrupt_result_json_not_counted(self, tmp_path: Path, monkeypatch):
+        import yaml
+
+        batch_id = "test-corrupt"
+        dataset_short = "SWE-bench_Verified"
+        # _init_state expects output/<dataset_short>/<batch_id>/
+        batch_dir = tmp_path / "output" / dataset_short / batch_id
+        inst_dir = batch_dir / "inst1"
+        inst_dir.mkdir(parents=True)
+        # Write corrupt result.json
+        (inst_dir / "result.json").write_text("not valid json {{")
+        # Write valid result.json
+        inst2_dir = batch_dir / "inst2"
+        inst2_dir.mkdir(parents=True)
+        (inst2_dir / "result.json").write_text('{"plans": []}')
+
+        cfg = {"system": {"batch_id": batch_id, "dataset": f"SWE-bench/{dataset_short}"}}
+        cfg_file = tmp_path / "config.yaml"
+        cfg_file.write_text(yaml.dump(cfg))
+
+        sample_file = batch_dir / "sampled_instances.json"
+        sample_file.write_text(json.dumps({"instances": ["inst1", "inst2"]}))
+
+        monkeypatch.chdir(tmp_path)
+        with patch.object(watchdog, "STATE_FILE", tmp_path / "state.json"):
+            state = watchdog._init_state()
+
+        assert state.completed == 1
+        assert state.total_instances == 2
+
+
 class TestRepairPrompt:
     def test_prompt_contains_regression_testing(self):
         state = watchdog.WatchdogState(batch_id="b", total_instances=10)
-        # We can't easily call invoke_claude_repair without tmux, but we can
-        # inspect the prompt text indirectly by checking it exists in the
-        # function source.  A simpler approach: the prompt is built inside
-        # the function; let's just verify the constants make sense.
         assert "Run the FULL test suite" in str(watchdog.invoke_claude_repair.__code__.co_consts)
         assert "write additional tests" in str(watchdog.invoke_claude_repair.__code__.co_consts)
 

@@ -20,10 +20,11 @@ system:
   #   run1, run2, run3           — sequentially numbered exploration runs
   #   run3_level1_n3_on_run1     — variation on existing sample set
   # Allowed characters: [A-Za-z0-9_.-]. CLI flag --batch-id overrides this value.
-  batch_id: "run3-50-no_truncation"
+  batch_id: "run4-full-500"
 
-  instances:
-    - astropy__astropy-12907
+  # Instance list is populated from output/SWE-bench_Verified/<batch_id>/sampled_instances.json
+  # by scripts/run_batch_verified.sh. Leave empty here; the batch script reads the JSON manifest.
+  instances: []
   output_dir: ./output
 
   # When true (default), exit the round loop early once an instance is

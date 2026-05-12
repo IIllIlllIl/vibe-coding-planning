@@ -150,6 +150,72 @@ class TestBuildDefaultAgent:
         )
         assert agent.kwargs["instance_template"] == "keep {{task}} here"
 
+    # ------------------------------------------------------------------
+    # Regression: re.sub replacement-string backreference interpretation.
+    # If the substitution is done with `re.sub(pat, task, ...)`, any
+    # ``\1``-``\9`` or ``\g<name>`` inside ``task`` is treated as a group
+    # reference and raises ``re.error: invalid group reference``. SWE-bench
+    # problem_statements occasionally contain such sequences (regex
+    # examples, escape demos, Windows paths in stack traces) and would
+    # otherwise crash the agent setup before any LLM call. The fix passes
+    # the replacement via a lambda so the string is inserted verbatim.
+    # ------------------------------------------------------------------
+    def test_task_with_backslash_digit_is_inserted_literally(self):
+        agent = build_default_agent(
+            FakeDefaultAgent,
+            model="m",
+            environment="env",
+            system_template="test",
+            step_limit=10,
+            instance_template="<pr>{{task}}</pr>",
+            task=r"see regex \1 backref",
+        )
+        # The literal backslash-digit must survive into the rendered template.
+        assert agent.kwargs["instance_template"] == r"<pr>see regex \1 backref</pr>"
+
+    def test_task_with_backslash_g_named_group_is_inserted_literally(self):
+        agent = build_default_agent(
+            FakeDefaultAgent,
+            model="m",
+            environment="env",
+            system_template="test",
+            step_limit=10,
+            instance_template="<pr>{{task}}</pr>",
+            task=r"use \g<name> to refer",
+        )
+        assert agent.kwargs["instance_template"] == r"<pr>use \g<name> to refer</pr>"
+
+    def test_task_with_windows_path_survives_substitution(self):
+        agent = build_default_agent(
+            FakeDefaultAgent,
+            model="m",
+            environment="env",
+            system_template="test",
+            step_limit=10,
+            instance_template="<pr>{{task}}</pr>",
+            task=r"file C:\Users\dev\repo\test.py line 42",
+        )
+        assert (
+            agent.kwargs["instance_template"]
+            == r"<pr>file C:\Users\dev\repo\test.py line 42</pr>"
+        )
+
+    def test_task_with_backslash_works_in_default_template(self):
+        # The instance_template=None branch concatenates `task` with string
+        # literals and never calls re.sub, but verify the no-template path
+        # also tolerates regex-like content for parity.
+        agent = build_default_agent(
+            FakeDefaultAgent,
+            model="m",
+            environment="env",
+            system_template="test",
+            step_limit=10,
+            instance_template=None,
+            task=r"task with \1 and \g<x>",
+        )
+        it = agent.kwargs["instance_template"]
+        assert r"task with \1 and \g<x>" in it
+
 
 class TestExtractLastAssistant:
     def test_extracts_last_assistant(self):

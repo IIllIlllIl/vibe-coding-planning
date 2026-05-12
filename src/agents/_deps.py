@@ -162,9 +162,21 @@ def build_default_agent(
     # Pre-render {{task}} to avoid Jinja re-parsing task content.
     # mini-swe-agent uses StrictUndefined; characters like {student}
     # inside the issue description are interpreted as undefined variables.
+    #
+    # The replacement is passed as a lambda (not a plain string) because
+    # ``re.sub``'s replacement string interprets backreferences such as
+    # ``\1``-``\9``, ``\g<name>``, and Python escape sequences like ``\U``.
+    # SWE-bench problem_statements can contain regex examples, ``\g<...>``
+    # references, or Windows paths like ``C:\Users\...`` (which embeds the
+    # bytes ``\U``); a plain-string replacement would raise ``re.error`` or
+    # ``IndexError`` and crash the agent setup before any LLM call. Using
+    # ``lambda _m: task`` makes the substitution treat ``task`` as a
+    # literal regardless of its content.
     if task is not None:
         if instance_template is not None:
-            instance_template = re.sub(r"\{\{\s*task\s*\}\}", task, instance_template)
+            instance_template = re.sub(
+                r"\{\{\s*task\s*\}\}", lambda _m: task, instance_template
+            )
         else:
             # Use mini-swe-agent's default template pre-rendered.
             instance_template = (
