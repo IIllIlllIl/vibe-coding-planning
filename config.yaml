@@ -1,6 +1,6 @@
 # Plan-Code-Test runtime configuration
 system:
-  n: 5
+  n: 3
   optimization_info_level: 1
   model: deepseek-v4-flash
   api_base: "https://api.deepseek.com"
@@ -20,7 +20,7 @@ system:
   #   run1, run2, run3           — sequentially numbered exploration runs
   #   run3_level1_n3_on_run1     — variation on existing sample set
   # Allowed characters: [A-Za-z0-9_.-]. CLI flag --batch-id overrides this value.
-  batch_id: ""
+  batch_id: "run3-50-no_truncation"
 
   instances:
     - astropy__astropy-12907

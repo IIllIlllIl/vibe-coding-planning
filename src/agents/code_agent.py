@@ -91,6 +91,7 @@ def run(
         step_limit=config.agent.max_steps,
         cost_limit=config.agent.cost_limit,
         instance_template=instance_template,
+        task=issue_description,
     )
 
     logger.info(

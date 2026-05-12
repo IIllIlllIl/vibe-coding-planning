@@ -110,6 +110,46 @@ class TestBuildDefaultAgent:
         )
         assert "cost_limit" not in agent.kwargs
 
+    def test_task_pre_renders_instance_template(self):
+        agent = build_default_agent(
+            FakeDefaultAgent,
+            model="m",
+            environment="env",
+            system_template="test",
+            step_limit=10,
+            instance_template="<pr>{{task}}</pr>",
+            task="hello {world}",
+        )
+        it = agent.kwargs["instance_template"]
+        assert "{{task}}" not in it
+        assert "<pr>hello {world}</pr>" == it
+
+    def test_task_pre_renders_default_template_when_none(self):
+        agent = build_default_agent(
+            FakeDefaultAgent,
+            model="m",
+            environment="env",
+            system_template="test",
+            step_limit=10,
+            instance_template=None,
+            task="issue with {braces}",
+        )
+        it = agent.kwargs["instance_template"]
+        assert "{{task}}" not in it
+        assert "issue with {braces}" in it
+
+    def test_task_none_leaves_template_untouched(self):
+        agent = build_default_agent(
+            FakeDefaultAgent,
+            model="m",
+            environment="env",
+            system_template="test",
+            step_limit=10,
+            instance_template="keep {{task}} here",
+            task=None,
+        )
+        assert agent.kwargs["instance_template"] == "keep {{task}} here"
+
 
 class TestExtractLastAssistant:
     def test_extracts_last_assistant(self):

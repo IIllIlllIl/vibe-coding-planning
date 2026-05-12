@@ -7,6 +7,7 @@ extraction utilities adapted to the mini-swe-agent 1.17.5 API surface.
 from __future__ import annotations
 
 import logging
+import re
 import urllib.parse
 from typing import Any
 
@@ -113,6 +114,7 @@ def build_default_agent(
     step_limit: int,
     cost_limit: float | None = None,
     instance_template: str | None = None,
+    task: str | None = None,
 ) -> Any:
     """Build a DefaultAgent with explicit config kwargs.
 
@@ -141,6 +143,11 @@ def build_default_agent(
             official mini-swe-agent SWE-bench instance template (which ends
             with the ``git diff --cached`` submission command). When omitted,
             DefaultAgent falls back to its built-in default instance_template.
+        task: The SWE-bench issue description. When provided, ``{{task}}``
+            inside ``instance_template`` is pre-rendered here so that
+            mini-swe-agent's ``StrictUndefined`` Jinja renderer never sees
+            special characters (e.g. ``{student}``, ``{%s}``) inside the
+            task content as template syntax.
 
     Returns:
         A ``DefaultAgent`` instance.
@@ -151,6 +158,23 @@ def build_default_agent(
     }
     if cost_limit is not None:
         kwargs["cost_limit"] = cost_limit
+
+    # Pre-render {{task}} to avoid Jinja re-parsing task content.
+    # mini-swe-agent uses StrictUndefined; characters like {student}
+    # inside the issue description are interpreted as undefined variables.
+    if task is not None:
+        if instance_template is not None:
+            instance_template = re.sub(r"\{\{\s*task\s*\}\}", task, instance_template)
+        else:
+            # Use mini-swe-agent's default template pre-rendered.
+            instance_template = (
+                "Your task: "
+                + task
+                + ". Please reply with a single shell command in triple backticks. "
+                "To finish, the first line of the output of the shell command must be "
+                "'COMPLETE_TASK_AND_SUBMIT_FINAL_OUTPUT'."
+            )
+
     if instance_template is not None:
         kwargs["instance_template"] = instance_template
 

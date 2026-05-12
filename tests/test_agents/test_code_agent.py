@@ -97,15 +97,19 @@ class TestRunSuccess:
 
     @patch("src.agents.code_agent.import_minisweagent")
     def test_instance_template_passed_to_agent(self, mock_import, config, mock_env):
-        """The official SWE-bench instance_template (with submission cmd) must be forwarded."""
+        """The official SWE-bench instance_template (with submission cmd) must be forwarded,
+        with {{task}} pre-rendered to avoid Jinja StrictUndefined errors on special chars."""
         mock_import.return_value = (MockDefaultAgent, MockLiteLLMModel, object)
         code_agent.run(config, "Plan", "Issue", mock_env)
         assert "instance_template" in MockDefaultAgent.last_kwargs
-        assert "{{task}}" in MockDefaultAgent.last_kwargs["instance_template"]
+        # {{task}} is pre-rendered in our code before passing to mini-swe-agent
+        assert "{{task}}" not in MockDefaultAgent.last_kwargs["instance_template"]
+        assert "Issue" in MockDefaultAgent.last_kwargs["instance_template"]
 
     @patch("src.agents.code_agent.import_minisweagent")
-    def test_instance_template_omitted_when_blank(self, mock_import, mock_env):
-        """If config provides no instance_template, kwarg is omitted so DefaultAgent uses its default."""
+    def test_instance_template_pre_rendered_when_blank(self, mock_import, mock_env):
+        """If config provides no instance_template, we pass a pre-rendered default template
+        to prevent mini-swe-agent's StrictUndefined Jinja from choking on special chars."""
         cfg = Config(
             system=SystemConfig(model="deepseek-v4-flash", api_base="https://api.deepseek.com"),
             prompts=PromptConfig(code_generation_prompt="x"),  # no code_instance_template
@@ -114,7 +118,10 @@ class TestRunSuccess:
         )
         mock_import.return_value = (MockDefaultAgent, MockLiteLLMModel, object)
         code_agent.run(cfg, "Plan", "Issue", mock_env)
-        assert "instance_template" not in MockDefaultAgent.last_kwargs
+        assert "instance_template" in MockDefaultAgent.last_kwargs
+        it = MockDefaultAgent.last_kwargs["instance_template"]
+        assert "{{task}}" not in it
+        assert "Issue" in it
 
 
 class TestRunValidation:

@@ -196,7 +196,9 @@ class TestRunSuccess:
             config, "previous plan", "intro", "body", "issue", mock_env
         )
         assert "instance_template" in MockDefaultAgent.last_kwargs
-        assert "{{task}}" in MockDefaultAgent.last_kwargs["instance_template"]
+        # {{task}} is pre-rendered in our code before passing to mini-swe-agent
+        assert "{{task}}" not in MockDefaultAgent.last_kwargs["instance_template"]
+        assert "issue" in MockDefaultAgent.last_kwargs["instance_template"]
 
     @patch("src.agents.reflect_agent.import_minisweagent")
     def test_passes_docker_environment(self, mock_import, config, mock_env):
