@@ -20,7 +20,6 @@ from src.agents._deps import (
 )
 from src.config import Config
 from src.exceptions import TaskError
-from src.prompts.templates import render_plan_prompt
 
 logger = logging.getLogger(__name__)
 
@@ -82,10 +81,12 @@ def run(
     """
     DefaultAgent, LitellmModel, _ = import_minisweagent()
 
-    system_template = render_plan_prompt(
-        config.prompts.plan_generation_prompt,
-        config.prompts.nrpv_block,
-    )
+    # Pass the raw system_template verbatim. The {{nrpv_block}} Jinja
+    # placeholder is rendered at agent.run() time via the extra_template_vars
+    # kwarg below — never inlined into the template source on the host side
+    # (that would cause mini-swe-agent's second-pass Jinja render to crash
+    # on any nrpv content with {{...}} or {%...%} fragments).
+    system_template = config.prompts.plan_generation_prompt
     instance_template = config.prompts.plan_instance_template or None
 
     model = build_model(
@@ -103,7 +104,6 @@ def run(
         step_limit=config.agent.max_steps,
         cost_limit=config.agent.cost_limit,
         instance_template=instance_template,
-        task=issue_description,
     )
 
     logger.info(
@@ -112,7 +112,10 @@ def run(
         config.agent.max_steps,
     )
 
-    exception_name, exception_msg = agent.run(task=issue_description)
+    exception_name, exception_msg = agent.run(
+        task=issue_description,
+        nrpv_block=config.prompts.nrpv_block,
+    )
 
     # Try to read plan from the file the agent wrote in the container
     plan_text = _read_plan_from_file(env)

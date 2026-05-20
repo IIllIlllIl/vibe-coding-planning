@@ -7,7 +7,6 @@ extraction utilities adapted to the mini-swe-agent 1.17.5 API surface.
 from __future__ import annotations
 
 import logging
-import re
 import urllib.parse
 from typing import Any
 
@@ -114,7 +113,6 @@ def build_default_agent(
     step_limit: int,
     cost_limit: float | None = None,
     instance_template: str | None = None,
-    task: str | None = None,
 ) -> Any:
     """Build a DefaultAgent with explicit config kwargs.
 
@@ -122,35 +120,41 @@ def build_default_agent(
 
         DefaultAgent(model, env, *, config_class=AgentConfig, **kwargs)
 
-    ``config_class`` defaults to ``AgentConfig`` internally; we pass
-    only the config fields (``system_template``, ``instance_template``,
-    ``step_limit``, ``cost_limit``) as keyword arguments and let
-    DefaultAgent forward them.
+    We pass only the config fields (``system_template``, ``instance_template``,
+    ``step_limit``, ``cost_limit``) as keyword arguments and let DefaultAgent
+    forward them to its internal ``AgentConfig``. ``DefaultAgent`` is passed
+    as an explicit argument so that tests can inject a mock class without
+    patching ``_deps`` internals.
 
-    ``DefaultAgent`` is passed as an explicit argument so that tests
-    can inject a mock class without patching ``_deps`` internals.
+    Task injection follows the official ``minisweagent/config/extra/swebench.yaml``
+    pattern: the ``instance_template`` contains a literal ``{{task}}``
+    placeholder, and the task string is supplied at call time via
+    ``agent.run(task=<issue_description>)``. mini-swe-agent's
+    ``DefaultAgent.run`` puts ``task`` into ``extra_template_vars`` and
+    renders the template with Jinja2's ``StrictUndefined`` — variable
+    substitution is a single, non-recursive pass, so any Jinja-looking
+    fragments inside the task content (``{{var}}``, ``{%s ...%}``, regex
+    backrefs, Windows paths) are inserted verbatim and never re-parsed as
+    template syntax. Earlier revisions of this function tried to pre-render
+    ``{{task}}`` here, which inlined the task into the template *source*
+    and triggered ``TemplateSyntaxError`` / ``UndefinedError`` on the
+    second render pass — that crash took out 7 of 450 instances in batch
+    ``run4-full-500`` before being diagnosed.
 
     Args:
         DefaultAgent: The DefaultAgent class.
         model: A model instance (e.g. ``LitellmModel``).
         environment: Tool execution environment.
-        system_template: System prompt text (was ``system_prompt`` in 1.0.x).
-        step_limit: Maximum number of agent steps (was ``max_steps`` in 1.0.x).
-        cost_limit: Optional cost limit (supported natively by 1.17.5).
-        instance_template: Optional first-user-message template. When provided,
-            DefaultAgent renders it via Jinja2 with the ``task`` kwarg passed
-            to ``agent.run(task=...)``. Used by ``code_agent`` to feed the
-            official mini-swe-agent SWE-bench instance template (which ends
-            with the ``git diff --cached`` submission command). When omitted,
-            DefaultAgent falls back to its built-in default instance_template.
-        task: The SWE-bench issue description. When provided, ``{{task}}``
-            inside ``instance_template`` is pre-rendered here so that
-            mini-swe-agent's ``StrictUndefined`` Jinja renderer never sees
-            special characters (e.g. ``{student}``, ``{%s}``) inside the
-            task content as template syntax.
+        system_template: System prompt text.
+        step_limit: Maximum number of agent steps.
+        cost_limit: Optional cost limit.
+        instance_template: Optional first-user-message template. Should
+            contain a literal ``{{task}}`` placeholder. When omitted,
+            mini-swe-agent falls back to its built-in default template.
 
     Returns:
-        A ``DefaultAgent`` instance.
+        A ``DefaultAgent`` instance. Call ``agent.run(task=<issue>)`` to
+        inject the task.
     """
     kwargs: dict[str, Any] = {
         "system_template": system_template,
@@ -158,34 +162,6 @@ def build_default_agent(
     }
     if cost_limit is not None:
         kwargs["cost_limit"] = cost_limit
-
-    # Pre-render {{task}} to avoid Jinja re-parsing task content.
-    # mini-swe-agent uses StrictUndefined; characters like {student}
-    # inside the issue description are interpreted as undefined variables.
-    #
-    # The replacement is passed as a lambda (not a plain string) because
-    # ``re.sub``'s replacement string interprets backreferences such as
-    # ``\1``-``\9``, ``\g<name>``, and Python escape sequences like ``\U``.
-    # SWE-bench problem_statements can contain regex examples, ``\g<...>``
-    # references, or Windows paths like ``C:\Users\...`` (which embeds the
-    # bytes ``\U``); a plain-string replacement would raise ``re.error`` or
-    # ``IndexError`` and crash the agent setup before any LLM call. Using
-    # ``lambda _m: task`` makes the substitution treat ``task`` as a
-    # literal regardless of its content.
-    if task is not None:
-        if instance_template is not None:
-            instance_template = re.sub(
-                r"\{\{\s*task\s*\}\}", lambda _m: task, instance_template
-            )
-        else:
-            # Use mini-swe-agent's default template pre-rendered.
-            instance_template = (
-                "Your task: "
-                + task
-                + ". Please reply with a single shell command in triple backticks. "
-                "To finish, the first line of the output of the shell command must be "
-                "'COMPLETE_TASK_AND_SUBMIT_FINAL_OUTPUT'."
-            )
 
     if instance_template is not None:
         kwargs["instance_template"] = instance_template

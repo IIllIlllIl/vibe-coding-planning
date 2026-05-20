@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from typing import Any
 from unittest.mock import patch
 
 import pytest
@@ -22,6 +23,7 @@ class MockDefaultAgent:
     """Simulates a DefaultAgent that successfully submits a plan."""
 
     last_kwargs: dict = {}
+    last_run_kwargs: dict = {}
 
     def __init__(self, model, env, **kwargs):
         self.model = model
@@ -33,29 +35,34 @@ class MockDefaultAgent:
             {"role": "assistant", "content": "plan output"},
         ]
 
-    def run(self, task):
+    def run(self, **kwargs):
+        MockDefaultAgent.last_run_kwargs = kwargs
         return ("Submitted", "plan output")
 
 
 class MockDefaultAgentEmpty(MockDefaultAgent):
-    def run(self, task):
+    def run(self, **kwargs):
+        MockDefaultAgent.last_run_kwargs = kwargs
         return ("Submitted", "")
 
 
 class MockDefaultAgentWhitespace(MockDefaultAgent):
-    def run(self, task):
+    def run(self, **kwargs):
+        MockDefaultAgent.last_run_kwargs = kwargs
         return ("Submitted", "   \n\n   ")
 
 
 class MockDefaultAgentSpaces(MockDefaultAgent):
-    def run(self, task):
+    def run(self, **kwargs):
+        MockDefaultAgent.last_run_kwargs = kwargs
         return ("Submitted", "  plan with spaces  ")
 
 
 class MockDefaultAgentLimitExceeded(MockDefaultAgent):
     """Simulates step-limit exhaustion — falls back to last assistant message."""
 
-    def run(self, task):
+    def run(self, **kwargs):
+        MockDefaultAgent.last_run_kwargs = kwargs
         return ("LimitsExceeded", "step limit reached")
 
 
@@ -67,7 +74,7 @@ def config() -> Config:
             api_base="https://api.deepseek.com",
         ),
         prompts=PromptConfig(
-            plan_generation_prompt="You are a planner.\n{nrpv_block}",
+            plan_generation_prompt="You are a planner.\n{{nrpv_block}}",
             plan_instance_template="<pr_description>{{task}}</pr_description>",
             nrpv_block="## Navigation\n## Reproduction\n## Patch\n## Validation",
         ),
@@ -94,12 +101,35 @@ class TestRunSuccess:
         assert messages[2]["role"] == "assistant"
 
     @patch("src.agents.plan_agent.import_minisweagent")
-    def test_system_template_passed_to_agent(self, mock_import, config, mock_env):
+    def test_system_template_passed_verbatim(self, mock_import, config, mock_env):
+        """The plan_generation_prompt must be forwarded to DefaultAgent
+        unchanged — no host-side str.format / str.replace. The
+        ``{{nrpv_block}}`` Jinja placeholder is rendered by
+        mini-swe-agent's DefaultAgent at run() time.
+        """
         mock_import.return_value = (MockDefaultAgent, MockLiteLLMModel, object)
         plan_agent.run(config, "Fix parser bug", mock_env)
 
-        # DefaultAgent should receive the rendered system template
-        assert "system_template" in MockDefaultAgent.last_kwargs
+        st = MockDefaultAgent.last_kwargs["system_template"]
+        # Placeholder preserved verbatim.
+        assert "{{nrpv_block}}" in st
+        # NRPV content is NOT inlined into the template source.
+        assert "## Navigation" not in st
+
+    @patch("src.agents.plan_agent.import_minisweagent")
+    def test_nrpv_block_injected_via_agent_run(self, mock_import, config, mock_env):
+        """The NRPV definition must flow to mini-swe-agent as a
+        ``run(**kwargs)`` value, not as inlined template source. This
+        keeps the second-pass Jinja render safe even when NRPV content
+        ever ends up containing Jinja-looking fragments."""
+        mock_import.return_value = (MockDefaultAgent, MockLiteLLMModel, object)
+        plan_agent.run(config, "Fix parser bug", mock_env)
+
+        assert MockDefaultAgent.last_run_kwargs["task"] == "Fix parser bug"
+        assert (
+            MockDefaultAgent.last_run_kwargs["nrpv_block"]
+            == config.prompts.nrpv_block
+        )
 
     @patch("src.agents.plan_agent.import_minisweagent")
     def test_plan_trimmed(self, mock_import, config, mock_env):

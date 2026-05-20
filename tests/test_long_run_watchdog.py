@@ -11,7 +11,7 @@ import json
 import os
 import tempfile
 import time
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from unittest.mock import patch
 
@@ -87,8 +87,9 @@ class TestCooldownLogic:
         assert watchdog.cooldown_expired(state) is True
 
     def test_cooldown_active(self):
-        future = datetime.now(timezone.utc)
-        future = future.replace(second=future.second + 10)
+        # Use timedelta to avoid the "second must be in 0..59" overflow
+        # when datetime.now().second is >= 50 (replace() does no carry).
+        future = datetime.now(timezone.utc) + timedelta(seconds=10)
         state = watchdog.WatchdogState(
             batch_id="b", total_instances=10, status="api_cooldown",
             api_cooldown_until=future.isoformat(),
@@ -282,4 +283,9 @@ class TestRepairPrompt:
         state = watchdog.WatchdogState(batch_id="b", total_instances=10)
         assert "Run the FULL test suite" in str(watchdog.invoke_claude_repair.__code__.co_consts)
         assert "write additional tests" in str(watchdog.invoke_claude_repair.__code__.co_consts)
+
+    def test_prompt_forbids_watchdog_modification(self):
+        state = watchdog.WatchdogState(batch_id="b", total_instances=10)
+        consts = str(watchdog.invoke_claude_repair.__code__.co_consts)
+        assert "scripts/long_run_watchdog.py" in consts
 

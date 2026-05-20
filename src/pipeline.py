@@ -262,9 +262,10 @@ def _build_feedback_text(
     All content is gathered on the host so the reflect agent inside Docker
     never needs to read trajectory files.  The current plan and the
     original issue text are NOT part of either return value — the plan is
-    supplied separately to :func:`gepa_reflection.render` (filling
-    ``{prompt_template}``), and the issue is delivered through the
-    reflect agent's instance_template (Jinja-rendered with ``task``).
+    forwarded to :func:`src.agents.reflect_agent.run` as ``current_plan``
+    (which mini-swe-agent fills into the ``{{prompt_template}}`` Jinja
+    placeholder at run() time), and the issue is delivered through the
+    reflect agent's instance_template (also Jinja-rendered with ``task``).
 
     The returned tuple is ``(feedback_intro, feedback_body)``:
 

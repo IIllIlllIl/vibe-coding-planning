@@ -45,7 +45,7 @@ plan-code-test/
 │   └── prompts/
 │       ├── __init__.py
 │       ├── templates.py             # Prompt 模板常量（plan / code / reflection）
-│       └── gepa_reflection.py       # 默认反射 Prompt 模板（plan-optimization 版，可由 config 覆盖）
+│       └── gepa_reflection.py       # 反射输出解析（parse_output），模板本身已移至 config.yaml
 ├── config.yaml                      # 运行时配置
 ├── requirements.txt                 # Python 依赖
 ├── .gitignore
@@ -70,7 +70,7 @@ plan-code-test/
 |------|------|------|
 | **Plan Agent** | `src/agents/plan_agent.py` | 创建 `DefaultAgent`（system prompt = `plan_generation_prompt`），在 Docker 环境中自主探索代码库，输出自然语言 Plan。返回 `(plan_content, trajectory_messages)` |
 | **Code Agent** | `src/agents/code_agent.py` | 创建 `DefaultAgent`（system prompt = `code_generation_prompt`），输入 Plan + Issue 描述，输出 Git diff 格式的 Patch。返回 `(patch_content, trajectory_messages)` |
-| **Reflect Agent** | `src/agents/reflect_agent.py` | 复用 `DefaultAgent` + Docker 环境（同 Plan/Code Agent），在 Docker 容器内运行。**所有 feedback 内容在主机端读取并组装为纯文本字符串 `feedback_text`，通过 system prompt 注入，不传递文件路径**。Agent 可读取代码库文件验证假设、编写临时测试脚本，但不得修改源代码。始终走 `gepa_reflection.render()`，模板取自 `config.prompts.reflection_prompt_template`，未配置时回退到 `DEFAULT_REFLECTION_TEMPLATE`（plan-optimization 版默认模板）。返回 `(new_plan, trajectory_messages)` |
+| **Reflect Agent** | `src/agents/reflect_agent.py` | 复用 `DefaultAgent` + Docker 环境（同 Plan/Code Agent），在 Docker 容器内运行。**所有 feedback 内容在主机端读取并组装为纯文本字符串 `feedback_text`，通过 `agent.run(**kwargs)` 作为 Jinja 变量值注入，不传递文件路径**。Agent 可读取代码库文件验证假设、编写临时测试脚本，但不得修改源代码。`reflect_agent.run()` 将 `config.prompts.reflection_prompt_template` 作为原始 system prompt 传入 `agent.run()`，由 `mini-swe-agent` 在 agent 内部通过 `extra_template_vars` 做 `StrictUndefined` 单次渲染。返回 `(new_plan, trajectory_messages)` |
 
 **Agent 层的统一约定**：
 - `plan_agent` 与 `code_agent` 函数签名：`run(config, task_input, env) -> (result_text, trajectory_messages)`
@@ -104,8 +104,8 @@ plan-code-test/
 
 | 模块 | 文件 | 职责 |
 |------|------|
-| **配置加载** | `src/prompts/templates.py` | 从 `config.yaml` 读取用户可配置的 Prompt：`plan_generation_prompt`、`code_generation_prompt`、`reflection_prompt_template`（反射模板，覆盖 `gepa_reflection.DEFAULT_REFLECTION_TEMPLATE`）。不存放硬编码常量 |
-| **GEPA 反射模板** | `src/prompts/gepa_reflection.py` | 提供 `render(current_plan, feedback_data, placeholders="", template=None) -> str` 渲染函数与 `DEFAULT_REFLECTION_TEMPLATE` 公开常量。默认模板是 plan-optimization 版（与原 GEPA prompt-optimization 模板有差异：移除 `{placeholders}` 约束，加入 N/R/P/V 输出结构要求）。reflect_agent 调用时优先使用 `config.prompts.reflection_prompt_template`，缺失时回退到默认模板 |
+| **配置加载** | `src/prompts/templates.py` | 从 `config.yaml` 读取用户可配置的 Prompt：`plan_generation_prompt`、`code_generation_prompt`、`reflection_prompt_template`。不存放硬编码常量；`src/config.py` 在加载阶段若 `reflection_prompt_template` 缺失则填充默认值 |
+| **GEPA 反射解析** | `src/prompts/gepa_reflection.py` | 仅保留 `parse_output(llm_response) -> str` 回退解析函数：当容器内 `/tmp/plan.md` 缺失时，从 LLM 响应中提取第一个 ``` 代码块作为新 Plan。不再维护 `DEFAULT_REFLECTION_TEMPLATE` 常量或 `render()` 函数 — 模板渲染由 `mini-swe-agent` 在 agent 内部完成 |
 
 ---
 
@@ -178,10 +178,9 @@ TestResults = dict[str, Any]  # {resolved: bool, stdout: str, stderr: str, log_d
 
 ### 5.3 GEPA 反射 Prompt 模板如何集成？
 
-不引入 `gepa` 包作为运行时依赖。`src/prompts/gepa_reflection.py` 中：
-- 硬编码 GEPA 的反射 Prompt 模板文本（附录 A）
-- 提供 `render()` 函数，将 `current_plan` 和 `feedback_data` 填入占位符
-- 输出解析：优先从容器内 `/tmp/plan.md` 读取新 Plan（pipeline 在 `docker.stop` 前通过 `docker exec cat` 抓取）；若文件为空或不存在，则回退到从 LLM 响应中提取第一个 ``` 代码块
+不引入 `gepa` 包作为运行时依赖。反射 Prompt 模板唯一可信源为 `config.yaml` 的 `prompts.reflection_prompt_template`（`src/config.py` 加载时若缺失则填充默认值）。`src/prompts/gepa_reflection.py` 中：
+- 不再维护 `DEFAULT_REFLECTION_TEMPLATE` 常量或 `render()` 函数（已由 `mini-swe-agent` 的 `extra_template_vars` + `StrictUndefined` 渲染替代）
+- 仅保留 `parse_output()` 回退解析函数：优先从容器内 `/tmp/plan.md` 读取新 Plan（pipeline 在 `docker.stop` 前通过 `docker exec cat` 抓取）；若文件为空或不存在，则回退到从 LLM 响应中提取第一个 ``` 代码块
 
 这样即使 `gepa` 包未来版本变化，我们的 Prompt 模板也是稳定的。
 
@@ -230,10 +229,10 @@ TestResults = dict[str, Any]  # {resolved: bool, stdout: str, stderr: str, log_d
 | FR-02 Plan 生成 | `src/agents/plan_agent.py` |
 | FR-03 Code 生成 | `src/agents/code_agent.py` |
 | FR-04 测试评估 | `src/evaluator/swe_evaluator.py` |
-| FR-05 方案优化 | `src/agents/reflect_agent.py` + `src/prompts/gepa_reflection.py`（含 `DEFAULT_REFLECTION_TEMPLATE`）+ `src/environment/docker_env.py` + `src/pipeline.py`（feedback_text 组装） |
+| FR-05 方案优化 | `src/agents/reflect_agent.py` + `src/prompts/gepa_reflection.py`（`parse_output()` 回退解析）+ `src/environment/docker_env.py` + `src/pipeline.py`（feedback_text 组装） |
 | FR-06 迭代循环 | `src/pipeline.py` |
 | FR-07 重跑 | `src/config.py`（resume 配置）+ `src/pipeline.py`（**当前轮迭代未实现，详 `project_issues.md` §6**） |
-| FR-08/09 配置 | `src/config.py` + `config.yaml`；`prompts.reflection_prompt_template` 缺失或为空时回退到 `src/prompts/gepa_reflection.py:DEFAULT_REFLECTION_TEMPLATE` |
+| FR-08/09 配置 | `src/config.py` + `config.yaml`；`prompts.reflection_prompt_template` 缺失或为空时由 `src/config.py` 加载阶段填充默认值 |
 | FR-10 轨迹保存 | `src/output/trajectory.py` + `src/output/writer.py` |
 | FR-11 Feedback 字符串组装 | `src/pipeline.py:_build_feedback_text`（主机端组装为纯文本，注入 reflect_agent 的 system prompt） |
 | FR-12 错误处理 | `src/pipeline.py` 中的 try/except 层级 |

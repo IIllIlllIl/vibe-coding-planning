@@ -1,9 +1,23 @@
 """Prompt template management.
 
-Reads prompt templates from the configuration file and provides rendering
-utilities for placeholder substitution. The reflection template lives in
-its own module (:mod:`src.prompts.gepa_reflection`) because it has a
-richer placeholder set; this module covers the plan and code agents.
+Reads prompt templates from the configuration file. The templates are
+passed verbatim to mini-swe-agent's ``DefaultAgent``, which Jinja-renders
+both ``system_template`` and ``instance_template`` through
+``Template(..., undefined=StrictUndefined).render(**extra_template_vars)``
+at run() time (see ``minisweagent.agents.default.DefaultAgent.render_template``).
+
+All LLM-generated and user-controlled content (the approved ``plan``,
+the ``nrpv_block``, the ``task`` issue description, etc.) is delivered
+as Jinja **variable values** via ``agent.run(task=..., plan=..., ...)``
+— never inlined into the template source on the host side. This keeps
+mini-swe-agent's single-pass non-recursive render safe even when the
+content contains Jinja-looking fragments like ``{{var}}`` or
+``{% tag %}`` (as Django/Sphinx/Sympy bug plans regularly do).
+
+The reflection template lives in its own module
+(:mod:`src.prompts.gepa_reflection`) only because it ships a
+``parse_output`` helper for extracting fenced plan content; the
+rendering path is identical to the plan and code agents.
 """
 
 from dataclasses import dataclass
@@ -45,42 +59,3 @@ def load_prompt_templates(config_prompts: dict) -> PromptTemplates:
         reflect_instance=config_prompts.get("reflect_instance_template", ""),
         nrpv_block=config_prompts.get("nrpv_block", ""),
     )
-
-
-def render_plan_prompt(template: str, nrpv_block: str) -> str:
-    """Render the plan generation system prompt.
-
-    Substitutes ``{nrpv_block}`` in the plan agent's system template with
-    the shared NRPV definition. The issue description is delivered to the
-    agent via the separate ``plan_instance_template``, not via this
-    system-prompt renderer.
-
-    Args:
-        template: Raw plan generation system template
-            (``config.prompts.plan_generation_prompt``).
-        nrpv_block: Shared NRPV section text
-            (``config.prompts.nrpv_block``).
-
-    Returns:
-        The fully rendered system prompt string.
-    """
-    return template.replace("{nrpv_block}", nrpv_block)
-
-
-def render_code_prompt(template: str, plan: str) -> str:
-    """Render the code generation system prompt.
-
-    Substitutes ``{plan}`` with the approved plan text. The issue
-    description is delivered separately through the SWE-official
-    ``code_instance_template`` (Jinja-rendered with the ``task`` kwarg by
-    DefaultAgent), so it is intentionally NOT a parameter here.
-
-    Args:
-        template: Raw code generation system template
-            (``config.prompts.code_generation_prompt``).
-        plan: The approved plan content to inject.
-
-    Returns:
-        The fully rendered system prompt string.
-    """
-    return template.replace("{plan}", plan)

@@ -12,15 +12,16 @@ from src.config import AgentConfig, Config, PromptConfig, SystemConfig
 from src.exceptions import FatalError, TaskError
 
 
-# Reflection template stub used by the test suite.  We do NOT depend on the
-# YAML-resident template here because the agent's behaviour is independent
-# of template wording — render() just needs the four placeholders to be
-# present so str.format succeeds.
+# Reflection template stub used by the test suite.  We do NOT depend on
+# the YAML-resident template here because the agent's behaviour is
+# independent of template wording — the assertions below just need the
+# four Jinja placeholders to be present so the variable-injection
+# contract can be exercised.
 TEST_REFLECTION_TEMPLATE = (
-    "Plan: {prompt_template}\n"
-    "Intro: {feedback_intro}\n"
-    "Body: {inputs_outputs_feedback}\n"
-    "NRPV:\n{nrpv_block}\n"
+    "Plan: {{prompt_template}}\n"
+    "Intro: {{feedback_intro}}\n"
+    "Body: {{inputs_outputs_feedback}}\n"
+    "NRPV:\n{{nrpv_block}}\n"
     "Navigation Reproduction Patch Validation"
 )
 
@@ -38,6 +39,7 @@ class MockDefaultAgent:
     """Simulates a DefaultAgent that successfully submits."""
 
     last_kwargs: dict = {}
+    last_run_kwargs: dict = {}
     last_env: Any = None
 
     def __init__(self, model, env, **kwargs):
@@ -57,7 +59,8 @@ class MockDefaultAgent:
             },
         ]
 
-    def run(self, task):
+    def run(self, **kwargs):
+        MockDefaultAgent.last_run_kwargs = kwargs
         return (
             "Submitted",
             "## Improved Plan\n\n1. Analyze the bug\n2. Fix the parser\n3. Add tests",
@@ -67,7 +70,8 @@ class MockDefaultAgent:
 class MockDefaultAgentFenced(MockDefaultAgent):
     """Agent output wrapped in ``` markdown fence (template requirement)."""
 
-    def run(self, task):
+    def run(self, **kwargs):
+        MockDefaultAgent.last_run_kwargs = kwargs
         fenced = (
             "```markdown\n"
             "## Improved Plan\n\n1. Analyze the bug\n2. Fix the parser\n"
@@ -77,24 +81,28 @@ class MockDefaultAgentFenced(MockDefaultAgent):
 
 
 class MockDefaultAgentEmpty(MockDefaultAgent):
-    def run(self, task):
+    def run(self, **kwargs):
+        MockDefaultAgent.last_run_kwargs = kwargs
         return ("Submitted", "")
 
 
 class MockDefaultAgentWhitespace(MockDefaultAgent):
-    def run(self, task):
+    def run(self, **kwargs):
+        MockDefaultAgent.last_run_kwargs = kwargs
         return ("Submitted", "   \n\n   ")
 
 
 class MockDefaultAgentShort(MockDefaultAgent):
-    def run(self, task):
+    def run(self, **kwargs):
+        MockDefaultAgent.last_run_kwargs = kwargs
         return ("Submitted", "Too short.")
 
 
 class MockDefaultAgentLimitExceeded(MockDefaultAgent):
     """Step-limit exhaustion — falls back to last assistant message."""
 
-    def run(self, task):
+    def run(self, **kwargs):
+        MockDefaultAgent.last_run_kwargs = kwargs
         return ("LimitsExceeded", "step limit reached")
 
 
@@ -139,9 +147,16 @@ class TestRunSuccess:
         assert messages[0]["role"] == "system"
 
     @patch("src.agents.reflect_agent.import_minisweagent")
-    def test_system_template_contains_all_placeholders(
+    def test_system_template_passed_verbatim(
         self, mock_import, config, mock_env
     ):
+        """The reflection_prompt_template must be forwarded to
+        DefaultAgent unchanged — no host-side str.format inlining of
+        the four placeholders. Inlining LLM-generated content
+        (prompt_template, inputs_outputs_feedback) into the template
+        source would crash mini-swe-agent's second-pass StrictUndefined
+        Jinja render on any ``{{...}}`` / ``{%...%}`` fragments.
+        """
         mock_import.return_value = (MockDefaultAgent, MockLiteLLMModel, object)
         reflect_agent.run(
             config,
@@ -152,53 +167,64 @@ class TestRunSuccess:
             mock_env,
         )
 
-        assert "system_template" in MockDefaultAgent.last_kwargs
         st = MockDefaultAgent.last_kwargs["system_template"]
-        # Plan, intro, body, and the nrpv block must all land in the system prompt
-        assert "PREVIOUS-PLAN-MARKER" in st
-        assert "INTRO-MARKER" in st
-        assert "BODY-MARKER" in st
-        # NRPV section names must appear (via the nrpv_block field)
-        assert "Navigation" in st
-        assert "Reproduction" in st
-        assert "Patch" in st
-        assert "Validation" in st
+        # All four placeholders preserved verbatim.
+        assert "{{prompt_template}}" in st
+        assert "{{feedback_intro}}" in st
+        assert "{{inputs_outputs_feedback}}" in st
+        assert "{{nrpv_block}}" in st
+        # None of the runtime content is inlined into the template source.
+        assert "PREVIOUS-PLAN-MARKER" not in st
+        assert "INTRO-MARKER" not in st
+        assert "BODY-MARKER" not in st
 
     @patch("src.agents.reflect_agent.import_minisweagent")
-    def test_issue_description_passed_as_task(self, mock_import, config, mock_env):
-        """The reflect agent must receive the original issue via ``task``
-        so its reflect_instance_template can wrap it in <pr_description>."""
-
-        captured: dict = {}
-
-        class CapturingAgent(MockDefaultAgent):
-            def run(self, task):
-                captured["task"] = task
-                return MockDefaultAgent.run(self, task)
-
-        mock_import.return_value = (CapturingAgent, MockLiteLLMModel, object)
+    def test_all_four_vars_injected_via_agent_run(
+        self, mock_import, config, mock_env
+    ):
+        """The four runtime values plus ``task`` must flow to mini-swe-agent
+        as ``run(**kwargs)``; the agent merges them into
+        ``extra_template_vars`` before the (single-pass, non-recursive)
+        Jinja render."""
+        mock_import.return_value = (MockDefaultAgent, MockLiteLLMModel, object)
         reflect_agent.run(
             config,
-            "previous plan",
-            "intro",
-            "body",
-            "ISSUE-X",
+            "PREVIOUS-PLAN-MARKER",
+            "INTRO-MARKER",
+            "BODY-MARKER",
+            "ISSUE-MARKER",
             mock_env,
         )
-        assert captured["task"] == "ISSUE-X"
+
+        rk = MockDefaultAgent.last_run_kwargs
+        assert rk["task"] == "ISSUE-MARKER"
+        assert rk["prompt_template"] == "PREVIOUS-PLAN-MARKER"
+        assert rk["feedback_intro"] == "INTRO-MARKER"
+        assert rk["inputs_outputs_feedback"] == "BODY-MARKER"
+        assert rk["nrpv_block"] == config.prompts.nrpv_block
 
     @patch("src.agents.reflect_agent.import_minisweagent")
     def test_reflect_instance_template_passed_to_agent(
         self, mock_import, config, mock_env
     ):
+        """The configured instance_template is forwarded verbatim.
+
+        ``{{task}}`` stays as a Jinja placeholder; the issue text is
+        injected by mini-swe-agent's ``agent.run(task=...)`` via
+        ``extra_template_vars`` (single-pass variable substitution).
+        Pre-rendering here would inline the issue into the template
+        source and crash on the second Jinja pass for issues containing
+        template-like fragments.
+        """
         mock_import.return_value = (MockDefaultAgent, MockLiteLLMModel, object)
         reflect_agent.run(
             config, "previous plan", "intro", "body", "issue", mock_env
         )
         assert "instance_template" in MockDefaultAgent.last_kwargs
-        # {{task}} is pre-rendered in our code before passing to mini-swe-agent
-        assert "{{task}}" not in MockDefaultAgent.last_kwargs["instance_template"]
-        assert "issue" in MockDefaultAgent.last_kwargs["instance_template"]
+        it = MockDefaultAgent.last_kwargs["instance_template"]
+        # Placeholder preserved; issue text NOT inlined.
+        assert "{{task}}" in it
+        assert "issue" not in it
 
     @patch("src.agents.reflect_agent.import_minisweagent")
     def test_passes_docker_environment(self, mock_import, config, mock_env):

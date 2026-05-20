@@ -110,7 +110,14 @@ class TestBuildDefaultAgent:
         )
         assert "cost_limit" not in agent.kwargs
 
-    def test_task_pre_renders_instance_template(self):
+    def test_instance_template_preserved_verbatim(self):
+        # build_default_agent must NOT touch the instance_template — the
+        # ``{{task}}`` placeholder is rendered later by mini-swe-agent's
+        # DefaultAgent.run(task=...) call, which inserts the task as a
+        # Jinja variable value (single non-recursive pass). Pre-rendering
+        # the placeholder here would inline the task into the template
+        # source and crash on the second render pass when the task
+        # contains Jinja-looking fragments.
         agent = build_default_agent(
             FakeDefaultAgent,
             model="m",
@@ -118,13 +125,13 @@ class TestBuildDefaultAgent:
             system_template="test",
             step_limit=10,
             instance_template="<pr>{{task}}</pr>",
-            task="hello {world}",
         )
-        it = agent.kwargs["instance_template"]
-        assert "{{task}}" not in it
-        assert "<pr>hello {world}</pr>" == it
+        assert agent.kwargs["instance_template"] == "<pr>{{task}}</pr>"
 
-    def test_task_pre_renders_default_template_when_none(self):
+    def test_no_instance_template_means_no_kwarg(self):
+        # When the caller does not provide an instance_template we let
+        # mini-swe-agent fall back to its built-in default. We must NOT
+        # synthesise one here.
         agent = build_default_agent(
             FakeDefaultAgent,
             model="m",
@@ -132,35 +139,24 @@ class TestBuildDefaultAgent:
             system_template="test",
             step_limit=10,
             instance_template=None,
-            task="issue with {braces}",
         )
-        it = agent.kwargs["instance_template"]
-        assert "{{task}}" not in it
-        assert "issue with {braces}" in it
-
-    def test_task_none_leaves_template_untouched(self):
-        agent = build_default_agent(
-            FakeDefaultAgent,
-            model="m",
-            environment="env",
-            system_template="test",
-            step_limit=10,
-            instance_template="keep {{task}} here",
-            task=None,
-        )
-        assert agent.kwargs["instance_template"] == "keep {{task}} here"
+        assert "instance_template" not in agent.kwargs
 
     # ------------------------------------------------------------------
-    # Regression: re.sub replacement-string backreference interpretation.
-    # If the substitution is done with `re.sub(pat, task, ...)`, any
-    # ``\1``-``\9`` or ``\g<name>`` inside ``task`` is treated as a group
-    # reference and raises ``re.error: invalid group reference``. SWE-bench
-    # problem_statements occasionally contain such sequences (regex
-    # examples, escape demos, Windows paths in stack traces) and would
-    # otherwise crash the agent setup before any LLM call. The fix passes
-    # the replacement via a lambda so the string is inserted verbatim.
+    # Regression: the variable-injection path must survive mini-swe-agent's
+    # actual Jinja2 + StrictUndefined render. This test exercises a real
+    # ``jinja2.Template`` (not a mock) using the same render call
+    # mini-swe-agent makes in ``DefaultAgent.run()``. The seven instances
+    # that crashed in batch ``run4-full-500`` had problem_statements
+    # containing patterns like ``{{test_run_form}}`` and ``{%s ...%}``;
+    # the older pre-render path inlined those into the template source and
+    # the second-pass renderer raised TemplateSyntaxError / UndefinedError.
+    # With variable injection, the task content is a literal value and is
+    # never re-parsed as template syntax.
     # ------------------------------------------------------------------
-    def test_task_with_backslash_digit_is_inserted_literally(self):
+    def test_instance_template_renders_safely_with_hostile_task(self):
+        from jinja2 import StrictUndefined, Template
+
         agent = build_default_agent(
             FakeDefaultAgent,
             model="m",
@@ -168,53 +164,21 @@ class TestBuildDefaultAgent:
             system_template="test",
             step_limit=10,
             instance_template="<pr>{{task}}</pr>",
-            task=r"see regex \1 backref",
         )
-        # The literal backslash-digit must survive into the rendered template.
-        assert agent.kwargs["instance_template"] == r"<pr>see regex \1 backref</pr>"
-
-    def test_task_with_backslash_g_named_group_is_inserted_literally(self):
-        agent = build_default_agent(
-            FakeDefaultAgent,
-            model="m",
-            environment="env",
-            system_template="test",
-            step_limit=10,
-            instance_template="<pr>{{task}}</pr>",
-            task=r"use \g<name> to refer",
+        rendered_template = agent.kwargs["instance_template"]
+        hostile_task = (
+            "Bug in test_run_form: {{test_run_form}} crashes on "
+            "{%s ...%} and regex \\1 backref and C:\\Users\\dev"
         )
-        assert agent.kwargs["instance_template"] == r"<pr>use \g<name> to refer</pr>"
-
-    def test_task_with_windows_path_survives_substitution(self):
-        agent = build_default_agent(
-            FakeDefaultAgent,
-            model="m",
-            environment="env",
-            system_template="test",
-            step_limit=10,
-            instance_template="<pr>{{task}}</pr>",
-            task=r"file C:\Users\dev\repo\test.py line 42",
+        # Simulate mini-swe-agent's render call.
+        output = Template(rendered_template, undefined=StrictUndefined).render(
+            task=hostile_task
         )
-        assert (
-            agent.kwargs["instance_template"]
-            == r"<pr>file C:\Users\dev\repo\test.py line 42</pr>"
-        )
-
-    def test_task_with_backslash_works_in_default_template(self):
-        # The instance_template=None branch concatenates `task` with string
-        # literals and never calls re.sub, but verify the no-template path
-        # also tolerates regex-like content for parity.
-        agent = build_default_agent(
-            FakeDefaultAgent,
-            model="m",
-            environment="env",
-            system_template="test",
-            step_limit=10,
-            instance_template=None,
-            task=r"task with \1 and \g<x>",
-        )
-        it = agent.kwargs["instance_template"]
-        assert r"task with \1 and \g<x>" in it
+        # All hostile characters survive verbatim.
+        assert "{{test_run_form}}" in output
+        assert "{%s ...%}" in output
+        assert r"\1 backref" in output
+        assert r"C:\Users\dev" in output
 
 
 class TestExtractLastAssistant:

@@ -1,61 +1,19 @@
-"""Reflection prompt rendering helper.
+"""Reflection prompt helpers.
 
 The reflection prompt template body lives in ``config.yaml`` (single
-source of truth) under ``prompts.reflection_prompt_template``. This
-module only:
+source of truth) under ``prompts.reflection_prompt_template``. It uses
+Jinja2 placeholders (``{{prompt_template}}``, ``{{feedback_intro}}``,
+``{{inputs_outputs_feedback}}``, ``{{nrpv_block}}``) that mini-swe-agent's
+``DefaultAgent`` renders at ``agent.run()`` time — the host MUST pass
+these values via ``agent.run(**kwargs)``, NOT inline them into the
+template source.
 
-* substitutes the four runtime placeholders the YAML template expects
-  (``{prompt_template}``, ``{feedback_intro}``,
-  ``{inputs_outputs_feedback}``, ``{nrpv_block}``); and
-* extracts the first ``\\`\\`\\`-fenced code block from the LLM's response
-  (``parse_output``), used as a fallback when the agent returns plan
-  text in its message rather than writing it to ``/tmp/plan.md``.
-
-Wording, structure, and design choices for the template itself are
-documented in the YAML comments above
-``prompts.reflection_prompt_template``.
+The only host-side helper kept here is ``parse_output``, used as a
+fallback to extract a ``\\`\\`\\`-fenced plan block from the LLM's submission
+message when ``/tmp/plan.md`` is missing.
 """
 
 import re
-
-
-def render(
-    *,
-    current_plan: str,
-    feedback_intro: str,
-    feedback_body: str,
-    nrpv_block: str,
-    template: str,
-) -> str:
-    """Render the reflection system prompt.
-
-    Substitutes the four placeholders the YAML reflection template
-    expects, in a single ``str.format`` pass. The template, NRPV block,
-    and feedback strings are all passed in by the caller — this function
-    has no defaults of its own.
-
-    Args:
-        current_plan: Previous round's plan
-            (fills ``{prompt_template}``).
-        feedback_intro: Level-aware paragraph describing which feedback
-            fields are present this round
-            (fills ``{feedback_intro}``).
-        feedback_body: Assembled trajectories / test results / patch
-            (fills ``{inputs_outputs_feedback}``).
-        nrpv_block: Shared NRPV section text
-            (fills ``{nrpv_block}``).
-        template: Raw reflection template body from
-            ``config.prompts.reflection_prompt_template``.
-
-    Returns:
-        The fully rendered system prompt string ready for DefaultAgent.
-    """
-    return template.format(
-        prompt_template=current_plan,
-        feedback_intro=feedback_intro,
-        inputs_outputs_feedback=feedback_body,
-        nrpv_block=nrpv_block,
-    )
 
 
 def parse_output(llm_response: str) -> str:

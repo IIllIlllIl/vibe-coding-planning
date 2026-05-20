@@ -44,6 +44,13 @@ REPAIR_CHECK_INTERVAL = 60            # 1 min while waiting for Claude repair
 DISK_MIN_FREE_GB = 10                 # Pause if less than 10 GB free
 MAX_REPAIR_ATTEMPTS = 3               # Claude repair limit before long cooldown
 DOCKER_PRUNE_INTERVAL_CHECKS = 6      # Run `docker system prune -f` every N checks
+# When the batch tmux session is gone, poll the master log for the
+# `=== Batch end ===` marker before treating the disappearance as a crash.
+# A single 5 s sleep proved too tight on a busy filesystem: tee can lag the
+# tmux exit by tens of seconds, causing the watchdog to mis-diagnose a clean
+# finish as a crash and burn a Claude repair attempt.
+LOG_SETTLE_POLL_SECONDS = 5
+LOG_SETTLE_MAX_SECONDS = 30
 
 BATCH_TMUX_SESSION = "pct-batch"
 REPAIR_TMUX_SESSION = "pct-repair"
@@ -315,6 +322,7 @@ def analyze_recent_logs() -> dict:
         "api_auth_failed": bool(_grep_patterns(master_tail, API_AUTH_PATTERNS)),
         "docker_down": bool(_grep_patterns(master_tail, DOCKER_DOWN_PATTERNS)),
         "expected_failure": bool(_grep_patterns(master_tail, EXPECTED_FAILURE_PATTERNS)),
+        "batch_completed": "=== Batch end ===" in master_tail,
     }
 
     # Try to identify current instance from most recent START line
@@ -326,7 +334,16 @@ def analyze_recent_logs() -> dict:
             break
     result["current_instance"] = current
 
-    # Count completed from master log
+    # Count completed (in the batch-progress sense) from the master log.
+    # "Completed" here matches the project definition: the agent either
+    # produced a passing patch OR exhausted its retry budget — both paths
+    # leave src.main writing a result.json and the master log recording
+    # DONE. SKIP means the instance already had a result.json from a prior
+    # run, which also counts. FAIL means src.main itself crashed before
+    # writing result.json (e.g. the current Jinja2 second-pass bug), so the
+    # instance is NOT done and must be retried after a code fix — counting
+    # FAIL here would let persistent crashers falsely satisfy the
+    # "all instances complete" check in main().
     completed = 0
     for line in master_tail.splitlines():
         if " DONE " in line or " SKIP " in line:
@@ -408,12 +425,40 @@ def docker_backoff_wait(retry_count: int) -> int:
 # Claude Code repair
 # ---------------------------------------------------------------------------
 
-def invoke_claude_repair(state: WatchdogState, error_lines: list[str]) -> None:
-    """Spawn a tmux session with Claude Code CLI to fix the bug."""
+def invoke_claude_repair(state: WatchdogState, error_lines: list[str]) -> bool:
+    """Spawn a tmux session with Claude Code CLI to fix the bug.
+
+    Returns True if the repair tmux session was actually launched, or False
+    if we aborted at the last moment (e.g. the master log just caught up
+    with a buffered ``=== Batch end ===`` line and the batch is in fact
+    complete). Caller can use the return value to skip post-repair
+    bookkeeping when no repair was launched.
+    """
+    log_snippet = _tail_file(MASTER_LOG, 100)
+
+    # Defensive recheck: between analyze_recent_logs() in the main loop and
+    # this point, the master log may have caught up with the buffered
+    # `=== Batch end ===` line that the batch script tees at exit. The
+    # earlier "session gone + error lines present" diagnosis was a race
+    # against tee flushing, not a real crash. Marking the batch complete
+    # here saves a Claude repair attempt (and the MAX_REPAIR_ATTEMPTS
+    # budget) for an actual bug. We deliberately do NOT overwrite
+    # state.completed — that field tracks real progress (result.json files
+    # on disk), and forging it to total_instances would mask instances
+    # that crashed before writing result.json.
+    if "=== Batch end ===" in log_snippet:
+        logging.info(
+            "End marker observed just before invoking repair; the earlier "
+            "diagnosis was a race against the master log's tee flush. "
+            "Marking batch complete instead of invoking Claude."
+        )
+        state.status = "completed"
+        save_state(state)
+        return False
+
     _kill_tmux_session(REPAIR_TMUX_SESSION)
 
     error_text = "\n".join(error_lines[:20])
-    log_snippet = _tail_file(MASTER_LOG, 100)
 
     prompt = f"""The PCT batch runner (plan-code-test pipeline) encountered an error that requires code changes.
 
@@ -437,6 +482,7 @@ def invoke_claude_repair(state: WatchdogState, error_lines: list[str]) -> None:
 
 Rules:
 - Do NOT modify `config.yaml`, `.watchdog_state.json`, or anything in `output/`.
+- Do NOT modify `scripts/long_run_watchdog.py` or any other file in `scripts/`.
 - Do NOT delete existing test files.
 - Prefer editing existing files over creating new ones.
 - The project uses Python 3.12 and pytest.
@@ -469,6 +515,7 @@ Rules:
     state.claude_repair_count += 1
     state.status = "repairing"
     save_state(state)
+    return True
 
 
 def is_repair_complete() -> bool:
@@ -478,8 +525,21 @@ def is_repair_complete() -> bool:
 def verify_repair() -> bool:
     """Run the FULL regression test suite after a repair.
 
-    If tests fail, reverts code changes. If new tests were added by the
-    repair agent, they are preserved as long as the suite passes.
+    If tests fail, revert ``src/``, ``tests/``, and
+    ``scripts/long_run_watchdog.py`` to HEAD. Earlier versions of this
+    function kept tests/ "for manual review" on failure, but real-world
+    repair runs have shown the agent may hallucinate a fix and rewrite
+    existing test assertions to match the hallucinated behaviour — leaving
+    those tests on disk poisons the next regression run. Reverting tests/
+    too means we lose any *legitimate* new tests the agent wrote, which is
+    an acceptable price for a recoverable test suite during a multi-day
+    unattended run.
+
+    ``scripts/long_run_watchdog.py`` is also reverted because the repair
+    agent runs inside a tmux session and could accidentally modify the
+    very file that is supervising the batch. The prompt already forbids
+    touching ``scripts/``, but the revert is a belt-and-suspenders safety
+    net.
     """
     logging.info("Running FULL regression test suite to verify repair...")
     try:
@@ -510,11 +570,24 @@ def verify_repair() -> bool:
     except subprocess.TimeoutExpired:
         logging.warning("pytest timed out during repair verification (> 10 min).")
 
-    # Revert source changes, but keep new test files for manual review
-    logging.warning("Reverting src/ changes via git checkout...")
-    subprocess.run(["git", "checkout", "--", "src/"], capture_output=True)
-    subprocess.run(["git", "clean", "-fd", "src/"], capture_output=True)
-    logging.warning("Test changes in tests/ are kept for manual review.")
+    # Revert src/, tests/, AND scripts/long_run_watchdog.py — see docstring
+    # for why tests/ is no longer preserved on failure. `git checkout --`
+    # reverts tracked-file edits; `git clean -fd` removes untracked files
+    # the repair agent may have created. We also revert the watchdog script
+    # because the repair agent runs inside tmux and could accidentally (or
+    # maliciously) corrupt the very process that is supervising the batch.
+    logging.warning(
+        "Reverting src/, tests/, and scripts/long_run_watchdog.py changes "
+        "via git checkout + clean..."
+    )
+    subprocess.run(
+        ["git", "checkout", "--", "src/", "tests/", "scripts/long_run_watchdog.py"],
+        capture_output=True,
+    )
+    subprocess.run(
+        ["git", "clean", "-fd", "src/", "tests/", "scripts/long_run_watchdog.py"],
+        capture_output=True,
+    )
     return False
 
 
@@ -574,6 +647,19 @@ def main() -> int:
 
     state = load_state()
 
+    # Cold-start: if status is "running" but no batch tmux session exists
+    # (fresh launch, or resume after Mac reboot / manual watchdog restart),
+    # kick off the batch before entering the watch loop. Without this, the
+    # `not batch_alive` branch below would misdiagnose the missing session
+    # as an unknown crash and spawn a Claude repair on every cold start.
+    # start_batch() kills any stale session first and the batch script is
+    # idempotent (skips instances with existing result.json), so re-running
+    # is always safe.
+    if state.status == "running" and not _tmux_session_exists(BATCH_TMUX_SESSION):
+        logging.info("Cold start: launching initial batch session.")
+        start_batch(state)
+        time.sleep(5)  # Let tmux + the shell wrapper settle before health check.
+
     # Main event loop
     while True:
         save_state(state)
@@ -625,8 +711,31 @@ def main() -> int:
         batch_alive = _tmux_session_exists(BATCH_TMUX_SESSION)
 
         if not batch_alive:
-            logging.warning("Batch session not found. Analyzing logs...")
+            # Race protection: the batch shell writes `=== Batch end ===` via
+            # `tee -a` as its last command, but the tmux session can be
+            # observed as gone a moment before that line lands in the master
+            # log. Without a settle, the watchdog mis-diagnoses a clean
+            # finish as an "unknown cause" crash and burns a Claude repair on
+            # a log that already shows the end marker.
+            #
+            # We poll the log up to LOG_SETTLE_MAX_SECONDS, short-circuiting
+            # as soon as the end marker appears. This is strictly better
+            # than a single fixed sleep — fast in the common case where the
+            # end marker is already there, and tolerant of a slow tee flush
+            # on a busy filesystem.
+            logging.warning(
+                "Batch session not found. Polling log for end marker (up to %ds)...",
+                LOG_SETTLE_MAX_SECONDS,
+            )
             log_analysis = analyze_recent_logs()
+            settle_waited = 0
+            while (
+                not log_analysis["batch_completed"]
+                and settle_waited < LOG_SETTLE_MAX_SECONDS
+            ):
+                time.sleep(LOG_SETTLE_POLL_SECONDS)
+                settle_waited += LOG_SETTLE_POLL_SECONDS
+                log_analysis = analyze_recent_logs()
 
             if log_analysis["api_auth_failed"]:
                 enter_fatal(state, "DeepSeek API authentication failed (401). Check DEEPSEEK_API_KEY.")
@@ -650,12 +759,39 @@ def main() -> int:
                 time.sleep(wait_sec)
                 continue
 
+            # Normal completion — batch script finished all instances and printed
+            # "=== Batch end ===" before exiting. This is success, not a crash.
+            # state.completed is left untouched: it reflects real progress
+            # (result.json files on disk), and forging it to total_instances
+            # would hide any instance that crashed before writing result.json.
+            if log_analysis["batch_completed"]:
+                logging.info("Batch ended normally (=== Batch end ===). Marking complete.")
+                state.status = "completed"
+                save_state(state)
+                continue
+
             # Unknown failure — could be a code bug
             master_tail = log_analysis["master_tail"]
             # Collect last few error-looking lines
             error_lines = [ln for ln in master_tail.splitlines() if "ERROR" in ln or "error" in ln.lower()][-10:]
             if not error_lines:
-                error_lines = ["Batch exited with unknown cause."]
+                # Session is gone, no end marker, AND no error lines were
+                # logged — there is nothing for Claude to diagnose. Most
+                # commonly this is a benign race where the script exited
+                # cleanly but tmux was inspected before the end marker
+                # landed (the settle delay above usually catches this, but
+                # we double-belt it here). Restart the batch instead of
+                # burning a Claude repair on an "unknown cause" prompt that
+                # gives the agent nothing to fix. start_batch() is
+                # idempotent — instances with result.json are skipped — so
+                # repeated restarts converge to either the end marker being
+                # written or a real error appearing in the log.
+                logging.warning(
+                    "Batch session gone with no end marker and no error lines. "
+                    "Restarting batch (idempotent) instead of invoking Claude repair."
+                )
+                start_batch(state)
+                continue
 
             if state.claude_repair_count >= MAX_REPAIR_ATTEMPTS:
                 logging.error(

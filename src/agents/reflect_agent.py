@@ -4,19 +4,26 @@ Runs inside a Docker container using DefaultAgent's interactive step
 loop, similar to plan_agent. The agent may read files and write
 temporary scripts, but must not modify source under ``/testbed``.
 
-The reflection system prompt is rendered on the host by combining:
+The reflection system_template (loaded verbatim from
+``config.prompts.reflection_prompt_template``) contains four Jinja
+placeholders that the host fills at ``agent.run()`` time via
+``extra_template_vars``:
 
-* the current plan (previous round's output);
-* a level-aware feedback intro (which fields are present this round);
-* the assembled feedback body (trajectories + optional test results +
-  patch); and
-* the shared NRPV block (single source for the four-section plan
-  structure).
+* ``{{prompt_template}}``         – the current plan (previous round's output)
+* ``{{feedback_intro}}``          – level-aware paragraph describing
+                                    which feedback fields are present
+* ``{{inputs_outputs_feedback}}`` – assembled feedback body
+                                    (trajectories + optional test
+                                    results + patch)
+* ``{{nrpv_block}}``              – shared NRPV definition
 
-All four pieces are pre-baked into ``system_template`` before the agent
-starts; the agent itself has no access to trajectory files in the
-container. The issue description is delivered separately via the
-configured ``reflect_instance_template`` (Jinja-rendered with the
+mini-swe-agent renders ``system_template`` with Jinja2 +
+``StrictUndefined`` in a single non-recursive pass, so passing these
+values via ``agent.run(prompt_template=..., feedback_body=..., ...)``
+ensures user/LLM content is treated as variable VALUES (never re-parsed
+as template syntax). The agent itself has no access to trajectory files
+in the container. The issue description is delivered separately via the
+configured ``reflect_instance_template`` (also Jinja-rendered with the
 ``task`` kwarg by DefaultAgent), so the reflection agent sees the same
 ``<pr_description>`` wrapper as the plan and code agents.
 """
@@ -89,13 +96,14 @@ def run(
     """
     DefaultAgent, LitellmModel, _ = import_minisweagent()
 
-    system_template = gepa_reflection.render(
-        current_plan=current_plan,
-        feedback_intro=feedback_intro,
-        feedback_body=feedback_body,
-        nrpv_block=config.prompts.nrpv_block,
-        template=config.prompts.reflection_prompt_template,
-    )
+    # Pass the raw reflection template verbatim. The four placeholders
+    # ({{prompt_template}}, {{feedback_intro}}, {{inputs_outputs_feedback}},
+    # {{nrpv_block}}) are rendered at agent.run() time via the
+    # extra_template_vars kwargs below — never inlined into the template
+    # source on the host side. Inlining LLM-generated content (current plan,
+    # feedback body) into a template that mini-swe-agent then Jinja-renders
+    # crashes whenever the content contains {{...}} or {%...%} fragments.
+    system_template = config.prompts.reflection_prompt_template
     instance_template = config.prompts.reflect_instance_template or None
 
     model = build_model(
@@ -113,7 +121,6 @@ def run(
         step_limit=config.agent.max_steps,
         cost_limit=config.agent.cost_limit,
         instance_template=instance_template,
-        task=issue_description,
     )
 
     logger.info(
@@ -122,7 +129,13 @@ def run(
         config.agent.max_steps,
     )
 
-    exception_name, exception_msg = agent.run(task=issue_description)
+    exception_name, exception_msg = agent.run(
+        task=issue_description,
+        prompt_template=current_plan,
+        feedback_intro=feedback_intro,
+        inputs_outputs_feedback=feedback_body,
+        nrpv_block=config.prompts.nrpv_block,
+    )
 
     # Try to read plan from the file the agent wrote in the container
     plan_text = _read_plan_from_file(env)

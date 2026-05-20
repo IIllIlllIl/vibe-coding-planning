@@ -20,7 +20,6 @@ from src.agents._deps import (
 )
 from src.config import Config
 from src.exceptions import TaskError
-from src.prompts.templates import render_code_prompt
 
 logger = logging.getLogger(__name__)
 
@@ -71,9 +70,13 @@ def run(
     """
     DefaultAgent, LitellmModel, _ = import_minisweagent()
 
-    system_template = render_code_prompt(
-        config.prompts.code_generation_prompt, plan
-    )
+    # Pass the raw system_template verbatim. The {{plan}} Jinja placeholder
+    # is rendered at agent.run() time via the extra_template_vars kwarg
+    # below — never inlined into the template source on the host side (that
+    # would cause mini-swe-agent's second-pass Jinja render to crash on any
+    # plan content with {{...}} or {%...%} fragments, which Django/Sphinx/
+    # Sympy bug plans regularly contain).
+    system_template = config.prompts.code_generation_prompt
     instance_template = config.prompts.code_instance_template or None
 
     model = build_model(
@@ -91,7 +94,6 @@ def run(
         step_limit=config.agent.max_steps,
         cost_limit=config.agent.cost_limit,
         instance_template=instance_template,
-        task=issue_description,
     )
 
     logger.info(
@@ -100,7 +102,7 @@ def run(
         config.agent.max_steps,
     )
 
-    exception_name, exception_msg = agent.run(task=issue_description)
+    exception_name, exception_msg = agent.run(task=issue_description, plan=plan)
     patch_text = _extract_result(exception_name, exception_msg)
 
     if not patch_text or not patch_text.strip():

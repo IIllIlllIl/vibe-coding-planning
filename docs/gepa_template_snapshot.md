@@ -1,5 +1,8 @@
 # GEPA 反射 Prompt 模板快照
 
+> **历史快照**：本文件记录 2026-04-30 从上游 `gepa-ai/gepa` 提取的原始模板，用于对比和溯源。
+> **当前架构（2026-05-19 起）**：`src/prompts/gepa_reflection.py` 不再维护 `DEFAULT_REFLECTION_TEMPLATE` 常量或 `render()` 函数。反射 Prompt 模板的唯一可信源为 `config.yaml` 的 `prompts.reflection_prompt_template`，变量通过 `agent.run(**kwargs)` 由 `mini-swe-agent` 在 agent 内部做 Jinja `StrictUndefined` 渲染。详见 `docs/requirement-document.md` 版本 6.2 及 `docs/architecture.md` §5.3。
+
 ## 来源
 
 - **上游仓库**: `gepa-ai/gepa` (https://github.com/gepa-ai/gepa)
@@ -9,7 +12,7 @@
 
 ## 说明
 
-本项目不依赖 `gepa` 包作为运行时依赖。`src/prompts/gepa_reflection.py` 中硬编码的 Prompt 模板文本直接来源于需求文档附录 A，以保证策略稳定性（即使 `gepa` 包未来版本变化，我们的 Prompt 模板也是稳定的）。
+本项目不依赖 `gepa` 包作为运行时依赖。原始实现中 `src/prompts/gepa_reflection.py` 曾硬编码 Prompt 模板文本（即本快照），直接来源于需求文档附录 A，以保证策略稳定性（即使 `gepa` 包未来版本变化，我们的 Prompt 模板也是稳定的）。2026-05-19 后模板移至 `config.yaml`，`gepa_reflection.py` 仅保留 `parse_output()` 回退解析函数。
 
 ## 模板原文
 

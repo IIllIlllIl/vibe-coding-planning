@@ -1,92 +1,14 @@
-"""Tests for src/prompts/gepa_reflection.py."""
+"""Tests for src/prompts/gepa_reflection.py.
 
-import pytest
+The reflection template is now rendered by mini-swe-agent's
+``DefaultAgent`` via Jinja2 + StrictUndefined, with the four
+placeholders supplied as ``extra_template_vars`` at ``agent.run()``
+time. The host-side ``render()`` helper has therefore been removed —
+only ``parse_output`` (used as a fallback to extract a fenced plan
+from the LLM submission message) remains.
+"""
 
-from src.prompts.gepa_reflection import parse_output, render
-
-
-# A representative reflection template covering all four placeholders
-# the YAML template uses.  The wording is irrelevant — the test focuses
-# on placeholder substitution semantics.
-SAMPLE_TEMPLATE = (
-    "Plan:\n```\n{prompt_template}\n```\n\n"
-    "{feedback_intro}\n\n"
-    "{inputs_outputs_feedback}\n\n"
-    "Use this structure:\n{nrpv_block}\n"
-)
-
-
-class TestRender:
-    def test_fills_all_required_placeholders(self):
-        """All four placeholders must be substituted."""
-        result = render(
-            current_plan="PLAN-MARKER",
-            feedback_intro="INTRO-MARKER",
-            feedback_body="BODY-MARKER",
-            nrpv_block="NRPV-MARKER",
-            template=SAMPLE_TEMPLATE,
-        )
-
-        assert "PLAN-MARKER" in result
-        assert "INTRO-MARKER" in result
-        assert "BODY-MARKER" in result
-        assert "NRPV-MARKER" in result
-        # All four placeholders must be substituted away
-        assert "{prompt_template}" not in result
-        assert "{feedback_intro}" not in result
-        assert "{inputs_outputs_feedback}" not in result
-        assert "{nrpv_block}" not in result
-
-    def test_intro_distinct_from_body(self):
-        """``feedback_intro`` and ``feedback_body`` must land in different
-        slots (the YAML template wording is the contract — render() must
-        keep them separable)."""
-        result = render(
-            current_plan="plan",
-            feedback_intro="<<INTRO>>",
-            feedback_body="<<BODY>>",
-            nrpv_block="nrpv",
-            template=SAMPLE_TEMPLATE,
-        )
-        intro_idx = result.index("<<INTRO>>")
-        body_idx = result.index("<<BODY>>")
-        # In the sample template, intro precedes body
-        assert intro_idx < body_idx
-
-    def test_keyword_only_arguments(self):
-        """All arguments must be keyword-only — guards against accidental
-        positional calls that silently pass arguments to the wrong slot."""
-        with pytest.raises(TypeError):
-            # Positional invocation should fail because the signature is
-            # keyword-only.
-            render("plan", "intro", "body", "nrpv", SAMPLE_TEMPLATE)  # type: ignore[misc]
-
-    def test_custom_template_passed_through(self):
-        """When the caller supplies a custom template, render() must use
-        it directly without reaching for any built-in default."""
-        custom = "<<CUSTOM>> P:{prompt_template} I:{feedback_intro} B:{inputs_outputs_feedback} N:{nrpv_block}"
-        result = render(
-            current_plan="P",
-            feedback_intro="I",
-            feedback_body="B",
-            nrpv_block="N",
-            template=custom,
-        )
-        assert result == "<<CUSTOM>> P:P I:I B:B N:N"
-
-    def test_missing_placeholder_in_template_raises(self):
-        """If the template references an unknown placeholder, str.format
-        will raise KeyError — propagating loudly is the right behaviour
-        because the YAML template is a configuration contract."""
-        bad_template = "{prompt_template} {unknown_placeholder}"
-        with pytest.raises(KeyError):
-            render(
-                current_plan="plan",
-                feedback_intro="intro",
-                feedback_body="body",
-                nrpv_block="nrpv",
-                template=bad_template,
-            )
+from src.prompts.gepa_reflection import parse_output
 
 
 class TestParseOutput:

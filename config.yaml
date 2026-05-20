@@ -45,8 +45,12 @@ system:
 prompts:
   # ============================================================
   # NRPV plan format — single source of truth
-  # Substituted into plan_generation_prompt and
-  # reflection_prompt_template via the {nrpv_block} placeholder.
+  # Injected into plan_generation_prompt and
+  # reflection_prompt_template via the {{nrpv_block}} Jinja
+  # variable (mini-swe-agent renders system_template through
+  # Jinja2 + StrictUndefined; we pass nrpv_block as a variable
+  # value at agent.run() time so its content is never re-parsed
+  # as template syntax).
   # ============================================================
   nrpv_block: |
     # Plan
@@ -81,7 +85,7 @@ prompts:
   #     boundary block, inverted for read-only planner.
   #   * "## Workflow" is the minimal mini-swe-agent submission protocol
   #     (heredoc -> echo COMPLETE_TASK_AND_SUBMIT_FINAL_OUTPUT && cat).
-  #   * "## Plan Format" pulls in {nrpv_block} (single source of truth).
+  #   * "## Plan Format" pulls in {{nrpv_block}} (single source of truth).
   # ============================================================
   plan_generation_prompt: |
     You are a software engineer producing a structured plan that another agent will execute.
@@ -123,7 +127,7 @@ prompts:
     Do not run other commands after submitting.
 
     ## Plan Format
-    {nrpv_block}
+    {{nrpv_block}}
 
   # ============================================================
   # Plan agent — instance_template
@@ -148,7 +152,7 @@ prompts:
 
     Approved plan:
     --- plan start ---
-    {plan}
+    {{plan}}
     --- plan end ---
 
   # ============================================================
@@ -321,18 +325,25 @@ prompts:
   #     Two GEPA research keywords are preserved verbatim:
   #     "niche and domain-specific factual information" and
   #     "generalizable strategy".
-  #   * {feedback_intro} is rendered host-side and lists which
-  #     fields are present in this round (varies with
+  #   * {{feedback_intro}} is injected at agent.run() time and lists
+  #     which fields are present in this round (varies with
   #     optimization_info_level).
-  #   * Final output structure pulls in {nrpv_block} so the
+  #   * Final output structure pulls in {{nrpv_block}} so the
   #     reflected plan keeps the same shape as the round-1 plan.
   #   * Submission protocol is the mini-swe-agent contract used
   #     by both plan and reflect agents.
-  # Placeholders (Python str.format style):
-  #   {prompt_template}          -> previous plan (filled by render())
-  #   {feedback_intro}           -> level-aware intro paragraph
-  #   {inputs_outputs_feedback}  -> assembled feedback body
-  #   {nrpv_block}               -> shared NRPV definition
+  # Placeholders (Jinja2 — injected via agent.run(**kwargs)):
+  #   {{prompt_template}}         -> previous plan
+  #   {{feedback_intro}}          -> level-aware intro paragraph
+  #   {{inputs_outputs_feedback}} -> assembled feedback body
+  #   {{nrpv_block}}              -> shared NRPV definition
+  # The double-brace syntax is REQUIRED so mini-swe-agent's
+  # DefaultAgent.render_template() (Jinja2 + StrictUndefined)
+  # substitutes the values at run() time. Single-brace {var}
+  # syntax with host-side str.format would inline LLM-generated
+  # content into the template source, which then crashes the
+  # second-pass Jinja render whenever the content contains
+  # {{...}} or {%...%} fragments (e.g. Django/Sphinx/Sympy plans).
   # ============================================================
   reflection_prompt_template: |
     I provided an assistant with the following plan to perform a task for me.
@@ -340,12 +351,12 @@ prompts:
     is handed to a downstream code-generation agent.
 
     ```
-    {prompt_template}
+    {{prompt_template}}
     ```
 
-    {feedback_intro}
+    {{feedback_intro}}
 
-    {inputs_outputs_feedback}
+    {{inputs_outputs_feedback}}
 
     Your task is to write a new plan for the assistant. The plan you write
     replaces the previous plan in full.
@@ -369,7 +380,7 @@ prompts:
 
     The new plan MUST follow this exact four-section structure:
 
-    {nrpv_block}
+    {{nrpv_block}}
 
     Important constraints:
     - Write the improved plan to /tmp/plan.md and finish with: echo COMPLETE_TASK_AND_SUBMIT_FINAL_OUTPUT && cat /tmp/plan.md

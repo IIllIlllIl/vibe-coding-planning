@@ -12,6 +12,7 @@
 | 5.1 | 2026-05-07 | — | 需求对齐：① Docker 挂载语义从 ro 改为 rw，关键不变量改为"轮间起始状态隔离"（每轮独立容器 + base_commit 初始状态）；② `agent.timeout` 透传到 `DefaultAgent`，默认值统一放宽至宽松值，仅用于筛除严重异常；③ Plan / Patch / Trajectory 三类中间产物统一命名 `{prefix}_{round}_{role?}_{timestamp}.{ext}` 并完整落盘；Plan 文本通过 `/tmp/plan.md` 由 pipeline 在容器停止前抓取持久化到 `plans/` 目录；④ 评估失败补 `error_info` 字段，`test_pass_rate` 维持 0/1；⑤ 任务级错误统一以 instance 为最小回滚粒度（不再 round-skip 续跑）；⑥ 反思 Agent 与 Plan Agent 协议对齐，新 plan 写入 `/tmp/plan.md` 并 `echo COMPLETE_TASK_AND_SUBMIT_FINAL_OUTPUT`；⑦ 配置项清单同步加入 `code_instance_template`，删除已废弃的 `docker.codebase_mount_options` |
 | 6.0 | 2026-05-08 | — | 数据集分层方法学：解除"仅使用 SWE-bench Pro"硬约束。**Phase 1（当前）使用 SWE-bench Verified** 大批量采集 plan / agent trajectory / resolved 信号，归纳"plan → 通过性"判别规律；**Phase 2 使用 SWE-bench Pro 作 held-out 保留集**验证规律泛化能力。Verified 镜像由 SWE-bench 官方在 Docker Hub 公开发布，无需 `build_docker_images.sh`；Pro 仍需该脚本构建专用镜像。代码侧 `system.dataset` 字段 + `swe_pro_instances` → `instances` 重命名 + `output/{dataset}/{instance_id}/...` 输出分层为 Phase 1 实施 todo（见 `project_issues.md` §3） |
 | 6.1 | 2026-05-08 | — | Phase 1 代码侧实施完成：① `SystemConfig.dataset` 字段落地（默认 `SWE-bench/SWE-bench_Verified`），透传到 `InstanceLoader(dataset=…)` → `load_swebench_dataset(name=…)`；② `swe_pro_instances` → `instances` 重命名贯穿 config dataclass / `config.yaml` / CLI / `result.json` schema / 测试；③ 输出目录分层为 `{output_dir}/{dataset_short}/{instance_id}/`，`result.json` 顶层新增 `dataset` 字段；④ 文档 §4.3 / §6.1 / §6.2 / FR-09 同步更新 |
+| 6.2 | 2026-05-19 | — | Jinja 变量注入架构整改：删除 `gepa_reflection.render()` 与 `DEFAULT_REFLECTION_TEMPLATE` 常量，将所有模板变量（`{{prompt_template}}`、`{{inputs_outputs_feedback}}`、`{{nrpv_block}}` 等）通过 `agent.run(**kwargs)` / `extra_template_vars` 注入，由 `mini-swe-agent` 在 agent 内部做 `StrictUndefined` 单次渲染。`config.yaml` 为 prompt 单点可信源；`src/prompts/gepa_reflection.py` 仅保留 `parse_output()`。同步更新 `docs/requirement-document.md`、`docs/architecture.md`、所有 agent 模块及测试 |
 
 ---
 
@@ -161,10 +162,10 @@
 | 配置参数 | `optimization_info_level`：0 = 仅基础信息（不含测试结果）；1 = 包含测试运行结果和报错信息 |
 | 输入（Feedback 来源） | 前一轮（第 i-1 轮）的：原始 Prompt、Plan[i-1]、生成 Plan[i-1] 的 Agent 轨迹（若 i-1 = 1 则为方案生成 Agent 轨迹，若 i-1 ≥ 2 则为反思 Agent 轨迹）、代码生成 Agent 轨迹、生成的 Patch、测试结果（可选） |
 | 输出 | 优化后的新 Plan[i]（自然语言字符串，由反思 Agent 写入容器内 `/tmp/plan.md`，主程序在容器停止前抓取并持久化为 `plans/plan_{round}_reflect_{timestamp}.md`） |
-| 优化方法 | 反思 Agent 始终通过 `src/prompts/gepa_reflection.py:render()` 渲染 system prompt：将当前 Plan 注入 `{prompt_template}`、Feedback 文本注入 `{inputs_outputs_feedback}`。模板默认使用 `DEFAULT_REFLECTION_TEMPLATE`（plan-optimization 版，要求 LLM 输出包含 N/R/P/V 四节、并以 `Write the plan to /tmp/plan.md && echo COMPLETE_TASK_AND_SUBMIT_FINAL_OUTPUT` 收尾，与 Plan Agent 协议对齐），可由 `prompts.reflection_prompt_template` 覆盖。不使用 GEPA 的种群交叉、Pareto 选择等模块 |
+| 优化方法 | 反思 Agent 将 `config.prompts.reflection_prompt_template` 作为原始 system prompt 直接传入 `DefaultAgent`，所有变量（当前 Plan、Feedback 文本等）通过 `agent.run(**kwargs)` 注入（`{{prompt_template}}`、`{{inputs_outputs_feedback}}` 等 Jinja 占位符在 agent 内部由 `mini-swe-agent` 的 `StrictUndefined` 单次渲染完成）。`config.yaml` 为 reflection prompt 的单点可信源；`src/prompts/gepa_reflection.py` 仅保留 `parse_output()` 作为 `/tmp/plan.md` 缺失时的回退解析。不使用 GEPA 的种群交叉、Pareto 选择等模块 |
 | 验收标准 | 新 Plan 能反映对前序方案失败原因的针对性改进；优化过程中反思 Agent 的轨迹被完整保存；容器停止前 `/tmp/plan.md` 非空，且持久化后的 plan 文件命名遵循 §4.4 |
-| 依赖 | `mini-swe-agent`（`DefaultAgent` + `DockerEnvironment` + `LiteLLMModel`）、本仓库内置的反射模板（`src/prompts/gepa_reflection.py:DEFAULT_REFLECTION_TEMPLATE`） |
-| 备注 | **信息注入方式（关键设计）**：主机端在调用反思 Agent 前，从 trajectory 文件中读取内容并组装为纯文本字符串 `feedback_text`，作为 `gepa_reflection.render()` 的 `feedback_data` 参数注入 system prompt。反思 Agent 在容器内**不持有任何文件路径**，无法访问 output_dir 中的 trajectory 文件，以防止其读取其他轮次的 plan 或 trajectory 内容而影响判断。**反思 Agent 在生成新 Plan 时自身也会产生轨迹，该轨迹必须保存。Plan 在 Agent 之间通过函数参数（内存字符串）传递，不通过文件中介；`/tmp/plan.md` 仅为 pipeline 持久化用途** |
+| 依赖 | `mini-swe-agent`（`DefaultAgent` + `DockerEnvironment` + `LiteLLMModel`）、`config.yaml` 中的 `prompts.reflection_prompt_template` |
+| 备注 | **信息注入方式（关键设计）**：主机端在调用反思 Agent 前，从 trajectory 文件中读取内容并组装为纯文本字符串 `feedback_text`；`reflect_agent.run()` 通过 `agent.run(inputs_outputs_feedback=feedback_text, prompt_template=current_plan, ...)` 将所有内容作为 Jinja 变量值传入 `DefaultAgent`，由 `mini-swe-agent` 在 agent 内部做 `StrictUndefined` 单次渲染。反思 Agent 在容器内**不持有任何文件路径**，无法访问 output_dir 中的 trajectory 文件，以防止其读取其他轮次的 plan 或 trajectory 内容而影响判断。**反思 Agent 在生成新 Plan 时自身也会产生轨迹，该轨迹必须保存。Plan 在 Agent 之间通过函数参数（内存字符串）传递，不通过文件中介；`/tmp/plan.md` 仅为 pipeline 持久化用途** |
 
 #### FR-06：迭代循环控制
 
@@ -203,7 +204,7 @@
 | ID | FR-08 |
 | 名称 | Agent Prompt 与 Plan 格式配置 |
 | 描述 | 支持通过 YAML/JSON 配置文件修改三个核心 Prompt：方案生成 Prompt（用于 FR-02）、代码生成 Prompt（用于 FR-03）、反思模板（用于反思 Agent，FR-05）。同时支持配置 Plan 格式模板，约束 Agent 输出结构 |
-| 配置项 | `plan_generation_prompt`、`code_generation_prompt`、`code_instance_template`（mini-swe-agent SWE-bench 实例级 Prompt 模板，用于 FR-03 代码生成 Agent 的初始化上下文）、`reflection_prompt_template`（反思 Agent 的 system prompt 模板，必须含 `{prompt_template}` 与 `{inputs_outputs_feedback}` 两个占位符；缺省或为空时回退到 `gepa_reflection.DEFAULT_REFLECTION_TEMPLATE`）、`plan_format_template`（Plan 格式模板，**必须包含"将 Plan 写到 `/tmp/plan.md`"的指令**，Plan Agent 与 Reflect Agent 共用此约定） |
+| 配置项 | `plan_generation_prompt`、`code_generation_prompt`、`code_instance_template`（mini-swe-agent SWE-bench 实例级 Prompt 模板，用于 FR-03 代码生成 Agent 的初始化上下文）、`reflection_prompt_template`（反思 Agent 的 system prompt 模板，必须含 `{{prompt_template}}` 与 `{{inputs_outputs_feedback}}` 两个 Jinja 占位符；缺省或为空时由 `src/config.py` 加载阶段填充默认值）、`plan_format_template`（Plan 格式模板，**必须包含"将 Plan 写到 `/tmp/plan.md`"的指令**，Plan Agent 与 Reflect Agent 共用此约定） |
 | 验收标准 | 用户修改配置文件后，无需修改代码即可改变对应 Agent 的行为和 Plan 输出格式；`reflection_prompt_template` 可被用户自定义覆盖默认模板，亦可显式留空回退到默认 |
 
 #### FR-09：系统运行参数配置
@@ -213,7 +214,7 @@
 | ID | FR-09 |
 | 名称 | 系统运行参数配置 |
 | 描述 | 支持配置文件配置系统运行的核心参数 |
-| 配置项 | 1）`n`：目标 Plan 数量；2）`optimization_info_level`：0 或 1；3）`model`：使用的 LLM 模型（如 deepseek-v4-flash）；4）`dataset`：HuggingFace SWE-bench 数据集名（如 `SWE-bench/SWE-bench_Verified` 或 `SWE-bench/SWE-bench_Pro`），决定 `instances` 的解析空间；5）`instances`：SWE-bench 实例 ID 列表（在 `dataset` 内解析）；6）`prompts.reflection_prompt_template`：反思模板（可选，缺省落回 `gepa_reflection.DEFAULT_REFLECTION_TEMPLATE`）；7）`resume`：重跑配置（可选，FR-07 推迟实现）；8）`agent.max_steps`：每个 Agent 的最大步数；9）`agent.cost_limit`：每个 Agent 的 API 调用成本上限（美元）；10）`agent.timeout`：由 pipeline 透传到 `DefaultAgent` 的命令执行超时（秒），**默认 1800 秒，仅用于筛除明显异常**；11）`evaluator.timeout`：SWE 评估器单实例超时（秒） |
+| 配置项 | 1）`n`：目标 Plan 数量；2）`optimization_info_level`：0 或 1；3）`model`：使用的 LLM 模型（如 deepseek-v4-flash）；4）`dataset`：HuggingFace SWE-bench 数据集名（如 `SWE-bench/SWE-bench_Verified` 或 `SWE-bench/SWE-bench_Pro`），决定 `instances` 的解析空间；5）`instances`：SWE-bench 实例 ID 列表（在 `dataset` 内解析）；6）`prompts.reflection_prompt_template`：反思模板（可选，缺省由 `src/config.py` 加载阶段填充默认值）；7）`resume`：重跑配置（可选，FR-07 推迟实现）；8）`agent.max_steps`：每个 Agent 的最大步数；9）`agent.cost_limit`：每个 Agent 的 API 调用成本上限（美元）；10）`agent.timeout`：由 pipeline 透传到 `DefaultAgent` 的命令执行超时（秒），**默认 1800 秒，仅用于筛除明显异常**；11）`evaluator.timeout`：SWE 评估器单实例超时（秒） |
 | 验收标准 | 系统启动时自动加载配置文件，根据配置执行相应流程 |
 
 ### 3.4 输出与数据保存
@@ -236,7 +237,7 @@
 |------|------|
 | ID | FR-11 |
 | 名称 | Feedback 文本组装（主机端） |
-| 描述 | 在调用反思 Agent 前，pipeline 在主机端组装一个纯文本字符串 `feedback_text`，作为 `gepa_reflection.render(...)` 的 `feedback_data` 参数注入反思 Agent 的 system prompt。组装内容包括：原始 Issue 描述、上一轮 plan/code/reflect 的 trajectory（按 `optimization_info_level` 决定是否含测试输出）、上一轮生成的 Patch、上一轮测试结果。**反思 Agent 在容器内仅接收已注入的字符串，不接收任何文件路径**，无法访问 output_dir 中的轨迹文件 |
+| 描述 | 在调用反思 Agent 前，pipeline 在主机端组装纯文本字符串 `feedback_text`；调用 `reflect_agent.run()` 时通过 `agent.run(feedback_intro=..., inputs_outputs_feedback=..., prompt_template=..., nrpv_block=...)` 将所有内容作为 Jinja 变量值传入。`mini-swe-agent` 在 agent 内部使用 `StrictUndefined` 对 `config.prompts.reflection_prompt_template` 做一次非递归渲染。**反思 Agent 在容器内仅接收已注入的字符串，不接收任何文件路径**，无法访问 output_dir 中的轨迹文件 |
 | 实现位置 | `src/pipeline.py:_build_feedback_text` |
 | 验收标准 | 程序在调用反思 Agent 前，能够组装出 `feedback_text` 字符串。组装过程在主机端完成；反思 Agent 在容器内仅接收已注入的字符串，不接收任何文件路径 |
 | 备注 | **Plan 在 Agent 之间通过函数参数（内存字符串）传递，不通过文件中介；`/tmp/plan.md` 仅为 pipeline 持久化用途** |
@@ -262,7 +263,7 @@
 
 ### 4.1 Optimization Feedback 文本（feedback_text）
 
-反思 Agent 接收的 Feedback 是 pipeline 在主机端组装的**纯文本字符串**，由 `src/pipeline.py:_build_feedback_text` 产出，作为 `gepa_reflection.render(..., feedback_data=feedback_text)` 的入参注入 system prompt。下面是逻辑结构（仅用于理解组装内容；不会以 JSON/dict 形式持久化）：
+反思 Agent 接收的 Feedback 是 pipeline 在主机端组装的**纯文本字符串**，由 `src/pipeline.py:_build_feedback_text` 产出。`reflect_agent.run()` 将该字符串作为 Jinja 变量值通过 `agent.run(inputs_outputs_feedback=feedback_text, ...)` 传入，与 `config.prompts.reflection_prompt_template` 在 agent 内部统一渲染。下面是逻辑结构（仅用于理解组装内容；不会以 JSON/dict 形式持久化）：
 
 ```
 === Original Prompt ===
@@ -285,7 +286,7 @@
 ```
 
 **注意事项**：
-- 当前 plan（即需要被改进的 Plan[i-1]）作为 `gepa_reflection.render()` 的独立参数 `current_plan` 注入模板的 `{prompt_template}` 占位符，不在 `feedback_text` 内重复出现，避免上下文冗余。
+- 当前 plan（即需要被改进的 Plan[i-1]）作为 Jinja 变量值 `prompt_template` 通过 `agent.run(prompt_template=current_plan, ...)` 传入，由 `mini-swe-agent` 在 agent 内部注入到 `config.prompts.reflection_prompt_template` 的 `{{prompt_template}}` 占位符，不在 `feedback_text` 内重复出现，避免上下文冗余。
 - 路径字段（trajectory 文件路径、patch 文件路径）**仅供主机端使用**。组装过程中主机端读取这些路径对应的文件内容、用实际文本替换路径，再拼接成 `feedback_text`。反思 Agent 在容器内**不接收任何文件路径**，以防止其访问其他轮次的 plan 或 trajectory 文件。
 - 运行参数（如 `optimization_info_level`、`model`）不再注入 `feedback_text`；它们体现在主结果 JSON（§4.3）中以保证可复现。
 
@@ -457,20 +458,20 @@ prompts:
     你是一个代码生成助手，根据以下方案生成代码...
     请输出 Git diff 格式的 Patch，不要直接修改文件。
 
-  # 反思模板：将当前 plan 注入 {prompt_template}，feedback_text 注入 {inputs_outputs_feedback}。
-  # 缺省或留空时回退到 src/prompts/gepa_reflection.py:DEFAULT_REFLECTION_TEMPLATE（plan-optimization 版，
-  # 要求 LLM 将新 plan 写到 /tmp/plan.md 并以 echo COMPLETE_TASK_AND_SUBMIT_FINAL_OUTPUT 收尾）。
+  # 反思模板：使用 Jinja 占位符 {{prompt_template}} 与 {{inputs_outputs_feedback}}。
+  # mini-swe-agent 在 agent.run() 时通过 extra_template_vars 将变量值注入模板并做 StrictUndefined 渲染。
+  # 权威版本以 config.yaml 为准；src/prompts/gepa_reflection.py 仅保留 parse_output() 回退解析。
   reflection_prompt_template: |
     The following is the current plan that a planning agent produced for a software-engineering task:
 
     ```
-    {prompt_template}
+    {{prompt_template}}
     ```
 
     Below is the feedback collected from executing this plan (issue description, agent
     trajectories, generated patch, and test outcomes):
 
-    {inputs_outputs_feedback}
+    {{inputs_outputs_feedback}}
 
     Write an improved plan that the next round can execute. The new plan must contain four
     explicitly labelled sections:
@@ -525,7 +526,7 @@ agent:
 |------|----------|----------|
 | n | 必须为整数且 ≥ 1 | n < 1 时系统报错退出 |
 | optimization_info_level | 必须为 0 或 1 | 非法值时默认设为 0 并给出警告 |
-| prompts.reflection_prompt_template | 若用户提供，必须含 `{prompt_template}` 与 `{inputs_outputs_feedback}` 两个占位符 | 缺失或为空时回退到 `gepa_reflection.DEFAULT_REFLECTION_TEMPLATE` |
+| prompts.reflection_prompt_template | 若用户提供，必须含 `{{prompt_template}}` 与 `{{inputs_outputs_feedback}}` 两个 Jinja 占位符 | 缺失或为空时回退到 `config.yaml` 内置默认值（由 `src/config.py` 在加载时填充） |
 | instances | 必须是有效的 SWE-bench 实例 ID（在 `system.dataset` 所选数据集内解析；Phase 1 默认 Verified，Phase 2 切到 Pro） | 无效时退出并提示 |
 | model | 必须为 DeepSeek API 支持的模型标识 | 无效时提示可选模型并退出（但不主动检查） |
 | api_base | 必须为合法 URL（含 scheme） | 非法时报错退出 |
@@ -619,7 +620,7 @@ chmod +x scripts/quickstart.sh
 
 | 风险项 | 风险描述 | 可能性 | 影响 | 缓解策略 |
 |--------|----------|--------|------|----------|
-| R-01 | GEPA 反射 Prompt 模板适配到 Plan 优化场景的适配效果不佳 | 中 | 高 | **技术预研（Spike）**：开发前先安排半天时间测试默认反思模板（`gepa_reflection.DEFAULT_REFLECTION_TEMPLATE`，plan-optimization 版）在我们的 Feedback 数据结构上的效果。若效果不佳，调整 `prompts.reflection_prompt_template` 内容或修改 `_build_feedback_text` 的组装策略（增加截断、摘要、强化关键信号等） |
+| R-01 | GEPA 反射 Prompt 模板适配到 Plan 优化场景的适配效果不佳 | 中 | 高 | **技术预研（Spike）**：开发前先安排半天时间测试默认反思模板（`config.prompts.reflection_prompt_template`，plan-optimization 版）在我们的 Feedback 数据结构上的效果。若效果不佳，调整 `prompts.reflection_prompt_template` 内容或修改 `_build_feedback_text` 的组装策略（增加截断、摘要、强化关键信号等） |
 | R-02 | DeepSeek V4 API 速率限制或成本超支 | 高 | 中 | 在配置文件中设置每轮的最大 Token 和 API 调用次数预算；使用 deepseek-v4-flash 以降低 API 成本 |
 | R-03 | Phase 2 SWE-bench Pro 评估环境构建复杂（需运行 build_docker_images.sh） | 中 | 中 | Phase 1 在 Verified 上完成大部分迭代以推迟接触 Pro；进入 Phase 2 前确保 build 脚本可复现；开发阶段保留 Mock 评估模式进行初步测试 |
 | R-04 | Agent 的自主探索可能因代码库过大而效率低下 | 中 | 中 | 在 Prompt 中引导 Agent 聚焦于 Issue 相关的目录或文件；设置 Agent 的最大步数限制 |
@@ -667,7 +668,7 @@ chmod +x scripts/quickstart.sh
 | TC-07 | 运行多个实例，其中一个实例的 Docker 环境失败 | 失败的实例被跳过（标记为 `error_skipped`），其他实例正常执行，结果文件中包含错误记录 |
 | TC-08 | 使用重跑功能：先运行 n=2 结束，修改 optimization_info_level 后从 Plan[2] 重跑至 n=3 | 系统加载 Plan[2] 的轨迹和代码（Plan[2] 不被重新生成），使用新的 optimization_info_level 生成 Plan[3]，新 Plan[3] 的反思内容中体现了对测试信息（如果启用）的利用 |
 | TC-09 | 检查输出结果文件结构 | 结果文件中包含 `runtime_versions` 字段（记录 mini-swe-agent、swebench、litellm 等版本号）；每个 Plan 的 `test_results` 为结构化对象（含 `resolved`、`stdout`、`stderr`、`log_dir`、`error_info`）；`plans/`、`patches/`、`trajectories/` 三个子目录均存在，文件名统一含 timestamp 并遵循 §4.4 命名规范 |
-| TC-10 | 反思模板可被 `prompts.reflection_prompt_template` 覆盖 | 用户在 config 中提供自定义模板（含 `{prompt_template}` 与 `{inputs_outputs_feedback}`）后，反思 Agent 的 system prompt 使用自定义模板而非 `DEFAULT_REFLECTION_TEMPLATE`；留空或不提供时回退到默认模板，仍能正常生成新 Plan |
+| TC-10 | 反思模板可由 `prompts.reflection_prompt_template` 自定义 | 用户在 config 中提供自定义模板（含 `{{prompt_template}}` 与 `{{inputs_outputs_feedback}}`）后，`reflect_agent.run()` 将该模板作为原始 system prompt 传入，变量通过 `agent.run(**kwargs)` 注入；留空或不提供时由 `src/config.py` 加载阶段填充默认值，仍能正常生成新 Plan |
 | TC-11 | 致命错误处理 | 模拟 API key 失效，系统在记录错误后优雅退出，已完成的实例数据和轨迹文件完整保留 |
 | TC-12 | 超时参数生效 | 设置 `agent.timeout = 60`，运行一个已知会触发超时的实例 | Agent 命令超时后该实例被标记为任务级错误并跳过，不会导致整个系统崩溃；结果文件中包含超时错误记录 |
 | TC-13 | 实例级跳过保留已完成轮次数据 | 设置 n=3，第 2 轮 Code Agent 生成 Patch 失败（或评估异常） | 该实例被整体跳过，但第 1 轮已产生的 `plans/plan_1_*`、`patches/patch_1_*`、`trajectories/trajectory_1_*` 等文件仍然保留在输出目录中 |
@@ -689,7 +690,7 @@ chmod +x scripts/quickstart.sh
 
 ## 附录 A：反思模板（默认 = plan-optimization 版）
 
-本节文本是反思 Agent 的**默认 system prompt 模板**，由 `src/prompts/gepa_reflection.py:DEFAULT_REFLECTION_TEMPLATE` 实现，可由 `prompts.reflection_prompt_template` 覆盖。模板的结构骨架借鉴自 GEPA (`gepa-ai/gepa` 及 KISS AI 内置版本) 的 prompt-optimization 反射模板，但本项目按 plan-optimization 语义重写，差异如下：
+本节文本是反思 Agent 的**默认 system prompt 模板**，保存在 `config.yaml` 的 `prompts.reflection_prompt_template` 中（`src/config.py` 加载时若缺失则填充默认值）。`src/prompts/gepa_reflection.py` 不再维护 `DEFAULT_REFLECTION_TEMPLATE` 常量，仅保留 `parse_output()` 作为 `/tmp/plan.md` 缺失时的回退解析。模板的结构骨架借鉴自 GEPA (`gepa-ai/gepa` 及 KISS AI 内置版本) 的 prompt-optimization 反射模板，但本项目按 plan-optimization 语义重写，差异如下：
 
 | 维度 | GEPA 原模板（prompt-optimization） | 本项目默认模板（plan-optimization） |
 |------|-----------------------------------|--------------------------------------|
@@ -698,23 +699,23 @@ chmod +x scripts/quickstart.sh
 | 占位符 `{placeholders}` | 必须保留；要求 LLM "must keep these exact placeholders intact" | **移除**；plan 没有 placeholders 概念 |
 | 输出结构 | 仅要求 ``` 块包裹 | 要求 ``` 块内含 N/R/P/V 四节（Navigation / Reproduction / Patch / Validation） |
 
-**占位符说明**：
-- `{prompt_template}` — 当前需要改进的 Plan（即 `<curr_param>`）
-- `{inputs_outputs_feedback}` — 由 `pipeline._build_feedback_text` 在主机端组装的 `feedback_text` 文本（即 `<side_info>`），包含执行轨迹、测试结果、Patch 等
+**占位符说明**（Jinja2 语法，由 `mini-swe-agent` 在 agent 内部通过 `extra_template_vars` 渲染）：
+- `{{prompt_template}}` — 当前需要改进的 Plan（即 `<curr_param>`），通过 `agent.run(prompt_template=current_plan, ...)` 传入
+- `{{inputs_outputs_feedback}}` — 由 `pipeline._build_feedback_text` 在主机端组装的 `feedback_text` 文本（即 `<side_info>`），通过 `agent.run(inputs_outputs_feedback=feedback_text, ...)` 传入，包含执行轨迹、测试结果、Patch 等
 
-**默认模板内容**（保留 GEPA 骨架，差异部分以中文加粗标注；权威版本以 `src/prompts/gepa_reflection.py:DEFAULT_REFLECTION_TEMPLATE` 为准）：
+**默认模板内容**（保留 GEPA 骨架，差异部分以中文加粗标注；权威版本以 `config.yaml` 的 `prompts.reflection_prompt_template` 为准）：
 
 ```
 The following is the current plan that **a planning agent** produced for a software-engineering task:
 
 ```
-{prompt_template}
+{{prompt_template}}
 ```
 
 The following are the inputs given to the agent, the agent's final response, the agent's
 trajectory (tool calls and reasoning), the resulting patch, and the test feedback:
 
-{inputs_outputs_feedback}
+{{inputs_outputs_feedback}}
 
 Your task is to write **a new plan** that the next round can execute.
 
@@ -740,4 +741,4 @@ Write the improved plan to `/tmp/plan.md` and finish with:
 
 **输出解析**：pipeline 在容器停止前通过 `docker exec cat /tmp/plan.md` 读取新 Plan 内容。若该文件为空或不存在，则回退到从 LLM 响应中提取第一个 ``` 代码块作为新 Plan（实现见 `gepa_reflection.parse_output`）。
 
-**覆盖方式**：用户可在 `config.yaml` 的 `prompts.reflection_prompt_template` 中提供自定义模板（必须保留 `{prompt_template}` 与 `{inputs_outputs_feedback}` 两个占位符）；缺省或留空时回退到本节描述的 `DEFAULT_REFLECTION_TEMPLATE`。
+**覆盖方式**：用户可在 `config.yaml` 的 `prompts.reflection_prompt_template` 中提供自定义模板（必须保留 `{{prompt_template}}` 与 `{{inputs_outputs_feedback}}` 两个 Jinja 占位符）；缺省或留空时由 `src/config.py` 加载阶段填充本节描述的默认模板。
