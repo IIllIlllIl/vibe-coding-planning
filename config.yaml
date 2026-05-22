@@ -431,3 +431,15 @@ evaluator:
   # Default 1800s (30 min) accommodates large SWE-bench Pro instances such as
   # numpy/scipy/astropy. Increase if you observe evaluator timeouts in run.log.
   timeout: 1800
+
+analysis:
+  # Contrastive rule extraction agent configuration.
+  # Independent from the main pipeline so analysis can run against a
+  # different provider while the pipeline uses DeepSeek.
+  model: "deepseek-v4-flash"
+  api_base: "https://api.deepseek.com"
+  api_key_env: "DEEPSEEK_API_KEY"
+  max_steps: 1000
+  cost_limit: 50.0
+  output_dir: "./output/analysis_results"
+  parallel: 1

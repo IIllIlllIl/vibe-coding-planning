@@ -1,0 +1,97 @@
+#!/usr/bin/env bash
+# Analysis runner for contrastive rule extraction.
+#
+# Serially processes reflect-success cases, skipping any that already have
+# output. Writes a master log suitable for the long-run watchdog.
+#
+# Usage:
+#   bash scripts/run_analysis.sh --model deepseek-v4-flash --output-dir ./output/analysis_flash
+#   bash scripts/run_analysis.sh --model deepseek-v4-pro   --output-dir ./output/analysis_pro
+
+set -euo pipefail
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+cd "$SCRIPT_DIR/.."
+
+# Defaults
+MODEL="deepseek-v4-flash"
+OUTPUT_DIR="./output/analysis_run"
+INPUT_DIR="./output/SWE-bench_Verified/reflect_success_cases"
+
+# Parse args
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    --model)
+      MODEL="$2"
+      shift 2
+      ;;
+    --output-dir)
+      OUTPUT_DIR="$2"
+      shift 2
+      ;;
+    --input-dir)
+      INPUT_DIR="$2"
+      shift 2
+      ;;
+    *)
+      echo "Unknown arg: $1"
+      exit 1
+      ;;
+  esac
+done
+
+mkdir -p "$OUTPUT_DIR"
+MASTER_LOG="logs/analysis_run.log"
+mkdir -p "$(dirname "$MASTER_LOG")"
+
+echo "[$(date '+%Y-%m-%d %H:%M:%S')] === Analysis start === model=$MODEL output=$OUTPUT_DIR" | tee -a "$MASTER_LOG"
+
+# Read instance IDs from manifest.json
+MANIFEST="$INPUT_DIR/manifest.json"
+if [[ ! -f "$MANIFEST" ]]; then
+  echo "[$(date '+%Y-%m-%d %H:%M:%S')] ERROR: manifest.json not found at $MANIFEST" | tee -a "$MASTER_LOG"
+  exit 1
+fi
+
+# Extract instance IDs using Python (more reliable than jq)
+INSTANCE_IDS=$(python3 -c "
+import json, sys
+with open('$MANIFEST') as f:
+    data = json.load(f)
+for c in data.get('cases', []):
+    print(c['instance_id'])
+")
+
+TOTAL=$(echo "$INSTANCE_IDS" | wc -l | tr -d ' ')
+COMPLETED=0
+
+for INSTANCE_ID in $INSTANCE_IDS; do
+  # Idempotency: skip if per-case result already exists
+  if [[ -f "$OUTPUT_DIR/per_case/${INSTANCE_ID}.json" ]]; then
+    echo "[$(date '+%Y-%m-%d %H:%M:%S')] SKIP $INSTANCE_ID (result exists)" | tee -a "$MASTER_LOG"
+    COMPLETED=$((COMPLETED + 1))
+    continue
+  fi
+
+  echo "[$(date '+%Y-%m-%d %H:%M:%S')] START $INSTANCE_ID" | tee -a "$MASTER_LOG"
+
+  START_TIME=$(date +%s)
+
+  if python -m src.analysis \
+      --input "$INPUT_DIR" \
+      --output "$OUTPUT_DIR" \
+      --model "$MODEL" \
+      --instance "$INSTANCE_ID" 2>&1 | tee -a "$MASTER_LOG"; then
+    END_TIME=$(date +%s)
+    ELAPSED=$((END_TIME - START_TIME))
+    echo "[$(date '+%Y-%m-%d %H:%M:%S')] DONE  $INSTANCE_ID rc=0 elapsed=${ELAPSED}s" | tee -a "$MASTER_LOG"
+    COMPLETED=$((COMPLETED + 1))
+  else
+    END_TIME=$(date +%s)
+    ELAPSED=$((END_TIME - START_TIME))
+    echo "[$(date '+%Y-%m-%d %H:%M:%S')] FAIL  $INSTANCE_ID rc=$? elapsed=${ELAPSED}s" | tee -a "$MASTER_LOG"
+    # Continue to next instance — don't abort the whole batch
+  fi
+done
+
+echo "[$(date '+%Y-%m-%d %H:%M:%S')] === Analysis end === completed=$COMPLETED/$TOTAL" | tee -a "$MASTER_LOG"

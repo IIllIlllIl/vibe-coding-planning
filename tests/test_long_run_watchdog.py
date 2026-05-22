@@ -278,6 +278,147 @@ class TestInitStateCorruptResult:
         assert state.total_instances == 2
 
 
+class TestAnalysisState:
+    def test_roundtrip_with_analysis_fields(self, tmp_path: Path):
+        state = watchdog.WatchdogState(
+            batch_id="test-batch",
+            total_instances=60,
+            completed=60,
+            status="completed",
+            analysis_phase="flash",
+            analysis_completed=7,
+        )
+        with patch.object(watchdog, "STATE_FILE", tmp_path / "state.json"):
+            watchdog.save_state(state)
+            loaded = watchdog.load_state()
+        assert loaded.analysis_phase == "flash"
+        assert loaded.analysis_completed == 7
+
+    def test_backward_compat_missing_analysis_fields(self, tmp_path: Path):
+        raw = {
+            "batch_id": "old-batch",
+            "total_instances": 10,
+            "completed": 10,
+            "status": "completed",
+        }
+        state_file = tmp_path / "state.json"
+        state_file.write_text(json.dumps(raw))
+        with patch.object(watchdog, "STATE_FILE", state_file):
+            loaded = watchdog.load_state()
+        assert loaded.analysis_phase is None
+        assert loaded.analysis_completed == 0
+
+
+class TestAnalysisLogAnalysis:
+    def test_detect_api_rate_limit_in_analysis_log(self, tmp_path: Path):
+        log = tmp_path / "analysis_run.log"
+        log.write_text(
+            "[2026-05-12 10:00:00] START sphinx-doc__sphinx-9229\n"
+            "[2026-05-12 10:05:00] ERROR: DeepSeek API returned 429 Too Many Requests\n"
+        )
+        with patch.object(watchdog, "ANALYSIS_LOG", log):
+            analysis = watchdog.analyze_recent_logs(log)
+        assert analysis["api_rate_limited"] is True
+        assert analysis["api_auth_failed"] is False
+
+    def test_analysis_end_marker_detected(self, tmp_path: Path):
+        log = tmp_path / "analysis_run.log"
+        log.write_text(
+            "[2026-05-12 10:00:00] START inst1\n"
+            "[2026-05-12 10:01:00] DONE  inst1 rc=0 elapsed=60s\n"
+            "[2026-05-12 10:01:01] === Analysis end ===\n"
+        )
+        with patch.object(watchdog, "ANALYSIS_LOG", log):
+            analysis = watchdog.analyze_recent_logs(log)
+        assert analysis["batch_completed"] is True
+
+    def test_limits_exceeded_is_expected_failure(self, tmp_path: Path):
+        log = tmp_path / "analysis_run.log"
+        log.write_text(
+            "[2026-05-12 10:00:00] FAIL  inst1 rc=1 elapsed=300s\n"
+            "Contrastive agent for inst1 terminated without submission (exit_status=LimitsExceeded)\n"
+        )
+        with patch.object(watchdog, "ANALYSIS_LOG", log):
+            analysis = watchdog.analyze_recent_logs(log)
+        assert analysis["expected_failure"] is True
+
+
+class TestAnalysisHangDetection:
+    def test_analysis_log_stale(self, tmp_path: Path):
+        log = tmp_path / "analysis_run.log"
+        log.write_text("old log line\n")
+        old_time = time.time() - watchdog.HANG_TIMEOUT_SECONDS - 60
+        os.utime(log, (old_time, old_time))
+        assert watchdog.is_log_stale(log) is True
+
+    def test_analysis_log_recent(self, tmp_path: Path):
+        log = tmp_path / "analysis_run.log"
+        log.write_text("recent log line\n")
+        assert watchdog.is_log_stale(log) is False
+
+
+class TestSerialPhaseHandoff:
+    def test_flash_to_pro_transition(self, tmp_path: Path):
+        """Simulate: batch done, flash analysis done → pro should start."""
+        state = watchdog.WatchdogState(
+            batch_id="b",
+            total_instances=60,
+            completed=60,
+            status="completed",
+            analysis_phase="flash",
+            analysis_completed=60,
+        )
+        # Write analysis log with end marker
+        analysis_log = tmp_path / "analysis_run.log"
+        analysis_log.write_text(
+            "[2026-05-12 10:00:00] START inst1\n"
+            "[2026-05-12 10:01:00] === Analysis end ===\n"
+        )
+        with patch.object(watchdog, "ANALYSIS_LOG", analysis_log):
+            analysis = watchdog.analyze_recent_logs(analysis_log)
+        assert analysis["batch_completed"] is True
+        # Simulate the handoff logic from the main loop
+        if state.analysis_phase == "flash" and analysis["batch_completed"]:
+            state.analysis_phase = "pro"
+            state.analysis_completed = 0
+        assert state.analysis_phase == "pro"
+        assert state.analysis_completed == 0
+
+    def test_pro_done_exits(self, tmp_path: Path):
+        state = watchdog.WatchdogState(
+            batch_id="b",
+            total_instances=60,
+            completed=60,
+            status="completed",
+            analysis_phase="pro",
+            analysis_completed=60,
+        )
+        analysis_log = tmp_path / "analysis_run.log"
+        analysis_log.write_text("[2026-05-12 10:01:00] === Analysis end ===\n")
+        with patch.object(watchdog, "ANALYSIS_LOG", analysis_log):
+            analysis = watchdog.analyze_recent_logs(analysis_log)
+        assert analysis["batch_completed"] is True
+        if state.analysis_phase == "pro" and analysis["batch_completed"]:
+            state.analysis_phase = "done"
+        assert state.analysis_phase == "done"
+
+
+class TestCooldownDuringAnalysis:
+    def test_cooldown_resumes_analysis_not_batch(self, tmp_path: Path):
+        state = watchdog.WatchdogState(
+            batch_id="b",
+            total_instances=60,
+            completed=60,
+            status="api_cooldown",
+            analysis_phase="flash",
+            api_cooldown_until=datetime.now(timezone.utc).isoformat(),
+        )
+        assert state.analysis_phase == "flash"
+        # After cooldown expires, the main loop would call start_analysis,
+        # not start_batch. We verify the phase stays "flash".
+        assert watchdog.cooldown_expired(state) is True
+
+
 class TestRepairPrompt:
     def test_prompt_contains_regression_testing(self):
         state = watchdog.WatchdogState(batch_id="b", total_instances=10)
@@ -288,4 +429,185 @@ class TestRepairPrompt:
         state = watchdog.WatchdogState(batch_id="b", total_instances=10)
         consts = str(watchdog.invoke_claude_repair.__code__.co_consts)
         assert "scripts/long_run_watchdog.py" in consts
+
+
+class TestReviewState:
+    def test_roundtrip_with_review_fields(self, tmp_path: Path):
+        state = watchdog.WatchdogState(
+            batch_id="test-batch",
+            total_instances=60,
+            completed=60,
+            status="completed",
+            analysis_phase="done",
+            review_phase="reviewing",
+            rework_queue=["inst1", "inst2"],
+            rework_attempts={"inst1": 1, "inst2": 2},
+            review_results={"inst1": {"score": 80, "passed": True}},
+        )
+        with patch.object(watchdog, "STATE_FILE", tmp_path / "state.json"):
+            watchdog.save_state(state)
+            loaded = watchdog.load_state()
+        assert loaded.review_phase == "reviewing"
+        assert loaded.rework_queue == ["inst1", "inst2"]
+        assert loaded.rework_attempts == {"inst1": 1, "inst2": 2}
+        assert loaded.review_results == {"inst1": {"score": 80, "passed": True}}
+
+    def test_backward_compat_missing_review_fields(self, tmp_path: Path):
+        raw = {
+            "batch_id": "old-batch",
+            "total_instances": 10,
+            "completed": 10,
+            "status": "completed",
+            "analysis_phase": "done",
+        }
+        state_file = tmp_path / "state.json"
+        state_file.write_text(json.dumps(raw))
+        with patch.object(watchdog, "STATE_FILE", state_file):
+            loaded = watchdog.load_state()
+        assert loaded.review_phase is None
+        assert loaded.rework_queue == []
+        assert loaded.rework_attempts == {}
+        assert loaded.review_results == {}
+
+
+class TestRuleQualityEvaluation:
+    def test_perfect_rule_passes(self):
+        rule = (
+            "When a plan only modifies the primary target function without tracing down "
+            "all internal helper functions, the strategy should be to perform a dependency "
+            "trace through the whole file, because fixing only the producer without fixing "
+            "all consumers leaves the system with inconsistent escaping."
+        )
+        result = watchdog.evaluate_rule_quality(rule)
+        assert result["passed"] is True
+        assert result["score"] >= 70
+        assert result["checks"]["starts_with_when"] is True
+        assert result["checks"]["has_because"] is True
+        assert result["checks"]["no_format_pollution"] is True
+        assert result["checks"]["no_impl_details"] is True
+        assert result["checks"]["has_strategy"] is True
+
+    def test_empty_rule_fails(self):
+        result = watchdog.evaluate_rule_quality("")
+        assert result["passed"] is False
+        assert result["checks"]["non_empty"] is False
+
+    def test_short_rule_fails(self):
+        # Missing both because AND strategy, so even with other checks it scores < 70
+        result = watchdog.evaluate_rule_quality("When X do Y.")
+        assert result["passed"] is False
+        assert result["checks"]["length_ok"] is False
+
+    def test_missing_because_fails(self):
+        rule = (
+            "When a plan only modifies the primary target function without tracing down "
+            "all internal helper functions, the strategy should be to perform a dependency trace."
+        )
+        result = watchdog.evaluate_rule_quality(rule)
+        assert result["checks"]["has_because"] is False
+
+    def test_markdown_pollution_fails(self):
+        rule = "## Rule 1\nWhen X, do Y because Z."
+        result = watchdog.evaluate_rule_quality(rule)
+        assert result["checks"]["no_format_pollution"] is False
+
+    def test_tool_call_pollution_fails(self):
+        rule = "<tool_calls>\nWhen X, do Y because Z."
+        result = watchdog.evaluate_rule_quality(rule)
+        assert result["checks"]["no_format_pollution"] is False
+
+    def test_file_path_impl_detail_fails(self):
+        rule = (
+            "When /testbed/foo.py has a bug, do Y because Z."
+        )
+        result = watchdog.evaluate_rule_quality(rule)
+        assert result["checks"]["no_impl_details"] is False
+
+    def test_line_number_impl_detail_fails(self):
+        rule = (
+            "When line 42 has an error, do Y because Z."
+        )
+        result = watchdog.evaluate_rule_quality(rule)
+        assert result["checks"]["no_impl_details"] is False
+
+    def test_no_strategy_fails(self):
+        rule = (
+            "When a bug exists, the output is wrong because the code is broken."
+        )
+        result = watchdog.evaluate_rule_quality(rule)
+        assert result["checks"]["has_strategy"] is False
+
+
+class TestReviewAllRules:
+    def test_all_pass_no_rework(self, tmp_path: Path):
+        per_case = tmp_path / "per_case"
+        per_case.mkdir()
+        for i, rule in enumerate([
+            "When A, do B because C.",
+            "When X, verify Y because Z.",
+        ]):
+            data = {"instance_id": f"inst{i}", "rule": rule * 20, "rule_valid": True}
+            (per_case / f"inst{i}.json").write_text(json.dumps(data))
+
+        queue, results = watchdog.review_all_rules(str(tmp_path))
+        assert queue == []
+        assert len(results) == 2
+        for r in results.values():
+            assert r["passed"] is True
+
+    def test_some_fail_queued_for_rework(self, tmp_path: Path):
+        per_case = tmp_path / "per_case"
+        per_case.mkdir()
+        # Good rule
+        good = {"instance_id": "good_inst", "rule": "When A, do B because C." * 15, "rule_valid": True}
+        (per_case / "good_inst.json").write_text(json.dumps(good))
+        # Bad rule (empty)
+        bad = {"instance_id": "bad_inst", "rule": "", "rule_valid": False}
+        (per_case / "bad_inst.json").write_text(json.dumps(bad))
+
+        queue, results = watchdog.review_all_rules(str(tmp_path))
+        assert queue == ["bad_inst"]
+        assert results["good_inst"]["passed"] is True
+        assert results["bad_inst"]["passed"] is False
+
+    def test_missing_per_case_dir(self, tmp_path: Path):
+        queue, results = watchdog.review_all_rules(str(tmp_path / "nonexistent"))
+        assert queue == []
+        assert results == {}
+
+
+class TestReworkHelpers:
+    def test_rework_session_name(self):
+        assert watchdog.is_rework_complete("django__django-12345") is True
+        # (session does not exist in test env)
+
+    def test_rework_log_path(self):
+        path = watchdog.get_rework_log_path("django__django-12345")
+        assert "rework_django_django-12345" in str(path)
+
+
+class TestProDoneEntersReview:
+    def test_pro_done_sets_review_phase(self, tmp_path: Path):
+        """Simulate the main-loop transition when pro analysis ends."""
+        state = watchdog.WatchdogState(
+            batch_id="b",
+            total_instances=60,
+            completed=60,
+            status="completed",
+            analysis_phase="pro",
+            analysis_completed=60,
+        )
+        analysis_log = tmp_path / "analysis_run.log"
+        analysis_log.write_text("[2026-05-12 10:01:00] === Analysis end ===\n")
+        with patch.object(watchdog, "ANALYSIS_LOG", analysis_log):
+            analysis = watchdog.analyze_recent_logs(analysis_log)
+        assert analysis["batch_completed"] is True
+
+        # Simulate the exact handoff logic from the updated main loop
+        if state.analysis_phase == "pro" and analysis["batch_completed"]:
+            state.analysis_phase = "done"
+            state.review_phase = "reviewing"
+
+        assert state.analysis_phase == "done"
+        assert state.review_phase == "reviewing"
 

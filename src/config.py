@@ -122,6 +122,24 @@ class EvaluatorConfig:
 
 
 @dataclass(frozen=True)
+class AnalysisConfig:
+    """Configuration for the contrastive rule extraction analysis.
+
+    Supports independent model settings from the main pipeline so that
+    analysis can run against a different provider (e.g. Moonshot/kimi)
+    while the pipeline uses DeepSeek.
+    """
+
+    model: str = "moonshot/kimi-k2.6"
+    api_base: str = "https://api.moonshot.cn"
+    api_key_env: str = "MOONSHOT_API_KEY"
+    max_steps: int = 1000
+    cost_limit: float = 50.0
+    output_dir: str = "./output/analysis_results"
+    parallel: int = 1
+
+
+@dataclass(frozen=True)
 class Config:
     """Top-level configuration object."""
 
@@ -130,7 +148,9 @@ class Config:
     docker: DockerConfig = field(default_factory=DockerConfig)
     agent: AgentConfig = field(default_factory=AgentConfig)
     evaluator: EvaluatorConfig = field(default_factory=EvaluatorConfig)
+    analysis: AnalysisConfig = field(default_factory=AnalysisConfig)
     api_key: str = ""
+    analysis_api_key: str = ""
 
 
 def _load_yaml(path: str | Path) -> dict[str, Any]:
@@ -368,6 +388,32 @@ def _build_evaluator_config(data: dict[str, Any]) -> EvaluatorConfig:
     )
 
 
+def _build_analysis_config(data: dict[str, Any]) -> AnalysisConfig:
+    """Build AnalysisConfig from a dict."""
+    import urllib.parse
+
+    api_base = _get_str(data, "api_base", "https://api.moonshot.cn")
+    parsed = urllib.parse.urlparse(api_base)
+    if not parsed.scheme or not parsed.netloc:
+        raise FatalError(
+            f"Invalid analysis.api_base URL: {api_base}. Must include scheme and host."
+        )
+
+    return AnalysisConfig(
+        model=_get_str(data, "model", "moonshot/kimi-k2.6"),
+        api_base=api_base,
+        api_key_env=_get_str(data, "api_key_env", "MOONSHOT_API_KEY"),
+        max_steps=_validate_positive_int(
+            "analysis.max_steps", _get_int(data, "max_steps", 1000)
+        ),
+        cost_limit=_validate_non_negative_float(
+            "analysis.cost_limit", _get_float(data, "cost_limit", 50.0)
+        ),
+        output_dir=_get_str(data, "output_dir", "./output/analysis_results"),
+        parallel=_validate_positive_int("analysis.parallel", _get_int(data, "parallel", 1)),
+    )
+
+
 def load_config(path: str | Path) -> Config:
     """Load configuration from a YAML file.
 
@@ -398,11 +444,23 @@ def load_config(path: str | Path) -> Config:
     if not isinstance(evaluator_data, dict):
         evaluator_data = {}
 
+    analysis_data = raw.get("analysis", {})
+    if not isinstance(analysis_data, dict):
+        analysis_data = {}
+
     api_key = os.environ.get("DEEPSEEK_API_KEY", "")
     if not api_key:
         raise FatalError(
             "Environment variable DEEPSEEK_API_KEY is not set. "
             "Please set it before running the system."
+        )
+
+    analysis_config = _build_analysis_config(analysis_data)
+    analysis_api_key = os.environ.get(analysis_config.api_key_env, "")
+    if not analysis_api_key:
+        logger.warning(
+            "Environment variable %s is not set. Analysis agent will fail if used.",
+            analysis_config.api_key_env,
         )
 
     return Config(
@@ -411,5 +469,7 @@ def load_config(path: str | Path) -> Config:
         docker=_build_docker_config(docker_data),
         agent=_build_agent_config(agent_data),
         evaluator=_build_evaluator_config(evaluator_data),
+        analysis=analysis_config,
         api_key=api_key,
+        analysis_api_key=analysis_api_key,
     )

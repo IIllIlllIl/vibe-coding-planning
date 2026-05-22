@@ -35,7 +35,7 @@ from pathlib import Path
 # Configurable constants
 # ---------------------------------------------------------------------------
 CHECK_INTERVAL_SECONDS = 3600         # 1 hour between health checks
-HANG_TIMEOUT_SECONDS = 3 * 3600       # 3 hours with no log change = hung
+HANG_TIMEOUT_SECONDS = 8 * 3600       # 8 hours with no log change = hung
 API_COOLDOWN_SECONDS = 5 * 3600       # 5 hours for DeepSeek rate-limit recovery
 REPAIR_BACKOFF_SECONDS = 10 * 3600    # 10 hours after max repair attempts exceeded
 DOCKER_RETRY_INTERVAL = 300           # base 5 min; exponentiated on repeated failures
@@ -53,8 +53,10 @@ LOG_SETTLE_POLL_SECONDS = 5
 LOG_SETTLE_MAX_SECONDS = 30
 
 BATCH_TMUX_SESSION = "pct-batch"
+ANALYSIS_TMUX_SESSION = "pct-analysis"
 REPAIR_TMUX_SESSION = "pct-repair"
 MASTER_LOG = Path("logs/batch_run.log")
+ANALYSIS_LOG = Path("logs/analysis_run.log")
 WATCHDOG_LOG = Path("logs/watchdog.log")
 STATE_FILE = Path("output/.watchdog_state.json")
 
@@ -134,6 +136,22 @@ class WatchdogState:
     last_heartbeat: str = ""
     claude_repair_count: int = 0
     docker_retry_count: int = 0
+    # Analysis phase tracking (flash → pro, serial)
+    analysis_phase: str | None = None   # None | "flash" | "pro" | "done"
+    analysis_completed: int = 0
+    # Review phase tracking (quality gate after pro analysis)
+    review_phase: str | None = None     # None | "pending" | "reviewing" | "reworking" | "done"
+    rework_queue: list[str] = None      # instance_ids that need rework
+    rework_attempts: dict[str, int] = None  # per-instance retry counter
+    review_results: dict[str, dict] = None  # per-instance quality scores
+
+    def __post_init__(self):
+        if self.rework_queue is None:
+            self.rework_queue = []
+        if self.rework_attempts is None:
+            self.rework_attempts = {}
+        if self.review_results is None:
+            self.review_results = {}
 
     def to_dict(self) -> dict:
         return asdict(self)
@@ -153,6 +171,12 @@ class WatchdogState:
             "last_heartbeat": "",
             "claude_repair_count": 0,
             "docker_retry_count": 0,
+            "analysis_phase": None,
+            "analysis_completed": 0,
+            "review_phase": None,
+            "rework_queue": [],
+            "rework_attempts": {},
+            "review_results": {},
         }
         defaults.update(d)
         return cls(**defaults)
@@ -284,6 +308,247 @@ def start_batch(state: WatchdogState) -> None:
         logging.error("Failed to start batch tmux session!")
 
 
+def start_analysis(state: WatchdogState) -> None:
+    """Start (or restart) the analysis runner in a tmux session.
+
+    The model is determined by state.analysis_phase ("flash" or "pro").
+    """
+    _kill_tmux_session(ANALYSIS_TMUX_SESSION)
+
+    model_name = {
+        "flash": "deepseek-v4-flash",
+        "pro": "deepseek-v4-pro",
+    }.get(state.analysis_phase or "", "deepseek-v4-flash")
+
+    output_dir = f"./output/analysis_{state.analysis_phase or 'unknown'}"
+
+    cmd = (
+        f"cd {shlex.quote(os.getcwd())} "
+        f"&& source /Users/taoran.wang/miniconda3/etc/profile.d/conda.sh "
+        f"&& conda activate mini-swe "
+        f"&& bash scripts/run_analysis.sh --model {model_name} --output-dir {output_dir}"
+    )
+
+    logging.info(
+        "Starting analysis tmux session: %s (phase=%s model=%s)",
+        ANALYSIS_TMUX_SESSION,
+        state.analysis_phase,
+        model_name,
+    )
+    subprocess.run(
+        ["tmux", "new-session", "-d", "-s", ANALYSIS_TMUX_SESSION, "bash", "-c", cmd],
+        capture_output=True,
+        check=False,
+    )
+    time.sleep(3)
+
+    if _tmux_session_exists(ANALYSIS_TMUX_SESSION):
+        logging.info("Analysis session started successfully.")
+    else:
+        logging.error("Failed to start analysis tmux session!")
+
+
+# ---------------------------------------------------------------------------
+# Rule quality review
+# ---------------------------------------------------------------------------
+
+# Patterns that indicate the rule contains implementation details rather than
+# generalizable reasoning strategies.
+IMPLEMENTATION_DETAIL_PATTERNS = [
+    re.compile(r"\/\w+\/\w+\.\w+"),           # file paths like /testbed/foo.py
+    re.compile(r"\bline\s*\d+\b", re.I),      # line numbers
+    re.compile(r"\bln\.?\s*\d+\b", re.I),     # ln 42
+    re.compile(r"\b\d+\s*:\s*\d+\b"),         # 42:13 (line:col)
+]
+
+# Patterns that indicate format pollution from the agent
+FORMAT_POLLUTION_PATTERNS = [
+    re.compile(r"^#+\s*"),                      # markdown headers
+    re.compile(r"<\｜\｜DSML\｜\｜"),            # DSML tool tags
+    re.compile(r"<tool_calls>"),                 # XML tool calls
+    re.compile(r"<tool_call\s+"),                # XML tool call open
+    re.compile(r"<invoke\s+"),                   # XML invoke
+    re.compile(r"<parameter\s+"),                # XML parameter
+]
+
+# Minimum quality score (0-100) for a rule to pass review
+RULE_QUALITY_PASS_THRESHOLD = 70
+RULE_REWORK_MAX_ATTEMPTS = 3
+
+
+def evaluate_rule_quality(rule_text: str) -> dict:
+    """Evaluate the quality of an extracted contrastive rule.
+
+    Returns a dict with:
+        - score (int): 0-100 composite score
+        - passed (bool): True if score >= RULE_QUALITY_PASS_THRESHOLD
+        - checks (dict): individual check results with boolean values
+    """
+    checks: dict[str, bool] = {}
+    score = 0
+    max_score = 100
+
+    # 1. Non-empty (10 pts)
+    checks["non_empty"] = bool(rule_text and rule_text.strip())
+    if checks["non_empty"]:
+        score += 10
+
+    # 2. Length reasonable (10 pts)
+    length = len(rule_text) if rule_text else 0
+    checks["length_ok"] = 50 <= length <= 5000
+    if checks["length_ok"]:
+        score += 10
+
+    # 3. Starts with "When " (15 pts)
+    checks["starts_with_when"] = rule_text.strip().lower().startswith("when ")
+    if checks["starts_with_when"]:
+        score += 15
+
+    # 4. Contains " because " (15 pts)
+    checks["has_because"] = " because " in rule_text.lower()
+    if checks["has_because"]:
+        score += 15
+
+    # 5. No markdown/format pollution (15 pts)
+    polluted = any(p.search(rule_text) for p in FORMAT_POLLUTION_PATTERNS)
+    checks["no_format_pollution"] = not polluted
+    if checks["no_format_pollution"]:
+        score += 15
+
+    # 6. No implementation details (15 pts)
+    has_impl = any(p.search(rule_text) for p in IMPLEMENTATION_DETAIL_PATTERNS)
+    checks["no_impl_details"] = not has_impl
+    if checks["no_impl_details"]:
+        score += 15
+
+    # 7. Has substantive strategy (20 pts)
+    # Look for strategy indicators: cognitive verbs, reasoning patterns
+    strategy_indicators = [
+        "should", "must", "need to", "strategy", "approach",
+        "instead", "rather than", "focus on", "prioritize",
+        "verify", "check", "ensure", "validate", "confirm",
+        "trace", "inspect", "examine", "analyze", "compare",
+        "recognize", "identify", "distinguish", "differentiate",
+    ]
+    has_strategy = any(ind in rule_text.lower() for ind in strategy_indicators)
+    checks["has_strategy"] = has_strategy
+    if has_strategy:
+        score += 20
+
+    return {
+        "score": score,
+        "passed": score >= RULE_QUALITY_PASS_THRESHOLD,
+        "checks": checks,
+        "max_score": max_score,
+    }
+
+
+def review_all_rules(output_dir: str) -> tuple[list[str], dict[str, dict]]:
+    """Review all extracted rules in the given output directory.
+
+    Args:
+        output_dir: Path to analysis output dir (e.g. "./output/analysis_pro")
+
+    Returns:
+        (rework_queue, review_results) where:
+            - rework_queue: list of instance_ids that failed review
+            - review_results: dict mapping instance_id -> quality result dict
+    """
+    per_case_dir = Path(output_dir) / "per_case"
+    if not per_case_dir.exists():
+        logging.warning("No per_case dir found at %s", per_case_dir)
+        return [], {}
+
+    rework_queue: list[str] = []
+    review_results: dict[str, dict] = {}
+
+    for result_file in sorted(per_case_dir.glob("*.json")):
+        try:
+            data = json.loads(result_file.read_text(encoding="utf-8"))
+        except Exception:
+            logging.warning("Cannot read result file: %s", result_file)
+            continue
+
+        instance_id = data.get("instance_id", result_file.stem)
+        rule_text = data.get("rule", "")
+        quality = evaluate_rule_quality(rule_text)
+        review_results[instance_id] = quality
+
+        if not quality["passed"]:
+            rework_queue.append(instance_id)
+            logging.info(
+                "Rule review FAILED for %s (score=%d/%d): %s",
+                instance_id,
+                quality["score"],
+                quality["max_score"],
+                {k: v for k, v in quality["checks"].items() if not v},
+            )
+        else:
+            logging.info(
+                "Rule review PASSED for %s (score=%d/%d)",
+                instance_id,
+                quality["score"],
+                quality["max_score"],
+            )
+
+    return rework_queue, review_results
+
+
+def start_rework(instance_id: str, model_name: str, output_dir: str) -> None:
+    """Start a single-case rework analysis in a dedicated tmux session.
+
+    The session name includes the instance_id so the watchdog can track
+    individual rework jobs.
+    """
+    session_name = f"pct-rework-{instance_id.replace('__', '-')}"
+    _kill_tmux_session(session_name)
+
+    # Delete the old result so the analysis CLI will re-run this case
+    old_result = Path(output_dir) / "per_case" / f"{instance_id}.json"
+    if old_result.exists():
+        old_result.unlink()
+        logging.info("Deleted old result for rework: %s", old_result)
+
+    input_dir = "./output/SWE-bench_Verified/reflect_success_cases"
+    cmd = (
+        f"cd {shlex.quote(os.getcwd())} "
+        f"&& source /Users/taoran.wang/miniconda3/etc/profile.d/conda.sh "
+        f"&& conda activate mini-swe "
+        f"&& python -m src.analysis "
+        f"--input {shlex.quote(input_dir)} "
+        f"--output {shlex.quote(output_dir)} "
+        f"--model {shlex.quote(model_name)} "
+        f"--instance {shlex.quote(instance_id)}"
+    )
+
+    logging.info(
+        "Starting rework session: %s (instance=%s model=%s)",
+        session_name, instance_id, model_name,
+    )
+    subprocess.run(
+        ["tmux", "new-session", "-d", "-s", session_name, "bash", "-c", cmd],
+        capture_output=True,
+        check=False,
+    )
+    time.sleep(3)
+
+    if _tmux_session_exists(session_name):
+        logging.info("Rework session started successfully: %s", session_name)
+    else:
+        logging.error("Failed to start rework session: %s", session_name)
+
+
+def is_rework_complete(instance_id: str) -> bool:
+    """Check if a rework tmux session has finished."""
+    session_name = f"pct-rework-{instance_id.replace('__', '-')}"
+    return not _tmux_session_exists(session_name)
+
+
+def get_rework_log_path(instance_id: str) -> Path:
+    """Return the log path for a rework session."""
+    return Path(f"logs/rework_{instance_id.replace('__', '_')}.log")
+
+
 # ---------------------------------------------------------------------------
 # Log analysis
 # ---------------------------------------------------------------------------
@@ -313,16 +578,25 @@ def _grep_patterns(text: str, patterns: list[re.Pattern]) -> list[str]:
     return matches
 
 
-def analyze_recent_logs() -> dict:
-    """Return a dict describing the most recent batch activity."""
-    master_tail = _tail_file(MASTER_LOG, 100)
+def analyze_recent_logs(log_path: Path | None = None) -> dict:
+    """Return a dict describing the most recent batch or analysis activity.
+
+    Args:
+        log_path: Path to the master log to analyze. Defaults to MASTER_LOG
+                  (the batch log). Pass ANALYSIS_LOG to analyze the analysis
+                  runner instead.
+    """
+    log_path = log_path or MASTER_LOG
+    master_tail = _tail_file(log_path, 100)
+    is_analysis = log_path.name != MASTER_LOG.name
+    end_marker = "=== Analysis end ===" if is_analysis else "=== Batch end ==="
     result = {
         "master_tail": master_tail,
         "api_rate_limited": bool(_grep_patterns(master_tail, API_RATE_LIMIT_PATTERNS)),
         "api_auth_failed": bool(_grep_patterns(master_tail, API_AUTH_PATTERNS)),
         "docker_down": bool(_grep_patterns(master_tail, DOCKER_DOWN_PATTERNS)),
         "expected_failure": bool(_grep_patterns(master_tail, EXPECTED_FAILURE_PATTERNS)),
-        "batch_completed": "=== Batch end ===" in master_tail,
+        "batch_completed": end_marker in master_tail,
     }
 
     # Try to identify current instance from most recent START line
@@ -353,16 +627,30 @@ def analyze_recent_logs() -> dict:
     return result
 
 
-def is_batch_hung() -> bool:
-    """True if the master log hasn't been modified in > HANG_TIMEOUT_SECONDS."""
-    if not MASTER_LOG.exists():
+def is_log_stale(log_path: Path | None = None) -> bool:
+    """True if the given log hasn't been modified in > HANG_TIMEOUT_SECONDS.
+
+    Args:
+        log_path: Defaults to MASTER_LOG. Pass ANALYSIS_LOG to check
+                  the analysis runner.
+    """
+    log_path = log_path or MASTER_LOG
+    if not log_path.exists():
         return False
-    mtime = MASTER_LOG.stat().st_mtime
+    mtime = log_path.stat().st_mtime
     age = time.time() - mtime
     if age > HANG_TIMEOUT_SECONDS:
-        logging.warning("Master log stale for %.0f min (> %d min threshold)", age / 60, HANG_TIMEOUT_SECONDS / 60)
+        logging.warning(
+            "%s stale for %.0f min (> %d min threshold)",
+            log_path.name, age / 60, HANG_TIMEOUT_SECONDS / 60,
+        )
         return True
     return False
+
+
+def is_batch_hung() -> bool:
+    """Backward-compatible wrapper: checks the batch master log."""
+    return is_log_stale(MASTER_LOG)
 
 
 # ---------------------------------------------------------------------------
@@ -647,26 +935,26 @@ def main() -> int:
 
     state = load_state()
 
-    # Cold-start: if status is "running" but no batch tmux session exists
+    # Determine whether we are in batch mode or analysis mode
+    in_analysis = state.analysis_phase in ("flash", "pro")
+    active_session = ANALYSIS_TMUX_SESSION if in_analysis else BATCH_TMUX_SESSION
+    active_log = ANALYSIS_LOG if in_analysis else MASTER_LOG
+    start_fn = start_analysis if in_analysis else start_batch
+
+    # Cold-start: if status is "running" but no active tmux session exists
     # (fresh launch, or resume after Mac reboot / manual watchdog restart),
-    # kick off the batch before entering the watch loop. Without this, the
-    # `not batch_alive` branch below would misdiagnose the missing session
-    # as an unknown crash and spawn a Claude repair on every cold start.
-    # start_batch() kills any stale session first and the batch script is
-    # idempotent (skips instances with existing result.json), so re-running
-    # is always safe.
-    if state.status == "running" and not _tmux_session_exists(BATCH_TMUX_SESSION):
-        logging.info("Cold start: launching initial batch session.")
-        start_batch(state)
-        time.sleep(5)  # Let tmux + the shell wrapper settle before health check.
+    # kick off the appropriate runner before entering the watch loop.
+    if state.status == "running" and not _tmux_session_exists(active_session):
+        if in_analysis:
+            logging.info("Cold start: launching initial analysis session (phase=%s).", state.analysis_phase)
+        else:
+            logging.info("Cold start: launching initial batch session.")
+        start_fn(state)
+        time.sleep(5)
 
     # Main event loop
     while True:
         save_state(state)
-
-        if state.status == "completed":
-            logging.info("Batch already completed. Exiting watchdog.")
-            return 0
 
         if state.status == "fatal":
             logging.error("Watchdog is in fatal state. Manual intervention required.")
@@ -675,13 +963,13 @@ def main() -> int:
 
         if state.status == "api_cooldown":
             if cooldown_expired(state):
-                logging.info("API cooldown expired. Resuming batch.")
+                logging.info("API cooldown expired. Resuming %s.", "analysis" if in_analysis else "batch")
                 state.status = "running"
                 state.api_cooldown_until = None
                 state.docker_retry_count = 0
                 state.claude_repair_count = 0
                 save_state(state)
-                start_batch(state)
+                start_fn(state)
             else:
                 logging.info("API cooldown active. Next check in 60s.")
                 time.sleep(60)
@@ -691,12 +979,11 @@ def main() -> int:
             if is_repair_complete():
                 logging.info("Claude repair session ended.")
                 if verify_repair():
-                    # Successful repair — reset counter so future repairs are allowed
                     state.claude_repair_count = 0
                 state.status = "running"
                 state.last_error = None
                 save_state(state)
-                start_batch(state)
+                start_fn(state)
             else:
                 time.sleep(REPAIR_CHECK_INTERVAL)
                 continue
@@ -708,26 +995,118 @@ def main() -> int:
             time.sleep(CHECK_INTERVAL_SECONDS)
             continue
 
-        batch_alive = _tmux_session_exists(BATCH_TMUX_SESSION)
+        # -----------------------------------------------------------------------
+        # Review phase (quality gate after pro analysis completes)
+        # -----------------------------------------------------------------------
+        if state.review_phase == "reviewing":
+            output_dir = "./output/analysis_pro"
+            logging.info("Starting rule quality review for %s ...", output_dir)
+            rework_queue, review_results = review_all_rules(output_dir)
+            state.review_results = review_results
+            save_state(state)
 
-        if not batch_alive:
-            # Race protection: the batch shell writes `=== Batch end ===` via
-            # `tee -a` as its last command, but the tmux session can be
-            # observed as gone a moment before that line lands in the master
-            # log. Without a settle, the watchdog mis-diagnoses a clean
-            # finish as an "unknown cause" crash and burns a Claude repair on
-            # a log that already shows the end marker.
-            #
-            # We poll the log up to LOG_SETTLE_MAX_SECONDS, short-circuiting
-            # as soon as the end marker appears. This is strictly better
-            # than a single fixed sleep — fast in the common case where the
-            # end marker is already there, and tolerant of a slow tee flush
-            # on a busy filesystem.
+            if not rework_queue:
+                logging.info("All rules passed quality review. Exiting.")
+                state.review_phase = "done"
+                save_state(state)
+                return 0
+
+            # Filter out cases that have exceeded max rework attempts
+            final_queue = []
+            for instance_id in rework_queue:
+                attempts = state.rework_attempts.get(instance_id, 0)
+                if attempts < RULE_REWORK_MAX_ATTEMPTS:
+                    final_queue.append(instance_id)
+                    logging.info(
+                        "Queueing %s for rework (attempt %d/%d)",
+                        instance_id, attempts + 1, RULE_REWORK_MAX_ATTEMPTS,
+                    )
+                else:
+                    logging.warning(
+                        "%s exceeded max rework attempts (%d). Keeping best result.",
+                        instance_id, RULE_REWORK_MAX_ATTEMPTS,
+                    )
+
+            if not final_queue:
+                logging.info("No cases eligible for further rework. Exiting with best-effort results.")
+                state.review_phase = "done"
+                save_state(state)
+                return 0
+
+            state.rework_queue = final_queue
+            state.review_phase = "reworking"
+            save_state(state)
+            # Fall through to rework handling below
+
+        if state.review_phase == "reworking":
+            # Check if there's an active rework session
+            current_rework = getattr(main, "_current_rework_instance", None)
+            if current_rework and not is_rework_complete(current_rework):
+                logging.info(
+                    "Rework in progress for %s. Next check in 60s.", current_rework
+                )
+                time.sleep(60)
+                continue
+
+            # Previous rework finished (or no current rework) — evaluate result
+            if current_rework:
+                result_file = Path("./output/analysis_pro/per_case") / f"{current_rework}.json"
+                if result_file.exists():
+                    try:
+                        data = json.loads(result_file.read_text(encoding="utf-8"))
+                        quality = evaluate_rule_quality(data.get("rule", ""))
+                        state.review_results[current_rework] = quality
+                        if quality["passed"]:
+                            logging.info(
+                                "Rework SUCCESS for %s (score=%d)",
+                                current_rework, quality["score"],
+                            )
+                        else:
+                            logging.warning(
+                                "Rework still FAILED for %s (score=%d).",
+                                current_rework, quality["score"],
+                            )
+                    except Exception as exc:
+                        logging.warning("Could not evaluate rework result for %s: %s", current_rework, exc)
+                state.rework_attempts[current_rework] = state.rework_attempts.get(current_rework, 0) + 1
+                main._current_rework_instance = None
+                save_state(state)
+
+            # Start next rework if queue not empty
+            if state.rework_queue:
+                next_instance = state.rework_queue.pop(0)
+                state.rework_attempts[next_instance] = state.rework_attempts.get(next_instance, 0) + 1
+                save_state(state)
+                main._current_rework_instance = next_instance
+                start_rework(next_instance, "deepseek-v4-pro", "./output/analysis_pro")
+                continue
+            else:
+                # Queue empty — go back to reviewing to see if we fixed everything
+                logging.info("Rework queue empty. Re-running quality review.")
+                state.review_phase = "reviewing"
+                save_state(state)
+                continue
+
+        if state.review_phase == "done":
+            logging.info("Review phase complete. All work finished.")
+            return 0
+
+        # Re-evaluate mode every loop iteration (phase may have changed)
+        in_analysis = state.analysis_phase in ("flash", "pro")
+        active_session = ANALYSIS_TMUX_SESSION if in_analysis else BATCH_TMUX_SESSION
+        active_log = ANALYSIS_LOG if in_analysis else MASTER_LOG
+        start_fn = start_analysis if in_analysis else start_batch
+
+        session_alive = _tmux_session_exists(active_session)
+
+        if not session_alive:
+            end_marker = "=== Analysis end ===" if in_analysis else "=== Batch end ==="
             logging.warning(
-                "Batch session not found. Polling log for end marker (up to %ds)...",
+                "%s session not found. Polling log for end marker (up to %ds)...",
+                "Analysis" if in_analysis else "Batch",
                 LOG_SETTLE_MAX_SECONDS,
             )
-            log_analysis = analyze_recent_logs()
+            log_analysis = analyze_recent_logs(active_log)
             settle_waited = 0
             while (
                 not log_analysis["batch_completed"]
@@ -735,7 +1114,7 @@ def main() -> int:
             ):
                 time.sleep(LOG_SETTLE_POLL_SECONDS)
                 settle_waited += LOG_SETTLE_POLL_SECONDS
-                log_analysis = analyze_recent_logs()
+                log_analysis = analyze_recent_logs(active_log)
 
             if log_analysis["api_auth_failed"]:
                 enter_fatal(state, "DeepSeek API authentication failed (401). Check DEEPSEEK_API_KEY.")
@@ -745,7 +1124,7 @@ def main() -> int:
                 enter_api_cooldown(state, "DeepSeek API transient error (rate-limit/network/5xx).")
                 continue
 
-            if log_analysis["docker_down"]:
+            if not in_analysis and log_analysis["docker_down"]:
                 state.docker_retry_count += 1
                 if state.docker_retry_count > DOCKER_MAX_RETRIES:
                     enter_fatal(state, f"Docker daemon unreachable after {DOCKER_MAX_RETRIES} retries.")
@@ -759,38 +1138,44 @@ def main() -> int:
                 time.sleep(wait_sec)
                 continue
 
-            # Normal completion — batch script finished all instances and printed
-            # "=== Batch end ===" before exiting. This is success, not a crash.
-            # state.completed is left untouched: it reflects real progress
-            # (result.json files on disk), and forging it to total_instances
-            # would hide any instance that crashed before writing result.json.
             if log_analysis["batch_completed"]:
-                logging.info("Batch ended normally (=== Batch end ===). Marking complete.")
-                state.status = "completed"
-                save_state(state)
-                continue
+                if in_analysis:
+                    logging.info("Analysis ended normally (%s).", end_marker)
+                    if state.analysis_phase == "flash":
+                        logging.info("Flash analysis complete. Handing off to pro analysis.")
+                        state.analysis_phase = "pro"
+                        state.analysis_completed = 0
+                        save_state(state)
+                        start_analysis(state)
+                        continue
+                    elif state.analysis_phase == "pro":
+                        logging.info("Pro analysis complete. Entering rule review phase.")
+                        state.analysis_phase = "done"
+                        state.review_phase = "reviewing"
+                        save_state(state)
+                        continue
+                else:
+                    logging.info("Batch ended normally (=== Batch end ===). Marking complete.")
+                    state.status = "completed"
+                    save_state(state)
+                    # Transition to analysis if batch is done
+                    logging.info("Batch complete. Starting flash analysis phase.")
+                    state.analysis_phase = "flash"
+                    state.analysis_completed = 0
+                    save_state(state)
+                    start_analysis(state)
+                    continue
 
-            # Unknown failure — could be a code bug
+            # Unknown failure
             master_tail = log_analysis["master_tail"]
-            # Collect last few error-looking lines
             error_lines = [ln for ln in master_tail.splitlines() if "ERROR" in ln or "error" in ln.lower()][-10:]
             if not error_lines:
-                # Session is gone, no end marker, AND no error lines were
-                # logged — there is nothing for Claude to diagnose. Most
-                # commonly this is a benign race where the script exited
-                # cleanly but tmux was inspected before the end marker
-                # landed (the settle delay above usually catches this, but
-                # we double-belt it here). Restart the batch instead of
-                # burning a Claude repair on an "unknown cause" prompt that
-                # gives the agent nothing to fix. start_batch() is
-                # idempotent — instances with result.json are skipped — so
-                # repeated restarts converge to either the end marker being
-                # written or a real error appearing in the log.
                 logging.warning(
-                    "Batch session gone with no end marker and no error lines. "
-                    "Restarting batch (idempotent) instead of invoking Claude repair."
+                    "%s session gone with no end marker and no error lines. "
+                    "Restarting (idempotent) instead of invoking Claude repair.",
+                    "Analysis" if in_analysis else "Batch",
                 )
-                start_batch(state)
+                start_fn(state)
                 continue
 
             if state.claude_repair_count >= MAX_REPAIR_ATTEMPTS:
@@ -805,44 +1190,47 @@ def main() -> int:
                 )
                 continue
 
-            logging.error("Unknown batch failure. Invoking Claude repair.")
+            logging.error("Unknown %s failure. Invoking Claude repair.", "analysis" if in_analysis else "batch")
             invoke_claude_repair(state, error_lines)
             continue
 
-        # Batch is alive — check for hang
-        if is_batch_hung():
-            logging.warning("Batch appears hung. Restarting...")
-            _kill_tmux_session(BATCH_TMUX_SESSION)
+        # Session is alive — check for hang
+        if is_log_stale(active_log):
+            logging.warning("%s appears hung. Restarting...", "Analysis" if in_analysis else "Batch")
+            _kill_tmux_session(active_session)
             time.sleep(5)
-            start_batch(state)
+            start_fn(state)
             continue
 
         # Update progress
-        log_analysis = analyze_recent_logs()
+        log_analysis = analyze_recent_logs(active_log)
         if log_analysis["current_instance"]:
             state.current_instance = log_analysis["current_instance"]
-        # Use max of disk count and log count for completed
-        disk_completed = state.completed
+        disk_completed = state.completed if not in_analysis else state.analysis_completed
         log_completed = log_analysis.get("log_completed", 0)
-        state.completed = max(disk_completed, log_completed)
+        if in_analysis:
+            state.analysis_completed = max(disk_completed, log_completed)
+        else:
+            state.completed = max(disk_completed, log_completed)
 
-        if state.total_instances > 0 and state.completed >= state.total_instances:
+        if not in_analysis and state.total_instances > 0 and state.completed >= state.total_instances:
             logging.info("All %d instances appear complete.", state.total_instances)
             state.status = "completed"
             save_state(state)
             continue
 
-        # Periodic Docker cleanup (container leak prevention)
-        check_counter = getattr(main, "_check_counter", 0)
-        check_counter += 1
-        main._check_counter = check_counter
-        if check_counter % DOCKER_PRUNE_INTERVAL_CHECKS == 0:
-            cleanup_docker()
+        # Periodic Docker cleanup (only relevant during batch)
+        if not in_analysis:
+            check_counter = getattr(main, "_check_counter", 0)
+            check_counter += 1
+            main._check_counter = check_counter
+            if check_counter % DOCKER_PRUNE_INTERVAL_CHECKS == 0:
+                cleanup_docker()
 
         logging.info(
-            "Healthy: completed=%d/%d current=%s",
-            state.completed,
-            state.total_instances,
+            "Healthy: %s completed=%d current=%s",
+            state.analysis_phase or "batch",
+            state.analysis_completed if in_analysis else state.completed,
             state.current_instance or "—",
         )
         time.sleep(CHECK_INTERVAL_SECONDS)
