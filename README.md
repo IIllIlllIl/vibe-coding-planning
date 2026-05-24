@@ -9,6 +9,8 @@
 - **完整轨迹留存**：方案生成、代码生成、反思优化三个阶段的全量 Trajectory 均保存，作为后续规律分析的研究语料
 - **可选早退**：通过 `skip_completed_rounds` 参数控制 resolved 后是否跳过剩余轮次（默认 `true`，resolved 即停；设为 `false` 跑满 n 轮以采集稳定性数据）
 - **断点重跑（计划中，FR-07）**：配置占位已就绪，pipeline 实现推迟到下一轮迭代
+- **对比分析与规则提取（FR-13）**：对 reflect-success cases 运行对比分析 Agent，提取可泛化的自然语言规则（When ... because ... 格式），支持 flash/pro 双模型串行实验
+- **规则质量审查与返工（FR-14，默认关闭）**：独立 LLM Reviewer Agent 审查规则质量（五维评分），未通过者触发返工循环。实践发现返工机制会**破坏已提取的有效规则**（删除旧结果后重跑失败），因此默认关闭。可通过 `config.analysis.enable_review` 开启
 - **最小化造轮子**：Agent 基于 `mini-swe-agent` 框架，反思复用 GEPA 反射 Prompt 模板，评估直接调用 `swebench` 官方库
 
 ## 实验设计：两阶段方法学
@@ -138,9 +140,17 @@ output/<dataset_short>/<instance_id>/
 │   ├── output/
 │   │   ├── writer.py              # 结果与 Patch 输出
 │   │   └── trajectory.py          # Trajectory 保存
-│   └── prompts/
-│       ├── templates.py           # Prompt 渲染工具
-│       └── gepa_reflection.py     # GEPA 反射模板渲染
+│   ├── prompts/
+│   │   ├── templates.py           # Prompt 渲染工具
+│   │   └── gepa_reflection.py     # GEPA 反射模板渲染
+│   └── analysis/
+│       ├── case_loader.py         # Reflect-success 案例加载
+│       ├── contrastive_agent.py   # 对比分析规则提取 Agent
+│       ├── reviewer_agent.py      # LLM 规则质量审查 Agent
+│       ├── review_cli.py          # 批量审查 CLI
+│       ├── cli.py                 # 批量提取 CLI
+│       ├── output.py              # 分析结果输出
+│       └── evaluate_rules.py      # 规则质量评估工具
 ├── config.yaml                    # 运行时配置
 ├── requirements.txt               # Python 依赖
 ├── output/                        # 运行输出（gitignore）
@@ -157,8 +167,10 @@ output/<dataset_short>/<instance_id>/
 
 ## 开发状态
 
-代码实现完成，全量单元测试 172 passed / 2 skipped、覆盖率 85.5%。v0.8 已完成 Prompt v3 重构 + n=4 端到端 dry-run 验证（参考开发日志）。
+代码实现完成，全量单元测试通过、覆盖率 85%+。v0.8 已完成 Prompt v3 重构 + n=4 端到端 dry-run 验证（参考开发日志）。v1.4 已完成对比分析模块（FR-13）和 LLM 规则审查模块（FR-14）开发，含 watchdog 集成和全量测试。
 
 **Phase 1 待办**（详见 `project_issues.md`）：
 - §1 FR-07 断点重跑
 - §2 树形结构候选 plan / 反思模板
+- §5 Review/Rework 破坏性返工（默认已关闭，需 redesign）
+- §6 Pro 模型在大轨迹 case 上的异常耗时

@@ -13,6 +13,8 @@
 | 6.0 | 2026-05-08 | — | 数据集分层方法学：解除"仅使用 SWE-bench Pro"硬约束。**Phase 1（当前）使用 SWE-bench Verified** 大批量采集 plan / agent trajectory / resolved 信号，归纳"plan → 通过性"判别规律；**Phase 2 使用 SWE-bench Pro 作 held-out 保留集**验证规律泛化能力。Verified 镜像由 SWE-bench 官方在 Docker Hub 公开发布，无需 `build_docker_images.sh`；Pro 仍需该脚本构建专用镜像。代码侧 `system.dataset` 字段 + `swe_pro_instances` → `instances` 重命名 + `output/{dataset}/{instance_id}/...` 输出分层为 Phase 1 实施 todo（见 `project_issues.md` §3） |
 | 6.1 | 2026-05-08 | — | Phase 1 代码侧实施完成：① `SystemConfig.dataset` 字段落地（默认 `SWE-bench/SWE-bench_Verified`），透传到 `InstanceLoader(dataset=…)` → `load_swebench_dataset(name=…)`；② `swe_pro_instances` → `instances` 重命名贯穿 config dataclass / `config.yaml` / CLI / `result.json` schema / 测试；③ 输出目录分层为 `{output_dir}/{dataset_short}/{instance_id}/`，`result.json` 顶层新增 `dataset` 字段；④ 文档 §4.3 / §6.1 / §6.2 / FR-09 同步更新 |
 | 6.2 | 2026-05-19 | — | Jinja 变量注入架构整改：删除 `gepa_reflection.render()` 与 `DEFAULT_REFLECTION_TEMPLATE` 常量，将所有模板变量（`{{prompt_template}}`、`{{inputs_outputs_feedback}}`、`{{nrpv_block}}` 等）通过 `agent.run(**kwargs)` / `extra_template_vars` 注入，由 `mini-swe-agent` 在 agent 内部做 `StrictUndefined` 单次渲染。`config.yaml` 为 prompt 单点可信源；`src/prompts/gepa_reflection.py` 仅保留 `parse_output()`。同步更新 `docs/requirement-document.md`、`docs/architecture.md`、所有 agent 模块及测试 |
+| 7.0 | 2026-05-22 | — | 对比分析与规则提取（FR-13）+ 规则质量审查（FR-14）：新增 `src/analysis/contrastive_agent.py` 从 reflect-success cases 提取 "When ... because ..." 格式规则；新增 `src/analysis/reviewer_agent.py` 作为独立 LLM Agent 审查规则质量（五维评分 0-100，通过阈值 70）；`scripts/long_run_watchdog.py` 集成 analysis → review → rework 循环，支持 flash/pro 双模型串行运行 + 增量审查（首轮全查，后续仅查上轮失败案例）+ 最大 3 次返工；`src/analysis/review_cli.py` 提供批量审查 CLI；全量测试覆盖（`tests/test_analysis/test_reviewer_agent.py` + `tests/test_long_run_watchdog.py` 新增 review phase 测试） |
+| 7.1 | 2026-05-24 | — | Review/Rework 设计缺陷修复：发现 rework 会先删除已有规则再重跑，若重跑失败则永久丢失数据（`astropy-14182`、`sympy-20916`、`scikit-learn-25747` 均受害）。新增 `config.analysis.enable_review`（默认 `false`）作为 opt-in 开关；默认流程改为 batch → flash analysis → pro analysis → done，跳过 review/rework。FR-14 描述更新；`project_issues.md` 新增 §5 记录该缺陷及未来修复方向 |
 
 ---
 
@@ -256,6 +258,37 @@
 | 任务级错误示例 | 某个 SWE-bench 实例的 Docker 镜像拉取/构建失败（Verified 时拉取官方镜像失败、Pro 时本地构建失败）、代码库构建失败、测试框架不支持、Agent 生成 Patch 格式非法、Agent 生成 Plan 失败、测试评估异常、Agent 命令超时 |
 | 处理方式 | **统一以 instance 为最小回滚粒度**：记录错误信息到日志和结果文件，跳过当前实例，继续处理下一个实例（如果配置了多个实例）。无论错误发生在 plan、code、reflect 还是 evaluate 阶段，均不再尝试在同实例内继续后续轮次——避免「round-skip 续跑」带来的前序状态退化问题（参见 `project_issues.md` §7 Q-4） |
 | 验收标准 | 程序在一个实例失败时不会崩溃，能够继续执行下一个实例；**任务级错误统一导致 instance skip，不会继续该实例的后续轮次**；日志中清晰记录了跳过原因；致命错误时程序优雅退出并保留已收集数据 |
+
+### 3.6 对比分析与规则提取（后处理阶段）
+
+#### FR-13：从 Reflect-Success Cases 中提取通用规则
+
+| 属性 | 内容 |
+|------|------|
+| ID | FR-13 |
+| 名称 | 对比分析与规则提取 |
+| 描述 | 对 PCT pipeline 中「某轮从失败变为成功」的案例（reflect-success cases），运行独立的对比分析 Agent，比较失败 Plan 与成功 Plan 的推理链差异，提取可泛化的自然语言规则。规则格式必须遵循：When [input pattern], [strategy] because [causal justification]。支持使用不同 LLM 模型串行提取（如 deepseek-v4-flash → deepseek-v4-pro），以便比较规则质量差异。Agent 在宿主机本地运行（DefaultAgent + LocalEnvironment），直接读取 plans/、patches/、trajectories/ 等文件，不依赖 Docker |
+| 输入 | reflect_success_cases 目录（含 manifest.json、各实例的 plan/trajectory/patch/result.json） |
+| 输出 | 每个实例的提取规则（`per_case/<instance_id>.json`）、批量聚合文件（`rules.jsonl` / `errors.jsonl`）、Agent 轨迹（`trajectories/<instance_id>.json`） |
+| 批量运行 | `scripts/run_analysis.sh`（由 `long_run_watchdog.py` 在 batch 结束后自动调用）或 `python -m src.analysis`（单实例调试） |
+| 关键配置 | `config.analysis.model` / `api_base` / `max_steps` / `cost_limit` —— 独立于主 pipeline 的模型配置，支持分析阶段使用不同提供商 |
+| 验收标准 | 1）规则文件非空且包含 "When ... because ..." 格式的规则行；2）不同模型的规则可区分保存（`analysis_flash/` vs `analysis_pro/`）；3）批量运行支持断点续跑（已存在的 `per_case/*.json` 自动 SKIP） |
+
+### 3.7 规则质量审查（LLM-based Reviewer）
+
+#### FR-14：独立 LLM Agent 审查规则质量并触发返工
+
+| 属性 | 内容 |
+|------|------|
+| ID | FR-14 |
+| 名称 | 规则质量审查与返工 |
+| 描述 | 在规则提取完成后，启动独立的 LLM Reviewer Agent 对每个提取的规则进行质量审查。Reviewer Agent 获得与 Extraction Agent **完全相同的文件夹访问权限**（plans、trajectories、patches、result.json），从 FORMAT、GENERALIZABILITY、CAUSAL_DEPTH、ACTIONABILITY、DISTINCTIVENESS 五个维度评分（0-100，通过阈值 70）。未通过的规则进入返工队列：由 `long_run_watchdog.py` 逐个重新运行提取 Agent，完成后再次提交 LLM 审查。**审查采用增量模式**：第一轮审查全部案例；后续轮次仅审查上一轮未通过的案例。最大返工次数 3 次。**已知问题**：返工会先删除已有规则文件再重跑，若重跑因随机性失败（如 `LimitsExceeded`），则该 case 永久丢失规则。因此 `enable_review` 默认 `false`，review/rework 阶段为 opt-in |
+| 输入 | 已提取的规则文本 + 对应实例的完整执行结果文件夹 |
+| 输出 | `review_results.json`（每个实例的 `{passed, score, feedback, issues, improvement_suggestions}`） |
+| 模型策略 | flash 模型提取的规则由 flash 模型审查；pro 模型提取的规则由 pro 模型审查（保证审查能力与提取能力匹配） |
+| 关键配置 | `config.analysis.enable_review`（默认 `false`）— 控制是否启用 review/rework 阶段 |
+| 实现位置 | `src/analysis/reviewer_agent.py`（核心 Reviewer Agent）、`src/analysis/review_cli.py`（批量审查 CLI）、`scripts/long_run_watchdog.py`（review/rework 循环集成） |
+| 验收标准 | 1）Reviewer Agent 输出结构化的 JSON 评分；2）未通过的规则被正确加入 rework_queue 并在 watchdog 中触发返工；3）增量审查模式下，第二轮仅审查上一轮失败的案例；4）超过 3 次返工仍未通过的案例被自动放弃，保留最佳结果；5）review 和 rework 阶段均支持 API cooldown、hang detection、Claude repair 等现有 watchdog 机制 |
 
 ---
 

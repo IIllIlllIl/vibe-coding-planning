@@ -84,7 +84,33 @@
 - **解读**：跑满 5 轮的 28 个未解决实例里只救回 1 个（3.6%）。把 n 从 3 提到 5 多花约 60% 单实例 wall time，**额外救回 1 例**。线性反思链的边际产出在 R3 之后几乎为零。
 - **处理建议**：在 §2 树形候选 plan 落地前，可考虑把默认 n 回到 3，并把节省的算力投入扩样（150→300 实例）以提高判别规律的统计置信度；或保留 n=5 但记录这一观察，作为"为何要尝试非线性反思策略"的实证依据。
 
-## 5. 迭代遗留问题
+## 5. Review/Rework 机制的破坏性返工（FR-14 设计缺陷）
+
+- **状态**：已定位，已添加开关，默认关闭
+- **现象**：review 判定未通过的规则进入 rework 队列后，`long_run_watchdog.py` 会**先删除旧结果文件**再重新运行对比分析 Agent。若重跑因随机性失败（如 `LimitsExceeded`、API 超时），则该 case 的规则永久丢失。实践中观察到：
+  - `astropy__astropy-14182` flash 分析首次成功提取规则，rework 后变为空规则
+  - `sympy__sympy-20916` flash + pro 首次均成功，rework 后 flash 变为空规则
+  - `scikit-learn__scikit-learn-25747` pro 分析首次成功，rework 后丢失（原文件被删，重跑未生成）
+- **根因**：rework 是破坏性操作，没有回滚机制。LLM Agent 的产出具有随机性，"成功→删除→重试失败"的链条会不可逆地破坏数据。
+- **处理**：
+  1. ✅ 新增 `config.analysis.enable_review`（默认 `false`），默认跳过 review/rework 阶段
+  2. ✅ 当 `enable_review=false` 时，watchdog 在 flash/pro 分析完成后直接进入下一阶段（flash→pro→结束），不再运行 review 和 rework
+  3. 若未来重新启用 review，需先解决"先删后跑"的破坏性逻辑：改为保留旧结果、在新路径重跑、对比后择优保留
+
+## 6. Pro 模型在大轨迹 case 上的异常耗时
+
+- **状态**：观察中
+- **现象**：`scikit-learn__scikit-learn-25747` 使用 `deepseek-v4-pro` 进行对比分析时，单 case 运行超过 1.5 小时仍未提交。同期 `sympy__sympy-20916`（pro 模型）仅耗时约 3 分钟。两者差异在于轨迹数据量：
+  - sympy-20916：轨迹文件合计约 200 KB
+  - scikit-learn-25747：轨迹文件合计约 **700 KB**（R2 reflect trajectory 单文件 358 KB）
+- **根因推测**：pro 模型推理速度显著慢于 flash，大轨迹文件导致 agent 反复分段读取、逐段分析，步数消耗极慢。step_limit=1000 下，1.5 小时约执行 500–600 步，远未触顶，说明 agent 不是被 limit 卡死，而是 genuinely 在大文件上低效迭代。
+- **影响**：pro 分析在 60 case 规模上，若遇大轨迹 case 会严重拖慢整体进度。当前已跑完的 58 个 pro case 平均耗时应在分钟级，但 scikit-learn-25747 成为长尾瓶颈。
+- **处理建议**：
+  1. 对 pro 模型缩短 `analysis.max_steps`（如从 1000 降至 500），或增加 trajectory 文件的预读摘要（让 agent 不必逐段 cat）
+  2. 对大轨迹 case（>300 KB）启用 flash 模型兜底，pro 仅用于中小 case
+  3. 给对比分析 agent 加 wall-time timeout，防止单 case 无限阻塞后续批次
+
+## 7. 迭代遗留问题
 
 当前无遗留问题。
 

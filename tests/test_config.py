@@ -475,3 +475,41 @@ class TestBatchIdValidation:
         filepath.write_text(yaml.dump(data), encoding="utf-8")
         config = load_config(filepath)
         assert config.system.batch_id == "run3_level1_n3"
+
+
+class TestAnalysisConfig:
+    """``analysis.enable_review`` controls whether the watchdog runs the
+    LLM-based quality review and rework loop after each analysis phase.
+    Default is ``False`` so that review is opt-in.
+    """
+
+    def test_enable_review_default_is_false(self, monkeypatch, tmp_path: Path):
+        monkeypatch.setenv("DEEPSEEK_API_KEY", "test-key")
+        filepath = tmp_path / "empty.yaml"
+        _write_test_config(filepath)
+        config = load_config(filepath)
+        assert config.analysis.enable_review is False
+
+    def test_enable_review_explicit_true(self, monkeypatch, tmp_path: Path):
+        monkeypatch.setenv("DEEPSEEK_API_KEY", "test-key")
+        data = {"analysis": {"enable_review": True}}
+        filepath = tmp_path / "review_on.yaml"
+        _write_test_config(filepath, data)
+        config = load_config(filepath)
+        assert config.analysis.enable_review is True
+
+    def test_enable_review_string_true_coerced(self, monkeypatch, tmp_path: Path):
+        monkeypatch.setenv("DEEPSEEK_API_KEY", "test-key")
+        data = {"analysis": {"enable_review": "true"}}
+        filepath = tmp_path / "review_str.yaml"
+        _write_test_config(filepath, data)
+        config = load_config(filepath)
+        assert config.analysis.enable_review is True
+
+    def test_enable_review_string_false_coerced(self, monkeypatch, tmp_path: Path):
+        monkeypatch.setenv("DEEPSEEK_API_KEY", "test-key")
+        data = {"analysis": {"enable_review": "false"}}
+        filepath = tmp_path / "review_str_false.yaml"
+        _write_test_config(filepath, data)
+        config = load_config(filepath)
+        assert config.analysis.enable_review is False

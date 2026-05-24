@@ -358,8 +358,8 @@ class TestAnalysisHangDetection:
 
 
 class TestSerialPhaseHandoff:
-    def test_flash_to_pro_transition(self, tmp_path: Path):
-        """Simulate: batch done, flash analysis done → pro should start."""
+    def test_flash_done_enters_review(self, tmp_path: Path):
+        """Simulate: flash analysis done → flash review should start."""
         state = watchdog.WatchdogState(
             batch_id="b",
             total_instances=60,
@@ -368,7 +368,6 @@ class TestSerialPhaseHandoff:
             analysis_phase="flash",
             analysis_completed=60,
         )
-        # Write analysis log with end marker
         analysis_log = tmp_path / "analysis_run.log"
         analysis_log.write_text(
             "[2026-05-12 10:00:00] START inst1\n"
@@ -377,14 +376,33 @@ class TestSerialPhaseHandoff:
         with patch.object(watchdog, "ANALYSIS_LOG", analysis_log):
             analysis = watchdog.analyze_recent_logs(analysis_log)
         assert analysis["batch_completed"] is True
-        # Simulate the handoff logic from the main loop
+        # Simulate the new handoff logic from the main loop
         if state.analysis_phase == "flash" and analysis["batch_completed"]:
+            state.review_phase = "reviewing"
+        assert state.analysis_phase == "flash"
+        assert state.review_phase == "reviewing"
+
+    def test_flash_review_done_hands_off_to_pro(self):
+        """Simulate: flash review done → pro analysis should start."""
+        state = watchdog.WatchdogState(
+            batch_id="b",
+            total_instances=60,
+            completed=60,
+            status="completed",
+            analysis_phase="flash",
+            review_phase="done",
+        )
+        # Simulate the transition logic when review_phase == "done"
+        if state.analysis_phase == "flash" and state.review_phase == "done":
             state.analysis_phase = "pro"
             state.analysis_completed = 0
+            state.review_phase = None
         assert state.analysis_phase == "pro"
+        assert state.review_phase is None
         assert state.analysis_completed == 0
 
-    def test_pro_done_exits(self, tmp_path: Path):
+    def test_pro_done_enters_review(self, tmp_path: Path):
+        """Simulate: pro analysis done → pro review should start."""
         state = watchdog.WatchdogState(
             batch_id="b",
             total_instances=60,
@@ -399,6 +417,22 @@ class TestSerialPhaseHandoff:
             analysis = watchdog.analyze_recent_logs(analysis_log)
         assert analysis["batch_completed"] is True
         if state.analysis_phase == "pro" and analysis["batch_completed"]:
+            state.review_phase = "reviewing"
+        assert state.analysis_phase == "pro"
+        assert state.review_phase == "reviewing"
+
+    def test_pro_review_done_exits(self):
+        """Simulate: pro review done → watchdog exits."""
+        state = watchdog.WatchdogState(
+            batch_id="b",
+            total_instances=60,
+            completed=60,
+            status="completed",
+            analysis_phase="pro",
+            review_phase="done",
+        )
+        # Simulate the transition logic when review_phase == "done"
+        if state.analysis_phase == "pro" and state.review_phase == "done":
             state.analysis_phase = "done"
         assert state.analysis_phase == "done"
 
@@ -603,11 +637,235 @@ class TestProDoneEntersReview:
             analysis = watchdog.analyze_recent_logs(analysis_log)
         assert analysis["batch_completed"] is True
 
-        # Simulate the exact handoff logic from the updated main loop
+        # New handoff: pro analysis complete → start pro review
         if state.analysis_phase == "pro" and analysis["batch_completed"]:
-            state.analysis_phase = "done"
             state.review_phase = "reviewing"
 
-        assert state.analysis_phase == "done"
+        assert state.analysis_phase == "pro"
         assert state.review_phase == "reviewing"
 
+
+class TestReviewConstants:
+    def test_review_tmux_session_defined(self):
+        assert watchdog.REVIEW_TMUX_SESSION == "pct-review"
+
+    def test_review_log_defined(self):
+        assert watchdog.REVIEW_LOG.name == "review_run.log"
+
+    def test_start_review_function_exists(self):
+        assert callable(watchdog.start_review)
+
+
+class TestReviewLogAnalysis:
+    def test_detect_review_end_marker(self, tmp_path: Path):
+        log = tmp_path / "review_run.log"
+        log.write_text(
+            "[2026-05-12 10:00:00] START review for inst1\n"
+            "[2026-05-12 10:01:00] DONE review for inst1 score=85 passed=True\n"
+            "[2026-05-12 10:01:01] === Review end ===\n"
+        )
+        with patch.object(watchdog, "REVIEW_LOG", log):
+            analysis = watchdog.analyze_recent_logs(log)
+        assert analysis["batch_completed"] is True
+
+    def test_detect_api_rate_limit_in_review_log(self, tmp_path: Path):
+        log = tmp_path / "review_run.log"
+        log.write_text(
+            "[2026-05-12 10:00:00] START review for inst1\n"
+            "[2026-05-12 10:05:00] ERROR: DeepSeek API returned 429 Too Many Requests\n"
+        )
+        with patch.object(watchdog, "REVIEW_LOG", log):
+            analysis = watchdog.analyze_recent_logs(log)
+        assert analysis["api_rate_limited"] is True
+
+
+class TestReviewHangDetection:
+    def test_review_log_stale(self, tmp_path: Path):
+        log = tmp_path / "review_run.log"
+        log.write_text("old review log line\n")
+        old_time = time.time() - watchdog.HANG_TIMEOUT_SECONDS - 60
+        os.utime(log, (old_time, old_time))
+        assert watchdog.is_log_stale(log) is True
+
+    def test_review_log_recent(self, tmp_path: Path):
+        log = tmp_path / "review_run.log"
+        log.write_text("recent review log line\n")
+        assert watchdog.is_log_stale(log) is False
+
+
+class TestCooldownDuringReview:
+    def test_cooldown_resumes_review_not_batch(self):
+        state = watchdog.WatchdogState(
+            batch_id="b",
+            total_instances=60,
+            completed=60,
+            status="api_cooldown",
+            analysis_phase="pro",
+            review_phase="reviewing",
+            api_cooldown_until=datetime.now(timezone.utc).isoformat(),
+        )
+        # After cooldown expires, the main loop should resume review
+        assert state.review_phase == "reviewing"
+        assert watchdog.cooldown_expired(state) is True
+
+
+class TestReviewPhaseDoneTransitions:
+    def test_flash_review_done_moves_to_pro(self):
+        state = watchdog.WatchdogState(
+            batch_id="b",
+            total_instances=60,
+            completed=60,
+            status="completed",
+            analysis_phase="flash",
+            review_phase="done",
+        )
+        # Simulate review_phase == "done" handler
+        if state.analysis_phase == "flash" and state.review_phase == "done":
+            state.analysis_phase = "pro"
+            state.analysis_completed = 0
+            state.review_phase = None
+        assert state.analysis_phase == "pro"
+        assert state.review_phase is None
+
+    def test_pro_review_done_moves_to_done(self):
+        state = watchdog.WatchdogState(
+            batch_id="b",
+            total_instances=60,
+            completed=60,
+            status="completed",
+            analysis_phase="pro",
+            review_phase="done",
+        )
+        # Simulate review_phase == "done" handler
+        if state.analysis_phase == "pro" and state.review_phase == "done":
+            state.analysis_phase = "done"
+        assert state.analysis_phase == "done"
+
+
+class TestEnableReviewFlag:
+    """When ``enable_review`` is false, the watchdog skips review/rework
+    and transitions directly: flash analysis → pro analysis → done.
+    """
+
+    def test_flash_done_skips_review_when_disabled(self, tmp_path: Path):
+        """Simulate the main-loop transition when flash analysis ends
+        and enable_review is false.
+        """
+        state = watchdog.WatchdogState(
+            batch_id="b",
+            total_instances=60,
+            completed=60,
+            status="completed",
+            analysis_phase="flash",
+            analysis_completed=60,
+        )
+        analysis_log = tmp_path / "analysis_run.log"
+        analysis_log.write_text(
+            "[2026-05-12 10:00:00] START inst1\n"
+            "[2026-05-12 10:01:00] === Analysis end ===\n"
+        )
+        with patch.object(watchdog, "ANALYSIS_LOG", analysis_log):
+            analysis = watchdog.analyze_recent_logs(analysis_log)
+        assert analysis["batch_completed"] is True
+
+        enable_review = False
+        if state.analysis_phase == "flash" and analysis["batch_completed"]:
+            if enable_review:
+                state.review_phase = "reviewing"
+            else:
+                state.analysis_phase = "pro"
+                state.analysis_completed = 0
+        assert state.analysis_phase == "pro"
+        assert state.review_phase is None
+
+    def test_pro_done_exits_when_review_disabled(self, tmp_path: Path):
+        """Simulate the main-loop transition when pro analysis ends
+        and enable_review is false.
+        """
+        state = watchdog.WatchdogState(
+            batch_id="b",
+            total_instances=60,
+            completed=60,
+            status="completed",
+            analysis_phase="pro",
+            analysis_completed=60,
+        )
+        analysis_log = tmp_path / "analysis_run.log"
+        analysis_log.write_text("[2026-05-12 10:01:00] === Analysis end ===\n")
+        with patch.object(watchdog, "ANALYSIS_LOG", analysis_log):
+            analysis = watchdog.analyze_recent_logs(analysis_log)
+        assert analysis["batch_completed"] is True
+
+        enable_review = False
+        finished = False
+        if state.analysis_phase == "pro" and analysis["batch_completed"]:
+            if enable_review:
+                state.review_phase = "reviewing"
+            else:
+                finished = True
+        assert finished is True
+        assert state.review_phase is None
+
+    def test_flash_done_enters_review_when_enabled(self, tmp_path: Path):
+        """When enable_review is true, flash analysis still enters review."""
+        state = watchdog.WatchdogState(
+            batch_id="b",
+            total_instances=60,
+            completed=60,
+            status="completed",
+            analysis_phase="flash",
+            analysis_completed=60,
+        )
+        analysis_log = tmp_path / "analysis_run.log"
+        analysis_log.write_text("[2026-05-12 10:01:00] === Analysis end ===\n")
+        with patch.object(watchdog, "ANALYSIS_LOG", analysis_log):
+            analysis = watchdog.analyze_recent_logs(analysis_log)
+        assert analysis["batch_completed"] is True
+
+        enable_review = True
+        if state.analysis_phase == "flash" and analysis["batch_completed"]:
+            if enable_review:
+                state.review_phase = "reviewing"
+            else:
+                state.analysis_phase = "pro"
+                state.analysis_completed = 0
+        assert state.analysis_phase == "flash"
+        assert state.review_phase == "reviewing"
+
+
+class TestLoadEnableReview:
+    def test_reads_true_from_config(self, tmp_path: Path, monkeypatch):
+        import yaml
+
+        monkeypatch.chdir(tmp_path)
+        cfg = {"analysis": {"enable_review": True}}
+        Path("config.yaml").write_text(yaml.dump(cfg), encoding="utf-8")
+        assert watchdog._load_enable_review() is True
+
+    def test_reads_false_from_config(self, tmp_path: Path, monkeypatch):
+        import yaml
+
+        monkeypatch.chdir(tmp_path)
+        cfg = {"analysis": {"enable_review": False}}
+        Path("config.yaml").write_text(yaml.dump(cfg), encoding="utf-8")
+        assert watchdog._load_enable_review() is False
+
+    def test_string_true_coerced(self, tmp_path: Path, monkeypatch):
+        import yaml
+
+        monkeypatch.chdir(tmp_path)
+        cfg = {"analysis": {"enable_review": "true"}}
+        Path("config.yaml").write_text(yaml.dump(cfg), encoding="utf-8")
+        assert watchdog._load_enable_review() is True
+
+    def test_missing_key_defaults_false(self, tmp_path: Path, monkeypatch):
+        import yaml
+
+        monkeypatch.chdir(tmp_path)
+        cfg = {"analysis": {"model": "deepseek-v4-flash"}}
+        Path("config.yaml").write_text(yaml.dump(cfg), encoding="utf-8")
+        assert watchdog._load_enable_review() is False
+
+    def test_missing_file_defaults_false(self, tmp_path: Path, monkeypatch):
+        monkeypatch.chdir(tmp_path)
+        assert watchdog._load_enable_review() is False

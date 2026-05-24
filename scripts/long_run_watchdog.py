@@ -54,9 +54,11 @@ LOG_SETTLE_MAX_SECONDS = 30
 
 BATCH_TMUX_SESSION = "pct-batch"
 ANALYSIS_TMUX_SESSION = "pct-analysis"
+REVIEW_TMUX_SESSION = "pct-review"
 REPAIR_TMUX_SESSION = "pct-repair"
 MASTER_LOG = Path("logs/batch_run.log")
 ANALYSIS_LOG = Path("logs/analysis_run.log")
+REVIEW_LOG = Path("logs/review_run.log")
 WATCHDOG_LOG = Path("logs/watchdog.log")
 STATE_FILE = Path("output/.watchdog_state.json")
 
@@ -348,6 +350,65 @@ def start_analysis(state: WatchdogState) -> None:
         logging.error("Failed to start analysis tmux session!")
 
 
+def start_review(state: WatchdogState, instance_ids: list[str] | None = None) -> None:
+    """Start (or restart) the LLM review runner in a tmux session.
+
+    The review target is inferred from ``state.analysis_phase`` (the phase
+    whose rules are being reviewed: "flash" or "pro").
+    """
+    _kill_tmux_session(REVIEW_TMUX_SESSION)
+
+    review_target = state.analysis_phase or "pro"
+    model_name = {
+        "flash": "deepseek-v4-flash",
+        "pro": "deepseek-v4-pro",
+    }.get(review_target, "deepseek-v4-pro")
+
+    output_dir = f"./output/analysis_{review_target}"
+    data_dir = "./output/SWE-bench_Verified/reflect_success_cases"
+
+    instances_arg = ""
+    if instance_ids:
+        instances_arg = " ".join(
+            f"--instance {shlex.quote(iid)}" for iid in instance_ids
+        )
+
+    cmd = (
+        f"cd {shlex.quote(os.getcwd())} "
+        f"&& source /Users/taoran.wang/miniconda3/etc/profile.d/conda.sh "
+        f"&& conda activate mini-swe "
+        f"&& python -m src.analysis.review_cli "
+        f"--data-dir {shlex.quote(data_dir)} "
+        f"--output-dir {shlex.quote(output_dir)} "
+        f"--model {shlex.quote(model_name)} "
+        f"{instances_arg} "
+        f">> logs/review_run.log 2>&1"
+    )
+
+    # Ensure the review log file exists so is_log_stale works immediately
+    REVIEW_LOG.parent.mkdir(parents=True, exist_ok=True)
+    REVIEW_LOG.touch(exist_ok=True)
+
+    logging.info(
+        "Starting review tmux session: %s (target=%s model=%s instances=%s)",
+        REVIEW_TMUX_SESSION,
+        review_target,
+        model_name,
+        len(instance_ids) if instance_ids else "all",
+    )
+    subprocess.run(
+        ["tmux", "new-session", "-d", "-s", REVIEW_TMUX_SESSION, "bash", "-c", cmd],
+        capture_output=True,
+        check=False,
+    )
+    time.sleep(3)
+
+    if _tmux_session_exists(REVIEW_TMUX_SESSION):
+        logging.info("Review session started successfully.")
+    else:
+        logging.error("Failed to start review tmux session!")
+
+
 # ---------------------------------------------------------------------------
 # Rule quality review
 # ---------------------------------------------------------------------------
@@ -443,11 +504,13 @@ def evaluate_rule_quality(rule_text: str) -> dict:
     }
 
 
-def review_all_rules(output_dir: str) -> tuple[list[str], dict[str, dict]]:
-    """Review all extracted rules in the given output directory.
+def review_all_rules(output_dir: str, instance_ids: list[str] | None = None) -> tuple[list[str], dict[str, dict]]:
+    """Review extracted rules in the given output directory.
 
     Args:
         output_dir: Path to analysis output dir (e.g. "./output/analysis_pro")
+        instance_ids: If provided, only review these specific instances.
+                      If None, review all instances found in per_case/*.json.
 
     Returns:
         (rework_queue, review_results) where:
@@ -459,10 +522,22 @@ def review_all_rules(output_dir: str) -> tuple[list[str], dict[str, dict]]:
         logging.warning("No per_case dir found at %s", per_case_dir)
         return [], {}
 
+    # Determine which files to examine
+    if instance_ids is not None:
+        files_to_check = []
+        for iid in instance_ids:
+            f = per_case_dir / f"{iid}.json"
+            if f.exists():
+                files_to_check.append(f)
+            else:
+                logging.warning("Result file missing for %s, treating as failed", iid)
+    else:
+        files_to_check = sorted(per_case_dir.glob("*.json"))
+
     rework_queue: list[str] = []
     review_results: dict[str, dict] = {}
 
-    for result_file in sorted(per_case_dir.glob("*.json")):
+    for result_file in files_to_check:
         try:
             data = json.loads(result_file.read_text(encoding="utf-8"))
         except Exception:
@@ -579,17 +654,21 @@ def _grep_patterns(text: str, patterns: list[re.Pattern]) -> list[str]:
 
 
 def analyze_recent_logs(log_path: Path | None = None) -> dict:
-    """Return a dict describing the most recent batch or analysis activity.
+    """Return a dict describing the most recent batch, analysis, or review activity.
 
     Args:
         log_path: Path to the master log to analyze. Defaults to MASTER_LOG
                   (the batch log). Pass ANALYSIS_LOG to analyze the analysis
-                  runner instead.
+                  runner, or REVIEW_LOG to analyze the review runner.
     """
     log_path = log_path or MASTER_LOG
     master_tail = _tail_file(log_path, 100)
-    is_analysis = log_path.name != MASTER_LOG.name
-    end_marker = "=== Analysis end ===" if is_analysis else "=== Batch end ==="
+    if log_path.name == REVIEW_LOG.name:
+        end_marker = "=== Review end ==="
+    elif log_path.name == MASTER_LOG.name:
+        end_marker = "=== Batch end ==="
+    else:
+        end_marker = "=== Analysis end ==="
     result = {
         "master_tail": master_tail,
         "api_rate_limited": bool(_grep_patterns(master_tail, API_RATE_LIMIT_PATTERNS)),
@@ -697,6 +776,27 @@ def cleanup_docker() -> None:
         logging.warning("Docker prune timed out (> 120 s).")
     except Exception as exc:
         logging.warning("Docker prune unexpected error: %s", exc)
+
+
+def _load_enable_review() -> bool:
+    """Read ``analysis.enable_review`` from config.yaml.
+
+    Returns ``False`` if the file is missing, unreadable, or the key
+    is absent, so that review is opt-in.
+    """
+    try:
+        import yaml
+
+        cfg = yaml.safe_load(Path("config.yaml").read_text(encoding="utf-8"))
+        analysis = cfg.get("analysis", {})
+        val = analysis.get("enable_review", False)
+        if isinstance(val, bool):
+            return val
+        if isinstance(val, str):
+            return val.lower() in ("true", "1", "yes", "on")
+        return bool(val)
+    except Exception:
+        return False
 
 
 def docker_backoff_wait(retry_count: int) -> int:
@@ -934,18 +1034,32 @@ def main() -> int:
         return 1
 
     state = load_state()
+    enable_review = _load_enable_review()
+    logging.info("Watchdog config: enable_review=%s", enable_review)
 
-    # Determine whether we are in batch mode or analysis mode
-    in_analysis = state.analysis_phase in ("flash", "pro")
-    active_session = ANALYSIS_TMUX_SESSION if in_analysis else BATCH_TMUX_SESSION
-    active_log = ANALYSIS_LOG if in_analysis else MASTER_LOG
-    start_fn = start_analysis if in_analysis else start_batch
+    # Determine active mode: review > analysis > batch
+    in_review = state.review_phase in ("reviewing", "reworking")
+    in_analysis = state.analysis_phase in ("flash", "pro") and not in_review
+    if in_review:
+        active_session = REVIEW_TMUX_SESSION
+        active_log = REVIEW_LOG
+        start_fn = lambda s: start_review(s, instance_ids=s.rework_queue or None)
+    elif in_analysis:
+        active_session = ANALYSIS_TMUX_SESSION
+        active_log = ANALYSIS_LOG
+        start_fn = start_analysis
+    else:
+        active_session = BATCH_TMUX_SESSION
+        active_log = MASTER_LOG
+        start_fn = start_batch
 
     # Cold-start: if status is "running" but no active tmux session exists
     # (fresh launch, or resume after Mac reboot / manual watchdog restart),
     # kick off the appropriate runner before entering the watch loop.
     if state.status == "running" and not _tmux_session_exists(active_session):
-        if in_analysis:
+        if in_review:
+            logging.info("Cold start: launching initial review session (target=%s).", state.analysis_phase)
+        elif in_analysis:
             logging.info("Cold start: launching initial analysis session (phase=%s).", state.analysis_phase)
         else:
             logging.info("Cold start: launching initial batch session.")
@@ -963,7 +1077,8 @@ def main() -> int:
 
         if state.status == "api_cooldown":
             if cooldown_expired(state):
-                logging.info("API cooldown expired. Resuming %s.", "analysis" if in_analysis else "batch")
+                mode_name = "review" if in_review else ("analysis" if in_analysis else "batch")
+                logging.info("API cooldown expired. Resuming %s.", mode_name)
                 state.status = "running"
                 state.api_cooldown_until = None
                 state.docker_retry_count = 0
@@ -996,49 +1111,119 @@ def main() -> int:
             continue
 
         # -----------------------------------------------------------------------
-        # Review phase (quality gate after pro analysis completes)
+        # Review phase (LLM-based quality gate)
         # -----------------------------------------------------------------------
         if state.review_phase == "reviewing":
-            output_dir = "./output/analysis_pro"
-            logging.info("Starting rule quality review for %s ...", output_dir)
-            rework_queue, review_results = review_all_rules(output_dir)
-            state.review_results = review_results
-            save_state(state)
+            # Re-evaluate mode (review may have been set while we were in analysis)
+            in_review = True
+            active_session = REVIEW_TMUX_SESSION
+            active_log = REVIEW_LOG
+            start_fn = lambda s: start_review(s, instance_ids=s.rework_queue or None)
 
-            if not rework_queue:
-                logging.info("All rules passed quality review. Exiting.")
-                state.review_phase = "done"
-                save_state(state)
-                return 0
+            # Check if review session is running
+            if _tmux_session_exists(REVIEW_TMUX_SESSION):
+                # Review is in progress — check for hang
+                if is_log_stale(REVIEW_LOG):
+                    logging.warning("Review session appears hung. Restarting...")
+                    _kill_tmux_session(REVIEW_TMUX_SESSION)
+                    time.sleep(5)
+                    start_fn(state)
+                    continue
+                # Healthy — just wait
+                logging.info("Review session in progress. Next check in 60s.")
+                time.sleep(60)
+                continue
 
-            # Filter out cases that have exceeded max rework attempts
-            final_queue = []
-            for instance_id in rework_queue:
-                attempts = state.rework_attempts.get(instance_id, 0)
-                if attempts < RULE_REWORK_MAX_ATTEMPTS:
-                    final_queue.append(instance_id)
-                    logging.info(
-                        "Queueing %s for rework (attempt %d/%d)",
-                        instance_id, attempts + 1, RULE_REWORK_MAX_ATTEMPTS,
-                    )
+            # Review session not running — check if it finished cleanly
+            review_log_analysis = analyze_recent_logs(REVIEW_LOG)
+            if review_log_analysis["batch_completed"]:
+                logging.info("Review batch completed. Loading results...")
+                review_target = state.analysis_phase  # "flash" or "pro"
+                output_dir = f"./output/analysis_{review_target}"
+                review_results_path = Path(output_dir) / "review_results.json"
+
+                rework_queue: list[str] = []
+                if review_results_path.exists():
+                    try:
+                        review_data = json.loads(review_results_path.read_text(encoding="utf-8"))
+                        state.review_results.update(review_data)
+
+                        for instance_id, result in review_data.items():
+                            if not result.get("passed", False):
+                                rework_queue.append(instance_id)
+
+                        logging.info(
+                            "Loaded review results for %s: %d passed, %d failed",
+                            review_target,
+                            len(review_data) - len(rework_queue),
+                            len(rework_queue),
+                        )
+                    except Exception as exc:
+                        logging.error("Failed to load review results: %s", exc)
+                        # Fallback: all cases need rework
+                        per_case_dir = Path(output_dir) / "per_case"
+                        if per_case_dir.exists():
+                            rework_queue = [f.stem for f in per_case_dir.glob("*.json")]
                 else:
-                    logging.warning(
-                        "%s exceeded max rework attempts (%d). Keeping best result.",
-                        instance_id, RULE_REWORK_MAX_ATTEMPTS,
+                    logging.warning("No review_results.json found at %s", review_results_path)
+                    # Fallback to programmatic review
+                    instances_to_review = state.rework_queue if state.rework_queue else None
+                    rework_queue, review_results = review_all_rules(
+                        output_dir, instance_ids=instances_to_review
                     )
+                    state.review_results.update(review_results)
+                    save_state(state)
 
-            if not final_queue:
-                logging.info("No cases eligible for further rework. Exiting with best-effort results.")
-                state.review_phase = "done"
+                if not rework_queue:
+                    logging.info("All rules passed LLM review for %s phase.", review_target)
+                    state.review_phase = "done"
+                    state.rework_queue = []
+                    save_state(state)
+                    continue  # Next loop will handle phase transition
+
+                # Filter out cases that have exceeded max rework attempts
+                final_queue = []
+                for instance_id in rework_queue:
+                    attempts = state.rework_attempts.get(instance_id, 0)
+                    if attempts < RULE_REWORK_MAX_ATTEMPTS:
+                        final_queue.append(instance_id)
+                        logging.info(
+                            "Queueing %s for rework (attempt %d/%d)",
+                            instance_id, attempts + 1, RULE_REWORK_MAX_ATTEMPTS,
+                        )
+                    else:
+                        logging.warning(
+                            "%s exceeded max rework attempts (%d). Keeping best result.",
+                            instance_id, RULE_REWORK_MAX_ATTEMPTS,
+                        )
+
+                if not final_queue:
+                    logging.info(
+                        "No cases eligible for further rework. Moving on from %s review.",
+                        review_target,
+                    )
+                    state.review_phase = "done"
+                    state.rework_queue = []
+                    save_state(state)
+                    continue  # Next loop will handle phase transition
+
+                state.rework_queue = final_queue
+                state.review_phase = "reworking"
                 save_state(state)
-                return 0
-
-            state.rework_queue = final_queue
-            state.review_phase = "reworking"
-            save_state(state)
-            # Fall through to rework handling below
+                # Fall through to rework handling below
+            else:
+                # Review session crashed or never started properly
+                logging.warning(
+                    "Review session not running and no end marker. Restarting..."
+                )
+                start_fn(state)
+                continue
 
         if state.review_phase == "reworking":
+            # Determine the output dir for the current analysis phase
+            review_target = state.analysis_phase  # "flash" or "pro"
+            output_dir = f"./output/analysis_{review_target}"
+
             # Check if there's an active rework session
             current_rework = getattr(main, "_current_rework_instance", None)
             if current_rework and not is_rework_complete(current_rework):
@@ -1048,62 +1233,101 @@ def main() -> int:
                 time.sleep(60)
                 continue
 
-            # Previous rework finished (or no current rework) — evaluate result
+            # Previous rework finished (or no current rework)
             if current_rework:
-                result_file = Path("./output/analysis_pro/per_case") / f"{current_rework}.json"
-                if result_file.exists():
-                    try:
-                        data = json.loads(result_file.read_text(encoding="utf-8"))
-                        quality = evaluate_rule_quality(data.get("rule", ""))
-                        state.review_results[current_rework] = quality
-                        if quality["passed"]:
-                            logging.info(
-                                "Rework SUCCESS for %s (score=%d)",
-                                current_rework, quality["score"],
-                            )
-                        else:
-                            logging.warning(
-                                "Rework still FAILED for %s (score=%d).",
-                                current_rework, quality["score"],
-                            )
-                    except Exception as exc:
-                        logging.warning("Could not evaluate rework result for %s: %s", current_rework, exc)
-                state.rework_attempts[current_rework] = state.rework_attempts.get(current_rework, 0) + 1
+                state.rework_attempts[current_rework] = (
+                    state.rework_attempts.get(current_rework, 0) + 1
+                )
                 main._current_rework_instance = None
+
+                # If this case exceeded max attempts, remove from queue
+                if state.rework_attempts.get(current_rework, 0) >= RULE_REWORK_MAX_ATTEMPTS:
+                    if current_rework in state.rework_queue:
+                        state.rework_queue.remove(current_rework)
+                        logging.warning(
+                            "%s exceeded max rework attempts (%d). Keeping best result.",
+                            current_rework, RULE_REWORK_MAX_ATTEMPTS,
+                        )
+
                 save_state(state)
 
             # Start next rework if queue not empty
-            if state.rework_queue:
-                next_instance = state.rework_queue.pop(0)
-                state.rework_attempts[next_instance] = state.rework_attempts.get(next_instance, 0) + 1
+            started = False
+            while state.rework_queue:
+                next_instance = state.rework_queue[0]
+                if state.rework_attempts.get(next_instance, 0) >= RULE_REWORK_MAX_ATTEMPTS:
+                    state.rework_queue.pop(0)
+                    logging.warning(
+                        "%s exceeded max rework attempts. Skipping.", next_instance
+                    )
+                    continue
+
+                state.rework_attempts[next_instance] = (
+                    state.rework_attempts.get(next_instance, 0) + 1
+                )
                 save_state(state)
                 main._current_rework_instance = next_instance
-                start_rework(next_instance, "deepseek-v4-pro", "./output/analysis_pro")
-                continue
-            else:
-                # Queue empty — go back to reviewing to see if we fixed everything
-                logging.info("Rework queue empty. Re-running quality review.")
+                model_name = {
+                    "flash": "deepseek-v4-flash",
+                    "pro": "deepseek-v4-pro",
+                }.get(review_target, "deepseek-v4-pro")
+                start_rework(next_instance, model_name, output_dir)
+                started = True
+                break
+
+            if not started:
+                # Queue empty (or all cases exceeded max attempts)
+                logging.info("Rework queue empty. Re-running targeted LLM review.")
                 state.review_phase = "reviewing"
                 save_state(state)
                 continue
 
         if state.review_phase == "done":
-            logging.info("Review phase complete. All work finished.")
+            if state.analysis_phase == "flash":
+                logging.info("Flash review complete. Handing off to pro analysis.")
+                state.analysis_phase = "pro"
+                state.analysis_completed = 0
+                state.review_phase = None
+                save_state(state)
+                start_analysis(state)
+                continue
+            elif state.analysis_phase == "pro":
+                logging.info("Pro review complete. All work finished.")
+                return 0
+            logging.info("Review phase complete. Exiting.")
             return 0
 
         # Re-evaluate mode every loop iteration (phase may have changed)
-        in_analysis = state.analysis_phase in ("flash", "pro")
-        active_session = ANALYSIS_TMUX_SESSION if in_analysis else BATCH_TMUX_SESSION
-        active_log = ANALYSIS_LOG if in_analysis else MASTER_LOG
-        start_fn = start_analysis if in_analysis else start_batch
+        in_review = state.review_phase in ("reviewing", "reworking")
+        in_analysis = state.analysis_phase in ("flash", "pro") and not in_review
+        if in_review:
+            active_session = REVIEW_TMUX_SESSION
+            active_log = REVIEW_LOG
+            start_fn = lambda s: start_review(s, instance_ids=s.rework_queue or None)
+        elif in_analysis:
+            active_session = ANALYSIS_TMUX_SESSION
+            active_log = ANALYSIS_LOG
+            start_fn = start_analysis
+        else:
+            active_session = BATCH_TMUX_SESSION
+            active_log = MASTER_LOG
+            start_fn = start_batch
 
         session_alive = _tmux_session_exists(active_session)
 
         if not session_alive:
-            end_marker = "=== Analysis end ===" if in_analysis else "=== Batch end ==="
+            if in_review:
+                end_marker = "=== Review end ==="
+                mode_label = "Review"
+            elif in_analysis:
+                end_marker = "=== Analysis end ==="
+                mode_label = "Analysis"
+            else:
+                end_marker = "=== Batch end ==="
+                mode_label = "Batch"
             logging.warning(
                 "%s session not found. Polling log for end marker (up to %ds)...",
-                "Analysis" if in_analysis else "Batch",
+                mode_label,
                 LOG_SETTLE_MAX_SECONDS,
             )
             log_analysis = analyze_recent_logs(active_log)
@@ -1124,7 +1348,7 @@ def main() -> int:
                 enter_api_cooldown(state, "DeepSeek API transient error (rate-limit/network/5xx).")
                 continue
 
-            if not in_analysis and log_analysis["docker_down"]:
+            if not in_analysis and not in_review and log_analysis["docker_down"]:
                 state.docker_retry_count += 1
                 if state.docker_retry_count > DOCKER_MAX_RETRIES:
                     enter_fatal(state, f"Docker daemon unreachable after {DOCKER_MAX_RETRIES} retries.")
@@ -1142,18 +1366,30 @@ def main() -> int:
                 if in_analysis:
                     logging.info("Analysis ended normally (%s).", end_marker)
                     if state.analysis_phase == "flash":
-                        logging.info("Flash analysis complete. Handing off to pro analysis.")
-                        state.analysis_phase = "pro"
-                        state.analysis_completed = 0
-                        save_state(state)
-                        start_analysis(state)
-                        continue
+                        if enable_review:
+                            logging.info("Flash analysis complete. Starting flash review.")
+                            state.review_phase = "reviewing"
+                            save_state(state)
+                            continue
+                        else:
+                            logging.info("Flash analysis complete. Review disabled; handing off to pro analysis.")
+                            state.analysis_phase = "pro"
+                            state.analysis_completed = 0
+                            save_state(state)
+                            start_analysis(state)
+                            continue
                     elif state.analysis_phase == "pro":
-                        logging.info("Pro analysis complete. Entering rule review phase.")
-                        state.analysis_phase = "done"
-                        state.review_phase = "reviewing"
-                        save_state(state)
-                        continue
+                        if enable_review:
+                            logging.info("Pro analysis complete. Starting pro review.")
+                            state.review_phase = "reviewing"
+                            save_state(state)
+                            continue
+                        else:
+                            logging.info("Pro analysis complete. Review disabled; all work finished.")
+                            return 0
+                elif in_review:
+                    # Review batch completed — handled above in the review_phase block
+                    continue
                 else:
                     logging.info("Batch ended normally (=== Batch end ===). Marking complete.")
                     state.status = "completed"
@@ -1173,7 +1409,7 @@ def main() -> int:
                 logging.warning(
                     "%s session gone with no end marker and no error lines. "
                     "Restarting (idempotent) instead of invoking Claude repair.",
-                    "Analysis" if in_analysis else "Batch",
+                    mode_label,
                 )
                 start_fn(state)
                 continue
@@ -1190,13 +1426,19 @@ def main() -> int:
                 )
                 continue
 
-            logging.error("Unknown %s failure. Invoking Claude repair.", "analysis" if in_analysis else "batch")
+            logging.error("Unknown %s failure. Invoking Claude repair.", mode_label.lower())
             invoke_claude_repair(state, error_lines)
             continue
 
         # Session is alive — check for hang
         if is_log_stale(active_log):
-            logging.warning("%s appears hung. Restarting...", "Analysis" if in_analysis else "Batch")
+            if in_review:
+                hang_label = "Review"
+            elif in_analysis:
+                hang_label = "Analysis"
+            else:
+                hang_label = "Batch"
+            logging.warning("%s appears hung. Restarting...", hang_label)
             _kill_tmux_session(active_session)
             time.sleep(5)
             start_fn(state)
@@ -1213,24 +1455,34 @@ def main() -> int:
         else:
             state.completed = max(disk_completed, log_completed)
 
-        if not in_analysis and state.total_instances > 0 and state.completed >= state.total_instances:
+        if not in_analysis and not in_review and state.total_instances > 0 and state.completed >= state.total_instances:
             logging.info("All %d instances appear complete.", state.total_instances)
             state.status = "completed"
             save_state(state)
             continue
 
         # Periodic Docker cleanup (only relevant during batch)
-        if not in_analysis:
+        if not in_analysis and not in_review:
             check_counter = getattr(main, "_check_counter", 0)
             check_counter += 1
             main._check_counter = check_counter
             if check_counter % DOCKER_PRUNE_INTERVAL_CHECKS == 0:
                 cleanup_docker()
 
+        if in_review:
+            phase_label = f"review({state.analysis_phase})"
+            completed = 0  # Review progress not tracked via state fields
+        elif in_analysis:
+            phase_label = state.analysis_phase or "analysis"
+            completed = state.analysis_completed
+        else:
+            phase_label = "batch"
+            completed = state.completed
+
         logging.info(
             "Healthy: %s completed=%d current=%s",
-            state.analysis_phase or "batch",
-            state.analysis_completed if in_analysis else state.completed,
+            phase_label,
+            completed,
             state.current_instance or "—",
         )
         time.sleep(CHECK_INTERVAL_SECONDS)

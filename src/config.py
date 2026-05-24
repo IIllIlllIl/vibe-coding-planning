@@ -137,6 +137,7 @@ class AnalysisConfig:
     cost_limit: float = 50.0
     output_dir: str = "./output/analysis_results"
     parallel: int = 1
+    enable_review: bool = False
 
 
 @dataclass(frozen=True)
@@ -411,6 +412,7 @@ def _build_analysis_config(data: dict[str, Any]) -> AnalysisConfig:
         ),
         output_dir=_get_str(data, "output_dir", "./output/analysis_results"),
         parallel=_validate_positive_int("analysis.parallel", _get_int(data, "parallel", 1)),
+        enable_review=_get_bool(data, "enable_review", False),
     )
 
 
