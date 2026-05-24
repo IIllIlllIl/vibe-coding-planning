@@ -54,10 +54,12 @@ LOG_SETTLE_MAX_SECONDS = 30
 
 BATCH_TMUX_SESSION = "pct-batch"
 ANALYSIS_TMUX_SESSION = "pct-analysis"
+AGGREGATION_TMUX_SESSION = "pct-aggregation"
 REVIEW_TMUX_SESSION = "pct-review"
 REPAIR_TMUX_SESSION = "pct-repair"
 MASTER_LOG = Path("logs/batch_run.log")
 ANALYSIS_LOG = Path("logs/analysis_run.log")
+AGGREGATION_LOG = Path("logs/aggregation_run.log")
 REVIEW_LOG = Path("logs/review_run.log")
 WATCHDOG_LOG = Path("logs/watchdog.log")
 STATE_FILE = Path("output/.watchdog_state.json")
@@ -141,6 +143,8 @@ class WatchdogState:
     # Analysis phase tracking (flash → pro, serial)
     analysis_phase: str | None = None   # None | "flash" | "pro" | "done"
     analysis_completed: int = 0
+    # Aggregation phase tracking (Input-Aware Tree Merge)
+    aggregation_phase: str | None = None  # None | "flash" | "pro" | "done"
     # Review phase tracking (quality gate after pro analysis)
     review_phase: str | None = None     # None | "pending" | "reviewing" | "reworking" | "done"
     rework_queue: list[str] = None      # instance_ids that need rework
@@ -175,6 +179,7 @@ class WatchdogState:
             "docker_retry_count": 0,
             "analysis_phase": None,
             "analysis_completed": 0,
+            "aggregation_phase": None,
             "review_phase": None,
             "rework_queue": [],
             "rework_attempts": {},
@@ -348,6 +353,57 @@ def start_analysis(state: WatchdogState) -> None:
         logging.info("Analysis session started successfully.")
     else:
         logging.error("Failed to start analysis tmux session!")
+
+
+def start_aggregation(state: WatchdogState) -> None:
+    """Start (or restart) the rule-aggregation runner in a tmux session.
+
+    The model matches the aggregation_phase ("flash" or "pro").
+    Reads per_case/*.json from the corresponding analysis output directory
+    and writes aggregated_rules.json back to the same directory.
+    """
+    _kill_tmux_session(AGGREGATION_TMUX_SESSION)
+
+    model_name = {
+        "flash": "deepseek-v4-flash",
+        "pro": "deepseek-v4-pro",
+    }.get(state.aggregation_phase or "", "deepseek-v4-flash")
+
+    input_dir = f"./output/analysis_{state.aggregation_phase or 'unknown'}/per_case"
+    output_dir = f"./output/analysis_{state.aggregation_phase or 'unknown'}"
+
+    cmd = (
+        f"cd {shlex.quote(os.getcwd())} "
+        f"&& source /Users/taoran.wang/miniconda3/etc/profile.d/conda.sh "
+        f"&& conda activate mini-swe "
+        f"&& python -m src.analysis "
+        f"--input {shlex.quote(input_dir)} "
+        f"--output {shlex.quote(output_dir)} "
+        f"--model {shlex.quote(model_name)} "
+        f"--aggregate "
+        f">> logs/aggregation_run.log 2>&1"
+    )
+
+    AGGREGATION_LOG.parent.mkdir(parents=True, exist_ok=True)
+    AGGREGATION_LOG.touch(exist_ok=True)
+
+    logging.info(
+        "Starting aggregation tmux session: %s (phase=%s model=%s)",
+        AGGREGATION_TMUX_SESSION,
+        state.aggregation_phase,
+        model_name,
+    )
+    subprocess.run(
+        ["tmux", "new-session", "-d", "-s", AGGREGATION_TMUX_SESSION, "bash", "-c", cmd],
+        capture_output=True,
+        check=False,
+    )
+    time.sleep(3)
+
+    if _tmux_session_exists(AGGREGATION_TMUX_SESSION):
+        logging.info("Aggregation session started successfully.")
+    else:
+        logging.error("Failed to start aggregation tmux session!")
 
 
 def start_review(state: WatchdogState, instance_ids: list[str] | None = None) -> None:
@@ -1037,10 +1093,15 @@ def main() -> int:
     enable_review = _load_enable_review()
     logging.info("Watchdog config: enable_review=%s", enable_review)
 
-    # Determine active mode: review > analysis > batch
-    in_review = state.review_phase in ("reviewing", "reworking")
-    in_analysis = state.analysis_phase in ("flash", "pro") and not in_review
-    if in_review:
+    # Determine active mode: aggregation > review > analysis > batch
+    in_aggregation = state.aggregation_phase in ("flash", "pro")
+    in_review = state.review_phase in ("reviewing", "reworking") and not in_aggregation
+    in_analysis = state.analysis_phase in ("flash", "pro") and not in_aggregation and not in_review
+    if in_aggregation:
+        active_session = AGGREGATION_TMUX_SESSION
+        active_log = AGGREGATION_LOG
+        start_fn = start_aggregation
+    elif in_review:
         active_session = REVIEW_TMUX_SESSION
         active_log = REVIEW_LOG
         start_fn = lambda s: start_review(s, instance_ids=s.rework_queue or None)
@@ -1057,7 +1118,9 @@ def main() -> int:
     # (fresh launch, or resume after Mac reboot / manual watchdog restart),
     # kick off the appropriate runner before entering the watch loop.
     if state.status == "running" and not _tmux_session_exists(active_session):
-        if in_review:
+        if in_aggregation:
+            logging.info("Cold start: launching initial aggregation session (phase=%s).", state.aggregation_phase)
+        elif in_review:
             logging.info("Cold start: launching initial review session (target=%s).", state.analysis_phase)
         elif in_analysis:
             logging.info("Cold start: launching initial analysis session (phase=%s).", state.analysis_phase)
@@ -1077,7 +1140,10 @@ def main() -> int:
 
         if state.status == "api_cooldown":
             if cooldown_expired(state):
-                mode_name = "review" if in_review else ("analysis" if in_analysis else "batch")
+                mode_name = (
+                    "aggregation" if in_aggregation else
+                    ("review" if in_review else ("analysis" if in_analysis else "batch"))
+                )
                 logging.info("API cooldown expired. Resuming %s.", mode_name)
                 state.status = "running"
                 state.api_cooldown_until = None
@@ -1109,6 +1175,51 @@ def main() -> int:
             logging.error("Disk space too low. Pausing.")
             time.sleep(CHECK_INTERVAL_SECONDS)
             continue
+
+        # -----------------------------------------------------------------------
+        # Aggregation phase (Input-Aware Tree Merge)
+        # -----------------------------------------------------------------------
+        if state.aggregation_phase in ("flash", "pro"):
+            in_aggregation = True
+            active_session = AGGREGATION_TMUX_SESSION
+            active_log = AGGREGATION_LOG
+            start_fn = start_aggregation
+
+            if _tmux_session_exists(AGGREGATION_TMUX_SESSION):
+                if is_log_stale(AGGREGATION_LOG):
+                    logging.warning("Aggregation session appears hung. Restarting...")
+                    _kill_tmux_session(AGGREGATION_TMUX_SESSION)
+                    time.sleep(5)
+                    start_fn(state)
+                    continue
+                logging.info("Aggregation session in progress. Next check in 60s.")
+                time.sleep(60)
+                continue
+
+            # Session not running — check for output file (aggregation is a single-shot
+            # python invocation without a shell-script end marker).
+            output_dir = f"./output/analysis_{state.aggregation_phase}"
+            agg_result_path = Path(output_dir) / "aggregated_rules.json"
+            if agg_result_path.exists():
+                logging.info("Aggregation complete. Output found at %s", agg_result_path)
+                if state.aggregation_phase == "flash":
+                    logging.info("Flash aggregation complete. Handing off to pro analysis.")
+                    state.analysis_phase = "pro"
+                    state.analysis_completed = 0
+                    state.aggregation_phase = None
+                    save_state(state)
+                    start_analysis(state)
+                    continue
+                elif state.aggregation_phase == "pro":
+                    logging.info("Pro aggregation complete. All work finished.")
+                    return 0
+            else:
+                logging.warning(
+                    "Aggregation session not running and no %s found. Restarting...",
+                    agg_result_path,
+                )
+                start_fn(state)
+                continue
 
         # -----------------------------------------------------------------------
         # Review phase (LLM-based quality gate)
@@ -1284,23 +1395,31 @@ def main() -> int:
 
         if state.review_phase == "done":
             if state.analysis_phase == "flash":
-                logging.info("Flash review complete. Handing off to pro analysis.")
-                state.analysis_phase = "pro"
-                state.analysis_completed = 0
+                logging.info("Flash review complete. Starting flash aggregation.")
+                state.aggregation_phase = "flash"
                 state.review_phase = None
                 save_state(state)
-                start_analysis(state)
+                start_aggregation(state)
                 continue
             elif state.analysis_phase == "pro":
-                logging.info("Pro review complete. All work finished.")
-                return 0
+                logging.info("Pro review complete. Starting pro aggregation.")
+                state.aggregation_phase = "pro"
+                state.review_phase = None
+                save_state(state)
+                start_aggregation(state)
+                continue
             logging.info("Review phase complete. Exiting.")
             return 0
 
         # Re-evaluate mode every loop iteration (phase may have changed)
-        in_review = state.review_phase in ("reviewing", "reworking")
-        in_analysis = state.analysis_phase in ("flash", "pro") and not in_review
-        if in_review:
+        in_aggregation = state.aggregation_phase in ("flash", "pro")
+        in_review = state.review_phase in ("reviewing", "reworking") and not in_aggregation
+        in_analysis = state.analysis_phase in ("flash", "pro") and not in_aggregation and not in_review
+        if in_aggregation:
+            active_session = AGGREGATION_TMUX_SESSION
+            active_log = AGGREGATION_LOG
+            start_fn = start_aggregation
+        elif in_review:
             active_session = REVIEW_TMUX_SESSION
             active_log = REVIEW_LOG
             start_fn = lambda s: start_review(s, instance_ids=s.rework_queue or None)
@@ -1316,7 +1435,10 @@ def main() -> int:
         session_alive = _tmux_session_exists(active_session)
 
         if not session_alive:
-            if in_review:
+            if in_aggregation:
+                end_marker = "=== Aggregation end ==="
+                mode_label = "Aggregation"
+            elif in_review:
                 end_marker = "=== Review end ==="
                 mode_label = "Review"
             elif in_analysis:
@@ -1348,7 +1470,7 @@ def main() -> int:
                 enter_api_cooldown(state, "DeepSeek API transient error (rate-limit/network/5xx).")
                 continue
 
-            if not in_analysis and not in_review and log_analysis["docker_down"]:
+            if not in_aggregation and not in_analysis and not in_review and log_analysis["docker_down"]:
                 state.docker_retry_count += 1
                 if state.docker_retry_count > DOCKER_MAX_RETRIES:
                     enter_fatal(state, f"Docker daemon unreachable after {DOCKER_MAX_RETRIES} retries.")
@@ -1363,7 +1485,12 @@ def main() -> int:
                 continue
 
             if log_analysis["batch_completed"]:
-                if in_analysis:
+                if in_aggregation:
+                    # Handled in the dedicated aggregation block above;
+                    # this path should rarely be reached.
+                    logging.info("Aggregation ended normally (%s).", end_marker)
+                    continue
+                elif in_analysis:
                     logging.info("Analysis ended normally (%s).", end_marker)
                     if state.analysis_phase == "flash":
                         if enable_review:
@@ -1372,11 +1499,10 @@ def main() -> int:
                             save_state(state)
                             continue
                         else:
-                            logging.info("Flash analysis complete. Review disabled; handing off to pro analysis.")
-                            state.analysis_phase = "pro"
-                            state.analysis_completed = 0
+                            logging.info("Flash analysis complete. Starting flash aggregation.")
+                            state.aggregation_phase = "flash"
                             save_state(state)
-                            start_analysis(state)
+                            start_aggregation(state)
                             continue
                     elif state.analysis_phase == "pro":
                         if enable_review:
@@ -1385,8 +1511,11 @@ def main() -> int:
                             save_state(state)
                             continue
                         else:
-                            logging.info("Pro analysis complete. Review disabled; all work finished.")
-                            return 0
+                            logging.info("Pro analysis complete. Starting pro aggregation.")
+                            state.aggregation_phase = "pro"
+                            save_state(state)
+                            start_aggregation(state)
+                            continue
                 elif in_review:
                     # Review batch completed — handled above in the review_phase block
                     continue
@@ -1432,7 +1561,9 @@ def main() -> int:
 
         # Session is alive — check for hang
         if is_log_stale(active_log):
-            if in_review:
+            if in_aggregation:
+                hang_label = "Aggregation"
+            elif in_review:
                 hang_label = "Review"
             elif in_analysis:
                 hang_label = "Analysis"
@@ -1469,7 +1600,10 @@ def main() -> int:
             if check_counter % DOCKER_PRUNE_INTERVAL_CHECKS == 0:
                 cleanup_docker()
 
-        if in_review:
+        if in_aggregation:
+            phase_label = f"aggregation({state.aggregation_phase})"
+            completed = 0  # Aggregation progress not tracked via state fields
+        elif in_review:
             phase_label = f"review({state.analysis_phase})"
             completed = 0  # Review progress not tracked via state fields
         elif in_analysis:

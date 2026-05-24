@@ -307,6 +307,7 @@ class TestAnalysisState:
             loaded = watchdog.load_state()
         assert loaded.analysis_phase is None
         assert loaded.analysis_completed == 0
+        assert loaded.aggregation_phase is None
 
 
 class TestAnalysisLogAnalysis:
@@ -357,9 +358,39 @@ class TestAnalysisHangDetection:
         assert watchdog.is_log_stale(log) is False
 
 
+class TestAggregationState:
+    def test_roundtrip_with_aggregation_fields(self, tmp_path: Path):
+        state = watchdog.WatchdogState(
+            batch_id="test-batch",
+            total_instances=60,
+            completed=60,
+            status="completed",
+            analysis_phase="done",
+            aggregation_phase="flash",
+        )
+        with patch.object(watchdog, "STATE_FILE", tmp_path / "state.json"):
+            watchdog.save_state(state)
+            loaded = watchdog.load_state()
+        assert loaded.aggregation_phase == "flash"
+
+    def test_backward_compat_missing_aggregation_fields(self, tmp_path: Path):
+        raw = {
+            "batch_id": "old-batch",
+            "total_instances": 10,
+            "completed": 10,
+            "status": "completed",
+            "analysis_phase": "done",
+        }
+        state_file = tmp_path / "state.json"
+        state_file.write_text(json.dumps(raw))
+        with patch.object(watchdog, "STATE_FILE", state_file):
+            loaded = watchdog.load_state()
+        assert loaded.aggregation_phase is None
+
+
 class TestSerialPhaseHandoff:
-    def test_flash_done_enters_review(self, tmp_path: Path):
-        """Simulate: flash analysis done → flash review should start."""
+    def test_flash_done_enters_aggregation_when_review_disabled(self, tmp_path: Path):
+        """Simulate: flash analysis done → flash aggregation should start (review disabled)."""
         state = watchdog.WatchdogState(
             batch_id="b",
             total_instances=60,
@@ -376,14 +407,67 @@ class TestSerialPhaseHandoff:
         with patch.object(watchdog, "ANALYSIS_LOG", analysis_log):
             analysis = watchdog.analyze_recent_logs(analysis_log)
         assert analysis["batch_completed"] is True
-        # Simulate the new handoff logic from the main loop
+
+        enable_review = False
         if state.analysis_phase == "flash" and analysis["batch_completed"]:
-            state.review_phase = "reviewing"
+            if enable_review:
+                state.review_phase = "reviewing"
+            else:
+                state.aggregation_phase = "flash"
+        assert state.analysis_phase == "flash"
+        assert state.aggregation_phase == "flash"
+        assert state.review_phase is None
+
+    def test_flash_done_enters_review_when_enabled(self, tmp_path: Path):
+        """Simulate: flash analysis done → flash review should start (review enabled)."""
+        state = watchdog.WatchdogState(
+            batch_id="b",
+            total_instances=60,
+            completed=60,
+            status="completed",
+            analysis_phase="flash",
+            analysis_completed=60,
+        )
+        analysis_log = tmp_path / "analysis_run.log"
+        analysis_log.write_text(
+            "[2026-05-12 10:00:00] START inst1\n"
+            "[2026-05-12 10:01:00] === Analysis end ===\n"
+        )
+        with patch.object(watchdog, "ANALYSIS_LOG", analysis_log):
+            analysis = watchdog.analyze_recent_logs(analysis_log)
+        assert analysis["batch_completed"] is True
+
+        enable_review = True
+        if state.analysis_phase == "flash" and analysis["batch_completed"]:
+            if enable_review:
+                state.review_phase = "reviewing"
+            else:
+                state.aggregation_phase = "flash"
         assert state.analysis_phase == "flash"
         assert state.review_phase == "reviewing"
+        assert state.aggregation_phase is None
 
-    def test_flash_review_done_hands_off_to_pro(self):
-        """Simulate: flash review done → pro analysis should start."""
+    def test_flash_aggregation_done_hands_off_to_pro(self):
+        """Simulate: flash aggregation done → pro analysis should start."""
+        state = watchdog.WatchdogState(
+            batch_id="b",
+            total_instances=60,
+            completed=60,
+            status="completed",
+            analysis_phase="flash",
+            aggregation_phase="flash",
+        )
+        # Simulate the transition logic when aggregation completes
+        if state.aggregation_phase == "flash":
+            state.analysis_phase = "pro"
+            state.analysis_completed = 0
+            state.aggregation_phase = None
+        assert state.analysis_phase == "pro"
+        assert state.aggregation_phase is None
+        assert state.analysis_completed == 0
+
+    def test_flash_review_done_enters_aggregation(self):
+        """Simulate: flash review done → flash aggregation should start."""
         state = watchdog.WatchdogState(
             batch_id="b",
             total_instances=60,
@@ -394,15 +478,14 @@ class TestSerialPhaseHandoff:
         )
         # Simulate the transition logic when review_phase == "done"
         if state.analysis_phase == "flash" and state.review_phase == "done":
-            state.analysis_phase = "pro"
-            state.analysis_completed = 0
+            state.aggregation_phase = "flash"
             state.review_phase = None
-        assert state.analysis_phase == "pro"
+        assert state.analysis_phase == "flash"
+        assert state.aggregation_phase == "flash"
         assert state.review_phase is None
-        assert state.analysis_completed == 0
 
-    def test_pro_done_enters_review(self, tmp_path: Path):
-        """Simulate: pro analysis done → pro review should start."""
+    def test_pro_done_enters_aggregation_when_review_disabled(self, tmp_path: Path):
+        """Simulate: pro analysis done → pro aggregation should start (review disabled)."""
         state = watchdog.WatchdogState(
             batch_id="b",
             total_instances=60,
@@ -416,25 +499,32 @@ class TestSerialPhaseHandoff:
         with patch.object(watchdog, "ANALYSIS_LOG", analysis_log):
             analysis = watchdog.analyze_recent_logs(analysis_log)
         assert analysis["batch_completed"] is True
-        if state.analysis_phase == "pro" and analysis["batch_completed"]:
-            state.review_phase = "reviewing"
-        assert state.analysis_phase == "pro"
-        assert state.review_phase == "reviewing"
 
-    def test_pro_review_done_exits(self):
-        """Simulate: pro review done → watchdog exits."""
+        enable_review = False
+        finished = False
+        if state.analysis_phase == "pro" and analysis["batch_completed"]:
+            if enable_review:
+                state.review_phase = "reviewing"
+            else:
+                state.aggregation_phase = "pro"
+        assert state.analysis_phase == "pro"
+        assert state.aggregation_phase == "pro"
+        assert state.review_phase is None
+
+    def test_pro_aggregation_done_exits(self):
+        """Simulate: pro aggregation done → watchdog exits."""
         state = watchdog.WatchdogState(
             batch_id="b",
             total_instances=60,
             completed=60,
             status="completed",
             analysis_phase="pro",
-            review_phase="done",
+            aggregation_phase="pro",
         )
-        # Simulate the transition logic when review_phase == "done"
-        if state.analysis_phase == "pro" and state.review_phase == "done":
-            state.analysis_phase = "done"
-        assert state.analysis_phase == "done"
+        # Simulate the transition logic when aggregation completes
+        if state.aggregation_phase == "pro":
+            finished = True
+        assert finished is True
 
 
 class TestCooldownDuringAnalysis:
@@ -645,6 +735,17 @@ class TestProDoneEntersReview:
         assert state.review_phase == "reviewing"
 
 
+class TestAggregationConstants:
+    def test_aggregation_tmux_session_defined(self):
+        assert watchdog.AGGREGATION_TMUX_SESSION == "pct-aggregation"
+
+    def test_aggregation_log_defined(self):
+        assert watchdog.AGGREGATION_LOG.name == "aggregation_run.log"
+
+    def test_start_aggregation_function_exists(self):
+        assert callable(watchdog.start_aggregation)
+
+
 class TestReviewConstants:
     def test_review_tmux_session_defined(self):
         assert watchdog.REVIEW_TMUX_SESSION == "pct-review"
@@ -710,7 +811,7 @@ class TestCooldownDuringReview:
 
 
 class TestReviewPhaseDoneTransitions:
-    def test_flash_review_done_moves_to_pro(self):
+    def test_flash_review_done_moves_to_aggregation(self):
         state = watchdog.WatchdogState(
             batch_id="b",
             total_instances=60,
@@ -721,13 +822,13 @@ class TestReviewPhaseDoneTransitions:
         )
         # Simulate review_phase == "done" handler
         if state.analysis_phase == "flash" and state.review_phase == "done":
-            state.analysis_phase = "pro"
-            state.analysis_completed = 0
+            state.aggregation_phase = "flash"
             state.review_phase = None
-        assert state.analysis_phase == "pro"
+        assert state.analysis_phase == "flash"
+        assert state.aggregation_phase == "flash"
         assert state.review_phase is None
 
-    def test_pro_review_done_moves_to_done(self):
+    def test_pro_review_done_moves_to_aggregation(self):
         state = watchdog.WatchdogState(
             batch_id="b",
             total_instances=60,
@@ -738,16 +839,20 @@ class TestReviewPhaseDoneTransitions:
         )
         # Simulate review_phase == "done" handler
         if state.analysis_phase == "pro" and state.review_phase == "done":
-            state.analysis_phase = "done"
-        assert state.analysis_phase == "done"
+            state.aggregation_phase = "pro"
+            state.review_phase = None
+        assert state.analysis_phase == "pro"
+        assert state.aggregation_phase == "pro"
+        assert state.review_phase is None
 
 
 class TestEnableReviewFlag:
     """When ``enable_review`` is false, the watchdog skips review/rework
-    and transitions directly: flash analysis → pro analysis → done.
+    and transitions directly: flash analysis → flash aggregation → pro analysis
+    → pro aggregation → done.
     """
 
-    def test_flash_done_skips_review_when_disabled(self, tmp_path: Path):
+    def test_flash_done_skips_review_enters_aggregation_when_disabled(self, tmp_path: Path):
         """Simulate the main-loop transition when flash analysis ends
         and enable_review is false.
         """
@@ -773,12 +878,12 @@ class TestEnableReviewFlag:
             if enable_review:
                 state.review_phase = "reviewing"
             else:
-                state.analysis_phase = "pro"
-                state.analysis_completed = 0
-        assert state.analysis_phase == "pro"
+                state.aggregation_phase = "flash"
+        assert state.analysis_phase == "flash"
+        assert state.aggregation_phase == "flash"
         assert state.review_phase is None
 
-    def test_pro_done_exits_when_review_disabled(self, tmp_path: Path):
+    def test_pro_done_enters_aggregation_when_review_disabled(self, tmp_path: Path):
         """Simulate the main-loop transition when pro analysis ends
         and enable_review is false.
         """
@@ -797,13 +902,13 @@ class TestEnableReviewFlag:
         assert analysis["batch_completed"] is True
 
         enable_review = False
-        finished = False
         if state.analysis_phase == "pro" and analysis["batch_completed"]:
             if enable_review:
                 state.review_phase = "reviewing"
             else:
-                finished = True
-        assert finished is True
+                state.aggregation_phase = "pro"
+        assert state.analysis_phase == "pro"
+        assert state.aggregation_phase == "pro"
         assert state.review_phase is None
 
     def test_flash_done_enters_review_when_enabled(self, tmp_path: Path):
@@ -827,10 +932,10 @@ class TestEnableReviewFlag:
             if enable_review:
                 state.review_phase = "reviewing"
             else:
-                state.analysis_phase = "pro"
-                state.analysis_completed = 0
+                state.aggregation_phase = "flash"
         assert state.analysis_phase == "flash"
         assert state.review_phase == "reviewing"
+        assert state.aggregation_phase is None
 
 
 class TestLoadEnableReview:

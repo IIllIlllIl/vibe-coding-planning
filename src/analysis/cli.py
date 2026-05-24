@@ -14,6 +14,7 @@ from pathlib import Path
 
 import dataclasses
 
+from src.analysis.aggregation_agent import aggregate_with_config
 from src.analysis.case_loader import load_cases
 from src.analysis.contrastive_agent import run as run_agent
 from src.analysis.output import AnalysisOutputWriter
@@ -63,6 +64,12 @@ def main(argv: list[str] | None = None) -> int:
         default=None,
         help="Override the analysis model (e.g. deepseek-v4-pro)",
     )
+    parser.add_argument(
+        "--aggregate",
+        action="store_true",
+        help="Run rule aggregation instead of per-case extraction. "
+             "--input is treated as the per_case directory.",
+    )
     args = parser.parse_args(argv)
 
     # Load configuration
@@ -86,6 +93,33 @@ def main(argv: list[str] | None = None) -> int:
         return 1
 
     output_dir = Path(args.output) if args.output else Path(config.analysis.output_dir)
+
+    # -----------------------------------------------------------------------
+    # Aggregation mode (Input-Aware Tree Merge)
+    # -----------------------------------------------------------------------
+    if args.aggregate:
+        per_case_dir = data_dir
+        aggregate_output = output_dir / "aggregated_rules.json"
+        try:
+            result = aggregate_with_config(
+                per_case_dir=per_case_dir,
+                output_path=aggregate_output,
+                config=config,
+            )
+            logger.info(
+                "Aggregation complete: %d always rules, %d branches -> %s",
+                len(result.get("always", [])),
+                len(result.get("branches", [])),
+                aggregate_output,
+            )
+            return 0
+        except Exception as exc:
+            logger.error("Aggregation failed: %s", exc)
+            return 1
+
+    # -----------------------------------------------------------------------
+    # Per-case contrastive analysis mode
+    # -----------------------------------------------------------------------
     writer = AnalysisOutputWriter(output_dir)
 
     # Load cases

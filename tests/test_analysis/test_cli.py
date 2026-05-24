@@ -1,11 +1,14 @@
-"""Tests for src/analysis/cli.py rule validation logic.
-
-The validation is embedded in the main() loop; we test it indirectly
-by extracting the validation logic into a helper."""
+"""Tests for src/analysis/cli.py rule validation and aggregation logic."""
 
 from __future__ import annotations
 
+import json
+from pathlib import Path
+from unittest.mock import MagicMock, patch
+
 import pytest
+
+from src.analysis.cli import main
 
 
 def _validate_rule(rule_text: str) -> bool:
@@ -74,3 +77,131 @@ class TestRuleValidation:
             "When a fix is too broad, narrow the scope because unintended changes cause regressions."
         )
         assert _validate_rule(text) is True
+
+
+# ---------------------------------------------------------------------------
+# --aggregate CLI tests
+# ---------------------------------------------------------------------------
+
+def _write_minimal_config(path: Path) -> None:
+    """Write a minimal valid config.yaml for CLI tests."""
+    import yaml
+
+    cfg = {
+        "system": {"batch_id": "test-batch"},
+        "analysis": {
+            "output_dir": "./output",
+            "api_key_env": "TEST_AGG_KEY",
+        },
+    }
+    path.write_text(yaml.dump(cfg), encoding="utf-8")
+
+
+class TestAggregateFlag:
+    def test_aggregate_runs_successfully(self, tmp_path: Path, monkeypatch):
+        monkeypatch.setenv("TEST_AGG_KEY", "test-key")
+        monkeypatch.setenv("DEEPSEEK_API_KEY", "test-ds-key")
+
+        per_case = tmp_path / "per_case"
+        per_case.mkdir()
+        (per_case / "case_1.json").write_text(
+            json.dumps(
+                {
+                    "instance_id": "case_1",
+                    "rule": "When A, do X because Y.",
+                    "rule_valid": True,
+                }
+            ),
+            encoding="utf-8",
+        )
+
+        config_path = tmp_path / "config.yaml"
+        _write_minimal_config(config_path)
+
+        output_dir = tmp_path / "output"
+
+        llm_output = json.dumps(
+            {
+                "always": ["When universal, do X because Y."],
+                "branches": [{"condition": "c1", "rules": ["When A, do X because Y."]}],
+            }
+        )
+        mock_response = MagicMock()
+        mock_response.choices = [MagicMock()]
+        mock_response.choices[0].message.content = llm_output
+
+        monkeypatch.chdir(tmp_path)
+
+        with patch("litellm.completion", return_value=mock_response):
+            rc = main(
+                [
+                    "--config", str(config_path),
+                    "--input", str(per_case),
+                    "--output", str(output_dir),
+                    "--aggregate",
+                ]
+            )
+
+        assert rc == 0
+        assert (output_dir / "aggregated_rules.json").exists()
+
+    def test_aggregate_no_valid_rules_fails(self, tmp_path: Path, monkeypatch):
+        monkeypatch.setenv("DEEPSEEK_API_KEY", "test-ds-key")
+
+        per_case = tmp_path / "per_case"
+        per_case.mkdir()
+
+        config_path = tmp_path / "config.yaml"
+        _write_minimal_config(config_path)
+
+        monkeypatch.chdir(tmp_path)
+
+        rc = main(
+            [
+                "--config", str(config_path),
+                "--input", str(per_case),
+                "--aggregate",
+            ]
+        )
+        assert rc == 1
+
+    def test_aggregate_with_model_override(self, tmp_path: Path, monkeypatch):
+        monkeypatch.setenv("TEST_AGG_KEY", "test-key")
+        monkeypatch.setenv("DEEPSEEK_API_KEY", "test-ds-key")
+
+        per_case = tmp_path / "per_case"
+        per_case.mkdir()
+        (per_case / "case_1.json").write_text(
+            json.dumps(
+                {
+                    "instance_id": "case_1",
+                    "rule": "When A, do X because Y.",
+                    "rule_valid": True,
+                }
+            ),
+            encoding="utf-8",
+        )
+
+        config_path = tmp_path / "config.yaml"
+        _write_minimal_config(config_path)
+
+        llm_output = json.dumps({"always": [], "branches": []})
+        mock_response = MagicMock()
+        mock_response.choices = [MagicMock()]
+        mock_response.choices[0].message.content = llm_output
+
+        monkeypatch.chdir(tmp_path)
+
+        with patch("litellm.completion", return_value=mock_response) as mock_completion:
+            rc = main(
+                [
+                    "--config", str(config_path),
+                    "--input", str(per_case),
+                    "--aggregate",
+                    "--model", "deepseek-v4-pro",
+                ]
+            )
+
+        assert rc == 0
+        # api_base defaults to moonshot in test config, so no deepseek prefix is added
+        assert mock_completion.call_args.kwargs["model"] == "deepseek-v4-pro"
