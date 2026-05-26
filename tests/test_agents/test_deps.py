@@ -71,6 +71,24 @@ class TestBuildModel:
         )
         assert m.model_name == "custom/provider-model"
 
+    def test_auto_prefixes_anthropic(self):
+        m = build_model(
+            FakeLitellmModel,
+            model_name="claude-sonnet-4",
+            api_key="k",
+            api_base="https://api.anthropic.com",
+        )
+        assert m.model_name == "anthropic/claude-sonnet-4"
+
+    def test_auto_prefixes_kimi(self):
+        m = build_model(
+            FakeLitellmModel,
+            model_name="kimi-for-coding",
+            api_key="k",
+            api_base="https://api.kimi.com/coding/",
+        )
+        assert m.model_name == "anthropic/kimi-for-coding"
+
     def test_unknown_domain_warns_and_returns_unchanged(self, caplog):
         with caplog.at_level("WARNING"):
             m = build_model(

@@ -513,3 +513,33 @@ class TestAnalysisConfig:
         _write_test_config(filepath, data)
         config = load_config(filepath)
         assert config.analysis.enable_review is False
+
+    def test_model_family_default_is_auto(self, monkeypatch, tmp_path: Path):
+        monkeypatch.setenv("DEEPSEEK_API_KEY", "test-key")
+        filepath = tmp_path / "empty.yaml"
+        _write_test_config(filepath)
+        config = load_config(filepath)
+        assert config.analysis.model_family == "auto"
+
+    def test_model_family_explicit_value(self, monkeypatch, tmp_path: Path):
+        monkeypatch.setenv("DEEPSEEK_API_KEY", "test-key")
+        data = {"analysis": {"model_family": "kimi"}}
+        filepath = tmp_path / "family_kimi.yaml"
+        _write_test_config(filepath, data)
+        config = load_config(filepath)
+        assert config.analysis.model_family == "kimi"
+
+    def test_system_prompt_suffix_default_empty(self, monkeypatch, tmp_path: Path):
+        monkeypatch.setenv("DEEPSEEK_API_KEY", "test-key")
+        filepath = tmp_path / "empty.yaml"
+        _write_test_config(filepath)
+        config = load_config(filepath)
+        assert config.analysis.system_prompt_suffix == ""
+
+    def test_system_prompt_suffix_custom_value(self, monkeypatch, tmp_path: Path):
+        monkeypatch.setenv("DEEPSEEK_API_KEY", "test-key")
+        data = {"analysis": {"system_prompt_suffix": "Always use bash."}}
+        filepath = tmp_path / "suffix.yaml"
+        _write_test_config(filepath, data)
+        config = load_config(filepath)
+        assert config.analysis.system_prompt_suffix == "Always use bash."

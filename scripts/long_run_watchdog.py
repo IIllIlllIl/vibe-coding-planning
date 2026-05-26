@@ -315,18 +315,35 @@ def start_batch(state: WatchdogState) -> None:
         logging.error("Failed to start batch tmux session!")
 
 
+def _resolve_analysis_model(phase: str | None) -> str:
+    """Return the model name for the given analysis phase.
+
+    Legacy phases "flash" and "pro" map to hard-coded DeepSeek models.
+    For any other phase (e.g. "kimi"), the model is read from
+    config.yaml ``analysis.model`` so that users can switch providers
+    without editing the watchdog.
+    """
+    legacy = {"flash": "deepseek-v4-flash", "pro": "deepseek-v4-pro"}
+    if phase in legacy:
+        return legacy[phase]
+    # Non-legacy phase: read from config.yaml
+    try:
+        import yaml
+        cfg = yaml.safe_load(Path("config.yaml").read_text(encoding="utf-8"))
+        return (cfg.get("analysis") or {}).get("model", "deepseek-v4-flash")
+    except Exception:
+        return "deepseek-v4-flash"
+
+
 def start_analysis(state: WatchdogState) -> None:
     """Start (or restart) the analysis runner in a tmux session.
 
-    The model is determined by state.analysis_phase ("flash" or "pro").
+    The model is determined by state.analysis_phase ("flash", "pro", or a
+    custom phase like "kimi").
     """
     _kill_tmux_session(ANALYSIS_TMUX_SESSION)
 
-    model_name = {
-        "flash": "deepseek-v4-flash",
-        "pro": "deepseek-v4-pro",
-    }.get(state.analysis_phase or "", "deepseek-v4-flash")
-
+    model_name = _resolve_analysis_model(state.analysis_phase)
     output_dir = f"./output/analysis_{state.analysis_phase or 'unknown'}"
 
     cmd = (
@@ -358,16 +375,14 @@ def start_analysis(state: WatchdogState) -> None:
 def start_aggregation(state: WatchdogState) -> None:
     """Start (or restart) the rule-aggregation runner in a tmux session.
 
-    The model matches the aggregation_phase ("flash" or "pro").
+    The model matches the aggregation_phase ("flash", "pro", or a custom
+    phase like "kimi").
     Reads per_case/*.json from the corresponding analysis output directory
     and writes aggregated_rules.json back to the same directory.
     """
     _kill_tmux_session(AGGREGATION_TMUX_SESSION)
 
-    model_name = {
-        "flash": "deepseek-v4-flash",
-        "pro": "deepseek-v4-pro",
-    }.get(state.aggregation_phase or "", "deepseek-v4-flash")
+    model_name = _resolve_analysis_model(state.aggregation_phase)
 
     input_dir = f"./output/analysis_{state.aggregation_phase or 'unknown'}/per_case"
     output_dir = f"./output/analysis_{state.aggregation_phase or 'unknown'}"
@@ -415,10 +430,7 @@ def start_review(state: WatchdogState, instance_ids: list[str] | None = None) ->
     _kill_tmux_session(REVIEW_TMUX_SESSION)
 
     review_target = state.analysis_phase or "pro"
-    model_name = {
-        "flash": "deepseek-v4-flash",
-        "pro": "deepseek-v4-pro",
-    }.get(review_target, "deepseek-v4-pro")
+    model_name = _resolve_analysis_model(review_target)
 
     output_dir = f"./output/analysis_{review_target}"
     data_dir = "./output/SWE-bench_Verified/reflect_success_cases"
@@ -1378,10 +1390,7 @@ def main() -> int:
                 )
                 save_state(state)
                 main._current_rework_instance = next_instance
-                model_name = {
-                    "flash": "deepseek-v4-flash",
-                    "pro": "deepseek-v4-pro",
-                }.get(review_target, "deepseek-v4-pro")
+                model_name = _resolve_analysis_model(review_target)
                 start_rework(next_instance, model_name, output_dir)
                 started = True
                 break

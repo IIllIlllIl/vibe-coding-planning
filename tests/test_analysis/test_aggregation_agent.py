@@ -373,6 +373,21 @@ class TestCallLitellm:
             )
             assert mock_completion.call_args.kwargs["model"] == "moonshot/kimi-k2.6"
 
+    def test_kimi_api_base_gets_anthropic_prefix(self):
+        mock_response = MagicMock()
+        mock_response.choices = [MagicMock()]
+        mock_response.choices[0].message.content = "ok"
+
+        with patch("litellm.completion", return_value=mock_response) as mock_completion:
+            agg._call_litellm(
+                model_name="claude-sonnet-4",
+                api_key="test-key",
+                api_base="https://api.kimi.com/coding/",
+                system_prompt="sys",
+                user_prompt="user",
+            )
+            assert mock_completion.call_args.kwargs["model"] == "anthropic/claude-sonnet-4"
+
     def test_empty_content_handled(self):
         mock_response = MagicMock()
         mock_response.choices = [MagicMock()]

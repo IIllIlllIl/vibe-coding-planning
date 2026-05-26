@@ -142,6 +142,57 @@ def _looks_like_rule(text: str) -> bool:
 
 
 # ---------------------------------------------------------------------------
+# Model-family-aware prompt helpers
+# ---------------------------------------------------------------------------
+
+_DEFAULT_SUFFIXES: dict[str, str] = {
+    "kimi": (
+        "\n\nCRITICAL FORMAT RULE: Every single response must contain exactly "
+        "ONE bash code block wrapped in triple backticks (```bash ... ```). "
+        "Do not include any explanatory text, reasoning, or markdown outside "
+        "the code block. The code block must be the ONLY content in your response."
+    ),
+}
+
+
+def _detect_model_family(analysis_cfg: Any) -> str:
+    """Return the model family, auto-detecting from api_base when set to 'auto'."""
+    family = analysis_cfg.model_family.lower().strip()
+    if family and family != "auto":
+        return family
+
+    import urllib.parse
+
+    domain = urllib.parse.urlparse(analysis_cfg.api_base).netloc.lower()
+    if "kimi.com" in domain:
+        return "kimi"
+    if "deepseek" in domain:
+        return "deepseek"
+    if "openai" in domain:
+        return "openai"
+    if "anthropic" in domain:
+        return "anthropic"
+    return "unknown"
+
+
+def _build_system_template(analysis_cfg: Any, rule_path: str) -> str:
+    """Build the system prompt with optional model-family suffix."""
+    base = CONTRASTIVE_SYSTEM_TEMPLATE.replace("{{RULE_FILE_PATH}}", rule_path)
+
+    # User-provided suffix takes highest priority
+    if getattr(analysis_cfg, "system_prompt_suffix", ""):
+        return base + "\n\n" + analysis_cfg.system_prompt_suffix
+
+    # Fall back to default suffix for the detected model family
+    family = _detect_model_family(analysis_cfg)
+    suffix = _DEFAULT_SUFFIXES.get(family, "")
+    if suffix:
+        return base + suffix
+
+    return base
+
+
+# ---------------------------------------------------------------------------
 # Main entry point
 # ---------------------------------------------------------------------------
 
@@ -189,8 +240,8 @@ def run(
     except Exception:
         pass
 
-    # Inject the instance-specific file path into the system prompt
-    system_template = CONTRASTIVE_SYSTEM_TEMPLATE.replace("{{RULE_FILE_PATH}}", rule_path)
+    # Build model-family-aware system prompt
+    system_template = _build_system_template(analysis_cfg, rule_path)
 
     agent = build_default_agent(
         DefaultAgent,

@@ -61,6 +61,8 @@ def _infer_litellm_prefix(model_name: str, api_base: str) -> str:
         return f"openai/{model_name}"
     if "anthropic" in domain:
         return f"anthropic/{model_name}"
+    if "kimi.com" in domain:
+        return f"anthropic/{model_name}"
 
     logger.warning(
         "Could not infer litellm provider prefix for api_base=%s. "

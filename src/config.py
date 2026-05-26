@@ -138,6 +138,13 @@ class AnalysisConfig:
     output_dir: str = "./output/analysis_results"
     parallel: int = 1
     enable_review: bool = False
+    # Model family for provider-aware prompt tuning.
+    # Valid values: "auto", "deepseek", "kimi", "openai", "anthropic".
+    # When "auto", the family is inferred from api_base.
+    model_family: str = "auto"
+    # Optional suffix appended to the contrastive agent's system prompt.
+    # Leave empty to use the default suffix for the detected model_family.
+    system_prompt_suffix: str = ""
 
 
 @dataclass(frozen=True)
@@ -413,6 +420,8 @@ def _build_analysis_config(data: dict[str, Any]) -> AnalysisConfig:
         output_dir=_get_str(data, "output_dir", "./output/analysis_results"),
         parallel=_validate_positive_int("analysis.parallel", _get_int(data, "parallel", 1)),
         enable_review=_get_bool(data, "enable_review", False),
+        model_family=_get_str(data, "model_family", "auto"),
+        system_prompt_suffix=_get_str(data, "system_prompt_suffix", ""),
     )
 
 

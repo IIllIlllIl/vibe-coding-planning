@@ -185,9 +185,16 @@ def _call_litellm(
     """Call LLM via litellm.completion."""
     import litellm
 
-    # DeepSeek models need the deepseek/ prefix
-    if "/" not in model_name and "deepseek" in api_base:
-        model_name = f"deepseek/{model_name}"
+    # Add litellm provider prefix when missing (deepseek, openai, anthropic, kimi)
+    if "/" not in model_name:
+        import urllib.parse
+        domain = urllib.parse.urlparse(api_base).netloc.lower()
+        if "deepseek" in domain:
+            model_name = f"deepseek/{model_name}"
+        elif "openai" in domain:
+            model_name = f"openai/{model_name}"
+        elif "anthropic" in domain or "kimi.com" in domain:
+            model_name = f"anthropic/{model_name}"
 
     logger.info("Calling LLM for aggregation: model=%s rules_len=%d", model_name, len(user_prompt))
 

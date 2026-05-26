@@ -131,3 +131,100 @@ class TestSystemTemplate:
         rendered = CONTRASTIVE_SYSTEM_TEMPLATE.replace("{{RULE_FILE_PATH}}", rule_path)
         assert rule_path in rendered
         assert "{{RULE_FILE_PATH}}" not in rendered
+
+
+class TestModelFamilyDetection:
+    """Tests for _detect_model_family and _build_system_template."""
+
+    def test_detect_kimi_from_api_base(self):
+        from src.analysis.contrastive_agent import _detect_model_family
+        from src.config import AnalysisConfig
+
+        cfg = AnalysisConfig(
+            model="x", api_base="https://api.kimi.com/coding/", api_key_env="X"
+        )
+        assert _detect_model_family(cfg) == "kimi"
+
+    def test_detect_deepseek_from_api_base(self):
+        from src.analysis.contrastive_agent import _detect_model_family
+        from src.config import AnalysisConfig
+
+        cfg = AnalysisConfig(
+            model="x", api_base="https://api.deepseek.com", api_key_env="X"
+        )
+        assert _detect_model_family(cfg) == "deepseek"
+
+    def test_explicit_family_overrides_auto(self):
+        from src.analysis.contrastive_agent import _detect_model_family
+        from src.config import AnalysisConfig
+
+        cfg = AnalysisConfig(
+            model="x",
+            api_base="https://api.deepseek.com",
+            api_key_env="X",
+            model_family="kimi",
+        )
+        assert _detect_model_family(cfg) == "kimi"
+
+    def test_auto_unknown_domain(self):
+        from src.analysis.contrastive_agent import _detect_model_family
+        from src.config import AnalysisConfig
+
+        cfg = AnalysisConfig(
+            model="x", api_base="https://unknown.example.com", api_key_env="X"
+        )
+        assert _detect_model_family(cfg) == "unknown"
+
+
+class TestBuildSystemTemplate:
+    """Tests for _build_system_template model-family suffix injection."""
+
+    def test_kimi_suffix_injected(self):
+        from src.analysis.contrastive_agent import _build_system_template
+        from src.config import AnalysisConfig
+
+        cfg = AnalysisConfig(
+            model="x", api_base="https://api.kimi.com/coding/", api_key_env="X"
+        )
+        st = _build_system_template(cfg, "/tmp/rule_test.md")
+        assert "CRITICAL FORMAT RULE" in st
+        assert "exactly ONE bash code block" in st
+
+    def test_deepseek_no_suffix(self):
+        from src.analysis.contrastive_agent import _build_system_template
+        from src.config import AnalysisConfig
+
+        cfg = AnalysisConfig(
+            model="x", api_base="https://api.deepseek.com", api_key_env="X"
+        )
+        st = _build_system_template(cfg, "/tmp/rule_test.md")
+        assert "CRITICAL FORMAT RULE" not in st
+
+    def test_custom_suffix_overrides_default(self):
+        from src.analysis.contrastive_agent import _build_system_template
+        from src.config import AnalysisConfig
+
+        cfg = AnalysisConfig(
+            model="x",
+            api_base="https://api.kimi.com/coding/",
+            api_key_env="X",
+            model_family="kimi",
+            system_prompt_suffix="[CUSTOM CONSTRAINT]",
+        )
+        st = _build_system_template(cfg, "/tmp/rule_test.md")
+        assert "[CUSTOM CONSTRAINT]" in st
+        assert "CRITICAL FORMAT RULE" not in st
+
+    def test_custom_suffix_empty_uses_default(self):
+        from src.analysis.contrastive_agent import _build_system_template
+        from src.config import AnalysisConfig
+
+        cfg = AnalysisConfig(
+            model="x",
+            api_base="https://api.kimi.com/coding/",
+            api_key_env="X",
+            model_family="kimi",
+            system_prompt_suffix="",
+        )
+        st = _build_system_template(cfg, "/tmp/rule_test.md")
+        assert "CRITICAL FORMAT RULE" in st

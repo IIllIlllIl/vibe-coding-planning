@@ -436,6 +436,12 @@ analysis:
   # Contrastive rule extraction agent configuration.
   # Independent from the main pipeline so analysis can run against a
   # different provider while the pipeline uses DeepSeek.
+  #
+  # To switch to Kimi Code API, change to:
+  #   model: "anthropic/claude-sonnet-4-20250514"
+  #   api_base: "https://api.kimi.com/coding/"
+  #   api_key_env: "MOONSHOT_API_KEY"
+  #   model_family: "kimi"
   model: "deepseek-v4-flash"
   api_base: "https://api.deepseek.com"
   api_key_env: "DEEPSEEK_API_KEY"
@@ -444,3 +450,9 @@ analysis:
   output_dir: "./output/analysis_results"
   parallel: 1
   enable_review: false
+  # Model family for provider-aware prompt tuning.
+  # "auto" detects from api_base; explicit values: "deepseek", "kimi", "openai", "anthropic".
+  model_family: "auto"
+  # Optional custom suffix appended to the contrastive agent system prompt.
+  # When empty, the default suffix for the detected model_family is used.
+  system_prompt_suffix: ""
