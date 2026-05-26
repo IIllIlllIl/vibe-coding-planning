@@ -1,5 +1,7 @@
 """Tests for src/evaluator/swe_evaluator.py."""
 
+import json as json_mod
+from pathlib import Path
 from unittest.mock import patch
 
 import pytest
@@ -156,6 +158,57 @@ class TestDeriveImageName:
         assert "__" not in result
         assert "_1776_" in result
         assert result == "swebench/sweb.eval.x86_64.pandas-dev_1776_pandas-1234:latest"
+
+
+class TestEvaluateCompletedFalse:
+    @patch("swebench.harness.run_evaluation.run_instance")
+    @patch("swebench.harness.test_spec.test_spec.make_test_spec")
+    @patch("docker.from_env")
+    def test_completed_false_returns_failure(self, mock_docker, mock_make_spec, mock_run_instance, instance_info):
+        mock_run_instance.return_value = {"completed": False, "resolved": False}
+
+        result = swe_evaluator.evaluate("diff content", instance_info)
+
+        assert result["resolved"] is False
+        assert "completed=False" in result["stderr"]
+        assert result["error_info"] is not None
+
+
+class TestEvaluateReport:
+    @patch("swebench.harness.run_evaluation.run_instance")
+    @patch("swebench.harness.test_spec.test_spec.make_test_spec")
+    @patch("docker.from_env")
+    def test_reads_report_json(self, mock_docker, mock_make_spec, mock_run_instance, instance_info):
+        import tempfile
+        with tempfile.TemporaryDirectory() as tmpdir:
+            log_dir = Path(tmpdir) / "logs" / "run_evaluation" / "eval_astropy__astropy-14539" / "plan-code-test" / "astropy__astropy-14539"
+            log_dir.mkdir(parents=True)
+            report = {
+                "astropy__astropy-14539": {
+                    "test_output": "test passed",
+                    "error": "",
+                }
+            }
+            (log_dir / "report.json").write_text(json_mod.dumps(report), encoding="utf-8")
+
+            with patch("src.evaluator.swe_evaluator.Path") as mock_path_cls:
+                mock_path_cls.return_value.resolve.return_value = log_dir
+
+                mock_run_instance.return_value = {"completed": True, "resolved": True}
+                result = swe_evaluator.evaluate("diff", instance_info)
+
+                assert result["resolved"] is True
+
+
+class TestImportSwebench:
+    def test_import_swebench_success(self):
+        swebench = swe_evaluator._import_swebench()
+        assert swebench is not None
+
+    def test_import_swebench_failure(self):
+        with patch("builtins.__import__", side_effect=ImportError("No module named 'swebench'")):
+            with pytest.raises(FatalError, match="swebench"):
+                swe_evaluator._import_swebench()
 
 
 class TestMissingDependency:

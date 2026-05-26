@@ -83,6 +83,8 @@ class PromptConfig:
     code_instance_template: str = ""
     reflection_prompt_template: str = ""
     reflect_instance_template: str = ""
+    check_prompt: str = ""
+    check_instance_template: str = ""
     nrpv_block: str = ""
 
 
@@ -122,6 +124,23 @@ class EvaluatorConfig:
 
 
 @dataclass(frozen=True)
+class CheckerConfig:
+    """Configuration for the plan checker agent.
+
+    The checker validates generated plans against a rule set before
+    code execution. It can use a different (typically cheaper) model
+    than the main pipeline.
+    """
+
+    enabled: bool = False
+    rules_path: str = "./output/analysis_pro/aggregated_rules.json"
+    model: str = "deepseek-v4-flash"
+    api_base: str = "https://api.deepseek.com"
+    max_steps: int = 50
+    cost_limit: float = 1.0
+
+
+@dataclass(frozen=True)
 class AnalysisConfig:
     """Configuration for the contrastive rule extraction analysis.
 
@@ -156,6 +175,7 @@ class Config:
     docker: DockerConfig = field(default_factory=DockerConfig)
     agent: AgentConfig = field(default_factory=AgentConfig)
     evaluator: EvaluatorConfig = field(default_factory=EvaluatorConfig)
+    checker: CheckerConfig = field(default_factory=CheckerConfig)
     analysis: AnalysisConfig = field(default_factory=AnalysisConfig)
     api_key: str = ""
     analysis_api_key: str = ""
@@ -367,6 +387,8 @@ def _build_prompt_config(data: dict[str, Any]) -> PromptConfig:
         code_instance_template=_get_str(data, "code_instance_template", ""),
         reflection_prompt_template=_get_str(data, "reflection_prompt_template", ""),
         reflect_instance_template=_get_str(data, "reflect_instance_template", ""),
+        check_prompt=_get_str(data, "check_prompt", ""),
+        check_instance_template=_get_str(data, "check_instance_template", ""),
         nrpv_block=_get_str(data, "nrpv_block", ""),
     )
 
@@ -393,6 +415,27 @@ def _build_evaluator_config(data: dict[str, Any]) -> EvaluatorConfig:
     """Build EvaluatorConfig from a dict."""
     return EvaluatorConfig(
         timeout=_validate_positive_int("evaluator.timeout", _get_int(data, "timeout", 1800)),
+    )
+
+
+def _build_checker_config(data: dict[str, Any]) -> CheckerConfig:
+    """Build CheckerConfig from a dict."""
+    import urllib.parse
+
+    api_base = _get_str(data, "api_base", "https://api.deepseek.com")
+    parsed = urllib.parse.urlparse(api_base)
+    if not parsed.scheme or not parsed.netloc:
+        raise FatalError(
+            f"Invalid checker.api_base URL: {api_base}. Must include scheme and host."
+        )
+
+    return CheckerConfig(
+        enabled=_get_bool(data, "enabled", False),
+        rules_path=_get_str(data, "rules_path", "./output/analysis_pro/aggregated_rules.json"),
+        model=_get_str(data, "model", "deepseek-v4-flash"),
+        api_base=api_base,
+        max_steps=_validate_positive_int("checker.max_steps", _get_int(data, "max_steps", 50)),
+        cost_limit=_validate_non_negative_float("checker.cost_limit", _get_float(data, "cost_limit", 1.0)),
     )
 
 
@@ -455,6 +498,10 @@ def load_config(path: str | Path) -> Config:
     if not isinstance(evaluator_data, dict):
         evaluator_data = {}
 
+    checker_data = raw.get("checker", {})
+    if not isinstance(checker_data, dict):
+        checker_data = {}
+
     analysis_data = raw.get("analysis", {})
     if not isinstance(analysis_data, dict):
         analysis_data = {}
@@ -480,6 +527,7 @@ def load_config(path: str | Path) -> Config:
         docker=_build_docker_config(docker_data),
         agent=_build_agent_config(agent_data),
         evaluator=_build_evaluator_config(evaluator_data),
+        checker=_build_checker_config(checker_data),
         analysis=analysis_config,
         api_key=api_key,
         analysis_api_key=analysis_api_key,

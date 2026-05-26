@@ -57,10 +57,12 @@ ANALYSIS_TMUX_SESSION = "pct-analysis"
 AGGREGATION_TMUX_SESSION = "pct-aggregation"
 REVIEW_TMUX_SESSION = "pct-review"
 REPAIR_TMUX_SESSION = "pct-repair"
+CHECKER_TMUX_SESSION = "pct-checker"
 MASTER_LOG = Path("logs/batch_run.log")
 ANALYSIS_LOG = Path("logs/analysis_run.log")
 AGGREGATION_LOG = Path("logs/aggregation_run.log")
 REVIEW_LOG = Path("logs/review_run.log")
+CHECKER_LOG = Path("logs/checker_run.log")
 WATCHDOG_LOG = Path("logs/watchdog.log")
 STATE_FILE = Path("output/.watchdog_state.json")
 
@@ -150,6 +152,8 @@ class WatchdogState:
     rework_queue: list[str] = None      # instance_ids that need rework
     rework_attempts: dict[str, int] = None  # per-instance retry counter
     review_results: dict[str, dict] = None  # per-instance quality scores
+    # Checker evaluation phase tracking (Plan-Check-Code on Pro Python)
+    checker_phase: str | None = None    # None | "running" | "done"
 
     def __post_init__(self):
         if self.rework_queue is None:
@@ -184,6 +188,7 @@ class WatchdogState:
             "rework_queue": [],
             "rework_attempts": {},
             "review_results": {},
+            "checker_phase": None,
         }
         defaults.update(d)
         return cls(**defaults)
@@ -419,6 +424,79 @@ def start_aggregation(state: WatchdogState) -> None:
         logging.info("Aggregation session started successfully.")
     else:
         logging.error("Failed to start aggregation tmux session!")
+
+
+def start_checker_eval(state: WatchdogState) -> None:
+    """Start (or restart) the checker evaluation runner in a tmux session.
+
+    Runs Plan-Check-Code on SWE-bench Pro Python instances using
+    scripts/evaluate_checker.py.
+    """
+    _kill_tmux_session(CHECKER_TMUX_SESSION)
+
+    # Ensure instance list file exists
+    instances_file = Path("output/pro_python_instances.json")
+    if not instances_file.exists():
+        logging.warning("Pro Python instance list not found at %s. Generating...", instances_file)
+        _generate_pro_python_instances(instances_file)
+
+    output_dir = "./output/checker_eval/pro_python"
+    dataset = "SWE-bench/SWE-bench_Pro"
+
+    cmd = (
+        f"cd {shlex.quote(os.getcwd())} "
+        f"&& source /Users/taoran.wang/miniconda3/etc/profile.d/conda.sh "
+        f"&& conda activate mini-swe "
+        f"&& python scripts/evaluate_checker.py "
+        f"--config config.yaml "
+        f"--dataset {shlex.quote(dataset)} "
+        f"--instances {shlex.quote(str(instances_file))} "
+        f"--output {shlex.quote(output_dir)} "
+        f"2>&1 | tee -a {shlex.quote(str(CHECKER_LOG))}"
+    )
+
+    CHECKER_LOG.parent.mkdir(parents=True, exist_ok=True)
+    CHECKER_LOG.touch(exist_ok=True)
+
+    logging.info(
+        "Starting checker eval tmux session: %s (dataset=%s instances=%s)",
+        CHECKER_TMUX_SESSION,
+        dataset,
+        instances_file,
+    )
+    subprocess.run(
+        ["tmux", "new-session", "-d", "-s", CHECKER_TMUX_SESSION, "bash", "-c", cmd],
+        capture_output=True,
+        check=False,
+    )
+    time.sleep(3)
+
+    if _tmux_session_exists(CHECKER_TMUX_SESSION):
+        logging.info("Checker eval session started successfully.")
+    else:
+        logging.error("Failed to start checker eval tmux session!")
+
+
+def _generate_pro_python_instances(output_path: Path) -> None:
+    """Generate a JSON file with SWE-bench Pro Python instance IDs."""
+    try:
+        from datasets import load_dataset
+        ds = load_dataset("ScaleAI/SWE-bench_Pro", split="test")
+        python_instances = [
+            x["instance_id"] for x in ds if x.get("repo_language") == "python"
+        ]
+        output_path.parent.mkdir(parents=True, exist_ok=True)
+        output_path.write_text(
+            json.dumps(python_instances, indent=2), encoding="utf-8"
+        )
+        logging.info(
+            "Generated %s with %d Python instances", output_path, len(python_instances)
+        )
+    except Exception as exc:
+        logging.error("Failed to generate Pro Python instance list: %s", exc)
+        # Create empty file so watchdog doesn't keep retrying
+        output_path.parent.mkdir(parents=True, exist_ok=True)
+        output_path.write_text("[]", encoding="utf-8")
 
 
 def start_review(state: WatchdogState, instance_ids: list[str] | None = None) -> None:
@@ -735,6 +813,8 @@ def analyze_recent_logs(log_path: Path | None = None) -> dict:
         end_marker = "=== Review end ==="
     elif log_path.name == MASTER_LOG.name:
         end_marker = "=== Batch end ==="
+    elif log_path.name == CHECKER_LOG.name:
+        end_marker = "=== Checker eval end ==="
     else:
         end_marker = "=== Analysis end ==="
     result = {
@@ -1105,11 +1185,16 @@ def main() -> int:
     enable_review = _load_enable_review()
     logging.info("Watchdog config: enable_review=%s", enable_review)
 
-    # Determine active mode: aggregation > review > analysis > batch
-    in_aggregation = state.aggregation_phase in ("flash", "pro")
-    in_review = state.review_phase in ("reviewing", "reworking") and not in_aggregation
-    in_analysis = state.analysis_phase in ("flash", "pro") and not in_aggregation and not in_review
-    if in_aggregation:
+    # Determine active mode: checker > aggregation > review > analysis > batch
+    in_checker = state.checker_phase == "running"
+    in_aggregation = state.aggregation_phase in ("flash", "pro") and not in_checker
+    in_review = state.review_phase in ("reviewing", "reworking") and not in_aggregation and not in_checker
+    in_analysis = state.analysis_phase in ("flash", "pro") and not in_aggregation and not in_review and not in_checker
+    if in_checker:
+        active_session = CHECKER_TMUX_SESSION
+        active_log = CHECKER_LOG
+        start_fn = start_checker_eval
+    elif in_aggregation:
         active_session = AGGREGATION_TMUX_SESSION
         active_log = AGGREGATION_LOG
         start_fn = start_aggregation
@@ -1130,7 +1215,9 @@ def main() -> int:
     # (fresh launch, or resume after Mac reboot / manual watchdog restart),
     # kick off the appropriate runner before entering the watch loop.
     if state.status == "running" and not _tmux_session_exists(active_session):
-        if in_aggregation:
+        if in_checker:
+            logging.info("Cold start: launching initial checker eval session.")
+        elif in_aggregation:
             logging.info("Cold start: launching initial aggregation session (phase=%s).", state.aggregation_phase)
         elif in_review:
             logging.info("Cold start: launching initial review session (target=%s).", state.analysis_phase)
@@ -1153,8 +1240,9 @@ def main() -> int:
         if state.status == "api_cooldown":
             if cooldown_expired(state):
                 mode_name = (
-                    "aggregation" if in_aggregation else
-                    ("review" if in_review else ("analysis" if in_analysis else "batch"))
+                    "checker" if in_checker else
+                    ("aggregation" if in_aggregation else
+                    ("review" if in_review else ("analysis" if in_analysis else "batch")))
                 )
                 logging.info("API cooldown expired. Resuming %s.", mode_name)
                 state.status = "running"
@@ -1421,10 +1509,15 @@ def main() -> int:
             return 0
 
         # Re-evaluate mode every loop iteration (phase may have changed)
-        in_aggregation = state.aggregation_phase in ("flash", "pro")
-        in_review = state.review_phase in ("reviewing", "reworking") and not in_aggregation
-        in_analysis = state.analysis_phase in ("flash", "pro") and not in_aggregation and not in_review
-        if in_aggregation:
+        in_checker = state.checker_phase == "running"
+        in_aggregation = state.aggregation_phase in ("flash", "pro") and not in_checker
+        in_review = state.review_phase in ("reviewing", "reworking") and not in_aggregation and not in_checker
+        in_analysis = state.analysis_phase in ("flash", "pro") and not in_aggregation and not in_review and not in_checker
+        if in_checker:
+            active_session = CHECKER_TMUX_SESSION
+            active_log = CHECKER_LOG
+            start_fn = start_checker_eval
+        elif in_aggregation:
             active_session = AGGREGATION_TMUX_SESSION
             active_log = AGGREGATION_LOG
             start_fn = start_aggregation
@@ -1444,7 +1537,10 @@ def main() -> int:
         session_alive = _tmux_session_exists(active_session)
 
         if not session_alive:
-            if in_aggregation:
+            if in_checker:
+                end_marker = "=== Checker eval end ==="
+                mode_label = "Checker"
+            elif in_aggregation:
                 end_marker = "=== Aggregation end ==="
                 mode_label = "Aggregation"
             elif in_review:
@@ -1479,7 +1575,7 @@ def main() -> int:
                 enter_api_cooldown(state, "DeepSeek API transient error (rate-limit/network/5xx).")
                 continue
 
-            if not in_aggregation and not in_analysis and not in_review and log_analysis["docker_down"]:
+            if not in_checker and not in_aggregation and not in_analysis and not in_review and log_analysis["docker_down"]:
                 state.docker_retry_count += 1
                 if state.docker_retry_count > DOCKER_MAX_RETRIES:
                     enter_fatal(state, f"Docker daemon unreachable after {DOCKER_MAX_RETRIES} retries.")
@@ -1493,8 +1589,28 @@ def main() -> int:
                 time.sleep(wait_sec)
                 continue
 
+            # Fallback for checker: if results.json exists, treat as complete
+            # even if the end marker wasn't captured in the log yet.
+            if in_checker:
+                checker_results = Path("output/checker_eval/pro_python/results.json")
+                if checker_results.exists():
+                    try:
+                        data = json.loads(checker_results.read_text(encoding="utf-8"))
+                        if data.get("metrics", {}).get("total", 0) > 0:
+                            logging.info("Checker eval complete (results.json found).")
+                            state.checker_phase = "done"
+                            save_state(state)
+                            continue
+                    except Exception:
+                        pass
+
             if log_analysis["batch_completed"]:
-                if in_aggregation:
+                if in_checker:
+                    logging.info("Checker eval ended normally (%s).", end_marker)
+                    state.checker_phase = "done"
+                    save_state(state)
+                    continue
+                elif in_aggregation:
                     # Handled in the dedicated aggregation block above;
                     # this path should rarely be reached.
                     logging.info("Aggregation ended normally (%s).", end_marker)
@@ -1570,7 +1686,9 @@ def main() -> int:
 
         # Session is alive — check for hang
         if is_log_stale(active_log):
-            if in_aggregation:
+            if in_checker:
+                hang_label = "Checker"
+            elif in_aggregation:
                 hang_label = "Aggregation"
             elif in_review:
                 hang_label = "Review"
@@ -1595,21 +1713,24 @@ def main() -> int:
         else:
             state.completed = max(disk_completed, log_completed)
 
-        if not in_analysis and not in_review and state.total_instances > 0 and state.completed >= state.total_instances:
+        if not in_checker and not in_analysis and not in_review and state.total_instances > 0 and state.completed >= state.total_instances:
             logging.info("All %d instances appear complete.", state.total_instances)
             state.status = "completed"
             save_state(state)
             continue
 
         # Periodic Docker cleanup (only relevant during batch)
-        if not in_analysis and not in_review:
+        if not in_checker and not in_analysis and not in_review:
             check_counter = getattr(main, "_check_counter", 0)
             check_counter += 1
             main._check_counter = check_counter
             if check_counter % DOCKER_PRUNE_INTERVAL_CHECKS == 0:
                 cleanup_docker()
 
-        if in_aggregation:
+        if in_checker:
+            phase_label = "checker"
+            completed = 0  # Checker progress tracked externally via results.json
+        elif in_aggregation:
             phase_label = f"aggregation({state.aggregation_phase})"
             completed = 0  # Aggregation progress not tracked via state fields
         elif in_review:

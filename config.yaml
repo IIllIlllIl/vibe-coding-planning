@@ -20,7 +20,7 @@ system:
   #   run1, run2, run3           — sequentially numbered exploration runs
   #   run3_level1_n3_on_run1     — variation on existing sample set
   # Allowed characters: [A-Za-z0-9_.-]. CLI flag --batch-id overrides this value.
-  batch_id: "run4-full-500"
+  batch_id: "checker-dryrun"
 
   # Instance list is populated from output/SWE-bench_Verified/<batch_id>/sampled_instances.json
   # by scripts/run_batch_verified.sh. Leave empty here; the batch script reads the JSON manifest.
@@ -408,6 +408,98 @@ prompts:
     echo COMPLETE_TASK_AND_SUBMIT_FINAL_OUTPUT && cat /tmp/plan.md
     ```
 
+  # ============================================================
+  # Check agent — system_template
+  # The check agent evaluates whether a plan follows the rule set.
+  # It reads the plan and rules, then outputs a JSON assessment.
+  # ============================================================
+  check_prompt: |
+    You are a plan quality checker. Your task is to evaluate whether a software engineering plan follows a set of best-practice rules extracted from successful bug-fix cases.
+
+    You will be given:
+    1. A set of universal rules that apply to all plans
+    2. A set of conditional rules grouped by observable conditions
+    3. The task description (PR description)
+    4. The plan to evaluate
+
+    For each applicable rule, determine whether the plan satisfies it or violates it.
+    A rule is "applicable" if its condition matches the task description. If a rule's condition does not match (e.g., the rule is about numpy but the task is about Django), ignore it.
+
+    A plan PASSES if it does not violate any applicable rule.
+    A plan FAILS if it violates one or more applicable rules.
+
+    Your response must contain exactly ONE bash code block with ONE command (or commands connected with && or ||).
+    Include a THOUGHT section before your command where you explain your reasoning process.
+    Format your response as shown in <format_example>.
+
+    <format_example>
+    THOUGHT: I have read the plan and rules. The plan addresses all applicable rules, so it should pass.
+
+    ```bash
+    cat <<'EOF' > /tmp/check_result.json
+    {
+      "passed": true,
+      "violations": [],
+      "overall_assessment": "The plan follows all applicable rules."
+    }
+    EOF
+    ```
+    </format_example>
+
+    Failure to follow these rules will cause your response to be rejected.
+
+    ## Important Boundaries
+    - MODIFY: /tmp (only for the check result file at /tmp/check_result.json)
+    - DO NOT MODIFY: any file under /testbed
+
+    ## Workflow
+    Read the rules and the plan carefully. When ready, write the JSON assessment to
+    /tmp/check_result.json using a heredoc:
+
+    ```bash
+    cat <<'EOF' > /tmp/check_result.json
+    <json content>
+    EOF
+    ```
+
+    After /tmp/check_result.json is written, your NEXT response MUST be exactly:
+
+    ```bash
+    echo COMPLETE_TASK_AND_SUBMIT_FINAL_OUTPUT && cat /tmp/check_result.json
+    ```
+
+    Do not run other commands after submitting.
+
+    The JSON object must use this exact schema:
+    {
+      "passed": true/false,
+      "violations": [
+        {
+          "rule": "the full rule text",
+          "reasoning": "why the plan violates this rule"
+        }
+      ],
+      "overall_assessment": "brief summary of plan quality"
+    }
+
+    If the plan passes all applicable rules, return passed=true and an empty violations list.
+    Be strict: a plan that does not explicitly address a rule's concern should be considered a violation.
+
+  # ============================================================
+  # Check agent — instance_template
+  # Injects the task, plan, and formatted rules into the prompt.
+  # ============================================================
+  check_instance_template: |
+    <pr_description>
+    Consider the following PR description:
+    {{task}}
+    </pr_description>
+
+    Plan to evaluate:
+    {{plan}}
+
+    {{rules_text}}
+
 docker:
   image_builder_script: "./scripts/build_docker_images.sh"
   workdir: "/testbed"
@@ -456,3 +548,15 @@ analysis:
   # Optional custom suffix appended to the contrastive agent system prompt.
   # When empty, the default suffix for the detected model_family is used.
   system_prompt_suffix: ""
+
+checker:
+  # Plan checker agent configuration.
+  # When enabled=true, the pipeline inserts a check step between plan
+  # generation and code execution. The checker validates the plan against
+  # the aggregated rule set.
+  enabled: true
+  rules_path: "./output/analysis_pro/aggregated_rules.json"
+  model: "deepseek-v4-flash"
+  api_base: "https://api.deepseek.com"
+  max_steps: 50
+  cost_limit: 1.0

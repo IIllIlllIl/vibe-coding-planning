@@ -543,3 +543,65 @@ class TestAnalysisConfig:
         _write_test_config(filepath, data)
         config = load_config(filepath)
         assert config.analysis.system_prompt_suffix == "Always use bash."
+
+
+class TestCheckerConfig:
+    def test_default_disabled(self, monkeypatch, tmp_path: Path):
+        monkeypatch.setenv("DEEPSEEK_API_KEY", "test-key")
+        filepath = tmp_path / "empty.yaml"
+        _write_test_config(filepath)
+        config = load_config(filepath)
+        assert config.checker.enabled is False
+        assert config.checker.model == "deepseek-v4-flash"
+        assert config.checker.max_steps == 50
+
+    def test_explicit_enabled(self, monkeypatch, tmp_path: Path):
+        monkeypatch.setenv("DEEPSEEK_API_KEY", "test-key")
+        data = {"checker": {"enabled": True, "model": "deepseek-v4-pro", "max_steps": 100}}
+        filepath = tmp_path / "checker.yaml"
+        _write_test_config(filepath, data)
+        config = load_config(filepath)
+        assert config.checker.enabled is True
+        assert config.checker.model == "deepseek-v4-pro"
+        assert config.checker.max_steps == 100
+
+    def test_custom_rules_path(self, monkeypatch, tmp_path: Path):
+        monkeypatch.setenv("DEEPSEEK_API_KEY", "test-key")
+        data = {"checker": {"rules_path": "./custom/rules.json"}}
+        filepath = tmp_path / "rules.yaml"
+        _write_test_config(filepath, data)
+        config = load_config(filepath)
+        assert config.checker.rules_path == "./custom/rules.json"
+
+    def test_cost_limit_validation(self, monkeypatch, tmp_path: Path):
+        monkeypatch.setenv("DEEPSEEK_API_KEY", "test-key")
+        data = {"checker": {"cost_limit": -1.0}}
+        filepath = tmp_path / "neg_cost.yaml"
+        _write_test_config(filepath, data)
+        config = load_config(filepath)
+        assert config.checker.cost_limit == 0.0
+
+    def test_max_steps_zero_raises(self, monkeypatch, tmp_path: Path):
+        monkeypatch.setenv("DEEPSEEK_API_KEY", "test-key")
+        data = {"checker": {"max_steps": 0}}
+        filepath = tmp_path / "zero_steps.yaml"
+        _write_test_config(filepath, data)
+        with pytest.raises(FatalError):
+            load_config(filepath)
+
+    def test_invalid_api_base_raises(self, monkeypatch, tmp_path: Path):
+        monkeypatch.setenv("DEEPSEEK_API_KEY", "test-key")
+        data = {"checker": {"api_base": "not-a-url"}}
+        filepath = tmp_path / "bad_api.yaml"
+        _write_test_config(filepath, data)
+        with pytest.raises(FatalError):
+            load_config(filepath)
+
+    def test_prompts_check_loaded(self, monkeypatch, tmp_path: Path):
+        monkeypatch.setenv("DEEPSEEK_API_KEY", "test-key")
+        data = {"prompts": {"check_prompt": "You are a checker.", "check_instance_template": "Task: {{task}}"}}
+        filepath = tmp_path / "prompts.yaml"
+        _write_test_config(filepath, data)
+        config = load_config(filepath)
+        assert config.prompts.check_prompt == "You are a checker."
+        assert config.prompts.check_instance_template == "Task: {{task}}"
