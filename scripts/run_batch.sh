@@ -1,18 +1,13 @@
 #!/usr/bin/env bash
-# Sequentially run sampled SWE-bench Verified instances.
+# Unified batch runner for SWE-bench Verified and Pro instances.
 #
-# Reads system.batch_id from config.yaml, then reads instance IDs from
-# output/SWE-bench_Verified/<batch_id>/sampled_instances.json. Skips any
-# whose result.json already exists (idempotent / resumable across manual
-# restarts), and runs the rest one at a time using config.yaml's n.
-#
-# Bash 3.2 compatible (macOS /bin/bash). Tested patterns:
-#   * No `mapfile` / `readarray` (bash 4+ only).
-#   * No `${ARR[@]}` on possibly-empty arrays under `set -u`.
+# Auto-detects dataset from config.yaml (system.dataset), derives instance
+# source and output paths automatically.
 #
 # Usage:
-#   bash scripts/run_batch_verified.sh           # real run
-#   bash scripts/run_batch_verified.sh --dry-run # list SKIP/RUN, no pipeline calls
+#   bash scripts/run_batch.sh           # real run
+#   bash scripts/run_batch.sh --dry-run # list SKIP/RUN, no pipeline calls
+#   bash scripts/run_batch.sh --instances FILE  # override instance list
 #
 # Outputs:
 #   logs/batch_run.log         - master log (status + duration per instance)
@@ -20,9 +15,24 @@
 set -uo pipefail
 
 DRY_RUN=0
-if [[ "${1:-}" == "--dry-run" ]]; then
-  DRY_RUN=1
-fi
+INSTANCE_FILE_OVERRIDE=""
+
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    --dry-run)
+      DRY_RUN=1
+      shift
+      ;;
+    --instances)
+      INSTANCE_FILE_OVERRIDE="$2"
+      shift 2
+      ;;
+    *)
+      echo "Unknown option: $1" >&2
+      exit 1
+      ;;
+  esac
+done
 
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$REPO_ROOT"
@@ -32,10 +42,7 @@ PER_INSTANCE_LOG_DIR="logs/batch"
 mkdir -p "$PER_INSTANCE_LOG_DIR"
 
 # ---------------------------------------------------------------------------
-# Activate conda env. Always activate (dry-run also validates this path so
-# we know it will work for the real run). Hardcoded base path verified
-# against `conda info --base` on this machine (/Users/taoran.wang/miniconda3);
-# fail loudly if the layout has changed.
+# Activate conda env
 # ---------------------------------------------------------------------------
 CONDA_BASE="/Users/taoran.wang/miniconda3"
 CONDA_HOOK="$CONDA_BASE/etc/profile.d/conda.sh"
@@ -48,20 +55,14 @@ fi
 source "$CONDA_HOOK"
 conda activate mini-swe || { echo "ERROR: failed to activate conda env mini-swe" >&2; exit 1; }
 
-# Sanity: required packages must be importable
 python -c "import minisweagent, swebench" 2>/dev/null \
   || { echo "ERROR: minisweagent/swebench not importable in active env" >&2; exit 1; }
 
 # ---------------------------------------------------------------------------
-# Read batch_id from config.yaml. Results are scoped per-batch:
-#   output/SWE-bench_Verified/<BATCH_ID>/<INSTANCE>/result.json
-# The sample file (list of instances for this batch) is also batch-scoped so
-# re-running with a new batch_id naturally targets a different set without
-# editing this script. Falls back to 'default' is NOT done — the loader
-# requires batch_id to be non-empty (FatalError otherwise), so we fail fast
-# here too.
+# Read batch config from config.yaml
 # ---------------------------------------------------------------------------
-BATCH_ID=$(python -c "
+read -r BATCH_ID DATASET DATASET_SHORT \
+  < <(python -c "
 import sys, yaml
 try:
     cfg = yaml.safe_load(open('config.yaml'))
@@ -70,49 +71,81 @@ try:
     if not bid:
         sys.stderr.write('ERROR: system.batch_id is empty in config.yaml\n')
         sys.exit(2)
-    print(bid)
+    dataset = (cfg.get('system') or {}).get('dataset', 'SWE-bench/SWE-bench_Verified')
+    dataset_short = dataset.split('/')[-1]
+    print(bid, dataset, dataset_short)
 except Exception as e:
-    sys.stderr.write(f'ERROR: failed to read system.batch_id from config.yaml: {e}\n')
+    sys.stderr.write(f'ERROR: failed to read config: {e}\n')
     sys.exit(2)
 ") || exit 1
 
-SAMPLE_FILE="output/SWE-bench_Verified/$BATCH_ID/sampled_instances.json"
-if [[ ! -f "$SAMPLE_FILE" ]]; then
-  echo "ERROR: sample file not found: $SAMPLE_FILE" >&2
-  echo "       (expected manifest for batch_id=$BATCH_ID)" >&2
+# ---------------------------------------------------------------------------
+# Determine instance list file
+# ---------------------------------------------------------------------------
+if [[ -n "$INSTANCE_FILE_OVERRIDE" ]]; then
+  INSTANCE_FILE="$INSTANCE_FILE_OVERRIDE"
+else
+  # Verified: batch-scoped sample file
+  if [[ "$DATASET" == *"Verified"* ]]; then
+    INSTANCE_FILE="output/$DATASET_SHORT/$BATCH_ID/sampled_instances.json"
+  # Pro: use ansible-only subset (Mac ARM compatible), fallback to python
+  elif [[ "$DATASET" == *"Pro"* ]]; then
+    if [[ -f "pro_ansible_instances.json" ]]; then
+      INSTANCE_FILE="pro_ansible_instances.json"
+    elif [[ -f "pro_python_instances.json" ]]; then
+      INSTANCE_FILE="pro_python_instances.json"
+    else
+      echo "ERROR: No Pro instance list found (tried pro_ansible_instances.json, pro_python_instances.json)" >&2
+      exit 1
+    fi
+  else
+    echo "ERROR: Unknown dataset '$DATASET'. Cannot determine instance source." >&2
+    exit 1
+  fi
+fi
+
+if [[ ! -f "$INSTANCE_FILE" ]]; then
+  echo "ERROR: instance file not found: $INSTANCE_FILE" >&2
   exit 1
 fi
 
-# DEEPSEEK_API_KEY only matters for real runs (pipeline calls the LLM).
+# DEEPSEEK_API_KEY only matters for real runs
 if [[ $DRY_RUN -eq 0 && -z "${DEEPSEEK_API_KEY:-}" ]]; then
   echo "ERROR: DEEPSEEK_API_KEY not set" >&2
   exit 1
 fi
 
 # ---------------------------------------------------------------------------
-# Read instance IDs (bash 3.2 compatible: while-read into array).
-# Use the ambient python (system or active conda) — only stdlib needed.
+# Read instance IDs (bash 3.2 compatible, handles both array and object formats)
 # ---------------------------------------------------------------------------
 INSTANCES=()
 while IFS= read -r line; do
   [[ -n "$line" ]] && INSTANCES+=("$line")
 done < <(python -c "
 import json
-with open('$SAMPLE_FILE') as f:
-    for x in json.load(f)['instances']:
+with open('$INSTANCE_FILE') as f:
+    data = json.load(f)
+    # Handle {'instances': [...]} (Verified format) or [...] (Pro format)
+    if isinstance(data, dict):
+        ids = data.get('instances', [])
+    elif isinstance(data, list):
+        ids = data
+    else:
+        ids = []
+    for x in ids:
         print(x)
 ")
 
 TOTAL=${#INSTANCES[@]}
 if [[ $TOTAL -eq 0 ]]; then
-  echo "ERROR: instance list is empty (parse failure?)" >&2
+  echo "ERROR: instance list is empty (parse failure?) from $INSTANCE_FILE" >&2
   exit 1
 fi
 
 if [[ $DRY_RUN -eq 1 ]]; then
-  echo "[DRY-RUN] $TOTAL instances loaded from $SAMPLE_FILE"
+  echo "[DRY-RUN] $TOTAL instances loaded from $INSTANCE_FILE"
 fi
-echo "[$(date '+%Y-%m-%d %H:%M:%S')] === Batch start: batch_id=$BATCH_ID  $TOTAL instances (dry_run=$DRY_RUN) ===" \
+echo "[$(date '+%Y-%m-%d %H:%M:%S')] === Batch start: dataset=$DATASET batch_id=$BATCH_ID $TOTAL instances (dry_run=$DRY_RUN) ===" \
   | tee -a "$MASTER_LOG"
 
 # ---------------------------------------------------------------------------
@@ -121,7 +154,7 @@ echo "[$(date '+%Y-%m-%d %H:%M:%S')] === Batch start: batch_id=$BATCH_ID  $TOTAL
 i=0
 for INSTANCE in "${INSTANCES[@]}"; do
   i=$((i + 1))
-  RESULT_FILE="output/SWE-bench_Verified/$BATCH_ID/$INSTANCE/result.json"
+  RESULT_FILE="output/$DATASET_SHORT/$BATCH_ID/$INSTANCE/result.json"
 
   if [[ -f "$RESULT_FILE" ]]; then
     echo "[$(date '+%Y-%m-%d %H:%M:%S')] [$i/$TOTAL] SKIP $INSTANCE (result.json exists)" \
@@ -140,8 +173,6 @@ for INSTANCE in "${INSTANCES[@]}"; do
   echo "[$(date '+%Y-%m-%d %H:%M:%S')] [$i/$TOTAL] START $INSTANCE -> $PER_LOG" \
     | tee -a "$MASTER_LOG"
 
-  # Run the pipeline. n is taken from config.yaml (currently 3); we do NOT
-  # pass --n so the config remains the single source of truth.
   python -m src.main --instance "$INSTANCE" --config config.yaml \
     > "$PER_LOG" 2>&1
   RC=$?

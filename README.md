@@ -186,10 +186,10 @@ output/checker_eval/<run_id>/
 │   ├── requirement-document.md    # 需求文档
 │   └── architecture.md            # 架构文档
 ├── scripts/
-│   ├── quickstart.sh              # 一键运行脚本
-│   ├── run_batch_verified.sh      # Verified 批量运行
+│   ├── run_batch.sh               # 统一批量运行脚本（Verified / Pro 自动识别）
 │   ├── run_analysis.sh            # 对比分析批量运行
 │   ├── evaluate_checker.py        # 检查器评估批量运行
+│   ├── dryrun_checker.py          # 检查器 dry-run 工具
 │   └── long_run_watchdog.py       # 长时无人值守监控
 ├── src/
 │   ├── main.py                    # 入口程序
@@ -236,7 +236,7 @@ output/checker_eval/<run_id>/
 - **Conda**: `mini-swe` 环境（Python 3.12，通过 `conda activate mini-swe` 激活）
 - Docker 守护进程：
   - **Verified（Phase 1）**：首次评估时由 `swebench` 自动从 Docker Hub 拉取官方镜像（`swebench/sweb.eval.x86_64.<id_with_1776>:latest`），无需自建
-  - **Pro（Phase 2）**：需先执行 `scripts/build_docker_images.sh` 构建专用镜像
+  - **Pro（Phase 2）**：使用官方预构建镜像（`jefzda/sweap-images:<tag>`），无需本地构建
 - DeepSeek API Key（环境变量 `DEEPSEEK_API_KEY`）
 
 ## 开发状态

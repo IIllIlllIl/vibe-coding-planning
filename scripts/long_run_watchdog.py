@@ -230,6 +230,7 @@ def _init_state() -> WatchdogState:
     dataset = (cfg.get("system") or {}).get("dataset", "SWE-bench/SWE-bench_Verified")
     dataset_short = dataset.split("/")[-1]
 
+    # Try batch-scoped sample file first (Verified format)
     sample_file = Path(f"output/{dataset_short}/{batch_id}/sampled_instances.json")
     total = 0
     if sample_file.exists():
@@ -237,6 +238,22 @@ def _init_state() -> WatchdogState:
             total = len(json.loads(sample_file.read_text(encoding="utf-8"))["instances"])
         except Exception:
             pass
+
+    # Fall back to Pro instance list files
+    if total == 0:
+        for pro_file in ["pro_ansible_instances.json", "pro_python_instances.json"]:
+            pf = Path(pro_file)
+            if pf.exists():
+                try:
+                    data = json.loads(pf.read_text(encoding="utf-8"))
+                    if isinstance(data, list):
+                        total = len(data)
+                    elif isinstance(data, dict):
+                        total = len(data.get("instances", []))
+                    if total > 0:
+                        break
+                except Exception:
+                    pass
 
     # Count already-completed instances (robust to corrupt JSON)
     completed = 0
@@ -303,7 +320,7 @@ def start_batch(state: WatchdogState) -> None:
         f"cd {shlex.quote(os.getcwd())} "
         f"&& source /Users/taoran.wang/miniconda3/etc/profile.d/conda.sh "
         f"&& conda activate mini-swe "
-        f"&& bash scripts/run_batch_verified.sh"
+        f"&& bash scripts/run_batch.sh"
     )
 
     logging.info("Starting batch tmux session: %s", BATCH_TMUX_SESSION)
@@ -435,13 +452,16 @@ def start_checker_eval(state: WatchdogState) -> None:
     _kill_tmux_session(CHECKER_TMUX_SESSION)
 
     # Ensure instance list file exists
-    instances_file = Path("output/pro_python_instances.json")
+    instances_file = Path("pro_ansible_instances.json")
     if not instances_file.exists():
-        logging.warning("Pro Python instance list not found at %s. Generating...", instances_file)
+        instances_file = Path("pro_python_instances.json")
+    if not instances_file.exists():
+        logging.warning("Pro instance list not found. Generating Python list...")
+        instances_file = Path("output/pro_python_instances.json")
         _generate_pro_python_instances(instances_file)
 
     output_dir = "./output/checker_eval/pro_python"
-    dataset = "SWE-bench/SWE-bench_Pro"
+    dataset = "ScaleAI/SWE-bench_Pro"
 
     cmd = (
         f"cd {shlex.quote(os.getcwd())} "

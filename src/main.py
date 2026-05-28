@@ -160,6 +160,14 @@ def main(argv: Sequence[str] | None = None) -> int:
         logging.error("No instances specified. Use --instance or set system.instances in config.")
         return 1
 
+    # Select pipeline based on checker configuration
+    if config.checker.enabled:
+        from src.pipeline_check import run_instance as _run_instance
+        logging.info("Using Plan-Check-Code pipeline (checker enabled)")
+    else:
+        _run_instance = run_instance  # module-level default
+        logging.info("Using Plan-Code-Test pipeline (checker disabled)")
+
     logging.info("Starting plan-code-test pipeline")
     logging.info("Model: %s", config.system.model)
     logging.info("Dataset: %s", config.system.dataset)
@@ -176,7 +184,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         logging.info("=" * 60)
 
         try:
-            result = run_instance(instance_id, config)
+            result = _run_instance(instance_id, config)
             resolved_any = any(
                 p.get("test_results", {}).get("resolved") for p in result.get("plans", [])
             )

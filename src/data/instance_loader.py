@@ -140,6 +140,16 @@ class InstanceLoader:
         if "problem_statement" not in instance and "text" in instance:
             instance["problem_statement"] = instance["text"]
 
+        # SWE-bench Pro instances use pre-built images on Docker Hub
+        dockerhub_tag = instance.get("dockerhub_tag")
+        if dockerhub_tag:
+            instance["image_name"] = f"jefzda/sweap-images:{dockerhub_tag}"
+            logger.info(
+                "SWE-bench Pro image mapped: %s -> %s",
+                instance_id,
+                instance["image_name"],
+            )
+
         logger.info(
             "Loaded SWE-bench instance: %s (repo=%s, dataset=%s)",
             instance_id,

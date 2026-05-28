@@ -104,12 +104,24 @@ def evaluate(
     if not instance_id:
         raise FatalError("instance_info missing 'instance_id' field.")
 
+    # Detect SWE-bench Pro instances by the presence of dockerhub_tag
+    is_pro = "dockerhub_tag" in instance_info
+
     logger.info(
-        "Running SWE evaluation: instance=%s suffix=%s timeout=%ss",
+        "Running SWE evaluation: instance=%s pro=%s suffix=%s timeout=%ss",
         instance_id,
+        is_pro,
         run_id_suffix,
         timeout,
     )
+
+    if is_pro:
+        from src.evaluator.pro_official_evaluator import evaluate_pro_instance
+        return evaluate_pro_instance(
+            patch=patch,
+            instance_info=instance_info,
+            timeout=timeout,
+        )
 
     pred = {
         "instance_id": instance_id,
@@ -233,3 +245,4 @@ def evaluate(
         "error_info": error_info,
         "report": report_data,
     }
+

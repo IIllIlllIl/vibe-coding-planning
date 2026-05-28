@@ -10,7 +10,7 @@ system:
   # Phase 2 (held-out) -> SWE-bench/SWE-bench_Pro.
   # Single run only ever reads one dataset; instance IDs below are interpreted
   # within this dataset.
-  dataset: "SWE-bench/SWE-bench_Verified"
+  dataset: "ScaleAI/SWE-bench_Pro"
 
   # Folder segment between dataset and instance in the output tree:
   #   output/<dataset_short>/<batch_id>/<instance>/...
@@ -20,7 +20,7 @@ system:
   #   run1, run2, run3           — sequentially numbered exploration runs
   #   run3_level1_n3_on_run1     — variation on existing sample set
   # Allowed characters: [A-Za-z0-9_.-]. CLI flag --batch-id overrides this value.
-  batch_id: "checker-dryrun"
+  batch_id: "pro-checker-v1"
 
   # Instance list is populated from output/SWE-bench_Verified/<batch_id>/sampled_instances.json
   # by scripts/run_batch_verified.sh. Leave empty here; the batch script reads the JSON manifest.
@@ -556,7 +556,7 @@ checker:
   # the aggregated rule set.
   enabled: true
   rules_path: "./output/analysis_pro/aggregated_rules.json"
-  model: "deepseek-v4-flash"
+  model: "deepseek-v4"
   api_base: "https://api.deepseek.com"
   max_steps: 50
   cost_limit: 1.0

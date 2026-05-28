@@ -112,6 +112,10 @@ def _run_instance_core(
     image_name = derive_image_name(instance_info)
     repo_path = instance_info.get("repo_path", "")
 
+    # Pro instances use /app as workdir; Verified uses config value
+    is_pro = "dockerhub_tag" in instance_info
+    workdir = "/app" if is_pro else config.docker.workdir
+
     # ------------------------------------------------------------------
     # 4. Run single round: Plan → Check → Code → Evaluate
     # ------------------------------------------------------------------
@@ -120,7 +124,7 @@ def _run_instance_core(
     try:
         docker.start(
             image=image_name,
-            workdir=config.docker.workdir,
+            workdir=workdir,
             mount_source=repo_path,
             timeout=config.agent.timeout,
         )
