@@ -216,7 +216,7 @@
 | ID | FR-09 |
 | 名称 | 系统运行参数配置 |
 | 描述 | 支持配置文件配置系统运行的核心参数 |
-| 配置项 | 1）`n`：目标 Plan 数量；2）`optimization_info_level`：0 或 1；3）`model`：使用的 LLM 模型（如 deepseek-v4-flash）；4）`dataset`：HuggingFace SWE-bench 数据集名（如 `SWE-bench/SWE-bench_Verified` 或 `SWE-bench/SWE-bench_Pro`），决定 `instances` 的解析空间；5）`instances`：SWE-bench 实例 ID 列表（在 `dataset` 内解析）；6）`prompts.reflection_prompt_template`：反思模板（可选，缺省由 `src/config.py` 加载阶段填充默认值）；7）`resume`：重跑配置（可选，FR-07 推迟实现）；8）`agent.max_steps`：每个 Agent 的最大步数；9）`agent.cost_limit`：每个 Agent 的 API 调用成本上限（美元）；10）`agent.timeout`：由 pipeline 透传到 `DefaultAgent` 的命令执行超时（秒），**默认 1800 秒，仅用于筛除明显异常**；11）`evaluator.timeout`：SWE 评估器单实例超时（秒） |
+| 配置项 | 1）`n`：目标 Plan 数量；2）`optimization_info_level`：0 或 1；3）`model`：使用的 LLM 模型（如 deepseek-v4-flash）；4）`dataset`：HuggingFace SWE-bench 数据集名（如 `SWE-bench/SWE-bench_Verified` 或 `ScaleAI/SWE-bench_Pro`），决定 `instances` 的解析空间；5）`instances`：SWE-bench 实例 ID 列表（在 `dataset` 内解析）；6）`prompts.reflection_prompt_template`：反思模板（可选，缺省由 `src/config.py` 加载阶段填充默认值）；7）`resume`：重跑配置（可选，FR-07 推迟实现）；8）`agent.max_steps`：每个 Agent 的最大步数；9）`agent.cost_limit`：每个 Agent 的 API 调用成本上限（美元）；10）`agent.timeout`：由 pipeline 透传到 `DefaultAgent` 的命令执行超时（秒），**默认 1800 秒，仅用于筛除明显异常**；11）`evaluator.timeout`：SWE 评估器单实例超时（秒） |
 | 验收标准 | 系统启动时自动加载配置文件，根据配置执行相应流程 |
 
 ### 3.4 输出与数据保存
@@ -467,7 +467,7 @@ system:
   n: 3
   optimization_info_level: 1
   model: deepseek-v4-flash
-  dataset: SWE-bench/SWE-bench_Verified  # Phase 1 默认；Phase 2 切换到 SWE-bench/SWE-bench_Pro
+  dataset: SWE-bench/SWE-bench_Verified  # Phase 1 默认；Phase 2 切换到 ScaleAI/SWE-bench_Pro
   instances:                              # 实例 ID 在所选 dataset 内解析；同一次运行只跑一个 dataset
     - astropy__astropy-12907
     - django__django-12345

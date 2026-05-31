@@ -112,7 +112,10 @@ def _override_config(config: Config, args: argparse.Namespace) -> Config:
         docker=config.docker,
         agent=config.agent,
         evaluator=config.evaluator,
+        checker=config.checker,
+        analysis=config.analysis,
         api_key=config.api_key,
+        analysis_api_key=config.analysis_api_key,
     )
     return new_config
 

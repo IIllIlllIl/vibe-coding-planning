@@ -6,8 +6,8 @@ system:
   api_base: "https://api.deepseek.com"
 
   # Hugging Face dataset name passed to swebench's load_swebench_dataset(name=...).
-  # Phase 1 (current) -> SWE-bench/SWE-bench_Verified (default).
-  # Phase 2 (held-out) -> SWE-bench/SWE-bench_Pro.
+  # Phase 1 -> SWE-bench/SWE-bench_Verified (default).
+  # Phase 2 -> ScaleAI/SWE-bench_Pro.
   # Single run only ever reads one dataset; instance IDs below are interpreted
   # within this dataset.
   dataset: "ScaleAI/SWE-bench_Pro"
@@ -510,7 +510,7 @@ agent:
   # (minisweagent/config/extra/swebench.yaml line 212).
   # Should only truncate runaway/infinite-loop agents — normal work
   # should finish well below this cap.
-  max_steps: 250
+  max_steps: 1500
   # Soft limit. Effective only if mini-swe-agent's DefaultAgent supports
   # 'cost_limit'; otherwise the value is ignored with a one-time warning
   # and the hard cap is governed by max_steps × per-step token cost.
@@ -556,7 +556,7 @@ checker:
   # the aggregated rule set.
   enabled: true
   rules_path: "./output/analysis_pro/aggregated_rules.json"
-  model: "deepseek-v4"
+  model: "deepseek-v4-pro"
   api_base: "https://api.deepseek.com"
   max_steps: 50
   cost_limit: 1.0

@@ -1,6 +1,6 @@
 # Plan-Code-Test: 自动化代码方案迭代优化系统
 
-输入一个 SWE-bench 实例（Verified 或 Pro），系统自动生成方案（Plan）、执行代码生成、运行测试评估，并基于反馈迭代优化方案，最终输出多轮 Plan 及其测试表现 —— 用于研究"plan 演化模式 → 任务通过性"的关系。
+本项目旨在**检测坏的 plan**。实现路径为：首先通过 PRC（Plan-Reflect-Code，也称 PCT）循环采集 fail→pass 的完整轨迹；然后从中对比分析提取导致 plan 失败的根本原因（patterns）；最后将这些 patterns 构建为规则检查器（Checker），在 PCC（Plan-Checker-Code）循环中验证检查器识别坏 plan 的能力。
 
 ## 核心特性
 
@@ -12,7 +12,7 @@
 - **对比分析与规则提取（FR-13）**：对 reflect-success cases 运行对比分析 Agent，提取可泛化的自然语言规则（When ... because ... 格式），支持 flash/pro 双模型串行实验
 - **规则质量审查与返工（FR-14，默认关闭）**：独立 LLM Reviewer Agent 审查规则质量（五维评分），未通过者触发返工循环。实践发现返工机制会**破坏已提取的有效规则**（删除旧结果后重跑失败），因此默认关闭。可通过 `config.analysis.enable_review` 开启
 - **Plan-Checker-Code 管道（FR-15）**：在 Plan 与 Code 之间插入规则检查器，验证计划是否符合从成功案例中提炼出的规则集。检查器在 Docker 内运行，可验证文件路径、函数名等具体引用。代码始终执行以产生 ground truth，用于计算检查器的 TP/FP/FN/TN、Accuracy、Precision、Recall、F1
-- **检查器 held-out 评估**：在 SWE-bench Pro Python 实例（266 个，held-out）上运行 Plan-Check-Code 管道，评估规则集的预测能力
+- **检查器 held-out 评估**：在 SWE-bench Pro ansible 实例（96 个，Mac ARM 兼容子集）上运行 Plan-Check-Code 管道，评估规则集的预测能力
 - **最小化造轮子**：Agent 基于 `mini-swe-agent` 框架，反思复用 GEPA 反射 Prompt 模板，评估直接调用 `swebench` 官方库
 
 ## 实验设计：两阶段方法学
@@ -21,7 +21,7 @@
 |------|--------|------|----------|
 | **Phase 1** | SWE-bench **Verified**（500 实例） | 大批量跑 pipeline，采集 plan / agent trajectory / resolved 结果，归纳"plan → 通过性"的判别规律 | **已完成** |
 | **Phase 2a** | SWE-bench **Verified** reflect-success | 对比分析提取规则，输入感知树聚合（Input-Aware Tree Merge） | **已完成** |
-| **Phase 2b** | SWE-bench **Pro** Python（266 实例） | 在 held-out 集上运行 Plan-Check-Code，评估规则检查器的预测准确率 | **当前阶段** |
+| **Phase 2b** | SWE-bench **Pro** ansible（96 实例，Mac ARM 兼容子集） | 在 held-out 集上运行 Plan-Check-Code，评估规则检查器的预测准确率 | **当前阶段** |
 
 把 Pro 留作 held-out 测试集是为了**避免在它身上过拟合 prompt / 反思模板**。Phase 1 之所以选 Verified，是因为它的镜像由 SWE-bench 官方在 Docker Hub 公开发布（无需自建），平均压缩 ~1 GB / 实例，迭代成本远低于 Pro。
 
@@ -51,9 +51,9 @@ python -m src.main --instance astropy__astropy-12907 --n 3 --config config.yaml
 # 6. 运行 Plan-Check-Code 检查器评估（Phase 2b 入口）
 python scripts/evaluate_checker.py --config config.yaml --instance astropy__astropy-12907
 
-# 7. 批量检查器评估（Pro Python held-out，266 实例）
-python scripts/evaluate_checker.py --config config.yaml --dataset SWE-bench/SWE-bench_Pro \
-    --instances output/pro_python_instances.json --output output/checker_eval/pro_python
+# 7. 批量检查器评估（Pro ansible，96 实例）
+python scripts/evaluate_checker.py --config config.yaml --dataset ScaleAI/SWE-bench_Pro \
+    --instances pro_ansible_instances.json --output output/checker_eval/pro_ansible
 ```
 
 输出位于 `./output/<dataset_short>/<instance_id>/`，包含结果 JSON、所有 Patch、Trajectory 文件和评估日志。
@@ -74,7 +74,7 @@ python scripts/evaluate_checker.py --config config.yaml --dataset SWE-bench/SWE-
 | `--output-dir DIR` | str | 输出根目录，覆盖 `system.output_dir` |
 | `--verbose`, `-v` | flag | 启用 DEBUG 日志 |
 
-> 注：`config.yaml` 中 `system.dataset` 字段决定 `instances` 的解析空间；默认 `SWE-bench/SWE-bench_Verified`，可切换到 `SWE-bench/SWE-bench_Pro`（Phase 2）。
+> 注：`config.yaml` 中 `system.dataset` 字段决定 `instances` 的解析空间；默认 `SWE-bench/SWE-bench_Verified`，可切换到 `ScaleAI/SWE-bench_Pro`（Phase 2）。
 
 ### 检查器评估 CLI
 
@@ -86,7 +86,7 @@ python scripts/evaluate_checker.py --config config.yaml --dataset SWE-bench/SWE-
 | `--instance ID` | str | 单实例 ID（dry-run 用） |
 | `--instances FILE` | str | 实例列表 JSON 文件路径 |
 | `--output DIR` | str | 评估输出目录 |
-| `--dataset NAME` | str | 数据集名称，默认 `SWE-bench/SWE-bench_Pro` |
+| `--dataset NAME` | str | 数据集名称，默认 `ScaleAI/SWE-bench_Pro` |
 
 ## 输出结构
 

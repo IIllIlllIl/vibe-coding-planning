@@ -84,6 +84,7 @@ class DockerEnvWrapper:
         kwargs: dict[str, Any] = {
             "image": image,
             "cwd": workdir,
+            "container_timeout": "4h",
         }
         if mount_source:
             kwargs["run_args"] = [

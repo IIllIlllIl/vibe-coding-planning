@@ -168,9 +168,9 @@ def run(
     system_template = config.prompts.check_prompt
     instance_template = config.prompts.check_instance_template or None
 
-    # Determine model and API credentials for the checker
-    # Use checker's dedicated model/config if available, else fall back to system defaults
-    check_model = config.checker.model or config.system.model
+    # Determine model and API credentials for the checker.
+    # Checker uses its own dedicated config; no fallback to system.model.
+    check_model = config.checker.model
     check_api_base = config.checker.api_base or config.system.api_base
     check_api_key = config.api_key  # Use main API key for checker
 
