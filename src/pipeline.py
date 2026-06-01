@@ -75,7 +75,11 @@ def _run_instance_core(
     # ------------------------------------------------------------------
     # 1. Load instance metadata
     # ------------------------------------------------------------------
-    loader = InstanceLoader(dataset=config.system.dataset)
+    loader = InstanceLoader(
+        dataset=config.system.dataset,
+        dataset_type=config.system.dataset_type,
+        language_filter=config.system.language_filter,
+    )
     try:
         instance_info = loader.load_instance(instance_id)
     except TaskError as exc:

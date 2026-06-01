@@ -420,6 +420,36 @@ class TestDataset:
         config = load_config(filepath)
         assert config.system.dataset == "SWE-bench/SWE-bench_Pro"
 
+    def test_dataset_type_default_empty(self, monkeypatch, tmp_path: Path):
+        monkeypatch.setenv("DEEPSEEK_API_KEY", "test-key")
+        filepath = tmp_path / "empty.yaml"
+        _write_test_config(filepath)
+        config = load_config(filepath)
+        assert config.system.dataset_type == ""
+
+    def test_dataset_type_polybench_loaded(self, monkeypatch, tmp_path: Path):
+        monkeypatch.setenv("DEEPSEEK_API_KEY", "test-key")
+        data = {"system": {"dataset_type": "polybench"}}
+        filepath = tmp_path / "polybench_type.yaml"
+        _write_test_config(filepath, data)
+        config = load_config(filepath)
+        assert config.system.dataset_type == "polybench"
+
+    def test_language_filter_default_empty(self, monkeypatch, tmp_path: Path):
+        monkeypatch.setenv("DEEPSEEK_API_KEY", "test-key")
+        filepath = tmp_path / "empty.yaml"
+        _write_test_config(filepath)
+        config = load_config(filepath)
+        assert config.system.language_filter == ""
+
+    def test_language_filter_python_loaded(self, monkeypatch, tmp_path: Path):
+        monkeypatch.setenv("DEEPSEEK_API_KEY", "test-key")
+        data = {"system": {"language_filter": "Python"}}
+        filepath = tmp_path / "lang_filter.yaml"
+        _write_test_config(filepath, data)
+        config = load_config(filepath)
+        assert config.system.language_filter == "Python"
+
 
 class TestBatchIdValidation:
     """``system.batch_id`` is the folder segment between dataset and instance

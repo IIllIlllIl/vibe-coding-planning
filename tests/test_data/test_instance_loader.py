@@ -4,6 +4,7 @@ import json
 from pathlib import Path
 from unittest.mock import patch
 
+import pandas as pd
 import pytest
 
 from src.data.instance_loader import InstanceLoader
@@ -82,3 +83,135 @@ class TestSwebenchMode:
     def test_list_empty_without_mock_dir(self):
         loader = InstanceLoader()
         assert loader.list_available_instances() == []
+
+
+class TestPolybenchMode:
+    """Tests for PolyBench dataset loading via the datasets library."""
+
+    @patch("datasets.load_dataset")
+    def test_load_polybench_instance(self, mock_load_dataset):
+        """Loading a PolyBench Python instance returns normalized fields."""
+        mock_row = {
+            "instance_id": "huggingface__transformers-3147",
+            "repo": "huggingface/transformers",
+            "base_commit": "abc123",
+            "patch": "diff content",
+            "test_patch": "test diff content",
+            "problem_statement": "Fix bug in transformers",
+            "language": "Python",
+            "Dockerfile": "FROM python:3.10",
+            "F2P": "['test_f2p']",
+            "P2P": "['test_p2p']",
+            "F2F": "[]",
+            "test_command": "pytest tests/",
+            "modified_nodes": '["file.py->func->foo"]',
+        }
+        mock_ds = type("MockDataset", (), {"to_pandas": lambda self: pd.DataFrame([mock_row])})()
+        mock_load_dataset.return_value = mock_ds
+
+        loader = InstanceLoader(
+            dataset="AmazonScience/SWE-PolyBench",
+            dataset_type="polybench",
+            language_filter="Python",
+        )
+        result = loader.load_instance("huggingface__transformers-3147")
+
+        assert result["instance_id"] == "huggingface__transformers-3147"
+        assert result["repo"] == "huggingface/transformers"
+        assert result["language"] == "Python"
+        # Field name normalization
+        assert "dockerfile" in result
+        assert "Dockerfile" not in result
+        assert result["dockerfile"] == "FROM python:3.10"
+        # JSON-string list fields parsed
+        assert result["f2p"] == ["test_f2p"]
+        assert result["p2p"] == ["test_p2p"]
+        assert result["f2f"] == []
+        assert result["modified_nodes"] == ["file.py->func->foo"]
+        # Image name derived
+        assert "ghcr.io/timesler/swe-polybench.eval.x86_64." in result["image_name"]
+        assert result["dataset_type"] == "polybench"
+        assert result["model_patch"] == ""
+
+    @patch("datasets.load_dataset")
+    def test_list_available_instances_polybench(self, mock_load_dataset):
+        """list_available_instances returns all cached PolyBench IDs."""
+        rows = [
+            {"instance_id": "repo__repo-1", "language": "Python"},
+            {"instance_id": "repo__repo-2", "language": "Python"},
+            {"instance_id": "repo__repo-3", "language": "Java"},
+        ]
+        mock_ds = type("MockDataset", (), {"to_pandas": lambda self: pd.DataFrame(rows)})()
+        mock_load_dataset.return_value = mock_ds
+
+        loader = InstanceLoader(
+            dataset="AmazonScience/SWE-PolyBench",
+            dataset_type="polybench",
+            language_filter="Python",
+        )
+        instances = loader.list_available_instances()
+        assert instances == ["repo__repo-1", "repo__repo-2"]
+
+    @patch("datasets.load_dataset")
+    def test_missing_instance_raises(self, mock_load_dataset):
+        mock_ds = type("MockDataset", (), {"to_pandas": lambda self: pd.DataFrame([])})()
+        mock_load_dataset.return_value = mock_ds
+
+        loader = InstanceLoader(
+            dataset="AmazonScience/SWE-PolyBench",
+            dataset_type="polybench",
+        )
+        with pytest.raises(TaskError, match="not found"):
+            loader.load_instance("nonexistent__repo-99999")
+
+    @patch("datasets.load_dataset")
+    def test_infer_polybench_from_dataset_name(self, mock_load_dataset):
+        """When dataset_type is empty but dataset name contains 'polybench',
+        the loader automatically enters PolyBench mode."""
+        mock_ds = type("MockDataset", (), {"to_pandas": lambda self: pd.DataFrame([])})()
+        mock_load_dataset.return_value = mock_ds
+
+        loader = InstanceLoader(
+            dataset="AmazonScience/SWE-PolyBench",
+        )
+        assert loader._is_polybench_dataset() is True
+
+    def test_infer_swebench_when_no_hint(self):
+        loader = InstanceLoader(dataset="SWE-bench/SWE-bench_Verified")
+        assert loader._is_polybench_dataset() is False
+
+    @patch("datasets.load_dataset")
+    def test_language_filter_applied(self, mock_load_dataset):
+        """Only instances matching language_filter are loaded."""
+        rows = [
+            {"instance_id": "py-1", "language": "Python"},
+            {"instance_id": "java-1", "language": "Java"},
+        ]
+        mock_ds = type("MockDataset", (), {"to_pandas": lambda self: pd.DataFrame(rows)})()
+        mock_load_dataset.return_value = mock_ds
+
+        loader = InstanceLoader(
+            dataset="AmazonScience/SWE-PolyBench",
+            dataset_type="polybench",
+            language_filter="Python",
+        )
+        instances = loader.list_available_instances()
+        assert instances == ["py-1"]
+
+    def test_normalize_polybench_fields(self):
+        """Static method correctly normalizes CamelCase and JSON-string fields."""
+        raw = {
+            "instance_id": "test-1",
+            "Dockerfile": "FROM python:3.10",
+            "F2P": "['a', 'b']",
+            "P2P": "[]",
+            "F2F": "['c']",
+            "modified_nodes": '["n1", "n2"]',
+        }
+        normalized = InstanceLoader._normalize_polybench_fields(raw)
+        assert normalized["dockerfile"] == "FROM python:3.10"
+        assert "Dockerfile" not in normalized
+        assert normalized["f2p"] == ["a", "b"]
+        assert normalized["p2p"] == []
+        assert normalized["f2f"] == ["c"]
+        assert normalized["modified_nodes"] == ["n1", "n2"]

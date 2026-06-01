@@ -40,8 +40,7 @@ class SystemConfig:
     The ``dataset`` field selects which SWE-bench dataset to load from
     Hugging Face. ``instances`` are interpreted within that dataset:
     a single run only ever touches one dataset (Phase 1 = Verified,
-    Phase 2 = Pro). The default is the Verified dataset since Phase 1
-    is the current research focus.
+    Phase 2 = PolyBench Python). The default is the Verified dataset.
 
     ``batch_id`` is a mandatory folder-name segment that isolates one
     experimental run from another in the output tree:
@@ -59,6 +58,8 @@ class SystemConfig:
     model: str = "deepseek-v4-flash"
     api_base: str = "https://api.deepseek.com"
     dataset: str = "SWE-bench/SWE-bench_Verified"
+    dataset_type: str = ""
+    language_filter: str = ""
     instances: list[str] = field(default_factory=list)
     output_dir: str = "./output"
     batch_id: str = "default"
@@ -363,6 +364,8 @@ def _build_system_config(data: dict[str, Any]) -> SystemConfig:
         model=_get_str(data, "model", "deepseek-v4-flash"),
         api_base=api_base,
         dataset=_get_str(data, "dataset", "SWE-bench/SWE-bench_Verified"),
+        dataset_type=_get_str(data, "dataset_type", ""),
+        language_filter=_get_str(data, "language_filter", ""),
         instances=_get_list(data, "instances"),
         output_dir=_get_str(data, "output_dir", "./output"),
         batch_id=validate_batch_id(_get_str(data, "batch_id", "")),

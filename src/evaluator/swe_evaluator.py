@@ -104,16 +104,26 @@ def evaluate(
     if not instance_id:
         raise FatalError("instance_info missing 'instance_id' field.")
 
-    # Detect SWE-bench Pro instances by the presence of dockerhub_tag
-    is_pro = "dockerhub_tag" in instance_info
+    # Detect dataset type from instance metadata
+    dataset_type = instance_info.get("dataset_type", "")
+    is_pro = dataset_type == "pro" or "dockerhub_tag" in instance_info
+    is_polybench = dataset_type == "polybench"
 
     logger.info(
-        "Running SWE evaluation: instance=%s pro=%s suffix=%s timeout=%ss",
+        "Running SWE evaluation: instance=%s dataset_type=%s suffix=%s timeout=%ss",
         instance_id,
-        is_pro,
+        dataset_type or "swebench",
         run_id_suffix,
         timeout,
     )
+
+    if is_polybench:
+        from src.evaluator.polybench_evaluator import evaluate_polybench_instance
+        return evaluate_polybench_instance(
+            patch=patch,
+            instance_info=instance_info,
+            timeout=timeout,
+        )
 
     if is_pro:
         from src.evaluator.pro_official_evaluator import evaluate_pro_instance

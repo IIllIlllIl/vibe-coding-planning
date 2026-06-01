@@ -200,6 +200,74 @@ class TestEvaluateReport:
                 assert result["resolved"] is True
 
 
+class TestPolybenchRouting:
+    def test_routes_polybench_by_dataset_type(self):
+        poly_info = {
+            "instance_id": "huggingface__transformers-3147",
+            "repo": "huggingface/transformers",
+            "base_commit": "abc123",
+            "dataset_type": "polybench",
+        }
+
+        with patch(
+            "src.evaluator.polybench_evaluator.evaluate_polybench_instance"
+        ) as mock_eval:
+            mock_eval.return_value = {
+                "resolved": True,
+                "stdout": "tests passed",
+                "stderr": "",
+                "log_dir": "/tmp/polybench",
+                "error_info": None,
+                "report": {},
+            }
+            result = swe_evaluator.evaluate("diff content", poly_info)
+
+        assert result["resolved"] is True
+        mock_eval.assert_called_once()
+        call_args = mock_eval.call_args
+        assert call_args.kwargs["patch"] == "diff content"
+        assert call_args.kwargs["instance_info"] == poly_info
+
+    def test_routes_pro_by_dockerhub_tag(self):
+        pro_info = {
+            "instance_id": "ansible__ansible-1234",
+            "repo": "ansible/ansible",
+            "dockerhub_tag": "some-tag",
+        }
+
+        with patch(
+            "src.evaluator.pro_official_evaluator.evaluate_pro_instance"
+        ) as mock_eval:
+            mock_eval.return_value = {
+                "resolved": False,
+                "stdout": "",
+                "stderr": "",
+                "log_dir": "/tmp/pro",
+                "error_info": None,
+                "report": {},
+            }
+            result = swe_evaluator.evaluate("diff", pro_info)
+
+        assert result["resolved"] is False
+        mock_eval.assert_called_once()
+
+    def test_routes_swebench_by_default(self):
+        verified_info = {
+            "instance_id": "astropy__astropy-14539",
+            "repo": "astropy/astropy",
+            "base_commit": "abc123",
+        }
+
+        with patch("swebench.harness.run_evaluation.run_instance") as mock_run:
+            with patch("swebench.harness.test_spec.test_spec.make_test_spec"):
+                with patch("docker.from_env"):
+                    mock_run.return_value = {"completed": True, "resolved": True}
+                    result = swe_evaluator.evaluate("diff", verified_info)
+
+        assert result["resolved"] is True
+        mock_run.assert_called_once()
+
+
 class TestImportSwebench:
     def test_import_swebench_success(self):
         swebench = swe_evaluator._import_swebench()

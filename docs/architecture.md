@@ -28,13 +28,15 @@ plan-code-test/
 │   │   ├── __init__.py
 │   │   ├── plan_agent.py          # Plan Agent：基于 DefaultAgent 的方案生成
 │   │   ├── code_agent.py          # Code Agent：基于 DefaultAgent 的 Patch 生成
-│   │   └── reflect_agent.py       # Reflect Agent：基于 GEPA Prompt 模板的反思优化
+│   │   ├── reflect_agent.py       # Reflect Agent：基于 GEPA Prompt 模板的反思优化
+│   │   └── check_agent.py         # Check Agent：计划质量检查（规则验证）
 │   ├── environment/
 │   │   ├── __init__.py
 │   │   └── docker_env.py          # Docker 环境封装（基于 mini-swe-agent DockerEnvironment）
 │   ├── evaluator/
 │   │   ├── __init__.py
-│   │   └── swe_evaluator.py       # SWE-bench 官方评估封装（run_evaluation）
+│   │   ├── swe_evaluator.py       # 多数据集评估路由（swebench / Pro / PolyBench）
+│   │   └── polybench_evaluator.py # PolyBench 官方评估封装（DockerManager + parser + scoring）
 │   ├── data/
 │   │   ├── __init__.py
 │   │   └── instance_loader.py     # 从 SWE-bench Pro 加载实例元数据
@@ -88,8 +90,9 @@ plan-code-test/
 
 | 模块 | 文件 | 职责 |
 |------|------|------|
-| **SWE 评估器** | `src/evaluator/swe_evaluator.py` | 调用 `swebench.harness.run_evaluation()`，传入 Patch + 实例信息 + Docker 镜像。返回 `{resolved, stdout, stderr, log_dir}` |
-| **实例加载器** | `src/data/instance_loader.py` | 根据 `instance_id` 从 SWE-bench Pro 数据集加载实例元数据（`repo`, `base_commit`, `test_patch`, `patch`, `requirements.txt` 等），供 `pipeline.py` 和 `swe_evaluator.py` 使用 |
+| **SWE 评估器** | `src/evaluator/swe_evaluator.py` | 多数据集评估路由。根据 `instance_info.dataset_type` 分发到：swebench（`swebench.harness.run_evaluation`）、Pro（`pro_official_evaluator`）、PolyBench（`polybench_evaluator`）。统一返回 `{resolved, stdout, stderr, log_dir, error_info, report}` |
+| **PolyBench 评估器** | `src/evaluator/polybench_evaluator.py` | 封装 PolyBench 官方评估流程：获取 Docker 镜像 → 应用 test patch → 应用 code patch → 运行测试 → parser 解析 → scoring。返回与 swebench 评估器兼容的 dict |
+| **实例加载器** | `src/data/instance_loader.py` | 根据 `dataset` / `dataset_type` / `language_filter` 从 SWE-bench（Verified/Pro）或 PolyBench 加载实例元数据。PolyBench 模式支持字段规范化（CamelCase → snake_case）和语言过滤 |
 
 ### 3.5 反馈与输出
 
@@ -212,11 +215,12 @@ TestResults = dict[str, Any]  # {resolved: bool, stdout: str, stderr: str, log_d
 | `src/agents/code_agent.py` | 同上，使用 `code_generation_prompt` | `mini-swe-agent` |
 | `src/agents/reflect_agent.py` | 复用 `DefaultAgent` + `DockerEnvironment`，`feedback_text` 通过 system prompt 注入，Agent 在容器内可探索代码库但无法访问 trajectory 文件 | `mini-swe-agent` |
 | `src/environment/docker_env.py` | 封装 `DockerEnvironment`，代码库 rw 挂载，轮间隔离由独立容器保证 | `mini-swe-agent` |
-| `src/evaluator/swe_evaluator.py` | 调用 `swebench.harness.run_evaluation` | `swebench` |
+| `src/evaluator/swe_evaluator.py` | 多数据集评估路由（swebench / Pro / PolyBench） | `swebench`, `poly-bench-evaluation` |
+| `src/evaluator/polybench_evaluator.py` | PolyBench 官方评估封装（DockerManager + parser + scoring） | `poly-bench-evaluation`, `docker` |
 | `src/output/writer.py` | JSON/文件 IO | 标准库 |
 | `src/output/trajectory.py` | 元数据附加 + JSON 写出 | 标准库 |
 | `src/prompts/gepa_reflection.py` | 模板渲染 + 输出解析 | 标准库 |
-| `src/data/instance_loader.py` | 通过 `swebench` API 加载实例元数据 | `swebench` |
+| `src/data/instance_loader.py` | 通过 `swebench` API 或 HuggingFace `datasets` 加载实例元数据（Verified / Pro / PolyBench） | `swebench`, `datasets` |
 | `scripts/quickstart.sh` | conda 激活 + pip install + 运行主程序 | shell |
 
 ---

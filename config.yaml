@@ -1,16 +1,27 @@
 # Plan-Code-Test runtime configuration
 system:
-  n: 3
+  n: 1
   optimization_info_level: 1
   model: deepseek-v4-flash
   api_base: "https://api.deepseek.com"
 
-  # Hugging Face dataset name passed to swebench's load_swebench_dataset(name=...).
+  # Hugging Face dataset name passed to the loader.
   # Phase 1 -> SWE-bench/SWE-bench_Verified (default).
-  # Phase 2 -> ScaleAI/SWE-bench_Pro.
+  # Phase 2 -> AmazonScience/SWE-PolyBench.
+  # PolyBench -> AmazonScience/SWE-PolyBench.
   # Single run only ever reads one dataset; instance IDs below are interpreted
   # within this dataset.
-  dataset: "ScaleAI/SWE-bench_Pro"
+  dataset: "AmazonScience/SWE-PolyBench"
+
+  # Explicit dataset type hint. When empty, the type is inferred from the
+  # dataset name. Supported values: "swebench" | "polybench" | "pro".
+  # Example for PolyBench: dataset_type: "polybench"
+  dataset_type: "polybench"
+
+  # Language filter for multi-language datasets (e.g. PolyBench).
+  # Only instances where "language" matches this value are loaded.
+  # Example: language_filter: "Python"
+  language_filter: "Python"
 
   # Folder segment between dataset and instance in the output tree:
   #   output/<dataset_short>/<batch_id>/<instance>/...
@@ -20,7 +31,7 @@ system:
   #   run1, run2, run3           — sequentially numbered exploration runs
   #   run3_level1_n3_on_run1     — variation on existing sample set
   # Allowed characters: [A-Za-z0-9_.-]. CLI flag --batch-id overrides this value.
-  batch_id: "pro-checker-v1"
+  batch_id: "polybench-smoke-autogpt"
 
   # Instance list is populated from output/SWE-bench_Verified/<batch_id>/sampled_instances.json
   # by scripts/run_batch_verified.sh. Leave empty here; the batch script reads the JSON manifest.
@@ -108,8 +119,14 @@ prompts:
     - MODIFY: /tmp (for scratch scripts and the plan file at /tmp/plan.md)
     - DO NOT MODIFY: any file under /testbed (this is read-only territory for the planning agent)
 
+    ## Exploration Budget
+    You have a hard exploration budget of 150 steps. After step 150 you MUST write the plan to /tmp/plan.md and submit it, even if your understanding is incomplete. An imperfect plan is infinitely better than no plan.
+
+    ## Efficiency Rules
+    - Every ~10 steps, briefly summarize what you have learned so far in your THOUGHT.
+
     ## Workflow
-    Read code and reproduce the bug as needed. When ready, write the plan to
+    Read code and reproduce the bug as needed. When ready — or when you reach the exploration budget limit — write the plan to
     /tmp/plan.md using a heredoc:
 
     ```bash
@@ -510,7 +527,7 @@ agent:
   # (minisweagent/config/extra/swebench.yaml line 212).
   # Should only truncate runaway/infinite-loop agents — normal work
   # should finish well below this cap.
-  max_steps: 1500
+  max_steps: 200
   # Soft limit. Effective only if mini-swe-agent's DefaultAgent supports
   # 'cost_limit'; otherwise the value is ignored with a one-time warning
   # and the hard cap is governed by max_steps × per-step token cost.
@@ -520,8 +537,8 @@ agent:
 
 evaluator:
   # Per-evaluation timeout (seconds) passed to swebench.harness.run_evaluation.
-  # Default 1800s (30 min) accommodates large SWE-bench Pro instances such as
-  # numpy/scipy/astropy. Increase if you observe evaluator timeouts in run.log.
+  # Default 1800s (30 min) accommodates large instances. Increase if you
+  # observe evaluator timeouts in run.log.
   timeout: 1800
 
 analysis:

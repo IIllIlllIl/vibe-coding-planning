@@ -3,6 +3,12 @@ mini-swe-agent~=1.0
 swebench>=4.1.0
 pyyaml>=6.0.0
 
+# PolyBench evaluation (official harness)
+# Install from GitHub: pip install -e git+https://github.com/amazon-science/SWE-PolyBench.git#egg=poly-bench-evaluation
+# Required exact versions for tree-sitter compatibility:
+#   tree-sitter==0.21.3
+#   tree-sitter-languages==1.10.2
+
 # LLM API (DeepSeek via OpenAI-compatible API)
 openai>=2.24.0
 litellm>=1.83.0

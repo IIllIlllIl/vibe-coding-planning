@@ -14,7 +14,7 @@
 | 6.1 | 2026-05-08 | — | Phase 1 代码侧实施完成：① `SystemConfig.dataset` 字段落地（默认 `SWE-bench/SWE-bench_Verified`），透传到 `InstanceLoader(dataset=…)` → `load_swebench_dataset(name=…)`；② `swe_pro_instances` → `instances` 重命名贯穿 config dataclass / `config.yaml` / CLI / `result.json` schema / 测试；③ 输出目录分层为 `{output_dir}/{dataset_short}/{instance_id}/`，`result.json` 顶层新增 `dataset` 字段；④ 文档 §4.3 / §6.1 / §6.2 / FR-09 同步更新 |
 | 6.2 | 2026-05-19 | — | Jinja 变量注入架构整改：删除 `gepa_reflection.render()` 与 `DEFAULT_REFLECTION_TEMPLATE` 常量，将所有模板变量（`{{prompt_template}}`、`{{inputs_outputs_feedback}}`、`{{nrpv_block}}` 等）通过 `agent.run(**kwargs)` / `extra_template_vars` 注入，由 `mini-swe-agent` 在 agent 内部做 `StrictUndefined` 单次渲染。`config.yaml` 为 prompt 单点可信源；`src/prompts/gepa_reflection.py` 仅保留 `parse_output()`。同步更新 `docs/requirement-document.md`、`docs/architecture.md`、所有 agent 模块及测试 |
 | 7.0 | 2026-05-22 | — | 对比分析与规则提取（FR-13）+ 规则质量审查（FR-14）：新增 `src/analysis/contrastive_agent.py` 从 reflect-success cases 提取 "When ... because ..." 格式规则；新增 `src/analysis/reviewer_agent.py` 作为独立 LLM Agent 审查规则质量（五维评分 0-100，通过阈值 70）；`scripts/long_run_watchdog.py` 集成 analysis → review → rework 循环，支持 flash/pro 双模型串行运行 + 增量审查（首轮全查，后续仅查上轮失败案例）+ 最大 3 次返工；`src/analysis/review_cli.py` 提供批量审查 CLI；全量测试覆盖（`tests/test_analysis/test_reviewer_agent.py` + `tests/test_long_run_watchdog.py` 新增 review phase 测试） |
-| 7.1 | 2026-05-24 | — | Review/Rework 设计缺陷修复：发现 rework 会先删除已有规则再重跑，若重跑失败则永久丢失数据（`astropy-14182`、`sympy-20916`、`scikit-learn-25747` 均受害）。新增 `config.analysis.enable_review`（默认 `false`）作为 opt-in 开关；默认流程改为 batch → flash analysis → pro analysis → done，跳过 review/rework。FR-14 描述更新；`project_issues.md` 新增 §5 记录该缺陷及未来修复方向 |
+| 7.1 | 2026-05-24 | — | Review/Rework 设计缺陷修复：发现 rework 会先删除已有规则再重跑，若重跑失败则永久丢失数据（`astropy-14182`、`sympy-20916`、`scikit-learn-25747` 均受害）。新增 `config.analysis.enable_review`（默认 `false`）作为 opt-in 开关；默认流程改为 batch → flash analysis → pro analysis → done，跳过 review/rework。FR-14 描述更新；`project_issues.md` 新增归档项记录该缺陷及未来修复方向 |
 
 ---
 
@@ -28,22 +28,22 @@
 
 与此同时，**方案的迭代优化**是软件开发能力的核心体现。一次规划难以完美，根据执行反馈持续改进方案，既是开发者提升效率的关键，也是自动化系统实现自我增强的必经之路。
 
-本项目旨在构建一套**自动化的方案评估与迭代优化系统**，以 **SWE-bench**（Phase 1 在 Verified 上探索、Phase 2 在 Pro 保留集上验证）为评估基准，以 DeepSeek V4 为底层模型，通过 Agent 自主探索代码库并生成方案，执行代码生成与测试评估，再基于执行反馈迭代优化方案，最终输出多个方案及其对应的测试通过率，为研发团队提供可量化的方案评估依据和可复用的优化经验。
+本项目旨在构建一套**自动化的方案评估与迭代优化系统**，以 SWE-bench Verified（Phase 1 探索）和 SWE-PolyBench Python 子集（Phase 2 held-out 验证）为评估基准，以 DeepSeek V4 为底层模型，通过 Agent 自主探索代码库并生成方案，执行代码生成与测试评估，再基于执行反馈迭代优化方案，最终输出多个方案及其对应的测试通过率，为研发团队提供可量化的方案评估依据和可复用的优化经验。
 
-### 1.2 数据集说明：两阶段方法学（Verified → Pro）
+### 1.2 数据集说明：两阶段方法学（Verified → PolyBench）
 
 本项目采用**两阶段数据集设计**：
 
 | 阶段 | 数据集 | 用途 | 镜像来源 |
 |------|--------|------|----------|
 | **Phase 1（当前）** | SWE-bench **Verified**（500 实例） | 大批量跑 pipeline，采集 plan / agent trajectory / resolved 信号，归纳"plan → 通过性"判别规律 | SWE-bench 官方 Docker Hub 公开发布，**无需** `build_docker_images.sh` |
-| **Phase 2（后续）** | SWE-bench **Pro**（held-out 保留集） | 把 Phase 1 总结出的规律拿来在保留集上验证泛化能力 | 仍需 `scripts/build_docker_images.sh` 构建专用镜像 |
+| **Phase 2（后续）** | **SWE-PolyBench** Python 子集（199 实例） | 把 Phase 1 总结出的规律拿来在 held-out 集上验证泛化能力 | GHCR 预构建镜像（`ghcr.io/timesler/swe-polybench.eval.x86_64.<id>:v1.1`） |
 
-**Pro 留作保留集的理由**：Pro 由 Scale AI 于 2025 年 9 月发布，按 GPL 许可证选择以避开 LLM 训练语料并结合私有代码库构建保留集来防止过拟合。把 Pro 留到 Phase 2 才接触，可避免在它身上**过拟合 prompt / 反思模板**——这是诚实评估规律泛化能力的前提。
+**PolyBench 留作保留集的理由**：SWE-bench Pro 在当前 pipeline 下 resolved 率为 0%，已决定放弃。SWE-PolyBench 是 Amazon Science 发布的多语言基准（Java/JS/TS/Python），其中 Python 子集共 199 个实例，来自 6 个仓库（transformers 126、keras 38、langchain 22、yt-dlp 10、tensorflow/models 2、AutoGPT 1）。PolyBench 据称比 SWE-bench 结构更复杂（2.0 文件/任务 vs 1.2，5.76 节点修改 vs 3.54）。把 PolyBench 留到 Phase 2 才接触，可避免在它身上**过拟合 prompt / 反思模板**。
 
-**为什么 Phase 1 选 Verified**：Verified 镜像约 1 GB / 实例（远小于 Pro 的 5–8 GB），由官方在 Docker Hub 公开发布无需自建，迭代成本远低于 Pro。任务复杂度更低（平均修改 1–2 行 vs Pro 的 107.4 行 / 4.1 文件）也意味着 plan 演化的信号比噪声更显著，更适合规律归纳。
+**为什么 Phase 1 选 Verified**：Verified 镜像约 1 GB / 实例，由官方在 Docker Hub 公开发布无需自建，迭代成本最低。任务复杂度更低（平均修改 1–2 行）也意味着 plan 演化的信号比噪声更显著，更适合规律归纳。
 
-**数据格式**：Verified 与 Pro 均沿用 SWE-bench 标准 schema，包含 `instance_id`、`base_commit`、`test_patch`、`patch`、`FAIL_TO_PASS`、`PASS_TO_PASS` 等字段，Pipeline 与评估器对二者**完全兼容**。
+**数据格式**：Verified 沿用 SWE-bench 标准 schema。PolyBench 实例字段与 swebench 高度一致（`repo`、`instance_id`、`base_commit`、`patch`、`test_patch`、`problem_statement` 等），仅大小写差异（`Dockerfile`/`F2P`/`P2P`）和 `modified_nodes` 为 JSON 字符串，由 `InstanceLoader` 做轻量映射。Pipeline 与评估器对二者完全兼容。
 
 ### 1.3 项目目标
 
@@ -53,14 +53,14 @@
 | G-02 | 实现方案的迭代优化能力，**优化方案由反思 Agent 直接生成**（不再使用独立的 plan agent） | P0 | 当参数 n > 1 时，系统能够产生 n 个方案，后序方案基于前序方案的优化反馈由反思 Agent 生成 |
 | G-03 | 支持配置优化信息是否包含测试运行结果和报错信息，**并在输出中记录该配置** | P1 | 可通过配置文件开关控制，输出文件记录该配置 |
 | G-04 | **最小化造轮子**：Agent 层基于 `mini-swe-agent` 框架，反思复用 GEPA 反射 Prompt 模板，**测试评估使用 SWE 官方评估工具** | P0 | Agent 使用 mini-swe-agent 的 DefaultAgent + DockerEnvironment + LiteLLMModel；评估直接调用 SWE-bench 官方工具 |
-| G-05 | **两阶段验证 SWE-bench**：Phase 1 在 Verified 上跑通至少 10 个实例并采集 plan 演化语料；Phase 2 在 Pro 保留集上验证 Phase 1 总结的判别规律 | P1 | Phase 1 至少 10 个 Verified 实例端到端运行；Phase 2 在 Pro 上至少 5 个实例做规律泛化检验 |
+| G-05 | **两阶段验证**：Phase 1 在 Verified 上跑通至少 10 个实例并采集 plan 演化语料；Phase 2 在 PolyBench Python 子集上验证 Phase 1 总结的判别规律 | P1 | Phase 1 至少 10 个 Verified 实例端到端运行；Phase 2 在 PolyBench Python 子集上至少 5 个实例做规律泛化检验 |
 | G-06 | **完整保存所有 Agent 轨迹**（方案生成、代码生成、反思优化），作为结果输出的一部分 | P0 | 每个 Agent 的 trajectory 按规范命名并保存 |
 | G-07 | **支持从已有 Plan 重跑**：允许用户修改优化配置（如是否使用测试信息）后从指定 Plan 继续迭代 | P2 | 能够加载已有 Plan 和轨迹，重新执行后续优化循环 |
 
 ### 1.4 系统范围
 
 #### 包含范围
-- 数据集采用**两阶段设计**（详见 §1.2）：Phase 1 使用 SWE-bench **Verified** 大批量采集语料，Phase 2 使用 SWE-bench **Pro** 作 held-out 保留集验证规律。**单次运行只读取一个数据集**，由 `system.dataset` 配置切换
+- 数据集采用**两阶段设计**（详见 §1.2）：Phase 1 使用 SWE-bench **Verified** 大批量采集语料，Phase 2 使用 **SWE-PolyBench** Python 子集作 held-out 保留集验证规律。**单次运行只读取一个数据集**，由 `system.dataset`、`system.dataset_type` 和 `system.language_filter` 配置切换
 - Agent 运行环境：**方案生成、代码生成、反思优化均在 Docker 容器中进行**，以防止 Agent 写入文件等操作对宿主环境产生噪声；**后续轮次的隔离由"每轮独立容器 + base_commit 初始状态"保证**（详见下文"轮间状态隔离不变量"）
 - 测试评估主动使用 **SWE 官方评估工具**（`swebench` Python 包），不自行实现评估逻辑
 - 自动保存所有 Agent 执行轨迹（包括反思 Agent 的轨迹），并按轮次和角色命名
@@ -88,7 +88,7 @@
 | 术语 | 说明 |
 |------|------|
 | **SWE-bench Verified** | SWE-bench 的人工审查子集（500 实例），由 SWE-bench 团队在 Hugging Face 与 Docker Hub 公开发布。任务平均修改量约 1–2 行 / 1 文件。本项目 Phase 1 使用其作为探索数据集——镜像 ~1 GB / 实例，可通过 `docker pull swebench/sweb.eval.x86_64.<id_with_1776>:latest` 直接获取，无需 `build_docker_images.sh` |
-| **SWE-bench Pro** | SWE-bench 的高质量保留集，由 Scale AI 发布。任务平均修改量 107.4 行 / 4.1 文件，远大于 Verified；按 GPL 许可证选择以避开 LLM 训练语料并结合私有代码库构建保留集防止过拟合。本项目 Phase 2 使用其作 held-out 验证集，使用前需通过 `scripts/build_docker_images.sh` 构建专用 Docker 镜像 |
+| **SWE-PolyBench** | Amazon Science 发布的多语言基准（Java/JS/TS/Python）。Python 子集共 199 个实例，来自 6 个仓库。任务平均修改量高于 Verified（2.0 文件/任务 vs 1.2，5.76 节点修改 vs 3.54）。本项目 Phase 2 使用 Python 子集作 held-out 验证集。镜像托管于 GHCR（`ghcr.io/timesler/swe-polybench.eval.x86_64.<id>:v1.1`），大量实例存在匿名访问 denied 问题 |
 | **Docker 执行环境** | 每个任务的每一轮（包括方案生成、代码生成、反思优化）均在一个**独立**的 Docker 容器中运行，从同一镜像 + 同一 SWE-bench 实例 `base_commit` 状态启动，确保轮间无状态污染。代码库以**读写（rw）**方式挂载到 `/testbed`，Agent 可修改源码与读写 `/tmp`；轮间隔离由容器生命周期保证，而非由挂载只读保证 |
 | **GEPA 反射 Prompt 模板** | 从 GEPA (`gepa-ai/gepa`) 提取的反思策略 Prompt 模板（见附录 A）。该模板指导 LLM 分析先前 Plan 的执行轨迹、测试结果和反馈，产出改进后的新 Plan。本项目不依赖 GEPA 的完整进化循环，仅复用其 Prompt 模板和反馈格式化逻辑 |
 | **反思 Agent** | 负责生成优化后的新 Plan。对于第二轮及之后的 Plan，不再调用原始方案生成 Agent，而是由反思 Agent 基于前一轮的 Optimization Feedback 直接生成新的 Plan。反思 Agent 使用 GEPA 反射 Prompt 模板驱动 LLM 进行反思 |
@@ -110,7 +110,7 @@
 |------|------|
 | ID | FR-01 |
 | 名称 | 任务输入与系统初始化 |
-| 描述 | 系统读取配置文件，加载指定 **SWE-bench** 任务实例（Verified 或 Pro，由 `system.dataset` 决定），**为每一轮**准备独立的 Docker 容器环境（同镜像 + 同 base_commit 起始状态）。Verified 镜像由 SWE-bench 官方在 Docker Hub 发布，`swebench` 库首次评估时自动拉取；Pro 镜像需通过运行 `scripts/build_docker_images.sh` 预先构建 |
+| 描述 | 系统读取配置文件，加载指定数据集任务实例（Verified 或 PolyBench，由 `system.dataset` + `system.dataset_type` 决定），**为每一轮**准备独立的 Docker 容器环境（同镜像 + 同 base_commit 起始状态）。Verified 镜像由 SWE-bench 官方在 Docker Hub 发布，`swebench` 库首次评估时自动拉取；PolyBench 使用 GHCR 预构建镜像 |
 | 输入 | SWE-bench 实例 ID（或实例列表）、配置文件路径 |
 | 输出 | 每轮一个运行中的 Docker 容器，`/testbed` 处于实例 `base_commit` 初始状态（rw 挂载），Agent 可读写 `/testbed` 与 `/tmp` |
 | 验收标准 | 成功启动 Docker 容器；`/testbed` 处于实例 `base_commit` 初始状态；Agent 能在该容器中执行文件读取、搜索、修改与命令执行；`/tmp` 目录可写；**第 i-1 轮对文件系统的任何修改对第 i 轮不可见** |
@@ -150,7 +150,7 @@
 | 输入 | Patch 内容（Git diff 格式）、SWE-bench 实例信息 |
 | 输出 | 测试结果：结构化对象 `{resolved: bool, stdout: string, stderr: string, log_dir: string, error_info: string \| null}`，由 `run_evaluation` 返回的 `(resolved_status, log_dir, report)` 元组组装而成。`error_info` 仅在评估器抛异常或 `completed=False` 时填写错误摘要，正常完成时为 `null` |
 | 验收标准 | 评估结果与 SWE 官方工具的输出完全一致；评估异常时 `error_info` 非空且 `resolved=false`，正常完成时 `error_info=null` |
-| 依赖 | `swebench` 官方 Python 包；Verified 时使用官方 Docker Hub 镜像，Pro 时使用 `build_docker_images.sh` 自建镜像 |
+| 依赖 | `swebench` 官方 Python 包；Verified 时使用官方 Docker Hub 镜像，PolyBench 时使用 GHCR 预构建镜像 |
 
 ### 3.2 核心功能：方案迭代优化
 
@@ -216,7 +216,7 @@
 | ID | FR-09 |
 | 名称 | 系统运行参数配置 |
 | 描述 | 支持配置文件配置系统运行的核心参数 |
-| 配置项 | 1）`n`：目标 Plan 数量；2）`optimization_info_level`：0 或 1；3）`model`：使用的 LLM 模型（如 deepseek-v4-flash）；4）`dataset`：HuggingFace SWE-bench 数据集名（如 `SWE-bench/SWE-bench_Verified` 或 `ScaleAI/SWE-bench_Pro`），决定 `instances` 的解析空间；5）`instances`：SWE-bench 实例 ID 列表（在 `dataset` 内解析）；6）`prompts.reflection_prompt_template`：反思模板（可选，缺省由 `src/config.py` 加载阶段填充默认值）；7）`resume`：重跑配置（可选，FR-07 推迟实现）；8）`agent.max_steps`：每个 Agent 的最大步数；9）`agent.cost_limit`：每个 Agent 的 API 调用成本上限（美元）；10）`agent.timeout`：由 pipeline 透传到 `DefaultAgent` 的命令执行超时（秒），**默认 1800 秒，仅用于筛除明显异常**；11）`evaluator.timeout`：SWE 评估器单实例超时（秒） |
+| 配置项 | 1）`n`：目标 Plan 数量；2）`optimization_info_level`：0 或 1；3）`model`：使用的 LLM 模型（如 deepseek-v4-flash）；4）`dataset`：HuggingFace 数据集名（如 `SWE-bench/SWE-bench_Verified` 或 `AmazonScience/SWE-PolyBench`），决定 `instances` 的解析空间；5）`dataset_type`：显式数据集类型提示（`"swebench"` / `"polybench"` / `"pro"`）；6）`language_filter`：多语言数据集语言过滤（如 `"Python"`，仅 PolyBench 需要）；7）`instances`：实例 ID 列表（在 `dataset` 内解析）；8）`prompts.reflection_prompt_template`：反思模板（可选，缺省由 `src/config.py` 加载阶段填充默认值）；9）`resume`：重跑配置（可选，FR-07 推迟实现）；10）`agent.max_steps`：每个 Agent 的最大步数；11）`agent.cost_limit`：每个 Agent 的 API 调用成本上限（美元）；12）`agent.timeout`：由 pipeline 透传到 `DefaultAgent` 的命令执行超时（秒），**默认 1800 秒，仅用于筛除明显异常**；13）`evaluator.timeout`：SWE 评估器单实例超时（秒） |
 | 验收标准 | 系统启动时自动加载配置文件，根据配置执行相应流程 |
 
 ### 3.4 输出与数据保存
@@ -467,11 +467,13 @@ system:
   n: 3
   optimization_info_level: 1
   model: deepseek-v4-flash
-  dataset: SWE-bench/SWE-bench_Verified  # Phase 1 默认；Phase 2 切换到 ScaleAI/SWE-bench_Pro
+  dataset: SWE-bench/SWE-bench_Verified  # Phase 1 默认；Phase 2 切换到 AmazonScience/SWE-PolyBench
+  dataset_type: ""                       # Phase 2 PolyBench 使用 "polybench"
+  language_filter: ""                    # Phase 2 PolyBench 使用 "Python"
   instances:                              # 实例 ID 在所选 dataset 内解析；同一次运行只跑一个 dataset
     - astropy__astropy-12907
     - django__django-12345
-  output_dir: ./output                    # 实际写入路径为 {output_dir}/{dataset_short}/{instance_id}/
+  output_dir: ./output                    # 实际写入路径为 {output_dir}/{dataset_short}/{batch_id}/{instance_id}/
 
   # 重跑配置（可选，FR-07 推迟实现，配置仅占位）
   resume:
@@ -541,7 +543,7 @@ prompts:
     Issue: {issue_description}
 
 docker:
-  image_builder_script: "./scripts/build_docker_images.sh"  # SWE-bench Pro 镜像构建脚本路径（Phase 2 使用；Phase 1 Verified 直接拉取官方镜像，无需该脚本）
+  image_builder_script: "./scripts/build_docker_images.sh"  # 保留字段（当前未使用；Phase 1 Verified 直接拉取官方镜像，Phase 2 PolyBench 使用 GHCR 预构建镜像）
   workdir: "/testbed"
   timeout: 30                  # Docker 命令执行超时（秒）
 
@@ -560,7 +562,7 @@ agent:
 | n | 必须为整数且 ≥ 1 | n < 1 时系统报错退出 |
 | optimization_info_level | 必须为 0 或 1 | 非法值时默认设为 0 并给出警告 |
 | prompts.reflection_prompt_template | 若用户提供，必须含 `{{prompt_template}}` 与 `{{inputs_outputs_feedback}}` 两个 Jinja 占位符 | 缺失或为空时回退到 `config.yaml` 内置默认值（由 `src/config.py` 在加载时填充） |
-| instances | 必须是有效的 SWE-bench 实例 ID（在 `system.dataset` 所选数据集内解析；Phase 1 默认 Verified，Phase 2 切到 Pro） | 无效时退出并提示 |
+| instances | 必须是有效的实例 ID（在 `system.dataset` 所选数据集内解析；Phase 1 默认 Verified，Phase 2 切到 PolyBench Python） | 无效时退出并提示 |
 | model | 必须为 DeepSeek API 支持的模型标识 | 无效时提示可选模型并退出（但不主动检查） |
 | api_base | 必须为合法 URL（含 scheme） | 非法时报错退出 |
 | agent.max_steps / agent.timeout / docker.timeout / evaluator.timeout | 必须 ≥ 1 | 非法时报错退出 |
@@ -569,27 +571,25 @@ agent:
 
 ### 6.3 快速启动脚本
 
-以下脚本展示如何从零开始运行一个实例。**示例为 Phase 2（SWE-bench Pro）的完整流程**（含本地 Docker 镜像构建）；Phase 1（Verified）的运行更简单——不需要构建步骤，`swebench` 首次评估时会自动从 Docker Hub 拉取官方镜像，可直接跳过 `[2/4] Building...` 段。
+以下脚本展示如何从零开始运行一个实例。**示例为 Phase 2（PolyBench）的完整流程**；Phase 1（Verified）的运行更简单——不需要构建步骤，`swebench` 首次评估时会自动从 Docker Hub 拉取官方镜像。
 
 ```bash
 #!/bin/bash
-# scripts/quickstart.sh — 一键运行单个 SWE-bench 实例（示例展示 Phase 2 / Pro 流程）
+# scripts/quickstart.sh — 一键运行单个实例（示例展示 Phase 2 / PolyBench 流程）
 
 set -e
 
-INSTANCE_ID="${1:-astropy__astropy-14539}"
+INSTANCE_ID="${1:-AutoGPT-4652}"
 PLAN_COUNT="${2:-3}"
 
 echo "[1/4] Activating conda environment..."
 conda activate mini-swe
 
 echo "[2/4] Installing Python dependencies..."
-pip install -r requirements.txt  # 包含 mini-swe-agent, swebench
+pip install -r requirements.txt  # 包含 mini-swe-agent, swebench, poly-bench-evaluation
 
-echo "[2/4] Building SWE-bench Pro Docker images... (Phase 2 only; Phase 1 Verified 跳过本步)"
-cd swebench-pro
-./scripts/build_docker_images.sh --instance "$INSTANCE_ID"
-cd ..
+echo "[2/4] Pulling PolyBench Docker image from GHCR... (Phase 2 only; Phase 1 Verified 跳过本步)"
+docker pull "ghcr.io/timesler/swe-polybench.eval.x86_64.${INSTANCE_ID,,}:v1.1" || echo "Warning: GHCR pull failed, may need login or local build"
 
 echo "[3/4] Preparing output directory..."
 mkdir -p ./output/"$INSTANCE_ID"
@@ -608,7 +608,7 @@ echo "Done. Results saved to ./output/$INSTANCE_ID/"
 
 ```bash
 chmod +x scripts/quickstart.sh
-./scripts/quickstart.sh astropy__astropy-14539 3
+./scripts/quickstart.sh AutoGPT-4652 3
 ```
 
 **前置条件**：
@@ -642,10 +642,10 @@ chmod +x scripts/quickstart.sh
 | 约束类型 | 描述 |
 |----------|------|
 | 技术约束 | Agent 基于 `mini-swe-agent` 框架（`DefaultAgent` + `DockerEnvironment` + `LiteLLMModel`）；反思优化复用 GEPA 反射 Prompt 模板（自行维护）；评估使用 SWE 官方工具；**所有 Agent（含反思 Agent）运行在 Docker 容器中**，代码库以**读写（rw）**方式挂载到 `/testbed`；**每轮使用独立容器，从同一镜像 + 同一 `base_commit` 初始状态启动**，确保轮间无状态污染；**反思 Agent 所需历史信息由主机端读取后通过 prompt 注入，不传递文件路径**，防止其访问其他轮次的 plan 或 trajectory 文件 |
-| 数据集约束 | 单次运行只读取一个 SWE-bench 数据集（由 `system.dataset` 决定）。**Phase 1 默认使用 SWE-bench Verified**（防止在 Pro 上过拟合 prompt / 反思模板）；**Phase 2 使用 SWE-bench Pro 作 held-out 验证集**。Verified 镜像由 `swebench` 自动从 Docker Hub 拉取，无需自建；Pro 仍需 `scripts/build_docker_images.sh` 构建专用镜像 |
+| 数据集约束 | 单次运行只读取一个数据集（由 `system.dataset` + `system.dataset_type` + `system.language_filter` 决定）。**Phase 1 默认使用 SWE-bench Verified**；**Phase 2 使用 SWE-PolyBench Python 子集作 held-out 验证集**。Verified 镜像由 `swebench` 自动从 Docker Hub 拉取，无需自建；PolyBench 使用 GHCR 预构建镜像，大量实例存在匿名访问 denied 问题 |
 | 开发约束 | 快速原型，不追求扩展性；最小化造轮子，优先调用现有库；Agent 行为通过 Prompt 约束，不修改 `mini-swe-agent` 框架源码 |
 | 模型约束 | **不做模型检查**，用户需确保 DeepSeek V4 API 可用 |
-| 运行约束 | 需要 Docker 环境；需要 DeepSeek API 调用权限；使用 Conda `mini-swe` 环境；Phase 2（Pro）额外需要 `scripts/build_docker_images.sh` 构建脚本 |
+| 运行约束 | 需要 Docker 环境；需要 DeepSeek API 调用权限；使用 Conda `mini-swe` 环境；Phase 2（PolyBench）额外需要 `tree-sitter==0.21.3` + `tree-sitter-languages==1.10.2` 精确安装，且 GHCR 镜像可能需登录或本地构建 |
 
 ---
 
@@ -655,7 +655,8 @@ chmod +x scripts/quickstart.sh
 |--------|----------|--------|------|----------|
 | R-01 | GEPA 反射 Prompt 模板适配到 Plan 优化场景的适配效果不佳 | 中 | 高 | **技术预研（Spike）**：开发前先安排半天时间测试默认反思模板（`config.prompts.reflection_prompt_template`，plan-optimization 版）在我们的 Feedback 数据结构上的效果。若效果不佳，调整 `prompts.reflection_prompt_template` 内容或修改 `_build_feedback_text` 的组装策略（增加截断、摘要、强化关键信号等） |
 | R-02 | DeepSeek V4 API 速率限制或成本超支 | 高 | 中 | 在配置文件中设置每轮的最大 Token 和 API 调用次数预算；使用 deepseek-v4-flash 以降低 API 成本 |
-| R-03 | Phase 2 SWE-bench Pro 评估环境构建复杂（需运行 build_docker_images.sh） | 中 | 中 | Phase 1 在 Verified 上完成大部分迭代以推迟接触 Pro；进入 Phase 2 前确保 build 脚本可复现；开发阶段保留 Mock 评估模式进行初步测试 |
+| R-03 | Phase 2 PolyBench GHCR 镜像大量实例匿名访问 denied | 高 | 高 | 确认 GHCR 访问限制根因（是否需登录 / 限流 / 部分镜像未发布）；若无法解决，评估本地构建 199 个实例镜像的可行性 |
+| R-03b | PolyBench 依赖 tree-sitter 版本锁定（`tree-sitter==0.21.3` + `tree-sitter-languages==1.10.2`） | 中 | 中 | 在 requirements.txt 中精确标注版本；安装时验证版本匹配；开发阶段保留 Mock 评估模式进行初步测试 |
 | R-04 | Agent 的自主探索可能因代码库过大而效率低下 | 中 | 中 | 在 Prompt 中引导 Agent 聚焦于 Issue 相关的目录或文件；设置 Agent 的最大步数限制 |
 | R-05 | Agent 生成的 Plan 结构化程度不足，导致代码生成 Agent 无法有效解析 | 高 | 高 | 通过 `plan_format_template` 约束输出结构；在代码生成 Prompt 中明确说明如何解析 Plan 内容 |
 | R-06 | 反思 Agent 上下文窗口因累积历史而超限 | 中 | 高 | 在组装 Optimization Feedback 时加入截断/摘要策略；在 Prompt 中控制长度 |
@@ -673,7 +674,7 @@ chmod +x scripts/quickstart.sh
 | **致命错误** | 磁盘空间不足 | 无法写入轨迹文件或结果文件 | 整个系统 | 立即停止，记录错误日志 | 非零 | 已产生的轨迹和结果保留 |
 | **致命错误** | Docker 守护进程崩溃 | Docker 服务不可用 | 整个系统 | 立即停止，记录错误日志 | 非零 | 已产生的轨迹和结果保留 |
 | **致命错误** | 配置文件解析失败 | config.yaml 格式错误 | 整个系统 | 立即停止，记录错误日志 | 非零 | 无（未开始运行） |
-| **任务级错误** | Docker 镜像不可用 | Phase 1 Verified 时 Docker Hub 拉取官方镜像失败、或 Phase 2 Pro 时本地镜像构建脚本执行失败 | 当前实例 | 跳过当前实例，记录错误，继续下一个 | 零（正常退出） | 已完成的实例数据保留 |
+| **任务级错误** | Docker 镜像不可用 | Phase 1 Verified 时 Docker Hub 拉取官方镜像失败、或 Phase 2 PolyBench 时 GHCR 镜像拉取失败 | 当前实例 | 跳过当前实例，记录错误，继续下一个 | 零（正常退出） | 已完成的实例数据保留 |
 | **任务级错误** | 代码库构建失败 | 实例的代码库在 Docker 中无法编译/安装 | 当前实例 | 跳过当前实例，记录错误，继续下一个 | 零（正常退出） | 已完成的实例数据保留 |
 | **任务级错误** | Agent 生成 Plan 失败 | Plan Agent 未输出有效 Plan（如空输出、格式完全不符） | 当前实例 | 跳过当前实例，记录错误，继续下一个 | 零（正常退出） | 已完成的实例数据保留 |
 | **任务级错误** | Agent 生成 Patch 失败 | Code Agent 未输出有效 Patch（如非 diff 格式、无法解析） | 当前实例 | 跳过当前实例，记录错误，继续下一个 | 零（正常退出） | 已完成的实例数据保留 |
@@ -692,7 +693,7 @@ chmod +x scripts/quickstart.sh
 
 | 测试用例 ID | 测试描述 | 预期结果 |
 |------------|----------|----------|
-| TC-01 | 设置 n=1，使用 SWE-bench 实例运行（Phase 1 默认 Verified；Phase 2 时使用 Pro 实例） | 系统在 Docker 内生成一个 Plan，生成 Patch，评估，输出结果文件包含 plan_1 及其轨迹。轨迹文件名为 `trajectory_1_plan_gen_{timestamp}.json` 和 `trajectory_1_code_gen_{timestamp}.json` |
+| TC-01 | 设置 n=1，使用 SWE-bench 实例运行（Phase 1 默认 Verified；Phase 2 时使用 PolyBench Python 实例） | 系统在 Docker 内生成一个 Plan，生成 Patch，评估，输出结果文件包含 plan_1 及其轨迹。轨迹文件名为 `trajectory_1_plan_gen_{timestamp}.json` 和 `trajectory_1_code_gen_{timestamp}.json` |
 | TC-02 | 设置 n=3，optimization_info_level=1 | 依次生成 Plan[1]（由 plan agent 生成）、Plan[2]（由 reflect agent 生成）、Plan[3]（由 reflect agent 生成），每个 Plan 对应一次完整的 code+test，所有轨迹保存（含 `trajectory_2_reflect_{timestamp}.json` 和 `trajectory_3_reflect_{timestamp}.json`），结果文件中包含测试反馈信息 |
 | TC-03 | optimization_info_level=0 | 优化信息只包含基础内容（无测试结果）；仍能生成优化后的 Plan；结果文件中 `optimization_info_level` 记录为 0 |
 | TC-04 | optimization_info_level=1 | 优化信息包含测试运行结果和报错信息；能够生成体现测试反馈的 Plan；结果文件中 `optimization_info_level` 记录为 1 |
@@ -715,8 +716,9 @@ chmod +x scripts/quickstart.sh
 | [1] | mini-swe-agent（https://github.com/SWE-agent/mini-swe-agent） | Agent 基础框架（Docker 环境、LLM 调用、Trajectory 记录） |
 | [2] | gepa-ai/gepa（https://github.com/gepa-ai/gepa） | 反射 Prompt 模板来源 |
 | [3] | SWE-bench Verified 数据集（https://huggingface.co/datasets/SWE-bench/SWE-bench_Verified） | Phase 1 探索数据集（500 实例，官方 Docker Hub 镜像可直接拉取） |
-| [3b] | SWE-bench Pro 数据集（https://www.swebench.com/） | Phase 2 保留验证集 |
-| [4] | SWE 官方评估工具（https://github.com/swe-bench/swebench） | 测试评估实现 |
+| [3b] | SWE-PolyBench 数据集（https://huggingface.co/datasets/AmazonScience/SWE-PolyBench） | Phase 2 保留验证集（Python 子集 199 实例） |
+| [4] | SWE 官方评估工具（https://github.com/swe-bench/swebench） | SWE-bench 测试评估实现 |
+| [4b] | SWE-PolyBench 官方工具（https://github.com/amazon-science/SWE-PolyBench） | PolyBench 测试评估实现 |
 | [5] | DeepSeek V4 API 文档（https://api-docs.deepseek.com/） | LLM 模型接口 |
 
 ---

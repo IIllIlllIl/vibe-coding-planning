@@ -70,7 +70,11 @@ def _run_instance_core(
     # ------------------------------------------------------------------
     # 1. Load instance metadata
     # ------------------------------------------------------------------
-    loader = InstanceLoader(dataset=config.system.dataset)
+    loader = InstanceLoader(
+        dataset=config.system.dataset,
+        dataset_type=config.system.dataset_type,
+        language_filter=config.system.language_filter,
+    )
     try:
         instance_info = loader.load_instance(instance_id)
     except TaskError as exc:
@@ -112,8 +116,9 @@ def _run_instance_core(
     image_name = derive_image_name(instance_info)
     repo_path = instance_info.get("repo_path", "")
 
-    # Pro instances use /app as workdir; Verified uses config value
-    is_pro = "dockerhub_tag" in instance_info
+    # Pro instances use /app as workdir; Verified and PolyBench use config value
+    dataset_type = instance_info.get("dataset_type", "")
+    is_pro = dataset_type == "pro" or "dockerhub_tag" in instance_info
     workdir = "/app" if is_pro else config.docker.workdir
 
     # ------------------------------------------------------------------
