@@ -8,12 +8,16 @@ container.
 from __future__ import annotations
 
 import logging
+import subprocess
 from typing import Any
 
 from src.config import DockerConfig
 from src.exceptions import FatalError
 
 logger = logging.getLogger(__name__)
+
+_POLYBENCH_GHCR_PREFIX = "ghcr.io/timesler/swe-polybench.eval.x86_64."
+_POLYBENCH_IMAGE_TAGS = ("v1.1", "v1.0", "latest")
 
 
 def _import_docker_env() -> type:
@@ -80,6 +84,7 @@ class DockerEnvWrapper:
                 to ``DockerEnvironment``.
         """
         DockerEnvironment = _import_docker_env()
+        image = _resolve_polybench_image(image, timeout=timeout)
 
         kwargs: dict[str, Any] = {
             "image": image,
@@ -152,3 +157,62 @@ class DockerEnvWrapper:
     def __exit__(self, *args: Any) -> None:
         """Context manager exit – always stop the container."""
         self.stop()
+
+
+def _resolve_polybench_image(image: str, timeout: int | None = None) -> str:
+    """Ensure PolyBench GHCR images are local, with tag fallback.
+
+    mini-swe-agent starts containers with ``docker run``. If the image is not
+    local, Docker may pull layers during ``docker run`` and hit its startup
+    timeout. Pulling explicitly here also lets us handle official PolyBench
+    images that exist as ``v1.0``/``latest`` but not ``v1.1``.
+    """
+    if not image.startswith(_POLYBENCH_GHCR_PREFIX) or ":" not in image:
+        return image
+
+    base = image.rsplit(":", 1)[0]
+    candidates = [f"{base}:{tag}" for tag in _POLYBENCH_IMAGE_TAGS]
+    if image not in candidates:
+        candidates.insert(0, image)
+
+    pull_timeout = timeout or 1800
+    last_error = ""
+    for candidate in candidates:
+        if _docker_image_exists(candidate):
+            if candidate != image:
+                logger.info("Using PolyBench fallback image already local: %s", candidate)
+            return candidate
+        try:
+            logger.info("Pulling PolyBench image: %s", candidate)
+            subprocess.run(
+                ["docker", "pull", candidate],
+                check=True,
+                capture_output=True,
+                text=True,
+                timeout=pull_timeout,
+            )
+            if candidate != image:
+                logger.info("Using PolyBench fallback image: %s", candidate)
+            return candidate
+        except subprocess.TimeoutExpired as exc:
+            last_error = f"timeout after {exc.timeout}s pulling {candidate}"
+            logger.warning("PolyBench image pull timed out: %s", candidate)
+        except subprocess.CalledProcessError as exc:
+            last_error = (exc.stderr or exc.stdout or str(exc)).strip()
+            logger.info("PolyBench image pull failed for %s: %s", candidate, last_error)
+
+    raise FatalError(
+        "Unable to obtain PolyBench Docker image for agent container. "
+        f"Tried: {', '.join(candidates)}. Last error: {last_error}"
+    )
+
+
+def _docker_image_exists(image: str) -> bool:
+    """Return True if Docker already has ``image`` locally."""
+    result = subprocess.run(
+        ["docker", "image", "inspect", image],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    return result.returncode == 0

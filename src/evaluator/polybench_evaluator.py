@@ -19,6 +19,8 @@ from src.exceptions import FatalError
 
 logger = logging.getLogger(__name__)
 
+_POLYBENCH_IMAGE_TAGS = ("v1.1", "v1.0", "latest")
+
 
 def _import_polybench() -> Any:
     """Lazy import PolyBench evaluation modules."""
@@ -47,6 +49,30 @@ def _import_polybench() -> Any:
             "poly_bench_evaluation is not installed. "
             "Please install it: pip install -e /path/to/SWE-PolyBench"
         ) from exc
+
+
+def _try_pull_prebuilt_image_with_fallback(
+    docker_manager: Any,
+    instance_id: str,
+    tags: tuple[str, ...] = _POLYBENCH_IMAGE_TAGS,
+) -> bool:
+    """Pull a PolyBench image, accepting older official image tags.
+
+    The official DockerManager supports a single tag per pull attempt.
+    In practice, some public GHCR images exist as ``v1.0``/``latest`` but
+    not ``v1.1``. Trying a small fixed fallback list keeps evaluation
+    compatible with both currently published image sets.
+    """
+    for tag in tags:
+        if docker_manager.try_pull_prebuilt_image(instance_id, version=tag):
+            if tag != tags[0]:
+                logger.info(
+                    "[%s] Pulled PolyBench image using fallback tag: %s",
+                    instance_id,
+                    tag,
+                )
+            return True
+    return False
 
 
 def evaluate_polybench_instance(
@@ -155,11 +181,8 @@ def evaluate_polybench_instance(
         # ------------------------------------------------------------------
         if docker_manager.check_image_local(local_image_name=image_id):
             logger.info("[%s] Using existing local image: %s", instance_id, image_id)
-        elif docker_manager.try_pull_prebuilt_image(instance_id, version="v1.1"):
-            logger.info(
-                "[%s] Successfully pulled pre-built image from GHCR",
-                instance_id,
-            )
+        elif _try_pull_prebuilt_image_with_fallback(docker_manager, instance_id):
+            logger.info("[%s] Successfully pulled pre-built image from GHCR", instance_id)
         else:
             logger.warning(
                 "[%s] Pre-built image not available locally or in GHCR. "

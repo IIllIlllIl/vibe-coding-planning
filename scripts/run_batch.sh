@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Unified batch runner for SWE-bench Verified and Pro instances.
+# Unified batch runner for SWE-bench and PolyBench instances.
 #
 # Auto-detects dataset from config.yaml (system.dataset), derives instance
 # source and output paths automatically.
@@ -98,9 +98,23 @@ else
       echo "ERROR: No Pro instance list found (tried pro_ansible_instances.json, pro_python_instances.json)" >&2
       exit 1
     fi
+  # Other configured datasets (e.g. PolyBench): prefer a batch-scoped
+  # manifest; otherwise materialize system.instances from config.yaml.
   else
-    echo "ERROR: Unknown dataset '$DATASET'. Cannot determine instance source." >&2
-    exit 1
+    INSTANCE_FILE="output/$DATASET_SHORT/$BATCH_ID/sampled_instances.json"
+    if [[ ! -f "$INSTANCE_FILE" ]]; then
+      mkdir -p "$(dirname "$INSTANCE_FILE")"
+      python -c "
+import json, sys, yaml
+cfg = yaml.safe_load(open('config.yaml')) or {}
+instances = ((cfg.get('system') or {}).get('instances') or [])
+if not instances:
+    sys.stderr.write('ERROR: system.instances is empty and no batch manifest exists\n')
+    sys.exit(2)
+with open('$INSTANCE_FILE', 'w', encoding='utf-8') as f:
+    json.dump({'instances': instances}, f, indent=2)
+" || exit 1
+    fi
   fi
 fi
 

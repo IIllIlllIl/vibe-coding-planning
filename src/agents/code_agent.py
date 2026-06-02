@@ -1,10 +1,10 @@
 """Code generation agent.
 
-Aligns with the official mini-swe-agent SWE-bench submission protocol:
-the agent edits files in the container with shell commands and finally
-emits ``echo COMPLETE_TASK_AND_SUBMIT_FINAL_OUTPUT && git add -A && git
-diff --cached``. ``DefaultAgent.has_finished`` strips the marker line and
-``Submitted.exception_msg`` carries the canonical ``git diff --cached``
+Aligns with the mini-swe-agent submission protocol: the agent edits files
+in the container with shell commands and finally emits
+``echo COMPLETE_TASK_AND_SUBMIT_FINAL_OUTPUT`` followed by the configured
+``git diff --cached`` command. ``DefaultAgent.has_finished`` strips the
+marker line and ``Submitted.exception_msg`` carries the canonical diff
 output verbatim — no fence-stripping, validation, or repair is needed.
 """
 

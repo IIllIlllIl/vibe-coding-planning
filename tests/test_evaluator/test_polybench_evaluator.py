@@ -4,7 +4,10 @@ from unittest.mock import patch, MagicMock
 
 import pytest
 
-from src.evaluator.polybench_evaluator import evaluate_polybench_instance
+from src.evaluator.polybench_evaluator import (
+    _try_pull_prebuilt_image_with_fallback,
+    evaluate_polybench_instance,
+)
 from src.exceptions import FatalError
 
 
@@ -54,6 +57,37 @@ def _make_docker_manager(**kwargs):
         def __del__(self):
             pass
     return _DM()
+
+
+def test_try_pull_prebuilt_image_with_fallback_uses_older_tag():
+    docker_manager = MagicMock()
+    docker_manager.try_pull_prebuilt_image.side_effect = [False, True]
+
+    result = _try_pull_prebuilt_image_with_fallback(
+        docker_manager,
+        "test__repo-1234",
+        tags=("v1.1", "v1.0", "latest"),
+    )
+
+    assert result is True
+    assert docker_manager.try_pull_prebuilt_image.call_args_list == [
+        (("test__repo-1234",), {"version": "v1.1"}),
+        (("test__repo-1234",), {"version": "v1.0"}),
+    ]
+
+
+def test_try_pull_prebuilt_image_with_fallback_returns_false_after_all_tags():
+    docker_manager = MagicMock()
+    docker_manager.try_pull_prebuilt_image.return_value = False
+
+    result = _try_pull_prebuilt_image_with_fallback(
+        docker_manager,
+        "test__repo-1234",
+        tags=("v1.1", "v1.0", "latest"),
+    )
+
+    assert result is False
+    assert docker_manager.try_pull_prebuilt_image.call_count == 3
 
 
 class TestEvaluatePolybenchInstance:

@@ -31,12 +31,113 @@ system:
   #   run1, run2, run3           — sequentially numbered exploration runs
   #   run3_level1_n3_on_run1     — variation on existing sample set
   # Allowed characters: [A-Za-z0-9_.-]. CLI flag --batch-id overrides this value.
-  batch_id: "polybench-smoke-autogpt"
+  batch_id: "polybench-run100"
 
-  # Instance list is populated from output/SWE-bench_Verified/<batch_id>/sampled_instances.json
-  # by scripts/run_batch_verified.sh. Leave empty here; the batch script reads the JSON manifest.
-  instances: []
-  output_dir: ./output
+  # Stratified PolyBench Python sample from 199 instances.
+  # Target: 100 instances. Seed: 20260602.
+  # Allocation: transformers=63, keras=19, langchain=11, yt-dlp=5,
+  # tensorflow/models=1, AutoGPT=1.
+  instances:
+    - keras-team__keras-19931
+    - huggingface__transformers-19219
+    - huggingface__transformers-22920
+    - langchain-ai__langchain-19331
+    - huggingface__transformers-12981
+    - keras-team__keras-20002
+    - huggingface__transformers-15831
+    - keras-team__keras-19201
+    - Significant-Gravitas__AutoGPT-4652
+    - huggingface__transformers-26752
+    - huggingface__transformers-28940
+    - huggingface__transformers-7562
+    - keras-team__keras-19924
+    - huggingface__transformers-7272
+    - langchain-ai__langchain-19717
+    - langchain-ai__langchain-5584
+    - huggingface__transformers-5122
+    - keras-team__keras-4856
+    - huggingface__transformers-16198
+    - keras-team__keras-19955
+    - huggingface__transformers-26568
+    - huggingface__transformers-8554
+    - huggingface__transformers-26164
+    - huggingface__transformers-28563
+    - keras-team__keras-19284
+    - huggingface__transformers-3716
+    - huggingface__transformers-13491
+    - yt-dlp__yt-dlp-4524
+    - yt-dlp__yt-dlp-5933
+    - huggingface__transformers-13919
+    - huggingface__transformers-22190
+    - keras-team__keras-19641
+    - keras-team__keras-19466
+    - langchain-ai__langchain-6483
+    - huggingface__transformers-13436
+    - huggingface__transformers-13989
+    - huggingface__transformers-15843
+    - huggingface__transformers-21345
+    - huggingface__transformers-26839
+    - yt-dlp__yt-dlp-9862
+    - langchain-ai__langchain-5450
+    - huggingface__transformers-14355
+    - huggingface__transformers-13495
+    - huggingface__transformers-30964
+    - huggingface__transformers-15913
+    - huggingface__transformers-15158
+    - keras-team__keras-18766
+    - huggingface__transformers-28071
+    - langchain-ai__langchain-20064
+    - huggingface__transformers-21768
+    - huggingface__transformers-5749
+    - keras-team__keras-19937
+    - huggingface__transformers-13693
+    - huggingface__transformers-18851
+    - huggingface__transformers-14779
+    - langchain-ai__langchain-6456
+    - huggingface__transformers-8435
+    - huggingface__transformers-8747
+    - huggingface__transformers-19590
+    - huggingface__transformers-29311
+    - huggingface__transformers-17082
+    - huggingface__transformers-23796
+    - keras-team__keras-18852
+    - huggingface__transformers-27717
+    - huggingface__transformers-30556
+    - huggingface__transformers-29838
+    - langchain-ai__langchain-4103
+    - huggingface__transformers-27561
+    - huggingface__transformers-23126
+    - keras-team__keras-3983
+    - tensorflow__models-4628
+    - langchain-ai__langchain-21201
+    - keras-team__keras-19915
+    - keras-team__keras-19484
+    - huggingface__transformers-24510
+    - huggingface__transformers-3198
+    - huggingface__transformers-22649
+    - huggingface__transformers-31095
+    - huggingface__transformers-16661
+    - huggingface__transformers-13573
+    - huggingface__transformers-7075
+    - keras-team__keras-19838
+    - huggingface__transformers-19073
+    - yt-dlp__yt-dlp-3435
+    - huggingface__transformers-28535
+    - huggingface__transformers-29563
+    - huggingface__transformers-28010
+    - huggingface__transformers-25358
+    - keras-team__keras-3907
+    - langchain-ai__langchain-5432
+    - huggingface__transformers-26386
+    - huggingface__transformers-23223
+    - huggingface__transformers-28398
+    - huggingface__transformers-30899
+    - keras-team__keras-19773
+    - keras-team__keras-18975
+    - huggingface__transformers-25884
+    - huggingface__transformers-20136
+    - langchain-ai__langchain-5609
+    - yt-dlp__yt-dlp-4841
 
   # When true (default), exit the round loop early once an instance is
   # resolved (all FAIL_TO_PASS pass + all PASS_TO_PASS pass), saving
@@ -204,8 +305,9 @@ prompts:
     2. Provide exactly ONE bash command to execute
 
     ## Important Boundaries
-    - MODIFY: Regular source code files in /testbed (this is the working directory for all your subsequent commands)
-    - DO NOT MODIFY: Tests, configuration files (pyproject.toml, setup.cfg, etc.)
+    - MODIFY: Only Python source code files (*.py) in /testbed (this is the working directory for all your subsequent commands)
+    - DO NOT MODIFY: Tests, Docker files, configuration files (pyproject.toml, setup.cfg, etc.),
+      README/docs, binary/media fixtures, or generated files.
 
     ## Command Execution Rules
     You are operating in an environment where
@@ -324,7 +426,7 @@ prompts:
     issue exactly the following command:
 
     ```bash
-    echo COMPLETE_TASK_AND_SUBMIT_FINAL_OUTPUT && git add -A && git diff --cached
+    echo COMPLETE_TASK_AND_SUBMIT_FINAL_OUTPUT && git add -A -- '*.py' ':(exclude)tests/**' ':(exclude)test/**' ':(exclude)*_test.py' ':(exclude)test_*.py' ':(exclude)*_pb2.py' && git diff --cached
     ```
 
     This command will submit your work.

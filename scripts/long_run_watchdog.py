@@ -967,6 +967,18 @@ def _load_enable_review() -> bool:
         return False
 
 
+def _should_start_analysis_after_batch() -> bool:
+    """Only run post-batch rule analysis for Verified exploration batches."""
+    try:
+        import yaml
+
+        cfg = yaml.safe_load(Path("config.yaml").read_text(encoding="utf-8"))
+        dataset = (cfg.get("system") or {}).get("dataset", "")
+        return "SWE-bench_Verified" in dataset or "Verified" in dataset
+    except Exception:
+        return False
+
+
 def docker_backoff_wait(retry_count: int) -> int:
     """Exponential backoff for Docker daemon retries.
 
@@ -1668,12 +1680,14 @@ def main() -> int:
                     logging.info("Batch ended normally (=== Batch end ===). Marking complete.")
                     state.status = "completed"
                     save_state(state)
-                    # Transition to analysis if batch is done
-                    logging.info("Batch complete. Starting flash analysis phase.")
-                    state.analysis_phase = "flash"
-                    state.analysis_completed = 0
-                    save_state(state)
-                    start_analysis(state)
+                    if _should_start_analysis_after_batch():
+                        logging.info("Batch complete. Starting flash analysis phase.")
+                        state.analysis_phase = "flash"
+                        state.analysis_completed = 0
+                        save_state(state)
+                        start_analysis(state)
+                    else:
+                        logging.info("Batch complete. No post-batch analysis configured for this dataset.")
                     continue
 
             # Unknown failure

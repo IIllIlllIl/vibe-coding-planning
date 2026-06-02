@@ -4,22 +4,33 @@ from __future__ import annotations
 
 from typing import Optional
 from unittest.mock import patch
+from types import SimpleNamespace
+import subprocess
 
 import pytest
 
 from src.config import DockerConfig
-from src.environment.docker_env import DockerEnvWrapper
+from src.environment.docker_env import DockerEnvWrapper, _resolve_polybench_image
 from src.exceptions import FatalError
 
 
 class MockDockerEnvironment:
     """Mock class that mimics mini-swe-agent 1.17.5 DockerEnvironment."""
 
-    def __init__(self, *, image: str, cwd: str, run_args: Optional[list[str]] = None, timeout: Optional[int] = None) -> None:
+    def __init__(
+        self,
+        *,
+        image: str,
+        cwd: str,
+        run_args: Optional[list[str]] = None,
+        timeout: Optional[int] = None,
+        **kwargs,
+    ) -> None:
         self.image = image
         self.cwd = cwd
         self.run_args = run_args or []
         self.timeout = timeout
+        self.kwargs = kwargs
         self._cleaned_up = False
 
     def execute(self, command: str) -> dict:
@@ -226,3 +237,42 @@ class TestMissingDependency:
         wrapper = DockerEnvWrapper(docker_config)
         with pytest.raises(FatalError, match="mini-swe-agent"):
             wrapper.start(image="swebench/astropy:latest", workdir="/testbed")
+
+
+class TestPolybenchImageFallback:
+    def test_resolve_polybench_image_uses_v10_fallback(self):
+        image = "ghcr.io/timesler/swe-polybench.eval.x86_64.test__repo-1:v1.1"
+
+        def fake_run(args, **kwargs):
+            cmd = args[:3]
+            target = args[-1]
+            if cmd == ["docker", "image", "inspect"]:
+                return SimpleNamespace(returncode=1, stdout="", stderr="")
+            if args[:2] == ["docker", "pull"]:
+                if target.endswith(":v1.0"):
+                    return SimpleNamespace(returncode=0, stdout="pulled", stderr="")
+                raise subprocess.CalledProcessError(
+                    1, args, output="", stderr="manifest unknown"
+                )
+            raise AssertionError(args)
+
+        with patch("src.environment.docker_env.subprocess.run", side_effect=fake_run):
+            resolved = _resolve_polybench_image(image, timeout=60)
+
+        assert resolved.endswith(":v1.0")
+
+    def test_resolve_polybench_image_raises_when_all_tags_fail(self):
+        image = "ghcr.io/timesler/swe-polybench.eval.x86_64.test__repo-1:v1.1"
+
+        def fake_run(args, **kwargs):
+            if args[:3] == ["docker", "image", "inspect"]:
+                return SimpleNamespace(returncode=1, stdout="", stderr="")
+            if args[:2] == ["docker", "pull"]:
+                raise subprocess.CalledProcessError(
+                    1, args, output="", stderr="denied"
+                )
+            raise AssertionError(args)
+
+        with patch("src.environment.docker_env.subprocess.run", side_effect=fake_run):
+            with pytest.raises(FatalError, match="Unable to obtain PolyBench Docker image"):
+                _resolve_polybench_image(image, timeout=60)
