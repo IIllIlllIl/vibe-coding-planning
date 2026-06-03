@@ -17,7 +17,7 @@ from typing import Any
 from src.agents import check_agent, code_agent, plan_agent
 from src.config import Config
 from src.data.instance_loader import InstanceLoader
-from src.environment.docker_env import DockerEnvWrapper
+from src.environment.docker_env import DockerEnvWrapper, cleanup_docker_image_cache
 from src.evaluator.swe_evaluator import derive_image_name, evaluate
 from src.exceptions import FatalError, TaskError
 from src.output.trajectory import save_trajectory
@@ -276,6 +276,8 @@ def _run_instance_core(
     finally:
         logger.info("[%s] Stopping Docker env", instance_id)
         docker.stop()
+        if config.docker.delete_images_after_instance:
+            cleanup_docker_image_cache(config.docker.max_cached_images)
 
     # ------------------------------------------------------------------
     # 5. Finalize output with check result

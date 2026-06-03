@@ -17,6 +17,8 @@ import dataclasses
 from src.analysis.aggregation_agent import aggregate_with_config
 from src.analysis.case_loader import load_cases
 from src.analysis.contrastive_agent import run as run_agent
+from src.analysis.opencode_agent import aggregate as aggregate_with_opencode
+from src.analysis.opencode_agent import run as run_opencode_agent
 from src.analysis.output import AnalysisOutputWriter
 from src.config import load_config
 from src.exceptions import FatalError, TaskError
@@ -101,11 +103,18 @@ def main(argv: list[str] | None = None) -> int:
         per_case_dir = data_dir
         aggregate_output = output_dir / "aggregated_rules.json"
         try:
-            result = aggregate_with_config(
-                per_case_dir=per_case_dir,
-                output_path=aggregate_output,
-                config=config,
-            )
+            if config.analysis.backend == "opencode":
+                result = aggregate_with_opencode(
+                    per_case_dir=per_case_dir,
+                    output_path=aggregate_output,
+                    config=config,
+                )
+            else:
+                result = aggregate_with_config(
+                    per_case_dir=per_case_dir,
+                    output_path=aggregate_output,
+                    config=config,
+                )
             logger.info(
                 "Aggregation complete: %d always rules, %d branches -> %s",
                 len(result.get("always", [])),
@@ -148,7 +157,12 @@ def main(argv: list[str] | None = None) -> int:
         logger.info("[%s] Starting analysis", case.instance_id)
 
         try:
-            rule_text, trajectory = run_agent(
+            agent_run = (
+                run_opencode_agent
+                if config.analysis.backend == "opencode"
+                else run_agent
+            )
+            rule_text, trajectory = agent_run(
                 config=config,
                 case=case,
                 data_base_dir=str(data_dir),

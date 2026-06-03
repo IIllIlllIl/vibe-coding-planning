@@ -18,6 +18,12 @@ logger = logging.getLogger(__name__)
 
 _POLYBENCH_GHCR_PREFIX = "ghcr.io/timesler/swe-polybench.eval.x86_64."
 _POLYBENCH_IMAGE_TAGS = ("v1.1", "v1.0", "latest")
+_PROJECT_IMAGE_PREFIXES = (
+    "swebench/sweb.eval.x86_64.",
+    _POLYBENCH_GHCR_PREFIX,
+    "jefzda/sweap-images:",
+    "polybench_",
+)
 
 
 def _import_docker_env() -> type:
@@ -31,6 +37,135 @@ def _import_docker_env() -> type:
             "mini-swe-agent is not installed. "
             "Please install it: pip install mini-swe-agent>=1.17.5"
         ) from exc
+
+
+def is_docker_storage_error(text: str) -> bool:
+    """Return True for Docker errors that indicate host storage corruption/fullness."""
+    lowered = text.lower()
+    patterns = (
+        "no space left on device",
+        "input/output error",
+        "/var/lib/desktop-containerd",
+        "containerd.metadata",
+        "meta.db",
+    )
+    return any(pattern in lowered for pattern in patterns)
+
+
+def remove_docker_image(image: str) -> None:
+    """Best-effort removal for a no-longer-needed Docker image."""
+    if not image:
+        return
+    try:
+        result = subprocess.run(
+            ["docker", "image", "rm", "-f", image],
+            capture_output=True,
+            text=True,
+            check=False,
+            timeout=300,
+        )
+    except FileNotFoundError:
+        logger.warning("Docker CLI not found; cannot remove image %s", image)
+        return
+    except subprocess.TimeoutExpired:
+        logger.warning("Timed out removing Docker image: %s", image)
+        return
+
+    if result.returncode == 0:
+        logger.info("Removed Docker image after instance: %s", image)
+        return
+
+    msg = (result.stderr or result.stdout or "").strip()
+    if "No such image" in msg:
+        logger.debug("Docker image already absent: %s", image)
+    else:
+        logger.warning("Failed to remove Docker image %s: %s", image, msg[:500])
+
+
+def cleanup_docker_image_cache(max_cached_images: int = 75) -> int:
+    """Keep only the newest project-related Docker images.
+
+    The cleanup is intentionally scoped to images used by this project so it
+    does not evict unrelated Docker work on the same machine.
+
+    Args:
+        max_cached_images: Number of newest project images to retain.
+
+    Returns:
+        Number of image references removed.
+    """
+    images = _list_project_docker_images()
+    if len(images) <= max_cached_images:
+        logger.info(
+            "Docker image cache within limit: %d/%d project images",
+            len(images),
+            max_cached_images,
+        )
+        return 0
+
+    images.sort(key=lambda item: item["created"], reverse=True)
+    stale = images[max_cached_images:]
+    removed = 0
+    for image in stale:
+        remove_docker_image(image["ref"])
+        removed += 1
+    logger.info(
+        "Docker image cache cleanup removed %d old project images; retained %d",
+        removed,
+        max_cached_images,
+    )
+    return removed
+
+
+def _list_project_docker_images() -> list[dict[str, str]]:
+    """Return project image refs with creation timestamps."""
+    try:
+        result = subprocess.run(
+            ["docker", "image", "ls", "--format", "{{.Repository}}:{{.Tag}}\t{{.ID}}"],
+            capture_output=True,
+            text=True,
+            check=False,
+            timeout=120,
+        )
+    except (FileNotFoundError, subprocess.TimeoutExpired) as exc:
+        logger.warning("Could not list Docker images for cache cleanup: %s", exc)
+        return []
+
+    if result.returncode != 0:
+        logger.warning("Docker image ls failed: %s", (result.stderr or result.stdout)[:500])
+        return []
+
+    images: list[dict[str, str]] = []
+    seen_refs: set[str] = set()
+    for line in result.stdout.splitlines():
+        if "\t" not in line:
+            continue
+        ref, image_id = line.split("\t", 1)
+        if ref in seen_refs or ref.startswith("<none>:"):
+            continue
+        if not _is_project_image_ref(ref):
+            continue
+        seen_refs.add(ref)
+        created = _inspect_image_created(ref)
+        images.append({"ref": ref, "id": image_id, "created": created})
+    return images
+
+
+def _is_project_image_ref(ref: str) -> bool:
+    return any(ref.startswith(prefix) for prefix in _PROJECT_IMAGE_PREFIXES)
+
+
+def _inspect_image_created(ref: str) -> str:
+    result = subprocess.run(
+        ["docker", "image", "inspect", ref, "--format", "{{.Created}}"],
+        capture_output=True,
+        text=True,
+        check=False,
+        timeout=30,
+    )
+    if result.returncode == 0:
+        return result.stdout.strip()
+    return ""
 
 
 class DockerEnvWrapper:
@@ -60,6 +195,7 @@ class DockerEnvWrapper:
         """
         self._config = docker_config
         self._env: Any = None
+        self._image: str = ""
 
     def start(
         self,
@@ -85,6 +221,7 @@ class DockerEnvWrapper:
         """
         DockerEnvironment = _import_docker_env()
         image = _resolve_polybench_image(image, timeout=timeout)
+        self._image = image
 
         kwargs: dict[str, Any] = {
             "image": image,
@@ -113,6 +250,11 @@ class DockerEnvWrapper:
             logger.info("Stopping Docker container")
             self._env.cleanup()
             self._env = None
+
+    @property
+    def image(self) -> str:
+        """Return the concrete image used for the current/last container."""
+        return self._image
 
     def execute(self, command: str) -> dict[str, Any]:
         """Execute a shell command inside the running container.
@@ -199,6 +341,12 @@ def _resolve_polybench_image(image: str, timeout: int | None = None) -> str:
             logger.warning("PolyBench image pull timed out: %s", candidate)
         except subprocess.CalledProcessError as exc:
             last_error = (exc.stderr or exc.stdout or str(exc)).strip()
+            if is_docker_storage_error(last_error):
+                raise FatalError(
+                    "Docker storage error while pulling PolyBench image. "
+                    "Stop the batch and free Docker disk space before retrying. "
+                    f"Image={candidate}. Error: {last_error}"
+                ) from exc
             logger.info("PolyBench image pull failed for %s: %s", candidate, last_error)
 
     raise FatalError(

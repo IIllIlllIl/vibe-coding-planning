@@ -8,6 +8,7 @@
 #   bash scripts/run_batch.sh           # real run
 #   bash scripts/run_batch.sh --dry-run # list SKIP/RUN, no pipeline calls
 #   bash scripts/run_batch.sh --instances FILE  # override instance list
+#   bash scripts/run_batch.sh --run-analysis --analysis-model MODEL --analysis-output-dir DIR
 #
 # Outputs:
 #   logs/batch_run.log         - master log (status + duration per instance)
@@ -16,6 +17,11 @@ set -uo pipefail
 
 DRY_RUN=0
 INSTANCE_FILE_OVERRIDE=""
+RUN_ANALYSIS=0
+ANALYSIS_ALLOW_FAILURES=0
+ANALYSIS_MODEL_OVERRIDE=""
+ANALYSIS_OUTPUT_DIR_OVERRIDE=""
+ANALYSIS_INPUT_DIR_OVERRIDE=""
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
@@ -25,6 +31,26 @@ while [[ $# -gt 0 ]]; do
       ;;
     --instances)
       INSTANCE_FILE_OVERRIDE="$2"
+      shift 2
+      ;;
+    --run-analysis)
+      RUN_ANALYSIS=1
+      shift
+      ;;
+    --analysis-allow-failures)
+      ANALYSIS_ALLOW_FAILURES=1
+      shift
+      ;;
+    --analysis-model)
+      ANALYSIS_MODEL_OVERRIDE="$2"
+      shift 2
+      ;;
+    --analysis-output-dir)
+      ANALYSIS_OUTPUT_DIR_OVERRIDE="$2"
+      shift 2
+      ;;
+    --analysis-input-dir)
+      ANALYSIS_INPUT_DIR_OVERRIDE="$2"
       shift 2
       ;;
     *)
@@ -61,23 +87,80 @@ python -c "import minisweagent, swebench" 2>/dev/null \
 # ---------------------------------------------------------------------------
 # Read batch config from config.yaml
 # ---------------------------------------------------------------------------
-read -r BATCH_ID DATASET DATASET_SHORT \
+read -r BATCH_ID DATASET DATASET_SHORT DOCKER_MIN_FREE_GB DOCKER_DELETE_IMAGES DOCKER_MAX_CACHED_IMAGES ANALYSIS_MODEL CONFIG_ANALYSIS_OUTPUT_DIR \
   < <(python -c "
 import sys, yaml
 try:
     cfg = yaml.safe_load(open('config.yaml'))
-    bid = (cfg.get('system') or {}).get('batch_id') or ''
+    system = cfg.get('system') or {}
+    docker = cfg.get('docker') or {}
+    bid = system.get('batch_id') or ''
     bid = bid.strip()
     if not bid:
         sys.stderr.write('ERROR: system.batch_id is empty in config.yaml\n')
         sys.exit(2)
-    dataset = (cfg.get('system') or {}).get('dataset', 'SWE-bench/SWE-bench_Verified')
+    dataset = system.get('dataset', 'SWE-bench/SWE-bench_Verified')
     dataset_short = dataset.split('/')[-1]
-    print(bid, dataset, dataset_short)
+    min_free = int(docker.get('min_free_gb', 20))
+    delete_images = str(docker.get('delete_images_after_instance', True)).lower()
+    max_cached = int(docker.get('max_cached_images', 75))
+    analysis = cfg.get('analysis') or {}
+    analysis_model = analysis.get('model', 'deepseek-v4-flash')
+    analysis_output = analysis.get('output_dir', './output/analysis_results')
+    print(bid, dataset, dataset_short, min_free, delete_images, max_cached, analysis_model, analysis_output)
 except Exception as e:
     sys.stderr.write(f'ERROR: failed to read config: {e}\n')
     sys.exit(2)
 ") || exit 1
+
+if [[ -n "$ANALYSIS_MODEL_OVERRIDE" ]]; then
+  ANALYSIS_MODEL="$ANALYSIS_MODEL_OVERRIDE"
+fi
+if [[ -n "$ANALYSIS_OUTPUT_DIR_OVERRIDE" ]]; then
+  CONFIG_ANALYSIS_OUTPUT_DIR="$ANALYSIS_OUTPUT_DIR_OVERRIDE"
+fi
+ANALYSIS_INPUT_DIR="${ANALYSIS_INPUT_DIR_OVERRIDE:-./output/SWE-bench_Verified/reflect_success_cases}"
+
+free_gb() {
+  df -Pk . | awk 'NR==2 {print int($4 / 1024 / 1024)}'
+}
+
+check_free_space() {
+  local free
+  free="$(free_gb)"
+  if [[ "$free" -lt "$DOCKER_MIN_FREE_GB" ]]; then
+    if [[ "$DOCKER_DELETE_IMAGES" == "true" ]]; then
+      echo "[$(date '+%Y-%m-%d %H:%M:%S')] Low disk space before instance: ${free}GiB free; attempting Docker cache cleanup" \
+        | tee -a "$MASTER_LOG"
+      cleanup_docker_after_instance
+      free="$(free_gb)"
+    fi
+  fi
+  if [[ "$free" -lt "$DOCKER_MIN_FREE_GB" ]]; then
+    echo "[$(date '+%Y-%m-%d %H:%M:%S')] FATAL low disk space: ${free}GiB free < ${DOCKER_MIN_FREE_GB}GiB threshold" \
+      | tee -a "$MASTER_LOG"
+    return 1
+  fi
+  return 0
+}
+
+cleanup_docker_after_instance() {
+  if [[ "$DOCKER_DELETE_IMAGES" != "true" ]]; then
+    return 0
+  fi
+
+  echo "[$(date '+%Y-%m-%d %H:%M:%S')] Docker cleanup: retaining newest ${DOCKER_MAX_CACHED_IMAGES} project images" \
+    | tee -a "$MASTER_LOG"
+  docker container prune -f >> "$MASTER_LOG" 2>&1 || true
+  docker builder prune -f >> "$MASTER_LOG" 2>&1 || true
+  python -c "from src.environment.docker_env import cleanup_docker_image_cache; cleanup_docker_image_cache(max_cached_images=int('$DOCKER_MAX_CACHED_IMAGES'))" \
+    >> "$MASTER_LOG" 2>&1 || true
+}
+
+is_docker_storage_error() {
+  local log_file="$1"
+  grep -Eiq 'no space left on device|input/output error|containerd\.metadata|meta\.db|/var/lib/desktop-containerd' "$log_file"
+}
 
 # ---------------------------------------------------------------------------
 # Determine instance list file
@@ -158,6 +241,9 @@ fi
 
 if [[ $DRY_RUN -eq 1 ]]; then
   echo "[DRY-RUN] $TOTAL instances loaded from $INSTANCE_FILE"
+  if [[ $RUN_ANALYSIS -eq 1 ]]; then
+    echo "[DRY-RUN] analysis would run after batch: model=$ANALYSIS_MODEL input=$ANALYSIS_INPUT_DIR output=$CONFIG_ANALYSIS_OUTPUT_DIR"
+  fi
 fi
 echo "[$(date '+%Y-%m-%d %H:%M:%S')] === Batch start: dataset=$DATASET batch_id=$BATCH_ID $TOTAL instances (dry_run=$DRY_RUN) ===" \
   | tee -a "$MASTER_LOG"
@@ -166,9 +252,12 @@ echo "[$(date '+%Y-%m-%d %H:%M:%S')] === Batch start: dataset=$DATASET batch_id=
 # Main loop
 # ---------------------------------------------------------------------------
 i=0
+FAIL_COUNT=0
 for INSTANCE in "${INSTANCES[@]}"; do
   i=$((i + 1))
   RESULT_FILE="output/$DATASET_SHORT/$BATCH_ID/$INSTANCE/result.json"
+
+  check_free_space || exit 75
 
   if [[ -f "$RESULT_FILE" ]]; then
     echo "[$(date '+%Y-%m-%d %H:%M:%S')] [$i/$TOTAL] SKIP $INSTANCE (result.json exists)" \
@@ -207,9 +296,40 @@ except Exception as e:
     echo "[$(date '+%Y-%m-%d %H:%M:%S')] [$i/$TOTAL] DONE  $INSTANCE rc=$RC elapsed=${ELAPSED}s resolved=$RESOLVED" \
       | tee -a "$MASTER_LOG"
   else
+    FAIL_COUNT=$((FAIL_COUNT + 1))
     echo "[$(date '+%Y-%m-%d %H:%M:%S')] [$i/$TOTAL] FAIL  $INSTANCE rc=$RC elapsed=${ELAPSED}s (see $PER_LOG)" \
       | tee -a "$MASTER_LOG"
+    if is_docker_storage_error "$PER_LOG"; then
+      echo "[$(date '+%Y-%m-%d %H:%M:%S')] FATAL Docker storage error detected; stopping batch before more instances fail" \
+        | tee -a "$MASTER_LOG"
+      exit 74
+    fi
   fi
+
+  cleanup_docker_after_instance
 done
 
 echo "[$(date '+%Y-%m-%d %H:%M:%S')] === Batch end ===" | tee -a "$MASTER_LOG"
+
+if [[ $RUN_ANALYSIS -eq 1 && $DRY_RUN -eq 0 ]]; then
+  if [[ $FAIL_COUNT -gt 0 && $ANALYSIS_ALLOW_FAILURES -ne 1 ]]; then
+    echo "[$(date '+%Y-%m-%d %H:%M:%S')] Analysis skipped: $FAIL_COUNT instance(s) failed; pass --analysis-allow-failures to run anyway" \
+      | tee -a "$MASTER_LOG"
+    exit 0
+  fi
+
+  echo "[$(date '+%Y-%m-%d %H:%M:%S')] === Analysis handoff start: model=$ANALYSIS_MODEL input=$ANALYSIS_INPUT_DIR output=$CONFIG_ANALYSIS_OUTPUT_DIR ===" \
+    | tee -a "$MASTER_LOG"
+  if bash scripts/run_analysis.sh \
+      --model "$ANALYSIS_MODEL" \
+      --input-dir "$ANALYSIS_INPUT_DIR" \
+      --output-dir "$CONFIG_ANALYSIS_OUTPUT_DIR"; then
+    echo "[$(date '+%Y-%m-%d %H:%M:%S')] === Analysis handoff end: rc=0 ===" \
+      | tee -a "$MASTER_LOG"
+  else
+    RC=$?
+    echo "[$(date '+%Y-%m-%d %H:%M:%S')] === Analysis handoff failed: rc=$RC ===" \
+      | tee -a "$MASTER_LOG"
+    exit "$RC"
+  fi
+fi

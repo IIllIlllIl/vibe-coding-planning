@@ -10,7 +10,12 @@ import subprocess
 import pytest
 
 from src.config import DockerConfig
-from src.environment.docker_env import DockerEnvWrapper, _resolve_polybench_image
+from src.environment.docker_env import (
+    DockerEnvWrapper,
+    _resolve_polybench_image,
+    cleanup_docker_image_cache,
+    is_docker_storage_error,
+)
 from src.exceptions import FatalError
 
 
@@ -240,6 +245,11 @@ class TestMissingDependency:
 
 
 class TestPolybenchImageFallback:
+    def test_detects_docker_storage_error(self):
+        msg = "write /var/lib/desktop-containerd/daemon/io.containerd.metadata.v1.bolt/meta.db: input/output error"
+        assert is_docker_storage_error(msg) is True
+        assert is_docker_storage_error("manifest unknown") is False
+
     def test_resolve_polybench_image_uses_v10_fallback(self):
         image = "ghcr.io/timesler/swe-polybench.eval.x86_64.test__repo-1:v1.1"
 
@@ -276,3 +286,58 @@ class TestPolybenchImageFallback:
         with patch("src.environment.docker_env.subprocess.run", side_effect=fake_run):
             with pytest.raises(FatalError, match="Unable to obtain PolyBench Docker image"):
                 _resolve_polybench_image(image, timeout=60)
+
+
+class TestDockerImageCacheCleanup:
+    def test_retains_newest_project_images_only(self):
+        removed: list[str] = []
+
+        def fake_run(args, **kwargs):
+            if args[:4] == ["docker", "image", "ls", "--format"]:
+                return SimpleNamespace(
+                    returncode=0,
+                    stdout=(
+                        "swebench/sweb.eval.x86_64.repo_1776_a:latest\tid1\n"
+                        "ghcr.io/timesler/swe-polybench.eval.x86_64.repo__b:v1.1\tid2\n"
+                        "ubuntu:latest\tid3\n"
+                        "jefzda/sweap-images:repo-c\tid4\n"
+                    ),
+                    stderr="",
+                )
+            if args[:3] == ["docker", "image", "inspect"]:
+                ref = args[3]
+                created = {
+                    "swebench/sweb.eval.x86_64.repo_1776_a:latest": "2026-01-01T00:00:00Z",
+                    "ghcr.io/timesler/swe-polybench.eval.x86_64.repo__b:v1.1": "2026-01-03T00:00:00Z",
+                    "jefzda/sweap-images:repo-c": "2026-01-02T00:00:00Z",
+                }[ref]
+                return SimpleNamespace(returncode=0, stdout=created + "\n", stderr="")
+            if args[:4] == ["docker", "image", "rm", "-f"]:
+                removed.append(args[4])
+                return SimpleNamespace(returncode=0, stdout="deleted", stderr="")
+            raise AssertionError(args)
+
+        with patch("src.environment.docker_env.subprocess.run", side_effect=fake_run):
+            count = cleanup_docker_image_cache(max_cached_images=2)
+
+        assert count == 1
+        assert removed == ["swebench/sweb.eval.x86_64.repo_1776_a:latest"]
+
+    def test_noop_when_within_limit(self):
+        def fake_run(args, **kwargs):
+            if args[:4] == ["docker", "image", "ls", "--format"]:
+                return SimpleNamespace(
+                    returncode=0,
+                    stdout="swebench/sweb.eval.x86_64.repo_1776_a:latest\tid1\n",
+                    stderr="",
+                )
+            if args[:3] == ["docker", "image", "inspect"]:
+                return SimpleNamespace(returncode=0, stdout="2026-01-01T00:00:00Z\n", stderr="")
+            if args[:4] == ["docker", "image", "rm", "-f"]:
+                raise AssertionError("should not remove images within limit")
+            raise AssertionError(args)
+
+        with patch("src.environment.docker_env.subprocess.run", side_effect=fake_run):
+            count = cleanup_docker_image_cache(max_cached_images=2)
+
+        assert count == 0

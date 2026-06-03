@@ -65,6 +65,7 @@ def evaluate(
     timeout: int = 300,
     *,
     run_id_suffix: str = "",
+    delete_image: bool = False,
 ) -> dict[str, Any]:
     """Evaluate a patch using the SWE-bench official harness.
 
@@ -82,6 +83,9 @@ def evaluate(
         run_id_suffix: Optional suffix appended to the run_id so that
             multiple evaluations of the same instance do not collide on
             cached logs.  Typical value is ``"_r2"`` for round 2.
+        delete_image: Whether the official evaluator should remove the
+            evaluation image when it finishes. Defaults to False because
+            image retention is governed by the configured Docker cache window.
 
     Returns:
         A dict with keys ``resolved``, ``stdout``, ``stderr``, ``log_dir``,
@@ -123,6 +127,7 @@ def evaluate(
             patch=patch,
             instance_info=instance_info,
             timeout=timeout,
+            delete_image=delete_image,
         )
 
     if is_pro:
@@ -147,7 +152,7 @@ def evaluate(
         result = run_instance(
             test_spec=test_spec,
             pred=pred,
-            rm_image=False,
+            rm_image=delete_image,
             force_rebuild=False,
             client=client,
             run_id=run_id,
@@ -255,4 +260,3 @@ def evaluate(
         "error_info": error_info,
         "report": report_data,
     }
-

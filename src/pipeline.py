@@ -15,7 +15,7 @@ from typing import Any
 from src.agents import code_agent, plan_agent, reflect_agent
 from src.config import Config
 from src.data.instance_loader import InstanceLoader
-from src.environment.docker_env import DockerEnvWrapper
+from src.environment.docker_env import DockerEnvWrapper, cleanup_docker_image_cache
 from src.evaluator.swe_evaluator import derive_image_name, evaluate
 from src.exceptions import FatalError, TaskError
 from src.output.trajectory import save_trajectory
@@ -204,6 +204,9 @@ def _run_instance_core(
     # ------------------------------------------------------------------
     # 4. Finalize output
     # ------------------------------------------------------------------
+    if config.docker.delete_images_after_instance:
+        cleanup_docker_image_cache(config.docker.max_cached_images)
+
     return _finalize_writer(writer, config, instance_id)
 
 

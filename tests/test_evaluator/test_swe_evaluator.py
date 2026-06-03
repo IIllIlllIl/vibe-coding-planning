@@ -119,12 +119,14 @@ class TestEvaluateTimeout:
 
         def capture(test_spec, pred, rm_image, force_rebuild, client, run_id, timeout, rewrite_reports):
             captured["timeout"] = timeout
+            captured["rm_image"] = rm_image
             return {"completed": True, "resolved": False}
 
         mock_run_instance.side_effect = capture
 
         swe_evaluator.evaluate("diff", instance_info)
         assert captured["timeout"] == 300
+        assert captured["rm_image"] is False
 
     @patch("swebench.harness.run_evaluation.run_instance")
     @patch("swebench.harness.test_spec.test_spec.make_test_spec")
@@ -142,6 +144,24 @@ class TestEvaluateTimeout:
 
         swe_evaluator.evaluate("diff", instance_info, timeout=1800)
         assert captured["timeout"] == 1800
+
+    @patch("swebench.harness.run_evaluation.run_instance")
+    @patch("swebench.harness.test_spec.test_spec.make_test_spec")
+    @patch("docker.from_env")
+    def test_delete_image_can_be_enabled(
+        self, mock_docker, mock_make_spec, mock_run_instance, instance_info
+    ):
+        captured = {}
+
+        def capture(test_spec, pred, rm_image, force_rebuild, client, run_id, timeout, rewrite_reports):
+            captured["rm_image"] = rm_image
+            return {"completed": True, "resolved": False}
+
+        mock_run_instance.side_effect = capture
+
+        swe_evaluator.evaluate("diff", instance_info, delete_image=True)
+
+        assert captured["rm_image"] is True
 
 
 class TestDeriveImageName:

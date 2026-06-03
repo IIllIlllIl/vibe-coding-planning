@@ -96,6 +96,9 @@ class DockerConfig:
     image_builder_script: str = "./scripts/build_docker_images.sh"
     workdir: str = "/testbed"
     timeout: int = 30
+    delete_images_after_instance: bool = True
+    min_free_gb: int = 20
+    max_cached_images: int = 75
 
 
 @dataclass(frozen=True)
@@ -153,11 +156,17 @@ class AnalysisConfig:
     model: str = "moonshot/kimi-k2.6"
     api_base: str = "https://api.moonshot.cn"
     api_key_env: str = "MOONSHOT_API_KEY"
+    backend: str = "mini_swe"
     max_steps: int = 1000
     cost_limit: float = 50.0
     output_dir: str = "./output/analysis_results"
     parallel: int = 1
     enable_review: bool = False
+    opencode_bin: str = "opencode"
+    opencode_xdg_data_home: str = ""
+    opencode_timeout: int = 900
+    rate_limit_sleep_seconds: int = 18000
+    max_retries: int = 2
     # Model family for provider-aware prompt tuning.
     # Valid values: "auto", "deepseek", "kimi", "openai", "anthropic".
     # When "auto", the family is inferred from api_base.
@@ -274,6 +283,13 @@ def _validate_non_negative_float(name: str, value: float) -> float:
     if value < 0:
         logger.warning("Parameter '%s' must be >= 0, got %s. Defaulting to 0.", name, value)
         return 0.0
+    return value
+
+
+def _validate_non_negative_int(name: str, value: int) -> int:
+    """Validate that an integer parameter is >= 0."""
+    if value < 0:
+        raise FatalError(f"Parameter '{name}' must be >= 0, got {value}")
     return value
 
 
@@ -402,6 +418,11 @@ def _build_docker_config(data: dict[str, Any]) -> DockerConfig:
         image_builder_script=_get_str(data, "image_builder_script", "./scripts/build_docker_images.sh"),
         workdir=_get_str(data, "workdir", "/testbed"),
         timeout=_validate_positive_int("docker.timeout", _get_int(data, "timeout", 30)),
+        delete_images_after_instance=_get_bool(data, "delete_images_after_instance", True),
+        min_free_gb=_validate_positive_int("docker.min_free_gb", _get_int(data, "min_free_gb", 20)),
+        max_cached_images=_validate_positive_int(
+            "docker.max_cached_images", _get_int(data, "max_cached_images", 75)
+        ),
     )
 
 
@@ -446,6 +467,12 @@ def _build_analysis_config(data: dict[str, Any]) -> AnalysisConfig:
     """Build AnalysisConfig from a dict."""
     import urllib.parse
 
+    backend = _get_str(data, "backend", "mini_swe")
+    if backend not in {"mini_swe", "opencode"}:
+        raise FatalError(
+            f"Invalid analysis.backend: {backend}. Expected 'mini_swe' or 'opencode'."
+        )
+
     api_base = _get_str(data, "api_base", "https://api.moonshot.cn")
     parsed = urllib.parse.urlparse(api_base)
     if not parsed.scheme or not parsed.netloc:
@@ -457,6 +484,7 @@ def _build_analysis_config(data: dict[str, Any]) -> AnalysisConfig:
         model=_get_str(data, "model", "moonshot/kimi-k2.6"),
         api_base=api_base,
         api_key_env=_get_str(data, "api_key_env", "MOONSHOT_API_KEY"),
+        backend=backend,
         max_steps=_validate_positive_int(
             "analysis.max_steps", _get_int(data, "max_steps", 1000)
         ),
@@ -466,6 +494,18 @@ def _build_analysis_config(data: dict[str, Any]) -> AnalysisConfig:
         output_dir=_get_str(data, "output_dir", "./output/analysis_results"),
         parallel=_validate_positive_int("analysis.parallel", _get_int(data, "parallel", 1)),
         enable_review=_get_bool(data, "enable_review", False),
+        opencode_bin=_get_str(data, "opencode_bin", "opencode"),
+        opencode_xdg_data_home=_get_str(data, "opencode_xdg_data_home", ""),
+        opencode_timeout=_validate_positive_int(
+            "analysis.opencode_timeout", _get_int(data, "opencode_timeout", 900)
+        ),
+        rate_limit_sleep_seconds=_validate_positive_int(
+            "analysis.rate_limit_sleep_seconds",
+            _get_int(data, "rate_limit_sleep_seconds", 18000),
+        ),
+        max_retries=_validate_non_negative_int(
+            "analysis.max_retries", _get_int(data, "max_retries", 2)
+        ),
         model_family=_get_str(data, "model_family", "auto"),
         system_prompt_suffix=_get_str(data, "system_prompt_suffix", ""),
     )
@@ -518,7 +558,7 @@ def load_config(path: str | Path) -> Config:
 
     analysis_config = _build_analysis_config(analysis_data)
     analysis_api_key = os.environ.get(analysis_config.api_key_env, "")
-    if not analysis_api_key:
+    if not analysis_api_key and analysis_config.backend != "opencode":
         logger.warning(
             "Environment variable %s is not set. Analysis agent will fail if used.",
             analysis_config.api_key_env,

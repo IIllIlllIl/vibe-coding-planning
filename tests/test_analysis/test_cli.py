@@ -205,3 +205,104 @@ class TestAggregateFlag:
         assert rc == 0
         # api_base defaults to moonshot in test config, so no deepseek prefix is added
         assert mock_completion.call_args.kwargs["model"] == "deepseek-v4-pro"
+
+    def test_aggregate_uses_opencode_backend(self, tmp_path: Path, monkeypatch):
+        monkeypatch.setenv("DEEPSEEK_API_KEY", "test-ds-key")
+
+        per_case = tmp_path / "per_case"
+        per_case.mkdir()
+        (per_case / "case_1.json").write_text(
+            json.dumps(
+                {
+                    "instance_id": "case_1",
+                    "rule": "When A, do X because Y.",
+                    "rule_valid": True,
+                }
+            ),
+            encoding="utf-8",
+        )
+
+        config_path = tmp_path / "config.yaml"
+        config_path.write_text(
+            "system:\n  batch_id: test-batch\nanalysis:\n  backend: opencode\n  output_dir: ./output\n",
+            encoding="utf-8",
+        )
+
+        output_dir = tmp_path / "output"
+        monkeypatch.chdir(tmp_path)
+
+        expected = {
+            "always": [],
+            "branches": [{"condition": "c1", "rules": ["When A, do X because Y."]}],
+        }
+        with patch("src.analysis.cli.aggregate_with_opencode", return_value=expected) as mock_agg:
+            rc = main(
+                [
+                    "--config", str(config_path),
+                    "--input", str(per_case),
+                    "--output", str(output_dir),
+                    "--aggregate",
+                ]
+            )
+
+        assert rc == 0
+        assert mock_agg.called
+
+
+class TestExtractionBackendFlag:
+    def test_extraction_uses_opencode_backend(self, tmp_path: Path, monkeypatch):
+        monkeypatch.setenv("DEEPSEEK_API_KEY", "test-ds-key")
+
+        data_dir = tmp_path / "reflect_success_cases"
+        case_dir = data_dir / "case__one-1"
+        (case_dir / "plans").mkdir(parents=True)
+        (case_dir / "patches").mkdir()
+        (case_dir / "trajectories").mkdir()
+        (data_dir / "manifest.json").write_text(
+            json.dumps({"cases": [{"instance_id": "case__one-1"}]}),
+            encoding="utf-8",
+        )
+        (case_dir / "result.json").write_text(
+            json.dumps(
+                {
+                    "plans": [
+                        {
+                            "round": 1,
+                            "generated_by": "plan_agent",
+                            "test_results": {"resolved": False},
+                        }
+                    ]
+                }
+            ),
+            encoding="utf-8",
+        )
+        (case_dir / "plans/plan_1_plan_gen_x.md").write_text("plan", encoding="utf-8")
+        (case_dir / "patches/patch_1_x.patch").write_text("patch", encoding="utf-8")
+        (case_dir / "trajectories/trajectory_1_plan_gen_x.json").write_text(
+            "{}", encoding="utf-8"
+        )
+
+        config_path = tmp_path / "config.yaml"
+        config_path.write_text(
+            "system:\n  batch_id: test-batch\nanalysis:\n  backend: opencode\n",
+            encoding="utf-8",
+        )
+        output_dir = tmp_path / "output"
+        monkeypatch.chdir(tmp_path)
+
+        with patch(
+            "src.analysis.cli.run_opencode_agent",
+            return_value=("When A, do B because C.", [{"role": "assistant"}]),
+        ) as mock_run:
+            rc = main(
+                [
+                    "--config", str(config_path),
+                    "--input", str(data_dir),
+                    "--output", str(output_dir),
+                ]
+            )
+
+        assert rc == 0
+        assert mock_run.called
+        result = json.loads((output_dir / "per_case/case__one-1.json").read_text())
+        assert result["rule_valid"] is True

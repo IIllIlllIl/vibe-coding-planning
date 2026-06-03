@@ -107,6 +107,9 @@ class TestLoadConfigSuccess:
         assert config.docker.image_builder_script == "./scripts/build.sh"
         assert config.docker.workdir == "/testbed"
         assert config.docker.timeout == 30
+        assert config.docker.delete_images_after_instance is True
+        assert config.docker.min_free_gb == 20
+        assert config.docker.max_cached_images == 75
         assert config.agent.max_steps == 30
         assert config.agent.cost_limit == 3.0
         assert config.agent.timeout == 1800
@@ -116,6 +119,24 @@ class TestLoadConfigSuccess:
         monkeypatch.setenv("DEEPSEEK_API_KEY", "my-secret-key")
         config = load_config(config_file)
         assert config.api_key == "my-secret-key"
+
+    def test_loads_docker_storage_controls(self, monkeypatch, tmp_path: Path):
+        monkeypatch.setenv("DEEPSEEK_API_KEY", "test-key")
+        data = {
+            "docker": {
+                "delete_images_after_instance": False,
+                "min_free_gb": 42,
+                "max_cached_images": 99,
+            }
+        }
+        filepath = tmp_path / "docker_storage.yaml"
+        _write_test_config(filepath, data)
+
+        config = load_config(filepath)
+
+        assert config.docker.delete_images_after_instance is False
+        assert config.docker.min_free_gb == 42
+        assert config.docker.max_cached_images == 99
 
 
 class TestLoadConfigValidation:
@@ -519,6 +540,49 @@ class TestAnalysisConfig:
         _write_test_config(filepath)
         config = load_config(filepath)
         assert config.analysis.enable_review is False
+
+    def test_backend_default_is_mini_swe(self, monkeypatch, tmp_path: Path):
+        monkeypatch.setenv("DEEPSEEK_API_KEY", "test-key")
+        filepath = tmp_path / "empty.yaml"
+        _write_test_config(filepath)
+        config = load_config(filepath)
+        assert config.analysis.backend == "mini_swe"
+
+    def test_backend_opencode_loaded(self, monkeypatch, tmp_path: Path):
+        monkeypatch.setenv("DEEPSEEK_API_KEY", "test-key")
+        data = {
+            "analysis": {
+                "backend": "opencode",
+                "model": "kimi-for-coding/k2p6",
+                "opencode_timeout": 123,
+                "rate_limit_sleep_seconds": 456,
+                "max_retries": 1,
+            }
+        }
+        filepath = tmp_path / "opencode.yaml"
+        _write_test_config(filepath, data)
+        config = load_config(filepath)
+        assert config.analysis.backend == "opencode"
+        assert config.analysis.model == "kimi-for-coding/k2p6"
+        assert config.analysis.opencode_timeout == 123
+        assert config.analysis.rate_limit_sleep_seconds == 456
+        assert config.analysis.max_retries == 1
+
+    def test_invalid_backend_raises(self, monkeypatch, tmp_path: Path):
+        monkeypatch.setenv("DEEPSEEK_API_KEY", "test-key")
+        data = {"analysis": {"backend": "bad"}}
+        filepath = tmp_path / "bad_backend.yaml"
+        _write_test_config(filepath, data)
+        with pytest.raises(FatalError, match="Invalid analysis.backend"):
+            load_config(filepath)
+
+    def test_negative_opencode_retries_raises(self, monkeypatch, tmp_path: Path):
+        monkeypatch.setenv("DEEPSEEK_API_KEY", "test-key")
+        data = {"analysis": {"backend": "opencode", "max_retries": -1}}
+        filepath = tmp_path / "bad_retries.yaml"
+        _write_test_config(filepath, data)
+        with pytest.raises(FatalError, match="analysis.max_retries.*must be >= 0"):
+            load_config(filepath)
 
     def test_enable_review_explicit_true(self, monkeypatch, tmp_path: Path):
         monkeypatch.setenv("DEEPSEEK_API_KEY", "test-key")

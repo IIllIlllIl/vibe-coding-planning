@@ -101,7 +101,13 @@ class TestEvaluatePolybenchInstance:
     ):
         """The evaluator creates a container, applies patches, runs tests, and scores."""
         pb = _make_pb_imports()
-        pb["DockerManager"] = lambda **kwargs: _make_docker_manager()
+        captured_dm_kwargs = {}
+
+        def make_manager(**kwargs):
+            captured_dm_kwargs.update(kwargs)
+            return _make_docker_manager()
+
+        pb["DockerManager"] = make_manager
 
         mock_output = MagicMock()
         mock_output.resolved = True
@@ -135,6 +141,7 @@ class TestEvaluatePolybenchInstance:
 
         assert result["resolved"] is True
         assert result["error_info"] is None
+        assert captured_dm_kwargs["delete_image"] is False
 
     @patch("docker.from_env")
     @patch("src.evaluator.polybench_evaluator._import_polybench")

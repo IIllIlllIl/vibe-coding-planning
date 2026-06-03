@@ -15,6 +15,7 @@ from typing import Any
 
 import docker
 
+from src.environment.docker_env import is_docker_storage_error
 from src.exceptions import FatalError
 
 logger = logging.getLogger(__name__)
@@ -103,6 +104,8 @@ def evaluate_polybench_instance(
         result_path: Directory for PolyBench result JSON files.
             When ``None``, a temporary directory is used.
         delete_image: Whether to delete the Docker image after evaluation.
+            Defaults to False because image retention is governed by the
+            configured Docker cache window.
 
     Returns:
         A dict compatible with the swebench evaluator's return shape:
@@ -372,6 +375,12 @@ def evaluate_polybench_instance(
     except FatalError:
         raise
     except Exception as exc:
+        if is_docker_storage_error(str(exc)):
+            raise FatalError(
+                "Docker storage error during PolyBench evaluation. "
+                "Stop the batch and free Docker disk space before retrying. "
+                f"Instance={instance_id}. Error: {exc}"
+            ) from exc
         logger.error(
             "[%s] PolyBench evaluation failed: %s",
             instance_id,

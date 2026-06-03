@@ -623,6 +623,16 @@ docker:
   image_builder_script: "./scripts/build_docker_images.sh"
   workdir: "/testbed"
   timeout: 30
+  # Keep project Docker storage bounded after each instance. This does
+  # not delete every image immediately; it trims only this project's
+  # Docker images down to max_cached_images.
+  delete_images_after_instance: true
+  # Retain this many newest project-related images
+  # (SWE-bench/PolyBench/Pro). Typical useful range: 50-100.
+  max_cached_images: 75
+  # run_batch.sh refuses to start a new instance below this free-space
+  # threshold so Docker.raw cannot silently consume the whole disk.
+  min_free_gb: 20
 
 agent:
   # Aligned with mini-swe-agent's official SWE-bench config
@@ -649,10 +659,11 @@ analysis:
   # different provider while the pipeline uses DeepSeek.
   #
   # To switch to Kimi Code API, change to:
-  #   model: "anthropic/claude-sonnet-4-20250514"
-  #   api_base: "https://api.kimi.com/coding/"
-  #   api_key_env: "MOONSHOT_API_KEY"
+  #   backend: "opencode"
+  #   model: "kimi-for-coding/k2p6"
   #   model_family: "kimi"
+  # OpenCode uses ~/.local/share/opencode/auth.json, not api_key_env.
+  backend: "mini_swe"
   model: "deepseek-v4-flash"
   api_base: "https://api.deepseek.com"
   api_key_env: "DEEPSEEK_API_KEY"
@@ -661,6 +672,15 @@ analysis:
   output_dir: "./output/analysis_results"
   parallel: 1
   enable_review: false
+  # OpenCode backend settings. Keep opencode_xdg_data_home empty to use an
+  # isolated temporary OpenCode data dir and copy auth.json automatically.
+  opencode_bin: "opencode"
+  opencode_xdg_data_home: ""
+  opencode_timeout: 900
+  # Kimi Code API has periodic quota windows; on rate-limit-like errors the
+  # OpenCode backend sleeps before retrying.
+  rate_limit_sleep_seconds: 18000
+  max_retries: 2
   # Model family for provider-aware prompt tuning.
   # "auto" detects from api_base; explicit values: "deepseek", "kimi", "openai", "anthropic".
   model_family: "auto"
