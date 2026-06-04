@@ -164,6 +164,7 @@ class AnalysisConfig:
     enable_review: bool = False
     opencode_bin: str = "opencode"
     opencode_xdg_data_home: str = ""
+    opencode_isolate_per_case: bool = True
     opencode_timeout: int = 900
     rate_limit_sleep_seconds: int = 18000
     max_retries: int = 2
@@ -496,6 +497,7 @@ def _build_analysis_config(data: dict[str, Any]) -> AnalysisConfig:
         enable_review=_get_bool(data, "enable_review", False),
         opencode_bin=_get_str(data, "opencode_bin", "opencode"),
         opencode_xdg_data_home=_get_str(data, "opencode_xdg_data_home", ""),
+        opencode_isolate_per_case=_get_bool(data, "opencode_isolate_per_case", True),
         opencode_timeout=_validate_positive_int(
             "analysis.opencode_timeout", _get_int(data, "opencode_timeout", 900)
         ),

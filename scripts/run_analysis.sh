@@ -66,11 +66,30 @@ TOTAL=$(echo "$INSTANCE_IDS" | wc -l | tr -d ' ')
 COMPLETED=0
 
 for INSTANCE_ID in $INSTANCE_IDS; do
-  # Idempotency: skip if per-case result already exists
+  # Idempotency: skip only if a valid per-case rule already exists.
+  # Failed placeholder files must not block later breakpoint reruns.
   if [[ -f "$OUTPUT_DIR/per_case/${INSTANCE_ID}.json" ]]; then
-    echo "[$(date '+%Y-%m-%d %H:%M:%S')] SKIP $INSTANCE_ID (result exists)" | tee -a "$MASTER_LOG"
-    COMPLETED=$((COMPLETED + 1))
-    continue
+    if python3 - "$OUTPUT_DIR/per_case/${INSTANCE_ID}.json" <<'PY'
+import json
+import sys
+
+path = sys.argv[1]
+try:
+    data = json.load(open(path, encoding="utf-8"))
+except Exception:
+    sys.exit(1)
+
+rule = str(data.get("rule", "")).strip()
+if data.get("rule_valid") is True and rule:
+    sys.exit(0)
+sys.exit(1)
+PY
+    then
+      echo "[$(date '+%Y-%m-%d %H:%M:%S')] SKIP $INSTANCE_ID (valid result exists)" | tee -a "$MASTER_LOG"
+      COMPLETED=$((COMPLETED + 1))
+      continue
+    fi
+    echo "[$(date '+%Y-%m-%d %H:%M:%S')] RETRY $INSTANCE_ID (existing result invalid)" | tee -a "$MASTER_LOG"
   fi
 
   echo "[$(date '+%Y-%m-%d %H:%M:%S')] START $INSTANCE_ID" | tee -a "$MASTER_LOG"

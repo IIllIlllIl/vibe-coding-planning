@@ -16,7 +16,11 @@ from src.analysis.aggregation_agent import (
     load_rules,
 )
 from src.analysis.case_loader import CaseDescriptor
-from src.analysis.opencode_client import prepare_xdg_data_home, run_opencode
+from src.analysis.opencode_client import (
+    OpenCodeResult,
+    prepare_xdg_data_home,
+    run_opencode,
+)
 from src.config import Config
 from src.exceptions import TaskError
 
@@ -88,12 +92,30 @@ def _extract_rule_lines(raw_output: str) -> str:
     return "\n".join(lines).strip() or raw_output.strip()
 
 
-def _validate_rule_text(rule_text: str, instance_id: str) -> None:
+def _shorten(text: str, limit: int = 800) -> str:
+    text = text.strip()
+    if len(text) <= limit:
+        return text
+    return text[:limit] + "...[truncated]"
+
+
+def _validate_rule_text(
+    rule_text: str,
+    instance_id: str,
+    result: OpenCodeResult | None = None,
+) -> None:
     lines = [line.strip() for line in rule_text.splitlines() if line.strip()]
     rule_lines = [line for line in lines if line.lower().startswith("when ")]
     if not rule_lines or not all(" because " in line.lower() for line in rule_lines):
+        detail = ""
+        if result is not None:
+            detail = (
+                f" stdout={_shorten(result.stdout)!r}"
+                f" stderr={_shorten(result.stderr)!r}"
+            )
         raise TaskError(
             f"OpenCode contrastive agent for {instance_id} produced invalid rule format."
+            f"{detail}"
         )
     if len(rule_text.strip()) < 30:
         raise TaskError(
@@ -118,7 +140,7 @@ def run(
         xdg_data_home=data_home,
     )
     rule_text = _extract_rule_lines(result.stdout)
-    _validate_rule_text(rule_text, case.instance_id)
+    _validate_rule_text(rule_text, case.instance_id, result)
     messages = [
         {"role": "user", "content": prompt},
         {

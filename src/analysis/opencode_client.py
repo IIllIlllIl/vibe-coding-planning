@@ -28,6 +28,8 @@ _RATE_LIMIT_PATTERNS = (
     "retryable",
 )
 
+_PROCESS_DATA_HOME: Path | None = None
+
 
 @dataclass(frozen=True)
 class OpenCodeResult:
@@ -51,10 +53,16 @@ def prepare_xdg_data_home(config: AnalysisConfig) -> Path:
     isolated directory avoids failures from a corrupt global sqlite/WAL state.
     If the isolated auth file is missing, copy the user's existing auth.json.
     """
+    global _PROCESS_DATA_HOME
+
     if config.opencode_xdg_data_home:
         data_home = Path(config.opencode_xdg_data_home).expanduser()
-    else:
+    elif config.opencode_isolate_per_case:
         data_home = Path(tempfile.mkdtemp(prefix="opencode-analysis-"))
+    else:
+        if _PROCESS_DATA_HOME is None:
+            _PROCESS_DATA_HOME = Path(tempfile.mkdtemp(prefix="opencode-analysis-"))
+        data_home = _PROCESS_DATA_HOME
 
     opencode_dir = data_home / "opencode"
     opencode_dir.mkdir(parents=True, exist_ok=True)
@@ -115,6 +123,16 @@ def run_opencode(
             detail = f"opencode timed out after {config.opencode_timeout}s"
             if exc.stderr:
                 detail += f": {exc.stderr}"
+            last_detail = detail
+            if attempt < attempts:
+                logger.warning(
+                    "OpenCode/Kimi timed out on attempt %d/%d; sleeping %ss",
+                    attempt,
+                    attempts,
+                    config.rate_limit_sleep_seconds,
+                )
+                sleep_func(config.rate_limit_sleep_seconds)
+                continue
             raise TaskError(detail) from exc
 
         if result.returncode == 0:

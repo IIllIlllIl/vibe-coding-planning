@@ -554,6 +554,7 @@ class TestAnalysisConfig:
             "analysis": {
                 "backend": "opencode",
                 "model": "kimi-for-coding/k2p6",
+                "opencode_isolate_per_case": False,
                 "opencode_timeout": 123,
                 "rate_limit_sleep_seconds": 456,
                 "max_retries": 1,
@@ -564,9 +565,18 @@ class TestAnalysisConfig:
         config = load_config(filepath)
         assert config.analysis.backend == "opencode"
         assert config.analysis.model == "kimi-for-coding/k2p6"
+        assert config.analysis.opencode_isolate_per_case is False
         assert config.analysis.opencode_timeout == 123
         assert config.analysis.rate_limit_sleep_seconds == 456
         assert config.analysis.max_retries == 1
+
+    def test_opencode_isolate_per_case_default_true(self, monkeypatch, tmp_path: Path):
+        monkeypatch.setenv("DEEPSEEK_API_KEY", "test-key")
+        data = {"analysis": {"backend": "opencode"}}
+        filepath = tmp_path / "opencode_default.yaml"
+        _write_test_config(filepath, data)
+        config = load_config(filepath)
+        assert config.analysis.opencode_isolate_per_case is True
 
     def test_invalid_backend_raises(self, monkeypatch, tmp_path: Path):
         monkeypatch.setenv("DEEPSEEK_API_KEY", "test-key")

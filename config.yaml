@@ -676,6 +676,11 @@ analysis:
   # isolated temporary OpenCode data dir and copy auth.json automatically.
   opencode_bin: "opencode"
   opencode_xdg_data_home: ""
+  # Keep true for strict experiment isolation: each case gets a fresh
+  # OpenCode sqlite/session store, so task-level rule extraction cannot
+  # share local session/message state across cases. Set false only if you
+  # explicitly prefer one temp OpenCode data dir per analysis process.
+  opencode_isolate_per_case: true
   opencode_timeout: 900
   # Kimi Code API has periodic quota windows; on rate-limit-like errors the
   # OpenCode backend sleeps before retrying.
