@@ -1,5 +1,6 @@
 # Output directories
-output/
+/output/*
+!/output/README.md
 trajectories/
 patches/
 logs/

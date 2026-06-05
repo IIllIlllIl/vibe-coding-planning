@@ -20,6 +20,7 @@ from src.analysis.contrastive_agent import run as run_agent
 from src.analysis.opencode_agent import aggregate as aggregate_with_opencode
 from src.analysis.opencode_agent import run as run_opencode_agent
 from src.analysis.output import AnalysisOutputWriter
+from src.analysis.rule_postprocess import postprocess_per_case_dir
 from src.config import load_config
 from src.exceptions import FatalError, TaskError
 
@@ -72,6 +73,18 @@ def main(argv: list[str] | None = None) -> int:
         help="Run rule aggregation instead of per-case extraction. "
              "--input is treated as the per_case directory.",
     )
+    parser.add_argument(
+        "--postprocess",
+        action="store_true",
+        help="Rewrite extracted per-case rules into canonical format. "
+             "--input is treated as the original per_case directory; output is "
+             "<output>/per_case_postprocessed.",
+    )
+    parser.add_argument(
+        "--postprocess-data-dir",
+        default="output/SWE-bench_Verified/reflect_success_cases",
+        help="Reflect-success cases directory used as context for --postprocess.",
+    )
     args = parser.parse_args(argv)
 
     # Load configuration
@@ -95,6 +108,32 @@ def main(argv: list[str] | None = None) -> int:
         return 1
 
     output_dir = Path(args.output) if args.output else Path(config.analysis.output_dir)
+
+    # -----------------------------------------------------------------------
+    # Postprocess mode: preserve original per_case files and write a repaired
+    # per_case_postprocessed directory for aggregation.
+    # -----------------------------------------------------------------------
+    if args.postprocess:
+        postprocess_output = output_dir / "per_case_postprocessed"
+        try:
+            stats = postprocess_per_case_dir(
+                per_case_dir=data_dir,
+                output_dir=postprocess_output,
+                config=config,
+                data_base_dir=args.postprocess_data_dir,
+            )
+            logger.info(
+                "Postprocess complete: copied=%d repaired=%d failed=%d skipped_empty=%d -> %s",
+                stats["copied_valid"],
+                stats["repaired"],
+                stats["failed"],
+                stats["skipped_empty"],
+                postprocess_output,
+            )
+            return 0 if stats["failed"] == 0 else 1
+        except Exception as exc:
+            logger.error("Postprocess failed: %s", exc)
+            return 1
 
     # -----------------------------------------------------------------------
     # Aggregation mode (Input-Aware Tree Merge)

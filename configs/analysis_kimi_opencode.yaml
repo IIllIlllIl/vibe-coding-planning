@@ -1,0 +1,29 @@
+system:
+  # Required by the shared config loader. This ID is for analysis outputs only;
+  # extraction still reads cases from the --input directory passed to src.analysis.
+  batch_id: kimi-opencode-analysis
+
+analysis:
+  # Route extraction and aggregation through OpenCode instead of mini-swe-agent.
+  backend: opencode
+  model: kimi-for-coding/k2p6
+  model_family: kimi
+
+  # OpenCode uses its own auth/config. These fields keep the analysis config
+  # semantically tied to Moonshot/Kimi for any non-OpenCode tooling.
+  api_base: https://api.moonshot.cn
+  api_key_env: MOONSHOT_API_KEY
+
+  max_steps: 1000
+  cost_limit: 50.0
+  output_dir: ./output/analysis_kimi_opencode_60
+  parallel: 1
+  enable_review: false
+
+  opencode_bin: opencode
+  opencode_xdg_data_home: ""
+  opencode_isolate_per_case: true
+  opencode_timeout: 900
+  rate_limit_sleep_seconds: 18000
+  max_retries: 2
+  system_prompt_suffix: ""

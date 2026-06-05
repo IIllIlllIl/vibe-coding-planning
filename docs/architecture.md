@@ -17,8 +17,13 @@ plan-code-test/
 │   ├── requirement-document.md    # 需求文档（终版）
 │   └── architecture.md            # 本文件
 ├── scripts/
-│   ├── quickstart.sh              # 一键运行脚本
-│   └── build_docker_images.sh     # SWE-bench Pro Docker 镜像构建（外部提供）
+│   ├── run_batch.sh               # 批量运行与 analysis-only handoff
+│   ├── run_analysis.sh            # 对比分析批量运行，支持 --config
+│   └── evaluate_checker.py        # Plan-Checker-Code held-out 评估
+├── configs/
+│   ├── analysis_kimi_opencode.yaml       # Kimi/OpenCode 规则分析实验配置
+│   ├── polybench_full199_pct.yaml        # PolyBench Python 199 实例纯 PCT 扫描配置
+│   └── polybench_remaining133_pct.yaml   # 跳过已有 PolyBench 结果后的 133 实例配置
 ├── src/
 │   ├── __init__.py
 │   ├── main.py                    # 入口：解析参数、加载配置、驱动主循环
@@ -44,10 +49,18 @@ plan-code-test/
 │   │   ├── __init__.py
 │   │   ├── writer.py              # 结果 JSON、Trajectory JSON、Patch 文件输出
 │   │   └── trajectory.py          # Trajectory 保存（从 DefaultAgent.messages 导出）
-│   └── prompts/
-│       ├── __init__.py
-│       ├── templates.py             # Prompt 模板常量（plan / code / reflection）
-│       └── gepa_reflection.py       # 反射输出解析（parse_output），模板本身已移至 config.yaml
+│   ├── prompts/
+│   │   ├── __init__.py
+│   │   ├── templates.py             # Prompt 模板常量（plan / code / reflection）
+│   │   └── gepa_reflection.py       # 反射输出解析（parse_output），模板本身已移至 config.yaml
+│   └── analysis/
+│       ├── case_loader.py         # Reflect-success case 文件索引
+│       ├── contrastive_agent.py   # mini-swe-agent 后端规则提取
+│       ├── opencode_agent.py      # OpenCode 后端规则提取与聚合
+│       ├── opencode_client.py     # opencode run 调用与重试
+│       ├── rule_postprocess.py    # 格式后处理，生成 per_case_postprocessed
+│       ├── aggregation_agent.py   # 规则加载、聚合 prompt、结果解析
+│       └── cli.py                 # analysis CLI
 ├── config.yaml                      # 运行时配置
 ├── requirements.txt                 # Python 依赖
 ├── .gitignore
@@ -109,6 +122,17 @@ plan-code-test/
 |------|------|
 | **配置加载** | `src/prompts/templates.py` | 从 `config.yaml` 读取用户可配置的 Prompt：`plan_generation_prompt`、`code_generation_prompt`、`reflection_prompt_template`。不存放硬编码常量；`src/config.py` 在加载阶段若 `reflection_prompt_template` 缺失则填充默认值 |
 | **GEPA 反射解析** | `src/prompts/gepa_reflection.py` | 仅保留 `parse_output(llm_response) -> str` 回退解析函数：当容器内 `/tmp/plan.md` 缺失时，从 LLM 响应中提取第一个 ``` 代码块作为新 Plan。不再维护 `DEFAULT_REFLECTION_TEMPLATE` 常量或 `render()` 函数 — 模板渲染由 `mini-swe-agent` 在 agent 内部完成 |
+
+### 3.7 规则分析层
+
+| 模块 | 文件 | 职责 |
+|------|------|------|
+| **Case 加载** | `src/analysis/case_loader.py` | 从 reflect-success cases 的 `manifest.json` 和实例目录中组装每轮 plan、patch、trajectory、result.json 的相对路径 |
+| **规则提取** | `src/analysis/contrastive_agent.py` | 使用 mini-swe-agent + LocalEnvironment 读取 case 文件，提取 `When ... because ...` 规则 |
+| **OpenCode 后端** | `src/analysis/opencode_agent.py` + `src/analysis/opencode_client.py` | 使用 `opencode run --pure --model <model>` 调用 Kimi/OpenCode，支持提取与聚合；通过隔离的 `XDG_DATA_HOME` 避免 OpenCode sqlite/WAL 状态污染 |
+| **规则后处理** | `src/analysis/rule_postprocess.py` | 对原始 `per_case/` 中语义可用但格式不合格的规则做格式修复，输出 `per_case_postprocessed/`，保留 `postprocess` metadata，不覆盖原始结果 |
+| **规则聚合** | `src/analysis/aggregation_agent.py` | 只读取传入 per-case 目录中 `rule_valid=true` JSON 的顶层 `rule` 字段，按行拆分规则，构造 Input-Aware Tree Merge prompt，解析并校验 `aggregated_rules.json` |
+| **Analysis CLI** | `src/analysis/cli.py` | 提供 per-case extraction、`--postprocess`、`--aggregate` 三种模式；根据 `analysis.backend` 在 mini-swe-agent 与 OpenCode 后端之间路由 |
 
 ---
 
@@ -205,7 +229,7 @@ TestResults = dict[str, Any]  # {resolved: bool, stdout: str, stderr: str, log_d
 
 ---
 
-## 6. 待填充的代码清单
+## 6. 主要代码清单
 
 | 模块 | 需实现的功能 | 依赖外部库 |
 |------|-------------|-----------|
@@ -221,7 +245,13 @@ TestResults = dict[str, Any]  # {resolved: bool, stdout: str, stderr: str, log_d
 | `src/output/trajectory.py` | 元数据附加 + JSON 写出 | 标准库 |
 | `src/prompts/gepa_reflection.py` | 模板渲染 + 输出解析 | 标准库 |
 | `src/data/instance_loader.py` | 通过 `swebench` API 或 HuggingFace `datasets` 加载实例元数据（Verified / Pro / PolyBench） | `swebench`, `datasets` |
-| `scripts/quickstart.sh` | conda 激活 + pip install + 运行主程序 | shell |
+| `src/analysis/contrastive_agent.py` | 从 reflect-success cases 提取规则 | `mini-swe-agent` |
+| `src/analysis/opencode_agent.py` | OpenCode/Kimi 规则提取与聚合后端 | `opencode` CLI |
+| `src/analysis/rule_postprocess.py` | 修复格式不合格但语义可用的规则，生成 `per_case_postprocessed/` | 标准库 + `opencode` CLI |
+| `src/analysis/aggregation_agent.py` | 加载 per-case 规则、构造聚合 prompt、校验聚合 JSON | `litellm` 或 OpenCode 后端 |
+| `scripts/run_analysis.sh` | 批量规则提取，支持 `--config` | shell |
+| `scripts/run_batch.sh` | 批量主流程与 `--analysis-only` handoff，支持 `--config` 指定主流程配置；直接运行时用 `caffeinate` 包装实例命令（macOS） | shell |
+| `scripts/long_run_watchdog.py` | 长时监控 batch / analysis / review / checker tmux 任务；支持 `PCT_CONFIG` 选择主流程配置，并用 `caffeinate` 包装被监控的长跑命令（macOS） | shell + Python |
 
 ---
 
@@ -240,3 +270,4 @@ TestResults = dict[str, Any]  # {resolved: bool, stdout: str, stderr: str, log_d
 | FR-10 轨迹保存 | `src/output/trajectory.py` + `src/output/writer.py` |
 | FR-11 Feedback 字符串组装 | `src/pipeline.py:_build_feedback_text`（主机端组装为纯文本，注入 reflect_agent 的 system prompt） |
 | FR-12 错误处理 | `src/pipeline.py` 中的 try/except 层级 |
+| FR-13 规则提取、后处理、聚合 | `src/analysis/contrastive_agent.py` + `src/analysis/opencode_agent.py` + `src/analysis/rule_postprocess.py` + `src/analysis/aggregation_agent.py` + `src/analysis/cli.py` |

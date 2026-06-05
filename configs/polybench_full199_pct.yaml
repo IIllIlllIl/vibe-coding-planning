@@ -1,0 +1,532 @@
+system:
+  n: 1
+  optimization_info_level: 1
+  model: deepseek-v4-flash
+  api_base: https://api.deepseek.com
+  dataset: AmazonScience/SWE-PolyBench
+  dataset_type: polybench
+  language_filter: Python
+  batch_id: polybench-full199-pct
+  instances:
+  - Significant-Gravitas__AutoGPT-4652
+  - huggingface__transformers-12981
+  - huggingface__transformers-13436
+  - huggingface__transformers-13491
+  - huggingface__transformers-13495
+  - huggingface__transformers-13573
+  - huggingface__transformers-13693
+  - huggingface__transformers-13865
+  - huggingface__transformers-13919
+  - huggingface__transformers-13988
+  - huggingface__transformers-13989
+  - huggingface__transformers-14355
+  - huggingface__transformers-14779
+  - huggingface__transformers-15158
+  - huggingface__transformers-15473
+  - huggingface__transformers-15795
+  - huggingface__transformers-15831
+  - huggingface__transformers-15843
+  - huggingface__transformers-15913
+  - huggingface__transformers-16198
+  - huggingface__transformers-16661
+  - huggingface__transformers-16814
+  - huggingface__transformers-16819
+  - huggingface__transformers-17053
+  - huggingface__transformers-17055
+  - huggingface__transformers-17082
+  - huggingface__transformers-17764
+  - huggingface__transformers-18851
+  - huggingface__transformers-19073
+  - huggingface__transformers-19219
+  - huggingface__transformers-19590
+  - huggingface__transformers-19657
+  - huggingface__transformers-20136
+  - huggingface__transformers-21345
+  - huggingface__transformers-21768
+  - huggingface__transformers-21969
+  - huggingface__transformers-22158
+  - huggingface__transformers-22190
+  - huggingface__transformers-22458
+  - huggingface__transformers-22649
+  - huggingface__transformers-22920
+  - huggingface__transformers-23126
+  - huggingface__transformers-23141
+  - huggingface__transformers-23223
+  - huggingface__transformers-23796
+  - huggingface__transformers-24238
+  - huggingface__transformers-24510
+  - huggingface__transformers-25358
+  - huggingface__transformers-25429
+  - huggingface__transformers-25636
+  - huggingface__transformers-25765
+  - huggingface__transformers-25793
+  - huggingface__transformers-25884
+  - huggingface__transformers-26164
+  - huggingface__transformers-26386
+  - huggingface__transformers-26568
+  - huggingface__transformers-26678
+  - huggingface__transformers-26752
+  - huggingface__transformers-26839
+  - huggingface__transformers-27114
+  - huggingface__transformers-27463
+  - huggingface__transformers-27561
+  - huggingface__transformers-27663
+  - huggingface__transformers-27717
+  - huggingface__transformers-27757
+  - huggingface__transformers-27797
+  - huggingface__transformers-28010
+  - huggingface__transformers-28071
+  - huggingface__transformers-28115
+  - huggingface__transformers-28256
+  - huggingface__transformers-28398
+  - huggingface__transformers-28517
+  - huggingface__transformers-28522
+  - huggingface__transformers-28535
+  - huggingface__transformers-28563
+  - huggingface__transformers-28940
+  - huggingface__transformers-29175
+  - huggingface__transformers-29300
+  - huggingface__transformers-29311
+  - huggingface__transformers-29449
+  - huggingface__transformers-29519
+  - huggingface__transformers-29563
+  - huggingface__transformers-29585
+  - huggingface__transformers-29589
+  - huggingface__transformers-29675
+  - huggingface__transformers-29680
+  - huggingface__transformers-29688
+  - huggingface__transformers-29838
+  - huggingface__transformers-30556
+  - huggingface__transformers-30567
+  - huggingface__transformers-30602
+  - huggingface__transformers-30627
+  - huggingface__transformers-30772
+  - huggingface__transformers-30899
+  - huggingface__transformers-30934
+  - huggingface__transformers-30964
+  - huggingface__transformers-31095
+  - huggingface__transformers-31128
+  - huggingface__transformers-31217
+  - huggingface__transformers-31247
+  - huggingface__transformers-31448
+  - huggingface__transformers-3147
+  - huggingface__transformers-31646
+  - huggingface__transformers-31654
+  - huggingface__transformers-3198
+  - huggingface__transformers-3716
+  - huggingface__transformers-4759
+  - huggingface__transformers-5060
+  - huggingface__transformers-5122
+  - huggingface__transformers-5749
+  - huggingface__transformers-6098
+  - huggingface__transformers-6322
+  - huggingface__transformers-6735
+  - huggingface__transformers-6744
+  - huggingface__transformers-7075
+  - huggingface__transformers-7078
+  - huggingface__transformers-7272
+  - huggingface__transformers-7374
+  - huggingface__transformers-7562
+  - huggingface__transformers-7858
+  - huggingface__transformers-7991
+  - huggingface__transformers-8049
+  - huggingface__transformers-8435
+  - huggingface__transformers-8437
+  - huggingface__transformers-8554
+  - huggingface__transformers-8624
+  - huggingface__transformers-8747
+  - keras-team__keras-1767
+  - keras-team__keras-18553
+  - keras-team__keras-18649
+  - keras-team__keras-18766
+  - keras-team__keras-18852
+  - keras-team__keras-18871
+  - keras-team__keras-18975
+  - keras-team__keras-18977
+  - keras-team__keras-19190
+  - keras-team__keras-19201
+  - keras-team__keras-19260
+  - keras-team__keras-19284
+  - keras-team__keras-19300
+  - keras-team__keras-19459
+  - keras-team__keras-19466
+  - keras-team__keras-19484
+  - keras-team__keras-19636
+  - keras-team__keras-19641
+  - keras-team__keras-19773
+  - keras-team__keras-19775
+  - keras-team__keras-19799
+  - keras-team__keras-19826
+  - keras-team__keras-19838
+  - keras-team__keras-19844
+  - keras-team__keras-19863
+  - keras-team__keras-19903
+  - keras-team__keras-19915
+  - keras-team__keras-19924
+  - keras-team__keras-19931
+  - keras-team__keras-19937
+  - keras-team__keras-19955
+  - keras-team__keras-19973
+  - keras-team__keras-20002
+  - keras-team__keras-20008
+  - keras-team__keras-3907
+  - keras-team__keras-3983
+  - keras-team__keras-4739
+  - keras-team__keras-4856
+  - langchain-ai__langchain-14350
+  - langchain-ai__langchain-19331
+  - langchain-ai__langchain-19717
+  - langchain-ai__langchain-20064
+  - langchain-ai__langchain-21201
+  - langchain-ai__langchain-3367
+  - langchain-ai__langchain-4009
+  - langchain-ai__langchain-4103
+  - langchain-ai__langchain-4186
+  - langchain-ai__langchain-4420
+  - langchain-ai__langchain-4579
+  - langchain-ai__langchain-4646
+  - langchain-ai__langchain-5432
+  - langchain-ai__langchain-5450
+  - langchain-ai__langchain-5584
+  - langchain-ai__langchain-5609
+  - langchain-ai__langchain-5625
+  - langchain-ai__langchain-6456
+  - langchain-ai__langchain-6483
+  - langchain-ai__langchain-676
+  - langchain-ai__langchain-6765
+  - langchain-ai__langchain-7653
+  - tensorflow__models-2727
+  - tensorflow__models-4628
+  - yt-dlp__yt-dlp-10390
+  - yt-dlp__yt-dlp-1649
+  - yt-dlp__yt-dlp-3435
+  - yt-dlp__yt-dlp-4524
+  - yt-dlp__yt-dlp-4841
+  - yt-dlp__yt-dlp-5195
+  - yt-dlp__yt-dlp-5933
+  - yt-dlp__yt-dlp-8917
+  - yt-dlp__yt-dlp-9856
+  - yt-dlp__yt-dlp-9862
+  skip_completed_rounds: true
+  resume:
+    enabled: false
+    from_plan_id: ''
+    from_round: 0
+    trajectories_dir: ''
+    patches_dir: ''
+prompts:
+  nrpv_block: '# Plan
+
+
+    ## Navigation (N)
+
+    - Locate and identify the relevant source files, functions, classes, and modules
+    involved in the issue.
+
+    - Explain how the codebase is structured around the problematic area.
+
+
+    ## Reproduction (R)
+
+    - Provide concrete steps to reproduce the bug or verify the issue exists.
+
+    - Describe the expected vs actual behavior.
+
+
+    ## Patch (P)
+
+    - List each file that needs modification and the exact change to make.
+
+    - Include specific code snippets or logic changes (do NOT write full file contents).
+
+
+    ## Validation (V)
+
+    - Describe how to verify the fix is correct (e.g., run specific tests, check edge
+    cases).
+
+    - Mention any regressions or side effects to watch for.
+
+    '
+  plan_generation_prompt: "You are a software engineer producing a structured plan\
+    \ that another agent will execute.\nYour response must contain exactly ONE bash\
+    \ code block with ONE command (or commands connected with && or ||).\n\nInclude\
+    \ a THOUGHT section before your command where you explain your reasoning process.\n\
+    Format your response as shown in <format_example>.\n\n<format_example>\nTHOUGHT:\
+    \ Your reasoning and analysis here\n\n```bash\nyour_command_here\n```\n</format_example>\n\
+    \nFailure to follow these rules will cause your response to be rejected.\n\n##\
+    \ Important Boundaries\n- MODIFY: /tmp (for scratch scripts and the plan file\
+    \ at /tmp/plan.md)\n- DO NOT MODIFY: any file under /testbed (this is read-only\
+    \ territory for the planning agent)\n\n## Exploration Budget\nYou have a hard\
+    \ exploration budget of 150 steps. After step 150 you MUST write the plan to /tmp/plan.md\
+    \ and submit it, even if your understanding is incomplete. An imperfect plan is\
+    \ infinitely better than no plan.\n\n## Efficiency Rules\n- Every ~10 steps, briefly\
+    \ summarize what you have learned so far in your THOUGHT.\n\n## Workflow\nRead\
+    \ code and reproduce the bug as needed. When ready \u2014 or when you reach the\
+    \ exploration budget limit \u2014 write the plan to\n/tmp/plan.md using a heredoc:\n\
+    \n```bash\ncat <<'EOF' > /tmp/plan.md\n<plan content>\nEOF\n```\n\nAfter /tmp/plan.md\
+    \ is written, your NEXT response MUST be exactly:\n\n```bash\necho COMPLETE_TASK_AND_SUBMIT_FINAL_OUTPUT\
+    \ && cat /tmp/plan.md\n```\n\nDo not run other commands after submitting.\n\n\
+    ## Plan Format\n{{nrpv_block}}\n"
+  plan_instance_template: '<pr_description>
+
+    Consider the following PR description:
+
+    {{task}}
+
+    </pr_description>
+
+    '
+  code_generation_prompt: 'You are in execution mode. Follow the approved plan below
+    exactly.
+
+
+    Approved plan:
+
+    --- plan start ---
+
+    {{plan}}
+
+    --- plan end ---
+
+    '
+  code_instance_template: "<pr_description>\nConsider the following PR description:\n\
+    {{task}}\n</pr_description>\n\n<instructions>\n# Task Instructions\n\n## Overview\n\
+    You are a software engineer implementing an approved plan to fix the issue\ndescribed\
+    \ in the PR description. Follow the approved plan exactly.\n\nIMPORTANT: This\
+    \ is an interactive process where you will think and issue ONE command, see its\
+    \ result, then think and issue your next command.\n\nFor each response:\n1. Include\
+    \ a THOUGHT section explaining your reasoning and what you're trying to accomplish\n\
+    2. Provide exactly ONE bash command to execute\n\n## Important Boundaries\n- MODIFY:\
+    \ Only Python source code files (*.py) in /testbed (this is the working directory\
+    \ for all your subsequent commands)\n- DO NOT MODIFY: Tests, Docker files, configuration\
+    \ files (pyproject.toml, setup.cfg, etc.),\n  README/docs, binary/media fixtures,\
+    \ or generated files.\n\n## Command Execution Rules\nYou are operating in an environment\
+    \ where\n1. You write a single command\n2. The system executes that command in\
+    \ a subshell\n3. You see the result\n4. You write your next command\n\nEach response\
+    \ should include:\n1. A **THOUGHT** section where you explain your reasoning and\
+    \ plan\n2. A single bash code block with your command\n\nFormat your responses\
+    \ like this:\n\n<format_example>\nTHOUGHT: Here I explain my reasoning process,\
+    \ analysis of the current situation,\nand what I'm trying to accomplish with the\
+    \ command below.\n\n```bash\nyour_command_here\n```\n</format_example>\n\nCommands\
+    \ must be specified in a single bash code block:\n\n```bash\nyour_command_here\n\
+    ```\n\n**CRITICAL REQUIREMENTS:**\n- Your response SHOULD include a THOUGHT section\
+    \ explaining your reasoning\n- Your response MUST include EXACTLY ONE bash code\
+    \ block\n- This bash block MUST contain EXACTLY ONE command (or a set of commands\
+    \ connected with && or ||)\n- If you include zero or multiple bash blocks, or\
+    \ no command at all, YOUR RESPONSE WILL FAIL\n- Do NOT try to run multiple independent\
+    \ commands in separate blocks in one response\n- Directory or environment variable\
+    \ changes are not persistent. Every action is executed in a new subshell.\n- However,\
+    \ you can prefix any action with `MY_ENV_VAR=MY_VALUE cd /path/to/working/dir\
+    \ && ...` or write/load environment variables from files\n\nExample of a CORRECT\
+    \ response:\n<example_response>\nTHOUGHT: I need to understand the structure of\
+    \ the repository first. Let me check what files are in the current directory to\
+    \ get a better understanding of the codebase.\n\n```bash\nls -la\n```\n</example_response>\n\
+    \nExample of an INCORRECT response:\n<example_response>\nTHOUGHT: I need to examine\
+    \ the codebase and then look at a specific file. I'll run multiple commands to\
+    \ do this.\n\n```bash\nls -la\n```\n\nNow I'll read the file:\n\n```bash\ncat\
+    \ file.txt\n```\n</example_response>\n\nIf you need to run multiple commands,\
+    \ either:\n1. Combine them in one block using && or ||\n```bash\ncommand1 && command2\
+    \ || echo \"Error occurred\"\n```\n\n2. Wait for the first command to complete,\
+    \ see its output, then issue the next command in your following response.\n\n\
+    ## Environment Details\n- You have a full Linux shell environment\n- Always use\
+    \ non-interactive flags (-y, -f) for commands\n- Avoid interactive tools like\
+    \ vi, nano, or any that require user input\n- If a command isn't available, you\
+    \ can install it\n\n## Useful Command Examples\n\n### Create a new file:\n```bash\n\
+    cat <<'EOF' > newfile.py\nimport numpy as np\nhello = \"world\"\nprint(hello)\n\
+    EOF\n```\n\n### Edit files with sed:\n```bash\n# Replace all occurrences\nsed\
+    \ -i 's/old_string/new_string/g' filename.py\n\n# Replace only first occurrence\n\
+    sed -i 's/old_string/new_string/' filename.py\n\n# Replace first occurrence on\
+    \ line 1\nsed -i '1s/old_string/new_string/' filename.py\n\n# Replace all occurrences\
+    \ in lines 1-10\nsed -i '1,10s/old_string/new_string/g' filename.py\n```\n\n###\
+    \ View file content:\n```bash\n# View specific lines with numbers\nnl -ba filename.py\
+    \ | sed -n '10,20p'\n```\n\n### Any other command you want to run\n```bash\nanything\n\
+    ```\n\n## Submission\nWhen you've completed your work (reading, editing, testing),\
+    \ and cannot make further progress\nissue exactly the following command:\n\n```bash\n\
+    echo COMPLETE_TASK_AND_SUBMIT_FINAL_OUTPUT && git add -A -- '*.py' ':(exclude)tests/**'\
+    \ ':(exclude)test/**' ':(exclude)*_test.py' ':(exclude)test_*.py' ':(exclude)*_pb2.py'\
+    \ && git diff --cached\n```\n\nThis command will submit your work.\nYou cannot\
+    \ continue working (reading, editing, testing) in any way on this task after submitting.\n\
+    </instructions>\n"
+  reflection_prompt_template: 'I provided an assistant with the following plan to
+    perform a task for me.
+
+    The assistant is the planning agent in a Plan-Code-Test pipeline; its plan
+
+    is handed to a downstream code-generation agent.
+
+
+    ```
+
+    {{prompt_template}}
+
+    ```
+
+
+    {{feedback_intro}}
+
+
+    {{inputs_outputs_feedback}}
+
+
+    Your task is to write a new plan for the assistant. The plan you write
+
+    replaces the previous plan in full.
+
+
+    Carefully examine the agent trajectories to understand HOW the assistant is
+
+    approaching the task. Look at:
+
+    - What tools the assistant is calling and with what arguments
+
+    - The reasoning steps the assistant takes
+
+    - Where the assistant makes mistakes or suboptimal choices
+
+    - What information the assistant is missing or misinterpreting
+
+
+    Read all the assistant responses and the corresponding feedback. Identify
+
+    all niche and domain-specific factual information about the task and
+
+    include it in the plan, as a lot of it may not be available to the
+
+    assistant in the future. The assistant may have utilized a generalizable
+
+    strategy to solve the task; if so, include that in the plan as well.
+
+
+    Based on the feedback AND the agent trajectories, identify what the
+
+    assistant is doing wrong or could do better, and incorporate specific
+
+    guidance to address these issues in the new plan.
+
+
+    The new plan MUST follow this exact four-section structure:
+
+
+    {{nrpv_block}}
+
+
+    Important constraints:
+
+    - Write the improved plan to /tmp/plan.md and finish with: echo COMPLETE_TASK_AND_SUBMIT_FINAL_OUTPUT
+    && cat /tmp/plan.md
+
+    - Do not summarise the previous plan, do not explain your reasoning outside the
+    plan file.
+
+    - The plan is natural-language guidance, not source code: do not paste full file
+    contents.
+
+    '
+  reflect_instance_template: '<pr_description>
+
+    Consider the following PR description:
+
+    {{task}}
+
+    </pr_description>
+
+
+    Based on the feedback in the system message above, write an improved plan
+
+    to /tmp/plan.md. After the plan file is written, submit by running:
+
+
+    ```bash
+
+    echo COMPLETE_TASK_AND_SUBMIT_FINAL_OUTPUT && cat /tmp/plan.md
+
+    ```
+
+    '
+  check_prompt: "You are a plan quality checker. Your task is to evaluate whether\
+    \ a software engineering plan follows a set of best-practice rules extracted from\
+    \ successful bug-fix cases.\n\nYou will be given:\n1. A set of universal rules\
+    \ that apply to all plans\n2. A set of conditional rules grouped by observable\
+    \ conditions\n3. The task description (PR description)\n4. The plan to evaluate\n\
+    \nFor each applicable rule, determine whether the plan satisfies it or violates\
+    \ it.\nA rule is \"applicable\" if its condition matches the task description.\
+    \ If a rule's condition does not match (e.g., the rule is about numpy but the\
+    \ task is about Django), ignore it.\n\nA plan PASSES if it does not violate any\
+    \ applicable rule.\nA plan FAILS if it violates one or more applicable rules.\n\
+    \nYour response must contain exactly ONE bash code block with ONE command (or\
+    \ commands connected with && or ||).\nInclude a THOUGHT section before your command\
+    \ where you explain your reasoning process.\nFormat your response as shown in\
+    \ <format_example>.\n\n<format_example>\nTHOUGHT: I have read the plan and rules.\
+    \ The plan addresses all applicable rules, so it should pass.\n\n```bash\ncat\
+    \ <<'EOF' > /tmp/check_result.json\n{\n  \"passed\": true,\n  \"violations\":\
+    \ [],\n  \"overall_assessment\": \"The plan follows all applicable rules.\"\n\
+    }\nEOF\n```\n</format_example>\n\nFailure to follow these rules will cause your\
+    \ response to be rejected.\n\n## Important Boundaries\n- MODIFY: /tmp (only for\
+    \ the check result file at /tmp/check_result.json)\n- DO NOT MODIFY: any file\
+    \ under /testbed\n\n## Workflow\nRead the rules and the plan carefully. When ready,\
+    \ write the JSON assessment to\n/tmp/check_result.json using a heredoc:\n\n```bash\n\
+    cat <<'EOF' > /tmp/check_result.json\n<json content>\nEOF\n```\n\nAfter /tmp/check_result.json\
+    \ is written, your NEXT response MUST be exactly:\n\n```bash\necho COMPLETE_TASK_AND_SUBMIT_FINAL_OUTPUT\
+    \ && cat /tmp/check_result.json\n```\n\nDo not run other commands after submitting.\n\
+    \nThe JSON object must use this exact schema:\n{\n  \"passed\": true/false,\n\
+    \  \"violations\": [\n    {\n      \"rule\": \"the full rule text\",\n      \"\
+    reasoning\": \"why the plan violates this rule\"\n    }\n  ],\n  \"overall_assessment\"\
+    : \"brief summary of plan quality\"\n}\n\nIf the plan passes all applicable rules,\
+    \ return passed=true and an empty violations list.\nBe strict: a plan that does\
+    \ not explicitly address a rule's concern should be considered a violation.\n"
+  check_instance_template: '<pr_description>
+
+    Consider the following PR description:
+
+    {{task}}
+
+    </pr_description>
+
+
+    Plan to evaluate:
+
+    {{plan}}
+
+
+    {{rules_text}}
+
+    '
+docker:
+  image_builder_script: ./scripts/build_docker_images.sh
+  workdir: /testbed
+  timeout: 30
+  delete_images_after_instance: true
+  max_cached_images: 75
+  min_free_gb: 20
+agent:
+  max_steps: 200
+  cost_limit: 3.0
+  timeout: 1800
+evaluator:
+  timeout: 1800
+analysis:
+  backend: mini_swe
+  model: deepseek-v4-flash
+  api_base: https://api.deepseek.com
+  api_key_env: DEEPSEEK_API_KEY
+  max_steps: 1000
+  cost_limit: 50.0
+  output_dir: ./output/analysis_polybench_full199_pct
+  parallel: 1
+  enable_review: false
+  opencode_bin: opencode
+  opencode_xdg_data_home: ''
+  opencode_isolate_per_case: true
+  opencode_timeout: 900
+  rate_limit_sleep_seconds: 18000
+  max_retries: 2
+  model_family: auto
+  system_prompt_suffix: ''
+checker:
+  enabled: false
+  rules_path: ./output/analysis_pro/aggregated_rules.json
+  model: deepseek-v4-pro
+  api_base: https://api.deepseek.com
+  max_steps: 50
+  cost_limit: 1.0

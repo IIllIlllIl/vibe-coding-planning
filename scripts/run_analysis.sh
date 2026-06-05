@@ -7,6 +7,7 @@
 # Usage:
 #   bash scripts/run_analysis.sh --model deepseek-v4-flash --output-dir ./output/analysis_flash
 #   bash scripts/run_analysis.sh --model deepseek-v4-pro   --output-dir ./output/analysis_pro
+#   bash scripts/run_analysis.sh --config configs/analysis_kimi_opencode.yaml --output-dir ./output/analysis_kimi_opencode_60
 
 set -euo pipefail
 
@@ -14,15 +15,20 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 cd "$SCRIPT_DIR/.."
 
 # Defaults
-MODEL="deepseek-v4-flash"
+CONFIG="config.yaml"
+MODEL_OVERRIDE=""
 OUTPUT_DIR="./output/analysis_run"
 INPUT_DIR="./output/SWE-bench_Verified/reflect_success_cases"
 
 # Parse args
 while [[ $# -gt 0 ]]; do
   case "$1" in
+    --config)
+      CONFIG="$2"
+      shift 2
+      ;;
     --model)
-      MODEL="$2"
+      MODEL_OVERRIDE="$2"
       shift 2
       ;;
     --output-dir)
@@ -44,7 +50,7 @@ mkdir -p "$OUTPUT_DIR"
 MASTER_LOG="logs/analysis_run.log"
 mkdir -p "$(dirname "$MASTER_LOG")"
 
-echo "[$(date '+%Y-%m-%d %H:%M:%S')] === Analysis start === model=$MODEL output=$OUTPUT_DIR" | tee -a "$MASTER_LOG"
+echo "[$(date '+%Y-%m-%d %H:%M:%S')] === Analysis start === config=$CONFIG model_override=${MODEL_OVERRIDE:-<config>} output=$OUTPUT_DIR" | tee -a "$MASTER_LOG"
 
 # Read instance IDs from manifest.json
 MANIFEST="$INPUT_DIR/manifest.json"
@@ -96,11 +102,16 @@ PY
 
   START_TIME=$(date +%s)
 
-  if python -m src.analysis \
-      --input "$INPUT_DIR" \
-      --output "$OUTPUT_DIR" \
-      --model "$MODEL" \
-      --instance "$INSTANCE_ID" 2>&1 | tee -a "$MASTER_LOG"; then
+  CMD=(python -m src.analysis
+    --config "$CONFIG"
+    --input "$INPUT_DIR"
+    --output "$OUTPUT_DIR"
+    --instance "$INSTANCE_ID")
+  if [[ -n "$MODEL_OVERRIDE" ]]; then
+    CMD+=(--model "$MODEL_OVERRIDE")
+  fi
+
+  if "${CMD[@]}" 2>&1 | tee -a "$MASTER_LOG"; then
     END_TIME=$(date +%s)
     ELAPSED=$((END_TIME - START_TIME))
     echo "[$(date '+%Y-%m-%d %H:%M:%S')] DONE  $INSTANCE_ID rc=0 elapsed=${ELAPSED}s" | tee -a "$MASTER_LOG"

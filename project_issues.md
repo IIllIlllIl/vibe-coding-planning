@@ -102,6 +102,27 @@
   2. 对大轨迹 case（>300 KB）启用 flash 模型兜底，pro 仅用于中小 case
   3. 给对比分析 agent 加 wall-time timeout，防止单 case 无限阻塞后续批次
 
+## 6. OpenCode analysis 仍被全局 DEEPSEEK_API_KEY 校验耦合
+
+- **状态**：待解决（不阻塞已完成的 Kimi/OpenCode 60-case 规则提取、后处理与聚合）
+- **现象**：`src.config.load_config()` 当前无条件要求 `DEEPSEEK_API_KEY` 存在，即使 `analysis.backend=opencode`。OpenCode 后端实际通过 OpenCode 自身 auth/config 发请求，不使用 `Config.api_key` 或 `analysis.api_key_env` 调用模型。
+- **当前处理**：运行 Kimi/OpenCode analysis 时如果环境里已有 `DEEPSEEK_API_KEY`，不会受影响；否则可临时设置 `DEEPSEEK_API_KEY=dummy` 绕过共享 loader 校验。
+- **影响**：这是配置层语义不清和可移植性问题，不代表已完成的 Kimi/OpenCode 60-case 规则提取与聚合使用了 DeepSeek。`configs/analysis_kimi_opencode.yaml` 的 `analysis.backend=opencode`、`model=kimi-for-coding/k2p6`、输出目录、超时和重试参数均走 OpenCode 路线；`analysis.api_base/api_key_env` 对 OpenCode 调用路径不生效。
+- **处理建议**：将 `load_config()` 的全局 API key 校验改为按实际使用路径执行：
+  1. PCT 主流程、checker 或 mini_swe analysis 需要 DeepSeek/LiteLLM key 时再校验对应 env var
+  2. `analysis.backend=opencode` 时不要求 `DEEPSEEK_API_KEY`
+  3. 为 OpenCode analysis 增加配置加载测试，验证仅设置 `MOONSHOT_API_KEY` 或仅存在 OpenCode auth 时也能加载配置
+
+## 7. OpenCode/Kimi 聚合默认超时与长重试等待
+
+- **状态**：待解决（不阻塞当前聚合产物，已手动规避）
+- **现象**：使用默认配置运行 Kimi/OpenCode 聚合时，`opencode_timeout=900` 可能不足以覆盖 195 条规则的一次性聚合请求。首次聚合超过 900 秒后进入 `rate_limit_sleep_seconds=18000` 的长等待路径，且 `conda run`/OpenCode 没有及时把中间日志返回。
+- **当前处理**：本次聚合使用一次性运行配置 `opencode_timeout=3600, max_retries=0` 完成，输出 `output/analysis_kimi_opencode_60/aggregated_rules.json`。该输出目录被 gitignore，不进入提交。
+- **处理建议**：
+  1. 为 `--aggregate` 增加独立超时/重试配置，避免复用 per-case 提取阶段的 5 小时限额等待策略
+  2. 在聚合开始前记录输入规则数和 prompt 大小，便于判断是否需要分批聚合
+  3. 考虑把规则聚合改为两阶段树形合并，降低单次 OpenCode 请求长度和 wall time 风险
+
 ---
 
 # 已完成项目（归档）

@@ -256,7 +256,7 @@
 | 致命错误示例 | DeepSeek API 返回 401/429 且重试无效、磁盘空间满、Docker 守护进程崩溃 |
 | 处理方式 | 立即停止整个程序，退出码非零，最后输出的日志中包含错误详情。已产生的轨迹和结果文件保留。不进行自动恢复 |
 | 任务级错误示例 | 某个 SWE-bench 实例的 Docker 镜像拉取/构建失败（Verified 时拉取官方镜像失败、Pro 时本地构建失败）、代码库构建失败、测试框架不支持、Agent 生成 Patch 格式非法、Agent 生成 Plan 失败、测试评估异常、Agent 命令超时 |
-| 处理方式 | **统一以 instance 为最小回滚粒度**：记录错误信息到日志和结果文件，跳过当前实例，继续处理下一个实例（如果配置了多个实例）。无论错误发生在 plan、code、reflect 还是 evaluate 阶段，均不再尝试在同实例内继续后续轮次——避免「round-skip 续跑」带来的前序状态退化问题（参见 `project_issues.md` §7 Q-4） |
+| 处理方式 | **统一以 instance 为最小回滚粒度**：记录错误信息到日志和结果文件，跳过当前实例，继续处理下一个实例（如果配置了多个实例）。无论错误发生在 plan、code、reflect 还是 evaluate 阶段，均不再尝试在同实例内继续后续轮次——避免「round-skip 续跑」带来的前序状态退化问题（参见 `project_issues.md` §4） |
 | 验收标准 | 程序在一个实例失败时不会崩溃，能够继续执行下一个实例；**任务级错误统一导致 instance skip，不会继续该实例的后续轮次**；日志中清晰记录了跳过原因；致命错误时程序优雅退出并保留已收集数据 |
 
 ### 3.6 对比分析与规则提取（后处理阶段）
@@ -267,12 +267,12 @@
 |------|------|
 | ID | FR-13 |
 | 名称 | 对比分析与规则提取 |
-| 描述 | 对 PCT pipeline 中「某轮从失败变为成功」的案例（reflect-success cases），运行独立的对比分析 Agent，比较失败 Plan 与成功 Plan 的推理链差异，提取可泛化的自然语言规则。规则格式必须遵循：When [input pattern], [strategy] because [causal justification]。支持使用不同 LLM 模型串行提取（如 deepseek-v4-flash → deepseek-v4-pro），以便比较规则质量差异。Agent 在宿主机本地运行（DefaultAgent + LocalEnvironment），直接读取 plans/、patches/、trajectories/ 等文件，不依赖 Docker |
+| 描述 | 对 PCT pipeline 中「某轮从失败变为成功」的案例（reflect-success cases），运行独立的对比分析 Agent，比较失败 Plan 与成功 Plan 的推理链差异，提取可泛化的自然语言规则。规则格式必须遵循：When [input pattern], [strategy] because [causal justification]。支持使用不同 LLM 模型串行提取（如 deepseek-v4-flash → deepseek-v4-pro），以便比较规则质量差异。默认 mini-swe-agent 后端在宿主机本地运行（DefaultAgent + LocalEnvironment），直接读取 plans/、patches/、trajectories/ 等文件；也支持 `analysis.backend=opencode` 通过 OpenCode/Kimi 执行提取、后处理和聚合 |
 | 输入 | reflect_success_cases 目录（含 manifest.json、各实例的 plan/trajectory/patch/result.json） |
-| 输出 | 每个实例的提取规则（`per_case/<instance_id>.json`）、批量聚合文件（`rules.jsonl` / `errors.jsonl`）、Agent 轨迹（`trajectories/<instance_id>.json`） |
-| 批量运行 | `scripts/run_analysis.sh`（由 `long_run_watchdog.py` 在 batch 结束后自动调用）或 `python -m src.analysis`（单实例调试） |
+| 输出 | 每个实例的提取规则（`per_case/<instance_id>.json`）、可选格式后处理结果（`per_case_postprocessed/<instance_id>.json`，保留原始版本不覆盖）、逐条记录（`rules.jsonl` / `errors.jsonl`）、聚合规则（`aggregated_rules.json`）、Agent 轨迹（`trajectories/<instance_id>.json`） |
+| 批量运行 | `scripts/run_analysis.sh`（由 `long_run_watchdog.py` 在 batch 结束后自动调用）或 `python -m src.analysis`（单实例调试）。`scripts/run_batch.sh --config <main_config>` 支持显式主流程配置；PolyBench Python 199 实例纯 PCT 扫描使用 `configs/polybench_full199_pct.yaml`，跳过已有 PolyBench `result.json` 的 133 实例续跑使用 `configs/polybench_remaining133_pct.yaml`。`long_run_watchdog.py` 支持通过 `PCT_CONFIG=<main_config>` 选择监控配置。`scripts/run_analysis.sh --config <analysis_config>` 支持显式分析配置；`scripts/run_batch.sh --analysis-only --analysis-config <analysis_config>` 支持跳过 PCT 主批次、只 handoff 到规则分析 |
 | 关键配置 | `config.analysis.model` / `api_base` / `max_steps` / `cost_limit` —— 独立于主 pipeline 的模型配置，支持分析阶段使用不同提供商 |
-| 验收标准 | 1）规则文件非空且包含 "When ... because ..." 格式的规则行；2）不同模型的规则可区分保存（`analysis_flash/` vs `analysis_pro/`）；3）批量运行支持断点续跑（已存在的 `per_case/*.json` 自动 SKIP） |
+| 验收标准 | 1）规则文件非空且包含 "When ... because ..." 格式的规则行；2）不同模型的规则可区分保存（`analysis_flash/` vs `analysis_pro/` 或独立配置输出目录）；3）批量运行支持断点续跑（已存在的 `per_case/*.json` 自动 SKIP）；4）对已有语义可用但格式不合格的规则，可通过 `python -m src.analysis --postprocess --input <output>/per_case --output <output> --postprocess-data-dir <reflect_success_cases>` 生成 `per_case_postprocessed/`。后处理获得与原提取阶段相同的 case 文件材料，但任务限定为格式修复而非重新提取；聚合阶段应以该后处理目录作为 `--input`，只读取顶层 `rule` 字段，`postprocess.original_rule` 和截断候选不进入聚合 |
 
 ### 3.7 规则质量审查（LLM-based Reviewer）
 
@@ -685,7 +685,7 @@ chmod +x scripts/quickstart.sh
 **判定规则**：
 - 致命错误：影响**数据收集完整性**或导致**系统无法继续运行任何任务**的错误
 - 任务级错误：仅影响**单个实例**，其他实例可以继续正常执行的错误
-- **统一原则**：instance 是最小回滚粒度。无论错误发生在 plan、code、reflect 还是 evaluate 阶段，均不再尝试在同实例内继续后续轮次（参见 `project_issues.md` §7 Q-4）
+- **统一原则**：instance 是最小回滚粒度。无论错误发生在 plan、code、reflect 还是 evaluate 阶段，均不再尝试在同实例内继续后续轮次（参见 `project_issues.md` §4）
 
 ---
 

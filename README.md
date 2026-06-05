@@ -89,22 +89,71 @@ python scripts/evaluate_checker.py --config config.yaml --dataset AmazonScience/
 | `--output DIR` | str | 评估输出目录 |
 | `--dataset NAME` | str | 数据集名称，默认 `AmazonScience/SWE-PolyBench` |
 
-## 输出结构
+### 批量运行脚本
 
-每个实例生成一个独立目录：
+`scripts/run_batch.sh` 读取主流程配置并逐实例调用 `python -m src.main`：
 
+| 参数 | 类型 | 说明 |
+|------|------|------|
+| `--config PATH` | str | 主流程配置文件路径，默认 `config.yaml` |
+| `--dry-run` | flag | 只列出 SKIP/RUN，不调用主流程 |
+| `--instances FILE` | str | 覆盖批次实例列表 JSON |
+| `--analysis-only` | flag | 跳过主流程，只执行规则分析 handoff |
+| `--analysis-config PATH` | str | 规则分析配置文件路径 |
+
+PolyBench Python 199 实例的纯 PCT 扫描配置已固定为
+`configs/polybench_full199_pct.yaml`（`checker.enabled=false`）：
+
+```bash
+bash scripts/run_batch.sh --config configs/polybench_full199_pct.yaml
 ```
-output/<dataset_short>/<batch_id>/<instance_id>/
-├── result.json          # 顶层结果：plans 列表、运行元数据、错误记录
-├── plans/               # 各轮 Plan 文本（plan_<round>_<role>_<ts>.md）
-├── patches/             # 各轮 git diff
-├── trajectories/        # plan/reflect/code 三类 agent 轨迹 JSON
-└── logs/                # 评估日志和运行日志
+
+跳过 `polybench-run20` / `polybench-run100` 中已有 `result.json` 的 66 个任务时，使用 remaining-133 配置：
+
+```bash
+bash scripts/run_batch.sh --config configs/polybench_remaining133_pct.yaml
 ```
 
-`result.json` 中每个 plan 记录包含：`round`、`plan_id`、`generated_by`、`patch_path`、`trajectory_path`、`test_results`（含 `resolved` 布尔值和 SWE-bench 官方评估输出）。
+长时监控运行时，watchdog 会用 `caffeinate` 包装其启动的 tmux 子任务，避免 macOS 睡眠暂停 batch：
 
-`<dataset_short>` 是 `system.dataset` 的短名（如 `SWE-bench/SWE-bench_Verified` → `SWE-bench_Verified`），`<batch_id>` 隔离不同实验批次。
+```bash
+PCT_CONFIG=configs/polybench_remaining133_pct.yaml \
+  conda run -n mini-swe python scripts/long_run_watchdog.py
+```
+
+### 规则分析 CLI
+
+`python -m src.analysis` 参数：
+
+| 参数 | 类型 | 说明 |
+|------|------|------|
+| `--config PATH` | str | 分析配置文件路径，Kimi/OpenCode 实验使用 `configs/analysis_kimi_opencode.yaml` |
+| `--input DIR` | str | 输入目录；提取/后处理时是 reflect-success 或 `per_case/`，聚合时是 per-case JSON 目录 |
+| `--output DIR` | str | 分析输出目录 |
+| `--instance ID` | str | 单实例调试 |
+| `--model MODEL` | str | 覆盖 `analysis.model` |
+| `--postprocess` | flag | 保留原始 `per_case/`，生成 `per_case_postprocessed/` |
+| `--postprocess-data-dir DIR` | str | 后处理时提供原始 reflect-success case 材料 |
+| `--aggregate` | flag | 读取 `--input` 中 `rule_valid=true` 的规则并生成 `aggregated_rules.json` |
+
+批量脚本也支持独立分析配置：
+
+```bash
+bash scripts/run_analysis.sh \
+  --config configs/analysis_kimi_opencode.yaml \
+  --input-dir ./output/SWE-bench_Verified/reflect_success_cases \
+  --output-dir ./output/analysis_kimi_opencode_60
+
+bash scripts/run_batch.sh \
+  --analysis-only \
+  --analysis-config configs/analysis_kimi_opencode.yaml \
+  --analysis-input-dir ./output/SWE-bench_Verified/reflect_success_cases \
+  --analysis-output-dir ./output/analysis_kimi_opencode_60
+```
+
+## Output 索引
+
+运行产物位于 [`output/`](output/)，该目录被 gitignore。目录结构、当前已有运行、关键产物、规则后处理/聚合命令和常用检索命令集中记录在 [`output/README.md`](output/README.md)。
 
 ## Plan-Checker-Code 管道
 
@@ -130,22 +179,7 @@ checker:
   cost_limit: 1.0
 ```
 
-检查器评估输出结构：
-
-```
-output/checker_eval/<run_id>/
-├── results.json           # 聚合指标 + 每实例摘要
-└── instances/
-    └── <instance_id>/
-        ├── result.json      # {check_result, test_results, resolved}
-        ├── plan.md
-        ├── check_result.json
-        ├── patch.patch
-        └── trajectories/
-            ├── plan.json
-            ├── check.json
-            └── code.json
-```
+检查器评估输出结构见 [`output/README.md`](output/README.md)。
 
 ## 文档索引
 
@@ -154,7 +188,12 @@ output/checker_eval/<run_id>/
 | [`docs/requirement-document.md`](docs/requirement-document.md) | 完整需求文档：功能需求、数据模型、验收标准、风险分析 |
 | [`docs/architecture.md`](docs/architecture.md) | 架构文档：目录结构、模块职责、数据流、设计决策 |
 | [`project_issues.md`](project_issues.md) | 待办与方法学决策（含 §3 数据集分层实施进度） |
+| [`output/README.md`](output/README.md) | 本地 output 目录索引、当前运行清单、关键产物和常用命令 |
 | [`CLAUDE.md`](CLAUDE.md) | Agent 操作守则（仅 3 节：项目索引 / conda env / 清理）—— 不放项目说明 |
+
+## 规则后处理与聚合
+
+规则提取的原始结果、后处理目录和聚合产物都在 `output/` 下。具体路径、输入语义和命令见 [`output/README.md`](output/README.md)。
 
 ## 技术栈
 
@@ -196,6 +235,10 @@ output/checker_eval/<run_id>/
 │   ├── evaluate_checker.py        # 检查器评估批量运行
 │   ├── dryrun_checker.py          # 检查器 dry-run 工具
 │   └── long_run_watchdog.py       # 长时无人值守监控
+├── configs/
+│   ├── analysis_kimi_opencode.yaml       # Kimi/OpenCode 规则分析实验配置
+│   ├── polybench_full199_pct.yaml        # PolyBench Python 199 实例纯 PCT 扫描配置
+│   └── polybench_remaining133_pct.yaml   # 跳过已有 PolyBench 结果后的 133 实例配置
 ├── src/
 │   ├── main.py                    # 入口程序
 │   ├── config.py                  # 配置加载与验证
@@ -229,6 +272,7 @@ output/checker_eval/<run_id>/
 │       ├── review_cli.py          # 批量审查 CLI
 │       ├── cli.py                 # 批量提取 CLI
 │       ├── output.py              # 分析结果输出
+│       ├── rule_postprocess.py    # 规则格式后处理，生成 per_case_postprocessed
 │       ├── evaluate_rules.py      # 规则质量评估工具
 │       └── aggregation_agent.py   # 规则聚合 Agent
 ├── config.yaml                    # 运行时配置
@@ -248,7 +292,7 @@ output/checker_eval/<run_id>/
 
 ## 开发状态
 
-代码实现完成，全量单元测试通过、覆盖率 85%+。v0.8 已完成 Prompt v3 重构 + n=4 端到端 dry-run 验证（参考开发日志）。v1.4 已完成对比分析模块（FR-13）和 LLM 规则审查模块（FR-14）开发，含 watchdog 集成和全量测试。
+代码实现完成，全量单元测试通过、覆盖率 85%+。v0.8 已完成 Prompt v3 重构 + n=4 端到端 dry-run 验证（参考开发日志）。v1.4 已完成对比分析模块（FR-13）和 LLM 规则审查模块（FR-14）开发，含 watchdog 集成和全量测试。Kimi/OpenCode 60-case 规则提取、格式后处理与聚合已完成，聚合产物位于 `output/analysis_kimi_opencode_60/aggregated_rules.json`（`output/` 被 gitignore，不进入提交）。
 
 **Phase 2 待办**（详见 `project_issues.md`）：
 - §1 FR-07 断点重跑
@@ -256,3 +300,4 @@ output/checker_eval/<run_id>/
 - §3 PolyBench GHCR 镜像访问问题（大量实例匿名拉取 denied）
 - §5 Review/Rework 破坏性返工（默认已关闭，需 redesign）
 - §6 Pro 模型在大轨迹 case 上的异常耗时
+- §7 OpenCode/Kimi 聚合默认超时与长重试等待

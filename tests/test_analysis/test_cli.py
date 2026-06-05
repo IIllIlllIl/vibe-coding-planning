@@ -249,6 +249,48 @@ class TestAggregateFlag:
         assert mock_agg.called
 
 
+class TestPostprocessFlag:
+    def test_postprocess_runs_to_postprocessed_dir(self, tmp_path: Path, monkeypatch):
+        monkeypatch.setenv("DEEPSEEK_API_KEY", "test-ds-key")
+
+        per_case = tmp_path / "per_case"
+        per_case.mkdir()
+        config_path = tmp_path / "config.yaml"
+        _write_minimal_config(config_path)
+        output_dir = tmp_path / "output"
+
+        expected = {
+            "copied_valid": 1,
+            "repaired": 1,
+            "failed": 0,
+            "skipped_empty": 0,
+        }
+        with patch(
+            "src.analysis.cli.postprocess_per_case_dir",
+            return_value=expected,
+        ) as mock_postprocess:
+            rc = main(
+                [
+                    "--config", str(config_path),
+                    "--input", str(per_case),
+                    "--output", str(output_dir),
+                    "--postprocess-data-dir", str(tmp_path / "cases"),
+                    "--postprocess",
+                ]
+            )
+
+        assert rc == 0
+        assert mock_postprocess.call_args.kwargs["per_case_dir"] == per_case.resolve()
+        assert (
+            mock_postprocess.call_args.kwargs["output_dir"]
+            == output_dir / "per_case_postprocessed"
+        )
+        assert (
+            mock_postprocess.call_args.kwargs["data_base_dir"]
+            == str(tmp_path / "cases")
+        )
+
+
 class TestExtractionBackendFlag:
     def test_extraction_uses_opencode_backend(self, tmp_path: Path, monkeypatch):
         monkeypatch.setenv("DEEPSEEK_API_KEY", "test-ds-key")

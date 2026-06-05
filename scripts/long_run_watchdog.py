@@ -7,7 +7,8 @@ and invokes Claude Code CLI for complex code repairs.
 Usage:
     export DEEPSEEK_API_KEY="..."
     export ANTHROPIC_API_KEY="..."   # only needed if claude repair is triggered
-    caffeinate -i -s -d python scripts/long_run_watchdog.py
+    export PCT_CONFIG="configs/polybench_remaining133_pct.yaml"  # optional
+    python scripts/long_run_watchdog.py
 
 State file (auto-created):
     output/.watchdog_state.json
@@ -23,6 +24,7 @@ import logging
 import os
 import re
 import shlex
+import shutil
 import signal
 import subprocess
 import sys
@@ -198,6 +200,10 @@ def _now_iso() -> str:
     return datetime.now(timezone.utc).isoformat()
 
 
+def _config_path() -> Path:
+    return Path(os.environ.get("PCT_CONFIG", "config.yaml"))
+
+
 def load_state() -> WatchdogState:
     if STATE_FILE.exists():
         try:
@@ -218,9 +224,9 @@ def _init_state() -> WatchdogState:
     """Infer initial state from config.yaml and sample file."""
     import yaml
 
-    cfg_path = Path("config.yaml")
+    cfg_path = _config_path()
     if not cfg_path.exists():
-        raise SystemExit("config.yaml not found")
+        raise SystemExit(f"config not found: {cfg_path}")
 
     cfg = yaml.safe_load(cfg_path.read_text(encoding="utf-8"))
     batch_id = (cfg.get("system") or {}).get("batch_id", "")
@@ -312,6 +318,15 @@ def _kill_tmux_session(name: str) -> None:
         time.sleep(2)
 
 
+def _prevent_sleep_command(cmd: str) -> str:
+    """Wrap long-running child commands with caffeinate when available."""
+    quoted = shlex.quote(cmd)
+    if shutil.which("caffeinate"):
+        return f"exec caffeinate -i -s -d bash -lc {quoted}"
+    logging.warning("caffeinate not found; running without macOS sleep prevention")
+    return f"exec bash -lc {quoted}"
+
+
 def start_batch(state: WatchdogState) -> None:
     """Start (or restart) the batch runner in a tmux session."""
     _kill_tmux_session(BATCH_TMUX_SESSION)
@@ -320,8 +335,9 @@ def start_batch(state: WatchdogState) -> None:
         f"cd {shlex.quote(os.getcwd())} "
         f"&& source /Users/taoran.wang/miniconda3/etc/profile.d/conda.sh "
         f"&& conda activate mini-swe "
-        f"&& bash scripts/run_batch.sh"
+        f"&& bash scripts/run_batch.sh --config {shlex.quote(str(_config_path()))}"
     )
+    cmd = _prevent_sleep_command(cmd)
 
     logging.info("Starting batch tmux session: %s", BATCH_TMUX_SESSION)
     subprocess.run(
@@ -348,10 +364,10 @@ def _resolve_analysis_model(phase: str | None) -> str:
     legacy = {"flash": "deepseek-v4-flash", "pro": "deepseek-v4-pro"}
     if phase in legacy:
         return legacy[phase]
-    # Non-legacy phase: read from config.yaml
+    # Non-legacy phase: read from the selected config.
     try:
         import yaml
-        cfg = yaml.safe_load(Path("config.yaml").read_text(encoding="utf-8"))
+        cfg = yaml.safe_load(_config_path().read_text(encoding="utf-8"))
         return (cfg.get("analysis") or {}).get("model", "deepseek-v4-flash")
     except Exception:
         return "deepseek-v4-flash"
@@ -374,6 +390,7 @@ def start_analysis(state: WatchdogState) -> None:
         f"&& conda activate mini-swe "
         f"&& bash scripts/run_analysis.sh --model {model_name} --output-dir {output_dir}"
     )
+    cmd = _prevent_sleep_command(cmd)
 
     logging.info(
         "Starting analysis tmux session: %s (phase=%s model=%s)",
@@ -420,6 +437,7 @@ def start_aggregation(state: WatchdogState) -> None:
         f"--aggregate "
         f">> logs/aggregation_run.log 2>&1"
     )
+    cmd = _prevent_sleep_command(cmd)
 
     AGGREGATION_LOG.parent.mkdir(parents=True, exist_ok=True)
     AGGREGATION_LOG.touch(exist_ok=True)
@@ -474,6 +492,7 @@ def start_checker_eval(state: WatchdogState) -> None:
         f"--output {shlex.quote(output_dir)} "
         f"2>&1 | tee -a {shlex.quote(str(CHECKER_LOG))}"
     )
+    cmd = _prevent_sleep_command(cmd)
 
     CHECKER_LOG.parent.mkdir(parents=True, exist_ok=True)
     CHECKER_LOG.touch(exist_ok=True)
@@ -550,6 +569,7 @@ def start_review(state: WatchdogState, instance_ids: list[str] | None = None) ->
         f"{instances_arg} "
         f">> logs/review_run.log 2>&1"
     )
+    cmd = _prevent_sleep_command(cmd)
 
     # Ensure the review log file exists so is_log_stale works immediately
     REVIEW_LOG.parent.mkdir(parents=True, exist_ok=True)
@@ -761,6 +781,7 @@ def start_rework(instance_id: str, model_name: str, output_dir: str) -> None:
         f"--model {shlex.quote(model_name)} "
         f"--instance {shlex.quote(instance_id)}"
     )
+    cmd = _prevent_sleep_command(cmd)
 
     logging.info(
         "Starting rework session: %s (instance=%s model=%s)",
@@ -1072,7 +1093,7 @@ Rules:
         f"{shlex.quote(prompt)}"
     )
 
-    full_cmd = f"cd {shlex.quote(os.getcwd())} && {claude_cmd}"
+    full_cmd = _prevent_sleep_command(f"cd {shlex.quote(os.getcwd())} && {claude_cmd}")
 
     logging.info("Invoking Claude Code repair (tmux session: %s)", REPAIR_TMUX_SESSION)
     subprocess.run(
