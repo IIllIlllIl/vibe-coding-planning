@@ -28,12 +28,16 @@
   1. **字段兼容性** ✅：PolyBench 实例字段与 swebench 高度一致，仅大小写差异和 JSON 字符串列表，已做轻量映射。
   2. **Docker 环境** ✅：镜像内有完整 git 仓库、pytest、Python 3.10，WORKDIR `/testbed`，与现有 agent 运行模式兼容。
   3. **评估工具链** ✅：Gold patch 验证通过（AutoGPT-4652 `resolved=True`），parser + scoring 逻辑正确。
-  4. **镜像可用性** ⚠️：GHCR (`ghcr.io/timesler/swe-polybench.eval.x86_64.{id}:v1.1`) 大量实例返回 `denied`（transformers、langchain、keras、yt-dlp 均失败），仅 AutoGPT 成功拉取。
-- **风险**：若 199 个 Python 实例中大量镜像无法直接拉取，需本地构建（按 repo 构建 base image + per-instance Dockerfile），成本显著高于 Verified 的直接拉取模式。
+  4. **镜像可用性** ⚠️（已部分厘清，2026-06-05）：
+     - GHCR 登录有效（用户 `IIllIlllIl`），匿名 `denied` 问题已解决。
+     - 登录后拉取测试（2026-06-05）：AutoGPT-4652 (v1.1 ✅)、yt-dlp-10390 (v1.1 ✅)；transformers-13573 (v1.1 ❌ 但 v1.0 ✅、latest ✅)；keras-1767 (v1.1 ❌)、langchain-14350 (v1.1 ❌)、tensorflow/models-2727 (v1.1 ❌)。
+     - `polybench_evaluator.py` 已集成 fallback tag（v1.1 → v1.0 → latest），可自动救回部分实例。
+     - 但 transformers、keras、langchain 等主力 repo 的 v1.1 镜像大量缺失，fallback tag 能否覆盖全部待验证。
+- **风险**：若 199 个 Python 实例中大量镜像在 GHCR 上确实不存在（非权限问题），则需本地构建（按 repo 构建 base image + per-instance Dockerfile），成本显著高于 Verified 的直接拉取模式。
 - **下一步**：
-  1. 小规模试运行：选择已知可拉取镜像的实例（如 AutoGPT-4652）运行完整 pipeline，验证端到端流程
-  2. 探索 GHCR 登录是否能解决镜像拉取问题
-  3. 若镜像问题无法解决，评估本地构建 199 个实例镜像的可行性与耗时
+  1. ✅ 小规模试运行：AutoGPT-4652 已通过 gold patch 验证（`resolved=True`）
+  2. ✅ GHCR 登录已验证有效
+  3. 启动 remaining-133 扫描，观察实际 pull 成功率；对 `not found` 实例评估是否需要本地构建镜像
 
 ## 4. Verified 探索运行（run1 2026-05-09 + run2 2026-05-11）暴露的 pipeline 健壮性问题
 
@@ -44,13 +48,12 @@
 
 ### 4.1 Jinja 模板把 problem_statement 里的 `{student}` 当作变量（致命）
 
-- **状态**：待解决（**优先级最高**：会让整个实例 result.json 写不出来）
-- **现象**：`django__django-12304` 在 Round 1 plan agent 完成后、code agent 启动前抛 `'student' is undefined`，pipeline `Unexpected error` 退出。该实例的 result.json 因此从未写出（FAIL=1，missing=1）。
-- **Run2 (n=5) 复现**：120 实例中 **8 个 FAIL 全部命中此类**，错误信息因 problem_statement 内特殊字符不同而不同——`'myform' is undefined`、`Encountered unknown tag 's'`（占 3 例）、`expected token 'end of print statement', got ':'`（2 例）、`unexpected '}'`、`unexpected char '^'`——但根因相同：Jinja2 把 user content 当模板二次渲染。
-- **累计影响**：170 实例（run1 50 + run2 120）中 9 个 FAIL，**8 在 reflect_agent（Round 2+）触发，3 在 code_agent（Round 1）触发**（run1 的 12304 也是 code_agent）。reflect_agent 失败占比上升是因为 reflect 比 plan/code 多走一次 instance_template 渲染。
-- **根因**：mini-swe-agent 的 instance_template 用 Jinja2 渲染（`{{task}}`）。当 `task` 内容（即 SWE-bench 的 `problem_statement`）本身包含字面量 `{student}` / `{...}` / `{%...%}` / `^` 等 Jinja 特殊字符时，Jinja 会把它当成未定义变量或模板语法并按 strict 模式报错。
-- **影响**：170 实例丢 9 个 (5.3%)；500 实例规模上同比率会丢 ~26 个，污染分析数据。
-- **处理建议**：要么在 `code_agent.run` / `plan_agent.run` / `reflect_agent.run` 把 `task` 作为已渲染的字符串传入（不交给 Jinja 二次处理），要么把 mini-swe-agent 的 environment 切换到 Jinja 的 `Undefined`（非 `StrictUndefined`），或对 problem_statement 做一次 `{`/`}`/`%`/`^` 转义。
+- **状态**：✅ 已修复（v0.9 Jinja 架构整改，2026-05-19）
+- **现象（历史）**：`django__django-12304` 在 Round 1 plan agent 完成后、code agent 启动前抛 `'student' is undefined`，pipeline `Unexpected error` 退出。该实例的 result.json 因此从未写出（FAIL=1，missing=1）。Run2 (n=5) 中 120 实例有 8 个 FAIL 全部命中此类。
+- **根因（历史）**：早期代码在主机端用 `str.format()` 或 `Template.render()` 预渲染 `instance_template`，将 `task` 内容（problem_statement）内联到模板源码字符串中，再传给 mini-swe-agent。mini-swe-agent 随后用 Jinja2 `StrictUndefined` 再次渲染该字符串，导致 problem_statement 中的 `{{student}}`、`{%...%}` 等字面量被当作模板语法解析。
+- **修复方式**：`src/agents/_deps.py:build_default_agent` 不再预渲染 template，而是传入原始 `instance_template` 和 `system_template`；`task` 及所有动态内容（plan、feedback 等）通过 `agent.run(task=..., **kwargs)` 传入，由 mini-swe-agent 放入 `extra_template_vars`，Jinja2 做单次 `Template.render(**vars)` 渲染。Jinja2 在变量替换阶段不会解析变量值内部的 `{{...}}` 或 `{%...%}` 片段（已用 Python 验证：`Template('PR: {{task}}').render(task='hello {{student}}')` → `'PR: hello {{student}}'`，不报错）。
+- **验证**：当前代码已通过 Jinja2 行为测试（`src/agents/_deps.py` 注释 line 137-144 记录了该修复的诊断历史）。PolyBench remaining-133 扫描前已做回归验证。
+- **注意**：`StrictUndefined` 仍保留，用于捕获真正的模板变量缺失（如模板源码中拼写错误的占位符），这是预期行为。
 
 ### 4.2 Plan / Reflect agent 运行 submission 但 `/tmp/plan.md` 为空
 
