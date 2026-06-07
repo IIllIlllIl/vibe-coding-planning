@@ -180,15 +180,20 @@ class TestEvaluatePolybenchInstance:
         assert result["resolved"] is False
         assert "patch apply failed" in result["stderr"].lower()
 
+    @patch(
+        "src.environment.polybench_image.build_polybench_image_from_official_dockerfile",
+        return_value="polybench_python_test__repo-1234",
+    )
     @patch("docker.from_env")
     @patch("src.evaluator.polybench_evaluator._import_polybench")
-    def test_returns_failure_when_image_unavailable(
+    def test_builds_official_dockerfile_when_image_unavailable(
         self,
         mock_import_polybench,
         mock_docker_from_env,
+        mock_build_image,
         polybench_instance_info,
     ):
-        """When the Docker image is not available locally or in GHCR, fail fast."""
+        """GHCR failure falls back to the official instance Dockerfile."""
         pb = _make_pb_imports()
         pb["DockerManager"] = lambda **kwargs: _make_docker_manager(
             check_image_local=False,
@@ -209,13 +214,19 @@ class TestEvaluatePolybenchInstance:
 
         mock_import_polybench.return_value = pb
 
-        result = evaluate_polybench_instance(
-            patch="some patch",
-            instance_info=polybench_instance_info,
-        )
+        mock_parser = MagicMock()
+        mock_parser.parse.return_value = {}
+        with patch("importlib.import_module") as mock_import:
+            mock_parsers_mod = MagicMock()
+            mock_parsers_mod.PythonPyUnit = lambda **kwargs: mock_parser
+            mock_import.return_value = mock_parsers_mod
+            result = evaluate_polybench_instance(
+                patch="some patch",
+                instance_info=polybench_instance_info,
+            )
 
+        mock_build_image.assert_called_once_with(polybench_instance_info)
         assert result["resolved"] is False
-        assert "unavailable" in result["error_info"].lower()
 
     def test_raises_when_instance_id_missing(self):
         with pytest.raises(FatalError, match="missing 'instance_id'"):

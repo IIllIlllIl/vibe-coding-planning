@@ -232,10 +232,9 @@ prompts:
     \ result, then think and issue your next command.\n\nFor each response:\n1. Include\
     \ a THOUGHT section explaining your reasoning and what you're trying to accomplish\n\
     2. Provide exactly ONE bash command to execute\n\n## Important Boundaries\n- MODIFY:\
-    \ Only Python source code files (*.py) in /testbed (this is the working directory\
-    \ for all your subsequent commands)\n- DO NOT MODIFY: Tests, Docker files, configuration\
-    \ files (pyproject.toml, setup.cfg, etc.),\n  README/docs, binary/media fixtures,\
-    \ or generated files.\n\n## Command Execution Rules\nYou are operating in an environment\
+    \ Any task-relevant non-test file in /testbed (this is the working directory\
+    \ for all your subsequent commands)\n- DO NOT MODIFY: Tests or test fixtures.\
+    \ Do not add or alter tests to make the submission pass.\n\n## Command Execution Rules\nYou are operating in an environment\
     \ where\n1. You write a single command\n2. The system executes that command in\
     \ a subshell\n3. You see the result\n4. You write your next command\n\nEach response\
     \ should include:\n1. A **THOUGHT** section where you explain your reasoning and\
@@ -277,8 +276,8 @@ prompts:
     \ | sed -n '10,20p'\n```\n\n### Any other command you want to run\n```bash\nanything\n\
     ```\n\n## Submission\nWhen you've completed your work (reading, editing, testing),\
     \ and cannot make further progress\nissue exactly the following command:\n\n```bash\n\
-    echo COMPLETE_TASK_AND_SUBMIT_FINAL_OUTPUT && git add -A -- '*.py' ':(exclude)tests/**'\
-    \ ':(exclude)test/**' ':(exclude)*_test.py' ':(exclude)test_*.py' ':(exclude)*_pb2.py'\
+    echo COMPLETE_TASK_AND_SUBMIT_FINAL_OUTPUT && git add -A -- . ':(exclude)tests/**'\
+    \ ':(exclude)test/**' ':(exclude)*_test.py' ':(exclude)test_*.py'\
     \ && git diff --cached\n```\n\nThis command will submit your work.\nYou cannot\
     \ continue working (reading, editing, testing) in any way on this task after submitting.\n\
     </instructions>\n"
@@ -433,6 +432,8 @@ docker:
   delete_images_after_instance: true
   max_cached_images: 75
   min_free_gb: 20
+  polybench_build_fallback: true
+  polybench_pull_timeout: 600
 agent:
   max_steps: 200
   cost_limit: 3.0

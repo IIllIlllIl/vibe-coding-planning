@@ -203,6 +203,7 @@ class DockerEnvWrapper:
         workdir: str,
         mount_source: str | None = None,
         timeout: int | None = None,
+        instance_info: dict[str, Any] | None = None,
     ) -> None:
         """Start a Docker container.
 
@@ -220,7 +221,12 @@ class DockerEnvWrapper:
                 to ``DockerEnvironment``.
         """
         DockerEnvironment = _import_docker_env()
-        image = _resolve_polybench_image(image, timeout=timeout)
+        image = _resolve_polybench_image(
+            image,
+            timeout=self._config.polybench_pull_timeout,
+            instance_info=instance_info,
+            build_fallback=self._config.polybench_build_fallback,
+        )
         self._image = image
 
         kwargs: dict[str, Any] = {
@@ -301,7 +307,13 @@ class DockerEnvWrapper:
         self.stop()
 
 
-def _resolve_polybench_image(image: str, timeout: int | None = None) -> str:
+def _resolve_polybench_image(
+    image: str,
+    timeout: int | None = None,
+    *,
+    instance_info: dict[str, Any] | None = None,
+    build_fallback: bool = False,
+) -> str:
     """Ensure PolyBench GHCR images are local, with tag fallback.
 
     mini-swe-agent starts containers with ``docker run``. If the image is not
@@ -348,6 +360,16 @@ def _resolve_polybench_image(image: str, timeout: int | None = None) -> str:
                     f"Image={candidate}. Error: {last_error}"
                 ) from exc
             logger.info("PolyBench image pull failed for %s: %s", candidate, last_error)
+
+    if build_fallback and instance_info:
+        logger.info(
+            "GHCR image unavailable; building with the official PolyBench Dockerfile"
+        )
+        from src.environment.polybench_image import (
+            build_polybench_image_from_official_dockerfile,
+        )
+
+        return build_polybench_image_from_official_dockerfile(instance_info)
 
     raise FatalError(
         "Unable to obtain PolyBench Docker image for agent container. "

@@ -126,6 +126,21 @@
   2. 在聚合开始前记录输入规则数和 prompt 大小，便于判断是否需要分批聚合
   3. 考虑把规则聚合改为两阶段树形合并，降低单次 OpenCode 请求长度和 wall time 风险
 
+## 8. PolyBench remaining-133 恢复运行
+
+- **状态**：恢复代码与重跑计划已完成，尚未执行重跑
+- **根因修正**：
+  1. evaluator 的 editable install 指向 `/tmp/SWE-PolyBench`，临时源码被清理后只剩空 namespace package。批次启动现改为导入 `docker_utils` / `repo_utils` 子模块做 fail-fast；当前环境已非 editable 安装官方 commit `1eb0bdc8ef63e1e88172b96bc435b1cd9fc93ecc`。
+  2. patch 在 evaluator 返回后才落盘，导致 53 个导入失败实例缺少 patch 文件。现改为评估前持久化，可从旧 code trajectory 恢复。
+  3. 11 个报告为 patch apply 失败的补丁已在对应官方 base commit 上复现：按官方顺序先应用 `test_patch`，再用 `git apply -v --ignore-whitespace --reject` 应用原模型补丁，11/11 均成功。10 个补丁中的额外 `setup.py` 修改也都可应用，因此不得自动删除；这些案例按 evaluator-only 原样重试。PolyBench patch policy 仅过滤测试文件，并拒绝与官方 test patch 的文件重叠；不主动过滤 `*_pb2.py` 等生成文件。官方答案审计发现 199 个答案中有 22 个包含非 Python 文件，因此通用规则不得按扩展名或配置文件名过滤。
+  4. GHCR 三个 tag 失败后原流程直接终止。现按官方 evaluator 使用 `RepoManager` + `DockerManager` 从实例 Dockerfile/base commit 本地构建，最多重试 3 次。
+- **重跑分组**：
+  - evaluator-only：64（53 evaluator 导入失败 + 11 个可原样重评 patch）
+  - full pipeline：38（36 镜像失败 + 2 空输出）
+  - 保留：31 个已有有效评估结果
+- **入口**：`scripts/retry_polybench.py`，默认仅输出计划；执行必须显式传 `--execute`
+- **详细说明**：`docs/polybench-rerun-plan.md`
+
 ---
 
 # 已完成项目（归档）

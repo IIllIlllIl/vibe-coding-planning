@@ -79,6 +79,7 @@ class OutputWriter:
         plan_path: str | None = None,
         reflection_log: str | None = None,
         optimized_from: str | None = None,
+        patch_path: str | None = None,
     ) -> dict[str, Any]:
         """Save a single round's outputs and return the plan record dict.
 
@@ -99,11 +100,12 @@ class OutputWriter:
         """
         self._ensure_dirs()
 
-        # Write patch file with timestamp
-        timestamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%S")
-        patch_filename = f"patch_{round_num}_{timestamp}.patch"
-        patch_path = self._patches_dir / patch_filename
-        patch_path.write_text(patch_content, encoding="utf-8")
+        if patch_path is None:
+            patch_path_obj = self.save_patch(
+                round_num=round_num,
+                patch_content=patch_content,
+            )
+            patch_path = str(patch_path_obj.relative_to(self.output_dir))
 
         # Build plan record
         plan_record: dict[str, Any] = {
@@ -113,7 +115,7 @@ class OutputWriter:
             "test_pass_rate": 1.0 if test_results.get("resolved") else 0.0,
             "test_results": test_results,
             "plan_path": plan_path,
-            "generated_patch_path": str(patch_path.relative_to(self.output_dir)),
+            "generated_patch_path": patch_path,
             "trajectory_path": trajectory_path,
             "reflection_log": reflection_log,
         }
@@ -122,6 +124,15 @@ class OutputWriter:
 
         self.plans.append(plan_record)
         return plan_record
+
+    def save_patch(self, *, round_num: int, patch_content: str) -> Path:
+        """Persist a generated patch before evaluation starts."""
+        self._ensure_dirs()
+        timestamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%S")
+        patch_path = self._patches_dir / f"patch_{round_num}_{timestamp}.patch"
+        patch_path.write_text(patch_content, encoding="utf-8")
+        logger.info("Patch saved to %s", patch_path)
+        return patch_path
 
     def record_error(
         self,

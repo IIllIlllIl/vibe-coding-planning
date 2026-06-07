@@ -305,9 +305,8 @@ prompts:
     2. Provide exactly ONE bash command to execute
 
     ## Important Boundaries
-    - MODIFY: Only Python source code files (*.py) in /testbed (this is the working directory for all your subsequent commands)
-    - DO NOT MODIFY: Tests, Docker files, configuration files (pyproject.toml, setup.cfg, etc.),
-      README/docs, binary/media fixtures, or generated files.
+    - MODIFY: Any task-relevant non-test file in /testbed (this is the working directory for all your subsequent commands)
+    - DO NOT MODIFY: Tests or test fixtures. Do not add or alter tests to make the submission pass.
 
     ## Command Execution Rules
     You are operating in an environment where
@@ -426,7 +425,7 @@ prompts:
     issue exactly the following command:
 
     ```bash
-    echo COMPLETE_TASK_AND_SUBMIT_FINAL_OUTPUT && git add -A -- '*.py' ':(exclude)tests/**' ':(exclude)test/**' ':(exclude)*_test.py' ':(exclude)test_*.py' ':(exclude)*_pb2.py' && git diff --cached
+    echo COMPLETE_TASK_AND_SUBMIT_FINAL_OUTPUT && git add -A -- . ':(exclude)tests/**' ':(exclude)test/**' ':(exclude)*_test.py' ':(exclude)test_*.py' && git diff --cached
     ```
 
     This command will submit your work.
@@ -633,6 +632,11 @@ docker:
   # run_batch.sh refuses to start a new instance below this free-space
   # threshold so Docker.raw cannot silently consume the whole disk.
   min_free_gb: 20
+  # Match the official PolyBench evaluator: if all GHCR tags are unavailable,
+  # build the instance image from its dataset Dockerfile and base commit.
+  polybench_build_fallback: true
+  # Bound each v1.1/v1.0/latest pull attempt before using the build fallback.
+  polybench_pull_timeout: 600
 
 agent:
   # Aligned with mini-swe-agent's official SWE-bench config

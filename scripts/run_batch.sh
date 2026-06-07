@@ -20,6 +20,7 @@ set -uo pipefail
 DRY_RUN=0
 CONFIG="config.yaml"
 INSTANCE_FILE_OVERRIDE=""
+BATCH_ID_OVERRIDE=""
 RUN_ANALYSIS=0
 ANALYSIS_ONLY=0
 ANALYSIS_ALLOW_FAILURES=0
@@ -40,6 +41,10 @@ while [[ $# -gt 0 ]]; do
       ;;
     --instances)
       INSTANCE_FILE_OVERRIDE="$2"
+      shift 2
+      ;;
+    --batch-id)
+      BATCH_ID_OVERRIDE="$2"
       shift 2
       ;;
     --run-analysis)
@@ -140,6 +145,13 @@ except Exception as e:
 if [[ -z "$ANALYSIS_CONFIG" ]]; then
   ANALYSIS_CONFIG="$CONFIG"
 fi
+if [[ -n "$BATCH_ID_OVERRIDE" ]]; then
+  if [[ ! "$BATCH_ID_OVERRIDE" =~ ^[A-Za-z0-9_.-]+$ || "$BATCH_ID_OVERRIDE" == "." || "$BATCH_ID_OVERRIDE" == ".." ]]; then
+    echo "ERROR: invalid --batch-id: $BATCH_ID_OVERRIDE" >&2
+    exit 1
+  fi
+  BATCH_ID="$BATCH_ID_OVERRIDE"
+fi
 
 if [[ -n "$ANALYSIS_MODEL_OVERRIDE" ]]; then
   ANALYSIS_MODEL="$ANALYSIS_MODEL_OVERRIDE"
@@ -166,6 +178,15 @@ except Exception as e:
   fi
 fi
 ANALYSIS_INPUT_DIR="${ANALYSIS_INPUT_DIR_OVERRIDE:-./output/SWE-bench_Verified/reflect_success_cases}"
+
+if [[ "$DATASET" == *"PolyBench"* ]]; then
+  python -c "from poly_bench_evaluation.docker_utils import DockerManager; from poly_bench_evaluation.repo_utils import RepoManager" 2>/dev/null \
+    || {
+      echo "ERROR: official PolyBench evaluator submodules are unavailable." >&2
+      echo "Install SWE-PolyBench from a persistent checkout; do not use an editable /tmp checkout." >&2
+      exit 1
+    }
+fi
 
 free_gb() {
   df -Pk . | awk 'NR==2 {print int($4 / 1024 / 1024)}'
@@ -332,7 +353,7 @@ if [[ $ANALYSIS_ONLY -eq 0 ]]; then
     echo "[$(date '+%Y-%m-%d %H:%M:%S')] [$i/$TOTAL] START $INSTANCE -> $PER_LOG" \
       | tee -a "$MASTER_LOG"
 
-    "${CAFFEINATE_CMD[@]}" python -m src.main --instance "$INSTANCE" --config "$CONFIG" \
+    "${CAFFEINATE_CMD[@]}" python -m src.main --instance "$INSTANCE" --config "$CONFIG" --batch-id "$BATCH_ID" \
       > "$PER_LOG" 2>&1
     RC=$?
 

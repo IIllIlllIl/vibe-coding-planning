@@ -132,6 +132,7 @@ def _run_instance_core(
             workdir=workdir,
             mount_source=repo_path,
             timeout=config.agent.timeout,
+            instance_info=instance_info,
         )
     except FatalError:
         raise
@@ -240,6 +241,27 @@ def _run_instance_core(
             output_dir=trajectories_dir,
         )
 
+        patch_policy: dict[str, Any] | None = None
+        if instance_info.get("dataset_type") == "polybench":
+            from src.evaluator.polybench_patch_policy import apply_polybench_patch_policy
+
+            policy_result = apply_polybench_patch_policy(
+                patch_text,
+                test_patch=str(instance_info.get("test_patch", "")),
+            )
+            patch_text = policy_result.patch
+            patch_policy = {
+                "kept_files": list(policy_result.kept_files),
+                "removed_files": list(policy_result.removed_files),
+                "test_overlap_files": list(policy_result.test_overlap_files),
+            }
+
+        patch_path_obj = writer.save_patch(
+            round_num=1,
+            patch_content=patch_text,
+        )
+        patch_path = str(patch_path_obj.relative_to(writer.output_dir))
+
         # ---- Evaluate ----
         logger.info("[%s] Evaluating patch", instance_id)
         test_results = evaluate(
@@ -261,7 +283,10 @@ def _run_instance_core(
             plan_path=plan_path,
             reflection_log=None,
             optimized_from=None,
+            patch_path=patch_path,
         )
+        if patch_policy is not None:
+            writer.plans[-1]["patch_policy"] = patch_policy
 
     except TaskError as exc:
         logger.warning("[%s] Pipeline step failed: %s", instance_id, exc)

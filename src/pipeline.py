@@ -129,6 +129,7 @@ def _run_instance_core(
                     workdir=config.docker.workdir,
                     mount_source=repo_path,
                     timeout=config.agent.timeout,
+                    instance_info=instance_info,
                 )
             except FatalError:
                 raise
@@ -446,6 +447,34 @@ def _run_round(
         output_dir=trajectories_dir,
     )
 
+    patch_policy: dict[str, Any] | None = None
+    if instance_info.get("dataset_type") == "polybench":
+        from src.evaluator.polybench_patch_policy import apply_polybench_patch_policy
+
+        policy_result = apply_polybench_patch_policy(
+            patch_text,
+            test_patch=str(instance_info.get("test_patch", "")),
+        )
+        patch_text = policy_result.patch
+        patch_policy = {
+            "kept_files": list(policy_result.kept_files),
+            "removed_files": list(policy_result.removed_files),
+            "test_overlap_files": list(policy_result.test_overlap_files),
+        }
+        if policy_result.removed_files:
+            logger.warning(
+                "[%s] Round %d: removed forbidden patch files: %s",
+                instance_id,
+                round_num,
+                ", ".join(policy_result.removed_files),
+            )
+
+    patch_path_obj = writer.save_patch(
+        round_num=round_num,
+        patch_content=patch_text,
+    )
+    patch_path = str(patch_path_obj.relative_to(writer.output_dir))
+
     # ------------------------------------------------------------------
     # Evaluate
     # ------------------------------------------------------------------
@@ -471,7 +500,10 @@ def _run_round(
         plan_path=plan_path,
         reflection_log=None,
         optimized_from=previous_plan_id if round_num > 1 else None,
+        patch_path=patch_path,
     )
+    if patch_policy is not None:
+        writer.plans[-1]["patch_policy"] = patch_policy
 
     return plan_text, traj_plan, plan_id, patch_text, test_results
 

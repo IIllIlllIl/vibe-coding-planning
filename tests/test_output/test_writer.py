@@ -14,6 +14,11 @@ def writer(tmp_path: Path) -> OutputWriter:
 
 
 class TestSaveRound:
+    def test_save_patch_can_run_before_evaluation(self, writer: OutputWriter):
+        patch_path = writer.save_patch(round_num=1, patch_content="diff content")
+        assert patch_path.exists()
+        assert patch_path.read_text(encoding="utf-8") == "diff content"
+
     def test_saves_patch_file(self, writer: OutputWriter, tmp_path: Path):
         writer.save_round(
             round_num=1,

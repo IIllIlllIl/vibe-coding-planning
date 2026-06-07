@@ -287,6 +287,36 @@ class TestPolybenchImageFallback:
             with pytest.raises(FatalError, match="Unable to obtain PolyBench Docker image"):
                 _resolve_polybench_image(image, timeout=60)
 
+    def test_resolve_polybench_image_builds_official_fallback(self):
+        image = "ghcr.io/timesler/swe-polybench.eval.x86_64.test__repo-1:v1.1"
+        instance_info = {"instance_id": "test__repo-1"}
+
+        def fake_run(args, **kwargs):
+            if args[:3] == ["docker", "image", "inspect"]:
+                return SimpleNamespace(returncode=1, stdout="", stderr="")
+            if args[:2] == ["docker", "pull"]:
+                raise subprocess.CalledProcessError(
+                    1, args, output="", stderr="manifest unknown"
+                )
+            raise AssertionError(args)
+
+        with (
+            patch("src.environment.docker_env.subprocess.run", side_effect=fake_run),
+            patch(
+                "src.environment.polybench_image.build_polybench_image_from_official_dockerfile",
+                return_value="polybench_python_test__repo-1",
+            ) as mock_build,
+        ):
+            resolved = _resolve_polybench_image(
+                image,
+                timeout=60,
+                instance_info=instance_info,
+                build_fallback=True,
+            )
+
+        assert resolved == "polybench_python_test__repo-1"
+        mock_build.assert_called_once_with(instance_info)
+
 
 class TestDockerImageCacheCleanup:
     def test_retains_newest_project_images_only(self):

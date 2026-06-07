@@ -47,8 +47,9 @@ def _import_polybench() -> Any:
         }
     except ImportError as exc:
         raise FatalError(
-            "poly_bench_evaluation is not installed. "
-            "Please install it: pip install -e /path/to/SWE-PolyBench"
+            "Official PolyBench evaluator submodules are unavailable "
+            f"({type(exc).__name__}: {exc}). Install SWE-PolyBench from a "
+            "persistent checkout; do not editable-install it from /tmp."
         ) from exc
 
 
@@ -112,6 +113,10 @@ def evaluate_polybench_instance(
         ``{"resolved": bool, "stdout": str, "stderr": str,
         "log_dir": str, "error_info": str | None, "report": dict}``.
     """
+    instance_id = instance_info.get("instance_id", "")
+    if not instance_id:
+        raise FatalError("instance_info missing 'instance_id' field.")
+
     pb = _import_polybench()
     DockerManager = pb["DockerManager"]
     PolyBenchInstance = pb["PolyBenchInstance"]
@@ -119,10 +124,6 @@ def evaluate_polybench_instance(
     store_instance_level_output = pb["store_instance_level_output"]
     DEFAULT_TIMEOUT = pb["DEFAULT_TIMEOUT"]
     REPO_TO_PARSER_CLASS = pb["REPO_TO_PARSER_CLASS"]
-
-    instance_id = instance_info.get("instance_id", "")
-    if not instance_id:
-        raise FatalError("instance_info missing 'instance_id' field.")
 
     # Build a PolyBenchInstance from the normalized instance_info
     # (InstanceLoader has already mapped field names).
@@ -187,35 +188,19 @@ def evaluate_polybench_instance(
         elif _try_pull_prebuilt_image_with_fallback(docker_manager, instance_id):
             logger.info("[%s] Successfully pulled pre-built image from GHCR", instance_id)
         else:
-            logger.warning(
-                "[%s] Pre-built image not available locally or in GHCR. "
-                "PolyBench evaluation requires the image to be pre-built "
-                "or accessible. Consider building locally with the Dockerfile.",
+            from src.environment.polybench_image import (
+                build_polybench_image_from_official_dockerfile,
+            )
+
+            logger.info(
+                "[%s] GHCR image unavailable; using official Dockerfile build fallback",
                 instance_id,
             )
-            # Store a failure result
-            output = instance_level_scoring(
-                instance_id=instance_id,
-                result={},
-                f2p=inst.f2p,
-                p2p=inst.p2p,
-                patch_applied=False,
-                generation=generation,
-            )
-            store_instance_level_output(
-                instance_output=output, result_path=result_path
-            )
-            return {
-                "resolved": False,
-                "stdout": "",
-                "stderr": (
-                    f"Docker image unavailable for {instance_id}. "
-                    f"Neither local image {image_id} nor GHCR pre-built image could be obtained."
-                ),
-                "log_dir": result_path,
-                "error_info": "Docker image unavailable",
-                "report": {},
-            }
+            built_image = build_polybench_image_from_official_dockerfile(instance_info)
+            if built_image != image_id:
+                raise FatalError(
+                    f"PolyBench local image naming mismatch: {built_image} != {image_id}"
+                )
 
         # ------------------------------------------------------------------
         # 2. Create container and apply patches

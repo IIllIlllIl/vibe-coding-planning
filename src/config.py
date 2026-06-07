@@ -99,6 +99,8 @@ class DockerConfig:
     delete_images_after_instance: bool = True
     min_free_gb: int = 20
     max_cached_images: int = 75
+    polybench_build_fallback: bool = True
+    polybench_pull_timeout: int = 600
 
 
 @dataclass(frozen=True)
@@ -423,6 +425,11 @@ def _build_docker_config(data: dict[str, Any]) -> DockerConfig:
         min_free_gb=_validate_positive_int("docker.min_free_gb", _get_int(data, "min_free_gb", 20)),
         max_cached_images=_validate_positive_int(
             "docker.max_cached_images", _get_int(data, "max_cached_images", 75)
+        ),
+        polybench_build_fallback=_get_bool(data, "polybench_build_fallback", True),
+        polybench_pull_timeout=_validate_positive_int(
+            "docker.polybench_pull_timeout",
+            _get_int(data, "polybench_pull_timeout", 600),
         ),
     )
 
