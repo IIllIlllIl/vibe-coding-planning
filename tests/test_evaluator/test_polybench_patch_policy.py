@@ -68,3 +68,20 @@ def test_rejects_overlap_with_official_test_patch():
 def test_rejects_non_diff_output():
     with pytest.raises(TaskError, match="not a git patch"):
         apply_polybench_patch_policy("not a patch")
+
+
+def test_preserves_trailing_blank_context_line_between_file_diffs():
+    first = (
+        "diff --git a/src/first.py b/src/first.py\n"
+        "--- a/src/first.py\n"
+        "+++ b/src/first.py\n"
+        "@@ -1,2 +1,2 @@\n"
+        "-old\n"
+        "+new\n"
+        " \n"
+    )
+    second = _diff("src/second.py")
+
+    result = apply_polybench_patch_policy(first + second)
+
+    assert result.patch == first + second

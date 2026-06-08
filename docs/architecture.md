@@ -18,12 +18,14 @@ plan-code-test/
 │   └── architecture.md            # 本文件
 ├── scripts/
 │   ├── run_batch.sh               # 批量运行与 analysis-only handoff
+│   ├── run_polybench_image_retry.sh # PolyBench Buster 4 实例重跑包装
 │   ├── run_analysis.sh            # 对比分析批量运行，支持 --config
-│   └── evaluate_checker.py        # Plan-Checker-Code held-out 评估
+│   └── evaluate_checker.py        # PCC 兼容入口 + 已有 PCT 的 checker-only 评估
 ├── configs/
 │   ├── analysis_kimi_opencode.yaml       # Kimi/OpenCode 规则分析实验配置
 │   ├── polybench_full199_pct.yaml        # PolyBench Python 199 实例纯 PCT 扫描配置
-│   └── polybench_remaining133_pct.yaml   # 跳过已有 PolyBench 结果后的 133 实例配置
+│   ├── polybench_remaining133_pct.yaml   # 跳过已有 PolyBench 结果后的 133 实例配置
+│   └── polybench_retry_images_buster4.json # Buster 兼容修复后的目标实例
 ├── src/
 │   ├── __init__.py
 │   ├── main.py                    # 入口：解析参数、加载配置、驱动主循环
@@ -78,6 +80,7 @@ plan-code-test/
 | **入口** | `src/main.py` | 解析命令行参数（`--config`, `--instance`, `--n`, `--output-dir`），加载配置，遍历 `swe_pro_instances`，对每个实例调用 `pipeline.run_instance()` |
 | **配置** | `src/config.py` | 加载 `config.yaml`，验证参数（`n >= 1`, `optimization_info_level` ∈ {0,1} 等），返回结构化的配置对象 |
 | **流水线** | `src/pipeline.py` | 单实例的核心循环：`generate_plan()` → `generate_code()` → `evaluate()` →（如有需要）`reflect_and_optimize()`，循环 n 次 |
+| **Checker 评估** | `scripts/evaluate_checker.py` | 兼容原 PCC 入口；也可把历史 PCT 结果按“最早成功 plan”整合为固定 JSONL，并仅调用原 `check_agent.run()` 计算分类指标 |
 
 ### 3.2 Agent 层
 
@@ -251,6 +254,7 @@ TestResults = dict[str, Any]  # {resolved: bool, stdout: str, stderr: str, log_d
 | `src/analysis/aggregation_agent.py` | 加载 per-case 规则、构造聚合 prompt、校验聚合 JSON | `litellm` 或 OpenCode 后端 |
 | `scripts/run_analysis.sh` | 批量规则提取，支持 `--config` | shell |
 | `scripts/run_batch.sh` | 批量主流程与 `--analysis-only` handoff，支持 `--config` 指定主流程配置；直接运行时用 `caffeinate` 包装实例命令（macOS） | shell |
+| `scripts/run_polybench_image_retry.sh` | 默认 dry-run；显式 `--execute` 后通过 `run_batch.sh` 重跑 4 个 Buster 镜像实例 | shell |
 | `scripts/long_run_watchdog.py` | 长时监控 batch / analysis / review / checker tmux 任务；支持 `PCT_CONFIG` 选择主流程配置，并用 `caffeinate` 包装被监控的长跑命令（macOS） | shell + Python |
 
 ---

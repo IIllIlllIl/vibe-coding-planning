@@ -13,31 +13,22 @@
 - **描述**：希望尝试使用树形结构来管理候选 plan / 反思模板（多分支保留 + 选择性回溯，而非当前的"线性单链 plan_r1 → plan_r2 → plan_r3"）。
 - **处理**：先评估现有 GEPA 代码是否已支持树形结构（`gepa-ai/gepa` 上游若有候选池/选择策略可以直接复用），再决定本项目应当如何接入。
 
-## 3. 将 Pro 数据集替换为 SWE-PolyBench Python 子集用于测试
+## 3. PolyBench full199 剩余扫描失败
 
-- **状态**：✅ 代码已完成（2026-06-01），文档已同步，待小规模试运行
-- **背景**：SWE-bench Pro 在当前 pipeline 下 0% resolved，用户决定放弃 Pro，寻找替代数据集作为" harder than Verified "的测试集。SWE-PolyBench 是 Amazon Science 发布的 polyglot 基准（Java/JS/TS/Python），其中 Python 子集 199 个实例据称比 SWE-bench 结构更复杂（2.0 文件/任务 vs 1.2，5.76 节点修改 vs 3.54）。
-- **代码落地**：
-  1. ✅ `src/data/instance_loader.py`：新增 PolyBench 加载路径（`_is_polybench_dataset`、`_load_polybench_cache`、`_normalize_polybench_fields`、`_load_from_polybench`）
-  2. ✅ `src/evaluator/polybench_evaluator.py`：新建，封装 PolyBench 官方 DockerManager + parser + scoring 流程
-  3. ✅ `src/evaluator/swe_evaluator.py`：新增多数据集路由（`is_polybench` / `is_pro` / 默认 swebench）
-  4. ✅ `src/pipeline.py` + `src/pipeline_check.py`：`dataset_type` 通用化判断，PolyBench workdir = `/testbed`
-  5. ✅ `src/config.py` + `config.yaml`：新增 `dataset_type`、`language_filter` 配置字段
-  6. ✅ 测试：新增 `TestPolybenchMode`（7 个）、`test_polybench_evaluator`（5 个）、`TestPolybenchRouting`（3 个）、配置解析测试
-- **验证结论**：
-  1. **字段兼容性** ✅：PolyBench 实例字段与 swebench 高度一致，仅大小写差异和 JSON 字符串列表，已做轻量映射。
-  2. **Docker 环境** ✅：镜像内有完整 git 仓库、pytest、Python 3.10，WORKDIR `/testbed`，与现有 agent 运行模式兼容。
-  3. **评估工具链** ✅：Gold patch 验证通过（AutoGPT-4652 `resolved=True`），parser + scoring 逻辑正确。
-  4. **镜像可用性** ⚠️（已部分厘清，2026-06-05）：
-     - GHCR 登录有效（用户 `IIllIlllIl`），匿名 `denied` 问题已解决。
-     - 登录后拉取测试（2026-06-05）：AutoGPT-4652 (v1.1 ✅)、yt-dlp-10390 (v1.1 ✅)；transformers-13573 (v1.1 ❌ 但 v1.0 ✅、latest ✅)；keras-1767 (v1.1 ❌)、langchain-14350 (v1.1 ❌)、tensorflow/models-2727 (v1.1 ❌)。
-     - `polybench_evaluator.py` 已集成 fallback tag（v1.1 → v1.0 → latest），可自动救回部分实例。
-     - 但 transformers、keras、langchain 等主力 repo 的 v1.1 镜像大量缺失，fallback tag 能否覆盖全部待验证。
-- **风险**：若 199 个 Python 实例中大量镜像在 GHCR 上确实不存在（非权限问题），则需本地构建（按 repo 构建 base image + per-instance Dockerfile），成本显著高于 Verified 的直接拉取模式。
-- **下一步**：
-  1. ✅ 小规模试运行：AutoGPT-4652 已通过 gold patch 验证（`resolved=True`）
-  2. ✅ GHCR 登录已验证有效
-  3. 启动 remaining-133 扫描，观察实际 pull 成功率；对 `not found` 实例评估是否需要本地构建镜像
+- **状态**：待解决 11 个无结果实例（截至 2026-06-08）
+- **当前统计**：
+  - full199 已有效评估 188 个，覆盖率 94.5%
+  - 74 个 resolved；全量 resolved 率 37.2%，已评估实例 resolved 率 39.4%
+  - remaining-133 原始 89 个 FAIL 中已恢复 78 个
+- **剩余失败**：
+  1. 4 个 Debian Buster apt 源失效实例：`transformers-6735`、`7858`、`8049`、`8437`
+  2. 5 个 `.[dev,testing]` 依赖环境未完成构建：`transformers-25429`、`25793`、`26678`、`27757`、`27797`
+  3. 1 个 `.[testing,flax]` 依赖环境未验证：`transformers-13988`
+  4. 1 个模型上下文窗口超限：`transformers-6322` 请求 2,881,419 tokens，超过 1,048,565 上限
+- **处理边界**：
+  - 前 10 个是镜像基础设施失败，不应计为 agent 修复失败。
+  - `transformers-6322` 需要缩减输入上下文或调整任务级提示词，不属于镜像问题。
+  - 本轮仅重跑已验证 Buster 修复路径的 4 个实例；其余 7 个继续保留为待解决项。
 
 ## 4. Verified 探索运行（run1 2026-05-09 + run2 2026-05-11）暴露的 pipeline 健壮性问题
 
@@ -46,16 +37,7 @@
 > - run2: `output/SWE-bench_Verified/run_summary_2026-05-11_run2.json`（seed=42 排除 run1，120 实例，n=5，26.7h，76/111 resolved=68.5%）
 > - 累计：170 sampled / 160 finalized / 110 resolved (68.8% of finalized)
 
-### 4.1 Jinja 模板把 problem_statement 里的 `{student}` 当作变量（致命）
-
-- **状态**：✅ 已修复（v0.9 Jinja 架构整改，2026-05-19）
-- **现象（历史）**：`django__django-12304` 在 Round 1 plan agent 完成后、code agent 启动前抛 `'student' is undefined`，pipeline `Unexpected error` 退出。该实例的 result.json 因此从未写出（FAIL=1，missing=1）。Run2 (n=5) 中 120 实例有 8 个 FAIL 全部命中此类。
-- **根因（历史）**：早期代码在主机端用 `str.format()` 或 `Template.render()` 预渲染 `instance_template`，将 `task` 内容（problem_statement）内联到模板源码字符串中，再传给 mini-swe-agent。mini-swe-agent 随后用 Jinja2 `StrictUndefined` 再次渲染该字符串，导致 problem_statement 中的 `{{student}}`、`{%...%}` 等字面量被当作模板语法解析。
-- **修复方式**：`src/agents/_deps.py:build_default_agent` 不再预渲染 template，而是传入原始 `instance_template` 和 `system_template`；`task` 及所有动态内容（plan、feedback 等）通过 `agent.run(task=..., **kwargs)` 传入，由 mini-swe-agent 放入 `extra_template_vars`，Jinja2 做单次 `Template.render(**vars)` 渲染。Jinja2 在变量替换阶段不会解析变量值内部的 `{{...}}` 或 `{%...%}` 片段（已用 Python 验证：`Template('PR: {{task}}').render(task='hello {{student}}')` → `'PR: hello {{student}}'`，不报错）。
-- **验证**：当前代码已通过 Jinja2 行为测试（`src/agents/_deps.py` 注释 line 137-144 记录了该修复的诊断历史）。PolyBench remaining-133 扫描前已做回归验证。
-- **注意**：`StrictUndefined` 仍保留，用于捕获真正的模板变量缺失（如模板源码中拼写错误的占位符），这是预期行为。
-
-### 4.2 Plan / Reflect agent 运行 submission 但 `/tmp/plan.md` 为空
+### 4.1 Plan / Reflect agent 运行 submission 但 `/tmp/plan.md` 为空
 
 - **状态**：待观察
 - **现象**：run1 命中 2 例（`pydata__xarray-4687` R1、`pytest-dev__pytest-10356` R2）。run2 未单独统计该类，但 run2 result.json 的 errors[] 中可能有同类记录。
@@ -63,14 +45,14 @@
 - **行为**：pipeline 将该 round 标 `round_failed`，整个实例 break round 循环，但 result.json 正常 finalize（带 errors[]）。**数据可靠**（不会污染分析），只是该实例没有可分析的 plan。
 - **处理建议**：如果出现频率上升再排查；目前 ~4% 可接受。可考虑在 plan agent 的 `has_finished` 钩子里要求 plan 文件非空才允许提交。
 
-### 4.3 Code agent `LimitsExceeded`（步数超限）
+### 4.2 Code agent `LimitsExceeded`（步数超限）
 
 - **状态**：待观察
 - **现象**：`django__django-11734` Round 1 code agent 跑满 250 步未提交，触发 `LimitsExceeded`；记 `round_failed`，instance finalize 时 0 plans。
 - **影响**：1/50 (2%) on run1。属预期失败模式（agent 的硬上限），**数据可靠**。
 - **处理建议**：观察 500 实例规模时这一类是否过多；如果显著高于当前 2%，再考虑提高 `agent.max_steps` 或加更激进的提交提示词。
 
-### 4.4 Reflect agent 上下文窗口超限（n≥4 触发，新发现）
+### 4.3 Reflect agent 上下文窗口超限（n≥4 触发）
 
 - **状态**：待解决（**n=5 探索运行新暴露**）
 - **现象**：`psf__requests-1142` Round 4 reflect_agent 调用 LiteLLM 时抛 `ContextWindowExceededError`：DeepSeek V4 Flash 上下文上限 1,048,576 tokens，实际请求 1,411,362 tokens（超 35%）。Pipeline `Unexpected error` 退出，result.json 未写出。
@@ -78,7 +60,7 @@
 - **累计影响**：1/120 (run2)。在 n=5 配置下出现，**Phase 1 后续运行若维持 n≥4 需要正视**。
 - **处理建议**：在 `_build_feedback_text` 里对每条 trajectory 加 char/token 上限（目前已截 stdout/stderr/patch 到 2000 字符，但 trajectory 本身没截）；或用 summarizer 把 R(N-1) 之前的 trajectory 压缩成要点；或把 R3+ 改用滚动窗口只保留最近一轮的完整 trajectory。
 
-### 4.5 反思 ROI：n=5 下 Round 3+ 几乎不带额外信号（信息项，非 bug）
+### 4.4 反思 ROI：n=5 下 Round 3+ 几乎不带额外信号（信息项，非 bug）
 
 - **状态**：观察数据，已影响 §2（树形候选 plan）的优先级判定
 - **数据**（run2，n=5，111 finalized）：
@@ -126,24 +108,36 @@
   2. 在聚合开始前记录输入规则数和 prompt 大小，便于判断是否需要分批聚合
   3. 考虑把规则聚合改为两阶段树形合并，降低单次 OpenCode 请求长度和 wall time 风险
 
-## 8. PolyBench remaining-133 恢复运行
+## 8. PolyBench 镜像兼容构建
 
-- **状态**：恢复代码与重跑计划已完成，尚未执行重跑
-- **根因修正**：
-  1. evaluator 的 editable install 指向 `/tmp/SWE-PolyBench`，临时源码被清理后只剩空 namespace package。批次启动现改为导入 `docker_utils` / `repo_utils` 子模块做 fail-fast；当前环境已非 editable 安装官方 commit `1eb0bdc8ef63e1e88172b96bc435b1cd9fc93ecc`。
-  2. patch 在 evaluator 返回后才落盘，导致 53 个导入失败实例缺少 patch 文件。现改为评估前持久化，可从旧 code trajectory 恢复。
-  3. 11 个报告为 patch apply 失败的补丁已在对应官方 base commit 上复现：按官方顺序先应用 `test_patch`，再用 `git apply -v --ignore-whitespace --reject` 应用原模型补丁，11/11 均成功。10 个补丁中的额外 `setup.py` 修改也都可应用，因此不得自动删除；这些案例按 evaluator-only 原样重试。PolyBench patch policy 仅过滤测试文件，并拒绝与官方 test patch 的文件重叠；不主动过滤 `*_pb2.py` 等生成文件。官方答案审计发现 199 个答案中有 22 个包含非 Python 文件，因此通用规则不得按扩展名或配置文件名过滤。
-  4. GHCR 三个 tag 失败后原流程直接终止。现按官方 evaluator 使用 `RepoManager` + `DockerManager` 从实例 Dockerfile/base commit 本地构建，最多重试 3 次。
-- **重跑分组**：
-  - evaluator-only：64（53 evaluator 导入失败 + 11 个可原样重评 patch）
-  - full pipeline：38（36 镜像失败 + 2 空输出）
-  - 保留：31 个已有有效评估结果
-- **入口**：`scripts/retry_polybench.py`，默认仅输出计划；执行必须显式传 `--execute`
-- **详细说明**：`docs/polybench-rerun-plan.md`
+- **状态**：部分解决，4 个实例已具备重跑条件，6 个仍需验证
+- **已完成**：
+  1. GHCR 按 `v1.1 → v1.0 → latest` 拉取，全部缺失时使用数据集官方 Dockerfile 和 base commit 本地构建。
+  2. Docker build 现在保留完整 `BuildError.build_log`，可看到真实 apt/pip 错误。
+  3. Debian Buster fallback 改用 archive 源并关闭 `Valid-Until` 检查；`transformers-6735` 已实际构建成功。
+  4. 为旧 Transformers extras 增加兼容候选：JAX 官方 wheel archive、PyAV 系统依赖、`Cython<3`、Python 3.10 Bullseye/FFmpeg 4.x、apt HTTPS 超时和有限重试。
+- **本次准备重跑**：
+  - manifest：`configs/polybench_retry_images_buster4.json`
+  - wrapper：`scripts/run_polybench_image_retry.sh`
+  - batch id：`polybench-retry-images-buster4`
+  - 默认只 dry-run；显式传 `--execute` 才运行
+- **仍未解决**：
+  1. 5 个 `.[dev,testing]` 实例的依赖树巨大，在 Apple Silicon 上以 `linux/amd64` 构建耗时很长；代表实例 `transformers-25429` 尚未生成最终镜像。
+  2. Docker SDK 在一次长构建后出现无活动容器但 build stream 未结束的等待状态，需要增加构建 wall-time timeout，并优先保存每个 variant 的独立日志。
+  3. `transformers-13988` 的 `.[testing,flax]` 路径尚未实际构建验证。
+- **约束**：不得通过删除官方 extras、放宽仓库声明版本或更改测试命令来换取构建成功；兼容处理只恢复历史依赖来源和对应年代的系统环境。
 
 ---
 
 # 已完成项目（归档）
+
+## E. 基于已有 PCT 结果的 Checker-only 评估
+
+- **状态**：✅ 已完成（2026-06-08）
+- **实现**：扩展 `scripts/evaluate_checker.py`，复用原 `check_agent.run()`、checker prompt、规则加载和配置，不重新运行 Plan Agent、Code Agent 或 evaluator。
+- **固定输入**：`--build-input` 扫描 PolyBench 历史结果，按 full199 顺序输出 JSONL；同一实例选择最早的成功 PCT，不按 resolved 结果择优。evaluator-only 重评只为原 plan 补充标签，并分别记录原 PCT 来源和标签来源。
+- **错误处理**：checker 运行错误写入 `errors.jsonl` 并从 TP/FP/FN/TN 分母排除。
+- **当前实测**：full199 历史结果生成 178 个固定样本，其中 74 resolved、104 unresolved，排除 21 个无有效成功 PCT 的实例。
 
 ## A. 数据集分层：探索用 SWE-bench Verified、保留 Pro 作为测试集
 
@@ -162,3 +156,18 @@
   1. ✅ 新增 `config.analysis.enable_review`（默认 `false`），默认跳过 review/rework 阶段
   2. ✅ 当 `enable_review=false` 时，watchdog 在 flash/pro 分析完成后直接进入下一阶段，不再运行 review 和 rework
   3. 若未来重新启用 review，需先解决"先删后跑"的破坏性逻辑：改为保留旧结果、在新路径重跑、对比后择优保留
+
+## C. Jinja 动态任务内容二次渲染
+
+- **状态**：✅ 已完成（2026-05-19，2026-06-05 回归验证）
+- **结论**：模板源码只渲染一次；problem statement、plan、feedback 等动态内容通过 `agent.run(..., **extra_template_vars)` 传入，不会把内容中的 `{{...}}` 再解释为 Jinja 语法。
+
+## D. PolyBench remaining-133 基础设施恢复
+
+- **状态**：✅ 已完成（2026-06-08）
+- **结果**：
+  - evaluator-only 64/64 完成；full pipeline 38 个中 27 个生成结果
+  - 原始 89 个 FAIL 中恢复 78 个
+  - evaluator 安装、patch 预保存、官方 Dockerfile fallback、脏 worktree reset 均已修复
+  - patch policy 不按扩展名过滤，保留 `*_pb2.py` 和官方答案允许的非 Python 文件
+  - 两个剩余 patch apply 错误由 `rstrip()` 删除 hunk 空白上下文行导致，修复后均 `patch_applied=true`；`transformers-7075` resolved，`keras-18649` 因功能测试失败 unresolved

@@ -77,6 +77,24 @@ def _try_pull_prebuilt_image_with_fallback(
     return False
 
 
+def _reset_container_worktree(docker_manager: Any, instance_id: str) -> None:
+    """Reset dirty official images before applying evaluation patches."""
+    container = getattr(docker_manager, "container", None)
+    if container is None:
+        raise RuntimeError("PolyBench container was not created.")
+    workdir = str(docker_manager._get_workdir_from_image())
+    result = container.exec_run(
+        cmd=["sh", "-lc", "git reset --hard HEAD && git clean -fd"],
+        workdir=workdir,
+        user="root",
+    )
+    if result.exit_code != 0:
+        output = result.output.decode("utf-8", errors="replace")[:1000]
+        raise RuntimeError(
+            f"[{instance_id}] Failed to reset PolyBench worktree: {output}"
+        )
+
+
 def evaluate_polybench_instance(
     patch: str,
     instance_info: dict[str, Any],
@@ -206,6 +224,7 @@ def evaluate_polybench_instance(
         # 2. Create container and apply patches
         # ------------------------------------------------------------------
         docker_manager.create_container()
+        _reset_container_worktree(docker_manager, instance_id)
 
         # Apply test patch (ground-truth tests)
         try:

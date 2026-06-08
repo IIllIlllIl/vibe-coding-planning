@@ -48,13 +48,15 @@ pytest --cov=src --cov-report=term-missing
 # 5. 运行单个 Verified 实例（Phase 1 默认入口）
 python -m src.main --instance astropy__astropy-12907 --n 3 --config config.yaml
 
-# 6. 运行 Plan-Check-Code 检查器评估（Phase 2b 入口）
-python scripts/evaluate_checker.py --config config.yaml --instance AutoGPT-4652
+# 6. 从已有 PCT 结果构建固定 Checker 输入
+python scripts/evaluate_checker.py --config configs/polybench_full199_pct.yaml \
+    --build-input --pct-root output/SWE-PolyBench \
+    --input-output output/SWE-PolyBench/polybench-pct-checker-input/cases.jsonl
 
-# 7. 批量检查器评估（PolyBench Python 子集）
-python scripts/evaluate_checker.py --config config.yaml --dataset AmazonScience/SWE-PolyBench \
-    --dataset_type polybench --language_filter Python \
-    --instances polybench_python_instances.json --output output/checker_eval/polybench_python
+# 7. 仅运行 Checker，不重新生成 Plan/Code 或执行 Evaluator
+python scripts/evaluate_checker.py --config configs/polybench_full199_pct.yaml \
+    --input-results output/SWE-PolyBench/polybench-pct-checker-input/cases.jsonl \
+    --output output/checker_eval/polybench-pct
 ```
 
 输出位于 `./output/<dataset_short>/<batch_id>/<instance_id>/`，包含结果 JSON、所有 Patch、Trajectory 文件和评估日志。
@@ -87,7 +89,11 @@ python scripts/evaluate_checker.py --config config.yaml --dataset AmazonScience/
 | `--instance ID` | str | 单实例 ID（dry-run 用） |
 | `--instances FILE` | str | 实例列表 JSON 文件路径 |
 | `--output DIR` | str | 评估输出目录 |
-| `--dataset NAME` | str | 数据集名称，默认 `AmazonScience/SWE-PolyBench` |
+| `--dataset NAME` | str | 旧 PCC 模式的数据集名称，默认 `ScaleAI/SWE-bench_Pro` |
+| `--build-input` | flag | 从已有 PCT 批次构建固定 checker 输入，不运行 agent |
+| `--pct-root DIR` | str | PCT 批次根目录，默认 `output/SWE-PolyBench` |
+| `--input-output FILE` | str | `--build-input` 生成的 JSONL 路径 |
+| `--input-results FILE` | str | 读取固定 PCT plan/label 并仅运行 checker |
 
 ### 批量运行脚本
 
@@ -112,6 +118,13 @@ bash scripts/run_batch.sh --config configs/polybench_full199_pct.yaml
 
 ```bash
 bash scripts/run_batch.sh --config configs/polybench_remaining133_pct.yaml
+```
+
+对已验证 Debian Buster archive fallback 的 4 个剩余镜像实例：
+
+```bash
+bash scripts/run_polybench_image_retry.sh           # dry-run
+bash scripts/run_polybench_image_retry.sh --execute # real run
 ```
 
 长时监控运行时，watchdog 会用 `caffeinate` 包装其启动的 tmux 子任务，避免 macOS 睡眠暂停 batch：
@@ -155,7 +168,7 @@ bash scripts/run_batch.sh \
 
 运行产物位于 [`output/`](output/)，该目录被 gitignore。目录结构、当前已有运行、关键产物、规则后处理/聚合命令和常用检索命令集中记录在 [`output/README.md`](output/README.md)。
 
-## Plan-Checker-Code 管道
+## Checker 评估
 
 检查器（Checker）在 Plan 生成之后、Code 执行之前插入一个规则验证步骤：
 
@@ -178,6 +191,8 @@ checker:
   max_steps: 50
   cost_limit: 1.0
 ```
+
+PolyBench held-out 评估默认使用 checker-only 路径。构建脚本按 full199 配置顺序扫描已有 PCT 结果；同一实例多次成功运行时选择最早的 plan，即使后续运行的 resolved 标签更好也不会替换。evaluator-only 重评只补全同一 plan 的有效标签，不视为新 PCT。checker 执行错误单独写入 `errors.jsonl`，不进入混淆矩阵。
 
 检查器评估输出结构见 [`output/README.md`](output/README.md)。
 
@@ -231,6 +246,7 @@ checker:
 │   └── architecture.md            # 架构文档
 ├── scripts/
 │   ├── run_batch.sh               # 统一批量运行脚本（Verified / Pro 自动识别）
+│   ├── run_polybench_image_retry.sh # PolyBench Buster 4 实例安全重跑入口
 │   ├── run_analysis.sh            # 对比分析批量运行
 │   ├── evaluate_checker.py        # 检查器评估批量运行
 │   ├── dryrun_checker.py          # 检查器 dry-run 工具
@@ -238,7 +254,8 @@ checker:
 ├── configs/
 │   ├── analysis_kimi_opencode.yaml       # Kimi/OpenCode 规则分析实验配置
 │   ├── polybench_full199_pct.yaml        # PolyBench Python 199 实例纯 PCT 扫描配置
-│   └── polybench_remaining133_pct.yaml   # 跳过已有 PolyBench 结果后的 133 实例配置
+│   ├── polybench_remaining133_pct.yaml   # 跳过已有 PolyBench 结果后的 133 实例配置
+│   └── polybench_retry_images_buster4.json # 已修复 Buster 镜像的 4 实例 manifest
 ├── src/
 │   ├── main.py                    # 入口程序
 │   ├── config.py                  # 配置加载与验证

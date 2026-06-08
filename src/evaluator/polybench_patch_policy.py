@@ -71,7 +71,9 @@ def apply_polybench_patch_policy(
     for file_diff in file_diffs:
         path = _target_path(file_diff)
         if _is_allowed_submission_path(path):
-            kept.append(file_diff.rstrip() + "\n")
+            # A blank line at the end of a hunk is still a counted context
+            # line. Stripping it corrupts the hunk header's line counts.
+            kept.append(file_diff if file_diff.endswith("\n") else file_diff + "\n")
             kept_files.append(path)
         else:
             removed_files.append(path)

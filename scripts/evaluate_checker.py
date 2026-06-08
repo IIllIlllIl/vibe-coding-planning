@@ -1,32 +1,49 @@
-"""Batch runner for Plan-Checker-Code evaluation on SWE-bench Pro Python instances.
+"""Evaluate the existing plan checker against PCC or saved PCT results.
 
-Computes TP/FP/FN/TN metrics by comparing checker predictions with actual
-code execution results.
-
-Usage:
-    conda activate mini-swe
-    python scripts/evaluate_checker.py --config config.yaml --output output/checker_eval/run1
-    python scripts/evaluate_checker.py --config config.yaml --instance django__django-12345
+The ``--input-results`` mode is checker-only: it reuses saved PCT plans and
+resolved labels, starts the corresponding repository container, and invokes
+``src.agents.check_agent.run`` without generating code or running an evaluator.
 """
 
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import logging
+import math
+import re
 import sys
+from dataclasses import replace
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
-from src.config import Config, load_config
-from src.pipeline_check import run_instance
+REPO_ROOT = Path(__file__).resolve().parents[1]
+if str(REPO_ROOT) not in sys.path:
+    sys.path.insert(0, str(REPO_ROOT))
+
+from src.agents import check_agent  # noqa: E402
+from src.config import Config, load_config  # noqa: E402
+from src.data.instance_loader import InstanceLoader  # noqa: E402
+from src.environment.docker_env import (  # noqa: E402
+    DockerEnvWrapper,
+    cleanup_docker_image_cache,
+)
+from src.evaluator.swe_evaluator import derive_image_name  # noqa: E402
+from src.pipeline_check import run_instance  # noqa: E402
+from src.rules.rule_loader import (  # noqa: E402
+    format_rules_for_prompt,
+    load_aggregated_rules,
+)
 
 logger = logging.getLogger(__name__)
 
+_PLAN_TIMESTAMP_RE = re.compile(r"(\d{8}T\d{6})")
+_EVALUATOR_RETRY_RUN_ID = "polybench_evaluator_retry"
+
 
 def _setup_logging() -> None:
-    """Configure root logger for batch output."""
     logging.basicConfig(
         level=logging.INFO,
         format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
@@ -34,41 +51,340 @@ def _setup_logging() -> None:
     )
 
 
+def _sha256(data: bytes) -> str:
+    return hashlib.sha256(data).hexdigest()
+
+
+def _portable_path(path: Path) -> str:
+    try:
+        return str(path.resolve().relative_to(REPO_ROOT))
+    except ValueError:
+        return str(path)
+
+
+def _write_jsonl(path: Path, records: list[dict[str, Any]]) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    content = "".join(
+        json.dumps(record, ensure_ascii=False, sort_keys=True) + "\n"
+        for record in records
+    )
+    path.write_text(content, encoding="utf-8")
+
+
+def _read_jsonl(path: Path) -> list[dict[str, Any]]:
+    records: list[dict[str, Any]] = []
+    for line_number, line in enumerate(
+        path.read_text(encoding="utf-8").splitlines(), 1
+    ):
+        if not line.strip():
+            continue
+        try:
+            record = json.loads(line)
+        except json.JSONDecodeError as exc:
+            raise ValueError(f"{path}:{line_number}: invalid JSON: {exc}") from exc
+        if not isinstance(record, dict):
+            raise ValueError(f"{path}:{line_number}: expected a JSON object")
+        records.append(record)
+    return records
+
+
+def _plan_timestamp(plan_path: Path, result: dict[str, Any]) -> str:
+    match = _PLAN_TIMESTAMP_RE.search(plan_path.name)
+    if match:
+        return match.group(1)
+    run_id = str(result.get("run_id", ""))
+    match = _PLAN_TIMESTAMP_RE.search(run_id)
+    return match.group(1) if match else "99999999T999999"
+
+
+def _valid_polybench_label(
+    instance_id: str, test_results: Any
+) -> tuple[bool, str]:
+    if not isinstance(test_results, dict):
+        return False, "missing test_results"
+    if not isinstance(test_results.get("resolved"), bool):
+        return False, "resolved is not boolean"
+    if test_results.get("error_info") not in (None, ""):
+        return False, "evaluator error"
+    report = test_results.get("report")
+    if not isinstance(report, dict):
+        return False, "missing evaluator report"
+    instance_report = report.get(instance_id)
+    if not isinstance(instance_report, dict):
+        return False, "missing instance evaluator report"
+    if instance_report.get("patch_applied") is not True:
+        return False, "patch was not applied"
+    return True, ""
+
+
+def _scan_pct_candidates(
+    pct_root: Path, allowed_ids: set[str]
+) -> tuple[dict[str, list[dict[str, Any]]], list[dict[str, Any]]]:
+    candidates: dict[str, list[dict[str, Any]]] = {}
+    exclusions: list[dict[str, Any]] = []
+
+    for result_path in sorted(pct_root.glob("*/*/result.json")):
+        instance_id = result_path.parent.name
+        if instance_id not in allowed_ids:
+            continue
+        try:
+            result_bytes = result_path.read_bytes()
+            result = json.loads(result_bytes)
+        except (OSError, json.JSONDecodeError) as exc:
+            exclusions.append(
+                {
+                    "instance_id": instance_id,
+                    "source_result_path": _portable_path(result_path),
+                    "reason": f"unreadable result: {exc}",
+                }
+            )
+            continue
+
+        plans = result.get("plans")
+        if not isinstance(plans, list) or not plans:
+            continue
+        plan_record = next(
+            (plan for plan in plans if plan.get("round") == 1), plans[0]
+        )
+        relative_plan_path = plan_record.get("plan_path")
+        if not relative_plan_path:
+            continue
+        plan_path = result_path.parent / str(relative_plan_path)
+        if not plan_path.is_file():
+            exclusions.append(
+                {
+                    "instance_id": instance_id,
+                    "source_result_path": _portable_path(result_path),
+                    "reason": f"plan file not found: {plan_path}",
+                }
+            )
+            continue
+        plan_bytes = plan_path.read_bytes()
+        if not plan_bytes.strip():
+            continue
+
+        valid, invalid_reason = _valid_polybench_label(
+            instance_id, plan_record.get("test_results")
+        )
+        patch_policy = plan_record.get("patch_policy") or {}
+        recovered_from = (
+            patch_policy.get("recovered_from")
+            if isinstance(patch_policy, dict)
+            else None
+        )
+        pct_source_dir = Path(recovered_from) if recovered_from else result_path.parent
+        pct_result_path = pct_source_dir / "result.json"
+        pct_run_id = str(result.get("run_id", ""))
+        if recovered_from and pct_result_path.is_file():
+            try:
+                original_result = json.loads(
+                    pct_result_path.read_text(encoding="utf-8")
+                )
+                pct_run_id = str(original_result.get("run_id", pct_run_id))
+            except (OSError, json.JSONDecodeError):
+                pass
+        if pct_run_id == _EVALUATOR_RETRY_RUN_ID:
+            pct_run_id = f"run_{_plan_timestamp(plan_path, result)}Z"
+        pct_plan_path = pct_source_dir / "plans" / plan_path.name
+        candidates.setdefault(instance_id, []).append(
+            {
+                "instance_id": instance_id,
+                "plan": plan_bytes.decode("utf-8"),
+                "plan_sha256": _sha256(plan_bytes),
+                "plan_generated_at": _plan_timestamp(plan_path, result),
+                "resolved": (plan_record.get("test_results") or {}).get(
+                    "resolved"
+                ),
+                "valid_label": valid,
+                "invalid_reason": invalid_reason,
+                "source_batch": pct_source_dir.parent.name,
+                "source_result_path": _portable_path(pct_result_path),
+                "source_plan_path": _portable_path(
+                    pct_plan_path if pct_plan_path.is_file() else plan_path
+                ),
+                "label_source_result_path": _portable_path(result_path),
+                "result_sha256": _sha256(result_bytes),
+                "pct_run_id": pct_run_id,
+                "is_evaluator_retry": (
+                    result.get("run_id") == _EVALUATOR_RETRY_RUN_ID
+                ),
+                "recovered_from": str(recovered_from or ""),
+            }
+        )
+    return candidates, exclusions
+
+
+def _select_earliest_success(
+    records: list[dict[str, Any]]
+) -> dict[str, Any] | None:
+    """Select the earliest distinct plan that has a valid evaluation label."""
+    by_plan: dict[tuple[str, str], list[dict[str, Any]]] = {}
+    for record in records:
+        key = (record["plan_sha256"], record["plan_generated_at"])
+        by_plan.setdefault(key, []).append(record)
+
+    successful_plans: list[tuple[str, str, dict[str, Any]]] = []
+    for (plan_sha256, plan_generated_at), plan_records in by_plan.items():
+        valid_records = [r for r in plan_records if r["valid_label"]]
+        if not valid_records:
+            continue
+        # Prefer the original successful PCT result. Evaluator-only recovery is
+        # used only when the original label was invalid.
+        label_record = min(
+            valid_records,
+            key=lambda r: (
+                r["is_evaluator_retry"],
+                r["source_result_path"],
+            ),
+        )
+        successful_plans.append(
+            (plan_generated_at, plan_sha256, label_record)
+        )
+
+    if not successful_plans:
+        return None
+    return min(successful_plans, key=lambda item: (item[0], item[1]))[2]
+
+
+def build_pct_checker_input(
+    *,
+    config: Config,
+    pct_root: Path,
+    output_path: Path,
+) -> dict[str, Any]:
+    """Build a stable checker input from the earliest successful PCT per case."""
+    ordered_ids = list(dict.fromkeys(config.system.instances))
+    candidates, scan_exclusions = _scan_pct_candidates(
+        pct_root, set(ordered_ids)
+    )
+    loader = InstanceLoader(
+        dataset=config.system.dataset,
+        dataset_type=config.system.dataset_type,
+        language_filter=config.system.language_filter,
+    )
+    cases: list[dict[str, Any]] = []
+    exclusions = list(scan_exclusions)
+
+    for instance_id in ordered_ids:
+        selected = _select_earliest_success(candidates.get(instance_id, []))
+        if selected is None:
+            reasons = sorted(
+                {
+                    record["invalid_reason"]
+                    for record in candidates.get(instance_id, [])
+                    if record["invalid_reason"]
+                }
+            )
+            exclusions.append(
+                {
+                    "instance_id": instance_id,
+                    "reason": (
+                        "no valid successful PCT"
+                        + (f": {', '.join(reasons)}" if reasons else "")
+                    ),
+                }
+            )
+            continue
+        try:
+            instance_info = loader.load_instance(instance_id)
+        except Exception as exc:
+            exclusions.append(
+                {
+                    "instance_id": instance_id,
+                    "reason": f"instance metadata load failed: {exc}",
+                }
+            )
+            continue
+        issue_description = (
+            instance_info.get("problem_statement")
+            or instance_info.get("issue_description")
+            or ""
+        )
+        if not issue_description:
+            exclusions.append(
+                {
+                    "instance_id": instance_id,
+                    "reason": "missing issue description",
+                }
+            )
+            continue
+        cases.append(
+            {
+                "instance_id": instance_id,
+                "dataset": config.system.dataset,
+                "issue_description": issue_description,
+                "plan": selected["plan"],
+                "resolved": selected["resolved"],
+                "source_batch": selected["source_batch"],
+                "source_result_path": selected["source_result_path"],
+                "source_plan_path": selected["source_plan_path"],
+                "pct_run_id": selected["pct_run_id"],
+                "pct_started_at": selected["plan_generated_at"],
+                "plan_generated_at": selected["plan_generated_at"],
+                "plan_sha256": selected["plan_sha256"],
+                "result_sha256": selected["result_sha256"],
+                "label_source_result_path": selected[
+                    "label_source_result_path"
+                ],
+                "label_recovered_from": selected["recovered_from"],
+            }
+        )
+
+    _write_jsonl(output_path, cases)
+    exclusions_path = output_path.with_name("exclusions.json")
+    exclusions_path.write_text(
+        json.dumps(exclusions, indent=2, ensure_ascii=False, sort_keys=True),
+        encoding="utf-8",
+    )
+    cases_sha256 = _sha256(output_path.read_bytes())
+    manifest = {
+        "schema_version": 1,
+        "selection_policy": "earliest-successful-pct-v1",
+        "dataset": config.system.dataset,
+        "pct_root": _portable_path(pct_root),
+        "cases_path": _portable_path(output_path),
+        "cases_sha256": cases_sha256,
+        "configured_instances": len(ordered_ids),
+        "selected_instances": len(cases),
+        "excluded_instances": len(ordered_ids) - len(cases),
+        "resolved": sum(case["resolved"] is True for case in cases),
+        "unresolved": sum(case["resolved"] is False for case in cases),
+    }
+    output_path.with_name("manifest.json").write_text(
+        json.dumps(manifest, indent=2, ensure_ascii=False, sort_keys=True),
+        encoding="utf-8",
+    )
+    return manifest
+
+
 def _compute_metrics(results: list[dict[str, Any]]) -> dict[str, Any]:
-    """Compute TP/FP/FN/TN and derived metrics from per-instance results.
-
-    Args:
-        results: List of result dicts, each with ``check_result`` and
-            ``test_results`` keys.
-
-    Returns:
-        Dict with counts and metrics.
-    """
     tp = fp = fn = tn = 0
-
-    for r in results:
-        check_passed = r.get("check_result", {}).get("passed", False)
-        resolved = r.get("test_results", {}).get("resolved", False)
-
+    for result in results:
+        check_passed = result["check_result"]["passed"]
+        resolved = result["test_results"]["resolved"]
         if check_passed and resolved:
             tp += 1
-        elif check_passed and not resolved:
+        elif check_passed:
             fp += 1
-        elif not check_passed and resolved:
+        elif resolved:
             fn += 1
         else:
             tn += 1
 
     total = tp + fp + fn + tn
     accuracy = (tp + tn) / total if total else 0.0
-    precision = tp / (tp + fp) if (tp + fp) else 0.0
-    recall = tp / (tp + fn) if (tp + fn) else 0.0
+    precision = tp / (tp + fp) if tp + fp else 0.0
+    recall = tp / (tp + fn) if tp + fn else 0.0
+    specificity = tn / (tn + fp) if tn + fp else 0.0
     f1 = (
         2 * precision * recall / (precision + recall)
-        if (precision + recall) > 0
+        if precision + recall
         else 0.0
     )
-
+    denominator = math.sqrt(
+        (tp + fp) * (tp + fn) * (tn + fp) * (tn + fn)
+    )
+    mcc = ((tp * tn - fp * fn) / denominator) if denominator else 0.0
     return {
         "tp": tp,
         "fp": fp,
@@ -79,19 +395,21 @@ def _compute_metrics(results: list[dict[str, Any]]) -> dict[str, Any]:
         "precision": precision,
         "recall": recall,
         "f1": f1,
+        "specificity": specificity,
+        "balanced_accuracy": (recall + specificity) / 2,
+        "mcc": mcc,
     }
 
 
 def _collect_violation_stats(
     results: list[dict[str, Any]], filter_fn: Any
 ) -> dict[str, int]:
-    """Collect violation frequency statistics for cases matching filter_fn."""
     stats: dict[str, int] = {}
-    for r in results:
-        if not filter_fn(r):
+    for result in results:
+        if not filter_fn(result):
             continue
-        for v in r.get("check_result", {}).get("violations", []):
-            rule_text = v.get("rule", "")
+        for violation in result["check_result"].get("violations", []):
+            rule_text = violation.get("rule", "")
             if rule_text:
                 stats[rule_text] = stats.get(rule_text, 0) + 1
     return stats
@@ -100,213 +418,277 @@ def _collect_violation_stats(
 def _save_results(
     output_dir: Path,
     results: list[dict[str, Any]],
-    metrics: dict[str, Any],
+    errors: list[dict[str, Any]],
+    *,
+    input_sha256: str | None = None,
 ) -> Path:
-    """Save aggregated results and metrics to output directory."""
     output_dir.mkdir(parents=True, exist_ok=True)
+    metrics = _compute_metrics(results)
+    metrics["checker_errors"] = len(errors)
+    (output_dir / "metrics.json").write_text(
+        json.dumps(metrics, indent=2, ensure_ascii=False),
+        encoding="utf-8",
+    )
+    _write_jsonl(output_dir / "predictions.jsonl", results)
+    _write_jsonl(output_dir / "errors.jsonl", errors)
 
-    # Save per-instance summaries
+    false_positives = [
+        r["instance_id"]
+        for r in results
+        if r["check_result"]["passed"] and not r["test_results"]["resolved"]
+    ]
+    false_negatives = [
+        r["instance_id"]
+        for r in results
+        if not r["check_result"]["passed"] and r["test_results"]["resolved"]
+    ]
     summary = {
         "run_timestamp": datetime.now(timezone.utc).isoformat(),
+        "input_sha256": input_sha256,
         "metrics": metrics,
-        "instances": [
-            {
-                "instance_id": r.get("instance_id", "unknown"),
-                "check_passed": r.get("check_result", {}).get("passed"),
-                "resolved": r.get("test_results", {}).get("resolved"),
-                "violation_count": len(
-                    r.get("check_result", {}).get("violations", [])
-                ),
-            }
-            for r in results
-        ],
+        "false_positives": false_positives,
+        "false_negatives": false_negatives,
+        "violation_frequency": sorted(
+            _collect_violation_stats(results, lambda _: True).items(),
+            key=lambda item: (-item[1], item[0]),
+        ),
     }
-
-    # Top violations in FP cases (false confidence)
-    fp_violations = _collect_violation_stats(
-        results, lambda r: r.get("check_result", {}).get("passed") is True
-        and r.get("test_results", {}).get("resolved") is False
-    )
-    summary["fp_violations_top10"] = sorted(
-        fp_violations.items(), key=lambda x: x[1], reverse=True
-    )[:10]
-
-    # Top violations in FN cases (false rejection)
-    fn_violations = _collect_violation_stats(
-        results, lambda r: r.get("check_result", {}).get("passed") is False
-        and r.get("test_results", {}).get("resolved") is True
-    )
-    summary["fn_violations_top10"] = sorted(
-        fn_violations.items(), key=lambda x: x[1], reverse=True
-    )[:10]
-
     results_path = output_dir / "results.json"
     results_path.write_text(
         json.dumps(summary, indent=2, ensure_ascii=False),
         encoding="utf-8",
     )
-    logger.info("Results saved to %s", results_path)
     return results_path
 
 
 def _load_instance_ids(path: str) -> list[str]:
-    """Load instance IDs from a JSON manifest or plain text file."""
-    p = Path(path)
-    if not p.exists():
+    source = Path(path)
+    if not source.exists():
         raise FileNotFoundError(f"Instance list not found: {path}")
-
-    text = p.read_text(encoding="utf-8")
-    # Try JSON first
+    text = source.read_text(encoding="utf-8")
     try:
         data = json.loads(text)
         if isinstance(data, list):
-            return [str(x) for x in data]
+            return [str(item) for item in data]
         if isinstance(data, dict):
-            # Manifest format with cases
-            cases = data.get("cases", [])
-            return [str(c.get("instance_id", c)) for c in cases]
+            return [
+                str(case.get("instance_id", case))
+                for case in data.get("cases", [])
+            ]
     except json.JSONDecodeError:
         pass
-
-    # Fallback: one ID per line
     return [line.strip() for line in text.splitlines() if line.strip()]
 
 
-def main(argv: list[str] | None = None) -> int:
-    """Main entry point."""
-    parser = argparse.ArgumentParser(
-        description="Evaluate plan checker on SWE-bench Pro Python instances."
-    )
-    parser.add_argument(
-        "--config", required=True, help="Path to config.yaml"
-    )
-    parser.add_argument(
-        "--output",
-        default="./output/checker_eval/run1",
-        help="Output directory for evaluation results",
-    )
-    parser.add_argument(
-        "--instances",
-        help="Path to instance list JSON or text file",
-    )
-    parser.add_argument(
-        "--instance",
-        help="Run a single instance ID (for dry-run)",
-    )
-    parser.add_argument(
-        "--dataset",
-        default="ScaleAI/SWE-bench_Pro",
-        help="Dataset to load instances from",
-    )
-    args = parser.parse_args(argv)
+def _run_checker_case(
+    case: dict[str, Any],
+    config: Config,
+    rules_text: str,
+    output_dir: Path,
+    loader: InstanceLoader,
+) -> dict[str, Any]:
+    required = ("instance_id", "issue_description", "plan", "resolved")
+    missing = [key for key in required if key not in case]
+    if missing:
+        raise ValueError(f"checker input missing fields: {', '.join(missing)}")
+    if not isinstance(case["resolved"], bool):
+        raise ValueError("checker input resolved label must be boolean")
 
-    _setup_logging()
-
-    # Load config
-    config = load_config(args.config)
-
-    # Override dataset for Pro evaluation
-    # We need to reconstruct the config with the new dataset
-    system_dict = {
-        "n": 1,
-        "optimization_info_level": config.system.optimization_info_level,
-        "model": config.system.model,
-        "api_base": config.system.api_base,
-        "dataset": args.dataset,
-        "instances": [],
-        "output_dir": config.system.output_dir,
-        "batch_id": f"checker_{datetime.now(timezone.utc).strftime('%Y%m%d_%H%M%S')}",
-        "skip_completed_rounds": False,
-    }
-
-    from src.config import (
-        AgentConfig,
-        CheckerConfig,
-        DockerConfig,
-        EvaluatorConfig,
-        PromptConfig,
-        SystemConfig,
+    instance_id = str(case["instance_id"])
+    instance_info = loader.load_instance(instance_id)
+    docker = DockerEnvWrapper(config.docker)
+    dataset_type = instance_info.get("dataset_type", "")
+    workdir = (
+        "/app"
+        if dataset_type == "pro" or "dockerhub_tag" in instance_info
+        else config.docker.workdir
     )
+    instance_dir = output_dir / "instances" / instance_id
+    instance_dir.mkdir(parents=True, exist_ok=True)
 
-    config = Config(
-        system=SystemConfig(**system_dict),
-        prompts=config.prompts,
-        docker=config.docker,
-        agent=config.agent,
-        evaluator=config.evaluator,
-        checker=CheckerConfig(
-            enabled=True,
-            rules_path=config.checker.rules_path,
-            model=config.checker.model,
-            api_base=config.checker.api_base,
-            max_steps=config.checker.max_steps,
-            cost_limit=config.checker.cost_limit,
+    try:
+        docker.start(
+            image=derive_image_name(instance_info),
+            workdir=workdir,
+            mount_source=instance_info.get("repo_path", ""),
+            timeout=config.agent.timeout,
+            instance_info=instance_info,
+        )
+        check_result, trajectory = check_agent.run(
+            config,
+            str(case["plan"]),
+            str(case["issue_description"]),
+            rules_text,
+            docker,
+        )
+        if check_result.get("_parse_error"):
+            raise ValueError(check_result.get("overall_assessment", "parse error"))
+        (instance_dir / "check_result.json").write_text(
+            json.dumps(check_result, indent=2, ensure_ascii=False),
+            encoding="utf-8",
+        )
+        (instance_dir / "trajectory.json").write_text(
+            json.dumps(
+                {
+                    "role": "check",
+                    "instance_id": instance_id,
+                    "messages": trajectory,
+                },
+                indent=2,
+                ensure_ascii=False,
+            ),
+            encoding="utf-8",
+        )
+        return {
+            "instance_id": instance_id,
+            "check_result": check_result,
+            "test_results": {"resolved": case["resolved"]},
+            "source": {
+                key: case.get(key)
+                for key in (
+                    "source_batch",
+                    "source_result_path",
+                    "source_plan_path",
+                    "plan_sha256",
+                )
+            },
+        }
+    finally:
+        docker.stop()
+        if config.docker.delete_images_after_instance:
+            cleanup_docker_image_cache(config.docker.max_cached_images)
+
+
+def run_checker_only(
+    *,
+    config: Config,
+    input_path: Path,
+    output_dir: Path,
+) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
+    cases = _read_jsonl(input_path)
+    rules = load_aggregated_rules(config.checker.rules_path)
+    rules_text = format_rules_for_prompt(rules)
+    loader = InstanceLoader(
+        dataset=config.system.dataset,
+        dataset_type=config.system.dataset_type,
+        language_filter=config.system.language_filter,
+    )
+    results: list[dict[str, Any]] = []
+    errors: list[dict[str, Any]] = []
+    for index, case in enumerate(cases, 1):
+        instance_id = str(case.get("instance_id", "unknown"))
+        logger.info("[%d/%d] Checking %s", index, len(cases), instance_id)
+        try:
+            results.append(
+                _run_checker_case(
+                    case, config, rules_text, output_dir, loader
+                )
+            )
+        except KeyboardInterrupt:
+            raise
+        except Exception as exc:
+            logger.exception("[%s] Checker-only evaluation failed", instance_id)
+            errors.append(
+                {
+                    "instance_id": instance_id,
+                    "error_type": type(exc).__name__,
+                    "message": str(exc),
+                }
+            )
+    _save_results(
+        output_dir,
+        results,
+        errors,
+        input_sha256=_sha256(input_path.read_bytes()),
+    )
+    return results, errors
+
+
+def _run_legacy_pcc(args: argparse.Namespace, config: Config) -> int:
+    dataset = args.dataset or "ScaleAI/SWE-bench_Pro"
+    configured_instance_ids = config.system.instances
+    config = replace(
+        config,
+        system=replace(
+            config.system,
+            n=1,
+            dataset=dataset,
+            instances=[],
+            batch_id=f"checker_{datetime.now(timezone.utc):%Y%m%d_%H%M%S}",
+            skip_completed_rounds=False,
         ),
-        analysis=config.analysis,
-        api_key=config.api_key,
-        analysis_api_key=config.analysis_api_key,
+        checker=replace(config.checker, enabled=True),
     )
-
-    # Determine instance list
     if args.instance:
         instance_ids = [args.instance]
     elif args.instances:
         instance_ids = _load_instance_ids(args.instances)
     else:
-        # Default: read from config system.instances
-        instance_ids = config.system.instances
-
+        instance_ids = configured_instance_ids
     if not instance_ids:
-        logger.error("No instances specified. Use --instance, --instances, or config.system.instances")
+        logger.error("No instances specified")
         return 1
 
-    logger.info("=== Checker eval start ===")
-    logger.info("Plan-Checker-Code Evaluation")
-    logger.info("Dataset: %s", args.dataset)
-    logger.info("Instances: %d", len(instance_ids))
-    logger.info("Checker model: %s", config.checker.model)
-    logger.info("Checker rules: %s", config.checker.rules_path)
-    logger.info("=" * 60)
-
-    output_dir = Path(args.output_dir)
     results: list[dict[str, Any]] = []
-
-    for i, instance_id in enumerate(instance_ids, 1):
-        logger.info("[%d/%d] Processing %s", i, len(instance_ids), instance_id)
+    errors: list[dict[str, Any]] = []
+    output_dir = Path(args.output)
+    for instance_id in instance_ids:
         try:
             result = run_instance(instance_id, config)
             results.append(result)
-
-            # Save per-instance result
-            inst_dir = output_dir / "instances" / instance_id
-            inst_dir.mkdir(parents=True, exist_ok=True)
-            inst_path = inst_dir / "result.json"
-            inst_path.write_text(
-                json.dumps(result, indent=2, ensure_ascii=False),
-                encoding="utf-8",
-            )
         except Exception as exc:
-            logger.error("[%s] Failed: %s", instance_id, exc)
-            results.append({
-                "instance_id": instance_id,
-                "check_result": {"passed": False, "violations": [], "overall_assessment": f"Pipeline error: {exc}"},
-                "test_results": {"resolved": False},
-            })
-
-    # Compute and save metrics
-    metrics = _compute_metrics(results)
-    logger.info("=" * 60)
-    logger.info("Metrics")
-    logger.info("  TP: %d  FP: %d  FN: %d  TN: %d", metrics["tp"], metrics["fp"], metrics["fn"], metrics["tn"])
-    logger.info("  Accuracy:  %.3f", metrics["accuracy"])
-    logger.info("  Precision: %.3f", metrics["precision"])
-    logger.info("  Recall:    %.3f", metrics["recall"])
-    logger.info("  F1:        %.3f", metrics["f1"])
-    logger.info("=" * 60)
-
-    _save_results(output_dir, results, metrics)
-    logger.info("=== Checker eval end ===")
+            errors.append(
+                {
+                    "instance_id": instance_id,
+                    "error_type": type(exc).__name__,
+                    "message": str(exc),
+                }
+            )
+    _save_results(output_dir, results, errors)
     return 0
+
+
+def main(argv: list[str] | None = None) -> int:
+    parser = argparse.ArgumentParser(
+        description="Evaluate the plan checker using PCC or saved PCT results."
+    )
+    parser.add_argument("--config", required=True)
+    parser.add_argument("--output", default="./output/checker_eval/run1")
+    parser.add_argument("--instances")
+    parser.add_argument("--instance")
+    parser.add_argument("--dataset")
+    parser.add_argument("--build-input", action="store_true")
+    parser.add_argument(
+        "--pct-root", default="./output/SWE-PolyBench"
+    )
+    parser.add_argument("--input-output")
+    parser.add_argument("--input-results")
+    args = parser.parse_args(argv)
+    _setup_logging()
+    config = load_config(args.config)
+
+    if args.build_input and args.input_results:
+        parser.error("--build-input and --input-results are mutually exclusive")
+    if args.build_input:
+        if not args.input_output:
+            parser.error("--input-output is required with --build-input")
+        manifest = build_pct_checker_input(
+            config=config,
+            pct_root=Path(args.pct_root),
+            output_path=Path(args.input_output),
+        )
+        logger.info("Built checker input: %s", json.dumps(manifest))
+        return 0
+    if args.input_results:
+        run_checker_only(
+            config=replace(
+                config, checker=replace(config.checker, enabled=True)
+            ),
+            input_path=Path(args.input_results),
+            output_dir=Path(args.output),
+        )
+        return 0
+    return _run_legacy_pcc(args, config)
 
 
 if __name__ == "__main__":

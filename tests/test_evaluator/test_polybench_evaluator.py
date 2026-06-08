@@ -5,6 +5,7 @@ from unittest.mock import patch, MagicMock
 import pytest
 
 from src.evaluator.polybench_evaluator import (
+    _reset_container_worktree,
     _try_pull_prebuilt_image_with_fallback,
     evaluate_polybench_instance,
 )
@@ -51,6 +52,9 @@ def _make_docker_manager(**kwargs):
             self.check_image_local = MagicMock(return_value=kwargs.get("check_image_local", True))
             self.try_pull_prebuilt_image = MagicMock(return_value=kwargs.get("try_pull_prebuilt_image", False))
             self.run_logs = kwargs.get("run_logs", ["test output", "exit code: 0"])
+            self.container = MagicMock()
+            self.container.exec_run.return_value = MagicMock(exit_code=0, output=b"")
+            self._get_workdir_from_image = MagicMock(return_value="/testbed")
             self.create_container = MagicMock()
             self.apply_patch_to_container = MagicMock(side_effect=kwargs.get("apply_patch_side_effect", [0, 0]))
             self.docker_run = MagicMock()
@@ -88,6 +92,18 @@ def test_try_pull_prebuilt_image_with_fallback_returns_false_after_all_tags():
 
     assert result is False
     assert docker_manager.try_pull_prebuilt_image.call_count == 3
+
+
+def test_reset_container_worktree_cleans_dirty_official_image():
+    docker_manager = _make_docker_manager()
+
+    _reset_container_worktree(docker_manager, "test__repo-1234")
+
+    docker_manager.container.exec_run.assert_called_once_with(
+        cmd=["sh", "-lc", "git reset --hard HEAD && git clean -fd"],
+        workdir="/testbed",
+        user="root",
+    )
 
 
 class TestEvaluatePolybenchInstance:

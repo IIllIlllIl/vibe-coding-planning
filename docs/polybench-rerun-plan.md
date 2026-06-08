@@ -5,6 +5,10 @@
 Recover infrastructure-caused failures while preserving official
 SWE-PolyBench evaluation semantics and avoiding unnecessary LLM reruns.
 
+The original remaining-133 recovery completed on 2026-06-08. It recovered
+78 of the 89 instances that previously had no `result.json`. The full199
+set now has 188 evaluated instances and 11 remaining failures.
+
 Planning is read-only:
 
 ```bash
@@ -15,15 +19,15 @@ Execution always requires an explicit `--execute`.
 
 ## Retry Groups
 
-The retry planner derives groups from persistent source-batch artifacts.
+The original retry planner derives groups from persistent source-batch artifacts.
 Logs are used when present, but are not required: a completed code trajectory
 containing a git diff without `result.json` is an evaluator-only recovery.
 
 | Group | Count | Action |
 |---|---:|---|
-| `evaluator_only` | 64 | Recover the generated patch and rerun only the official evaluator |
-| `full_pipeline` | 38 | Rerun Plan-Code-Test, with official Dockerfile image fallback |
-| `complete` | 31 | Preserve the existing result; do not rerun |
+| `evaluator_only` | 64 | Completed |
+| `full_pipeline` | 38 | Completed; 27 produced results |
+| `complete` | 31 | Preserved |
 
 The evaluator-only group contains:
 
@@ -56,7 +60,38 @@ The full-pipeline group contains:
 6. Official Dockerfile builds use PolyBench's `RepoManager` and
    `DockerManager`, target `linux/amd64`, and retry three times.
 
-## Execution
+## Remaining Image Retry
+
+Four instances failed because their official Dockerfiles use Debian Buster
+repositories that have moved to the Debian archive:
+
+- `huggingface__transformers-6735`
+- `huggingface__transformers-7858`
+- `huggingface__transformers-8049`
+- `huggingface__transformers-8437`
+
+The compatibility fallback has been validated by successfully building
+`transformers-6735`. A dedicated wrapper prepares an isolated rerun:
+
+```bash
+# Planning only
+bash scripts/run_polybench_image_retry.sh
+
+# Real execution
+bash scripts/run_polybench_image_retry.sh --execute
+```
+
+It uses:
+
+- config: `configs/polybench_remaining133_pct.yaml`
+- manifest: `configs/polybench_retry_images_buster4.json`
+- batch id: `polybench-retry-images-buster4`
+- output: `output/SWE-PolyBench/polybench-retry-images-buster4/`
+
+The wrapper delegates to `scripts/run_batch.sh`, which applies `caffeinate`
+per instance on macOS.
+
+## Historical Execution
 
 After repairing the `mini-swe` environment with a persistent, non-broken
 official PolyBench install:
@@ -72,7 +107,7 @@ package declares `scikit-learn==1.3.2` for optional retrieval metrics; this
 recovery uses pass-rate scoring only, and the installed parser/scoring modules
 have been verified with the environment's newer scikit-learn.
 
-Run evaluator-only recovery first:
+The completed recovery was run evaluator-only first:
 
 ```bash
 conda run -n mini-swe python scripts/retry_polybench.py \
