@@ -24,6 +24,7 @@ DEFAULT_INPUT = Path(
 )
 DEFAULT_OUTPUT = Path("output/checker_eval/polybench-flash-pro-baseline")
 CHECKER_MODEL = "deepseek-v4-flash"
+DEFAULT_PARALLEL = 4
 
 
 def _sha256(path: Path) -> str:
@@ -184,7 +185,18 @@ def main() -> int:
     )
     parser.add_argument("--dry-run", action="store_true")
     parser.add_argument("--no-resume", action="store_true")
+    parser.add_argument(
+        "--parallel",
+        type=int,
+        default=DEFAULT_PARALLEL,
+        help=(
+            "Concurrent checker instances within each arm "
+            f"(default: {DEFAULT_PARALLEL})"
+        ),
+    )
     args = parser.parse_args()
+    if args.parallel < 1:
+        parser.error("--parallel must be at least 1")
 
     required = (args.input_results, args.flash_rules, args.pro_rules)
     for path in required:
@@ -223,6 +235,7 @@ def main() -> int:
     ).hexdigest()
 
     if args.dry_run:
+        metadata["parallel_workers"] = args.parallel
         print(json.dumps(metadata, indent=2))
         return 0
 
@@ -241,6 +254,7 @@ def main() -> int:
         metadata["status"] = "running"
     else:
         metadata["started_at"] = datetime.now(timezone.utc).isoformat()
+    metadata["parallel_workers"] = args.parallel
     _write_json(experiment_path, metadata)
 
     for name, rules_path, baseline in arms:
@@ -256,6 +270,7 @@ def main() -> int:
             output_dir=args.output / name,
             rules_text_override=rules_override,
             resume=not args.no_resume,
+            max_workers=args.parallel,
         )
         metadata["arms"][name].update(
             {

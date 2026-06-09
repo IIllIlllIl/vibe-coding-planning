@@ -5,6 +5,8 @@ from __future__ import annotations
 import json
 import importlib.util
 import sys
+import threading
+import time
 from dataclasses import replace
 from datetime import datetime, timezone
 from pathlib import Path
@@ -542,3 +544,60 @@ def test_checker_only_reruns_mismatched_plan_cache(
 
     assert results == [replacement]
     mock_run_case.assert_called_once()
+
+
+@patch("evaluate_checker.cleanup_docker_image_cache")
+@patch("evaluate_checker.InstanceLoader")
+@patch("evaluate_checker._run_checker_case")
+def test_checker_only_parallel_preserves_input_order_and_cleans_once(
+    mock_run_case, mock_loader_cls, mock_cleanup, tmp_path
+):
+    cases_path = tmp_path / "cases.jsonl"
+    cases = [
+        {
+            "instance_id": f"repo__task-{index}",
+            "issue_description": "issue",
+            "plan": "plan",
+            "plan_sha256": f"hash-{index}",
+            "resolved": index % 2 == 0,
+        }
+        for index in range(4)
+    ]
+    _write_jsonl(cases_path, cases)
+    active = 0
+    peak = 0
+    lock = threading.Lock()
+
+    def run_case(case, config, rules_text, output_dir, loader):
+        nonlocal active, peak
+        with lock:
+            active += 1
+            peak = max(peak, active)
+        time.sleep(0.02)
+        with lock:
+            active -= 1
+        return {
+            "instance_id": case["instance_id"],
+            "check_result": {"passed": True, "violations": []},
+            "test_results": {"resolved": case["resolved"]},
+            "source": {"plan_sha256": case["plan_sha256"]},
+        }
+
+    mock_run_case.side_effect = run_case
+    results, errors = run_checker_only(
+        config=Config(checker=CheckerConfig(enabled=True)),
+        input_path=cases_path,
+        output_dir=tmp_path / "out",
+        rules_text_override="",
+        max_workers=3,
+    )
+
+    assert [result["instance_id"] for result in results] == [
+        case["instance_id"] for case in cases
+    ]
+    assert errors == []
+    assert peak == 3
+    mock_loader_cls.return_value.load_instance.assert_called_once_with(
+        "repo__task-0"
+    )
+    mock_cleanup.assert_called_once()

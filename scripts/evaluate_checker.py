@@ -16,6 +16,7 @@ import re
 import shutil
 import sys
 import tempfile
+from concurrent.futures import Future, ThreadPoolExecutor, as_completed
 from dataclasses import replace
 from datetime import datetime, timezone
 from pathlib import Path
@@ -697,7 +698,10 @@ def run_checker_only(
     output_dir: Path,
     rules_text_override: str | None = None,
     resume: bool = True,
+    max_workers: int = 1,
 ) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
+    if max_workers < 1:
+        raise ValueError("max_workers must be at least 1")
     cases = _read_jsonl(input_path)
     if rules_text_override is None:
         rules = load_aggregated_rules(config.checker.rules_path)
@@ -709,8 +713,9 @@ def run_checker_only(
         dataset_type=config.system.dataset_type,
         language_filter=config.system.language_filter,
     )
-    results: list[dict[str, Any]] = []
-    errors: list[dict[str, Any]] = []
+    results_by_index: dict[int, dict[str, Any]] = {}
+    errors_by_index: dict[int, dict[str, Any]] = {}
+    pending: list[tuple[int, dict[str, Any]]] = []
     for index, case in enumerate(cases, 1):
         instance_id = str(case.get("instance_id", "unknown"))
         prediction_path = (
@@ -738,28 +743,91 @@ def run_checker_only(
                         len(cases),
                         instance_id,
                     )
-                    results.append(prediction)
+                    results_by_index[index] = prediction
                     continue
             except (OSError, json.JSONDecodeError):
                 logger.warning("Ignoring invalid prediction cache: %s", prediction_path)
-        logger.info("[%d/%d] Checking %s", index, len(cases), instance_id)
-        try:
-            results.append(
-                _run_checker_case(
-                    case, config, rules_text, output_dir, loader
-                )
+        pending.append((index, case))
+
+    worker_config = config
+    cleanup_after_run = max_workers > 1 and config.docker.delete_images_after_instance
+    if cleanup_after_run:
+        worker_config = replace(
+            config,
+            docker=replace(config.docker, delete_images_after_instance=False),
+        )
+
+    def record_failure(index: int, case: dict[str, Any], exc: Exception) -> None:
+        instance_id = str(case.get("instance_id", "unknown"))
+        logger.exception(
+            "[%s] Checker-only evaluation failed",
+            instance_id,
+            exc_info=(type(exc), exc, exc.__traceback__),
+        )
+        errors_by_index[index] = {
+            "instance_id": instance_id,
+            "error_type": type(exc).__name__,
+            "message": str(exc),
+        }
+
+    try:
+        if max_workers == 1:
+            for index, case in pending:
+                instance_id = str(case.get("instance_id", "unknown"))
+                logger.info("[%d/%d] Checking %s", index, len(cases), instance_id)
+                try:
+                    results_by_index[index] = _run_checker_case(
+                        case, worker_config, rules_text, output_dir, loader
+                    )
+                except KeyboardInterrupt:
+                    raise
+                except Exception as exc:
+                    record_failure(index, case, exc)
+        elif pending:
+            # Populate the loader's lazy dataset cache before worker threads
+            # concurrently perform read-only lookups.
+            loader.load_instance(str(pending[0][1]["instance_id"]))
+            logger.info(
+                "Starting checker-only pool: workers=%d pending=%d resumed=%d",
+                max_workers,
+                len(pending),
+                len(results_by_index),
             )
-        except KeyboardInterrupt:
-            raise
-        except Exception as exc:
-            logger.exception("[%s] Checker-only evaluation failed", instance_id)
-            errors.append(
-                {
-                    "instance_id": instance_id,
-                    "error_type": type(exc).__name__,
-                    "message": str(exc),
-                }
-            )
+            with ThreadPoolExecutor(
+                max_workers=max_workers, thread_name_prefix="checker"
+            ) as executor:
+                futures: dict[Future[dict[str, Any]], tuple[int, dict[str, Any]]] = {}
+                for index, case in pending:
+                    future = executor.submit(
+                        _run_checker_case,
+                        case,
+                        worker_config,
+                        rules_text,
+                        output_dir,
+                        loader,
+                    )
+                    futures[future] = (index, case)
+                completed = len(results_by_index)
+                for future in as_completed(futures):
+                    index, case = futures[future]
+                    instance_id = str(case.get("instance_id", "unknown"))
+                    try:
+                        results_by_index[index] = future.result()
+                    except Exception as exc:
+                        record_failure(index, case, exc)
+                    completed += 1
+                    logger.info(
+                        "[%d/%d] Completed %s",
+                        completed,
+                        len(cases),
+                        instance_id,
+                    )
+    finally:
+        if cleanup_after_run:
+            cleanup_docker_image_cache(config.docker.max_cached_images)
+
+    results = [results_by_index[index] for index in sorted(results_by_index)]
+    errors = [errors_by_index[index] for index in sorted(errors_by_index)]
     _save_results(
         output_dir,
         results,

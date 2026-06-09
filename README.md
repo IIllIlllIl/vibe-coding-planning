@@ -205,7 +205,8 @@ bash scripts/run_checker_comparison.sh --execute --detach
 
 运行可从每实例 `prediction.json` 断点恢复，进度写入
 `output/checker_eval/polybench-flash-pro-baseline/experiment.json`，最终报告为
-`comparison_report.json` 和 `comparison_report.md`。
+`comparison_report.json` 和 `comparison_report.md`。每个 arm 默认并行运行
+4 个实例；可用 `--parallel N` 调整为任意正整数，三个 arm 仍依次运行。
 
 推荐使用 `--snapshot-root`。每个快照目录包含 `cases.jsonl`、
 `manifest.json` 和 `exclusions.json`，发布后不再覆盖。根目录

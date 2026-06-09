@@ -21,6 +21,10 @@ spec.loader.exec_module(comparison)
 from src.config import Config, PromptConfig  # noqa: E402
 
 
+def test_default_parallel_is_four():
+    assert comparison.DEFAULT_PARALLEL == 4
+
+
 def test_all_arms_force_flash_and_baseline_uses_dedicated_prompt(tmp_path):
     config = Config(
         prompts=PromptConfig(

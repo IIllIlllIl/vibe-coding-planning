@@ -162,6 +162,9 @@ The first command is validation-only. The detached run is monitored through
 the `polybench-checker-comparison` tmux session,
 `logs/checker_comparison_run.log`, and the experiment's `experiment.json`.
 Per-instance predictions make interrupted runs resumable.
+Each arm runs four checker instances concurrently by default; override with
+`--parallel N`. Arms remain sequential so all variants use the same bounded
+API and Docker concurrency.
 
 `SWE-bench_Verified/test_runs_archive/` currently contains:
 
