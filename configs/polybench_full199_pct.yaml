@@ -500,6 +500,7 @@ docker:
   min_free_gb: 20
   polybench_build_fallback: true
   polybench_pull_timeout: 600
+  polybench_build_timeout: 3600
 agent:
   max_steps: 200
   cost_limit: 3.0

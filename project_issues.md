@@ -2,33 +2,33 @@
 
 ## 1. 断点重跑（Resume，FR-07）
 
-- **状态**：待解决（推迟至下一轮迭代实现）
-- **现状**：`config.system.resume` 字段已加载并校验，但 `pipeline` 与 `OutputWriter` 完全未消费它（既不读历史 plans/trajectories，也不从指定轮次接续生成）。
-- **影响**：用户无法在长跑被中断后从中间轮次继续；每次必须从 round 1 重跑。
-- **处理**：按 `docs/requirement-document.md` §3.2 FR-07、§6.1 resume 配置、TC-08 实现，并补充端到端测试。
+- **状态**：决定不实施
+- **决策**：任务级断点恢复已由 `scripts/run_batch.sh` 实现。重复运行同一 batch 时，已有 `result.json` 的实例会跳过，未完成实例会重新从 round 1 执行。
+- **理由**：当前实验默认 `n=3`，单实例执行时间和重算成本可接受；从单个 Plan/round 内部恢复会显著增加历史状态校验、配置兼容和输出合并复杂度，收益不足。
+- **兼容处理**：`config.system.resume` 暂保留为未消费的兼容字段，不再计划接入 `pipeline` 或 `OutputWriter`，后续可在破坏性配置版本升级时删除。
 
 ## 2. 树形结构候选 Plan / 反思模板
 
-- **状态**：待解决
-- **描述**：希望尝试使用树形结构来管理候选 plan / 反思模板（多分支保留 + 选择性回溯，而非当前的"线性单链 plan_r1 → plan_r2 → plan_r3"）。
-- **处理**：先评估现有 GEPA 代码是否已支持树形结构（`gepa-ai/gepa` 上游若有候选池/选择策略可以直接复用），再决定本项目应当如何接入。
+- **状态**：决定不实施
+- **决策**：继续使用线性 `plan_r1 → plan_r2 → plan_r3` 反思链，不引入候选 Plan 树、多分支保留或选择性回溯。
+- **理由**：当前实验固定使用较小的 `n=3`，树形与线性结构能够探索的候选数量都很有限，预期效果差异不足以覆盖实现、调度和结果解释复杂度。
+- **边界**：该决策只针对候选 Plan/反思结构，不影响规则聚合阶段可能采用的分层或树形合并。
 
 ## 3. PolyBench full199 剩余扫描失败
 
-- **状态**：待解决 11 个无结果实例（截至 2026-06-08）
+- **状态**：扫描收尾，198/199 个实例具有有效 PCT；1 个上下文超限实例放弃（截至 2026-06-09）
 - **当前统计**：
-  - full199 已有效评估 188 个，覆盖率 94.5%
-  - 74 个 resolved；全量 resolved 率 37.2%，已评估实例 resolved 率 39.4%
-  - remaining-133 原始 89 个 FAIL 中已恢复 78 个
-- **剩余失败**：
-  1. 4 个 Debian Buster apt 源失效实例：`transformers-6735`、`7858`、`8049`、`8437`
-  2. 5 个 `.[dev,testing]` 依赖环境未完成构建：`transformers-25429`、`25793`、`26678`、`27757`、`27797`
-  3. 1 个 `.[testing,flax]` 依赖环境未验证：`transformers-13988`
-  4. 1 个模型上下文窗口超限：`transformers-6322` 请求 2,881,419 tokens，超过 1,048,565 上限
+  - 当前 checker-only 严格口径已有 198 个有效 PCT
+  - 77 个 resolved
+  - 7 个历史 patch-apply 失败已通过 evaluator-only 恢复
+  - 3 个 agent 空输出实例已完整重跑，均正常完成但 unresolved
+  - 6 个 Docker 兼容实例已完整重跑，均正常完成但 unresolved
+- **唯一排除**：
+  - `transformers-6322` 请求 2,881,419 tokens，超过 1,048,565 上限，按本轮决策放弃
 - **处理边界**：
-  - 前 10 个是镜像基础设施失败，不应计为 agent 修复失败。
-  - `transformers-6322` 需要缩减输入上下文或调整任务级提示词，不属于镜像问题。
-  - 本轮仅重跑已验证 Buster 修复路径的 4 个实例；其余 7 个继续保留为待解决项。
+  - 6 个镜像实例均已成功构建、通过依赖检查并完成 PCT。
+  - 最新 checker 快照：`output/SWE-PolyBench/polybench-pct-checker-datasets/20260609_198_cdf4d414e401/cases.jsonl`。
+  - `transformers-6322` 不再进入后续 PCT 重跑或 checker 数据集。
 
 ## 4. Verified 探索运行（run1 2026-05-09 + run2 2026-05-11）暴露的 pipeline 健壮性问题
 
@@ -62,7 +62,7 @@
 
 ### 4.4 反思 ROI：n=5 下 Round 3+ 几乎不带额外信号（信息项，非 bug）
 
-- **状态**：观察数据，已影响 §2（树形候选 plan）的优先级判定
+- **状态**：观察数据，支持将默认实验规模维持在 `n=3`
 - **数据**（run2，n=5，111 finalized）：
   | 解决轮次 | 实例数 | 占解决总数 |
   |---|--:|--:|
@@ -72,7 +72,7 @@
   | R4 | 0 | 0% |
   | R5 | 1 | 1.3% |
 - **解读**：跑满 5 轮的 28 个未解决实例里只救回 1 个（3.6%）。把 n 从 3 提到 5 多花约 60% 单实例 wall time，**额外救回 1 例**。线性反思链的边际产出在 R3 之后几乎为零。
-- **处理建议**：在 §2 树形候选 plan 落地前，可考虑把默认 n 回到 3，并把节省的算力投入扩样（150→300 实例）以提高判别规律的统计置信度；或保留 n=5 但记录这一观察，作为"为何要尝试非线性反思策略"的实证依据。
+- **处理建议**：默认使用 `n=3`，把节省的算力投入扩样以提高判别规律的统计置信度；不再推进候选 Plan 树形结构。
 
 ## 5. Pro 模型在大轨迹 case 上的异常耗时
 
@@ -89,14 +89,15 @@
 
 ## 6. OpenCode analysis 仍被全局 DEEPSEEK_API_KEY 校验耦合
 
-- **状态**：待解决（不阻塞已完成的 Kimi/OpenCode 60-case 规则提取、后处理与聚合）
+- **状态**：下一优先任务
 - **现象**：`src.config.load_config()` 当前无条件要求 `DEEPSEEK_API_KEY` 存在，即使 `analysis.backend=opencode`。OpenCode 后端实际通过 OpenCode 自身 auth/config 发请求，不使用 `Config.api_key` 或 `analysis.api_key_env` 调用模型。
 - **当前处理**：运行 Kimi/OpenCode analysis 时如果环境里已有 `DEEPSEEK_API_KEY`，不会受影响；否则可临时设置 `DEEPSEEK_API_KEY=dummy` 绕过共享 loader 校验。
 - **影响**：这是配置层语义不清和可移植性问题，不代表已完成的 Kimi/OpenCode 60-case 规则提取与聚合使用了 DeepSeek。`configs/analysis_kimi_opencode.yaml` 的 `analysis.backend=opencode`、`model=kimi-for-coding/k2p6`、输出目录、超时和重试参数均走 OpenCode 路线；`analysis.api_base/api_key_env` 对 OpenCode 调用路径不生效。
 - **处理建议**：将 `load_config()` 的全局 API key 校验改为按实际使用路径执行：
   1. PCT 主流程、checker 或 mini_swe analysis 需要 DeepSeek/LiteLLM key 时再校验对应 env var
   2. `analysis.backend=opencode` 时不要求 `DEEPSEEK_API_KEY`
-  3. 为 OpenCode analysis 增加配置加载测试，验证仅设置 `MOONSHOT_API_KEY` 或仅存在 OpenCode auth 时也能加载配置
+  3. `run_batch.sh`、`src.main`、analysis/review/checker CLI 分别在实际进入对应后端前校验所需凭据，避免共享 loader 过早失败
+  4. 增加配置加载和 CLI 回归测试，覆盖无 DeepSeek key 的 OpenCode analysis、需要 DeepSeek key 的 PCT/checker、以及独立 analysis key 的 mini_swe analysis
 
 ## 7. OpenCode/Kimi 聚合默认超时与长重试等待
 
@@ -110,21 +111,24 @@
 
 ## 8. PolyBench 镜像兼容构建
 
-- **状态**：部分解决，4 个实例已具备重跑条件，6 个仍需验证
+- **状态**：已解决，6 个剩余兼容镜像均已构建验证
 - **已完成**：
   1. GHCR 按 `v1.1 → v1.0 → latest` 拉取，全部缺失时使用数据集官方 Dockerfile 和 base commit 本地构建。
   2. Docker build 现在保留完整 `BuildError.build_log`，可看到真实 apt/pip 错误。
   3. Debian Buster fallback 改用 archive 源并关闭 `Valid-Until` 检查；`transformers-6735` 已实际构建成功。
   4. 为旧 Transformers extras 增加兼容候选：JAX 官方 wheel archive、PyAV 系统依赖、`Cython<3`、Python 3.10 Bullseye/FFmpeg 4.x、apt HTTPS 超时和有限重试。
+  5. Docker build 改为有 wall-time timeout 的 CLI 子进程；默认每个 variant 最多 3600 秒，超时后保留输出并继续下一个 variant。
+  6. `transformers-13988` 的 `apt-network+jax-wheel-archive` 镜像已构建并验证。
+  7. 5 个 `.[dev,testing]` 实例的 Bullseye + JAX archive + PyAV 兼容镜像均已构建并验证。
+  8. 本地兼容镜像被窗口清理后会通过相同 variant 自动重建；无需重新开发修复，但没有 BuildKit cache 时仍需重新下载和编译依赖。
 - **本次准备重跑**：
   - manifest：`configs/polybench_retry_images_buster4.json`
   - wrapper：`scripts/run_polybench_image_retry.sh`
   - batch id：`polybench-retry-images-buster4`
   - 默认只 dry-run；显式传 `--execute` 才运行
-- **仍未解决**：
-  1. 5 个 `.[dev,testing]` 实例的依赖树巨大，在 Apple Silicon 上以 `linux/amd64` 构建耗时很长；代表实例 `transformers-25429` 尚未生成最终镜像。
-  2. Docker SDK 在一次长构建后出现无活动容器但 build stream 未结束的等待状态，需要增加构建 wall-time timeout，并优先保存每个 variant 的独立日志。
-  3. `transformers-13988` 的 `.[testing,flax]` 路径尚未实际构建验证。
+- **后续重跑**：
+  - manifest：`configs/polybench_retry_images_compat6.json`
+  - 建议使用独立 batch id，保留原始失败数据。
 - **约束**：不得通过删除官方 extras、放宽仓库声明版本或更改测试命令来换取构建成功；兼容处理只恢复历史依赖来源和对应年代的系统环境。
 
 ---
@@ -137,7 +141,12 @@
 - **实现**：扩展 `scripts/evaluate_checker.py`，复用原 `check_agent.run()`、checker prompt、规则加载和配置，不重新运行 Plan Agent、Code Agent 或 evaluator。
 - **固定输入**：`--build-input` 扫描 PolyBench 历史结果，按 full199 顺序输出 JSONL；同一实例选择最早的成功 PCT，不按 resolved 结果择优。evaluator-only 重评只为原 plan 补充标签，并分别记录原 PCT 来源和标签来源。
 - **错误处理**：checker 运行错误写入 `errors.jsonl` 并从 TP/FP/FN/TN 分母排除。
-- **当前实测**：full199 历史结果生成 178 个固定样本，其中 74 resolved、104 unresolved，排除 21 个无有效成功 PCT 的实例。
+- **当前实测**：2026-06-09 纳入 Buster 4 重跑后，full199 历史结果生成
+  182 个固定样本，其中 74 resolved、108 unresolved，排除 17 个无有效
+  成功 PCT 的实例。
+- **持续维护**：使用 `--snapshot-root` 发布追加式不可变数据快照。当前
+  快照为 `20260609_182_ecaedc314e33`；旧快照不会被覆盖，相同内容不会
+  重复发布，新成功重跑会生成新的快照目录。
 
 ## A. 数据集分层：探索用 SWE-bench Verified、保留 Pro 作为测试集
 

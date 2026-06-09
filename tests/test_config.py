@@ -112,6 +112,7 @@ class TestLoadConfigSuccess:
         assert config.docker.max_cached_images == 75
         assert config.docker.polybench_build_fallback is True
         assert config.docker.polybench_pull_timeout == 600
+        assert config.docker.polybench_build_timeout == 3600
         assert config.agent.max_steps == 30
         assert config.agent.cost_limit == 3.0
         assert config.agent.timeout == 1800

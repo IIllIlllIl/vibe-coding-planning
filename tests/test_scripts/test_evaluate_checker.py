@@ -5,6 +5,8 @@ from __future__ import annotations
 import json
 import importlib.util
 import sys
+from dataclasses import replace
+from datetime import datetime, timezone
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
@@ -29,6 +31,7 @@ _select_earliest_success = evaluate_checker._select_earliest_success
 _write_jsonl = evaluate_checker._write_jsonl
 build_pct_checker_input = evaluate_checker.build_pct_checker_input
 run_checker_only = evaluate_checker.run_checker_only
+publish_pct_checker_snapshot = evaluate_checker.publish_pct_checker_snapshot
 
 
 def _candidate(
@@ -277,6 +280,81 @@ def test_build_input_is_ordered_and_contains_existing_checker_inputs(
     first_bytes = output.read_bytes()
     build_pct_checker_input(config=config, pct_root=root, output_path=output)
     assert output.read_bytes() == first_bytes
+
+
+@patch("evaluate_checker.InstanceLoader")
+def test_snapshot_publish_is_immutable_and_indexed(mock_loader_cls, tmp_path):
+    pct_root = tmp_path / "pct"
+    _write_pct_result(
+        pct_root,
+        "run1",
+        "repo__task-1",
+        timestamp="20260601T010000",
+        plan="first",
+        resolved=False,
+    )
+    mock_loader_cls.return_value.load_instance.return_value = {
+        "problem_statement": "issue"
+    }
+    config = Config(
+        system=SystemConfig(
+            dataset="AmazonScience/SWE-PolyBench",
+            dataset_type="polybench",
+            instances=["repo__task-1"],
+        )
+    )
+    snapshot_root = tmp_path / "snapshots"
+    created_at = datetime(2026, 6, 9, tzinfo=timezone.utc)
+
+    first = publish_pct_checker_snapshot(
+        config=config,
+        pct_root=pct_root,
+        snapshot_root=snapshot_root,
+        created_at=created_at,
+    )
+    first_dir = snapshot_root / first["snapshot_id"]
+    first_cases = (first_dir / "cases.jsonl").read_bytes()
+
+    repeated = publish_pct_checker_snapshot(
+        config=config,
+        pct_root=pct_root,
+        snapshot_root=snapshot_root,
+        created_at=datetime(2026, 6, 10, tzinfo=timezone.utc),
+    )
+    assert repeated["snapshot_id"] == first["snapshot_id"]
+    assert (first_dir / "cases.jsonl").read_bytes() == first_cases
+
+    _write_pct_result(
+        pct_root,
+        "run2",
+        "repo__task-2",
+        timestamp="20260602T010000",
+        plan="second",
+        resolved=True,
+    )
+    config = replace(
+        config,
+        system=replace(
+            config.system,
+            instances=["repo__task-1", "repo__task-2"],
+        ),
+    )
+    mock_loader_cls.return_value.load_instance.side_effect = lambda _: {
+        "problem_statement": "issue"
+    }
+    second = publish_pct_checker_snapshot(
+        config=config,
+        pct_root=pct_root,
+        snapshot_root=snapshot_root,
+        created_at=created_at,
+    )
+
+    assert second["snapshot_id"] != first["snapshot_id"]
+    assert (first_dir / "cases.jsonl").read_bytes() == first_cases
+    index = json.loads((snapshot_root / "index.json").read_text())
+    assert len(index["snapshots"]) == 2
+    assert index["latest_snapshot_id"] == second["snapshot_id"]
+    assert index["latest_cases_path"] == second["cases_path"]
 
 
 @patch("evaluate_checker.cleanup_docker_image_cache")

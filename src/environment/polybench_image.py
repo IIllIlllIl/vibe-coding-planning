@@ -4,11 +4,11 @@ from __future__ import annotations
 
 import logging
 from pathlib import Path
+import subprocess
 import tempfile
 from typing import Any
 
 import docker
-from docker.errors import BuildError
 
 from src.exceptions import FatalError
 
@@ -32,6 +32,12 @@ _BUSTER_ARCHIVE_SETUP = """RUN sed -i \\
 _JAX_FIND_LINKS = (
     "--find-links https://storage.googleapis.com/jax-releases/jax_releases.html"
 )
+_APT_NETWORK_SETUP = """RUN find /etc/apt -type f \\
+    \\( -name '*.list' -o -name '*.sources' \\) \\
+    -exec sed -i 's|http://deb.debian.org|https://deb.debian.org|g' {} + \\
+    && printf 'Acquire::Retries "3";\\nAcquire::https::Timeout "30";\\n' \\
+       > /etc/apt/apt.conf.d/80polybench-network
+"""
 _PYAV_BUILD_DEPS = """RUN find /etc/apt -type f \\
     \\( -name '*.list' -o -name '*.sources' \\) \\
     -exec sed -i 's|http://deb.debian.org|https://deb.debian.org|g' {} + \\
@@ -113,6 +119,14 @@ def _dockerfile_variants(dockerfile: str) -> list[tuple[str, str]]:
         )
         if fixed != candidate:
             prefix = f"{candidate_name}+" if candidate_name else ""
+            first_apt = "RUN apt-get update"
+            if first_apt in fixed:
+                fixed = fixed.replace(
+                    first_apt,
+                    f"{_APT_NETWORK_SETUP}\n\n{first_apt}",
+                    1,
+                )
+                prefix = f"{prefix}apt-network+"
             variants.append((f"{prefix}jax-wheel-archive", fixed))
             if ".[dev,testing]" in fixed:
                 install_command = (
@@ -139,41 +153,54 @@ def _dockerfile_variants(dockerfile: str) -> list[tuple[str, str]]:
     ]
 
 
-def _append_build_event(logs: list[str], event: dict[str, Any]) -> None:
-    if stream := event.get("stream"):
-        logs.append(str(stream).rstrip())
-    if error := event.get("error"):
-        logs.append(f"Error: {error}")
-    if detail := event.get("errorDetail"):
-        logs.append(f"Error Detail: {detail.get('message', detail)}")
-
-
 def _docker_build_with_full_logs(
     docker_manager: Any,
     *,
     repo_path: Path,
     dockerfile_content: str,
+    build_timeout: int,
 ) -> bool:
-    """Build with the official options while retaining BuildError output."""
-    (repo_path / "Dockerfile").write_text(dockerfile_content)
+    """Build with official options, bounded wall time, and retained output."""
+    (repo_path / "Dockerfile").write_text(dockerfile_content, encoding="utf-8")
     dockerignore = repo_path / ".dockerignore"
     if dockerignore.exists():
         dockerignore.unlink()
 
     try:
-        _, build_logs = docker_manager.client.images.build(
-            path=str(repo_path),
-            tag=docker_manager.image_id,
-            rm=True,
-            platform="linux/amd64",
+        result = subprocess.run(
+            [
+                "docker",
+                "build",
+                "--platform",
+                "linux/amd64",
+                "--tag",
+                docker_manager.image_id,
+                "--rm",
+                str(repo_path),
+            ],
+            capture_output=True,
+            text=True,
+            check=False,
+            timeout=build_timeout,
         )
-        for event in build_logs:
-            _append_build_event(docker_manager.build_logs, event)
-        return True
-    except BuildError as exc:
-        for event in exc.build_log:
-            _append_build_event(docker_manager.build_logs, event)
-        docker_manager.build_logs.append(f"Build Error: {exc}")
+        if result.stdout:
+            docker_manager.build_logs.extend(result.stdout.rstrip().splitlines())
+        if result.stderr:
+            docker_manager.build_logs.extend(result.stderr.rstrip().splitlines())
+        if result.returncode == 0:
+            return True
+        docker_manager.build_logs.append(
+            f"Build Error: docker build exited with code {result.returncode}"
+        )
+        return False
+    except subprocess.TimeoutExpired as exc:
+        for output in (exc.stdout, exc.stderr):
+            if output:
+                text = output.decode(errors="replace") if isinstance(output, bytes) else output
+                docker_manager.build_logs.extend(text.rstrip().splitlines())
+        docker_manager.build_logs.append(
+            f"Build Timeout: exceeded {build_timeout}s"
+        )
         return False
     except Exception as exc:
         docker_manager.build_logs.append(f"Unexpected Error: {exc}")
@@ -182,6 +209,8 @@ def _docker_build_with_full_logs(
 
 def build_polybench_image_from_official_dockerfile(
     instance_info: dict[str, Any],
+    *,
+    build_timeout: int = 3600,
 ) -> str:
     """Build an instance image with PolyBench's official DockerManager."""
     instance_id = str(instance_info.get("instance_id", ""))
@@ -228,6 +257,7 @@ def build_polybench_image_from_official_dockerfile(
                     docker_manager,
                     repo_path=repo_dir,
                     dockerfile_content=candidate,
+                    build_timeout=build_timeout,
                 )
                 if build_success:
                     break

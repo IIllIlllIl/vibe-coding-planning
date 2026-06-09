@@ -315,7 +315,7 @@ class TestPolybenchImageFallback:
             )
 
         assert resolved == "polybench_python_test__repo-1"
-        mock_build.assert_called_once_with(instance_info)
+        mock_build.assert_called_once_with(instance_info, build_timeout=3600)
 
 
 class TestDockerImageCacheCleanup:

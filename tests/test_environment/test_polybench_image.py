@@ -1,8 +1,10 @@
 """Tests for the official PolyBench Dockerfile build fallback."""
 
+import subprocess
 from unittest.mock import MagicMock, patch
 
 from src.environment.polybench_image import (
+    _docker_build_with_full_logs,
     _dockerfile_variants,
     build_polybench_image_from_official_dockerfile,
     local_polybench_image_name,
@@ -18,17 +20,19 @@ def test_local_image_name_matches_official_evaluator():
     )
 
 
+@patch("src.environment.polybench_image.subprocess.run")
 @patch("src.environment.polybench_image.docker.from_env")
 @patch("src.environment.polybench_image._import_official_builders")
 def test_builds_with_official_repo_and_docker_managers(
     mock_import,
     mock_docker_from_env,
+    mock_run,
     tmp_path,
 ):
     docker_manager = MagicMock()
     docker_manager.image_id = "polybench_python_org__repo-1"
     docker_manager.check_image_local.return_value = False
-    docker_manager.client.images.build.return_value = (MagicMock(), [])
+    mock_run.return_value = MagicMock(returncode=0, stdout="built\n", stderr="")
     DockerManager = MagicMock(return_value=docker_manager)
 
     repo_manager = MagicMock()
@@ -49,11 +53,21 @@ def test_builds_with_official_repo_and_docker_managers(
     assert image == "polybench_python_org__repo-1"
     repo_manager.clone_repo.assert_called_once()
     repo_manager.checkout_commit.assert_called_once_with(commit_hash="abc")
-    docker_manager.client.images.build.assert_called_once_with(
-        path=str(tmp_path),
-        tag="polybench_python_org__repo-1",
-        rm=True,
-        platform="linux/amd64",
+    mock_run.assert_called_once_with(
+        [
+            "docker",
+            "build",
+            "--platform",
+            "linux/amd64",
+            "--tag",
+            "polybench_python_org__repo-1",
+            "--rm",
+            str(tmp_path),
+        ],
+        capture_output=True,
+        text=True,
+        check=False,
+        timeout=3600,
     )
 
 
@@ -84,6 +98,7 @@ def test_current_debian_dockerfile_has_no_compatibility_variant():
 def test_transformers_dev_extras_get_jax_archive_fallback():
     dockerfile = (
         "FROM python:3.10-slim-bookworm\n"
+        "RUN apt-get update && apt-get install -y git\n"
         'RUN pip install --no-cache-dir -e ".[dev,testing]"\n'
     )
 
@@ -91,8 +106,8 @@ def test_transformers_dev_extras_get_jax_archive_fallback():
 
     assert [name for name, _ in variants] == [
         "official",
-        "jax-wheel-archive+pyav-build-compat",
-        "jax-wheel-archive",
+        "apt-network+jax-wheel-archive+pyav-build-compat",
+        "apt-network+jax-wheel-archive",
     ]
     assert (
         "--find-links https://storage.googleapis.com/jax-releases/"
@@ -102,6 +117,8 @@ def test_transformers_dev_extras_get_jax_archive_fallback():
     assert "pkg-config" in variants[1][1]
     assert "Cython<3" in variants[1][1]
     assert "PIP_CONSTRAINT" in variants[1][1]
+    assert "https://deb.debian.org" in variants[1][1]
+    assert 'Acquire::Retries "3"' in variants[1][1]
 
 
 def test_python310_slim_gets_bullseye_fallback():
@@ -115,4 +132,31 @@ def test_python310_slim_gets_bullseye_fallback():
             "python310-bullseye",
             "FROM public.ecr.aws/docker/library/python:3.10-slim-bullseye\n",
         ),
+    ]
+
+
+@patch("src.environment.polybench_image.subprocess.run")
+def test_docker_build_timeout_is_recorded(mock_run, tmp_path):
+    mock_run.side_effect = subprocess.TimeoutExpired(
+        cmd=["docker", "build"],
+        timeout=15,
+        output="partial stdout\n",
+        stderr="partial stderr\n",
+    )
+    docker_manager = MagicMock()
+    docker_manager.image_id = "polybench_python_org__repo-1"
+    docker_manager.build_logs = []
+
+    success = _docker_build_with_full_logs(
+        docker_manager,
+        repo_path=tmp_path,
+        dockerfile_content="FROM python:3.10\n",
+        build_timeout=15,
+    )
+
+    assert success is False
+    assert docker_manager.build_logs == [
+        "partial stdout",
+        "partial stderr",
+        "Build Timeout: exceeded 15s",
     ]

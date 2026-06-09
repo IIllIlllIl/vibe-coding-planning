@@ -80,7 +80,7 @@ plan-code-test/
 | **入口** | `src/main.py` | 解析命令行参数（`--config`, `--instance`, `--n`, `--output-dir`），加载配置，遍历 `swe_pro_instances`，对每个实例调用 `pipeline.run_instance()` |
 | **配置** | `src/config.py` | 加载 `config.yaml`，验证参数（`n >= 1`, `optimization_info_level` ∈ {0,1} 等），返回结构化的配置对象 |
 | **流水线** | `src/pipeline.py` | 单实例的核心循环：`generate_plan()` → `generate_code()` → `evaluate()` →（如有需要）`reflect_and_optimize()`，循环 n 次 |
-| **Checker 评估** | `scripts/evaluate_checker.py` | 兼容原 PCC 入口；也可把历史 PCT 结果按“最早成功 plan”整合为固定 JSONL，并仅调用原 `check_agent.run()` 计算分类指标 |
+| **Checker 评估** | `scripts/evaluate_checker.py` | 兼容原 PCC 入口；也可把历史 PCT 结果按“最早成功 plan”整合为固定 JSONL，追加发布不可变数据快照，并仅调用原 `check_agent.run()` 计算分类指标 |
 
 ### 3.2 Agent 层
 
@@ -230,6 +230,13 @@ TestResults = dict[str, Any]  # {resolved: bool, stdout: str, stderr: str, log_d
 - **致命错误**（API 401/429、磁盘满、Docker 崩溃）：抛出 FatalError，由 `main.py` 捕获后记录日志、调用 `writer.emergency_save()`、退出（保留已收集数据）
 - **任务级错误**（Agent 未输出有效 Plan/Patch、Docker 镜像构建失败、评估异常、Agent 命令超时）：记录到 `errors` 列表，**统一跳过当前实例**（不再尝试同实例内后续轮次），继续执行下一个实例
 
+当前 `src.config.load_config()`、`src.main` 和 `run_batch.sh` 对
+`DEEPSEEK_API_KEY` 的校验仍与配置加载/入口绑定，导致只使用 OpenCode
+认证的 analysis 路径也需要提供无实际用途的 DeepSeek key。下一优先改动是
+把凭据校验下沉到实际使用的后端入口：PCT/checker 校验主模型 key，
+mini_swe analysis 校验 `analysis.api_key_env`，OpenCode analysis 仅依赖
+OpenCode 自身认证。
+
 ---
 
 ## 6. 主要代码清单
@@ -269,7 +276,7 @@ TestResults = dict[str, Any]  # {resolved: bool, stdout: str, stderr: str, log_d
 | FR-04 测试评估 | `src/evaluator/swe_evaluator.py` |
 | FR-05 方案优化 | `src/agents/reflect_agent.py` + `src/prompts/gepa_reflection.py`（`parse_output()` 回退解析）+ `src/environment/docker_env.py` + `src/pipeline.py`（feedback_text 组装） |
 | FR-06 迭代循环 | `src/pipeline.py` |
-| FR-07 重跑 | `src/config.py`（resume 配置）+ `src/pipeline.py`（**当前轮迭代未实现，详 `project_issues.md` §6**） |
+| FR-07 单实例内部重跑 | **决定不实施**；任务级恢复由 `scripts/run_batch.sh` 跳过已有 `result.json` 并重跑未完成实例，`resume` 仅保留为兼容字段 |
 | FR-08/09 配置 | `src/config.py` + `config.yaml`；`prompts.reflection_prompt_template` 缺失或为空时由 `src/config.py` 加载阶段填充默认值 |
 | FR-10 轨迹保存 | `src/output/trajectory.py` + `src/output/writer.py` |
 | FR-11 Feedback 字符串组装 | `src/pipeline.py:_build_feedback_text`（主机端组装为纯文本，注入 reflect_agent 的 system prompt） |

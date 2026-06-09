@@ -101,6 +101,7 @@ class DockerConfig:
     max_cached_images: int = 75
     polybench_build_fallback: bool = True
     polybench_pull_timeout: int = 600
+    polybench_build_timeout: int = 3600
 
 
 @dataclass(frozen=True)
@@ -430,6 +431,10 @@ def _build_docker_config(data: dict[str, Any]) -> DockerConfig:
         polybench_pull_timeout=_validate_positive_int(
             "docker.polybench_pull_timeout",
             _get_int(data, "polybench_pull_timeout", 600),
+        ),
+        polybench_build_timeout=_validate_positive_int(
+            "docker.polybench_build_timeout",
+            _get_int(data, "polybench_build_timeout", 3600),
         ),
     )
 

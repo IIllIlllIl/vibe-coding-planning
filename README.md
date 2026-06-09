@@ -8,7 +8,7 @@
 - **方案迭代优化**：基于执行反馈（含可选测试结果）由反思 Agent 逐轮改进 Plan
 - **完整轨迹留存**：方案生成、代码生成、反思优化三个阶段的全量 Trajectory 均保存，作为后续规律分析的研究语料
 - **可选早退**：通过 `skip_completed_rounds` 参数控制 resolved 后是否跳过剩余轮次（默认 `true`，resolved 即停；设为 `false` 跑满 n 轮以采集稳定性数据）
-- **断点重跑（计划中，FR-07）**：配置占位已就绪，pipeline 实现推迟到下一轮迭代
+- **任务级断点恢复**：`run_batch.sh` 自动跳过已有 `result.json` 的实例并重跑未完成实例；单实例内部按 Plan/round 恢复已决定不实施
 - **对比分析与规则提取（FR-13）**：对 reflect-success cases 运行对比分析 Agent，提取可泛化的自然语言规则（When ... because ... 格式），支持 flash/pro 双模型串行实验
 - **规则质量审查与返工（FR-14，默认关闭）**：独立 LLM Reviewer Agent 审查规则质量（五维评分），未通过者触发返工循环。实践发现返工机制会**破坏已提取的有效规则**（删除旧结果后重跑失败），因此默认关闭。可通过 `config.analysis.enable_review` 开启
 - **Plan-Checker-Code 管道（FR-15）**：在 Plan 与 Code 之间插入规则检查器，验证计划是否符合从成功案例中提炼出的规则集。检查器在 Docker 内运行，可验证文件路径、函数名等具体引用。代码始终执行以产生 ground truth，用于计算检查器的 TP/FP/FN/TN、Accuracy、Precision、Recall、F1
@@ -48,14 +48,14 @@ pytest --cov=src --cov-report=term-missing
 # 5. 运行单个 Verified 实例（Phase 1 默认入口）
 python -m src.main --instance astropy__astropy-12907 --n 3 --config config.yaml
 
-# 6. 从已有 PCT 结果构建固定 Checker 输入
+# 6. 从已有 PCT 结果发布不可变 Checker 数据快照
 python scripts/evaluate_checker.py --config configs/polybench_full199_pct.yaml \
     --build-input --pct-root output/SWE-PolyBench \
-    --input-output output/SWE-PolyBench/polybench-pct-checker-input/cases.jsonl
+    --snapshot-root output/SWE-PolyBench/polybench-pct-checker-datasets
 
 # 7. 仅运行 Checker，不重新生成 Plan/Code 或执行 Evaluator
 python scripts/evaluate_checker.py --config configs/polybench_full199_pct.yaml \
-    --input-results output/SWE-PolyBench/polybench-pct-checker-input/cases.jsonl \
+    --input-results output/SWE-PolyBench/polybench-pct-checker-datasets/20260609_198_cdf4d414e401/cases.jsonl \
     --output output/checker_eval/polybench-pct
 ```
 
@@ -93,6 +93,7 @@ python scripts/evaluate_checker.py --config configs/polybench_full199_pct.yaml \
 | `--build-input` | flag | 从已有 PCT 批次构建固定 checker 输入，不运行 agent |
 | `--pct-root DIR` | str | PCT 批次根目录，默认 `output/SWE-PolyBench` |
 | `--input-output FILE` | str | `--build-input` 生成的 JSONL 路径 |
+| `--snapshot-root DIR` | str | 追加发布不可变、按日期和内容哈希命名的数据快照 |
 | `--input-results FILE` | str | 读取固定 PCT plan/label 并仅运行 checker |
 
 ### 批量运行脚本
@@ -193,6 +194,17 @@ checker:
 ```
 
 PolyBench held-out 评估默认使用 checker-only 路径。构建脚本按 full199 配置顺序扫描已有 PCT 结果；同一实例多次成功运行时选择最早的 plan，即使后续运行的 resolved 标签更好也不会替换。evaluator-only 重评只补全同一 plan 的有效标签，不视为新 PCT。checker 执行错误单独写入 `errors.jsonl`，不进入混淆矩阵。
+
+推荐使用 `--snapshot-root`。每个快照目录包含 `cases.jsonl`、
+`manifest.json` 和 `exclusions.json`，发布后不再覆盖。根目录
+`index.json` 记录全部快照以及 `latest_cases_path`。没有新增有效 PCT
+时会复用相同哈希的快照；新重跑成功后才生成新目录。
+
+PolyBench 本地兼容镜像可能被项目的 Docker 窗口清理。镜像缺失时，
+运行入口会按 GHCR tags 尝试拉取，随后从数据集 Dockerfile 自动重建，
+并复用已实现的 Buster archive、apt HTTPS/retry、JAX wheel archive、
+PyAV/Cython 和 Python 3.10 Bullseye 兼容 variant。无需再次人工修改
+依赖方案，但若镜像和 BuildKit cache 都已清理，完整重建仍可能耗时十几分钟。
 
 检查器评估输出结构见 [`output/README.md`](output/README.md)。
 
@@ -304,7 +316,7 @@ PolyBench held-out 评估默认使用 checker-only 路径。构建脚本按 full
 - Docker 守护进程：
   - **Verified（Phase 1）**：首次评估时由 `swebench` 自动从 Docker Hub 拉取官方镜像（`swebench/sweb.eval.x86_64.<id_with_1776>:latest`），无需自建
   - **PolyBench（Phase 2）**：使用 GHCR 预构建镜像（`ghcr.io/timesler/swe-polybench.eval.x86_64.<id>:v1.1`）。**注意**：大量实例存在 GHCR 匿名访问 `denied` 问题（transformers、langchain、keras 等 repo 均失败），可能需要 GHCR 登录或本地构建
-- DeepSeek API Key（环境变量 `DEEPSEEK_API_KEY`）
+- DeepSeek API Key（环境变量 `DEEPSEEK_API_KEY`，当前配置加载仍全局校验；解除 OpenCode-only 路径耦合是下一优先任务）
 - **PolyBench 额外依赖**：`tree-sitter==0.21.3` + `tree-sitter-languages==1.10.2` 必须精确安装，否则 PolyBench 官方工具无法导入
 
 ## 开发状态
@@ -312,9 +324,10 @@ PolyBench held-out 评估默认使用 checker-only 路径。构建脚本按 full
 代码实现完成，全量单元测试通过、覆盖率 85%+。v0.8 已完成 Prompt v3 重构 + n=4 端到端 dry-run 验证（参考开发日志）。v1.4 已完成对比分析模块（FR-13）和 LLM 规则审查模块（FR-14）开发，含 watchdog 集成和全量测试。Kimi/OpenCode 60-case 规则提取、格式后处理与聚合已完成，聚合产物位于 `output/analysis_kimi_opencode_60/aggregated_rules.json`（`output/` 被 gitignore，不进入提交）。
 
 **Phase 2 待办**（详见 `project_issues.md`）：
-- §1 FR-07 断点重跑
-- §2 树形结构候选 plan / 反思模板
-- §3 PolyBench GHCR 镜像访问问题（大量实例匿名拉取 denied）
-- §5 Review/Rework 破坏性返工（默认已关闭，需 redesign）
-- §6 Pro 模型在大轨迹 case 上的异常耗时
+- §6 解除 OpenCode analysis 与全局 `DEEPSEEK_API_KEY` 校验耦合（下一优先任务）
+- §5 Pro 模型在大轨迹 case 上的异常耗时
 - §7 OpenCode/Kimi 聚合默认超时与长重试等待
+
+已关闭的设计项：
+- §1 单实例内部断点重跑：任务级恢复已满足当前需求
+- §2 候选 Plan 树形结构：当前 `n=3` 下收益不足

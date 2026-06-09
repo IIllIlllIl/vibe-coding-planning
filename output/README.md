@@ -115,6 +115,39 @@ Both `run_batch.sh` and watchdog-started tmux jobs use `caffeinate` when it is
 available on macOS, so long-running child commands are launched in sleep
 prevention mode.
 
+### PolyBench Checker Dataset Snapshots
+
+Checker-only inputs are maintained as append-only snapshots:
+
+```text
+output/SWE-PolyBench/polybench-pct-checker-datasets/
+├── index.json
+└── <YYYYMMDD>_<case_count>_<cases_hash_prefix>/
+    ├── cases.jsonl
+    ├── manifest.json
+    └── exclusions.json
+```
+
+Current input:
+
+```text
+output/SWE-PolyBench/polybench-pct-checker-datasets/
+  20260609_198_cdf4d414e401/cases.jsonl
+```
+
+Publish after new successful PCT reruns:
+
+```bash
+conda run -n mini-swe python scripts/evaluate_checker.py \
+  --config configs/polybench_full199_pct.yaml \
+  --build-input \
+  --pct-root output/SWE-PolyBench \
+  --snapshot-root output/SWE-PolyBench/polybench-pct-checker-datasets
+```
+
+Existing snapshots are never overwritten. `index.json` identifies the latest
+recommended input and preserves the history of case counts and hashes.
+
 `SWE-bench_Verified/test_runs_archive/` currently contains:
 
 | Path | Instance dirs | `result.json` count | Notable top-level files |

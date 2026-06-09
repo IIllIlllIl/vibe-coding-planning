@@ -13,7 +13,9 @@ import json
 import logging
 import math
 import re
+import shutil
 import sys
+import tempfile
 from dataclasses import replace
 from datetime import datetime, timezone
 from pathlib import Path
@@ -60,6 +62,11 @@ def _portable_path(path: Path) -> str:
         return str(path.resolve().relative_to(REPO_ROOT))
     except ValueError:
         return str(path)
+
+
+def _resolve_stored_path(path: str) -> Path:
+    stored_path = Path(path)
+    return stored_path if stored_path.is_absolute() else REPO_ROOT / stored_path
 
 
 def _write_jsonl(path: Path, records: list[dict[str, Any]]) -> None:
@@ -355,6 +362,116 @@ def build_pct_checker_input(
         encoding="utf-8",
     )
     return manifest
+
+
+def publish_pct_checker_snapshot(
+    *,
+    config: Config,
+    pct_root: Path,
+    snapshot_root: Path,
+    created_at: datetime | None = None,
+) -> dict[str, Any]:
+    """Publish an immutable, content-addressed checker dataset snapshot."""
+    snapshot_root.mkdir(parents=True, exist_ok=True)
+    build_dir = Path(
+        tempfile.mkdtemp(prefix=".building-", dir=str(snapshot_root))
+    )
+    try:
+        manifest = build_pct_checker_input(
+            config=config,
+            pct_root=pct_root,
+            output_path=build_dir / "cases.jsonl",
+        )
+        timestamp = created_at or datetime.now(timezone.utc)
+        index_path = snapshot_root / "index.json"
+        index = {"schema_version": 1, "snapshots": []}
+        if index_path.is_file():
+            loaded = json.loads(index_path.read_text(encoding="utf-8"))
+            if isinstance(loaded, dict):
+                index = loaded
+                index.setdefault("snapshots", [])
+
+        matching_entry = next(
+            (
+                item
+                for item in index["snapshots"]
+                if item.get("cases_sha256") == manifest["cases_sha256"]
+                and _resolve_stored_path(
+                    str(item.get("snapshot_path", ""))
+                ).is_dir()
+            ),
+            None,
+        )
+        if matching_entry:
+            snapshot_dir = _resolve_stored_path(
+                str(matching_entry["snapshot_path"])
+            )
+            existing_manifest = json.loads(
+                (snapshot_dir / "manifest.json").read_text(encoding="utf-8")
+            )
+            shutil.rmtree(build_dir)
+            manifest = existing_manifest
+        else:
+            snapshot_id = (
+                f"{timestamp:%Y%m%d}_{manifest['selected_instances']}_"
+                f"{manifest['cases_sha256'][:12]}"
+            )
+            snapshot_dir = snapshot_root / snapshot_id
+            if snapshot_dir.exists():
+                raise ValueError(
+                    f"Snapshot ID collision with different content: {snapshot_dir}"
+                )
+            manifest.update(
+                {
+                    "snapshot_id": snapshot_id,
+                    "snapshot_path": _portable_path(snapshot_dir),
+                    "created_at": timestamp.isoformat(),
+                    "cases_path": _portable_path(snapshot_dir / "cases.jsonl"),
+                    "immutable": True,
+                }
+            )
+            (build_dir / "manifest.json").write_text(
+                json.dumps(
+                    manifest, indent=2, ensure_ascii=False, sort_keys=True
+                ),
+                encoding="utf-8",
+            )
+            build_dir.rename(snapshot_dir)
+
+        entry = {
+            "snapshot_id": manifest["snapshot_id"],
+            "snapshot_path": manifest["snapshot_path"],
+            "created_at": manifest["created_at"],
+            "cases_sha256": manifest["cases_sha256"],
+            "selected_instances": manifest["selected_instances"],
+            "excluded_instances": manifest["excluded_instances"],
+            "resolved": manifest["resolved"],
+            "unresolved": manifest["unresolved"],
+        }
+        snapshots = [
+            item
+            for item in index["snapshots"]
+            if item.get("snapshot_id") != entry["snapshot_id"]
+        ]
+        snapshots.append(entry)
+        snapshots.sort(key=lambda item: (item["created_at"], item["snapshot_id"]))
+        index.update(
+            {
+                "schema_version": 1,
+                "selection_policy": manifest["selection_policy"],
+                "latest_snapshot_id": manifest["snapshot_id"],
+                "latest_cases_path": manifest["cases_path"],
+                "snapshots": snapshots,
+            }
+        )
+        index_path.write_text(
+            json.dumps(index, indent=2, ensure_ascii=False, sort_keys=True),
+            encoding="utf-8",
+        )
+        return manifest
+    finally:
+        if build_dir.exists():
+            shutil.rmtree(build_dir)
 
 
 def _compute_metrics(results: list[dict[str, Any]]) -> dict[str, Any]:
@@ -662,6 +779,10 @@ def main(argv: list[str] | None = None) -> int:
         "--pct-root", default="./output/SWE-PolyBench"
     )
     parser.add_argument("--input-output")
+    parser.add_argument(
+        "--snapshot-root",
+        help="Publish an immutable dataset snapshot under this directory",
+    )
     parser.add_argument("--input-results")
     args = parser.parse_args(argv)
     _setup_logging()
@@ -670,13 +791,23 @@ def main(argv: list[str] | None = None) -> int:
     if args.build_input and args.input_results:
         parser.error("--build-input and --input-results are mutually exclusive")
     if args.build_input:
-        if not args.input_output:
-            parser.error("--input-output is required with --build-input")
-        manifest = build_pct_checker_input(
-            config=config,
-            pct_root=Path(args.pct_root),
-            output_path=Path(args.input_output),
-        )
+        if bool(args.input_output) == bool(args.snapshot_root):
+            parser.error(
+                "exactly one of --input-output or --snapshot-root is required "
+                "with --build-input"
+            )
+        if args.snapshot_root:
+            manifest = publish_pct_checker_snapshot(
+                config=config,
+                pct_root=Path(args.pct_root),
+                snapshot_root=Path(args.snapshot_root),
+            )
+        else:
+            manifest = build_pct_checker_input(
+                config=config,
+                pct_root=Path(args.pct_root),
+                output_path=Path(args.input_output),
+            )
         logger.info("Built checker input: %s", json.dumps(manifest))
         return 0
     if args.input_results:

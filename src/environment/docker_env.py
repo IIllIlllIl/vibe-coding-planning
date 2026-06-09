@@ -226,6 +226,7 @@ class DockerEnvWrapper:
             timeout=self._config.polybench_pull_timeout,
             instance_info=instance_info,
             build_fallback=self._config.polybench_build_fallback,
+            build_timeout=self._config.polybench_build_timeout,
         )
         self._image = image
 
@@ -313,6 +314,7 @@ def _resolve_polybench_image(
     *,
     instance_info: dict[str, Any] | None = None,
     build_fallback: bool = False,
+    build_timeout: int = 3600,
 ) -> str:
     """Ensure PolyBench GHCR images are local, with tag fallback.
 
@@ -369,7 +371,10 @@ def _resolve_polybench_image(
             build_polybench_image_from_official_dockerfile,
         )
 
-        return build_polybench_image_from_official_dockerfile(instance_info)
+        return build_polybench_image_from_official_dockerfile(
+            instance_info,
+            build_timeout=build_timeout,
+        )
 
     raise FatalError(
         "Unable to obtain PolyBench Docker image for agent container. "

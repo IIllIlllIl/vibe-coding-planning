@@ -146,7 +146,8 @@ system:
   # and reflection-quality data collection.
   skip_completed_rounds: true
 
-  # Resume configuration (optional)
+  # Legacy compatibility only. Instance-internal resume was dropped;
+  # run_batch.sh provides task-level recovery by skipping completed results.
   resume:
     enabled: false
     from_plan_id: ""
@@ -637,6 +638,8 @@ docker:
   polybench_build_fallback: true
   # Bound each v1.1/v1.0/latest pull attempt before using the build fallback.
   polybench_pull_timeout: 600
+  # Bound each official/compatibility Dockerfile build variant.
+  polybench_build_timeout: 3600
 
 agent:
   # Aligned with mini-swe-agent's official SWE-bench config

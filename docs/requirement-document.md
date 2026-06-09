@@ -15,6 +15,7 @@
 | 6.2 | 2026-05-19 | — | Jinja 变量注入架构整改：删除 `gepa_reflection.render()` 与 `DEFAULT_REFLECTION_TEMPLATE` 常量，将所有模板变量（`{{prompt_template}}`、`{{inputs_outputs_feedback}}`、`{{nrpv_block}}` 等）通过 `agent.run(**kwargs)` / `extra_template_vars` 注入，由 `mini-swe-agent` 在 agent 内部做 `StrictUndefined` 单次渲染。`config.yaml` 为 prompt 单点可信源；`src/prompts/gepa_reflection.py` 仅保留 `parse_output()`。同步更新 `docs/requirement-document.md`、`docs/architecture.md`、所有 agent 模块及测试 |
 | 7.0 | 2026-05-22 | — | 对比分析与规则提取（FR-13）+ 规则质量审查（FR-14）：新增 `src/analysis/contrastive_agent.py` 从 reflect-success cases 提取 "When ... because ..." 格式规则；新增 `src/analysis/reviewer_agent.py` 作为独立 LLM Agent 审查规则质量（五维评分 0-100，通过阈值 70）；`scripts/long_run_watchdog.py` 集成 analysis → review → rework 循环，支持 flash/pro 双模型串行运行 + 增量审查（首轮全查，后续仅查上轮失败案例）+ 最大 3 次返工；`src/analysis/review_cli.py` 提供批量审查 CLI；全量测试覆盖（`tests/test_analysis/test_reviewer_agent.py` + `tests/test_long_run_watchdog.py` 新增 review phase 测试） |
 | 7.1 | 2026-05-24 | — | Review/Rework 设计缺陷修复：发现 rework 会先删除已有规则再重跑，若重跑失败则永久丢失数据（`astropy-14182`、`sympy-20916`、`scikit-learn-25747` 均受害）。新增 `config.analysis.enable_review`（默认 `false`）作为 opt-in 开关；默认流程改为 batch → flash analysis → pro analysis → done，跳过 review/rework。FR-14 描述更新；`project_issues.md` 新增归档项记录该缺陷及未来修复方向 |
+| 7.2 | 2026-06-09 | — | 范围收敛：FR-07 单实例内部断点重跑取消，任务级恢复统一由 `run_batch.sh` 跳过已完成实例实现；候选 Plan 树形结构取消，当前实验固定使用线性 `n=3`；下一优先任务改为解除 OpenCode analysis 与全局 `DEEPSEEK_API_KEY` 校验耦合 |
 
 ---
 
@@ -55,7 +56,7 @@
 | G-04 | **最小化造轮子**：Agent 层基于 `mini-swe-agent` 框架，反思复用 GEPA 反射 Prompt 模板，**测试评估使用 SWE 官方评估工具** | P0 | Agent 使用 mini-swe-agent 的 DefaultAgent + DockerEnvironment + LiteLLMModel；评估直接调用 SWE-bench 官方工具 |
 | G-05 | **两阶段验证**：Phase 1 在 Verified 上跑通至少 10 个实例并采集 plan 演化语料；Phase 2 在 PolyBench Python 子集上验证 Phase 1 总结的判别规律 | P1 | Phase 1 至少 10 个 Verified 实例端到端运行；Phase 2 在 PolyBench Python 子集上至少 5 个实例做规律泛化检验 |
 | G-06 | **完整保存所有 Agent 轨迹**（方案生成、代码生成、反思优化），作为结果输出的一部分 | P0 | 每个 Agent 的 trajectory 按规范命名并保存 |
-| G-07 | **支持从已有 Plan 重跑**：允许用户修改优化配置（如是否使用测试信息）后从指定 Plan 继续迭代 | P2 | 能够加载已有 Plan 和轨迹，重新执行后续优化循环 |
+| G-07 | **任务级恢复**：重复运行 batch 时跳过已有结果，仅重新执行未完成实例 | P1 | `run_batch.sh` 对已有 `result.json` 输出 `SKIP`，其余实例从 round 1 重新执行 |
 
 ### 1.4 系统范围
 
@@ -64,7 +65,7 @@
 - Agent 运行环境：**方案生成、代码生成、反思优化均在 Docker 容器中进行**，以防止 Agent 写入文件等操作对宿主环境产生噪声；**后续轮次的隔离由"每轮独立容器 + base_commit 初始状态"保证**（详见下文"轮间状态隔离不变量"）
 - 测试评估主动使用 **SWE 官方评估工具**（`swebench` Python 包），不自行实现评估逻辑
 - 自动保存所有 Agent 执行轨迹（包括反思 Agent 的轨迹），并按轮次和角色命名
-- 支持从任意已有 Plan 开始重跑后续迭代（断点重跑）
+- 支持 batch 任务级恢复：已有 `result.json` 的实例跳过，未完成实例从 round 1 重新执行
 - 基本的错误恢复与异常处理：API 不可用等致命错误终止；任务级错误（含 Agent 输出无效、Patch 应用失败、评估异常等）以**实例**为最小回滚单位跳过并继续
 
 #### 轮间状态隔离不变量
@@ -181,21 +182,13 @@
 | 验收标准 | 1）若 n < 1 则系统报错退出；2）若 n == 1 则只执行单轮后退出；3）若 n > 1 则共执行 n 轮，Plan[1] 由 FR-02 生成，Plan[2..n] 由 FR-05 生成 |
 | 错误处理 | 如果某一轮中 Agent 执行失败（如 API 错误），按 FR-12 的错误分类处理 |
 
-#### FR-07：支持从已有 Plan 重跑（断点重跑）
+#### FR-07：从已有 Plan 重跑（已取消）
 
-> **状态：推迟到下一轮迭代实现**。当前 `config.system.resume` 字段已加载并校验，但 `pipeline` 与 `OutputWriter` 尚未消费该配置。详见 `project_issues.md` §6。下一轮按本节及 §6.1 resume 配置、§11 TC-08 实现，并补充端到端测试。
-
-| 属性 | 内容 |
-|------|------|
-| ID | FR-07 |
-| 名称 | 从指定 Plan 开始重跑后续迭代 |
-| 描述 | 用户可修改配置文件（如改变 `optimization_info_level`）后，指定一个已生成的 Plan（例如 `plan_2`）及其所有相关轨迹和代码，系统从该 Plan 开始重新执行后续优化循环。**Plan[2] 本身保持不变**，仅基于新的配置生成 Plan[3] 及后续 |
-| 适用场景 | 用户希望比较不同优化信息级别（例如从不含测试结果改为含测试结果）的效果，无需重新运行前几轮 |
-| 输入 | 已有 Plan 的 ID、对应的轨迹文件路径、代码 Patch 文件路径、测试结果（可选）、新的运行参数（n、optimization_info_level 等） |
-| 输出 | 从该 Plan 之后的新 Plan 序列及评估结果 |
-| 前置条件 | 已有 Plan 及其相关数据必须完整（Plan 内容、生成它的 Agent 轨迹、代码生成轨迹、Patch、测试结果） |
-| 验收标准 | 系统能够加载已有数据，并从指定的 Plan 开始连续产生后续 Plan，且新产生的 Plan 基于新的配置参数（如测试反馈开关）。已有 Plan 不被重新生成 |
-| 备注 | 该功能通过一个独立的脚本或命令行参数实现，不改变主流程的接口 |
+> **状态：取消，不实施单实例内部恢复。** 当前实验固定使用较小的
+> `n=3`，从指定 Plan/round 恢复的收益不足以覆盖历史状态校验、配置兼容
+> 和输出合并复杂度。长批次恢复由 `scripts/run_batch.sh` 在实例粒度完成：
+> 已有 `result.json` 的实例跳过，未完成实例从 round 1 重新执行。
+> `config.system.resume` 暂保留为未消费的兼容字段。
 
 ### 3.3 配置功能
 
@@ -216,7 +209,7 @@
 | ID | FR-09 |
 | 名称 | 系统运行参数配置 |
 | 描述 | 支持配置文件配置系统运行的核心参数 |
-| 配置项 | 1）`n`：目标 Plan 数量；2）`optimization_info_level`：0 或 1；3）`model`：使用的 LLM 模型（如 deepseek-v4-flash）；4）`dataset`：HuggingFace 数据集名（如 `SWE-bench/SWE-bench_Verified` 或 `AmazonScience/SWE-PolyBench`），决定 `instances` 的解析空间；5）`dataset_type`：显式数据集类型提示（`"swebench"` / `"polybench"` / `"pro"`）；6）`language_filter`：多语言数据集语言过滤（如 `"Python"`，仅 PolyBench 需要）；7）`instances`：实例 ID 列表（在 `dataset` 内解析）；8）`prompts.reflection_prompt_template`：反思模板（可选，缺省由 `src/config.py` 加载阶段填充默认值）；9）`resume`：重跑配置（可选，FR-07 推迟实现）；10）`agent.max_steps`：每个 Agent 的最大步数；11）`agent.cost_limit`：每个 Agent 的 API 调用成本上限（美元）；12）`agent.timeout`：由 pipeline 透传到 `DefaultAgent` 的命令执行超时（秒），**默认 1800 秒，仅用于筛除明显异常**；13）`evaluator.timeout`：SWE 评估器单实例超时（秒） |
+| 配置项 | 1）`n`：目标 Plan 数量；2）`optimization_info_level`：0 或 1；3）`model`：使用的 LLM 模型（如 deepseek-v4-flash）；4）`dataset`：HuggingFace 数据集名（如 `SWE-bench/SWE-bench_Verified` 或 `AmazonScience/SWE-PolyBench`），决定 `instances` 的解析空间；5）`dataset_type`：显式数据集类型提示（`"swebench"` / `"polybench"` / `"pro"`）；6）`language_filter`：多语言数据集语言过滤（如 `"Python"`，仅 PolyBench 需要）；7）`instances`：实例 ID 列表（在 `dataset` 内解析）；8）`prompts.reflection_prompt_template`：反思模板（可选，缺省由 `src/config.py` 加载阶段填充默认值）；9）`resume`：仅为历史配置兼容保留，不被 pipeline 消费；10）`agent.max_steps`：每个 Agent 的最大步数；11）`agent.cost_limit`：每个 Agent 的 API 调用成本上限（美元）；12）`agent.timeout`：由 pipeline 透传到 `DefaultAgent` 的命令执行超时（秒），**默认 1800 秒，仅用于筛除明显异常**；13）`evaluator.timeout`：SWE 评估器单实例超时（秒） |
 | 验收标准 | 系统启动时自动加载配置文件，根据配置执行相应流程 |
 
 ### 3.4 输出与数据保存
@@ -475,7 +468,7 @@ system:
     - django__django-12345
   output_dir: ./output                    # 实际写入路径为 {output_dir}/{dataset_short}/{batch_id}/{instance_id}/
 
-  # 重跑配置（可选，FR-07 推迟实现，配置仅占位）
+  # 历史兼容字段：单实例内部恢复已取消，pipeline 不消费
   resume:
     enabled: false
     from_plan_id: "plan_002"
@@ -567,7 +560,7 @@ agent:
 | api_base | 必须为合法 URL（含 scheme） | 非法时报错退出 |
 | agent.max_steps / agent.timeout / docker.timeout / evaluator.timeout | 必须 ≥ 1 | 非法时报错退出 |
 | agent.cost_limit | 必须 ≥ 0 | 负值时默认设为 0 并给出警告 |
-| resume.enabled | 为 true 时需检查 from_plan_id 对应的文件是否存在（FR-07 当前推迟，仅校验配置不消费） | 文件缺失时报错退出 |
+| resume.* | 历史兼容字段，当前 pipeline 不消费 | 不用于控制运行；任务级恢复由 `run_batch.sh` 处理 |
 
 ### 6.3 快速启动脚本
 
@@ -633,7 +626,6 @@ chmod +x scripts/quickstart.sh
 | P1 | Prompt 与 Plan 格式配置 | FR-08, FR-09 |
 | P1 | 反思模板可由 `prompts.reflection_prompt_template` 覆盖 | FR-05, FR-08 |
 | P1 | 输出 Optimization Feedback 中的运行参数 | FR-11 |
-| P2 | 从已有 Plan 重跑（推迟，详 `project_issues.md` §6） | FR-07 |
 
 ---
 
@@ -700,7 +692,7 @@ chmod +x scripts/quickstart.sh
 | TC-05 | 修改 Prompt 配置文件后重新运行 | 对应 Agent 的行为发生预期变化（例如 Plan 输出遵循新的 `plan_format_template`） |
 | TC-06 | 设置 n=0 或 n=-1 | 系统报错退出，错误信息包含参数无效 |
 | TC-07 | 运行多个实例，其中一个实例的 Docker 环境失败 | 失败的实例被跳过（标记为 `error_skipped`），其他实例正常执行，结果文件中包含错误记录 |
-| TC-08 | 使用重跑功能：先运行 n=2 结束，修改 optimization_info_level 后从 Plan[2] 重跑至 n=3 | 系统加载 Plan[2] 的轨迹和代码（Plan[2] 不被重新生成），使用新的 optimization_info_level 生成 Plan[3]，新 Plan[3] 的反思内容中体现了对测试信息（如果启用）的利用 |
+| TC-08 | 中断一个多实例 batch 后使用相同 batch id 和实例清单重新运行 | 已有 `result.json` 的实例被跳过；未完成实例从 round 1 重新执行；原有结果不被覆盖 |
 | TC-09 | 检查输出结果文件结构 | 结果文件中包含 `runtime_versions` 字段（记录 mini-swe-agent、swebench、litellm 等版本号）；每个 Plan 的 `test_results` 为结构化对象（含 `resolved`、`stdout`、`stderr`、`log_dir`、`error_info`）；`plans/`、`patches/`、`trajectories/` 三个子目录均存在，文件名统一含 timestamp 并遵循 §4.4 命名规范 |
 | TC-10 | 反思模板可由 `prompts.reflection_prompt_template` 自定义 | 用户在 config 中提供自定义模板（含 `{{prompt_template}}` 与 `{{inputs_outputs_feedback}}`）后，`reflect_agent.run()` 将该模板作为原始 system prompt 传入，变量通过 `agent.run(**kwargs)` 注入；留空或不提供时由 `src/config.py` 加载阶段填充默认值，仍能正常生成新 Plan |
 | TC-11 | 致命错误处理 | 模拟 API key 失效，系统在记录错误后优雅退出，已完成的实例数据和轨迹文件完整保留 |
