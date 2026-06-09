@@ -448,3 +448,97 @@ def test_checker_errors_are_excluded_from_metrics(
 def test_compute_metrics_rejects_implicit_missing_values():
     with pytest.raises(KeyError):
         _compute_metrics([{"check_result": {}, "test_results": {}}])
+
+
+@patch("evaluate_checker.InstanceLoader")
+@patch("evaluate_checker.load_aggregated_rules")
+@patch("evaluate_checker._run_checker_case")
+def test_checker_only_resumes_matching_prediction(
+    mock_run_case, mock_load_rules, mock_loader_cls, tmp_path
+):
+    cases_path = tmp_path / "cases.jsonl"
+    _write_jsonl(
+        cases_path,
+        [
+            {
+                "instance_id": "repo__task-1",
+                "issue_description": "issue",
+                "plan": "plan",
+                "plan_sha256": "plan-hash",
+                "resolved": False,
+            }
+        ],
+    )
+    output = tmp_path / "out"
+    prediction = {
+        "instance_id": "repo__task-1",
+        "check_result": {"passed": False, "violations": []},
+        "test_results": {"resolved": False},
+        "source": {"plan_sha256": "plan-hash"},
+    }
+    prediction_path = (
+        output / "instances" / "repo__task-1" / "prediction.json"
+    )
+    prediction_path.parent.mkdir(parents=True)
+    prediction_path.write_text(json.dumps(prediction), encoding="utf-8")
+
+    results, errors = run_checker_only(
+        config=Config(checker=CheckerConfig(enabled=True)),
+        input_path=cases_path,
+        output_dir=output,
+        rules_text_override="",
+    )
+
+    assert results == [prediction]
+    assert errors == []
+    mock_run_case.assert_not_called()
+    mock_load_rules.assert_not_called()
+
+
+@patch("evaluate_checker.InstanceLoader")
+@patch("evaluate_checker._run_checker_case")
+def test_checker_only_reruns_mismatched_plan_cache(
+    mock_run_case, mock_loader_cls, tmp_path
+):
+    cases_path = tmp_path / "cases.jsonl"
+    case = {
+        "instance_id": "repo__task-1",
+        "issue_description": "issue",
+        "plan": "new plan",
+        "plan_sha256": "new-hash",
+        "resolved": True,
+    }
+    _write_jsonl(cases_path, [case])
+    output = tmp_path / "out"
+    prediction_path = (
+        output / "instances" / "repo__task-1" / "prediction.json"
+    )
+    prediction_path.parent.mkdir(parents=True)
+    prediction_path.write_text(
+        json.dumps(
+            {
+                "instance_id": "repo__task-1",
+                "check_result": {"passed": False},
+                "test_results": {"resolved": True},
+                "source": {"plan_sha256": "old-hash"},
+            }
+        ),
+        encoding="utf-8",
+    )
+    replacement = {
+        "instance_id": "repo__task-1",
+        "check_result": {"passed": True, "violations": []},
+        "test_results": {"resolved": True},
+        "source": {"plan_sha256": "new-hash"},
+    }
+    mock_run_case.return_value = replacement
+
+    results, _ = run_checker_only(
+        config=Config(checker=CheckerConfig(enabled=True)),
+        input_path=cases_path,
+        output_dir=output,
+        rules_text_override="",
+    )
+
+    assert results == [replacement]
+    mock_run_case.assert_called_once()

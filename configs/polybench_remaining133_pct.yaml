@@ -408,6 +408,13 @@ prompts:
     : \"brief summary of plan quality\"\n}\n\nIf the plan passes all applicable rules,\
     \ return passed=true and an empty violations list.\nBe strict: a plan that does\
     \ not explicitly address a rule's concern should be considered a violation.\n"
+  check_baseline_prompt: |
+    You are a plan quality checker. Directly judge whether the proposed software engineering plan is likely to resolve the given issue correctly.
+    Evaluate technical correctness, task-specificity, completeness, feasibility, and validation. You may inspect the repository. Do not use or infer any external rule set.
+    PASS when the plan provides a sufficiently correct and actionable path to implement and validate the fix. FAIL when material errors, unsupported assumptions, missing implementation steps, or inadequate validation make resolution unlikely.
+    Write /tmp/check_result.json with exactly: {"passed": true/false, "violations": [{"rule": "direct plan-quality concern", "reasoning": "why the plan is insufficient"}], "overall_assessment": "brief summary"}.
+    If the plan passes, use an empty violations list. Modify only /tmp/check_result.json and never modify /testbed.
+    After writing it, respond exactly with one bash block containing: echo COMPLETE_TASK_AND_SUBMIT_FINAL_OUTPUT && cat /tmp/check_result.json
   check_instance_template: '<pr_description>
 
     Consider the following PR description:

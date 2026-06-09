@@ -85,6 +85,7 @@ class PromptConfig:
     reflection_prompt_template: str = ""
     reflect_instance_template: str = ""
     check_prompt: str = ""
+    check_baseline_prompt: str = ""
     check_instance_template: str = ""
     nrpv_block: str = ""
 
@@ -411,6 +412,7 @@ def _build_prompt_config(data: dict[str, Any]) -> PromptConfig:
         reflection_prompt_template=_get_str(data, "reflection_prompt_template", ""),
         reflect_instance_template=_get_str(data, "reflect_instance_template", ""),
         check_prompt=_get_str(data, "check_prompt", ""),
+        check_baseline_prompt=_get_str(data, "check_baseline_prompt", ""),
         check_instance_template=_get_str(data, "check_instance_template", ""),
         nrpv_block=_get_str(data, "nrpv_block", ""),
     )

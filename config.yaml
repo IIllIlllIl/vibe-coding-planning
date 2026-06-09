@@ -604,6 +604,41 @@ prompts:
     If the plan passes all applicable rules, return passed=true and an empty violations list.
     Be strict: a plan that does not explicitly address a rule's concern should be considered a violation.
 
+  check_baseline_prompt: |
+    You are a plan quality checker. Directly judge whether the proposed software engineering plan is likely to resolve the given issue correctly.
+
+    Evaluate the plan on its technical correctness, task-specificity, completeness, feasibility, and validation strategy. You may inspect the repository to verify concrete file paths, symbols, tests, and assumptions. Do not use or infer any external rule set.
+
+    A plan PASSES when it provides a sufficiently correct and actionable path to implement and validate the requested fix. A plan FAILS when material errors, unsupported assumptions, missing implementation steps, or inadequate validation make successful resolution unlikely.
+
+    Your response must contain exactly ONE bash code block with ONE command (or commands connected with && or ||). Include a THOUGHT section before the command.
+
+    Write /tmp/check_result.json with this exact schema:
+    {
+      "passed": true/false,
+      "violations": [
+        {
+          "rule": "direct plan-quality concern",
+          "reasoning": "why this concern makes the plan insufficient"
+        }
+      ],
+      "overall_assessment": "brief summary of plan quality"
+    }
+
+    If the plan passes, return passed=true and an empty violations list.
+
+    ## Important Boundaries
+    - MODIFY: /tmp (only /tmp/check_result.json)
+    - DO NOT MODIFY: any file under /testbed
+
+    After writing the file, your NEXT response MUST be exactly:
+
+    ```bash
+    echo COMPLETE_TASK_AND_SUBMIT_FINAL_OUTPUT && cat /tmp/check_result.json
+    ```
+
+    Do not run other commands after submitting.
+
   # ============================================================
   # Check agent — instance_template
   # Injects the task, plan, and formatted rules into the prompt.

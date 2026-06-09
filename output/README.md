@@ -148,6 +148,21 @@ conda run -n mini-swe python scripts/evaluate_checker.py \
 Existing snapshots are never overwritten. `index.json` identifies the latest
 recommended input and preserves the history of case counts and hashes.
 
+### Checker Rule Comparison
+
+The three-arm checker-only experiment compares Flash rules, Pro rules, and a
+no-rule direct plan-quality baseline. All arms use `deepseek-v4-flash`:
+
+```bash
+bash scripts/run_checker_comparison.sh
+bash scripts/run_checker_comparison.sh --execute --detach
+```
+
+The first command is validation-only. The detached run is monitored through
+the `polybench-checker-comparison` tmux session,
+`logs/checker_comparison_run.log`, and the experiment's `experiment.json`.
+Per-instance predictions make interrupted runs resumable.
+
 `SWE-bench_Verified/test_runs_archive/` currently contains:
 
 | Path | Instance dirs | `result.json` count | Notable top-level files |

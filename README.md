@@ -195,6 +195,18 @@ checker:
 
 PolyBench held-out 评估默认使用 checker-only 路径。构建脚本按 full199 配置顺序扫描已有 PCT 结果；同一实例多次成功运行时选择最早的 plan，即使后续运行的 resolved 标签更好也不会替换。evaluator-only 重评只补全同一 plan 的有效标签，不视为新 PCT。checker 执行错误单独写入 `errors.jsonl`，不进入混淆矩阵。
 
+Flash 规则、Pro 规则和无规则直接判断的公平对比统一使用
+`deepseek-v4-flash`。命令默认只校验输入；提交代码后可在 tmux 中启动：
+
+```bash
+bash scripts/run_checker_comparison.sh
+bash scripts/run_checker_comparison.sh --execute --detach
+```
+
+运行可从每实例 `prediction.json` 断点恢复，进度写入
+`output/checker_eval/polybench-flash-pro-baseline/experiment.json`，最终报告为
+`comparison_report.json` 和 `comparison_report.md`。
+
 推荐使用 `--snapshot-root`。每个快照目录包含 `cases.jsonl`、
 `manifest.json` 和 `exclusions.json`，发布后不再覆盖。根目录
 `index.json` 记录全部快照以及 `latest_cases_path`。没有新增有效 PCT

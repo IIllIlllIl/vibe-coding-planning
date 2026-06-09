@@ -78,6 +78,16 @@ def _write_jsonl(path: Path, records: list[dict[str, Any]]) -> None:
     path.write_text(content, encoding="utf-8")
 
 
+def _write_json(path: Path, data: dict[str, Any]) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    temporary = path.with_suffix(path.suffix + ".tmp")
+    temporary.write_text(
+        json.dumps(data, indent=2, ensure_ascii=False, sort_keys=True),
+        encoding="utf-8",
+    )
+    temporary.replace(path)
+
+
 def _read_jsonl(path: Path) -> list[dict[str, Any]]:
     records: list[dict[str, Any]] = []
     for line_number, line in enumerate(
@@ -515,6 +525,8 @@ def _compute_metrics(results: list[dict[str, Any]]) -> dict[str, Any]:
         "specificity": specificity,
         "balanced_accuracy": (recall + specificity) / 2,
         "mcc": mcc,
+        "checker_pass_rate": (tp + fp) / total if total else 0.0,
+        "resolved_prevalence": (tp + fn) / total if total else 0.0,
     }
 
 
@@ -656,7 +668,7 @@ def _run_checker_case(
             ),
             encoding="utf-8",
         )
-        return {
+        prediction = {
             "instance_id": instance_id,
             "check_result": check_result,
             "test_results": {"resolved": case["resolved"]},
@@ -670,6 +682,8 @@ def _run_checker_case(
                 )
             },
         }
+        _write_json(instance_dir / "prediction.json", prediction)
+        return prediction
     finally:
         docker.stop()
         if config.docker.delete_images_after_instance:
@@ -681,10 +695,15 @@ def run_checker_only(
     config: Config,
     input_path: Path,
     output_dir: Path,
+    rules_text_override: str | None = None,
+    resume: bool = True,
 ) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
     cases = _read_jsonl(input_path)
-    rules = load_aggregated_rules(config.checker.rules_path)
-    rules_text = format_rules_for_prompt(rules)
+    if rules_text_override is None:
+        rules = load_aggregated_rules(config.checker.rules_path)
+        rules_text = format_rules_for_prompt(rules)
+    else:
+        rules_text = rules_text_override
     loader = InstanceLoader(
         dataset=config.system.dataset,
         dataset_type=config.system.dataset_type,
@@ -694,6 +713,35 @@ def run_checker_only(
     errors: list[dict[str, Any]] = []
     for index, case in enumerate(cases, 1):
         instance_id = str(case.get("instance_id", "unknown"))
+        prediction_path = (
+            output_dir / "instances" / instance_id / "prediction.json"
+        )
+        if resume and prediction_path.is_file():
+            try:
+                prediction = json.loads(
+                    prediction_path.read_text(encoding="utf-8")
+                )
+                source = prediction.get("source") or {}
+                if (
+                    prediction.get("instance_id") == instance_id
+                    and isinstance(
+                        (prediction.get("check_result") or {}).get("passed"),
+                        bool,
+                    )
+                    and (prediction.get("test_results") or {}).get("resolved")
+                    is case.get("resolved")
+                    and source.get("plan_sha256") == case.get("plan_sha256")
+                ):
+                    logger.info(
+                        "[%d/%d] Resuming completed %s",
+                        index,
+                        len(cases),
+                        instance_id,
+                    )
+                    results.append(prediction)
+                    continue
+            except (OSError, json.JSONDecodeError):
+                logger.warning("Ignoring invalid prediction cache: %s", prediction_path)
         logger.info("[%d/%d] Checking %s", index, len(cases), instance_id)
         try:
             results.append(
