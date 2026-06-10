@@ -13,9 +13,11 @@ import logging
 from pathlib import Path
 from typing import Any
 
-import docker
-
-from src.environment.docker_env import is_docker_storage_error
+from src.environment.docker_env import (
+    close_docker_client,
+    create_docker_client,
+    is_docker_storage_error,
+)
 from src.exceptions import FatalError
 
 logger = logging.getLogger(__name__)
@@ -187,7 +189,7 @@ def evaluate_polybench_instance(
         parser_class_name,
     )
 
-    client = docker.from_env(timeout=720)
+    client = create_docker_client(timeout=720)
     image_id = f"polybench_{inst.language.lower()}_{instance_id.lower()}"
     docker_manager = DockerManager(
         image_id=image_id, delete_image=delete_image, client=client
@@ -403,3 +405,4 @@ def evaluate_polybench_instance(
             docker_manager.__del__()
         except Exception:
             pass
+        close_docker_client(client)

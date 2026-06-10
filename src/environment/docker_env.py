@@ -8,7 +8,17 @@ container.
 from __future__ import annotations
 
 import logging
+import argparse
+import fcntl
+import os
+import sys
+import shutil
 import subprocess
+import threading
+import time
+from contextlib import contextmanager
+from pathlib import Path
+from collections.abc import Iterator
 from typing import Any
 
 from src.config import DockerConfig
@@ -117,6 +127,303 @@ def cleanup_docker_image_cache(max_cached_images: int = 75) -> int:
     return removed
 
 
+class DockerCapacityWindow:
+    """Shared capacity controller for concurrent Docker workloads.
+
+    All workers using the same window share a bounded container semaphore and
+    a maintenance lock. The lock ensures disk checks and image-cache cleanup
+    never race across workers.
+    """
+
+    def __init__(
+        self,
+        *,
+        max_concurrent: int,
+        max_cached_images: int,
+        min_free_gb: int,
+        disk_path: str | Path = ".",
+        lock_dir: str | Path | None = None,
+    ) -> None:
+        if max_concurrent < 1:
+            raise ValueError("max_concurrent must be at least 1")
+        if max_cached_images < max_concurrent:
+            raise ValueError(
+                "max_cached_images must be at least max_concurrent"
+            )
+        if min_free_gb < 1:
+            raise ValueError("min_free_gb must be at least 1")
+        self.max_concurrent = max_concurrent
+        self.max_cached_images = max_cached_images
+        self.min_free_gb = min_free_gb
+        self.disk_path = Path(disk_path)
+        self.lock_dir = Path(
+            lock_dir
+            or os.environ.get(
+                "VIBE_DOCKER_WINDOW_DIR",
+                "/tmp/vibe-coding-planning-docker-window",
+            )
+        )
+        self.lock_dir.mkdir(parents=True, exist_ok=True)
+        self._slots = threading.BoundedSemaphore(max_concurrent)
+        self._maintenance_lock = threading.Lock()
+        self._state_lock = threading.Lock()
+        self._local = threading.local()
+        self._active = 0
+        self._peak_active = 0
+
+    @contextmanager
+    def _interprocess_lock(self, name: str) -> Iterator[None]:
+        path = self.lock_dir / name
+        with path.open("a+") as handle:
+            fcntl.flock(handle.fileno(), fcntl.LOCK_EX)
+            try:
+                yield
+            finally:
+                fcntl.flock(handle.fileno(), fcntl.LOCK_UN)
+
+    def _acquire_process_slot(self) -> Any:
+        while True:
+            for index in range(self.max_concurrent):
+                handle = (self.lock_dir / f"slot-{index}.lock").open("a+")
+                try:
+                    fcntl.flock(
+                        handle.fileno(),
+                        fcntl.LOCK_EX | fcntl.LOCK_NB,
+                    )
+                    return handle
+                except BlockingIOError:
+                    handle.close()
+            time.sleep(0.1)
+
+    @staticmethod
+    def _release_process_slot(handle: Any) -> None:
+        fcntl.flock(handle.fileno(), fcntl.LOCK_UN)
+        handle.close()
+
+    @property
+    def active(self) -> int:
+        with self._state_lock:
+            return self._active
+
+    @property
+    def peak_active(self) -> int:
+        with self._state_lock:
+            return self._peak_active
+
+    def _free_gb(self) -> int:
+        return int(shutil.disk_usage(self.disk_path).free / (1024**3))
+
+    def ensure_capacity(self) -> None:
+        """Clean the image cache and fail before launch if disk remains low."""
+        with self._maintenance_lock:
+            with self._interprocess_lock("maintenance.lock"):
+                free_gb = self._free_gb()
+                if free_gb < self.min_free_gb:
+                    logger.warning(
+                        "Docker window low disk: %dGiB free; cleaning image cache",
+                        free_gb,
+                    )
+                    cleanup_docker_image_cache(self.max_cached_images)
+                    free_gb = self._free_gb()
+                if free_gb < self.min_free_gb:
+                    raise FatalError(
+                        "Docker capacity window blocked container launch: "
+                        f"{free_gb}GiB free < {self.min_free_gb}GiB minimum"
+                    )
+
+    def maintain(self) -> None:
+        """Serialize project-image cleanup across all window users."""
+        with self._maintenance_lock:
+            with self._interprocess_lock("maintenance.lock"):
+                cleanup_docker_image_cache(self.max_cached_images)
+
+    @contextmanager
+    def lease(self) -> Iterator[None]:
+        """Acquire one shared Docker slot for a complete container lifecycle."""
+        depth = getattr(self._local, "lease_depth", 0)
+        if depth:
+            self._local.lease_depth = depth + 1
+            try:
+                yield
+            finally:
+                self._local.lease_depth -= 1
+            return
+
+        self._slots.acquire()
+        process_slot = None
+        try:
+            process_slot = self._acquire_process_slot()
+            self.ensure_capacity()
+            self._local.lease_depth = 1
+            with self._state_lock:
+                self._active += 1
+                self._peak_active = max(self._peak_active, self._active)
+            try:
+                yield
+            finally:
+                with self._state_lock:
+                    self._active -= 1
+                self._local.lease_depth = 0
+                self.maintain()
+        finally:
+            if process_slot is not None:
+                self._release_process_slot(process_slot)
+            self._slots.release()
+
+
+_DEFAULT_WINDOW: DockerCapacityWindow | None = None
+_DEFAULT_WINDOW_LOCK = threading.Lock()
+
+
+def configure_docker_capacity(
+    config: DockerConfig, *, max_concurrent: int = 1
+) -> DockerCapacityWindow:
+    """Configure and return the process-wide Docker capacity window."""
+    global _DEFAULT_WINDOW
+    with _DEFAULT_WINDOW_LOCK:
+        desired = (
+            max_concurrent,
+            config.max_cached_images,
+            config.min_free_gb,
+        )
+        current = _DEFAULT_WINDOW
+        current_values = (
+            current.max_concurrent,
+            current.max_cached_images,
+            current.min_free_gb,
+        ) if current else None
+        if current_values != desired:
+            _DEFAULT_WINDOW = DockerCapacityWindow(
+                max_concurrent=max_concurrent,
+                max_cached_images=config.max_cached_images,
+                min_free_gb=config.min_free_gb,
+            )
+        return _DEFAULT_WINDOW
+
+
+def get_docker_capacity_window(
+    config: DockerConfig | None = None,
+) -> DockerCapacityWindow:
+    """Return the shared window, creating a single-slot default if needed."""
+    if config is not None:
+        return configure_docker_capacity(config)
+    with _DEFAULT_WINDOW_LOCK:
+        global _DEFAULT_WINDOW
+        if _DEFAULT_WINDOW is None:
+            _DEFAULT_WINDOW = DockerCapacityWindow(
+                max_concurrent=1,
+                max_cached_images=75,
+                min_free_gb=20,
+            )
+        return _DEFAULT_WINDOW
+
+
+@contextmanager
+def managed_docker_client(
+    *, timeout: int | None = None
+) -> Iterator[Any]:
+    """Create a Docker SDK client under the shared capacity window."""
+    window = get_docker_capacity_window()
+    with window.lease():
+        import docker
+
+        client = docker.from_env(timeout=timeout) if timeout else docker.from_env()
+        try:
+            yield client
+        finally:
+            close = getattr(client, "close", None)
+            if close is not None:
+                close()
+
+
+def create_docker_client(*, timeout: int | None = None) -> Any:
+    """Create a Docker SDK client that owns a shared-window lease."""
+    lease = get_docker_capacity_window().lease()
+    lease.__enter__()
+    try:
+        import docker
+
+        client = docker.from_env(timeout=timeout) if timeout else docker.from_env()
+        setattr(client, "_vibe_capacity_lease", lease)
+        return client
+    except BaseException:
+        lease.__exit__(*sys.exc_info())
+        raise
+
+
+def close_docker_client(client: Any) -> None:
+    """Close a client created by :func:`create_docker_client`."""
+    try:
+        close = getattr(client, "close", None)
+        if close is not None:
+            close()
+    finally:
+        lease = getattr(client, "_vibe_capacity_lease", None)
+        if lease is not None:
+            lease.__exit__(None, None, None)
+            delattr(client, "_vibe_capacity_lease")
+
+
+def run_docker_cli(
+    args: list[str],
+    *,
+    timeout: int = 300,
+    check: bool = False,
+) -> subprocess.CompletedProcess[str]:
+    """Run a Docker CLI command under the shared capacity window."""
+    if not args or args[0] != "docker":
+        raise ValueError("Docker CLI command must start with 'docker'")
+    with get_docker_capacity_window().lease():
+        return subprocess.run(
+            args,
+            capture_output=True,
+            text=True,
+            check=check,
+            timeout=timeout,
+        )
+
+
+def prune_docker_resources(max_cached_images: int = 75) -> None:
+    """Prune stopped containers/build cache and enforce the image window."""
+    for args in (
+        ["docker", "container", "prune", "-f"],
+        ["docker", "builder", "prune", "-f"],
+    ):
+        result = run_docker_cli(args, timeout=300)
+        if result.returncode != 0:
+            logger.warning("Docker maintenance failed: %s", result.stderr[:500])
+    cleanup_docker_image_cache(max_cached_images)
+
+
+def reset_project_docker_resources() -> None:
+    """Stop project containers and remove project images/build cache."""
+    result = run_docker_cli(
+        ["docker", "container", "ls", "-aq", "--filter", "name=minisweagent-"],
+        timeout=120,
+    )
+    container_ids = result.stdout.split()
+    if container_ids:
+        remove_result = run_docker_cli(
+            ["docker", "container", "rm", "-f", *container_ids],
+            timeout=300,
+        )
+        if remove_result.returncode != 0:
+            raise FatalError(
+                "Failed to remove project Docker containers: "
+                f"{remove_result.stderr[:500]}"
+            )
+    prune_docker_resources(max_cached_images=0)
+    dangling_result = run_docker_cli(
+        ["docker", "image", "prune", "-af"],
+        timeout=300,
+    )
+    if dangling_result.returncode != 0:
+        raise FatalError(
+            "Failed to prune residual Docker images: "
+            f"{dangling_result.stderr[:500]}"
+        )
+
+
 def _list_project_docker_images() -> list[dict[str, str]]:
     """Return project image refs with creation timestamps."""
     try:
@@ -185,7 +492,11 @@ class DockerEnvWrapper:
         env.stop()
     """
 
-    def __init__(self, docker_config: DockerConfig) -> None:
+    def __init__(
+        self,
+        docker_config: DockerConfig,
+        capacity_window: DockerCapacityWindow | None = None,
+    ) -> None:
         """Initialise the wrapper.
 
         ``docker_config`` is currently unused internally (1.17.5's
@@ -194,6 +505,10 @@ class DockerEnvWrapper:
         tests and callers.
         """
         self._config = docker_config
+        self._capacity_window = capacity_window or get_docker_capacity_window(
+            docker_config
+        )
+        self._lease_context: Any = None
         self._env: Any = None
         self._image: str = ""
 
@@ -220,32 +535,39 @@ class DockerEnvWrapper:
             timeout: Per-command execution timeout in seconds forwarded
                 to ``DockerEnvironment``.
         """
-        DockerEnvironment = _import_docker_env()
-        image = _resolve_polybench_image(
-            image,
-            timeout=self._config.polybench_pull_timeout,
-            instance_info=instance_info,
-            build_fallback=self._config.polybench_build_fallback,
-            build_timeout=self._config.polybench_build_timeout,
-        )
-        self._image = image
+        self._lease_context = self._capacity_window.lease()
+        self._lease_context.__enter__()
+        try:
+            DockerEnvironment = _import_docker_env()
+            image = _resolve_polybench_image(
+                image,
+                timeout=self._config.polybench_pull_timeout,
+                instance_info=instance_info,
+                build_fallback=self._config.polybench_build_fallback,
+                build_timeout=self._config.polybench_build_timeout,
+            )
+            self._image = image
 
-        kwargs: dict[str, Any] = {
-            "image": image,
-            "cwd": workdir,
-            "container_timeout": "4h",
-        }
-        if mount_source:
-            kwargs["run_args"] = [
-                "--rm",
-                "--mount",
-                f"type=bind,source={mount_source},target={workdir}",
-            ]
-        if timeout is not None:
-            kwargs["timeout"] = timeout
+            kwargs: dict[str, Any] = {
+                "image": image,
+                "cwd": workdir,
+                "container_timeout": "4h",
+            }
+            if mount_source:
+                kwargs["run_args"] = [
+                    "--rm",
+                    "--mount",
+                    f"type=bind,source={mount_source},target={workdir}",
+                ]
+            if timeout is not None:
+                kwargs["timeout"] = timeout
 
-        self._env = DockerEnvironment(**kwargs)
-        logger.info("Docker container started: image=%s cwd=%s", image, workdir)
+            self._env = DockerEnvironment(**kwargs)
+            logger.info("Docker container started: image=%s cwd=%s", image, workdir)
+        except BaseException:
+            self._lease_context.__exit__(*sys.exc_info())
+            self._lease_context = None
+            raise
 
     def stop(self) -> None:
         """Stop and remove the running container.
@@ -257,6 +579,9 @@ class DockerEnvWrapper:
             logger.info("Stopping Docker container")
             self._env.cleanup()
             self._env = None
+        if self._lease_context is not None:
+            self._lease_context.__exit__(None, None, None)
+            self._lease_context = None
 
     @property
     def image(self) -> str:
@@ -306,6 +631,18 @@ class DockerEnvWrapper:
     def __exit__(self, *args: Any) -> None:
         """Context manager exit – always stop the container."""
         self.stop()
+
+
+def _main() -> int:
+    parser = argparse.ArgumentParser(description="Central Docker maintenance")
+    parser.add_argument("command", choices=("maintain", "reset-project"))
+    parser.add_argument("--max-cached-images", type=int, default=75)
+    args = parser.parse_args()
+    if args.command == "maintain":
+        prune_docker_resources(args.max_cached_images)
+    elif args.command == "reset-project":
+        reset_project_docker_resources()
+    return 0
 
 
 def _resolve_polybench_image(
@@ -391,3 +728,7 @@ def _docker_image_exists(image: str) -> bool:
         check=False,
     )
     return result.returncode == 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(_main())

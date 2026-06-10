@@ -5,6 +5,7 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
+import shutil
 import sys
 from dataclasses import replace
 from datetime import datetime, timezone
@@ -22,9 +23,13 @@ DEFAULT_INPUT = Path(
     "output/SWE-PolyBench/polybench-pct-checker-datasets/"
     "20260609_198_cdf4d414e401/cases.jsonl"
 )
-DEFAULT_OUTPUT = Path("output/checker_eval/polybench-flash-pro-baseline")
+DEFAULT_OUTPUT = Path("output/checker_eval/polybench-flash-pro-kimi-baseline")
+DEFAULT_RESUME_SOURCE = Path(
+    "output/checker_eval/polybench-flash-pro-baseline"
+)
 CHECKER_MODEL = "deepseek-v4-flash"
-DEFAULT_PARALLEL = 4
+DEFAULT_PARALLEL = 3
+DEFAULT_MAX_CACHED_IMAGES = 6
 
 
 def _sha256(path: Path) -> str:
@@ -49,6 +54,28 @@ def _prediction_map(path: Path) -> dict[str, dict[str, Any]]:
     if not path.is_file():
         return {}
     return {item["instance_id"]: item for item in _read_jsonl(path)}
+
+
+def seed_resume_predictions(source: Path, target: Path) -> dict[str, int]:
+    """Copy only completed per-instance outputs from a prior experiment."""
+    counts: dict[str, int] = {}
+    if not source.is_dir() or source == target:
+        return counts
+    for name in ARM_NAMES:
+        source_instances = source / name / "instances"
+        target_instances = target / name / "instances"
+        copied = 0
+        if source_instances.is_dir():
+            for prediction_path in source_instances.glob("*/prediction.json"):
+                source_instance = prediction_path.parent
+                target_instance = target_instances / source_instance.name
+                if target_instance.exists():
+                    continue
+                target_instance.parent.mkdir(parents=True, exist_ok=True)
+                shutil.copytree(source_instance, target_instance)
+                copied += 1
+        counts[name] = copied
+    return counts
 
 
 def _pairwise(
@@ -84,8 +111,12 @@ def _pairwise(
     }
 
 
+ARM_NAMES = ("flash_rules", "pro_rules", "kimi_rules", "no_rules")
+RULE_ARM_NAMES = ("flash_rules", "pro_rules", "kimi_rules")
+
+
 def build_comparison_report(output_dir: Path) -> dict[str, Any]:
-    names = ("flash_rules", "pro_rules", "no_rules")
+    names = ARM_NAMES
     summaries = {
         name: json.loads((output_dir / name / "results.json").read_text())
         for name in names
@@ -112,18 +143,14 @@ def build_comparison_report(output_dir: Path) -> dict[str, Any]:
                 metric: summaries[name]["metrics"][metric] - baseline[metric]
                 for metric in metric_names
             }
-            for name in ("flash_rules", "pro_rules")
+            for name in RULE_ARM_NAMES
         },
         "pairwise": {
-            "flash_rules_vs_no_rules": _pairwise(
-                predictions["flash_rules"], predictions["no_rules"]
-            ),
-            "pro_rules_vs_no_rules": _pairwise(
-                predictions["pro_rules"], predictions["no_rules"]
-            ),
-            "flash_rules_vs_pro_rules": _pairwise(
-                predictions["flash_rules"], predictions["pro_rules"]
-            ),
+            f"{left}_vs_{right}": _pairwise(
+                predictions[left], predictions[right]
+            )
+            for index, left in enumerate(names)
+            for right in names[index + 1 :]
         },
     }
     _write_json(output_dir / "comparison_report.json", report)
@@ -183,6 +210,19 @@ def main() -> int:
         type=Path,
         default=Path("output/analysis_pro/aggregated_rules.json"),
     )
+    parser.add_argument(
+        "--kimi-rules",
+        type=Path,
+        default=Path(
+            "output/analysis_kimi_opencode_60/aggregated_rules.json"
+        ),
+    )
+    parser.add_argument(
+        "--resume-source",
+        type=Path,
+        default=DEFAULT_RESUME_SOURCE,
+        help="Prior comparison output used to seed matching arm predictions",
+    )
     parser.add_argument("--dry-run", action="store_true")
     parser.add_argument("--no-resume", action="store_true")
     parser.add_argument(
@@ -194,19 +234,44 @@ def main() -> int:
             f"(default: {DEFAULT_PARALLEL})"
         ),
     )
+    parser.add_argument(
+        "--max-cached-images",
+        type=int,
+        default=DEFAULT_MAX_CACHED_IMAGES,
+        help=(
+            "Newest project Docker images retained during the run "
+            f"(default: {DEFAULT_MAX_CACHED_IMAGES})"
+        ),
+    )
     args = parser.parse_args()
     if args.parallel < 1:
         parser.error("--parallel must be at least 1")
+    if args.max_cached_images < args.parallel:
+        parser.error("--max-cached-images must be at least --parallel")
 
-    required = (args.input_results, args.flash_rules, args.pro_rules)
+    required = (
+        args.input_results,
+        args.flash_rules,
+        args.pro_rules,
+        args.kimi_rules,
+    )
     for path in required:
         if not path.is_file():
             raise FileNotFoundError(path)
     config = load_config(args.config)
+    config = replace(
+        config,
+        docker=replace(
+            config.docker,
+            delete_images_after_instance=True,
+            max_cached_images=args.max_cached_images,
+        ),
+    )
     cases = _read_jsonl(args.input_results)
     arms = (
         ("flash_rules", args.flash_rules, False),
         ("pro_rules", args.pro_rules, False),
+        ("kimi_rules", args.kimi_rules, False),
         ("no_rules", None, True),
     )
     metadata = {
@@ -236,10 +301,14 @@ def main() -> int:
 
     if args.dry_run:
         metadata["parallel_workers"] = args.parallel
+        metadata["max_cached_images"] = args.max_cached_images
         print(json.dumps(metadata, indent=2))
         return 0
 
     args.output.mkdir(parents=True, exist_ok=True)
+    seeded = seed_resume_predictions(args.resume_source, args.output)
+    if any(seeded.values()):
+        print(f"Seeded prior predictions: {seeded}", flush=True)
     experiment_path = args.output / "experiment.json"
     if experiment_path.is_file():
         existing = json.loads(experiment_path.read_text())
@@ -255,6 +324,7 @@ def main() -> int:
     else:
         metadata["started_at"] = datetime.now(timezone.utc).isoformat()
     metadata["parallel_workers"] = args.parallel
+    metadata["max_cached_images"] = args.max_cached_images
     _write_json(experiment_path, metadata)
 
     for name, rules_path, baseline in arms:

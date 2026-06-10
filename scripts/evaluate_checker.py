@@ -30,8 +30,9 @@ from src.agents import check_agent  # noqa: E402
 from src.config import Config, load_config  # noqa: E402
 from src.data.instance_loader import InstanceLoader  # noqa: E402
 from src.environment.docker_env import (  # noqa: E402
+    DockerCapacityWindow,
     DockerEnvWrapper,
-    cleanup_docker_image_cache,
+    configure_docker_capacity,
 )
 from src.evaluator.swe_evaluator import derive_image_name  # noqa: E402
 from src.pipeline_check import run_instance  # noqa: E402
@@ -616,6 +617,7 @@ def _run_checker_case(
     rules_text: str,
     output_dir: Path,
     loader: InstanceLoader,
+    docker_window: DockerCapacityWindow | None = None,
 ) -> dict[str, Any]:
     required = ("instance_id", "issue_description", "plan", "resolved")
     missing = [key for key in required if key not in case]
@@ -626,7 +628,7 @@ def _run_checker_case(
 
     instance_id = str(case["instance_id"])
     instance_info = loader.load_instance(instance_id)
-    docker = DockerEnvWrapper(config.docker)
+    docker = DockerEnvWrapper(config.docker, docker_window)
     dataset_type = instance_info.get("dataset_type", "")
     workdir = (
         "/app"
@@ -652,7 +654,9 @@ def _run_checker_case(
             docker,
         )
         if check_result.get("_parse_error"):
-            raise ValueError(check_result.get("overall_assessment", "parse error"))
+            raise ValueError(
+                check_result.get("overall_assessment", "parse error")
+            )
         (instance_dir / "check_result.json").write_text(
             json.dumps(check_result, indent=2, ensure_ascii=False),
             encoding="utf-8",
@@ -687,8 +691,6 @@ def _run_checker_case(
         return prediction
     finally:
         docker.stop()
-        if config.docker.delete_images_after_instance:
-            cleanup_docker_image_cache(config.docker.max_cached_images)
 
 
 def run_checker_only(
@@ -749,13 +751,14 @@ def run_checker_only(
                 logger.warning("Ignoring invalid prediction cache: %s", prediction_path)
         pending.append((index, case))
 
-    worker_config = config
-    cleanup_after_run = max_workers > 1 and config.docker.delete_images_after_instance
-    if cleanup_after_run:
-        worker_config = replace(
-            config,
-            docker=replace(config.docker, delete_images_after_instance=False),
-        )
+    docker_window = configure_docker_capacity(
+        config.docker,
+        max_concurrent=max_workers,
+    )
+    worker_config = replace(
+        config,
+        docker=replace(config.docker, delete_images_after_instance=False),
+    )
 
     def record_failure(index: int, case: dict[str, Any], exc: Exception) -> None:
         instance_id = str(case.get("instance_id", "unknown"))
@@ -777,7 +780,12 @@ def run_checker_only(
                 logger.info("[%d/%d] Checking %s", index, len(cases), instance_id)
                 try:
                     results_by_index[index] = _run_checker_case(
-                        case, worker_config, rules_text, output_dir, loader
+                        case,
+                        worker_config,
+                        rules_text,
+                        output_dir,
+                        loader,
+                        docker_window,
                     )
                 except KeyboardInterrupt:
                     raise
@@ -805,6 +813,7 @@ def run_checker_only(
                         rules_text,
                         output_dir,
                         loader,
+                        docker_window,
                     )
                     futures[future] = (index, case)
                 completed = len(results_by_index)
@@ -823,8 +832,11 @@ def run_checker_only(
                         instance_id,
                     )
     finally:
-        if cleanup_after_run:
-            cleanup_docker_image_cache(config.docker.max_cached_images)
+        logger.info(
+            "Docker capacity window peak usage: %d/%d",
+            docker_window.peak_active,
+            docker_window.max_concurrent,
+        )
 
     results = [results_by_index[index] for index in sorted(results_by_index)]
     errors = [errors_by_index[index] for index in sorted(errors_by_index)]

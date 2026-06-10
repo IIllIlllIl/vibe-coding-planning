@@ -8,8 +8,11 @@ import subprocess
 import tempfile
 from typing import Any
 
-import docker
-
+from src.environment.docker_env import (
+    close_docker_client,
+    create_docker_client,
+    run_docker_cli,
+)
 from src.exceptions import FatalError
 
 logger = logging.getLogger(__name__)
@@ -167,7 +170,7 @@ def _docker_build_with_full_logs(
         dockerignore.unlink()
 
     try:
-        result = subprocess.run(
+        result = run_docker_cli(
             [
                 "docker",
                 "build",
@@ -178,9 +181,6 @@ def _docker_build_with_full_logs(
                 "--rm",
                 str(repo_path),
             ],
-            capture_output=True,
-            text=True,
-            check=False,
             timeout=build_timeout,
         )
         if result.stdout:
@@ -235,43 +235,46 @@ def build_polybench_image_from_official_dockerfile(
 
     DockerManager, RepoManager = _import_official_builders()
     image_id = local_polybench_image_name(instance_info)
-    client = docker.from_env(timeout=720)
+    client = create_docker_client(timeout=720)
     docker_manager = DockerManager(image_id=image_id, delete_image=False, client=client)
-    if docker_manager.check_image_local(local_image_name=image_id):
-        return image_id
+    try:
+        if docker_manager.check_image_local(local_image_name=image_id):
+            return image_id
 
-    with tempfile.TemporaryDirectory(prefix="polybench_repo_") as tmp_dir:
-        repo_manager = RepoManager(repo_name=repo, repo_path=tmp_dir)
-        try:
-            repo_manager.clone_repo()
-            repo_manager.checkout_commit(commit_hash=base_commit)
-            repo_dir = Path(repo_manager.tmp_repo_dir)
-            build_success = False
-            for variant_name, candidate in _dockerfile_variants(dockerfile):
-                logger.info(
-                    "[%s] PolyBench Dockerfile build variant: %s",
-                    instance_id,
-                    variant_name,
-                )
-                build_success = _docker_build_with_full_logs(
-                    docker_manager,
-                    repo_path=repo_dir,
-                    dockerfile_content=candidate,
-                    build_timeout=build_timeout,
-                )
-                if build_success:
-                    break
-            if not build_success:
-                build_log = "\n".join(docker_manager.build_logs)[-12000:]
-                raise FatalError(
-                    f"Official PolyBench Dockerfile build failed for {instance_id} "
-                    f"after {len(_dockerfile_variants(dockerfile))} variant(s). "
-                    f"Build log tail:\n{build_log}"
-                )
-        finally:
-            cleanup = getattr(repo_manager, "__del__", None)
-            if cleanup is not None:
-                cleanup()
+        with tempfile.TemporaryDirectory(prefix="polybench_repo_") as tmp_dir:
+            repo_manager = RepoManager(repo_name=repo, repo_path=tmp_dir)
+            try:
+                repo_manager.clone_repo()
+                repo_manager.checkout_commit(commit_hash=base_commit)
+                repo_dir = Path(repo_manager.tmp_repo_dir)
+                build_success = False
+                for variant_name, candidate in _dockerfile_variants(dockerfile):
+                    logger.info(
+                        "[%s] PolyBench Dockerfile build variant: %s",
+                        instance_id,
+                        variant_name,
+                    )
+                    build_success = _docker_build_with_full_logs(
+                        docker_manager,
+                        repo_path=repo_dir,
+                        dockerfile_content=candidate,
+                        build_timeout=build_timeout,
+                    )
+                    if build_success:
+                        break
+                if not build_success:
+                    build_log = "\n".join(docker_manager.build_logs)[-12000:]
+                    raise FatalError(
+                        f"Official PolyBench Dockerfile build failed for {instance_id} "
+                        f"after {len(_dockerfile_variants(dockerfile))} variant(s). "
+                        f"Build log tail:\n{build_log}"
+                    )
+            finally:
+                cleanup = getattr(repo_manager, "__del__", None)
+                if cleanup is not None:
+                    cleanup()
+    finally:
+        close_docker_client(client)
 
     logger.info("[%s] Built local PolyBench image: %s", instance_id, image_id)
     return image_id

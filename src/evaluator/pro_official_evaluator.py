@@ -8,7 +8,6 @@ This keeps the pipeline symmetric with Verified (which uses swebench's
 
 from __future__ import annotations
 
-import json
 import logging
 import os
 import tempfile
@@ -16,6 +15,8 @@ from pathlib import Path
 from typing import Any
 
 import pandas as pd
+
+from src.environment.docker_env import get_docker_capacity_window
 
 logger = logging.getLogger(__name__)
 
@@ -96,18 +97,19 @@ def evaluate_pro_instance(
     # so we must run from the official framework root.
     original_cwd = os.getcwd()
     try:
-        os.chdir(_OFFICIAL_DIR)
-        result = eval_with_docker(
-            patch=patch,
-            sample=sample,
-            output_dir=str(workspace_parent),
-            dockerhub_username="jefzda",
-            scripts_dir="run_scripts",
-            prefix="",
-            redo=False,
-            block_network=False,
-            docker_platform="linux/amd64",
-        )
+        with get_docker_capacity_window().lease():
+            os.chdir(_OFFICIAL_DIR)
+            result = eval_with_docker(
+                patch=patch,
+                sample=sample,
+                output_dir=str(workspace_parent),
+                dockerhub_username="jefzda",
+                scripts_dir="run_scripts",
+                prefix="",
+                redo=False,
+                block_network=False,
+                docker_platform="linux/amd64",
+            )
     except Exception as exc:
         logger.error("[%s] Official Pro evaluator raised %s: %s", instance_id, type(exc).__name__, exc)
         return {

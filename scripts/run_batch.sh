@@ -218,9 +218,8 @@ cleanup_docker_after_instance() {
 
   echo "[$(date '+%Y-%m-%d %H:%M:%S')] Docker cleanup: retaining newest ${DOCKER_MAX_CACHED_IMAGES} project images" \
     | tee -a "$MASTER_LOG"
-  docker container prune -f >> "$MASTER_LOG" 2>&1 || true
-  docker builder prune -f >> "$MASTER_LOG" 2>&1 || true
-  python -c "from src.environment.docker_env import cleanup_docker_image_cache; cleanup_docker_image_cache(max_cached_images=int('$DOCKER_MAX_CACHED_IMAGES'))" \
+  python -m src.environment.docker_env maintain \
+    --max-cached-images "$DOCKER_MAX_CACHED_IMAGES" \
     >> "$MASTER_LOG" 2>&1 || true
 }
 

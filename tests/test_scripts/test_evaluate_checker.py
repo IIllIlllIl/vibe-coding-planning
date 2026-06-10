@@ -359,11 +359,10 @@ def test_snapshot_publish_is_immutable_and_indexed(mock_loader_cls, tmp_path):
     assert index["latest_cases_path"] == second["cases_path"]
 
 
-@patch("evaluate_checker.cleanup_docker_image_cache")
 @patch("evaluate_checker.check_agent.run")
 @patch("evaluate_checker.DockerEnvWrapper")
 def test_checker_case_only_calls_existing_checker(
-    mock_docker_cls, mock_check, mock_cleanup, tmp_path
+    mock_docker_cls, mock_check, tmp_path
 ):
     mock_check.return_value = (
         {"passed": True, "violations": [], "overall_assessment": "ok"},
@@ -546,11 +545,11 @@ def test_checker_only_reruns_mismatched_plan_cache(
     mock_run_case.assert_called_once()
 
 
-@patch("evaluate_checker.cleanup_docker_image_cache")
+@patch("evaluate_checker.configure_docker_capacity")
 @patch("evaluate_checker.InstanceLoader")
 @patch("evaluate_checker._run_checker_case")
 def test_checker_only_parallel_preserves_input_order_and_cleans_once(
-    mock_run_case, mock_loader_cls, mock_cleanup, tmp_path
+    mock_run_case, mock_loader_cls, mock_configure_window, tmp_path
 ):
     cases_path = tmp_path / "cases.jsonl"
     cases = [
@@ -568,7 +567,9 @@ def test_checker_only_parallel_preserves_input_order_and_cleans_once(
     peak = 0
     lock = threading.Lock()
 
-    def run_case(case, config, rules_text, output_dir, loader):
+    def run_case(
+        case, config, rules_text, output_dir, loader, docker_window
+    ):
         nonlocal active, peak
         with lock:
             active += 1
@@ -597,7 +598,14 @@ def test_checker_only_parallel_preserves_input_order_and_cleans_once(
     ]
     assert errors == []
     assert peak == 3
+    mock_configure_window.assert_called_once_with(
+        Config(checker=CheckerConfig(enabled=True)).docker,
+        max_concurrent=3,
+    )
+    assert all(
+        call.args[-1] is mock_configure_window.return_value
+        for call in mock_run_case.call_args_list
+    )
     mock_loader_cls.return_value.load_instance.assert_called_once_with(
         "repo__task-0"
     )
-    mock_cleanup.assert_called_once()

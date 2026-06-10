@@ -81,7 +81,8 @@ plan-code-test/
 | **配置** | `src/config.py` | 加载 `config.yaml`，验证参数（`n >= 1`, `optimization_info_level` ∈ {0,1} 等），返回结构化的配置对象 |
 | **流水线** | `src/pipeline.py` | 单实例的核心循环：`generate_plan()` → `generate_code()` → `evaluate()` →（如有需要）`reflect_and_optimize()`，循环 n 次 |
 | **Checker 评估** | `scripts/evaluate_checker.py` | 兼容原 PCC 入口；也可把历史 PCT 结果按“最早成功 plan”整合为固定 JSONL，追加发布不可变数据快照，并仅调用原 `check_agent.run()` 计算分类指标；每实例预测支持断点恢复 |
-| **Checker 对比实验** | `scripts/run_checker_comparison.py` | 在同一 PCT 快照和 Flash checker 模型上依次评估 Flash 规则、Pro 规则和无规则直接判断，生成统一指标、差值和逐实例配对报告 |
+| **Checker 对比实验** | `scripts/run_checker_comparison.py` | 在同一 PCT 快照和 Flash checker 模型上依次评估 Flash、Pro、Kimi 规则和无规则直接判断，生成统一指标、差值和逐实例配对报告 |
+| **Docker 容量窗口** | `src/environment/docker_env.py::DockerCapacityWindow` | 为并行任务提供共享容器槽位、启动前磁盘门控和串行镜像缓存维护；所有 checker worker 必须在同一个 window lease 内完成容器生命周期 |
 
 ### 3.2 Agent 层
 

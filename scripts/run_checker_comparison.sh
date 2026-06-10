@@ -45,7 +45,7 @@ if [[ ${#ARGS[@]} -gt 0 ]]; then
   CMD+=("${ARGS[@]}")
 fi
 if [[ $EXECUTE -ne 1 ]]; then
-  echo "Planning only. Pass --execute to start the three-arm comparison."
+  echo "Planning only. Pass --execute to start the four-arm comparison."
   exec "${CMD[@]}" --dry-run
 fi
 

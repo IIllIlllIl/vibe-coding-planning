@@ -20,12 +20,14 @@ def test_local_image_name_matches_official_evaluator():
     )
 
 
-@patch("src.environment.polybench_image.subprocess.run")
-@patch("src.environment.polybench_image.docker.from_env")
+@patch("src.environment.polybench_image.run_docker_cli")
+@patch("src.environment.polybench_image.close_docker_client")
+@patch("src.environment.polybench_image.create_docker_client")
 @patch("src.environment.polybench_image._import_official_builders")
 def test_builds_with_official_repo_and_docker_managers(
     mock_import,
-    mock_docker_from_env,
+    mock_create_client,
+    mock_close_client,
     mock_run,
     tmp_path,
 ):
@@ -64,11 +66,9 @@ def test_builds_with_official_repo_and_docker_managers(
             "--rm",
             str(tmp_path),
         ],
-        capture_output=True,
-        text=True,
-        check=False,
         timeout=3600,
     )
+    mock_close_client.assert_called_once_with(mock_create_client.return_value)
 
 
 def test_buster_dockerfile_gets_archive_fallback():
@@ -135,7 +135,7 @@ def test_python310_slim_gets_bullseye_fallback():
     ]
 
 
-@patch("src.environment.polybench_image.subprocess.run")
+@patch("src.environment.polybench_image.run_docker_cli")
 def test_docker_build_timeout_is_recorded(mock_run, tmp_path):
     mock_run.side_effect = subprocess.TimeoutExpired(
         cmd=["docker", "build"],

@@ -95,7 +95,6 @@ def evaluate(
         FatalError: If swebench is not installed or image name cannot be determined.
     """
     try:
-        import docker
         from swebench.harness.run_evaluation import run_instance
         from swebench.harness.test_spec.test_spec import make_test_spec
     except ImportError as exc:
@@ -145,8 +144,11 @@ def evaluate(
     }
     run_id = f"eval_{instance_id}{run_id_suffix}"
 
+    client = None
     try:
-        client = docker.from_env()
+        from src.environment.docker_env import create_docker_client
+
+        client = create_docker_client()
         test_spec = make_test_spec(instance_info, namespace="swebench")
 
         result = run_instance(
@@ -201,6 +203,11 @@ def evaluate(
             "error_info": error_msg,
             "report": {},
         }
+    finally:
+        if client is not None:
+            from src.environment.docker_env import close_docker_client
+
+            close_docker_client(client)
 
     log_dir_rel = f"logs/run_evaluation/{run_id}/plan-code-test/{instance_id}"
     log_dir_abs = Path(log_dir_rel).resolve()

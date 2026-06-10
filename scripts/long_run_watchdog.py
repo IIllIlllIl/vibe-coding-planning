@@ -25,7 +25,6 @@ import os
 import re
 import shlex
 import shutil
-import signal
 import subprocess
 import sys
 import time
@@ -595,6 +594,11 @@ def start_review(state: WatchdogState, instance_ids: list[str] | None = None) ->
         logging.error("Failed to start review tmux session!")
 
 
+def start_review_for_state(state: WatchdogState) -> None:
+    """Start review using the state's pending rework queue when present."""
+    start_review(state, instance_ids=state.rework_queue or None)
+
+
 # ---------------------------------------------------------------------------
 # Rule quality review
 # ---------------------------------------------------------------------------
@@ -942,29 +946,14 @@ def cleanup_docker() -> None:
 
     Runs non-interactively; failures are logged but never fatal.
     """
-    logging.info("Running docker system prune -f ...")
+    logging.info("Running centralized Docker maintenance ...")
     try:
-        result = subprocess.run(
-            ["docker", "system", "prune", "-f"],
-            capture_output=True,
-            text=True,
-            timeout=120,
-        )
-        if result.returncode == 0:
-            out = result.stdout.strip()
-            if out:
-                logging.info("Docker prune output: %s", out)
-            else:
-                logging.info("Docker prune completed (nothing removed).")
-        else:
-            err = result.stderr.strip()[:400]
-            logging.warning("Docker prune failed (rc=%d): %s", result.returncode, err)
-    except FileNotFoundError:
-        logging.warning("Docker CLI not found; skipping prune.")
-    except subprocess.TimeoutExpired:
-        logging.warning("Docker prune timed out (> 120 s).")
+        from src.environment.docker_env import prune_docker_resources
+
+        prune_docker_resources()
+        logging.info("Centralized Docker maintenance completed.")
     except Exception as exc:
-        logging.warning("Docker prune unexpected error: %s", exc)
+        logging.warning("Docker maintenance unexpected error: %s", exc)
 
 
 def _load_enable_review() -> bool:
@@ -1254,7 +1243,7 @@ def main() -> int:
     elif in_review:
         active_session = REVIEW_TMUX_SESSION
         active_log = REVIEW_LOG
-        start_fn = lambda s: start_review(s, instance_ids=s.rework_queue or None)
+        start_fn = start_review_for_state
     elif in_analysis:
         active_session = ANALYSIS_TMUX_SESSION
         active_log = ANALYSIS_LOG
@@ -1382,7 +1371,7 @@ def main() -> int:
             in_review = True
             active_session = REVIEW_TMUX_SESSION
             active_log = REVIEW_LOG
-            start_fn = lambda s: start_review(s, instance_ids=s.rework_queue or None)
+            start_fn = start_review_for_state
 
             # Check if review session is running
             if _tmux_session_exists(REVIEW_TMUX_SESSION):
@@ -1577,7 +1566,7 @@ def main() -> int:
         elif in_review:
             active_session = REVIEW_TMUX_SESSION
             active_log = REVIEW_LOG
-            start_fn = lambda s: start_review(s, instance_ids=s.rework_queue or None)
+            start_fn = start_review_for_state
         elif in_analysis:
             active_session = ANALYSIS_TMUX_SESSION
             active_log = ANALYSIS_LOG

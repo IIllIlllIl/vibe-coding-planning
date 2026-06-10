@@ -150,8 +150,9 @@ recommended input and preserves the history of case counts and hashes.
 
 ### Checker Rule Comparison
 
-The three-arm checker-only experiment compares Flash rules, Pro rules, and a
-no-rule direct plan-quality baseline. All arms use `deepseek-v4-flash`:
+The four-arm checker-only experiment compares Flash, Pro, and Kimi rules
+against a no-rule direct plan-quality baseline. All arms use
+`deepseek-v4-flash`:
 
 ```bash
 bash scripts/run_checker_comparison.sh
@@ -162,9 +163,12 @@ The first command is validation-only. The detached run is monitored through
 the `polybench-checker-comparison` tmux session,
 `logs/checker_comparison_run.log`, and the experiment's `experiment.json`.
 Per-instance predictions make interrupted runs resumable.
-Each arm runs four checker instances concurrently by default; override with
+Each arm runs three checker instances concurrently by default; override with
 `--parallel N`. Arms remain sequential so all variants use the same bounded
 API and Docker concurrency.
+The runner retains six project images by default and performs cache cleanup
+after every completed checker case. Use `--max-cached-images N` to override;
+the value must not be lower than `--parallel`.
 
 `SWE-bench_Verified/test_runs_archive/` currently contains:
 

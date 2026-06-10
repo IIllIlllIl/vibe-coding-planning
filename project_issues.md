@@ -139,7 +139,8 @@
 
 - **状态**：✅ 已完成（2026-06-08）
 - **实现**：扩展 `scripts/evaluate_checker.py`，复用原 `check_agent.run()`、checker prompt、规则加载和配置，不重新运行 Plan Agent、Code Agent 或 evaluator。
-- **对比实验入口**：`scripts/run_checker_comparison.py` 固定使用 `deepseek-v4-flash` 对比 Flash 规则、Pro 规则和无规则直接判断；`scripts/run_checker_comparison.sh` 提供 dry-run、tmux 后台执行、日志和断点续跑。正式 198 样本运行应在代码提交后启动。
+- **对比实验入口**：`scripts/run_checker_comparison.py` 固定使用 `deepseek-v4-flash` 对比 Flash、Pro、Kimi 规则和无规则直接判断；`scripts/run_checker_comparison.sh` 提供 dry-run、tmux 后台执行、日志和断点续跑。四组实验使用新输出目录，并仅导入旧实验中含有效 `prediction.json` 的已完成实例。正式 198 样本运行应在代码提交后启动。
+- **Docker 容量窗口**：并行 checker 统一复用 `DockerCapacityWindow`。窗口以 semaphore 限制活动容器数，以单一维护锁执行磁盘检查和镜像清理；默认 3 个容器槽位、保留 6 个最新项目镜像，避免各 worker 独立扩张 Docker.raw。
 - **固定输入**：`--build-input` 扫描 PolyBench 历史结果，按 full199 顺序输出 JSONL；同一实例选择最早的成功 PCT，不按 resolved 结果择优。evaluator-only 重评只为原 plan 补充标签，并分别记录原 PCT 来源和标签来源。
 - **错误处理**：checker 运行错误写入 `errors.jsonl` 并从 TP/FP/FN/TN 分母排除。
 - **当前实测**：2026-06-09 纳入 Buster 4 重跑后，full199 历史结果生成
