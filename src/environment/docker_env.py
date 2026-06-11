@@ -62,13 +62,13 @@ def is_docker_storage_error(text: str) -> bool:
     return any(pattern in lowered for pattern in patterns)
 
 
-def remove_docker_image(image: str) -> None:
+def remove_docker_image(image: str) -> bool:
     """Best-effort removal for a no-longer-needed Docker image."""
     if not image:
-        return
+        return False
     try:
         result = subprocess.run(
-            ["docker", "image", "rm", "-f", image],
+            ["docker", "image", "rm", image],
             capture_output=True,
             text=True,
             check=False,
@@ -76,27 +76,30 @@ def remove_docker_image(image: str) -> None:
         )
     except FileNotFoundError:
         logger.warning("Docker CLI not found; cannot remove image %s", image)
-        return
+        return False
     except subprocess.TimeoutExpired:
         logger.warning("Timed out removing Docker image: %s", image)
-        return
+        return False
 
     if result.returncode == 0:
         logger.info("Removed Docker image after instance: %s", image)
-        return
+        return True
 
     msg = (result.stderr or result.stdout or "").strip()
     if "No such image" in msg:
         logger.debug("Docker image already absent: %s", image)
     else:
         logger.warning("Failed to remove Docker image %s: %s", image, msg[:500])
+    return False
 
 
 def cleanup_docker_image_cache(max_cached_images: int = 75) -> int:
-    """Keep only the newest project-related Docker images.
+    """Keep the newest idle project images and protect container references.
 
     The cleanup is intentionally scoped to images used by this project so it
-    does not evict unrelated Docker work on the same machine.
+    does not evict unrelated Docker work on the same machine. Images referenced
+    by running or stopped containers are never counted against the idle cache
+    limit and are never removed.
 
     Args:
         max_cached_images: Number of newest project images to retain.
@@ -104,12 +107,19 @@ def cleanup_docker_image_cache(max_cached_images: int = 75) -> int:
     Returns:
         Number of image references removed.
     """
-    images = _list_project_docker_images()
+    referenced_ids = _list_container_image_ids()
+    images = [
+        image
+        for image in _list_project_docker_images()
+        if image["id"] not in referenced_ids
+    ]
     if len(images) <= max_cached_images:
         logger.info(
-            "Docker image cache within limit: %d/%d project images",
+            "Docker image cache within limit: %d/%d idle project images "
+            "(%d container-referenced image IDs protected)",
             len(images),
             max_cached_images,
+            len(referenced_ids),
         )
         return 0
 
@@ -117,14 +127,58 @@ def cleanup_docker_image_cache(max_cached_images: int = 75) -> int:
     stale = images[max_cached_images:]
     removed = 0
     for image in stale:
-        remove_docker_image(image["ref"])
-        removed += 1
+        removed += remove_docker_image(image["ref"])
     logger.info(
-        "Docker image cache cleanup removed %d old project images; retained %d",
+        "Docker image cache cleanup removed %d old idle project images; "
+        "retained %d idle images and protected %d referenced image IDs",
         removed,
         max_cached_images,
+        len(referenced_ids),
     )
     return removed
+
+
+def prune_dangling_images() -> None:
+    """Delete only untagged images that no container references."""
+    try:
+        result = subprocess.run(
+            ["docker", "image", "prune", "-f"],
+            capture_output=True,
+            text=True,
+            check=False,
+            timeout=300,
+        )
+    except (FileNotFoundError, subprocess.TimeoutExpired) as exc:
+        logger.warning("Could not prune dangling Docker images: %s", exc)
+        return
+    if result.returncode != 0:
+        logger.warning(
+            "Docker dangling-image prune failed: "
+            f"{(result.stderr or result.stdout)[:500]}"
+        )
+
+
+def prune_build_cache(*, aggressive: bool) -> None:
+    """Prune unused BuildKit cache according to the current disk pressure."""
+    args = ["docker", "builder", "prune", "-af"]
+    if not aggressive:
+        args = ["docker", "builder", "prune", "-f", "--filter", "until=24h"]
+    try:
+        result = subprocess.run(
+            args,
+            capture_output=True,
+            text=True,
+            check=False,
+            timeout=600,
+        )
+    except (FileNotFoundError, subprocess.TimeoutExpired) as exc:
+        logger.warning("Could not prune Docker build cache: %s", exc)
+        return
+    if result.returncode != 0:
+        logger.warning(
+            "Docker build-cache prune failed: "
+            f"{(result.stderr or result.stdout)[:500]}"
+        )
 
 
 class DockerCapacityWindow:
@@ -195,8 +249,37 @@ class DockerCapacityWindow:
                     handle.close()
             time.sleep(0.1)
 
+    def _acquire_usage_lock(self) -> Any:
+        """Hold a shared lock for one complete Docker lifecycle."""
+        handle = (self.lock_dir / "usage.lock").open("a+")
+        fcntl.flock(handle.fileno(), fcntl.LOCK_SH)
+        return handle
+
+    @contextmanager
+    def _exclusive_idle_usage(self) -> Iterator[bool]:
+        """Acquire the global Docker lifecycle lock only when all users idle."""
+        with self._state_lock:
+            locally_active = bool(self._active)
+        if locally_active:
+            yield False
+            return
+        handle = (self.lock_dir / "usage.lock").open("a+")
+        try:
+            try:
+                fcntl.flock(
+                    handle.fileno(),
+                    fcntl.LOCK_EX | fcntl.LOCK_NB,
+                )
+            except BlockingIOError:
+                yield False
+                return
+            yield True
+        finally:
+            fcntl.flock(handle.fileno(), fcntl.LOCK_UN)
+            handle.close()
+
     @staticmethod
-    def _release_process_slot(handle: Any) -> None:
+    def _release_file_lock(handle: Any) -> None:
         fcntl.flock(handle.fileno(), fcntl.LOCK_UN)
         handle.close()
 
@@ -220,10 +303,11 @@ class DockerCapacityWindow:
                 free_gb = self._free_gb()
                 if free_gb < self.min_free_gb:
                     logger.warning(
-                        "Docker window low disk: %dGiB free; cleaning image cache",
+                        "Docker window low disk: %dGiB free; cleaning Docker storage",
                         free_gb,
                     )
-                    cleanup_docker_image_cache(self.max_cached_images)
+                    prune_dangling_images()
+                    prune_build_cache(aggressive=True)
                     free_gb = self._free_gb()
                 if free_gb < self.min_free_gb:
                     raise FatalError(
@@ -235,7 +319,20 @@ class DockerCapacityWindow:
         """Serialize project-image cleanup across all window users."""
         with self._maintenance_lock:
             with self._interprocess_lock("maintenance.lock"):
-                cleanup_docker_image_cache(self.max_cached_images)
+                with self._exclusive_idle_usage() as all_idle:
+                    if all_idle:
+                        cleanup_docker_image_cache(self.max_cached_images)
+                    else:
+                        logger.info(
+                            "Docker image eviction deferred while another "
+                            "capacity slot is active"
+                        )
+                    prune_dangling_images()
+                    free_gb = self._free_gb()
+                    if free_gb < max(self.min_free_gb * 4, 80):
+                        prune_build_cache(aggressive=True)
+                    elif free_gb < max(self.min_free_gb * 8, 150):
+                        prune_build_cache(aggressive=False)
 
     @contextmanager
     def lease(self) -> Iterator[None]:
@@ -251,9 +348,13 @@ class DockerCapacityWindow:
 
         self._slots.acquire()
         process_slot = None
+        usage_lock = None
+        capacity_ready = False
         try:
             process_slot = self._acquire_process_slot()
+            usage_lock = self._acquire_usage_lock()
             self.ensure_capacity()
+            capacity_ready = True
             self._local.lease_depth = 1
             with self._state_lock:
                 self._active += 1
@@ -264,11 +365,19 @@ class DockerCapacityWindow:
                 with self._state_lock:
                     self._active -= 1
                 self._local.lease_depth = 0
-                self.maintain()
         finally:
+            if usage_lock is not None:
+                self._release_file_lock(usage_lock)
             if process_slot is not None:
-                self._release_process_slot(process_slot)
+                self._release_file_lock(process_slot)
             self._slots.release()
+            if capacity_ready:
+                try:
+                    self.maintain()
+                except Exception:
+                    logger.exception(
+                        "Docker maintenance failed after lease release"
+                    )
 
 
 _DEFAULT_WINDOW: DockerCapacityWindow | None = None
@@ -428,7 +537,14 @@ def _list_project_docker_images() -> list[dict[str, str]]:
     """Return project image refs with creation timestamps."""
     try:
         result = subprocess.run(
-            ["docker", "image", "ls", "--format", "{{.Repository}}:{{.Tag}}\t{{.ID}}"],
+            [
+                "docker",
+                "image",
+                "ls",
+                "--no-trunc",
+                "--format",
+                "{{.Repository}}:{{.Tag}}\t{{.ID}}",
+            ],
             capture_output=True,
             text=True,
             check=False,
@@ -456,6 +572,56 @@ def _list_project_docker_images() -> list[dict[str, str]]:
         created = _inspect_image_created(ref)
         images.append({"ref": ref, "id": image_id, "created": created})
     return images
+
+
+def _list_container_image_ids() -> set[str]:
+    """Return image IDs referenced by all running and stopped containers."""
+    try:
+        result = subprocess.run(
+            [
+                "docker",
+                "container",
+                "ls",
+                "-aq",
+            ],
+            capture_output=True,
+            text=True,
+            check=False,
+            timeout=120,
+        )
+    except (FileNotFoundError, subprocess.TimeoutExpired) as exc:
+        logger.warning("Could not list Docker containers: %s", exc)
+        return set()
+    if result.returncode != 0:
+        logger.warning(
+            "Docker container ls failed: "
+            f"{(result.stderr or result.stdout)[:500]}"
+        )
+        return set()
+    container_ids = result.stdout.split()
+    if not container_ids:
+        return set()
+    inspect = subprocess.run(
+        [
+            "docker",
+            "container",
+            "inspect",
+            "--format",
+            "{{.Image}}",
+            *container_ids,
+        ],
+        capture_output=True,
+        text=True,
+        check=False,
+        timeout=120,
+    )
+    if inspect.returncode != 0:
+        logger.warning(
+            "Docker container inspect failed: "
+            f"{(inspect.stderr or inspect.stdout)[:500]}"
+        )
+        return set()
+    return {line.strip() for line in inspect.stdout.splitlines() if line.strip()}
 
 
 def _is_project_image_ref(ref: str) -> bool:
@@ -637,9 +803,16 @@ def _main() -> int:
     parser = argparse.ArgumentParser(description="Central Docker maintenance")
     parser.add_argument("command", choices=("maintain", "reset-project"))
     parser.add_argument("--max-cached-images", type=int, default=75)
+    parser.add_argument("--max-concurrent", type=int, default=1)
+    parser.add_argument("--min-free-gb", type=int, default=20)
     args = parser.parse_args()
     if args.command == "maintain":
-        prune_docker_resources(args.max_cached_images)
+        window = DockerCapacityWindow(
+            max_concurrent=args.max_concurrent,
+            max_cached_images=args.max_cached_images,
+            min_free_gb=args.min_free_gb,
+        )
+        window.maintain()
     elif args.command == "reset-project":
         reset_project_docker_resources()
     return 0

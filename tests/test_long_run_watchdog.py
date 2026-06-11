@@ -245,6 +245,12 @@ class TestCleanupDocker:
     def test_function_exists(self):
         assert callable(watchdog.cleanup_docker)
 
+    @patch("src.environment.docker_env.get_docker_capacity_window")
+    def test_uses_shared_capacity_window(self, mock_get_window):
+        watchdog.cleanup_docker()
+
+        mock_get_window.return_value.maintain.assert_called_once_with()
+
 
 class TestInitStateCorruptResult:
     def test_corrupt_result_json_not_counted(self, tmp_path: Path, monkeypatch):

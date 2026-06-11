@@ -278,7 +278,7 @@ python runs/run_phase5.py 2>&1 | tee runs/$TS/run.log
 
 ```bash
 docker system df                                  # 看占用
-docker system prune -f                            # 清未引用
+python -m src.environment.docker_env maintain     # 统一窗口安全维护
 df -h /                                           # 宿主机至少 50 GB 空闲
 # Docker Desktop > Settings > Resources > Disk image size 调到 ≥ 100 GB
 ```

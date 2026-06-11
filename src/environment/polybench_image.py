@@ -41,6 +41,9 @@ _APT_NETWORK_SETUP = """RUN find /etc/apt -type f \\
     && printf 'Acquire::Retries "3";\\nAcquire::https::Timeout "30";\\n' \\
        > /etc/apt/apt.conf.d/80polybench-network
 """
+_PIP_NETWORK_SETUP = """ENV PIP_DEFAULT_TIMEOUT=300
+ENV PIP_RETRIES=5
+"""
 _PYAV_BUILD_DEPS = """RUN find /etc/apt -type f \\
     \\( -name '*.list' -o -name '*.sources' \\) \\
     -exec sed -i 's|http://deb.debian.org|https://deb.debian.org|g' {} + \\
@@ -146,6 +149,34 @@ def _dockerfile_variants(dockerfile: str) -> list[tuple[str, str]]:
                         pyav_fixed,
                     )
                 )
+    hardened: list[tuple[str, str]] = []
+    seen_content = {content for _, content in variants}
+    for variant_name, candidate in tuple(variants):
+        fixed = candidate
+        additions: list[str] = []
+        first_apt = "RUN apt-get update"
+        if first_apt in fixed and "80polybench-network" not in fixed:
+            fixed = fixed.replace(
+                first_apt,
+                f"{_APT_NETWORK_SETUP}\n\n{first_apt}",
+                1,
+            )
+            additions.append("apt-retry")
+        if "pip install" in fixed and "PIP_DEFAULT_TIMEOUT" not in fixed:
+            first_newline = fixed.find("\n")
+            if first_newline >= 0:
+                fixed = (
+                    fixed[: first_newline + 1]
+                    + _PIP_NETWORK_SETUP
+                    + "\n"
+                    + fixed[first_newline + 1 :]
+                )
+                additions.append("pip-retry")
+        if additions and fixed not in seen_content:
+            suffix = "+".join(additions)
+            hardened.append((f"{variant_name}+{suffix}", fixed))
+            seen_content.add(fixed)
+    variants.extend(hardened)
     return [
         variants[0],
         *sorted(

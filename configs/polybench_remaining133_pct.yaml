@@ -437,6 +437,7 @@ docker:
   workdir: /testbed
   timeout: 30
   delete_images_after_instance: true
+  # Idle-image cache allowance; container-referenced images are protected.
   max_cached_images: 75
   min_free_gb: 20
   polybench_build_fallback: true

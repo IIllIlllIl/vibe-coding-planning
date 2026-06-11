@@ -82,7 +82,7 @@ plan-code-test/
 | **流水线** | `src/pipeline.py` | 单实例的核心循环：`generate_plan()` → `generate_code()` → `evaluate()` →（如有需要）`reflect_and_optimize()`，循环 n 次 |
 | **Checker 评估** | `scripts/evaluate_checker.py` | 兼容原 PCC 入口；也可把历史 PCT 结果按“最早成功 plan”整合为固定 JSONL，追加发布不可变数据快照，并仅调用原 `check_agent.run()` 计算分类指标；每实例预测支持断点恢复 |
 | **Checker 对比实验** | `scripts/run_checker_comparison.py` | 在同一 PCT 快照和 Flash checker 模型上依次评估 Flash、Pro、Kimi 规则和无规则直接判断，生成统一指标、差值和逐实例配对报告 |
-| **Docker 容量窗口** | `src/environment/docker_env.py::DockerCapacityWindow` | 为并行任务提供共享容器槽位、启动前磁盘门控和串行镜像缓存维护；所有 checker worker 必须在同一个 window lease 内完成容器生命周期 |
+| **Docker 容量窗口** | `src/environment/docker_env.py::DockerCapacityWindow` | 所有项目 Docker 入口共享的容量管理模块：提供跨进程容器槽位、启动前磁盘门控和串行缓存维护；所有 worker 在同一个 window lease 内完成容器生命周期。每次维护均清理无引用 dangling 镜像；带标签镜像淘汰只在所有 lease 空闲时运行，并保护所有容器引用的 ImageID且不强制删标签；BuildKit 缓存仅在磁盘压力下分级清理。pipeline、PCC、checker-only、evaluator 和 watchdog 不再实现独立清理策略 |
 
 ### 3.2 Agent 层
 

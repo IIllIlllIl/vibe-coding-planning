@@ -135,6 +135,25 @@ output/SWE-PolyBench/polybench-pct-checker-datasets/
   20260609_198_cdf4d414e401/cases.jsonl
 ```
 
+Official PolyBench task labels are stored as a derived artifact so the
+immutable source snapshot is not modified:
+
+```text
+20260609_198_cdf4d414e401/derived/task_category_v1/
+├── cases.jsonl
+├── bug_fix_cases.jsonl
+├── feature_cases.jsonl
+├── refactoring_cases.jsonl
+├── testing_cases.jsonl
+└── manifest.json
+```
+
+Regenerate with:
+
+```bash
+conda run -n mini-swe python scripts/label_checker_task_categories.py
+```
+
 Publish after new successful PCT reruns:
 
 ```bash

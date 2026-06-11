@@ -32,9 +32,17 @@ def test_default_checker_image_cache_is_bounded():
 def test_comparison_has_four_arms():
     assert comparison.ARM_NAMES == (
         "flash_rules",
+        "no_rules",
         "pro_rules",
         "kimi_rules",
+    )
+
+
+def test_recovery_order_starts_with_baseline():
+    assert comparison.RECOVERY_ARM_NAMES == (
         "no_rules",
+        "pro_rules",
+        "kimi_rules",
     )
 
 
@@ -84,6 +92,32 @@ def test_all_arms_force_flash_and_baseline_uses_dedicated_prompt(tmp_path):
     assert baseline_config.prompts.check_prompt == "baseline prompt"
     assert rules_override is None
     assert baseline_override == ""
+
+
+def test_baseline_recovery_raises_only_baseline_budget(tmp_path):
+    config = Config(
+        prompts=PromptConfig(
+            check_prompt="rule prompt",
+            check_baseline_prompt="baseline prompt",
+        )
+    )
+    baseline_config, _ = comparison._arm_config(
+        config,
+        rules_path=None,
+        baseline=True,
+        recovery=True,
+    )
+    rules_config, _ = comparison._arm_config(
+        config,
+        rules_path=tmp_path / "rules.json",
+        baseline=False,
+        recovery=True,
+    )
+
+    assert baseline_config.checker.max_steps == 100
+    assert baseline_config.checker.cost_limit == 3.0
+    assert rules_config.checker.max_steps == config.checker.max_steps
+    assert rules_config.checker.cost_limit == config.checker.cost_limit
 
 
 def _write_arm(output: Path, name: str, passed: bool) -> None:

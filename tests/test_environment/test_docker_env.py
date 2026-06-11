@@ -11,6 +11,7 @@ import time
 
 import pytest
 
+import src.environment.docker_env as docker_env_module
 from src.config import DockerConfig
 from src.environment.docker_env import (
     DockerCapacityWindow,
@@ -18,6 +19,8 @@ from src.environment.docker_env import (
     _resolve_polybench_image,
     cleanup_docker_image_cache,
     is_docker_storage_error,
+    prune_dangling_images,
+    remove_docker_image,
     reset_project_docker_resources,
 )
 from src.exceptions import FatalError
@@ -59,6 +62,20 @@ def docker_config() -> DockerConfig:
         workdir="/testbed",
         timeout=30,
     )
+
+
+@pytest.fixture(autouse=True)
+def isolated_default_docker_window(tmp_path, monkeypatch):
+    """Keep wrapper tests away from the real shared Docker window."""
+    window = DockerCapacityWindow(
+        max_concurrent=1,
+        max_cached_images=75,
+        min_free_gb=20,
+        lock_dir=tmp_path / "docker-window",
+    )
+    monkeypatch.setattr(window, "ensure_capacity", lambda: None)
+    monkeypatch.setattr(window, "maintain", lambda: None)
+    monkeypatch.setattr(docker_env_module, "_DEFAULT_WINDOW", window)
 
 
 class TestStart:
@@ -251,71 +268,100 @@ class TestPolybenchImageFallback:
 
 
 class TestDockerImageCacheCleanup:
-    def test_retains_newest_project_images_only(self):
-        removed: list[str] = []
+    @patch("src.environment.docker_env.remove_docker_image", return_value=True)
+    @patch("src.environment.docker_env._list_container_image_ids")
+    @patch("src.environment.docker_env._list_project_docker_images")
+    def test_retains_newest_idle_project_images_only(
+        self, mock_images, mock_references, mock_remove
+    ):
+        mock_references.return_value = {"id-active"}
+        mock_images.return_value = [
+            {"ref": "project:old", "id": "id-old", "created": "2026-01-01"},
+            {
+                "ref": "project:active",
+                "id": "id-active",
+                "created": "2025-01-01",
+            },
+            {"ref": "project:new", "id": "id-new", "created": "2026-01-03"},
+            {"ref": "project:middle", "id": "id-mid", "created": "2026-01-02"},
+        ]
 
-        def fake_run(args, **kwargs):
-            if args[:4] == ["docker", "image", "ls", "--format"]:
-                return SimpleNamespace(
-                    returncode=0,
-                    stdout=(
-                        "swebench/sweb.eval.x86_64.repo_1776_a:latest\tid1\n"
-                        "ghcr.io/timesler/swe-polybench.eval.x86_64.repo__b:v1.1\tid2\n"
-                        "ubuntu:latest\tid3\n"
-                        "jefzda/sweap-images:repo-c\tid4\n"
-                    ),
-                    stderr="",
-                )
-            if args[:3] == ["docker", "image", "inspect"]:
-                ref = args[3]
-                created = {
-                    "swebench/sweb.eval.x86_64.repo_1776_a:latest": "2026-01-01T00:00:00Z",
-                    "ghcr.io/timesler/swe-polybench.eval.x86_64.repo__b:v1.1": "2026-01-03T00:00:00Z",
-                    "jefzda/sweap-images:repo-c": "2026-01-02T00:00:00Z",
-                }[ref]
-                return SimpleNamespace(returncode=0, stdout=created + "\n", stderr="")
-            if args[:4] == ["docker", "image", "rm", "-f"]:
-                removed.append(args[4])
-                return SimpleNamespace(returncode=0, stdout="deleted", stderr="")
-            raise AssertionError(args)
-
-        with patch("src.environment.docker_env.subprocess.run", side_effect=fake_run):
-            count = cleanup_docker_image_cache(max_cached_images=2)
+        count = cleanup_docker_image_cache(max_cached_images=2)
 
         assert count == 1
-        assert removed == ["swebench/sweb.eval.x86_64.repo_1776_a:latest"]
+        mock_remove.assert_called_once_with("project:old")
 
-    def test_noop_when_within_limit(self):
-        def fake_run(args, **kwargs):
-            if args[:4] == ["docker", "image", "ls", "--format"]:
-                return SimpleNamespace(
-                    returncode=0,
-                    stdout="swebench/sweb.eval.x86_64.repo_1776_a:latest\tid1\n",
-                    stderr="",
-                )
-            if args[:3] == ["docker", "image", "inspect"]:
-                return SimpleNamespace(returncode=0, stdout="2026-01-01T00:00:00Z\n", stderr="")
-            if args[:4] == ["docker", "image", "rm", "-f"]:
-                raise AssertionError("should not remove images within limit")
-            raise AssertionError(args)
+    @patch("src.environment.docker_env.remove_docker_image")
+    @patch("src.environment.docker_env._list_container_image_ids")
+    @patch("src.environment.docker_env._list_project_docker_images")
+    def test_referenced_images_do_not_consume_idle_cache_slots(
+        self, mock_images, mock_references, mock_remove
+    ):
+        mock_references.return_value = {"active-1", "active-2"}
+        mock_images.return_value = [
+            {"ref": "project:a", "id": "active-1", "created": "2026-01-01"},
+            {"ref": "project:b", "id": "active-2", "created": "2026-01-02"},
+            {"ref": "project:c", "id": "idle-1", "created": "2026-01-03"},
+            {"ref": "project:d", "id": "idle-2", "created": "2026-01-04"},
+        ]
 
-        with patch("src.environment.docker_env.subprocess.run", side_effect=fake_run):
-            count = cleanup_docker_image_cache(max_cached_images=2)
+        count = cleanup_docker_image_cache(max_cached_images=2)
 
         assert count == 0
+        mock_remove.assert_not_called()
+
+    def test_image_removal_is_not_forced(self):
+        with patch(
+            "src.environment.docker_env.subprocess.run",
+            return_value=SimpleNamespace(
+                returncode=0, stdout="deleted", stderr=""
+            ),
+        ) as mock_run:
+            assert remove_docker_image("project:old") is True
+
+        assert mock_run.call_args.args[0] == [
+            "docker",
+            "image",
+            "rm",
+            "project:old",
+        ]
+
+    @patch("src.environment.docker_env.remove_docker_image")
+    @patch("src.environment.docker_env._list_container_image_ids")
+    @patch("src.environment.docker_env._list_project_docker_images")
+    def test_noop_when_within_limit(
+        self, mock_images, mock_references, mock_remove
+    ):
+        mock_references.return_value = set()
+        mock_images.return_value = [
+            {"ref": "project:a", "id": "id1", "created": "2026-01-01"}
+        ]
+
+        count = cleanup_docker_image_cache(max_cached_images=2)
+
+        assert count == 0
+        mock_remove.assert_not_called()
 
 
 class TestDockerCapacityWindow:
+    @patch("src.environment.docker_env.prune_build_cache")
+    @patch("src.environment.docker_env.prune_dangling_images")
     @patch("src.environment.docker_env.cleanup_docker_image_cache")
     @patch("src.environment.docker_env.shutil.disk_usage")
     def test_shared_window_bounds_concurrency(
-        self, mock_disk_usage, mock_cleanup
+        self,
+        mock_disk_usage,
+        mock_cleanup,
+        mock_dangling,
+        mock_build,
+        tmp_path,
     ):
-        mock_disk_usage.return_value = SimpleNamespace(free=100 * 1024**3)
+        mock_disk_usage.return_value = SimpleNamespace(free=200 * 1024**3)
         window = DockerCapacityWindow(
             max_concurrent=2,
             max_cached_images=4,
             min_free_gb=20,
+            lock_dir=tmp_path / "shared",
         )
         barrier = threading.Barrier(2)
 
@@ -333,25 +379,37 @@ class TestDockerCapacityWindow:
         assert all(not thread.is_alive() for thread in threads)
         assert window.peak_active == 2
         assert window.active == 0
-        assert mock_cleanup.call_count == 4
+        assert mock_cleanup.call_count >= 1
+        assert mock_dangling.call_count == 4
+        mock_build.assert_not_called()
 
+    @patch("src.environment.docker_env.prune_build_cache")
+    @patch("src.environment.docker_env.prune_dangling_images")
     @patch("src.environment.docker_env.cleanup_docker_image_cache")
     @patch("src.environment.docker_env.shutil.disk_usage")
     def test_low_disk_blocks_lease_after_cleanup(
-        self, mock_disk_usage, mock_cleanup
+        self,
+        mock_disk_usage,
+        mock_cleanup,
+        mock_dangling,
+        mock_build,
+        tmp_path,
     ):
         mock_disk_usage.return_value = SimpleNamespace(free=5 * 1024**3)
         window = DockerCapacityWindow(
             max_concurrent=1,
             max_cached_images=2,
             min_free_gb=20,
+            lock_dir=tmp_path / "low-disk",
         )
 
         with pytest.raises(FatalError, match="blocked container launch"):
             with window.lease():
                 pass
 
-        mock_cleanup.assert_called_once_with(2)
+        mock_cleanup.assert_not_called()
+        mock_dangling.assert_called_once_with()
+        mock_build.assert_called_once_with(aggressive=True)
         assert window.active == 0
 
     def test_rejects_cache_smaller_than_window(self):
@@ -362,16 +420,24 @@ class TestDockerCapacityWindow:
                 min_free_gb=20,
             )
 
+    @patch("src.environment.docker_env.prune_build_cache")
+    @patch("src.environment.docker_env.prune_dangling_images")
     @patch("src.environment.docker_env.cleanup_docker_image_cache")
     @patch("src.environment.docker_env.shutil.disk_usage")
     def test_nested_lease_is_reentrant(
-        self, mock_disk_usage, mock_cleanup
+        self,
+        mock_disk_usage,
+        mock_cleanup,
+        mock_dangling,
+        mock_build,
+        tmp_path,
     ):
-        mock_disk_usage.return_value = SimpleNamespace(free=100 * 1024**3)
+        mock_disk_usage.return_value = SimpleNamespace(free=200 * 1024**3)
         window = DockerCapacityWindow(
             max_concurrent=1,
             max_cached_images=2,
             min_free_gb=20,
+            lock_dir=tmp_path / "nested",
         )
 
         with window.lease():
@@ -381,13 +447,22 @@ class TestDockerCapacityWindow:
 
         assert window.active == 0
         mock_cleanup.assert_called_once_with(2)
+        mock_dangling.assert_called_once_with()
+        mock_build.assert_not_called()
 
+    @patch("src.environment.docker_env.prune_build_cache")
+    @patch("src.environment.docker_env.prune_dangling_images")
     @patch("src.environment.docker_env.cleanup_docker_image_cache")
     @patch("src.environment.docker_env.shutil.disk_usage")
     def test_separate_windows_share_interprocess_slots(
-        self, mock_disk_usage, mock_cleanup, tmp_path
+        self,
+        mock_disk_usage,
+        mock_cleanup,
+        mock_dangling,
+        mock_build,
+        tmp_path,
     ):
-        mock_disk_usage.return_value = SimpleNamespace(free=100 * 1024**3)
+        mock_disk_usage.return_value = SimpleNamespace(free=200 * 1024**3)
         windows = [
             DockerCapacityWindow(
                 max_concurrent=1,
@@ -422,6 +497,77 @@ class TestDockerCapacityWindow:
 
         assert all(not thread.is_alive() for thread in threads)
         assert peak == 1
+        mock_build.assert_not_called()
+
+    @patch("src.environment.docker_env.prune_build_cache")
+    @patch("src.environment.docker_env.prune_dangling_images")
+    @patch("src.environment.docker_env.cleanup_docker_image_cache")
+    @patch("src.environment.docker_env.shutil.disk_usage")
+    def test_maintenance_defers_tagged_eviction_while_slot_is_active(
+        self,
+        mock_disk_usage,
+        mock_cleanup,
+        mock_dangling,
+        mock_build,
+        tmp_path,
+    ):
+        mock_disk_usage.return_value = SimpleNamespace(free=200 * 1024**3)
+        window = DockerCapacityWindow(
+            max_concurrent=2,
+            max_cached_images=4,
+            min_free_gb=20,
+            lock_dir=tmp_path / "active-slot",
+        )
+        active_usage = window._acquire_usage_lock()
+        try:
+            window.maintain()
+        finally:
+            window._release_file_lock(active_usage)
+
+        mock_cleanup.assert_not_called()
+        mock_dangling.assert_called_once_with()
+        mock_build.assert_not_called()
+
+    @patch("src.environment.docker_env.prune_build_cache")
+    @patch("src.environment.docker_env.prune_dangling_images")
+    @patch("src.environment.docker_env.cleanup_docker_image_cache")
+    @patch("src.environment.docker_env.shutil.disk_usage")
+    def test_moderate_disk_pressure_uses_age_filtered_build_prune(
+        self,
+        mock_disk_usage,
+        mock_cleanup,
+        mock_dangling,
+        mock_build,
+        tmp_path,
+    ):
+        mock_disk_usage.return_value = SimpleNamespace(free=100 * 1024**3)
+        window = DockerCapacityWindow(
+            max_concurrent=1,
+            max_cached_images=2,
+            min_free_gb=20,
+            lock_dir=tmp_path / "moderate-disk",
+        )
+
+        window.maintain()
+
+        mock_cleanup.assert_called_once_with(2)
+        mock_dangling.assert_called_once_with()
+        mock_build.assert_called_once_with(aggressive=False)
+
+
+@patch("src.environment.docker_env.subprocess.run")
+def test_prune_dangling_images_uses_non_aggressive_image_prune(mock_run):
+    mock_run.return_value = SimpleNamespace(returncode=0, stdout="", stderr="")
+
+    prune_dangling_images()
+
+    mock_run.assert_called_once_with(
+        ["docker", "image", "prune", "-f"],
+        capture_output=True,
+        text=True,
+        check=False,
+        timeout=300,
+    )
 
 
 @patch("src.environment.docker_env.prune_docker_resources")

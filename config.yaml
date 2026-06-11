@@ -662,8 +662,9 @@ docker:
   # not delete every image immediately; it trims only this project's
   # Docker images down to max_cached_images.
   delete_images_after_instance: true
-  # Retain this many newest project-related images
-  # (SWE-bench/PolyBench/Pro). Typical useful range: 50-100.
+  # Retain this many newest idle project-related images
+  # (SWE-bench/PolyBench/Pro). Images referenced by any container are
+  # protected and do not consume this idle-cache allowance.
   max_cached_images: 75
   # run_batch.sh refuses to start a new instance below this free-space
   # threshold so Docker.raw cannot silently consume the whole disk.

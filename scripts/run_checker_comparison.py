@@ -1,4 +1,4 @@
-"""Run the reproducible three-arm PolyBench checker-only comparison."""
+"""Run the reproducible four-arm PolyBench checker-only comparison."""
 
 from __future__ import annotations
 
@@ -30,6 +30,9 @@ DEFAULT_RESUME_SOURCE = Path(
 CHECKER_MODEL = "deepseek-v4-flash"
 DEFAULT_PARALLEL = 3
 DEFAULT_MAX_CACHED_IMAGES = 6
+RECOVERY_ARM_NAMES = ("no_rules", "pro_rules", "kimi_rules")
+BASELINE_RECOVERY_MAX_STEPS = 100
+BASELINE_RECOVERY_COST_LIMIT = 3.0
 
 
 def _sha256(path: Path) -> str:
@@ -111,7 +114,7 @@ def _pairwise(
     }
 
 
-ARM_NAMES = ("flash_rules", "pro_rules", "kimi_rules", "no_rules")
+ARM_NAMES = ("flash_rules", "no_rules", "pro_rules", "kimi_rules")
 RULE_ARM_NAMES = ("flash_rules", "pro_rules", "kimi_rules")
 
 
@@ -176,7 +179,11 @@ def build_comparison_report(output_dir: Path) -> dict[str, Any]:
 
 
 def _arm_config(
-    config: Config, *, rules_path: Path | None, baseline: bool
+    config: Config,
+    *,
+    rules_path: Path | None,
+    baseline: bool,
+    recovery: bool = False,
 ) -> tuple[Config, str | None]:
     prompt = (
         config.prompts.check_baseline_prompt
@@ -190,6 +197,19 @@ def _arm_config(
         enabled=True,
         model=CHECKER_MODEL,
         rules_path=str(rules_path or ""),
+        max_steps=(
+            max(config.checker.max_steps, BASELINE_RECOVERY_MAX_STEPS)
+            if baseline and recovery
+            else config.checker.max_steps
+        ),
+        cost_limit=(
+            max(
+                config.checker.cost_limit,
+                BASELINE_RECOVERY_COST_LIMIT,
+            )
+            if baseline and recovery
+            else config.checker.cost_limit
+        ),
     )
     prompts = replace(config.prompts, check_prompt=prompt)
     return replace(config, checker=checker, prompts=prompts), ("" if baseline else None)
@@ -225,6 +245,15 @@ def main() -> int:
     )
     parser.add_argument("--dry-run", action="store_true")
     parser.add_argument("--no-resume", action="store_true")
+    parser.add_argument(
+        "--recovery",
+        action="store_true",
+        help=(
+            "Resume only no_rules, pro_rules, and kimi_rules in that order. "
+            "Completed predictions are reused; the no-rules retry budget is "
+            "raised for prior LimitsExceeded cases."
+        ),
+    )
     parser.add_argument(
         "--parallel",
         type=int,
@@ -268,11 +297,16 @@ def main() -> int:
         ),
     )
     cases = _read_jsonl(args.input_results)
-    arms = (
+    all_arms = (
         ("flash_rules", args.flash_rules, False),
+        ("no_rules", None, True),
         ("pro_rules", args.pro_rules, False),
         ("kimi_rules", args.kimi_rules, False),
-        ("no_rules", None, True),
+    )
+    arms = (
+        tuple(arm for arm in all_arms if arm[0] in RECOVERY_ARM_NAMES)
+        if args.recovery
+        else all_arms
     )
     metadata = {
         "schema_version": 1,
@@ -284,7 +318,7 @@ def main() -> int:
         "case_count": len(cases),
         "arms": {},
     }
-    for name, rules_path, baseline in arms:
+    for name, rules_path, baseline in all_arms:
         arm_config, _ = _arm_config(
             config, rules_path=rules_path, baseline=baseline
         )
@@ -298,6 +332,7 @@ def main() -> int:
     metadata["experiment_fingerprint"] = hashlib.sha256(
         fingerprint_data
     ).hexdigest()
+    metadata["execution_arms"] = [name for name, _, _ in arms]
 
     if args.dry_run:
         metadata["parallel_workers"] = args.parallel
@@ -325,11 +360,24 @@ def main() -> int:
         metadata["started_at"] = datetime.now(timezone.utc).isoformat()
     metadata["parallel_workers"] = args.parallel
     metadata["max_cached_images"] = args.max_cached_images
+    if args.recovery:
+        recovery_runs = metadata.setdefault("recovery_runs", [])
+        recovery_runs.append(
+            {
+                "started_at": datetime.now(timezone.utc).isoformat(),
+                "arms": list(RECOVERY_ARM_NAMES),
+                "baseline_max_steps": BASELINE_RECOVERY_MAX_STEPS,
+                "baseline_cost_limit": BASELINE_RECOVERY_COST_LIMIT,
+            }
+        )
     _write_json(experiment_path, metadata)
 
     for name, rules_path, baseline in arms:
         arm_config, rules_override = _arm_config(
-            config, rules_path=rules_path, baseline=baseline
+            config,
+            rules_path=rules_path,
+            baseline=baseline,
+            recovery=args.recovery,
         )
         print(f"=== Checker comparison arm start: {name} ===", flush=True)
         metadata["arms"][name]["status"] = "running"

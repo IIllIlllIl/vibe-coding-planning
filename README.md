@@ -201,12 +201,15 @@ Flash、Pro、Kimi 规则和无规则直接判断的公平对比统一使用
 ```bash
 bash scripts/run_checker_comparison.sh
 bash scripts/run_checker_comparison.sh --execute --detach
+bash scripts/run_checker_recovery.sh --execute --detach
 ```
 
 运行可从每实例 `prediction.json` 断点恢复，进度写入
 `output/checker_eval/polybench-flash-pro-kimi-baseline/experiment.json`，最终报告为
 `comparison_report.json` 和 `comparison_report.md`。每个 arm 默认并行运行
 3 个实例；可用 `--parallel N` 调整为任意正整数，三个 arm 仍依次运行。
+恢复入口只补齐无规则、Pro、Kimi 的错误或未完成实例，顺序固定为
+`no_rules → pro_rules → kimi_rules`，不会重跑已完成的 Flash 或有效预测。
 并行运行默认仅保留 6 个最新项目 Docker 镜像，并在每个实例完成后清理；
 可用 `--max-cached-images N` 调整，但不得低于并发数。
 
@@ -220,6 +223,14 @@ PolyBench 本地兼容镜像可能被项目的 Docker 窗口清理。镜像缺�
 并复用已实现的 Buster archive、apt HTTPS/retry、JAX wheel archive、
 PyAV/Cython 和 Python 3.10 Bullseye 兼容 variant。无需再次人工修改
 依赖方案，但若镜像和 BuildKit cache 都已清理，完整重建仍可能耗时十几分钟。
+
+并行任务共享 `DockerCapacityWindow`。缓存淘汰仅在所有容器 slot
+空闲时执行，并排除所有容器引用的 ImageID；删除镜像标签不再使用
+`--force`，因此不会把其他 worker 正在使用的镜像转成匿名镜像。无引用
+dangling 镜像会安全清理，BuildKit cache 仅在磁盘空间低于分级阈值时清理。
+pipeline、PCC、checker-only、evaluator、watchdog 和 Docker CLI/SDK helper
+均共享该模块，不再维护独立清理策略。早期定时清理 daemon 已归档到
+`scripts/archive/docker_cleanup_daemon/`，不属于正式运行路径。
 
 检查器评估输出结构见 [`output/README.md`](output/README.md)。
 

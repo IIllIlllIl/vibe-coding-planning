@@ -44,7 +44,7 @@ DOCKER_MAX_RETRIES = 12               # 12 retries with backoff, then fatal
 REPAIR_CHECK_INTERVAL = 60            # 1 min while waiting for Claude repair
 DISK_MIN_FREE_GB = 10                 # Pause if less than 10 GB free
 MAX_REPAIR_ATTEMPTS = 3               # Claude repair limit before long cooldown
-DOCKER_PRUNE_INTERVAL_CHECKS = 6      # Run `docker system prune -f` every N checks
+DOCKER_PRUNE_INTERVAL_CHECKS = 6      # Run shared-window maintenance every N checks
 # When the batch tmux session is gone, poll the master log for the
 # `=== Batch end ===` marker before treating the disappearance as a crash.
 # A single 5 s sleep proved too tight on a busy filesystem: tee can lag the
@@ -942,15 +942,15 @@ def check_disk_space() -> bool:
 
 
 def cleanup_docker() -> None:
-    """Prune unused Docker objects to free space and prevent container leaks.
+    """Run reference-aware Docker maintenance through the shared window.
 
     Runs non-interactively; failures are logged but never fatal.
     """
     logging.info("Running centralized Docker maintenance ...")
     try:
-        from src.environment.docker_env import prune_docker_resources
+        from src.environment.docker_env import get_docker_capacity_window
 
-        prune_docker_resources()
+        get_docker_capacity_window().maintain()
         logging.info("Centralized Docker maintenance completed.")
     except Exception as exc:
         logging.warning("Docker maintenance unexpected error: %s", exc)

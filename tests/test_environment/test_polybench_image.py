@@ -79,20 +79,28 @@ RUN apt-get update && apt-get install -y git
 
     variants = _dockerfile_variants(dockerfile)
 
-    assert [name for name, _ in variants] == [
-        "official",
-        "debian-buster-archive",
+    variants_by_name = dict(variants)
+
+    assert variants[0] == ("official", dockerfile)
+    assert "debian-buster-archive" in variants_by_name
+    assert "official+apt-retry" in variants_by_name
+    assert "debian-buster-archive+apt-retry" in variants_by_name
+    assert "archive.debian.org/debian" in variants_by_name[
+        "debian-buster-archive"
     ]
-    assert "archive.debian.org/debian" in variants[1][1]
-    assert "Acquire::Check-Valid-Until" in variants[1][1]
+    assert "Acquire::Check-Valid-Until" in variants_by_name[
+        "debian-buster-archive"
+    ]
 
 
 def test_current_debian_dockerfile_has_no_compatibility_variant():
-    assert _dockerfile_variants(
-        "FROM python:3.10-slim-bookworm\nRUN apt-get update\n"
-    ) == [
-        ("official", "FROM python:3.10-slim-bookworm\nRUN apt-get update\n")
-    ]
+    dockerfile = "FROM python:3.10-slim-bookworm\nRUN apt-get update\n"
+
+    variants = _dockerfile_variants(dockerfile)
+
+    assert variants[0] == ("official", dockerfile)
+    assert variants[1][0] == "official+apt-retry"
+    assert "https://deb.debian.org" in variants[1][1]
 
 
 def test_transformers_dev_extras_get_jax_archive_fallback():
@@ -104,21 +112,28 @@ def test_transformers_dev_extras_get_jax_archive_fallback():
 
     variants = _dockerfile_variants(dockerfile)
 
-    assert [name for name, _ in variants] == [
-        "official",
-        "apt-network+jax-wheel-archive+pyav-build-compat",
-        "apt-network+jax-wheel-archive",
-    ]
+    variants_by_name = dict(variants)
+
+    assert variants[0] == ("official", dockerfile)
+    assert "apt-network+jax-wheel-archive+pyav-build-compat" in variants_by_name
+    assert "apt-network+jax-wheel-archive" in variants_by_name
+    assert (
+        "apt-network+jax-wheel-archive+pyav-build-compat+pip-retry"
+        in variants_by_name
+    )
     assert (
         "--find-links https://storage.googleapis.com/jax-releases/"
         "jax_releases.html -e"
-    ) in variants[2][1]
-    assert "libavformat-dev" in variants[1][1]
-    assert "pkg-config" in variants[1][1]
-    assert "Cython<3" in variants[1][1]
-    assert "PIP_CONSTRAINT" in variants[1][1]
-    assert "https://deb.debian.org" in variants[1][1]
-    assert 'Acquire::Retries "3"' in variants[1][1]
+    ) in variants_by_name["apt-network+jax-wheel-archive"]
+    compat = variants_by_name[
+        "apt-network+jax-wheel-archive+pyav-build-compat"
+    ]
+    assert "libavformat-dev" in compat
+    assert "pkg-config" in compat
+    assert "Cython<3" in compat
+    assert "PIP_CONSTRAINT" in compat
+    assert "https://deb.debian.org" in compat
+    assert 'Acquire::Retries "3"' in compat
 
 
 def test_python310_slim_gets_bullseye_fallback():
@@ -133,6 +148,20 @@ def test_python310_slim_gets_bullseye_fallback():
             "FROM public.ecr.aws/docker/library/python:3.10-slim-bullseye\n",
         ),
     ]
+
+
+def test_pip_install_gets_timeout_and_retry_fallback():
+    dockerfile = (
+        "FROM python:3.8-slim\n"
+        "RUN pip install --no-cache-dir tensorflow\n"
+    )
+
+    variants = _dockerfile_variants(dockerfile)
+
+    assert variants[0] == ("official", dockerfile)
+    assert variants[1][0] == "official+pip-retry"
+    assert "PIP_DEFAULT_TIMEOUT=300" in variants[1][1]
+    assert "PIP_RETRIES=5" in variants[1][1]
 
 
 @patch("src.environment.polybench_image.run_docker_cli")
