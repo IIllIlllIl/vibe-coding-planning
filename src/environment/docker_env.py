@@ -220,6 +220,7 @@ class DockerCapacityWindow:
         self.lock_dir.mkdir(parents=True, exist_ok=True)
         self._slots = threading.BoundedSemaphore(max_concurrent)
         self._maintenance_lock = threading.Lock()
+        self._image_acquisition_lock = threading.Lock()
         self._state_lock = threading.Lock()
         self._local = threading.local()
         self._active = 0
@@ -314,6 +315,13 @@ class DockerCapacityWindow:
                         "Docker capacity window blocked container launch: "
                         f"{free_gb}GiB free < {self.min_free_gb}GiB minimum"
                     )
+
+    @contextmanager
+    def image_acquisition(self) -> Iterator[None]:
+        """Serialize project image pulls and builds across all workers."""
+        with self._image_acquisition_lock:
+            with self._interprocess_lock("image-acquisition.lock"):
+                yield
 
     def maintain(self) -> None:
         """Serialize project-image cleanup across all window users."""
@@ -415,9 +423,17 @@ def get_docker_capacity_window(
 ) -> DockerCapacityWindow:
     """Return the shared window, creating a single-slot default if needed."""
     if config is not None:
+        with _DEFAULT_WINDOW_LOCK:
+            global _DEFAULT_WINDOW
+            if (
+                _DEFAULT_WINDOW is not None
+                and _DEFAULT_WINDOW.max_cached_images
+                == config.max_cached_images
+                and _DEFAULT_WINDOW.min_free_gb == config.min_free_gb
+            ):
+                return _DEFAULT_WINDOW
         return configure_docker_capacity(config)
     with _DEFAULT_WINDOW_LOCK:
-        global _DEFAULT_WINDOW
         if _DEFAULT_WINDOW is None:
             _DEFAULT_WINDOW = DockerCapacityWindow(
                 max_concurrent=1,
@@ -711,6 +727,7 @@ class DockerEnvWrapper:
                 instance_info=instance_info,
                 build_fallback=self._config.polybench_build_fallback,
                 build_timeout=self._config.polybench_build_timeout,
+                capacity_window=self._capacity_window,
             )
             self._image = image
 
@@ -825,6 +842,7 @@ def _resolve_polybench_image(
     instance_info: dict[str, Any] | None = None,
     build_fallback: bool = False,
     build_timeout: int = 3600,
+    capacity_window: DockerCapacityWindow | None = None,
 ) -> str:
     """Ensure PolyBench GHCR images are local, with tag fallback.
 
@@ -841,50 +859,72 @@ def _resolve_polybench_image(
     if image not in candidates:
         candidates.insert(0, image)
 
-    pull_timeout = timeout or 1800
-    last_error = ""
     for candidate in candidates:
         if _docker_image_exists(candidate):
             if candidate != image:
-                logger.info("Using PolyBench fallback image already local: %s", candidate)
+                logger.info(
+                    "Using PolyBench fallback image already local: %s",
+                    candidate,
+                )
             return candidate
-        try:
-            logger.info("Pulling PolyBench image: %s", candidate)
-            subprocess.run(
-                ["docker", "pull", candidate],
-                check=True,
-                capture_output=True,
-                text=True,
-                timeout=pull_timeout,
+
+    window = capacity_window or get_docker_capacity_window()
+    pull_timeout = timeout or 1800
+    last_error = ""
+    with window.image_acquisition():
+        # Another worker may have completed the image while this worker waited.
+        for candidate in candidates:
+            if _docker_image_exists(candidate):
+                if candidate != image:
+                    logger.info(
+                        "Using PolyBench fallback image already local: %s",
+                        candidate,
+                    )
+                return candidate
+
+        for candidate in candidates:
+            try:
+                logger.info("Pulling PolyBench image: %s", candidate)
+                subprocess.run(
+                    ["docker", "pull", candidate],
+                    check=True,
+                    capture_output=True,
+                    text=True,
+                    timeout=pull_timeout,
+                )
+                if candidate != image:
+                    logger.info("Using PolyBench fallback image: %s", candidate)
+                return candidate
+            except subprocess.TimeoutExpired as exc:
+                last_error = f"timeout after {exc.timeout}s pulling {candidate}"
+                logger.warning("PolyBench image pull timed out: %s", candidate)
+            except subprocess.CalledProcessError as exc:
+                last_error = (exc.stderr or exc.stdout or str(exc)).strip()
+                if is_docker_storage_error(last_error):
+                    raise FatalError(
+                        "Docker storage error while pulling PolyBench image. "
+                        "Stop the batch and free Docker disk space before retrying. "
+                        f"Image={candidate}. Error: {last_error}"
+                    ) from exc
+                logger.info(
+                    "PolyBench image pull failed for %s: %s",
+                    candidate,
+                    last_error,
+                )
+
+        if build_fallback and instance_info:
+            logger.info(
+                "GHCR image unavailable; building with the official "
+                "PolyBench Dockerfile"
             )
-            if candidate != image:
-                logger.info("Using PolyBench fallback image: %s", candidate)
-            return candidate
-        except subprocess.TimeoutExpired as exc:
-            last_error = f"timeout after {exc.timeout}s pulling {candidate}"
-            logger.warning("PolyBench image pull timed out: %s", candidate)
-        except subprocess.CalledProcessError as exc:
-            last_error = (exc.stderr or exc.stdout or str(exc)).strip()
-            if is_docker_storage_error(last_error):
-                raise FatalError(
-                    "Docker storage error while pulling PolyBench image. "
-                    "Stop the batch and free Docker disk space before retrying. "
-                    f"Image={candidate}. Error: {last_error}"
-                ) from exc
-            logger.info("PolyBench image pull failed for %s: %s", candidate, last_error)
+            from src.environment.polybench_image import (
+                build_polybench_image_from_official_dockerfile,
+            )
 
-    if build_fallback and instance_info:
-        logger.info(
-            "GHCR image unavailable; building with the official PolyBench Dockerfile"
-        )
-        from src.environment.polybench_image import (
-            build_polybench_image_from_official_dockerfile,
-        )
-
-        return build_polybench_image_from_official_dockerfile(
-            instance_info,
-            build_timeout=build_timeout,
-        )
+            return build_polybench_image_from_official_dockerfile(
+                instance_info,
+                build_timeout=build_timeout,
+            )
 
     raise FatalError(
         "Unable to obtain PolyBench Docker image for agent container. "

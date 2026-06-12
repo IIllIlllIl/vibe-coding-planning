@@ -12,7 +12,7 @@ if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
 
 spec = importlib.util.spec_from_file_location(
-    "run_checker_comparison", "scripts/run_checker_comparison.py"
+    "run_checker_comparison", "scripts/internal/run_checker_comparison.py"
 )
 comparison = importlib.util.module_from_spec(spec)
 sys.modules["run_checker_comparison"] = comparison
@@ -114,8 +114,8 @@ def test_baseline_recovery_raises_only_baseline_budget(tmp_path):
         recovery=True,
     )
 
-    assert baseline_config.checker.max_steps == 100
-    assert baseline_config.checker.cost_limit == 3.0
+    assert baseline_config.checker.max_steps == 200
+    assert baseline_config.checker.cost_limit == 6.0
     assert rules_config.checker.max_steps == config.checker.max_steps
     assert rules_config.checker.cost_limit == config.checker.cost_limit
 

@@ -13,11 +13,11 @@ from pptx import Presentation
 from pptx.dml.color import RGBColor
 from pptx.util import Inches, Pt
 
-REPO_ROOT = Path(__file__).resolve().parents[1]
+REPO_ROOT = Path(__file__).resolve().parents[2]
 if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
 
-from scripts.generate_checker_interim_ppt import (  # noqa: E402
+from scripts.tools.generate_checker_interim_ppt import (  # noqa: E402
     ARMS,
     NAVY,
     WHITE,
@@ -199,6 +199,10 @@ def main() -> None:
                 ],
             ),
             (
+                "Recall",
+                [float(bug_fix_metrics[arm]["recall"]) for arm, _ in ARMS],
+            ),
+            (
                 "F1",
                 [float(bug_fix_metrics[arm]["f1"]) for arm, _ in ARMS],
             ),
@@ -214,21 +218,35 @@ def main() -> None:
     add_title(
         slide,
         "Bug Fix vs. Full Common Cohort",
-        "Balanced accuracy remains near chance after restricting task type",
+        "Recall and balanced accuracy before and after restricting task type",
     )
     add_chart(
         slide,
         [label for _, label in ARMS],
         [
             (
-                "Full common cohort (N=155)",
+                "Full recall (N=155)",
+                [
+                    float(common_metrics[arm]["recall"])
+                    for arm, _ in ARMS
+                ],
+            ),
+            (
+                "Bug Fix recall (N=125)",
+                [
+                    float(bug_fix_metrics[arm]["recall"])
+                    for arm, _ in ARMS
+                ],
+            ),
+            (
+                "Full balanced accuracy",
                 [
                     float(common_metrics[arm]["balanced_accuracy"])
                     for arm, _ in ARMS
                 ],
             ),
             (
-                "Bug Fix subset (N=125)",
+                "Bug Fix balanced accuracy",
                 [
                     float(bug_fix_metrics[arm]["balanced_accuracy"])
                     for arm, _ in ARMS
@@ -237,23 +255,22 @@ def main() -> None:
         ],
         left=0.8,
         top=1.45,
-        width=7.5,
+        width=7.8,
         height=4.8,
     )
     add_bullets(
         slide,
         [
-            "Flash: 0.482 → 0.463",
-            "No rules: 0.485 → 0.467",
-            "Pro: 0.461 → 0.475",
-            "Kimi: 0.455 → 0.448",
+            "Recall remains highest for the no-rule baseline.",
+            "Flash retains similar recall and F1 on Bug Fix tasks.",
+            "Pro remains highly conservative with 3.6% recall.",
             "No arm exceeds 0.48 balanced accuracy.",
         ],
-        left=8.55,
+        left=8.85,
         top=1.7,
-        width=4.1,
+        width=3.8,
         height=4.2,
-        size=15,
+        size=14,
     )
     add_footer(slide)
 

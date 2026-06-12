@@ -12,6 +12,7 @@ import sys
 from typing import Sequence
 
 from src.config import Config, load_config
+from src.environment.docker_env import configure_docker_capacity
 from src.exceptions import FatalError
 from src.pipeline import run_instance
 
@@ -70,6 +71,12 @@ def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
         "-v",
         action="store_true",
         help="Enable verbose (DEBUG) logging",
+    )
+    parser.add_argument(
+        "--docker-max-concurrent",
+        type=int,
+        default=1,
+        help=argparse.SUPPRESS,
     )
     return parser.parse_args(argv)
 
@@ -151,6 +158,21 @@ def main(argv: Sequence[str] | None = None) -> int:
     except FatalError as exc:
         logging.error("Configuration error: %s", exc)
         return 1
+    if args.docker_max_concurrent < 1:
+        logging.error("--docker-max-concurrent must be at least 1")
+        return 1
+    if config.docker.max_cached_images < args.docker_max_concurrent:
+        logging.error(
+            "docker.max_cached_images (%d) must be at least the batch "
+            "parallelism (%d)",
+            config.docker.max_cached_images,
+            args.docker_max_concurrent,
+        )
+        return 1
+    configure_docker_capacity(
+        config.docker,
+        max_concurrent=args.docker_max_concurrent,
+    )
 
     # Determine instance list
     instances: list[str] = []

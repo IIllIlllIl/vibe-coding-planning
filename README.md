@@ -13,6 +13,7 @@
 - **规则质量审查与返工（FR-14，默认关闭）**：独立 LLM Reviewer Agent 审查规则质量（五维评分），未通过者触发返工循环。实践发现返工机制会**破坏已提取的有效规则**（删除旧结果后重跑失败），因此默认关闭。可通过 `config.analysis.enable_review` 开启
 - **Plan-Checker-Code 管道（FR-15）**：在 Plan 与 Code 之间插入规则检查器，验证计划是否符合从成功案例中提炼出的规则集。检查器在 Docker 内运行，可验证文件路径、函数名等具体引用。代码始终执行以产生 ground truth，用于计算检查器的 TP/FP/FN/TN、Accuracy、Precision、Recall、F1
 - **检查器 held-out 评估**：在 SWE-PolyBench Python 子集上运行 Plan-Check-Code 管道，评估规则集的预测能力
+- **GEPA 规则优化（设计中）**：计划使用 Verified PCT Round 1 的 `issue + plan + repo + resolved` 分类数据，让 GEPA 直接优化 Checker 的完整规则文本，替代逐案例提取与聚合。设计见 [`docs/gepa-rule-optimization.md`](docs/gepa-rule-optimization.md)
 - **最小化造轮子**：Agent 基于 `mini-swe-agent` 框架，反思复用 GEPA 反射 Prompt 模板，评估直接调用 `swebench` 官方库
 
 ## 实验设计：两阶段方法学
@@ -49,12 +50,12 @@ pytest --cov=src --cov-report=term-missing
 python -m src.main --instance astropy__astropy-12907 --n 3 --config config.yaml
 
 # 6. 从已有 PCT 结果发布不可变 Checker 数据快照
-python scripts/evaluate_checker.py --config configs/polybench_full199_pct.yaml \
+python scripts/internal/evaluate_checker.py --config configs/polybench_full199_pct.yaml \
     --build-input --pct-root output/SWE-PolyBench \
     --snapshot-root output/SWE-PolyBench/polybench-pct-checker-datasets
 
 # 7. 仅运行 Checker，不重新生成 Plan/Code 或执行 Evaluator
-python scripts/evaluate_checker.py --config configs/polybench_full199_pct.yaml \
+python scripts/internal/evaluate_checker.py --config configs/polybench_full199_pct.yaml \
     --input-results output/SWE-PolyBench/polybench-pct-checker-datasets/20260609_198_cdf4d414e401/cases.jsonl \
     --output output/checker_eval/polybench-pct
 ```
@@ -81,7 +82,7 @@ python scripts/evaluate_checker.py --config configs/polybench_full199_pct.yaml \
 
 ### 检查器评估 CLI
 
-`python scripts/evaluate_checker.py` 参数：
+`scripts/internal/evaluate_checker.py` 是 checker 数据构建和执行的内部实现：
 
 | 参数 | 类型 | 说明 |
 |------|------|------|
@@ -89,7 +90,6 @@ python scripts/evaluate_checker.py --config configs/polybench_full199_pct.yaml \
 | `--instance ID` | str | 单实例 ID（dry-run 用） |
 | `--instances FILE` | str | 实例列表 JSON 文件路径 |
 | `--output DIR` | str | 评估输出目录 |
-| `--dataset NAME` | str | 旧 PCC 模式的数据集名称，默认 `ScaleAI/SWE-bench_Pro` |
 | `--build-input` | flag | 从已有 PCT 批次构建固定 checker 输入，不运行 agent |
 | `--pct-root DIR` | str | PCT 批次根目录，默认 `output/SWE-PolyBench` |
 | `--input-output FILE` | str | `--build-input` 生成的 JSONL 路径 |
@@ -98,21 +98,33 @@ python scripts/evaluate_checker.py --config configs/polybench_full199_pct.yaml \
 
 ### 批量运行脚本
 
-`scripts/run_batch.sh` 读取主流程配置并逐实例调用 `python -m src.main`：
+`scripts/run_batch.sh` 读取主流程配置，并通过有界 worker pool 调用
+`python -m src.main`：
 
 | 参数 | 类型 | 说明 |
 |------|------|------|
 | `--config PATH` | str | 主流程配置文件路径，默认 `config.yaml` |
 | `--dry-run` | flag | 只列出 SKIP/RUN，不调用主流程 |
 | `--instances FILE` | str | 覆盖批次实例列表 JSON |
+| `--parallel N` | int | 同时运行的 PCT/PCC 实例数，默认 `1` |
 | `--analysis-only` | flag | 跳过主流程，只执行规则分析 handoff |
 | `--analysis-config PATH` | str | 规则分析配置文件路径 |
+| `--checker-comparison` | flag | 运行四臂 checker-only 对比 |
+| `--checker-recovery` | flag | 仅恢复 checker-only 错误或未完成样本 |
+
+`--parallel` 控制主 PCT/PCC 阶段；规则提取的并行度仍由
+`analysis.parallel` 控制。所有 PCT/PCC worker 共享
+`DockerCapacityWindow` 的跨进程容器槽位。缺失镜像的 pull/build
+保持全局串行，已有镜像的 agent 和 evaluator 工作负载可以并行运行。
+重复执行同一 batch 时，已有 `result.json` 的实例仍会直接跳过。
 
 PolyBench Python 199 实例的纯 PCT 扫描配置已固定为
 `configs/polybench_full199_pct.yaml`（`checker.enabled=false`）：
 
 ```bash
-bash scripts/run_batch.sh --config configs/polybench_full199_pct.yaml
+bash scripts/run_batch.sh \
+  --config configs/polybench_full199_pct.yaml \
+  --parallel 2
 ```
 
 跳过 `polybench-run20` / `polybench-run100` 中已有 `result.json` 的 66 个任务时，使用 remaining-133 配置：
@@ -124,8 +136,10 @@ bash scripts/run_batch.sh --config configs/polybench_remaining133_pct.yaml
 对已验证 Debian Buster archive fallback 的 4 个剩余镜像实例：
 
 ```bash
-bash scripts/run_polybench_image_retry.sh           # dry-run
-bash scripts/run_polybench_image_retry.sh --execute # real run
+bash scripts/run_batch.sh --dry-run \
+  --config configs/polybench_remaining133_pct.yaml \
+  --instances configs/polybench_retry_images_buster4.json \
+  --batch-id polybench-retry-images-buster4
 ```
 
 长时监控运行时，watchdog 会用 `caffeinate` 包装其启动的 tmux 子任务，避免 macOS 睡眠暂停 batch：
@@ -150,10 +164,10 @@ PCT_CONFIG=configs/polybench_remaining133_pct.yaml \
 | `--postprocess-data-dir DIR` | str | 后处理时提供原始 reflect-success case 材料 |
 | `--aggregate` | flag | 读取 `--input` 中 `rule_valid=true` 的规则并生成 `aggregated_rules.json` |
 
-批量脚本也支持独立分析配置：
+统一入口支持独立分析配置：
 
 ```bash
-bash scripts/run_analysis.sh \
+bash scripts/run_batch.sh --analysis-only \
   --config configs/analysis_kimi_opencode.yaml \
   --input-dir ./output/SWE-bench_Verified/reflect_success_cases \
   --output-dir ./output/analysis_kimi_opencode_60
@@ -199,9 +213,9 @@ Flash、Pro、Kimi 规则和无规则直接判断的公平对比统一使用
 `deepseek-v4-flash`。命令默认只校验输入；提交代码后可在 tmux 中启动：
 
 ```bash
-bash scripts/run_checker_comparison.sh
-bash scripts/run_checker_comparison.sh --execute --detach
-bash scripts/run_checker_recovery.sh --execute --detach
+bash scripts/run_batch.sh --checker-comparison --dry-run
+bash scripts/run_batch.sh --checker-comparison --parallel 3
+bash scripts/run_batch.sh --checker-recovery --parallel 1
 ```
 
 运行可从每实例 `prediction.json` 断点恢复，进度写入
@@ -228,6 +242,9 @@ PyAV/Cython 和 Python 3.10 Bullseye 兼容 variant。无需再次人工修改
 空闲时执行，并排除所有容器引用的 ImageID；删除镜像标签不再使用
 `--force`，因此不会把其他 worker 正在使用的镜像转成匿名镜像。无引用
 dangling 镜像会安全清理，BuildKit cache 仅在磁盘空间低于分级阈值时清理。
+缺失的 PolyBench 镜像通过跨线程、跨进程的全局锁串行拉取或构建；等待
+该锁的 worker 会在获得锁后再次检查本地镜像，避免重复下载。同一时间仍可
+运行多个已取得镜像的 checker 容器，镜像获取串行不等于 checker 执行串行。
 pipeline、PCC、checker-only、evaluator、watchdog 和 Docker CLI/SDK helper
 均共享该模块，不再维护独立清理策略。早期定时清理 daemon 已归档到
 `scripts/archive/docker_cleanup_daemon/`，不属于正式运行路径。
@@ -240,6 +257,7 @@ pipeline、PCC、checker-only、evaluator、watchdog 和 Docker CLI/SDK helper
 |------|------|
 | [`docs/requirement-document.md`](docs/requirement-document.md) | 完整需求文档：功能需求、数据模型、验收标准、风险分析 |
 | [`docs/architecture.md`](docs/architecture.md) | 架构文档：目录结构、模块职责、数据流、设计决策 |
+| [`docs/gepa-rule-optimization.md`](docs/gepa-rule-optimization.md) | 基于 GEPA 的替代规则生成流程：数据边界、Checker/ASI、优化目标和实施顺序 |
 | [`project_issues.md`](project_issues.md) | 待办与方法学决策（含 §3 数据集分层实施进度） |
 | [`output/README.md`](output/README.md) | 本地 output 目录索引、当前运行清单、关键产物和常用命令 |
 | [`CLAUDE.md`](CLAUDE.md) | Agent 操作守则（仅 3 节：项目索引 / conda env / 清理）—— 不放项目说明 |
@@ -283,12 +301,11 @@ pipeline、PCC、checker-only、evaluator、watchdog 和 Docker CLI/SDK helper
 │   ├── requirement-document.md    # 需求文档
 │   └── architecture.md            # 架构文档
 ├── scripts/
-│   ├── run_batch.sh               # 统一批量运行脚本（Verified / Pro 自动识别）
-│   ├── run_polybench_image_retry.sh # PolyBench Buster 4 实例安全重跑入口
-│   ├── run_analysis.sh            # 对比分析批量运行
-│   ├── evaluate_checker.py        # 检查器评估批量运行
-│   ├── dryrun_checker.py          # 检查器 dry-run 工具
-│   └── long_run_watchdog.py       # 长时无人值守监控
+│   ├── run_batch.sh               # 唯一手动实验入口
+│   ├── long_run_watchdog.py       # 唯一无人值守实验入口
+│   ├── internal/                  # batch/analysis/checker 内部实现
+│   ├── tools/                     # 报告和数据维护工具
+│   └── archive/                   # 历史入口与临时脚本
 ├── configs/
 │   ├── analysis_kimi_opencode.yaml       # Kimi/OpenCode 规则分析实验配置
 │   ├── polybench_full199_pct.yaml        # PolyBench Python 199 实例纯 PCT 扫描配置

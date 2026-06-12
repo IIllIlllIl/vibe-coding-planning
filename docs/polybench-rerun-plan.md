@@ -12,7 +12,7 @@ set now has 188 evaluated instances and 11 remaining failures.
 Planning is read-only:
 
 ```bash
-conda run -n mini-swe python scripts/retry_polybench.py --phase plan
+conda run -n mini-swe python scripts/archive/legacy_entrypoints/retry_polybench.py --phase plan
 ```
 
 Execution always requires an explicit `--execute`.
@@ -75,10 +75,10 @@ The compatibility fallback has been validated by successfully building
 
 ```bash
 # Planning only
-bash scripts/run_polybench_image_retry.sh
+bash scripts/run_batch.sh --dry-run --config configs/polybench_remaining133_pct.yaml --instances configs/polybench_retry_images_buster4.json --batch-id polybench-retry-images-buster4
 
 # Real execution
-bash scripts/run_polybench_image_retry.sh --execute
+bash scripts/run_batch.sh --config configs/polybench_remaining133_pct.yaml --instances configs/polybench_retry_images_buster4.json --batch-id polybench-retry-images-buster4
 ```
 
 It uses:
@@ -110,14 +110,14 @@ have been verified with the environment's newer scikit-learn.
 The completed recovery was run evaluator-only first:
 
 ```bash
-conda run -n mini-swe python scripts/retry_polybench.py \
+conda run -n mini-swe python scripts/archive/legacy_entrypoints/retry_polybench.py \
   --phase evaluator --execute
 ```
 
 Then run the full pipeline group:
 
 ```bash
-conda run -n mini-swe python scripts/retry_polybench.py \
+conda run -n mini-swe python scripts/archive/legacy_entrypoints/retry_polybench.py \
   --phase full --execute
 ```
 

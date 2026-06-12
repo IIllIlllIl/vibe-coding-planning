@@ -60,6 +60,10 @@ class TestParseArgs:
         args = parse_args(["-v"])
         assert args.verbose is True
 
+    def test_docker_parallel_flag(self):
+        args = parse_args(["--docker-max-concurrent", "3"])
+        assert args.docker_max_concurrent == 3
+
 
 class TestOverrideConfig:
     def test_n_override(self, config):
@@ -103,15 +107,35 @@ class TestOverrideConfig:
 
 
 class TestMain:
+    @patch("src.main.configure_docker_capacity")
     @patch("src.main.load_config")
     @patch("src.main.run_instance")
     @patch.dict("os.environ", {"DEEPSEEK_API_KEY": "test-key"})
-    def test_runs_single_instance(self, mock_run, mock_load, config):
+    def test_runs_single_instance(
+        self,
+        mock_run,
+        mock_load,
+        mock_configure_docker,
+        config,
+    ):
         mock_load.return_value = config
         mock_run.return_value = {"plans": []}
 
-        exit_code = main(["--instance", "django__django-123", "--n", "1"])
+        exit_code = main(
+            [
+                "--instance",
+                "django__django-123",
+                "--n",
+                "1",
+                "--docker-max-concurrent",
+                "3",
+            ]
+        )
         assert exit_code == 0
+        mock_configure_docker.assert_called_once_with(
+            config.docker,
+            max_concurrent=3,
+        )
         mock_run.assert_called_once()
         call_args = mock_run.call_args
         assert call_args[0][0] == "django__django-123"

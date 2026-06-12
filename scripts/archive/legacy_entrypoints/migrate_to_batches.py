@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""One-time migration of output/SWE-bench_Verified/ to a batch-scoped layout.
+"""Archived one-time migration to a batch-scoped output layout.
 
 Before:
     output/SWE-bench_Verified/

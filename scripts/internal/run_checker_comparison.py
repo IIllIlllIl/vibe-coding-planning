@@ -12,11 +12,14 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
-REPO_ROOT = Path(__file__).resolve().parents[1]
+REPO_ROOT = Path(__file__).resolve().parents[2]
 if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
 
-from scripts.evaluate_checker import _read_jsonl, run_checker_only  # noqa: E402
+from scripts.internal.evaluate_checker import (  # noqa: E402
+    _read_jsonl,
+    run_checker_only,
+)
 from src.config import Config, load_config  # noqa: E402
 
 DEFAULT_INPUT = Path(
@@ -31,8 +34,8 @@ CHECKER_MODEL = "deepseek-v4-flash"
 DEFAULT_PARALLEL = 3
 DEFAULT_MAX_CACHED_IMAGES = 6
 RECOVERY_ARM_NAMES = ("no_rules", "pro_rules", "kimi_rules")
-BASELINE_RECOVERY_MAX_STEPS = 100
-BASELINE_RECOVERY_COST_LIMIT = 3.0
+BASELINE_RECOVERY_MAX_STEPS = 200
+BASELINE_RECOVERY_COST_LIMIT = 6.0
 
 
 def _sha256(path: Path) -> str:

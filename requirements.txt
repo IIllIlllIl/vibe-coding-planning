@@ -24,3 +24,12 @@ pytest-cov>=5.0.0
 # Optional: used only for extracting the reflection prompt template
 # from GEPA during development. Not required at runtime.
 # gepa>=0.1.1
+
+# --- Third-party GEPA (vendored in third_party/gepa) ---
+# GEPA core has no dependencies; these are required by gepa.optimize_anything
+# and its adapters. Install GEPA itself in editable mode with:
+#   pip install -e third_party/gepa
+tqdm>=4.66.1
+cloudpickle>=3.0.0
+datasets>=2.14.6
+pydantic>=2.12.0

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Plan and execute targeted recovery for a failed PolyBench batch.
+"""Archived targeted recovery for the historical remaining-133 batch.
 
 Planning is the default and performs no Docker, evaluator, or LLM work.
 Execution requires the explicit ``--execute`` flag.
@@ -16,7 +16,7 @@ import sys
 import tempfile
 from pathlib import Path
 
-REPO_ROOT = Path(__file__).resolve().parents[1]
+REPO_ROOT = Path(__file__).resolve().parents[3]
 if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
 

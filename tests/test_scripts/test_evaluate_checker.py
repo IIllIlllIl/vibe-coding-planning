@@ -21,7 +21,7 @@ if str(REPO_ROOT) not in sys.path:
 from src.config import CheckerConfig, Config, SystemConfig  # noqa: E402
 
 spec = importlib.util.spec_from_file_location(
-    "evaluate_checker", "scripts/evaluate_checker.py"
+    "evaluate_checker", "scripts/internal/evaluate_checker.py"
 )
 evaluate_checker = importlib.util.module_from_spec(spec)
 sys.modules["evaluate_checker"] = evaluate_checker

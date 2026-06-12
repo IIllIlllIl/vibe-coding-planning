@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
-# Dry-run by default. Use --execute to run, and --detach for a tmux batch.
+# Archived wrapper. Use scripts/run_batch.sh --checker-comparison.
 set -euo pipefail
 
-REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)"
 cd "$REPO_ROOT"
 
 EXECUTE=0
@@ -40,7 +40,7 @@ if [[ $DETACH -eq 1 ]]; then
 fi
 
 mkdir -p logs
-CMD=(conda run -n mini-swe python scripts/run_checker_comparison.py)
+CMD=(conda run -n mini-swe python scripts/internal/run_checker_comparison.py)
 if [[ ${#ARGS[@]} -gt 0 ]]; then
   CMD+=("${ARGS[@]}")
 fi

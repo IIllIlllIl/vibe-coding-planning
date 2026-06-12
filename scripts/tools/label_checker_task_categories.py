@@ -10,11 +10,15 @@ from collections import Counter
 from pathlib import Path
 from typing import Any
 
-REPO_ROOT = Path(__file__).resolve().parents[1]
+REPO_ROOT = Path(__file__).resolve().parents[2]
 if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
 
-from scripts.evaluate_checker import _read_jsonl, _write_json, _write_jsonl  # noqa: E402
+from scripts.internal.evaluate_checker import (  # noqa: E402
+    _read_jsonl,
+    _write_json,
+    _write_jsonl,
+)
 from src.config import load_config  # noqa: E402
 from src.data.instance_loader import InstanceLoader  # noqa: E402
 

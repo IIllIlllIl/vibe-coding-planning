@@ -27,6 +27,19 @@ from src.exceptions import TaskError
 logger = logging.getLogger(__name__)
 
 
+def _loads_check_json(text: str) -> dict[str, Any]:
+    """Parse checker JSON, repairing only invalid backslash escapes."""
+    try:
+        return json.loads(text)
+    except json.JSONDecodeError as exc:
+        if "Invalid \\escape" not in str(exc):
+            raise
+        repaired = re.sub(r'\\(?!["\\/bfnrtu])', r"\\\\", text)
+        if repaired == text:
+            raise
+        return json.loads(repaired)
+
+
 def _read_check_result_from_file(env: Any) -> str | None:
     """Try to read /tmp/check_result.json from the Docker container.
 
@@ -65,7 +78,7 @@ def _extract_json_from_text(text: str) -> dict[str, Any]:
     json_fence_match = re.search(r"```json\s*(.*?)\s*```", text, re.DOTALL)
     if json_fence_match:
         try:
-            return json.loads(json_fence_match.group(1))
+            return _loads_check_json(json_fence_match.group(1))
         except json.JSONDecodeError:
             pass
 
@@ -75,7 +88,7 @@ def _extract_json_from_text(text: str) -> dict[str, Any]:
     fence_match = re.search(r"```(?!\w)\s*(.+?)\s*```", text[start_pos:], re.DOTALL)
     if fence_match:
         try:
-            return json.loads(fence_match.group(1))
+            return _loads_check_json(fence_match.group(1))
         except json.JSONDecodeError:
             pass
 
@@ -83,7 +96,7 @@ def _extract_json_from_text(text: str) -> dict[str, Any]:
     json_match = re.search(r"(\{.*\})", text, re.DOTALL)
     if json_match:
         try:
-            return json.loads(json_match.group(1))
+            return _loads_check_json(json_match.group(1))
         except json.JSONDecodeError as exc:
             raise ValueError(f"Invalid JSON: {exc}") from exc
 

@@ -5,14 +5,12 @@
 # output. Writes a master log suitable for the long-run watchdog.
 #
 # Usage:
-#   bash scripts/run_analysis.sh --model deepseek-v4-flash --output-dir ./output/analysis_flash
-#   bash scripts/run_analysis.sh --model deepseek-v4-pro   --output-dir ./output/analysis_pro
-#   bash scripts/run_analysis.sh --config configs/analysis_kimi_opencode.yaml --output-dir ./output/analysis_kimi_opencode_60
+# Invoked by scripts/run_batch.sh --analysis-only.
 
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-cd "$SCRIPT_DIR/.."
+cd "$SCRIPT_DIR/../.."
 
 # Defaults
 CONFIG="config.yaml"

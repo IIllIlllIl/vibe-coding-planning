@@ -6,7 +6,7 @@ import hashlib
 import json
 from pathlib import Path
 
-from scripts.label_checker_task_categories import label_task_categories
+from scripts.tools.label_checker_task_categories import label_task_categories
 
 
 class FakeLoader:

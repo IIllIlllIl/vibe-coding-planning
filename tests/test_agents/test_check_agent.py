@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import json
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -270,6 +269,27 @@ class TestRun:
         assert validated["passed"] is False
         assert len(validated["violations"]) == 1
         assert validated["overall_assessment"] == "Bad"
+
+    def test_extract_repairs_invalid_backslash_escape(self):
+        text = (
+            '{"passed": false, "violations": [], '
+            '"overall_assessment": "Inspect C:\\Users\\project and \\d+."}'
+        )
+
+        result = check_agent._extract_json_from_text(text)
+
+        assert result["overall_assessment"] == (
+            "Inspect C:\\Users\\project and \\d+."
+        )
+
+    def test_extract_does_not_repair_other_invalid_json(self):
+        text = (
+            '{"passed": false, "violations": [], '
+            '"overall_assessment": "missing comma" "extra": true}'
+        )
+
+        with pytest.raises(ValueError, match="Invalid JSON"):
+            check_agent._extract_json_from_text(text)
 
     def test_extract_from_markdown_fenced_json(self):
         text = '```json\n{"passed": true, "violations": [], "overall_assessment": "OK"}\n```'

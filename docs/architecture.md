@@ -2,7 +2,7 @@
 
 ## 1. 设计原则
 
-- **最小化造轮子**：Agent 层完全基于 `mini-swe-agent`，不包装抽象层；GEPA 仅提取 Prompt 模板
+- **最小化造轮子**：Agent 层完全基于 `mini-swe-agent`，不包装抽象层；现有 PCT Reflect 只复用 GEPA Prompt 模板，新规则优化流程则计划直接复用 vendored GEPA 的 Adapter、搜索、采样、缓存和结果对象
 - **单层抽象**：每个模块只做一件事，模块间通过纯数据结构（dict/Pydantic model）传递，不互相持有复杂引用
 - **配置驱动**：所有 Prompt、参数、路径均从 `config.yaml` 读取，代码中无硬编码业务逻辑
 - **失败隔离**：单实例/单轮次失败不影响其他实例，致命错误时保留已收集数据
@@ -15,12 +15,14 @@
 plan-code-test/
 ├── docs/
 │   ├── requirement-document.md    # 需求文档（终版）
+│   ├── gepa-rule-optimization.md  # GEPA 规则优化流程设计
 │   └── architecture.md            # 本文件
 ├── scripts/
-│   ├── run_batch.sh               # 批量运行与 analysis-only handoff
-│   ├── run_polybench_image_retry.sh # PolyBench Buster 4 实例重跑包装
-│   ├── run_analysis.sh            # 对比分析批量运行，支持 --config
-│   └── evaluate_checker.py        # PCC 兼容入口 + 已有 PCT 的 checker-only 评估
+│   ├── run_batch.sh               # 唯一手动实验入口
+│   ├── long_run_watchdog.py       # 唯一无人值守实验入口
+│   ├── internal/                  # batch/analysis/checker 实现
+│   ├── tools/                     # 报告与数据维护工具
+│   └── archive/                   # 历史实验入口
 ├── configs/
 │   ├── analysis_kimi_opencode.yaml       # Kimi/OpenCode 规则分析实验配置
 │   ├── polybench_full199_pct.yaml        # PolyBench Python 199 实例纯 PCT 扫描配置
@@ -80,9 +82,10 @@ plan-code-test/
 | **入口** | `src/main.py` | 解析命令行参数（`--config`, `--instance`, `--n`, `--output-dir`），加载配置，遍历 `swe_pro_instances`，对每个实例调用 `pipeline.run_instance()` |
 | **配置** | `src/config.py` | 加载 `config.yaml`，验证参数（`n >= 1`, `optimization_info_level` ∈ {0,1} 等），返回结构化的配置对象 |
 | **流水线** | `src/pipeline.py` | 单实例的核心循环：`generate_plan()` → `generate_code()` → `evaluate()` →（如有需要）`reflect_and_optimize()`，循环 n 次 |
-| **Checker 评估** | `scripts/evaluate_checker.py` | 兼容原 PCC 入口；也可把历史 PCT 结果按“最早成功 plan”整合为固定 JSONL，追加发布不可变数据快照，并仅调用原 `check_agent.run()` 计算分类指标；每实例预测支持断点恢复 |
-| **Checker 对比实验** | `scripts/run_checker_comparison.py` | 在同一 PCT 快照和 Flash checker 模型上依次评估 Flash、Pro、Kimi 规则和无规则直接判断，生成统一指标、差值和逐实例配对报告 |
-| **Docker 容量窗口** | `src/environment/docker_env.py::DockerCapacityWindow` | 所有项目 Docker 入口共享的容量管理模块：提供跨进程容器槽位、启动前磁盘门控和串行缓存维护；所有 worker 在同一个 window lease 内完成容器生命周期。每次维护均清理无引用 dangling 镜像；带标签镜像淘汰只在所有 lease 空闲时运行，并保护所有容器引用的 ImageID且不强制删标签；BuildKit 缓存仅在磁盘压力下分级清理。pipeline、PCC、checker-only、evaluator 和 watchdog 不再实现独立清理策略 |
+| **Checker 评估** | `scripts/internal/evaluate_checker.py` | `run_batch.sh` 使用的 checker 数据构建和执行实现 |
+| **Checker 对比实验** | `scripts/internal/run_checker_comparison.py` | `run_batch.sh --checker-comparison` 使用的四臂评估实现 |
+| **Batch 调度器** | `scripts/run_batch.sh`, `scripts/internal/run_batch_workers.py` | `run_batch.sh` 负责所有手动实验模式；内部调度器按 `--parallel` 有界并发执行 PCT/PCC 实例 |
+| **Docker 容量窗口** | `src/environment/docker_env.py::DockerCapacityWindow` | 所有项目 Docker 入口共享的容量管理模块：提供跨进程容器槽位、启动前磁盘门控、串行镜像获取和串行缓存维护；所有 worker 在同一个 window lease 内完成容器生命周期。缺失的 PolyBench 镜像通过全局锁逐个 pull/build，等待者获得锁后再次检查本地镜像以避免重复下载；已有镜像的容器仍可并行运行。每次维护均清理无引用 dangling 镜像；带标签镜像淘汰只在所有 lease 空闲时运行，并保护所有容器引用的 ImageID且不强制删标签；BuildKit 缓存仅在磁盘压力下分级清理。pipeline、PCC、checker-only、evaluator 和 watchdog 不再实现独立清理策略 |
 
 ### 3.2 Agent 层
 
@@ -138,6 +141,27 @@ plan-code-test/
 | **规则后处理** | `src/analysis/rule_postprocess.py` | 对原始 `per_case/` 中语义可用但格式不合格的规则做格式修复，输出 `per_case_postprocessed/`，保留 `postprocess` metadata，不覆盖原始结果 |
 | **规则聚合** | `src/analysis/aggregation_agent.py` | 只读取传入 per-case 目录中 `rule_valid=true` JSON 的顶层 `rule` 字段，按行拆分规则，构造 Input-Aware Tree Merge prompt，解析并校验 `aggregated_rules.json` |
 | **Analysis CLI** | `src/analysis/cli.py` | 提供 per-case extraction、`--postprocess`、`--aggregate` 三种模式；根据 `analysis.backend` 在 mini-swe-agent 与 OpenCode 后端之间路由 |
+
+### 3.8 GEPA 规则优化层（设计中）
+
+该层计划替代现有规则提取、后处理和聚合流程，但尚未实现。详细设计见
+[`gepa-rule-optimization.md`](gepa-rule-optimization.md)。
+
+| 模块 | 计划职责 |
+|------|----------|
+| **Round 1 数据快照构建** | 从 Verified 每个任务选择完整的 PCT Round 1，发布不可变数据、来源 manifest 和 train/validation 切分 |
+| **Checker 分类器** | 仅接收 issue、plan、候选规则并访问任务仓库；输出 `predicted_resolved`、`decision_reason` 和 `repository_evidence` |
+| **GEPA Adapter** | 调用固定 Checker，返回逐样本 0/1 correctness 和包含 trajectory、patch、测试结果的 ASI |
+| **GEPA Search** | 把完整规则合集作为唯一文本组件，使用 vendored GEPA 的 reflective mutation、官方 minibatch、Pareto selection、缓存和状态恢复 |
+| **候选报告** | 对每个候选保存 Accuracy、MCC、Balanced Accuracy、Precision、Recall、F1、pass rate 和逐样本预测 |
+
+关键数据边界：
+
+- Checker 可见：issue、Round 1 plan、base commit 仓库、候选规则。
+- 仅 GEPA ASI 可见：真实标签、Plan/Code trajectory、实际 patch、evaluator/test 结果。
+- Code trajectory、patch 和 evaluator 结果不得进入 Checker 输入。
+- Checker 与 GEPA reflection 默认均为 DeepSeek V4 Flash，但使用独立配置。
+- Checker temperature 在新流程中显式固定为 `0.0`；当前实现尚未显式设置。
 
 ---
 
@@ -261,9 +285,8 @@ OpenCode 自身认证。
 | `src/analysis/opencode_agent.py` | OpenCode/Kimi 规则提取与聚合后端 | `opencode` CLI |
 | `src/analysis/rule_postprocess.py` | 修复格式不合格但语义可用的规则，生成 `per_case_postprocessed/` | 标准库 + `opencode` CLI |
 | `src/analysis/aggregation_agent.py` | 加载 per-case 规则、构造聚合 prompt、校验聚合 JSON | `litellm` 或 OpenCode 后端 |
-| `scripts/run_analysis.sh` | 批量规则提取，支持 `--config` | shell |
-| `scripts/run_batch.sh` | 批量主流程与 `--analysis-only` handoff，支持 `--config` 指定主流程配置；直接运行时用 `caffeinate` 包装实例命令（macOS） | shell |
-| `scripts/run_polybench_image_retry.sh` | 默认 dry-run；显式 `--execute` 后通过 `run_batch.sh` 重跑 4 个 Buster 镜像实例 | shell |
+| `scripts/internal/run_analysis.sh` | `run_batch.sh --analysis-only` 使用的规则提取实现 | shell |
+| `scripts/run_batch.sh` | 唯一手动实验入口：PCT/PCC、analysis、checker comparison/recovery | shell |
 | `scripts/long_run_watchdog.py` | 长时监控 batch / analysis / review / checker tmux 任务；支持 `PCT_CONFIG` 选择主流程配置，并用 `caffeinate` 包装被监控的长跑命令（macOS） | shell + Python |
 
 ---

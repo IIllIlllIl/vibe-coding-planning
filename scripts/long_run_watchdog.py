@@ -244,21 +244,9 @@ def _init_state() -> WatchdogState:
         except Exception:
             pass
 
-    # Fall back to Pro instance list files
     if total == 0:
-        for pro_file in ["pro_ansible_instances.json", "pro_python_instances.json"]:
-            pf = Path(pro_file)
-            if pf.exists():
-                try:
-                    data = json.loads(pf.read_text(encoding="utf-8"))
-                    if isinstance(data, list):
-                        total = len(data)
-                    elif isinstance(data, dict):
-                        total = len(data.get("instances", []))
-                    if total > 0:
-                        break
-                except Exception:
-                    pass
+        configured = (cfg.get("system") or {}).get("instances") or []
+        total = len(configured)
 
     # Count already-completed instances (robust to corrupt JSON)
     completed = 0
@@ -387,7 +375,10 @@ def start_analysis(state: WatchdogState) -> None:
         f"cd {shlex.quote(os.getcwd())} "
         f"&& source /Users/taoran.wang/miniconda3/etc/profile.d/conda.sh "
         f"&& conda activate mini-swe "
-        f"&& bash scripts/run_analysis.sh --model {model_name} --output-dir {output_dir}"
+        f"&& bash scripts/run_batch.sh --analysis-only "
+        f"--analysis-config {shlex.quote(str(_config_path()))} "
+        f"--analysis-model {shlex.quote(model_name)} "
+        f"--analysis-output-dir {shlex.quote(output_dir)}"
     )
     cmd = _prevent_sleep_command(cmd)
 
@@ -463,32 +454,15 @@ def start_aggregation(state: WatchdogState) -> None:
 def start_checker_eval(state: WatchdogState) -> None:
     """Start (or restart) the checker evaluation runner in a tmux session.
 
-    Runs Plan-Check-Code on SWE-bench Pro Python instances using
-    scripts/evaluate_checker.py.
+    Runs the four-arm PolyBench checker-only comparison through run_batch.sh.
     """
     _kill_tmux_session(CHECKER_TMUX_SESSION)
-
-    # Ensure instance list file exists
-    instances_file = Path("pro_ansible_instances.json")
-    if not instances_file.exists():
-        instances_file = Path("pro_python_instances.json")
-    if not instances_file.exists():
-        logging.warning("Pro instance list not found. Generating Python list...")
-        instances_file = Path("output/pro_python_instances.json")
-        _generate_pro_python_instances(instances_file)
-
-    output_dir = "./output/checker_eval/pro_python"
-    dataset = "ScaleAI/SWE-bench_Pro"
 
     cmd = (
         f"cd {shlex.quote(os.getcwd())} "
         f"&& source /Users/taoran.wang/miniconda3/etc/profile.d/conda.sh "
         f"&& conda activate mini-swe "
-        f"&& python scripts/evaluate_checker.py "
-        f"--config config.yaml "
-        f"--dataset {shlex.quote(dataset)} "
-        f"--instances {shlex.quote(str(instances_file))} "
-        f"--output {shlex.quote(output_dir)} "
+        f"&& bash scripts/run_batch.sh --checker-comparison "
         f"2>&1 | tee -a {shlex.quote(str(CHECKER_LOG))}"
     )
     cmd = _prevent_sleep_command(cmd)
@@ -497,10 +471,8 @@ def start_checker_eval(state: WatchdogState) -> None:
     CHECKER_LOG.touch(exist_ok=True)
 
     logging.info(
-        "Starting checker eval tmux session: %s (dataset=%s instances=%s)",
+        "Starting checker-only comparison tmux session: %s",
         CHECKER_TMUX_SESSION,
-        dataset,
-        instances_file,
     )
     subprocess.run(
         ["tmux", "new-session", "-d", "-s", CHECKER_TMUX_SESSION, "bash", "-c", cmd],
@@ -513,28 +485,6 @@ def start_checker_eval(state: WatchdogState) -> None:
         logging.info("Checker eval session started successfully.")
     else:
         logging.error("Failed to start checker eval tmux session!")
-
-
-def _generate_pro_python_instances(output_path: Path) -> None:
-    """Generate a JSON file with SWE-bench Pro Python instance IDs."""
-    try:
-        from datasets import load_dataset
-        ds = load_dataset("ScaleAI/SWE-bench_Pro", split="test")
-        python_instances = [
-            x["instance_id"] for x in ds if x.get("repo_language") == "python"
-        ]
-        output_path.parent.mkdir(parents=True, exist_ok=True)
-        output_path.write_text(
-            json.dumps(python_instances, indent=2), encoding="utf-8"
-        )
-        logging.info(
-            "Generated %s with %d Python instances", output_path, len(python_instances)
-        )
-    except Exception as exc:
-        logging.error("Failed to generate Pro Python instance list: %s", exc)
-        # Create empty file so watchdog doesn't keep retrying
-        output_path.parent.mkdir(parents=True, exist_ok=True)
-        output_path.write_text("[]", encoding="utf-8")
 
 
 def start_review(state: WatchdogState, instance_ids: list[str] | None = None) -> None:
@@ -1634,11 +1584,14 @@ def main() -> int:
             # Fallback for checker: if results.json exists, treat as complete
             # even if the end marker wasn't captured in the log yet.
             if in_checker:
-                checker_results = Path("output/checker_eval/pro_python/results.json")
+                checker_results = Path(
+                    "output/checker_eval/polybench-flash-pro-kimi-baseline/"
+                    "comparison_report.json"
+                )
                 if checker_results.exists():
                     try:
                         data = json.loads(checker_results.read_text(encoding="utf-8"))
-                        if data.get("metrics", {}).get("total", 0) > 0:
+                        if data.get("arms"):
                             logging.info("Checker eval complete (results.json found).")
                             state.checker_phase = "done"
                             save_state(state)

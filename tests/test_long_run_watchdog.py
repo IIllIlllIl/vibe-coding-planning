@@ -752,6 +752,51 @@ class TestAggregationConstants:
         assert callable(watchdog.start_aggregation)
 
 
+class TestUnifiedExperimentEntrypoint:
+    @patch.object(watchdog.time, "sleep")
+    @patch.object(watchdog, "_tmux_session_exists", return_value=True)
+    @patch.object(watchdog, "_kill_tmux_session")
+    @patch.object(watchdog.subprocess, "run")
+    def test_analysis_starts_through_run_batch(
+        self,
+        mock_run,
+        mock_kill,
+        mock_exists,
+        mock_sleep,
+    ):
+        state = watchdog.WatchdogState(
+            batch_id="b",
+            total_instances=1,
+            analysis_phase="flash",
+        )
+
+        watchdog.start_analysis(state)
+
+        command = mock_run.call_args.args[0][-1]
+        assert "scripts/run_batch.sh --analysis-only" in command
+        assert "scripts/internal/" not in command
+
+    @patch.object(watchdog.time, "sleep")
+    @patch.object(watchdog, "_tmux_session_exists", return_value=True)
+    @patch.object(watchdog, "_kill_tmux_session")
+    @patch.object(watchdog.subprocess, "run")
+    def test_checker_starts_through_run_batch(
+        self,
+        mock_run,
+        mock_kill,
+        mock_exists,
+        mock_sleep,
+        tmp_path,
+    ):
+        state = watchdog.WatchdogState(batch_id="b", total_instances=1)
+        with patch.object(watchdog, "CHECKER_LOG", tmp_path / "checker.log"):
+            watchdog.start_checker_eval(state)
+
+        command = mock_run.call_args.args[0][-1]
+        assert "scripts/run_batch.sh --checker-comparison" in command
+        assert "SWE-bench_Pro" not in command
+
+
 class TestReviewConstants:
     def test_review_tmux_session_defined(self):
         assert watchdog.REVIEW_TMUX_SESSION == "pct-review"

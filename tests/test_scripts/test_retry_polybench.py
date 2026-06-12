@@ -3,7 +3,7 @@
 from pathlib import Path
 from types import SimpleNamespace
 
-import scripts.retry_polybench as retry
+from scripts.archive.legacy_entrypoints import retry_polybench as retry
 
 
 def _patch() -> str:

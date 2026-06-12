@@ -11,6 +11,8 @@
 #   bash scripts/run_batch.sh --instances FILE  # override instance list
 #   bash scripts/run_batch.sh --run-analysis --analysis-model MODEL --analysis-output-dir DIR
 #   bash scripts/run_batch.sh --analysis-only --analysis-config configs/analysis_kimi_opencode.yaml
+#   bash scripts/run_batch.sh --checker-comparison --parallel 3
+#   bash scripts/run_batch.sh --checker-recovery --parallel 1
 #
 # Outputs:
 #   logs/batch_run.log         - master log (status + duration per instance)
@@ -28,6 +30,9 @@ ANALYSIS_CONFIG=""
 ANALYSIS_MODEL_OVERRIDE=""
 ANALYSIS_OUTPUT_DIR_OVERRIDE=""
 ANALYSIS_INPUT_DIR_OVERRIDE=""
+PARALLEL=1
+CHECKER_COMPARISON=0
+CHECKER_RECOVERY=0
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
@@ -46,6 +51,19 @@ while [[ $# -gt 0 ]]; do
     --batch-id)
       BATCH_ID_OVERRIDE="$2"
       shift 2
+      ;;
+    --parallel)
+      PARALLEL="$2"
+      shift 2
+      ;;
+    --checker-comparison)
+      CHECKER_COMPARISON=1
+      shift
+      ;;
+    --checker-recovery)
+      CHECKER_COMPARISON=1
+      CHECKER_RECOVERY=1
+      shift
       ;;
     --run-analysis)
       RUN_ANALYSIS=1
@@ -83,17 +101,17 @@ while [[ $# -gt 0 ]]; do
   esac
 done
 
+if ! [[ "$PARALLEL" =~ ^[1-9][0-9]*$ ]]; then
+  echo "ERROR: --parallel must be a positive integer" >&2
+  exit 2
+fi
+
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$REPO_ROOT"
 
 MASTER_LOG="logs/batch_run.log"
 PER_INSTANCE_LOG_DIR="logs/batch"
 mkdir -p "$PER_INSTANCE_LOG_DIR"
-
-CAFFEINATE_CMD=()
-if command -v caffeinate >/dev/null 2>&1; then
-  CAFFEINATE_CMD=(caffeinate -i -s -d)
-fi
 
 # ---------------------------------------------------------------------------
 # Activate conda env
@@ -112,10 +130,22 @@ conda activate mini-swe || { echo "ERROR: failed to activate conda env mini-swe"
 python -c "import minisweagent, swebench" 2>/dev/null \
   || { echo "ERROR: minisweagent/swebench not importable in active env" >&2; exit 1; }
 
+if [[ $CHECKER_COMPARISON -eq 1 ]]; then
+  CHECKER_CMD=(python scripts/internal/run_checker_comparison.py
+    --parallel "$PARALLEL")
+  if [[ $CHECKER_RECOVERY -eq 1 ]]; then
+    CHECKER_CMD+=(--recovery)
+  fi
+  if [[ $DRY_RUN -eq 1 ]]; then
+    CHECKER_CMD+=(--dry-run)
+  fi
+  exec "${CHECKER_CMD[@]}"
+fi
+
 # ---------------------------------------------------------------------------
 # Read batch config from the selected config file
 # ---------------------------------------------------------------------------
-read -r BATCH_ID DATASET DATASET_SHORT DOCKER_MIN_FREE_GB DOCKER_DELETE_IMAGES DOCKER_MAX_CACHED_IMAGES ANALYSIS_MODEL CONFIG_ANALYSIS_OUTPUT_DIR \
+read -r BATCH_ID DATASET DATASET_SHORT DOCKER_MAX_CACHED_IMAGES ANALYSIS_MODEL CONFIG_ANALYSIS_OUTPUT_DIR \
   < <(python -c "
 import sys, yaml
 try:
@@ -130,13 +160,11 @@ try:
         sys.exit(2)
     dataset = system.get('dataset', 'SWE-bench/SWE-bench_Verified')
     dataset_short = dataset.split('/')[-1]
-    min_free = int(docker.get('min_free_gb', 20))
-    delete_images = str(docker.get('delete_images_after_instance', True)).lower()
     max_cached = int(docker.get('max_cached_images', 75))
     analysis = cfg.get('analysis') or {}
     analysis_model = analysis.get('model', 'deepseek-v4-flash')
     analysis_output = analysis.get('output_dir', './output/analysis_results')
-    print(bid, dataset, dataset_short, min_free, delete_images, max_cached, analysis_model, analysis_output)
+    print(bid, dataset, dataset_short, max_cached, analysis_model, analysis_output)
 except Exception as e:
     sys.stderr.write(f'ERROR: failed to read config: {e}\n')
     sys.exit(2)
@@ -144,6 +172,10 @@ except Exception as e:
 
 if [[ -z "$ANALYSIS_CONFIG" ]]; then
   ANALYSIS_CONFIG="$CONFIG"
+fi
+if [[ "$DOCKER_MAX_CACHED_IMAGES" -lt "$PARALLEL" ]]; then
+  echo "ERROR: docker.max_cached_images ($DOCKER_MAX_CACHED_IMAGES) must be at least --parallel ($PARALLEL)" >&2
+  exit 2
 fi
 if [[ -n "$BATCH_ID_OVERRIDE" ]]; then
   if [[ ! "$BATCH_ID_OVERRIDE" =~ ^[A-Za-z0-9_.-]+$ || "$BATCH_ID_OVERRIDE" == "." || "$BATCH_ID_OVERRIDE" == ".." ]]; then
@@ -188,46 +220,6 @@ if [[ "$DATASET" == *"PolyBench"* ]]; then
     }
 fi
 
-free_gb() {
-  df -Pk . | awk 'NR==2 {print int($4 / 1024 / 1024)}'
-}
-
-check_free_space() {
-  local free
-  free="$(free_gb)"
-  if [[ "$free" -lt "$DOCKER_MIN_FREE_GB" ]]; then
-    if [[ "$DOCKER_DELETE_IMAGES" == "true" ]]; then
-      echo "[$(date '+%Y-%m-%d %H:%M:%S')] Low disk space before instance: ${free}GiB free; attempting Docker cache cleanup" \
-        | tee -a "$MASTER_LOG"
-      cleanup_docker_after_instance
-      free="$(free_gb)"
-    fi
-  fi
-  if [[ "$free" -lt "$DOCKER_MIN_FREE_GB" ]]; then
-    echo "[$(date '+%Y-%m-%d %H:%M:%S')] FATAL low disk space: ${free}GiB free < ${DOCKER_MIN_FREE_GB}GiB threshold" \
-      | tee -a "$MASTER_LOG"
-    return 1
-  fi
-  return 0
-}
-
-cleanup_docker_after_instance() {
-  if [[ "$DOCKER_DELETE_IMAGES" != "true" ]]; then
-    return 0
-  fi
-
-  echo "[$(date '+%Y-%m-%d %H:%M:%S')] Docker cleanup: retaining newest ${DOCKER_MAX_CACHED_IMAGES} project images" \
-    | tee -a "$MASTER_LOG"
-  python -m src.environment.docker_env maintain \
-    --max-cached-images "$DOCKER_MAX_CACHED_IMAGES" \
-    >> "$MASTER_LOG" 2>&1 || true
-}
-
-is_docker_storage_error() {
-  local log_file="$1"
-  grep -Eiq 'no space left on device|input/output error|containerd\.metadata|meta\.db|/var/lib/desktop-containerd' "$log_file"
-}
-
 # ---------------------------------------------------------------------------
 # Determine instance list file
 # ---------------------------------------------------------------------------
@@ -240,16 +232,6 @@ if [[ $ANALYSIS_ONLY -eq 0 ]]; then
     # Verified: batch-scoped sample file
     if [[ "$DATASET" == *"Verified"* ]]; then
       INSTANCE_FILE="output/$DATASET_SHORT/$BATCH_ID/sampled_instances.json"
-    # Pro: use ansible-only subset (Mac ARM compatible), fallback to python
-    elif [[ "$DATASET" == *"Pro"* ]]; then
-      if [[ -f "pro_ansible_instances.json" ]]; then
-        INSTANCE_FILE="pro_ansible_instances.json"
-      elif [[ -f "pro_python_instances.json" ]]; then
-        INSTANCE_FILE="pro_python_instances.json"
-      else
-        echo "ERROR: No Pro instance list found (tried pro_ansible_instances.json, pro_python_instances.json)" >&2
-        exit 1
-      fi
     # Other configured datasets (e.g. PolyBench): prefer a batch-scoped
     # manifest; otherwise materialize system.instances from config.yaml.
     else
@@ -320,7 +302,7 @@ if [[ $DRY_RUN -eq 1 ]]; then
     echo "[DRY-RUN] analysis would run: config=$ANALYSIS_CONFIG model=$ANALYSIS_MODEL input=$ANALYSIS_INPUT_DIR output=$CONFIG_ANALYSIS_OUTPUT_DIR analysis_only=$ANALYSIS_ONLY"
   fi
 fi
-echo "[$(date '+%Y-%m-%d %H:%M:%S')] === Batch start: dataset=$DATASET batch_id=$BATCH_ID $TOTAL instances (dry_run=$DRY_RUN) ===" \
+echo "[$(date '+%Y-%m-%d %H:%M:%S')] === Batch start: dataset=$DATASET batch_id=$BATCH_ID $TOTAL instances (dry_run=$DRY_RUN parallel=$PARALLEL) ===" \
   | tee -a "$MASTER_LOG"
 
 # ---------------------------------------------------------------------------
@@ -329,61 +311,40 @@ echo "[$(date '+%Y-%m-%d %H:%M:%S')] === Batch start: dataset=$DATASET batch_id=
 i=0
 FAIL_COUNT=0
 if [[ $ANALYSIS_ONLY -eq 0 ]]; then
-  for INSTANCE in "${INSTANCES[@]}"; do
-    i=$((i + 1))
-    RESULT_FILE="output/$DATASET_SHORT/$BATCH_ID/$INSTANCE/result.json"
-
-    check_free_space || exit 75
-
-    if [[ -f "$RESULT_FILE" ]]; then
-      echo "[$(date '+%Y-%m-%d %H:%M:%S')] [$i/$TOTAL] SKIP $INSTANCE (result.json exists)" \
-        | tee -a "$MASTER_LOG"
-      continue
-    fi
-
-    if [[ $DRY_RUN -eq 1 ]]; then
-      echo "[$(date '+%Y-%m-%d %H:%M:%S')] [$i/$TOTAL] WOULD-RUN $INSTANCE" \
-        | tee -a "$MASTER_LOG"
-      continue
-    fi
-
-    PER_LOG="$PER_INSTANCE_LOG_DIR/$INSTANCE.log"
-    START_EPOCH=$(date +%s)
-    echo "[$(date '+%Y-%m-%d %H:%M:%S')] [$i/$TOTAL] START $INSTANCE -> $PER_LOG" \
-      | tee -a "$MASTER_LOG"
-
-    "${CAFFEINATE_CMD[@]}" python -m src.main --instance "$INSTANCE" --config "$CONFIG" --batch-id "$BATCH_ID" \
-      > "$PER_LOG" 2>&1
-    RC=$?
-
-    END_EPOCH=$(date +%s)
-    ELAPSED=$((END_EPOCH - START_EPOCH))
-
-    if [[ $RC -eq 0 && -f "$RESULT_FILE" ]]; then
-      RESOLVED=$(python -c "
-import json, sys
-try:
-    d = json.load(open('$RESULT_FILE'))
-    plans = d.get('plans', [])
-    print(any(p.get('test_results', {}).get('resolved') for p in plans))
-except Exception as e:
-    print('parse_error:' + str(e))
-")
-      echo "[$(date '+%Y-%m-%d %H:%M:%S')] [$i/$TOTAL] DONE  $INSTANCE rc=$RC elapsed=${ELAPSED}s resolved=$RESOLVED" \
-        | tee -a "$MASTER_LOG"
-    else
-      FAIL_COUNT=$((FAIL_COUNT + 1))
-      echo "[$(date '+%Y-%m-%d %H:%M:%S')] [$i/$TOTAL] FAIL  $INSTANCE rc=$RC elapsed=${ELAPSED}s (see $PER_LOG)" \
-        | tee -a "$MASTER_LOG"
-      if is_docker_storage_error "$PER_LOG"; then
-        echo "[$(date '+%Y-%m-%d %H:%M:%S')] FATAL Docker storage error detected; stopping batch before more instances fail" \
+  if [[ $DRY_RUN -eq 1 ]]; then
+    for INSTANCE in "${INSTANCES[@]}"; do
+      i=$((i + 1))
+      RESULT_FILE="output/$DATASET_SHORT/$BATCH_ID/$INSTANCE/result.json"
+      if [[ -f "$RESULT_FILE" ]]; then
+        echo "[$(date '+%Y-%m-%d %H:%M:%S')] [$i/$TOTAL] SKIP $INSTANCE (result.json exists)" \
           | tee -a "$MASTER_LOG"
-        exit 74
+      else
+        echo "[$(date '+%Y-%m-%d %H:%M:%S')] [$i/$TOTAL] WOULD-RUN $INSTANCE" \
+          | tee -a "$MASTER_LOG"
       fi
+    done
+  else
+    SUMMARY_FILE="logs/batch_summary_${BATCH_ID}.json"
+    python scripts/internal/run_batch_workers.py \
+      --config "$CONFIG" \
+      --instances "$INSTANCE_FILE" \
+      --batch-id "$BATCH_ID" \
+      --dataset-short "$DATASET_SHORT" \
+      --parallel "$PARALLEL" \
+      --log-dir "$PER_INSTANCE_LOG_DIR" \
+      --master-log "$MASTER_LOG" \
+      --summary "$SUMMARY_FILE"
+    BATCH_RC=$?
+    if [[ $BATCH_RC -eq 74 ]]; then
+      exit 74
+    elif [[ $BATCH_RC -ne 0 ]]; then
+      exit "$BATCH_RC"
     fi
-
-    cleanup_docker_after_instance
-  done
+    FAIL_COUNT=$(python -c "
+import json
+print(int(json.load(open('$SUMMARY_FILE')).get('failed', 0)))
+")
+  fi
 
   echo "[$(date '+%Y-%m-%d %H:%M:%S')] === Batch end ===" | tee -a "$MASTER_LOG"
 else
@@ -399,7 +360,7 @@ if [[ $RUN_ANALYSIS -eq 1 && $DRY_RUN -eq 0 ]]; then
 
   echo "[$(date '+%Y-%m-%d %H:%M:%S')] === Analysis handoff start: config=$ANALYSIS_CONFIG model=$ANALYSIS_MODEL input=$ANALYSIS_INPUT_DIR output=$CONFIG_ANALYSIS_OUTPUT_DIR ===" \
     | tee -a "$MASTER_LOG"
-  ANALYSIS_CMD=(bash scripts/run_analysis.sh
+  ANALYSIS_CMD=(bash scripts/internal/run_analysis.sh
     --config "$ANALYSIS_CONFIG"
     --input-dir "$ANALYSIS_INPUT_DIR"
     --output-dir "$CONFIG_ANALYSIS_OUTPUT_DIR")

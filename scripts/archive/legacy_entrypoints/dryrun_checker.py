@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Dry-run a single instance through the Plan-Check-Code pipeline."""
+"""Archived single-instance PCC debug entrypoint."""
 
 from __future__ import annotations
 

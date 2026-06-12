@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Smoke test Kimi rule extraction and aggregation through OpenCode.
+"""Archived smoke test for Kimi rule extraction through OpenCode.
 
 This script is intentionally separate from the production analysis CLI. It
 checks whether the configured OpenCode provider can run the two rule stages on
@@ -19,7 +19,7 @@ from pathlib import Path
 import sys
 from typing import Any
 
-REPO_ROOT = Path(__file__).resolve().parents[1]
+REPO_ROOT = Path(__file__).resolve().parents[3]
 if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
 

@@ -1,9 +1,9 @@
 #!/usr/bin/env bash
-# Targeted rerun for the four PolyBench instances whose Buster image builds
+# Archived wrapper for the four historical Buster image retries.
 # are recoverable with the Debian archive compatibility fallback.
 set -euo pipefail
 
-REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)"
 cd "$REPO_ROOT"
 
 CONFIG="configs/polybench_remaining133_pct.yaml"

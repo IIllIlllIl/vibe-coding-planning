@@ -266,6 +266,66 @@ class TestPolybenchImageFallback:
         assert resolved == "polybench_python_test__repo-1"
         mock_build.assert_called_once_with(instance_info, build_timeout=3600)
 
+    def test_concurrent_resolvers_pull_same_image_once(self, tmp_path):
+        image = (
+            "ghcr.io/timesler/"
+            "swe-polybench.eval.x86_64.test__repo-1:v1.1"
+        )
+        window = DockerCapacityWindow(
+            max_concurrent=2,
+            max_cached_images=2,
+            min_free_gb=20,
+            lock_dir=tmp_path / "pull-lock",
+        )
+        local_images: set[str] = set()
+        state_lock = threading.Lock()
+        pull_count = 0
+
+        def fake_run(args, **kwargs):
+            nonlocal pull_count
+            target = args[-1]
+            if args[:3] == ["docker", "image", "inspect"]:
+                with state_lock:
+                    exists = target in local_images
+                return SimpleNamespace(
+                    returncode=0 if exists else 1,
+                    stdout="",
+                    stderr="",
+                )
+            if args[:2] == ["docker", "pull"]:
+                with state_lock:
+                    pull_count += 1
+                time.sleep(0.03)
+                with state_lock:
+                    local_images.add(target)
+                return SimpleNamespace(returncode=0, stdout="", stderr="")
+            raise AssertionError(args)
+
+        results: list[str] = []
+
+        def resolve():
+            results.append(
+                _resolve_polybench_image(
+                    image,
+                    timeout=60,
+                    capacity_window=window,
+                )
+            )
+
+        threads = [threading.Thread(target=resolve) for _ in range(2)]
+        with patch(
+            "src.environment.docker_env.subprocess.run",
+            side_effect=fake_run,
+        ):
+            for thread in threads:
+                thread.start()
+            for thread in threads:
+                thread.join(timeout=2)
+
+        assert all(not thread.is_alive() for thread in threads)
+        assert results == [image, image]
+        assert pull_count == 1
+
 
 class TestDockerImageCacheCleanup:
     @patch("src.environment.docker_env.remove_docker_image", return_value=True)
@@ -344,6 +404,58 @@ class TestDockerImageCacheCleanup:
 
 
 class TestDockerCapacityWindow:
+    def test_config_lookup_preserves_explicit_parallel_window(
+        self, docker_config, monkeypatch, tmp_path
+    ):
+        window = DockerCapacityWindow(
+            max_concurrent=3,
+            max_cached_images=docker_config.max_cached_images,
+            min_free_gb=docker_config.min_free_gb,
+            lock_dir=tmp_path / "configured",
+        )
+        monkeypatch.setattr(docker_env_module, "_DEFAULT_WINDOW", window)
+
+        resolved = docker_env_module.get_docker_capacity_window(docker_config)
+
+        assert resolved is window
+        assert resolved.max_concurrent == 3
+
+    def test_image_acquisition_is_shared_between_windows(self, tmp_path):
+        windows = [
+            DockerCapacityWindow(
+                max_concurrent=2,
+                max_cached_images=2,
+                min_free_gb=20,
+                lock_dir=tmp_path / "shared-pull",
+            )
+            for _ in range(2)
+        ]
+        active = 0
+        peak = 0
+        state_lock = threading.Lock()
+
+        def acquire(window):
+            nonlocal active, peak
+            with window.image_acquisition():
+                with state_lock:
+                    active += 1
+                    peak = max(peak, active)
+                time.sleep(0.03)
+                with state_lock:
+                    active -= 1
+
+        threads = [
+            threading.Thread(target=acquire, args=(window,))
+            for window in windows
+        ]
+        for thread in threads:
+            thread.start()
+        for thread in threads:
+            thread.join(timeout=2)
+
+        assert all(not thread.is_alive() for thread in threads)
+        assert peak == 1
+
     @patch("src.environment.docker_env.prune_build_cache")
     @patch("src.environment.docker_env.prune_dangling_images")
     @patch("src.environment.docker_env.cleanup_docker_image_cache")

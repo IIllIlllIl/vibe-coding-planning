@@ -16,6 +16,7 @@
 | 7.0 | 2026-05-22 | — | 对比分析与规则提取（FR-13）+ 规则质量审查（FR-14）：新增 `src/analysis/contrastive_agent.py` 从 reflect-success cases 提取 "When ... because ..." 格式规则；新增 `src/analysis/reviewer_agent.py` 作为独立 LLM Agent 审查规则质量（五维评分 0-100，通过阈值 70）；`scripts/long_run_watchdog.py` 集成 analysis → review → rework 循环，支持 flash/pro 双模型串行运行 + 增量审查（首轮全查，后续仅查上轮失败案例）+ 最大 3 次返工；`src/analysis/review_cli.py` 提供批量审查 CLI；全量测试覆盖（`tests/test_analysis/test_reviewer_agent.py` + `tests/test_long_run_watchdog.py` 新增 review phase 测试） |
 | 7.1 | 2026-05-24 | — | Review/Rework 设计缺陷修复：发现 rework 会先删除已有规则再重跑，若重跑失败则永久丢失数据（`astropy-14182`、`sympy-20916`、`scikit-learn-25747` 均受害）。新增 `config.analysis.enable_review`（默认 `false`）作为 opt-in 开关；默认流程改为 batch → flash analysis → pro analysis → done，跳过 review/rework。FR-14 描述更新；`project_issues.md` 新增归档项记录该缺陷及未来修复方向 |
 | 7.2 | 2026-06-09 | — | 范围收敛：FR-07 单实例内部断点重跑取消，任务级恢复统一由 `run_batch.sh` 跳过已完成实例实现；候选 Plan 树形结构取消，当前实验固定使用线性 `n=3`；下一优先任务改为解除 OpenCode analysis 与全局 `DEEPSEEK_API_KEY` 校验耦合 |
+| 7.3 | 2026-06-12 | — | 新增 FR-16 设计：使用 vendored GEPA 在 Verified PCT Round 1 分类数据上直接优化完整 Checker 规则文本，替代逐案例规则提取与聚合；PolyBench 保持最终 held-out |
 
 ---
 
@@ -263,7 +264,7 @@
 | 描述 | 对 PCT pipeline 中「某轮从失败变为成功」的案例（reflect-success cases），运行独立的对比分析 Agent，比较失败 Plan 与成功 Plan 的推理链差异，提取可泛化的自然语言规则。规则格式必须遵循：When [input pattern], [strategy] because [causal justification]。支持使用不同 LLM 模型串行提取（如 deepseek-v4-flash → deepseek-v4-pro），以便比较规则质量差异。默认 mini-swe-agent 后端在宿主机本地运行（DefaultAgent + LocalEnvironment），直接读取 plans/、patches/、trajectories/ 等文件；也支持 `analysis.backend=opencode` 通过 OpenCode/Kimi 执行提取、后处理和聚合 |
 | 输入 | reflect_success_cases 目录（含 manifest.json、各实例的 plan/trajectory/patch/result.json） |
 | 输出 | 每个实例的提取规则（`per_case/<instance_id>.json`）、可选格式后处理结果（`per_case_postprocessed/<instance_id>.json`，保留原始版本不覆盖）、逐条记录（`rules.jsonl` / `errors.jsonl`）、聚合规则（`aggregated_rules.json`）、Agent 轨迹（`trajectories/<instance_id>.json`） |
-| 批量运行 | `scripts/run_analysis.sh`（由 `long_run_watchdog.py` 在 batch 结束后自动调用）或 `python -m src.analysis`（单实例调试）。`scripts/run_batch.sh --config <main_config>` 支持显式主流程配置；PolyBench Python 199 实例纯 PCT 扫描使用 `configs/polybench_full199_pct.yaml`，跳过已有 PolyBench `result.json` 的 133 实例续跑使用 `configs/polybench_remaining133_pct.yaml`。`long_run_watchdog.py` 支持通过 `PCT_CONFIG=<main_config>` 选择监控配置。`scripts/run_analysis.sh --config <analysis_config>` 支持显式分析配置；`scripts/run_batch.sh --analysis-only --analysis-config <analysis_config>` 支持跳过 PCT 主批次、只 handoff 到规则分析 |
+| 批量运行 | 手动实验统一使用 `scripts/run_batch.sh`，无人值守实验使用 `scripts/long_run_watchdog.py`。`run_batch.sh --analysis-only --analysis-config <analysis_config>` 进入规则分析；`--checker-comparison` / `--checker-recovery` 进入 checker-only；默认模式执行 PCT/PCC。 |
 | 关键配置 | `config.analysis.model` / `api_base` / `max_steps` / `cost_limit` —— 独立于主 pipeline 的模型配置，支持分析阶段使用不同提供商 |
 | 验收标准 | 1）规则文件非空且包含 "When ... because ..." 格式的规则行；2）不同模型的规则可区分保存（`analysis_flash/` vs `analysis_pro/` 或独立配置输出目录）；3）批量运行支持断点续跑（已存在的 `per_case/*.json` 自动 SKIP）；4）对已有语义可用但格式不合格的规则，可通过 `python -m src.analysis --postprocess --input <output>/per_case --output <output> --postprocess-data-dir <reflect_success_cases>` 生成 `per_case_postprocessed/`。后处理获得与原提取阶段相同的 case 文件材料，但任务限定为格式修复而非重新提取；聚合阶段应以该后处理目录作为 `--input`，只读取顶层 `rule` 字段，`postprocess.original_rule` 和截断候选不进入聚合 |
 
@@ -282,6 +283,30 @@
 | 关键配置 | `config.analysis.enable_review`（默认 `false`）— 控制是否启用 review/rework 阶段 |
 | 实现位置 | `src/analysis/reviewer_agent.py`（核心 Reviewer Agent）、`src/analysis/review_cli.py`（批量审查 CLI）、`scripts/long_run_watchdog.py`（review/rework 循环集成） |
 | 验收标准 | 1）Reviewer Agent 输出结构化的 JSON 评分；2）未通过的规则被正确加入 rework_queue 并在 watchdog 中触发返工；3）增量审查模式下，第二轮仅审查上一轮失败的案例；4）超过 3 次返工仍未通过的案例被自动放弃，保留最佳结果；5）review 和 rework 阶段均支持 API cooldown、hang detection、Claude repair 等现有 watchdog 机制 |
+
+### 3.8 GEPA 规则文本优化（替代流程，设计中）
+
+#### FR-16：基于分类反馈优化 Checker 规则合集
+
+| 属性 | 内容 |
+|------|------|
+| ID | FR-16 |
+| 名称 | 基于 GEPA 的 Checker 规则优化 |
+| 状态 | 设计完成，尚未实现 |
+| 描述 | 从 SWE-bench Verified 每个任务的完整 PCT Round 1 构建二分类数据。固定 Checker Agent 接收 issue、Plan、候选规则并可读取 base commit 仓库，预测该 Plan 经当前 Code Agent 执行后是否 resolved。GEPA 把完整规则合集作为唯一文本组件，通过预测反馈迭代优化规则文本，替代 FR-13/FR-14 的逐案例提取、审查和聚合流程 |
+| Checker 输入 | issue description、Round 1 Plan、base commit 仓库、候选规则文本 |
+| GEPA ASI | 真实 resolved 标签、Checker 判断与仓库证据、Plan/Code trajectory、实际 patch、evaluator/test 结果；这些执行后信息不得进入 Checker 输入 |
+| 候选 | `{"rules": "<complete rules text>"}`；GEPA 只能修改 rules，不能修改 Checker prompt、schema、模型或数据切分 |
+| 内部评分 | 官方逐样本 correctness：预测正确为 1.0，错误为 0.0；GEPA 按 minibatch 分数和 validation 平均分运行 |
+| 报告指标 | Accuracy、MCC、Balanced Accuracy、Precision、Recall、F1、pass rate |
+| 数据切分 | Verified 按 resolved 标签和 repo 分层 80/20；PolyBench 固定快照仅用于最终 held-out |
+| 初始规则 | 在补齐并审计 Verified Round 1 后人工编写；不得使用 PolyBench 失败案例，不使用 seedless 自动生成 |
+| Checker 输出 | `predicted_resolved`、`decision_reason`、`repository_evidence` |
+| 模型策略 | Checker 和 GEPA reflection 默认均为 DeepSeek V4 Flash，但分别配置；Checker temperature 显式为 0.0 |
+| GEPA 复用 | 使用 vendored GEPA 的 Adapter、EvaluationBatch、官方 minibatch sampler、reflective mutation、Pareto selection、cache、callbacks、状态恢复和 GEPAResult，不复制核心搜索算法 |
+| 验收标准 | 1）数据快照和切分可复现；2）Checker 看不到执行后信息；3）每个候选规则具有完整预测和指标；4）搜索历史和规则哈希可审计；5）最终规则只在优化完成后评估 PolyBench |
+
+完整设计见 [`gepa-rule-optimization.md`](gepa-rule-optimization.md)。
 
 ---
 

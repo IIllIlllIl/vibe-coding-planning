@@ -1,43 +1,39 @@
 # 项目问题记录与改进建议
 
-## 1. 断点重跑（Resume，FR-07）
+> 本文档只保留**当前需要关注或待决策**的开放项。已完成或已关闭的项目不再在此记录。
 
-- **状态**：决定不实施
-- **决策**：任务级断点恢复已由 `scripts/run_batch.sh` 实现。重复运行同一 batch 时，已有 `result.json` 的实例会跳过，未完成实例会重新从 round 1 执行。
-- **理由**：当前实验默认 `n=3`，单实例执行时间和重算成本可接受；从单个 Plan/round 内部恢复会显著增加历史状态校验、配置兼容和输出合并复杂度，收益不足。
-- **兼容处理**：`config.system.resume` 暂保留为未消费的兼容字段，不再计划接入 `pipeline` 或 `OutputWriter`，后续可在破坏性配置版本升级时删除。
+---
 
-## 2. 树形结构候选 Plan / 反思模板
+## 1. GEPA 规则优化流程实施
 
-- **状态**：决定不实施
-- **决策**：继续使用线性 `plan_r1 → plan_r2 → plan_r3` 反思链，不引入候选 Plan 树、多分支保留或选择性回溯。
-- **理由**：当前实验固定使用较小的 `n=3`，树形与线性结构能够探索的候选数量都很有限，预期效果差异不足以覆盖实现、调度和结果解释复杂度。
-- **边界**：该决策只针对候选 Plan/反思结构，不影响规则聚合阶段可能采用的分层或树形合并。
+- **状态**：设计已文档化，等待用户审阅和手动提交后实施
+- **设计文档**：`docs/gepa-rule-optimization.md`
+- **目标**：使用 Verified PCT Round 1 分类数据直接优化完整 Checker 规则文本，替代逐案例规则提取、后处理和聚合
+- **当前 Verified 数据审计**：
+  - 500 个唯一任务
+  - 486 个有效 Round 1 样本：327 resolved / 159 unresolved
+  - 14 个待补跑：7 个空 Plan、6 个空 Code 输出、1 个 Code Agent `LimitsExceeded`
+- **执行顺序**：
+  1. 审阅并提交当前文档和工作区
+  2. 准备 14 个实例的补跑 manifest/config
+  3. 使用现有并发 batch 和统一 Docker 容量窗口补齐
+  4. 发布不可变 Round 1 快照
+  5. 审计任务过难、无 Plan 可解、Code Agent 偏离三类标签噪声
+  6. 基于 Verified 审计人工生成初始规则
+  7. 实现 GEPA Adapter 和独立 Checker/reflection 配置
+- **随机性注意**：当前 Checker 未显式设置 temperature；新流程要求 Checker 默认显式 `temperature: 0.0`
+- **本阶段边界**：不立即补跑、不实现、不启动 GEPA 实验
 
-## 3. PolyBench full199 剩余扫描失败
+---
 
-- **状态**：扫描收尾，198/199 个实例具有有效 PCT；1 个上下文超限实例放弃（截至 2026-06-09）
-- **当前统计**：
-  - 当前 checker-only 严格口径已有 198 个有效 PCT
-  - 77 个 resolved
-  - 7 个历史 patch-apply 失败已通过 evaluator-only 恢复
-  - 3 个 agent 空输出实例已完整重跑，均正常完成但 unresolved
-  - 6 个 Docker 兼容实例已完整重跑，均正常完成但 unresolved
-- **唯一排除**：
-  - `transformers-6322` 请求 2,881,419 tokens，超过 1,048,565 上限，按本轮决策放弃
-- **处理边界**：
-  - 6 个镜像实例均已成功构建、通过依赖检查并完成 PCT。
-  - 最新 checker 快照：`output/SWE-PolyBench/polybench-pct-checker-datasets/20260609_198_cdf4d414e401/cases.jsonl`。
-  - `transformers-6322` 不再进入后续 PCT 重跑或 checker 数据集。
-
-## 4. Verified 探索运行（run1 2026-05-09 + run2 2026-05-11）暴露的 pipeline 健壮性问题
+## 2. Verified 探索运行暴露的 pipeline 健壮性问题
 
 > 数据来源：
 > - run1: `output/SWE-bench_Verified/run_summary_2026-05-09.json`（seed=42，50 实例，n=3，11h，34/49 resolved=69.4%）
 > - run2: `output/SWE-bench_Verified/run_summary_2026-05-11_run2.json`（seed=42 排除 run1，120 实例，n=5，26.7h，76/111 resolved=68.5%）
 > - 累计：170 sampled / 160 finalized / 110 resolved (68.8% of finalized)
 
-### 4.1 Plan / Reflect agent 运行 submission 但 `/tmp/plan.md` 为空
+### 2.1 Plan / Reflect agent 运行 submission 但 `/tmp/plan.md` 为空
 
 - **状态**：待观察
 - **现象**：run1 命中 2 例（`pydata__xarray-4687` R1、`pytest-dev__pytest-10356` R2）。run2 未单独统计该类，但 run2 result.json 的 errors[] 中可能有同类记录。
@@ -45,36 +41,23 @@
 - **行为**：pipeline 将该 round 标 `round_failed`，整个实例 break round 循环，但 result.json 正常 finalize（带 errors[]）。**数据可靠**（不会污染分析），只是该实例没有可分析的 plan。
 - **处理建议**：如果出现频率上升再排查；目前 ~4% 可接受。可考虑在 plan agent 的 `has_finished` 钩子里要求 plan 文件非空才允许提交。
 
-### 4.2 Code agent `LimitsExceeded`（步数超限）
+### 2.2 Code agent `LimitsExceeded`（步数超限）
 
 - **状态**：待观察
 - **现象**：`django__django-11734` Round 1 code agent 跑满 250 步未提交，触发 `LimitsExceeded`；记 `round_failed`，instance finalize 时 0 plans。
 - **影响**：1/50 (2%) on run1。属预期失败模式（agent 的硬上限），**数据可靠**。
 - **处理建议**：观察 500 实例规模时这一类是否过多；如果显著高于当前 2%，再考虑提高 `agent.max_steps` 或加更激进的提交提示词。
 
-### 4.3 Reflect agent 上下文窗口超限（n≥4 触发）
+### 2.3 Reflect agent 上下文窗口超限（n≥4 触发）
 
-- **状态**：待解决（**n=5 探索运行新暴露**）
+- **状态**：待解决
 - **现象**：`psf__requests-1142` Round 4 reflect_agent 调用 LiteLLM 时抛 `ContextWindowExceededError`：DeepSeek V4 Flash 上下文上限 1,048,576 tokens，实际请求 1,411,362 tokens（超 35%）。Pipeline `Unexpected error` 退出，result.json 未写出。
 - **根因**：reflect_agent 把所有前序 trajectories（plan + code agents 的全部交互日志）、test_results、patch 拼进 system prompt（`{inputs_outputs_feedback}`）。round 越高累积越多，n=5 时 R4/R5 容易爆 1M 上下文。run1（n=3）从未触发是因为累积量还不够。
-- **累计影响**：1/120 (run2)。在 n=5 配置下出现，**Phase 1 后续运行若维持 n≥4 需要正视**。
 - **处理建议**：在 `_build_feedback_text` 里对每条 trajectory 加 char/token 上限（目前已截 stdout/stderr/patch 到 2000 字符，但 trajectory 本身没截）；或用 summarizer 把 R(N-1) 之前的 trajectory 压缩成要点；或把 R3+ 改用滚动窗口只保留最近一轮的完整 trajectory。
 
-### 4.4 反思 ROI：n=5 下 Round 3+ 几乎不带额外信号（信息项，非 bug）
+---
 
-- **状态**：观察数据，支持将默认实验规模维持在 `n=3`
-- **数据**（run2，n=5，111 finalized）：
-  | 解决轮次 | 实例数 | 占解决总数 |
-  |---|--:|--:|
-  | R1 | 73 | 96.1% |
-  | R2 | 2 | 2.6% |
-  | R3 | 0 | 0% |
-  | R4 | 0 | 0% |
-  | R5 | 1 | 1.3% |
-- **解读**：跑满 5 轮的 28 个未解决实例里只救回 1 个（3.6%）。把 n 从 3 提到 5 多花约 60% 单实例 wall time，**额外救回 1 例**。线性反思链的边际产出在 R3 之后几乎为零。
-- **处理建议**：默认使用 `n=3`，把节省的算力投入扩样以提高判别规律的统计置信度；不再推进候选 Plan 树形结构。
-
-## 5. Pro 模型在大轨迹 case 上的异常耗时
+## 3. Pro 模型在大轨迹 case 上的异常耗时
 
 - **状态**：观察中
 - **现象**：`scikit-learn__scikit-learn-25747` 使用 `deepseek-v4-pro` 进行对比分析时，单 case 运行超过 1.5 小时仍未提交。同期 `sympy__sympy-20916`（pro 模型）仅耗时约 3 分钟。两者差异在于轨迹数据量：
@@ -87,7 +70,9 @@
   2. 对大轨迹 case（>300 KB）启用 flash 模型兜底，pro 仅用于中小 case
   3. 给对比分析 agent 加 wall-time timeout，防止单 case 无限阻塞后续批次
 
-## 6. OpenCode analysis 仍被全局 DEEPSEEK_API_KEY 校验耦合
+---
+
+## 4. OpenCode analysis 仍被全局 DEEPSEEK_API_KEY 校验耦合
 
 - **状态**：下一优先任务
 - **现象**：`src.config.load_config()` 当前无条件要求 `DEEPSEEK_API_KEY` 存在，即使 `analysis.backend=opencode`。OpenCode 后端实际通过 OpenCode 自身 auth/config 发请求，不使用 `Config.api_key` 或 `analysis.api_key_env` 调用模型。
@@ -99,7 +84,9 @@
   3. `run_batch.sh`、`src.main`、analysis/review/checker CLI 分别在实际进入对应后端前校验所需凭据，避免共享 loader 过早失败
   4. 增加配置加载和 CLI 回归测试，覆盖无 DeepSeek key 的 OpenCode analysis、需要 DeepSeek key 的 PCT/checker、以及独立 analysis key 的 mini_swe analysis
 
-## 7. OpenCode/Kimi 聚合默认超时与长重试等待
+---
+
+## 5. OpenCode/Kimi 聚合默认超时与长重试等待
 
 - **状态**：待解决（不阻塞当前聚合产物，已手动规避）
 - **现象**：使用默认配置运行 Kimi/OpenCode 聚合时，`opencode_timeout=900` 可能不足以覆盖 195 条规则的一次性聚合请求。首次聚合超过 900 秒后进入 `rate_limit_sleep_seconds=18000` 的长等待路径，且 `conda run`/OpenCode 没有及时把中间日志返回。
@@ -109,76 +96,81 @@
   2. 在聚合开始前记录输入规则数和 prompt 大小，便于判断是否需要分批聚合
   3. 考虑把规则聚合改为两阶段树形合并，降低单次 OpenCode 请求长度和 wall time 风险
 
-## 8. PolyBench 镜像兼容构建
+---
 
-- **状态**：已解决，6 个剩余兼容镜像均已构建验证
-- **已完成**：
-  1. GHCR 按 `v1.1 → v1.0 → latest` 拉取，全部缺失时使用数据集官方 Dockerfile 和 base commit 本地构建。
-  2. Docker build 现在保留完整 `BuildError.build_log`，可看到真实 apt/pip 错误。
-  3. Debian Buster fallback 改用 archive 源并关闭 `Valid-Until` 检查；`transformers-6735` 已实际构建成功。
-  4. 为旧 Transformers extras 增加兼容候选：JAX 官方 wheel archive、PyAV 系统依赖、`Cython<3`、Python 3.10 Bullseye/FFmpeg 4.x、apt HTTPS 超时和有限重试。
-  5. Docker build 改为有 wall-time timeout 的 CLI 子进程；默认每个 variant 最多 3600 秒，超时后保留输出并继续下一个 variant。
-  6. `transformers-13988` 的 `apt-network+jax-wheel-archive` 镜像已构建并验证。
-  7. 5 个 `.[dev,testing]` 实例的 Bullseye + JAX archive + PyAV 兼容镜像均已构建并验证。
-  8. 本地兼容镜像被窗口清理后会通过相同 variant 自动重建；无需重新开发修复，但没有 BuildKit cache 时仍需重新下载和编译依赖。
-- **本次准备重跑**：
-  - manifest：`configs/polybench_retry_images_buster4.json`
-  - wrapper：`scripts/run_polybench_image_retry.sh`
-  - batch id：`polybench-retry-images-buster4`
-  - 默认只 dry-run；显式传 `--execute` 才运行
-- **后续重跑**：
-  - manifest：`configs/polybench_retry_images_compat6.json`
-  - 建议使用独立 batch id，保留原始失败数据。
-- **约束**：不得通过删除官方 extras、放宽仓库声明版本或更改测试命令来换取构建成功；兼容处理只恢复历史依赖来源和对应年代的系统环境。
+## 6. scripts 目录整理
+
+- **状态**：已完成入口收敛
+- **目标**：
+  1. 识别仍在使用的正式入口；
+  2. 识别重复、过时、临时或可归档脚本；
+  3. 检查脚本间参数、日志、Docker 管理和 batch 调度是否一致；
+  4. 在用户明确下令前，只了解情况并等待，不自行整理或修改。
+- **当前结构**：
+  - **正式实验入口**：`scripts/run_batch.sh`、`scripts/long_run_watchdog.py`
+  - **内部实现**：`scripts/internal/`
+  - **报告/数据工具**：`scripts/tools/`
+  - **历史入口**：`scripts/archive/legacy_entrypoints/`
+- **重点关注**：
+  - Bash wrapper 与 Python runner 职责已清晰；
+  - analysis 使用 `run_batch.sh --analysis-only`；
+  - checker 使用 `run_batch.sh --checker-comparison` 或 `--checker-recovery`；
+  - Buster 4 等目标重跑直接使用 `run_batch.sh --instances ... --batch-id ...`；
+  - 所有 Docker 调用最终都经过 `src.environment.docker_env`，无独立清理逻辑残留；
+  - `build_docker_images.sh` 已在 `config.yaml` 中配置但文件已不存在，相关逻辑已被 `DockerCapacityWindow` + GHCR/build fallback 替代。
+
+### 6.1 重要发现：脚本中的过时/错误目标
+
+| 问题 | 位置 | 风险 | 建议处理 |
+|------|------|------|----------|
+| **checker eval 阶段仍指向已放弃的 SWE-bench Pro** | 已修复 | watchdog 现在调用 `run_batch.sh --checker-comparison` |
+| **`evaluate_checker.py` 三模式混合** | `scripts/internal/evaluate_checker.py` | 已移出正式入口；后续可继续删除 legacy PCC 模式 |
+| **`run_batch.sh` 仍残留 Pro 分支** | 已修复 | 已统一走配置实例或 batch manifest |
+| **`long_run_watchdog.py` 生成 Pro 实例列表** | 已修复 | 生成函数和调用均已删除 |
+| **公共 IO helper 被脚本间私有导入** | `label_checker_task_categories.py` 导入 `evaluate_checker.py` 的 `_read_jsonl` / `_write_json` | 修改 evaluate_checker 时容易破坏 PPT/分类脚本 | 将 helper 移到 `src/output/writer.py` 或 `src/utils.py` |
+
+- **后续可选优化**：将 checker JSONL 公共 IO helper 从内部脚本迁入 `src/`。
 
 ---
 
-# 已完成项目（归档）
+## 7. 跨平台兼容性审查（macOS → Linux）
 
-## E. 基于已有 PCT 结果的 Checker-only 评估
+> **状态**：待处理
+> **背景**：项目即将从 macOS 迁移到 Linux 服务器，需识别并修复平台相关假设，确保 batch、checker、analysis、watchdog 等核心流程在 Linux 上可直接运行。
 
-- **状态**：✅ 已完成（2026-06-08）
-- **实现**：扩展 `scripts/evaluate_checker.py`，复用原 `check_agent.run()`、checker prompt、规则加载和配置，不重新运行 Plan Agent、Code Agent 或 evaluator。
-- **对比实验入口**：`scripts/run_checker_comparison.py` 固定使用 `deepseek-v4-flash` 对比 Flash、Pro、Kimi 规则和无规则直接判断；`scripts/run_checker_comparison.sh` 提供 dry-run、tmux 后台执行、日志和断点续跑。四组实验使用新输出目录，并仅导入旧实验中含有效 `prediction.json` 的已完成实例。正式 198 样本运行应在代码提交后启动。
-- **Docker 容量窗口**：并行 checker 统一复用 `DockerCapacityWindow`。窗口以 semaphore 限制活动容器数，以单一维护锁执行磁盘检查和镜像清理；默认 3 个容器槽位、保留 6 个最新项目镜像，避免各 worker 独立扩张 Docker.raw。
-- **固定输入**：`--build-input` 扫描 PolyBench 历史结果，按 full199 顺序输出 JSONL；同一实例选择最早的成功 PCT，不按 resolved 结果择优。evaluator-only 重评只为原 plan 补充标签，并分别记录原 PCT 来源和标签来源。
-- **错误处理**：checker 运行错误写入 `errors.jsonl` 并从 TP/FP/FN/TN 分母排除。
-- **当前实测**：2026-06-09 纳入 Buster 4 重跑后，full199 历史结果生成
-  182 个固定样本，其中 74 resolved、108 unresolved，排除 17 个无有效
-  成功 PCT 的实例。
-- **持续维护**：使用 `--snapshot-root` 发布追加式不可变数据快照。当前
-  快照为 `20260609_182_ecaedc314e33`；旧快照不会被覆盖，相同内容不会
-  重复发布，新成功重跑会生成新的快照目录。
+### 7.1 已确认问题
 
-## A. 数据集分层：探索用 SWE-bench Verified、保留 Pro 作为测试集
+| 问题 | 位置 | 影响 | 建议处理 |
+|------|------|------|----------|
+| **硬编码 macOS conda 路径** | `scripts/run_batch.sh:106`：`CONDA_BASE="/Users/taoran.wang/miniconda3"` | Linux 上不存在该路径，batch 启动即失败 | 改为通过 `conda info --base` 或环境变量 `CONDA_BASE` 推导；默认回退到 `$HOME/miniconda3` |
+| **硬编码 macOS conda 路径（watchdog）** | `scripts/long_run_watchdog.py:335,388,430,485,562,780` 多处 `source /Users/taoran.wang/miniconda3/etc/profile.d/conda.sh` | watchdog 在 Linux 上无法激活环境，所有 tmux 子任务启动失败 | 提取为配置或环境变量；优先使用 `conda run -n mini-swe` 替代 `source + conda activate` |
+| **macOS 专属 `caffeinate`** | `scripts/internal/run_batch_workers.py`、`scripts/long_run_watchdog.py` | Linux 无 `caffeinate`，当前实现会降级为无睡眠预防 | Linux 下增加 `systemd-inhibit` |
+| **Docker Desktop 专属错误模式** | `src/environment/docker_env.py`、`scripts/internal/run_batch_workers.py` | Linux Docker Engine 错误信息不同 | 补充 Linux 引擎常见错误模式 |
+| **文档中的 macOS/zsh 导向** | `CLAUDE.md` 提及 `source ~/.zshrc`、`macOS system Python` | 新 Linux 环境可能使用 bash，成员 onboarding 时容易按错误说明操作 | 在 `README.md`/`CLAUDE.md` 增加 Linux 激活说明；保留 macOS 作为可选分支 |
+| **PolyBench 实例 ID 小写转换** | `src/environment/polybench_image.py:87-88`：`instance_id.lower()`、`language.lower()` | 在 macOS 默认不区分大小写文件系统下无感；Linux 区分大小写后，若实例目录或镜像 tag 依赖原始大小写会不一致 | 检查依赖路径处是否统一使用小写；在关键位置加断言或规范化 |
+| **analysis 内部脚本使用 `python3`** | `scripts/internal/run_analysis.sh` | Linux 上可能不指向 conda Python | 统一使用激活环境中的 `python` |
 
-- **状态**：✅ 已完成（v0.10，2026-05-08）
-- **结论**：Verified 数据集切换功能已代码落地并经过 run1/run2 共 170 实例的大规模运行验证。`InstanceLoader(dataset=...)` 与 `derive_image_name()` 均无需额外分支即可支持 Verified。Pro 因 0% resolved 已放弃，已由 SWE-PolyBench Python 子集替代（见 §3）。
-- **代码落地**：
-  1. ✅ `SystemConfig.dataset` 字段已加入，`config.yaml` 同步加 `system.dataset`
-  2. ✅ `swe_pro_instances` → `instances` 重命名贯穿全项目
-  3. ✅ 输出根目录改为 `output/{dataset_short}/{instance_id}/...`
-  4. ✅ `docs/requirement-document.md` §4.3 / §6.1 / §6.2 / FR-09 已同步
+### 7.2 已确认可移植（无需修改，但需留意）
 
-## B. Review/Rework 机制的破坏性返工（FR-14 设计缺陷）
+| 项目 | 结论 | 说明 |
+|------|------|------|
+| **文件锁 `fcntl`** | Linux/macOS 均支持 | `src/environment/docker_env.py` 使用 `fcntl.flock`，在 Linux 上行为一致；Windows 不支持，但当前目标平台为 Linux，无需处理 |
+| **`tmux` 后台执行** | Linux 可用 | `long_run_watchdog.py` 与 `run_checker_comparison.sh` 均依赖 tmux，Linux 发行版安装 `tmux` 后即可 |
+| **路径处理** | 基本可移植 | `pathlib.Path` 已广泛使用；未发现硬编码 `\\` 或 `C:\\` 等 Windows 路径假设 |
+| **Docker CLI 调用** | 可移植 | 所有脚本均通过 `docker` 命令调用，未绑定 Docker Desktop GUI 或 macOS 特定 socket |
 
-- **状态**：✅ 已完成
-- **处理**：
-  1. ✅ 新增 `config.analysis.enable_review`（默认 `false`），默认跳过 review/rework 阶段
-  2. ✅ 当 `enable_review=false` 时，watchdog 在 flash/pro 分析完成后直接进入下一阶段，不再运行 review 和 rework
-  3. 若未来重新启用 review，需先解决"先删后跑"的破坏性逻辑：改为保留旧结果、在新路径重跑、对比后择优保留
+### 7.3 待补充检查
 
-## C. Jinja 动态任务内容二次渲染
+- [ ] `scripts/run_batch.sh` 中 `read -r BATCH_ID ... < <(python -c ...)` 的进程替换在 Linux bash 中正常，但需确认目标 shell 为 bash ≥ 4。
+- [ ] `long_run_watchdog.py` 调用 `claude -p` 进行自动修复，Linux 上需预装 Claude Code CLI 并登录。
+- [ ] Linux 下是否有 `caffeinate` 的等效包或是否需要通过 `logind.conf`/`systemd` 禁用睡眠。
+- [ ] 目标 Linux 是否使用 Docker Engine + rootless？rootless Docker 的 socket 路径与权限与 macOS Docker Desktop 不同。
+- [ ] 文件系统：Linux 默认区分大小写，需回归测试 `output/` 目录下大小写混合的实例目录。
 
-- **状态**：✅ 已完成（2026-05-19，2026-06-05 回归验证）
-- **结论**：模板源码只渲染一次；problem statement、plan、feedback 等动态内容通过 `agent.run(..., **extra_template_vars)` 传入，不会把内容中的 `{{...}}` 再解释为 Jinja 语法。
+### 7.4 迁移优先级建议
 
-## D. PolyBench remaining-133 基础设施恢复
-
-- **状态**：✅ 已完成（2026-06-08）
-- **结果**：
-  - evaluator-only 64/64 完成；full pipeline 38 个中 27 个生成结果
-  - 原始 89 个 FAIL 中恢复 78 个
-  - evaluator 安装、patch 预保存、官方 Dockerfile fallback、脏 worktree reset 均已修复
-  - patch policy 不按扩展名过滤，保留 `*_pb2.py` 和官方答案允许的非 Python 文件
-  - 两个剩余 patch apply 错误由 `rstrip()` 删除 hunk 空白上下文行导致，修复后均 `patch_applied=true`；`transformers-7075` resolved，`keras-18649` 因功能测试失败 unresolved
+1. **P0**：统一 conda 环境激活方式，移除所有 hardcoded `/Users/taoran.wang/miniconda3`。
+2. **P1**：为 Linux 增加 `caffeinate` 替代方案，或在文档中说明手动禁用睡眠。
+3. **P1**：扩展 `is_docker_storage_error()` 正则，覆盖 Linux Docker Engine 典型错误。
+4. **P2**：更新 `CLAUDE.md`/`README.md`，增加 Linux 环境初始化说明。
+5. **P2**：统一 `python` / `python3` 调用，优先在 conda env 内执行。
