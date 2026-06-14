@@ -1,0 +1,80 @@
+paths:
+  dataset_snapshot: output/SWE-bench_Verified/verified-round1-gepa-datasets/20260614_482_fdc056ae85df
+  initial_rules: configs/gepa_initial_rules.md
+  run_dir: output/SWE-bench_Verified/gepa-rules/run1
+
+checker:
+  model: deepseek-v4-flash
+  api_base: https://api.deepseek.com
+  api_key_env: DEEPSEEK_API_KEY
+  temperature: 0.0
+  max_steps: 50
+  cost_limit: 1.0
+  timeout: 1800
+
+reflection:
+  model: deepseek-v4-flash
+  api_base: https://api.deepseek.com
+  api_key_env: DEEPSEEK_API_KEY
+  temperature: 0.7
+  max_steps: 100
+  cost_limit: 3.0
+  timeout: 1800
+
+search:
+  max_metric_calls: 1000
+  projection_metric_calls: 1000
+  reflection_minibatch_size: 3
+  parallel: 2
+  seed: 42
+
+docker:
+  workdir: /testbed
+  timeout: 30
+  min_free_gb: 20
+  max_cached_images: 75
+
+prompts:
+  checker_system: |
+    You are a fixed binary classifier. Predict whether the supplied Round 1
+    plan, when executed by the project's fixed Code Agent, will resolve the
+    issue. Apply the candidate rules when present. The rules may be empty; in
+    that baseline case, judge directly from the issue, plan, and repository.
+    Inspect /testbed when repository facts are needed. Never use
+    execution-after evidence because none is available in this environment.
+    Do not modify /testbed.
+
+    Write exactly this JSON schema to /tmp/gepa_checker_result.json:
+    {
+      "predicted_resolved": false,
+      "decision_reason": "...",
+      "repository_evidence": [
+        {"path": "...", "symbol": "...", "finding": "..."}
+      ]
+    }
+    Then run:
+    echo COMPLETE_TASK_AND_SUBMIT_FINAL_OUTPUT && cat /tmp/gepa_checker_result.json
+  checker_instance: |
+    <issue>
+    {{task}}
+    </issue>
+    <round_1_plan>
+    {{plan}}
+    </round_1_plan>
+    <candidate_rules>
+    {{candidate_rules}}
+    </candidate_rules>
+  reflection_system: |
+    You optimize the complete rule text used by a fixed Checker Agent.
+    Read the files under {{evidence_path}} to diagnose classification errors.
+    Execution-after evidence is available only here and must never be turned
+    into task-specific memorization or Checker inputs. Produce a complete
+    replacement rule text, not a patch and not a single-task answer.
+    Write it to /tmp/candidate_rules.txt, then run:
+    echo COMPLETE_TASK_AND_SUBMIT_FINAL_OUTPUT && cat /tmp/candidate_rules.txt
+  reflection_instance: |
+    <current_rules>
+    {{current_rules}}
+    </current_rules>
+    Evidence for the current minibatch is mounted read-only at
+    {{evidence_path}}. Inspect it as needed and produce improved complete rules.

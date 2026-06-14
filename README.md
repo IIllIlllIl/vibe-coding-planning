@@ -13,7 +13,7 @@
 - **规则质量审查与返工（FR-14，默认关闭）**：独立 LLM Reviewer Agent 审查规则质量（五维评分），未通过者触发返工循环。实践发现返工机制会**破坏已提取的有效规则**（删除旧结果后重跑失败），因此默认关闭。可通过 `config.analysis.enable_review` 开启
 - **Plan-Checker-Code 管道（FR-15）**：在 Plan 与 Code 之间插入规则检查器，验证计划是否符合从成功案例中提炼出的规则集。检查器在 Docker 内运行，可验证文件路径、函数名等具体引用。代码始终执行以产生 ground truth，用于计算检查器的 TP/FP/FN/TN、Accuracy、Precision、Recall、F1
 - **检查器 held-out 评估**：在 SWE-PolyBench Python 子集上运行 Plan-Check-Code 管道，评估规则集的预测能力
-- **GEPA 规则优化（设计中）**：计划使用 Verified PCT Round 1 的 `issue + plan + repo + resolved` 分类数据，让 GEPA 直接优化 Checker 的完整规则文本，替代逐案例提取与聚合。设计见 [`docs/gepa-rule-optimization.md`](docs/gepa-rule-optimization.md)
+- **GEPA 规则优化**：使用 Verified PCT Round 1 的 `issue + plan + repo + resolved` 分类数据，让 GEPA 直接优化 Checker 的完整规则文本。模块和无外部 LLM 测试已完成，完整实验尚未运行。设计见 [`docs/gepa-rule-optimization.md`](docs/gepa-rule-optimization.md)
 - **最小化造轮子**：Agent 基于 `mini-swe-agent` 框架，反思复用 GEPA 反射 Prompt 模板，评估直接调用 `swebench` 官方库
 
 ## 实验设计：两阶段方法学
@@ -111,12 +111,37 @@ python scripts/internal/evaluate_checker.py --config configs/polybench_full199_p
 | `--analysis-config PATH` | str | 规则分析配置文件路径 |
 | `--checker-comparison` | flag | 运行四臂 checker-only 对比 |
 | `--checker-recovery` | flag | 仅恢复 checker-only 错误或未完成样本 |
+| `--gepa-rules` | flag | 运行全局 GEPA Checker 规则优化任务 |
+| `--gepa-config PATH` | str | GEPA 独立配置，默认 `configs/gepa_verified_rules.yaml` |
 
 `--parallel` 控制主 PCT/PCC 阶段；规则提取的并行度仍由
 `analysis.parallel` 控制。所有 PCT/PCC worker 共享
 `DockerCapacityWindow` 的跨进程容器槽位。缺失镜像的 pull/build
 保持全局串行，已有镜像的 agent 和 evaluator 工作负载可以并行运行。
 重复执行同一 batch 时，已有 `result.json` 的实例仍会直接跳过。
+
+GEPA 是一个全局优化任务，不使用实例 worker pool：
+
+```bash
+bash scripts/run_batch.sh --gepa-rules \
+  --gepa-config configs/gepa_verified_rules.yaml
+```
+
+同一 `run_dir` 会从 `gepa_state.bin` 自动恢复。优雅停止：
+
+```bash
+touch output/SWE-bench_Verified/gepa-rules/run1/gepa.stop
+```
+
+空规则轻量 pilot 使用 `configs/gepa_verified_rules_pilot.yaml`。运行前可重复
+构建确定性的 6/4 子集：
+
+```bash
+conda run -n mini-swe python scripts/tools/build_gepa_pilot_dataset.py
+```
+
+运行会额外生成 `audit_events.jsonl`、`usage.jsonl` 和
+`cost_report.json`，用于检查信息隔离、GEPA 接受路径以及时间/token/费用。
 
 PolyBench Python 199 实例的纯 PCT 扫描配置已固定为
 `configs/polybench_full199_pct.yaml`（`checker.enabled=false`）：

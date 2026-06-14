@@ -6,8 +6,9 @@
 
 ## 1. GEPA 规则优化流程实施
 
-- **状态**：Verified 正式 Round 1 数据快照已发布；等待语义噪声审计和
-  GEPA Adapter 实现
+- **状态**：Verified 正式 Round 1 数据快照已发布；GEPA Checker、Adapter、
+  文件型 reflection proposer、runner、报告和监控集成已实现并通过
+  mock/no-LLM 测试；等待语义噪声审计、初始规则审阅和小预算 pilot
 - **设计文档**：`docs/gepa-rule-optimization.md`
 - **目标**：使用 Verified PCT Round 1 分类数据直接优化完整 Checker 规则文本，替代逐案例规则提取、后处理和聚合
 - **当前 Verified 数据审计**：
@@ -21,10 +22,17 @@
   - `complete: true`、`provisional: false`、`invalid_source_instances: 0`
 - **执行顺序**：
   1. 审计任务过难和 Code Agent 偏离两类语义噪声
-  2. 基于 Verified 审计人工生成初始规则
-  3. 实现 GEPA Adapter 和独立 Checker/reflection 配置
+  2. 审阅 `configs/gepa_initial_rules.md` 的初始规则
+  3. 用户确认成本后运行小预算 pilot
 - **随机性注意**：当前 Checker 未显式设置 temperature；新流程要求 Checker 默认显式 `temperature: 0.0`
-- **本阶段边界**：不立即补跑、不实现、不启动 GEPA 实验
+- **本阶段边界**：实现已完成，但未启动外部 LLM GEPA 实验
+- **Pilot 就绪**：
+  - 空规则 seed：`configs/gepa_empty_rules.txt`
+  - 6/4 平衡子集配置：`configs/gepa_verified_rules_pilot.yaml`
+  - 预算：18 metric calls，minibatch=2，parallel=1
+  - 审计：`audit_events.jsonl`；API usage：`usage.jsonl`；
+    全量线性估算：`cost_report.json`
+  - 状态：等待用户手动 commit 后启动，不在本次修改中调用外部 LLM
 
 ---
 

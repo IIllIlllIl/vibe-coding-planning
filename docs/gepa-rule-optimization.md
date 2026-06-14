@@ -1,6 +1,7 @@
 # 基于 GEPA 的规则优化流程设计
 
-> 状态：Verified Round 1 正式数据快照已发布；GEPA 优化尚未运行。
+> 状态：Verified Round 1 正式数据快照已发布；GEPA 模块已实现并通过
+> mock/no-LLM 验证，外部 LLM 优化尚未运行。
 >
 > 目标：使用 GEPA 直接优化供 Plan Checker 使用的完整规则文本，替代当前
 > “逐案例规则提取 → 后处理 → 聚合”的规则生成流程。
@@ -374,3 +375,58 @@ GEPA 内部目标。
 8. 实现 GEPA adapter、固定 Checker schema 和独立配置。
 9. 先做小预算 smoke test，再运行完整优化。
 10. 冻结最佳规则，在 PolyBench 固定快照上做 checker-only 评估。
+
+## 10. 当前实现状态
+
+实现位于 `src/optimization/`，独立配置为
+`configs/gepa_verified_rules.yaml`。正式入口：
+
+```bash
+bash scripts/run_batch.sh --gepa-rules \
+  --gepa-config configs/gepa_verified_rules.yaml
+```
+
+实现直接调用 `gepa.optimize`，候选只有 `rules`。Checker temperature 在配置
+加载和模型构建两处固定为 `0.0`。Adapter 的 Checker payload 只包含
+`issue_description`、`plan` 和 `repository`；真实标签与 ASI 只进入 reflection
+trajectory。Reflection evidence bundle 按 minibatch 创建，并以只读 Docker
+mount 暴露给 mini-swe-agent proposer。
+
+`run_dir` 保存 GEPA 原生 `gepa_state.bin`、`candidates.json`、`run_log.json`、
+`candidate_tree.html`，以及项目补充的 `progress.json`、`errors.jsonl`、
+`evaluations.jsonl`、`candidate_metrics.json` 和 `best_rules.txt`。同一目录再次
+运行会由 GEPA 自动恢复；创建 `gepa.stop` 可优雅停止。
+
+### 10.1 轻量空规则 Pilot
+
+Pilot 配置为 `configs/gepa_verified_rules_pilot.yaml`，使用语义为空字符串的
+`configs/gepa_empty_rules.txt`。数据由以下命令从正式快照确定性构建：
+
+```bash
+conda run -n mini-swe python scripts/tools/build_gepa_pilot_dataset.py
+```
+
+当前 pilot 快照为 `pilot_6_4_seed42_73df941adb4d`，包含 6 train / 4
+validation，两个 split 都保持 resolved/unresolved 平衡，总计覆盖 3 个 repo。
+配置使用 `reflection_minibatch_size=2`、`parallel=1`、
+`max_metric_calls=18`，并把成本线性投影到 `projection_metric_calls=1000`。
+
+### 10.2 审计与成本日志
+
+`audit_events.jsonl` 逐事件记录：
+
+- 空 seed、唯一候选组件 `rules` 和 Checker temperature；
+- Checker 可见字段与禁止字段，明确记录 label/ASI 不可见；
+- 每次 evaluation 的实例、split、trace 模式和 baseline/minibatch/full-validation
+  类型；
+- 当前 reflection minibatch、evidence bundle 路径及文件类别；
+- evidence mount 的只读、禁网和仅当前 bundle 属性；
+- proposal 是完整替换文本及其哈希；
+- minibatch 接受/拒绝分数，拒绝时跳过 full validation，接受前完成 full
+  validation；
+- metric call 预算、停止后的候选数量和最佳候选。
+
+`usage.jsonl` 从 mini-swe-agent/LiteLLM 的实际响应逐 API 调用记录 Checker 和
+Reflection 的 prompt/completion/total tokens、LiteLLM reported cost、耗时和
+成功状态。`cost_report.json` 分 phase 汇总平均/P50/P95 时间、token、费用、
+每 metric call 成本，并按 `projection_metric_calls` 给出线性全量估算。

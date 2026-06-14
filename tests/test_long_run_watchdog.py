@@ -66,6 +66,16 @@ class TestWatchdogState:
         assert loaded.docker_retry_count == 0
         assert loaded.status == "running"
 
+    def test_gepa_mode_initializes_global_task(self, monkeypatch):
+        monkeypatch.setenv(
+            "GEPA_RULES_CONFIG",
+            "configs/gepa_verified_rules.yaml",
+        )
+        state = watchdog._init_state()
+        assert state.batch_id == "gepa-rules"
+        assert state.total_instances == 1
+        assert state.gepa_rules_phase == "running"
+
 
 class TestCooldownLogic:
     def test_cooldown_not_expired(self):
@@ -98,6 +108,15 @@ class TestCooldownLogic:
 
 
 class TestLogAnalysis:
+    def test_detect_gepa_completion_marker(self, tmp_path: Path):
+        log = tmp_path / "gepa_rules.log"
+        log.write_text(
+            "[2026-06-14 12:00:00] === GEPA rules end: rc=0 ===\n",
+            encoding="utf-8",
+        )
+        analysis = watchdog.analyze_recent_logs(log)
+        assert analysis["batch_completed"] is True
+
     def test_detect_api_rate_limit(self, tmp_path: Path):
         log = tmp_path / "batch_run.log"
         log.write_text(

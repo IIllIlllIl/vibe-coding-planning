@@ -59,11 +59,13 @@ AGGREGATION_TMUX_SESSION = "pct-aggregation"
 REVIEW_TMUX_SESSION = "pct-review"
 REPAIR_TMUX_SESSION = "pct-repair"
 CHECKER_TMUX_SESSION = "pct-checker"
+GEPA_RULES_TMUX_SESSION = "pct-gepa-rules"
 MASTER_LOG = Path("logs/batch_run.log")
 ANALYSIS_LOG = Path("logs/analysis_run.log")
 AGGREGATION_LOG = Path("logs/aggregation_run.log")
 REVIEW_LOG = Path("logs/review_run.log")
 CHECKER_LOG = Path("logs/checker_run.log")
+GEPA_RULES_LOG = Path("logs/gepa_rules.log")
 WATCHDOG_LOG = Path("logs/watchdog.log")
 STATE_FILE = Path("output/.watchdog_state.json")
 
@@ -155,6 +157,7 @@ class WatchdogState:
     review_results: dict[str, dict] = None  # per-instance quality scores
     # Checker evaluation phase tracking (Plan-Check-Code on Pro Python)
     checker_phase: str | None = None    # None | "running" | "done"
+    gepa_rules_phase: str | None = None  # None | "running" | "done"
 
     def __post_init__(self):
         if self.rework_queue is None:
@@ -190,6 +193,7 @@ class WatchdogState:
             "rework_attempts": {},
             "review_results": {},
             "checker_phase": None,
+            "gepa_rules_phase": None,
         }
         defaults.update(d)
         return cls(**defaults)
@@ -222,6 +226,13 @@ def save_state(state: WatchdogState) -> None:
 def _init_state() -> WatchdogState:
     """Infer initial state from config.yaml and sample file."""
     import yaml
+
+    if os.environ.get("GEPA_RULES_CONFIG"):
+        return WatchdogState(
+            batch_id="gepa-rules",
+            total_instances=1,
+            gepa_rules_phase="running",
+        )
 
     cfg_path = _config_path()
     if not cfg_path.exists():
@@ -485,6 +496,39 @@ def start_checker_eval(state: WatchdogState) -> None:
         logging.info("Checker eval session started successfully.")
     else:
         logging.error("Failed to start checker eval tmux session!")
+
+
+def start_gepa_rules(state: WatchdogState) -> None:
+    """Start or resume the global GEPA rule optimization task."""
+    del state
+    _kill_tmux_session(GEPA_RULES_TMUX_SESSION)
+    config = os.environ.get(
+        "GEPA_RULES_CONFIG",
+        "configs/gepa_verified_rules.yaml",
+    )
+    cmd = (
+        f"cd {shlex.quote(os.getcwd())} "
+        f"&& conda run -n mini-swe bash scripts/run_batch.sh "
+        f"--gepa-rules --gepa-config {shlex.quote(config)}"
+    )
+    cmd = _prevent_sleep_command(cmd)
+    GEPA_RULES_LOG.parent.mkdir(parents=True, exist_ok=True)
+    GEPA_RULES_LOG.touch(exist_ok=True)
+    subprocess.run(
+        [
+            "tmux",
+            "new-session",
+            "-d",
+            "-s",
+            GEPA_RULES_TMUX_SESSION,
+            "bash",
+            "-c",
+            cmd,
+        ],
+        capture_output=True,
+        check=False,
+    )
+    time.sleep(3)
 
 
 def start_review(state: WatchdogState, instance_ids: list[str] | None = None) -> None:
@@ -810,6 +854,8 @@ def analyze_recent_logs(log_path: Path | None = None) -> dict:
         end_marker = "=== Batch end ==="
     elif log_path.name == CHECKER_LOG.name:
         end_marker = "=== Checker eval end ==="
+    elif log_path.name == GEPA_RULES_LOG.name:
+        end_marker = "=== GEPA rules end: rc=0 ==="
     else:
         end_marker = "=== Analysis end ==="
     result = {
@@ -1177,12 +1223,32 @@ def main() -> int:
     enable_review = _load_enable_review()
     logging.info("Watchdog config: enable_review=%s", enable_review)
 
-    # Determine active mode: checker > aggregation > review > analysis > batch
+    # Determine active mode: GEPA > checker > aggregation > review > analysis > batch
+    in_gepa_rules = state.gepa_rules_phase == "running"
     in_checker = state.checker_phase == "running"
-    in_aggregation = state.aggregation_phase in ("flash", "pro") and not in_checker
-    in_review = state.review_phase in ("reviewing", "reworking") and not in_aggregation and not in_checker
-    in_analysis = state.analysis_phase in ("flash", "pro") and not in_aggregation and not in_review and not in_checker
-    if in_checker:
+    in_aggregation = (
+        state.aggregation_phase in ("flash", "pro")
+        and not in_checker
+        and not in_gepa_rules
+    )
+    in_review = (
+        state.review_phase in ("reviewing", "reworking")
+        and not in_aggregation
+        and not in_checker
+        and not in_gepa_rules
+    )
+    in_analysis = (
+        state.analysis_phase in ("flash", "pro")
+        and not in_aggregation
+        and not in_review
+        and not in_checker
+        and not in_gepa_rules
+    )
+    if in_gepa_rules:
+        active_session = GEPA_RULES_TMUX_SESSION
+        active_log = GEPA_RULES_LOG
+        start_fn = start_gepa_rules
+    elif in_checker:
         active_session = CHECKER_TMUX_SESSION
         active_log = CHECKER_LOG
         start_fn = start_checker_eval
@@ -1207,7 +1273,9 @@ def main() -> int:
     # (fresh launch, or resume after Mac reboot / manual watchdog restart),
     # kick off the appropriate runner before entering the watch loop.
     if state.status == "running" and not _tmux_session_exists(active_session):
-        if in_checker:
+        if in_gepa_rules:
+            logging.info("Cold start: launching GEPA rules session.")
+        elif in_checker:
             logging.info("Cold start: launching initial checker eval session.")
         elif in_aggregation:
             logging.info("Cold start: launching initial aggregation session (phase=%s).", state.aggregation_phase)
@@ -1501,11 +1569,31 @@ def main() -> int:
             return 0
 
         # Re-evaluate mode every loop iteration (phase may have changed)
+        in_gepa_rules = state.gepa_rules_phase == "running"
         in_checker = state.checker_phase == "running"
-        in_aggregation = state.aggregation_phase in ("flash", "pro") and not in_checker
-        in_review = state.review_phase in ("reviewing", "reworking") and not in_aggregation and not in_checker
-        in_analysis = state.analysis_phase in ("flash", "pro") and not in_aggregation and not in_review and not in_checker
-        if in_checker:
+        in_aggregation = (
+            state.aggregation_phase in ("flash", "pro")
+            and not in_checker
+            and not in_gepa_rules
+        )
+        in_review = (
+            state.review_phase in ("reviewing", "reworking")
+            and not in_aggregation
+            and not in_checker
+            and not in_gepa_rules
+        )
+        in_analysis = (
+            state.analysis_phase in ("flash", "pro")
+            and not in_aggregation
+            and not in_review
+            and not in_checker
+            and not in_gepa_rules
+        )
+        if in_gepa_rules:
+            active_session = GEPA_RULES_TMUX_SESSION
+            active_log = GEPA_RULES_LOG
+            start_fn = start_gepa_rules
+        elif in_checker:
             active_session = CHECKER_TMUX_SESSION
             active_log = CHECKER_LOG
             start_fn = start_checker_eval
@@ -1567,7 +1655,14 @@ def main() -> int:
                 enter_api_cooldown(state, "DeepSeek API transient error (rate-limit/network/5xx).")
                 continue
 
-            if not in_checker and not in_aggregation and not in_analysis and not in_review and log_analysis["docker_down"]:
+            if (
+                not in_gepa_rules
+                and not in_checker
+                and not in_aggregation
+                and not in_analysis
+                and not in_review
+                and log_analysis["docker_down"]
+            ):
                 state.docker_retry_count += 1
                 if state.docker_retry_count > DOCKER_MAX_RETRIES:
                     enter_fatal(state, f"Docker daemon unreachable after {DOCKER_MAX_RETRIES} retries.")
@@ -1580,6 +1675,31 @@ def main() -> int:
                 save_state(state)
                 time.sleep(wait_sec)
                 continue
+
+            if in_gepa_rules:
+                try:
+                    import yaml
+
+                    gepa_config = Path(
+                        os.environ.get(
+                            "GEPA_RULES_CONFIG",
+                            "configs/gepa_verified_rules.yaml",
+                        )
+                    )
+                    raw = yaml.safe_load(
+                        gepa_config.read_text(encoding="utf-8")
+                    )
+                    run_dir = Path(raw["paths"]["run_dir"])
+                    progress = json.loads(
+                        (run_dir / "progress.json").read_text(encoding="utf-8")
+                    )
+                    if progress.get("status") == "completed":
+                        state.gepa_rules_phase = "done"
+                        state.status = "completed"
+                        save_state(state)
+                        continue
+                except (OSError, KeyError, TypeError, ValueError, json.JSONDecodeError):
+                    pass
 
             # Fallback for checker: if results.json exists, treat as complete
             # even if the end marker wasn't captured in the log yet.
@@ -1600,7 +1720,13 @@ def main() -> int:
                         pass
 
             if log_analysis["batch_completed"]:
-                if in_checker:
+                if in_gepa_rules:
+                    logging.info("GEPA rules optimization ended normally.")
+                    state.gepa_rules_phase = "done"
+                    state.status = "completed"
+                    save_state(state)
+                    continue
+                elif in_checker:
                     logging.info("Checker eval ended normally (%s).", end_marker)
                     state.checker_phase = "done"
                     save_state(state)
@@ -1710,21 +1836,56 @@ def main() -> int:
         else:
             state.completed = max(disk_completed, log_completed)
 
-        if not in_checker and not in_analysis and not in_review and state.total_instances > 0 and state.completed >= state.total_instances:
+        if (
+            not in_gepa_rules
+            and not in_checker
+            and not in_aggregation
+            and not in_analysis
+            and not in_review
+            and state.total_instances > 0
+            and state.completed >= state.total_instances
+        ):
             logging.info("All %d instances appear complete.", state.total_instances)
             state.status = "completed"
             save_state(state)
             continue
 
         # Periodic Docker cleanup (only relevant during batch)
-        if not in_checker and not in_analysis and not in_review:
+        if (
+            not in_gepa_rules
+            and not in_checker
+            and not in_aggregation
+            and not in_analysis
+            and not in_review
+        ):
             check_counter = getattr(main, "_check_counter", 0)
             check_counter += 1
             main._check_counter = check_counter
             if check_counter % DOCKER_PRUNE_INTERVAL_CHECKS == 0:
                 cleanup_docker()
 
-        if in_checker:
+        if in_gepa_rules:
+            phase_label = "gepa_rules"
+            completed = 0
+            try:
+                import yaml
+
+                gepa_config = Path(
+                    os.environ.get(
+                        "GEPA_RULES_CONFIG",
+                        "configs/gepa_verified_rules.yaml",
+                    )
+                )
+                raw = yaml.safe_load(gepa_config.read_text(encoding="utf-8"))
+                progress = json.loads(
+                    (Path(raw["paths"]["run_dir"]) / "progress.json").read_text(
+                        encoding="utf-8"
+                    )
+                )
+                completed = int(progress.get("metric_calls_used", 0))
+            except (OSError, KeyError, TypeError, ValueError, json.JSONDecodeError):
+                pass
+        elif in_checker:
             phase_label = "checker"
             completed = 0  # Checker progress tracked externally via results.json
         elif in_aggregation:

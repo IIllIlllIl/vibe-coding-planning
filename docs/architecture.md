@@ -142,18 +142,21 @@ plan-code-test/
 | **规则聚合** | `src/analysis/aggregation_agent.py` | 只读取传入 per-case 目录中 `rule_valid=true` JSON 的顶层 `rule` 字段，按行拆分规则，构造 Input-Aware Tree Merge prompt，解析并校验 `aggregated_rules.json` |
 | **Analysis CLI** | `src/analysis/cli.py` | 提供 per-case extraction、`--postprocess`、`--aggregate` 三种模式；根据 `analysis.backend` 在 mini-swe-agent 与 OpenCode 后端之间路由 |
 
-### 3.8 GEPA 规则优化层（设计中）
+### 3.8 GEPA 规则优化层
 
-该层计划替代现有规则提取、后处理和聚合流程，但尚未实现。详细设计见
+该层用于替代现有规则提取、后处理和聚合流程。核心模块和 mock/no-LLM
+验证已实现，尚未运行外部 LLM pilot。详细设计见
 [`gepa-rule-optimization.md`](gepa-rule-optimization.md)。
 
-| 模块 | 计划职责 |
+| 模块 | 职责 |
 |------|----------|
-| **Round 1 数据快照构建** | 从 Verified 每个任务选择完整的 PCT Round 1，发布不可变数据、来源 manifest 和 train/validation 切分 |
-| **Checker 分类器** | 仅接收 issue、plan、候选规则并访问任务仓库；输出 `predicted_resolved`、`decision_reason` 和 `repository_evidence` |
-| **GEPA Adapter** | 调用固定 Checker，返回逐样本 0/1 correctness 和包含 trajectory、patch、测试结果的 ASI |
-| **GEPA Search** | 把完整规则合集作为唯一文本组件，使用 vendored GEPA 的 reflective mutation、官方 minibatch、Pareto selection、缓存和状态恢复 |
-| **候选报告** | 对每个候选保存 Accuracy、MCC、Balanced Accuracy、Precision、Recall、F1、pass rate 和逐样本预测 |
+| **配置/数据** | `src/optimization/config.py`、`dataset.py`：独立配置、正式快照加载、Checker/ASI 边界校验 |
+| **Checker 分类器** | `checker.py`：仅接收 issue、plan、候选规则并访问任务仓库；输出固定二分类 schema，temperature 固定 0.0 |
+| **GEPA Adapter** | `adapter.py`：调用固定 Checker，返回逐样本 0/1 correctness 和仅供 reflection 使用的 ASI |
+| **Reflection proposer** | `reflection.py`：为当前 minibatch 创建 evidence bundle，以只读 mount 提供给 mini-swe-agent |
+| **GEPA Search** | `runner.py`：直接调用 vendored `gepa.optimize`，复用 Pareto、epoch sampler、cache、callbacks 和状态恢复 |
+| **候选报告** | `metrics.py`、`report.py`：保存候选指标、逐样本预测、最佳规则和 candidate tree |
+| **运行入口** | `python -m src.optimization`、`scripts/internal/run_gepa_rules.py`、`run_batch.sh --gepa-rules` |
 
 关键数据边界：
 

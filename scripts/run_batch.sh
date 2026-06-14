@@ -13,6 +13,7 @@
 #   bash scripts/run_batch.sh --analysis-only --analysis-config configs/analysis_kimi_opencode.yaml
 #   bash scripts/run_batch.sh --checker-comparison --parallel 3
 #   bash scripts/run_batch.sh --checker-recovery --parallel 1
+#   bash scripts/run_batch.sh --gepa-rules --gepa-config configs/gepa_verified_rules.yaml
 #
 # Outputs:
 #   logs/batch_run.log         - master log (status + duration per instance)
@@ -33,6 +34,8 @@ ANALYSIS_INPUT_DIR_OVERRIDE=""
 PARALLEL=1
 CHECKER_COMPARISON=0
 CHECKER_RECOVERY=0
+GEPA_RULES=0
+GEPA_CONFIG="configs/gepa_verified_rules.yaml"
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
@@ -64,6 +67,14 @@ while [[ $# -gt 0 ]]; do
       CHECKER_COMPARISON=1
       CHECKER_RECOVERY=1
       shift
+      ;;
+    --gepa-rules)
+      GEPA_RULES=1
+      shift
+      ;;
+    --gepa-config)
+      GEPA_CONFIG="$2"
+      shift 2
       ;;
     --run-analysis)
       RUN_ANALYSIS=1
@@ -129,6 +140,26 @@ conda activate mini-swe || { echo "ERROR: failed to activate conda env mini-swe"
 
 python -c "import minisweagent, swebench" 2>/dev/null \
   || { echo "ERROR: minisweagent/swebench not importable in active env" >&2; exit 1; }
+
+if [[ $GEPA_RULES -eq 1 ]]; then
+  if [[ $DRY_RUN -eq 1 ]]; then
+    echo "[DRY-RUN] GEPA rules optimization: config=$GEPA_CONFIG"
+    exit 0
+  fi
+  if [[ -z "${DEEPSEEK_API_KEY:-}" ]]; then
+    echo "ERROR: DEEPSEEK_API_KEY not set" >&2
+    exit 1
+  fi
+  mkdir -p logs
+  echo "[$(date '+%Y-%m-%d %H:%M:%S')] === GEPA rules start: config=$GEPA_CONFIG ===" \
+    | tee -a logs/gepa_rules.log
+  python scripts/internal/run_gepa_rules.py --config "$GEPA_CONFIG" \
+    2>&1 | tee -a logs/gepa_rules.log
+  GEPA_RC=${PIPESTATUS[0]}
+  echo "[$(date '+%Y-%m-%d %H:%M:%S')] === GEPA rules end: rc=$GEPA_RC ===" \
+    | tee -a logs/gepa_rules.log
+  exit "$GEPA_RC"
+fi
 
 if [[ $CHECKER_COMPARISON -eq 1 ]]; then
   CHECKER_CMD=(python scripts/internal/run_checker_comparison.py
