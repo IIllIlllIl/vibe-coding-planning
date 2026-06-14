@@ -1,6 +1,6 @@
 # 基于 GEPA 的规则优化流程设计
 
-> 状态：设计阶段，尚未实现或运行。
+> 状态：Verified Round 1 正式数据快照已发布；GEPA 优化尚未运行。
 >
 > 目标：使用 GEPA 直接优化供 Plan Checker 使用的完整规则文本，替代当前
 > “逐案例规则提取 → 后处理 → 聚合”的规则生成流程。
@@ -42,19 +42,21 @@ Code Agent 执行能力和执行偏差等因素。实现前需要先审计这些
   快照 manifest 中记录来源。
 - 缺少完整 Round 1 结果的任务先进入补跑清单，不直接作为负样本。
 
-截至 2026-06-12 的只读审计结果：
+截至 2026-06-14 的补跑和清洗结果：
 
 | 项目 | 数量 |
 |------|-----:|
 | Verified 唯一任务 | 500 |
-| 当前有效 Round 1 样本 | 486 |
-| Round 1 resolved | 327 |
-| Round 1 unresolved | 159 |
-| 需要补跑 | 14 |
+| 完整 Round 1 | 499 |
+| 终态 Agent execution failure | 1 |
+| 高置信 resolved placeholder | 17 |
+| 正式清洗后可用样本 | 482 |
 
-14 个缺失样本包括 7 个空 Plan、6 个空 Code 输出和 1 个 Code Agent
-`LimitsExceeded`。补跑将在文档和代码准备完成、用户手动提交 Git 后单独执行；
-可使用现有有界并发和统一 `DockerCapacityWindow` 提速。
+14 个原始缺失任务已完成补跑。`sympy__sympy-13031` 在定向重跑中形成
+resolved Round 1；`django__django-15280` 使用已有且产物完整的历史 Round 1。
+`django__django-13513` 多次由 Plan Agent 判断无需修改，Code Agent 最终产生
+空输出。该结果视为可审计的 Agent 能力失败，不伪装成 unresolved 标签，并以
+`AGENT_EXECUTION_FAILURE` 从训练 cases 中排除。
 
 ### 2.2 样本结构
 
@@ -120,6 +122,94 @@ Checker 输入，否则会发生标签泄漏。它们只用于向 GEPA 解释为
 
 若这些情况占比较低，保留全部完整样本；若占比较高，再定义可复现的数据清洗
 规则。当前不引入额外人工 plan-quality 标签。
+
+### 3.1 当前自动清洗规则
+
+当前数据清洗只检测并清理 **placeholder Plan** 这一种错误类型。规则仅应用于
+`resolved == true` 且实际 patch 非空的样本，并分为三个可审计子类型：
+
+1. `EXACT_PLACEHOLDER`：全文是已知占位词，例如 `test`、`test content`、
+   `placeholder`、`todo`、`tbd`、`n/a` 或 `none`。
+2. `GENERIC_PLACEHOLDER`：全文匹配人工确认的无信息泛化句
+   `Complete the implementation as described in the PR.`
+3. `PATH_ONLY_PLAN`：删除 `Plan` / `Navigation` 标题后，正文严格只有一条
+   源码文件路径。
+
+`unresolved` placeholder 保留，因为它们是“无有效 Plan 导致失败”的有效负样本。
+短 Plan、缺少 Patch 章节或只提到一个文件本身都不是自动排除条件。
+
+本次被 placeholder 清洗排除的 17 个任务如下：
+
+| 子类型 | 任务 ID |
+|--------|---------|
+| `EXACT_PLACEHOLDER` | `django__django-12125` |
+| `EXACT_PLACEHOLDER` | `django__django-13033` |
+| `EXACT_PLACEHOLDER` | `django__django-13516` |
+| `EXACT_PLACEHOLDER` | `django__django-15103` |
+| `EXACT_PLACEHOLDER` | `django__django-15315` |
+| `EXACT_PLACEHOLDER` | `pydata__xarray-6744` |
+| `EXACT_PLACEHOLDER` | `pytest-dev__pytest-6197` |
+| `EXACT_PLACEHOLDER` | `pytest-dev__pytest-6202` |
+| `EXACT_PLACEHOLDER` | `pytest-dev__pytest-7324` |
+| `EXACT_PLACEHOLDER` | `scikit-learn__scikit-learn-14710` |
+| `EXACT_PLACEHOLDER` | `sphinx-doc__sphinx-8551` |
+| `EXACT_PLACEHOLDER` | `sympy__sympy-14248` |
+| `EXACT_PLACEHOLDER` | `sympy__sympy-16450` |
+| `EXACT_PLACEHOLDER` | `sympy__sympy-20590` |
+| `GENERIC_PLACEHOLDER` | `sympy__sympy-13878` |
+| `PATH_ONLY_PLAN` | `django__django-15987` |
+| `PATH_ONLY_PLAN` | `scikit-learn__scikit-learn-14053` |
+
+### 3.2 来源排除（不属于数据清洗）
+
+`django__django-13513` 已完成运行并留下结构化错误结果，但 Code Agent 产生空
+输出，未形成可用于分类的 Round 1。该任务使用 `AGENT_EXECUTION_FAILURE`
+作为**来源排除**记录，保留 `result.json` 路径、哈希和错误详情。它不属于
+placeholder 清洗，也不会被伪装成 unresolved 样本。
+
+### 3.3 GEPA 输入快照
+
+构建入口：
+
+```bash
+conda run -n mini-swe python \
+  scripts/tools/build_verified_gepa_dataset.py
+```
+
+输出根目录：
+
+```text
+output/SWE-bench_Verified/verified-round1-gepa-datasets/
+```
+
+每个内容寻址快照包含：
+
+- `cases.jsonl`：全部清洗后样本
+- `train.jsonl` / `validation.jsonl`：按 repo 和 resolved 分层的固定 80/20 切分
+- `exclusions.json`：placeholder 清洗项和来源排除项及其理由
+- `manifest.json`：来源、哈希、数量、切分参数及完整性状态
+
+每条记录将 `checker_input` 与 `asi` 分开。Checker 只能读取前者；trajectory、
+实际 patch 和 evaluator 结果只存在于 `asi`。默认构建要求 500 个任务均有可
+审计终态来源：完整 Round 1，或明确的终态 Agent execution failure；其他缺失、
+损坏或无法解释的来源仍拒绝发布。`--allow-incomplete` 只用于开发期临时快照，
+并在 manifest 中写入 `provisional: true` 和 `complete: false`。
+
+当前正式快照为：
+
+```text
+20260614_482_fdc056ae85df
+```
+
+它覆盖全部 500 个任务的终态来源，包含 482 条清洗后 cases：
+
+- `complete: true`
+- `provisional: false`
+- `invalid_source_instances: 0`
+- 315 resolved / 167 unresolved
+- 384 train / 98 validation
+- 17 个 resolved placeholder 排除
+- 1 个 `AGENT_EXECUTION_FAILURE` 来源排除（不属于数据清洗）
 
 ## 4. GEPA 集成方式
 
@@ -278,10 +368,9 @@ GEPA 内部目标。
 2. 用户手动提交当前 Git 工作区。
 3. 准备 14 个缺失 Verified Round 1 实例的补跑 manifest/config。
 4. 使用现有并发 batch 和 Docker 容量窗口补齐 PCT。
-5. 发布不可变 Verified Round 1 数据快照。
-6. 审计任务难度、无 Plan 可解和 Code Agent 偏离三类噪声。
+5. 发布 `complete: true` 的不可变 Round 1 数据快照。
+6. 继续审计任务难度和 Code Agent 偏离两类语义噪声。
 7. 基于 Verified 审计结果人工编写初始规则。
 8. 实现 GEPA adapter、固定 Checker schema 和独立配置。
 9. 先做小预算 smoke test，再运行完整优化。
 10. 冻结最佳规则，在 PolyBench 固定快照上做 checker-only 评估。
-

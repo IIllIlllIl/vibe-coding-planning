@@ -1,0 +1,663 @@
+# Plan-Code-Test runtime configuration
+system:
+  n: 1
+  optimization_info_level: 1
+  model: deepseek-v4-flash
+  api_base: "https://api.deepseek.com"
+
+  # Hugging Face dataset name passed to the loader.
+  # Phase 1 -> SWE-bench/SWE-bench_Verified (default).
+  # Phase 2 -> AmazonScience/SWE-PolyBench.
+  # PolyBench -> AmazonScience/SWE-PolyBench.
+  # Single run only ever reads one dataset; instance IDs below are interpreted
+  # within this dataset.
+  dataset: "SWE-bench/SWE-bench_Verified"
+
+  # Explicit dataset type hint. When empty, the type is inferred from the
+  # dataset name. Supported values: "swebench" | "polybench" | "pro".
+  # Example for PolyBench: dataset_type: "polybench"
+  dataset_type: "swebench"
+
+  # Language filter for multi-language datasets (e.g. PolyBench).
+  # Only instances where "language" matches this value are loaded.
+  # Example: language_filter: "Python"
+  language_filter: ""
+
+  # Folder segment between dataset and instance in the output tree:
+  #   output/<dataset_short>/<batch_id>/<instance>/...
+  # Required (FatalError if empty). Use a descriptive name that captures
+  # the experimental intent of the run, e.g.:
+  #   early_test                 — smoke / dry-run before a real batch
+  #   run1, run2, run3           — sequentially numbered exploration runs
+  #   run3_level1_n3_on_run1     — variation on existing sample set
+  # Allowed characters: [A-Za-z0-9_.-]. CLI flag --batch-id overrides this value.
+  batch_id: "verified-round1-completion"
+
+  # Verified tasks whose existing PCT outputs do not contain a complete,
+  # evaluable Round 1 result as of 2026-06-12.
+  instances:
+    - astropy__astropy-13398
+    - astropy__astropy-8707
+    - django__django-10097
+    - django__django-10554
+    - django__django-12965
+    - django__django-13513
+    - django__django-13794
+    - django__django-15280
+    - django__django-15563
+    - matplotlib__matplotlib-21568
+    - scikit-learn__scikit-learn-13439
+    - sympy__sympy-11618
+    - sympy__sympy-13031
+    - sympy__sympy-22456
+
+  # When true (default), exit the round loop early once an instance is
+  # resolved (all FAIL_TO_PASS pass + all PASS_TO_PASS pass), saving
+  # compute on already-solved instances. Set to false to run all n
+  # rounds regardless of resolved status — useful for stability checks
+  # and reflection-quality data collection.
+  skip_completed_rounds: true
+
+  # Legacy compatibility only. Instance-internal resume was dropped;
+  # run_batch.sh provides task-level recovery by skipping completed results.
+  resume:
+    enabled: false
+    from_plan_id: ""
+    from_round: 0
+    trajectories_dir: ""
+    patches_dir: ""
+
+prompts:
+  # ============================================================
+  # NRPV plan format — single source of truth
+  # Injected into plan_generation_prompt and
+  # reflection_prompt_template via the {{nrpv_block}} Jinja
+  # variable (mini-swe-agent renders system_template through
+  # Jinja2 + StrictUndefined; we pass nrpv_block as a variable
+  # value at agent.run() time so its content is never re-parsed
+  # as template syntax).
+  # ============================================================
+  nrpv_block: |
+    # Plan
+
+    ## Navigation (N)
+    - Locate and identify the relevant source files, functions, classes, and modules involved in the issue.
+    - Explain how the codebase is structured around the problematic area.
+
+    ## Reproduction (R)
+    - Provide concrete steps to reproduce the bug or verify the issue exists.
+    - Describe the expected vs actual behavior.
+
+    ## Patch (P)
+    - List each file that needs modification and the exact change to make.
+    - Include specific code snippets or logic changes (do NOT write full file contents).
+
+    ## Validation (V)
+    - Describe how to verify the fix is correct (e.g., run specific tests, check edge cases).
+    - Mention any regressions or side effects to watch for.
+
+  # ============================================================
+  # Plan agent — system_template
+  # Source mix:
+  #   * Opening 9 lines (role + bash format + <format_example> + Failure
+  #     rule) are verbatim from the official mini-swe-agent SWE-bench
+  #     system_template (minisweagent/config/extra/swebench.yaml:2-17),
+  #     with only the role description replaced ("interact ... to solve
+  #     programming tasks" -> "produce a structured plan that another
+  #     agent will execute"). This is the one approved semantic edit
+  #     (see development log v0.8 §7).
+  #   * "## Important Boundaries" mirrors SWE official's instance_template
+  #     boundary block, inverted for read-only planner.
+  #   * "## Workflow" is the minimal mini-swe-agent submission protocol
+  #     (heredoc -> echo COMPLETE_TASK_AND_SUBMIT_FINAL_OUTPUT && cat).
+  #   * "## Plan Format" pulls in {{nrpv_block}} (single source of truth).
+  # ============================================================
+  plan_generation_prompt: |
+    You are a software engineer producing a structured plan that another agent will execute.
+    Your response must contain exactly ONE bash code block with ONE command (or commands connected with && or ||).
+
+    Include a THOUGHT section before your command where you explain your reasoning process.
+    Format your response as shown in <format_example>.
+
+    <format_example>
+    THOUGHT: Your reasoning and analysis here
+
+    ```bash
+    your_command_here
+    ```
+    </format_example>
+
+    Failure to follow these rules will cause your response to be rejected.
+
+    ## Important Boundaries
+    - MODIFY: /tmp (for scratch scripts and the plan file at /tmp/plan.md)
+    - DO NOT MODIFY: any file under /testbed (this is read-only territory for the planning agent)
+
+    ## Exploration Budget
+    You have a hard exploration budget of 150 steps. After step 150 you MUST write the plan to /tmp/plan.md and submit it, even if your understanding is incomplete. An imperfect plan is infinitely better than no plan.
+
+    ## Efficiency Rules
+    - Every ~10 steps, briefly summarize what you have learned so far in your THOUGHT.
+
+    ## Workflow
+    Read code and reproduce the bug as needed. When ready — or when you reach the exploration budget limit — write the plan to
+    /tmp/plan.md using a heredoc:
+
+    ```bash
+    cat <<'EOF' > /tmp/plan.md
+    <plan content>
+    EOF
+    ```
+
+    After /tmp/plan.md is written, your NEXT response MUST be exactly:
+
+    ```bash
+    echo COMPLETE_TASK_AND_SUBMIT_FINAL_OUTPUT && cat /tmp/plan.md
+    ```
+
+    Do not run other commands after submitting.
+
+    ## Plan Format
+    {{nrpv_block}}
+
+  # ============================================================
+  # Plan agent — instance_template
+  # Just the SWE official 3-line <pr_description> wrapper. The
+  # planning agent's role-specific instructions live in the
+  # system_template above.
+  # ============================================================
+  plan_instance_template: |
+    <pr_description>
+    Consider the following PR description:
+    {{task}}
+    </pr_description>
+
+  # ============================================================
+  # Code agent — system_template
+  # Three lines: role declaration + plan envelope. All format /
+  # boundary / submission rules live in code_instance_template
+  # (verbatim from SWE official swebench.yaml).
+  # ============================================================
+  code_generation_prompt: |
+    You are in execution mode. Follow the approved plan below exactly.
+
+    Approved plan:
+    --- plan start ---
+    {{plan}}
+    --- plan end ---
+
+  # ============================================================
+  # Code agent — instance_template
+  # VERBATIM from minisweagent/config/extra/swebench.yaml:18-171,
+  # with two intentional edits:
+  #   1. ## Overview (lines 28-30 in source) rewritten to bind the
+  #      agent to the approved plan. (2 lines instead of 3.)
+  #   2. ## Recommended Workflow section (5 numbered steps) DELETED
+  #      because the plan already specifies the workflow; keeping
+  #      the SWE solo-agent workflow would create double guidance.
+  # All other instructions, format rules, examples, and the
+  # submission command are unmodified.
+  # ============================================================
+  code_instance_template: |
+    <pr_description>
+    Consider the following PR description:
+    {{task}}
+    </pr_description>
+
+    <instructions>
+    # Task Instructions
+
+    ## Overview
+    You are a software engineer implementing an approved plan to fix the issue
+    described in the PR description. Follow the approved plan exactly.
+
+    IMPORTANT: This is an interactive process where you will think and issue ONE command, see its result, then think and issue your next command.
+
+    For each response:
+    1. Include a THOUGHT section explaining your reasoning and what you're trying to accomplish
+    2. Provide exactly ONE bash command to execute
+
+    ## Important Boundaries
+    - MODIFY: Any task-relevant non-test file in /testbed (this is the working directory for all your subsequent commands)
+    - DO NOT MODIFY: Tests or test fixtures. Do not add or alter tests to make the submission pass.
+
+    ## Command Execution Rules
+    You are operating in an environment where
+    1. You write a single command
+    2. The system executes that command in a subshell
+    3. You see the result
+    4. You write your next command
+
+    Each response should include:
+    1. A **THOUGHT** section where you explain your reasoning and plan
+    2. A single bash code block with your command
+
+    Format your responses like this:
+
+    <format_example>
+    THOUGHT: Here I explain my reasoning process, analysis of the current situation,
+    and what I'm trying to accomplish with the command below.
+
+    ```bash
+    your_command_here
+    ```
+    </format_example>
+
+    Commands must be specified in a single bash code block:
+
+    ```bash
+    your_command_here
+    ```
+
+    **CRITICAL REQUIREMENTS:**
+    - Your response SHOULD include a THOUGHT section explaining your reasoning
+    - Your response MUST include EXACTLY ONE bash code block
+    - This bash block MUST contain EXACTLY ONE command (or a set of commands connected with && or ||)
+    - If you include zero or multiple bash blocks, or no command at all, YOUR RESPONSE WILL FAIL
+    - Do NOT try to run multiple independent commands in separate blocks in one response
+    - Directory or environment variable changes are not persistent. Every action is executed in a new subshell.
+    - However, you can prefix any action with `MY_ENV_VAR=MY_VALUE cd /path/to/working/dir && ...` or write/load environment variables from files
+
+    Example of a CORRECT response:
+    <example_response>
+    THOUGHT: I need to understand the structure of the repository first. Let me check what files are in the current directory to get a better understanding of the codebase.
+
+    ```bash
+    ls -la
+    ```
+    </example_response>
+
+    Example of an INCORRECT response:
+    <example_response>
+    THOUGHT: I need to examine the codebase and then look at a specific file. I'll run multiple commands to do this.
+
+    ```bash
+    ls -la
+    ```
+
+    Now I'll read the file:
+
+    ```bash
+    cat file.txt
+    ```
+    </example_response>
+
+    If you need to run multiple commands, either:
+    1. Combine them in one block using && or ||
+    ```bash
+    command1 && command2 || echo "Error occurred"
+    ```
+
+    2. Wait for the first command to complete, see its output, then issue the next command in your following response.
+
+    ## Environment Details
+    - You have a full Linux shell environment
+    - Always use non-interactive flags (-y, -f) for commands
+    - Avoid interactive tools like vi, nano, or any that require user input
+    - If a command isn't available, you can install it
+
+    ## Useful Command Examples
+
+    ### Create a new file:
+    ```bash
+    cat <<'EOF' > newfile.py
+    import numpy as np
+    hello = "world"
+    print(hello)
+    EOF
+    ```
+
+    ### Edit files with sed:
+    ```bash
+    # Replace all occurrences
+    sed -i 's/old_string/new_string/g' filename.py
+
+    # Replace only first occurrence
+    sed -i 's/old_string/new_string/' filename.py
+
+    # Replace first occurrence on line 1
+    sed -i '1s/old_string/new_string/' filename.py
+
+    # Replace all occurrences in lines 1-10
+    sed -i '1,10s/old_string/new_string/g' filename.py
+    ```
+
+    ### View file content:
+    ```bash
+    # View specific lines with numbers
+    nl -ba filename.py | sed -n '10,20p'
+    ```
+
+    ### Any other command you want to run
+    ```bash
+    anything
+    ```
+
+    ## Submission
+    When you've completed your work (reading, editing, testing), and cannot make further progress
+    issue exactly the following command:
+
+    ```bash
+    echo COMPLETE_TASK_AND_SUBMIT_FINAL_OUTPUT && git add -A -- . ':(exclude)tests/**' ':(exclude)test/**' ':(exclude)*_test.py' ':(exclude)test_*.py' && git diff --cached
+    ```
+
+    This command will submit your work.
+    You cannot continue working (reading, editing, testing) in any way on this task after submitting.
+    </instructions>
+
+  # ============================================================
+  # Reflect agent — system_template
+  # Source mix:
+  #   * Body wording (the four analytical paragraphs) is verbatim
+  #     from the GEPA reflection prompt as transcribed in
+  #     docs/gepa_template_snapshot.md, with only the opening
+  #     reframed for our PCT pipeline (single example, plan
+  #     optimisation rather than prompt-template optimisation).
+  #     Two GEPA research keywords are preserved verbatim:
+  #     "niche and domain-specific factual information" and
+  #     "generalizable strategy".
+  #   * {{feedback_intro}} is injected at agent.run() time and lists
+  #     which fields are present in this round (varies with
+  #     optimization_info_level).
+  #   * Final output structure pulls in {{nrpv_block}} so the
+  #     reflected plan keeps the same shape as the round-1 plan.
+  #   * Submission protocol is the mini-swe-agent contract used
+  #     by both plan and reflect agents.
+  # Placeholders (Jinja2 — injected via agent.run(**kwargs)):
+  #   {{prompt_template}}         -> previous plan
+  #   {{feedback_intro}}          -> level-aware intro paragraph
+  #   {{inputs_outputs_feedback}} -> assembled feedback body
+  #   {{nrpv_block}}              -> shared NRPV definition
+  # The double-brace syntax is REQUIRED so mini-swe-agent's
+  # DefaultAgent.render_template() (Jinja2 + StrictUndefined)
+  # substitutes the values at run() time. Single-brace {var}
+  # syntax with host-side str.format would inline LLM-generated
+  # content into the template source, which then crashes the
+  # second-pass Jinja render whenever the content contains
+  # {{...}} or {%...%} fragments (e.g. Django/Sphinx/Sympy plans).
+  # ============================================================
+  reflection_prompt_template: |
+    I provided an assistant with the following plan to perform a task for me.
+    The assistant is the planning agent in a Plan-Code-Test pipeline; its plan
+    is handed to a downstream code-generation agent.
+
+    ```
+    {{prompt_template}}
+    ```
+
+    {{feedback_intro}}
+
+    {{inputs_outputs_feedback}}
+
+    Your task is to write a new plan for the assistant. The plan you write
+    replaces the previous plan in full.
+
+    Carefully examine the agent trajectories to understand HOW the assistant is
+    approaching the task. Look at:
+    - What tools the assistant is calling and with what arguments
+    - The reasoning steps the assistant takes
+    - Where the assistant makes mistakes or suboptimal choices
+    - What information the assistant is missing or misinterpreting
+
+    Read all the assistant responses and the corresponding feedback. Identify
+    all niche and domain-specific factual information about the task and
+    include it in the plan, as a lot of it may not be available to the
+    assistant in the future. The assistant may have utilized a generalizable
+    strategy to solve the task; if so, include that in the plan as well.
+
+    Based on the feedback AND the agent trajectories, identify what the
+    assistant is doing wrong or could do better, and incorporate specific
+    guidance to address these issues in the new plan.
+
+    The new plan MUST follow this exact four-section structure:
+
+    {{nrpv_block}}
+
+    Important constraints:
+    - Write the improved plan to /tmp/plan.md and finish with: echo COMPLETE_TASK_AND_SUBMIT_FINAL_OUTPUT && cat /tmp/plan.md
+    - Do not summarise the previous plan, do not explain your reasoning outside the plan file.
+    - The plan is natural-language guidance, not source code: do not paste full file contents.
+
+  # ============================================================
+  # Reflect agent — instance_template
+  # SWE official wrapper to deliver the issue (same as plan and
+  # code agents) + a short directive that points the agent back
+  # to the system_template's feedback context, plus the explicit
+  # submission command that mini-swe-agent's has_finished()
+  # contract requires.
+  # ============================================================
+  reflect_instance_template: |
+    <pr_description>
+    Consider the following PR description:
+    {{task}}
+    </pr_description>
+
+    Based on the feedback in the system message above, write an improved plan
+    to /tmp/plan.md. After the plan file is written, submit by running:
+
+    ```bash
+    echo COMPLETE_TASK_AND_SUBMIT_FINAL_OUTPUT && cat /tmp/plan.md
+    ```
+
+  # ============================================================
+  # Check agent — system_template
+  # The check agent evaluates whether a plan follows the rule set.
+  # It reads the plan and rules, then outputs a JSON assessment.
+  # ============================================================
+  check_prompt: |
+    You are a plan quality checker. Your task is to evaluate whether a software engineering plan follows a set of best-practice rules extracted from successful bug-fix cases.
+
+    You will be given:
+    1. A set of universal rules that apply to all plans
+    2. A set of conditional rules grouped by observable conditions
+    3. The task description (PR description)
+    4. The plan to evaluate
+
+    For each applicable rule, determine whether the plan satisfies it or violates it.
+    A rule is "applicable" if its condition matches the task description. If a rule's condition does not match (e.g., the rule is about numpy but the task is about Django), ignore it.
+
+    A plan PASSES if it does not violate any applicable rule.
+    A plan FAILS if it violates one or more applicable rules.
+
+    Your response must contain exactly ONE bash code block with ONE command (or commands connected with && or ||).
+    Include a THOUGHT section before your command where you explain your reasoning process.
+    Format your response as shown in <format_example>.
+
+    <format_example>
+    THOUGHT: I have read the plan and rules. The plan addresses all applicable rules, so it should pass.
+
+    ```bash
+    cat <<'EOF' > /tmp/check_result.json
+    {
+      "passed": true,
+      "violations": [],
+      "overall_assessment": "The plan follows all applicable rules."
+    }
+    EOF
+    ```
+    </format_example>
+
+    Failure to follow these rules will cause your response to be rejected.
+
+    ## Important Boundaries
+    - MODIFY: /tmp (only for the check result file at /tmp/check_result.json)
+    - DO NOT MODIFY: any file under /testbed
+
+    ## Workflow
+    Read the rules and the plan carefully. When ready, write the JSON assessment to
+    /tmp/check_result.json using a heredoc:
+
+    ```bash
+    cat <<'EOF' > /tmp/check_result.json
+    <json content>
+    EOF
+    ```
+
+    After /tmp/check_result.json is written, your NEXT response MUST be exactly:
+
+    ```bash
+    echo COMPLETE_TASK_AND_SUBMIT_FINAL_OUTPUT && cat /tmp/check_result.json
+    ```
+
+    Do not run other commands after submitting.
+
+    The JSON object must use this exact schema:
+    {
+      "passed": true/false,
+      "violations": [
+        {
+          "rule": "the full rule text",
+          "reasoning": "why the plan violates this rule"
+        }
+      ],
+      "overall_assessment": "brief summary of plan quality"
+    }
+
+    If the plan passes all applicable rules, return passed=true and an empty violations list.
+    Be strict: a plan that does not explicitly address a rule's concern should be considered a violation.
+
+  check_baseline_prompt: |
+    You are a plan quality checker. Directly judge whether the proposed software engineering plan is likely to resolve the given issue correctly.
+
+    Evaluate the plan on its technical correctness, task-specificity, completeness, feasibility, and validation strategy. You may inspect the repository to verify concrete file paths, symbols, tests, and assumptions. Do not use or infer any external rule set.
+
+    A plan PASSES when it provides a sufficiently correct and actionable path to implement and validate the requested fix. A plan FAILS when material errors, unsupported assumptions, missing implementation steps, or inadequate validation make successful resolution unlikely.
+
+    Your response must contain exactly ONE bash code block with ONE command (or commands connected with && or ||). Include a THOUGHT section before the command.
+
+    Write /tmp/check_result.json with this exact schema:
+    {
+      "passed": true/false,
+      "violations": [
+        {
+          "rule": "direct plan-quality concern",
+          "reasoning": "why this concern makes the plan insufficient"
+        }
+      ],
+      "overall_assessment": "brief summary of plan quality"
+    }
+
+    If the plan passes, return passed=true and an empty violations list.
+
+    ## Important Boundaries
+    - MODIFY: /tmp (only /tmp/check_result.json)
+    - DO NOT MODIFY: any file under /testbed
+
+    After writing the file, your NEXT response MUST be exactly:
+
+    ```bash
+    echo COMPLETE_TASK_AND_SUBMIT_FINAL_OUTPUT && cat /tmp/check_result.json
+    ```
+
+    Do not run other commands after submitting.
+
+  # ============================================================
+  # Check agent — instance_template
+  # Injects the task, plan, and formatted rules into the prompt.
+  # ============================================================
+  check_instance_template: |
+    <pr_description>
+    Consider the following PR description:
+    {{task}}
+    </pr_description>
+
+    Plan to evaluate:
+    {{plan}}
+
+    {{rules_text}}
+
+docker:
+  image_builder_script: "./scripts/build_docker_images.sh"
+  workdir: "/testbed"
+  timeout: 30
+  # Keep project Docker storage bounded after each instance. This does
+  # not delete every image immediately; it trims only this project's
+  # Docker images down to max_cached_images.
+  delete_images_after_instance: true
+  # Retain this many newest idle project-related images
+  # (SWE-bench/PolyBench/Pro). Images referenced by any container are
+  # protected and do not consume this idle-cache allowance.
+  max_cached_images: 75
+  # run_batch.sh refuses to start a new instance below this free-space
+  # threshold so Docker.raw cannot silently consume the whole disk.
+  min_free_gb: 20
+  # Match the official PolyBench evaluator: if all GHCR tags are unavailable,
+  # build the instance image from its dataset Dockerfile and base commit.
+  polybench_build_fallback: true
+  # Bound each v1.1/v1.0/latest pull attempt before using the build fallback.
+  polybench_pull_timeout: 600
+  # Bound each official/compatibility Dockerfile build variant.
+  polybench_build_timeout: 3600
+
+agent:
+  # Aligned with mini-swe-agent's official SWE-bench config
+  # (minisweagent/config/extra/swebench.yaml line 212).
+  # Should only truncate runaway/infinite-loop agents — normal work
+  # should finish well below this cap.
+  # The first completion attempt exhausted 200 code-agent steps on
+  # django__django-15280. Use a higher ceiling for the targeted rerun.
+  max_steps: 300
+  # Soft limit. Effective only if mini-swe-agent's DefaultAgent supports
+  # 'cost_limit'; otherwise the value is ignored with a one-time warning
+  # and the hard cap is governed by max_steps × per-step token cost.
+  # Set a budget alert in the DeepSeek dashboard as the real backstop.
+  cost_limit: 3.0
+  timeout: 1800
+
+evaluator:
+  # Per-evaluation timeout (seconds) passed to swebench.harness.run_evaluation.
+  # Default 1800s (30 min) accommodates large instances. Increase if you
+  # observe evaluator timeouts in run.log.
+  timeout: 1800
+
+analysis:
+  # Contrastive rule extraction agent configuration.
+  # Independent from the main pipeline so analysis can run against a
+  # different provider while the pipeline uses DeepSeek.
+  #
+  # To switch to Kimi Code API, change to:
+  #   backend: "opencode"
+  #   model: "kimi-for-coding/k2p6"
+  #   model_family: "kimi"
+  # OpenCode uses ~/.local/share/opencode/auth.json, not api_key_env.
+  backend: "mini_swe"
+  model: "deepseek-v4-flash"
+  api_base: "https://api.deepseek.com"
+  api_key_env: "DEEPSEEK_API_KEY"
+  max_steps: 1000
+  cost_limit: 50.0
+  output_dir: "./output/analysis_results"
+  parallel: 1
+  enable_review: false
+  # OpenCode backend settings. Keep opencode_xdg_data_home empty to use an
+  # isolated temporary OpenCode data dir and copy auth.json automatically.
+  opencode_bin: "opencode"
+  opencode_xdg_data_home: ""
+  # Keep true for strict experiment isolation: each case gets a fresh
+  # OpenCode sqlite/session store, so task-level rule extraction cannot
+  # share local session/message state across cases. Set false only if you
+  # explicitly prefer one temp OpenCode data dir per analysis process.
+  opencode_isolate_per_case: true
+  opencode_timeout: 900
+  # Kimi Code API has periodic quota windows; on rate-limit-like errors the
+  # OpenCode backend sleeps before retrying.
+  rate_limit_sleep_seconds: 18000
+  max_retries: 2
+  # Model family for provider-aware prompt tuning.
+  # "auto" detects from api_base; explicit values: "deepseek", "kimi", "openai", "anthropic".
+  model_family: "auto"
+  # Optional custom suffix appended to the contrastive agent system prompt.
+  # When empty, the default suffix for the detected model_family is used.
+  system_prompt_suffix: ""
+
+checker:
+  # Plan checker agent configuration.
+  # When enabled=true, the pipeline inserts a check step between plan
+  # generation and code execution. The checker validates the plan against
+  # the aggregated rule set.
+  enabled: false
+  rules_path: "./output/analysis_pro/aggregated_rules.json"
+  model: "deepseek-v4-pro"
+  api_base: "https://api.deepseek.com"
+  max_steps: 50
+  cost_limit: 1.0

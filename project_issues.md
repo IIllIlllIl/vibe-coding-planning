@@ -6,21 +6,23 @@
 
 ## 1. GEPA 规则优化流程实施
 
-- **状态**：设计已文档化，等待用户审阅和手动提交后实施
+- **状态**：Verified 正式 Round 1 数据快照已发布；等待语义噪声审计和
+  GEPA Adapter 实现
 - **设计文档**：`docs/gepa-rule-optimization.md`
 - **目标**：使用 Verified PCT Round 1 分类数据直接优化完整 Checker 规则文本，替代逐案例规则提取、后处理和聚合
 - **当前 Verified 数据审计**：
   - 500 个唯一任务
-  - 486 个有效 Round 1 样本：327 resolved / 159 unresolved
-  - 14 个待补跑：7 个空 Plan、6 个空 Code 输出、1 个 Code Agent `LimitsExceeded`
+  - 499 个完整 Round 1
+  - 1 个终态 Agent execution failure，作为来源排除项保留错误证据，
+    不属于数据清洗
+  - 17 个高置信 resolved placeholder 自动排除
+  - 正式 GEPA 快照：482 条（315 resolved / 167 unresolved）
+    `20260614_482_fdc056ae85df`
+  - `complete: true`、`provisional: false`、`invalid_source_instances: 0`
 - **执行顺序**：
-  1. 审阅并提交当前文档和工作区
-  2. 准备 14 个实例的补跑 manifest/config
-  3. 使用现有并发 batch 和统一 Docker 容量窗口补齐
-  4. 发布不可变 Round 1 快照
-  5. 审计任务过难、无 Plan 可解、Code Agent 偏离三类标签噪声
-  6. 基于 Verified 审计人工生成初始规则
-  7. 实现 GEPA Adapter 和独立 Checker/reflection 配置
+  1. 审计任务过难和 Code Agent 偏离两类语义噪声
+  2. 基于 Verified 审计人工生成初始规则
+  3. 实现 GEPA Adapter 和独立 Checker/reflection 配置
 - **随机性注意**：当前 Checker 未显式设置 temperature；新流程要求 Checker 默认显式 `temperature: 0.0`
 - **本阶段边界**：不立即补跑、不实现、不启动 GEPA 实验
 

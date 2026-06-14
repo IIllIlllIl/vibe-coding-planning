@@ -1,0 +1,18 @@
+{
+  "instances": [
+    "astropy__astropy-13398",
+    "astropy__astropy-8707",
+    "django__django-10097",
+    "django__django-10554",
+    "django__django-12965",
+    "django__django-13513",
+    "django__django-13794",
+    "django__django-15280",
+    "django__django-15563",
+    "matplotlib__matplotlib-21568",
+    "scikit-learn__scikit-learn-13439",
+    "sympy__sympy-11618",
+    "sympy__sympy-13031",
+    "sympy__sympy-22456"
+  ]
+}
