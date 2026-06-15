@@ -27,14 +27,39 @@ class CheckerRunner(Protocol):
     def __call__(self, case: GEPACase, rules: str) -> CheckerOutput: ...
 
 
-def _json_object(text: str) -> dict[str, Any]:
+def _loads_json(text: str) -> dict[str, Any]:
     try:
         return json.loads(text)
-    except json.JSONDecodeError:
-        match = re.search(r"\{.*\}", text, re.DOTALL)
-        if not match:
-            raise ValueError("checker did not produce a JSON object")
-        return json.loads(match.group(0))
+    except json.JSONDecodeError as exc:
+        if "Invalid \\escape" not in str(exc):
+            raise
+        repaired = re.sub(r'\\(?!["\\/bfnrtu])', r"\\\\", text)
+        if repaired == text:
+            raise
+        return json.loads(repaired)
+
+
+def _json_object(text: str) -> dict[str, Any]:
+    json_fence = re.search(r"```json\s*(.*?)\s*```", text, re.DOTALL)
+    if json_fence:
+        try:
+            return _loads_json(json_fence.group(1))
+        except json.JSONDecodeError:
+            pass
+    start = json_fence.end() if json_fence else 0
+    fence = re.search(r"```(?!\w)\s*(.+?)\s*```", text[start:], re.DOTALL)
+    if fence:
+        try:
+            return _loads_json(fence.group(1))
+        except json.JSONDecodeError:
+            pass
+    match = re.search(r"\{.*\}", text, re.DOTALL)
+    if not match:
+        raise ValueError("checker did not produce a JSON object")
+    try:
+        return _loads_json(match.group(0))
+    except json.JSONDecodeError as exc:
+        raise ValueError(f"checker produced invalid JSON: {exc}") from exc
 
 
 def validate_checker_output(value: dict[str, Any]) -> CheckerOutput:
@@ -144,7 +169,7 @@ class DockerChecker:
                 step_limit=self.config.checker.max_steps,
                 cost_limit=self.config.checker.cost_limit,
             )
-            agent.run(
+            exit_status, final_submission = agent.run(
                 task=case.issue_description,
                 plan=case.plan,
                 candidate_rules=rules,
@@ -152,7 +177,21 @@ class DockerChecker:
             final_message = extract_last_assistant(agent.messages)
             result = env.execute("cat /tmp/gepa_checker_result.json")
             text = result.get("output", "") if result.get("returncode") == 0 else ""
-            parsed = validate_checker_output(_json_object(text or final_message))
+            fallback = final_submission or final_message
+            if not text.strip() and not fallback.strip():
+                raise ValueError(
+                    "checker did not produce output "
+                    f"(exit_status={exit_status})"
+                )
+            try:
+                parsed = validate_checker_output(
+                    _json_object(text or fallback)
+                )
+            except (ValueError, json.JSONDecodeError) as exc:
+                raise ValueError(
+                    "checker result invalid "
+                    f"(exit_status={exit_status}): {exc}"
+                ) from exc
             leaked_categories = _asi_leakage_categories(agent.messages, case)
             self.audit.write(
                 "checker_completed",
@@ -161,6 +200,8 @@ class DockerChecker:
                 predicted_resolved=parsed.predicted_resolved,
                 repository_evidence_count=len(parsed.repository_evidence),
                 parse_success=True,
+                exit_status=exit_status,
+                trajectory_messages=len(agent.messages),
                 asi_leakage_detected=bool(leaked_categories),
                 leaked_asi_categories=leaked_categories,
             )

@@ -191,18 +191,25 @@ class ProgressCallback:
         )
 
     def on_error(self, event: dict[str, Any]) -> None:
-        path = self.run_dir / "errors.jsonl"
-        with path.open("a", encoding="utf-8") as handle:
-            handle.write(
-                json.dumps(
-                    {
-                        "iteration": event["iteration"],
-                        "error": repr(event["exception"]),
-                        "will_continue": event["will_continue"],
-                    }
-                )
-                + "\n"
-            )
+        JsonlLogger(self.run_dir / "errors.jsonl").write(
+            "gepa_error",
+            iteration=event["iteration"],
+            error=repr(event["exception"]),
+            will_continue=event["will_continue"],
+        )
+
+    def mark_failed(self, *, phase: str, error: str) -> None:
+        self.progress.update(
+            status="failed",
+            failure_phase=phase,
+            failure=error,
+        )
+        self.audit.write(
+            "gepa_optimization_failed",
+            phase=phase,
+            error=error,
+        )
+        self._save()
 
     def on_optimization_end(self, event: dict[str, Any]) -> None:
         self.progress.update(

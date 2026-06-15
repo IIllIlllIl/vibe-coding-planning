@@ -55,6 +55,9 @@ def write_cost_report(
     observed_metric_calls: int,
     projection_metric_calls: int,
     parallel: int,
+    run_status: str = "completed",
+    successful_proposals: int = 0,
+    required_proposals: int = 0,
 ) -> None:
     usage_path = run_dir / "usage.jsonl"
     records = (
@@ -69,7 +72,37 @@ def write_cost_report(
     checker = _phase_summary(records, "checker")
     reflection = _phase_summary(records, "reflection")
     scale = projection_metric_calls / max(1, observed_metric_calls)
+    limitations = []
+    if run_status != "completed":
+        limitations.append("run did not complete successfully")
+    if successful_proposals < required_proposals:
+        limitations.append(
+            "successful Reflection proposals did not meet the configured minimum"
+        )
+    if reflection["calls"] == 0:
+        limitations.append("no successful Reflection API calls were observed")
+    reported_cost_available = (
+        checker["reported_cost_usd"] + reflection["reported_cost_usd"]
+    ) > 0
+    if not reported_cost_available:
+        limitations.append(
+            "provider/LiteLLM did not report a non-zero USD cost"
+        )
+    token_time_estimate_valid = run_status == "completed" and (
+        successful_proposals >= required_proposals
+    )
+    usd_estimate_valid = token_time_estimate_valid and reported_cost_available
     report = {
+        "run_quality": {
+            "status": run_status,
+            "successful_proposals": successful_proposals,
+            "required_proposals": required_proposals,
+            "reflection_observed": reflection["calls"] > 0,
+            "reported_cost_available": reported_cost_available,
+            "token_time_estimate_valid": token_time_estimate_valid,
+            "usd_estimate_valid": usd_estimate_valid,
+            "limitations": limitations,
+        },
         "checker": checker,
         "reflection": reflection,
         "combined": {
@@ -98,6 +131,8 @@ def write_cost_report(
             ),
         },
         "full_run_linear_estimate": {
+            "token_time_valid": token_time_estimate_valid,
+            "usd_valid": usd_estimate_valid,
             "target_metric_calls": projection_metric_calls,
             "estimated_checker_api_calls": checker["calls"] * scale,
             "estimated_reflection_api_calls": reflection["calls"] * scale,

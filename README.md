@@ -13,7 +13,7 @@
 - **规则质量审查与返工（FR-14，默认关闭）**：独立 LLM Reviewer Agent 审查规则质量（五维评分），未通过者触发返工循环。实践发现返工机制会**破坏已提取的有效规则**（删除旧结果后重跑失败），因此默认关闭。可通过 `config.analysis.enable_review` 开启
 - **Plan-Checker-Code 管道（FR-15）**：在 Plan 与 Code 之间插入规则检查器，验证计划是否符合从成功案例中提炼出的规则集。检查器在 Docker 内运行，可验证文件路径、函数名等具体引用。代码始终执行以产生 ground truth，用于计算检查器的 TP/FP/FN/TN、Accuracy、Precision、Recall、F1
 - **检查器 held-out 评估**：在 SWE-PolyBench Python 子集上运行 Plan-Check-Code 管道，评估规则集的预测能力
-- **GEPA 规则优化**：使用 Verified PCT Round 1 的 `issue + plan + repo + resolved` 分类数据，让 GEPA 直接优化 Checker 的完整规则文本。模块和无外部 LLM 测试已完成，完整实验尚未运行。设计见 [`docs/gepa-rule-optimization.md`](docs/gepa-rule-optimization.md)
+- **GEPA 规则优化**：使用 Verified PCT Round 1 的 `issue + plan + repo + resolved` 分类数据，让 GEPA 直接优化 Checker 的完整规则文本。首次外部 LLM pilot 已完成基础链路验证并暴露 Reflection 缺陷；修复后正在进行极小闭环验收。设计见 [`docs/gepa-rule-optimization.md`](docs/gepa-rule-optimization.md)
 - **最小化造轮子**：Agent 基于 `mini-swe-agent` 框架，反思复用 GEPA 反射 Prompt 模板，评估直接调用 `swebench` 官方库
 
 ## 实验设计：两阶段方法学
@@ -142,6 +142,26 @@ conda run -n mini-swe python scripts/tools/build_gepa_pilot_dataset.py
 
 运行会额外生成 `audit_events.jsonl`、`usage.jsonl` 和
 `cost_report.json`，用于检查信息隔离、GEPA 接受路径以及时间/token/费用。
+
+2026-06-14 的首次 6/4 pilot 证明了 Checker 隔离和 GEPA 基础链路，但
+Reflection 因 mini-swe-agent `DefaultAgent.run(task=...)` 参数缺失而未生成候选；
+该缺陷已修复。修复后的最小闭环验证使用：
+
+```bash
+conda run -n mini-swe python scripts/tools/build_gepa_pilot_dataset.py \
+  --seed 43 --train-per-label 1 --validation-per-label 1
+bash scripts/run_batch.sh --gepa-rules \
+  --gepa-config configs/gepa_verified_rules_reflection_smoke.yaml
+```
+
+该 smoke 配置强制执行 Reflection，并要求至少一个成功 proposal；不满足时
+`progress.json` 为 `failed` 且进程返回非零。成本报告会区分 token/time 外推与
+提供方 USD cost 是否实际可用。
+
+GEPA Checker 使用 checker-only 恢复实验验证过的资源上限：
+`max_steps=200`、`cost_limit=6.0`、`timeout=1800`。Checker 执行错误不会被当成
+分类错误参与优化，而会令运行失败并保留错误证据，之后使用同一 `run_dir`
+恢复。
 
 PolyBench Python 199 实例的纯 PCT 扫描配置已固定为
 `configs/polybench_full199_pct.yaml`（`checker.enabled=false`）：

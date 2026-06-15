@@ -1,7 +1,8 @@
 # 基于 GEPA 的规则优化流程设计
 
-> 状态：Verified Round 1 正式数据快照已发布；GEPA 模块已实现并通过
-> mock/no-LLM 验证，外部 LLM 优化尚未运行。
+> 状态：Verified Round 1 正式数据快照已发布；首次外部 LLM pilot 已完成，
+> 并暴露 Reflection 调用与失败状态缺陷。代码已修复，等待极小 Reflection
+> smoke 实跑验收。
 >
 > 目标：使用 GEPA 直接优化供 Plan Checker 使用的完整规则文本，替代当前
 > “逐案例规则提取 → 后处理 → 聚合”的规则生成流程。
@@ -411,6 +412,46 @@ validation，两个 split 都保持 resolved/unresolved 平衡，总计覆盖 3 
 配置使用 `reflection_minibatch_size=2`、`parallel=1`、
 `max_metric_calls=18`，并把成本线性投影到 `projection_metric_calls=1000`。
 
+首次外部 LLM pilot 于 2026-06-14 完成 18 次 metric calls，但不能视为规则
+生成闭环通过：
+
+- 空规则 validation baseline 为 0.5（2/4）；
+- Checker/ASI 隔离、Docker 仓库访问、GEPA 原生采样/状态保存和 usage 审计
+  均实际运行；
+- mini-swe-agent 1.17.5 的 `DefaultAgent.run()` 要求必需参数 `task`，初版
+  Reflection proposer 未传该参数，4 次 proposal 均失败；
+- vendored GEPA 的 reflective proposer 会把该异常转换为“未提出候选”，因此
+  初版错误地以退出码 0 和 `completed` 状态结束；
+- 运行只有空规则候选，Reflection API calls 为 0，原成本外推不包含
+  Reflection，不能用于正式预算。
+
+修复后，Reflection 显式传入稳定的非任务特定 `task`。proposer 异常会同时写入
+`audit_events.jsonl` 和 `errors.jsonl`；即使 GEPA 内部吞掉异常，runner 也会将
+`progress.json` 改为 `failed` 并返回非零退出码。`cost_report.json` 现在明确
+记录运行完整性、Reflection 覆盖、token/time 外推有效性和 USD 成本可用性。
+
+Checker 资源上限和输出恢复已对齐完成 792 次无 Checker 错误的 checker-only
+恢复配置：
+
+- `max_steps=200`、`cost_limit=6.0`、`timeout=1800`；
+- 保留显式 `temperature=0.0`；
+- prompt 使用与 checker-only 相同的“先 heredoc 写结果文件，下一响应只提交”
+  工作流；
+- 优先读取容器结果文件，再读取 `DefaultAgent.run()` 返回的最终提交内容，
+  并兼容 fenced JSON 和无效反斜杠转义；
+- Checker operational error 写入错误日志并令当前 GEPA 运行失败，不能作为
+  correctness=0 的分类样本进入搜索或 evaluation cache。
+
+GEPA 仍必须使用固定 Checker prompt。checker-only 的 no-rules arm 会切换到
+独立 baseline prompt，但 GEPA 不能根据候选是否为空切换 system prompt，否则
+不同候选的评估器不再固定。因此这里仅复用可靠的资源上限、提交协议、解析和
+失败语义。
+
+用于验证修复的极小运行配置为
+`configs/gepa_verified_rules_reflection_smoke.yaml`，对应 2 train / 2 validation
+快照。它设置 `skip_perfect_score=false`、`min_proposals=1` 和
+`max_metric_calls=6`，以至少一次成功 Reflection proposal 作为硬性验收条件。
+
 ### 10.2 审计与成本日志
 
 `audit_events.jsonl` 逐事件记录：
@@ -429,4 +470,6 @@ validation，两个 split 都保持 resolved/unresolved 平衡，总计覆盖 3 
 `usage.jsonl` 从 mini-swe-agent/LiteLLM 的实际响应逐 API 调用记录 Checker 和
 Reflection 的 prompt/completion/total tokens、LiteLLM reported cost、耗时和
 成功状态。`cost_report.json` 分 phase 汇总平均/P50/P95 时间、token、费用、
-每 metric call 成本，并按 `projection_metric_calls` 给出线性全量估算。
+每 metric call 成本，并按 `projection_metric_calls` 给出线性全量估算；当运行
+失败、未观察到 Reflection 或提供方未返回非零 USD cost 时，报告必须将对应
+估算标记为无效或不可用，不能把 `$0` 解释为真实免费。

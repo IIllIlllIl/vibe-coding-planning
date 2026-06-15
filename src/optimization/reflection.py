@@ -75,8 +75,36 @@ class MiniSWEReflectionProposer:
         self.bundles = EvidenceBundleWriter(config.run_dir)
         self.audit = JsonlLogger(config.run_dir / "audit_events.jsonl")
         self.usage = JsonlLogger(config.run_dir / "usage.jsonl")
+        self.errors = JsonlLogger(config.run_dir / "errors.jsonl")
+        self.failures: list[dict[str, str]] = []
+        self.successful_proposals = 0
 
     def __call__(
+        self,
+        candidate: dict[str, str],
+        reflective_dataset: Mapping[str, Sequence[Mapping[str, Any]]],
+        components_to_update: list[str],
+    ) -> dict[str, str]:
+        try:
+            proposal = self._propose(
+                candidate,
+                reflective_dataset,
+                components_to_update,
+            )
+        except Exception as exc:
+            failure = {
+                "error_type": type(exc).__name__,
+                "error": str(exc),
+                "candidate_sha256": text_sha256(candidate.get("rules", "")),
+            }
+            self.failures.append(failure)
+            self.audit.write("reflection_failed", **failure)
+            self.errors.write("reflection_failed", **failure)
+            raise
+        self.successful_proposals += 1
+        return proposal
+
+    def _propose(
         self,
         candidate: dict[str, str],
         reflective_dataset: Mapping[str, Sequence[Mapping[str, Any]]],
@@ -160,6 +188,7 @@ class MiniSWEReflectionProposer:
                     cost_limit=self.config.reflection.cost_limit,
                 )
                 agent.run(
+                    task="Review the current minibatch evidence and improve the complete Checker rules.",
                     current_rules=candidate["rules"],
                     evidence_path="/evidence",
                 )

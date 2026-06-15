@@ -164,7 +164,13 @@ plan-code-test/
 - 仅 GEPA ASI 可见：真实标签、Plan/Code trajectory、实际 patch、evaluator/test 结果。
 - Code trajectory、patch 和 evaluator 结果不得进入 Checker 输入。
 - Checker 与 GEPA reflection 默认均为 DeepSeek V4 Flash，但使用独立配置。
-- Checker temperature 在新流程中显式固定为 `0.0`；当前实现尚未显式设置。
+- Checker temperature 在 GEPA 流程中显式固定为 `0.0`。
+- Checker 的 step/cost/timeout、结果文件提交协议和 JSON 回退解析与已完成的
+  checker-only 恢复配置对齐。operational error 会中止本次优化，避免把 Agent
+  或 Docker 故障缓存为分类错误。
+- Reflection proposer 失败由项目侧记录并在 `gepa.optimize` 返回后检查。原因是
+  GEPA v0.1.1 会把 proposer 异常转换为“未提出候选”；存在任何 Reflection
+  失败或未达到配置的 `min_proposals` 时，运行必须标记为 failed 并返回非零。
 
 ---
 

@@ -8,7 +8,8 @@
 
 - **状态**：Verified 正式 Round 1 数据快照已发布；GEPA Checker、Adapter、
   文件型 reflection proposer、runner、报告和监控集成已实现并通过
-  mock/no-LLM 测试；等待语义噪声审计、初始规则审阅和小预算 pilot
+  mock/no-LLM 测试；首次外部 LLM pilot 暴露 Reflection 调用和失败状态问题，
+  已完成代码修复，等待极小 Reflection smoke 实跑确认
 - **设计文档**：`docs/gepa-rule-optimization.md`
 - **目标**：使用 Verified PCT Round 1 分类数据直接优化完整 Checker 规则文本，替代逐案例规则提取、后处理和聚合
 - **当前 Verified 数据审计**：
@@ -24,15 +25,37 @@
   1. 审计任务过难和 Code Agent 偏离两类语义噪声
   2. 审阅 `configs/gepa_initial_rules.md` 的初始规则
   3. 用户确认成本后运行小预算 pilot
-- **随机性注意**：当前 Checker 未显式设置 temperature；新流程要求 Checker 默认显式 `temperature: 0.0`
-- **本阶段边界**：实现已完成，但未启动外部 LLM GEPA 实验
-- **Pilot 就绪**：
+- **随机性注意**：GEPA Checker 已显式设置 `temperature: 0.0`
+- **首次 Pilot 结果（2026-06-14）**：
   - 空规则 seed：`configs/gepa_empty_rules.txt`
   - 6/4 平衡子集配置：`configs/gepa_verified_rules_pilot.yaml`
   - 预算：18 metric calls，minibatch=2，parallel=1
-  - 审计：`audit_events.jsonl`；API usage：`usage.jsonl`；
-    全量线性估算：`cost_report.json`
-  - 状态：等待用户手动 commit 后启动，不在本次修改中调用外部 LLM
+  - baseline accuracy：0.5；Checker API calls：329；约 127 万 tokens
+  - Reflection 因缺少 `DefaultAgent.run(task=...)` 参数失败，候选数保持 1
+  - GEPA 内部吞掉 proposer 异常，导致初版错误标记为 completed/rc=0
+  - 原成本报告无 Reflection 样本且 USD cost 未由提供方返回，外推无效
+- **已完成修复**：
+  - Reflection 传入必需 `task`
+  - Reflection/Checker 失败写入 `errors.jsonl` 和 audit
+  - runner 检测被 GEPA 吞掉的 proposer 失败，标记 failed 并返回非零
+  - 成本报告增加运行完整性和估算有效性
+  - Checker 对齐 checker-only 恢复配置：200 steps、$6 cost limit、1800s
+    timeout、结果文件优先和最终提交回退
+  - Checker operational error 不再作为 correctness=0 进入搜索/cache，而是
+    令运行失败并允许同 run_dir 恢复
+- **下一验收**：
+  - `configs/gepa_verified_rules_reflection_smoke.yaml`
+  - 2 train / 2 validation，`skip_perfect_score=false`
+  - 至少 1 个成功 proposal，否则运行硬失败
+- **Checker 稳定性说明**：
+  - GEPA pilot 的 22 条 evaluation records 中有 3 次无合法 JSON，涉及 2 个
+    唯一实例；API 调用数量表明对应执行耗尽约 50 steps
+  - 旧 checker-only baseline 也曾有 1 个 `LimitsExceeded` TaskError；同批其他
+    110 个错误主要来自 Docker storage/启动故障
+  - 后续完成的四臂 checker-only 结果中四个 arm 均为 198/198、
+    `checker_errors=0`，合计 792 次预测无 Checker 错误
+  - 因此该现象是低频 Agent 步数耗尽，不是 GEPA 独有；GEPA 已采用
+    checker-only 恢复阶段验证过的 200 steps / $6 上限
 
 ---
 

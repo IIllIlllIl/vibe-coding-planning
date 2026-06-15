@@ -30,6 +30,8 @@ class SearchConfig:
     reflection_minibatch_size: int
     seed: int
     parallel: int
+    skip_perfect_score: bool = True
+    min_proposals: int = 0
 
 
 @dataclass(frozen=True)
@@ -101,6 +103,8 @@ def load_optimization_config(path: str | Path) -> OptimizationConfig:
         ),
         seed=int(search_data.get("seed", 42)),
         parallel=int(search_data.get("parallel", 1)),
+        skip_perfect_score=bool(search_data.get("skip_perfect_score", True)),
+        min_proposals=int(search_data.get("min_proposals", 0)),
     )
     if min(
         search.max_metric_calls,
@@ -109,6 +113,8 @@ def load_optimization_config(path: str | Path) -> OptimizationConfig:
         search.parallel,
     ) < 1:
         raise ValueError("search budgets and parallelism must be positive")
+    if search.min_proposals < 0:
+        raise ValueError("search.min_proposals must be non-negative")
 
     docker = DockerConfig(
         workdir=str(docker_data.get("workdir", "/testbed")),

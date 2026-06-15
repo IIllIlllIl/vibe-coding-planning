@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+from contextlib import nullcontext
 from pathlib import Path
 
 import pytest
@@ -10,7 +11,7 @@ import pytest
 from src.config import DockerConfig
 from src.optimization.audit import AuditedModel, JsonlLogger
 from src.optimization.adapter import CheckerGEPAAdapter
-from src.optimization.checker import validate_checker_output
+from src.optimization.checker import _json_object, validate_checker_output
 from src.optimization.config import (
     ModelConfig,
     OptimizationConfig,
@@ -20,8 +21,11 @@ from src.optimization.config import (
 from src.optimization.dataset import load_snapshot
 from src.optimization.metrics import classification_metrics
 from src.optimization.models import CheckerOutput
-from src.optimization.reflection import EvidenceBundleWriter
-from src.optimization.runner import run_optimization
+from src.optimization.reflection import (
+    EvidenceBundleWriter,
+    MiniSWEReflectionProposer,
+)
+from src.optimization.runner import OptimizationRunFailed, run_optimization
 
 
 def _record(instance_id: str, split: str, *, resolved: bool = True) -> dict:
@@ -186,6 +190,16 @@ def test_checker_schema_is_strict():
         )
 
 
+def test_checker_json_fallback_matches_checker_only_behavior():
+    value = _json_object(
+        'analysis\n```json\n{"predicted_resolved": false, '
+        '"decision_reason": "Windows path C:\\path", '
+        '"repository_evidence": []}\n```'
+    )
+    assert value["predicted_resolved"] is False
+    assert value["decision_reason"] == "Windows path C:\\path"
+
+
 def test_adapter_never_counts_checker_errors_as_correct(tmp_path):
     train, _ = load_snapshot(_snapshot(tmp_path / "snapshot"))
 
@@ -204,6 +218,23 @@ def test_adapter_never_counts_checker_errors_as_correct(tmp_path):
         {"rules": ""},
     )
     assert empty.scores == [0.0]
+    run_dir = tmp_path / "adapter-run"
+    CheckerGEPAAdapter(broken_checker, run_dir=run_dir).evaluate(
+        [train[0]],
+        {"rules": ""},
+    )
+    error = json.loads((run_dir / "errors.jsonl").read_text())
+    assert error["event"] == "checker_evaluation_failed"
+    assert error["instance_id"] == train[0].instance_id
+    with pytest.raises(RuntimeError, match="Checker operational failure"):
+        CheckerGEPAAdapter(
+            broken_checker,
+            run_dir=tmp_path / "strict-adapter-run",
+            fail_on_checker_error=True,
+        ).evaluate(
+            [train[0]],
+            {"rules": ""},
+        )
     with pytest.raises(ValueError, match="only the string component rules"):
         CheckerGEPAAdapter(broken_checker).evaluate(
             [train[0]],
@@ -241,6 +272,75 @@ def test_evidence_bundle_contains_only_current_minibatch(tmp_path):
         ]
     )
     assert next_bundle.name == "iteration_0002"
+
+
+def test_reflection_proposer_supplies_required_agent_task(
+    tmp_path, monkeypatch
+):
+    config = _config(tmp_path)
+    monkeypatch.setenv("TEST_API_KEY", "secret")
+    calls = {}
+
+    class FakeModel:
+        def __init__(self, **kwargs):
+            calls["model_kwargs"] = kwargs
+            self.config = type(
+                "Config", (), {"model_name": "provider/model"}
+            )()
+
+    class FakeEnvironment:
+        def __init__(self, **kwargs):
+            calls["environment_kwargs"] = kwargs
+
+        def execute(self, command):
+            assert command == "cat /tmp/candidate_rules.txt"
+            return {"returncode": 0, "output": "complete improved rules"}
+
+        def cleanup(self):
+            calls["cleaned_up"] = True
+
+    class FakeAgent:
+        messages = [{"role": "assistant", "content": "done"}]
+
+        def run(self, task, **kwargs):
+            calls["task"] = task
+            calls["run_kwargs"] = kwargs
+
+    class FakeCapacityWindow:
+        def lease(self):
+            return nullcontext()
+
+    monkeypatch.setattr(
+        "src.optimization.reflection.import_minisweagent",
+        lambda: (object, FakeModel, FakeEnvironment),
+    )
+    monkeypatch.setattr(
+        "src.optimization.reflection.build_default_agent",
+        lambda *args, **kwargs: FakeAgent(),
+    )
+    proposer = MiniSWEReflectionProposer(config, FakeCapacityWindow())
+    record = {
+        "instance_id": "repo__one",
+        "expected_resolved": False,
+        "score": 0.0,
+        "checker_output": {"predicted_resolved": True},
+        **_record("repo__one", "train")["asi"],
+    }
+
+    proposal = proposer(
+        {"rules": ""},
+        {"rules": [record]},
+        ["rules"],
+    )
+
+    assert proposal == {"rules": "complete improved rules"}
+    assert calls["task"].startswith("Review the current minibatch evidence")
+    assert calls["run_kwargs"] == {
+        "current_rules": "",
+        "evidence_path": "/evidence",
+    }
+    assert calls["environment_kwargs"]["run_args"][-1].endswith(",readonly")
+    assert calls["cleaned_up"] is True
 
 
 def test_metrics_include_required_reporting_values():
@@ -349,3 +449,74 @@ def test_native_gepa_end_to_end_without_llm(tmp_path):
         (config.run_dir / "cost_report.json").read_text()
     )
     assert cost_report["full_run_linear_estimate"]["target_metric_calls"] == 1000
+
+
+def test_swallowed_reflection_failure_marks_run_failed(tmp_path):
+    config = _config(tmp_path)
+
+    def checker(case, rules):
+        return CheckerOutput(
+            predicted_resolved=False,
+            decision_reason="force reflection",
+            repository_evidence=(),
+        )
+
+    class BrokenProposer:
+        successful_proposals = 0
+
+        def __init__(self):
+            self.failures = []
+
+        def __call__(self, candidate, reflective_dataset, components):
+            failure = {
+                "error_type": "RuntimeError",
+                "error": "reflection broke",
+            }
+            self.failures.append(failure)
+            raise RuntimeError("reflection broke")
+
+    proposer = BrokenProposer()
+    with pytest.raises(
+        OptimizationRunFailed,
+        match="Reflection proposal attempt",
+    ):
+        run_optimization(config, checker=checker, proposer=proposer)
+
+    progress = json.loads((config.run_dir / "progress.json").read_text())
+    assert progress["status"] == "failed"
+    assert progress["failure_phase"] == "reflection"
+    cost_report = json.loads(
+        (config.run_dir / "cost_report.json").read_text()
+    )
+    assert cost_report["run_quality"]["status"] == "failed"
+    assert cost_report["run_quality"]["token_time_estimate_valid"] is False
+    audit = (config.run_dir / "audit_events.jsonl").read_text()
+    assert '"event": "run_failed"' in audit
+    assert '"event": "run_completed"' not in audit
+
+
+def test_checker_operational_failure_marks_run_failed(tmp_path):
+    config = _config(tmp_path)
+
+    def broken_checker(case, rules):
+        raise RuntimeError("checker infrastructure failed")
+
+    with pytest.raises(RuntimeError, match="Checker operational failure"):
+        run_optimization(
+            config,
+            checker=broken_checker,
+            proposer=lambda *args: {"rules": "unused"},
+        )
+
+    progress = json.loads((config.run_dir / "progress.json").read_text())
+    assert progress["status"] == "failed"
+    assert progress["failure_phase"] == "optimization"
+    errors = [
+        json.loads(line)
+        for line in (config.run_dir / "errors.jsonl").read_text().splitlines()
+    ]
+    assert any(
+        record["event"] == "checker_evaluation_failed"
+        for record in errors
+    )
+    assert any(record["event"] == "optimization_failed" for record in errors)

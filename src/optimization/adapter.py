@@ -23,13 +23,20 @@ class CheckerGEPAAdapter:
         parallel: int = 1,
         proposer: Any = None,
         run_dir: Path | None = None,
+        fail_on_checker_error: bool = False,
     ) -> None:
         self.checker = checker
         self.parallel = parallel
         self.propose_new_texts = proposer
         self.run_dir = run_dir
+        self.fail_on_checker_error = fail_on_checker_error
         self.audit = (
             JsonlLogger(run_dir / "audit_events.jsonl")
+            if run_dir is not None
+            else None
+        )
+        self.errors = (
+            JsonlLogger(run_dir / "errors.jsonl")
             if run_dir is not None
             else None
         )
@@ -58,6 +65,22 @@ class CheckerGEPAAdapter:
                 }
             return public_output, score, trace
         except Exception as exc:
+            if self.audit is not None:
+                self.audit.write(
+                    "checker_evaluation_failed",
+                    instance_id=case.instance_id,
+                    candidate_sha256=text_sha256(rules),
+                    error_type=type(exc).__name__,
+                    error=str(exc),
+                )
+            if self.errors is not None:
+                self.errors.write(
+                    "checker_evaluation_failed",
+                    instance_id=case.instance_id,
+                    candidate_sha256=text_sha256(rules),
+                    error_type=type(exc).__name__,
+                    error=str(exc),
+                )
             output = {
                 "instance_id": case.instance_id,
                 "error": f"{type(exc).__name__}: {exc}",
@@ -160,6 +183,13 @@ class CheckerGEPAAdapter:
                 scores=result.scores,
                 capture_traces=capture_traces,
                 error_count=sum("error" in output for output in result.outputs),
+            )
+        errors = [output for output in result.outputs if "error" in output]
+        if self.fail_on_checker_error and errors:
+            instance_ids = [str(output["instance_id"]) for output in errors]
+            raise RuntimeError(
+                "Checker operational failure for: "
+                + ", ".join(instance_ids)
             )
         return result
 

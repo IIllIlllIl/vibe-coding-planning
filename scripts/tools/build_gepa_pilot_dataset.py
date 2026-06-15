@@ -140,8 +140,18 @@ def main() -> None:
     parser.add_argument("--source", type=Path, default=DEFAULT_SOURCE)
     parser.add_argument("--output-root", type=Path, default=DEFAULT_OUTPUT_ROOT)
     parser.add_argument("--seed", type=int, default=42)
+    parser.add_argument("--train-per-label", type=int, default=3)
+    parser.add_argument("--validation-per-label", type=int, default=2)
     args = parser.parse_args()
-    print(build_pilot_dataset(args.source, args.output_root, seed=args.seed))
+    print(
+        build_pilot_dataset(
+            args.source,
+            args.output_root,
+            train_per_label=args.train_per_label,
+            validation_per_label=args.validation_per_label,
+            seed=args.seed,
+        )
+    )
 
 
 if __name__ == "__main__":

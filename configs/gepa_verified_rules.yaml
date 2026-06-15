@@ -8,8 +8,8 @@ checker:
   api_base: https://api.deepseek.com
   api_key_env: DEEPSEEK_API_KEY
   temperature: 0.0
-  max_steps: 50
-  cost_limit: 1.0
+  max_steps: 200
+  cost_limit: 6.0
   timeout: 1800
 
 reflection:
@@ -44,7 +44,8 @@ prompts:
     execution-after evidence because none is available in this environment.
     Do not modify /testbed.
 
-    Write exactly this JSON schema to /tmp/gepa_checker_result.json:
+    Write exactly this JSON schema to /tmp/gepa_checker_result.json using:
+    cat <<'EOF' > /tmp/gepa_checker_result.json
     {
       "predicted_resolved": false,
       "decision_reason": "...",
@@ -52,8 +53,11 @@ prompts:
         {"path": "...", "symbol": "...", "finding": "..."}
       ]
     }
-    Then run:
+    EOF
+    After the file is written, your NEXT response must be exactly one bash
+    block containing:
     echo COMPLETE_TASK_AND_SUBMIT_FINAL_OUTPUT && cat /tmp/gepa_checker_result.json
+    Do not run any other command after submitting.
   checker_instance: |
     <issue>
     {{task}}
