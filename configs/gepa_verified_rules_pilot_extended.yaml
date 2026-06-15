@@ -8,7 +8,7 @@ checker:
   api_base: https://api.deepseek.com
   api_key_env: DEEPSEEK_API_KEY
   temperature: 0.0
-  max_steps: 200
+  max_steps: 500
   cost_limit: 6.0
   timeout: 1800
 
@@ -72,15 +72,83 @@ prompts:
     </candidate_rules>
   reflection_system: |
     You optimize the complete rule text used by a fixed Checker Agent.
-    The current rules may be empty. Read the files under {{evidence_path}} to
-    diagnose classification errors. Execution-after evidence is available
-    only here and must never be turned into task-specific memorization or
-    Checker inputs. Produce a complete replacement rule text, not a patch and
-    not a single-task answer. Write it to /tmp/candidate_rules.txt, then run:
+
+    ## Optimization task
+
+    The Checker predicts whether a supplied Round 1 software-engineering plan,
+    when executed by the project's fixed Code Agent, is likely to resolve the
+    corresponding issue.
+
+    At deployment time the Checker can use only:
+    - the issue description;
+    - the Round 1 plan;
+    - the candidate rules;
+    - the repository at the specified base commit.
+
+    The Checker outputs predicted_resolved plus its reasoning and repository
+    evidence. The optimization score is 1 when predicted_resolved equals the
+    historical resolved label, otherwise 0.
+
+    ## Reflection evidence
+
+    Files under {{evidence_path}} contain evaluation evidence for the current
+    minibatch. They may include:
+    - the Checker's complete trajectory, prediction, reasoning, and repository
+      evidence;
+    - the historical resolved label and correctness score;
+    - Plan and Code Agent trajectories;
+    - the generated patch;
+    - evaluator and test results.
+
+    Use execution-after evidence only to diagnose why the Checker was correct
+    or incorrect and to derive generalizable plan-assessment rules.
+
+    ## Deployment boundary
+
+    Every proposed rule must be applicable using only the issue, Round 1 plan,
+    candidate rules, and base-commit repository.
+
+    Rules must never require or assume access to:
+    - the resolved label or correctness score;
+    - Plan or Code Agent trajectories;
+    - the generated patch;
+    - evaluator or test results;
+    - execution output or an expected output.
+
+    Do not memorize instance IDs, exact patches, labels, or task-specific
+    answers.
+
+    ## Rule objective
+
+    The rules should help the Checker assess whether the plan is technically
+    correct, repository-grounded, complete, feasible for the fixed Code Agent,
+    and supported by an adequate validation strategy.
+
+    Produce a complete replacement for the current rule text. Preserve useful
+    existing rules, revise harmful rules, and add only generalizable guidance.
+    Do not output a Git patch, shell command, analysis narrative, or a solution
+    for a single task.
+
+    Write only the complete replacement rules to
+    /tmp/candidate_rules.txt. Then submit with:
     echo COMPLETE_TASK_AND_SUBMIT_FINAL_OUTPUT && cat /tmp/candidate_rules.txt
   reflection_instance: |
     <current_rules>
     {{current_rules}}
     </current_rules>
-    Evidence for the current minibatch is mounted read-only at
-    {{evidence_path}}. Inspect it as needed and produce improved complete rules.
+
+    Evidence for the current minibatch is mounted read-only at:
+    {{evidence_path}}
+
+    For each case:
+    1. Read the issue and Round 1 plan from the Checker trajectory.
+    2. Compare the Checker prediction with the historical resolved label.
+    3. Inspect the Checker trajectory to identify reasoning errors or useful
+       strategies.
+    4. Use the Code trajectory, generated patch, and evaluator result only to
+       explain why the prediction was correct or incorrect.
+    5. Convert those findings into generalizable rules that the Checker can
+       apply before code execution, using only its deployment-visible inputs.
+
+    Review all cases before writing the complete replacement rules. Reserve
+    enough steps to write and submit /tmp/candidate_rules.txt.

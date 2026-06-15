@@ -166,6 +166,26 @@ prompts:
         load_optimization_config(config)
 
 
+def test_extended_pilot_reflection_prompt_enforces_deployment_boundary(
+    monkeypatch,
+):
+    monkeypatch.setenv("DEEPSEEK_API_KEY", "secret")
+    repo_root = Path(__file__).resolve().parents[2]
+    config = load_optimization_config(
+        repo_root / "configs" / "gepa_verified_rules_pilot_extended.yaml"
+    )
+
+    assert config.checker.max_steps == 500
+    assert "fixed Code Agent" in config.reflection_prompt
+    assert "repository at the specified base commit" in config.reflection_prompt
+    assert "execution output or an expected output" in config.reflection_prompt
+    assert "Do not output a Git patch, shell command" in config.reflection_prompt
+    assert "Compare the Checker prediction" in config.reflection_instance_template
+    assert "using only its deployment-visible inputs" in (
+        config.reflection_instance_template
+    )
+
+
 def test_checker_schema_is_strict():
     output = validate_checker_output(
         {
