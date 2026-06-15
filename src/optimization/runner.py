@@ -104,6 +104,9 @@ def run_optimization(
                 getattr(proposer_runner, "successful_proposals", 0)
             ),
             required_proposals=config.search.min_proposals,
+            reflection_failures=len(
+                getattr(proposer_runner, "failures", [])
+            ),
         )
         audit.write(
             "run_failed",
@@ -117,16 +120,18 @@ def run_optimization(
         getattr(proposer_runner, "successful_proposals", 0)
     )
     failure_reasons = []
-    if failures:
-        failure_reasons.append(
-            f"{len(failures)} Reflection proposal attempt(s) failed"
-        )
     if successful_proposals < config.search.min_proposals:
         failure_reasons.append(
             "successful Reflection proposals "
             f"{successful_proposals} < required {config.search.min_proposals}"
         )
-    run_status = "failed" if failure_reasons else "completed"
+    run_status = (
+        "failed"
+        if failure_reasons
+        else "completed_with_warnings"
+        if failures
+        else "completed"
+    )
     write_cost_report(
         config.run_dir,
         observed_metric_calls=int(result.total_metric_calls or 0),
@@ -135,6 +140,7 @@ def run_optimization(
         run_status=run_status,
         successful_proposals=successful_proposals,
         required_proposals=config.search.min_proposals,
+        reflection_failures=len(failures),
     )
     if failure_reasons:
         error = "; ".join(failure_reasons)
@@ -148,6 +154,14 @@ def run_optimization(
             required_proposals=config.search.min_proposals,
         )
         raise OptimizationRunFailed(error)
+    if failures:
+        callback.mark_completed_with_warnings(
+            warning=(
+                f"{len(failures)} Reflection proposal attempt(s) failed; "
+                "GEPA continued because the successful proposal threshold was met"
+            ),
+            reflection_failures=len(failures),
+        )
     audit.write(
         "run_completed",
         best_candidate_idx=result.best_idx,
@@ -157,6 +171,7 @@ def run_optimization(
         candidate_count=result.num_candidates,
         successful_proposals=successful_proposals,
         required_proposals=config.search.min_proposals,
+        reflection_failures=len(failures),
         stop_file_present=(config.run_dir / "gepa.stop").is_file(),
     )
     return result

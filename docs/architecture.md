@@ -169,8 +169,13 @@ plan-code-test/
   checker-only 恢复配置对齐。operational error 会中止本次优化，避免把 Agent
   或 Docker 故障缓存为分类错误。
 - Reflection proposer 失败由项目侧记录并在 `gepa.optimize` 返回后检查。原因是
-  GEPA v0.1.1 会把 proposer 异常转换为“未提出候选”；存在任何 Reflection
-  失败或未达到配置的 `min_proposals` 时，运行必须标记为 failed 并返回非零。
+  GEPA v0.1.1 会把 proposer 异常转换为“未提出候选”；单次失败记录 warning
+  并继续，只有成功 proposal 数低于 `min_proposals` 时才标记 failed 并返回
+  非零。
+- `max_metric_calls` 沿用 GEPA 官方迭代边界软上限语义，实际调用数可因完成当前
+  evaluation 小幅超额。
+- 当前 GEPA 配置固定 `parallel=1`。Adapter 并发能力尚未获用户批准或验证，
+  不属于当前正式运行方案。
 
 ---
 

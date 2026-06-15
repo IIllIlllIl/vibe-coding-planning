@@ -155,8 +155,8 @@ bash scripts/run_batch.sh --gepa-rules \
 ```
 
 该 smoke 配置强制执行 Reflection，并要求至少一个成功 proposal；不满足时
-`progress.json` 为 `failed` 且进程返回非零。成本报告会区分 token/time 外推与
-提供方 USD cost 是否实际可用。
+`progress.json` 为 `failed` 且进程返回非零。成本报告以 token 和模型调用时间
+为验收依据；USD 花费以提供方控制台为准。
 
 GEPA Checker 使用 checker-only 恢复实验验证过的资源上限：
 `max_steps=200`、`cost_limit=6.0`、`timeout=1800`。Checker 执行错误不会被当成
@@ -303,6 +303,7 @@ pipeline、PCC、checker-only、evaluator、watchdog 和 Docker CLI/SDK helper
 | [`docs/requirement-document.md`](docs/requirement-document.md) | 完整需求文档：功能需求、数据模型、验收标准、风险分析 |
 | [`docs/architecture.md`](docs/architecture.md) | 架构文档：目录结构、模块职责、数据流、设计决策 |
 | [`docs/gepa-rule-optimization.md`](docs/gepa-rule-optimization.md) | 基于 GEPA 的替代规则生成流程：数据边界、Checker/ASI、优化目标和实施顺序 |
+| [`docs/linux-deployment.md`](docs/linux-deployment.md) | **（临时）** Linux 服务器迁移部署记录：已知问题、验证清单、待补充项 |
 | [`project_issues.md`](project_issues.md) | 待办与方法学决策（含 §3 数据集分层实施进度） |
 | [`output/README.md`](output/README.md) | 本地 output 目录索引、当前运行清单、关键产物和常用命令 |
 | [`CLAUDE.md`](CLAUDE.md) | Agent 操作守则（仅 3 节：项目索引 / conda env / 清理）—— 不放项目说明 |

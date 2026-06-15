@@ -211,6 +211,24 @@ class ProgressCallback:
         )
         self._save()
 
+    def mark_completed_with_warnings(
+        self,
+        *,
+        warning: str,
+        reflection_failures: int,
+    ) -> None:
+        self.progress.update(
+            status="completed_with_warnings",
+            warning=warning,
+            reflection_failures=reflection_failures,
+        )
+        self.audit.write(
+            "gepa_optimization_completed_with_warnings",
+            warning=warning,
+            reflection_failures=reflection_failures,
+        )
+        self._save()
+
     def on_optimization_end(self, event: dict[str, Any]) -> None:
         self.progress.update(
             status="completed",

@@ -346,8 +346,9 @@ GEPA 内部目标。
 - 内部优化分数：逐样本 0/1 correctness。
 - 数据切分：Verified 分层 80/20。
 - PolyBench：只做最终 held-out checker-only 评估。
-- 预算：在实现后根据 Checker 单样本成本设置显式
-  `max_metric_calls` / `max_candidate_proposals`，不直接照搬高成本示例。
+- 预算：根据 Checker 单样本成本设置显式 `max_metric_calls`。GEPA v0.1.1
+  只在迭代边界检查预算，因此这是软上限；已经开始的 minibatch 或 validation
+  evaluation 会完成，实际 metric calls 可以小幅超过配置值。
 
 ## 8. 输出与可复现性
 
@@ -426,9 +427,10 @@ validation，两个 split 都保持 resolved/unresolved 平衡，总计覆盖 3 
   Reflection，不能用于正式预算。
 
 修复后，Reflection 显式传入稳定的非任务特定 `task`。proposer 异常会同时写入
-`audit_events.jsonl` 和 `errors.jsonl`；即使 GEPA 内部吞掉异常，runner 也会将
-`progress.json` 改为 `failed` 并返回非零退出码。`cost_report.json` 现在明确
-记录运行完整性、Reflection 覆盖、token/time 外推有效性和 USD 成本可用性。
+`audit_events.jsonl` 和 `errors.jsonl`。单次失败遵循 GEPA 原生容错语义继续
+搜索并最终标记 `completed_with_warnings`；只有成功 proposal 数低于配置的
+`min_proposals` 时才改为 `failed` 并返回非零退出码。成本验收只使用 token 和
+模型调用时间；USD 花费由 DeepSeek 控制台核对。
 
 Checker 资源上限和输出恢复已对齐完成 792 次无 Checker 错误的 checker-only
 恢复配置：
@@ -452,6 +454,18 @@ GEPA 仍必须使用固定 Checker prompt。checker-only 的 no-rules arm 会切
 快照。它设置 `skip_perfect_score=false`、`min_proposals=1` 和
 `max_metric_calls=6`，以至少一次成功 Reflection proposal 作为硬性验收条件。
 
+该 smoke 实际执行了 3 次 Reflection。第一次恰好调用 40 steps 后以
+`LimitsExceeded` 退出，未写候选文件；后两次分别生成 3874 和 1751 字符的
+非空完整规则，但同一 minibatch 上的 correctness 未提高，因此被 GEPA 拒绝。
+`candidates.json` 中的空规则是初始 seed，不是一次空 proposal。GEPA candidate
+tree 只保存 seed 和通过 minibatch 筛选、完成 validation 后被接纳的候选；
+被拒 proposal 只保存在 audit/run log 中。
+
+下一次较长验证使用 `configs/gepa_verified_rules_pilot_extended.yaml`：
+6 train / 4 validation、空 seed、`skip_perfect_score=false`、minibatch=2、
+`min_proposals=3`、`max_metric_calls=30`、`parallel=1`。该运行尚未启动，目标是
+观察多次成功 proposal，并争取覆盖候选接纳和完整 validation 分支。
+
 ### 10.2 审计与成本日志
 
 `audit_events.jsonl` 逐事件记录：
@@ -468,8 +482,12 @@ GEPA 仍必须使用固定 Checker prompt。checker-only 的 no-rules arm 会切
 - metric call 预算、停止后的候选数量和最佳候选。
 
 `usage.jsonl` 从 mini-swe-agent/LiteLLM 的实际响应逐 API 调用记录 Checker 和
-Reflection 的 prompt/completion/total tokens、LiteLLM reported cost、耗时和
-成功状态。`cost_report.json` 分 phase 汇总平均/P50/P95 时间、token、费用、
-每 metric call 成本，并按 `projection_metric_calls` 给出线性全量估算；当运行
-失败、未观察到 Reflection 或提供方未返回非零 USD cost 时，报告必须将对应
-估算标记为无效或不可用，不能把 `$0` 解释为真实免费。
+Reflection 的 prompt/completion/total tokens、耗时和成功状态。
+`cost_report.json` 分 phase 汇总平均/P50/P95 时间、token 和每 metric call
+消耗，并按 `projection_metric_calls` 给出线性全量估算；运行失败或成功
+Reflection proposal 未达到配置阈值时，token/time 估算标记为无效。提供方
+返回的 USD 字段仅保留为原始观测，不参与验收，实际费用以控制台为准。
+
+所有当前 GEPA 配置均固定 `parallel=1`。Adapter 内部仍保留有界并发实现，但
+GEPA 并行方案尚未经过用户批准，也未进行正确性或资源容量验证；完成串行闭环
+验收前不得提高该值。

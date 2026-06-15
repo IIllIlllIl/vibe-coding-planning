@@ -187,16 +187,33 @@ class MiniSWEReflectionProposer:
                     step_limit=self.config.reflection.max_steps,
                     cost_limit=self.config.reflection.cost_limit,
                 )
-                agent.run(
+                exit_status, exit_message = agent.run(
                     task="Review the current minibatch evidence and improve the complete Checker rules.",
                     current_rules=candidate["rules"],
                     evidence_path="/evidence",
                 )
                 final_message = extract_last_assistant(agent.messages)
                 result = env.execute("cat /tmp/candidate_rules.txt")
+                candidate_file_found = result.get("returncode") == 0
+                self.audit.write(
+                    "reflection_agent_completed",
+                    candidate_sha256=parent_sha256,
+                    instance_ids=instance_ids,
+                    exit_status=exit_status,
+                    exit_message=exit_message,
+                    trajectory_messages=len(agent.messages),
+                    model_calls=int(getattr(model, "n_calls", 0)),
+                    candidate_file_found=candidate_file_found,
+                    candidate_file_chars=(
+                        len(str(result.get("output", "")))
+                        if candidate_file_found
+                        else 0
+                    ),
+                    final_assistant_chars=len(final_message),
+                )
                 text = (
                     result.get("output", "")
-                    if result.get("returncode") == 0
+                    if candidate_file_found
                     else ""
                 )
                 if not text.strip():
@@ -208,7 +225,10 @@ class MiniSWEReflectionProposer:
                     text = match.group(1) if match else ""
                 if not text.strip():
                     raise ValueError(
-                        "reflection agent produced empty candidate rules"
+                        "reflection agent produced empty candidate rules "
+                        f"(exit_status={exit_status}, "
+                        f"model_calls={getattr(model, 'n_calls', 0)}, "
+                        f"candidate_file_found={candidate_file_found})"
                     )
                 proposed = text.strip()
                 looks_like_patch = "diff --git " in proposed

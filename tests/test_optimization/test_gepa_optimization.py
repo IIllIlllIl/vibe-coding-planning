@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 from contextlib import nullcontext
+from dataclasses import replace
 from pathlib import Path
 
 import pytest
@@ -305,6 +306,7 @@ def test_reflection_proposer_supplies_required_agent_task(
         def run(self, task, **kwargs):
             calls["task"] = task
             calls["run_kwargs"] = kwargs
+            return "Submitted", "done"
 
     class FakeCapacityWindow:
         def lease(self):
@@ -341,6 +343,17 @@ def test_reflection_proposer_supplies_required_agent_task(
     }
     assert calls["environment_kwargs"]["run_args"][-1].endswith(",readonly")
     assert calls["cleaned_up"] is True
+    audit = [
+        json.loads(line)
+        for line in (config.run_dir / "audit_events.jsonl").read_text().splitlines()
+    ]
+    completed = next(
+        record
+        for record in audit
+        if record["event"] == "reflection_agent_completed"
+    )
+    assert completed["exit_status"] == "Submitted"
+    assert completed["candidate_file_found"] is True
 
 
 def test_metrics_include_required_reporting_values():
@@ -451,8 +464,12 @@ def test_native_gepa_end_to_end_without_llm(tmp_path):
     assert cost_report["full_run_linear_estimate"]["target_metric_calls"] == 1000
 
 
-def test_swallowed_reflection_failure_marks_run_failed(tmp_path):
+def test_reflection_failure_below_success_threshold_marks_run_failed(tmp_path):
     config = _config(tmp_path)
+    config = replace(
+        config,
+        search=replace(config.search, min_proposals=1),
+    )
 
     def checker(case, rules):
         return CheckerOutput(
@@ -478,7 +495,7 @@ def test_swallowed_reflection_failure_marks_run_failed(tmp_path):
     proposer = BrokenProposer()
     with pytest.raises(
         OptimizationRunFailed,
-        match="Reflection proposal attempt",
+        match="successful Reflection proposals",
     ):
         run_optimization(config, checker=checker, proposer=proposer)
 
@@ -493,6 +510,57 @@ def test_swallowed_reflection_failure_marks_run_failed(tmp_path):
     audit = (config.run_dir / "audit_events.jsonl").read_text()
     assert '"event": "run_failed"' in audit
     assert '"event": "run_completed"' not in audit
+
+
+def test_reflection_failure_can_recover_when_success_threshold_is_met(tmp_path):
+    config = _config(tmp_path)
+    config = replace(
+        config,
+        search=replace(config.search, min_proposals=1),
+    )
+
+    def checker(case, rules):
+        return CheckerOutput(
+            predicted_resolved=rules == "improved rules",
+            decision_reason="deterministic test checker",
+            repository_evidence=(),
+        )
+
+    class FlakyProposer:
+        successful_proposals = 0
+
+        def __init__(self):
+            self.failures = []
+            self.calls = 0
+
+        def __call__(self, candidate, reflective_dataset, components):
+            self.calls += 1
+            if self.calls == 1:
+                self.failures.append(
+                    {
+                        "error_type": "RuntimeError",
+                        "error": "transient reflection failure",
+                    }
+                )
+                raise RuntimeError("transient reflection failure")
+            self.successful_proposals += 1
+            return {"rules": "improved rules"}
+
+    result = run_optimization(
+        config,
+        checker=checker,
+        proposer=FlakyProposer(),
+    )
+
+    assert result.best_candidate == {"rules": "improved rules"}
+    progress = json.loads((config.run_dir / "progress.json").read_text())
+    assert progress["status"] == "completed_with_warnings"
+    assert progress["reflection_failures"] == 1
+    cost_report = json.loads(
+        (config.run_dir / "cost_report.json").read_text()
+    )
+    assert cost_report["run_quality"]["status"] == "completed_with_warnings"
+    assert cost_report["run_quality"]["token_time_estimate_valid"] is True
 
 
 def test_checker_operational_failure_marks_run_failed(tmp_path):

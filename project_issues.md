@@ -8,8 +8,8 @@
 
 - **状态**：Verified 正式 Round 1 数据快照已发布；GEPA Checker、Adapter、
   文件型 reflection proposer、runner、报告和监控集成已实现并通过
-  mock/no-LLM 测试；首次外部 LLM pilot 暴露 Reflection 调用和失败状态问题，
-  已完成代码修复，等待极小 Reflection smoke 实跑确认
+  mock/no-LLM 测试；极小 Reflection smoke 已生成两次非空完整规则并验证拒绝
+  分支，等待较长串行 pilot 覆盖候选接纳和完整 validation 分支
 - **设计文档**：`docs/gepa-rule-optimization.md`
 - **目标**：使用 Verified PCT Round 1 分类数据直接优化完整 Checker 规则文本，替代逐案例规则提取、后处理和聚合
 - **当前 Verified 数据审计**：
@@ -37,16 +37,26 @@
 - **已完成修复**：
   - Reflection 传入必需 `task`
   - Reflection/Checker 失败写入 `errors.jsonl` 和 audit
-  - runner 检测被 GEPA 吞掉的 proposer 失败，标记 failed 并返回非零
-  - 成本报告增加运行完整性和估算有效性
+  - runner 检测被 GEPA 吞掉的 proposer 失败；单次失败记 warning 并继续，
+    成功 proposal 低于 `min_proposals` 才标记 failed
+  - 成本报告增加运行完整性和 token/time 估算有效性；USD 不作为验收指标
   - Checker 对齐 checker-only 恢复配置：200 steps、$6 cost limit、1800s
     timeout、结果文件优先和最终提交回退
   - Checker operational error 不再作为 correctness=0 进入搜索/cache，而是
     令运行失败并允许同 run_dir 恢复
+- **极小 Reflection smoke 结果**：
+  - 第一次 Reflection 达到 40-step 上限，以 `LimitsExceeded` 退出且未写候选
+  - 后两次生成非空完整规则，但 minibatch correctness 未提高，均被拒绝
+  - candidate tree 中的空规则是 seed；被拒 proposal 不进入官方候选树
 - **下一验收**：
-  - `configs/gepa_verified_rules_reflection_smoke.yaml`
-  - 2 train / 2 validation，`skip_perfect_score=false`
-  - 至少 1 个成功 proposal，否则运行硬失败
+  - `configs/gepa_verified_rules_pilot_extended.yaml`
+  - 6 train / 4 validation，空 seed，`skip_perfect_score=false`
+  - 软预算 30 metric calls，至少 3 个成功 proposal，`parallel=1`
+  - 重点观察候选接纳、完整 validation、恢复和最终报告
+- **预算/并发决策**：
+  - 接受 GEPA 官方 `max_metric_calls` 的迭代边界软上限语义
+  - 当前不设计并行 GEPA；全部配置固定 `parallel=1`
+  - Adapter 并发能力未获用户批准、未验证，不得用于正式运行
 - **Checker 稳定性说明**：
   - GEPA pilot 的 22 条 evaluation records 中有 3 次无合法 JSON，涉及 2 个
     唯一实例；API 调用数量表明对应执行耗尽约 50 steps

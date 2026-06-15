@@ -58,6 +58,7 @@ def write_cost_report(
     run_status: str = "completed",
     successful_proposals: int = 0,
     required_proposals: int = 0,
+    reflection_failures: int = 0,
 ) -> None:
     usage_path = run_dir / "usage.jsonl"
     records = (
@@ -73,7 +74,7 @@ def write_cost_report(
     reflection = _phase_summary(records, "reflection")
     scale = projection_metric_calls / max(1, observed_metric_calls)
     limitations = []
-    if run_status != "completed":
+    if run_status == "failed":
         limitations.append("run did not complete successfully")
     if successful_proposals < required_proposals:
         limitations.append(
@@ -81,26 +82,21 @@ def write_cost_report(
         )
     if reflection["calls"] == 0:
         limitations.append("no successful Reflection API calls were observed")
-    reported_cost_available = (
-        checker["reported_cost_usd"] + reflection["reported_cost_usd"]
-    ) > 0
-    if not reported_cost_available:
+    if reflection_failures:
         limitations.append(
-            "provider/LiteLLM did not report a non-zero USD cost"
+            f"{reflection_failures} Reflection proposal attempt(s) failed"
         )
-    token_time_estimate_valid = run_status == "completed" and (
+    token_time_estimate_valid = run_status != "failed" and (
         successful_proposals >= required_proposals
     )
-    usd_estimate_valid = token_time_estimate_valid and reported_cost_available
     report = {
         "run_quality": {
             "status": run_status,
             "successful_proposals": successful_proposals,
             "required_proposals": required_proposals,
+            "reflection_failures": reflection_failures,
             "reflection_observed": reflection["calls"] > 0,
-            "reported_cost_available": reported_cost_available,
             "token_time_estimate_valid": token_time_estimate_valid,
-            "usd_estimate_valid": usd_estimate_valid,
             "limitations": limitations,
         },
         "checker": checker,
@@ -132,7 +128,6 @@ def write_cost_report(
         },
         "full_run_linear_estimate": {
             "token_time_valid": token_time_estimate_valid,
-            "usd_valid": usd_estimate_valid,
             "target_metric_calls": projection_metric_calls,
             "estimated_checker_api_calls": checker["calls"] * scale,
             "estimated_reflection_api_calls": reflection["calls"] * scale,
@@ -158,6 +153,10 @@ def write_cost_report(
                 + reflection["duration_seconds_total"] * scale
             ),
             "method": "linear extrapolation from observed pilot API calls",
+            "budget_semantics": (
+                "GEPA checks max_metric_calls at iteration boundaries; "
+                "observed calls may exceed the configured soft limit"
+            ),
         },
     }
     (run_dir / "cost_report.json").write_text(

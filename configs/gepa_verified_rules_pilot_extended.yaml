@@ -1,7 +1,7 @@
 paths:
-  dataset_snapshot: output/SWE-bench_Verified/verified-round1-gepa-datasets/20260614_482_fdc056ae85df
-  initial_rules: configs/gepa_initial_rules.md
-  run_dir: output/SWE-bench_Verified/gepa-rules/run1
+  dataset_snapshot: output/SWE-bench_Verified/gepa-pilot-datasets/pilot_6_4_seed42_73df941adb4d
+  initial_rules: configs/gepa_empty_rules.txt
+  run_dir: output/SWE-bench_Verified/gepa-rules/pilot-extended-empty-seed
 
 checker:
   model: deepseek-v4-flash
@@ -22,27 +22,29 @@ reflection:
   timeout: 1800
 
 search:
-  max_metric_calls: 1000
+  max_metric_calls: 30
   projection_metric_calls: 1000
-  reflection_minibatch_size: 3
+  reflection_minibatch_size: 2
   parallel: 1
   seed: 42
+  skip_perfect_score: false
+  min_proposals: 3
 
 docker:
   workdir: /testbed
   timeout: 30
   min_free_gb: 20
-  max_cached_images: 75
+  max_cached_images: 10
 
 prompts:
   checker_system: |
     You are a fixed binary classifier. Predict whether the supplied Round 1
     plan, when executed by the project's fixed Code Agent, will resolve the
-    issue. Apply the candidate rules when present. The rules may be empty; in
-    that baseline case, judge directly from the issue, plan, and repository.
-    Inspect /testbed when repository facts are needed. Never use
-    execution-after evidence because none is available in this environment.
-    Do not modify /testbed.
+    issue. Apply the candidate rules when present. The candidate rules may be
+    an empty string; in that baseline case, judge directly from the issue,
+    plan, and repository. Inspect /testbed when repository facts are needed.
+    Never use execution-after evidence because none is available in this
+    environment. Do not modify /testbed.
 
     Write exactly this JSON schema to /tmp/gepa_checker_result.json using:
     cat <<'EOF' > /tmp/gepa_checker_result.json
@@ -70,11 +72,11 @@ prompts:
     </candidate_rules>
   reflection_system: |
     You optimize the complete rule text used by a fixed Checker Agent.
-    Read the files under {{evidence_path}} to diagnose classification errors.
-    Execution-after evidence is available only here and must never be turned
-    into task-specific memorization or Checker inputs. Produce a complete
-    replacement rule text, not a patch and not a single-task answer.
-    Write it to /tmp/candidate_rules.txt, then run:
+    The current rules may be empty. Read the files under {{evidence_path}} to
+    diagnose classification errors. Execution-after evidence is available
+    only here and must never be turned into task-specific memorization or
+    Checker inputs. Produce a complete replacement rule text, not a patch and
+    not a single-task answer. Write it to /tmp/candidate_rules.txt, then run:
     echo COMPLETE_TASK_AND_SUBMIT_FINAL_OUTPUT && cat /tmp/candidate_rules.txt
   reflection_instance: |
     <current_rules>
