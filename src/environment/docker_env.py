@@ -34,6 +34,10 @@ _PROJECT_IMAGE_PREFIXES = (
     "jefzda/sweap-images:",
     "polybench_",
 )
+_REMOTE_PROJECT_IMAGE_PREFIXES = (
+    "swebench/sweb.eval.x86_64.",
+    "jefzda/sweap-images:",
+)
 
 
 def _import_docker_env() -> type:
@@ -729,6 +733,11 @@ class DockerEnvWrapper:
                 build_timeout=self._config.polybench_build_timeout,
                 capacity_window=self._capacity_window,
             )
+            image = _ensure_remote_project_image_local(
+                image,
+                timeout=self._config.polybench_pull_timeout,
+                capacity_window=self._capacity_window,
+            )
             self._image = image
 
             kwargs: dict[str, Any] = {
@@ -930,6 +939,58 @@ def _resolve_polybench_image(
         "Unable to obtain PolyBench Docker image for agent container. "
         f"Tried: {', '.join(candidates)}. Last error: {last_error}"
     )
+
+
+def _ensure_remote_project_image_local(
+    image: str,
+    timeout: int | None = None,
+    *,
+    capacity_window: DockerCapacityWindow | None = None,
+) -> str:
+    """Pre-pull remote project images under the shared image lock.
+
+    mini-swe-agent otherwise lets ``docker run`` pull missing images. With
+    Checker parallelism this can create concurrent pulls and opaque
+    ``docker run`` startup failures. Pulling explicitly preserves parallel
+    container execution while serializing only image acquisition.
+    """
+    if not any(image.startswith(prefix) for prefix in _REMOTE_PROJECT_IMAGE_PREFIXES):
+        return image
+    if _docker_image_exists(image):
+        return image
+
+    window = capacity_window or get_docker_capacity_window()
+    pull_timeout = timeout or 600
+    with window.image_acquisition():
+        if _docker_image_exists(image):
+            return image
+        try:
+            logger.info("Pulling project Docker image: %s", image)
+            subprocess.run(
+                ["docker", "pull", image],
+                check=True,
+                capture_output=True,
+                text=True,
+                timeout=pull_timeout,
+            )
+        except subprocess.TimeoutExpired as exc:
+            raise FatalError(
+                "Timed out pulling project Docker image before container "
+                f"startup: {image} after {exc.timeout}s"
+            ) from exc
+        except subprocess.CalledProcessError as exc:
+            message = (exc.stderr or exc.stdout or str(exc)).strip()
+            if is_docker_storage_error(message):
+                raise FatalError(
+                    "Docker storage error while pulling project image. "
+                    "Stop the batch and free Docker disk space before retrying. "
+                    f"Image={image}. Error: {message}"
+                ) from exc
+            raise FatalError(
+                "Unable to pull project Docker image before container startup. "
+                f"Image={image}. Error: {message}"
+            ) from exc
+    return image
 
 
 def _docker_image_exists(image: str) -> bool:

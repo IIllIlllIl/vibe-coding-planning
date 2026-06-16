@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 import json
+import subprocess
+import time
 from contextlib import nullcontext
 from dataclasses import replace
 from pathlib import Path
@@ -376,6 +378,73 @@ def test_adapter_exhausted_checker_retries_remain_operational_failure(tmp_path):
         if record["event"] == "checker_evaluation_attempt_failed"
     ]
     assert [record["attempt"] for record in attempts] == [1, 2]
+
+
+def test_adapter_records_checker_subprocess_diagnostics(tmp_path):
+    train, _ = load_snapshot(_snapshot(tmp_path / "snapshot"))
+
+    def broken_checker(case, rules):
+        raise subprocess.CalledProcessError(
+            125,
+            ["docker", "run", "image"],
+            output="docker stdout",
+            stderr="docker stderr",
+        )
+
+    run_dir = tmp_path / "diagnostic-adapter"
+    CheckerGEPAAdapter(
+        broken_checker,
+        run_dir=run_dir,
+    ).evaluate([train[0]], {"rules": "rules"})
+
+    error = json.loads((run_dir / "errors.jsonl").read_text())
+    assert error["error_type"] == "CalledProcessError"
+    assert error["returncode"] == 125
+    assert error["stdout"] == "docker stdout"
+    assert error["stderr"] == "docker stderr"
+
+
+def test_adapter_parallel_strict_mode_stops_submitting_after_failure(tmp_path):
+    train, _ = load_snapshot(_snapshot(tmp_path / "snapshot"))
+    calls: list[str] = []
+
+    def checker(case, rules):
+        calls.append(case.instance_id)
+        if case.instance_id == "repo__train1":
+            raise RuntimeError("persistent checker failure")
+        time.sleep(0.2)
+        return CheckerOutput(
+            predicted_resolved=True,
+            decision_reason="ok",
+            repository_evidence=(),
+        )
+
+    run_dir = tmp_path / "fail-fast-adapter"
+    batch = [
+        train[0],
+        train[1],
+        replace(train[0], instance_id="repo__train3"),
+        replace(train[1], instance_id="repo__train4"),
+    ]
+    with pytest.raises(RuntimeError, match="repo__train1"):
+        CheckerGEPAAdapter(
+            checker,
+            parallel=2,
+            run_dir=run_dir,
+            fail_on_checker_error=True,
+        ).evaluate(batch, {"rules": "rules"})
+
+    assert "repo__train3" not in calls
+    assert "repo__train4" not in calls
+    audit = [
+        json.loads(line)
+        for line in (run_dir / "audit_events.jsonl").read_text().splitlines()
+    ]
+    assert any(
+        record["event"] == "adapter_evaluation_aborted"
+        and record["not_started"] == 2
+        for record in audit
+    )
 
 
 def test_evidence_bundle_contains_only_current_minibatch(tmp_path):

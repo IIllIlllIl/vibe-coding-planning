@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from concurrent.futures import ThreadPoolExecutor
+from concurrent.futures import FIRST_COMPLETED, Future, ThreadPoolExecutor, wait
 import hashlib
 import json
 from pathlib import Path
@@ -13,6 +13,23 @@ from gepa.core.adapter import EvaluationBatch
 from src.optimization.audit import JsonlLogger, text_sha256
 from src.optimization.checker import CheckerRunner
 from src.optimization.models import GEPACase
+
+
+def _exception_details(exc: Exception) -> dict[str, Any]:
+    details: dict[str, Any] = {
+        "error_type": type(exc).__name__,
+        "error": str(exc),
+    }
+    for attr in ("cmd", "returncode", "timeout"):
+        if hasattr(exc, attr):
+            details[attr] = getattr(exc, attr)
+    for attr in ("stdout", "stderr", "output"):
+        value = getattr(exc, attr, None)
+        if isinstance(value, bytes):
+            value = value.decode("utf-8", errors="replace")
+        if value:
+            details[attr] = str(value)[-4000:]
+    return details
 
 
 class CheckerGEPAAdapter:
@@ -66,6 +83,7 @@ class CheckerGEPAAdapter:
                 )
             except Exception as exc:
                 last_exc = exc
+                details = _exception_details(exc)
                 if self.audit is not None:
                     self.audit.write(
                         "checker_evaluation_attempt_failed",
@@ -73,18 +91,17 @@ class CheckerGEPAAdapter:
                         candidate_sha256=text_sha256(rules),
                         attempt=attempt,
                         max_attempts=self.checker_attempts,
-                        error_type=type(exc).__name__,
-                        error=str(exc),
+                        **details,
                     )
         assert last_exc is not None
+        details = _exception_details(last_exc)
         if self.audit is not None:
             self.audit.write(
                 "checker_evaluation_failed",
                 instance_id=case.instance_id,
                 candidate_sha256=text_sha256(rules),
                 attempts=self.checker_attempts,
-                error_type=type(last_exc).__name__,
-                error=str(last_exc),
+                **details,
             )
         if self.errors is not None:
             self.errors.write(
@@ -92,8 +109,7 @@ class CheckerGEPAAdapter:
                 instance_id=case.instance_id,
                 candidate_sha256=text_sha256(rules),
                 attempts=self.checker_attempts,
-                error_type=type(last_exc).__name__,
-                error=str(last_exc),
+                **details,
             )
         output = {
             "instance_id": case.instance_id,
@@ -144,6 +160,73 @@ class CheckerGEPAAdapter:
                 **case.asi,
             }
         return public_output, score, trace
+
+    def _evaluate_parallel_fail_fast(
+        self,
+        batch: list[GEPACase],
+        rules: str,
+        capture_traces: bool,
+        candidate_hash: str,
+    ) -> list[tuple[dict[str, Any], float, dict[str, Any] | None]]:
+        rows: list[tuple[dict[str, Any], float, dict[str, Any] | None] | None] = [
+            None
+        ] * len(batch)
+        active: dict[
+            Future[tuple[dict[str, Any], float, dict[str, Any] | None]], int
+        ] = {}
+        next_index = 0
+
+        with ThreadPoolExecutor(max_workers=self.parallel) as executor:
+            while next_index < len(batch) and len(active) < self.parallel:
+                active[
+                    executor.submit(
+                        self._evaluate_one,
+                        batch[next_index],
+                        rules,
+                        capture_traces,
+                    )
+                ] = next_index
+                next_index += 1
+
+            while active:
+                done, _ = wait(active, return_when=FIRST_COMPLETED)
+                for future in done:
+                    index = active.pop(future)
+                    row = future.result()
+                    rows[index] = row
+                    output = row[0]
+                    if "error" in output:
+                        for pending in active:
+                            pending.cancel()
+                        completed = sum(row is not None for row in rows)
+                        if self.audit is not None:
+                            self.audit.write(
+                                "adapter_evaluation_aborted",
+                                candidate_sha256=candidate_hash,
+                                instance_id=str(output["instance_id"]),
+                                completed=completed,
+                                in_flight=len(active),
+                                not_started=len(batch)
+                                - completed
+                                - len(active),
+                                reason="checker_operational_failure",
+                            )
+                        raise RuntimeError(
+                            "Checker operational failure for: "
+                            + str(output["instance_id"])
+                        )
+                    if next_index < len(batch):
+                        active[
+                            executor.submit(
+                                self._evaluate_one,
+                                batch[next_index],
+                                rules,
+                                capture_traces,
+                            )
+                        ] = next_index
+                        next_index += 1
+
+        return [row for row in rows if row is not None]
 
     def evaluate(
         self,
@@ -199,17 +282,25 @@ class CheckerGEPAAdapter:
                 parallel=self.parallel,
                 checker_attempts=self.checker_attempts,
             )
-        with ThreadPoolExecutor(max_workers=self.parallel) as executor:
-            rows = list(
-                executor.map(
-                    lambda case: self._evaluate_one(
-                        case,
-                        candidate["rules"],
-                        capture_traces,
-                    ),
-                    batch,
-                )
+        if self.fail_on_checker_error and self.parallel > 1:
+            rows = self._evaluate_parallel_fail_fast(
+                batch,
+                candidate["rules"],
+                capture_traces,
+                candidate_hash,
             )
+        else:
+            with ThreadPoolExecutor(max_workers=self.parallel) as executor:
+                rows = list(
+                    executor.map(
+                        lambda case: self._evaluate_one(
+                            case,
+                            candidate["rules"],
+                            capture_traces,
+                        ),
+                        batch,
+                    )
+                )
         result = EvaluationBatch(
             outputs=[row[0] for row in rows],
             scores=[row[1] for row in rows],

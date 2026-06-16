@@ -112,6 +112,65 @@ class TestStart:
         wrapper.start(image="swebench/astropy:latest", workdir="/testbed", timeout=120)
         assert wrapper._env is not None
 
+    @patch("src.environment.docker_env._import_docker_env")
+    def test_concurrent_verified_starts_pull_image_once(
+        self, mock_import, tmp_path, docker_config, monkeypatch
+    ):
+        mock_import.return_value = MockDockerEnvironment
+        window = DockerCapacityWindow(
+            max_concurrent=2,
+            max_cached_images=2,
+            min_free_gb=20,
+            lock_dir=tmp_path / "verified-pull",
+        )
+        monkeypatch.setattr(window, "ensure_capacity", lambda: None)
+        monkeypatch.setattr(window, "maintain", lambda: None)
+        image = "swebench/sweb.eval.x86_64.django_1776_django-14765:latest"
+        local_images: set[str] = set()
+        state_lock = threading.Lock()
+        pull_count = 0
+
+        def fake_run(args, **kwargs):
+            nonlocal pull_count
+            target = args[-1]
+            if args[:3] == ["docker", "image", "inspect"]:
+                with state_lock:
+                    exists = target in local_images
+                return SimpleNamespace(
+                    returncode=0 if exists else 1,
+                    stdout="",
+                    stderr="",
+                )
+            if args[:2] == ["docker", "pull"]:
+                with state_lock:
+                    pull_count += 1
+                time.sleep(0.03)
+                with state_lock:
+                    local_images.add(target)
+                return SimpleNamespace(returncode=0, stdout="pulled", stderr="")
+            raise AssertionError(args)
+
+        wrappers = [DockerEnvWrapper(docker_config, window) for _ in range(2)]
+
+        def start(wrapper):
+            wrapper.start(image=image, workdir="/testbed")
+
+        threads = [threading.Thread(target=start, args=(wrapper,)) for wrapper in wrappers]
+        with patch(
+            "src.environment.docker_env.subprocess.run",
+            side_effect=fake_run,
+        ):
+            for thread in threads:
+                thread.start()
+            for thread in threads:
+                thread.join(timeout=2)
+
+        assert all(not thread.is_alive() for thread in threads)
+        assert pull_count == 1
+        assert all(wrapper._env is not None for wrapper in wrappers)
+        for wrapper in wrappers:
+            wrapper.stop()
+
 
 class TestExecute:
     @patch("src.environment.docker_env._import_docker_env")
