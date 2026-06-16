@@ -154,7 +154,7 @@ plan-code-test/
 | **Checker 分类器** | `checker.py`：仅接收 issue、plan、候选规则并访问任务仓库；输出固定二分类 schema，temperature 固定 0.0 |
 | **GEPA Adapter** | `adapter.py`：调用固定 Checker，返回逐样本 0/1 correctness 和仅供 reflection 使用的 ASI |
 | **Reflection proposer** | `reflection.py`：为当前 minibatch 创建 evidence bundle，以只读 mount 提供给 mini-swe-agent |
-| **GEPA Search** | `runner.py`：直接调用 vendored `gepa.optimize`，复用 Pareto、epoch sampler、cache、callbacks 和状态恢复 |
+| **GEPA Search** | `runner.py`、`resume.py`：直接调用 vendored `gepa.optimize`，复用官方 Pareto、epoch sampler、cache 和 candidate tree；项目侧补充跨进程随机状态、运行身份和累计统计恢复 |
 | **候选报告** | `metrics.py`、`report.py`：保存候选指标、逐样本预测、最佳规则和 candidate tree |
 | **运行入口** | `python -m src.optimization`、`scripts/internal/run_gepa_rules.py`、`run_batch.sh --gepa-rules` |
 
@@ -166,16 +166,28 @@ plan-code-test/
 - Checker 与 GEPA reflection 默认均为 DeepSeek V4 Flash，但使用独立配置。
 - Checker temperature 在 GEPA 流程中显式固定为 `0.0`。
 - Checker 的 step/cost/timeout、结果文件提交协议和 JSON 回退解析与已完成的
-  checker-only 恢复配置对齐。operational error 会中止本次优化，避免把 Agent
-  或 Docker 故障缓存为分类错误。
+  checker-only 恢复配置对齐。每个样本可配置 `checker.max_attempts`，用于重试
+  偶发 Agent/Docker/API 执行失败；全部尝试失败时仍作为 operational error
+  中止本次优化，避免把 Agent 或 Docker 故障缓存为分类错误。
 - Reflection proposer 失败由项目侧记录并在 `gepa.optimize` 返回后检查。原因是
   GEPA v0.1.1 会把 proposer 异常转换为“未提出候选”；单次失败记录 warning
   并继续，只有成功 proposal 数低于 `min_proposals` 时才标记 failed 并返回
   非零。
 - `max_metric_calls` 沿用 GEPA 官方迭代边界软上限语义，实际调用数可因完成当前
   evaluation 小幅超额。
-- 当前 GEPA 配置固定 `parallel=1`。Adapter 并发能力尚未获用户批准或验证，
-  不属于当前正式运行方案。
+- 同一 `run_dir` 是一个逻辑实验。`run_manifest.json` 固定数据、初始规则、
+  Checker/Reflection 配置和搜索语义；续跑只允许提高累计
+  `max_metric_calls`。`gepa_resume_state.json` 与官方 `gepa_state.bin` 在迭代
+  边界对齐，保存 Pareto selector 与 epoch sampler 共享 RNG、sampler epoch、
+  累计 proposal/failure 和候选接纳计数。
+- GEPA v0.1.1 在每次 `optimize` 入口加载状态前都会请求一次 seed validation。
+  正式续跑由 Adapter 回放首次运行保存的 seed validation 输出，不再次调用
+  Checker，也不把这次入口初始化误计为新增 metric calls。
+- GEPA 搜索主循环保持串行：Pareto 选择、minibatch sampling、Reflection
+  proposal、accept/reject 和状态写入都依赖前序结果。`search.parallel` 只控制
+  同一次 Checker evaluation batch 内的样本级并发，Adapter 使用有序 map 保持
+  输出顺序。正式配置当前仍为 `parallel=1`；`parallel=2` 需要先用新 run_dir
+  小型试运行验证正确性、Docker 容量和 API rate limit。
 
 ---
 

@@ -24,12 +24,20 @@ class CheckerGEPAAdapter:
         proposer: Any = None,
         run_dir: Path | None = None,
         fail_on_checker_error: bool = False,
+        checker_attempts: int = 1,
+        startup_seed_replay: dict[
+            str, tuple[dict[str, Any], float]
+        ] | None = None,
+        seed_rules_sha256: str | None = None,
     ) -> None:
         self.checker = checker
         self.parallel = parallel
         self.propose_new_texts = proposer
         self.run_dir = run_dir
         self.fail_on_checker_error = fail_on_checker_error
+        self.checker_attempts = checker_attempts
+        self.startup_seed_replay = startup_seed_replay
+        self.seed_rules_sha256 = seed_rules_sha256
         self.audit = (
             JsonlLogger(run_dir / "audit_events.jsonl")
             if run_dir is not None
@@ -47,56 +55,95 @@ class CheckerGEPAAdapter:
         rules: str,
         capture_traces: bool,
     ) -> tuple[dict[str, Any], float, dict[str, Any] | None]:
-        try:
-            output = self.checker(case, rules)
-            score = float(output.predicted_resolved == case.resolved)
-            public_output = {
-                "instance_id": case.instance_id,
-                **output.to_dict(),
-            }
-            trace = None
-            if capture_traces:
-                trace = {
-                    "instance_id": case.instance_id,
-                    "expected_resolved": case.resolved,
-                    "score": score,
-                    "checker_output": output.to_dict(include_trajectory=True),
-                    **case.asi,
-                }
-            return public_output, score, trace
-        except Exception as exc:
-            if self.audit is not None:
-                self.audit.write(
-                    "checker_evaluation_failed",
-                    instance_id=case.instance_id,
-                    candidate_sha256=text_sha256(rules),
-                    error_type=type(exc).__name__,
-                    error=str(exc),
+        last_exc: Exception | None = None
+        for attempt in range(1, self.checker_attempts + 1):
+            try:
+                return self._evaluate_one_attempt(
+                    case,
+                    rules,
+                    capture_traces,
+                    attempt=attempt,
                 )
-            if self.errors is not None:
-                self.errors.write(
-                    "checker_evaluation_failed",
-                    instance_id=case.instance_id,
-                    candidate_sha256=text_sha256(rules),
-                    error_type=type(exc).__name__,
-                    error=str(exc),
-                )
-            output = {
-                "instance_id": case.instance_id,
-                "error": f"{type(exc).__name__}: {exc}",
-            }
-            trace = (
-                {
-                    "instance_id": case.instance_id,
-                    "expected_resolved": case.resolved,
-                    "score": 0.0,
-                    "checker_output": output,
-                    **case.asi,
-                }
-                if capture_traces
-                else None
+            except Exception as exc:
+                last_exc = exc
+                if self.audit is not None:
+                    self.audit.write(
+                        "checker_evaluation_attempt_failed",
+                        instance_id=case.instance_id,
+                        candidate_sha256=text_sha256(rules),
+                        attempt=attempt,
+                        max_attempts=self.checker_attempts,
+                        error_type=type(exc).__name__,
+                        error=str(exc),
+                    )
+        assert last_exc is not None
+        if self.audit is not None:
+            self.audit.write(
+                "checker_evaluation_failed",
+                instance_id=case.instance_id,
+                candidate_sha256=text_sha256(rules),
+                attempts=self.checker_attempts,
+                error_type=type(last_exc).__name__,
+                error=str(last_exc),
             )
-            return output, 0.0, trace
+        if self.errors is not None:
+            self.errors.write(
+                "checker_evaluation_failed",
+                instance_id=case.instance_id,
+                candidate_sha256=text_sha256(rules),
+                attempts=self.checker_attempts,
+                error_type=type(last_exc).__name__,
+                error=str(last_exc),
+            )
+        output = {
+            "instance_id": case.instance_id,
+            "error": f"{type(last_exc).__name__}: {last_exc}",
+        }
+        trace = (
+            {
+                "instance_id": case.instance_id,
+                "expected_resolved": case.resolved,
+                "score": 0.0,
+                "checker_output": output,
+                **case.asi,
+            }
+            if capture_traces
+            else None
+        )
+        return output, 0.0, trace
+
+    def _evaluate_one_attempt(
+        self,
+        case: GEPACase,
+        rules: str,
+        capture_traces: bool,
+        *,
+        attempt: int,
+    ) -> tuple[dict[str, Any], float, dict[str, Any] | None]:
+        output = self.checker(case, rules)
+        if self.audit is not None and attempt > 1:
+            self.audit.write(
+                "checker_evaluation_retried",
+                instance_id=case.instance_id,
+                candidate_sha256=text_sha256(rules),
+                successful_attempt=attempt,
+                max_attempts=self.checker_attempts,
+            )
+        score = float(output.predicted_resolved == case.resolved)
+        public_output = {
+            "instance_id": case.instance_id,
+            **output.to_dict(),
+        }
+        trace = None
+        if capture_traces:
+            trace = {
+                "instance_id": case.instance_id,
+                "expected_resolved": case.resolved,
+                "score": score,
+                "checker_output": output.to_dict(include_trajectory=True),
+                **case.asi,
+            }
+        return public_output, score, trace
 
     def evaluate(
         self,
@@ -107,6 +154,27 @@ class CheckerGEPAAdapter:
         if set(candidate) != {"rules"} or not isinstance(candidate["rules"], str):
             raise ValueError("candidate must contain only the string component rules")
         candidate_hash = text_sha256(candidate["rules"])
+        if (
+            self.startup_seed_replay is not None
+            and candidate_hash == self.seed_rules_sha256
+            and not capture_traces
+            and {case.instance_id for case in batch}
+            == set(self.startup_seed_replay)
+        ):
+            rows = [self.startup_seed_replay[case.instance_id] for case in batch]
+            self.startup_seed_replay = None
+            if self.audit is not None:
+                self.audit.write(
+                    "seed_validation_replayed",
+                    candidate_sha256=candidate_hash,
+                    instance_ids=[case.instance_id for case in batch],
+                    checker_calls_avoided=len(batch),
+                )
+            return EvaluationBatch(
+                outputs=[row[0] for row in rows],
+                scores=[row[1] for row in rows],
+                trajectories=None,
+            )
         if self.audit is not None:
             self.audit.write(
                 "adapter_evaluation_started",
@@ -128,6 +196,8 @@ class CheckerGEPAAdapter:
                     "generated_patch",
                     "evaluator_result",
                 ],
+                parallel=self.parallel,
+                checker_attempts=self.checker_attempts,
             )
         with ThreadPoolExecutor(max_workers=self.parallel) as executor:
             rows = list(

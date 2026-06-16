@@ -15,6 +15,11 @@ from src.optimization.config import OptimizationConfig
 from src.optimization.dataset import load_snapshot
 from src.optimization.reflection import MiniSWEReflectionProposer
 from src.optimization.report import write_cost_report, write_report
+from src.optimization.resume import (
+    ReproducibleSearchState,
+    load_seed_validation_replay,
+    prepare_run_manifest,
+)
 
 
 class OptimizationRunFailed(RuntimeError):
@@ -31,6 +36,8 @@ def run_optimization(
     train, validation = load_snapshot(config.dataset_snapshot)
     config.run_dir.mkdir(parents=True, exist_ok=True)
     initial_rules = config.initial_rules_path.read_text(encoding="utf-8").strip()
+    resuming = prepare_run_manifest(config, initial_rules=initial_rules)
+    search_state = ReproducibleSearchState(config, resuming=resuming)
     audit = JsonlLogger(config.run_dir / "audit_events.jsonl")
     audit.write(
         "run_started",
@@ -47,7 +54,7 @@ def run_optimization(
         checker_temperature=config.checker.temperature,
         skip_perfect_score=config.search.skip_perfect_score,
         min_proposals=config.search.min_proposals,
-        resuming_from_state=(config.run_dir / "gepa_state.bin").is_file(),
+        resuming_from_state=resuming,
         stop_file_present=(config.run_dir / "gepa.stop").is_file(),
     )
     capacity = configure_docker_capacity(
@@ -55,15 +62,40 @@ def run_optimization(
         max_concurrent=config.search.parallel,
     )
     checker_runner = checker or DockerChecker(config, capacity)
-    proposer_runner = proposer or MiniSWEReflectionProposer(config, capacity)
+    proposer_runner = proposer or MiniSWEReflectionProposer(
+        config,
+        capacity,
+        successful_proposals=search_state.successful_proposals,
+        failures=search_state.reflection_failures,
+    )
+    if proposer is not None:
+        proposer_runner.successful_proposals = search_state.successful_proposals
+        proposer_runner.failures = list(search_state.reflection_failures)
+    seed_replay = (
+        load_seed_validation_replay(
+            config.run_dir,
+            validation,
+            initial_rules=initial_rules,
+        )
+        if resuming
+        else None
+    )
     adapter = CheckerGEPAAdapter(
         checker_runner,
         parallel=config.search.parallel,
         proposer=proposer_runner,
         run_dir=config.run_dir,
         fail_on_checker_error=True,
+        checker_attempts=config.checker.max_attempts,
+        startup_seed_replay=seed_replay,
+        seed_rules_sha256=text_sha256(initial_rules),
     )
-    callback = ProgressCallback(config.run_dir)
+    callback = ProgressCallback(
+        config.run_dir,
+        checkpoint=search_state,
+        proposer=proposer_runner,
+        accepted_candidates=search_state.accepted_candidates,
+    )
     try:
         result = optimize_fn(
             seed_candidate={"rules": initial_rules},
@@ -71,10 +103,10 @@ def run_optimization(
             valset=validation,
             adapter=adapter,
             reflection_lm=None,
-            candidate_selection_strategy="pareto",
+            candidate_selection_strategy=search_state.selector,
             frontier_type="instance",
-            batch_sampler="epoch_shuffled",
-            reflection_minibatch_size=config.search.reflection_minibatch_size,
+            batch_sampler=search_state.sampler,
+            reflection_minibatch_size=None,
             perfect_score=1.0,
             skip_perfect_score=config.search.skip_perfect_score,
             max_metric_calls=config.search.max_metric_calls,

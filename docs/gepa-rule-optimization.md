@@ -373,7 +373,7 @@ GEPA 内部目标。
 4. 使用现有并发 batch 和 Docker 容量窗口补齐 PCT。
 5. 发布 `complete: true` 的不可变 Round 1 数据快照。
 6. 继续审计任务难度和 Code Agent 偏离两类语义噪声。
-7. 基于 Verified 审计结果人工编写初始规则。
+7. 使用已记录 provenance 的 GPT seed 作为初始规则。
 8. 实现 GEPA adapter、固定 Checker schema 和独立配置。
 9. 先做小预算 smoke test，再运行完整优化。
 10. 冻结最佳规则，在 PolyBench 固定快照上做 checker-only 评估。
@@ -394,10 +394,29 @@ bash scripts/run_batch.sh --gepa-rules \
 trajectory。Reflection evidence bundle 按 minibatch 创建，并以只读 Docker
 mount 暴露给 mini-swe-agent proposer。
 
+正式初始规则使用 `configs/gepa_initial_rules_gpt_seed.md`。该 seed 由用户提供的
+GPT prompt 生成，prompt 和原始输出完整记录在
+`docs/gepa_initial_rules_gpt_seed_provenance.md`。为保持可复现性，生成后的规则
+文本不再进行人工优化；后续改进交由 GEPA 在正式 run_dir 中完成。
+
 `run_dir` 保存 GEPA 原生 `gepa_state.bin`、`candidates.json`、`run_log.json`、
-`candidate_tree.html`，以及项目补充的 `progress.json`、`errors.jsonl`、
-`evaluations.jsonl`、`candidate_metrics.json` 和 `best_rules.txt`。同一目录再次
-运行会由 GEPA 自动恢复；创建 `gepa.stop` 可优雅停止。
+`candidate_tree.html`，以及项目补充的 `run_manifest.json`、
+`gepa_resume_state.json`、`progress.json`、`errors.jsonl`、
+`evaluations.jsonl`、`candidate_metrics.json` 和 `best_rules.txt`。最终
+`GEPAResult` 序列化为 `result.json`；当前实现不生成 `report.json`。
+
+同一目录代表同一个逻辑实验。续跑前项目会验证数据快照、初始规则、
+Checker/Reflection prompt 与模型限制、seed、minibatch、项目优化源码、
+vendored GEPA 核心源码和搜索语义不变，只允许提高累计
+`max_metric_calls`。项目侧状态与官方 `gepa_state.bin` 在迭代边界同步，恢复
+共享 RNG、epoch sampler 内部状态和累计 proposal/failure 统计。
+如果两个状态文件的官方迭代号不一致，运行会拒绝恢复，避免静默改变采样序列。
+
+GEPA v0.1.1 会在加载已有状态前再次请求 seed validation。恢复入口会使用首次
+运行写入 `evaluations.jsonl` 的完整 seed validation 输出进行回放，不调用
+Checker。旧的、没有 `run_manifest.json` 和 `gepa_resume_state.json` 的 run
+不能自动升级为正式可复现续跑；应使用新 `run_dir` 重新开始。创建
+`gepa.stop` 可优雅停止。
 
 ### 10.1 轻量空规则 Pilot
 
@@ -432,10 +451,15 @@ validation，两个 split 都保持 resolved/unresolved 平衡，总计覆盖 3 
 `min_proposals` 时才改为 `failed` 并返回非零退出码。成本验收只使用 token 和
 模型调用时间；USD 花费由 DeepSeek 控制台核对。
 
-Checker 资源上限和输出恢复已对齐完成 792 次无 Checker 错误的 checker-only
-恢复配置：
+Checker 输出恢复已对齐完成 792 次无 Checker 错误的 checker-only 恢复配置。
+资源上限当前分两层处理：
 
-- `max_steps=200`、`cost_limit=6.0`、`timeout=1800`；
+- checker-only 已验证配置为 `max_steps=200`、`cost_limit=6.0`、
+  `timeout=1800`；
+- extended pilot 暂时把 Checker `max_steps` 提高到 `500`，用于观察真实
+  Checker 步数分布，后续全量实验上限待基于该分布决定；
+- `max_attempts=3`，单样本 Checker 偶发失败时最多重试两次；只有全部尝试失败
+  才写入 `errors.jsonl` 并作为 operational failure 中止本次 GEPA run；
 - 保留显式 `temperature=0.0`；
 - prompt 使用与 checker-only 相同的“先 heredoc 写结果文件，下一响应只提交”
   工作流；
@@ -461,10 +485,26 @@ GEPA 仍必须使用固定 Checker prompt。checker-only 的 no-rules arm 会切
 tree 只保存 seed 和通过 minibatch 筛选、完成 validation 后被接纳的候选；
 被拒 proposal 只保存在 audit/run log 中。
 
-下一次较长验证使用 `configs/gepa_verified_rules_pilot_extended.yaml`：
+较长验证使用 `configs/gepa_verified_rules_pilot_extended.yaml`：
 6 train / 4 validation、空 seed、`skip_perfect_score=false`、minibatch=2、
-`min_proposals=3`、`max_metric_calls=30`、`parallel=1`。该运行尚未启动，目标是
-观察多次成功 proposal，并争取覆盖候选接纳和完整 validation 分支。
+`min_proposals=3`、`max_metric_calls=30`、`parallel=1`、Checker
+`max_steps=500`。
+
+该 extended pilot 已于 2026-06-15 完成：
+
+- `progress.json` 状态为 `completed`，总计 30 metric calls；
+- 4 次成功 Reflection proposal，0 次 Reflection failure；
+- 1 个候选被接纳，接纳前完成 4/4 validation，validation average 为 1.0；
+- 最佳候选为非空规则，`best_candidate_idx=1`，candidate tree 中共有 2 个
+  候选；
+- `cost_report.json` 标记 `token_time_estimate_valid=true`，观测到 768 次
+  Checker API call、127 次 Reflection API call，总计约 590 万 tokens；
+- Reflection prompt 能生成完整规则文本：成功 proposal 长度覆盖约 3.5k 到
+  8.4k 字符，均为完整规则替换文本，不是 Git patch。
+
+该 pilot 的 `run_dir` 创建于正式 `run_manifest.json`/`gepa_resume_state.json`
+机制落地前，因此它验证了 GEPA 规则生成和候选接纳闭环，但不作为正式跨进程
+可复现续跑能力的实跑证据。正式续跑验证应使用新的 `run_dir`。
 
 ### 10.2 审计与成本日志
 
@@ -488,6 +528,9 @@ Reflection 的 prompt/completion/total tokens、耗时和成功状态。
 Reflection proposal 未达到配置阈值时，token/time 估算标记为无效。提供方
 返回的 USD 字段仅保留为原始观测，不参与验收，实际费用以控制台为准。
 
-所有当前 GEPA 配置均固定 `parallel=1`。Adapter 内部仍保留有界并发实现，但
-GEPA 并行方案尚未经过用户批准，也未进行正确性或资源容量验证；完成串行闭环
-验收前不得提高该值。
+GEPA 主循环不并行：Pareto 选择、minibatch sampling、Reflection proposal、
+候选接纳和状态写入均依赖前序结果。当前并行设计只允许 Checker evaluation
+batch 内部样本级并发，Adapter 使用有序 map 保持输出顺序，单样本失败按
+`max_attempts` 独立重试。所有当前 GEPA 配置仍固定 `parallel=1`；下一步应使用
+新的 run_dir 做 `parallel=2` 小型试运行，验证 candidate tree、validation
+scores、resume state、Docker 容量和 API rate limit 后再考虑正式启用。

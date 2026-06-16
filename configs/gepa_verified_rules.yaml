@@ -1,6 +1,6 @@
 paths:
   dataset_snapshot: output/SWE-bench_Verified/verified-round1-gepa-datasets/20260614_482_fdc056ae85df
-  initial_rules: configs/gepa_initial_rules.md
+  initial_rules: configs/gepa_initial_rules_gpt_seed.md
   run_dir: output/SWE-bench_Verified/gepa-rules/run1
 
 checker:
@@ -11,6 +11,7 @@ checker:
   max_steps: 200
   cost_limit: 6.0
   timeout: 1800
+  max_attempts: 3
 
 reflection:
   model: deepseek-v4-flash

@@ -21,6 +21,7 @@ class ModelConfig:
     max_steps: int
     cost_limit: float
     timeout: int
+    max_attempts: int = 1
 
 
 @dataclass(frozen=True)
@@ -59,6 +60,9 @@ def _model(data: dict[str, Any], *, checker: bool) -> ModelConfig:
     temperature = float(data.get("temperature", 0.0 if checker else 0.7))
     if checker and temperature != 0.0:
         raise ValueError("checker.temperature must be exactly 0.0")
+    max_attempts = int(data.get("max_attempts", 1))
+    if max_attempts < 1:
+        raise ValueError("model max_attempts must be positive")
     return ModelConfig(
         model=str(data["model"]),
         api_base=str(data["api_base"]),
@@ -67,6 +71,7 @@ def _model(data: dict[str, Any], *, checker: bool) -> ModelConfig:
         max_steps=int(data.get("max_steps", 50)),
         cost_limit=float(data.get("cost_limit", 1.0)),
         timeout=int(data.get("timeout", 1800)),
+        max_attempts=max_attempts,
     )
 
 

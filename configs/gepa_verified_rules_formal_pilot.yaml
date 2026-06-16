@@ -1,7 +1,7 @@
 paths:
-  dataset_snapshot: output/SWE-bench_Verified/gepa-pilot-datasets/pilot_6_4_seed42_73df941adb4d
-  initial_rules: configs/gepa_empty_rules.txt
-  run_dir: output/SWE-bench_Verified/gepa-rules/pilot-extended-empty-seed
+  dataset_snapshot: output/SWE-bench_Verified/verified-round1-gepa-datasets/20260614_482_fdc056ae85df
+  initial_rules: configs/gepa_initial_rules_gpt_seed.md
+  run_dir: output/SWE-bench_Verified/gepa-rules/formal-pilot-gpt-seed-mc116
 
 checker:
   model: deepseek-v4-flash
@@ -23,19 +23,24 @@ reflection:
   timeout: 1800
 
 search:
-  max_metric_calls: 30
+  # Full seed validation costs 98 metric calls on this snapshot. With
+  # minibatch=3, each normal proposal iteration costs about 6 more calls.
+  # Therefore 116 targets roughly 3 GEPA proposal iterations unless an
+  # accepted candidate triggers a full validation. GEPA checks this as a soft
+  # iteration-boundary limit.
+  max_metric_calls: 116
   projection_metric_calls: 1000
-  reflection_minibatch_size: 2
-  parallel: 1
+  reflection_minibatch_size: 3
+  parallel: 2
   seed: 42
   skip_perfect_score: false
-  min_proposals: 3
+  min_proposals: 2
 
 docker:
   workdir: /testbed
   timeout: 30
   min_free_gb: 20
-  max_cached_images: 10
+  max_cached_images: 75
 
 prompts:
   checker_system: |

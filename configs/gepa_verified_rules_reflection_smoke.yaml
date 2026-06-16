@@ -11,6 +11,7 @@ checker:
   max_steps: 200
   cost_limit: 6.0
   timeout: 1800
+  max_attempts: 3
 
 reflection:
   model: deepseek-v4-flash

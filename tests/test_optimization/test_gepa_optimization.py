@@ -8,6 +8,7 @@ from dataclasses import replace
 from pathlib import Path
 
 import pytest
+from gepa.core.state import GEPAState
 
 from src.config import DockerConfig
 from src.optimization.audit import AuditedModel, JsonlLogger
@@ -27,6 +28,7 @@ from src.optimization.reflection import (
     MiniSWEReflectionProposer,
 )
 from src.optimization.runner import OptimizationRunFailed, run_optimization
+from src.optimization.resume import IncompatibleOptimizationRun
 
 
 def _record(instance_id: str, split: str, *, resolved: bool = True) -> dict:
@@ -82,6 +84,7 @@ def _snapshot(root: Path) -> Path:
 
 
 def _config(tmp_path: Path) -> OptimizationConfig:
+    tmp_path.mkdir(parents=True, exist_ok=True)
     initial = tmp_path / "rules.txt"
     initial.write_text("", encoding="utf-8")
     model = ModelConfig(
@@ -176,6 +179,7 @@ def test_extended_pilot_reflection_prompt_enforces_deployment_boundary(
     )
 
     assert config.checker.max_steps == 500
+    assert config.checker.max_attempts == 3
     assert "fixed Code Agent" in config.reflection_prompt
     assert "repository at the specified base commit" in config.reflection_prompt
     assert "execution output or an expected output" in config.reflection_prompt
@@ -261,6 +265,117 @@ def test_adapter_never_counts_checker_errors_as_correct(tmp_path):
             [train[0]],
             {"rules": "rules", "prompt": "leak"},
         )
+
+
+def test_adapter_parallel_preserves_batch_order(tmp_path):
+    train, _ = load_snapshot(_snapshot(tmp_path / "snapshot"))
+
+    def checker(case, rules):
+        return CheckerOutput(
+            predicted_resolved=case.instance_id == "repo__train2",
+            decision_reason=f"checked {case.instance_id}",
+            repository_evidence=(),
+        )
+
+    result = CheckerGEPAAdapter(
+        checker,
+        parallel=2,
+        run_dir=tmp_path / "parallel-adapter",
+    ).evaluate(
+        [train[1], train[0]],
+        {"rules": "rules"},
+        capture_traces=True,
+    )
+
+    assert [output["instance_id"] for output in result.outputs] == [
+        "repo__train2",
+        "repo__train1",
+    ]
+    assert result.scores == [1.0, 0.0]
+    audit = [
+        json.loads(line)
+        for line in (
+            tmp_path / "parallel-adapter" / "audit_events.jsonl"
+        ).read_text().splitlines()
+    ]
+    started = next(
+        record for record in audit if record["event"] == "adapter_evaluation_started"
+    )
+    assert started["parallel"] == 2
+
+
+def test_adapter_retries_transient_checker_failure(tmp_path):
+    train, _ = load_snapshot(_snapshot(tmp_path / "snapshot"))
+    calls = {"count": 0}
+
+    def flaky_checker(case, rules):
+        calls["count"] += 1
+        if calls["count"] == 1:
+            raise RuntimeError("transient checker failure")
+        return CheckerOutput(
+            predicted_resolved=True,
+            decision_reason="retry recovered",
+            repository_evidence=(),
+        )
+
+    run_dir = tmp_path / "retry-adapter"
+    result = CheckerGEPAAdapter(
+        flaky_checker,
+        run_dir=run_dir,
+        fail_on_checker_error=True,
+        checker_attempts=2,
+    ).evaluate([train[0]], {"rules": "rules"})
+
+    assert calls["count"] == 2
+    assert result.scores == [1.0]
+    assert not (run_dir / "errors.jsonl").exists()
+    audit = [
+        json.loads(line)
+        for line in (run_dir / "audit_events.jsonl").read_text().splitlines()
+    ]
+    assert any(
+        record["event"] == "checker_evaluation_attempt_failed"
+        for record in audit
+    )
+    assert any(
+        record["event"] == "checker_evaluation_retried"
+        and record["successful_attempt"] == 2
+        for record in audit
+    )
+
+
+def test_adapter_exhausted_checker_retries_remain_operational_failure(tmp_path):
+    train, _ = load_snapshot(_snapshot(tmp_path / "snapshot"))
+
+    def broken_checker(case, rules):
+        raise RuntimeError("persistent checker failure")
+
+    run_dir = tmp_path / "retry-failed-adapter"
+    with pytest.raises(RuntimeError, match="Checker operational failure"):
+        CheckerGEPAAdapter(
+            broken_checker,
+            run_dir=run_dir,
+            fail_on_checker_error=True,
+            checker_attempts=2,
+        ).evaluate([train[0]], {"rules": "rules"})
+
+    errors = [
+        json.loads(line)
+        for line in (run_dir / "errors.jsonl").read_text().splitlines()
+    ]
+    assert len(errors) == 1
+    assert errors[0]["event"] == "checker_evaluation_failed"
+    assert errors[0]["attempts"] == 2
+    audit = [
+        json.loads(line)
+        for line in (run_dir / "audit_events.jsonl").read_text().splitlines()
+    ]
+    attempts = [
+        record
+        for record in audit
+        if record["event"] == "checker_evaluation_attempt_failed"
+    ]
+    assert [record["attempt"] for record in attempts] == [1, 2]
 
 
 def test_evidence_bundle_contains_only_current_minibatch(tmp_path):
@@ -482,6 +597,248 @@ def test_native_gepa_end_to_end_without_llm(tmp_path):
         (config.run_dir / "cost_report.json").read_text()
     )
     assert cost_report["full_run_linear_estimate"]["target_metric_calls"] == 1000
+
+
+def test_split_resume_matches_continuous_search(tmp_path):
+    continuous_config = _config(tmp_path / "continuous")
+    continuous_config = replace(
+        continuous_config,
+        search=replace(
+            continuous_config.search,
+            max_metric_calls=11,
+            skip_perfect_score=False,
+        ),
+    )
+    split_config = _config(tmp_path / "split")
+    split_config = replace(
+        split_config,
+        search=replace(
+            split_config.search,
+            max_metric_calls=5,
+            skip_perfect_score=False,
+        ),
+    )
+    checker_calls = {"continuous": 0, "split": 0}
+
+    def checker_for(run_name):
+        def checker(case, rules):
+            checker_calls[run_name] += 1
+            return CheckerOutput(
+                predicted_resolved=case.instance_id in rules,
+                decision_reason="deterministic resume test",
+                repository_evidence=(),
+            )
+
+        return checker
+
+    class DeterministicProposer:
+        def __init__(self):
+            self.successful_proposals = 0
+            self.failures = []
+
+        def __call__(self, candidate, reflective_dataset, components):
+            assert components == ["rules"]
+            self.successful_proposals += 1
+            instance_ids = sorted(
+                record["instance_id"]
+                for record in reflective_dataset["rules"]
+            )
+            rules = " ".join(
+                item
+                for item in [candidate["rules"], *instance_ids]
+                if item
+            )
+            return {"rules": rules}
+
+    continuous = run_optimization(
+        continuous_config,
+        checker=checker_for("continuous"),
+        proposer=DeterministicProposer(),
+    )
+    run_optimization(
+        split_config,
+        checker=checker_for("split"),
+        proposer=DeterministicProposer(),
+    )
+    split_config = replace(
+        split_config,
+        search=replace(split_config.search, max_metric_calls=11),
+    )
+    split = run_optimization(
+        split_config,
+        checker=checker_for("split"),
+        proposer=DeterministicProposer(),
+    )
+
+    continuous_state = GEPAState.load(str(continuous_config.run_dir))
+    split_state = GEPAState.load(str(split_config.run_dir))
+    assert split.best_candidate == continuous.best_candidate
+    assert split.total_metric_calls == continuous.total_metric_calls
+    assert split_state.program_candidates == continuous_state.program_candidates
+    assert (
+        split_state.parent_program_for_candidate
+        == continuous_state.parent_program_for_candidate
+    )
+    assert (
+        split_state.program_at_pareto_front_valset
+        == continuous_state.program_at_pareto_front_valset
+    )
+    assert checker_calls["split"] == checker_calls["continuous"]
+
+    def event_values(run_dir, event, field):
+        records = [
+            json.loads(line)
+            for line in (run_dir / "audit_events.jsonl").read_text().splitlines()
+        ]
+        return [record[field] for record in records if record["event"] == event]
+
+    assert event_values(
+        split_config.run_dir,
+        "gepa_minibatch_sampled",
+        "minibatch_ids",
+    ) == event_values(
+        continuous_config.run_dir,
+        "gepa_minibatch_sampled",
+        "minibatch_ids",
+    )
+    assert event_values(
+        split_config.run_dir,
+        "gepa_proposal_started",
+        "parent_candidate_sha256",
+    ) == event_values(
+        continuous_config.run_dir,
+        "gepa_proposal_started",
+        "parent_candidate_sha256",
+    )
+    assert event_values(
+        split_config.run_dir,
+        "seed_validation_replayed",
+        "checker_calls_avoided",
+    ) == [2]
+
+    resume_state = json.loads(
+        (split_config.run_dir / "gepa_resume_state.json").read_text()
+    )
+    assert resume_state["gepa_state_i"] == split_state.i
+    assert resume_state["successful_proposals"] == len(
+        event_values(
+            split_config.run_dir,
+            "gepa_proposal_completed",
+            "proposed_candidate_sha256",
+        )
+    )
+
+
+def test_resume_rejects_semantic_changes_and_budget_decrease(tmp_path):
+    config = _config(tmp_path)
+
+    def checker(case, rules):
+        return CheckerOutput(
+            predicted_resolved=False,
+            decision_reason="deterministic resume validation",
+            repository_evidence=(),
+        )
+
+    class Proposer:
+        successful_proposals = 0
+        failures = []
+
+        def __call__(self, candidate, reflective_dataset, components):
+            self.successful_proposals += 1
+            return {"rules": "unchanged outcome"}
+
+    run_optimization(config, checker=checker, proposer=Proposer())
+
+    changed_prompt = replace(config, checker_prompt="different checker")
+    with pytest.raises(
+        IncompatibleOptimizationRun,
+        match="configuration differs",
+    ):
+        run_optimization(
+            changed_prompt,
+            checker=checker,
+            proposer=Proposer(),
+        )
+
+    decreased_budget = replace(
+        config,
+        search=replace(config.search, max_metric_calls=9),
+    )
+    with pytest.raises(
+        IncompatibleOptimizationRun,
+        match="cannot decrease",
+    ):
+        run_optimization(
+            decreased_budget,
+            checker=checker,
+            proposer=Proposer(),
+        )
+
+
+def test_resume_accumulates_reflection_outcomes_across_processes(tmp_path):
+    config = _config(tmp_path)
+    config = replace(
+        config,
+        search=replace(
+            config.search,
+            max_metric_calls=4,
+            skip_perfect_score=False,
+        ),
+    )
+
+    def checker(case, rules):
+        return CheckerOutput(
+            predicted_resolved=False,
+            decision_reason="force proposal attempts",
+            repository_evidence=(),
+        )
+
+    class BrokenProposer:
+        def __init__(self):
+            self.successful_proposals = 0
+            self.failures = []
+
+        def __call__(self, candidate, reflective_dataset, components):
+            failure = {
+                "error_type": "RuntimeError",
+                "error": "first process failure",
+            }
+            self.failures.append(failure)
+            raise RuntimeError("first process failure")
+
+    run_optimization(config, checker=checker, proposer=BrokenProposer())
+    first_state = json.loads(
+        (config.run_dir / "gepa_resume_state.json").read_text()
+    )
+    assert first_state["successful_proposals"] == 0
+    assert len(first_state["reflection_failures"]) == 2
+
+    class SuccessfulProposer:
+        def __init__(self):
+            self.successful_proposals = 0
+            self.failures = []
+
+        def __call__(self, candidate, reflective_dataset, components):
+            self.successful_proposals += 1
+            return {"rules": "non-improving rules"}
+
+    resumed_config = replace(
+        config,
+        search=replace(config.search, max_metric_calls=5),
+    )
+    run_optimization(
+        resumed_config,
+        checker=checker,
+        proposer=SuccessfulProposer(),
+    )
+    resumed_state = json.loads(
+        (config.run_dir / "gepa_resume_state.json").read_text()
+    )
+    assert resumed_state["successful_proposals"] == 1
+    assert len(resumed_state["reflection_failures"]) == 2
+    progress = json.loads((config.run_dir / "progress.json").read_text())
+    assert progress["status"] == "completed_with_warnings"
+    assert progress["reflection_failures"] == 2
 
 
 def test_reflection_failure_below_success_threshold_marks_run_failed(tmp_path):

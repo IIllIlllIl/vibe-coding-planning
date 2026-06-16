@@ -9,7 +9,8 @@
 - **状态**：Verified 正式 Round 1 数据快照已发布；GEPA Checker、Adapter、
   文件型 reflection proposer、runner、报告和监控集成已实现并通过
   mock/no-LLM 测试；极小 Reflection smoke 已生成两次非空完整规则并验证拒绝
-  分支，等待较长串行 pilot 覆盖候选接纳和完整 validation 分支
+  分支；extended pilot 已覆盖候选接纳、完整 validation、成本/token 报告和
+  prompt 产出完整规则文本
 - **设计文档**：`docs/gepa-rule-optimization.md`
 - **目标**：使用 Verified PCT Round 1 分类数据直接优化完整 Checker 规则文本，替代逐案例规则提取、后处理和聚合
 - **当前 Verified 数据审计**：
@@ -21,10 +22,15 @@
   - 正式 GEPA 快照：482 条（315 resolved / 167 unresolved）
     `20260614_482_fdc056ae85df`
   - `complete: true`、`provisional: false`、`invalid_source_instances: 0`
+- **初始规则决策**：
+  - 正式配置使用 `configs/gepa_initial_rules_gpt_seed.md`
+  - 生成 prompt 和原始输出记录在
+    `docs/gepa_initial_rules_gpt_seed_provenance.md`
+  - 为保持可复现性，该 GPT 输出不再人工优化；后续改进只由 GEPA run 产生
 - **执行顺序**：
-  1. 审计任务过难和 Code Agent 偏离两类语义噪声
-  2. 审阅 `configs/gepa_initial_rules.md` 的初始规则
-  3. 用户确认成本后运行小预算 pilot
+  1. 使用新的 run_dir 验证正式 resume 机制
+  2. 设计并执行 `parallel=2` 小型试运行
+  3. 用户确认成本后运行正式 GEPA 优化
 - **随机性注意**：GEPA Checker 已显式设置 `temperature: 0.0`
 - **首次 Pilot 结果（2026-06-14）**：
   - 空规则 seed：`configs/gepa_empty_rules.txt`
@@ -40,23 +46,46 @@
   - runner 检测被 GEPA 吞掉的 proposer 失败；单次失败记 warning 并继续，
     成功 proposal 低于 `min_proposals` 才标记 failed
   - 成本报告增加运行完整性和 token/time 估算有效性；USD 不作为验收指标
-  - Checker 对齐 checker-only 恢复配置：200 steps、$6 cost limit、1800s
-    timeout、结果文件优先和最终提交回退
+  - Checker 对齐 checker-only 的结果文件优先和最终提交回退；稳定资源配置
+    保留 $6 cost limit、1800s timeout 和 temperature=0.0。checker-only
+    验证过 200 steps；extended pilot 暂用 500 steps 观察真实步数分布；
+    Checker 单样本默认 `max_attempts=3`，偶发执行失败重试，全部失败才中止
   - Checker operational error 不再作为 correctness=0 进入搜索/cache，而是
     令运行失败并允许同 run_dir 恢复
+  - 正式跨进程续跑增加不可变 run manifest、共享 RNG/epoch sampler 状态、
+    累计 proposal/failure 统计和 seed validation 回放；连续运行与分段运行的
+    minibatch、父候选、candidate tree、Pareto、最佳候选和 Checker 调用数已由
+    no-LLM 对照测试验证一致
 - **极小 Reflection smoke 结果**：
   - 第一次 Reflection 达到 40-step 上限，以 `LimitsExceeded` 退出且未写候选
   - 后两次生成非空完整规则，但 minibatch correctness 未提高，均被拒绝
   - candidate tree 中的空规则是 seed；被拒 proposal 不进入官方候选树
-- **下一验收**：
+- **extended pilot 结果（2026-06-15）**：
   - `configs/gepa_verified_rules_pilot_extended.yaml`
   - 6 train / 4 validation，空 seed，`skip_perfect_score=false`
-  - 软预算 30 metric calls，至少 3 个成功 proposal，`parallel=1`
-  - 重点观察候选接纳、完整 validation、恢复和最终报告
+  - 软预算 30 metric calls，实际完成 30 metric calls，`parallel=1`
+  - 4 次成功 proposal，0 次 Reflection failure，超过 `min_proposals=3`
+  - 1 个候选被接纳，接纳前完成完整 validation；最佳候选非空，candidate tree
+    中共有 2 个候选
+  - `result.json`、`candidate_metrics.json`、`best_rules.txt`、
+    `candidate_tree.html` 和 `cost_report.json` 已生成
+  - 该 run_dir 创建早于正式 `run_manifest.json`/`gepa_resume_state.json` 机制，
+    因此不作为正式跨进程续跑实跑证据
+- **下一验收**：
+  - 使用新的 run_dir 做小型断点续跑验证，覆盖 manifest、resume_state 和
+    seed validation replay
+  - 分析 extended pilot 中 Checker 实际 step 分布，再决定全量实验 step 上限
+  - 设计并执行 `parallel=2` 小型试运行，只验证 Checker evaluation batch 内
+    样本级并发，不并行 GEPA iteration
+  - 准备并运行 `configs/gepa_verified_rules_formal_pilot.yaml`：正式 384/98
+    filtered Verified 快照、GPT seed、`parallel=2`、Checker `max_steps=500`、
+    `max_attempts=3`，软预算 116 metric calls，用于观察整体 GEPA 代码路径在
+    正式数据上的 2-3 个 proposal iteration，并测试 Checker evaluation batch
+    内样本级并行
 - **预算/并发决策**：
   - 接受 GEPA 官方 `max_metric_calls` 的迭代边界软上限语义
-  - 当前不设计并行 GEPA；全部配置固定 `parallel=1`
-  - Adapter 并发能力未获用户批准、未验证，不得用于正式运行
+  - 不并行 GEPA 主循环；只设计 Checker evaluation batch 内样本级并发
+  - 全部配置当前仍固定 `parallel=1`；`parallel=2` 需先通过新 run_dir 小型试运行
 - **Checker 稳定性说明**：
   - GEPA pilot 的 22 条 evaluation records 中有 3 次无合法 JSON，涉及 2 个
     唯一实例；API 调用数量表明对应执行耗尽约 50 steps

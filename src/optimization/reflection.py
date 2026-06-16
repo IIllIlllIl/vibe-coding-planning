@@ -69,6 +69,9 @@ class MiniSWEReflectionProposer:
         self,
         config: OptimizationConfig,
         capacity_window: DockerCapacityWindow,
+        *,
+        successful_proposals: int = 0,
+        failures: Sequence[Mapping[str, str]] = (),
     ) -> None:
         self.config = config
         self.capacity_window = capacity_window
@@ -76,8 +79,8 @@ class MiniSWEReflectionProposer:
         self.audit = JsonlLogger(config.run_dir / "audit_events.jsonl")
         self.usage = JsonlLogger(config.run_dir / "usage.jsonl")
         self.errors = JsonlLogger(config.run_dir / "errors.jsonl")
-        self.failures: list[dict[str, str]] = []
-        self.successful_proposals = 0
+        self.failures = [dict(failure) for failure in failures]
+        self.successful_proposals = successful_proposals
 
     def __call__(
         self,

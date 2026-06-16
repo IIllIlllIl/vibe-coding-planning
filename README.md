@@ -13,7 +13,7 @@
 - **规则质量审查与返工（FR-14，默认关闭）**：独立 LLM Reviewer Agent 审查规则质量（五维评分），未通过者触发返工循环。实践发现返工机制会**破坏已提取的有效规则**（删除旧结果后重跑失败），因此默认关闭。可通过 `config.analysis.enable_review` 开启
 - **Plan-Checker-Code 管道（FR-15）**：在 Plan 与 Code 之间插入规则检查器，验证计划是否符合从成功案例中提炼出的规则集。检查器在 Docker 内运行，可验证文件路径、函数名等具体引用。代码始终执行以产生 ground truth，用于计算检查器的 TP/FP/FN/TN、Accuracy、Precision、Recall、F1
 - **检查器 held-out 评估**：在 SWE-PolyBench Python 子集上运行 Plan-Check-Code 管道，评估规则集的预测能力
-- **GEPA 规则优化**：使用 Verified PCT Round 1 的 `issue + plan + repo + resolved` 分类数据，让 GEPA 直接优化 Checker 的完整规则文本。首次外部 LLM pilot 已完成基础链路验证并暴露 Reflection 缺陷；修复后正在进行极小闭环验收。设计见 [`docs/gepa-rule-optimization.md`](docs/gepa-rule-optimization.md)
+- **GEPA 规则优化**：使用 Verified PCT Round 1 的 `issue + plan + repo + resolved` 分类数据，让 GEPA 直接优化 Checker 的完整规则文本。外部 LLM pilot 已完成基础链路、Reflection 规则生成、候选接纳、完整 validation 和成本/token 报告验证。设计见 [`docs/gepa-rule-optimization.md`](docs/gepa-rule-optimization.md)
 - **最小化造轮子**：Agent 基于 `mini-swe-agent` 框架，反思复用 GEPA 反射 Prompt 模板，评估直接调用 `swebench` 官方库
 
 ## 实验设计：两阶段方法学
@@ -127,7 +127,18 @@ bash scripts/run_batch.sh --gepa-rules \
   --gepa-config configs/gepa_verified_rules.yaml
 ```
 
-同一 `run_dir` 会从 `gepa_state.bin` 自动恢复。优雅停止：
+正式 GEPA 配置的初始规则为
+`configs/gepa_initial_rules_gpt_seed.md`。生成 prompt 和原始输出记录在
+`docs/gepa_initial_rules_gpt_seed_provenance.md`；为保持可复现性，该 seed
+不再人工改写。
+
+同一 `run_dir` 表示同一次逻辑实验，可以分多次进程执行并提高累计
+`max_metric_calls`。项目除复用官方 `gepa_state.bin` 外，还保存
+`run_manifest.json` 和 `gepa_resume_state.json`，用于校验实验身份并恢复
+Pareto/epoch sampling 的随机状态、sampler epoch 和累计 proposal 统计。
+数据、初始规则、prompt、模型、step limit、seed、minibatch、项目优化代码、
+vendored GEPA 核心代码或其他搜索语义发生变化时会拒绝恢复，必须使用新的
+`run_dir`。优雅停止：
 
 ```bash
 touch output/SWE-bench_Verified/gepa-rules/run1/gepa.stop
@@ -142,6 +153,8 @@ conda run -n mini-swe python scripts/tools/build_gepa_pilot_dataset.py
 
 运行会额外生成 `audit_events.jsonl`、`usage.jsonl` 和
 `cost_report.json`，用于检查信息隔离、GEPA 接受路径以及时间/token/费用。
+最终优化结果写入 `result.json`，候选指标写入 `candidate_metrics.json`，最佳
+规则写入 `best_rules.txt`，候选树写入 `candidate_tree.html`。
 
 2026-06-14 的首次 6/4 pilot 证明了 Checker 隔离和 GEPA 基础链路，但
 Reflection 因 mini-swe-agent `DefaultAgent.run(task=...)` 参数缺失而未生成候选；
@@ -158,10 +171,19 @@ bash scripts/run_batch.sh --gepa-rules \
 `progress.json` 为 `failed` 且进程返回非零。成本报告以 token 和模型调用时间
 为验收依据；USD 花费以提供方控制台为准。
 
-GEPA Checker 使用 checker-only 恢复实验验证过的资源上限：
-`max_steps=200`、`cost_limit=6.0`、`timeout=1800`。Checker 执行错误不会被当成
-分类错误参与优化，而会令运行失败并保留错误证据，之后使用同一 `run_dir`
-恢复。
+GEPA Checker 的稳定资源上限来自 checker-only 恢复实验：
+`cost_limit=6.0`、`timeout=1800`，并保留显式 `temperature=0.0`。历史
+checker-only 验证使用 `max_steps=200`；extended pilot 暂时把 Checker
+`max_steps` 提高到 `500`，用于观察真实步数分布并为后续全量实验确定上限。
+Checker 单样本执行默认最多 `max_attempts=3`：偶发失败会重试，只有全部尝试
+失败才作为 operational failure。Checker 执行错误不会被当成分类错误参与优化，
+也不会写入 evaluation cache。
+
+GEPA 的 Pareto 选择、minibatch sampling、Reflection proposal 和 candidate tree
+更新保持串行。`search.parallel` 仅用于同一次 Checker evaluation batch 内的
+样本级并发；输出顺序保持与输入 batch 一致。当前正式配置仍为 `parallel=1`，
+下一步需要用新的 run_dir 做 `parallel=2` 小型试运行，验证正确性、Docker 容量
+和 API rate limit 后再考虑正式启用。
 
 PolyBench Python 199 实例的纯 PCT 扫描配置已固定为
 `configs/polybench_full199_pct.yaml`（`checker.enabled=false`）：

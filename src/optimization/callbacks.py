@@ -25,15 +25,24 @@ def _atomic_json(path: Path, value: Any) -> None:
 
 
 class ProgressCallback:
-    def __init__(self, run_dir: Path) -> None:
+    def __init__(
+        self,
+        run_dir: Path,
+        *,
+        checkpoint: Any = None,
+        proposer: Any = None,
+        accepted_candidates: int = 0,
+    ) -> None:
         self.run_dir = run_dir
         self.audit = JsonlLogger(run_dir / "audit_events.jsonl")
         self.valset_size = 0
+        self.checkpoint = checkpoint
+        self.proposer = proposer
         self.progress: dict[str, Any] = {
             "status": "starting",
             "iteration": 0,
             "metric_calls_used": 0,
-            "accepted_candidates": 0,
+            "accepted_candidates": accepted_candidates,
         }
 
     def _save(self) -> None:
@@ -189,6 +198,12 @@ class ProgressCallback:
             run_dir=event["run_dir"],
             state_file="gepa_state.bin",
         )
+        if self.checkpoint is not None:
+            self.checkpoint.save(
+                gepa_state_i=event["iteration"] - 1,
+                proposer=self.proposer,
+                accepted_candidates=self.progress["accepted_candidates"],
+            )
 
     def on_error(self, event: dict[str, Any]) -> None:
         JsonlLogger(self.run_dir / "errors.jsonl").write(
@@ -242,4 +257,10 @@ class ProgressCallback:
             total_iterations=event["total_iterations"],
             total_metric_calls=event["total_metric_calls"],
         )
+        if self.checkpoint is not None:
+            self.checkpoint.save(
+                gepa_state_i=event["final_state"].i,
+                proposer=self.proposer,
+                accepted_candidates=self.progress["accepted_candidates"],
+            )
         self._save()
