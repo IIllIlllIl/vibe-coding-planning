@@ -216,6 +216,21 @@ PCT_CONFIG=configs/polybench_remaining133_pct.yaml \
   conda run -n mini-swe python scripts/long_run_watchdog.py
 ```
 
+新的集群运行方向是从本地通过相邻项目 `../../hpc_submit` 提供的
+`ulhpc-submit` 提交 HPC 作业，让现有 `scripts/run_batch.sh`、checker、analysis
+或 GEPA 入口在 HPC Linux 节点上执行。HPC 作业由调度器管理，不需要
+`caffeinate` 或 tmux watchdog；设计见 [`docs/hpc-submit.md`](docs/hpc-submit.md)。
+在设计完整 batch 包装前，先用 smoke 脚本验证 hpc_submit、远端 conda、Docker
+和项目 Docker 镜像维护入口：
+
+```bash
+cp configs/ulhpc_submit.example.yaml configs/ulhpc_submit.yaml
+# edit configs/ulhpc_submit.yaml: user, remote_project_dir, ssh_key if needed
+
+bash scripts/hpc_smoke_check.sh
+bash scripts/hpc_smoke_check.sh --submit
+```
+
 ### 规则分析 CLI
 
 `python -m src.analysis` 参数：
@@ -325,7 +340,8 @@ pipeline、PCC、checker-only、evaluator、watchdog 和 Docker CLI/SDK helper
 | [`docs/requirement-document.md`](docs/requirement-document.md) | 完整需求文档：功能需求、数据模型、验收标准、风险分析 |
 | [`docs/architecture.md`](docs/architecture.md) | 架构文档：目录结构、模块职责、数据流、设计决策 |
 | [`docs/gepa-rule-optimization.md`](docs/gepa-rule-optimization.md) | 基于 GEPA 的替代规则生成流程：数据边界、Checker/ASI、优化目标和实施顺序 |
-| [`docs/linux-deployment.md`](docs/linux-deployment.md) | **（临时）** Linux 服务器迁移部署记录：已知问题、验证清单、待补充项 |
+| [`docs/hpc-submit.md`](docs/hpc-submit.md) | HPC submit 运行方案：本地提交、远端作业脚本、数据边界、恢复策略 |
+| [`docs/linux-deployment.md`](docs/linux-deployment.md) | **（历史）** Linux 服务器迁移记录：仅用于甄别仍适用于 HPC 的 Linux 假设 |
 | [`project_issues.md`](project_issues.md) | 待办与方法学决策（含 §3 数据集分层实施进度） |
 | [`output/README.md`](output/README.md) | 本地 output 目录索引、当前运行清单、关键产物和常用命令 |
 | [`CLAUDE.md`](CLAUDE.md) | Agent 操作守则（仅 3 节：项目索引 / conda env / 清理）—— 不放项目说明 |
@@ -370,6 +386,7 @@ pipeline、PCC、checker-only、evaluator、watchdog 和 Docker CLI/SDK helper
 │   └── architecture.md            # 架构文档
 ├── scripts/
 │   ├── run_batch.sh               # 唯一手动实验入口
+│   ├── hpc_smoke_check.sh         # HPC/hpc_submit 可用性 smoke
 │   ├── long_run_watchdog.py       # 唯一无人值守实验入口
 │   ├── internal/                  # batch/analysis/checker 内部实现
 │   ├── tools/                     # 报告和数据维护工具

@@ -17,6 +17,7 @@
 | 7.1 | 2026-05-24 | — | Review/Rework 设计缺陷修复：发现 rework 会先删除已有规则再重跑，若重跑失败则永久丢失数据（`astropy-14182`、`sympy-20916`、`scikit-learn-25747` 均受害）。新增 `config.analysis.enable_review`（默认 `false`）作为 opt-in 开关；默认流程改为 batch → flash analysis → pro analysis → done，跳过 review/rework。FR-14 描述更新；`project_issues.md` 新增归档项记录该缺陷及未来修复方向 |
 | 7.2 | 2026-06-09 | — | 范围收敛：FR-07 单实例内部断点重跑取消，任务级恢复统一由 `run_batch.sh` 跳过已完成实例实现；候选 Plan 树形结构取消，当前实验固定使用线性 `n=3`；下一优先任务改为解除 OpenCode analysis 与全局 `DEEPSEEK_API_KEY` 校验耦合 |
 | 7.3 | 2026-06-12 | — | 新增 FR-16 设计：使用 vendored GEPA 在 Verified PCT Round 1 分类数据上直接优化完整 Checker 规则文本，替代逐案例规则提取与聚合；PolyBench 保持最终 held-out |
+| 7.4 | 2026-06-17 | — | 运行形态调整：放弃“迁移到长期 Linux 服务器”作为近期目标，改为本地通过相邻项目 `../../hpc_submit` 的 `ulhpc-submit` 提交 HPC 作业运行实验。HPC 节点仍是 Linux，但不采用 macOS 防休眠、tmux watchdog 常驻或服务器长期部署假设；新增 FR-17 |
 
 ---
 
@@ -68,6 +69,7 @@
 - 自动保存所有 Agent 执行轨迹（包括反思 Agent 的轨迹），并按轮次和角色命名
 - 支持 batch 任务级恢复：已有 `result.json` 的实例跳过，未完成实例从 round 1 重新执行
 - 基本的错误恢复与异常处理：API 不可用等致命错误终止；任务级错误（含 Agent 输出无效、Patch 应用失败、评估异常等）以**实例**为最小回滚单位跳过并继续
+- 支持 HPC 作业提交包装：本地入口通过相邻项目 `../../hpc_submit` 的 `ulhpc-submit` 将当前代码、配置和必要输入提交到 HPC，远端作业复用现有 `run_batch.sh` / checker / analysis / GEPA 入口执行实验
 
 #### 轮间状态隔离不变量
 
@@ -82,6 +84,8 @@
 - 不进行严格的非功能性需求验证（如性能测试、压力测试）
 - 不进行模型约束检查（用户自行确保模型可用）
 - 不提供 Web UI 或图形化界面
+- 不把项目整体迁移为长期运行的 Linux 服务器服务；HPC 只作为批处理作业运行环境
+- 不要求 HPC 路径集成 `long_run_watchdog.py` 的自动修复、tmux 管理或 `caffeinate` 防休眠逻辑
 
 ---
 
@@ -264,7 +268,7 @@
 | 描述 | 对 PCT pipeline 中「某轮从失败变为成功」的案例（reflect-success cases），运行独立的对比分析 Agent，比较失败 Plan 与成功 Plan 的推理链差异，提取可泛化的自然语言规则。规则格式必须遵循：When [input pattern], [strategy] because [causal justification]。支持使用不同 LLM 模型串行提取（如 deepseek-v4-flash → deepseek-v4-pro），以便比较规则质量差异。默认 mini-swe-agent 后端在宿主机本地运行（DefaultAgent + LocalEnvironment），直接读取 plans/、patches/、trajectories/ 等文件；也支持 `analysis.backend=opencode` 通过 OpenCode/Kimi 执行提取、后处理和聚合 |
 | 输入 | reflect_success_cases 目录（含 manifest.json、各实例的 plan/trajectory/patch/result.json） |
 | 输出 | 每个实例的提取规则（`per_case/<instance_id>.json`）、可选格式后处理结果（`per_case_postprocessed/<instance_id>.json`，保留原始版本不覆盖）、逐条记录（`rules.jsonl` / `errors.jsonl`）、聚合规则（`aggregated_rules.json`）、Agent 轨迹（`trajectories/<instance_id>.json`） |
-| 批量运行 | 手动实验统一使用 `scripts/run_batch.sh`，无人值守实验使用 `scripts/long_run_watchdog.py`。`run_batch.sh --analysis-only --analysis-config <analysis_config>` 进入规则分析；`--checker-comparison` / `--checker-recovery` 进入 checker-only；默认模式执行 PCT/PCC。 |
+| 批量运行 | 实际实验统一复用 `scripts/run_batch.sh`；本地长时无人值守可使用 `scripts/long_run_watchdog.py`；HPC 运行由计划新增的 `scripts/hpc_submit_batch.sh` 包装 `ulhpc-submit`，远端仍调用现有入口。`run_batch.sh --analysis-only --analysis-config <analysis_config>` 进入规则分析；`--checker-comparison` / `--checker-recovery` 进入 checker-only；默认模式执行 PCT/PCC。 |
 | 关键配置 | `config.analysis.model` / `api_base` / `max_steps` / `cost_limit` —— 独立于主 pipeline 的模型配置，支持分析阶段使用不同提供商 |
 | 验收标准 | 1）规则文件非空且包含 "When ... because ..." 格式的规则行；2）不同模型的规则可区分保存（`analysis_flash/` vs `analysis_pro/` 或独立配置输出目录）；3）批量运行支持断点续跑（已存在的 `per_case/*.json` 自动 SKIP）；4）对已有语义可用但格式不合格的规则，可通过 `python -m src.analysis --postprocess --input <output>/per_case --output <output> --postprocess-data-dir <reflect_success_cases>` 生成 `per_case_postprocessed/`。后处理获得与原提取阶段相同的 case 文件材料，但任务限定为格式修复而非重新提取；聚合阶段应以该后处理目录作为 `--input`，只读取顶层 `rule` 字段，`postprocess.original_rule` 和截断候选不进入聚合 |
 
@@ -307,6 +311,24 @@
 | 验收标准 | 1）数据快照和切分可复现；2）Checker 看不到执行后信息；3）每个候选规则具有完整预测和指标；4）搜索历史和规则哈希可审计；5）最终规则只在优化完成后评估 PolyBench |
 
 完整设计见 [`gepa-rule-optimization.md`](gepa-rule-optimization.md)。
+
+### 3.9 HPC 作业提交运行
+
+#### FR-17：通过 `ulhpc-submit` 提交实验作业
+
+| 属性 | 内容 |
+|------|------|
+| ID | FR-17 |
+| 名称 | HPC submit 批处理运行入口 |
+| 状态 | 新增需求，待实现 |
+| 描述 | 提供一个类似 `scripts/run_batch.sh` 的本地包装脚本，调用相邻项目 `../../hpc_submit` 安装后的 `ulhpc-submit` CLI。`ulhpc-submit` 负责代码同步、Slurm job script 生成、`sbatch` 提交、状态监控和日志回传；HPC job 在远端 Linux 节点激活 `mini-swe` conda 环境，复用现有 `run_batch.sh`、checker comparison/recovery、analysis-only 或 GEPA 入口执行实验 |
+| 输入 | 本地代码仓库、配置文件、可选实例列表、batch_id/run_dir、并发度、HPC 作业资源参数（job name、wall time、CPU、内存等） |
+| 输出 | HPC 作业 ID、本地/远端作业日志、远端 `logs/` 与 `output/` 产物；作业失败时保留可诊断日志和已完成实例结果 |
+| 关键约束 | 1）HPC 包装层不得复制 PCT/PCC/checker/analysis/GEPA 业务逻辑；2）远端实际执行入口仍为现有脚本；3）不使用 `caffeinate`；4）默认不依赖 tmux/watchdog；5）密钥通过本地/HPC 环境注入，不写入 git 文件或命令日志；6）包装层不得重复实现 `ulhpc-submit` 已提供的 SSH、rsync、Slurm 监控和日志回传能力 |
+| 前置 smoke | 在设计完整 batch wrapper 前，先用 `scripts/hpc_smoke_check.sh` 验证 `ulhpc-submit` 调用链路、ULHPC SSH 连通性、远端 `mini-swe` conda 环境、`mini-swe-agent==1.17.5`、`swebench`、Docker CLI/daemon、项目 Docker 镜像维护入口和可选 API key 注入。默认 dry-run 会检查 SSH 连通性但不提交 Slurm job；只有 `--submit` 才提交 Slurm job |
+| 恢复策略 | PCT/PCC 依赖 `run_batch.sh` 的已有 `result.json` skip 语义；GEPA 依赖 `run_manifest.json`、`gepa_resume_state.json` 和官方 `gepa_state.bin`；wall time 用尽或 transient failure 后可重新提交同一逻辑实验 |
+| 验收标准 | 1）smoke 脚本能明确区分 dry-run 与真实 submit；2）dry-run smoke 能验证 ULHPC SSH 连通性且不提交 Slurm job；3）真实 smoke job 能在 HPC 上完成 conda/import、Docker 和镜像维护检查；4）完整 batch wrapper 的 `--dry-run` 能打印将提交的 HPC 命令和远端执行命令；5）1-2 实例 smoke batch 能在 HPC 上完成并生成标准 output；6）作业日志包含 conda/env 检查、git/code snapshot 标识、实际执行命令和返回码；7）失败后重新提交不会重跑已有 `result.json` 的实例；8）文档明确本地文件同步、远端工作目录、Docker 权限和密钥注入方式 |
+| 设计文档 | [`docs/hpc-submit.md`](hpc-submit.md) |
 
 ---
 

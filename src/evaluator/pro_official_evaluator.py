@@ -16,7 +16,10 @@ from typing import Any
 
 import pandas as pd
 
-from src.environment.docker_env import get_docker_capacity_window
+from src.environment.docker_env import (
+    ensure_project_image_local,
+    get_docker_capacity_window,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -98,6 +101,11 @@ def evaluate_pro_instance(
     original_cwd = os.getcwd()
     try:
         with get_docker_capacity_window().lease():
+            image = instance_info.get("image_name")
+            if not image and instance_info.get("dockerhub_tag"):
+                image = f"jefzda/sweap-images:{instance_info['dockerhub_tag']}"
+            if image:
+                ensure_project_image_local(str(image), timeout=timeout)
             os.chdir(_OFFICIAL_DIR)
             result = eval_with_docker(
                 patch=patch,

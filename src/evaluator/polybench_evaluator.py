@@ -16,6 +16,7 @@ from typing import Any
 from src.environment.docker_env import (
     close_docker_client,
     create_docker_client,
+    get_docker_capacity_window,
     is_docker_storage_error,
 )
 from src.exceptions import FatalError
@@ -205,22 +206,39 @@ def evaluate_polybench_instance(
         # ------------------------------------------------------------------
         if docker_manager.check_image_local(local_image_name=image_id):
             logger.info("[%s] Using existing local image: %s", instance_id, image_id)
-        elif _try_pull_prebuilt_image_with_fallback(docker_manager, instance_id):
-            logger.info("[%s] Successfully pulled pre-built image from GHCR", instance_id)
         else:
-            from src.environment.polybench_image import (
-                build_polybench_image_from_official_dockerfile,
-            )
+            with get_docker_capacity_window().image_acquisition():
+                if docker_manager.check_image_local(local_image_name=image_id):
+                    logger.info(
+                        "[%s] Using existing local image after wait: %s",
+                        instance_id,
+                        image_id,
+                    )
+                elif _try_pull_prebuilt_image_with_fallback(
+                    docker_manager, instance_id
+                ):
+                    logger.info(
+                        "[%s] Successfully pulled pre-built image from GHCR",
+                        instance_id,
+                    )
+                else:
+                    from src.environment.polybench_image import (
+                        build_polybench_image_from_official_dockerfile,
+                    )
 
-            logger.info(
-                "[%s] GHCR image unavailable; using official Dockerfile build fallback",
-                instance_id,
-            )
-            built_image = build_polybench_image_from_official_dockerfile(instance_info)
-            if built_image != image_id:
-                raise FatalError(
-                    f"PolyBench local image naming mismatch: {built_image} != {image_id}"
-                )
+                    logger.info(
+                        "[%s] GHCR image unavailable; using official Dockerfile "
+                        "build fallback",
+                        instance_id,
+                    )
+                    built_image = build_polybench_image_from_official_dockerfile(
+                        instance_info
+                    )
+                    if built_image != image_id:
+                        raise FatalError(
+                            "PolyBench local image naming mismatch: "
+                            f"{built_image} != {image_id}"
+                        )
 
         # ------------------------------------------------------------------
         # 2. Create container and apply patches

@@ -107,6 +107,56 @@ def test_reset_container_worktree_cleans_dirty_official_image():
 
 
 class TestEvaluatePolybenchInstance:
+    @patch("src.evaluator.polybench_evaluator.get_docker_capacity_window")
+    @patch("docker.from_env")
+    @patch("src.evaluator.polybench_evaluator._import_polybench")
+    def test_image_acquisition_rechecks_after_wait(
+        self,
+        mock_import_polybench,
+        mock_docker_from_env,
+        mock_get_window,
+        polybench_instance_info,
+    ):
+        """Waiting workers re-check the local image before pull/build."""
+        image_lock = MagicMock()
+        mock_get_window.return_value.image_acquisition.return_value = image_lock
+        pb = _make_pb_imports()
+        docker_manager = _make_docker_manager(check_image_local=False)
+        docker_manager.check_image_local.side_effect = [False, True]
+        pb["DockerManager"] = lambda **kwargs: docker_manager
+
+        mock_output = MagicMock()
+        mock_output.resolved = True
+        pb["instance_level_scoring"] = lambda **kwargs: mock_output
+        pb["store_instance_level_output"] = lambda **kwargs: None
+
+        mock_inst = MagicMock()
+        mock_inst.repo = "test/repo"
+        mock_inst.test_patch = "test diff"
+        mock_inst.test_command = "pytest tests/"
+        mock_inst.f2p = ["test_f2p"]
+        mock_inst.p2p = ["test_p2p"]
+        mock_inst.language = "Python"
+        pb["PolyBenchInstance"] = lambda **kwargs: mock_inst
+        mock_import_polybench.return_value = pb
+
+        mock_parser = MagicMock()
+        mock_parser.parse.return_value = {"passed": 1, "failed": 0}
+        with patch("importlib.import_module") as mock_import:
+            mock_parsers_mod = MagicMock()
+            mock_parsers_mod.PythonPyUnit = lambda **kwargs: mock_parser
+            mock_import.return_value = mock_parsers_mod
+
+            result = evaluate_polybench_instance(
+                patch="model patch content",
+                instance_info=polybench_instance_info,
+            )
+
+        assert result["resolved"] is True
+        image_lock.__enter__.assert_called_once()
+        image_lock.__exit__.assert_called_once()
+        docker_manager.try_pull_prebuilt_image.assert_not_called()
+
     @patch("docker.from_env")
     @patch("src.evaluator.polybench_evaluator._import_polybench")
     def test_runs_full_evaluation_flow(

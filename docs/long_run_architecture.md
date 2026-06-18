@@ -1,6 +1,12 @@
 # Long-Run Architecture: 5-Day Unsupervised PCT Batch
 
 > For running the full 500-instance SWE-bench Verified batch without human presence.
+>
+> Status: local/macOS watchdog design. This is not the current HPC execution
+> path. For HPC, use `docs/hpc-submit.md` and validate with
+> `scripts/hpc_smoke_check.sh`; Slurm manages job lifetime, so `caffeinate`,
+> tmux watchdog supervision, and Claude repair sessions are not required by
+> default.
 
 ## Design Philosophy
 

@@ -16,9 +16,12 @@ plan-code-test/
 ├── docs/
 │   ├── requirement-document.md    # 需求文档（终版）
 │   ├── gepa-rule-optimization.md  # GEPA 规则优化流程设计
+│   ├── hpc-submit.md              # 通过 hpc_submit/ulhpc-submit 提交远端作业的运行方案
 │   └── architecture.md            # 本文件
 ├── scripts/
-│   ├── run_batch.sh               # 唯一手动实验入口
+│   ├── run_batch.sh               # 本地/远端实际实验入口
+│   ├── hpc_smoke_check.sh         # HPC/hpc_submit 可用性 smoke
+│   ├── hpc_submit_batch.sh        # 计划新增：本地调用 ulhpc-submit 的包装入口
 │   ├── long_run_watchdog.py       # 唯一无人值守实验入口
 │   ├── internal/                  # batch/analysis/checker 实现
 │   ├── tools/                     # 报告与数据维护工具
@@ -84,7 +87,9 @@ plan-code-test/
 | **流水线** | `src/pipeline.py` | 单实例的核心循环：`generate_plan()` → `generate_code()` → `evaluate()` →（如有需要）`reflect_and_optimize()`，循环 n 次 |
 | **Checker 评估** | `scripts/internal/evaluate_checker.py` | `run_batch.sh` 使用的 checker 数据构建和执行实现 |
 | **Checker 对比实验** | `scripts/internal/run_checker_comparison.py` | `run_batch.sh --checker-comparison` 使用的四臂评估实现 |
-| **Batch 调度器** | `scripts/run_batch.sh`, `scripts/internal/run_batch_workers.py` | `run_batch.sh` 负责所有手动实验模式；内部调度器按 `--parallel` 有界并发执行 PCT/PCC 实例 |
+| **Batch 调度器** | `scripts/run_batch.sh`, `scripts/internal/run_batch_workers.py` | `run_batch.sh` 负责所有实际实验模式；内部调度器按 `--parallel` 有界并发执行 PCT/PCC 实例 |
+| **HPC smoke** | `scripts/hpc_smoke_check.sh` | 在设计完整 HPC batch 包装前验证 `ulhpc-submit`、远端 `mini-swe` conda 环境、`mini-swe-agent==1.17.5`、`swebench`、Docker CLI/daemon 和项目 Docker 镜像维护入口。默认 dry-run；`--submit` 才提交 Slurm 作业 |
+| **HPC 提交包装器** | `scripts/hpc_submit_batch.sh`（计划新增） | 本地组装实验命令并调用相邻项目 `../../hpc_submit` 提供的 `ulhpc-submit`；远端仍执行 `scripts/run_batch.sh`、checker、analysis 或 GEPA 入口。该层只处理项目级参数映射，不复制 SSH/rsync/Slurm 监控或实验逻辑 |
 | **Docker 容量窗口** | `src/environment/docker_env.py::DockerCapacityWindow` | 所有项目 Docker 入口共享的容量管理模块：提供跨进程容器槽位、启动前磁盘门控、串行镜像获取和串行缓存维护；所有 worker 在同一个 window lease 内完成容器生命周期。缺失的 PolyBench 镜像通过全局锁逐个 pull/build，等待者获得锁后再次检查本地镜像以避免重复下载；已有镜像的容器仍可并行运行。每次维护均清理无引用 dangling 镜像；带标签镜像淘汰只在所有 lease 空闲时运行，并保护所有容器引用的 ImageID且不强制删标签；BuildKit 缓存仅在磁盘压力下分级清理。pipeline、PCC、checker-only、evaluator 和 watchdog 不再实现独立清理策略 |
 
 ### 3.2 Agent 层
@@ -312,8 +317,11 @@ OpenCode 自身认证。
 | `src/analysis/rule_postprocess.py` | 修复格式不合格但语义可用的规则，生成 `per_case_postprocessed/` | 标准库 + `opencode` CLI |
 | `src/analysis/aggregation_agent.py` | 加载 per-case 规则、构造聚合 prompt、校验聚合 JSON | `litellm` 或 OpenCode 后端 |
 | `scripts/internal/run_analysis.sh` | `run_batch.sh --analysis-only` 使用的规则提取实现 | shell |
-| `scripts/run_batch.sh` | 唯一手动实验入口：PCT/PCC、analysis、checker comparison/recovery | shell |
-| `scripts/long_run_watchdog.py` | 长时监控 batch / analysis / review / checker tmux 任务；支持 `PCT_CONFIG` 选择主流程配置，并用 `caffeinate` 包装被监控的长跑命令（macOS） | shell + Python |
+| `scripts/run_batch.sh` | 实际实验入口：PCT/PCC、analysis、checker comparison/recovery、GEPA | shell |
+| `scripts/hpc_smoke_check.sh` | HPC 可用性 smoke：通过 `ulhpc-submit` 检查提交链路、远端 conda/import、Docker daemon 和 `src.environment.docker_env maintain` | shell |
+| `configs/ulhpc_submit.example.yaml` | `../../hpc_submit` 的项目级配置模板；复制为 gitignored `configs/ulhpc_submit.yaml` 后供 smoke 和后续 batch wrapper 自动使用 | YAML |
+| `scripts/hpc_submit_batch.sh`（计划新增） | 本地 HPC 提交入口：调用 `ulhpc-submit` 同步项目并提交 Slurm 作业，远端再调用 `run_batch.sh` 或对应内部入口 | shell |
+| `scripts/long_run_watchdog.py` | 本地长时监控 batch / analysis / review / checker tmux 任务；支持 `PCT_CONFIG` 选择主流程配置，并用 `caffeinate` 包装被监控的长跑命令（macOS）。HPC 路径默认不使用 watchdog | shell + Python |
 
 ---
 
@@ -333,3 +341,4 @@ OpenCode 自身认证。
 | FR-11 Feedback 字符串组装 | `src/pipeline.py:_build_feedback_text`（主机端组装为纯文本，注入 reflect_agent 的 system prompt） |
 | FR-12 错误处理 | `src/pipeline.py` 中的 try/except 层级 |
 | FR-13 规则提取、后处理、聚合 | `src/analysis/contrastive_agent.py` + `src/analysis/opencode_agent.py` + `src/analysis/rule_postprocess.py` + `src/analysis/aggregation_agent.py` + `src/analysis/cli.py` |
+| FR-17 HPC submit 运行入口 | `scripts/hpc_submit_batch.sh`（计划新增） + `docs/hpc-submit.md`；远端实际执行仍复用 `scripts/run_batch.sh` |

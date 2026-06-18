@@ -179,7 +179,9 @@
   3. 检查脚本间参数、日志、Docker 管理和 batch 调度是否一致；
   4. 在用户明确下令前，只了解情况并等待，不自行整理或修改。
 - **当前结构**：
-  - **正式实验入口**：`scripts/run_batch.sh`、`scripts/long_run_watchdog.py`
+  - **正式实验入口**：`scripts/run_batch.sh`
+  - **HPC 验证入口**：`scripts/hpc_smoke_check.sh`
+  - **本地长时入口**：`scripts/long_run_watchdog.py`（HPC 路径默认不使用）
   - **内部实现**：`scripts/internal/`
   - **报告/数据工具**：`scripts/tools/`
   - **历史入口**：`scripts/archive/legacy_entrypoints/`
@@ -205,24 +207,35 @@
 
 ---
 
-## 7. 跨平台兼容性审查（macOS → Linux）
+## 7. HPC submit 运行路径（替代 Linux 服务器迁移）
 
-> **状态**：待处理
-> **背景**：项目即将从 macOS 迁移到 Linux 服务器，需识别并修复平台相关假设，确保 batch、checker、analysis、watchdog 等核心流程在 Linux 上可直接运行。
+> **状态**：新需求，待实现
+> **背景**：不再优先把项目整体迁移到一台长期运行的 Linux 服务器。新的运行形态是
+> 在本地仓库通过相邻项目 `../../hpc_submit` 的 `ulhpc-submit` 提交 HPC 作业；HPC 计算节点仍是 Linux，
+> 但由调度器管理作业生命周期，默认不使用 macOS 防休眠、tmux watchdog 或服务器
+> 常驻运行方案。设计文档见 `docs/hpc-submit.md`。
 
-### 7.1 已确认问题
+### 7.1 从旧 Linux 迁移记录中保留的问题
 
 | 问题 | 位置 | 影响 | 建议处理 |
 |------|------|------|----------|
-| **硬编码 macOS conda 路径** | `scripts/run_batch.sh:106`：`CONDA_BASE="/Users/taoran.wang/miniconda3"` | Linux 上不存在该路径，batch 启动即失败 | 改为通过 `conda info --base` 或环境变量 `CONDA_BASE` 推导；默认回退到 `$HOME/miniconda3` |
-| **硬编码 macOS conda 路径（watchdog）** | `scripts/long_run_watchdog.py:335,388,430,485,562,780` 多处 `source /Users/taoran.wang/miniconda3/etc/profile.d/conda.sh` | watchdog 在 Linux 上无法激活环境，所有 tmux 子任务启动失败 | 提取为配置或环境变量；优先使用 `conda run -n mini-swe` 替代 `source + conda activate` |
-| **macOS 专属 `caffeinate`** | `scripts/internal/run_batch_workers.py`、`scripts/long_run_watchdog.py` | Linux 无 `caffeinate`，当前实现会降级为无睡眠预防 | Linux 下增加 `systemd-inhibit` |
-| **Docker Desktop 专属错误模式** | `src/environment/docker_env.py`、`scripts/internal/run_batch_workers.py` | Linux Docker Engine 错误信息不同 | 补充 Linux 引擎常见错误模式 |
-| **文档中的 macOS/zsh 导向** | `CLAUDE.md` 提及 `source ~/.zshrc`、`macOS system Python` | 新 Linux 环境可能使用 bash，成员 onboarding 时容易按错误说明操作 | 在 `README.md`/`CLAUDE.md` 增加 Linux 激活说明；保留 macOS 作为可选分支 |
-| **PolyBench 实例 ID 小写转换** | `src/environment/polybench_image.py:87-88`：`instance_id.lower()`、`language.lower()` | 在 macOS 默认不区分大小写文件系统下无感；Linux 区分大小写后，若实例目录或镜像 tag 依赖原始大小写会不一致 | 检查依赖路径处是否统一使用小写；在关键位置加断言或规范化 |
-| **analysis 内部脚本使用 `python3`** | `scripts/internal/run_analysis.sh` | Linux 上可能不指向 conda Python | 统一使用激活环境中的 `python` |
+| **硬编码 macOS conda 路径** | `scripts/run_batch.sh:130`：`CONDA_BASE="/Users/taoran.wang/miniconda3"` | HPC Linux 上不存在该路径；若远端直接跑 `run_batch.sh` 会启动失败 | P0：改为 `CONDA_BASE` 环境变量 / `conda info --base` / `conda run -n mini-swe` |
+| **watchdog 中硬编码 macOS conda 路径** | `scripts/long_run_watchdog.py` 多处 `source /Users/.../conda.sh` | HPC 默认不跑 watchdog；仅影响本地/服务器长跑路径 | 降级为非 HPC 阻塞项；后续若保留 watchdog 再修 |
+| **macOS 专属 `caffeinate`** | `scripts/internal/run_batch_workers.py`、`scripts/long_run_watchdog.py` | HPC 作业不需要防休眠；worker 中有则使用、无则跳过 | 不作为 HPC P0；文档明确 HPC 不使用 caffeinate |
+| **Docker Desktop 专属错误模式** | `src/environment/docker_env.py`、`scripts/internal/run_batch_workers.py` | HPC 使用 Linux Docker Engine，错误信息可能不同 | 补充 Linux Docker Engine/rootless 常见错误模式 |
+| **PolyBench 实例 ID 小写转换** | `src/environment/polybench_image.py:87-88`：`instance_id.lower()`、`language.lower()` | HPC Linux 文件系统大小写敏感，路径/镜像 tag 不一致会暴露 | 在 smoke job 中验证；必要时加断言或统一规范化 |
+| **analysis 内部脚本使用 `python3`** | `scripts/internal/run_analysis.sh` | HPC 上可能不指向 conda Python | 统一由 `mini-swe` 环境内的 `python` 执行 |
 
-### 7.2 已确认可移植（无需修改，但需留意）
+### 7.2 不再作为 HPC 需求处理的旧项
+
+| 项目 | 新结论 |
+|------|--------|
+| **服务器防休眠 / `systemd-inhibit`** | HPC 调度器管理作业，不需要为计算节点防休眠。只有本地 macOS 长跑 watchdog 才需要 `caffeinate` |
+| **tmux 常驻运行** | HPC job 日志和调度器状态替代 tmux；默认不在远端 job 内启动 tmux |
+| **Claude Code repair agent 自动修复** | HPC 第一阶段不做远端自动修复；未知代码错误让 job 失败，本地修复后重新提交 |
+| **Linux 服务器 onboarding 文档** | 降级为历史记录；新的正式文档是 `docs/hpc-submit.md` |
+
+### 7.3 已确认可移植（仍需留意）
 
 | 项目 | 结论 | 说明 |
 |------|------|------|
@@ -231,18 +244,26 @@
 | **路径处理** | 基本可移植 | `pathlib.Path` 已广泛使用；未发现硬编码 `\\` 或 `C:\\` 等 Windows 路径假设 |
 | **Docker CLI 调用** | 可移植 | 所有脚本均通过 `docker` 命令调用，未绑定 Docker Desktop GUI 或 macOS 特定 socket |
 
-### 7.3 待补充检查
+### 7.4 HPC 待补充检查
 
-- [ ] `scripts/run_batch.sh` 中 `read -r BATCH_ID ... < <(python -c ...)` 的进程替换在 Linux bash 中正常，但需确认目标 shell 为 bash ≥ 4。
-- [ ] `long_run_watchdog.py` 调用 `claude -p` 进行自动修复，Linux 上需预装 Claude Code CLI 并登录。
-- [ ] Linux 下是否有 `caffeinate` 的等效包或是否需要通过 `logind.conf`/`systemd` 禁用睡眠。
-- [ ] 目标 Linux 是否使用 Docker Engine + rootless？rootless Docker 的 socket 路径与权限与 macOS Docker Desktop 不同。
-- [ ] 文件系统：Linux 默认区分大小写，需回归测试 `output/` 目录下大小写混合的实例目录。
+- [x] 找到并读取真实 `../../hpc_submit` 项目；确认安装后的 CLI 是 `ulhpc-submit`，支持 `--dry-run`、`--local-dir`、`--remote-dir`、资源参数、rsync、Slurm 提交、监控和日志回传。
+- [x] 新增 `scripts/hpc_smoke_check.sh`，默认 dry-run 会检查 ULHPC SSH 连通性但不提交 Slurm；`--submit` 才提交 Slurm；远端检查 conda/import、Docker CLI/daemon、项目 Docker 维护入口和可选 API key。
+- [x] 新增 `configs/ulhpc_submit.example.yaml`；本地私有 `configs/ulhpc_submit.yaml` 自动被 smoke 脚本使用并已加入 `.gitignore`。
+- [x] 确认 hpc_submit dry-run 行为：`ulhpc-submit --dry-run --no-sync` 会打开 SSH 并展开远端路径。对本项目 smoke 来说这是合理的连通性检查；如未来需要纯本地脚本生成，再另行扩展 hpc_submit。
+- [ ] 2026-06-18 smoke dry-run 结果：已创建本地私有 `configs/ulhpc_submit.yaml`（gitignored），使用 `user=taoran.wang` 和 `ssh_key=~/.ssh/id_rsa`。非沙箱网络下 `access-iris.uni.lu` 解析到 `172.16.3.3`，但无法连接 8022：`Unable to connect to port 8022 on 172.16.3.3`。下一步需要确认 ULHPC VPN/校园网络/访问节点端口可达后重跑。
+- [ ] 确认 HPC 节点是否允许 Docker Engine / rootless Docker / Singularity 等容器运行方式。
+- [ ] 确认 HPC 节点能访问 Docker Hub、GHCR、HuggingFace 和 LLM API；若不能，设计镜像和数据预热步骤。
+- [ ] 确认 `mini-swe` conda 环境在 HPC 侧可用，`minisweagent.__version__ == 1.17.5`。
+- [ ] 确认 `scripts/run_batch.sh` 中 `read -r BATCH_ID ... < <(python -c ...)` 的进程替换在 HPC bash 中正常。
+- [ ] 确认输出策略：远端保留、自动同步回本地，或按 job ID 手动拉取。
+- [ ] 文件系统：HPC Linux 默认区分大小写，需用 1-2 个 PolyBench 实例 smoke test。
 
-### 7.4 迁移优先级建议
+### 7.5 实施优先级建议
 
-1. **P0**：统一 conda 环境激活方式，移除所有 hardcoded `/Users/taoran.wang/miniconda3`。
-2. **P1**：为 Linux 增加 `caffeinate` 替代方案，或在文档中说明手动禁用睡眠。
-3. **P1**：扩展 `is_docker_storage_error()` 正则，覆盖 Linux Docker Engine 典型错误。
-4. **P2**：更新 `CLAUDE.md`/`README.md`，增加 Linux 环境初始化说明。
-5. **P2**：统一 `python` / `python3` 调用，优先在 conda env 内执行。
+1. **P0**：用真实 ULHPC 配置运行 `scripts/hpc_smoke_check.sh`，验证 SSH 连通性。
+2. **P0**：用真实 ULHPC 配置运行 `scripts/hpc_smoke_check.sh --submit`。
+3. **P0**：统一远端 conda 调用方式，避免 hardcoded `/Users/taoran.wang/miniconda3`。
+4. **P0**：基于 smoke 结果设计 `scripts/hpc_submit_batch.sh --dry-run`。
+5. **P1**：扩展 Linux Docker Engine/rootless 常见错误识别。
+6. **P1**：按 wall time 把 PolyBench / checker / GEPA 拆成多个可恢复 job。
+7. **P2**：清理或降级旧 Linux 服务器迁移文档中的 watchdog/tmux/防休眠内容。

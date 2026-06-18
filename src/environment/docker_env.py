@@ -993,6 +993,25 @@ def _ensure_remote_project_image_local(
     return image
 
 
+def ensure_project_image_local(
+    image: str,
+    timeout: int | None = None,
+    *,
+    capacity_window: DockerCapacityWindow | None = None,
+) -> str:
+    """Ensure remote project images are local via the shared image manager.
+
+    This is the public entry point for code paths that call official
+    evaluators directly instead of launching containers through
+    :class:`DockerEnvWrapper`.
+    """
+    return _ensure_remote_project_image_local(
+        image,
+        timeout=timeout,
+        capacity_window=capacity_window,
+    )
+
+
 def _docker_image_exists(image: str) -> bool:
     """Return True if Docker already has ``image`` locally."""
     result = subprocess.run(

@@ -1,5 +1,10 @@
 # PolyBench Remaining-133 Recovery Plan
 
+> Historical local recovery note. It predates the HPC submit direction and
+> describes direct `run_batch.sh`/local Docker recovery. For new HPC runs, first
+> validate `ulhpc-submit` with `scripts/hpc_smoke_check.sh`, then design the
+> batch wrapper described in `docs/hpc-submit.md`.
+
 ## Goal
 
 Recover infrastructure-caused failures while preserving official
@@ -88,8 +93,9 @@ It uses:
 - batch id: `polybench-retry-images-buster4`
 - output: `output/SWE-PolyBench/polybench-retry-images-buster4/`
 
-The wrapper delegates to `scripts/run_batch.sh`, which applies `caffeinate`
-per instance on macOS.
+The local wrapper delegates to `scripts/run_batch.sh`, which may apply
+`caffeinate` per instance on macOS. This is historical local-run behavior and
+is not part of the HPC submit path.
 
 ## Historical Execution
 

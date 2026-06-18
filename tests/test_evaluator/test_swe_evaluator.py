@@ -21,11 +21,17 @@ def instance_info():
 
 
 class TestEvaluateSuccess:
+    @patch("src.environment.docker_env.ensure_project_image_local")
     @patch("swebench.harness.run_evaluation.run_instance")
     @patch("swebench.harness.test_spec.test_spec.make_test_spec")
     @patch("docker.from_env")
     def test_returns_structured_result(
-        self, mock_docker, mock_make_spec, mock_run_instance, instance_info
+        self,
+        mock_docker,
+        mock_make_spec,
+        mock_run_instance,
+        mock_ensure_image,
+        instance_info,
     ):
         mock_run_instance.return_value = {"completed": True, "resolved": True}
 
@@ -37,6 +43,38 @@ class TestEvaluateSuccess:
         assert "log_dir" in result
         assert result["resolved"] is True
         assert "logs/run_evaluation" in result["log_dir"]
+        mock_ensure_image.assert_called_once_with(
+            "swebench/astropy-astropy:latest",
+            timeout=300,
+        )
+
+    @patch("src.environment.docker_env.ensure_project_image_local")
+    @patch("swebench.harness.run_evaluation.run_instance")
+    @patch("swebench.harness.test_spec.test_spec.make_test_spec")
+    @patch("docker.from_env")
+    def test_prepares_image_before_official_run_instance(
+        self, mock_docker, mock_make_spec, mock_run_instance, mock_ensure_image
+    ):
+        events = []
+        info = {"instance_id": "pandas-dev__pandas-1234"}
+
+        def ensure_image(*args, **kwargs):
+            events.append("ensure")
+
+        def run_instance(*args, **kwargs):
+            events.append("run_instance")
+            return {"completed": True, "resolved": True}
+
+        mock_ensure_image.side_effect = ensure_image
+        mock_run_instance.side_effect = run_instance
+
+        swe_evaluator.evaluate("diff content", info, timeout=1800)
+
+        assert events == ["ensure", "run_instance"]
+        mock_ensure_image.assert_called_once_with(
+            "swebench/sweb.eval.x86_64.pandas-dev_1776_pandas-1234:latest",
+            timeout=1800,
+        )
 
     @patch("swebench.harness.run_evaluation.run_instance")
     @patch("swebench.harness.test_spec.test_spec.make_test_spec")

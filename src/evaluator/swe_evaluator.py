@@ -146,9 +146,16 @@ def evaluate(
 
     client = None
     try:
-        from src.environment.docker_env import create_docker_client
+        from src.environment.docker_env import (
+            create_docker_client,
+            ensure_project_image_local,
+        )
 
         client = create_docker_client()
+        ensure_project_image_local(
+            derive_image_name(instance_info),
+            timeout=timeout,
+        )
         test_spec = make_test_spec(instance_info, namespace="swebench")
 
         result = run_instance(
