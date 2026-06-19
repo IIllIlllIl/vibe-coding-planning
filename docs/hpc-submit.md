@@ -94,7 +94,12 @@ bash scripts/hpc_smoke_check.sh \
 
 约定：`scripts/hpc_smoke_check.sh` 的默认 dry-run 会保留 `ulhpc-submit` 的 SSH
 连通性检查，但加上 `--no-sync`，避免实际同步代码或提交 Slurm job。需要同时检查
-rsync dry-run 时，显式加 `--sync-dry-run`。
+rsync dry-run 时，显式加 `--sync-dry-run`。脚本会先用 `nc` 做
+`host:port` TCP 预检，再用系统 `ssh` 做一次
+`BatchMode=yes` / `NumberOfPasswordPrompts=0` 的公钥认证预检。任一预检失败都会在
+调用 `ulhpc-submit` 之前退出，避免进入 `hpc_submit` 当前 Paramiko 5 次重试循环。
+如需直接交给 `ulhpc-submit` 尝试，可加 `--skip-port-check` 或
+`--skip-ssh-check`。
 
 本项目建议新增正式 batch 包装脚本：
 

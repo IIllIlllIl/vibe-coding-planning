@@ -44,7 +44,7 @@ output/checker_eval/<run_id>/
 
 | Path | Current contents |
 |------|------------------|
-| `SWE-bench_Verified/` | Verified PCT outputs. Main analysis data remains at top level; earlier/test runs are under `test_runs_archive/` |
+| `SWE-bench_Verified/` | Verified PCT outputs, checker/GEPA datasets, and GEPA rule optimization runs. PCT smoke/test runs are under `test_runs_archive/`; GEPA pilot and formal runs are tracked separately under `gepa-rules/` |
 | `SWE-PolyBench/` | PolyBench PCT runs and retry/sample manifests |
 | `SWE-bench_Pro/` | SWE-bench Pro prompt/checker experiment outputs |
 | `analysis_flash/` | Flash rule extraction/review/aggregation outputs |
@@ -197,6 +197,31 @@ the value must not be lower than `--parallel`.
 | `SWE-bench_Verified/test_runs_archive/early_test/` | 2 | 2 | |
 | `SWE-bench_Verified/test_runs_archive/run1/` | 50 | 49 | `sampled_instances.json`, `run_summary.json` |
 | `SWE-bench_Verified/test_runs_archive/run2/` | 120 | 111 | `sampled_instances.json`, `run_summary.json` |
+
+### Verified GEPA Rule Optimization Runs
+
+GEPA rule optimization outputs are under:
+
+```text
+output/SWE-bench_Verified/gepa-rules/
+```
+
+These directories are not currently moved into `test_runs_archive/`; the run
+name and each run's `run_manifest.json` are the source of truth for whether a
+run is intended for later analysis.
+
+| Path | Classification | Notes |
+|------|----------------|-------|
+| `SWE-bench_Verified/gepa-rules/formal-pilot-gpt-seed-mc116-retry1/` | Formal analysis pilot | Current run intended for follow-up analysis. Uses the filtered Verified GEPA snapshot, GPT-generated seed rules, `parallel: 2`, and a resumable run manifest. Budget was first prepared at 116 metric calls and later resumed with a higher `latest_max_metric_calls`. |
+| `SWE-bench_Verified/gepa-rules/formal-pilot-gpt-seed-mc116/` | Superseded formal attempt | Earlier formal-pilot attempt retained for auditability; do not use as the primary analysis run unless explicitly selected. |
+| `SWE-bench_Verified/gepa-rules/pilot-empty-seed/` | Test pilot | Empty-seed pilot used to validate GEPA wiring and audit outputs. |
+| `SWE-bench_Verified/gepa-rules/reflection-smoke-empty-seed/` | Smoke test | Small reflection smoke run used to validate Reflection proposal behavior. |
+| `SWE-bench_Verified/gepa-rules/pilot-extended-empty-seed/` | Test pilot | Longer empty-seed pilot used to validate candidate proposal/acceptance paths before the formal GPT-seed run. |
+
+For formal analysis, prefer runs that include `run_manifest.json`,
+`gepa_resume_state.json`, `candidates.json`, `run_log.json`, and
+`final_report.json`. The manifest records the dataset fingerprint, initial
+rules hash, semantic resume hash, initial budget, and latest resumed budget.
 
 ## Analysis Run Directories
 

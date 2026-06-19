@@ -1,0 +1,2 @@
+{"timestamp": "2026-06-19T16:51:50", "category": "JOB", "state": "SUBMITTED", "detail": "job_id=5480226"}
+{"timestamp": "2026-06-19T16:52:30", "category": "JOB", "state": "FAILED", "detail": "exit=1:0 rss= nodes=iris-167"}

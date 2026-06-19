@@ -1,0 +1,165 @@
+[2026-06-19T16:49:48] INFO Starting run; local log: /Users/taoran.wang/Documents/projects/vibe-trust/vibe-coding-planning/.tmp_hpc_smoke/ulhpc-runs/vibe-coding-planning_20260619_164948/run.log
+[2026-06-19T16:49:48] INFO Connected to twang@access-iris.uni.lu:8022
+[2026-06-19T16:49:48] INFO Syncing /Users/taoran.wang/Documents/projects/vibe-trust/vibe-coding-planning -> /home/users/twang/hpc_runs/vibe-coding-planning
+[2026-06-19T16:49:49] INFO Code sync complete
+[2026-06-19T16:49:49] INFO Detected dependencies: requirements.txt=True, environment.yml=False
+[2026-06-19T16:49:49] INFO Generated Slurm script: /Users/taoran.wang/Documents/projects/vibe-trust/vibe-coding-planning/.ulhpc_submit/generated_job.sh
+[2026-06-19T16:49:49] INFO Submitted job 5480224
+[2026-06-19T16:49:49] INFO [JOB] SUBMITTED job_id=5480224
+[2026-06-19T16:49:49] INFO Monitoring job state...
+[2026-06-19T16:50:30] INFO Job 5480224 finished with state FAILED
+[2026-06-19T16:50:30] INFO [JOB] FAILED exit=1:0 rss= nodes=iris-167
+[2026-06-19T16:50:30] INFO Fetching remote output...
+[2026-06-19T16:50:30] INFO === remote stdout ===
+  [ulhpc-submit] job started at Fri Jun 19 16:50:18 CEST 2026
+  [ulhpc-submit] running on host: iris-167
+  [ulhpc-submit] remote dir: /home/users/twang/hpc_runs/vibe-coding-planning
+  [ulhpc-submit] configuring environment on compute node
+  [ulhpc-submit] WARNING: conda not available; falling back to pip. Some packages may differ from the conda environment.
+  Collecting poly_bench_evaluation@ git+https://github.com/amazon-science/SWE-PolyBench.git@1eb0bdc8ef63e1e88172b96bc435b1cd9fc93ecc (from -r requirements.txt (line 7))
+    Using cached poly_bench_evaluation-0.1.0-py3-none-any.whl
+  Requirement already satisfied: mini-swe-agent==1.17.5 in /home/users/twang/.local/lib/python3.11/site-packages (from -r requirements.txt (line 2)) (1.17.5)
+  Requirement already satisfied: swebench>=4.1.0 in /home/users/twang/.local/lib/python3.11/site-packages (from -r requirements.txt (line 3)) (4.1.0)
+  Requirement already satisfied: pyyaml>=6.0.0 in /home/users/twang/.local/lib/python3.11/site-packages (from -r requirements.txt (line 4)) (6.0.3)
+  Requirement already satisfied: openai>=2.24.0 in /home/users/twang/.local/lib/python3.11/site-packages (from -r requirements.txt (line 17)) (2.43.0)
+  Requirement already satisfied: litellm>=1.83.0 in /home/users/twang/.local/lib/python3.11/site-packages (from -r requirements.txt (line 18)) (1.89.2)
+  Requirement already satisfied: pytest>=8.0.0 in /home/users/twang/.local/lib/python3.11/site-packages (from -r requirements.txt (line 21)) (9.1.1)
+  Requirement already satisfied: pytest-cov>=5.0.0 in /home/users/twang/.local/lib/python3.11/site-packages (from -r requirements.txt (line 22)) (7.1.0)
+  Requirement already satisfied: tqdm>=4.66.1 in /home/users/twang/.local/lib/python3.11/site-packages (from -r requirements.txt (line 32)) (4.68.3)
+  Requirement already satisfied: cloudpickle>=3.0.0 in /home/users/twang/.local/lib/python3.11/site-packages (from -r requirements.txt (line 33)) (3.1.2)
+  Requirement already satisfied: datasets>=2.14.6 in /home/users/twang/.local/lib/python3.11/site-packages (from -r requirements.txt (line 34)) (5.0.0)
+  Requirement already satisfied: pydantic>=2.12.0 in /home/users/twang/.local/lib/python3.11/site-packages (from -r requirements.txt (line 35)) (2.13.4)
+  Requirement already satisfied: requests in /home/users/twang/.local/lib/python3.11/site-packages (from mini-swe-agent==1.17.5->-r requirements.txt (line 2)) (2.34.2)
+  Requirement already satisfied: jinja2 in /home/users/twang/.local/lib/python3.11/site-packages (from mini-swe-agent==1.17.5->-r requirements.txt (line 2)) (3.1.6)
+  Requirement already satisfied: tenacity in /home/users/twang/.local/lib/python3.11/site-packages (from mini-swe-agent==1.17.5->-r requirements.txt (line 2)) (9.1.4)
+  Requirement already satisfied: rich in /home/users/twang/.local/lib/python3.11/site-packages (from mini-swe-agent==1.17.5->-r requirements.txt (line 2)) (15.0.0)
+  Requirement already satisfied: python-dotenv in /home/users/twang/.local/lib/python3.11/site-packages (from mini-swe-agent==1.17.5->-r requirements.txt (line 2)) (1.2.2)
+  Requirement already satisfied: typer in /home/users/twang/.local/lib/python3.11/site-packages (from mini-swe-agent==1.17.5->-r requirements.txt (line 2)) (0.25.1)
+  Requirement already satisfied: platformdirs in /home/users/twang/.local/lib/python3.11/site-packages (from mini-swe-agent==1.17.5->-r requirements.txt (line 2)) (4.10.0)
+  Requirement already satisfied: textual in /home/users/twang/.local/lib/python3.11/site-packages (from mini-swe-agent==1.17.5->-r requirements.txt (line 2)) (8.2.7)
+  Requirement already satisfied: prompt_toolkit in /home/users/twang/.local/lib/python3.11/site-packages (from mini-swe-agent==1.17.5->-r requirements.txt (line 2)) (3.0.52)
+  Requirement already satisfied: beautifulsoup4 in /home/users/twang/.local/lib/python3.11/site-packages (from swebench>=4.1.0->-r requirements.txt (line 3)) (4.15.0)
+  Requirement already satisfied: chardet in /home/users/twang/.local/lib/python3.11/site-packages (from swebench>=4.1.0->-r requirements.txt (line 3)) (7.4.3)
+  Requirement already satisfied: docker in /home/users/twang/.local/lib/python3.11/site-packages (from swebench>=4.1.0->-r requirements.txt (line 3)) (7.1.0)
+  Requirement already satisfied: ghapi in /home/users/twang/.local/lib/python3.11/site-packages (from swebench>=4.1.0->-r requirements.txt (line 3)) (1.0.13)
+  Requirement already satisfied: GitPython in /home/users/twang/.local/lib/python3.11/site-packages (from swebench>=4.1.0->-r requirements.txt (line 3)) (3.1.50)
+  Requirement already satisfied: modal in /home/users/twang/.local/lib/python3.11/site-packages (from swebench>=4.1.0->-r requirements.txt (line 3)) (1.5.0)
+  Requirement already satisfied: pre-commit in /home/users/twang/.local/lib/python3.11/site-packages (from swebench>=4.1.0->-r requirements.txt (line 3)) (4.6.0)
+  Requirement already satisfied: unidiff in /home/users/twang/.local/lib/python3.11/site-packages (from swebench>=4.1.0->-r requirements.txt (line 3)) (0.7.5)
+  Requirement already satisfied: pandas in /home/users/twang/.local/lib/python3.11/site-packages (from poly_bench_evaluation@ git+https://github.com/amazon-science/SWE-PolyBench.git@1eb0bdc8ef63e1e88172b96bc435b1cd9fc93ecc->-r requirements.txt (line 7)) (3.0.3)
+  Requirement already satisfied: loguru in /home/users/twang/.local/lib/python3.11/site-packages (from poly_bench_evaluation@ git+https://github.com/amazon-science/SWE-PolyBench.git@1eb0bdc8ef63e1e88172b96bc435b1cd9fc93ecc->-r requirements.txt (line 7)) (0.7.3)
+  Requirement already satisfied: boto3 in /home/users/twang/.local/lib/python3.11/site-packages (from poly_bench_evaluation@ git+https://github.com/amazon-science/SWE-PolyBench.git@1eb0bdc8ef63e1e88172b96bc435b1cd9fc93ecc->-r requirements.txt (line 7)) (1.43.33)
+  Requirement already satisfied: tree-sitter-languages==1.10.2 in /home/users/twang/.local/lib/python3.11/site-packages (from poly_bench_evaluation@ git+https://github.com/amazon-science/SWE-PolyBench.git@1eb0bdc8ef63e1e88172b96bc435b1cd9fc93ecc->-r requirements.txt (line 7)) (1.10.2)
+  Requirement already satisfied: tree-sitter==0.21.3 in /home/users/twang/.local/lib/python3.11/site-packages (from poly_bench_evaluation@ git+https://github.com/amazon-science/SWE-PolyBench.git@1eb0bdc8ef63e1e88172b96bc435b1cd9fc93ecc->-r requirements.txt (line 7)) (0.21.3)
+  Requirement already satisfied: scikit-learn==1.3.2 in /home/users/twang/.local/lib/python3.11/site-packages (from poly_bench_evaluation@ git+https://github.com/amazon-science/SWE-PolyBench.git@1eb0bdc8ef63e1e88172b96bc435b1cd9fc93ecc->-r requirements.txt (line 7)) (1.3.2)
+  Requirement already satisfied: whatthepatch in /home/users/twang/.local/lib/python3.11/site-packages (from poly_bench_evaluation@ git+https://github.com/amazon-science/SWE-PolyBench.git@1eb0bdc8ef63e1e88172b96bc435b1cd9fc93ecc->-r requirements.txt (line 7)) (1.0.7)
+  Requirement already satisfied: numpy<2.0,>=1.17.3 in /home/users/twang/.local/lib/python3.11/site-packages (from scikit-learn==1.3.2->poly_bench_evaluation@ git+https://github.com/amazon-science/SWE-PolyBench.git@1eb0bdc8ef63e1e88172b96bc435b1cd9fc93ecc->-r requirements.txt (line 7)) (1.26.4)
+  Requirement already satisfied: scipy>=1.5.0 in /home/users/twang/.local/lib/python3.11/site-packages (from scikit-learn==1.3.2->poly_bench_evaluation@ git+https://github.com/amazon-science/SWE-PolyBench.git@1eb0bdc8ef63e1e88172b96bc435b1cd9fc93ecc->-r requirements.txt (line 7)) (1.17.1)
+  Requirement already satisfied: joblib>=1.1.1 in /home/users/twang/.local/lib/python3.11/site-packages (from scikit-learn==1.3.2->poly_bench_evaluation@ git+https://github.com/amazon-science/SWE-PolyBench.git@1eb0bdc8ef63e1e88172b96bc435b1cd9fc93ecc->-r requirements.txt (line 7)) (1.5.3)
+  Requirement already satisfied: threadpoolctl>=2.0.0 in /home/users/twang/.local/lib/python3.11/site-packages (from scikit-learn==1.3.2->poly_bench_evaluation@ git+https://github.com/amazon-science/SWE-PolyBench.git@1eb0bdc8ef63e1e88172b96bc435b1cd9fc93ecc->-r requirements.txt (line 7)) (3.6.0)
+  Requirement already satisfied: anyio<5,>=3.5.0 in /home/users/twang/.local/lib/python3.11/site-packages (from openai>=2.24.0->-r requirements.txt (line 17)) (4.14.0)
+  Requirement already satisfied: distro<2,>=1.7.0 in /home/users/twang/.local/lib/python3.11/site-packages (from openai>=2.24.0->-r requirements.txt (line 17)) (1.9.0)
+  Requirement already satisfied: httpx<1,>=0.23.0 in /home/users/twang/.local/lib/python3.11/site-packages (from openai>=2.24.0->-r requirements.txt (line 17)) (0.28.1)
+  Requirement already satisfied: jiter<1,>=0.10.0 in /home/users/twang/.local/lib/python3.11/site-packages (from openai>=2.24.0->-r requirements.txt (line 17)) (0.15.0)
+  Requirement already satisfied: sniffio in /home/users/twang/.local/lib/python3.11/site-packages (from openai>=2.24.0->-r requirements.txt (line 17)) (1.3.1)
+  Requirement already satisfied: typing-extensions<5,>=4.11 in /home/users/twang/.local/lib/python3.11/site-packages (from openai>=2.24.0->-r requirements.txt (line 17)) (4.15.0)
+  Requirement already satisfied: fastuuid<1.0,>=0.14.0 in /home/users/twang/.local/lib/python3.11/site-packages (from litellm>=1.83.0->-r requirements.txt (line 18)) (0.14.0)
+  Requirement already satisfied: tiktoken<1.0,>=0.8.0 in /home/users/twang/.local/lib/python3.11/site-packages (from litellm>=1.83.0->-r requirements.txt (line 18)) (0.13.0)
+  Requirement already satisfied: importlib-metadata<9.0,>=8.0.0 in /home/users/twang/.local/lib/python3.11/site-packages (from litellm>=1.83.0->-r requirements.txt (line 18)) (8.9.0)
+  Requirement already satisfied: tokenizers<1.0,>=0.21.0 in /home/users/twang/.local/lib/python3.11/site-packages (from litellm>=1.83.0->-r requirements.txt (line 18)) (0.23.1)
+  Requirement already satisfied: click<9.0,>=8.0.0 in /home/users/twang/.local/lib/python3.11/site-packages (from litellm>=1.83.0->-r requirements.txt (line 18)) (8.4.1)
+  Requirement already satisfied: aiohttp<4.0,>=3.10 in /home/users/twang/.local/lib/python3.11/site-packages (from litellm>=1.83.0->-r requirements.txt (line 18)) (3.14.1)
+  Requirement already satisfied: jsonschema<5.0,>=4.0.0 in /home/users/twang/.local/lib/python3.11/site-packages (from litellm>=1.83.0->-r requirements.txt (line 18)) (4.26.0)
+  Requirement already satisfied: iniconfig>=1.0.1 in /home/users/twang/.local/lib/python3.11/site-packages (from pytest>=8.0.0->-r requirements.txt (line 21)) (2.3.0)
+  Requirement already satisfied: packaging>=22 in /opt/apps/easybuild/systems/iris/rhel810-20250803/2023b/broadwell/software/Python/3.11.5-GCCcore-13.2.0/lib/python3.11/site-packages (from pytest>=8.0.0->-r requirements.txt (line 21)) (23.2)
+  Requirement already satisfied: pluggy<2,>=1.5 in /home/users/twang/.local/lib/python3.11/site-packages (from pytest>=8.0.0->-r requirements.txt (line 21)) (1.6.0)
+  Requirement already satisfied: pygments>=2.7.2 in /home/users/twang/.local/lib/python3.11/site-packages (from pytest>=8.0.0->-r requirements.txt (line 21)) (2.20.0)
+  Requirement already satisfied: coverage[toml]>=7.10.6 in /home/users/twang/.local/lib/python3.11/site-packages (from pytest-cov>=5.0.0->-r requirements.txt (line 22)) (7.14.1)
+  Requirement already satisfied: filelock in /home/users/twang/.local/lib/python3.11/site-packages (from datasets>=2.14.6->-r requirements.txt (line 34)) (3.29.4)
+  Requirement already satisfied: pyarrow>=21.0.0 in /home/users/twang/.local/lib/python3.11/site-packages (from datasets>=2.14.6->-r requirements.txt (line 34)) (24.0.0)
+  Requirement already satisfied: dill<0.4.2,>=0.3.0 in /home/users/twang/.local/lib/python3.11/site-packages (from datasets>=2.14.6->-r requirements.txt (line 34)) (0.4.1)
+  Requirement already satisfied: xxhash in /home/users/twang/.local/lib/python3.11/site-packages (from datasets>=2.14.6->-r requirements.txt (line 34)) (3.7.0)
+  Requirement already satisfied: multiprocess<0.70.20 in /home/users/twang/.local/lib/python3.11/site-packages (from datasets>=2.14.6->-r requirements.txt (line 34)) (0.70.19)
+  Requirement already satisfied: fsspec[http]<=2026.4.0,>=2023.1.0 in /home/users/twang/.local/lib/python3.11/site-packages (from datasets>=2.14.6->-r requirements.txt (line 34)) (2026.4.0)
+  Requirement already satisfied: huggingface-hub<2.0,>=0.25.0 in /home/users/twang/.local/lib/python3.11/site-packages (from datasets>=2.14.6->-r requirements.txt (line 34)) (1.20.1)
+  Requirement already satisfied: annotated-types>=0.6.0 in /home/users/twang/.local/lib/python3.11/site-packages (from pydantic>=2.12.0->-r requirements.txt (line 35)) (0.7.0)
+  Requirement already satisfied: pydantic-core==2.46.4 in /home/users/twang/.local/lib/python3.11/site-packages (from pydantic>=2.12.0->-r requirements.txt (line 35)) (2.46.4)
+  Requirement already satisfied: typing-inspection>=0.4.2 in /home/users/twang/.local/lib/python3.11/site-packages (from pydantic>=2.12.0->-r requirements.txt (line 35)) (0.4.2)
+  Requirement already satisfied: aiohappyeyeballs>=2.5.0 in /home/users/twang/.local/lib/python3.11/site-packages (from aiohttp<4.0,>=3.10->litellm>=1.83.0->-r requirements.txt (line 18)) (2.6.2)
+  Requirement already satisfied: aiosignal>=1.4.0 in /home/users/twang/.local/lib/python3.11/site-packages (from aiohttp<4.0,>=3.10->litellm>=1.83.0->-r requirements.txt (line 18)) (1.4.0)
+  Requirement already satisfied: attrs>=17.3.0 in /home/users/twang/.local/lib/python3.11/site-packages (from aiohttp<4.0,>=3.10->litellm>=1.83.0->-r requirements.txt (line 18)) (26.1.0)
+  Requirement already satisfied: frozenlist>=1.1.1 in /home/users/twang/.local/lib/python3.11/site-packages (from aiohttp<4.0,>=3.10->litellm>=1.83.0->-r requirements.txt (line 18)) (1.8.0)
+  Requirement already satisfied: multidict<7.0,>=4.5 in /home/users/twang/.local/lib/python3.11/site-packages (from aiohttp<4.0,>=3.10->litellm>=1.83.0->-r requirements.txt (line 18)) (6.7.1)
+  Requirement already satisfied: propcache>=0.2.0 in /home/users/twang/.local/lib/python3.11/site-packages (from aiohttp<4.0,>=3.10->litellm>=1.83.0->-r requirements.txt (line 18)) (0.5.2)
+  Requirement already satisfied: yarl<2.0,>=1.17.0 in /home/users/twang/.local/lib/python3.11/site-packages (from aiohttp<4.0,>=3.10->litellm>=1.83.0->-r requirements.txt (line 18)) (1.24.2)
+  Requirement already satisfied: idna>=2.8 in /home/users/twang/.local/lib/python3.11/site-packages (from anyio<5,>=3.5.0->openai>=2.24.0->-r requirements.txt (line 17)) (3.18)
+  Requirement already satisfied: certifi in /home/users/twang/.local/lib/python3.11/site-packages (from httpx<1,>=0.23.0->openai>=2.24.0->-r requirements.txt (line 17)) (2026.6.17)
+  Requirement already satisfied: httpcore==1.* in /home/users/twang/.local/lib/python3.11/site-packages (from httpx<1,>=0.23.0->openai>=2.24.0->-r requirements.txt (line 17)) (1.0.9)
+  Requirement already satisfied: h11>=0.16 in /home/users/twang/.local/lib/python3.11/site-packages (from httpcore==1.*->httpx<1,>=0.23.0->openai>=2.24.0->-r requirements.txt (line 17)) (0.16.0)
+  Requirement already satisfied: hf-xet<2.0.0,>=1.5.1 in /home/users/twang/.local/lib/python3.11/site-packages (from huggingface-hub<2.0,>=0.25.0->datasets>=2.14.6->-r requirements.txt (line 34)) (1.5.1)
+  Requirement already satisfied: zipp>=3.20 in /home/users/twang/.local/lib/python3.11/site-packages (from importlib-metadata<9.0,>=8.0.0->litellm>=1.83.0->-r requirements.txt (line 18)) (4.1.0)
+  Requirement already satisfied: MarkupSafe>=2.0 in /home/users/twang/.local/lib/python3.11/site-packages (from jinja2->mini-swe-agent==1.17.5->-r requirements.txt (line 2)) (3.0.3)
+  Requirement already satisfied: jsonschema-specifications>=2023.03.6 in /home/users/twang/.local/lib/python3.11/site-packages (from jsonschema<5.0,>=4.0.0->litellm>=1.83.0->-r requirements.txt (line 18)) (2025.9.1)
+  Requirement already satisfied: referencing>=0.28.4 in /home/users/twang/.local/lib/python3.11/site-packages (from jsonschema<5.0,>=4.0.0->litellm>=1.83.0->-r requirements.txt (line 18)) (0.37.0)
+  Requirement already satisfied: rpds-py>=0.25.0 in /home/users/twang/.local/lib/python3.11/site-packages (from jsonschema<5.0,>=4.0.0->litellm>=1.83.0->-r requirements.txt (line 18)) (2026.5.1)
+  Requirement already satisfied: charset_normalizer<4,>=2 in /home/users/twang/.local/lib/python3.11/site-packages (from requests->mini-swe-agent==1.17.5->-r requirements.txt (line 2)) (3.4.7)
+  Requirement already satisfied: urllib3<3,>=1.26 in /home/users/twang/.local/lib/python3.11/site-packages (from requests->mini-swe-agent==1.17.5->-r requirements.txt (line 2)) (2.7.0)
+  Requirement already satisfied: regex in /home/users/twang/.local/lib/python3.11/site-packages (from tiktoken<1.0,>=0.8.0->litellm>=1.83.0->-r requirements.txt (line 18)) (2026.5.9)
+  Requirement already satisfied: shellingham>=1.3.0 in /home/users/twang/.local/lib/python3.11/site-packages (from typer->mini-swe-agent==1.17.5->-r requirements.txt (line 2)) (1.5.4)
+  Requirement already satisfied: annotated-doc>=0.0.2 in /home/users/twang/.local/lib/python3.11/site-packages (from typer->mini-swe-agent==1.17.5->-r requirements.txt (line 2)) (0.0.4)
+  Requirement already satisfied: markdown-it-py>=2.2.0 in /home/users/twang/.local/lib/python3.11/site-packages (from rich->mini-swe-agent==1.17.5->-r requirements.txt (line 2)) (4.2.0)
+  Requirement already satisfied: soupsieve>=1.6.1 in /home/users/twang/.local/lib/python3.11/site-packages (from beautifulsoup4->swebench>=4.1.0->-r requirements.txt (line 3)) (2.8.4)
+  Requirement already satisfied: botocore<1.44.0,>=1.43.33 in /home/users/twang/.local/lib/python3.11/site-packages (from boto3->poly_bench_evaluation@ git+https://github.com/amazon-science/SWE-PolyBench.git@1eb0bdc8ef63e1e88172b96bc435b1cd9fc93ecc->-r requirements.txt (line 7)) (1.43.33)
+  Requirement already satisfied: jmespath<2.0.0,>=0.7.1 in /home/users/twang/.local/lib/python3.11/site-packages (from boto3->poly_bench_evaluation@ git+https://github.com/amazon-science/SWE-PolyBench.git@1eb0bdc8ef63e1e88172b96bc435b1cd9fc93ecc->-r requirements.txt (line 7)) (1.1.0)
+  Requirement already satisfied: s3transfer<0.20.0,>=0.19.0 in /home/users/twang/.local/lib/python3.11/site-packages (from boto3->poly_bench_evaluation@ git+https://github.com/amazon-science/SWE-PolyBench.git@1eb0bdc8ef63e1e88172b96bc435b1cd9fc93ecc->-r requirements.txt (line 7)) (0.19.0)
+  Requirement already satisfied: fastcore>=1.12.19 in /home/users/twang/.local/lib/python3.11/site-packages (from ghapi->swebench>=4.1.0->-r requirements.txt (line 3)) (1.13.6)
+  Requirement already satisfied: gitdb<5,>=4.0.1 in /home/users/twang/.local/lib/python3.11/site-packages (from GitPython->swebench>=4.1.0->-r requirements.txt (line 3)) (4.0.12)
+  Requirement already satisfied: cbor2 in /home/users/twang/.local/lib/python3.11/site-packages (from modal->swebench>=4.1.0->-r requirements.txt (line 3)) (6.1.2)
+  Requirement already satisfied: grpclib<0.4.10,>=0.4.7 in /home/users/twang/.local/lib/python3.11/site-packages (from modal->swebench>=4.1.0->-r requirements.txt (line 3)) (0.4.9)
+  Requirement already satisfied: protobuf!=4.24.0,<7.0,>=3.19 in /home/users/twang/.local/lib/python3.11/site-packages (from modal->swebench>=4.1.0->-r requirements.txt (line 3)) (6.33.6)
+  Requirement already satisfied: synchronicity~=0.12.3 in /home/users/twang/.local/lib/python3.11/site-packages (from modal->swebench>=4.1.0->-r requirements.txt (line 3)) (0.12.5)
+  Requirement already satisfied: toml in /home/users/twang/.local/lib/python3.11/site-packages (from modal->swebench>=4.1.0->-r requirements.txt (line 3)) (0.10.2)
+  Requirement already satisfied: types-certifi in /home/users/twang/.local/lib/python3.11/site-packages (from modal->swebench>=4.1.0->-r requirements.txt (line 3)) (2021.10.8.3)
+  Requirement already satisfied: types-toml in /home/users/twang/.local/lib/python3.11/site-packages (from modal->swebench>=4.1.0->-r requirements.txt (line 3)) (0.10.8.20260518)
+  Requirement already satisfied: watchfiles in /home/users/twang/.local/lib/python3.11/site-packages (from modal->swebench>=4.1.0->-r requirements.txt (line 3)) (1.2.0)
+  Requirement already satisfied: python-dateutil>=2.8.2 in /home/users/twang/.local/lib/python3.11/site-packages (from pandas->poly_bench_evaluation@ git+https://github.com/amazon-science/SWE-PolyBench.git@1eb0bdc8ef63e1e88172b96bc435b1cd9fc93ecc->-r requirements.txt (line 7)) (2.9.0.post0)
+  Requirement already satisfied: cfgv>=2.0.0 in /home/users/twang/.local/lib/python3.11/site-packages (from pre-commit->swebench>=4.1.0->-r requirements.txt (line 3)) (3.5.0)
+  Requirement already satisfied: identify>=1.0.0 in /home/users/twang/.local/lib/python3.11/site-packages (from pre-commit->swebench>=4.1.0->-r requirements.txt (line 3)) (2.6.19)
+  Requirement already satisfied: nodeenv>=0.11.1 in /home/users/twang/.local/lib/python3.11/site-packages (from pre-commit->swebench>=4.1.0->-r requirements.txt (line 3)) (1.10.0)
+  Requirement already satisfied: virtualenv>=20.10.0 in /home/users/twang/.local/lib/python3.11/site-packages (from pre-commit->swebench>=4.1.0->-r requirements.txt (line 3)) (21.5.1)
+  Requirement already satisfied: wcwidth in /home/users/twang/.local/lib/python3.11/site-packages (from prompt_toolkit->mini-swe-agent==1.17.5->-r requirements.txt (line 2)) (0.8.1)
+  Requirement already satisfied: mdit-py-plugins in /home/users/twang/.local/lib/python3.11/site-packages (from textual->mini-swe-agent==1.17.5->-r requirements.txt (line 2)) (0.6.1)
+  Requirement already satisfied: smmap<6,>=3.0.1 in /home/users/twang/.local/lib/python3.11/site-packages (from gitdb<5,>=4.0.1->GitPython->swebench>=4.1.0->-r requirements.txt (line 3)) (5.0.3)
+  Requirement already satisfied: h2<5,>=3.1.0 in /home/users/twang/.local/lib/python3.11/site-packages (from grpclib<0.4.10,>=0.4.7->modal->swebench>=4.1.0->-r requirements.txt (line 3)) (4.3.0)
+  Requirement already satisfied: mdurl~=0.1 in /home/users/twang/.local/lib/python3.11/site-packages (from markdown-it-py>=2.2.0->rich->mini-swe-agent==1.17.5->-r requirements.txt (line 2)) (0.1.2)
+  Requirement already satisfied: linkify-it-py<3,>=1 in /home/users/twang/.local/lib/python3.11/site-packages (from markdown-it-py>=2.2.0->rich->mini-swe-agent==1.17.5->-r requirements.txt (line 2)) (2.1.0)
+  Requirement already satisfied: six>=1.5 in /home/users/twang/.local/lib/python3.11/site-packages (from python-dateutil>=2.8.2->pandas->poly_bench_evaluation@ git+https://github.com/amazon-science/SWE-PolyBench.git@1eb0bdc8ef63e1e88172b96bc435b1cd9fc93ecc->-r requirements.txt (line 7)) (1.17.0)
+  Requirement already satisfied: distlib<1,>=0.3.7 in /home/users/twang/.local/lib/python3.11/site-packages (from virtualenv>=20.10.0->pre-commit->swebench>=4.1.0->-r requirements.txt (line 3)) (0.4.3)
+  Requirement already satisfied: python-discovery>=1.4.2 in /home/users/twang/.local/lib/python3.11/site-packages (from virtualenv>=20.10.0->pre-commit->swebench>=4.1.0->-r requirements.txt (line 3)) (1.4.2)
+  Requirement already satisfied: hyperframe<7,>=6.1 in /home/users/twang/.local/lib/python3.11/site-packages (from h2<5,>=3.1.0->grpclib<0.4.10,>=0.4.7->modal->swebench>=4.1.0->-r requirements.txt (line 3)) (6.1.0)
+  Requirement already satisfied: hpack<5,>=4.1 in /home/users/twang/.local/lib/python3.11/site-packages (from h2<5,>=3.1.0->grpclib<0.4.10,>=0.4.7->modal->swebench>=4.1.0->-r requirements.txt (line 3)) (4.1.0)
+  Requirement already satisfied: uc-micro-py in /home/users/twang/.local/lib/python3.11/site-packages (from linkify-it-py<3,>=1->markdown-it-py>=2.2.0->rich->mini-swe-agent==1.17.5->-r requirements.txt (line 2)) (2.0.0)
+  [ulhpc-submit] environment ready
+  [ulhpc-submit] executing user command
+  [vibe-hpc-smoke] started at Fri Jun 19 16:50:26 CEST 2026
+  [vibe-hpc-smoke] host=iris-167
+  [vibe-hpc-smoke] pwd=/mnt/aiongpfs/users/twang/hpc_runs/vibe-coding-planning
+  [vibe-hpc-smoke] python=/usr/bin/python
+  Python 3.6.8
+  [ulhpc-submit] exit_code=1
+  [ulhpc-submit] job finished at Fri Jun 19 16:50:29 CEST 2026
+[2026-06-19T16:50:31] INFO === remote stderr ===
+  
+  [notice] A new release of pip is available: 23.2.1 -> 26.1.2
+  [notice] To update, run: pip install --upgrade pip
+  Traceback (most recent call last):
+    File "<stdin>", line 11, in <module>
+    File "/usr/lib64/python3.6/importlib/__init__.py", line 126, in import_module
+      return _bootstrap._gcd_import(name[level:], package, level)
+    File "<frozen importlib._bootstrap>", line 994, in _gcd_import
+    File "<frozen importlib._bootstrap>", line 971, in _find_and_load
+    File "<frozen importlib._bootstrap>", line 953, in _find_and_load_unlocked
+  ModuleNotFoundError: No module named 'minisweagent'
+[2026-06-19T16:50:31] INFO Detected issue: ENV_DEPENDENCY_ERROR
+[2026-06-19T16:50:31] ERROR [ENV_DEPENDENCY_ERROR] Missing or incompatible Python package detected in job output.
+Suggestion: A required package is missing or incompatible. Check requirements.txt / environment.yml.

@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import re
+import threading
 from typing import Any, Protocol
 
 from src.agents._deps import (
@@ -12,7 +13,11 @@ from src.agents._deps import (
     extract_last_assistant,
     import_minisweagent,
 )
-from src.environment.docker_env import DockerCapacityWindow, DockerEnvWrapper
+from src.environment.docker_env import (
+    DockerCapacityWindow,
+    DockerEnvWrapper,
+    ensure_project_image_local,
+)
 from src.evaluator.swe_evaluator import derive_image_name
 from src.optimization.audit import AuditedModel, JsonlLogger, text_sha256
 from src.optimization.config import OptimizationConfig
@@ -112,8 +117,36 @@ class DockerChecker:
         self.capacity_window = capacity_window
         self.audit = JsonlLogger(config.run_dir / "audit_events.jsonl")
         self.usage = JsonlLogger(config.run_dir / "usage.jsonl")
+        self._prepared_images: set[str] = set()
+        self._prepare_lock = threading.Lock()
+
+    def prepare(self, case: GEPACase) -> None:
+        """Prepare infrastructure before any Checker LLM call."""
+        instance_info = case.checker_payload()["repository"]
+        image = derive_image_name(instance_info)
+        with self._prepare_lock:
+            if image in self._prepared_images:
+                return
+        self.audit.write(
+            "checker_infrastructure_prepare_started",
+            instance_id=case.instance_id,
+            image=image,
+        )
+        ensure_project_image_local(
+            image,
+            timeout=self.config.checker.timeout,
+            capacity_window=self.capacity_window,
+        )
+        self.audit.write(
+            "checker_infrastructure_prepare_completed",
+            instance_id=case.instance_id,
+            image=image,
+        )
+        with self._prepare_lock:
+            self._prepared_images.add(image)
 
     def __call__(self, case: GEPACase, rules: str) -> CheckerOutput:
+        self.prepare(case)
         DefaultAgent, LitellmModel, _ = import_minisweagent()
         base_model = LitellmModel(
             model_name=_infer_litellm_prefix(

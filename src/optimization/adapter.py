@@ -136,6 +136,9 @@ class CheckerGEPAAdapter:
         *,
         attempt: int,
     ) -> tuple[dict[str, Any], float, dict[str, Any] | None]:
+        prepare = getattr(self.checker, "prepare", None)
+        if callable(prepare):
+            prepare(case)
         output = self.checker(case, rules)
         if self.audit is not None and attempt > 1:
             self.audit.write(

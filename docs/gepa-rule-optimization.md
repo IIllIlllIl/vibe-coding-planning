@@ -460,13 +460,19 @@ Checker 输出恢复已对齐完成 792 次无 Checker 错误的 checker-only �
   Checker 步数分布，后续全量实验上限待基于该分布决定；
 - `max_attempts=3`，单样本 Checker 偶发失败时最多重试两次；只有全部尝试失败
   才写入 `errors.jsonl` 并作为 operational failure 中止本次 GEPA run；
+- 每次 Checker attempt 前先执行 `prepare(case)`：对目标项目镜像做
+  inspect/pull，成功后才创建 Checker LLM model/agent。Docker 镜像获取失败
+  因此发生在 LLM 调用前，不消耗 Checker token；
 - 保留显式 `temperature=0.0`；
 - prompt 使用与 checker-only 相同的“先 heredoc 写结果文件，下一响应只提交”
   工作流；
 - 优先读取容器结果文件，再读取 `DefaultAgent.run()` 返回的最终提交内容，
   并兼容 fenced JSON 和无效反斜杠转义；
 - Checker operational error 写入错误日志并令当前 GEPA 运行失败，不能作为
-  correctness=0 的分类样本进入搜索或 evaluation cache。
+  correctness=0 的分类样本进入搜索或 evaluation cache。此类失败会在
+  `progress.json` 中标记 `failure_kind: checker_operational_failure` 和
+  `resumable: true`；清理 Docker/API 环境后可用同一 `run_dir` 从官方
+  `gepa_state.bin` 和项目侧 `gepa_resume_state.json` 恢复。
 
 GEPA 仍必须使用固定 Checker prompt。checker-only 的 no-rules arm 会切换到
 独立 baseline prompt，但 GEPA 不能根据候选是否为空切换 system prompt，否则

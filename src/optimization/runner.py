@@ -26,6 +26,12 @@ class OptimizationRunFailed(RuntimeError):
     """Raised when GEPA returns after a swallowed component failure."""
 
 
+def _classify_optimization_failure(error: str) -> tuple[bool, str | None]:
+    if "Checker operational failure for:" in error:
+        return True, "checker_operational_failure"
+    return False, None
+
+
 def run_optimization(
     config: OptimizationConfig,
     *,
@@ -118,7 +124,13 @@ def run_optimization(
         )
     except Exception as exc:
         error = f"{type(exc).__name__}: {exc}"
-        callback.mark_failed(phase="optimization", error=error)
+        resumable, failure_kind = _classify_optimization_failure(error)
+        callback.mark_failed(
+            phase="optimization",
+            error=error,
+            resumable=resumable,
+            failure_kind=failure_kind,
+        )
         JsonlLogger(config.run_dir / "errors.jsonl").write(
             "optimization_failed",
             error_type=type(exc).__name__,
@@ -144,6 +156,8 @@ def run_optimization(
             "run_failed",
             phase="optimization",
             error=error,
+            resumable=resumable,
+            failure_kind=failure_kind,
         )
         raise
     write_report(result, validation, config.run_dir)

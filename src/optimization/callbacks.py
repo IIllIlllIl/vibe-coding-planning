@@ -213,16 +213,28 @@ class ProgressCallback:
             will_continue=event["will_continue"],
         )
 
-    def mark_failed(self, *, phase: str, error: str) -> None:
+    def mark_failed(
+        self,
+        *,
+        phase: str,
+        error: str,
+        resumable: bool = False,
+        failure_kind: str | None = None,
+    ) -> None:
         self.progress.update(
             status="failed",
             failure_phase=phase,
             failure=error,
+            resumable=resumable,
         )
+        if failure_kind is not None:
+            self.progress["failure_kind"] = failure_kind
         self.audit.write(
             "gepa_optimization_failed",
             phase=phase,
             error=error,
+            resumable=resumable,
+            failure_kind=failure_kind,
         )
         self._save()
 

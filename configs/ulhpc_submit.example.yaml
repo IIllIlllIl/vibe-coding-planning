@@ -34,3 +34,4 @@ sync_excludes:
   - ".ulhpc_submit"
   - "output"
   - "third_party/swe-bench-pro-os"
+  - "swe-bench-pro-os"

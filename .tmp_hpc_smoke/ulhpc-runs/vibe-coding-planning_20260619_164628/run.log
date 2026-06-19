@@ -1,0 +1,532 @@
+[2026-06-19T16:46:28] INFO Starting run; local log: /Users/taoran.wang/Documents/projects/vibe-trust/vibe-coding-planning/.tmp_hpc_smoke/ulhpc-runs/vibe-coding-planning_20260619_164628/run.log
+[2026-06-19T16:46:28] INFO Connected to twang@access-iris.uni.lu:8022
+[2026-06-19T16:46:28] INFO Syncing /Users/taoran.wang/Documents/projects/vibe-trust/vibe-coding-planning -> /home/users/twang/hpc_runs/vibe-coding-planning
+[2026-06-19T16:46:29] INFO Code sync complete
+[2026-06-19T16:46:29] INFO Detected dependencies: requirements.txt=True, environment.yml=False
+[2026-06-19T16:46:29] INFO Generated Slurm script: /Users/taoran.wang/Documents/projects/vibe-trust/vibe-coding-planning/.ulhpc_submit/generated_job.sh
+[2026-06-19T16:46:29] INFO Submitted job 5480219
+[2026-06-19T16:46:29] INFO [JOB] SUBMITTED job_id=5480219
+[2026-06-19T16:46:29] INFO Monitoring job state...
+[2026-06-19T16:48:43] INFO Job 5480219 finished with state FAILED
+[2026-06-19T16:48:43] INFO [JOB] FAILED exit=1:0 rss= nodes=iris-167
+[2026-06-19T16:48:43] INFO Fetching remote output...
+[2026-06-19T16:48:43] INFO === remote stdout ===
+  Collecting unidiff (from swebench>=4.1.0->-r requirements.txt (line 3))
+    Obtaining dependency information for unidiff from https://files.pythonhosted.org/packages/8a/54/57c411a6e8f7bd7848c8b66e4dcaffa586bf4c02e63f2280db0327a4e6eb/unidiff-0.7.5-py2.py3-none-any.whl.metadata
+    Downloading unidiff-0.7.5-py2.py3-none-any.whl.metadata (4.6 kB)
+  Requirement already satisfied: pandas in /home/users/twang/.local/lib/python3.11/site-packages (from poly_bench_evaluation@ git+https://github.com/amazon-science/SWE-PolyBench.git@1eb0bdc8ef63e1e88172b96bc435b1cd9fc93ecc->-r requirements.txt (line 7)) (3.0.3)
+  Collecting loguru (from poly_bench_evaluation@ git+https://github.com/amazon-science/SWE-PolyBench.git@1eb0bdc8ef63e1e88172b96bc435b1cd9fc93ecc->-r requirements.txt (line 7))
+    Obtaining dependency information for loguru from https://files.pythonhosted.org/packages/0c/29/0348de65b8cc732daa3e33e67806420b2ae89bdce2b04af740289c5c6c8c/loguru-0.7.3-py3-none-any.whl.metadata
+    Downloading loguru-0.7.3-py3-none-any.whl.metadata (22 kB)
+  Collecting boto3 (from poly_bench_evaluation@ git+https://github.com/amazon-science/SWE-PolyBench.git@1eb0bdc8ef63e1e88172b96bc435b1cd9fc93ecc->-r requirements.txt (line 7))
+    Obtaining dependency information for boto3 from https://files.pythonhosted.org/packages/b1/42/bb88180fe1e46f77fe9507083a256dad243747e29aa0f2fbf6ff421b4132/boto3-1.43.33-py3-none-any.whl.metadata
+    Downloading boto3-1.43.33-py3-none-any.whl.metadata (6.6 kB)
+  Collecting tree-sitter-languages==1.10.2 (from poly_bench_evaluation@ git+https://github.com/amazon-science/SWE-PolyBench.git@1eb0bdc8ef63e1e88172b96bc435b1cd9fc93ecc->-r requirements.txt (line 7))
+    Obtaining dependency information for tree-sitter-languages==1.10.2 from https://files.pythonhosted.org/packages/96/81/ab4eda8dbd3f736fcc9a508bc69232d3b9076cd46b932d9bf9d49b9a1ec9/tree_sitter_languages-1.10.2-cp311-cp311-manylinux_2_17_x86_64.manylinux2014_x86_64.whl.metadata
+    Downloading tree_sitter_languages-1.10.2-cp311-cp311-manylinux_2_17_x86_64.manylinux2014_x86_64.whl.metadata (10 kB)
+  Collecting tree-sitter==0.21.3 (from poly_bench_evaluation@ git+https://github.com/amazon-science/SWE-PolyBench.git@1eb0bdc8ef63e1e88172b96bc435b1cd9fc93ecc->-r requirements.txt (line 7))
+    Obtaining dependency information for tree-sitter==0.21.3 from https://files.pythonhosted.org/packages/29/4e/798154f2846d620bf9fa3bc244e056d4858f2108f834656bf9f1219d4f30/tree_sitter-0.21.3-cp311-cp311-manylinux_2_17_x86_64.manylinux2014_x86_64.whl.metadata
+    Downloading tree_sitter-0.21.3-cp311-cp311-manylinux_2_17_x86_64.manylinux2014_x86_64.whl.metadata (10 kB)
+  Collecting scikit-learn==1.3.2 (from poly_bench_evaluation@ git+https://github.com/amazon-science/SWE-PolyBench.git@1eb0bdc8ef63e1e88172b96bc435b1cd9fc93ecc->-r requirements.txt (line 7))
+    Obtaining dependency information for scikit-learn==1.3.2 from https://files.pythonhosted.org/packages/0c/2a/d3ff6091406bc2207e0adb832ebd15e40ac685811c7e2e3b432bfd969b71/scikit_learn-1.3.2-cp311-cp311-manylinux_2_17_x86_64.manylinux2014_x86_64.whl.metadata
+    Downloading scikit_learn-1.3.2-cp311-cp311-manylinux_2_17_x86_64.manylinux2014_x86_64.whl.metadata (11 kB)
+  Collecting whatthepatch (from poly_bench_evaluation@ git+https://github.com/amazon-science/SWE-PolyBench.git@1eb0bdc8ef63e1e88172b96bc435b1cd9fc93ecc->-r requirements.txt (line 7))
+    Obtaining dependency information for whatthepatch from https://files.pythonhosted.org/packages/8e/93/af1d6ccb69ab6b5a00e03fa0cefa563f9862412667776ea15dd4eece3a90/whatthepatch-1.0.7-py3-none-any.whl.metadata
+    Downloading whatthepatch-1.0.7-py3-none-any.whl.metadata (7.2 kB)
+  Collecting numpy<2.0,>=1.17.3 (from scikit-learn==1.3.2->poly_bench_evaluation@ git+https://github.com/amazon-science/SWE-PolyBench.git@1eb0bdc8ef63e1e88172b96bc435b1cd9fc93ecc->-r requirements.txt (line 7))
+    Obtaining dependency information for numpy<2.0,>=1.17.3 from https://files.pythonhosted.org/packages/3a/d0/edc009c27b406c4f9cbc79274d6e46d634d139075492ad055e3d68445925/numpy-1.26.4-cp311-cp311-manylinux_2_17_x86_64.manylinux2014_x86_64.whl.metadata
+    Downloading numpy-1.26.4-cp311-cp311-manylinux_2_17_x86_64.manylinux2014_x86_64.whl.metadata (61 kB)
+       ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 61.0/61.0 kB 14.3 MB/s eta 0:00:00
+  Collecting scipy>=1.5.0 (from scikit-learn==1.3.2->poly_bench_evaluation@ git+https://github.com/amazon-science/SWE-PolyBench.git@1eb0bdc8ef63e1e88172b96bc435b1cd9fc93ecc->-r requirements.txt (line 7))
+    Obtaining dependency information for scipy>=1.5.0 from https://files.pythonhosted.org/packages/09/7d/af933f0f6e0767995b4e2d705a0665e454d1c19402aa7e895de3951ebb04/scipy-1.17.1-cp311-cp311-manylinux_2_27_x86_64.manylinux_2_28_x86_64.whl.metadata
+    Downloading scipy-1.17.1-cp311-cp311-manylinux_2_27_x86_64.manylinux_2_28_x86_64.whl.metadata (62 kB)
+       ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 62.1/62.1 kB 18.1 MB/s eta 0:00:00
+  Collecting joblib>=1.1.1 (from scikit-learn==1.3.2->poly_bench_evaluation@ git+https://github.com/amazon-science/SWE-PolyBench.git@1eb0bdc8ef63e1e88172b96bc435b1cd9fc93ecc->-r requirements.txt (line 7))
+    Obtaining dependency information for joblib>=1.1.1 from https://files.pythonhosted.org/packages/7b/91/984aca2ec129e2757d1e4e3c81c3fcda9d0f85b74670a094cc443d9ee949/joblib-1.5.3-py3-none-any.whl.metadata
+    Downloading joblib-1.5.3-py3-none-any.whl.metadata (5.5 kB)
+  Collecting threadpoolctl>=2.0.0 (from scikit-learn==1.3.2->poly_bench_evaluation@ git+https://github.com/amazon-science/SWE-PolyBench.git@1eb0bdc8ef63e1e88172b96bc435b1cd9fc93ecc->-r requirements.txt (line 7))
+    Obtaining dependency information for threadpoolctl>=2.0.0 from https://files.pythonhosted.org/packages/32/d5/f9a850d79b0851d1d4ef6456097579a9005b31fea68726a4ae5f2d82ddd9/threadpoolctl-3.6.0-py3-none-any.whl.metadata
+    Downloading threadpoolctl-3.6.0-py3-none-any.whl.metadata (13 kB)
+  Collecting anyio<5,>=3.5.0 (from openai>=2.24.0->-r requirements.txt (line 17))
+    Obtaining dependency information for anyio<5,>=3.5.0 from https://files.pythonhosted.org/packages/ba/16/9826f089383c593cdfc4a6e5aca94d9e91ae1692c57af82c3b2aa5e810f7/anyio-4.14.0-py3-none-any.whl.metadata
+    Downloading anyio-4.14.0-py3-none-any.whl.metadata (4.6 kB)
+  Collecting distro<2,>=1.7.0 (from openai>=2.24.0->-r requirements.txt (line 17))
+    Obtaining dependency information for distro<2,>=1.7.0 from https://files.pythonhosted.org/packages/12/b3/231ffd4ab1fc9d679809f356cebee130ac7daa00d6d6f3206dd4fd137e9e/distro-1.9.0-py3-none-any.whl.metadata
+    Downloading distro-1.9.0-py3-none-any.whl.metadata (6.8 kB)
+  Collecting httpx<1,>=0.23.0 (from openai>=2.24.0->-r requirements.txt (line 17))
+    Obtaining dependency information for httpx<1,>=0.23.0 from https://files.pythonhosted.org/packages/2a/39/e50c7c3a983047577ee07d2a9e53faf5a69493943ec3f6a384bdc792deb2/httpx-0.28.1-py3-none-any.whl.metadata
+    Downloading httpx-0.28.1-py3-none-any.whl.metadata (7.1 kB)
+  Collecting jiter<1,>=0.10.0 (from openai>=2.24.0->-r requirements.txt (line 17))
+    Obtaining dependency information for jiter<1,>=0.10.0 from https://files.pythonhosted.org/packages/7b/7e/1c445c2b6f0e30a274dc8082e0c3c7825411cce80d726bccd697c98cc8d3/jiter-0.15.0-cp311-cp311-manylinux_2_17_x86_64.manylinux2014_x86_64.whl.metadata
+    Downloading jiter-0.15.0-cp311-cp311-manylinux_2_17_x86_64.manylinux2014_x86_64.whl.metadata (5.2 kB)
+  Collecting sniffio (from openai>=2.24.0->-r requirements.txt (line 17))
+    Obtaining dependency information for sniffio from https://files.pythonhosted.org/packages/e9/44/75a9c9421471a6c4805dbf2356f7c181a29c1879239abab1ea2cc8f38b40/sniffio-1.3.1-py3-none-any.whl.metadata
+    Downloading sniffio-1.3.1-py3-none-any.whl.metadata (3.9 kB)
+  Collecting typing-extensions<5,>=4.11 (from openai>=2.24.0->-r requirements.txt (line 17))
+    Obtaining dependency information for typing-extensions<5,>=4.11 from https://files.pythonhosted.org/packages/18/67/36e9267722cc04a6b9f15c7f3441c2363321a3ea07da7ae0c0707beb2a9c/typing_extensions-4.15.0-py3-none-any.whl.metadata
+    Downloading typing_extensions-4.15.0-py3-none-any.whl.metadata (3.3 kB)
+  Collecting fastuuid<1.0,>=0.14.0 (from litellm>=1.83.0->-r requirements.txt (line 18))
+    Obtaining dependency information for fastuuid<1.0,>=0.14.0 from https://files.pythonhosted.org/packages/fc/c2/f84c90167cc7765cb82b3ff7808057608b21c14a38531845d933a4637307/fastuuid-0.14.0-cp311-cp311-manylinux_2_17_x86_64.manylinux2014_x86_64.whl.metadata
+    Downloading fastuuid-0.14.0-cp311-cp311-manylinux_2_17_x86_64.manylinux2014_x86_64.whl.metadata (1.1 kB)
+  Collecting tiktoken<1.0,>=0.8.0 (from litellm>=1.83.0->-r requirements.txt (line 18))
+    Obtaining dependency information for tiktoken<1.0,>=0.8.0 from https://files.pythonhosted.org/packages/f9/39/fe42ad00de01a8c4a49ad8649a2c8a316835a9cad5961b11d21eac0020a5/tiktoken-0.13.0-cp311-cp311-manylinux_2_28_x86_64.whl.metadata
+    Downloading tiktoken-0.13.0-cp311-cp311-manylinux_2_28_x86_64.whl.metadata (6.7 kB)
+  Collecting importlib-metadata<9.0,>=8.0.0 (from litellm>=1.83.0->-r requirements.txt (line 18))
+    Obtaining dependency information for importlib-metadata<9.0,>=8.0.0 from https://files.pythonhosted.org/packages/7d/f9/97f2ca8bb3ec6e4b1d64f983ebe98b9a192faddff67fac3d6303a537e670/importlib_metadata-8.9.0-py3-none-any.whl.metadata
+    Downloading importlib_metadata-8.9.0-py3-none-any.whl.metadata (4.5 kB)
+  Collecting tokenizers<1.0,>=0.21.0 (from litellm>=1.83.0->-r requirements.txt (line 18))
+    Obtaining dependency information for tokenizers<1.0,>=0.21.0 from https://files.pythonhosted.org/packages/0d/d5/1353e5f677ec27c2494fb6a6725e82d56c985f53e90ec511369e7e4f02c6/tokenizers-0.23.1-cp310-abi3-manylinux_2_17_x86_64.manylinux2014_x86_64.whl.metadata
+    Downloading tokenizers-0.23.1-cp310-abi3-manylinux_2_17_x86_64.manylinux2014_x86_64.whl.metadata (9.8 kB)
+  Collecting click<9.0,>=8.0.0 (from litellm>=1.83.0->-r requirements.txt (line 18))
+    Obtaining dependency information for click<9.0,>=8.0.0 from https://files.pythonhosted.org/packages/c7/0d/67e5b4109ea4a837e80daa87c2c696711955e40449a97e8926672534def2/click-8.4.1-py3-none-any.whl.metadata
+    Downloading click-8.4.1-py3-none-any.whl.metadata (2.6 kB)
+  Collecting aiohttp<4.0,>=3.10 (from litellm>=1.83.0->-r requirements.txt (line 18))
+    Obtaining dependency information for aiohttp<4.0,>=3.10 from https://files.pythonhosted.org/packages/76/7f/a987b14a3859094b3cea3f4825219c3e5536242564af6e3f9c2f6c994eb2/aiohttp-3.14.1-cp311-cp311-manylinux2014_x86_64.manylinux_2_17_x86_64.manylinux_2_28_x86_64.whl.metadata
+    Downloading aiohttp-3.14.1-cp311-cp311-manylinux2014_x86_64.manylinux_2_17_x86_64.manylinux_2_28_x86_64.whl.metadata (8.3 kB)
+  Collecting jsonschema<5.0,>=4.0.0 (from litellm>=1.83.0->-r requirements.txt (line 18))
+    Obtaining dependency information for jsonschema<5.0,>=4.0.0 from https://files.pythonhosted.org/packages/69/90/f63fb5873511e014207a475e2bb4e8b2e570d655b00ac19a9a0ca0a385ee/jsonschema-4.26.0-py3-none-any.whl.metadata
+    Downloading jsonschema-4.26.0-py3-none-any.whl.metadata (7.6 kB)
+  Collecting iniconfig>=1.0.1 (from pytest>=8.0.0->-r requirements.txt (line 21))
+    Obtaining dependency information for iniconfig>=1.0.1 from https://files.pythonhosted.org/packages/cb/b1/3846dd7f199d53cb17f49cba7e651e9ce294d8497c8c150530ed11865bb8/iniconfig-2.3.0-py3-none-any.whl.metadata
+    Downloading iniconfig-2.3.0-py3-none-any.whl.metadata (2.5 kB)
+  Requirement already satisfied: packaging>=22 in /opt/apps/easybuild/systems/iris/rhel810-20250803/2023b/broadwell/software/Python/3.11.5-GCCcore-13.2.0/lib/python3.11/site-packages (from pytest>=8.0.0->-r requirements.txt (line 21)) (23.2)
+  Collecting pluggy<2,>=1.5 (from pytest>=8.0.0->-r requirements.txt (line 21))
+    Obtaining dependency information for pluggy<2,>=1.5 from https://files.pythonhosted.org/packages/54/20/4d324d65cc6d9205fabedc306948156824eb9f0ee1633355a8f7ec5c66bf/pluggy-1.6.0-py3-none-any.whl.metadata
+    Downloading pluggy-1.6.0-py3-none-any.whl.metadata (4.8 kB)
+  Collecting pygments>=2.7.2 (from pytest>=8.0.0->-r requirements.txt (line 21))
+    Obtaining dependency information for pygments>=2.7.2 from https://files.pythonhosted.org/packages/f4/7e/a72dd26f3b0f4f2bf1dd8923c85f7ceb43172af56d63c7383eb62b332364/pygments-2.20.0-py3-none-any.whl.metadata
+    Downloading pygments-2.20.0-py3-none-any.whl.metadata (2.5 kB)
+  Collecting coverage[toml]>=7.10.6 (from pytest-cov>=5.0.0->-r requirements.txt (line 22))
+    Obtaining dependency information for coverage[toml]>=7.10.6 from https://files.pythonhosted.org/packages/77/63/e77aaacd491182210d639636b7a8bba23ffffa9b82aa3762da9431855fa9/coverage-7.14.1-cp311-cp311-manylinux1_x86_64.manylinux_2_28_x86_64.manylinux_2_5_x86_64.whl.metadata
+    Downloading coverage-7.14.1-cp311-cp311-manylinux1_x86_64.manylinux_2_28_x86_64.manylinux_2_5_x86_64.whl.metadata (8.6 kB)
+  Collecting filelock (from datasets>=2.14.6->-r requirements.txt (line 34))
+    Obtaining dependency information for filelock from https://files.pythonhosted.org/packages/13/37/a065dc3bd6e49423a6532c642ca7378d3f467b1ef44c2800c937af7f9739/filelock-3.29.4-py3-none-any.whl.metadata
+    Downloading filelock-3.29.4-py3-none-any.whl.metadata (2.0 kB)
+  Collecting pyarrow>=21.0.0 (from datasets>=2.14.6->-r requirements.txt (line 34))
+    Obtaining dependency information for pyarrow>=21.0.0 from https://files.pythonhosted.org/packages/f3/27/99c42abe8e21b44f4917f62631f3aa31404882a2c41d8a4cd5c110e13d52/pyarrow-24.0.0-cp311-cp311-manylinux_2_28_x86_64.whl.metadata
+    Downloading pyarrow-24.0.0-cp311-cp311-manylinux_2_28_x86_64.whl.metadata (3.0 kB)
+  Collecting dill<0.4.2,>=0.3.0 (from datasets>=2.14.6->-r requirements.txt (line 34))
+    Obtaining dependency information for dill<0.4.2,>=0.3.0 from https://files.pythonhosted.org/packages/1e/77/dc8c558f7593132cf8fefec57c4f60c83b16941c574ac5f619abb3ae7933/dill-0.4.1-py3-none-any.whl.metadata
+    Downloading dill-0.4.1-py3-none-any.whl.metadata (10 kB)
+  Collecting xxhash (from datasets>=2.14.6->-r requirements.txt (line 34))
+    Obtaining dependency information for xxhash from https://files.pythonhosted.org/packages/f7/d0/3c91e4e6a05ca4d7df8e39ec3a75b713609258ec84705ab34be6430826a1/xxhash-3.7.0-cp311-cp311-manylinux2014_x86_64.manylinux_2_17_x86_64.manylinux_2_28_x86_64.whl.metadata
+    Downloading xxhash-3.7.0-cp311-cp311-manylinux2014_x86_64.manylinux_2_17_x86_64.manylinux_2_28_x86_64.whl.metadata (13 kB)
+  Collecting multiprocess<0.70.20 (from datasets>=2.14.6->-r requirements.txt (line 34))
+    Obtaining dependency information for multiprocess<0.70.20 from https://files.pythonhosted.org/packages/86/c2/dec9722dc3474c164a0b6bcd9a7ed7da542c98af8cabce05374abab35edd/multiprocess-0.70.19-py311-none-any.whl.metadata
+    Downloading multiprocess-0.70.19-py311-none-any.whl.metadata (7.5 kB)
+  Collecting fsspec[http]<=2026.4.0,>=2023.1.0 (from datasets>=2.14.6->-r requirements.txt (line 34))
+    Obtaining dependency information for fsspec[http]<=2026.4.0,>=2023.1.0 from https://files.pythonhosted.org/packages/d5/0c/043d5e551459da400957a1395e0febbf771446ff34291afcbe3d8be2a279/fsspec-2026.4.0-py3-none-any.whl.metadata
+    Downloading fsspec-2026.4.0-py3-none-any.whl.metadata (10 kB)
+  Collecting huggingface-hub<2.0,>=0.25.0 (from datasets>=2.14.6->-r requirements.txt (line 34))
+    Obtaining dependency information for huggingface-hub<2.0,>=0.25.0 from https://files.pythonhosted.org/packages/8e/b5/ff8516e74b459da3dce9567540c39f2d305ee7a2655109f6802873ff1588/huggingface_hub-1.20.1-py3-none-any.whl.metadata
+    Downloading huggingface_hub-1.20.1-py3-none-any.whl.metadata (14 kB)
+  Collecting annotated-types>=0.6.0 (from pydantic>=2.12.0->-r requirements.txt (line 35))
+    Obtaining dependency information for annotated-types>=0.6.0 from https://files.pythonhosted.org/packages/78/b6/6307fbef88d9b5ee7421e68d78a9f162e0da4900bc5f5793f6d3d0e34fb8/annotated_types-0.7.0-py3-none-any.whl.metadata
+    Downloading annotated_types-0.7.0-py3-none-any.whl.metadata (15 kB)
+  Collecting pydantic-core==2.46.4 (from pydantic>=2.12.0->-r requirements.txt (line 35))
+    Obtaining dependency information for pydantic-core==2.46.4 from https://files.pythonhosted.org/packages/80/50/540cd3aeefc041beb111125c4bff779831a2111fc6b15a9138cda277d32c/pydantic_core-2.46.4-cp311-cp311-manylinux_2_17_x86_64.manylinux2014_x86_64.whl.metadata
+    Downloading pydantic_core-2.46.4-cp311-cp311-manylinux_2_17_x86_64.manylinux2014_x86_64.whl.metadata (6.6 kB)
+  Collecting typing-inspection>=0.4.2 (from pydantic>=2.12.0->-r requirements.txt (line 35))
+    Obtaining dependency information for typing-inspection>=0.4.2 from https://files.pythonhosted.org/packages/dc/9b/47798a6c91d8bdb567fe2698fe81e0c6b7cb7ef4d13da4114b41d239f65d/typing_inspection-0.4.2-py3-none-any.whl.metadata
+    Downloading typing_inspection-0.4.2-py3-none-any.whl.metadata (2.6 kB)
+  Collecting aiohappyeyeballs>=2.5.0 (from aiohttp<4.0,>=3.10->litellm>=1.83.0->-r requirements.txt (line 18))
+    Obtaining dependency information for aiohappyeyeballs>=2.5.0 from https://files.pythonhosted.org/packages/5f/fc/a7bf5b6e4e617b45f90f2d9d2a68519c249c81dd4fc2658c7a2a61c4f4b7/aiohappyeyeballs-2.6.2-py3-none-any.whl.metadata
+    Downloading aiohappyeyeballs-2.6.2-py3-none-any.whl.metadata (5.9 kB)
+  Collecting aiosignal>=1.4.0 (from aiohttp<4.0,>=3.10->litellm>=1.83.0->-r requirements.txt (line 18))
+    Obtaining dependency information for aiosignal>=1.4.0 from https://files.pythonhosted.org/packages/fb/76/641ae371508676492379f16e2fa48f4e2c11741bd63c48be4b12a6b09cba/aiosignal-1.4.0-py3-none-any.whl.metadata
+    Downloading aiosignal-1.4.0-py3-none-any.whl.metadata (3.7 kB)
+  Collecting attrs>=17.3.0 (from aiohttp<4.0,>=3.10->litellm>=1.83.0->-r requirements.txt (line 18))
+    Obtaining dependency information for attrs>=17.3.0 from https://files.pythonhosted.org/packages/64/b4/17d4b0b2a2dc85a6df63d1157e028ed19f90d4cd97c36717afef2bc2f395/attrs-26.1.0-py3-none-any.whl.metadata
+    Downloading attrs-26.1.0-py3-none-any.whl.metadata (8.8 kB)
+  Collecting frozenlist>=1.1.1 (from aiohttp<4.0,>=3.10->litellm>=1.83.0->-r requirements.txt (line 18))
+    Obtaining dependency information for frozenlist>=1.1.1 from https://files.pythonhosted.org/packages/11/b1/71a477adc7c36e5fb628245dfbdea2166feae310757dea848d02bd0689fd/frozenlist-1.8.0-cp311-cp311-manylinux1_x86_64.manylinux_2_28_x86_64.manylinux_2_5_x86_64.whl.metadata
+    Downloading frozenlist-1.8.0-cp311-cp311-manylinux1_x86_64.manylinux_2_28_x86_64.manylinux_2_5_x86_64.whl.metadata (20 kB)
+  Collecting multidict<7.0,>=4.5 (from aiohttp<4.0,>=3.10->litellm>=1.83.0->-r requirements.txt (line 18))
+    Obtaining dependency information for multidict<7.0,>=4.5 from https://files.pythonhosted.org/packages/5a/56/21b27c560c13822ed93133f08aa6372c53a8e067f11fbed37b4adcdac922/multidict-6.7.1-cp311-cp311-manylinux2014_x86_64.manylinux_2_17_x86_64.manylinux_2_28_x86_64.whl.metadata
+    Downloading multidict-6.7.1-cp311-cp311-manylinux2014_x86_64.manylinux_2_17_x86_64.manylinux_2_28_x86_64.whl.metadata (5.3 kB)
+  Collecting propcache>=0.2.0 (from aiohttp<4.0,>=3.10->litellm>=1.83.0->-r requirements.txt (line 18))
+    Obtaining dependency information for propcache>=0.2.0 from https://files.pythonhosted.org/packages/27/1b/16ab7f2cf2041da2f60d156ba64c2484eadf9168075b4ff43c3ef60045af/propcache-0.5.2-cp311-cp311-manylinux2014_x86_64.manylinux_2_17_x86_64.manylinux_2_28_x86_64.whl.metadata
+    Downloading propcache-0.5.2-cp311-cp311-manylinux2014_x86_64.manylinux_2_17_x86_64.manylinux_2_28_x86_64.whl.metadata (16 kB)
+  Collecting yarl<2.0,>=1.17.0 (from aiohttp<4.0,>=3.10->litellm>=1.83.0->-r requirements.txt (line 18))
+    Obtaining dependency information for yarl<2.0,>=1.17.0 from https://files.pythonhosted.org/packages/b6/ec/08f671f69a444d704aeecebf92af659b67b97a869942411d0a578b08c334/yarl-1.24.2-cp311-cp311-manylinux2014_x86_64.manylinux_2_17_x86_64.manylinux_2_28_x86_64.whl.metadata
+    Downloading yarl-1.24.2-cp311-cp311-manylinux2014_x86_64.manylinux_2_17_x86_64.manylinux_2_28_x86_64.whl.metadata (94 kB)
+       ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 94.2/94.2 kB 25.5 MB/s eta 0:00:00
+  Collecting idna>=2.8 (from anyio<5,>=3.5.0->openai>=2.24.0->-r requirements.txt (line 17))
+    Obtaining dependency information for idna>=2.8 from https://files.pythonhosted.org/packages/1e/5e/d4e9f1a599fb8e573b7b87160658329fbf28d19eac2718f51fc3def3aa5a/idna-3.18-py3-none-any.whl.metadata
+    Downloading idna-3.18-py3-none-any.whl.metadata (6.1 kB)
+  Collecting certifi (from httpx<1,>=0.23.0->openai>=2.24.0->-r requirements.txt (line 17))
+    Obtaining dependency information for certifi from https://files.pythonhosted.org/packages/ef/2f/c5464532e965badff2f4c4c1a3a83f5697f0d7c407ed0cda44aaa99bb451/certifi-2026.6.17-py3-none-any.whl.metadata
+    Downloading certifi-2026.6.17-py3-none-any.whl.metadata (2.5 kB)
+  Collecting httpcore==1.* (from httpx<1,>=0.23.0->openai>=2.24.0->-r requirements.txt (line 17))
+    Obtaining dependency information for httpcore==1.* from https://files.pythonhosted.org/packages/7e/f5/f66802a942d491edb555dd61e3a9961140fd64c90bce1eafd741609d334d/httpcore-1.0.9-py3-none-any.whl.metadata
+    Downloading httpcore-1.0.9-py3-none-any.whl.metadata (21 kB)
+  Collecting h11>=0.16 (from httpcore==1.*->httpx<1,>=0.23.0->openai>=2.24.0->-r requirements.txt (line 17))
+    Obtaining dependency information for h11>=0.16 from https://files.pythonhosted.org/packages/04/4b/29cac41a4d98d144bf5f6d33995617b185d14b22401f75ca86f384e87ff1/h11-0.16.0-py3-none-any.whl.metadata
+    Downloading h11-0.16.0-py3-none-any.whl.metadata (8.3 kB)
+  Collecting hf-xet<2.0.0,>=1.5.1 (from huggingface-hub<2.0,>=0.25.0->datasets>=2.14.6->-r requirements.txt (line 34))
+    Obtaining dependency information for hf-xet<2.0.0,>=1.5.1 from https://files.pythonhosted.org/packages/de/cc/f99f4bc7295023d7bd9ebbfd51f75cc530ca262c1227666268b8208f4b77/hf_xet-1.5.1-cp37-abi3-manylinux2014_x86_64.manylinux_2_17_x86_64.whl.metadata
+    Downloading hf_xet-1.5.1-cp37-abi3-manylinux2014_x86_64.manylinux_2_17_x86_64.whl.metadata (4.9 kB)
+  Collecting typer (from mini-swe-agent==1.17.5->-r requirements.txt (line 2))
+    Obtaining dependency information for typer from https://files.pythonhosted.org/packages/3f/f9/2b3ff4e56e5fa7debfaf9eb135d0da96f3e9a1d5b27222223c7296336e5f/typer-0.25.1-py3-none-any.whl.metadata
+    Downloading typer-0.25.1-py3-none-any.whl.metadata (15 kB)
+  Collecting zipp>=3.20 (from importlib-metadata<9.0,>=8.0.0->litellm>=1.83.0->-r requirements.txt (line 18))
+    Obtaining dependency information for zipp>=3.20 from https://files.pythonhosted.org/packages/3a/13/547360d81e6d88d58492968ffda9f9542854f11310ee556fef14260cc886/zipp-4.1.0-py3-none-any.whl.metadata
+    Downloading zipp-4.1.0-py3-none-any.whl.metadata (3.6 kB)
+  Collecting MarkupSafe>=2.0 (from jinja2->mini-swe-agent==1.17.5->-r requirements.txt (line 2))
+    Obtaining dependency information for MarkupSafe>=2.0 from https://files.pythonhosted.org/packages/30/ac/0273f6fcb5f42e314c6d8cd99effae6a5354604d461b8d392b5ec9530a54/markupsafe-3.0.3-cp311-cp311-manylinux2014_x86_64.manylinux_2_17_x86_64.manylinux_2_28_x86_64.whl.metadata
+    Downloading markupsafe-3.0.3-cp311-cp311-manylinux2014_x86_64.manylinux_2_17_x86_64.manylinux_2_28_x86_64.whl.metadata (2.7 kB)
+  Collecting jsonschema-specifications>=2023.03.6 (from jsonschema<5.0,>=4.0.0->litellm>=1.83.0->-r requirements.txt (line 18))
+    Obtaining dependency information for jsonschema-specifications>=2023.03.6 from https://files.pythonhosted.org/packages/41/45/1a4ed80516f02155c51f51e8cedb3c1902296743db0bbc66608a0db2814f/jsonschema_specifications-2025.9.1-py3-none-any.whl.metadata
+    Downloading jsonschema_specifications-2025.9.1-py3-none-any.whl.metadata (2.9 kB)
+  Collecting referencing>=0.28.4 (from jsonschema<5.0,>=4.0.0->litellm>=1.83.0->-r requirements.txt (line 18))
+    Obtaining dependency information for referencing>=0.28.4 from https://files.pythonhosted.org/packages/2c/58/ca301544e1fa93ed4f80d724bf5b194f6e4b945841c5bfd555878eea9fcb/referencing-0.37.0-py3-none-any.whl.metadata
+    Downloading referencing-0.37.0-py3-none-any.whl.metadata (2.8 kB)
+  Collecting rpds-py>=0.25.0 (from jsonschema<5.0,>=4.0.0->litellm>=1.83.0->-r requirements.txt (line 18))
+    Obtaining dependency information for rpds-py>=0.25.0 from https://files.pythonhosted.org/packages/3d/33/237173db1cfef10105b3839a24de00eb8d2a523711add4632447cdf0aedd/rpds_py-2026.5.1-cp311-cp311-manylinux_2_17_x86_64.manylinux2014_x86_64.whl.metadata
+    Downloading rpds_py-2026.5.1-cp311-cp311-manylinux_2_17_x86_64.manylinux2014_x86_64.whl.metadata (4.1 kB)
+  Collecting charset_normalizer<4,>=2 (from requests->mini-swe-agent==1.17.5->-r requirements.txt (line 2))
+    Obtaining dependency information for charset_normalizer<4,>=2 from https://files.pythonhosted.org/packages/a1/fa/f74eb381a7d94ded44739e9d94de18dc5edc9c17fb8c11f0a6890696c0a9/charset_normalizer-3.4.7-cp311-cp311-manylinux2014_x86_64.manylinux_2_17_x86_64.manylinux_2_28_x86_64.whl.metadata
+    Downloading charset_normalizer-3.4.7-cp311-cp311-manylinux2014_x86_64.manylinux_2_17_x86_64.manylinux_2_28_x86_64.whl.metadata (40 kB)
+       ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 40.9/40.9 kB 10.4 MB/s eta 0:00:00
+  Collecting urllib3<3,>=1.26 (from requests->mini-swe-agent==1.17.5->-r requirements.txt (line 2))
+    Obtaining dependency information for urllib3<3,>=1.26 from https://files.pythonhosted.org/packages/7f/3e/5db95bcf282c52709639744ca2a8b149baccf648e39c8cc87553df9eae0c/urllib3-2.7.0-py3-none-any.whl.metadata
+    Downloading urllib3-2.7.0-py3-none-any.whl.metadata (6.9 kB)
+  Collecting regex (from tiktoken<1.0,>=0.8.0->litellm>=1.83.0->-r requirements.txt (line 18))
+    Obtaining dependency information for regex from https://files.pythonhosted.org/packages/33/6f/1481597e859ef19508b345eec4afd1416ed6e6b459c75a64026ef193aecf/regex-2026.5.9-cp311-cp311-manylinux2014_x86_64.manylinux_2_17_x86_64.manylinux_2_28_x86_64.whl.metadata
+    Downloading regex-2026.5.9-cp311-cp311-manylinux2014_x86_64.manylinux_2_17_x86_64.manylinux_2_28_x86_64.whl.metadata (40 kB)
+       ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 40.4/40.4 kB 9.7 MB/s eta 0:00:00
+  Collecting shellingham>=1.3.0 (from typer->mini-swe-agent==1.17.5->-r requirements.txt (line 2))
+    Obtaining dependency information for shellingham>=1.3.0 from https://files.pythonhosted.org/packages/e0/f9/0595336914c5619e5f28a1fb793285925a8cd4b432c9da0a987836c7f822/shellingham-1.5.4-py2.py3-none-any.whl.metadata
+    Downloading shellingham-1.5.4-py2.py3-none-any.whl.metadata (3.5 kB)
+  Collecting annotated-doc>=0.0.2 (from typer->mini-swe-agent==1.17.5->-r requirements.txt (line 2))
+    Obtaining dependency information for annotated-doc>=0.0.2 from https://files.pythonhosted.org/packages/1e/d3/26bf1008eb3d2daa8ef4cacc7f3bfdc11818d111f7e2d0201bc6e3b49d45/annotated_doc-0.0.4-py3-none-any.whl.metadata
+    Downloading annotated_doc-0.0.4-py3-none-any.whl.metadata (6.6 kB)
+  Collecting markdown-it-py>=2.2.0 (from rich->mini-swe-agent==1.17.5->-r requirements.txt (line 2))
+    Obtaining dependency information for markdown-it-py>=2.2.0 from https://files.pythonhosted.org/packages/b3/81/4da04ced5a082363ecfa159c010d200ecbd959ae410c10c0264a38cac0f5/markdown_it_py-4.2.0-py3-none-any.whl.metadata
+    Downloading markdown_it_py-4.2.0-py3-none-any.whl.metadata (7.4 kB)
+  Collecting soupsieve>=1.6.1 (from beautifulsoup4->swebench>=4.1.0->-r requirements.txt (line 3))
+    Obtaining dependency information for soupsieve>=1.6.1 from https://files.pythonhosted.org/packages/5e/f5/0c41cb68dcae6b7de4fac4188a3a9589e21fb31df21ea3a2e888db95e6c9/soupsieve-2.8.4-py3-none-any.whl.metadata
+    Downloading soupsieve-2.8.4-py3-none-any.whl.metadata (4.6 kB)
+  Collecting botocore<1.44.0,>=1.43.33 (from boto3->poly_bench_evaluation@ git+https://github.com/amazon-science/SWE-PolyBench.git@1eb0bdc8ef63e1e88172b96bc435b1cd9fc93ecc->-r requirements.txt (line 7))
+    Obtaining dependency information for botocore<1.44.0,>=1.43.33 from https://files.pythonhosted.org/packages/a1/f5/55fc2d15a81ae39115ebcf8db876f54e78f834446b468e178c9de8e7977e/botocore-1.43.33-py3-none-any.whl.metadata
+    Downloading botocore-1.43.33-py3-none-any.whl.metadata (5.6 kB)
+  Collecting jmespath<2.0.0,>=0.7.1 (from boto3->poly_bench_evaluation@ git+https://github.com/amazon-science/SWE-PolyBench.git@1eb0bdc8ef63e1e88172b96bc435b1cd9fc93ecc->-r requirements.txt (line 7))
+    Obtaining dependency information for jmespath<2.0.0,>=0.7.1 from https://files.pythonhosted.org/packages/14/2f/967ba146e6d58cf6a652da73885f52fc68001525b4197effc174321d70b4/jmespath-1.1.0-py3-none-any.whl.metadata
+    Downloading jmespath-1.1.0-py3-none-any.whl.metadata (7.6 kB)
+  Collecting s3transfer<0.20.0,>=0.19.0 (from boto3->poly_bench_evaluation@ git+https://github.com/amazon-science/SWE-PolyBench.git@1eb0bdc8ef63e1e88172b96bc435b1cd9fc93ecc->-r requirements.txt (line 7))
+    Obtaining dependency information for s3transfer<0.20.0,>=0.19.0 from https://files.pythonhosted.org/packages/46/5f/4c174edad94f82de888ac00a5ddd8d07b35609b6c94f0bdf4d74af57703e/s3transfer-0.19.0-py3-none-any.whl.metadata
+    Downloading s3transfer-0.19.0-py3-none-any.whl.metadata (1.7 kB)
+  Collecting fastcore>=1.12.19 (from ghapi->swebench>=4.1.0->-r requirements.txt (line 3))
+    Obtaining dependency information for fastcore>=1.12.19 from https://files.pythonhosted.org/packages/29/11/867a59ae2d233ce81da373513cabaca2abf03f0180b28e85cf3ae2d5f7f6/fastcore-1.13.6-py3-none-any.whl.metadata
+    Downloading fastcore-1.13.6-py3-none-any.whl.metadata (3.4 kB)
+  Collecting gitdb<5,>=4.0.1 (from GitPython->swebench>=4.1.0->-r requirements.txt (line 3))
+    Obtaining dependency information for gitdb<5,>=4.0.1 from https://files.pythonhosted.org/packages/a0/61/5c78b91c3143ed5c14207f463aecfc8f9dbb5092fb2869baf37c273b2705/gitdb-4.0.12-py3-none-any.whl.metadata
+    Downloading gitdb-4.0.12-py3-none-any.whl.metadata (1.2 kB)
+  Collecting cbor2 (from modal->swebench>=4.1.0->-r requirements.txt (line 3))
+    Obtaining dependency information for cbor2 from https://files.pythonhosted.org/packages/3a/f3/7fed7cee8456932d38e7b11d5034470ee9e91378d16f762c552e78df34fa/cbor2-6.1.2-cp311-cp311-manylinux_2_28_x86_64.whl.metadata
+    Downloading cbor2-6.1.2-cp311-cp311-manylinux_2_28_x86_64.whl.metadata (5.5 kB)
+  Collecting grpclib<0.4.10,>=0.4.7 (from modal->swebench>=4.1.0->-r requirements.txt (line 3))
+    Obtaining dependency information for grpclib<0.4.10,>=0.4.7 from https://files.pythonhosted.org/packages/5c/90/b0cbbd9efcc82816c58f31a34963071aa19fb792a212a5d9caf8e0fc3097/grpclib-0.4.9-py3-none-any.whl.metadata
+    Downloading grpclib-0.4.9-py3-none-any.whl.metadata (6.1 kB)
+  Collecting protobuf!=4.24.0,<7.0,>=3.19 (from modal->swebench>=4.1.0->-r requirements.txt (line 3))
+    Obtaining dependency information for protobuf!=4.24.0,<7.0,>=3.19 from https://files.pythonhosted.org/packages/16/92/d1e32e3e0d894fe00b15ce28ad4944ab692713f2e7f0a99787405e43533a/protobuf-6.33.6-cp39-abi3-manylinux2014_x86_64.whl.metadata
+    Downloading protobuf-6.33.6-cp39-abi3-manylinux2014_x86_64.whl.metadata (593 bytes)
+  Collecting synchronicity~=0.12.3 (from modal->swebench>=4.1.0->-r requirements.txt (line 3))
+    Obtaining dependency information for synchronicity~=0.12.3 from https://files.pythonhosted.org/packages/06/74/ad9b99520f70c0bc3318e582e359d360cfc0f7afd7bf368a7f24013cece7/synchronicity-0.12.5-py3-none-any.whl.metadata
+    Downloading synchronicity-0.12.5-py3-none-any.whl.metadata (14 kB)
+  Collecting toml (from modal->swebench>=4.1.0->-r requirements.txt (line 3))
+    Obtaining dependency information for toml from https://files.pythonhosted.org/packages/44/6f/7120676b6d73228c96e17f1f794d8ab046fc910d781c8d151120c3f1569e/toml-0.10.2-py2.py3-none-any.whl.metadata
+    Downloading toml-0.10.2-py2.py3-none-any.whl.metadata (7.1 kB)
+  Collecting types-certifi (from modal->swebench>=4.1.0->-r requirements.txt (line 3))
+    Obtaining dependency information for types-certifi from https://files.pythonhosted.org/packages/b5/63/2463d89481e811f007b0e1cd0a91e52e141b47f9de724d20db7b861dcfec/types_certifi-2021.10.8.3-py3-none-any.whl.metadata
+    Downloading types_certifi-2021.10.8.3-py3-none-any.whl.metadata (1.4 kB)
+  Collecting types-toml (from modal->swebench>=4.1.0->-r requirements.txt (line 3))
+    Obtaining dependency information for types-toml from https://files.pythonhosted.org/packages/91/25/489751806bf5c95e4007f8e17409199c54d31e49ffbea07c5729b1286c8e/types_toml-0.10.8.20260518-py3-none-any.whl.metadata
+    Downloading types_toml-0.10.8.20260518-py3-none-any.whl.metadata (1.7 kB)
+  Collecting watchfiles (from modal->swebench>=4.1.0->-r requirements.txt (line 3))
+    Obtaining dependency information for watchfiles from https://files.pythonhosted.org/packages/ee/5a/73e2959af1b97fd5d556f9a8bdba017be23ceeef731869d5eaa0a753d5a3/watchfiles-1.2.0-cp311-cp311-manylinux_2_17_x86_64.manylinux2014_x86_64.whl.metadata
+    Downloading watchfiles-1.2.0-cp311-cp311-manylinux_2_17_x86_64.manylinux2014_x86_64.whl.metadata (4.9 kB)
+  Requirement already satisfied: python-dateutil>=2.8.2 in /home/users/twang/.local/lib/python3.11/site-packages (from pandas->poly_bench_evaluation@ git+https://github.com/amazon-science/SWE-PolyBench.git@1eb0bdc8ef63e1e88172b96bc435b1cd9fc93ecc->-r requirements.txt (line 7)) (2.9.0.post0)
+  Collecting cfgv>=2.0.0 (from pre-commit->swebench>=4.1.0->-r requirements.txt (line 3))
+    Obtaining dependency information for cfgv>=2.0.0 from https://files.pythonhosted.org/packages/db/3c/33bac158f8ab7f89b2e59426d5fe2e4f63f7ed25df84c036890172b412b5/cfgv-3.5.0-py2.py3-none-any.whl.metadata
+    Downloading cfgv-3.5.0-py2.py3-none-any.whl.metadata (8.9 kB)
+  Collecting identify>=1.0.0 (from pre-commit->swebench>=4.1.0->-r requirements.txt (line 3))
+    Obtaining dependency information for identify>=1.0.0 from https://files.pythonhosted.org/packages/94/84/d9273cd09688070a6523c4aee4663a8538721b2b755c4962aafae0011e72/identify-2.6.19-py2.py3-none-any.whl.metadata
+    Downloading identify-2.6.19-py2.py3-none-any.whl.metadata (4.4 kB)
+  Collecting nodeenv>=0.11.1 (from pre-commit->swebench>=4.1.0->-r requirements.txt (line 3))
+    Obtaining dependency information for nodeenv>=0.11.1 from https://files.pythonhosted.org/packages/88/b2/d0896bdcdc8d28a7fc5717c305f1a861c26e18c05047949fb371034d98bd/nodeenv-1.10.0-py2.py3-none-any.whl.metadata
+    Downloading nodeenv-1.10.0-py2.py3-none-any.whl.metadata (24 kB)
+  Collecting virtualenv>=20.10.0 (from pre-commit->swebench>=4.1.0->-r requirements.txt (line 3))
+    Obtaining dependency information for virtualenv>=20.10.0 from https://files.pythonhosted.org/packages/2c/02/3623e6169bed617ed1e2d372f7c69f92ec28d54c4dfc997055c8578ec148/virtualenv-21.5.1-py3-none-any.whl.metadata
+    Downloading virtualenv-21.5.1-py3-none-any.whl.metadata (3.4 kB)
+  Collecting wcwidth (from prompt_toolkit->mini-swe-agent==1.17.5->-r requirements.txt (line 2))
+    Obtaining dependency information for wcwidth from https://files.pythonhosted.org/packages/bd/6e/95b0e537de1f4d4301f76f944642c6da50d1511cc7b3d64dc418a66c7509/wcwidth-0.8.1-py3-none-any.whl.metadata
+    Downloading wcwidth-0.8.1-py3-none-any.whl.metadata (43 kB)
+       ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 43.1/43.1 kB 13.4 MB/s eta 0:00:00
+  Collecting mdit-py-plugins (from textual->mini-swe-agent==1.17.5->-r requirements.txt (line 2))
+    Obtaining dependency information for mdit-py-plugins from https://files.pythonhosted.org/packages/a5/69/6da5581c6a7fede7dc261bf4e67d6adca4196f176b43288b55b3db395b6e/mdit_py_plugins-0.6.1-py3-none-any.whl.metadata
+    Downloading mdit_py_plugins-0.6.1-py3-none-any.whl.metadata (2.9 kB)
+  Collecting smmap<6,>=3.0.1 (from gitdb<5,>=4.0.1->GitPython->swebench>=4.1.0->-r requirements.txt (line 3))
+    Obtaining dependency information for smmap<6,>=3.0.1 from https://files.pythonhosted.org/packages/c1/d4/59e74daffcb57a07668852eeeb6035af9f32cbfd7a1d2511f17d2fe6a738/smmap-5.0.3-py3-none-any.whl.metadata
+    Downloading smmap-5.0.3-py3-none-any.whl.metadata (4.6 kB)
+  Collecting h2<5,>=3.1.0 (from grpclib<0.4.10,>=0.4.7->modal->swebench>=4.1.0->-r requirements.txt (line 3))
+    Obtaining dependency information for h2<5,>=3.1.0 from https://files.pythonhosted.org/packages/69/b2/119f6e6dcbd96f9069ce9a2665e0146588dc9f88f29549711853645e736a/h2-4.3.0-py3-none-any.whl.metadata
+    Downloading h2-4.3.0-py3-none-any.whl.metadata (5.1 kB)
+  Collecting mdurl~=0.1 (from markdown-it-py>=2.2.0->rich->mini-swe-agent==1.17.5->-r requirements.txt (line 2))
+    Obtaining dependency information for mdurl~=0.1 from https://files.pythonhosted.org/packages/b3/38/89ba8ad64ae25be8de66a6d463314cf1eb366222074cfda9ee839c56a4b4/mdurl-0.1.2-py3-none-any.whl.metadata
+    Downloading mdurl-0.1.2-py3-none-any.whl.metadata (1.6 kB)
+  Collecting linkify-it-py<3,>=1 (from markdown-it-py>=2.2.0->rich->mini-swe-agent==1.17.5->-r requirements.txt (line 2))
+    Obtaining dependency information for linkify-it-py<3,>=1 from https://files.pythonhosted.org/packages/b4/de/88b3be5c31b22333b3ca2f6ff1de4e863d8fe45aaea7485f591970ec1d3e/linkify_it_py-2.1.0-py3-none-any.whl.metadata
+    Downloading linkify_it_py-2.1.0-py3-none-any.whl.metadata (8.5 kB)
+  Requirement already satisfied: six>=1.5 in /home/users/twang/.local/lib/python3.11/site-packages (from python-dateutil>=2.8.2->pandas->poly_bench_evaluation@ git+https://github.com/amazon-science/SWE-PolyBench.git@1eb0bdc8ef63e1e88172b96bc435b1cd9fc93ecc->-r requirements.txt (line 7)) (1.17.0)
+  Collecting distlib<1,>=0.3.7 (from virtualenv>=20.10.0->pre-commit->swebench>=4.1.0->-r requirements.txt (line 3))
+    Obtaining dependency information for distlib<1,>=0.3.7 from https://files.pythonhosted.org/packages/02/08/9c41fb51ab5b43eb21674aff13df270e8ba6c4b29c8624e328dc7a9482af/distlib-0.4.3-py2.py3-none-any.whl.metadata
+    Downloading distlib-0.4.3-py2.py3-none-any.whl.metadata (5.3 kB)
+  Collecting python-discovery>=1.4.2 (from virtualenv>=20.10.0->pre-commit->swebench>=4.1.0->-r requirements.txt (line 3))
+    Obtaining dependency information for python-discovery>=1.4.2 from https://files.pythonhosted.org/packages/1a/82/a70006589557f267f15bd384c0642ad49f0d97b690c3a05b166b9dcbad3b/python_discovery-1.4.2-py3-none-any.whl.metadata
+    Downloading python_discovery-1.4.2-py3-none-any.whl.metadata (5.6 kB)
+  Collecting hyperframe<7,>=6.1 (from h2<5,>=3.1.0->grpclib<0.4.10,>=0.4.7->modal->swebench>=4.1.0->-r requirements.txt (line 3))
+    Obtaining dependency information for hyperframe<7,>=6.1 from https://files.pythonhosted.org/packages/48/30/47d0bf6072f7252e6521f3447ccfa40b421b6824517f82854703d0f5a98b/hyperframe-6.1.0-py3-none-any.whl.metadata
+    Downloading hyperframe-6.1.0-py3-none-any.whl.metadata (4.3 kB)
+  Collecting hpack<5,>=4.1 (from h2<5,>=3.1.0->grpclib<0.4.10,>=0.4.7->modal->swebench>=4.1.0->-r requirements.txt (line 3))
+    Obtaining dependency information for hpack<5,>=4.1 from https://files.pythonhosted.org/packages/07/c6/80c95b1b2b94682a72cbdbfb85b81ae2daffa4291fbfa1b1464502ede10d/hpack-4.1.0-py3-none-any.whl.metadata
+    Downloading hpack-4.1.0-py3-none-any.whl.metadata (4.6 kB)
+  Collecting uc-micro-py (from linkify-it-py<3,>=1->markdown-it-py>=2.2.0->rich->mini-swe-agent==1.17.5->-r requirements.txt (line 2))
+    Obtaining dependency information for uc-micro-py from https://files.pythonhosted.org/packages/61/73/d21edf5b204d1467e06500080a50f79d49ef2b997c79123a536d4a17d97c/uc_micro_py-2.0.0-py3-none-any.whl.metadata
+    Downloading uc_micro_py-2.0.0-py3-none-any.whl.metadata (2.2 kB)
+  Downloading mini_swe_agent-1.17.5-py3-none-any.whl (81 kB)
+     ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 81.2/81.2 kB 26.3 MB/s eta 0:00:00
+  Downloading swebench-4.1.0-py3-none-any.whl (157 kB)
+     ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 157.2/157.2 kB 42.3 MB/s eta 0:00:00
+  Downloading pyyaml-6.0.3-cp311-cp311-manylinux2014_x86_64.manylinux_2_17_x86_64.manylinux_2_28_x86_64.whl (806 kB)
+     ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 806.6/806.6 kB 80.9 MB/s eta 0:00:00
+  Downloading scikit_learn-1.3.2-cp311-cp311-manylinux_2_17_x86_64.manylinux2014_x86_64.whl (10.9 MB)
+     ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 10.9/10.9 MB 145.7 MB/s eta 0:00:00
+  Downloading tree_sitter-0.21.3-cp311-cp311-manylinux_2_17_x86_64.manylinux2014_x86_64.whl (498 kB)
+     ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 498.8/498.8 kB 72.3 MB/s eta 0:00:00
+  Downloading tree_sitter_languages-1.10.2-cp311-cp311-manylinux_2_17_x86_64.manylinux2014_x86_64.whl (8.4 MB)
+     ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 8.4/8.4 MB 166.0 MB/s eta 0:00:00
+  Downloading openai-2.43.0-py3-none-any.whl (1.4 MB)
+     ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 1.4/1.4 MB 73.5 MB/s eta 0:00:00
+  Downloading litellm-1.89.2-py3-none-any.whl (15.5 MB)
+     ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 15.5/15.5 MB 120.6 MB/s eta 0:00:00
+  Downloading pytest-9.1.1-py3-none-any.whl (386 kB)
+     ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 386.5/386.5 kB 69.9 MB/s eta 0:00:00
+  Downloading pytest_cov-7.1.0-py3-none-any.whl (22 kB)
+  Downloading tqdm-4.68.3-py3-none-any.whl (78 kB)
+     ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 78.3/78.3 kB 11.0 MB/s eta 0:00:00
+  Downloading cloudpickle-3.1.2-py3-none-any.whl (22 kB)
+  Downloading datasets-5.0.0-py3-none-any.whl (555 kB)
+     ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 555.1/555.1 kB 101.3 MB/s eta 0:00:00
+  Downloading pydantic-2.13.4-py3-none-any.whl (472 kB)
+     ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 472.3/472.3 kB 96.1 MB/s eta 0:00:00
+  Downloading pydantic_core-2.46.4-cp311-cp311-manylinux_2_17_x86_64.manylinux2014_x86_64.whl (2.1 MB)
+     ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 2.1/2.1 MB 146.7 MB/s eta 0:00:00
+  Downloading aiohttp-3.14.1-cp311-cp311-manylinux2014_x86_64.manylinux_2_17_x86_64.manylinux_2_28_x86_64.whl (1.8 MB)
+     ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 1.8/1.8 MB 147.8 MB/s eta 0:00:00
+  Downloading annotated_types-0.7.0-py3-none-any.whl (13 kB)
+  Downloading anyio-4.14.0-py3-none-any.whl (123 kB)
+     ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 123.5/123.5 kB 41.8 MB/s eta 0:00:00
+  Downloading click-8.4.1-py3-none-any.whl (116 kB)
+     ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 116.6/116.6 kB 36.8 MB/s eta 0:00:00
+  Downloading dill-0.4.1-py3-none-any.whl (120 kB)
+     ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 120.0/120.0 kB 36.8 MB/s eta 0:00:00
+  Downloading distro-1.9.0-py3-none-any.whl (20 kB)
+  Downloading fastuuid-0.14.0-cp311-cp311-manylinux_2_17_x86_64.manylinux2014_x86_64.whl (279 kB)
+     ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 279.7/279.7 kB 55.0 MB/s eta 0:00:00
+  Downloading httpx-0.28.1-py3-none-any.whl (73 kB)
+     ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 73.5/73.5 kB 23.2 MB/s eta 0:00:00
+  Downloading httpcore-1.0.9-py3-none-any.whl (78 kB)
+     ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 78.8/78.8 kB 27.7 MB/s eta 0:00:00
+  Downloading huggingface_hub-1.20.1-py3-none-any.whl (719 kB)
+     ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 719.8/719.8 kB 108.1 MB/s eta 0:00:00
+  Downloading filelock-3.29.4-py3-none-any.whl (42 kB)
+     ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 42.8/42.8 kB 11.4 MB/s eta 0:00:00
+  Downloading importlib_metadata-8.9.0-py3-none-any.whl (27 kB)
+  Downloading iniconfig-2.3.0-py3-none-any.whl (7.5 kB)
+  Downloading jinja2-3.1.6-py3-none-any.whl (134 kB)
+     ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 134.9/134.9 kB 47.4 MB/s eta 0:00:00
+  Downloading jiter-0.15.0-cp311-cp311-manylinux_2_17_x86_64.manylinux2014_x86_64.whl (349 kB)
+     ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 349.4/349.4 kB 96.2 MB/s eta 0:00:00
+  Downloading jsonschema-4.26.0-py3-none-any.whl (90 kB)
+     ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 90.6/90.6 kB 33.5 MB/s eta 0:00:00
+  Downloading multiprocess-0.70.19-py311-none-any.whl (144 kB)
+     ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 144.5/144.5 kB 47.1 MB/s eta 0:00:00
+  Downloading numpy-1.26.4-cp311-cp311-manylinux_2_17_x86_64.manylinux2014_x86_64.whl (18.3 MB)
+     ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 18.3/18.3 MB 141.9 MB/s eta 0:00:00
+  Downloading pluggy-1.6.0-py3-none-any.whl (20 kB)
+  Downloading pyarrow-24.0.0-cp311-cp311-manylinux_2_28_x86_64.whl (48.8 MB)
+     ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 48.8/48.8 MB 91.2 MB/s eta 0:00:00
+  Downloading pygments-2.20.0-py3-none-any.whl (1.2 MB)
+     ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 1.2/1.2 MB 132.4 MB/s eta 0:00:00
+  Downloading python_dotenv-1.2.2-py3-none-any.whl (22 kB)
+  Downloading requests-2.34.2-py3-none-any.whl (73 kB)
+     ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 73.1/73.1 kB 31.0 MB/s eta 0:00:00
+  Downloading tiktoken-0.13.0-cp311-cp311-manylinux_2_28_x86_64.whl (1.1 MB)
+     ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 1.1/1.1 MB 135.0 MB/s eta 0:00:00
+  Downloading tokenizers-0.23.1-cp310-abi3-manylinux_2_17_x86_64.manylinux2014_x86_64.whl (3.3 MB)
+     ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 3.3/3.3 MB 98.4 MB/s eta 0:00:00
+  Downloading typer-0.25.1-py3-none-any.whl (58 kB)
+     ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 58.4/58.4 kB 16.9 MB/s eta 0:00:00
+  Downloading rich-15.0.0-py3-none-any.whl (310 kB)
+     ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 310.7/310.7 kB 80.4 MB/s eta 0:00:00
+  Downloading typing_extensions-4.15.0-py3-none-any.whl (44 kB)
+     ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 44.6/44.6 kB 15.0 MB/s eta 0:00:00
+  Downloading typing_inspection-0.4.2-py3-none-any.whl (14 kB)
+  Downloading beautifulsoup4-4.15.0-py3-none-any.whl (109 kB)
+     ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 109.9/109.9 kB 39.6 MB/s eta 0:00:00
+  Downloading boto3-1.43.33-py3-none-any.whl (140 kB)
+     ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 140.5/140.5 kB 40.6 MB/s eta 0:00:00
+  Downloading chardet-7.4.3-cp311-cp311-manylinux2014_x86_64.manylinux_2_17_x86_64.manylinux_2_28_x86_64.whl (883 kB)
+     ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 883.4/883.4 kB 118.8 MB/s eta 0:00:00
+  Downloading docker-7.1.0-py3-none-any.whl (147 kB)
+     ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 147.8/147.8 kB 56.2 MB/s eta 0:00:00
+  Downloading ghapi-1.0.13-py3-none-any.whl (71 kB)
+     ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 71.4/71.4 kB 25.8 MB/s eta 0:00:00
+  Downloading gitpython-3.1.50-py3-none-any.whl (212 kB)
+     ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 212.5/212.5 kB 61.3 MB/s eta 0:00:00
+  Downloading loguru-0.7.3-py3-none-any.whl (61 kB)
+     ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 61.6/61.6 kB 13.7 MB/s eta 0:00:00
+  Downloading modal-1.5.0-py3-none-any.whl (882 kB)
+     ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 882.1/882.1 kB 76.8 MB/s eta 0:00:00
+  Downloading platformdirs-4.10.0-py3-none-any.whl (22 kB)
+  Downloading pre_commit-4.6.0-py2.py3-none-any.whl (226 kB)
+     ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 226.5/226.5 kB 63.0 MB/s eta 0:00:00
+  Downloading prompt_toolkit-3.0.52-py3-none-any.whl (391 kB)
+     ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 391.4/391.4 kB 89.3 MB/s eta 0:00:00
+  Downloading sniffio-1.3.1-py3-none-any.whl (10 kB)
+  Downloading tenacity-9.1.4-py3-none-any.whl (28 kB)
+  Downloading textual-8.2.7-py3-none-any.whl (731 kB)
+     ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 731.1/731.1 kB 113.2 MB/s eta 0:00:00
+  Downloading unidiff-0.7.5-py2.py3-none-any.whl (14 kB)
+  Downloading whatthepatch-1.0.7-py3-none-any.whl (11 kB)
+  Downloading xxhash-3.7.0-cp311-cp311-manylinux2014_x86_64.manylinux_2_17_x86_64.manylinux_2_28_x86_64.whl (193 kB)
+     ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 193.9/193.9 kB 55.8 MB/s eta 0:00:00
+  Downloading aiohappyeyeballs-2.6.2-py3-none-any.whl (15 kB)
+  Downloading aiosignal-1.4.0-py3-none-any.whl (7.5 kB)
+  Downloading annotated_doc-0.0.4-py3-none-any.whl (5.3 kB)
+  Downloading attrs-26.1.0-py3-none-any.whl (67 kB)
+     ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 67.5/67.5 kB 11.3 MB/s eta 0:00:00
+  Downloading botocore-1.43.33-py3-none-any.whl (15.3 MB)
+     ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 15.3/15.3 MB 160.9 MB/s eta 0:00:00
+  Downloading certifi-2026.6.17-py3-none-any.whl (133 kB)
+     ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 133.3/133.3 kB 43.0 MB/s eta 0:00:00
+  Downloading cfgv-3.5.0-py2.py3-none-any.whl (7.4 kB)
+  Downloading charset_normalizer-3.4.7-cp311-cp311-manylinux2014_x86_64.manylinux_2_17_x86_64.manylinux_2_28_x86_64.whl (214 kB)
+     ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 214.1/214.1 kB 56.3 MB/s eta 0:00:00
+  Downloading fastcore-1.13.6-py3-none-any.whl (105 kB)
+     ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 105.8/105.8 kB 24.2 MB/s eta 0:00:00
+  Downloading frozenlist-1.8.0-cp311-cp311-manylinux1_x86_64.manylinux_2_28_x86_64.manylinux_2_5_x86_64.whl (231 kB)
+     ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 231.1/231.1 kB 36.2 MB/s eta 0:00:00
+  Downloading fsspec-2026.4.0-py3-none-any.whl (203 kB)
+     ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 203.4/203.4 kB 47.3 MB/s eta 0:00:00
+  Downloading gitdb-4.0.12-py3-none-any.whl (62 kB)
+     ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 62.8/62.8 kB 17.1 MB/s eta 0:00:00
+  Downloading grpclib-0.4.9-py3-none-any.whl (77 kB)
+     ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 77.1/77.1 kB 15.6 MB/s eta 0:00:00
+  Downloading hf_xet-1.5.1-cp37-abi3-manylinux2014_x86_64.manylinux_2_17_x86_64.whl (4.5 MB)
+     ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 4.5/4.5 MB 160.2 MB/s eta 0:00:00
+  Downloading identify-2.6.19-py2.py3-none-any.whl (99 kB)
+     ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 99.4/99.4 kB 28.5 MB/s eta 0:00:00
+  Downloading idna-3.18-py3-none-any.whl (65 kB)
+     ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 65.5/65.5 kB 27.1 MB/s eta 0:00:00
+  Downloading jmespath-1.1.0-py3-none-any.whl (20 kB)
+  Downloading joblib-1.5.3-py3-none-any.whl (309 kB)
+     ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 309.1/309.1 kB 78.2 MB/s eta 0:00:00
+  Downloading jsonschema_specifications-2025.9.1-py3-none-any.whl (18 kB)
+  Downloading markdown_it_py-4.2.0-py3-none-any.whl (91 kB)
+     ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 91.7/91.7 kB 28.2 MB/s eta 0:00:00
+  Downloading markupsafe-3.0.3-cp311-cp311-manylinux2014_x86_64.manylinux_2_17_x86_64.manylinux_2_28_x86_64.whl (22 kB)
+  Downloading multidict-6.7.1-cp311-cp311-manylinux2014_x86_64.manylinux_2_17_x86_64.manylinux_2_28_x86_64.whl (246 kB)
+     ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 246.3/246.3 kB 33.9 MB/s eta 0:00:00
+  Downloading nodeenv-1.10.0-py2.py3-none-any.whl (23 kB)
+  Downloading propcache-0.5.2-cp311-cp311-manylinux2014_x86_64.manylinux_2_17_x86_64.manylinux_2_28_x86_64.whl (58 kB)
+     ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 58.9/58.9 kB 21.1 MB/s eta 0:00:00
+  Downloading protobuf-6.33.6-cp39-abi3-manylinux2014_x86_64.whl (323 kB)
+     ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 323.4/323.4 kB 63.4 MB/s eta 0:00:00
+  Downloading referencing-0.37.0-py3-none-any.whl (26 kB)
+  Downloading rpds_py-2026.5.1-cp311-cp311-manylinux_2_17_x86_64.manylinux2014_x86_64.whl (378 kB)
+     ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 378.0/378.0 kB 88.5 MB/s eta 0:00:00
+  Downloading s3transfer-0.19.0-py3-none-any.whl (90 kB)
+     ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 90.1/90.1 kB 31.4 MB/s eta 0:00:00
+  Downloading scipy-1.17.1-cp311-cp311-manylinux_2_27_x86_64.manylinux_2_28_x86_64.whl (35.3 MB)
+     ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 35.3/35.3 MB 74.4 MB/s eta 0:00:00
+  Downloading shellingham-1.5.4-py2.py3-none-any.whl (9.8 kB)
+  Downloading soupsieve-2.8.4-py3-none-any.whl (37 kB)
+  Downloading synchronicity-0.12.5-py3-none-any.whl (41 kB)
+     ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 41.1/41.1 kB 15.0 MB/s eta 0:00:00
+  Downloading threadpoolctl-3.6.0-py3-none-any.whl (18 kB)
+  Downloading urllib3-2.7.0-py3-none-any.whl (131 kB)
+     ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 131.1/131.1 kB 50.8 MB/s eta 0:00:00
+  Downloading virtualenv-21.5.1-py3-none-any.whl (4.6 MB)
+     ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 4.6/4.6 MB 156.0 MB/s eta 0:00:00
+  Downloading yarl-1.24.2-cp311-cp311-manylinux2014_x86_64.manylinux_2_17_x86_64.manylinux_2_28_x86_64.whl (106 kB)
+     ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 106.4/106.4 kB 17.5 MB/s eta 0:00:00
+  Downloading zipp-4.1.0-py3-none-any.whl (10 kB)
+  Downloading cbor2-6.1.2-cp311-cp311-manylinux_2_28_x86_64.whl (468 kB)
+     ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 468.8/468.8 kB 94.0 MB/s eta 0:00:00
+  Downloading coverage-7.14.1-cp311-cp311-manylinux1_x86_64.manylinux_2_28_x86_64.manylinux_2_5_x86_64.whl (252 kB)
+     ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 252.7/252.7 kB 70.7 MB/s eta 0:00:00
+  Downloading mdit_py_plugins-0.6.1-py3-none-any.whl (66 kB)
+     ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 66.7/66.7 kB 23.3 MB/s eta 0:00:00
+  Downloading regex-2026.5.9-cp311-cp311-manylinux2014_x86_64.manylinux_2_17_x86_64.manylinux_2_28_x86_64.whl (799 kB)
+     ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 799.8/799.8 kB 117.2 MB/s eta 0:00:00
+  Downloading toml-0.10.2-py2.py3-none-any.whl (16 kB)
+  Downloading types_certifi-2021.10.8.3-py3-none-any.whl (2.1 kB)
+  Downloading types_toml-0.10.8.20260518-py3-none-any.whl (9.7 kB)
+  Downloading watchfiles-1.2.0-cp311-cp311-manylinux_2_17_x86_64.manylinux2014_x86_64.whl (456 kB)
+     ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 456.9/456.9 kB 96.9 MB/s eta 0:00:00
+  Downloading wcwidth-0.8.1-py3-none-any.whl (323 kB)
+     ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 323.1/323.1 kB 85.3 MB/s eta 0:00:00
+  Downloading distlib-0.4.3-py2.py3-none-any.whl (470 kB)
+     ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 470.6/470.6 kB 84.4 MB/s eta 0:00:00
+  Downloading h11-0.16.0-py3-none-any.whl (37 kB)
+  Downloading h2-4.3.0-py3-none-any.whl (61 kB)
+     ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 61.8/61.8 kB 10.9 MB/s eta 0:00:00
+  Downloading linkify_it_py-2.1.0-py3-none-any.whl (19 kB)
+  Downloading mdurl-0.1.2-py3-none-any.whl (10.0 kB)
+  Downloading python_discovery-1.4.2-py3-none-any.whl (33 kB)
+  Downloading smmap-5.0.3-py3-none-any.whl (24 kB)
+  Downloading hpack-4.1.0-py3-none-any.whl (34 kB)
+  Downloading hyperframe-6.1.0-py3-none-any.whl (13 kB)
+  Downloading uc_micro_py-2.0.0-py3-none-any.whl (6.4 kB)
+  Building wheels for collected packages: poly_bench_evaluation
+    Building wheel for poly_bench_evaluation (pyproject.toml): started
+    Building wheel for poly_bench_evaluation (pyproject.toml): finished with status 'done'
+    Created wheel for poly_bench_evaluation: filename=poly_bench_evaluation-0.1.0-py3-none-any.whl size=41374 sha256=08113b1d85acc2a7c8042776267ac40873f5a4650a1b9e8a2ffa6059d05ea03c
+    Stored in directory: /mnt/aiongpfs/users/twang/.cache/pip/wheels/8a/bf/9c/8c2167f6ad7f07662b65ba08261986f955cfc9027ef73588f3
+  Successfully built poly_bench_evaluation
+  Installing collected packages: unidiff, types-certifi, distlib, zipp, xxhash, whatthepatch, wcwidth, urllib3, uc-micro-py, typing-extensions, types-toml, tree-sitter, tqdm, toml, threadpoolctl, tenacity, soupsieve, sniffio, smmap, shellingham, rpds-py, regex, pyyaml, python-dotenv, pygments, pyarrow, protobuf, propcache, pluggy, platformdirs, numpy, nodeenv, multidict, mdurl, MarkupSafe, loguru, joblib, jmespath, jiter, iniconfig, idna, identify, hyperframe, hpack, hf-xet, h11, fsspec, frozenlist, filelock, fastuuid, fastcore, distro, dill, coverage, cloudpickle, click, charset_normalizer, chardet, cfgv, certifi, cbor2, attrs, annotated-types, annotated-doc, aiohappyeyeballs, yarl, typing-inspection, tree-sitter-languages, synchronicity, scipy, requests, referencing, python-discovery, pytest, pydantic-core, prompt_toolkit, multiprocess, markdown-it-py, linkify-it-py, jinja2, importlib-metadata, httpcore, h2, gitdb, ghapi, botocore, beautifulsoup4, anyio, aiosignal, watchfiles, virtualenv, tiktoken, scikit-learn, s3transfer, rich, pytest-cov, pydantic, mdit-py-plugins, jsonschema-specifications, httpx, grpclib, GitPython, docker, aiohttp, typer, textual, pre-commit, openai, modal, jsonschema, boto3, huggingface-hub, tokenizers, datasets, swebench, poly_bench_evaluation, litellm, mini-swe-agent
+    Attempting uninstall: numpy
+      Found existing installation: numpy 2.4.6
+      Uninstalling numpy-2.4.6:
+        Successfully uninstalled numpy-2.4.6
+  Successfully installed GitPython-3.1.50 MarkupSafe-3.0.3 aiohappyeyeballs-2.6.2 aiohttp-3.14.1 aiosignal-1.4.0 annotated-doc-0.0.4 annotated-types-0.7.0 anyio-4.14.0 attrs-26.1.0 beautifulsoup4-4.15.0 boto3-1.43.33 botocore-1.43.33 cbor2-6.1.2 certifi-2026.6.17 cfgv-3.5.0 chardet-7.4.3 charset_normalizer-3.4.7 click-8.4.1 cloudpickle-3.1.2 coverage-7.14.1 datasets-5.0.0 dill-0.4.1 distlib-0.4.3 distro-1.9.0 docker-7.1.0 fastcore-1.13.6 fastuuid-0.14.0 filelock-3.29.4 frozenlist-1.8.0 fsspec-2026.4.0 ghapi-1.0.13 gitdb-4.0.12 grpclib-0.4.9 h11-0.16.0 h2-4.3.0 hf-xet-1.5.1 hpack-4.1.0 httpcore-1.0.9 httpx-0.28.1 huggingface-hub-1.20.1 hyperframe-6.1.0 identify-2.6.19 idna-3.18 importlib-metadata-8.9.0 iniconfig-2.3.0 jinja2-3.1.6 jiter-0.15.0 jmespath-1.1.0 joblib-1.5.3 jsonschema-4.26.0 jsonschema-specifications-2025.9.1 linkify-it-py-2.1.0 litellm-1.89.2 loguru-0.7.3 markdown-it-py-4.2.0 mdit-py-plugins-0.6.1 mdurl-0.1.2 mini-swe-agent-1.17.5 modal-1.5.0 multidict-6.7.1 multiprocess-0.70.19 nodeenv-1.10.0 numpy-1.26.4 openai-2.43.0 platformdirs-4.10.0 pluggy-1.6.0 poly_bench_evaluation-0.1.0 pre-commit-4.6.0 prompt_toolkit-3.0.52 propcache-0.5.2 protobuf-6.33.6 pyarrow-24.0.0 pydantic-2.13.4 pydantic-core-2.46.4 pygments-2.20.0 pytest-9.1.1 pytest-cov-7.1.0 python-discovery-1.4.2 python-dotenv-1.2.2 pyyaml-6.0.3 referencing-0.37.0 regex-2026.5.9 requests-2.34.2 rich-15.0.0 rpds-py-2026.5.1 s3transfer-0.19.0 scikit-learn-1.3.2 scipy-1.17.1 shellingham-1.5.4 smmap-5.0.3 sniffio-1.3.1 soupsieve-2.8.4 swebench-4.1.0 synchronicity-0.12.5 tenacity-9.1.4 textual-8.2.7 threadpoolctl-3.6.0 tiktoken-0.13.0 tokenizers-0.23.1 toml-0.10.2 tqdm-4.68.3 tree-sitter-0.21.3 tree-sitter-languages-1.10.2 typer-0.25.1 types-certifi-2021.10.8.3 types-toml-0.10.8.20260518 typing-extensions-4.15.0 typing-inspection-0.4.2 uc-micro-py-2.0.0 unidiff-0.7.5 urllib3-2.7.0 virtualenv-21.5.1 watchfiles-1.2.0 wcwidth-0.8.1 whatthepatch-1.0.7 xxhash-3.7.0 yarl-1.24.2 zipp-4.1.0
+  [ulhpc-submit] environment ready
+  [ulhpc-submit] executing user command
+  [vibe-hpc-smoke] started at Fri Jun 19 16:48:33 CEST 2026
+  [vibe-hpc-smoke] host=iris-167
+  [vibe-hpc-smoke] pwd=/mnt/aiongpfs/users/twang/hpc_runs/vibe-coding-planning
+  [vibe-hpc-smoke] python=/usr/bin/python
+  Python 3.6.8
+  [ulhpc-submit] exit_code=1
+  [ulhpc-submit] job finished at Fri Jun 19 16:48:33 CEST 2026
+[2026-06-19T16:48:48] INFO === remote stderr ===
+    Running command git clone --filter=blob:none --quiet https://github.com/amazon-science/SWE-PolyBench.git /tmp/pip-install-dgydp4zh/poly-bench-evaluation_f9501373040f4fa5a4007f0a2b70813a
+    Running command git rev-parse -q --verify 'sha^1eb0bdc8ef63e1e88172b96bc435b1cd9fc93ecc'
+    Running command git fetch -q https://github.com/amazon-science/SWE-PolyBench.git 1eb0bdc8ef63e1e88172b96bc435b1cd9fc93ecc
+    Running command git checkout -q 1eb0bdc8ef63e1e88172b96bc435b1cd9fc93ecc
+  
+  [notice] A new release of pip is available: 23.2.1 -> 26.1.2
+  [notice] To update, run: pip install --upgrade pip
+  Traceback (most recent call last):
+    File "<stdin>", line 11, in <module>
+    File "/usr/lib64/python3.6/importlib/__init__.py", line 126, in import_module
+      return _bootstrap._gcd_import(name[level:], package, level)
+    File "<frozen importlib._bootstrap>", line 994, in _gcd_import
+    File "<frozen importlib._bootstrap>", line 971, in _find_and_load
+    File "<frozen importlib._bootstrap>", line 953, in _find_and_load_unlocked
+  ModuleNotFoundError: No module named 'minisweagent'
+[2026-06-19T16:48:48] INFO Detected issue: ENV_DEPENDENCY_ERROR
+[2026-06-19T16:48:48] ERROR [ENV_DEPENDENCY_ERROR] Missing or incompatible Python package detected in job output.
+Suggestion: A required package is missing or incompatible. Check requirements.txt / environment.yml.

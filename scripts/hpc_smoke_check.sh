@@ -24,6 +24,9 @@ ULHPC_CONFIG=""
 ULHPC_USER_ARG=""
 ULHPC_HOST_ARG=""
 ULHPC_PORT_ARG=""
+SKIP_PORT_CHECK=0
+SKIP_SSH_CHECK=0
+SSH_CONNECT_TIMEOUT="15"
 
 usage() {
   cat <<'USAGE'
@@ -49,7 +52,10 @@ Options:
                             (default: configs/ulhpc_submit.yaml if present)
   --user USER               UL HPC username
   --host HOST               UL HPC access host
-  --port PORT               UL HPC SSH port
+  --port PORT               UL HPC SSH port (exported as ULHPC_PORT)
+  --skip-port-check         Skip local TCP preflight before ulhpc-submit
+  --skip-ssh-check          Skip one-shot SSH preflight before ulhpc-submit
+  --ssh-connect-timeout N   Seconds for one-shot SSH preflight (default: 15)
   --conda-env NAME          Conda env to activate on HPC (default: mini-swe)
   --local-dir DIR           Local dir to sync (default: repo root)
   --full-logs               Ask ulhpc-submit to download full remote logs
@@ -118,6 +124,18 @@ while [[ $# -gt 0 ]]; do
       ULHPC_PORT_ARG="$2"
       shift 2
       ;;
+    --skip-port-check)
+      SKIP_PORT_CHECK=1
+      shift
+      ;;
+    --skip-ssh-check)
+      SKIP_SSH_CHECK=1
+      shift
+      ;;
+    --ssh-connect-timeout)
+      SSH_CONNECT_TIMEOUT="$2"
+      shift 2
+      ;;
     --conda-env)
       CONDA_ENV="$2"
       shift 2
@@ -170,6 +188,10 @@ if ! [[ "$DOCKER_MIN_FREE_GB" =~ ^[1-9][0-9]*$ ]]; then
   echo "ERROR: --docker-min-free-gb must be a positive integer" >&2
   exit 2
 fi
+if ! [[ "$SSH_CONNECT_TIMEOUT" =~ ^[1-9][0-9]*$ ]]; then
+  echo "ERROR: --ssh-connect-timeout must be a positive integer" >&2
+  exit 2
+fi
 
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 if [[ -z "$LOCAL_DIR" ]]; then
@@ -191,14 +213,115 @@ if [[ -z "${ULHPC_LOG_DIR:-}" ]]; then
 fi
 mkdir -p "$ULHPC_LOG_DIR"
 
+CONFIG_HOST=""
+CONFIG_PORT=""
+CONFIG_USER=""
+CONFIG_SSH_KEY=""
+while IFS='=' read -r CONFIG_KEY CONFIG_VALUE; do
+  case "$CONFIG_KEY" in
+    host) CONFIG_HOST="$CONFIG_VALUE" ;;
+    port) CONFIG_PORT="$CONFIG_VALUE" ;;
+    user) CONFIG_USER="$CONFIG_VALUE" ;;
+    ssh_key) CONFIG_SSH_KEY="$CONFIG_VALUE" ;;
+  esac
+done < <(python - "$ULHPC_CONFIG" <<'PY'
+import sys
+from pathlib import Path
+
+import yaml
+
+path = Path(sys.argv[1]) if len(sys.argv) > 1 and sys.argv[1] else None
+data = {}
+if path and path.exists():
+    data = yaml.safe_load(path.read_text(encoding="utf-8")) or {}
+for key in ("host", "port", "user", "ssh_key"):
+    print(f"{key}={data.get(key, '')}")
+PY
+)
+
+PREFLIGHT_HOST="${ULHPC_HOST_ARG:-${ULHPC_HOST:-${CONFIG_HOST:-access-iris.uni.lu}}}"
+PREFLIGHT_PORT="${ULHPC_PORT_ARG:-${ULHPC_PORT:-${CONFIG_PORT:-8022}}}"
+PREFLIGHT_USER="${ULHPC_USER_ARG:-${ULHPC_USER:-${CONFIG_USER:-}}}"
+PREFLIGHT_SSH_KEY="${ULHPC_SSH_KEY:-${CONFIG_SSH_KEY:-}}"
+if [[ "$PREFLIGHT_SSH_KEY" == "~/"* ]]; then
+  PREFLIGHT_SSH_KEY="$HOME/${PREFLIGHT_SSH_KEY#\~/}"
+fi
+
+if [[ -n "$ULHPC_PORT_ARG" ]]; then
+  export ULHPC_PORT="$ULHPC_PORT_ARG"
+fi
+
+if [[ "$SKIP_PORT_CHECK" -eq 0 ]]; then
+  if command -v nc >/dev/null 2>&1; then
+    echo "[hpc-smoke] checking tcp connectivity: $PREFLIGHT_HOST:$PREFLIGHT_PORT"
+    if ! nc -z -w 10 "$PREFLIGHT_HOST" "$PREFLIGHT_PORT"; then
+      echo "ERROR: cannot connect to $PREFLIGHT_HOST:$PREFLIGHT_PORT" >&2
+      echo "Check VPN/campus network, ULHPC access host/port, or use --skip-port-check to let ulhpc-submit try anyway." >&2
+      exit 3
+    fi
+  else
+    echo "[hpc-smoke] nc not found; skipping tcp preflight"
+  fi
+fi
+
+if [[ "$SKIP_SSH_CHECK" -eq 0 ]]; then
+  if [[ -z "$PREFLIGHT_USER" ]]; then
+    echo "ERROR: cannot run SSH preflight without ULHPC user." >&2
+    echo "Set user in configs/ulhpc_submit.yaml, ULHPC_USER, or --user." >&2
+    exit 2
+  fi
+  if command -v ssh >/dev/null 2>&1; then
+    SSH_PREFLIGHT_CMD=(
+      ssh
+      -p "$PREFLIGHT_PORT"
+      -o BatchMode=yes
+      -o NumberOfPasswordPrompts=0
+      -o PreferredAuthentications=publickey
+      -o ConnectTimeout="$SSH_CONNECT_TIMEOUT"
+    )
+    if [[ -n "$PREFLIGHT_SSH_KEY" ]]; then
+      SSH_PREFLIGHT_CMD+=(
+        -o IdentitiesOnly=yes
+        -i "$PREFLIGHT_SSH_KEY"
+      )
+    fi
+    SSH_PREFLIGHT_CMD+=("$PREFLIGHT_USER@$PREFLIGHT_HOST" true)
+
+    echo "[hpc-smoke] checking one-shot ssh auth: $PREFLIGHT_USER@$PREFLIGHT_HOST:$PREFLIGHT_PORT"
+    if ! "${SSH_PREFLIGHT_CMD[@]}"; then
+      echo "ERROR: one-shot SSH preflight failed for $PREFLIGHT_USER@$PREFLIGHT_HOST:$PREFLIGHT_PORT" >&2
+      echo "Not invoking ulhpc-submit, to avoid its current multi-attempt Paramiko retry loop." >&2
+      echo "After VPN/access/SSH key is stable, rerun this script; use --skip-ssh-check only when you explicitly want ulhpc-submit to try." >&2
+      exit 4
+    fi
+  else
+    echo "[hpc-smoke] ssh not found; skipping ssh preflight"
+  fi
+fi
+
 REMOTE_SCRIPT=$(cat <<EOF
 set -euo pipefail
 echo "[vibe-hpc-smoke] started at \$(date)"
 echo "[vibe-hpc-smoke] host=\$(hostname)"
 echo "[vibe-hpc-smoke] pwd=\$(pwd)"
-echo "[vibe-hpc-smoke] python=\$(command -v python)"
-python --version
-python - <<'PY'
+if command -v module >/dev/null 2>&1; then
+  module load miniconda3 2>/dev/null || true
+fi
+if command -v conda >/dev/null 2>&1; then
+  set +u
+  source "\$(conda info --base)/etc/profile.d/conda.sh"
+  set -u
+  conda activate "$CONDA_ENV"
+fi
+EASYBUILD_PYTHON="/opt/apps/easybuild/systems/iris/rhel810-20250803/2023b/broadwell/software/Python/3.11.5-GCCcore-13.2.0/bin/python"
+if [[ -x "\$EASYBUILD_PYTHON" ]]; then
+  PYTHON_BIN="\$EASYBUILD_PYTHON"
+else
+  PYTHON_BIN="\$(command -v python3.11 || command -v python)"
+fi
+echo "[vibe-hpc-smoke] python=\$PYTHON_BIN"
+"\$PYTHON_BIN" --version
+"\$PYTHON_BIN" - <<'PY'
 import importlib
 import sys
 
@@ -237,7 +360,7 @@ docker info >/tmp/vibe_hpc_docker_info.txt
 sed -n '1,40p' /tmp/vibe_hpc_docker_info.txt
 docker image ls --format '{{.Repository}}:{{.Tag}}\t{{.Size}}' | sed -n '1,20p'
 
-python -m src.environment.docker_env maintain \
+"\$PYTHON_BIN" -m src.environment.docker_env maintain \
   --max-cached-images "$DOCKER_MAX_CACHED_IMAGES" \
   --max-concurrent 1 \
   --min-free-gb "$DOCKER_MIN_FREE_GB"
@@ -268,7 +391,7 @@ if [[ -n "$ULHPC_HOST_ARG" ]]; then
   ULHPC_CMD+=(--host "$ULHPC_HOST_ARG")
 fi
 if [[ -n "$ULHPC_PORT_ARG" ]]; then
-  ULHPC_CMD+=(--port "$ULHPC_PORT_ARG")
+  :
 fi
 if [[ -n "$REMOTE_DIR" ]]; then
   ULHPC_CMD+=(--remote-dir "$REMOTE_DIR")

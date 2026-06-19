@@ -177,13 +177,21 @@ checker-only 验证使用 `max_steps=200`；extended pilot 暂时把 Checker
 `max_steps` 提高到 `500`，用于观察真实步数分布并为后续全量实验确定上限。
 Checker 单样本执行默认最多 `max_attempts=3`：偶发失败会重试，只有全部尝试
 失败才作为 operational failure。Checker 执行错误不会被当成分类错误参与优化，
-也不会写入 evaluation cache。
+也不会写入 evaluation cache。GEPA Adapter 会在每次 Checker attempt 前先准备
+对应项目镜像；镜像 inspect/pull 成功后才允许创建 Checker LLM agent，避免
+Docker 基础设施故障消耗 Checker API token。
 
 GEPA 的 Pareto 选择、minibatch sampling、Reflection proposal 和 candidate tree
 更新保持串行。`search.parallel` 仅用于同一次 Checker evaluation batch 内的
-样本级并发；输出顺序保持与输入 batch 一致。当前正式配置仍为 `parallel=1`，
-下一步需要用新的 run_dir 做 `parallel=2` 小型试运行，验证正确性、Docker 容量
-和 API rate limit 后再考虑正式启用。
+样本级并发；输出顺序保持与输入 batch 一致。当前 formal pilot 已使用
+`parallel=2` 验证该路径；后续提高并发前仍需重新评估 Docker 容量和 API rate
+limit。
+
+如果 Docker 镜像准备、容器启动或 Checker agent 运行在全部重试后仍失败，
+`progress.json` 会标记 `status: failed`、`failure_kind:
+checker_operational_failure`、`resumable: true`。这表示本次进程已停止但逻辑
+实验没有作废；清理 Docker 或修复环境后，可以用相同 `run_dir` 和兼容配置继续
+恢复。失败样本不会作为 correctness=0 缓存进 GEPA。
 
 PolyBench Python 199 实例的纯 PCT 扫描配置已固定为
 `configs/polybench_full199_pct.yaml`（`checker.enabled=false`）：

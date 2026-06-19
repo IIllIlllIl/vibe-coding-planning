@@ -346,6 +346,59 @@ def test_adapter_retries_transient_checker_failure(tmp_path):
     )
 
 
+def test_adapter_prepares_infrastructure_before_checker_call(tmp_path):
+    train, _ = load_snapshot(_snapshot(tmp_path / "snapshot"))
+    calls: list[str] = []
+
+    class Checker:
+        def prepare(self, case):
+            calls.append(f"prepare:{case.instance_id}")
+
+        def __call__(self, case, rules):
+            calls.append(f"call:{case.instance_id}")
+            return CheckerOutput(
+                predicted_resolved=True,
+                decision_reason="prepared first",
+                repository_evidence=(),
+            )
+
+    CheckerGEPAAdapter(Checker()).evaluate([train[0]], {"rules": "rules"})
+
+    assert calls == [
+        f"prepare:{train[0].instance_id}",
+        f"call:{train[0].instance_id}",
+    ]
+
+
+def test_adapter_does_not_call_checker_when_prepare_fails(tmp_path):
+    train, _ = load_snapshot(_snapshot(tmp_path / "snapshot"))
+    calls: list[str] = []
+
+    class Checker:
+        def prepare(self, case):
+            calls.append(f"prepare:{case.instance_id}")
+            raise RuntimeError("docker image pull failed")
+
+        def __call__(self, case, rules):
+            calls.append(f"call:{case.instance_id}")
+            raise AssertionError("checker LLM should not run")
+
+    run_dir = tmp_path / "prepare-failed-adapter"
+    with pytest.raises(RuntimeError, match="Checker operational failure"):
+        CheckerGEPAAdapter(
+            Checker(),
+            run_dir=run_dir,
+            fail_on_checker_error=True,
+        ).evaluate([train[0]], {"rules": "rules"})
+
+    assert calls == [f"prepare:{train[0].instance_id}"]
+    errors = [
+        json.loads(line)
+        for line in (run_dir / "errors.jsonl").read_text().splitlines()
+    ]
+    assert errors[0]["event"] == "checker_evaluation_failed"
+
+
 def test_adapter_exhausted_checker_retries_remain_operational_failure(tmp_path):
     train, _ = load_snapshot(_snapshot(tmp_path / "snapshot"))
 
@@ -1025,6 +1078,8 @@ def test_checker_operational_failure_marks_run_failed(tmp_path):
     progress = json.loads((config.run_dir / "progress.json").read_text())
     assert progress["status"] == "failed"
     assert progress["failure_phase"] == "optimization"
+    assert progress["resumable"] is True
+    assert progress["failure_kind"] == "checker_operational_failure"
     errors = [
         json.loads(line)
         for line in (config.run_dir / "errors.jsonl").read_text().splitlines()

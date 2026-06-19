@@ -174,6 +174,9 @@ plan-code-test/
   checker-only 恢复配置对齐。每个样本可配置 `checker.max_attempts`，用于重试
   偶发 Agent/Docker/API 执行失败；全部尝试失败时仍作为 operational error
   中止本次优化，避免把 Agent 或 Docker 故障缓存为分类错误。
+- GEPA Adapter 在每次 Checker attempt 前调用 Checker 的 `prepare(case)` 钩子。
+  DockerChecker 的 prepare 阶段只做项目镜像 inspect/pull，并在成功后才允许创建
+  Checker LLM model/agent；镜像获取失败会在 LLM 调用前终止该 attempt。
 - Reflection proposer 失败由项目侧记录并在 `gepa.optimize` 返回后检查。原因是
   GEPA v0.1.1 会把 proposer 异常转换为“未提出候选”；单次失败记录 warning
   并继续，只有成功 proposal 数低于 `min_proposals` 时才标记 failed 并返回
@@ -188,11 +191,15 @@ plan-code-test/
 - GEPA v0.1.1 在每次 `optimize` 入口加载状态前都会请求一次 seed validation。
   正式续跑由 Adapter 回放首次运行保存的 seed validation 输出，不再次调用
   Checker，也不把这次入口初始化误计为新增 metric calls。
+- Checker operational failure 会写入 `errors.jsonl` 和 `progress.json`，并标记
+  `failure_kind: checker_operational_failure`、`resumable: true`。这类失败保留
+  官方 `gepa_state.bin` 和项目侧 `gepa_resume_state.json`，清理 Docker/API 环境后
+  可用同一 `run_dir` 恢复；失败样本不会进入 GEPA evaluation cache。
 - GEPA 搜索主循环保持串行：Pareto 选择、minibatch sampling、Reflection
   proposal、accept/reject 和状态写入都依赖前序结果。`search.parallel` 只控制
   同一次 Checker evaluation batch 内的样本级并发，Adapter 使用有序 map 保持
-  输出顺序。正式配置当前仍为 `parallel=1`；`parallel=2` 需要先用新 run_dir
-  小型试运行验证正确性、Docker 容量和 API rate limit。
+  输出顺序。当前 formal pilot 已使用 `parallel=2` 验证该路径；后续提高并发前仍
+  需要重新验证 Docker 容量和 API rate limit。
 
 ---
 

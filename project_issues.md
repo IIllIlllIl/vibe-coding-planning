@@ -251,6 +251,11 @@
 - [x] 新增 `configs/ulhpc_submit.example.yaml`；本地私有 `configs/ulhpc_submit.yaml` 自动被 smoke 脚本使用并已加入 `.gitignore`。
 - [x] 确认 hpc_submit dry-run 行为：`ulhpc-submit --dry-run --no-sync` 会打开 SSH 并展开远端路径。对本项目 smoke 来说这是合理的连通性检查；如未来需要纯本地脚本生成，再另行扩展 hpc_submit。
 - [ ] 2026-06-18 smoke dry-run 结果：已创建本地私有 `configs/ulhpc_submit.yaml`（gitignored），使用 `user=taoran.wang` 和 `ssh_key=~/.ssh/id_rsa`。非沙箱网络下 `access-iris.uni.lu` 解析到 `172.16.3.3`，但无法连接 8022：`Unable to connect to port 8022 on 172.16.3.3`。下一步需要确认 ULHPC VPN/校园网络/访问节点端口可达后重跑。
+- [ ] 2026-06-19 smoke dry-run 重试：`bash scripts/hpc_smoke_check.sh` 仍未通过。`ulhpc-submit` 到达认证阶段后失败；系统 `ssh -p 8022 ...` 与 `nc -vz access-iris.uni.lu 8022` 返回 `Connection refused`。当前不能提交 Slurm smoke；需确认 ULHPC VPN/校园网、access host/port 或 SSH 凭据后重试。
+- [ ] 2026-06-19 VPN 后重试：`scripts/hpc_smoke_check.sh` 的 TCP preflight 首次成功，但 `ulhpc-submit` 随后 SSH 认证失败；系统 `ssh -p 8022 -i ~/.ssh/id_rsa ...` 超时；再次 `nc -vz access-iris.uni.lu 8022` 也超时。当前状态是端口连通不稳定且 SSH 凭据/账号仍未验证通过，尚不能提交 Slurm smoke。
+- [ ] 2026-06-19 用户名修正：ULHPC 正确用户为 `twang`，不是 `taoran.wang`；本地 gitignored `configs/ulhpc_submit.yaml` 已更新。修正后重试 `ssh -p 8022 -o BatchMode=yes -o ConnectTimeout=20 twang@access-iris.uni.lu 'echo ok'` 仍超时，说明当前剩余阻塞是 VPN/access node 连通性，而非用户名字段。
+- [x] 为 `scripts/hpc_smoke_check.sh` 增加 TCP port preflight：默认先检查 ULHPC host/port，失败时快速退出；`--skip-port-check` 可绕过并直接交给 `ulhpc-submit`。
+- [x] 为 `scripts/hpc_smoke_check.sh` 增加一次性 SSH preflight：默认用系统 `ssh -o BatchMode=yes -o NumberOfPasswordPrompts=0 -o PreferredAuthentications=publickey` 验证 `user@host:port`，失败时不调用 `ulhpc-submit`，避免触发 `hpc_submit` 当前 Paramiko 5 次重试；`--skip-ssh-check` 可显式绕过。
 - [ ] 确认 HPC 节点是否允许 Docker Engine / rootless Docker / Singularity 等容器运行方式。
 - [ ] 确认 HPC 节点能访问 Docker Hub、GHCR、HuggingFace 和 LLM API；若不能，设计镜像和数据预热步骤。
 - [ ] 确认 `mini-swe` conda 环境在 HPC 侧可用，`minisweagent.__version__ == 1.17.5`。
