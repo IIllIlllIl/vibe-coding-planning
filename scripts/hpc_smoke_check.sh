@@ -354,9 +354,20 @@ else
   fi
 fi
 
-command -v docker
+if ! command -v docker >/dev/null 2>&1; then
+  echo "ERROR: Docker CLI is not available on this HPC node." >&2
+  echo "[vibe-hpc-smoke] container runtime diagnostics:" >&2
+  command -v apptainer >&2 || true
+  command -v singularity >&2 || true
+  echo "Traceback: Docker CLI unavailable for this project smoke." >&2
+  exit 30
+fi
 docker --version
-docker info >/tmp/vibe_hpc_docker_info.txt
+if ! docker info >/tmp/vibe_hpc_docker_info.txt; then
+  echo "ERROR: Docker daemon is not reachable from this HPC job." >&2
+  echo "Traceback: Docker daemon unavailable for this project smoke." >&2
+  exit 31
+fi
 sed -n '1,40p' /tmp/vibe_hpc_docker_info.txt
 docker image ls --format '{{.Repository}}:{{.Tag}}\t{{.Size}}' | sed -n '1,20p'
 

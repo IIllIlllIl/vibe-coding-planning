@@ -412,6 +412,15 @@ vendored GEPA 核心源码和搜索语义不变，只允许提高累计
 共享 RNG、epoch sampler 内部状态和累计 proposal/failure 统计。
 如果两个状态文件的官方迭代号不一致，运行会拒绝恢复，避免静默改变采样序列。
 
+恢复校验默认要求 `run_manifest.json` 中的语义 hash 完全一致。仅在已有
+`gepa_state.bin` 可恢复，且数据、prompt、模型、Docker 配置、搜索参数和
+vendored GEPA 核心均不变时，允许项目侧运行基础设施/恢复标记文件
+`adapter.py`、`checker.py`、`callbacks.py`、`runner.py`、`resume.py` 的 hash
+变化继续同一逻辑实验；该兼容恢复会记录在
+`run_manifest.json.compatible_resume_events` 中。该例用于修复 Docker 镜像准备
+前置和 failure metadata，不改变候选规则、Checker prompt、采样或 GEPA 接受
+逻辑。
+
 GEPA v0.1.1 会在加载已有状态前再次请求 seed validation。恢复入口会使用首次
 运行写入 `evaluations.jsonl` 的完整 seed validation 输出进行回放，不调用
 Checker。旧的、没有 `run_manifest.json` 和 `gepa_resume_state.json` 的 run

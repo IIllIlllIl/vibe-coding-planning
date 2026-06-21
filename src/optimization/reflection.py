@@ -14,6 +14,7 @@ from src.agents._deps import (
     extract_last_assistant,
     import_minisweagent,
 )
+from src.environment.apptainer_env import ApptainerEnvironment
 from src.environment.docker_env import DockerCapacityWindow
 from src.optimization.audit import AuditedModel, JsonlLogger, text_sha256
 from src.optimization.config import OptimizationConfig
@@ -156,13 +157,20 @@ class MiniSWEReflectionProposer:
                 "bundle_path": str(bundle),
             },
         )
-        run_args = [
-            "--rm",
-            "--network",
-            "none",
-            "--mount",
-            f"type=bind,source={bundle.resolve()},target=/evidence,readonly",
-        ]
+        run_args: list[str]
+        if self.config.container.runtime == "apptainer":
+            run_args = [
+                "--bind",
+                f"{bundle.resolve()}:/evidence:ro",
+            ]
+        else:
+            run_args = [
+                "--rm",
+                "--network",
+                "none",
+                "--mount",
+                f"type=bind,source={bundle.resolve()},target=/evidence,readonly",
+            ]
         self.audit.write(
             "reflection_mount_configured",
             candidate_sha256=parent_sha256,
@@ -173,13 +181,26 @@ class MiniSWEReflectionProposer:
             mount_source_is_current_bundle=True,
         )
         with self.capacity_window.lease():
-            env = DockerEnvironment(
-                image="python:3.12-slim",
-                cwd="/evidence",
-                run_args=run_args,
-                timeout=self.config.reflection.timeout,
-                container_timeout="4h",
-            )
+            if self.config.container.runtime == "apptainer":
+                env = ApptainerEnvironment(
+                    image="python:3.12-slim",
+                    cwd="/evidence",
+                    sif_cache_dir=self.config.container.sif_cache_dir,
+                    capacity_window=self.capacity_window,
+                    run_args=run_args,
+                    timeout=self.config.reflection.timeout,
+                    container_timeout="4h",
+                    writable_tmpfs=self.config.container.writable_tmpfs,
+                    network_disabled=True,
+                )
+            else:
+                env = DockerEnvironment(
+                    image="python:3.12-slim",
+                    cwd="/evidence",
+                    run_args=run_args,
+                    timeout=self.config.reflection.timeout,
+                    container_timeout="4h",
+                )
             try:
                 agent = build_default_agent(
                     DefaultAgent,

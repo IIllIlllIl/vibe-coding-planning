@@ -36,6 +36,16 @@ class SearchConfig:
 
 
 @dataclass(frozen=True)
+class ContainerConfig:
+    """Container runtime selection for GEPA (Docker or Apptainer)."""
+
+    runtime: str = "docker"
+    module: str = "tools/Apptainer"
+    sif_cache_dir: Path = Path("/tmp/vibe-sif-cache")
+    writable_tmpfs: bool = True
+
+
+@dataclass(frozen=True)
 class OptimizationConfig:
     dataset_snapshot: Path
     initial_rules_path: Path
@@ -44,6 +54,7 @@ class OptimizationConfig:
     reflection: ModelConfig
     search: SearchConfig
     docker: DockerConfig
+    container: ContainerConfig
     checker_prompt: str
     checker_instance_template: str
     reflection_prompt: str
@@ -86,6 +97,7 @@ def load_optimization_config(path: str | Path) -> OptimizationConfig:
     )
     search_data = _mapping(raw.get("search"), "search")
     docker_data = _mapping(raw.get("docker", {}), "docker")
+    container_data = _mapping(raw.get("container", {}), "container")
     prompts = _mapping(raw.get("prompts"), "prompts")
     paths = _mapping(raw.get("paths"), "paths")
 
@@ -136,6 +148,17 @@ def load_optimization_config(path: str | Path) -> OptimizationConfig:
         candidate = Path(raw_path)
         return candidate if candidate.is_absolute() else root / candidate
 
+    container = ContainerConfig(
+        runtime=str(container_data.get("runtime", "docker")),
+        module=str(container_data.get("module", "tools/Apptainer")),
+        sif_cache_dir=resolve(str(container_data.get("sif_cache_dir", "/tmp/vibe-sif-cache"))),
+        writable_tmpfs=bool(container_data.get("writable_tmpfs", True)),
+    )
+    if container.runtime not in ("docker", "apptainer"):
+        raise ValueError(
+            f"container.runtime must be 'docker' or 'apptainer', got {container.runtime!r}"
+        )
+
     return OptimizationConfig(
         dataset_snapshot=resolve(str(paths["dataset_snapshot"])),
         initial_rules_path=resolve(str(paths["initial_rules"])),
@@ -144,6 +167,7 @@ def load_optimization_config(path: str | Path) -> OptimizationConfig:
         reflection=reflection,
         search=search,
         docker=docker,
+        container=container,
         checker_prompt=str(prompts["checker_system"]),
         checker_instance_template=str(prompts["checker_instance"]),
         reflection_prompt=str(prompts["reflection_system"]),

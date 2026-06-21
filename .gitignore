@@ -4,6 +4,7 @@
 trajectories/
 patches/
 logs/
+.tmp_hpc_smoke/
 
 # Environment variables
 .env

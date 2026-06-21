@@ -15,8 +15,9 @@ from gepa.core.state import GEPAState
 from src.config import DockerConfig
 from src.optimization.audit import AuditedModel, JsonlLogger
 from src.optimization.adapter import CheckerGEPAAdapter
-from src.optimization.checker import _json_object, validate_checker_output
+from src.optimization.checker import DockerChecker, _json_object, validate_checker_output
 from src.optimization.config import (
+    ContainerConfig,
     ModelConfig,
     OptimizationConfig,
     SearchConfig,
@@ -24,7 +25,7 @@ from src.optimization.config import (
 )
 from src.optimization.dataset import load_snapshot
 from src.optimization.metrics import classification_metrics
-from src.optimization.models import CheckerOutput
+from src.optimization.models import CheckerOutput, GEPACase, RepositoryRef
 from src.optimization.reflection import (
     EvidenceBundleWriter,
     MiniSWEReflectionProposer,
@@ -112,11 +113,17 @@ def _config(tmp_path: Path) -> OptimizationConfig:
             parallel=1,
         ),
         docker=DockerConfig(min_free_gb=1, max_cached_images=1),
+        container=ContainerConfig(runtime="docker"),
         checker_prompt="checker",
         checker_instance_template="{{task}} {{plan}} {{candidate_rules}}",
         reflection_prompt="reflection",
         reflection_instance_template="{{current_rules}} {{evidence_path}}",
     )
+
+
+class _FakeCapacityWindow:
+    def lease(self):
+        return nullcontext()
 
 
 def test_snapshot_enforces_checker_asi_boundary(tmp_path):
@@ -897,6 +904,91 @@ def test_resume_rejects_semantic_changes_and_budget_decrease(tmp_path):
         )
 
 
+def test_resume_allows_infrastructure_only_source_changes(tmp_path):
+    config = _config(tmp_path)
+    config = replace(
+        config,
+        search=replace(config.search, max_metric_calls=4),
+    )
+
+    def checker(case, rules):
+        return CheckerOutput(
+            predicted_resolved=False,
+            decision_reason="infrastructure compatible resume",
+            repository_evidence=(),
+        )
+
+    class Proposer:
+        successful_proposals = 0
+        failures = []
+
+        def __call__(self, candidate, reflective_dataset, components):
+            self.successful_proposals += 1
+            return {"rules": "unchanged outcome"}
+
+    run_optimization(config, checker=checker, proposer=Proposer())
+    manifest_path = config.run_dir / "run_manifest.json"
+    manifest = json.loads(manifest_path.read_text())
+    manifest["semantic_sha256"] = "previous-source-fingerprint"
+    manifest["semantic_config"]["source"]["project_optimization"][
+        "adapter.py"
+    ] = "previous-adapter-hash"
+    manifest_path.write_text(json.dumps(manifest), encoding="utf-8")
+
+    resumed_config = replace(
+        config,
+        search=replace(config.search, max_metric_calls=6),
+    )
+    run_optimization(resumed_config, checker=checker, proposer=Proposer())
+
+    updated_manifest = json.loads(manifest_path.read_text())
+    assert updated_manifest["latest_max_metric_calls"] == 6
+    assert updated_manifest["compatible_resume_events"]
+    event = updated_manifest["compatible_resume_events"][-1]
+    assert event["previous_semantic_sha256"] == "previous-source-fingerprint"
+    assert "adapter.py" in event["compatible_project_files"]
+
+
+def test_resume_treats_legacy_missing_container_as_default_docker(tmp_path):
+    config = _config(tmp_path)
+    config = replace(
+        config,
+        search=replace(config.search, max_metric_calls=4),
+    )
+
+    def checker(case, rules):
+        return CheckerOutput(
+            predicted_resolved=False,
+            decision_reason="legacy docker container default",
+            repository_evidence=(),
+        )
+
+    class Proposer:
+        successful_proposals = 0
+        failures = []
+
+        def __call__(self, candidate, reflective_dataset, components):
+            self.successful_proposals += 1
+            return {"rules": "unchanged outcome"}
+
+    run_optimization(config, checker=checker, proposer=Proposer())
+    manifest_path = config.run_dir / "run_manifest.json"
+    manifest = json.loads(manifest_path.read_text())
+    manifest["semantic_sha256"] = "legacy-before-container-field"
+    manifest["semantic_config"].pop("container")
+    manifest_path.write_text(json.dumps(manifest), encoding="utf-8")
+
+    resumed_config = replace(
+        config,
+        search=replace(config.search, max_metric_calls=6),
+    )
+    run_optimization(resumed_config, checker=checker, proposer=Proposer())
+
+    updated_manifest = json.loads(manifest_path.read_text())
+    assert updated_manifest["latest_max_metric_calls"] == 6
+    assert updated_manifest["compatible_resume_events"]
+
+
 def test_resume_accumulates_reflection_outcomes_across_processes(tmp_path):
     config = _config(tmp_path)
     config = replace(
@@ -1089,3 +1181,240 @@ def test_checker_operational_failure_marks_run_failed(tmp_path):
         for record in errors
     )
     assert any(record["event"] == "optimization_failed" for record in errors)
+
+
+def test_apptainer_config_loads(monkeypatch):
+    monkeypatch.setenv("DEEPSEEK_API_KEY", "secret")
+    repo_root = Path(__file__).resolve().parents[2]
+    config = load_optimization_config(
+        repo_root
+        / "configs"
+        / "gepa_verified_rules_reflection_smoke_apptainer.yaml"
+    )
+    assert config.container.runtime == "apptainer"
+    assert config.container.module == "tools/Apptainer"
+    assert config.container.writable_tmpfs is True
+    assert config.container.sif_cache_dir == Path(
+        "/home/users/twang/hpc_runs/vibe-sif-cache"
+    )
+
+
+def test_docker_config_defaults_are_preserved(monkeypatch):
+    monkeypatch.setenv("DEEPSEEK_API_KEY", "secret")
+    repo_root = Path(__file__).resolve().parents[2]
+    config = load_optimization_config(
+        repo_root / "configs" / "gepa_verified_rules_reflection_smoke.yaml"
+    )
+    assert config.container.runtime == "docker"
+    assert config.container.sif_cache_dir == Path("/tmp/vibe-sif-cache")
+    assert config.container.writable_tmpfs is True
+
+
+def test_checker_prepare_uses_apptainer_sif_cache_when_runtime_apptainer(
+    tmp_path, monkeypatch
+):
+    config = _config(tmp_path)
+    config = replace(
+        config,
+        container=ContainerConfig(
+            runtime="apptainer",
+            sif_cache_dir=tmp_path / "sif",
+        ),
+    )
+    ensured = []
+
+    class FakeCache:
+        def __init__(self, *args, **kwargs):
+            pass
+
+        def ensure(self, image, *, timeout):
+            ensured.append((image, timeout))
+            return tmp_path / "sif" / "image.sif"
+
+    monkeypatch.setattr(
+        "src.optimization.checker.ApptainerSifCache",
+        FakeCache,
+    )
+    monkeypatch.setattr(
+        "src.optimization.checker.derive_image_name",
+        lambda info: "test/image:latest",
+    )
+
+    checker = DockerChecker(config, _FakeCapacityWindow())
+    case = GEPACase(
+        instance_id="org__1",
+        split="train",
+        resolved=True,
+        issue_description="issue",
+        plan="plan",
+        repository=RepositoryRef("org/repo", "abc", "org__1"),
+        asi={},
+    )
+    checker.prepare(case)
+
+    assert ensured == [("test/image:latest", config.checker.timeout)]
+
+
+def test_checker_call_uses_apptainer_environment_when_runtime_apptainer(
+    tmp_path, monkeypatch
+):
+    monkeypatch.setenv("TEST_API_KEY", "secret")
+    config = _config(tmp_path)
+    config = replace(
+        config,
+        container=ContainerConfig(
+            runtime="apptainer",
+            sif_cache_dir=tmp_path / "sif",
+        ),
+    )
+    calls = {}
+
+    class FakeModel:
+        def __init__(self, **kwargs):
+            calls["model_kwargs"] = kwargs
+
+    class FakeAgent:
+        messages = [{"role": "assistant", "content": "done"}]
+
+        def run(self, task, **kwargs):
+            return "Submitted", '{"predicted_resolved": true}'
+
+    class FakeEnvironment:
+        def __init__(self, **kwargs):
+            calls["environment_kwargs"] = kwargs
+
+        def execute(self, command):
+            return {
+                "returncode": 0,
+                "output": (
+                    '{"predicted_resolved": true, "decision_reason": "ok", '
+                    '"repository_evidence": []}'
+                ),
+            }
+
+        def cleanup(self):
+            calls["cleaned_up"] = True
+
+        def get_template_vars(self):
+            return {}
+
+    class FakeSifCache:
+        def __init__(self, *args, **kwargs):
+            pass
+
+        def ensure(self, image, *, timeout):
+            return tmp_path / "sif" / "image.sif"
+
+    monkeypatch.setattr(
+        "src.optimization.checker.import_minisweagent",
+        lambda: (object, FakeModel, object),
+    )
+    monkeypatch.setattr(
+        "src.optimization.checker.build_default_agent",
+        lambda *args, **kwargs: FakeAgent(),
+    )
+    monkeypatch.setattr(
+        "src.optimization.checker.ApptainerEnvironment",
+        FakeEnvironment,
+    )
+    monkeypatch.setattr(
+        "src.optimization.checker.ApptainerSifCache",
+        FakeSifCache,
+    )
+    monkeypatch.setattr(
+        "src.optimization.checker.derive_image_name",
+        lambda info: "test/image:latest",
+    )
+
+    checker = DockerChecker(config, _FakeCapacityWindow())
+    case = GEPACase(
+        instance_id="org__1",
+        split="train",
+        resolved=True,
+        issue_description="issue",
+        plan="plan",
+        repository=RepositoryRef("org/repo", "abc", "org__1"),
+        asi={},
+    )
+    result = checker(case, "")
+
+    assert result.predicted_resolved is True
+    assert calls["environment_kwargs"]["image"] == "test/image:latest"
+    assert calls["environment_kwargs"]["cwd"] == config.docker.workdir
+    assert calls["environment_kwargs"]["writable_tmpfs"] is True
+    assert calls["cleaned_up"] is True
+
+
+def test_reflection_proposer_uses_apptainer_when_runtime_apptainer(
+    tmp_path, monkeypatch
+):
+    monkeypatch.setenv("TEST_API_KEY", "secret")
+    config = _config(tmp_path)
+    config = replace(
+        config,
+        container=ContainerConfig(
+            runtime="apptainer",
+            sif_cache_dir=tmp_path / "sif",
+        ),
+    )
+    calls = {}
+
+    class FakeModel:
+        def __init__(self, **kwargs):
+            calls["model_kwargs"] = kwargs
+
+    class FakeEnvironment:
+        def __init__(self, **kwargs):
+            calls["environment_kwargs"] = kwargs
+
+        def execute(self, command):
+            assert command == "cat /tmp/candidate_rules.txt"
+            return {"returncode": 0, "output": "apptainer improved rules"}
+
+        def cleanup(self):
+            calls["cleaned_up"] = True
+
+        def get_template_vars(self):
+            return {}
+
+    class FakeAgent:
+        messages = [{"role": "assistant", "content": "done"}]
+
+        def run(self, task, **kwargs):
+            return "Submitted", "done"
+
+    monkeypatch.setattr(
+        "src.optimization.reflection.import_minisweagent",
+        lambda: (object, FakeModel, object),
+    )
+    monkeypatch.setattr(
+        "src.optimization.reflection.build_default_agent",
+        lambda *args, **kwargs: FakeAgent(),
+    )
+    monkeypatch.setattr(
+        "src.optimization.reflection.ApptainerEnvironment",
+        FakeEnvironment,
+    )
+
+    proposer = MiniSWEReflectionProposer(config, _FakeCapacityWindow())
+    record = {
+        "instance_id": "repo__one",
+        "expected_resolved": False,
+        "score": 0.0,
+        "checker_output": {"predicted_resolved": True},
+        **_record("repo__one", "train")["asi"],
+    }
+
+    proposal = proposer(
+        {"rules": ""},
+        {"rules": [record]},
+        ["rules"],
+    )
+
+    assert proposal == {"rules": "apptainer improved rules"}
+    assert calls["environment_kwargs"]["image"] == "python:3.12-slim"
+    assert calls["environment_kwargs"]["cwd"] == "/evidence"
+    assert calls["environment_kwargs"]["network_disabled"] is True
+    assert calls["environment_kwargs"]["run_args"][0] == "--bind"
+    assert calls["environment_kwargs"]["run_args"][1].endswith(":/evidence:ro")
+    assert calls["cleaned_up"] is True

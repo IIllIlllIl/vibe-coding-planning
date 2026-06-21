@@ -256,9 +256,15 @@
 - [ ] 2026-06-19 用户名修正：ULHPC 正确用户为 `twang`，不是 `taoran.wang`；本地 gitignored `configs/ulhpc_submit.yaml` 已更新。修正后重试 `ssh -p 8022 -o BatchMode=yes -o ConnectTimeout=20 twang@access-iris.uni.lu 'echo ok'` 仍超时，说明当前剩余阻塞是 VPN/access node 连通性，而非用户名字段。
 - [x] 为 `scripts/hpc_smoke_check.sh` 增加 TCP port preflight：默认先检查 ULHPC host/port，失败时快速退出；`--skip-port-check` 可绕过并直接交给 `ulhpc-submit`。
 - [x] 为 `scripts/hpc_smoke_check.sh` 增加一次性 SSH preflight：默认用系统 `ssh -o BatchMode=yes -o NumberOfPasswordPrompts=0 -o PreferredAuthentications=publickey` 验证 `user@host:port`，失败时不调用 `ulhpc-submit`，避免触发 `hpc_submit` 当前 Paramiko 5 次重试；`--skip-ssh-check` 可显式绕过。
-- [ ] 确认 HPC 节点是否允许 Docker Engine / rootless Docker / Singularity 等容器运行方式。
+- [x] 2026-06-19/21 ULHPC smoke 提交结果：`nc`、SSH、rsync、Slurm `sbatch`、排队和调度执行均通过；真实 job 曾在 `iris-167` 上运行，Python 3.11.5、`minisweagent==1.17.5`、`swebench==4.1.0`、`yaml`、Docker Python SDK 导入通过。当前阻塞是计算节点无 `docker` CLI；access node 常见路径也未发现 Docker/Apptainer/Singularity 命令。后续用户确认 ULHPC 不能使用 Docker，需走 Apptainer/Singularity 或其他获批容器路径。
+- [x] 确认 Docker 镜像可转换为 `.sif`：Apptainer 支持从 `docker://` registry、`docker-daemon://` 本地 daemon 镜像和 `docker-archive://` tar archive 构建 SIF；但这只解决镜像格式，不会自动替代本项目内部 Docker daemon / Docker SDK / 官方 evaluator Docker harness。
+- [x] 2026-06-21 Apptainer smoke：`module load apptainer` 和 `module load singularity` 均不可用；正确模块名为 `tools/Apptainer`，默认 runtime 为 `apptainer version 1.4.0`。`apptainer exec docker://alpine:latest true` 在 Slurm job `5483872` / `iris-065` 上成功，说明计算节点可从 Docker Hub 拉取最小公开 OCI 镜像并转换运行。
+- [x] 2026-06-21 Apptainer bind/writable/local SIF smoke：job `5483875` 验证 `--bind .:/workspace` 和 `--writable-tmpfs` 成功；job `5483876` 通过 `apptainer pull --force alpine_latest.sif docker://alpine:latest` 生成远端 SIF；job `5483877` 通过 `apptainer exec alpine_latest.sif ...` 成功执行本地 SIF。
+- [x] 2026-06-21 GEPA 真实镜像 smoke：job `5483878` 成功执行 `apptainer exec --writable-tmpfs docker://swebench/sweb.eval.x86_64.astropy_1776_astropy-12907:latest ...`，`/testbed` 存在且 `/tmp` 可写。首次拉取/转换该 SWE-bench image 约 9.5 分钟，需预热 SIF 缓存。`git rev-parse` 暴露 `dubious ownership`，Apptainer backend 需注入 `safe.directory /testbed`。
+- [ ] 记录 `hpc_submit` 空依赖目录边界问题：用空 `--local-dir --no-sync` 时生成的环境片段含空 `else`，会导致 Slurm 脚本语法错误；真实项目目录不走该空分支，且当前不修改相邻项目源码。
+- [ ] 先设计 GEPA 专用 Apptainer environment backend：保持 `execute()` / `get_template_vars()` / `cleanup()` 接口兼容，替代 `DockerChecker` 和 `MiniSWEReflectionProposer` 中的 Docker lifecycle；GEPA pilot 通过后再评估是否扩展到 SWE-bench / PolyBench / Pro official evaluator。
 - [ ] 确认 HPC 节点能访问 Docker Hub、GHCR、HuggingFace 和 LLM API；若不能，设计镜像和数据预热步骤。
-- [ ] 确认 `mini-swe` conda 环境在 HPC 侧可用，`minisweagent.__version__ == 1.17.5`。
+- [x] 确认 HPC 侧 Python 依赖入口：`/opt/apps/easybuild/systems/iris/rhel810-20250803/2023b/broadwell/software/Python/3.11.5-GCCcore-13.2.0/bin/python` 可导入 `minisweagent==1.17.5`、`swebench==4.1.0`、`yaml`、`docker`。
 - [ ] 确认 `scripts/run_batch.sh` 中 `read -r BATCH_ID ... < <(python -c ...)` 的进程替换在 HPC bash 中正常。
 - [ ] 确认输出策略：远端保留、自动同步回本地，或按 job ID 手动拉取。
 - [ ] 文件系统：HPC Linux 默认区分大小写，需用 1-2 个 PolyBench 实例 smoke test。

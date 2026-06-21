@@ -212,7 +212,7 @@ run is intended for later analysis.
 
 | Path | Classification | Notes |
 |------|----------------|-------|
-| `SWE-bench_Verified/gepa-rules/formal-pilot-gpt-seed-mc116-retry1/` | Formal analysis pilot | Current run intended for follow-up analysis. Uses the filtered Verified GEPA snapshot, GPT-generated seed rules, `parallel: 2`, and a resumable run manifest. Budget was first prepared at 116 metric calls and later resumed with a higher `latest_max_metric_calls`. |
+| `SWE-bench_Verified/gepa-rules/formal-pilot-gpt-seed-mc116-retry1/` | Formal analysis pilot | Current run intended for follow-up analysis. Uses the filtered Verified GEPA snapshot, GPT-generated seed rules, `parallel: 2`, and a resumable run manifest. Budget was first prepared at 116 metric calls, later resumed at 550, and then resumed again at `latest_max_metric_calls: 2150` for the 2026-06-19 long run. |
 | `SWE-bench_Verified/gepa-rules/formal-pilot-gpt-seed-mc116/` | Superseded formal attempt | Earlier formal-pilot attempt retained for auditability; do not use as the primary analysis run unless explicitly selected. |
 | `SWE-bench_Verified/gepa-rules/pilot-empty-seed/` | Test pilot | Empty-seed pilot used to validate GEPA wiring and audit outputs. |
 | `SWE-bench_Verified/gepa-rules/reflection-smoke-empty-seed/` | Smoke test | Small reflection smoke run used to validate Reflection proposal behavior. |

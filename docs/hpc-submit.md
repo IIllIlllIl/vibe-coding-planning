@@ -85,12 +85,19 @@ bash scripts/hpc_smoke_check.sh \
 该 smoke 会检查：
 
 - `ulhpc-submit` 是否可调用。
-- 远端是否能激活 `mini-swe` conda 环境。
+- 远端是否能使用项目所需 Python 3.11 环境。
 - `minisweagent.__version__ == "1.17.5"`、`swebench`、`PyYAML`、Docker SDK
   是否可导入。
 - Docker CLI 和 daemon 是否可用。
 - `python -m src.environment.docker_env maintain` 是否能执行项目镜像集合维护。
 - 可选 `--check-api-key` 检查 `DEEPSEEK_API_KEY` 是否进入远端 job 环境。
+
+截至 2026-06-19 的真实 ULHPC smoke 结果：SSH、rsync、Slurm 提交、排队、
+调度执行和 Python 依赖导入均已通过；作业在 `iris-167` 上运行时没有可用的
+`docker` CLI，access node 常见路径中也未发现 Docker/Apptainer/Singularity
+命令。因此完整实验暂不能直接复用当前 Docker-based evaluator，需要先确认
+ULHPC 是否有 Docker-enabled/rootless Docker 分区，或设计 Apptainer/Singularity
+兼容路径。
 
 约定：`scripts/hpc_smoke_check.sh` 的默认 dry-run 会保留 `ulhpc-submit` 的 SSH
 连通性检查，但加上 `--no-sync`，避免实际同步代码或提交 Slurm job。需要同时检查
@@ -250,7 +257,167 @@ bash scripts/hpc_submit_batch.sh \
 
 ---
 
-## 7. 待实现清单
+## 7. Apptainer/Singularity 可行性
+
+ULHPC 已确认不能使用 Docker 时，Docker 镜像转换为 `.sif` 在技术上可行，但这
+不是当前项目的无改造替换。
+
+Apptainer 支持从 Docker / OCI 镜像生成 SIF：
+
+```bash
+# 从公开 Docker Hub / OCI registry 拉取并转换
+apptainer pull image.sif docker://repo/image:tag
+apptainer build image.sif docker://repo/image:tag
+
+# 如本地已有 Docker daemon 中的镜像，可在有 Docker 的机器上转换
+apptainer build image.sif docker-daemon://repo/image:tag
+
+# 如先导出 Docker archive，可从 tar 转换
+docker save repo/image:tag -o image.tar
+apptainer build image.sif docker-archive://image.tar
+```
+
+私有 registry 需要先完成 `apptainer registry login`，或通过
+`APPTAINER_DOCKER_USERNAME` / `APPTAINER_DOCKER_PASSWORD` 传递凭据。为避免共享
+HPC 出口触发 Docker Hub rate limit，正式作业应预先 `pull/build` 成 `.sif`，
+再从本地 `.sif` 运行，而不是在每个 job 中反复使用 `docker://...`。
+
+运行 `.sif` 的基本形态：
+
+```bash
+apptainer exec \
+  --bind "$PWD:/workspace" \
+  --writable-tmpfs \
+  image.sif \
+  bash -lc 'cd /workspace && python -m src.main --help'
+```
+
+`--bind` 用于把远端工作目录挂入容器。`--writable-tmpfs` 或 `--compat`
+通常是必要的，因为 SIF 默认只读，而本项目的 agent/evaluator 会写临时文件、
+应用 patch、运行测试并生成日志。并发运行时优先使用 `--writable-tmpfs`，不要让
+多个 job 共享同一个可写 overlay。
+
+### 7.1 不能直接替换的原因
+
+`ulhpc-submit --container PATH` 只会把最外层命令包装为
+`apptainer exec PATH <command>`。这能提供一个可复现的 Python/系统依赖环境，但
+不会提供 Docker daemon，也不会让容器内部的 `docker` CLI / Docker SDK 调用自动
+变成 Apptainer 调用。
+
+当前项目仍有以下 Docker-native 路径：
+
+- `src/environment/docker_env.py` 封装 `mini-swe-agent` 的 `DockerEnvironment`，
+  并直接调用 `docker image/container/builder` CLI、Docker SDK client 和镜像缓存
+  维护逻辑。
+- `src/evaluator/swe_evaluator.py` 调用 `swebench.harness.run_evaluation`
+  的 Docker client / `run_instance` 路径。
+- `src/evaluator/polybench_evaluator.py` 使用官方
+  `poly_bench_evaluation.docker_utils.DockerManager`，依赖
+  `create_container()`、`exec_run()`、`apply_patch_to_container()`、
+  `docker_run()`。
+- `src/evaluator/pro_official_evaluator.py` 调用 SWE-bench Pro 官方
+  `eval_with_docker`。
+
+因此，单纯把 benchmark Docker 镜像转为 `.sif` 后，现有 PCT/PCC/GEPA
+正式评估仍会在运行时因为找不到 Docker daemon 或 Docker API 而失败。
+
+### 7.2 建议验证顺序
+
+1. 先提交一个只检查 Apptainer/Singularity 的 Slurm smoke：
+   `command -v apptainer || command -v singularity`、`apptainer --version`、
+   `apptainer exec docker://alpine:latest true`。如果 ULHPC 禁止计算节点联网，
+   改为预先上传一个很小的 `alpine.sif` 后执行 `apptainer exec alpine.sif true`。
+2. 在本地或允许构建镜像的机器上选 1 个已知 Docker 镜像转 `.sif`，上传到远端，
+   验证 `apptainer exec --bind "$PWD:/workspace" --writable-tmpfs image.sif`
+   能运行 Python、读写工作目录和执行目标测试命令。
+3. 只为一个最小 evaluator 实现 Apptainer backend：把“创建容器、应用 patch、
+   执行测试、收集日志”的生命周期改成 `apptainer exec` + 临时工作目录/overlay。
+4. 通过 1-2 个实例 pilot 比较结果、wall time、临时目录大小、`.sif` 缓存命中和
+   并发冲突，再决定是否扩大到 GEPA pilot。
+
+短期可行路线是：用 Apptainer 运行外层 Python job 与无 Docker 的分析任务；对于
+需要 benchmark 容器隔离的 evaluator，新增 Apptainer backend 或寻找 ULHPC
+批准的 rootless Docker/Podman 资源。直接依赖 `ulhpc-submit --container` 不能完成
+当前实验的 Docker-to-Apptainer 迁移。
+
+2026-06-21 smoke 更新：ULHPC 计算节点上直接 `module load apptainer` 和
+`module load singularity` 都不可用；正确模块名是 `tools/Apptainer`，默认加载
+`apptainer version 1.4.0`。在 `iris-065` 上执行
+`apptainer exec docker://alpine:latest true` 成功，日志显示 OCI image 被拉取、
+转换为 SIF 并运行。因此计算节点可用 Apptainer，也可从 Docker Hub 拉取最小
+公开镜像。后续配置中的 `container_module` 应使用 `tools/Apptainer`。
+
+同日补充 smoke：
+
+- `apptainer exec --bind .:/workspace --writable-tmpfs docker://alpine:latest ...`
+  成功，说明 bind mount 和非持久可写层可用。
+- `apptainer pull --force alpine_latest.sif docker://alpine:latest` 成功，随后
+  `apptainer exec alpine_latest.sif ...` 成功，说明远端本地 `.sif` 文件执行
+  可用。
+- `apptainer exec --writable-tmpfs
+  docker://swebench/sweb.eval.x86_64.astropy_1776_astropy-12907:latest ...`
+  成功，`/testbed` 存在且可读，`/tmp` 可写。首次拉取和转换该 SWE-bench
+  镜像耗时约 9.5 分钟，因此正式 GEPA job 不应在主循环中临时转换大量镜像，
+  应先预热 `.sif` 缓存或使用固定 SIF 目录。
+- 该 SWE-bench image 下 `git rev-parse` 报 `dubious ownership`，因为
+  `/testbed` 由 root 拥有而 job 以用户身份运行。Apptainer backend 应在命令前
+  设置 `git config --global --add safe.directory /testbed`，或使用隔离的
+  `GIT_CONFIG_GLOBAL` 注入 safe-directory 配置。
+
+注意：为了只测 Apptainer 而使用空 `--local-dir --no-sync` 时，当前
+`hpc_submit` 会生成一个空 `else` 分支导致 Slurm 脚本语法错误。这是
+`hpc_submit` 的空依赖目录边界问题，不影响本项目真实目录提交；本项目没有修改
+相邻 `../../hpc_submit` 源码。
+
+### 7.3 GEPA pilot 迁移建议
+
+当前正在运行/已验证过的小型 GEPA 规则生成 pilot 是最适合的 Apptainer 迁移目标：
+
+| 配置 | 数据规模 | 作用 |
+|------|----------|------|
+| `configs/gepa_verified_rules_reflection_smoke.yaml` | 2 train / 2 validation | 最小 Reflection 链路 smoke，成本最低 |
+| `configs/gepa_verified_rules_pilot.yaml` | 6 train / 4 validation | 空规则 seed 基础 pilot |
+| `configs/gepa_verified_rules_pilot_extended.yaml` | 6 train / 4 validation | 覆盖候选接纳、validation 和成本报告 |
+| `configs/gepa_verified_rules_formal_pilot.yaml` | 384 train / 98 validation | 正式数据上的小步数 pilot |
+
+相关入口：
+
+- `scripts/internal/run_gepa_rules.py` 调用 `src.optimization.cli.main()`。
+- `src/optimization/runner.py` 构造 `DockerChecker` 和
+  `MiniSWEReflectionProposer`，再调用 GEPA。
+- `src/optimization/checker.py` 的 `DockerChecker` 使用 benchmark image 启动
+  `/testbed` 环境，只做 Checker 读仓库和输出 JSON。
+- `src/optimization/reflection.py` 的 `MiniSWEReflectionProposer` 使用
+  `python:3.12-slim`，只读挂载 reflection evidence bundle 到 `/evidence`。
+
+这条路径不调用 `swebench.harness.run_instance`、PolyBench `DockerManager` 或
+SWE-bench Pro `eval_with_docker`，因此比 PCT/PCC 正式 evaluator 更适合作为
+Docker-to-Apptainer 迁移 pilot。
+
+最小化影响方案：
+
+1. 新增一个 GEPA 专用 Apptainer environment backend，保持
+   `execute(command, cwd="", timeout=None)`、`get_template_vars()`、`cleanup()`
+   接口与 `mini-swe-agent` 的 `DockerEnvironment` 兼容。
+2. 在 GEPA 配置中新增 runtime 选择，例如 `container_runtime: docker|apptainer`，
+   默认仍为 Docker；只有 HPC pilot 配置切到 Apptainer。
+3. Checker backend 将 Docker image 名映射到 SIF 路径：
+   `swebench/sweb.eval.x86_64.astropy_1776_astropy-12907:latest` →
+   `<sif_cache>/swebench_sweb.eval.x86_64.astropy_1776_astropy-12907_latest.sif`。
+   若 SIF 不存在，先串行 `apptainer pull`；正式 job 应预热，避免主循环等待。
+4. Reflection backend 使用 `python:3.12-slim` 对应 SIF，并通过
+   `--bind <bundle>:/evidence:ro --writable-tmpfs` 运行。
+5. 所有 Apptainer 执行命令加 `--writable-tmpfs`，并在启动后写入
+   `safe.directory /testbed`，避免 Git ownership 报错影响 Checker。
+6. 先跑 `gepa_verified_rules_reflection_smoke.yaml`；通过后再跑
+   `gepa_verified_rules_pilot.yaml`。`formal_pilot` 等 SIF 缓存和并发策略稳定后再跑。
+
+该方案不会改变 GEPA 搜索、Adapter、prompt、run manifest、resume state、
+cost report 或 candidate tree 语义；变化集中在容器执行后端和镜像/SIF 缓存。
+
+---
+
+## 8. 待实现清单
 
 - [x] 确认相邻项目为 `../../hpc_submit`，安装后的 CLI 为 `ulhpc-submit`。
 - [x] 确认 `ulhpc-submit` 支持 dry-run、local/remote dir、Slurm 资源参数、
@@ -263,6 +430,13 @@ bash scripts/hpc_submit_batch.sh \
       调用。
 - [ ] 让 `scripts/run_batch.sh` 的 conda 激活方式不依赖硬编码 macOS 路径，或在
       HPC job 中绕过它并直接用 `conda run -n mini-swe` 调用内部入口。
-- [ ] 明确 HPC 侧 Docker 权限、镜像缓存目录和 GHCR/Docker Hub 登录方式。
+- [x] 提交 Apptainer/Singularity smoke，确认计算节点上的模块名为
+      `tools/Apptainer`，默认版本为 `1.4.0`，且
+      `apptainer exec docker://alpine:latest true` 可在 Slurm job 中成功执行。
+- [x] 补充 bind mount、`--writable-tmpfs`、本地 `.sif` 文件和一个真实
+      SWE-bench image 的执行 smoke。
+- [ ] 为 Docker-native evaluator 设计 Apptainer backend，或明确使用
+      Docker-enabled/rootless Docker/Podman 资源。
+- [ ] 明确 HPC 侧 Docker/Apptainer 镜像缓存目录和 GHCR/Docker Hub 登录方式。
 - [ ] 跑一个 1-2 实例 smoke job，验证日志、输出取回和失败恢复。
 - [ ] 根据 smoke 结果决定是否保留 watchdog 作为本地长跑工具，HPC 路径默认不使用。

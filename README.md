@@ -228,8 +228,8 @@ PCT_CONFIG=configs/polybench_remaining133_pct.yaml \
 `ulhpc-submit` 提交 HPC 作业，让现有 `scripts/run_batch.sh`、checker、analysis
 或 GEPA 入口在 HPC Linux 节点上执行。HPC 作业由调度器管理，不需要
 `caffeinate` 或 tmux watchdog；设计见 [`docs/hpc-submit.md`](docs/hpc-submit.md)。
-在设计完整 batch 包装前，先用 smoke 脚本验证 hpc_submit、远端 conda、Docker
-和项目 Docker 镜像维护入口：
+在设计完整 batch 包装前，先用 smoke 脚本验证 hpc_submit、远端 Python 依赖、
+Docker 和项目 Docker 镜像维护入口：
 
 ```bash
 cp configs/ulhpc_submit.example.yaml configs/ulhpc_submit.yaml
@@ -238,6 +238,10 @@ cp configs/ulhpc_submit.example.yaml configs/ulhpc_submit.yaml
 bash scripts/hpc_smoke_check.sh
 bash scripts/hpc_smoke_check.sh --submit
 ```
+
+当前 ULHPC smoke 已验证 SSH、同步、Slurm 提交/排队/执行和 Python 依赖导入；
+剩余阻塞是计算节点未提供 `docker` CLI/daemon。正式 HPC batch 需要先确认
+Docker-enabled/rootless Docker 资源，或改造为 Apptainer/Singularity 路径。
 
 ### 规则分析 CLI
 

@@ -24,6 +24,21 @@ from src.optimization.models import GEPACase
 
 MANIFEST_VERSION = 1
 RESUME_STATE_VERSION = 1
+INFRASTRUCTURE_COMPATIBLE_PROJECT_FILES = {
+    "adapter.py",
+    "callbacks.py",
+    "checker.py",
+    "config.py",
+    "reflection.py",
+    "resume.py",
+    "runner.py",
+}
+DEFAULT_DOCKER_CONTAINER_SEMANTIC = {
+    "runtime": "docker",
+    "module": "tools/Apptainer",
+    "sif_cache_dir": "/tmp/vibe-sif-cache",
+    "writable_tmpfs": True,
+}
 
 
 class IncompatibleOptimizationRun(ValueError):
@@ -87,6 +102,8 @@ def _semantic_config(
     search = asdict(config.search)
     search.pop("max_metric_calls")
     search.pop("projection_metric_calls")
+    container = asdict(config.container)
+    container["sif_cache_dir"] = str(container["sif_cache_dir"])
     return {
         "dataset": _dataset_fingerprint(config.dataset_snapshot),
         "source": _source_fingerprint(),
@@ -95,6 +112,7 @@ def _semantic_config(
         "reflection": asdict(config.reflection),
         "search": search,
         "docker": asdict(config.docker),
+        "container": container,
         "prompts": {
             "checker_system_sha256": text_sha256(config.checker_prompt),
             "checker_instance_sha256": text_sha256(
@@ -114,6 +132,26 @@ def _semantic_config(
             "candidate_components": ["rules"],
         },
     }
+
+
+def _without_compatible_infrastructure_source(
+    semantic: dict[str, Any],
+) -> dict[str, Any]:
+    value = json.loads(json.dumps(semantic, ensure_ascii=False))
+    value.setdefault("container", dict(DEFAULT_DOCKER_CONTAINER_SEMANTIC))
+    project_source = value["source"]["project_optimization"]
+    for name in INFRASTRUCTURE_COMPATIBLE_PROJECT_FILES:
+        project_source.pop(name, None)
+    return value
+
+
+def _is_infrastructure_compatible_change(
+    previous: dict[str, Any],
+    current: dict[str, Any],
+) -> bool:
+    return _without_compatible_infrastructure_source(
+        previous
+    ) == _without_compatible_infrastructure_source(current)
 
 
 def prepare_run_manifest(
@@ -157,10 +195,30 @@ def prepare_run_manifest(
     if manifest.get("version") != MANIFEST_VERSION:
         raise IncompatibleOptimizationRun("unsupported run manifest version")
     if manifest.get("semantic_sha256") != semantic_sha256:
-        raise IncompatibleOptimizationRun(
-            "run configuration differs from the existing logical experiment; "
-            "use a new run_dir for changed data, prompts, models, limits, or "
-            "search semantics"
+        previous_semantic = manifest.get("semantic_config")
+        if not isinstance(previous_semantic, dict) or not (
+            resuming
+            and _is_infrastructure_compatible_change(
+                previous_semantic,
+                semantic,
+            )
+        ):
+            raise IncompatibleOptimizationRun(
+                "run configuration differs from the existing logical experiment; "
+                "use a new run_dir for changed data, prompts, models, limits, or "
+                "search semantics"
+            )
+        manifest.setdefault("compatible_resume_events", []).append(
+            {
+                "reason": "project infrastructure source changed without "
+                "changing data, prompts, models, vendored GEPA, or search "
+                "semantics",
+                "previous_semantic_sha256": manifest.get("semantic_sha256"),
+                "current_semantic_sha256": semantic_sha256,
+                "compatible_project_files": sorted(
+                    INFRASTRUCTURE_COMPATIBLE_PROJECT_FILES
+                ),
+            }
         )
     previous_budget = int(manifest["latest_max_metric_calls"])
     if requested_budget < previous_budget:

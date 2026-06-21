@@ -13,6 +13,10 @@ from src.agents._deps import (
     extract_last_assistant,
     import_minisweagent,
 )
+from src.environment.apptainer_env import (
+    ApptainerEnvironment,
+    ApptainerSifCache,
+)
 from src.environment.docker_env import (
     DockerCapacityWindow,
     DockerEnvWrapper,
@@ -132,11 +136,20 @@ class DockerChecker:
             instance_id=case.instance_id,
             image=image,
         )
-        ensure_project_image_local(
-            image,
-            timeout=self.config.checker.timeout,
-            capacity_window=self.capacity_window,
-        )
+        if self.config.container.runtime == "apptainer":
+            ApptainerSifCache(
+                self.config.container.sif_cache_dir,
+                self.capacity_window,
+            ).ensure(
+                image,
+                timeout=self.config.checker.timeout,
+            )
+        else:
+            ensure_project_image_local(
+                image,
+                timeout=self.config.checker.timeout,
+                capacity_window=self.capacity_window,
+            )
         self.audit.write(
             "checker_infrastructure_prepare_completed",
             instance_id=case.instance_id,
@@ -172,8 +185,8 @@ class DockerChecker:
                 "candidate_sha256": candidate_sha256,
             },
         )
-        env = DockerEnvWrapper(self.config.docker, self.capacity_window)
         instance_info = case.checker_payload()["repository"]
+        image = derive_image_name(instance_info)
         checker_payload = case.checker_payload()
         self.audit.write(
             "checker_input_boundary",
@@ -186,13 +199,26 @@ class DockerChecker:
             label_available_to_checker=False,
             asi_available_to_checker=False,
         )
+        env: ApptainerEnvironment | DockerEnvWrapper | None = None
         try:
-            env.start(
-                derive_image_name(instance_info),
-                self.config.docker.workdir,
-                timeout=self.config.checker.timeout,
-                instance_info=instance_info,
-            )
+            if self.config.container.runtime == "apptainer":
+                env = ApptainerEnvironment(
+                    image=image,
+                    cwd=self.config.docker.workdir,
+                    sif_cache_dir=self.config.container.sif_cache_dir,
+                    capacity_window=self.capacity_window,
+                    timeout=self.config.checker.timeout,
+                    writable_tmpfs=self.config.container.writable_tmpfs,
+                    git_safe_directories=[self.config.docker.workdir],
+                )
+            else:
+                env = DockerEnvWrapper(self.config.docker, self.capacity_window)
+                env.start(
+                    image,
+                    self.config.docker.workdir,
+                    timeout=self.config.checker.timeout,
+                    instance_info=instance_info,
+                )
             agent = build_default_agent(
                 DefaultAgent,
                 model,
@@ -250,4 +276,8 @@ class DockerChecker:
                 tuple(agent.messages),
             )
         finally:
-            env.stop()
+            if env is not None:
+                if isinstance(env, ApptainerEnvironment):
+                    env.cleanup()
+                else:
+                    env.stop()

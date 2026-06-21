@@ -13,7 +13,7 @@ default_cpus_per_task: 1
 default_mem: 8G
 conda_module: miniconda3
 python_module: lang/Python/3.11
-container_module: apptainer
+container_module: tools/Apptainer
 log_dir: ./.tmp_hpc_smoke/ulhpc-runs
 # Optional if you do not use ssh-agent:
 # ssh_key: ~/.ssh/id_rsa

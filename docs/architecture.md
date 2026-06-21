@@ -188,6 +188,11 @@ plan-code-test/
   `max_metric_calls`。`gepa_resume_state.json` 与官方 `gepa_state.bin` 在迭代
   边界对齐，保存 Pareto selector 与 epoch sampler 共享 RNG、sampler epoch、
   累计 proposal/failure 和候选接纳计数。
+- 默认恢复校验仍是严格语义匹配。仅当已有官方 GEPA state 可恢复，且数据、
+  prompts、模型、搜索参数、Docker 配置和 vendored GEPA 核心完全不变时，项目侧
+  允许 `adapter.py`、`checker.py`、`callbacks.py`、`runner.py`、`resume.py` 这类
+  运行基础设施/恢复标记代码的 hash 变化继续同一 `run_dir`；该事件会写入
+  `run_manifest.json.compatible_resume_events`。
 - GEPA v0.1.1 在每次 `optimize` 入口加载状态前都会请求一次 seed validation。
   正式续跑由 Adapter 回放首次运行保存的 seed validation 输出，不再次调用
   Checker，也不把这次入口初始化误计为新增 metric calls。
