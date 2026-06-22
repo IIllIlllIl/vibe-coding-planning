@@ -5,6 +5,7 @@ from __future__ import annotations
 import hashlib
 import json
 import statistics
+from collections import Counter
 from pathlib import Path
 from typing import Any
 
@@ -31,9 +32,21 @@ def _phase_summary(records: list[dict[str, Any]], phase: str) -> dict[str, Any]:
         if record.get("event") == "model_call" and record.get("phase") == phase
     ]
     durations = [float(record.get("duration_seconds", 0.0)) for record in selected]
+    models = Counter(
+        str(record["model"])
+        for record in selected
+        if record.get("model")
+    )
+    provider_models = Counter(
+        str(record["provider_model"])
+        for record in selected
+        if record.get("provider_model")
+    )
     return {
         "calls": len(selected),
         "successful_calls": sum(bool(record.get("success")) for record in selected),
+        "models": dict(sorted(models.items())),
+        "provider_models": dict(sorted(provider_models.items())),
         "duration_seconds_total": sum(durations),
         "duration_seconds_mean": statistics.mean(durations) if durations else 0.0,
         "duration_seconds_p50": _percentile(durations, 0.5),
@@ -72,6 +85,10 @@ def write_cost_report(
     )
     checker = _phase_summary(records, "checker")
     reflection = _phase_summary(records, "reflection")
+    combined_models = Counter(checker["models"])
+    combined_models.update(reflection["models"])
+    combined_provider_models = Counter(checker["provider_models"])
+    combined_provider_models.update(reflection["provider_models"])
     scale = projection_metric_calls / max(1, observed_metric_calls)
     limitations = []
     if run_status == "failed":
@@ -103,6 +120,8 @@ def write_cost_report(
         "reflection": reflection,
         "combined": {
             "calls": checker["calls"] + reflection["calls"],
+            "models": dict(sorted(combined_models.items())),
+            "provider_models": dict(sorted(combined_provider_models.items())),
             "total_tokens": checker["total_tokens"] + reflection["total_tokens"],
             "reported_cost_usd": (
                 checker["reported_cost_usd"] + reflection["reported_cost_usd"]

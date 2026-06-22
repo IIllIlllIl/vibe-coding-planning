@@ -394,6 +394,31 @@ bash scripts/run_batch.sh --gepa-rules \
 trajectory。Reflection evidence bundle 按 minibatch 创建，并以只读 Docker
 mount 暴露给 mini-swe-agent proposer。
 
+Checker system prompt 只保留固定分类协议：必须把 candidate rules 作为唯一
+决策标准，issue、plan 和 repository 仅作为应用规则的证据；如果 candidate
+rules 没有明确支持预测 resolved，则默认预测 unresolved。GEPA 维护的完整规则
+文本继续作为 user/instance 输入中的 `<candidate_rules>` 传入，不放入 system
+prompt，避免可优化规则与固定执行协议混在同一层。
+
+2026-06-22 切换到 strict Checker prompt 后，旧 pilot/formal run 目录已归档到：
+
+```text
+output/SWE-bench_Verified/gepa-rules/archive/20260622_pre_strict_checker/
+```
+
+HPC 24h strict 试运行配置为：
+
+```text
+configs/gepa_verified_rules_strict_hpc_24h_apptainer.yaml
+```
+
+该配置使用正式 482-case 快照、GPT seed、Apptainer runtime、`parallel=4`、
+`max_metric_calls=1500`，并把 SIF cache 放在可跨实验复用的 scratch 目录：
+
+```text
+/scratch/users/twang/vibe-coding-planning/shared/sif-cache
+```
+
 正式初始规则使用 `configs/gepa_initial_rules_gpt_seed.md`。该 seed 由用户提供的
 GPT prompt 生成，prompt 和原始输出完整记录在
 `docs/gepa_initial_rules_gpt_seed_provenance.md`。为保持可复现性，生成后的规则
@@ -485,8 +510,9 @@ Checker 输出恢复已对齐完成 792 次无 Checker 错误的 checker-only �
 
 GEPA 仍必须使用固定 Checker prompt。checker-only 的 no-rules arm 会切换到
 独立 baseline prompt，但 GEPA 不能根据候选是否为空切换 system prompt，否则
-不同候选的评估器不再固定。因此这里仅复用可靠的资源上限、提交协议、解析和
-失败语义。
+不同候选的评估器不再固定。当前 GEPA Checker 不再支持空规则时直接依靠模型
+能力判断；空规则或规则未覆盖时应默认拒绝。因此这里仅复用可靠的资源上限、
+提交协议、解析和失败语义。
 
 用于验证修复的极小运行配置为
 `configs/gepa_verified_rules_reflection_smoke.yaml`，对应 2 train / 2 validation
@@ -521,6 +547,29 @@ tree 只保存 seed 和通过 minibatch 筛选、完成 validation 后被接纳�
 机制落地前，因此它验证了 GEPA 规则生成和候选接纳闭环，但不作为正式跨进程
 可复现续跑能力的实跑证据。正式续跑验证应使用新的 `run_dir`。
 
+#### 10.1.1 HPC Apptainer smoke
+
+为在 ULHPC Iris（无 Docker，仅提供 `tools/Apptainer 1.4.0`）上运行 GEPA，新增
+`configs/gepa_verified_rules_reflection_smoke_apptainer.yaml` 与
+`src/environment/apptainer_env.py`。该配置使用与本地 Docker 隔离的
+`run_dir`：
+
+```text
+output/SWE-bench_Verified/gepa-rules/reflection-smoke-empty-seed-apptainer
+```
+
+2026-06-21 通过 `scripts/hpc_submit_batch.sh` 提交后：
+
+- Slurm 作业在 Iris 计算节点成功完成，退出码 0，执行 **6/6 metric calls**。
+- 产物包括 `result.json`、`candidate_metrics.json`、`best_rules.txt`、
+  `cost_report.json`、`audit_events.jsonl` 等。
+- 断点续跑验证通过：中途 `scancel` 取消后，同一命令重新提交，GEPA 从
+  `gepa_state.bin` 恢复，继续完成剩余 metric calls，未重复已完成的初始调用。
+- HPC 作业不依赖 conda，改用 `module load lang/Python/3.11 tools/Apptainer` +
+  `python3` + `pip install --user -e third_party/gepa`。
+
+详细运行与参数设计见 `docs/hpc-submit.md`。
+
 ### 10.2 审计与成本日志
 
 `audit_events.jsonl` 逐事件记录：
@@ -539,8 +588,9 @@ tree 只保存 seed 和通过 minibatch 筛选、完成 validation 后被接纳�
 `usage.jsonl` 从 mini-swe-agent/LiteLLM 的实际响应逐 API 调用记录 Checker 和
 Reflection 的 prompt/completion/total tokens、耗时和成功状态。
 `cost_report.json` 分 phase 汇总平均/P50/P95 时间、token 和每 metric call
-消耗，并按 `projection_metric_calls` 给出线性全量估算；运行失败或成功
-Reflection proposal 未达到配置阈值时，token/time 估算标记为无效。提供方
+消耗，并记录 checker、reflection 和 combined 实际请求的 `model` 以及提供方
+响应中的 `provider_model`；报告按 `projection_metric_calls` 给出线性全量估算。
+运行失败或成功 Reflection proposal 未达到配置阈值时，token/time 估算标记为无效。提供方
 返回的 USD 字段仅保留为原始观测，不参与验收，实际费用以控制台为准。
 
 GEPA 主循环不并行：Pareto 选择、minibatch sampling、Reflection proposal、

@@ -38,24 +38,26 @@ docker:
   workdir: /testbed
   timeout: 30
   min_free_gb: 20
-  max_cached_images: 6
+  max_cached_images: 1000
 
 container:
   runtime: apptainer
   module: tools/Apptainer
-  # Adjust this to a persistent HPC directory with enough space for .sif files.
-  sif_cache_dir: /home/users/twang/hpc_runs/vibe-sif-cache
+  # Shared Lustre scratch is faster than Isilon home for concurrent SIF reads.
+  sif_cache_dir: /scratch/users/twang/vibe-coding-planning/shared/sif-cache
   writable_tmpfs: true
 
 prompts:
   checker_system: |
-    You are a fixed binary classifier. Predict whether the supplied Round 1
-    plan, when executed by the project's fixed Code Agent, will resolve the
-    issue. Apply the candidate rules when present. The candidate rules may be
-    an empty string; in that baseline case, judge directly from the issue,
-    plan, and repository. Inspect /testbed when repository facts are needed.
-    Never use execution-after evidence because none is available in this
-    environment. Do not modify /testbed.
+    You are a rule-bound binary classifier.
+
+    Decide whether the supplied plan should be predicted resolved.
+
+    Use the candidate rules as the only decision criteria.
+    Use the issue, plan, and repository only as evidence for applying those rules.
+    Do not add criteria that are not stated in the candidate rules.
+
+    If the candidate rules do not clearly support predicting resolved, predict unresolved.
 
     Write exactly this JSON schema to /tmp/gepa_checker_result.json using:
     cat <<'EOF' > /tmp/gepa_checker_result.json
@@ -75,9 +77,9 @@ prompts:
     <issue>
     {{task}}
     </issue>
-    <round_1_plan>
+    <plan>
     {{plan}}
-    </round_1_plan>
+    </plan>
     <candidate_rules>
     {{candidate_rules}}
     </candidate_rules>

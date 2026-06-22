@@ -35,6 +35,7 @@ def test_image_to_sif_name_mapping():
 class _FakeCapacityWindow:
     def __init__(self):
         self.acquisitions = 0
+        self.min_free_gb = 0
 
     @staticmethod
     def lease():
@@ -135,17 +136,26 @@ def test_sif_cache_raises_when_apptainer_missing(tmp_path, monkeypatch):
         cache.ensure("python:3.12-slim")
 
 
-def test_environment_requires_existing_sif(tmp_path):
+def test_environment_pulls_missing_sif_on_demand(tmp_path, monkeypatch):
     cache_dir = tmp_path / "sifs"
     cache_dir.mkdir()
     window = _FakeCapacityWindow()
-    with pytest.raises(FatalError, match="Apptainer SIF not found"):
-        ApptainerEnvironment(
-            image="python:3.12-slim",
-            cwd="/testbed",
-            sif_cache_dir=cache_dir,
-            capacity_window=window,
-        )
+
+    def fake_run(args, **kwargs):
+        assert args[0] == "apptainer"
+        if args[1] == "pull":
+            Path(args[3]).write_text("sif", encoding="utf-8")
+        return subprocess.CompletedProcess(args, returncode=0, stdout="", stderr="")
+
+    monkeypatch.setattr(subprocess, "run", fake_run)
+
+    env = ApptainerEnvironment(
+        image="python:3.12-slim",
+        cwd="/testbed",
+        sif_cache_dir=cache_dir,
+        capacity_window=window,
+    )
+    assert env._sif_path.exists()
 
 
 def _make_env(cache_dir: Path, *, network_disabled: bool = False, run_args=None):

@@ -30,6 +30,7 @@ from src.optimization.reflection import (
     EvidenceBundleWriter,
     MiniSWEReflectionProposer,
 )
+from src.optimization.report import write_cost_report
 from src.optimization.runner import OptimizationRunFailed, run_optimization
 from src.optimization.resume import IncompatibleOptimizationRun
 
@@ -189,6 +190,15 @@ def test_extended_pilot_reflection_prompt_enforces_deployment_boundary(
 
     assert config.checker.max_steps == 500
     assert config.checker.max_attempts == 3
+    assert "rule-bound binary classifier" in config.checker_prompt
+    assert "candidate rules as the only decision criteria" in config.checker_prompt
+    assert "Do not add criteria" in config.checker_prompt
+    assert "predict unresolved" in config.checker_prompt
+    assert "judge directly" not in config.checker_prompt
+    assert "Inspect /testbed" not in config.checker_prompt
+    assert "Do not modify /testbed" not in config.checker_prompt
+    assert "<plan>" in config.checker_instance_template
+    assert "<round_1_plan>" not in config.checker_instance_template
     assert "fixed Code Agent" in config.reflection_prompt
     assert "repository at the specified base commit" in config.reflection_prompt
     assert "execution output or an expected output" in config.reflection_prompt
@@ -672,8 +682,75 @@ def test_audited_model_records_real_response_usage(tmp_path):
     record = json.loads(path.read_text())
     assert record["prompt_tokens"] == 10
     assert record["completion_tokens"] == 4
+    assert record["model"] == "provider/model"
+    assert record["provider_model"] == "provider-model"
     assert record["reported_cost_usd"] == 0.25
     assert record["duration_seconds"] >= 0
+
+
+def test_cost_report_records_called_models(tmp_path):
+    usage_path = tmp_path / "usage.jsonl"
+    records = [
+        {
+            "event": "model_call",
+            "phase": "checker",
+            "success": True,
+            "model": "deepseek/deepseek-v4-flash",
+            "provider_model": "deepseek-v4-flash",
+            "duration_seconds": 1.0,
+            "prompt_tokens": 10,
+            "completion_tokens": 2,
+            "total_tokens": 12,
+            "reported_cost_usd": 0.0,
+        },
+        {
+            "event": "model_call",
+            "phase": "checker",
+            "success": True,
+            "model": "deepseek/deepseek-v4-flash",
+            "provider_model": "deepseek-v4-flash",
+            "duration_seconds": 2.0,
+            "prompt_tokens": 11,
+            "completion_tokens": 3,
+            "total_tokens": 14,
+            "reported_cost_usd": 0.0,
+        },
+        {
+            "event": "model_call",
+            "phase": "reflection",
+            "success": True,
+            "model": "deepseek/deepseek-v4-flash",
+            "provider_model": "deepseek-v4-flash",
+            "duration_seconds": 3.0,
+            "prompt_tokens": 20,
+            "completion_tokens": 4,
+            "total_tokens": 24,
+            "reported_cost_usd": 0.0,
+        },
+    ]
+    usage_path.write_text(
+        "".join(json.dumps(record) + "\n" for record in records),
+        encoding="utf-8",
+    )
+
+    write_cost_report(
+        tmp_path,
+        observed_metric_calls=2,
+        projection_metric_calls=10,
+        parallel=2,
+        successful_proposals=1,
+        required_proposals=1,
+    )
+
+    report = json.loads((tmp_path / "cost_report.json").read_text())
+    expected = {"deepseek/deepseek-v4-flash": 3}
+    expected_provider = {"deepseek-v4-flash": 3}
+    assert report["checker"]["models"] == {"deepseek/deepseek-v4-flash": 2}
+    assert report["reflection"]["models"] == {
+        "deepseek/deepseek-v4-flash": 1
+    }
+    assert report["combined"]["models"] == expected
+    assert report["combined"]["provider_models"] == expected_provider
 
 
 def test_native_gepa_end_to_end_without_llm(tmp_path):
@@ -1195,8 +1272,29 @@ def test_apptainer_config_loads(monkeypatch):
     assert config.container.module == "tools/Apptainer"
     assert config.container.writable_tmpfs is True
     assert config.container.sif_cache_dir == Path(
-        "/home/users/twang/hpc_runs/vibe-sif-cache"
+        "/scratch/users/twang/vibe-coding-planning/shared/sif-cache"
     )
+
+
+def test_strict_hpc_24h_config_loads(monkeypatch):
+    monkeypatch.setenv("DEEPSEEK_API_KEY", "secret")
+    repo_root = Path(__file__).resolve().parents[2]
+    config = load_optimization_config(
+        repo_root
+        / "configs"
+        / "gepa_verified_rules_strict_hpc_24h_apptainer.yaml"
+    )
+
+    assert config.checker.model == "deepseek-v4-flash"
+    assert config.reflection.model == "deepseek-v4-flash"
+    assert config.search.parallel == 4
+    assert config.search.max_metric_calls == 1500
+    assert config.container.runtime == "apptainer"
+    assert config.container.sif_cache_dir == Path(
+        "/scratch/users/twang/vibe-coding-planning/shared/sif-cache"
+    )
+    assert "rule-bound binary classifier" in config.checker_prompt
+    assert "<candidate_rules>" in config.checker_instance_template
 
 
 def test_docker_config_defaults_are_preserved(monkeypatch):

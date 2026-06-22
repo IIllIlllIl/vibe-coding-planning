@@ -1,6 +1,6 @@
 # CLAUDE.md — Agent Operational Notes
 
-> Three sections only. Project information lives in `README.md`; this file
+> Four sections only. Project information lives in `README.md`; this file
 > holds the operational rules the agent has been tripped on before.
 
 ## 1. Project file index — read these to understand the project
@@ -29,7 +29,39 @@ python -c "import minisweagent; print(minisweagent.__version__)"
 
 If `conda activate` reports "shell not initialized", run `source ~/.zshrc` first (`conda init zsh` is already done; only `source` is needed in fresh shells). Never install dependencies into `base` or use the macOS system Python.
 
-## 3. Cleanup checklist — run BEFORE marking the task complete
+## 3. Credential and key safety — never write secrets into tracked artifacts
+
+Never place API keys, GitHub tokens, SSH private keys, or other credentials in
+commands, scripts, generated job files, configs, docs, tests, logs, Git remote
+URLs, or committed history. Treat any value matching an API key/token as a
+secret even if it is later rotated.
+
+For local runs, read secrets only from environment variables or ignored local
+files such as `.env`. For HPC runs, do not transmit local secrets through
+command-line arguments, `ulhpc-submit` payloads, Slurm scripts, rsync-staged
+files, or shell-expanded heredocs. The expected pattern is:
+
+```bash
+set +x
+source ~/.config/vibe-coding-planning/deepseek.env
+test -n "${DEEPSEEK_API_KEY:-}" || exit 2
+```
+
+The remote env file must be created on the remote host with private
+permissions, for example `chmod 700 ~/.config/vibe-coding-planning` and
+`chmod 600 ~/.config/vibe-coding-planning/deepseek.env`.
+
+Before finishing work that touches LLM/HPC/Git configuration, check that:
+
+- no secret literal appears in `git diff`, generated files, docs, or test data;
+- `git remote -v` does not contain embedded tokens;
+- generated HPC files such as `.ulhpc_submit/` are ignored or removed;
+- logs and reports record model names, token usage, and timing, but never keys.
+
+If a secret is found in tracked files or Git history, report it immediately and
+assume it is compromised. Do not print the secret value back to the user.
+
+## 4. Cleanup checklist — run BEFORE marking the task complete
 
 After finishing a task, before reporting completion to the user, delete these build/test artifacts:
 

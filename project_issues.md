@@ -10,7 +10,8 @@
   文件型 reflection proposer、runner、报告和监控集成已实现并通过
   mock/no-LLM 测试；极小 Reflection smoke 已生成两次非空完整规则并验证拒绝
   分支；extended pilot 已覆盖候选接纳、完整 validation、成本/token 报告和
-  prompt 产出完整规则文本
+  prompt 产出完整规则文本；**HPC Apptainer backend 与提交脚本已实现，
+  reflection smoke 在 ULHPC Iris 上成功完成并验证断点续跑**。
 - **设计文档**：`docs/gepa-rule-optimization.md`
 - **目标**：使用 Verified PCT Round 1 分类数据直接优化完整 Checker 规则文本，替代逐案例规则提取、后处理和聚合
 - **当前 Verified 数据审计**：
@@ -28,9 +29,10 @@
     `docs/gepa_initial_rules_gpt_seed_provenance.md`
   - 为保持可复现性，该 GPT 输出不再人工优化；后续改进只由 GEPA run 产生
 - **执行顺序**：
-  1. 使用新的 run_dir 验证正式 resume 机制
-  2. 设计并执行 `parallel=2` 小型试运行
-  3. 用户确认成本后运行正式 GEPA 优化
+  1. 旧 pilot/formal run 已归档到
+     `output/SWE-bench_Verified/gepa-rules/archive/20260622_pre_strict_checker/`
+  2. 使用 strict Checker prompt 的新 run_dir 执行 HPC Apptainer 24h 试运行
+  3. 根据 HPC 资源探测、DeepSeek rate limit 和候选质量决定是否继续提高预算
 - **随机性注意**：GEPA Checker 已显式设置 `temperature: 0.0`
 - **首次 Pilot 结果（2026-06-14）**：
   - 空规则 seed：`configs/gepa_empty_rules.txt`
@@ -72,20 +74,21 @@
   - 该 run_dir 创建早于正式 `run_manifest.json`/`gepa_resume_state.json` 机制，
     因此不作为正式跨进程续跑实跑证据
 - **下一验收**：
-  - 使用新的 run_dir 做小型断点续跑验证，覆盖 manifest、resume_state 和
-    seed validation replay
-  - 分析 extended pilot 中 Checker 实际 step 分布，再决定全量实验 step 上限
-  - 设计并执行 `parallel=2` 小型试运行，只验证 Checker evaluation batch 内
-    样本级并发，不并行 GEPA iteration
-  - 准备并运行 `configs/gepa_verified_rules_formal_pilot.yaml`：正式 384/98
-    filtered Verified 快照、GPT seed、`parallel=2`、Checker `max_steps=500`、
-    `max_attempts=3`，软预算 116 metric calls，用于观察整体 GEPA 代码路径在
-    正式数据上的 2-3 个 proposal iteration，并测试 Checker evaluation batch
-    内样本级并行
+  - ✅ HPC Apptainer reflection smoke 已完成并验证断点续跑；产物与本地 Docker
+    run_dir 隔离
+  - 新 strict 24h 配置：
+    `configs/gepa_verified_rules_strict_hpc_24h_apptainer.yaml`
+  - SIF cache 统一指向跨实验共享目录：
+    `/scratch/users/twang/vibe-coding-planning/shared/sif-cache`
+  - 提交独立长作业，预拉正式 384/98 快照所需的约 482 个 benchmark SIF
+    （预计 ~500 GB）
+  - 在 HPC 上执行 `parallel=4` strict Checker 24h 试运行，验证 candidate tree、
+    validation scores、resume state、wall time 和 DeepSeek rate limit
 - **预算/并发决策**：
   - 接受 GEPA 官方 `max_metric_calls` 的迭代边界软上限语义
   - 不并行 GEPA 主循环；只设计 Checker evaluation batch 内样本级并发
-  - 全部配置当前仍固定 `parallel=1`；`parallel=2` 需先通过新 run_dir 小型试运行
+  - 本地配置仍固定 `parallel=1`；HPC strict 24h 配置初始使用 `parallel=4`，
+    若资源探测或 DeepSeek rate limit 不稳，则先下调到 `parallel=2`
 - **Checker 稳定性说明**：
   - GEPA pilot 的 22 条 evaluation records 中有 3 次无合法 JSON，涉及 2 个
     唯一实例；API 调用数量表明对应执行耗尽约 50 steps
@@ -265,16 +268,23 @@
 - [ ] 先设计 GEPA 专用 Apptainer environment backend：保持 `execute()` / `get_template_vars()` / `cleanup()` 接口兼容，替代 `DockerChecker` 和 `MiniSWEReflectionProposer` 中的 Docker lifecycle；GEPA pilot 通过后再评估是否扩展到 SWE-bench / PolyBench / Pro official evaluator。
 - [ ] 确认 HPC 节点能访问 Docker Hub、GHCR、HuggingFace 和 LLM API；若不能，设计镜像和数据预热步骤。
 - [x] 确认 HPC 侧 Python 依赖入口：`/opt/apps/easybuild/systems/iris/rhel810-20250803/2023b/broadwell/software/Python/3.11.5-GCCcore-13.2.0/bin/python` 可导入 `minisweagent==1.17.5`、`swebench==4.1.0`、`yaml`、`docker`。
+- [x] HPC 计算节点无 conda；GEPA 作业改用 `module load lang/Python/3.11 tools/Apptainer` + `python3`，并在作业内 `python3 -m pip install --user -e third_party/gepa`。
+- [x] 设计并实现 GEPA 专用 Apptainer environment backend（`src/environment/apptainer_env.py`），在 `iris-*` 上跑通 reflection smoke。
+- [x] 明确 Apptainer SIF 缓存目录：`container.sif_cache_dir`，并提供 `scripts/tools/prepare_apptainer_sifs.py` 在主循环外预热全部所需 SIF。
+- [x] `output/` 不同步问题由 `scripts/hpc_submit_batch.sh` 单独 `rsync` 数据集快照到远端、作业结束后再 `rsync` 拉回 `run_dir` 解决。
+- [x] 完成 4 实例 GEPA reflection smoke 的 HPC 实跑与断点续跑验证，产物与本地 Docker run_dir 隔离。
 - [ ] 确认 `scripts/run_batch.sh` 中 `read -r BATCH_ID ... < <(python -c ...)` 的进程替换在 HPC bash 中正常。
 - [ ] 确认输出策略：远端保留、自动同步回本地，或按 job ID 手动拉取。
 - [ ] 文件系统：HPC Linux 默认区分大小写，需用 1-2 个 PolyBench 实例 smoke test。
 
 ### 7.5 实施优先级建议
 
-1. **P0**：用真实 ULHPC 配置运行 `scripts/hpc_smoke_check.sh`，验证 SSH 连通性。
-2. **P0**：用真实 ULHPC 配置运行 `scripts/hpc_smoke_check.sh --submit`。
-3. **P0**：统一远端 conda 调用方式，避免 hardcoded `/Users/taoran.wang/miniconda3`。
-4. **P0**：基于 smoke 结果设计 `scripts/hpc_submit_batch.sh --dry-run`。
-5. **P1**：扩展 Linux Docker Engine/rootless 常见错误识别。
-6. **P1**：按 wall time 把 PolyBench / checker / GEPA 拆成多个可恢复 job。
-7. **P2**：清理或降级旧 Linux 服务器迁移文档中的 watchdog/tmux/防休眠内容。
+1. **P0（已完成）**：GEPA Apptainer backend 已实现，`scripts/hpc_submit_batch.sh`
+      可提交 GEPA 规则优化作业；reflection smoke 与断点续跑已验证通过。
+2. **P1**：继续探索 PCT/PCC/SWE-bench/PolyBench/Pro 等 Docker-native evaluator
+      在 HPC 上的可行路径（Apptainer backend 或申请 Docker-enabled 分区）。
+3. **P1**：根据 HPC 存储与计算资源（home quota、scratch、节点 CPU/内存）设计
+      GEPA 正式 pilot 的 `parallel`、SIF 缓存大小和 `DockerCapacityWindow` 参数。
+4. **P1**：扩展 Linux Docker Engine/rootless 常见错误识别（若后续有
+      Docker-enabled 资源）。
+5. **P2**：按 wall time 把未来大型 GEPA run 拆成多个可恢复 job。

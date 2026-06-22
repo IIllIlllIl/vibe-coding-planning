@@ -35,9 +35,12 @@ PCT/PCC、checker、analysis、GEPA 逻辑仍由现有脚本执行。
 
 仍然保留的 Linux 相关约束：
 
-- HPC 节点需要可用的 Docker Engine、rootless Docker 或集群批准的容器运行方式。
-- `mini-swe` conda 环境必须存在，且包含 `mini-swe-agent==1.17.5`、`swebench`
-  和项目依赖。
+- **Iris 计算节点不提供 Docker CLI/daemon**，已确认可用模块为 `tools/Apptainer`
+  （Apptainer 1.4.0）。GEPA 规则优化 pilot 已完成 Apptainer 迁移；PCT/PCC/SWE-bench
+  官方 evaluator 仍依赖 Docker，暂不能直接在 Iris 上运行。
+- `mini-swe` conda 环境在计算节点不可用；GEPA HPC 作业改为 `module load
+  lang/Python/3.11 tools/Apptainer` 后使用系统 `python3`，并通过
+  `python3 -m pip install --user -e third_party/gepa` 安装 vendored GEPA。
 - Linux 文件系统大小写敏感，PolyBench 镜像/实例路径规范化仍需验证。
 - Docker Hub / GHCR / HuggingFace / LLM API 网络访问可能受 HPC 策略限制，需要在
   作业提交前确认。
@@ -108,73 +111,105 @@ rsync dry-run 时，显式加 `--sync-dry-run`。脚本会先用 `nc` 做
 如需直接交给 `ulhpc-submit` 尝试，可加 `--skip-port-check` 或
 `--skip-ssh-check`。
 
-本项目建议新增正式 batch 包装脚本：
+本项目已新增 GEPA 专用 HPC batch 包装脚本 `scripts/hpc_submit_batch.sh`：
 
 ```bash
+# 默认 dry-run：只打印将要执行的 ulhpc-submit 命令和远端命令，不提交 Slurm 作业
 bash scripts/hpc_submit_batch.sh \
-  --config configs/polybench_full199_pct.yaml \
-  --parallel 2 \
-  --job-name polybench-pct \
-  --time 24:00:00
+  --gepa-rules \
+  --gepa-config configs/gepa_verified_rules_reflection_smoke_apptainer.yaml
+
+# 真正提交 GEPA Apptainer 作业
+bash scripts/hpc_submit_batch.sh \
+  --gepa-rules \
+  --gepa-config configs/gepa_verified_rules_reflection_smoke_apptainer.yaml \
+  --job-name gepa-ref-smoke-apptainer \
+  --time 02:00:00 \
+  --cpus 1 \
+  --mem 16G \
+  --remote-env-file '~/.config/vibe-coding-planning/deepseek.env' \
+  --submit
 ```
 
-可复用 `scripts/run_batch.sh` 的主要参数：
+该脚本目前只实现了 GEPA 规则优化入口（`--gepa-rules`）。它会：
+
+1. 读取 `configs/ulhpc_submit.yaml` 获取 SSH/用户设置（也可用 `--ulhpc-config` 覆盖）。
+2. 从 GEPA 配置中解析 `dataset_snapshot`、`run_dir` 和 `initial_rules`，并在本地校验存在性。
+3. 使用 `rsync` 把数据集快照单独同步到 HPC（`ulhpc-submit` 默认不同步 `output/`）。
+4. 把远端命令封装成 `ulhpc-submit ... -- bash -lc '<remote_script>'` 提交到 Slurm。
+5. 作业结束后再次 `rsync` 把远端 `run_dir` 拉回本地同名路径，无论 Slurm 作业成功或失败。
+
+远端命令的关键形态如下。`DEEPSEEK_API_KEY` 不从本地命令行传递，也不展开进
+`ulhpc-submit` 参数；作业只 source 远端用户私有 env 文件：
+
+```bash
+source /etc/profile.d/modules.sh
+module load tools/Apptainer
+set +x
+source ~/.config/vibe-coding-planning/deepseek.env
+test -n "${DEEPSEEK_API_KEY:-}" || exit 2
+python3 -m pip install --quiet --user -e third_party/gepa || true
+python3 scripts/internal/run_gepa_rules.py --config <relative-config-path>
+```
+
+注意 Iris 计算节点没有 `conda`，因此脚本不使用 `conda run -n mini-swe`；而是依赖
+`module load lang/Python/3.11 tools/Apptainer` 与 `python3`。
+
+`scripts/hpc_submit_batch.sh` 当前支持的参数：
 
 | 参数 | 说明 |
 |------|------|
-| `--config PATH` | 主流程配置，传给远端 `scripts/run_batch.sh --config` |
-| `--instances FILE` | 可选实例列表，传给远端 run batch |
-| `--batch-id ID` | 可选批次覆盖，强烈建议每个 HPC job 使用唯一值 |
-| `--parallel N` | 远端 worker 并发数，应小于等于作业申请的 CPU/Docker 容量 |
-| `--gepa-rules` / `--gepa-config PATH` | 提交 GEPA 规则优化作业 |
-| `--analysis-only` / `--analysis-config PATH` | 提交规则分析作业 |
-| `--checker-comparison` / `--checker-recovery` | 提交 checker-only 作业 |
-| `--dry-run` | 只打印将提交的 `ulhpc-submit` 命令和远端命令，不提交 Slurm 作业 |
+| `--gepa-rules` | 必选标志，表示提交 GEPA 规则优化作业 |
+| `--gepa-config PATH` | GEPA 配置文件路径 |
+| `--job-name NAME` | Slurm 作业名（默认 `vibe-gepa`） |
+| `--partition NAME` | Slurm partition（默认 `batch`） |
+| `--time HH:MM:SS` | wall time（默认 `02:00:00`） |
+| `--cpus N` | CPUs per task（默认 `1`） |
+| `--mem SIZE` | 内存（默认 `16G`） |
+| `--gpus N` | GPUs（默认 `0`） |
+| `--remote-dir DIR` | HPC 侧工作目录（默认 `~/hpc_runs/vibe-coding-planning`） |
+| `--remote-env-file FILE` | HPC 侧私有 env 文件，作业内 source 后读取 `DEEPSEEK_API_KEY`（默认 `~/.config/vibe-coding-planning/deepseek.env`） |
 | `--ulhpc-config FILE` | 覆盖默认 `configs/ulhpc_submit.yaml` |
-
-HPC 专属参数应直接映射到 `ulhpc-submit`：
-
-| 参数 | 映射 | 说明 |
-|------|------|------|
-| `--job-name NAME` | `ulhpc-submit --job-name` | Slurm 作业名 |
-| `--partition NAME` | `ulhpc-submit --partition` | Slurm partition，默认可用 `batch` |
-| `--time HH:MM:SS` | `ulhpc-submit --time` | wall time |
-| `--cpus N` | `ulhpc-submit --cpus` | CPUs per task，默认可与 `--parallel` 对齐 |
-| `--mem SIZE` | `ulhpc-submit --mem` | 内存 |
-| `--gpus N` | `ulhpc-submit --gpus` | 当前默认 0 |
-| `--remote-dir DIR` | `ulhpc-submit --remote-dir` | HPC 侧工作目录 |
-| `--conda-env mini-swe` | `ulhpc-submit --conda-env` | 远端 conda 环境名 |
-| `--container PATH` | `ulhpc-submit --container` | 如后续改用 Apptainer/Singularity |
-| `--full-logs` | `ulhpc-submit --full-logs` | 下载完整远端日志 |
+| `--full-logs` | 下载完整远端日志 |
+| `--submit` | 真正提交；省略时只 dry-run |
 
 已确认 `ulhpc-submit` 还支持 `--local-dir`、`--nodes`、`--ntasks`、`--no-sync`、
 `--show-config`、`--dry-run`、`ULHPC_*` 环境变量和
-`~/.config/ulhpc-submit/config.yaml`。
+`~/.config/ulhpc-submit/config.yaml`。`scripts/hpc_submit_batch.sh` 已在 dry-run 和
+提交模式下与 `ulhpc-submit` 对接通过。
 
 ---
 
 ## 4. 作业命令结构
 
-HPC 包装脚本不需要自行实现 SSH、rsync、Slurm 监控或日志回传；这些由
-`ulhpc-submit` 完成。包装脚本只需把本项目的实验命令组织成一条
-`ulhpc-submit ... -- bash scripts/run_batch.sh ...`。
+HPC 包装脚本不需要自行实现 SSH、Slurm 脚本生成、队列监控或日志回传；这些由
+`ulhpc-submit` 完成。但 `output/` 目录默认被 `ulhpc-submit` 排除在同步之外，
+因此 GEPA 数据集快照和最终 `run_dir` 的拉回由 `scripts/hpc_submit_batch.sh` 用
+`rsync` 单独处理。
 
-示例 dry-run 形态：
+示例 dry-run 形态（实际调用以脚本打印为准）：
 
 ```bash
 ulhpc-submit \
   --local-dir . \
   --remote-dir '~/hpc_runs/vibe-coding-planning' \
-  --job-name polybench-pct \
+  --job-name gepa-ref-smoke-apptainer \
   --partition batch \
-  --cpus 2 \
-  --mem 32G \
-  --time 24:00:00 \
+  --cpus 1 \
+  --mem 16G \
+  --time 02:00:00 \
   --conda-env mini-swe \
-  --dry-run \
-  -- bash scripts/run_batch.sh \
-    --config configs/polybench_full199_pct.yaml \
-    --parallel 2
+  -- bash -lc '<remote_script>'
+```
+
+设计约束：
+
+- 不在 HPC 作业中使用 `caffeinate`。
+- 不要求 tmux；HPC 调度器日志和 `ulhpc-submit` 本地 run log 是主日志来源。
+- 不在作业脚本里修改 `config.yaml`；通过专用的 Apptainer GEPA 配置文件切换后端。
+- 作业失败时保留远端 `run_dir`，`scripts/hpc_submit_batch.sh` 会把它同步回本地。
+- GEPA 作业继续使用已有 `run_manifest.json` / `gepa_resume_state.json`
+  做身份校验和断点恢复。
 ```
 
 设计约束：
@@ -195,14 +230,15 @@ ulhpc-submit \
 
 - `src/`、`scripts/`、`configs/`、`docs/` 中运行所需文件。
 - `config.yaml` 或指定的 config 文件。
-- 实例列表 JSON，例如 `configs/polybench_remaining133_pct.yaml` 引用的
-  `system.instances`，或 CLI `--instances` 指定文件。
 - GEPA / checker 使用的已发布快照，例如 `output/SWE-bench_Verified/...`
-  下的不可变数据集。如果快照只存在本地，提交前必须同步到远端。
+  下的不可变数据集。由于 `ulhpc-submit` 默认**排除 `output/` 目录**，快照必须由
+  `scripts/hpc_submit_batch.sh` 在提交前单独 `rsync` 到远端。
+- 远端 `run_dir` 的父目录需可写，以便 GEPA 写入结果；作业结束后脚本会把该目录
+  同步回本地同名路径。
 
 不应默认提交：
 
-- 大体积历史 `output/`，除非本次恢复或 GEPA/checker 输入必须依赖其中快照。
+- 大体积历史 `output/`（除必须输入快照外）。
 - `.pytest_cache/`、`.mypy_cache/`、`.ruff_cache/`、`htmlcov/`、`logs/`。
 - 本地 `.claude/` 权限文件。
 
@@ -210,8 +246,20 @@ ulhpc-submit \
 
 - `DEEPSEEK_API_KEY` 等密钥不写入 git 文件。
 - 当前 `ulhpc-submit` 会生成 Slurm job script 并同步项目文件；包装脚本不得把
-  密钥展开进命令行日志或文档示例。
-- 优先通过本地环境、`ULHPC_*` 配置和 HPC 侧用户环境传递凭据。
+  密钥展开进命令行参数、Slurm 脚本正文、日志或文档示例。
+- GEPA HPC 作业默认通过远端私有 env 文件读取 key：
+
+  ```bash
+  mkdir -p ~/.config/vibe-coding-planning
+  chmod 700 ~/.config/vibe-coding-planning
+  # 手动写入新建的 HPC 专用 DeepSeek key，不提交、不同步、不写入 shell 历史。
+  printf "export DEEPSEEK_API_KEY='...'\n" > ~/.config/vibe-coding-planning/deepseek.env
+  chmod 600 ~/.config/vibe-coding-planning/deepseek.env
+  ```
+
+- 作业脚本中使用 `set +x`，只执行 `source "$REMOTE_ENV_FILE"` 并检查变量存在，
+  不打印 key。共享 HPC 上仍应使用 DeepSeek 控制台的实验专用 key、额度/告警和
+  运行后禁用/轮换来限制风险。
 - OpenCode/Kimi analysis 仍受当前配置加载问题影响，可能需要临时提供
   `DEEPSEEK_API_KEY=dummy`；长期修复见 `project_issues.md`。
 
@@ -234,19 +282,94 @@ bash scripts/hpc_submit_batch.sh \
   --time 08:00:00
 ```
 
-### 6.2 GEPA 规则优化
+### 6.2 GEPA 规则优化（Apptainer）
 
 GEPA 主循环保持串行，`search.parallel` 只控制同一次 checker evaluation batch
-内的样本级并发。HPC job 应优先申请稳定 wall time 和足够 Docker 存储，而不是
-盲目提高 `--parallel`。
+内的样本级并发。HPC job 应优先申请稳定 wall time 和足够的 SIF 缓存目录空间，
+而不是盲目提高 `--parallel`。
+
+在提交前必须先预热 SIF 缓存（Iris 登录节点或短 Slurm 作业均可）：
+
+```bash
+python scripts/tools/prepare_apptainer_sifs.py \
+  --config configs/gepa_verified_rules_strict_hpc_24h_apptainer.yaml \
+  --sif-cache-dir /scratch/users/twang/vibe-coding-planning/shared/sif-cache
+```
+
+该命令会基于 GEPA 配置中的训练/验证数据，拉取 Reflection 使用的
+`python:3.12-slim` 以及每个 Checker 样本对应的 benchmark image，全部转换为
+`.sif`。当前 reflection smoke（4 个 astropy 样本 + Reflection image）预热后缓存
+约 **7.9 GB**；首次拉取单个 SWE-bench image 约需 5–10 分钟，主循环中不应临时
+转换。
+
+HPC GEPA 配置示例见
+`configs/gepa_verified_rules_strict_hpc_24h_apptainer.yaml`：
+
+```yaml
+paths:
+  dataset_snapshot: output/SWE-bench_Verified/verified-round1-gepa-datasets/20260614_482_fdc056ae85df
+  initial_rules: configs/gepa_initial_rules_gpt_seed.md
+  run_dir: output/SWE-bench_Verified/gepa-rules/strict-checker-hpc-24h-20260622
+
+container:
+  runtime: apptainer
+  module: tools/Apptainer
+  sif_cache_dir: /scratch/users/twang/vibe-coding-planning/shared/sif-cache
+  writable_tmpfs: true
+```
+
+`container.runtime` 默认值为 `docker`，因此现有本地 Docker 配置无需修改即可
+继续使用。只有 HPC 专用配置显式切到 `apptainer`。
+
+提交 smoke 作业：
 
 ```bash
 bash scripts/hpc_submit_batch.sh \
   --gepa-rules \
-  --gepa-config configs/gepa_verified_rules_formal_pilot.yaml \
-  --job-name gepa-formal-pilot \
-  --time 48:00:00
+  --gepa-config configs/gepa_verified_rules_reflection_smoke_apptainer.yaml \
+  --job-name gepa-ref-smoke-apptainer \
+  --time 02:00:00 \
+  --cpus 1 \
+  --mem 16G \
+  --remote-env-file '~/.config/vibe-coding-planning/deepseek.env' \
+  --submit
 ```
+
+提交 strict Checker 24h 试运行：
+
+```bash
+bash scripts/hpc_submit_batch.sh \
+  --gepa-rules \
+  --gepa-config configs/gepa_verified_rules_strict_hpc_24h_apptainer.yaml \
+  --job-name gepa-strict-24h \
+  --time 24:00:00 \
+  --cpus 4 \
+  --mem 16G \
+  --remote-env-file '~/.config/vibe-coding-planning/deepseek.env' \
+  --full-logs \
+  --submit
+```
+
+**已验证结果（2026-06-21）**：
+
+- Slurm 作业在 Iris 计算节点成功完成，退出码 0，执行 **6/6 metric calls**。
+- 生成了 `result.json`、`candidate_metrics.json`、`best_rules.txt`、
+  `cost_report.json` 和 `audit_events.jsonl`。
+- `cost_report.json` 按 checker、reflection 和 combined 汇总实际请求的模型
+  以及提供方响应中的模型名，可用于确认是否只调用 Flash。
+- `audit_events.jsonl` 中包含 `checker_infrastructure_prepare_completed` 和
+  `reflection_candidate_proposed`，没有 `docker` CLI 相关错误。
+- 使用 `container` 语义后，`run_manifest.json` 与本地 Docker run 的指纹不同，
+  避免互相覆盖。
+
+**断点续跑验证**：
+
+1. 提交上述 smoke 作业，在运行途中用 `scancel` 取消 Slurm 作业。
+2. 不修改任何文件，再次执行同样的 `scripts/hpc_submit_batch.sh ... --submit`。
+3. `prepare_run_manifest()` 检测到已有 manifest，`ApptainerEnvironment` 构造
+   与 SIF 路径与第一次一致，GEPA 从 `gepa_state.bin` 恢复。
+4. 恢复后的运行继续完成剩余的 metric calls，最终生成完整 `result.json`，没有
+   重复已完成的初始 metric calls。
 
 ### 6.3 失败后恢复
 
@@ -369,51 +492,144 @@ apptainer exec \
 `hpc_submit` 的空依赖目录边界问题，不影响本项目真实目录提交；本项目没有修改
 相邻 `../../hpc_submit` 源码。
 
-### 7.3 GEPA pilot 迁移建议
+### 7.3 GEPA Apptainer 实现与验证
 
-当前正在运行/已验证过的小型 GEPA 规则生成 pilot 是最适合的 Apptainer 迁移目标：
+GEPA 规则优化 pilot 的 Apptainer 迁移已完成并通过真实 HPC 验证。实现集中在新的
+`src/environment/apptainer_env.py` 和 GEPA 配置的 `container` 段，未改变 GEPA
+搜索、Adapter、prompt、run manifest、resume state、cost report 或 candidate tree
+语义。
 
-| 配置 | 数据规模 | 作用 |
-|------|----------|------|
-| `configs/gepa_verified_rules_reflection_smoke.yaml` | 2 train / 2 validation | 最小 Reflection 链路 smoke，成本最低 |
-| `configs/gepa_verified_rules_pilot.yaml` | 6 train / 4 validation | 空规则 seed 基础 pilot |
-| `configs/gepa_verified_rules_pilot_extended.yaml` | 6 train / 4 validation | 覆盖候选接纳、validation 和成本报告 |
-| `configs/gepa_verified_rules_formal_pilot.yaml` | 384 train / 98 validation | 正式数据上的小步数 pilot |
+#### 7.3.1 新增 Apptainer 后端
 
-相关入口：
+`src/environment/apptainer_env.py`：
 
-- `scripts/internal/run_gepa_rules.py` 调用 `src.optimization.cli.main()`。
-- `src/optimization/runner.py` 构造 `DockerChecker` 和
-  `MiniSWEReflectionProposer`，再调用 GEPA。
-- `src/optimization/checker.py` 的 `DockerChecker` 使用 benchmark image 启动
-  `/testbed` 环境，只做 Checker 读仓库和输出 JSON。
-- `src/optimization/reflection.py` 的 `MiniSWEReflectionProposer` 使用
-  `python:3.12-slim`，只读挂载 reflection evidence bundle 到 `/evidence`。
+- `ApptainerEnvironment` 暴露与 `mini-swe-agent 1.17.5` 的 `DockerEnvironment`
+  兼容的公共接口：
+  - `execute(command, cwd="", *, timeout=None) -> dict[str, Any]`
+  - `get_template_vars() -> {"cwd": ...}`
+  - `cleanup() -> None`
+- `ApptainerSifCache` 把 Docker image tag 映射为安全的 SIF 文件名，例如
+  `swebench/sweb.eval.x86_64.astropy_1776_astropy-12907:latest` ->
+  `swebench_sweb.eval.x86.64.astropy_1776_astropy-12907_latest.sif`，并执行
+  `apptainer pull --force <sif> docker://<image>`。
+- 拉取通过 `DockerCapacityWindow.image_acquisition()` 串行化，避免多 worker
+  同时转换同一个 SIF；磁盘检查和容量窗口语义与 Docker 路径复用同一份实现。
+- 每次容器启动后创建 `/tmp/vibe_gitconfig` 并设 `GIT_CONFIG_GLOBAL`，注入
+  `[safe] directory = /testbed`，解决 `/testbed` 属主为 root 导致的
+  `dubious ownership` 错误。
+- Checker 命令使用 `--writable-tmpfs`；Reflection 命令额外加
+  `--bind <bundle>:/evidence:ro` 与 `--net --network none`。
 
-这条路径不调用 `swebench.harness.run_instance`、PolyBench `DockerManager` 或
-SWE-bench Pro `eval_with_docker`，因此比 PCT/PCC 正式 evaluator 更适合作为
-Docker-to-Apptainer 迁移 pilot。
+#### 7.3.2 配置扩展
 
-最小化影响方案：
+`src/optimization/config.py` 新增 `ContainerConfig`：
 
-1. 新增一个 GEPA 专用 Apptainer environment backend，保持
-   `execute(command, cwd="", timeout=None)`、`get_template_vars()`、`cleanup()`
-   接口与 `mini-swe-agent` 的 `DockerEnvironment` 兼容。
-2. 在 GEPA 配置中新增 runtime 选择，例如 `container_runtime: docker|apptainer`，
-   默认仍为 Docker；只有 HPC pilot 配置切到 Apptainer。
-3. Checker backend 将 Docker image 名映射到 SIF 路径：
-   `swebench/sweb.eval.x86_64.astropy_1776_astropy-12907:latest` →
-   `<sif_cache>/swebench_sweb.eval.x86_64.astropy_1776_astropy-12907_latest.sif`。
-   若 SIF 不存在，先串行 `apptainer pull`；正式 job 应预热，避免主循环等待。
-4. Reflection backend 使用 `python:3.12-slim` 对应 SIF，并通过
-   `--bind <bundle>:/evidence:ro --writable-tmpfs` 运行。
-5. 所有 Apptainer 执行命令加 `--writable-tmpfs`，并在启动后写入
-   `safe.directory /testbed`，避免 Git ownership 报错影响 Checker。
-6. 先跑 `gepa_verified_rules_reflection_smoke.yaml`；通过后再跑
-   `gepa_verified_rules_pilot.yaml`。`formal_pilot` 等 SIF 缓存和并发策略稳定后再跑。
+```python
+@dataclass(frozen=True)
+class ContainerConfig:
+    runtime: str = "docker"
+    module: str = "tools/Apptainer"
+    sif_cache_dir: Path = Path("/tmp/vibe-sif-cache")
+    writable_tmpfs: bool = True
+```
 
-该方案不会改变 GEPA 搜索、Adapter、prompt、run manifest、resume state、
-cost report 或 candidate tree 语义；变化集中在容器执行后端和镜像/SIF 缓存。
+`OptimizationConfig` 增加 `container: ContainerConfig` 字段；YAML 中可写：
+
+```yaml
+container:
+  runtime: apptainer
+  module: tools/Apptainer
+  sif_cache_dir: /scratch/users/twang/vibe-coding-planning/shared/sif-cache
+  writable_tmpfs: true
+```
+
+`runtime` 默认值为 `docker`，因此所有现有本地 Docker 配置保持原行为不变。
+`src/optimization/resume.py` 的 `_semantic_config()` 把 `container` 段加入
+run manifest，确保 Docker run_dir 与 Apptainer run_dir 不会互相恢复。
+
+#### 7.3.3 Checker / Reflection 运行时选择
+
+- `src/optimization/checker.py` 的 `DockerChecker` 保持类名不变以兼容测试和
+  resume。当 `config.container.runtime == "apptainer"` 时，`prepare()` 通过
+  `ApptainerSifCache.ensure()` 准备 SIF，`__call__()` 构造
+  `ApptainerEnvironment` 并在 `/testbed` 下执行 Checker。
+- `src/optimization/reflection.py` 的 `MiniSWEReflectionProposer._propose()` 在
+  Apptainer 路径下使用 `python:3.12-slim` 的 SIF，把当前 minibatch 的 evidence
+  bundle 只读挂载到 `/evidence`。
+
+#### 7.3.4 HPC 入口与辅助脚本
+
+- `scripts/hpc_submit_batch.sh`：GEPA 专用提交包装。默认 dry-run；`--submit`
+  才真正提交。它读取 `configs/ulhpc_submit.yaml` 的 SSH 信息，单独 `rsync`
+  数据集快照到 HPC，提交远端命令，并在作业结束后把 `run_dir` 拉回本地。
+- 远端命令在 `bash -lc` 内执行：
+  ```bash
+  source /etc/profile.d/modules.sh
+  module load tools/Apptainer
+  set +x
+  source ~/.config/vibe-coding-planning/deepseek.env
+  test -n "${DEEPSEEK_API_KEY:-}" || exit 2
+  python3 -m pip install --quiet --user -e third_party/gepa || true
+  python3 scripts/internal/run_gepa_rules.py --config <relative-config-path>
+  ```
+  Iris 计算节点没有 `conda`，因此使用 `module load lang/Python/3.11` 与
+  `python3`；vendored `gepa` 包在作业内临时 `--user` 安装。
+- `scripts/tools/prepare_apptainer_sifs.py`：基于 GEPA 配置中的
+  训练/验证数据，预拉 Reflection image 和所有 Checker benchmark images 的 SIF。
+  当前 reflection smoke（4 个 astropy 样本 + `python:3.12-slim`）预热后约
+  **7.9 GB**；单个 SWE-bench image 首次转换约 5-10 分钟，必须在主循环外完成。
+
+#### 7.3.5 实跑结果
+
+使用配置
+`configs/gepa_verified_rules_reflection_smoke_apptainer.yaml`，其
+`run_dir` 特意与本地 Docker 路径隔离：
+
+```text
+output/SWE-bench_Verified/gepa-rules/reflection-smoke-empty-seed-apptainer
+```
+
+2026-06-21 提交结果：
+
+- Slurm 作业在 Iris 计算节点成功完成，退出码 0，共执行 **6/6 metric calls**。
+- 产物包括 `result.json`、`candidate_metrics.json`、`best_rules.txt`、
+  `cost_report.json`、`audit_events.jsonl`、`evaluations.jsonl` 等。
+- `audit_events.jsonl` 包含 `checker_infrastructure_prepare_completed` 和
+  `reflection_candidate_proposed`；日志中没有 Docker CLI 相关错误。
+- 远端 `/tmp` 可写，`/testbed` 仓库读取与 git 命令正常。
+
+断点续跑验证：
+
+1. 提交 smoke 作业，运行途中用 `scancel` 取消。
+2. 同一 `run_dir`、同一配置，再次执行 `scripts/hpc_submit_batch.sh ... --submit`。
+3. `prepare_run_manifest()` 检测到已有 manifest，校验 `container` 语义一致后，
+   GEPA 从 `gepa_state.bin` 恢复。
+4. 恢复后的运行继续完成剩余 metric calls，最终输出完整 `result.json`，未重复
+   已完成的初始 metric calls。
+
+### 7.4 其它 evaluator 的 Docker 依赖（仍未解决）
+
+GEPA 之所以能快速迁移，是因为它只使用 benchmark image 做 Checker 的只读仓库
+环境和 Reflection 的轻量 Python 容器，不依赖 Docker daemon 的生命周期 API。
+
+以下路径仍直接依赖 Docker daemon，暂不能直接在 Iris 上运行：
+
+- `src/evaluator/swe_evaluator.py` 调用 `swebench.harness.run_evaluation` 的
+  Docker client / `run_instance`。
+- `src/evaluator/polybench_evaluator.py` 使用
+  `poly_bench_evaluation.docker_utils.DockerManager`。
+- `src/evaluator/pro_official_evaluator.py` 调用 SWE-bench Pro 官方
+  `eval_with_docker`。
+
+若未来要在 HPC 上跑完整 PCT/PCC/checker-only，需要为它们单独设计 Apptainer
+backend，或申请到支持 Docker/Podman 的计算资源。`ulhpc-submit --container PATH`
+只能把最外层命令包进一个 Apptainer 容器，不会让容器内部的 `docker` CLI / Docker
+SDK 自动转成 Apptainer 调用。
+
+注意：为了只测 Apptainer 而使用空 `--local-dir --no-sync` 时，当前
+`hpc_submit` 会生成一个空 `else` 分支导致 Slurm 脚本语法错误。这是
+`hpc_submit` 的空依赖目录边界问题，不影响本项目真实目录提交；本项目没有修改
+相邻 `../../hpc_submit` 源码。
 
 ---
 
@@ -426,17 +642,134 @@ cost report 或 candidate tree 语义；变化集中在容器执行后端和镜�
       HPC 运行依赖。
 - [x] 明确 smoke dry-run 应检查 ULHPC SSH 连通性；默认加 `--no-sync`，不提交
       Slurm job，也不实际同步代码。
-- [ ] 新增 `scripts/hpc_submit_batch.sh`，实现本地 dry-run 和 `ulhpc-submit`
-      调用。
-- [ ] 让 `scripts/run_batch.sh` 的 conda 激活方式不依赖硬编码 macOS 路径，或在
-      HPC job 中绕过它并直接用 `conda run -n mini-swe` 调用内部入口。
+- [x] 新增 `scripts/hpc_submit_batch.sh`，实现本地 dry-run 和 `ulhpc-submit`
+      调用；目前支持 GEPA 规则优化入口。
+- [x] 让 HPC job 的 Python/conda 激活不依赖硬编码 macOS 路径：计算节点无 conda，
+      改用 `module load lang/Python/3.11 tools/Apptainer` + `python3` + 临时
+      `pip install --user -e third_party/gepa`。
 - [x] 提交 Apptainer/Singularity smoke，确认计算节点上的模块名为
       `tools/Apptainer`，默认版本为 `1.4.0`，且
       `apptainer exec docker://alpine:latest true` 可在 Slurm job 中成功执行。
 - [x] 补充 bind mount、`--writable-tmpfs`、本地 `.sif` 文件和一个真实
       SWE-bench image 的执行 smoke。
-- [ ] 为 Docker-native evaluator 设计 Apptainer backend，或明确使用
-      Docker-enabled/rootless Docker/Podman 资源。
-- [ ] 明确 HPC 侧 Docker/Apptainer 镜像缓存目录和 GHCR/Docker Hub 登录方式。
-- [ ] 跑一个 1-2 实例 smoke job，验证日志、输出取回和失败恢复。
-- [ ] 根据 smoke 结果决定是否保留 watchdog 作为本地长跑工具，HPC 路径默认不使用。
+- [x] 为 GEPA 设计并实现 Apptainer backend（`src/environment/apptainer_env.py`），
+      PCT/PCC/SWE-bench/PolyBench/Pro 的 Docker-native evaluator 仍待后续评估。
+- [x] 明确 HPC 侧 Apptainer SIF 缓存目录：`container.sif_cache_dir`，并提供
+      `scripts/tools/prepare_apptainer_sifs.py` 预拉脚本；Docker Hub/GHCR 登录
+      对当前公开 SWE-bench image 暂不需要。
+- [x] 跑一个 4 实例 GEPA reflection smoke job，验证日志、输出取回和失败恢复。
+- [x] 根据 smoke 结果确认：HPC 路径默认不使用 watchdog；本地 macOS 长跑仍可保留
+      `scripts/long_run_watchdog.py` 与 `caffeinate`。
+
+---
+
+## 9. HPC 资源与 GEPA 参数设计
+
+本节基于 2026-06-22 对 ULHPC Iris 的实际查询结果，给出 GEPA 正式 pilot 的
+资源申请与 SIF 缓存策略建议。
+
+### 9.1 存储资源
+
+| 路径 | 文件系统 | 容量/配额 | 当前使用 | 建议用途 |
+|------|----------|-----------|----------|----------|
+| `/home/users/twang` | Isilon (`/mnt/isilon`) | 10 TB soft / ~11.3 TB hard | 26 GB | 代码、小体积产物、当前 SIF 缓存可继续存放 |
+| `/scratch/users/twang` | Lustre (`/mnt/scratch`) | 10 TB soft / ~11.3 TB hard | 12 KB | **推荐作为大规模 SIF 缓存和大型 run_dir** |
+| `/tmp`（计算节点本地） | 本地 SSD | 502 GB / 节点，当前空闲约 469 GB | 34 GB | Apptainer 临时可写层、数据集解压 |
+
+结论：**存储空间足够一次性预下载全部 Verified 482 个 benchmark image 的 SIF**。
+按 reflection smoke 的 4 个 astropy image（每个约 1 GB）估算，完整 482 个唯一
+image 约需 **450-500 GB**，加上 `python:3.12-slim` 后约 500 GB，远低于 10 TB
+配额。
+
+### 9.2 计算资源
+
+主要分区规格（2026-06-22）：
+
+| 分区 | CPU/节点 | 内存/节点 | 最大节点数 | 最大 wall time | 备注 |
+|------|----------|-----------|------------|----------------|------|
+| `batch*`（默认） | 28 | 114688 MB (~112 GB) | 64 | 2 天 | 适合 GEPA 主循环 |
+| `bigmem` | 112 | 3024000 MB (~2.9 TB) | 2 | 2 天 | 内存充足，但 CPU 利用率对 GEPA 不高 |
+| `interactive` | 28/112 | 112 GB / 738 GB GPU | 2 | 2 小时 | 仅交互测试 |
+| `gpu` / `hopper` / `l40s` | 28-112 | 738 GB-2 TB | 1-4 | 2 天 | GEPA 不需要 GPU |
+
+`batch` 分区对 GEPA 已足够。注意该分区 `MaxMemPerCPU=4096 MB`，因此内存申请
+最好按 `4 GB × cpus` 对齐；例如 `--cpus 2 --mem 8G`、`--cpus 4 --mem 16G`。
+
+### 9.3 SIF 缓存策略
+
+**推荐：预下载全部所需 SIF 到
+`/scratch/users/twang/vibe-coding-planning/shared/sif-cache`**，理由：
+
+1. 空间充足（~500 GB << 10 TB）。
+2. 避免主循环中首次调用某个 image 时等待 5-10 分钟转换。
+3. 完整 GEPA 优化会反复访问大量不同 repo 的 benchmark image，按需拉取会严重
+   拖慢进度。
+4. Lustre `/scratch` 的并发读取性能通常优于 Isilon `/home`，更适合多个 Apptainer
+   进程同时加载不同 SIF。
+
+操作步骤：
+
+```bash
+# 1. 在 HPC 登录节点或短 Slurm 作业中预拉
+python scripts/tools/prepare_apptainer_sifs.py \
+  --config configs/gepa_verified_rules_reflection_smoke_apptainer.yaml \
+  --sif-cache-dir /scratch/users/twang/vibe-coding-planning/shared/sif-cache
+
+# 2. 把对应 GEPA 配置中的 sif_cache_dir 也改为同一路径
+container:
+  runtime: apptainer
+  module: tools/Apptainer
+  sif_cache_dir: /scratch/users/twang/vibe-coding-planning/shared/sif-cache
+  writable_tmpfs: true
+```
+
+注意：`prepare_apptainer_sifs.py` 对每个 image 串行执行 `apptainer pull`，482 个
+image 可能需要数小时到一天，建议提交一个独立的 `batch` 长作业完成预热，而不是在
+登录节点长时间运行。
+
+### 9.4 并发参数设计
+
+GEPA 主循环仍是串行，`search.parallel` 只控制一次 Checker evaluation batch 内
+的样本级并发。建议从 `parallel=2` 开始验证：
+
+```bash
+bash scripts/hpc_submit_batch.sh \
+  --gepa-rules \
+  --gepa-config configs/gepa_verified_rules_formal_pilot_apptainer.yaml \
+  --job-name gepa-formal-pilot-p2 \
+  --partition batch \
+  --cpus 2 \
+  --mem 8G \
+  --time 08:00:00 \
+  --submit
+```
+
+资源对齐：
+
+- `--cpus` = `search.parallel`（strict 24h 配置初始为 4，资源探测后可下调）。
+- `--mem` = 4 GB × `--cpus`（batch 分区 `MaxMemPerCPU=4G`）。
+- `--time`：strict Checker GEPA 试运行使用 `24:00:00`。
+
+`DockerCapacityWindow` 参数仍复用 `docker:` 配置段：
+
+```yaml
+docker:
+  workdir: /testbed
+  timeout: 30
+  min_free_gb: 20
+  max_cached_images: 10000
+```
+
+对 Apptainer 路径而言，`max_cached_images` 只影响 Docker 镜像清理（在 HPC 上
+实际无操作），`min_free_gb` 检查 `/tmp` 剩余空间；当前节点 `/tmp` 空闲约 469 GB，
+远超 20 GB，无需调整。
+
+### 9.5 下一步验证
+
+1. 旧 pilot/formal run 已归档到
+   `output/SWE-bench_Verified/gepa-rules/archive/20260622_pre_strict_checker/`。
+2. 使用 `configs/gepa_verified_rules_strict_hpc_24h_apptainer.yaml` 和新的
+   `run_dir` 启动 strict Checker GEPA。
+3. 提交一个独立长作业预拉 482 个 benchmark SIF 到 shared scratch cache。
+4. 用 `parallel=4` / `--cpus 4 --mem 16G --time 24:00:00` 试运行；如资源探测或
+   DeepSeek rate limit 显示不稳，先下调到 `parallel=2`。

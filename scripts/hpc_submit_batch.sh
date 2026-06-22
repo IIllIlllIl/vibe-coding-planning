@@ -17,6 +17,7 @@
 #     --time 02:00:00 \
 #     --cpus 1 \
 #     --mem 16G \
+#     --remote-env-file '~/.config/vibe-coding-planning/deepseek.env' \
 #     --submit
 set -euo pipefail
 
@@ -32,6 +33,7 @@ GPUS="0"
 REMOTE_DIR=""
 ULHPC_CONFIG=""
 FULL_LOGS=0
+REMOTE_ENV_FILE="~/.config/vibe-coding-planning/deepseek.env"
 
 usage() {
   cat <<'USAGE'
@@ -50,6 +52,8 @@ Slurm / ulhpc-submit options:
   --mem SIZE                Memory (default: 16G)
   --gpus N                  GPUs (default: 0)
   --remote-dir DIR          Remote project directory on HPC
+  --remote-env-file FILE    Remote shell env file sourced inside the Slurm job
+                            (default: ~/.config/vibe-coding-planning/deepseek.env)
   --ulhpc-config FILE       ulhpc-submit config file
                             (default: configs/ulhpc_submit.yaml if present)
   --full-logs               Download full remote logs instead of tailing
@@ -70,6 +74,7 @@ Examples:
     --time 02:00:00 \
     --cpus 1 \
     --mem 16G \
+    --remote-env-file '~/.config/vibe-coding-planning/deepseek.env' \
     --submit
 USAGE
 }
@@ -110,6 +115,10 @@ while [[ $# -gt 0 ]]; do
       ;;
     --remote-dir)
       REMOTE_DIR="$2"
+      shift 2
+      ;;
+    --remote-env-file)
+      REMOTE_ENV_FILE="$2"
       shift 2
       ;;
     --ulhpc-config)
@@ -157,6 +166,10 @@ if ! [[ "$CPUS" =~ ^[1-9][0-9]*$ ]]; then
 fi
 if ! [[ "$GPUS" =~ ^[0-9]+$ ]]; then
   echo "ERROR: --gpus must be a non-negative integer" >&2
+  exit 2
+fi
+if [[ -z "$REMOTE_ENV_FILE" ]]; then
+  echo "ERROR: --remote-env-file must not be empty" >&2
   exit 2
 fi
 
@@ -281,14 +294,6 @@ RUN_DIR_REL="${RUN_DIR#$REPO_ROOT/}"
 GEPA_CONFIG_REL="${GEPA_CONFIG_ABS#$REPO_ROOT/}"
 
 # ---------------------------------------------------------------------------
-# Verify API key is available locally (will be forwarded to the job)
-# ---------------------------------------------------------------------------
-if [[ -z "${DEEPSEEK_API_KEY:-}" ]]; then
-  echo "ERROR: DEEPSEEK_API_KEY is not set locally" >&2
-  exit 2
-fi
-
-# ---------------------------------------------------------------------------
 # Build remote command
 # ---------------------------------------------------------------------------
 REMOTE_SCRIPT=$(cat <<EOF
@@ -296,7 +301,21 @@ set -euo pipefail
 echo "[vibe-gepa] started at \$(date) on \$(hostname)"
 source /etc/profile.d/modules.sh
 module load tools/Apptainer
-export DEEPSEEK_API_KEY="$DEEPSEEK_API_KEY"
+REMOTE_ENV_FILE="$REMOTE_ENV_FILE"
+if [[ "\$REMOTE_ENV_FILE" == "~/"* ]]; then
+  REMOTE_ENV_FILE="\$HOME/\${REMOTE_ENV_FILE#\~/}"
+fi
+if [[ ! -f "\$REMOTE_ENV_FILE" ]]; then
+  echo "[vibe-gepa] remote env file not found: \$REMOTE_ENV_FILE" >&2
+  echo "[vibe-gepa] create it with chmod 600 and export DEEPSEEK_API_KEY inside" >&2
+  exit 2
+fi
+set +x
+source "\$REMOTE_ENV_FILE"
+test -n "\${DEEPSEEK_API_KEY:-}" || {
+  echo "[vibe-gepa] DEEPSEEK_API_KEY missing after sourcing \$REMOTE_ENV_FILE" >&2
+  exit 2
+}
 # Ensure the vendored gepa package is installed in the remote environment.
 python3 -m pip install --quiet --user -e third_party/gepa || true
 python3 scripts/internal/run_gepa_rules.py --config "$GEPA_CONFIG_REL"
@@ -351,23 +370,17 @@ RSYNC_SSH="ssh ${SSH_OPTS[*]}"
 echo "[hpc-submit] mode=$([[ "$SUBMIT" -eq 1 ]] && echo submit || echo dry-run)"
 echo "[hpc-submit] gepa-config=$GEPA_CONFIG"
 echo "[hpc-submit] remote-dir=$REMOTE_DIR"
+echo "[hpc-submit] remote-env-file=$REMOTE_ENV_FILE"
 echo "[hpc-submit] dataset_snapshot=$DATASET_SNAPSHOT"
 echo "[hpc-submit] run_dir=$RUN_DIR"
 
 if [[ "$SUBMIT" -eq 0 ]]; then
   echo "[hpc-submit] dry-run: dataset snapshot would be rsynced to remote"
   echo "[hpc-submit] dry-run: the following ulhpc-submit command would be executed:"
-  # Redact the API key from the displayed command while keeping the real key
-  # in the command that would be submitted.
-  REDACTED_SCRIPT="${REMOTE_SCRIPT//$DEEPSEEK_API_KEY/\*\*\*REDACTED\*\*\*}"
-  REDACTED_CMD=()
-  for arg in "${ULHPC_CMD[@]}"; do
-    REDACTED_CMD+=("${arg//$DEEPSEEK_API_KEY/\*\*\*REDACTED\*\*\*}")
-  done
-  printf '  %s' "${REDACTED_CMD[*]}"
+  printf '  %s' "${ULHPC_CMD[*]}"
   echo
-  echo "[hpc-submit] dry-run: remote script (API key redacted):"
-  echo "$REDACTED_SCRIPT"
+  echo "[hpc-submit] dry-run: remote script:"
+  echo "$REMOTE_SCRIPT"
   exit 0
 fi
 

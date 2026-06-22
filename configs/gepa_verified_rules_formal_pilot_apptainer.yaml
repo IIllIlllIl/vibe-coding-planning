@@ -1,7 +1,8 @@
 paths:
   dataset_snapshot: output/SWE-bench_Verified/verified-round1-gepa-datasets/20260614_482_fdc056ae85df
   initial_rules: configs/gepa_initial_rules_gpt_seed.md
-  run_dir: output/SWE-bench_Verified/gepa-rules/formal-pilot-gpt-seed-mc116
+  # Distinct run_dir so HPC Apptainer runs do not collide with local Docker runs.
+  run_dir: output/SWE-bench_Verified/gepa-rules/formal-pilot-gpt-seed-mc116-apptainer
 
 checker:
   model: deepseek-v4-flash
@@ -36,11 +37,22 @@ search:
   skip_perfect_score: false
   min_proposals: 2
 
+# The docker: section is still used to configure the shared capacity window
+# and the Checker workdir. On HPC we keep the workdir and raise
+# max_cached_images so the Docker-only cleanup logic does not artificially
+# limit Apptainer SIF caching; min_free_gb remains the guard against low disk.
 docker:
   workdir: /testbed
   timeout: 30
   min_free_gb: 20
-  max_cached_images: 75
+  max_cached_images: 1000
+
+container:
+  runtime: apptainer
+  module: tools/Apptainer
+  # Shared Lustre scratch is faster than Isilon home for concurrent SIF reads.
+  sif_cache_dir: /scratch/users/twang/vibe-coding-planning/shared/sif-cache
+  writable_tmpfs: true
 
 prompts:
   checker_system: |

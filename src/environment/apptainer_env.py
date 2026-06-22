@@ -11,6 +11,7 @@ from __future__ import annotations
 import base64
 import logging
 import shlex
+import shutil
 import subprocess
 import sys
 import threading
@@ -57,10 +58,20 @@ class ApptainerSifCache:
 
         Pulls are serialized across workers via the shared image-acquisition
         lock so that concurrent GEPA workers do not race on the same SIF.
+        If the cache filesystem does not have enough free space, the pull is
+        aborted before consuming disk.
         """
         sif = self.sif_path(image)
         if sif.exists():
             return sif
+
+        free_gb = int(shutil.disk_usage(self.sif_cache_dir).free / (1024**3))
+        min_gb = self._capacity_window.min_free_gb
+        if free_gb < min_gb:
+            raise FatalError(
+                f"Apptainer SIF cache low on disk: {free_gb}GiB free "
+                f"< {min_gb}GiB minimum. Refusing to pull {image}."
+            )
 
         with self._capacity_window.image_acquisition():
             # Another worker may have completed the pull while we waited.
@@ -150,13 +161,11 @@ class ApptainerEnvironment:
         self._git_config_path = "/tmp/vibe_gitconfig"
 
         self._cache = ApptainerSifCache(sif_cache_dir, capacity_window)
-        self._sif_path = self._cache.sif_path(image)
-        if not self._sif_path.exists():
-            raise FatalError(
-                f"Apptainer SIF not found: {self._sif_path}. "
-                f"Run prepare_apptainer_sifs.py or ApptainerSifCache.ensure() "
-                f"before starting the environment."
-            )
+        # Pull the SIF on demand if it is not already cached. This lets a GEPA
+        # job start from a partial cache without requiring a full preheat pass.
+        self._sif_path = self._cache.ensure(
+            image, timeout=self._timeout if self._timeout is not None else 1800
+        )
 
         self._capacity_window = capacity_window
         self._lease: Any = None

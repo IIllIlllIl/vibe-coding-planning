@@ -1,30 +1,30 @@
 paths:
   dataset_snapshot: output/SWE-bench_Verified/gepa-pilot-datasets/pilot_2_2_seed43_e2bdb83dc201
-  initial_rules: configs/gepa_empty_rules.txt
-  run_dir: output/SWE-bench_Verified/gepa-rules/reflection-smoke-empty-seed
+  initial_rules: configs/gepa_initial_rules_gpt_seed.md
+  run_dir: /tmp/gepa-rules-stub-run-openai
 
 checker:
-  model: deepseek-v4-flash
-  api_base: https://api.deepseek.com
-  api_key_env: DEEPSEEK_API_KEY
+  model: openai/deepseek-v4-flash
+  api_base: http://127.0.0.1:18080
+  api_key_env: FAKE_LLM_API_KEY
   temperature: 0.0
-  max_steps: 200
-  cost_limit: 6.0
+  max_steps: 20
+  cost_limit: 0.0
   timeout: 1800
-  max_attempts: 3
+  max_attempts: 1
 
 reflection:
-  model: deepseek-v4-flash
-  api_base: https://api.deepseek.com
-  api_key_env: DEEPSEEK_API_KEY
-  temperature: 0.7
-  max_steps: 40
-  cost_limit: 1.0
+  model: openai/deepseek-v4-flash
+  api_base: http://127.0.0.1:18080
+  api_key_env: FAKE_LLM_API_KEY
+  temperature: 0.0
+  max_steps: 20
+  cost_limit: 0.0
   timeout: 1800
 
 search:
   max_metric_calls: 6
-  projection_metric_calls: 1000
+  projection_metric_calls: 6
   reflection_minibatch_size: 1
   parallel: 1
   seed: 42
@@ -75,11 +75,9 @@ prompts:
     </candidate_rules>
   reflection_system: |
     You optimize the complete rule text used by a fixed Checker Agent.
-    The current rules may be empty. Read the files under {{evidence_path}} to
-    diagnose classification errors. Execution-after evidence is available
-    only here and must never be turned into task-specific memorization or
-    Checker inputs. Produce a complete replacement rule text, not a patch and
-    not a single-task answer. Write it to /tmp/candidate_rules.txt, then run:
+    Read the files under {{evidence_path}} to diagnose classification errors.
+    Produce a complete replacement rule text.
+    Write it to /tmp/candidate_rules.txt, then run:
     echo COMPLETE_TASK_AND_SUBMIT_FINAL_OUTPUT && cat /tmp/candidate_rules.txt
   reflection_instance: |
     <current_rules>
