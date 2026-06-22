@@ -144,7 +144,7 @@ bash scripts/hpc_submit_batch.sh \
 
 ```bash
 source /etc/profile.d/modules.sh
-module load tools/Apptainer
+module load lang/Python/3.11 tools/Apptainer
 set +x
 source ~/.config/vibe-coding-planning/deepseek.env
 test -n "${DEEPSEEK_API_KEY:-}" || exit 2
@@ -152,8 +152,10 @@ python3 -m pip install --quiet --user -e third_party/gepa || true
 python3 scripts/internal/run_gepa_rules.py --config <relative-config-path>
 ```
 
-注意 Iris 计算节点没有 `conda`，因此脚本不使用 `conda run -n mini-swe`；而是依赖
-`module load lang/Python/3.11 tools/Apptainer` 与 `python3`。
+注意 Iris 计算节点没有 `conda`，因此脚本不使用 `conda run -n mini-swe`；而是从
+`configs/ulhpc_submit.yaml` 读取 `python_module`（默认 `lang/Python/3.11`）和
+`container_module`（默认 `tools/Apptainer`），在作业内执行 `module load` 后用
+`python3` 运行 GEPA。
 
 `scripts/hpc_submit_batch.sh` 当前支持的参数：
 
@@ -288,19 +290,32 @@ GEPA 主循环保持串行，`search.parallel` 只控制同一次 checker evalua
 内的样本级并发。HPC job 应优先申请稳定 wall time 和足够的 SIF 缓存目录空间，
 而不是盲目提高 `--parallel`。
 
-在提交前必须先预热 SIF 缓存（Iris 登录节点或短 Slurm 作业均可）：
+Apptainer 后端现在默认**按需拉取 SIF**：`ApptainerEnvironment` 构造时若
+`container.sif_cache_dir` 中缺少对应 SIF，会直接在计算节点执行
+`apptainer pull`；只有当 SIF 缓存目录剩余空间低于 `docker.min_free_gb` 时才会
+拒绝拉取并停止，避免把 `/scratch` 写满。因此**不强制要求提前预热全部 SIF**。
+
+如果希望一次性预下载（例如为了缩短主循环首次命中新 image 时的 5–10 分钟等待），
+可在 HPC 登录节点或一个短 Slurm 作业中运行：
 
 ```bash
 python scripts/tools/prepare_apptainer_sifs.py \
+  --config configs/gepa_verified_rules_reflection_smoke_apptainer.yaml \
+  --sif-cache-dir /scratch/users/twang/vibe-coding-planning/shared/sif-cache
+```
+
+或者提交一个独立长作业（适合 482 个 image 的 formal/strict run）：
+
+```bash
+bash scripts/tools/submit_apptainer_sif_preheat.sh \
   --config configs/gepa_verified_rules_strict_hpc_24h_apptainer.yaml \
   --sif-cache-dir /scratch/users/twang/vibe-coding-planning/shared/sif-cache
 ```
 
-该命令会基于 GEPA 配置中的训练/验证数据，拉取 Reflection 使用的
-`python:3.12-slim` 以及每个 Checker 样本对应的 benchmark image，全部转换为
-`.sif`。当前 reflection smoke（4 个 astropy 样本 + Reflection image）预热后缓存
-约 **7.9 GB**；首次拉取单个 SWE-bench image 约需 5–10 分钟，主循环中不应临时
-转换。
+`submit_apptainer_sif_preheat.sh` 会生成并提交一个 `batch` 作业，串行拉取该
+配置所需的所有 benchmark image 和 `python:3.12-slim`。当前 reflection smoke
+（4 个 astropy 样本 + Reflection image）预热后缓存约 **7.9 GB**；首次拉取单个
+SWE-bench image 约需 5–10 分钟。
 
 HPC GEPA 配置示例见
 `configs/gepa_verified_rules_strict_hpc_24h_apptainer.yaml`：
@@ -320,6 +335,11 @@ container:
 
 `container.runtime` 默认值为 `docker`，因此现有本地 Docker 配置无需修改即可
 继续使用。只有 HPC 专用配置显式切到 `apptainer`。
+
+`scripts/hpc_submit_batch.sh` 不再使用 `conda`（Iris 计算节点没有 conda），而是
+从 `configs/ulhpc_submit.yaml` 读取 `python_module` 与 `container_module`，在远端
+作业脚本中执行 `module load lang/Python/3.11 tools/Apptainer` 后用 `python3` 运行
+GEPA。
 
 提交 smoke 作业：
 
@@ -697,25 +717,9 @@ image 约需 **450-500 GB**，加上 `python:3.12-slim` 后约 500 GB，远低�
 
 ### 9.3 SIF 缓存策略
 
-**推荐：预下载全部所需 SIF 到
-`/scratch/users/twang/vibe-coding-planning/shared/sif-cache`**，理由：
+HPC GEPA 配置把 SIF 缓存固定到 `/scratch` 上的共享目录：
 
-1. 空间充足（~500 GB << 10 TB）。
-2. 避免主循环中首次调用某个 image 时等待 5-10 分钟转换。
-3. 完整 GEPA 优化会反复访问大量不同 repo 的 benchmark image，按需拉取会严重
-   拖慢进度。
-4. Lustre `/scratch` 的并发读取性能通常优于 Isilon `/home`，更适合多个 Apptainer
-   进程同时加载不同 SIF。
-
-操作步骤：
-
-```bash
-# 1. 在 HPC 登录节点或短 Slurm 作业中预拉
-python scripts/tools/prepare_apptainer_sifs.py \
-  --config configs/gepa_verified_rules_reflection_smoke_apptainer.yaml \
-  --sif-cache-dir /scratch/users/twang/vibe-coding-planning/shared/sif-cache
-
-# 2. 把对应 GEPA 配置中的 sif_cache_dir 也改为同一路径
+```yaml
 container:
   runtime: apptainer
   module: tools/Apptainer
@@ -723,9 +727,36 @@ container:
   writable_tmpfs: true
 ```
 
-注意：`prepare_apptainer_sifs.py` 对每个 image 串行执行 `apptainer pull`，482 个
-image 可能需要数小时到一天，建议提交一个独立的 `batch` 长作业完成预热，而不是在
-登录节点长时间运行。
+`ApptainerSifCache.ensure()` 会先检查该目录剩余空间，低于 `docker.min_free_gb`
+时直接拒绝拉取并退出，防止写满共享存储。若 SIF 已存在则直接复用；不存在则按需
+`apptainer pull`。因此**不强制预下载也能正确运行**，只是首次遇到新 image 时会付出
+5-10 分钟转换时间。
+
+为了把转换开销移出主循环，仍推荐一次性预下载全部所需 SIF 到上述目录。空间充足
+（~500 GB << 10 TB），Lustre `/scratch` 的并发读取性能也优于 Isilon `/home`。
+
+操作步骤：
+
+```bash
+# 按需拉取（不预下载）：直接提交 GEPA 作业即可
+bash scripts/hpc_submit_batch.sh \
+  --gepa-rules \
+  --gepa-config configs/gepa_verified_rules_strict_hpc_24h_apptainer.yaml \
+  --submit
+
+# 或一次性预拉（可选）
+python scripts/tools/prepare_apptainer_sifs.py \
+  --config configs/gepa_verified_rules_strict_hpc_24h_apptainer.yaml \
+  --sif-cache-dir /scratch/users/twang/vibe-coding-planning/shared/sif-cache
+
+# 或提交独立长作业完成预热
+bash scripts/tools/submit_apptainer_sif_preheat.sh \
+  --config configs/gepa_verified_rules_strict_hpc_24h_apptainer.yaml \
+  --sif-cache-dir /scratch/users/twang/vibe-coding-planning/shared/sif-cache
+```
+
+`prepare_apptainer_sifs.py` 对每个 image 串行执行 `apptainer pull`；482 个 image
+可能需要数小时到一天，建议在登录节点负载低时或提交独立 batch 作业运行。
 
 ### 9.4 并发参数设计
 
@@ -761,8 +792,8 @@ docker:
 ```
 
 对 Apptainer 路径而言，`max_cached_images` 只影响 Docker 镜像清理（在 HPC 上
-实际无操作），`min_free_gb` 检查 `/tmp` 剩余空间；当前节点 `/tmp` 空闲约 469 GB，
-远超 20 GB，无需调整。
+实际无操作），`min_free_gb` 同时检查 SIF 缓存目录与 `/tmp` 剩余空间；当前节点
+`/tmp` 空闲约 469 GB，远超 20 GB，无需调整。
 
 ### 9.5 下一步验证
 
@@ -770,6 +801,8 @@ docker:
    `output/SWE-bench_Verified/gepa-rules/archive/20260622_pre_strict_checker/`。
 2. 使用 `configs/gepa_verified_rules_strict_hpc_24h_apptainer.yaml` 和新的
    `run_dir` 启动 strict Checker GEPA。
-3. 提交一个独立长作业预拉 482 个 benchmark SIF 到 shared scratch cache。
+3. 先按**按需拉取**模式提交 strict Checker GEPA 试运行；若首次运行因 image
+   转换等待过久，再决定是否提交 `submit_apptainer_sif_preheat.sh` 一次性预拉 482
+   个 benchmark SIF 到 shared scratch cache。
 4. 用 `parallel=4` / `--cpus 4 --mem 16G --time 24:00:00` 试运行；如资源探测或
    DeepSeek rate limit 显示不稳，先下调到 `parallel=2`。

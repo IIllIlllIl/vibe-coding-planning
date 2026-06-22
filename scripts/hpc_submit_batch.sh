@@ -3,7 +3,7 @@
 #
 # This script wraps ulhpc-submit for GEPA-specific needs:
 #   - stages the dataset snapshot (output/ is excluded from ulhpc-submit sync)
-#   - submits the GEPA CLI via conda run
+#   - submits the GEPA CLI via module load (Iris compute nodes have no conda)
 #   - retrieves the run_dir output after the job finishes
 #
 # Default mode is dry-run; pass --submit to actually submit.
@@ -197,6 +197,8 @@ CONFIG_HOST=""
 CONFIG_PORT=""
 CONFIG_USER=""
 CONFIG_SSH_KEY=""
+CONFIG_PYTHON_MODULE=""
+CONFIG_CONTAINER_MODULE=""
 if [[ -n "$ULHPC_CONFIG" && -f "$ULHPC_CONFIG" ]]; then
   while IFS='=' read -r CONFIG_KEY CONFIG_VALUE; do
     case "$CONFIG_KEY" in
@@ -204,6 +206,8 @@ if [[ -n "$ULHPC_CONFIG" && -f "$ULHPC_CONFIG" ]]; then
       port) CONFIG_PORT="$CONFIG_VALUE" ;;
       user) CONFIG_USER="$CONFIG_VALUE" ;;
       ssh_key) CONFIG_SSH_KEY="$CONFIG_VALUE" ;;
+      python_module) CONFIG_PYTHON_MODULE="$CONFIG_VALUE" ;;
+      container_module) CONFIG_CONTAINER_MODULE="$CONFIG_VALUE" ;;
     esac
   done < <(python - "$ULHPC_CONFIG" <<'PY'
 import sys
@@ -214,7 +218,7 @@ path = Path(sys.argv[1]) if len(sys.argv) > 1 and sys.argv[1] else None
 data = {}
 if path and path.exists():
     data = yaml.safe_load(path.read_text(encoding="utf-8")) or {}
-for key in ("host", "port", "user", "ssh_key"):
+for key in ("host", "port", "user", "ssh_key", "python_module", "container_module"):
     print(f"{key}={data.get(key, '')}")
 PY
   )
@@ -224,6 +228,8 @@ PREFLIGHT_HOST="${ULHPC_HOST:-${CONFIG_HOST:-access-iris.uni.lu}}"
 PREFLIGHT_PORT="${ULHPC_PORT:-${CONFIG_PORT:-8022}}"
 PREFLIGHT_USER="${ULHPC_USER:-${CONFIG_USER:-}}"
 PREFLIGHT_SSH_KEY="${ULHPC_SSH_KEY:-${CONFIG_SSH_KEY:-}}"
+PYTHON_MODULE="${ULHPC_PYTHON_MODULE:-${CONFIG_PYTHON_MODULE:-lang/Python/3.11}}"
+CONTAINER_MODULE="${ULHPC_CONTAINER_MODULE:-${CONFIG_CONTAINER_MODULE:-tools/Apptainer}}"
 if [[ "$PREFLIGHT_SSH_KEY" == "~/"* ]]; then
   PREFLIGHT_SSH_KEY="$HOME/${PREFLIGHT_SSH_KEY#\~/}"
 fi
@@ -300,7 +306,7 @@ REMOTE_SCRIPT=$(cat <<EOF
 set -euo pipefail
 echo "[vibe-gepa] started at \$(date) on \$(hostname)"
 source /etc/profile.d/modules.sh
-module load tools/Apptainer
+module load $PYTHON_MODULE $CONTAINER_MODULE
 REMOTE_ENV_FILE="$REMOTE_ENV_FILE"
 if [[ "\$REMOTE_ENV_FILE" == "~/"* ]]; then
   REMOTE_ENV_FILE="\$HOME/\${REMOTE_ENV_FILE#\~/}"
@@ -338,7 +344,6 @@ ULHPC_CMD=(
   --mem "$MEM"
   --time "$TIME_LIMIT"
   --gpus "$GPUS"
-  --conda-env mini-swe
 )
 
 if [[ -n "$ULHPC_CONFIG" ]]; then
