@@ -127,6 +127,7 @@ bash scripts/hpc_submit_batch.sh \
   --time 02:00:00 \
   --cpus 1 \
   --mem 16G \
+  --remote-dataset-dir '~/hpc_datasets/vibe-coding-planning' \
   --remote-env-file '~/.config/vibe-coding-planning/deepseek.env' \
   --submit
 ```
@@ -135,9 +136,15 @@ bash scripts/hpc_submit_batch.sh \
 
 1. 读取 `configs/ulhpc_submit.yaml` 获取 SSH/用户设置（也可用 `--ulhpc-config` 覆盖）。
 2. 从 GEPA 配置中解析 `dataset_snapshot`、`run_dir` 和 `initial_rules`，并在本地校验存在性。
-3. 使用 `rsync` 把数据集快照单独同步到 HPC（`ulhpc-submit` 默认不同步 `output/`）。
-4. 把远端命令封装成 `ulhpc-submit ... -- bash -lc '<remote_script>'` 提交到 Slurm。
-5. 作业结束后再次 `rsync` 把远端 `run_dir` 拉回本地同名路径，无论 Slurm 作业成功或失败。
+3. 使用 `rsync` 把数据集快照同步到远端项目目录外的 staging 目录
+   （默认 `~/hpc_datasets/vibe-coding-planning`），避免污染 `ulhpc-submit`
+   的项目同步完整性检查。
+4. 把远端命令封装成 `ulhpc-submit ... -- bash -lc '<remote_script>'` 提交到 Slurm；
+   作业启动后先把项目内的 `output/.../dataset` 路径 symlink 到外部 staging
+   dataset，并把项目内的 `output/.../run_dir` symlink 到外部 run state 目录
+   （默认 `~/hpc_run_state/vibe-coding-planning`），再启动 GEPA。
+5. 作业结束后再次 `rsync` 把外部 run state 目录拉回本地同名 `run_dir`，无论
+   Slurm 作业成功或失败。
 
 远端命令的关键形态如下。`DEEPSEEK_API_KEY` 不从本地命令行传递，也不展开进
 `ulhpc-submit` 参数；作业只 source 远端用户私有 env 文件：
@@ -145,6 +152,19 @@ bash scripts/hpc_submit_batch.sh \
 ```bash
 source /etc/profile.d/modules.sh
 module load lang/Python/3.11 tools/Apptainer
+export APPTAINER_CACHEDIR=/scratch/users/twang/vibe-coding-planning/shared/apptainer-cache
+export APPTAINER_TMPDIR=/scratch/users/twang/vibe-coding-planning/shared/apptainer-tmp
+mkdir -p "$APPTAINER_CACHEDIR" "$APPTAINER_TMPDIR"
+REMOTE_DATASET_SNAPSHOT=~/hpc_datasets/vibe-coding-planning/output/...
+DATASET_LINK=output/...
+mkdir -p "$(dirname "$DATASET_LINK")"
+rm -rf "$DATASET_LINK"
+ln -s "$REMOTE_DATASET_SNAPSHOT" "$DATASET_LINK"
+REMOTE_RUN_SNAPSHOT=~/hpc_run_state/vibe-coding-planning/output/...
+RUN_LINK=output/...
+mkdir -p "$(dirname "$RUN_LINK")" "$REMOTE_RUN_SNAPSHOT"
+rm -rf "$RUN_LINK"
+ln -s "$REMOTE_RUN_SNAPSHOT" "$RUN_LINK"
 set +x
 source ~/.config/vibe-coding-planning/deepseek.env
 test -n "${DEEPSEEK_API_KEY:-}" || exit 2
@@ -170,6 +190,10 @@ python3 scripts/internal/run_gepa_rules.py --config <relative-config-path>
 | `--mem SIZE` | 内存（默认 `16G`） |
 | `--gpus N` | GPUs（默认 `0`） |
 | `--remote-dir DIR` | HPC 侧工作目录（默认 `~/hpc_runs/vibe-coding-planning`） |
+| `--remote-dataset-dir DIR` | HPC 侧 dataset staging 根目录，必须位于 `--remote-dir` 外部（默认 `~/hpc_datasets/vibe-coding-planning`） |
+| `--remote-run-dir DIR` | HPC 侧 GEPA run state 根目录，必须位于 `--remote-dir` 外部（默认 `~/hpc_run_state/vibe-coding-planning`） |
+| `--remote-apptainer-cache-dir DIR` | HPC 侧 `APPTAINER_CACHEDIR`，用于 OCI layer cache（默认 `/scratch/users/twang/vibe-coding-planning/shared/apptainer-cache`） |
+| `--remote-apptainer-tmp-dir DIR` | HPC 侧 `APPTAINER_TMPDIR`，用于 Apptainer 临时构建文件（默认 `/scratch/users/twang/vibe-coding-planning/shared/apptainer-tmp`） |
 | `--remote-env-file FILE` | HPC 侧私有 env 文件，作业内 source 后读取 `DEEPSEEK_API_KEY`（默认 `~/.config/vibe-coding-planning/deepseek.env`） |
 | `--ulhpc-config FILE` | 覆盖默认 `configs/ulhpc_submit.yaml` |
 | `--full-logs` | 下载完整远端日志 |
@@ -187,7 +211,19 @@ python3 scripts/internal/run_gepa_rules.py --config <relative-config-path>
 HPC 包装脚本不需要自行实现 SSH、Slurm 脚本生成、队列监控或日志回传；这些由
 `ulhpc-submit` 完成。但 `output/` 目录默认被 `ulhpc-submit` 排除在同步之外，
 因此 GEPA 数据集快照和最终 `run_dir` 的拉回由 `scripts/hpc_submit_batch.sh` 用
-`rsync` 单独处理。
+`rsync` 单独处理。数据集快照必须放在远端项目目录外，例如
+`~/hpc_datasets/vibe-coding-planning/...`；作业启动时再在项目内创建 symlink。
+GEPA `run_dir` 也必须放在远端项目目录外，例如
+`~/hpc_run_state/vibe-coding-planning/...`；作业启动时 symlink 回配置中的
+`output/...` 路径。这样可以保留 `gepa_state.bin` / `run_manifest.json` 等 resume
+状态，同时不让 `ulhpc-submit` 的 project sync integrity check 看到 excluded
+output 文件。
+不要先把 dataset rsync 到 `<remote-dir>/output/...`，否则 `ulhpc-submit` 的
+sync integrity check 会因为远端项目目录多出文件而失败。提交脚本会在调用
+`ulhpc-submit` 前清理 `<remote-dir>/output/`，以移除旧失败尝试留下的 excluded
+output 文件；真实 dataset 和 run state 分别保存在 `--remote-dataset-dir` 与
+`--remote-run-dir` 下，不受该清理影响。若旧 run state 仍在 `<remote-dir>/output/...`
+中，脚本会在清理前先把它移动到 `--remote-run-dir`。
 
 示例 dry-run 形态（实际调用以脚本打印为准）：
 
@@ -200,7 +236,6 @@ ulhpc-submit \
   --cpus 1 \
   --mem 16G \
   --time 02:00:00 \
-  --conda-env mini-swe \
   -- bash -lc '<remote_script>'
 ```
 
@@ -234,7 +269,8 @@ ulhpc-submit \
 - `config.yaml` 或指定的 config 文件。
 - GEPA / checker 使用的已发布快照，例如 `output/SWE-bench_Verified/...`
   下的不可变数据集。由于 `ulhpc-submit` 默认**排除 `output/` 目录**，快照必须由
-  `scripts/hpc_submit_batch.sh` 在提交前单独 `rsync` 到远端。
+  `scripts/hpc_submit_batch.sh` 在提交前单独 `rsync` 到 `--remote-dir` 外部的
+  `--remote-dataset-dir`，再由远端作业 symlink 回项目内的 `output/...` 路径。
 - 远端 `run_dir` 的父目录需可写，以便 GEPA 写入结果；作业结束后脚本会把该目录
   同步回本地同名路径。
 
@@ -581,7 +617,8 @@ run manifest，确保 Docker run_dir 与 Apptainer run_dir 不会互相恢复。
 
 - `scripts/hpc_submit_batch.sh`：GEPA 专用提交包装。默认 dry-run；`--submit`
   才真正提交。它读取 `configs/ulhpc_submit.yaml` 的 SSH 信息，单独 `rsync`
-  数据集快照到 HPC，提交远端命令，并在作业结束后把 `run_dir` 拉回本地。
+  数据集快照到项目目录外的 HPC staging 目录，把 GEPA run state 放在项目目录外，
+  提交远端命令，并在作业结束后把 `run_dir` 拉回本地。
 - 远端命令在 `bash -lc` 内执行：
   ```bash
   source /etc/profile.d/modules.sh
@@ -731,6 +768,21 @@ container:
 时直接拒绝拉取并退出，防止写满共享存储。若 SIF 已存在则直接复用；不存在则按需
 `apptainer pull`。因此**不强制预下载也能正确运行**，只是首次遇到新 image 时会付出
 5-10 分钟转换时间。
+
+注意：`container.sif_cache_dir` 只控制最终 `.sif` 文件位置；Apptainer 从
+Docker/OCI registry 拉取 layer 和构建 SIF 时还会使用自身 cache/tmp。HPC 作业必须
+把它们显式指向 `/scratch`，避免写入 home quota：
+
+```bash
+export APPTAINER_CACHEDIR=/scratch/users/twang/vibe-coding-planning/shared/apptainer-cache
+export APPTAINER_TMPDIR=/scratch/users/twang/vibe-coding-planning/shared/apptainer-tmp
+mkdir -p "$APPTAINER_CACHEDIR" "$APPTAINER_TMPDIR"
+```
+
+`scripts/hpc_submit_batch.sh` 默认设置上述两个变量，也可用
+`--remote-apptainer-cache-dir` 和 `--remote-apptainer-tmp-dir` 覆盖。若某次
+`apptainer pull` 失败，项目会先写入临时 `.sif.tmp.<pid>`，成功后再替换最终
+`.sif`，避免半成品被后续 resume 误认为可用。
 
 为了把转换开销移出主循环，仍推荐一次性预下载全部所需 SIF 到上述目录。空间充足
 （~500 GB << 10 TB），Lustre `/scratch` 的并发读取性能也优于 Isilon `/home`。

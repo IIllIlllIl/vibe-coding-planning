@@ -20,6 +20,10 @@ def test_hpc_submit_batch_help_succeeds() -> None:
 
     assert result.returncode == 0
     assert "--remote-env-file" in result.stdout
+    assert "--remote-dataset-dir" in result.stdout
+    assert "--remote-run-dir" in result.stdout
+    assert "--remote-apptainer-cache-dir" in result.stdout
+    assert "--remote-apptainer-tmp-dir" in result.stdout
     assert "--gepa-config" in result.stdout
 
 
@@ -77,6 +81,14 @@ prompts:
             str(config),
             "--remote-dir",
             "~/hpc_runs/test",
+            "--remote-dataset-dir",
+            "~/hpc_datasets/test",
+            "--remote-run-dir",
+            "~/hpc_run_state/test",
+            "--remote-apptainer-cache-dir",
+            "/scratch/test/apptainer-cache",
+            "--remote-apptainer-tmp-dir",
+            "/scratch/test/apptainer-tmp",
             "--remote-env-file",
             "~/.config/vibe-coding-planning/deepseek.env",
         ],
@@ -90,5 +102,32 @@ prompts:
     assert result.returncode == 0, result.stderr
     assert "secret-should-not-appear" not in result.stdout
     assert "DEEPSEEK_API_KEY=\"$DEEPSEEK_API_KEY\"" not in result.stdout
+    assert "--conda-env mini-swe" not in result.stdout
     assert "source \"$REMOTE_ENV_FILE\"" in result.stdout
     assert "~/.config/vibe-coding-planning/deepseek.env" in result.stdout
+    assert "remote-dataset-dir=~/hpc_datasets/test" in result.stdout
+    assert "remote-run-dir=~/hpc_run_state/test" in result.stdout
+    assert "REMOTE_RUN_SNAPSHOT=\"~/hpc_run_state/test/" in result.stdout
+    assert "ln -s \"$REMOTE_RUN_SNAPSHOT\" \"$RUN_LINK\"" in result.stdout
+    assert "remote-apptainer-cache-dir=/scratch/test/apptainer-cache" in (
+        result.stdout
+    )
+    assert "remote-apptainer-tmp-dir=/scratch/test/apptainer-tmp" in (
+        result.stdout
+    )
+    assert 'export APPTAINER_CACHEDIR="/scratch/test/apptainer-cache"' in (
+        result.stdout
+    )
+    assert 'export APPTAINER_TMPDIR="/scratch/test/apptainer-tmp"' in (
+        result.stdout
+    )
+    assert 'mkdir -p "$APPTAINER_CACHEDIR" "$APPTAINER_TMPDIR"' in (
+        result.stdout
+    )
+    assert "dataset snapshot would be rsynced outside remote project dir" in (
+        result.stdout
+    )
+    assert "REMOTE_DATASET_SNAPSHOT=\"~/hpc_datasets/test/" in result.stdout
+    assert "ln -s \"$REMOTE_DATASET_SNAPSHOT\" \"$DATASET_LINK\"" in (
+        result.stdout
+    )

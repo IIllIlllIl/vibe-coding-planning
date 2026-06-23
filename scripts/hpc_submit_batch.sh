@@ -2,7 +2,7 @@
 # Submit a GEPA rules optimization job to ULHPC via ulhpc-submit.
 #
 # This script wraps ulhpc-submit for GEPA-specific needs:
-#   - stages the dataset snapshot (output/ is excluded from ulhpc-submit sync)
+#   - stages the dataset snapshot outside the ulhpc-submit project sync dir
 #   - submits the GEPA CLI via module load (Iris compute nodes have no conda)
 #   - retrieves the run_dir output after the job finishes
 #
@@ -13,6 +13,7 @@
 #     --gepa-rules \
 #     --gepa-config configs/gepa_verified_rules_reflection_smoke_apptainer.yaml \
 #     --remote-dir '~/hpc_runs/vibe-coding-planning' \
+#     --remote-dataset-dir '~/hpc_datasets/vibe-coding-planning' \
 #     --job-name gepa-ref-smoke \
 #     --time 02:00:00 \
 #     --cpus 1 \
@@ -31,6 +32,10 @@ CPUS="1"
 MEM="16G"
 GPUS="0"
 REMOTE_DIR=""
+REMOTE_DATASET_DIR="~/hpc_datasets/vibe-coding-planning"
+REMOTE_RUN_DIR="~/hpc_run_state/vibe-coding-planning"
+REMOTE_APPTAINER_CACHE_DIR="/scratch/users/twang/vibe-coding-planning/shared/apptainer-cache"
+REMOTE_APPTAINER_TMP_DIR="/scratch/users/twang/vibe-coding-planning/shared/apptainer-tmp"
 ULHPC_CONFIG=""
 FULL_LOGS=0
 REMOTE_ENV_FILE="~/.config/vibe-coding-planning/deepseek.env"
@@ -52,6 +57,16 @@ Slurm / ulhpc-submit options:
   --mem SIZE                Memory (default: 16G)
   --gpus N                  GPUs (default: 0)
   --remote-dir DIR          Remote project directory on HPC
+  --remote-dataset-dir DIR  Remote dataset staging root outside --remote-dir
+                            (default: ~/hpc_datasets/vibe-coding-planning)
+  --remote-run-dir DIR      Remote run state root outside --remote-dir
+                            (default: ~/hpc_run_state/vibe-coding-planning)
+  --remote-apptainer-cache-dir DIR
+                            Remote APPTAINER_CACHEDIR
+                            (default: /scratch/users/twang/vibe-coding-planning/shared/apptainer-cache)
+  --remote-apptainer-tmp-dir DIR
+                            Remote APPTAINER_TMPDIR
+                            (default: /scratch/users/twang/vibe-coding-planning/shared/apptainer-tmp)
   --remote-env-file FILE    Remote shell env file sourced inside the Slurm job
                             (default: ~/.config/vibe-coding-planning/deepseek.env)
   --ulhpc-config FILE       ulhpc-submit config file
@@ -70,6 +85,10 @@ Examples:
     --gepa-rules \
     --gepa-config configs/gepa_verified_rules_reflection_smoke_apptainer.yaml \
     --remote-dir '~/hpc_runs/vibe-gepa-reflection-smoke' \
+    --remote-dataset-dir '~/hpc_datasets/vibe-coding-planning' \
+    --remote-run-dir '~/hpc_run_state/vibe-coding-planning' \
+    --remote-apptainer-cache-dir /scratch/users/twang/vibe-coding-planning/shared/apptainer-cache \
+    --remote-apptainer-tmp-dir /scratch/users/twang/vibe-coding-planning/shared/apptainer-tmp \
     --job-name gepa-ref-smoke \
     --time 02:00:00 \
     --cpus 1 \
@@ -115,6 +134,22 @@ while [[ $# -gt 0 ]]; do
       ;;
     --remote-dir)
       REMOTE_DIR="$2"
+      shift 2
+      ;;
+    --remote-dataset-dir)
+      REMOTE_DATASET_DIR="$2"
+      shift 2
+      ;;
+    --remote-run-dir)
+      REMOTE_RUN_DIR="$2"
+      shift 2
+      ;;
+    --remote-apptainer-cache-dir)
+      REMOTE_APPTAINER_CACHE_DIR="$2"
+      shift 2
+      ;;
+    --remote-apptainer-tmp-dir)
+      REMOTE_APPTAINER_TMP_DIR="$2"
       shift 2
       ;;
     --remote-env-file)
@@ -170,6 +205,22 @@ if ! [[ "$GPUS" =~ ^[0-9]+$ ]]; then
 fi
 if [[ -z "$REMOTE_ENV_FILE" ]]; then
   echo "ERROR: --remote-env-file must not be empty" >&2
+  exit 2
+fi
+if [[ -z "$REMOTE_DATASET_DIR" ]]; then
+  echo "ERROR: --remote-dataset-dir must not be empty" >&2
+  exit 2
+fi
+if [[ -z "$REMOTE_RUN_DIR" ]]; then
+  echo "ERROR: --remote-run-dir must not be empty" >&2
+  exit 2
+fi
+if [[ -z "$REMOTE_APPTAINER_CACHE_DIR" ]]; then
+  echo "ERROR: --remote-apptainer-cache-dir must not be empty" >&2
+  exit 2
+fi
+if [[ -z "$REMOTE_APPTAINER_TMP_DIR" ]]; then
+  echo "ERROR: --remote-apptainer-tmp-dir must not be empty" >&2
   exit 2
 fi
 
@@ -298,6 +349,9 @@ fi
 DATASET_REL="${DATASET_SNAPSHOT#$REPO_ROOT/}"
 RUN_DIR_REL="${RUN_DIR#$REPO_ROOT/}"
 GEPA_CONFIG_REL="${GEPA_CONFIG_ABS#$REPO_ROOT/}"
+DATASET_PARENT_REL="$(dirname "$DATASET_REL")"
+REMOTE_DATASET_SNAPSHOT="$REMOTE_DATASET_DIR/$DATASET_REL"
+REMOTE_RUN_SNAPSHOT="$REMOTE_RUN_DIR/$RUN_DIR_REL"
 
 # ---------------------------------------------------------------------------
 # Build remote command
@@ -307,6 +361,29 @@ set -euo pipefail
 echo "[vibe-gepa] started at \$(date) on \$(hostname)"
 source /etc/profile.d/modules.sh
 module load $PYTHON_MODULE $CONTAINER_MODULE
+export APPTAINER_CACHEDIR="$REMOTE_APPTAINER_CACHE_DIR"
+export APPTAINER_TMPDIR="$REMOTE_APPTAINER_TMP_DIR"
+mkdir -p "\$APPTAINER_CACHEDIR" "\$APPTAINER_TMPDIR"
+REMOTE_DATASET_SNAPSHOT="$REMOTE_DATASET_SNAPSHOT"
+if [[ "\$REMOTE_DATASET_SNAPSHOT" == "~/"* ]]; then
+  REMOTE_DATASET_SNAPSHOT="\$HOME/\${REMOTE_DATASET_SNAPSHOT#\~/}"
+fi
+DATASET_LINK="$DATASET_REL"
+mkdir -p "\$(dirname "\$DATASET_LINK")"
+rm -rf "\$DATASET_LINK"
+ln -s "\$REMOTE_DATASET_SNAPSHOT" "\$DATASET_LINK"
+test -f "\$DATASET_LINK/manifest.json" || {
+  echo "[vibe-gepa] dataset snapshot missing after symlink: \$DATASET_LINK" >&2
+  exit 2
+}
+REMOTE_RUN_SNAPSHOT="$REMOTE_RUN_SNAPSHOT"
+if [[ "\$REMOTE_RUN_SNAPSHOT" == "~/"* ]]; then
+  REMOTE_RUN_SNAPSHOT="\$HOME/\${REMOTE_RUN_SNAPSHOT#\~/}"
+fi
+RUN_LINK="$RUN_DIR_REL"
+mkdir -p "\$(dirname "\$RUN_LINK")" "\$REMOTE_RUN_SNAPSHOT"
+rm -rf "\$RUN_LINK"
+ln -s "\$REMOTE_RUN_SNAPSHOT" "\$RUN_LINK"
 REMOTE_ENV_FILE="$REMOTE_ENV_FILE"
 if [[ "\$REMOTE_ENV_FILE" == "~/"* ]]; then
   REMOTE_ENV_FILE="\$HOME/\${REMOTE_ENV_FILE#\~/}"
@@ -375,12 +452,18 @@ RSYNC_SSH="ssh ${SSH_OPTS[*]}"
 echo "[hpc-submit] mode=$([[ "$SUBMIT" -eq 1 ]] && echo submit || echo dry-run)"
 echo "[hpc-submit] gepa-config=$GEPA_CONFIG"
 echo "[hpc-submit] remote-dir=$REMOTE_DIR"
+echo "[hpc-submit] remote-dataset-dir=$REMOTE_DATASET_DIR"
+echo "[hpc-submit] remote-dataset-snapshot=$REMOTE_DATASET_SNAPSHOT"
+echo "[hpc-submit] remote-run-dir=$REMOTE_RUN_DIR"
+echo "[hpc-submit] remote-run-snapshot=$REMOTE_RUN_SNAPSHOT"
+echo "[hpc-submit] remote-apptainer-cache-dir=$REMOTE_APPTAINER_CACHE_DIR"
+echo "[hpc-submit] remote-apptainer-tmp-dir=$REMOTE_APPTAINER_TMP_DIR"
 echo "[hpc-submit] remote-env-file=$REMOTE_ENV_FILE"
 echo "[hpc-submit] dataset_snapshot=$DATASET_SNAPSHOT"
 echo "[hpc-submit] run_dir=$RUN_DIR"
 
 if [[ "$SUBMIT" -eq 0 ]]; then
-  echo "[hpc-submit] dry-run: dataset snapshot would be rsynced to remote"
+  echo "[hpc-submit] dry-run: dataset snapshot would be rsynced outside remote project dir"
   echo "[hpc-submit] dry-run: the following ulhpc-submit command would be executed:"
   printf '  %s' "${ULHPC_CMD[*]}"
   echo
@@ -392,11 +475,45 @@ fi
 # Ensure remote directory exists
 ssh "${SSH_OPTS[@]}" "$PREFLIGHT_USER@$PREFLIGHT_HOST" "mkdir -p $(printf '%q' "$REMOTE_DIR")"
 
-# Stage dataset snapshot (output/ is excluded from ulhpc-submit sync)
-echo "[hpc-submit] staging dataset snapshot to HPC..."
+# Keep dataset files outside ulhpc-submit's project sync directory. Otherwise
+# ulhpc-submit's file-count integrity check sees extra files under remote-dir.
+REMOTE_DATASET_PARENT="$REMOTE_DATASET_DIR/$DATASET_PARENT_REL"
+REMOTE_RUN_SNAPSHOT_PREPARE="$REMOTE_RUN_SNAPSHOT"
+REMOTE_DATASET_PARENT_SCRIPT=$(cat <<EOF
+set -euo pipefail
+REMOTE_DATASET_PARENT="$REMOTE_DATASET_PARENT"
+REMOTE_RUN_SNAPSHOT="$REMOTE_RUN_SNAPSHOT_PREPARE"
+REMOTE_PROJECT_OUTPUT="$REMOTE_DIR/output"
+if [[ "\$REMOTE_DATASET_PARENT" == "~/"* ]]; then
+  REMOTE_DATASET_PARENT="\$HOME/\${REMOTE_DATASET_PARENT#\~/}"
+fi
+if [[ "\$REMOTE_RUN_SNAPSHOT" == "~/"* ]]; then
+  REMOTE_RUN_SNAPSHOT="\$HOME/\${REMOTE_RUN_SNAPSHOT#\~/}"
+fi
+if [[ "\$REMOTE_PROJECT_OUTPUT" == "~/"* ]]; then
+  REMOTE_PROJECT_OUTPUT="\$HOME/\${REMOTE_PROJECT_OUTPUT#\~/}"
+fi
+mkdir -p "\$REMOTE_DATASET_PARENT"
+mkdir -p "\$(dirname "\$REMOTE_RUN_SNAPSHOT")"
+if [[ -d "\$REMOTE_PROJECT_OUTPUT" && ! -e "\$REMOTE_RUN_SNAPSHOT/gepa_state.bin" ]]; then
+  REMOTE_PROJECT_RUN="$REMOTE_DIR/$RUN_DIR_REL"
+  if [[ "\$REMOTE_PROJECT_RUN" == "~/"* ]]; then
+    REMOTE_PROJECT_RUN="\$HOME/\${REMOTE_PROJECT_RUN#\~/}"
+  fi
+  if [[ -d "\$REMOTE_PROJECT_RUN" && ! -L "\$REMOTE_PROJECT_RUN" ]]; then
+    mv "\$REMOTE_PROJECT_RUN" "\$REMOTE_RUN_SNAPSHOT"
+  fi
+fi
+rm -rf "\$REMOTE_PROJECT_OUTPUT"
+EOF
+)
+ssh "${SSH_OPTS[@]}" "$PREFLIGHT_USER@$PREFLIGHT_HOST" "$REMOTE_DATASET_PARENT_SCRIPT"
+
+# Stage dataset snapshot outside remote-dir (output/ is excluded from ulhpc-submit sync)
+echo "[hpc-submit] staging dataset snapshot to HPC dataset directory..."
 rsync -avz -e "$RSYNC_SSH" \
   "$DATASET_SNAPSHOT/" \
-  "$PREFLIGHT_USER@$PREFLIGHT_HOST:$(printf '%q' "$REMOTE_DIR/$DATASET_REL")/"
+  "$PREFLIGHT_USER@$PREFLIGHT_HOST:$(printf '%q' "$REMOTE_DATASET_SNAPSHOT")/"
 
 # Submit job
 echo "[hpc-submit] submitting GEPA job..."
@@ -409,7 +526,7 @@ set -e
 echo "[hpc-submit] retrieving run_dir output (rc=$ULHPC_RC)..."
 mkdir -p "$(dirname "$RUN_DIR")"
 rsync -avz -e "$RSYNC_SSH" \
-  "$PREFLIGHT_USER@$PREFLIGHT_HOST:$(printf '%q' "$REMOTE_DIR/$RUN_DIR_REL")/" \
+  "$PREFLIGHT_USER@$PREFLIGHT_HOST:$(printf '%q' "$REMOTE_RUN_SNAPSHOT")/" \
   "$RUN_DIR/"
 
 if [[ $ULHPC_RC -ne 0 ]]; then

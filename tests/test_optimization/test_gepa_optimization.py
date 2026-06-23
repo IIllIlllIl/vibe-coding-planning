@@ -1288,7 +1288,7 @@ def test_strict_hpc_24h_config_loads(monkeypatch):
     assert config.checker.model == "deepseek-v4-flash"
     assert config.reflection.model == "deepseek-v4-flash"
     assert config.search.parallel == 4
-    assert config.search.max_metric_calls == 1500
+    assert config.search.max_metric_calls == 3000
     assert config.container.runtime == "apptainer"
     assert config.container.sif_cache_dir == Path(
         "/scratch/users/twang/vibe-coding-planning/shared/sif-cache"

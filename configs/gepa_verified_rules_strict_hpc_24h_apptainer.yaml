@@ -26,8 +26,8 @@ search:
   # The Slurm job wall time is the primary 24h budget. GEPA's
   # max_metric_calls remains a soft iteration-boundary cap and can be raised
   # for resume if the job finishes early.
-  max_metric_calls: 1500
-  projection_metric_calls: 1500
+  max_metric_calls: 3000
+  projection_metric_calls: 3000
   reflection_minibatch_size: 3
   parallel: 4
   seed: 42

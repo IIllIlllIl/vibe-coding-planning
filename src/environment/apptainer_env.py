@@ -10,11 +10,11 @@ from __future__ import annotations
 
 import base64
 import logging
+import os
 import shlex
 import shutil
 import subprocess
 import sys
-import threading
 from pathlib import Path
 from typing import Any
 
@@ -79,6 +79,8 @@ class ApptainerSifCache:
                 return sif
 
             self.sif_cache_dir.mkdir(parents=True, exist_ok=True)
+            tmp_sif = sif.with_name(f"{sif.name}.tmp.{os.getpid()}")
+            tmp_sif.unlink(missing_ok=True)
             logger.info(
                 "Apptainer: pulling SIF for %s -> %s",
                 image,
@@ -90,7 +92,7 @@ class ApptainerSifCache:
                         "apptainer",
                         "pull",
                         "--force",
-                        str(sif),
+                        str(tmp_sif),
                         f"docker://{image}",
                     ],
                     capture_output=True,
@@ -99,10 +101,12 @@ class ApptainerSifCache:
                     timeout=timeout,
                 )
             except subprocess.TimeoutExpired as exc:
+                tmp_sif.unlink(missing_ok=True)
                 raise FatalError(
                     f"Apptainer SIF pull timed out after {exc.timeout}s: {image}"
                 ) from exc
             except FileNotFoundError as exc:
+                tmp_sif.unlink(missing_ok=True)
                 raise FatalError(
                     "Apptainer CLI not found. "
                     "Load the Apptainer module before running, e.g. "
@@ -110,10 +114,18 @@ class ApptainerSifCache:
                 ) from exc
 
             if result.returncode != 0:
+                tmp_sif.unlink(missing_ok=True)
                 stderr = (result.stderr or result.stdout or "").strip()
                 raise FatalError(
                     f"Apptainer pull failed for {image}: {stderr[:1000]}"
                 )
+            if not tmp_sif.exists():
+                tmp_sif.unlink(missing_ok=True)
+                raise FatalError(
+                    "Apptainer pull reported success but temporary SIF is "
+                    f"missing: {tmp_sif}"
+                )
+            tmp_sif.replace(sif)
 
         if not sif.exists():
             raise FatalError(

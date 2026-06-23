@@ -91,7 +91,8 @@ def test_sif_cache_pulls_missing_image(tmp_path, monkeypatch):
         assert args[1] == "pull"
         assert args[2] == "--force"
         assert args[4] == "docker://python:3.12-slim"
-        # Create the expected file so ensure() can verify it exists.
+        assert Path(args[3]).name.startswith("python_3.12-slim.sif.tmp.")
+        # Create the temporary SIF so ensure() can rename it atomically.
         Path(args[3]).write_text("sif", encoding="utf-8")
         return subprocess.CompletedProcess(args, returncode=0, stdout="", stderr="")
 
@@ -100,6 +101,7 @@ def test_sif_cache_pulls_missing_image(tmp_path, monkeypatch):
     sif = cache.ensure("python:3.12-slim")
     assert sif.name == "python_3.12-slim.sif"
     assert sif.exists()
+    assert not list(cache_dir.glob("*.tmp.*"))
     assert window.acquisitions == 1
 
 
@@ -120,6 +122,8 @@ def test_sif_cache_raises_on_pull_failure(tmp_path, monkeypatch):
 
     with pytest.raises(FatalError, match="Apptainer pull failed"):
         cache.ensure("python:3.12-slim")
+    assert not (cache_dir / "python_3.12-slim.sif").exists()
+    assert not list(cache_dir.glob("*.tmp.*"))
 
 
 def test_sif_cache_raises_when_apptainer_missing(tmp_path, monkeypatch):

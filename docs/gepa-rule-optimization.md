@@ -413,7 +413,7 @@ configs/gepa_verified_rules_strict_hpc_24h_apptainer.yaml
 ```
 
 该配置使用正式 482-case 快照、GPT seed、Apptainer runtime、`parallel=4`、
-`max_metric_calls=1500`，并把 SIF cache 放在可跨实验复用的 scratch 目录：
+`max_metric_calls=3000`（resume 扩容后的软上限），并把 SIF cache 放在可跨实验复用的 scratch 目录：
 
 ```text
 /scratch/users/twang/vibe-coding-planning/shared/sif-cache
