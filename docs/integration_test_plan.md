@@ -1,5 +1,12 @@
 # 集成测试方案 v2.1（macOS 本机执行版）
 
+> 历史归档：本文档是 2026-05 早期本机 PCT/PCC 集成测试方案，包含
+> mini-swe-agent 1.0、SWE-bench Pro、只读挂载、OpenCode/Kimi 之前的成本假设等
+> 已经过时内容。当前 GEPA strict Checker、HPC Apptainer 和短作业 resume 流程请看
+> [`gepa-rule-optimization.md`](gepa-rule-optimization.md) 与
+> [`hpc-submit.md`](hpc-submit.md)；当前开放问题请看
+> [`../project_issues.md`](../project_issues.md)。
+
 **版本历史**
 
 - v1（2026-04 初稿）：单阶段烟测 + skip 占位

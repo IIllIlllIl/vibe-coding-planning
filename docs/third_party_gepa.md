@@ -12,12 +12,13 @@
 
 ## 2. 为什么引入
 
-GEPA（Genetic-Pareto）是一个基于大语言模型反射和 Pareto 进化搜索的文本优化框架。项目未来可能利用 GEPA 探索新的 plan/prompt 优化流程，因此先把 GEPA 源码以第三方代码形式纳入仓库，使其在 `mini-swe` conda 环境中可导入、可调用。
+GEPA（Genetic-Pareto）是一个基于大语言模型反射和 Pareto 进化搜索的文本优化框架。项目使用它优化 Checker 规则文本，因此把 GEPA 源码以第三方代码形式纳入仓库，使其在 `mini-swe` conda 环境中可导入、可调用。
 
-**当前阶段**：GEPA 尚未接入现有的 PCT/PCC/Analysis 执行逻辑。项目已完成
-可导入和无外部 LLM 的最小运行验证，并已形成使用 GEPA 直接优化 Checker
-规则文本的设计。现有 `reflect_agent.py`、`pipeline.py`、`config.yaml` 中的
-反射 Prompt 模板仍保持不变。新流程设计见
+**当前阶段**：项目已在 `src/optimization/runner.py` 中直接调用
+`gepa.optimize()`，用 vendored GEPA 优化 Checker 规则文本。PCT/PCC/Analysis
+原有执行逻辑仍不依赖 GEPA；GEPA 相关能力优先放在
+`adapter`、`config`、`callbacks`、`resume`、`report` 等项目层，不修改官方
+`third_party/gepa` 代码。新流程设计见
 [`gepa-rule-optimization.md`](gepa-rule-optimization.md)。
 
 ## 3. 目录结构
@@ -86,16 +87,15 @@ git commit -m "Bump gepa to v0.2.0"
 
 | 模块 | 是否使用 GEPA | 说明 |
 |------|--------------|------|
-| `src/agents/reflect_agent.py` | 否 | 继续使用 `config.yaml` 中的 `prompts.reflection_prompt_template` |
+| `src/optimization/runner.py` | 是 | 直接调用 `gepa.optimize()`，保持官方搜索循环、候选选择、cache、callbacks 和状态恢复 |
+| `src/optimization/adapter.py` | 是 | 实现项目任务到 `GEPAAdapter` 的适配，固定 Checker 评估并只优化 `rules` 文本 |
+| `src/optimization/reflection.py` | 间接 | 作为 GEPA reflective mutation 的 LLM proposer，负责根据 minibatch 证据写出完整候选规则 |
+| `src/agents/reflect_agent.py` | 否 | 继续使用 `config.yaml` 中的 PCT 反思 prompt，不参与 GEPA 规则优化 |
 | `src/pipeline.py` | 否 | 继续运行原生 PCT 循环 |
-| `src/agents/plan_agent.py` | 否 | 继续基于 `mini-swe-agent` 生成 plan |
-| `src/agents/code_agent.py` | 否 | 继续基于 `mini-swe-agent` 生成 patch |
 
-后续接入新规则优化流程时，应新增独立模块（例如
-`src/optimization/gepa_adapter.py`），而不是修改上述现有 PCT 模块。实现应优先
-复用 GEPA 的 `GEPAAdapter`、`EvaluationBatch`、官方 minibatch sampler、
-reflective mutation、Pareto selection、evaluation cache、callbacks、状态恢复和
-`GEPAResult`，不复制其搜索算法。
+实现应继续复用 GEPA 的 `GEPAAdapter`、`EvaluationBatch`、官方 minibatch
+sampler、reflective mutation、Pareto selection、evaluation cache、callbacks、
+状态恢复和 `GEPAResult`，不复制其搜索算法。
 
 ## 8. 常见问题
 

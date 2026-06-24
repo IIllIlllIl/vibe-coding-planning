@@ -1,8 +1,10 @@
 # 基于 GEPA 的规则优化流程设计
 
-> 状态：Verified Round 1 正式数据快照已发布；首次外部 LLM pilot 已完成，
-> 并暴露 Reflection 调用与失败状态缺陷。代码已修复，等待极小 Reflection
-> smoke 实跑验收。
+> 状态：Verified Round 1 正式数据快照已发布；GEPA 规则优化主流程、strict
+> Checker prompt、GPT seed、跨进程 resume、报告、HPC Apptainer backend、
+> SIF cache 预热脚本、`ulhpc-submit` wrapper 和短作业 resume supervisor 均已实现。
+> 当前待验证的是 strict prompt 新 run 的规则质量、HPC `parallel=4` 稳定性和
+> SIF 预热完成度。
 >
 > 目标：使用 GEPA 直接优化供 Plan Checker 使用的完整规则文本，替代当前
 > “逐案例规则提取 → 后处理 → 聚合”的规则生成流程。
@@ -452,7 +454,12 @@ Checker。旧的、没有 `run_manifest.json` 和 `gepa_resume_state.json` 的 r
 不能自动升级为正式可复现续跑；应使用新 `run_dir` 重新开始。创建
 `gepa.stop` 可优雅停止。
 
-### 10.1 轻量空规则 Pilot
+### 10.1 历史验证：轻量空规则 Pilot
+
+> 本节是历史验证记录，用于解释 GEPA 基础链路、Reflection failure 处理和候选接纳
+> 机制如何被验证。当前正式规则生成不再使用空规则/no-seed 模式，而是使用
+> `configs/gepa_initial_rules_gpt_seed.md` 作为 seed，并通过 strict Checker prompt
+> 约束“规则未覆盖则默认 unresolved”。
 
 Pilot 配置为 `configs/gepa_verified_rules_pilot.yaml`，使用语义为空字符串的
 `configs/gepa_empty_rules.txt`。数据由以下命令从正式快照确定性构建：
@@ -596,6 +603,7 @@ Reflection 的 prompt/completion/total tokens、耗时和成功状态。
 GEPA 主循环不并行：Pareto 选择、minibatch sampling、Reflection proposal、
 候选接纳和状态写入均依赖前序结果。当前并行设计只允许 Checker evaluation
 batch 内部样本级并发，Adapter 使用有序 map 保持输出顺序，单样本失败按
-`max_attempts` 独立重试。所有当前 GEPA 配置仍固定 `parallel=1`；下一步应使用
-新的 run_dir 做 `parallel=2` 小型试运行，验证 candidate tree、validation
-scores、resume state、Docker 容量和 API rate limit 后再考虑正式启用。
+`max_attempts` 独立重试。本地 Docker 配置仍以小并发验证为主。HPC strict 配置
+使用 Apptainer backend 和 `parallel=4`，需要在真实长跑中继续观察 DeepSeek
+rate limit、SIF 获取锁、文件系统压力、candidate tree、validation scores 和
+resume state。

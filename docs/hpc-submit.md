@@ -15,11 +15,12 @@
 1. 在本地确认配置、实例列表、输出路径和凭据要求。
 2. 调用 `ulhpc-submit`，由 `../../hpc_submit` 负责 rsync、Slurm 脚本生成、
    `sbatch` 提交、状态监控和日志回传。
-3. 在 HPC 作业中激活 `mini-swe` 环境，调用现有实验入口。
-4. 将作业日志和 `output/` 产物同步或保留在可取回的位置。
+3. 在 HPC 作业中加载 module Python/Apptainer，调用现有 GEPA 实验入口。
+4. 将作业日志和 GEPA persistent `run_dir` 保留在可取回、可 resume 的位置。
 
 该入口不替代 `scripts/run_batch.sh`。它只是远端作业包装层，HPC 节点上的实际
-PCT/PCC、checker、analysis、GEPA 逻辑仍由现有脚本执行。
+GEPA 逻辑仍由现有脚本执行。PCT/PCC/checker-only 的 Docker-native 路径仍需后续
+单独设计 Apptainer 或 Docker-enabled 资源方案。
 
 ---
 
@@ -89,18 +90,20 @@ bash scripts/hpc_smoke_check.sh \
 
 - `ulhpc-submit` 是否可调用。
 - 远端是否能使用项目所需 Python 3.11 环境。
-- `minisweagent.__version__ == "1.17.5"`、`swebench`、`PyYAML`、Docker SDK
-  是否可导入。
-- Docker CLI 和 daemon 是否可用。
-- `python -m src.environment.docker_env maintain` 是否能执行项目镜像集合维护。
+- `PyYAML`、基础 Python 包和项目代码是否可导入；GEPA 作业会在远端安装 vendored
+  GEPA。
+- Docker CLI/daemon 是否可用，并在不可用时明确报告。Iris 当前已知无 Docker
+  daemon；GEPA 路径应使用 Apptainer。
+- Apptainer module、SIF cache 和 GEPA Apptainer backend 通过 GEPA smoke / batch
+  wrapper 验证。
 - 可选 `--check-api-key` 检查 `DEEPSEEK_API_KEY` 是否进入远端 job 环境。
 
-截至 2026-06-19 的真实 ULHPC smoke 结果：SSH、rsync、Slurm 提交、排队、
-调度执行和 Python 依赖导入均已通过；作业在 `iris-167` 上运行时没有可用的
-`docker` CLI，access node 常见路径中也未发现 Docker/Apptainer/Singularity
-命令。因此完整实验暂不能直接复用当前 Docker-based evaluator，需要先确认
-ULHPC 是否有 Docker-enabled/rootless Docker 分区，或设计 Apptainer/Singularity
-兼容路径。
+真实 ULHPC smoke 结果：SSH、rsync、Slurm 提交、排队、调度执行和 Python
+依赖导入均已通过；Iris 计算节点没有可用 Docker daemon，但可用
+`tools/Apptainer`。因此 GEPA 规则优化已走 Apptainer backend；完整
+PCT/PCC/SWE-bench evaluator 仍不能直接复用当前 Docker-based evaluator，需要
+后续设计 Apptainer/Singularity 兼容路径或申请 Docker-enabled/rootless Docker
+资源。
 
 约定：`scripts/hpc_smoke_check.sh` 的默认 dry-run 会保留 `ulhpc-submit` 的 SSH
 连通性检查，但加上 `--no-sync`，避免实际同步代码或提交 Slurm job。需要同时检查
@@ -289,9 +292,6 @@ ulhpc-submit \
 - 作业脚本中使用 `set +x`，只执行 `source "$REMOTE_ENV_FILE"` 并检查变量存在，
   不打印 key。共享 HPC 上仍应使用 DeepSeek 控制台的实验专用 key、额度/告警和
   运行后禁用/轮换来限制风险。
-- OpenCode/Kimi analysis 仍受当前配置加载问题影响，可能需要临时提供
-  `DEEPSEEK_API_KEY=dummy`；长期修复见 `project_issues.md`。
-
 ---
 
 ## 6. 推荐执行模式
@@ -427,6 +427,68 @@ bash scripts/hpc_submit_batch.sh \
 3. 如果是代码 bug，本地修复并提交新 job；不要在远端工作目录手工改代码。
 4. 如果是配置语义变化导致 resume manifest 不兼容，开启新的 `run_dir`，不要复用
    旧状态。
+
+### 6.4 短作业切片自动续跑
+
+长 wall-time 作业在 ULHPC 上更容易长时间排队。对 GEPA 这种支持 `run_dir`
+resume 的任务，可以用 `scripts/hpc_resume_loop.py` 把一次长实验拆成多个短
+Slurm allocation：
+
+```bash
+conda run -n mini-swe python scripts/hpc_resume_loop.py \
+  --slice-time 12:00:00 \
+  --check-interval 01:00:00 \
+  --poll-interval 300 \
+  --max-runs 4 \
+  --gepa-rules \
+  --gepa-config configs/gepa_verified_rules_strict_hpc_24h_apptainer.yaml \
+  --job-name gepa-strict-newprompt \
+  --remote-dir '~/hpc_runs/vibe-gepa-strict-newprompt' \
+  --time 24:00:00 \
+  --cpus 4 \
+  --mem 32G \
+  --submit
+```
+
+`hpc_resume_loop.py` 会移除传给 batch wrapper 的原始 `--time`，改用
+`--slice-time`。上例中每个实际 Slurm job 申请 12 小时；`--time 24:00:00`
+不会继续传给 `hpc_submit_batch.sh`。如果省略 `--submit`，supervisor 只执行一次
+batch dry-run，不进入循环。
+
+循环语义：
+
+1. 检查远端 persistent `run_dir`。
+2. 如果 `result.json` 的 `run_status` / `status` 是 `completed` 或
+   `completed_with_warnings`，停止并返回 0。
+3. 如果 `result.json` 是 `failed`，或结果文件损坏、状态文件缺 manifest、远端状态
+   检查失败，停止并返回非零。
+4. 否则调用 `scripts/hpc_submit_batch.sh ... --time <slice-time> --submit` 提交一轮。
+5. 通过 `squeue` / `sacct` 等待该 job 进入终态。
+6. 再次检查远端 `run_dir`；未完成且未达到 `--max-runs` 时，等待
+   `--check-interval` 后提交下一轮。
+
+参数说明：
+
+| 参数 | 默认 | 说明 |
+|------|------|------|
+| `--slice-time HH:MM:SS` | `12:00:00` | 每个 Slurm job 的 wall time |
+| `--check-interval HH:MM:SS` | `01:00:00` | 一轮结束但未完成时，下次提交前等待时间 |
+| `--poll-interval SECONDS` | `300` | 等待当前 job 完成时查询 `squeue` / `sacct` 的间隔 |
+| `--max-runs N` | `4` | 最多提交多少个切片；`0` 表示无限续跑 |
+| `--batch-script PATH` | `scripts/hpc_submit_batch.sh` | 供测试或特殊 wrapper 覆盖 |
+
+这个 supervisor 不在 Slurm job 内部自我重提；它应运行在本地机器或登录节点上，作为
+作业外部的调度器。这样可以避免 wall-time kill 时来不及提交下一轮，也能避免多个
+Slurm job 同时写同一个 GEPA `run_dir`。实际运行时仍建议使用唯一的 `--job-name`
+和唯一的 `run_dir`，不要同时启动两个 supervisor 管理同一实验。
+
+如果 `conda run -n mini-swe ...` 环境中找不到 `ulhpc-submit`，需要把安装
+`ulhpc-submit` 的目录显式加入 PATH，例如：
+
+```bash
+conda run -n mini-swe env PATH=/Users/taoran.wang/miniconda3/bin:$PATH \
+  python scripts/hpc_resume_loop.py ...
+```
 
 ---
 
@@ -689,7 +751,7 @@ SDK 自动转成 Apptainer 调用。
 
 ---
 
-## 8. 待实现清单
+## 8. 实施记录与剩余边界
 
 - [x] 确认相邻项目为 `../../hpc_submit`，安装后的 CLI 为 `ulhpc-submit`。
 - [x] 确认 `ulhpc-submit` 支持 dry-run、local/remote dir、Slurm 资源参数、

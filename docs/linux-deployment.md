@@ -33,12 +33,13 @@ bash scripts/hpc_smoke_check.sh --submit --user <ulhpc-user> --remote-dir '~/hpc
 
 | 项目 | HPC 验证方式 |
 |------|--------------|
-| `mini-swe` conda 环境 | `scripts/hpc_smoke_check.sh` 检查 Python、`minisweagent==1.17.5`、`swebench`、Docker SDK |
-| Docker CLI/daemon | smoke job 执行 `docker --version`、`docker info` 和 `docker image ls` |
-| 项目镜像维护入口 | smoke job 执行 `python -m src.environment.docker_env maintain` |
+| Python runtime | GEPA 路径使用 `module load lang/Python/3.11` + `python3`；Iris 计算节点不依赖 `mini-swe` conda |
+| Apptainer runtime | GEPA 路径使用 `module load tools/Apptainer`，并通过 `container.sif_cache_dir` 复用 SIF |
+| Docker CLI/daemon | Iris 计算节点已确认没有可用 Docker daemon；PCT/PCC Docker-native evaluator 不能直接运行 |
+| 项目镜像维护入口 | GEPA Apptainer 路径使用 `scripts/tools/prepare_apptainer_sifs.py` 预热 SIF；Docker 镜像维护仅适用于本地 Docker 路径 |
 | Linux 文件系统大小写敏感 | 后续 1-2 个 PolyBench 实例 smoke batch 验证 |
 | Docker Hub/GHCR/HuggingFace/API 网络访问 | 后续真实 smoke job 或小批量 batch 验证 |
-| Linux Docker Engine/rootless 错误模式 | 在 HPC job 日志中收集后补充到 `is_docker_storage_error()` |
+| Linux Docker Engine/rootless 错误模式 | 仅在后续申请到 Docker-enabled/rootless Docker 资源时再评估 |
 
 ---
 

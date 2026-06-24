@@ -2,7 +2,7 @@
 
 ## 1. 设计原则
 
-- **最小化造轮子**：Agent 层完全基于 `mini-swe-agent`，不包装抽象层；现有 PCT Reflect 只复用 GEPA Prompt 模板，新规则优化流程则计划直接复用 vendored GEPA 的 Adapter、搜索、采样、缓存和结果对象
+- **最小化造轮子**：Agent 层完全基于 `mini-swe-agent`，不包装抽象层；现有 PCT Reflect 只复用 GEPA Prompt 模板，新规则优化流程直接复用 vendored GEPA 的 Adapter、搜索、采样、缓存和结果对象
 - **单层抽象**：每个模块只做一件事，模块间通过纯数据结构（dict/Pydantic model）传递，不互相持有复杂引用
 - **配置驱动**：所有 Prompt、参数、路径均从 `config.yaml` 读取，代码中无硬编码业务逻辑
 - **失败隔离**：单实例/单轮次失败不影响其他实例，致命错误时保留已收集数据
@@ -21,8 +21,9 @@ plan-code-test/
 ├── scripts/
 │   ├── run_batch.sh               # 本地/远端实际实验入口
 │   ├── hpc_smoke_check.sh         # HPC/hpc_submit 可用性 smoke
-│   ├── hpc_submit_batch.sh        # 计划新增：本地调用 ulhpc-submit 的包装入口
-│   ├── long_run_watchdog.py       # 唯一无人值守实验入口
+│   ├── hpc_submit_batch.sh        # GEPA HPC 提交包装入口
+│   ├── hpc_resume_loop.py         # 支持 resume 的短 Slurm job 切片 supervisor
+│   ├── long_run_watchdog.py       # 本地/macOS 长跑入口（HPC 默认不使用）
 │   ├── internal/                  # batch/analysis/checker 实现
 │   ├── tools/                     # 报告与数据维护工具
 │   └── archive/                   # 历史实验入口
@@ -51,7 +52,7 @@ plan-code-test/
 │   │   └── polybench_evaluator.py # PolyBench 官方评估封装（DockerManager + parser + scoring）
 │   ├── data/
 │   │   ├── __init__.py
-│   │   └── instance_loader.py     # 从 SWE-bench Pro 加载实例元数据
+│   │   └── instance_loader.py     # 从 Verified / Pro / PolyBench 加载实例元数据
 │   ├── output/
 │   │   ├── __init__.py
 │   │   ├── writer.py              # 结果 JSON、Trajectory JSON、Patch 文件输出
@@ -82,14 +83,15 @@ plan-code-test/
 
 | 模块 | 文件 | 职责 |
 |------|------|------|
-| **入口** | `src/main.py` | 解析命令行参数（`--config`, `--instance`, `--n`, `--output-dir`），加载配置，遍历 `swe_pro_instances`，对每个实例调用 `pipeline.run_instance()` |
+| **入口** | `src/main.py` | 解析命令行参数（`--config`, `--instance`, `--n`, `--output-dir`），加载配置，遍历 `instances`，对每个实例调用 `pipeline.run_instance()` |
 | **配置** | `src/config.py` | 加载 `config.yaml`，验证参数（`n >= 1`, `optimization_info_level` ∈ {0,1} 等），返回结构化的配置对象 |
 | **流水线** | `src/pipeline.py` | 单实例的核心循环：`generate_plan()` → `generate_code()` → `evaluate()` →（如有需要）`reflect_and_optimize()`，循环 n 次 |
 | **Checker 评估** | `scripts/internal/evaluate_checker.py` | `run_batch.sh` 使用的 checker 数据构建和执行实现 |
 | **Checker 对比实验** | `scripts/internal/run_checker_comparison.py` | `run_batch.sh --checker-comparison` 使用的四臂评估实现 |
 | **Batch 调度器** | `scripts/run_batch.sh`, `scripts/internal/run_batch_workers.py` | `run_batch.sh` 负责所有实际实验模式；内部调度器按 `--parallel` 有界并发执行 PCT/PCC 实例 |
-| **HPC smoke** | `scripts/hpc_smoke_check.sh` | 在设计完整 HPC batch 包装前验证 `ulhpc-submit`、远端 `mini-swe` conda 环境、`mini-swe-agent==1.17.5`、`swebench`、Docker CLI/daemon 和项目 Docker 镜像维护入口。默认 dry-run；`--submit` 才提交 Slurm 作业 |
-| **HPC 提交包装器** | `scripts/hpc_submit_batch.sh`（计划新增） | 本地组装实验命令并调用相邻项目 `../../hpc_submit` 提供的 `ulhpc-submit`；远端仍执行 `scripts/run_batch.sh`、checker、analysis 或 GEPA 入口。该层只处理项目级参数映射，不复制 SSH/rsync/Slurm 监控或实验逻辑 |
+| **HPC smoke** | `scripts/hpc_smoke_check.sh` | 验证 `ulhpc-submit`、ULHPC SSH/Slurm、远端 Python 依赖和 Docker/Apptainer 可用性。Iris 已确认无 Docker daemon，GEPA 路径使用 Apptainer |
+| **HPC GEPA 提交包装器** | `scripts/hpc_submit_batch.sh` | 本地组装 GEPA 规则优化作业并调用相邻项目 `../../hpc_submit` 提供的 `ulhpc-submit`；使用 `--stage-data`、`--link-as`、`--persistent-output` 和 module Python/Apptainer；远端执行 `scripts/internal/run_gepa_rules.py` |
+| **HPC resume supervisor** | `scripts/hpc_resume_loop.py` | 将可恢复 GEPA run 拆成多个短 Slurm job；默认 12h 切片、1h 间隔，通过远端 persistent `run_dir/result.json` 判断完成并自动续跑 |
 | **Docker 容量窗口** | `src/environment/docker_env.py::DockerCapacityWindow` | 所有项目 Docker 入口共享的容量管理模块：提供跨进程容器槽位、启动前磁盘门控、串行镜像获取和串行缓存维护；所有 worker 在同一个 window lease 内完成容器生命周期。缺失的 PolyBench 镜像通过全局锁逐个 pull/build，等待者获得锁后再次检查本地镜像以避免重复下载；已有镜像的容器仍可并行运行。每次维护均清理无引用 dangling 镜像；带标签镜像淘汰只在所有 lease 空闲时运行，并保护所有容器引用的 ImageID且不强制删标签；BuildKit 缓存仅在磁盘压力下分级清理。pipeline、PCC、checker-only、evaluator 和 watchdog 不再实现独立清理策略 |
 
 ### 3.2 Agent 层
@@ -149,8 +151,9 @@ plan-code-test/
 
 ### 3.8 GEPA 规则优化层
 
-该层用于替代现有规则提取、后处理和聚合流程。核心模块和 mock/no-LLM
-验证已实现，尚未运行外部 LLM pilot。详细设计见
+该层用于替代现有规则提取、后处理和聚合流程。核心模块、mock/no-LLM 测试、
+外部 LLM pilot、strict Checker prompt、HPC Apptainer smoke 和断点续跑均已实现。
+详细设计见
 [`gepa-rule-optimization.md`](gepa-rule-optimization.md)。
 
 | 模块 | 职责 |
@@ -165,10 +168,11 @@ plan-code-test/
 
 关键数据边界：
 
-- Checker 可见：issue、Round 1 plan、base commit 仓库、候选规则。
+- Checker 可见：issue、plan、base commit 仓库、候选规则。
 - 仅 GEPA ASI 可见：真实标签、Plan/Code trajectory、实际 patch、evaluator/test 结果。
 - Code trajectory、patch 和 evaluator 结果不得进入 Checker 输入。
-- Checker 与 GEPA reflection 默认均为 DeepSeek V4 Flash，但使用独立配置。
+- Checker 与 GEPA reflection 默认均为 DeepSeek V4 Flash，但使用独立配置；当前
+  GEPA 规则生成不应使用 Pro/Kimi。
 - Checker temperature 在 GEPA 流程中显式固定为 `0.0`。
 - Checker 的 step/cost/timeout、结果文件提交协议和 JSON 回退解析与已完成的
   checker-only 恢复配置对齐。每个样本可配置 `checker.max_attempts`，用于重试
@@ -203,8 +207,8 @@ plan-code-test/
 - GEPA 搜索主循环保持串行：Pareto 选择、minibatch sampling、Reflection
   proposal、accept/reject 和状态写入都依赖前序结果。`search.parallel` 只控制
   同一次 Checker evaluation batch 内的样本级并发，Adapter 使用有序 map 保持
-  输出顺序。当前 formal pilot 已使用 `parallel=2` 验证该路径；后续提高并发前仍
-  需要重新验证 Docker 容量和 API rate limit。
+  输出顺序。本地 Docker 路径以小并发验证为主；HPC strict 配置使用 Apptainer
+  backend 和 `parallel=4`，仍需在实跑中观察 rate limit、SIF 缓存和文件系统压力。
 
 ---
 
@@ -330,9 +334,10 @@ OpenCode 自身认证。
 | `src/analysis/aggregation_agent.py` | 加载 per-case 规则、构造聚合 prompt、校验聚合 JSON | `litellm` 或 OpenCode 后端 |
 | `scripts/internal/run_analysis.sh` | `run_batch.sh --analysis-only` 使用的规则提取实现 | shell |
 | `scripts/run_batch.sh` | 实际实验入口：PCT/PCC、analysis、checker comparison/recovery、GEPA | shell |
-| `scripts/hpc_smoke_check.sh` | HPC 可用性 smoke：通过 `ulhpc-submit` 检查提交链路、远端 conda/import、Docker daemon 和 `src.environment.docker_env maintain` | shell |
+| `scripts/hpc_smoke_check.sh` | HPC 可用性 smoke：通过 `ulhpc-submit` 检查提交链路、远端 Python 依赖和 Docker/Apptainer 可用性 | shell |
 | `configs/ulhpc_submit.example.yaml` | `../../hpc_submit` 的项目级配置模板；复制为 gitignored `configs/ulhpc_submit.yaml` 后供 smoke 和后续 batch wrapper 自动使用 | YAML |
-| `scripts/hpc_submit_batch.sh`（计划新增） | 本地 HPC 提交入口：调用 `ulhpc-submit` 同步项目并提交 Slurm 作业，远端再调用 `run_batch.sh` 或对应内部入口 | shell |
+| `scripts/hpc_submit_batch.sh` | GEPA HPC 提交入口：调用 `ulhpc-submit` 同步项目、stage 数据集、挂载 persistent `run_dir` 并提交 Slurm 作业，远端运行 `scripts/internal/run_gepa_rules.py` | shell |
+| `scripts/hpc_resume_loop.py` | 可恢复 GEPA 长任务 supervisor：按短 wall time 重复提交同一 run，等待 Slurm job 结束并检查远端 `result.json` | Python |
 | `scripts/long_run_watchdog.py` | 本地长时监控 batch / analysis / review / checker tmux 任务；支持 `PCT_CONFIG` 选择主流程配置，并用 `caffeinate` 包装被监控的长跑命令（macOS）。HPC 路径默认不使用 watchdog | shell + Python |
 
 ---
@@ -353,4 +358,4 @@ OpenCode 自身认证。
 | FR-11 Feedback 字符串组装 | `src/pipeline.py:_build_feedback_text`（主机端组装为纯文本，注入 reflect_agent 的 system prompt） |
 | FR-12 错误处理 | `src/pipeline.py` 中的 try/except 层级 |
 | FR-13 规则提取、后处理、聚合 | `src/analysis/contrastive_agent.py` + `src/analysis/opencode_agent.py` + `src/analysis/rule_postprocess.py` + `src/analysis/aggregation_agent.py` + `src/analysis/cli.py` |
-| FR-17 HPC submit 运行入口 | `scripts/hpc_submit_batch.sh`（计划新增） + `docs/hpc-submit.md`；远端实际执行仍复用 `scripts/run_batch.sh` |
+| FR-17 HPC submit 运行入口 | `scripts/hpc_submit_batch.sh` + `scripts/hpc_resume_loop.py` + `docs/hpc-submit.md`；当前 GEPA 路径远端执行 `scripts/internal/run_gepa_rules.py`，PCT/PCC Docker-native 路径待后续设计 |

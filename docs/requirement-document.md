@@ -18,6 +18,7 @@
 | 7.2 | 2026-06-09 | — | 范围收敛：FR-07 单实例内部断点重跑取消，任务级恢复统一由 `run_batch.sh` 跳过已完成实例实现；候选 Plan 树形结构取消，当前实验固定使用线性 `n=3`；下一优先任务改为解除 OpenCode analysis 与全局 `DEEPSEEK_API_KEY` 校验耦合 |
 | 7.3 | 2026-06-12 | — | 新增 FR-16 设计：使用 vendored GEPA 在 Verified PCT Round 1 分类数据上直接优化完整 Checker 规则文本，替代逐案例规则提取与聚合；PolyBench 保持最终 held-out |
 | 7.4 | 2026-06-17 | — | 运行形态调整：放弃“迁移到长期 Linux 服务器”作为近期目标，改为本地通过相邻项目 `../../hpc_submit` 的 `ulhpc-submit` 提交 HPC 作业运行实验。HPC 节点仍是 Linux，但不采用 macOS 防休眠、tmux watchdog 常驻或服务器长期部署假设；新增 FR-17 |
+| 7.5 | 2026-06-24 | — | 当前主线更新：GEPA strict Checker 规则优化、GPT seed rules、HPC Apptainer backend、`hpc_submit_batch.sh`、SIF 预热和短作业 `hpc_resume_loop.py` 已实现；OpenCode/Kimi 聚合超时不再作为当前问题 |
 
 ---
 
@@ -80,7 +81,7 @@
 - 不再依赖"代码库只读挂载"的硬约束来防止轮间污染——隔离由容器生命周期保证，挂载方式可放宽为读写以契合 mini-swe-agent 官方 SWE-bench 提交协议（`git add -A && git diff --cached` 输出 patch）
 
 #### 不包含范围
-- 不考虑任何并发执行能力
+- 主 PCT/PCC、checker-only 和 GEPA Checker evaluation batch 支持有界并发；GEPA 搜索主循环仍保持官方串行语义
 - 不进行严格的非功能性需求验证（如性能测试、压力测试）
 - 不进行模型约束检查（用户自行确保模型可用）
 - 不提供 Web UI 或图形化界面
@@ -257,7 +258,10 @@
 | 处理方式 | **统一以 instance 为最小回滚粒度**：记录错误信息到日志和结果文件，跳过当前实例，继续处理下一个实例（如果配置了多个实例）。无论错误发生在 plan、code、reflect 还是 evaluate 阶段，均不再尝试在同实例内继续后续轮次——避免「round-skip 续跑」带来的前序状态退化问题（参见 `project_issues.md` §4） |
 | 验收标准 | 程序在一个实例失败时不会崩溃，能够继续执行下一个实例；**任务级错误统一导致 instance skip，不会继续该实例的后续轮次**；日志中清晰记录了跳过原因；致命错误时程序优雅退出并保留已收集数据 |
 
-### 3.6 对比分析与规则提取（后处理阶段）
+### 3.6 对比分析与规则提取（历史后处理路径）
+
+本节记录早期 PCT reflect-success 规则提取路径。当前规则生成主线为 §3.8 的
+GEPA strict Checker 规则文本优化；FR-13 保留为历史产物说明，不作为当前优先待办。
 
 #### FR-13：从 Reflect-Success Cases 中提取通用规则
 
@@ -268,11 +272,14 @@
 | 描述 | 对 PCT pipeline 中「某轮从失败变为成功」的案例（reflect-success cases），运行独立的对比分析 Agent，比较失败 Plan 与成功 Plan 的推理链差异，提取可泛化的自然语言规则。规则格式必须遵循：When [input pattern], [strategy] because [causal justification]。支持使用不同 LLM 模型串行提取（如 deepseek-v4-flash → deepseek-v4-pro），以便比较规则质量差异。默认 mini-swe-agent 后端在宿主机本地运行（DefaultAgent + LocalEnvironment），直接读取 plans/、patches/、trajectories/ 等文件；也支持 `analysis.backend=opencode` 通过 OpenCode/Kimi 执行提取、后处理和聚合 |
 | 输入 | reflect_success_cases 目录（含 manifest.json、各实例的 plan/trajectory/patch/result.json） |
 | 输出 | 每个实例的提取规则（`per_case/<instance_id>.json`）、可选格式后处理结果（`per_case_postprocessed/<instance_id>.json`，保留原始版本不覆盖）、逐条记录（`rules.jsonl` / `errors.jsonl`）、聚合规则（`aggregated_rules.json`）、Agent 轨迹（`trajectories/<instance_id>.json`） |
-| 批量运行 | 实际实验统一复用 `scripts/run_batch.sh`；本地长时无人值守可使用 `scripts/long_run_watchdog.py`；HPC 运行由计划新增的 `scripts/hpc_submit_batch.sh` 包装 `ulhpc-submit`，远端仍调用现有入口。`run_batch.sh --analysis-only --analysis-config <analysis_config>` 进入规则分析；`--checker-comparison` / `--checker-recovery` 进入 checker-only；默认模式执行 PCT/PCC。 |
+| 批量运行 | 实际实验统一复用 `scripts/run_batch.sh`；本地长时无人值守可使用 `scripts/long_run_watchdog.py`；HPC GEPA 运行由 `scripts/hpc_submit_batch.sh` 包装 `ulhpc-submit`，并可用 `scripts/hpc_resume_loop.py` 拆成短 Slurm job 续跑。`run_batch.sh --analysis-only --analysis-config <analysis_config>` 进入规则分析；`--checker-comparison` / `--checker-recovery` 进入 checker-only；默认模式执行 PCT/PCC。 |
 | 关键配置 | `config.analysis.model` / `api_base` / `max_steps` / `cost_limit` —— 独立于主 pipeline 的模型配置，支持分析阶段使用不同提供商 |
 | 验收标准 | 1）规则文件非空且包含 "When ... because ..." 格式的规则行；2）不同模型的规则可区分保存（`analysis_flash/` vs `analysis_pro/` 或独立配置输出目录）；3）批量运行支持断点续跑（已存在的 `per_case/*.json` 自动 SKIP）；4）对已有语义可用但格式不合格的规则，可通过 `python -m src.analysis --postprocess --input <output>/per_case --output <output> --postprocess-data-dir <reflect_success_cases>` 生成 `per_case_postprocessed/`。后处理获得与原提取阶段相同的 case 文件材料，但任务限定为格式修复而非重新提取；聚合阶段应以该后处理目录作为 `--input`，只读取顶层 `rule` 字段，`postprocess.original_rule` 和截断候选不进入聚合 |
 
-### 3.7 规则质量审查（LLM-based Reviewer）
+### 3.7 规则质量审查（历史 LLM-based Reviewer）
+
+本节记录早期规则审查/返工路径。该路径默认关闭，当前规则质量改进主要通过
+GEPA reflection、候选报告和后续 prompt 调整完成。
 
 #### FR-14：独立 LLM Agent 审查规则质量并触发返工
 
@@ -288,7 +295,7 @@
 | 实现位置 | `src/analysis/reviewer_agent.py`（核心 Reviewer Agent）、`src/analysis/review_cli.py`（批量审查 CLI）、`scripts/long_run_watchdog.py`（review/rework 循环集成） |
 | 验收标准 | 1）Reviewer Agent 输出结构化的 JSON 评分；2）未通过的规则被正确加入 rework_queue 并在 watchdog 中触发返工；3）增量审查模式下，第二轮仅审查上一轮失败的案例；4）超过 3 次返工仍未通过的案例被自动放弃，保留最佳结果；5）review 和 rework 阶段均支持 API cooldown、hang detection、Claude repair 等现有 watchdog 机制 |
 
-### 3.8 GEPA 规则文本优化（替代流程，设计中）
+### 3.8 GEPA 规则文本优化（当前主线）
 
 #### FR-16：基于分类反馈优化 Checker 规则合集
 
@@ -296,15 +303,15 @@
 |------|------|
 | ID | FR-16 |
 | 名称 | 基于 GEPA 的 Checker 规则优化 |
-| 状态 | 设计完成，尚未实现 |
-| 描述 | 从 SWE-bench Verified 每个任务的完整 PCT Round 1 构建二分类数据。固定 Checker Agent 接收 issue、Plan、候选规则并可读取 base commit 仓库，预测该 Plan 经当前 Code Agent 执行后是否 resolved。GEPA 把完整规则合集作为唯一文本组件，通过预测反馈迭代优化规则文本，替代 FR-13/FR-14 的逐案例提取、审查和聚合流程 |
-| Checker 输入 | issue description、Round 1 Plan、base commit 仓库、候选规则文本 |
+| 状态 | 已实现并作为当前 GEPA 规则优化主线运行 |
+| 描述 | 从 SWE-bench Verified PCT Round 1 构建二分类数据。固定 Checker Agent 接收 issue、plan、候选规则并可读取 base commit 仓库，预测该 plan 经当前 Code Agent 执行后是否 resolved。GEPA 把完整规则合集作为唯一文本组件，通过预测反馈迭代优化规则文本，替代 FR-13/FR-14 的逐案例提取、审查和聚合流程 |
+| Checker 输入 | issue description、plan、base commit 仓库、候选规则文本 |
 | GEPA ASI | 真实 resolved 标签、Checker 判断与仓库证据、Plan/Code trajectory、实际 patch、evaluator/test 结果；这些执行后信息不得进入 Checker 输入 |
 | 候选 | `{"rules": "<complete rules text>"}`；GEPA 只能修改 rules，不能修改 Checker prompt、schema、模型或数据切分 |
 | 内部评分 | 官方逐样本 correctness：预测正确为 1.0，错误为 0.0；GEPA 按 minibatch 分数和 validation 平均分运行 |
 | 报告指标 | Accuracy、MCC、Balanced Accuracy、Precision、Recall、F1、pass rate |
 | 数据切分 | Verified 按 resolved 标签和 repo 分层 80/20；PolyBench 固定快照仅用于最终 held-out |
-| 初始规则 | 在补齐并审计 Verified Round 1 后人工编写；不得使用 PolyBench 失败案例，不使用 seedless 自动生成 |
+| 初始规则 | 使用已记录 prompt 生成的 GPT seed rules；seedless/no-rules 模式仅保留为历史流程 smoke，不作为正式规则优化入口 |
 | Checker 输出 | `predicted_resolved`、`decision_reason`、`repository_evidence` |
 | 模型策略 | Checker 和 GEPA reflection 默认均为 DeepSeek V4 Flash，但分别配置；Checker temperature 显式为 0.0 |
 | GEPA 复用 | 使用 vendored GEPA 的 Adapter、EvaluationBatch、官方 minibatch sampler、reflective mutation、Pareto selection、cache、callbacks、状态恢复和 GEPAResult，不复制核心搜索算法 |
@@ -320,14 +327,14 @@
 |------|------|
 | ID | FR-17 |
 | 名称 | HPC submit 批处理运行入口 |
-| 状态 | 新增需求，待实现 |
-| 描述 | 提供一个类似 `scripts/run_batch.sh` 的本地包装脚本，调用相邻项目 `../../hpc_submit` 安装后的 `ulhpc-submit` CLI。`ulhpc-submit` 负责代码同步、Slurm job script 生成、`sbatch` 提交、状态监控和日志回传；HPC job 在远端 Linux 节点激活 `mini-swe` conda 环境，复用现有 `run_batch.sh`、checker comparison/recovery、analysis-only 或 GEPA 入口执行实验 |
+| 状态 | GEPA 路径已实现；PCT/PCC Docker-native 路径待后续设计 |
+| 描述 | 提供一个类似 `scripts/run_batch.sh` 的本地包装脚本，调用相邻项目 `../../hpc_submit` 安装后的 `ulhpc-submit` CLI。`ulhpc-submit` 负责代码同步、数据 staging、持久 run_dir symlink、Slurm job script 生成、`sbatch` 提交和日志路径记录；当前 GEPA job 在远端 Linux 节点加载 `lang/Python/3.11` 与 `tools/Apptainer`，调用 `scripts/internal/run_gepa_rules.py` 执行规则优化 |
 | 输入 | 本地代码仓库、配置文件、可选实例列表、batch_id/run_dir、并发度、HPC 作业资源参数（job name、wall time、CPU、内存等） |
 | 输出 | HPC 作业 ID、本地/远端作业日志、远端 `logs/` 与 `output/` 产物；作业失败时保留可诊断日志和已完成实例结果 |
 | 关键约束 | 1）HPC 包装层不得复制 PCT/PCC/checker/analysis/GEPA 业务逻辑；2）远端实际执行入口仍为现有脚本；3）不使用 `caffeinate`；4）默认不依赖 tmux/watchdog；5）密钥通过本地/HPC 环境注入，不写入 git 文件或命令日志；6）包装层不得重复实现 `ulhpc-submit` 已提供的 SSH、rsync、Slurm 监控和日志回传能力 |
-| 前置 smoke | 在设计完整 batch wrapper 前，先用 `scripts/hpc_smoke_check.sh` 验证 `ulhpc-submit` 调用链路、ULHPC SSH 连通性、远端 `mini-swe` conda 环境、`mini-swe-agent==1.17.5`、`swebench`、Docker CLI/daemon、项目 Docker 镜像维护入口和可选 API key 注入。默认 dry-run 会检查 SSH 连通性但不提交 Slurm job；只有 `--submit` 才提交 Slurm job |
+| 前置 smoke | `scripts/hpc_smoke_check.sh` 验证 `ulhpc-submit` 调用链路、ULHPC SSH 连通性、Slurm 提交、远端 Python 依赖和容器能力。Iris 计算节点没有 Docker daemon；当前 GEPA 路径使用 Apptainer，PCT/PCC/SWE-bench evaluator 的 Docker-native 路径仍待后续设计。默认 dry-run 会检查 SSH 连通性但不提交 Slurm job；只有 `--submit` 才提交 Slurm job |
 | 恢复策略 | PCT/PCC 依赖 `run_batch.sh` 的已有 `result.json` skip 语义；GEPA 依赖 `run_manifest.json`、`gepa_resume_state.json` 和官方 `gepa_state.bin`；wall time 用尽或 transient failure 后可重新提交同一逻辑实验 |
-| 验收标准 | 1）smoke 脚本能明确区分 dry-run 与真实 submit；2）dry-run smoke 能验证 ULHPC SSH 连通性且不提交 Slurm job；3）真实 smoke job 能在 HPC 上完成 conda/import、Docker 和镜像维护检查；4）完整 batch wrapper 的 `--dry-run` 能打印将提交的 HPC 命令和远端执行命令；5）1-2 实例 smoke batch 能在 HPC 上完成并生成标准 output；6）作业日志包含 conda/env 检查、git/code snapshot 标识、实际执行命令和返回码；7）失败后重新提交不会重跑已有 `result.json` 的实例；8）文档明确本地文件同步、远端工作目录、Docker 权限和密钥注入方式 |
+| 验收标准 | 1）smoke 脚本能明确区分 dry-run 与真实 submit；2）dry-run smoke 能验证 ULHPC SSH 连通性且不提交 Slurm job；3）GEPA wrapper dry-run 能打印 `--stage-data`、`--persistent-output`、module Python/Apptainer cache 和远端执行命令；4）真实 GEPA smoke job 能在 HPC 上完成 Apptainer 容器启动、Checker/Reflection 调用和标准 output 生成；5）wall time 或 transient failure 后重新提交同一 persistent run_dir 可恢复 GEPA；6）作业日志包含 env 检查、git/code snapshot 标识、实际执行命令和返回码；7）文档明确本地文件同步、远端工作目录、Apptainer/SIF 缓存和密钥注入方式 |
 | 设计文档 | [`docs/hpc-submit.md`](hpc-submit.md) |
 
 ---
