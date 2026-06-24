@@ -199,11 +199,19 @@ def test_extended_pilot_reflection_prompt_enforces_deployment_boundary(
     assert "Do not modify /testbed" not in config.checker_prompt
     assert "<plan>" in config.checker_instance_template
     assert "<round_1_plan>" not in config.checker_instance_template
-    assert "fixed Code Agent" in config.reflection_prompt
+    assert "fixed Code Agent" not in config.reflection_prompt
+    assert "Round 1" not in config.reflection_prompt
+    assert "likely to resolve" not in config.reflection_prompt
+    assert "plan-review checklist" in config.reflection_prompt
+    assert "Delete" in config.reflection_prompt
+    assert "misleading items" in config.reflection_prompt
+    assert "Merge redundant or highly similar items" in config.reflection_prompt
     assert "repository at the specified base commit" in config.reflection_prompt
     assert "execution output or an expected output" in config.reflection_prompt
     assert "Do not output a Git patch, shell command" in config.reflection_prompt
     assert "Compare the Checker prediction" in config.reflection_instance_template
+    assert "Read the issue and plan" in config.reflection_instance_template
+    assert "Round 1 plan" not in config.reflection_instance_template
     assert "using only its deployment-visible inputs" in (
         config.reflection_instance_template
     )

@@ -18,6 +18,9 @@ PARTITION="batch"
 CPUS="1"
 MEM="8G"
 TIME="2-00:00:00"
+TIMEOUT="1800"
+MAX_ATTEMPTS="3"
+RETRY_BACKOFF="60"
 
 usage() {
   cat <<'USAGE'
@@ -34,6 +37,9 @@ Slurm options:
   --cpus N               CPUs per task (default: 1)
   --mem SIZE             Memory (default: 8G)
   --time HH:MM:SS        Wall time (default: 2-00:00:00, i.e. 2 days)
+  --timeout SECONDS      Timeout per SIF pull attempt (default: 1800)
+  --max-attempts N       Attempts per missing SIF image (default: 3)
+  --retry-backoff SEC    Seconds between failed pull attempts (default: 60)
 
 Examples:
   bash scripts/tools/submit_apptainer_sif_preheat.sh \
@@ -72,6 +78,18 @@ while [[ $# -gt 0 ]]; do
       TIME="$2"
       shift 2
       ;;
+    --timeout)
+      TIMEOUT="$2"
+      shift 2
+      ;;
+    --max-attempts)
+      MAX_ATTEMPTS="$2"
+      shift 2
+      ;;
+    --retry-backoff)
+      RETRY_BACKOFF="$2"
+      shift 2
+      ;;
     -h|--help)
       usage
       exit 0
@@ -92,6 +110,18 @@ fi
 if [[ -z "$SIF_CACHE_DIR" ]]; then
   echo "ERROR: --sif-cache-dir is required" >&2
   usage >&2
+  exit 2
+fi
+if ! [[ "$TIMEOUT" =~ ^[1-9][0-9]*$ ]]; then
+  echo "ERROR: --timeout must be a positive integer" >&2
+  exit 2
+fi
+if ! [[ "$MAX_ATTEMPTS" =~ ^[1-9][0-9]*$ ]]; then
+  echo "ERROR: --max-attempts must be a positive integer" >&2
+  exit 2
+fi
+if ! [[ "$RETRY_BACKOFF" =~ ^[0-9]+$ ]]; then
+  echo "ERROR: --retry-backoff must be a non-negative integer" >&2
   exit 2
 fi
 
@@ -126,10 +156,11 @@ cd "$REPO_ROOT"
 echo "[preheat] started at \$(date) on \$(hostname)"
 echo "[preheat] config=$CONFIG_REL"
 echo "[preheat] sif_cache_dir=$SIF_CACHE_DIR"
+echo "[preheat] timeout=$TIMEOUT"
+echo "[preheat] max_attempts=$MAX_ATTEMPTS"
+echo "[preheat] retry_backoff=$RETRY_BACKOFF"
 
-python3 scripts/tools/prepare_apptainer_sifs.py \\
-  --config "$CONFIG_REL" \\
-  --sif-cache-dir "$SIF_CACHE_DIR"
+python3 scripts/tools/prepare_apptainer_sifs.py --config "$CONFIG_REL" --sif-cache-dir "$SIF_CACHE_DIR" --timeout "$TIMEOUT" --max-attempts "$MAX_ATTEMPTS" --retry-backoff "$RETRY_BACKOFF" --failed-output "$SIF_CACHE_DIR/preheat_failed_images_\${SLURM_JOB_ID}.txt"
 
 RC=\$?
 echo "[preheat] finished with rc=\$RC at \$(date)"

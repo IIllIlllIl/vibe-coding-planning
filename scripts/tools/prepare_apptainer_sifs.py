@@ -17,22 +17,22 @@ Examples:
 from __future__ import annotations
 
 import argparse
-import subprocess
 import sys
+import time
 from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
 
-from src.environment.apptainer_env import (
+from src.environment.apptainer_env import (  # noqa: E402
     ApptainerSifCache,
     _image_to_sif_name,
 )
-from src.environment.docker_env import DockerCapacityWindow
-from src.evaluator.swe_evaluator import derive_image_name
-from src.optimization.config import load_optimization_config
-from src.optimization.dataset import load_snapshot
+from src.environment.docker_env import DockerCapacityWindow  # noqa: E402
+from src.evaluator.swe_evaluator import derive_image_name  # noqa: E402
+from src.optimization.config import load_optimization_config  # noqa: E402
+from src.optimization.dataset import load_snapshot  # noqa: E402
 
 
 REFLECTION_IMAGE = "python:3.12-slim"
@@ -57,6 +57,25 @@ def _parse_args() -> argparse.Namespace:
         default=1800,
         help="Timeout per SIF pull in seconds (default: 1800)",
     )
+    parser.add_argument(
+        "--max-attempts",
+        type=int,
+        default=3,
+        help="Attempts per missing SIF image before marking it failed (default: 3)",
+    )
+    parser.add_argument(
+        "--retry-backoff",
+        type=int,
+        default=60,
+        help="Seconds to wait between failed pull attempts (default: 60)",
+    )
+    parser.add_argument(
+        "--failed-output",
+        help=(
+            "Write failed image refs to this file "
+            "(default: <sif-cache-dir>/preheat_failed_images.txt)"
+        ),
+    )
     return parser.parse_args()
 
 
@@ -74,6 +93,33 @@ def _collect_images(config) -> list[str]:
     return images
 
 
+def _pull_with_retries(
+    cache: ApptainerSifCache,
+    image: str,
+    *,
+    timeout: int,
+    max_attempts: int,
+    retry_backoff: int,
+) -> tuple[bool, str | None]:
+    """Try to pull one missing image, returning success and final error text."""
+    last_error: str | None = None
+    for attempt in range(1, max_attempts + 1):
+        try:
+            cache.ensure(image, timeout=timeout)
+            return True, None
+        except Exception as exc:  # noqa: BLE001
+            last_error = str(exc)
+            print(
+                f"  RETRYABLE_FAILURE attempt={attempt}/{max_attempts} "
+                f"image={image}: {last_error}",
+                file=sys.stderr,
+                flush=True,
+            )
+            if attempt < max_attempts and retry_backoff > 0:
+                time.sleep(retry_backoff)
+    return False, last_error
+
+
 def main() -> int:
     args = _parse_args()
     config = load_optimization_config(args.config)
@@ -85,11 +131,21 @@ def main() -> int:
             file=sys.stderr,
         )
         return 2
+    if args.max_attempts < 1:
+        print("ERROR: --max-attempts must be >= 1", file=sys.stderr)
+        return 2
+    if args.retry_backoff < 0:
+        print("ERROR: --retry-backoff must be >= 0", file=sys.stderr)
+        return 2
 
     sif_cache_dir = Path(
         args.sif_cache_dir or config.container.sif_cache_dir
     )
     sif_cache_dir.mkdir(parents=True, exist_ok=True)
+    failed_output = Path(
+        args.failed_output
+        or (sif_cache_dir / "preheat_failed_images.txt")
+    )
 
     window = DockerCapacityWindow(
         max_concurrent=1,
@@ -103,7 +159,7 @@ def main() -> int:
 
     pulled = 0
     cached = 0
-    failed = 0
+    failures: list[tuple[str, str | None]] = []
     for image in images:
         sif = cache.sif_path(image)
         if sif.exists():
@@ -112,20 +168,36 @@ def main() -> int:
             cached += 1
             continue
         print(f"  PULLING {image} -> {sif.name}")
-        try:
-            cache.ensure(image, timeout=args.timeout)
+        ok, error = _pull_with_retries(
+            cache,
+            image,
+            timeout=args.timeout,
+            max_attempts=args.max_attempts,
+            retry_backoff=args.retry_backoff,
+        )
+        if ok:
             size_mb = sif.stat().st_size / (1024 * 1024)
             print(f"  OK {_image_to_sif_name(image)} ({size_mb:.1f} MiB)")
             pulled += 1
-        except Exception as exc:  # noqa: BLE001
-            print(f"  FAILED {image}: {exc}", file=sys.stderr)
-            failed += 1
+        else:
+            print(f"  FAILED {image}: {error}", file=sys.stderr)
+            failures.append((image, error))
+
+    if failures:
+        failed_output.parent.mkdir(parents=True, exist_ok=True)
+        failed_output.write_text(
+            "".join(f"{image}\t{error or ''}\n" for image, error in failures),
+            encoding="utf-8",
+        )
+        print(f"Failed image list written to {failed_output}", file=sys.stderr)
+    else:
+        failed_output.unlink(missing_ok=True)
 
     print(
-        f"Summary: {cached} cached, {pulled} pulled, {failed} failed "
+        f"Summary: {cached} cached, {pulled} pulled, {len(failures)} failed "
         f"out of {len(images)}"
     )
-    return 1 if failed else 0
+    return 1 if failures else 0
 
 
 if __name__ == "__main__":
