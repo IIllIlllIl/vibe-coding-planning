@@ -1,25 +1,15 @@
 #!/usr/bin/env bash
 # Submit a GEPA rules optimization job to ULHPC via ulhpc-submit.
 #
-# This script wraps ulhpc-submit for GEPA-specific needs:
-#   - stages the dataset snapshot outside the ulhpc-submit project sync dir
-#   - submits the GEPA CLI via module load (Iris compute nodes have no conda)
-#   - retrieves the run_dir output after the job finishes
+# This wrapper keeps the project-facing GEPA CLI stable while delegating the
+# HPC mechanics to ulhpc-submit:
+#   - dataset staging: ulhpc-submit --stage-data + --link-as
+#   - resumable run_dir: ulhpc-submit --persistent-output
+#   - Iris runtime: --module lang/Python/3.11 --module tools/Apptainer --no-conda
+#   - Apptainer cache env: --apptainer-cache-dir / --apptainer-tmp-dir
+#   - long-job behavior: --submit-only --json
 #
-# Default mode is dry-run; pass --submit to actually submit.
-#
-# Usage:
-#   bash scripts/hpc_submit_batch.sh \
-#     --gepa-rules \
-#     --gepa-config configs/gepa_verified_rules_reflection_smoke_apptainer.yaml \
-#     --remote-dir '~/hpc_runs/vibe-coding-planning' \
-#     --remote-dataset-dir '~/hpc_datasets/vibe-coding-planning' \
-#     --job-name gepa-ref-smoke \
-#     --time 02:00:00 \
-#     --cpus 1 \
-#     --mem 16G \
-#     --remote-env-file '~/.config/vibe-coding-planning/deepseek.env' \
-#     --submit
+# Default mode is dry-run; pass --submit to submit.
 set -euo pipefail
 
 SUBMIT=0
@@ -36,6 +26,7 @@ REMOTE_DATASET_DIR="~/hpc_datasets/vibe-coding-planning"
 REMOTE_RUN_DIR="~/hpc_run_state/vibe-coding-planning"
 REMOTE_APPTAINER_CACHE_DIR="/scratch/users/twang/vibe-coding-planning/shared/apptainer-cache"
 REMOTE_APPTAINER_TMP_DIR="/scratch/users/twang/vibe-coding-planning/shared/apptainer-tmp"
+REMOTE_APPTAINER_SIF_CACHE_DIR=""
 ULHPC_CONFIG=""
 FULL_LOGS=0
 REMOTE_ENV_FILE="~/.config/vibe-coding-planning/deepseek.env"
@@ -54,9 +45,9 @@ Slurm / ulhpc-submit options:
   --partition NAME          Slurm partition (default: batch)
   --time HH:MM:SS           Wall time (default: 02:00:00)
   --cpus N                  CPUs per task (default: 1)
-  --mem SIZE                Memory (default: 16G)
+  --mem SIZE                Memory per node (default: 16G)
   --gpus N                  GPUs (default: 0)
-  --remote-dir DIR          Remote project directory on HPC
+  --remote-dir DIR          Remote project workdir on HPC
   --remote-dataset-dir DIR  Remote dataset staging root outside --remote-dir
                             (default: ~/hpc_datasets/vibe-coding-planning)
   --remote-run-dir DIR      Remote run state root outside --remote-dir
@@ -67,33 +58,25 @@ Slurm / ulhpc-submit options:
   --remote-apptainer-tmp-dir DIR
                             Remote APPTAINER_TMPDIR
                             (default: /scratch/users/twang/vibe-coding-planning/shared/apptainer-tmp)
+  --remote-apptainer-sif-cache-dir DIR
+                            Remote shared SIF cache directory
+                            (default: container.sif_cache_dir from GEPA config)
   --remote-env-file FILE    Remote shell env file sourced inside the Slurm job
                             (default: ~/.config/vibe-coding-planning/deepseek.env)
   --ulhpc-config FILE       ulhpc-submit config file
                             (default: configs/ulhpc_submit.yaml if present)
-  --full-logs               Download full remote logs instead of tailing
+  --full-logs               Ask ulhpc-submit to retrieve full logs when not detached
   --submit                  Actually submit the job (default is dry-run)
 
 Examples:
-  # Dry-run: print the commands that would run
   bash scripts/hpc_submit_batch.sh \
     --gepa-rules \
-    --gepa-config configs/gepa_verified_rules_reflection_smoke_apptainer.yaml
-
-  # Real submission
-  bash scripts/hpc_submit_batch.sh \
-    --gepa-rules \
-    --gepa-config configs/gepa_verified_rules_reflection_smoke_apptainer.yaml \
-    --remote-dir '~/hpc_runs/vibe-gepa-reflection-smoke' \
-    --remote-dataset-dir '~/hpc_datasets/vibe-coding-planning' \
-    --remote-run-dir '~/hpc_run_state/vibe-coding-planning' \
-    --remote-apptainer-cache-dir /scratch/users/twang/vibe-coding-planning/shared/apptainer-cache \
-    --remote-apptainer-tmp-dir /scratch/users/twang/vibe-coding-planning/shared/apptainer-tmp \
-    --job-name gepa-ref-smoke \
-    --time 02:00:00 \
-    --cpus 1 \
-    --mem 16G \
-    --remote-env-file '~/.config/vibe-coding-planning/deepseek.env' \
+    --gepa-config configs/gepa_verified_rules_strict_hpc_24h_apptainer.yaml \
+    --remote-dir '~/hpc_runs/vibe-gepa-strict-newprompt' \
+    --job-name gepa-strict-newprompt \
+    --time 24:00:00 \
+    --cpus 4 \
+    --mem 32G \
     --submit
 USAGE
 }
@@ -152,6 +135,10 @@ while [[ $# -gt 0 ]]; do
       REMOTE_APPTAINER_TMP_DIR="$2"
       shift 2
       ;;
+    --remote-apptainer-sif-cache-dir)
+      REMOTE_APPTAINER_SIF_CACHE_DIR="$2"
+      shift 2
+      ;;
     --remote-env-file)
       REMOTE_ENV_FILE="$2"
       shift 2
@@ -169,7 +156,6 @@ while [[ $# -gt 0 ]]; do
       shift
       ;;
     --dry-run)
-      # Default mode; accept explicitly for convenience.
       SUBMIT=0
       shift
       ;;
@@ -203,26 +189,13 @@ if ! [[ "$GPUS" =~ ^[0-9]+$ ]]; then
   echo "ERROR: --gpus must be a non-negative integer" >&2
   exit 2
 fi
-if [[ -z "$REMOTE_ENV_FILE" ]]; then
-  echo "ERROR: --remote-env-file must not be empty" >&2
-  exit 2
-fi
-if [[ -z "$REMOTE_DATASET_DIR" ]]; then
-  echo "ERROR: --remote-dataset-dir must not be empty" >&2
-  exit 2
-fi
-if [[ -z "$REMOTE_RUN_DIR" ]]; then
-  echo "ERROR: --remote-run-dir must not be empty" >&2
-  exit 2
-fi
-if [[ -z "$REMOTE_APPTAINER_CACHE_DIR" ]]; then
-  echo "ERROR: --remote-apptainer-cache-dir must not be empty" >&2
-  exit 2
-fi
-if [[ -z "$REMOTE_APPTAINER_TMP_DIR" ]]; then
-  echo "ERROR: --remote-apptainer-tmp-dir must not be empty" >&2
-  exit 2
-fi
+for value_name in REMOTE_ENV_FILE REMOTE_DATASET_DIR REMOTE_RUN_DIR \
+  REMOTE_APPTAINER_CACHE_DIR REMOTE_APPTAINER_TMP_DIR; do
+  if [[ -z "${!value_name}" ]]; then
+    echo "ERROR: $value_name must not be empty" >&2
+    exit 2
+  fi
+done
 
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 GEPA_CONFIG_ABS="$(python -c "from pathlib import Path; print(Path('$REPO_ROOT').resolve() / '$GEPA_CONFIG')")"
@@ -241,99 +214,57 @@ if ! command -v ulhpc-submit >/dev/null 2>&1; then
   exit 127
 fi
 
-# ---------------------------------------------------------------------------
-# Parse ulhpc-submit config for SSH connection details
-# ---------------------------------------------------------------------------
-CONFIG_HOST=""
-CONFIG_PORT=""
-CONFIG_USER=""
-CONFIG_SSH_KEY=""
-CONFIG_PYTHON_MODULE=""
-CONFIG_CONTAINER_MODULE=""
-if [[ -n "$ULHPC_CONFIG" && -f "$ULHPC_CONFIG" ]]; then
-  while IFS='=' read -r CONFIG_KEY CONFIG_VALUE; do
-    case "$CONFIG_KEY" in
-      host) CONFIG_HOST="$CONFIG_VALUE" ;;
-      port) CONFIG_PORT="$CONFIG_VALUE" ;;
-      user) CONFIG_USER="$CONFIG_VALUE" ;;
-      ssh_key) CONFIG_SSH_KEY="$CONFIG_VALUE" ;;
-      python_module) CONFIG_PYTHON_MODULE="$CONFIG_VALUE" ;;
-      container_module) CONFIG_CONTAINER_MODULE="$CONFIG_VALUE" ;;
-    esac
-  done < <(python - "$ULHPC_CONFIG" <<'PY'
+CONFIG_VALUES=$(python - "$GEPA_CONFIG_ABS" "${ULHPC_CONFIG:-}" <<'PY'
 import sys
 from pathlib import Path
+
 import yaml
 
-path = Path(sys.argv[1]) if len(sys.argv) > 1 and sys.argv[1] else None
-data = {}
-if path and path.exists():
-    data = yaml.safe_load(path.read_text(encoding="utf-8")) or {}
-for key in ("host", "port", "user", "ssh_key", "python_module", "container_module"):
-    print(f"{key}={data.get(key, '')}")
-PY
-  )
-fi
-
-PREFLIGHT_HOST="${ULHPC_HOST:-${CONFIG_HOST:-access-iris.uni.lu}}"
-PREFLIGHT_PORT="${ULHPC_PORT:-${CONFIG_PORT:-8022}}"
-PREFLIGHT_USER="${ULHPC_USER:-${CONFIG_USER:-}}"
-PREFLIGHT_SSH_KEY="${ULHPC_SSH_KEY:-${CONFIG_SSH_KEY:-}}"
-PYTHON_MODULE="${ULHPC_PYTHON_MODULE:-${CONFIG_PYTHON_MODULE:-lang/Python/3.11}}"
-CONTAINER_MODULE="${ULHPC_CONTAINER_MODULE:-${CONFIG_CONTAINER_MODULE:-tools/Apptainer}}"
-if [[ "$PREFLIGHT_SSH_KEY" == "~/"* ]]; then
-  PREFLIGHT_SSH_KEY="$HOME/${PREFLIGHT_SSH_KEY#\~/}"
-fi
-
-if [[ -z "$PREFLIGHT_USER" ]]; then
-  echo "ERROR: cannot determine ULHPC user. Set user in configs/ulhpc_submit.yaml or ULHPC_USER." >&2
-  exit 2
-fi
-
-if [[ -z "$REMOTE_DIR" ]]; then
-  REMOTE_DIR="~/hpc_runs/vibe-coding-planning"
-fi
-
-# ---------------------------------------------------------------------------
-# Read GEPA config to locate dataset snapshot and run_dir
-# ---------------------------------------------------------------------------
-GEPA_PATHS=$(python - "$GEPA_CONFIG_ABS" <<'PY'
-import sys
-from pathlib import Path
-import yaml
-
-config_path = Path(sys.argv[1])
-root = config_path.parents[1] if config_path.parent.name == "configs" else Path.cwd()
-cfg = yaml.safe_load(config_path.read_text(encoding="utf-8")) or {}
+gepa_config = Path(sys.argv[1])
+ulhpc_config = Path(sys.argv[2]) if len(sys.argv) > 2 and sys.argv[2] else None
+repo_root = gepa_config.parents[1] if gepa_config.parent.name == "configs" else Path.cwd()
+cfg = yaml.safe_load(gepa_config.read_text(encoding="utf-8")) or {}
 paths = cfg.get("paths", {})
 
-def resolve(raw):
+def resolve(raw: str) -> str:
     if not raw:
         return ""
-    candidate = Path(raw)
-    return str(candidate if candidate.is_absolute() else root / candidate)
+    value = Path(raw)
+    return str(value if value.is_absolute() else repo_root / value)
 
 print(f"dataset_snapshot={resolve(paths.get('dataset_snapshot', ''))}")
 print(f"run_dir={resolve(paths.get('run_dir', ''))}")
 print(f"initial_rules={resolve(paths.get('initial_rules', ''))}")
+container = cfg.get("container", {}) or {}
+print(f"sif_cache_dir={container.get('sif_cache_dir', '')}")
+
+ulhpc = {}
+if ulhpc_config and ulhpc_config.exists():
+    ulhpc = yaml.safe_load(ulhpc_config.read_text(encoding="utf-8")) or {}
+print(f"python_module={ulhpc.get('python_module', '')}")
+print(f"container_module={ulhpc.get('container_module', '')}")
 PY
 )
 
 DATASET_SNAPSHOT=""
 RUN_DIR=""
 INITIAL_RULES=""
+CONFIG_SIF_CACHE_DIR=""
+CONFIG_PYTHON_MODULE=""
+CONFIG_CONTAINER_MODULE=""
 while IFS='=' read -r KEY VALUE; do
   case "$KEY" in
     dataset_snapshot) DATASET_SNAPSHOT="$VALUE" ;;
     run_dir) RUN_DIR="$VALUE" ;;
     initial_rules) INITIAL_RULES="$VALUE" ;;
+    sif_cache_dir) CONFIG_SIF_CACHE_DIR="$VALUE" ;;
+    python_module) CONFIG_PYTHON_MODULE="$VALUE" ;;
+    container_module) CONFIG_CONTAINER_MODULE="$VALUE" ;;
   esac
-done <<< "$GEPA_PATHS"
+done <<< "$CONFIG_VALUES"
 
 if [[ -z "$DATASET_SNAPSHOT" || ! -d "$DATASET_SNAPSHOT" ]]; then
   echo "ERROR: dataset_snapshot directory not found locally: $DATASET_SNAPSHOT" >&2
-  echo "Build it first, e.g.:" >&2
-  echo "  conda run -n mini-swe python scripts/tools/build_gepa_pilot_dataset.py" >&2
   exit 2
 fi
 if [[ -z "$RUN_DIR" ]]; then
@@ -345,45 +276,49 @@ if [[ -z "$INITIAL_RULES" || ! -f "$INITIAL_RULES" ]]; then
   exit 2
 fi
 
-# Relative paths inside the remote project directory
+PYTHON_MODULE="${ULHPC_PYTHON_MODULE:-${CONFIG_PYTHON_MODULE:-lang/Python/3.11}}"
+CONTAINER_MODULE="${ULHPC_CONTAINER_MODULE:-${CONFIG_CONTAINER_MODULE:-tools/Apptainer}}"
+if [[ -z "$REMOTE_APPTAINER_SIF_CACHE_DIR" ]]; then
+  REMOTE_APPTAINER_SIF_CACHE_DIR="$CONFIG_SIF_CACHE_DIR"
+fi
+if [[ -z "$REMOTE_APPTAINER_SIF_CACHE_DIR" ]]; then
+  echo "ERROR: --remote-apptainer-sif-cache-dir is required when GEPA config has no container.sif_cache_dir" >&2
+  exit 2
+fi
+if [[ -z "$REMOTE_DIR" ]]; then
+  REMOTE_DIR="~/hpc_runs/vibe-coding-planning"
+fi
+
 DATASET_REL="${DATASET_SNAPSHOT#$REPO_ROOT/}"
 RUN_DIR_REL="${RUN_DIR#$REPO_ROOT/}"
 GEPA_CONFIG_REL="${GEPA_CONFIG_ABS#$REPO_ROOT/}"
-DATASET_PARENT_REL="$(dirname "$DATASET_REL")"
+if [[ "$DATASET_REL" == "$DATASET_SNAPSHOT" ]]; then
+  echo "ERROR: dataset_snapshot must be inside the repository for --link-as: $DATASET_SNAPSHOT" >&2
+  exit 2
+fi
+if [[ "$RUN_DIR_REL" == "$RUN_DIR" ]]; then
+  echo "ERROR: run_dir must be inside the repository for --persistent-output: $RUN_DIR" >&2
+  exit 2
+fi
+if [[ "$GEPA_CONFIG_REL" == "$GEPA_CONFIG_ABS" ]]; then
+  echo "ERROR: GEPA config must be inside the repository: $GEPA_CONFIG_ABS" >&2
+  exit 2
+fi
+
 REMOTE_DATASET_SNAPSHOT="$REMOTE_DATASET_DIR/$DATASET_REL"
 REMOTE_RUN_SNAPSHOT="$REMOTE_RUN_DIR/$RUN_DIR_REL"
 
-# ---------------------------------------------------------------------------
-# Build remote command
-# ---------------------------------------------------------------------------
 REMOTE_SCRIPT=$(cat <<EOF
 set -euo pipefail
 echo "[vibe-gepa] started at \$(date) on \$(hostname)"
-source /etc/profile.d/modules.sh
-module load $PYTHON_MODULE $CONTAINER_MODULE
 export APPTAINER_CACHEDIR="$REMOTE_APPTAINER_CACHE_DIR"
 export APPTAINER_TMPDIR="$REMOTE_APPTAINER_TMP_DIR"
-mkdir -p "\$APPTAINER_CACHEDIR" "\$APPTAINER_TMPDIR"
-REMOTE_DATASET_SNAPSHOT="$REMOTE_DATASET_SNAPSHOT"
-if [[ "\$REMOTE_DATASET_SNAPSHOT" == "~/"* ]]; then
-  REMOTE_DATASET_SNAPSHOT="\$HOME/\${REMOTE_DATASET_SNAPSHOT#\~/}"
-fi
-DATASET_LINK="$DATASET_REL"
-mkdir -p "\$(dirname "\$DATASET_LINK")"
-rm -rf "\$DATASET_LINK"
-ln -s "\$REMOTE_DATASET_SNAPSHOT" "\$DATASET_LINK"
-test -f "\$DATASET_LINK/manifest.json" || {
-  echo "[vibe-gepa] dataset snapshot missing after symlink: \$DATASET_LINK" >&2
+export ULHPC_APPTAINER_SIF_CACHE_DIR="$REMOTE_APPTAINER_SIF_CACHE_DIR"
+mkdir -p "\$APPTAINER_CACHEDIR" "\$APPTAINER_TMPDIR" "\$ULHPC_APPTAINER_SIF_CACHE_DIR"
+test -f "$DATASET_REL/manifest.json" || {
+  echo "[vibe-gepa] dataset snapshot missing after staging: $DATASET_REL" >&2
   exit 2
 }
-REMOTE_RUN_SNAPSHOT="$REMOTE_RUN_SNAPSHOT"
-if [[ "\$REMOTE_RUN_SNAPSHOT" == "~/"* ]]; then
-  REMOTE_RUN_SNAPSHOT="\$HOME/\${REMOTE_RUN_SNAPSHOT#\~/}"
-fi
-RUN_LINK="$RUN_DIR_REL"
-mkdir -p "\$(dirname "\$RUN_LINK")" "\$REMOTE_RUN_SNAPSHOT"
-rm -rf "\$RUN_LINK"
-ln -s "\$REMOTE_RUN_SNAPSHOT" "\$RUN_LINK"
 REMOTE_ENV_FILE="$REMOTE_ENV_FILE"
 if [[ "\$REMOTE_ENV_FILE" == "~/"* ]]; then
   REMOTE_ENV_FILE="\$HOME/\${REMOTE_ENV_FILE#\~/}"
@@ -399,7 +334,6 @@ test -n "\${DEEPSEEK_API_KEY:-}" || {
   echo "[vibe-gepa] DEEPSEEK_API_KEY missing after sourcing \$REMOTE_ENV_FILE" >&2
   exit 2
 }
-# Ensure the vendored gepa package is installed in the remote environment.
 python3 -m pip install --quiet --user -e third_party/gepa || true
 python3 scripts/internal/run_gepa_rules.py --config "$GEPA_CONFIG_REL"
 GEPA_RC=\$?
@@ -408,11 +342,10 @@ exit \$GEPA_RC
 EOF
 )
 
-# ---------------------------------------------------------------------------
-# Build ulhpc-submit command
-# ---------------------------------------------------------------------------
 ULHPC_CMD=(
   ulhpc-submit
+  --submit-only
+  --json
   --local-dir "$REPO_ROOT"
   --remote-dir "$REMOTE_DIR"
   --job-name "$JOB_NAME"
@@ -421,6 +354,17 @@ ULHPC_CMD=(
   --mem "$MEM"
   --time "$TIME_LIMIT"
   --gpus "$GPUS"
+  --module "$PYTHON_MODULE"
+  --module "$CONTAINER_MODULE"
+  --python python3
+  --no-conda
+  --stage-data "$DATASET_SNAPSHOT:$REMOTE_DATASET_SNAPSHOT"
+  --link-as "$DATASET_REL"
+  --persistent-output "$RUN_DIR_REL:$REMOTE_RUN_SNAPSHOT"
+  --apptainer-cache-dir "$REMOTE_APPTAINER_CACHE_DIR"
+  --apptainer-tmp-dir "$REMOTE_APPTAINER_TMP_DIR"
+  --apptainer-sif-cache-dir "$REMOTE_APPTAINER_SIF_CACHE_DIR"
+  --remote-ignore-extra
 )
 
 if [[ -n "$ULHPC_CONFIG" ]]; then
@@ -430,107 +374,31 @@ if [[ "$FULL_LOGS" -eq 1 ]]; then
   ULHPC_CMD+=(--full-logs)
 fi
 if [[ "$SUBMIT" -eq 0 ]]; then
-  ULHPC_CMD+=(--dry-run --no-sync)
+  ULHPC_CMD+=(--dry-run)
 fi
 
 ULHPC_CMD+=(-- bash -lc "$REMOTE_SCRIPT")
 
-# ---------------------------------------------------------------------------
-# SSH / rsync helper
-# ---------------------------------------------------------------------------
-SSH_OPTS=(
-  -p "$PREFLIGHT_PORT"
-)
-if [[ -n "$PREFLIGHT_SSH_KEY" ]]; then
-  SSH_OPTS+=(-i "$PREFLIGHT_SSH_KEY")
-fi
-RSYNC_SSH="ssh ${SSH_OPTS[*]}"
-
-# ---------------------------------------------------------------------------
-# Execute
-# ---------------------------------------------------------------------------
 echo "[hpc-submit] mode=$([[ "$SUBMIT" -eq 1 ]] && echo submit || echo dry-run)"
 echo "[hpc-submit] gepa-config=$GEPA_CONFIG"
 echo "[hpc-submit] remote-dir=$REMOTE_DIR"
-echo "[hpc-submit] remote-dataset-dir=$REMOTE_DATASET_DIR"
 echo "[hpc-submit] remote-dataset-snapshot=$REMOTE_DATASET_SNAPSHOT"
-echo "[hpc-submit] remote-run-dir=$REMOTE_RUN_DIR"
 echo "[hpc-submit] remote-run-snapshot=$REMOTE_RUN_SNAPSHOT"
 echo "[hpc-submit] remote-apptainer-cache-dir=$REMOTE_APPTAINER_CACHE_DIR"
 echo "[hpc-submit] remote-apptainer-tmp-dir=$REMOTE_APPTAINER_TMP_DIR"
+echo "[hpc-submit] remote-apptainer-sif-cache-dir=$REMOTE_APPTAINER_SIF_CACHE_DIR"
 echo "[hpc-submit] remote-env-file=$REMOTE_ENV_FILE"
 echo "[hpc-submit] dataset_snapshot=$DATASET_SNAPSHOT"
 echo "[hpc-submit] run_dir=$RUN_DIR"
+echo "[hpc-submit] invoking ulhpc-submit..."
 
-if [[ "$SUBMIT" -eq 0 ]]; then
-  echo "[hpc-submit] dry-run: dataset snapshot would be rsynced outside remote project dir"
-  echo "[hpc-submit] dry-run: the following ulhpc-submit command would be executed:"
-  printf '  %s' "${ULHPC_CMD[*]}"
-  echo
-  echo "[hpc-submit] dry-run: remote script:"
-  echo "$REMOTE_SCRIPT"
-  exit 0
-fi
-
-# Ensure remote directory exists
-ssh "${SSH_OPTS[@]}" "$PREFLIGHT_USER@$PREFLIGHT_HOST" "mkdir -p $(printf '%q' "$REMOTE_DIR")"
-
-# Keep dataset files outside ulhpc-submit's project sync directory. Otherwise
-# ulhpc-submit's file-count integrity check sees extra files under remote-dir.
-REMOTE_DATASET_PARENT="$REMOTE_DATASET_DIR/$DATASET_PARENT_REL"
-REMOTE_RUN_SNAPSHOT_PREPARE="$REMOTE_RUN_SNAPSHOT"
-REMOTE_DATASET_PARENT_SCRIPT=$(cat <<EOF
-set -euo pipefail
-REMOTE_DATASET_PARENT="$REMOTE_DATASET_PARENT"
-REMOTE_RUN_SNAPSHOT="$REMOTE_RUN_SNAPSHOT_PREPARE"
-REMOTE_PROJECT_OUTPUT="$REMOTE_DIR/output"
-if [[ "\$REMOTE_DATASET_PARENT" == "~/"* ]]; then
-  REMOTE_DATASET_PARENT="\$HOME/\${REMOTE_DATASET_PARENT#\~/}"
-fi
-if [[ "\$REMOTE_RUN_SNAPSHOT" == "~/"* ]]; then
-  REMOTE_RUN_SNAPSHOT="\$HOME/\${REMOTE_RUN_SNAPSHOT#\~/}"
-fi
-if [[ "\$REMOTE_PROJECT_OUTPUT" == "~/"* ]]; then
-  REMOTE_PROJECT_OUTPUT="\$HOME/\${REMOTE_PROJECT_OUTPUT#\~/}"
-fi
-mkdir -p "\$REMOTE_DATASET_PARENT"
-mkdir -p "\$(dirname "\$REMOTE_RUN_SNAPSHOT")"
-if [[ -d "\$REMOTE_PROJECT_OUTPUT" && ! -e "\$REMOTE_RUN_SNAPSHOT/gepa_state.bin" ]]; then
-  REMOTE_PROJECT_RUN="$REMOTE_DIR/$RUN_DIR_REL"
-  if [[ "\$REMOTE_PROJECT_RUN" == "~/"* ]]; then
-    REMOTE_PROJECT_RUN="\$HOME/\${REMOTE_PROJECT_RUN#\~/}"
-  fi
-  if [[ -d "\$REMOTE_PROJECT_RUN" && ! -L "\$REMOTE_PROJECT_RUN" ]]; then
-    mv "\$REMOTE_PROJECT_RUN" "\$REMOTE_RUN_SNAPSHOT"
-  fi
-fi
-rm -rf "\$REMOTE_PROJECT_OUTPUT"
-EOF
-)
-ssh "${SSH_OPTS[@]}" "$PREFLIGHT_USER@$PREFLIGHT_HOST" "$REMOTE_DATASET_PARENT_SCRIPT"
-
-# Stage dataset snapshot outside remote-dir (output/ is excluded from ulhpc-submit sync)
-echo "[hpc-submit] staging dataset snapshot to HPC dataset directory..."
-rsync -avz -e "$RSYNC_SSH" \
-  "$DATASET_SNAPSHOT/" \
-  "$PREFLIGHT_USER@$PREFLIGHT_HOST:$(printf '%q' "$REMOTE_DATASET_SNAPSHOT")/"
-
-# Submit job
-echo "[hpc-submit] submitting GEPA job..."
 set +e
 "${ULHPC_CMD[@]}"
 ULHPC_RC=$?
 set -e
 
-# Retrieve run_dir output regardless of success/failure
-echo "[hpc-submit] retrieving run_dir output (rc=$ULHPC_RC)..."
-mkdir -p "$(dirname "$RUN_DIR")"
-rsync -avz -e "$RSYNC_SSH" \
-  "$PREFLIGHT_USER@$PREFLIGHT_HOST:$(printf '%q' "$REMOTE_RUN_SNAPSHOT")/" \
-  "$RUN_DIR/"
-
 if [[ $ULHPC_RC -ne 0 ]]; then
-  echo "[hpc-submit] ulhpc-submit reported failure; run_dir has been retrieved for inspection" >&2
+  echo "[hpc-submit] ulhpc-submit reported failure" >&2
 fi
 
 exit "$ULHPC_RC"

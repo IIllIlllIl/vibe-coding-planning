@@ -33,15 +33,20 @@ def test_hpc_submit_batch_dry_run_uses_remote_env_file_without_local_key(
     fake_bin = tmp_path / "bin"
     fake_bin.mkdir()
     fake_ulhpc = fake_bin / "ulhpc-submit"
-    fake_ulhpc.write_text("#!/usr/bin/env bash\nexit 0\n", encoding="utf-8")
+    fake_ulhpc.write_text(
+        "#!/usr/bin/env bash\nprintf '%s\\n' \"$@\"\nexit 0\n",
+        encoding="utf-8",
+    )
     fake_ulhpc.chmod(0o755)
 
-    snapshot = tmp_path / "snapshot"
-    snapshot.mkdir()
-    rules = tmp_path / "rules.md"
+    local_root = REPO_ROOT / ".tmp_hpc_smoke" / "test_hpc_submit_batch"
+    snapshot = local_root / "snapshot"
+    snapshot.mkdir(parents=True, exist_ok=True)
+    (snapshot / "manifest.json").write_text("{}", encoding="utf-8")
+    rules = local_root / "rules.md"
     rules.write_text("1. rule\n", encoding="utf-8")
-    run_dir = tmp_path / "run"
-    config = tmp_path / "gepa.yaml"
+    run_dir = local_root / "run"
+    config = local_root / "gepa.yaml"
     config.write_text(
         f"""
 paths:
@@ -59,6 +64,9 @@ reflection:
 search:
   max_metric_calls: 1
 docker: {{}}
+container:
+  runtime: apptainer
+  sif_cache_dir: /scratch/test/sif-cache
 prompts:
   checker_system: checker
   checker_instance: checker
@@ -103,31 +111,45 @@ prompts:
     assert "secret-should-not-appear" not in result.stdout
     assert "DEEPSEEK_API_KEY=\"$DEEPSEEK_API_KEY\"" not in result.stdout
     assert "--conda-env mini-swe" not in result.stdout
+    assert "--submit-only" in result.stdout
+    assert "--json" in result.stdout
+    assert "--module" in result.stdout
+    assert "lang/Python/3.11" in result.stdout
+    assert "tools/Apptainer" in result.stdout
+    assert "--python" in result.stdout
+    assert "python3" in result.stdout
+    assert "--no-conda" in result.stdout
     assert "source \"$REMOTE_ENV_FILE\"" in result.stdout
     assert "~/.config/vibe-coding-planning/deepseek.env" in result.stdout
-    assert "remote-dataset-dir=~/hpc_datasets/test" in result.stdout
-    assert "remote-run-dir=~/hpc_run_state/test" in result.stdout
-    assert "REMOTE_RUN_SNAPSHOT=\"~/hpc_run_state/test/" in result.stdout
-    assert "ln -s \"$REMOTE_RUN_SNAPSHOT\" \"$RUN_LINK\"" in result.stdout
+    assert "remote-dataset-snapshot=~/hpc_datasets/test/" in result.stdout
+    assert "remote-run-snapshot=~/hpc_run_state/test/" in result.stdout
+    assert "--stage-data" in result.stdout
+    assert "--link-as" in result.stdout
+    assert "--persistent-output" in result.stdout
+    assert "~/hpc_run_state/test/" in result.stdout
     assert "remote-apptainer-cache-dir=/scratch/test/apptainer-cache" in (
         result.stdout
     )
     assert "remote-apptainer-tmp-dir=/scratch/test/apptainer-tmp" in (
         result.stdout
     )
+    assert "--apptainer-cache-dir" in result.stdout
+    assert "/scratch/test/apptainer-cache" in result.stdout
+    assert "--apptainer-tmp-dir" in result.stdout
+    assert "/scratch/test/apptainer-tmp" in result.stdout
+    assert "--apptainer-sif-cache-dir" in result.stdout
+    assert "/scratch/test/sif-cache" in result.stdout
     assert 'export APPTAINER_CACHEDIR="/scratch/test/apptainer-cache"' in (
         result.stdout
     )
     assert 'export APPTAINER_TMPDIR="/scratch/test/apptainer-tmp"' in (
         result.stdout
     )
-    assert 'mkdir -p "$APPTAINER_CACHEDIR" "$APPTAINER_TMPDIR"' in (
+    assert 'export ULHPC_APPTAINER_SIF_CACHE_DIR="/scratch/test/sif-cache"' in (
         result.stdout
     )
-    assert "dataset snapshot would be rsynced outside remote project dir" in (
-        result.stdout
-    )
-    assert "REMOTE_DATASET_SNAPSHOT=\"~/hpc_datasets/test/" in result.stdout
-    assert "ln -s \"$REMOTE_DATASET_SNAPSHOT\" \"$DATASET_LINK\"" in (
-        result.stdout
-    )
+    assert (
+        'mkdir -p "$APPTAINER_CACHEDIR" "$APPTAINER_TMPDIR" '
+        '"$ULHPC_APPTAINER_SIF_CACHE_DIR"'
+    ) in result.stdout
+    assert "--remote-ignore-extra" in result.stdout

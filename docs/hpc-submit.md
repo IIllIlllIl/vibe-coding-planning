@@ -132,50 +132,43 @@ bash scripts/hpc_submit_batch.sh \
   --submit
 ```
 
-该脚本目前只实现了 GEPA 规则优化入口（`--gepa-rules`）。它会：
+该脚本目前只实现了 GEPA 规则优化入口（`--gepa-rules`）。它保留项目侧
+GEPA 参数接口，但把 HPC 侧同步、staging、持久输出和提交交给新版
+`ulhpc-submit`：
 
-1. 读取 `configs/ulhpc_submit.yaml` 获取 SSH/用户设置（也可用 `--ulhpc-config` 覆盖）。
+1. 读取 `configs/ulhpc_submit.yaml` 获取连接和 runtime 默认值（也可用
+   `--ulhpc-config` 覆盖）。
 2. 从 GEPA 配置中解析 `dataset_snapshot`、`run_dir` 和 `initial_rules`，并在本地校验存在性。
-3. 使用 `rsync` 把数据集快照同步到远端项目目录外的 staging 目录
-   （默认 `~/hpc_datasets/vibe-coding-planning`），避免污染 `ulhpc-submit`
-   的项目同步完整性检查。
-4. 把远端命令封装成 `ulhpc-submit ... -- bash -lc '<remote_script>'` 提交到 Slurm；
-   作业启动后先把项目内的 `output/.../dataset` 路径 symlink 到外部 staging
-   dataset，并把项目内的 `output/.../run_dir` symlink 到外部 run state 目录
-   （默认 `~/hpc_run_state/vibe-coding-planning`），再启动 GEPA。
-5. 作业结束后再次 `rsync` 把外部 run state 目录拉回本地同名 `run_dir`，无论
-   Slurm 作业成功或失败。
+3. 通过 `ulhpc-submit --stage-data LOCAL:REMOTE --link-as PROJECT_PATH`
+   把 dataset 放在远端项目目录外，并在远端 workdir 内创建 project-relative
+   symlink。
+4. 通过 `ulhpc-submit --persistent-output PROJECT_PATH:REMOTE` 把 GEPA
+   `run_dir` 指向远端持久 state 目录，便于 Slurm job 截止后继续 resume。
+5. 通过 `--module lang/Python/3.11 --module tools/Apptainer --python python3
+   --no-conda` 使用 Iris 计算节点上的 module Python。
+6. 通过 `--apptainer-cache-dir`、`--apptainer-tmp-dir` 和
+   `--apptainer-sif-cache-dir` 把 Apptainer cache/tmp/SIF 目录传给
+   `ulhpc-submit`；远端命令也会显式 export 这些变量作为兼容兜底。
+7. 使用 `--submit-only --json` 提交长任务；提交成功后本地进程退出，不持续监控。
 
 远端命令的关键形态如下。`DEEPSEEK_API_KEY` 不从本地命令行传递，也不展开进
 `ulhpc-submit` 参数；作业只 source 远端用户私有 env 文件：
 
 ```bash
-source /etc/profile.d/modules.sh
-module load lang/Python/3.11 tools/Apptainer
+set +x
 export APPTAINER_CACHEDIR=/scratch/users/twang/vibe-coding-planning/shared/apptainer-cache
 export APPTAINER_TMPDIR=/scratch/users/twang/vibe-coding-planning/shared/apptainer-tmp
-mkdir -p "$APPTAINER_CACHEDIR" "$APPTAINER_TMPDIR"
-REMOTE_DATASET_SNAPSHOT=~/hpc_datasets/vibe-coding-planning/output/...
-DATASET_LINK=output/...
-mkdir -p "$(dirname "$DATASET_LINK")"
-rm -rf "$DATASET_LINK"
-ln -s "$REMOTE_DATASET_SNAPSHOT" "$DATASET_LINK"
-REMOTE_RUN_SNAPSHOT=~/hpc_run_state/vibe-coding-planning/output/...
-RUN_LINK=output/...
-mkdir -p "$(dirname "$RUN_LINK")" "$REMOTE_RUN_SNAPSHOT"
-rm -rf "$RUN_LINK"
-ln -s "$REMOTE_RUN_SNAPSHOT" "$RUN_LINK"
-set +x
+export ULHPC_APPTAINER_SIF_CACHE_DIR=/scratch/users/twang/vibe-coding-planning/shared/sif-cache
 source ~/.config/vibe-coding-planning/deepseek.env
 test -n "${DEEPSEEK_API_KEY:-}" || exit 2
 python3 -m pip install --quiet --user -e third_party/gepa || true
 python3 scripts/internal/run_gepa_rules.py --config <relative-config-path>
 ```
 
-注意 Iris 计算节点没有 `conda`，因此脚本不使用 `conda run -n mini-swe`；而是从
-`configs/ulhpc_submit.yaml` 读取 `python_module`（默认 `lang/Python/3.11`）和
-`container_module`（默认 `tools/Apptainer`），在作业内执行 `module load` 后用
-`python3` 运行 GEPA。
+注意 Iris 计算节点没有 `conda`，因此脚本不使用 `conda run -n mini-swe`。
+module load、Python executable、dataset symlink 和 persistent output symlink 由
+`ulhpc-submit` 生成的 Slurm script 处理；Apptainer cache/tmp/SIF 路径同时通过
+`ulhpc-submit` 参数和 wrapper 远端命令显式 export 设置。
 
 `scripts/hpc_submit_batch.sh` 当前支持的参数：
 
@@ -194,41 +187,37 @@ python3 scripts/internal/run_gepa_rules.py --config <relative-config-path>
 | `--remote-run-dir DIR` | HPC 侧 GEPA run state 根目录，必须位于 `--remote-dir` 外部（默认 `~/hpc_run_state/vibe-coding-planning`） |
 | `--remote-apptainer-cache-dir DIR` | HPC 侧 `APPTAINER_CACHEDIR`，用于 OCI layer cache（默认 `/scratch/users/twang/vibe-coding-planning/shared/apptainer-cache`） |
 | `--remote-apptainer-tmp-dir DIR` | HPC 侧 `APPTAINER_TMPDIR`，用于 Apptainer 临时构建文件（默认 `/scratch/users/twang/vibe-coding-planning/shared/apptainer-tmp`） |
+| `--remote-apptainer-sif-cache-dir DIR` | HPC 侧共享 SIF cache；默认读取 GEPA config 的 `container.sif_cache_dir` |
 | `--remote-env-file FILE` | HPC 侧私有 env 文件，作业内 source 后读取 `DEEPSEEK_API_KEY`（默认 `~/.config/vibe-coding-planning/deepseek.env`） |
 | `--ulhpc-config FILE` | 覆盖默认 `configs/ulhpc_submit.yaml` |
 | `--full-logs` | 下载完整远端日志 |
 | `--submit` | 真正提交；省略时只 dry-run |
 
-已确认 `ulhpc-submit` 还支持 `--local-dir`、`--nodes`、`--ntasks`、`--no-sync`、
-`--show-config`、`--dry-run`、`ULHPC_*` 环境变量和
-`~/.config/ulhpc-submit/config.yaml`。`scripts/hpc_submit_batch.sh` 已在 dry-run 和
-提交模式下与 `ulhpc-submit` 对接通过。
+当前 wrapper 依赖新版 `ulhpc-submit` 的 `--submit-only`、`--json`、
+`--stage-data`、`--link-as`、`--persistent-output`、`--module`、`--python`、
+`--no-conda`、`--apptainer-*` 和 `--remote-ignore-extra`。
 
 ---
 
 ## 4. 作业命令结构
 
-HPC 包装脚本不需要自行实现 SSH、Slurm 脚本生成、队列监控或日志回传；这些由
-`ulhpc-submit` 完成。但 `output/` 目录默认被 `ulhpc-submit` 排除在同步之外，
-因此 GEPA 数据集快照和最终 `run_dir` 的拉回由 `scripts/hpc_submit_batch.sh` 用
-`rsync` 单独处理。数据集快照必须放在远端项目目录外，例如
-`~/hpc_datasets/vibe-coding-planning/...`；作业启动时再在项目内创建 symlink。
-GEPA `run_dir` 也必须放在远端项目目录外，例如
-`~/hpc_run_state/vibe-coding-planning/...`；作业启动时 symlink 回配置中的
-`output/...` 路径。这样可以保留 `gepa_state.bin` / `run_manifest.json` 等 resume
-状态，同时不让 `ulhpc-submit` 的 project sync integrity check 看到 excluded
-output 文件。
-不要先把 dataset rsync 到 `<remote-dir>/output/...`，否则 `ulhpc-submit` 的
-sync integrity check 会因为远端项目目录多出文件而失败。提交脚本会在调用
-`ulhpc-submit` 前清理 `<remote-dir>/output/`，以移除旧失败尝试留下的 excluded
-output 文件；真实 dataset 和 run state 分别保存在 `--remote-dataset-dir` 与
-`--remote-run-dir` 下，不受该清理影响。若旧 run state 仍在 `<remote-dir>/output/...`
-中，脚本会在清理前先把它移动到 `--remote-run-dir`。
+HPC 包装脚本不需要自行实现 SSH、rsync、Slurm 脚本生成、队列监控、日志回传、
+dataset symlink 或 run state symlink；这些由新版 `ulhpc-submit` 完成。由于
+`output/` 默认被项目 sync 排除，GEPA 数据集通过 `--stage-data` 放在远端项目目录
+外，再用 `--link-as` symlink 回配置中的 project-relative 路径；GEPA `run_dir`
+通过 `--persistent-output` 指向远端持久 state 目录，用于保存
+`gepa_state.bin` / `run_manifest.json` 等 resume 状态。
+
+默认使用 `--remote-ignore-extra`，允许远端 workdir 中存在被本地 exclude 的无关
+残留文件。若确实需要清理远端 excluded 文件，可手动使用新版 `ulhpc-submit` 的
+`--remote-clean-excluded`，但不作为本项目 wrapper 默认行为。
 
 示例 dry-run 形态（实际调用以脚本打印为准）：
 
 ```bash
 ulhpc-submit \
+  --submit-only \
+  --json \
   --local-dir . \
   --remote-dir '~/hpc_runs/vibe-coding-planning' \
   --job-name gepa-ref-smoke-apptainer \
@@ -236,6 +225,17 @@ ulhpc-submit \
   --cpus 1 \
   --mem 16G \
   --time 02:00:00 \
+  --module lang/Python/3.11 \
+  --module tools/Apptainer \
+  --python python3 \
+  --no-conda \
+  --stage-data output/SWE-bench_Verified/...:~/hpc_datasets/vibe-coding-planning/output/SWE-bench_Verified/... \
+  --link-as output/SWE-bench_Verified/... \
+  --persistent-output output/SWE-bench_Verified/gepa-rules/run:~/hpc_run_state/vibe-coding-planning/output/SWE-bench_Verified/gepa-rules/run \
+  --apptainer-cache-dir /scratch/users/twang/vibe-coding-planning/shared/apptainer-cache \
+  --apptainer-tmp-dir /scratch/users/twang/vibe-coding-planning/shared/apptainer-tmp \
+  --apptainer-sif-cache-dir /scratch/users/twang/vibe-coding-planning/shared/sif-cache \
+  --remote-ignore-extra \
   -- bash -lc '<remote_script>'
 ```
 
@@ -244,18 +244,8 @@ ulhpc-submit \
 - 不在 HPC 作业中使用 `caffeinate`。
 - 不要求 tmux；HPC 调度器日志和 `ulhpc-submit` 本地 run log 是主日志来源。
 - 不在作业脚本里修改 `config.yaml`；通过专用的 Apptainer GEPA 配置文件切换后端。
-- 作业失败时保留远端 `run_dir`，`scripts/hpc_submit_batch.sh` 会把它同步回本地。
-- GEPA 作业继续使用已有 `run_manifest.json` / `gepa_resume_state.json`
-  做身份校验和断点恢复。
-```
-
-设计约束：
-
-- 不在 HPC 作业中使用 `caffeinate`。
-- 不要求 tmux；HPC 调度器日志和 `ulhpc-submit` 本地 run log 是主日志来源。
-- 不在作业脚本里修改 `config.yaml`；通过 CLI 参数覆盖配置。
-- 作业失败时保留远端 `logs/` 和 `output/`，依靠 `run_batch.sh` 的
-  `result.json` skip 语义重新提交未完成任务。
+- 作业失败或 wall time 截止时保留远端持久 `run_dir`，后续提交使用 GEPA
+  resume 状态继续运行。
 - GEPA 作业继续使用已有 `run_manifest.json` / `gepa_resume_state.json`
   做身份校验和断点恢复。
 
@@ -268,11 +258,12 @@ ulhpc-submit \
 - `src/`、`scripts/`、`configs/`、`docs/` 中运行所需文件。
 - `config.yaml` 或指定的 config 文件。
 - GEPA / checker 使用的已发布快照，例如 `output/SWE-bench_Verified/...`
-  下的不可变数据集。由于 `ulhpc-submit` 默认**排除 `output/` 目录**，快照必须由
-  `scripts/hpc_submit_batch.sh` 在提交前单独 `rsync` 到 `--remote-dir` 外部的
-  `--remote-dataset-dir`，再由远端作业 symlink 回项目内的 `output/...` 路径。
-- 远端 `run_dir` 的父目录需可写，以便 GEPA 写入结果；作业结束后脚本会把该目录
-  同步回本地同名路径。
+  下的不可变数据集。由于 `ulhpc-submit` 默认**排除 `output/` 目录**，快照通过
+  `--stage-data` 上传到 `--remote-dir` 外部的 `--remote-dataset-dir`，再由
+  `--link-as` symlink 回远端 workdir 内的 project-relative `output/...` 路径。
+- 远端 `run_dir` 的父目录需可写；wrapper 通过 `--persistent-output` 将
+  project-relative `run_dir` symlink 到 `--remote-run-dir` 下的持久目录，供 GEPA
+  写入结果和 resume 状态。
 
 不应默认提交：
 
@@ -429,10 +420,13 @@ bash scripts/hpc_submit_batch.sh \
 
 ### 6.3 失败后恢复
 
-1. 查看 `ulhpc-submit` 本地 run log、HPC job 日志和远端 `logs/batch_run.log`。
-2. 如果是实例级失败，重新提交同一 config 即可，已有 `result.json` 会跳过。
+1. 查看 `ulhpc-submit` 本地 run log、HPC job stdout/stderr 和 GEPA `run_dir`
+   下的 `result.json`、`audit_events.jsonl`、`errors.jsonl`。
+2. 如果是 GEPA 可恢复失败或 wall time 用尽，重新提交同一 config；GEPA 使用
+   持久 `run_dir` 中的 `gepa_state.bin` 和 manifest 继续。
 3. 如果是代码 bug，本地修复并提交新 job；不要在远端工作目录手工改代码。
-4. 如果是 wall time 用尽，使用同一 `batch_id` 重新提交，继续跑未完成实例。
+4. 如果是配置语义变化导致 resume manifest 不兼容，开启新的 `run_dir`，不要复用
+   旧状态。
 
 ---
 
@@ -616,21 +610,26 @@ run manifest，确保 Docker run_dir 与 Apptainer run_dir 不会互相恢复。
 #### 7.3.4 HPC 入口与辅助脚本
 
 - `scripts/hpc_submit_batch.sh`：GEPA 专用提交包装。默认 dry-run；`--submit`
-  才真正提交。它读取 `configs/ulhpc_submit.yaml` 的 SSH 信息，单独 `rsync`
-  数据集快照到项目目录外的 HPC staging 目录，把 GEPA run state 放在项目目录外，
-  提交远端命令，并在作业结束后把 `run_dir` 拉回本地。
+  才真正提交。它保留项目侧 GEPA 参数接口，但将同步、数据 staging、持久
+  `run_dir`、module Python、Apptainer cache/tmp/SIF 参数和 Slurm 提交委托给
+  新版 `ulhpc-submit`。数据集通过 `--stage-data` 放在项目目录外，`run_dir`
+  通过 `--persistent-output` 指向远端持久 state 目录；远端命令会额外 export
+  Apptainer cache/tmp/SIF 变量作为兼容兜底。
 - 远端命令在 `bash -lc` 内执行：
   ```bash
-  source /etc/profile.d/modules.sh
-  module load tools/Apptainer
   set +x
+  export APPTAINER_CACHEDIR=/scratch/users/twang/vibe-coding-planning/shared/apptainer-cache
+  export APPTAINER_TMPDIR=/scratch/users/twang/vibe-coding-planning/shared/apptainer-tmp
+  export ULHPC_APPTAINER_SIF_CACHE_DIR=/scratch/users/twang/vibe-coding-planning/shared/sif-cache
   source ~/.config/vibe-coding-planning/deepseek.env
   test -n "${DEEPSEEK_API_KEY:-}" || exit 2
   python3 -m pip install --quiet --user -e third_party/gepa || true
   python3 scripts/internal/run_gepa_rules.py --config <relative-config-path>
   ```
   Iris 计算节点没有 `conda`，因此使用 `module load lang/Python/3.11` 与
-  `python3`；vendored `gepa` 包在作业内临时 `--user` 安装。
+  `python3`；module loading 由 `ulhpc-submit --module ... --python python3
+  --no-conda` 生成的 Slurm script 处理。vendored `gepa` 包在作业内临时
+  `--user` 安装。
 - `scripts/tools/prepare_apptainer_sifs.py`：基于 GEPA 配置中的
   训练/验证数据，预拉 Reflection image 和所有 Checker benchmark images 的 SIF。
   当前 reflection smoke（4 个 astropy 样本 + `python:3.12-slim`）预热后约
