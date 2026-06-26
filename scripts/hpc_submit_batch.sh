@@ -377,7 +377,7 @@ if [[ "$SUBMIT" -eq 0 ]]; then
   ULHPC_CMD+=(--dry-run)
 fi
 
-ULHPC_CMD+=(-- bash -lc "$REMOTE_SCRIPT")
+ULHPC_CMD+=(-- bash -c "$REMOTE_SCRIPT")
 
 echo "[hpc-submit] mode=$([[ "$SUBMIT" -eq 1 ]] && echo submit || echo dry-run)"
 echo "[hpc-submit] gepa-config=$GEPA_CONFIG"

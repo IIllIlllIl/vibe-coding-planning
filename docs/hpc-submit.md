@@ -239,7 +239,7 @@ ulhpc-submit \
   --apptainer-tmp-dir /scratch/users/twang/vibe-coding-planning/shared/apptainer-tmp \
   --apptainer-sif-cache-dir /scratch/users/twang/vibe-coding-planning/shared/sif-cache \
   --remote-ignore-extra \
-  -- bash -lc '<remote_script>'
+  -- bash -c '<remote_script>'
 ```
 
 设计约束：
@@ -331,18 +331,45 @@ python scripts/tools/prepare_apptainer_sifs.py \
   --sif-cache-dir /scratch/users/twang/vibe-coding-planning/shared/sif-cache
 ```
 
-或者提交一个独立长作业（适合 482 个 image 的 formal/strict run）：
+或者通过 `ulhpc-submit` 提交一个独立作业（适合 482 个 image 的
+formal/strict run）：
 
 ```bash
 bash scripts/tools/submit_apptainer_sif_preheat.sh \
   --config configs/gepa_verified_rules_strict_hpc_24h_apptainer.yaml \
-  --sif-cache-dir /scratch/users/twang/vibe-coding-planning/shared/sif-cache
+  --sif-cache-dir /scratch/users/twang/vibe-coding-planning/shared/sif-cache \
+  --time 08:00:00 \
+  --submit
 ```
 
-`submit_apptainer_sif_preheat.sh` 会生成并提交一个 `batch` 作业，串行拉取该
-配置所需的所有 benchmark image 和 `python:3.12-slim`。当前 reflection smoke
-（4 个 astropy 样本 + Reflection image）预热后缓存约 **7.9 GB**；首次拉取单个
-SWE-bench image 约需 5–10 分钟。
+`submit_apptainer_sif_preheat.sh` 现在只是一个本地 wrapper：代码同步、dataset
+staging、module loading、Apptainer cache/tmp/SIF 环境变量和 submit-only JSON
+输出都委托给 `ulhpc-submit`；真正的串行拉取逻辑仍在
+`scripts/tools/prepare_apptainer_sifs.py`。当前 reflection smoke（4 个 astropy
+样本 + Reflection image）预热后缓存约 **7.9 GB**；首次拉取单个 SWE-bench
+image 约需 5–10 分钟。
+
+若 24h 预热作业排队过久，可在 pilot 预热作业验证成功后，改用本地 SIF preheat
+supervisor 提交 8h 切片。该 supervisor 不管理 GEPA `run_dir`；它只重复提交
+本地 `submit_apptainer_sif_preheat.sh` wrapper，并用目标 image 数量和 SIF
+cache 中的 `.sif` 数量判断是否完成。已有 SIF 会被
+`prepare_apptainer_sifs.py` 跳过，因此重复提交是幂等的：
+
+```bash
+conda run -n mini-swe env PATH=/Users/taoran.wang/miniconda3/bin:$PATH \
+  python scripts/tools/hpc_sif_preheat_loop.py \
+  --config configs/gepa_verified_rules_strict_hpc_24h_newprompt_20260625_apptainer.yaml \
+  --remote-project-dir /scratch/users/twang/vibe-coding-planning/runs/vibe-sif-preheat \
+  --remote-dataset-dir /scratch/users/twang/vibe-coding-planning/hpc_datasets \
+  --sif-cache-dir /scratch/users/twang/vibe-coding-planning/shared/sif-cache \
+  --job-name gepa-preheat-sifs-8h \
+  --slice-time 08:00:00 \
+  --poll-interval 1800 \
+  --check-interval 01:00:00 \
+  --cpus 1 \
+  --mem 4G \
+  --submit
+```
 
 HPC GEPA 配置示例见
 `configs/gepa_verified_rules_strict_hpc_24h_apptainer.yaml`：
@@ -438,7 +465,7 @@ Slurm allocation：
 conda run -n mini-swe python scripts/hpc_resume_loop.py \
   --slice-time 12:00:00 \
   --check-interval 01:00:00 \
-  --poll-interval 300 \
+  --poll-interval 1800 \
   --max-runs 4 \
   --gepa-rules \
   --gepa-config configs/gepa_verified_rules_strict_hpc_24h_apptainer.yaml \
@@ -473,7 +500,7 @@ batch dry-run，不进入循环。
 |------|------|------|
 | `--slice-time HH:MM:SS` | `12:00:00` | 每个 Slurm job 的 wall time |
 | `--check-interval HH:MM:SS` | `01:00:00` | 一轮结束但未完成时，下次提交前等待时间 |
-| `--poll-interval SECONDS` | `300` | 等待当前 job 完成时查询 `squeue` / `sacct` 的间隔 |
+| `--poll-interval SECONDS` | `1800` | 等待当前 job 完成时查询 `squeue` / `sacct` 的间隔 |
 | `--max-runs N` | `4` | 最多提交多少个切片；`0` 表示无限续跑 |
 | `--batch-script PATH` | `scripts/hpc_submit_batch.sh` | 供测试或特殊 wrapper 覆盖 |
 
@@ -677,7 +704,8 @@ run manifest，确保 Docker run_dir 与 Apptainer run_dir 不会互相恢复。
   新版 `ulhpc-submit`。数据集通过 `--stage-data` 放在项目目录外，`run_dir`
   通过 `--persistent-output` 指向远端持久 state 目录；远端命令会额外 export
   Apptainer cache/tmp/SIF 变量作为兼容兜底。
-- 远端命令在 `bash -lc` 内执行：
+- 远端命令在 `bash -c` 内执行，避免 login shell 重置 `ulhpc-submit` 已加载的
+  module Python/Apptainer 环境：
   ```bash
   set +x
   export APPTAINER_CACHEDIR=/scratch/users/twang/vibe-coding-planning/shared/apptainer-cache
@@ -862,14 +890,17 @@ python scripts/tools/prepare_apptainer_sifs.py \
   --config configs/gepa_verified_rules_strict_hpc_24h_apptainer.yaml \
   --sif-cache-dir /scratch/users/twang/vibe-coding-planning/shared/sif-cache
 
-# 或提交独立长作业完成预热
+# 或通过 ulhpc-submit wrapper 提交独立作业完成预热
 bash scripts/tools/submit_apptainer_sif_preheat.sh \
   --config configs/gepa_verified_rules_strict_hpc_24h_apptainer.yaml \
-  --sif-cache-dir /scratch/users/twang/vibe-coding-planning/shared/sif-cache
+  --sif-cache-dir /scratch/users/twang/vibe-coding-planning/shared/sif-cache \
+  --time 08:00:00 \
+  --submit
 ```
 
 `prepare_apptainer_sifs.py` 对每个 image 串行执行 `apptainer pull`；482 个 image
-可能需要数小时到一天，建议在登录节点负载低时或提交独立 batch 作业运行。
+可能需要数小时到一天，建议通过 `submit_apptainer_sif_preheat.sh` 提交独立作业
+或用 `hpc_sif_preheat_loop.py` 做短切片重复提交。
 
 ### 9.4 并发参数设计
 

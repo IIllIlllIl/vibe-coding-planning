@@ -1,14 +1,10 @@
 #!/usr/bin/env bash
-# Submit a Slurm job that pre-pulls all Apptainer SIF images required by a GEPA
-# config. This is intended to run on an HPC login node where sbatch is available.
+# Submit an Apptainer SIF preheat job through ulhpc-submit.
 #
-# Usage (from the HPC login node, inside the project directory):
-#   bash scripts/tools/submit_apptainer_sif_preheat.sh \
-#     --config configs/gepa_verified_rules_formal_pilot_apptainer.yaml \
-#     --sif-cache-dir /scratch/users/twang/vibe-sif-cache
-#
-# The script will create the cache directory if it does not exist, then submit
-# a single-node batch job that runs prepare_apptainer_sifs.py.
+# This wrapper intentionally does not hand-write Slurm/module setup. It reuses
+# ulhpc-submit for sync, module loading, staging, Apptainer cache env, and
+# submit-only JSON output. The actual image preheat logic lives in
+# scripts/tools/prepare_apptainer_sifs.py.
 set -euo pipefail
 
 CONFIG=""
@@ -16,35 +12,59 @@ SIF_CACHE_DIR=""
 JOB_NAME="vibe-preheat-sifs"
 PARTITION="batch"
 CPUS="1"
-MEM="8G"
-TIME="2-00:00:00"
+MEM="4G"
+TIME="08:00:00"
 TIMEOUT="1800"
 MAX_ATTEMPTS="3"
 RETRY_BACKOFF="60"
+REMOTE_DIR=""
+REMOTE_DATASET_DIR="~/hpc_datasets/vibe-coding-planning"
+REMOTE_APPTAINER_CACHE_DIR="/scratch/users/twang/vibe-coding-planning/shared/apptainer-cache"
+REMOTE_APPTAINER_TMP_DIR="/scratch/users/twang/vibe-coding-planning/shared/apptainer-tmp"
+ULHPC_CONFIG=""
+FULL_LOGS=0
+SUBMIT=0
 
 usage() {
   cat <<'USAGE'
 Usage:
-  bash scripts/tools/submit_apptainer_sif_preheat.sh --config PATH --sif-cache-dir DIR [options]
+  bash scripts/tools/submit_apptainer_sif_preheat.sh --config PATH [options]
 
 Required:
-  --config PATH          GEPA config file (relative to repo root)
-  --sif-cache-dir DIR    Directory on a shared HPC filesystem to store .sif files
+  --config PATH          GEPA config file, relative to repo root or absolute
 
-Slurm options:
-  --job-name NAME        Job name (default: vibe-preheat-sifs)
-  --partition NAME       Slurm partition (default: batch)
-  --cpus N               CPUs per task (default: 1)
-  --mem SIZE             Memory (default: 8G)
-  --time HH:MM:SS        Wall time (default: 2-00:00:00, i.e. 2 days)
+Preheat options:
+  --sif-cache-dir DIR    Shared remote SIF cache directory
+                         (default: container.sif_cache_dir from config)
   --timeout SECONDS      Timeout per SIF pull attempt (default: 1800)
   --max-attempts N       Attempts per missing SIF image (default: 3)
   --retry-backoff SEC    Seconds between failed pull attempts (default: 60)
 
+Slurm / ulhpc-submit options:
+  --job-name NAME        Job name (default: vibe-preheat-sifs)
+  --partition NAME       Slurm partition (default: batch)
+  --cpus N               CPUs per task (default: 1)
+  --mem SIZE             Memory (default: 4G)
+  --time HH:MM:SS        Wall time (default: 08:00:00)
+  --remote-dir DIR       Remote project workdir
+  --remote-dataset-dir DIR
+                         Remote dataset staging root outside --remote-dir
+                         (default: ~/hpc_datasets/vibe-coding-planning)
+  --remote-apptainer-cache-dir DIR
+                         Remote APPTAINER_CACHEDIR
+  --remote-apptainer-tmp-dir DIR
+                         Remote APPTAINER_TMPDIR
+  --ulhpc-config FILE    ulhpc-submit config file
+                         (default: configs/ulhpc_submit.yaml if present)
+  --full-logs            Ask ulhpc-submit to retrieve full logs when monitored
+  --submit               Actually submit the job (default is dry-run)
+
 Examples:
   bash scripts/tools/submit_apptainer_sif_preheat.sh \
-    --config configs/gepa_verified_rules_formal_pilot_apptainer.yaml \
-    --sif-cache-dir /scratch/users/twang/vibe-sif-cache
+    --config configs/gepa_verified_rules_strict_hpc_24h_apptainer.yaml \
+    --sif-cache-dir /scratch/users/twang/vibe-coding-planning/shared/sif-cache \
+    --time 08:00:00 \
+    --submit
 USAGE
 }
 
@@ -90,6 +110,38 @@ while [[ $# -gt 0 ]]; do
       RETRY_BACKOFF="$2"
       shift 2
       ;;
+    --remote-dir)
+      REMOTE_DIR="$2"
+      shift 2
+      ;;
+    --remote-dataset-dir)
+      REMOTE_DATASET_DIR="$2"
+      shift 2
+      ;;
+    --remote-apptainer-cache-dir)
+      REMOTE_APPTAINER_CACHE_DIR="$2"
+      shift 2
+      ;;
+    --remote-apptainer-tmp-dir)
+      REMOTE_APPTAINER_TMP_DIR="$2"
+      shift 2
+      ;;
+    --ulhpc-config)
+      ULHPC_CONFIG="$2"
+      shift 2
+      ;;
+    --full-logs)
+      FULL_LOGS=1
+      shift
+      ;;
+    --submit)
+      SUBMIT=1
+      shift
+      ;;
+    --dry-run)
+      SUBMIT=0
+      shift
+      ;;
     -h|--help)
       usage
       exit 0
@@ -107,9 +159,8 @@ if [[ -z "$CONFIG" ]]; then
   usage >&2
   exit 2
 fi
-if [[ -z "$SIF_CACHE_DIR" ]]; then
-  echo "ERROR: --sif-cache-dir is required" >&2
-  usage >&2
+if ! [[ "$CPUS" =~ ^[1-9][0-9]*$ ]]; then
+  echo "ERROR: --cpus must be a positive integer" >&2
   exit 2
 fi
 if ! [[ "$TIMEOUT" =~ ^[1-9][0-9]*$ ]]; then
@@ -124,55 +175,183 @@ if ! [[ "$RETRY_BACKOFF" =~ ^[0-9]+$ ]]; then
   echo "ERROR: --retry-backoff must be a non-negative integer" >&2
   exit 2
 fi
+for value_name in REMOTE_DATASET_DIR REMOTE_APPTAINER_CACHE_DIR REMOTE_APPTAINER_TMP_DIR; do
+  if [[ -z "${!value_name}" ]]; then
+    echo "ERROR: $value_name must not be empty" >&2
+    exit 2
+  fi
+done
 
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
-CONFIG_ABS="$(cd "$REPO_ROOT" && python3 -c "from pathlib import Path; print(Path('$CONFIG').resolve())")"
+CONFIG_ABS="$(python -c "from pathlib import Path; print((Path('$REPO_ROOT') / '$CONFIG').resolve())")"
 if [[ ! -f "$CONFIG_ABS" ]]; then
   echo "ERROR: config not found: $CONFIG" >&2
   exit 2
 fi
 
-# Relative path inside the repo so the remote job can reference it directly.
+if [[ -z "$ULHPC_CONFIG" && -f "$REPO_ROOT/configs/ulhpc_submit.yaml" ]]; then
+  ULHPC_CONFIG="$REPO_ROOT/configs/ulhpc_submit.yaml"
+fi
+
+if ! command -v ulhpc-submit >/dev/null 2>&1; then
+  echo "ERROR: ulhpc-submit not found. Install the adjacent hpc_submit project:" >&2
+  echo "  cd ../../hpc_submit && pip install -e \".[dev]\"" >&2
+  exit 127
+fi
+
+CONFIG_VALUES=$(python - "$CONFIG_ABS" "${ULHPC_CONFIG:-}" <<'PY'
+import sys
+from pathlib import Path
+
+import yaml
+
+gepa_config = Path(sys.argv[1])
+ulhpc_config = Path(sys.argv[2]) if len(sys.argv) > 2 and sys.argv[2] else None
+repo_root = gepa_config.parents[1] if gepa_config.parent.name == "configs" else Path.cwd()
+cfg = yaml.safe_load(gepa_config.read_text(encoding="utf-8")) or {}
+paths = cfg.get("paths", {})
+
+def resolve(raw: str) -> str:
+    if not raw:
+        return ""
+    value = Path(raw)
+    return str(value if value.is_absolute() else repo_root / value)
+
+print(f"dataset_snapshot={resolve(paths.get('dataset_snapshot', ''))}")
+container = cfg.get("container", {}) or {}
+print(f"sif_cache_dir={container.get('sif_cache_dir', '')}")
+
+ulhpc = {}
+if ulhpc_config and ulhpc_config.exists():
+    ulhpc = yaml.safe_load(ulhpc_config.read_text(encoding="utf-8")) or {}
+print(f"python_module={ulhpc.get('python_module', '')}")
+print(f"container_module={ulhpc.get('container_module', '')}")
+PY
+)
+
+DATASET_SNAPSHOT=""
+CONFIG_SIF_CACHE_DIR=""
+CONFIG_PYTHON_MODULE=""
+CONFIG_CONTAINER_MODULE=""
+while IFS='=' read -r KEY VALUE; do
+  case "$KEY" in
+    dataset_snapshot) DATASET_SNAPSHOT="$VALUE" ;;
+    sif_cache_dir) CONFIG_SIF_CACHE_DIR="$VALUE" ;;
+    python_module) CONFIG_PYTHON_MODULE="$VALUE" ;;
+    container_module) CONFIG_CONTAINER_MODULE="$VALUE" ;;
+  esac
+done <<< "$CONFIG_VALUES"
+
+if [[ -z "$DATASET_SNAPSHOT" || ! -d "$DATASET_SNAPSHOT" ]]; then
+  echo "ERROR: dataset_snapshot directory not found locally: $DATASET_SNAPSHOT" >&2
+  exit 2
+fi
+if [[ -z "$SIF_CACHE_DIR" ]]; then
+  SIF_CACHE_DIR="$CONFIG_SIF_CACHE_DIR"
+fi
+if [[ -z "$SIF_CACHE_DIR" ]]; then
+  echo "ERROR: --sif-cache-dir is required when GEPA config has no container.sif_cache_dir" >&2
+  exit 2
+fi
+
+PYTHON_MODULE="${ULHPC_PYTHON_MODULE:-${CONFIG_PYTHON_MODULE:-lang/Python/3.11}}"
+CONTAINER_MODULE="${ULHPC_CONTAINER_MODULE:-${CONFIG_CONTAINER_MODULE:-tools/Apptainer}}"
+if [[ -z "$REMOTE_DIR" ]]; then
+  REMOTE_DIR="~/hpc_runs/vibe-coding-planning-sif-preheat"
+fi
+
+DATASET_REL="${DATASET_SNAPSHOT#$REPO_ROOT/}"
 CONFIG_REL="${CONFIG_ABS#$REPO_ROOT/}"
+if [[ "$DATASET_REL" == "$DATASET_SNAPSHOT" ]]; then
+  echo "ERROR: dataset_snapshot must be inside the repository for --link-as: $DATASET_SNAPSHOT" >&2
+  exit 2
+fi
+if [[ "$CONFIG_REL" == "$CONFIG_ABS" ]]; then
+  echo "ERROR: GEPA config must be inside the repository: $CONFIG_ABS" >&2
+  exit 2
+fi
 
-mkdir -p "$SIF_CACHE_DIR"
+REMOTE_DATASET_SNAPSHOT="$REMOTE_DATASET_DIR/$DATASET_REL"
 
-JOB_SCRIPT=$(cat <<EOF
-#!/bin/bash
-#SBATCH --job-name=$JOB_NAME
-#SBATCH --partition=$PARTITION
-#SBATCH --cpus-per-task=$CPUS
-#SBATCH --mem=$MEM
-#SBATCH --time=$TIME
-#SBATCH --output=$SIF_CACHE_DIR/preheat_%j.out
-#SBATCH --error=$SIF_CACHE_DIR/preheat_%j.err
-
+REMOTE_SCRIPT=$(cat <<EOF
 set -euo pipefail
-
-source /etc/profile.d/modules.sh
-module load lang/Python/3.11 tools/Apptainer
-
-cd "$REPO_ROOT"
-echo "[preheat] started at \$(date) on \$(hostname)"
-echo "[preheat] config=$CONFIG_REL"
-echo "[preheat] sif_cache_dir=$SIF_CACHE_DIR"
-echo "[preheat] timeout=$TIMEOUT"
-echo "[preheat] max_attempts=$MAX_ATTEMPTS"
-echo "[preheat] retry_backoff=$RETRY_BACKOFF"
-
-python3 scripts/tools/prepare_apptainer_sifs.py --config "$CONFIG_REL" --sif-cache-dir "$SIF_CACHE_DIR" --timeout "$TIMEOUT" --max-attempts "$MAX_ATTEMPTS" --retry-backoff "$RETRY_BACKOFF" --failed-output "$SIF_CACHE_DIR/preheat_failed_images_\${SLURM_JOB_ID}.txt"
-
+echo "[sif-preheat] started at \$(date) on \$(hostname)"
+export APPTAINER_CACHEDIR="$REMOTE_APPTAINER_CACHE_DIR"
+export APPTAINER_TMPDIR="$REMOTE_APPTAINER_TMP_DIR"
+export ULHPC_APPTAINER_SIF_CACHE_DIR="$SIF_CACHE_DIR"
+mkdir -p "\$APPTAINER_CACHEDIR" "\$APPTAINER_TMPDIR" "\$ULHPC_APPTAINER_SIF_CACHE_DIR"
+test -f "$DATASET_REL/manifest.json" || {
+  echo "[sif-preheat] dataset snapshot missing after staging: $DATASET_REL" >&2
+  exit 2
+}
+python3 -m pip install --quiet --user -r requirements.txt
+python3 scripts/tools/prepare_apptainer_sifs.py \
+  --config "$CONFIG_REL" \
+  --sif-cache-dir "$SIF_CACHE_DIR" \
+  --timeout "$TIMEOUT" \
+  --max-attempts "$MAX_ATTEMPTS" \
+  --retry-backoff "$RETRY_BACKOFF" \
+  --failed-output "$SIF_CACHE_DIR/preheat_failed_images_\${SLURM_JOB_ID}.txt"
 RC=\$?
-echo "[preheat] finished with rc=\$RC at \$(date)"
+echo "[sif-preheat] finished with rc=\$RC at \$(date)"
 exit \$RC
 EOF
 )
 
-JOB_FILE="$SIF_CACHE_DIR/preheat_job_script.sh"
-echo "$JOB_SCRIPT" > "$JOB_FILE"
-chmod +x "$JOB_FILE"
+ULHPC_CMD=(
+  ulhpc-submit
+  --submit-only
+  --json
+  --local-dir "$REPO_ROOT"
+  --remote-dir "$REMOTE_DIR"
+  --job-name "$JOB_NAME"
+  --partition "$PARTITION"
+  --cpus "$CPUS"
+  --mem "$MEM"
+  --time "$TIME"
+  --gpus 0
+  --module "$PYTHON_MODULE"
+  --module "$CONTAINER_MODULE"
+  --python python3
+  --no-conda
+  --stage-data "$DATASET_SNAPSHOT:$REMOTE_DATASET_SNAPSHOT"
+  --link-as "$DATASET_REL"
+  --apptainer-cache-dir "$REMOTE_APPTAINER_CACHE_DIR"
+  --apptainer-tmp-dir "$REMOTE_APPTAINER_TMP_DIR"
+  --apptainer-sif-cache-dir "$SIF_CACHE_DIR"
+  --remote-ignore-extra
+)
 
-echo "[preheat] submitting Slurm job..."
-JOB_ID=$(sbatch "$JOB_FILE" | awk '{print $NF}')
-echo "[preheat] submitted job $JOB_ID"
-echo "[preheat] logs will be at $SIF_CACHE_DIR/preheat_${JOB_ID}.out"
+if [[ -n "$ULHPC_CONFIG" ]]; then
+  ULHPC_CMD+=(--config "$ULHPC_CONFIG")
+fi
+if [[ "$FULL_LOGS" -eq 1 ]]; then
+  ULHPC_CMD+=(--full-logs)
+fi
+if [[ "$SUBMIT" -eq 0 ]]; then
+  ULHPC_CMD+=(--dry-run)
+fi
+
+ULHPC_CMD+=(-- bash -c "$REMOTE_SCRIPT")
+
+echo "[sif-preheat] mode=$([[ "$SUBMIT" -eq 1 ]] && echo submit || echo dry-run)"
+echo "[sif-preheat] config=$CONFIG"
+echo "[sif-preheat] remote-dir=$REMOTE_DIR"
+echo "[sif-preheat] remote-dataset-snapshot=$REMOTE_DATASET_SNAPSHOT"
+echo "[sif-preheat] sif-cache-dir=$SIF_CACHE_DIR"
+echo "[sif-preheat] remote-apptainer-cache-dir=$REMOTE_APPTAINER_CACHE_DIR"
+echo "[sif-preheat] remote-apptainer-tmp-dir=$REMOTE_APPTAINER_TMP_DIR"
+echo "[sif-preheat] timeout=$TIMEOUT"
+echo "[sif-preheat] max-attempts=$MAX_ATTEMPTS"
+echo "[sif-preheat] invoking ulhpc-submit..."
+
+set +e
+"${ULHPC_CMD[@]}"
+ULHPC_RC=$?
+set -e
+
+if [[ $ULHPC_RC -ne 0 ]]; then
+  echo "[sif-preheat] ulhpc-submit reported failure" >&2
+fi
+
+exit "$ULHPC_RC"

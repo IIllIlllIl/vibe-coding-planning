@@ -171,7 +171,7 @@ def parse_args(argv: list[str]) -> SupervisorConfig:
     )
     parser.add_argument("--slice-time", default="12:00:00")
     parser.add_argument("--check-interval", default="01:00:00")
-    parser.add_argument("--poll-interval", default="300")
+    parser.add_argument("--poll-interval", default="1800")
     parser.add_argument(
         "--max-runs",
         type=int,
