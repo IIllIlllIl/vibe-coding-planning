@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import time
+import traceback
 from datetime import datetime, timedelta, timezone
 from typing import Protocol
 
@@ -97,7 +98,12 @@ def _handle_pilot_failure(config: WatchdogConfig, state: WatchdogState, logs: st
         return
     validation = run_validations()
     if not result.ok or not validation.ok:
-        state.phase = "blocked"
+        if state.repair_attempts >= config.max_repair_attempts:
+            state.phase = "blocked"
+            state.last_error = (result.output + "\n" + validation.output)[-4000:]
+            return
+        state.phase = "pilot_failed"
+        state.last_error_class = "repair_validation"
         state.last_error = (result.output + "\n" + validation.output)[-4000:]
         return
     state.phase = "idle"
@@ -163,8 +169,16 @@ def run_once(config: WatchdogConfig, state: WatchdogState, slurm: SlurmLike) -> 
             state.last_sif_count = int(status.get("sif_count") or 0)
             if status.get("complete"):
                 state.phase = "completed"
+            else:
+                state.phase = "pilot_failed"
+                state.last_error = (
+                    "full preheat job completed but SIF cache is incomplete: "
+                    f"{status}"
+                )[-4000:]
         elif is_terminal(job_state):
-            state.phase = "blocked"
+            logs = slurm.read_logs(state.full_stdout_path, state.full_stderr_path)
+            state.phase = "pilot_failed"
+            state.last_error = logs[-4000:]
         return state
 
     return state
@@ -172,7 +186,12 @@ def run_once(config: WatchdogConfig, state: WatchdogState, slurm: SlurmLike) -> 
 
 def run_forever(config: WatchdogConfig, state: WatchdogState, slurm: SlurmClient, save) -> int:
     while True:
-        state = run_once(config, state, slurm)
+        try:
+            state = run_once(config, state, slurm)
+        except Exception:
+            state.phase = "pilot_failed"
+            state.last_error_class = "watchdog_exception"
+            state.last_error = traceback.format_exc()[-4000:]
         save(state)
         if state.phase in {"completed", "blocked"}:
             return 0 if state.phase == "completed" else 2

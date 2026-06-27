@@ -24,6 +24,7 @@ REMOTE_APPTAINER_TMP_DIR="/scratch/users/twang/vibe-coding-planning/shared/appta
 ULHPC_CONFIG=""
 FULL_LOGS=0
 SUBMIT=0
+INSTALL_DEPS=0
 
 usage() {
   cat <<'USAGE'
@@ -58,6 +59,8 @@ Slurm / ulhpc-submit options:
                          (default: configs/ulhpc_submit.yaml if present)
   --full-logs            Ask ulhpc-submit to retrieve full logs when monitored
   --submit               Actually submit the job (default is dry-run)
+  --install-deps         Run pip install --user -r requirements.txt before preheat
+                         (default: skip dependency installation)
 
 Examples:
   bash scripts/tools/submit_apptainer_sif_preheat.sh \
@@ -136,6 +139,10 @@ while [[ $# -gt 0 ]]; do
       ;;
     --submit)
       SUBMIT=1
+      shift
+      ;;
+    --install-deps)
+      INSTALL_DEPS=1
       shift
       ;;
     --dry-run)
@@ -272,6 +279,11 @@ if [[ "$CONFIG_REL" == "$CONFIG_ABS" ]]; then
 fi
 
 REMOTE_DATASET_SNAPSHOT="$REMOTE_DATASET_DIR/$DATASET_REL"
+if [[ "$INSTALL_DEPS" -eq 1 ]]; then
+  REMOTE_INSTALL_DEPS='python3 -m pip install --quiet --user -r requirements.txt'
+else
+  REMOTE_INSTALL_DEPS='echo "[sif-preheat] skipping dependency install; use --install-deps to enable"'
+fi
 
 REMOTE_SCRIPT=$(cat <<EOF
 set -euo pipefail
@@ -284,7 +296,7 @@ test -f "$DATASET_REL/manifest.json" || {
   echo "[sif-preheat] dataset snapshot missing after staging: $DATASET_REL" >&2
   exit 2
 }
-python3 -m pip install --quiet --user -r requirements.txt
+$REMOTE_INSTALL_DEPS
 python3 scripts/tools/prepare_apptainer_sifs.py \
   --config "$CONFIG_REL" \
   --sif-cache-dir "$SIF_CACHE_DIR" \
@@ -343,6 +355,7 @@ echo "[sif-preheat] remote-apptainer-cache-dir=$REMOTE_APPTAINER_CACHE_DIR"
 echo "[sif-preheat] remote-apptainer-tmp-dir=$REMOTE_APPTAINER_TMP_DIR"
 echo "[sif-preheat] timeout=$TIMEOUT"
 echo "[sif-preheat] max-attempts=$MAX_ATTEMPTS"
+echo "[sif-preheat] install-deps=$INSTALL_DEPS"
 echo "[sif-preheat] invoking ulhpc-submit..."
 
 set +e

@@ -97,9 +97,48 @@ container_module: tools/Apptainer
     assert "--apptainer-sif-cache-dir" in result.stdout
     assert "/scratch/test/sif-cache" in result.stdout
     assert "scripts/tools/prepare_apptainer_sifs.py" in result.stdout
-    assert "python3 -m pip install --quiet --user -r requirements.txt" in result.stdout
+    assert "skipping dependency install" in result.stdout
+    assert "python3 -m pip install --quiet --user -r requirements.txt" not in result.stdout
     assert "sbatch" not in result.stdout
     assert "module load" not in result.stdout
+
+
+def test_submit_apptainer_sif_preheat_can_install_deps_when_requested(tmp_path: Path) -> None:
+    fake_bin = tmp_path / "bin"
+    fake_bin.mkdir()
+    fake_ulhpc = fake_bin / "ulhpc-submit"
+    fake_ulhpc.write_text(
+        "#!/usr/bin/env bash\nprintf '%s\\n' \"$@\"\n",
+        encoding="utf-8",
+    )
+    fake_ulhpc.chmod(0o755)
+
+    local_root = REPO_ROOT / ".tmp_hpc_smoke" / "test_sif_preheat_install_deps"
+    config = _write_preheat_config(local_root)
+
+    env = os.environ.copy()
+    env["PATH"] = f"{fake_bin}{os.pathsep}{env['PATH']}"
+    result = subprocess.run(
+        [
+            "bash",
+            str(SUBMIT_SCRIPT),
+            "--config",
+            str(config.relative_to(REPO_ROOT)),
+            "--remote-dir",
+            "~/hpc_runs/preheat",
+            "--remote-dataset-dir",
+            "~/hpc_datasets/preheat",
+            "--install-deps",
+        ],
+        cwd=REPO_ROOT,
+        capture_output=True,
+        text=True,
+        check=False,
+        env=env,
+    )
+
+    assert result.returncode == 0, result.stderr
+    assert "python3 -m pip install --quiet --user -r requirements.txt" in result.stdout
 
 
 def test_hpc_sif_preheat_loop_submit_slice_uses_local_wrapper(monkeypatch, tmp_path: Path) -> None:

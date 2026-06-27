@@ -23,6 +23,12 @@ REPAIRABLE_PATTERNS: list[tuple[str, re.Pattern[str]]] = [
     ("dataset_staging", re.compile(r"dataset snapshot missing|link-as|stage-data|manifest\.json", re.I)),
     ("job_id_parse", re.compile(r"could not find.*job.*id|job_id", re.I)),
     ("prepare_sifs_cli", re.compile(r"prepare_apptainer_sifs\.py|invalid choice|No such file or directory", re.I)),
+    ("time_limit", re.compile(r"DUE TO TIME LIMIT|\\bTIMEOUT\\b|time limit", re.I)),
+    ("ssh_auth", re.compile(r"Permission denied|Host key verification failed|Authentication failed", re.I)),
+    ("slurm_qos", re.compile(r"QOS|AssocMax|Invalid account|permission denied", re.I)),
+    ("disk_full", re.compile(r"No space left on device|Disk quota exceeded", re.I)),
+    ("registry_network", re.compile(r"TLS handshake timeout|temporary failure|connection timed out|503|502|504", re.I)),
+    ("core_code_error", re.compile(r"src/optimization|src/environment|Traceback.*src/", re.I | re.S)),
 ]
 
 BLOCKING_PATTERNS: list[tuple[str, re.Pattern[str]]] = [
@@ -30,11 +36,6 @@ BLOCKING_PATTERNS: list[tuple[str, re.Pattern[str]]] = [
         "secret_related",
         re.compile(r"api[_-]?key|auth[_-]?token|access[_-]?token|secret|credential", re.I),
     ),
-    ("ssh_auth", re.compile(r"Permission denied|Host key verification failed|Authentication failed", re.I)),
-    ("slurm_qos", re.compile(r"QOS|AssocMax|Invalid account|permission denied", re.I)),
-    ("disk_full", re.compile(r"No space left on device|Disk quota exceeded", re.I)),
-    ("registry_network", re.compile(r"TLS handshake timeout|temporary failure|connection timed out|503|502|504", re.I)),
-    ("core_code_error", re.compile(r"src/optimization|src/environment|Traceback.*src/", re.I | re.S)),
 ]
 
 AGENT_QUOTA_PATTERN = re.compile(
@@ -52,4 +53,4 @@ def classify_failure(text: str) -> FailureClassification:
     for error_class, pattern in BLOCKING_PATTERNS:
         if pattern.search(text):
             return FailureClassification(error_class, repairable=False)
-    return FailureClassification("unknown", repairable=False)
+    return FailureClassification("unknown", repairable=True)

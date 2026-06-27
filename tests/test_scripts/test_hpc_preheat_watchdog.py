@@ -1,7 +1,9 @@
 from __future__ import annotations
 
 import json
+from dataclasses import replace
 from pathlib import Path
+from types import SimpleNamespace
 
 import pytest
 
@@ -94,9 +96,13 @@ def test_state_roundtrip(tmp_path: Path) -> None:
         ("ulhpc-submit: unknown option --bad", "ulhpc_submit_args", True),
         ("dataset snapshot missing after staging", "dataset_staging", True),
         ("ValueError: environment variable DEEPSEEK_API_KEY is not set", "config_key_coupling", True),
-        ("No space left on device", "disk_full", False),
+        ("slurmstepd: error: job cancelled DUE TO TIME LIMIT", "time_limit", True),
+        ("Permission denied (publickey)", "ssh_auth", True),
+        ("QOSMaxWallDurationPerJobLimit", "slurm_qos", True),
+        ("No space left on device", "disk_full", True),
+        ("TLS handshake timeout", "registry_network", True),
         ("DEEPSEEK_API_KEY leaked", "secret_related", False),
-        ("unrecognized fatal condition", "unknown", False),
+        ("unrecognized fatal condition", "unknown", True),
     ],
 )
 def test_classifier(text: str, error_class: str, repairable: bool) -> None:
@@ -155,6 +161,55 @@ def test_supervisor_submits_full_after_pilot_success(monkeypatch, tmp_path: Path
     assert result.phase == "full_preheat_submitted"
     assert result.full_job_id == "full-job"
     assert submitted == ["full"]
+
+
+def test_supervisor_routes_full_job_failure_to_repair_path(monkeypatch, tmp_path: Path) -> None:
+    config = replace(_config(tmp_path, enable_agent_repair=True), stop_after_full_submit=False)
+    state = WatchdogState(
+        phase="full_preheat_submitted",
+        full_job_id="full-1",
+        full_stdout_path="/remote/full.out",
+        full_stderr_path="/remote/full.err",
+    )
+    monkeypatch.setattr(supervisor, "expected_image_count", lambda path: 2)
+    monkeypatch.setattr(
+        supervisor,
+        "run_agent_repair",
+        lambda config, error_class, logs: repair.RepairResult(ok=True, output="ok"),
+    )
+    monkeypatch.setattr(supervisor, "changed_files", lambda: [])
+    monkeypatch.setattr(supervisor, "run_validations", lambda: SimpleNamespace(ok=True, output="ok"))
+
+    result = supervisor.run_once(config, state, FakeSlurm(state="FAILED"))
+    assert result.phase == "pilot_failed"
+    assert result.last_error == "pilot logs"
+
+    result = supervisor.run_once(config, result, FakeSlurm())
+    assert result.phase == "idle"
+    assert result.repair_attempts == 1
+
+
+def test_validation_failure_retries_until_repair_budget(monkeypatch, tmp_path: Path) -> None:
+    config = _config(tmp_path, enable_agent_repair=True)
+    state = WatchdogState(phase="pilot_failed", last_error="syntax error")
+    monkeypatch.setattr(supervisor, "expected_image_count", lambda path: 1)
+    monkeypatch.setattr(supervisor, "changed_files", lambda: [])
+    monkeypatch.setattr(
+        supervisor,
+        "run_agent_repair",
+        lambda config, error_class, logs: repair.RepairResult(ok=True, output="ok"),
+    )
+    monkeypatch.setattr(
+        supervisor,
+        "run_validations",
+        lambda: SimpleNamespace(ok=False, output="validation failed"),
+    )
+
+    result = supervisor.run_once(config, state, FakeSlurm())
+
+    assert result.phase == "pilot_failed"
+    assert result.last_error_class == "repair_validation"
+    assert result.repair_attempts == 1
 
 
 def test_agent_quota_enters_five_hour_cooldown(monkeypatch, tmp_path: Path) -> None:
