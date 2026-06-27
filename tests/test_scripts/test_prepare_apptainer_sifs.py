@@ -34,16 +34,21 @@ def test_prepare_apptainer_sifs_retries_and_continues(
     cached = cache_dir / "image_cached.sif"
     cache_dir.mkdir()
     cached.write_text("cached", encoding="utf-8")
+    load_kwargs = {}
 
-    monkeypatch.setattr(
-        prepare_apptainer_sifs,
-        "load_optimization_config",
-        lambda path: SimpleNamespace(
+    def fake_load_optimization_config(path, **kwargs):
+        load_kwargs.update(kwargs)
+        return SimpleNamespace(
             container=SimpleNamespace(
                 runtime="apptainer",
                 sif_cache_dir=cache_dir,
             )
-        ),
+        )
+
+    monkeypatch.setattr(
+        prepare_apptainer_sifs,
+        "load_optimization_config",
+        fake_load_optimization_config,
     )
     monkeypatch.setattr(
         prepare_apptainer_sifs,
@@ -77,6 +82,7 @@ def test_prepare_apptainer_sifs_retries_and_continues(
     rc = prepare_apptainer_sifs.main()
 
     assert rc == 1
+    assert load_kwargs == {"require_api_keys": False}
     assert attempts == {
         "image:retry-success": 2,
         "image:always-fails": 3,

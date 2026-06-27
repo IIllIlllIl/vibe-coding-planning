@@ -122,7 +122,7 @@ def _pull_with_retries(
 
 def main() -> int:
     args = _parse_args()
-    config = load_optimization_config(args.config)
+    config = load_optimization_config(args.config, require_api_keys=False)
 
     if config.container.runtime != "apptainer":
         print(

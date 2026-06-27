@@ -97,4 +97,4 @@ def expected_image_count(config_path) -> int:
     from scripts.tools.prepare_apptainer_sifs import _collect_images
     from src.optimization.config import load_optimization_config
 
-    return len(_collect_images(load_optimization_config(config_path)))
+    return len(_collect_images(load_optimization_config(config_path, require_api_keys=False)))

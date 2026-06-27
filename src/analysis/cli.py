@@ -89,7 +89,7 @@ def main(argv: list[str] | None = None) -> int:
 
     # Load configuration
     try:
-        config = load_config(args.config)
+        config = load_config(args.config, require_api_key=False)
     except FatalError as exc:
         logger.error("Failed to load config: %s", exc)
         return 1

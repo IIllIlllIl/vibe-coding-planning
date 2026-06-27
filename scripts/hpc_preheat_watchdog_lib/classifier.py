@@ -13,6 +13,10 @@ class FailureClassification:
 
 
 REPAIRABLE_PATTERNS: list[tuple[str, re.Pattern[str]]] = [
+    (
+        "config_key_coupling",
+        re.compile(r"environment variable [A-Z0-9_]*API_KEY is not set", re.I),
+    ),
     ("shell_syntax", re.compile(r"syntax error|unbound variable|bad substitution", re.I)),
     ("ulhpc_submit_args", re.compile(r"unknown option|unrecognized arguments|requires a value", re.I)),
     ("module_python", re.compile(r"python3: command not found|module.*not.*found|unknown module", re.I)),
@@ -42,10 +46,10 @@ AGENT_QUOTA_PATTERN = re.compile(
 def classify_failure(text: str) -> FailureClassification:
     if AGENT_QUOTA_PATTERN.search(text):
         return FailureClassification("agent_quota", repairable=True, agent_quota=True)
-    for error_class, pattern in BLOCKING_PATTERNS:
-        if pattern.search(text):
-            return FailureClassification(error_class, repairable=False)
     for error_class, pattern in REPAIRABLE_PATTERNS:
         if pattern.search(text):
             return FailureClassification(error_class, repairable=True)
+    for error_class, pattern in BLOCKING_PATTERNS:
+        if pattern.search(text):
+            return FailureClassification(error_class, repairable=False)
     return FailureClassification("unknown", repairable=False)

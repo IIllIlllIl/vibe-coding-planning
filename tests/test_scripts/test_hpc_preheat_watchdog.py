@@ -93,6 +93,7 @@ def test_state_roundtrip(tmp_path: Path) -> None:
         ("bash: syntax error near unexpected token", "shell_syntax", True),
         ("ulhpc-submit: unknown option --bad", "ulhpc_submit_args", True),
         ("dataset snapshot missing after staging", "dataset_staging", True),
+        ("ValueError: environment variable DEEPSEEK_API_KEY is not set", "config_key_coupling", True),
         ("No space left on device", "disk_full", False),
         ("DEEPSEEK_API_KEY leaked", "secret_related", False),
         ("unrecognized fatal condition", "unknown", False),

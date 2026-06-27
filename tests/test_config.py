@@ -166,6 +166,14 @@ class TestLoadConfigValidation:
         with pytest.raises(FatalError, match="DEEPSEEK_API_KEY"):
             load_config(config_file)
 
+    def test_can_load_without_main_api_key_for_external_backends(
+        self, monkeypatch, config_file: Path
+    ):
+        monkeypatch.delenv("DEEPSEEK_API_KEY", raising=False)
+        config = load_config(config_file, require_api_key=False)
+
+        assert config.api_key == ""
+
     def test_optimization_info_level_invalid_defaults_to_zero(
         self, monkeypatch, tmp_path: Path, caplog
     ):

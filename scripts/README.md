@@ -78,7 +78,8 @@ bash scripts/tools/submit_apptainer_sif_preheat.sh \
   --submit
 ```
 
-**注意**：SIF preheat **不需要** DeepSeek API key。
+**注意**：SIF preheat **不需要** DeepSeek API key；它只读取 dataset/container/image
+相关配置，不调用 Checker 或 Reflection 模型。
 
 ---
 

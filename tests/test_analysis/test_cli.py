@@ -6,8 +6,6 @@ import json
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
-import pytest
-
 from src.analysis.cli import main
 
 
@@ -207,7 +205,7 @@ class TestAggregateFlag:
         assert mock_completion.call_args.kwargs["model"] == "deepseek-v4-pro"
 
     def test_aggregate_uses_opencode_backend(self, tmp_path: Path, monkeypatch):
-        monkeypatch.setenv("DEEPSEEK_API_KEY", "test-ds-key")
+        monkeypatch.delenv("DEEPSEEK_API_KEY", raising=False)
 
         per_case = tmp_path / "per_case"
         per_case.mkdir()
@@ -293,7 +291,7 @@ class TestPostprocessFlag:
 
 class TestExtractionBackendFlag:
     def test_extraction_uses_opencode_backend(self, tmp_path: Path, monkeypatch):
-        monkeypatch.setenv("DEEPSEEK_API_KEY", "test-ds-key")
+        monkeypatch.delenv("DEEPSEEK_API_KEY", raising=False)
 
         data_dir = tmp_path / "reflect_success_cases"
         case_dir = data_dir / "case__one-1"

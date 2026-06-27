@@ -86,7 +86,11 @@ def _model(data: dict[str, Any], *, checker: bool) -> ModelConfig:
     )
 
 
-def load_optimization_config(path: str | Path) -> OptimizationConfig:
+def load_optimization_config(
+    path: str | Path,
+    *,
+    require_api_keys: bool = True,
+) -> OptimizationConfig:
     config_path = Path(path).resolve()
     raw = yaml.safe_load(config_path.read_text(encoding="utf-8")) or {}
     root = config_path.parents[1] if config_path.parent.name == "configs" else Path.cwd()
@@ -101,11 +105,12 @@ def load_optimization_config(path: str | Path) -> OptimizationConfig:
     prompts = _mapping(raw.get("prompts"), "prompts")
     paths = _mapping(raw.get("paths"), "paths")
 
-    for model_config in (checker, reflection):
-        if not os.environ.get(model_config.api_key_env):
-            raise ValueError(
-                f"environment variable {model_config.api_key_env} is not set"
-            )
+    if require_api_keys:
+        for model_config in (checker, reflection):
+            if not os.environ.get(model_config.api_key_env):
+                raise ValueError(
+                    f"environment variable {model_config.api_key_env} is not set"
+                )
 
     search = SearchConfig(
         max_metric_calls=int(search_data["max_metric_calls"]),

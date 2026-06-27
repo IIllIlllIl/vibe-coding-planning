@@ -303,12 +303,16 @@ TestResults = dict[str, Any]  # {resolved: bool, stdout: str, stderr: str, log_d
 - **致命错误**（API 401/429、磁盘满、Docker 崩溃）：抛出 FatalError，由 `main.py` 捕获后记录日志、调用 `writer.emergency_save()`、退出（保留已收集数据）
 - **任务级错误**（Agent 未输出有效 Plan/Patch、Docker 镜像构建失败、评估异常、Agent 命令超时）：记录到 `errors` 列表，**统一跳过当前实例**（不再尝试同实例内后续轮次），继续执行下一个实例
 
-当前 `src.config.load_config()`、`src.main` 和 `run_batch.sh` 对
-`DEEPSEEK_API_KEY` 的校验仍与配置加载/入口绑定，导致只使用 OpenCode
-认证的 analysis 路径也需要提供无实际用途的 DeepSeek key。下一优先改动是
-把凭据校验下沉到实际使用的后端入口：PCT/checker 校验主模型 key，
-mini_swe analysis 校验 `analysis.api_key_env`，OpenCode analysis 仅依赖
-OpenCode 自身认证。
+当前凭据校验按实际入口收窄：
+
+- `src.main` 和 GEPA 主运行入口仍要求 `DEEPSEEK_API_KEY`，因为这些路径会直接
+  调用 DeepSeek/LLM。
+- `src.config.load_config(..., require_api_key=False)` 供外部认证或非 LLM 入口使用；
+  `src.analysis.cli` 采用该模式，使 `analysis.backend=opencode` 只依赖 OpenCode
+  自身认证，不再要求无实际用途的全局 DeepSeek key。
+- `src.optimization.config.load_optimization_config(..., require_api_keys=False)` 供
+  SIF preheat 等纯镜像准备工具使用；这些工具只读取 dataset/container/image
+  信息，不调用 Checker 或 Reflection 模型。
 
 ---
 

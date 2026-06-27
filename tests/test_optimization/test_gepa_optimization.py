@@ -179,6 +179,47 @@ prompts:
         load_optimization_config(config)
 
 
+def test_optimization_config_can_skip_api_key_validation_for_preheat(
+    tmp_path,
+    monkeypatch,
+):
+    monkeypatch.delenv("TEST_KEY", raising=False)
+    config = tmp_path / "config.yaml"
+    config.write_text(
+        """
+paths:
+  dataset_snapshot: snapshot
+  initial_rules: rules.txt
+  run_dir: run
+checker:
+  model: model
+  api_base: https://example.test
+  api_key_env: TEST_KEY
+reflection:
+  model: model
+  api_base: https://example.test
+  api_key_env: TEST_KEY
+search:
+  max_metric_calls: 2
+docker: {}
+container:
+  runtime: apptainer
+prompts:
+  checker_system: checker
+  checker_instance: checker
+  reflection_system: reflection
+  reflection_instance: reflection
+""",
+        encoding="utf-8",
+    )
+
+    loaded = load_optimization_config(config, require_api_keys=False)
+
+    assert loaded.checker.api_key_env == "TEST_KEY"
+    assert loaded.reflection.api_key_env == "TEST_KEY"
+    assert loaded.container.runtime == "apptainer"
+
+
 def test_extended_pilot_reflection_prompt_enforces_deployment_boundary(
     monkeypatch,
 ):

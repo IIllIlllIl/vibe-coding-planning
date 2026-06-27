@@ -345,9 +345,11 @@ bash scripts/tools/submit_apptainer_sif_preheat.sh \
 `submit_apptainer_sif_preheat.sh` 现在只是一个本地 wrapper：代码同步、dataset
 staging、module loading、Apptainer cache/tmp/SIF 环境变量和 submit-only JSON
 输出都委托给 `ulhpc-submit`；真正的串行拉取逻辑仍在
-`scripts/tools/prepare_apptainer_sifs.py`。当前 reflection smoke（4 个 astropy
-样本 + Reflection image）预热后缓存约 **7.9 GB**；首次拉取单个 SWE-bench
-image 约需 5–10 分钟。
+`scripts/tools/prepare_apptainer_sifs.py`。SIF preheat 不调用 Checker 或
+Reflection 模型；该工具加载 GEPA 配置时会跳过 LLM API key 校验，因此不需要
+远端 `DEEPSEEK_API_KEY`。当前 reflection smoke（4 个 astropy 样本 +
+Reflection image）预热后缓存约 **7.9 GB**；首次拉取单个 SWE-bench image
+约需 5–10 分钟。
 
 若 24h 预热作业排队过久，可在 pilot 预热作业验证成功后，改用本地 SIF preheat
 supervisor 提交 8h 切片。该 supervisor 不管理 GEPA `run_dir`；它只重复提交

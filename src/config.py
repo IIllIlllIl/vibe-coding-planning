@@ -527,13 +527,15 @@ def _build_analysis_config(data: dict[str, Any]) -> AnalysisConfig:
     )
 
 
-def load_config(path: str | Path) -> Config:
+def load_config(path: str | Path, *, require_api_key: bool = True) -> Config:
     """Load configuration from a YAML file.
 
     Reads the API key from the ``DEEPSEEK_API_KEY`` environment variable
     (kept as the canonical env var for backward compatibility) and stores
-    it in ``Config.api_key``. Raises FatalError if the key is not set or
-    if the config file cannot be parsed.
+    it in ``Config.api_key``. Raises FatalError if the key is not set unless
+    ``require_api_key`` is false. Non-LLM or externally authenticated entry
+    points, such as OpenCode analysis, may disable the check while preserving
+    strict behavior for the main pipeline.
     """
     raw = _load_yaml(path)
 
@@ -566,7 +568,7 @@ def load_config(path: str | Path) -> Config:
         analysis_data = {}
 
     api_key = os.environ.get("DEEPSEEK_API_KEY", "")
-    if not api_key:
+    if require_api_key and not api_key:
         raise FatalError(
             "Environment variable DEEPSEEK_API_KEY is not set. "
             "Please set it before running the system."

@@ -19,6 +19,7 @@
 | 7.3 | 2026-06-12 | — | 新增 FR-16 设计：使用 vendored GEPA 在 Verified PCT Round 1 分类数据上直接优化完整 Checker 规则文本，替代逐案例规则提取与聚合；PolyBench 保持最终 held-out |
 | 7.4 | 2026-06-17 | — | 运行形态调整：放弃“迁移到长期 Linux 服务器”作为近期目标，改为本地通过相邻项目 `../../hpc_submit` 的 `ulhpc-submit` 提交 HPC 作业运行实验。HPC 节点仍是 Linux，但不采用 macOS 防休眠、tmux watchdog 常驻或服务器长期部署假设；新增 FR-17 |
 | 7.5 | 2026-06-24 | — | 当前主线更新：GEPA strict Checker 规则优化、GPT seed rules、HPC Apptainer backend、`hpc_submit_batch.sh`、SIF 预热和短作业 `hpc_resume_loop.py` 已实现；OpenCode/Kimi 聚合超时不再作为当前问题 |
+| 7.6 | 2026-06-27 | — | 凭据校验收窄：GEPA/PCT 主运行仍要求实际 LLM key；SIF preheat 通过 `load_optimization_config(require_api_keys=False)` 只读取 image 所需配置，不再要求 DeepSeek key；OpenCode analysis 通过 `load_config(require_api_key=False)` 与全局 `DEEPSEEK_API_KEY` 解耦，仅依赖 OpenCode 自身认证 |
 
 ---
 
