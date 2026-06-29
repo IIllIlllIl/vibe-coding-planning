@@ -14,9 +14,9 @@ PARTITION="batch"
 CPUS="1"
 MEM="4G"
 TIME="08:00:00"
-TIMEOUT="1800"
-MAX_ATTEMPTS="3"
-RETRY_BACKOFF="60"
+TIMEOUT="0"
+MAX_ATTEMPTS="1"
+RETRY_BACKOFF="0"
 REMOTE_DIR=""
 REMOTE_DATASET_DIR="~/hpc_datasets/vibe-coding-planning"
 REMOTE_APPTAINER_CACHE_DIR="/scratch/users/twang/vibe-coding-planning/shared/apptainer-cache"
@@ -37,9 +37,10 @@ Required:
 Preheat options:
   --sif-cache-dir DIR    Shared remote SIF cache directory
                          (default: container.sif_cache_dir from config)
-  --timeout SECONDS      Timeout per SIF pull attempt (default: 1800)
-  --max-attempts N       Attempts per missing SIF image (default: 3)
-  --retry-backoff SEC    Seconds between failed pull attempts (default: 60)
+  --timeout SECONDS      Timeout per SIF pull attempt; 0 disables the per-pull timeout
+                         (default: 0)
+  --max-attempts N       Attempts per missing SIF image (default: 1)
+  --retry-backoff SEC    Seconds between failed pull attempts (default: 0)
 
 Slurm / ulhpc-submit options:
   --job-name NAME        Job name (default: vibe-preheat-sifs)
@@ -170,8 +171,8 @@ if ! [[ "$CPUS" =~ ^[1-9][0-9]*$ ]]; then
   echo "ERROR: --cpus must be a positive integer" >&2
   exit 2
 fi
-if ! [[ "$TIMEOUT" =~ ^[1-9][0-9]*$ ]]; then
-  echo "ERROR: --timeout must be a positive integer" >&2
+if ! [[ "$TIMEOUT" =~ ^[0-9]+$ ]]; then
+  echo "ERROR: --timeout must be a non-negative integer" >&2
   exit 2
 fi
 if ! [[ "$MAX_ATTEMPTS" =~ ^[1-9][0-9]*$ ]]; then

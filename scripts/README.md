@@ -80,6 +80,8 @@ bash scripts/tools/submit_apptainer_sif_preheat.sh \
 
 **注意**：SIF preheat **不需要** DeepSeek API key；它只读取 dataset/container/image
 相关配置，不调用 Checker 或 Reflection 模型。
+默认拉取策略为 `--timeout 0 --max-attempts 1 --retry-backoff 0`：
+不设置单个 image 的内部 pull 超时，由 Slurm `--time` 控制整段 job 的总预算。
 
 ---
 
@@ -114,6 +116,7 @@ conda run -n mini-swe python scripts/tools/hpc_sif_preheat_loop.py \
 - 默认 **不启用** agent repair；必须显式加 `--enable-agent-repair` 才会在 pilot 失败后让 agent 尝试修复。
 - agent repair 默认使用 `codex exec --sandbox workspace-write --ask-for-approval never`，并将修复 prompt 作为最后一个参数传入。可用 `--agent-command` 覆盖为其他非交互 agent 命令。
 - agent quota/rate-limit 默认每次等待 5h，最多 `--max-agent-cooldowns 20` 次。
+- preheat 默认 `--pull-timeout 0 --max-pull-attempts 1 --retry-backoff 0`，避免大镜像被 30 分钟内部超时反复打断；总时长由 pilot/full Slurm walltime 控制。
 - repair 只能修改白名单内的文件：主要是 `scripts/tools/submit_apptainer_sif_preheat.sh`、`scripts/tools/hpc_sif_preheat_loop.py`、`scripts/hpc_preheat_watchdog.py`、`scripts/hpc_preheat_watchdog_lib/` 以及对应测试文件。
 - 默认 `--monitor-full` 关闭，提交 full preheat 后 watchdog 即退出；加 `--monitor-full` 会继续监控 full preheat 到完成。
 

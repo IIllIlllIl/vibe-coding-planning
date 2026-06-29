@@ -16,11 +16,9 @@ REPO_ROOT = Path(__file__).resolve().parents[2]
 if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
 
-from scripts.internal.evaluate_checker import (  # noqa: E402
-    _read_jsonl,
-    run_checker_only,
-)
 from src.config import Config, load_config  # noqa: E402
+from src.output.json_io import read_jsonl, write_json  # noqa: E402
+from scripts.internal.evaluate_checker import run_checker_only  # noqa: E402
 
 DEFAULT_INPUT = Path(
     "output/SWE-PolyBench/polybench-pct-checker-datasets/"
@@ -46,20 +44,10 @@ def _text_sha256(text: str) -> str:
     return hashlib.sha256(text.encode("utf-8")).hexdigest()
 
 
-def _write_json(path: Path, data: dict[str, Any]) -> None:
-    path.parent.mkdir(parents=True, exist_ok=True)
-    temporary = path.with_suffix(path.suffix + ".tmp")
-    temporary.write_text(
-        json.dumps(data, indent=2, ensure_ascii=False, sort_keys=True),
-        encoding="utf-8",
-    )
-    temporary.replace(path)
-
-
 def _prediction_map(path: Path) -> dict[str, dict[str, Any]]:
     if not path.is_file():
         return {}
-    return {item["instance_id"]: item for item in _read_jsonl(path)}
+    return {item["instance_id"]: item for item in read_jsonl(path)}
 
 
 def seed_resume_predictions(source: Path, target: Path) -> dict[str, int]:
@@ -159,7 +147,7 @@ def build_comparison_report(output_dir: Path) -> dict[str, Any]:
             for right in names[index + 1 :]
         },
     }
-    _write_json(output_dir / "comparison_report.json", report)
+    write_json(output_dir / "comparison_report.json", report)
 
     lines = [
         "# Checker-only comparison",
@@ -299,7 +287,7 @@ def main() -> int:
             max_cached_images=args.max_cached_images,
         ),
     )
-    cases = _read_jsonl(args.input_results)
+    cases = read_jsonl(args.input_results)
     all_arms = (
         ("flash_rules", args.flash_rules, False),
         ("no_rules", None, True),
@@ -373,7 +361,7 @@ def main() -> int:
                 "baseline_cost_limit": BASELINE_RECOVERY_COST_LIMIT,
             }
         )
-    _write_json(experiment_path, metadata)
+    write_json(experiment_path, metadata)
 
     for name, rules_path, baseline in arms:
         arm_config, rules_override = _arm_config(
@@ -384,7 +372,7 @@ def main() -> int:
         )
         print(f"=== Checker comparison arm start: {name} ===", flush=True)
         metadata["arms"][name]["status"] = "running"
-        _write_json(experiment_path, metadata)
+        write_json(experiment_path, metadata)
         results, errors = run_checker_only(
             config=arm_config,
             input_path=args.input_results,
@@ -400,13 +388,13 @@ def main() -> int:
                 "errors": len(errors),
             }
         )
-        _write_json(experiment_path, metadata)
+        write_json(experiment_path, metadata)
         print(f"=== Checker comparison arm end: {name} ===", flush=True)
 
     build_comparison_report(args.output)
     metadata["status"] = "complete"
     metadata["completed_at"] = datetime.now(timezone.utc).isoformat()
-    _write_json(experiment_path, metadata)
+    write_json(experiment_path, metadata)
     print("=== Checker comparison end ===", flush=True)
     return 0
 

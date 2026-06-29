@@ -351,6 +351,10 @@ Reflection 模型；该工具加载 GEPA 配置时会跳过 LLM API key 校验�
 Reflection image）预热后缓存约 **7.9 GB**；首次拉取单个 SWE-bench image
 约需 5–10 分钟。
 
+默认 SIF preheat 拉取策略为 `--timeout 0 --max-attempts 1 --retry-backoff 0`：
+`0` 表示不设置单个 image 的内部 pull 超时，由 Slurm `--time` 控制整段 job
+的总预算。这样可以避免大镜像或慢 registry 被 30 分钟内部 timeout 反复打断。
+
 若 24h 预热作业排队过久，可在 pilot 预热作业验证成功后，改用本地 SIF preheat
 supervisor 提交 8h 切片。该 supervisor 不管理 GEPA `run_dir`；它只重复提交
 本地 `submit_apptainer_sif_preheat.sh` wrapper，并用目标 image 数量和 SIF

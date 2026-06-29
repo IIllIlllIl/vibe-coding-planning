@@ -96,3 +96,61 @@ def test_prepare_apptainer_sifs_retries_and_continues(
     assert "RETRYABLE_FAILURE attempt=3/3 image=image:always-fails" in (
         output.err
     )
+
+
+def test_prepare_apptainer_sifs_zero_timeout_disables_per_pull_timeout(
+    tmp_path, monkeypatch
+) -> None:
+    cache_dir = tmp_path / "sifs"
+    seen_timeouts: list[int | None] = []
+
+    class FakeCache:
+        def __init__(self, sif_cache_dir: Path, capacity_window) -> None:
+            self.sif_cache_dir = sif_cache_dir
+
+        def sif_path(self, image: str) -> Path:
+            return self.sif_cache_dir / f"{image.replace(':', '_')}.sif"
+
+        def ensure(self, image: str, *, timeout: int | None = 600) -> Path:
+            seen_timeouts.append(timeout)
+            sif = self.sif_path(image)
+            sif.write_text("sif", encoding="utf-8")
+            return sif
+
+    def fake_load_optimization_config(path, **kwargs):
+        return SimpleNamespace(
+            container=SimpleNamespace(
+                runtime="apptainer",
+                sif_cache_dir=cache_dir,
+            )
+        )
+
+    monkeypatch.setattr(
+        prepare_apptainer_sifs,
+        "load_optimization_config",
+        fake_load_optimization_config,
+    )
+    monkeypatch.setattr(
+        prepare_apptainer_sifs,
+        "_collect_images",
+        lambda config: ["image:no-timeout"],
+    )
+    monkeypatch.setattr(prepare_apptainer_sifs, "ApptainerSifCache", FakeCache)
+    monkeypatch.setattr(
+        sys,
+        "argv",
+        [
+            "prepare_apptainer_sifs.py",
+            "--config",
+            "config.yaml",
+            "--sif-cache-dir",
+            str(cache_dir),
+            "--timeout",
+            "0",
+        ],
+    )
+
+    rc = prepare_apptainer_sifs.main()
+
+    assert rc == 0
+    assert seen_timeouts == [None]

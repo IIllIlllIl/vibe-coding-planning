@@ -35,6 +35,11 @@ from src.environment.docker_env import (  # noqa: E402
     configure_docker_capacity,
 )
 from src.evaluator.swe_evaluator import derive_image_name  # noqa: E402
+from src.output.json_io import (  # noqa: E402
+    read_jsonl as _read_jsonl,
+    write_json as _write_json,
+    write_jsonl as _write_jsonl,
+)
 from src.pipeline_check import run_instance  # noqa: E402
 from src.rules.rule_loader import (  # noqa: E402
     format_rules_for_prompt,
@@ -69,42 +74,6 @@ def _portable_path(path: Path) -> str:
 def _resolve_stored_path(path: str) -> Path:
     stored_path = Path(path)
     return stored_path if stored_path.is_absolute() else REPO_ROOT / stored_path
-
-
-def _write_jsonl(path: Path, records: list[dict[str, Any]]) -> None:
-    path.parent.mkdir(parents=True, exist_ok=True)
-    content = "".join(
-        json.dumps(record, ensure_ascii=False, sort_keys=True) + "\n"
-        for record in records
-    )
-    path.write_text(content, encoding="utf-8")
-
-
-def _write_json(path: Path, data: dict[str, Any]) -> None:
-    path.parent.mkdir(parents=True, exist_ok=True)
-    temporary = path.with_suffix(path.suffix + ".tmp")
-    temporary.write_text(
-        json.dumps(data, indent=2, ensure_ascii=False, sort_keys=True),
-        encoding="utf-8",
-    )
-    temporary.replace(path)
-
-
-def _read_jsonl(path: Path) -> list[dict[str, Any]]:
-    records: list[dict[str, Any]] = []
-    for line_number, line in enumerate(
-        path.read_text(encoding="utf-8").splitlines(), 1
-    ):
-        if not line.strip():
-            continue
-        try:
-            record = json.loads(line)
-        except json.JSONDecodeError as exc:
-            raise ValueError(f"{path}:{line_number}: invalid JSON: {exc}") from exc
-        if not isinstance(record, dict):
-            raise ValueError(f"{path}:{line_number}: expected a JSON object")
-        records.append(record)
-    return records
 
 
 def _plan_timestamp(plan_path: Path, result: dict[str, Any]) -> str:

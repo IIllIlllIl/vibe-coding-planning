@@ -125,9 +125,9 @@ def parse_args(argv: list[str]) -> Config:
     parser.add_argument("--max-runs", type=int, default=0)
     parser.add_argument("--cpus", default="1")
     parser.add_argument("--mem", default="4G")
-    parser.add_argument("--timeout", default="1800")
-    parser.add_argument("--max-attempts", default="3")
-    parser.add_argument("--retry-backoff", default="60")
+    parser.add_argument("--timeout", default="0")
+    parser.add_argument("--max-attempts", default="1")
+    parser.add_argument("--retry-backoff", default="0")
     parser.add_argument("--submit", action="store_true")
     args = parser.parse_args(argv)
     if args.max_runs < 0:

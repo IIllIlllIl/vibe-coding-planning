@@ -68,6 +68,9 @@ def test_cli_defaults_poll_interval_to_60_minutes() -> None:
     )
 
     assert args.poll_interval == 3600
+    assert args.pull_timeout == "0"
+    assert args.max_pull_attempts == "1"
+    assert args.retry_backoff == "0"
     assert args.agent_cooldown == 18000
     assert args.max_agent_cooldowns == 20
 

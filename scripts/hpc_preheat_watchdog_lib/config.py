@@ -59,9 +59,9 @@ class WatchdogConfig:
     full_time: str = "08:00:00"
     cpus: str = "1"
     mem: str = "4G"
-    pull_timeout: str = "1800"
-    max_pull_attempts: str = "3"
-    retry_backoff: str = "60"
+    pull_timeout: str = "0"
+    max_pull_attempts: str = "1"
+    retry_backoff: str = "0"
     poll_interval_seconds: int = 3600
     ssh_retry_interval_seconds: int = 300
     ssh_retry_attempts: int = 3

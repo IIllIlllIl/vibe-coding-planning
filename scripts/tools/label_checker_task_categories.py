@@ -14,13 +14,9 @@ REPO_ROOT = Path(__file__).resolve().parents[2]
 if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
 
-from scripts.internal.evaluate_checker import (  # noqa: E402
-    _read_jsonl,
-    _write_json,
-    _write_jsonl,
-)
 from src.config import load_config  # noqa: E402
 from src.data.instance_loader import InstanceLoader  # noqa: E402
+from src.output.json_io import read_jsonl, write_json, write_jsonl  # noqa: E402
 
 DEFAULT_INPUT = Path(
     "output/SWE-PolyBench/polybench-pct-checker-datasets/"
@@ -54,7 +50,7 @@ def label_task_categories(
     loader: InstanceLoader,
 ) -> dict[str, Any]:
     """Create labeled full data and category subsets without editing input."""
-    cases = _read_jsonl(input_path)
+    cases = read_jsonl(input_path)
     labeled: list[dict[str, Any]] = []
     for case in cases:
         instance_id = str(case["instance_id"])
@@ -68,7 +64,7 @@ def label_task_categories(
 
     output_dir.mkdir(parents=True, exist_ok=True)
     labeled_path = output_dir / "cases.jsonl"
-    _write_jsonl(labeled_path, labeled)
+    write_jsonl(labeled_path, labeled)
 
     counts = Counter(case["task_category"] for case in labeled)
     subset_files: dict[str, dict[str, Any]] = {}
@@ -81,7 +77,7 @@ def label_task_categories(
         subset = [
             case for case in labeled if case["task_category"] == category
         ]
-        _write_jsonl(subset_path, subset)
+        write_jsonl(subset_path, subset)
         subset_files[category] = {
             "path": _portable_path(subset_path),
             "sha256": _sha256(subset_path),
@@ -103,7 +99,7 @@ def label_task_categories(
         "category_counts": dict(sorted(counts.items())),
         "subsets": subset_files,
     }
-    _write_json(output_dir / "manifest.json", manifest)
+    write_json(output_dir / "manifest.json", manifest)
     return manifest
 
 

@@ -54,8 +54,8 @@ def _parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--timeout",
         type=int,
-        default=1800,
-        help="Timeout per SIF pull in seconds (default: 1800)",
+        default=0,
+        help="Timeout per SIF pull in seconds; 0 disables the per-pull timeout (default: 0)",
     )
     parser.add_argument(
         "--max-attempts",
@@ -97,7 +97,7 @@ def _pull_with_retries(
     cache: ApptainerSifCache,
     image: str,
     *,
-    timeout: int,
+    timeout: int | None,
     max_attempts: int,
     retry_backoff: int,
 ) -> tuple[bool, str | None]:
@@ -134,6 +134,9 @@ def main() -> int:
     if args.max_attempts < 1:
         print("ERROR: --max-attempts must be >= 1", file=sys.stderr)
         return 2
+    if args.timeout < 0:
+        print("ERROR: --timeout must be >= 0", file=sys.stderr)
+        return 2
     if args.retry_backoff < 0:
         print("ERROR: --retry-backoff must be >= 0", file=sys.stderr)
         return 2
@@ -157,6 +160,7 @@ def main() -> int:
     images = _collect_images(config)
     print(f"Preparing {len(images)} SIF image(s) in {sif_cache_dir}")
 
+    pull_timeout = None if args.timeout == 0 else args.timeout
     pulled = 0
     cached = 0
     failures: list[tuple[str, str | None]] = []
@@ -171,7 +175,7 @@ def main() -> int:
         ok, error = _pull_with_retries(
             cache,
             image,
-            timeout=args.timeout,
+            timeout=pull_timeout,
             max_attempts=args.max_attempts,
             retry_backoff=args.retry_backoff,
         )
