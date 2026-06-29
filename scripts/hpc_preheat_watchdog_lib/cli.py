@@ -7,6 +7,7 @@ from scripts.hpc_preheat_watchdog_lib.config import (
     DEFAULT_STATE_FILE,
     DEFAULT_ULHPC_CONFIG,
     WatchdogConfig,
+    parse_command,
     parse_duration,
     resolve_repo_path,
 )
@@ -48,7 +49,13 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--agent-cooldown", type=parse_duration, default=18000)
     parser.add_argument("--max-repair-attempts", type=int, default=6)
     parser.add_argument("--max-whitelist-violations", type=int, default=2)
-    parser.add_argument("--max-agent-cooldowns", type=int, default=3)
+    parser.add_argument("--max-agent-cooldowns", type=int, default=20)
+    parser.add_argument(
+        "--agent-command",
+        type=parse_command,
+        default=None,
+        help="Repair agent command. The watchdog appends the repair prompt as the final argument.",
+    )
     parser.add_argument("--enable-agent-repair", action="store_true")
     parser.add_argument("--submit", action="store_true")
     parser.add_argument("--monitor-full", action="store_true")
@@ -84,6 +91,7 @@ def config_from_args(args: argparse.Namespace) -> WatchdogConfig:
         submit=args.submit,
         enable_agent_repair=args.enable_agent_repair,
         stop_after_full_submit=not args.monitor_full,
+        **({"agent_command": args.agent_command} if args.agent_command is not None else {}),
     )
 
 

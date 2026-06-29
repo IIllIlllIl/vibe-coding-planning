@@ -71,6 +71,8 @@ def build_repair_prompt(error_class: str, logs: str, violations: list[DiffViolat
         )
     return f"""You are repairing only the ULHPC SIF preheat submission harness.
 
+Make minimal changes within the explicit file whitelist, run focused tests, and exit.
+
 Allowed files:
 - scripts/tools/submit_apptainer_sif_preheat.sh
 - scripts/tools/hpc_sif_preheat_loop.py
@@ -95,11 +97,7 @@ Logs:
 
 def run_agent_repair(config: WatchdogConfig, *, error_class: str, logs: str) -> RepairResult:
     prompt = build_repair_prompt(error_class, logs)
-    system_prompt = (
-        "You are repairing only a ULHPC SIF preheat submission harness. "
-        "Make minimal changes within the explicit file whitelist, run focused tests, and exit."
-    )
-    command = [*config.claude_command, "--system-prompt", system_prompt, prompt]
+    command = [*config.agent_command, prompt]
     result = run_command(list(command))
     output = result.stdout + "\n" + result.stderr
     agent_quota = any(

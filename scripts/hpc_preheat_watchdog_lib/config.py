@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import argparse
 import re
+import shlex
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -34,6 +35,13 @@ def resolve_repo_path(raw: str | Path) -> Path:
     return path if path.is_absolute() else REPO_ROOT / path
 
 
+def parse_command(raw: str) -> tuple[str, ...]:
+    command = tuple(shlex.split(raw))
+    if not command:
+        raise argparse.ArgumentTypeError("command must not be empty")
+    return command
+
+
 @dataclass(frozen=True)
 class WatchdogConfig:
     pilot_config: Path
@@ -60,17 +68,19 @@ class WatchdogConfig:
     agent_cooldown_seconds: int = 18000
     max_repair_attempts: int = 6
     max_whitelist_violations: int = 2
-    max_agent_cooldowns: int = 3
+    max_agent_cooldowns: int = 20
     submit: bool = False
     enable_agent_repair: bool = False
     stop_after_full_submit: bool = True
-    claude_command: tuple[str, ...] = (
-        "claude",
-        "-p",
-        "--permission-mode",
-        "bypassPermissions",
-        "--allowed-tools",
-        "Bash,Edit,Read,Grep,Write",
+    agent_command: tuple[str, ...] = (
+        "codex",
+        "exec",
+        "--sandbox",
+        "workspace-write",
+        "--ask-for-approval",
+        "never",
+        "-C",
+        str(REPO_ROOT),
     )
 
     @property

@@ -8,7 +8,7 @@ from types import SimpleNamespace
 import pytest
 
 from scripts.hpc_preheat_watchdog_lib import classifier, cli, repair, supervisor
-from scripts.hpc_preheat_watchdog_lib.config import WatchdogConfig
+from scripts.hpc_preheat_watchdog_lib.config import WatchdogConfig, parse_command
 from scripts.hpc_preheat_watchdog_lib.preheat import SubmittedJob
 from scripts.hpc_preheat_watchdog_lib.state import WatchdogState, load_state, save_state
 
@@ -69,6 +69,46 @@ def test_cli_defaults_poll_interval_to_60_minutes() -> None:
 
     assert args.poll_interval == 3600
     assert args.agent_cooldown == 18000
+    assert args.max_agent_cooldowns == 20
+
+
+def test_parse_command_uses_shell_quoting() -> None:
+    assert parse_command('codex exec --sandbox workspace-write -C "/tmp/my repo"') == (
+        "codex",
+        "exec",
+        "--sandbox",
+        "workspace-write",
+        "-C",
+        "/tmp/my repo",
+    )
+
+
+def test_cli_accepts_custom_agent_command() -> None:
+    parser = cli.build_parser()
+    args = parser.parse_args(
+        [
+            "--pilot-config",
+            "pilot.yaml",
+            "--full-config",
+            "full.yaml",
+            "--pilot-sif-cache-dir",
+            "/scratch/pilot",
+            "--full-sif-cache-dir",
+            "/scratch/full",
+            "--agent-command",
+            "codex exec --sandbox workspace-write --ask-for-approval never",
+        ]
+    )
+    config = cli.config_from_args(args)
+
+    assert config.agent_command == (
+        "codex",
+        "exec",
+        "--sandbox",
+        "workspace-write",
+        "--ask-for-approval",
+        "never",
+    )
 
 
 def test_state_roundtrip(tmp_path: Path) -> None:
@@ -222,6 +262,27 @@ def test_agent_quota_enters_five_hour_cooldown(monkeypatch, tmp_path: Path) -> N
     assert result.phase == "agent_cooldown"
     assert result.agent_cooldowns == 1
     assert result.cooldown_until is not None
+
+
+def test_agent_repair_uses_configured_agent_command(monkeypatch, tmp_path: Path) -> None:
+    config = replace(
+        _config(tmp_path),
+        agent_command=("codex", "exec", "--sandbox", "workspace-write"),
+    )
+    captured: list[list[str]] = []
+
+    def fake_run_command(command: list[str]):
+        captured.append(command)
+        return SimpleNamespace(returncode=0, stdout="ok", stderr="")
+
+    monkeypatch.setattr(repair, "run_command", fake_run_command)
+
+    result = repair.run_agent_repair(config, error_class="time_limit", logs="DUE TO TIME LIMIT")
+
+    assert result.ok is True
+    assert captured
+    assert captured[0][:4] == ["codex", "exec", "--sandbox", "workspace-write"]
+    assert "Failure class: time_limit" in captured[0][-1]
 
 
 def test_whitelist_violation_restores_and_retries(monkeypatch, tmp_path: Path) -> None:
