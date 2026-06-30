@@ -20,6 +20,7 @@ class FakeSlurm:
         self.state_calls = 0
         self.log_calls = 0
         self.cache_calls = 0
+        self.merge_calls: list[tuple[str, str]] = []
 
     def get_job_state(self, job_id: str) -> str:
         self.state_calls += 1
@@ -32,6 +33,10 @@ class FakeSlurm:
     def cache_status(self, cache_dir: str, expected: int) -> dict:
         self.cache_calls += 1
         return {"complete": self.complete, "sif_count": expected if self.complete else 0}
+
+    def merge_sif_cache(self, source_dir: str, target_dir: str) -> dict:
+        self.merge_calls.append((source_dir, target_dir))
+        return {"merged": [], "skipped": [], "target_count": 0}
 
 
 def _config(tmp_path: Path, *, submit: bool = True, enable_agent_repair: bool = False) -> WatchdogConfig:
@@ -75,6 +80,20 @@ def test_cli_defaults_poll_interval_to_60_minutes() -> None:
     assert args.max_agent_cooldowns == 20
 
 
+def test_default_agent_command_matches_current_codex_cli(tmp_path: Path) -> None:
+    config = _config(tmp_path)
+
+    assert config.agent_command[:4] == (
+        "codex",
+        "exec",
+        "--sandbox",
+        "workspace-write",
+    )
+    assert "--ask-for-approval" not in config.agent_command
+    assert config.agent_command[-2] == "-C"
+    assert Path(config.agent_command[-1]).name == "vibe-coding-planning"
+
+
 def test_parse_command_uses_shell_quoting() -> None:
     assert parse_command('codex exec --sandbox workspace-write -C "/tmp/my repo"') == (
         "codex",
@@ -99,7 +118,7 @@ def test_cli_accepts_custom_agent_command() -> None:
             "--full-sif-cache-dir",
             "/scratch/full",
             "--agent-command",
-            "codex exec --sandbox workspace-write --ask-for-approval never",
+            "codex exec --sandbox workspace-write -C /tmp/repo",
         ]
     )
     config = cli.config_from_args(args)
@@ -109,8 +128,8 @@ def test_cli_accepts_custom_agent_command() -> None:
         "exec",
         "--sandbox",
         "workspace-write",
-        "--ask-for-approval",
-        "never",
+        "-C",
+        "/tmp/repo",
     )
 
 
@@ -203,6 +222,9 @@ def test_supervisor_submits_full_after_pilot_success(monkeypatch, tmp_path: Path
     result = supervisor.run_once(config, result, slurm)
     assert result.phase == "full_preheat_submitted"
     assert result.full_job_id == "full-job"
+    assert slurm.merge_calls == [
+        (config.pilot_sif_cache_dir, config.full_sif_cache_dir)
+    ]
     assert submitted == ["full"]
 
 

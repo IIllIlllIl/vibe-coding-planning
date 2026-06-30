@@ -77,8 +77,6 @@ class WatchdogConfig:
         "exec",
         "--sandbox",
         "workspace-write",
-        "--ask-for-approval",
-        "never",
         "-C",
         str(REPO_ROOT),
     )

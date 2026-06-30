@@ -23,6 +23,7 @@ class SlurmLike(Protocol):
     def get_job_state(self, job_id: str) -> str: ...
     def read_logs(self, stdout_path: str | None, stderr_path: str | None) -> str: ...
     def cache_status(self, cache_dir: str, expected: int) -> dict: ...
+    def merge_sif_cache(self, source_dir: str, target_dir: str) -> dict: ...
 
 
 def initialize_expected_counts(config: WatchdogConfig, state: WatchdogState) -> None:
@@ -156,6 +157,7 @@ def run_once(config: WatchdogConfig, state: WatchdogState, slurm: SlurmLike) -> 
 
     if state.phase == "pilot_completed":
         if config.submit:
+            slurm.merge_sif_cache(config.pilot_sif_cache_dir, config.full_sif_cache_dir)
             _submit_full(config, state)
         return state
 

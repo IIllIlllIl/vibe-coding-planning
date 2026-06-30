@@ -123,3 +123,49 @@ print(json.dumps({
         if result.returncode != 0:
             return {"complete": False, "sif_count": 0, "error": result.stderr.strip()}
         return json.loads(result.stdout.strip().splitlines()[-1])
+
+    def merge_sif_cache(self, source_dir: str, target_dir: str) -> dict[str, Any]:
+        remote_script = """
+import json
+import shutil
+import sys
+from pathlib import Path
+
+source = Path(sys.argv[1])
+target = Path(sys.argv[2])
+target.mkdir(parents=True, exist_ok=True)
+merged = []
+skipped = []
+for item in sorted(source.glob("*.sif")) if source.is_dir() else []:
+    destination = target / item.name
+    if destination.exists():
+        skipped.append(item.name)
+        continue
+    temporary = destination.with_name(destination.name + ".tmp.merge")
+    if temporary.exists():
+        temporary.unlink()
+    shutil.copy2(str(item), str(temporary))
+    temporary.replace(destination)
+    merged.append(item.name)
+print(json.dumps({
+    "merged": merged,
+    "skipped": skipped,
+    "target_count": len(list(target.glob("*.sif"))),
+}, sort_keys=True))
+"""
+        command = (
+            "python3 -c "
+            + shlex.quote(remote_script)
+            + " "
+            + shlex.quote(source_dir)
+            + " "
+            + shlex.quote(target_dir)
+        )
+        result = self.run_ssh(command)
+        if result.returncode != 0:
+            raise RuntimeError(
+                "failed to merge remote SIF caches\n"
+                f"stdout:\n{result.stdout}\n"
+                f"stderr:\n{result.stderr}"
+            )
+        return json.loads(result.stdout.strip().splitlines()[-1])
