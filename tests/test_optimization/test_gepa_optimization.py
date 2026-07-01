@@ -1346,6 +1346,23 @@ def test_strict_hpc_24h_config_loads(monkeypatch):
     assert "<candidate_rules>" in config.checker_instance_template
 
 
+def test_default_gepa_config_is_local_prompt_fix(monkeypatch):
+    monkeypatch.setenv("DEEPSEEK_API_KEY", "secret")
+    repo_root = Path(__file__).resolve().parents[2]
+    config = load_optimization_config(repo_root / "configs" / "gepa_verified_rules.yaml")
+
+    assert config.checker.model == "deepseek-v4-flash"
+    assert config.reflection.model == "deepseek-v4-flash"
+    assert config.container.runtime == "docker"
+    assert config.search.max_metric_calls == 3000
+    assert config.search.parallel == 2
+    assert config.initial_rules_path.name == "gepa_initial_rules_gpt_seed.md"
+    assert "strict-checker-local-newprompt-3000-20260701" in str(config.run_dir)
+    assert "plan-review checklist" in config.reflection_prompt
+    assert "misleading items" in config.reflection_prompt
+    assert "Merge redundant or highly similar items" in config.reflection_prompt
+
+
 def test_docker_config_defaults_are_preserved(monkeypatch):
     monkeypatch.setenv("DEEPSEEK_API_KEY", "secret")
     repo_root = Path(__file__).resolve().parents[2]
