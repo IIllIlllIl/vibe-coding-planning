@@ -1,0 +1,145 @@
+from __future__ import annotations
+
+import json
+import subprocess
+import sys
+from pathlib import Path
+from types import SimpleNamespace
+
+from scripts.tools import login_apptainer_sif_preheat
+
+
+def _config(sif_cache_dir: str = "/scratch/test/sif-cache") -> SimpleNamespace:
+    return SimpleNamespace(
+        container=SimpleNamespace(
+            runtime="apptainer",
+            sif_cache_dir=sif_cache_dir,
+        )
+    )
+
+
+def test_login_preheat_dry_run_filters_missing_images(
+    tmp_path: Path, monkeypatch, capsys
+) -> None:
+    ulhpc = tmp_path / "ulhpc.yaml"
+    ulhpc.write_text("user: tester\nhost: example.invalid\nport: 2222\n", encoding="utf-8")
+
+    monkeypatch.setattr(
+        login_apptainer_sif_preheat,
+        "load_optimization_config",
+        lambda path, **kwargs: _config(),
+    )
+    monkeypatch.setattr(
+        login_apptainer_sif_preheat,
+        "_collect_images",
+        lambda config: ["python:3.12-slim", "repo/image:latest"],
+    )
+    monkeypatch.setattr(
+        login_apptainer_sif_preheat,
+        "_remote_existing_sifs",
+        lambda *args: {"python_3.12-slim.sif"},
+    )
+    monkeypatch.setattr(
+        sys,
+        "argv",
+        [
+            "login_apptainer_sif_preheat.py",
+            "--config",
+            "config.yaml",
+            "--ulhpc-config",
+            str(ulhpc),
+            "--missing-only",
+            "--dry-run",
+        ],
+    )
+
+    assert login_apptainer_sif_preheat.main() == 0
+
+    events = [
+        json.loads(line)
+        for line in capsys.readouterr().out.splitlines()
+        if line.startswith("{")
+    ]
+    assert events[0]["event"] == "login_preheat_plan"
+    assert events[0]["image_count"] == 1
+    assert events[1] == {
+        "event": "selected_image",
+        "image": "repo/image:latest",
+        "sif": "repo_image_latest.sif",
+    }
+
+
+def test_login_preheat_executes_remote_script_with_scratch_cache(
+    tmp_path: Path, monkeypatch
+) -> None:
+    ulhpc = tmp_path / "ulhpc.yaml"
+    ulhpc.write_text("user: tester\nhost: example.invalid\nport: 2222\n", encoding="utf-8")
+    captured: dict[str, object] = {}
+
+    def fake_run(command, **kwargs):
+        captured["command"] = command
+        captured["input"] = kwargs.get("input")
+        return subprocess.CompletedProcess(command, 0, "", "")
+
+    monkeypatch.setattr(
+        login_apptainer_sif_preheat,
+        "load_optimization_config",
+        lambda path, **kwargs: _config(),
+    )
+    monkeypatch.setattr(
+        login_apptainer_sif_preheat,
+        "_collect_images",
+        lambda config: ["repo/image:latest"],
+    )
+    monkeypatch.setattr(login_apptainer_sif_preheat.subprocess, "run", fake_run)
+    monkeypatch.setattr(
+        sys,
+        "argv",
+        [
+            "login_apptainer_sif_preheat.py",
+            "--config",
+            "config.yaml",
+            "--ulhpc-config",
+            str(ulhpc),
+            "--apptainer-cache-dir",
+            "/scratch/test/apptainer-cache-login",
+            "--apptainer-tmp-dir",
+            "/scratch/test/apptainer-tmp-login",
+            "--timeout",
+            "123",
+        ],
+    )
+
+    assert login_apptainer_sif_preheat.main() == 0
+
+    command = captured["command"]
+    assert isinstance(command, list)
+    assert command[:3] == ["ssh", "-p", "2222"]
+    assert command[-2] == "tester@example.invalid"
+    payload = json.loads(str(captured["input"]))
+    assert payload["images"] == ["repo/image:latest"]
+    assert payload["sif_cache_dir"] == "/scratch/test/sif-cache"
+    assert payload["apptainer_cache_dir"] == "/scratch/test/apptainer-cache-login"
+    assert payload["apptainer_tmp_dir"] == "/scratch/test/apptainer-tmp-login"
+    assert payload["timeout"] == 123
+
+
+def test_login_preheat_requires_positive_timeout(monkeypatch) -> None:
+    monkeypatch.setattr(
+        sys,
+        "argv",
+        [
+            "login_apptainer_sif_preheat.py",
+            "--config",
+            "config.yaml",
+            "--timeout",
+            "0",
+        ],
+    )
+
+    try:
+        login_apptainer_sif_preheat.main()
+    except SystemExit as exc:
+        assert str(exc) == "--timeout must be positive for login preheat"
+    else:
+        raise AssertionError("expected SystemExit")

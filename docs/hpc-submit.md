@@ -377,6 +377,33 @@ conda run -n mini-swe env PATH=/Users/taoran.wang/miniconda3/bin:$PATH \
   --submit
 ```
 
+若 Slurm 预热作业长时间卡在 `PENDING (Priority)`，也可以使用 login 节点直接
+预热模式。该模式由本地脚本通过 SSH 在 access/login 节点串行调用 Apptainer，
+最终 `.sif` 仍写入 shared cache，但 Apptainer 的中间 cache/tmp 必须显式指向
+`/scratch`，避免写入 home quota：
+
+```bash
+# 只列出 shared cache 中缺失的前 3 个镜像
+conda run -n mini-swe python scripts/tools/login_apptainer_sif_preheat.py \
+  --config configs/gepa_verified_rules_strict_hpc_24h_newprompt_20260625_apptainer.yaml \
+  --missing-only \
+  --limit 3 \
+  --dry-run
+
+# 无人值守 login preheat，每轮串行拉取 1 个缺失镜像
+conda run -n mini-swe python scripts/tools/login_sif_preheat_watchdog.py \
+  --config configs/gepa_verified_rules_strict_hpc_24h_newprompt_20260625_apptainer.yaml \
+  --batch-size 1 \
+  --timeout 21600 \
+  --check-interval 1800 \
+  --max-no-progress-runs 3
+```
+
+login preheat 不调用 Checker、Reflection 或 DeepSeek API。为了降低 access 节点
+负载，应保持 `--batch-size 1` 或小批量串行运行。不要让 Slurm preheat job 和
+login preheat watchdog 同时写同一个 shared SIF cache；若切换到 login 模式，应先
+确认 Slurm preheat 已完成、取消或不会并发运行。
+
 HPC GEPA 配置示例见
 `configs/gepa_verified_rules_strict_hpc_24h_apptainer.yaml`：
 

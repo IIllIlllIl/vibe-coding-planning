@@ -13,6 +13,8 @@ scripts/
 ├── tools/                           # 可独立运行的辅助工具
 │   ├── submit_apptainer_sif_preheat.sh  # 单次 SIF preheat 提交
 │   ├── hpc_sif_preheat_loop.py          # SIF preheat 切片循环
+│   ├── login_apptainer_sif_preheat.py   # login 节点直接预热 SIF
+│   ├── login_sif_preheat_watchdog.py    # login SIF preheat 无人值守循环
 │   └── prepare_apptainer_sifs.py        # 本地/HPC 上预拉 SIF
 ├── internal/                        # 被外层脚本调用的内部入口
 │   └── run_gepa_rules.py            # run_batch.sh --gepa-rules 的实际入口
@@ -145,7 +147,52 @@ conda run -n mini-swe python scripts/hpc_preheat_watchdog.py \
 
 ---
 
-## 5. `hpc_resume_loop.py`
+## 5. `tools/login_apptainer_sif_preheat.py`
+
+在 ULHPC access/login 节点直接串行执行 `apptainer pull`，绕过 Slurm 排队。适合 SIF 预热作业长期 `PENDING (Priority)` 时使用。该模式不调用 DeepSeek，也不启动 GEPA。
+
+- 最终 `.sif` 仍写入 shared cache，例如 `/scratch/users/twang/vibe-coding-planning/shared/sif-cache`。
+- Apptainer layer cache/tmp 会强制指向 scratch，避免写满 home quota。
+- 默认只做串行低并发操作；不要同时运行 Slurm preheat 和 login preheat 写同一个 shared cache。
+
+**常用命令**
+
+```bash
+# 先查看缺失镜像中的前 3 个
+conda run -n mini-swe python scripts/tools/login_apptainer_sif_preheat.py \
+  --config configs/gepa_verified_rules_strict_hpc_24h_newprompt_20260625_apptainer.yaml \
+  --missing-only \
+  --limit 3 \
+  --dry-run
+
+# 拉取 1 个缺失镜像做 pilot
+conda run -n mini-swe python scripts/tools/login_apptainer_sif_preheat.py \
+  --config configs/gepa_verified_rules_strict_hpc_24h_newprompt_20260625_apptainer.yaml \
+  --missing-only \
+  --limit 1 \
+  --timeout 21600
+```
+
+---
+
+## 6. `tools/login_sif_preheat_watchdog.py`
+
+login preheat 的无人值守循环。每轮按 `--batch-size` 拉取一小批缺失镜像，随后重新检查 shared cache 数量；有进展则继续，无进展超过阈值则进入 blocked 并退出非零。
+
+**常用命令**
+
+```bash
+conda run -n mini-swe python scripts/tools/login_sif_preheat_watchdog.py \
+  --config configs/gepa_verified_rules_strict_hpc_24h_newprompt_20260625_apptainer.yaml \
+  --batch-size 1 \
+  --timeout 21600 \
+  --check-interval 1800 \
+  --max-no-progress-runs 3
+```
+
+---
+
+## 7. `hpc_resume_loop.py`
 
 把一次长 GEPA 任务切成多个短 Slurm 切片顺序提交。每片结束后检查 `run_dir` 里的 `result.json` / `gepa_state.bin`，如果已完成则退出，否则 resume 提交下一片。
 
