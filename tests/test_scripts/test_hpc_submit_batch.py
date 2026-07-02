@@ -113,6 +113,9 @@ prompts:
     assert "--conda-env mini-swe" not in result.stdout
     assert "--submit-only" in result.stdout
     assert "--json" in result.stdout
+    lines = result.stdout.splitlines()
+    assert lines[lines.index("--cpus") + 1] == "2"
+    assert lines[lines.index("--mem") + 1] == "8G"
     assert "--module" in result.stdout
     assert "lang/Python/3.11" in result.stdout
     assert "tools/Apptainer" in result.stdout

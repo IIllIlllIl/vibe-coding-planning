@@ -1,7 +1,7 @@
 paths:
   dataset_snapshot: output/SWE-bench_Verified/verified-round1-gepa-datasets/20260614_482_fdc056ae85df
   initial_rules: configs/gepa_initial_rules_gpt_seed.md
-  run_dir: output/SWE-bench_Verified/gepa-rules/strict-checker-local-newprompt-3000-20260701
+  run_dir: output/SWE-bench_Verified/gepa-rules/strict-checker-local-newprompt-3000-p1-20260702
 
 checker:
   model: deepseek-v4-flash
@@ -11,7 +11,9 @@ checker:
   max_steps: 500
   cost_limit: 6.0
   timeout: 1800
-  max_attempts: 3
+  # Local Docker Desktop can transiently fail while pulling many large
+  # SWE-bench images. Keep Checker retries higher than the HPC config.
+  max_attempts: 5
 
 reflection:
   model: deepseek-v4-flash
@@ -29,7 +31,10 @@ search:
   max_metric_calls: 3000
   projection_metric_calls: 3000
   reflection_minibatch_size: 3
-  parallel: 2
+  # Local Docker image acquisition is the bottleneck and Docker Desktop's
+  # content store has been unstable under concurrent GEPA checker workers.
+  # HPC Apptainer configs keep higher parallelism.
+  parallel: 1
   seed: 42
   skip_perfect_score: false
   min_proposals: 2

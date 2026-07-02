@@ -61,6 +61,32 @@ Before finishing work that touches LLM/HPC/Git configuration, check that:
 If a secret is found in tracked files or Git history, report it immediately and
 assume it is compromised. Do not print the secret value back to the user.
 
+HPC usage must also be FairShare-aware. ULHPC uses Slurm FairTree/FairShare and
+TRES accounting, so CPU, GPU, memory, and past usage affect later queue
+priority. Before proposing or submitting an HPC job, read `docs/hpc-submit.md`
+and warn the user if the command appears to over-request resources or bypass the
+documented workflow. Current defaults:
+
+- SIF preheat: `1 CPU / 4G`, because it is network/IO bound. If `MaxRSS` keeps
+  reaching the limit, increase only to `5G` or `6G`; do not add CPUs.
+- GEPA main run: start with `search.parallel=2`, `--cpus 2`, `--mem 8G`.
+  Increase to `parallel=4`, `--cpus 4`, `--mem 16G` only after `sacct` and
+  throughput show it is justified.
+- Do not use `8 CPU / 32G` as a default. Treat it as an exceptional request that
+  needs explicit justification from observed resource usage.
+- Avoid concurrent Slurm/login preheat jobs writing the same shared SIF cache.
+
+After a long HPC job finishes or fails, inspect resource usage with:
+
+```bash
+sacct -j <jobid> --format=JobID,JobName,State,Elapsed,AllocCPUS,TotalCPU,ReqMem,MaxRSS
+```
+
+Use `TotalCPU / (Elapsed * AllocCPUS)` and `MaxRSS / ReqMem` to decide whether
+the next run should reduce, keep, or increase requested resources. Report a
+warning before launching any run whose requested memory is not aligned with the
+ULHPC `batch` partition guideline of roughly `4G × cpus`.
+
 ## 4. Cleanup checklist — run BEFORE marking the task complete
 
 After finishing a task, before reporting completion to the user, delete these build/test artifacts:

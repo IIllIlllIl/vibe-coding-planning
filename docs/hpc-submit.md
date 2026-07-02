@@ -22,6 +22,31 @@
 GEPA 逻辑仍由现有脚本执行。PCT/PCC/checker-only 的 Docker-native 路径仍需后续
 单独设计 Apptainer 或 Docker-enabled 资源方案。
 
+### 1.1 FairShare 合规原则
+
+ULHPC 使用 Slurm FairTree/FairShare 调度：用户和 account 的历史资源使用会影响
+后续排队优先级。`FairShare` 越高，排队位置越有利；持续消耗更多 CPU、GPU 或内存
+会降低后续作业优先级。ULHPC 还启用了 TRES accounting，CPU、GPU 和内存都会进入
+计费/使用量统计；如果内存申请超过按 CPU 默认比例对应的内存，系统会按更高的
+CPU 等效资源重新计算使用量。参考官方说明：
+<https://hpc-docs.uni.lu/slurm/fairsharing/>。
+
+因此，本项目的 HPC 使用必须遵守以下约束：
+
+1. 申请资源以最近一次 `sacct` 观测为依据，不用“保险型”大配置作为默认值。
+2. SIF preheat 属于网络/IO 密集任务，默认只申请 `1 CPU` 和 `4G`；若 `MaxRSS`
+   继续贴近上限，再小幅提高到 `5G` 或 `6G`，不要增加 CPU。
+3. GEPA 主运行的 `--cpus` 应与 `search.parallel` 对齐。默认优先使用
+   `parallel=2` / `--cpus 2 --mem 8G` 做试运行；只有确认并发收益后才使用
+   `parallel=4` / `--cpus 4 --mem 16G`。
+4. 不再把 `8 CPU / 32G` 作为 GEPA 默认提交配置；只有在 `sacct` 显示内存或并发
+   确实不足时才临时使用。
+5. 每次长作业结束后记录 `sacct -j <jobid>
+   --format=JobID,JobName,State,Elapsed,AllocCPUS,TotalCPU,ReqMem,MaxRSS`，用
+   `TotalCPU / (Elapsed * AllocCPUS)` 和 `MaxRSS / ReqMem` 评估下一轮资源。
+6. 避免同时运行多个写同一 shared SIF cache 的 preheat 作业；这会放大 IO 压力并
+   造成重复下载/转换。
+
 ---
 
 ## 2. 与旧 Linux 服务器迁移方案的差异
@@ -83,7 +108,7 @@ bash scripts/hpc_smoke_check.sh
 bash scripts/hpc_smoke_check.sh \
   --submit \
   --time 00:30:00 \
-  --mem 8G
+  --mem 4G
 ```
 
 该 smoke 会检查：
@@ -128,8 +153,8 @@ bash scripts/hpc_submit_batch.sh \
   --gepa-config configs/gepa_verified_rules_reflection_smoke_apptainer.yaml \
   --job-name gepa-ref-smoke-apptainer \
   --time 02:00:00 \
-  --cpus 1 \
-  --mem 16G \
+  --cpus 2 \
+  --mem 8G \
   --remote-dataset-dir '~/hpc_datasets/vibe-coding-planning' \
   --remote-env-file '~/.config/vibe-coding-planning/deepseek.env' \
   --submit
@@ -182,8 +207,8 @@ module load、Python executable、dataset symlink 和 persistent output symlink 
 | `--job-name NAME` | Slurm 作业名（默认 `vibe-gepa`） |
 | `--partition NAME` | Slurm partition（默认 `batch`） |
 | `--time HH:MM:SS` | wall time（默认 `02:00:00`） |
-| `--cpus N` | CPUs per task（默认 `1`） |
-| `--mem SIZE` | 内存（默认 `16G`） |
+| `--cpus N` | CPUs per task（默认 `2`） |
+| `--mem SIZE` | 内存（默认 `8G`；GEPA 主任务按并发设置，preheat 默认 `4G`） |
 | `--gpus N` | GPUs（默认 `0`） |
 | `--remote-dir DIR` | HPC 侧工作目录（默认 `~/hpc_runs/vibe-coding-planning`） |
 | `--remote-dataset-dir DIR` | HPC 侧 dataset staging 根目录，必须位于 `--remote-dir` 外部（默认 `~/hpc_datasets/vibe-coding-planning`） |
@@ -225,8 +250,8 @@ ulhpc-submit \
   --remote-dir '~/hpc_runs/vibe-coding-planning' \
   --job-name gepa-ref-smoke-apptainer \
   --partition batch \
-  --cpus 1 \
-  --mem 16G \
+  --cpus 2 \
+  --mem 8G \
   --time 02:00:00 \
   --module lang/Python/3.11 \
   --module tools/Apptainer \
@@ -436,8 +461,8 @@ bash scripts/hpc_submit_batch.sh \
   --gepa-config configs/gepa_verified_rules_reflection_smoke_apptainer.yaml \
   --job-name gepa-ref-smoke-apptainer \
   --time 02:00:00 \
-  --cpus 1 \
-  --mem 16G \
+  --cpus 2 \
+  --mem 8G \
   --remote-env-file '~/.config/vibe-coding-planning/deepseek.env' \
   --submit
 ```
@@ -505,8 +530,8 @@ conda run -n mini-swe python scripts/hpc_resume_loop.py \
   --job-name gepa-strict-newprompt \
   --remote-dir '~/hpc_runs/vibe-gepa-strict-newprompt' \
   --time 24:00:00 \
-  --cpus 4 \
-  --mem 32G \
+  --cpus 2 \
+  --mem 8G \
   --submit
 ```
 
@@ -873,6 +898,8 @@ image 约需 **450-500 GB**，加上 `python:3.12-slim` 后约 500 GB，远低�
 
 `batch` 分区对 GEPA 已足够。注意该分区 `MaxMemPerCPU=4096 MB`，因此内存申请
 最好按 `4 GB × cpus` 对齐；例如 `--cpus 2 --mem 8G`、`--cpus 4 --mem 16G`。
+超过该比例的内存申请会在 ULHPC 的 TRES accounting 中折算成更高的资源使用量，
+从而影响 FairShare。
 
 ### 9.3 SIF 缓存策略
 
@@ -957,6 +984,8 @@ bash scripts/hpc_submit_batch.sh \
 - `--cpus` = `search.parallel`（strict 24h 配置初始为 4，资源探测后可下调）。
 - `--mem` = 4 GB × `--cpus`（batch 分区 `MaxMemPerCPU=4G`）。
 - `--time`：strict Checker GEPA 试运行使用 `24:00:00`。
+- 每轮结束后用 `sacct` 检查 CPU 和内存效率。若 CPU 利用率长期很低且吞吐没有
+  下降，应把下一轮从 `parallel=4` 下调到 `parallel=2`，优先保护 FairShare。
 
 `DockerCapacityWindow` 参数仍复用 `docker:` 配置段：
 
@@ -981,5 +1010,6 @@ docker:
 3. 先按**按需拉取**模式提交 strict Checker GEPA 试运行；若首次运行因 image
    转换等待过久，再决定是否提交 `submit_apptainer_sif_preheat.sh` 一次性预拉 482
    个 benchmark SIF 到 shared scratch cache。
-4. 用 `parallel=4` / `--cpus 4 --mem 16G --time 24:00:00` 试运行；如资源探测或
-   DeepSeek rate limit 显示不稳，先下调到 `parallel=2`。
+4. 默认用 `parallel=2` / `--cpus 2 --mem 8G --time 24:00:00` 试运行；若
+   `sacct` 与 GEPA 吞吐显示 CPU、内存和 DeepSeek rate limit 都支持更高并发，再
+   提高到 `parallel=4` / `--cpus 4 --mem 16G`。

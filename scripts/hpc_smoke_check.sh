@@ -11,7 +11,7 @@ JOB_NAME="vibe-hpc-smoke"
 PARTITION="batch"
 TIME_LIMIT="00:30:00"
 CPUS="1"
-MEM="8G"
+MEM="4G"
 GPUS="0"
 REMOTE_DIR=""
 CONDA_ENV="mini-swe"
@@ -45,7 +45,7 @@ Options:
   --partition NAME          Slurm partition (default: batch)
   --time HH:MM:SS           Wall time (default: 00:30:00)
   --cpus N                  CPUs per task (default: 1)
-  --mem SIZE                Memory (default: 8G)
+  --mem SIZE                Memory (default: 4G)
   --gpus N                  GPUs (default: 0)
   --remote-dir DIR          Remote project directory for ulhpc-submit
   --ulhpc-config FILE       ulhpc-submit config file

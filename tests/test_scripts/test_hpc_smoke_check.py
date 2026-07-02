@@ -78,6 +78,8 @@ def test_hpc_smoke_dry_run_checks_connectivity_without_sync(tmp_path) -> None:
     assert "--no-sync" in args
     assert "--user" in args
     assert "dummy" in args
+    assert args[args.index("--cpus") + 1] == "1"
+    assert args[args.index("--mem") + 1] == "4G"
     assert "src.environment.docker_env maintain" in "\n".join(args)
 
 
@@ -85,7 +87,6 @@ def test_hpc_smoke_submit_omits_dry_run_and_no_sync(tmp_path) -> None:
     fake_bin = tmp_path / "bin"
     fake_bin.mkdir()
     capture = tmp_path / "args.txt"
-    ssh_capture = tmp_path / "ssh_args.txt"
     fake = fake_bin / "ulhpc-submit"
     fake.write_text(
         "#!/usr/bin/env bash\n"

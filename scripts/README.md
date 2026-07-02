@@ -41,8 +41,8 @@ bash scripts/hpc_submit_batch.sh \
   --gepa-config configs/gepa_verified_rules_strict_hpc_24h_apptainer.yaml \
   --job-name gepa-strict-24h \
   --time 24:00:00 \
-  --cpus 4 \
-  --mem 32G
+  --cpus 2 \
+  --mem 8G
 
 # 正式提交
 bash scripts/hpc_submit_batch.sh \
@@ -50,12 +50,15 @@ bash scripts/hpc_submit_batch.sh \
   --gepa-config configs/gepa_verified_rules_strict_hpc_24h_apptainer.yaml \
   --job-name gepa-strict-24h \
   --time 24:00:00 \
-  --cpus 4 \
-  --mem 32G \
+  --cpus 2 \
+  --mem 8G \
   --submit
 ```
 
-**注意**：该脚本需要远程 HPC 节点上的 `~/.config/vibe-coding-planning/deepseek.env` 提供 `DEEPSEEK_API_KEY`。
+**注意**：该脚本需要远程 HPC 节点上的 `~/.config/vibe-coding-planning/deepseek.env`
+提供 `DEEPSEEK_API_KEY`。GEPA 主任务的 `--cpus` 应与 `search.parallel` 对齐；
+默认先用 `2 CPU / 8G`，只有 `sacct` 显示资源确实需要且吞吐受益时再提高到
+`4 CPU / 16G`。不要把 `8 CPU / 32G` 作为默认配置。
 
 ---
 
@@ -228,4 +231,8 @@ conda run -n mini-swe python scripts/hpc_resume_loop.py \
 3. **不要删除 `.claude/`**。该目录存放 Claude Code 项目级权限设置，误删会导致下次会话需要重新授权。
 4. **HPC SIF preheat 不需要 DeepSeek key**。只有 GEPA 主作业需要 `DEEPSEEK_API_KEY`。
 5. **`.ulhpc_submit/` 是临时文件**。由 `ulhpc-submit` 生成，用于本地/远程同步；任务结束后可删除，不要提交到 Git。
-6. 每次修改配置或 HPC 脚本后，运行 `git diff` 确认没有密钥、token 或个人路径泄露。
+6. **不要过度申请 HPC 资源**。SIF preheat 默认 `1 CPU / 4G`；GEPA 默认先用
+   `2 CPU / 8G`，确认需要后再提高到 `4 CPU / 16G`。长作业结束后用
+   `sacct` 检查 `Elapsed`、`AllocCPUS`、`TotalCPU`、`ReqMem` 和 `MaxRSS`，再决定
+   下一轮资源。
+7. 每次修改配置或 HPC 脚本后，运行 `git diff` 确认没有密钥、token 或个人路径泄露。

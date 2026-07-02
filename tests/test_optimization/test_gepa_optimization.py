@@ -1355,9 +1355,10 @@ def test_default_gepa_config_is_local_prompt_fix(monkeypatch):
     assert config.reflection.model == "deepseek-v4-flash"
     assert config.container.runtime == "docker"
     assert config.search.max_metric_calls == 3000
-    assert config.search.parallel == 2
+    assert config.search.parallel == 1
+    assert config.checker.max_attempts == 5
     assert config.initial_rules_path.name == "gepa_initial_rules_gpt_seed.md"
-    assert "strict-checker-local-newprompt-3000-20260701" in str(config.run_dir)
+    assert "strict-checker-local-newprompt-3000-p1-20260702" in str(config.run_dir)
     assert "plan-review checklist" in config.reflection_prompt
     assert "misleading items" in config.reflection_prompt
     assert "Merge redundant or highly similar items" in config.reflection_prompt
