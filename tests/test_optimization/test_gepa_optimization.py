@@ -34,6 +34,7 @@ from src.optimization.online_config import (
 )
 from src.optimization.online_dataset import load_online_snapshot
 from src.optimization.online_models import OnlineRolloutOutput
+from src.optimization.online_rollout import OnlinePCTRolloutRunner
 from src.optimization.online_runner import run_online_optimization
 from src.optimization.reflection import (
     EvidenceBundleWriter,
@@ -275,6 +276,31 @@ evaluator:
         load_online_optimization_config(bad)
 
 
+def test_online_smoke_pilot_config_is_small_and_auditable():
+    repo_root = Path(__file__).resolve().parents[2]
+    config = load_online_optimization_config(
+        repo_root
+        / "configs"
+        / "gepa_online_planning_smoke_3to5iter_20260703.yaml",
+        require_api_keys=False,
+    )
+
+    assert "pilot_6_4" in str(config.dataset_snapshot)
+    assert "smoke-pilot-3to5iter" in str(config.run_dir)
+    assert config.search.max_metric_calls == 20
+    assert config.search.reflection_minibatch_size == 1
+    assert config.search.parallel == 1
+    assert config.plan.model == "deepseek-v4-flash"
+    assert config.code.model == "deepseek-v4-flash"
+    assert config.reflection.model == "deepseek-v4-flash"
+    assert "{{planning_rules}}" in config.plan_instance_template
+    assert "{{planning_rules}}" not in config.code_prompt
+    assert "{{candidate_rules}}" not in config.code_prompt
+    assert "{{planning_rules}}" not in config.code_instance_template
+    assert "{{candidate_rules}}" not in config.code_instance_template
+    assert "current online rollout evidence" in config.reflection_prompt
+
+
 def test_plan_agent_accepts_optional_planning_rules(monkeypatch):
     from src.agents import plan_agent
     from src.config import Config, PromptConfig, SystemConfig
@@ -334,6 +360,91 @@ def test_plan_agent_accepts_optional_planning_rules(monkeypatch):
         "nrpv_block": "NRPV",
         "planning_rules": "candidate planning rules",
     }
+
+
+def test_online_rollout_audit_records_design_boundaries(tmp_path, monkeypatch):
+    config = _online_config(tmp_path)
+    case = load_online_snapshot(config.dataset_snapshot)[0][0]
+    calls = {}
+    monkeypatch.setenv("TEST_API_KEY", "secret")
+
+    class FakeEnv:
+        def __init__(self, docker_config, capacity_window):
+            calls["env_config"] = docker_config
+            calls["capacity_window"] = capacity_window
+
+        def start(self, **kwargs):
+            calls["start_kwargs"] = kwargs
+
+        def stop(self):
+            calls["stopped"] = True
+
+    monkeypatch.setattr(
+        "src.optimization.online_rollout.DockerEnvWrapper",
+        FakeEnv,
+    )
+    monkeypatch.setattr(
+        "src.optimization.online_rollout.OnlinePCTRolloutRunner._load_instance_info",
+        lambda self, case: {
+            "instance_id": case.instance_id,
+            "repo": "org/repo",
+            "base_commit": "abc123",
+            "repo_path": "/tmp/repo",
+        },
+    )
+
+    def fake_plan_run(config, issue_description, env, *, planning_rules):
+        calls["planning_rules"] = planning_rules
+        return "generated plan", [{"role": "assistant", "content": "plan"}]
+
+    def fake_code_run(config, plan, issue_description, env):
+        calls["code_plan"] = plan
+        return "diff --git a/a.py b/a.py\n", [
+            {"role": "assistant", "content": "code"}
+        ]
+
+    monkeypatch.setattr("src.optimization.online_rollout.plan_agent.run", fake_plan_run)
+    monkeypatch.setattr("src.optimization.online_rollout.code_agent.run", fake_code_run)
+    monkeypatch.setattr(
+        "src.optimization.online_rollout.evaluate",
+        lambda patch, instance_info, timeout, run_id_suffix: {
+            "resolved": True,
+            "stdout": "ok",
+        },
+    )
+
+    result = OnlinePCTRolloutRunner(config, _FakeCapacityWindow())(
+        case,
+        "candidate planning rules",
+    )
+
+    assert result.resolved is True
+    assert calls["planning_rules"] == "candidate planning rules"
+    assert calls["code_plan"] == "generated plan"
+    assert calls["stopped"] is True
+    audit = [
+        json.loads(line)
+        for line in (config.run_dir / "audit_events.jsonl").read_text().splitlines()
+    ]
+    started = next(
+        record for record in audit if record["event"] == "online_rollout_started"
+    )
+    completed = next(
+        record for record in audit if record["event"] == "online_rollout_completed"
+    )
+    assert started["plan_agent_receives_candidate_rules"] is True
+    assert started["code_agent_receives_candidate_rules"] is False
+    assert started["evaluator_receives_candidate_rules"] is False
+    assert started["historical_plan_used"] is False
+    assert started["historical_resolved_used"] is False
+    assert started["historical_asi_used"] is False
+    assert started["plan_prompt_has_candidate_rules"] is True
+    assert started["code_prompt_has_candidate_rules"] is False
+    assert completed["resolved"] is True
+    assert completed["plan_chars"] == len("generated plan")
+    assert completed["patch_chars"] == len("diff --git a/a.py b/a.py\n")
+    assert completed["plan_trajectory_messages"] == 1
+    assert completed["code_trajectory_messages"] == 1
 
 
 def test_config_requires_zero_checker_temperature(tmp_path, monkeypatch):

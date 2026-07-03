@@ -1,0 +1,150 @@
+mode: online_planning
+
+paths:
+  dataset_snapshot: output/SWE-bench_Verified/gepa-pilot-datasets/pilot_6_4_seed42_73df941adb4d
+  initial_rules: configs/gepa_initial_rules_gpt_seed.md
+  run_dir: output/SWE-bench_Verified/gepa-rules/online-planning-smoke-pilot-3to5iter-20260703
+
+dataset:
+  name: SWE-bench/SWE-bench_Verified
+
+plan:
+  model: deepseek-v4-flash
+  api_base: https://api.deepseek.com
+  api_key_env: DEEPSEEK_API_KEY
+  temperature: 0.0
+  max_steps: 200
+  cost_limit: 6.0
+  timeout: 1800
+  max_attempts: 1
+
+code:
+  model: deepseek-v4-flash
+  api_base: https://api.deepseek.com
+  api_key_env: DEEPSEEK_API_KEY
+  temperature: 0.0
+  max_steps: 500
+  cost_limit: 10.0
+  timeout: 1800
+  max_attempts: 1
+
+reflection:
+  model: deepseek-v4-flash
+  api_base: https://api.deepseek.com
+  api_key_env: DEEPSEEK_API_KEY
+  temperature: 0.7
+  max_steps: 500
+  cost_limit: 10.0
+  timeout: 1800
+
+search:
+  # GEPA checks max_metric_calls at iteration boundaries. This value targets a
+  # small 3-5 proposal smoke run, not a formal optimization budget.
+  max_metric_calls: 20
+  projection_metric_calls: 100
+  reflection_minibatch_size: 1
+  seed: 42
+  parallel: 1
+  skip_perfect_score: false
+  min_proposals: 1
+
+docker:
+  workdir: /testbed
+  timeout: 1800
+  delete_images_after_instance: false
+  min_free_gb: 20
+  max_cached_images: 75
+
+container:
+  runtime: docker
+
+evaluator:
+  timeout: 1800
+
+prompts:
+  plan_system: |
+    You are a strict planning agent. Produce a structured plan that another
+    agent will execute.
+
+    Use the supplied planning rules as the primary planning checklist. You may
+    inspect the repository and make conservative engineering inferences when a
+    rule does not cover a detail, but do not present unsupported assumptions as
+    facts.
+
+    Your response must contain exactly one bash code block with one command.
+    Write the plan to /tmp/plan.md. After the file is written, your next
+    response must be exactly:
+    echo COMPLETE_TASK_AND_SUBMIT_FINAL_OUTPUT && cat /tmp/plan.md
+
+    Do not modify files under /testbed. Use /tmp only for scratch work and the
+    final plan file.
+
+    ## Plan Format
+    {{nrpv_block}}
+
+  plan_instance: |
+    <planning_rules>
+    {{planning_rules}}
+    </planning_rules>
+
+    <pr_description>
+    Consider the following PR description:
+    {{task}}
+    </pr_description>
+
+  code_system: |
+    You are in execution mode. Follow the approved plan below exactly.
+
+    Approved plan:
+    --- plan start ---
+    {{plan}}
+    --- plan end ---
+
+  code_instance: |
+    <pr_description>
+    Consider the following PR description:
+    {{task}}
+    </pr_description>
+
+    <instructions>
+    Implement the approved plan in /testbed. Do not modify tests or test
+    fixtures. When finished, submit the patch with:
+    echo COMPLETE_TASK_AND_SUBMIT_FINAL_OUTPUT && git diff --cached
+    </instructions>
+
+  reflection_system: |
+    You maintain the complete planning checklist used by a strict Plan Agent.
+
+    Files under {{evidence_path}} contain current online rollout evidence for
+    the minibatch. They may include generated plans, Plan and Code Agent
+    trajectories, generated patches, evaluator results, resolved values, scores,
+    and attribution hints.
+
+    Use this execution-after evidence only to improve the planning checklist.
+    Distinguish plan/rule problems from Code Agent deviations and infrastructure
+    failures. Do not add rules that depend on seeing evaluator results,
+    generated patches, trajectories, resolved labels, or future execution
+    output at deployment time.
+
+    Preserve useful checklist items. Delete misleading items. Merge redundant
+    items. Add new items only when the lesson is general and deployable from
+    issue, repository, and planning rules before code execution.
+
+    Write only the complete revised checklist to /tmp/candidate_rules.txt. Then
+    submit with:
+    echo COMPLETE_TASK_AND_SUBMIT_FINAL_OUTPUT && cat /tmp/candidate_rules.txt
+
+  reflection_instance: |
+    <current_rules>
+    {{current_rules}}
+    </current_rules>
+
+    Evidence for the current minibatch is mounted read-only at:
+    {{evidence_path}}
+
+  nrpv_block: |
+    Your plan must include:
+    - Navigation: files, symbols, and repository areas to inspect.
+    - Reproduction: how to understand or reproduce the reported behavior.
+    - Patch: the narrowly scoped implementation strategy.
+    - Validation: checks tied to the reported behavior.

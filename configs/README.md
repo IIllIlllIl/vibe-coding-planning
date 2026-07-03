@@ -12,6 +12,7 @@ from file names.
 | `gepa_verified_rules_strict_local_newprompt_3000.yaml` | local Docker | Explicit name for the same local prompt-fix 3000 run. Use this when comparing against earlier strict-only runs. Keeps local Docker checker execution serial for reliability and writes to the same fresh `p1` run_dir. |
 | `gepa_verified_rules_strict_hpc_24h_newprompt_20260625_apptainer.yaml` | ULHPC Apptainer | Active HPC prompt-fix run. Uses the shared scratch SIF cache and `parallel: 4`. |
 | `gepa_online_planning_pilot.yaml` | local Docker | Experimental online GEPA planning run. Candidate rules go to the Plan Agent as a strict planning checklist; Code Agent only sees the generated plan. Use only for small pilot validation. |
+| `gepa_online_planning_smoke_3to5iter_20260703.yaml` | local Docker | Dedicated online GEPA smoke pilot for validating input isolation, rollout logging, and 3-5 proposal behavior before any formal run. |
 
 The prompt-fix configs are the current mainline. They differ from the older
 strict-only run by using the newer Reflection prompt that maintains rules as a
