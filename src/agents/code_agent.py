@@ -84,6 +84,7 @@ def run(
         model_name=config.system.model,
         api_key=config.api_key,
         api_base=config.system.api_base,
+        temperature=config.agent.temperature,
     )
 
     agent = build_default_agent(

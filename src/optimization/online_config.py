@@ -1,0 +1,173 @@
+"""Configuration for online GEPA planning optimization."""
+
+from __future__ import annotations
+
+import os
+from dataclasses import dataclass
+from pathlib import Path
+from typing import Any
+
+import yaml
+
+from src.config import DockerConfig
+from src.optimization.config import ContainerConfig, ModelConfig, SearchConfig
+
+
+@dataclass(frozen=True)
+class OnlineDatasetConfig:
+    dataset: str = "SWE-bench/SWE-bench_Verified"
+    dataset_type: str = ""
+    language_filter: str = ""
+
+
+@dataclass(frozen=True)
+class OnlineOptimizationConfig:
+    dataset_snapshot: Path
+    initial_rules_path: Path
+    run_dir: Path
+    dataset: OnlineDatasetConfig
+    plan: ModelConfig
+    code: ModelConfig
+    reflection: ModelConfig
+    search: SearchConfig
+    docker: DockerConfig
+    container: ContainerConfig
+    plan_prompt: str
+    plan_instance_template: str
+    code_prompt: str
+    code_instance_template: str
+    reflection_prompt: str
+    reflection_instance_template: str
+    nrpv_block: str
+    evaluator_timeout: int
+
+
+def _mapping(value: Any, name: str) -> dict[str, Any]:
+    if not isinstance(value, dict):
+        raise ValueError(f"{name} must be a mapping")
+    return value
+
+
+def _model(data: dict[str, Any], *, default_temperature: float) -> ModelConfig:
+    max_attempts = int(data.get("max_attempts", 1))
+    if max_attempts < 1:
+        raise ValueError("model max_attempts must be positive")
+    return ModelConfig(
+        model=str(data["model"]),
+        api_base=str(data["api_base"]),
+        api_key_env=str(data.get("api_key_env", "DEEPSEEK_API_KEY")),
+        temperature=float(data.get("temperature", default_temperature)),
+        max_steps=int(data.get("max_steps", 50)),
+        cost_limit=float(data.get("cost_limit", 1.0)),
+        timeout=int(data.get("timeout", 1800)),
+        max_attempts=max_attempts,
+    )
+
+
+def load_online_optimization_config(
+    path: str | Path,
+    *,
+    require_api_keys: bool = True,
+) -> OnlineOptimizationConfig:
+    config_path = Path(path).resolve()
+    raw = yaml.safe_load(config_path.read_text(encoding="utf-8")) or {}
+    if raw.get("mode") != "online_planning":
+        raise ValueError("online GEPA config must set mode: online_planning")
+    root = config_path.parents[1] if config_path.parent.name == "configs" else Path.cwd()
+
+    paths = _mapping(raw.get("paths"), "paths")
+    dataset_data = _mapping(raw.get("dataset", {}), "dataset")
+    plan = _model(_mapping(raw.get("plan"), "plan"), default_temperature=0.0)
+    code = _model(_mapping(raw.get("code"), "code"), default_temperature=0.0)
+    reflection = _model(
+        _mapping(raw.get("reflection"), "reflection"),
+        default_temperature=0.7,
+    )
+    search_data = _mapping(raw.get("search"), "search")
+    docker_data = _mapping(raw.get("docker", {}), "docker")
+    container_data = _mapping(raw.get("container", {}), "container")
+    prompts = _mapping(raw.get("prompts"), "prompts")
+    evaluator_data = _mapping(raw.get("evaluator", {}), "evaluator")
+
+    if require_api_keys:
+        for model_config in (plan, code, reflection):
+            if not os.environ.get(model_config.api_key_env):
+                raise ValueError(
+                    f"environment variable {model_config.api_key_env} is not set"
+                )
+
+    search = SearchConfig(
+        max_metric_calls=int(search_data["max_metric_calls"]),
+        projection_metric_calls=int(
+            search_data.get(
+                "projection_metric_calls",
+                search_data["max_metric_calls"],
+            )
+        ),
+        reflection_minibatch_size=int(
+            search_data.get("reflection_minibatch_size", 3)
+        ),
+        seed=int(search_data.get("seed", 42)),
+        parallel=int(search_data.get("parallel", 1)),
+        skip_perfect_score=bool(search_data.get("skip_perfect_score", True)),
+        min_proposals=int(search_data.get("min_proposals", 0)),
+    )
+    if min(
+        search.max_metric_calls,
+        search.projection_metric_calls,
+        search.reflection_minibatch_size,
+        search.parallel,
+    ) < 1:
+        raise ValueError("search budgets and parallelism must be positive")
+    if search.min_proposals < 0:
+        raise ValueError("search.min_proposals must be non-negative")
+
+    def resolve(raw_path: str) -> Path:
+        candidate = Path(raw_path)
+        return candidate if candidate.is_absolute() else root / candidate
+
+    docker = DockerConfig(
+        workdir=str(docker_data.get("workdir", "/testbed")),
+        timeout=int(docker_data.get("timeout", 30)),
+        delete_images_after_instance=bool(
+            docker_data.get("delete_images_after_instance", True)
+        ),
+        min_free_gb=int(docker_data.get("min_free_gb", 20)),
+        max_cached_images=int(docker_data.get("max_cached_images", 75)),
+        polybench_build_fallback=False,
+    )
+    container = ContainerConfig(
+        runtime=str(container_data.get("runtime", "docker")),
+        module=str(container_data.get("module", "tools/Apptainer")),
+        sif_cache_dir=resolve(str(container_data.get("sif_cache_dir", "/tmp/vibe-sif-cache"))),
+        writable_tmpfs=bool(container_data.get("writable_tmpfs", True)),
+    )
+    if container.runtime not in ("docker", "apptainer"):
+        raise ValueError(
+            f"container.runtime must be 'docker' or 'apptainer', got {container.runtime!r}"
+        )
+
+    return OnlineOptimizationConfig(
+        dataset_snapshot=resolve(str(paths["dataset_snapshot"])),
+        initial_rules_path=resolve(str(paths["initial_rules"])),
+        run_dir=resolve(str(paths["run_dir"])),
+        dataset=OnlineDatasetConfig(
+            dataset=str(dataset_data.get("name", "SWE-bench/SWE-bench_Verified")),
+            dataset_type=str(dataset_data.get("type", "")),
+            language_filter=str(dataset_data.get("language_filter", "")),
+        ),
+        plan=plan,
+        code=code,
+        reflection=reflection,
+        search=search,
+        docker=docker,
+        container=container,
+        plan_prompt=str(prompts["plan_system"]),
+        plan_instance_template=str(prompts["plan_instance"]),
+        code_prompt=str(prompts["code_system"]),
+        code_instance_template=str(prompts["code_instance"]),
+        reflection_prompt=str(prompts["reflection_system"]),
+        reflection_instance_template=str(prompts["reflection_instance"]),
+        nrpv_block=str(prompts["nrpv_block"]),
+        evaluator_timeout=int(evaluator_data.get("timeout", 1800)),
+    )

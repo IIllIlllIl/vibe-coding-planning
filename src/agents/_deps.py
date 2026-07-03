@@ -78,6 +78,7 @@ def build_model(
     model_name: str,
     api_key: str,
     api_base: str,
+    temperature: float | None = None,
 ) -> Any:
     """Build a LitellmModel with provider-prefixed model name.
 
@@ -99,9 +100,13 @@ def build_model(
     prefixed = _infer_litellm_prefix(model_name, api_base)
     logger.info("Building LitellmModel: resolved_name=%s", prefixed)
 
+    model_kwargs = {"api_key": api_key, "api_base": api_base}
+    if temperature is not None:
+        model_kwargs["temperature"] = temperature
+
     return LitellmModel(
         model_name=prefixed,
-        model_kwargs={"api_key": api_key, "api_base": api_base},
+        model_kwargs=model_kwargs,
         cost_tracking="ignore_errors",
     )
 

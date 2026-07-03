@@ -1,11 +1,9 @@
-"""Isolated evidence bundles and mini-swe-agent rule proposer."""
+"""Reflection proposer for online GEPA planning rules."""
 
 from __future__ import annotations
 
-import json
 import os
 import re
-from pathlib import Path
 from typing import Any, Mapping, Sequence
 
 from src.agents._deps import (
@@ -14,89 +12,16 @@ from src.agents._deps import (
     extract_last_assistant,
     import_minisweagent,
 )
-from src.environment.apptainer_env import ApptainerEnvironment
 from src.environment.docker_env import DockerCapacityWindow
 from src.optimization.audit import AuditedModel, JsonlLogger, text_sha256
-from src.optimization.config import OptimizationConfig
+from src.optimization.online_config import OnlineOptimizationConfig
+from src.optimization.reflection import EvidenceBundleWriter
 
 
-def _write_json(path: Path, value: Any) -> None:
-    path.write_text(
-        json.dumps(value, indent=2, ensure_ascii=False, sort_keys=True) + "\n",
-        encoding="utf-8",
-    )
-
-
-class EvidenceBundleWriter:
-    def __init__(self, run_dir: Path, *, mode: str = "checker") -> None:
-        self.root = run_dir / "reflection_inputs"
-        self.mode = mode
-        if mode not in {"checker", "online_planning"}:
-            raise ValueError(f"unknown reflection evidence mode: {mode}")
-        existing = [
-            int(path.name.rsplit("_", 1)[-1])
-            for path in self.root.glob("iteration_*")
-            if path.is_dir() and path.name.rsplit("_", 1)[-1].isdigit()
-        ]
-        self.counter = max(existing, default=0)
-
-    def write(self, records: Sequence[Mapping[str, Any]]) -> Path:
-        self.counter += 1
-        bundle = self.root / f"iteration_{self.counter:04d}"
-        bundle.mkdir(parents=True, exist_ok=False)
-        manifest = []
-        for record in records:
-            instance_id = str(record["instance_id"])
-            case_dir = bundle / instance_id
-            case_dir.mkdir()
-            if self.mode == "checker":
-                _write_json(case_dir / "checker_output.json", record["checker_output"])
-                _write_json(case_dir / "plan_trajectory.json", record["plan_trajectory"])
-                _write_json(case_dir / "code_trajectory.json", record["code_trajectory"])
-                (case_dir / "generated.patch").write_text(
-                    str(record["generated_patch"]),
-                    encoding="utf-8",
-                )
-                _write_json(case_dir / "evaluator_result.json", record["evaluator_result"])
-            else:
-                (case_dir / "generated_plan.md").write_text(
-                    str(record["generated_plan"]),
-                    encoding="utf-8",
-                )
-                _write_json(case_dir / "plan_trajectory.json", record["plan_trajectory"])
-                _write_json(case_dir / "code_trajectory.json", record["code_trajectory"])
-                (case_dir / "generated.patch").write_text(
-                    str(record["generated_patch"]),
-                    encoding="utf-8",
-                )
-                _write_json(case_dir / "evaluator_result.json", record["evaluator_result"])
-                _write_json(
-                    case_dir / "rollout_summary.json",
-                    {
-                        "resolved": record["resolved"],
-                        "score": record["score"],
-                        "attribution_hint": record.get("attribution_hint", {}),
-                    },
-                )
-            manifest.append(
-                {
-                    "instance_id": instance_id,
-                    **(
-                        {"expected_resolved": record["expected_resolved"]}
-                        if self.mode == "checker"
-                        else {"resolved": record["resolved"]}
-                    ),
-                    "score": record["score"],
-                }
-            )
-        _write_json(bundle / "manifest.json", {"mode": self.mode, "cases": manifest})
-        return bundle
-
-
-class MiniSWEReflectionProposer:
+class OnlinePlanningReflectionProposer:
     def __init__(
         self,
-        config: OptimizationConfig,
+        config: OnlineOptimizationConfig,
         capacity_window: DockerCapacityWindow,
         *,
         successful_proposals: int = 0,
@@ -104,7 +29,7 @@ class MiniSWEReflectionProposer:
     ) -> None:
         self.config = config
         self.capacity_window = capacity_window
-        self.bundles = EvidenceBundleWriter(config.run_dir)
+        self.bundles = EvidenceBundleWriter(config.run_dir, mode="online_planning")
         self.audit = JsonlLogger(config.run_dir / "audit_events.jsonl")
         self.usage = JsonlLogger(config.run_dir / "usage.jsonl")
         self.errors = JsonlLogger(config.run_dir / "errors.jsonl")
@@ -130,8 +55,8 @@ class MiniSWEReflectionProposer:
                 "candidate_sha256": text_sha256(candidate.get("rules", "")),
             }
             self.failures.append(failure)
-            self.audit.write("reflection_failed", **failure)
-            self.errors.write("reflection_failed", **failure)
+            self.audit.write("online_reflection_failed", **failure)
+            self.errors.write("online_reflection_failed", **failure)
             raise
         self.successful_proposals += 1
         return proposal
@@ -144,23 +69,30 @@ class MiniSWEReflectionProposer:
     ) -> dict[str, str]:
         if components_to_update != ["rules"]:
             raise ValueError("GEPA may only update the rules component")
+        if self.config.container.runtime != "docker":
+            raise NotImplementedError(
+                "online planning reflection currently supports local Docker only"
+            )
         records = list(reflective_dataset["rules"])
         bundle = self.bundles.write(records)
         instance_ids = [str(record["instance_id"]) for record in records]
         parent_sha256 = text_sha256(candidate["rules"])
         self.audit.write(
-            "reflection_bundle_created",
+            "online_reflection_bundle_created",
             candidate_sha256=parent_sha256,
             bundle_path=str(bundle),
             instance_ids=instance_ids,
             minibatch_size=len(instance_ids),
             current_minibatch_only=True,
-            contains_checker_output=True,
-            contains_resolved_label=True,
+            contains_generated_plan=True,
             contains_plan_trajectory=True,
             contains_code_trajectory=True,
             contains_generated_patch=True,
             contains_evaluator_result=True,
+            contains_current_rollout_resolved=True,
+            contains_historical_plan=False,
+            contains_historical_resolved=False,
+            contains_historical_asi=False,
         )
         DefaultAgent, LitellmModel, DockerEnvironment = import_minisweagent()
         base_model = LitellmModel(
@@ -183,52 +115,24 @@ class MiniSWEReflectionProposer:
                 "candidate_sha256": parent_sha256,
                 "instance_ids": instance_ids,
                 "bundle_path": str(bundle),
+                "mode": "online_planning",
             },
         )
-        run_args: list[str]
-        if self.config.container.runtime == "apptainer":
-            run_args = [
-                "--bind",
-                f"{bundle.resolve()}:/evidence:ro",
-            ]
-        else:
-            run_args = [
-                "--rm",
-                "--network",
-                "none",
-                "--mount",
-                f"type=bind,source={bundle.resolve()},target=/evidence,readonly",
-            ]
-        self.audit.write(
-            "reflection_mount_configured",
-            candidate_sha256=parent_sha256,
-            bundle_path=str(bundle),
-            container_path="/evidence",
-            readonly=True,
-            network_disabled=True,
-            mount_source_is_current_bundle=True,
-        )
+        run_args = [
+            "--rm",
+            "--network",
+            "none",
+            "--mount",
+            f"type=bind,source={bundle.resolve()},target=/evidence,readonly",
+        ]
         with self.capacity_window.lease():
-            if self.config.container.runtime == "apptainer":
-                env = ApptainerEnvironment(
-                    image="python:3.12-slim",
-                    cwd="/evidence",
-                    sif_cache_dir=self.config.container.sif_cache_dir,
-                    capacity_window=self.capacity_window,
-                    run_args=run_args,
-                    timeout=self.config.reflection.timeout,
-                    container_timeout="4h",
-                    writable_tmpfs=self.config.container.writable_tmpfs,
-                    network_disabled=True,
-                )
-            else:
-                env = DockerEnvironment(
-                    image="python:3.12-slim",
-                    cwd="/evidence",
-                    run_args=run_args,
-                    timeout=self.config.reflection.timeout,
-                    container_timeout="4h",
-                )
+            env = DockerEnvironment(
+                image="python:3.12-slim",
+                cwd="/evidence",
+                run_args=run_args,
+                timeout=self.config.reflection.timeout,
+                container_timeout="4h",
+            )
             try:
                 agent = build_default_agent(
                     DefaultAgent,
@@ -240,7 +144,10 @@ class MiniSWEReflectionProposer:
                     cost_limit=self.config.reflection.cost_limit,
                 )
                 exit_status, exit_message = agent.run(
-                    task="Review the current minibatch evidence and improve the complete Checker rules.",
+                    task=(
+                        "Review the current online rollout evidence and improve "
+                        "the complete planning checklist."
+                    ),
                     current_rules=candidate["rules"],
                     evidence_path="/evidence",
                 )
@@ -248,7 +155,7 @@ class MiniSWEReflectionProposer:
                 result = env.execute("cat /tmp/candidate_rules.txt")
                 candidate_file_found = result.get("returncode") == 0
                 self.audit.write(
-                    "reflection_agent_completed",
+                    "online_reflection_agent_completed",
                     candidate_sha256=parent_sha256,
                     instance_ids=instance_ids,
                     exit_status=exit_status,
@@ -263,11 +170,7 @@ class MiniSWEReflectionProposer:
                     ),
                     final_assistant_chars=len(final_message),
                 )
-                text = (
-                    result.get("output", "")
-                    if candidate_file_found
-                    else ""
-                )
+                text = result.get("output", "") if candidate_file_found else ""
                 if not text.strip():
                     match = re.search(
                         r"```(?:text)?\s*(.*?)```",
@@ -276,16 +179,11 @@ class MiniSWEReflectionProposer:
                     )
                     text = match.group(1) if match else ""
                 if not text.strip():
-                    raise ValueError(
-                        "reflection agent produced empty candidate rules "
-                        f"(exit_status={exit_status}, "
-                        f"model_calls={getattr(model, 'n_calls', 0)}, "
-                        f"candidate_file_found={candidate_file_found})"
-                    )
+                    raise ValueError("reflection agent produced empty candidate rules")
                 proposed = text.strip()
                 looks_like_patch = "diff --git " in proposed
                 self.audit.write(
-                    "reflection_candidate_proposed",
+                    "online_reflection_candidate_proposed",
                     parent_candidate_sha256=parent_sha256,
                     proposed_candidate_sha256=text_sha256(proposed),
                     proposed_rules_empty=proposed == "",

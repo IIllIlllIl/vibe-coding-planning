@@ -11,6 +11,7 @@ from file names.
 | `gepa_verified_rules.yaml` | local Docker | Default active local prompt-fix run. Uses GPT seed rules, strict Checker, prompt-fix Reflection checklist prompt, full Verified snapshot, and `max_metric_calls: 3000`. Local Docker uses `parallel: 1`, higher Checker retries, and a fresh `p1` run_dir to avoid the earlier Docker Desktop image-pull failure state. |
 | `gepa_verified_rules_strict_local_newprompt_3000.yaml` | local Docker | Explicit name for the same local prompt-fix 3000 run. Use this when comparing against earlier strict-only runs. Keeps local Docker checker execution serial for reliability and writes to the same fresh `p1` run_dir. |
 | `gepa_verified_rules_strict_hpc_24h_newprompt_20260625_apptainer.yaml` | ULHPC Apptainer | Active HPC prompt-fix run. Uses the shared scratch SIF cache and `parallel: 4`. |
+| `gepa_online_planning_pilot.yaml` | local Docker | Experimental online GEPA planning run. Candidate rules go to the Plan Agent as a strict planning checklist; Code Agent only sees the generated plan. Use only for small pilot validation. |
 
 The prompt-fix configs are the current mainline. They differ from the older
 strict-only run by using the newer Reflection prompt that maintains rules as a

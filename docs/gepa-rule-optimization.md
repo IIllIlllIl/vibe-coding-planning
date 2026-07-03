@@ -607,3 +607,139 @@ batch 内部样本级并发，Adapter 使用有序 map 保持输出顺序，单�
 使用 Apptainer backend 和 `parallel=4`，需要在真实长跑中继续观察 DeepSeek
 rate limit、SIF 获取锁、文件系统压力、candidate tree、validation scores 和
 resume state。
+
+## 11. 实验实现：Online GEPA Planning 规则生成
+
+当前已实现的 GEPA 主线是 offline classifier：候选 `rules` 只进入固定
+Checker，GEPA 根据 `predicted_resolved == historical resolved` 优化规则。
+这条链路适合学习“如何判断一个已有 plan 的通过概率”，但它不直接验证规则是否
+能帮助 Plan Agent 从一开始生成更好的 plan。
+
+拟议的 online GEPA 链路把候选规则从 Checker 判别标准改为 Plan Agent 的
+planning checklist / planning guidance：
+
+```text
+issue + candidate planning rules
+                 ↓
+            Plan Agent
+                 ↓
+                plan
+                 ↓
+            Code Agent
+                 ↓
+              patch
+                 ↓
+             evaluator
+                 ↓
+              resolved
+```
+
+GEPA 仍只优化一个组件：
+
+```python
+{"rules": "<complete planning checklist text>"}
+```
+
+但 metric call 不再是 Checker evaluation，而是一次完整的 single-round
+Plan-Code-Test rollout。首版 score 定义为：
+
+```text
+resolved == true  -> 1.0
+resolved == false -> 0.0
+operational failure -> retry / fatal，不作为 unresolved 样本进入 cache
+```
+
+Online GEPA 不使用 offline GEPA 快照中的历史 plan、历史 resolved 标签、
+历史 trajectory、历史 patch 或历史 evaluator result。即使为了复用实例清单、
+issue、repository 和 train/validation split 读取同一个快照目录，online case
+loader 也必须只提取以下部署前字段：
+
+- `instance_id`；
+- issue description；
+- repository / base commit / image metadata；
+- split。
+
+所有 plan、patch、trajectory、evaluator result 和 resolved/score 都必须来自当前
+candidate rules 触发的本次 rollout。它们只能作为执行后 evidence 提供给
+Reflection，不得作为 Plan Agent 或 Code Agent 的输入。
+
+### 11.1 Strict Plan Agent 语义
+
+Online 链路中的 Plan Agent 应使用 strict rules 语义。固定 system prompt 只保留
+角色、仓库边界、探索预算和提交协议；候选 rules 放在 user / instance prompt 中，
+避免把可优化内容混入固定 system prompt。
+
+建议 user prompt 结构：
+
+```text
+<planning_rules>
+{{candidate_rules}}
+</planning_rules>
+
+<pr_description>
+{{issue_description}}
+</pr_description>
+```
+
+Plan Agent 必须把 rules 作为主要规划约束。规则没有覆盖的地方，可以做仓库事实
+调查和保守工程推理，但不得把未由 issue 或 repository 支持的假设写成事实。
+这样可以减少 Plan Agent 仅凭模型默认能力绕过规则缺陷的情况，同时保留完成真实
+软件任务所需的最小调查能力。
+
+输入隔离原则：
+
+- Candidate rules 只直接提供给 Plan Agent 和 GEPA Reflection。
+- Code Agent 只接收 issue、Plan Agent 生成的 plan 和 base repository；它不直接
+  接收 candidate rules 原文。
+- Evaluator 只接收当前 rollout 生成的 patch 和实例测试环境；它不接收 candidate
+  rules、GEPA score 或 Reflection evidence。
+
+### 11.2 噪声与 trajectory 归因
+
+Online GEPA 的反馈更真实，但噪声也更强。一个 rollout 的结果同时受 Plan Agent、
+Code Agent、evaluator、容器镜像、模型随机性和测试环境影响。Reflection 可以读取
+完整执行后证据来判断失败或成功是否应归因于 planning rules：
+
+- generated plan；
+- Plan Agent trajectory；
+- Code Agent trajectory；
+- generated patch；
+- evaluator result；
+- resolved 标签；
+- operational failure metadata。
+
+Reflection prompt 应要求区分至少三类情况：
+
+1. **规则/plan 归因**：plan 遗漏关键需求、错误定位、假设无证据、范围不当，且
+   Code Agent 基本按 plan 执行。
+2. **Code Agent 偏离**：plan 合理，但 Code Agent 没有按 plan 执行、实现遗漏或
+   引入无关修改，不能据此过度惩罚 planning rules。
+3. **偶然成功/失败或基础设施噪声**：plan 与最终 patch/test 结果弱相关，或失败
+   来自 Docker/Apptainer、镜像拉取、timeout、evaluator harness 等 operational
+   问题；这类证据不应驱动规则内容更新。
+
+这不能完全消除噪声，因为 GEPA 的接受/拒绝仍由标量 score 决定；但它可以让
+Reflection 在修改 rules 时更少追逐 Code Agent 偶然行为。为进一步降低噪声，
+首版应固定 Plan/Code 模型、temperature、prompt、数据 split、运行 seed 和
+evaluator 配置。
+
+### 11.3 与当前代码的关系
+
+现有 `src/pipeline.py` 已实现多轮 PCT，`src/pipeline_check.py` 已实现
+single-round Plan-Check-Code 并记录 evaluator 结果；但二者都不是 GEPA adapter。
+当前 `src/optimization/adapter.py` 只调用 Checker 并比较历史标签。
+
+Online GEPA 使用独立实验入口，而不是改写当前 offline 主线：
+
+- `src/optimization/online_dataset.py`：从实例清单或 existing snapshot 中只提取
+  issue/repository/split，不加载历史 plan、resolved 或 ASI。
+- `src/optimization/online_adapter.py`：把 GEPA candidate 映射为一次 PCT rollout。
+- `src/optimization/online_runner.py`：复用 GEPA optimize、resume、audit 和 report
+  思路，但记录 online 专用 manifest。
+- `configs/gepa_online_planning_pilot.yaml`：小样本 pilot 配置。
+
+首版 pilot 建议使用极小 train/validation split，例如 10/5 或 20/10。每个
+metric call 都会触发 Plan Agent、Code Agent 和 evaluator，成本远高于 offline
+Checker-only GEPA。HPC 版本还需要先确认完整 PCT/PCC evaluator 的 Apptainer
+可行路径；当前 GEPA Apptainer backend 只覆盖 Checker/Reflection，不等价于完整
+PCT/PCC online rollout。

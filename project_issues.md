@@ -30,7 +30,41 @@
 
 ---
 
-## 2. HPC SIF 预热与可恢复短作业运行
+## 2. Online GEPA planning 规则生成设计
+
+- **状态**：实验链路已实现，待 pilot 验证
+- **背景**：当前 GEPA 主线是 offline classifier：候选规则进入固定 Checker，
+  通过历史 Round 1 `resolved` 标签学习如何判断已有 plan。新设想是把候选规则
+  作为 strict planning checklist 注入 Plan Agent 的 user prompt，直接运行
+  `Plan -> Code -> Evaluator`，再把 result 和 trajectory 交给 GEPA Reflection。
+  Online 链路不使用 offline 快照中的历史 plan、历史 resolved、历史 trajectory、
+  历史 patch 或历史 evaluator result；这些字段只允许由当前 rollout 生成后进入
+  Reflection evidence。
+- **目标**：
+  - 学习能帮助 Plan Agent 生成更好 plan 的规则，而不只是学习预测已有 plan 的规则。
+  - 使用真实 rollout 的 evaluator 结果作为反馈，减少 offline 标签只能间接反映
+    plan 质量的问题。
+- **需要决策**：
+  1. Candidate rules 在 Plan Agent user prompt 中的精确结构，以及 strict planning
+     语义如何避免 Plan Agent 用默认能力绕过规则缺陷。
+  2. Online score 是否只用 `resolved` 0/1，还是增加对 operational failure、Code
+     Agent 偏离 plan、偶然成功/失败的特殊处理。
+  3. Reflection evidence 如何摘要 Plan trajectory、Code trajectory、patch 和
+     evaluator result，并明确区分规则问题、Code Agent 执行偏离和基础设施噪声。
+  4. 第一版 pilot 的 train/validation 规模、预算和本地/HPC 运行环境。
+  5. 是否先只做本地 Docker pilot；HPC 版本依赖完整 PCT/PCC evaluator 的 Apptainer
+     路径，不能直接复用当前 Checker/Reflection-only Apptainer backend。
+  6. Online dataset loader 如何只提取 `instance_id`、issue、repository/base commit
+     和 split，防止误把 offline GEPA 的历史标签或 ASI 传入 Plan/Code Agent。
+- **当前判断**：
+  - 方案可行，但它优化的是 planning guidance，不再是 checker classifier。
+  - 已新增独立 `online_adapter` / `online_runner` / pilot config，不替换当前
+    offline GEPA 主线。
+  - 详细设计记录在 `docs/gepa-rule-optimization.md` 第 11 节。
+
+---
+
+## 3. HPC SIF 预热与可恢复短作业运行
 
 - **状态**：实现已完成，待真实长跑验证
 - **背景**：ULHPC Iris 不能使用 Docker daemon；GEPA Checker/Reflection 通过
@@ -63,7 +97,7 @@
 
 ---
 
-## 3. HPC 上 GEPA 之外的 PCT/PCC/SWE-bench/PolyBench 可行路径
+## 4. HPC 上 GEPA 之外的 PCT/PCC/SWE-bench/PolyBench 可行路径
 
 - **状态**：待设计，非当前 GEPA 规则生成 P0
 - **背景**：GEPA Checker/Reflection 已有 Apptainer backend，但项目中其他流程仍有
@@ -79,7 +113,7 @@
 
 ---
 
-## 4. 凭据与模型调用安全
+## 5. 凭据与模型调用安全
 
 - **状态**：持续关注
 - **背景**：历史上发现过 DeepSeek Pro 异常调用和本地 Git remote URL 中出现

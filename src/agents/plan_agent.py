@@ -60,6 +60,8 @@ def run(
     config: Config,
     issue_description: str,
     env: Any,
+    *,
+    planning_rules: str = "",
 ) -> tuple[str, list[dict[str, Any]]]:
     """Run the plan generation agent.
 
@@ -71,6 +73,9 @@ def run(
             first user message.
         env: Docker environment wrapper (passed to DefaultAgent for tool
             execution).
+        planning_rules: Optional candidate planning rules for online GEPA
+            experiments. Existing PCT configs do not reference this variable,
+            so the default preserves the historical prompt exactly.
 
     Returns:
         A tuple of ``(plan_text, trajectory_messages)``.
@@ -94,6 +99,7 @@ def run(
         model_name=config.system.model,
         api_key=config.api_key,
         api_base=config.system.api_base,
+        temperature=config.agent.temperature,
     )
 
     agent = build_default_agent(
@@ -115,6 +121,7 @@ def run(
     exception_name, exception_msg = agent.run(
         task=issue_description,
         nrpv_block=config.prompts.nrpv_block,
+        planning_rules=planning_rules,
     )
 
     # Try to read plan from the file the agent wrote in the container

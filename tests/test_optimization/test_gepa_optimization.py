@@ -26,6 +26,15 @@ from src.optimization.config import (
 from src.optimization.dataset import load_snapshot
 from src.optimization.metrics import classification_metrics
 from src.optimization.models import CheckerOutput, GEPACase, RepositoryRef
+from src.optimization.online_adapter import OnlinePlanningGEPAAdapter
+from src.optimization.online_config import (
+    OnlineDatasetConfig,
+    OnlineOptimizationConfig,
+    load_online_optimization_config,
+)
+from src.optimization.online_dataset import load_online_snapshot
+from src.optimization.online_models import OnlineRolloutOutput
+from src.optimization.online_runner import run_online_optimization
 from src.optimization.reflection import (
     EvidenceBundleWriter,
     MiniSWEReflectionProposer,
@@ -122,6 +131,50 @@ def _config(tmp_path: Path) -> OptimizationConfig:
     )
 
 
+def _online_config(tmp_path: Path) -> OnlineOptimizationConfig:
+    tmp_path.mkdir(parents=True, exist_ok=True)
+    initial = tmp_path / "rules.txt"
+    initial.write_text("seed planning rules", encoding="utf-8")
+    model = ModelConfig(
+        model="model",
+        api_base="https://example.test",
+        api_key_env="TEST_API_KEY",
+        temperature=0.0,
+        max_steps=2,
+        cost_limit=0.0,
+        timeout=10,
+    )
+    return OnlineOptimizationConfig(
+        dataset_snapshot=_snapshot(tmp_path / "snapshot"),
+        initial_rules_path=initial,
+        run_dir=tmp_path / "online-run",
+        dataset=OnlineDatasetConfig(),
+        plan=model,
+        code=model,
+        reflection=model,
+        search=SearchConfig(
+            max_metric_calls=10,
+            projection_metric_calls=100,
+            reflection_minibatch_size=1,
+            seed=42,
+            parallel=1,
+            skip_perfect_score=False,
+        ),
+        docker=DockerConfig(min_free_gb=1, max_cached_images=1),
+        container=ContainerConfig(runtime="docker"),
+        plan_prompt="plan system",
+        plan_instance_template=(
+            "<planning_rules>{{planning_rules}}</planning_rules>{{task}}"
+        ),
+        code_prompt="code system {{plan}}",
+        code_instance_template="{{task}}",
+        reflection_prompt="online reflection",
+        reflection_instance_template="{{current_rules}} {{evidence_path}}",
+        nrpv_block="NRPV",
+        evaluator_timeout=10,
+    )
+
+
 class _FakeCapacityWindow:
     def lease(self):
         return nullcontext()
@@ -144,6 +197,143 @@ def test_snapshot_enforces_checker_asi_boundary(tmp_path):
     (snapshot / "train.jsonl").write_text(json.dumps(bad) + "\n")
     with pytest.raises(ValueError, match="checker_input boundary"):
         load_snapshot(snapshot)
+
+
+def test_online_snapshot_drops_offline_plan_label_and_asi(tmp_path):
+    snapshot = _snapshot(tmp_path / "snapshot")
+    train, validation = load_online_snapshot(snapshot)
+
+    assert len(train) == len(validation) == 2
+    case = train[0]
+    assert case.rollout_payload() == {
+        "issue_description": f"issue {case.instance_id}",
+        "repository": {
+            "repo": "org/repo",
+            "base_commit": "abc123",
+            "instance_id": case.instance_id,
+        },
+    }
+    assert not hasattr(case, "plan")
+    assert not hasattr(case, "resolved")
+    assert not hasattr(case, "asi")
+
+
+def test_online_config_requires_explicit_mode_and_loads_prompts(
+    tmp_path,
+    monkeypatch,
+):
+    monkeypatch.setenv("TEST_KEY", "secret")
+    config = tmp_path / "online.yaml"
+    config.write_text(
+        """
+mode: online_planning
+paths:
+  dataset_snapshot: snapshot
+  initial_rules: rules.txt
+  run_dir: run
+dataset:
+  name: SWE-bench/SWE-bench_Verified
+plan:
+  model: deepseek-v4-flash
+  api_base: https://api.deepseek.com
+  api_key_env: TEST_KEY
+code:
+  model: deepseek-v4-flash
+  api_base: https://api.deepseek.com
+  api_key_env: TEST_KEY
+reflection:
+  model: deepseek-v4-flash
+  api_base: https://api.deepseek.com
+  api_key_env: TEST_KEY
+search:
+  max_metric_calls: 2
+docker: {}
+prompts:
+  plan_system: strict plan
+  plan_instance: <planning_rules>{{planning_rules}}</planning_rules>{{task}}
+  code_system: code {{plan}}
+  code_instance: code {{task}}
+  reflection_system: reflect
+  reflection_instance: reflect {{current_rules}} {{evidence_path}}
+  nrpv_block: nrpv
+evaluator:
+  timeout: 10
+""",
+        encoding="utf-8",
+    )
+
+    loaded = load_online_optimization_config(config)
+
+    assert loaded.plan.model == "deepseek-v4-flash"
+    assert loaded.code.model == "deepseek-v4-flash"
+    assert "{{planning_rules}}" in loaded.plan_instance_template
+    assert loaded.evaluator_timeout == 10
+
+    bad = tmp_path / "offline.yaml"
+    bad.write_text(config.read_text().replace("mode: online_planning", "mode: offline"))
+    with pytest.raises(ValueError, match="mode: online_planning"):
+        load_online_optimization_config(bad)
+
+
+def test_plan_agent_accepts_optional_planning_rules(monkeypatch):
+    from src.agents import plan_agent
+    from src.config import Config, PromptConfig, SystemConfig
+
+    calls = {}
+
+    class FakeModel:
+        pass
+
+    class FakeAgent:
+        messages = [{"role": "assistant", "content": "submitted plan"}]
+
+        def run(self, **kwargs):
+            calls["run_kwargs"] = kwargs
+            return "Submitted", "submitted plan"
+
+    class FakeEnv:
+        def execute(self, command):
+            assert command == "cat /tmp/plan.md"
+            return {"returncode": 0, "output": "plan from file"}
+
+    monkeypatch.setattr(
+        "src.agents.plan_agent.import_minisweagent",
+        lambda: (object, FakeModel, object),
+    )
+    monkeypatch.setattr(
+        "src.agents.plan_agent.build_model",
+        lambda *args, **kwargs: FakeModel(),
+    )
+    monkeypatch.setattr(
+        "src.agents.plan_agent.build_default_agent",
+        lambda *args, **kwargs: FakeAgent(),
+    )
+    config = Config(
+        system=SystemConfig(model="model", api_base="https://example.test"),
+        prompts=PromptConfig(
+            plan_generation_prompt="system",
+            plan_instance_template=(
+                "<planning_rules>{{planning_rules}}</planning_rules>{{task}}"
+            ),
+            nrpv_block="NRPV",
+        ),
+        api_key="secret",
+    )
+
+    plan, messages = plan_agent.run(
+        config,
+        "issue",
+        FakeEnv(),
+        planning_rules="candidate planning rules",
+    )
+
+    assert plan == "plan from file"
+    assert messages == FakeAgent.messages
+    assert calls["run_kwargs"] == {
+        "task": "issue",
+        "nrpv_block": "NRPV",
+        "planning_rules": "candidate planning rules",
+    }
 
 
 def test_config_requires_zero_checker_temperature(tmp_path, monkeypatch):
@@ -436,6 +626,83 @@ def test_adapter_prepares_infrastructure_before_checker_call(tmp_path):
     ]
 
 
+def test_online_adapter_scores_current_rollout_and_records_boundaries(tmp_path):
+    train, _ = load_online_snapshot(_snapshot(tmp_path / "snapshot"))
+
+    def rollout(case, rules):
+        assert rules == "planning rules"
+        assert not hasattr(case, "plan")
+        return OnlineRolloutOutput(
+            resolved=case.instance_id == "repo__train1",
+            plan=f"generated plan for {case.instance_id}",
+            patch="diff --git a/a.py b/a.py\n",
+            plan_trajectory=({"role": "assistant", "content": "plan"},),
+            code_trajectory=({"role": "assistant", "content": "code"},),
+            evaluator_result={"resolved": case.instance_id == "repo__train1"},
+            attribution_hint={"code_followed_plan": True},
+        )
+
+    run_dir = tmp_path / "online-adapter"
+    result = OnlinePlanningGEPAAdapter(
+        rollout,
+        run_dir=run_dir,
+    ).evaluate(
+        train,
+        {"rules": "planning rules"},
+        capture_traces=True,
+    )
+
+    assert [output["instance_id"] for output in result.outputs] == [
+        "repo__train1",
+        "repo__train2",
+    ]
+    assert result.scores == [1.0, 0.0]
+    assert result.trajectories[0]["generated_plan"].startswith("generated plan")
+    assert result.trajectories[0]["resolved"] is True
+    assert "checker_output" not in result.trajectories[0]
+    audit = [
+        json.loads(line)
+        for line in (run_dir / "audit_events.jsonl").read_text().splitlines()
+    ]
+    started = next(
+        record
+        for record in audit
+        if record["event"] == "online_adapter_evaluation_started"
+    )
+    assert started["plan_agent_receives_candidate_rules"] is True
+    assert started["code_agent_receives_candidate_rules"] is False
+    assert started["historical_plan_available_to_plan_agent"] is False
+    assert started["historical_resolved_available_to_plan_agent"] is False
+    with pytest.raises(ValueError, match="only the string component rules"):
+        OnlinePlanningGEPAAdapter(rollout).evaluate(
+            train,
+            {"rules": "planning rules", "extra": "nope"},
+        )
+
+
+def test_online_adapter_treats_rollout_errors_as_operational(tmp_path):
+    train, _ = load_online_snapshot(_snapshot(tmp_path / "snapshot"))
+    run_dir = tmp_path / "online-error"
+
+    def broken_rollout(case, rules):
+        raise RuntimeError("docker failed before evaluator")
+
+    with pytest.raises(RuntimeError, match="Online rollout operational failure"):
+        OnlinePlanningGEPAAdapter(
+            broken_rollout,
+            run_dir=run_dir,
+            fail_on_rollout_error=True,
+            rollout_attempts=2,
+        ).evaluate([train[0]], {"rules": "rules"})
+
+    errors = [
+        json.loads(line)
+        for line in (run_dir / "errors.jsonl").read_text().splitlines()
+    ]
+    assert errors[0]["event"] == "online_rollout_failed"
+    assert errors[0]["attempts"] == 2
+
+
 def test_adapter_does_not_call_checker_when_prepare_fails(tmp_path):
     train, _ = load_snapshot(_snapshot(tmp_path / "snapshot"))
     calls: list[str] = []
@@ -596,6 +863,36 @@ def test_evidence_bundle_contains_only_current_minibatch(tmp_path):
         ]
     )
     assert next_bundle.name == "iteration_0002"
+
+
+def test_online_evidence_bundle_contains_current_rollout_only(tmp_path):
+    writer = EvidenceBundleWriter(tmp_path, mode="online_planning")
+    bundle = writer.write(
+        [
+            {
+                "instance_id": "repo__one",
+                "score": 1.0,
+                "resolved": True,
+                "generated_plan": "current generated plan",
+                "plan_trajectory": [{"role": "assistant", "content": "plan"}],
+                "code_trajectory": [{"role": "assistant", "content": "code"}],
+                "generated_patch": "diff --git a/a.py b/a.py\n",
+                "evaluator_result": {"resolved": True},
+                "attribution_hint": {"code_followed_plan": True},
+            }
+        ]
+    )
+
+    case_dir = bundle / "repo__one"
+    assert (case_dir / "generated_plan.md").read_text() == "current generated plan"
+    assert (case_dir / "generated.patch").is_file()
+    assert (case_dir / "rollout_summary.json").is_file()
+    assert not (case_dir / "checker_output.json").exists()
+    manifest = json.loads((bundle / "manifest.json").read_text())
+    assert manifest["mode"] == "online_planning"
+    assert manifest["cases"] == [
+        {"instance_id": "repo__one", "resolved": True, "score": 1.0}
+    ]
 
 
 def test_reflection_proposer_supplies_required_agent_task(
@@ -852,6 +1149,61 @@ def test_native_gepa_end_to_end_without_llm(tmp_path):
         (config.run_dir / "cost_report.json").read_text()
     )
     assert cost_report["full_run_linear_estimate"]["target_metric_calls"] == 1000
+
+
+def test_online_gepa_end_to_end_without_llm(tmp_path):
+    config = _online_config(tmp_path)
+
+    def rollout(case, rules):
+        return OnlineRolloutOutput(
+            resolved=("repo__train" in case.instance_id and "improved" in rules)
+            or ("repo__val" in case.instance_id and "improved" in rules),
+            plan=f"plan generated from {rules} for {case.instance_id}",
+            patch="diff --git a/a.py b/a.py\n",
+            plan_trajectory=({"role": "assistant", "content": "plan"},),
+            code_trajectory=({"role": "assistant", "content": "code"},),
+            evaluator_result={"resolved": "improved" in rules},
+            attribution_hint={"code_followed_plan": True},
+        )
+
+    class Proposer:
+        successful_proposals = 0
+        failures = []
+
+        def __call__(self, candidate, reflective_dataset, components):
+            assert components == ["rules"]
+            self.successful_proposals += 1
+            record = reflective_dataset["rules"][0]
+            assert "generated_plan" in record
+            assert "checker_output" not in record
+            assert "expected_resolved" not in record
+            return {"rules": "improved planning rules"}
+
+    result = run_online_optimization(
+        config,
+        rollout=rollout,
+        proposer=Proposer(),
+    )
+
+    assert result.best_candidate == {"rules": "improved planning rules"}
+    manifest = json.loads(
+        (config.run_dir / "online_run_manifest.json").read_text()
+    )
+    assert manifest["mode"] == "online_planning"
+    assert manifest["input_boundary"]["historical_plan_used"] is False
+    assert manifest["input_boundary"]["historical_resolved_used"] is False
+    assert manifest["input_boundary"]["historical_asi_used"] is False
+    candidate_metrics = json.loads(
+        (config.run_dir / "candidate_metrics.json").read_text()
+    )
+    assert "metrics" not in candidate_metrics[0]
+    assert "validation_resolved_count" in candidate_metrics[0]
+    audit = [
+        json.loads(line)
+        for line in (config.run_dir / "audit_events.jsonl").read_text().splitlines()
+    ]
+    start = next(record for record in audit if record["event"] == "online_run_started")
+    assert start["code_agent_receives_candidate_rules"] is False
 
 
 def test_split_resume_matches_continuous_search(tmp_path):
