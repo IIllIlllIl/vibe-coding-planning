@@ -393,12 +393,28 @@ def test_online_rollout_audit_records_design_boundaries(tmp_path, monkeypatch):
         },
     )
 
-    def fake_plan_run(config, issue_description, env, *, planning_rules):
+    def fake_plan_run(
+        config,
+        issue_description,
+        env,
+        *,
+        planning_rules,
+        model_wrapper=None,
+    ):
         calls["planning_rules"] = planning_rules
+        calls["plan_model_wrapper"] = model_wrapper
         return "generated plan", [{"role": "assistant", "content": "plan"}]
 
-    def fake_code_run(config, plan, issue_description, env):
+    def fake_code_run(
+        config,
+        plan,
+        issue_description,
+        env,
+        *,
+        model_wrapper=None,
+    ):
         calls["code_plan"] = plan
+        calls["code_model_wrapper"] = model_wrapper
         return "diff --git a/a.py b/a.py\n", [
             {"role": "assistant", "content": "code"}
         ]
@@ -421,6 +437,8 @@ def test_online_rollout_audit_records_design_boundaries(tmp_path, monkeypatch):
     assert result.resolved is True
     assert calls["planning_rules"] == "candidate planning rules"
     assert calls["code_plan"] == "generated plan"
+    assert calls["plan_model_wrapper"] is not None
+    assert calls["code_model_wrapper"] is not None
     assert calls["stopped"] is True
     audit = [
         json.loads(line)
@@ -1174,6 +1192,30 @@ def test_cost_report_records_called_models(tmp_path):
         },
         {
             "event": "model_call",
+            "phase": "plan",
+            "success": True,
+            "model": "deepseek/deepseek-v4-flash",
+            "provider_model": "deepseek-v4-flash",
+            "duration_seconds": 1.5,
+            "prompt_tokens": 12,
+            "completion_tokens": 4,
+            "total_tokens": 16,
+            "reported_cost_usd": 0.0,
+        },
+        {
+            "event": "model_call",
+            "phase": "code",
+            "success": True,
+            "model": "deepseek/deepseek-v4-flash",
+            "provider_model": "deepseek-v4-flash",
+            "duration_seconds": 2.5,
+            "prompt_tokens": 30,
+            "completion_tokens": 10,
+            "total_tokens": 40,
+            "reported_cost_usd": 0.0,
+        },
+        {
+            "event": "model_call",
             "phase": "reflection",
             "success": True,
             "model": "deepseek/deepseek-v4-flash",
@@ -1200,9 +1242,11 @@ def test_cost_report_records_called_models(tmp_path):
     )
 
     report = json.loads((tmp_path / "cost_report.json").read_text())
-    expected = {"deepseek/deepseek-v4-flash": 3}
-    expected_provider = {"deepseek-v4-flash": 3}
+    expected = {"deepseek/deepseek-v4-flash": 5}
+    expected_provider = {"deepseek-v4-flash": 5}
     assert report["checker"]["models"] == {"deepseek/deepseek-v4-flash": 2}
+    assert report["plan"]["models"] == {"deepseek/deepseek-v4-flash": 1}
+    assert report["code"]["models"] == {"deepseek/deepseek-v4-flash": 1}
     assert report["reflection"]["models"] == {
         "deepseek/deepseek-v4-flash": 1
     }

@@ -11,6 +11,7 @@ as TaskError rather than silently passing downstream.
 from __future__ import annotations
 
 import logging
+from collections.abc import Callable
 from typing import Any
 
 from src.agents._deps import (
@@ -62,6 +63,7 @@ def run(
     env: Any,
     *,
     planning_rules: str = "",
+    model_wrapper: Callable[[Any], Any] | None = None,
 ) -> tuple[str, list[dict[str, Any]]]:
     """Run the plan generation agent.
 
@@ -76,6 +78,8 @@ def run(
         planning_rules: Optional candidate planning rules for online GEPA
             experiments. Existing PCT configs do not reference this variable,
             so the default preserves the historical prompt exactly.
+        model_wrapper: Optional hook for callers that need to instrument model
+            calls. The default preserves the historical model object.
 
     Returns:
         A tuple of ``(plan_text, trajectory_messages)``.
@@ -101,6 +105,8 @@ def run(
         api_base=config.system.api_base,
         temperature=config.agent.temperature,
     )
+    if model_wrapper is not None:
+        model = model_wrapper(model)
 
     agent = build_default_agent(
         DefaultAgent,

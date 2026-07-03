@@ -11,6 +11,7 @@ output verbatim — no fence-stripping, validation, or repair is needed.
 from __future__ import annotations
 
 import logging
+from collections.abc import Callable
 from typing import Any
 
 from src.agents._deps import (
@@ -48,6 +49,8 @@ def run(
     plan: str,
     issue_description: str,
     env: Any,
+    *,
+    model_wrapper: Callable[[Any], Any] | None = None,
 ) -> tuple[str, list[dict[str, Any]]]:
     """Run the code generation agent.
 
@@ -86,6 +89,8 @@ def run(
         api_base=config.system.api_base,
         temperature=config.agent.temperature,
     )
+    if model_wrapper is not None:
+        model = model_wrapper(model)
 
     agent = build_default_agent(
         DefaultAgent,

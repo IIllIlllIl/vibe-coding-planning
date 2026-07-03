@@ -16,7 +16,7 @@ from src.config import (
 from src.data.instance_loader import InstanceLoader
 from src.environment.docker_env import DockerCapacityWindow, DockerEnvWrapper
 from src.evaluator.swe_evaluator import derive_image_name, evaluate
-from src.optimization.audit import JsonlLogger, text_sha256
+from src.optimization.audit import AuditedModel, JsonlLogger, text_sha256
 from src.optimization.online_config import OnlineOptimizationConfig
 from src.optimization.online_models import OnlineGEPACase, OnlineRolloutOutput
 
@@ -32,6 +32,7 @@ class OnlinePCTRolloutRunner:
         self.config = config
         self.capacity_window = capacity_window
         self.audit = JsonlLogger(config.run_dir / "audit_events.jsonl")
+        self.usage = JsonlLogger(config.run_dir / "usage.jsonl")
 
     def _agent_config(self, model_config: Any) -> AgentConfig:
         return AgentConfig(
@@ -137,6 +138,16 @@ class OnlinePCTRolloutRunner:
                     case.issue_description,
                     env,
                     planning_rules=rules,
+                    model_wrapper=lambda model: AuditedModel(
+                        model,
+                        self.usage,
+                        phase="plan",
+                        context={
+                            "instance_id": case.instance_id,
+                            "candidate_sha256": candidate_sha256,
+                            "mode": "online_planning",
+                        },
+                    ),
                 )
                 base_code_config = self._base_config(self.config.code)
                 code_config = replace(
@@ -152,6 +163,16 @@ class OnlinePCTRolloutRunner:
                     plan,
                     case.issue_description,
                     env,
+                    model_wrapper=lambda model: AuditedModel(
+                        model,
+                        self.usage,
+                        phase="code",
+                        context={
+                            "instance_id": case.instance_id,
+                            "candidate_sha256": candidate_sha256,
+                            "mode": "online_planning",
+                        },
+                    ),
                 )
             finally:
                 env.stop()

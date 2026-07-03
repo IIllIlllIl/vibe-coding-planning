@@ -84,10 +84,16 @@ def write_cost_report(
         else []
     )
     checker = _phase_summary(records, "checker")
+    plan = _phase_summary(records, "plan")
+    code = _phase_summary(records, "code")
     reflection = _phase_summary(records, "reflection")
     combined_models = Counter(checker["models"])
+    combined_models.update(plan["models"])
+    combined_models.update(code["models"])
     combined_models.update(reflection["models"])
     combined_provider_models = Counter(checker["provider_models"])
+    combined_provider_models.update(plan["provider_models"])
+    combined_provider_models.update(code["provider_models"])
     combined_provider_models.update(reflection["provider_models"])
     scale = projection_metric_calls / max(1, observed_metric_calls)
     limitations = []
@@ -117,29 +123,56 @@ def write_cost_report(
             "limitations": limitations,
         },
         "checker": checker,
+        "plan": plan,
+        "code": code,
         "reflection": reflection,
         "combined": {
-            "calls": checker["calls"] + reflection["calls"],
+            "calls": (
+                checker["calls"]
+                + plan["calls"]
+                + code["calls"]
+                + reflection["calls"]
+            ),
             "models": dict(sorted(combined_models.items())),
             "provider_models": dict(sorted(combined_provider_models.items())),
-            "total_tokens": checker["total_tokens"] + reflection["total_tokens"],
+            "total_tokens": (
+                checker["total_tokens"]
+                + plan["total_tokens"]
+                + code["total_tokens"]
+                + reflection["total_tokens"]
+            ),
             "reported_cost_usd": (
-                checker["reported_cost_usd"] + reflection["reported_cost_usd"]
+                checker["reported_cost_usd"]
+                + plan["reported_cost_usd"]
+                + code["reported_cost_usd"]
+                + reflection["reported_cost_usd"]
             ),
         },
         "observed": {
             "metric_calls": observed_metric_calls,
             "model_api_calls_per_metric_call": (
-                (checker["calls"] + reflection["calls"])
+                (
+                    checker["calls"]
+                    + plan["calls"]
+                    + code["calls"]
+                    + reflection["calls"]
+                )
                 / max(1, observed_metric_calls)
             ),
             "tokens_per_metric_call": (
-                (checker["total_tokens"] + reflection["total_tokens"])
+                (
+                    checker["total_tokens"]
+                    + plan["total_tokens"]
+                    + code["total_tokens"]
+                    + reflection["total_tokens"]
+                )
                 / max(1, observed_metric_calls)
             ),
             "cost_usd_per_metric_call": (
                 (
                     checker["reported_cost_usd"]
+                    + plan["reported_cost_usd"]
+                    + code["reported_cost_usd"]
                     + reflection["reported_cost_usd"]
                 )
                 / max(1, observed_metric_calls)
@@ -149,13 +182,23 @@ def write_cost_report(
             "token_time_valid": token_time_estimate_valid,
             "target_metric_calls": projection_metric_calls,
             "estimated_checker_api_calls": checker["calls"] * scale,
+            "estimated_plan_api_calls": plan["calls"] * scale,
+            "estimated_code_api_calls": code["calls"] * scale,
             "estimated_reflection_api_calls": reflection["calls"] * scale,
             "estimated_total_tokens": (
-                (checker["total_tokens"] + reflection["total_tokens"]) * scale
+                (
+                    checker["total_tokens"]
+                    + plan["total_tokens"]
+                    + code["total_tokens"]
+                    + reflection["total_tokens"]
+                )
+                * scale
             ),
             "estimated_reported_cost_usd": (
                 (
                     checker["reported_cost_usd"]
+                    + plan["reported_cost_usd"]
+                    + code["reported_cost_usd"]
                     + reflection["reported_cost_usd"]
                 )
                 * scale
@@ -163,12 +206,20 @@ def write_cost_report(
             "estimated_serial_model_seconds": (
                 (
                     checker["duration_seconds_total"]
+                    + plan["duration_seconds_total"]
+                    + code["duration_seconds_total"]
                     + reflection["duration_seconds_total"]
                 )
                 * scale
             ),
             "estimated_wall_seconds_with_parallelism": (
-                checker["duration_seconds_total"] * scale / max(1, parallel)
+                (
+                    checker["duration_seconds_total"]
+                    + plan["duration_seconds_total"]
+                    + code["duration_seconds_total"]
+                )
+                * scale
+                / max(1, parallel)
                 + reflection["duration_seconds_total"] * scale
             ),
             "method": "linear extrapolation from observed pilot API calls",

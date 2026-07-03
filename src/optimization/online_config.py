@@ -18,6 +18,8 @@ class OnlineDatasetConfig:
     dataset: str = "SWE-bench/SWE-bench_Verified"
     dataset_type: str = ""
     language_filter: str = ""
+    train_instance_ids: tuple[str, ...] = ()
+    validation_instance_ids: tuple[str, ...] = ()
 
 
 @dataclass(frozen=True)
@@ -155,6 +157,13 @@ def load_online_optimization_config(
             dataset=str(dataset_data.get("name", "SWE-bench/SWE-bench_Verified")),
             dataset_type=str(dataset_data.get("type", "")),
             language_filter=str(dataset_data.get("language_filter", "")),
+            train_instance_ids=tuple(
+                str(item) for item in dataset_data.get("train_instance_ids", [])
+            ),
+            validation_instance_ids=tuple(
+                str(item)
+                for item in dataset_data.get("validation_instance_ids", [])
+            ),
         ),
         plan=plan,
         code=code,

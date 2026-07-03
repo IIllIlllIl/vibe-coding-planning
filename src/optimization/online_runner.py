@@ -56,10 +56,14 @@ def _write_online_manifest(
     config: OnlineOptimizationConfig,
     *,
     initial_rules: str,
+    train_ids: list[str],
+    validation_ids: list[str],
 ) -> None:
     manifest = {
         "mode": "online_planning",
         "dataset_snapshot": str(config.dataset_snapshot),
+        "train_instance_ids": train_ids,
+        "validation_instance_ids": validation_ids,
         "initial_rules_sha256": text_sha256(initial_rules),
         "run_dir": str(config.run_dir),
         "candidate_components": ["rules"],
@@ -121,9 +125,30 @@ def run_online_optimization(
     optimize_fn: Callable[..., Any] = gepa.optimize,
 ) -> Any:
     train, validation = load_online_snapshot(config.dataset_snapshot)
+    if config.dataset.train_instance_ids:
+        allowed = set(config.dataset.train_instance_ids)
+        train = [case for case in train if case.instance_id in allowed]
+        if {case.instance_id for case in train} != allowed:
+            missing = sorted(allowed - {case.instance_id for case in train})
+            raise ValueError(f"online train instance IDs not found: {missing}")
+    if config.dataset.validation_instance_ids:
+        allowed = set(config.dataset.validation_instance_ids)
+        validation = [case for case in validation if case.instance_id in allowed]
+        if {case.instance_id for case in validation} != allowed:
+            missing = sorted(allowed - {case.instance_id for case in validation})
+            raise ValueError(
+                f"online validation instance IDs not found: {missing}"
+            )
+    if not train or not validation:
+        raise ValueError("online GEPA requires non-empty train and validation sets")
     config.run_dir.mkdir(parents=True, exist_ok=True)
     initial_rules = config.initial_rules_path.read_text(encoding="utf-8").strip()
-    _write_online_manifest(config, initial_rules=initial_rules)
+    _write_online_manifest(
+        config,
+        initial_rules=initial_rules,
+        train_ids=[case.instance_id for case in train],
+        validation_ids=[case.instance_id for case in validation],
+    )
     audit = JsonlLogger(config.run_dir / "audit_events.jsonl")
     audit.write(
         "online_run_started",
