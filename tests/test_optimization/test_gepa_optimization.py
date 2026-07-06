@@ -13,7 +13,7 @@ import pytest
 from gepa.core.state import GEPAState
 
 from src.config import DockerConfig
-from src.optimization.audit import AuditedModel, JsonlLogger
+from src.optimization.audit import AuditedModel, JsonlLogger, text_sha256
 from src.optimization.adapter import CheckerGEPAAdapter
 from src.optimization.checker import DockerChecker, _json_object, validate_checker_output
 from src.optimization.config import (
@@ -29,11 +29,18 @@ from src.optimization.models import CheckerOutput, GEPACase, RepositoryRef
 from src.optimization.online_adapter import OnlinePlanningGEPAAdapter
 from src.optimization.online_config import (
     OnlineDatasetConfig,
+    OnlineExecutionConfig,
+    OnlineHPCConfig,
     OnlineOptimizationConfig,
     load_online_optimization_config,
 )
 from src.optimization.online_dataset import load_online_snapshot
+from src.optimization.online_hpc_executor import (
+    OnlineRolloutBatchStore,
+    build_slurm_array_script,
+)
 from src.optimization.online_models import OnlineRolloutOutput
+from src.optimization.online_rollout_worker import case_from_manifest, output_to_json
 from src.optimization.online_rollout import OnlinePCTRolloutRunner
 from src.optimization.online_runner import run_online_optimization
 from src.optimization.reflection import (
@@ -43,6 +50,7 @@ from src.optimization.reflection import (
 from src.optimization.report import write_cost_report
 from src.optimization.runner import OptimizationRunFailed, run_optimization
 from src.optimization.resume import IncompatibleOptimizationRun
+from scripts.tools.prepare_online_hpc_resource_pilot import prepare_pilot
 
 
 def _record(instance_id: str, split: str, *, resolved: bool = True) -> dict:
@@ -163,6 +171,8 @@ def _online_config(tmp_path: Path) -> OnlineOptimizationConfig:
         ),
         docker=DockerConfig(min_free_gb=1, max_cached_images=1),
         container=ContainerConfig(runtime="docker"),
+        execution=OnlineExecutionConfig(),
+        hpc=OnlineHPCConfig(),
         plan_prompt="plan system",
         plan_instance_template=(
             "<planning_rules>{{planning_rules}}</planning_rules>{{task}}"
@@ -269,11 +279,127 @@ evaluator:
     assert loaded.code.model == "deepseek-v4-flash"
     assert "{{planning_rules}}" in loaded.plan_instance_template
     assert loaded.evaluator_timeout == 10
+    assert loaded.execution.backend == "local_docker"
+    assert loaded.hpc.cpus_per_task == 1
+    assert loaded.hpc.mem == "4G"
+    assert loaded.hpc.worker_config_path.endswith("online.yaml")
 
     bad = tmp_path / "offline.yaml"
     bad.write_text(config.read_text().replace("mode: online_planning", "mode: offline"))
     with pytest.raises(ValueError, match="mode: online_planning"):
         load_online_optimization_config(bad)
+
+
+def test_online_config_loads_hpc_backend_settings(tmp_path, monkeypatch):
+    monkeypatch.setenv("TEST_KEY", "secret")
+    config = tmp_path / "online-hpc.yaml"
+    config.write_text(
+        """
+mode: online_planning
+paths:
+  dataset_snapshot: snapshot
+  initial_rules: rules.txt
+  run_dir: run
+dataset: {}
+plan:
+  model: deepseek-v4-flash
+  api_base: https://api.deepseek.com
+  api_key_env: TEST_KEY
+code:
+  model: deepseek-v4-flash
+  api_base: https://api.deepseek.com
+  api_key_env: TEST_KEY
+reflection:
+  model: deepseek-v4-flash
+  api_base: https://api.deepseek.com
+  api_key_env: TEST_KEY
+search:
+  max_metric_calls: 2
+docker: {}
+container:
+  runtime: apptainer
+  sif_cache_dir: /scratch/project/sif-cache
+execution:
+  backend: hpc_slurm
+hpc:
+  submit: false
+  cpus_per_task: 1
+  mem: 4G
+  time: "02:00:00"
+  max_running_array_tasks: 10
+  remote_env_file: ~/.config/vibe-coding-planning/deepseek.env
+prompts:
+  plan_system: strict plan
+  plan_instance: <planning_rules>{{planning_rules}}</planning_rules>{{task}}
+  code_system: code {{plan}}
+  code_instance: code {{task}}
+  reflection_system: reflect
+  reflection_instance: reflect {{current_rules}} {{evidence_path}}
+  nrpv_block: nrpv
+evaluator: {}
+""",
+        encoding="utf-8",
+    )
+
+    loaded = load_online_optimization_config(config)
+
+    assert loaded.execution.backend == "hpc_slurm"
+    assert loaded.container.runtime == "apptainer"
+    assert str(loaded.container.sif_cache_dir) == "/scratch/project/sif-cache"
+    assert loaded.hpc.submit is False
+    assert loaded.hpc.cpus_per_task == 1
+    assert loaded.hpc.mem == "4G"
+    assert loaded.hpc.max_running_array_tasks == 10
+    assert "deepseek.env" in loaded.hpc.remote_env_file
+    assert loaded.hpc.worker_config_path.endswith("online-hpc.yaml")
+
+
+def test_online_config_accepts_legacy_array_concurrency(tmp_path, monkeypatch):
+    monkeypatch.setenv("TEST_KEY", "secret")
+    config = tmp_path / "online-hpc-legacy.yaml"
+    config.write_text(
+        """
+mode: online_planning
+paths:
+  dataset_snapshot: snapshot
+  initial_rules: rules.txt
+  run_dir: run
+dataset: {}
+plan:
+  model: deepseek-v4-flash
+  api_base: https://api.deepseek.com
+  api_key_env: TEST_KEY
+code:
+  model: deepseek-v4-flash
+  api_base: https://api.deepseek.com
+  api_key_env: TEST_KEY
+reflection:
+  model: deepseek-v4-flash
+  api_base: https://api.deepseek.com
+  api_key_env: TEST_KEY
+search:
+  max_metric_calls: 2
+docker: {}
+execution:
+  backend: hpc_slurm
+hpc:
+  array_concurrency: 7
+prompts:
+  plan_system: strict plan
+  plan_instance: <planning_rules>{{planning_rules}}</planning_rules>{{task}}
+  code_system: code {{plan}}
+  code_instance: code {{task}}
+  reflection_system: reflect
+  reflection_instance: reflect {{current_rules}} {{evidence_path}}
+  nrpv_block: nrpv
+evaluator: {}
+""",
+        encoding="utf-8",
+    )
+
+    loaded = load_online_optimization_config(config)
+
+    assert loaded.hpc.max_running_array_tasks == 7
 
 
 def test_online_smoke_pilot_config_is_small_and_auditable():
@@ -815,6 +941,204 @@ def test_online_adapter_scores_current_rollout_and_records_boundaries(tmp_path):
             train,
             {"rules": "planning rules", "extra": "nope"},
         )
+
+
+def test_online_rollout_batch_store_writes_deploy_time_task_manifests(tmp_path):
+    train, _ = load_online_snapshot(_snapshot(tmp_path / "snapshot"))
+    store = OnlineRolloutBatchStore(tmp_path / "run")
+
+    batch_dir, tasks = store.create(
+        batch=train,
+        rules="planning rules",
+        split="train",
+        capture_traces=True,
+    )
+
+    assert batch_dir.name == "batch_0001"
+    assert len(tasks) == len(train)
+    manifest = json.loads(tasks[0].manifest_path.read_text())
+    assert manifest["instance_id"] == train[0].instance_id
+    assert manifest["issue_description"] == train[0].issue_description
+    assert manifest["candidate_sha256"] == text_sha256("planning rules")
+    assert "resolved" not in manifest
+    assert "plan" not in manifest
+    assert "evaluator_result" not in manifest
+    assert Path(manifest["rules_path"]).read_text() == "planning rules"
+
+
+def test_online_rollout_worker_serialization_boundaries():
+    manifest = {
+        "instance_id": "repo__one",
+        "split": "train",
+        "issue_description": "issue",
+        "repository": {
+            "repo": "org/repo",
+            "base_commit": "abc123",
+            "instance_id": "repo__one",
+        },
+    }
+    case = case_from_manifest(manifest)
+    output = OnlineRolloutOutput(
+        resolved=True,
+        plan="plan",
+        patch="patch",
+        plan_trajectory=({"role": "assistant", "content": "plan"},),
+        code_trajectory=({"role": "assistant", "content": "code"},),
+        evaluator_result={"resolved": True},
+        attribution_hint={"code_followed_plan": True},
+    )
+
+    assert case.rollout_payload()["repository"]["base_commit"] == "abc123"
+    serialized = output_to_json(output)
+    assert serialized["score"] == 1.0
+    assert serialized["plan_trajectory"][0]["content"] == "plan"
+
+
+def test_slurm_array_script_uses_minimal_resources_and_private_env_file():
+    script = build_slurm_array_script(
+        config_path="configs/online.yaml",
+        batch_dir="/scratch/project/batch_0001",
+        task_count=7,
+        job_name="online-gepa-rollout",
+        partition="batch",
+        cpus_per_task=1,
+        mem="4G",
+        time_limit="02:00:00",
+        max_running_array_tasks=5,
+        remote_env_file="~/.config/vibe-coding-planning/deepseek.env",
+        python_module="lang/Python/3.11",
+        container_module="tools/Apptainer",
+        python_bin="python3",
+    )
+
+    assert "#SBATCH --array=0-6%5" in script
+    assert "#SBATCH --cpus-per-task=1" in script
+    assert "#SBATCH --mem=4G" in script
+    assert "module load lang/Python/3.11" in script
+    assert "module load tools/Apptainer" in script
+    assert "ENV_FILE='~/.config/vibe-coding-planning/deepseek.env'" in script
+    assert 'source "${ENV_FILE}"' in script
+    assert "DEEPSEEK_API_KEY" in script
+    assert "sk-018" not in script
+    assert "online_rollout_worker" in script
+
+
+def test_online_hpc_resource_pilot_prepares_20_minute_single_worker_tasks(
+    tmp_path,
+    monkeypatch,
+):
+    monkeypatch.setenv("TEST_KEY", "secret")
+    snapshot = _snapshot(tmp_path / "snapshot")
+    rules = tmp_path / "rules.md"
+    rules.write_text("1. Follow the rules.\n", encoding="utf-8")
+    config = tmp_path / "online-resource-pilot.yaml"
+    config.write_text(
+        f"""
+mode: online_planning
+paths:
+  dataset_snapshot: {snapshot}
+  initial_rules: {rules}
+  run_dir: {tmp_path / "run"}
+dataset: {{}}
+plan:
+  model: deepseek-v4-flash
+  api_base: https://api.deepseek.com
+  api_key_env: TEST_KEY
+code:
+  model: deepseek-v4-flash
+  api_base: https://api.deepseek.com
+  api_key_env: TEST_KEY
+reflection:
+  model: deepseek-v4-flash
+  api_base: https://api.deepseek.com
+  api_key_env: TEST_KEY
+search:
+  max_metric_calls: 2
+docker: {{}}
+container:
+  runtime: apptainer
+  sif_cache_dir: /scratch/project/sif-cache
+execution:
+  backend: hpc_slurm
+hpc:
+  submit: false
+  cpus_per_task: 1
+  mem: 4G
+  time: "00:20:00"
+  max_running_array_tasks: 2
+  remote_env_file: ~/.config/vibe-coding-planning/deepseek.env
+  worker_config_path: configs/online-resource-pilot.yaml
+prompts:
+  plan_system: strict plan
+  plan_instance: <planning_rules>{{{{planning_rules}}}}</planning_rules>{{{{task}}}}
+  code_system: code {{{{plan}}}}
+  code_instance: code {{{{task}}}}
+  reflection_system: reflect
+  reflection_instance: reflect {{{{current_rules}}}} {{{{evidence_path}}}}
+  nrpv_block: nrpv
+evaluator: {{}}
+""",
+        encoding="utf-8",
+    )
+
+    manifest = prepare_pilot(
+        config_path=config,
+        split="train",
+        instance_ids=[],
+        limit=2,
+        submit=False,
+    )
+
+    script = Path(str(manifest["script_path"])).read_text(encoding="utf-8")
+    assert manifest["task_count"] == 2
+    assert manifest["cpus_per_task"] == 1
+    assert manifest["mem"] == "4G"
+    assert manifest["time"] == "00:20:00"
+    assert manifest["max_running_array_tasks"] == 2
+    assert "#SBATCH --array=0-1%2" in script
+    assert "#SBATCH --cpus-per-task=1" in script
+    assert "#SBATCH --mem=4G" in script
+    assert "#SBATCH --time=00:20:00" in script
+    assert "DEEPSEEK_API_KEY" in script
+    assert "sk-018" not in script
+    assert (Path(str(manifest["batch_dir"])) / "resource_pilot_manifest.json").is_file()
+
+
+def test_online_adapter_uses_batch_executor_for_hpc_rollouts(tmp_path):
+    train, _ = load_online_snapshot(_snapshot(tmp_path / "snapshot"))
+
+    class BatchExecutor:
+        calls = []
+
+        def evaluate(self, batch, rules, capture_traces):
+            self.calls.append((len(batch), rules, capture_traces))
+            return [
+                OnlineRolloutOutput(
+                    resolved=case.instance_id == "repo__train1",
+                    plan=f"plan {case.instance_id}",
+                    patch="patch",
+                    plan_trajectory=(),
+                    code_trajectory=(),
+                    evaluator_result={"resolved": case.instance_id == "repo__train1"},
+                    attribution_hint={"hpc": True},
+                )
+                for case in batch
+            ]
+
+    executor = BatchExecutor()
+
+    def local_rollout(case, rules):
+        raise AssertionError("local rollout should not be called")
+
+    result = OnlinePlanningGEPAAdapter(
+        local_rollout,
+        run_dir=tmp_path / "adapter",
+        batch_executor=executor,
+    ).evaluate(train, {"rules": "planning rules"}, capture_traces=True)
+
+    assert executor.calls == [(2, "planning rules", True)]
+    assert result.scores == [1.0, 0.0]
+    assert result.trajectories[0]["attribution_hint"] == {"hpc": True}
 
 
 def test_online_adapter_treats_rollout_errors_as_operational(tmp_path):

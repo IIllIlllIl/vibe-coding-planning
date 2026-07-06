@@ -34,18 +34,28 @@ CPU 等效资源重新计算使用量。参考官方说明：
 因此，本项目的 HPC 使用必须遵守以下约束：
 
 1. 申请资源以最近一次 `sacct` 观测为依据，不用“保险型”大配置作为默认值。
-2. SIF preheat 属于网络/IO 密集任务，默认只申请 `1 CPU` 和 `4G`；若 `MaxRSS`
-   继续贴近上限，再小幅提高到 `5G` 或 `6G`，不要增加 CPU。
-3. GEPA 主运行的 `--cpus` 应与 `search.parallel` 对齐。默认优先使用
+2. `batch` 分区按约 `4G × CPU` 的内存比例配置；`1 CPU` 的合规默认内存上界
+   是 `4G`。如果请求超过该比例，Slurm/ULHPC accounting 会按更高的 CPU 等效
+   资源重新计算使用量，降低 FairShare。需要更多内存时，先用 `sacct MaxRSS`
+   证明需要，再同步提高 CPU 和内存。
+3. SIF preheat 属于网络/IO 密集任务，默认只申请 `1 CPU` 和 `4G`；若 `MaxRSS`
+   继续贴近上限，应先记录原因；如果必须提高到 `5G` 或 `6G`，同时说明这会
+   超过 `1 CPU` 的默认内存比例并影响 FairShare。
+4. GEPA 主运行的 `--cpus` 应与 `search.parallel` 对齐。默认优先使用
    `parallel=2` / `--cpus 2 --mem 8G` 做试运行；只有确认并发收益后才使用
    `parallel=4` / `--cpus 4 --mem 16G`。
-4. 不再把 `8 CPU / 32G` 作为 GEPA 默认提交配置；只有在 `sacct` 显示内存或并发
+5. 不再把 `8 CPU / 32G` 作为 GEPA 默认提交配置；只有在 `sacct` 显示内存或并发
    确实不足时才临时使用。
-5. 每次长作业结束后记录 `sacct -j <jobid>
+6. 每次长作业结束后记录 `sacct -j <jobid>
    --format=JobID,JobName,State,Elapsed,AllocCPUS,TotalCPU,ReqMem,MaxRSS`，用
    `TotalCPU / (Elapsed * AllocCPUS)` 和 `MaxRSS / ReqMem` 评估下一轮资源。
-6. 避免同时运行多个写同一 shared SIF cache 的 preheat 作业；这会放大 IO 压力并
+7. 避免同时运行多个写同一 shared SIF cache 的 preheat 作业；这会放大 IO 压力并
    造成重复下载/转换。
+8. Online GEPA 的 rollout 并行应使用 Slurm job array 拆分为小 task，而不是申请
+   一个大 allocation 后在作业内空等。每个 array element 是一个独立 Slurm task，
+   只运行一个 rollout worker；`max_running_array_tasks` 只限制同时运行的
+   array elements，不是 worker 内部并发。资源测量 pilot 从
+   `1 CPU / 4G / 20min` 起步，再用 `sacct` 数据调整。
 
 ---
 
@@ -63,7 +73,9 @@ CPU 等效资源重新计算使用量。参考官方说明：
 
 - **Iris 计算节点不提供 Docker CLI/daemon**，已确认可用模块为 `tools/Apptainer`
   （Apptainer 1.4.0）。GEPA 规则优化 pilot 已完成 Apptainer 迁移；PCT/PCC/SWE-bench
-  官方 evaluator 仍依赖 Docker，暂不能直接在 Iris 上运行。
+  官方 evaluator 仍依赖 Docker，暂不能直接在 Iris 上运行。Online GEPA HPC
+  的新增 worker/executor 先把 rollout task 拆分、记录和 Slurm array 生成打通；
+  真实大规模运行前仍需要用 worker-only pilot 验证 Apptainer evaluator 路径。
 - `mini-swe` conda 环境在计算节点不可用；GEPA HPC 作业改为 `module load
   lang/Python/3.11 tools/Apptainer` 后使用系统 `python3`，并通过
   `python3 -m pip install --user -e third_party/gepa` 安装 vendored GEPA。

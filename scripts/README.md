@@ -11,6 +11,7 @@ scripts/
 ├── hpc_preheat_watchdog.py          # SIF preheat 夜间无人值守 harness
 ├── hpc_preheat_watchdog_lib/        # watchdog 内部实现
 ├── tools/                           # 可独立运行的辅助工具
+│   ├── prepare_online_hpc_resource_pilot.py # online rollout 资源测量 pilot
 │   ├── submit_apptainer_sif_preheat.sh  # 单次 SIF preheat 提交
 │   ├── hpc_sif_preheat_loop.py          # SIF preheat 切片循环
 │   ├── login_apptainer_sif_preheat.py   # login 节点直接预热 SIF
@@ -87,6 +88,34 @@ bash scripts/tools/submit_apptainer_sif_preheat.sh \
 相关配置，不调用 Checker 或 Reflection 模型。
 默认拉取策略为 `--timeout 0 --max-attempts 1 --retry-backoff 0`：
 不设置单个 image 的内部 pull 超时，由 Slurm `--time` 控制整段 job 的总预算。
+
+---
+
+## 2.5 `tools/prepare_online_hpc_resource_pilot.py`
+
+准备或提交 online GEPA rollout 的 ULHPC 资源测量 pilot。它不会运行完整 GEPA
+搜索；它只把少量 `candidate rules + instance` rollout 拆成 Slurm array tasks，
+用于测量单个 worker 的 `Elapsed / TotalCPU / MaxRSS`。
+
+**常用命令**
+
+```bash
+# 生成 task manifests 和 sbatch 脚本，不提交
+conda run -n mini-swe python scripts/tools/prepare_online_hpc_resource_pilot.py \
+  --config configs/gepa_online_planning_hpc_resource_pilot_20260706.yaml \
+  --limit 3
+
+# 在 ULHPC login/access 节点上提交
+python3 scripts/tools/prepare_online_hpc_resource_pilot.py \
+  --config configs/gepa_online_planning_hpc_resource_pilot_20260706.yaml \
+  --limit 3 \
+  --submit
+```
+
+**注意**：每个 Slurm array element 只运行一个 rollout worker。配置里的
+`max_running_array_tasks` 只限制同时运行的 Slurm tasks 数，不是 worker 内部并发。
+资源测量 pilot 默认 `1 CPU / 4G / 20min`，符合 `batch` 分区约 `4G × CPU` 的
+内存比例。
 
 ---
 

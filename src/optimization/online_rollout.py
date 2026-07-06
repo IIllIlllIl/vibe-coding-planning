@@ -14,6 +14,7 @@ from src.config import (
     SystemConfig,
 )
 from src.data.instance_loader import InstanceLoader
+from src.environment.apptainer_env import ApptainerEnvironment
 from src.environment.docker_env import DockerCapacityWindow, DockerEnvWrapper
 from src.evaluator.swe_evaluator import derive_image_name, evaluate
 from src.optimization.audit import AuditedModel, JsonlLogger, text_sha256
@@ -85,10 +86,9 @@ class OnlinePCTRolloutRunner:
         case: OnlineGEPACase,
         rules: str,
     ) -> OnlineRolloutOutput:
-        if self.config.container.runtime != "docker":
-            raise NotImplementedError(
-                "online PCT rollout currently supports local Docker only; "
-                "full Apptainer PCT/PCC evaluator support is still a separate design item"
+        if self.config.container.runtime not in ("docker", "apptainer"):
+            raise ValueError(
+                f"unsupported online rollout runtime: {self.config.container.runtime}"
             )
 
         candidate_sha256 = text_sha256(rules)
@@ -123,15 +123,14 @@ class OnlinePCTRolloutRunner:
         )
 
         try:
-            env = DockerEnvWrapper(self.config.docker, self.capacity_window)
+            env: DockerEnvWrapper | ApptainerEnvironment
+            env = self._start_environment(
+                image_name=image_name,
+                workdir=workdir,
+                repo_path=repo_path,
+                instance_info=instance_info,
+            )
             try:
-                env.start(
-                    image=image_name,
-                    workdir=workdir,
-                    mount_source=repo_path,
-                    timeout=self.config.plan.timeout,
-                    instance_info=instance_info,
-                )
                 plan_config = self._base_config(self.config.plan)
                 plan, plan_trajectory = plan_agent.run(
                     plan_config,
@@ -175,7 +174,7 @@ class OnlinePCTRolloutRunner:
                     ),
                 )
             finally:
-                env.stop()
+                self._stop_environment(env)
 
             evaluator_result = evaluate(
                 patch,
@@ -218,3 +217,44 @@ class OnlinePCTRolloutRunner:
                 "candidate_rules_visible_to_code_agent": False,
             },
         )
+
+    def _start_environment(
+        self,
+        *,
+        image_name: str,
+        workdir: str,
+        repo_path: str,
+        instance_info: dict[str, Any],
+    ) -> DockerEnvWrapper | ApptainerEnvironment:
+        if self.config.container.runtime == "apptainer":
+            run_args = []
+            if repo_path:
+                run_args.extend(["--bind", f"{repo_path}:{workdir}"])
+            return ApptainerEnvironment(
+                image=image_name,
+                cwd=workdir,
+                sif_cache_dir=self.config.container.sif_cache_dir,
+                capacity_window=self.capacity_window,
+                run_args=run_args,
+                timeout=self.config.plan.timeout,
+                writable_tmpfs=self.config.container.writable_tmpfs,
+                git_safe_directories=[workdir],
+            )
+        env = DockerEnvWrapper(self.config.docker, self.capacity_window)
+        env.start(
+            image=image_name,
+            workdir=workdir,
+            mount_source=repo_path,
+            timeout=self.config.plan.timeout,
+            instance_info=instance_info,
+        )
+        return env
+
+    def _stop_environment(
+        self,
+        env: DockerEnvWrapper | ApptainerEnvironment,
+    ) -> None:
+        if isinstance(env, ApptainerEnvironment):
+            env.cleanup()
+        else:
+            env.stop()

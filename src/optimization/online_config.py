@@ -23,6 +23,42 @@ class OnlineDatasetConfig:
 
 
 @dataclass(frozen=True)
+class OnlineExecutionConfig:
+    backend: str = "local_docker"
+
+
+@dataclass(frozen=True)
+class OnlineHPCConfig:
+    """ULHPC job-array settings for online rollout workers.
+
+    These defaults intentionally request the smallest fairshare-friendly
+    resources we currently expect to need. Resource increases should be based
+    on sacct measurements from pilot workers. ``max_running_array_tasks`` is
+    Slurm array scheduling concurrency, not parallelism inside one worker.
+    """
+
+    submit: bool = False
+    remote_project_dir: str = "~/hpc_runs/vibe-coding-planning-online"
+    remote_task_dir: str = (
+        "/scratch/users/twang/vibe-coding-planning/online-rollout-tasks"
+    )
+    remote_env_file: str = "~/.config/vibe-coding-planning/deepseek.env"
+    ulhpc_config: str = "configs/ulhpc_submit.yaml"
+    partition: str = "batch"
+    cpus_per_task: int = 1
+    mem: str = "4G"
+    time: str = "02:00:00"
+    max_running_array_tasks: int = 5
+    poll_interval_seconds: int = 300
+    max_task_attempts: int = 2
+    python_module: str = "lang/Python/3.11"
+    container_module: str = "tools/Apptainer"
+    python_bin: str = "python3"
+    job_name_prefix: str = "online-gepa-rollout"
+    worker_config_path: str = ""
+
+
+@dataclass(frozen=True)
 class OnlineOptimizationConfig:
     dataset_snapshot: Path
     initial_rules_path: Path
@@ -34,6 +70,8 @@ class OnlineOptimizationConfig:
     search: SearchConfig
     docker: DockerConfig
     container: ContainerConfig
+    execution: OnlineExecutionConfig
+    hpc: OnlineHPCConfig
     plan_prompt: str
     plan_instance_template: str
     code_prompt: str
@@ -88,6 +126,8 @@ def load_online_optimization_config(
     search_data = _mapping(raw.get("search"), "search")
     docker_data = _mapping(raw.get("docker", {}), "docker")
     container_data = _mapping(raw.get("container", {}), "container")
+    execution_data = _mapping(raw.get("execution", {}), "execution")
+    hpc_data = _mapping(raw.get("hpc", {}), "hpc")
     prompts = _mapping(raw.get("prompts"), "prompts")
     evaluator_data = _mapping(raw.get("evaluator", {}), "evaluator")
 
@@ -148,6 +188,81 @@ def load_online_optimization_config(
         raise ValueError(
             f"container.runtime must be 'docker' or 'apptainer', got {container.runtime!r}"
         )
+    execution = OnlineExecutionConfig(
+        backend=str(execution_data.get("backend", "local_docker"))
+    )
+    if execution.backend not in ("local_docker", "hpc_slurm"):
+        raise ValueError(
+            "execution.backend must be 'local_docker' or 'hpc_slurm', "
+            f"got {execution.backend!r}"
+        )
+    hpc_defaults = OnlineHPCConfig()
+    try:
+        default_worker_config_path = str(config_path.relative_to(root))
+    except ValueError:
+        default_worker_config_path = str(config_path)
+    hpc = OnlineHPCConfig(
+        submit=bool(hpc_data.get("submit", False)),
+        remote_project_dir=str(
+            hpc_data.get(
+                "remote_project_dir",
+                hpc_defaults.remote_project_dir,
+            )
+        ),
+        remote_task_dir=str(
+            hpc_data.get("remote_task_dir", hpc_defaults.remote_task_dir)
+        ),
+        remote_env_file=str(
+            hpc_data.get("remote_env_file", hpc_defaults.remote_env_file)
+        ),
+        ulhpc_config=str(
+            hpc_data.get("ulhpc_config", hpc_defaults.ulhpc_config)
+        ),
+        partition=str(hpc_data.get("partition", hpc_defaults.partition)),
+        cpus_per_task=int(
+            hpc_data.get("cpus_per_task", hpc_defaults.cpus_per_task)
+        ),
+        mem=str(hpc_data.get("mem", hpc_defaults.mem)),
+        time=str(hpc_data.get("time", hpc_defaults.time)),
+        max_running_array_tasks=int(
+            hpc_data.get(
+                "max_running_array_tasks",
+                hpc_data.get(
+                    "array_concurrency",
+                    hpc_defaults.max_running_array_tasks,
+                ),
+            )
+        ),
+        poll_interval_seconds=int(
+            hpc_data.get(
+                "poll_interval_seconds",
+                hpc_defaults.poll_interval_seconds,
+            )
+        ),
+        max_task_attempts=int(
+            hpc_data.get("max_task_attempts", hpc_defaults.max_task_attempts)
+        ),
+        python_module=str(
+            hpc_data.get("python_module", hpc_defaults.python_module)
+        ),
+        container_module=str(
+            hpc_data.get("container_module", hpc_defaults.container_module)
+        ),
+        python_bin=str(hpc_data.get("python_bin", hpc_defaults.python_bin)),
+        job_name_prefix=str(
+            hpc_data.get("job_name_prefix", hpc_defaults.job_name_prefix)
+        ),
+        worker_config_path=str(
+            hpc_data.get("worker_config_path", default_worker_config_path)
+        ),
+    )
+    if min(
+        hpc.cpus_per_task,
+        hpc.max_running_array_tasks,
+        hpc.poll_interval_seconds,
+        hpc.max_task_attempts,
+    ) < 1:
+        raise ValueError("hpc numeric resources and retry settings must be positive")
 
     return OnlineOptimizationConfig(
         dataset_snapshot=resolve(str(paths["dataset_snapshot"])),
@@ -171,6 +286,8 @@ def load_online_optimization_config(
         search=search,
         docker=docker,
         container=container,
+        execution=execution,
+        hpc=hpc,
         plan_prompt=str(prompts["plan_system"]),
         plan_instance_template=str(prompts["plan_instance"]),
         code_prompt=str(prompts["code_system"]),

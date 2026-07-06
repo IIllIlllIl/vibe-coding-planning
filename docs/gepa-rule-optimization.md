@@ -734,12 +734,66 @@ Online GEPA 使用独立实验入口，而不是改写当前 offline 主线：
 - `src/optimization/online_dataset.py`：从实例清单或 existing snapshot 中只提取
   issue/repository/split，不加载历史 plan、resolved 或 ASI。
 - `src/optimization/online_adapter.py`：把 GEPA candidate 映射为一次 PCT rollout。
+- `src/optimization/online_rollout.py`：执行单个 current Plan-Code-Test rollout。
+  本地使用 Docker；HPC worker 可使用 Apptainer/SIF backend。
+- `src/optimization/online_rollout_worker.py`：无状态 worker CLI。输入一个
+  `candidate rules + instance` task manifest，输出一个 rollout JSON。它不持有
+  GEPA search state。
+- `src/optimization/online_hpc_executor.py`：创建 Slurm job-array task manifests、
+  生成 fairshare-friendly array script，并把 worker 输出还原为 GEPA rollout
+  outputs。每个 array element 是一个独立 Slurm task，只运行一个 rollout
+  worker。默认 `hpc.submit=false` 时只准备 artifact；`hpc.submit=true` 时假定
+  controller 运行在可调用 `sbatch` 且能访问 task directory 的 ULHPC 环境。
+- `scripts/tools/prepare_online_hpc_resource_pilot.py`：准备或提交一个小型
+  online rollout resource pilot，用于测量单 worker 的 `Elapsed / TotalCPU /
+  MaxRSS`，不运行完整 GEPA 搜索。
 - `src/optimization/online_runner.py`：复用 GEPA optimize、resume、audit 和 report
   思路，但记录 online 专用 manifest。
 - `configs/gepa_online_planning_pilot.yaml`：小样本 pilot 配置。
 
 首版 pilot 建议使用极小 train/validation split，例如 10/5 或 20/10。每个
 metric call 都会触发 Plan Agent、Code Agent 和 evaluator，成本远高于 offline
-Checker-only GEPA。HPC 版本还需要先确认完整 PCT/PCC evaluator 的 Apptainer
-可行路径；当前 GEPA Apptainer backend 只覆盖 Checker/Reflection，不等价于完整
-PCT/PCC online rollout。
+Checker-only GEPA。
+
+### 11.4 Online HPC rollout 设计
+
+Online HPC 版本不把 GEPA 搜索本身拆成多个独立 Slurm 作业。GEPA controller
+仍然只有一个；它在 `adapter.evaluate(batch, candidate)` 时把每个
+`candidate rules + instance_id` rollout 拆成 Slurm array task。这里的并行单位
+是 **Slurm array element**，不是一个 worker 内部的线程/进程并发：
+
+```text
+GEPA controller
+  -> OnlinePlanningGEPAAdapter.evaluate(batch, candidate)
+  -> OnlineHPC executor prepares task manifests
+  -> Slurm array workers run online_rollout_worker.py
+  -> controller collects rollout JSON and returns EvaluationBatch
+```
+
+这种设计保留官方 GEPA candidate selection、Pareto frontier、cache 和 resume 语义，
+同时把最重的 Plan-Code-Test 工作并行化。
+
+FairShare 默认资源必须保守。ULHPC `batch` 分区按约 `4G × CPU` 的内存比例
+配置，因此 `1 CPU` 的默认内存上界是 `4G`；超过该比例会按更高 CPU 等效资源
+计入 FairShare。
+
+- `cpus_per_task: 1`
+- `mem: 4G`
+- resource pilot 先用 `time: 00:20:00`
+- `max_running_array_tasks: 3` 起步
+
+`max_running_array_tasks` 只限制同一个 Slurm array 中同时运行多少个独立 task。
+每个 task 仍然只运行一个 rollout worker，并独立申请 `1 CPU / 4G`。
+
+后续只能根据 `sacct` 的 `Elapsed / TotalCPU / MaxRSS` 数据调整。不要默认使用
+`4 CPU / 16G` 或更大的 per-task 配置。
+
+当前实现阶段：
+
+1. 已有 worker manifest、worker JSON output、Slurm array script 生成和本地
+   GEPA adapter 接口。
+2. `hpc.submit=false` 用于 pilot 前审查 task/script artifact。
+3. `hpc.submit=true` 默认调用 `sbatch`，适合 controller 已在 ULHPC 可访问 shared
+   task directory 的环境运行。
+4. 本地 Mac controller 到 ULHPC 的自动 rsync/remote `sbatch` 提交流程仍应作为
+   后续 wrapper 层实现，不应塞入 GEPA adapter 核心。

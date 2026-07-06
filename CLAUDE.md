@@ -72,6 +72,10 @@ documented workflow. Current defaults:
 - GEPA main run: start with `search.parallel=2`, `--cpus 2`, `--mem 8G`.
   Increase to `parallel=4`, `--cpus 4`, `--mem 16G` only after `sacct` and
   throughput show it is justified.
+- Online GEPA HPC rollout: each Slurm array element runs exactly one rollout
+  worker. Use `1 CPU / 4G` per task; `max_running_array_tasks` only caps how
+  many array elements Slurm may run at once and is not worker-internal
+  concurrency. Resource pilot wall time starts at `20min`.
 - Do not use `8 CPU / 32G` as a default. Treat it as an exceptional request that
   needs explicit justification from observed resource usage.
 - Avoid concurrent Slurm/login preheat jobs writing the same shared SIF cache.
@@ -85,7 +89,9 @@ sacct -j <jobid> --format=JobID,JobName,State,Elapsed,AllocCPUS,TotalCPU,ReqMem,
 Use `TotalCPU / (Elapsed * AllocCPUS)` and `MaxRSS / ReqMem` to decide whether
 the next run should reduce, keep, or increase requested resources. Report a
 warning before launching any run whose requested memory is not aligned with the
-ULHPC `batch` partition guideline of roughly `4G × cpus`.
+ULHPC `batch` partition guideline of roughly `4G × cpus`; requesting more than
+`4G` with `1 CPU` is not the default and needs explicit measurement-based
+justification.
 
 ## 4. Cleanup checklist — run BEFORE marking the task complete
 

@@ -12,6 +12,7 @@ from src.optimization.audit import JsonlLogger, text_sha256
 from src.optimization.online_adapter import OnlinePlanningGEPAAdapter
 from src.optimization.online_config import OnlineOptimizationConfig
 from src.optimization.online_dataset import load_online_snapshot
+from src.optimization.online_hpc_executor import HPCSlurmOnlineRolloutExecutor
 from src.optimization.online_reflection import OnlinePlanningReflectionProposer
 from src.optimization.online_rollout import OnlinePCTRolloutRunner
 from src.optimization.report import write_cost_report
@@ -171,6 +172,9 @@ def run_online_optimization(
         max_concurrent=config.search.parallel,
     )
     rollout_runner = rollout or OnlinePCTRolloutRunner(config, capacity)
+    batch_executor = None
+    if rollout is None and config.execution.backend == "hpc_slurm":
+        batch_executor = HPCSlurmOnlineRolloutExecutor(config)
     proposer_runner = proposer or OnlinePlanningReflectionProposer(
         config,
         capacity,
@@ -182,6 +186,7 @@ def run_online_optimization(
         run_dir=config.run_dir,
         fail_on_rollout_error=True,
         rollout_attempts=max(config.plan.max_attempts, config.code.max_attempts),
+        batch_executor=batch_executor,
     )
     try:
         result = optimize_fn(

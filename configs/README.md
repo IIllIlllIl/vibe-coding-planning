@@ -13,6 +13,7 @@ from file names.
 | `gepa_verified_rules_strict_hpc_24h_newprompt_20260625_apptainer.yaml` | ULHPC Apptainer | Active HPC prompt-fix run. Uses the shared scratch SIF cache and `parallel: 4`. |
 | `gepa_online_planning_pilot.yaml` | local Docker | Experimental online GEPA planning run. Candidate rules go to the Plan Agent as a strict planning checklist; Code Agent only sees the generated plan. Use only for small pilot validation. |
 | `gepa_online_planning_smoke_3to5iter_20260703.yaml` | local Docker | Dedicated online GEPA smoke pilot for validating input isolation, rollout logging, and 3-5 proposal behavior before any formal run. |
+| `gepa_online_planning_hpc_resource_pilot_20260706.yaml` | ULHPC Apptainer | Resource-measurement pilot for online rollout workers. Each Slurm array element runs one rollout with `1 CPU / 4G / 20min`; `max_running_array_tasks` controls simultaneous array elements, not worker-internal concurrency. |
 
 The prompt-fix configs are the current mainline. They differ from the older
 strict-only run by using the newer Reflection prompt that maintains rules as a

@@ -21,6 +21,15 @@ class OnlineRolloutRunner(Protocol):
     ) -> OnlineRolloutOutput: ...
 
 
+class OnlineRolloutBatchExecutor(Protocol):
+    def evaluate(
+        self,
+        batch: list[OnlineGEPACase],
+        rules: str,
+        capture_traces: bool,
+    ) -> list[OnlineRolloutOutput]: ...
+
+
 class OnlinePlanningGEPAAdapter:
     """Evaluate candidate planning rules by running current PCT rollouts."""
 
@@ -33,8 +42,10 @@ class OnlinePlanningGEPAAdapter:
         run_dir: Any = None,
         fail_on_rollout_error: bool = True,
         rollout_attempts: int = 1,
+        batch_executor: OnlineRolloutBatchExecutor | None = None,
     ) -> None:
         self.rollout = rollout
+        self.batch_executor = batch_executor
         self.parallel = parallel
         self.propose_new_texts = proposer
         self.run_dir = run_dir
@@ -219,7 +230,38 @@ class OnlinePlanningGEPAAdapter:
                 historical_resolved_available_to_plan_agent=False,
                 historical_asi_available_to_plan_agent=False,
             )
-        if self.fail_on_rollout_error and self.parallel > 1:
+        if self.batch_executor is not None:
+            try:
+                rows = [
+                    self._row_from_output(case, output, capture_traces)
+                    for case, output in zip(
+                        batch,
+                        self.batch_executor.evaluate(
+                            batch,
+                            candidate["rules"],
+                            capture_traces,
+                        ),
+                        strict=True,
+                    )
+                ]
+            except Exception as exc:
+                details = _exception_details(exc)
+                if self.audit is not None:
+                    self.audit.write(
+                        "online_hpc_batch_failed",
+                        candidate_sha256=candidate_hash,
+                        batch_size=len(batch),
+                        **details,
+                    )
+                if self.errors is not None:
+                    self.errors.write(
+                        "online_hpc_batch_failed",
+                        candidate_sha256=candidate_hash,
+                        batch_size=len(batch),
+                        **details,
+                    )
+                raise
+        elif self.fail_on_rollout_error and self.parallel > 1:
             rows = self._evaluate_parallel_fail_fast(
                 batch,
                 candidate["rules"],
@@ -274,6 +316,26 @@ class OnlinePlanningGEPAAdapter:
             scores=scores,
             trajectories=trajectories,
         )
+
+    @staticmethod
+    def _row_from_output(
+        case: OnlineGEPACase,
+        output: OnlineRolloutOutput,
+        capture_traces: bool,
+    ) -> tuple[dict[str, Any], float, dict[str, Any] | None]:
+        score = float(output.resolved)
+        public_output = {
+            "instance_id": case.instance_id,
+            **output.to_public_output(),
+        }
+        trace = None
+        if capture_traces:
+            trace = {
+                "instance_id": case.instance_id,
+                "score": score,
+                **output.to_trace(),
+            }
+        return public_output, score, trace
 
     def make_reflective_dataset(
         self,

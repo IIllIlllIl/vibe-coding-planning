@@ -1,0 +1,346 @@
+mode: online_planning
+
+paths:
+  dataset_snapshot: output/SWE-bench_Verified/gepa-pilot-datasets/pilot_6_4_seed42_73df941adb4d
+  initial_rules: configs/gepa_initial_rules_gpt_seed.md
+  run_dir: output/SWE-bench_Verified/gepa-rules/online-planning-hpc-resource-pilot-20260706
+
+dataset:
+  name: SWE-bench/SWE-bench_Verified
+  train_instance_ids:
+    - django__django-10097
+    - django__django-10880
+    - matplotlib__matplotlib-13989
+  validation_instance_ids:
+    - django__django-10554
+
+plan:
+  model: deepseek-v4-flash
+  api_base: https://api.deepseek.com
+  api_key_env: DEEPSEEK_API_KEY
+  temperature: 0.0
+  max_steps: 300
+  cost_limit: 6.0
+  timeout: 1800
+  max_attempts: 3
+
+code:
+  model: deepseek-v4-flash
+  api_base: https://api.deepseek.com
+  api_key_env: DEEPSEEK_API_KEY
+  temperature: 0.0
+  max_steps: 1000
+  cost_limit: 20.0
+  timeout: 1800
+  max_attempts: 2
+
+reflection:
+  model: deepseek-v4-flash
+  api_base: https://api.deepseek.com
+  api_key_env: DEEPSEEK_API_KEY
+  temperature: 0.7
+  max_steps: 500
+  cost_limit: 10.0
+  timeout: 1800
+
+search:
+  # GEPA checks max_metric_calls at iteration boundaries. This value targets a
+  # small 3-5 proposal smoke run, not a formal optimization budget.
+  max_metric_calls: 20
+  projection_metric_calls: 100
+  reflection_minibatch_size: 1
+  seed: 42
+  parallel: 1
+  skip_perfect_score: false
+  min_proposals: 1
+
+docker:
+  workdir: /testbed
+  timeout: 1800
+  delete_images_after_instance: false
+  min_free_gb: 20
+  max_cached_images: 75
+
+container:
+  runtime: apptainer
+  module: tools/Apptainer
+  sif_cache_dir: /scratch/users/twang/vibe-coding-planning/shared/sif-cache
+  writable_tmpfs: true
+
+execution:
+  backend: hpc_slurm
+
+hpc:
+  # Resource-measurement pilot: each Slurm array task runs one rollout worker.
+  # max_running_array_tasks limits simultaneously running Slurm array elements;
+  # it is not Python/thread/process concurrency inside a worker.
+  submit: false
+  partition: batch
+  cpus_per_task: 1
+  mem: 4G
+  time: "00:20:00"
+  max_running_array_tasks: 3
+  poll_interval_seconds: 300
+  max_task_attempts: 1
+  remote_env_file: ~/.config/vibe-coding-planning/deepseek.env
+  python_module: lang/Python/3.11
+  container_module: tools/Apptainer
+  python_bin: python3
+  job_name_prefix: online-gepa-resource-pilot
+  worker_config_path: configs/gepa_online_planning_hpc_resource_pilot_20260706.yaml
+
+evaluator:
+  timeout: 1800
+
+prompts:
+  plan_system: |
+    You are a strict planning agent. Produce a structured plan that another
+    agent will execute.
+
+    Use the supplied planning rules as the primary planning checklist. You may
+    inspect the repository and make conservative engineering inferences when a
+    rule does not cover a detail, but do not present unsupported assumptions as
+    facts.
+
+    Your response must contain exactly ONE bash code block with ONE command
+    (or commands connected with && or ||).
+
+    Include a THOUGHT section before your command where you explain your
+    reasoning process.
+
+    Failure to follow these rules will cause your response to be rejected.
+
+    Do not modify files under /testbed. Use /tmp only for scratch work and the
+    final plan file.
+
+    ## Exploration Budget
+    You have a hard exploration budget of 150 steps. After step 150 you MUST
+    write the plan to /tmp/plan.md and submit it, even if your understanding is
+    incomplete. An imperfect plan is infinitely better than no plan.
+
+    ## Efficiency Rules
+    - Every ~10 steps, briefly summarize what you have learned so far in your
+      THOUGHT.
+
+    ## Workflow
+    Read code and reproduce the bug as needed. When ready -- or when you reach
+    the exploration budget limit -- write the plan to /tmp/plan.md using a
+    heredoc:
+
+    ```bash
+    cat <<'EOF' > /tmp/plan.md
+    <plan content>
+    EOF
+    ```
+
+    After /tmp/plan.md is written, your NEXT response MUST be exactly:
+
+    ```bash
+    echo COMPLETE_TASK_AND_SUBMIT_FINAL_OUTPUT && cat /tmp/plan.md
+    ```
+
+    Do not run other commands after submitting.
+
+    ## Plan Format
+    {{nrpv_block}}
+
+  plan_instance: |
+    <planning_rules>
+    {{planning_rules}}
+    </planning_rules>
+
+    <pr_description>
+    Consider the following PR description:
+    {{task}}
+    </pr_description>
+
+  code_system: |
+    You are in execution mode. Follow the approved plan below exactly.
+
+    Approved plan:
+    --- plan start ---
+    {{plan}}
+    --- plan end ---
+
+  code_instance: |
+    <pr_description>
+    Consider the following PR description:
+    {{task}}
+    </pr_description>
+
+    <instructions>
+    # Task Instructions
+
+    ## Overview
+    You are a software engineer implementing an approved plan to fix the issue
+    described in the PR description. Follow the approved plan exactly.
+
+    IMPORTANT: This is an interactive process where you will think and issue ONE command, see its result, then think and issue your next command.
+
+    For each response:
+    1. Include a THOUGHT section explaining your reasoning and what you're trying to accomplish
+    2. Provide exactly ONE bash command to execute
+
+    ## Important Boundaries
+    - MODIFY: Any task-relevant non-test file in /testbed (this is the working directory for all your subsequent commands)
+    - DO NOT MODIFY: Tests or test fixtures. Do not add or alter tests to make the submission pass.
+
+    ## Command Execution Rules
+    You are operating in an environment where
+    1. You write a single command
+    2. The system executes that command in a subshell
+    3. You see the result
+    4. You write your next command
+
+    Each response should include:
+    1. A **THOUGHT** section where you explain your reasoning and plan
+    2. A single bash code block with your command
+
+    Format your responses like this:
+
+    <format_example>
+    THOUGHT: Here I explain my reasoning process, analysis of the current situation,
+    and what I'm trying to accomplish with the command below.
+
+    ```bash
+    your_command_here
+    ```
+    </format_example>
+
+    Commands must be specified in a single bash code block:
+
+    ```bash
+    your_command_here
+    ```
+
+    **CRITICAL REQUIREMENTS:**
+    - Your response SHOULD include a THOUGHT section explaining your reasoning
+    - Your response MUST include EXACTLY ONE bash code block
+    - This bash block MUST contain EXACTLY ONE command (or a set of commands connected with && or ||)
+    - If you include zero or multiple bash blocks, or no command at all, YOUR RESPONSE WILL FAIL
+    - Do NOT try to run multiple independent commands in separate blocks in one response
+    - Directory or environment variable changes are not persistent. Every action is executed in a new subshell.
+    - However, you can prefix any action with `MY_ENV_VAR=MY_VALUE cd /path/to/working/dir && ...` or write/load environment variables from files
+
+    Example of a CORRECT response:
+    <example_response>
+    THOUGHT: I need to understand the structure of the repository first. Let me check what files are in the current directory to get a better understanding of the codebase.
+
+    ```bash
+    ls -la
+    ```
+    </example_response>
+
+    Example of an INCORRECT response:
+    <example_response>
+    THOUGHT: I need to examine the codebase and then look at a specific file. I'll run multiple commands to do this.
+
+    ```bash
+    ls -la
+    ```
+
+    Now I'll read the file:
+
+    ```bash
+    cat file.txt
+    ```
+    </example_response>
+
+    If you need to run multiple commands, either:
+    1. Combine them in one block using && or ||
+    ```bash
+    command1 && command2 || echo "Error occurred"
+    ```
+
+    2. Wait for the first command to complete, see its output, then issue the next command in your following response.
+
+    ## Environment Details
+    - You have a full Linux shell environment
+    - Always use non-interactive flags (-y, -f) for commands
+    - Avoid interactive tools like vi, nano, or any that require user input
+    - If a command isn't available, you can install it
+
+    ## Useful Command Examples
+
+    ### Create a new file:
+    ```bash
+    cat <<'EOF' > newfile.py
+    import numpy as np
+    hello = "world"
+    print(hello)
+    EOF
+    ```
+
+    ### Edit files with sed:
+    ```bash
+    # Replace all occurrences
+    sed -i 's/old_string/new_string/g' filename.py
+
+    # Replace only first occurrence
+    sed -i 's/old_string/new_string/' filename.py
+
+    # Replace first occurrence on line 1
+    sed -i '1s/old_string/new_string/' filename.py
+
+    # Replace all occurrences in lines 1-10
+    sed -i '1,10s/old_string/new_string/g' filename.py
+    ```
+
+    ### View file content:
+    ```bash
+    # View specific lines with numbers
+    nl -ba filename.py | sed -n '10,20p'
+    ```
+
+    ### Any other command you want to run
+    ```bash
+    anything
+    ```
+
+    ## Submission
+    When you've completed your work (reading, editing, testing), and cannot make further progress
+    issue exactly the following command:
+    ```bash
+    echo COMPLETE_TASK_AND_SUBMIT_FINAL_OUTPUT && git add -A -- . ':(exclude)tests/**' ':(exclude)test/**' ':(exclude)*_test.py' ':(exclude)test_*.py' && git diff --cached
+    ```
+
+    This command will submit your work.
+    You cannot continue working (reading, editing, testing) in any way on this task after submitting.
+    </instructions>
+
+  reflection_system: |
+    You maintain the complete planning checklist used by a strict Plan Agent.
+
+    Files under {{evidence_path}} contain current online rollout evidence for
+    the minibatch. They may include generated plans, Plan and Code Agent
+    trajectories, generated patches, evaluator results, resolved values, scores,
+    and attribution hints.
+
+    Use this execution-after evidence only to improve the planning checklist.
+    Distinguish plan/rule problems from Code Agent deviations and infrastructure
+    failures. Do not add rules that depend on seeing evaluator results,
+    generated patches, trajectories, resolved labels, or future execution
+    output at deployment time.
+
+    Preserve useful checklist items. Delete misleading items. Merge redundant
+    items. Add new items only when the lesson is general and deployable from
+    issue, repository, and planning rules before code execution.
+
+    Write only the complete revised checklist to /tmp/candidate_rules.txt. Then
+    submit with:
+    echo COMPLETE_TASK_AND_SUBMIT_FINAL_OUTPUT && cat /tmp/candidate_rules.txt
+
+  reflection_instance: |
+    <current_rules>
+    {{current_rules}}
+    </current_rules>
+
+    Evidence for the current minibatch is mounted read-only at:
+    {{evidence_path}}
+
+  nrpv_block: |
+    Your plan must include:
+    - Navigation: files, symbols, and repository areas to inspect.
+    - Reproduction: how to understand or reproduce the reported behavior.
+    - Patch: the narrowly scoped implementation strategy.
+    - Validation: checks tied to the reported behavior.
