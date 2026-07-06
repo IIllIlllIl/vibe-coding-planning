@@ -291,8 +291,16 @@ def test_online_smoke_pilot_config_is_small_and_auditable():
     assert config.search.reflection_minibatch_size == 1
     assert config.search.parallel == 1
     assert config.plan.model == "deepseek-v4-flash"
+    assert config.plan.max_steps == 300
+    assert config.plan.max_attempts == 3
+    assert config.code.max_attempts == 2
     assert config.code.model == "deepseek-v4-flash"
     assert config.reflection.model == "deepseek-v4-flash"
+    assert "Exploration Budget" in config.plan_prompt
+    assert "After step 150 you MUST" in config.plan_prompt
+    assert "Efficiency Rules" in config.plan_prompt
+    assert "cat <<'EOF' > /tmp/plan.md" in config.plan_prompt
+    assert "Do not run other commands after submitting" in config.plan_prompt
     assert "{{planning_rules}}" in config.plan_instance_template
     assert "{{planning_rules}}" not in config.code_prompt
     assert "{{candidate_rules}}" not in config.code_prompt
@@ -830,6 +838,53 @@ def test_online_adapter_treats_rollout_errors_as_operational(tmp_path):
     ]
     assert errors[0]["event"] == "online_rollout_failed"
     assert errors[0]["attempts"] == 2
+
+
+def test_online_runner_uses_plan_and_code_rollout_attempts(tmp_path):
+    config = _online_config(tmp_path)
+    config = replace(
+        config,
+        plan=replace(config.plan, max_attempts=1),
+        code=replace(config.code, max_attempts=3),
+    )
+    captured: dict[str, int] = {}
+
+    class FakeResult:
+        candidates = [{"rules": "seed planning rules"}]
+        val_subscores = [{"repo__val": 1.0}]
+        val_aggregate_scores = [1.0]
+        parents = [None]
+        best_candidate = {"rules": "seed planning rules"}
+        best_idx = 0
+        total_metric_calls = 1
+        num_candidates = 1
+
+        def to_dict(self):
+            return {"best_candidate": self.best_candidate}
+
+        def candidate_tree_html(self):
+            return "<html></html>"
+
+    def fake_optimize(**kwargs):
+        captured["rollout_attempts"] = kwargs["adapter"].rollout_attempts
+        return FakeResult()
+
+    run_online_optimization(
+        config,
+        rollout=lambda case, rules: OnlineRolloutOutput(
+            resolved=True,
+            plan="plan",
+            patch="patch",
+            plan_trajectory=(),
+            code_trajectory=(),
+            evaluator_result={"resolved": True},
+            attribution_hint={},
+        ),
+        proposer=lambda candidate, reflective_dataset, components: candidate,
+        optimize_fn=fake_optimize,
+    )
+
+    assert captured["rollout_attempts"] == 3
 
 
 def test_adapter_does_not_call_checker_when_prepare_fails(tmp_path):

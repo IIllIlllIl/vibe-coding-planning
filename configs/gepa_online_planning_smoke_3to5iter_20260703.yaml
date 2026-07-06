@@ -3,7 +3,7 @@ mode: online_planning
 paths:
   dataset_snapshot: output/SWE-bench_Verified/gepa-pilot-datasets/pilot_6_4_seed42_73df941adb4d
   initial_rules: configs/gepa_initial_rules_gpt_seed.md
-  run_dir: output/SWE-bench_Verified/gepa-rules/online-planning-smoke-pilot-3to5iter-20260703-rerun1
+  run_dir: output/SWE-bench_Verified/gepa-rules/online-planning-smoke-pilot-3to5iter-20260703-pct-aligned-rerun2
 
 dataset:
   name: SWE-bench/SWE-bench_Verified
@@ -19,10 +19,10 @@ plan:
   api_base: https://api.deepseek.com
   api_key_env: DEEPSEEK_API_KEY
   temperature: 0.0
-  max_steps: 200
+  max_steps: 300
   cost_limit: 6.0
   timeout: 1800
-  max_attempts: 1
+  max_attempts: 3
 
 code:
   model: deepseek-v4-flash
@@ -32,7 +32,7 @@ code:
   max_steps: 1000
   cost_limit: 20.0
   timeout: 1800
-  max_attempts: 1
+  max_attempts: 2
 
 reflection:
   model: deepseek-v4-flash
@@ -77,13 +77,44 @@ prompts:
     rule does not cover a detail, but do not present unsupported assumptions as
     facts.
 
-    Your response must contain exactly one bash code block with one command.
-    Write the plan to /tmp/plan.md. After the file is written, your next
-    response must be exactly:
-    echo COMPLETE_TASK_AND_SUBMIT_FINAL_OUTPUT && cat /tmp/plan.md
+    Your response must contain exactly ONE bash code block with ONE command
+    (or commands connected with && or ||).
+
+    Include a THOUGHT section before your command where you explain your
+    reasoning process.
+
+    Failure to follow these rules will cause your response to be rejected.
 
     Do not modify files under /testbed. Use /tmp only for scratch work and the
     final plan file.
+
+    ## Exploration Budget
+    You have a hard exploration budget of 150 steps. After step 150 you MUST
+    write the plan to /tmp/plan.md and submit it, even if your understanding is
+    incomplete. An imperfect plan is infinitely better than no plan.
+
+    ## Efficiency Rules
+    - Every ~10 steps, briefly summarize what you have learned so far in your
+      THOUGHT.
+
+    ## Workflow
+    Read code and reproduce the bug as needed. When ready -- or when you reach
+    the exploration budget limit -- write the plan to /tmp/plan.md using a
+    heredoc:
+
+    ```bash
+    cat <<'EOF' > /tmp/plan.md
+    <plan content>
+    EOF
+    ```
+
+    After /tmp/plan.md is written, your NEXT response MUST be exactly:
+
+    ```bash
+    echo COMPLETE_TASK_AND_SUBMIT_FINAL_OUTPUT && cat /tmp/plan.md
+    ```
+
+    Do not run other commands after submitting.
 
     ## Plan Format
     {{nrpv_block}}

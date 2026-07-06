@@ -181,7 +181,7 @@ def run_online_optimization(
         proposer=proposer_runner,
         run_dir=config.run_dir,
         fail_on_rollout_error=True,
-        rollout_attempts=config.plan.max_attempts,
+        rollout_attempts=max(config.plan.max_attempts, config.code.max_attempts),
     )
     try:
         result = optimize_fn(
