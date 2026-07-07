@@ -232,6 +232,10 @@ paths = cfg.get("paths", {})
 def resolve(raw: str) -> str:
     if not raw:
         return ""
+    remote_user = os.environ.get("ULHPC_USER")
+    if remote_user:
+        raw = raw.replace("${USER}", remote_user).replace("$USER", remote_user)
+    raw = os.path.expandvars(raw)
     value = Path(raw)
     return str(value if value.is_absolute() else repo_root / value)
 
@@ -239,7 +243,13 @@ print(f"dataset_snapshot={resolve(paths.get('dataset_snapshot', ''))}")
 print(f"run_dir={resolve(paths.get('run_dir', ''))}")
 print(f"initial_rules={resolve(paths.get('initial_rules', ''))}")
 container = cfg.get("container", {}) or {}
-print(f"sif_cache_dir={os.path.expandvars(str(container.get('sif_cache_dir', '')))}")
+raw_sif_cache = str(container.get("sif_cache_dir", ""))
+remote_user = os.environ.get("ULHPC_USER")
+if remote_user:
+    raw_sif_cache = raw_sif_cache.replace("${USER}", remote_user).replace(
+        "$USER", remote_user
+    )
+print(f"sif_cache_dir={os.path.expandvars(raw_sif_cache)}")
 
 ulhpc = {}
 if ulhpc_config and ulhpc_config.exists():
