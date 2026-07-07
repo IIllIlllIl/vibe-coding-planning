@@ -85,6 +85,17 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--check-interval", type=int, default=3600)
     parser.add_argument("--max-runs", type=int, default=0)
     parser.add_argument("--max-no-progress-runs", type=int, default=3)
+    parser.add_argument(
+        "--cleanup-tmp",
+        action=argparse.BooleanOptionalAction,
+        default=True,
+        help="Remove remote APPTAINER_TMPDIR contents after each batch (default: true)",
+    )
+    parser.add_argument(
+        "--cleanup-apptainer-cache",
+        action="store_true",
+        help="Remove remote APPTAINER_CACHEDIR contents after each batch",
+    )
     parser.add_argument("--dry-run", action="store_true")
     return parser.parse_args()
 
@@ -130,6 +141,12 @@ def build_preheat_command(args: argparse.Namespace, config_path: Path, batch_siz
         "--retry-backoff",
         str(args.retry_backoff),
     ]
+    if args.cleanup_tmp:
+        command.append("--cleanup-tmp")
+    else:
+        command.append("--no-cleanup-tmp")
+    if args.cleanup_apptainer_cache:
+        command.append("--cleanup-apptainer-cache")
     if args.sif_cache_dir:
         command.extend(["--sif-cache-dir", args.sif_cache_dir])
     return command

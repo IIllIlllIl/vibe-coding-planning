@@ -1,76 +1,72 @@
 #!/usr/bin/env bash
-# Submit an Apptainer SIF preheat job through ulhpc-submit.
+# Submit a single-worker online GEPA resource pilot through ulhpc-submit.
 #
-# This wrapper intentionally does not hand-write Slurm/module setup. It reuses
-# ulhpc-submit for sync, module loading, staging, Apptainer cache env, and
-# submit-only JSON output. The actual image preheat logic lives in
-# scripts/tools/prepare_apptainer_sifs.py.
+# The wrapper intentionally delegates Slurm script generation and module setup
+# to ulhpc-submit. The remote command runs one rollout worker directly; it does
+# not submit a nested sbatch job.
 set -euo pipefail
 
-CONFIG=""
-SIF_CACHE_DIR=""
-JOB_NAME="vibe-preheat-sifs"
+CONFIG="configs/gepa_online_planning_hpc_resource_pilot_20260706.yaml"
+JOB_NAME="online-gepa-resource-pilot"
 PARTITION="batch"
 CPUS="1"
 MEM="4G"
-TIME="08:00:00"
-TIMEOUT="0"
-MAX_ATTEMPTS="1"
-RETRY_BACKOFF="0"
-REMOTE_DIR=""
-REMOTE_DATASET_DIR="~/hpc_datasets/vibe-coding-planning"
+TIME="00:20:00"
+LIMIT="1"
+TASK_INDEX="0"
+SPLIT="train"
 ULHPC_REMOTE_USER="${ULHPC_USER:-${USER:-}}"
 VIBE_HPC_ROOT="${VIBE_HPC_ROOT:-/scratch/users/${ULHPC_REMOTE_USER}/vibe-coding-planning}"
+REMOTE_DIR="${VIBE_HPC_ROOT}/online-ulhpc-resource-pilot"
+REMOTE_DATASET_DIR="${VIBE_HPC_ROOT}/datasets"
+REMOTE_RUN_DIR="${VIBE_HPC_ROOT}/run_state"
 REMOTE_APPTAINER_CACHE_DIR="${VIBE_HPC_ROOT}/shared/apptainer-cache"
 REMOTE_APPTAINER_TMP_DIR="${VIBE_HPC_ROOT}/shared/apptainer-tmp"
+REMOTE_ENV_FILE="~/.config/vibe-coding-planning/deepseek.env"
 ULHPC_CONFIG=""
 FULL_LOGS=0
 SUBMIT=0
 INSTALL_DEPS=0
+INSTANCE_IDS=()
 
 usage() {
   cat <<'USAGE'
 Usage:
-  bash scripts/tools/submit_apptainer_sif_preheat.sh --config PATH [options]
+  bash scripts/tools/submit_online_hpc_resource_pilot.sh [options]
 
-Required:
-  --config PATH          GEPA config file, relative to repo root or absolute
-
-Preheat options:
-  --sif-cache-dir DIR    Shared remote SIF cache directory
-                         (default: container.sif_cache_dir from config)
-  --timeout SECONDS      Timeout per SIF pull attempt; 0 disables the per-pull timeout
-                         (default: 0)
-  --max-attempts N       Attempts per missing SIF image (default: 1)
-  --retry-backoff SEC    Seconds between failed pull attempts (default: 0)
+Online pilot options:
+  --config PATH          Online GEPA config file
+                         (default: configs/gepa_online_planning_hpc_resource_pilot_20260706.yaml)
+  --split train|validation
+  --instance-id ID       Select one instance; may be repeated
+  --limit N              Number of selected cases visible to the worker (default: 1)
+  --task-index N         Which selected case to run (default: 0)
 
 Slurm / ulhpc-submit options:
-  --job-name NAME        Job name (default: vibe-preheat-sifs)
+  --job-name NAME        Job name (default: online-gepa-resource-pilot)
   --partition NAME       Slurm partition (default: batch)
   --cpus N               CPUs per task (default: 1)
   --mem SIZE             Memory (default: 4G)
-  --time HH:MM:SS        Wall time (default: 08:00:00)
+  --time HH:MM:SS        Wall time (default: 00:20:00)
   --remote-dir DIR       Remote project workdir
   --remote-dataset-dir DIR
-                         Remote dataset staging root outside --remote-dir
-                         (default: ~/hpc_datasets/vibe-coding-planning)
+  --remote-run-dir DIR
   --remote-apptainer-cache-dir DIR
-                         Remote APPTAINER_CACHEDIR
   --remote-apptainer-tmp-dir DIR
-                         Remote APPTAINER_TMPDIR
+  --remote-env-file FILE Remote private env file sourced inside the job
+                         (default: ~/.config/vibe-coding-planning/deepseek.env)
   --ulhpc-config FILE    ulhpc-submit config file
                          (default: configs/ulhpc_submit.yaml if present)
+  --install-deps         Run pip install --user -r requirements.txt before the worker
   --full-logs            Ask ulhpc-submit to retrieve full logs when monitored
   --submit               Actually submit the job (default is dry-run)
-  --install-deps         Run pip install --user -r requirements.txt before preheat
-                         (default: skip dependency installation)
 
 Examples:
-  bash scripts/tools/submit_apptainer_sif_preheat.sh \
-    --config configs/gepa_verified_rules_strict_hpc_24h_apptainer.yaml \
-    --sif-cache-dir "${VIBE_HPC_ROOT}/shared/sif-cache" \
-    --time 08:00:00 \
-    --submit
+  # 1-minute smoke to verify sync/module/bootstrap behavior.
+  bash scripts/tools/submit_online_hpc_resource_pilot.sh --time 00:01:00 --submit
+
+  # 20-minute resource measurement pilot.
+  bash scripts/tools/submit_online_hpc_resource_pilot.sh --time 00:20:00 --submit
 USAGE
 }
 
@@ -80,8 +76,20 @@ while [[ $# -gt 0 ]]; do
       CONFIG="$2"
       shift 2
       ;;
-    --sif-cache-dir)
-      SIF_CACHE_DIR="$2"
+    --split)
+      SPLIT="$2"
+      shift 2
+      ;;
+    --instance-id)
+      INSTANCE_IDS+=("$2")
+      shift 2
+      ;;
+    --limit)
+      LIMIT="$2"
+      shift 2
+      ;;
+    --task-index)
+      TASK_INDEX="$2"
       shift 2
       ;;
     --job-name)
@@ -104,24 +112,16 @@ while [[ $# -gt 0 ]]; do
       TIME="$2"
       shift 2
       ;;
-    --timeout)
-      TIMEOUT="$2"
-      shift 2
-      ;;
-    --max-attempts)
-      MAX_ATTEMPTS="$2"
-      shift 2
-      ;;
-    --retry-backoff)
-      RETRY_BACKOFF="$2"
-      shift 2
-      ;;
     --remote-dir)
       REMOTE_DIR="$2"
       shift 2
       ;;
     --remote-dataset-dir)
       REMOTE_DATASET_DIR="$2"
+      shift 2
+      ;;
+    --remote-run-dir)
+      REMOTE_RUN_DIR="$2"
       shift 2
       ;;
     --remote-apptainer-cache-dir)
@@ -132,9 +132,17 @@ while [[ $# -gt 0 ]]; do
       REMOTE_APPTAINER_TMP_DIR="$2"
       shift 2
       ;;
+    --remote-env-file)
+      REMOTE_ENV_FILE="$2"
+      shift 2
+      ;;
     --ulhpc-config)
       ULHPC_CONFIG="$2"
       shift 2
+      ;;
+    --install-deps)
+      INSTALL_DEPS=1
+      shift
       ;;
     --full-logs)
       FULL_LOGS=1
@@ -142,10 +150,6 @@ while [[ $# -gt 0 ]]; do
       ;;
     --submit)
       SUBMIT=1
-      shift
-      ;;
-    --install-deps)
-      INSTALL_DEPS=1
       shift
       ;;
     --dry-run)
@@ -164,33 +168,24 @@ while [[ $# -gt 0 ]]; do
   esac
 done
 
-if [[ -z "$CONFIG" ]]; then
-  echo "ERROR: --config is required" >&2
-  usage >&2
+if [[ "$SPLIT" != "train" && "$SPLIT" != "validation" ]]; then
+  echo "ERROR: --split must be train or validation" >&2
   exit 2
 fi
-if ! [[ "$CPUS" =~ ^[1-9][0-9]*$ ]]; then
-  echo "ERROR: --cpus must be a positive integer" >&2
-  exit 2
-fi
-if ! [[ "$TIMEOUT" =~ ^[0-9]+$ ]]; then
-  echo "ERROR: --timeout must be a non-negative integer" >&2
-  exit 2
-fi
-if ! [[ "$MAX_ATTEMPTS" =~ ^[1-9][0-9]*$ ]]; then
-  echo "ERROR: --max-attempts must be a positive integer" >&2
-  exit 2
-fi
-if ! [[ "$RETRY_BACKOFF" =~ ^[0-9]+$ ]]; then
-  echo "ERROR: --retry-backoff must be a non-negative integer" >&2
-  exit 2
-fi
-for value_name in REMOTE_DATASET_DIR REMOTE_APPTAINER_CACHE_DIR REMOTE_APPTAINER_TMP_DIR; do
-  if [[ -z "${!value_name}" ]]; then
-    echo "ERROR: $value_name must not be empty" >&2
+for value_name in CPUS LIMIT TASK_INDEX; do
+  if ! [[ "${!value_name}" =~ ^[0-9]+$ ]]; then
+    echo "ERROR: $value_name must be a non-negative integer" >&2
     exit 2
   fi
 done
+if [[ "$CPUS" -lt 1 || "$LIMIT" -lt 1 ]]; then
+  echo "ERROR: --cpus and --limit must be positive" >&2
+  exit 2
+fi
+if [[ "$TASK_INDEX" -ge "$LIMIT" ]]; then
+  echo "ERROR: --task-index must be smaller than --limit" >&2
+  exit 2
+fi
 
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 CONFIG_ABS="$(python -c "from pathlib import Path; print((Path('$REPO_ROOT') / '$CONFIG').resolve())")"
@@ -211,14 +206,15 @@ fi
 
 CONFIG_VALUES=$(python - "$CONFIG_ABS" "${ULHPC_CONFIG:-}" <<'PY'
 import sys
+import os
 from pathlib import Path
 
 import yaml
 
-gepa_config = Path(sys.argv[1])
+config_path = Path(sys.argv[1])
 ulhpc_config = Path(sys.argv[2]) if len(sys.argv) > 2 and sys.argv[2] else None
-repo_root = gepa_config.parents[1] if gepa_config.parent.name == "configs" else Path.cwd()
-cfg = yaml.safe_load(gepa_config.read_text(encoding="utf-8")) or {}
+repo_root = config_path.parents[1] if config_path.parent.name == "configs" else Path.cwd()
+cfg = yaml.safe_load(config_path.read_text(encoding="utf-8")) or {}
 paths = cfg.get("paths", {})
 
 def resolve(raw: str) -> str:
@@ -228,8 +224,9 @@ def resolve(raw: str) -> str:
     return str(value if value.is_absolute() else repo_root / value)
 
 print(f"dataset_snapshot={resolve(paths.get('dataset_snapshot', ''))}")
+print(f"run_dir={resolve(paths.get('run_dir', ''))}")
 container = cfg.get("container", {}) or {}
-print(f"sif_cache_dir={container.get('sif_cache_dir', '')}")
+print(f"sif_cache_dir={os.path.expandvars(str(container.get('sif_cache_dir', '')))}")
 
 ulhpc = {}
 if ulhpc_config and ulhpc_config.exists():
@@ -240,13 +237,15 @@ PY
 )
 
 DATASET_SNAPSHOT=""
-CONFIG_SIF_CACHE_DIR=""
+RUN_DIR=""
+SIF_CACHE_DIR=""
 CONFIG_PYTHON_MODULE=""
 CONFIG_CONTAINER_MODULE=""
 while IFS='=' read -r KEY VALUE; do
   case "$KEY" in
     dataset_snapshot) DATASET_SNAPSHOT="$VALUE" ;;
-    sif_cache_dir) CONFIG_SIF_CACHE_DIR="$VALUE" ;;
+    run_dir) RUN_DIR="$VALUE" ;;
+    sif_cache_dir) SIF_CACHE_DIR="$VALUE" ;;
     python_module) CONFIG_PYTHON_MODULE="$VALUE" ;;
     container_module) CONFIG_CONTAINER_MODULE="$VALUE" ;;
   esac
@@ -256,59 +255,75 @@ if [[ -z "$DATASET_SNAPSHOT" || ! -d "$DATASET_SNAPSHOT" ]]; then
   echo "ERROR: dataset_snapshot directory not found locally: $DATASET_SNAPSHOT" >&2
   exit 2
 fi
-if [[ -z "$SIF_CACHE_DIR" ]]; then
-  SIF_CACHE_DIR="$CONFIG_SIF_CACHE_DIR"
+if [[ -z "$RUN_DIR" ]]; then
+  echo "ERROR: paths.run_dir is required in the online GEPA config" >&2
+  exit 2
 fi
 if [[ -z "$SIF_CACHE_DIR" ]]; then
-  echo "ERROR: --sif-cache-dir is required when GEPA config has no container.sif_cache_dir" >&2
+  echo "ERROR: container.sif_cache_dir is required in the online GEPA config" >&2
   exit 2
 fi
 
 PYTHON_MODULE="${ULHPC_PYTHON_MODULE:-${CONFIG_PYTHON_MODULE:-lang/Python/3.11}}"
 CONTAINER_MODULE="${ULHPC_CONTAINER_MODULE:-${CONFIG_CONTAINER_MODULE:-tools/Apptainer}}"
-if [[ -z "$REMOTE_DIR" ]]; then
-  REMOTE_DIR="~/hpc_runs/vibe-coding-planning-sif-preheat"
-fi
 
 DATASET_REL="${DATASET_SNAPSHOT#$REPO_ROOT/}"
+RUN_REL="${RUN_DIR#$REPO_ROOT/}"
 CONFIG_REL="${CONFIG_ABS#$REPO_ROOT/}"
 if [[ "$DATASET_REL" == "$DATASET_SNAPSHOT" ]]; then
   echo "ERROR: dataset_snapshot must be inside the repository for --link-as: $DATASET_SNAPSHOT" >&2
   exit 2
 fi
+if [[ "$RUN_REL" == "$RUN_DIR" ]]; then
+  echo "ERROR: paths.run_dir must be inside the repository for --persistent-output: $RUN_DIR" >&2
+  exit 2
+fi
 if [[ "$CONFIG_REL" == "$CONFIG_ABS" ]]; then
-  echo "ERROR: GEPA config must be inside the repository: $CONFIG_ABS" >&2
+  echo "ERROR: config must be inside the repository: $CONFIG_ABS" >&2
   exit 2
 fi
 
 REMOTE_DATASET_SNAPSHOT="$REMOTE_DATASET_DIR/$DATASET_REL"
+REMOTE_RUN_PATH="$REMOTE_RUN_DIR/$RUN_REL"
+
 if [[ "$INSTALL_DEPS" -eq 1 ]]; then
   REMOTE_INSTALL_DEPS='python3 -m pip install --quiet --user -r requirements.txt'
 else
-  REMOTE_INSTALL_DEPS='echo "[sif-preheat] skipping dependency install; use --install-deps to enable"'
+  REMOTE_INSTALL_DEPS='echo "[online-resource-pilot] skipping dependency install; use --install-deps to enable"'
 fi
+
+INSTANCE_ARGS=""
+for instance_id in "${INSTANCE_IDS[@]+"${INSTANCE_IDS[@]}"}"; do
+  INSTANCE_ARGS+=" --instance-id $(printf '%q' "$instance_id")"
+done
 
 REMOTE_SCRIPT=$(cat <<EOF
 set -euo pipefail
-echo "[sif-preheat] started at \$(date) on \$(hostname)"
+set +x
+echo "[online-resource-pilot] started at \$(date) on \$(hostname)"
+ENV_FILE="$REMOTE_ENV_FILE"
+ENV_FILE="\${ENV_FILE/#\\~/\$HOME}"
+source "\$ENV_FILE"
+test -n "\${DEEPSEEK_API_KEY:-}" || {
+  echo "[online-resource-pilot] missing DEEPSEEK_API_KEY" >&2
+  exit 2
+}
 export APPTAINER_CACHEDIR="$REMOTE_APPTAINER_CACHE_DIR"
 export APPTAINER_TMPDIR="$REMOTE_APPTAINER_TMP_DIR"
 export ULHPC_APPTAINER_SIF_CACHE_DIR="$SIF_CACHE_DIR"
 mkdir -p "\$APPTAINER_CACHEDIR" "\$APPTAINER_TMPDIR" "\$ULHPC_APPTAINER_SIF_CACHE_DIR"
 test -f "$DATASET_REL/manifest.json" || {
-  echo "[sif-preheat] dataset snapshot missing after staging: $DATASET_REL" >&2
+  echo "[online-resource-pilot] dataset snapshot missing after staging: $DATASET_REL" >&2
   exit 2
 }
 $REMOTE_INSTALL_DEPS
-python3 scripts/tools/prepare_apptainer_sifs.py \
+python3 scripts/tools/run_online_hpc_resource_worker.py \
   --config "$CONFIG_REL" \
-  --sif-cache-dir "$SIF_CACHE_DIR" \
-  --timeout "$TIMEOUT" \
-  --max-attempts "$MAX_ATTEMPTS" \
-  --retry-backoff "$RETRY_BACKOFF" \
-  --failed-output "$SIF_CACHE_DIR/preheat_failed_images_\${SLURM_JOB_ID}.txt"
+  --split "$SPLIT" \
+  --limit "$LIMIT" \
+  --task-index "$TASK_INDEX"$INSTANCE_ARGS
 RC=\$?
-echo "[sif-preheat] finished with rc=\$RC at \$(date)"
+echo "[online-resource-pilot] finished with rc=\$RC at \$(date)"
 exit \$RC
 EOF
 )
@@ -331,6 +346,7 @@ ULHPC_CMD=(
   --no-conda
   --stage-data "$DATASET_SNAPSHOT:$REMOTE_DATASET_SNAPSHOT"
   --link-as "$DATASET_REL"
+  --persistent-output "$RUN_REL:$REMOTE_RUN_PATH"
   --apptainer-cache-dir "$REMOTE_APPTAINER_CACHE_DIR"
   --apptainer-tmp-dir "$REMOTE_APPTAINER_TMP_DIR"
   --apptainer-sif-cache-dir "$SIF_CACHE_DIR"
@@ -349,17 +365,17 @@ fi
 
 ULHPC_CMD+=(-- bash -c "$REMOTE_SCRIPT")
 
-echo "[sif-preheat] mode=$([[ "$SUBMIT" -eq 1 ]] && echo submit || echo dry-run)"
-echo "[sif-preheat] config=$CONFIG"
-echo "[sif-preheat] remote-dir=$REMOTE_DIR"
-echo "[sif-preheat] remote-dataset-snapshot=$REMOTE_DATASET_SNAPSHOT"
-echo "[sif-preheat] sif-cache-dir=$SIF_CACHE_DIR"
-echo "[sif-preheat] remote-apptainer-cache-dir=$REMOTE_APPTAINER_CACHE_DIR"
-echo "[sif-preheat] remote-apptainer-tmp-dir=$REMOTE_APPTAINER_TMP_DIR"
-echo "[sif-preheat] timeout=$TIMEOUT"
-echo "[sif-preheat] max-attempts=$MAX_ATTEMPTS"
-echo "[sif-preheat] install-deps=$INSTALL_DEPS"
-echo "[sif-preheat] invoking ulhpc-submit..."
+echo "[online-resource-pilot] mode=$([[ "$SUBMIT" -eq 1 ]] && echo submit || echo dry-run)"
+echo "[online-resource-pilot] config=$CONFIG"
+echo "[online-resource-pilot] remote-dir=$REMOTE_DIR"
+echo "[online-resource-pilot] remote-dataset-snapshot=$REMOTE_DATASET_SNAPSHOT"
+echo "[online-resource-pilot] remote-run-path=$REMOTE_RUN_PATH"
+echo "[online-resource-pilot] sif-cache-dir=$SIF_CACHE_DIR"
+echo "[online-resource-pilot] remote-apptainer-cache-dir=$REMOTE_APPTAINER_CACHE_DIR"
+echo "[online-resource-pilot] remote-apptainer-tmp-dir=$REMOTE_APPTAINER_TMP_DIR"
+echo "[online-resource-pilot] cpus=$CPUS mem=$MEM time=$TIME"
+echo "[online-resource-pilot] install-deps=$INSTALL_DEPS"
+echo "[online-resource-pilot] invoking ulhpc-submit..."
 
 set +e
 "${ULHPC_CMD[@]}"
@@ -367,7 +383,7 @@ ULHPC_RC=$?
 set -e
 
 if [[ $ULHPC_RC -ne 0 ]]; then
-  echo "[sif-preheat] ulhpc-submit reported failure" >&2
+  echo "[online-resource-pilot] ulhpc-submit reported failure" >&2
 fi
 
 exit "$ULHPC_RC"

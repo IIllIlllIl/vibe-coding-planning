@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import argparse
+import os
 import re
 import shlex
 from dataclasses import dataclass
@@ -11,6 +12,14 @@ REPO_ROOT = Path(__file__).resolve().parents[2]
 DEFAULT_STATE_FILE = REPO_ROOT / "output" / ".hpc_preheat_watchdog_state.json"
 DEFAULT_PREHEAT_SCRIPT = REPO_ROOT / "scripts" / "tools" / "submit_apptainer_sif_preheat.sh"
 DEFAULT_ULHPC_CONFIG = REPO_ROOT / "configs" / "ulhpc_submit.yaml"
+
+
+def default_hpc_root() -> str:
+    user = os.environ.get("ULHPC_USER") or os.environ.get("USER") or "<user>"
+    return os.environ.get(
+        "VIBE_HPC_ROOT",
+        f"/scratch/users/{user}/vibe-coding-planning",
+    )
 
 
 def parse_duration(raw: str) -> int:
@@ -51,8 +60,8 @@ class WatchdogConfig:
     state_file: Path = DEFAULT_STATE_FILE
     preheat_script: Path = DEFAULT_PREHEAT_SCRIPT
     ulhpc_config: Path = DEFAULT_ULHPC_CONFIG
-    remote_project_dir: str = "/scratch/users/twang/vibe-coding-planning/runs/vibe-sif-preheat-watchdog"
-    remote_dataset_dir: str = "/scratch/users/twang/vibe-coding-planning/hpc_datasets"
+    remote_project_dir: str = f"{default_hpc_root()}/runs/vibe-sif-preheat-watchdog"
+    remote_dataset_dir: str = f"{default_hpc_root()}/hpc_datasets"
     pilot_job_name: str = "gepa-preheat-pilot-watchdog"
     full_job_name: str = "gepa-preheat-full-watchdog"
     pilot_time: str = "00:30:00"

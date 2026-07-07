@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import base64
+import io
 import re
 import subprocess
 from contextlib import contextmanager, nullcontext
@@ -250,6 +251,54 @@ def test_environment_applies_network_and_run_args(tmp_path, monkeypatch):
     assert "none" in args
     bind_index = args.index("--bind")
     assert args[bind_index + 1] == "/host:/container:ro"
+
+
+def test_environment_host_workdir_is_initialized_and_bound(tmp_path, monkeypatch):
+    cache_dir = tmp_path / "sifs"
+    host_workdir = tmp_path / "phase-workdir"
+    calls = []
+    popen_calls = []
+
+    class FakePopen:
+        def __init__(self, args, **kwargs):
+            popen_calls.append(args)
+            self.stdout = io.BytesIO(b"fake-tar")
+            self.stderr = io.BytesIO(b"")
+
+        def wait(self):
+            return 0
+
+    def fake_run(args, **kwargs):
+        calls.append(args)
+        if args[0] == "tar":
+            assert args[:3] == ["tar", "-xf", "-"]
+            assert args[3] == "-C"
+            assert args[4] == str(host_workdir)
+        return subprocess.CompletedProcess(args, returncode=0, stdout="", stderr="")
+
+    monkeypatch.setattr(subprocess, "Popen", FakePopen)
+    monkeypatch.setattr(subprocess, "run", fake_run)
+
+    env = _make_env(cache_dir, run_args=None)
+    env.cleanup()
+    calls.clear()
+    popen_calls.clear()
+
+    env = ApptainerEnvironment(
+        image="python:3.12-slim",
+        cwd="/testbed",
+        sif_cache_dir=cache_dir,
+        capacity_window=_TrackingCapacityWindow(),
+        host_workdir=host_workdir,
+    )
+    assert popen_calls[0][-1] == "cd /testbed && tar -cf - ."
+
+    calls.clear()
+    env.execute("git status")
+
+    args = calls[-1]
+    bind_index = args.index("--bind")
+    assert args[bind_index + 1] == f"{host_workdir}:/testbed"
 
 
 def test_environment_get_template_vars_and_cleanup(tmp_path, monkeypatch):

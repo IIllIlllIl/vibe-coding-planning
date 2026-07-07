@@ -161,6 +161,8 @@ class ApptainerEnvironment:
         writable_tmpfs: bool = True,
         network_disabled: bool = False,
         git_safe_directories: list[str] | None = None,
+        host_workdir: Path | None = None,
+        initialize_host_workdir: bool = True,
     ) -> None:
         self._image = image
         self._cwd = cwd
@@ -171,6 +173,8 @@ class ApptainerEnvironment:
         self._network_disabled = network_disabled
         self._git_safe_dirs = list(git_safe_directories or [cwd])
         self._git_config_path = "/tmp/vibe_gitconfig"
+        self._host_workdir = Path(host_workdir) if host_workdir is not None else None
+        self._initialize_host_workdir = initialize_host_workdir
 
         self._cache = ApptainerSifCache(sif_cache_dir, capacity_window)
         # Pull the SIF on demand if it is not already cached. This lets a GEPA
@@ -184,11 +188,69 @@ class ApptainerEnvironment:
         self._lease = capacity_window.lease()
         self._lease.__enter__()
         try:
+            if self._host_workdir is not None:
+                self._prepare_host_workdir()
             self._ensure_git_config()
         except BaseException:
             self._lease.__exit__(*sys.exc_info())
             self._lease = None
             raise
+
+    def _prepare_host_workdir(self) -> None:
+        """Create a persistent host workdir and bind it to the container cwd.
+
+        This provides Docker-like statefulness for one agent phase: every
+        ``execute()`` call sees the same ``/testbed`` files because changes are
+        written to the host workdir. The workdir is intentionally phase-local;
+        callers should create a new directory for each Plan/Code/Evaluator
+        phase when they want artifact-only isolation between phases.
+        """
+        assert self._host_workdir is not None
+        self._host_workdir.mkdir(parents=True, exist_ok=True)
+        if self._initialize_host_workdir and not any(self._host_workdir.iterdir()):
+            self._copy_container_cwd_to_host_workdir()
+        self._run_args.extend(
+            [
+                "--bind",
+                f"{self._host_workdir}:{self._cwd}",
+            ]
+        )
+
+    def _copy_container_cwd_to_host_workdir(self) -> None:
+        assert self._host_workdir is not None
+        source = subprocess.Popen(
+            [
+                "apptainer",
+                "exec",
+                str(self._sif_path),
+                "bash",
+                "-lc",
+                f"cd {shlex.quote(self._cwd)} && tar -cf - .",
+            ],
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=False,
+        )
+        assert source.stdout is not None
+        try:
+            target = subprocess.run(
+                ["tar", "-xf", "-", "-C", str(self._host_workdir)],
+                stdin=source.stdout,
+                capture_output=True,
+                check=False,
+            )
+        finally:
+            source.stdout.close()
+        source_stderr = source.stderr.read() if source.stderr is not None else b""
+        source_returncode = source.wait()
+        if source_returncode != 0 or target.returncode != 0:
+            raise FatalError(
+                "Failed to initialize Apptainer host workdir from image "
+                f"{self._image}: "
+                f"source_rc={source_returncode} target_rc={target.returncode} "
+                f"source_stderr={source_stderr.decode('utf-8', 'replace')[:500]} "
+                f"target_stderr={target.stderr.decode('utf-8', 'replace')[:500]}"
+            )
 
     def _ensure_git_config(self) -> None:
         """Create a temporary gitconfig inside the container that trusts cwd."""

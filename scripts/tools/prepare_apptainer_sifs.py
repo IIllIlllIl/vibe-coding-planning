@@ -11,7 +11,7 @@ Examples:
     # Override SIF cache directory without editing the config:
     python scripts/tools/prepare_apptainer_sifs.py \
         --config configs/gepa_verified_rules_reflection_smoke_apptainer.yaml \
-        --sif-cache-dir /scratch/users/twang/vibe-sif-cache
+        --sif-cache-dir /scratch/users/${USER}/vibe-sif-cache
 """
 
 from __future__ import annotations

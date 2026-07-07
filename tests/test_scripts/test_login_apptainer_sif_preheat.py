@@ -122,6 +122,50 @@ def test_login_preheat_executes_remote_script_with_scratch_cache(
     assert payload["apptainer_cache_dir"] == "/scratch/test/apptainer-cache-login"
     assert payload["apptainer_tmp_dir"] == "/scratch/test/apptainer-tmp-login"
     assert payload["timeout"] == 123
+    assert payload["cleanup_tmp"] is True
+    assert payload["cleanup_apptainer_cache"] is False
+
+
+def test_login_preheat_can_request_apptainer_cache_cleanup(
+    tmp_path: Path, monkeypatch
+) -> None:
+    ulhpc = tmp_path / "ulhpc.yaml"
+    ulhpc.write_text("user: tester\nhost: example.invalid\nport: 2222\n", encoding="utf-8")
+    captured: dict[str, object] = {}
+
+    def fake_run(command, **kwargs):
+        captured["input"] = kwargs.get("input")
+        return subprocess.CompletedProcess(command, 0, "", "")
+
+    monkeypatch.setattr(
+        login_apptainer_sif_preheat,
+        "load_optimization_config",
+        lambda path, **kwargs: _config(),
+    )
+    monkeypatch.setattr(
+        login_apptainer_sif_preheat,
+        "_collect_images",
+        lambda config: ["repo/image:latest"],
+    )
+    monkeypatch.setattr(login_apptainer_sif_preheat.subprocess, "run", fake_run)
+    monkeypatch.setattr(
+        sys,
+        "argv",
+        [
+            "login_apptainer_sif_preheat.py",
+            "--config",
+            "config.yaml",
+            "--ulhpc-config",
+            str(ulhpc),
+            "--cleanup-apptainer-cache",
+        ],
+    )
+
+    assert login_apptainer_sif_preheat.main() == 0
+
+    payload = json.loads(str(captured["input"]))
+    assert payload["cleanup_tmp"] is True
+    assert payload["cleanup_apptainer_cache"] is True
 
 
 def test_login_preheat_requires_positive_timeout(monkeypatch) -> None:

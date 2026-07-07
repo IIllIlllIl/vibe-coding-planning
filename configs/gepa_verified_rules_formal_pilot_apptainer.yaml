@@ -51,7 +51,7 @@ container:
   runtime: apptainer
   module: tools/Apptainer
   # Shared Lustre scratch is faster than Isilon home for concurrent SIF reads.
-  sif_cache_dir: /scratch/users/twang/vibe-coding-planning/shared/sif-cache
+  sif_cache_dir: /scratch/users/${USER}/vibe-coding-planning/shared/sif-cache
   writable_tmpfs: true
 
 prompts:

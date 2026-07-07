@@ -47,7 +47,7 @@ container:
   runtime: apptainer
   module: tools/Apptainer
   # Shared Lustre SIF cache reused across GEPA experiments.
-  sif_cache_dir: /scratch/users/twang/vibe-coding-planning/shared/sif-cache
+  sif_cache_dir: /scratch/users/${USER}/vibe-coding-planning/shared/sif-cache
   writable_tmpfs: true
 
 prompts:

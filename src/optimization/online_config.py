@@ -39,9 +39,7 @@ class OnlineHPCConfig:
 
     submit: bool = False
     remote_project_dir: str = "~/hpc_runs/vibe-coding-planning-online"
-    remote_task_dir: str = (
-        "/scratch/users/twang/vibe-coding-planning/online-rollout-tasks"
-    )
+    remote_task_dir: str = ""
     remote_env_file: str = "~/.config/vibe-coding-planning/deepseek.env"
     ulhpc_config: str = "configs/ulhpc_submit.yaml"
     partition: str = "batch"
@@ -80,6 +78,18 @@ class OnlineOptimizationConfig:
     reflection_instance_template: str
     nrpv_block: str
     evaluator_timeout: int
+
+
+def _default_hpc_root() -> str:
+    user = os.environ.get("ULHPC_USER") or os.environ.get("USER") or "<user>"
+    return os.environ.get(
+        "VIBE_HPC_ROOT",
+        f"/scratch/users/{user}/vibe-coding-planning",
+    )
+
+
+def _default_remote_task_dir() -> str:
+    return f"{_default_hpc_root()}/online-rollout-tasks"
 
 
 def _mapping(value: Any, name: str) -> dict[str, Any]:
@@ -165,6 +175,7 @@ def load_online_optimization_config(
         raise ValueError("search.min_proposals must be non-negative")
 
     def resolve(raw_path: str) -> Path:
+        raw_path = os.path.expandvars(raw_path)
         candidate = Path(raw_path)
         return candidate if candidate.is_absolute() else root / candidate
 
@@ -210,7 +221,10 @@ def load_online_optimization_config(
             )
         ),
         remote_task_dir=str(
-            hpc_data.get("remote_task_dir", hpc_defaults.remote_task_dir)
+            hpc_data.get(
+                "remote_task_dir",
+                hpc_defaults.remote_task_dir or _default_remote_task_dir(),
+            )
         ),
         remote_env_file=str(
             hpc_data.get("remote_env_file", hpc_defaults.remote_env_file)

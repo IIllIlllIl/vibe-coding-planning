@@ -7,6 +7,7 @@ from scripts.hpc_preheat_watchdog_lib.config import (
     DEFAULT_STATE_FILE,
     DEFAULT_ULHPC_CONFIG,
     WatchdogConfig,
+    default_hpc_root,
     parse_command,
     parse_duration,
     resolve_repo_path,
@@ -30,11 +31,11 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--ulhpc-config", default=str(DEFAULT_ULHPC_CONFIG))
     parser.add_argument(
         "--remote-project-dir",
-        default="/scratch/users/twang/vibe-coding-planning/runs/vibe-sif-preheat-watchdog",
+        default=f"{default_hpc_root()}/runs/vibe-sif-preheat-watchdog",
     )
     parser.add_argument(
         "--remote-dataset-dir",
-        default="/scratch/users/twang/vibe-coding-planning/hpc_datasets",
+        default=f"{default_hpc_root()}/hpc_datasets",
     )
     parser.add_argument("--pilot-job-name", default="gepa-preheat-pilot-watchdog")
     parser.add_argument("--full-job-name", default="gepa-preheat-full-watchdog")

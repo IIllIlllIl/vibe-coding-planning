@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 from dataclasses import replace
+import shutil
+from pathlib import Path
 from typing import Any
 
 from src.agents import code_agent, plan_agent
@@ -123,19 +125,21 @@ class OnlinePCTRolloutRunner:
         )
 
         try:
-            env: DockerEnvWrapper | ApptainerEnvironment
-            env = self._start_environment(
+            plan_env: DockerEnvWrapper | ApptainerEnvironment
+            plan_env = self._start_environment(
                 image_name=image_name,
                 workdir=workdir,
                 repo_path=repo_path,
                 instance_info=instance_info,
+                phase="plan",
+                candidate_sha256=candidate_sha256,
             )
             try:
                 plan_config = self._base_config(self.config.plan)
                 plan, plan_trajectory = plan_agent.run(
                     plan_config,
                     case.issue_description,
-                    env,
+                    plan_env,
                     planning_rules=rules,
                     model_wrapper=lambda model: AuditedModel(
                         model,
@@ -148,6 +152,19 @@ class OnlinePCTRolloutRunner:
                         },
                     ),
                 )
+            finally:
+                self._stop_environment(plan_env)
+
+            code_env: DockerEnvWrapper | ApptainerEnvironment
+            code_env = self._start_environment(
+                image_name=image_name,
+                workdir=workdir,
+                repo_path=repo_path,
+                instance_info=instance_info,
+                phase="code",
+                candidate_sha256=candidate_sha256,
+            )
+            try:
                 base_code_config = self._base_config(self.config.code)
                 code_config = replace(
                     base_code_config,
@@ -161,7 +178,7 @@ class OnlinePCTRolloutRunner:
                     code_config,
                     plan,
                     case.issue_description,
-                    env,
+                    code_env,
                     model_wrapper=lambda model: AuditedModel(
                         model,
                         self.usage,
@@ -174,7 +191,7 @@ class OnlinePCTRolloutRunner:
                     ),
                 )
             finally:
-                self._stop_environment(env)
+                self._stop_environment(code_env)
 
             evaluator_result = evaluate(
                 patch,
@@ -225,10 +242,19 @@ class OnlinePCTRolloutRunner:
         workdir: str,
         repo_path: str,
         instance_info: dict[str, Any],
+        phase: str,
+        candidate_sha256: str,
     ) -> DockerEnvWrapper | ApptainerEnvironment:
         if self.config.container.runtime == "apptainer":
             run_args = []
-            if repo_path:
+            host_workdir = None
+            if phase == "code":
+                host_workdir = self._phase_workdir(
+                    instance_info["instance_id"],
+                    candidate_sha256,
+                    phase,
+                )
+            elif repo_path:
                 run_args.extend(["--bind", f"{repo_path}:{workdir}"])
             return ApptainerEnvironment(
                 image=image_name,
@@ -239,6 +265,8 @@ class OnlinePCTRolloutRunner:
                 timeout=self.config.plan.timeout,
                 writable_tmpfs=self.config.container.writable_tmpfs,
                 git_safe_directories=[workdir],
+                host_workdir=host_workdir,
+                initialize_host_workdir=host_workdir is not None,
             )
         env = DockerEnvWrapper(self.config.docker, self.capacity_window)
         env.start(
@@ -249,6 +277,31 @@ class OnlinePCTRolloutRunner:
             instance_info=instance_info,
         )
         return env
+
+    def _phase_workdir(
+        self,
+        instance_id: str,
+        candidate_sha256: str,
+        phase: str,
+    ) -> Path:
+        path = (
+            self.config.run_dir
+            / "phase_workspaces"
+            / candidate_sha256[:12]
+            / instance_id
+            / phase
+        )
+        if path.exists():
+            shutil.rmtree(path)
+        path.mkdir(parents=True, exist_ok=True)
+        self.audit.write(
+            "online_phase_workspace_prepared",
+            instance_id=instance_id,
+            candidate_sha256=candidate_sha256,
+            phase=phase,
+            path=str(path),
+        )
+        return path
 
     def _stop_environment(
         self,

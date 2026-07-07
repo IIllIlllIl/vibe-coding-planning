@@ -599,6 +599,91 @@ def test_online_rollout_audit_records_design_boundaries(tmp_path, monkeypatch):
     assert completed["code_trajectory_messages"] == 1
 
 
+def test_online_rollout_apptainer_uses_separate_plan_and_code_phases(
+    tmp_path,
+    monkeypatch,
+):
+    config = _online_config(tmp_path)
+    config = replace(
+        config,
+        container=ContainerConfig(
+            runtime="apptainer",
+            sif_cache_dir=tmp_path / "sifs",
+        ),
+    )
+    case = load_online_snapshot(config.dataset_snapshot)[0][0]
+    monkeypatch.setenv("TEST_API_KEY", "secret")
+    env_kwargs = []
+    cleaned = []
+
+    class FakeApptainerEnvironment:
+        def __init__(self, **kwargs):
+            env_kwargs.append(kwargs)
+
+        def cleanup(self):
+            cleaned.append(True)
+
+    monkeypatch.setattr(
+        "src.optimization.online_rollout.ApptainerEnvironment",
+        FakeApptainerEnvironment,
+    )
+    monkeypatch.setattr(
+        "src.optimization.online_rollout.OnlinePCTRolloutRunner._load_instance_info",
+        lambda self, case: {
+            "instance_id": case.instance_id,
+            "repo": "org/repo",
+            "base_commit": "abc123",
+            "repo_path": "",
+        },
+    )
+    monkeypatch.setattr(
+        "src.optimization.online_rollout.derive_image_name",
+        lambda info: "test/image:latest",
+    )
+    monkeypatch.setattr(
+        "src.optimization.online_rollout.plan_agent.run",
+        lambda *args, **kwargs: (
+            "generated plan",
+            [{"role": "assistant", "content": "plan"}],
+        ),
+    )
+    monkeypatch.setattr(
+        "src.optimization.online_rollout.code_agent.run",
+        lambda *args, **kwargs: (
+            "diff --git a/a.py b/a.py\n",
+            [{"role": "assistant", "content": "code"}],
+        ),
+    )
+    monkeypatch.setattr(
+        "src.optimization.online_rollout.evaluate",
+        lambda patch, instance_info, timeout, run_id_suffix: {"resolved": True},
+    )
+
+    OnlinePCTRolloutRunner(config, _FakeCapacityWindow())(
+        case,
+        "candidate planning rules",
+    )
+
+    assert len(env_kwargs) == 2
+    plan_kwargs, code_kwargs = env_kwargs
+    assert plan_kwargs["host_workdir"] is None
+    assert code_kwargs["host_workdir"] is not None
+    assert "phase_workspaces" in str(code_kwargs["host_workdir"])
+    assert code_kwargs["initialize_host_workdir"] is True
+    assert len(cleaned) == 2
+
+    audit = [
+        json.loads(line)
+        for line in (config.run_dir / "audit_events.jsonl").read_text().splitlines()
+    ]
+    workspace_events = [
+        record
+        for record in audit
+        if record["event"] == "online_phase_workspace_prepared"
+    ]
+    assert [event["phase"] for event in workspace_events] == ["code"]
+
+
 def test_config_requires_zero_checker_temperature(tmp_path, monkeypatch):
     monkeypatch.setenv("TEST_KEY", "secret")
     config = tmp_path / "config.yaml"
@@ -2197,6 +2282,7 @@ def test_checker_operational_failure_marks_run_failed(tmp_path):
 
 def test_apptainer_config_loads(monkeypatch):
     monkeypatch.setenv("DEEPSEEK_API_KEY", "secret")
+    monkeypatch.setenv("USER", "testuser")
     repo_root = Path(__file__).resolve().parents[2]
     config = load_optimization_config(
         repo_root
@@ -2207,12 +2293,13 @@ def test_apptainer_config_loads(monkeypatch):
     assert config.container.module == "tools/Apptainer"
     assert config.container.writable_tmpfs is True
     assert config.container.sif_cache_dir == Path(
-        "/scratch/users/twang/vibe-coding-planning/shared/sif-cache"
+        "/scratch/users/testuser/vibe-coding-planning/shared/sif-cache"
     )
 
 
 def test_strict_hpc_24h_config_loads(monkeypatch):
     monkeypatch.setenv("DEEPSEEK_API_KEY", "secret")
+    monkeypatch.setenv("USER", "testuser")
     repo_root = Path(__file__).resolve().parents[2]
     config = load_optimization_config(
         repo_root
@@ -2226,7 +2313,7 @@ def test_strict_hpc_24h_config_loads(monkeypatch):
     assert config.search.max_metric_calls == 3000
     assert config.container.runtime == "apptainer"
     assert config.container.sif_cache_dir == Path(
-        "/scratch/users/twang/vibe-coding-planning/shared/sif-cache"
+        "/scratch/users/testuser/vibe-coding-planning/shared/sif-cache"
     )
     assert "rule-bound binary classifier" in config.checker_prompt
     assert "<candidate_rules>" in config.checker_instance_template

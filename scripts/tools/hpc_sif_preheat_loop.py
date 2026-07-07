@@ -94,6 +94,14 @@ def _ssh_config(ulhpc_config: Path) -> tuple[str, str, str]:
     return f"{user}@{host}", port, ssh_key
 
 
+def _default_hpc_root() -> str:
+    user = os.environ.get("ULHPC_USER") or os.environ.get("USER") or "<user>"
+    return os.environ.get(
+        "VIBE_HPC_ROOT",
+        f"/scratch/users/{user}/vibe-coding-planning",
+    )
+
+
 def parse_args(argv: list[str]) -> Config:
     parser = argparse.ArgumentParser(
         description="Repeatedly submit short SIF preheat jobs to ULHPC.",
@@ -108,15 +116,15 @@ def parse_args(argv: list[str]) -> Config:
     parser.add_argument("--ulhpc-config", default="configs/ulhpc_submit.yaml")
     parser.add_argument(
         "--remote-project-dir",
-        default="/scratch/users/twang/vibe-coding-planning/runs/vibe-sif-preheat",
+        default=f"{_default_hpc_root()}/runs/vibe-sif-preheat",
     )
     parser.add_argument(
         "--remote-dataset-dir",
-        default="/scratch/users/twang/vibe-coding-planning/hpc_datasets",
+        default=f"{_default_hpc_root()}/hpc_datasets",
     )
     parser.add_argument(
         "--sif-cache-dir",
-        default="/scratch/users/twang/vibe-coding-planning/shared/sif-cache",
+        default=f"{_default_hpc_root()}/shared/sif-cache",
     )
     parser.add_argument("--job-name", default="gepa-preheat-sifs-8h")
     parser.add_argument("--slice-time", default="08:00:00")

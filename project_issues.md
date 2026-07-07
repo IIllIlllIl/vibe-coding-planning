@@ -32,7 +32,7 @@
 
 ## 2. Online GEPA planning 规则生成设计
 
-- **状态**：实验链路已实现，待 pilot 验证
+- **状态**：实验链路已实现；HPC Apptainer agent 级隔离语义待改造
 - **背景**：当前 GEPA 主线是 offline classifier：候选规则进入固定 Checker，
   通过历史 Round 1 `resolved` 标签学习如何判断已有 plan。新设想是把候选规则
   作为 strict planning checklist 注入 Plan Agent 的 user prompt，直接运行
@@ -52,14 +52,20 @@
   3. Reflection evidence 如何摘要 Plan trajectory、Code trajectory、patch 和
      evaluator result，并明确区分规则问题、Code Agent 执行偏离和基础设施噪声。
   4. 第一版 pilot 的 train/validation 规模、预算和本地/HPC 运行环境。
-  5. 是否先只做本地 Docker pilot；HPC 版本依赖完整 PCT/PCC evaluator 的 Apptainer
-     路径，不能直接复用当前 Checker/Reflection-only Apptainer backend。
+  5. HPC 版本如何实现 agent 级隔离：每个 Plan / Code / Evaluator phase 使用
+     独立容器状态，但同一个 Code Agent phase 内的多步 `execute()` 必须共享
+     可写 `/testbed`，否则无法生成 patch。
   6. Online dataset loader 如何只提取 `instance_id`、issue、repository/base commit
      和 split，防止误把 offline GEPA 的历史标签或 ASI 传入 Plan/Code Agent。
 - **当前判断**：
   - 方案可行，但它优化的是 planning guidance，不再是 checker classifier。
   - 已新增独立 `online_adapter` / `online_runner` / pilot config，不替换当前
     offline GEPA 主线。
+  - 2026-07-07 online HPC resource pilot 的 `Code agent produced empty output`
+    不是规则质量结论；当前最可能根因是 Apptainer backend 每次 `execute()` 都用
+    新的 `apptainer exec --writable-tmpfs`，`/testbed` 修改不会跨命令保留。
+    后续应按 `docs/gepa-rule-optimization.md` 第 11.5 节改造成 phase 内
+    stateful、phase 间 artifact-only 的 agent 级隔离。
   - 详细设计记录在 `docs/gepa-rule-optimization.md` 第 11 节。
 
 ---
@@ -72,11 +78,11 @@
   因此使用共享 SIF cache 避免各实验重复拉取。
 - **当前共享目录**：
   - SIF cache：
-    `/scratch/users/twang/vibe-coding-planning/shared/sif-cache`
+    `/scratch/users/<user>/vibe-coding-planning/shared/sif-cache`
   - Apptainer cache：
-    `/scratch/users/twang/vibe-coding-planning/shared/apptainer-cache`
+    `/scratch/users/<user>/vibe-coding-planning/shared/apptainer-cache`
   - Apptainer tmp：
-    `/scratch/users/twang/vibe-coding-planning/shared/apptainer-tmp`
+    `/scratch/users/<user>/vibe-coding-planning/shared/apptainer-tmp`
 - **当前状态**：
   - 已提交 24h SIF 预热 job：`5485457 gepa-preheat-sifs-all`
   - 最近检查状态：`PENDING (Priority)`
@@ -94,22 +100,42 @@
   - `scripts/hpc_resume_loop.py` 支持短 Slurm job 切片：默认 `--slice-time 12:00:00`、
     `--check-interval 01:00:00`、`--max-runs 4`，通过远端 persistent `run_dir`
     判断完成并自动继续提交。
+  - login preheat 的最终产物是
+    `/scratch/users/<user>/vibe-coding-planning/shared/sif-cache/*.sif`；Apptainer
+    layer cache/tmp 不是最终成果，必须位于 scratch。
+- **2026-07-06 目录清理记录**：
+  - 发现旧的 `~/.apptainer/cache` 占用 home 约 532G，当前 login preheat 进程使用
+    `/scratch/users/<user>/vibe-coding-planning/shared/apptainer-cache-login` 和
+    `apptainer-tmp-login`，因此该 home cache 不属于当前 preheat 的最终 SIF 产物。
+  - 已按保守策略将 home cache 迁移到 scratch archive：
+    `/scratch/users/<user>/vibe-coding-planning/archive/home-apptainer-cache-20260706T204123Z`
+    （约 266G），并将 `~/.apptainer/cache` 改为指向
+    `/scratch/users/<user>/vibe-coding-planning/shared/apptainer-cache-home-default`
+    的 symlink，防止后续默认 Apptainer 行为再次写入 home。
+  - 后续判断：如果 SIF preheat 完成且 GEPA/online 运行只读取
+    `shared/sif-cache/*.sif`，没有调用 archive 中的旧 layer cache，则可清理该
+    archive 释放 scratch 空间。
 
 ---
 
 ## 4. HPC 上 GEPA 之外的 PCT/PCC/SWE-bench/PolyBench 可行路径
 
-- **状态**：待设计，非当前 GEPA 规则生成 P0
+- **状态**：待设计；Online GEPA 需要优先实现最小可用 Apptainer PCT phase backend
 - **背景**：GEPA Checker/Reflection 已有 Apptainer backend，但项目中其他流程仍有
   Docker-native 假设，尤其是 SWE-bench / PolyBench / evaluator harness。
 - **需要决策**：
   1. 是否只支持 GEPA Checker/Reflection 在 HPC 上运行，还是继续扩展完整 PCT/PCC 到 Apptainer。
   2. 若要支持完整 PCT/PCC，是实现项目级 Apptainer evaluator backend，还是申请 Docker-enabled/rootless Docker 资源。
-  3. PolyBench 实例 ID、语言名、镜像 tag 和大小写敏感文件系统之间是否需要统一规范化。
-  4. 旧 `run_batch.sh` / watchdog 中的 macOS conda 路径、tmux、caffeinate 等本地长跑逻辑是否还需要维护 HPC 兼容性。
+  3. Online GEPA 是否先实现最小三阶段 Apptainer backend：
+     Plan phase、Code phase、Evaluator phase 各自隔离；phase 之间只传
+     `plan.md`、`generated.patch`、`evaluator_result.json` 和 trajectories。
+  4. PolyBench 实例 ID、语言名、镜像 tag 和大小写敏感文件系统之间是否需要统一规范化。
+  5. 旧 `run_batch.sh` / watchdog 中的 macOS conda 路径、tmux、caffeinate 等本地长跑逻辑是否还需要维护 HPC 兼容性。
 - **当前判断**：
   - 当前 strict GEPA run 不依赖完整 PCT/PCC evaluator。
-  - 不应为了当前 GEPA 规则优化阻塞在 Docker-native pipeline 迁移上。
+  - Offline strict GEPA 不应阻塞在 Docker-native pipeline 迁移上；但 Online GEPA
+    的 HPC pilot 需要先补齐最小 agent-level Apptainer rollout backend，否则
+    Code Agent 无法可靠产出 patch，Evaluator 也无法验证 preheated SIF 是否可用。
 
 ---
 

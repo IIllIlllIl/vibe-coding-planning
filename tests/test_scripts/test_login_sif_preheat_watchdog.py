@@ -24,6 +24,8 @@ def _args(tmp_path: Path, **overrides):
         "check_interval": 0,
         "max_runs": 1,
         "max_no_progress_runs": 2,
+        "cleanup_tmp": True,
+        "cleanup_apptainer_cache": False,
         "dry_run": False,
     }
     data.update(overrides)
@@ -49,6 +51,21 @@ def test_build_preheat_command_uses_batch_and_scratch_dirs(tmp_path: Path) -> No
     assert command[command.index("--apptainer-tmp-dir") + 1] == (
         "/scratch/test/apptainer-tmp-login"
     )
+    assert "--cleanup-tmp" in command
+    assert "--cleanup-apptainer-cache" not in command
+
+
+def test_build_preheat_command_can_cleanup_apptainer_cache(tmp_path: Path) -> None:
+    args = _args(tmp_path, cleanup_apptainer_cache=True)
+
+    command = login_sif_preheat_watchdog.build_preheat_command(
+        args,
+        Path("/repo/config.yaml"),
+        batch_size=1,
+    )
+
+    assert "--cleanup-tmp" in command
+    assert "--cleanup-apptainer-cache" in command
 
 
 def test_watchdog_marks_completed_when_cache_is_complete(

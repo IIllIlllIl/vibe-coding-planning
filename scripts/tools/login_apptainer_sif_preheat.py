@@ -30,12 +30,20 @@ DEFAULT_APPTAINER_BIN = (
     "/mnt/aiongpfs/apps/resif/iris-rhel8/2020b/broadwell/software/"
     "Apptainer/1.2.1/bin/apptainer"
 )
+
+
+def _default_hpc_root() -> str:
+    user = os.environ.get("ULHPC_USER") or os.environ.get("USER") or "<user>"
+    return os.environ.get(
+        "VIBE_HPC_ROOT",
+        f"/scratch/users/{user}/vibe-coding-planning",
+    )
+
+
 DEFAULT_APPTAINER_CACHE_DIR = (
-    "/scratch/users/twang/vibe-coding-planning/shared/apptainer-cache-login"
+    f"{_default_hpc_root()}/shared/apptainer-cache-login"
 )
-DEFAULT_APPTAINER_TMP_DIR = (
-    "/scratch/users/twang/vibe-coding-planning/shared/apptainer-tmp-login"
-)
+DEFAULT_APPTAINER_TMP_DIR = f"{_default_hpc_root()}/shared/apptainer-tmp-login"
 DEFAULT_ULHPC_CONFIG = REPO_ROOT / "configs" / "ulhpc_submit.yaml"
 
 
@@ -134,6 +142,20 @@ def _parse_args() -> argparse.Namespace:
         action="store_true",
         help="Print selected images and remote command metadata without pulling",
     )
+    parser.add_argument(
+        "--cleanup-tmp",
+        action=argparse.BooleanOptionalAction,
+        default=True,
+        help="Remove remote APPTAINER_TMPDIR contents after the batch (default: true)",
+    )
+    parser.add_argument(
+        "--cleanup-apptainer-cache",
+        action="store_true",
+        help=(
+            "Remove remote APPTAINER_CACHEDIR contents after the batch. Final SIF "
+            "files in --sif-cache-dir are preserved."
+        ),
+    )
     return parser.parse_args()
 
 
@@ -162,6 +184,8 @@ timeout = payload["timeout"]
 max_attempts = payload["max_attempts"]
 retry_backoff = payload["retry_backoff"]
 images = payload["images"]
+cleanup_tmp = bool(payload.get("cleanup_tmp", True))
+cleanup_apptainer_cache = bool(payload.get("cleanup_apptainer_cache", False))
 
 os.environ["APPTAINER_CACHEDIR"] = payload["apptainer_cache_dir"]
 os.environ["APPTAINER_TMPDIR"] = payload["apptainer_tmp_dir"]
@@ -290,6 +314,37 @@ summary = {
     "total": len(images),
 }
 print(json.dumps(summary, sort_keys=True), flush=True)
+for label, directory, enabled in (
+    ("apptainer_tmp", Path(os.environ["APPTAINER_TMPDIR"]), cleanup_tmp),
+    ("apptainer_cache", Path(os.environ["APPTAINER_CACHEDIR"]), cleanup_apptainer_cache),
+):
+    if not enabled:
+        continue
+    removed = 0
+    errors = []
+    if directory.exists():
+        for child in directory.iterdir():
+            try:
+                if child.is_dir() and not child.is_symlink():
+                    shutil.rmtree(child)
+                else:
+                    child.unlink()
+                removed += 1
+            except Exception as exc:
+                errors.append(f"{child}: {type(exc).__name__}: {exc}")
+    print(
+        json.dumps(
+            {
+                "event": "cleanup",
+                "target": label,
+                "path": str(directory),
+                "removed_entries": removed,
+                "errors": errors,
+            },
+            sort_keys=True,
+        ),
+        flush=True,
+    )
 raise SystemExit(1 if failures else 0)
 '''
 
@@ -361,6 +416,8 @@ def main() -> int:
         "retry_backoff": args.retry_backoff,
         "missing_only": args.missing_only,
         "dry_run": args.dry_run,
+        "cleanup_tmp": args.cleanup_tmp,
+        "cleanup_apptainer_cache": args.cleanup_apptainer_cache,
     }
     print(json.dumps({"event": "login_preheat_plan", **metadata}, sort_keys=True), flush=True)
     for image in images:
@@ -384,6 +441,8 @@ def main() -> int:
         "max_attempts": args.max_attempts,
         "retry_backoff": args.retry_backoff,
         "failed_output": failed_output,
+        "cleanup_tmp": args.cleanup_tmp,
+        "cleanup_apptainer_cache": args.cleanup_apptainer_cache,
     }
     command = "python3 -c " + shlex.quote(_remote_script())
     result = subprocess.run(

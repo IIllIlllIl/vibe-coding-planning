@@ -11,7 +11,9 @@ scripts/
 ├── hpc_preheat_watchdog.py          # SIF preheat 夜间无人值守 harness
 ├── hpc_preheat_watchdog_lib/        # watchdog 内部实现
 ├── tools/                           # 可独立运行的辅助工具
-│   ├── prepare_online_hpc_resource_pilot.py # online rollout 资源测量 pilot
+│   ├── submit_online_hpc_resource_pilot.sh  # 用 ulhpc-submit 提交 online 资源测量 pilot
+│   ├── run_online_hpc_resource_worker.py    # online 资源测量 pilot 的单 worker 入口
+│   ├── prepare_online_hpc_resource_pilot.py # 旧式 sbatch/array artifact 准备入口
 │   ├── submit_apptainer_sif_preheat.sh  # 单次 SIF preheat 提交
 │   ├── hpc_sif_preheat_loop.py          # SIF preheat 切片循环
 │   ├── login_apptainer_sif_preheat.py   # login 节点直接预热 SIF
@@ -73,13 +75,13 @@ bash scripts/hpc_submit_batch.sh \
 # dry-run
 bash scripts/tools/submit_apptainer_sif_preheat.sh \
   --config configs/gepa_verified_rules_strict_hpc_24h_apptainer.yaml \
-  --sif-cache-dir /scratch/users/twang/vibe-coding-planning/shared/sif-cache \
+  --sif-cache-dir /scratch/users/<user>/vibe-coding-planning/shared/sif-cache \
   --time 08:00:00
 
 # 提交
 bash scripts/tools/submit_apptainer_sif_preheat.sh \
   --config configs/gepa_verified_rules_strict_hpc_24h_apptainer.yaml \
-  --sif-cache-dir /scratch/users/twang/vibe-coding-planning/shared/sif-cache \
+  --sif-cache-dir /scratch/users/<user>/vibe-coding-planning/shared/sif-cache \
   --time 08:00:00 \
   --submit
 ```
@@ -88,34 +90,51 @@ bash scripts/tools/submit_apptainer_sif_preheat.sh \
 相关配置，不调用 Checker 或 Reflection 模型。
 默认拉取策略为 `--timeout 0 --max-attempts 1 --retry-backoff 0`：
 不设置单个 image 的内部 pull 超时，由 Slurm `--time` 控制整段 job 的总预算。
+login preheat 的最终成果是 `shared/sif-cache/*.sif`；Apptainer cache/tmp 只是中间
+文件，必须放在 scratch。`login_apptainer_sif_preheat.py` 默认清理
+`APPTAINER_TMPDIR`，需要更激进地回收 layer cache 时可使用
+`--cleanup-apptainer-cache`。
 
 ---
 
-## 2.5 `tools/prepare_online_hpc_resource_pilot.py`
+## 2.5 `tools/submit_online_hpc_resource_pilot.sh`
 
-准备或提交 online GEPA rollout 的 ULHPC 资源测量 pilot。它不会运行完整 GEPA
-搜索；它只把少量 `candidate rules + instance` rollout 拆成 Slurm array tasks，
-用于测量单个 worker 的 `Elapsed / TotalCPU / MaxRSS`。
+通过 `ulhpc-submit` 提交 online GEPA rollout 的 ULHPC 资源测量 pilot。它不会运行
+完整 GEPA 搜索；每个提交只运行一个 `candidate rules + instance` rollout worker，
+用于测量单 worker 的 `Elapsed / TotalCPU / MaxRSS`。
+
+这个入口是当前推荐路径。它复用 `ulhpc-submit` 处理 rsync、dataset staging、
+persistent output、module loading 和 Slurm script 生成，避免项目侧再次手写
+`sbatch` 和 `module load` 逻辑。
 
 **常用命令**
 
 ```bash
-# 生成 task manifests 和 sbatch 脚本，不提交
-conda run -n mini-swe python scripts/tools/prepare_online_hpc_resource_pilot.py \
+# dry-run：检查 ulhpc-submit 计划，不提交
+bash scripts/tools/submit_online_hpc_resource_pilot.sh \
   --config configs/gepa_online_planning_hpc_resource_pilot_20260706.yaml \
-  --limit 3
+  --time 00:01:00
 
-# 在 ULHPC login/access 节点上提交
-python3 scripts/tools/prepare_online_hpc_resource_pilot.py \
+# 1 分钟 smoke：只验证远端同步、module 和 worker bootstrap
+bash scripts/tools/submit_online_hpc_resource_pilot.sh \
   --config configs/gepa_online_planning_hpc_resource_pilot_20260706.yaml \
-  --limit 3 \
+  --time 00:01:00 \
+  --submit
+
+# 20 分钟资源测量 pilot
+bash scripts/tools/submit_online_hpc_resource_pilot.sh \
+  --config configs/gepa_online_planning_hpc_resource_pilot_20260706.yaml \
+  --time 00:20:00 \
   --submit
 ```
 
-**注意**：每个 Slurm array element 只运行一个 rollout worker。配置里的
-`max_running_array_tasks` 只限制同时运行的 Slurm tasks 数，不是 worker 内部并发。
-资源测量 pilot 默认 `1 CPU / 4G / 20min`，符合 `batch` 分区约 `4G × CPU` 的
-内存比例。
+**注意**：pilot 默认 `1 CPU / 4G / 20min`，符合 `batch` 分区约 `4G × CPU` 的
+内存比例。它只 source 远端私有 env 文件读取 `DEEPSEEK_API_KEY`，不把 key 写进
+命令行、配置或 Slurm 脚本。
+
+`tools/run_online_hpc_resource_worker.py` 是远端单 worker 入口，由 wrapper 调用。
+`tools/prepare_online_hpc_resource_pilot.py` 仍保留为底层 sbatch/array artifact
+准备工具；直接用它提交需要保证运行环境已初始化 `module`，不作为当前推荐方式。
 
 ---
 
@@ -129,12 +148,12 @@ python3 scripts/tools/prepare_online_hpc_resource_pilot.py \
 # 只检查 cache 状态，不提交
 conda run -n mini-swe python scripts/tools/hpc_sif_preheat_loop.py \
   --config configs/gepa_verified_rules_strict_hpc_24h_apptainer.yaml \
-  --sif-cache-dir /scratch/users/twang/vibe-coding-planning/shared/sif-cache
+  --sif-cache-dir /scratch/users/<user>/vibe-coding-planning/shared/sif-cache
 
 # 持续提交 8h 切片直到完成
 conda run -n mini-swe python scripts/tools/hpc_sif_preheat_loop.py \
   --config configs/gepa_verified_rules_strict_hpc_24h_apptainer.yaml \
-  --sif-cache-dir /scratch/users/twang/vibe-coding-planning/shared/sif-cache \
+  --sif-cache-dir /scratch/users/<user>/vibe-coding-planning/shared/sif-cache \
   --slice-time 08:00:00 \
   --check-interval 01:00:00 \
   --submit
@@ -162,16 +181,16 @@ conda run -n mini-swe python scripts/tools/hpc_sif_preheat_loop.py \
 conda run -n mini-swe python scripts/hpc_preheat_watchdog.py \
   --pilot-config configs/gepa_verified_rules_reflection_smoke_apptainer.yaml \
   --full-config configs/gepa_verified_rules_strict_hpc_24h_apptainer.yaml \
-  --pilot-sif-cache-dir /scratch/users/twang/vibe-coding-planning/shared/sif-cache-pilot \
-  --full-sif-cache-dir /scratch/users/twang/vibe-coding-planning/shared/sif-cache \
+  --pilot-sif-cache-dir /scratch/users/<user>/vibe-coding-planning/shared/sif-cache-pilot \
+  --full-sif-cache-dir /scratch/users/<user>/vibe-coding-planning/shared/sif-cache \
   --once
 
 # 无人值守正式运行
 conda run -n mini-swe python scripts/hpc_preheat_watchdog.py \
   --pilot-config configs/gepa_verified_rules_reflection_smoke_apptainer.yaml \
   --full-config configs/gepa_verified_rules_strict_hpc_24h_apptainer.yaml \
-  --pilot-sif-cache-dir /scratch/users/twang/vibe-coding-planning/shared/sif-cache-pilot \
-  --full-sif-cache-dir /scratch/users/twang/vibe-coding-planning/shared/sif-cache \
+  --pilot-sif-cache-dir /scratch/users/<user>/vibe-coding-planning/shared/sif-cache-pilot \
+  --full-sif-cache-dir /scratch/users/<user>/vibe-coding-planning/shared/sif-cache \
   --enable-agent-repair \
   --monitor-full \
   --submit
@@ -183,7 +202,7 @@ conda run -n mini-swe python scripts/hpc_preheat_watchdog.py \
 
 在 ULHPC access/login 节点直接串行执行 `apptainer pull`，绕过 Slurm 排队。适合 SIF 预热作业长期 `PENDING (Priority)` 时使用。该模式不调用 DeepSeek，也不启动 GEPA。
 
-- 最终 `.sif` 仍写入 shared cache，例如 `/scratch/users/twang/vibe-coding-planning/shared/sif-cache`。
+- 最终 `.sif` 仍写入 shared cache，例如 `/scratch/users/<user>/vibe-coding-planning/shared/sif-cache`。
 - Apptainer layer cache/tmp 会强制指向 scratch，避免写满 home quota。
 - 默认只做串行低并发操作；不要同时运行 Slurm preheat 和 login preheat 写同一个 shared cache。
 

@@ -24,8 +24,10 @@ GPUS="0"
 REMOTE_DIR=""
 REMOTE_DATASET_DIR="~/hpc_datasets/vibe-coding-planning"
 REMOTE_RUN_DIR="~/hpc_run_state/vibe-coding-planning"
-REMOTE_APPTAINER_CACHE_DIR="/scratch/users/twang/vibe-coding-planning/shared/apptainer-cache"
-REMOTE_APPTAINER_TMP_DIR="/scratch/users/twang/vibe-coding-planning/shared/apptainer-tmp"
+ULHPC_REMOTE_USER="${ULHPC_USER:-${USER:-}}"
+VIBE_HPC_ROOT="${VIBE_HPC_ROOT:-/scratch/users/${ULHPC_REMOTE_USER}/vibe-coding-planning}"
+REMOTE_APPTAINER_CACHE_DIR="${VIBE_HPC_ROOT}/shared/apptainer-cache"
+REMOTE_APPTAINER_TMP_DIR="${VIBE_HPC_ROOT}/shared/apptainer-tmp"
 REMOTE_APPTAINER_SIF_CACHE_DIR=""
 ULHPC_CONFIG=""
 FULL_LOGS=0
@@ -54,10 +56,10 @@ Slurm / ulhpc-submit options:
                             (default: ~/hpc_run_state/vibe-coding-planning)
   --remote-apptainer-cache-dir DIR
                             Remote APPTAINER_CACHEDIR
-                            (default: /scratch/users/twang/vibe-coding-planning/shared/apptainer-cache)
+                            (default: ${VIBE_HPC_ROOT}/shared/apptainer-cache)
   --remote-apptainer-tmp-dir DIR
                             Remote APPTAINER_TMPDIR
-                            (default: /scratch/users/twang/vibe-coding-planning/shared/apptainer-tmp)
+                            (default: ${VIBE_HPC_ROOT}/shared/apptainer-tmp)
   --remote-apptainer-sif-cache-dir DIR
                             Remote shared SIF cache directory
                             (default: container.sif_cache_dir from GEPA config)
@@ -216,6 +218,7 @@ fi
 
 CONFIG_VALUES=$(python - "$GEPA_CONFIG_ABS" "${ULHPC_CONFIG:-}" <<'PY'
 import sys
+import os
 from pathlib import Path
 
 import yaml
@@ -236,7 +239,7 @@ print(f"dataset_snapshot={resolve(paths.get('dataset_snapshot', ''))}")
 print(f"run_dir={resolve(paths.get('run_dir', ''))}")
 print(f"initial_rules={resolve(paths.get('initial_rules', ''))}")
 container = cfg.get("container", {}) or {}
-print(f"sif_cache_dir={container.get('sif_cache_dir', '')}")
+print(f"sif_cache_dir={os.path.expandvars(str(container.get('sif_cache_dir', '')))}")
 
 ulhpc = {}
 if ulhpc_config and ulhpc_config.exists():

@@ -150,6 +150,7 @@ def load_optimization_config(
     )
 
     def resolve(raw_path: str) -> Path:
+        raw_path = os.path.expandvars(raw_path)
         candidate = Path(raw_path)
         return candidate if candidate.is_absolute() else root / candidate
 

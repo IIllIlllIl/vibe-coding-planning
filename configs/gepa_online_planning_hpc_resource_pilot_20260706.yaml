@@ -64,7 +64,7 @@ docker:
 container:
   runtime: apptainer
   module: tools/Apptainer
-  sif_cache_dir: /scratch/users/twang/vibe-coding-planning/shared/sif-cache
+  sif_cache_dir: /scratch/users/${USER}/vibe-coding-planning/shared/sif-cache
   writable_tmpfs: true
 
 execution:

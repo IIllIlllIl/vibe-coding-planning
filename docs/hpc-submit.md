@@ -56,6 +56,9 @@ CPU 等效资源重新计算使用量。参考官方说明：
    只运行一个 rollout worker；`max_running_array_tasks` 只限制同时运行的
    array elements，不是 worker 内部并发。资源测量 pilot 从
    `1 CPU / 4G / 20min` 起步，再用 `sacct` 数据调整。
+   当前资源测量 pilot 首选 `scripts/tools/submit_online_hpc_resource_pilot.sh`，
+   通过 `ulhpc-submit` 直接运行一个 worker；不要在 `ulhpc-submit` 作业内部再
+   嵌套提交 `sbatch`。
 
 ---
 
@@ -196,9 +199,9 @@ GEPA 参数接口，但把 HPC 侧同步、staging、持久输出和提交交给
 
 ```bash
 set +x
-export APPTAINER_CACHEDIR=/scratch/users/twang/vibe-coding-planning/shared/apptainer-cache
-export APPTAINER_TMPDIR=/scratch/users/twang/vibe-coding-planning/shared/apptainer-tmp
-export ULHPC_APPTAINER_SIF_CACHE_DIR=/scratch/users/twang/vibe-coding-planning/shared/sif-cache
+export APPTAINER_CACHEDIR=/scratch/users/<user>/vibe-coding-planning/shared/apptainer-cache
+export APPTAINER_TMPDIR=/scratch/users/<user>/vibe-coding-planning/shared/apptainer-tmp
+export ULHPC_APPTAINER_SIF_CACHE_DIR=/scratch/users/<user>/vibe-coding-planning/shared/sif-cache
 source ~/.config/vibe-coding-planning/deepseek.env
 test -n "${DEEPSEEK_API_KEY:-}" || exit 2
 python3 -m pip install --quiet --user -e third_party/gepa || true
@@ -225,8 +228,8 @@ module load、Python executable、dataset symlink 和 persistent output symlink 
 | `--remote-dir DIR` | HPC 侧工作目录（默认 `~/hpc_runs/vibe-coding-planning`） |
 | `--remote-dataset-dir DIR` | HPC 侧 dataset staging 根目录，必须位于 `--remote-dir` 外部（默认 `~/hpc_datasets/vibe-coding-planning`） |
 | `--remote-run-dir DIR` | HPC 侧 GEPA run state 根目录，必须位于 `--remote-dir` 外部（默认 `~/hpc_run_state/vibe-coding-planning`） |
-| `--remote-apptainer-cache-dir DIR` | HPC 侧 `APPTAINER_CACHEDIR`，用于 OCI layer cache（默认 `/scratch/users/twang/vibe-coding-planning/shared/apptainer-cache`） |
-| `--remote-apptainer-tmp-dir DIR` | HPC 侧 `APPTAINER_TMPDIR`，用于 Apptainer 临时构建文件（默认 `/scratch/users/twang/vibe-coding-planning/shared/apptainer-tmp`） |
+| `--remote-apptainer-cache-dir DIR` | HPC 侧 `APPTAINER_CACHEDIR`，用于 OCI layer cache（默认 `/scratch/users/<user>/vibe-coding-planning/shared/apptainer-cache`） |
+| `--remote-apptainer-tmp-dir DIR` | HPC 侧 `APPTAINER_TMPDIR`，用于 Apptainer 临时构建文件（默认 `/scratch/users/<user>/vibe-coding-planning/shared/apptainer-tmp`） |
 | `--remote-apptainer-sif-cache-dir DIR` | HPC 侧共享 SIF cache；默认读取 GEPA config 的 `container.sif_cache_dir` |
 | `--remote-env-file FILE` | HPC 侧私有 env 文件，作业内 source 后读取 `DEEPSEEK_API_KEY`（默认 `~/.config/vibe-coding-planning/deepseek.env`） |
 | `--ulhpc-config FILE` | 覆盖默认 `configs/ulhpc_submit.yaml` |
@@ -272,9 +275,9 @@ ulhpc-submit \
   --stage-data output/SWE-bench_Verified/...:~/hpc_datasets/vibe-coding-planning/output/SWE-bench_Verified/... \
   --link-as output/SWE-bench_Verified/... \
   --persistent-output output/SWE-bench_Verified/gepa-rules/run:~/hpc_run_state/vibe-coding-planning/output/SWE-bench_Verified/gepa-rules/run \
-  --apptainer-cache-dir /scratch/users/twang/vibe-coding-planning/shared/apptainer-cache \
-  --apptainer-tmp-dir /scratch/users/twang/vibe-coding-planning/shared/apptainer-tmp \
-  --apptainer-sif-cache-dir /scratch/users/twang/vibe-coding-planning/shared/sif-cache \
+  --apptainer-cache-dir /scratch/users/<user>/vibe-coding-planning/shared/apptainer-cache \
+  --apptainer-tmp-dir /scratch/users/<user>/vibe-coding-planning/shared/apptainer-tmp \
+  --apptainer-sif-cache-dir /scratch/users/<user>/vibe-coding-planning/shared/sif-cache \
   --remote-ignore-extra \
   -- bash -c '<remote_script>'
 ```
@@ -365,7 +368,7 @@ Apptainer 后端现在默认**按需拉取 SIF**：`ApptainerEnvironment` 构造
 ```bash
 python scripts/tools/prepare_apptainer_sifs.py \
   --config configs/gepa_verified_rules_reflection_smoke_apptainer.yaml \
-  --sif-cache-dir /scratch/users/twang/vibe-coding-planning/shared/sif-cache
+  --sif-cache-dir /scratch/users/<user>/vibe-coding-planning/shared/sif-cache
 ```
 
 或者通过 `ulhpc-submit` 提交一个独立作业（适合 482 个 image 的
@@ -374,7 +377,7 @@ formal/strict run）：
 ```bash
 bash scripts/tools/submit_apptainer_sif_preheat.sh \
   --config configs/gepa_verified_rules_strict_hpc_24h_apptainer.yaml \
-  --sif-cache-dir /scratch/users/twang/vibe-coding-planning/shared/sif-cache \
+  --sif-cache-dir /scratch/users/<user>/vibe-coding-planning/shared/sif-cache \
   --time 08:00:00 \
   --submit
 ```
@@ -402,9 +405,9 @@ cache 中的 `.sif` 数量判断是否完成。已有 SIF 会被
 conda run -n mini-swe env PATH=/Users/taoran.wang/miniconda3/bin:$PATH \
   python scripts/tools/hpc_sif_preheat_loop.py \
   --config configs/gepa_verified_rules_strict_hpc_24h_newprompt_20260625_apptainer.yaml \
-  --remote-project-dir /scratch/users/twang/vibe-coding-planning/runs/vibe-sif-preheat \
-  --remote-dataset-dir /scratch/users/twang/vibe-coding-planning/hpc_datasets \
-  --sif-cache-dir /scratch/users/twang/vibe-coding-planning/shared/sif-cache \
+  --remote-project-dir /scratch/users/<user>/vibe-coding-planning/runs/vibe-sif-preheat \
+  --remote-dataset-dir /scratch/users/<user>/vibe-coding-planning/hpc_datasets \
+  --sif-cache-dir /scratch/users/<user>/vibe-coding-planning/shared/sif-cache \
   --job-name gepa-preheat-sifs-8h \
   --slice-time 08:00:00 \
   --poll-interval 1800 \
@@ -441,6 +444,28 @@ login preheat 不调用 Checker、Reflection 或 DeepSeek API。为了降低 acc
 login preheat watchdog 同时写同一个 shared SIF cache；若切换到 login 模式，应先
 确认 Slurm preheat 已完成、取消或不会并发运行。
 
+login preheat 的最终成果只有 shared SIF cache 中的 `.sif` 文件：
+
+```text
+/scratch/users/<user>/vibe-coding-planning/shared/sif-cache
+```
+
+Apptainer 的中间 cache/tmp 不是最终成果。login preheat 默认把它们写到 scratch：
+
+```text
+/scratch/users/<user>/vibe-coding-planning/shared/apptainer-cache-login
+/scratch/users/<user>/vibe-coding-planning/shared/apptainer-tmp-login
+```
+
+脚本默认在每轮结束后清理 `APPTAINER_TMPDIR` 内容；如需在每轮成功生成 SIF 后也
+回收 layer cache，可给 watchdog 增加 `--cleanup-apptainer-cache`。该选项不会删除
+`shared/sif-cache` 中的最终 `.sif` 文件。
+
+不要把 login preheat 的 cache/tmp 指向 `~/.apptainer/cache` 或 home 目录。若发现
+home 下已有大型 `~/.apptainer/cache`，先确认没有运行中的 Apptainer 进程使用它；
+无法确认时应移动到 scratch archive，并在 `~/.apptainer/cache` 放置指向 scratch 的
+symlink，防止后续默认 Apptainer 行为再次写爆 home quota。
+
 HPC GEPA 配置示例见
 `configs/gepa_verified_rules_strict_hpc_24h_apptainer.yaml`：
 
@@ -453,7 +478,7 @@ paths:
 container:
   runtime: apptainer
   module: tools/Apptainer
-  sif_cache_dir: /scratch/users/twang/vibe-coding-planning/shared/sif-cache
+  sif_cache_dir: /scratch/users/<user>/vibe-coding-planning/shared/sif-cache
   writable_tmpfs: true
 ```
 
@@ -653,6 +678,24 @@ apptainer exec \
 因此，单纯把 benchmark Docker 镜像转为 `.sif` 后，现有 PCT/PCC/GEPA
 正式评估仍会在运行时因为找不到 Docker daemon 或 Docker API 而失败。
 
+另一个不能直接替换的差异是状态生命周期。Docker backend 通常启动一个长期运行
+的容器，agent 的多次 `execute()` 调用共享同一个可写容器层。当前简单的
+Apptainer backend 每次 `execute()` 都是新的 `apptainer exec --writable-tmpfs`；
+在 `/testbed` 中写入的源码修改不会自动进入下一次 exec。对于 Code Agent，这会
+导致前面步骤的编辑丢失，最终 `git diff --cached` 为空。
+
+HPC Online GEPA 应采用 agent phase 级隔离，而不是每条命令隔离：
+
+- Plan phase：独立容器，只产出 `plan.md` 和 trajectory。
+- Code phase：独立容器，但该 phase 内所有命令共享同一个可写 `/testbed`；结束
+  后只产出 `generated.patch` 和 trajectory。
+- Evaluator phase：独立干净容器，读取 patch 后运行测试，只产出 evaluator
+  result 和日志。
+
+跨 phase 信息必须通过 scratch 上的显式 artifact 目录传递，不共享隐式容器状态。
+这既保留了比本地 Docker PCT 更强的隔离，又满足 `mini-swe-agent` 交互式编辑
+模型对 phase 内状态持久性的要求。
+
 ### 7.2 建议验证顺序
 
 1. 先提交一个只检查 Apptainer/Singularity 的 Slurm smoke：
@@ -748,7 +791,7 @@ class ContainerConfig:
 container:
   runtime: apptainer
   module: tools/Apptainer
-  sif_cache_dir: /scratch/users/twang/vibe-coding-planning/shared/sif-cache
+  sif_cache_dir: /scratch/users/<user>/vibe-coding-planning/shared/sif-cache
   writable_tmpfs: true
 ```
 
@@ -778,9 +821,9 @@ run manifest，确保 Docker run_dir 与 Apptainer run_dir 不会互相恢复。
   module Python/Apptainer 环境：
   ```bash
   set +x
-  export APPTAINER_CACHEDIR=/scratch/users/twang/vibe-coding-planning/shared/apptainer-cache
-  export APPTAINER_TMPDIR=/scratch/users/twang/vibe-coding-planning/shared/apptainer-tmp
-  export ULHPC_APPTAINER_SIF_CACHE_DIR=/scratch/users/twang/vibe-coding-planning/shared/sif-cache
+  export APPTAINER_CACHEDIR=/scratch/users/<user>/vibe-coding-planning/shared/apptainer-cache
+  export APPTAINER_TMPDIR=/scratch/users/<user>/vibe-coding-planning/shared/apptainer-tmp
+  export ULHPC_APPTAINER_SIF_CACHE_DIR=/scratch/users/<user>/vibe-coding-planning/shared/sif-cache
   source ~/.config/vibe-coding-planning/deepseek.env
   test -n "${DEEPSEEK_API_KEY:-}" || exit 2
   python3 -m pip install --quiet --user -e third_party/gepa || true
@@ -888,8 +931,8 @@ SDK 自动转成 Apptainer 调用。
 
 | 路径 | 文件系统 | 容量/配额 | 当前使用 | 建议用途 |
 |------|----------|-----------|----------|----------|
-| `/home/users/twang` | Isilon (`/mnt/isilon`) | 10 TB soft / ~11.3 TB hard | 26 GB | 代码、小体积产物、当前 SIF 缓存可继续存放 |
-| `/scratch/users/twang` | Lustre (`/mnt/scratch`) | 10 TB soft / ~11.3 TB hard | 12 KB | **推荐作为大规模 SIF 缓存和大型 run_dir** |
+| `/home/users/<user>` | Isilon (`/mnt/isilon`) | 10 TB soft / ~11.3 TB hard | 26 GB | 代码、小体积产物、当前 SIF 缓存可继续存放 |
+| `/scratch/users/<user>` | Lustre (`/mnt/scratch`) | 10 TB soft / ~11.3 TB hard | 12 KB | **推荐作为大规模 SIF 缓存和大型 run_dir** |
 | `/tmp`（计算节点本地） | 本地 SSD | 502 GB / 节点，当前空闲约 469 GB | 34 GB | Apptainer 临时可写层、数据集解压 |
 
 结论：**存储空间足够一次性预下载全部 Verified 482 个 benchmark image 的 SIF**。
@@ -921,7 +964,7 @@ HPC GEPA 配置把 SIF 缓存固定到 `/scratch` 上的共享目录：
 container:
   runtime: apptainer
   module: tools/Apptainer
-  sif_cache_dir: /scratch/users/twang/vibe-coding-planning/shared/sif-cache
+  sif_cache_dir: /scratch/users/<user>/vibe-coding-planning/shared/sif-cache
   writable_tmpfs: true
 ```
 
@@ -935,8 +978,8 @@ Docker/OCI registry 拉取 layer 和构建 SIF 时还会使用自身 cache/tmp�
 把它们显式指向 `/scratch`，避免写入 home quota：
 
 ```bash
-export APPTAINER_CACHEDIR=/scratch/users/twang/vibe-coding-planning/shared/apptainer-cache
-export APPTAINER_TMPDIR=/scratch/users/twang/vibe-coding-planning/shared/apptainer-tmp
+export APPTAINER_CACHEDIR=/scratch/users/<user>/vibe-coding-planning/shared/apptainer-cache
+export APPTAINER_TMPDIR=/scratch/users/<user>/vibe-coding-planning/shared/apptainer-tmp
 mkdir -p "$APPTAINER_CACHEDIR" "$APPTAINER_TMPDIR"
 ```
 
@@ -960,12 +1003,12 @@ bash scripts/hpc_submit_batch.sh \
 # 或一次性预拉（可选）
 python scripts/tools/prepare_apptainer_sifs.py \
   --config configs/gepa_verified_rules_strict_hpc_24h_apptainer.yaml \
-  --sif-cache-dir /scratch/users/twang/vibe-coding-planning/shared/sif-cache
+  --sif-cache-dir /scratch/users/<user>/vibe-coding-planning/shared/sif-cache
 
 # 或通过 ulhpc-submit wrapper 提交独立作业完成预热
 bash scripts/tools/submit_apptainer_sif_preheat.sh \
   --config configs/gepa_verified_rules_strict_hpc_24h_apptainer.yaml \
-  --sif-cache-dir /scratch/users/twang/vibe-coding-planning/shared/sif-cache \
+  --sif-cache-dir /scratch/users/<user>/vibe-coding-planning/shared/sif-cache \
   --time 08:00:00 \
   --submit
 ```

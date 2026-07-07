@@ -418,7 +418,7 @@ configs/gepa_verified_rules_strict_hpc_24h_apptainer.yaml
 `max_metric_calls=3000`（resume 扩容后的软上限），并把 SIF cache 放在可跨实验复用的 scratch 目录：
 
 ```text
-/scratch/users/twang/vibe-coding-planning/shared/sif-cache
+/scratch/users/<user>/vibe-coding-planning/shared/sif-cache
 ```
 
 正式初始规则使用 `configs/gepa_initial_rules_gpt_seed.md`。该 seed 由用户提供的
@@ -744,9 +744,16 @@ Online GEPA 使用独立实验入口，而不是改写当前 offline 主线：
   outputs。每个 array element 是一个独立 Slurm task，只运行一个 rollout
   worker。默认 `hpc.submit=false` 时只准备 artifact；`hpc.submit=true` 时假定
   controller 运行在可调用 `sbatch` 且能访问 task directory 的 ULHPC 环境。
-- `scripts/tools/prepare_online_hpc_resource_pilot.py`：准备或提交一个小型
-  online rollout resource pilot，用于测量单 worker 的 `Elapsed / TotalCPU /
-  MaxRSS`，不运行完整 GEPA 搜索。
+- `scripts/tools/submit_online_hpc_resource_pilot.sh`：当前推荐的 online rollout
+  resource pilot 提交入口。它通过 `ulhpc-submit` 处理同步、dataset staging、
+  persistent output、module loading 和 Slurm script 生成，然后在远端直接运行
+  一个 worker，不再嵌套提交 `sbatch`。
+- `scripts/tools/run_online_hpc_resource_worker.py`：`ulhpc-submit` pilot 的单
+  worker 入口，用于测量单个 `candidate rules + instance` rollout 的
+  `Elapsed / TotalCPU / MaxRSS`。
+- `scripts/tools/prepare_online_hpc_resource_pilot.py`：保留为底层 sbatch/array
+  artifact 准备工具；直接提交它要求调用环境已经正确初始化 ULHPC module，不作为
+  当前资源测量 pilot 的首选入口。
 - `src/optimization/online_runner.py`：复用 GEPA optimize、resume、audit 和 report
   思路，但记录 online 专用 manifest。
 - `configs/gepa_online_planning_pilot.yaml`：小样本 pilot 配置。
@@ -797,3 +804,80 @@ FairShare 默认资源必须保守。ULHPC `batch` 分区按约 `4G × CPU` 的�
    task directory 的环境运行。
 4. 本地 Mac controller 到 ULHPC 的自动 rsync/remote `sbatch` 提交流程仍应作为
    后续 wrapper 层实现，不应塞入 GEPA adapter 核心。
+5. Apptainer rollout 已开始迁移到 agent phase 隔离：Plan phase 和 Code phase
+   分别启动环境；Code phase 使用独立 host workdir bind 到 `/testbed`，以保留
+   同一 Code Agent 内多步命令产生的源码修改。Evaluator phase 仍需后续迁移到
+   clean-container + patch artifact 的 Apptainer backend。
+
+### 11.5 Online HPC 的 agent 级隔离语义
+
+Online HPC 不应简单复刻本地 PCT 的“一条 rollout 共用一个 Docker 容器”模型。
+本地 Docker 路径中，Plan Agent、Code Agent 和 evaluator 在同一个长期运行的
+benchmark 容器或同一轮可写状态上衔接，原因主要是本地资源有限且
+`mini-swe-agent` 的 Docker backend 天然提供可写容器层。HPC 上应利用更充足的
+计算资源，把隔离边界收紧到 **agent phase**：
+
+```text
+Plan phase container
+  input: issue + candidate planning rules + read-only base repo
+  output artifacts: plan.md, plan trajectory
+
+Code phase container
+  input: issue + plan.md + clean base repo
+  internal state: Code Agent 多步命令共享同一个可写工作区
+  output artifacts: generated.patch, code trajectory
+
+Evaluator phase container
+  input: clean base repo + generated.patch + test metadata
+  output artifacts: evaluator_result.json, logs, resolved
+```
+
+phase 之间不得共享隐式容器文件系统状态。所有跨 phase 信息必须通过 host/scratch
+上的显式 artifact 目录传递，并在 audit 中记录 artifact 路径、哈希和可见性。
+这样可以精确控制哪些信息进入下一个 agent：
+
+- Plan phase 看不到历史 resolved、历史 patch、历史 evaluator result，也看不到
+  Code/Evaluator 未来信息。
+- Code phase 不直接接收 candidate rules，只接收 issue、当前 plan 和 clean base
+  repo。
+- Evaluator phase 不接收 candidate rules、Plan/Code trajectory 或 GEPA score；
+  它只读取当前 patch 和测试环境。
+- Reflection phase 是唯一可以读取当前 rollout 全部执行后证据的阶段。
+
+注意：agent 级隔离不等于每条 shell command 都隔离。`mini-swe-agent` 的
+Code Agent 是交互式多步编辑模型，同一个 Code phase 内的所有 `execute()` 调用
+必须共享同一个可写 `/testbed` 状态；否则前一步修改的源码会在下一步消失，最终
+`git diff --cached` 为空并触发 `Code agent produced empty output`。
+
+2026-07-07 的 ULHPC smoke 已验证当前 Apptainer backend 的问题：
+
+```text
+apptainer exec --writable-tmpfs <sif> bash -lc 'cd /testbed && touch marker'
+apptainer exec --writable-tmpfs <sif> bash -lc 'cd /testbed && test -f marker'
+=> TESTBED_NOT_PERSISTED
+```
+
+因此，Online HPC 的 Apptainer backend 需要提供 **phase 内 stateful execution**。
+可接受实现包括：
+
+1. 每个 phase 创建独立 persistent overlay，并在该 phase 的每次
+   `apptainer exec` 中复用同一个 overlay。
+2. 每个 phase 创建独立 host-side worktree，bind 到 `/testbed`，让修改落在
+   scratch 工作目录。
+3. 每个 phase 使用独立 Apptainer instance 或 sandbox，但必须避免多个 worker
+   共享同一个可写层。
+
+推荐首版使用 per-phase overlay 或 per-phase worktree。无论选择哪种实现，都必须
+满足相同后端合同：
+
+- `execute()` 在同一个 phase 内多次调用时，`/testbed` 文件修改必须持久。
+- phase 结束时，从该 phase 的可写状态中收集唯一允许的输出 artifact。
+- 下一 phase 从 clean base repo 启动，只挂载它被允许读取的 artifact。
+- phase 失败时保留足够诊断信息：last exit status、trajectory、最后若干命令、
+  artifact manifest、overlay/worktree 保留路径（可配置）。
+- cleanup 默认删除临时可写层；debug 模式或失败保留必须写入 manifest，防止
+  scratch 中出现不可追踪的大文件。
+
+这层抽象应放在 environment / rollout orchestration 中，而不是让 GEPA adapter、
+Plan Agent prompt 或 Code Agent prompt 感知 Docker/Apptainer 差异。上层只依赖
+“phase 内有状态、phase 间 artifact-only”的执行合同。
