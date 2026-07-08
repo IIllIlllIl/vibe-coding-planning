@@ -595,6 +595,35 @@ class TestDockerCapacityWindow:
     @patch("src.environment.docker_env.prune_dangling_images")
     @patch("src.environment.docker_env.cleanup_docker_image_cache")
     @patch("src.environment.docker_env.shutil.disk_usage")
+    def test_can_disable_docker_maintenance_for_non_docker_backends(
+        self,
+        mock_disk_usage,
+        mock_cleanup,
+        mock_dangling,
+        mock_build,
+        tmp_path,
+    ):
+        mock_disk_usage.return_value = SimpleNamespace(free=200 * 1024**3)
+        window = DockerCapacityWindow(
+            max_concurrent=1,
+            max_cached_images=2,
+            min_free_gb=20,
+            lock_dir=tmp_path / "no-docker-maintenance",
+            enable_docker_maintenance=False,
+        )
+
+        with window.lease():
+            pass
+        window.maintain()
+
+        mock_cleanup.assert_not_called()
+        mock_dangling.assert_not_called()
+        mock_build.assert_not_called()
+
+    @patch("src.environment.docker_env.prune_build_cache")
+    @patch("src.environment.docker_env.prune_dangling_images")
+    @patch("src.environment.docker_env.cleanup_docker_image_cache")
+    @patch("src.environment.docker_env.shutil.disk_usage")
     def test_nested_lease_is_reentrant(
         self,
         mock_disk_usage,

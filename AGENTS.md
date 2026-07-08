@@ -67,6 +67,14 @@ priority. Before proposing or submitting an HPC job, read `docs/hpc-submit.md`
 and warn the user if the command appears to over-request resources or bypass the
 documented workflow. Current defaults:
 
+- Do not trust sandboxed SSH/HPC connectivity failures as evidence of a real
+  ULHPC problem. Codex's default sandbox can block DNS or network access. If an
+  important `ssh`, `ulhpc-submit`, `squeue`, `sacct`, or remote-file check fails
+  with DNS, host resolution, timeout, or connection errors inside the sandbox,
+  rerun the same check with an approved escalated command before diagnosing VPN,
+  Iris, credentials, queue, or remote configuration issues. Report the result as
+  either "sandbox network failed" or "real remote check failed"; do not conflate
+  the two.
 - SIF preheat: `1 CPU / 4G`, because it is network/IO bound. If `MaxRSS` keeps
   reaching the limit, increase only to `5G` or `6G`; do not add CPUs.
 - GEPA main run: start with `search.parallel=2`, `--cpus 2`, `--mem 8G`.

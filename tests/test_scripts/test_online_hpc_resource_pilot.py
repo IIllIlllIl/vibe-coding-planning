@@ -210,6 +210,63 @@ container_module: tools/Apptainer
     assert "module load" not in result.stdout
 
 
+def test_submit_online_hpc_resource_pilot_defaults_to_remote_user_from_config(
+    tmp_path: Path,
+) -> None:
+    fake_bin = tmp_path / "bin"
+    fake_bin.mkdir()
+    fake_ulhpc = fake_bin / "ulhpc-submit"
+    fake_ulhpc.write_text(
+        "#!/usr/bin/env bash\nprintf '%s\\n' \"$@\"\n",
+        encoding="utf-8",
+    )
+    fake_ulhpc.chmod(0o755)
+
+    local_root = REPO_ROOT / ".tmp_hpc_smoke" / "test_online_remote_user"
+    config = _write_online_config(local_root)
+    config.write_text(
+        config.read_text(encoding="utf-8").replace(
+            "/scratch/test/sif-cache",
+            "/scratch/users/${USER}/vibe-coding-planning/shared/sif-cache",
+        ),
+        encoding="utf-8",
+    )
+    ulhpc_config = tmp_path / "ulhpc.yaml"
+    ulhpc_config.write_text(
+        """
+user: remoteuser
+python_module: lang/Python/3.11
+container_module: tools/Apptainer
+""",
+        encoding="utf-8",
+    )
+
+    env = os.environ.copy()
+    env["PATH"] = f"{fake_bin}{os.pathsep}{env['PATH']}"
+    env["USER"] = "localuser"
+    env.pop("ULHPC_USER", None)
+    env.pop("VIBE_HPC_ROOT", None)
+    result = subprocess.run(
+        [
+            "bash",
+            str(SUBMIT_SCRIPT),
+            "--config",
+            str(config.relative_to(REPO_ROOT)),
+            "--ulhpc-config",
+            str(ulhpc_config),
+        ],
+        cwd=REPO_ROOT,
+        capture_output=True,
+        text=True,
+        check=False,
+        env=env,
+    )
+
+    assert result.returncode == 0, result.stderr
+    assert "/scratch/users/remoteuser/vibe-coding-planning" in result.stdout
+    assert "/scratch/users/localuser" not in result.stdout
+
+
 def test_submit_online_hpc_resource_pilot_can_install_deps_when_requested(
     tmp_path: Path,
 ) -> None:

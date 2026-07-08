@@ -80,7 +80,11 @@ def run_task(
         config = load_online_optimization_config(config_path)
         if worker_run_dir is not None:
             config = replace(config, run_dir=worker_run_dir)
-        capacity = configure_docker_capacity(config.docker, max_concurrent=1)
+        capacity = configure_docker_capacity(
+            config.docker,
+            max_concurrent=1,
+            enable_docker_maintenance=config.container.runtime == "docker",
+        )
         output = OnlinePCTRolloutRunner(config, capacity)(case, rules)
         _write_json(
             output_path,

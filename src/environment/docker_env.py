@@ -201,6 +201,7 @@ class DockerCapacityWindow:
         min_free_gb: int,
         disk_path: str | Path = ".",
         lock_dir: str | Path | None = None,
+        enable_docker_maintenance: bool = True,
     ) -> None:
         if max_concurrent < 1:
             raise ValueError("max_concurrent must be at least 1")
@@ -213,6 +214,7 @@ class DockerCapacityWindow:
         self.max_concurrent = max_concurrent
         self.max_cached_images = max_cached_images
         self.min_free_gb = min_free_gb
+        self.enable_docker_maintenance = enable_docker_maintenance
         self.disk_path = Path(disk_path)
         self.lock_dir = Path(
             lock_dir
@@ -306,7 +308,7 @@ class DockerCapacityWindow:
         with self._maintenance_lock:
             with self._interprocess_lock("maintenance.lock"):
                 free_gb = self._free_gb()
-                if free_gb < self.min_free_gb:
+                if free_gb < self.min_free_gb and self.enable_docker_maintenance:
                     logger.warning(
                         "Docker window low disk: %dGiB free; cleaning Docker storage",
                         free_gb,
@@ -329,6 +331,8 @@ class DockerCapacityWindow:
 
     def maintain(self) -> None:
         """Serialize project-image cleanup across all window users."""
+        if not self.enable_docker_maintenance:
+            return
         with self._maintenance_lock:
             with self._interprocess_lock("maintenance.lock"):
                 with self._exclusive_idle_usage() as all_idle:
@@ -397,7 +401,10 @@ _DEFAULT_WINDOW_LOCK = threading.Lock()
 
 
 def configure_docker_capacity(
-    config: DockerConfig, *, max_concurrent: int = 1
+    config: DockerConfig,
+    *,
+    max_concurrent: int = 1,
+    enable_docker_maintenance: bool = True,
 ) -> DockerCapacityWindow:
     """Configure and return the process-wide Docker capacity window."""
     global _DEFAULT_WINDOW
@@ -406,18 +413,21 @@ def configure_docker_capacity(
             max_concurrent,
             config.max_cached_images,
             config.min_free_gb,
+            enable_docker_maintenance,
         )
         current = _DEFAULT_WINDOW
         current_values = (
             current.max_concurrent,
             current.max_cached_images,
             current.min_free_gb,
+            current.enable_docker_maintenance,
         ) if current else None
         if current_values != desired:
             _DEFAULT_WINDOW = DockerCapacityWindow(
                 max_concurrent=max_concurrent,
                 max_cached_images=config.max_cached_images,
                 min_free_gb=config.min_free_gb,
+                enable_docker_maintenance=enable_docker_maintenance,
             )
         return _DEFAULT_WINDOW
 

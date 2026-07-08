@@ -41,7 +41,11 @@ from src.optimization.online_hpc_executor import (
     build_slurm_array_script,
 )
 from src.optimization.online_models import OnlineRolloutOutput
-from src.optimization.online_rollout_worker import case_from_manifest, output_to_json
+from src.optimization.online_rollout_worker import (
+    case_from_manifest,
+    output_to_json,
+    run_task,
+)
 from src.optimization.online_rollout import OnlinePCTRolloutRunner
 from src.optimization.online_runner import run_online_optimization
 from src.optimization.reflection import (
@@ -1146,6 +1150,92 @@ def test_online_rollout_worker_serialization_boundaries():
     assert serialized["plan_trajectory"][0]["content"] == "plan"
 
 
+def test_online_rollout_worker_disables_docker_maintenance_for_apptainer(
+    tmp_path,
+    monkeypatch,
+):
+    config = _online_config(tmp_path)
+    config = replace(
+        config,
+        container=ContainerConfig(
+            runtime="apptainer",
+            sif_cache_dir=tmp_path / "sifs",
+        ),
+        evaluator=OnlineEvaluatorConfig(
+            timeout=config.evaluator.timeout,
+            backend="swebench_apptainer",
+        ),
+    )
+    rules_path = tmp_path / "rules.txt"
+    rules_path.write_text("planning rules", encoding="utf-8")
+    task_manifest = tmp_path / "task.json"
+    task_manifest.write_text(
+        json.dumps(
+            {
+                "instance_id": "repo__one",
+                "split": "train",
+                "issue_description": "issue",
+                "repository": {
+                    "repo": "org/repo",
+                    "base_commit": "abc123",
+                    "instance_id": "repo__one",
+                },
+                "rules_path": str(rules_path),
+            }
+        ),
+        encoding="utf-8",
+    )
+    captured: dict[str, bool] = {}
+
+    def fake_configure_docker_capacity(
+        docker_config,
+        *,
+        max_concurrent,
+        enable_docker_maintenance=True,
+    ):
+        captured["enable_docker_maintenance"] = enable_docker_maintenance
+        return _FakeCapacityWindow()
+
+    class FakeRunner:
+        def __init__(self, runner_config, capacity):
+            pass
+
+        def __call__(self, case, rules):
+            assert rules == "planning rules"
+            return OnlineRolloutOutput(
+                resolved=True,
+                plan="plan",
+                patch="patch",
+                plan_trajectory=(),
+                code_trajectory=(),
+                evaluator_result={"resolved": True},
+                attribution_hint={},
+            )
+
+    monkeypatch.setattr(
+        "src.optimization.online_rollout_worker.load_online_optimization_config",
+        lambda path: config,
+    )
+    monkeypatch.setattr(
+        "src.optimization.online_rollout_worker.configure_docker_capacity",
+        fake_configure_docker_capacity,
+    )
+    monkeypatch.setattr(
+        "src.optimization.online_rollout_worker.OnlinePCTRolloutRunner",
+        FakeRunner,
+    )
+
+    rc = run_task(
+        config_path=tmp_path / "config.yaml",
+        task_manifest_path=task_manifest,
+        output_path=tmp_path / "output.json",
+        worker_run_dir=tmp_path / "worker-run",
+    )
+
+    assert rc == 0
+    assert captured["enable_docker_maintenance"] is False
+
+
 def test_slurm_array_script_uses_minimal_resources_and_private_env_file():
     script = build_slurm_array_script(
         config_path="configs/online.yaml",
@@ -1361,6 +1451,72 @@ def test_online_runner_uses_plan_and_code_rollout_attempts(tmp_path):
     )
 
     assert captured["rollout_attempts"] == 3
+
+
+def test_online_runner_disables_docker_maintenance_for_apptainer(
+    tmp_path,
+    monkeypatch,
+):
+    config = _online_config(tmp_path)
+    config = replace(
+        config,
+        container=ContainerConfig(
+            runtime="apptainer",
+            sif_cache_dir=tmp_path / "sifs",
+        ),
+        evaluator=OnlineEvaluatorConfig(
+            timeout=config.evaluator.timeout,
+            backend="swebench_apptainer",
+        ),
+    )
+    captured: dict[str, bool] = {}
+
+    def fake_configure_docker_capacity(
+        docker_config,
+        *,
+        max_concurrent,
+        enable_docker_maintenance=True,
+    ):
+        captured["enable_docker_maintenance"] = enable_docker_maintenance
+        return _FakeCapacityWindow()
+
+    class FakeResult:
+        candidates = [{"rules": "seed planning rules"}]
+        val_subscores = [{"repo__val": 1.0}]
+        val_aggregate_scores = [1.0]
+        parents = [None]
+        best_candidate = {"rules": "seed planning rules"}
+        best_idx = 0
+        total_metric_calls = 1
+        num_candidates = 1
+
+        def to_dict(self):
+            return {"best_candidate": self.best_candidate}
+
+        def candidate_tree_html(self):
+            return "<html></html>"
+
+    monkeypatch.setattr(
+        "src.optimization.online_runner.configure_docker_capacity",
+        fake_configure_docker_capacity,
+    )
+
+    run_online_optimization(
+        config,
+        rollout=lambda case, rules: OnlineRolloutOutput(
+            resolved=True,
+            plan="plan",
+            patch="patch",
+            plan_trajectory=(),
+            code_trajectory=(),
+            evaluator_result={"resolved": True},
+            attribution_hint={},
+        ),
+        proposer=lambda candidate, reflective_dataset, components: candidate,
+        optimize_fn=lambda **kwargs: FakeResult(),
+    )
+
+    assert captured["enable_docker_maintenance"] is False
 
 
 def test_adapter_does_not_call_checker_when_prepare_fails(tmp_path):

@@ -19,10 +19,8 @@ MAX_ATTEMPTS="1"
 RETRY_BACKOFF="0"
 REMOTE_DIR=""
 REMOTE_DATASET_DIR="~/hpc_datasets/vibe-coding-planning"
-ULHPC_REMOTE_USER="${ULHPC_USER:-${USER:-}}"
-VIBE_HPC_ROOT="${VIBE_HPC_ROOT:-/scratch/users/${ULHPC_REMOTE_USER}/vibe-coding-planning}"
-REMOTE_APPTAINER_CACHE_DIR="${VIBE_HPC_ROOT}/shared/apptainer-cache"
-REMOTE_APPTAINER_TMP_DIR="${VIBE_HPC_ROOT}/shared/apptainer-tmp"
+REMOTE_APPTAINER_CACHE_DIR=""
+REMOTE_APPTAINER_TMP_DIR=""
 ULHPC_CONFIG=""
 FULL_LOGS=0
 SUBMIT=0
@@ -185,13 +183,6 @@ if ! [[ "$RETRY_BACKOFF" =~ ^[0-9]+$ ]]; then
   echo "ERROR: --retry-backoff must be a non-negative integer" >&2
   exit 2
 fi
-for value_name in REMOTE_DATASET_DIR REMOTE_APPTAINER_CACHE_DIR REMOTE_APPTAINER_TMP_DIR; do
-  if [[ -z "${!value_name}" ]]; then
-    echo "ERROR: $value_name must not be empty" >&2
-    exit 2
-  fi
-done
-
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 CONFIG_ABS="$(python -c "from pathlib import Path; print((Path('$REPO_ROOT') / '$CONFIG').resolve())")"
 if [[ ! -f "$CONFIG_ABS" ]]; then
@@ -202,6 +193,45 @@ fi
 if [[ -z "$ULHPC_CONFIG" && -f "$REPO_ROOT/configs/ulhpc_submit.yaml" ]]; then
   ULHPC_CONFIG="$REPO_ROOT/configs/ulhpc_submit.yaml"
 fi
+
+ULHPC_REMOTE_USER="$(python - "${ULHPC_CONFIG:-}" <<'PY'
+import os
+import sys
+from pathlib import Path
+
+import yaml
+
+user = os.environ.get("ULHPC_USER", "")
+if not user and len(sys.argv) > 1 and sys.argv[1]:
+    path = Path(sys.argv[1])
+    if path.exists():
+        data = yaml.safe_load(path.read_text(encoding="utf-8")) or {}
+        user = str(data.get("user", "") or "")
+if not user:
+    user = os.environ.get("USER", "")
+print(user)
+PY
+)"
+if [[ -z "$ULHPC_REMOTE_USER" ]]; then
+  echo "ERROR: cannot determine ULHPC remote user; set configs/ulhpc_submit.yaml user or ULHPC_USER" >&2
+  exit 2
+fi
+if [[ -z "${ULHPC_USER:-}" ]]; then
+  export ULHPC_USER="$ULHPC_REMOTE_USER"
+fi
+VIBE_HPC_ROOT="${VIBE_HPC_ROOT:-/scratch/users/${ULHPC_REMOTE_USER}/vibe-coding-planning}"
+if [[ -z "$REMOTE_APPTAINER_CACHE_DIR" ]]; then
+  REMOTE_APPTAINER_CACHE_DIR="${VIBE_HPC_ROOT}/shared/apptainer-cache"
+fi
+if [[ -z "$REMOTE_APPTAINER_TMP_DIR" ]]; then
+  REMOTE_APPTAINER_TMP_DIR="${VIBE_HPC_ROOT}/shared/apptainer-tmp"
+fi
+for value_name in REMOTE_DATASET_DIR REMOTE_APPTAINER_CACHE_DIR REMOTE_APPTAINER_TMP_DIR; do
+  if [[ -z "${!value_name}" ]]; then
+    echo "ERROR: $value_name must not be empty" >&2
+    exit 2
+  fi
+done
 
 if ! command -v ulhpc-submit >/dev/null 2>&1; then
   echo "ERROR: ulhpc-submit not found. Install the adjacent hpc_submit project:" >&2

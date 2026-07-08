@@ -156,3 +156,86 @@ prompts:
         '"$ULHPC_APPTAINER_SIF_CACHE_DIR"'
     ) in result.stdout
     assert "--remote-ignore-extra" in result.stdout
+
+
+def test_hpc_submit_batch_defaults_to_remote_user_from_config(tmp_path) -> None:
+    fake_bin = tmp_path / "bin"
+    fake_bin.mkdir()
+    fake_ulhpc = fake_bin / "ulhpc-submit"
+    fake_ulhpc.write_text(
+        "#!/usr/bin/env bash\nprintf '%s\\n' \"$@\"\nexit 0\n",
+        encoding="utf-8",
+    )
+    fake_ulhpc.chmod(0o755)
+
+    local_root = REPO_ROOT / ".tmp_hpc_smoke" / "test_hpc_submit_remote_user"
+    snapshot = local_root / "snapshot"
+    snapshot.mkdir(parents=True, exist_ok=True)
+    (snapshot / "manifest.json").write_text("{}", encoding="utf-8")
+    rules = local_root / "rules.md"
+    rules.write_text("1. rule\n", encoding="utf-8")
+    run_dir = local_root / "run"
+    config = local_root / "gepa.yaml"
+    config.write_text(
+        f"""
+paths:
+  dataset_snapshot: {snapshot}
+  initial_rules: {rules}
+  run_dir: {run_dir}
+checker:
+  model: deepseek-v4-flash
+  api_base: https://api.deepseek.com
+  api_key_env: DEEPSEEK_API_KEY
+reflection:
+  model: deepseek-v4-flash
+  api_base: https://api.deepseek.com
+  api_key_env: DEEPSEEK_API_KEY
+search:
+  max_metric_calls: 1
+docker: {{}}
+container:
+  runtime: apptainer
+  sif_cache_dir: /scratch/users/${{USER}}/vibe-coding-planning/shared/sif-cache
+prompts:
+  checker_system: checker
+  checker_instance: checker
+  reflection_system: reflection
+  reflection_instance: reflection
+""",
+        encoding="utf-8",
+    )
+    ulhpc_config = tmp_path / "ulhpc.yaml"
+    ulhpc_config.write_text(
+        """
+user: remoteuser
+python_module: lang/Python/3.11
+container_module: tools/Apptainer
+""",
+        encoding="utf-8",
+    )
+
+    env = os.environ.copy()
+    env["PATH"] = f"{fake_bin}{os.pathsep}{env['PATH']}"
+    env["USER"] = "localuser"
+    env.pop("ULHPC_USER", None)
+    env.pop("VIBE_HPC_ROOT", None)
+    result = subprocess.run(
+        [
+            "bash",
+            str(SCRIPT),
+            "--gepa-rules",
+            "--gepa-config",
+            str(config),
+            "--ulhpc-config",
+            str(ulhpc_config),
+        ],
+        cwd=REPO_ROOT,
+        capture_output=True,
+        text=True,
+        check=False,
+        env=env,
+    )
+
+    assert result.returncode == 0, result.stderr
+    assert "/scratch/users/remoteuser/vibe-coding-planning" in result.stdout
+    assert "/scratch/users/localuser" not in result.stdout

@@ -170,6 +170,7 @@ def run_online_optimization(
     capacity = configure_docker_capacity(
         config.docker,
         max_concurrent=config.search.parallel,
+        enable_docker_maintenance=config.container.runtime == "docker",
     )
     rollout_runner = rollout or OnlinePCTRolloutRunner(config, capacity)
     batch_executor = None
