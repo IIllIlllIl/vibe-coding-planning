@@ -48,7 +48,9 @@ plan-code-test/
 │   │   └── docker_env.py          # Docker 环境封装（基于 mini-swe-agent DockerEnvironment）
 │   ├── evaluator/
 │   │   ├── __init__.py
-│   │   ├── swe_evaluator.py       # 多数据集评估路由（swebench / Pro / PolyBench）
+│   │   ├── swe_evaluator.py       # 本地 Docker 多数据集评估路由
+│   │   ├── swe_apptainer_evaluator.py # Online HPC 标准 SWE-bench/Verified Apptainer evaluator
+│   │   ├── runtime_evaluator.py   # Online rollout evaluator backend 分发
 │   │   └── polybench_evaluator.py # PolyBench 官方评估封装（DockerManager + parser + scoring）
 │   ├── data/
 │   │   ├── __init__.py
@@ -118,7 +120,8 @@ plan-code-test/
 
 | 模块 | 文件 | 职责 |
 |------|------|------|
-| **SWE 评估器** | `src/evaluator/swe_evaluator.py` | 多数据集评估路由。根据 `instance_info.dataset_type` 分发到：swebench（`swebench.harness.run_evaluation`）、Pro（`pro_official_evaluator`）、PolyBench（`polybench_evaluator`）。统一返回 `{resolved, stdout, stderr, log_dir, error_info, report}` |
+| **SWE 评估器** | `src/evaluator/swe_evaluator.py` | 本地 Docker 多数据集评估路由。根据 `instance_info.dataset_type` 分发到：swebench（官方 Docker `run_evaluation`）、Pro（`pro_official_evaluator`）、PolyBench（`polybench_evaluator`）。统一返回 `{resolved, stdout, stderr, log_dir, error_info, report}` |
+| **Online runtime evaluator** | `src/evaluator/runtime_evaluator.py` + `src/evaluator/swe_apptainer_evaluator.py` | Online rollout 根据 config 选择 `swebench_docker` 或 `swebench_apptainer`。Apptainer backend 面向标准 SWE-bench/Verified，复用官方 `make_test_spec()` 和 `get_eval_report()`，只替换容器执行层 |
 | **PolyBench 评估器** | `src/evaluator/polybench_evaluator.py` | 封装 PolyBench 官方评估流程：获取 Docker 镜像 → 应用 test patch → 应用 code patch → 运行测试 → parser 解析 → scoring。返回与 swebench 评估器兼容的 dict |
 | **实例加载器** | `src/data/instance_loader.py` | 根据 `dataset` / `dataset_type` / `language_filter` 从 SWE-bench（Verified/Pro）或 PolyBench 加载实例元数据。PolyBench 模式支持字段规范化（CamelCase → snake_case）和语言过滤 |
 
@@ -326,7 +329,9 @@ TestResults = dict[str, Any]  # {resolved: bool, stdout: str, stderr: str, log_d
 | `src/agents/code_agent.py` | 同上，使用 `code_generation_prompt` | `mini-swe-agent` |
 | `src/agents/reflect_agent.py` | 复用 `DefaultAgent` + `DockerEnvironment`，`feedback_text` 通过 system prompt 注入，Agent 在容器内可探索代码库但无法访问 trajectory 文件 | `mini-swe-agent` |
 | `src/environment/docker_env.py` | 封装 `DockerEnvironment`，代码库 rw 挂载，轮间隔离由独立容器保证 | `mini-swe-agent` |
-| `src/evaluator/swe_evaluator.py` | 多数据集评估路由（swebench / Pro / PolyBench） | `swebench`, `poly-bench-evaluation` |
+| `src/evaluator/swe_evaluator.py` | 本地 Docker 多数据集评估路由（swebench / Pro / PolyBench） | `swebench`, `poly-bench-evaluation` |
+| `src/evaluator/runtime_evaluator.py` | Online rollout evaluator backend 分发 | project |
+| `src/evaluator/swe_apptainer_evaluator.py` | Online HPC 标准 SWE-bench/Verified Apptainer evaluator；复用官方 test spec 和 grading | `swebench`, `apptainer` |
 | `src/evaluator/polybench_evaluator.py` | PolyBench 官方评估封装（DockerManager + parser + scoring） | `poly-bench-evaluation`, `docker` |
 | `src/output/writer.py` | JSON/文件 IO | 标准库 |
 | `src/output/trajectory.py` | 元数据附加 + JSON 写出 | 标准库 |

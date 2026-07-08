@@ -75,10 +75,11 @@ CPU 等效资源重新计算使用量。参考官方说明：
 仍然保留的 Linux 相关约束：
 
 - **Iris 计算节点不提供 Docker CLI/daemon**，已确认可用模块为 `tools/Apptainer`
-  （Apptainer 1.4.0）。GEPA 规则优化 pilot 已完成 Apptainer 迁移；PCT/PCC/SWE-bench
-  官方 evaluator 仍依赖 Docker，暂不能直接在 Iris 上运行。Online GEPA HPC
-  的新增 worker/executor 先把 rollout task 拆分、记录和 Slurm array 生成打通；
-  真实大规模运行前仍需要用 worker-only pilot 验证 Apptainer evaluator 路径。
+  （Apptainer 1.4.0）。GEPA 规则优化 pilot 已完成 Apptainer 迁移。官方
+  SWE-bench evaluator 仍是 Docker API 实现；本项目为 Online GEPA 的标准
+  SWE-bench/Verified 路径新增了 `swebench_apptainer` evaluator backend，复用
+  官方 test spec 与 grading，只替换容器执行层。真实大规模运行前仍需要用
+  worker-only pilot 验证该 backend。
 - `mini-swe` conda 环境在计算节点不可用；GEPA HPC 作业改为 `module load
   lang/Python/3.11 tools/Apptainer` 后使用系统 `python3`，并通过
   `python3 -m pip install --user -e third_party/gepa` 安装 vendored GEPA。
@@ -140,10 +141,11 @@ bash scripts/hpc_smoke_check.sh \
 
 真实 ULHPC smoke 结果：SSH、rsync、Slurm 提交、排队、调度执行和 Python
 依赖导入均已通过；Iris 计算节点没有可用 Docker daemon，但可用
-`tools/Apptainer`。因此 GEPA 规则优化已走 Apptainer backend；完整
-PCT/PCC/SWE-bench evaluator 仍不能直接复用当前 Docker-based evaluator，需要
-后续设计 Apptainer/Singularity 兼容路径或申请 Docker-enabled/rootless Docker
-资源。
+`tools/Apptainer`。因此 GEPA 规则优化已走 Apptainer backend；Online GEPA 的
+标准 SWE-bench/Verified rollout 已新增 `swebench_apptainer` evaluator backend。
+完整 PCT/PCC、Pro 和 PolyBench 仍不能直接复用当前 Docker-based evaluator，
+需要后续设计对应 Apptainer/Singularity 兼容路径或申请 Docker-enabled/rootless
+Docker 资源。
 
 约定：`scripts/hpc_smoke_check.sh` 的默认 dry-run 会保留 `ulhpc-submit` 的 SSH
 连通性检查，但加上 `--no-sync`，避免实际同步代码或提交 Slurm job。需要同时检查
@@ -705,8 +707,9 @@ HPC Online GEPA 应采用 agent phase 级隔离，而不是每条命令隔离：
 2. 在本地或允许构建镜像的机器上选 1 个已知 Docker 镜像转 `.sif`，上传到远端，
    验证 `apptainer exec --bind "$PWD:/workspace" --writable-tmpfs image.sif`
    能运行 Python、读写工作目录和执行目标测试命令。
-3. 只为一个最小 evaluator 实现 Apptainer backend：把“创建容器、应用 patch、
-   执行测试、收集日志”的生命周期改成 `apptainer exec` + 临时工作目录/overlay。
+3. 使用 Online GEPA 的 `swebench_apptainer` backend 验证标准
+   SWE-bench/Verified evaluator 生命周期：创建干净工作区、应用 patch、执行测试、
+   收集日志和官方 grading。
 4. 通过 1-2 个实例 pilot 比较结果、wall time、临时目录大小、`.sif` 缓存命中和
    并发冲突，再决定是否扩大到 GEPA pilot。
 
@@ -866,22 +869,40 @@ output/SWE-bench_Verified/gepa-rules/reflection-smoke-empty-seed-apptainer
 4. 恢复后的运行继续完成剩余 metric calls，最终输出完整 `result.json`，未重复
    已完成的初始 metric calls。
 
-### 7.4 其它 evaluator 的 Docker 依赖（仍未解决）
+### 7.4 Evaluator backend 状态
 
-GEPA 之所以能快速迁移，是因为它只使用 benchmark image 做 Checker 的只读仓库
-环境和 Reflection 的轻量 Python 容器，不依赖 Docker daemon 的生命周期 API。
+GEPA strict Checker 之所以能快速迁移，是因为它只使用 benchmark image 做
+Checker 的只读仓库环境和 Reflection 的轻量 Python 容器，不依赖 Docker daemon
+的生命周期 API。
+
+Online GEPA 的标准 SWE-bench/Verified 路径现在使用配置驱动 evaluator：
+
+```yaml
+container:
+  runtime: apptainer
+
+evaluator:
+  backend: swebench_apptainer
+```
+
+`swebench_apptainer` 复用官方 SWE-bench `make_test_spec()` 和
+`get_eval_report()`，项目侧只实现 Apptainer 容器执行：初始化 clean
+`/testbed`、应用 patch、运行 eval script、收集 `test_output.txt` 和
+`report.json`。HPC online 配置禁止使用 `swebench_docker`，避免在无 Docker
+daemon 的 Iris 节点上隐式失败。
 
 以下路径仍直接依赖 Docker daemon，暂不能直接在 Iris 上运行：
 
 - `src/evaluator/swe_evaluator.py` 调用 `swebench.harness.run_evaluation` 的
-  Docker client / `run_instance`。
+  Docker client / `run_instance`。这是本地 Docker backend，不是 HPC online
+  backend。
 - `src/evaluator/polybench_evaluator.py` 使用
   `poly_bench_evaluation.docker_utils.DockerManager`。
 - `src/evaluator/pro_official_evaluator.py` 调用 SWE-bench Pro 官方
   `eval_with_docker`。
 
-若未来要在 HPC 上跑完整 PCT/PCC/checker-only，需要为它们单独设计 Apptainer
-backend，或申请到支持 Docker/Podman 的计算资源。`ulhpc-submit --container PATH`
+若未来要在 HPC 上跑完整 PCT/PCC、Pro 或 PolyBench，需要为它们单独设计
+Apptainer backend，或申请到支持 Docker/Podman 的计算资源。`ulhpc-submit --container PATH`
 只能把最外层命令包进一个 Apptainer 容器，不会让容器内部的 `docker` CLI / Docker
 SDK 自动转成 Apptainer 调用。
 
@@ -912,7 +933,9 @@ SDK 自动转成 Apptainer 调用。
 - [x] 补充 bind mount、`--writable-tmpfs`、本地 `.sif` 文件和一个真实
       SWE-bench image 的执行 smoke。
 - [x] 为 GEPA 设计并实现 Apptainer backend（`src/environment/apptainer_env.py`），
-      PCT/PCC/SWE-bench/PolyBench/Pro 的 Docker-native evaluator 仍待后续评估。
+      并为 Online GEPA 的标准 SWE-bench/Verified 路径实现
+      `swebench_apptainer` evaluator。完整 PCT/PCC、PolyBench 和 Pro 的
+      Docker-native evaluator 仍待后续评估。
 - [x] 明确 HPC 侧 Apptainer SIF 缓存目录：`container.sif_cache_dir`，并提供
       `scripts/tools/prepare_apptainer_sifs.py` 预拉脚本；Docker Hub/GHCR 登录
       对当前公开 SWE-bench image 暂不需要。

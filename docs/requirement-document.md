@@ -328,12 +328,12 @@ GEPA reflection、候选报告和后续 prompt 调整完成。
 |------|------|
 | ID | FR-17 |
 | 名称 | HPC submit 批处理运行入口 |
-| 状态 | GEPA 路径已实现；PCT/PCC Docker-native 路径待后续设计 |
+| 状态 | GEPA 路径已实现；Online GEPA 的标准 SWE-bench/Verified Apptainer evaluator 已实现；完整 PCT/PCC、Pro 和 PolyBench Docker-native 路径待后续设计 |
 | 描述 | 提供一个类似 `scripts/run_batch.sh` 的本地包装脚本，调用相邻项目 `../../hpc_submit` 安装后的 `ulhpc-submit` CLI。`ulhpc-submit` 负责代码同步、数据 staging、持久 run_dir symlink、Slurm job script 生成、`sbatch` 提交和日志路径记录；当前 GEPA job 在远端 Linux 节点加载 `lang/Python/3.11` 与 `tools/Apptainer`，调用 `scripts/internal/run_gepa_rules.py` 执行规则优化 |
 | 输入 | 本地代码仓库、配置文件、可选实例列表、batch_id/run_dir、并发度、HPC 作业资源参数（job name、wall time、CPU、内存等） |
 | 输出 | HPC 作业 ID、本地/远端作业日志、远端 `logs/` 与 `output/` 产物；作业失败时保留可诊断日志和已完成实例结果 |
 | 关键约束 | 1）HPC 包装层不得复制 PCT/PCC/checker/analysis/GEPA 业务逻辑；2）远端实际执行入口仍为现有脚本；3）不使用 `caffeinate`；4）默认不依赖 tmux/watchdog；5）密钥通过本地/HPC 环境注入，不写入 git 文件或命令日志；6）包装层不得重复实现 `ulhpc-submit` 已提供的 SSH、rsync、Slurm 监控和日志回传能力 |
-| 前置 smoke | `scripts/hpc_smoke_check.sh` 验证 `ulhpc-submit` 调用链路、ULHPC SSH 连通性、Slurm 提交、远端 Python 依赖和容器能力。Iris 计算节点没有 Docker daemon；当前 GEPA 路径使用 Apptainer，PCT/PCC/SWE-bench evaluator 的 Docker-native 路径仍待后续设计。默认 dry-run 会检查 SSH 连通性但不提交 Slurm job；只有 `--submit` 才提交 Slurm job |
+| 前置 smoke | `scripts/hpc_smoke_check.sh` 验证 `ulhpc-submit` 调用链路、ULHPC SSH 连通性、Slurm 提交、远端 Python 依赖和容器能力。Iris 计算节点没有 Docker daemon；当前 GEPA 路径使用 Apptainer，Online GEPA 的标准 SWE-bench/Verified evaluator 使用 `swebench_apptainer`，完整 PCT/PCC、Pro 和 PolyBench 的 Docker-native 路径仍待后续设计。默认 dry-run 会检查 SSH 连通性但不提交 Slurm job；只有 `--submit` 才提交 Slurm job |
 | 恢复策略 | PCT/PCC 依赖 `run_batch.sh` 的已有 `result.json` skip 语义；GEPA 依赖 `run_manifest.json`、`gepa_resume_state.json` 和官方 `gepa_state.bin`；wall time 用尽或 transient failure 后可重新提交同一逻辑实验 |
 | 验收标准 | 1）smoke 脚本能明确区分 dry-run 与真实 submit；2）dry-run smoke 能验证 ULHPC SSH 连通性且不提交 Slurm job；3）GEPA wrapper dry-run 能打印 `--stage-data`、`--persistent-output`、module Python/Apptainer cache 和远端执行命令；4）真实 GEPA smoke job 能在 HPC 上完成 Apptainer 容器启动、Checker/Reflection 调用和标准 output 生成；5）wall time 或 transient failure 后重新提交同一 persistent run_dir 可恢复 GEPA；6）作业日志包含 env 检查、git/code snapshot 标识、实际执行命令和返回码；7）文档明确本地文件同步、远端工作目录、Apptainer/SIF 缓存和密钥注入方式 |
 | 设计文档 | [`docs/hpc-submit.md`](hpc-submit.md) |

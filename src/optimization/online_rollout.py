@@ -18,7 +18,8 @@ from src.config import (
 from src.data.instance_loader import InstanceLoader
 from src.environment.apptainer_env import ApptainerEnvironment
 from src.environment.docker_env import DockerCapacityWindow, DockerEnvWrapper
-from src.evaluator.swe_evaluator import derive_image_name, evaluate
+from src.evaluator.runtime_evaluator import evaluate_online_patch
+from src.evaluator.swe_evaluator import derive_image_name
 from src.optimization.audit import AuditedModel, JsonlLogger, text_sha256
 from src.optimization.online_config import OnlineOptimizationConfig
 from src.optimization.online_models import OnlineGEPACase, OnlineRolloutOutput
@@ -193,10 +194,28 @@ class OnlinePCTRolloutRunner:
             finally:
                 self._stop_environment(code_env)
 
-            evaluator_result = evaluate(
+            eval_workdir = self._phase_workdir(
+                instance_info["instance_id"],
+                candidate_sha256,
+                "eval",
+            )
+            self.audit.write(
+                "online_evaluator_started",
+                instance_id=case.instance_id,
+                candidate_sha256=candidate_sha256,
+                backend=self.config.evaluator.backend,
+                container_runtime=self.config.container.runtime,
+                receives_candidate_rules=False,
+                receives_plan_trajectory=False,
+                receives_code_trajectory=False,
+                receives_patch=True,
+            )
+            evaluator_result = evaluate_online_patch(
                 patch,
                 instance_info,
-                timeout=self.config.evaluator_timeout,
+                config=self.config,
+                capacity_window=self.capacity_window,
+                phase_workdir=eval_workdir,
                 run_id_suffix="_online_gepa",
             )
         except Exception as exc:

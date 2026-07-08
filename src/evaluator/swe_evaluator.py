@@ -264,6 +264,8 @@ def evaluate(
     # error_info is non-null when evaluation did not complete successfully
     error_info: str | None = None
     if not result.get("completed", True):
+        if stderr_text and "completed=False" not in stderr_text:
+            stderr_text = f"SWE evaluation completed=False: {stderr_text}"
         error_info = stderr_text if stderr_text else "SWE evaluation completed=False"
 
     return {

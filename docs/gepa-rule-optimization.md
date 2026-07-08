@@ -735,7 +735,15 @@ Online GEPA 使用独立实验入口，而不是改写当前 offline 主线：
   issue/repository/split，不加载历史 plan、resolved 或 ASI。
 - `src/optimization/online_adapter.py`：把 GEPA candidate 映射为一次 PCT rollout。
 - `src/optimization/online_rollout.py`：执行单个 current Plan-Code-Test rollout。
-  本地使用 Docker；HPC worker 可使用 Apptainer/SIF backend。
+  本地使用 Docker；HPC worker 使用 Apptainer/SIF backend。Plan、Code 和
+  Evaluator phase 各自隔离，phase 之间只传显式 artifact。
+- `src/evaluator/runtime_evaluator.py`：根据 online config 选择 evaluator
+  backend。本地默认 `swebench_docker`，HPC/Apptainer 默认
+  `swebench_apptainer`。
+- `src/evaluator/swe_apptainer_evaluator.py`：标准 SWE-bench/Verified 的
+  Apptainer evaluator backend。它复用官方 `make_test_spec()` 和
+  `get_eval_report()`，只替换 Docker container 执行层；Pro 和 PolyBench 不走
+  该 backend。
 - `src/optimization/online_rollout_worker.py`：无状态 worker CLI。输入一个
   `candidate rules + instance` task manifest，输出一个 rollout JSON。它不持有
   GEPA search state。
@@ -804,10 +812,24 @@ FairShare 默认资源必须保守。ULHPC `batch` 分区按约 `4G × CPU` 的�
    task directory 的环境运行。
 4. 本地 Mac controller 到 ULHPC 的自动 rsync/remote `sbatch` 提交流程仍应作为
    后续 wrapper 层实现，不应塞入 GEPA adapter 核心。
-5. Apptainer rollout 已开始迁移到 agent phase 隔离：Plan phase 和 Code phase
-   分别启动环境；Code phase 使用独立 host workdir bind 到 `/testbed`，以保留
-   同一 Code Agent 内多步命令产生的源码修改。Evaluator phase 仍需后续迁移到
-   clean-container + patch artifact 的 Apptainer backend。
+5. Apptainer rollout 使用 agent phase 隔离：Plan phase、Code phase 和
+   Evaluator phase 分别启动环境；Code/Evaluator phase 使用独立 host workdir
+   bind 到 `/testbed`，以保留同一 phase 内多步命令产生的源码修改。Evaluator
+   phase 通过 `swebench_apptainer` backend 在 clean base repo 上应用当前 patch
+   并运行官方 test spec。
+
+配置约束：
+
+```yaml
+container:
+  runtime: apptainer
+
+evaluator:
+  backend: swebench_apptainer
+```
+
+`execution.backend: hpc_slurm` 不允许使用 `evaluator.backend: swebench_docker`。
+`container.runtime: apptainer` 也不允许隐式 fallback 到 Docker evaluator。
 
 ### 11.5 Online HPC 的 agent 级隔离语义
 
@@ -857,8 +879,8 @@ apptainer exec --writable-tmpfs <sif> bash -lc 'cd /testbed && test -f marker'
 => TESTBED_NOT_PERSISTED
 ```
 
-因此，Online HPC 的 Apptainer backend 需要提供 **phase 内 stateful execution**。
-可接受实现包括：
+因此，Online HPC 的 Apptainer backend 提供 **phase 内 stateful execution**。
+当前实现使用 per-phase host workdir bind 到 `/testbed`。可接受替代实现包括：
 
 1. 每个 phase 创建独立 persistent overlay，并在该 phase 的每次
    `apptainer exec` 中复用同一个 overlay。
@@ -867,8 +889,7 @@ apptainer exec --writable-tmpfs <sif> bash -lc 'cd /testbed && test -f marker'
 3. 每个 phase 使用独立 Apptainer instance 或 sandbox，但必须避免多个 worker
    共享同一个可写层。
 
-推荐首版使用 per-phase overlay 或 per-phase worktree。无论选择哪种实现，都必须
-满足相同后端合同：
+无论选择哪种实现，都必须满足相同后端合同：
 
 - `execute()` 在同一个 phase 内多次调用时，`/testbed` 文件修改必须持久。
 - phase 结束时，从该 phase 的可写状态中收集唯一允许的输出 artifact。

@@ -29,6 +29,7 @@ from src.optimization.models import CheckerOutput, GEPACase, RepositoryRef
 from src.optimization.online_adapter import OnlinePlanningGEPAAdapter
 from src.optimization.online_config import (
     OnlineDatasetConfig,
+    OnlineEvaluatorConfig,
     OnlineExecutionConfig,
     OnlineHPCConfig,
     OnlineOptimizationConfig,
@@ -182,7 +183,7 @@ def _online_config(tmp_path: Path) -> OnlineOptimizationConfig:
         reflection_prompt="online reflection",
         reflection_instance_template="{{current_rules}} {{evidence_path}}",
         nrpv_block="NRPV",
-        evaluator_timeout=10,
+        evaluator=OnlineEvaluatorConfig(timeout=10),
     )
 
 
@@ -279,6 +280,7 @@ evaluator:
     assert loaded.code.model == "deepseek-v4-flash"
     assert "{{planning_rules}}" in loaded.plan_instance_template
     assert loaded.evaluator_timeout == 10
+    assert loaded.evaluator.backend == "swebench_docker"
     assert loaded.execution.backend == "local_docker"
     assert loaded.hpc.cpus_per_task == 1
     assert loaded.hpc.mem == "4G"
@@ -345,6 +347,7 @@ evaluator: {}
 
     assert loaded.execution.backend == "hpc_slurm"
     assert loaded.container.runtime == "apptainer"
+    assert loaded.evaluator.backend == "swebench_apptainer"
     assert str(loaded.container.sif_cache_dir) == "/scratch/project/sif-cache"
     assert loaded.hpc.submit is False
     assert loaded.hpc.cpus_per_task == 1
@@ -380,6 +383,8 @@ reflection:
 search:
   max_metric_calls: 2
 docker: {}
+container:
+  runtime: apptainer
 execution:
   backend: hpc_slurm
 hpc:
@@ -400,6 +405,55 @@ evaluator: {}
     loaded = load_online_optimization_config(config)
 
     assert loaded.hpc.max_running_array_tasks == 7
+    assert loaded.evaluator.backend == "swebench_apptainer"
+
+
+def test_online_hpc_config_rejects_docker_evaluator(tmp_path, monkeypatch):
+    monkeypatch.setenv("TEST_KEY", "secret")
+    config = tmp_path / "online-hpc-docker-eval.yaml"
+    config.write_text(
+        """
+mode: online_planning
+paths:
+  dataset_snapshot: snapshot
+  initial_rules: rules.txt
+  run_dir: run
+dataset: {}
+plan:
+  model: deepseek-v4-flash
+  api_base: https://api.deepseek.com
+  api_key_env: TEST_KEY
+code:
+  model: deepseek-v4-flash
+  api_base: https://api.deepseek.com
+  api_key_env: TEST_KEY
+reflection:
+  model: deepseek-v4-flash
+  api_base: https://api.deepseek.com
+  api_key_env: TEST_KEY
+search:
+  max_metric_calls: 2
+docker: {}
+container:
+  runtime: apptainer
+execution:
+  backend: hpc_slurm
+prompts:
+  plan_system: strict plan
+  plan_instance: <planning_rules>{{planning_rules}}</planning_rules>{{task}}
+  code_system: code {{plan}}
+  code_instance: code {{task}}
+  reflection_system: reflect
+  reflection_instance: reflect {{current_rules}} {{evidence_path}}
+  nrpv_block: nrpv
+evaluator:
+  backend: swebench_docker
+""",
+        encoding="utf-8",
+    )
+
+    with pytest.raises(ValueError, match="must not use evaluator.backend"):
+        load_online_optimization_config(config)
 
 
 def test_online_smoke_pilot_config_is_small_and_auditable():
@@ -556,8 +610,8 @@ def test_online_rollout_audit_records_design_boundaries(tmp_path, monkeypatch):
     monkeypatch.setattr("src.optimization.online_rollout.plan_agent.run", fake_plan_run)
     monkeypatch.setattr("src.optimization.online_rollout.code_agent.run", fake_code_run)
     monkeypatch.setattr(
-        "src.optimization.online_rollout.evaluate",
-        lambda patch, instance_info, timeout, run_id_suffix: {
+        "src.optimization.online_rollout.evaluate_online_patch",
+        lambda patch, instance_info, config, capacity_window, phase_workdir, run_id_suffix: {
             "resolved": True,
             "stdout": "ok",
         },
@@ -610,6 +664,10 @@ def test_online_rollout_apptainer_uses_separate_plan_and_code_phases(
             runtime="apptainer",
             sif_cache_dir=tmp_path / "sifs",
         ),
+        evaluator=OnlineEvaluatorConfig(
+            timeout=config.evaluator.timeout,
+            backend="swebench_apptainer",
+        ),
     )
     case = load_online_snapshot(config.dataset_snapshot)[0][0]
     monkeypatch.setenv("TEST_API_KEY", "secret")
@@ -655,8 +713,10 @@ def test_online_rollout_apptainer_uses_separate_plan_and_code_phases(
         ),
     )
     monkeypatch.setattr(
-        "src.optimization.online_rollout.evaluate",
-        lambda patch, instance_info, timeout, run_id_suffix: {"resolved": True},
+        "src.optimization.online_rollout.evaluate_online_patch",
+        lambda patch, instance_info, config, capacity_window, phase_workdir, run_id_suffix: {
+            "resolved": True
+        },
     )
 
     OnlinePCTRolloutRunner(config, _FakeCapacityWindow())(
@@ -681,7 +741,14 @@ def test_online_rollout_apptainer_uses_separate_plan_and_code_phases(
         for record in audit
         if record["event"] == "online_phase_workspace_prepared"
     ]
-    assert [event["phase"] for event in workspace_events] == ["code"]
+    assert [event["phase"] for event in workspace_events] == ["code", "eval"]
+    evaluator_events = [
+        record for record in audit if record["event"] == "online_evaluator_started"
+    ]
+    assert evaluator_events[0]["backend"] == "swebench_apptainer"
+    assert evaluator_events[0]["container_runtime"] == "apptainer"
+    assert evaluator_events[0]["receives_candidate_rules"] is False
+    assert evaluator_events[0]["receives_patch"] is True
 
 
 def test_config_requires_zero_checker_temperature(tmp_path, monkeypatch):

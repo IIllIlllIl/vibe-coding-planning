@@ -28,6 +28,12 @@ class OnlineExecutionConfig:
 
 
 @dataclass(frozen=True)
+class OnlineEvaluatorConfig:
+    timeout: int = 1800
+    backend: str = "swebench_docker"
+
+
+@dataclass(frozen=True)
 class OnlineHPCConfig:
     """ULHPC job-array settings for online rollout workers.
 
@@ -77,7 +83,11 @@ class OnlineOptimizationConfig:
     reflection_prompt: str
     reflection_instance_template: str
     nrpv_block: str
-    evaluator_timeout: int
+    evaluator: OnlineEvaluatorConfig
+
+    @property
+    def evaluator_timeout(self) -> int:
+        return self.evaluator.timeout
 
 
 def _default_hpc_root() -> str:
@@ -207,6 +217,36 @@ def load_online_optimization_config(
             "execution.backend must be 'local_docker' or 'hpc_slurm', "
             f"got {execution.backend!r}"
         )
+    evaluator = OnlineEvaluatorConfig(
+        timeout=int(evaluator_data.get("timeout", 1800)),
+        backend=str(
+            evaluator_data.get(
+                "backend",
+                "swebench_apptainer"
+                if container.runtime == "apptainer"
+                else "swebench_docker",
+            )
+        ),
+    )
+    if evaluator.backend not in ("swebench_docker", "swebench_apptainer"):
+        raise ValueError(
+            "evaluator.backend must be 'swebench_docker' or "
+            f"'swebench_apptainer', got {evaluator.backend!r}"
+        )
+    if execution.backend == "hpc_slurm" and evaluator.backend == "swebench_docker":
+        raise ValueError(
+            "online HPC Slurm execution must not use evaluator.backend "
+            "'swebench_docker'; use 'swebench_apptainer'"
+        )
+    if container.runtime == "docker" and evaluator.backend == "swebench_apptainer":
+        raise ValueError(
+            "evaluator.backend 'swebench_apptainer' requires "
+            "container.runtime: apptainer"
+        )
+    if container.runtime == "apptainer" and evaluator.backend == "swebench_docker":
+        raise ValueError(
+            "container.runtime: apptainer must not use Docker evaluator backend"
+        )
     hpc_defaults = OnlineHPCConfig()
     try:
         default_worker_config_path = str(config_path.relative_to(root))
@@ -309,5 +349,5 @@ def load_online_optimization_config(
         reflection_prompt=str(prompts["reflection_system"]),
         reflection_instance_template=str(prompts["reflection_instance"]),
         nrpv_block=str(prompts["nrpv_block"]),
-        evaluator_timeout=int(evaluator_data.get("timeout", 1800)),
+        evaluator=evaluator,
     )

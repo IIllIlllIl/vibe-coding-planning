@@ -65,6 +65,7 @@ container:
   runtime: docker
 
 evaluator:
+  backend: swebench_docker
   timeout: 1800
 
 prompts:

@@ -32,7 +32,8 @@
 
 ## 2. Online GEPA planning 规则生成设计
 
-- **状态**：实验链路已实现；HPC Apptainer agent 级隔离语义待改造
+- **状态**：实验链路已实现；HPC Apptainer agent 级隔离与标准 SWE-bench
+  evaluator backend 正在补齐
 - **背景**：当前 GEPA 主线是 offline classifier：候选规则进入固定 Checker，
   通过历史 Round 1 `resolved` 标签学习如何判断已有 plan。新设想是把候选规则
   作为 strict planning checklist 注入 Plan Agent 的 user prompt，直接运行
@@ -52,7 +53,7 @@
   3. Reflection evidence 如何摘要 Plan trajectory、Code trajectory、patch 和
      evaluator result，并明确区分规则问题、Code Agent 执行偏离和基础设施噪声。
   4. 第一版 pilot 的 train/validation 规模、预算和本地/HPC 运行环境。
-  5. HPC 版本如何实现 agent 级隔离：每个 Plan / Code / Evaluator phase 使用
+  5. HPC 版本如何验证 agent 级隔离：每个 Plan / Code / Evaluator phase 使用
      独立容器状态，但同一个 Code Agent phase 内的多步 `execute()` 必须共享
      可写 `/testbed`，否则无法生成 patch。
   6. Online dataset loader 如何只提取 `instance_id`、issue、repository/base commit
@@ -62,10 +63,11 @@
   - 已新增独立 `online_adapter` / `online_runner` / pilot config，不替换当前
     offline GEPA 主线。
   - 2026-07-07 online HPC resource pilot 的 `Code agent produced empty output`
-    不是规则质量结论；当前最可能根因是 Apptainer backend 每次 `execute()` 都用
-    新的 `apptainer exec --writable-tmpfs`，`/testbed` 修改不会跨命令保留。
-    后续应按 `docs/gepa-rule-optimization.md` 第 11.5 节改造成 phase 内
-    stateful、phase 间 artifact-only 的 agent 级隔离。
+    不是规则质量结论；根因是 Apptainer backend 每次 `execute()` 都用新的
+    `apptainer exec --writable-tmpfs`，`/testbed` 修改不会跨命令保留。当前
+    online rollout 已按 `docs/gepa-rule-optimization.md` 第 11.5 节改造成
+    phase 内 stateful、phase 间 artifact-only 的 agent 级隔离，并新增标准
+    SWE-bench/Verified 的 Apptainer evaluator backend。
   - 详细设计记录在 `docs/gepa-rule-optimization.md` 第 11 节。
 
 ---
@@ -120,22 +122,24 @@
 
 ## 4. HPC 上 GEPA 之外的 PCT/PCC/SWE-bench/PolyBench 可行路径
 
-- **状态**：待设计；Online GEPA 需要优先实现最小可用 Apptainer PCT phase backend
+- **状态**：部分实现；Online GEPA 的标准 SWE-bench/Verified Apptainer rollout
+  路径已补齐，完整 PCT/PCC、Pro 和 PolyBench 迁移仍待设计
 - **背景**：GEPA Checker/Reflection 已有 Apptainer backend，但项目中其他流程仍有
   Docker-native 假设，尤其是 SWE-bench / PolyBench / evaluator harness。
 - **需要决策**：
-  1. 是否只支持 GEPA Checker/Reflection 在 HPC 上运行，还是继续扩展完整 PCT/PCC 到 Apptainer。
-  2. 若要支持完整 PCT/PCC，是实现项目级 Apptainer evaluator backend，还是申请 Docker-enabled/rootless Docker 资源。
-  3. Online GEPA 是否先实现最小三阶段 Apptainer backend：
-     Plan phase、Code phase、Evaluator phase 各自隔离；phase 之间只传
-     `plan.md`、`generated.patch`、`evaluator_result.json` 和 trajectories。
+  1. 是否继续把完整 PCT/PCC 迁移到 Apptainer，还是只让 Online GEPA 先使用
+     Apptainer rollout。
+  2. Pro / PolyBench 是否实现各自的 Apptainer evaluator backend，还是申请
+     Docker-enabled/rootless Docker 资源。
+  3. Online GEPA 的标准 SWE-bench/Verified Apptainer evaluator backend 在真实
+     pilot 中是否与本地 Docker evaluator 结果一致。
   4. PolyBench 实例 ID、语言名、镜像 tag 和大小写敏感文件系统之间是否需要统一规范化。
   5. 旧 `run_batch.sh` / watchdog 中的 macOS conda 路径、tmux、caffeinate 等本地长跑逻辑是否还需要维护 HPC 兼容性。
 - **当前判断**：
   - 当前 strict GEPA run 不依赖完整 PCT/PCC evaluator。
-  - Offline strict GEPA 不应阻塞在 Docker-native pipeline 迁移上；但 Online GEPA
-    的 HPC pilot 需要先补齐最小 agent-level Apptainer rollout backend，否则
-    Code Agent 无法可靠产出 patch，Evaluator 也无法验证 preheated SIF 是否可用。
+  - Offline strict GEPA 不应阻塞在 Docker-native pipeline 迁移上；Online GEPA
+    HPC pilot 应优先验证新增的 agent-level Apptainer rollout 和
+    `swebench_apptainer` evaluator backend。
 
 ---
 

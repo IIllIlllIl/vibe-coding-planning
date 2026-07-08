@@ -90,6 +90,7 @@ hpc:
   worker_config_path: configs/gepa_online_planning_hpc_resource_pilot_20260706.yaml
 
 evaluator:
+  backend: swebench_apptainer
   timeout: 1800
 
 prompts:

@@ -2,12 +2,15 @@
 
 import json as json_mod
 from pathlib import Path
+from types import SimpleNamespace
 from unittest.mock import patch
 
 import pytest
 
+from src.evaluator.swe_apptainer_evaluator import evaluate_apptainer
 from src.evaluator import swe_evaluator
 from src.exceptions import FatalError
+from src.optimization.config import ContainerConfig
 
 
 @pytest.fixture
@@ -256,6 +259,72 @@ class TestEvaluateReport:
                 result = swe_evaluator.evaluate("diff", instance_info)
 
                 assert result["resolved"] is True
+
+
+class TestEvaluateApptainer:
+    @patch("src.evaluator.swe_apptainer_evaluator.ApptainerEnvironment")
+    @patch("swebench.harness.grading.get_eval_report")
+    @patch("swebench.harness.test_spec.test_spec.make_test_spec")
+    def test_reuses_official_spec_and_grading(
+        self,
+        mock_make_spec,
+        mock_get_report,
+        mock_env_cls,
+        tmp_path,
+        instance_info,
+    ):
+        commands = []
+        mock_make_spec.return_value = SimpleNamespace(eval_script="echo tests")
+        mock_get_report.return_value = {
+            "astropy__astropy-14539": {"resolved": True, "error": ""}
+        }
+
+        class FakeEnv:
+            def execute(self, command, cwd="", *, timeout=None):
+                commands.append(command)
+                if "git apply --verbose .vibe_patch.diff" in command:
+                    return {"returncode": 0, "output": "applied"}
+                return {"returncode": 0, "output": "test output"}
+
+            def cleanup(self):
+                commands.append("cleanup")
+
+        mock_env_cls.return_value = FakeEnv()
+
+        result = evaluate_apptainer(
+            "diff --git a/a.py b/a.py\n",
+            instance_info,
+            container=ContainerConfig(
+                runtime="apptainer",
+                sif_cache_dir=tmp_path / "sifs",
+            ),
+            capacity_window=object(),
+            phase_workdir=tmp_path / "eval-workdir",
+            timeout=123,
+        )
+
+        assert result["resolved"] is True
+        assert result["stdout"] == "test output"
+        mock_make_spec.assert_called_once_with(instance_info, namespace="swebench")
+        mock_get_report.assert_called_once()
+        assert any(".vibe_patch.diff" in command for command in commands)
+        assert any("/bin/bash .vibe_eval.sh" in command for command in commands)
+        assert commands[-1] == "cleanup"
+
+    def test_rejects_non_standard_datasets(self, tmp_path, instance_info):
+        info = {**instance_info, "dataset_type": "polybench"}
+
+        with pytest.raises(FatalError, match="standard SWE-bench/Verified"):
+            evaluate_apptainer(
+                "diff",
+                info,
+                container=ContainerConfig(
+                    runtime="apptainer",
+                    sif_cache_dir=tmp_path / "sifs",
+                ),
+                capacity_window=object(),
+                phase_workdir=tmp_path / "eval-workdir",
+            )
 
 
 class TestPolybenchRouting:
