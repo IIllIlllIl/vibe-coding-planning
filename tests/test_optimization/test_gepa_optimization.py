@@ -40,7 +40,9 @@ from src.optimization.online_dataset import load_online_snapshot
 from src.optimization.online_hpc_executor import (
     HPCSlurmOnlineRolloutExecutor,
     OnlineRolloutBatchStore,
+    SlurmTaskStatus,
     build_slurm_array_script,
+    parse_slurm_duration,
 )
 from src.optimization.online_models import OnlineRolloutOutput
 from src.optimization.online_reflection import OnlinePlanningReflectionProposer
@@ -385,7 +387,13 @@ def test_online_hpc_6to8_config_uses_formal_snapshot_without_instance_subset(
     assert config.hpc.cpus_per_task == 1
     assert config.hpc.mem == "4G"
     assert config.hpc.time == "00:40:00"
+    assert config.hpc.max_running_array_tasks == 150
+    assert config.hpc.task_output_grace_seconds == 300
+    assert config.hpc.missing_task_grace_seconds == 600
     assert config.hpc.max_task_attempts == 2
+    assert config.search.max_metric_calls == 1000
+    assert config.search.projection_metric_calls == 1000
+    assert config.search.reflection_minibatch_size == 3
 
 
 def test_online_config_accepts_legacy_array_concurrency(tmp_path, monkeypatch):
@@ -1559,6 +1567,300 @@ def test_online_hpc_executor_retries_failed_worker_outputs(tmp_path, monkeypatch
     usage = json.loads((batch_dir / "resource_usage.json").read_text())
     assert done["retry_job_ids"] == ["12342"]
     assert usage["retry_job_ids"] == ["12342"]
+
+
+def test_parse_slurm_duration_supports_common_formats():
+    assert parse_slurm_duration("02:03") == 123
+    assert parse_slurm_duration("01:02:03") == 3723
+    assert parse_slurm_duration("2-01:02:03") == 176523
+    assert parse_slurm_duration("Unknown") is None
+
+
+def test_online_hpc_wait_does_not_retry_pending_task(tmp_path, monkeypatch):
+    config = _online_config(tmp_path)
+    train, _ = load_online_snapshot(config.dataset_snapshot)
+    config = replace(
+        config,
+        execution=OnlineExecutionConfig(backend="hpc_slurm"),
+        hpc=replace(
+            config.hpc,
+            submit=True,
+            poll_interval_seconds=1,
+            max_task_attempts=2,
+        ),
+    )
+    submitted_scripts: list[Path] = []
+    sleep_calls = 0
+
+    def write_output(batch_dir: Path, index: int) -> None:
+        output_path = batch_dir / "outputs" / f"task_{index:04d}.json"
+        output_path.write_text(
+            json.dumps(
+                {
+                    "status": "completed",
+                    "instance_id": train[index].instance_id,
+                    "resolved": index == 0,
+                    "plan": f"plan {train[index].instance_id}",
+                    "patch": "patch",
+                    "plan_trajectory": [],
+                    "code_trajectory": [],
+                    "evaluator_result": {"resolved": index == 0},
+                    "attribution_hint": {"hpc": True},
+                }
+            ),
+            encoding="utf-8",
+        )
+
+    def fake_submitter(script_path):
+        submitted_scripts.append(script_path)
+        write_output(script_path.parent, 0)
+        return "12345"
+
+    def fake_sleep(_seconds):
+        nonlocal sleep_calls
+        sleep_calls += 1
+        write_output(submitted_scripts[0].parent, 1)
+
+    monkeypatch.setattr(
+        "src.optimization.online_hpc_executor.collect_slurm_resource_snapshot",
+        lambda job_id=None: {"ulhpcshare_stdout": "FairShare 0.9"},
+    )
+    monkeypatch.setattr(
+        "src.optimization.online_hpc_executor.query_slurm_task_status",
+        lambda job_id, task_index: SlurmTaskStatus("PENDING", 0),
+    )
+    executor = HPCSlurmOnlineRolloutExecutor(
+        config,
+        submitter=fake_submitter,
+        sleeper=fake_sleep,
+    )
+
+    outputs = executor.evaluate(train, "planning rules", capture_traces=True)
+
+    assert [output.plan for output in outputs] == [
+        f"plan {train[0].instance_id}",
+        f"plan {train[1].instance_id}",
+    ]
+    assert len(submitted_scripts) == 1
+    assert sleep_calls == 1
+
+
+def test_online_hpc_wait_retries_terminal_task_without_output(
+    tmp_path,
+    monkeypatch,
+):
+    config = _online_config(tmp_path)
+    train, _ = load_online_snapshot(config.dataset_snapshot)
+    config = replace(
+        config,
+        execution=OnlineExecutionConfig(backend="hpc_slurm"),
+        hpc=replace(
+            config.hpc,
+            submit=True,
+            max_task_attempts=2,
+            max_running_array_tasks=2,
+        ),
+    )
+    submitted_scripts: list[Path] = []
+
+    def write_output(batch_dir: Path, index: int) -> None:
+        output_path = batch_dir / "outputs" / f"task_{index:04d}.json"
+        output_path.write_text(
+            json.dumps(
+                {
+                    "status": "completed",
+                    "instance_id": train[index].instance_id,
+                    "resolved": index == 0,
+                    "plan": f"plan {train[index].instance_id}",
+                    "patch": "patch",
+                    "plan_trajectory": [],
+                    "code_trajectory": [],
+                    "evaluator_result": {"resolved": index == 0},
+                    "attribution_hint": {"hpc": True},
+                }
+            ),
+            encoding="utf-8",
+        )
+
+    def fake_submitter(script_path):
+        submitted_scripts.append(script_path)
+        if len(submitted_scripts) == 1:
+            write_output(script_path.parent, 0)
+        else:
+            write_output(script_path.parent, 1)
+        return str(12340 + len(submitted_scripts))
+
+    monkeypatch.setattr(
+        "src.optimization.online_hpc_executor.collect_slurm_resource_snapshot",
+        lambda job_id=None: {"ulhpcshare_stdout": "FairShare 0.9"},
+    )
+    monkeypatch.setattr(
+        "src.optimization.online_hpc_executor.query_slurm_task_status",
+        lambda job_id, task_index: SlurmTaskStatus("COMPLETED", 2400),
+    )
+    executor = HPCSlurmOnlineRolloutExecutor(
+        config,
+        submitter=fake_submitter,
+        sleeper=lambda seconds: None,
+    )
+
+    outputs = executor.evaluate(train, "planning rules", capture_traces=True)
+
+    assert [output.plan for output in outputs] == [
+        f"plan {train[0].instance_id}",
+        f"plan {train[1].instance_id}",
+    ]
+    assert len(submitted_scripts) == 2
+    retry_script = submitted_scripts[1].read_text(encoding="utf-8")
+    assert "#SBATCH --array=1%2" in retry_script
+
+
+def test_online_hpc_wait_does_not_retry_other_pending_tasks_early(
+    tmp_path,
+    monkeypatch,
+):
+    config = _online_config(tmp_path)
+    train, _ = load_online_snapshot(config.dataset_snapshot)
+    config = replace(
+        config,
+        execution=OnlineExecutionConfig(backend="hpc_slurm"),
+        hpc=replace(
+            config.hpc,
+            submit=True,
+            poll_interval_seconds=1,
+            max_task_attempts=2,
+            max_running_array_tasks=2,
+        ),
+    )
+    submitted_scripts: list[Path] = []
+
+    def write_output(batch_dir: Path, index: int) -> None:
+        output_path = batch_dir / "outputs" / f"task_{index:04d}.json"
+        output_path.write_text(
+            json.dumps(
+                {
+                    "status": "completed",
+                    "instance_id": train[index].instance_id,
+                    "resolved": index == 0,
+                    "plan": f"plan {train[index].instance_id}",
+                    "patch": "patch",
+                    "plan_trajectory": [],
+                    "code_trajectory": [],
+                    "evaluator_result": {"resolved": index == 0},
+                    "attribution_hint": {"hpc": True},
+                }
+            ),
+            encoding="utf-8",
+        )
+
+    def fake_submitter(script_path):
+        submitted_scripts.append(script_path)
+        if len(submitted_scripts) == 2:
+            write_output(script_path.parent, 1)
+        return str(12340 + len(submitted_scripts))
+
+    def fake_sleep(_seconds):
+        write_output(submitted_scripts[0].parent, 0)
+
+    def fake_status(_job_id, task_index):
+        if task_index == 0 and not (
+            submitted_scripts[0].parent / "outputs" / "task_0000.json"
+        ).is_file():
+            return SlurmTaskStatus("PENDING", 0)
+        return SlurmTaskStatus("COMPLETED", 2400)
+
+    monkeypatch.setattr(
+        "src.optimization.online_hpc_executor.collect_slurm_resource_snapshot",
+        lambda job_id=None: {"ulhpcshare_stdout": "FairShare 0.9"},
+    )
+    monkeypatch.setattr(
+        "src.optimization.online_hpc_executor.query_slurm_task_status",
+        fake_status,
+    )
+    executor = HPCSlurmOnlineRolloutExecutor(
+        config,
+        submitter=fake_submitter,
+        sleeper=fake_sleep,
+    )
+
+    outputs = executor.evaluate(train, "planning rules", capture_traces=True)
+
+    assert [output.plan for output in outputs] == [
+        f"plan {train[0].instance_id}",
+        f"plan {train[1].instance_id}",
+    ]
+    assert len(submitted_scripts) == 2
+    retry_script = submitted_scripts[1].read_text(encoding="utf-8")
+    assert "#SBATCH --array=1%2" in retry_script
+
+
+def test_online_hpc_wait_retries_running_task_after_walltime_grace(
+    tmp_path,
+    monkeypatch,
+):
+    config = _online_config(tmp_path)
+    train, _ = load_online_snapshot(config.dataset_snapshot)
+    config = replace(
+        config,
+        execution=OnlineExecutionConfig(backend="hpc_slurm"),
+        hpc=replace(
+            config.hpc,
+            submit=True,
+            time="00:40:00",
+            task_output_grace_seconds=300,
+            max_task_attempts=2,
+        ),
+    )
+    submitted_scripts: list[Path] = []
+
+    def write_output(batch_dir: Path, index: int) -> None:
+        output_path = batch_dir / "outputs" / f"task_{index:04d}.json"
+        output_path.write_text(
+            json.dumps(
+                {
+                    "status": "completed",
+                    "instance_id": train[index].instance_id,
+                    "resolved": index == 0,
+                    "plan": f"plan {train[index].instance_id}",
+                    "patch": "patch",
+                    "plan_trajectory": [],
+                    "code_trajectory": [],
+                    "evaluator_result": {"resolved": index == 0},
+                    "attribution_hint": {"hpc": True},
+                }
+            ),
+            encoding="utf-8",
+        )
+
+    def fake_submitter(script_path):
+        submitted_scripts.append(script_path)
+        if len(submitted_scripts) == 1:
+            write_output(script_path.parent, 0)
+        else:
+            write_output(script_path.parent, 1)
+        return str(12340 + len(submitted_scripts))
+
+    monkeypatch.setattr(
+        "src.optimization.online_hpc_executor.collect_slurm_resource_snapshot",
+        lambda job_id=None: {"ulhpcshare_stdout": "FairShare 0.9"},
+    )
+    monkeypatch.setattr(
+        "src.optimization.online_hpc_executor.query_slurm_task_status",
+        lambda job_id, task_index: SlurmTaskStatus("RUNNING", 2700),
+    )
+    executor = HPCSlurmOnlineRolloutExecutor(
+        config,
+        submitter=fake_submitter,
+        sleeper=lambda seconds: None,
+    )
+
+    outputs = executor.evaluate(train, "planning rules", capture_traces=True)
+
+    assert [output.plan for output in outputs] == [
+        f"plan {train[0].instance_id}",
+        f"plan {train[1].instance_id}",
+    ]
+    assert len(submitted_scripts) == 2
 
 
 def test_online_adapter_treats_rollout_errors_as_operational(tmp_path):

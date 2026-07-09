@@ -54,6 +54,8 @@ class OnlineHPCConfig:
     time: str = "02:00:00"
     max_running_array_tasks: int = 5
     poll_interval_seconds: int = 300
+    task_output_grace_seconds: int = 300
+    missing_task_grace_seconds: int = 600
     max_task_attempts: int = 2
     python_module: str = "lang/Python/3.11"
     container_module: str = "tools/Apptainer"
@@ -293,6 +295,18 @@ def load_online_optimization_config(
                 hpc_defaults.poll_interval_seconds,
             )
         ),
+        task_output_grace_seconds=int(
+            hpc_data.get(
+                "task_output_grace_seconds",
+                hpc_defaults.task_output_grace_seconds,
+            )
+        ),
+        missing_task_grace_seconds=int(
+            hpc_data.get(
+                "missing_task_grace_seconds",
+                hpc_defaults.missing_task_grace_seconds,
+            )
+        ),
         max_task_attempts=int(
             hpc_data.get("max_task_attempts", hpc_defaults.max_task_attempts)
         ),
@@ -314,6 +328,8 @@ def load_online_optimization_config(
         hpc.cpus_per_task,
         hpc.max_running_array_tasks,
         hpc.poll_interval_seconds,
+        hpc.task_output_grace_seconds,
+        hpc.missing_task_grace_seconds,
         hpc.max_task_attempts,
     ) < 1:
         raise ValueError("hpc numeric resources and retry settings must be positive")

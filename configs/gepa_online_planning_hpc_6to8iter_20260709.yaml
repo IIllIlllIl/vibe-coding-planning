@@ -41,9 +41,9 @@ search:
   # GEPA checks max_metric_calls at iteration boundaries. This value targets a
   # short 6-8 proposal online run over the formal 384/98 snapshot, not a full
   # search budget. A successful run can be resumed with a larger budget.
-  max_metric_calls: 40
-  projection_metric_calls: 160
-  reflection_minibatch_size: 1
+  max_metric_calls: 1000
+  projection_metric_calls: 1000
+  reflection_minibatch_size: 3
   seed: 42
   parallel: 1
   skip_perfect_score: false
@@ -74,8 +74,10 @@ hpc:
   cpus_per_task: 1
   mem: 4G
   time: "00:40:00"
-  max_running_array_tasks: 3
+  max_running_array_tasks: 150
   poll_interval_seconds: 300
+  task_output_grace_seconds: 300
+  missing_task_grace_seconds: 600
   max_task_attempts: 2
   remote_env_file: ~/.config/vibe-coding-planning/deepseek.env
   python_module: lang/Python/3.11

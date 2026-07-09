@@ -1074,8 +1074,10 @@ Online GEPA 的 HPC controller + Slurm array rollout 路径会在每个 rollout 
 
 如果 worker 写出失败 output，controller 会按 `hpc.max_task_attempts` 只重试失败
 的 task index，并把失败 JSON 归档到 `failed_outputs/attempt_NN/`。缺失 output
-仍按文件协议等待，不会因为本地 timeout 被当作失败，以免把 Slurm 排队中的 task
-重复提交。
+会结合 Slurm 状态处理：排队中的 `PENDING` task 不计入执行超时；正常 `RUNNING`
+task 继续等待；终态 task 仍无 output、`RUNNING` 超过配置 walltime 加
+`hpc.task_output_grace_seconds`、或 Slurm 在 `hpc.missing_task_grace_seconds`
+内一直查不到 task 时，才作为可重试 worker 重新提交。
 
 `DockerCapacityWindow` 参数仍复用 `docker:` 配置段：
 

@@ -20,6 +20,30 @@ from src.optimization.online_config import OnlineOptimizationConfig
 from src.optimization.online_models import OnlineGEPACase, OnlineRolloutOutput
 
 
+_SLURM_TERMINAL_STATES = {
+    "BOOT_FAIL",
+    "CANCELLED",
+    "COMPLETED",
+    "DEADLINE",
+    "FAILED",
+    "NODE_FAIL",
+    "OUT_OF_MEMORY",
+    "PREEMPTED",
+    "REVOKED",
+    "SPECIAL_EXIT",
+    "TIMEOUT",
+}
+_SLURM_PENDING_STATES = {
+    "CONFIGURING",
+    "PENDING",
+    "REQUEUE_FED",
+    "REQUEUE_HOLD",
+    "REQUEUED",
+    "RESIZING",
+    "SUSPENDED",
+}
+
+
 @dataclass(frozen=True)
 class OnlineRolloutTask:
     index: int
@@ -28,6 +52,13 @@ class OnlineRolloutTask:
     manifest_path: Path
     output_path: Path
     worker_run_dir: Path
+
+
+@dataclass(frozen=True)
+class SlurmTaskStatus:
+    state: str
+    elapsed_seconds: int | None = None
+    raw: str = ""
 
 
 class OnlineRolloutBatchStore:
@@ -256,10 +287,11 @@ class HPCSlurmOnlineRolloutExecutor:
                 job_id=job_id,
                 fairshare_before=before.get("ulhpcshare_stdout", ""),
             )
-            self._wait_for_outputs(tasks)
+            missing = self._wait_for_outputs(tasks, job_id=job_id, attempt=1)
             outputs, retry_job_ids = self._load_outputs_with_retries(
                 batch_dir,
                 tasks,
+                initial_missing=missing,
             )
             after = collect_slurm_resource_snapshot(job_id)
             usage = {
@@ -333,19 +365,36 @@ class HPCSlurmOnlineRolloutExecutor:
         self,
         batch_dir: Path,
         tasks: list[OnlineRolloutTask],
+        *,
+        initial_missing: list[OnlineRolloutTask] | None = None,
     ) -> tuple[list[OnlineRolloutOutput], list[str]]:
         retry_job_ids: list[str] = []
         outputs_by_index: dict[int, OnlineRolloutOutput] = {}
         pending = list(tasks)
+        missing_by_attempt: dict[int, list[OnlineRolloutTask]] = {
+            1: list(initial_missing or [])
+        }
         for attempt in range(1, self.config.hpc.max_task_attempts + 1):
-            failed: list[OnlineRolloutTask] = []
+            failed_by_index: dict[int, OnlineRolloutTask] = {
+                task.index: task for task in missing_by_attempt.pop(attempt, [])
+            }
             for task in pending:
+                if task.index in failed_by_index:
+                    self.audit.write(
+                        "online_hpc_rollout_task_missing_output",
+                        batch_dir=str(batch_dir),
+                        instance_id=task.case.instance_id,
+                        task_index=task.index,
+                        attempt=attempt,
+                        max_task_attempts=self.config.hpc.max_task_attempts,
+                    )
+                    continue
                 try:
                     outputs_by_index[task.index] = self.store.load_output(
                         task.output_path
                     )
                 except Exception as exc:
-                    failed.append(task)
+                    failed_by_index[task.index] = task
                     self.audit.write(
                         "online_hpc_rollout_task_failed",
                         batch_dir=str(batch_dir),
@@ -357,6 +406,7 @@ class HPCSlurmOnlineRolloutExecutor:
                         error=str(exc),
                     )
                     self._archive_failed_output(batch_dir, task, attempt)
+            failed = [failed_by_index[index] for index in sorted(failed_by_index)]
             if not failed:
                 return (
                     [outputs_by_index[task.index] for task in tasks],
@@ -388,7 +438,11 @@ class HPCSlurmOnlineRolloutExecutor:
                 instance_ids=[task.case.instance_id for task in failed],
                 fairshare_before=before.get("ulhpcshare_stdout", ""),
             )
-            self._wait_for_outputs(failed)
+            missing_by_attempt[retry_attempt] = self._wait_for_outputs(
+                failed,
+                job_id=job_id,
+                attempt=retry_attempt,
+            )
             pending = failed
         raise RuntimeError("unreachable online HPC retry state")
 
@@ -404,13 +458,70 @@ class HPCSlurmOnlineRolloutExecutor:
         failed_dir.mkdir(parents=True, exist_ok=True)
         task.output_path.replace(failed_dir / task.output_path.name)
 
-    def _wait_for_outputs(self, tasks: list[OnlineRolloutTask]) -> None:
-        remaining = {task.output_path for task in tasks}
+    def _wait_for_outputs(
+        self,
+        tasks: list[OnlineRolloutTask],
+        *,
+        job_id: str | None,
+        attempt: int,
+    ) -> list[OnlineRolloutTask]:
+        remaining = {task.index: task for task in tasks}
+        first_missing_seen_at: dict[int, float] = {}
+        retriable_outputs: dict[int, OnlineRolloutTask] = {}
+        walltime_seconds = parse_slurm_duration(self.config.hpc.time)
         while remaining:
-            complete = {path for path in remaining if path.is_file()}
-            remaining -= complete
+            now = time.monotonic()
+            retriable: dict[int, OnlineRolloutTask] = {}
+            complete = [
+                index
+                for index, task in remaining.items()
+                if task.output_path.is_file()
+            ]
+            for index in complete:
+                remaining.pop(index)
+                first_missing_seen_at.pop(index, None)
+            for index, task in list(remaining.items()):
+                if job_id is None:
+                    continue
+                status = query_slurm_task_status(job_id, index)
+                missing_for = now - first_missing_seen_at.setdefault(index, now)
+                if status is None:
+                    if missing_for >= self.config.hpc.missing_task_grace_seconds:
+                        retriable[index] = task
+                    continue
+                state = normalize_slurm_state(status.state)
+                if state in _SLURM_PENDING_STATES or state in {
+                    "COMPLETING",
+                    "RUNNING",
+                }:
+                    if (
+                        state == "RUNNING"
+                        and walltime_seconds is not None
+                        and status.elapsed_seconds is not None
+                        and status.elapsed_seconds
+                        >= walltime_seconds
+                        + self.config.hpc.task_output_grace_seconds
+                    ):
+                        retriable[index] = task
+                    continue
+                if state in _SLURM_TERMINAL_STATES:
+                    retriable[index] = task
+            for index in retriable:
+                remaining.pop(index, None)
+            if retriable:
+                retriable_outputs.update(retriable)
+                self.audit.write(
+                    "online_hpc_rollout_missing_outputs_retriable",
+                    job_id=job_id,
+                    attempt=attempt,
+                    task_indices=sorted(retriable),
+                    instance_ids=[
+                        retriable[index].case.instance_id for index in sorted(retriable)
+                    ],
+                )
             if remaining:
                 self.sleep(self.config.hpc.poll_interval_seconds)
+        return [retriable_outputs[index] for index in sorted(retriable_outputs)]
 
 
 def _write_json(path: Path, value: Any) -> None:
@@ -442,6 +553,78 @@ def _run_optional_command(args: list[str]) -> dict[str, Any]:
         "stdout": result.stdout.strip(),
         "stderr": result.stderr.strip(),
     }
+
+
+def normalize_slurm_state(value: str) -> str:
+    return value.strip().split()[0].upper() if value.strip() else "UNKNOWN"
+
+
+def parse_slurm_duration(value: str) -> int | None:
+    value = value.strip()
+    if not value or value.lower() in {"unknown", "n/a"}:
+        return None
+    days = 0
+    if "-" in value:
+        day_part, value = value.split("-", 1)
+        try:
+            days = int(day_part)
+        except ValueError:
+            return None
+    parts = value.split(":")
+    try:
+        if len(parts) == 2:
+            hours = 0
+            minutes, seconds = (int(part) for part in parts)
+        elif len(parts) == 3:
+            hours, minutes, seconds = (int(part) for part in parts)
+        else:
+            return None
+    except ValueError:
+        return None
+    return days * 86400 + hours * 3600 + minutes * 60 + seconds
+
+
+def parse_slurm_task_status(stdout: str) -> SlurmTaskStatus | None:
+    for line in stdout.splitlines():
+        line = line.strip()
+        if not line:
+            continue
+        parts = line.split("|")
+        if len(parts) >= 3:
+            return SlurmTaskStatus(
+                state=parts[1],
+                elapsed_seconds=parse_slurm_duration(parts[2]),
+                raw=line,
+            )
+        if len(parts) == 2:
+            return SlurmTaskStatus(
+                state=parts[0],
+                elapsed_seconds=parse_slurm_duration(parts[1]),
+                raw=line,
+            )
+    return None
+
+
+def query_slurm_task_status(job_id: str, task_index: int) -> SlurmTaskStatus | None:
+    task_ref = f"{job_id}_{task_index}"
+    sacct = _run_optional_command(
+        [
+            "sacct",
+            "-P",
+            "-n",
+            "-j",
+            task_ref,
+            "--format=JobIDRaw,State,Elapsed",
+        ]
+    )
+    if sacct["returncode"] == 0:
+        status = parse_slurm_task_status(str(sacct["stdout"]))
+        if status is not None:
+            return status
+    squeue = _run_optional_command(["squeue", "-h", "-j", task_ref, "-o", "%T|%M"])
+    if squeue["returncode"] == 0:
+        return parse_slurm_task_status(str(squeue["stdout"]))
+    return None
 
 
 def collect_slurm_resource_snapshot(job_id: str | None = None) -> dict[str, Any]:

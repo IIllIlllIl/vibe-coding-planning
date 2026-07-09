@@ -799,6 +799,10 @@ FairShare 默认资源必须保守。ULHPC `batch` 分区按约 `4G × CPU` 的�
 
 `max_running_array_tasks` 只限制同一个 Slurm array 中同时运行多少个独立 task。
 每个 task 仍然只运行一个 rollout worker，并独立申请 `1 CPU / 4G`。
+对正式 384/98 snapshot 的 short-budget online run，`max_running_array_tasks`
+可以高于 validation size，例如 `150`，让 Slurm 同时调度大量独立 1-CPU rollout
+tasks。该值不是单个 job 的 CPU 数；每个 array element 仍独立申请
+`1 CPU / 4G`，实际并发由 Slurm/FairShare/可用资源决定。
 
 后续只能根据 `sacct` 的 `Elapsed / TotalCPU / MaxRSS` 数据调整。不要默认使用
 `4 CPU / 16G` 或更大的 per-task 配置。
@@ -828,9 +832,11 @@ FairShare 默认资源必须保守。ULHPC `batch` 分区按约 `4G × CPU` 的�
    项目全局 `logs/run_evaluation`，避免并发 worker 或重复 instance 覆盖日志。
 9. 如果某个 worker output 已写出但 `status != completed`，controller 会归档该
    output 到 `failed_outputs/attempt_NN/`，并只为失败 task index 重新提交 Slurm
-   array。重试次数由 `hpc.max_task_attempts` 控制。缺失 output 不会被本地超时
-   判定为失败，因为它可能只是 Slurm 仍在排队或运行；controller 会继续按
-   `hpc.poll_interval_seconds` 等待文件出现。
+   array。重试次数由 `hpc.max_task_attempts` 控制。缺失 output 会结合 Slurm
+   task 状态判断：`PENDING`/正常 `RUNNING` 继续等待；终态 task 仍无 output、
+   或 `RUNNING` 已超过配置 walltime 加 `hpc.task_output_grace_seconds`，才进入
+   retry；如果 Slurm 长时间查不到 task，则按 `hpc.missing_task_grace_seconds`
+   作为丢失 task 处理。
 
 配置约束：
 
