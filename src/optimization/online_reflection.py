@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import os
 import re
+import shutil
 from typing import Any, Mapping, Sequence
 
 from src.agents._deps import (
@@ -12,6 +13,7 @@ from src.agents._deps import (
     extract_last_assistant,
     import_minisweagent,
 )
+from src.environment.apptainer_env import ApptainerEnvironment
 from src.environment.docker_env import DockerCapacityWindow
 from src.optimization.audit import AuditedModel, JsonlLogger, text_sha256
 from src.optimization.online_config import OnlineOptimizationConfig
@@ -69,10 +71,6 @@ class OnlinePlanningReflectionProposer:
     ) -> dict[str, str]:
         if components_to_update != ["rules"]:
             raise ValueError("GEPA may only update the rules component")
-        if self.config.container.runtime != "docker":
-            raise NotImplementedError(
-                "online planning reflection currently supports local Docker only"
-            )
         records = list(reflective_dataset["rules"])
         bundle = self.bundles.write(records)
         instance_ids = [str(record["instance_id"]) for record in records]
@@ -118,21 +116,62 @@ class OnlinePlanningReflectionProposer:
                 "mode": "online_planning",
             },
         )
-        run_args = [
-            "--rm",
-            "--network",
-            "none",
-            "--mount",
-            f"type=bind,source={bundle.resolve()},target=/evidence,readonly",
-        ]
-        with self.capacity_window.lease():
-            env = DockerEnvironment(
-                image="python:3.12-slim",
-                cwd="/evidence",
-                run_args=run_args,
-                timeout=self.config.reflection.timeout,
-                container_timeout="4h",
+        if self.config.container.runtime == "apptainer":
+            run_args = [
+                "--bind",
+                f"{bundle.resolve()}:/evidence:ro",
+            ]
+            workspace = (
+                self.config.run_dir
+                / "online_reflection_workspaces"
+                / parent_sha256[:12]
+                / bundle.name
             )
+            if workspace.exists():
+                shutil.rmtree(workspace)
+            workspace.mkdir(parents=True, exist_ok=True)
+        else:
+            run_args = [
+                "--rm",
+                "--network",
+                "none",
+                "--mount",
+                f"type=bind,source={bundle.resolve()},target=/evidence,readonly",
+            ]
+            workspace = None
+        self.audit.write(
+            "online_reflection_mount_configured",
+            candidate_sha256=parent_sha256,
+            bundle_path=str(bundle),
+            container_path="/evidence",
+            readonly=True,
+            network_disabled=True,
+            runtime=self.config.container.runtime,
+            host_workdir=str(workspace) if workspace is not None else None,
+        )
+        with self.capacity_window.lease():
+            if self.config.container.runtime == "apptainer":
+                env = ApptainerEnvironment(
+                    image="python:3.12-slim",
+                    cwd="/tmp",
+                    sif_cache_dir=self.config.container.sif_cache_dir,
+                    capacity_window=self.capacity_window,
+                    run_args=run_args,
+                    timeout=self.config.reflection.timeout,
+                    container_timeout="4h",
+                    writable_tmpfs=self.config.container.writable_tmpfs,
+                    network_disabled=True,
+                    host_workdir=workspace,
+                    initialize_host_workdir=False,
+                )
+            else:
+                env = DockerEnvironment(
+                    image="python:3.12-slim",
+                    cwd="/evidence",
+                    run_args=run_args,
+                    timeout=self.config.reflection.timeout,
+                    container_timeout="4h",
+                )
             try:
                 agent = build_default_agent(
                     DefaultAgent,

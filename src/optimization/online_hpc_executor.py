@@ -13,7 +13,7 @@ from pathlib import Path
 import shlex
 import subprocess
 import time
-from typing import Callable, Sequence
+from typing import Any, Callable, Sequence
 
 from src.optimization.audit import JsonlLogger, text_sha256
 from src.optimization.online_config import OnlineOptimizationConfig
@@ -197,7 +197,7 @@ class HPCSlurmOnlineRolloutExecutor:
         self,
         config: OnlineOptimizationConfig,
         *,
-        submitter: Callable[[Path], None] | None = None,
+        submitter: Callable[[Path], str | None] | None = None,
         sleeper: Callable[[float], None] = time.sleep,
     ) -> None:
         self.config = config
@@ -247,9 +247,47 @@ class HPCSlurmOnlineRolloutExecutor:
             max_running_array_tasks=self.config.hpc.max_running_array_tasks,
         )
         if self.config.hpc.submit:
-            (self.submitter or submit_slurm_array)(script_path)
+            before = collect_slurm_resource_snapshot()
+            job_id = (self.submitter or submit_slurm_array)(script_path)
+            self.audit.write(
+                "online_hpc_rollout_batch_submitted",
+                batch_dir=str(batch_dir),
+                job_id=job_id,
+                fairshare_before=before.get("ulhpcshare_stdout", ""),
+            )
             self._wait_for_outputs(tasks)
-            return [self.store.load_output(task.output_path) for task in tasks]
+            outputs = [self.store.load_output(task.output_path) for task in tasks]
+            after = collect_slurm_resource_snapshot(job_id)
+            usage = {
+                "mode": "online_planning_hpc_batch_resource_usage",
+                "batch_dir": str(batch_dir),
+                "job_id": job_id,
+                "task_count": len(tasks),
+                "cpus_per_task": self.config.hpc.cpus_per_task,
+                "mem": self.config.hpc.mem,
+                "time": self.config.hpc.time,
+                "max_running_array_tasks": self.config.hpc.max_running_array_tasks,
+                "before": before,
+                "after": after,
+            }
+            _write_json(batch_dir / "resource_usage.json", usage)
+            _write_json(
+                batch_dir / "batch_done.json",
+                {
+                    "mode": "online_planning_hpc_batch_done",
+                    "job_id": job_id,
+                    "task_count": len(tasks),
+                    "completed_outputs": len(outputs),
+                },
+            )
+            self.audit.write(
+                "online_hpc_rollout_batch_completed",
+                batch_dir=str(batch_dir),
+                job_id=job_id,
+                completed_outputs=len(outputs),
+                fairshare_after=after.get("ulhpcshare_stdout", ""),
+            )
+            return outputs
         raise RuntimeError(
             "HPC rollout batch prepared but not submitted. Review "
             f"{script_path} and set hpc.submit=true after resource pilot setup."
@@ -264,7 +302,60 @@ class HPCSlurmOnlineRolloutExecutor:
                 self.sleep(self.config.hpc.poll_interval_seconds)
 
 
-def submit_slurm_array(script_path: Path) -> None:
+def _write_json(path: Path, value: Any) -> None:
+    tmp = path.with_suffix(path.suffix + ".tmp")
+    tmp.write_text(
+        json.dumps(value, indent=2, ensure_ascii=False, sort_keys=True) + "\n",
+        encoding="utf-8",
+    )
+    tmp.replace(path)
+
+
+def _run_optional_command(args: list[str]) -> dict[str, Any]:
+    try:
+        result = subprocess.run(
+            args,
+            capture_output=True,
+            text=True,
+            check=False,
+            timeout=60,
+        )
+    except Exception as exc:
+        return {
+            "returncode": None,
+            "stdout": "",
+            "stderr": f"{type(exc).__name__}: {exc}",
+        }
+    return {
+        "returncode": result.returncode,
+        "stdout": result.stdout.strip(),
+        "stderr": result.stderr.strip(),
+    }
+
+
+def collect_slurm_resource_snapshot(job_id: str | None = None) -> dict[str, Any]:
+    """Collect best-effort ULHPC FairShare and Slurm accounting details."""
+    snapshot: dict[str, Any] = {}
+    fairshare = _run_optional_command(["ulhpcshare"])
+    snapshot["ulhpcshare_returncode"] = fairshare["returncode"]
+    snapshot["ulhpcshare_stdout"] = fairshare["stdout"]
+    snapshot["ulhpcshare_stderr"] = fairshare["stderr"]
+    if job_id:
+        sacct = _run_optional_command(
+            [
+                "sacct",
+                "-j",
+                job_id,
+                "--format=JobID,JobName,State,Elapsed,AllocCPUS,TotalCPU,ReqMem,MaxRSS",
+            ]
+        )
+        snapshot["sacct_returncode"] = sacct["returncode"]
+        snapshot["sacct_stdout"] = sacct["stdout"]
+        snapshot["sacct_stderr"] = sacct["stderr"]
+    return snapshot
+
+
+def submit_slurm_array(script_path: Path) -> str | None:
     """Submit a prepared Slurm array script with ``sbatch``.
 
     This assumes the controller is running on a host where ``sbatch`` can see
@@ -283,3 +374,6 @@ def submit_slurm_array(script_path: Path) -> None:
         raise RuntimeError(
             "sbatch failed: " + (result.stderr or result.stdout).strip()[:1000]
         )
+    output = (result.stdout or "").strip()
+    parts = output.split()
+    return parts[-1] if parts and parts[-1].isdigit() else None

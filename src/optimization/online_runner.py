@@ -2,7 +2,10 @@
 
 from __future__ import annotations
 
+from contextlib import contextmanager
+import fcntl
 import json
+import os
 from typing import Any, Callable
 
 import gepa
@@ -16,6 +19,29 @@ from src.optimization.online_hpc_executor import HPCSlurmOnlineRolloutExecutor
 from src.optimization.online_reflection import OnlinePlanningReflectionProposer
 from src.optimization.online_rollout import OnlinePCTRolloutRunner
 from src.optimization.report import write_cost_report
+
+
+@contextmanager
+def _online_controller_lock(config: OnlineOptimizationConfig):
+    """Prevent two online GEPA controllers from sharing one run_dir."""
+    lock_path = config.run_dir / "online_controller.lock"
+    with lock_path.open("a+", encoding="utf-8") as handle:
+        try:
+            fcntl.flock(handle.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
+        except BlockingIOError as exc:
+            raise RuntimeError(
+                "another online GEPA controller appears to be active for "
+                f"run_dir {config.run_dir}; use a distinct run_dir or wait for "
+                "the existing controller to finish"
+            ) from exc
+        handle.seek(0)
+        handle.truncate()
+        handle.write(f"pid={os.getpid()}\n")
+        handle.flush()
+        try:
+            yield
+        finally:
+            fcntl.flock(handle.fileno(), fcntl.LOCK_UN)
 
 
 def _write_online_report(result: Any, config: OnlineOptimizationConfig) -> None:
@@ -143,6 +169,26 @@ def run_online_optimization(
     if not train or not validation:
         raise ValueError("online GEPA requires non-empty train and validation sets")
     config.run_dir.mkdir(parents=True, exist_ok=True)
+    with _online_controller_lock(config):
+        return _run_online_optimization_locked(
+            config,
+            train=train,
+            validation=validation,
+            rollout=rollout,
+            proposer=proposer,
+            optimize_fn=optimize_fn,
+        )
+
+
+def _run_online_optimization_locked(
+    config: OnlineOptimizationConfig,
+    *,
+    train: list[Any],
+    validation: list[Any],
+    rollout: Callable[..., Any] | None,
+    proposer: Callable[..., Any] | None,
+    optimize_fn: Callable[..., Any],
+) -> Any:
     initial_rules = config.initial_rules_path.read_text(encoding="utf-8").strip()
     _write_online_manifest(
         config,

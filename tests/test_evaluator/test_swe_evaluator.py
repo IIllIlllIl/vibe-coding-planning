@@ -305,6 +305,8 @@ class TestEvaluateApptainer:
 
         assert result["resolved"] is True
         assert result["stdout"] == "test output"
+        assert str(tmp_path / "eval-workdir") in result["log_dir"]
+        assert "logs/run_evaluation" in result["log_dir"]
         mock_make_spec.assert_called_once_with(instance_info, namespace="swebench")
         mock_get_report.assert_called_once()
         assert any(".vibe_patch.diff" in command for command in commands)

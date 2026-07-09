@@ -817,6 +817,15 @@ FairShare 默认资源必须保守。ULHPC `batch` 分区按约 `4G × CPU` 的�
    bind 到 `/testbed`，以保留同一 phase 内多步命令产生的源码修改。Evaluator
    phase 通过 `swebench_apptainer` backend 在 clean base repo 上应用当前 patch
    并运行官方 test spec。
+6. Online GEPA controller 会持有 `run_dir/online_controller.lock`。同一个
+   `run_dir` 不允许两个 controller 同时运行；需要对比 6-8 iteration、prompt
+   variants 或正式 resume 时必须使用独立 `run_dir`。
+7. 每个 submitted rollout batch 完成后会写入
+   `hpc_rollout_batches/batch_*/batch_done.json` 和 `resource_usage.json`。
+   后者尽力记录提交前后 `ulhpcshare` 以及对应 Slurm job 的 `sacct` 输出，用于
+   监控最小资源申请是否仍产生 FairShare 浪费。
+8. Apptainer evaluator 日志写入当前 worker 的 eval phase workspace 下，不再写入
+   项目全局 `logs/run_evaluation`，避免并发 worker 或重复 instance 覆盖日志。
 
 配置约束：
 

@@ -1065,6 +1065,13 @@ bash scripts/hpc_submit_batch.sh \
 - 每轮结束后用 `sacct` 检查 CPU 和内存效率。若 CPU 利用率长期很低且吞吐没有
   下降，应把下一轮从 `parallel=4` 下调到 `parallel=2`，优先保护 FairShare。
 
+Online GEPA 的 HPC controller + Slurm array rollout 路径会在每个 rollout batch
+完成后写入 `hpc_rollout_batches/batch_*/resource_usage.json`。该文件包含提交前后
+`ulhpcshare` 的输出，以及对应 array job 的 `sacct` 输出。每次小规模真实 run
+结束后都应检查该文件，确认 `1 CPU / 4G / 30-40min` 的 worker 申请没有明显
+低利用率；如果 controller 长时间等待 worker，也要把 controller 自身 job 的
+`sacct` 结果纳入报告。
+
 `DockerCapacityWindow` 参数仍复用 `docker:` 配置段：
 
 ```yaml

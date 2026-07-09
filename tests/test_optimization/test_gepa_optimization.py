@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import fcntl
 import subprocess
 import time
 from contextlib import nullcontext
@@ -37,10 +38,12 @@ from src.optimization.online_config import (
 )
 from src.optimization.online_dataset import load_online_snapshot
 from src.optimization.online_hpc_executor import (
+    HPCSlurmOnlineRolloutExecutor,
     OnlineRolloutBatchStore,
     build_slurm_array_script,
 )
 from src.optimization.online_models import OnlineRolloutOutput
+from src.optimization.online_reflection import OnlinePlanningReflectionProposer
 from src.optimization.online_rollout_worker import (
     case_from_manifest,
     output_to_json,
@@ -1383,6 +1386,86 @@ def test_online_adapter_uses_batch_executor_for_hpc_rollouts(tmp_path):
     assert result.trajectories[0]["attribution_hint"] == {"hpc": True}
 
 
+def test_online_hpc_executor_writes_batch_done_and_resource_usage(
+    tmp_path,
+    monkeypatch,
+):
+    config = _online_config(tmp_path)
+    train, _ = load_online_snapshot(config.dataset_snapshot)
+    config = replace(
+        config,
+        execution=OnlineExecutionConfig(backend="hpc_slurm"),
+        hpc=replace(
+            config.hpc,
+            submit=True,
+            cpus_per_task=1,
+            mem="4G",
+            time="00:40:00",
+            max_running_array_tasks=2,
+        ),
+    )
+
+    def fake_submitter(script_path):
+        batch_dir = script_path.parent
+        for index, case in enumerate(train):
+            output_path = batch_dir / "outputs" / f"task_{index:04d}.json"
+            output_path.write_text(
+                json.dumps(
+                    {
+                        "status": "completed",
+                        "resolved": index == 0,
+                        "plan": f"plan {case.instance_id}",
+                        "patch": "patch",
+                        "plan_trajectory": [],
+                        "code_trajectory": [],
+                        "evaluator_result": {"resolved": index == 0},
+                        "attribution_hint": {"hpc": True},
+                    }
+                ),
+                encoding="utf-8",
+            )
+        return "12345"
+
+    def fake_run(args, **kwargs):
+        class Result:
+            returncode = 0
+            stderr = ""
+
+            @property
+            def stdout(self):
+                if args[0] == "ulhpcshare":
+                    return "FairShare 0.900000\n"
+                return (
+                    "JobID State Elapsed AllocCPUS TotalCPU ReqMem MaxRSS\n"
+                    "12345 COMPLETED 00:10:00 1 00:05:00 4G 1800000K\n"
+                )
+
+        return Result()
+
+    monkeypatch.setattr(
+        "src.optimization.online_hpc_executor.subprocess.run",
+        fake_run,
+    )
+    executor = HPCSlurmOnlineRolloutExecutor(
+        config,
+        submitter=fake_submitter,
+        sleeper=lambda seconds: None,
+    )
+
+    outputs = executor.evaluate(train, "planning rules", capture_traces=True)
+
+    assert [output.resolved for output in outputs] == [True, False]
+    batch_dir = config.run_dir / "hpc_rollout_batches" / "batch_0001"
+    done = json.loads((batch_dir / "batch_done.json").read_text())
+    usage = json.loads((batch_dir / "resource_usage.json").read_text())
+    assert done["job_id"] == "12345"
+    assert done["completed_outputs"] == 2
+    assert usage["cpus_per_task"] == 1
+    assert usage["mem"] == "4G"
+    assert "FairShare" in usage["before"]["ulhpcshare_stdout"]
+    assert "MaxRSS" in usage["after"]["sacct_stdout"]
+
+
 def test_online_adapter_treats_rollout_errors_as_operational(tmp_path):
     train, _ = load_online_snapshot(_snapshot(tmp_path / "snapshot"))
     run_dir = tmp_path / "online-error"
@@ -1517,6 +1600,195 @@ def test_online_runner_disables_docker_maintenance_for_apptainer(
     )
 
     assert captured["enable_docker_maintenance"] is False
+
+
+def test_online_reflection_proposer_uses_apptainer_when_runtime_apptainer(
+    tmp_path, monkeypatch
+):
+    monkeypatch.setenv("TEST_API_KEY", "secret")
+    config = _online_config(tmp_path)
+    config = replace(
+        config,
+        container=ContainerConfig(
+            runtime="apptainer",
+            sif_cache_dir=tmp_path / "sifs",
+        ),
+        evaluator=OnlineEvaluatorConfig(
+            timeout=config.evaluator.timeout,
+            backend="swebench_apptainer",
+        ),
+    )
+    calls: dict[str, object] = {}
+
+    class FakeModel:
+        def __init__(self, **kwargs):
+            calls["model_kwargs"] = kwargs
+
+    class FakeEnvironment:
+        def __init__(self, **kwargs):
+            calls["environment_kwargs"] = kwargs
+
+        def execute(self, command):
+            assert command == "cat /tmp/candidate_rules.txt"
+            return {"returncode": 0, "output": "improved online planning rules"}
+
+        def cleanup(self):
+            calls["cleaned_up"] = True
+
+        def get_template_vars(self):
+            return {}
+
+    class FakeAgent:
+        messages = [{"role": "assistant", "content": "done"}]
+
+        def run(self, task, **kwargs):
+            calls["task"] = task
+            calls["run_kwargs"] = kwargs
+            return "Submitted", "done"
+
+    monkeypatch.setattr(
+        "src.optimization.online_reflection.import_minisweagent",
+        lambda: (object, FakeModel, object),
+    )
+    monkeypatch.setattr(
+        "src.optimization.online_reflection.build_default_agent",
+        lambda *args, **kwargs: FakeAgent(),
+    )
+    monkeypatch.setattr(
+        "src.optimization.online_reflection.ApptainerEnvironment",
+        FakeEnvironment,
+    )
+    proposer = OnlinePlanningReflectionProposer(config, _FakeCapacityWindow())
+    record = {
+        "instance_id": "repo__one",
+        "score": 1.0,
+        "resolved": True,
+        "generated_plan": "current generated plan",
+        "plan_trajectory": [{"role": "assistant", "content": "plan"}],
+        "code_trajectory": [{"role": "assistant", "content": "code"}],
+        "generated_patch": "diff --git a/a.py b/a.py\n",
+        "evaluator_result": {"resolved": True},
+        "attribution_hint": {"code_followed_plan": True},
+    }
+
+    proposal = proposer(
+        {"rules": "seed planning rules"},
+        {"rules": [record]},
+        ["rules"],
+    )
+
+    assert proposal == {"rules": "improved online planning rules"}
+    assert calls["task"].startswith("Review the current online rollout evidence")
+    assert calls["run_kwargs"] == {
+        "current_rules": "seed planning rules",
+        "evidence_path": "/evidence",
+    }
+    env_kwargs = calls["environment_kwargs"]
+    assert env_kwargs["image"] == "python:3.12-slim"
+    assert env_kwargs["cwd"] == "/tmp"
+    assert env_kwargs["sif_cache_dir"] == tmp_path / "sifs"
+    assert env_kwargs["network_disabled"] is True
+    assert env_kwargs["host_workdir"] is not None
+    assert env_kwargs["initialize_host_workdir"] is False
+    assert env_kwargs["run_args"][0] == "--bind"
+    assert env_kwargs["run_args"][1].endswith(":/evidence:ro")
+    assert "online_reflection_workspaces" in str(env_kwargs["host_workdir"])
+    assert calls["cleaned_up"] is True
+    audit = [
+        json.loads(line)
+        for line in (config.run_dir / "audit_events.jsonl").read_text().splitlines()
+    ]
+    mount = next(
+        record
+        for record in audit
+        if record["event"] == "online_reflection_mount_configured"
+    )
+    assert mount["runtime"] == "apptainer"
+    assert mount["readonly"] is True
+    assert mount["network_disabled"] is True
+
+
+def test_online_runner_builds_default_apptainer_reflection_proposer(
+    tmp_path,
+    monkeypatch,
+):
+    config = _online_config(tmp_path)
+    config = replace(
+        config,
+        container=ContainerConfig(
+            runtime="apptainer",
+            sif_cache_dir=tmp_path / "sifs",
+        ),
+        evaluator=OnlineEvaluatorConfig(
+            timeout=config.evaluator.timeout,
+            backend="swebench_apptainer",
+        ),
+    )
+    captured: dict[str, object] = {}
+
+    class FakeResult:
+        candidates = [{"rules": "seed planning rules"}]
+        val_subscores = [{"repo__val": 1.0}]
+        val_aggregate_scores = [1.0]
+        parents = [None]
+        best_candidate = {"rules": "seed planning rules"}
+        best_idx = 0
+        total_metric_calls = 1
+        num_candidates = 1
+
+        def to_dict(self):
+            return {"best_candidate": self.best_candidate}
+
+        def candidate_tree_html(self):
+            return "<html></html>"
+
+    def fake_optimize(**kwargs):
+        captured["proposer"] = kwargs["adapter"].propose_new_texts
+        return FakeResult()
+
+    run_online_optimization(
+        config,
+        rollout=lambda case, rules: OnlineRolloutOutput(
+            resolved=True,
+            plan="plan",
+            patch="patch",
+            plan_trajectory=(),
+            code_trajectory=(),
+            evaluator_result={"resolved": True},
+            attribution_hint={},
+        ),
+        optimize_fn=fake_optimize,
+    )
+
+    assert isinstance(captured["proposer"], OnlinePlanningReflectionProposer)
+    assert captured["proposer"].config.container.runtime == "apptainer"
+
+
+def test_online_runner_rejects_concurrent_controller_for_same_run_dir(tmp_path):
+    config = _online_config(tmp_path)
+    config.run_dir.mkdir(parents=True, exist_ok=True)
+    lock_path = config.run_dir / "online_controller.lock"
+
+    with lock_path.open("w", encoding="utf-8") as handle:
+        fcntl.flock(handle.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
+        try:
+            with pytest.raises(RuntimeError, match="another online GEPA controller"):
+                run_online_optimization(
+                    config,
+                    rollout=lambda case, rules: OnlineRolloutOutput(
+                        resolved=True,
+                        plan="plan",
+                        patch="patch",
+                        plan_trajectory=(),
+                        code_trajectory=(),
+                        evaluator_result={"resolved": True},
+                        attribution_hint={},
+                    ),
+                    proposer=lambda candidate, reflective_dataset, components: candidate,
+                    optimize_fn=lambda **kwargs: None,
+                )
+        finally:
+            fcntl.flock(handle.fileno(), fcntl.LOCK_UN)
 
 
 def test_adapter_does_not_call_checker_when_prepare_fails(tmp_path):

@@ -65,7 +65,8 @@ def evaluate_apptainer(
     test_spec = make_test_spec(instance_info, namespace="swebench")
     run_id = f"eval_{instance_id}{run_id_suffix}"
     log_dir = (
-        Path("logs")
+        phase_workdir
+        / "logs"
         / "run_evaluation"
         / run_id
         / "plan-code-test"
