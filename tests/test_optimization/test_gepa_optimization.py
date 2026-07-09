@@ -364,6 +364,30 @@ evaluator: {}
     assert loaded.hpc.worker_config_path.endswith("online-hpc.yaml")
 
 
+def test_online_hpc_6to8_config_uses_formal_snapshot_without_instance_subset(
+    monkeypatch,
+):
+    monkeypatch.setenv("DEEPSEEK_API_KEY", "secret")
+    repo_root = Path(__file__).resolve().parents[2]
+
+    config = load_online_optimization_config(
+        repo_root / "configs" / "gepa_online_planning_hpc_6to8iter_20260709.yaml"
+    )
+
+    assert (
+        "verified-round1-gepa-datasets/20260614_482_fdc056ae85df"
+        in str(config.dataset_snapshot)
+    )
+    assert config.dataset.train_instance_ids == ()
+    assert config.dataset.validation_instance_ids == ()
+    assert config.execution.backend == "hpc_slurm"
+    assert config.hpc.submit is True
+    assert config.hpc.cpus_per_task == 1
+    assert config.hpc.mem == "4G"
+    assert config.hpc.time == "00:40:00"
+    assert config.hpc.max_task_attempts == 2
+
+
 def test_online_config_accepts_legacy_array_concurrency(tmp_path, monkeypatch):
     monkeypatch.setenv("TEST_KEY", "secret")
     config = tmp_path / "online-hpc-legacy.yaml"

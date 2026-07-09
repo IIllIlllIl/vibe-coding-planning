@@ -1,18 +1,12 @@
 mode: online_planning
 
 paths:
-  dataset_snapshot: output/SWE-bench_Verified/gepa-pilot-datasets/pilot_6_4_seed42_73df941adb4d
+  dataset_snapshot: output/SWE-bench_Verified/verified-round1-gepa-datasets/20260614_482_fdc056ae85df
   initial_rules: configs/gepa_initial_rules_gpt_seed.md
   run_dir: output/SWE-bench_Verified/gepa-rules/online-planning-hpc-6to8iter-20260709
 
 dataset:
   name: SWE-bench/SWE-bench_Verified
-  train_instance_ids:
-    - django__django-10097
-    - django__django-10880
-    - matplotlib__matplotlib-13989
-  validation_instance_ids:
-    - django__django-10554
 
 plan:
   model: deepseek-v4-flash
@@ -45,7 +39,8 @@ reflection:
 
 search:
   # GEPA checks max_metric_calls at iteration boundaries. This value targets a
-  # small 6-8 proposal online run, not a formal optimization budget.
+  # short 6-8 proposal online run over the formal 384/98 snapshot, not a full
+  # search budget. A successful run can be resumed with a larger budget.
   max_metric_calls: 40
   projection_metric_calls: 160
   reflection_minibatch_size: 1
