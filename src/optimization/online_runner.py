@@ -245,7 +245,7 @@ def _run_online_optimization_locked(
             candidate_selection_strategy="pareto",
             frontier_type="instance",
             batch_sampler="epoch_shuffled",
-            reflection_minibatch_size=None,
+            reflection_minibatch_size=config.search.reflection_minibatch_size,
             perfect_score=1.0,
             skip_perfect_score=config.search.skip_perfect_score,
             max_metric_calls=config.search.max_metric_calls,

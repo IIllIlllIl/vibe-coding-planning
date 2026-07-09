@@ -1466,6 +1466,77 @@ def test_online_hpc_executor_writes_batch_done_and_resource_usage(
     assert "MaxRSS" in usage["after"]["sacct_stdout"]
 
 
+def test_online_hpc_executor_retries_failed_worker_outputs(tmp_path, monkeypatch):
+    config = _online_config(tmp_path)
+    train, _ = load_online_snapshot(config.dataset_snapshot)
+    config = replace(
+        config,
+        execution=OnlineExecutionConfig(backend="hpc_slurm"),
+        hpc=replace(
+            config.hpc,
+            submit=True,
+            max_task_attempts=2,
+            max_running_array_tasks=2,
+        ),
+    )
+    submitted_scripts: list[Path] = []
+
+    def write_output(batch_dir: Path, index: int, *, status: str) -> None:
+        output_path = batch_dir / "outputs" / f"task_{index:04d}.json"
+        payload = {
+            "status": status,
+            "instance_id": train[index].instance_id,
+            "resolved": index == 0,
+            "plan": f"plan {train[index].instance_id}",
+            "patch": "patch",
+            "plan_trajectory": [],
+            "code_trajectory": [],
+            "evaluator_result": {"resolved": index == 0},
+            "attribution_hint": {"hpc": True},
+        }
+        if status != "completed":
+            payload.update({"error_type": "RuntimeError", "error": "transient"})
+        output_path.write_text(json.dumps(payload), encoding="utf-8")
+
+    def fake_submitter(script_path):
+        submitted_scripts.append(script_path)
+        batch_dir = script_path.parent
+        if len(submitted_scripts) == 1:
+            write_output(batch_dir, 0, status="completed")
+            write_output(batch_dir, 1, status="failed")
+        else:
+            write_output(batch_dir, 1, status="completed")
+        return str(12340 + len(submitted_scripts))
+
+    monkeypatch.setattr(
+        "src.optimization.online_hpc_executor.collect_slurm_resource_snapshot",
+        lambda job_id=None: {"ulhpcshare_stdout": "FairShare 0.9"},
+    )
+    executor = HPCSlurmOnlineRolloutExecutor(
+        config,
+        submitter=fake_submitter,
+        sleeper=lambda seconds: None,
+    )
+
+    outputs = executor.evaluate(train, "planning rules", capture_traces=True)
+
+    assert [output.plan for output in outputs] == [
+        f"plan {train[0].instance_id}",
+        f"plan {train[1].instance_id}",
+    ]
+    assert len(submitted_scripts) == 2
+    retry_script = submitted_scripts[1].read_text(encoding="utf-8")
+    assert "#SBATCH --array=1%2" in retry_script
+    batch_dir = config.run_dir / "hpc_rollout_batches" / "batch_0001"
+    assert (
+        batch_dir / "failed_outputs" / "attempt_01" / "task_0001.json"
+    ).is_file()
+    done = json.loads((batch_dir / "batch_done.json").read_text())
+    usage = json.loads((batch_dir / "resource_usage.json").read_text())
+    assert done["retry_job_ids"] == ["12342"]
+    assert usage["retry_job_ids"] == ["12342"]
+
+
 def test_online_adapter_treats_rollout_errors_as_operational(tmp_path):
     train, _ = load_online_snapshot(_snapshot(tmp_path / "snapshot"))
     run_dir = tmp_path / "online-error"
@@ -1495,6 +1566,7 @@ def test_online_runner_uses_plan_and_code_rollout_attempts(tmp_path):
         config,
         plan=replace(config.plan, max_attempts=1),
         code=replace(config.code, max_attempts=3),
+        search=replace(config.search, reflection_minibatch_size=2),
     )
     captured: dict[str, int] = {}
 
@@ -1516,6 +1588,7 @@ def test_online_runner_uses_plan_and_code_rollout_attempts(tmp_path):
 
     def fake_optimize(**kwargs):
         captured["rollout_attempts"] = kwargs["adapter"].rollout_attempts
+        captured["reflection_minibatch_size"] = kwargs["reflection_minibatch_size"]
         return FakeResult()
 
     run_online_optimization(
@@ -1534,6 +1607,7 @@ def test_online_runner_uses_plan_and_code_rollout_attempts(tmp_path):
     )
 
     assert captured["rollout_attempts"] == 3
+    assert captured["reflection_minibatch_size"] == 2
 
 
 def test_online_runner_disables_docker_maintenance_for_apptainer(

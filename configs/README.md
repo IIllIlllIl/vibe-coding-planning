@@ -14,6 +14,7 @@ from file names.
 | `gepa_online_planning_pilot.yaml` | local Docker | Experimental online GEPA planning run. Candidate rules go to the Plan Agent as a strict planning checklist; Code Agent only sees the generated plan. Use only for small pilot validation. |
 | `gepa_online_planning_smoke_3to5iter_20260703.yaml` | local Docker | Dedicated online GEPA smoke pilot for validating input isolation, rollout logging, and 3-5 proposal behavior before any formal run. |
 | `gepa_online_planning_hpc_resource_pilot_20260706.yaml` | ULHPC Apptainer | Resource-measurement pilot for online rollout workers. Each Slurm array element runs one rollout with `1 CPU / 4G / 20min`; `max_running_array_tasks` controls simultaneous array elements, not worker-internal concurrency. |
+| `gepa_online_planning_hpc_6to8iter_20260709.yaml` | ULHPC Apptainer | Small real online GEPA run for validating the full HPC controller + Slurm array rollout flow. Uses a distinct run_dir, Flash-only models, `1 CPU / 4G / 40min` rollout workers, and `max_metric_calls: 40` to target roughly 6-8 proposal opportunities on the 3-train/1-validation pilot split. Failed worker outputs are retried once via `hpc.max_task_attempts: 2`. |
 
 The prompt-fix configs are the current mainline. They differ from the older
 strict-only run by using the newer Reflection prompt that maintains rules as a

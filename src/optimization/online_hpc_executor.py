@@ -151,10 +151,21 @@ def build_slurm_array_script(
     python_module: str,
     container_module: str,
     python_bin: str,
+    task_indices: Sequence[int] | None = None,
+    attempt: int = 1,
 ) -> str:
     if task_count < 1:
         raise ValueError("task_count must be positive")
-    array_spec = f"0-{task_count - 1}%{max_running_array_tasks}"
+    if task_indices is None:
+        index_spec = f"0-{task_count - 1}"
+    else:
+        indices = list(task_indices)
+        if not indices:
+            raise ValueError("task_indices must not be empty")
+        if any(index < 0 or index >= task_count for index in indices):
+            raise ValueError("task_indices must be within task_count")
+        index_spec = ",".join(str(index) for index in indices)
+    array_spec = f"{index_spec}%{max_running_array_tasks}"
     quoted_config = shlex.quote(config_path)
     quoted_batch_dir = shlex.quote(batch_dir)
     quoted_python = shlex.quote(python_bin)
@@ -180,7 +191,8 @@ def build_slurm_array_script(
         'TASK_ID="$(printf "%04d" "${SLURM_ARRAY_TASK_ID}")"',
         'TASK_MANIFEST="${BATCH_DIR}/tasks/task_${TASK_ID}.json"',
         'OUTPUT_JSON="${BATCH_DIR}/outputs/task_${TASK_ID}.json"',
-        'WORKER_RUN_DIR="${BATCH_DIR}/worker_runs/task_${TASK_ID}"',
+        f"ATTEMPT={attempt}",
+        'WORKER_RUN_DIR="${BATCH_DIR}/worker_runs/task_${TASK_ID}/attempt_${ATTEMPT}"',
         f"{quoted_python} -m src.optimization.online_rollout_worker "
         f"--config {quoted_config} "
         "--task-manifest \"${TASK_MANIFEST}\" "
@@ -219,23 +231,12 @@ class HPCSlurmOnlineRolloutExecutor:
             split=split,
             capture_traces=capture_traces,
         )
-        script = build_slurm_array_script(
-            config_path=self.config.hpc.worker_config_path,
-            batch_dir=str(batch_dir),
-            task_count=len(tasks),
-            job_name=f"{self.config.hpc.job_name_prefix}-{batch_dir.name}",
-            partition=self.config.hpc.partition,
-            cpus_per_task=self.config.hpc.cpus_per_task,
-            mem=self.config.hpc.mem,
-            time_limit=self.config.hpc.time,
-            max_running_array_tasks=self.config.hpc.max_running_array_tasks,
-            remote_env_file=self.config.hpc.remote_env_file,
-            python_module=self.config.hpc.python_module,
-            container_module=self.config.hpc.container_module,
-            python_bin=self.config.hpc.python_bin,
+        script_path = self._write_array_script(
+            batch_dir=batch_dir,
+            tasks=tasks,
+            total_task_count=len(tasks),
+            attempt=1,
         )
-        script_path = batch_dir / "rollout_array.sbatch"
-        script_path.write_text(script, encoding="utf-8")
         self.audit.write(
             "online_hpc_rollout_batch_prepared",
             batch_dir=str(batch_dir),
@@ -256,12 +257,16 @@ class HPCSlurmOnlineRolloutExecutor:
                 fairshare_before=before.get("ulhpcshare_stdout", ""),
             )
             self._wait_for_outputs(tasks)
-            outputs = [self.store.load_output(task.output_path) for task in tasks]
+            outputs, retry_job_ids = self._load_outputs_with_retries(
+                batch_dir,
+                tasks,
+            )
             after = collect_slurm_resource_snapshot(job_id)
             usage = {
                 "mode": "online_planning_hpc_batch_resource_usage",
                 "batch_dir": str(batch_dir),
                 "job_id": job_id,
+                "retry_job_ids": retry_job_ids,
                 "task_count": len(tasks),
                 "cpus_per_task": self.config.hpc.cpus_per_task,
                 "mem": self.config.hpc.mem,
@@ -276,8 +281,10 @@ class HPCSlurmOnlineRolloutExecutor:
                 {
                     "mode": "online_planning_hpc_batch_done",
                     "job_id": job_id,
+                    "retry_job_ids": retry_job_ids,
                     "task_count": len(tasks),
                     "completed_outputs": len(outputs),
+                    "attempts": self.config.hpc.max_task_attempts,
                 },
             )
             self.audit.write(
@@ -292,6 +299,110 @@ class HPCSlurmOnlineRolloutExecutor:
             "HPC rollout batch prepared but not submitted. Review "
             f"{script_path} and set hpc.submit=true after resource pilot setup."
         )
+
+    def _write_array_script(
+        self,
+        *,
+        batch_dir: Path,
+        tasks: list[OnlineRolloutTask],
+        total_task_count: int,
+        attempt: int,
+    ) -> Path:
+        script = build_slurm_array_script(
+            config_path=self.config.hpc.worker_config_path,
+            batch_dir=str(batch_dir),
+            task_count=total_task_count,
+            job_name=f"{self.config.hpc.job_name_prefix}-{batch_dir.name}-a{attempt}",
+            partition=self.config.hpc.partition,
+            cpus_per_task=self.config.hpc.cpus_per_task,
+            mem=self.config.hpc.mem,
+            time_limit=self.config.hpc.time,
+            max_running_array_tasks=self.config.hpc.max_running_array_tasks,
+            remote_env_file=self.config.hpc.remote_env_file,
+            python_module=self.config.hpc.python_module,
+            container_module=self.config.hpc.container_module,
+            python_bin=self.config.hpc.python_bin,
+            task_indices=None if attempt == 1 else [task.index for task in tasks],
+            attempt=attempt,
+        )
+        script_path = batch_dir / f"rollout_array_attempt_{attempt:02d}.sbatch"
+        script_path.write_text(script, encoding="utf-8")
+        return script_path
+
+    def _load_outputs_with_retries(
+        self,
+        batch_dir: Path,
+        tasks: list[OnlineRolloutTask],
+    ) -> tuple[list[OnlineRolloutOutput], list[str]]:
+        retry_job_ids: list[str] = []
+        outputs_by_index: dict[int, OnlineRolloutOutput] = {}
+        pending = list(tasks)
+        for attempt in range(1, self.config.hpc.max_task_attempts + 1):
+            failed: list[OnlineRolloutTask] = []
+            for task in pending:
+                try:
+                    outputs_by_index[task.index] = self.store.load_output(
+                        task.output_path
+                    )
+                except Exception as exc:
+                    failed.append(task)
+                    self.audit.write(
+                        "online_hpc_rollout_task_failed",
+                        batch_dir=str(batch_dir),
+                        instance_id=task.case.instance_id,
+                        task_index=task.index,
+                        attempt=attempt,
+                        max_task_attempts=self.config.hpc.max_task_attempts,
+                        error_type=type(exc).__name__,
+                        error=str(exc),
+                    )
+                    self._archive_failed_output(batch_dir, task, attempt)
+            if not failed:
+                return (
+                    [outputs_by_index[task.index] for task in tasks],
+                    retry_job_ids,
+                )
+            if attempt >= self.config.hpc.max_task_attempts:
+                failed_ids = ", ".join(task.case.instance_id for task in failed)
+                raise RuntimeError(
+                    "online HPC rollout tasks failed after "
+                    f"{attempt} attempts: {failed_ids}"
+                )
+            retry_attempt = attempt + 1
+            retry_script = self._write_array_script(
+                batch_dir=batch_dir,
+                tasks=failed,
+                total_task_count=len(tasks),
+                attempt=retry_attempt,
+            )
+            before = collect_slurm_resource_snapshot()
+            job_id = (self.submitter or submit_slurm_array)(retry_script)
+            if job_id is not None:
+                retry_job_ids.append(job_id)
+            self.audit.write(
+                "online_hpc_rollout_retry_submitted",
+                batch_dir=str(batch_dir),
+                attempt=retry_attempt,
+                job_id=job_id,
+                task_indices=[task.index for task in failed],
+                instance_ids=[task.case.instance_id for task in failed],
+                fairshare_before=before.get("ulhpcshare_stdout", ""),
+            )
+            self._wait_for_outputs(failed)
+            pending = failed
+        raise RuntimeError("unreachable online HPC retry state")
+
+    @staticmethod
+    def _archive_failed_output(
+        batch_dir: Path,
+        task: OnlineRolloutTask,
+        attempt: int,
+    ) -> None:
+        if not task.output_path.exists():
+            return
+        failed_dir = batch_dir / "failed_outputs" / f"attempt_{attempt:02d}"
+        failed_dir.mkdir(parents=True, exist_ok=True)
+        task.output_path.replace(failed_dir / task.output_path.name)
 
     def _wait_for_outputs(self, tasks: list[OnlineRolloutTask]) -> None:
         remaining = {task.output_path for task in tasks}

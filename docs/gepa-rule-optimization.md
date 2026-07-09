@@ -826,6 +826,11 @@ FairShare 默认资源必须保守。ULHPC `batch` 分区按约 `4G × CPU` 的�
    监控最小资源申请是否仍产生 FairShare 浪费。
 8. Apptainer evaluator 日志写入当前 worker 的 eval phase workspace 下，不再写入
    项目全局 `logs/run_evaluation`，避免并发 worker 或重复 instance 覆盖日志。
+9. 如果某个 worker output 已写出但 `status != completed`，controller 会归档该
+   output 到 `failed_outputs/attempt_NN/`，并只为失败 task index 重新提交 Slurm
+   array。重试次数由 `hpc.max_task_attempts` 控制。缺失 output 不会被本地超时
+   判定为失败，因为它可能只是 Slurm 仍在排队或运行；controller 会继续按
+   `hpc.poll_interval_seconds` 等待文件出现。
 
 配置约束：
 
