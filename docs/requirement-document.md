@@ -262,7 +262,7 @@
 ### 3.6 对比分析与规则提取（历史后处理路径）
 
 本节记录早期 PCT reflect-success 规则提取路径。当前规则生成主线为 §3.8 的
-GEPA strict Checker 规则文本优化；FR-13 保留为历史产物说明，不作为当前优先待办。
+Online GEPA；FR-13 保留为历史产物说明，不作为当前优先待办。
 
 #### FR-13：从 Reflect-Success Cases 中提取通用规则
 
@@ -296,7 +296,7 @@ GEPA reflection、候选报告和后续 prompt 调整完成。
 | 实现位置 | `src/analysis/reviewer_agent.py`（核心 Reviewer Agent）、`src/analysis/review_cli.py`（批量审查 CLI）、`scripts/long_run_watchdog.py`（review/rework 循环集成） |
 | 验收标准 | 1）Reviewer Agent 输出结构化的 JSON 评分；2）未通过的规则被正确加入 rework_queue 并在 watchdog 中触发返工；3）增量审查模式下，第二轮仅审查上一轮失败的案例；4）超过 3 次返工仍未通过的案例被自动放弃，保留最佳结果；5）review 和 rework 阶段均支持 API cooldown、hang detection、Claude repair 等现有 watchdog 机制 |
 
-### 3.8 GEPA 规则文本优化（当前主线）
+### 3.8 GEPA 规则文本优化
 
 #### FR-16：基于分类反馈优化 Checker 规则合集
 
@@ -304,7 +304,7 @@ GEPA reflection、候选报告和后续 prompt 调整完成。
 |------|------|
 | ID | FR-16 |
 | 名称 | 基于 GEPA 的 Checker 规则优化 |
-| 状态 | 已实现并作为当前 GEPA 规则优化主线运行 |
+| 状态 | 已实现的 offline 对照路径；因规则生成效果不足暂缓，当前主线为 Online GEPA |
 | 描述 | 从 SWE-bench Verified PCT Round 1 构建二分类数据。固定 Checker Agent 接收 issue、plan、候选规则并可读取 base commit 仓库，预测该 plan 经当前 Code Agent 执行后是否 resolved。GEPA 把完整规则合集作为唯一文本组件，通过预测反馈迭代优化规则文本，替代 FR-13/FR-14 的逐案例提取、审查和聚合流程 |
 | Checker 输入 | issue description、plan、base commit 仓库、候选规则文本 |
 | GEPA ASI | 真实 resolved 标签、Checker 判断与仓库证据、Plan/Code trajectory、实际 patch、evaluator/test 结果；这些执行后信息不得进入 Checker 输入 |
@@ -319,6 +319,19 @@ GEPA reflection、候选报告和后续 prompt 调整完成。
 | 验收标准 | 1）数据快照和切分可复现；2）Checker 看不到执行后信息；3）每个候选规则具有完整预测和指标；4）搜索历史和规则哈希可审计；5）最终规则只在优化完成后评估 PolyBench |
 
 完整设计见 [`gepa-rule-optimization.md`](gepa-rule-optimization.md)。
+
+#### FR-18：Online GEPA planning rules 优化（当前主线）
+
+| 属性 | 内容 |
+|------|------|
+| ID | FR-18 |
+| 名称 | 基于真实 rollout 的 planning rules 优化 |
+| 状态 | 已实现并作为当前规则生成主线运行 |
+| 描述 | 将候选 rules 注入 Plan Agent，执行当前 `Plan -> Code -> Evaluator` rollout，并以当前生成的 trajectory、patch、evaluator result 和 resolved score 驱动 GEPA reflection |
+| 输入隔离 | Plan Agent 可见 issue、repo 和 candidate rules；Code Agent 只可见 issue、plan 和 repo；历史 PCT plan、label、patch、trajectory 与 ASI 不进入当前 rollout |
+| HPC 执行 | controller 串行维护 GEPA 状态；每个高并行 metric batch 由独立 1 CPU / 4G Slurm array elements 执行，resume 优先接管已有 batch 的 pending/running/completed task，只重提失败或丢失 task |
+| 数据可信度 | operational failure 不计作 unresolved；evaluator 必须验证可写 worktree 含目标仓库 tracked files，基础设施失败不得污染 candidate score |
+| 历史路径 | PCT、PCC 与 offline GEPA 的代码、数据快照和有效结果保留用于复现与对照，但目前暂停继续优化 |
 
 ### 3.9 HPC 作业提交运行
 

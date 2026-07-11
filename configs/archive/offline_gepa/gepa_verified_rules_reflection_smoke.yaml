@@ -1,7 +1,7 @@
 paths:
   dataset_snapshot: output/SWE-bench_Verified/gepa-pilot-datasets/pilot_2_2_seed43_e2bdb83dc201
-  initial_rules: configs/gepa_empty_rules.txt
-  run_dir: output/SWE-bench_Verified/gepa-rules/reflection-smoke-empty-seed-apptainer
+  initial_rules: configs/archive/offline_gepa/gepa_empty_rules.txt
+  run_dir: output/SWE-bench_Verified/gepa-rules/reflection-smoke-empty-seed
 
 checker:
   model: deepseek-v4-flash
@@ -31,21 +31,11 @@ search:
   skip_perfect_score: false
   min_proposals: 1
 
-# Docker section is kept for backward compatibility and is used when
-# container.runtime is docker (the default). For HPC Apptainer runs only the
-# workdir value is reused; image pulling is handled by the Apptainer backend.
 docker:
   workdir: /testbed
   timeout: 30
   min_free_gb: 20
-  max_cached_images: 1000
-
-container:
-  runtime: apptainer
-  module: tools/Apptainer
-  # Shared Lustre scratch is faster than Isilon home for concurrent SIF reads.
-  sif_cache_dir: /scratch/users/${USER}/vibe-coding-planning/shared/sif-cache
-  writable_tmpfs: true
+  max_cached_images: 6
 
 prompts:
   checker_system: |

@@ -162,12 +162,12 @@ rsync dry-run 时，显式加 `--sync-dry-run`。脚本会先用 `nc` 做
 # 默认 dry-run：只打印将要执行的 ulhpc-submit 命令和远端命令，不提交 Slurm 作业
 bash scripts/hpc_submit_batch.sh \
   --gepa-rules \
-  --gepa-config configs/gepa_verified_rules_reflection_smoke_apptainer.yaml
+  --gepa-config configs/archive/offline_gepa/gepa_verified_rules_reflection_smoke_apptainer.yaml
 
 # 真正提交 GEPA Apptainer 作业
 bash scripts/hpc_submit_batch.sh \
   --gepa-rules \
-  --gepa-config configs/gepa_verified_rules_reflection_smoke_apptainer.yaml \
+  --gepa-config configs/archive/offline_gepa/gepa_verified_rules_reflection_smoke_apptainer.yaml \
   --job-name gepa-ref-smoke-apptainer \
   --time 02:00:00 \
   --cpus 2 \
@@ -346,7 +346,7 @@ ulhpc-submit \
 ```bash
 bash scripts/hpc_submit_batch.sh \
   --config configs/polybench_full199_pct.yaml \
-  --instances configs/polybench_retry_images_buster4.json \
+  --instances configs/archive/pct_runs/polybench_retry_images_buster4.json \
   --batch-id polybench-hpc-buster4-001 \
   --parallel 2 \
   --job-name pct-buster4 \
@@ -369,7 +369,7 @@ Apptainer 后端现在默认**按需拉取 SIF**：`ApptainerEnvironment` 构造
 
 ```bash
 python scripts/tools/prepare_apptainer_sifs.py \
-  --config configs/gepa_verified_rules_reflection_smoke_apptainer.yaml \
+  --config configs/archive/offline_gepa/gepa_verified_rules_reflection_smoke_apptainer.yaml \
   --sif-cache-dir /scratch/users/<user>/vibe-coding-planning/shared/sif-cache
 ```
 
@@ -378,7 +378,7 @@ formal/strict run）：
 
 ```bash
 bash scripts/tools/submit_apptainer_sif_preheat.sh \
-  --config configs/gepa_verified_rules_strict_hpc_24h_apptainer.yaml \
+  --config configs/archive/offline_gepa/gepa_verified_rules_strict_hpc_24h_apptainer.yaml \
   --sif-cache-dir /scratch/users/<user>/vibe-coding-planning/shared/sif-cache \
   --time 08:00:00 \
   --submit
@@ -406,7 +406,7 @@ cache 中的 `.sif` 数量判断是否完成。已有 SIF 会被
 ```bash
 conda run -n mini-swe env PATH=/Users/taoran.wang/miniconda3/bin:$PATH \
   python scripts/tools/hpc_sif_preheat_loop.py \
-  --config configs/gepa_verified_rules_strict_hpc_24h_newprompt_20260625_apptainer.yaml \
+  --config configs/archive/offline_gepa/gepa_verified_rules_strict_hpc_24h_newprompt_20260625_apptainer.yaml \
   --remote-project-dir /scratch/users/<user>/vibe-coding-planning/runs/vibe-sif-preheat \
   --remote-dataset-dir /scratch/users/<user>/vibe-coding-planning/hpc_datasets \
   --sif-cache-dir /scratch/users/<user>/vibe-coding-planning/shared/sif-cache \
@@ -427,14 +427,14 @@ conda run -n mini-swe env PATH=/Users/taoran.wang/miniconda3/bin:$PATH \
 ```bash
 # 只列出 shared cache 中缺失的前 3 个镜像
 conda run -n mini-swe python scripts/tools/login_apptainer_sif_preheat.py \
-  --config configs/gepa_verified_rules_strict_hpc_24h_newprompt_20260625_apptainer.yaml \
+  --config configs/archive/offline_gepa/gepa_verified_rules_strict_hpc_24h_newprompt_20260625_apptainer.yaml \
   --missing-only \
   --limit 3 \
   --dry-run
 
 # 无人值守 login preheat，每轮串行拉取 1 个缺失镜像
 conda run -n mini-swe python scripts/tools/login_sif_preheat_watchdog.py \
-  --config configs/gepa_verified_rules_strict_hpc_24h_newprompt_20260625_apptainer.yaml \
+  --config configs/archive/offline_gepa/gepa_verified_rules_strict_hpc_24h_newprompt_20260625_apptainer.yaml \
   --batch-size 1 \
   --timeout 21600 \
   --check-interval 1800 \
@@ -469,7 +469,7 @@ home 下已有大型 `~/.apptainer/cache`，先确认没有运行中的 Apptaine
 symlink，防止后续默认 Apptainer 行为再次写爆 home quota。
 
 HPC GEPA 配置示例见
-`configs/gepa_verified_rules_strict_hpc_24h_apptainer.yaml`：
+`configs/archive/offline_gepa/gepa_verified_rules_strict_hpc_24h_apptainer.yaml`：
 
 ```yaml
 paths:
@@ -497,7 +497,7 @@ GEPA。
 ```bash
 bash scripts/hpc_submit_batch.sh \
   --gepa-rules \
-  --gepa-config configs/gepa_verified_rules_reflection_smoke_apptainer.yaml \
+  --gepa-config configs/archive/offline_gepa/gepa_verified_rules_reflection_smoke_apptainer.yaml \
   --job-name gepa-ref-smoke-apptainer \
   --time 02:00:00 \
   --cpus 2 \
@@ -511,7 +511,7 @@ bash scripts/hpc_submit_batch.sh \
 ```bash
 bash scripts/hpc_submit_batch.sh \
   --gepa-rules \
-  --gepa-config configs/gepa_verified_rules_strict_hpc_24h_apptainer.yaml \
+  --gepa-config configs/archive/offline_gepa/gepa_verified_rules_strict_hpc_24h_apptainer.yaml \
   --job-name gepa-strict-24h \
   --time 24:00:00 \
   --cpus 4 \
@@ -565,7 +565,7 @@ conda run -n mini-swe python scripts/hpc_resume_loop.py \
   --poll-interval 1800 \
   --max-runs 4 \
   --gepa-rules \
-  --gepa-config configs/gepa_verified_rules_strict_hpc_24h_apptainer.yaml \
+  --gepa-config configs/archive/offline_gepa/gepa_verified_rules_strict_hpc_24h_apptainer.yaml \
   --job-name gepa-strict-newprompt \
   --remote-dir '~/hpc_runs/vibe-gepa-strict-newprompt' \
   --time 24:00:00 \
@@ -844,7 +844,7 @@ run manifest，确保 Docker run_dir 与 Apptainer run_dir 不会互相恢复。
 #### 7.3.5 实跑结果
 
 使用配置
-`configs/gepa_verified_rules_reflection_smoke_apptainer.yaml`，其
+`configs/archive/offline_gepa/gepa_verified_rules_reflection_smoke_apptainer.yaml`，其
 `run_dir` 特意与本地 Docker 路径隔离：
 
 ```text
@@ -1020,17 +1020,17 @@ mkdir -p "$APPTAINER_CACHEDIR" "$APPTAINER_TMPDIR"
 # 按需拉取（不预下载）：直接提交 GEPA 作业即可
 bash scripts/hpc_submit_batch.sh \
   --gepa-rules \
-  --gepa-config configs/gepa_verified_rules_strict_hpc_24h_apptainer.yaml \
+  --gepa-config configs/archive/offline_gepa/gepa_verified_rules_strict_hpc_24h_apptainer.yaml \
   --submit
 
 # 或一次性预拉（可选）
 python scripts/tools/prepare_apptainer_sifs.py \
-  --config configs/gepa_verified_rules_strict_hpc_24h_apptainer.yaml \
+  --config configs/archive/offline_gepa/gepa_verified_rules_strict_hpc_24h_apptainer.yaml \
   --sif-cache-dir /scratch/users/<user>/vibe-coding-planning/shared/sif-cache
 
 # 或通过 ulhpc-submit wrapper 提交独立作业完成预热
 bash scripts/tools/submit_apptainer_sif_preheat.sh \
-  --config configs/gepa_verified_rules_strict_hpc_24h_apptainer.yaml \
+  --config configs/archive/offline_gepa/gepa_verified_rules_strict_hpc_24h_apptainer.yaml \
   --sif-cache-dir /scratch/users/<user>/vibe-coding-planning/shared/sif-cache \
   --time 08:00:00 \
   --submit
@@ -1048,7 +1048,7 @@ GEPA 主循环仍是串行，`search.parallel` 只控制一次 Checker evaluatio
 ```bash
 bash scripts/hpc_submit_batch.sh \
   --gepa-rules \
-  --gepa-config configs/gepa_verified_rules_formal_pilot_apptainer.yaml \
+  --gepa-config configs/archive/offline_gepa/gepa_verified_rules_formal_pilot_apptainer.yaml \
   --job-name gepa-formal-pilot-p2 \
   --partition batch \
   --cpus 2 \
@@ -1109,7 +1109,7 @@ resume 的 completed-output takeover 现场。
 ```bash
 bash scripts/hpc_submit_batch.sh \
   --gepa-rules \
-  --gepa-config configs/gepa_online_planning_hpc_8h_resume_20260711.yaml \
+  --gepa-config configs/archive/online_tests/gepa_online_planning_hpc_8h_resume_20260711.yaml \
   --job-name online-gepa-resume-8h-20260711 \
   --remote-dir '~/hpc_runs/vibe-coding-planning-online-2h-smoke-20260709' \
   --cpus 1 \
@@ -1120,6 +1120,19 @@ bash scripts/hpc_submit_batch.sh \
 
 不要为 8h resume 新建 `run_dir`，否则会丢失原 GEPA checkpoint；也不要把 controller
 的 8 小时误写为 worker walltime，worker 仍按 YAML 使用 `1 CPU / 4G / 50min`。
+
+> **废弃说明（2026-07-11）：上述 2h/20min/8h run_dir 只保留为 HPC 控制流程
+> 证据，不再是有效规则优化 checkpoint。** Apptainer evaluator 曾在复制 SIF 内
+> repository 前创建 `phase_workdir/logs`，导致非空判断跳过复制，并将缺少源码的
+> host directory bind 到 `/testbed`。所有 patch apply 因此在测试前失败，却被记录
+> 为 unresolved。修复后正式实验必须使用新 `run_dir` 和空 GEPA cache，先验证
+> workspace 存在 `.git`/tracked files、`git apply` 成功且产生官方 test report；
+> 不得再次提交本节旧 resume 命令。
+
+修复后的首个正式 8h 验证使用稳定配置
+`configs/gepa_online_planning_hpc.yaml`，写入全新的
+`online-planning-hpc-postfix-8h-20260712` run directory。它不得接管上述失真
+checkpoint；后续只允许 resume 这个 post-fix run 自身生成的 checkpoint。
 
 `DockerCapacityWindow` 参数仍复用 `docker:` 配置段：
 
@@ -1139,7 +1152,7 @@ docker:
 
 1. 旧 pilot/formal run 已归档到
    `output/SWE-bench_Verified/gepa-rules/archive/20260622_pre_strict_checker/`。
-2. 使用 `configs/gepa_verified_rules_strict_hpc_24h_apptainer.yaml` 和新的
+2. 使用 `configs/archive/offline_gepa/gepa_verified_rules_strict_hpc_24h_apptainer.yaml` 和新的
    `run_dir` 启动 strict Checker GEPA。
 3. 先按**按需拉取**模式提交 strict Checker GEPA 试运行；若首次运行因 image
    转换等待过久，再决定是否提交 `submit_apptainer_sif_preheat.sh` 一次性预拉 482

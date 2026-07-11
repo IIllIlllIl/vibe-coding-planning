@@ -65,7 +65,7 @@ Slurm / ulhpc-submit options:
 
 Examples:
   bash scripts/tools/submit_apptainer_sif_preheat.sh \
-    --config configs/gepa_verified_rules_strict_hpc_24h_apptainer.yaml \
+    --config configs/gepa_online_planning_hpc.yaml \
     --sif-cache-dir "${VIBE_HPC_ROOT}/shared/sif-cache" \
     --time 08:00:00 \
     --submit

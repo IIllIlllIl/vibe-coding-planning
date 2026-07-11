@@ -164,7 +164,7 @@ def main() -> int:
     parser.add_argument(
         "--config",
         type=Path,
-        default=Path("configs/gepa_online_planning_hpc_resource_pilot_20260706.yaml"),
+        default=Path("configs/archive/online_tests/gepa_online_planning_hpc_resource_pilot_20260706.yaml"),
     )
     parser.add_argument("--split", choices=("train", "validation"), default="train")
     parser.add_argument("--instance-id", action="append", default=[])

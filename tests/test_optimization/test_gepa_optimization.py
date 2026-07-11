@@ -374,7 +374,7 @@ def test_online_hpc_6to8_config_uses_formal_snapshot_without_instance_subset(
     repo_root = Path(__file__).resolve().parents[2]
 
     config = load_online_optimization_config(
-        repo_root / "configs" / "gepa_online_planning_hpc_6to8iter_20260709.yaml"
+        repo_root / "configs" / "gepa_online_planning_hpc.yaml"
     )
 
     assert (
@@ -401,10 +401,18 @@ def test_online_hpc_8h_resume_config_keeps_2h_checkpoint_semantics(monkeypatch):
     monkeypatch.setenv("DEEPSEEK_API_KEY", "secret")
     repo_root = Path(__file__).resolve().parents[2]
     original = load_online_optimization_config(
-        repo_root / "configs" / "gepa_online_planning_hpc_2h_smoke_20260709.yaml"
+        repo_root
+        / "configs"
+        / "archive"
+        / "online_tests"
+        / "gepa_online_planning_hpc_2h_smoke_20260709.yaml"
     )
     resumed = load_online_optimization_config(
-        repo_root / "configs" / "gepa_online_planning_hpc_8h_resume_20260711.yaml"
+        repo_root
+        / "configs"
+        / "archive"
+        / "online_tests"
+        / "gepa_online_planning_hpc_8h_resume_20260711.yaml"
     )
 
     assert resumed.run_dir == original.run_dir
@@ -526,6 +534,8 @@ def test_online_smoke_pilot_config_is_small_and_auditable():
     config = load_online_optimization_config(
         repo_root
         / "configs"
+        / "archive"
+        / "online_tests"
         / "gepa_online_planning_smoke_3to5iter_20260703.yaml",
         require_api_keys=False,
     )
@@ -896,7 +906,11 @@ def test_extended_pilot_reflection_prompt_enforces_deployment_boundary(
     monkeypatch.setenv("DEEPSEEK_API_KEY", "secret")
     repo_root = Path(__file__).resolve().parents[2]
     config = load_optimization_config(
-        repo_root / "configs" / "gepa_verified_rules_pilot_extended.yaml"
+        repo_root
+        / "configs"
+        / "archive"
+        / "offline_gepa"
+        / "gepa_verified_rules_pilot_extended.yaml"
     )
 
     assert config.checker.max_steps == 500
@@ -3428,6 +3442,8 @@ def test_apptainer_config_loads(monkeypatch):
     config = load_optimization_config(
         repo_root
         / "configs"
+        / "archive"
+        / "offline_gepa"
         / "gepa_verified_rules_reflection_smoke_apptainer.yaml"
     )
     assert config.container.runtime == "apptainer"
@@ -3445,6 +3461,8 @@ def test_strict_hpc_24h_config_loads(monkeypatch):
     config = load_optimization_config(
         repo_root
         / "configs"
+        / "archive"
+        / "offline_gepa"
         / "gepa_verified_rules_strict_hpc_24h_apptainer.yaml"
     )
 
@@ -3482,7 +3500,11 @@ def test_docker_config_defaults_are_preserved(monkeypatch):
     monkeypatch.setenv("DEEPSEEK_API_KEY", "secret")
     repo_root = Path(__file__).resolve().parents[2]
     config = load_optimization_config(
-        repo_root / "configs" / "gepa_verified_rules_reflection_smoke.yaml"
+        repo_root
+        / "configs"
+        / "archive"
+        / "offline_gepa"
+        / "gepa_verified_rules_reflection_smoke.yaml"
     )
     assert config.container.runtime == "docker"
     assert config.container.sif_cache_dir == Path("/tmp/vibe-sif-cache")

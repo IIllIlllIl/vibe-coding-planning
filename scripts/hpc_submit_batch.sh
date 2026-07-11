@@ -71,7 +71,7 @@ Slurm / ulhpc-submit options:
 Examples:
   bash scripts/hpc_submit_batch.sh \
     --gepa-rules \
-    --gepa-config configs/gepa_verified_rules_strict_hpc_24h_apptainer.yaml \
+    --gepa-config configs/gepa_online_planning_hpc.yaml \
     --remote-dir '~/hpc_runs/vibe-gepa-strict-newprompt' \
     --job-name gepa-strict-newprompt \
     --time 24:00:00 \

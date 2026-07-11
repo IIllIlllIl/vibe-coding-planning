@@ -7,7 +7,7 @@ and invokes Claude Code CLI for complex code repairs.
 Usage:
     export DEEPSEEK_API_KEY="..."
     export ANTHROPIC_API_KEY="..."   # only needed if claude repair is triggered
-    export PCT_CONFIG="configs/polybench_remaining133_pct.yaml"  # optional
+    export PCT_CONFIG="configs/archive/pct_runs/polybench_remaining133_pct.yaml"  # optional
     python scripts/long_run_watchdog.py
 
 State file (auto-created):

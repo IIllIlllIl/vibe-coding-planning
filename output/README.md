@@ -1,8 +1,25 @@
 # Output Directory Index
 
 Most contents of this directory are gitignored local experiment outputs; this
-README is the tracked index. Use it as a quick map of what is currently present;
-it does not classify runs by importance.
+README is the tracked index and classification policy. Unarchived directories
+must contain useful formal results, reproducible inputs, analysis evidence, or
+intentional test runs. Clearly failed or invalid runs are moved under the
+nearest `archive/failed-or-invalid/`; archiving never means deletion.
+
+## Current Research Priority
+
+Online GEPA is the active rule-generation path and its valid outputs have the
+highest analysis priority. It optimizes planning rules against current
+Plan-Code-Evaluator rollouts. PCT, PCC, per-case rule extraction, and offline
+GEPA strict Checker optimization are historical approaches that were not
+effective enough to remain active; their valid outputs and immutable datasets
+remain useful for provenance, reproduction, and method comparison.
+
+An output is not archived merely because its process ended with a nonzero exit:
+a long run with committed iterations and auditable partial state can remain
+valuable. Outputs are archived when they contain no usable result, have a known
+infrastructure error that invalidates scores, or are explicitly failed retry
+backups.
 
 ## Standard Instance Output Layout
 
@@ -44,8 +61,8 @@ output/checker_eval/<run_id>/
 
 | Path | Current contents |
 |------|------------------|
-| `SWE-bench_Verified/` | Verified PCT outputs, checker/GEPA datasets, and GEPA rule optimization runs. PCT smoke/test runs are under `test_runs_archive/`; GEPA pilot and formal runs are tracked separately under `gepa-rules/` |
-| `SWE-PolyBench/` | PolyBench PCT runs and retry/sample manifests |
+| `SWE-bench_Verified/` | Online GEPA outputs, historical offline GEPA/PCT outputs, and immutable datasets. Invalid GEPA runs are under `gepa-rules/archive/failed-or-invalid/` |
+| `SWE-PolyBench/` | Historical PolyBench PCT runs and retry/sample manifests; invalid retry states are under `archive/failed-or-invalid/` |
 | `SWE-bench_Pro/` | SWE-bench Pro prompt/checker experiment outputs |
 | `analysis_flash/` | Flash rule extraction/review/aggregation outputs |
 | `analysis_pro/` | Pro rule extraction/aggregation outputs |
@@ -206,17 +223,18 @@ GEPA rule optimization outputs are under:
 output/SWE-bench_Verified/gepa-rules/
 ```
 
-These directories are not currently moved into `test_runs_archive/`; the run
-name and each run's `run_manifest.json` are the source of truth for whether a
-run is intended for later analysis.
+The unarchived directories are useful completed tests, resource pilots, or
+historical runs with committed search state. Archive directories are excluded
+from score and rule-quality analysis.
 
 | Path | Classification | Notes |
 |------|----------------|-------|
-| `SWE-bench_Verified/gepa-rules/formal-pilot-gpt-seed-mc116-retry1/` | Formal analysis pilot | Current run intended for follow-up analysis. Uses the filtered Verified GEPA snapshot, GPT-generated seed rules, `parallel: 2`, and a resumable run manifest. Budget was first prepared at 116 metric calls, later resumed at 550, and then resumed again at `latest_max_metric_calls: 2150` for the 2026-06-19 long run. |
-| `SWE-bench_Verified/gepa-rules/formal-pilot-gpt-seed-mc116/` | Superseded formal attempt | Earlier formal-pilot attempt retained for auditability; do not use as the primary analysis run unless explicitly selected. |
-| `SWE-bench_Verified/gepa-rules/pilot-empty-seed/` | Test pilot | Empty-seed pilot used to validate GEPA wiring and audit outputs. |
-| `SWE-bench_Verified/gepa-rules/reflection-smoke-empty-seed/` | Smoke test | Small reflection smoke run used to validate Reflection proposal behavior. |
-| `SWE-bench_Verified/gepa-rules/pilot-extended-empty-seed/` | Test pilot | Longer empty-seed pilot used to validate candidate proposal/acceptance paths before the formal GPT-seed run. |
+| `SWE-bench_Verified/gepa-rules/online-planning-smoke-pilot-3to5iter-20260703-pct-aligned-rerun2/` | Completed Online GEPA test | Completed 22 metric calls; useful for pipeline behavior, not a formal quality claim. |
+| `SWE-bench_Verified/gepa-rules/online-planning-hpc-resource-pilot-20260706/` | Online HPC resource pilot | Retained as environment and resource evidence. |
+| `SWE-bench_Verified/gepa-rules/strict-checker-hpc-24h-20260622/` | Historical partial offline run | Reached iteration 28 before an Apptainer cache quota failure; committed state remains useful for offline analysis. |
+| `SWE-bench_Verified/gepa-rules/strict-checker-local-newprompt-3000-p1-20260702/` | Historical partial offline run | Reached iteration 72 before a Docker registry failure; committed state remains useful for offline analysis. |
+| `SWE-bench_Verified/gepa-rules/archive/20260622_pre_strict_checker/` | Historical archive | Pre-strict Checker pilots retained for auditability. |
+| `SWE-bench_Verified/gepa-rules/archive/failed-or-invalid/` | Invalid archive | Runs excluded from scoring; see the archive README for exact causes and original names. |
 
 For formal analysis, prefer runs that include `run_manifest.json`,
 `gepa_resume_state.json`, `candidates.json`, `run_log.json`, and

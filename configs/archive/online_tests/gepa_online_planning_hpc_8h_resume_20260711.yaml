@@ -88,7 +88,7 @@ hpc:
   # Resume the same logical experiment and persistent checkpoint. The outer
   # controller receives its 8h walltime from hpc_submit_batch.sh, not this YAML.
   job_name_prefix: online-gepa-8h-resume
-  worker_config_path: configs/gepa_online_planning_hpc_8h_resume_20260711.yaml
+  worker_config_path: configs/archive/online_tests/gepa_online_planning_hpc_8h_resume_20260711.yaml
 
 evaluator:
   backend: swebench_apptainer

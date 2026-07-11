@@ -3,7 +3,7 @@ mode: online_planning
 paths:
   dataset_snapshot: output/SWE-bench_Verified/verified-round1-gepa-datasets/20260614_482_fdc056ae85df
   initial_rules: configs/gepa_initial_rules_gpt_seed.md
-  run_dir: output/SWE-bench_Verified/gepa-rules/online-planning-hpc-2h-smoke-20260709
+  run_dir: output/SWE-bench_Verified/gepa-rules/online-planning-hpc-postfix-8h-20260712
 
 dataset:
   name: SWE-bench/SWE-bench_Verified
@@ -39,8 +39,10 @@ reflection:
 
 search:
   # GEPA checks max_metric_calls at iteration boundaries. This value targets a
-  # short 6-8 proposal online run over the formal 384/98 snapshot, not a full
-  # search budget. A successful run can be resumed with a larger budget.
+  # 8-hour post-evaluator-fix validation over the formal 384/98 snapshot. The
+  # metric budget is intentionally generous because GEPA checks it only at
+  # iteration boundaries; walltime remains the operational limit, and a
+  # successful run can be resumed with a larger controller walltime.
   max_metric_calls: 1000
   projection_metric_calls: 1000
   reflection_minibatch_size: 3
@@ -66,7 +68,7 @@ execution:
   backend: hpc_slurm
 
 hpc:
-  # Small online GEPA run: each Slurm array task runs one rollout worker.
+  # Each Slurm array task runs one rollout worker.
   # max_running_array_tasks limits simultaneously running Slurm array elements;
   # it is not Python/thread/process concurrency inside a worker.
   submit: true
@@ -85,8 +87,8 @@ hpc:
   python_module: lang/Python/3.11
   container_module: tools/Apptainer
   python_bin: python3
-  job_name_prefix: online-gepa-2h-smoke
-  worker_config_path: configs/gepa_online_planning_hpc_2h_smoke_20260709.yaml
+  job_name_prefix: online-gepa-postfix-8h
+  worker_config_path: configs/gepa_online_planning_hpc.yaml
 
 evaluator:
   backend: swebench_apptainer

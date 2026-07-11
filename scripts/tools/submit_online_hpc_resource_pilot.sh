@@ -6,7 +6,7 @@
 # not submit a nested sbatch job.
 set -euo pipefail
 
-CONFIG="configs/gepa_online_planning_hpc_resource_pilot_20260706.yaml"
+CONFIG="configs/archive/online_tests/gepa_online_planning_hpc_resource_pilot_20260706.yaml"
 JOB_NAME="online-gepa-resource-pilot"
 PARTITION="batch"
 CPUS="1"
@@ -34,7 +34,7 @@ Usage:
 
 Online pilot options:
   --config PATH          Online GEPA config file
-                         (default: configs/gepa_online_planning_hpc_resource_pilot_20260706.yaml)
+                         (default: configs/archive/online_tests/gepa_online_planning_hpc_resource_pilot_20260706.yaml)
   --split train|validation
   --instance-id ID       Select one instance; may be repeated
   --limit N              Number of selected cases visible to the worker (default: 1)

@@ -289,7 +289,14 @@ class TestEvaluateApptainer:
             def cleanup(self):
                 commands.append("cleanup")
 
-        mock_env_cls.return_value = FakeEnv()
+        phase_workdir = tmp_path / "eval-workdir"
+
+        def make_env(**kwargs):
+            assert kwargs["host_workdir"] == phase_workdir
+            assert not phase_workdir.exists() or not any(phase_workdir.iterdir())
+            return FakeEnv()
+
+        mock_env_cls.side_effect = make_env
 
         result = evaluate_apptainer(
             "diff --git a/a.py b/a.py\n",
@@ -299,7 +306,7 @@ class TestEvaluateApptainer:
                 sif_cache_dir=tmp_path / "sifs",
             ),
             capacity_window=object(),
-            phase_workdir=tmp_path / "eval-workdir",
+            phase_workdir=phase_workdir,
             timeout=123,
         )
 
@@ -310,8 +317,48 @@ class TestEvaluateApptainer:
         mock_make_spec.assert_called_once_with(instance_info, namespace="swebench")
         mock_get_report.assert_called_once()
         assert any(".vibe_patch.diff" in command for command in commands)
+        assert any("git rev-parse --is-inside-work-tree" in command for command in commands)
         assert any("/bin/bash .vibe_eval.sh" in command for command in commands)
         assert commands[-1] == "cleanup"
+
+    @patch("src.evaluator.swe_apptainer_evaluator.ApptainerEnvironment")
+    @patch("swebench.harness.grading.get_eval_report")
+    @patch("swebench.harness.test_spec.test_spec.make_test_spec")
+    def test_rejects_uninitialized_repository_workspace(
+        self,
+        mock_make_spec,
+        _mock_get_report,
+        mock_env_cls,
+        tmp_path,
+        instance_info,
+    ):
+        mock_make_spec.return_value = SimpleNamespace(eval_script="echo tests")
+
+        class FakeEnv:
+            def execute(self, command, cwd="", *, timeout=None):
+                if "git rev-parse --is-inside-work-tree" in command:
+                    return {"returncode": 1, "output": "not a git repository"}
+                return {"returncode": 0, "output": ""}
+
+            def cleanup(self):
+                pass
+
+        mock_env_cls.return_value = FakeEnv()
+
+        with pytest.raises(
+            FatalError,
+            match="workspace is not an initialized repository",
+        ):
+            evaluate_apptainer(
+                "diff --git a/a.py b/a.py\n",
+                instance_info,
+                container=ContainerConfig(
+                    runtime="apptainer",
+                    sif_cache_dir=tmp_path / "sifs",
+                ),
+                capacity_window=object(),
+                phase_workdir=tmp_path / "eval-workdir",
+            )
 
     def test_rejects_non_standard_datasets(self, tmp_path, instance_info):
         info = {**instance_info, "dataset_type": "polybench"}

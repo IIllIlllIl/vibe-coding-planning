@@ -1,8 +1,10 @@
 # Plan-Code-Test: 自动化代码方案迭代优化系统
 
-本项目旨在**检测坏的 plan**。早期路径是通过 PRC（Plan-Reflect-Code，也称
-PCT）采集轨迹、提取规则并在 PCC（Plan-Checker-Code）中验证。当前主线是使用
-Verified PCT Round 1 数据和 vendored GEPA，直接优化 Checker 使用的完整规则文本。
+本项目旨在生成能改善代码 Agent 实际执行结果的 planning rules。当前主线是
+**Online GEPA**：把候选 rules 注入 Plan Agent，执行 `Plan -> Code -> Evaluator`
+真实 rollout，并用当前 rollout 的轨迹与 resolved 结果优化规则。早期 PCT、PCC
+和基于历史标签的 offline GEPA 产物继续保留用于方法学对照和数据溯源，但因实际
+规则生成效果不足，目前暂停继续投入。
 
 ## 核心特性
 
@@ -15,7 +17,8 @@ Verified PCT Round 1 数据和 vendored GEPA，直接优化 Checker 使用的完
 - **规则质量审查与返工（FR-14，默认关闭）**：独立 LLM Reviewer Agent 审查规则质量（五维评分），未通过者触发返工循环。实践发现返工机制会**破坏已提取的有效规则**（删除旧结果后重跑失败），因此默认关闭。可通过 `config.analysis.enable_review` 开启
 - **Plan-Checker-Code 管道（FR-15）**：在 Plan 与 Code 之间插入规则检查器，验证计划是否符合从成功案例中提炼出的规则集。检查器在 Docker 内运行，可验证文件路径、函数名等具体引用。代码始终执行以产生 ground truth，用于计算检查器的 TP/FP/FN/TN、Accuracy、Precision、Recall、F1
 - **检查器 held-out 评估**：在 SWE-PolyBench Python 子集上运行 Plan-Check-Code 管道，评估规则集的预测能力
-- **GEPA 规则优化（当前主线）**：使用 Verified PCT Round 1 的 `issue + plan + repo + resolved` 分类数据，让 GEPA 直接优化 Checker 的完整规则文本。当前 strict Checker prompt、GPT seed、Apptainer backend、HPC 提交和 resume 机制均已实现。设计见 [`docs/gepa-rule-optimization.md`](docs/gepa-rule-optimization.md)
+- **Online GEPA 规则优化（当前主线）**：候选规则只注入 Plan Agent，Code Agent 只接收 issue 和生成的 plan；当前 rollout 的 patch、trajectory 和 evaluator result 作为 reflection evidence。HPC 多任务 rollout、原子 batch resume 和 Apptainer evaluator 均已实现。设计见 [`docs/gepa-rule-optimization.md`](docs/gepa-rule-optimization.md)
+- **PCT / PCC / offline GEPA（历史方案）**：代码、正式结果和可复现数据快照继续保留，但不作为当前规则生成入口；只有方法学对照或专项诊断需要时才恢复。
 - **最小化造轮子**：Agent 基于 `mini-swe-agent` 框架，反思复用 GEPA 反射 Prompt 模板，评估直接调用 `swebench` 官方库
 
 ## 实验设计：两阶段方法学
@@ -25,7 +28,8 @@ Verified PCT Round 1 数据和 vendored GEPA，直接优化 Checker 使用的完
 | **Phase 1** | SWE-bench **Verified**（500 实例） | 大批量跑 pipeline，采集 plan / agent trajectory / resolved 结果，归纳"plan → 通过性"的判别规律 | **已完成** |
 | **Phase 2a** | SWE-bench **Verified** reflect-success | 对比分析提取规则，输入感知树聚合（Input-Aware Tree Merge） | **已完成** |
 | **Phase 2b** | **SWE-PolyBench** Python 子集（199 实例） | 在 held-out 集上运行 Plan-Check-Code，评估规则检查器的预测准确率 | 暂缓 |
-| **Phase 3** | SWE-bench **Verified** Round 1 GEPA 快照（482 实例） | 直接优化 Checker 完整规则文本 | **当前主线** |
+| **Phase 3** | SWE-bench **Verified** Round 1 GEPA 快照（482 实例） | Offline GEPA 优化 Checker 完整规则文本 | 已完成探索，暂缓 |
+| **Phase 4** | SWE-bench **Verified** 正式 train/validation split | Online GEPA 以真实 Plan-Code-Evaluator rollout 优化 planning rules | **当前主线** |
 
 把 SWE-PolyBench Python 子集留作 held-out 测试集，替代原定的 SWE-bench Pro（Pro 在当前 pipeline 下 resolved 率为 0%，已放弃）。PolyBench 来自 Amazon Science 的多语言基准，Python 子集共 199 个实例，来自 6 个仓库（transformers、keras、langchain、yt-dlp、tensorflow/models、AutoGPT）。
 
@@ -153,7 +157,7 @@ touch output/SWE-bench_Verified/gepa-rules/run1/gepa.stop
 
 ```bash
 bash scripts/hpc_submit_batch.sh --gepa-rules \
-  --gepa-config configs/gepa_verified_rules_strict_hpc_24h_apptainer.yaml \
+  --gepa-config configs/archive/offline_gepa/gepa_verified_rules_strict_hpc_24h_apptainer.yaml \
   --submit
 ```
 
@@ -165,7 +169,7 @@ conda run -n mini-swe env PATH=/Users/taoran.wang/miniconda3/bin:$PATH \
   --slice-time 12:00:00 \
   --check-interval 01:00:00 \
   --gepa-rules \
-  --gepa-config configs/gepa_verified_rules_strict_hpc_24h_apptainer.yaml \
+  --gepa-config configs/archive/offline_gepa/gepa_verified_rules_strict_hpc_24h_apptainer.yaml \
   --submit
 ```
 
@@ -208,22 +212,22 @@ bash scripts/run_batch.sh \
 跳过 `polybench-run20` / `polybench-run100` 中已有 `result.json` 的 66 个任务时，使用 remaining-133 配置：
 
 ```bash
-bash scripts/run_batch.sh --config configs/polybench_remaining133_pct.yaml
+bash scripts/run_batch.sh --config configs/archive/pct_runs/polybench_remaining133_pct.yaml
 ```
 
 对已验证 Debian Buster archive fallback 的 4 个剩余镜像实例：
 
 ```bash
 bash scripts/run_batch.sh --dry-run \
-  --config configs/polybench_remaining133_pct.yaml \
-  --instances configs/polybench_retry_images_buster4.json \
+  --config configs/archive/pct_runs/polybench_remaining133_pct.yaml \
+  --instances configs/archive/pct_runs/polybench_retry_images_buster4.json \
   --batch-id polybench-retry-images-buster4
 ```
 
 长时监控运行时，watchdog 会用 `caffeinate` 包装其启动的 tmux 子任务，避免 macOS 睡眠暂停 batch：
 
 ```bash
-PCT_CONFIG=configs/polybench_remaining133_pct.yaml \
+PCT_CONFIG=configs/archive/pct_runs/polybench_remaining133_pct.yaml \
   conda run -n mini-swe python scripts/long_run_watchdog.py
 ```
 
@@ -471,10 +475,12 @@ pipeline、PCC、checker-only、evaluator、watchdog 和 Docker CLI/SDK helper
 
 ## 开发状态
 
-当前主线是 GEPA strict Checker 规则优化：正式 Verified Round 1 快照、GPT seed、
-strict Checker prompt、HPC Apptainer backend、SIF 预热、`ulhpc-submit` staging /
-persistent output wrapper 和短作业 resume supervisor 均已实现。下一步关注点见
+当前主线是 Online GEPA planning rules 优化：正式 Verified split、Plan/Code 输入
+隔离、HPC rollout arrays、Apptainer evaluator、`ulhpc-submit` staging、持久化
+run directory 和 batch 接管式 resume 均已实现。下一步关注点见
 [`project_issues.md`](project_issues.md)。
 
-历史路径中，PCT 采集、规则提取、OpenCode/Kimi analysis、checker-only 对比和
-PolyBench 本地兼容修复已有产物与文档记录，但不再是当前规则生成主线。
+历史路径中，PCT/PCC、规则提取、OpenCode/Kimi analysis、offline GEPA strict
+Checker、checker-only 对比和 PolyBench 本地兼容修复已有产物与文档记录，但不再
+是当前规则生成主线。输出的价值与归档状态以 [`output/README.md`](output/README.md)
+为准。

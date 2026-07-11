@@ -6,8 +6,8 @@ set -euo pipefail
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)"
 cd "$REPO_ROOT"
 
-CONFIG="configs/polybench_remaining133_pct.yaml"
-INSTANCES="configs/polybench_retry_images_buster4.json"
+CONFIG="configs/archive/pct_runs/polybench_remaining133_pct.yaml"
+INSTANCES="configs/archive/pct_runs/polybench_retry_images_buster4.json"
 BATCH_ID="polybench-retry-images-buster4"
 
 if [[ "${1:-}" == "--execute" ]]; then

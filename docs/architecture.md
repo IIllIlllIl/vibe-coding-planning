@@ -154,8 +154,9 @@ plan-code-test/
 
 ### 3.8 GEPA 规则优化层
 
-该层用于替代现有规则提取、后处理和聚合流程。核心模块、mock/no-LLM 测试、
-外部 LLM pilot、strict Checker prompt、HPC Apptainer smoke 和断点续跑均已实现。
+该层包含当前 Online GEPA 主线和保留的 offline GEPA 对照路径。Online GEPA 通过
+真实 Plan-Code-Evaluator rollout 优化 planning rules；PCT/PCC、逐案例规则提取和
+offline strict Checker 目前暂停继续投入，但其实现与产物保留用于复现和对照。
 详细设计见
 [`gepa-rule-optimization.md`](gepa-rule-optimization.md)。
 

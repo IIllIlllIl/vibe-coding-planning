@@ -80,16 +80,16 @@ The compatibility fallback has been validated by successfully building
 
 ```bash
 # Planning only
-bash scripts/run_batch.sh --dry-run --config configs/polybench_remaining133_pct.yaml --instances configs/polybench_retry_images_buster4.json --batch-id polybench-retry-images-buster4
+bash scripts/run_batch.sh --dry-run --config configs/archive/pct_runs/polybench_remaining133_pct.yaml --instances configs/archive/pct_runs/polybench_retry_images_buster4.json --batch-id polybench-retry-images-buster4
 
 # Real execution
-bash scripts/run_batch.sh --config configs/polybench_remaining133_pct.yaml --instances configs/polybench_retry_images_buster4.json --batch-id polybench-retry-images-buster4
+bash scripts/run_batch.sh --config configs/archive/pct_runs/polybench_remaining133_pct.yaml --instances configs/archive/pct_runs/polybench_retry_images_buster4.json --batch-id polybench-retry-images-buster4
 ```
 
 It uses:
 
-- config: `configs/polybench_remaining133_pct.yaml`
-- manifest: `configs/polybench_retry_images_buster4.json`
+- config: `configs/archive/pct_runs/polybench_remaining133_pct.yaml`
+- manifest: `configs/archive/pct_runs/polybench_retry_images_buster4.json`
 - batch id: `polybench-retry-images-buster4`
 - output: `output/SWE-PolyBench/polybench-retry-images-buster4/`
 

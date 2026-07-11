@@ -72,7 +72,6 @@ def evaluate_apptainer(
         / "plan-code-test"
         / instance_id
     )
-    log_dir.mkdir(parents=True, exist_ok=True)
     report_path = log_dir / "report.json"
     test_output_path = log_dir / "test_output.txt"
     patch_path = log_dir / "patch.diff"
@@ -85,9 +84,6 @@ def evaluate_apptainer(
         image,
         timeout,
     )
-    patch_path.write_text(patch or "", encoding="utf-8")
-    eval_script_path.write_text(test_spec.eval_script, encoding="utf-8")
-
     env: ApptainerEnvironment | None = None
     eval_completed = False
     report: dict[str, Any] = {}
@@ -106,8 +102,24 @@ def evaluate_apptainer(
             host_workdir=phase_workdir,
             initialize_host_workdir=True,
         )
+        # ApptainerEnvironment must see an empty host_workdir so it copies the
+        # image's repository before binding that directory over /testbed.
+        log_dir.mkdir(parents=True, exist_ok=True)
+        patch_path.write_text(patch or "", encoding="utf-8")
+        eval_script_path.write_text(test_spec.eval_script, encoding="utf-8")
         _write_file_in_workdir(env, ".vibe_patch.diff", patch or "", timeout=60)
         _write_file_in_workdir(env, ".vibe_eval.sh", test_spec.eval_script, timeout=60)
+
+        repository_check = env.execute(
+            'git rev-parse --is-inside-work-tree >/dev/null '
+            '&& test -n "$(git ls-files | head -n 1)"',
+            timeout=60,
+        )
+        if repository_check.get("returncode") != 0:
+            raise FatalError(
+                "Apptainer evaluator workspace is not an initialized repository: "
+                f"{repository_check.get('output', '')[:500]}"
+            )
 
         applied_patch = False
         apply_output = ""
@@ -164,6 +176,7 @@ def evaluate_apptainer(
         logger.error("Apptainer SWE evaluation failed: %s", exc)
         stderr_text = str(exc) or type(exc).__name__
         error_info = stderr_text
+        log_dir.mkdir(parents=True, exist_ok=True)
         run_log_path.write_text(stderr_text, encoding="utf-8")
     finally:
         if env is not None:

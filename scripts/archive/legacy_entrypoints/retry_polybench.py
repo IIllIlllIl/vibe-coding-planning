@@ -229,7 +229,7 @@ def main() -> int:
     )
     parser.add_argument("--logs", default="logs/batch")
     parser.add_argument(
-        "--config", default="configs/polybench_remaining133_pct.yaml"
+        "--config", default="configs/archive/pct_runs/polybench_remaining133_pct.yaml"
     )
     parser.add_argument(
         "--phase",

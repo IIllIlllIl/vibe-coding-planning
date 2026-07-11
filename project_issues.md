@@ -5,37 +5,34 @@
 
 ---
 
-## 1. GEPA strict Checker run 质量评估
+## 1. Online GEPA planning rules 质量评估
 
-- **状态**：当前主线，待实跑与结果判断
-- **背景**：Checker prompt 已改为 strict 规则执行语义，candidate rules 放在
-  user 输入中；GEPA 规则优化流程、resume manifest、报告、HPC Apptainer backend
-  和新版 `ulhpc-submit` wrapper 均已实现。
+- **状态**：当前主线；evaluator 基础设施修复后需要重新建立可信的正式结果
+- **背景**：candidate rules 进入 Plan Agent，随后执行真实的 Plan、Code 和
+  evaluator rollout；HPC array、原子 batch resume、报告与输入隔离均已实现。
 - **当前输入**：
   - 正式数据快照：
     `output/SWE-bench_Verified/verified-round1-gepa-datasets/20260614_482_fdc056ae85df/`
   - 初始规则：`configs/gepa_initial_rules_gpt_seed.md`
-  - strict HPC 配置：
-    `configs/gepa_verified_rules_strict_hpc_24h_apptainer.yaml`
+  - Online HPC 配置位于 `configs/gepa_online_planning_hpc_*.yaml`。
 - **需要关注**：
-  1. strict Checker prompt 是否确实降低了 Checker 自由发挥，让规则缺失更容易反映到预测错误中。
-  2. 新 run 生成的 candidate rules 是否比 GPT seed 在 validation 上有稳定提升。
+  1. evaluator 修复后的新 run 是否产生可信、可复现的 validation score。
+  2. 新 run 生成的 candidate rules 是否比 seed 在 validation 上有稳定提升。
   3. accepted candidates、candidate tree、validation scores、best rules 和 token/time 报告是否一致可解释。
   4. Reflection 生成的规则是否仍倾向变长、泛化或过度改写；是否需要继续调整 reflection prompt / evidence 编排 / candidate 格式。
   5. 继续搜索是否有边际收益，或应切换到更保守的规则编辑机制。
 - **当前决策**：
   - 接受 GEPA 官方 `max_metric_calls` 的迭代边界软上限语义。
-  - 不并行 GEPA 主循环；只并行 Checker evaluation batch 内样本级执行。
-  - 本地 Docker 配置以验证为主；HPC strict run 使用 Apptainer backend。
+  - 不并行 GEPA 主循环；只把同一 metric batch 的 rollout 分发为独立 Slurm array task。
+  - 本地 Docker 配置以验证为主；HPC online run 使用 Apptainer backend。
 
 ---
 
-## 2. Online GEPA planning 规则生成设计
+## 2. Online GEPA 运行正确性与归因
 
-- **状态**：实验链路已实现；HPC Apptainer agent 级隔离与标准 SWE-bench
-  evaluator backend 正在补齐
-- **背景**：当前 GEPA 主线是 offline classifier：候选规则进入固定 Checker，
-  通过历史 Round 1 `resolved` 标签学习如何判断已有 plan。新设想是把候选规则
+- **状态**：当前主线已实现；持续检查 evaluator、resume 和 reflection 归因
+- **背景**：早期 GEPA 主线是 offline classifier：候选规则进入固定 Checker，
+  通过历史 Round 1 `resolved` 标签学习如何判断已有 plan。当前方案把候选规则
   作为 strict planning checklist 注入 Plan Agent 的 user prompt，直接运行
   `Plan -> Code -> Evaluator`，再把 result 和 trajectory 交给 GEPA Reflection。
   Online 链路不使用 offline 快照中的历史 plan、历史 resolved、历史 trajectory、
@@ -59,9 +56,8 @@
   6. Online dataset loader 如何只提取 `instance_id`、issue、repository/base commit
      和 split，防止误把 offline GEPA 的历史标签或 ASI 传入 Plan/Code Agent。
 - **当前判断**：
-  - 方案可行，但它优化的是 planning guidance，不再是 checker classifier。
-  - 已新增独立 `online_adapter` / `online_runner` / pilot config，不替换当前
-    offline GEPA 主线。
+  - Online GEPA 优化 planning guidance，是当前规则生成主线；offline classifier
+    与 PCT/PCC 保留为历史对照，暂不继续扩展。
   - 2026-07-07 online HPC resource pilot 的 `Code agent produced empty output`
     不是规则质量结论；根因是 Apptainer backend 每次 `execute()` 都用新的
     `apptainer exec --writable-tmpfs`，`/testbed` 修改不会跨命令保留。当前

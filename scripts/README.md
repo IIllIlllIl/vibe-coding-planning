@@ -41,7 +41,7 @@ scripts/
 # 先 dry-run
 bash scripts/hpc_submit_batch.sh \
   --gepa-rules \
-  --gepa-config configs/gepa_verified_rules_strict_hpc_24h_apptainer.yaml \
+  --gepa-config configs/archive/offline_gepa/gepa_verified_rules_strict_hpc_24h_apptainer.yaml \
   --job-name gepa-strict-24h \
   --time 24:00:00 \
   --cpus 2 \
@@ -50,7 +50,7 @@ bash scripts/hpc_submit_batch.sh \
 # 正式提交
 bash scripts/hpc_submit_batch.sh \
   --gepa-rules \
-  --gepa-config configs/gepa_verified_rules_strict_hpc_24h_apptainer.yaml \
+  --gepa-config configs/archive/offline_gepa/gepa_verified_rules_strict_hpc_24h_apptainer.yaml \
   --job-name gepa-strict-24h \
   --time 24:00:00 \
   --cpus 2 \
@@ -74,13 +74,13 @@ bash scripts/hpc_submit_batch.sh \
 ```bash
 # dry-run
 bash scripts/tools/submit_apptainer_sif_preheat.sh \
-  --config configs/gepa_verified_rules_strict_hpc_24h_apptainer.yaml \
+  --config configs/archive/offline_gepa/gepa_verified_rules_strict_hpc_24h_apptainer.yaml \
   --sif-cache-dir /scratch/users/<user>/vibe-coding-planning/shared/sif-cache \
   --time 08:00:00
 
 # 提交
 bash scripts/tools/submit_apptainer_sif_preheat.sh \
-  --config configs/gepa_verified_rules_strict_hpc_24h_apptainer.yaml \
+  --config configs/archive/offline_gepa/gepa_verified_rules_strict_hpc_24h_apptainer.yaml \
   --sif-cache-dir /scratch/users/<user>/vibe-coding-planning/shared/sif-cache \
   --time 08:00:00 \
   --submit
@@ -112,18 +112,18 @@ persistent output、module loading 和 Slurm script 生成，避免项目侧再�
 ```bash
 # dry-run：检查 ulhpc-submit 计划，不提交
 bash scripts/tools/submit_online_hpc_resource_pilot.sh \
-  --config configs/gepa_online_planning_hpc_resource_pilot_20260706.yaml \
+  --config configs/archive/online_tests/gepa_online_planning_hpc_resource_pilot_20260706.yaml \
   --time 00:01:00
 
 # 1 分钟 smoke：只验证远端同步、module 和 worker bootstrap
 bash scripts/tools/submit_online_hpc_resource_pilot.sh \
-  --config configs/gepa_online_planning_hpc_resource_pilot_20260706.yaml \
+  --config configs/archive/online_tests/gepa_online_planning_hpc_resource_pilot_20260706.yaml \
   --time 00:01:00 \
   --submit
 
 # 20 分钟资源测量 pilot
 bash scripts/tools/submit_online_hpc_resource_pilot.sh \
-  --config configs/gepa_online_planning_hpc_resource_pilot_20260706.yaml \
+  --config configs/archive/online_tests/gepa_online_planning_hpc_resource_pilot_20260706.yaml \
   --time 00:20:00 \
   --submit
 ```
@@ -147,12 +147,12 @@ bash scripts/tools/submit_online_hpc_resource_pilot.sh \
 ```bash
 # 只检查 cache 状态，不提交
 conda run -n mini-swe python scripts/tools/hpc_sif_preheat_loop.py \
-  --config configs/gepa_verified_rules_strict_hpc_24h_apptainer.yaml \
+  --config configs/archive/offline_gepa/gepa_verified_rules_strict_hpc_24h_apptainer.yaml \
   --sif-cache-dir /scratch/users/<user>/vibe-coding-planning/shared/sif-cache
 
 # 持续提交 8h 切片直到完成
 conda run -n mini-swe python scripts/tools/hpc_sif_preheat_loop.py \
-  --config configs/gepa_verified_rules_strict_hpc_24h_apptainer.yaml \
+  --config configs/archive/offline_gepa/gepa_verified_rules_strict_hpc_24h_apptainer.yaml \
   --sif-cache-dir /scratch/users/<user>/vibe-coding-planning/shared/sif-cache \
   --slice-time 08:00:00 \
   --check-interval 01:00:00 \
@@ -179,16 +179,16 @@ conda run -n mini-swe python scripts/tools/hpc_sif_preheat_loop.py \
 ```bash
 # 单次运行，dry-run，先验证参数
 conda run -n mini-swe python scripts/hpc_preheat_watchdog.py \
-  --pilot-config configs/gepa_verified_rules_reflection_smoke_apptainer.yaml \
-  --full-config configs/gepa_verified_rules_strict_hpc_24h_apptainer.yaml \
+  --pilot-config configs/archive/offline_gepa/gepa_verified_rules_reflection_smoke_apptainer.yaml \
+  --full-config configs/archive/offline_gepa/gepa_verified_rules_strict_hpc_24h_apptainer.yaml \
   --pilot-sif-cache-dir /scratch/users/<user>/vibe-coding-planning/shared/sif-cache-pilot \
   --full-sif-cache-dir /scratch/users/<user>/vibe-coding-planning/shared/sif-cache \
   --once
 
 # 无人值守正式运行
 conda run -n mini-swe python scripts/hpc_preheat_watchdog.py \
-  --pilot-config configs/gepa_verified_rules_reflection_smoke_apptainer.yaml \
-  --full-config configs/gepa_verified_rules_strict_hpc_24h_apptainer.yaml \
+  --pilot-config configs/archive/offline_gepa/gepa_verified_rules_reflection_smoke_apptainer.yaml \
+  --full-config configs/archive/offline_gepa/gepa_verified_rules_strict_hpc_24h_apptainer.yaml \
   --pilot-sif-cache-dir /scratch/users/<user>/vibe-coding-planning/shared/sif-cache-pilot \
   --full-sif-cache-dir /scratch/users/<user>/vibe-coding-planning/shared/sif-cache \
   --enable-agent-repair \
@@ -211,14 +211,14 @@ conda run -n mini-swe python scripts/hpc_preheat_watchdog.py \
 ```bash
 # 先查看缺失镜像中的前 3 个
 conda run -n mini-swe python scripts/tools/login_apptainer_sif_preheat.py \
-  --config configs/gepa_verified_rules_strict_hpc_24h_newprompt_20260625_apptainer.yaml \
+  --config configs/archive/offline_gepa/gepa_verified_rules_strict_hpc_24h_newprompt_20260625_apptainer.yaml \
   --missing-only \
   --limit 3 \
   --dry-run
 
 # 拉取 1 个缺失镜像做 pilot
 conda run -n mini-swe python scripts/tools/login_apptainer_sif_preheat.py \
-  --config configs/gepa_verified_rules_strict_hpc_24h_newprompt_20260625_apptainer.yaml \
+  --config configs/archive/offline_gepa/gepa_verified_rules_strict_hpc_24h_newprompt_20260625_apptainer.yaml \
   --missing-only \
   --limit 1 \
   --timeout 21600
@@ -234,7 +234,7 @@ login preheat 的无人值守循环。每轮按 `--batch-size` 拉取一小批�
 
 ```bash
 conda run -n mini-swe python scripts/tools/login_sif_preheat_watchdog.py \
-  --config configs/gepa_verified_rules_strict_hpc_24h_newprompt_20260625_apptainer.yaml \
+  --config configs/archive/offline_gepa/gepa_verified_rules_strict_hpc_24h_newprompt_20260625_apptainer.yaml \
   --batch-size 1 \
   --timeout 21600 \
   --check-interval 1800 \
@@ -253,7 +253,7 @@ conda run -n mini-swe python scripts/tools/login_sif_preheat_watchdog.py \
 # 先 dry-run
 conda run -n mini-swe python scripts/hpc_resume_loop.py \
   --gepa-rules \
-  --gepa-config configs/gepa_verified_rules_strict_hpc_24h_apptainer.yaml \
+  --gepa-config configs/archive/offline_gepa/gepa_verified_rules_strict_hpc_24h_apptainer.yaml \
   --slice-time 12:00:00 \
   --check-interval 01:00:00 \
   --max-runs 4
@@ -261,7 +261,7 @@ conda run -n mini-swe python scripts/hpc_resume_loop.py \
 # 正式运行：每片 12h，最多 4 片
 conda run -n mini-swe python scripts/hpc_resume_loop.py \
   --gepa-rules \
-  --gepa-config configs/gepa_verified_rules_strict_hpc_24h_apptainer.yaml \
+  --gepa-config configs/archive/offline_gepa/gepa_verified_rules_strict_hpc_24h_apptainer.yaml \
   --slice-time 12:00:00 \
   --check-interval 01:00:00 \
   --max-runs 4 \

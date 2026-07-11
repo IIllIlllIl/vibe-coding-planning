@@ -411,7 +411,7 @@ output/SWE-bench_Verified/gepa-rules/archive/20260622_pre_strict_checker/
 HPC 24h strict 试运行配置为：
 
 ```text
-configs/gepa_verified_rules_strict_hpc_24h_apptainer.yaml
+configs/archive/offline_gepa/gepa_verified_rules_strict_hpc_24h_apptainer.yaml
 ```
 
 该配置使用正式 482-case 快照、GPT seed、Apptainer runtime、`parallel=4`、
@@ -461,8 +461,8 @@ Checker。旧的、没有 `run_manifest.json` 和 `gepa_resume_state.json` 的 r
 > `configs/gepa_initial_rules_gpt_seed.md` 作为 seed，并通过 strict Checker prompt
 > 约束“规则未覆盖则默认 unresolved”。
 
-Pilot 配置为 `configs/gepa_verified_rules_pilot.yaml`，使用语义为空字符串的
-`configs/gepa_empty_rules.txt`。数据由以下命令从正式快照确定性构建：
+Pilot 配置为 `configs/archive/offline_gepa/gepa_verified_rules_pilot.yaml`，使用语义为空字符串的
+`configs/archive/offline_gepa/gepa_empty_rules.txt`。数据由以下命令从正式快照确定性构建：
 
 ```bash
 conda run -n mini-swe python scripts/tools/build_gepa_pilot_dataset.py
@@ -522,7 +522,7 @@ GEPA 仍必须使用固定 Checker prompt。checker-only 的 no-rules arm 会切
 提交协议、解析和失败语义。
 
 用于验证修复的极小运行配置为
-`configs/gepa_verified_rules_reflection_smoke.yaml`，对应 2 train / 2 validation
+`configs/archive/offline_gepa/gepa_verified_rules_reflection_smoke.yaml`，对应 2 train / 2 validation
 快照。它设置 `skip_perfect_score=false`、`min_proposals=1` 和
 `max_metric_calls=6`，以至少一次成功 Reflection proposal 作为硬性验收条件。
 
@@ -533,7 +533,7 @@ GEPA 仍必须使用固定 Checker prompt。checker-only 的 no-rules arm 会切
 tree 只保存 seed 和通过 minibatch 筛选、完成 validation 后被接纳的候选；
 被拒 proposal 只保存在 audit/run log 中。
 
-较长验证使用 `configs/gepa_verified_rules_pilot_extended.yaml`：
+较长验证使用 `configs/archive/offline_gepa/gepa_verified_rules_pilot_extended.yaml`：
 6 train / 4 validation、空 seed、`skip_perfect_score=false`、minibatch=2、
 `min_proposals=3`、`max_metric_calls=30`、`parallel=1`、Checker
 `max_steps=500`。
@@ -557,7 +557,7 @@ tree 只保存 seed 和通过 minibatch 筛选、完成 validation 后被接纳�
 #### 10.1.1 HPC Apptainer smoke
 
 为在 ULHPC Iris（无 Docker，仅提供 `tools/Apptainer 1.4.0`）上运行 GEPA，新增
-`configs/gepa_verified_rules_reflection_smoke_apptainer.yaml` 与
+`configs/archive/offline_gepa/gepa_verified_rules_reflection_smoke_apptainer.yaml` 与
 `src/environment/apptainer_env.py`。该配置使用与本地 Docker 隔离的
 `run_dir`：
 
@@ -610,12 +610,12 @@ resume state。
 
 ## 11. 实验实现：Online GEPA Planning 规则生成
 
-当前已实现的 GEPA 主线是 offline classifier：候选 `rules` 只进入固定
-Checker，GEPA 根据 `predicted_resolved == historical resolved` 优化规则。
-这条链路适合学习“如何判断一个已有 plan 的通过概率”，但它不直接验证规则是否
-能帮助 Plan Agent 从一开始生成更好的 plan。
+当前规则生成主线是 Online GEPA。早期 offline classifier 把候选 `rules` 只交给
+固定 Checker，并根据 `predicted_resolved == historical resolved` 优化规则；该路径
+适合学习“如何判断一个已有 plan 的通过概率”，但不能直接证明规则能改善 Plan
+Agent 的输出，因此与 PCT/PCC 一并保留为历史对照并暂缓继续投入。
 
-拟议的 online GEPA 链路把候选规则从 Checker 判别标准改为 Plan Agent 的
+Online GEPA 链路把候选规则从 Checker 判别标准改为 Plan Agent 的
 planning checklist / planning guidance：
 
 ```text
@@ -729,7 +729,8 @@ evaluator 配置。
 single-round Plan-Check-Code 并记录 evaluator 结果；但二者都不是 GEPA adapter。
 当前 `src/optimization/adapter.py` 只调用 Checker 并比较历史标签。
 
-Online GEPA 使用独立实验入口，而不是改写当前 offline 主线：
+Online GEPA 使用独立实验入口；它是当前活跃主线，同时保留 offline 入口以支持
+历史结果复现和方法学对照：
 
 - `src/optimization/online_dataset.py`：从实例清单或 existing snapshot 中只提取
   issue/repository/split，不加载历史 plan、resolved 或 ASI。
@@ -873,12 +874,28 @@ array。它只创建 fingerprinted `batch_0005`，worker array `5523762` 的 3 �
 因此 batch 保持 `SUBMITTED` 且 3 个 outputs 未进入 GEPA checkpoint；下次相同代码
 和语义配置 resume 应直接验证并重放这些 outputs，不再提交 worker。
 
-`configs/gepa_online_planning_hpc_8h_resume_20260711.yaml` 用于继续该 checkpoint。
+`configs/archive/online_tests/gepa_online_planning_hpc_8h_resume_20260711.yaml` 用于继续该 checkpoint。
 它和原 2h 配置共享正式 384/98 snapshot、initial rules、prompt/model/search 语义及
 `run_dir`；外层 controller walltime 由提交命令指定为 `08:00:00`。原目录名中的
 `smoke` 只表示首次 controller 时长，不代表数据子集或简化 objective。已完整进入
 GEPA state 的 rollout 可进入最终分析；incomplete batch 只有通过 fingerprint 和
 output identity 校验并由 controller 消费后才能计入。
+
+> **2026-07-11 数据有效性更正：不得继续上述 run_dir 的规则优化。** 后续审计发现
+> Apptainer evaluator 在初始化 repository host workdir 前先创建了
+> `phase_workdir/logs/`。`ApptainerEnvironment` 因目录非空而跳过从 SIF 复制
+> `/testbed`，随后又把该空目录 bind 到容器 `/testbed`，遮蔽真实仓库。2h/8h run
+> 中抽查的全部 online evidence 都以 `Patch apply failed: No file to patch` 结束，
+> evaluator 没有执行测试；这些 operational failures 被旧逻辑表现为
+> `resolved=false/score=0`。因此该 run 的 `0/98` validation、minibatch scores、
+> proposal 接受结果和规则效果结论均无效，只能保留用于 controller/array/resume/
+> retry 控制流程验证。修复后必须使用新的 `run_dir` 从 seed validation 重新开始，
+> 不能 resume 已污染的 `gepa_state.bin` 或 evaluation cache。
+
+修复位于 `src/evaluator/swe_apptainer_evaluator.py`：任何 log artifact 创建前先构造
+`ApptainerEnvironment` 并完成 repository copy/bind；写 patch 前额外执行 Git
+worktree/tracked-file preflight。preflight 失败现在抛出 operational `FatalError`，
+不得再降级为普通 unresolved score。
 
 配置约束：
 

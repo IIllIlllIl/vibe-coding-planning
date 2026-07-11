@@ -1,18 +1,12 @@
 mode: online_planning
 
 paths:
-  dataset_snapshot: output/SWE-bench_Verified/gepa-pilot-datasets/pilot_6_4_seed42_73df941adb4d
+  dataset_snapshot: output/SWE-bench_Verified/verified-round1-gepa-datasets/20260614_482_fdc056ae85df
   initial_rules: configs/gepa_initial_rules_gpt_seed.md
-  run_dir: output/SWE-bench_Verified/gepa-rules/online-planning-hpc-resource-pilot-20260706
+  run_dir: output/SWE-bench_Verified/gepa-rules/online-planning-hpc-2h-smoke-20260709
 
 dataset:
   name: SWE-bench/SWE-bench_Verified
-  train_instance_ids:
-    - django__django-10097
-    - django__django-10880
-    - matplotlib__matplotlib-13989
-  validation_instance_ids:
-    - django__django-10554
 
 plan:
   model: deepseek-v4-flash
@@ -45,10 +39,11 @@ reflection:
 
 search:
   # GEPA checks max_metric_calls at iteration boundaries. This value targets a
-  # small 3-5 proposal smoke run, not a formal optimization budget.
-  max_metric_calls: 20
-  projection_metric_calls: 100
-  reflection_minibatch_size: 1
+  # short 6-8 proposal online run over the formal 384/98 snapshot, not a full
+  # search budget. A successful run can be resumed with a larger budget.
+  max_metric_calls: 1000
+  projection_metric_calls: 1000
+  reflection_minibatch_size: 3
   seed: 42
   parallel: 1
   skip_perfect_score: false
@@ -71,23 +66,27 @@ execution:
   backend: hpc_slurm
 
 hpc:
-  # Resource-measurement pilot: each Slurm array task runs one rollout worker.
+  # Small online GEPA run: each Slurm array task runs one rollout worker.
   # max_running_array_tasks limits simultaneously running Slurm array elements;
   # it is not Python/thread/process concurrency inside a worker.
-  submit: false
+  submit: true
   partition: batch
   cpus_per_task: 1
   mem: 4G
-  time: "00:20:00"
-  max_running_array_tasks: 3
+  # Observed seed-validation P95 was about 18min, with a successful 37min
+  # long-tail task and two 40min timeouts. Keep 1 CPU / 4G and allow 50min.
+  time: "00:50:00"
+  max_running_array_tasks: 150
   poll_interval_seconds: 300
-  max_task_attempts: 1
+  task_output_grace_seconds: 300
+  missing_task_grace_seconds: 600
+  max_task_attempts: 2
   remote_env_file: ~/.config/vibe-coding-planning/deepseek.env
   python_module: lang/Python/3.11
   container_module: tools/Apptainer
   python_bin: python3
-  job_name_prefix: online-gepa-resource-pilot
-  worker_config_path: configs/gepa_online_planning_hpc_resource_pilot_20260706.yaml
+  job_name_prefix: online-gepa-2h-smoke
+  worker_config_path: configs/archive/online_tests/gepa_online_planning_hpc_2h_smoke_20260709.yaml
 
 evaluator:
   backend: swebench_apptainer
