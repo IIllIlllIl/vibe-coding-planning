@@ -43,6 +43,8 @@ class OnlinePlanningGEPAAdapter:
         fail_on_rollout_error: bool = True,
         rollout_attempts: int = 1,
         batch_executor: OnlineRolloutBatchExecutor | None = None,
+        resume_seed_evaluation: EvaluationBatch | None = None,
+        resume_seed_key: tuple[str, tuple[str, ...]] | None = None,
     ) -> None:
         self.rollout = rollout
         self.batch_executor = batch_executor
@@ -51,6 +53,8 @@ class OnlinePlanningGEPAAdapter:
         self.run_dir = run_dir
         self.fail_on_rollout_error = fail_on_rollout_error
         self.rollout_attempts = rollout_attempts
+        self.resume_seed_evaluation = resume_seed_evaluation
+        self.resume_seed_key = resume_seed_key
         self.audit = (
             JsonlLogger(run_dir / "audit_events.jsonl")
             if run_dir is not None
@@ -215,6 +219,29 @@ class OnlinePlanningGEPAAdapter:
         if set(candidate) != {"rules"} or not isinstance(candidate["rules"], str):
             raise ValueError("candidate must contain only the string component rules")
         candidate_hash = text_sha256(candidate["rules"])
+        if self.resume_seed_evaluation is not None:
+            expected_key = self.resume_seed_key
+            actual_key = (candidate_hash, tuple(case.instance_id for case in batch))
+            if capture_traces or expected_key is None or actual_key != expected_key:
+                raise ValueError(
+                    "GEPA first evaluation does not match the persisted seed validation"
+                )
+            resumed = self.resume_seed_evaluation
+            self.resume_seed_evaluation = None
+            self.resume_seed_key = None
+            if len(resumed.scores) != len(batch):
+                raise ValueError(
+                    "checkpoint seed validation size does not match the current batch"
+                )
+            if self.audit is not None:
+                self.audit.write(
+                    "online_seed_validation_restored",
+                    candidate_sha256=candidate_hash,
+                    batch_size=len(batch),
+                    source="gepa_state.bin",
+                    submitted_rollouts=0,
+                )
+            return resumed
         if self.audit is not None:
             self.audit.write(
                 "online_adapter_evaluation_started",

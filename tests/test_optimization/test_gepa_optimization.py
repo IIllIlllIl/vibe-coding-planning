@@ -11,7 +11,7 @@ from dataclasses import replace
 from pathlib import Path
 
 import pytest
-from gepa.core.state import GEPAState
+from gepa.core.state import GEPAState, ValsetEvaluation
 
 from src.config import DockerConfig
 from src.optimization.audit import AuditedModel, JsonlLogger, text_sha256
@@ -42,6 +42,7 @@ from src.optimization.online_hpc_executor import (
     OnlineRolloutBatchStore,
     SlurmTaskStatus,
     build_slurm_array_script,
+    evaluation_fingerprint,
     parse_slurm_duration,
 )
 from src.optimization.online_models import OnlineRolloutOutput
@@ -386,7 +387,7 @@ def test_online_hpc_6to8_config_uses_formal_snapshot_without_instance_subset(
     assert config.hpc.submit is True
     assert config.hpc.cpus_per_task == 1
     assert config.hpc.mem == "4G"
-    assert config.hpc.time == "00:40:00"
+    assert config.hpc.time == "00:50:00"
     assert config.hpc.max_running_array_tasks == 150
     assert config.hpc.task_output_grace_seconds == 300
     assert config.hpc.missing_task_grace_seconds == 600
@@ -394,6 +395,31 @@ def test_online_hpc_6to8_config_uses_formal_snapshot_without_instance_subset(
     assert config.search.max_metric_calls == 1000
     assert config.search.projection_metric_calls == 1000
     assert config.search.reflection_minibatch_size == 3
+
+
+def test_online_hpc_8h_resume_config_keeps_2h_checkpoint_semantics(monkeypatch):
+    monkeypatch.setenv("DEEPSEEK_API_KEY", "secret")
+    repo_root = Path(__file__).resolve().parents[2]
+    original = load_online_optimization_config(
+        repo_root / "configs" / "gepa_online_planning_hpc_2h_smoke_20260709.yaml"
+    )
+    resumed = load_online_optimization_config(
+        repo_root / "configs" / "gepa_online_planning_hpc_8h_resume_20260711.yaml"
+    )
+
+    assert resumed.run_dir == original.run_dir
+    assert resumed.dataset_snapshot == original.dataset_snapshot
+    assert resumed.initial_rules_path == original.initial_rules_path
+    assert resumed.plan == original.plan
+    assert resumed.code == original.code
+    assert resumed.reflection == original.reflection
+    assert resumed.search == original.search
+    assert resumed.hpc.cpus_per_task == 1
+    assert resumed.hpc.mem == "4G"
+    assert resumed.hpc.time == "00:50:00"
+    assert resumed.hpc.worker_config_path.endswith(
+        "gepa_online_planning_hpc_8h_resume_20260711.yaml"
+    )
 
 
 def test_online_config_accepts_legacy_array_concurrency(tmp_path, monkeypatch):
@@ -1445,6 +1471,8 @@ def test_online_hpc_executor_writes_batch_done_and_resource_usage(
                 json.dumps(
                     {
                         "status": "completed",
+                        "instance_id": case.instance_id,
+                        "candidate_sha256": text_sha256("planning rules"),
                         "resolved": index == 0,
                         "plan": f"plan {case.instance_id}",
                         "patch": "patch",
@@ -1498,6 +1526,154 @@ def test_online_hpc_executor_writes_batch_done_and_resource_usage(
     assert "MaxRSS" in usage["after"]["sacct_stdout"]
 
 
+def test_online_hpc_executor_reuses_completed_fingerprinted_batch(
+    tmp_path,
+    monkeypatch,
+):
+    config = _online_config(tmp_path)
+    train, _ = load_online_snapshot(config.dataset_snapshot)
+    config = replace(
+        config,
+        execution=OnlineExecutionConfig(backend="hpc_slurm"),
+        hpc=replace(config.hpc, submit=True, max_running_array_tasks=2),
+    )
+    submissions: list[Path] = []
+
+    def submitter(script_path):
+        submissions.append(script_path)
+        for index, case in enumerate(train):
+            (script_path.parent / "outputs" / f"task_{index:04d}.json").write_text(
+                json.dumps(
+                    {
+                        "status": "completed",
+                        "instance_id": case.instance_id,
+                        "candidate_sha256": text_sha256("planning rules"),
+                        "resolved": index == 0,
+                        "plan": f"plan {case.instance_id}",
+                        "patch": "patch",
+                        "plan_trajectory": [],
+                        "code_trajectory": [],
+                        "evaluator_result": {"resolved": index == 0},
+                        "attribution_hint": {},
+                    }
+                ),
+                encoding="utf-8",
+            )
+        return "12345"
+
+    monkeypatch.setattr(
+        "src.optimization.online_hpc_executor.collect_slurm_resource_snapshot",
+        lambda job_id=None: {"ulhpcshare_stdout": "FairShare 0.9"},
+    )
+    executor = HPCSlurmOnlineRolloutExecutor(
+        config,
+        submitter=submitter,
+        sleeper=lambda seconds: None,
+    )
+
+    first = executor.evaluate(train, "planning rules", capture_traces=True)
+    second = executor.evaluate(train, "planning rules", capture_traces=True)
+
+    assert [output.resolved for output in first] == [True, False]
+    assert [output.resolved for output in second] == [True, False]
+    assert len(submissions) == 1
+    assert len(list((config.run_dir / "hpc_rollout_batches").glob("batch_*"))) == 1
+
+
+def test_online_hpc_executor_resumes_submitted_batch_and_retries_only_missing(
+    tmp_path,
+    monkeypatch,
+):
+    config = _online_config(tmp_path)
+    train, _ = load_online_snapshot(config.dataset_snapshot)
+    config = replace(
+        config,
+        execution=OnlineExecutionConfig(backend="hpc_slurm"),
+        hpc=replace(
+            config.hpc,
+            submit=True,
+            max_task_attempts=2,
+            max_running_array_tasks=2,
+        ),
+    )
+    executor = HPCSlurmOnlineRolloutExecutor(config, sleeper=lambda seconds: None)
+    fingerprint, semantic_hash = evaluation_fingerprint(
+        config,
+        batch=train,
+        rules="planning rules",
+        capture_traces=True,
+    )
+    batch_dir, tasks = executor.store.create(
+        batch=train,
+        rules="planning rules",
+        split="train",
+        capture_traces=True,
+        evaluation_fingerprint=fingerprint,
+        rollout_semantic_sha256=semantic_hash,
+    )
+    executor._write_array_script(
+        batch_dir=batch_dir,
+        tasks=tasks,
+        total_task_count=2,
+        attempt=1,
+    )
+    executor._write_batch_state(
+        batch_dir,
+        phase="SUBMITTED",
+        evaluation_fingerprint=fingerprint,
+        active_attempt=1,
+        active_job_id="111",
+        retry_job_ids=[],
+    )
+
+    def write_output(index):
+        case = train[index]
+        tasks[index].output_path.write_text(
+            json.dumps(
+                {
+                    "status": "completed",
+                    "instance_id": case.instance_id,
+                    "candidate_sha256": text_sha256("planning rules"),
+                    "resolved": index == 0,
+                    "plan": f"plan {case.instance_id}",
+                    "patch": "patch",
+                    "plan_trajectory": [],
+                    "code_trajectory": [],
+                    "evaluator_result": {"resolved": index == 0},
+                    "attribution_hint": {},
+                }
+            ),
+            encoding="utf-8",
+        )
+
+    write_output(0)
+    submissions: list[Path] = []
+
+    def retry_submitter(script_path):
+        submissions.append(script_path)
+        write_output(1)
+        return "222"
+
+    executor.submitter = retry_submitter
+    monkeypatch.setattr(
+        "src.optimization.online_hpc_executor.query_slurm_task_status",
+        lambda job_id, task_index: SlurmTaskStatus("COMPLETED", 300),
+    )
+    monkeypatch.setattr(
+        "src.optimization.online_hpc_executor.collect_slurm_resource_snapshot",
+        lambda job_id=None: {"ulhpcshare_stdout": "FairShare 0.9"},
+    )
+
+    outputs = executor.evaluate(train, "planning rules", capture_traces=True)
+
+    assert [output.resolved for output in outputs] == [True, False]
+    assert len(submissions) == 1
+    assert "#SBATCH --array=1%2" in submissions[0].read_text(encoding="utf-8")
+    state = json.loads((batch_dir / "batch_state.json").read_text())
+    assert state["phase"] == "COMPLETE"
+    assert state["retry_job_ids"] == ["222"]
+
+
 def test_online_hpc_executor_retries_failed_worker_outputs(tmp_path, monkeypatch):
     config = _online_config(tmp_path)
     train, _ = load_online_snapshot(config.dataset_snapshot)
@@ -1518,6 +1694,7 @@ def test_online_hpc_executor_retries_failed_worker_outputs(tmp_path, monkeypatch
         payload = {
             "status": status,
             "instance_id": train[index].instance_id,
+            "candidate_sha256": text_sha256("planning rules"),
             "resolved": index == 0,
             "plan": f"plan {train[index].instance_id}",
             "patch": "patch",
@@ -1599,6 +1776,7 @@ def test_online_hpc_wait_does_not_retry_pending_task(tmp_path, monkeypatch):
                 {
                     "status": "completed",
                     "instance_id": train[index].instance_id,
+                    "candidate_sha256": text_sha256("planning rules"),
                     "resolved": index == 0,
                     "plan": f"plan {train[index].instance_id}",
                     "patch": "patch",
@@ -1670,6 +1848,7 @@ def test_online_hpc_wait_retries_terminal_task_without_output(
                 {
                     "status": "completed",
                     "instance_id": train[index].instance_id,
+                    "candidate_sha256": text_sha256("planning rules"),
                     "resolved": index == 0,
                     "plan": f"plan {train[index].instance_id}",
                     "patch": "patch",
@@ -1741,6 +1920,7 @@ def test_online_hpc_wait_does_not_retry_other_pending_tasks_early(
                 {
                     "status": "completed",
                     "instance_id": train[index].instance_id,
+                    "candidate_sha256": text_sha256("planning rules"),
                     "resolved": index == 0,
                     "plan": f"plan {train[index].instance_id}",
                     "patch": "patch",
@@ -1820,6 +2000,7 @@ def test_online_hpc_wait_retries_running_task_after_walltime_grace(
                 {
                     "status": "completed",
                     "instance_id": train[index].instance_id,
+                    "candidate_sha256": text_sha256("planning rules"),
                     "resolved": index == 0,
                     "plan": f"plan {train[index].instance_id}",
                     "patch": "patch",
@@ -1934,6 +2115,71 @@ def test_online_runner_uses_plan_and_code_rollout_attempts(tmp_path):
 
     assert captured["rollout_attempts"] == 3
     assert captured["reflection_minibatch_size"] == 2
+
+
+def test_online_runner_restores_seed_validation_without_rollouts(tmp_path):
+    config = _online_config(tmp_path)
+    _, validation = load_online_snapshot(config.dataset_snapshot)
+    config.run_dir.mkdir(parents=True)
+    seed_outputs = {
+        index: {
+            "instance_id": case.instance_id,
+            "resolved": index == 0,
+            "plan": f"seed plan {case.instance_id}",
+        }
+        for index, case in enumerate(validation)
+    }
+    state = GEPAState(
+        {"rules": "seed planning rules"},
+        ValsetEvaluation(
+            outputs_by_val_id=seed_outputs,
+            scores_by_val_id={0: 1.0, 1: 0.0},
+        ),
+        track_best_outputs=True,
+    )
+    state.total_num_evals = len(validation)
+    state.num_full_ds_evals = 1
+    state.save(str(config.run_dir))
+    captured: dict[str, object] = {}
+
+    class FakeResult:
+        candidates = [{"rules": "seed planning rules"}]
+        val_subscores = [{0: 1.0, 1: 0.0}]
+        val_aggregate_scores = [0.5]
+        parents = [[None]]
+        best_candidate = {"rules": "seed planning rules"}
+        best_idx = 0
+        total_metric_calls = 2
+        num_candidates = 1
+
+        def to_dict(self):
+            return {"best_candidate": self.best_candidate}
+
+        def candidate_tree_html(self):
+            return "<html></html>"
+
+    def fake_optimize(**kwargs):
+        evaluation = kwargs["adapter"].evaluate(
+            validation,
+            {"rules": "seed planning rules"},
+            capture_traces=False,
+        )
+        captured["scores"] = evaluation.scores
+        return FakeResult()
+
+    run_online_optimization(
+        config,
+        rollout=lambda case, rules: (_ for _ in ()).throw(
+            AssertionError("resume must not run seed validation rollouts")
+        ),
+        proposer=lambda candidate, reflective_dataset, components: candidate,
+        optimize_fn=fake_optimize,
+    )
+
+    assert captured["scores"] == [1.0, 0.0]
+    audit = (config.run_dir / "audit_events.jsonl").read_text(encoding="utf-8")
+    assert '"event": "online_seed_validation_restored"' in audit
+    assert '"submitted_rollouts": 0' in audit
 
 
 def test_online_runner_disables_docker_maintenance_for_apptainer(

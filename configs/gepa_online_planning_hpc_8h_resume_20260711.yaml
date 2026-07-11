@@ -3,7 +3,7 @@ mode: online_planning
 paths:
   dataset_snapshot: output/SWE-bench_Verified/verified-round1-gepa-datasets/20260614_482_fdc056ae85df
   initial_rules: configs/gepa_initial_rules_gpt_seed.md
-  run_dir: output/SWE-bench_Verified/gepa-rules/online-planning-hpc-6to8iter-20260709
+  run_dir: output/SWE-bench_Verified/gepa-rules/online-planning-hpc-2h-smoke-20260709
 
 dataset:
   name: SWE-bench/SWE-bench_Verified
@@ -85,8 +85,10 @@ hpc:
   python_module: lang/Python/3.11
   container_module: tools/Apptainer
   python_bin: python3
-  job_name_prefix: online-gepa-6to8
-  worker_config_path: configs/gepa_online_planning_hpc_6to8iter_20260709.yaml
+  # Resume the same logical experiment and persistent checkpoint. The outer
+  # controller receives its 8h walltime from hpc_submit_batch.sh, not this YAML.
+  job_name_prefix: online-gepa-8h-resume
+  worker_config_path: configs/gepa_online_planning_hpc_8h_resume_20260711.yaml
 
 evaluator:
   backend: swebench_apptainer

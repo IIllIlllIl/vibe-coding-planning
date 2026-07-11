@@ -7,7 +7,8 @@ outputs produced by a Slurm job array.
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import asdict, dataclass
+import hashlib
 import json
 from pathlib import Path
 import shlex
@@ -44,6 +45,75 @@ _SLURM_PENDING_STATES = {
 }
 
 
+def _stable_sha256(value: Any) -> str:
+    payload = json.dumps(
+        value,
+        ensure_ascii=False,
+        sort_keys=True,
+        separators=(",", ":"),
+        default=str,
+    ).encode("utf-8")
+    return hashlib.sha256(payload).hexdigest()
+
+
+def _rollout_source_sha256() -> str:
+    root = Path(__file__).resolve().parents[2]
+    digest = hashlib.sha256()
+    for path in sorted((root / "src").rglob("*.py")):
+        digest.update(str(path.relative_to(root)).encode("utf-8"))
+        digest.update(b"\0")
+        digest.update(path.read_bytes())
+        digest.update(b"\0")
+    return digest.hexdigest()
+
+
+def rollout_semantic_sha256(config: OnlineOptimizationConfig) -> str:
+    """Hash every setting that can change a worker's rollout result."""
+    return _stable_sha256(
+        {
+            "schema": 1,
+            "rollout_source_sha256": _rollout_source_sha256(),
+            "dataset": asdict(config.dataset),
+            "plan": asdict(config.plan),
+            "code": asdict(config.code),
+            "docker": asdict(config.docker),
+            "container": asdict(config.container),
+            "evaluator": asdict(config.evaluator),
+            "prompts": {
+                "plan": config.plan_prompt,
+                "plan_instance": config.plan_instance_template,
+                "code": config.code_prompt,
+                "code_instance": config.code_instance_template,
+                "nrpv": config.nrpv_block,
+            },
+        }
+    )
+
+
+def evaluation_fingerprint(
+    config: OnlineOptimizationConfig,
+    *,
+    batch: Sequence[OnlineGEPACase],
+    rules: str,
+    capture_traces: bool,
+) -> tuple[str, str]:
+    semantic_hash = rollout_semantic_sha256(config)
+    return (
+        _stable_sha256(
+            {
+                "schema": 1,
+                "rollout_semantic_sha256": semantic_hash,
+                "candidate_sha256": text_sha256(rules),
+                "capture_traces": capture_traces,
+                "instances": [case.instance_id for case in batch],
+                "splits": [case.split for case in batch],
+                "case_payloads": [case.rollout_payload() for case in batch],
+            }
+        ),
+        semantic_hash,
+    )
+
+
 @dataclass(frozen=True)
 class OnlineRolloutTask:
     index: int
@@ -76,6 +146,16 @@ class OnlineRolloutBatchStore:
         ]
         return self.root / f"batch_{max(existing, default=0) + 1:04d}"
 
+    def find_by_fingerprint(self, fingerprint: str) -> Path | None:
+        for path in sorted(self.root.glob("batch_*"), reverse=True):
+            manifest_path = path / "manifest.json"
+            if not manifest_path.is_file():
+                continue
+            manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+            if manifest.get("evaluation_fingerprint") == fingerprint:
+                return path
+        return None
+
     def create(
         self,
         *,
@@ -83,6 +163,8 @@ class OnlineRolloutBatchStore:
         rules: str,
         split: str | None,
         capture_traces: bool,
+        evaluation_fingerprint: str = "",
+        rollout_semantic_sha256: str = "",
     ) -> tuple[Path, list[OnlineRolloutTask]]:
         batch_dir = self.next_batch_dir()
         task_dir = batch_dir / "tasks"
@@ -138,6 +220,8 @@ class OnlineRolloutBatchStore:
                     "capture_traces": capture_traces,
                     "task_count": len(tasks),
                     "instances": [case.instance_id for case in batch],
+                    "evaluation_fingerprint": evaluation_fingerprint,
+                    "rollout_semantic_sha256": rollout_semantic_sha256,
                 },
                 indent=2,
                 ensure_ascii=False,
@@ -149,13 +233,46 @@ class OnlineRolloutBatchStore:
         return batch_dir, tasks
 
     @staticmethod
-    def load_output(path: Path) -> OnlineRolloutOutput:
+    def tasks_for_existing(
+        batch_dir: Path,
+        batch: Sequence[OnlineGEPACase],
+    ) -> list[OnlineRolloutTask]:
+        rules_path = batch_dir / "candidate_rules.txt"
+        return [
+            OnlineRolloutTask(
+                index=index,
+                case=case,
+                rules_path=rules_path,
+                manifest_path=batch_dir / "tasks" / f"task_{index:04d}.json",
+                output_path=batch_dir / "outputs" / f"task_{index:04d}.json",
+                worker_run_dir=batch_dir / "worker_runs" / f"task_{index:04d}",
+            )
+            for index, case in enumerate(batch)
+        ]
+
+    @staticmethod
+    def load_output(
+        path: Path,
+        *,
+        expected_instance_id: str | None = None,
+        expected_candidate_sha256: str | None = None,
+    ) -> OnlineRolloutOutput:
         data = json.loads(path.read_text(encoding="utf-8"))
         if data.get("status") != "completed":
             raise RuntimeError(
                 f"online rollout worker failed for {data.get('instance_id')}: "
                 f"{data.get('error_type')}: {data.get('error')}"
             )
+        if (
+            expected_instance_id is not None
+            and data.get("instance_id") != expected_instance_id
+        ):
+            raise RuntimeError("online rollout output instance ID mismatch")
+        if (
+            expected_candidate_sha256 is not None
+            and data.get("candidate_sha256") != expected_candidate_sha256
+        ):
+            raise RuntimeError("online rollout output candidate hash mismatch")
         return OnlineRolloutOutput(
             resolved=bool(data["resolved"]),
             plan=str(data["plan"]),
@@ -256,44 +373,144 @@ class HPCSlurmOnlineRolloutExecutor:
         capture_traces: bool,
     ) -> list[OnlineRolloutOutput]:
         split = next((case.split for case in batch), None)
-        batch_dir, tasks = self.store.create(
+        fingerprint, semantic_hash = evaluation_fingerprint(
+            self.config,
             batch=batch,
             rules=rules,
-            split=split,
             capture_traces=capture_traces,
         )
-        script_path = self._write_array_script(
-            batch_dir=batch_dir,
-            tasks=tasks,
-            total_task_count=len(tasks),
-            attempt=1,
-        )
-        self.audit.write(
-            "online_hpc_rollout_batch_prepared",
-            batch_dir=str(batch_dir),
-            task_count=len(tasks),
-            submit=self.config.hpc.submit,
-            cpus_per_task=self.config.hpc.cpus_per_task,
-            mem=self.config.hpc.mem,
-            time=self.config.hpc.time,
-            max_running_array_tasks=self.config.hpc.max_running_array_tasks,
-        )
-        if self.config.hpc.submit:
-            before = collect_slurm_resource_snapshot()
-            job_id = (self.submitter or submit_slurm_array)(script_path)
-            self.audit.write(
-                "online_hpc_rollout_batch_submitted",
-                batch_dir=str(batch_dir),
-                job_id=job_id,
-                fairshare_before=before.get("ulhpcshare_stdout", ""),
+        batch_dir = self.store.find_by_fingerprint(fingerprint)
+        if batch_dir is None:
+            batch_dir, tasks = self.store.create(
+                batch=batch,
+                rules=rules,
+                split=split,
+                capture_traces=capture_traces,
+                evaluation_fingerprint=fingerprint,
+                rollout_semantic_sha256=semantic_hash,
             )
-            missing = self._wait_for_outputs(tasks, job_id=job_id, attempt=1)
+            self._write_array_script(
+                batch_dir=batch_dir,
+                tasks=tasks,
+                total_task_count=len(tasks),
+                attempt=1,
+            )
+            self._write_batch_state(
+                batch_dir,
+                phase="PREPARED",
+                evaluation_fingerprint=fingerprint,
+                active_attempt=1,
+                active_job_id=None,
+                retry_job_ids=[],
+            )
+            self.audit.write(
+                "online_hpc_rollout_batch_prepared",
+                batch_dir=str(batch_dir),
+                evaluation_fingerprint=fingerprint,
+                task_count=len(tasks),
+                submit=self.config.hpc.submit,
+                cpus_per_task=self.config.hpc.cpus_per_task,
+                mem=self.config.hpc.mem,
+                time=self.config.hpc.time,
+                max_running_array_tasks=self.config.hpc.max_running_array_tasks,
+            )
+        else:
+            tasks = self.store.tasks_for_existing(batch_dir, batch)
+            self._validate_existing_batch(
+                batch_dir,
+                tasks=tasks,
+                rules=rules,
+                fingerprint=fingerprint,
+            )
+            self.audit.write(
+                "online_hpc_rollout_batch_resumed",
+                batch_dir=str(batch_dir),
+                evaluation_fingerprint=fingerprint,
+                completed_outputs=sum(task.output_path.is_file() for task in tasks),
+            )
+        if self.config.hpc.submit:
+            state = self._read_batch_state(batch_dir, fingerprint=fingerprint)
+            job_id = state.get("active_job_id")
+            attempt = int(state.get("active_attempt", 1))
+            retry_job_ids = [str(item) for item in state.get("retry_job_ids", [])]
+            before: dict[str, Any] = {}
+            if not all(task.output_path.is_file() for task in tasks):
+                if not job_id:
+                    if state.get("phase") == "SUBMITTING":
+                        job_name = (
+                            f"{self.config.hpc.job_name_prefix}-{batch_dir.name}"
+                            f"-a{attempt}"
+                        )
+                        job_id = query_slurm_array_job_id(job_name)
+                        if not job_id:
+                            raise RuntimeError(
+                                "online HPC batch submission outcome is ambiguous; "
+                                "the deterministic Slurm job name is not visible yet"
+                            )
+                        self._write_batch_state(
+                            batch_dir,
+                            phase="SUBMITTED",
+                            evaluation_fingerprint=fingerprint,
+                            active_attempt=attempt,
+                            active_job_id=job_id,
+                            retry_job_ids=retry_job_ids,
+                        )
+                        self.audit.write(
+                            "online_hpc_rollout_submission_reconciled",
+                            batch_dir=str(batch_dir),
+                            job_id=job_id,
+                            attempt=attempt,
+                            job_name=job_name,
+                        )
+                        state = self._read_batch_state(
+                            batch_dir,
+                            fingerprint=fingerprint,
+                        )
+                    if job_id:
+                        before = {}
+                    else:
+                        before = collect_slurm_resource_snapshot()
+                        script_path = batch_dir / f"rollout_array_attempt_{attempt:02d}.sbatch"
+                        self._write_batch_state(
+                            batch_dir,
+                            phase="SUBMITTING",
+                            evaluation_fingerprint=fingerprint,
+                            active_attempt=attempt,
+                            active_job_id=None,
+                            retry_job_ids=retry_job_ids,
+                        )
+                        job_id = (self.submitter or submit_slurm_array)(script_path)
+                        self._write_batch_state(
+                            batch_dir,
+                            phase="SUBMITTED",
+                            evaluation_fingerprint=fingerprint,
+                            active_attempt=attempt,
+                            active_job_id=job_id,
+                            retry_job_ids=retry_job_ids,
+                        )
+                        self.audit.write(
+                            "online_hpc_rollout_batch_submitted",
+                            batch_dir=str(batch_dir),
+                            job_id=job_id,
+                            attempt=attempt,
+                            fairshare_before=before.get("ulhpcshare_stdout", ""),
+                        )
+                missing = self._wait_for_outputs(
+                    tasks,
+                    job_id=str(job_id) if job_id else None,
+                    attempt=attempt,
+                )
+            else:
+                missing = []
             outputs, retry_job_ids = self._load_outputs_with_retries(
                 batch_dir,
                 tasks,
                 initial_missing=missing,
+                starting_attempt=attempt,
+                retry_job_ids=retry_job_ids,
+                evaluation_fingerprint=fingerprint,
             )
-            after = collect_slurm_resource_snapshot(job_id)
+            after = collect_slurm_resource_snapshot(str(job_id) if job_id else None)
             usage = {
                 "mode": "online_planning_hpc_batch_resource_usage",
                 "batch_dir": str(batch_dir),
@@ -317,7 +534,20 @@ class HPCSlurmOnlineRolloutExecutor:
                     "task_count": len(tasks),
                     "completed_outputs": len(outputs),
                     "attempts": self.config.hpc.max_task_attempts,
+                    "evaluation_fingerprint": fingerprint,
                 },
+            )
+            latest_state = self._read_batch_state(
+                batch_dir,
+                fingerprint=fingerprint,
+            )
+            self._write_batch_state(
+                batch_dir,
+                phase="COMPLETE",
+                evaluation_fingerprint=fingerprint,
+                active_attempt=int(latest_state.get("active_attempt", attempt)),
+                active_job_id=latest_state.get("active_job_id", job_id),
+                retry_job_ids=retry_job_ids,
             )
             self.audit.write(
                 "online_hpc_rollout_batch_completed",
@@ -329,8 +559,70 @@ class HPCSlurmOnlineRolloutExecutor:
             return outputs
         raise RuntimeError(
             "HPC rollout batch prepared but not submitted. Review "
-            f"{script_path} and set hpc.submit=true after resource pilot setup."
+            f"{batch_dir} and set hpc.submit=true after resource pilot setup."
         )
+
+    @staticmethod
+    def _write_batch_state(
+        batch_dir: Path,
+        *,
+        phase: str,
+        evaluation_fingerprint: str,
+        active_attempt: int,
+        active_job_id: str | None,
+        retry_job_ids: list[str],
+    ) -> None:
+        _write_json(
+            batch_dir / "batch_state.json",
+            {
+                "schema_version": 1,
+                "phase": phase,
+                "evaluation_fingerprint": evaluation_fingerprint,
+                "active_attempt": active_attempt,
+                "active_job_id": active_job_id,
+                "retry_job_ids": retry_job_ids,
+            },
+        )
+
+    @staticmethod
+    def _read_batch_state(
+        batch_dir: Path,
+        *,
+        fingerprint: str,
+    ) -> dict[str, Any]:
+        path = batch_dir / "batch_state.json"
+        if not path.is_file():
+            raise RuntimeError(f"resumable online HPC batch lacks {path.name}")
+        state = json.loads(path.read_text(encoding="utf-8"))
+        if state.get("schema_version") != 1:
+            raise RuntimeError("unsupported online HPC batch state schema")
+        if state.get("evaluation_fingerprint") != fingerprint:
+            raise RuntimeError("online HPC batch state fingerprint mismatch")
+        return state
+
+    @staticmethod
+    def _validate_existing_batch(
+        batch_dir: Path,
+        *,
+        tasks: list[OnlineRolloutTask],
+        rules: str,
+        fingerprint: str,
+    ) -> None:
+        manifest = json.loads((batch_dir / "manifest.json").read_text(encoding="utf-8"))
+        if manifest.get("evaluation_fingerprint") != fingerprint:
+            raise RuntimeError("online HPC batch manifest fingerprint mismatch")
+        if manifest.get("candidate_sha256") != text_sha256(rules):
+            raise RuntimeError("online HPC batch candidate hash mismatch")
+        if manifest.get("instances") != [task.case.instance_id for task in tasks]:
+            raise RuntimeError("online HPC batch instance order mismatch")
+        if manifest.get("task_count") != len(tasks):
+            raise RuntimeError("online HPC batch task count mismatch")
+        for task in tasks:
+            task_manifest = json.loads(task.manifest_path.read_text(encoding="utf-8"))
+            if task_manifest.get("instance_id") != task.case.instance_id:
+                raise RuntimeError("online HPC task manifest instance mismatch")
+            if task_manifest.get("candidate_sha256") != text_sha256(rules):
+                raise RuntimeError("online HPC task manifest candidate mismatch")
 
     def _write_array_script(
         self,
@@ -367,14 +659,20 @@ class HPCSlurmOnlineRolloutExecutor:
         tasks: list[OnlineRolloutTask],
         *,
         initial_missing: list[OnlineRolloutTask] | None = None,
+        starting_attempt: int = 1,
+        retry_job_ids: list[str] | None = None,
+        evaluation_fingerprint: str = "",
     ) -> tuple[list[OnlineRolloutOutput], list[str]]:
-        retry_job_ids: list[str] = []
+        retry_job_ids = list(retry_job_ids or [])
         outputs_by_index: dict[int, OnlineRolloutOutput] = {}
         pending = list(tasks)
         missing_by_attempt: dict[int, list[OnlineRolloutTask]] = {
-            1: list(initial_missing or [])
+            starting_attempt: list(initial_missing or [])
         }
-        for attempt in range(1, self.config.hpc.max_task_attempts + 1):
+        for attempt in range(
+            starting_attempt,
+            self.config.hpc.max_task_attempts + 1,
+        ):
             failed_by_index: dict[int, OnlineRolloutTask] = {
                 task.index: task for task in missing_by_attempt.pop(attempt, [])
             }
@@ -391,7 +689,11 @@ class HPCSlurmOnlineRolloutExecutor:
                     continue
                 try:
                     outputs_by_index[task.index] = self.store.load_output(
-                        task.output_path
+                        task.output_path,
+                        expected_instance_id=task.case.instance_id,
+                        expected_candidate_sha256=text_sha256(
+                            task.rules_path.read_text(encoding="utf-8")
+                        ),
                     )
                 except Exception as exc:
                     failed_by_index[task.index] = task
@@ -426,9 +728,27 @@ class HPCSlurmOnlineRolloutExecutor:
                 attempt=retry_attempt,
             )
             before = collect_slurm_resource_snapshot()
+            if evaluation_fingerprint:
+                self._write_batch_state(
+                    batch_dir,
+                    phase="SUBMITTING",
+                    evaluation_fingerprint=evaluation_fingerprint,
+                    active_attempt=retry_attempt,
+                    active_job_id=None,
+                    retry_job_ids=retry_job_ids,
+                )
             job_id = (self.submitter or submit_slurm_array)(retry_script)
             if job_id is not None:
                 retry_job_ids.append(job_id)
+            if evaluation_fingerprint:
+                self._write_batch_state(
+                    batch_dir,
+                    phase="SUBMITTED",
+                    evaluation_fingerprint=evaluation_fingerprint,
+                    active_attempt=retry_attempt,
+                    active_job_id=job_id,
+                    retry_job_ids=retry_job_ids,
+                )
             self.audit.write(
                 "online_hpc_rollout_retry_submitted",
                 batch_dir=str(batch_dir),
@@ -624,6 +944,27 @@ def query_slurm_task_status(job_id: str, task_index: int) -> SlurmTaskStatus | N
     squeue = _run_optional_command(["squeue", "-h", "-j", task_ref, "-o", "%T|%M"])
     if squeue["returncode"] == 0:
         return parse_slurm_task_status(str(squeue["stdout"]))
+    return None
+
+
+def query_slurm_array_job_id(job_name: str) -> str | None:
+    """Reconcile the narrow crash window after sbatch but before journal update."""
+    squeue = _run_optional_command(
+        ["squeue", "-h", "-n", job_name, "-o", "%A"]
+    )
+    if squeue["returncode"] == 0:
+        for line in str(squeue["stdout"]).splitlines():
+            value = line.strip()
+            if value.isdigit():
+                return value
+    sacct = _run_optional_command(
+        ["sacct", "-X", "-n", "--name", job_name, "--format=JobID"]
+    )
+    if sacct["returncode"] == 0:
+        for line in reversed(str(sacct["stdout"]).splitlines()):
+            value = line.strip().split("_", 1)[0]
+            if value.isdigit():
+                return value
     return None
 
 

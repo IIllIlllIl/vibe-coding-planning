@@ -837,6 +837,48 @@ tasks。该值不是单个 job 的 CPU 数；每个 array element 仍独立申�
    或 `RUNNING` 已超过配置 walltime 加 `hpc.task_output_grace_seconds`，才进入
    retry；如果 Slurm 长时间查不到 task，则按 `hpc.missing_task_grace_seconds`
    作为丢失 task 处理。
+10. Online resume 把昂贵的 Slurm rollout 和可回退的串行 GEPA 阶段分开处理。
+    如果 `gepa_state.bin` 已存在，controller 从 checkpoint 恢复 seed validation
+    scores，不重新提交完整 validation array。GEPA Reflection、candidate selection
+    或其他串行步骤如果在 checkpoint 之间中断，允许从最近 checkpoint 重跑。
+11. 每个新 rollout batch 都保存不可变 `evaluation_fingerprint`。它覆盖 rollout
+    semantic hash、candidate rules hash、ordered instance payloads、split 和
+    `capture_traces`。semantic hash 覆盖 Plan/Code 模型配置、prompt、container、
+    evaluator、dataset 配置和 `src/**/*.py` 源码 hash。恢复时只有 fingerprint
+    完全相同的 batch 才能接管；
+    output 还必须匹配 task manifest 中的 instance ID 和 candidate hash。
+12. `batch_state.json` 记录 `PREPARED -> SUBMITTING -> SUBMITTED -> COMPLETE`。
+    `SUBMITTED` batch 恢复时继续查询原 Slurm job；已有有效 output 直接复用，终态
+    缺失或失败的 index 才重提。`SUBMITTING` 用于覆盖 `sbatch` 成功但 job ID 尚未
+    写回的窄窗口：controller 先按 deterministic job name 查询 `squeue/sacct`，查不到
+    时拒绝自动重提，避免重复 array 竞争写同一 output。
+13. `COMPLETE` 只表示 worker outputs 已完整收集，不表示 GEPA state 已提交。如果
+    controller 在返回 EvaluationBatch 后、下次 state save 前死亡，同一 fingerprint
+    会重放已验证 outputs；GEPA checkpoint 仍是 candidate/Pareto/budget 的唯一权威。
+14. 旧 batch 没有 fingerprint/journal schema，不能自动接管。需要真实复用时必须先
+    做显式、可审计的 legacy migration，验证 candidate、ordered instances、trace
+    mode 和 rollout 语义；不得仅凭“最后一个 incomplete batch”推断。
+
+2h online smoke 的 worker accounting 显示 seed validation 98 tasks 的 P50/P95
+约为 4.4/18.2 分钟，一条成功长尾约 37.2 分钟，另有两条在 40 分钟触发 timeout。
+因此正式 short-budget config 保持 FairShare 对齐的 `1 CPU / 4G`，只把 walltime
+调整为 `00:50:00`。单次 OOM 尚不足以证明需要整体增加内存；应先观察是否由同一
+instance 稳定复现。
+
+2026-07-11 的真实 20 分钟 resume 验证使用同一 persistent `run_dir`：controller
+job `5523761` 从 `gepa_state.bin` 恢复 seed validation，审计事件记录
+`online_seed_validation_restored`、`submitted_rollouts: 0`，没有重新提交 98-task
+array。它只创建 fingerprinted `batch_0005`，worker array `5523762` 的 3 个 element
+全部完成（约 5.5、14.6、28.4 分钟）。controller 在 20 分钟 walltime 到达时退出，
+因此 batch 保持 `SUBMITTED` 且 3 个 outputs 未进入 GEPA checkpoint；下次相同代码
+和语义配置 resume 应直接验证并重放这些 outputs，不再提交 worker。
+
+`configs/gepa_online_planning_hpc_8h_resume_20260711.yaml` 用于继续该 checkpoint。
+它和原 2h 配置共享正式 384/98 snapshot、initial rules、prompt/model/search 语义及
+`run_dir`；外层 controller walltime 由提交命令指定为 `08:00:00`。原目录名中的
+`smoke` 只表示首次 controller 时长，不代表数据子集或简化 objective。已完整进入
+GEPA state 的 rollout 可进入最终分析；incomplete batch 只有通过 fingerprint 和
+output identity 校验并由 controller 消费后才能计入。
 
 配置约束：
 

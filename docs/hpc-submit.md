@@ -1068,7 +1068,7 @@ bash scripts/hpc_submit_batch.sh \
 Online GEPA 的 HPC controller + Slurm array rollout 路径会在每个 rollout batch
 完成后写入 `hpc_rollout_batches/batch_*/resource_usage.json`。该文件包含提交前后
 `ulhpcshare` 的输出，以及对应 array job 的 `sacct` 输出。每次小规模真实 run
-结束后都应检查该文件，确认 `1 CPU / 4G / 30-40min` 的 worker 申请没有明显
+结束后都应检查该文件，确认 `1 CPU / 4G / 50min` 的 worker 申请没有明显
 低利用率；如果 controller 长时间等待 worker，也要把 controller 自身 job 的
 `sacct` 结果纳入报告。
 
@@ -1078,6 +1078,48 @@ Online GEPA 的 HPC controller + Slurm array rollout 路径会在每个 rollout 
 task 继续等待；终态 task 仍无 output、`RUNNING` 超过配置 walltime 加
 `hpc.task_output_grace_seconds`、或 Slurm 在 `hpc.missing_task_grace_seconds`
 内一直查不到 task 时，才作为可重试 worker 重新提交。
+
+Online controller resume 不应把进程重启等同于重新提交全部 rollout。新 batch
+在 `manifest.json` 中保存 evaluation fingerprint，并在 `batch_state.json` 中保存
+`PREPARED / SUBMITTING / SUBMITTED / COMPLETE` 和 active Slurm job/attempt：
+
+- 已有 `gepa_state.bin` 时，seed validation 从 checkpoint 恢复，不能再次提交
+  98-task validation array。
+- `SUBMITTED` batch 继续等待原 job；已完成 output 经 instance/candidate hash 校验后
+  复用，只有失败或终态缺失 index 才 retry。
+- `SUBMITTING` 且 job ID 尚未写入时，先用 deterministic job name 查询
+  `squeue/sacct`。如果暂时查不到，停止并等待对账，不得猜测为提交失败后直接重提。
+- Reflection、candidate selection 等非并行阶段允许从最近 GEPA checkpoint 重跑。
+- 没有 fingerprint/journal 的旧 batch 默认不自动接管；显式 migration 前不得把它
+  作为当前 evaluation 的可信输入。
+
+`COMPLETE` batch 可能尚未进入下一次 `gepa_state.bin` save。恢复时可按相同
+fingerprint 重放 outputs；GEPA checkpoint 决定 candidate、Pareto front 和 metric
+budget 是否已经提交，batch journal 不自行修改搜索状态。
+
+2026-07-11 真实 resume smoke：controller `5523761` 使用 `1 CPU / 4G / 20min`
+恢复原 2h run。它从 checkpoint 返回 98 个 seed validation scores，实际提交 rollout
+为 0；随后只提交 3-task worker array `5523762`。三个 worker 均完成，最长约
+28.4 分钟，验证 `50min` worker walltime 有足够余量。由于 controller 先在 20 分钟
+结束，`batch_0005` 留下 3 个有效 outputs 和 `SUBMITTED` journal，作为下一次 8h
+resume 的 completed-output takeover 现场。
+
+继续该逻辑实验使用：
+
+```bash
+bash scripts/hpc_submit_batch.sh \
+  --gepa-rules \
+  --gepa-config configs/gepa_online_planning_hpc_8h_resume_20260711.yaml \
+  --job-name online-gepa-resume-8h-20260711 \
+  --remote-dir '~/hpc_runs/vibe-coding-planning-online-2h-smoke-20260709' \
+  --cpus 1 \
+  --mem 4G \
+  --time 08:00:00 \
+  --submit
+```
+
+不要为 8h resume 新建 `run_dir`，否则会丢失原 GEPA checkpoint；也不要把 controller
+的 8 小时误写为 worker walltime，worker 仍按 YAML 使用 `1 CPU / 4G / 50min`。
 
 `DockerCapacityWindow` 参数仍复用 `docker:` 配置段：
 

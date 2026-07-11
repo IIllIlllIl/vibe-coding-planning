@@ -9,6 +9,8 @@ import os
 from typing import Any, Callable
 
 import gepa
+from gepa.core.adapter import EvaluationBatch
+from gepa.core.state import GEPAState
 
 from src.environment.docker_env import configure_docker_capacity
 from src.optimization.audit import JsonlLogger, text_sha256
@@ -144,6 +146,57 @@ def _write_online_manifest(
     )
 
 
+def _load_resume_seed_evaluation(
+    config: OnlineOptimizationConfig,
+    *,
+    initial_rules: str,
+    validation: list[Any],
+) -> EvaluationBatch | None:
+    """Return the persisted seed scores GEPA otherwise recomputes before load."""
+    state_path = config.run_dir / "gepa_state.bin"
+    if not state_path.is_file():
+        return None
+    state = GEPAState.load(str(config.run_dir))
+    if not state.program_candidates or state.program_candidates[0] != {
+        "rules": initial_rules
+    }:
+        raise ValueError("online GEPA checkpoint seed candidate differs from config")
+    scores_by_id = state.prog_candidate_val_subscores[0]
+    expected_ids = list(range(len(validation)))
+    if set(scores_by_id) != set(expected_ids):
+        raise ValueError(
+            "online GEPA checkpoint validation IDs differ from the current snapshot"
+        )
+
+    # GEPA discards this pre-load EvaluationBatch once it loads gepa_state.bin.
+    # Preserve real seed outputs when available and use a minimal marker otherwise.
+    outputs = []
+    best_outputs = state.best_outputs_valset or {}
+    for val_id, case in enumerate(validation):
+        seed_output = next(
+            (
+                output
+                for program_idx, output in best_outputs.get(val_id, [])
+                if program_idx == 0
+            ),
+            None,
+        )
+        outputs.append(
+            seed_output
+            if seed_output is not None
+            else {
+                "instance_id": case.instance_id,
+                "resolved": bool(scores_by_id[val_id]),
+                "checkpoint_restored": True,
+            }
+        )
+    return EvaluationBatch(
+        outputs=outputs,
+        scores=[float(scores_by_id[val_id]) for val_id in expected_ids],
+        trajectories=None,
+    )
+
+
 def run_online_optimization(
     config: OnlineOptimizationConfig,
     *,
@@ -226,6 +279,11 @@ def _run_online_optimization_locked(
         config,
         capacity,
     )
+    resume_seed_evaluation = _load_resume_seed_evaluation(
+        config,
+        initial_rules=initial_rules,
+        validation=validation,
+    )
     adapter = OnlinePlanningGEPAAdapter(
         rollout_runner,
         parallel=config.search.parallel,
@@ -234,6 +292,15 @@ def _run_online_optimization_locked(
         fail_on_rollout_error=True,
         rollout_attempts=max(config.plan.max_attempts, config.code.max_attempts),
         batch_executor=batch_executor,
+        resume_seed_evaluation=resume_seed_evaluation,
+        resume_seed_key=(
+            (
+                text_sha256(initial_rules),
+                tuple(case.instance_id for case in validation),
+            )
+            if resume_seed_evaluation is not None
+            else None
+        ),
     )
     try:
         result = optimize_fn(
