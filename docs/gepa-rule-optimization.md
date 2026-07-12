@@ -738,6 +738,9 @@ Online GEPA 使用独立实验入口；它是当前活跃主线，同时保留 o
 - `src/optimization/online_rollout.py`：执行单个 current Plan-Code-Test rollout。
   本地使用 Docker；HPC worker 使用 Apptainer/SIF backend。Plan、Code 和
   Evaluator phase 各自隔离，phase 之间只传显式 artifact。
+  Apptainer Code phase 的可写 repository 只存活到 patch 和 Code trajectory
+  提取完成；environment 停止后、evaluator 启动前立即删除。删除失败按
+  operational failure 终止 rollout，不得作为 unresolved score。
 - `src/evaluator/runtime_evaluator.py`：根据 online config 选择 evaluator
   backend。本地默认 `swebench_docker`，HPC/Apptainer 默认
   `swebench_apptainer`。

@@ -5,6 +5,7 @@ from __future__ import annotations
 from dataclasses import replace
 import shutil
 from pathlib import Path
+import time
 from typing import Any
 
 from src.agents import code_agent, plan_agent
@@ -20,6 +21,7 @@ from src.environment.apptainer_env import ApptainerEnvironment
 from src.environment.docker_env import DockerCapacityWindow, DockerEnvWrapper
 from src.evaluator.runtime_evaluator import evaluate_online_patch
 from src.evaluator.swe_evaluator import derive_image_name
+from src.exceptions import FatalError
 from src.optimization.audit import AuditedModel, JsonlLogger, text_sha256
 from src.optimization.online_config import OnlineOptimizationConfig
 from src.optimization.online_models import OnlineGEPACase, OnlineRolloutOutput
@@ -156,6 +158,15 @@ class OnlinePCTRolloutRunner:
             finally:
                 self._stop_environment(plan_env)
 
+            code_workspace = (
+                self._phase_workdir(
+                    instance_info["instance_id"],
+                    candidate_sha256,
+                    "code",
+                )
+                if self.config.container.runtime == "apptainer"
+                else None
+            )
             code_env: DockerEnvWrapper | ApptainerEnvironment
             code_env = self._start_environment(
                 image_name=image_name,
@@ -164,6 +175,7 @@ class OnlinePCTRolloutRunner:
                 instance_info=instance_info,
                 phase="code",
                 candidate_sha256=candidate_sha256,
+                host_workdir=code_workspace,
             )
             try:
                 base_code_config = self._base_config(self.config.code)
@@ -192,7 +204,16 @@ class OnlinePCTRolloutRunner:
                     ),
                 )
             finally:
-                self._stop_environment(code_env)
+                try:
+                    self._stop_environment(code_env)
+                finally:
+                    if code_workspace is not None:
+                        self._remove_phase_workspace(
+                            code_workspace,
+                            instance_id=case.instance_id,
+                            candidate_sha256=candidate_sha256,
+                            phase="code",
+                        )
 
             eval_workdir = self._phase_workdir(
                 instance_info["instance_id"],
@@ -263,17 +284,11 @@ class OnlinePCTRolloutRunner:
         instance_info: dict[str, Any],
         phase: str,
         candidate_sha256: str,
+        host_workdir: Path | None = None,
     ) -> DockerEnvWrapper | ApptainerEnvironment:
         if self.config.container.runtime == "apptainer":
             run_args = []
-            host_workdir = None
-            if phase == "code":
-                host_workdir = self._phase_workdir(
-                    instance_info["instance_id"],
-                    candidate_sha256,
-                    phase,
-                )
-            elif repo_path:
+            if host_workdir is None and repo_path:
                 run_args.extend(["--bind", f"{repo_path}:{workdir}"])
             return ApptainerEnvironment(
                 image=image_name,
@@ -321,6 +336,57 @@ class OnlinePCTRolloutRunner:
             path=str(path),
         )
         return path
+
+    def _remove_phase_workspace(
+        self,
+        path: Path,
+        *,
+        instance_id: str,
+        candidate_sha256: str,
+        phase: str,
+        max_attempts: int = 3,
+    ) -> None:
+        for attempt in range(1, max_attempts + 1):
+            try:
+                shutil.rmtree(path)
+                self.audit.write(
+                    "online_phase_workspace_removed",
+                    instance_id=instance_id,
+                    candidate_sha256=candidate_sha256,
+                    phase=phase,
+                    path=str(path),
+                    cleanup_attempts=attempt,
+                )
+                return
+            except FileNotFoundError:
+                self.audit.write(
+                    "online_phase_workspace_removed",
+                    instance_id=instance_id,
+                    candidate_sha256=candidate_sha256,
+                    phase=phase,
+                    path=str(path),
+                    cleanup_attempts=attempt,
+                    already_absent=True,
+                )
+                return
+            except OSError as exc:
+                if attempt < max_attempts:
+                    time.sleep(2 ** (attempt - 1))
+                    continue
+                self.audit.write(
+                    "online_phase_workspace_cleanup_failed",
+                    instance_id=instance_id,
+                    candidate_sha256=candidate_sha256,
+                    phase=phase,
+                    path=str(path),
+                    cleanup_attempts=attempt,
+                    error_type=type(exc).__name__,
+                    error=str(exc),
+                )
+                raise FatalError(
+                    f"Failed to remove {phase} phase workspace after "
+                    f"{max_attempts} attempts: {path}: {exc}"
+                ) from exc
 
     def _stop_environment(
         self,

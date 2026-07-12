@@ -1097,6 +1097,13 @@ Online controller resume 不应把进程重启等同于重新提交全部 rollou
 fingerprint 重放 outputs；GEPA checkpoint 决定 candidate、Pareto front 和 metric
 budget 是否已经提交，batch journal 不自行修改搜索状态。
 
+Online worker 的 Code phase 会把 SIF 内只读 repository 复制为可写 host
+workspace，以支持 Agent 多步修改。该副本不是实验结果：patch 和 trajectory
+提取完成、Apptainer environment 停止后，必须在 evaluator 启动前立即删除。
+删除最多重试三次；持续失败属于基础设施错误并停止 rollout。Persistent run
+directory 只保留 task/output JSON、trajectory、patch、evaluator result、audit 和
+GEPA checkpoint，不保留完整 Code repository 副本。
+
 2026-07-11 真实 resume smoke：controller `5523761` 使用 `1 CPU / 4G / 20min`
 恢复原 2h run。它从 checkpoint 返回 98 个 seed validation scores，实际提交 rollout
 为 0；随后只提交 3-task worker array `5523762`。三个 worker 均完成，最长约

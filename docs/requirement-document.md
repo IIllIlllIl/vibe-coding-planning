@@ -331,6 +331,7 @@ GEPA reflection、候选报告和后续 prompt 调整完成。
 | 输入隔离 | Plan Agent 可见 issue、repo 和 candidate rules；Code Agent 只可见 issue、plan 和 repo；历史 PCT plan、label、patch、trajectory 与 ASI 不进入当前 rollout |
 | HPC 执行 | controller 串行维护 GEPA 状态；每个高并行 metric batch 由独立 1 CPU / 4G Slurm array elements 执行，resume 优先接管已有 batch 的 pending/running/completed task，只重提失败或丢失 task |
 | 数据可信度 | operational failure 不计作 unresolved；evaluator 必须验证可写 worktree 含目标仓库 tracked files，基础设施失败不得污染 candidate score |
+| 临时空间生命周期 | Apptainer Code workspace 仅保留到 patch 和 Code trajectory 提取完成；停止 environment 后、调用 evaluator 前必须删除。删除失败应有限重试并作为 operational failure 停止 rollout，不得将完整 repository 写入 persistent result |
 | 历史路径 | PCT、PCC 与 offline GEPA 的代码、数据快照和有效结果保留用于复现与对照，但目前暂停继续优化 |
 
 ### 3.9 HPC 作业提交运行

@@ -14,6 +14,7 @@ import pytest
 from gepa.core.state import GEPAState, ValsetEvaluation
 
 from src.config import DockerConfig
+from src.exceptions import FatalError
 from src.optimization.audit import AuditedModel, JsonlLogger, text_sha256
 from src.optimization.adapter import CheckerGEPAAdapter
 from src.optimization.checker import DockerChecker, _json_object, validate_checker_output
@@ -787,11 +788,21 @@ def test_online_rollout_apptainer_uses_separate_plan_and_code_phases(
             [{"role": "assistant", "content": "code"}],
         ),
     )
+    def fake_evaluate(
+        patch,
+        instance_info,
+        config,
+        capacity_window,
+        phase_workdir,
+        run_id_suffix,
+    ):
+        code_workdir = Path(env_kwargs[1]["host_workdir"])
+        assert not code_workdir.exists()
+        return {"resolved": True}
+
     monkeypatch.setattr(
         "src.optimization.online_rollout.evaluate_online_patch",
-        lambda patch, instance_info, config, capacity_window, phase_workdir, run_id_suffix: {
-            "resolved": True
-        },
+        fake_evaluate,
     )
 
     OnlinePCTRolloutRunner(config, _FakeCapacityWindow())(
@@ -805,6 +816,7 @@ def test_online_rollout_apptainer_uses_separate_plan_and_code_phases(
     assert code_kwargs["host_workdir"] is not None
     assert "phase_workspaces" in str(code_kwargs["host_workdir"])
     assert code_kwargs["initialize_host_workdir"] is True
+    assert not Path(code_kwargs["host_workdir"]).exists()
     assert len(cleaned) == 2
 
     audit = [
@@ -817,6 +829,12 @@ def test_online_rollout_apptainer_uses_separate_plan_and_code_phases(
         if record["event"] == "online_phase_workspace_prepared"
     ]
     assert [event["phase"] for event in workspace_events] == ["code", "eval"]
+    removed_events = [
+        record
+        for record in audit
+        if record["event"] == "online_phase_workspace_removed"
+    ]
+    assert [event["phase"] for event in removed_events] == ["code"]
     evaluator_events = [
         record for record in audit if record["event"] == "online_evaluator_started"
     ]
@@ -824,6 +842,60 @@ def test_online_rollout_apptainer_uses_separate_plan_and_code_phases(
     assert evaluator_events[0]["container_runtime"] == "apptainer"
     assert evaluator_events[0]["receives_candidate_rules"] is False
     assert evaluator_events[0]["receives_patch"] is True
+
+
+def test_online_rollout_workspace_cleanup_retries(tmp_path, monkeypatch):
+    config = _online_config(tmp_path)
+    runner = OnlinePCTRolloutRunner(config, _FakeCapacityWindow())
+    workspace = tmp_path / "workspace"
+    workspace.mkdir()
+    calls = []
+    real_rmtree = __import__("shutil").rmtree
+
+    def flaky_rmtree(path):
+        calls.append(path)
+        if len(calls) < 3:
+            raise OSError("temporary GPFS metadata error")
+        real_rmtree(path)
+
+    monkeypatch.setattr("src.optimization.online_rollout.shutil.rmtree", flaky_rmtree)
+    monkeypatch.setattr("src.optimization.online_rollout.time.sleep", lambda _: None)
+
+    runner._remove_phase_workspace(
+        workspace,
+        instance_id="org__repo-1",
+        candidate_sha256="abc",
+        phase="code",
+    )
+
+    assert len(calls) == 3
+    assert not workspace.exists()
+
+
+def test_online_rollout_workspace_cleanup_failure_is_fatal(tmp_path, monkeypatch):
+    config = _online_config(tmp_path)
+    runner = OnlinePCTRolloutRunner(config, _FakeCapacityWindow())
+    workspace = tmp_path / "workspace"
+    workspace.mkdir()
+    monkeypatch.setattr(
+        "src.optimization.online_rollout.shutil.rmtree",
+        lambda path: (_ for _ in ()).throw(OSError("quota metadata failure")),
+    )
+    monkeypatch.setattr("src.optimization.online_rollout.time.sleep", lambda _: None)
+
+    with pytest.raises(FatalError, match="Failed to remove code phase workspace"):
+        runner._remove_phase_workspace(
+            workspace,
+            instance_id="org__repo-1",
+            candidate_sha256="abc",
+            phase="code",
+        )
+
+    audit = [
+        json.loads(line)
+        for line in (config.run_dir / "audit_events.jsonl").read_text().splitlines()
+    ]
+    assert audit[-1]["event"] == "online_phase_workspace_cleanup_failed"
 
 
 def test_config_requires_zero_checker_temperature(tmp_path, monkeypatch):

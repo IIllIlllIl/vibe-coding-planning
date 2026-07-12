@@ -64,6 +64,10 @@
     online rollout 已按 `docs/gepa-rule-optimization.md` 第 11.5 节改造成
     phase 内 stateful、phase 间 artifact-only 的 agent 级隔离，并新增标准
     SWE-bench/Verified 的 Apptainer evaluator backend。
+  - 2026-07-12 post-fix seed validation 因 home quota 用尽停止。根因之一是每个
+    Apptainer Code phase 的完整 repository workspace 被写入 persistent run_dir 后
+    未回收。现已改为 patch/trajectory 提取后、evaluator 启动前即时删除，删除失败
+    重试三次后按 operational failure 停止；历史遗留 workspaces 已清理。
   - 详细设计记录在 `docs/gepa-rule-optimization.md` 第 11 节。
 
 ---
