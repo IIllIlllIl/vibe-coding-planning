@@ -220,6 +220,12 @@ class OnlinePCTRolloutRunner:
                 candidate_sha256,
                 "eval",
             )
+            eval_log_root = (
+                self.config.run_dir
+                / "evaluator_logs"
+                / candidate_sha256[:12]
+                / case.instance_id
+            )
             self.audit.write(
                 "online_evaluator_started",
                 instance_id=case.instance_id,
@@ -231,14 +237,23 @@ class OnlinePCTRolloutRunner:
                 receives_code_trajectory=False,
                 receives_patch=True,
             )
-            evaluator_result = evaluate_online_patch(
-                patch,
-                instance_info,
-                config=self.config,
-                capacity_window=self.capacity_window,
-                phase_workdir=eval_workdir,
-                run_id_suffix="_online_gepa",
-            )
+            try:
+                evaluator_result = evaluate_online_patch(
+                    patch,
+                    instance_info,
+                    config=self.config,
+                    capacity_window=self.capacity_window,
+                    phase_workdir=eval_workdir,
+                    persistent_log_root=eval_log_root,
+                    run_id_suffix="_online_gepa",
+                )
+            finally:
+                self._remove_phase_workspace(
+                    eval_workdir,
+                    instance_id=case.instance_id,
+                    candidate_sha256=candidate_sha256,
+                    phase="eval",
+                )
         except Exception as exc:
             self.audit.write(
                 "online_rollout_failed",

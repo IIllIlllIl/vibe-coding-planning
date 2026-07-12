@@ -39,6 +39,7 @@ def evaluate_apptainer(
     timeout: int = 1800,
     run_id_suffix: str = "",
     phase_workdir: Path,
+    persistent_log_root: Path | None = None,
 ) -> dict[str, Any]:
     """Evaluate one SWE-bench patch in an Apptainer-backed environment."""
     try:
@@ -65,8 +66,7 @@ def evaluate_apptainer(
     test_spec = make_test_spec(instance_info, namespace="swebench")
     run_id = f"eval_{instance_id}{run_id_suffix}"
     log_dir = (
-        phase_workdir
-        / "logs"
+        (persistent_log_root or phase_workdir / "logs")
         / "run_evaluation"
         / run_id
         / "plan-code-test"

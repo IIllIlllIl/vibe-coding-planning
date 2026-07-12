@@ -1101,8 +1101,11 @@ Online worker 的 Code phase 会把 SIF 内只读 repository 复制为可写 hos
 workspace，以支持 Agent 多步修改。该副本不是实验结果：patch 和 trajectory
 提取完成、Apptainer environment 停止后，必须在 evaluator 启动前立即删除。
 删除最多重试三次；持续失败属于基础设施错误并停止 rollout。Persistent run
-directory 只保留 task/output JSON、trajectory、patch、evaluator result、audit 和
-GEPA checkpoint，不保留完整 Code repository 副本。
+Evaluator 同样从 clean base创建独立可写repository来应用patch；它把官方report、
+test output和运行日志写到workspace外的worker专属日志目录，形成结构化结果后立即
+删除eval workspace。删除最多重试三次，持续失败不产生score。Persistent run
+directory 只保留 task/output JSON、trajectory、patch、evaluator result、audit、
+小型evaluator日志和GEPA checkpoint，不保留完整Code或Evaluator repository副本。
 
 2026-07-11 真实 resume smoke：controller `5523761` 使用 `1 CPU / 4G / 20min`
 恢复原 2h run。它从 checkpoint 返回 98 个 seed validation scores，实际提交 rollout

@@ -687,7 +687,7 @@ def test_online_rollout_audit_records_design_boundaries(tmp_path, monkeypatch):
     monkeypatch.setattr("src.optimization.online_rollout.code_agent.run", fake_code_run)
     monkeypatch.setattr(
         "src.optimization.online_rollout.evaluate_online_patch",
-        lambda patch, instance_info, config, capacity_window, phase_workdir, run_id_suffix: {
+        lambda patch, instance_info, config, capacity_window, phase_workdir, persistent_log_root, run_id_suffix: {
             "resolved": True,
             "stdout": "ok",
         },
@@ -794,11 +794,17 @@ def test_online_rollout_apptainer_uses_separate_plan_and_code_phases(
         config,
         capacity_window,
         phase_workdir,
+        persistent_log_root,
         run_id_suffix,
     ):
         code_workdir = Path(env_kwargs[1]["host_workdir"])
         assert not code_workdir.exists()
-        return {"resolved": True}
+        assert persistent_log_root.name == case.instance_id
+        (phase_workdir / "temporary-repository-file").write_text("temporary")
+        persistent_log_root.mkdir(parents=True)
+        log_file = persistent_log_root / "report.json"
+        log_file.write_text("{}")
+        return {"resolved": True, "log_dir": str(persistent_log_root)}
 
     monkeypatch.setattr(
         "src.optimization.online_rollout.evaluate_online_patch",
@@ -817,6 +823,14 @@ def test_online_rollout_apptainer_uses_separate_plan_and_code_phases(
     assert "phase_workspaces" in str(code_kwargs["host_workdir"])
     assert code_kwargs["initialize_host_workdir"] is True
     assert not Path(code_kwargs["host_workdir"]).exists()
+    eval_workspace = (
+        config.run_dir
+        / "phase_workspaces"
+        / text_sha256("candidate planning rules")[:12]
+        / case.instance_id
+        / "eval"
+    )
+    assert not eval_workspace.exists()
     assert len(cleaned) == 2
 
     audit = [
@@ -834,7 +848,7 @@ def test_online_rollout_apptainer_uses_separate_plan_and_code_phases(
         for record in audit
         if record["event"] == "online_phase_workspace_removed"
     ]
-    assert [event["phase"] for event in removed_events] == ["code"]
+    assert [event["phase"] for event in removed_events] == ["code", "eval"]
     evaluator_events = [
         record for record in audit if record["event"] == "online_evaluator_started"
     ]

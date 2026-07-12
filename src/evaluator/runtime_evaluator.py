@@ -18,6 +18,7 @@ def evaluate_online_patch(
     config: OnlineOptimizationConfig,
     capacity_window: DockerCapacityWindow,
     phase_workdir: Path,
+    persistent_log_root: Path | None = None,
     run_id_suffix: str = "_online_gepa",
 ) -> dict[str, Any]:
     """Evaluate an online rollout patch using the configured backend."""
@@ -38,5 +39,6 @@ def evaluate_online_patch(
             timeout=config.evaluator.timeout,
             run_id_suffix=run_id_suffix,
             phase_workdir=phase_workdir,
+            persistent_log_root=persistent_log_root,
         )
     raise ValueError(f"unsupported evaluator backend: {config.evaluator.backend!r}")

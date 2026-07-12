@@ -290,6 +290,7 @@ class TestEvaluateApptainer:
                 commands.append("cleanup")
 
         phase_workdir = tmp_path / "eval-workdir"
+        persistent_log_root = tmp_path / "persistent-evaluator-logs"
 
         def make_env(**kwargs):
             assert kwargs["host_workdir"] == phase_workdir
@@ -307,12 +308,13 @@ class TestEvaluateApptainer:
             ),
             capacity_window=object(),
             phase_workdir=phase_workdir,
+            persistent_log_root=persistent_log_root,
             timeout=123,
         )
 
         assert result["resolved"] is True
         assert result["stdout"] == "test output"
-        assert str(tmp_path / "eval-workdir") in result["log_dir"]
+        assert str(persistent_log_root) in result["log_dir"]
         assert "logs/run_evaluation" in result["log_dir"]
         mock_make_spec.assert_called_once_with(instance_info, namespace="swebench")
         mock_get_report.assert_called_once()

@@ -832,8 +832,10 @@ tasks。该值不是单个 job 的 CPU 数；每个 array element 仍独立申�
    `hpc_rollout_batches/batch_*/batch_done.json` 和 `resource_usage.json`。
    后者尽力记录提交前后 `ulhpcshare` 以及对应 Slurm job 的 `sacct` 输出，用于
    监控最小资源申请是否仍产生 FairShare 浪费。
-8. Apptainer evaluator 日志写入当前 worker 的 eval phase workspace 下，不再写入
-   项目全局 `logs/run_evaluation`，避免并发 worker 或重复 instance 覆盖日志。
+8. Apptainer evaluator 的小型日志写入当前 worker 的独立
+   `evaluator_logs/<candidate>/<instance>/`，不放在 eval repository workspace，
+   也不写项目全局 `logs/run_evaluation`。官方 report、test output、patch 和运行
+   日志形成后，停止 environment 并立即删除完整 eval workspace。
 9. 如果某个 worker output 已写出但 `status != completed`，controller 会归档该
    output 到 `failed_outputs/attempt_NN/`，并只为失败 task index 重新提交 Slurm
    array。重试次数由 `hpc.max_task_attempts` 控制。缺失 output 会结合 Slurm

@@ -157,10 +157,11 @@ plan-code-test/
 该层包含当前 Online GEPA 主线和保留的 offline GEPA 对照路径。Online GEPA 通过
 真实 Plan-Code-Evaluator rollout 优化 planning rules；PCT/PCC、逐案例规则提取和
 offline strict Checker 目前暂停继续投入，但其实现与产物保留用于复现和对照。
-Apptainer Code phase 的可写 host repository 归单次 rollout 所有，只用于 Agent
-多步修改和 patch 提取；environment 停止后、evaluator 启动前立即删除。Persistent
-run directory 只保存结构化 output、trajectory、patch、evaluator result、audit 和
-GEPA checkpoint，不保存可从 SIF 重建的完整 repository。
+Apptainer Code和Evaluator phase的可写host repository均归单次rollout所有。Code
+副本在patch提取后、evaluator启动前删除；Evaluator副本在官方report和test output
+写入外部持久日志目录后删除。Persistent run directory只保存结构化output、
+trajectory、patch、evaluator result、audit、小型日志和GEPA checkpoint，不保存
+可从SIF重建的完整repository。
 详细设计见
 [`gepa-rule-optimization.md`](gepa-rule-optimization.md)。
 
