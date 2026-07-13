@@ -10,6 +10,7 @@ from __future__ import annotations
 import argparse
 from dataclasses import replace
 from datetime import datetime, timezone
+import hashlib
 import json
 from pathlib import Path
 from typing import Any
@@ -63,6 +64,23 @@ def output_to_json(output: OnlineRolloutOutput) -> dict[str, Any]:
     }
 
 
+def checkpoint_identity(manifest: dict[str, Any]) -> str:
+    payload = {
+        "schema": 1,
+        "evaluation_fingerprint": manifest.get("evaluation_fingerprint"),
+        "rollout_semantic_sha256": manifest.get("rollout_semantic_sha256"),
+        "candidate_sha256": manifest.get("candidate_sha256"),
+        "instance_id": manifest.get("instance_id"),
+        "split": manifest.get("split"),
+        "issue_description": manifest.get("issue_description"),
+        "repository": manifest.get("repository"),
+    }
+    encoded = json.dumps(
+        payload, ensure_ascii=False, sort_keys=True, separators=(",", ":")
+    ).encode("utf-8")
+    return hashlib.sha256(encoded).hexdigest()
+
+
 def run_task(
     *,
     config_path: Path,
@@ -85,7 +103,17 @@ def run_task(
             max_concurrent=1,
             enable_docker_maintenance=config.container.runtime == "docker",
         )
-        output = OnlinePCTRolloutRunner(config, capacity)(case, rules)
+        checkpoint_dir = (
+            worker_run_dir.parent / "checkpoints"
+            if worker_run_dir is not None
+            else None
+        )
+        output = OnlinePCTRolloutRunner(
+            config,
+            capacity,
+            checkpoint_dir=checkpoint_dir,
+            checkpoint_identity=checkpoint_identity(manifest),
+        )(case, rules)
         _write_json(
             output_path,
             {

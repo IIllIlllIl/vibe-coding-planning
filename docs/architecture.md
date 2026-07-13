@@ -162,6 +162,10 @@ Apptainer Code和Evaluator phase的可写host repository均归单次rollout所�
 写入外部持久日志目录后删除。Persistent run directory只保存结构化output、
 trajectory、patch、evaluator result、audit、小型日志和GEPA checkpoint，不保存
 可从SIF重建的完整repository。
+HPC worker 在 task 级共享目录中为成功的 Plan、Code 和 Evaluator phase 原子写入
+带 rollout identity 的 checkpoint。Slurm retry 只从第一个未完成 phase 继续：Code
+失败复用 plan，Evaluator 失败复用 plan 和 patch；identity 不一致时拒绝复用。
+Agent 在空提交或非 `Submitted` 退出前另外持久化 partial trajectory，供失败归因。
 详细设计见
 [`gepa-rule-optimization.md`](gepa-rule-optimization.md)。
 

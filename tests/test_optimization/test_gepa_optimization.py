@@ -14,7 +14,7 @@ import pytest
 from gepa.core.state import GEPAState, ValsetEvaluation
 
 from src.config import DockerConfig
-from src.exceptions import FatalError
+from src.exceptions import FatalError, TaskError
 from src.optimization.audit import AuditedModel, JsonlLogger, text_sha256
 from src.optimization.adapter import CheckerGEPAAdapter
 from src.optimization.checker import DockerChecker, _json_object, validate_checker_output
@@ -664,6 +664,7 @@ def test_online_rollout_audit_records_design_boundaries(tmp_path, monkeypatch):
         *,
         planning_rules,
         model_wrapper=None,
+        failure_trajectory_path=None,
     ):
         calls["planning_rules"] = planning_rules
         calls["plan_model_wrapper"] = model_wrapper
@@ -676,6 +677,7 @@ def test_online_rollout_audit_records_design_boundaries(tmp_path, monkeypatch):
         env,
         *,
         model_wrapper=None,
+        failure_trajectory_path=None,
     ):
         calls["code_plan"] = plan
         calls["code_model_wrapper"] = model_wrapper
@@ -727,6 +729,109 @@ def test_online_rollout_audit_records_design_boundaries(tmp_path, monkeypatch):
     assert completed["patch_chars"] == len("diff --git a/a.py b/a.py\n")
     assert completed["plan_trajectory_messages"] == 1
     assert completed["code_trajectory_messages"] == 1
+
+
+def test_online_rollout_retry_resumes_from_plan_checkpoint(tmp_path, monkeypatch):
+    config = _online_config(tmp_path)
+    case = load_online_snapshot(config.dataset_snapshot)[0][0]
+    monkeypatch.setenv("TEST_API_KEY", "secret")
+    calls = {"plan": 0, "code": 0, "evaluator": 0}
+
+    class FakeEnv:
+        def __init__(self, docker_config, capacity_window):
+            pass
+
+        def start(self, **kwargs):
+            pass
+
+        def stop(self):
+            pass
+
+    monkeypatch.setattr("src.optimization.online_rollout.DockerEnvWrapper", FakeEnv)
+    monkeypatch.setattr(
+        "src.optimization.online_rollout.OnlinePCTRolloutRunner._load_instance_info",
+        lambda self, case: {
+            "instance_id": case.instance_id,
+            "repo": "org/repo",
+            "base_commit": "abc123",
+            "repo_path": "/tmp/repo",
+        },
+    )
+
+    def fake_plan(*args, **kwargs):
+        calls["plan"] += 1
+        return "checkpointed plan", [{"role": "assistant", "content": "plan"}]
+
+    def fake_code(*args, **kwargs):
+        calls["code"] += 1
+        if calls["code"] == 1:
+            raise TaskError("empty patch")
+        return "diff --git a/a.py b/a.py\n", [
+            {"role": "assistant", "content": "code"}
+        ]
+
+    def fake_evaluator(*args, **kwargs):
+        calls["evaluator"] += 1
+        return {"resolved": True}
+
+    monkeypatch.setattr("src.optimization.online_rollout.plan_agent.run", fake_plan)
+    monkeypatch.setattr("src.optimization.online_rollout.code_agent.run", fake_code)
+    monkeypatch.setattr(
+        "src.optimization.online_rollout.evaluate_online_patch", fake_evaluator
+    )
+    checkpoint_dir = tmp_path / "task" / "checkpoints"
+    identity = "matching-rollout-identity"
+
+    with pytest.raises(TaskError, match="empty patch"):
+        OnlinePCTRolloutRunner(
+            config,
+            _FakeCapacityWindow(),
+            checkpoint_dir=checkpoint_dir,
+            checkpoint_identity=identity,
+        )(case, "candidate planning rules")
+
+    assert (checkpoint_dir / "plan.json").is_file()
+    assert not (checkpoint_dir / "code.json").exists()
+
+    result = OnlinePCTRolloutRunner(
+        config,
+        _FakeCapacityWindow(),
+        checkpoint_dir=checkpoint_dir,
+        checkpoint_identity=identity,
+    )(case, "candidate planning rules")
+
+    assert result.resolved is True
+    assert calls == {"plan": 1, "code": 2, "evaluator": 1}
+    audit = [
+        json.loads(line)
+        for line in (config.run_dir / "audit_events.jsonl").read_text().splitlines()
+    ]
+    assert any(
+        event["event"] == "online_rollout_phase_resumed"
+        and event["phase"] == "plan"
+        for event in audit
+    )
+
+
+def test_online_rollout_rejects_checkpoint_identity_mismatch(tmp_path):
+    config = _online_config(tmp_path)
+    checkpoint_dir = tmp_path / "task" / "checkpoints"
+    runner = OnlinePCTRolloutRunner(
+        config,
+        _FakeCapacityWindow(),
+        checkpoint_dir=checkpoint_dir,
+        checkpoint_identity="first",
+    )
+    runner._write_checkpoint("plan", {"plan": "plan", "plan_trajectory": []})
+
+    resumed = OnlinePCTRolloutRunner(
+        config,
+        _FakeCapacityWindow(),
+        checkpoint_dir=checkpoint_dir,
+        checkpoint_identity="different",
+    )
+    with pytest.raises(FatalError, match="checkpoint identity mismatch"):
+        resumed._read_checkpoint("plan")
 
 
 def test_online_rollout_apptainer_uses_separate_plan_and_code_phases(
@@ -1358,7 +1463,7 @@ def test_online_rollout_worker_disables_docker_maintenance_for_apptainer(
         return _FakeCapacityWindow()
 
     class FakeRunner:
-        def __init__(self, runner_config, capacity):
+        def __init__(self, runner_config, capacity, **kwargs):
             pass
 
         def __call__(self, case, rules):

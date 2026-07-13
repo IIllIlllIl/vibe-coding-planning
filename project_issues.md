@@ -68,6 +68,11 @@
     Apptainer Code phase 的完整 repository workspace 被写入 persistent run_dir 后
     未回收。现已改为 patch/trajectory 提取后、evaluator 启动前即时删除，删除失败
     重试三次后按 operational failure 停止；历史遗留 workspaces 已清理。
+  - 后续 8h seed validation 得到 96/98 个健康 output，但一个 Code Agent 两次主动
+    提交空 diff，另一个 task 两次被 50min Slurm walltime 终止。此前 task retry 会
+    连 Plan 一起重跑，使长 Plan 再次消耗大部分 walltime。现已增加 Plan/Code/
+    Evaluator phase checkpoint：retry 从首个未完成 phase 继续，并持久化失败 Agent
+    partial trajectory。下一次真实 HPC run 需验证 phase 接管和磁盘回收。
   - 详细设计记录在 `docs/gepa-rule-optimization.md` 第 11 节。
 
 ---

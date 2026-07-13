@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import replace
+import json
 import shutil
 from pathlib import Path
 import time
@@ -34,11 +35,16 @@ class OnlinePCTRolloutRunner:
         self,
         config: OnlineOptimizationConfig,
         capacity_window: DockerCapacityWindow,
+        *,
+        checkpoint_dir: Path | None = None,
+        checkpoint_identity: str | None = None,
     ) -> None:
         self.config = config
         self.capacity_window = capacity_window
         self.audit = JsonlLogger(config.run_dir / "audit_events.jsonl")
         self.usage = JsonlLogger(config.run_dir / "usage.jsonl")
+        self.checkpoint_dir = checkpoint_dir
+        self.checkpoint_identity = checkpoint_identity
 
     def _agent_config(self, model_config: Any) -> AgentConfig:
         return AgentConfig(
@@ -128,132 +134,162 @@ class OnlinePCTRolloutRunner:
         )
 
         try:
-            plan_env: DockerEnvWrapper | ApptainerEnvironment
-            plan_env = self._start_environment(
-                image_name=image_name,
-                workdir=workdir,
-                repo_path=repo_path,
-                instance_info=instance_info,
-                phase="plan",
-                candidate_sha256=candidate_sha256,
-            )
-            try:
-                plan_config = self._base_config(self.config.plan)
-                plan, plan_trajectory = plan_agent.run(
-                    plan_config,
-                    case.issue_description,
-                    plan_env,
-                    planning_rules=rules,
-                    model_wrapper=lambda model: AuditedModel(
-                        model,
-                        self.usage,
-                        phase="plan",
-                        context={
-                            "instance_id": case.instance_id,
-                            "candidate_sha256": candidate_sha256,
-                            "mode": "online_planning",
-                        },
-                    ),
+            plan_checkpoint = self._read_checkpoint("plan")
+            if plan_checkpoint is None:
+                plan_env: DockerEnvWrapper | ApptainerEnvironment
+                plan_env = self._start_environment(
+                    image_name=image_name,
+                    workdir=workdir,
+                    repo_path=repo_path,
+                    instance_info=instance_info,
+                    phase="plan",
+                    candidate_sha256=candidate_sha256,
                 )
-            finally:
-                self._stop_environment(plan_env)
-
-            code_workspace = (
-                self._phase_workdir(
-                    instance_info["instance_id"],
-                    candidate_sha256,
-                    "code",
-                )
-                if self.config.container.runtime == "apptainer"
-                else None
-            )
-            code_env: DockerEnvWrapper | ApptainerEnvironment
-            code_env = self._start_environment(
-                image_name=image_name,
-                workdir=workdir,
-                repo_path=repo_path,
-                instance_info=instance_info,
-                phase="code",
-                candidate_sha256=candidate_sha256,
-                host_workdir=code_workspace,
-            )
-            try:
-                base_code_config = self._base_config(self.config.code)
-                code_config = replace(
-                    base_code_config,
-                    prompts=replace(
-                        base_code_config.prompts,
-                        plan_generation_prompt="",
-                        plan_instance_template="",
-                    ),
-                )
-                patch, code_trajectory = code_agent.run(
-                    code_config,
-                    plan,
-                    case.issue_description,
-                    code_env,
-                    model_wrapper=lambda model: AuditedModel(
-                        model,
-                        self.usage,
-                        phase="code",
-                        context={
-                            "instance_id": case.instance_id,
-                            "candidate_sha256": candidate_sha256,
-                            "mode": "online_planning",
-                        },
-                    ),
-                )
-            finally:
                 try:
-                    self._stop_environment(code_env)
+                    plan_config = self._base_config(self.config.plan)
+                    plan, plan_trajectory = plan_agent.run(
+                        plan_config,
+                        case.issue_description,
+                        plan_env,
+                        planning_rules=rules,
+                        failure_trajectory_path=(
+                            self.config.run_dir / "failed_plan_trajectory.json"
+                        ),
+                        model_wrapper=lambda model: AuditedModel(
+                            model,
+                            self.usage,
+                            phase="plan",
+                            context={
+                                "instance_id": case.instance_id,
+                                "candidate_sha256": candidate_sha256,
+                                "mode": "online_planning",
+                            },
+                        ),
+                    )
                 finally:
-                    if code_workspace is not None:
-                        self._remove_phase_workspace(
-                            code_workspace,
-                            instance_id=case.instance_id,
-                            candidate_sha256=candidate_sha256,
-                            phase="code",
-                        )
+                    self._stop_environment(plan_env)
+                self._write_checkpoint(
+                    "plan",
+                    {"plan": plan, "plan_trajectory": list(plan_trajectory)},
+                )
+            else:
+                plan = str(plan_checkpoint["plan"])
+                plan_trajectory = list(plan_checkpoint["plan_trajectory"])
+                self._record_checkpoint_resumed("plan", case, candidate_sha256)
 
-            eval_workdir = self._phase_workdir(
-                instance_info["instance_id"],
-                candidate_sha256,
-                "eval",
-            )
+            code_checkpoint = self._read_checkpoint("code")
+            if code_checkpoint is None:
+                code_workspace = (
+                    self._phase_workdir(
+                        instance_info["instance_id"], candidate_sha256, "code"
+                    )
+                    if self.config.container.runtime == "apptainer"
+                    else None
+                )
+                code_env: DockerEnvWrapper | ApptainerEnvironment
+                code_env = self._start_environment(
+                    image_name=image_name,
+                    workdir=workdir,
+                    repo_path=repo_path,
+                    instance_info=instance_info,
+                    phase="code",
+                    candidate_sha256=candidate_sha256,
+                    host_workdir=code_workspace,
+                )
+                try:
+                    base_code_config = self._base_config(self.config.code)
+                    code_config = replace(
+                        base_code_config,
+                        prompts=replace(
+                            base_code_config.prompts,
+                            plan_generation_prompt="",
+                            plan_instance_template="",
+                        ),
+                    )
+                    patch, code_trajectory = code_agent.run(
+                        code_config,
+                        plan,
+                        case.issue_description,
+                        code_env,
+                        failure_trajectory_path=(
+                            self.config.run_dir / "failed_code_trajectory.json"
+                        ),
+                        model_wrapper=lambda model: AuditedModel(
+                            model,
+                            self.usage,
+                            phase="code",
+                            context={
+                                "instance_id": case.instance_id,
+                                "candidate_sha256": candidate_sha256,
+                                "mode": "online_planning",
+                            },
+                        ),
+                    )
+                finally:
+                    try:
+                        self._stop_environment(code_env)
+                    finally:
+                        if code_workspace is not None:
+                            self._remove_phase_workspace(
+                                code_workspace,
+                                instance_id=case.instance_id,
+                                candidate_sha256=candidate_sha256,
+                                phase="code",
+                            )
+                self._write_checkpoint(
+                    "code",
+                    {"patch": patch, "code_trajectory": list(code_trajectory)},
+                )
+            else:
+                patch = str(code_checkpoint["patch"])
+                code_trajectory = list(code_checkpoint["code_trajectory"])
+                self._record_checkpoint_resumed("code", case, candidate_sha256)
+
             eval_log_root = (
                 self.config.run_dir
                 / "evaluator_logs"
                 / candidate_sha256[:12]
                 / case.instance_id
             )
-            self.audit.write(
-                "online_evaluator_started",
-                instance_id=case.instance_id,
-                candidate_sha256=candidate_sha256,
-                backend=self.config.evaluator.backend,
-                container_runtime=self.config.container.runtime,
-                receives_candidate_rules=False,
-                receives_plan_trajectory=False,
-                receives_code_trajectory=False,
-                receives_patch=True,
-            )
-            try:
-                evaluator_result = evaluate_online_patch(
-                    patch,
-                    instance_info,
-                    config=self.config,
-                    capacity_window=self.capacity_window,
-                    phase_workdir=eval_workdir,
-                    persistent_log_root=eval_log_root,
-                    run_id_suffix="_online_gepa",
+            evaluator_checkpoint = self._read_checkpoint("evaluator")
+            if evaluator_checkpoint is None:
+                eval_workdir = self._phase_workdir(
+                    instance_info["instance_id"], candidate_sha256, "eval"
                 )
-            finally:
-                self._remove_phase_workspace(
-                    eval_workdir,
+                self.audit.write(
+                    "online_evaluator_started",
                     instance_id=case.instance_id,
                     candidate_sha256=candidate_sha256,
-                    phase="eval",
+                    backend=self.config.evaluator.backend,
+                    container_runtime=self.config.container.runtime,
+                    receives_candidate_rules=False,
+                    receives_plan_trajectory=False,
+                    receives_code_trajectory=False,
+                    receives_patch=True,
                 )
+                try:
+                    evaluator_result = evaluate_online_patch(
+                        patch,
+                        instance_info,
+                        config=self.config,
+                        capacity_window=self.capacity_window,
+                        phase_workdir=eval_workdir,
+                        persistent_log_root=eval_log_root,
+                        run_id_suffix="_online_gepa",
+                    )
+                finally:
+                    self._remove_phase_workspace(
+                        eval_workdir,
+                        instance_id=case.instance_id,
+                        candidate_sha256=candidate_sha256,
+                        phase="eval",
+                    )
+                self._write_checkpoint(
+                    "evaluator", {"evaluator_result": evaluator_result}
+                )
+            else:
+                evaluator_result = dict(evaluator_checkpoint["evaluator_result"])
+                self._record_checkpoint_resumed("evaluator", case, candidate_sha256)
         except Exception as exc:
             self.audit.write(
                 "online_rollout_failed",
@@ -288,6 +324,67 @@ class OnlinePCTRolloutRunner:
                 "candidate_rules_visible_to_plan_agent": True,
                 "candidate_rules_visible_to_code_agent": False,
             },
+        )
+
+    def _checkpoint_path(self, phase: str) -> Path | None:
+        if self.checkpoint_dir is None:
+            return None
+        return self.checkpoint_dir / f"{phase}.json"
+
+    def _read_checkpoint(self, phase: str) -> dict[str, Any] | None:
+        path = self._checkpoint_path(phase)
+        if path is None or not path.is_file():
+            return None
+        value = json.loads(path.read_text(encoding="utf-8"))
+        if value.get("schema_version") != 1:
+            raise FatalError(f"unsupported online rollout checkpoint schema: {path}")
+        if value.get("checkpoint_identity") != self.checkpoint_identity:
+            raise FatalError(f"online rollout checkpoint identity mismatch: {path}")
+        if value.get("phase") != phase:
+            raise FatalError(f"online rollout checkpoint phase mismatch: {path}")
+        payload = value.get("payload")
+        if not isinstance(payload, dict):
+            raise FatalError(f"invalid online rollout checkpoint payload: {path}")
+        return payload
+
+    def _write_checkpoint(self, phase: str, payload: dict[str, Any]) -> None:
+        path = self._checkpoint_path(phase)
+        if path is None:
+            return
+        if not self.checkpoint_identity:
+            raise FatalError("online rollout checkpoint identity is required")
+        path.parent.mkdir(parents=True, exist_ok=True)
+        temporary = path.with_suffix(path.suffix + ".tmp")
+        temporary.write_text(
+            json.dumps(
+                {
+                    "schema_version": 1,
+                    "checkpoint_identity": self.checkpoint_identity,
+                    "phase": phase,
+                    "payload": payload,
+                },
+                indent=2,
+                ensure_ascii=False,
+                sort_keys=True,
+                default=str,
+            )
+            + "\n",
+            encoding="utf-8",
+        )
+        temporary.replace(path)
+
+    def _record_checkpoint_resumed(
+        self,
+        phase: str,
+        case: OnlineGEPACase,
+        candidate_sha256: str,
+    ) -> None:
+        self.audit.write(
+            "online_rollout_phase_resumed",
+            instance_id=case.instance_id,
+            candidate_sha256=candidate_sha256,
+            phase=phase,
+            checkpoint_path=str(self._checkpoint_path(phase)),
         )
 
     def _start_environment(

@@ -11,7 +11,9 @@ output verbatim — no fence-stripping, validation, or repair is needed.
 from __future__ import annotations
 
 import logging
+import json
 from collections.abc import Callable
+from pathlib import Path
 from typing import Any
 
 from src.agents._deps import (
@@ -51,6 +53,7 @@ def run(
     env: Any,
     *,
     model_wrapper: Callable[[Any], Any] | None = None,
+    failure_trajectory_path: Path | None = None,
 ) -> tuple[str, list[dict[str, Any]]]:
     """Run the code generation agent.
 
@@ -109,9 +112,44 @@ def run(
     )
 
     exception_name, exception_msg = agent.run(task=issue_description, plan=plan)
+    if exception_name != "Submitted":
+        _write_failure_trajectory(
+            failure_trajectory_path, agent.messages, exception_name, exception_msg
+        )
     patch_text = _extract_result(exception_name, exception_msg)
 
     if not patch_text or not patch_text.strip():
+        _write_failure_trajectory(
+            failure_trajectory_path, agent.messages, exception_name, exception_msg
+        )
         raise TaskError("Code agent produced empty output.")
 
     return patch_text, agent.messages
+
+
+def _write_failure_trajectory(
+    path: Path | None,
+    messages: list[dict[str, Any]],
+    exit_status: str,
+    exit_message: str,
+) -> None:
+    if path is None:
+        return
+    path.parent.mkdir(parents=True, exist_ok=True)
+    temporary = path.with_suffix(path.suffix + ".tmp")
+    temporary.write_text(
+        json.dumps(
+            {
+                "exit_status": exit_status,
+                "exit_message": exit_message,
+                "messages": messages,
+            },
+            indent=2,
+            ensure_ascii=False,
+            sort_keys=True,
+            default=str,
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+    temporary.replace(path)

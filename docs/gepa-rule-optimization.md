@@ -864,6 +864,17 @@ tasks。该值不是单个 job 的 CPU 数；每个 array element 仍独立申�
 14. 旧 batch 没有 fingerprint/journal schema，不能自动接管。需要真实复用时必须先
     做显式、可审计的 legacy migration，验证 candidate、ordered instances、trace
     mode 和 rollout 语义；不得仅凭“最后一个 incomplete batch”推断。
+15. Slurm task retry 还会在单条 rollout 内按原子 phase 接管。每个 task 的
+    `worker_runs/task_N/checkpoints/` 保存成功的 `plan.json`、`code.json` 和
+    `evaluator.json`；文件先写 `.tmp` 再原子 replace。Plan 成功而 Code 失败时，
+    下一 attempt 直接复用 plan；Evaluator 失败时复用 plan、patch 和两段 trajectory。
+    checkpoint identity 绑定 evaluation fingerprint、rollout semantic hash、candidate、
+    instance、split、issue 和 repository，任何不一致都作为基础设施错误拒绝接管。
+    只有成功 phase 可形成 checkpoint，失败或被 Slurm kill 的半成品不能晋级。
+16. Plan/Code Agent 在空提交或非 `Submitted` 退出前，将完整 partial messages、
+    exit status 和 exit message 原子写入当前 attempt 的
+    `failed_<phase>_trajectory.json`。这使空 diff、step/cost limit 等失败可审计；
+    Slurm `SIGKILL` 仍只能保留 kill 前已完成 phase 的 checkpoint 和 usage/audit。
 
 2h online smoke 的 worker accounting 显示 seed validation 98 tasks 的 P50/P95
 约为 4.4/18.2 分钟，一条成功长尾约 37.2 分钟，另有两条在 40 分钟触发 timeout。

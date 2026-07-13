@@ -11,7 +11,9 @@ as TaskError rather than silently passing downstream.
 from __future__ import annotations
 
 import logging
+import json
 from collections.abc import Callable
+from pathlib import Path
 from typing import Any
 
 from src.agents._deps import (
@@ -64,6 +66,7 @@ def run(
     *,
     planning_rules: str = "",
     model_wrapper: Callable[[Any], Any] | None = None,
+    failure_trajectory_path: Path | None = None,
 ) -> tuple[str, list[dict[str, Any]]]:
     """Run the plan generation agent.
 
@@ -136,6 +139,9 @@ def run(
         plan_text = _extract_result(agent, exception_name, exception_msg)
 
     if not plan_text or not plan_text.strip():
+        _write_failure_trajectory(
+            failure_trajectory_path, agent.messages, exception_name, exception_msg
+        )
         if exception_name == "Submitted":
             raise TaskError(
                 "Plan agent submitted but /tmp/plan.md was empty and no plan text was returned."
@@ -147,3 +153,31 @@ def run(
         )
 
     return plan_text.strip(), agent.messages
+
+
+def _write_failure_trajectory(
+    path: Path | None,
+    messages: list[dict[str, Any]],
+    exit_status: str,
+    exit_message: str,
+) -> None:
+    if path is None:
+        return
+    path.parent.mkdir(parents=True, exist_ok=True)
+    temporary = path.with_suffix(path.suffix + ".tmp")
+    temporary.write_text(
+        json.dumps(
+            {
+                "exit_status": exit_status,
+                "exit_message": exit_message,
+                "messages": messages,
+            },
+            indent=2,
+            ensure_ascii=False,
+            sort_keys=True,
+            default=str,
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+    temporary.replace(path)

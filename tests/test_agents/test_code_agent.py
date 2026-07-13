@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 from unittest.mock import patch
 
 import pytest
@@ -174,6 +175,26 @@ class TestRunValidation:
         mock_import.return_value = (MockDefaultAgentEmpty, MockLiteLLMModel, object)
         with pytest.raises(TaskError, match="empty"):
             code_agent.run(config, "Plan", "Issue", mock_env)
+
+    @patch("src.agents.code_agent.import_minisweagent")
+    def test_empty_output_persists_failure_trajectory(
+        self, mock_import, config, mock_env, tmp_path
+    ):
+        mock_import.return_value = (MockDefaultAgentEmpty, MockLiteLLMModel, object)
+        path = tmp_path / "failed_code_trajectory.json"
+        with pytest.raises(TaskError, match="empty"):
+            code_agent.run(
+                config,
+                "Plan",
+                "Issue",
+                mock_env,
+                failure_trajectory_path=path,
+            )
+
+        record = json.loads(path.read_text())
+        assert record["exit_status"] == "Submitted"
+        assert record["exit_message"] == ""
+        assert record["messages"][-1]["role"] == "assistant"
 
     @patch("src.agents.code_agent.import_minisweagent")
     def test_limits_exceeded_raises_task_error(self, mock_import, config, mock_env):

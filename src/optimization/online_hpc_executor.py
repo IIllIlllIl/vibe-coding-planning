@@ -195,6 +195,8 @@ class OnlineRolloutBatchStore:
                 "rules_path": str(rules_path),
                 "candidate_sha256": candidate_sha256,
                 "capture_traces": capture_traces,
+                "evaluation_fingerprint": evaluation_fingerprint,
+                "rollout_semantic_sha256": rollout_semantic_sha256,
             }
             manifest_path.write_text(
                 json.dumps(payload, indent=2, ensure_ascii=False, sort_keys=True)

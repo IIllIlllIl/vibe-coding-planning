@@ -1093,6 +1093,13 @@ Online controller resume 不应把进程重启等同于重新提交全部 rollou
 - 没有 fingerprint/journal 的旧 batch 默认不自动接管；显式 migration 前不得把它
   作为当前 evaluation 的可信输入。
 
+单个 worker 的 retry 同样不能无条件重跑完整 PCT。task 级共享
+`checkpoints/` 把 Plan、Code、Evaluator 的成功边界作为原子断点：Code 失败复用
+Plan，Evaluator 失败复用 Plan 和 Code patch；只有首个未完成 phase 重跑。每个
+checkpoint 都校验 rollout identity，且以临时文件原子替换，避免复用不同 candidate、
+prompt/source、issue/repository 或 Slurm kill 留下的半文件。失败 Agent 的 partial
+trajectory 保存在具体 attempt 目录，不作为下一 phase 输入，只用于诊断。
+
 `COMPLETE` batch 可能尚未进入下一次 `gepa_state.bin` save。恢复时可按相同
 fingerprint 重放 outputs；GEPA checkpoint 决定 candidate、Pareto front 和 metric
 budget 是否已经提交，batch journal 不自行修改搜索状态。
