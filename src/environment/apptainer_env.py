@@ -19,7 +19,7 @@ from pathlib import Path
 from typing import Any
 
 from src.environment.docker_env import DockerCapacityWindow
-from src.exceptions import FatalError
+from src.exceptions import CommandTimeoutError, FatalError
 
 logger = logging.getLogger(__name__)
 
@@ -320,9 +320,7 @@ class ApptainerEnvironment:
                 "'module load tools/Apptainer'."
             ) from exc
         except subprocess.TimeoutExpired as exc:
-            raise FatalError(
-                f"Apptainer command timed out after {exc.timeout}s: {command[:200]}"
-            ) from exc
+            raise CommandTimeoutError(command, exc.timeout) from exc
 
         return {
             "output": (result.stdout or "") + (result.stderr or ""),

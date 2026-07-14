@@ -22,7 +22,7 @@ from src.agents._deps import (
     import_minisweagent,
 )
 from src.config import Config
-from src.exceptions import TaskError
+from src.exceptions import AgentTaskError
 
 logger = logging.getLogger(__name__)
 
@@ -40,9 +40,16 @@ def _extract_result(exception_name: str, exception_msg: str) -> str:
     """
     if exception_name == "Submitted":
         return exception_msg
-    raise TaskError(
+    reason = (
+        "code_step_or_cost_limit"
+        if exception_name == "LimitsExceeded"
+        else "code_not_submitted"
+    )
+    raise AgentTaskError(
         f"Code agent terminated without a submission "
-        f"(exit_status={exception_name}): {exception_msg[:200]}"
+        f"(exit_status={exception_name}): {exception_msg[:200]}",
+        phase="code",
+        reason=reason,
     )
 
 
@@ -122,7 +129,11 @@ def run(
         _write_failure_trajectory(
             failure_trajectory_path, agent.messages, exception_name, exception_msg
         )
-        raise TaskError("Code agent produced empty output.")
+        raise AgentTaskError(
+            "Code agent produced empty output.",
+            phase="code",
+            reason="code_empty_patch",
+        )
 
     return patch_text, agent.messages
 

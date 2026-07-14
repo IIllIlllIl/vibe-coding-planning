@@ -8,6 +8,7 @@ from typing import Any, Mapping, Protocol, Sequence
 
 from gepa.core.adapter import EvaluationBatch
 
+from src.exceptions import AgentRolloutFailure
 from src.optimization.adapter import _exception_details
 from src.optimization.audit import JsonlLogger, text_sha256
 from src.optimization.online_models import OnlineGEPACase, OnlineRolloutOutput
@@ -73,6 +74,7 @@ class OnlinePlanningGEPAAdapter:
         capture_traces: bool,
     ) -> tuple[dict[str, Any], float, dict[str, Any] | None]:
         last_exc: Exception | None = None
+        last_agent_failure: AgentRolloutFailure | None = None
         for attempt in range(1, self.rollout_attempts + 1):
             try:
                 output = self.rollout(case, rules)
@@ -97,8 +99,24 @@ class OnlinePlanningGEPAAdapter:
                         **output.to_trace(),
                     }
                 return public_output, score, trace
+            except AgentRolloutFailure as exc:
+                last_exc = exc
+                last_agent_failure = exc
+                details = _exception_details(exc)
+                if self.audit is not None:
+                    self.audit.write(
+                        "online_rollout_agent_failure_attempt",
+                        instance_id=case.instance_id,
+                        candidate_sha256=text_sha256(rules),
+                        attempt=attempt,
+                        max_attempts=self.rollout_attempts,
+                        terminal_phase=exc.phase,
+                        terminal_reason=exc.reason,
+                        **details,
+                    )
             except Exception as exc:
                 last_exc = exc
+                last_agent_failure = None
                 details = _exception_details(exc)
                 if self.audit is not None:
                     self.audit.write(
@@ -110,6 +128,40 @@ class OnlinePlanningGEPAAdapter:
                         **details,
                     )
         assert last_exc is not None
+        if last_agent_failure is not None:
+            public_output = {
+                "instance_id": case.instance_id,
+                "resolved": False,
+                "outcome_status": "scored",
+                "score_valid": True,
+                "evaluator_status": "not_run",
+                "evaluator_resolved": None,
+                "terminal_phase": last_agent_failure.phase,
+                "terminal_reason": last_agent_failure.reason,
+                "failure_origin": "agent",
+                "plan": "",
+                "patch": "",
+                "evaluator_result": {
+                    "status": "not_run",
+                    "reason": "agent_failed_before_evaluation",
+                },
+                "attribution_hint": {
+                    "agent_failure_scored_after_retries": True,
+                },
+            }
+            trace = None
+            if capture_traces:
+                trace = {
+                    "instance_id": case.instance_id,
+                    "score": 0.0,
+                    "resolved": False,
+                    "outcome_status": "scored",
+                    "terminal_phase": last_agent_failure.phase,
+                    "terminal_reason": last_agent_failure.reason,
+                    "failure_origin": "agent",
+                    "evaluator_status": "not_run",
+                }
+            return public_output, 0.0, trace
         details = _exception_details(last_exc)
         if self.audit is not None:
             self.audit.write(
@@ -350,6 +402,8 @@ class OnlinePlanningGEPAAdapter:
         output: OnlineRolloutOutput,
         capture_traces: bool,
     ) -> tuple[dict[str, Any], float, dict[str, Any] | None]:
+        if output.outcome_status != "scored" or not output.score_valid:
+            raise RuntimeError("invalid online rollout output cannot enter GEPA")
         score = float(output.resolved)
         public_output = {
             "instance_id": case.instance_id,

@@ -22,7 +22,12 @@ from src.environment.apptainer_env import ApptainerEnvironment
 from src.environment.docker_env import DockerCapacityWindow, DockerEnvWrapper
 from src.evaluator.runtime_evaluator import evaluate_online_patch
 from src.evaluator.swe_evaluator import derive_image_name
-from src.exceptions import FatalError
+from src.exceptions import (
+    AgentRolloutFailure,
+    AgentTaskError,
+    CommandTimeoutError,
+    FatalError,
+)
 from src.optimization.audit import AuditedModel, JsonlLogger, text_sha256
 from src.optimization.online_config import OnlineOptimizationConfig
 from src.optimization.online_models import OnlineGEPACase, OnlineRolloutOutput
@@ -147,25 +152,36 @@ class OnlinePCTRolloutRunner:
                 )
                 try:
                     plan_config = self._base_config(self.config.plan)
-                    plan, plan_trajectory = plan_agent.run(
-                        plan_config,
-                        case.issue_description,
-                        plan_env,
-                        planning_rules=rules,
-                        failure_trajectory_path=(
-                            self.config.run_dir / "failed_plan_trajectory.json"
-                        ),
-                        model_wrapper=lambda model: AuditedModel(
-                            model,
-                            self.usage,
+                    try:
+                        plan, plan_trajectory = plan_agent.run(
+                            plan_config,
+                            case.issue_description,
+                            plan_env,
+                            planning_rules=rules,
+                            failure_trajectory_path=(
+                                self.config.run_dir / "failed_plan_trajectory.json"
+                            ),
+                            model_wrapper=lambda model: AuditedModel(
+                                model,
+                                self.usage,
+                                phase="plan",
+                                context={
+                                    "instance_id": case.instance_id,
+                                    "candidate_sha256": candidate_sha256,
+                                    "mode": "online_planning",
+                                },
+                            ),
+                        )
+                    except AgentTaskError as exc:
+                        raise AgentRolloutFailure(
+                            str(exc), phase=exc.phase, reason=exc.reason
+                        ) from exc
+                    except CommandTimeoutError as exc:
+                        raise AgentRolloutFailure(
+                            str(exc),
                             phase="plan",
-                            context={
-                                "instance_id": case.instance_id,
-                                "candidate_sha256": candidate_sha256,
-                                "mode": "online_planning",
-                            },
-                        ),
-                    )
+                            reason="plan_command_timeout",
+                        ) from exc
                 finally:
                     self._stop_environment(plan_env)
                 self._write_checkpoint(
@@ -206,25 +222,36 @@ class OnlinePCTRolloutRunner:
                             plan_instance_template="",
                         ),
                     )
-                    patch, code_trajectory = code_agent.run(
-                        code_config,
-                        plan,
-                        case.issue_description,
-                        code_env,
-                        failure_trajectory_path=(
-                            self.config.run_dir / "failed_code_trajectory.json"
-                        ),
-                        model_wrapper=lambda model: AuditedModel(
-                            model,
-                            self.usage,
+                    try:
+                        patch, code_trajectory = code_agent.run(
+                            code_config,
+                            plan,
+                            case.issue_description,
+                            code_env,
+                            failure_trajectory_path=(
+                                self.config.run_dir / "failed_code_trajectory.json"
+                            ),
+                            model_wrapper=lambda model: AuditedModel(
+                                model,
+                                self.usage,
+                                phase="code",
+                                context={
+                                    "instance_id": case.instance_id,
+                                    "candidate_sha256": candidate_sha256,
+                                    "mode": "online_planning",
+                                },
+                            ),
+                        )
+                    except AgentTaskError as exc:
+                        raise AgentRolloutFailure(
+                            str(exc), phase=exc.phase, reason=exc.reason
+                        ) from exc
+                    except CommandTimeoutError as exc:
+                        raise AgentRolloutFailure(
+                            str(exc),
                             phase="code",
-                            context={
-                                "instance_id": case.instance_id,
-                                "candidate_sha256": candidate_sha256,
-                                "mode": "online_planning",
-                            },
-                        ),
-                    )
+                            reason="code_command_timeout",
+                        ) from exc
                 finally:
                     try:
                         self._stop_environment(code_env)
@@ -324,6 +351,7 @@ class OnlinePCTRolloutRunner:
                 "candidate_rules_visible_to_plan_agent": True,
                 "candidate_rules_visible_to_code_agent": False,
             },
+            evaluator_resolved=resolved,
         )
 
     def _checkpoint_path(self, phase: str) -> Path | None:
@@ -398,6 +426,9 @@ class OnlinePCTRolloutRunner:
         candidate_sha256: str,
         host_workdir: Path | None = None,
     ) -> DockerEnvWrapper | ApptainerEnvironment:
+        phase_timeout = (
+            self.config.code.timeout if phase == "code" else self.config.plan.timeout
+        )
         if self.config.container.runtime == "apptainer":
             run_args = []
             if host_workdir is None and repo_path:
@@ -408,7 +439,7 @@ class OnlinePCTRolloutRunner:
                 sif_cache_dir=self.config.container.sif_cache_dir,
                 capacity_window=self.capacity_window,
                 run_args=run_args,
-                timeout=self.config.plan.timeout,
+                timeout=phase_timeout,
                 writable_tmpfs=self.config.container.writable_tmpfs,
                 git_safe_directories=[workdir],
                 host_workdir=host_workdir,
@@ -419,7 +450,7 @@ class OnlinePCTRolloutRunner:
             image=image_name,
             workdir=workdir,
             mount_source=repo_path,
-            timeout=self.config.plan.timeout,
+            timeout=phase_timeout,
             instance_info=instance_info,
         )
         return env

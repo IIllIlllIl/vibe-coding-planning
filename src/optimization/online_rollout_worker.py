@@ -16,10 +16,15 @@ from pathlib import Path
 from typing import Any
 
 from src.environment.docker_env import configure_docker_capacity
+from src.exceptions import AgentRolloutFailure
 from src.optimization.audit import text_sha256
 from src.optimization.models import RepositoryRef
 from src.optimization.online_config import load_online_optimization_config
-from src.optimization.online_models import OnlineGEPACase, OnlineRolloutOutput
+from src.optimization.online_models import (
+    ONLINE_OUTCOME_POLICY_VERSION,
+    OnlineGEPACase,
+    OnlineRolloutOutput,
+)
 from src.optimization.online_rollout import OnlinePCTRolloutRunner
 
 
@@ -61,6 +66,13 @@ def output_to_json(output: OnlineRolloutOutput) -> dict[str, Any]:
         "code_trajectory": list(output.code_trajectory),
         "evaluator_result": output.evaluator_result,
         "attribution_hint": output.attribution_hint,
+        "outcome_status": output.outcome_status,
+        "score_valid": output.score_valid,
+        "evaluator_status": output.evaluator_status,
+        "evaluator_resolved": output.evaluator_resolved,
+        "terminal_phase": output.terminal_phase,
+        "terminal_reason": output.terminal_reason,
+        "failure_origin": output.failure_origin,
     }
 
 
@@ -118,6 +130,7 @@ def run_task(
             output_path,
             {
                 "status": "completed",
+                "outcome_policy_version": ONLINE_OUTCOME_POLICY_VERSION,
                 "started_at": started_at,
                 "finished_at": _now(),
                 "mode": "online_planning",
@@ -128,6 +141,29 @@ def run_task(
             },
         )
         return 0
+    except AgentRolloutFailure as exc:
+        _write_json(
+            output_path,
+            {
+                "status": "agent_failed",
+                "outcome_policy_version": ONLINE_OUTCOME_POLICY_VERSION,
+                "started_at": started_at,
+                "finished_at": _now(),
+                "mode": "online_planning",
+                "instance_id": str(manifest.get("instance_id", "")),
+                "split": str(manifest.get("split", "")),
+                "candidate_sha256": text_sha256(rules),
+                "error_type": type(exc).__name__,
+                "error": str(exc),
+                "failure_origin": "agent",
+                "terminal_phase": exc.phase,
+                "terminal_reason": exc.reason,
+                "retryable": True,
+                "score_valid": False,
+                "score": None,
+            },
+        )
+        return 1
     except Exception as exc:
         _write_json(
             output_path,
@@ -142,6 +178,8 @@ def run_task(
                 "error_type": type(exc).__name__,
                 "error": str(exc),
                 "retryable": True,
+                "score_valid": False,
+                "score": None,
             },
         )
         return 1

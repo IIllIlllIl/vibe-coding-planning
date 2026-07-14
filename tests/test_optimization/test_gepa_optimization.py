@@ -14,7 +14,7 @@ import pytest
 from gepa.core.state import GEPAState, ValsetEvaluation
 
 from src.config import DockerConfig
-from src.exceptions import FatalError, TaskError
+from src.exceptions import AgentRolloutFailure, FatalError, TaskError
 from src.optimization.audit import AuditedModel, JsonlLogger, text_sha256
 from src.optimization.adapter import CheckerGEPAAdapter
 from src.optimization.checker import DockerChecker, _json_object, validate_checker_output
@@ -1416,6 +1416,68 @@ def test_online_rollout_worker_serialization_boundaries():
     assert serialized["plan_trajectory"][0]["content"] == "plan"
 
 
+def test_online_rollout_worker_serializes_agent_failure(tmp_path, monkeypatch):
+    config = _online_config(tmp_path)
+    rules_path = tmp_path / "rules.txt"
+    rules_path.write_text("planning rules", encoding="utf-8")
+    manifest_path = tmp_path / "task.json"
+    manifest_path.write_text(
+        json.dumps(
+            {
+                "instance_id": "repo__one",
+                "split": "train",
+                "issue_description": "issue",
+                "repository": {
+                    "repo": "org/repo",
+                    "base_commit": "abc123",
+                    "instance_id": "repo__one",
+                },
+                "rules_path": str(rules_path),
+                "candidate_sha256": text_sha256("planning rules"),
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    class FakeRunner:
+        def __init__(self, *args, **kwargs):
+            pass
+
+        def __call__(self, case, rules):
+            raise AgentRolloutFailure(
+                "code command timed out",
+                phase="code",
+                reason="code_command_timeout",
+            )
+
+    monkeypatch.setattr(
+        "src.optimization.online_rollout_worker.load_online_optimization_config",
+        lambda path: config,
+    )
+    monkeypatch.setattr(
+        "src.optimization.online_rollout_worker.configure_docker_capacity",
+        lambda *args, **kwargs: _FakeCapacityWindow(),
+    )
+    monkeypatch.setattr(
+        "src.optimization.online_rollout_worker.OnlinePCTRolloutRunner", FakeRunner
+    )
+    output_path = tmp_path / "output.json"
+
+    assert run_task(
+        config_path=tmp_path / "config.yaml",
+        task_manifest_path=manifest_path,
+        output_path=output_path,
+        worker_run_dir=tmp_path / "worker-run",
+    ) == 1
+    payload = json.loads(output_path.read_text(encoding="utf-8"))
+    assert payload["status"] == "agent_failed"
+    assert payload["score"] is None
+    assert payload["score_valid"] is False
+    assert payload["terminal_phase"] == "code"
+    assert payload["terminal_reason"] == "code_command_timeout"
+    assert payload["failure_origin"] == "agent"
+
+
 def test_online_rollout_worker_disables_docker_maintenance_for_apptainer(
     tmp_path,
     monkeypatch,
@@ -2097,6 +2159,131 @@ def test_online_hpc_wait_retries_terminal_task_without_output(
     assert len(submitted_scripts) == 2
     retry_script = submitted_scripts[1].read_text(encoding="utf-8")
     assert "#SBATCH --array=1%2" in retry_script
+
+
+def test_online_hpc_scores_agent_failure_after_fixed_retries(
+    tmp_path,
+    monkeypatch,
+):
+    config = _online_config(tmp_path)
+    train, _ = load_online_snapshot(config.dataset_snapshot)
+    config = replace(
+        config,
+        execution=OnlineExecutionConfig(backend="hpc_slurm"),
+        hpc=replace(
+            config.hpc,
+            submit=True,
+            max_task_attempts=2,
+            max_running_array_tasks=2,
+        ),
+    )
+    submitted_scripts: list[Path] = []
+
+    def write_outputs(batch_dir: Path) -> None:
+        for index, case in enumerate(train):
+            payload = {
+                "instance_id": case.instance_id,
+                "candidate_sha256": text_sha256("planning rules"),
+            }
+            if index == 0:
+                payload.update(
+                    {
+                        "status": "agent_failed",
+                        "score": None,
+                        "score_valid": False,
+                        "outcome_status": "invalid",
+                        "evaluator_status": "not_run",
+                        "evaluator_resolved": None,
+                        "terminal_phase": "code",
+                        "terminal_reason": "code_command_timeout",
+                        "failure_origin": "agent",
+                        "error": "command timed out",
+                    }
+                )
+            else:
+                payload.update(
+                    {
+                        "status": "completed",
+                        "resolved": True,
+                        "plan": "plan",
+                        "patch": "patch",
+                        "plan_trajectory": [],
+                        "code_trajectory": [],
+                        "evaluator_result": {"resolved": True},
+                    }
+                )
+            (batch_dir / "outputs" / f"task_{index:04d}.json").write_text(
+                json.dumps(payload), encoding="utf-8"
+            )
+
+    def fake_submitter(script_path):
+        submitted_scripts.append(script_path)
+        write_outputs(script_path.parent)
+        return str(12340 + len(submitted_scripts))
+
+    monkeypatch.setattr(
+        "src.optimization.online_hpc_executor.collect_slurm_resource_snapshot",
+        lambda job_id=None: {"ulhpcshare_stdout": "FairShare 0.9"},
+    )
+    executor = HPCSlurmOnlineRolloutExecutor(
+        config,
+        submitter=fake_submitter,
+        sleeper=lambda seconds: None,
+    )
+
+    outputs = executor.evaluate(train, "planning rules", capture_traces=True)
+
+    assert len(submitted_scripts) == 2
+    assert "#SBATCH --array=0%2" in submitted_scripts[1].read_text(encoding="utf-8")
+    assert outputs[0].resolved is False
+    assert outputs[0].outcome_status == "scored"
+    assert outputs[0].score_valid is True
+    assert outputs[0].evaluator_status == "not_run"
+    assert outputs[0].terminal_phase == "code"
+    assert outputs[0].terminal_reason == "code_command_timeout"
+    assert outputs[0].failure_origin == "agent"
+    assert outputs[1].resolved is True
+
+
+def test_online_hpc_does_not_score_infrastructure_failure(
+    tmp_path,
+    monkeypatch,
+):
+    config = _online_config(tmp_path)
+    train, _ = load_online_snapshot(config.dataset_snapshot)
+    config = replace(
+        config,
+        execution=OnlineExecutionConfig(backend="hpc_slurm"),
+        hpc=replace(config.hpc, submit=True, max_task_attempts=1),
+    )
+
+    def fake_submitter(script_path):
+        for index, case in enumerate(train):
+            (script_path.parent / "outputs" / f"task_{index:04d}.json").write_text(
+                json.dumps(
+                    {
+                        "status": "failed",
+                        "instance_id": case.instance_id,
+                        "candidate_sha256": text_sha256("planning rules"),
+                        "error": "repository initialization failed",
+                    }
+                ),
+                encoding="utf-8",
+            )
+        return "12345"
+
+    monkeypatch.setattr(
+        "src.optimization.online_hpc_executor.collect_slurm_resource_snapshot",
+        lambda job_id=None: {},
+    )
+    executor = HPCSlurmOnlineRolloutExecutor(
+        config,
+        submitter=fake_submitter,
+        sleeper=lambda seconds: None,
+    )
+
+    with pytest.raises(RuntimeError, match="infrastructure-invalid"):
+        executor.evaluate(train, "planning rules", capture_traces=True)
 
 
 def test_online_hpc_wait_does_not_retry_other_pending_tasks_early(

@@ -3,7 +3,7 @@ mode: online_planning
 paths:
   dataset_snapshot: output/SWE-bench_Verified/verified-round1-gepa-datasets/20260614_482_fdc056ae85df
   initial_rules: configs/gepa_initial_rules_gpt_seed.md
-  run_dir: output/SWE-bench_Verified/gepa-rules/online-planning-hpc-postfix-8h-20260712
+  run_dir: output/SWE-bench_Verified/gepa-rules/online-planning-hpc-formal-8h-20260713
 
 dataset:
   name: SWE-bench/SWE-bench_Verified
@@ -87,7 +87,7 @@ hpc:
   python_module: lang/Python/3.11
   container_module: tools/Apptainer
   python_bin: python3
-  job_name_prefix: online-gepa-postfix-8h
+  job_name_prefix: online-gepa-formal-8h
   worker_config_path: configs/gepa_online_planning_hpc.yaml
 
 evaluator:

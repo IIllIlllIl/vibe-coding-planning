@@ -1079,6 +1079,21 @@ task 继续等待；终态 task 仍无 output、`RUNNING` 超过配置 walltime 
 `hpc.task_output_grace_seconds`、或 Slurm 在 `hpc.missing_task_grace_seconds`
 内一直查不到 task 时，才作为可重试 worker 重新提交。
 
+失败 output 分两类。`status=agent_failed` 表示 Plan/Code Agent 在其明确运行契约内
+失败，例如空 plan/patch、未提交、step/cost limit 或 Agent 执行的单命令超时。
+controller 仍先重试；固定次数用尽且最后一次仍是同类失败时，才将它原子转换为
+`outcome_status=scored`、`resolved=false`、`score=0`。`status=failed`、缺失 output、
+Slurm/SIF/repository/API/checkpoint/evaluator harness/cleanup 异常属于基础设施无效，
+重试耗尽后必须停止 controller，不能进入 GEPA cache。官方 evaluator 测试脚本自身
+超过测试预算是 patch 未能在预算内通过，记为 unresolved；evaluator 的准备、解析或
+清理异常仍是 invalid。该分类口径以 `outcome_policy_version=1` 纳入 fingerprint。
+
+失败 trajectory 保存在 attempt 目录，只用于诊断。最终 scored output 只能包含经过
+identity 校验的成功 phase checkpoint；不得把失败 partial trajectory 混入 Reflection
+证据。下一次真实提交后应按 `terminal_reason` 汇总 scored-zero 数、invalid 数、重试
+次数及 evaluator timeout 数，并抽查 Agent 单命令 timeout 是否确为 Agent 行为而非
+共享存储或容器故障。
+
 Online controller resume 不应把进程重启等同于重新提交全部 rollout。新 batch
 在 `manifest.json` 中保存 evaluation fingerprint，并在 `batch_state.json` 中保存
 `PREPARED / SUBMITTING / SUBMITTED / COMPLETE` 和 active Slurm job/attempt：

@@ -18,7 +18,11 @@ from typing import Any, Callable, Sequence
 
 from src.optimization.audit import JsonlLogger, text_sha256
 from src.optimization.online_config import OnlineOptimizationConfig
-from src.optimization.online_models import OnlineGEPACase, OnlineRolloutOutput
+from src.optimization.online_models import (
+    ONLINE_OUTCOME_POLICY_VERSION,
+    OnlineGEPACase,
+    OnlineRolloutOutput,
+)
 
 
 _SLURM_TERMINAL_STATES = {
@@ -72,6 +76,7 @@ def rollout_semantic_sha256(config: OnlineOptimizationConfig) -> str:
     return _stable_sha256(
         {
             "schema": 1,
+            "outcome_policy_version": ONLINE_OUTCOME_POLICY_VERSION,
             "rollout_source_sha256": _rollout_source_sha256(),
             "dataset": asdict(config.dataset),
             "plan": asdict(config.plan),
@@ -102,6 +107,7 @@ def evaluation_fingerprint(
         _stable_sha256(
             {
                 "schema": 1,
+                "outcome_policy_version": ONLINE_OUTCOME_POLICY_VERSION,
                 "rollout_semantic_sha256": semantic_hash,
                 "candidate_sha256": text_sha256(rules),
                 "capture_traces": capture_traces,
@@ -129,6 +135,17 @@ class SlurmTaskStatus:
     state: str
     elapsed_seconds: int | None = None
     raw: str = ""
+
+
+class AgentWorkerFailure(RuntimeError):
+    """A structured worker failure attributable to Plan/Code behavior."""
+
+    def __init__(self, data: dict[str, Any]) -> None:
+        super().__init__(
+            f"{data.get('terminal_phase')}:{data.get('terminal_reason')}: "
+            f"{data.get('error', '')}"
+        )
+        self.data = data
 
 
 class OnlineRolloutBatchStore:
@@ -260,6 +277,12 @@ class OnlineRolloutBatchStore:
         expected_candidate_sha256: str | None = None,
     ) -> OnlineRolloutOutput:
         data = json.loads(path.read_text(encoding="utf-8"))
+        if data.get("status") == "agent_failed":
+            if data.get("failure_origin") != "agent":
+                raise RuntimeError("agent-failed output lacks agent attribution")
+            if not data.get("terminal_phase") or not data.get("terminal_reason"):
+                raise RuntimeError("agent-failed output lacks terminal classification")
+            raise AgentWorkerFailure(data)
         if data.get("status") != "completed":
             raise RuntimeError(
                 f"online rollout worker failed for {data.get('instance_id')}: "
@@ -283,6 +306,13 @@ class OnlineRolloutBatchStore:
             code_trajectory=tuple(data.get("code_trajectory", [])),
             evaluator_result=dict(data.get("evaluator_result", {})),
             attribution_hint=dict(data.get("attribution_hint", {})),
+            outcome_status=str(data.get("outcome_status", "scored")),
+            score_valid=bool(data.get("score_valid", True)),
+            evaluator_status=str(data.get("evaluator_status", "completed")),
+            evaluator_resolved=data.get("evaluator_resolved"),
+            terminal_phase=data.get("terminal_phase"),
+            terminal_reason=data.get("terminal_reason"),
+            failure_origin=data.get("failure_origin"),
         )
 
 
@@ -678,6 +708,7 @@ class HPCSlurmOnlineRolloutExecutor:
             failed_by_index: dict[int, OnlineRolloutTask] = {
                 task.index: task for task in missing_by_attempt.pop(attempt, [])
             }
+            agent_failures: dict[int, dict[str, Any]] = {}
             for task in pending:
                 if task.index in failed_by_index:
                     self.audit.write(
@@ -697,6 +728,20 @@ class HPCSlurmOnlineRolloutExecutor:
                             task.rules_path.read_text(encoding="utf-8")
                         ),
                     )
+                except AgentWorkerFailure as exc:
+                    failed_by_index[task.index] = task
+                    agent_failures[task.index] = exc.data
+                    self.audit.write(
+                        "online_hpc_rollout_agent_failure",
+                        batch_dir=str(batch_dir),
+                        instance_id=task.case.instance_id,
+                        task_index=task.index,
+                        attempt=attempt,
+                        max_task_attempts=self.config.hpc.max_task_attempts,
+                        terminal_phase=exc.data["terminal_phase"],
+                        terminal_reason=exc.data["terminal_reason"],
+                    )
+                    self._archive_failed_output(batch_dir, task, attempt)
                 except Exception as exc:
                     failed_by_index[task.index] = task
                     self.audit.write(
@@ -717,9 +762,41 @@ class HPCSlurmOnlineRolloutExecutor:
                     retry_job_ids,
                 )
             if attempt >= self.config.hpc.max_task_attempts:
-                failed_ids = ", ".join(task.case.instance_id for task in failed)
+                infrastructure_failed = [
+                    task for task in failed if task.index not in agent_failures
+                ]
+                for task in failed:
+                    failure = agent_failures.get(task.index)
+                    if failure is None:
+                        continue
+                    self._finalize_agent_failure(task, failure, attempt)
+                    outputs_by_index[task.index] = self.store.load_output(
+                        task.output_path,
+                        expected_instance_id=task.case.instance_id,
+                        expected_candidate_sha256=text_sha256(
+                            task.rules_path.read_text(encoding="utf-8")
+                        ),
+                    )
+                    self.audit.write(
+                        "online_hpc_rollout_agent_failure_scored",
+                        batch_dir=str(batch_dir),
+                        instance_id=task.case.instance_id,
+                        task_index=task.index,
+                        attempt=attempt,
+                        score=0.0,
+                        terminal_phase=failure["terminal_phase"],
+                        terminal_reason=failure["terminal_reason"],
+                    )
+                if not infrastructure_failed:
+                    return (
+                        [outputs_by_index[task.index] for task in tasks],
+                        retry_job_ids,
+                    )
+                failed_ids = ", ".join(
+                    task.case.instance_id for task in infrastructure_failed
+                )
                 raise RuntimeError(
-                    "online HPC rollout tasks failed after "
+                    "online HPC infrastructure-invalid rollout tasks failed after "
                     f"{attempt} attempts: {failed_ids}"
                 )
             retry_attempt = attempt + 1
@@ -779,6 +856,61 @@ class HPCSlurmOnlineRolloutExecutor:
         failed_dir = batch_dir / "failed_outputs" / f"attempt_{attempt:02d}"
         failed_dir.mkdir(parents=True, exist_ok=True)
         task.output_path.replace(failed_dir / task.output_path.name)
+
+    @staticmethod
+    def _finalize_agent_failure(
+        task: OnlineRolloutTask,
+        failure: dict[str, Any],
+        attempt: int,
+    ) -> None:
+        checkpoint_dir = task.worker_run_dir / "checkpoints"
+
+        def checkpoint_payload(phase: str) -> dict[str, Any]:
+            path = checkpoint_dir / f"{phase}.json"
+            if not path.is_file():
+                return {}
+            value = json.loads(path.read_text(encoding="utf-8"))
+            payload = value.get("payload")
+            return payload if isinstance(payload, dict) else {}
+
+        plan_payload = checkpoint_payload("plan")
+        code_payload = checkpoint_payload("code")
+        _write_json(
+            task.output_path,
+            {
+                "status": "completed",
+                "outcome_policy_version": ONLINE_OUTCOME_POLICY_VERSION,
+                "started_at": failure.get("started_at"),
+                "finished_at": failure.get("finished_at"),
+                "mode": "online_planning",
+                "instance_id": task.case.instance_id,
+                "split": task.case.split,
+                "candidate_sha256": failure.get("candidate_sha256"),
+                "resolved": False,
+                "score": 0.0,
+                "outcome_status": "scored",
+                "score_valid": True,
+                "evaluator_status": "not_run",
+                "evaluator_resolved": None,
+                "terminal_phase": failure["terminal_phase"],
+                "terminal_reason": failure["terminal_reason"],
+                "failure_origin": "agent",
+                "attempts": attempt,
+                "plan": str(plan_payload.get("plan", "")),
+                "patch": str(code_payload.get("patch", "")),
+                "plan_trajectory": list(plan_payload.get("plan_trajectory", [])),
+                "code_trajectory": list(code_payload.get("code_trajectory", [])),
+                "evaluator_result": {
+                    "status": "not_run",
+                    "reason": "agent_failed_before_evaluation",
+                },
+                "attribution_hint": {
+                    "candidate_rules_visible_to_plan_agent": True,
+                    "candidate_rules_visible_to_code_agent": False,
+                    "agent_failure_scored_after_retries": True,
+                },
+            },
+        )
 
     def _wait_for_outputs(
         self,

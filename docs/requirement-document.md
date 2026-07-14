@@ -330,7 +330,7 @@ GEPA reflection、候选报告和后续 prompt 调整完成。
 | 描述 | 将候选 rules 注入 Plan Agent，执行当前 `Plan -> Code -> Evaluator` rollout，并以当前生成的 trajectory、patch、evaluator result 和 resolved score 驱动 GEPA reflection |
 | 输入隔离 | Plan Agent 可见 issue、repo 和 candidate rules；Code Agent 只可见 issue、plan 和 repo；历史 PCT plan、label、patch、trajectory 与 ASI 不进入当前 rollout |
 | HPC 执行 | controller 串行维护 GEPA 状态；每个高并行 metric batch 由独立 1 CPU / 4G Slurm array elements 执行，resume 优先接管已有 batch 的 pending/running/completed task，只重提失败或丢失 task |
-| 数据可信度 | operational failure 不计作 unresolved；evaluator 必须验证可写 worktree 含目标仓库 tracked files，基础设施失败不得污染 candidate score |
+| 数据可信度 | 仅 `outcome_status=scored` 且 `score_valid=true` 的 output 进入 GEPA。Evaluator 结果和固定重试后仍存在的结构化 Plan/Code Agent 合约失败计 0/1；repository/SIF/Slurm/API/checkpoint/evaluator harness/cleanup 等基础设施失败保持 invalid，不得污染 candidate score。计分策略版本必须进入 rollout fingerprint |
 | 临时空间生命周期 | Apptainer Code workspace 仅保留到 patch 和 Code trajectory 提取完成；Evaluator workspace 仅保留到官方 report、test output 和 error信息写入workspace外的持久日志目录。两个environment停止后都必须立即删除对应完整repository。删除失败应有限重试并作为operational failure停止rollout，不得将完整repository写入persistent result |
 | 历史路径 | PCT、PCC 与 offline GEPA 的代码、数据快照和有效结果保留用于复现与对照，但目前暂停继续优化 |
 

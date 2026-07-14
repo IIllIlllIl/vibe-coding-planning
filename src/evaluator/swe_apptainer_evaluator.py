@@ -17,7 +17,7 @@ from typing import Any
 from src.environment.apptainer_env import ApptainerEnvironment
 from src.environment.docker_env import DockerCapacityWindow
 from src.evaluator.swe_evaluator import derive_image_name
-from src.exceptions import FatalError
+from src.exceptions import CommandTimeoutError, FatalError
 from src.optimization.config import ContainerConfig
 
 logger = logging.getLogger(__name__)
@@ -139,7 +139,20 @@ def evaluate_apptainer(
             "git -c core.fileMode=false diff",
             timeout=timeout,
         ).get("output", "").strip()
-        eval_result = env.execute("/bin/bash .vibe_eval.sh", timeout=timeout)
+        try:
+            eval_result = env.execute("/bin/bash .vibe_eval.sh", timeout=timeout)
+        except CommandTimeoutError as exc:
+            stderr_text = str(exc)
+            error_info = "official_tests_timed_out"
+            run_log_path.write_text(stderr_text, encoding="utf-8")
+            return _result(
+                False,
+                stdout_text,
+                stderr_text,
+                log_dir,
+                error_info,
+                report,
+            )
         stdout_text = eval_result.get("output", "")
         test_output_path.write_text(stdout_text, encoding="utf-8")
         after = env.execute(
@@ -170,14 +183,16 @@ def evaluate_apptainer(
         eval_completed = True
     except FatalError:
         raise
+    except CommandTimeoutError as exc:
+        raise FatalError(
+            f"Apptainer evaluator infrastructure command timed out: {exc}"
+        ) from exc
     except KeyboardInterrupt:
         raise
     except Exception as exc:
-        logger.error("Apptainer SWE evaluation failed: %s", exc)
-        stderr_text = str(exc) or type(exc).__name__
-        error_info = stderr_text
-        log_dir.mkdir(parents=True, exist_ok=True)
-        run_log_path.write_text(stderr_text, encoding="utf-8")
+        raise FatalError(
+            f"Apptainer SWE evaluator internal failure: {type(exc).__name__}: {exc}"
+        ) from exc
     finally:
         if env is not None:
             env.cleanup()

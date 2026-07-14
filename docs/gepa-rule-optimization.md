@@ -646,8 +646,22 @@ Plan-Code-Test rollout。首版 score 定义为：
 ```text
 resolved == true  -> 1.0
 resolved == false -> 0.0
-operational failure -> retry / fatal，不作为 unresolved 样本进入 cache
+Plan/Code Agent 可归因失败（固定重试后）-> 0.0
+infrastructure-invalid -> retry / fatal，不进入 GEPA score/cache
 ```
+
+Online outcome policy v1 使用结构化终态，而不是额外发明一个主观“可信分数”：
+
+- `outcome_status=scored`、`score_valid=true` 才能进入 GEPA；
+- evaluator 完成时，`evaluator_status=completed` 且 `evaluator_resolved` 保存官方结果；
+- Plan/Code Agent 的空提交、step/cost limit、未提交以及 Agent 所执行单命令超时，
+  在 `hpc.max_task_attempts` 全部用尽后记为 `resolved=false`，同时保存
+  `terminal_phase`、`terminal_reason` 和 `failure_origin=agent`；
+- repository/SIF/Slurm/API、checkpoint identity、evaluator harness 或清理失败仍是
+  invalid，不能用 0 分补齐；官方测试脚本自身跑到 evaluator timeout 则是该 patch
+  未在预算内通过测试，记为可信 unresolved；
+- outcome policy version 进入 rollout semantic hash 和 evaluation fingerprint，
+  防止 v1 与旧计分口径的 batch/checkpoint 静默混用。
 
 Online GEPA 不使用 offline GEPA 快照中的历史 plan、历史 resolved 标签、
 历史 trajectory、历史 patch 或历史 evaluator result。即使为了复用实例清单、
@@ -875,6 +889,12 @@ tasks。该值不是单个 job 的 CPU 数；每个 array element 仍独立申�
     exit status 和 exit message 原子写入当前 attempt 的
     `failed_<phase>_trajectory.json`。这使空 diff、step/cost limit 等失败可审计；
     Slurm `SIGKILL` 仍只能保留 kill 前已完成 phase 的 checkpoint 和 usage/audit。
+17. Worker 首次写出的 Agent 失败仍是 `status=agent_failed`、`score=null`，controller
+    先按 task index 重试。只有最后一次 attempt 仍属于结构化 Plan/Code Agent 失败，
+    controller 才生成 `status=completed` 的 scored-zero output。中间某次 Agent 失败、
+    最后一次基础设施失败时，最终结果仍是 invalid；不能用较早的可归因失败掩盖
+    最新基础设施状态。`failed_*_trajectory.json` 只供诊断，不进入 output/Reflection；
+    最终 output 仅复用 identity 校验通过的成功 phase checkpoint。
 
 2h online smoke 的 worker accounting 显示 seed validation 98 tasks 的 P50/P95
 约为 4.4/18.2 分钟，一条成功长尾约 37.2 分钟，另有两条在 40 分钟触发 timeout。

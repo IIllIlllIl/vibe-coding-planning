@@ -22,7 +22,7 @@ from src.agents._deps import (
     import_minisweagent,
 )
 from src.config import Config
-from src.exceptions import TaskError
+from src.exceptions import AgentTaskError
 
 logger = logging.getLogger(__name__)
 
@@ -143,13 +143,22 @@ def run(
             failure_trajectory_path, agent.messages, exception_name, exception_msg
         )
         if exception_name == "Submitted":
-            raise TaskError(
-                "Plan agent submitted but /tmp/plan.md was empty and no plan text was returned."
+            raise AgentTaskError(
+                "Plan agent submitted but /tmp/plan.md was empty and no plan text was returned.",
+                phase="plan",
+                reason="plan_empty",
             )
-        raise TaskError(
+        reason = (
+            "plan_step_or_cost_limit"
+            if exception_name == "LimitsExceeded"
+            else "plan_not_submitted"
+        )
+        raise AgentTaskError(
             f"Plan agent terminated without a submission (exit_status={exception_name}). "
             f"Expected the agent to write a plan to /tmp/plan.md and finish with: "
-            f"echo COMPLETE_TASK_AND_SUBMIT_FINAL_OUTPUT"
+            f"echo COMPLETE_TASK_AND_SUBMIT_FINAL_OUTPUT",
+            phase="plan",
+            reason=reason,
         )
 
     return plan_text.strip(), agent.messages

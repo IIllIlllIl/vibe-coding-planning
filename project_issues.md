@@ -21,6 +21,8 @@
   3. accepted candidates、candidate tree、validation scores、best rules 和 token/time 报告是否一致可解释。
   4. Reflection 生成的规则是否仍倾向变长、泛化或过度改写；是否需要继续调整 reflection prompt / evidence 编排 / candidate 格式。
   5. 继续搜索是否有边际收益，或应切换到更保守的规则编辑机制。
+  6. 下一次正式提交需验证 outcome policy v1：按 `terminal_reason` 汇总 Agent scored-zero、
+     evaluator unresolved、infrastructure-invalid 和 retry 数，并人工抽查 timeout 归因。
 - **当前决策**：
   - 接受 GEPA 官方 `max_metric_calls` 的迭代边界软上限语义。
   - 不并行 GEPA 主循环；只把同一 metric batch 的 rollout 分发为独立 Slurm array task。
@@ -42,11 +44,19 @@
   - 学习能帮助 Plan Agent 生成更好 plan 的规则，而不只是学习预测已有 plan 的规则。
   - 使用真实 rollout 的 evaluator 结果作为反馈，减少 offline 标签只能间接反映
     plan 质量的问题。
+- **已实现决策**：
+  - 只有 `outcome_status=scored`、`score_valid=true` 的结果进入 GEPA。
+  - Evaluator resolved/unresolved 使用 1/0；Plan/Code Agent 空提交、未提交、
+    step/cost limit 或 Agent 单命令超时在固定重试用尽后计 0。
+  - repository/SIF/Slurm/API/checkpoint identity/evaluator harness/cleanup 失败保持
+    invalid 并停止当前 metric call；不设置主观可信分数。
+  - outcome policy v1 纳入 evaluation fingerprint；失败 partial trajectory 仅诊断，
+    不进入 Reflection evidence。
 - **需要决策**：
   1. Candidate rules 在 Plan Agent user prompt 中的精确结构，以及 strict planning
      语义如何避免 Plan Agent 用默认能力绕过规则缺陷。
-  2. Online score 是否只用 `resolved` 0/1，还是增加对 operational failure、Code
-     Agent 偏离 plan、偶然成功/失败的特殊处理。
+  2. 是否需要在 outcome policy v1 的审计数据足够后，进一步拆分 Agent timeout
+     的细分类别；当前不引入连续置信分数。
   3. Reflection evidence 如何摘要 Plan trajectory、Code trajectory、patch 和
      evaluator result，并明确区分规则问题、Code Agent 执行偏离和基础设施噪声。
   4. 第一版 pilot 的 train/validation 规模、预算和本地/HPC 运行环境。
@@ -73,6 +83,11 @@
     连 Plan 一起重跑，使长 Plan 再次消耗大部分 walltime。现已增加 Plan/Code/
     Evaluator phase checkpoint：retry 从首个未完成 phase 继续，并持久化失败 Agent
     partial trajectory。下一次真实 HPC run 需验证 phase 接管和磁盘回收。
+  - outcome policy v1 会减少单个 Agent 失败导致整个 98-task validation 作废的情况，
+    但仍有以下待观测风险：基础设施故障被误归因为 Agent 会压低分数；固定重试带来
+    best-of-N 偏差；Code Agent 随机性可能被错误归因给 planning rules；新旧 policy
+    的 validation score 不可直接横向比较。下一次任务必须同时报告分类计数并抽样
+    检查 trajectory/audit，确认这些风险未污染规则接受决策。
   - 详细设计记录在 `docs/gepa-rule-optimization.md` 第 11 节。
 
 ---

@@ -9,7 +9,7 @@ import pytest
 
 from src.evaluator.swe_apptainer_evaluator import evaluate_apptainer
 from src.evaluator import swe_evaluator
-from src.exceptions import FatalError
+from src.exceptions import CommandTimeoutError, FatalError
 from src.optimization.config import ContainerConfig
 
 
@@ -322,6 +322,86 @@ class TestEvaluateApptainer:
         assert any("git rev-parse --is-inside-work-tree" in command for command in commands)
         assert any("/bin/bash .vibe_eval.sh" in command for command in commands)
         assert commands[-1] == "cleanup"
+
+    @patch("src.evaluator.swe_apptainer_evaluator.ApptainerEnvironment")
+    @patch("swebench.harness.grading.get_eval_report")
+    @patch("swebench.harness.test_spec.test_spec.make_test_spec")
+    def test_scores_official_test_timeout_as_unresolved(
+        self,
+        mock_make_spec,
+        _mock_get_report,
+        mock_env_cls,
+        tmp_path,
+        instance_info,
+    ):
+        mock_make_spec.return_value = SimpleNamespace(eval_script="echo tests")
+
+        class FakeEnv:
+            cleaned = False
+
+            def execute(self, command, cwd="", *, timeout=None):
+                if command == "/bin/bash .vibe_eval.sh":
+                    raise CommandTimeoutError(command, timeout)
+                return {"returncode": 0, "output": ""}
+
+            def cleanup(self):
+                self.cleaned = True
+
+        env = FakeEnv()
+        mock_env_cls.return_value = env
+
+        result = evaluate_apptainer(
+            "diff --git a/a.py b/a.py\n",
+            instance_info,
+            container=ContainerConfig(
+                runtime="apptainer",
+                sif_cache_dir=tmp_path / "sifs",
+            ),
+            capacity_window=object(),
+            phase_workdir=tmp_path / "eval-workdir",
+            persistent_log_root=tmp_path / "logs",
+            timeout=123,
+        )
+
+        assert result["resolved"] is False
+        assert result["error_info"] == "official_tests_timed_out"
+        assert env.cleaned is True
+
+    @patch("src.evaluator.swe_apptainer_evaluator.ApptainerEnvironment")
+    @patch("swebench.harness.grading.get_eval_report")
+    @patch("swebench.harness.test_spec.test_spec.make_test_spec")
+    def test_keeps_grading_failure_infrastructure_invalid(
+        self,
+        mock_make_spec,
+        mock_get_report,
+        mock_env_cls,
+        tmp_path,
+        instance_info,
+    ):
+        mock_make_spec.return_value = SimpleNamespace(eval_script="echo tests")
+        mock_get_report.side_effect = ValueError("malformed report")
+
+        class FakeEnv:
+            def execute(self, command, cwd="", *, timeout=None):
+                return {"returncode": 0, "output": "test output"}
+
+            def cleanup(self):
+                pass
+
+        mock_env_cls.return_value = FakeEnv()
+
+        with pytest.raises(FatalError, match="evaluator internal failure"):
+            evaluate_apptainer(
+                "diff --git a/a.py b/a.py\n",
+                instance_info,
+                container=ContainerConfig(
+                    runtime="apptainer",
+                    sif_cache_dir=tmp_path / "sifs",
+                ),
+                capacity_window=object(),
+                phase_workdir=tmp_path / "eval-workdir",
+                persistent_log_root=tmp_path / "logs",
+            )
 
     @patch("src.evaluator.swe_apptainer_evaluator.ApptainerEnvironment")
     @patch("swebench.harness.grading.get_eval_report")

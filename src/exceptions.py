@@ -15,3 +15,30 @@ class TaskError(Exception):
     Examples: Docker image build failure, invalid plan/patch output, evaluation failure.
     The system should skip the current task and continue with the next one.
     """
+
+
+class AgentTaskError(TaskError):
+    """A structured failure attributable to an agent under its run contract."""
+
+    def __init__(self, message: str, *, phase: str, reason: str) -> None:
+        super().__init__(message)
+        self.phase = phase
+        self.reason = reason
+
+
+class AgentRolloutFailure(TaskError):
+    """A terminal Plan/Code phase failure that may become a scored zero."""
+
+    def __init__(self, message: str, *, phase: str, reason: str) -> None:
+        super().__init__(message)
+        self.phase = phase
+        self.reason = reason
+
+
+class CommandTimeoutError(Exception):
+    """One environment command exceeded its declared execution budget."""
+
+    def __init__(self, command: str, timeout: float | None) -> None:
+        super().__init__(f"Command timed out after {timeout}s: {command[:200]}")
+        self.command = command
+        self.timeout = timeout
