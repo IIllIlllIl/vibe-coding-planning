@@ -349,3 +349,50 @@ def test_hpc_supervisor_stops_at_additional_iteration_target(tmp_path: Path) -> 
     assert result.returncode == 0, result.stderr
     assert "iteration target reached" in result.stdout
     assert not batch_log.exists()
+
+
+def test_hpc_supervisor_rejects_completion_before_iteration_target(
+    tmp_path: Path,
+) -> None:
+    fake_bin = tmp_path / "bin"
+    fake_bin.mkdir()
+    local_root = REPO_ROOT / ".tmp_hpc_smoke" / "test_hpc_supervisor_short"
+    config = _write_config(local_root)
+    fake_batch = tmp_path / "hpc_submit_batch.sh"
+    batch_log = tmp_path / "batch.log"
+    statuses = tmp_path / "statuses.txt"
+    statuses.write_text(
+        '{"state":"result","status":"completed","completed_iterations":3,'
+        '"first_observed_completed_iterations":0,'
+        '"active_controllers":[],"active_workers":[]}\n',
+        encoding="utf-8",
+    )
+    _fake_batch_script(fake_batch, batch_log)
+    _fake_ssh(fake_bin / "ssh", statuses, tmp_path / "ssh.log")
+
+    result = subprocess.run(
+        [
+            "python",
+            str(SCRIPT),
+            "--target-iterations",
+            "8",
+            "--once",
+            "--state-file",
+            str(tmp_path / "state.json"),
+            "--batch-script",
+            str(fake_batch),
+            "--gepa-rules",
+            "--gepa-config",
+            str(config),
+            "--submit",
+        ],
+        cwd=REPO_ROOT,
+        capture_output=True,
+        text=True,
+        check=False,
+        env=_env(fake_bin),
+    )
+
+    assert result.returncode == 2
+    assert "completed before iteration target" in result.stderr
+    assert not batch_log.exists()

@@ -561,6 +561,16 @@ def run_loop(config: SupervisorConfig) -> int:
             state["last_remote_status"] = status
             print(f"[hpc-resume] status={json.dumps(status, sort_keys=True)}")
             if is_completed(status):
+                if config.target_iterations and not _iteration_target_reached(
+                    config, status, state
+                ):
+                    state["status"] = "completed_before_iteration_target"
+                    _save_supervisor_state(config, state)
+                    print(
+                        "[hpc-resume] run completed before iteration target",
+                        file=sys.stderr,
+                    )
+                    return 2
                 state["status"] = "completed"
                 _save_supervisor_state(config, state)
                 return 0
