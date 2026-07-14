@@ -6,6 +6,8 @@ from contextlib import contextmanager
 import fcntl
 import json
 import os
+from pathlib import Path
+import tempfile
 from typing import Any, Callable
 
 import gepa
@@ -13,6 +15,7 @@ from gepa.core.adapter import EvaluationBatch
 from gepa.core.state import GEPAState
 
 from src.environment.docker_env import configure_docker_capacity
+from src.exceptions import OnlineControllerYield
 from src.optimization.audit import JsonlLogger, text_sha256
 from src.optimization.online_adapter import OnlinePlanningGEPAAdapter
 from src.optimization.online_config import OnlineOptimizationConfig
@@ -21,6 +24,50 @@ from src.optimization.online_hpc_executor import HPCSlurmOnlineRolloutExecutor
 from src.optimization.online_reflection import OnlinePlanningReflectionProposer
 from src.optimization.online_rollout import OnlinePCTRolloutRunner
 from src.optimization.report import write_cost_report
+
+
+def _atomic_json(path: Path, value: dict[str, Any]) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    fd, temp_name = tempfile.mkstemp(dir=path.parent, prefix=f".{path.name}.")
+    try:
+        with os.fdopen(fd, "w", encoding="utf-8") as handle:
+            json.dump(value, handle, indent=2, sort_keys=True)
+            handle.write("\n")
+        os.replace(temp_name, path)
+    finally:
+        if os.path.exists(temp_name):
+            os.unlink(temp_name)
+
+
+class OnlineIterationProgressCallback:
+    """Publish only GEPA iterations that are durable in the official state."""
+
+    def __init__(self, run_dir: Path, completed_iterations: int) -> None:
+        self.path = run_dir / "online_iteration_progress.json"
+        self.first_observed = completed_iterations
+        if self.path.is_file():
+            existing = json.loads(self.path.read_text(encoding="utf-8"))
+            self.first_observed = int(
+                existing.get("first_observed_completed_iterations", completed_iterations)
+            )
+        self._save(completed_iterations, event="controller_started")
+
+    def _save(self, completed_iterations: int, *, event: str) -> None:
+        _atomic_json(
+            self.path,
+            {
+                "schema_version": 1,
+                "first_observed_completed_iterations": self.first_observed,
+                "completed_iterations": completed_iterations,
+                "last_event": event,
+            },
+        )
+
+    def on_state_saved(self, event: dict[str, Any]) -> None:
+        self._save(int(event["iteration"]), event="state_saved")
+
+    def on_optimization_end(self, event: dict[str, Any]) -> None:
+        self._save(int(event["total_iterations"]), event="optimization_completed")
 
 
 @contextmanager
@@ -250,6 +297,10 @@ def _run_online_optimization_locked(
         validation_ids=[case.instance_id for case in validation],
     )
     audit = JsonlLogger(config.run_dir / "audit_events.jsonl")
+    _atomic_json(
+        config.run_dir / "controller_status.json",
+        {"schema_version": 1, "status": "running", "pid": os.getpid()},
+    )
     audit.write(
         "online_run_started",
         seed_candidate_sha256=text_sha256(initial_rules),
@@ -283,6 +334,13 @@ def _run_online_optimization_locked(
         config,
         initial_rules=initial_rules,
         validation=validation,
+    )
+    completed_iterations = 0
+    if (config.run_dir / "gepa_state.bin").is_file():
+        completed_iterations = max(0, GEPAState.load(str(config.run_dir)).i + 1)
+    progress_callback = OnlineIterationProgressCallback(
+        config.run_dir,
+        completed_iterations,
     )
     adapter = OnlinePlanningGEPAAdapter(
         rollout_runner,
@@ -319,9 +377,38 @@ def _run_online_optimization_locked(
             run_dir=str(config.run_dir),
             cache_evaluation=True,
             track_best_outputs=True,
-            callbacks=[],
+            callbacks=[progress_callback],
             seed=config.search.seed,
         )
+    except OnlineControllerYield as exc:
+        _atomic_json(
+            config.run_dir / "controller_yield.json",
+            {
+                "schema_version": 1,
+                "status": "yielded",
+                "reason": exc.reason,
+                "batch_dir": exc.batch_dir,
+                "worker_job_id": exc.job_id,
+                "completed_iterations": completed_iterations,
+            },
+        )
+        _atomic_json(
+            config.run_dir / "controller_status.json",
+            {
+                "schema_version": 1,
+                "status": "yielded",
+                "reason": exc.reason,
+                "batch_dir": exc.batch_dir,
+                "worker_job_id": exc.job_id,
+            },
+        )
+        audit.write(
+            "online_controller_yielded",
+            reason=exc.reason,
+            batch_dir=exc.batch_dir,
+            worker_job_id=exc.job_id,
+        )
+        return None
     except Exception as exc:
         error = f"{type(exc).__name__}: {exc}"
         JsonlLogger(config.run_dir / "errors.jsonl").write(
@@ -342,6 +429,15 @@ def _run_online_optimization_locked(
             reflection_failures=len(getattr(proposer_runner, "failures", [])),
         )
         audit.write("online_run_failed", error=error)
+        _atomic_json(
+            config.run_dir / "controller_status.json",
+            {
+                "schema_version": 1,
+                "status": "failed",
+                "error_type": type(exc).__name__,
+                "error": str(exc),
+            },
+        )
         raise
 
     _write_online_report(result, config)
@@ -360,5 +456,9 @@ def _run_online_optimization_locked(
         best_candidate_sha256=text_sha256(result.best_candidate["rules"]),
         total_metric_calls=result.total_metric_calls,
         candidate_count=result.num_candidates,
+    )
+    _atomic_json(
+        config.run_dir / "controller_status.json",
+        {"schema_version": 1, "status": "completed"},
     )
     return result

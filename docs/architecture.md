@@ -93,7 +93,7 @@ plan-code-test/
 | **Batch 调度器** | `scripts/run_batch.sh`, `scripts/internal/run_batch_workers.py` | `run_batch.sh` 负责所有实际实验模式；内部调度器按 `--parallel` 有界并发执行 PCT/PCC 实例 |
 | **HPC smoke** | `scripts/hpc_smoke_check.sh` | 验证 `ulhpc-submit`、ULHPC SSH/Slurm、远端 Python 依赖和 Docker/Apptainer 可用性。Iris 已确认无 Docker daemon，GEPA 路径使用 Apptainer |
 | **HPC GEPA 提交包装器** | `scripts/hpc_submit_batch.sh` | 本地组装 GEPA 规则优化作业并调用相邻项目 `../../hpc_submit` 提供的 `ulhpc-submit`；使用 `--stage-data`、`--link-as`、`--persistent-output` 和 module Python/Apptainer；远端执行 `scripts/internal/run_gepa_rules.py` |
-| **HPC resume supervisor** | `scripts/hpc_resume_loop.py` | 将可恢复 GEPA run 拆成多个短 Slurm job；默认 12h 切片、1h 间隔，通过远端 persistent `run_dir/result.json` 判断完成并自动续跑 |
+| **HPC resume supervisor** | `scripts/hpc_resume_loop.py` | 本地每 30 分钟低频查询 controller、worker arrays 和 persistent run state；按新增 durable GEPA iteration 目标提交短 controller，不在 worker 排队/运行时占用 controller allocation |
 | **Docker 容量窗口** | `src/environment/docker_env.py::DockerCapacityWindow` | 所有项目 Docker 入口共享的容量管理模块：提供跨进程容器槽位、启动前磁盘门控、串行镜像获取和串行缓存维护；所有 worker 在同一个 window lease 内完成容器生命周期。缺失的 PolyBench 镜像通过全局锁逐个 pull/build，等待者获得锁后再次检查本地镜像以避免重复下载；已有镜像的容器仍可并行运行。每次维护均清理无引用 dangling 镜像；带标签镜像淘汰只在所有 lease 空闲时运行，并保护所有容器引用的 ImageID且不强制删标签；BuildKit 缓存仅在磁盘压力下分级清理。pipeline、PCC、checker-only、evaluator 和 watchdog 不再实现独立清理策略 |
 
 ### 3.2 Agent 层
@@ -171,6 +171,11 @@ resolved/unresolved 和固定重试后仍存在的结构化 Plan/Code Agent 失�
 后者记 0 并保留 phase/reason。基础设施、API、checkpoint identity、harness 和 cleanup
 失败保持 invalid 并中止当前 metric call。失败 partial trajectory 仅供诊断，不进入
 Reflection；策略版本进入 rollout fingerprint，避免不同口径的 checkpoint 混用。
+正式 HPC 配置启用 cooperative controller yield：每次新 array 或 retry array 的
+`SUBMITTED` journal 原子落盘后，controller 正常退出。GEPA 当前 iteration 尚未保存，
+下一 controller 会从上一 durable `gepa_state.bin` 重放同一 metric call，并按
+fingerprint 接管 array。`online_iteration_progress.json` 只在官方 state save 回调后
+推进；本地 supervisor 因而以完整 iteration 而非累计 walltime 作为停止条件。
 详细设计见
 [`gepa-rule-optimization.md`](gepa-rule-optimization.md)。
 

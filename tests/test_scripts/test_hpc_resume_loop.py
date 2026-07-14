@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 import os
 import subprocess
 from pathlib import Path
@@ -110,6 +111,8 @@ def test_hpc_resume_loop_dry_run_delegates_slice_time(tmp_path: Path) -> None:
             "00:30:00",
             "--batch-script",
             str(fake_batch),
+            "--state-file",
+            str(tmp_path / "state.json"),
             "--gepa-rules",
             "--gepa-config",
             str(config),
@@ -146,7 +149,6 @@ def test_hpc_resume_loop_resubmits_until_completed(tmp_path: Path) -> None:
             [
                 '{"state":"missing"}',
                 '{"state":"resumable"}',
-                '{"state":"resumable"}',
                 '{"state":"result","status":"completed"}',
             ]
         )
@@ -170,6 +172,8 @@ def test_hpc_resume_loop_resubmits_until_completed(tmp_path: Path) -> None:
             "3",
             "--batch-script",
             str(fake_batch),
+            "--state-file",
+            str(tmp_path / "state.json"),
             "--gepa-rules",
             "--gepa-config",
             str(config),
@@ -207,7 +211,6 @@ def test_hpc_resume_loop_stops_on_failed_result(tmp_path: Path) -> None:
     statuses.write_text('{"state":"result","status":"failed"}\n', encoding="utf-8")
     _fake_batch_script(fake_batch, batch_log)
     _fake_ssh(fake_bin / "ssh", statuses, tmp_path / "ssh.log")
-
     result = subprocess.run(
         [
             "python",
@@ -216,6 +219,53 @@ def test_hpc_resume_loop_stops_on_failed_result(tmp_path: Path) -> None:
             "0",
             "--poll-interval",
             "0",
+            "--batch-script",
+            str(fake_batch),
+            "--state-file",
+            str(tmp_path / "state.json"),
+            "--gepa-rules",
+            "--gepa-config",
+            str(config),
+            "--submit",
+        ],
+        cwd=REPO_ROOT,
+        capture_output=True,
+        text=True,
+        check=False,
+        env=_env(fake_bin),
+    )
+
+    assert result.returncode == 1
+    assert "run is blocked; not resubmitting" in result.stderr
+    assert not batch_log.exists()
+
+
+def test_hpc_supervisor_waits_for_workers_without_submitting(tmp_path: Path) -> None:
+    fake_bin = tmp_path / "bin"
+    fake_bin.mkdir()
+    local_root = REPO_ROOT / ".tmp_hpc_smoke" / "test_hpc_supervisor_wait"
+    config = _write_config(local_root)
+    fake_batch = tmp_path / "hpc_submit_batch.sh"
+    batch_log = tmp_path / "batch.log"
+    statuses = tmp_path / "statuses.txt"
+    statuses.write_text(
+        '{"state":"resumable","completed_iterations":2,'
+        '"first_observed_completed_iterations":2,'
+        '"active_controllers":[],"active_workers":["9001"]}\n',
+        encoding="utf-8",
+    )
+    _fake_batch_script(fake_batch, batch_log)
+    _fake_ssh(fake_bin / "ssh", statuses, tmp_path / "ssh.log")
+
+    result = subprocess.run(
+        [
+            "python",
+            str(SCRIPT),
+            "--target-iterations",
+            "3",
+            "--once",
+            "--state-file",
+            str(tmp_path / "state.json"),
             "--batch-script",
             str(fake_batch),
             "--gepa-rules",
@@ -230,6 +280,72 @@ def test_hpc_resume_loop_stops_on_failed_result(tmp_path: Path) -> None:
         env=_env(fake_bin),
     )
 
-    assert result.returncode == 1
-    assert "run is failed; not resubmitting" in result.stderr
+    assert result.returncode == 0, result.stderr
+    assert "waiting without submission" in result.stdout
+    assert not batch_log.exists()
+    state = json.loads((tmp_path / "state.json").read_text(encoding="utf-8"))
+    assert state["baseline_iterations"] == 2
+    assert state["target_completed_iterations"] == 5
+
+
+def test_hpc_supervisor_stops_at_additional_iteration_target(tmp_path: Path) -> None:
+    fake_bin = tmp_path / "bin"
+    fake_bin.mkdir()
+    local_root = REPO_ROOT / ".tmp_hpc_smoke" / "test_hpc_supervisor_target"
+    config = _write_config(local_root)
+    fake_batch = tmp_path / "hpc_submit_batch.sh"
+    batch_log = tmp_path / "batch.log"
+    statuses = tmp_path / "statuses.txt"
+    statuses.write_text(
+        '{"state":"resumable","completed_iterations":5,'
+        '"first_observed_completed_iterations":2,'
+        '"active_controllers":[],"active_workers":[]}\n',
+        encoding="utf-8",
+    )
+    _fake_batch_script(fake_batch, batch_log)
+    _fake_ssh(fake_bin / "ssh", statuses, tmp_path / "ssh.log")
+    state_path = tmp_path / "state.json"
+    state_path.write_text(
+        json.dumps(
+            {
+                "schema_version": 1,
+                "submissions": 1,
+                "remote_run_snapshot": (
+                    "~/hpc_run_state/vibe-coding-planning/"
+                    ".tmp_hpc_smoke/test_hpc_supervisor_target/run"
+                ),
+                "job_name": "vibe-gepa",
+                "target_additional_iterations": 3,
+                "baseline_iterations": 2,
+                "target_completed_iterations": 5,
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    result = subprocess.run(
+        [
+            "python",
+            str(SCRIPT),
+            "--target-iterations",
+            "3",
+            "--once",
+            "--state-file",
+            str(state_path),
+            "--batch-script",
+            str(fake_batch),
+            "--gepa-rules",
+            "--gepa-config",
+            str(config),
+            "--submit",
+        ],
+        cwd=REPO_ROOT,
+        capture_output=True,
+        text=True,
+        check=False,
+        env=_env(fake_bin),
+    )
+
+    assert result.returncode == 0, result.stderr
+    assert "iteration target reached" in result.stdout
     assert not batch_log.exists()

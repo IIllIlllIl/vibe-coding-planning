@@ -4,6 +4,8 @@
 from __future__ import annotations
 
 import argparse
+from contextlib import contextmanager
+import fcntl
 import json
 import os
 import re
@@ -36,6 +38,9 @@ TERMINAL_JOB_STATES = {
 SUCCESS_RUN_STATUSES = {"completed", "completed_with_warnings"}
 FAILED_RUN_STATUSES = {"failed"}
 BLOCKING_STATUS_STATES = {
+    "controller_failed",
+    "invalid_controller_status",
+    "invalid_progress",
     "invalid_result",
     "state_without_manifest",
     "status_check_failed",
@@ -57,6 +62,9 @@ class SupervisorConfig:
     ssh_port: str
     ssh_key: str
     batch_script: Path
+    target_iterations: int
+    once: bool
+    state_file: Path
 
 
 def parse_duration(raw: str) -> int:
@@ -169,9 +177,28 @@ def parse_args(argv: list[str]) -> SupervisorConfig:
         ),
         allow_abbrev=False,
     )
-    parser.add_argument("--slice-time", default="12:00:00")
-    parser.add_argument("--check-interval", default="01:00:00")
+    parser.add_argument("--slice-time", default="02:00:00")
+    parser.add_argument(
+        "--check-interval",
+        default="0",
+        help="Deprecated compatibility option; supervisor cadence uses --poll-interval.",
+    )
     parser.add_argument("--poll-interval", default="1800")
+    parser.add_argument(
+        "--target-iterations",
+        type=int,
+        default=0,
+        help="Stop after this many additional durable GEPA iterations; 0 uses run completion.",
+    )
+    parser.add_argument(
+        "--once",
+        action="store_true",
+        help="Perform one remote decision without sleeping.",
+    )
+    parser.add_argument(
+        "--state-file",
+        help="Local supervisor state path (default: .local/hpc-supervisor/<job>.json).",
+    )
     parser.add_argument(
         "--max-runs",
         type=int,
@@ -185,12 +212,21 @@ def parse_args(argv: list[str]) -> SupervisorConfig:
     known, batch_args = parser.parse_known_args(argv)
     if known.max_runs < 0:
         raise SystemExit("--max-runs must be non-negative")
+    if known.target_iterations < 0:
+        raise SystemExit("--target-iterations must be non-negative")
     gepa_config_raw = _take_option(batch_args, "--gepa-config")
     if not gepa_config_raw:
         raise SystemExit("--gepa-config is required")
     gepa_config = _resolve_repo_path(gepa_config_raw)
     submit = "--submit" in batch_args
     job_name = _take_option(batch_args, "--job-name") or "vibe-gepa"
+    state_file = Path(
+        known.state_file
+        or REPO_ROOT
+        / ".local"
+        / "hpc-supervisor"
+        / f"{re.sub(r'[^A-Za-z0-9_.-]+', '_', job_name)}.json"
+    )
     ssh_target, ssh_port, ssh_key = _ssh_config(batch_args)
     return SupervisorConfig(
         batch_args=batch_args,
@@ -206,6 +242,9 @@ def parse_args(argv: list[str]) -> SupervisorConfig:
         ssh_port=ssh_port,
         ssh_key=ssh_key,
         batch_script=Path(known.batch_script),
+        target_iterations=known.target_iterations,
+        once=known.once,
+        state_file=state_file,
     )
 
 
@@ -312,13 +351,18 @@ def remote_run_status(config: SupervisorConfig) -> dict[str, Any]:
     script = r"""
 import json
 import os
+import subprocess
 import sys
 from pathlib import Path
 
 run_dir = Path(os.path.expanduser(sys.argv[1]))
+controller_job_name = sys.argv[2]
 result_path = run_dir / "result.json"
 state_path = run_dir / "gepa_state.bin"
 manifest_path = run_dir / "run_manifest.json"
+online_manifest_path = run_dir / "online_run_manifest.json"
+progress_path = run_dir / "online_iteration_progress.json"
+controller_status_path = run_dir / "controller_status.json"
 payload = {"state": "missing", "run_dir": str(run_dir)}
 if result_path.is_file():
     try:
@@ -327,11 +371,75 @@ if result_path.is_file():
         payload = {"state": "invalid_result", "error": str(exc), "run_dir": str(run_dir)}
     else:
         status = result.get("run_status") or result.get("status")
+        if status is None and online_manifest_path.is_file():
+            status = "completed"
         payload = {"state": "result", "status": status, "run_dir": str(run_dir)}
-elif state_path.is_file() and manifest_path.is_file():
+elif state_path.is_file() and (manifest_path.is_file() or online_manifest_path.is_file()):
     payload = {"state": "resumable", "run_dir": str(run_dir)}
 elif state_path.is_file():
     payload = {"state": "state_without_manifest", "run_dir": str(run_dir)}
+
+if controller_status_path.is_file():
+    try:
+        controller_status = json.loads(controller_status_path.read_text(encoding="utf-8"))
+        payload["controller_status"] = controller_status.get("status")
+        if controller_status.get("status") == "failed":
+            payload["state"] = "controller_failed"
+            payload["error_type"] = controller_status.get("error_type")
+    except Exception as exc:
+        payload = {"state": "invalid_controller_status", "error": str(exc), "run_dir": str(run_dir)}
+
+if progress_path.is_file():
+    try:
+        progress = json.loads(progress_path.read_text(encoding="utf-8"))
+        payload["completed_iterations"] = int(progress["completed_iterations"])
+        payload["first_observed_completed_iterations"] = int(
+            progress["first_observed_completed_iterations"]
+        )
+    except Exception as exc:
+        payload = {"state": "invalid_progress", "error": str(exc), "run_dir": str(run_dir)}
+
+def slurm_state(job_id):
+    queued = subprocess.run(
+        ["squeue", "-h", "-j", str(job_id), "-o", "%T"],
+        capture_output=True, text=True,
+    )
+    if queued.returncode == 0 and queued.stdout.strip():
+        return queued.stdout.strip().splitlines()[0].split()[0].upper()
+    accounted = subprocess.run(
+        ["sacct", "-n", "-P", "-j", str(job_id), "--format=State"],
+        capture_output=True, text=True,
+    )
+    if accounted.returncode == 0 and accounted.stdout.strip():
+        return accounted.stdout.strip().splitlines()[0].split("|", 1)[0].split()[0].upper()
+    return "UNKNOWN"
+
+controllers = subprocess.run(
+    ["squeue", "-h", "-n", controller_job_name, "-o", "%A|%T"],
+    capture_output=True, text=True,
+)
+payload["active_controllers"] = []
+if controllers.returncode == 0:
+    payload["active_controllers"] = [
+        line for line in controllers.stdout.splitlines()
+        if line.strip() and line.rsplit("|", 1)[-1].strip().upper() not in {"COMPLETED", "FAILED", "CANCELLED", "TIMEOUT"}
+    ]
+
+worker_ids = set()
+for path in (run_dir / "hpc_rollout_batches").glob("batch_*/batch_state.json"):
+    try:
+        batch_state = json.loads(path.read_text(encoding="utf-8"))
+    except Exception:
+        continue
+    if batch_state.get("phase") == "COMPLETE":
+        continue
+    if batch_state.get("active_job_id"):
+        worker_ids.add(str(batch_state["active_job_id"]))
+payload["worker_states"] = {job_id: slurm_state(job_id) for job_id in sorted(worker_ids)}
+payload["active_workers"] = [
+    job_id for job_id, state in payload["worker_states"].items()
+    if state not in {"BOOT_FAIL", "CANCELLED", "COMPLETED", "DEADLINE", "FAILED", "NODE_FAIL", "OUT_OF_MEMORY", "PREEMPTED", "REVOKED", "SPECIAL_EXIT", "TIMEOUT"}
+]
 print(json.dumps(payload, sort_keys=True))
 """
     remote_command = (
@@ -339,6 +447,8 @@ print(json.dumps(payload, sort_keys=True))
         + shlex.quote(script)
         + " "
         + shlex.quote(config.remote_run_snapshot)
+        + " "
+        + shlex.quote(config.job_name)
     )
     result = run_command(_ssh_command(config, remote_command))
     if result.returncode != 0:
@@ -365,50 +475,133 @@ def is_failed(status: dict[str, Any]) -> bool:
     )
 
 
+def _load_supervisor_state(config: SupervisorConfig) -> dict[str, Any]:
+    if not config.state_file.is_file():
+        return {
+            "schema_version": 1,
+            "submissions": 0,
+            "remote_run_snapshot": config.remote_run_snapshot,
+            "job_name": config.job_name,
+            "target_additional_iterations": config.target_iterations,
+        }
+    state = json.loads(config.state_file.read_text(encoding="utf-8"))
+    expected = {
+        "remote_run_snapshot": config.remote_run_snapshot,
+        "job_name": config.job_name,
+        "target_additional_iterations": config.target_iterations,
+    }
+    for key, value in expected.items():
+        if state.get(key) != value:
+            raise RuntimeError(
+                f"supervisor state differs at {key}; use the original options "
+                "or a new --state-file"
+            )
+    return state
+
+
+def _save_supervisor_state(config: SupervisorConfig, state: dict[str, Any]) -> None:
+    config.state_file.parent.mkdir(parents=True, exist_ok=True)
+    temp = config.state_file.with_suffix(config.state_file.suffix + ".tmp")
+    temp.write_text(json.dumps(state, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+    temp.replace(config.state_file)
+
+
+@contextmanager
+def _supervisor_lock(config: SupervisorConfig):
+    lock_path = config.state_file.with_suffix(config.state_file.suffix + ".lock")
+    lock_path.parent.mkdir(parents=True, exist_ok=True)
+    with lock_path.open("a+", encoding="utf-8") as handle:
+        try:
+            fcntl.flock(handle.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
+        except BlockingIOError as exc:
+            raise RuntimeError(f"another supervisor holds {lock_path}") from exc
+        try:
+            yield
+        finally:
+            fcntl.flock(handle.fileno(), fcntl.LOCK_UN)
+
+
+def _iteration_target_reached(
+    config: SupervisorConfig,
+    status: dict[str, Any],
+    state: dict[str, Any],
+) -> bool:
+    if config.target_iterations == 0:
+        return False
+    completed = status.get("completed_iterations")
+    if completed is None:
+        state["progress_bootstrap_required"] = True
+        return False
+    if "baseline_iterations" not in state:
+        baseline = completed
+        if state.get("progress_bootstrap_required"):
+            baseline = status.get("first_observed_completed_iterations", completed)
+        state["baseline_iterations"] = int(baseline)
+        state["target_completed_iterations"] = (
+            state["baseline_iterations"] + config.target_iterations
+        )
+    state["last_completed_iterations"] = int(completed)
+    return int(completed) >= int(state["target_completed_iterations"])
+
+
 def run_loop(config: SupervisorConfig) -> int:
     if not config.submit:
         return run_dry_run(config)
 
-    print(
-        "[hpc-resume] starting loop "
-        f"slice_time={config.slice_time} max_runs={config.max_runs} "
-        f"check_interval={config.check_interval_seconds}s "
-        f"remote_run_snapshot={config.remote_run_snapshot}"
-    )
-    runs = 0
-    while config.max_runs == 0 or runs < config.max_runs:
-        status = remote_run_status(config)
-        print(f"[hpc-resume] pre-submit status={json.dumps(status, sort_keys=True)}")
-        if is_completed(status):
-            print("[hpc-resume] run already completed")
-            return 0
-        if is_failed(status):
-            print("[hpc-resume] run is failed; not resubmitting", file=sys.stderr)
-            return 1
-
-        runs += 1
-        job_id = submit_slice(config)
-        job_state = wait_for_job(config, job_id)
-        status = remote_run_status(config)
+    with _supervisor_lock(config):
+        state = _load_supervisor_state(config)
         print(
-            "[hpc-resume] post-job "
-            f"job_id={job_id} job_state={job_state} "
-            f"status={json.dumps(status, sort_keys=True)}"
+            "[hpc-resume] starting supervisor "
+            f"slice_time={config.slice_time} poll_interval={config.poll_interval_seconds}s "
+            f"target_iterations={config.target_iterations} max_runs={config.max_runs} "
+            f"remote_run_snapshot={config.remote_run_snapshot}"
         )
-        if is_completed(status):
-            print("[hpc-resume] completed")
-            return 0
-        if is_failed(status):
-            print("[hpc-resume] run failed; stopping", file=sys.stderr)
-            return 1
-        if config.max_runs != 0 and runs >= config.max_runs:
-            break
-        if config.check_interval_seconds > 0:
-            print(f"[hpc-resume] sleeping {config.check_interval_seconds}s before resume")
-            time.sleep(config.check_interval_seconds)
+        while True:
+            status = remote_run_status(config)
+            state["last_remote_status"] = status
+            print(f"[hpc-resume] status={json.dumps(status, sort_keys=True)}")
+            if is_completed(status):
+                state["status"] = "completed"
+                _save_supervisor_state(config, state)
+                return 0
+            if is_failed(status):
+                state["status"] = "blocked"
+                _save_supervisor_state(config, state)
+                print("[hpc-resume] run is blocked; not resubmitting", file=sys.stderr)
+                return 1
+            if _iteration_target_reached(config, status, state):
+                state["status"] = "iteration_target_reached"
+                _save_supervisor_state(config, state)
+                print("[hpc-resume] iteration target reached")
+                return 0
 
-    print("[hpc-resume] max runs reached before completion", file=sys.stderr)
-    return 2
+            active_controllers = status.get("active_controllers", [])
+            active_workers = status.get("active_workers", [])
+            if active_controllers or active_workers:
+                state["status"] = (
+                    "waiting_controller" if active_controllers else "waiting_workers"
+                )
+                print(
+                    "[hpc-resume] waiting without submission "
+                    f"controllers={active_controllers} workers={active_workers}"
+                )
+            else:
+                submissions = int(state.get("submissions", 0))
+                if config.max_runs != 0 and submissions >= config.max_runs:
+                    state["status"] = "max_runs_reached"
+                    _save_supervisor_state(config, state)
+                    print("[hpc-resume] max runs reached", file=sys.stderr)
+                    return 2
+                job_id = submit_slice(config)
+                state["submissions"] = submissions + 1
+                state["last_controller_job_id"] = job_id
+                state["status"] = "controller_submitted"
+
+            _save_supervisor_state(config, state)
+            if config.once:
+                return 0
+            if config.poll_interval_seconds > 0:
+                time.sleep(config.poll_interval_seconds)
 
 
 def main(argv: list[str] | None = None) -> int:

@@ -14,7 +14,12 @@ import pytest
 from gepa.core.state import GEPAState, ValsetEvaluation
 
 from src.config import DockerConfig
-from src.exceptions import AgentRolloutFailure, FatalError, TaskError
+from src.exceptions import (
+    AgentRolloutFailure,
+    FatalError,
+    OnlineControllerYield,
+    TaskError,
+)
 from src.optimization.audit import AuditedModel, JsonlLogger, text_sha256
 from src.optimization.adapter import CheckerGEPAAdapter
 from src.optimization.checker import DockerChecker, _json_object, validate_checker_output
@@ -54,7 +59,10 @@ from src.optimization.online_rollout_worker import (
     run_task,
 )
 from src.optimization.online_rollout import OnlinePCTRolloutRunner
-from src.optimization.online_runner import run_online_optimization
+from src.optimization.online_runner import (
+    OnlineIterationProgressCallback,
+    run_online_optimization,
+)
 from src.optimization.reflection import (
     EvidenceBundleWriter,
     MiniSWEReflectionProposer,
@@ -2159,6 +2167,77 @@ def test_online_hpc_wait_retries_terminal_task_without_output(
     assert len(submitted_scripts) == 2
     retry_script = submitted_scripts[1].read_text(encoding="utf-8")
     assert "#SBATCH --array=1%2" in retry_script
+
+
+def test_online_hpc_controller_yields_after_durable_array_submission(
+    tmp_path,
+    monkeypatch,
+):
+    config = _online_config(tmp_path)
+    train, _ = load_online_snapshot(config.dataset_snapshot)
+    config = replace(
+        config,
+        execution=OnlineExecutionConfig(
+            backend="hpc_slurm",
+            controller_yield_after_submit=True,
+        ),
+        hpc=replace(config.hpc, submit=True),
+    )
+    monkeypatch.setattr(
+        "src.optimization.online_hpc_executor.collect_slurm_resource_snapshot",
+        lambda job_id=None: {},
+    )
+    executor = HPCSlurmOnlineRolloutExecutor(
+        config,
+        submitter=lambda script_path: "12345",
+        sleeper=lambda seconds: None,
+    )
+
+    with pytest.raises(OnlineControllerYield) as raised:
+        executor.evaluate(train, "planning rules", capture_traces=True)
+
+    assert raised.value.job_id == "12345"
+    batch_state = json.loads(
+        next(config.run_dir.glob("hpc_rollout_batches/batch_*/batch_state.json"))
+        .read_text(encoding="utf-8")
+    )
+    assert batch_state["phase"] == "SUBMITTED"
+    assert batch_state["active_job_id"] == "12345"
+
+    batch_dir = next(config.run_dir.glob("hpc_rollout_batches/batch_*"))
+    for index, case in enumerate(train):
+        (batch_dir / "outputs" / f"task_{index:04d}.json").write_text(
+            json.dumps(
+                {
+                    "status": "completed",
+                    "instance_id": case.instance_id,
+                    "candidate_sha256": text_sha256("planning rules"),
+                    "resolved": False,
+                    "plan": "plan",
+                    "patch": "patch",
+                    "plan_trajectory": [],
+                    "code_trajectory": [],
+                    "evaluator_result": {"resolved": False},
+                }
+            ),
+            encoding="utf-8",
+        )
+
+    outputs = executor.evaluate(train, "planning rules", capture_traces=True)
+    assert len(outputs) == len(train)
+    assert (batch_dir / "batch_done.json").is_file()
+
+
+def test_online_iteration_progress_counts_only_saved_state(tmp_path):
+    callback = OnlineIterationProgressCallback(tmp_path, completed_iterations=4)
+    callback.on_state_saved({"iteration": 5, "run_dir": str(tmp_path)})
+
+    progress = json.loads(
+        (tmp_path / "online_iteration_progress.json").read_text(encoding="utf-8")
+    )
+    assert progress["first_observed_completed_iterations"] == 4
+    assert progress["completed_iterations"] == 5
+    assert progress["last_event"] == "state_saved"
 
 
 def test_online_hpc_scores_agent_failure_after_fixed_retries(

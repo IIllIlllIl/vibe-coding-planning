@@ -17,6 +17,7 @@ import time
 from typing import Any, Callable, Sequence
 
 from src.optimization.audit import JsonlLogger, text_sha256
+from src.exceptions import OnlineControllerYield
 from src.optimization.online_config import OnlineOptimizationConfig
 from src.optimization.online_models import (
     ONLINE_OUTCOME_POLICY_VERSION,
@@ -398,6 +399,27 @@ class HPCSlurmOnlineRolloutExecutor:
         self.sleep = sleeper
         self.audit = JsonlLogger(config.run_dir / "audit_events.jsonl")
 
+    def _yield_for_workers(
+        self,
+        batch_dir: Path,
+        job_id: str | None,
+        *,
+        reason: str,
+    ) -> None:
+        if not self.config.execution.controller_yield_after_submit:
+            return
+        self.audit.write(
+            "online_controller_yield_requested",
+            batch_dir=str(batch_dir),
+            job_id=job_id,
+            reason=reason,
+        )
+        raise OnlineControllerYield(
+            batch_dir=str(batch_dir),
+            job_id=job_id,
+            reason=reason,
+        )
+
     def evaluate(
         self,
         batch: list[OnlineGEPACase],
@@ -467,6 +489,7 @@ class HPCSlurmOnlineRolloutExecutor:
             retry_job_ids = [str(item) for item in state.get("retry_job_ids", [])]
             before: dict[str, Any] = {}
             if not all(task.output_path.is_file() for task in tasks):
+                should_yield = False
                 if not job_id:
                     if state.get("phase") == "SUBMITTING":
                         job_name = (
@@ -494,6 +517,7 @@ class HPCSlurmOnlineRolloutExecutor:
                             attempt=attempt,
                             job_name=job_name,
                         )
+                        should_yield = True
                         state = self._read_batch_state(
                             batch_dir,
                             fingerprint=fingerprint,
@@ -527,6 +551,13 @@ class HPCSlurmOnlineRolloutExecutor:
                             attempt=attempt,
                             fairshare_before=before.get("ulhpcshare_stdout", ""),
                         )
+                        should_yield = True
+                if should_yield:
+                    self._yield_for_workers(
+                        batch_dir,
+                        str(job_id) if job_id else None,
+                        reason="waiting_for_rollout_array",
+                    )
                 missing = self._wait_for_outputs(
                     tasks,
                     job_id=str(job_id) if job_id else None,
@@ -836,6 +867,11 @@ class HPCSlurmOnlineRolloutExecutor:
                 task_indices=[task.index for task in failed],
                 instance_ids=[task.case.instance_id for task in failed],
                 fairshare_before=before.get("ulhpcshare_stdout", ""),
+            )
+            self._yield_for_workers(
+                batch_dir,
+                job_id,
+                reason="waiting_for_retry_array",
             )
             missing_by_attempt[retry_attempt] = self._wait_for_outputs(
                 failed,

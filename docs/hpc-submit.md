@@ -560,8 +560,8 @@ Slurm allocation：
 
 ```bash
 conda run -n mini-swe python scripts/hpc_resume_loop.py \
-  --slice-time 12:00:00 \
-  --check-interval 01:00:00 \
+  --slice-time 02:00:00 \
+  --poll-interval 1800 \
   --poll-interval 1800 \
   --max-runs 4 \
   --gepa-rules \
@@ -586,17 +586,47 @@ batch dry-run，不进入循环。
    `completed_with_warnings`，停止并返回 0。
 3. 如果 `result.json` 是 `failed`，或结果文件损坏、状态文件缺 manifest、远端状态
    检查失败，停止并返回非零。
+
+Online GEPA 推荐把它作为本地轻量 supervisor 使用，而不是等待单个 controller：
+
+```bash
+conda run -n mini-swe python scripts/hpc_resume_loop.py \
+  --target-iterations 6 \
+  --poll-interval 1800 \
+  --slice-time 02:00:00 \
+  --max-runs 30 \
+  --gepa-rules \
+  --gepa-config configs/gepa_online_planning_hpc.yaml \
+  --job-name online-gepa-formal-8h \
+  --remote-dir '~/hpc_runs/vibe-coding-planning-online-formal' \
+  --cpus 1 --mem 4G --submit
+```
+
+`--target-iterations` 表示相对 supervisor 首次观察到的 durable GEPA state 再完成
+多少个 iteration，不是 controller 次数。默认轮询为 1800 秒；worker 完成后平均
+延迟约 15 分钟才提交下一 controller，但等待期间不占 ULHPC allocation。
+`--once` 只做一次检查/决策，适合 smoke 和人工审查；`--state-file` 可覆盖本地
+`.local/hpc-supervisor/<job>.json`。本地 state 记录 baseline、目标、提交次数和最近
+远端快照，不是实验权威数据；远端 `gepa_state.bin`、batch journal 和
+`online_iteration_progress.json` 才是权威来源。
+
+提交条件必须同时满足：实验未完成、iteration 目标未达到、没有 active controller、
+没有 active worker，并且 `controller_status.json` 未标记 `failed`。远端 Slurm 状态
+未知时按 active/ambiguous 等待，不猜测后重复提交。正式 config 的
+`execution.controller_yield_after_submit=true` 让 controller 在 array journal 落盘后
+主动退出；下一 controller 使用 fingerprint 接管，不重新提交仍有效的 array。
 4. 否则调用 `scripts/hpc_submit_batch.sh ... --time <slice-time> --submit` 提交一轮。
 5. 通过 `squeue` / `sacct` 等待该 job 进入终态。
 6. 再次检查远端 `run_dir`；未完成且未达到 `--max-runs` 时，等待
-   `--check-interval` 后提交下一轮。
+   `--poll-interval` 后重新发现远端状态；`--check-interval` 仅保留参数兼容性。
 
 参数说明：
 
 | 参数 | 默认 | 说明 |
 |------|------|------|
-| `--slice-time HH:MM:SS` | `12:00:00` | 每个 Slurm job 的 wall time |
-| `--check-interval HH:MM:SS` | `01:00:00` | 一轮结束但未完成时，下次提交前等待时间 |
+| `--slice-time HH:MM:SS` | `02:00:00` | 每个短 controller 的异常上限；正常会在提交 array 后提前 yield |
+| `--poll-interval HH:MM:SS` | `1800` | 本地 supervisor 的远端查询周期 |
+| `--check-interval HH:MM:SS` | `0` | 已废弃，仅保留旧命令兼容性 |
 | `--poll-interval SECONDS` | `1800` | 等待当前 job 完成时查询 `squeue` / `sacct` 的间隔 |
 | `--max-runs N` | `4` | 最多提交多少个切片；`0` 表示无限续跑 |
 | `--batch-script PATH` | `scripts/hpc_submit_batch.sh` | 供测试或特殊 wrapper 覆盖 |

@@ -23,6 +23,9 @@
   5. 继续搜索是否有边际收益，或应切换到更保守的规则编辑机制。
   6. 下一次正式提交需验证 outcome policy v1：按 `terminal_reason` 汇总 Agent scored-zero、
      evaluator unresolved、infrastructure-invalid 和 retry 数，并人工抽查 timeout 归因。
+  7. 下一次正式提交需验证本地 30 分钟 supervisor：新 array 提交后 controller 是否
+     正常 yield、active worker 期间是否零重复提交、worker 终态后是否接管同一
+     fingerprint，以及 iteration 目标是否只在 durable state save 后增加。
 - **当前决策**：
   - 接受 GEPA 官方 `max_metric_calls` 的迭代边界软上限语义。
   - 不并行 GEPA 主循环；只把同一 metric batch 的 rollout 分发为独立 Slurm array task。
@@ -88,6 +91,10 @@
     best-of-N 偏差；Code Agent 随机性可能被错误归因给 planning rules；新旧 policy
     的 validation score 不可直接横向比较。下一次任务必须同时报告分类计数并抽样
     检查 trajectory/audit，确认这些风险未污染规则接受决策。
+  - 本地 supervisor 与 cooperative controller yield 已实现。剩余运行风险是本地休眠/
+    断网只会延迟推进；Slurm 查询长期 UNKNOWN 会保守等待；controller 在 `sbatch`
+    成功但 journal 写回前被杀仍依赖既有 deterministic job-name reconciliation。
+    下一次任务先用 `--once` 审查决策，再启动持续 30 分钟轮询。
   - 详细设计记录在 `docs/gepa-rule-optimization.md` 第 11 节。
 
 ---
@@ -115,13 +122,14 @@
   2. 预热后缺失 SIF 数量和失败列表。
   3. strict GEPA run 在 SIF 未全部预热时是否可通过 resume 容忍按需拉取失败。
   4. `parallel=4` 在 HPC 上是否稳定；如遇 DeepSeek rate limit、文件系统压力或镜像拉取冲突，降到 `parallel=2`。
-  5. 新增 `scripts/hpc_resume_loop.py` 的 12h 切片续跑策略需要一次真实 run 验证。
+  5. 新增本地 supervisor 的 2h controller 上限、30min 轮询和 iteration 目标需要一次真实 run 验证。
 - **当前实现**：
   - `scripts/hpc_submit_batch.sh` 复用新版 `ulhpc-submit` 的
     `--stage-data`、`--link-as`、`--persistent-output`、module Python 和 Apptainer cache 参数。
-  - `scripts/hpc_resume_loop.py` 支持短 Slurm job 切片：默认 `--slice-time 12:00:00`、
-    `--check-interval 01:00:00`、`--max-runs 4`，通过远端 persistent `run_dir`
-    判断完成并自动继续提交。
+  - `scripts/hpc_resume_loop.py` 默认 `--slice-time 02:00:00`、
+    `--poll-interval 1800`、`--max-runs 4`；Online 正式运行应显式给出
+    `--target-iterations` 和更宽松的 `--max-runs`，通过远端 persistent `run_dir`
+    判断等待、提交或停止。
   - login preheat 的最终产物是
     `/scratch/users/<user>/vibe-coding-planning/shared/sif-cache/*.sif`；Apptainer
     layer cache/tmp 不是最终成果，必须位于 scratch。

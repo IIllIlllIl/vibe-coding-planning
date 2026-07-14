@@ -25,6 +25,7 @@ class OnlineDatasetConfig:
 @dataclass(frozen=True)
 class OnlineExecutionConfig:
     backend: str = "local_docker"
+    controller_yield_after_submit: bool = False
 
 
 @dataclass(frozen=True)
@@ -212,7 +213,10 @@ def load_online_optimization_config(
             f"container.runtime must be 'docker' or 'apptainer', got {container.runtime!r}"
         )
     execution = OnlineExecutionConfig(
-        backend=str(execution_data.get("backend", "local_docker"))
+        backend=str(execution_data.get("backend", "local_docker")),
+        controller_yield_after_submit=bool(
+            execution_data.get("controller_yield_after_submit", False)
+        ),
     )
     if execution.backend not in ("local_docker", "hpc_slurm"):
         raise ValueError(

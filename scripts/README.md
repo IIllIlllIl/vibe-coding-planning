@@ -245,25 +245,29 @@ conda run -n mini-swe python scripts/tools/login_sif_preheat_watchdog.py \
 
 ## 7. `hpc_resume_loop.py`
 
-把一次长 GEPA 任务切成多个短 Slurm 切片顺序提交。每片结束后检查 `run_dir` 里的 `result.json` / `gepa_state.bin`，如果已完成则退出，否则 resume 提交下一片。
+本地轻量 supervisor。默认每 30 分钟查询远端 controller、worker array、batch journal、`result.json`、`gepa_state.bin` 和 online iteration progress；只有没有 active job 且状态可恢复时才提交短 controller。Online GEPA 可用 `--target-iterations N` 以新增完整 iteration 为停止目标，worker 排队或运行期间不占 controller allocation。
 
 **常用命令**
 
 ```bash
 # 先 dry-run
 conda run -n mini-swe python scripts/hpc_resume_loop.py \
+  --target-iterations 6 \
+  --poll-interval 1800 \
+  --slice-time 02:00:00 \
   --gepa-rules \
   --gepa-config configs/archive/offline_gepa/gepa_verified_rules_strict_hpc_24h_apptainer.yaml \
-  --slice-time 12:00:00 \
-  --check-interval 01:00:00 \
+  --slice-time 02:00:00 \
+  --poll-interval 1800 \
   --max-runs 4
 
-# 正式运行：每片 12h，最多 4 片
+# Online 正式运行：2h controller 上限，30min 轮询，以 iteration 为目标
 conda run -n mini-swe python scripts/hpc_resume_loop.py \
   --gepa-rules \
   --gepa-config configs/archive/offline_gepa/gepa_verified_rules_strict_hpc_24h_apptainer.yaml \
-  --slice-time 12:00:00 \
-  --check-interval 01:00:00 \
+  --slice-time 02:00:00 \
+  --poll-interval 1800 \
+  --target-iterations 6 \
   --max-runs 4 \
   --submit
 ```

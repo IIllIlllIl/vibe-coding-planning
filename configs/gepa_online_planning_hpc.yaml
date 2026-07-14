@@ -66,6 +66,7 @@ container:
 
 execution:
   backend: hpc_slurm
+  controller_yield_after_submit: true
 
 hpc:
   # Each Slurm array task runs one rollout worker.

@@ -5,6 +5,7 @@ trajectories/
 patches/
 logs/
 .tmp_hpc_smoke/
+.local/hpc-supervisor/
 .ulhpc_submit/
 
 # Environment variables

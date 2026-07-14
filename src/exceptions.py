@@ -42,3 +42,13 @@ class CommandTimeoutError(Exception):
         super().__init__(f"Command timed out after {timeout}s: {command[:200]}")
         self.command = command
         self.timeout = timeout
+
+
+class OnlineControllerYield(Exception):
+    """The controller safely stopped after persisting asynchronous HPC work."""
+
+    def __init__(self, *, batch_dir: str, job_id: str | None, reason: str) -> None:
+        super().__init__(f"{reason}: batch={batch_dir} job_id={job_id}")
+        self.batch_dir = batch_dir
+        self.job_id = job_id
+        self.reason = reason

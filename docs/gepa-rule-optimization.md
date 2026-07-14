@@ -895,6 +895,15 @@ tasks。该值不是单个 job 的 CPU 数；每个 array element 仍独立申�
     最后一次基础设施失败时，最终结果仍是 invalid；不能用较早的可归因失败掩盖
     最新基础设施状态。`failed_*_trajectory.json` 只供诊断，不进入 output/Reflection；
     最终 output 仅复用 identity 校验通过的成功 phase checkpoint。
+18. `execution.controller_yield_after_submit=true` 时，controller 在新 worker/retry
+    array 写入 `SUBMITTED` journal 后抛出内部 cooperative yield，并以成功退出释放
+    allocation。该退出不写 optimization failure。下一 controller 重放尚未提交的
+    GEPA metric call，通过 fingerprint 找回同一 batch；worker 仍 active 时再次 yield，
+    worker 全部终态后才收集、选择性 retry 或返回 outputs。
+19. `online_iteration_progress.json` 的 `completed_iterations` 只由 GEPA
+    `on_state_saved`/`on_optimization_end` 更新；iteration 内的 Reflection、candidate
+    evaluation 或 validation 尚未写入官方 state 时不计数。`controller_status.json`
+    区分 `running/yielded/failed/completed`，本地 supervisor 对 `failed` 停止自动提交。
 
 2h online smoke 的 worker accounting 显示 seed validation 98 tasks 的 P50/P95
 约为 4.4/18.2 分钟，一条成功长尾约 37.2 分钟，另有两条在 40 分钟触发 timeout。
