@@ -402,13 +402,13 @@ if progress_path.is_file():
 def slurm_state(job_id):
     queued = subprocess.run(
         ["squeue", "-h", "-j", str(job_id), "-o", "%T"],
-        capture_output=True, text=True,
+        stdout=subprocess.PIPE, stderr=subprocess.PIPE, universal_newlines=True,
     )
     if queued.returncode == 0 and queued.stdout.strip():
         return queued.stdout.strip().splitlines()[0].split()[0].upper()
     accounted = subprocess.run(
         ["sacct", "-n", "-P", "-j", str(job_id), "--format=State"],
-        capture_output=True, text=True,
+        stdout=subprocess.PIPE, stderr=subprocess.PIPE, universal_newlines=True,
     )
     if accounted.returncode == 0 and accounted.stdout.strip():
         return accounted.stdout.strip().splitlines()[0].split("|", 1)[0].split()[0].upper()
@@ -416,7 +416,7 @@ def slurm_state(job_id):
 
 controllers = subprocess.run(
     ["squeue", "-h", "-n", controller_job_name, "-o", "%A|%T"],
-    capture_output=True, text=True,
+    stdout=subprocess.PIPE, stderr=subprocess.PIPE, universal_newlines=True,
 )
 payload["active_controllers"] = []
 if controllers.returncode == 0:
