@@ -3,13 +3,14 @@
 from __future__ import annotations
 
 import json
+import time
 from unittest.mock import patch
 
 import pytest
 
 from src.agents import code_agent
 from src.config import AgentConfig, Config, PromptConfig, SystemConfig
-from src.exceptions import FatalError, TaskError
+from src.exceptions import AgentTaskError, FatalError, TaskError
 
 
 class MockLiteLLMModel:
@@ -57,6 +58,12 @@ class MockDefaultAgentLimitExceeded(MockDefaultAgent):
     def run(self, **kwargs):
         MockDefaultAgent.last_run_kwargs = kwargs
         return ("LimitsExceeded", "step limit reached")
+
+
+class MockDefaultAgentSlow(MockDefaultAgent):
+    def run(self, **kwargs):
+        time.sleep(1)
+        return super().run(**kwargs)
 
 
 @pytest.fixture
@@ -170,6 +177,29 @@ class TestRunSuccess:
 
 
 class TestRunValidation:
+    @patch("src.agents.code_agent.import_minisweagent")
+    def test_phase_deadline_is_structured_and_persists_trajectory(
+        self, mock_import, config, mock_env, tmp_path
+    ):
+        mock_import.return_value = (MockDefaultAgentSlow, MockLiteLLMModel, object)
+        path = tmp_path / "failed_code_trajectory.json"
+
+        with pytest.raises(AgentTaskError) as caught:
+            code_agent.run(
+                config,
+                "Plan",
+                "Issue",
+                mock_env,
+                failure_trajectory_path=path,
+                phase_timeout_seconds=0.01,
+            )
+
+        assert caught.value.phase == "code"
+        assert caught.value.reason == "code_phase_deadline_exceeded"
+        record = json.loads(path.read_text())
+        assert record["exit_status"] == "PhaseDeadlineExceeded"
+        assert record["messages"][-1]["role"] == "assistant"
+
     @patch("src.agents.code_agent.import_minisweagent")
     def test_empty_output_raises_task_error(self, mock_import, config, mock_env):
         mock_import.return_value = (MockDefaultAgentEmpty, MockLiteLLMModel, object)

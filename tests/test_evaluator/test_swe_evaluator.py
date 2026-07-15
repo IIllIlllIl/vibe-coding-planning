@@ -274,7 +274,8 @@ class TestEvaluateApptainer:
         instance_info,
     ):
         commands = []
-        mock_make_spec.return_value = SimpleNamespace(eval_script="echo tests")
+        eval_script = "echo tests\n" + ("# large official test payload\n" * 12000)
+        mock_make_spec.return_value = SimpleNamespace(eval_script=eval_script)
         mock_get_report.return_value = {
             "astropy__astropy-14539": {"resolved": True, "error": ""}
         }
@@ -321,6 +322,13 @@ class TestEvaluateApptainer:
         assert any(".vibe_patch.diff" in command for command in commands)
         assert any("git rev-parse --is-inside-work-tree" in command for command in commands)
         assert any("/bin/bash .vibe_eval.sh" in command for command in commands)
+        assert max(map(len, commands)) < 1000
+        assert (phase_workdir / ".vibe_patch.diff").read_text(encoding="utf-8") == (
+            "diff --git a/a.py b/a.py\n"
+        )
+        assert (phase_workdir / ".vibe_eval.sh").read_text(
+            encoding="utf-8"
+        ) == eval_script
         assert commands[-1] == "cleanup"
 
     @patch("src.evaluator.swe_apptainer_evaluator.ApptainerEnvironment")

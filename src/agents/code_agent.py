@@ -13,7 +13,10 @@ from __future__ import annotations
 import logging
 import json
 from collections.abc import Callable
+from contextlib import contextmanager
 from pathlib import Path
+import signal
+import threading
 from typing import Any
 
 from src.agents._deps import (
@@ -25,6 +28,37 @@ from src.config import Config
 from src.exceptions import AgentTaskError
 
 logger = logging.getLogger(__name__)
+
+
+@contextmanager
+def _phase_timer(timeout_seconds: float | None):
+    """Interrupt an agent phase before the enclosing Slurm allocation expires."""
+    if timeout_seconds is None or timeout_seconds <= 0:
+        yield
+        return
+    if threading.current_thread() is not threading.main_thread():
+        raise RuntimeError("Code phase timer requires the worker main thread")
+    if not hasattr(signal, "setitimer"):
+        raise RuntimeError("Code phase timer requires POSIX setitimer support")
+
+    def deadline_reached(signum: int, frame: Any) -> None:
+        del signum, frame
+        raise AgentTaskError(
+            f"Code agent exceeded its {timeout_seconds:g}s phase budget.",
+            phase="code",
+            reason="code_phase_deadline_exceeded",
+        )
+
+    previous_handler = signal.getsignal(signal.SIGALRM)
+    signal.signal(signal.SIGALRM, deadline_reached)
+    previous_timer = signal.setitimer(signal.ITIMER_REAL, timeout_seconds)
+    try:
+        yield
+    finally:
+        signal.setitimer(signal.ITIMER_REAL, 0)
+        signal.signal(signal.SIGALRM, previous_handler)
+        if previous_timer[0] > 0:
+            signal.setitimer(signal.ITIMER_REAL, *previous_timer)
 
 
 def _extract_result(exception_name: str, exception_msg: str) -> str:
@@ -61,6 +95,7 @@ def run(
     *,
     model_wrapper: Callable[[Any], Any] | None = None,
     failure_trajectory_path: Path | None = None,
+    phase_timeout_seconds: float | None = None,
 ) -> tuple[str, list[dict[str, Any]]]:
     """Run the code generation agent.
 
@@ -118,7 +153,19 @@ def run(
         config.agent.max_steps,
     )
 
-    exception_name, exception_msg = agent.run(task=issue_description, plan=plan)
+    try:
+        with _phase_timer(phase_timeout_seconds):
+            exception_name, exception_msg = agent.run(
+                task=issue_description, plan=plan
+            )
+    except AgentTaskError as exc:
+        _write_failure_trajectory(
+            failure_trajectory_path,
+            agent.messages,
+            "PhaseDeadlineExceeded",
+            str(exc),
+        )
+        raise
     if exception_name != "Submitted":
         _write_failure_trajectory(
             failure_trajectory_path, agent.messages, exception_name, exception_msg

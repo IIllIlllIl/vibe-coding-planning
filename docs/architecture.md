@@ -166,7 +166,7 @@ HPC worker 在 task 级共享目录中为成功的 Plan、Code 和 Evaluator pha
 带 rollout identity 的 checkpoint。Slurm retry 只从第一个未完成 phase 继续：Code
 失败复用 plan，Evaluator 失败复用 plan 和 patch；identity 不一致时拒绝复用。
 Agent 在空提交或非 `Submitted` 退出前另外持久化 partial trajectory，供失败归因。
-Online outcome policy v1 只允许 `outcome_status=scored` 进入 GEPA。Evaluator 的
+Online outcome policy v2 只允许 `outcome_status=scored` 进入 GEPA。Evaluator 的
 resolved/unresolved 和固定重试后仍存在的结构化 Plan/Code Agent 失败均为有效分数；
 后者记 0 并保留 phase/reason。基础设施、API、checkpoint identity、harness 和 cleanup
 失败保持 invalid 并中止当前 metric call。失败 partial trajectory 仅供诊断，不进入

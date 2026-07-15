@@ -26,6 +26,7 @@ class OnlineDatasetConfig:
 class OnlineExecutionConfig:
     backend: str = "local_docker"
     controller_yield_after_submit: bool = False
+    code_phase_timeout_seconds: int = 0
 
 
 @dataclass(frozen=True)
@@ -217,12 +218,17 @@ def load_online_optimization_config(
         controller_yield_after_submit=bool(
             execution_data.get("controller_yield_after_submit", False)
         ),
+        code_phase_timeout_seconds=int(
+            execution_data.get("code_phase_timeout_seconds", 0)
+        ),
     )
     if execution.backend not in ("local_docker", "hpc_slurm"):
         raise ValueError(
             "execution.backend must be 'local_docker' or 'hpc_slurm', "
             f"got {execution.backend!r}"
         )
+    if execution.code_phase_timeout_seconds < 0:
+        raise ValueError("execution.code_phase_timeout_seconds must be non-negative")
     evaluator = OnlineEvaluatorConfig(
         timeout=int(evaluator_data.get("timeout", 1800)),
         backend=str(

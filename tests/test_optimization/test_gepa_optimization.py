@@ -396,11 +396,12 @@ def test_online_hpc_6to8_config_uses_formal_snapshot_without_instance_subset(
     assert config.hpc.submit is True
     assert config.hpc.cpus_per_task == 1
     assert config.hpc.mem == "4G"
-    assert config.hpc.time == "00:50:00"
+    assert config.execution.code_phase_timeout_seconds == 2400
+    assert config.hpc.time == "00:55:00"
     assert config.hpc.max_running_array_tasks == 150
     assert config.hpc.task_output_grace_seconds == 300
     assert config.hpc.missing_task_grace_seconds == 600
-    assert config.hpc.max_task_attempts == 2
+    assert config.hpc.max_task_attempts == 3
     assert config.search.max_metric_calls == 1000
     assert config.search.projection_metric_calls == 1000
     assert config.search.reflection_minibatch_size == 3
@@ -686,9 +687,11 @@ def test_online_rollout_audit_records_design_boundaries(tmp_path, monkeypatch):
         *,
         model_wrapper=None,
         failure_trajectory_path=None,
+        phase_timeout_seconds=None,
     ):
         calls["code_plan"] = plan
         calls["code_model_wrapper"] = model_wrapper
+        calls["code_phase_timeout_seconds"] = phase_timeout_seconds
         return "diff --git a/a.py b/a.py\n", [
             {"role": "assistant", "content": "code"}
         ]
@@ -2240,6 +2243,36 @@ def test_online_iteration_progress_counts_only_saved_state(tmp_path):
     assert progress["last_event"] == "state_saved"
 
 
+def test_online_adapter_audits_controller_yield_without_failure(tmp_path):
+    train, _ = load_online_snapshot(_snapshot(tmp_path / "snapshot"))
+
+    class YieldingExecutor:
+        def evaluate(self, batch, rules, capture_traces):
+            raise OnlineControllerYield(
+                batch_dir="batch_0001",
+                job_id="12345",
+                reason="waiting_for_rollout_array",
+            )
+
+    run_dir = tmp_path / "run"
+    adapter = OnlinePlanningGEPAAdapter(
+        lambda case, rules: None,
+        run_dir=run_dir,
+        batch_executor=YieldingExecutor(),
+    )
+
+    with pytest.raises(OnlineControllerYield):
+        adapter.evaluate(train, {"rules": "planning rules"})
+
+    audit = [
+        json.loads(line)
+        for line in (run_dir / "audit_events.jsonl").read_text().splitlines()
+    ]
+    assert any(record["event"] == "online_hpc_batch_yielded" for record in audit)
+    assert not any(record["event"] == "online_hpc_batch_failed" for record in audit)
+    assert not (run_dir / "errors.jsonl").exists()
+
+
 def test_online_hpc_scores_agent_failure_after_fixed_retries(
     tmp_path,
     monkeypatch,
@@ -2252,7 +2285,7 @@ def test_online_hpc_scores_agent_failure_after_fixed_retries(
         hpc=replace(
             config.hpc,
             submit=True,
-            max_task_attempts=2,
+            max_task_attempts=3,
             max_running_array_tasks=2,
         ),
     )
@@ -2274,7 +2307,7 @@ def test_online_hpc_scores_agent_failure_after_fixed_retries(
                         "evaluator_status": "not_run",
                         "evaluator_resolved": None,
                         "terminal_phase": "code",
-                        "terminal_reason": "code_command_timeout",
+                        "terminal_reason": "code_phase_deadline_exceeded",
                         "failure_origin": "agent",
                         "error": "command timed out",
                     }
@@ -2312,14 +2345,14 @@ def test_online_hpc_scores_agent_failure_after_fixed_retries(
 
     outputs = executor.evaluate(train, "planning rules", capture_traces=True)
 
-    assert len(submitted_scripts) == 2
+    assert len(submitted_scripts) == 3
     assert "#SBATCH --array=0%2" in submitted_scripts[1].read_text(encoding="utf-8")
     assert outputs[0].resolved is False
     assert outputs[0].outcome_status == "scored"
     assert outputs[0].score_valid is True
     assert outputs[0].evaluator_status == "not_run"
     assert outputs[0].terminal_phase == "code"
-    assert outputs[0].terminal_reason == "code_command_timeout"
+    assert outputs[0].terminal_reason == "code_phase_deadline_exceeded"
     assert outputs[0].failure_origin == "agent"
     assert outputs[1].resolved is True
 

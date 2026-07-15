@@ -10,7 +10,6 @@ from __future__ import annotations
 
 import json
 import logging
-import base64
 from pathlib import Path
 from typing import Any
 
@@ -107,8 +106,15 @@ def evaluate_apptainer(
         log_dir.mkdir(parents=True, exist_ok=True)
         patch_path.write_text(patch or "", encoding="utf-8")
         eval_script_path.write_text(test_spec.eval_script, encoding="utf-8")
-        _write_file_in_workdir(env, ".vibe_patch.diff", patch or "", timeout=60)
-        _write_file_in_workdir(env, ".vibe_eval.sh", test_spec.eval_script, timeout=60)
+        # phase_workdir is bind-mounted over /testbed. Write large artifacts on
+        # the host so their contents never become part of an execve argv.
+        phase_workdir.mkdir(parents=True, exist_ok=True)
+        (phase_workdir / ".vibe_patch.diff").write_text(
+            patch or "", encoding="utf-8"
+        )
+        (phase_workdir / ".vibe_eval.sh").write_text(
+            test_spec.eval_script, encoding="utf-8"
+        )
 
         repository_check = env.execute(
             'git rev-parse --is-inside-work-tree >/dev/null '
@@ -203,25 +209,6 @@ def evaluate_apptainer(
     if not eval_completed and error_info is None:
         error_info = stderr_text or "Apptainer SWE evaluation completed=False"
     return _result(resolved, stdout_text, stderr_text, log_dir, error_info, report)
-
-
-def _write_file_in_workdir(
-    env: ApptainerEnvironment,
-    filename: str,
-    content: str,
-    *,
-    timeout: int,
-) -> None:
-    encoded = base64.b64encode(content.encode("utf-8")).decode("ascii")
-    result = env.execute(
-        f"printf '%s' '{encoded}' | base64 -d > {filename}",
-        timeout=timeout,
-    )
-    if result.get("returncode") != 0:
-        raise FatalError(
-            f"Failed to write {filename} in Apptainer workdir: "
-            f"{result.get('output', '')[:500]}"
-        )
 
 
 def _result(

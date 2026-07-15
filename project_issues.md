@@ -21,7 +21,7 @@
   3. accepted candidates、candidate tree、validation scores、best rules 和 token/time 报告是否一致可解释。
   4. Reflection 生成的规则是否仍倾向变长、泛化或过度改写；是否需要继续调整 reflection prompt / evidence 编排 / candidate 格式。
   5. 继续搜索是否有边际收益，或应切换到更保守的规则编辑机制。
-  6. 下一次正式提交需验证 outcome policy v1：按 `terminal_reason` 汇总 Agent scored-zero、
+  6. 下一次正式提交需验证 outcome policy v2：按 `terminal_reason` 汇总 Agent scored-zero、
      evaluator unresolved、infrastructure-invalid 和 retry 数，并人工抽查 timeout 归因。
   7. 下一次正式提交需验证本地 30 分钟 supervisor：新 array 提交后 controller 是否
      正常 yield、active worker 期间是否零重复提交、worker 终态后是否接管同一
@@ -53,12 +53,12 @@
     step/cost limit 或 Agent 单命令超时在固定重试用尽后计 0。
   - repository/SIF/Slurm/API/checkpoint identity/evaluator harness/cleanup 失败保持
     invalid 并停止当前 metric call；不设置主观可信分数。
-  - outcome policy v1 纳入 evaluation fingerprint；失败 partial trajectory 仅诊断，
+  - outcome policy v2 纳入 evaluation fingerprint；失败 partial trajectory 仅诊断，
     不进入 Reflection evidence。
 - **需要决策**：
   1. Candidate rules 在 Plan Agent user prompt 中的精确结构，以及 strict planning
      语义如何避免 Plan Agent 用默认能力绕过规则缺陷。
-  2. 是否需要在 outcome policy v1 的审计数据足够后，进一步拆分 Agent timeout
+  2. 是否需要在 outcome policy v2 的审计数据足够后，进一步拆分 Agent timeout
      的细分类别；当前不引入连续置信分数。
   3. Reflection evidence 如何摘要 Plan trajectory、Code trajectory、patch 和
      evaluator result，并明确区分规则问题、Code Agent 执行偏离和基础设施噪声。
@@ -86,7 +86,13 @@
     连 Plan 一起重跑，使长 Plan 再次消耗大部分 walltime。现已增加 Plan/Code/
     Evaluator phase checkpoint：retry 从首个未完成 phase 继续，并持久化失败 Agent
     partial trajectory。下一次真实 HPC run 需验证 phase 接管和磁盘回收。
-  - outcome policy v1 会减少单个 Agent 失败导致整个 98-task validation 作废的情况，
+  - 2026-07-15 的 outcome policy v2 增加 Code phase 内部软截止：独立预算 40 分钟，worker 总 walltime
+    55 分钟，首次失败后选择性 retry 两次。只有三次都产生结构化
+    `code_phase_deadline_exceeded` 才计 unresolved；裸 Slurm timeout/缺失 output
+    继续保持 invalid。deadline 和 total attempts 均进入 evaluation fingerprint。下一次
+    运行需验证 timer 终态、40 分钟实际预算、Plan checkpoint
+    复用和三次 attempt 计数，防止基础设施等待被错误归因给 Agent。
+  - outcome policy v2 会减少单个 Agent 失败导致整个 98-task validation 作废的情况，
     但仍有以下待观测风险：基础设施故障被误归因为 Agent 会压低分数；固定重试带来
     best-of-N 偏差；Code Agent 随机性可能被错误归因给 planning rules；新旧 policy
     的 validation score 不可直接横向比较。下一次任务必须同时报告分类计数并抽样
@@ -99,10 +105,10 @@
 
 ### 下一次运行：两个大更新的联合风险审查
 
-以下检查同时覆盖 outcome policy v1（结构化归因）和 iteration-target supervisor。
+以下检查同时覆盖 outcome policy v2（结构化归因、Code deadline）和 iteration-target supervisor。
 准确性优先于节省时间；命中停止条件后 supervisor 不得继续自动提交 controller。
 
-#### A. Outcome policy v1
+#### A. Outcome policy v2
 
 | 风险 | 下一次运行观察证据 | 停止/处理条件 |
 |---|---|---|
@@ -120,6 +126,7 @@
 |---|---|---|
 | iteration 计数提前或 off-by-one | 对比 `online_iteration_progress.json`、`gepa_state.bin` 的 `state.i`、`on_state_saved` audit 和 candidate/Pareto 状态 | `completed_iterations` 在官方 state save 前增加，或与 `state.i + 1` 不一致时立即停止 |
 | cooperative yield 被误记成失败或完成 | 检查 `controller_status.json`、Slurm exit、`online_controller_yielded` 和 GEPA error/audit | yield 写入 `failed`/`result.json`，或未持久化 `SUBMITTED` journal 就退出时停止 |
+| adapter 重复把 cooperative yield 记成 batch failure | 检查同一 yield 周围只有 `online_hpc_batch_yielded`，且 `errors.jsonl` 无对应记录 | 出现 `online_hpc_batch_failed` 或 error record 时停止；该修复需在下一次真实 controller yield 验证 |
 | 同一 batch 被重复提交 | 对比 fingerprint、batch number、active/retry job IDs、array indices 和 output timestamps | 同一 fingerprint 的健康 active array 被再次提交，或两个 worker 同时写同一 output 时取消重复 job 并停止 supervisor |
 | 两个 controller 并发修改 GEPA state | 每轮查询 controller job name、`online_controller.lock` 和 controller job IDs | 同一 run_dir 同时存在两个 active controller 时立即停止并检查 checkpoint |
 | Slurm `UNKNOWN` 或网络失败被误当成可提交 | 保存每次远端 snapshot 和 SSH/squeue/sacct 返回状态 | 状态不明确时发生新提交即视为 supervisor 决策错误；正确行为必须是保守等待 |
@@ -140,6 +147,11 @@
 3. 只有在以下条件全部满足后，才能把该 run 用于规则效果结论：无重复 array/controller；
    无 invalid 混入 score；所有 score-zero 分类可解释；iteration 只在官方 checkpoint
    后增加；accepted/rejected candidate 与记录的 validation score 一致。
+4. 2026-07-15 已修复 evaluator 将大型 patch/eval script 编码进 Apptainer command
+   所导致的 `Argument list too long`，并修复 adapter 对 cooperative yield 的重复失败
+   审计。下一次运行需确认 eval script 经 bind-mounted workspace 传输、无 argv 错误，
+   且正常 yield 不污染 `errors.jsonl`。Agent 被 Slurm walltime 杀死的归因与预算策略仍
+   保持开放，需单独讨论，不能视为本次传输修复已经覆盖。
 
 ---
 

@@ -615,6 +615,9 @@ conda run -n mini-swe python scripts/hpc_resume_loop.py \
 未知时按 active/ambiguous 等待，不猜测后重复提交。正式 config 的
 `execution.controller_yield_after_submit=true` 让 controller 在 array journal 落盘后
 主动退出；下一 controller 使用 fingerprint 接管，不重新提交仍有效的 array。
+该 cooperative yield 是正常调度边界：adapter 审计使用
+`online_hpc_batch_yielded`，不得写入 `online_hpc_batch_failed` 或 `errors.jsonl`；
+supervisor 仍以 `controller_status.json` 的 `yielded` 状态决定后续轮询。
 4. 否则调用 `scripts/hpc_submit_batch.sh ... --time <slice-time> --submit` 提交一轮。
 5. 通过 `squeue` / `sacct` 等待该 job 进入终态。
 6. 再次检查远端 `run_dir`；未完成且未达到 `--max-runs` 时，等待
@@ -919,7 +922,9 @@ evaluator:
 `get_eval_report()`，项目侧只实现 Apptainer 容器执行：初始化 clean
 `/testbed`、应用 patch、运行 eval script、收集 `test_output.txt` 和
 `report.json`。HPC online 配置禁止使用 `swebench_docker`，避免在无 Docker
-daemon 的 Iris 节点上隐式失败。
+daemon 的 Iris 节点上隐式失败。patch 与官方 eval script 通过 host 上的独立 phase
+workspace 写入，再由 `/testbed` bind mount 传给容器；文件内容不进入
+`apptainer exec` 的参数列表，因此大型官方 test spec 不受操作系统 argv 长度限制。
 
 以下路径仍直接依赖 Docker daemon，暂不能直接在 Iris 上运行：
 
@@ -1098,7 +1103,7 @@ bash scripts/hpc_submit_batch.sh \
 Online GEPA 的 HPC controller + Slurm array rollout 路径会在每个 rollout batch
 完成后写入 `hpc_rollout_batches/batch_*/resource_usage.json`。该文件包含提交前后
 `ulhpcshare` 的输出，以及对应 array job 的 `sacct` 输出。每次小规模真实 run
-结束后都应检查该文件，确认 `1 CPU / 4G / 50min` 的 worker 申请没有明显
+结束后都应检查该文件，确认 `1 CPU / 4G / 55min` 的 worker 申请没有明显
 低利用率；如果 controller 长时间等待 worker，也要把 controller 自身 job 的
 `sacct` 结果纳入报告。
 
@@ -1116,13 +1121,19 @@ controller 仍先重试；固定次数用尽且最后一次仍是同类失败时
 Slurm/SIF/repository/API/checkpoint/evaluator harness/cleanup 异常属于基础设施无效，
 重试耗尽后必须停止 controller，不能进入 GEPA cache。官方 evaluator 测试脚本自身
 超过测试预算是 patch 未能在预算内通过，记为 unresolved；evaluator 的准备、解析或
-清理异常仍是 invalid。该分类口径以 `outcome_policy_version=1` 纳入 fingerprint。
+清理异常仍是 invalid。该分类口径以 `outcome_policy_version=2` 纳入 fingerprint。
 
 失败 trajectory 保存在 attempt 目录，只用于诊断。最终 scored output 只能包含经过
 identity 校验的成功 phase checkpoint；不得把失败 partial trajectory 混入 Reflection
 证据。下一次真实提交后应按 `terminal_reason` 汇总 scored-zero 数、invalid 数、重试
 次数及 evaluator timeout 数，并抽查 Agent 单命令 timeout 是否确为 Agent 行为而非
 共享存储或容器故障。
+
+正式 online config 为 Code phase 设置独立的 2400 秒软预算，并给 worker 申请
+55 分钟 walltime。软预算由 worker 内部 timer 执行；完整 40 分钟用尽时写出
+`code_phase_deadline_exceeded`。`hpc.max_task_attempts=3` 是总 attempts 数，即首次
+执行后只选择性重试失败 task 两次，第三次仍为同类可信 Agent 失败才计 unresolved。
+Slurm 硬超时、timer 不可用或 output 缺失仍是 infrastructure-invalid。
 
 Online controller resume 不应把进程重启等同于重新提交全部 rollout。新 batch
 在 `manifest.json` 中保存 evaluation fingerprint，并在 `batch_state.json` 中保存
@@ -1181,7 +1192,7 @@ bash scripts/hpc_submit_batch.sh \
 ```
 
 不要为 8h resume 新建 `run_dir`，否则会丢失原 GEPA checkpoint；也不要把 controller
-的 8 小时误写为 worker walltime，worker 仍按 YAML 使用 `1 CPU / 4G / 50min`。
+的 8 小时误写为 worker walltime，worker 仍按 YAML 使用 `1 CPU / 4G / 55min`。
 
 > **废弃说明（2026-07-11）：上述 2h/20min/8h run_dir 只保留为 HPC 控制流程
 > 证据，不再是有效规则优化 checkpoint。** Apptainer evaluator 曾在复制 SIF 内

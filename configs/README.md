@@ -8,7 +8,7 @@ superseded variants live under `archive/` and remain available for provenance.
 
 | Config | Runtime | Purpose |
 |---|---|---|
-| `gepa_online_planning_hpc.yaml` | ULHPC Apptainer | Standard formal configuration over the 384/98 split. The current run directory is the fresh supervised outcome-policy-v1 experiment targeting at least 8 durable iterations, dated 2026-07-14. Each rollout is an independent `1 CPU / 4G / 50min` array task; fingerprinted batch journals and Plan/Code/Evaluator checkpoints support selective retry. |
+| `gepa_online_planning_hpc.yaml` | ULHPC Apptainer | Standard formal configuration over the 384/98 split. Each rollout is an independent `1 CPU / 4G / 55min` array task under outcome policy v2, with a controlled 40min Code budget and three total attempts; fingerprinted batch journals and Plan/Code/Evaluator checkpoints support selective retry. |
 | `gepa_online_planning_pilot.yaml` | local Docker | Standard small executable example for validating the Online GEPA flow locally. |
 
 Online GEPA is the current mainline. Candidate rules go only to the Plan Agent;

@@ -8,7 +8,7 @@ from typing import Any, Mapping, Protocol, Sequence
 
 from gepa.core.adapter import EvaluationBatch
 
-from src.exceptions import AgentRolloutFailure
+from src.exceptions import AgentRolloutFailure, OnlineControllerYield
 from src.optimization.adapter import _exception_details
 from src.optimization.audit import JsonlLogger, text_sha256
 from src.optimization.online_models import OnlineGEPACase, OnlineRolloutOutput
@@ -323,6 +323,17 @@ class OnlinePlanningGEPAAdapter:
                         strict=True,
                     )
                 ]
+            except OnlineControllerYield as exc:
+                if self.audit is not None:
+                    self.audit.write(
+                        "online_hpc_batch_yielded",
+                        candidate_sha256=candidate_hash,
+                        batch_size=len(batch),
+                        batch_dir=exc.batch_dir,
+                        worker_job_id=exc.job_id,
+                        reason=exc.reason,
+                    )
+                raise
             except Exception as exc:
                 details = _exception_details(exc)
                 if self.audit is not None:

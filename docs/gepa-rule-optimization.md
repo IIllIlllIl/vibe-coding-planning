@@ -650,7 +650,8 @@ Plan/Code Agent 可归因失败（固定重试后）-> 0.0
 infrastructure-invalid -> retry / fatal，不进入 GEPA score/cache
 ```
 
-Online outcome policy v1 使用结构化终态，而不是额外发明一个主观“可信分数”：
+Online outcome policy v2 使用结构化终态，而不是额外发明一个主观“可信分数”。
+它保留 v1 的归因边界，并增加受控 Code phase deadline 和三次 total attempts：
 
 - `outcome_status=scored`、`score_valid=true` 才能进入 GEPA；
 - evaluator 完成时，`evaluator_status=completed` 且 `evaluator_resolved` 保存官方结果；
@@ -849,7 +850,9 @@ tasks。该值不是单个 job 的 CPU 数；每个 array element 仍独立申�
 8. Apptainer evaluator 的小型日志写入当前 worker 的独立
    `evaluator_logs/<candidate>/<instance>/`，不放在 eval repository workspace，
    也不写项目全局 `logs/run_evaluation`。官方 report、test output、patch 和运行
-   日志形成后，停止 environment 并立即删除完整 eval workspace。
+   日志形成后，停止 environment 并立即删除完整 eval workspace。patch 和官方
+   eval script 由 host 直接写入 bind-mounted phase workspace；不得把文件内容编码
+   进 `apptainer exec` 的 shell command，否则大型 test spec 会触发系统 argv 上限。
 9. 如果某个 worker output 已写出但 `status != completed`，controller 会归档该
    output 到 `failed_outputs/attempt_NN/`，并只为失败 task index 重新提交 Slurm
    array。重试次数由 `hpc.max_task_attempts` 控制。缺失 output 会结合 Slurm
@@ -895,11 +898,17 @@ tasks。该值不是单个 job 的 CPU 数；每个 array element 仍独立申�
     最后一次基础设施失败时，最终结果仍是 invalid；不能用较早的可归因失败掩盖
     最新基础设施状态。`failed_*_trajectory.json` 只供诊断，不进入 output/Reflection；
     最终 output 仅复用 identity 校验通过的成功 phase checkpoint。
+    正式 HPC config 使用 `execution.code_phase_timeout_seconds=2400`：Code Agent
+    完整获得 40 分钟后由 worker 内部 POSIX timer 主动产生
+    `code_phase_deadline_exceeded`，从而在 Slurm 硬终止前保存诊断、清理 workspace
+    并写出结构化 output。timer 无法安装、Slurm `SIGKILL` 或没有结构化 output 时仍是
+    infrastructure-invalid，controller 不得反推为 Agent 失败。
 18. `execution.controller_yield_after_submit=true` 时，controller 在新 worker/retry
     array 写入 `SUBMITTED` journal 后抛出内部 cooperative yield，并以成功退出释放
     allocation。该退出不写 optimization failure。下一 controller 重放尚未提交的
     GEPA metric call，通过 fingerprint 找回同一 batch；worker 仍 active 时再次 yield，
-    worker 全部终态后才收集、选择性 retry 或返回 outputs。
+    worker 全部终态后才收集、选择性 retry 或返回 outputs。adapter 将该边界单独记录为
+    `online_hpc_batch_yielded`；它不得写入 `online_hpc_batch_failed` 或 `errors.jsonl`。
 19. `online_iteration_progress.json` 的 `completed_iterations` 只由 GEPA
     `on_state_saved`/`on_optimization_end` 更新；iteration 内的 Reflection、candidate
     evaluation 或 validation 尚未写入官方 state 时不计数。`controller_status.json`
@@ -907,9 +916,11 @@ tasks。该值不是单个 job 的 CPU 数；每个 array element 仍独立申�
 
 2h online smoke 的 worker accounting 显示 seed validation 98 tasks 的 P50/P95
 约为 4.4/18.2 分钟，一条成功长尾约 37.2 分钟，另有两条在 40 分钟触发 timeout。
-因此正式 short-budget config 保持 FairShare 对齐的 `1 CPU / 4G`，只把 walltime
-调整为 `00:50:00`。单次 OOM 尚不足以证明需要整体增加内存；应先观察是否由同一
-instance 稳定复现。
+因此正式 config 保持 FairShare 对齐的 `1 CPU / 4G`，worker walltime 使用 55 分钟：
+Code phase 独立预算 40 分钟，剩余 15 分钟用于初始化、checkpoint、Evaluator、清理和
+结构化终态落盘。`hpc.max_task_attempts=3` 表示首次执行加两次选择性 retry；Plan
+checkpoint 继续复用，每次未成功 Code 都从 clean repository 开始。
+单次 OOM 尚不足以证明需要整体增加内存；应先观察是否由同一 instance 稳定复现。
 
 2026-07-11 的真实 20 分钟 resume 验证使用同一 persistent `run_dir`：controller
 job `5523761` 从 `gepa_state.bin` 恢复 seed validation，审计事件记录

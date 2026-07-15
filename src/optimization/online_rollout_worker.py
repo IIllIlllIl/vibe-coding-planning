@@ -158,6 +158,11 @@ def run_task(
                 "failure_origin": "agent",
                 "terminal_phase": exc.phase,
                 "terminal_reason": exc.reason,
+                "phase_timeout_seconds": (
+                    config.execution.code_phase_timeout_seconds
+                    if exc.reason == "code_phase_deadline_exceeded"
+                    else None
+                ),
                 "retryable": True,
                 "score_valid": False,
                 "score": None,

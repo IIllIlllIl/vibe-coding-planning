@@ -231,6 +231,10 @@ class OnlinePCTRolloutRunner:
                             failure_trajectory_path=(
                                 self.config.run_dir / "failed_code_trajectory.json"
                             ),
+                            phase_timeout_seconds=(
+                                self.config.execution.code_phase_timeout_seconds
+                                or None
+                            ),
                             model_wrapper=lambda model: AuditedModel(
                                 model,
                                 self.usage,

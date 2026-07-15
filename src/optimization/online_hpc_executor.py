@@ -76,7 +76,7 @@ def rollout_semantic_sha256(config: OnlineOptimizationConfig) -> str:
     """Hash every setting that can change a worker's rollout result."""
     return _stable_sha256(
         {
-            "schema": 1,
+            "schema": 2,
             "outcome_policy_version": ONLINE_OUTCOME_POLICY_VERSION,
             "rollout_source_sha256": _rollout_source_sha256(),
             "dataset": asdict(config.dataset),
@@ -85,6 +85,10 @@ def rollout_semantic_sha256(config: OnlineOptimizationConfig) -> str:
             "docker": asdict(config.docker),
             "container": asdict(config.container),
             "evaluator": asdict(config.evaluator),
+            "code_phase_timeout_seconds": (
+                config.execution.code_phase_timeout_seconds
+            ),
+            "agent_failure_max_task_attempts": config.hpc.max_task_attempts,
             "prompts": {
                 "plan": config.plan_prompt,
                 "plan_instance": config.plan_instance_template,

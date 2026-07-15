@@ -3,7 +3,7 @@ mode: online_planning
 paths:
   dataset_snapshot: output/SWE-bench_Verified/verified-round1-gepa-datasets/20260614_482_fdc056ae85df
   initial_rules: configs/gepa_initial_rules_gpt_seed.md
-  run_dir: output/SWE-bench_Verified/gepa-rules/online-planning-hpc-supervised-8it-20260714
+  run_dir: output/SWE-bench_Verified/gepa-rules/online-planning-hpc-policy-v2-20260715
 
 dataset:
   name: SWE-bench/SWE-bench_Verified
@@ -67,6 +67,9 @@ container:
 execution:
   backend: hpc_slurm
   controller_yield_after_submit: true
+  # A controlled Code deadline leaves time to write a structured failure,
+  # clean the workspace, and run later phases when Code succeeds early.
+  code_phase_timeout_seconds: 2400
 
 hpc:
   # Each Slurm array task runs one rollout worker.
@@ -77,18 +80,20 @@ hpc:
   cpus_per_task: 1
   mem: 4G
   # Observed seed-validation P95 was about 18min, with a successful 37min
-  # long-tail task and two 40min timeouts. Keep 1 CPU / 4G and allow 50min.
-  time: "00:50:00"
+  # long-tail task and two 40min timeouts. Keep 1 CPU / 4G; allow 40min for
+  # Code and reserve 15min for setup, checkpointing, evaluation, and cleanup.
+  time: "00:55:00"
   max_running_array_tasks: 150
   poll_interval_seconds: 300
   task_output_grace_seconds: 300
   missing_task_grace_seconds: 600
-  max_task_attempts: 2
+  # Total attempts: the initial attempt plus two selective retries.
+  max_task_attempts: 3
   remote_env_file: ~/.config/vibe-coding-planning/deepseek.env
   python_module: lang/Python/3.11
   container_module: tools/Apptainer
   python_bin: python3
-  job_name_prefix: online-gepa-supervised-8it
+  job_name_prefix: online-gepa-policy-v2
   worker_config_path: configs/gepa_online_planning_hpc.yaml
 
 evaluator:
