@@ -10,7 +10,7 @@ comparison, provenance, or reproduction.
 |---|---|---|
 | `SWE-bench_Verified/verified-round1-gepa-datasets/20260614_482_fdc056ae85df/` | Immutable formal 384/98 Online GEPA dataset snapshot | Active input; do not move or modify |
 | `SWE-bench_Verified/gepa-rules/` | Local destination for current Online GEPA results | Active output root |
-| Remote `online-planning-hpc-policy-v2-20260715` run directory | Outcome-policy-v2 formal run | Active; managed by the supervisor |
+| Remote `online-planning-hpc-policy-v3-20260715` run directory | Outcome-policy-v3 formal run targeting 8 durable iterations | Active; managed by the supervisor |
 
 The active rule-generation flow is:
 
@@ -62,3 +62,9 @@ by research lifecycle to reduce accidental context pollution. Two superseded
 Verified snapshots and their original multi-snapshot index are retained under
 `archive/datasets/historical/verified-round1-gepa-datasets/`; the active index
 names only the formal `20260614_482_fdc056ae85df` snapshot.
+
+On 2026-07-15, four non-resumable Online runs were moved on the remote host
+into `archive/failed-or-invalid/`: `postfix-8h-20260712`,
+`formal-8h-20260713`, `supervised-8it-20260714`, and
+`policy-v2-20260715`. Their partial outputs are retained for diagnostics but
+must not be resumed or compared directly with policy v3.

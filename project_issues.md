@@ -5,6 +5,26 @@
 
 ---
 
+## 0. ULHPC FairShare timeline
+
+Use exact `sshare` output as the comparison authority. Do not compare only
+against an old remembered value or describe a change without a dated baseline.
+
+Query:
+
+```bash
+ssh -p 8022 twang@access-iris.uni.lu \
+  'sshare -u twang -o Account,User,RawUsage,EffectvUsage,FairShare | awk "NR==1 || /twang/"'
+```
+
+| Observed at | Context | RawUsage | EffectvUsage | FairShare | Comparison |
+|---|---|---:|---:|---:|---|
+| 2026-07-15 17:17 Europe/Luxembourg | policy-v3 seed validation array active | 574030 | 0.010887 | 0.364826 | First authoritative project baseline |
+
+Future launch/progress checks must append a row before interpreting movement.
+
+---
+
 ## 1. Online GEPA planning rules 质量评估
 
 - **Reflection Agent 价值与可观测性**：新运行会在每个 evidence bundle 中保存
@@ -23,7 +43,8 @@
   - 正式数据快照：
     `output/SWE-bench_Verified/verified-round1-gepa-datasets/20260614_482_fdc056ae85df/`
   - 初始规则：`configs/gepa_initial_rules_gpt_seed.md`
-  - Online HPC 配置位于 `configs/gepa_online_planning_hpc_*.yaml`。
+  - Online HPC runtime 配置：`configs/gepa_online_planning_hpc.yaml`。
+  - 正式 Supervisor launch 配置：`configs/online_gepa_supervisor.yaml`。
   - 默认 output working set 仅由 `output/README.md` 和 `output/catalog.json`
     定义；PCT、PCC、offline GEPA、旧 analysis/test/operations 已移入
     `output/archive/`，除非明确进行历史审计，否则不作为 Agent 工作上下文。

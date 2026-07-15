@@ -64,25 +64,28 @@ semantics change.
 Recommended local supervisor service (macOS):
 
 ```bash
-conda run -n mini-swe python scripts/hpc_supervisor_service.py start \
-  --session <unique-session> \
-  --log .local/hpc-supervisor/<unique-job-name>.log \
-  --target-iterations 8 \
-  --poll-interval 1800 \
-  --slice-time 02:00:00 \
-  --max-runs 0 \
-  --gepa-rules \
-  --gepa-config configs/gepa_online_planning_hpc.yaml \
-  --job-name <unique-job-name> \
-  --remote-dir '<unique-remote-dir>' \
-  --cpus 1 --mem 4G --submit
+conda run -n mini-swe python scripts/hpc_supervisor_service.py \
+  start --launch-config configs/online_gepa_supervisor.yaml
 ```
+
+`configs/online_gepa_supervisor.yaml` is the authority for session/log names,
+run identity, iteration target, cadence, controller walltime/resources, remote
+workdir, and submit mode. Update and review that file before starting a new run;
+do not reconstruct a long invocation from a previous conversation. Runtime
+models/prompts/worker resources remain in `gepa_online_planning_hpc.yaml`.
 
 The service launches the foreground resume loop inside `tmux` under
 `caffeinate -i -s`. Closing the initiating shell therefore does not terminate
 the unattended supervisor. Use the same script with `status` or `stop` and the
 same `--session` to inspect or stop it. Do not launch the raw resume loop with
 `&` for an unattended run.
+
+Status and stop use the same persisted identity:
+
+```bash
+conda run -n mini-swe python scripts/hpc_supervisor_service.py \
+  status --launch-config configs/online_gepa_supervisor.yaml
+```
 
 The supervisor polls every 30 minutes and submits only when:
 
@@ -101,6 +104,14 @@ OOM, and output-integrity failures remain blocking.
 value is an explicit operator safety cap, not the recommended unattended mode.
 Transient submission failures are journaled locally and retried on the next
 poll instead of terminating the supervisor.
+
+### Local executable discovery
+
+`hpc_submit_batch.sh` resolves `ulhpc-submit` from `PATH` first and then beside
+`CONDA_EXE`. The 2026-07-14 launch worked because its ad hoc command explicitly
+prepended the base Conda `bin` directory to `PATH`; the first service-based
+launch did not. Executable discovery now lives in the wrapper and is covered by
+a test, so launch commands must not inject a user-specific PATH.
 
 ### Blocking boundary
 

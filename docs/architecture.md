@@ -32,6 +32,7 @@
 | `src/evaluator/swe_apptainer_evaluator.py` | Official SWE-bench evaluation in Apptainer |
 | `scripts/hpc_resume_loop.py` | Local iteration-target supervisor |
 | `scripts/hpc_supervisor_service.py` | Durable tmux+caffeinate lifecycle wrapper |
+| `configs/online_gepa_supervisor.yaml` | Versioned local supervisor launch identity and arguments |
 
 ## 3. Runtime Data Flow
 
@@ -50,8 +51,14 @@ GEPA controller
 ```
 
 With cooperative yield enabled, a controller exits successfully after durable
-array submission. The local supervisor later submits another short controller;
+array submission. The local supervisor, driven by the persisted launch config,
+later submits another short controller through `ulhpc-submit`;
 the next controller finds the same fingerprinted batch instead of duplicating it.
+
+The supervisor submits controller allocations only. A running controller
+submits rollout arrays directly with `sbatch`. `ulhpc-submit` is still required
+at the supervisor boundary because it synchronizes the code, stages the formal
+dataset, links the persistent run directory, and submits each controller slice.
 
 ## 4. State Authorities
 

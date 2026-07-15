@@ -240,7 +240,17 @@ for value_name in REMOTE_ENV_FILE REMOTE_DATASET_DIR REMOTE_RUN_DIR \
   fi
 done
 
-if ! command -v ulhpc-submit >/dev/null 2>&1; then
+ULHPC_SUBMIT_BIN="${ULHPC_SUBMIT_BIN:-}"
+if [[ -z "$ULHPC_SUBMIT_BIN" ]] && command -v ulhpc-submit >/dev/null 2>&1; then
+  ULHPC_SUBMIT_BIN="$(command -v ulhpc-submit)"
+fi
+if [[ -z "$ULHPC_SUBMIT_BIN" && -n "${CONDA_EXE:-}" ]]; then
+  CONDA_ULHPC_SUBMIT="$(dirname "$CONDA_EXE")/ulhpc-submit"
+  if [[ -x "$CONDA_ULHPC_SUBMIT" ]]; then
+    ULHPC_SUBMIT_BIN="$CONDA_ULHPC_SUBMIT"
+  fi
+fi
+if [[ -z "$ULHPC_SUBMIT_BIN" || ! -x "$ULHPC_SUBMIT_BIN" ]]; then
   echo "ERROR: ulhpc-submit not found. Install the adjacent hpc_submit project:" >&2
   echo "  cd ../../hpc_submit && pip install -e \".[dev]\"" >&2
   exit 127
@@ -386,7 +396,7 @@ EOF
 )
 
 ULHPC_CMD=(
-  ulhpc-submit
+  "$ULHPC_SUBMIT_BIN"
   --submit-only
   --json
   --local-dir "$REPO_ROOT"

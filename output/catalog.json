@@ -9,8 +9,8 @@
     "output/SWE-bench_Verified/gepa-rules"
   ],
   "active_remote_run": {
-    "name": "online-planning-hpc-policy-v2-20260715",
-    "outcome_policy_version": 2,
+    "name": "online-planning-hpc-policy-v3-20260715",
+    "outcome_policy_version": 3,
     "classification": "active_formal"
   },
   "archive_groups": [
@@ -99,6 +99,10 @@
       "classification": "invalid",
       "original_paths": [
         "output/SWE-bench_Verified/gepa-rules/archive/failed-or-invalid",
+        "output/SWE-bench_Verified/gepa-rules/online-planning-hpc-postfix-8h-20260712",
+        "output/SWE-bench_Verified/gepa-rules/online-planning-hpc-formal-8h-20260713",
+        "output/SWE-bench_Verified/gepa-rules/online-planning-hpc-supervised-8it-20260714",
+        "output/SWE-bench_Verified/gepa-rules/online-planning-hpc-policy-v2-20260715",
         "output/SWE-PolyBench/archive/failed-or-invalid"
       ],
       "score_usable": false

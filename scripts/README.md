@@ -259,22 +259,17 @@ conda run -n mini-swe python scripts/hpc_resume_loop.py \
   --gepa-config configs/gepa_online_planning_hpc.yaml \
   --max-runs 0
 
-# Online 正式运行：tmux+caffeinate 常驻，2h controller，30min 轮询
-conda run -n mini-swe python scripts/hpc_supervisor_service.py start \
-  --session online-gepa-formal \
-  --log .local/hpc-supervisor/online-gepa-formal.log \
-  --gepa-rules \
-  --gepa-config configs/gepa_online_planning_hpc.yaml \
-  --slice-time 02:00:00 \
-  --poll-interval 1800 \
-  --target-iterations 6 \
-  --max-runs 0 \
-  --submit
+# Online 正式运行：使用受版本控制的完整 launch identity
+conda run -n mini-swe python scripts/hpc_supervisor_service.py \
+  start --launch-config configs/online_gepa_supervisor.yaml
 ```
 
 参数 `--batch-script` 可指向 `scripts/hpc_submit_batch.sh`（默认就是）。
 `--max-runs 0` 表示不以 controller 次数主动退出；无人值守运行不要直接用
 shell `&` 启动 `hpc_resume_loop.py`。
+正式启动不得临时拼接 PATH 或重新组织参数。`hpc_submit_batch.sh` 会从 PATH
+或 `CONDA_EXE` 同目录定位 `ulhpc-submit`；完整启动参数由
+`configs/online_gepa_supervisor.yaml` 持久化。
 
 ---
 

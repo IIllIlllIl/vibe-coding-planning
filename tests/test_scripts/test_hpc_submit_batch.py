@@ -3,6 +3,7 @@ from __future__ import annotations
 import os
 import subprocess
 from pathlib import Path
+import sys
 
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
@@ -25,6 +26,42 @@ def test_hpc_submit_batch_help_succeeds() -> None:
     assert "--remote-apptainer-cache-dir" in result.stdout
     assert "--remote-apptainer-tmp-dir" in result.stdout
     assert "--gepa-config" in result.stdout
+
+
+def test_hpc_submit_batch_finds_ulhpc_submit_next_to_conda_exe(tmp_path) -> None:
+    conda_bin = tmp_path / "conda-base" / "bin"
+    conda_bin.mkdir(parents=True)
+    fake_ulhpc = conda_bin / "ulhpc-submit"
+    fake_ulhpc.write_text(
+        "#!/usr/bin/env bash\nprintf '%s\\n' \"$@\"\nexit 0\n",
+        encoding="utf-8",
+    )
+    fake_ulhpc.chmod(0o755)
+    env = os.environ.copy()
+    env["PATH"] = f"{Path(sys.executable).parent}{os.pathsep}/usr/bin:/bin"
+    env["CONDA_EXE"] = str(conda_bin / "conda")
+    env.pop("ULHPC_SUBMIT_BIN", None)
+
+    result = subprocess.run(
+        [
+            "bash",
+            str(SCRIPT),
+            "--gepa-rules",
+            "--gepa-config",
+            "configs/gepa_online_planning_hpc.yaml",
+            "--remote-dir",
+            "~/hpc_runs/conda-fallback-test",
+        ],
+        cwd=REPO_ROOT,
+        capture_output=True,
+        text=True,
+        check=False,
+        env=env,
+    )
+
+    assert result.returncode == 0, result.stderr
+    assert "[hpc-submit] invoking ulhpc-submit" in result.stdout
+    assert "--dry-run" in result.stdout
 
 
 def test_hpc_submit_batch_dry_run_uses_remote_env_file_without_local_key(

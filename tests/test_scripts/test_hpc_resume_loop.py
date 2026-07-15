@@ -368,6 +368,59 @@ def test_hpc_supervisor_service_starts_with_tmux_and_caffeinate(tmp_path: Path) 
     assert "hpc_resume_loop.py --poll-interval 1800" in invocation
 
 
+def test_hpc_supervisor_service_uses_persisted_launch_config(tmp_path: Path) -> None:
+    fake_bin = tmp_path / "bin"
+    fake_bin.mkdir()
+    tmux_log = tmp_path / "tmux.log"
+    tmux = fake_bin / "tmux"
+    tmux.write_text(
+        "#!/usr/bin/env bash\n"
+        f"printf '%s\\n' \"$*\" >> {tmux_log}\n"
+        "if [[ \"$1\" == has-session ]]; then exit 1; fi\n"
+        "exit 0\n",
+        encoding="utf-8",
+    )
+    tmux.chmod(0o755)
+    launch_config = tmp_path / "launch.yaml"
+    launch_config.write_text(
+        """
+schema_version: 1
+session: persisted-online-gepa
+log: .local/hpc-supervisor/persisted.log
+arguments:
+  - --target-iterations
+  - "8"
+  - --gepa-config
+  - configs/gepa_online_planning_hpc.yaml
+  - --submit
+""",
+        encoding="utf-8",
+    )
+    env = os.environ.copy()
+    env["PATH"] = f"{fake_bin}{os.pathsep}{env['PATH']}"
+
+    result = subprocess.run(
+        [
+            "python",
+            str(SERVICE_SCRIPT),
+            "start",
+            "--launch-config",
+            str(launch_config),
+        ],
+        cwd=REPO_ROOT,
+        capture_output=True,
+        text=True,
+        check=False,
+        env=env,
+    )
+
+    assert result.returncode == 0, result.stderr
+    invocation = tmux_log.read_text(encoding="utf-8")
+    assert "new-session -d -s persisted-online-gepa" in invocation
+    assert "hpc_resume_loop.py --target-iterations 8" in invocation
+    assert "configs/gepa_online_planning_hpc.yaml --submit" in invocation
+
+
 def test_hpc_supervisor_waits_for_workers_without_submitting(tmp_path: Path) -> None:
     fake_bin = tmp_path / "bin"
     fake_bin.mkdir()

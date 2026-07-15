@@ -29,6 +29,8 @@ Read these files in order:
 6. [`docs/hpc-submit.md`](docs/hpc-submit.md) before any ULHPC operation.
 7. [`configs/gepa_online_planning_hpc.yaml`](configs/gepa_online_planning_hpc.yaml)
    for formal models, prompts, budgets, and resources.
+8. [`configs/online_gepa_supervisor.yaml`](configs/online_gepa_supervisor.yaml)
+   for the exact unattended launch identity and controller arguments.
 
 Do not browse `docs/archive/` or `output/archive/` unless the user explicitly
 requests historical comparison, audit, or reproduction. Transferable PCT/PCC
@@ -97,6 +99,14 @@ Submission and resume commands are intentionally kept in
 [`docs/hpc-submit.md`](docs/hpc-submit.md), so resource and credential rules are
 read before a job is launched.
 
+Start or inspect the formal supervisor from its persisted launch config; do not
+reconstruct its arguments from chat history:
+
+```bash
+conda run -n mini-swe python scripts/hpc_supervisor_service.py \
+  start --launch-config configs/online_gepa_supervisor.yaml
+```
+
 ## Output Boundary
 
 [`output/README.md`](output/README.md) defines the active output working set.
@@ -117,6 +127,7 @@ Historical PCT/PCC/offline/test/analysis/operations outputs are under
 | `scripts/hpc_supervisor_service.py` | Durable supervisor start/status/stop |
 | `scripts/hpc_submit_batch.sh` | `ulhpc-submit` wrapper |
 | `configs/gepa_online_planning_hpc.yaml` | Formal Online experiment configuration |
+| `configs/online_gepa_supervisor.yaml` | Persistent unattended launch configuration |
 | `docs/knowledge/` | Reusable lessons extracted from historical methods |
 | `docs/reference/` | GEPA and seed-rule provenance |
 | `docs/archive/` | Non-authoritative historical documents |

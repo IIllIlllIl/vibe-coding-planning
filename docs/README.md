@@ -19,6 +19,7 @@ Read in this order:
 | [`architecture.md`](architecture.md) | Current modules, data flow, and ownership boundaries |
 | [`gepa-rule-optimization.md`](gepa-rule-optimization.md) | Online GEPA optimization semantics and evidence contract |
 | [`hpc-submit.md`](hpc-submit.md) | Current ULHPC submission, supervisor, and FairShare operations |
+| [`../configs/README.md`](../configs/README.md) | Runtime-versus-launch configuration ownership and active config index |
 
 ## Reusable Knowledge
 

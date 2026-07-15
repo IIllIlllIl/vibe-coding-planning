@@ -70,6 +70,9 @@ Every rollout is either `scored` or `invalid`.
   repository. Evaluator retry may reuse successful Plan and Code checkpoints.
 - Partial failed trajectory is diagnostic only and never becomes formal evidence.
 - Serial Reflection/candidate-selection work between official checkpoints may rerun.
+- The exact local supervisor command surface is persisted in
+  `configs/online_gepa_supervisor.yaml`; unattended launches must not depend on
+  reconstructed chat commands or ad hoc PATH injection.
 
 ## 6. Storage And Cleanup
 
