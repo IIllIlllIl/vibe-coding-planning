@@ -7,6 +7,15 @@
 
 ## 1. Online GEPA planning rules 质量评估
 
+- **Reflection Agent 价值与可观测性**：新运行会在每个 evidence bundle 中保存
+  脱敏后的 `reflection_trajectory.json`。下一次 8 durable iterations 需要检查
+  实际命令、读取文件、model calls、重复工作、token 和 candidate diff，再决定
+  是否保留 agentic proposer。旧运行只有消息/调用计数，无法恢复具体命令。
+- **Repo-grounded 两阶段 Reflection walltime**：三个 instance-specific SIF
+  reviewer 加 synthesis 若串行沿用当前 30 分钟命令 timeout，可能超过 2 小时
+  Controller slice。正式提交前必须增加短 phase budget 和 proposal checkpoint/yield；
+  该实验不得混入现有 run directory。
+
 - **状态**：当前主线；evaluator 基础设施修复后需要重新建立可信的正式结果
 - **背景**：candidate rules 进入 Plan Agent，随后执行真实的 Plan、Code 和
   evaluator rollout；HPC array、原子 batch resume、报告与输入隔离均已实现。
@@ -15,13 +24,16 @@
     `output/SWE-bench_Verified/verified-round1-gepa-datasets/20260614_482_fdc056ae85df/`
   - 初始规则：`configs/gepa_initial_rules_gpt_seed.md`
   - Online HPC 配置位于 `configs/gepa_online_planning_hpc_*.yaml`。
+  - 默认 output working set 仅由 `output/README.md` 和 `output/catalog.json`
+    定义；PCT、PCC、offline GEPA、旧 analysis/test/operations 已移入
+    `output/archive/`，除非明确进行历史审计，否则不作为 Agent 工作上下文。
 - **需要关注**：
   1. evaluator 修复后的新 run 是否产生可信、可复现的 validation score。
   2. 新 run 生成的 candidate rules 是否比 seed 在 validation 上有稳定提升。
   3. accepted candidates、candidate tree、validation scores、best rules 和 token/time 报告是否一致可解释。
   4. Reflection 生成的规则是否仍倾向变长、泛化或过度改写；是否需要继续调整 reflection prompt / evidence 编排 / candidate 格式。
   5. 继续搜索是否有边际收益，或应切换到更保守的规则编辑机制。
-  6. 下一次正式提交需验证 outcome policy v2：按 `terminal_reason` 汇总 Agent scored-zero、
+  6. 下一次正式提交需验证 outcome policy v3：按 `terminal_reason` 汇总 Agent scored-zero、
      evaluator unresolved、infrastructure-invalid 和 retry 数，并人工抽查 timeout 归因。
   7. 下一次正式提交需验证本地 30 分钟 supervisor：新 array 提交后 controller 是否
      正常 yield、active worker 期间是否零重复提交、worker 终态后是否接管同一
@@ -51,9 +63,10 @@
   - 只有 `outcome_status=scored`、`score_valid=true` 的结果进入 GEPA。
   - Evaluator resolved/unresolved 使用 1/0；Plan/Code Agent 空提交、未提交、
     step/cost limit 或 Agent 单命令超时在固定重试用尽后计 0。
-  - repository/SIF/Slurm/API/checkpoint identity/evaluator harness/cleanup 失败保持
-    invalid 并停止当前 metric call；不设置主观可信分数。
-  - outcome policy v2 纳入 evaluation fingerprint；失败 partial trajectory 仅诊断，
+  - repository/SIF/OOM/checkpoint identity/evaluator harness/output integrity/
+    cleanup 失败保持 invalid 并停止当前 metric call；不设置主观可信分数。
+    Reflection、SSH/status、提交和普通 controller 异常自动恢复。
+  - outcome policy v3 纳入 evaluation fingerprint；失败 partial trajectory 仅诊断，
     不进入 Reflection evidence。
 - **需要决策**：
   1. Candidate rules 在 Plan Agent user prompt 中的精确结构，以及 strict planning
@@ -74,7 +87,8 @@
   - 2026-07-07 online HPC resource pilot 的 `Code agent produced empty output`
     不是规则质量结论；根因是 Apptainer backend 每次 `execute()` 都用新的
     `apptainer exec --writable-tmpfs`，`/testbed` 修改不会跨命令保留。当前
-    online rollout 已按 `docs/gepa-rule-optimization.md` 第 11.5 节改造成
+    online rollout 已按 `docs/gepa-rule-optimization.md` 的 phase resume 与
+    `docs/knowledge/isolation-and-artifacts.md` 改造成
     phase 内 stateful、phase 间 artifact-only 的 agent 级隔离，并新增标准
     SWE-bench/Verified 的 Apptainer evaluator backend。
   - 2026-07-12 post-fix seed validation 因 home quota 用尽停止。根因之一是每个
@@ -88,24 +102,28 @@
     partial trajectory。下一次真实 HPC run 需验证 phase 接管和磁盘回收。
   - 2026-07-15 的 outcome policy v2 增加 Code phase 内部软截止：独立预算 40 分钟，worker 总 walltime
     55 分钟，首次失败后选择性 retry 两次。只有三次都产生结构化
-    `code_phase_deadline_exceeded` 才计 unresolved；裸 Slurm timeout/缺失 output
-    继续保持 invalid。deadline 和 total attempts 均进入 evaluation fingerprint。下一次
+    `code_phase_deadline_exceeded` 才计 unresolved。policy v3 进一步将 Slurm 明确报告的
+    `TIMEOUT` 直接计 unresolved 并标记 timeout；OOM、节点故障、状态未知和缺失 output
+    继续保持 invalid。deadline、timeout 口径和 total attempts 均进入 evaluation fingerprint。下一次
     运行需验证 timer 终态、40 分钟实际预算、Plan checkpoint
     复用和三次 attempt 计数，防止基础设施等待被错误归因给 Agent。
-  - outcome policy v2 会减少单个 Agent 失败导致整个 98-task validation 作废的情况，
+  - outcome policy v3 会减少单个 Agent 失败导致整个 98-task validation 作废的情况，
     但仍有以下待观测风险：基础设施故障被误归因为 Agent 会压低分数；固定重试带来
     best-of-N 偏差；Code Agent 随机性可能被错误归因给 planning rules；新旧 policy
     的 validation score 不可直接横向比较。下一次任务必须同时报告分类计数并抽样
     检查 trajectory/audit，确认这些风险未污染规则接受决策。
-  - 本地 supervisor 与 cooperative controller yield 已实现。剩余运行风险是本地休眠/
-    断网只会延迟推进；Slurm 查询长期 UNKNOWN 会保守等待；controller 在 `sbatch`
+  - 本地 supervisor 与 cooperative controller yield 已实现，并新增
+    `scripts/hpc_supervisor_service.py`，强制通过 `tmux + caffeinate` 承载无人值守循环。
+    SSH/状态查询失败只保守等待，不退出也不提交；Reflection 失败标记为可恢复并由下一
+    controller 重放。Slurm 查询长期 UNKNOWN 会保守等待；controller 在 `sbatch`
     成功但 journal 写回前被杀仍依赖既有 deterministic job-name reconciliation。
     下一次任务先用 `--once` 审查决策，再启动持续 30 分钟轮询。
-  - 详细设计记录在 `docs/gepa-rule-optimization.md` 第 11 节。
+  - 详细设计记录在 `docs/gepa-rule-optimization.md`，跨方法经验位于
+    `docs/knowledge/`。
 
 ### 下一次运行：两个大更新的联合风险审查
 
-以下检查同时覆盖 outcome policy v2（结构化归因、Code deadline）和 iteration-target supervisor。
+以下检查同时覆盖 outcome policy v3（结构化归因、timeout）和 iteration-target supervisor。
 准确性优先于节省时间；命中停止条件后 supervisor 不得继续自动提交 controller。
 
 #### A. Outcome policy v2
@@ -114,6 +132,7 @@
 |---|---|---|
 | Agent 与基础设施边界误判 | 按 `terminal_phase` / `terminal_reason` 汇总 scored-zero；逐条抽查 command、trajectory、Slurm state 和同实例 retry | repository/SIF/API/共享存储/容器故障被记为 `failure_origin=agent`，立即停止并修正分类，受影响 score 不可信 |
 | Agent command timeout 可能实际由环境卡顿造成 | 对 `plan_command_timeout` / `code_command_timeout` 比较命令类型、worker elapsed、同节点和同时间段失败聚集 | 多实例同期超时、简单命令超时或明显 I/O/节点异常时，不得继续按 Agent unresolved 处理 |
+| Slurm TIMEOUT 被错误归因 | 核对 `sacct` 原始 state、phase checkpoint 和合成 output | 只有明确 `TIMEOUT` 可计 unresolved；UNKNOWN、OOM、NODE_FAIL 或损坏输出被降级时立即停止，该 score 不可信 |
 | 官方测试 timeout 可能掩盖 evaluator 基础设施 hang | 检查 `.vibe_eval.sh` 已启动、测试 stdout、资源使用和 timeout 前日志 | harness/初始化/挂载阶段超时却被记为 `official_tests_timed_out` 时停止；只有官方测试实际运行超时才可计 0 |
 | 固定 retry 形成 best-of-N 偏差 | 报告每个样本 attempts、首次与最终终态、不同 candidate 的 retry rate | candidate 间 retry rate 明显不均，或大量首次失败后重试成功时，validation 不应直接与旧 run 比较 |
 | Code Agent 随机失败被错误归因给 planning rules | 抽查 plan 合理但 Code 偏离/空输出/超时的 score-zero evidence；比较 candidate 间 Code failure rate | GEPA 接受/拒绝主要由 Code failure 数差异驱动，而非 evaluator/plan 差异时，暂停规则效果结论 |
@@ -134,6 +153,8 @@
 | 终态 worker 未被 controller 正确接管 | worker 全终态后检查下一 controller 是否复用已有 outputs、只 retry 缺失/失败 index | 已完成 output 被重跑、candidate/instance hash 不匹配仍复用，或整个 98-task batch 重提时停止 |
 | 本地 state 陈旧或目标绑定错误 | 核对 state 中 run_dir、job name、baseline、target 和 submission count | state identity 与命令不一致必须拒绝运行；不得手工改 state 后继续同一实验 |
 | `controller_status=failed` 后仍自动推进 | 检查 supervisor exit code、本地 state 和后续 controller job | 明确基础设施失败后出现自动新 controller 时停止 supervisor |
+| Supervisor 随启动 shell 退出 | 检查 tmux session、service log 和 30 分钟后的 state 更新时间 | 无 tmux session、未由 caffeinate 包装或日志停止更新时不得视为无人值守运行成功 |
+| Reflection 失败错误 block 或重复提交 | 检查 `retryable_failed`、GEPA state/candidate tree 和下一 controller | 失败 proposal 被计为 iteration/candidate，或 supervisor 永久退出，或同一 proposal 被并发执行时停止 |
 
 #### C. 两项更新的交互风险与首次运行门槛
 
@@ -183,8 +204,8 @@
   - `scripts/hpc_submit_batch.sh` 复用新版 `ulhpc-submit` 的
     `--stage-data`、`--link-as`、`--persistent-output`、module Python 和 Apptainer cache 参数。
   - `scripts/hpc_resume_loop.py` 默认 `--slice-time 02:00:00`、
-    `--poll-interval 1800`、`--max-runs 4`；Online 正式运行应显式给出
-    `--target-iterations` 和更宽松的 `--max-runs`，通过远端 persistent `run_dir`
+    `--poll-interval 1800`、`--max-runs 0`（无限）；Online 正式运行应显式给出
+    `--target-iterations`，通过远端 persistent `run_dir`
     判断等待、提交或停止。
   - login preheat 的最终产物是
     `/scratch/users/<user>/vibe-coding-planning/shared/sif-cache/*.sif`；Apptainer

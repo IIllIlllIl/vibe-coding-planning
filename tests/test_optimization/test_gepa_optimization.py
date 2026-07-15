@@ -2101,9 +2101,11 @@ def test_online_hpc_wait_does_not_retry_pending_task(tmp_path, monkeypatch):
     assert sleep_calls == 1
 
 
+@pytest.mark.parametrize("terminal_state", ["COMPLETED", "OUT_OF_MEMORY"])
 def test_online_hpc_wait_retries_terminal_task_without_output(
     tmp_path,
     monkeypatch,
+    terminal_state,
 ):
     config = _online_config(tmp_path)
     train, _ = load_online_snapshot(config.dataset_snapshot)
@@ -2153,7 +2155,7 @@ def test_online_hpc_wait_retries_terminal_task_without_output(
     )
     monkeypatch.setattr(
         "src.optimization.online_hpc_executor.query_slurm_task_status",
-        lambda job_id, task_index: SlurmTaskStatus("COMPLETED", 2400),
+        lambda job_id, task_index: SlurmTaskStatus(terminal_state, 2400),
     )
     executor = HPCSlurmOnlineRolloutExecutor(
         config,
@@ -2170,6 +2172,78 @@ def test_online_hpc_wait_retries_terminal_task_without_output(
     assert len(submitted_scripts) == 2
     retry_script = submitted_scripts[1].read_text(encoding="utf-8")
     assert "#SBATCH --array=1%2" in retry_script
+
+
+def test_online_hpc_wait_scores_slurm_timeout_without_retry(tmp_path, monkeypatch):
+    config = _online_config(tmp_path)
+    train, _ = load_online_snapshot(config.dataset_snapshot)
+    config = replace(
+        config,
+        execution=OnlineExecutionConfig(backend="hpc_slurm"),
+        hpc=replace(config.hpc, submit=True, max_task_attempts=3),
+    )
+    submitted_scripts: list[Path] = []
+
+    def fake_submitter(script_path):
+        submitted_scripts.append(script_path)
+        batch_dir = script_path.parent
+        (batch_dir / "outputs" / "task_0000.json").write_text(
+            json.dumps(
+                {
+                    "status": "completed",
+                    "instance_id": train[0].instance_id,
+                    "candidate_sha256": text_sha256("planning rules"),
+                    "resolved": True,
+                    "plan": "successful plan",
+                    "patch": "patch",
+                    "plan_trajectory": [],
+                    "code_trajectory": [],
+                    "evaluator_result": {"resolved": True},
+                    "attribution_hint": {},
+                }
+            ),
+            encoding="utf-8",
+        )
+        checkpoint_dir = batch_dir / "worker_runs" / "task_0001" / "checkpoints"
+        checkpoint_dir.mkdir(parents=True)
+        (checkpoint_dir / "plan.json").write_text(
+            json.dumps(
+                {
+                    "payload": {
+                        "plan": "saved plan",
+                        "plan_trajectory": [{"role": "assistant", "content": "plan"}],
+                    }
+                }
+            ),
+            encoding="utf-8",
+        )
+        return "12345"
+
+    monkeypatch.setattr(
+        "src.optimization.online_hpc_executor.collect_slurm_resource_snapshot",
+        lambda job_id=None: {},
+    )
+    monkeypatch.setattr(
+        "src.optimization.online_hpc_executor.query_slurm_task_status",
+        lambda job_id, task_index: SlurmTaskStatus("TIMEOUT", 3300),
+    )
+    executor = HPCSlurmOnlineRolloutExecutor(
+        config,
+        submitter=fake_submitter,
+        sleeper=lambda seconds: None,
+    )
+
+    outputs = executor.evaluate(train, "planning rules", capture_traces=True)
+
+    assert len(submitted_scripts) == 1
+    assert outputs[0].resolved is True
+    assert outputs[1].resolved is False
+    assert outputs[1].plan == "saved plan"
+    assert outputs[1].terminal_phase == "code"
+    assert outputs[1].terminal_reason == "slurm_timeout"
+    assert outputs[1].failure_origin == "agent"
+    assert outputs[1].attribution_hint["timeout"] is True
+    assert outputs[1].attribution_hint["timeout_scored_as_unresolved"] is True
 
 
 def test_online_hpc_controller_yields_after_durable_array_submission(
@@ -2354,6 +2428,9 @@ def test_online_hpc_scores_agent_failure_after_fixed_retries(
     assert outputs[0].terminal_phase == "code"
     assert outputs[0].terminal_reason == "code_phase_deadline_exceeded"
     assert outputs[0].failure_origin == "agent"
+    assert outputs[0].attribution_hint["timeout"] is True
+    assert outputs[0].attribution_hint["timeout_source"] == "agent_contract"
+    assert outputs[0].attribution_hint["agent_failure_scored_after_retries"] is True
     assert outputs[1].resolved is True
 
 
@@ -2621,6 +2698,104 @@ def test_online_runner_uses_plan_and_code_rollout_attempts(tmp_path):
     assert captured["reflection_minibatch_size"] == 2
 
 
+def test_online_runner_marks_reflection_failure_retryable(tmp_path):
+    config = _online_config(tmp_path)
+
+    class FailedProposer:
+        def __init__(self):
+            self.failures = []
+            self.successful_proposals = 0
+
+        def __call__(self, candidate, reflective_dataset, components):
+            raise AssertionError("not called by this test")
+
+    proposer = FailedProposer()
+
+    def failed_optimize(**kwargs):
+        proposer.failures.append(
+            {"error_type": "TimeoutError", "error": "reflection timeout"}
+        )
+        raise TimeoutError("reflection command exceeded its deadline")
+
+    with pytest.raises(TimeoutError, match="reflection command"):
+        run_online_optimization(
+            config,
+            rollout=lambda case, rules: OnlineRolloutOutput(
+                resolved=True,
+                plan="plan",
+                patch="patch",
+                plan_trajectory=(),
+                code_trajectory=(),
+                evaluator_result={"resolved": True},
+                attribution_hint={},
+            ),
+            proposer=proposer,
+            optimize_fn=failed_optimize,
+        )
+
+    status = json.loads(
+        (config.run_dir / "controller_status.json").read_text(encoding="utf-8")
+    )
+    assert status["status"] == "retryable_failed"
+    assert status["failure_phase"] == "reflection"
+
+
+def test_online_runner_marks_ordinary_controller_failure_retryable(tmp_path):
+    config = _online_config(tmp_path)
+
+    with pytest.raises(RuntimeError, match="temporary controller failure"):
+        run_online_optimization(
+            config,
+            rollout=lambda case, rules: OnlineRolloutOutput(
+                resolved=True,
+                plan="plan",
+                patch="patch",
+                plan_trajectory=(),
+                code_trajectory=(),
+                evaluator_result={"resolved": True},
+                attribution_hint={},
+            ),
+            proposer=lambda candidate, reflective_dataset, components: candidate,
+            optimize_fn=lambda **kwargs: (_ for _ in ()).throw(
+                RuntimeError("temporary controller failure")
+            ),
+        )
+
+    status = json.loads(
+        (config.run_dir / "controller_status.json").read_text(encoding="utf-8")
+    )
+    assert status["status"] == "retryable_failed"
+    assert status["blocking"] is False
+
+
+def test_online_runner_blocks_invalid_controller_configuration(tmp_path):
+    config = _online_config(tmp_path)
+
+    with pytest.raises(ValueError, match="invalid controller configuration"):
+        run_online_optimization(
+            config,
+            rollout=lambda case, rules: OnlineRolloutOutput(
+                resolved=True,
+                plan="plan",
+                patch="patch",
+                plan_trajectory=(),
+                code_trajectory=(),
+                evaluator_result={"resolved": True},
+                attribution_hint={},
+            ),
+            proposer=lambda candidate, reflective_dataset, components: candidate,
+            optimize_fn=lambda **kwargs: (_ for _ in ()).throw(
+                ValueError("invalid controller configuration")
+            ),
+        )
+
+    status = json.loads(
+        (config.run_dir / "controller_status.json").read_text(encoding="utf-8")
+    )
+    assert status["status"] == "failed"
+    assert status["blocking"] is True
+
+
 def test_online_runner_restores_seed_validation_without_rollouts(tmp_path):
     config = _online_config(tmp_path)
     _, validation = load_online_snapshot(config.dataset_snapshot)
@@ -2789,7 +2964,13 @@ def test_online_reflection_proposer_uses_apptainer_when_runtime_apptainer(
             return {}
 
     class FakeAgent:
-        messages = [{"role": "assistant", "content": "done"}]
+        messages = [
+            {
+                "role": "assistant",
+                "content": "inspected evidence with secret",
+                "api_key": "secret",
+            }
+        ]
 
         def run(self, task, **kwargs):
             calls["task"] = task
@@ -2856,6 +3037,21 @@ def test_online_reflection_proposer_uses_apptainer_when_runtime_apptainer(
     assert mount["runtime"] == "apptainer"
     assert mount["readonly"] is True
     assert mount["network_disabled"] is True
+    trajectory_path = next(
+        config.run_dir.glob("reflection_inputs/*/reflection_trajectory.json")
+    )
+    trajectory = json.loads(trajectory_path.read_text())
+    assert trajectory["mode"] == "online_planning"
+    assert trajectory["status"] == "completed"
+    assert trajectory["instance_ids"] == ["repo__one"]
+    assert trajectory["messages"][0]["api_key"] == "[REDACTED]"
+    assert "secret" not in trajectory_path.read_text()
+    completed = next(
+        record
+        for record in audit
+        if record["event"] == "online_reflection_agent_completed"
+    )
+    assert completed["trajectory_path"] == str(trajectory_path)
 
 
 def test_online_runner_builds_default_apptainer_reflection_proposer(
@@ -3212,6 +3408,16 @@ def test_reflection_proposer_supplies_required_agent_task(
     )
     assert completed["exit_status"] == "Submitted"
     assert completed["candidate_file_found"] is True
+    trajectory_path = next(
+        config.run_dir.glob("reflection_inputs/*/reflection_trajectory.json")
+    )
+    trajectory = json.loads(trajectory_path.read_text())
+    assert trajectory["mode"] == "checker"
+    assert trajectory["status"] == "completed"
+    assert trajectory["messages"] == [
+        {"role": "assistant", "content": "done"}
+    ]
+    assert completed["trajectory_path"] == str(trajectory_path)
 
 
 def test_metrics_include_required_reporting_values():

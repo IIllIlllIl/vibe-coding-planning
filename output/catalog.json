@@ -1,0 +1,107 @@
+{
+  "schema_version": 1,
+  "generated_at": "2026-07-15",
+  "active_method": "online_gepa_planning_rules",
+  "default_agent_scope": [
+    "output/README.md",
+    "output/catalog.json",
+    "output/SWE-bench_Verified/verified-round1-gepa-datasets/20260614_482_fdc056ae85df",
+    "output/SWE-bench_Verified/gepa-rules"
+  ],
+  "active_remote_run": {
+    "name": "online-planning-hpc-policy-v2-20260715",
+    "outcome_policy_version": 2,
+    "classification": "active_formal"
+  },
+  "archive_groups": [
+    {
+      "path": "output/archive/online-gepa/reference",
+      "classification": "online_reference",
+      "original_paths": [
+        "output/SWE-bench_Verified/gepa-rules/online-planning-smoke-*",
+        "output/SWE-bench_Verified/gepa-rules/online-planning-hpc-resource-pilot-*"
+      ],
+      "score_usable": false
+    },
+    {
+      "path": "output/archive/offline-gepa",
+      "classification": "historical_valid",
+      "original_paths": [
+        "output/SWE-bench_Verified/gepa-rules/strict-checker-*",
+        "output/SWE-bench_Verified/gepa-rules/archive/20260622_pre_strict_checker"
+      ],
+      "score_usable": "offline_only"
+    },
+    {
+      "path": "output/archive/pct",
+      "classification": "historical_valid",
+      "original_paths": [
+        "output/SWE-bench_Verified/run*",
+        "output/SWE-bench_Verified/verified-round1-completion*",
+        "output/SWE-PolyBench/polybench-*",
+        "output/SWE-bench_Pro/pro-checker-v1"
+      ],
+      "score_usable": "historical_only"
+    },
+    {
+      "path": "output/archive/pcc",
+      "classification": "historical_valid",
+      "original_paths": [
+        "output/checker_eval",
+        "output/SWE-bench_Verified/reflect_success_cases",
+        "output/SWE-PolyBench/polybench-pct-checker-input"
+      ],
+      "score_usable": "historical_only"
+    },
+    {
+      "path": "output/archive/analysis",
+      "classification": "historical_derived",
+      "original_paths": [
+        "output/analysis_*",
+        "output/SWE-bench_Verified/reflection_analysis_2026-05-11"
+      ],
+      "score_usable": false
+    },
+    {
+      "path": "output/archive/datasets/historical",
+      "classification": "historical_input",
+      "original_paths": [
+        "output/SWE-bench_Verified/gepa-pilot-datasets",
+        "output/SWE-PolyBench/polybench-pct-checker-datasets",
+        "output/SWE-bench_Verified/verified-round1-gepa-datasets/20260612_480_37a74c28b19d",
+        "output/SWE-bench_Verified/verified-round1-gepa-datasets/20260614_482_3a18b1e4f9ed"
+      ],
+      "score_usable": false
+    },
+    {
+      "path": "output/archive/tests",
+      "classification": "test_only",
+      "original_paths": [
+        "output/SWE-bench_Verified/test_runs_archive",
+        "output/analysis_test_runs_archive",
+        "output/SWE-bench_Pro/pro-prompt-fix-test1"
+      ],
+      "score_usable": false
+    },
+    {
+      "path": "output/archive/operations",
+      "classification": "operational_only",
+      "original_paths": [
+        "output/local-run-logs",
+        "output/login-preheat-logs-newprompt",
+        "output/*watchdog*.json",
+        "output/*preheat*.log"
+      ],
+      "score_usable": false
+    },
+    {
+      "path": "output/archive/failed-or-invalid",
+      "classification": "invalid",
+      "original_paths": [
+        "output/SWE-bench_Verified/gepa-rules/archive/failed-or-invalid",
+        "output/SWE-PolyBench/archive/failed-or-invalid"
+      ],
+      "score_usable": false
+    }
+  ]
+}

@@ -19,7 +19,7 @@ GEPA（Genetic-Pareto）是一个基于大语言模型反射和 Pareto 进化搜
 原有执行逻辑仍不依赖 GEPA；GEPA 相关能力优先放在
 `adapter`、`config`、`callbacks`、`resume`、`report` 等项目层，不修改官方
 `third_party/gepa` 代码。新流程设计见
-[`gepa-rule-optimization.md`](gepa-rule-optimization.md)。
+[`gepa-rule-optimization.md`](../gepa-rule-optimization.md)。
 
 ## 3. 目录结构
 

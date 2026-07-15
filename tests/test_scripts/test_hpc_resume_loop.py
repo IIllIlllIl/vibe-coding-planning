@@ -8,6 +8,7 @@ from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 SCRIPT = REPO_ROOT / "scripts" / "hpc_resume_loop.py"
+SERVICE_SCRIPT = REPO_ROOT / "scripts" / "hpc_supervisor_service.py"
 
 
 def _write_config(root: Path) -> Path:
@@ -238,6 +239,133 @@ def test_hpc_resume_loop_stops_on_failed_result(tmp_path: Path) -> None:
     assert result.returncode == 1
     assert "run is blocked; not resubmitting" in result.stderr
     assert not batch_log.exists()
+
+
+def test_hpc_supervisor_retries_status_check_failure_without_submitting(
+    tmp_path: Path,
+) -> None:
+    fake_bin = tmp_path / "bin"
+    fake_bin.mkdir()
+    local_root = REPO_ROOT / ".tmp_hpc_smoke" / "test_status_failure"
+    config = _write_config(local_root)
+    fake_batch = tmp_path / "hpc_submit_batch.sh"
+    batch_log = tmp_path / "batch.log"
+    _fake_batch_script(fake_batch, batch_log)
+    (fake_bin / "ssh").write_text("#!/usr/bin/env bash\nexit 255\n", encoding="utf-8")
+    (fake_bin / "ssh").chmod(0o755)
+
+    result = subprocess.run(
+        [
+            "python",
+            str(SCRIPT),
+            "--once",
+            "--state-file",
+            str(tmp_path / "state.json"),
+            "--batch-script",
+            str(fake_batch),
+            "--gepa-rules",
+            "--gepa-config",
+            str(config),
+            "--submit",
+        ],
+        cwd=REPO_ROOT,
+        capture_output=True,
+        text=True,
+        check=False,
+        env=_env(fake_bin),
+    )
+
+    assert result.returncode == 0
+    assert "retrying without submission" in result.stderr
+    assert not batch_log.exists()
+    state = json.loads((tmp_path / "state.json").read_text(encoding="utf-8"))
+    assert state["status"] == "waiting_after_status_check_failure"
+
+
+def test_hpc_supervisor_retains_loop_after_submission_failure(tmp_path: Path) -> None:
+    fake_bin = tmp_path / "bin"
+    fake_bin.mkdir()
+    local_root = REPO_ROOT / ".tmp_hpc_smoke" / "test_submission_failure"
+    config = _write_config(local_root)
+    fake_batch = tmp_path / "hpc_submit_batch.sh"
+    fake_batch.write_text("#!/usr/bin/env bash\nexit 1\n", encoding="utf-8")
+    fake_batch.chmod(0o755)
+    statuses = tmp_path / "statuses.txt"
+    statuses.write_text('{"state":"missing"}\n', encoding="utf-8")
+    _fake_ssh(fake_bin / "ssh", statuses, tmp_path / "ssh.log")
+    state_path = tmp_path / "state.json"
+
+    result = subprocess.run(
+        [
+            "python",
+            str(SCRIPT),
+            "--once",
+            "--state-file",
+            str(state_path),
+            "--batch-script",
+            str(fake_batch),
+            "--gepa-rules",
+            "--gepa-config",
+            str(config),
+            "--submit",
+        ],
+        cwd=REPO_ROOT,
+        capture_output=True,
+        text=True,
+        check=False,
+        env=_env(fake_bin),
+    )
+
+    assert result.returncode == 0
+    assert "retrying later" in result.stderr
+    state = json.loads(state_path.read_text(encoding="utf-8"))
+    assert state["status"] == "waiting_after_submission_failure"
+    assert state["submissions"] == 0
+
+
+def test_hpc_supervisor_service_starts_with_tmux_and_caffeinate(tmp_path: Path) -> None:
+    fake_bin = tmp_path / "bin"
+    fake_bin.mkdir()
+    tmux_log = tmp_path / "tmux.log"
+    tmux = fake_bin / "tmux"
+    tmux.write_text(
+        "#!/usr/bin/env bash\n"
+        f"printf '%s\\n' \"$*\" >> {tmux_log}\n"
+        "if [[ \"$1\" == has-session ]]; then exit 1; fi\n"
+        "exit 0\n",
+        encoding="utf-8",
+    )
+    tmux.chmod(0o755)
+    env = os.environ.copy()
+    env["PATH"] = f"{fake_bin}{os.pathsep}{env['PATH']}"
+
+    result = subprocess.run(
+        [
+            "python",
+            str(SERVICE_SCRIPT),
+            "start",
+            "--session",
+            "online-gepa-test",
+            "--log",
+            str(tmp_path / "supervisor.log"),
+            "--poll-interval",
+            "1800",
+            "--gepa-config",
+            "configs/gepa_online_planning_pilot.yaml",
+            "--submit",
+        ],
+        cwd=REPO_ROOT,
+        capture_output=True,
+        text=True,
+        check=False,
+        env=env,
+    )
+
+    assert result.returncode == 0, result.stderr
+    invocation = tmux_log.read_text(encoding="utf-8")
+    assert "new-session -d -s online-gepa-test" in invocation
+    assert "exec caffeinate -i -s conda run -n mini-swe python" in invocation
+    assert "hpc_resume_loop.py --poll-interval 1800" in invocation
 
 
 def test_hpc_supervisor_waits_for_workers_without_submitting(tmp_path: Path) -> None:

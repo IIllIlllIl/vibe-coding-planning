@@ -1,0 +1,486 @@
+# Plan-Code-Test: 自动化代码方案迭代优化系统
+
+> Historical mixed-design snapshot. Current project overview lives in `../../../README.md`.
+
+本项目旨在生成能改善代码 Agent 实际执行结果的 planning rules。当前主线是
+**Online GEPA**：把候选 rules 注入 Plan Agent，执行 `Plan -> Code -> Evaluator`
+真实 rollout，并用当前 rollout 的轨迹与 resolved 结果优化规则。早期 PCT、PCC
+和基于历史标签的 offline GEPA 产物继续保留用于方法学对照和数据溯源，但因实际
+规则生成效果不足，目前暂停继续投入。
+
+> **Agent working set**：默认只使用 `configs/gepa_online_planning_hpc.yaml`、
+> `docs/gepa-rule-optimization.md`、当前 Online GEPA 源码，以及
+> `output/README.md` 列出的 active paths。`output/archive/` 和
+> `configs/archive/` 只在用户明确要求历史对照、审计或复现时读取；其中的旧分数
+> 不得用于当前 Online GEPA 质量结论。
+
+## 核心特性
+
+- **Plan → Code → Test 闭环**：Agent 自主探索代码库生成方案，按方案输出 Patch，经 SWE 官方工具评估
+- **方案迭代优化**：基于执行反馈（含可选测试结果）由反思 Agent 逐轮改进 Plan
+- **完整轨迹留存**：方案生成、代码生成、反思优化三个阶段的全量 Trajectory 均保存，作为后续规律分析的研究语料
+- **可选早退**：通过 `skip_completed_rounds` 参数控制 resolved 后是否跳过剩余轮次（默认 `true`，resolved 即停；设为 `false` 跑满 n 轮以采集稳定性数据）
+- **任务级断点恢复**：`run_batch.sh` 自动跳过已有 `result.json` 的实例并重跑未完成实例；单实例内部按 Plan/round 恢复已决定不实施
+- **对比分析与规则提取（FR-13，历史路径）**：对 reflect-success cases 运行对比分析 Agent，提取可泛化的自然语言规则（When ... because ... 格式）
+- **规则质量审查与返工（FR-14，默认关闭）**：独立 LLM Reviewer Agent 审查规则质量（五维评分），未通过者触发返工循环。实践发现返工机制会**破坏已提取的有效规则**（删除旧结果后重跑失败），因此默认关闭。可通过 `config.analysis.enable_review` 开启
+- **Plan-Checker-Code 管道（FR-15）**：在 Plan 与 Code 之间插入规则检查器，验证计划是否符合从成功案例中提炼出的规则集。检查器在 Docker 内运行，可验证文件路径、函数名等具体引用。代码始终执行以产生 ground truth，用于计算检查器的 TP/FP/FN/TN、Accuracy、Precision、Recall、F1
+- **检查器 held-out 评估**：在 SWE-PolyBench Python 子集上运行 Plan-Check-Code 管道，评估规则集的预测能力
+- **Online GEPA 规则优化（当前主线）**：候选规则只注入 Plan Agent，Code Agent 只接收 issue 和生成的 plan；当前 rollout 的 patch、trajectory 和 evaluator result 作为 reflection evidence。HPC 多任务 rollout、原子 batch resume 和 Apptainer evaluator 均已实现。设计见 [`docs/gepa-rule-optimization.md`](docs/gepa-rule-optimization.md)
+- **PCT / PCC / offline GEPA（历史方案）**：代码、正式结果和可复现数据快照继续保留，但不作为当前规则生成入口；只有方法学对照或专项诊断需要时才恢复。
+- **最小化造轮子**：Agent 基于 `mini-swe-agent` 框架，反思复用 GEPA 反射 Prompt 模板，评估直接调用 `swebench` 官方库
+
+## 实验设计：两阶段方法学
+
+| 阶段 | 数据集 | 目的 | 当前状态 |
+|------|--------|------|----------|
+| **Phase 1** | SWE-bench **Verified**（500 实例） | 大批量跑 pipeline，采集 plan / agent trajectory / resolved 结果，归纳"plan → 通过性"的判别规律 | **已完成** |
+| **Phase 2a** | SWE-bench **Verified** reflect-success | 对比分析提取规则，输入感知树聚合（Input-Aware Tree Merge） | **已完成** |
+| **Phase 2b** | **SWE-PolyBench** Python 子集（199 实例） | 在 held-out 集上运行 Plan-Check-Code，评估规则检查器的预测准确率 | 暂缓 |
+| **Phase 3** | SWE-bench **Verified** Round 1 GEPA 快照（482 实例） | Offline GEPA 优化 Checker 完整规则文本 | 已完成探索，暂缓 |
+| **Phase 4** | SWE-bench **Verified** 正式 train/validation split | Online GEPA 以真实 Plan-Code-Evaluator rollout 优化 planning rules | **当前主线** |
+
+把 SWE-PolyBench Python 子集留作 held-out 测试集，替代原定的 SWE-bench Pro（Pro 在当前 pipeline 下 resolved 率为 0%，已放弃）。PolyBench 来自 Amazon Science 的多语言基准，Python 子集共 199 个实例，来自 6 个仓库（transformers、keras、langchain、yt-dlp、tensorflow/models、AutoGPT）。
+
+数据集切换通过 `system.dataset` + `system.dataset_type` + `system.language_filter` 配置项控制。输出自动按 `{dataset_short}/{batch_id}/{instance_id}` 分层。当前开放项见 [`project_issues.md`](project_issues.md)。
+
+## 快速开始
+
+本项目使用 **Conda 环境 `mini-swe`**（Python 3.12）：
+
+```bash
+# 1. 激活环境（假设已安装 miniconda 且已有 mini-swe 环境）
+conda activate mini-swe
+
+# 2. 克隆仓库并安装依赖
+git clone <repo-url> && cd vibe-coding-planning
+pip install -r requirements.txt
+
+# 3. 设置 API Key
+export DEEPSEEK_API_KEY="your-key"
+
+# 4. 运行单元测试（含覆盖率报告）
+pytest --cov=src --cov-report=term-missing
+
+# 5. 验证当前 Online GEPA 正式配置（不调用外部 LLM）
+python -c "from src.optimization.online_config import load_online_optimization_config; load_online_optimization_config('configs/gepa_online_planning_hpc.yaml', require_api_keys=False)"
+```
+
+当前输出入口与 archive 边界见 [`output/README.md`](output/README.md)。PCT、PCC、
+Checker 和 offline GEPA 的旧 CLI 仍保留用于明确的历史复现，但不再属于 quick start。
+
+详细配置说明见 [`docs/requirement-document.md`](docs/requirement-document.md) §6 配置项规范。
+
+## CLI 参数
+
+### 主流水线 CLI
+
+`python -m src.main` 支持以下参数（CLI 值优先于 `config.yaml`）：
+
+| 参数 | 类型 | 说明 |
+|------|------|------|
+| `--config PATH` | str | 配置文件路径，默认 `config.yaml` |
+| `--instance ID` | str | 单实例 ID（来自任意 SWE-bench 子集），覆盖 `system.instances` 列表 |
+| `--n N` | int | 迭代轮数，覆盖 `system.n` |
+| `--output-dir DIR` | str | 输出根目录，覆盖 `system.output_dir` |
+| `--verbose`, `-v` | flag | 启用 DEBUG 日志 |
+
+> 注：`config.yaml` 中 `system.dataset` 字段决定 `instances` 的解析空间；默认 `SWE-bench/SWE-bench_Verified`，可切换到 `AmazonScience/SWE-PolyBench`（Phase 2）。配合 `dataset_type: polybench` 和 `language_filter: Python` 使用。
+
+### 检查器评估 CLI
+
+`scripts/internal/evaluate_checker.py` 是 checker 数据构建和执行的内部实现：
+
+| 参数 | 类型 | 说明 |
+|------|------|------|
+| `--config PATH` | str | 配置文件路径，默认 `config.yaml` |
+| `--instance ID` | str | 单实例 ID（dry-run 用） |
+| `--instances FILE` | str | 实例列表 JSON 文件路径 |
+| `--output DIR` | str | 评估输出目录 |
+| `--build-input` | flag | 从已有 PCT 批次构建固定 checker 输入，不运行 agent |
+| `--pct-root DIR` | str | PCT 批次根目录，默认 `output/SWE-PolyBench` |
+| `--input-output FILE` | str | `--build-input` 生成的 JSONL 路径 |
+| `--snapshot-root DIR` | str | 追加发布不可变、按日期和内容哈希命名的数据快照 |
+| `--input-results FILE` | str | 读取固定 PCT plan/label 并仅运行 checker |
+
+### 批量运行脚本
+
+`scripts/run_batch.sh` 读取主流程配置，并通过有界 worker pool 调用
+`python -m src.main`：
+
+| 参数 | 类型 | 说明 |
+|------|------|------|
+| `--config PATH` | str | 主流程配置文件路径，默认 `config.yaml` |
+| `--dry-run` | flag | 只列出 SKIP/RUN，不调用主流程 |
+| `--instances FILE` | str | 覆盖批次实例列表 JSON |
+| `--parallel N` | int | 同时运行的 PCT/PCC 实例数，默认 `1` |
+| `--analysis-only` | flag | 跳过主流程，只执行规则分析 handoff |
+| `--analysis-config PATH` | str | 规则分析配置文件路径 |
+| `--checker-comparison` | flag | 运行四臂 checker-only 对比 |
+| `--checker-recovery` | flag | 仅恢复 checker-only 错误或未完成样本 |
+| `--gepa-rules` | flag | 运行全局 GEPA Checker 规则优化任务 |
+| `--gepa-config PATH` | str | GEPA 独立配置，默认 `configs/gepa_verified_rules.yaml` |
+
+`--parallel` 控制主 PCT/PCC 阶段；规则提取的并行度仍由
+`analysis.parallel` 控制。所有 PCT/PCC worker 共享
+`DockerCapacityWindow` 的跨进程容器槽位。缺失镜像的 pull/build
+保持全局串行，已有镜像的 agent 和 evaluator 工作负载可以并行运行。
+重复执行同一 batch 时，已有 `result.json` 的实例仍会直接跳过。
+
+GEPA 是一个全局优化任务，不使用实例 worker pool：
+
+```bash
+bash scripts/run_batch.sh --gepa-rules \
+  --gepa-config configs/gepa_verified_rules.yaml
+```
+
+正式 GEPA 配置的初始规则为
+`configs/gepa_initial_rules_gpt_seed.md`。生成 prompt 和原始输出记录在
+`docs/reference/gepa_initial_rules_gpt_seed_provenance.md`；为保持可复现性，该 seed
+不再人工改写。
+
+同一 `run_dir` 表示同一次逻辑实验，可以分多次进程执行并提高累计
+`max_metric_calls`。项目除复用官方 `gepa_state.bin` 外，还保存
+`run_manifest.json` 和 `gepa_resume_state.json`，用于校验实验身份并恢复
+Pareto/epoch sampling 的随机状态、sampler epoch 和累计 proposal 统计。
+数据、初始规则、prompt、模型、step limit、seed、minibatch、项目优化代码、
+vendored GEPA 核心代码或其他搜索语义发生变化时会拒绝恢复，必须使用新的
+`run_dir`。优雅停止：
+
+```bash
+touch output/SWE-bench_Verified/gepa-rules/run1/gepa.stop
+```
+
+旧的空规则 pilot 和 reflection smoke 只作为历史验证记录保留。当前正式策略使用
+`configs/gepa_initial_rules_gpt_seed.md` 作为 seed，并用 strict Checker prompt
+降低 Checker 自由发挥。HPC 试运行配置为：
+
+```bash
+bash scripts/hpc_submit_batch.sh --gepa-rules \
+  --gepa-config configs/archive/offline_gepa/gepa_verified_rules_strict_hpc_24h_apptainer.yaml \
+  --submit
+```
+
+长时间排队场景可用短作业切片 supervisor：
+
+```bash
+conda run -n mini-swe env PATH=/Users/taoran.wang/miniconda3/bin:$PATH \
+  python scripts/hpc_resume_loop.py \
+  --slice-time 12:00:00 \
+  --check-interval 01:00:00 \
+  --gepa-rules \
+  --gepa-config configs/archive/offline_gepa/gepa_verified_rules_strict_hpc_24h_apptainer.yaml \
+  --submit
+```
+
+运行会额外生成 `audit_events.jsonl`、`usage.jsonl` 和 `cost_report.json`，
+用于检查信息隔离、GEPA 接受路径以及时间/token。USD 花费以提供方控制台为准。
+最终优化结果写入 `result.json`，候选指标写入 `candidate_metrics.json`，最佳
+规则写入 `best_rules.txt`，候选树写入 `candidate_tree.html`。
+
+GEPA Checker 的稳定资源上限来自 checker-only 恢复实验：
+`cost_limit=6.0`、`timeout=1800`，并保留显式 `temperature=0.0`。历史
+checker-only 验证使用 `max_steps=200`；extended pilot 暂时把 Checker
+`max_steps` 提高到 `500`，用于观察真实步数分布并为后续全量实验确定上限。
+Checker 单样本执行默认最多 `max_attempts=3`：偶发失败会重试，只有全部尝试
+失败才作为 operational failure。Checker 执行错误不会被当成分类错误参与优化，
+也不会写入 evaluation cache。GEPA Adapter 会在每次 Checker attempt 前先准备
+对应项目镜像；镜像 inspect/pull 成功后才允许创建 Checker LLM agent，避免
+Docker 基础设施故障消耗 Checker API token。
+
+GEPA 的 Pareto 选择、minibatch sampling、Reflection proposal 和 candidate tree
+更新保持串行。`search.parallel` 仅用于同一次 Checker evaluation batch 内的
+样本级并发；输出顺序保持与输入 batch 一致。本地 Docker 验证保持小并发，当前
+HPC strict 配置使用 Apptainer backend 和 `parallel=4`，实跑中需继续观察
+DeepSeek rate limit、文件系统压力和 SIF 获取稳定性。
+
+如果 Docker 镜像准备、容器启动或 Checker agent 运行在全部重试后仍失败，
+`progress.json` 会标记 `status: failed`、`failure_kind:
+checker_operational_failure`、`resumable: true`。这表示本次进程已停止但逻辑
+实验没有作废；清理 Docker 或修复环境后，可以用相同 `run_dir` 和兼容配置继续
+恢复。失败样本不会作为 correctness=0 缓存进 GEPA。
+
+PolyBench Python 199 实例的纯 PCT 扫描配置已固定为
+`configs/polybench_full199_pct.yaml`（`checker.enabled=false`）：
+
+```bash
+bash scripts/run_batch.sh \
+  --config configs/polybench_full199_pct.yaml \
+  --parallel 2
+```
+
+跳过 `polybench-run20` / `polybench-run100` 中已有 `result.json` 的 66 个任务时，使用 remaining-133 配置：
+
+```bash
+bash scripts/run_batch.sh --config configs/archive/pct_runs/polybench_remaining133_pct.yaml
+```
+
+对已验证 Debian Buster archive fallback 的 4 个剩余镜像实例：
+
+```bash
+bash scripts/run_batch.sh --dry-run \
+  --config configs/archive/pct_runs/polybench_remaining133_pct.yaml \
+  --instances configs/archive/pct_runs/polybench_retry_images_buster4.json \
+  --batch-id polybench-retry-images-buster4
+```
+
+长时监控运行时，watchdog 会用 `caffeinate` 包装其启动的 tmux 子任务，避免 macOS 睡眠暂停 batch：
+
+```bash
+PCT_CONFIG=configs/archive/pct_runs/polybench_remaining133_pct.yaml \
+  conda run -n mini-swe python scripts/long_run_watchdog.py
+```
+
+集群运行方向是从本地通过相邻项目 `../../hpc_submit` 提供的 `ulhpc-submit`
+提交 HPC 作业。当前已实现 GEPA 专用 Apptainer wrapper；PCT/PCC 的 Docker-native
+路径仍需另行设计。HPC 作业由调度器管理，不需要 `caffeinate` 或 tmux watchdog；
+设计见 [`docs/hpc-submit.md`](docs/hpc-submit.md)。基础连通性可用 smoke 脚本检查：
+
+```bash
+cp configs/ulhpc_submit.example.yaml configs/ulhpc_submit.yaml
+# edit configs/ulhpc_submit.yaml: user, remote_project_dir, ssh_key if needed
+
+bash scripts/hpc_smoke_check.sh
+bash scripts/hpc_smoke_check.sh --submit
+```
+
+当前 ULHPC smoke 已验证 SSH、同步、Slurm 提交/排队/执行和 Python 依赖导入；
+计算节点未提供 `docker` CLI/daemon。GEPA 已改造为 Apptainer 路径；完整
+PCT/PCC/SWE-bench/PolyBench evaluator 仍需要 Docker-enabled/rootless Docker
+资源或进一步 Apptainer 改造。
+
+### 规则分析 CLI（历史路径）
+
+该路径用于早期 PCT reflect-success 规则提取与聚合实验。当前规则生成主线是
+GEPA strict Checker 规则优化，见下方 GEPA 配置示例和
+[`docs/gepa-rule-optimization.md`](docs/gepa-rule-optimization.md)。
+
+`python -m src.analysis` 参数：
+
+| 参数 | 类型 | 说明 |
+|------|------|------|
+| `--config PATH` | str | 分析配置文件路径，Kimi/OpenCode 实验使用 `configs/analysis_kimi_opencode.yaml` |
+| `--input DIR` | str | 输入目录；提取/后处理时是 reflect-success 或 `per_case/`，聚合时是 per-case JSON 目录 |
+| `--output DIR` | str | 分析输出目录 |
+| `--instance ID` | str | 单实例调试 |
+| `--model MODEL` | str | 覆盖 `analysis.model` |
+| `--postprocess` | flag | 保留原始 `per_case/`，生成 `per_case_postprocessed/` |
+| `--postprocess-data-dir DIR` | str | 后处理时提供原始 reflect-success case 材料 |
+| `--aggregate` | flag | 读取 `--input` 中 `rule_valid=true` 的规则并生成 `aggregated_rules.json` |
+
+统一入口支持独立分析配置：
+
+```bash
+bash scripts/run_batch.sh --analysis-only \
+  --config configs/analysis_kimi_opencode.yaml \
+  --input-dir ./output/SWE-bench_Verified/reflect_success_cases \
+  --output-dir ./output/analysis_kimi_opencode_60
+
+bash scripts/run_batch.sh \
+  --analysis-only \
+  --analysis-config configs/analysis_kimi_opencode.yaml \
+  --analysis-input-dir ./output/SWE-bench_Verified/reflect_success_cases \
+  --analysis-output-dir ./output/analysis_kimi_opencode_60
+```
+
+## Output 索引
+
+运行产物位于 [`output/`](output/)，该目录被 gitignore。目录结构、当前已有运行、关键产物、规则后处理/聚合命令和常用检索命令集中记录在 [`output/README.md`](output/README.md)。
+
+## Checker 评估（历史 checker-only 对比路径）
+
+本节描述早期将聚合规则用于 checker-only / PolyBench 对比的路径。当前 GEPA
+主线使用 `src/optimization/checker.py` 中的 strict Checker prompt，并只优化
+`candidate_rules`，不再依赖 Flash/Pro/Kimi 聚合规则 arm 作为正式规则生成流程。
+
+检查器（Checker）在 Plan 生成之后、Code 执行之前插入一个规则验证步骤：
+
+```
+Plan Agent → Check Agent → Code Agent → SWE Eval
+```
+
+- **Plan Agent**：按标准流程生成 NRPV 格式计划
+- **Check Agent**：将计划与规则集（`output/analysis_pro/aggregated_rules.json`）比对，输出 JSON 评估结果（`passed` / `violations` / `overall_assessment`）
+- **Code Agent**：无论检查是否通过，始终执行代码生成，以产生 ground truth 用于指标计算
+- **评估指标**：TP / FP / FN / TN、Accuracy、Precision、Recall、F1
+
+检查器默认使用 `deepseek-v4-flash`（成本低于 Pro），独立于主 pipeline 模型配置。在 `config.yaml` 中通过 `checker:` 段启用和控制：
+
+```yaml
+checker:
+  enabled: true               # 启用检查器
+  rules_path: "./output/analysis_pro/aggregated_rules.json"
+  model: "deepseek-v4-flash"  # 检查器专用模型
+  max_steps: 50
+  cost_limit: 1.0
+```
+
+PolyBench held-out 评估默认使用 checker-only 路径。构建脚本按 full199 配置顺序扫描已有 PCT 结果；同一实例多次成功运行时选择最早的 plan，即使后续运行的 resolved 标签更好也不会替换。evaluator-only 重评只补全同一 plan 的有效标签，不视为新 PCT。checker 执行错误单独写入 `errors.jsonl`，不进入混淆矩阵。
+
+Flash、Pro、Kimi 规则和无规则直接判断的公平对比统一使用
+`deepseek-v4-flash`。命令默认只校验输入；提交代码后可在 tmux 中启动：
+
+```bash
+bash scripts/run_batch.sh --checker-comparison --dry-run
+bash scripts/run_batch.sh --checker-comparison --parallel 3
+bash scripts/run_batch.sh --checker-recovery --parallel 1
+```
+
+运行可从每实例 `prediction.json` 断点恢复，进度写入
+`output/checker_eval/polybench-flash-pro-kimi-baseline/experiment.json`，最终报告为
+`comparison_report.json` 和 `comparison_report.md`。每个 arm 默认并行运行
+3 个实例；可用 `--parallel N` 调整为任意正整数，三个 arm 仍依次运行。
+恢复入口只补齐无规则、Pro、Kimi 的错误或未完成实例，顺序固定为
+`no_rules → pro_rules → kimi_rules`，不会重跑已完成的 Flash 或有效预测。
+并行运行默认仅保留 6 个最新项目 Docker 镜像，并在每个实例完成后清理；
+可用 `--max-cached-images N` 调整，但不得低于并发数。
+
+推荐使用 `--snapshot-root`。每个快照目录包含 `cases.jsonl`、
+`manifest.json` 和 `exclusions.json`，发布后不再覆盖。根目录
+`index.json` 记录全部快照以及 `latest_cases_path`。没有新增有效 PCT
+时会复用相同哈希的快照；新重跑成功后才生成新目录。
+
+PolyBench 本地兼容镜像可能被项目的 Docker 窗口清理。镜像缺失时，
+运行入口会按 GHCR tags 尝试拉取，随后从数据集 Dockerfile 自动重建，
+并复用已实现的 Buster archive、apt HTTPS/retry、JAX wheel archive、
+PyAV/Cython 和 Python 3.10 Bullseye 兼容 variant。无需再次人工修改
+依赖方案，但若镜像和 BuildKit cache 都已清理，完整重建仍可能耗时十几分钟。
+
+并行任务共享 `DockerCapacityWindow`。缓存淘汰仅在所有容器 slot
+空闲时执行，并排除所有容器引用的 ImageID；删除镜像标签不再使用
+`--force`，因此不会把其他 worker 正在使用的镜像转成匿名镜像。无引用
+dangling 镜像会安全清理，BuildKit cache 仅在磁盘空间低于分级阈值时清理。
+缺失的 PolyBench 镜像通过跨线程、跨进程的全局锁串行拉取或构建；等待
+该锁的 worker 会在获得锁后再次检查本地镜像，避免重复下载。同一时间仍可
+运行多个已取得镜像的 checker 容器，镜像获取串行不等于 checker 执行串行。
+pipeline、PCC、checker-only、evaluator、watchdog 和 Docker CLI/SDK helper
+均共享该模块，不再维护独立清理策略。早期定时清理 daemon 已归档到
+`scripts/archive/docker_cleanup_daemon/`，不属于正式运行路径。
+
+检查器评估输出结构见 [`output/README.md`](output/README.md)。
+
+## 文档索引
+
+| 文档 | 内容 |
+|------|------|
+| [`docs/README.md`](docs/README.md) | 权威文档入口、knowledge 与 archive 边界 |
+| [`docs/requirement-document.md`](docs/requirement-document.md) | 当前 Online GEPA 行为合同和验收标准 |
+| [`docs/architecture.md`](docs/architecture.md) | 当前模块、数据流、状态权威和隔离边界 |
+| [`docs/gepa-rule-optimization.md`](docs/gepa-rule-optimization.md) | Online GEPA objective、evidence、policy v2 与 resume 语义 |
+| [`docs/hpc-submit.md`](docs/hpc-submit.md) | 当前 ULHPC、supervisor、FairShare 与排障手册 |
+| [`docs/knowledge/`](docs/knowledge/) | 从 PCT/PCC/offline 提取的预算、checkpoint、隔离和清理经验 |
+| [`project_issues.md`](project_issues.md) | 当前需要关注或待决策的开放项 |
+| [`output/README.md`](output/README.md) | 当前 output working set 与历史 archive 边界 |
+| [`AGENTS.md`](AGENTS.md) | Agent 环境、凭据、HPC 与清理守则 |
+
+## 规则后处理与聚合
+
+规则提取的原始结果、后处理目录和聚合产物都在 `output/` 下。具体路径、输入语义和命令见 [`output/README.md`](output/README.md)。
+
+## 技术栈
+
+| 组件 | 用途 |
+|------|------|
+| [mini-swe-agent](https://github.com/SWE-agent/mini-swe-agent) | Agent 基础框架（Docker 环境、LLM 调用、Trajectory 记录） |
+| GEPA 反射 Prompt 模板 | 方案反思策略（从 `gepa-ai/gepa` 提取，自行维护） |
+| [SWE-bench Verified](https://huggingface.co/datasets/SWE-bench/SWE-bench_Verified) | Phase 1 探索数据集（500 实例，官方 Docker Hub 镜像） |
+| [SWE-PolyBench](https://huggingface.co/datasets/AmazonScience/SWE-PolyBench) | Phase 2 保留验证集（Python 子集 199 实例，GHCR 镜像） |
+| `swebench` 官方 Python 包 | SWE-bench 测试评估（`run_evaluation`） |
+| `poly-bench-evaluation` | PolyBench 官方评估工具（DockerManager + parser + scoring） |
+| DeepSeek V4 (Flash) | 底层 LLM |
+
+## 关键依赖
+
+| 包 | 版本 | 用途 |
+|------|------|------|
+| `mini-swe-agent` | `==1.17.5` | Agent 框架（DefaultAgent、DockerEnvironment） |
+| `swebench` | `==4.1.0` | SWE-bench 评估工具 |
+| `poly-bench-evaluation` | (GitHub) | PolyBench 官方评估工具（parser + scoring） |
+| `tree-sitter` | `==0.21.3` | PolyBench 依赖（必须精确锁定） |
+| `tree-sitter-languages` | `==1.10.2` | PolyBench 依赖（必须精确锁定） |
+| `litellm` | `>=1.83.0` | LLM API 客户端 |
+| `openai` | `>=2.24.0` | OpenAI 兼容 API（用于 DeepSeek） |
+| `pyyaml` | `>=6.0.0` | YAML 配置解析 |
+
+权威清单是 [`requirements.txt`](requirements.txt)，依赖变更时同步更新。
+
+## 目录结构
+
+```
+.
+├── docs/
+│   ├── requirement-document.md    # 需求文档
+│   └── architecture.md            # 架构文档
+├── scripts/
+│   ├── run_batch.sh               # 唯一手动实验入口
+│   ├── hpc_smoke_check.sh         # HPC/hpc_submit 可用性 smoke
+│   ├── long_run_watchdog.py       # 唯一无人值守实验入口
+│   ├── internal/                  # batch/analysis/checker 内部实现
+│   ├── tools/                     # 报告和数据维护工具
+│   └── archive/                   # 历史入口与临时脚本
+├── configs/
+│   ├── analysis_kimi_opencode.yaml       # Kimi/OpenCode 规则分析实验配置
+│   ├── polybench_full199_pct.yaml        # PolyBench Python 199 实例纯 PCT 扫描配置
+│   ├── polybench_remaining133_pct.yaml   # 跳过已有 PolyBench 结果后的 133 实例配置
+│   └── polybench_retry_images_buster4.json # 已修复 Buster 镜像的 4 实例 manifest
+├── src/
+│   ├── main.py                    # 入口程序
+│   ├── config.py                  # 配置加载与验证
+│   ├── pipeline.py                # 核心流水线（plan-code-test 循环 + feedback 拼装）
+│   ├── pipeline_check.py          # Plan-Check-Code 单轮流水线
+│   ├── exceptions.py              # FatalError / TaskError 定义
+│   ├── agents/
+│   │   ├── plan_agent.py          # 方案生成 Agent
+│   │   ├── code_agent.py          # 代码生成 Agent
+│   │   ├── reflect_agent.py       # 反思优化 Agent
+│   │   └── check_agent.py         # 计划检查 Agent
+│   ├── environment/
+│   │   └── docker_env.py          # Docker 环境封装
+│   ├── evaluator/
+│   │   ├── swe_evaluator.py       # 多数据集评估路由（swebench / Pro / PolyBench）
+│   │   └── polybench_evaluator.py # PolyBench 官方评估封装
+│   ├── data/
+│   │   └── instance_loader.py     # SWE-bench 实例元数据加载（Verified / Pro 通用）
+│   ├── output/
+│   │   ├── writer.py              # 结果与 Patch 输出
+│   │   └── trajectory.py          # Trajectory 保存
+│   ├── prompts/
+│   │   ├── templates.py           # Prompt 渲染工具
+│   │   └── gepa_reflection.py     # GEPA 反射模板渲染
+│   ├── rules/
+│   │   └── rule_loader.py         # 聚合规则加载与格式化
+│   └── analysis/
+│       ├── case_loader.py         # Reflect-success 案例加载
+│       ├── contrastive_agent.py   # 对比分析规则提取 Agent
+│       ├── reviewer_agent.py      # LLM 规则质量审查 Agent
+│       ├── review_cli.py          # 批量审查 CLI
+│       ├── cli.py                 # 批量提取 CLI
+│       ├── output.py              # 分析结果输出
+│       ├── rule_postprocess.py    # 规则格式后处理，生成 per_case_postprocessed
+│       ├── evaluate_rules.py      # 规则质量评估工具
+│       └── aggregation_agent.py   # 规则聚合 Agent
+├── config.yaml                    # 运行时配置
+├── requirements.txt               # Python 依赖
+├── output/                        # 运行输出（gitignore）
+└── trajectories/                  # Trajectory 文件（gitignore）
+```
+
+## 环境要求
+
+- **Conda**: `mini-swe` 环境（Python 3.12，通过 `conda activate mini-swe` 激活）
+- Docker 守护进程：
+  - **Verified（Phase 1）**：首次评估时由 `swebench` 自动从 Docker Hub 拉取官方镜像（`swebench/sweb.eval.x86_64.<id_with_1776>:latest`），无需自建
+  - **PolyBench（Phase 2）**：使用 GHCR 预构建镜像（`ghcr.io/timesler/swe-polybench.eval.x86_64.<id>:v1.1`）。**注意**：大量实例存在 GHCR 匿名访问 `denied` 问题（transformers、langchain、keras 等 repo 均失败），可能需要 GHCR 登录或本地构建
+- DeepSeek API Key（环境变量 `DEEPSEEK_API_KEY`；GEPA/HPC 运行不得把 key 写入命令、配置、日志或提交文件）
+- **PolyBench 额外依赖**：`tree-sitter==0.21.3` + `tree-sitter-languages==1.10.2` 必须精确安装，否则 PolyBench 官方工具无法导入
+
+## 开发状态
+
+当前主线是 Online GEPA planning rules 优化：正式 Verified split、Plan/Code 输入
+隔离、HPC rollout arrays、Apptainer evaluator、`ulhpc-submit` staging、持久化
+run directory 和 batch 接管式 resume 均已实现。下一步关注点见
+[`project_issues.md`](project_issues.md)。
+
+历史路径中，PCT/PCC、规则提取、OpenCode/Kimi analysis、offline GEPA strict
+Checker、checker-only 对比和 PolyBench 本地兼容修复已有产物与文档记录，但不再
+是当前规则生成主线。输出的价值与归档状态以 [`output/README.md`](output/README.md)
+为准。

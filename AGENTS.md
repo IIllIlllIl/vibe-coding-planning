@@ -8,12 +8,19 @@
 | Path | What's inside |
 |------|---------------|
 | [`README.md`](README.md) | User-facing overview, quick start, CLI args, output layout, tech stack, dev status |
-| [`docs/requirement-document.md`](docs/requirement-document.md) | Functional requirements (FR-01…FR-08), data model, acceptance criteria, error matrix, constraints |
-| [`docs/architecture.md`](docs/architecture.md) | Module layout, data flow, design decisions |
+| [`docs/README.md`](docs/README.md) | Authoritative documentation map and archive boundary; read this before browsing docs |
+| [`docs/requirement-document.md`](docs/requirement-document.md) | Current Online GEPA behavioral requirements and acceptance criteria |
+| [`docs/architecture.md`](docs/architecture.md) | Current Online GEPA modules, data flow, and state authorities |
+| [`docs/gepa-rule-optimization.md`](docs/gepa-rule-optimization.md) | Current optimization, evidence, outcome-policy, and resume semantics |
 | [`project_issues.md`](project_issues.md) | Open issues, deferred work, methodology decisions in flight |
-| [`config.yaml`](config.yaml) | Runtime config (system / prompts / docker / agent / evaluator) — single source of truth for prompts |
+| [`configs/gepa_online_planning_hpc.yaml`](configs/gepa_online_planning_hpc.yaml) | Current formal Online GEPA models, prompts, budgets, evaluator, and HPC settings |
 
 When you need any project fact (features, CLI usage, file conventions, run commands, dependencies), **read from these files instead of asking the user or guessing**. Do not duplicate their content into this file.
+
+Do not browse `docs/archive/` or `output/archive/` by default. Those trees are
+historical and non-authoritative; use them only for an explicitly requested
+audit, comparison, or reproduction. Reusable historical lessons are already
+extracted under `docs/knowledge/`.
 
 ## 2. Python environment — always use the `mini-swe` conda env
 

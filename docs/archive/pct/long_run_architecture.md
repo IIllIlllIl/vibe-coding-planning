@@ -1,5 +1,7 @@
 # Long-Run Architecture: 5-Day Unsupervised PCT Batch
 
+> Historical, non-authoritative. Current reusable decisions live in `../../knowledge/`.
+
 > For running the full 500-instance SWE-bench Verified batch without human presence.
 >
 > Status: local/macOS watchdog design. This is not the current HPC execution

@@ -1,5 +1,7 @@
 # 聚合规则质量审查报告
 
+> Historical, non-authoritative. Current reusable decisions live in `../../knowledge/`.
+
 > 审查时间: 2026-05-26
 > 审查对象: `output/analysis_flash/aggregated_rules.json` + `output/analysis_pro/aggregated_rules.json`
 > 来源: 60 个 SWE-bench Verified reflect-success 案例的 task-level 规则聚合

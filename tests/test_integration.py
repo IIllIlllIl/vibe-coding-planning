@@ -17,7 +17,7 @@ import pytest
 
 # Skip all tests in this file unless RUN_INTEGRATION=1 is set in the environment.
 # This requires Docker, mini-swe-agent, swebench, SWE-bench Pro images, and
-# DEEPSEEK_API_KEY. See docs/integration_test_plan.md for the full prerequisites.
+# DEEPSEEK_API_KEY. Historical prerequisites are archived under docs/archive/integration/.
 pytestmark = pytest.mark.skipif(
     os.environ.get("RUN_INTEGRATION") != "1",
     reason="Set RUN_INTEGRATION=1 to enable real integration tests "

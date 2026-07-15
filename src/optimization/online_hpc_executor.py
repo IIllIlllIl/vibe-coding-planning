@@ -153,6 +153,12 @@ class AgentWorkerFailure(RuntimeError):
         self.data = data
 
 
+def _is_timeout_reason(reason: str) -> bool:
+    return "timeout" in reason.lower() or reason.lower().endswith(
+        "deadline_exceeded"
+    )
+
+
 class OnlineRolloutBatchStore:
     """Create local task manifests and collect worker output JSON files."""
 
@@ -947,7 +953,69 @@ class HPCSlurmOnlineRolloutExecutor:
                 "attribution_hint": {
                     "candidate_rules_visible_to_plan_agent": True,
                     "candidate_rules_visible_to_code_agent": False,
+                    "timeout": _is_timeout_reason(failure["terminal_reason"]),
+                    "timeout_source": (
+                        "agent_contract"
+                        if _is_timeout_reason(failure["terminal_reason"])
+                        else None
+                    ),
                     "agent_failure_scored_after_retries": True,
+                },
+            },
+        )
+
+    @staticmethod
+    def _finalize_slurm_timeout(task: OnlineRolloutTask, attempt: int) -> None:
+        """Turn a proven worker wall-time expiry into a scored agent outcome."""
+        checkpoint_dir = task.worker_run_dir / "checkpoints"
+
+        def checkpoint_payload(phase: str) -> dict[str, Any]:
+            path = checkpoint_dir / f"{phase}.json"
+            if not path.is_file():
+                return {}
+            value = json.loads(path.read_text(encoding="utf-8"))
+            payload = value.get("payload")
+            return payload if isinstance(payload, dict) else {}
+
+        plan_payload = checkpoint_payload("plan")
+        code_payload = checkpoint_payload("code")
+        terminal_phase = "code" if plan_payload else "plan"
+        if code_payload:
+            terminal_phase = "evaluator"
+        candidate_sha256 = text_sha256(task.rules_path.read_text(encoding="utf-8"))
+        _write_json(
+            task.output_path,
+            {
+                "status": "completed",
+                "outcome_policy_version": ONLINE_OUTCOME_POLICY_VERSION,
+                "mode": "online_planning",
+                "instance_id": task.case.instance_id,
+                "split": task.case.split,
+                "candidate_sha256": candidate_sha256,
+                "resolved": False,
+                "score": 0.0,
+                "outcome_status": "scored",
+                "score_valid": True,
+                "evaluator_status": "not_run",
+                "evaluator_resolved": None,
+                "terminal_phase": terminal_phase,
+                "terminal_reason": "slurm_timeout",
+                "failure_origin": "agent",
+                "attempts": attempt,
+                "plan": str(plan_payload.get("plan", "")),
+                "patch": str(code_payload.get("patch", "")),
+                "plan_trajectory": list(plan_payload.get("plan_trajectory", [])),
+                "code_trajectory": list(code_payload.get("code_trajectory", [])),
+                "evaluator_result": {
+                    "status": "not_run",
+                    "reason": "worker_slurm_timeout",
+                },
+                "attribution_hint": {
+                    "candidate_rules_visible_to_plan_agent": True,
+                    "candidate_rules_visible_to_code_agent": False,
+                    "timeout": True,
+                    "timeout_source": "slurm_walltime",
+                    "timeout_scored_as_unresolved": True,
                 },
             },
         )
@@ -997,6 +1065,20 @@ class HPCSlurmOnlineRolloutExecutor:
                         + self.config.hpc.task_output_grace_seconds
                     ):
                         retriable[index] = task
+                    continue
+                if state == "TIMEOUT":
+                    self._finalize_slurm_timeout(task, attempt)
+                    remaining.pop(index, None)
+                    first_missing_seen_at.pop(index, None)
+                    self.audit.write(
+                        "online_hpc_rollout_timeout_scored",
+                        job_id=job_id,
+                        attempt=attempt,
+                        task_index=index,
+                        instance_id=task.case.instance_id,
+                        score=0.0,
+                        terminal_reason="slurm_timeout",
+                    )
                     continue
                 if state in _SLURM_TERMINAL_STATES:
                     retriable[index] = task

@@ -1,6 +1,10 @@
 # Output directories
 /output/*
 !/output/README.md
+!/output/catalog.json
+!/output/archive/
+/output/archive/*
+!/output/archive/README.md
 trajectories/
 patches/
 logs/

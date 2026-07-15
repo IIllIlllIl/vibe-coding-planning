@@ -438,7 +438,7 @@ prompts:
   # Source mix:
   #   * Body wording (the four analytical paragraphs) is verbatim
   #     from the GEPA reflection prompt as transcribed in
-  #     docs/gepa_template_snapshot.md, with only the opening
+  #     docs/reference/gepa_template_snapshot.md, with only the opening
   #     reframed for our PCT pipeline (single example, plan
   #     optimisation rather than prompt-template optimisation).
   #     Two GEPA research keywords are preserved verbatim:

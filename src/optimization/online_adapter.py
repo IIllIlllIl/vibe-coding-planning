@@ -14,6 +14,12 @@ from src.optimization.audit import JsonlLogger, text_sha256
 from src.optimization.online_models import OnlineGEPACase, OnlineRolloutOutput
 
 
+def _is_timeout_reason(reason: str) -> bool:
+    return "timeout" in reason.lower() or reason.lower().endswith(
+        "deadline_exceeded"
+    )
+
+
 class OnlineRolloutRunner(Protocol):
     def __call__(
         self,
@@ -129,39 +135,12 @@ class OnlinePlanningGEPAAdapter:
                     )
         assert last_exc is not None
         if last_agent_failure is not None:
-            public_output = {
-                "instance_id": case.instance_id,
-                "resolved": False,
-                "outcome_status": "scored",
-                "score_valid": True,
-                "evaluator_status": "not_run",
-                "evaluator_resolved": None,
-                "terminal_phase": last_agent_failure.phase,
-                "terminal_reason": last_agent_failure.reason,
-                "failure_origin": "agent",
-                "plan": "",
-                "patch": "",
-                "evaluator_result": {
-                    "status": "not_run",
-                    "reason": "agent_failed_before_evaluation",
-                },
-                "attribution_hint": {
-                    "agent_failure_scored_after_retries": True,
-                },
-            }
-            trace = None
-            if capture_traces:
-                trace = {
-                    "instance_id": case.instance_id,
-                    "score": 0.0,
-                    "resolved": False,
-                    "outcome_status": "scored",
-                    "terminal_phase": last_agent_failure.phase,
-                    "terminal_reason": last_agent_failure.reason,
-                    "failure_origin": "agent",
-                    "evaluator_status": "not_run",
-                }
-            return public_output, 0.0, trace
+            return self._scored_agent_failure(
+                case,
+                last_agent_failure,
+                capture_traces=capture_traces,
+                after_retries=True,
+            )
         details = _exception_details(last_exc)
         if self.audit is not None:
             self.audit.write(
@@ -198,6 +177,51 @@ class OnlinePlanningGEPAAdapter:
             else None
         )
         return output, 0.0, trace
+
+    @staticmethod
+    def _scored_agent_failure(
+        case: OnlineGEPACase,
+        failure: AgentRolloutFailure,
+        *,
+        capture_traces: bool,
+        after_retries: bool,
+    ) -> tuple[dict[str, Any], float, dict[str, Any] | None]:
+        timeout = _is_timeout_reason(failure.reason)
+        public_output = {
+            "instance_id": case.instance_id,
+            "resolved": False,
+            "outcome_status": "scored",
+            "score_valid": True,
+            "evaluator_status": "not_run",
+            "evaluator_resolved": None,
+            "terminal_phase": failure.phase,
+            "terminal_reason": failure.reason,
+            "failure_origin": "agent",
+            "plan": "",
+            "patch": "",
+            "evaluator_result": {
+                "status": "not_run",
+                "reason": "agent_failed_before_evaluation",
+            },
+            "attribution_hint": {
+                "timeout": timeout,
+                "timeout_source": "agent_contract" if timeout else None,
+                "agent_failure_scored_after_retries": after_retries,
+            },
+        }
+        trace = None
+        if capture_traces:
+            trace = {
+                "instance_id": case.instance_id,
+                "score": 0.0,
+                "resolved": False,
+                "outcome_status": "scored",
+                "terminal_phase": failure.phase,
+                "terminal_reason": failure.reason,
+                "failure_origin": "agent",
+                "evaluator_status": "not_run",
+            }
+        return public_output, 0.0, trace
 
     def _evaluate_parallel_fail_fast(
         self,

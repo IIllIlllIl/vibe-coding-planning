@@ -43,7 +43,6 @@ BLOCKING_STATUS_STATES = {
     "invalid_progress",
     "invalid_result",
     "state_without_manifest",
-    "status_check_failed",
 }
 
 
@@ -202,7 +201,7 @@ def parse_args(argv: list[str]) -> SupervisorConfig:
     parser.add_argument(
         "--max-runs",
         type=int,
-        default=4,
+        default=0,
         help="Maximum submitted slices; 0 means unlimited.",
     )
     parser.add_argument(
@@ -383,9 +382,13 @@ if controller_status_path.is_file():
     try:
         controller_status = json.loads(controller_status_path.read_text(encoding="utf-8"))
         payload["controller_status"] = controller_status.get("status")
+        payload["controller_failure_phase"] = controller_status.get("failure_phase")
         if controller_status.get("status") == "failed":
             payload["state"] = "controller_failed"
             payload["error_type"] = controller_status.get("error_type")
+        elif controller_status.get("status") == "retryable_failed":
+            payload["state"] = "resumable"
+            payload["retryable_controller_error_type"] = controller_status.get("error_type")
     except Exception as exc:
         payload = {"state": "invalid_controller_status", "error": str(exc), "run_dir": str(run_dir)}
 
@@ -560,6 +563,19 @@ def run_loop(config: SupervisorConfig) -> int:
             status = remote_run_status(config)
             state["last_remote_status"] = status
             print(f"[hpc-resume] status={json.dumps(status, sort_keys=True)}")
+            if status.get("state") == "status_check_failed":
+                state["status"] = "waiting_after_status_check_failure"
+                _save_supervisor_state(config, state)
+                print(
+                    "[hpc-resume] remote status check failed; retaining supervisor "
+                    "and retrying without submission",
+                    file=sys.stderr,
+                )
+                if config.once:
+                    return 0
+                if config.poll_interval_seconds > 0:
+                    time.sleep(config.poll_interval_seconds)
+                continue
             if is_completed(status):
                 if config.target_iterations and not _iteration_target_reached(
                     config, status, state
@@ -602,7 +618,25 @@ def run_loop(config: SupervisorConfig) -> int:
                     _save_supervisor_state(config, state)
                     print("[hpc-resume] max runs reached", file=sys.stderr)
                     return 2
-                job_id = submit_slice(config)
+                try:
+                    job_id = submit_slice(config)
+                except Exception as exc:
+                    state["status"] = "waiting_after_submission_failure"
+                    state["last_submission_error"] = {
+                        "error_type": type(exc).__name__,
+                        "error": str(exc),
+                    }
+                    _save_supervisor_state(config, state)
+                    print(
+                        "[hpc-resume] controller submission failed; retaining "
+                        "supervisor and retrying later",
+                        file=sys.stderr,
+                    )
+                    if config.once:
+                        return 0
+                    if config.poll_interval_seconds > 0:
+                        time.sleep(config.poll_interval_seconds)
+                    continue
                 state["submissions"] = submissions + 1
                 state["last_controller_job_id"] = job_id
                 state["status"] = "controller_submitted"
@@ -615,6 +649,9 @@ def run_loop(config: SupervisorConfig) -> int:
 
 
 def main(argv: list[str] | None = None) -> int:
+    if hasattr(sys.stdout, "reconfigure"):
+        sys.stdout.reconfigure(line_buffering=True)
+        sys.stderr.reconfigure(line_buffering=True)
     config = parse_args(sys.argv[1:] if argv is None else argv)
     return run_loop(config)
 

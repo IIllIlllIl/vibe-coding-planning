@@ -1,9 +1,11 @@
 # Linux 服务器迁移记录（历史）
 
+> Historical, non-authoritative. Current ULHPC operations live in `../../hpc-submit.md`.
+
 > 本文档是旧需求的归档：曾计划把项目从 macOS 迁移到一台长期运行的 Linux
 > 服务器。当前正式方向已改为通过相邻项目 `../../hpc_submit` 的
 > `ulhpc-submit` 提交 UL HPC Slurm 作业。新的运行方案见
-> [`docs/hpc-submit.md`](hpc-submit.md)。
+> [`docs/hpc-submit.md`](../../hpc-submit.md)。
 
 ---
 
@@ -56,6 +58,6 @@ bash scripts/hpc_smoke_check.sh --submit --user <ulhpc-user> --remote-dir '~/hpc
 
 ## 相关文档
 
-- [`docs/hpc-submit.md`](hpc-submit.md)：当前 HPC submit 运行方案。
-- [`project_issues.md`](../project_issues.md) §7：HPC submit 任务清单和已发现问题。
-- [`docs/long_run_architecture.md`](long_run_architecture.md)：本地/macOS watchdog 历史方案，不是 HPC 路径。
+- [`docs/hpc-submit.md`](../../hpc-submit.md)：当前 HPC submit 运行方案。
+- [`project_issues.md`](../../../project_issues.md)：当前任务清单和已发现问题。
+- [`../pct/long_run_architecture.md`](../pct/long_run_architecture.md)：本地/macOS watchdog 历史方案，不是 HPC 路径。

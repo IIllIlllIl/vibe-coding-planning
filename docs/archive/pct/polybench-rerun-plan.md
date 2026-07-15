@@ -1,5 +1,7 @@
 # PolyBench Remaining-133 Recovery Plan
 
+> Historical, non-authoritative. Current reusable decisions live in `../../knowledge/`.
+
 > Historical local recovery note. It predates the HPC submit direction and
 > describes direct `run_batch.sh`/local Docker recovery. For new HPC runs, first
 > validate `ulhpc-submit` with `scripts/hpc_smoke_check.sh`, then design the

@@ -1,10 +1,12 @@
 # mini-swe-agent 1.17.5 适配重构计划
 
+> Historical, non-authoritative. The migration is complete; current code is authoritative.
+
 > 历史归档：本文档是 2026-05-03 的 mini-swe-agent 1.17.5 迁移计划，
 > 用于解释当时从 1.0.x API 迁移时的设计和验证步骤。当前代码已完成迁移，
 > 文中的阶段清单、ro 挂载测试和待办项不代表当前开放问题。当前状态以
-> [`architecture.md`](architecture.md)、[`requirement-document.md`](requirement-document.md)
-> 和 [`../project_issues.md`](../project_issues.md) 为准。
+> [`architecture.md`](../../architecture.md)、[`requirement-document.md`](../../requirement-document.md)
+> 和 [`project_issues.md`](../../../project_issues.md) 为准。
 
 **版本**: v1.0  
 **日期**: 2026-05-03  

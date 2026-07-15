@@ -8,7 +8,7 @@ from typing import Any
 from src.optimization.models import RepositoryRef
 
 
-ONLINE_OUTCOME_POLICY_VERSION = 2
+ONLINE_OUTCOME_POLICY_VERSION = 3
 
 @dataclass(frozen=True)
 class OnlineGEPACase:

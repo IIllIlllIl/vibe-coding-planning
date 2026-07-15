@@ -21,10 +21,78 @@ from src.optimization.config import OptimizationConfig
 
 
 def _write_json(path: Path, value: Any) -> None:
-    path.write_text(
+    temp = path.with_suffix(path.suffix + ".tmp")
+    temp.write_text(
         json.dumps(value, indent=2, ensure_ascii=False, sort_keys=True) + "\n",
         encoding="utf-8",
     )
+    temp.replace(path)
+
+
+_SENSITIVE_KEY_PARTS = ("api_key", "authorization", "password", "secret", "token")
+
+
+def _reflection_secret_values() -> tuple[str, ...]:
+    values = []
+    for name, value in os.environ.items():
+        lowered = name.lower()
+        if value and any(part in lowered for part in _SENSITIVE_KEY_PARTS):
+            values.append(value)
+    return tuple(sorted(set(values), key=len, reverse=True))
+
+
+def _safe_reflection_value(value: Any, secrets: tuple[str, ...]) -> Any:
+    if isinstance(value, dict):
+        result = {}
+        for key, item in value.items():
+            key_text = str(key)
+            if any(part in key_text.lower() for part in _SENSITIVE_KEY_PARTS):
+                result[key_text] = "[REDACTED]"
+            else:
+                result[key_text] = _safe_reflection_value(item, secrets)
+        return result
+    if isinstance(value, (list, tuple)):
+        return [_safe_reflection_value(item, secrets) for item in value]
+    if isinstance(value, str):
+        result = value
+        for secret in secrets:
+            result = result.replace(secret, "[REDACTED]")
+        return result
+    if value is None or isinstance(value, (bool, int, float)):
+        return value
+    return str(value)
+
+
+def save_reflection_trajectory(
+    bundle: Path,
+    messages: Sequence[Mapping[str, Any]],
+    *,
+    mode: str,
+    candidate_sha256: str,
+    instance_ids: Sequence[str],
+    status: str,
+    exit_status: Any = None,
+    exit_message: Any = None,
+    error: BaseException | None = None,
+) -> Path:
+    """Persist a redacted Reflection Agent transcript beside its evidence."""
+    secrets = _reflection_secret_values()
+    path = bundle / "reflection_trajectory.json"
+    payload = {
+        "schema_version": 1,
+        "mode": mode,
+        "candidate_sha256": candidate_sha256,
+        "instance_ids": list(instance_ids),
+        "status": status,
+        "exit_status": exit_status,
+        "exit_message": exit_message,
+        "messages": list(messages),
+    }
+    if error is not None:
+        payload["error_type"] = type(error).__name__
+        payload["error"] = str(error)
+    _write_json(path, _safe_reflection_value(payload, secrets))
+    return path
 
 
 class EvidenceBundleWriter:
@@ -239,10 +307,32 @@ class MiniSWEReflectionProposer:
                     step_limit=self.config.reflection.max_steps,
                     cost_limit=self.config.reflection.cost_limit,
                 )
-                exit_status, exit_message = agent.run(
-                    task="Review the current minibatch evidence and improve the complete Checker rules.",
-                    current_rules=candidate["rules"],
-                    evidence_path="/evidence",
+                try:
+                    exit_status, exit_message = agent.run(
+                        task="Review the current minibatch evidence and improve the complete Checker rules.",
+                        current_rules=candidate["rules"],
+                        evidence_path="/evidence",
+                    )
+                except Exception as exc:
+                    save_reflection_trajectory(
+                        bundle,
+                        agent.messages,
+                        mode="checker",
+                        candidate_sha256=parent_sha256,
+                        instance_ids=instance_ids,
+                        status="failed",
+                        error=exc,
+                    )
+                    raise
+                trajectory_path = save_reflection_trajectory(
+                    bundle,
+                    agent.messages,
+                    mode="checker",
+                    candidate_sha256=parent_sha256,
+                    instance_ids=instance_ids,
+                    status="completed",
+                    exit_status=exit_status,
+                    exit_message=exit_message,
                 )
                 final_message = extract_last_assistant(agent.messages)
                 result = env.execute("cat /tmp/candidate_rules.txt")
@@ -251,6 +341,7 @@ class MiniSWEReflectionProposer:
                     "reflection_agent_completed",
                     candidate_sha256=parent_sha256,
                     instance_ids=instance_ids,
+                    trajectory_path=str(trajectory_path),
                     exit_status=exit_status,
                     exit_message=exit_message,
                     trajectory_messages=len(agent.messages),

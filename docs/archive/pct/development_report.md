@@ -1,10 +1,12 @@
 # Plan-Code-Test 系统开发报告
 
+> Historical, non-authoritative. Current reusable decisions live in `../../knowledge/`.
+
 > 历史归档：本文档是 2026-05-01 的早期开发报告，反映当时的 PCT 原型状态。
 > 其中 SWE-bench Pro、只读 Docker 挂载、测试数量和 GEPA 仅作为反思 prompt 模板等
 > 描述不代表当前主线。当前架构、GEPA 规则优化和 HPC 运行方式请看
-> [`architecture.md`](architecture.md)、[`gepa-rule-optimization.md`](gepa-rule-optimization.md)
-> 与 [`hpc-submit.md`](hpc-submit.md)。
+> [`architecture.md`](../../architecture.md)、[`gepa-rule-optimization.md`](../../gepa-rule-optimization.md)
+> 与 [`hpc-submit.md`](../../hpc-submit.md)。
 
 **报告日期**: 2026-05-01
 **开发轮次**: 3 轮（已完成）

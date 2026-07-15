@@ -17,7 +17,10 @@ from src.environment.apptainer_env import ApptainerEnvironment
 from src.environment.docker_env import DockerCapacityWindow
 from src.optimization.audit import AuditedModel, JsonlLogger, text_sha256
 from src.optimization.online_config import OnlineOptimizationConfig
-from src.optimization.reflection import EvidenceBundleWriter
+from src.optimization.reflection import (
+    EvidenceBundleWriter,
+    save_reflection_trajectory,
+)
 
 
 class OnlinePlanningReflectionProposer:
@@ -182,13 +185,35 @@ class OnlinePlanningReflectionProposer:
                     step_limit=self.config.reflection.max_steps,
                     cost_limit=self.config.reflection.cost_limit,
                 )
-                exit_status, exit_message = agent.run(
-                    task=(
-                        "Review the current online rollout evidence and improve "
-                        "the complete planning checklist."
-                    ),
-                    current_rules=candidate["rules"],
-                    evidence_path="/evidence",
+                try:
+                    exit_status, exit_message = agent.run(
+                        task=(
+                            "Review the current online rollout evidence and improve "
+                            "the complete planning checklist."
+                        ),
+                        current_rules=candidate["rules"],
+                        evidence_path="/evidence",
+                    )
+                except Exception as exc:
+                    save_reflection_trajectory(
+                        bundle,
+                        agent.messages,
+                        mode="online_planning",
+                        candidate_sha256=parent_sha256,
+                        instance_ids=instance_ids,
+                        status="failed",
+                        error=exc,
+                    )
+                    raise
+                trajectory_path = save_reflection_trajectory(
+                    bundle,
+                    agent.messages,
+                    mode="online_planning",
+                    candidate_sha256=parent_sha256,
+                    instance_ids=instance_ids,
+                    status="completed",
+                    exit_status=exit_status,
+                    exit_message=exit_message,
                 )
                 final_message = extract_last_assistant(agent.messages)
                 result = env.execute("cat /tmp/candidate_rules.txt")
@@ -197,6 +222,7 @@ class OnlinePlanningReflectionProposer:
                     "online_reflection_agent_completed",
                     candidate_sha256=parent_sha256,
                     instance_ids=instance_ids,
+                    trajectory_path=str(trajectory_path),
                     exit_status=exit_status,
                     exit_message=exit_message,
                     trajectory_messages=len(agent.messages),

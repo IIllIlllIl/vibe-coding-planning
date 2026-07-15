@@ -256,23 +256,25 @@ conda run -n mini-swe python scripts/hpc_resume_loop.py \
   --poll-interval 1800 \
   --slice-time 02:00:00 \
   --gepa-rules \
-  --gepa-config configs/archive/offline_gepa/gepa_verified_rules_strict_hpc_24h_apptainer.yaml \
-  --slice-time 02:00:00 \
-  --poll-interval 1800 \
-  --max-runs 4
+  --gepa-config configs/gepa_online_planning_hpc.yaml \
+  --max-runs 0
 
-# Online 正式运行：2h controller 上限，30min 轮询，以 iteration 为目标
-conda run -n mini-swe python scripts/hpc_resume_loop.py \
+# Online 正式运行：tmux+caffeinate 常驻，2h controller，30min 轮询
+conda run -n mini-swe python scripts/hpc_supervisor_service.py start \
+  --session online-gepa-formal \
+  --log .local/hpc-supervisor/online-gepa-formal.log \
   --gepa-rules \
-  --gepa-config configs/archive/offline_gepa/gepa_verified_rules_strict_hpc_24h_apptainer.yaml \
+  --gepa-config configs/gepa_online_planning_hpc.yaml \
   --slice-time 02:00:00 \
   --poll-interval 1800 \
   --target-iterations 6 \
-  --max-runs 4 \
+  --max-runs 0 \
   --submit
 ```
 
 参数 `--batch-script` 可指向 `scripts/hpc_submit_batch.sh`（默认就是）。
+`--max-runs 0` 表示不以 controller 次数主动退出；无人值守运行不要直接用
+shell `&` 启动 `hpc_resume_loop.py`。
 
 ---
 

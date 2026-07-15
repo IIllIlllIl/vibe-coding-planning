@@ -15,7 +15,7 @@ from gepa.core.adapter import EvaluationBatch
 from gepa.core.state import GEPAState
 
 from src.environment.docker_env import configure_docker_capacity
-from src.exceptions import OnlineControllerYield
+from src.exceptions import FatalError, OnlineControllerYield
 from src.optimization.audit import JsonlLogger, text_sha256
 from src.optimization.online_adapter import OnlinePlanningGEPAAdapter
 from src.optimization.online_config import OnlineOptimizationConfig
@@ -24,6 +24,30 @@ from src.optimization.online_hpc_executor import HPCSlurmOnlineRolloutExecutor
 from src.optimization.online_reflection import OnlinePlanningReflectionProposer
 from src.optimization.online_rollout import OnlinePCTRolloutRunner
 from src.optimization.report import write_cost_report
+
+
+_BLOCKING_ERROR_MARKERS = (
+    "checkpoint identity",
+    "fingerprint mismatch",
+    "infrastructure-invalid",
+    "manifest differs",
+    "out of memory",
+    "out_of_memory",
+    "quota exceeded",
+    "no space left",
+)
+
+
+def _is_blocking_controller_error(exc: Exception) -> bool:
+    current: BaseException | None = exc
+    while current is not None:
+        if isinstance(current, (FatalError, MemoryError)):
+            return True
+        message = str(current).lower()
+        if any(marker in message for marker in _BLOCKING_ERROR_MARKERS):
+            return True
+        current = current.__cause__ or current.__context__
+    return isinstance(exc, ValueError)
 
 
 def _atomic_json(path: Path, value: dict[str, Any]) -> None:
@@ -360,6 +384,7 @@ def _run_online_optimization_locked(
             else None
         ),
     )
+    reflection_failure_count_before = len(getattr(proposer_runner, "failures", []))
     try:
         result = optimize_fn(
             seed_candidate={"rules": initial_rules},
@@ -411,6 +436,14 @@ def _run_online_optimization_locked(
         return None
     except Exception as exc:
         error = f"{type(exc).__name__}: {exc}"
+        reflection_failures = list(getattr(proposer_runner, "failures", []))
+        new_reflection_failure = (
+            len(reflection_failures) > reflection_failure_count_before
+        )
+        blocking_failure = (
+            False if new_reflection_failure else _is_blocking_controller_error(exc)
+        )
+        controller_status = "failed" if blocking_failure else "retryable_failed"
         JsonlLogger(config.run_dir / "errors.jsonl").write(
             "online_optimization_failed",
             error_type=type(exc).__name__,
@@ -426,14 +459,16 @@ def _run_online_optimization_locked(
                 getattr(proposer_runner, "successful_proposals", 0)
             ),
             required_proposals=config.search.min_proposals,
-            reflection_failures=len(getattr(proposer_runner, "failures", [])),
+            reflection_failures=len(reflection_failures),
         )
         audit.write("online_run_failed", error=error)
         _atomic_json(
             config.run_dir / "controller_status.json",
             {
                 "schema_version": 1,
-                "status": "failed",
+                "status": controller_status,
+                "failure_phase": "reflection" if new_reflection_failure else "controller",
+                "blocking": blocking_failure,
                 "error_type": type(exc).__name__,
                 "error": str(exc),
             },
