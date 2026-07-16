@@ -90,6 +90,14 @@ evaluator result. Candidate rules never enter Code or Evaluator inputs. A
 repo-grounded reviewer may read the candidate, current rollout evidence, and
 clean base repository; synthesis reads the reviews and current evidence bundle.
 
+The instance reviewer runs inside the matching disposable benchmark SIF. It may
+execute focused tests, write diagnostic scripts/tests, temporarily apply the
+generated patch, or make a counterfactual edit. `/evidence` remains read-only;
+repository edits live only in the writable SIF overlay and are discarded after
+the structured review and trajectory are persisted. Review records label every
+observation as `base`, `generated_patch`, or `counterfactual` so synthesis does
+not mix repository states.
+
 Code may create or modify diagnostic tests inside its workspace. Code itself
 chooses the staged submission returned by mini-swe-agent; the Host does not
 apply test-path filtering or silently rewrite that patch. The Evaluator starts

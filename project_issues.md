@@ -183,6 +183,7 @@ Future launch/progress checks must append a row before interpreting movement.
 | worker 已完成但 batch 仍为 `SUBMITTED` | 对照 fingerprint、Slurm、output、`batch_state.json` 与 GEPA durable state | 这是未被 GEPA 重放/消费的 metric call，不得误标 `COMPLETE`；接管时记录 `OUTPUTS_READY`，完成和复用使用不同审计事件 |
 | Reflection 失败错误 block 或重复提交 | 检查 `retryable_failed`、GEPA state/candidate tree 和下一 controller | 失败 proposal 被计为 iteration/candidate，或 supervisor 永久退出，或同一 proposal 被并发执行时停止 |
 | Code 自选 patch 包含诊断测试或测试基础设施修改 | 对所有 `resolved=true` 的 submission 保留 patch/trajectory 并做运行后审查；运行时不按路径过滤 | 当前选择优先避免 Host 误杀正确 patch。若发现通过修改 runner、fixture 或跳过断言获得 resolved，应将样本标记为不可靠并重新评估该 run；不得事后静默改 patch |
+| 实验型 SIF Reviewer 混淆 base/patch/counterfactual 状态或耗时过长 | 审查 repository_actions、experiments、trajectory、confidence 与 Reviewer walltime P50/P90/P95 | 若结论无法对应到实际命令、把临时修改当作 base 事实、频繁撞到 55min worker walltime，暂停规则质量解释；优先修复 prompt/schema 或拆分 Reviewer task，不得让 Reviewer 失败覆盖 durable evaluator score |
 
 #### C. 两项更新的交互风险与首次运行门槛
 

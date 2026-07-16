@@ -327,6 +327,9 @@ prompts:
     Compare successful and unsuccessful instances. Distinguish planning defects
     from Code deviations, evaluator failures, infrastructure failures, and
     uncertain attribution. Never convert the latter four into planning rules.
+    Prefer lessons supported by explicit repository_actions or experiments.
+    Treat unsupported claims, mixed repository states, and low-confidence
+    conclusions as reasons to reject a lesson rather than invent a rule.
 
     Add or change a rule only when the lesson is actionable before Code runs,
     using only the issue, repository, and planning checklist. It must change a
@@ -367,6 +370,23 @@ prompts:
     the Plan and Code trajectories and repository only to answer concrete
     attribution questions.
 
+    Repository interaction is part of the review, not optional decoration.
+    After reading the evidence, formulate concrete attribution questions, then
+    inspect the untouched base repository before making temporary changes. Use
+    targeted commands that distinguish competing explanations. When useful,
+    run focused existing tests or reproductions, write temporary tests or
+    analysis scripts, apply generated.patch inside this disposable SIF, or make
+    a small counterfactual edit. Do not run broad test suites or explore
+    unrelated code without an attribution question. All repository changes are
+    temporary and will be discarded; never present them as a submission patch.
+
+    Keep repository states explicit: base means the untouched repository,
+    generated_patch means after applying the rollout patch, and counterfactual
+    means after your own temporary diagnostic edit. Clearly separate facts
+    observed in each state. Experiments are not mandatory when static repository
+    evidence already answers the attribution question, but explain why they
+    were unnecessary.
+
     Compare issue -> plan -> Code execution -> patch -> evaluator. Assess the
     plan's navigation, reproduction, patch strategy, and validation. Determine
     whether Code materially followed the plan. Attribute the outcome to exactly
@@ -375,11 +395,18 @@ prompts:
     exploration. Do not use gold patches, network access, or hindsight-only
     facts as deploy-time lessons.
 
-    Write {{output_path}} as one JSON object with exactly these fields:
-    instance_id, outcome, plan_assessment, code_followed_plan, attribution,
-    planning_lesson, evidence_files. plan_assessment must contain navigation,
-    reproduction, patch_strategy, and validation. evidence_files must list the
-    evidence files actually read, including task.md, generated_plan.md, and
+    Write {{output_path}} as one JSON object with these fields: instance_id,
+    outcome, attribution_questions, repository_actions, experiments,
+    experiment_skipped_reason, plan_assessment, code_followed_plan, attribution,
+    planning_lesson, confidence, remaining_uncertainty, evidence_files.
+    repository_actions is a non-empty list of objects with purpose,
+    command_summary, repository_state, and result. experiments is a list of
+    objects with hypothesis, repository_state, method, observation, and boolean
+    supports_hypothesis. Use an empty experiments list and a non-empty
+    experiment_skipped_reason only when targeted execution was unnecessary.
+    plan_assessment must contain navigation, reproduction, patch_strategy, and
+    validation. confidence is low, medium, or high. evidence_files must list the
+    files actually read, including task.md, generated_plan.md, and
     evaluator_result.json. Use an empty planning_lesson when no defensible
     planning lesson exists.
 

@@ -32,6 +32,10 @@ engineering checklist.
 4. Each instance reviewer may read the current issue, repository identity/base
    commit, clean base repository, plan/code trajectories, patch, evaluator
    result, score, and structured attribution.
+   It may run focused reproductions/tests and make temporary diagnostic edits
+   inside its disposable SIF. It must distinguish observations from the
+   untouched base, generated-patch, and counterfactual states. No reviewer edit
+   or diagnostic test becomes an evaluator or submission input.
 5. Synthesis Reflection reads current rules and the ordered reviewer outputs;
    raw current evidence is available only for targeted verification.
 6. Historical PCT plans, patches, resolved labels, ASI, and archived outputs
@@ -82,6 +86,10 @@ Every rollout is either `scored` or `invalid`.
   terminal-missing indices.
 - Plan, Code, Evaluator, and instance-reviewer checkpoints are atomic and
   identity-bound.
+- A completed instance review records attribution questions, repository actions,
+  optional targeted experiments, confidence, and remaining uncertainty. An
+  empty experiment list is valid only with a reason that static evidence was
+  sufficient; writing code is never required merely to satisfy the schema.
 - Code retry may reuse a successful Plan checkpoint but starts from a clean Code
   repository. Evaluator retry may reuse successful Plan and Code checkpoints.
 - A successful Reflection proposal is atomically persisted before it is returned

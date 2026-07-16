@@ -456,6 +456,24 @@ def test_current_online_code_prompt_delegates_patch_selection_to_agent(config_na
     assert ":(exclude)*_test.py" not in prompt
 
 
+@pytest.mark.parametrize(
+    "config_name",
+    ("gepa_online_planning_hpc.yaml", "gepa_online_planning_pilot.yaml"),
+)
+def test_current_online_reviewer_prompt_enables_disposable_repo_experiments(
+    config_name,
+):
+    repo_root = Path(__file__).resolve().parents[2]
+    raw = yaml.safe_load((repo_root / "configs" / config_name).read_text())
+    prompt = raw["prompts"]["reflection_reviewer_system"]
+
+    assert "attribution questions" in prompt
+    assert "temporary" in prompt
+    assert "counterfactual" in prompt
+    assert "generated.patch" in prompt
+    assert "experiments" in prompt
+
+
 def test_online_hpc_8h_resume_config_keeps_2h_checkpoint_semantics(monkeypatch):
     monkeypatch.setenv("DEEPSEEK_API_KEY", "secret")
     repo_root = Path(__file__).resolve().parents[2]
@@ -851,6 +869,15 @@ def test_online_rollout_retry_resumes_from_plan_checkpoint(tmp_path, monkeypatch
                 {
                     "instance_id": case.instance_id,
                     "outcome": "resolved",
+                    "attribution_questions": ["Did the plan identify the path?"],
+                    "repository_actions": [{
+                        "purpose": "Inspect the planned symbol.",
+                        "command_summary": "Searched the base repository.",
+                        "repository_state": "base",
+                        "result": "The symbol exists at the planned path.",
+                    }],
+                    "experiments": [],
+                    "experiment_skipped_reason": "Static evidence was sufficient.",
                     "plan_assessment": {
                         "navigation": "good",
                         "reproduction": "good",
@@ -860,6 +887,8 @@ def test_online_rollout_retry_resumes_from_plan_checkpoint(tmp_path, monkeypatch
                     "code_followed_plan": True,
                     "attribution": "plan",
                     "planning_lesson": "keep",
+                    "confidence": "high",
+                    "remaining_uncertainty": "",
                     "evidence_files": [
                         "task.md",
                         "generated_plan.md",
@@ -927,6 +956,15 @@ def test_instance_reflection_review_requires_grounded_evidence():
     valid = {
         "instance_id": "repo__one",
         "outcome": "resolved",
+        "attribution_questions": ["Did the plan identify the path?"],
+        "repository_actions": [{
+            "purpose": "Inspect the planned symbol.",
+            "command_summary": "Searched the base repository.",
+            "repository_state": "base",
+            "result": "The symbol exists at the planned path.",
+        }],
+        "experiments": [],
+        "experiment_skipped_reason": "Static evidence was sufficient.",
         "plan_assessment": {
             "navigation": "good",
             "reproduction": "good",
@@ -936,6 +974,8 @@ def test_instance_reflection_review_requires_grounded_evidence():
         "code_followed_plan": True,
         "attribution": "plan",
         "planning_lesson": "keep",
+        "confidence": "high",
+        "remaining_uncertainty": "",
         "evidence_files": [
             "task.md",
             "generated_plan.md",
@@ -948,18 +988,34 @@ def test_instance_reflection_review_requires_grounded_evidence():
     with pytest.raises(ValueError, match="required evidence"):
         validate_instance_review(invalid, instance_id="repo__one")
 
+    missing_skip_reason = {**valid, "experiment_skipped_reason": ""}
+    with pytest.raises(ValueError, match="experiments were skipped"):
+        validate_instance_review(missing_skip_reason, instance_id="repo__one")
+
+    invalid_action = {
+        **valid,
+        "repository_actions": [
+            {**valid["repository_actions"][0], "repository_state": "mixed"}
+        ],
+    }
+    with pytest.raises(ValueError, match="repository state"):
+        validate_instance_review(invalid_action, instance_id="repo__one")
+
     validate_reviewer_exploration(
         [
             {
                 "role": "assistant",
-                "content": "cat /evidence/task.md && rg symbol /testbed",
+                "content": "```bash\ncat /evidence/task.md && rg symbol /testbed\n```",
             }
         ],
         repository_path="/testbed",
     )
     with pytest.raises(ValueError, match="base repository"):
         validate_reviewer_exploration(
-            [{"role": "assistant", "content": "cat /evidence/task.md"}],
+            [{
+                "role": "assistant",
+                "content": "```bash\ncat /evidence/task.md\n```",
+            }],
             repository_path="/testbed",
         )
 
@@ -988,6 +1044,23 @@ def test_instance_reflection_reviewer_reads_repo_and_persists_review(
                     {
                         "instance_id": case.instance_id,
                         "outcome": "resolved",
+                        "attribution_questions": [
+                            "Did the plan identify the path?"
+                        ],
+                        "repository_actions": [{
+                            "purpose": "Inspect the planned symbol.",
+                            "command_summary": "Searched the base repository.",
+                            "repository_state": "base",
+                            "result": "The symbol exists at the planned path.",
+                        }],
+                        "experiments": [{
+                            "hypothesis": "The focused behavior matches the plan.",
+                            "repository_state": "base",
+                            "method": "Ran a focused repository command.",
+                            "observation": "The expected path was exercised.",
+                            "supports_hypothesis": True,
+                        }],
+                        "experiment_skipped_reason": "",
                         "plan_assessment": {
                             "navigation": "good",
                             "reproduction": "good",
@@ -997,6 +1070,8 @@ def test_instance_reflection_reviewer_reads_repo_and_persists_review(
                         "code_followed_plan": True,
                         "attribution": "plan",
                         "planning_lesson": "keep",
+                        "confidence": "high",
+                        "remaining_uncertainty": "",
                         "evidence_files": [
                             "task.md",
                             "generated_plan.md",
@@ -1016,7 +1091,10 @@ def test_instance_reflection_reviewer_reads_repo_and_persists_review(
         messages = [
             {
                 "role": "assistant",
-                "content": "cat /evidence/task.md && rg symbol /testbed",
+                "content": (
+                    "```bash\ncat /evidence/task.md && rg symbol /testbed "
+                    "&& python /review/check_behavior.py\n```"
+                ),
             }
         ]
 
@@ -3419,19 +3497,30 @@ def test_online_reflection_proposer_uses_apptainer_when_runtime_apptainer(
         "generated_patch": "diff --git a/a.py b/a.py\n",
         "evaluator_result": {"resolved": True},
         "attribution_hint": {"code_followed_plan": True},
-        "reflection_review": {
-            "instance_id": "repo__one",
-            "outcome": "resolved",
-            "plan_assessment": {
+            "reflection_review": {
+                "instance_id": "repo__one",
+                "outcome": "resolved",
+                "attribution_questions": ["Did the plan identify the path?"],
+                "repository_actions": [{
+                    "purpose": "Inspect the planned symbol.",
+                    "command_summary": "Searched the base repository.",
+                    "repository_state": "base",
+                    "result": "The symbol exists at the planned path.",
+                }],
+                "experiments": [],
+                "experiment_skipped_reason": "Static evidence was sufficient.",
+                "plan_assessment": {
                 "navigation": "good",
                 "reproduction": "good",
                 "patch_strategy": "good",
                 "validation": "good",
             },
             "code_followed_plan": True,
-            "attribution": "plan",
-            "planning_lesson": "keep the useful rule",
-            "evidence_files": [
+                "attribution": "plan",
+                "planning_lesson": "keep the useful rule",
+                "confidence": "high",
+                "remaining_uncertainty": "",
+                "evidence_files": [
                 "task.md",
                 "generated_plan.md",
                 "evaluator_result.json",

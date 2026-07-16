@@ -23,6 +23,11 @@ checkpoint/worker transfer, but does not filter paths or repair the patch.
 Malformed, incomplete, or poorly selected patches are evaluator-visible Code
 outcomes and normally score unresolved rather than blocking the run.
 
+The SIF instance reviewer may also run focused tests or make temporary
+diagnostic/counterfactual edits after inspecting the untouched base. These edits
+are discarded with its SIF overlay; repository actions and observations remain
+in the reviewer trajectory and structured review for synthesis.
+
 The runtime config and launch config have separate authority: changing prompts,
 budgets, evaluator, or worker resources belongs in
 `gepa_online_planning_hpc.yaml`; changing the run identity, iteration target,

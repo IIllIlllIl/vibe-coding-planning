@@ -221,6 +221,19 @@ class OnlinePlanningGEPAAdapter:
             review = {
                 "instance_id": case.instance_id,
                 "outcome": "unresolved",
+                "attribution_questions": [
+                    "No reviewer ran because the rollout ended before review."
+                ],
+                "repository_actions": [
+                    {
+                        "purpose": "Record unavailable repository review.",
+                        "command_summary": "No repository command was run.",
+                        "repository_state": "base",
+                        "result": "Repository evidence unavailable.",
+                    }
+                ],
+                "experiments": [],
+                "experiment_skipped_reason": "Reviewer did not run.",
                 "plan_assessment": {
                     "navigation": "Unavailable after terminal Agent failure.",
                     "reproduction": "Unavailable after terminal Agent failure.",
@@ -230,6 +243,8 @@ class OnlinePlanningGEPAAdapter:
                 "code_followed_plan": None,
                 "attribution": "uncertain",
                 "planning_lesson": "No reviewer-backed planning lesson.",
+                "confidence": "low",
+                "remaining_uncertainty": "The rollout ended before review.",
                 "evidence_files": ["rollout_summary.json"],
                 "review_status": "not_run_after_terminal_agent_failure",
             }
@@ -484,6 +499,17 @@ class OnlinePlanningGEPAAdapter:
             review = output.reflection_review or {
                 "instance_id": case.instance_id,
                 "outcome": "unresolved",
+                "attribution_questions": ["Why was reviewer output unavailable?"],
+                "repository_actions": [
+                    {
+                        "purpose": "Record unavailable repository review.",
+                        "command_summary": "No repository command was available.",
+                        "repository_state": "base",
+                        "result": "Repository evidence unavailable.",
+                    }
+                ],
+                "experiments": [],
+                "experiment_skipped_reason": "Reviewer output was unavailable.",
                 "plan_assessment": {
                     "navigation": "Reviewer output unavailable.",
                     "reproduction": "Reviewer output unavailable.",
@@ -493,6 +519,8 @@ class OnlinePlanningGEPAAdapter:
                 "code_followed_plan": None,
                 "attribution": "uncertain",
                 "planning_lesson": "No reviewer-backed planning lesson.",
+                "confidence": "low",
+                "remaining_uncertainty": "No durable reviewer output exists.",
                 "evidence_files": ["rollout_summary.json"],
                 "review_status": "not_available",
             }

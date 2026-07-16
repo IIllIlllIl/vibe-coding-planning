@@ -59,6 +59,15 @@ worker returns. Candidate-comparison and full-validation calls do not run
 reviewers. Synthesis reads all instance reviews and writes both
 `reflection_analysis.json` and the complete candidate checklist.
 
+Reviewers use question-driven repository interaction rather than a ceremonial
+filesystem check. After evidence triage they inspect the untouched base and may
+run a focused reproduction/test, write a disposable diagnostic script or test,
+apply the generated patch, or make a small counterfactual edit. Their structured
+output records attribution questions, repository actions, experiments,
+confidence, and uncertainty. Experiments are optional when static evidence is
+decisive. Reviewer edits never cross into Code or Evaluator; only the trajectory
+and structured review persist.
+
 Each synthesis proposal persists a redacted `reflection_trajectory.json`
 beside its evidence bundle. It records the complete mini-swe-agent transcript,
 proposal mode, candidate identity, instance IDs, and completion or failure

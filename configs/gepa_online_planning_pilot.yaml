@@ -166,10 +166,23 @@ prompts:
     concrete attribution questions. Compare issue -> plan -> Code -> patch ->
     evaluator. Attribute to plan, code, evaluator, infrastructure, or uncertain.
 
-    Write {{output_path}} as JSON with instance_id, outcome, plan_assessment,
-    code_followed_plan, attribution, planning_lesson, and evidence_files.
-    plan_assessment contains navigation, reproduction, patch_strategy, and
-    validation. Use exactly one bash code block per response. Submit with:
+    Form explicit attribution questions and use targeted repository interaction
+    to answer them. Inspect the untouched base first. When useful, run a focused
+    reproduction or existing test, write a temporary diagnostic test or script,
+    apply generated.patch, or make a small counterfactual edit. All changes are
+    disposable and never become a submission. Keep observations from base,
+    generated_patch, and counterfactual states separate. Experiments may be
+    skipped only when static evidence is sufficient and the reason is recorded.
+
+    Write {{output_path}} as JSON with instance_id, outcome,
+    attribution_questions, repository_actions, experiments,
+    experiment_skipped_reason, plan_assessment, code_followed_plan, attribution,
+    planning_lesson, confidence, remaining_uncertainty, and evidence_files.
+    repository_actions records purpose, command_summary, repository_state, and
+    result. Each experiment records hypothesis, repository_state, method,
+    observation, and boolean supports_hypothesis. plan_assessment contains
+    navigation, reproduction, patch_strategy, and validation. Use exactly one
+    bash code block per response. Submit with:
     echo COMPLETE_TASK_AND_SUBMIT_FINAL_OUTPUT && cat {{output_path}}
 
   reflection_reviewer_instance: |

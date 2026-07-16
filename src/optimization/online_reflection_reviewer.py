@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 import os
 from pathlib import Path
+import re
 import shutil
 from typing import Any
 
@@ -23,6 +24,8 @@ from src.optimization.reflection import save_reflection_trajectory
 
 
 _ATTRIBUTIONS = {"plan", "code", "evaluator", "infrastructure", "uncertain"}
+_REPOSITORY_STATES = {"base", "generated_patch", "counterfactual"}
+_CONFIDENCE_LEVELS = {"low", "medium", "high"}
 
 
 def _write_json(path: Path, value: Any) -> None:
@@ -42,6 +45,56 @@ def validate_instance_review(value: Any, *, instance_id: str) -> dict[str, Any]:
         raise ValueError("Reflection reviewer output instance ID mismatch")
     if value.get("attribution") not in _ATTRIBUTIONS:
         raise ValueError("Reflection reviewer output has invalid attribution")
+    questions = value.get("attribution_questions")
+    if not isinstance(questions, list) or not questions or not all(
+        isinstance(question, str) and question.strip() for question in questions
+    ):
+        raise ValueError("Reflection reviewer output lacks attribution questions")
+    actions = value.get("repository_actions")
+    if not isinstance(actions, list) or not actions:
+        raise ValueError("Reflection reviewer output lacks repository actions")
+    action_fields = {"purpose", "command_summary", "repository_state", "result"}
+    for action in actions:
+        if not isinstance(action, dict) or set(action) != action_fields:
+            raise ValueError("Reflection reviewer repository action is malformed")
+        if action["repository_state"] not in _REPOSITORY_STATES:
+            raise ValueError("Reflection reviewer repository state is invalid")
+        if not all(
+            isinstance(action[field], str) and action[field].strip()
+            for field in action_fields
+        ):
+            raise ValueError("Reflection reviewer repository action is empty")
+    experiments = value.get("experiments")
+    if not isinstance(experiments, list):
+        raise ValueError("Reflection reviewer experiments must be a list")
+    experiment_fields = {
+        "hypothesis",
+        "repository_state",
+        "method",
+        "observation",
+        "supports_hypothesis",
+    }
+    for experiment in experiments:
+        if not isinstance(experiment, dict) or set(experiment) != experiment_fields:
+            raise ValueError("Reflection reviewer experiment is malformed")
+        if experiment["repository_state"] not in _REPOSITORY_STATES:
+            raise ValueError("Reflection reviewer experiment state is invalid")
+        if not all(
+            isinstance(experiment[field], str) and experiment[field].strip()
+            for field in ("hypothesis", "repository_state", "method", "observation")
+        ) or not isinstance(experiment["supports_hypothesis"], bool):
+            raise ValueError("Reflection reviewer experiment result is invalid")
+    skipped_reason = value.get("experiment_skipped_reason")
+    if not experiments and not (
+        isinstance(skipped_reason, str) and skipped_reason.strip()
+    ):
+        raise ValueError("Reflection reviewer must explain why experiments were skipped")
+    if experiments and not isinstance(skipped_reason, str):
+        raise ValueError("Reflection reviewer experiment skip reason must be a string")
+    if value.get("confidence") not in _CONFIDENCE_LEVELS:
+        raise ValueError("Reflection reviewer confidence is invalid")
+    if not isinstance(value.get("remaining_uncertainty"), str):
+        raise ValueError("Reflection reviewer remaining uncertainty must be a string")
     assessment = value.get("plan_assessment")
     if not isinstance(assessment, dict) or set(assessment) != {
         "navigation",
@@ -69,9 +122,10 @@ def validate_reviewer_exploration(
         for message in messages
         if message.get("role") == "assistant"
     )
-    if "/evidence" not in assistant_text:
+    commands = re.findall(r"```bash\s*(.*?)```", assistant_text, flags=re.DOTALL)
+    if not any("/evidence" in command for command in commands):
         raise ValueError("Reflection reviewer did not issue an evidence command")
-    if repository_path not in assistant_text:
+    if not any(repository_path in command for command in commands):
         raise ValueError("Reflection reviewer did not inspect the base repository")
 
 
