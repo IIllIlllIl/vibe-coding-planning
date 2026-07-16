@@ -8,7 +8,7 @@ superseded variants live under `archive/` and remain available for provenance.
 
 | Config | Runtime | Purpose |
 |---|---|---|
-| `gepa_online_planning_hpc.yaml` | ULHPC Apptainer | Standard formal configuration over the 384/98 split. Each rollout is an independent `1 CPU / 4G / 55min` array task under outcome policy v3: a Slurm-confirmed timeout is scored unresolved, while infrastructure failures remain invalid. Fingerprinted batch journals and Plan/Code/Evaluator checkpoints support selective retry. |
+| `gepa_online_planning_hpc.yaml` | ULHPC Apptainer | Standard formal configuration over the 384/98 split. Each rollout is an independent `1 CPU / 4G / 55min` array task under outcome policy v3: a Slurm-confirmed timeout retries only that index up to the shared attempt limit, then becomes unresolved; infrastructure failures remain invalid. Fingerprinted batch journals and Plan/Code/Evaluator checkpoints support selective retry. |
 | `online_gepa_supervisor.yaml` | Local tmux+caffeinate | Exact formal launch identity: session/log, 8-iteration target, 30-minute cadence, unlimited controller slices, remote workdir, and `1 CPU / 4G / 2h` controller arguments. Use this file instead of reconstructing a long command. |
 | `gepa_online_planning_pilot.yaml` | local Docker | Standard small executable example for validating the Online GEPA flow locally. |
 

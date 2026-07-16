@@ -15,6 +15,19 @@ from src.exceptions import FatalError
 logger = logging.getLogger(__name__)
 _MINI_SWE_AGENT_VERSION = "1.17.5"
 
+_PERMANENT_PROVIDER_ERROR_MARKERS = (
+    "authentication failed",
+    "billing hard limit",
+    "credit balance",
+    "insufficient balance",
+    "insufficient credits",
+    "insufficient_quota",
+    "invalid api key",
+    "invalid_api_key",
+    "quota exceeded",
+    "unauthorized",
+)
+
 
 def import_minisweagent() -> Any:
     """Lazy import mini-swe-agent 1.17.5 classes.
@@ -174,6 +187,27 @@ def build_default_agent(
         kwargs["instance_template"] = instance_template
 
     return DefaultAgent(model, environment, **kwargs)
+
+
+def raise_for_permanent_provider_error(
+    exception_name: str,
+    exception_message: str,
+) -> None:
+    """Keep permanent provider failures out of scored agent outcomes.
+
+    ``LimitsExceeded`` is mini-swe-agent's own step/cost budget signal and is
+    deliberately excluded: that is attributable to the agent and may be
+    retried and scored unresolved. Provider authentication, billing, and hard
+    quota failures cannot be repaired by rerunning an instance.
+    """
+    if exception_name == "LimitsExceeded":
+        return
+    normalized = f"{exception_name}: {exception_message}".lower()
+    if any(marker in normalized for marker in _PERMANENT_PROVIDER_ERROR_MARKERS):
+        raise FatalError(
+            "Permanent model-provider failure; refusing to score this as an "
+            f"agent outcome (exit_status={exception_name})."
+        )
 
 
 def extract_last_assistant(messages: list[dict[str, Any]]) -> str:

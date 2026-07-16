@@ -440,9 +440,7 @@ def _run_online_optimization_locked(
         new_reflection_failure = (
             len(reflection_failures) > reflection_failure_count_before
         )
-        blocking_failure = (
-            False if new_reflection_failure else _is_blocking_controller_error(exc)
-        )
+        blocking_failure = _is_blocking_controller_error(exc)
         controller_status = "failed" if blocking_failure else "retryable_failed"
         JsonlLogger(config.run_dir / "errors.jsonl").write(
             "online_optimization_failed",

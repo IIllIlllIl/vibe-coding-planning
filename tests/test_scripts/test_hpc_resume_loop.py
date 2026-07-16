@@ -364,7 +364,10 @@ def test_hpc_supervisor_service_starts_with_tmux_and_caffeinate(tmp_path: Path) 
     assert result.returncode == 0, result.stderr
     invocation = tmux_log.read_text(encoding="utf-8")
     assert "new-session -d -s online-gepa-test" in invocation
-    assert "exec caffeinate -i -s conda run -n mini-swe python" in invocation
+    assert (
+        "exec caffeinate -i -s conda run --no-capture-output -n mini-swe python"
+        in invocation
+    )
     assert "hpc_resume_loop.py --poll-interval 1800" in invocation
 
 
@@ -419,6 +422,7 @@ arguments:
     assert "new-session -d -s persisted-online-gepa" in invocation
     assert "hpc_resume_loop.py --target-iterations 8" in invocation
     assert "configs/gepa_online_planning_hpc.yaml --submit" in invocation
+    assert "conda run --no-capture-output -n mini-swe" in invocation
 
 
 def test_hpc_supervisor_waits_for_workers_without_submitting(tmp_path: Path) -> None:

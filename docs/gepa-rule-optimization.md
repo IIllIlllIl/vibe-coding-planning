@@ -69,15 +69,17 @@ Agent randomness is not mistaken for planning quality.
 - evaluator resolved -> 1;
 - evaluator unresolved or official test timeout -> 0;
 - final Plan/Code Agent contract failure after all attempts -> 0;
-- Slurm-confirmed worker timeout -> 0 with timeout attribution;
+- Slurm-confirmed worker timeout -> selectively retry, then 0 with timeout
+  attribution only after the final configured attempt;
 - repository/SIF/OOM/checkpoint identity/evaluator harness/output-integrity/
   cleanup failure -> invalid and blocking.
 
 The Code phase has a controlled 2400-second deadline. The worker writes
 `code_phase_deadline_exceeded` before Slurm termination. Three total attempts
 are allowed. A structured Agent timeout becomes score 0 after those attempts.
-A Slurm-confirmed `TIMEOUT` without worker output becomes score 0 immediately;
-missing output with ambiguous state stays invalid.
+A Slurm-confirmed `TIMEOUT` without worker output retries only that index and
+becomes score 0 after `hpc.max_task_attempts`; missing output with ambiguous
+state stays invalid.
 
 Policy version, Code deadline, retry count, prompts, models, evaluator config,
 dataset identity, container config, and optimization source hash participate in
@@ -88,20 +90,34 @@ the rollout semantic hash/evaluation fingerprint.
 Every metric batch stores an immutable evaluation fingerprint and a journal:
 
 ```text
-PREPARED -> SUBMITTING -> SUBMITTED -> COMPLETE
+PREPARED -> SUBMITTING -> SUBMITTED -> OUTPUTS_READY -> COMPLETE
 ```
 
 - `SUBMITTED`: query the original job; reuse valid outputs and retry only failed
   or terminal-missing indices.
 - `SUBMITTING`: reconcile by deterministic job name before any replacement.
-- `COMPLETE`: worker outputs are collected; GEPA state may still be uncommitted.
+- `OUTPUTS_READY`: all worker files exist, but collection has not completed.
+- `COMPLETE`: outputs were validated and returned to GEPA; GEPA state may still
+  be uncommitted.
 - Legacy batches without identity/journal are not automatically adopted.
 
+A completed Slurm array may remain `SUBMITTED` when GEPA does not replay that
+exact metric-call fingerprint after restart. Its files remain reusable, but it
+must not be called `COMPLETE` or counted as committed evidence. Reusing an
+already `COMPLETE` batch emits a reuse event rather than another completion.
+
 Pending time does not count as worker execution timeout. Running tasks may use
-their allocation plus configured output grace. A confirmed `TIMEOUT` is scored
-unresolved; other terminal tasks without output are selectively retried. An
+their allocation plus configured output grace. A confirmed `TIMEOUT` is
+selectively retried and becomes unresolved only after the attempt limit; other
+terminal tasks without output are also selectively retried. An
 unknown Slurm task is treated as lost only after its grace and is never inferred
 to be an Agent timeout.
+
+Formal HPC Plan and Code YAML omits mini-swe step, cost, and model-attempt
+fields. The Online loader disables the retired step/cost mechanisms internally,
+and the Plan prompt contains no separate step budget. Per-command timeout,
+evaluator timeout, worker Slurm walltime, and the shared HPC attempt count remain
+the visible operational boundaries.
 
 ## 6. Phase Resume
 
@@ -144,9 +160,10 @@ The formal configuration is `configs/gepa_online_planning_hpc.yaml`:
   failures;
 - controller slices 2 hours under the external supervisor.
 
-Outcome policy v3 treats a Slurm-confirmed worker `TIMEOUT` as a scored
-unresolved rollout. The controller preserves any completed Plan/Code checkpoint
-in Reflection evidence and marks `terminal_reason=slurm_timeout`. OOM, node,
+Outcome policy v3 selectively retries a Slurm-confirmed worker `TIMEOUT`; only
+the final exhausted attempt becomes scored unresolved. The controller preserves
+any completed Plan/Code checkpoint in Reflection evidence and marks
+`terminal_reason=slurm_timeout`. OOM, node,
 repository, evaluator-harness, corrupt-output, and ambiguous Slurm failures stay
 invalid. Reflection failures are not instance outcomes; they leave the GEPA
 proposal uncommitted and are retried by a later controller slice.

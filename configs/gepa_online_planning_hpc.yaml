@@ -13,20 +13,14 @@ plan:
   api_base: https://api.deepseek.com
   api_key_env: DEEPSEEK_API_KEY
   temperature: 0.0
-  max_steps: 300
-  cost_limit: 6.0
   timeout: 1800
-  max_attempts: 3
 
 code:
   model: deepseek-v4-flash
   api_base: https://api.deepseek.com
   api_key_env: DEEPSEEK_API_KEY
   temperature: 0.0
-  max_steps: 1000
-  cost_limit: 20.0
   timeout: 1800
-  max_attempts: 2
 
 reflection:
   model: deepseek-v4-flash
@@ -120,11 +114,6 @@ prompts:
 
     Do not modify files under /testbed. Use /tmp only for scratch work and the
     final plan file.
-
-    ## Exploration Budget
-    You have a hard exploration budget of 150 steps. After step 150 you MUST
-    write the plan to /tmp/plan.md and submit it, even if your understanding is
-    incomplete. An imperfect plan is infinitely better than no plan.
 
     ## Efficiency Rules
     - Every ~10 steps, briefly summarize what you have learned so far in your

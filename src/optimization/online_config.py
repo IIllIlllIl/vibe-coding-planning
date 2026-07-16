@@ -121,8 +121,8 @@ def _model(data: dict[str, Any], *, default_temperature: float) -> ModelConfig:
         api_base=str(data["api_base"]),
         api_key_env=str(data.get("api_key_env", "DEEPSEEK_API_KEY")),
         temperature=float(data.get("temperature", default_temperature)),
-        max_steps=int(data.get("max_steps", 50)),
-        cost_limit=float(data.get("cost_limit", 1.0)),
+        max_steps=int(data.get("max_steps", 0)),
+        cost_limit=float(data.get("cost_limit", 0.0)),
         timeout=int(data.get("timeout", 1800)),
         max_attempts=max_attempts,
     )

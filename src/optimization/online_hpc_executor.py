@@ -12,12 +12,13 @@ import hashlib
 import json
 from pathlib import Path
 import shlex
+import shutil
 import subprocess
 import time
 from typing import Any, Callable, Sequence
 
 from src.optimization.audit import JsonlLogger, text_sha256
-from src.exceptions import OnlineControllerYield
+from src.exceptions import FatalError, OnlineControllerYield
 from src.optimization.online_config import OnlineOptimizationConfig
 from src.optimization.online_models import (
     ONLINE_OUTCOME_POLICY_VERSION,
@@ -498,6 +499,34 @@ class HPCSlurmOnlineRolloutExecutor:
             attempt = int(state.get("active_attempt", 1))
             retry_job_ids = [str(item) for item in state.get("retry_job_ids", [])]
             before: dict[str, Any] = {}
+            if state.get("phase") == "COMPLETE":
+                if not (batch_dir / "batch_done.json").is_file():
+                    raise RuntimeError(
+                        "online HPC COMPLETE batch lacks batch_done.json"
+                    )
+                outputs = self._load_completed_outputs(tasks)
+                self.audit.write(
+                    "online_hpc_rollout_batch_reused_complete",
+                    batch_dir=str(batch_dir),
+                    job_id=job_id,
+                    completed_outputs=len(outputs),
+                )
+                return outputs
+            if all(task.output_path.is_file() for task in tasks):
+                self._write_batch_state(
+                    batch_dir,
+                    phase="OUTPUTS_READY",
+                    evaluation_fingerprint=fingerprint,
+                    active_attempt=attempt,
+                    active_job_id=job_id,
+                    retry_job_ids=retry_job_ids,
+                )
+                self.audit.write(
+                    "online_hpc_rollout_batch_outputs_ready",
+                    batch_dir=str(batch_dir),
+                    job_id=job_id,
+                    output_count=len(tasks),
+                )
             if not all(task.output_path.is_file() for task in tasks):
                 should_yield = False
                 if not job_id:
@@ -634,6 +663,22 @@ class HPCSlurmOnlineRolloutExecutor:
             "HPC rollout batch prepared but not submitted. Review "
             f"{batch_dir} and set hpc.submit=true after resource pilot setup."
         )
+
+    def _load_completed_outputs(
+        self,
+        tasks: list[OnlineRolloutTask],
+    ) -> list[OnlineRolloutOutput]:
+        candidate_sha256 = text_sha256(
+            tasks[0].rules_path.read_text(encoding="utf-8")
+        )
+        return [
+            self.store.load_output(
+                task.output_path,
+                expected_instance_id=task.case.instance_id,
+                expected_candidate_sha256=candidate_sha256,
+            )
+            for task in tasks
+        ]
 
     @staticmethod
     def _write_batch_state(
@@ -1020,6 +1065,37 @@ class HPCSlurmOnlineRolloutExecutor:
             },
         )
 
+    def _cleanup_timed_out_workspace(
+        self,
+        task: OnlineRolloutTask,
+        attempt: int,
+    ) -> None:
+        workspace = task.worker_run_dir / f"attempt_{attempt}" / "phase_workspaces"
+        if not workspace.exists():
+            return
+        try:
+            shutil.rmtree(workspace)
+        except OSError as exc:
+            self.audit.write(
+                "online_hpc_rollout_timeout_cleanup_failed",
+                task_index=task.index,
+                instance_id=task.case.instance_id,
+                attempt=attempt,
+                path=str(workspace),
+                error_type=type(exc).__name__,
+                error=str(exc),
+            )
+            raise FatalError(
+                f"failed to clean terminal timeout workspace {workspace}: {exc}"
+            ) from exc
+        self.audit.write(
+            "online_hpc_rollout_timeout_workspace_removed",
+            task_index=task.index,
+            instance_id=task.case.instance_id,
+            attempt=attempt,
+            path=str(workspace),
+        )
+
     def _wait_for_outputs(
         self,
         tasks: list[OnlineRolloutTask],
@@ -1067,18 +1143,31 @@ class HPCSlurmOnlineRolloutExecutor:
                         retriable[index] = task
                     continue
                 if state == "TIMEOUT":
-                    self._finalize_slurm_timeout(task, attempt)
-                    remaining.pop(index, None)
-                    first_missing_seen_at.pop(index, None)
-                    self.audit.write(
-                        "online_hpc_rollout_timeout_scored",
-                        job_id=job_id,
-                        attempt=attempt,
-                        task_index=index,
-                        instance_id=task.case.instance_id,
-                        score=0.0,
-                        terminal_reason="slurm_timeout",
-                    )
+                    self._cleanup_timed_out_workspace(task, attempt)
+                    if attempt < self.config.hpc.max_task_attempts:
+                        retriable[index] = task
+                        self.audit.write(
+                            "online_hpc_rollout_timeout_retriable",
+                            job_id=job_id,
+                            attempt=attempt,
+                            max_task_attempts=self.config.hpc.max_task_attempts,
+                            task_index=index,
+                            instance_id=task.case.instance_id,
+                        )
+                    else:
+                        self._finalize_slurm_timeout(task, attempt)
+                        remaining.pop(index, None)
+                        first_missing_seen_at.pop(index, None)
+                        self.audit.write(
+                            "online_hpc_rollout_timeout_scored",
+                            job_id=job_id,
+                            attempt=attempt,
+                            max_task_attempts=self.config.hpc.max_task_attempts,
+                            task_index=index,
+                            instance_id=task.case.instance_id,
+                            score=0.0,
+                            terminal_reason="slurm_timeout",
+                        )
                     continue
                 if state in _SLURM_TERMINAL_STATES:
                     retriable[index] = task

@@ -41,10 +41,16 @@ Every rollout is either `scored` or `invalid`.
 - Official evaluator resolved/unresolved produces score 1/0.
 - Plan/Code Agent contract failures are retried selectively. After the configured
   total attempts, a final structured Agent failure becomes score 0.
-- A Slurm-confirmed `TIMEOUT` is a scored unresolved result with timeout
-  attribution. Missing output with unknown state cannot be inferred as timeout.
+- A Slurm-confirmed `TIMEOUT` selectively retries that index up to
+  `hpc.max_task_attempts`; only the final exhausted attempt becomes scored
+  unresolved with timeout attribution. Missing output with unknown state cannot
+  be inferred as timeout.
 - Repository, SIF, OOM, checkpoint identity, evaluator harness, transfer,
   output-integrity, disk/quota, and cleanup failures remain invalid and block.
+- Formal HPC Plan/Code agents do not use mini-swe step or cost limits; the
+  55-minute worker allocation is their total rollout boundary. Permanent
+  provider authentication, billing, or hard-quota failure remains invalid and
+  must block rather than becoming scored evidence.
 - Reflection, SSH/status, controller submission, and ordinary transient
   controller failures are resumable and must not permanently stop supervision.
 - Outcome policy version and all score-changing budgets belong to the evaluation
@@ -73,6 +79,8 @@ Every rollout is either `scored` or `invalid`.
 - The exact local supervisor command surface is persisted in
   `configs/online_gepa_supervisor.yaml`; unattended launches must not depend on
   reconstructed chat commands or ad hoc PATH injection.
+- The durable service streams stdout/stderr to its configured log during
+  execution (`conda run --no-capture-output` or equivalent).
 
 ## 6. Storage And Cleanup
 

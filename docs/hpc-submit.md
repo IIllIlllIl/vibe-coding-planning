@@ -80,6 +80,9 @@ the unattended supervisor. Use the same script with `status` or `stop` and the
 same `--session` to inspect or stop it. Do not launch the raw resume loop with
 `&` for an unattended run.
 
+The service uses `conda run --no-capture-output`, so stdout/stderr reaches the
+configured log while the supervisor is running rather than only after exit.
+
 Status and stop use the same persisted identity:
 
 ```bash
@@ -118,10 +121,12 @@ a test, so launch commands must not inject a user-specific PATH.
 | Outcome | Supervisor behavior |
 |---|---|
 | Agent timeout/contract failure after configured retries | score unresolved; continue |
-| Slurm-confirmed worker `TIMEOUT` | score unresolved with timeout metadata; continue |
+| Slurm-confirmed worker `TIMEOUT` | retry only that index; after the final configured attempt, score unresolved with timeout metadata |
 | Reflection failure | leave proposal uncommitted; retry a controller slice |
 | SSH/status/submission/transient controller failure | wait and retry |
-| OOM, disk/quota, corrupt state/output, fingerprint/manifest mismatch | block |
+| OOM, disk quota, permanent provider authentication/billing/hard quota failure, corrupt state/output, fingerprint/manifest mismatch | block |
+| Formal Plan/Code mini-swe `cost_limit` / `step_limit` | disabled; worker walltime is the total rollout boundary |
+| Transient provider rate limiting | retryable; do not classify as permanent account quota exhaustion |
 | Repository/SIF/evaluator harness or cleanup integrity failure | block |
 
 Local supervisor state is a cache. Remote `gepa_state.bin`, batch journals, and
@@ -134,6 +139,11 @@ next controller replays the GEPA metric call and finds the same fingerprinted
 batch. While workers remain active it yields again; after terminal state it
 collects outputs, selectively retries, or returns the EvaluationBatch.
 
+Worker completion alone is not GEPA commitment. Collection advances the batch
+through `OUTPUTS_READY` and then `COMPLETE`. A finished array left at
+`SUBMITTED` belongs to a metric call GEPA has not replayed; preserve it for
+fingerprint reuse and do not count it as an optimization result.
+
 Yield must appear as `yielded`, not `failed`, in controller status and audit.
 
 ## 6. Slurm Status Rules
@@ -141,8 +151,10 @@ Yield must appear as `yielded`, not `failed`, in controller status and audit.
 - `PENDING`: wait; queue time is not execution timeout.
 - `RUNNING`: wait up to requested worker walltime plus output grace.
 - terminal with valid output: collect.
-- `TIMEOUT` without output: synthesize a scored unresolved result from durable
-  phase checkpoints, mark `timeout_source=slurm_walltime`, and do not retry.
+- `TIMEOUT` without output: clean the terminal attempt workspace and retry only
+  that index. After `hpc.max_task_attempts` is exhausted, synthesize a scored
+  unresolved result from durable phase checkpoints and mark
+  `timeout_source=slurm_walltime`.
 - other terminal states without output: retry the affected index; after the
   configured attempts, block as infrastructure-invalid.
 - state missing/unknown: wait through missing-task grace, then treat as lost.

@@ -23,6 +23,7 @@ from src.agents._deps import (
     build_default_agent,
     build_model,
     import_minisweagent,
+    raise_for_permanent_provider_error,
 )
 from src.config import Config
 from src.exceptions import AgentTaskError
@@ -158,6 +159,7 @@ def run(
             exception_name, exception_msg = agent.run(
                 task=issue_description, plan=plan
             )
+            raise_for_permanent_provider_error(exception_name, exception_msg)
     except AgentTaskError as exc:
         _write_failure_trajectory(
             failure_trajectory_path,

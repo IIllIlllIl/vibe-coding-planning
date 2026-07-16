@@ -20,6 +20,8 @@ ssh -p 8022 twang@access-iris.uni.lu \
 | Observed at | Context | RawUsage | EffectvUsage | FairShare | Comparison |
 |---|---|---:|---:|---:|---|
 | 2026-07-15 17:17 Europe/Luxembourg | policy-v3 seed validation array active | 574030 | 0.010887 | 0.364826 | First authoritative project baseline |
+| 2026-07-15 17:26 Europe/Luxembourg | policy-v3 seed validation: 89/98 outputs, 9 workers active | 610001 | 0.011633 | 0.364826 | FairShare unchanged; usage increased by 35971 |
+| 2026-07-16 11:36 Europe/Luxembourg | policy-v3 at 7/8 durable iterations; latest rollout array complete and awaiting collection | 750738 | 0.014363 | 0.365549 | FairShare increased by 0.000723 from the first authoritative baseline |
 
 Future launch/progress checks must append a row before interpreting movement.
 
@@ -83,7 +85,8 @@ Future launch/progress checks must append a row before interpreting movement.
 - **已实现决策**：
   - 只有 `outcome_status=scored`、`score_valid=true` 的结果进入 GEPA。
   - Evaluator resolved/unresolved 使用 1/0；Plan/Code Agent 空提交、未提交、
-    step/cost limit 或 Agent 单命令超时在固定重试用尽后计 0。
+    Agent 单命令超时在固定重试用尽后计 0；正式 HPC Plan/Code 的 mini-swe
+    step/cost limits 已禁用，统一由 worker walltime 提供总边界。
   - repository/SIF/OOM/checkpoint identity/evaluator harness/output integrity/
     cleanup 失败保持 invalid 并停止当前 metric call；不设置主观可信分数。
     Reflection、SSH/status、提交和普通 controller 异常自动恢复。
@@ -123,8 +126,8 @@ Future launch/progress checks must append a row before interpreting movement.
     partial trajectory。下一次真实 HPC run 需验证 phase 接管和磁盘回收。
   - 2026-07-15 的 outcome policy v2 增加 Code phase 内部软截止：独立预算 40 分钟，worker 总 walltime
     55 分钟，首次失败后选择性 retry 两次。只有三次都产生结构化
-    `code_phase_deadline_exceeded` 才计 unresolved。policy v3 进一步将 Slurm 明确报告的
-    `TIMEOUT` 直接计 unresolved 并标记 timeout；OOM、节点故障、状态未知和缺失 output
+    `code_phase_deadline_exceeded` 才计 unresolved。policy v3 对 Slurm 明确报告的
+    `TIMEOUT` 仅重试该 index，用尽共享 attempt 后计 unresolved 并标记 timeout；OOM、节点故障、状态未知和缺失 output
     继续保持 invalid。deadline、timeout 口径和 total attempts 均进入 evaluation fingerprint。下一次
     运行需验证 timer 终态、40 分钟实际预算、Plan checkpoint
     复用和三次 attempt 计数，防止基础设施等待被错误归因给 Agent。
@@ -175,6 +178,8 @@ Future launch/progress checks must append a row before interpreting movement.
 | 本地 state 陈旧或目标绑定错误 | 核对 state 中 run_dir、job name、baseline、target 和 submission count | state identity 与命令不一致必须拒绝运行；不得手工改 state 后继续同一实验 |
 | `controller_status=failed` 后仍自动推进 | 检查 supervisor exit code、本地 state 和后续 controller job | 明确基础设施失败后出现自动新 controller 时停止 supervisor |
 | Supervisor 随启动 shell 退出 | 检查 tmux session、service log 和 30 分钟后的 state 更新时间 | 无 tmux session、未由 caffeinate 包装或日志停止更新时不得视为无人值守运行成功 |
+| `conda run` 捕获长期 Supervisor stdout | 当前 tmux/state 正常但 service log 在进程运行期间为空；对比 state mtime 与退出后的 log | **已修复，待下次运行验证**：标准入口使用 `--no-capture-output` 并有命令构造测试；不重启当前 run |
+| worker 已完成但 batch 仍为 `SUBMITTED` | 对照 fingerprint、Slurm、output、`batch_state.json` 与 GEPA durable state | 这是未被 GEPA 重放/消费的 metric call，不得误标 `COMPLETE`；接管时记录 `OUTPUTS_READY`，完成和复用使用不同审计事件 |
 | Reflection 失败错误 block 或重复提交 | 检查 `retryable_failed`、GEPA state/candidate tree 和下一 controller | 失败 proposal 被计为 iteration/candidate，或 supervisor 永久退出，或同一 proposal 被并发执行时停止 |
 
 #### C. 两项更新的交互风险与首次运行门槛

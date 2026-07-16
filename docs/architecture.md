@@ -45,6 +45,7 @@ GEPA controller
   -> worker resumes first incomplete Plan/Code/Evaluator phase
   -> structured output written atomically
   -> controller reuses valid outputs and retries only failed indices
+  -> batch journal OUTPUTS_READY -> COMPLETE after validated collection
   -> EvaluationBatch returned to GEPA
   -> Reflection proposes rules
   -> GEPA saves durable state
@@ -59,6 +60,11 @@ The supervisor submits controller allocations only. A running controller
 submits rollout arrays directly with `sbatch`. `ulhpc-submit` is still required
 at the supervisor boundary because it synchronizes the code, stages the formal
 dataset, links the persistent run directory, and submits each controller slice.
+
+`SUBMITTED` proves submission durability, not GEPA consumption.
+`OUTPUTS_READY` means every worker file exists, while `COMPLETE` means the
+executor validated and returned the batch. Official GEPA state remains the
+authority for whether the metric call affected optimization.
 
 ## 4. State Authorities
 
@@ -85,7 +91,8 @@ evaluator result. Candidate rules never enter Code or Evaluator inputs.
 - Cooperative yield: normal scheduling control, not failure.
 - Controller walltime: recover from durable GEPA/batch state.
 - Worker hard kill: reuse only checkpoints completed before the kill.
-- Slurm-confirmed worker timeout: scored unresolved with timeout attribution;
+- Slurm-confirmed worker timeout: selectively retried, then scored unresolved
+  with timeout attribution only after the shared attempt limit;
   other hard kills remain operational failures.
 - Reflection failure: retry the uncommitted proposal in a later controller.
 

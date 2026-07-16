@@ -12,6 +12,7 @@ from src.agents._deps import (
     build_default_agent,
     extract_last_assistant,
     import_minisweagent,
+    raise_for_permanent_provider_error,
 )
 from src.environment.apptainer_env import ApptainerEnvironment
 from src.environment.docker_env import DockerCapacityWindow
@@ -194,6 +195,7 @@ class OnlinePlanningReflectionProposer:
                         current_rules=candidate["rules"],
                         evidence_path="/evidence",
                     )
+                    raise_for_permanent_provider_error(exit_status, exit_message)
                 except Exception as exc:
                     save_reflection_trajectory(
                         bundle,

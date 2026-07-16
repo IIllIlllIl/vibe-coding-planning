@@ -37,6 +37,7 @@ from src.agents._deps import (
     build_default_agent,
     build_model,
     import_minisweagent,
+    raise_for_permanent_provider_error,
 )
 from src.config import Config
 from src.exceptions import TaskError
@@ -136,6 +137,7 @@ def run(
         inputs_outputs_feedback=feedback_body,
         nrpv_block=config.prompts.nrpv_block,
     )
+    raise_for_permanent_provider_error(exception_name, exception_msg)
 
     # Try to read plan from the file the agent wrote in the container
     plan_text = _read_plan_from_file(env)

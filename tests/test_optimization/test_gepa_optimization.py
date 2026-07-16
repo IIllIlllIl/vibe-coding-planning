@@ -11,6 +11,7 @@ from dataclasses import replace
 from pathlib import Path
 
 import pytest
+import yaml
 from gepa.core.state import GEPAState, ValsetEvaluation
 
 from src.config import DockerConfig
@@ -405,6 +406,29 @@ def test_online_hpc_6to8_config_uses_formal_snapshot_without_instance_subset(
     assert config.search.max_metric_calls == 1000
     assert config.search.projection_metric_calls == 1000
     assert config.search.reflection_minibatch_size == 3
+    assert config.plan.max_steps == 0
+    assert config.plan.cost_limit == 0.0
+    assert config.plan.max_attempts == 1
+    assert config.code.max_steps == 0
+    assert config.code.cost_limit == 0.0
+    assert config.code.max_attempts == 1
+    assert "Exploration Budget" not in config.plan_prompt
+    assert "After step 150 you MUST" not in config.plan_prompt
+
+
+@pytest.mark.parametrize(
+    "config_name",
+    ("gepa_online_planning_hpc.yaml", "gepa_online_planning_pilot.yaml"),
+)
+def test_current_online_configs_omit_retired_plan_code_limits(config_name):
+    repo_root = Path(__file__).resolve().parents[2]
+    raw = yaml.safe_load((repo_root / "configs" / config_name).read_text())
+
+    for phase in ("plan", "code"):
+        assert "max_steps" not in raw[phase]
+        assert "cost_limit" not in raw[phase]
+        assert "max_attempts" not in raw[phase]
+    assert "Exploration Budget" not in raw["prompts"]["plan_system"]
 
 
 def test_online_hpc_8h_resume_config_keeps_2h_checkpoint_semantics(monkeypatch):
@@ -557,6 +581,7 @@ def test_online_smoke_pilot_config_is_small_and_auditable():
     assert config.search.parallel == 1
     assert config.plan.model == "deepseek-v4-flash"
     assert config.plan.max_steps == 300
+    assert config.plan.cost_limit == 6.0
     assert config.plan.max_attempts == 3
     assert config.code.max_attempts == 2
     assert config.code.model == "deepseek-v4-flash"
@@ -1856,6 +1881,20 @@ def test_online_hpc_executor_reuses_completed_fingerprinted_batch(
     assert [output.resolved for output in second] == [True, False]
     assert len(submissions) == 1
     assert len(list((config.run_dir / "hpc_rollout_batches").glob("batch_*"))) == 1
+    audit_events = [
+        json.loads(line)
+        for line in (config.run_dir / "audit_events.jsonl")
+        .read_text(encoding="utf-8")
+        .splitlines()
+    ]
+    assert sum(
+        event["event"] == "online_hpc_rollout_batch_completed"
+        for event in audit_events
+    ) == 1
+    assert sum(
+        event["event"] == "online_hpc_rollout_batch_reused_complete"
+        for event in audit_events
+    ) == 1
 
 
 def test_online_hpc_executor_resumes_submitted_batch_and_retries_only_missing(
@@ -2174,7 +2213,7 @@ def test_online_hpc_wait_retries_terminal_task_without_output(
     assert "#SBATCH --array=1%2" in retry_script
 
 
-def test_online_hpc_wait_scores_slurm_timeout_without_retry(tmp_path, monkeypatch):
+def test_online_hpc_wait_retries_slurm_timeout_before_scoring(tmp_path, monkeypatch):
     config = _online_config(tmp_path)
     train, _ = load_online_snapshot(config.dataset_snapshot)
     config = replace(
@@ -2205,7 +2244,7 @@ def test_online_hpc_wait_scores_slurm_timeout_without_retry(tmp_path, monkeypatc
             encoding="utf-8",
         )
         checkpoint_dir = batch_dir / "worker_runs" / "task_0001" / "checkpoints"
-        checkpoint_dir.mkdir(parents=True)
+        checkpoint_dir.mkdir(parents=True, exist_ok=True)
         (checkpoint_dir / "plan.json").write_text(
             json.dumps(
                 {
@@ -2217,7 +2256,17 @@ def test_online_hpc_wait_scores_slurm_timeout_without_retry(tmp_path, monkeypatc
             ),
             encoding="utf-8",
         )
-        return "12345"
+        timeout_workspace = (
+            batch_dir
+            / "worker_runs"
+            / "task_0001"
+            / f"attempt_{len(submitted_scripts)}"
+            / "phase_workspaces"
+            / "candidate"
+        )
+        timeout_workspace.mkdir(parents=True)
+        (timeout_workspace / "leftover.txt").write_text("partial", encoding="utf-8")
+        return str(12344 + len(submitted_scripts))
 
     monkeypatch.setattr(
         "src.optimization.online_hpc_executor.collect_slurm_resource_snapshot",
@@ -2235,7 +2284,11 @@ def test_online_hpc_wait_scores_slurm_timeout_without_retry(tmp_path, monkeypatc
 
     outputs = executor.evaluate(train, "planning rules", capture_traces=True)
 
-    assert len(submitted_scripts) == 1
+    assert len(submitted_scripts) == 3
+    assert all(
+        "#SBATCH --array=1%" in script.read_text(encoding="utf-8")
+        for script in submitted_scripts[1:]
+    )
     assert outputs[0].resolved is True
     assert outputs[1].resolved is False
     assert outputs[1].plan == "saved plan"
@@ -2244,6 +2297,50 @@ def test_online_hpc_wait_scores_slurm_timeout_without_retry(tmp_path, monkeypatc
     assert outputs[1].failure_origin == "agent"
     assert outputs[1].attribution_hint["timeout"] is True
     assert outputs[1].attribution_hint["timeout_scored_as_unresolved"] is True
+    batch_dir = submitted_scripts[0].parent
+    assert not list(
+        (batch_dir / "worker_runs" / "task_0001").glob(
+            "attempt_*/phase_workspaces"
+        )
+    )
+    audit_events = [
+        json.loads(line)
+        for line in (config.run_dir / "audit_events.jsonl")
+        .read_text(encoding="utf-8")
+        .splitlines()
+    ]
+    assert sum(
+        event["event"] == "online_hpc_rollout_timeout_retriable"
+        for event in audit_events
+    ) == 2
+    timeout_scored = [
+        event
+        for event in audit_events
+        if event["event"] == "online_hpc_rollout_timeout_scored"
+    ]
+    assert len(timeout_scored) == 1
+    assert timeout_scored[0]["attempt"] == 3
+
+
+def test_online_hpc_timeout_cleanup_failure_is_fatal(tmp_path, monkeypatch):
+    config = _online_config(tmp_path)
+    train, _ = load_online_snapshot(config.dataset_snapshot)
+    executor = HPCSlurmOnlineRolloutExecutor(config, sleeper=lambda seconds: None)
+    batch_dir, tasks = executor.store.create(
+        batch=train,
+        rules="planning rules",
+        split="train",
+        capture_traces=True,
+    )
+    workspace = tasks[0].worker_run_dir / "attempt_1" / "phase_workspaces"
+    workspace.mkdir(parents=True)
+    monkeypatch.setattr(
+        "src.optimization.online_hpc_executor.shutil.rmtree",
+        lambda path: (_ for _ in ()).throw(OSError("storage unavailable")),
+    )
+
+    with pytest.raises(FatalError, match="terminal timeout workspace"):
+        executor._cleanup_timed_out_workspace(tasks[0], 1)
 
 
 def test_online_hpc_controller_yields_after_durable_array_submission(
@@ -2303,6 +2400,18 @@ def test_online_hpc_controller_yields_after_durable_array_submission(
     outputs = executor.evaluate(train, "planning rules", capture_traces=True)
     assert len(outputs) == len(train)
     assert (batch_dir / "batch_done.json").is_file()
+    state = json.loads((batch_dir / "batch_state.json").read_text(encoding="utf-8"))
+    assert state["phase"] == "COMPLETE"
+    audit_events = [
+        json.loads(line)
+        for line in (config.run_dir / "audit_events.jsonl")
+        .read_text(encoding="utf-8")
+        .splitlines()
+    ]
+    assert any(
+        event["event"] == "online_hpc_rollout_batch_outputs_ready"
+        for event in audit_events
+    )
 
 
 def test_online_iteration_progress_counts_only_saved_state(tmp_path):
@@ -2737,6 +2846,45 @@ def test_online_runner_marks_reflection_failure_retryable(tmp_path):
         (config.run_dir / "controller_status.json").read_text(encoding="utf-8")
     )
     assert status["status"] == "retryable_failed"
+    assert status["failure_phase"] == "reflection"
+
+
+def test_online_runner_blocks_permanent_provider_reflection_failure(tmp_path):
+    config = _online_config(tmp_path)
+
+    class FailedProposer:
+        failures = []
+        successful_proposals = 0
+
+    proposer = FailedProposer()
+
+    def failed_optimize(**kwargs):
+        proposer.failures.append(
+            {"error_type": "FatalError", "error": "provider authentication"}
+        )
+        raise FatalError("Permanent model-provider failure")
+
+    with pytest.raises(FatalError, match="Permanent model-provider"):
+        run_online_optimization(
+            config,
+            rollout=lambda case, rules: OnlineRolloutOutput(
+                resolved=True,
+                plan="plan",
+                patch="patch",
+                plan_trajectory=(),
+                code_trajectory=(),
+                evaluator_result={"resolved": True},
+                attribution_hint={},
+            ),
+            proposer=proposer,
+            optimize_fn=failed_optimize,
+        )
+
+    status = json.loads(
+        (config.run_dir / "controller_status.json").read_text(encoding="utf-8")
+    )
+    assert status["status"] == "failed"
+    assert status["blocking"] is True
     assert status["failure_phase"] == "reflection"
 
 

@@ -9,6 +9,7 @@ from src.agents._deps import (
     build_default_agent,
     build_model,
     extract_last_assistant,
+    raise_for_permanent_provider_error,
 )
 from src.exceptions import FatalError
 
@@ -160,6 +161,7 @@ class TestBuildDefaultAgent:
         )
         assert "instance_template" not in agent.kwargs
 
+
     # ------------------------------------------------------------------
     # Regression: the variable-injection path must survive mini-swe-agent's
     # actual Jinja2 + StrictUndefined render. This test exercises a real
@@ -197,6 +199,32 @@ class TestBuildDefaultAgent:
         assert "{%s ...%}" in output
         assert r"\1 backref" in output
         assert r"C:\Users\dev" in output
+
+
+class TestPermanentProviderErrors:
+    @pytest.mark.parametrize(
+        "name,message",
+        [
+            ("AuthenticationError", "Invalid API key"),
+            ("APIError", "insufficient balance for this request"),
+            ("RateLimitError", "insufficient_quota"),
+        ],
+    )
+    def test_permanent_provider_failure_is_fatal(self, name, message):
+        with pytest.raises(FatalError, match="Permanent model-provider failure"):
+            raise_for_permanent_provider_error(name, message)
+
+    def test_agent_cost_limit_is_not_provider_failure(self):
+        raise_for_permanent_provider_error(
+            "LimitsExceeded",
+            "cost limit exceeded; insufficient balance wording from local report",
+        )
+
+    def test_transient_rate_limit_is_not_permanent(self):
+        raise_for_permanent_provider_error(
+            "RateLimitError",
+            "Too many requests; retry after 30 seconds",
+        )
 
 
 class TestExtractLastAssistant:

@@ -100,6 +100,7 @@ def main(argv: list[str] | None = None) -> int:
         "-s",
         "conda",
         "run",
+        "--no-capture-output",
         "-n",
         "mini-swe",
         "python",
