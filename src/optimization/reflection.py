@@ -127,6 +127,11 @@ class EvidenceBundleWriter:
                 )
                 _write_json(case_dir / "evaluator_result.json", record["evaluator_result"])
             else:
+                (case_dir / "task.md").write_text(
+                    str(record["issue_description"]),
+                    encoding="utf-8",
+                )
+                _write_json(case_dir / "repository.json", record["repository"])
                 (case_dir / "generated_plan.md").write_text(
                     str(record["generated_plan"]),
                     encoding="utf-8",
@@ -145,6 +150,10 @@ class EvidenceBundleWriter:
                         "score": record["score"],
                         "attribution_hint": record.get("attribution_hint", {}),
                     },
+                )
+                _write_json(
+                    case_dir / "instance_review.json",
+                    record["reflection_review"],
                 )
             manifest.append(
                 {

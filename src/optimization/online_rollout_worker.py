@@ -73,6 +73,7 @@ def output_to_json(output: OnlineRolloutOutput) -> dict[str, Any]:
         "terminal_phase": output.terminal_phase,
         "terminal_reason": output.terminal_reason,
         "failure_origin": output.failure_origin,
+        "reflection_review": output.reflection_review,
     }
 
 
@@ -120,12 +121,20 @@ def run_task(
             if worker_run_dir is not None
             else None
         )
-        output = OnlinePCTRolloutRunner(
+        runner = OnlinePCTRolloutRunner(
             config,
             capacity,
             checkpoint_dir=checkpoint_dir,
             checkpoint_identity=checkpoint_identity(manifest),
-        )(case, rules)
+        )
+        if getattr(runner, "supports_capture_traces", False):
+            output = runner(
+                case,
+                rules,
+                capture_traces=bool(manifest.get("capture_traces", False)),
+            )
+        else:
+            output = runner(case, rules)
         _write_json(
             output_path,
             {

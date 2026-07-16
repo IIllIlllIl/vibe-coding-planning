@@ -2,9 +2,13 @@
 
 from __future__ import annotations
 
+import hashlib
+import json
 import os
+from pathlib import Path
 import re
 import shutil
+import tempfile
 from typing import Any, Mapping, Sequence
 
 from src.agents._deps import (
@@ -22,6 +26,7 @@ from src.optimization.reflection import (
     EvidenceBundleWriter,
     save_reflection_trajectory,
 )
+from src.optimization.online_reflection_reviewer import validate_instance_review
 
 
 class OnlinePlanningReflectionProposer:
@@ -41,6 +46,120 @@ class OnlinePlanningReflectionProposer:
         self.errors = JsonlLogger(config.run_dir / "errors.jsonl")
         self.failures = [dict(failure) for failure in failures]
         self.successful_proposals = successful_proposals
+        self.proposal_checkpoints = config.run_dir / "reflection_proposals"
+
+    def _proposal_identity(
+        self,
+        candidate: Mapping[str, str],
+        reflective_dataset: Mapping[str, Sequence[Mapping[str, Any]]],
+        components_to_update: Sequence[str],
+    ) -> tuple[str, dict[str, Any]]:
+        records = list(reflective_dataset.get("rules", ()))
+        records_json = json.dumps(
+            records,
+            ensure_ascii=False,
+            sort_keys=True,
+            separators=(",", ":"),
+        )
+        identity = {
+            "schema_version": 1,
+            "semantic_version": "online-reflection-proposal-v1",
+            "parent_candidate_sha256": text_sha256(candidate.get("rules", "")),
+            "components_to_update": list(components_to_update),
+            "instance_ids": [
+                str(record.get("instance_id", "")) for record in records
+            ],
+            "evidence_sha256": text_sha256(records_json),
+            "reflection": {
+                "model": self.config.reflection.model,
+                "api_base": self.config.reflection.api_base,
+                "temperature": self.config.reflection.temperature,
+                "system_prompt_sha256": text_sha256(
+                    self.config.reflection_prompt
+                ),
+                "instance_prompt_sha256": text_sha256(
+                    self.config.reflection_instance_template
+                ),
+            },
+        }
+        encoded = json.dumps(
+            identity,
+            ensure_ascii=False,
+            sort_keys=True,
+            separators=(",", ":"),
+        ).encode("utf-8")
+        return hashlib.sha256(encoded).hexdigest(), identity
+
+    def _checkpoint_path(self, fingerprint: str) -> Path:
+        return self.proposal_checkpoints / f"{fingerprint}.json"
+
+    def _load_proposal_checkpoint(
+        self,
+        fingerprint: str,
+        identity: Mapping[str, Any],
+    ) -> dict[str, str] | None:
+        path = self._checkpoint_path(fingerprint)
+        if not path.is_file():
+            return None
+        payload = json.loads(path.read_text(encoding="utf-8"))
+        if payload.get("fingerprint") != fingerprint:
+            raise ValueError("reflection proposal checkpoint fingerprint mismatch")
+        if payload.get("identity") != identity:
+            raise ValueError("reflection proposal checkpoint identity mismatch")
+        proposal = payload.get("proposal")
+        if (
+            not isinstance(proposal, dict)
+            or set(proposal) != {"rules"}
+            or not isinstance(proposal["rules"], str)
+            or not proposal["rules"].strip()
+        ):
+            raise ValueError("reflection proposal checkpoint is invalid")
+        self.audit.write(
+            "online_reflection_proposal_resumed",
+            proposal_fingerprint=fingerprint,
+            parent_candidate_sha256=identity["parent_candidate_sha256"],
+            proposed_candidate_sha256=text_sha256(proposal["rules"]),
+            checkpoint_path=str(path),
+        )
+        return {"rules": proposal["rules"]}
+
+    def _save_proposal_checkpoint(
+        self,
+        fingerprint: str,
+        identity: Mapping[str, Any],
+        proposal: Mapping[str, str],
+        *,
+        bundle: Path,
+        trajectory_path: Path,
+    ) -> None:
+        path = self._checkpoint_path(fingerprint)
+        path.parent.mkdir(parents=True, exist_ok=True)
+        payload = {
+            "schema_version": 1,
+            "status": "PROPOSAL_READY",
+            "fingerprint": fingerprint,
+            "identity": identity,
+            "proposal": dict(proposal),
+            "bundle_path": str(bundle),
+            "trajectory_path": str(trajectory_path),
+        }
+        fd, temp_name = tempfile.mkstemp(dir=path.parent, prefix=f".{path.name}.")
+        try:
+            with os.fdopen(fd, "w", encoding="utf-8") as handle:
+                json.dump(payload, handle, indent=2, ensure_ascii=False, sort_keys=True)
+                handle.write("\n")
+            os.replace(temp_name, path)
+        finally:
+            if os.path.exists(temp_name):
+                os.unlink(temp_name)
+        self.audit.write(
+            "online_reflection_proposal_checkpointed",
+            proposal_fingerprint=fingerprint,
+            parent_candidate_sha256=identity["parent_candidate_sha256"],
+            proposed_candidate_sha256=text_sha256(proposal["rules"]),
+            checkpoint_path=str(path),
+            trajectory_path=str(trajectory_path),
+        )
 
     def __call__(
         self,
@@ -48,11 +167,21 @@ class OnlinePlanningReflectionProposer:
         reflective_dataset: Mapping[str, Sequence[Mapping[str, Any]]],
         components_to_update: list[str],
     ) -> dict[str, str]:
+        fingerprint, identity = self._proposal_identity(
+            candidate,
+            reflective_dataset,
+            components_to_update,
+        )
+        resumed = self._load_proposal_checkpoint(fingerprint, identity)
+        if resumed is not None:
+            return resumed
         try:
             proposal = self._propose(
                 candidate,
                 reflective_dataset,
                 components_to_update,
+                proposal_fingerprint=fingerprint,
+                proposal_identity=identity,
             )
         except Exception as exc:
             failure = {
@@ -72,10 +201,18 @@ class OnlinePlanningReflectionProposer:
         candidate: dict[str, str],
         reflective_dataset: Mapping[str, Sequence[Mapping[str, Any]]],
         components_to_update: list[str],
+        *,
+        proposal_fingerprint: str,
+        proposal_identity: Mapping[str, Any],
     ) -> dict[str, str]:
         if components_to_update != ["rules"]:
             raise ValueError("GEPA may only update the rules component")
         records = list(reflective_dataset["rules"])
+        for record in records:
+            validate_instance_review(
+                record.get("reflection_review"),
+                instance_id=str(record["instance_id"]),
+            )
         bundle = self.bundles.write(records)
         instance_ids = [str(record["instance_id"]) for record in records]
         parent_sha256 = text_sha256(candidate["rules"])
@@ -217,9 +354,41 @@ class OnlinePlanningReflectionProposer:
                     exit_status=exit_status,
                     exit_message=exit_message,
                 )
+                assistant_text = "\n".join(
+                    str(message.get("content", ""))
+                    for message in agent.messages
+                    if message.get("role") == "assistant"
+                )
+                if "/evidence" not in assistant_text:
+                    raise ValueError(
+                        "reflection synthesis did not issue an evidence command"
+                    )
                 final_message = extract_last_assistant(agent.messages)
                 result = env.execute("cat /tmp/candidate_rules.txt")
+                analysis_result = env.execute("cat /tmp/reflection_analysis.json")
                 candidate_file_found = result.get("returncode") == 0
+                if analysis_result.get("returncode") != 0:
+                    raise ValueError(
+                        "reflection synthesis did not create its analysis file"
+                    )
+                analysis = json.loads(str(analysis_result.get("output", "")))
+                reviewed_ids = analysis.get("reviewed_instance_ids")
+                if not isinstance(reviewed_ids, list) or set(reviewed_ids) != set(
+                    instance_ids
+                ):
+                    raise ValueError(
+                        "reflection synthesis analysis does not cover the minibatch"
+                    )
+                (bundle / "reflection_analysis.json").write_text(
+                    json.dumps(
+                        analysis,
+                        indent=2,
+                        ensure_ascii=False,
+                        sort_keys=True,
+                    )
+                    + "\n",
+                    encoding="utf-8",
+                )
                 self.audit.write(
                     "online_reflection_agent_completed",
                     candidate_sha256=parent_sha256,
@@ -230,6 +399,7 @@ class OnlinePlanningReflectionProposer:
                     trajectory_messages=len(agent.messages),
                     model_calls=int(getattr(model, "n_calls", 0)),
                     candidate_file_found=candidate_file_found,
+                    analysis_file_found=True,
                     candidate_file_chars=(
                         len(str(result.get("output", "")))
                         if candidate_file_found
@@ -263,6 +433,16 @@ class OnlinePlanningReflectionProposer:
                     raise ValueError(
                         "reflection agent produced a patch instead of rules"
                     )
-                return {"rules": proposed}
+                proposal = {"rules": proposed}
+                self._save_proposal_checkpoint(
+                    proposal_fingerprint,
+                    proposal_identity,
+                    proposal,
+                    bundle=bundle,
+                    trajectory_path=trajectory_path,
+                )
+                return proposal
             finally:
                 env.cleanup()
+                if workspace is not None and workspace.exists():
+                    shutil.rmtree(workspace)

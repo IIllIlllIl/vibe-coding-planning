@@ -54,6 +54,11 @@ from src.optimization.online_hpc_executor import (
 )
 from src.optimization.online_models import OnlineRolloutOutput
 from src.optimization.online_reflection import OnlinePlanningReflectionProposer
+from src.optimization.online_reflection_reviewer import (
+    OnlineInstanceReflectionReviewer,
+    validate_instance_review,
+    validate_reviewer_exploration,
+)
 from src.optimization.online_rollout_worker import (
     case_from_manifest,
     output_to_json,
@@ -202,6 +207,8 @@ def _online_config(tmp_path: Path) -> OnlineOptimizationConfig:
         code_instance_template="{{task}}",
         reflection_prompt="online reflection",
         reflection_instance_template="{{current_rules}} {{evidence_path}}",
+        reflection_reviewer_prompt="online instance reviewer",
+        reflection_reviewer_instance_template="{{task}} {{evidence_path}}",
         nrpv_block="NRPV",
         evaluator=OnlineEvaluatorConfig(timeout=10),
     )
@@ -429,6 +436,24 @@ def test_current_online_configs_omit_retired_plan_code_limits(config_name):
         assert "cost_limit" not in raw[phase]
         assert "max_attempts" not in raw[phase]
     assert "Exploration Budget" not in raw["prompts"]["plan_system"]
+
+
+@pytest.mark.parametrize(
+    "config_name",
+    ("gepa_online_planning_hpc.yaml", "gepa_online_planning_pilot.yaml"),
+)
+def test_current_online_code_prompt_delegates_patch_selection_to_agent(config_name):
+    repo_root = Path(__file__).resolve().parents[2]
+    raw = yaml.safe_load((repo_root / "configs" / config_name).read_text())
+    prompt = raw["prompts"]["code_instance"]
+
+    assert "may create or modify tests" in prompt
+    assert "stage exactly" in prompt
+    assert "git diff --cached --binary --full-index" in prompt
+    assert "Do not modify tests" not in prompt
+    assert ":(exclude)tests/**" not in prompt
+    assert ":(exclude)test/**" not in prompt
+    assert ":(exclude)*_test.py" not in prompt
 
 
 def test_online_hpc_8h_resume_config_keeps_2h_checkpoint_semantics(monkeypatch):
@@ -771,7 +796,7 @@ def test_online_rollout_retry_resumes_from_plan_checkpoint(tmp_path, monkeypatch
     config = _online_config(tmp_path)
     case = load_online_snapshot(config.dataset_snapshot)[0][0]
     monkeypatch.setenv("TEST_API_KEY", "secret")
-    calls = {"plan": 0, "code": 0, "evaluator": 0}
+    calls = {"plan": 0, "code": 0, "evaluator": 0, "reviewer": 0}
 
     class FakeEnv:
         def __init__(self, docker_config, capacity_window):
@@ -815,6 +840,39 @@ def test_online_rollout_retry_resumes_from_plan_checkpoint(tmp_path, monkeypatch
     monkeypatch.setattr(
         "src.optimization.online_rollout.evaluate_online_patch", fake_evaluator
     )
+
+    class FakeReviewer:
+        def __init__(self, *args, **kwargs):
+            pass
+
+        def review(self, **kwargs):
+            calls["reviewer"] += 1
+            return (
+                {
+                    "instance_id": case.instance_id,
+                    "outcome": "resolved",
+                    "plan_assessment": {
+                        "navigation": "good",
+                        "reproduction": "good",
+                        "patch_strategy": "good",
+                        "validation": "good",
+                    },
+                    "code_followed_plan": True,
+                    "attribution": "plan",
+                    "planning_lesson": "keep",
+                    "evidence_files": [
+                        "task.md",
+                        "generated_plan.md",
+                        "evaluator_result.json",
+                    ],
+                },
+                [{"role": "assistant", "content": "reviewed"}],
+            )
+
+    monkeypatch.setattr(
+        "src.optimization.online_rollout.OnlineInstanceReflectionReviewer",
+        FakeReviewer,
+    )
     checkpoint_dir = tmp_path / "task" / "checkpoints"
     identity = "matching-rollout-identity"
 
@@ -834,10 +892,21 @@ def test_online_rollout_retry_resumes_from_plan_checkpoint(tmp_path, monkeypatch
         _FakeCapacityWindow(),
         checkpoint_dir=checkpoint_dir,
         checkpoint_identity=identity,
-    )(case, "candidate planning rules")
+    )(case, "candidate planning rules", capture_traces=True)
 
     assert result.resolved is True
-    assert calls == {"plan": 1, "code": 2, "evaluator": 1}
+    assert result.reflection_review["attribution"] == "plan"
+    assert (checkpoint_dir / "reflection_reviewer.json").is_file()
+
+    resumed = OnlinePCTRolloutRunner(
+        config,
+        _FakeCapacityWindow(),
+        checkpoint_dir=checkpoint_dir,
+        checkpoint_identity=identity,
+    )(case, "candidate planning rules", capture_traces=True)
+
+    assert resumed.reflection_review == result.reflection_review
+    assert calls == {"plan": 1, "code": 2, "evaluator": 1, "reviewer": 1}
     audit = [
         json.loads(line)
         for line in (config.run_dir / "audit_events.jsonl").read_text().splitlines()
@@ -847,6 +916,151 @@ def test_online_rollout_retry_resumes_from_plan_checkpoint(tmp_path, monkeypatch
         and event["phase"] == "plan"
         for event in audit
     )
+    assert any(
+        event["event"] == "online_rollout_phase_resumed"
+        and event["phase"] == "reflection_reviewer"
+        for event in audit
+    )
+
+
+def test_instance_reflection_review_requires_grounded_evidence():
+    valid = {
+        "instance_id": "repo__one",
+        "outcome": "resolved",
+        "plan_assessment": {
+            "navigation": "good",
+            "reproduction": "good",
+            "patch_strategy": "good",
+            "validation": "good",
+        },
+        "code_followed_plan": True,
+        "attribution": "plan",
+        "planning_lesson": "keep",
+        "evidence_files": [
+            "task.md",
+            "generated_plan.md",
+            "evaluator_result.json",
+        ],
+    }
+
+    assert validate_instance_review(valid, instance_id="repo__one") == valid
+    invalid = {**valid, "evidence_files": ["rollout_summary.json"]}
+    with pytest.raises(ValueError, match="required evidence"):
+        validate_instance_review(invalid, instance_id="repo__one")
+
+    validate_reviewer_exploration(
+        [
+            {
+                "role": "assistant",
+                "content": "cat /evidence/task.md && rg symbol /testbed",
+            }
+        ],
+        repository_path="/testbed",
+    )
+    with pytest.raises(ValueError, match="base repository"):
+        validate_reviewer_exploration(
+            [{"role": "assistant", "content": "cat /evidence/task.md"}],
+            repository_path="/testbed",
+        )
+
+
+def test_instance_reflection_reviewer_reads_repo_and_persists_review(
+    tmp_path, monkeypatch
+):
+    monkeypatch.setenv("TEST_API_KEY", "secret")
+    config = _online_config(tmp_path)
+    case = load_online_snapshot(config.dataset_snapshot)[0][0]
+    calls = {}
+
+    class FakeModel:
+        def __init__(self, **kwargs):
+            calls["model"] = kwargs
+
+    class FakeEnvironment:
+        def __init__(self, **kwargs):
+            calls["environment"] = kwargs
+
+        def execute(self, command):
+            assert command == "cat /review/instance_review.json"
+            return {
+                "returncode": 0,
+                "output": json.dumps(
+                    {
+                        "instance_id": case.instance_id,
+                        "outcome": "resolved",
+                        "plan_assessment": {
+                            "navigation": "good",
+                            "reproduction": "good",
+                            "patch_strategy": "good",
+                            "validation": "good",
+                        },
+                        "code_followed_plan": True,
+                        "attribution": "plan",
+                        "planning_lesson": "keep",
+                        "evidence_files": [
+                            "task.md",
+                            "generated_plan.md",
+                            "evaluator_result.json",
+                        ],
+                    }
+                ),
+            }
+
+        def cleanup(self):
+            calls["cleaned"] = True
+
+        def get_template_vars(self):
+            return {}
+
+    class FakeAgent:
+        messages = [
+            {
+                "role": "assistant",
+                "content": "cat /evidence/task.md && rg symbol /testbed",
+            }
+        ]
+
+        def run(self, task, **kwargs):
+            calls["run"] = kwargs
+            return "Submitted", "done"
+
+    monkeypatch.setattr(
+        "src.optimization.online_reflection_reviewer.import_minisweagent",
+        lambda: (object, FakeModel, FakeEnvironment),
+    )
+    monkeypatch.setattr(
+        "src.optimization.online_reflection_reviewer.build_default_agent",
+        lambda *args, **kwargs: FakeAgent(),
+    )
+    phase_root = tmp_path / "reviewer"
+
+    review, trajectory = OnlineInstanceReflectionReviewer(
+        config, _FakeCapacityWindow()
+    ).review(
+        case=case,
+        rules="rules",
+        image_name="benchmark:latest",
+        workdir="/testbed",
+        evidence={
+            "generated_plan": "plan",
+            "plan_trajectory": [],
+            "code_trajectory": [],
+            "generated_patch": "patch",
+            "evaluator_result": {"resolved": True},
+            "rollout_summary": {"resolved": True, "score": 1.0},
+        },
+        phase_root=phase_root,
+    )
+
+    assert review["instance_id"] == case.instance_id
+    assert trajectory == FakeAgent.messages
+    assert (phase_root / "evidence" / "task.md").is_file()
+    assert (phase_root / "evidence" / "repository.json").is_file()
+    assert (phase_root / "evidence" / "instance_review.json").is_file()
+    assert (phase_root / "evidence" / "reflection_trajectory.json").is_file()
+    assert not (phase_root / "workspace").exists()
+    assert calls["environment"]["cwd"] == "/review"
+    assert calls["cleaned"] is True
 
 
 def test_online_rollout_rejects_checkpoint_identity_mismatch(tmp_path):
@@ -2322,6 +2536,44 @@ def test_online_hpc_wait_retries_slurm_timeout_before_scoring(tmp_path, monkeypa
     assert timeout_scored[0]["attempt"] == 3
 
 
+def test_reviewer_timeout_preserves_completed_evaluator_score(tmp_path):
+    config = _online_config(tmp_path)
+    train, _ = load_online_snapshot(config.dataset_snapshot)
+    store = OnlineRolloutBatchStore(config.run_dir)
+    _, tasks = store.create(
+        batch=train[:1],
+        rules="planning rules",
+        split="train",
+        capture_traces=True,
+    )
+    task = tasks[0]
+    checkpoint_dir = task.worker_run_dir / "checkpoints"
+    checkpoint_dir.mkdir(parents=True)
+    for phase, payload in {
+        "plan": {"plan": "plan", "plan_trajectory": []},
+        "code": {"patch": "patch", "code_trajectory": []},
+        "evaluator": {"evaluator_result": {"resolved": True}},
+    }.items():
+        (checkpoint_dir / f"{phase}.json").write_text(
+            json.dumps({"payload": payload}),
+            encoding="utf-8",
+        )
+
+    disposition = HPCSlurmOnlineRolloutExecutor._finalize_slurm_timeout(
+        task, 3
+    )
+    output = store.load_output(
+        task.output_path,
+        expected_instance_id=task.case.instance_id,
+        expected_candidate_sha256=text_sha256("planning rules"),
+    )
+
+    assert disposition == "reviewer_timeout_preserved_evaluator"
+    assert output.resolved is True
+    assert output.terminal_reason is None
+    assert output.attribution_hint["reflection_reviewer_timeout"] is True
+
+
 def test_online_hpc_timeout_cleanup_failure_is_fatal(tmp_path, monkeypatch):
     config = _online_config(tmp_path)
     train, _ = load_online_snapshot(config.dataset_snapshot)
@@ -3102,8 +3354,21 @@ def test_online_reflection_proposer_uses_apptainer_when_runtime_apptainer(
             calls["environment_kwargs"] = kwargs
 
         def execute(self, command):
-            assert command == "cat /tmp/candidate_rules.txt"
-            return {"returncode": 0, "output": "improved online planning rules"}
+            if command == "cat /tmp/candidate_rules.txt":
+                return {
+                    "returncode": 0,
+                    "output": "improved online planning rules",
+                }
+            assert command == "cat /tmp/reflection_analysis.json"
+            return {
+                "returncode": 0,
+                "output": json.dumps(
+                    {
+                        "reviewed_instance_ids": ["repo__one"],
+                        "proposal_changed": True,
+                    }
+                ),
+            }
 
         def cleanup(self):
             calls["cleaned_up"] = True
@@ -3115,7 +3380,7 @@ def test_online_reflection_proposer_uses_apptainer_when_runtime_apptainer(
         messages = [
             {
                 "role": "assistant",
-                "content": "inspected evidence with secret",
+                "content": "cat /evidence/manifest.json # inspected with secret",
                 "api_key": "secret",
             }
         ]
@@ -3140,6 +3405,12 @@ def test_online_reflection_proposer_uses_apptainer_when_runtime_apptainer(
     proposer = OnlinePlanningReflectionProposer(config, _FakeCapacityWindow())
     record = {
         "instance_id": "repo__one",
+        "issue_description": "issue",
+        "repository": {
+            "repo": "org/repo",
+            "base_commit": "abc123",
+            "instance_id": "repo__one",
+        },
         "score": 1.0,
         "resolved": True,
         "generated_plan": "current generated plan",
@@ -3148,6 +3419,24 @@ def test_online_reflection_proposer_uses_apptainer_when_runtime_apptainer(
         "generated_patch": "diff --git a/a.py b/a.py\n",
         "evaluator_result": {"resolved": True},
         "attribution_hint": {"code_followed_plan": True},
+        "reflection_review": {
+            "instance_id": "repo__one",
+            "outcome": "resolved",
+            "plan_assessment": {
+                "navigation": "good",
+                "reproduction": "good",
+                "patch_strategy": "good",
+                "validation": "good",
+            },
+            "code_followed_plan": True,
+            "attribution": "plan",
+            "planning_lesson": "keep the useful rule",
+            "evidence_files": [
+                "task.md",
+                "generated_plan.md",
+                "evaluator_result.json",
+            ],
+        },
     }
 
     proposal = proposer(
@@ -3172,6 +3461,7 @@ def test_online_reflection_proposer_uses_apptainer_when_runtime_apptainer(
     assert env_kwargs["run_args"][0] == "--bind"
     assert env_kwargs["run_args"][1].endswith(":/evidence:ro")
     assert "online_reflection_workspaces" in str(env_kwargs["host_workdir"])
+    assert not Path(env_kwargs["host_workdir"]).exists()
     assert calls["cleaned_up"] is True
     audit = [
         json.loads(line)
@@ -3200,6 +3490,29 @@ def test_online_reflection_proposer_uses_apptainer_when_runtime_apptainer(
         if record["event"] == "online_reflection_agent_completed"
     )
     assert completed["trajectory_path"] == str(trajectory_path)
+    checkpoint_path = next(config.run_dir.glob("reflection_proposals/*.json"))
+    checkpoint = json.loads(checkpoint_path.read_text())
+    assert checkpoint["status"] == "PROPOSAL_READY"
+    assert checkpoint["proposal"] == {"rules": "improved online planning rules"}
+
+    resumed = proposer(
+        {"rules": "seed planning rules"},
+        {"rules": [record]},
+        ["rules"],
+    )
+
+    assert resumed == proposal
+    assert len(list(config.run_dir.glob("reflection_inputs/iteration_*"))) == 1
+    resumed_events = [
+        item
+        for item in (
+            json.loads(line)
+            for line in (config.run_dir / "audit_events.jsonl").read_text().splitlines()
+        )
+        if item["event"] == "online_reflection_proposal_resumed"
+    ]
+    assert len(resumed_events) == 1
+    assert resumed_events[0]["proposal_fingerprint"] == checkpoint["fingerprint"]
 
 
 def test_online_runner_builds_default_apptainer_reflection_proposer(
@@ -3419,8 +3732,14 @@ def test_evidence_bundle_contains_only_current_minibatch(tmp_path):
     writer = EvidenceBundleWriter(tmp_path)
     bundle = writer.write(
         [
-            {
-                "instance_id": "repo__one",
+                {
+                    "instance_id": "repo__one",
+                    "issue_description": "issue",
+                    "repository": {
+                        "repo": "org/repo",
+                        "base_commit": "abc123",
+                        "instance_id": "repo__one",
+                    },
                 "expected_resolved": False,
                 "score": 0.0,
                 "checker_output": {"predicted_resolved": True},
@@ -3451,8 +3770,14 @@ def test_online_evidence_bundle_contains_current_rollout_only(tmp_path):
     writer = EvidenceBundleWriter(tmp_path, mode="online_planning")
     bundle = writer.write(
         [
-            {
-                "instance_id": "repo__one",
+                {
+                    "instance_id": "repo__one",
+                    "issue_description": "issue",
+                    "repository": {
+                        "repo": "org/repo",
+                        "base_commit": "abc123",
+                        "instance_id": "repo__one",
+                    },
                 "score": 1.0,
                 "resolved": True,
                 "generated_plan": "current generated plan",
@@ -3460,8 +3785,26 @@ def test_online_evidence_bundle_contains_current_rollout_only(tmp_path):
                 "code_trajectory": [{"role": "assistant", "content": "code"}],
                 "generated_patch": "diff --git a/a.py b/a.py\n",
                 "evaluator_result": {"resolved": True},
-                "attribution_hint": {"code_followed_plan": True},
-            }
+                    "attribution_hint": {"code_followed_plan": True},
+                    "reflection_review": {
+                        "instance_id": "repo__one",
+                        "outcome": "resolved",
+                        "plan_assessment": {
+                            "navigation": "good",
+                            "reproduction": "good",
+                            "patch_strategy": "good",
+                            "validation": "good",
+                        },
+                        "code_followed_plan": True,
+                        "attribution": "plan",
+                        "planning_lesson": "keep",
+                        "evidence_files": [
+                            "task.md",
+                            "generated_plan.md",
+                            "evaluator_result.json",
+                        ],
+                    },
+                }
         ]
     )
 

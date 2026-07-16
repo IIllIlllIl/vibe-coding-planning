@@ -172,6 +172,8 @@ def _write_online_manifest(
             "code_agent": ["issue_description", "generated_plan", "repository"],
             "reflection": [
                 "candidate_rules",
+                "issue_description",
+                "repository_identity",
                 "generated_plan",
                 "plan_trajectory",
                 "code_trajectory",
@@ -179,6 +181,7 @@ def _write_online_manifest(
                 "evaluator_result",
                 "current_rollout_resolved",
                 "score",
+                "instance_reflection_review",
             ],
             "historical_plan_used": False,
             "historical_resolved_used": False,
@@ -188,6 +191,7 @@ def _write_online_manifest(
             "plan": config.plan.model,
             "code": config.code.model,
             "reflection": config.reflection.model,
+            "reflection_reviewer": config.reflection.model,
         },
         "search": {
             "max_metric_calls": config.search.max_metric_calls,

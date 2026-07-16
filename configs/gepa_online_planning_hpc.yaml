@@ -3,7 +3,7 @@ mode: online_planning
 paths:
   dataset_snapshot: output/SWE-bench_Verified/verified-round1-gepa-datasets/20260614_482_fdc056ae85df
   initial_rules: configs/gepa_initial_rules_gpt_seed.md
-  run_dir: output/SWE-bench_Verified/gepa-rules/online-planning-hpc-policy-v3-20260715
+  run_dir: output/SWE-bench_Verified/gepa-rules/online-planning-hpc-two-stage-reflection-20260716
 
 dataset:
   name: SWE-bench/SWE-bench_Verified
@@ -87,7 +87,7 @@ hpc:
   python_module: lang/Python/3.11
   container_module: tools/Apptainer
   python_bin: python3
-  job_name_prefix: online-gepa-policy-v3
+  job_name_prefix: online-gepa-two-stage
   worker_config_path: configs/gepa_online_planning_hpc.yaml
 
 evaluator:
@@ -179,8 +179,15 @@ prompts:
     2. Provide exactly ONE bash command to execute
 
     ## Important Boundaries
-    - MODIFY: Any task-relevant non-test file in /testbed (this is the working directory for all your subsequent commands)
-    - DO NOT MODIFY: Tests or test fixtures. Do not add or alter tests to make the submission pass.
+    - MODIFY: Any task-relevant file in /testbed (this is the working directory for all your subsequent commands).
+    - You may create or modify tests and fixtures to reproduce the issue and
+      validate the implementation. These diagnostic changes remain useful in
+      your trajectory even when they are not part of the final solution.
+    - You are responsible for deciding which changes belong in the final patch.
+      Before submission, inspect all changes, clear the staging area, and stage
+      only the changes you intend to send to the clean official evaluator.
+    - Do not weaken, delete, or skip assertions merely to make an incorrect
+      implementation appear to pass.
 
     ## Command Execution Rules
     You are operating in an environment where
@@ -296,9 +303,11 @@ prompts:
 
     ## Submission
     When you've completed your work (reading, editing, testing), and cannot make further progress
-    issue exactly the following command:
+    first inspect the complete diff and use an earlier command to stage exactly
+    the changes you intend to submit. Diagnostic tests and temporary debugging
+    artifacts may remain unstaged. Then issue exactly the following command:
     ```bash
-    echo COMPLETE_TASK_AND_SUBMIT_FINAL_OUTPUT && git add -A -- . ':(exclude)tests/**' ':(exclude)test/**' ':(exclude)*_test.py' ':(exclude)test_*.py' && git diff --cached
+    echo COMPLETE_TASK_AND_SUBMIT_FINAL_OUTPUT && git diff --cached --binary --full-index
     ```
 
     This command will submit your work.
@@ -306,25 +315,34 @@ prompts:
     </instructions>
 
   reflection_system: |
-    You maintain the complete planning checklist used by a strict Plan Agent.
+    You are the synthesis stage of a two-stage planning-rule Reflection system.
+    Repo-grounded instance reviewers have already examined each issue, base
+    repository, plan, execution trajectory, patch, and evaluator result.
 
-    Files under {{evidence_path}} contain current online rollout evidence for
-    the minibatch. They may include generated plans, Plan and Code Agent
-    trajectories, generated patches, evaluator results, resolved values, scores,
-    and attribution hints.
+    First list {{evidence_path}} and read manifest.json plus every
+    instance_review.json. Use raw evidence only to resolve a contradiction or
+    verify a review; do not wander through trajectories without a specific
+    question.
 
-    Use this execution-after evidence only to improve the planning checklist.
-    Distinguish plan/rule problems from Code Agent deviations and infrastructure
-    failures. Do not add rules that depend on seeing evaluator results,
-    generated patches, trajectories, resolved labels, or future execution
-    output at deployment time.
+    Compare successful and unsuccessful instances. Distinguish planning defects
+    from Code deviations, evaluator failures, infrastructure failures, and
+    uncertain attribution. Never convert the latter four into planning rules.
 
-    Preserve useful checklist items. Delete misleading items. Merge redundant
-    items. Add new items only when the lesson is general and deployable from
-    issue, repository, and planning rules before code execution.
+    Add or change a rule only when the lesson is actionable before Code runs,
+    using only the issue, repository, and planning checklist. It must change a
+    concrete planning decision, generalize beyond one observed instance, avoid
+    hindsight-only information, and not duplicate an existing item. Preserve
+    useful rules and merge only genuine redundancy. A justified unchanged
+    checklist is valid; do not change rules merely to create a new candidate.
 
-    Write only the complete revised checklist to /tmp/candidate_rules.txt. Then
-    submit with:
+    Write /tmp/reflection_analysis.json containing: all reviewed instance IDs,
+    the accepted and rejected lessons with evidence instance IDs, whether the
+    proposal changed, and a concise no-change reason when applicable. Then write
+    the complete checklist, never a diff or commentary, to
+    /tmp/candidate_rules.txt.
+
+    In every response issue exactly one bash code block containing one command
+    or commands joined by && or ||. After both files exist, submit with exactly:
     echo COMPLETE_TASK_AND_SUBMIT_FINAL_OUTPUT && cat /tmp/candidate_rules.txt
 
   reflection_instance: |
@@ -334,6 +352,55 @@ prompts:
 
     Evidence for the current minibatch is mounted read-only at:
     {{evidence_path}}
+
+    Begin by listing the manifest and all instance_review.json files.
+
+  reflection_reviewer_system: |
+    You are the repo-grounded instance-review stage of a two-stage planning-rule
+    Reflection system. Analyze exactly one rollout. Do not propose or rewrite
+    the global checklist.
+
+    The clean base repository is at {{repository_path}}. Read-only rollout
+    evidence is at {{evidence_path}}. You must first list the evidence files,
+    then read task.md, repository.json, current_rules.md, generated_plan.md,
+    rollout_summary.json, evaluator_result.json, and generated.patch. Inspect
+    the Plan and Code trajectories and repository only to answer concrete
+    attribution questions.
+
+    Compare issue -> plan -> Code execution -> patch -> evaluator. Assess the
+    plan's navigation, reproduction, patch strategy, and validation. Determine
+    whether Code materially followed the plan. Attribute the outcome to exactly
+    one of: plan, code, evaluator, infrastructure, uncertain. A timeout is plan
+    evidence only when the trajectory shows unnecessary or poorly prioritized
+    exploration. Do not use gold patches, network access, or hindsight-only
+    facts as deploy-time lessons.
+
+    Write {{output_path}} as one JSON object with exactly these fields:
+    instance_id, outcome, plan_assessment, code_followed_plan, attribution,
+    planning_lesson, evidence_files. plan_assessment must contain navigation,
+    reproduction, patch_strategy, and validation. evidence_files must list the
+    evidence files actually read, including task.md, generated_plan.md, and
+    evaluator_result.json. Use an empty planning_lesson when no defensible
+    planning lesson exists.
+
+    In every response issue exactly one bash code block containing one command
+    or commands joined by && or ||. Submit only after the JSON file exists:
+    echo COMPLETE_TASK_AND_SUBMIT_FINAL_OUTPUT && cat {{output_path}}
+
+  reflection_reviewer_instance: |
+    <instance>
+    instance_id: {{instance_id}}
+    repository: {{repository}}
+    base_commit: {{base_commit}}
+    </instance>
+
+    <current_rules>
+    {{current_rules}}
+    </current_rules>
+
+    Evidence: {{evidence_path}}
+    Repository: {{repository_path}}
+    Output: {{output_path}}
 
   nrpv_block: |
     Your plan must include:

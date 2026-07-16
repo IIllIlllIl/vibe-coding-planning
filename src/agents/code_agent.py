@@ -3,9 +3,11 @@
 Aligns with the mini-swe-agent submission protocol: the agent edits files
 in the container with shell commands and finally emits
 ``echo COMPLETE_TASK_AND_SUBMIT_FINAL_OUTPUT`` followed by the configured
-``git diff --cached`` command. ``DefaultAgent.has_finished`` strips the
-marker line and ``Submitted.exception_msg`` carries the canonical diff
-output verbatim — no fence-stripping, validation, or repair is needed.
+``git diff --cached`` command. The Agent owns the semantic choice of staged
+files, including whether locally written diagnostic tests belong in its final
+submission. ``DefaultAgent.has_finished`` strips the marker line and
+``Submitted.exception_msg`` carries the canonical diff output verbatim. The
+Host deliberately does not filter or repair that choice.
 """
 
 from __future__ import annotations
@@ -109,8 +111,9 @@ def run(
 
     Returns:
         A tuple of ``(patch_text, trajectory_messages)``. ``patch_text``
-        is the raw ``git diff --cached`` output captured by the
-        official submission command; no post-processing is applied.
+        is the raw ``git diff --cached`` output captured by the submission
+        command. Apart from requiring a non-empty formal submission, no Host
+        path policy, semantic filtering, or patch repair is applied.
 
     Raises:
         TaskError: If the agent terminates without submitting (e.g.

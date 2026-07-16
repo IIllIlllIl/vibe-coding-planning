@@ -31,24 +31,49 @@ small number of GEPA iterations, not a reduced formal dataset.
 | Plan | issue, repository, candidate rules | historical outcomes and future phases |
 | Code | issue, generated plan, clean repository | candidate rules, historical evidence |
 | Evaluator | patch, clean base, official test metadata | rules and Agent trajectories |
-| Reflection | current minibatch rollout evidence | archived/offline labels as current evidence |
+| Instance reviewer | issue, base repo, rules, one rollout's evidence | gold patch, validation data, network |
+
+The Code Agent may write and run diagnostic tests inside its isolated phase
+workspace. It owns the staged patch returned at formal submission. Online GEPA
+does not apply test-path heuristics or silently rewrite that patch: any non-empty
+formal submission is transferred byte-for-byte to the clean evaluator. Apply,
+test, or submission-selection mistakes are Code evidence and normally score
+unresolved; only transfer or clean-environment integrity failures invalidate the
+metric call.
+| Synthesis | current rules, ordered reviews, targeted current evidence | archived/offline labels as current evidence |
 
 This boundary makes rules causal only through the generated plan.
 
 ## 3. Rollout Evidence
 
-A completed trace can contain generated plan, Plan trajectory, Code trajectory,
-patch, evaluator result, resolved/score, and structured attribution. Failed
+A completed trace can contain issue description, repository identity/base
+commit, generated plan, Plan trajectory, Code trajectory, patch, evaluator
+result, resolved/score, and structured attribution. Failed
 partial trajectories remain in attempt diagnostics and do not enter formal
 Reflection evidence.
 
-Each Reflection proposal persists a redacted `reflection_trajectory.json`
+For `capture_traces=true`, each rollout worker adds a repo-grounded reviewer
+phase in the matching benchmark SIF. Its structured `instance_review.json`,
+redacted trajectory, and identity-bound checkpoint are persisted before the
+worker returns. Candidate-comparison and full-validation calls do not run
+reviewers. Synthesis reads all instance reviews and writes both
+`reflection_analysis.json` and the complete candidate checklist.
+
+Each synthesis proposal persists a redacted `reflection_trajectory.json`
 beside its evidence bundle. It records the complete mini-swe-agent transcript,
 proposal mode, candidate identity, instance IDs, and completion or failure
 status. Credential-shaped fields and sensitive environment values are redacted
 before the atomic write, and the completion audit event records the path. This
 artifact is required to compare agentic evidence exploration with a single
 Reflection LLM call.
+
+After a successful Reflection call, the complete proposal is atomically stored
+under `reflection_proposals/<fingerprint>.json` before it is returned to GEPA.
+The fingerprint covers the parent rules, ordered evidence content, component,
+model, temperature, and Reflection prompts. Replaying that exact call returns
+the persisted proposal and does not invoke the Agent again. This is an
+uncommitted proposal checkpoint only: `gepa_state.bin` remains authoritative
+for candidate acceptance and full-validation state.
 
 Reflection should distinguish:
 
@@ -152,7 +177,7 @@ The formal configuration is `configs/gepa_online_planning_hpc.yaml`:
 
 - full 384/98 snapshot;
 - `max_metric_calls=1000`;
-- reflection minibatch 3;
+- reflection minibatch 3 (retained pending collaborator discussion of 6-12);
 - up to 150 independent worker elements running concurrently;
 - worker `1 CPU / 4G / 55min`;
 - Code budget 40 minutes;
@@ -166,7 +191,9 @@ any completed Plan/Code checkpoint in Reflection evidence and marks
 `terminal_reason=slurm_timeout`. OOM, node,
 repository, evaluator-harness, corrupt-output, and ambiguous Slurm failures stay
 invalid. Reflection failures are not instance outcomes; they leave the GEPA
-proposal uncommitted and are retried by a later controller slice.
+proposal uncommitted and are retried by a later controller slice. Successful
+Reflection output is reused from its proposal checkpoint if the controller
+exits before GEPA commits or rejects it.
 
 `max_running_array_tasks=150` is a Slurm array throttle, not a request for 150
 CPUs in one allocation.
@@ -187,20 +214,17 @@ Before drawing rule-quality conclusions, verify:
 Historical offline Checker design, pilots, and run timelines are preserved in
 the superseded archive document, not in this authority.
 
-## 10. Repo-Grounded Reflection Experiment
+## 10. Repo-Grounded Two-Stage Reflection
 
-A proposed experiment gives Reflection read-only access to the real base
-repositories for the three train instances in its minibatch. Since those
-instances use different SWE-bench SIFs, one agent environment cannot safely
-represent all three. The intended design is three bounded per-instance repo
-reviewers followed by one evidence-only synthesis agent. Validation instances,
-gold patches, persistent repository mutations, and network access remain
-forbidden.
+The active design uses one instance reviewer per trace rollout, inside that
+instance's benchmark SIF, followed by one evidence-only synthesis Agent. The
+reviewers run across the existing rollout array rather than serially in the
+controller. Validation instances, gold patches, persistent repository
+mutations, and network access remain forbidden.
 
-This design must not inherit the current 30-minute command timeout as an
-unbounded per-reviewer phase. Three serial reviewers plus synthesis could exceed
-the 2-hour controller slice. Before a formal run, define short phase-level
-budgets, persist reviewer trajectories and notes, and either checkpoint the
-proposal phase or conservatively yield before starting when remaining
-controller walltime is insufficient. Use a new run identity because this
-changes candidate-generation semantics.
+Plan, Code, and Evaluator checkpoints make reviewer retry inexpensive. A worker
+walltime after evaluator completion retries only the unfinished reviewer; after
+the final attempt the evaluator score is preserved and the missing review is
+marked uncertain. Synthesis may produce an unchanged checklist when no
+defensible deploy-time planning lesson exists. The two-stage prompt and
+reviewer semantics require the dedicated formal run identity dated 2026-07-16.

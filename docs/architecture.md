@@ -4,7 +4,7 @@
 >
 > Scope: Online GEPA planning rules and ULHPC rollout execution
 >
-> Last reviewed: 2026-07-15
+> Last reviewed: 2026-07-16
 >
 > Supersedes: `archive/mixed-design/architecture-pct-era-20260715.md`
 
@@ -28,6 +28,7 @@
 | `src/optimization/online_hpc_executor.py` | Fingerprinted batch journal, Slurm arrays, retry |
 | `src/optimization/online_rollout_worker.py` | One array element and structured output |
 | `src/optimization/online_reflection.py` | Current-minibatch Reflection evidence |
+| `src/optimization/online_reflection_reviewer.py` | Repo-grounded instance review and validation |
 | `src/evaluator/runtime_evaluator.py` | Config-driven evaluator routing |
 | `src/evaluator/swe_apptainer_evaluator.py` | Official SWE-bench evaluation in Apptainer |
 | `scripts/hpc_resume_loop.py` | Local iteration-target supervisor |
@@ -42,12 +43,13 @@ GEPA controller
   -> HPC executor computes evaluation fingerprint
   -> batch journal PREPARED -> SUBMITTING -> SUBMITTED
   -> one Slurm array element per rollout
-  -> worker resumes first incomplete Plan/Code/Evaluator phase
+  -> trace worker resumes first incomplete Plan/Code/Evaluator/Reviewer phase
+  -> each trace worker reviews its instance inside the matching benchmark SIF
   -> structured output written atomically
   -> controller reuses valid outputs and retries only failed indices
   -> batch journal OUTPUTS_READY -> COMPLETE after validated collection
   -> EvaluationBatch returned to GEPA
-  -> Reflection proposes rules
+  -> synthesis Reflection reads structured instance reviews and proposes rules
   -> GEPA saves durable state
 ```
 
@@ -74,6 +76,8 @@ authority for whether the metric call affected optimization.
 | Batch submission and active jobs | `batch_state.json` plus Slurm |
 | Evaluation identity | batch manifest and evaluation fingerprint |
 | Phase completion | identity-bound atomic phase checkpoints |
+| Instance review | worker `reflection_reviewer.json` checkpoint and trajectory |
+| Uncommitted Reflection output | `reflection_proposals/<fingerprint>.json` |
 | Supervisor progress | remote durable state; local supervisor JSON is a cache |
 | Current output scope | `output/README.md` and `output/catalog.json` |
 
@@ -82,7 +86,17 @@ authority for whether the metric call affected optimization.
 Each phase gets an independent environment. Code commands share one writable
 workspace within a Code phase, but no implicit filesystem state crosses phases.
 Allowed cross-phase artifacts are the generated plan, patch, trajectory, and
-evaluator result. Candidate rules never enter Code or Evaluator inputs.
+evaluator result. Candidate rules never enter Code or Evaluator inputs. A
+repo-grounded reviewer may read the candidate, current rollout evidence, and
+clean base repository; synthesis reads the reviews and current evidence bundle.
+
+Code may create or modify diagnostic tests inside its workspace. Code itself
+chooses the staged submission returned by mini-swe-agent; the Host does not
+apply test-path filtering or silently rewrite that patch. The Evaluator starts
+from a clean base repository and receives only the staged submission, while the
+Code trajectory remains available to Reflection. Patch syntax/application and
+official-test failures are scored unresolved rather than rejected by a
+pre-evaluation semantic gate.
 
 ## 6. Failure Boundaries
 
@@ -94,7 +108,11 @@ evaluator result. Candidate rules never enter Code or Evaluator inputs.
 - Slurm-confirmed worker timeout: selectively retried, then scored unresolved
   with timeout attribution only after the shared attempt limit;
   other hard kills remain operational failures.
-- Reflection failure: retry the uncommitted proposal in a later controller.
+- Reviewer timeout after a durable evaluator checkpoint never changes the
+  evaluator score; it produces an explicit uncertain/missing review instead.
+- Reflection failure before `PROPOSAL_READY`: retry in a later controller.
+- Controller exit after `PROPOSAL_READY`: replay the exact persisted proposal;
+  GEPA state still decides whether it is accepted or rejected.
 
 Detailed contracts live in `requirement-document.md`; transferable rationale
 lives in `knowledge/`.

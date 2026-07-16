@@ -29,9 +29,12 @@ engineering checklist.
 2. The Code Agent receives only the issue, generated plan, and clean repository.
 3. The Evaluator receives only the patch, clean base repository, and official
    test metadata.
-4. Reflection may read the current minibatch's plan/code trajectories, patch,
-   evaluator result, score, and structured attribution.
-5. Historical PCT plans, patches, resolved labels, ASI, and archived outputs
+4. Each instance reviewer may read the current issue, repository identity/base
+   commit, clean base repository, plan/code trajectories, patch, evaluator
+   result, score, and structured attribution.
+5. Synthesis Reflection reads current rules and the ordered reviewer outputs;
+   raw current evidence is available only for targeted verification.
+6. Historical PCT plans, patches, resolved labels, ASI, and archived outputs
    must not enter a current rollout.
 
 ## 3. Outcome Contract
@@ -39,6 +42,12 @@ engineering checklist.
 Every rollout is either `scored` or `invalid`.
 
 - Official evaluator resolved/unresolved produces score 1/0.
+- The Code Agent may write or modify diagnostic tests in its isolated workspace
+  and owns the semantic selection of its staged submission. The Host requires
+  only a formal non-empty submission and transport integrity; it must not
+  delete or rewrite file diffs based on test-path heuristics. Malformed,
+  incomplete, or poorly selected submissions proceed to the clean evaluator
+  and normally become scored unresolved evidence.
 - Plan/Code Agent contract failures are retried selectively. After the configured
   total attempts, a final structured Agent failure becomes score 0.
 - A Slurm-confirmed `TIMEOUT` selectively retries that index up to
@@ -71,11 +80,18 @@ Every rollout is either `scored` or `invalid`.
 - `gepa_state.bin` is the authority for committed GEPA candidate/Pareto/budget state.
 - Fingerprinted HPC batches reuse valid completed outputs and retry only failed or
   terminal-missing indices.
-- Plan, Code, and Evaluator checkpoints are atomic and identity-bound.
+- Plan, Code, Evaluator, and instance-reviewer checkpoints are atomic and
+  identity-bound.
 - Code retry may reuse a successful Plan checkpoint but starts from a clean Code
   repository. Evaluator retry may reuse successful Plan and Code checkpoints.
+- A successful Reflection proposal is atomically persisted before it is returned
+  to GEPA. Replaying the same parent, ordered evidence, and Reflection semantics
+  must return that exact proposal without another Agent call.
 - Partial failed trajectory is diagnostic only and never becomes formal evidence.
-- Serial Reflection/candidate-selection work between official checkpoints may rerun.
+- Partial Reflection work before a durable proposal may rerun. GEPA remains the
+  authority for whether a durable proposal was accepted, rejected, or validated.
+- Reviewer timeout or failure must not overwrite a durable official evaluator
+  score. Missing review evidence is marked uncertain and cannot justify a rule.
 - The exact local supervisor command surface is persisted in
   `configs/online_gepa_supervisor.yaml`; unattended launches must not depend on
   reconstructed chat commands or ad hoc PATH injection.
@@ -85,6 +101,9 @@ Every rollout is either `scored` or `invalid`.
 ## 6. Storage And Cleanup
 
 - Code workspaces are removed after patch and trajectory extraction.
+- Only the Code Agent's staged submission crosses into the clean Evaluator
+  workspace. Unstaged diagnostic tests remain visible in the Code trajectory
+  but the writable Code repository itself never crosses the phase boundary.
 - Evaluator workspaces are removed after report/log extraction.
 - Cleanup failure is infrastructure-invalid.
 - Current run state and official dataset snapshots are durable; temporary writable
@@ -107,7 +126,7 @@ A formal run is usable for rule-quality conclusions only when:
 3. all reused outputs pass identity/fingerprint checks;
 4. iteration count advances only after official GEPA state save;
 5. scored-zero Agent failures have auditable structured reasons;
-6. Plan/Code/Evaluator visibility boundaries hold;
+6. Plan/Code/Evaluator/Reviewer/Synthesis visibility boundaries hold;
 7. accepted/rejected candidates agree with recorded scores;
 8. outcome-policy versions are not mixed in comparisons.
 

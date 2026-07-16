@@ -86,6 +86,8 @@ class OnlineOptimizationConfig:
     code_instance_template: str
     reflection_prompt: str
     reflection_instance_template: str
+    reflection_reviewer_prompt: str
+    reflection_reviewer_instance_template: str
     nrpv_block: str
     evaluator: OnlineEvaluatorConfig
 
@@ -374,6 +376,15 @@ def load_online_optimization_config(
         code_instance_template=str(prompts["code_instance"]),
         reflection_prompt=str(prompts["reflection_system"]),
         reflection_instance_template=str(prompts["reflection_instance"]),
+        reflection_reviewer_prompt=str(
+            prompts.get("reflection_reviewer_system", prompts["reflection_system"])
+        ),
+        reflection_reviewer_instance_template=str(
+            prompts.get(
+                "reflection_reviewer_instance",
+                prompts["reflection_instance"],
+            )
+        ),
         nrpv_block=str(prompts["nrpv_block"]),
         evaluator=evaluator,
     )

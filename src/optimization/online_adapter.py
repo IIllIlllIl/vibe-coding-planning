@@ -83,7 +83,14 @@ class OnlinePlanningGEPAAdapter:
         last_agent_failure: AgentRolloutFailure | None = None
         for attempt in range(1, self.rollout_attempts + 1):
             try:
-                output = self.rollout(case, rules)
+                if getattr(self.rollout, "supports_capture_traces", False):
+                    output = self.rollout(
+                        case,
+                        rules,
+                        capture_traces=capture_traces,
+                    )
+                else:
+                    output = self.rollout(case, rules)
                 if self.audit is not None and attempt > 1:
                     self.audit.write(
                         "online_rollout_retried",
@@ -211,6 +218,21 @@ class OnlinePlanningGEPAAdapter:
         }
         trace = None
         if capture_traces:
+            review = {
+                "instance_id": case.instance_id,
+                "outcome": "unresolved",
+                "plan_assessment": {
+                    "navigation": "Unavailable after terminal Agent failure.",
+                    "reproduction": "Unavailable after terminal Agent failure.",
+                    "patch_strategy": "Unavailable after terminal Agent failure.",
+                    "validation": "Unavailable after terminal Agent failure.",
+                },
+                "code_followed_plan": None,
+                "attribution": "uncertain",
+                "planning_lesson": "No reviewer-backed planning lesson.",
+                "evidence_files": ["rollout_summary.json"],
+                "review_status": "not_run_after_terminal_agent_failure",
+            }
             trace = {
                 "instance_id": case.instance_id,
                 "score": 0.0,
@@ -220,6 +242,19 @@ class OnlinePlanningGEPAAdapter:
                 "terminal_reason": failure.reason,
                 "failure_origin": "agent",
                 "evaluator_status": "not_run",
+                "issue_description": case.issue_description,
+                "repository": {
+                    "repo": case.repository.repo,
+                    "base_commit": case.repository.base_commit,
+                    "instance_id": case.repository.instance_id,
+                },
+                "generated_plan": "",
+                "plan_trajectory": [],
+                "code_trajectory": [],
+                "generated_patch": "",
+                "evaluator_result": public_output["evaluator_result"],
+                "attribution_hint": public_output["attribution_hint"],
+                "reflection_review": review,
             }
         return public_output, 0.0, trace
 
@@ -446,10 +481,32 @@ class OnlinePlanningGEPAAdapter:
         }
         trace = None
         if capture_traces:
+            review = output.reflection_review or {
+                "instance_id": case.instance_id,
+                "outcome": "unresolved",
+                "plan_assessment": {
+                    "navigation": "Reviewer output unavailable.",
+                    "reproduction": "Reviewer output unavailable.",
+                    "patch_strategy": "Reviewer output unavailable.",
+                    "validation": "Reviewer output unavailable.",
+                },
+                "code_followed_plan": None,
+                "attribution": "uncertain",
+                "planning_lesson": "No reviewer-backed planning lesson.",
+                "evidence_files": ["rollout_summary.json"],
+                "review_status": "not_available",
+            }
             trace = {
                 "instance_id": case.instance_id,
+                "issue_description": case.issue_description,
+                "repository": {
+                    "repo": case.repository.repo,
+                    "base_commit": case.repository.base_commit,
+                    "instance_id": case.repository.instance_id,
+                },
                 "score": score,
                 **output.to_trace(),
+                "reflection_review": review,
             }
         return public_output, score, trace
 

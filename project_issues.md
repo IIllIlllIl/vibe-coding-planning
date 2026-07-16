@@ -33,10 +33,11 @@ Future launch/progress checks must append a row before interpreting movement.
   脱敏后的 `reflection_trajectory.json`。下一次 8 durable iterations 需要检查
   实际命令、读取文件、model calls、重复工作、token 和 candidate diff，再决定
   是否保留 agentic proposer。旧运行只有消息/调用计数，无法恢复具体命令。
-- **Repo-grounded 两阶段 Reflection walltime**：三个 instance-specific SIF
-  reviewer 加 synthesis 若串行沿用当前 30 分钟命令 timeout，可能超过 2 小时
-  Controller slice。正式提交前必须增加短 phase budget 和 proposal checkpoint/yield；
-  该实验不得混入现有 run directory。
+- **Repo-grounded 两阶段 Reflection 风险**：instance reviewer 已放入对应 trace
+  worker 的 benchmark SIF，并有独立 checkpoint；synthesis 只读结构化 reviews。
+  下一次新 identity 运行需检查 reviewer 实际读取 evidence/repo、reviewer timeout
+  后 evaluator score 是否保持、review attribution 是否过度归因于 plan、synthesis
+  是否引用全部 instance，以及额外 token/FairShare 成本。
 
 - **状态**：当前主线；evaluator 基础设施修复后需要重新建立可信的正式结果
 - **背景**：candidate rules 进入 Plan Agent，随后执行真实的 Plan、Code 和
@@ -181,6 +182,7 @@ Future launch/progress checks must append a row before interpreting movement.
 | `conda run` 捕获长期 Supervisor stdout | 当前 tmux/state 正常但 service log 在进程运行期间为空；对比 state mtime 与退出后的 log | **已修复，待下次运行验证**：标准入口使用 `--no-capture-output` 并有命令构造测试；不重启当前 run |
 | worker 已完成但 batch 仍为 `SUBMITTED` | 对照 fingerprint、Slurm、output、`batch_state.json` 与 GEPA durable state | 这是未被 GEPA 重放/消费的 metric call，不得误标 `COMPLETE`；接管时记录 `OUTPUTS_READY`，完成和复用使用不同审计事件 |
 | Reflection 失败错误 block 或重复提交 | 检查 `retryable_failed`、GEPA state/candidate tree 和下一 controller | 失败 proposal 被计为 iteration/candidate，或 supervisor 永久退出，或同一 proposal 被并发执行时停止 |
+| Code 自选 patch 包含诊断测试或测试基础设施修改 | 对所有 `resolved=true` 的 submission 保留 patch/trajectory 并做运行后审查；运行时不按路径过滤 | 当前选择优先避免 Host 误杀正确 patch。若发现通过修改 runner、fixture 或跳过断言获得 resolved，应将样本标记为不可靠并重新评估该 run；不得事后静默改 patch |
 
 #### C. 两项更新的交互风险与首次运行门槛
 

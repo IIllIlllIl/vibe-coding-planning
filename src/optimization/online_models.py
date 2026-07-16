@@ -46,6 +46,7 @@ class OnlineRolloutOutput:
     code_trajectory: tuple[dict[str, Any], ...]
     evaluator_result: dict[str, Any]
     attribution_hint: dict[str, Any] = field(default_factory=dict)
+    reflection_review: dict[str, Any] | None = None
     outcome_status: str = "scored"
     score_valid: bool = True
     evaluator_status: str = "completed"
@@ -94,4 +95,5 @@ class OnlineRolloutOutput:
             "terminal_phase": self.terminal_phase,
             "terminal_reason": self.terminal_reason,
             "failure_origin": self.failure_origin,
+            "reflection_review": self.reflection_review,
         }

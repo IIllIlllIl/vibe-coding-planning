@@ -31,10 +31,15 @@ from src.exceptions import (
 from src.optimization.audit import AuditedModel, JsonlLogger, text_sha256
 from src.optimization.online_config import OnlineOptimizationConfig
 from src.optimization.online_models import OnlineGEPACase, OnlineRolloutOutput
+from src.optimization.online_reflection_reviewer import (
+    OnlineInstanceReflectionReviewer,
+)
 
 
 class OnlinePCTRolloutRunner:
     """Run one current single-round PCT rollout for candidate planning rules."""
+
+    supports_capture_traces = True
 
     def __init__(
         self,
@@ -101,6 +106,8 @@ class OnlinePCTRolloutRunner:
         self,
         case: OnlineGEPACase,
         rules: str,
+        *,
+        capture_traces: bool = False,
     ) -> OnlineRolloutOutput:
         if self.config.container.runtime not in ("docker", "apptainer"):
             raise ValueError(
@@ -332,6 +339,59 @@ class OnlinePCTRolloutRunner:
             raise
 
         resolved = bool(evaluator_result.get("resolved", False))
+        reflection_review = None
+        if capture_traces:
+            reviewer_checkpoint = self._read_checkpoint("reflection_reviewer")
+            if reviewer_checkpoint is None:
+                phase_root = (
+                    self.checkpoint_dir.parent / "reflection_reviewer"
+                    if self.checkpoint_dir is not None
+                    else self.config.run_dir
+                    / "reflection_reviewer"
+                    / candidate_sha256[:12]
+                    / case.instance_id
+                )
+                reflection_review, reviewer_trajectory = (
+                    OnlineInstanceReflectionReviewer(
+                        self.config,
+                        self.capacity_window,
+                    ).review(
+                        case=case,
+                        rules=rules,
+                        image_name=image_name,
+                        workdir=workdir,
+                        evidence={
+                            "generated_plan": plan,
+                            "plan_trajectory": plan_trajectory,
+                            "code_trajectory": code_trajectory,
+                            "generated_patch": patch,
+                            "evaluator_result": evaluator_result,
+                            "rollout_summary": {
+                                "resolved": resolved,
+                                "score": float(resolved),
+                                "attribution_hint": {
+                                    "candidate_rules_visible_to_plan_agent": True,
+                                    "candidate_rules_visible_to_code_agent": False,
+                                },
+                            },
+                        },
+                        phase_root=phase_root,
+                    )
+                )
+                self._write_checkpoint(
+                    "reflection_reviewer",
+                    {
+                        "reflection_review": reflection_review,
+                        "reflection_reviewer_trajectory": reviewer_trajectory,
+                    },
+                )
+            else:
+                reflection_review = dict(
+                    reviewer_checkpoint["reflection_review"]
+                )
+                self._record_checkpoint_resumed(
+                    "reflection_reviewer", case, candidate_sha256
+                )
         self.audit.write(
             "online_rollout_completed",
             instance_id=case.instance_id,
@@ -351,6 +411,7 @@ class OnlinePCTRolloutRunner:
             plan_trajectory=tuple(plan_trajectory),
             code_trajectory=tuple(code_trajectory),
             evaluator_result=evaluator_result,
+            reflection_review=reflection_review,
             attribution_hint={
                 "candidate_rules_visible_to_plan_agent": True,
                 "candidate_rules_visible_to_code_agent": False,

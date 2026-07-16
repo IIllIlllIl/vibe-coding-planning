@@ -1,6 +1,6 @@
 schema_version: 1
-session: online-gepa-policy-v3-8it-20260715
-log: .local/hpc-supervisor/online-gepa-policy-v3-8it-20260715.log
+session: online-gepa-two-stage-8it-20260716
+log: .local/hpc-supervisor/online-gepa-two-stage-8it-20260716.log
 arguments:
   - --target-iterations
   - "8"
@@ -14,9 +14,9 @@ arguments:
   - --gepa-config
   - configs/gepa_online_planning_hpc.yaml
   - --job-name
-  - online-gepa-policy-v3-8it-20260715
+  - online-gepa-two-stage-8it-20260716
   - --remote-dir
-  - ~/hpc_runs/vibe-coding-planning-online-policy-v3-8it-20260715
+  - ~/hpc_runs/vibe-coding-planning-online-two-stage-8it-20260716
   - --cpus
   - "1"
   - --mem

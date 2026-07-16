@@ -125,31 +125,29 @@ prompts:
     </pr_description>
 
     <instructions>
-    Implement the approved plan in /testbed. Do not modify tests or test
-    fixtures. When finished, submit the patch with:
-    echo COMPLETE_TASK_AND_SUBMIT_FINAL_OUTPUT && git diff --cached
+    Implement the approved plan in /testbed. You may create or modify tests and
+    fixtures to reproduce the issue and validate the implementation. Do not
+    weaken or skip assertions merely to make an incorrect implementation pass.
+
+    You are responsible for selecting the final patch. Inspect all changes,
+    clear the staging area, and use an earlier command to stage exactly the
+    changes you intend to send to the clean official evaluator. Diagnostic
+    tests and temporary debugging artifacts may remain unstaged. Then submit:
+    echo COMPLETE_TASK_AND_SUBMIT_FINAL_OUTPUT && git diff --cached --binary --full-index
     </instructions>
 
   reflection_system: |
-    You maintain the complete planning checklist used by a strict Plan Agent.
+    You synthesize planning rules from repo-grounded instance reviews. First
+    list {{evidence_path}}, then read manifest.json and every
+    instance_review.json. Distinguish plan defects from Code, evaluator,
+    infrastructure, and uncertain attribution. Add only general lessons that a
+    Plan Agent can apply using the issue and repository before Code runs. A
+    justified unchanged checklist is valid.
 
-    Files under {{evidence_path}} contain current online rollout evidence for
-    the minibatch. They may include generated plans, Plan and Code Agent
-    trajectories, generated patches, evaluator results, resolved values, scores,
-    and attribution hints.
-
-    Use this execution-after evidence only to improve the planning checklist.
-    Distinguish plan/rule problems from Code Agent deviations and infrastructure
-    failures. Do not add rules that depend on seeing evaluator results,
-    generated patches, trajectories, resolved labels, or future execution
-    output at deployment time.
-
-    Preserve useful checklist items. Delete misleading items. Merge redundant
-    items. Add new items only when the lesson is general and deployable from
-    issue, repository, and planning rules before code execution.
-
-    Write only the complete revised checklist to /tmp/candidate_rules.txt. Then
-    submit with:
+    Write /tmp/reflection_analysis.json with reviewed_instance_ids,
+    accepted_lessons, rejected_lessons, proposal_changed, and no_change_reason.
+    Write the complete checklist to /tmp/candidate_rules.txt. Use exactly one
+    bash code block per response. Submit with:
     echo COMPLETE_TASK_AND_SUBMIT_FINAL_OUTPUT && cat /tmp/candidate_rules.txt
 
   reflection_instance: |
@@ -159,6 +157,28 @@ prompts:
 
     Evidence for the current minibatch is mounted read-only at:
     {{evidence_path}}
+
+  reflection_reviewer_system: |
+    Review exactly one rollout; do not rewrite the global checklist. First list
+    {{evidence_path}}, read task.md, repository.json, current_rules.md,
+    generated_plan.md, rollout_summary.json, evaluator_result.json, and
+    generated.patch, then inspect trajectories and {{repository_path}} for
+    concrete attribution questions. Compare issue -> plan -> Code -> patch ->
+    evaluator. Attribute to plan, code, evaluator, infrastructure, or uncertain.
+
+    Write {{output_path}} as JSON with instance_id, outcome, plan_assessment,
+    code_followed_plan, attribution, planning_lesson, and evidence_files.
+    plan_assessment contains navigation, reproduction, patch_strategy, and
+    validation. Use exactly one bash code block per response. Submit with:
+    echo COMPLETE_TASK_AND_SUBMIT_FINAL_OUTPUT && cat {{output_path}}
+
+  reflection_reviewer_instance: |
+    Instance {{instance_id}} is from {{repository}} at {{base_commit}}.
+    Current rules:
+    {{current_rules}}
+    Evidence: {{evidence_path}}
+    Repository: {{repository_path}}
+    Output: {{output_path}}
 
   nrpv_block: |
     Your plan must include:

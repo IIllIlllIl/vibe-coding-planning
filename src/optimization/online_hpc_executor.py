@@ -95,6 +95,10 @@ def rollout_semantic_sha256(config: OnlineOptimizationConfig) -> str:
                 "plan_instance": config.plan_instance_template,
                 "code": config.code_prompt,
                 "code_instance": config.code_instance_template,
+                "reflection_reviewer": config.reflection_reviewer_prompt,
+                "reflection_reviewer_instance": (
+                    config.reflection_reviewer_instance_template
+                ),
                 "nrpv": config.nrpv_block,
             },
         }
@@ -325,6 +329,7 @@ class OnlineRolloutBatchStore:
             terminal_phase=data.get("terminal_phase"),
             terminal_reason=data.get("terminal_reason"),
             failure_origin=data.get("failure_origin"),
+            reflection_review=data.get("reflection_review"),
         )
 
 
@@ -1010,7 +1015,7 @@ class HPCSlurmOnlineRolloutExecutor:
         )
 
     @staticmethod
-    def _finalize_slurm_timeout(task: OnlineRolloutTask, attempt: int) -> None:
+    def _finalize_slurm_timeout(task: OnlineRolloutTask, attempt: int) -> str:
         """Turn a proven worker wall-time expiry into a scored agent outcome."""
         checkpoint_dir = task.worker_run_dir / "checkpoints"
 
@@ -1024,6 +1029,50 @@ class HPCSlurmOnlineRolloutExecutor:
 
         plan_payload = checkpoint_payload("plan")
         code_payload = checkpoint_payload("code")
+        evaluator_payload = checkpoint_payload("evaluator")
+        task_manifest = json.loads(task.manifest_path.read_text(encoding="utf-8"))
+        if evaluator_payload and bool(task_manifest.get("capture_traces")):
+            evaluator_result = dict(evaluator_payload["evaluator_result"])
+            resolved = bool(evaluator_result.get("resolved", False))
+            _write_json(
+                task.output_path,
+                {
+                    "status": "completed",
+                    "outcome_policy_version": ONLINE_OUTCOME_POLICY_VERSION,
+                    "mode": "online_planning",
+                    "instance_id": task.case.instance_id,
+                    "split": task.case.split,
+                    "candidate_sha256": text_sha256(
+                        task.rules_path.read_text(encoding="utf-8")
+                    ),
+                    "resolved": resolved,
+                    "score": float(resolved),
+                    "outcome_status": "scored",
+                    "score_valid": True,
+                    "evaluator_status": "completed",
+                    "evaluator_resolved": resolved,
+                    "terminal_phase": None,
+                    "terminal_reason": None,
+                    "failure_origin": None,
+                    "attempts": attempt,
+                    "plan": str(plan_payload.get("plan", "")),
+                    "patch": str(code_payload.get("patch", "")),
+                    "plan_trajectory": list(
+                        plan_payload.get("plan_trajectory", [])
+                    ),
+                    "code_trajectory": list(
+                        code_payload.get("code_trajectory", [])
+                    ),
+                    "evaluator_result": evaluator_result,
+                    "attribution_hint": {
+                        "candidate_rules_visible_to_plan_agent": True,
+                        "candidate_rules_visible_to_code_agent": False,
+                        "reflection_reviewer_timeout": True,
+                    },
+                    "reflection_review": None,
+                },
+            )
+            return "reviewer_timeout_preserved_evaluator"
         terminal_phase = "code" if plan_payload else "plan"
         if code_payload:
             terminal_phase = "evaluator"
@@ -1064,37 +1113,43 @@ class HPCSlurmOnlineRolloutExecutor:
                 },
             },
         )
+        return "rollout_timeout_scored_unresolved"
 
     def _cleanup_timed_out_workspace(
         self,
         task: OnlineRolloutTask,
         attempt: int,
     ) -> None:
-        workspace = task.worker_run_dir / f"attempt_{attempt}" / "phase_workspaces"
-        if not workspace.exists():
-            return
-        try:
-            shutil.rmtree(workspace)
-        except OSError as exc:
+        workspaces = [
+            task.worker_run_dir / f"attempt_{attempt}" / "phase_workspaces",
+            task.worker_run_dir / "reflection_reviewer" / "workspace",
+        ]
+        for workspace in workspaces:
+            if not workspace.exists():
+                continue
+            try:
+                shutil.rmtree(workspace)
+            except OSError as exc:
+                self.audit.write(
+                    "online_hpc_rollout_timeout_cleanup_failed",
+                    task_index=task.index,
+                    instance_id=task.case.instance_id,
+                    attempt=attempt,
+                    path=str(workspace),
+                    error_type=type(exc).__name__,
+                    error=str(exc),
+                )
+                raise FatalError(
+                    "failed to clean terminal timeout workspace "
+                    f"{workspace}: {exc}"
+                ) from exc
             self.audit.write(
-                "online_hpc_rollout_timeout_cleanup_failed",
+                "online_hpc_rollout_timeout_workspace_removed",
                 task_index=task.index,
                 instance_id=task.case.instance_id,
                 attempt=attempt,
                 path=str(workspace),
-                error_type=type(exc).__name__,
-                error=str(exc),
             )
-            raise FatalError(
-                f"failed to clean terminal timeout workspace {workspace}: {exc}"
-            ) from exc
-        self.audit.write(
-            "online_hpc_rollout_timeout_workspace_removed",
-            task_index=task.index,
-            instance_id=task.case.instance_id,
-            attempt=attempt,
-            path=str(workspace),
-        )
 
     def _wait_for_outputs(
         self,
@@ -1155,18 +1210,34 @@ class HPCSlurmOnlineRolloutExecutor:
                             instance_id=task.case.instance_id,
                         )
                     else:
-                        self._finalize_slurm_timeout(task, attempt)
+                        disposition = self._finalize_slurm_timeout(task, attempt)
                         remaining.pop(index, None)
                         first_missing_seen_at.pop(index, None)
                         self.audit.write(
-                            "online_hpc_rollout_timeout_scored",
+                            (
+                                "online_hpc_reflection_reviewer_timeout"
+                                if disposition
+                                == "reviewer_timeout_preserved_evaluator"
+                                else "online_hpc_rollout_timeout_scored"
+                            ),
                             job_id=job_id,
                             attempt=attempt,
                             max_task_attempts=self.config.hpc.max_task_attempts,
                             task_index=index,
                             instance_id=task.case.instance_id,
-                            score=0.0,
-                            terminal_reason="slurm_timeout",
+                            score=(
+                                None
+                                if disposition
+                                == "reviewer_timeout_preserved_evaluator"
+                                else 0.0
+                            ),
+                            terminal_reason=(
+                                "reflection_reviewer_timeout"
+                                if disposition
+                                == "reviewer_timeout_preserved_evaluator"
+                                else "slurm_timeout"
+                            ),
+                            timeout_disposition=disposition,
                         )
                     continue
                 if state in _SLURM_TERMINAL_STATES:

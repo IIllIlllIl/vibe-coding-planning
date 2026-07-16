@@ -104,6 +104,32 @@ class TestRunSuccess:
         assert messages[2]["role"] == "assistant"
 
     @patch("src.agents.code_agent.import_minisweagent")
+    def test_returns_agent_selected_test_diff_without_host_filtering(
+        self, mock_import, config, mock_env
+    ):
+        submitted = (
+            "diff --git a/tests/test_regression.py b/tests/test_regression.py\n"
+            "new file mode 100644\n"
+            "--- /dev/null\n"
+            "+++ b/tests/test_regression.py\n"
+            "@@ -0,0 +1 @@\n"
+            "+def test_regression(): assert True\n"
+        )
+
+        class TestSubmittingAgent(MockDefaultAgent):
+            def run(self, **kwargs):
+                MockDefaultAgent.last_run_kwargs = kwargs
+                return "Submitted", submitted
+
+        mock_import.return_value = (TestSubmittingAgent, MockLiteLLMModel, object)
+
+        patch_text, _ = code_agent.run(
+            config, "Plan to fix bug", "Parser fails on input", mock_env
+        )
+
+        assert patch_text == submitted
+
+    @patch("src.agents.code_agent.import_minisweagent")
     def test_system_template_passed_verbatim(self, mock_import, config, mock_env):
         """The code_generation_prompt must be forwarded to DefaultAgent
         unchanged — no host-side str.replace inlining of ``{{plan}}``.
