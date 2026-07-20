@@ -2,9 +2,9 @@
 
 > Authority: current optimization and evidence semantics
 >
-> Scope: candidate planning rules, rollout evidence, Reflection, policy v2
+> Scope: candidate planning rules, rollout evidence, Reflection, policy v4
 >
-> Last reviewed: 2026-07-15
+> Last reviewed: 2026-07-20
 >
 > Supersedes: `archive/mixed-design/gepa-rule-optimization-mixed-20260715.md`
 
@@ -65,12 +65,12 @@ This boundary makes rules causal only through the generated plan.
 
 A completed trace can contain issue description, repository identity/base
 commit, generated plan, Plan trajectory, Code trajectory, patch, evaluator
-result, resolved/score, and structured attribution. Failed
-partial trajectories remain in attempt diagnostics and do not enter formal
-Reflection evidence.
+result, resolved/score, and structured attribution. A final scored Agent failure
+uses the phase-complete evidence chain defined by outcome policy v4; operational
+failure attempts remain diagnostics and do not become scores.
 
-For `capture_traces=true`, each rollout worker adds a repo-grounded reviewer
-phase in the matching benchmark SIF. Its structured `instance_review.json`,
+For `capture_traces=true`, a separate Reviewer array runs after durable PCT
+outputs using each instance's matching benchmark SIF. Its structured `instance_review.json`,
 redacted trajectory, and identity-bound checkpoint are persisted before the
 worker returns. Candidate-comparison and full-validation calls do not run
 reviewers. Synthesis reads all instance reviews and writes both
@@ -91,6 +91,9 @@ ambiguous, unsupported, or conflicts with another report, it may inspect the
 corresponding raw task, plan and Code trajectories, patch, evaluator result,
 rollout summary, and Reviewer trajectory. The evaluator output remains the
 authority for resolved/unresolved; neither Reviewer nor Synthesis rewrites it.
+The raw bundle is intentionally complete but is not a mandatory reading list:
+forcing every raw file into context would add noise and make minibatch scaling
+harder.
 
 Each synthesis proposal persists a redacted `reflection_trajectory.json`
 beside its evidence bundle. It records the complete mini-swe-agent transcript,
@@ -172,11 +175,10 @@ terminal tasks without output are also selectively retried. An
 unknown Slurm task is treated as lost only after its grace and is never inferred
 to be an Agent timeout.
 
-Formal HPC Plan and Code YAML omits mini-swe step, cost, and model-attempt
-fields. The Online loader disables the retired step/cost mechanisms internally,
-and the Plan prompt contains no separate step budget. Per-command timeout,
-evaluator timeout, worker Slurm walltime, and the shared HPC attempt count remain
-the visible operational boundaries.
+Formal HPC Plan, Code, Reviewer, and Synthesis omit mini-swe step, cost, and
+model-attempt fields. Reviewer and Synthesis run as separate Slurm tasks. Per-command
+timeout, evaluator timeout, phase Slurm walltime, and the shared three-attempt
+policy remain visible operational boundaries.
 
 ## 6. Phase Resume
 
@@ -223,9 +225,10 @@ The formal configuration is `configs/gepa_online_planning_hpc.yaml`:
 - Code budget 40 minutes;
 - three total attempts for structured Agent failures and non-timeout worker
   failures;
-- controller slices 2 hours under the external supervisor.
+- controller slices 2 hours under the external supervisor; Reviewer and
+  Synthesis use separate Slurm allocations.
 
-Outcome policy v3 selectively retries a Slurm-confirmed worker `TIMEOUT`; only
+Outcome policy v4 selectively retries a Slurm-confirmed worker `TIMEOUT`; only
 the final exhausted attempt becomes scored unresolved. The controller preserves
 any completed Plan/Code checkpoint in Reflection evidence and marks
 `terminal_reason=slurm_timeout`. OOM, node,
@@ -262,9 +265,15 @@ reviewers run across the existing rollout array rather than serially in the
 controller. Validation instances, gold patches, persistent repository
 mutations, and network access remain forbidden.
 
-Plan, Code, and Evaluator checkpoints make reviewer retry inexpensive. A worker
-walltime after evaluator completion retries only the unfinished reviewer; after
-the final attempt the evaluator score is preserved and the missing review is
-marked uncertain. Synthesis may produce an unchanged checklist when no
-defensible deploy-time planning lesson exists. The two-stage prompt and
-reviewer semantics require the dedicated formal run identity dated 2026-07-16.
+Plan, Code, and Evaluator checkpoints make Reviewer retry inexpensive. Reviewer
+and Synthesis are separate Slurm Agent tasks, each with three total attempts and
+a clean workspace per attempt. They restart their own phase rather than resume
+an Agent conversation.
+A final Reviewer failure preserves the durable evaluator score and supplies an
+explicit unavailable/uncertain review unless the cause is a blocking
+infrastructure failure. Every failed attempt keeps its redacted trajectory and
+terminal reason outside the disposable workspace. A final Synthesis ordinary
+Agent failure after three total attempts blocks the experiment: it never
+fabricates rules, returns the parent as a no-op candidate, or enters an unbounded
+controller replay. Successful instance-review and `PROPOSAL_READY` checkpoints
+are the two safe Reflection resume boundaries.

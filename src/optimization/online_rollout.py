@@ -31,9 +31,7 @@ from src.exceptions import (
 from src.optimization.audit import AuditedModel, JsonlLogger, text_sha256
 from src.optimization.online_config import OnlineOptimizationConfig
 from src.optimization.online_models import OnlineGEPACase, OnlineRolloutOutput
-from src.optimization.online_reflection_reviewer import (
-    OnlineInstanceReflectionReviewer,
-)
+from src.optimization.online_reflection_reviewer import OnlineInstanceReflectionReviewer
 
 
 class OnlinePCTRolloutRunner:
@@ -375,7 +373,7 @@ class OnlinePCTRolloutRunner:
         resolved = bool(evaluator_result.get("resolved", False))
         reflection_review = None
         reviewer_trajectory: list[dict[str, Any]] = []
-        if capture_traces:
+        if capture_traces and not self.config.execution.separate_reflection_tasks:
             reviewer_checkpoint = self._read_checkpoint("reflection_reviewer")
             if reviewer_checkpoint is None:
                 phase_root = (
@@ -417,9 +415,7 @@ class OnlinePCTRolloutRunner:
                     },
                 )
             else:
-                reflection_review = dict(
-                    reviewer_checkpoint["reflection_review"]
-                )
+                reflection_review = dict(reviewer_checkpoint["reflection_review"])
                 reviewer_trajectory = list(
                     reviewer_checkpoint.get("reflection_reviewer_trajectory", [])
                 )

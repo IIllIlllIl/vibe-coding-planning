@@ -1,6 +1,6 @@
 schema_version: 1
-session: online-gepa-phase-evidence-2it-smoke-20260720
-log: .local/hpc-supervisor/online-gepa-phase-evidence-2it-smoke-20260720.log
+session: online-gepa-separate-reflection-2it-smoke-20260720
+log: .local/hpc-supervisor/online-gepa-separate-reflection-2it-smoke-20260720.log
 arguments:
   - --target-iterations
   - "2"
@@ -14,9 +14,9 @@ arguments:
   - --gepa-config
   - configs/gepa_online_planning_hpc.yaml
   - --job-name
-  - online-gepa-phase-evidence-2it-smoke-20260720
+  - online-gepa-separate-reflection-2it-smoke-20260720
   - --remote-dir
-  - ~/hpc_runs/vibe-coding-planning-online-phase-evidence-2it-smoke-20260720
+  - ~/hpc_runs/vibe-coding-planning-online-separate-reflection-2it-smoke-20260720
   - --cpus
   - "1"
   - --mem

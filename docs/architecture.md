@@ -29,6 +29,8 @@
 | `src/optimization/online_rollout_worker.py` | One array element and structured output |
 | `src/optimization/online_reflection.py` | Current-minibatch Reflection evidence |
 | `src/optimization/online_reflection_reviewer.py` | Repo-grounded instance review and validation |
+| `src/optimization/online_reviewer_worker.py` | One independent Reviewer Slurm attempt |
+| `src/optimization/online_synthesis_worker.py` | One independent Synthesis Slurm attempt |
 | `src/evaluator/runtime_evaluator.py` | Config-driven evaluator routing |
 | `src/evaluator/swe_apptainer_evaluator.py` | Official SWE-bench evaluation in Apptainer |
 | `scripts/hpc_resume_loop.py` | Local iteration-target supervisor |
@@ -76,7 +78,8 @@ authority for whether the metric call affected optimization.
 | Batch submission and active jobs | `batch_state.json` plus Slurm |
 | Evaluation identity | batch manifest and evaluation fingerprint |
 | Phase completion | identity-bound atomic phase checkpoints |
-| Instance review | worker `reflection_reviewer.json` checkpoint, concise report, trajectory, and immutable raw rollout evidence |
+| Instance review | batch `reviewer/task_state.json`, per-attempt evidence, and merged rollout output |
+| Synthesis task | `hpc_synthesis_tasks/<fingerprint>/task_state.json` plus Slurm |
 | Uncommitted Reflection output | `reflection_proposals/<fingerprint>.json` |
 | Supervisor progress | remote durable state; local supervisor JSON is a cache |
 | Current output scope | `output/README.md` and `output/catalog.json` |
@@ -122,7 +125,19 @@ pre-evaluation semantic gate.
   and Code checkpoints take precedence over partial copies from a later retry.
 - Reviewer timeout after a durable evaluator checkpoint never changes the
   evaluator score; it produces an explicit uncertain/missing review instead.
-- Reflection failure before `PROPOSAL_READY`: retry in a later controller.
+- Reviewer and Synthesis run as separate Slurm Agent phases after durable input
+  checkpoints. Reviewer retry starts with a clean reviewer workspace without
+  rerunning Plan/Code/Evaluator. Synthesis submission/adoption makes the
+  controller yield and later collect its output, so controller walltime is not
+  the Synthesis budget.
+- Reflection failure before `PROPOSAL_READY` retries Synthesis from the
+  beginning of that phase. No mid-conversation resume is required.
+- Task storage separates immutable input, per-attempt trajectory/failure
+  records, disposable workspaces, and the single authoritative successful
+  result. Workspace cleanup never removes attempt evidence.
+- Exhausted Reviewer Agent failures produce an unavailable review without
+  changing the evaluator score. Exhausted Synthesis Agent failures are blocking
+  because no trustworthy proposal exists and the failure rate must be inspected.
 - Controller exit after `PROPOSAL_READY`: replay the exact persisted proposal;
   GEPA state still decides whether it is accepted or rejected.
 

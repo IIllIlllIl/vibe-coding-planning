@@ -27,8 +27,6 @@ reflection:
   api_base: https://api.deepseek.com
   api_key_env: DEEPSEEK_API_KEY
   temperature: 0.7
-  max_steps: 500
-  cost_limit: 10.0
   timeout: 1800
 
 search:

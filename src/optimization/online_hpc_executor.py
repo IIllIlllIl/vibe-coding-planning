@@ -90,6 +90,9 @@ def rollout_semantic_sha256(config: OnlineOptimizationConfig) -> str:
             "code_phase_timeout_seconds": (
                 config.execution.code_phase_timeout_seconds
             ),
+            "separate_reflection_tasks": (
+                config.execution.separate_reflection_tasks
+            ),
             "agent_failure_max_task_attempts": config.hpc.max_task_attempts,
             "prompts": {
                 "plan": config.plan_prompt,
@@ -395,6 +398,51 @@ def build_slurm_array_script(
     return "\n".join(lines) + "\n"
 
 
+def build_reviewer_array_script(
+    *,
+    config_path: str,
+    batch_dir: str,
+    task_count: int,
+    job_name: str,
+    hpc: Any,
+    task_indices: Sequence[int],
+    attempt: int,
+) -> str:
+    index_spec = ",".join(str(index) for index in task_indices)
+    lines = [
+        "#!/usr/bin/env bash",
+        f"#SBATCH --job-name={job_name}",
+        f"#SBATCH --partition={hpc.partition}",
+        f"#SBATCH --cpus-per-task={hpc.cpus_per_task}",
+        f"#SBATCH --mem={hpc.mem}",
+        f"#SBATCH --time={hpc.time}",
+        f"#SBATCH --array={index_spec}%{hpc.max_running_array_tasks}",
+        "#SBATCH --output=%x-%A_%a.out",
+        "#SBATCH --error=%x-%A_%a.err",
+        "set -euo pipefail",
+        "set +x",
+        f"module load {shlex.quote(hpc.python_module)}",
+        f"module load {shlex.quote(hpc.container_module)}",
+        f"ENV_FILE={shlex.quote(hpc.remote_env_file)}",
+        'ENV_FILE="${ENV_FILE/#\\~/$HOME}"',
+        'source "${ENV_FILE}"',
+        'test -n "${DEEPSEEK_API_KEY:-}" || exit 2',
+        f"BATCH_DIR={shlex.quote(batch_dir)}",
+        'TASK_ID="$(printf "%04d" "${SLURM_ARRAY_TASK_ID}")"',
+        f"ATTEMPT={attempt}",
+        'ATTEMPT_ID="$(printf "%02d" "${ATTEMPT}")"',
+        'TASK_MANIFEST="${BATCH_DIR}/reviewer/tasks/task_${TASK_ID}.json"',
+        'OUTPUT_JSON="${BATCH_DIR}/reviewer/outputs/task_${TASK_ID}.json"',
+        'ATTEMPT_DIR="${BATCH_DIR}/reviewer/attempts/task_${TASK_ID}/attempt_${ATTEMPT_ID}"',
+        f"{shlex.quote(hpc.python_bin)} -m src.optimization.online_reviewer_worker "
+        f"--config {shlex.quote(config_path)} "
+        '--task-manifest "${TASK_MANIFEST}" '
+        '--output "${OUTPUT_JSON}" '
+        '--attempt-dir "${ATTEMPT_DIR}"',
+    ]
+    return "\n".join(lines) + "\n"
+
+
 class HPCSlurmOnlineRolloutExecutor:
     """Prepare, optionally submit, and collect a Slurm rollout batch."""
 
@@ -613,6 +661,13 @@ class HPCSlurmOnlineRolloutExecutor:
                 retry_job_ids=retry_job_ids,
                 evaluation_fingerprint=fingerprint,
             )
+            if capture_traces and self.config.execution.separate_reflection_tasks:
+                outputs = self._ensure_reviews(
+                    batch_dir,
+                    tasks,
+                    outputs,
+                    evaluation_fingerprint=fingerprint,
+                )
             after = collect_slurm_resource_snapshot(str(job_id) if job_id else None)
             usage = {
                 "mode": "online_planning_hpc_batch_resource_usage",
@@ -664,6 +719,244 @@ class HPCSlurmOnlineRolloutExecutor:
             "HPC rollout batch prepared but not submitted. Review "
             f"{batch_dir} and set hpc.submit=true after resource pilot setup."
         )
+
+    def _ensure_reviews(
+        self,
+        batch_dir: Path,
+        tasks: list[OnlineRolloutTask],
+        outputs: list[OnlineRolloutOutput],
+        *,
+        evaluation_fingerprint: str,
+    ) -> list[OnlineRolloutOutput]:
+        root = batch_dir / "reviewer"
+        task_root = root / "tasks"
+        output_root = root / "outputs"
+        state_path = root / "task_state.json"
+        task_root.mkdir(parents=True, exist_ok=True)
+        output_root.mkdir(exist_ok=True)
+        for task in tasks:
+            path = task_root / f"task_{task.index:04d}.json"
+            if not path.exists():
+                _write_json(
+                    path,
+                    {
+                        "schema_version": 1,
+                        "evaluation_fingerprint": evaluation_fingerprint,
+                        "instance_id": task.case.instance_id,
+                        "rollout_manifest_path": str(task.manifest_path),
+                        "rollout_output_path": str(task.output_path),
+                    },
+                )
+        state = (
+            json.loads(state_path.read_text(encoding="utf-8"))
+            if state_path.is_file()
+            else {
+                "schema_version": 1,
+                "evaluation_fingerprint": evaluation_fingerprint,
+                "attempt": 1,
+                "job_id": None,
+            }
+        )
+        if state.get("evaluation_fingerprint") != evaluation_fingerprint:
+            raise FatalError("reviewer task fingerprint mismatch")
+
+        while True:
+            attempt = int(state["attempt"])
+            retry: list[int] = []
+            missing_outputs: set[int] = set()
+            completed: dict[int, dict[str, Any]] = {}
+            for task in tasks:
+                path = output_root / f"task_{task.index:04d}.json"
+                if not path.is_file():
+                    retry.append(task.index)
+                    missing_outputs.add(task.index)
+                    continue
+                payload = json.loads(path.read_text(encoding="utf-8"))
+                if payload.get("status") == "completed":
+                    if (
+                        payload.get("instance_id") is not None
+                        and payload.get("instance_id") != task.case.instance_id
+                    ):
+                        raise FatalError("reviewer output instance ID mismatch")
+                    if (
+                        payload.get("candidate_sha256") is not None
+                        and payload.get("candidate_sha256")
+                        != text_sha256(task.rules_path.read_text(encoding="utf-8"))
+                    ):
+                        raise FatalError("reviewer output candidate hash mismatch")
+                    completed[task.index] = payload
+                elif payload.get("status") == "blocking_failed":
+                    raise FatalError(
+                        "reviewer infrastructure failure: "
+                        f"{task.case.instance_id}: {payload.get('error')}"
+                    )
+                else:
+                    retry.append(task.index)
+            if not retry:
+                merged = []
+                for task, output in zip(tasks, outputs, strict=True):
+                    payload = completed[task.index]
+                    reviewed = OnlineRolloutOutput(
+                            resolved=output.resolved,
+                            plan=output.plan,
+                            patch=output.patch,
+                            plan_trajectory=output.plan_trajectory,
+                            code_trajectory=output.code_trajectory,
+                            evaluator_result=output.evaluator_result,
+                            terminal_phase=output.terminal_phase,
+                            terminal_reason=output.terminal_reason,
+                            reflection_review=dict(payload["review"]),
+                            reflection_reviewer_trajectory=tuple(
+                                payload.get("trajectory", [])
+                            ),
+                        )
+                    merged.append(reviewed)
+                    persisted = json.loads(
+                        task.output_path.read_text(encoding="utf-8")
+                    )
+                    persisted.update(reviewed.to_worker_payload())
+                    _write_json(task.output_path, persisted)
+                _write_json(
+                    state_path,
+                    {**state, "status": "COMPLETE", "job_id": state.get("job_id")},
+                )
+                self.audit.write(
+                    "online_hpc_reviewer_completed",
+                    batch_dir=str(batch_dir),
+                    attempt=attempt,
+                    task_count=len(tasks),
+                )
+                return merged
+
+            job_id = state.get("job_id")
+            if job_id:
+                active = False
+                missing_status = False
+                for index in retry:
+                    status = query_slurm_task_status(str(job_id), index)
+                    if status is None:
+                        missing_status = True
+                    elif normalize_slurm_state(status.state) in (
+                        _SLURM_PENDING_STATES | {"RUNNING", "COMPLETING"}
+                    ):
+                        active = True
+                    elif normalize_slurm_state(status.state) in {
+                        "OUT_OF_MEMORY",
+                        "NODE_FAIL",
+                        "BOOT_FAIL",
+                    }:
+                        raise FatalError(
+                            f"reviewer infrastructure failure: {status.state}"
+                        )
+                    elif index in missing_outputs:
+                        _write_json(
+                            root
+                            / "attempts"
+                            / f"task_{index:04d}"
+                            / f"attempt_{attempt:02d}"
+                            / "slurm_status.json",
+                            {
+                                "state": normalize_slurm_state(status.state),
+                                "elapsed_seconds": status.elapsed_seconds,
+                                "raw": status.raw,
+                            },
+                        )
+                        terminal_missing_since = state.get("terminal_missing_since")
+                        if terminal_missing_since is None:
+                            state = {**state, "terminal_missing_since": time.time()}
+                            _write_json(state_path, state)
+                            active = True
+                        elif (
+                            time.time() - float(terminal_missing_since)
+                            < self.config.hpc.task_output_grace_seconds
+                        ):
+                            active = True
+                if missing_status:
+                    missing_since = state.get("missing_since")
+                    if missing_since is None:
+                        state = {**state, "missing_since": time.time()}
+                        _write_json(state_path, state)
+                        active = True
+                    elif (
+                        time.time() - float(missing_since)
+                        < self.config.hpc.missing_task_grace_seconds
+                    ):
+                        active = True
+                if active:
+                    self._yield_for_workers(
+                        root,
+                        str(job_id),
+                        reason="waiting_for_reviewer_array",
+                    )
+            if attempt >= self.config.hpc.max_task_attempts:
+                for index in retry:
+                    task = tasks[index]
+                    completed[index] = {
+                        "instance_id": task.case.instance_id,
+                        "candidate_sha256": text_sha256(
+                            task.rules_path.read_text(encoding="utf-8")
+                        ),
+                        "review": {
+                            "review_status": "unavailable",
+                            "instance_id": task.case.instance_id,
+                            "reason": "reviewer attempts exhausted",
+                        },
+                        "trajectory": [],
+                    }
+                    _write_json(
+                        output_root / f"task_{index:04d}.json",
+                        {"status": "completed", **completed[index]},
+                    )
+                state = {**state, "status": "EXHAUSTED", "job_id": None}
+                _write_json(state_path, state)
+                self.audit.write(
+                    "online_hpc_reviewer_exhausted",
+                    batch_dir=str(batch_dir),
+                    attempt=attempt,
+                    task_indices=retry,
+                )
+                continue
+
+            next_attempt = attempt if not job_id else attempt + 1
+            script = root / f"reviewer_attempt_{next_attempt:02d}.sbatch"
+            script.write_text(
+                build_reviewer_array_script(
+                    config_path=self.config.hpc.worker_config_path,
+                    batch_dir=str(batch_dir),
+                    task_count=len(tasks),
+                    job_name=(
+                        f"{self.config.hpc.job_name_prefix}-review-{batch_dir.name}"
+                        f"-a{next_attempt}"
+                    ),
+                    hpc=self.config.hpc,
+                    task_indices=retry,
+                    attempt=next_attempt,
+                ),
+                encoding="utf-8",
+            )
+            submitted = (self.submitter or submit_slurm_array)(script)
+            state = {
+                "schema_version": 1,
+                "evaluation_fingerprint": evaluation_fingerprint,
+                "status": "SUBMITTED",
+                "attempt": next_attempt,
+                "job_id": submitted,
+                "missing_since": None,
+                "terminal_missing_since": None,
+            }
+            _write_json(state_path, state)
+            self.audit.write(
+                "online_hpc_reviewer_submitted",
+                batch_dir=str(batch_dir),
+                attempt=next_attempt,
+                job_id=submitted,
+                task_indices=retry,
+            )
+            self._yield_for_workers(
+                root,
+                submitted,
+                reason="waiting_for_reviewer_array",
+            )
 
     def _load_completed_outputs(
         self,

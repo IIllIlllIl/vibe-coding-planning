@@ -68,3 +68,7 @@ class OnlineControllerYield(Exception):
         self.batch_dir = batch_dir
         self.job_id = job_id
         self.reason = reason
+
+
+class SynthesisExhaustedError(FatalError):
+    """All bounded Synthesis Agent attempts failed without a proposal."""

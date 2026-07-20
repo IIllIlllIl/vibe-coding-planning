@@ -26,6 +26,7 @@ class OnlineDatasetConfig:
 class OnlineExecutionConfig:
     backend: str = "local_docker"
     controller_yield_after_submit: bool = False
+    separate_reflection_tasks: bool = False
     code_phase_timeout_seconds: int = 0
 
 
@@ -219,6 +220,9 @@ def load_online_optimization_config(
         backend=str(execution_data.get("backend", "local_docker")),
         controller_yield_after_submit=bool(
             execution_data.get("controller_yield_after_submit", False)
+        ),
+        separate_reflection_tasks=bool(
+            execution_data.get("separate_reflection_tasks", False)
         ),
         code_phase_timeout_seconds=int(
             execution_data.get("code_phase_timeout_seconds", 0)

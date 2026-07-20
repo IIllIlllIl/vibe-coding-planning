@@ -31,10 +31,15 @@ escalated network access.
 | Controller slice | 1 CPU / 4G | 2h abnormal upper bound; normally yields early |
 | Rollout array element | 1 CPU / 4G | 55min total |
 | Code phase | same worker | 40min internal soft deadline |
+| Reviewer array element | 1 CPU / 4G | 55min; initial attempt plus two retries |
+| Synthesis task | 1 CPU / 4G | 55min; initial attempt plus two retries |
 | SIF preheat | 1 CPU / 4G | network/IO bound |
 
-Each array element executes one rollout. `max_running_array_tasks=150` limits
-simultaneously running elements; it does not allocate 150 CPUs to one job.
+Each array element executes one PCT rollout or one Reviewer. Synthesis uses a
+single-element array so it follows the same submission/status contract.
+`max_running_array_tasks=150` limits simultaneously running elements; it does
+not allocate 150 CPUs to one job. Reviewer and Synthesis submission makes the
+controller yield; neither consumes the controller walltime while running.
 
 Before increasing resources, inspect `sacct` and FairShare. More than 4G with
 one CPU requires measurement-based justification.

@@ -19,6 +19,7 @@ from src.exceptions import (
     AgentRolloutFailure,
     FatalError,
     OnlineControllerYield,
+    SynthesisExhaustedError,
     TaskError,
 )
 from src.optimization.audit import AuditedModel, JsonlLogger, text_sha256
@@ -400,6 +401,7 @@ def test_online_hpc_6to8_config_uses_formal_snapshot_without_instance_subset(
     assert config.dataset.train_instance_ids == ()
     assert config.dataset.validation_instance_ids == ()
     assert config.execution.backend == "hpc_slurm"
+    assert config.execution.separate_reflection_tasks is True
     assert config.hpc.submit is True
     assert config.hpc.cpus_per_task == 1
     assert config.hpc.mem == "4G"
@@ -434,6 +436,8 @@ def test_current_online_configs_omit_retired_plan_code_limits(config_name):
         assert "max_steps" not in raw[phase]
         assert "cost_limit" not in raw[phase]
         assert "max_attempts" not in raw[phase]
+    assert "max_steps" not in raw["reflection"]
+    assert "cost_limit" not in raw["reflection"]
     assert "Exploration Budget" not in raw["prompts"]["plan_system"]
 
 
@@ -3193,6 +3197,34 @@ def test_online_runner_blocks_permanent_provider_reflection_failure(tmp_path):
     assert status["failure_phase"] == "reflection"
 
 
+def test_online_runner_blocks_exhausted_synthesis_with_specific_phase(tmp_path):
+    config = _online_config(tmp_path)
+
+    with pytest.raises(SynthesisExhaustedError):
+        run_online_optimization(
+            config,
+            rollout=lambda case, rules: OnlineRolloutOutput(
+                resolved=True,
+                plan="plan",
+                patch="patch",
+                plan_trajectory=(),
+                code_trajectory=(),
+                evaluator_result={"resolved": True},
+            ),
+            proposer=lambda candidate, reflective_dataset, components: candidate,
+            optimize_fn=lambda **kwargs: (_ for _ in ()).throw(
+                SynthesisExhaustedError("synthesis attempts exhausted")
+            ),
+        )
+
+    status = json.loads(
+        (config.run_dir / "controller_status.json").read_text(encoding="utf-8")
+    )
+    assert status["status"] == "failed"
+    assert status["blocking"] is True
+    assert status["failure_phase"] == "synthesis"
+
+
 def test_online_runner_marks_ordinary_controller_failure_retryable(tmp_path):
     config = _online_config(tmp_path)
 
@@ -4947,3 +4979,297 @@ def test_reflection_proposer_uses_apptainer_when_runtime_apptainer(
     assert calls["environment_kwargs"]["run_args"][0] == "--bind"
     assert calls["environment_kwargs"]["run_args"][1].endswith(":/evidence:ro")
     assert calls["cleaned_up"] is True
+
+
+def test_separate_reviewer_array_uses_worker_resources_and_persists_review(
+    tmp_path, monkeypatch
+):
+    config = _online_config(tmp_path)
+    train, _ = load_online_snapshot(config.dataset_snapshot)
+    config = replace(
+        config,
+        execution=OnlineExecutionConfig(
+            backend="hpc_slurm", separate_reflection_tasks=True
+        ),
+        hpc=replace(
+            config.hpc,
+            submit=True,
+            cpus_per_task=1,
+            mem="4G",
+            time="00:55:00",
+            max_task_attempts=3,
+        ),
+    )
+    scripts: list[Path] = []
+
+    def submitter(script_path):
+        scripts.append(script_path)
+        if script_path.parent.name == "reviewer":
+            for index, case in enumerate(train):
+                (script_path.parent / "outputs" / f"task_{index:04d}.json").write_text(
+                    json.dumps(
+                        {
+                            "status": "completed",
+                            "instance_id": case.instance_id,
+                            "review": {
+                                "instance_id": case.instance_id,
+                                "review_status": "completed",
+                                "plan_assessment": {
+                                    "correct": "ok",
+                                    "missing_or_wrong": "",
+                                    "repository_findings": "checked",
+                                },
+                                "code_plan_alignment": "aligned",
+                                "outcome_attribution": "plan",
+                                "planning_lesson": "lesson",
+                                "uncertainty": "",
+                            },
+                            "trajectory": [
+                                {"role": "assistant", "content": "review"}
+                            ],
+                        }
+                    )
+                )
+        else:
+            for index, case in enumerate(train):
+                (script_path.parent / "outputs" / f"task_{index:04d}.json").write_text(
+                    json.dumps(
+                        {
+                            "status": "completed",
+                            "instance_id": case.instance_id,
+                            "candidate_sha256": text_sha256("rules"),
+                            "resolved": index == 0,
+                            "plan": "plan",
+                            "patch": "patch",
+                            "plan_trajectory": [],
+                            "code_trajectory": [],
+                            "evaluator_result": {"resolved": index == 0},
+                        }
+                    )
+                )
+        return str(100 + len(scripts))
+
+    monkeypatch.setattr(
+        "src.optimization.online_hpc_executor.collect_slurm_resource_snapshot",
+        lambda job_id=None: {},
+    )
+    executor = HPCSlurmOnlineRolloutExecutor(config, submitter=submitter)
+    outputs = executor.evaluate(train, "rules", capture_traces=True)
+
+    assert len(scripts) == 2
+    reviewer_script = scripts[1].read_text()
+    assert "#SBATCH --cpus-per-task=1" in reviewer_script
+    assert "#SBATCH --mem=4G" in reviewer_script
+    assert "#SBATCH --time=00:55:00" in reviewer_script
+    assert outputs[0].reflection_review["planning_lesson"] == "lesson"
+    reused = executor.evaluate(train, "rules", capture_traces=True)
+    assert len(scripts) == 2
+    assert reused[0].reflection_review["planning_lesson"] == "lesson"
+
+
+def test_reviewer_exhaustion_preserves_attempts_and_evaluator_score(
+    tmp_path, monkeypatch
+):
+    config = _online_config(tmp_path)
+    train, _ = load_online_snapshot(config.dataset_snapshot)
+    config = replace(
+        config,
+        execution=OnlineExecutionConfig(
+            backend="hpc_slurm", separate_reflection_tasks=True
+        ),
+        hpc=replace(config.hpc, submit=True, max_task_attempts=3),
+    )
+    submissions = 0
+
+    def submitter(script_path):
+        nonlocal submissions
+        submissions += 1
+        if script_path.parent.name == "reviewer":
+            reviewer_attempt = submissions - 1
+            for index in range(len(train)):
+                attempt_dir = (
+                    script_path.parent
+                    / "attempts"
+                    / f"task_{index:04d}"
+                    / f"attempt_{reviewer_attempt:02d}"
+                )
+                attempt_dir.mkdir(parents=True, exist_ok=True)
+                (attempt_dir / "failure.json").write_text(
+                    json.dumps({"error": f"failure {reviewer_attempt}"})
+                )
+                (script_path.parent / "outputs" / f"task_{index:04d}.json").write_text(
+                    json.dumps({"status": "agent_failed", "error": "bad review"})
+                )
+        else:
+            for index, case in enumerate(train):
+                (script_path.parent / "outputs" / f"task_{index:04d}.json").write_text(
+                    json.dumps(
+                        {
+                            "status": "completed",
+                            "instance_id": case.instance_id,
+                            "candidate_sha256": text_sha256("rules"),
+                            "resolved": index == 0,
+                            "plan": "plan",
+                            "patch": "patch",
+                            "plan_trajectory": [],
+                            "code_trajectory": [],
+                            "evaluator_result": {"resolved": index == 0},
+                        }
+                    )
+                )
+        return str(200 + submissions)
+
+    monkeypatch.setattr(
+        "src.optimization.online_hpc_executor.collect_slurm_resource_snapshot",
+        lambda job_id=None: {},
+    )
+    monkeypatch.setattr(
+        "src.optimization.online_hpc_executor.query_slurm_task_status",
+        lambda job_id, task_index: SlurmTaskStatus("COMPLETED", 10),
+    )
+    outputs = HPCSlurmOnlineRolloutExecutor(config, submitter=submitter).evaluate(
+        train, "rules", capture_traces=True
+    )
+
+    assert submissions == 4
+    assert [output.resolved for output in outputs] == [True, False]
+    assert all(
+        output.reflection_review["review_status"] == "unavailable"
+        for output in outputs
+    )
+    reviewer_root = config.run_dir / "hpc_rollout_batches" / "batch_0001" / "reviewer"
+    assert len(list(reviewer_root.glob("attempts/task_0000/attempt_*/failure.json"))) == 3
+
+
+def _synthesis_record() -> dict:
+    return {
+        "instance_id": "repo__one",
+        "issue_description": "issue",
+        "repository": {
+            "repo": "org/repo",
+            "base_commit": "abc",
+            "instance_id": "repo__one",
+        },
+        "score": 0.0,
+        "resolved": False,
+        "generated_plan": "plan",
+        "plan_trajectory": [],
+        "code_trajectory": [],
+        "generated_patch": "patch",
+        "evaluator_result": {"resolved": False},
+        "reflection_review": {
+            "instance_id": "repo__one",
+            "review_status": "completed",
+            "plan_assessment": {
+                "correct": "",
+                "missing_or_wrong": "miss",
+                "repository_findings": "finding",
+            },
+            "code_plan_alignment": "aligned",
+            "outcome_attribution": "plan",
+            "planning_lesson": "lesson",
+            "uncertainty": "",
+        },
+        "reflection_reviewer_trajectory": [],
+    }
+
+
+def test_synthesis_slurm_retries_twice_then_reuses_success(tmp_path, monkeypatch):
+    config = _online_config(tmp_path)
+    config = replace(
+        config,
+        execution=OnlineExecutionConfig(
+            backend="hpc_slurm",
+            controller_yield_after_submit=True,
+            separate_reflection_tasks=True,
+        ),
+        hpc=replace(
+            config.hpc,
+            submit=True,
+            time="00:55:00",
+            max_task_attempts=3,
+        ),
+    )
+    submissions: list[Path] = []
+
+    def submit(script_path):
+        submissions.append(script_path)
+        root = script_path.parent
+        manifest = json.loads((root / "manifest.json").read_text())
+        attempt = len(submissions)
+        attempt_dir = root / "attempts" / f"attempt_{attempt:02d}"
+        attempt_dir.mkdir(parents=True, exist_ok=True)
+        payload = {
+            "status": "agent_failed",
+            "proposal_fingerprint": manifest["proposal_fingerprint"],
+            "error": "bad synthesis",
+        }
+        if attempt == 3:
+            payload = {
+                "status": "completed",
+                "proposal_fingerprint": manifest["proposal_fingerprint"],
+                "proposal": {"rules": "improved rules"},
+            }
+        (root / "output.json").write_text(json.dumps(payload))
+        return str(300 + attempt)
+
+    monkeypatch.setattr("src.optimization.online_reflection.submit_slurm_array", submit)
+    monkeypatch.setattr(
+        "src.optimization.online_reflection.query_slurm_task_status",
+        lambda job_id, task_index: SlurmTaskStatus("COMPLETED", 10),
+    )
+    proposer = OnlinePlanningReflectionProposer(config, _FakeCapacityWindow())
+    args = ({"rules": "seed"}, {"rules": [_synthesis_record()]}, ["rules"])
+
+    for _ in range(3):
+        with pytest.raises(OnlineControllerYield):
+            proposer(*args)
+    assert proposer(*args) == {"rules": "improved rules"}
+    assert proposer(*args) == {"rules": "improved rules"}
+    assert len(submissions) == 3
+    script = submissions[0].read_text()
+    assert "#SBATCH --cpus-per-task=1" in script
+    assert "#SBATCH --mem=4G" in script
+    assert "#SBATCH --time=00:55:00" in script
+
+
+def test_synthesis_exhaustion_is_blocking(tmp_path, monkeypatch):
+    config = _online_config(tmp_path)
+    config = replace(
+        config,
+        execution=OnlineExecutionConfig(
+            backend="hpc_slurm", separate_reflection_tasks=True
+        ),
+        hpc=replace(config.hpc, submit=True, max_task_attempts=3),
+    )
+    submissions = 0
+
+    def submit(script_path):
+        nonlocal submissions
+        submissions += 1
+        root = script_path.parent
+        manifest = json.loads((root / "manifest.json").read_text())
+        (root / "output.json").write_text(
+            json.dumps(
+                {
+                    "status": "agent_failed",
+                    "proposal_fingerprint": manifest["proposal_fingerprint"],
+                    "error": "failed",
+                }
+            )
+        )
+        return str(400 + submissions)
+
+    monkeypatch.setattr("src.optimization.online_reflection.submit_slurm_array", submit)
+    monkeypatch.setattr(
+        "src.optimization.online_reflection.query_slurm_task_status",
+        lambda job_id, task_index: SlurmTaskStatus("COMPLETED", 10),
+    )
+    proposer = OnlinePlanningReflectionProposer(config, _FakeCapacityWindow())
+    args = ({"rules": "seed"}, {"rules": [_synthesis_record()]}, ["rules"])
+    for _ in range(3):
+        with pytest.raises(OnlineControllerYield):
+            proposer(*args)
+    with pytest.raises(FatalError, match="synthesis attempts exhausted"):
+        proposer(*args)
+    assert submissions == 3

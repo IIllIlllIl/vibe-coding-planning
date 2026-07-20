@@ -130,7 +130,7 @@ def build_default_agent(
     environment: Any,
     *,
     system_template: str,
-    step_limit: int,
+    step_limit: int | None,
     cost_limit: float | None = None,
     instance_template: str | None = None,
 ) -> Any:
@@ -176,10 +176,9 @@ def build_default_agent(
         A ``DefaultAgent`` instance. Call ``agent.run(task=<issue>)`` to
         inject the task.
     """
-    kwargs: dict[str, Any] = {
-        "system_template": system_template,
-        "step_limit": step_limit,
-    }
+    kwargs: dict[str, Any] = {"system_template": system_template}
+    if step_limit is not None:
+        kwargs["step_limit"] = step_limit
     if cost_limit is not None:
         kwargs["cost_limit"] = cost_limit
 

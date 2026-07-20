@@ -8,8 +8,8 @@ superseded variants live under `archive/` and remain available for provenance.
 
 | Config | Runtime | Purpose |
 |---|---|---|
-| `gepa_online_planning_hpc.yaml` | ULHPC Apptainer | Standard formal configuration over the 384/98 split. Trace workers add a repo-grounded reviewer, then controller-side synthesis can use its concise report or inspect the preserved raw evidence. Each rollout remains an independent `1 CPU / 4G / 55min` array task; fingerprinted batch journals and Plan/Code/Evaluator/Reviewer checkpoints support selective retry. |
-| `online_gepa_supervisor.yaml` | Local tmux+caffeinate | Exact launch identity for the outcome-policy-v4 phase-evidence smoke: session/log, 2-iteration target, 30-minute cadence, unlimited controller slices, remote workdir, and `1 CPU / 4G / 2h` controller arguments. The smoke deliberately retains `reflection_minibatch_size: 3`. It is configured but not launched. Use this file instead of reconstructing a long command. |
+| `gepa_online_planning_hpc.yaml` | ULHPC Apptainer | Standard formal configuration over the 384/98 split. PCT, repo-grounded Reviewer, and Synthesis are separate Slurm phases, each using `1 CPU / 4G / 55min` and at most three attempts. Reviewer/Synthesis preserve per-attempt trajectories; Synthesis no longer consumes controller walltime. |
+| `online_gepa_supervisor.yaml` | Local tmux+caffeinate | Exact launch identity for the separate-Reflection 2-iteration smoke: session/log, 30-minute cadence, unlimited controller slices, remote workdir, and `1 CPU / 4G / 2h` controller arguments. The smoke deliberately retains `reflection_minibatch_size: 3`. It is configured but not launched. |
 | `gepa_online_planning_pilot.yaml` | local Docker | Standard small executable example for validating the Online GEPA flow locally. |
 
 Online GEPA is the current mainline. Candidate rules go only to the Plan Agent;

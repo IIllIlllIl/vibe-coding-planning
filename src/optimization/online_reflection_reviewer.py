@@ -175,8 +175,8 @@ class OnlineInstanceReflectionReviewer:
                 env,
                 system_template=self.config.reflection_reviewer_prompt,
                 instance_template=self.config.reflection_reviewer_instance_template,
-                step_limit=self.config.reflection.max_steps,
-                cost_limit=self.config.reflection.cost_limit,
+                step_limit=None,
+                cost_limit=None,
             )
             try:
                 exit_status, exit_message = agent.run(

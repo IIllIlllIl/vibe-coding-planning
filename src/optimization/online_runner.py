@@ -15,7 +15,7 @@ from gepa.core.adapter import EvaluationBatch
 from gepa.core.state import GEPAState
 
 from src.environment.docker_env import configure_docker_capacity
-from src.exceptions import FatalError, OnlineControllerYield
+from src.exceptions import FatalError, OnlineControllerYield, SynthesisExhaustedError
 from src.optimization.audit import JsonlLogger, text_sha256
 from src.optimization.online_adapter import OnlinePlanningGEPAAdapter
 from src.optimization.online_config import OnlineOptimizationConfig
@@ -467,7 +467,13 @@ def _run_online_optimization_locked(
             {
                 "schema_version": 1,
                 "status": controller_status,
-                "failure_phase": "reflection" if new_reflection_failure else "controller",
+                "failure_phase": (
+                    "synthesis"
+                    if isinstance(exc, SynthesisExhaustedError)
+                    else "reflection"
+                    if new_reflection_failure
+                    else "controller"
+                ),
                 "blocking": blocking_failure,
                 "error_type": type(exc).__name__,
                 "error": str(exc),

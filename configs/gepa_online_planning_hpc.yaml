@@ -3,7 +3,7 @@ mode: online_planning
 paths:
   dataset_snapshot: output/SWE-bench_Verified/verified-round1-gepa-datasets/20260614_482_fdc056ae85df
   initial_rules: configs/gepa_initial_rules_gpt_seed.md
-  run_dir: output/SWE-bench_Verified/gepa-rules/online-planning-hpc-phase-evidence-2it-smoke-20260720
+  run_dir: output/SWE-bench_Verified/gepa-rules/online-planning-hpc-separate-reflection-2it-smoke-20260720
 
 dataset:
   name: SWE-bench/SWE-bench_Verified
@@ -27,16 +27,12 @@ reflection:
   api_base: https://api.deepseek.com
   api_key_env: DEEPSEEK_API_KEY
   temperature: 0.7
-  max_steps: 500
-  cost_limit: 10.0
   timeout: 1800
 
 search:
-  # GEPA checks max_metric_calls at iteration boundaries. This value targets a
-  # 8-hour post-evaluator-fix validation over the formal 384/98 snapshot. The
-  # metric budget is intentionally generous because GEPA checks it only at
-  # iteration boundaries; walltime remains the operational limit, and a
-  # successful run can be resumed with a larger controller walltime.
+  # GEPA checks max_metric_calls at iteration boundaries. Keep the metric budget
+  # generous; the persisted supervisor config, not this ceiling, targets two
+  # durable iterations for the current smoke.
   max_metric_calls: 1000
   projection_metric_calls: 1000
   reflection_minibatch_size: 3
@@ -61,12 +57,14 @@ container:
 execution:
   backend: hpc_slurm
   controller_yield_after_submit: true
+  separate_reflection_tasks: true
   # A controlled Code deadline leaves time to write a structured failure,
   # clean the workspace, and run later phases when Code succeeds early.
   code_phase_timeout_seconds: 2400
 
 hpc:
-  # Each Slurm array task runs one rollout worker.
+  # PCT, Reviewer, and Synthesis use the same per-task resources. PCT and
+  # Reviewer use arrays; Synthesis uses a single-element array.
   # max_running_array_tasks limits simultaneously running Slurm array elements;
   # it is not Python/thread/process concurrency inside a worker.
   submit: true
@@ -87,7 +85,7 @@ hpc:
   python_module: lang/Python/3.11
   container_module: tools/Apptainer
   python_bin: python3
-  job_name_prefix: online-gepa-phase-evidence-smoke
+  job_name_prefix: online-gepa-separate-reflection-smoke
   worker_config_path: configs/gepa_online_planning_hpc.yaml
 
 evaluator:

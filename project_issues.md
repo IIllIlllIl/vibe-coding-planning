@@ -176,9 +176,77 @@ Reflection evidence 按阶段拼接：每个已完成阶段采用同一 identity
 最终失败时，Reflection bundle 同时含正确的 Plan/Code 证据和最终失败标记；旧
 policy batch 不被复用；operational invalid 不进入 GEPA score。配置已准备但未启动。
 
-仍留待 Reviewer/Synthesis 专题讨论：两阶段 Agent 的失败 retry/resume 边界、
-Synthesis 是否以及如何按需回看 raw evidence、proposal checkpoint 的最小合同。
-在该讨论完成前不增加新的 Reviewer schema、Host semantic validator 或状态机。
+Reviewer/Synthesis 的实现已完成，待新 identity smoke 验证：两者为独立 Slurm Agent task，均为
+初始尝试加两次 selective retry；不做对话中间 resume，只复用完整
+`instance_review` / `PROPOSAL_READY` checkpoint；移除 Reflection step/cost limit，
+由各自 Slurm allocation 提供总边界。Reviewer 最终普通 Agent 失败不得覆盖已经
+durable 的 evaluator score，严重基础设施失败仍 block。Synthesis 默认读取简明
+review，存在歧义时才回看 raw evidence。smoke 需验证 task journal/fingerprint、
+walltime 和失败分类，不增加 Host semantic validator 或复杂状态机。
+已进一步确定最终失败策略：所有 Reviewer/Synthesis attempt trajectory 必须按
+attempt 保留，clean retry 只能删除 disposable workspace；Reviewer 三次普通 Agent
+失败后保留 evaluator score 并标记 review unavailable，Synthesis 三次失败后必须
+明确 block，禁止生成 no-op/伪 candidate 或由 supervisor 无限重放。首次 smoke
+需要报告两类 Agent 的每次 attempt、终止原因、walltime 和成功率。
+
+### 2.2 Separate-Reflection 2-iteration smoke 验收（2026-07-20）
+
+本次新 identity：
+`online-planning-hpc-separate-reflection-2it-smoke-20260720`。使用正式
+384/98 snapshot、`reflection_minibatch_size=3`，Supervisor 目标为两个 durable
+GEPA iteration。PCT、Reviewer、Synthesis 均申请 `1 CPU / 4G / 55min`，初始
+attempt 加两次 selective retry。配置已经准备，尚未提交。
+
+#### 本次实现变更
+
+1. PCT worker 在 Evaluator durable output 后结束；Reviewer 不再占用 PCT 剩余
+   walltime，Synthesis 不再占用 controller walltime。
+2. trace minibatch 的 Reviewer 作为独立 Slurm array 提交；validation 和 proposal
+   comparison 不提交 Reviewer。Synthesis 使用相同资源的单元素 Slurm array。
+3. 两类 task 都持久化 manifest/fingerprint、Slurm job/attempt、output grace 和
+   missing-status grace；active 原 job 必须接管，不得重复提交。
+4. 每个 attempt 使用独立目录。可正常 flush 的失败保存脱敏 trajectory 和
+   `failure.json`；hard kill 至少保存 Slurm state 和已写 evidence。clean retry 只
+   删除 disposable workspace。
+5. Reviewer 三次普通 Agent 失败后写 `review_status=unavailable`，不得改写 durable
+   evaluator score；OOM、SIF、disk/quota、identity 等严重错误仍 block。
+6. Synthesis 三次普通 Agent 失败后写 `EXHAUSTED` 并以
+   `failure_phase=synthesis` block；不得返回 parent/no-op/伪 candidate，也不得由
+   Supervisor 无限重放。成功 `PROPOSAL_READY` 继续按 fingerprint 复用。
+7. Reviewer/Synthesis 已移除 mini-swe step/cost limits，总阶段边界由 55min Slurm
+   allocation 提供；单命令 1800s timeout 仅防止单个环境命令卡死。
+8. Synthesis 删除“assistant 文本必须包含 `/evidence`”的弱代理检查，仅保留
+   identity、合法 JSON、instance coverage、非空完整 rules 和明显 Git patch 拒绝。
+9. active runtime/supervisor identity 已切换到本次 2-iteration smoke；旧 outcome
+   或旧 Reflection batch 不得被 fingerprint 复用。
+
+#### Smoke 必须观察的风险
+
+| 风险 | 观察证据 | 不符合预期时的处理 |
+|---|---|---|
+| 阶段边界仍混合 | 对照 PCT、Reviewer、Synthesis job IDs、SBATCH 资源和时间线 | Reviewer 出现在 PCT worker 内或 Synthesis 在 controller 内执行时停止；该 run 不用于质量结论 |
+| Reviewer 在非 trace 调用误提交 | 对照 batch manifest 的 `capture_traces`、98 validation、proposal comparison 和 Reviewer task 数 | validation/proposal comparison 出现 Reviewer job 时停止并修复 |
+| active task 被重复提交 | 对照 task fingerprint、`task_state.json`、job ID、attempt 和 Slurm | 同一 attempt/fingerprint 有两个 active job 时取消重复 job；受影响 evidence 不可信 |
+| retry 回退重跑 PCT | 比较 Plan/Code/Evaluator checkpoint mtime、PCT job ID 与 Reviewer retry job | Reviewer retry 导致 PCT 重跑时停止；应只重跑缺失 Reviewer index |
+| Reviewer 合并改变 evaluator score | 比较合并前 rollout output、合并后 output 和 GEPA score | 任一 resolved/score 被 review 改写时停止；该 candidate 数据作废 |
+| Reviewer exhausted 分类过宽 | 检查三次 failure/Slurm state、unavailable review 和基础设施日志 | OOM/SIF/disk/identity 被降级为 unavailable 时停止；必须 block |
+| Reviewer 普通失败错误 block | 检查空输出、格式错误、Agent timeout 的三次 attempt 和 batch 终态 | durable evaluator 已存在但普通 Reviewer failure block 时修复后 resume |
+| attempt evidence 被覆盖 | 检查 `attempt_01..03` trajectory/failure/Slurm status 及 mtime | retry 删除旧 attempt 或复用同一 workspace 时停止并修复 |
+| hard kill 证据不足 | 检查 Slurm state、partial evidence、stdout/stderr 与 attempt identity | 无法判断终止来源时不得将其解释为 Reviewer/Synthesis 行为 |
+| Synthesis job 接管错误 | 对照 proposal fingerprint、manifest、job ID、output 和 `PROPOSAL_READY` | 已完成 output 被重跑或不同 evidence 被复用时停止；proposal 不可信 |
+| Synthesis exhausted 未 block | 人工构造/观察三次失败后的 state、controller status 和后续 Supervisor 行为 | 出现 no-op candidate 或新 controller 自动重放时立即停止 Supervisor |
+| controller 仍耗时过长 | 统计各 slice elapsed，区分 GEPA 本地操作与提交/yield | 提交 Reviewer/Synthesis 后未及时 yield，或 2h 内仍被 Agent 占用时修复 |
+| 55min Reflection allocation 不足 | 统计 Reviewer/Synthesis elapsed P50/P90/P95、TIMEOUT 和 attempt 分布 | TIMEOUT 明显集中且 trajectory 显示正常分析未完成，再依据数据调 walltime |
+| 移除 step/cost limit 后异常探索 | 审查命令数、trajectory、token、walltime 和无关 repo 探索 | 大量无关探索或频繁撞 55min 时先改 prompt，再讨论预算 |
+| Reviewer 没有真实 repo-grounding | 检查 trajectory 中读取 repository、针对归因问题的命令及 report evidence | 只复述 issue/trajectory、未核对 repo 的 review 不用于规则质量解释 |
+| Synthesis 被 raw evidence 干扰 | 检查是否先使用简明 reviews、仅在歧义时读取对应 raw evidence | 无差别读取全部 trajectory 或忽略 Reviewer 时调整 prompt |
+| 最小结构检查过松 | 检查 candidate 是否完整 planning rules、analysis coverage 和 proposal audit | patch、空泛文本或不完整 rules 进入 GEPA 时停止并加强最小合同 |
+| 新增 Slurm 阶段影响 FairShare/吞吐 | 记录提交数量、排队时间、实际 CPU/RSS 和 FairShare | 资源利用低不增加 CPU；先评估阶段数、排队和 30min supervisor cadence |
+
+只有在无重复任务、无 score 改写、fingerprint 接管正确、attempt evidence 完整、
+Synthesis exhausted 能 block 且两个 durable iteration 与 GEPA state 一致时，才可用
+该 smoke 判断 Reviewer/Synthesis 的成功率与 prompt 行为。规则质量结论仍需单独
+审查 accepted candidate、minibatch score 和 validation score。
 
 ## 3. HPC SIF 预热与可恢复短作业运行
 

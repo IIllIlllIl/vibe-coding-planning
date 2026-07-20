@@ -89,7 +89,8 @@ The standard configuration uses:
 - full 384/98 dataset;
 - Reflection minibatch size 3;
 - up to 150 independent Slurm workers;
-- worker allocation `1 CPU / 4G / 55min`;
+- separate PCT, Reviewer, and Synthesis Slurm phases, each using
+  `1 CPU / 4G / 55min`;
 - Code phase soft budget 40 minutes;
 - three total attempts;
 - short cooperative controller slices managed by a local 30-minute supervisor.

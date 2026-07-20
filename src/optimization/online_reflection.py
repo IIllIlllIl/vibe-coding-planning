@@ -7,8 +7,10 @@ import json
 import os
 from pathlib import Path
 import re
+import shlex
 import shutil
 import tempfile
+import time
 from typing import Any, Mapping, Sequence
 
 from src.agents._deps import (
@@ -27,6 +29,13 @@ from src.optimization.reflection import (
     save_reflection_trajectory,
 )
 from src.optimization.online_reflection_reviewer import validate_instance_review
+from src.exceptions import FatalError, OnlineControllerYield, SynthesisExhaustedError
+from src.optimization.online_hpc_executor import (
+    _SLURM_PENDING_STATES,
+    normalize_slurm_state,
+    query_slurm_task_status,
+    submit_slurm_array,
+)
 
 
 class OnlinePlanningReflectionProposer:
@@ -80,6 +89,11 @@ class OnlinePlanningReflectionProposer:
                 "instance_prompt_sha256": text_sha256(
                     self.config.reflection_instance_template
                 ),
+                "separate_slurm_task": (
+                    self.config.execution.separate_reflection_tasks
+                ),
+                "max_task_attempts": self.config.hpc.max_task_attempts,
+                "source_sha256": text_sha256(Path(__file__).read_text(encoding="utf-8")),
             },
         }
         encoded = json.dumps(
@@ -175,6 +189,17 @@ class OnlinePlanningReflectionProposer:
         resumed = self._load_proposal_checkpoint(fingerprint, identity)
         if resumed is not None:
             return resumed
+        if (
+            self.config.execution.backend == "hpc_slurm"
+            and self.config.execution.separate_reflection_tasks
+        ):
+            return self._propose_hpc(
+                candidate,
+                reflective_dataset,
+                components_to_update,
+                proposal_fingerprint=fingerprint,
+                proposal_identity=identity,
+            )
         try:
             proposal = self._propose(
                 candidate,
@@ -195,6 +220,228 @@ class OnlinePlanningReflectionProposer:
             raise
         self.successful_proposals += 1
         return proposal
+
+    def _propose_hpc(
+        self,
+        candidate: dict[str, str],
+        reflective_dataset: Mapping[str, Sequence[Mapping[str, Any]]],
+        components_to_update: list[str],
+        *,
+        proposal_fingerprint: str,
+        proposal_identity: Mapping[str, Any],
+    ) -> dict[str, str]:
+        root = self.config.run_dir / "hpc_synthesis_tasks" / proposal_fingerprint
+        manifest_path = root / "manifest.json"
+        output_path = root / "output.json"
+        state_path = root / "task_state.json"
+        root.mkdir(parents=True, exist_ok=True)
+        manifest = json.loads(
+            json.dumps(
+                {
+                    "schema_version": 1,
+                    "proposal_fingerprint": proposal_fingerprint,
+                    "proposal_identity": proposal_identity,
+                    "candidate": candidate,
+                    "reflective_dataset": reflective_dataset,
+                    "components_to_update": components_to_update,
+                },
+                ensure_ascii=False,
+                default=str,
+            )
+        )
+        if manifest_path.is_file():
+            if json.loads(manifest_path.read_text(encoding="utf-8")) != manifest:
+                raise FatalError("synthesis task manifest differs")
+        else:
+            manifest_path.write_text(
+                json.dumps(manifest, indent=2, ensure_ascii=False, sort_keys=True)
+                + "\n",
+                encoding="utf-8",
+            )
+        state = (
+            json.loads(state_path.read_text(encoding="utf-8"))
+            if state_path.is_file()
+            else {"schema_version": 1, "attempt": 0, "job_id": None}
+        )
+        if state.get("status") == "EXHAUSTED":
+            raise SynthesisExhaustedError("synthesis attempts exhausted")
+        if output_path.is_file():
+            payload = json.loads(output_path.read_text(encoding="utf-8"))
+            if payload.get("proposal_fingerprint") != proposal_fingerprint:
+                raise FatalError("synthesis output fingerprint mismatch")
+            if payload.get("status") == "completed":
+                proposal = payload.get("proposal")
+                if (
+                    not isinstance(proposal, dict)
+                    or set(proposal) != {"rules"}
+                    or not isinstance(proposal["rules"], str)
+                    or not proposal["rules"].strip()
+                ):
+                    raise FatalError("synthesis completed output is invalid")
+                attempt_dir = root / "attempts" / f"attempt_{int(state['attempt']):02d}"
+                trajectories = list(attempt_dir.rglob("reflection_trajectory.json"))
+                trajectory_path = trajectories[0] if trajectories else output_path
+                self._save_proposal_checkpoint(
+                    proposal_fingerprint,
+                    proposal_identity,
+                    proposal,
+                    bundle=attempt_dir,
+                    trajectory_path=trajectory_path,
+                )
+                self.audit.write(
+                    "online_hpc_synthesis_completed",
+                    proposal_fingerprint=proposal_fingerprint,
+                    attempt=int(state["attempt"]),
+                    job_id=state.get("job_id"),
+                )
+                self.successful_proposals += 1
+                return {"rules": proposal["rules"]}
+            if payload.get("status") == "blocking_failed":
+                raise FatalError(
+                    f"synthesis infrastructure failure: {payload.get('error')}"
+                )
+
+        attempt = int(state.get("attempt", 0))
+        job_id = state.get("job_id")
+        if job_id:
+            status = query_slurm_task_status(str(job_id), 0)
+            active = False
+            if status is None:
+                missing_since = state.get("missing_since")
+                if missing_since is None:
+                    state = {**state, "missing_since": time.time()}
+                    state_path.write_text(
+                        json.dumps(state, indent=2, sort_keys=True) + "\n",
+                        encoding="utf-8",
+                    )
+                    active = True
+                elif (
+                    time.time() - float(missing_since)
+                    < self.config.hpc.missing_task_grace_seconds
+                ):
+                    active = True
+            elif normalize_slurm_state(status.state) in (
+                _SLURM_PENDING_STATES | {"RUNNING", "COMPLETING"}
+            ):
+                active = True
+            if active:
+                raise OnlineControllerYield(
+                    batch_dir=str(root),
+                    job_id=str(job_id),
+                    reason="waiting_for_synthesis_task",
+                )
+            state_name = normalize_slurm_state(status.state) if status else "MISSING"
+            if state_name in {"OUT_OF_MEMORY", "NODE_FAIL", "BOOT_FAIL"}:
+                raise FatalError(f"synthesis infrastructure failure: {state_name}")
+            if status is not None and not output_path.is_file():
+                attempt_dir = root / "attempts" / f"attempt_{attempt:02d}"
+                attempt_dir.mkdir(parents=True, exist_ok=True)
+                (attempt_dir / "slurm_status.json").write_text(
+                    json.dumps(
+                        {
+                            "state": state_name,
+                            "elapsed_seconds": status.elapsed_seconds,
+                            "raw": status.raw,
+                        },
+                        indent=2,
+                        sort_keys=True,
+                    )
+                    + "\n",
+                    encoding="utf-8",
+                )
+                terminal_missing_since = state.get("terminal_missing_since")
+                if terminal_missing_since is None:
+                    state = {**state, "terminal_missing_since": time.time()}
+                    state_path.write_text(
+                        json.dumps(state, indent=2, sort_keys=True) + "\n",
+                        encoding="utf-8",
+                    )
+                    raise OnlineControllerYield(
+                        batch_dir=str(root),
+                        job_id=str(job_id),
+                        reason="waiting_for_synthesis_output_grace",
+                    )
+                if (
+                    time.time() - float(terminal_missing_since)
+                    < self.config.hpc.task_output_grace_seconds
+                ):
+                    raise OnlineControllerYield(
+                        batch_dir=str(root),
+                        job_id=str(job_id),
+                        reason="waiting_for_synthesis_output_grace",
+                    )
+        if attempt >= self.config.hpc.max_task_attempts:
+            state = {**state, "status": "EXHAUSTED"}
+            state_path.write_text(
+                json.dumps(state, indent=2, sort_keys=True) + "\n",
+                encoding="utf-8",
+            )
+            self.audit.write(
+                "online_hpc_synthesis_exhausted",
+                proposal_fingerprint=proposal_fingerprint,
+                attempt=attempt,
+                job_id=job_id,
+            )
+            raise SynthesisExhaustedError("synthesis attempts exhausted")
+
+        next_attempt = attempt + 1
+        attempt_dir = root / "attempts" / f"attempt_{next_attempt:02d}"
+        script_path = root / f"synthesis_attempt_{next_attempt:02d}.sbatch"
+        hpc = self.config.hpc
+        script_path.write_text(
+            "\n".join(
+                [
+                    "#!/usr/bin/env bash",
+                    f"#SBATCH --job-name={hpc.job_name_prefix}-syn-{proposal_fingerprint[:10]}-a{next_attempt}",
+                    f"#SBATCH --partition={hpc.partition}",
+                    f"#SBATCH --cpus-per-task={hpc.cpus_per_task}",
+                    f"#SBATCH --mem={hpc.mem}",
+                    f"#SBATCH --time={hpc.time}",
+                    "#SBATCH --array=0-0%1",
+                    "#SBATCH --output=%x-%A_%a.out",
+                    "#SBATCH --error=%x-%A_%a.err",
+                    "set -euo pipefail",
+                    "set +x",
+                    f"module load {shlex.quote(hpc.python_module)}",
+                    f"module load {shlex.quote(hpc.container_module)}",
+                    f"ENV_FILE={shlex.quote(hpc.remote_env_file)}",
+                    'ENV_FILE="${ENV_FILE/#\\~/$HOME}"',
+                    'source "${ENV_FILE}"',
+                    'test -n "${DEEPSEEK_API_KEY:-}" || exit 2',
+                    f"{shlex.quote(hpc.python_bin)} -m src.optimization.online_synthesis_worker "
+                    f"--config {shlex.quote(hpc.worker_config_path)} "
+                    f"--manifest {shlex.quote(str(manifest_path))} "
+                    f"--output {shlex.quote(str(output_path))} "
+                    f"--attempt-dir {shlex.quote(str(attempt_dir))}",
+                ]
+            )
+            + "\n",
+            encoding="utf-8",
+        )
+        submitted = submit_slurm_array(script_path)
+        state = {
+            "schema_version": 1,
+            "status": "SUBMITTED",
+            "attempt": next_attempt,
+            "job_id": submitted,
+            "missing_since": None,
+            "terminal_missing_since": None,
+        }
+        state_path.write_text(
+            json.dumps(state, indent=2, sort_keys=True) + "\n",
+            encoding="utf-8",
+        )
+        self.audit.write(
+            "online_hpc_synthesis_submitted",
+            proposal_fingerprint=proposal_fingerprint,
+            attempt=next_attempt,
+            job_id=submitted,
+        )
+        raise OnlineControllerYield(
+            batch_dir=str(root),
+            job_id=submitted,
+            reason="waiting_for_synthesis_task",
+        )
 
     def _propose(
         self,
@@ -320,8 +567,8 @@ class OnlinePlanningReflectionProposer:
                     env,
                     system_template=self.config.reflection_prompt,
                     instance_template=self.config.reflection_instance_template,
-                    step_limit=self.config.reflection.max_steps,
-                    cost_limit=self.config.reflection.cost_limit,
+                    step_limit=None,
+                    cost_limit=None,
                 )
                 try:
                     exit_status, exit_message = agent.run(
@@ -354,15 +601,6 @@ class OnlinePlanningReflectionProposer:
                     exit_status=exit_status,
                     exit_message=exit_message,
                 )
-                assistant_text = "\n".join(
-                    str(message.get("content", ""))
-                    for message in agent.messages
-                    if message.get("role") == "assistant"
-                )
-                if "/evidence" not in assistant_text:
-                    raise ValueError(
-                        "reflection synthesis did not issue an evidence command"
-                    )
                 final_message = extract_last_assistant(agent.messages)
                 result = env.execute("cat /tmp/candidate_rules.txt")
                 analysis_result = env.execute("cat /tmp/reflection_analysis.json")
