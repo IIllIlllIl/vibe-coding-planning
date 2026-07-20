@@ -11,13 +11,32 @@ from gepa.core.adapter import EvaluationBatch
 from src.exceptions import AgentRolloutFailure, OnlineControllerYield
 from src.optimization.adapter import _exception_details
 from src.optimization.audit import JsonlLogger, text_sha256
-from src.optimization.online_models import OnlineGEPACase, OnlineRolloutOutput
+from src.optimization.online_models import (
+    OnlineGEPACase,
+    OnlineRolloutOutput,
+    scored_agent_failure,
+)
 
 
-def _is_timeout_reason(reason: str) -> bool:
-    return "timeout" in reason.lower() or reason.lower().endswith(
-        "deadline_exceeded"
-    )
+def _unavailable_reflection_review(
+    instance_id: str,
+    *,
+    review_status: str,
+    reason: str,
+) -> dict[str, Any]:
+    return {
+        "review_status": review_status,
+        "instance_id": instance_id,
+        "plan_assessment": {
+            "correct": "",
+            "missing_or_wrong": reason,
+            "repository_findings": "",
+        },
+        "code_plan_alignment": "",
+        "outcome_attribution": "Reviewer output unavailable.",
+        "planning_lesson": "",
+        "uncertainty": reason,
+    }
 
 
 class OnlineRolloutRunner(Protocol):
@@ -47,8 +66,6 @@ class OnlinePlanningGEPAAdapter:
         parallel: int = 1,
         proposer: Any = None,
         run_dir: Any = None,
-        fail_on_rollout_error: bool = True,
-        rollout_attempts: int = 1,
         batch_executor: OnlineRolloutBatchExecutor | None = None,
         resume_seed_evaluation: EvaluationBatch | None = None,
         resume_seed_key: tuple[str, tuple[str, ...]] | None = None,
@@ -58,8 +75,6 @@ class OnlinePlanningGEPAAdapter:
         self.parallel = parallel
         self.propose_new_texts = proposer
         self.run_dir = run_dir
-        self.fail_on_rollout_error = fail_on_rollout_error
-        self.rollout_attempts = rollout_attempts
         self.resume_seed_evaluation = resume_seed_evaluation
         self.resume_seed_key = resume_seed_key
         self.audit = (
@@ -79,111 +94,58 @@ class OnlinePlanningGEPAAdapter:
         rules: str,
         capture_traces: bool,
     ) -> tuple[dict[str, Any], float, dict[str, Any] | None]:
-        last_exc: Exception | None = None
-        last_agent_failure: AgentRolloutFailure | None = None
-        for attempt in range(1, self.rollout_attempts + 1):
-            try:
-                if getattr(self.rollout, "supports_capture_traces", False):
-                    output = self.rollout(
-                        case,
-                        rules,
-                        capture_traces=capture_traces,
-                    )
-                else:
-                    output = self.rollout(case, rules)
-                if self.audit is not None and attempt > 1:
-                    self.audit.write(
-                        "online_rollout_retried",
-                        instance_id=case.instance_id,
-                        candidate_sha256=text_sha256(rules),
-                        successful_attempt=attempt,
-                        max_attempts=self.rollout_attempts,
-                    )
-                score = float(output.resolved)
-                public_output = {
-                    "instance_id": case.instance_id,
-                    **output.to_public_output(),
-                }
-                trace = None
-                if capture_traces:
-                    trace = {
-                        "instance_id": case.instance_id,
-                        "score": score,
-                        **output.to_trace(),
-                    }
-                return public_output, score, trace
-            except AgentRolloutFailure as exc:
-                last_exc = exc
-                last_agent_failure = exc
-                details = _exception_details(exc)
-                if self.audit is not None:
-                    self.audit.write(
-                        "online_rollout_agent_failure_attempt",
-                        instance_id=case.instance_id,
-                        candidate_sha256=text_sha256(rules),
-                        attempt=attempt,
-                        max_attempts=self.rollout_attempts,
-                        terminal_phase=exc.phase,
-                        terminal_reason=exc.reason,
-                        **details,
-                    )
-            except Exception as exc:
-                last_exc = exc
-                last_agent_failure = None
-                details = _exception_details(exc)
-                if self.audit is not None:
-                    self.audit.write(
-                        "online_rollout_attempt_failed",
-                        instance_id=case.instance_id,
-                        candidate_sha256=text_sha256(rules),
-                        attempt=attempt,
-                        max_attempts=self.rollout_attempts,
-                        **details,
-                    )
-        assert last_exc is not None
-        if last_agent_failure is not None:
+        try:
+            if getattr(self.rollout, "supports_capture_traces", False):
+                output = self.rollout(case, rules, capture_traces=capture_traces)
+            else:
+                output = self.rollout(case, rules)
+        except AgentRolloutFailure as exc:
+            if self.audit is not None:
+                self.audit.write(
+                    "online_rollout_agent_failure_scored",
+                    instance_id=case.instance_id,
+                    candidate_sha256=text_sha256(rules),
+                    terminal_phase=exc.phase,
+                    terminal_reason=exc.reason,
+                    **_exception_details(exc),
+                )
             return self._scored_agent_failure(
                 case,
-                last_agent_failure,
+                exc,
                 capture_traces=capture_traces,
-                after_retries=True,
             )
-        details = _exception_details(last_exc)
-        if self.audit is not None:
-            self.audit.write(
-                "online_rollout_failed",
-                instance_id=case.instance_id,
-                candidate_sha256=text_sha256(rules),
-                attempts=self.rollout_attempts,
-                **details,
-            )
-        if self.errors is not None:
-            self.errors.write(
-                "online_rollout_failed",
-                instance_id=case.instance_id,
-                candidate_sha256=text_sha256(rules),
-                attempts=self.rollout_attempts,
-                **details,
-            )
-        if self.fail_on_rollout_error:
-            raise RuntimeError(
-                "Online rollout operational failure for: "
-                + str(case.instance_id)
-            ) from last_exc
-        output = {
+        except Exception as exc:
+            details = _exception_details(exc)
+            if self.audit is not None:
+                self.audit.write(
+                    "online_rollout_failed",
+                    instance_id=case.instance_id,
+                    candidate_sha256=text_sha256(rules),
+                    attempts=1,
+                    **details,
+                )
+            if self.errors is not None:
+                self.errors.write(
+                    "online_rollout_failed",
+                    instance_id=case.instance_id,
+                    candidate_sha256=text_sha256(rules),
+                    attempts=1,
+                    **details,
+                )
+            raise
+        score = float(output.resolved)
+        public_output = {
             "instance_id": case.instance_id,
-            "error": f"{type(last_exc).__name__}: {last_exc}",
+            **output.to_public_output(),
         }
-        trace = (
-            {
+        trace = None
+        if capture_traces:
+            trace = {
                 "instance_id": case.instance_id,
-                "score": 0.0,
-                "rollout_output": output,
+                "score": score,
+                **output.to_trace(),
             }
-            if capture_traces
-            else None
-        )
-        return output, 0.0, trace
+        return public_output, score, trace
 
     @staticmethod
     def _scored_agent_failure(
@@ -191,84 +153,35 @@ class OnlinePlanningGEPAAdapter:
         failure: AgentRolloutFailure,
         *,
         capture_traces: bool,
-        after_retries: bool,
     ) -> tuple[dict[str, Any], float, dict[str, Any] | None]:
-        timeout = _is_timeout_reason(failure.reason)
+        output = scored_agent_failure(
+            phase=failure.phase,
+            reason=failure.reason,
+            evidence=failure.evidence,
+        )
         public_output = {
             "instance_id": case.instance_id,
-            "resolved": False,
-            "outcome_status": "scored",
-            "score_valid": True,
-            "evaluator_status": "not_run",
-            "evaluator_resolved": None,
-            "terminal_phase": failure.phase,
-            "terminal_reason": failure.reason,
-            "failure_origin": "agent",
-            "plan": "",
-            "patch": "",
-            "evaluator_result": {
-                "status": "not_run",
-                "reason": "agent_failed_before_evaluation",
-            },
-            "attribution_hint": {
-                "timeout": timeout,
-                "timeout_source": "agent_contract" if timeout else None,
-                "agent_failure_scored_after_retries": after_retries,
-            },
+            **output.to_public_output(),
         }
         trace = None
         if capture_traces:
-            review = {
-                "instance_id": case.instance_id,
-                "outcome": "unresolved",
-                "attribution_questions": [
-                    "No reviewer ran because the rollout ended before review."
-                ],
-                "repository_actions": [
-                    {
-                        "purpose": "Record unavailable repository review.",
-                        "command_summary": "No repository command was run.",
-                        "repository_state": "base",
-                        "result": "Repository evidence unavailable.",
-                    }
-                ],
-                "experiments": [],
-                "experiment_skipped_reason": "Reviewer did not run.",
-                "plan_assessment": {
-                    "navigation": "Unavailable after terminal Agent failure.",
-                    "reproduction": "Unavailable after terminal Agent failure.",
-                    "patch_strategy": "Unavailable after terminal Agent failure.",
-                    "validation": "Unavailable after terminal Agent failure.",
-                },
-                "code_followed_plan": None,
-                "attribution": "uncertain",
-                "planning_lesson": "No reviewer-backed planning lesson.",
-                "confidence": "low",
-                "remaining_uncertainty": "The rollout ended before review.",
-                "evidence_files": ["rollout_summary.json"],
-                "review_status": "not_run_after_terminal_agent_failure",
-            }
+            review = _unavailable_reflection_review(
+                case.instance_id,
+                review_status="not_run_after_terminal_agent_failure",
+                reason="The rollout ended before repository review.",
+            )
             trace = {
                 "instance_id": case.instance_id,
                 "score": 0.0,
                 "resolved": False,
-                "outcome_status": "scored",
-                "terminal_phase": failure.phase,
-                "terminal_reason": failure.reason,
-                "failure_origin": "agent",
-                "evaluator_status": "not_run",
                 "issue_description": case.issue_description,
                 "repository": {
                     "repo": case.repository.repo,
                     "base_commit": case.repository.base_commit,
                     "instance_id": case.repository.instance_id,
                 },
-                "generated_plan": "",
-                "plan_trajectory": [],
-                "code_trajectory": [],
-                "generated_patch": "",
+                **output.to_trace(),
                 "evaluator_result": public_output["evaluator_result"],
-                "attribution_hint": public_output["attribution_hint"],
                 "reflection_review": review,
             }
         return public_output, 0.0, trace
@@ -425,7 +338,7 @@ class OnlinePlanningGEPAAdapter:
                         **details,
                     )
                 raise
-        elif self.fail_on_rollout_error and self.parallel > 1:
+        elif self.parallel > 1:
             rows = self._evaluate_parallel_fail_fast(
                 batch,
                 candidate["rules"],
@@ -487,8 +400,6 @@ class OnlinePlanningGEPAAdapter:
         output: OnlineRolloutOutput,
         capture_traces: bool,
     ) -> tuple[dict[str, Any], float, dict[str, Any] | None]:
-        if output.outcome_status != "scored" or not output.score_valid:
-            raise RuntimeError("invalid online rollout output cannot enter GEPA")
         score = float(output.resolved)
         public_output = {
             "instance_id": case.instance_id,
@@ -496,34 +407,11 @@ class OnlinePlanningGEPAAdapter:
         }
         trace = None
         if capture_traces:
-            review = output.reflection_review or {
-                "instance_id": case.instance_id,
-                "outcome": "unresolved",
-                "attribution_questions": ["Why was reviewer output unavailable?"],
-                "repository_actions": [
-                    {
-                        "purpose": "Record unavailable repository review.",
-                        "command_summary": "No repository command was available.",
-                        "repository_state": "base",
-                        "result": "Repository evidence unavailable.",
-                    }
-                ],
-                "experiments": [],
-                "experiment_skipped_reason": "Reviewer output was unavailable.",
-                "plan_assessment": {
-                    "navigation": "Reviewer output unavailable.",
-                    "reproduction": "Reviewer output unavailable.",
-                    "patch_strategy": "Reviewer output unavailable.",
-                    "validation": "Reviewer output unavailable.",
-                },
-                "code_followed_plan": None,
-                "attribution": "uncertain",
-                "planning_lesson": "No reviewer-backed planning lesson.",
-                "confidence": "low",
-                "remaining_uncertainty": "No durable reviewer output exists.",
-                "evidence_files": ["rollout_summary.json"],
-                "review_status": "not_available",
-            }
+            review = output.reflection_review or _unavailable_reflection_review(
+                case.instance_id,
+                review_status="not_available",
+                reason="No durable reviewer output exists.",
+            )
             trace = {
                 "instance_id": case.instance_id,
                 "issue_description": case.issue_description,

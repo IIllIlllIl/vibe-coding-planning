@@ -375,8 +375,6 @@ def _run_online_optimization_locked(
         parallel=config.search.parallel,
         proposer=proposer_runner,
         run_dir=config.run_dir,
-        fail_on_rollout_error=True,
-        rollout_attempts=max(config.plan.max_attempts, config.code.max_attempts),
         batch_executor=batch_executor,
         resume_seed_evaluation=resume_seed_evaluation,
         resume_seed_key=(

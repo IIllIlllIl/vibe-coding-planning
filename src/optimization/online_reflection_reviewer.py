@@ -5,7 +5,6 @@ from __future__ import annotations
 import json
 import os
 from pathlib import Path
-import re
 import shutil
 from typing import Any
 
@@ -23,11 +22,6 @@ from src.optimization.online_models import OnlineGEPACase
 from src.optimization.reflection import save_reflection_trajectory
 
 
-_ATTRIBUTIONS = {"plan", "code", "evaluator", "infrastructure", "uncertain"}
-_REPOSITORY_STATES = {"base", "generated_patch", "counterfactual"}
-_CONFIDENCE_LEVELS = {"low", "medium", "high"}
-
-
 def _write_json(path: Path, value: Any) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     temporary = path.with_suffix(path.suffix + ".tmp")
@@ -38,95 +32,35 @@ def _write_json(path: Path, value: Any) -> None:
     temporary.replace(path)
 
 
-def validate_instance_review(value: Any, *, instance_id: str) -> dict[str, Any]:
+def validate_instance_review(
+    value: Any,
+    *,
+    instance_id: str,
+) -> dict[str, Any]:
     if not isinstance(value, dict):
         raise ValueError("Reflection reviewer output must be a JSON object")
     if value.get("instance_id") != instance_id:
         raise ValueError("Reflection reviewer output instance ID mismatch")
-    if value.get("attribution") not in _ATTRIBUTIONS:
-        raise ValueError("Reflection reviewer output has invalid attribution")
-    questions = value.get("attribution_questions")
-    if not isinstance(questions, list) or not questions or not all(
-        isinstance(question, str) and question.strip() for question in questions
-    ):
-        raise ValueError("Reflection reviewer output lacks attribution questions")
-    actions = value.get("repository_actions")
-    if not isinstance(actions, list) or not actions:
-        raise ValueError("Reflection reviewer output lacks repository actions")
-    action_fields = {"purpose", "command_summary", "repository_state", "result"}
-    for action in actions:
-        if not isinstance(action, dict) or set(action) != action_fields:
-            raise ValueError("Reflection reviewer repository action is malformed")
-        if action["repository_state"] not in _REPOSITORY_STATES:
-            raise ValueError("Reflection reviewer repository state is invalid")
-        if not all(
-            isinstance(action[field], str) and action[field].strip()
-            for field in action_fields
-        ):
-            raise ValueError("Reflection reviewer repository action is empty")
-    experiments = value.get("experiments")
-    if not isinstance(experiments, list):
-        raise ValueError("Reflection reviewer experiments must be a list")
-    experiment_fields = {
-        "hypothesis",
-        "repository_state",
-        "method",
-        "observation",
-        "supports_hypothesis",
-    }
-    for experiment in experiments:
-        if not isinstance(experiment, dict) or set(experiment) != experiment_fields:
-            raise ValueError("Reflection reviewer experiment is malformed")
-        if experiment["repository_state"] not in _REPOSITORY_STATES:
-            raise ValueError("Reflection reviewer experiment state is invalid")
-        if not all(
-            isinstance(experiment[field], str) and experiment[field].strip()
-            for field in ("hypothesis", "repository_state", "method", "observation")
-        ) or not isinstance(experiment["supports_hypothesis"], bool):
-            raise ValueError("Reflection reviewer experiment result is invalid")
-    skipped_reason = value.get("experiment_skipped_reason")
-    if not experiments and not (
-        isinstance(skipped_reason, str) and skipped_reason.strip()
-    ):
-        raise ValueError("Reflection reviewer must explain why experiments were skipped")
-    if experiments and not isinstance(skipped_reason, str):
-        raise ValueError("Reflection reviewer experiment skip reason must be a string")
-    if value.get("confidence") not in _CONFIDENCE_LEVELS:
-        raise ValueError("Reflection reviewer confidence is invalid")
-    if not isinstance(value.get("remaining_uncertainty"), str):
-        raise ValueError("Reflection reviewer remaining uncertainty must be a string")
+    review_status = value.get("review_status")
+    if isinstance(review_status, str) and review_status != "completed":
+        return dict(value)
     assessment = value.get("plan_assessment")
     if not isinstance(assessment, dict) or set(assessment) != {
-        "navigation",
-        "reproduction",
-        "patch_strategy",
-        "validation",
+        "correct",
+        "missing_or_wrong",
+        "repository_findings",
     }:
         raise ValueError("Reflection reviewer output lacks plan assessment")
-    inspected = value.get("evidence_files")
-    if not isinstance(inspected, list) or not inspected:
-        raise ValueError("Reflection reviewer did not report inspected evidence")
-    required = {"task.md", "generated_plan.md", "evaluator_result.json"}
-    if not required.issubset({Path(str(item)).name for item in inspected}):
-        raise ValueError("Reflection reviewer did not inspect required evidence")
-    return dict(value)
-
-
-def validate_reviewer_exploration(
-    messages: list[dict[str, Any]],
-    *,
-    repository_path: str,
-) -> None:
-    assistant_text = "\n".join(
-        str(message.get("content", ""))
-        for message in messages
-        if message.get("role") == "assistant"
+    required_text = (
+        *assessment.values(),
+        value.get("code_plan_alignment"),
+        value.get("outcome_attribution"),
+        value.get("planning_lesson"),
+        value.get("uncertainty"),
     )
-    commands = re.findall(r"```bash\s*(.*?)```", assistant_text, flags=re.DOTALL)
-    if not any("/evidence" in command for command in commands):
-        raise ValueError("Reflection reviewer did not issue an evidence command")
-    if not any(repository_path in command for command in commands):
-        raise ValueError("Reflection reviewer did not inspect the base repository")
+    if not all(isinstance(item, str) for item in required_text):
+        raise ValueError("Reflection reviewer analysis fields must be strings")
+    return dict(value)
 
 
 class OnlineInstanceReflectionReviewer:
@@ -278,10 +212,9 @@ class OnlineInstanceReflectionReviewer:
                 exit_status=exit_status,
                 exit_message=exit_message,
             )
-            validate_reviewer_exploration(
-                list(agent.messages),
-                repository_path=workdir,
-            )
+            persisted_trajectory = json.loads(
+                trajectory_path.read_text(encoding="utf-8")
+            )["messages"]
             result = env.execute("cat /review/instance_review.json")
             if result.get("returncode") != 0:
                 raise ValueError("Reflection reviewer did not create its output file")
@@ -289,15 +222,15 @@ class OnlineInstanceReflectionReviewer:
                 json.loads(str(result.get("output", ""))),
                 instance_id=case.instance_id,
             )
+            review["review_status"] = "completed"
             _write_json(evidence_dir / "instance_review.json", review)
             self.audit.write(
                 "online_reflection_instance_review_completed",
                 instance_id=case.instance_id,
                 candidate_sha256=text_sha256(rules),
-                attribution=review["attribution"],
                 trajectory_path=str(trajectory_path),
             )
-            return review, list(agent.messages)
+            return review, list(persisted_trajectory)
         finally:
             env.cleanup()
             if workspace.exists():

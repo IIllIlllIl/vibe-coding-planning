@@ -57,7 +57,6 @@ from src.optimization.online_reflection import OnlinePlanningReflectionProposer
 from src.optimization.online_reflection_reviewer import (
     OnlineInstanceReflectionReviewer,
     validate_instance_review,
-    validate_reviewer_exploration,
 )
 from src.optimization.online_rollout_worker import (
     case_from_manifest,
@@ -460,7 +459,7 @@ def test_current_online_code_prompt_delegates_patch_selection_to_agent(config_na
     "config_name",
     ("gepa_online_planning_hpc.yaml", "gepa_online_planning_pilot.yaml"),
 )
-def test_current_online_reviewer_prompt_enables_disposable_repo_experiments(
+def test_current_online_reviewer_prompt_keeps_raw_evidence_available(
     config_name,
 ):
     repo_root = Path(__file__).resolve().parents[2]
@@ -471,7 +470,11 @@ def test_current_online_reviewer_prompt_enables_disposable_repo_experiments(
     assert "temporary" in prompt
     assert "counterfactual" in prompt
     assert "generated.patch" in prompt
-    assert "experiments" in prompt
+    assert "plan_assessment" in prompt
+    assert "outcome_attribution" in prompt
+    assert "command_ledger_path" not in prompt
+    assert "repository_state" not in prompt
+    assert "evidence_claims" not in prompt
 
 
 def test_online_hpc_8h_resume_config_keeps_2h_checkpoint_semantics(monkeypatch):
@@ -868,32 +871,15 @@ def test_online_rollout_retry_resumes_from_plan_checkpoint(tmp_path, monkeypatch
             return (
                 {
                     "instance_id": case.instance_id,
-                    "outcome": "resolved",
-                    "attribution_questions": ["Did the plan identify the path?"],
-                    "repository_actions": [{
-                        "purpose": "Inspect the planned symbol.",
-                        "command_summary": "Searched the base repository.",
-                        "repository_state": "base",
-                        "result": "The symbol exists at the planned path.",
-                    }],
-                    "experiments": [],
-                    "experiment_skipped_reason": "Static evidence was sufficient.",
                     "plan_assessment": {
-                        "navigation": "good",
-                        "reproduction": "good",
-                        "patch_strategy": "good",
-                        "validation": "good",
+                        "correct": "good",
+                        "missing_or_wrong": "",
+                        "repository_findings": "The symbol exists.",
                     },
-                    "code_followed_plan": True,
-                    "attribution": "plan",
+                    "code_plan_alignment": "Code followed the plan.",
+                    "outcome_attribution": "Planning was adequate.",
                     "planning_lesson": "keep",
-                    "confidence": "high",
-                    "remaining_uncertainty": "",
-                    "evidence_files": [
-                        "task.md",
-                        "generated_plan.md",
-                        "evaluator_result.json",
-                    ],
+                    "uncertainty": "",
                 },
                 [{"role": "assistant", "content": "reviewed"}],
             )
@@ -924,7 +910,7 @@ def test_online_rollout_retry_resumes_from_plan_checkpoint(tmp_path, monkeypatch
     )(case, "candidate planning rules", capture_traces=True)
 
     assert result.resolved is True
-    assert result.reflection_review["attribution"] == "plan"
+    assert result.reflection_review["outcome_attribution"] == "Planning was adequate."
     assert (checkpoint_dir / "reflection_reviewer.json").is_file()
 
     resumed = OnlinePCTRolloutRunner(
@@ -952,72 +938,23 @@ def test_online_rollout_retry_resumes_from_plan_checkpoint(tmp_path, monkeypatch
     )
 
 
-def test_instance_reflection_review_requires_grounded_evidence():
+def test_instance_reflection_review_requires_minimal_analysis():
     valid = {
         "instance_id": "repo__one",
-        "outcome": "resolved",
-        "attribution_questions": ["Did the plan identify the path?"],
-        "repository_actions": [{
-            "purpose": "Inspect the planned symbol.",
-            "command_summary": "Searched the base repository.",
-            "repository_state": "base",
-            "result": "The symbol exists at the planned path.",
-        }],
-        "experiments": [],
-        "experiment_skipped_reason": "Static evidence was sufficient.",
         "plan_assessment": {
-            "navigation": "good",
-            "reproduction": "good",
-            "patch_strategy": "good",
-            "validation": "good",
+            "correct": "good",
+            "missing_or_wrong": "",
+            "repository_findings": "The symbol exists at the planned path.",
         },
-        "code_followed_plan": True,
-        "attribution": "plan",
+        "code_plan_alignment": "Code followed the plan.",
+        "outcome_attribution": "The outcome supports the plan.",
         "planning_lesson": "keep",
-        "confidence": "high",
-        "remaining_uncertainty": "",
-        "evidence_files": [
-            "task.md",
-            "generated_plan.md",
-            "evaluator_result.json",
-        ],
+        "uncertainty": "",
     }
-
     assert validate_instance_review(valid, instance_id="repo__one") == valid
-    invalid = {**valid, "evidence_files": ["rollout_summary.json"]}
-    with pytest.raises(ValueError, match="required evidence"):
+    invalid = {**valid, "plan_assessment": {"correct": "good"}}
+    with pytest.raises(ValueError, match="plan assessment"):
         validate_instance_review(invalid, instance_id="repo__one")
-
-    missing_skip_reason = {**valid, "experiment_skipped_reason": ""}
-    with pytest.raises(ValueError, match="experiments were skipped"):
-        validate_instance_review(missing_skip_reason, instance_id="repo__one")
-
-    invalid_action = {
-        **valid,
-        "repository_actions": [
-            {**valid["repository_actions"][0], "repository_state": "mixed"}
-        ],
-    }
-    with pytest.raises(ValueError, match="repository state"):
-        validate_instance_review(invalid_action, instance_id="repo__one")
-
-    validate_reviewer_exploration(
-        [
-            {
-                "role": "assistant",
-                "content": "```bash\ncat /evidence/task.md && rg symbol /testbed\n```",
-            }
-        ],
-        repository_path="/testbed",
-    )
-    with pytest.raises(ValueError, match="base repository"):
-        validate_reviewer_exploration(
-            [{
-                "role": "assistant",
-                "content": "```bash\ncat /evidence/task.md\n```",
-            }],
-            repository_path="/testbed",
-        )
 
 
 def test_instance_reflection_reviewer_reads_repo_and_persists_review(
@@ -1037,46 +974,22 @@ def test_instance_reflection_reviewer_reads_repo_and_persists_review(
             calls["environment"] = kwargs
 
         def execute(self, command):
-            assert command == "cat /review/instance_review.json"
+            if command != "cat /review/instance_review.json":
+                return {"returncode": 0, "output": "repository evidence"}
             return {
                 "returncode": 0,
                 "output": json.dumps(
                     {
                         "instance_id": case.instance_id,
-                        "outcome": "resolved",
-                        "attribution_questions": [
-                            "Did the plan identify the path?"
-                        ],
-                        "repository_actions": [{
-                            "purpose": "Inspect the planned symbol.",
-                            "command_summary": "Searched the base repository.",
-                            "repository_state": "base",
-                            "result": "The symbol exists at the planned path.",
-                        }],
-                        "experiments": [{
-                            "hypothesis": "The focused behavior matches the plan.",
-                            "repository_state": "base",
-                            "method": "Ran a focused repository command.",
-                            "observation": "The expected path was exercised.",
-                            "supports_hypothesis": True,
-                        }],
-                        "experiment_skipped_reason": "",
                         "plan_assessment": {
-                            "navigation": "good",
-                            "reproduction": "good",
-                            "patch_strategy": "good",
-                            "validation": "good",
+                            "correct": "good",
+                            "missing_or_wrong": "",
+                            "repository_findings": "The expected path exists.",
                         },
-                        "code_followed_plan": True,
-                        "attribution": "plan",
+                        "code_plan_alignment": "Code followed the plan.",
+                        "outcome_attribution": "Planning was adequate.",
                         "planning_lesson": "keep",
-                        "confidence": "high",
-                        "remaining_uncertainty": "",
-                        "evidence_files": [
-                            "task.md",
-                            "generated_plan.md",
-                            "evaluator_result.json",
-                        ],
+                        "uncertainty": "",
                     }
                 ),
             }
@@ -1098,8 +1011,14 @@ def test_instance_reflection_reviewer_reads_repo_and_persists_review(
             }
         ]
 
+        def __init__(self, environment):
+            self.environment = environment
+
         def run(self, task, **kwargs):
             calls["run"] = kwargs
+            self.environment.execute(
+                "cat /evidence/task.md && cd /testbed && rg symbol ."
+            )
             return "Submitted", "done"
 
     monkeypatch.setattr(
@@ -1108,7 +1027,7 @@ def test_instance_reflection_reviewer_reads_repo_and_persists_review(
     )
     monkeypatch.setattr(
         "src.optimization.online_reflection_reviewer.build_default_agent",
-        lambda *args, **kwargs: FakeAgent(),
+        lambda *args, **kwargs: FakeAgent(args[2]),
     )
     phase_root = tmp_path / "reviewer"
 
@@ -1131,10 +1050,12 @@ def test_instance_reflection_reviewer_reads_repo_and_persists_review(
     )
 
     assert review["instance_id"] == case.instance_id
+    assert "command_ledger_path" not in calls["run"]
     assert trajectory == FakeAgent.messages
     assert (phase_root / "evidence" / "task.md").is_file()
     assert (phase_root / "evidence" / "repository.json").is_file()
     assert (phase_root / "evidence" / "instance_review.json").is_file()
+    assert not (phase_root / "evidence" / "reviewer_commands.json").exists()
     assert (phase_root / "evidence" / "reflection_trajectory.json").is_file()
     assert not (phase_root / "workspace").exists()
     assert calls["environment"]["cwd"] == "/review"
@@ -1652,7 +1573,6 @@ def test_online_adapter_scores_current_rollout_and_records_boundaries(tmp_path):
             plan_trajectory=({"role": "assistant", "content": "plan"},),
             code_trajectory=({"role": "assistant", "content": "code"},),
             evaluator_result={"resolved": case.instance_id == "repo__train1"},
-            attribution_hint={"code_followed_plan": True},
         )
 
     run_dir = tmp_path / "online-adapter"
@@ -1735,7 +1655,6 @@ def test_online_rollout_worker_serialization_boundaries():
         plan_trajectory=({"role": "assistant", "content": "plan"},),
         code_trajectory=({"role": "assistant", "content": "code"},),
         evaluator_result={"resolved": True},
-        attribution_hint={"code_followed_plan": True},
     )
 
     assert case.rollout_payload()["repository"]["base_commit"] == "abc123"
@@ -1776,6 +1695,11 @@ def test_online_rollout_worker_serializes_agent_failure(tmp_path, monkeypatch):
                 "code command timed out",
                 phase="code",
                 reason="code_command_timeout",
+                evidence={
+                    "plan": "saved plan",
+                    "plan_trajectory": [{"role": "assistant", "content": "plan"}],
+                    "code_trajectory": [{"role": "assistant", "content": "timeout"}],
+                },
             )
 
     monkeypatch.setattr(
@@ -1799,11 +1723,80 @@ def test_online_rollout_worker_serializes_agent_failure(tmp_path, monkeypatch):
     ) == 1
     payload = json.loads(output_path.read_text(encoding="utf-8"))
     assert payload["status"] == "agent_failed"
-    assert payload["score"] is None
-    assert payload["score_valid"] is False
+    assert "score" not in payload
     assert payload["terminal_phase"] == "code"
     assert payload["terminal_reason"] == "code_command_timeout"
-    assert payload["failure_origin"] == "agent"
+    assert payload["phase_evidence"]["plan"] == "saved plan"
+    assert payload["phase_evidence"]["code_trajectory"][0]["content"] == "timeout"
+
+
+def test_online_hpc_agent_failure_joins_latest_successful_phase_checkpoints(
+    tmp_path,
+):
+    config = _online_config(tmp_path)
+    train, _ = load_online_snapshot(config.dataset_snapshot)
+    store = OnlineRolloutBatchStore(config.run_dir)
+    _, tasks = store.create(
+        batch=train[:1],
+        rules="planning rules",
+        split="train",
+        capture_traces=True,
+    )
+    task = tasks[0]
+    checkpoint_dir = task.worker_run_dir / "checkpoints"
+    checkpoint_dir.mkdir(parents=True)
+    (checkpoint_dir / "plan.json").write_text(
+        json.dumps(
+            {
+                "payload": {
+                    "plan": "plan from attempt one",
+                    "plan_trajectory": [
+                        {"role": "assistant", "content": "plan attempt one"}
+                    ],
+                }
+            }
+        ),
+        encoding="utf-8",
+    )
+    (checkpoint_dir / "code.json").write_text(
+        json.dumps(
+            {
+                "payload": {
+                    "patch": "patch from attempt two",
+                    "code_trajectory": [
+                        {"role": "assistant", "content": "code attempt two"}
+                    ],
+                }
+            }
+        ),
+        encoding="utf-8",
+    )
+    failure = {
+        "terminal_phase": "evaluator",
+        "terminal_reason": "worker_timeout",
+        "candidate_sha256": text_sha256("planning rules"),
+        "phase_evidence": {
+            "plan": "stale plan",
+            "patch": "stale patch",
+            "code_trajectory": [
+                {"role": "assistant", "content": "stale code"}
+            ],
+        },
+    }
+
+    HPCSlurmOnlineRolloutExecutor._finalize_agent_failure(task, failure, 3)
+    output = store.load_output(
+        task.output_path,
+        expected_instance_id=task.case.instance_id,
+        expected_candidate_sha256=text_sha256("planning rules"),
+    )
+
+    assert output.plan == "plan from attempt one"
+    assert output.plan_trajectory[0]["content"] == "plan attempt one"
+    assert output.patch == "patch from attempt two"
+    assert output.code_trajectory[0]["content"] == "code attempt two"
+    assert output.terminal_phase == "evaluator"
+    assert output.terminal_reason == "worker_timeout"
 
 
 def test_online_rollout_worker_disables_docker_maintenance_for_apptainer(
@@ -1865,7 +1858,6 @@ def test_online_rollout_worker_disables_docker_maintenance_for_apptainer(
                 plan_trajectory=(),
                 code_trajectory=(),
                 evaluator_result={"resolved": True},
-                attribution_hint={},
             )
 
     monkeypatch.setattr(
@@ -2018,7 +2010,6 @@ def test_online_adapter_uses_batch_executor_for_hpc_rollouts(tmp_path):
                     plan_trajectory=(),
                     code_trajectory=(),
                     evaluator_result={"resolved": case.instance_id == "repo__train1"},
-                    attribution_hint={"hpc": True},
                 )
                 for case in batch
             ]
@@ -2036,7 +2027,7 @@ def test_online_adapter_uses_batch_executor_for_hpc_rollouts(tmp_path):
 
     assert executor.calls == [(2, "planning rules", True)]
     assert result.scores == [1.0, 0.0]
-    assert result.trajectories[0]["attribution_hint"] == {"hpc": True}
+    assert result.trajectories[0]["resolved"] is True
 
 
 def test_online_hpc_executor_writes_batch_done_and_resource_usage(
@@ -2586,9 +2577,7 @@ def test_online_hpc_wait_retries_slurm_timeout_before_scoring(tmp_path, monkeypa
     assert outputs[1].plan == "saved plan"
     assert outputs[1].terminal_phase == "code"
     assert outputs[1].terminal_reason == "slurm_timeout"
-    assert outputs[1].failure_origin == "agent"
-    assert outputs[1].attribution_hint["timeout"] is True
-    assert outputs[1].attribution_hint["timeout_scored_as_unresolved"] is True
+    assert outputs[1].evaluator_result["reason"] == "worker_slurm_timeout"
     batch_dir = submitted_scripts[0].parent
     assert not list(
         (batch_dir / "worker_runs" / "task_0001").glob(
@@ -2649,7 +2638,7 @@ def test_reviewer_timeout_preserves_completed_evaluator_score(tmp_path):
     assert disposition == "reviewer_timeout_preserved_evaluator"
     assert output.resolved is True
     assert output.terminal_reason is None
-    assert output.attribution_hint["reflection_reviewer_timeout"] is True
+    assert output.reflection_review["review_status"] == "reflection_reviewer_timeout"
 
 
 def test_online_hpc_timeout_cleanup_failure_is_fatal(tmp_path, monkeypatch):
@@ -2815,13 +2804,8 @@ def test_online_hpc_scores_agent_failure_after_fixed_retries(
                     {
                         "status": "agent_failed",
                         "score": None,
-                        "score_valid": False,
-                        "outcome_status": "invalid",
-                        "evaluator_status": "not_run",
-                        "evaluator_resolved": None,
                         "terminal_phase": "code",
                         "terminal_reason": "code_phase_deadline_exceeded",
-                        "failure_origin": "agent",
                         "error": "command timed out",
                     }
                 )
@@ -2861,15 +2845,9 @@ def test_online_hpc_scores_agent_failure_after_fixed_retries(
     assert len(submitted_scripts) == 3
     assert "#SBATCH --array=0%2" in submitted_scripts[1].read_text(encoding="utf-8")
     assert outputs[0].resolved is False
-    assert outputs[0].outcome_status == "scored"
-    assert outputs[0].score_valid is True
-    assert outputs[0].evaluator_status == "not_run"
     assert outputs[0].terminal_phase == "code"
     assert outputs[0].terminal_reason == "code_phase_deadline_exceeded"
-    assert outputs[0].failure_origin == "agent"
-    assert outputs[0].attribution_hint["timeout"] is True
-    assert outputs[0].attribution_hint["timeout_source"] == "agent_contract"
-    assert outputs[0].attribution_hint["agent_failure_scored_after_retries"] is True
+    assert outputs[0].evaluator_result["status"] == "not_run"
     assert outputs[1].resolved is True
 
 
@@ -3071,12 +3049,10 @@ def test_online_adapter_treats_rollout_errors_as_operational(tmp_path):
     def broken_rollout(case, rules):
         raise RuntimeError("docker failed before evaluator")
 
-    with pytest.raises(RuntimeError, match="Online rollout operational failure"):
+    with pytest.raises(RuntimeError, match="docker failed before evaluator"):
         OnlinePlanningGEPAAdapter(
             broken_rollout,
             run_dir=run_dir,
-            fail_on_rollout_error=True,
-            rollout_attempts=2,
         ).evaluate([train[0]], {"rules": "rules"})
 
     errors = [
@@ -3084,10 +3060,10 @@ def test_online_adapter_treats_rollout_errors_as_operational(tmp_path):
         for line in (run_dir / "errors.jsonl").read_text().splitlines()
     ]
     assert errors[0]["event"] == "online_rollout_failed"
-    assert errors[0]["attempts"] == 2
+    assert errors[0]["attempts"] == 1
 
 
-def test_online_runner_uses_plan_and_code_rollout_attempts(tmp_path):
+def test_online_runner_does_not_derive_adapter_retries_from_models(tmp_path):
     config = _online_config(tmp_path)
     config = replace(
         config,
@@ -3114,7 +3090,9 @@ def test_online_runner_uses_plan_and_code_rollout_attempts(tmp_path):
             return "<html></html>"
 
     def fake_optimize(**kwargs):
-        captured["rollout_attempts"] = kwargs["adapter"].rollout_attempts
+        captured["has_rollout_attempts"] = hasattr(
+            kwargs["adapter"], "rollout_attempts"
+        )
         captured["reflection_minibatch_size"] = kwargs["reflection_minibatch_size"]
         return FakeResult()
 
@@ -3127,13 +3105,12 @@ def test_online_runner_uses_plan_and_code_rollout_attempts(tmp_path):
             plan_trajectory=(),
             code_trajectory=(),
             evaluator_result={"resolved": True},
-            attribution_hint={},
         ),
         proposer=lambda candidate, reflective_dataset, components: candidate,
         optimize_fn=fake_optimize,
     )
 
-    assert captured["rollout_attempts"] == 3
+    assert captured["has_rollout_attempts"] is False
     assert captured["reflection_minibatch_size"] == 2
 
 
@@ -3166,7 +3143,6 @@ def test_online_runner_marks_reflection_failure_retryable(tmp_path):
                 plan_trajectory=(),
                 code_trajectory=(),
                 evaluator_result={"resolved": True},
-                attribution_hint={},
             ),
             proposer=proposer,
             optimize_fn=failed_optimize,
@@ -3204,7 +3180,6 @@ def test_online_runner_blocks_permanent_provider_reflection_failure(tmp_path):
                 plan_trajectory=(),
                 code_trajectory=(),
                 evaluator_result={"resolved": True},
-                attribution_hint={},
             ),
             proposer=proposer,
             optimize_fn=failed_optimize,
@@ -3231,7 +3206,6 @@ def test_online_runner_marks_ordinary_controller_failure_retryable(tmp_path):
                 plan_trajectory=(),
                 code_trajectory=(),
                 evaluator_result={"resolved": True},
-                attribution_hint={},
             ),
             proposer=lambda candidate, reflective_dataset, components: candidate,
             optimize_fn=lambda **kwargs: (_ for _ in ()).throw(
@@ -3259,7 +3233,6 @@ def test_online_runner_blocks_invalid_controller_configuration(tmp_path):
                 plan_trajectory=(),
                 code_trajectory=(),
                 evaluator_result={"resolved": True},
-                attribution_hint={},
             ),
             proposer=lambda candidate, reflective_dataset, components: candidate,
             optimize_fn=lambda **kwargs: (_ for _ in ()).throw(
@@ -3396,7 +3369,6 @@ def test_online_runner_disables_docker_maintenance_for_apptainer(
             plan_trajectory=(),
             code_trajectory=(),
             evaluator_result={"resolved": True},
-            attribution_hint={},
         ),
         proposer=lambda candidate, reflective_dataset, components: candidate,
         optimize_fn=lambda **kwargs: FakeResult(),
@@ -3497,34 +3469,17 @@ def test_online_reflection_proposer_uses_apptainer_when_runtime_apptainer(
         "generated_patch": "diff --git a/a.py b/a.py\n",
         "evaluator_result": {"resolved": True},
         "attribution_hint": {"code_followed_plan": True},
-            "reflection_review": {
-                "instance_id": "repo__one",
-                "outcome": "resolved",
-                "attribution_questions": ["Did the plan identify the path?"],
-                "repository_actions": [{
-                    "purpose": "Inspect the planned symbol.",
-                    "command_summary": "Searched the base repository.",
-                    "repository_state": "base",
-                    "result": "The symbol exists at the planned path.",
-                }],
-                "experiments": [],
-                "experiment_skipped_reason": "Static evidence was sufficient.",
-                "plan_assessment": {
-                "navigation": "good",
-                "reproduction": "good",
-                "patch_strategy": "good",
-                "validation": "good",
+        "reflection_review": {
+            "instance_id": "repo__one",
+            "plan_assessment": {
+                "correct": "good",
+                "missing_or_wrong": "",
+                "repository_findings": "The symbol exists at the planned path.",
             },
-            "code_followed_plan": True,
-                "attribution": "plan",
-                "planning_lesson": "keep the useful rule",
-                "confidence": "high",
-                "remaining_uncertainty": "",
-                "evidence_files": [
-                "task.md",
-                "generated_plan.md",
-                "evaluator_result.json",
-            ],
+            "code_plan_alignment": "Code followed the plan.",
+            "outcome_attribution": "Planning was adequate.",
+            "planning_lesson": "keep the useful rule",
+            "uncertainty": "",
         },
     }
 
@@ -3651,7 +3606,6 @@ def test_online_runner_builds_default_apptainer_reflection_proposer(
             plan_trajectory=(),
             code_trajectory=(),
             evaluator_result={"resolved": True},
-            attribution_hint={},
         ),
         optimize_fn=fake_optimize,
     )
@@ -3678,7 +3632,6 @@ def test_online_runner_rejects_concurrent_controller_for_same_run_dir(tmp_path):
                         plan_trajectory=(),
                         code_trajectory=(),
                         evaluator_result={"resolved": True},
-                        attribution_hint={},
                     ),
                     proposer=lambda candidate, reflective_dataset, components: candidate,
                     optimize_fn=lambda **kwargs: None,
@@ -3874,24 +3827,21 @@ def test_online_evidence_bundle_contains_current_rollout_only(tmp_path):
                 "code_trajectory": [{"role": "assistant", "content": "code"}],
                 "generated_patch": "diff --git a/a.py b/a.py\n",
                 "evaluator_result": {"resolved": True},
+                    "reflection_reviewer_trajectory": [
+                        {"role": "assistant", "content": "reviewed raw evidence"}
+                    ],
                     "attribution_hint": {"code_followed_plan": True},
                     "reflection_review": {
                         "instance_id": "repo__one",
-                        "outcome": "resolved",
                         "plan_assessment": {
-                            "navigation": "good",
-                            "reproduction": "good",
-                            "patch_strategy": "good",
-                            "validation": "good",
+                            "correct": "good",
+                            "missing_or_wrong": "",
+                            "repository_findings": "The symbol exists.",
                         },
-                        "code_followed_plan": True,
-                        "attribution": "plan",
+                        "code_plan_alignment": "Code followed the plan.",
+                        "outcome_attribution": "Planning was adequate.",
                         "planning_lesson": "keep",
-                        "evidence_files": [
-                            "task.md",
-                            "generated_plan.md",
-                            "evaluator_result.json",
-                        ],
+                        "uncertainty": "",
                     },
                 }
         ]
@@ -3899,6 +3849,9 @@ def test_online_evidence_bundle_contains_current_rollout_only(tmp_path):
 
     case_dir = bundle / "repo__one"
     assert (case_dir / "generated_plan.md").read_text() == "current generated plan"
+    assert json.loads((case_dir / "reviewer_trajectory.json").read_text()) == [
+        {"role": "assistant", "content": "reviewed raw evidence"}
+    ]
     assert (case_dir / "generated.patch").is_file()
     assert (case_dir / "rollout_summary.json").is_file()
     assert not (case_dir / "checker_output.json").exists()
@@ -4213,7 +4166,6 @@ def test_online_gepa_end_to_end_without_llm(tmp_path):
             plan_trajectory=({"role": "assistant", "content": "plan"},),
             code_trajectory=({"role": "assistant", "content": "code"},),
             evaluator_result={"resolved": "improved" in rules},
-            attribution_hint={"code_followed_plan": True},
         )
 
     class Proposer:

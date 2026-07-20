@@ -20,19 +20,35 @@ class TaskError(Exception):
 class AgentTaskError(TaskError):
     """A structured failure attributable to an agent under its run contract."""
 
-    def __init__(self, message: str, *, phase: str, reason: str) -> None:
+    def __init__(
+        self,
+        message: str,
+        *,
+        phase: str,
+        reason: str,
+        trajectory: list[dict] | None = None,
+    ) -> None:
         super().__init__(message)
         self.phase = phase
         self.reason = reason
+        self.trajectory = list(trajectory or [])
 
 
 class AgentRolloutFailure(TaskError):
     """A terminal Plan/Code phase failure that may become a scored zero."""
 
-    def __init__(self, message: str, *, phase: str, reason: str) -> None:
+    def __init__(
+        self,
+        message: str,
+        *,
+        phase: str,
+        reason: str,
+        evidence: dict | None = None,
+    ) -> None:
         super().__init__(message)
         self.phase = phase
         self.reason = reason
+        self.evidence = dict(evidence or {})
 
 
 class CommandTimeoutError(Exception):

@@ -23,7 +23,7 @@ from src.agents._deps import (
     raise_for_permanent_provider_error,
 )
 from src.config import Config
-from src.exceptions import AgentTaskError
+from src.exceptions import AgentTaskError, CommandTimeoutError
 
 logger = logging.getLogger(__name__)
 
@@ -128,11 +128,19 @@ def run(
         config.agent.max_steps,
     )
 
-    exception_name, exception_msg = agent.run(
-        task=issue_description,
-        nrpv_block=config.prompts.nrpv_block,
-        planning_rules=planning_rules,
-    )
+    try:
+        exception_name, exception_msg = agent.run(
+            task=issue_description,
+            nrpv_block=config.prompts.nrpv_block,
+            planning_rules=planning_rules,
+        )
+    except CommandTimeoutError as exc:
+        raise AgentTaskError(
+            str(exc),
+            phase="plan",
+            reason="plan_command_timeout",
+            trajectory=agent.messages,
+        ) from exc
     raise_for_permanent_provider_error(exception_name, exception_msg)
 
     # Try to read plan from the file the agent wrote in the container
@@ -149,6 +157,7 @@ def run(
                 "Plan agent submitted but /tmp/plan.md was empty and no plan text was returned.",
                 phase="plan",
                 reason="plan_empty",
+                trajectory=agent.messages,
             )
         reason = (
             "plan_step_or_cost_limit"
@@ -161,6 +170,7 @@ def run(
             f"echo COMPLETE_TASK_AND_SUBMIT_FINAL_OUTPUT",
             phase="plan",
             reason=reason,
+            trajectory=agent.messages,
         )
 
     return plan_text.strip(), agent.messages

@@ -148,12 +148,17 @@ class EvidenceBundleWriter:
                     {
                         "resolved": record["resolved"],
                         "score": record["score"],
-                        "attribution_hint": record.get("attribution_hint", {}),
+                        "terminal_phase": record.get("terminal_phase"),
+                        "terminal_reason": record.get("terminal_reason"),
                     },
                 )
                 _write_json(
                     case_dir / "instance_review.json",
                     record["reflection_review"],
+                )
+                _write_json(
+                    case_dir / "reviewer_trajectory.json",
+                    record.get("reflection_reviewer_trajectory", []),
                 )
             manifest.append(
                 {

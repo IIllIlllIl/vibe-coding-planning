@@ -57,24 +57,7 @@ def case_from_manifest(manifest: dict[str, Any]) -> OnlineGEPACase:
 
 
 def output_to_json(output: OnlineRolloutOutput) -> dict[str, Any]:
-    return {
-        "resolved": output.resolved,
-        "score": float(output.resolved),
-        "plan": output.plan,
-        "patch": output.patch,
-        "plan_trajectory": list(output.plan_trajectory),
-        "code_trajectory": list(output.code_trajectory),
-        "evaluator_result": output.evaluator_result,
-        "attribution_hint": output.attribution_hint,
-        "outcome_status": output.outcome_status,
-        "score_valid": output.score_valid,
-        "evaluator_status": output.evaluator_status,
-        "evaluator_resolved": output.evaluator_resolved,
-        "terminal_phase": output.terminal_phase,
-        "terminal_reason": output.terminal_reason,
-        "failure_origin": output.failure_origin,
-        "reflection_review": output.reflection_review,
-    }
+    return output.to_worker_payload()
 
 
 def checkpoint_identity(manifest: dict[str, Any]) -> str:
@@ -164,17 +147,15 @@ def run_task(
                 "candidate_sha256": text_sha256(rules),
                 "error_type": type(exc).__name__,
                 "error": str(exc),
-                "failure_origin": "agent",
                 "terminal_phase": exc.phase,
                 "terminal_reason": exc.reason,
+                "phase_evidence": exc.evidence,
                 "phase_timeout_seconds": (
                     config.execution.code_phase_timeout_seconds
                     if exc.reason == "code_phase_deadline_exceeded"
                     else None
                 ),
                 "retryable": True,
-                "score_valid": False,
-                "score": None,
             },
         )
         return 1
@@ -192,8 +173,6 @@ def run_task(
                 "error_type": type(exc).__name__,
                 "error": str(exc),
                 "retryable": True,
-                "score_valid": False,
-                "score": None,
             },
         )
         return 1

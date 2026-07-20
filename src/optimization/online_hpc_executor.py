@@ -24,6 +24,7 @@ from src.optimization.online_models import (
     ONLINE_OUTCOME_POLICY_VERSION,
     OnlineGEPACase,
     OnlineRolloutOutput,
+    scored_agent_failure,
 )
 
 
@@ -294,8 +295,6 @@ class OnlineRolloutBatchStore:
     ) -> OnlineRolloutOutput:
         data = json.loads(path.read_text(encoding="utf-8"))
         if data.get("status") == "agent_failed":
-            if data.get("failure_origin") != "agent":
-                raise RuntimeError("agent-failed output lacks agent attribution")
             if not data.get("terminal_phase") or not data.get("terminal_reason"):
                 raise RuntimeError("agent-failed output lacks terminal classification")
             raise AgentWorkerFailure(data)
@@ -321,15 +320,12 @@ class OnlineRolloutBatchStore:
             plan_trajectory=tuple(data.get("plan_trajectory", [])),
             code_trajectory=tuple(data.get("code_trajectory", [])),
             evaluator_result=dict(data.get("evaluator_result", {})),
-            attribution_hint=dict(data.get("attribution_hint", {})),
-            outcome_status=str(data.get("outcome_status", "scored")),
-            score_valid=bool(data.get("score_valid", True)),
-            evaluator_status=str(data.get("evaluator_status", "completed")),
-            evaluator_resolved=data.get("evaluator_resolved"),
             terminal_phase=data.get("terminal_phase"),
             terminal_reason=data.get("terminal_reason"),
-            failure_origin=data.get("failure_origin"),
             reflection_review=data.get("reflection_review"),
+            reflection_reviewer_trajectory=tuple(
+                data.get("reflection_reviewer_trajectory", [])
+            ),
         )
 
 
@@ -971,6 +967,22 @@ class HPCSlurmOnlineRolloutExecutor:
 
         plan_payload = checkpoint_payload("plan")
         code_payload = checkpoint_payload("code")
+        failure_evidence = dict(failure.get("phase_evidence", {}))
+        evidence = {
+            "plan": plan_payload.get("plan", failure_evidence.get("plan", "")),
+            "plan_trajectory": plan_payload.get(
+                "plan_trajectory", failure_evidence.get("plan_trajectory", [])
+            ),
+            "patch": code_payload.get("patch", failure_evidence.get("patch", "")),
+            "code_trajectory": code_payload.get(
+                "code_trajectory", failure_evidence.get("code_trajectory", [])
+            ),
+        }
+        output = scored_agent_failure(
+            phase=str(failure["terminal_phase"]),
+            reason=str(failure["terminal_reason"]),
+            evidence=evidence,
+        )
         _write_json(
             task.output_path,
             {
@@ -982,35 +994,8 @@ class HPCSlurmOnlineRolloutExecutor:
                 "instance_id": task.case.instance_id,
                 "split": task.case.split,
                 "candidate_sha256": failure.get("candidate_sha256"),
-                "resolved": False,
-                "score": 0.0,
-                "outcome_status": "scored",
-                "score_valid": True,
-                "evaluator_status": "not_run",
-                "evaluator_resolved": None,
-                "terminal_phase": failure["terminal_phase"],
-                "terminal_reason": failure["terminal_reason"],
-                "failure_origin": "agent",
                 "attempts": attempt,
-                "plan": str(plan_payload.get("plan", "")),
-                "patch": str(code_payload.get("patch", "")),
-                "plan_trajectory": list(plan_payload.get("plan_trajectory", [])),
-                "code_trajectory": list(code_payload.get("code_trajectory", [])),
-                "evaluator_result": {
-                    "status": "not_run",
-                    "reason": "agent_failed_before_evaluation",
-                },
-                "attribution_hint": {
-                    "candidate_rules_visible_to_plan_agent": True,
-                    "candidate_rules_visible_to_code_agent": False,
-                    "timeout": _is_timeout_reason(failure["terminal_reason"]),
-                    "timeout_source": (
-                        "agent_contract"
-                        if _is_timeout_reason(failure["terminal_reason"])
-                        else None
-                    ),
-                    "agent_failure_scored_after_retries": True,
-                },
+                **output.to_worker_payload(),
             },
         )
 
@@ -1034,6 +1019,17 @@ class HPCSlurmOnlineRolloutExecutor:
         if evaluator_payload and bool(task_manifest.get("capture_traces")):
             evaluator_result = dict(evaluator_payload["evaluator_result"])
             resolved = bool(evaluator_result.get("resolved", False))
+            output = OnlineRolloutOutput(
+                resolved=resolved,
+                plan=str(plan_payload.get("plan", "")),
+                patch=str(code_payload.get("patch", "")),
+                plan_trajectory=tuple(plan_payload.get("plan_trajectory", [])),
+                code_trajectory=tuple(code_payload.get("code_trajectory", [])),
+                evaluator_result=evaluator_result,
+                reflection_review={
+                    "review_status": "reflection_reviewer_timeout"
+                },
+            )
             _write_json(
                 task.output_path,
                 {
@@ -1045,31 +1041,8 @@ class HPCSlurmOnlineRolloutExecutor:
                     "candidate_sha256": text_sha256(
                         task.rules_path.read_text(encoding="utf-8")
                     ),
-                    "resolved": resolved,
-                    "score": float(resolved),
-                    "outcome_status": "scored",
-                    "score_valid": True,
-                    "evaluator_status": "completed",
-                    "evaluator_resolved": resolved,
-                    "terminal_phase": None,
-                    "terminal_reason": None,
-                    "failure_origin": None,
                     "attempts": attempt,
-                    "plan": str(plan_payload.get("plan", "")),
-                    "patch": str(code_payload.get("patch", "")),
-                    "plan_trajectory": list(
-                        plan_payload.get("plan_trajectory", [])
-                    ),
-                    "code_trajectory": list(
-                        code_payload.get("code_trajectory", [])
-                    ),
-                    "evaluator_result": evaluator_result,
-                    "attribution_hint": {
-                        "candidate_rules_visible_to_plan_agent": True,
-                        "candidate_rules_visible_to_code_agent": False,
-                        "reflection_reviewer_timeout": True,
-                    },
-                    "reflection_review": None,
+                    **output.to_worker_payload(),
                 },
             )
             return "reviewer_timeout_preserved_evaluator"
@@ -1077,6 +1050,17 @@ class HPCSlurmOnlineRolloutExecutor:
         if code_payload:
             terminal_phase = "evaluator"
         candidate_sha256 = text_sha256(task.rules_path.read_text(encoding="utf-8"))
+        output = scored_agent_failure(
+            phase=terminal_phase,
+            reason="slurm_timeout",
+            evaluator_reason="worker_slurm_timeout",
+            evidence={
+                "plan": plan_payload.get("plan", ""),
+                "plan_trajectory": plan_payload.get("plan_trajectory", []),
+                "patch": code_payload.get("patch", ""),
+                "code_trajectory": code_payload.get("code_trajectory", []),
+            },
+        )
         _write_json(
             task.output_path,
             {
@@ -1086,31 +1070,8 @@ class HPCSlurmOnlineRolloutExecutor:
                 "instance_id": task.case.instance_id,
                 "split": task.case.split,
                 "candidate_sha256": candidate_sha256,
-                "resolved": False,
-                "score": 0.0,
-                "outcome_status": "scored",
-                "score_valid": True,
-                "evaluator_status": "not_run",
-                "evaluator_resolved": None,
-                "terminal_phase": terminal_phase,
-                "terminal_reason": "slurm_timeout",
-                "failure_origin": "agent",
                 "attempts": attempt,
-                "plan": str(plan_payload.get("plan", "")),
-                "patch": str(code_payload.get("patch", "")),
-                "plan_trajectory": list(plan_payload.get("plan_trajectory", [])),
-                "code_trajectory": list(code_payload.get("code_trajectory", [])),
-                "evaluator_result": {
-                    "status": "not_run",
-                    "reason": "worker_slurm_timeout",
-                },
-                "attribution_hint": {
-                    "candidate_rules_visible_to_plan_agent": True,
-                    "candidate_rules_visible_to_code_agent": False,
-                    "timeout": True,
-                    "timeout_source": "slurm_walltime",
-                    "timeout_scored_as_unresolved": True,
-                },
+                **output.to_worker_payload(),
             },
         )
         return "rollout_timeout_scored_unresolved"

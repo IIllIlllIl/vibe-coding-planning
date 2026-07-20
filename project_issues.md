@@ -39,6 +39,22 @@ Future launch/progress checks must append a row before interpreting movement.
   后 evaluator score 是否保持、review attribution 是否过度归因于 plan、synthesis
   是否引用全部 instance，以及额外 token/FairShare 成本。
 
+- **2026-07-16 smoke 语义混合事故**：本地 supervisor 每个 controller slice
+  都会重新 rsync 当前工作区。修复 Reviewer 审计期间，旧 identity
+  `online-planning-hpc-two-stage-reflection-2it-smoke-20260716` 未先停止，导致
+  `batch_0001..0003` 使用 review schema v1，而 controller `5543536` 和
+  `batch_0004` 起使用未提交的 schema v2。supervisor 已停止；该 run 只保留作
+  resume/审计诊断，不得作为单一语义的规则质量实验。后续 prompt/schema/source
+  修改必须先停止 supervisor，并使用新的 run identity；提交 wrapper 还需增加
+  tracked commit/worktree semantic identity gate，避免运行中 rsync 漂移。
+
+- **Reviewer recorder completion-protocol 回归**：实验型 recorder 曾在 command
+  output 前加入 `REVIEW_COMMAND_ID`，破坏 mini-swe 对 completion marker 的精确
+  识别；三个 `batch_0004` worker 因而重复提交并最终失败。command ledger、
+  repository-state 分类和 schema-v2 claim 已整体撤回，不再位于实验路径中。
+  下一次新 identity smoke 只需确认 Reviewer 一次提交即退出、简明报告与原始
+  trajectory 均被 Synthesis bundle 保存。
+
 - **状态**：当前主线；evaluator 基础设施修复后需要重新建立可信的正式结果
 - **背景**：candidate rules 进入 Plan Agent，随后执行真实的 Plan、Code 和
   evaluator rollout；HPC array、原子 batch resume、报告与输入隔离均已实现。
@@ -84,19 +100,20 @@ Future launch/progress checks must append a row before interpreting movement.
   - 使用真实 rollout 的 evaluator 结果作为反馈，减少 offline 标签只能间接反映
     plan 质量的问题。
 - **已实现决策**：
-  - 只有 `outcome_status=scored`、`score_valid=true` 的结果进入 GEPA。
+  - 只有成功构造的 `OnlineRolloutOutput` 进入 GEPA；普通 operational exception
+    不构造 outcome，也不伪造 0 分。
   - Evaluator resolved/unresolved 使用 1/0；Plan/Code Agent 空提交、未提交、
     Agent 单命令超时在固定重试用尽后计 0；正式 HPC Plan/Code 的 mini-swe
     step/cost limits 已禁用，统一由 worker walltime 提供总边界。
   - repository/SIF/OOM/checkpoint identity/evaluator harness/output integrity/
     cleanup 失败保持 invalid 并停止当前 metric call；不设置主观可信分数。
     Reflection、SSH/status、提交和普通 controller 异常自动恢复。
-  - outcome policy v3 纳入 evaluation fingerprint；失败 partial trajectory 仅诊断，
-    不进入 Reflection evidence。
+  - outcome policy v4 纳入 evaluation fingerprint；最终 scored Agent failure 按
+    phase checkpoint 拼接完整 evidence chain 后进入 Reflection。
 - **需要决策**：
   1. Candidate rules 在 Plan Agent user prompt 中的精确结构，以及 strict planning
      语义如何避免 Plan Agent 用默认能力绕过规则缺陷。
-  2. 是否需要在 outcome policy v2 的审计数据足够后，进一步拆分 Agent timeout
+  2. 是否需要在 outcome policy v4 的审计数据足够后，进一步拆分 Agent timeout
      的细分类别；当前不引入连续置信分数。
   3. Reflection evidence 如何摘要 Plan trajectory、Code trajectory、patch 和
      evaluator result，并明确区分规则问题、Code Agent 执行偏离和基础设施噪声。
@@ -146,64 +163,22 @@ Future launch/progress checks must append a row before interpreting movement.
   - 详细设计记录在 `docs/gepa-rule-optimization.md`，跨方法经验位于
     `docs/knowledge/`。
 
-### 下一次运行：两个大更新的联合风险审查
+### 2.1 Outcome policy v4 待 smoke 验证（2026-07-20）
 
-以下检查同时覆盖 outcome policy v3（结构化归因、timeout）和 iteration-target supervisor。
-准确性优先于节省时间；命中停止条件后 supervisor 不得继续自动提交 controller。
+去过度设计修复已经移除重复 outcome 字段、Adapter 内部整次 rollout retry 和
+`fail_on_rollout_error` 计分分支。Plan/Code 最终失败现在由同一个纯函数转换为
+unresolved；普通 operational exception 仍直接 invalid。跨 worker retry 的正式
+Reflection evidence 按阶段拼接：每个已完成阶段采用同一 identity 下最新成功的
+原子 checkpoint，最终失败阶段采用最后的 reason/trajectory，而不是只取最后一个
+进程尝试。语义版本已升为 outcome policy v4，并使用独立 run identity。
 
-#### A. Outcome policy v2
+下一次 2-iteration smoke 需要验证：Plan 第一次成功、Code 后续成功、Evaluator
+最终失败时，Reflection bundle 同时含正确的 Plan/Code 证据和最终失败标记；旧
+policy batch 不被复用；operational invalid 不进入 GEPA score。配置已准备但未启动。
 
-| 风险 | 下一次运行观察证据 | 停止/处理条件 |
-|---|---|---|
-| Agent 与基础设施边界误判 | 按 `terminal_phase` / `terminal_reason` 汇总 scored-zero；逐条抽查 command、trajectory、Slurm state 和同实例 retry | repository/SIF/API/共享存储/容器故障被记为 `failure_origin=agent`，立即停止并修正分类，受影响 score 不可信 |
-| Agent command timeout 可能实际由环境卡顿造成 | 对 `plan_command_timeout` / `code_command_timeout` 比较命令类型、worker elapsed、同节点和同时间段失败聚集 | 多实例同期超时、简单命令超时或明显 I/O/节点异常时，不得继续按 Agent unresolved 处理 |
-| Slurm TIMEOUT 被错误归因 | 核对 `sacct` 原始 state、phase checkpoint 和合成 output | 只有明确 `TIMEOUT` 可计 unresolved；UNKNOWN、OOM、NODE_FAIL 或损坏输出被降级时立即停止，该 score 不可信 |
-| 官方测试 timeout 可能掩盖 evaluator 基础设施 hang | 检查 `.vibe_eval.sh` 已启动、测试 stdout、资源使用和 timeout 前日志 | harness/初始化/挂载阶段超时却被记为 `official_tests_timed_out` 时停止；只有官方测试实际运行超时才可计 0 |
-| 固定 retry 形成 best-of-N 偏差 | 报告每个样本 attempts、首次与最终终态、不同 candidate 的 retry rate | candidate 间 retry rate 明显不均，或大量首次失败后重试成功时，validation 不应直接与旧 run 比较 |
-| Code Agent 随机失败被错误归因给 planning rules | 抽查 plan 合理但 Code 偏离/空输出/超时的 score-zero evidence；比较 candidate 间 Code failure rate | GEPA 接受/拒绝主要由 Code failure 数差异驱动，而非 evaluator/plan 差异时，暂停规则效果结论 |
-| scored-zero evidence 信息不足 | 检查最终 trace 含 phase/reason 和成功 checkpoint，失败 partial trajectory 只在诊断目录 | Reflection 看不到终态分类，或失败 partial trajectory 混入正式 evidence 时停止 |
-| 新旧计分口径不可比 | 报告 `outcome_policy_version`、semantic hash、各终态计数 | 不得把 v1 validation score 与旧 policy score 当作同口径提升；只能在同一 v1 run/candidate 间比较 |
-
-#### B. Iteration-target supervisor
-
-| 风险 | 下一次运行观察证据 | 停止/处理条件 |
-|---|---|---|
-| iteration 计数提前或 off-by-one | 对比 `online_iteration_progress.json`、`gepa_state.bin` 的 `state.i`、`on_state_saved` audit 和 candidate/Pareto 状态 | `completed_iterations` 在官方 state save 前增加，或与 `state.i + 1` 不一致时立即停止 |
-| cooperative yield 被误记成失败或完成 | 检查 `controller_status.json`、Slurm exit、`online_controller_yielded` 和 GEPA error/audit | yield 写入 `failed`/`result.json`，或未持久化 `SUBMITTED` journal 就退出时停止 |
-| adapter 重复把 cooperative yield 记成 batch failure | 检查同一 yield 周围只有 `online_hpc_batch_yielded`，且 `errors.jsonl` 无对应记录 | 出现 `online_hpc_batch_failed` 或 error record 时停止；该修复需在下一次真实 controller yield 验证 |
-| 同一 batch 被重复提交 | 对比 fingerprint、batch number、active/retry job IDs、array indices 和 output timestamps | 同一 fingerprint 的健康 active array 被再次提交，或两个 worker 同时写同一 output 时取消重复 job 并停止 supervisor |
-| 两个 controller 并发修改 GEPA state | 每轮查询 controller job name、`online_controller.lock` 和 controller job IDs | 同一 run_dir 同时存在两个 active controller 时立即停止并检查 checkpoint |
-| Slurm `UNKNOWN` 或网络失败被误当成可提交 | 保存每次远端 snapshot 和 SSH/squeue/sacct 返回状态 | 状态不明确时发生新提交即视为 supervisor 决策错误；正确行为必须是保守等待 |
-| `sbatch` 成功、job ID journal 未写回的竞态 | 检查 `SUBMITTING`、deterministic job-name reconciliation 和实际 squeue/sacct job | 未完成 reconciliation 就提交替代 array 时停止；不得靠删除 batch state 恢复 |
-| 终态 worker 未被 controller 正确接管 | worker 全终态后检查下一 controller 是否复用已有 outputs、只 retry 缺失/失败 index | 已完成 output 被重跑、candidate/instance hash 不匹配仍复用，或整个 98-task batch 重提时停止 |
-| 本地 state 陈旧或目标绑定错误 | 核对 state 中 run_dir、job name、baseline、target 和 submission count | state identity 与命令不一致必须拒绝运行；不得手工改 state 后继续同一实验 |
-| `controller_status=failed` 后仍自动推进 | 检查 supervisor exit code、本地 state 和后续 controller job | 明确基础设施失败后出现自动新 controller 时停止 supervisor |
-| Supervisor 随启动 shell 退出 | 检查 tmux session、service log 和 30 分钟后的 state 更新时间 | 无 tmux session、未由 caffeinate 包装或日志停止更新时不得视为无人值守运行成功 |
-| `conda run` 捕获长期 Supervisor stdout | 当前 tmux/state 正常但 service log 在进程运行期间为空；对比 state mtime 与退出后的 log | **已修复，待下次运行验证**：标准入口使用 `--no-capture-output` 并有命令构造测试；不重启当前 run |
-| worker 已完成但 batch 仍为 `SUBMITTED` | 对照 fingerprint、Slurm、output、`batch_state.json` 与 GEPA durable state | 这是未被 GEPA 重放/消费的 metric call，不得误标 `COMPLETE`；接管时记录 `OUTPUTS_READY`，完成和复用使用不同审计事件 |
-| Reflection 失败错误 block 或重复提交 | 检查 `retryable_failed`、GEPA state/candidate tree 和下一 controller | 失败 proposal 被计为 iteration/candidate，或 supervisor 永久退出，或同一 proposal 被并发执行时停止 |
-| Code 自选 patch 包含诊断测试或测试基础设施修改 | 对所有 `resolved=true` 的 submission 保留 patch/trajectory 并做运行后审查；运行时不按路径过滤 | 当前选择优先避免 Host 误杀正确 patch。若发现通过修改 runner、fixture 或跳过断言获得 resolved，应将样本标记为不可靠并重新评估该 run；不得事后静默改 patch |
-| 实验型 SIF Reviewer 混淆 base/patch/counterfactual 状态或耗时过长 | 审查 repository_actions、experiments、trajectory、confidence 与 Reviewer walltime P50/P90/P95 | 若结论无法对应到实际命令、把临时修改当作 base 事实、频繁撞到 55min worker walltime，暂停规则质量解释；优先修复 prompt/schema 或拆分 Reviewer task，不得让 Reviewer 失败覆盖 durable evaluator score |
-
-#### C. 两项更新的交互风险与首次运行门槛
-
-1. Supervisor 会放大自动化速度，因此一次归因错误可能连续影响多个 iteration。
-   首次运行先执行 `--once`，确认远端 snapshot 和提交决策；第一个完整 iteration
-   完成后暂停一次，人工审查 outcome 分类、candidate score、batch 接管和 iteration
-   计数，再允许继续达到剩余目标。
-2. 第一次审查至少报告：各 candidate 的 resolved、Agent scored-zero、official-test
-   timeout、infrastructure-invalid、attempt/retry 数；controller/worker job 时间线；
-   fingerprint 接管记录；`gepa_state.bin` 对应的 durable iteration 数。
-3. 只有在以下条件全部满足后，才能把该 run 用于规则效果结论：无重复 array/controller；
-   无 invalid 混入 score；所有 score-zero 分类可解释；iteration 只在官方 checkpoint
-   后增加；accepted/rejected candidate 与记录的 validation score 一致。
-4. 2026-07-15 已修复 evaluator 将大型 patch/eval script 编码进 Apptainer command
-   所导致的 `Argument list too long`，并修复 adapter 对 cooperative yield 的重复失败
-   审计。下一次运行需确认 eval script 经 bind-mounted workspace 传输、无 argv 错误，
-   且正常 yield 不污染 `errors.jsonl`。Agent 被 Slurm walltime 杀死的归因与预算策略仍
-   保持开放，需单独讨论，不能视为本次传输修复已经覆盖。
-
----
+仍留待 Reviewer/Synthesis 专题讨论：两阶段 Agent 的失败 retry/resume 边界、
+Synthesis 是否以及如何按需回看 raw evidence、proposal checkpoint 的最小合同。
+在该讨论完成前不增加新的 Reviewer schema、Host semantic validator 或状态机。
 
 ## 3. HPC SIF 预热与可恢复短作业运行
 

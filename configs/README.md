@@ -8,8 +8,8 @@ superseded variants live under `archive/` and remain available for provenance.
 
 | Config | Runtime | Purpose |
 |---|---|---|
-| `gepa_online_planning_hpc.yaml` | ULHPC Apptainer | Standard formal configuration over the 384/98 split. Trace workers add a repo-grounded reviewer in the matching benchmark SIF, then controller-side synthesis proposes rules from the structured reviews. Each rollout remains an independent `1 CPU / 4G / 55min` array task; fingerprinted batch journals and Plan/Code/Evaluator/Reviewer checkpoints support selective retry. |
-| `online_gepa_supervisor.yaml` | Local tmux+caffeinate | Exact formal launch identity: session/log, 8-iteration target, 30-minute cadence, unlimited controller slices, remote workdir, and `1 CPU / 4G / 2h` controller arguments. Use this file instead of reconstructing a long command. |
+| `gepa_online_planning_hpc.yaml` | ULHPC Apptainer | Standard formal configuration over the 384/98 split. Trace workers add a repo-grounded reviewer, then controller-side synthesis can use its concise report or inspect the preserved raw evidence. Each rollout remains an independent `1 CPU / 4G / 55min` array task; fingerprinted batch journals and Plan/Code/Evaluator/Reviewer checkpoints support selective retry. |
+| `online_gepa_supervisor.yaml` | Local tmux+caffeinate | Exact launch identity for the outcome-policy-v4 phase-evidence smoke: session/log, 2-iteration target, 30-minute cadence, unlimited controller slices, remote workdir, and `1 CPU / 4G / 2h` controller arguments. The smoke deliberately retains `reflection_minibatch_size: 3`. It is configured but not launched. Use this file instead of reconstructing a long command. |
 | `gepa_online_planning_pilot.yaml` | local Docker | Standard small executable example for validating the Online GEPA flow locally. |
 
 Online GEPA is the current mainline. Candidate rules go only to the Plan Agent;
@@ -25,8 +25,9 @@ outcomes and normally score unresolved rather than blocking the run.
 
 The SIF instance reviewer may also run focused tests or make temporary
 diagnostic/counterfactual edits after inspecting the untouched base. These edits
-are discarded with its SIF overlay; repository actions and observations remain
-in the reviewer trajectory and structured review for synthesis.
+are discarded with its SIF overlay. Its full trajectory and the immutable
+rollout evidence remain available to synthesis; no Host semantic command ledger
+or repository-state classifier sits between the two agents.
 
 The runtime config and launch config have separate authority: changing prompts,
 budgets, evaluator, or worker resources belongs in

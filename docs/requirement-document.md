@@ -2,7 +2,7 @@
 
 > Authority: current behavioral requirements
 >
-> Scope: Online GEPA planning-rule optimization, outcome policy v3, HPC rollout
+> Scope: Online GEPA planning-rule optimization, outcome policy v4, HPC rollout
 >
 > Last reviewed: 2026-07-15
 >
@@ -86,16 +86,20 @@ Every rollout is either `scored` or `invalid`.
   terminal-missing indices.
 - Plan, Code, Evaluator, and instance-reviewer checkpoints are atomic and
   identity-bound.
-- A completed instance review records attribution questions, repository actions,
-  optional targeted experiments, confidence, and remaining uncertainty. An
-  empty experiment list is valid only with a reason that static evidence was
-  sufficient; writing code is never required merely to satisfy the schema.
+- A completed instance review contains only planning analysis, Code-plan
+  alignment, outcome attribution, a possible planning lesson, and uncertainty.
+  Reviewer trajectory and raw rollout evidence are preserved so Synthesis may
+  inspect them when the concise report is ambiguous or contradictory. The Host
+  does not classify commands, repository states, or software semantics.
 - Code retry may reuse a successful Plan checkpoint but starts from a clean Code
   repository. Evaluator retry may reuse successful Plan and Code checkpoints.
 - A successful Reflection proposal is atomically persisted before it is returned
   to GEPA. Replaying the same parent, ordered evidence, and Reflection semantics
   must return that exact proposal without another Agent call.
-- Partial failed trajectory is diagnostic only and never becomes formal evidence.
+- A final scored Agent failure carries one coherent phase chain: the latest
+  identity-bound successful checkpoint for each completed phase, followed by
+  the final failed phase trajectory/reason. It must not select every artifact
+  from only the last process attempt or mix identities.
 - Partial Reflection work before a durable proposal may rerun. GEPA remains the
   authority for whether a durable proposal was accepted, rejected, or validated.
 - Reviewer timeout or failure must not overwrite a durable official evaluator

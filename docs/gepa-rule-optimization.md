@@ -24,6 +24,23 @@ output/SWE-bench_Verified/verified-round1-gepa-datasets/
 It contains 384 train and 98 validation instances. “Small experiment” means a
 small number of GEPA iterations, not a reduced formal dataset.
 
+The official GEPA search sequence is:
+
+1. Evaluate the seed candidate once on the fixed 98-instance validation set.
+2. At each iteration, select a parent from the instance-level validation Pareto
+   frontier and draw the next 3-instance minibatch from the 384 training cases
+   with the epoch-shuffled sampler.
+3. Evaluate that parent on the minibatch with traces; the three repo-grounded
+   Reviewers and Synthesis propose a complete candidate rule set.
+4. Evaluate the proposal on the same minibatch and require a strictly higher
+   score sum. Rejected proposals do not reach validation.
+5. Evaluate an accepted proposal on the fixed validation set, add it to the
+   candidate pool, and update the per-validation-instance Pareto frontier.
+
+The minibatch is therefore fixed only within one parent/proposal comparison,
+not for the whole run. A later iteration normally receives the next shuffled
+training minibatch and may select a different Pareto parent.
+
 ## 2. Visibility Contract
 
 | Phase | May read | Must not read |
@@ -62,11 +79,18 @@ reviewers. Synthesis reads all instance reviews and writes both
 Reviewers use question-driven repository interaction rather than a ceremonial
 filesystem check. After evidence triage they inspect the untouched base and may
 run a focused reproduction/test, write a disposable diagnostic script or test,
-apply the generated patch, or make a small counterfactual edit. Their structured
-output records attribution questions, repository actions, experiments,
-confidence, and uncertainty. Experiments are optional when static evidence is
-decisive. Reviewer edits never cross into Code or Evaluator; only the trajectory
-and structured review persist.
+apply the generated patch, or make a small counterfactual edit. The Host is
+deliberately not used to classify commands, repository states, or semantic
+claims. The Reviewer writes only planning analysis, Code-plan alignment,
+outcome attribution, a possible planning lesson, and uncertainty. Reviewer
+edits never cross into Code or Evaluator; its complete trajectory and the raw
+rollout artifacts persist.
+
+Synthesis normally reads the concise per-instance reports. If a report is
+ambiguous, unsupported, or conflicts with another report, it may inspect the
+corresponding raw task, plan and Code trajectories, patch, evaluator result,
+rollout summary, and Reviewer trajectory. The evaluator output remains the
+authority for resolved/unresolved; neither Reviewer nor Synthesis rewrites it.
 
 Each synthesis proposal persists a redacted `reflection_trajectory.json`
 beside its evidence bundle. It records the complete mini-swe-agent transcript,
@@ -96,9 +120,10 @@ generic. A fixed Code budget intentionally rewards plans that help execution
 converge, but candidate comparisons must still report Code failure rates so
 Agent randomness is not mistaken for planning quality.
 
-## 4. Outcome Policy V3
+## 4. Outcome Policy V4
 
-`outcome_status=scored` is the only state accepted into GEPA scores.
+Only a validated `OnlineRolloutOutput` is accepted into GEPA scores. Operational
+exceptions never instantiate that type and therefore cannot silently become 0.
 
 - evaluator resolved -> 1;
 - evaluator unresolved or official test timeout -> 0;
@@ -168,6 +193,12 @@ Code retry never continues a half-written repository. It reuses only the
 successful Plan artifact and starts a new clean Code workspace. This is a
 deliberate correctness tradeoff: incomplete exploration time is lost, but
 formal evidence is not contaminated by partial state.
+
+When all attempts fail, Reflection receives a phase-complete chain rather than
+the globally last process transcript. For example, a Plan completed on attempt
+1 and Code completed on attempt 2 remain the authoritative artifacts if the
+Evaluator times out on attempt 3. The final phase reason/evidence is appended;
+artifacts are joined only under the same rollout checkpoint identity.
 
 ## 7. Controller And Iteration Semantics
 

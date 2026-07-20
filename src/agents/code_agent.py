@@ -28,7 +28,7 @@ from src.agents._deps import (
     raise_for_permanent_provider_error,
 )
 from src.config import Config
-from src.exceptions import AgentTaskError
+from src.exceptions import AgentTaskError, CommandTimeoutError
 
 logger = logging.getLogger(__name__)
 
@@ -64,7 +64,11 @@ def _phase_timer(timeout_seconds: float | None):
             signal.setitimer(signal.ITIMER_REAL, *previous_timer)
 
 
-def _extract_result(exception_name: str, exception_msg: str) -> str:
+def _extract_result(
+    exception_name: str,
+    exception_msg: str,
+    trajectory: list[dict[str, Any]],
+) -> str:
     """Extract the agent's final output based on how it terminated.
 
     Only ``Submitted`` is treated as success — its message is the
@@ -87,6 +91,7 @@ def _extract_result(exception_name: str, exception_msg: str) -> str:
         f"(exit_status={exception_name}): {exception_msg[:200]}",
         phase="code",
         reason=reason,
+        trajectory=trajectory,
     )
 
 
@@ -163,7 +168,22 @@ def run(
                 task=issue_description, plan=plan
             )
             raise_for_permanent_provider_error(exception_name, exception_msg)
+    except CommandTimeoutError as exc:
+        error = AgentTaskError(
+            str(exc),
+            phase="code",
+            reason="code_command_timeout",
+            trajectory=agent.messages,
+        )
+        _write_failure_trajectory(
+            failure_trajectory_path,
+            agent.messages,
+            "CommandTimeout",
+            str(exc),
+        )
+        raise error from exc
     except AgentTaskError as exc:
+        exc.trajectory = list(agent.messages)
         _write_failure_trajectory(
             failure_trajectory_path,
             agent.messages,
@@ -175,7 +195,7 @@ def run(
         _write_failure_trajectory(
             failure_trajectory_path, agent.messages, exception_name, exception_msg
         )
-    patch_text = _extract_result(exception_name, exception_msg)
+    patch_text = _extract_result(exception_name, exception_msg, agent.messages)
 
     if not patch_text or not patch_text.strip():
         _write_failure_trajectory(
@@ -185,6 +205,7 @@ def run(
             "Code agent produced empty output.",
             phase="code",
             reason="code_empty_patch",
+            trajectory=agent.messages,
         )
 
     return patch_text, agent.messages

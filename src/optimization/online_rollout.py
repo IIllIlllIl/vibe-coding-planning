@@ -165,9 +165,6 @@ class OnlinePCTRolloutRunner:
                             case.issue_description,
                             plan_env,
                             planning_rules=rules,
-                            failure_trajectory_path=(
-                                self.config.run_dir / "failed_plan_trajectory.json"
-                            ),
                             model_wrapper=lambda model: AuditedModel(
                                 model,
                                 self.usage,
@@ -180,14 +177,34 @@ class OnlinePCTRolloutRunner:
                             ),
                         )
                     except AgentTaskError as exc:
+                        self._write_phase_failure(
+                            "plan", reason=exc.reason, trajectory=exc.trajectory
+                        )
                         raise AgentRolloutFailure(
-                            str(exc), phase=exc.phase, reason=exc.reason
+                            str(exc),
+                            phase=exc.phase,
+                            reason=exc.reason,
+                            evidence={
+                                "plan": "",
+                                "plan_trajectory": exc.trajectory,
+                                "patch": "",
+                                "code_trajectory": [],
+                            },
                         ) from exc
                     except CommandTimeoutError as exc:
+                        self._write_phase_failure(
+                            "plan", reason="plan_command_timeout", trajectory=[]
+                        )
                         raise AgentRolloutFailure(
                             str(exc),
                             phase="plan",
                             reason="plan_command_timeout",
+                            evidence={
+                                "plan": "",
+                                "plan_trajectory": [],
+                                "patch": "",
+                                "code_trajectory": [],
+                            },
                         ) from exc
                 finally:
                     self._stop_environment(plan_env)
@@ -235,9 +252,6 @@ class OnlinePCTRolloutRunner:
                             plan,
                             case.issue_description,
                             code_env,
-                            failure_trajectory_path=(
-                                self.config.run_dir / "failed_code_trajectory.json"
-                            ),
                             phase_timeout_seconds=(
                                 self.config.execution.code_phase_timeout_seconds
                                 or None
@@ -254,14 +268,34 @@ class OnlinePCTRolloutRunner:
                             ),
                         )
                     except AgentTaskError as exc:
+                        self._write_phase_failure(
+                            "code", reason=exc.reason, trajectory=exc.trajectory
+                        )
                         raise AgentRolloutFailure(
-                            str(exc), phase=exc.phase, reason=exc.reason
+                            str(exc),
+                            phase=exc.phase,
+                            reason=exc.reason,
+                            evidence={
+                                "plan": plan,
+                                "plan_trajectory": plan_trajectory,
+                                "patch": "",
+                                "code_trajectory": exc.trajectory,
+                            },
                         ) from exc
                     except CommandTimeoutError as exc:
+                        self._write_phase_failure(
+                            "code", reason="code_command_timeout", trajectory=[]
+                        )
                         raise AgentRolloutFailure(
                             str(exc),
                             phase="code",
                             reason="code_command_timeout",
+                            evidence={
+                                "plan": plan,
+                                "plan_trajectory": plan_trajectory,
+                                "patch": "",
+                                "code_trajectory": [],
+                            },
                         ) from exc
                 finally:
                     try:
@@ -340,6 +374,7 @@ class OnlinePCTRolloutRunner:
 
         resolved = bool(evaluator_result.get("resolved", False))
         reflection_review = None
+        reviewer_trajectory: list[dict[str, Any]] = []
         if capture_traces:
             reviewer_checkpoint = self._read_checkpoint("reflection_reviewer")
             if reviewer_checkpoint is None:
@@ -369,10 +404,6 @@ class OnlinePCTRolloutRunner:
                             "rollout_summary": {
                                 "resolved": resolved,
                                 "score": float(resolved),
-                                "attribution_hint": {
-                                    "candidate_rules_visible_to_plan_agent": True,
-                                    "candidate_rules_visible_to_code_agent": False,
-                                },
                             },
                         },
                         phase_root=phase_root,
@@ -388,6 +419,9 @@ class OnlinePCTRolloutRunner:
             else:
                 reflection_review = dict(
                     reviewer_checkpoint["reflection_review"]
+                )
+                reviewer_trajectory = list(
+                    reviewer_checkpoint.get("reflection_reviewer_trajectory", [])
                 )
                 self._record_checkpoint_resumed(
                     "reflection_reviewer", case, candidate_sha256
@@ -412,11 +446,7 @@ class OnlinePCTRolloutRunner:
             code_trajectory=tuple(code_trajectory),
             evaluator_result=evaluator_result,
             reflection_review=reflection_review,
-            attribution_hint={
-                "candidate_rules_visible_to_plan_agent": True,
-                "candidate_rules_visible_to_code_agent": False,
-            },
-            evaluator_resolved=resolved,
+            reflection_reviewer_trajectory=tuple(reviewer_trajectory),
         )
 
     def _checkpoint_path(self, phase: str) -> Path | None:
@@ -455,6 +485,37 @@ class OnlinePCTRolloutRunner:
                     "checkpoint_identity": self.checkpoint_identity,
                     "phase": phase,
                     "payload": payload,
+                },
+                indent=2,
+                ensure_ascii=False,
+                sort_keys=True,
+                default=str,
+            )
+            + "\n",
+            encoding="utf-8",
+        )
+        temporary.replace(path)
+
+    def _write_phase_failure(
+        self,
+        phase: str,
+        *,
+        reason: str,
+        trajectory: list[dict[str, Any]],
+    ) -> None:
+        if self.checkpoint_dir is None:
+            return
+        path = self.checkpoint_dir / "failures" / f"{phase}.json"
+        path.parent.mkdir(parents=True, exist_ok=True)
+        temporary = path.with_suffix(".json.tmp")
+        temporary.write_text(
+            json.dumps(
+                {
+                    "schema_version": 1,
+                    "checkpoint_identity": self.checkpoint_identity,
+                    "phase": phase,
+                    "reason": reason,
+                    "trajectory": trajectory,
                 },
                 indent=2,
                 ensure_ascii=False,

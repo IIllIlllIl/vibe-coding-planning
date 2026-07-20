@@ -76,7 +76,7 @@ authority for whether the metric call affected optimization.
 | Batch submission and active jobs | `batch_state.json` plus Slurm |
 | Evaluation identity | batch manifest and evaluation fingerprint |
 | Phase completion | identity-bound atomic phase checkpoints |
-| Instance review | worker `reflection_reviewer.json` checkpoint and trajectory |
+| Instance review | worker `reflection_reviewer.json` checkpoint, concise report, trajectory, and immutable raw rollout evidence |
 | Uncommitted Reflection output | `reflection_proposals/<fingerprint>.json` |
 | Supervisor progress | remote durable state; local supervisor JSON is a cache |
 | Current output scope | `output/README.md` and `output/catalog.json` |
@@ -94,9 +94,10 @@ The instance reviewer runs inside the matching disposable benchmark SIF. It may
 execute focused tests, write diagnostic scripts/tests, temporarily apply the
 generated patch, or make a counterfactual edit. `/evidence` remains read-only;
 repository edits live only in the writable SIF overlay and are discarded after
-the structured review and trajectory are persisted. Review records label every
-observation as `base`, `generated_patch`, or `counterfactual` so synthesis does
-not mix repository states.
+the concise review and trajectory are persisted. The Host does not classify
+repository states or decide whether an Agent observation is semantically true.
+Synthesis may read the raw Reviewer trajectory and rollout evidence whenever a
+concise report is ambiguous or contradictory.
 
 Code may create or modify diagnostic tests inside its workspace. Code itself
 chooses the staged submission returned by mini-swe-agent; the Host does not
@@ -116,6 +117,9 @@ pre-evaluation semantic gate.
 - Slurm-confirmed worker timeout: selectively retried, then scored unresolved
   with timeout attribution only after the shared attempt limit;
   other hard kills remain operational failures.
+- Exhausted Agent failures use one shared outcome constructor. The execution
+  backend supplies raw phase/reason/evidence; successful identity-bound Plan
+  and Code checkpoints take precedence over partial copies from a later retry.
 - Reviewer timeout after a durable evaluator checkpoint never changes the
   evaluator score; it produces an explicit uncertain/missing review instead.
 - Reflection failure before `PROPOSAL_READY`: retry in a later controller.

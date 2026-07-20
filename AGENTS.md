@@ -23,6 +23,17 @@ historical and non-authoritative; use them only for an explicitly requested
 audit, comparison, or reproduction. Reusable historical lessons are already
 extracted under `docs/knowledge/`.
 
+This is a scientific experiment repository, not a production service. Do not
+optimize for a perfect industrial-grade implementation. Prefer the smallest
+implementation that makes the experiment understandable, reproducible, and
+trustworthy. Explicit, understandable risks and an explainable experimental
+flow are more valuable than complex defensive mechanisms. Before adding a
+schema, state machine, validator, audit layer, retry, abstraction, or edge-case
+handler, identify the concrete experimental need and weigh its added failure
+modes and interpretive cost. Preserve raw evidence where practical, document
+known limitations, and avoid speculative completeness or redundant authority
+layers when a simpler experimental contract is sufficient.
+
 ## 2. Python environment — always use the `mini-swe` conda env
 
 Python 3.12.13. The project depends on `mini-swe-agent==1.17.5`, which is only installed in this env. Running outside it fails with `ModuleNotFoundError: No module named 'minisweagent'`.
