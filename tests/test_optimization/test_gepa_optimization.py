@@ -12,7 +12,7 @@ from pathlib import Path
 
 import pytest
 import yaml
-from gepa.core.state import GEPAState, ValsetEvaluation
+from gepa.core.state import EvaluationCache, GEPAState, ValsetEvaluation
 
 from src.config import DockerConfig
 from src.exceptions import (
@@ -24,7 +24,7 @@ from src.exceptions import (
 )
 from src.optimization.audit import AuditedModel, JsonlLogger, text_sha256
 from src.optimization.adapter import CheckerGEPAAdapter
-from src.optimization.checker import DockerChecker, _json_object, validate_checker_output
+from src.optimization.checker import DockerChecker, validate_checker_output
 from src.optimization.config import (
     ContainerConfig,
     ModelConfig,
@@ -32,7 +32,7 @@ from src.optimization.config import (
     SearchConfig,
     load_optimization_config,
 )
-from src.optimization.dataset import load_snapshot
+from src.optimization.dataset import GEPACaseLoader, load_snapshot
 from src.optimization.metrics import classification_metrics
 from src.optimization.models import CheckerOutput, GEPACase, RepositoryRef
 from src.optimization.online_adapter import OnlinePlanningGEPAAdapter
@@ -72,6 +72,7 @@ from src.optimization.online_runner import (
 from src.optimization.reflection import (
     EvidenceBundleWriter,
     MiniSWEReflectionProposer,
+    save_reflection_trajectory,
 )
 from src.optimization.report import write_cost_report
 from src.optimization.runner import OptimizationRunFailed, run_optimization
@@ -236,6 +237,50 @@ def test_snapshot_enforces_checker_asi_boundary(tmp_path):
     (snapshot / "train.jsonl").write_text(json.dumps(bad) + "\n")
     with pytest.raises(ValueError, match="checker_input boundary"):
         load_snapshot(snapshot)
+
+
+def test_offline_gepa_loader_prevents_train_validation_cache_aliasing(tmp_path):
+    train, validation = load_snapshot(_snapshot(tmp_path / "snapshot"))
+    train_loader = GEPACaseLoader(train)
+    validation_loader = GEPACaseLoader(validation)
+
+    assert set(train_loader.all_ids()).isdisjoint(validation_loader.all_ids())
+    assert train_loader.fetch(["repo__train1"]) == [train[0]]
+    assert validation_loader.fetch(["repo__val1"]) == [validation[0]]
+
+    cache = EvaluationCache()
+    candidate = {"rules": "candidate"}
+    cache.put(candidate, "repo__train1", {"instance_id": "repo__train1"}, 1.0)
+
+    assert cache.get(candidate, "repo__val1") is None
+
+
+def test_reflection_trajectory_records_failed_agent_run_and_redacts_secrets(
+    tmp_path, monkeypatch
+):
+    monkeypatch.setenv("TEST_API_KEY", "private-reflection-value")
+    path = save_reflection_trajectory(
+        tmp_path,
+        [
+            {
+                "role": "assistant",
+                "content": "failure private-reflection-value",
+                "authorization": "private-reflection-value",
+            }
+        ],
+        mode="checker",
+        candidate_sha256="candidate-hash",
+        instance_ids=["repo__train1"],
+        status="failed",
+        error=TimeoutError("timeout private-reflection-value"),
+    )
+
+    trajectory = json.loads(path.read_text())
+    assert trajectory["status"] == "failed"
+    assert trajectory["error_type"] == "TimeoutError"
+    assert trajectory["instance_ids"] == ["repo__train1"]
+    assert trajectory["messages"][0]["authorization"] == "[REDACTED]"
+    assert "private-reflection-value" not in path.read_text()
 
 
 def test_online_snapshot_drops_offline_plan_label_and_asi(tmp_path):
@@ -1411,51 +1456,47 @@ def test_checker_schema_is_strict():
         )
 
 
-def test_checker_json_fallback_matches_checker_only_behavior():
-    value = _json_object(
-        'analysis\n```json\n{"predicted_resolved": false, '
-        '"decision_reason": "Windows path C:\\path", '
-        '"repository_evidence": []}\n```'
-    )
-    assert value["predicted_resolved"] is False
-    assert value["decision_reason"] == "Windows path C:\\path"
-
-
-def test_adapter_never_counts_checker_errors_as_correct(tmp_path):
+def test_adapter_treats_checker_errors_only_as_operational_failures(
+    tmp_path, monkeypatch
+):
     train, _ = load_snapshot(_snapshot(tmp_path / "snapshot"))
+    monkeypatch.setenv("TEST_API_KEY", "private-checker-value")
 
     def broken_checker(case, rules):
-        raise RuntimeError("checker failed")
+        error = RuntimeError("checker failed private-checker-value")
+        error.checker_trajectory = (  # type: ignore[attr-defined]
+            {
+                "role": "assistant",
+                "content": "observed private-checker-value",
+            },
+        )
+        raise error
 
-    batch = CheckerGEPAAdapter(broken_checker).evaluate(
-        [train[0]],
-        {"rules": "rules"},
-        capture_traces=True,
-    )
-    assert batch.scores == [0.0]
-    assert batch.trajectories[0]["expected_resolved"] is True
-    empty = CheckerGEPAAdapter(broken_checker).evaluate(
-        [train[0]],
-        {"rules": ""},
-    )
-    assert empty.scores == [0.0]
-    run_dir = tmp_path / "adapter-run"
-    CheckerGEPAAdapter(broken_checker, run_dir=run_dir).evaluate(
-        [train[0]],
-        {"rules": ""},
-    )
-    error = json.loads((run_dir / "errors.jsonl").read_text())
-    assert error["event"] == "checker_evaluation_failed"
-    assert error["instance_id"] == train[0].instance_id
     with pytest.raises(RuntimeError, match="Checker operational failure"):
-        CheckerGEPAAdapter(
-            broken_checker,
-            run_dir=tmp_path / "strict-adapter-run",
-            fail_on_checker_error=True,
-        ).evaluate(
+        CheckerGEPAAdapter(broken_checker).evaluate(
+            [train[0]],
+            {"rules": "rules"},
+            capture_traces=True,
+        )
+    run_dir = tmp_path / "adapter-run"
+    with pytest.raises(RuntimeError, match="Checker operational failure"):
+        CheckerGEPAAdapter(broken_checker, run_dir=run_dir).evaluate(
             [train[0]],
             {"rules": ""},
         )
+    error = json.loads((run_dir / "errors.jsonl").read_text())
+    assert error["event"] == "checker_evaluation_failed"
+    assert error["instance_id"] == train[0].instance_id
+    assert not (run_dir / "evaluations.jsonl").exists()
+    trajectory_path = next(run_dir.glob("checker_trajectories/*/*/*.json"))
+    trajectory = json.loads(trajectory_path.read_text())
+    assert trajectory["status"] == "failed"
+    assert trajectory["attempt"] == 1
+    assert trajectory["instance_id"] == train[0].instance_id
+    assert trajectory["candidate_sha256"] == text_sha256("")
+    assert "resolved" not in trajectory
+    assert "asi" not in trajectory
+    assert "private-checker-value" not in trajectory_path.read_text()
     with pytest.raises(ValueError, match="only the string component rules"):
         CheckerGEPAAdapter(broken_checker).evaluate(
             [train[0]],
@@ -1471,6 +1512,12 @@ def test_adapter_parallel_preserves_batch_order(tmp_path):
             predicted_resolved=case.instance_id == "repo__train2",
             decision_reason=f"checked {case.instance_id}",
             repository_evidence=(),
+            trajectory=(
+                {
+                    "role": "assistant",
+                    "content": f"inspected {case.instance_id}",
+                },
+            ),
         )
 
     result = CheckerGEPAAdapter(
@@ -1488,6 +1535,19 @@ def test_adapter_parallel_preserves_batch_order(tmp_path):
         "repo__train1",
     ]
     assert result.scores == [1.0, 0.0]
+    trajectory_paths = sorted(
+        (tmp_path / "parallel-adapter").glob(
+            "checker_trajectories/*/*/*.json"
+        )
+    )
+    assert len(trajectory_paths) == 2
+    trajectories = [json.loads(path.read_text()) for path in trajectory_paths]
+    assert {item["instance_id"] for item in trajectories} == {
+        "repo__train1",
+        "repo__train2",
+    }
+    assert all(item["status"] == "completed" for item in trajectories)
+    assert all(item["messages"] for item in trajectories)
     audit = [
         json.loads(line)
         for line in (
@@ -1518,7 +1578,6 @@ def test_adapter_retries_transient_checker_failure(tmp_path):
     result = CheckerGEPAAdapter(
         flaky_checker,
         run_dir=run_dir,
-        fail_on_checker_error=True,
         checker_attempts=2,
     ).evaluate([train[0]], {"rules": "rules"})
 
@@ -3690,7 +3749,6 @@ def test_adapter_does_not_call_checker_when_prepare_fails(tmp_path):
         CheckerGEPAAdapter(
             Checker(),
             run_dir=run_dir,
-            fail_on_checker_error=True,
         ).evaluate([train[0]], {"rules": "rules"})
 
     assert calls == [f"prepare:{train[0].instance_id}"]
@@ -3712,7 +3770,6 @@ def test_adapter_exhausted_checker_retries_remain_operational_failure(tmp_path):
         CheckerGEPAAdapter(
             broken_checker,
             run_dir=run_dir,
-            fail_on_checker_error=True,
             checker_attempts=2,
         ).evaluate([train[0]], {"rules": "rules"})
 
@@ -3747,10 +3804,11 @@ def test_adapter_records_checker_subprocess_diagnostics(tmp_path):
         )
 
     run_dir = tmp_path / "diagnostic-adapter"
-    CheckerGEPAAdapter(
-        broken_checker,
-        run_dir=run_dir,
-    ).evaluate([train[0]], {"rules": "rules"})
+    with pytest.raises(RuntimeError, match="Checker operational failure"):
+        CheckerGEPAAdapter(
+            broken_checker,
+            run_dir=run_dir,
+        ).evaluate([train[0]], {"rules": "rules"})
 
     error = json.loads((run_dir / "errors.jsonl").read_text())
     assert error["error_type"] == "CalledProcessError"
@@ -3759,7 +3817,7 @@ def test_adapter_records_checker_subprocess_diagnostics(tmp_path):
     assert error["stderr"] == "docker stderr"
 
 
-def test_adapter_parallel_strict_mode_stops_submitting_after_failure(tmp_path):
+def test_adapter_parallel_stops_submitting_after_failure(tmp_path):
     train, _ = load_snapshot(_snapshot(tmp_path / "snapshot"))
     calls: list[str] = []
 
@@ -3786,7 +3844,6 @@ def test_adapter_parallel_strict_mode_stops_submitting_after_failure(tmp_path):
             checker,
             parallel=2,
             run_dir=run_dir,
-            fail_on_checker_error=True,
         ).evaluate(batch, {"rules": "rules"})
 
     assert "repo__train3" not in calls
@@ -3913,8 +3970,7 @@ def test_reflection_proposer_supplies_required_agent_task(
             calls["environment_kwargs"] = kwargs
 
         def execute(self, command):
-            assert command == "cat /tmp/candidate_rules.txt"
-            return {"returncode": 0, "output": "complete improved rules"}
+            raise AssertionError("Offline Reflection must use final submission")
 
         def cleanup(self):
             calls["cleaned_up"] = True
@@ -3925,7 +3981,7 @@ def test_reflection_proposer_supplies_required_agent_task(
         def run(self, task, **kwargs):
             calls["task"] = task
             calls["run_kwargs"] = kwargs
-            return "Submitted", "done"
+            return "Submitted", "complete improved rules"
 
     class FakeCapacityWindow:
         def lease(self):
@@ -3972,7 +4028,7 @@ def test_reflection_proposer_supplies_required_agent_task(
         if record["event"] == "reflection_agent_completed"
     )
     assert completed["exit_status"] == "Submitted"
-    assert completed["candidate_file_found"] is True
+    assert completed["submission_chars"] == len("complete improved rules")
     trajectory_path = next(
         config.run_dir.glob("reflection_inputs/*/reflection_trajectory.json")
     )
@@ -3983,6 +4039,19 @@ def test_reflection_proposer_supplies_required_agent_task(
         {"role": "assistant", "content": "done"}
     ]
     assert completed["trajectory_path"] == str(trajectory_path)
+
+    with pytest.raises(ValueError, match="identical to its parent"):
+        proposer(
+            {"rules": "complete improved rules"},
+            {"rules": [record]},
+            ["rules"],
+        )
+    failed_trajectory_path = sorted(
+        config.run_dir.glob("reflection_inputs/*/reflection_trajectory.json")
+    )[-1]
+    failed_trajectory = json.loads(failed_trajectory_path.read_text())
+    assert failed_trajectory["status"] == "failed"
+    assert failed_trajectory["error_type"] == "ValueError"
 
 
 def test_metrics_include_required_reporting_values():
@@ -4151,6 +4220,11 @@ def test_native_gepa_end_to_end_without_llm(tmp_path):
 
     result = run_optimization(config, checker=checker, proposer=proposer)
     assert result.best_candidate == {"rules": "improved rules"}
+    state = GEPAState.load(str(config.run_dir))
+    assert set(state.prog_candidate_val_subscores[0]) == {
+        "repo__val1",
+        "repo__val2",
+    }
     assert (config.run_dir / "gepa_state.bin").is_file()
     assert (config.run_dir / "candidates.json").is_file()
     assert (config.run_dir / "run_log.json").is_file()
@@ -4184,6 +4258,46 @@ def test_native_gepa_end_to_end_without_llm(tmp_path):
         (config.run_dir / "cost_report.json").read_text()
     )
     assert cost_report["full_run_linear_estimate"]["target_metric_calls"] == 1000
+
+
+def test_offline_max_iterations_stops_after_exact_proposal_count(tmp_path):
+    config = _config(tmp_path)
+    config = replace(
+        config,
+        search=replace(
+            config.search,
+            max_metric_calls=100,
+            max_iterations=3,
+            min_proposals=0,
+        ),
+    )
+
+    def checker(case, rules):
+        return CheckerOutput(
+            predicted_resolved=case.instance_id in rules,
+            decision_reason="deterministic iteration-limit checker",
+            repository_evidence=(),
+        )
+
+    class Proposer:
+        successful_proposals = 0
+        failures = []
+
+        def __call__(self, candidate, reflective_dataset, components):
+            self.successful_proposals += 1
+            instance_id = reflective_dataset["rules"][0]["instance_id"]
+            return {"rules": f"{candidate['rules']} {instance_id}".strip()}
+
+    run_optimization(config, checker=checker, proposer=Proposer())
+
+    state = GEPAState.load(str(config.run_dir))
+    assert state.i == 2
+    audit = [
+        json.loads(line)
+        for line in (config.run_dir / "audit_events.jsonl").read_text().splitlines()
+    ]
+    starts = [item for item in audit if item["event"] == "gepa_iteration_started"]
+    assert [item["iteration"] for item in starts] == [1, 2, 3]
 
 
 def test_online_gepa_end_to_end_without_llm(tmp_path):
@@ -4393,7 +4507,7 @@ def test_resume_rejects_semantic_changes_and_budget_decrease(tmp_path):
     changed_prompt = replace(config, checker_prompt="different checker")
     with pytest.raises(
         IncompatibleOptimizationRun,
-        match="configuration differs",
+        match="configuration or source differs",
     ):
         run_optimization(
             changed_prompt,
@@ -4416,7 +4530,7 @@ def test_resume_rejects_semantic_changes_and_budget_decrease(tmp_path):
         )
 
 
-def test_resume_allows_infrastructure_only_source_changes(tmp_path):
+def test_resume_rejects_infrastructure_source_changes(tmp_path):
     config = _config(tmp_path)
     config = replace(
         config,
@@ -4451,17 +4565,14 @@ def test_resume_allows_infrastructure_only_source_changes(tmp_path):
         config,
         search=replace(config.search, max_metric_calls=6),
     )
-    run_optimization(resumed_config, checker=checker, proposer=Proposer())
-
-    updated_manifest = json.loads(manifest_path.read_text())
-    assert updated_manifest["latest_max_metric_calls"] == 6
-    assert updated_manifest["compatible_resume_events"]
-    event = updated_manifest["compatible_resume_events"][-1]
-    assert event["previous_semantic_sha256"] == "previous-source-fingerprint"
-    assert "adapter.py" in event["compatible_project_files"]
+    with pytest.raises(
+        IncompatibleOptimizationRun,
+        match="configuration or source differs",
+    ):
+        run_optimization(resumed_config, checker=checker, proposer=Proposer())
 
 
-def test_resume_treats_legacy_missing_container_as_default_docker(tmp_path):
+def test_resume_rejects_legacy_manifest_missing_container_semantics(tmp_path):
     config = _config(tmp_path)
     config = replace(
         config,
@@ -4494,11 +4605,11 @@ def test_resume_treats_legacy_missing_container_as_default_docker(tmp_path):
         config,
         search=replace(config.search, max_metric_calls=6),
     )
-    run_optimization(resumed_config, checker=checker, proposer=Proposer())
-
-    updated_manifest = json.loads(manifest_path.read_text())
-    assert updated_manifest["latest_max_metric_calls"] == 6
-    assert updated_manifest["compatible_resume_events"]
+    with pytest.raises(
+        IncompatibleOptimizationRun,
+        match="configuration or source differs",
+    ):
+        run_optimization(resumed_config, checker=checker, proposer=Proposer())
 
 
 def test_resume_accumulates_reflection_outcomes_across_processes(tmp_path):
@@ -4738,7 +4849,7 @@ def test_strict_hpc_24h_config_loads(monkeypatch):
     assert "<candidate_rules>" in config.checker_instance_template
 
 
-def test_default_gepa_config_is_local_prompt_fix(monkeypatch):
+def test_default_gepa_config_is_three_iteration_smoke(monkeypatch):
     monkeypatch.setenv("DEEPSEEK_API_KEY", "secret")
     repo_root = Path(__file__).resolve().parents[2]
     config = load_optimization_config(repo_root / "configs" / "gepa_verified_rules.yaml")
@@ -4746,14 +4857,25 @@ def test_default_gepa_config_is_local_prompt_fix(monkeypatch):
     assert config.checker.model == "deepseek-v4-flash"
     assert config.reflection.model == "deepseek-v4-flash"
     assert config.container.runtime == "docker"
-    assert config.search.max_metric_calls == 3000
+    assert config.search.max_metric_calls == 410
+    assert config.search.projection_metric_calls == 410
+    assert config.search.max_iterations == 3
     assert config.search.parallel == 1
     assert config.checker.max_attempts == 5
     assert config.initial_rules_path.name == "gepa_initial_rules_gpt_seed.md"
-    assert "strict-checker-local-newprompt-3000-p1-20260702" in str(config.run_dir)
+    assert "offline-interactive-checker-3it-smoke-20260721" in str(
+        config.run_dir
+    )
+    assert "inspect and interact with the repository" in config.checker_prompt
+    assert "temporary" in config.checker_prompt
+    assert "code or test" in config.checker_prompt
+    assert "/tmp/gepa_checker_result.json" not in config.checker_prompt
+    assert "exactly one shell action" in config.checker_prompt
     assert "plan-review checklist" in config.reflection_prompt
     assert "misleading items" in config.reflection_prompt
     assert "Merge redundant or highly similar items" in config.reflection_prompt
+    assert "repository interaction" in config.reflection_prompt
+    assert "/tmp/candidate_rules.txt" not in config.reflection_prompt
 
 
 def test_docker_config_defaults_are_preserved(monkeypatch):
@@ -4838,20 +4960,18 @@ def test_checker_call_uses_apptainer_environment_when_runtime_apptainer(
         messages = [{"role": "assistant", "content": "done"}]
 
         def run(self, task, **kwargs):
-            return "Submitted", '{"predicted_resolved": true}'
+            return (
+                "Submitted",
+                '{"predicted_resolved": true, "decision_reason": "ok", '
+                '"repository_evidence": []}',
+            )
 
     class FakeEnvironment:
         def __init__(self, **kwargs):
             calls["environment_kwargs"] = kwargs
 
         def execute(self, command):
-            return {
-                "returncode": 0,
-                "output": (
-                    '{"predicted_resolved": true, "decision_reason": "ok", '
-                    '"repository_evidence": []}'
-                ),
-            }
+            raise AssertionError("Checker must parse the final submission directly")
 
         def cleanup(self):
             calls["cleaned_up"] = True
@@ -4929,8 +5049,7 @@ def test_reflection_proposer_uses_apptainer_when_runtime_apptainer(
             calls["environment_kwargs"] = kwargs
 
         def execute(self, command):
-            assert command == "cat /tmp/candidate_rules.txt"
-            return {"returncode": 0, "output": "apptainer improved rules"}
+            raise AssertionError("Offline Reflection must use final submission")
 
         def cleanup(self):
             calls["cleaned_up"] = True
@@ -4942,7 +5061,7 @@ def test_reflection_proposer_uses_apptainer_when_runtime_apptainer(
         messages = [{"role": "assistant", "content": "done"}]
 
         def run(self, task, **kwargs):
-            return "Submitted", "done"
+            return "Submitted", "apptainer improved rules"
 
     monkeypatch.setattr(
         "src.optimization.reflection.import_minisweagent",

@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import os
 import threading
 import time
 from datetime import datetime, timezone
@@ -12,10 +13,52 @@ from typing import Any
 
 _PATH_LOCKS: dict[Path, threading.Lock] = {}
 _PATH_LOCKS_GUARD = threading.Lock()
+_SENSITIVE_KEY_PARTS = ("api_key", "authorization", "password", "secret", "token")
 
 
 def text_sha256(text: str) -> str:
     return hashlib.sha256(text.encode("utf-8")).hexdigest()
+
+
+def redact_sensitive(value: Any) -> Any:
+    """Return a JSON-safe copy with credential-shaped values removed."""
+    secrets = tuple(
+        sorted(
+            {
+                item
+                for name, item in os.environ.items()
+                if item
+                and any(part in name.lower() for part in _SENSITIVE_KEY_PARTS)
+            },
+            key=len,
+            reverse=True,
+        )
+    )
+
+    def redact(item: Any) -> Any:
+        if isinstance(item, dict):
+            result = {}
+            for key, child in item.items():
+                key_text = str(key)
+                if any(
+                    part in key_text.lower() for part in _SENSITIVE_KEY_PARTS
+                ):
+                    result[key_text] = "[REDACTED]"
+                else:
+                    result[key_text] = redact(child)
+            return result
+        if isinstance(item, (list, tuple)):
+            return [redact(child) for child in item]
+        if isinstance(item, str):
+            result = item
+            for secret in secrets:
+                result = result.replace(secret, "[REDACTED]")
+            return result
+        if item is None or isinstance(item, (bool, int, float)):
+            return item
+        return str(item)
+
+    return redact(value)
 
 
 class JsonlLogger:

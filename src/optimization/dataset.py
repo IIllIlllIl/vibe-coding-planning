@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
-from typing import Any
+from typing import Any, Sequence
 
 from src.optimization.models import GEPACase, RepositoryRef
 
@@ -15,6 +15,31 @@ ASI_KEYS = {
     "generated_patch",
     "evaluator_result",
 }
+
+
+class GEPACaseLoader:
+    """In-memory GEPA loader keyed by stable benchmark instance IDs.
+
+    GEPA shares one evaluation cache between its train and validation loaders.
+    Using list offsets as IDs therefore aliases train item 0 with validation
+    item 0.  Stable, split-disjoint instance IDs keep those cache entries
+    distinct and make persisted GEPA state auditable without a positional join.
+    """
+
+    def __init__(self, cases: Sequence[GEPACase]) -> None:
+        self._cases_by_id = {case.instance_id: case for case in cases}
+        if len(self._cases_by_id) != len(cases):
+            raise ValueError("GEPA case instance IDs must be unique")
+        self._ids = [case.instance_id for case in cases]
+
+    def all_ids(self) -> list[str]:
+        return list(self._ids)
+
+    def fetch(self, ids: Sequence[str]) -> list[GEPACase]:
+        return [self._cases_by_id[instance_id] for instance_id in ids]
+
+    def __len__(self) -> int:
+        return len(self._ids)
 
 
 def _read_jsonl(path: Path) -> list[dict[str, Any]]:

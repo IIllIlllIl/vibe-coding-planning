@@ -24,21 +24,6 @@ from src.optimization.models import GEPACase
 
 MANIFEST_VERSION = 1
 RESUME_STATE_VERSION = 1
-INFRASTRUCTURE_COMPATIBLE_PROJECT_FILES = {
-    "adapter.py",
-    "callbacks.py",
-    "checker.py",
-    "config.py",
-    "reflection.py",
-    "resume.py",
-    "runner.py",
-}
-DEFAULT_DOCKER_CONTAINER_SEMANTIC = {
-    "runtime": "docker",
-    "module": "tools/Apptainer",
-    "sif_cache_dir": "/tmp/vibe-sif-cache",
-    "writable_tmpfs": True,
-}
 
 
 class IncompatibleOptimizationRun(ValueError):
@@ -127,31 +112,12 @@ def _semantic_config(
             "candidate_selection_strategy": "pareto",
             "frontier_type": "instance",
             "batch_sampler": "epoch_shuffled",
+            "data_id": "instance_id",
             "cache_evaluation": True,
             "track_best_outputs": True,
             "candidate_components": ["rules"],
         },
     }
-
-
-def _without_compatible_infrastructure_source(
-    semantic: dict[str, Any],
-) -> dict[str, Any]:
-    value = json.loads(json.dumps(semantic, ensure_ascii=False))
-    value.setdefault("container", dict(DEFAULT_DOCKER_CONTAINER_SEMANTIC))
-    project_source = value["source"]["project_optimization"]
-    for name in INFRASTRUCTURE_COMPATIBLE_PROJECT_FILES:
-        project_source.pop(name, None)
-    return value
-
-
-def _is_infrastructure_compatible_change(
-    previous: dict[str, Any],
-    current: dict[str, Any],
-) -> bool:
-    return _without_compatible_infrastructure_source(
-        previous
-    ) == _without_compatible_infrastructure_source(current)
 
 
 def prepare_run_manifest(
@@ -195,30 +161,10 @@ def prepare_run_manifest(
     if manifest.get("version") != MANIFEST_VERSION:
         raise IncompatibleOptimizationRun("unsupported run manifest version")
     if manifest.get("semantic_sha256") != semantic_sha256:
-        previous_semantic = manifest.get("semantic_config")
-        if not isinstance(previous_semantic, dict) or not (
-            resuming
-            and _is_infrastructure_compatible_change(
-                previous_semantic,
-                semantic,
-            )
-        ):
-            raise IncompatibleOptimizationRun(
-                "run configuration differs from the existing logical experiment; "
-                "use a new run_dir for changed data, prompts, models, limits, or "
-                "search semantics"
-            )
-        manifest.setdefault("compatible_resume_events", []).append(
-            {
-                "reason": "project infrastructure source changed without "
-                "changing data, prompts, models, vendored GEPA, or search "
-                "semantics",
-                "previous_semantic_sha256": manifest.get("semantic_sha256"),
-                "current_semantic_sha256": semantic_sha256,
-                "compatible_project_files": sorted(
-                    INFRASTRUCTURE_COMPATIBLE_PROJECT_FILES
-                ),
-            }
+        raise IncompatibleOptimizationRun(
+            "run configuration or source differs from the existing logical "
+            "experiment; use a new run_dir instead of resuming changed code, "
+            "data, prompts, models, or search semantics"
         )
     previous_budget = int(manifest["latest_max_metric_calls"])
     if requested_budget < previous_budget:
@@ -291,7 +237,7 @@ class ReproducibleSearchState:
         self.sampler.shuffled_ids = list(sampler["shuffled_ids"])
         self.sampler.epoch = int(sampler["epoch"])
         self.sampler.id_freqs = Counter(
-            {int(key): int(count) for key, count in sampler["id_freqs"].items()}
+            {str(key): int(count) for key, count in sampler["id_freqs"].items()}
         )
         self.sampler.last_trainset_size = int(sampler["last_trainset_size"])
         self.successful_proposals = int(value["successful_proposals"])

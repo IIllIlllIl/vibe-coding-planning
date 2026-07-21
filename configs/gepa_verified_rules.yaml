@@ -1,7 +1,7 @@
 paths:
   dataset_snapshot: output/SWE-bench_Verified/verified-round1-gepa-datasets/20260614_482_fdc056ae85df
   initial_rules: configs/gepa_initial_rules_gpt_seed.md
-  run_dir: output/SWE-bench_Verified/gepa-rules/strict-checker-local-newprompt-3000-p1-20260702
+  run_dir: output/SWE-bench_Verified/gepa-rules/offline-interactive-checker-3it-smoke-20260721
 
 checker:
   model: deepseek-v4-flash
@@ -25,11 +25,13 @@ reflection:
   timeout: 1800
 
 search:
-  # Local prompt-fix validation run. The user may stop it manually; GEPA checks
-  # max_metric_calls only at iteration boundaries, so this is a soft upper
-  # bound chosen to avoid under-running the comparison.
-  max_metric_calls: 3000
-  projection_metric_calls: 3000
+  # Full 384/98 snapshot, with exactly three GEPA proposal iterations after
+  # seed validation. 410 metric calls is the worst case when all three
+  # proposals pass the minibatch gate and receive full 98-case validation:
+  # 98 + 3 * (3 parent + 3 proposal + 98 validation).
+  max_iterations: 3
+  max_metric_calls: 410
+  projection_metric_calls: 410
   reflection_minibatch_size: 3
   # Local Docker image acquisition is the bottleneck and Docker Desktop's
   # content store has been unstable under concurrent GEPA checker workers.
@@ -37,7 +39,7 @@ search:
   parallel: 1
   seed: 42
   skip_perfect_score: false
-  min_proposals: 2
+  min_proposals: 1
 
 docker:
   workdir: /testbed
@@ -57,8 +59,16 @@ prompts:
 
     If the candidate rules do not clearly support predicting resolved, predict unresolved.
 
-    Write exactly this JSON schema to /tmp/gepa_checker_result.json using:
-    cat <<'EOF' > /tmp/gepa_checker_result.json
+    You may inspect and interact with the repository to apply the candidate
+    rules. You may run commands and tests and make temporary code or test
+    changes when useful. Treat any such changes only as diagnostic evidence.
+
+    Every response must contain exactly one shell action in one bash code block.
+    When you have enough evidence, submit the result with one final action in
+    this form:
+    ```bash
+    cat <<'EOF'
+    COMPLETE_TASK_AND_SUBMIT_FINAL_OUTPUT
     {
       "predicted_resolved": false,
       "decision_reason": "...",
@@ -67,9 +77,7 @@ prompts:
       ]
     }
     EOF
-    After the file is written, your NEXT response must be exactly one bash
-    block containing:
-    echo COMPLETE_TASK_AND_SUBMIT_FINAL_OUTPUT && cat /tmp/gepa_checker_result.json
+    ```
     Do not run any other command after submitting.
   checker_instance: |
     <issue>
@@ -88,13 +96,17 @@ prompts:
 
     The Checker receives an issue, a plan, candidate rules, and the repository
     at the base commit. It predicts resolved only when the plan and repository
-    evidence satisfy the candidate rules. Otherwise it predicts unresolved.
+    evidence satisfy the candidate rules. It may interact with the repository,
+    including running tests and making temporary diagnostic changes. Otherwise
+    it predicts unresolved.
 
     At deployment time the Checker can use only:
     - the issue description;
     - the plan;
     - the candidate rules;
     - the repository at the specified base commit.
+
+    It may generate new diagnostic evidence by interacting with that repository.
 
     The Checker outputs predicted_resolved plus its reasoning and repository
     evidence. The optimization score is 1 when predicted_resolved equals the
@@ -117,14 +129,14 @@ prompts:
     ## Deployment boundary
 
     Every checklist item must be applicable using only the issue, plan,
-    candidate rules, and base-commit repository.
+    candidate rules, and interaction with the base-commit repository.
 
     Checklist items must never require or assume access to:
     - the resolved label or correctness score;
     - Plan or Code Agent trajectories;
     - the generated patch;
     - evaluator or test results;
-    - execution output or an expected output.
+    - historical execution output, evaluator output, or an expected output.
 
     Do not memorize instance IDs, exact patches, labels, or task-specific
     answers.
@@ -133,7 +145,7 @@ prompts:
 
     Maintain the candidate rules as a concise plan-review checklist. Each item
     should describe an observable criterion that a human reviewer and the
-    Checker can apply using only the issue, plan, and repository.
+    Checker can apply using the issue, plan, and repository interaction.
 
     Review all cases in the current minibatch, including correct and incorrect
     predictions. Consider false positives and false negatives separately.
@@ -152,9 +164,15 @@ prompts:
     Do not output a Git patch, shell command, analysis narrative, or a solution
     for a single task.
 
-    Write only the complete revised checklist to
-    /tmp/candidate_rules.txt. Then submit with:
-    echo COMPLETE_TASK_AND_SUBMIT_FINAL_OUTPUT && cat /tmp/candidate_rules.txt
+    Every response must contain exactly one shell action in one bash code block.
+    Submit the complete revised checklist directly, without a separate result
+    file or analysis text:
+    ```bash
+    cat <<'EOF'
+    COMPLETE_TASK_AND_SUBMIT_FINAL_OUTPUT
+    <complete revised checklist>
+    EOF
+    ```
   reflection_instance: |
     <current_rules>
     {{current_rules}}
@@ -171,4 +189,4 @@ prompts:
     4. Use the Code trajectory, generated patch, and evaluator result only to
        explain why the prediction was correct or incorrect.
     5. Convert those findings into checklist items that the Checker can
-       apply before code execution, using only its deployment-visible inputs.
+       apply using only its deployment-visible inputs and repository interaction.

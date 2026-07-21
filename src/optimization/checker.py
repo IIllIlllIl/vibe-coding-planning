@@ -3,14 +3,12 @@
 from __future__ import annotations
 
 import json
-import re
 import threading
 from typing import Any, Protocol
 
 from src.agents._deps import (
     _infer_litellm_prefix,
     build_default_agent,
-    extract_last_assistant,
     import_minisweagent,
 )
 from src.environment.apptainer_env import (
@@ -34,41 +32,6 @@ from src.optimization.models import (
 
 class CheckerRunner(Protocol):
     def __call__(self, case: GEPACase, rules: str) -> CheckerOutput: ...
-
-
-def _loads_json(text: str) -> dict[str, Any]:
-    try:
-        return json.loads(text)
-    except json.JSONDecodeError as exc:
-        if "Invalid \\escape" not in str(exc):
-            raise
-        repaired = re.sub(r'\\(?!["\\/bfnrtu])', r"\\\\", text)
-        if repaired == text:
-            raise
-        return json.loads(repaired)
-
-
-def _json_object(text: str) -> dict[str, Any]:
-    json_fence = re.search(r"```json\s*(.*?)\s*```", text, re.DOTALL)
-    if json_fence:
-        try:
-            return _loads_json(json_fence.group(1))
-        except json.JSONDecodeError:
-            pass
-    start = json_fence.end() if json_fence else 0
-    fence = re.search(r"```(?!\w)\s*(.+?)\s*```", text[start:], re.DOTALL)
-    if fence:
-        try:
-            return _loads_json(fence.group(1))
-        except json.JSONDecodeError:
-            pass
-    match = re.search(r"\{.*\}", text, re.DOTALL)
-    if not match:
-        raise ValueError("checker did not produce a JSON object")
-    try:
-        return _loads_json(match.group(0))
-    except json.JSONDecodeError as exc:
-        raise ValueError(f"checker produced invalid JSON: {exc}") from exc
 
 
 def validate_checker_output(value: dict[str, Any]) -> CheckerOutput:
@@ -200,6 +163,7 @@ class DockerChecker:
             asi_available_to_checker=False,
         )
         env: ApptainerEnvironment | DockerEnvWrapper | None = None
+        agent: Any | None = None
         try:
             if self.config.container.runtime == "apptainer":
                 env = ApptainerEnvironment(
@@ -233,22 +197,19 @@ class DockerChecker:
                 plan=case.plan,
                 candidate_rules=rules,
             )
-            final_message = extract_last_assistant(agent.messages)
-            result = env.execute("cat /tmp/gepa_checker_result.json")
-            text = result.get("output", "") if result.get("returncode") == 0 else ""
-            fallback = final_submission or final_message
-            if not text.strip() and not fallback.strip():
+            if not final_submission.strip():
                 raise ValueError(
-                    "checker did not produce output "
+                    "checker did not submit JSON output "
                     f"(exit_status={exit_status})"
                 )
             try:
-                parsed = validate_checker_output(
-                    _json_object(text or fallback)
-                )
+                value = json.loads(final_submission)
+                if not isinstance(value, dict):
+                    raise ValueError("checker submission must be a JSON object")
+                parsed = validate_checker_output(value)
             except (ValueError, json.JSONDecodeError) as exc:
                 raise ValueError(
-                    "checker result invalid "
+                    "checker final submission invalid "
                     f"(exit_status={exit_status}): {exc}"
                 ) from exc
             leaked_categories = _asi_leakage_categories(agent.messages, case)
@@ -275,6 +236,13 @@ class DockerChecker:
                 parsed.repository_evidence,
                 tuple(agent.messages),
             )
+        except Exception as exc:
+            if agent is not None:
+                try:
+                    exc.checker_trajectory = tuple(agent.messages)  # type: ignore[attr-defined]
+                except Exception:
+                    pass
+            raise
         finally:
             if env is not None:
                 if isinstance(env, ApptainerEnvironment):

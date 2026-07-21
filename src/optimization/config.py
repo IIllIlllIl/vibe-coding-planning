@@ -33,6 +33,7 @@ class SearchConfig:
     parallel: int
     skip_perfect_score: bool = True
     min_proposals: int = 0
+    max_iterations: int | None = None
 
 
 @dataclass(frozen=True)
@@ -127,6 +128,11 @@ def load_optimization_config(
         parallel=int(search_data.get("parallel", 1)),
         skip_perfect_score=bool(search_data.get("skip_perfect_score", True)),
         min_proposals=int(search_data.get("min_proposals", 0)),
+        max_iterations=(
+            int(search_data["max_iterations"])
+            if search_data.get("max_iterations") is not None
+            else None
+        ),
     )
     if min(
         search.max_metric_calls,
@@ -137,6 +143,8 @@ def load_optimization_config(
         raise ValueError("search budgets and parallelism must be positive")
     if search.min_proposals < 0:
         raise ValueError("search.min_proposals must be non-negative")
+    if search.max_iterations is not None and search.max_iterations < 1:
+        raise ValueError("search.max_iterations must be positive when set")
 
     docker = DockerConfig(
         workdir=str(docker_data.get("workdir", "/testbed")),

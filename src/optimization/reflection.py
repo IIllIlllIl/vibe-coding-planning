@@ -4,19 +4,22 @@ from __future__ import annotations
 
 import json
 import os
-import re
 from pathlib import Path
 from typing import Any, Mapping, Sequence
 
 from src.agents._deps import (
     _infer_litellm_prefix,
     build_default_agent,
-    extract_last_assistant,
     import_minisweagent,
 )
 from src.environment.apptainer_env import ApptainerEnvironment
 from src.environment.docker_env import DockerCapacityWindow
-from src.optimization.audit import AuditedModel, JsonlLogger, text_sha256
+from src.optimization.audit import (
+    AuditedModel,
+    JsonlLogger,
+    redact_sensitive,
+    text_sha256,
+)
 from src.optimization.config import OptimizationConfig
 
 
@@ -27,40 +30,6 @@ def _write_json(path: Path, value: Any) -> None:
         encoding="utf-8",
     )
     temp.replace(path)
-
-
-_SENSITIVE_KEY_PARTS = ("api_key", "authorization", "password", "secret", "token")
-
-
-def _reflection_secret_values() -> tuple[str, ...]:
-    values = []
-    for name, value in os.environ.items():
-        lowered = name.lower()
-        if value and any(part in lowered for part in _SENSITIVE_KEY_PARTS):
-            values.append(value)
-    return tuple(sorted(set(values), key=len, reverse=True))
-
-
-def _safe_reflection_value(value: Any, secrets: tuple[str, ...]) -> Any:
-    if isinstance(value, dict):
-        result = {}
-        for key, item in value.items():
-            key_text = str(key)
-            if any(part in key_text.lower() for part in _SENSITIVE_KEY_PARTS):
-                result[key_text] = "[REDACTED]"
-            else:
-                result[key_text] = _safe_reflection_value(item, secrets)
-        return result
-    if isinstance(value, (list, tuple)):
-        return [_safe_reflection_value(item, secrets) for item in value]
-    if isinstance(value, str):
-        result = value
-        for secret in secrets:
-            result = result.replace(secret, "[REDACTED]")
-        return result
-    if value is None or isinstance(value, (bool, int, float)):
-        return value
-    return str(value)
 
 
 def save_reflection_trajectory(
@@ -76,7 +45,6 @@ def save_reflection_trajectory(
     error: BaseException | None = None,
 ) -> Path:
     """Persist a redacted Reflection Agent transcript beside its evidence."""
-    secrets = _reflection_secret_values()
     path = bundle / "reflection_trajectory.json"
     payload = {
         "schema_version": 1,
@@ -91,7 +59,7 @@ def save_reflection_trajectory(
     if error is not None:
         payload["error_type"] = type(error).__name__
         payload["error"] = str(error)
-    _write_json(path, _safe_reflection_value(payload, secrets))
+    _write_json(path, redact_sensitive(payload))
     return path
 
 
@@ -322,7 +290,7 @@ class MiniSWEReflectionProposer:
                     cost_limit=self.config.reflection.cost_limit,
                 )
                 try:
-                    exit_status, exit_message = agent.run(
+                    exit_status, final_submission = agent.run(
                         task="Review the current minibatch evidence and improve the complete Checker rules.",
                         current_rules=candidate["rules"],
                         evidence_path="/evidence",
@@ -338,6 +306,46 @@ class MiniSWEReflectionProposer:
                         error=exc,
                     )
                     raise
+                try:
+                    if not final_submission.strip():
+                        raise ValueError(
+                            "reflection agent submitted empty candidate rules "
+                            f"(exit_status={exit_status}, "
+                            f"model_calls={getattr(model, 'n_calls', 0)})"
+                        )
+                    proposed = final_submission.strip()
+                    looks_like_patch = "diff --git " in proposed
+                    self.audit.write(
+                        "reflection_candidate_proposed",
+                        parent_candidate_sha256=parent_sha256,
+                        proposed_candidate_sha256=text_sha256(proposed),
+                        proposed_rules_empty=proposed == "",
+                        output_is_complete_replacement=not looks_like_patch,
+                        looks_like_git_patch=looks_like_patch,
+                        output_length_chars=len(proposed),
+                        instance_ids=instance_ids,
+                    )
+                    if looks_like_patch:
+                        raise ValueError(
+                            "reflection agent produced a patch instead of rules"
+                        )
+                    if proposed == candidate["rules"].strip():
+                        raise ValueError(
+                            "reflection agent produced rules identical to its parent"
+                        )
+                except Exception as exc:
+                    save_reflection_trajectory(
+                        bundle,
+                        agent.messages,
+                        mode="checker",
+                        candidate_sha256=parent_sha256,
+                        instance_ids=instance_ids,
+                        status="failed",
+                        exit_status=exit_status,
+                        exit_message=final_submission,
+                        error=exc,
+                    )
+                    raise
                 trajectory_path = save_reflection_trajectory(
                     bundle,
                     agent.messages,
@@ -346,63 +354,19 @@ class MiniSWEReflectionProposer:
                     instance_ids=instance_ids,
                     status="completed",
                     exit_status=exit_status,
-                    exit_message=exit_message,
+                    exit_message=final_submission,
                 )
-                final_message = extract_last_assistant(agent.messages)
-                result = env.execute("cat /tmp/candidate_rules.txt")
-                candidate_file_found = result.get("returncode") == 0
                 self.audit.write(
                     "reflection_agent_completed",
                     candidate_sha256=parent_sha256,
                     instance_ids=instance_ids,
                     trajectory_path=str(trajectory_path),
                     exit_status=exit_status,
-                    exit_message=exit_message,
+                    exit_message=final_submission,
                     trajectory_messages=len(agent.messages),
                     model_calls=int(getattr(model, "n_calls", 0)),
-                    candidate_file_found=candidate_file_found,
-                    candidate_file_chars=(
-                        len(str(result.get("output", "")))
-                        if candidate_file_found
-                        else 0
-                    ),
-                    final_assistant_chars=len(final_message),
+                    submission_chars=len(final_submission),
                 )
-                text = (
-                    result.get("output", "")
-                    if candidate_file_found
-                    else ""
-                )
-                if not text.strip():
-                    match = re.search(
-                        r"```(?:text)?\s*(.*?)```",
-                        final_message,
-                        re.DOTALL,
-                    )
-                    text = match.group(1) if match else ""
-                if not text.strip():
-                    raise ValueError(
-                        "reflection agent produced empty candidate rules "
-                        f"(exit_status={exit_status}, "
-                        f"model_calls={getattr(model, 'n_calls', 0)}, "
-                        f"candidate_file_found={candidate_file_found})"
-                    )
-                proposed = text.strip()
-                looks_like_patch = "diff --git " in proposed
-                self.audit.write(
-                    "reflection_candidate_proposed",
-                    parent_candidate_sha256=parent_sha256,
-                    proposed_candidate_sha256=text_sha256(proposed),
-                    proposed_rules_empty=proposed == "",
-                    output_is_complete_replacement=not looks_like_patch,
-                    looks_like_git_patch=looks_like_patch,
-                    output_length_chars=len(proposed),
-                    instance_ids=instance_ids,
-                )
-                if looks_like_patch:
-                    raise ValueError(
-                        "reflection agent produced a patch instead of rules"
-                    )
                 return {"rules": proposed}
             finally:
                 env.cleanup()

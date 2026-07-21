@@ -5,6 +5,7 @@ from __future__ import annotations
 from typing import Any, Callable
 
 import gepa
+from gepa.utils import MaxCandidateProposalsStopper
 
 from src.environment.docker_env import configure_docker_capacity
 from src.optimization.audit import JsonlLogger, text_sha256
@@ -12,7 +13,7 @@ from src.optimization.adapter import CheckerGEPAAdapter
 from src.optimization.callbacks import ProgressCallback
 from src.optimization.checker import DockerChecker
 from src.optimization.config import OptimizationConfig
-from src.optimization.dataset import load_snapshot
+from src.optimization.dataset import GEPACaseLoader, load_snapshot
 from src.optimization.reflection import MiniSWEReflectionProposer
 from src.optimization.report import write_cost_report, write_report
 from src.optimization.resume import (
@@ -40,6 +41,8 @@ def run_optimization(
     optimize_fn: Callable[..., Any] = gepa.optimize,
 ) -> Any:
     train, validation = load_snapshot(config.dataset_snapshot)
+    train_loader = GEPACaseLoader(train)
+    validation_loader = GEPACaseLoader(validation)
     config.run_dir.mkdir(parents=True, exist_ok=True)
     initial_rules = config.initial_rules_path.read_text(encoding="utf-8").strip()
     resuming = prepare_run_manifest(config, initial_rules=initial_rules)
@@ -52,6 +55,7 @@ def run_optimization(
         train_instances=len(train),
         validation_instances=len(validation),
         max_metric_calls=config.search.max_metric_calls,
+        max_iterations=config.search.max_iterations,
         projection_metric_calls=config.search.projection_metric_calls,
         reflection_minibatch_size=config.search.reflection_minibatch_size,
         parallel=config.search.parallel,
@@ -91,7 +95,6 @@ def run_optimization(
         parallel=config.search.parallel,
         proposer=proposer_runner,
         run_dir=config.run_dir,
-        fail_on_checker_error=True,
         checker_attempts=config.checker.max_attempts,
         startup_seed_replay=seed_replay,
         seed_rules_sha256=text_sha256(initial_rules),
@@ -102,11 +105,16 @@ def run_optimization(
         proposer=proposer_runner,
         accepted_candidates=search_state.accepted_candidates,
     )
+    iteration_stopper = (
+        MaxCandidateProposalsStopper(config.search.max_iterations)
+        if config.search.max_iterations is not None
+        else None
+    )
     try:
         result = optimize_fn(
             seed_candidate={"rules": initial_rules},
-            trainset=train,
-            valset=validation,
+            trainset=train_loader,
+            valset=validation_loader,
             adapter=adapter,
             reflection_lm=None,
             candidate_selection_strategy=search_state.selector,
@@ -116,6 +124,7 @@ def run_optimization(
             perfect_score=1.0,
             skip_perfect_score=config.search.skip_perfect_score,
             max_metric_calls=config.search.max_metric_calls,
+            stop_callbacks=iteration_stopper,
             run_dir=str(config.run_dir),
             cache_evaluation=True,
             track_best_outputs=True,

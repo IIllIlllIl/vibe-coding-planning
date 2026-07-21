@@ -6,11 +6,13 @@ from concurrent.futures import FIRST_COMPLETED, Future, ThreadPoolExecutor, wait
 import hashlib
 import json
 from pathlib import Path
+from datetime import datetime, timezone
 from typing import Any, Mapping, Sequence
+import uuid
 
 from gepa.core.adapter import EvaluationBatch
 
-from src.optimization.audit import JsonlLogger, text_sha256
+from src.optimization.audit import JsonlLogger, redact_sensitive, text_sha256
 from src.optimization.checker import CheckerRunner
 from src.optimization.models import GEPACase
 
@@ -40,7 +42,6 @@ class CheckerGEPAAdapter:
         parallel: int = 1,
         proposer: Any = None,
         run_dir: Path | None = None,
-        fail_on_checker_error: bool = False,
         checker_attempts: int = 1,
         startup_seed_replay: dict[
             str, tuple[dict[str, Any], float]
@@ -51,7 +52,6 @@ class CheckerGEPAAdapter:
         self.parallel = parallel
         self.propose_new_texts = proposer
         self.run_dir = run_dir
-        self.fail_on_checker_error = fail_on_checker_error
         self.checker_attempts = checker_attempts
         self.startup_seed_replay = startup_seed_replay
         self.seed_rules_sha256 = seed_rules_sha256
@@ -65,6 +65,68 @@ class CheckerGEPAAdapter:
             if run_dir is not None
             else None
         )
+
+    def _save_checker_trajectory(
+        self,
+        *,
+        case: GEPACase,
+        rules: str,
+        attempt: int,
+        status: str,
+        messages: Sequence[Mapping[str, Any]] = (),
+        output: Mapping[str, Any] | None = None,
+        error: Exception | None = None,
+    ) -> Path | None:
+        if self.run_dir is None:
+            return None
+        candidate_sha256 = text_sha256(rules)
+        call_id = uuid.uuid4().hex
+        root = (
+            self.run_dir
+            / "checker_trajectories"
+            / candidate_sha256[:12]
+            / case.instance_id
+        )
+        root.mkdir(parents=True, exist_ok=True)
+        path = root / f"{call_id}.json"
+        payload: dict[str, Any] = {
+            "schema_version": 1,
+            "call_id": call_id,
+            "timestamp": datetime.now(timezone.utc).isoformat(),
+            "instance_id": case.instance_id,
+            "split": case.split,
+            "candidate_sha256": candidate_sha256,
+            "attempt": attempt,
+            "max_attempts": self.checker_attempts,
+            "status": status,
+            "messages": list(messages),
+        }
+        if output is not None:
+            payload["output"] = dict(output)
+        if error is not None:
+            payload.update(_exception_details(error))
+        temporary = path.with_suffix(".json.tmp")
+        temporary.write_text(
+            json.dumps(
+                redact_sensitive(payload),
+                indent=2,
+                ensure_ascii=False,
+                sort_keys=True,
+            )
+            + "\n",
+            encoding="utf-8",
+        )
+        temporary.replace(path)
+        if self.audit is not None:
+            self.audit.write(
+                "checker_trajectory_saved",
+                instance_id=case.instance_id,
+                candidate_sha256=candidate_sha256,
+                attempt=attempt,
+                status=status,
+                trajectory_path=str(path),
+            )
+        return path
 
     def _evaluate_one(
         self,
@@ -136,10 +198,29 @@ class CheckerGEPAAdapter:
         *,
         attempt: int,
     ) -> tuple[dict[str, Any], float, dict[str, Any] | None]:
-        prepare = getattr(self.checker, "prepare", None)
-        if callable(prepare):
-            prepare(case)
-        output = self.checker(case, rules)
+        try:
+            prepare = getattr(self.checker, "prepare", None)
+            if callable(prepare):
+                prepare(case)
+            output = self.checker(case, rules)
+        except Exception as exc:
+            self._save_checker_trajectory(
+                case=case,
+                rules=rules,
+                attempt=attempt,
+                status="failed",
+                messages=getattr(exc, "checker_trajectory", ()),
+                error=exc,
+            )
+            raise
+        self._save_checker_trajectory(
+            case=case,
+            rules=rules,
+            attempt=attempt,
+            status="completed",
+            messages=output.trajectory,
+            output=output.to_dict(),
+        )
         if self.audit is not None and attempt > 1:
             self.audit.write(
                 "checker_evaluation_retried",
@@ -285,7 +366,7 @@ class CheckerGEPAAdapter:
                 parallel=self.parallel,
                 checker_attempts=self.checker_attempts,
             )
-        if self.fail_on_checker_error and self.parallel > 1:
+        if self.parallel > 1:
             rows = self._evaluate_parallel_fail_fast(
                 batch,
                 candidate["rules"],
@@ -304,6 +385,13 @@ class CheckerGEPAAdapter:
                         batch,
                     )
                 )
+        errors = [output for output, _, _ in rows if "error" in output]
+        if errors:
+            instance_ids = [str(output["instance_id"]) for output in errors]
+            raise RuntimeError(
+                "Checker operational failure for: "
+                + ", ".join(instance_ids)
+            )
         result = EvaluationBatch(
             outputs=[row[0] for row in rows],
             scores=[row[1] for row in rows],
@@ -347,13 +435,6 @@ class CheckerGEPAAdapter:
                 scores=result.scores,
                 capture_traces=capture_traces,
                 error_count=sum("error" in output for output in result.outputs),
-            )
-        errors = [output for output in result.outputs if "error" in output]
-        if self.fail_on_checker_error and errors:
-            instance_ids = [str(output["instance_id"]) for output in errors]
-            raise RuntimeError(
-                "Checker operational failure for: "
-                + ", ".join(instance_ids)
             )
         return result
 

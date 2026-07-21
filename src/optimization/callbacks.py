@@ -144,7 +144,6 @@ class ProgressCallback:
     def on_candidate_accepted(self, event: dict[str, Any]) -> None:
         self.progress["accepted_candidates"] += 1
         self.progress["latest_candidate_idx"] = event["new_candidate_idx"]
-        self.progress["latest_score"] = event["new_score"]
         self.audit.write(
             "gepa_candidate_accepted",
             iteration=event["iteration"],
