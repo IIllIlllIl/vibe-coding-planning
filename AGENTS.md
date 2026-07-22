@@ -12,9 +12,11 @@
 | [`docs/requirement-document.md`](docs/requirement-document.md) | Current Online GEPA behavioral requirements and acceptance criteria |
 | [`docs/architecture.md`](docs/architecture.md) | Current Online GEPA modules, data flow, and state authorities |
 | [`docs/gepa-rule-optimization.md`](docs/gepa-rule-optimization.md) | Current optimization, evidence, outcome-policy, and resume semantics |
+| [`docs/offline-gepa.md`](docs/offline-gepa.md) | Current Offline GEPA objective, Checker boundary, scoring, stopping, and resume semantics |
 | [`project_issues.md`](project_issues.md) | Open issues, deferred work, methodology decisions in flight |
 | [`configs/gepa_online_planning_hpc.yaml`](configs/gepa_online_planning_hpc.yaml) | Current formal Online GEPA models, prompts, budgets, evaluator, and HPC settings |
 | [`configs/online_gepa_supervisor.yaml`](configs/online_gepa_supervisor.yaml) | Persistent formal supervisor identity, iteration target, cadence, remote workdir, and controller resources |
+| [`configs/gepa_verified_rules.yaml`](configs/gepa_verified_rules.yaml) | Current local Offline GEPA experiment configuration |
 
 When you need any project fact (features, CLI usage, file conventions, run commands, dependencies), **read from these files instead of asking the user or guessing**. Do not duplicate their content into this file.
 

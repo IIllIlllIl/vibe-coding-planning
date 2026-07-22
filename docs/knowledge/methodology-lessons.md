@@ -1,7 +1,7 @@
 # Methodology Evolution And Reusable Lessons
 
 > Knowledge status: rationale, not runtime authority
-> Last reviewed: 2026-07-15
+> Last reviewed: 2026-07-22
 
 ## Evolution
 
@@ -9,7 +9,7 @@
 |---|---|---|
 | PCT | Real Plan-Code-Test trajectories and execution failure evidence | Did not directly optimize one deployable global rule set |
 | PCC/Checker | Structured plan-quality diagnosis and held-out classification | Prediction of historical resolved is indirect relative to actual execution |
-| Offline GEPA | Demonstrated GEPA text optimization, resume, Pareto state, audit | Optimized a Checker against historical labels, not Plan Agent behavior |
+| Offline GEPA | Active low-cost route for learning an inspectable plan-approval standard; reuses historical execution evidence for Reflection | Optimizes Checker agreement with historical labels, so label/Checker bias and transfer to actual plan quality require held-out analysis |
 | Online GEPA | Optimizes rules through current Plan-Code-Evaluator rollouts | Expensive and sensitive to Agent/evaluator/infrastructure noise |
 
 ## What Online Reuses
@@ -30,5 +30,5 @@
 - Treating infrastructure failure as unresolved.
 
 Historical documents remain useful for provenance. They are not authoritative
-for current behavior; transferable decisions are restated in the other
-knowledge documents.
+for current behavior; current Offline semantics are restated in
+[`../offline-gepa.md`](../offline-gepa.md).

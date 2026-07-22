@@ -7,6 +7,11 @@ The rules were intentionally not edited after generation, to preserve
 reproducibility. The runnable GEPA seed file contains only the generated rule
 text, not this prompt.
 
+This seed remains the authority for reproducing historical runs that reference
+it. The current Offline experiment deliberately uses
+`configs/gepa_initial_rules_minimal.md` instead, so GEPA can explore from a much
+smaller initial checklist.
+
 ## Prompt
 
 ```text

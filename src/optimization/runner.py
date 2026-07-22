@@ -41,6 +41,16 @@ def run_optimization(
     optimize_fn: Callable[..., Any] = gepa.optimize,
 ) -> Any:
     train, validation = load_snapshot(config.dataset_snapshot)
+    class_counts_by_split = {
+        "train": {
+            True: sum(case.resolved for case in train),
+            False: sum(not case.resolved for case in train),
+        },
+        "validation": {
+            True: sum(case.resolved for case in validation),
+            False: sum(not case.resolved for case in validation),
+        },
+    }
     train_loader = GEPACaseLoader(train)
     validation_loader = GEPACaseLoader(validation)
     config.run_dir.mkdir(parents=True, exist_ok=True)
@@ -64,6 +74,8 @@ def run_optimization(
         checker_temperature=config.checker.temperature,
         skip_perfect_score=config.search.skip_perfect_score,
         min_proposals=config.search.min_proposals,
+        primary_metric=config.search.primary_metric,
+        class_counts_by_split=class_counts_by_split,
         resuming_from_state=resuming,
         stop_file_present=(config.run_dir / "gepa.stop").is_file(),
     )
@@ -98,6 +110,8 @@ def run_optimization(
         checker_attempts=config.checker.max_attempts,
         startup_seed_replay=seed_replay,
         seed_rules_sha256=text_sha256(initial_rules),
+        primary_metric=config.search.primary_metric,
+        class_counts_by_split=class_counts_by_split,
     )
     callback = ProgressCallback(
         config.run_dir,

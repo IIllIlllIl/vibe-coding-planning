@@ -1,27 +1,36 @@
 # Output Workspace
 
-This directory exposes only the current Online GEPA experiment surface. Agents
-should not search `output/archive/` unless a task explicitly asks for historical
-comparison, provenance, or reproduction.
+This directory exposes the current Online and Offline GEPA experiment surface.
+Agents should not search `output/archive/` unless a task explicitly asks for
+historical comparison, provenance, or reproduction.
 
 ## Active Surface
 
 | Path | Purpose | Status |
 |---|---|---|
-| `SWE-bench_Verified/verified-round1-gepa-datasets/20260614_482_fdc056ae85df/` | Immutable formal 384/98 Online GEPA dataset snapshot | Active input; do not move or modify |
-| `SWE-bench_Verified/gepa-rules/` | Local destination for current Online GEPA results | Active output root |
+| `SWE-bench_Verified/verified-round1-gepa-datasets/20260614_482_fdc056ae85df/` | Immutable formal 384/98 snapshot shared by current Online and Offline experiments | Active input; do not move or modify |
+| `SWE-bench_Verified/gepa-rules/` | Local destination for current Online and Offline GEPA results | Active output root |
+| `SWE-bench_Verified/gepa-rules/offline-plan-verifier-balanced-b12-8it-20260722/` | Current local Offline target | Configured, not started |
 | Remote `online-planning-hpc-policy-v3-20260715` run directory | Outcome-policy-v3 formal run targeting 8 durable iterations | Active; managed by the supervisor |
 
-The active rule-generation flow is:
+The active Online rule-generation flow is:
 
 ```text
 task -> Plan Agent with candidate rules -> Code Agent -> evaluator
      -> structured outcome -> GEPA reflection -> updated planning rules
 ```
 
-PCT, PCC/Checker, offline GEPA, standalone rule extraction, old tests, and
-preheat logs are historical. They are intentionally absent from the active
-surface.
+The active Offline rule-generation flow is:
+
+```text
+issue + historical plan + base repository + candidate rules
+  -> repo-grounded Checker -> balanced-accuracy score
+  -> GEPA reflection -> updated plan-approval rules
+```
+
+PCT, PCC/Checker, earlier Offline GEPA runs, standalone rule extraction, old
+tests, and preheat logs are historical. They are intentionally absent from the
+active surface.
 
 ## Archive Boundary
 
@@ -36,8 +45,8 @@ Rules for agents and scripts:
 2. Do not resume an archived run without an explicit user request and identity
    validation.
 3. Do not mix outcome-policy versions in score comparisons.
-4. Keep current Online GEPA run directories and the formal dataset snapshot
-   outside `archive/`.
+4. Keep current Online/Offline GEPA run directories and the formal dataset
+   snapshot outside `archive/`.
 5. Put new smoke/test outputs under an explicitly named test path and archive
    them after the test is reviewed.
 

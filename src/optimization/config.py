@@ -34,6 +34,7 @@ class SearchConfig:
     skip_perfect_score: bool = True
     min_proposals: int = 0
     max_iterations: int | None = None
+    primary_metric: str = "accuracy"
 
 
 @dataclass(frozen=True)
@@ -133,6 +134,7 @@ def load_optimization_config(
             if search_data.get("max_iterations") is not None
             else None
         ),
+        primary_metric=str(search_data.get("primary_metric", "accuracy")),
     )
     if min(
         search.max_metric_calls,
@@ -145,6 +147,16 @@ def load_optimization_config(
         raise ValueError("search.min_proposals must be non-negative")
     if search.max_iterations is not None and search.max_iterations < 1:
         raise ValueError("search.max_iterations must be positive when set")
+    if search.primary_metric not in ("accuracy", "balanced_accuracy"):
+        raise ValueError(
+            "search.primary_metric must be 'accuracy' or 'balanced_accuracy'"
+        )
+    if search.primary_metric == "balanced_accuracy" and search.skip_perfect_score:
+        raise ValueError(
+            "search.skip_perfect_score must be false when primary_metric is "
+            "balanced_accuracy because class-weighted examples do not share "
+            "one perfect score"
+        )
 
     docker = DockerConfig(
         workdir=str(docker_data.get("workdir", "/testbed")),

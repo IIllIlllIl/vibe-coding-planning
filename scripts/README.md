@@ -35,6 +35,10 @@ scripts/
 
 通过 `ulhpc-submit` 提交 GEPA 规则优化作业。默认 dry-run，加 `--submit` 才真正提交。它会自动 staging 数据集、持久化 `run_dir`、加载 Apptainer 模块。
 
+下列 Offline 配置均为归档复现实例。当前
+`configs/gepa_verified_rules.yaml` 使用本地 Docker 和直接的累计
+`max_iterations` 控制，不通过这个 HPC wrapper 或 Online supervisor 启动。
+
 **常用命令**
 
 ```bash

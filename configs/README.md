@@ -35,14 +35,26 @@ budgets, evaluator, or worker resources belongs in
 poll cadence, controller resources, or remote workdir belongs in
 `online_gepa_supervisor.yaml`. Keep their run identity and job prefix aligned.
 
+## Active Offline GEPA
+
+| Config | Runtime | Purpose |
+|---|---|---|
+| `gepa_verified_rules.yaml` | Local Docker | Eight-proposal Checker-rule experiment over the full 384/98 split, using minibatch 12, balanced accuracy, repository-grounded read-only verification, and a minimal seed. It is configured but not started. |
+| `gepa_initial_rules_minimal.md` | Prompt text | Minimal current Offline seed intended to leave room for GEPA exploration. |
+
+`search.max_iterations` is the primary experimental stop condition and is an
+absolute cumulative proposal target across resume. `max_metric_calls=2000` is
+only a fail-safe above the 1,074-call worst-case projection. No Offline
+supervisor is required for this run; the Online HPC supervisor is not a local
+Offline entry point. See [`../docs/offline-gepa.md`](../docs/offline-gepa.md).
+
 ## Representative Paused Workflows
 
 | Config | Historical workflow represented |
 |---|---|
-| `gepa_verified_rules.yaml` | Offline GEPA strict Checker optimization. |
 | `polybench_full199_pct.yaml` | PCT/PCC-era PolyBench data collection and checker evaluation. |
 | `analysis_kimi_opencode.yaml` | Per-case rule extraction/aggregation analysis. |
-| `gepa_initial_rules_gpt_seed.md` | Shared immutable seed used by representative GEPA configs. |
+| `gepa_initial_rules_gpt_seed.md` | Immutable historical seed retained with provenance; not used by the current Offline config. |
 
 ## Archive
 

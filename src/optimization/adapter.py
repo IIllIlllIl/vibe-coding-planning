@@ -47,6 +47,8 @@ class CheckerGEPAAdapter:
             str, tuple[dict[str, Any], float]
         ] | None = None,
         seed_rules_sha256: str | None = None,
+        primary_metric: str = "accuracy",
+        class_counts_by_split: Mapping[str, Mapping[bool, int]] | None = None,
     ) -> None:
         self.checker = checker
         self.parallel = parallel
@@ -55,6 +57,23 @@ class CheckerGEPAAdapter:
         self.checker_attempts = checker_attempts
         self.startup_seed_replay = startup_seed_replay
         self.seed_rules_sha256 = seed_rules_sha256
+        if primary_metric not in ("accuracy", "balanced_accuracy"):
+            raise ValueError(
+                "primary_metric must be 'accuracy' or 'balanced_accuracy'"
+            )
+        self.primary_metric = primary_metric
+        self.class_counts_by_split = {
+            split: {bool(label): int(count) for label, count in counts.items()}
+            for split, counts in (class_counts_by_split or {}).items()
+        }
+        if self.primary_metric == "balanced_accuracy":
+            for split in ("train", "validation"):
+                counts = self.class_counts_by_split.get(split, {})
+                if counts.get(True, 0) < 1 or counts.get(False, 0) < 1:
+                    raise ValueError(
+                        "balanced_accuracy requires positive resolved and "
+                        f"unresolved class counts for {split}"
+                    )
         self.audit = (
             JsonlLogger(run_dir / "audit_events.jsonl")
             if run_dir is not None
@@ -65,6 +84,34 @@ class CheckerGEPAAdapter:
             if run_dir is not None
             else None
         )
+
+    def _score_details(
+        self,
+        case: GEPACase,
+        predicted_resolved: bool,
+    ) -> dict[str, Any]:
+        is_correct = predicted_resolved == case.resolved
+        if predicted_resolved:
+            classification_outcome = (
+                "true_positive" if case.resolved else "false_positive"
+            )
+        else:
+            classification_outcome = (
+                "false_negative" if case.resolved else "true_negative"
+            )
+        class_weight = 1.0
+        if self.primary_metric == "balanced_accuracy":
+            counts = self.class_counts_by_split[case.split]
+            total = counts[True] + counts[False]
+            class_weight = total / (2 * counts[case.resolved])
+        return {
+            "primary_metric": self.primary_metric,
+            "is_correct": is_correct,
+            "classification_outcome": classification_outcome,
+            "error_type": None if is_correct else classification_outcome,
+            "class_weight": class_weight,
+            "score": class_weight if is_correct else 0.0,
+        }
 
     def _save_checker_trajectory(
         self,
@@ -229,7 +276,11 @@ class CheckerGEPAAdapter:
                 successful_attempt=attempt,
                 max_attempts=self.checker_attempts,
             )
-        score = float(output.predicted_resolved == case.resolved)
+        score_details = self._score_details(
+            case,
+            output.predicted_resolved,
+        )
+        score = float(score_details["score"])
         public_output = {
             "instance_id": case.instance_id,
             **output.to_dict(),
@@ -239,7 +290,7 @@ class CheckerGEPAAdapter:
             trace = {
                 "instance_id": case.instance_id,
                 "expected_resolved": case.resolved,
-                "score": score,
+                **score_details,
                 "checker_output": output.to_dict(include_trajectory=True),
                 **case.asi,
             }
@@ -365,6 +416,8 @@ class CheckerGEPAAdapter:
                 ],
                 parallel=self.parallel,
                 checker_attempts=self.checker_attempts,
+                primary_metric=self.primary_metric,
+                class_counts_by_split=self.class_counts_by_split,
             )
         if self.parallel > 1:
             rows = self._evaluate_parallel_fail_fast(
@@ -412,6 +465,10 @@ class CheckerGEPAAdapter:
                     result.scores,
                     strict=True,
                 ):
+                    score_details = self._score_details(
+                        case,
+                        bool(output["predicted_resolved"]),
+                    )
                     handle.write(
                         json.dumps(
                             {
@@ -420,6 +477,13 @@ class CheckerGEPAAdapter:
                                 "split": case.split,
                                 "resolved": case.resolved,
                                 "score": score,
+                                "primary_metric": self.primary_metric,
+                                "is_correct": score_details["is_correct"],
+                                "classification_outcome": score_details[
+                                    "classification_outcome"
+                                ],
+                                "error_type": score_details["error_type"],
+                                "class_weight": score_details["class_weight"],
                                 "output": output,
                             },
                             ensure_ascii=False,

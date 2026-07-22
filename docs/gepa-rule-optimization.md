@@ -254,8 +254,10 @@ Before drawing rule-quality conclusions, verify:
 7. candidate acceptance matches recorded scores;
 8. comparisons use one outcome-policy version.
 
-Historical offline Checker design, pilots, and run timelines are preserved in
-the superseded archive document, not in this authority.
+Historical Offline Checker pilots and run timelines remain in the superseded
+archive. The reopened current Offline contract is independently documented in
+[`offline-gepa.md`](offline-gepa.md); it does not change this document's Online
+outcome semantics.
 
 ## 10. Repo-Grounded Two-Stage Reflection
 

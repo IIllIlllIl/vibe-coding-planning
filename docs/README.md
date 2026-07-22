@@ -1,7 +1,7 @@
 # Documentation Index
 
 > Authority: navigation policy for project documentation
-> Last reviewed: 2026-07-15
+> Last reviewed: 2026-07-22
 
 Agents should read the smallest authoritative set that answers the task. Do not
 search `docs/archive/` unless the user explicitly requests historical audit,
@@ -18,6 +18,7 @@ Read in this order:
 | [`requirement-document.md`](requirement-document.md) | Online GEPA behavioral requirements and acceptance criteria |
 | [`architecture.md`](architecture.md) | Current modules, data flow, and ownership boundaries |
 | [`gepa-rule-optimization.md`](gepa-rule-optimization.md) | Online GEPA optimization semantics and evidence contract |
+| [`offline-gepa.md`](offline-gepa.md) | Offline GEPA Checker boundary, metric, stopping, artifacts, and resume contract |
 | [`hpc-submit.md`](hpc-submit.md) | Current ULHPC submission, supervisor, and FairShare operations |
 | [`../configs/README.md`](../configs/README.md) | Runtime-versus-launch configuration ownership and active config index |
 

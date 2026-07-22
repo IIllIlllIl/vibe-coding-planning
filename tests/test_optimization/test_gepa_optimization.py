@@ -1560,6 +1560,61 @@ def test_adapter_parallel_preserves_batch_order(tmp_path):
     assert started["parallel"] == 2
 
 
+def test_adapter_balanced_accuracy_scores_are_additive_and_auditable(tmp_path):
+    train, _ = load_snapshot(_snapshot(tmp_path / "snapshot"))
+    cases = [
+        replace(train[0], instance_id="resolved-correct", resolved=True),
+        replace(train[0], instance_id="resolved-wrong", resolved=True),
+        replace(train[0], instance_id="resolved-correct-2", resolved=True),
+        replace(train[0], instance_id="unresolved-correct", resolved=False),
+    ]
+    predictions = {
+        "resolved-correct": True,
+        "resolved-wrong": False,
+        "resolved-correct-2": True,
+        "unresolved-correct": False,
+    }
+
+    def checker(case, rules):
+        return CheckerOutput(
+            predicted_resolved=predictions[case.instance_id],
+            decision_reason="weighted classification",
+            repository_evidence=(),
+        )
+
+    result = CheckerGEPAAdapter(
+        checker,
+        primary_metric="balanced_accuracy",
+        class_counts_by_split={
+            "train": {True: 3, False: 1},
+            "validation": {True: 1, False: 1},
+        },
+    ).evaluate(cases, {"rules": "rules"}, capture_traces=True)
+
+    assert result.scores == pytest.approx([2 / 3, 0.0, 2 / 3, 2.0])
+    assert sum(result.scores) / len(result.scores) == pytest.approx(5 / 6)
+    assert result.trajectories is not None
+    assert result.trajectories[1]["is_correct"] is False
+    assert result.trajectories[1]["error_type"] == "false_negative"
+    assert result.trajectories[3]["classification_outcome"] == "true_negative"
+    assert all(
+        trace["primary_metric"] == "balanced_accuracy"
+        for trace in result.trajectories
+    )
+
+
+def test_adapter_balanced_accuracy_requires_both_classes_per_split():
+    with pytest.raises(ValueError, match="unresolved class counts for train"):
+        CheckerGEPAAdapter(
+            lambda case, rules: None,
+            primary_metric="balanced_accuracy",
+            class_counts_by_split={
+                "train": {True: 2, False: 0},
+                "validation": {True: 1, False: 1},
+            },
+        )
+
+
 def test_adapter_retries_transient_checker_failure(tmp_path):
     train, _ = load_snapshot(_snapshot(tmp_path / "snapshot"))
     calls = {"count": 0}
@@ -4849,7 +4904,7 @@ def test_strict_hpc_24h_config_loads(monkeypatch):
     assert "<candidate_rules>" in config.checker_instance_template
 
 
-def test_default_gepa_config_is_three_iteration_smoke(monkeypatch):
+def test_default_gepa_config_is_eight_iteration_run(monkeypatch):
     monkeypatch.setenv("DEEPSEEK_API_KEY", "secret")
     repo_root = Path(__file__).resolve().parents[2]
     config = load_optimization_config(repo_root / "configs" / "gepa_verified_rules.yaml")
@@ -4857,25 +4912,36 @@ def test_default_gepa_config_is_three_iteration_smoke(monkeypatch):
     assert config.checker.model == "deepseek-v4-flash"
     assert config.reflection.model == "deepseek-v4-flash"
     assert config.container.runtime == "docker"
-    assert config.search.max_metric_calls == 410
-    assert config.search.projection_metric_calls == 410
-    assert config.search.max_iterations == 3
+    assert config.search.max_metric_calls == 2000
+    assert config.search.projection_metric_calls == 1074
+    assert config.search.max_iterations == 8
+    assert config.search.reflection_minibatch_size == 12
+    assert config.search.primary_metric == "balanced_accuracy"
     assert config.search.parallel == 1
     assert config.checker.max_attempts == 5
-    assert config.initial_rules_path.name == "gepa_initial_rules_gpt_seed.md"
-    assert "offline-interactive-checker-3it-smoke-20260721" in str(
+    assert config.initial_rules_path.name == "gepa_initial_rules_minimal.md"
+    assert "offline-plan-verifier-balanced-b12-8it-20260722" in str(
         config.run_dir
     )
-    assert "inspect and interact with the repository" in config.checker_prompt
-    assert "temporary" in config.checker_prompt
-    assert "code or test" in config.checker_prompt
-    assert "/tmp/gepa_checker_result.json" not in config.checker_prompt
-    assert "exactly one shell action" in config.checker_prompt
+    checker_prompt = " ".join(config.checker_prompt.split())
+    assert "software plan verification assistant" in checker_prompt
+    assert "Before deciding, inspect the repository" in checker_prompt
+    assert "Do not modify repository source or test files" in checker_prompt
+    assert "Do not implement the proposed solution" in checker_prompt
+    assert "temporary diagnostic or reproduction scripts outside" in checker_prompt
+    assert "/tmp/gepa_checker_result.json" not in checker_prompt
+    assert "exactly one shell action" in checker_prompt
     assert "plan-review checklist" in config.reflection_prompt
     assert "misleading items" in config.reflection_prompt
     assert "Merge redundant or highly similar items" in config.reflection_prompt
-    assert "repository interaction" in config.reflection_prompt
+    assert "fixed Checker prompt" in config.reflection_prompt
+    assert "balanced accuracy" in config.reflection_prompt
     assert "/tmp/candidate_rules.txt" not in config.reflection_prompt
+    assert config.initial_rules_path.read_text(encoding="utf-8").strip() == (
+        "Approve a plan only when evidence from the issue and base repository "
+        "supports that its proposed change addresses the reported problem and "
+        "the plan includes a relevant way to validate the result."
+    )
 
 
 def test_docker_config_defaults_are_preserved(monkeypatch):
