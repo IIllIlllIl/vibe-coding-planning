@@ -183,7 +183,12 @@ def run_optimization(
             failure_kind=failure_kind,
         )
         raise
-    write_report(result, validation, config.run_dir)
+    write_report(
+        result,
+        validation,
+        config.run_dir,
+        primary_metric=config.search.primary_metric,
+    )
     failures = list(getattr(proposer_runner, "failures", []))
     successful_proposals = int(
         getattr(proposer_runner, "successful_proposals", 0)

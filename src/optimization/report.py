@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import math
 import statistics
 from collections import Counter
 from pathlib import Path
@@ -235,7 +236,67 @@ def write_cost_report(
     )
 
 
-def write_report(result: Any, validation: list[GEPACase], run_dir: Path) -> None:
+def _candidate_validation_records(
+    evaluation_records: list[dict[str, Any]],
+    *,
+    candidate_hash: str,
+    validation: list[GEPACase],
+) -> list[dict[str, Any]]:
+    expected = {case.instance_id: case for case in validation}
+    records_by_instance: dict[str, dict[str, Any]] = {}
+    for record in evaluation_records:
+        if (
+            record.get("candidate_sha256") != candidate_hash
+            or record.get("split") != "validation"
+        ):
+            continue
+        instance_id = str(record.get("instance_id", ""))
+        if instance_id in records_by_instance:
+            raise ValueError(
+                "duplicate validation prediction for candidate "
+                f"{candidate_hash}: {instance_id}"
+            )
+        records_by_instance[instance_id] = record
+
+    missing = sorted(set(expected) - set(records_by_instance))
+    unexpected = sorted(set(records_by_instance) - set(expected))
+    if missing or unexpected:
+        raise ValueError(
+            "candidate validation predictions do not match the validation "
+            f"split for {candidate_hash}: missing={missing}, "
+            f"unexpected={unexpected}"
+        )
+
+    ordered = []
+    for case in validation:
+        record = records_by_instance[case.instance_id]
+        if record.get("resolved") is not case.resolved:
+            raise ValueError(
+                "validation label mismatch for "
+                f"{candidate_hash}: {case.instance_id}"
+            )
+        output = record.get("output")
+        prediction = (
+            output.get("predicted_resolved")
+            if isinstance(output, dict)
+            else None
+        )
+        if not isinstance(prediction, bool):
+            raise ValueError(
+                "validation prediction must be boolean for "
+                f"{candidate_hash}: {case.instance_id}"
+            )
+        ordered.append(record)
+    return ordered
+
+
+def write_report(
+    result: Any,
+    validation: list[GEPACase],
+    run_dir: Path,
+    *,
+    primary_metric: str,
+) -> None:
     evaluation_records = []
     evaluation_path = run_dir / "evaluations.jsonl"
     if evaluation_path.is_file():
@@ -247,36 +308,43 @@ def write_report(result: Any, validation: list[GEPACase], run_dir: Path) -> None
     candidates = []
     for index, candidate in enumerate(result.candidates):
         candidate_hash = _hash(candidate["rules"])
-        scores = result.val_subscores[index]
-        labels = []
-        predictions = []
-        predictions_by_instance = {}
-        for val_id, score in scores.items():
-            case = (
-                validation[val_id]
-                if isinstance(val_id, int)
-                else next(
-                    item for item in validation if item.instance_id == val_id
-                )
+        validation_predictions = _candidate_validation_records(
+            evaluation_records,
+            candidate_hash=candidate_hash,
+            validation=validation,
+        )
+        labels = [case.resolved for case in validation]
+        predictions = [
+            record["output"]["predicted_resolved"]
+            for record in validation_predictions
+        ]
+        metrics = classification_metrics(labels, predictions)
+        if primary_metric not in metrics:
+            raise ValueError(
+                f"unsupported primary metric for candidate report: {primary_metric}"
             )
-            labels.append(case.resolved)
-            predictions.append(case.resolved if score == 1.0 else not case.resolved)
-        for record in evaluation_records:
-            if (
-                record["candidate_sha256"] == candidate_hash
-                and record["split"] == "validation"
-            ):
-                predictions_by_instance[record["instance_id"]] = record
+        validation_score = float(result.val_aggregate_scores[index])
+        if not math.isclose(
+            float(metrics[primary_metric]),
+            validation_score,
+            rel_tol=1e-12,
+            abs_tol=1e-12,
+        ):
+            raise ValueError(
+                "candidate validation score does not match predictions for "
+                f"{candidate_hash}: primary_metric={primary_metric}, "
+                f"result={validation_score}, "
+                f"recomputed={metrics[primary_metric]}"
+            )
         candidates.append(
             {
                 "candidate_idx": index,
                 "rules_sha256": candidate_hash,
-                "validation_score": result.val_aggregate_scores[index],
-                "metrics": classification_metrics(labels, predictions),
+                "primary_metric": primary_metric,
+                "validation_score": validation_score,
+                "metrics": metrics,
                 "parents": result.parents[index],
-                "validation_predictions": list(
-                    predictions_by_instance.values()
-                ),
+                "validation_predictions": validation_predictions,
             }
         )
     (run_dir / "result.json").write_text(

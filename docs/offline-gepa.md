@@ -2,7 +2,7 @@
 
 > Authority: current local Offline GEPA experiment contract
 >
-> Last reviewed: 2026-07-22
+> Last reviewed: 2026-07-23
 
 ## Objective
 
@@ -38,6 +38,27 @@ post-execution diagnostic evidence. Reflection runs in a lightweight container
 with the current evidence bundle mounted at `/evidence`; it does not freely
 enter each benchmark repository.
 
+Before a Reflection proposal is returned to GEPA, a deterministic
+high-precision check rejects exact current-minibatch instance/repository
+identifiers, complete Checker-evidence paths, and code symbols containing `_`
+or `::`. A dot alone is not treated as a code-symbol signal because it is also
+ordinary sentence punctuation; path placeholders such as `.` and `/` are also
+ignored. The check performs no fuzzy or semantic matching and does not add a
+score.
+
+When the check finds a match, the original proposal and complete trajectory are
+preserved and the same Reflection configuration receives the proposal plus the
+exact matches for one generalization repair. A clean repair is returned to
+GEPA. If that single repair still contains a match, the proposal fails and GEPA
+retains its parent; there is no additional judge or unbounded retry.
+
+The Reflection instance prompt documents the evidence API explicitly. It
+directs Reflection to read `/evidence/manifest.json` first and names the
+per-instance `checker_output.json`, `plan_trajectory.json`,
+`code_trajectory.json`, `generated.patch`, and `evaluator_result.json` files
+with their relevant fields. This prevents filename and field guessing without
+requiring Reflection to read every raw trajectory in full.
+
 ## Dataset And Metric
 
 The immutable snapshot is
@@ -72,7 +93,7 @@ The current config is [`../configs/gepa_verified_rules.yaml`](../configs/gepa_ve
 - instance-level validation Pareto selection;
 - eight cumulative candidate-proposal iterations;
 - balanced accuracy;
-- local Docker execution with one concurrent Checker.
+- local Docker execution with two concurrent Checkers.
 
 `max_iterations=8` is the primary stop condition. GEPA's official saved state
 is cumulative, so resuming the same logical run continues toward eight total
@@ -97,6 +118,8 @@ The run directory preserves:
 - every Checker call's complete trajectory;
 - `reflection_inputs/*/reflection_trajectory.json` inside per-proposal evidence
   bundles;
+- `reflection_inputs/*/reflection_repair_trajectory.json` when a proposal
+  requires the single contamination repair;
 - candidate rules, validation metrics, reports, errors, token use, and cost.
 
 Operational Checker exhaustion currently stops the optimization and is marked

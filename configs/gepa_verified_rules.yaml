@@ -1,7 +1,7 @@
 paths:
   dataset_snapshot: output/SWE-bench_Verified/verified-round1-gepa-datasets/20260614_482_fdc056ae85df
   initial_rules: configs/gepa_initial_rules_minimal.md
-  run_dir: output/SWE-bench_Verified/gepa-rules/offline-plan-verifier-balanced-b12-8it-20260722
+  run_dir: output/SWE-bench_Verified/gepa-rules/offline-plan-verifier-balanced-b12-p2-8it-20260723
 
 checker:
   model: deepseek-v4-flash
@@ -37,10 +37,10 @@ search:
   projection_metric_calls: 1074
   reflection_minibatch_size: 12
   primary_metric: balanced_accuracy
-  # Local Docker image acquisition is the bottleneck and Docker Desktop's
-  # content store has been unstable under concurrent GEPA checker workers.
-  # HPC Apptainer configs keep higher parallelism.
-  parallel: 1
+  # The previous local run completed with one Checker worker. Use two in the
+  # next run as a measured throughput increase; retain raw trajectories so
+  # Docker/content-store failures remain distinguishable from Checker output.
+  parallel: 2
   seed: 42
   skip_perfect_score: false
   min_proposals: 1
@@ -79,7 +79,12 @@ prompts:
     If the candidate rules and verified repository evidence do not clearly
     support approval, predict unresolved.
 
+    ## Shell protocol
+
     Every response must contain exactly one shell action in one bash code block.
+    Use a Markdown ```bash code block; do not use <bash> tags. The repository
+    is available at /testbed, not /repo.
+
     When you have enough evidence, submit the result with one final action in
     this form:
     ```bash
@@ -94,7 +99,10 @@ prompts:
     }
     EOF
     ```
-    Do not run any other command after submitting.
+    Submission finishes only when the executed command writes
+    COMPLETE_TASK_AND_SUBMIT_FINAL_OUTPUT as its first output line. Saying that
+    the result was submitted does not finish the task. Do not run any other
+    command after submitting.
   checker_instance: |
     <issue>
     {{task}}
@@ -157,8 +165,10 @@ prompts:
     - evaluator or test results;
     - historical execution output, evaluator output, or an expected output.
 
-    Do not memorize instance IDs, exact patches, labels, or task-specific
-    answers.
+    Do not copy instance IDs, repository names, file paths, code symbols, exact
+    patches, labels, or task-specific answers from the evidence into the
+    checklist. Translate a useful observation into a general criterion that
+    applies to unseen repositories; otherwise omit it.
 
     Do not place Checker tool permissions, repository mutation policy, output
     protocol, or other fixed execution instructions in the candidate rules.
@@ -189,6 +199,8 @@ prompts:
     Do not output a Git patch, shell command, analysis narrative, or a solution
     for a single task.
 
+    ## Shell protocol
+
     Every response must contain exactly one shell action in one bash code block.
     Submit the complete revised checklist directly, without a separate result
     file or analysis text:
@@ -198,6 +210,9 @@ prompts:
     <complete revised checklist>
     EOF
     ```
+    Submission finishes only when the executed command writes
+    COMPLETE_TASK_AND_SUBMIT_FINAL_OUTPUT as its first output line. Printing the
+    checklist without that line does not finish the task.
   reflection_instance: |
     <current_rules>
     {{current_rules}}
@@ -205,6 +220,29 @@ prompts:
 
     Evidence for the current minibatch is mounted read-only at:
     {{evidence_path}}
+
+    Evidence layout:
+    - {{evidence_path}}/manifest.json
+      - cases[].instance_id
+      - cases[].expected_resolved
+      - cases[].score
+    - {{evidence_path}}/<instance_id>/checker_output.json
+      - predicted_resolved
+      - decision_reason
+      - repository_evidence
+      - trajectory, including the issue and plan seen by the Checker
+    - {{evidence_path}}/<instance_id>/plan_trajectory.json
+      - messages
+    - {{evidence_path}}/<instance_id>/code_trajectory.json
+      - messages
+    - {{evidence_path}}/<instance_id>/generated.patch
+    - {{evidence_path}}/<instance_id>/evaluator_result.json
+      - resolved
+      - report
+      - stdout
+      - stderr
+
+    Read manifest.json first. Do not guess alternative filenames.
 
     For each case:
     1. Read the issue and plan from the Checker trajectory.

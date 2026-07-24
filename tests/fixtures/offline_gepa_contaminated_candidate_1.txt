@@ -1,0 +1,29 @@
+## Repository Grounding
+- Every file, class, method, and variable referenced by the plan must exist in the base commit. Reject plans that rely on speculative infrastructure (e.g., table_to_pk, get_primary_key_columns) without verifying existence.
+
+## Root Cause Location & Scope
+- The plan must target the root cause at the most appropriate shared location, not patch around it in every caller. (E.g., if the bug is in compile_json_path, the fix must be there, not in each backend's operations file.)
+- When the plan proposes modifying a specific file, verify that file actually contains the relevant logic; reject plans that target a file but the logic resides in a different utility function.
+
+## Issue Coverage & Reasoning
+- The plan must identify the root cause (not just suppress a symptom like catching an exception) and explain how the change resolves it.
+- The plan's logic connecting the issue to the proposed change must be based on the actual code path observed in the repository, not on an assumed propagation path that contradicts verified behavior (e.g., claiming autoscale_view on all axes when relim on a shared axis is the actual trigger).
+
+## Patch Completeness
+- The plan must specify the exact replacement code (the "after" state). Reject plans where the patch section is cut off, missing the actual change, or contains only a description without the modified lines.
+- Exception: If the missing code is trivially obvious (e.g., a one-line quoting fix), a description may suffice; but if the intent is ambiguous, reject.
+- Reject plans that are merely placeholders with no proposed change (e.g., a plan that says only "Test plan" with no patch or implementation content).
+
+## Defensive Completeness
+- The plan's change must handle all outcomes of the condition it introduces (e.g., if adding is_real, verify both the true and false branches work; if adding is not None, verify the fallback behavior is correct).
+- If the plan modifies a shared/polymorphic function (like compile_json_path, Set._complement, column_sql), verify the change is safe for all existing callers, not just the reported issue.
+
+## Validation Quality
+- The plan must describe a concrete, runnable validation procedure (e.g., an exact Python command, an existing test suite command). Reject plans whose validation relies on infrastructure or steps outside the repository.
+- The validation must cover at least one edge case beyond the minimal reproduction and include a regression check (e.g., running the existing test suite for the affected module).
+
+## Risk Indicators (Flag for Rejection)
+- The plan relies on speculative infrastructure (non-existent variables, methods, or mappings).
+- The plan's root-cause analysis contradicts observed behavior when traced.
+- The plan introduces a blanket early return or catch-all without analyzing impact on other code paths.
+- The plan only guards against one outcome of a condition (e.g., only checks is_real but not an unevaluated symbolic expression) and does not handle other outcomes that also cause bugs.

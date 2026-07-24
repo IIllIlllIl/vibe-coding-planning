@@ -72,9 +72,10 @@ from src.optimization.online_runner import (
 from src.optimization.reflection import (
     EvidenceBundleWriter,
     MiniSWEReflectionProposer,
+    find_candidate_contamination,
     save_reflection_trajectory,
 )
-from src.optimization.report import write_cost_report
+from src.optimization.report import write_cost_report, write_report
 from src.optimization.runner import OptimizationRunFailed, run_optimization
 from src.optimization.resume import IncompatibleOptimizationRun
 from scripts.tools.prepare_online_hpc_resource_pilot import prepare_pilot
@@ -4109,6 +4110,265 @@ def test_reflection_proposer_supplies_required_agent_task(
     assert failed_trajectory["error_type"] == "ValueError"
 
 
+def test_candidate_contamination_check_replays_previous_run_rules():
+    repo_root = Path(__file__).resolve().parents[2]
+    contaminated_rules = (
+        repo_root
+        / "tests/fixtures/offline_gepa_contaminated_candidate_1.txt"
+    ).read_text(encoding="utf-8")
+    safe_seed = (
+        repo_root / "configs/gepa_initial_rules_minimal.md"
+    ).read_text(encoding="utf-8")
+    assert text_sha256(contaminated_rules.strip()) == (
+        "2009d7e35597e072cfcfcb568479c9652763e1eb514a464e8fd919b08769575a"
+    )
+
+    # These structured evidence values and rules are copied from iteration 1
+    # of offline-plan-verifier-balanced-b12-8it-20260722.
+    records = [
+        {
+            "instance_id": "django__django-15503",
+            "checker_output": {
+                "repository_evidence": [
+                    {
+                        "path": "django/db/models/fields/json.py",
+                        "symbol": "compile_json_path",
+                    },
+                ]
+            },
+        },
+        {
+            "instance_id": "django__django-15629",
+            "checker_output": {
+                "repository_evidence": [
+                    {
+                        "path": "django/db/backends/base/schema.py",
+                        "symbol": "column_sql",
+                    }
+                ]
+            },
+        },
+        {
+            "instance_id": "sympy__sympy-13615",
+            "checker_output": {
+                "repository_evidence": [
+                    {
+                        "path": "sympy/sets/sets.py",
+                        "symbol": "Set._complement",
+                    }
+                ]
+            },
+        },
+        {
+            "instance_id": "pallets__flask-5014",
+            "checker_output": {
+                "repository_evidence": [
+                    {"path": "/", "symbol": "reproduction"}
+                ]
+            },
+        },
+        {
+            "instance_id": "matplotlib__matplotlib-25311",
+            "checker_output": {
+                "repository_evidence": [
+                    {"path": ".", "symbol": "_connect_picklable"}
+                ]
+            },
+        },
+    ]
+
+    hits = find_candidate_contamination(contaminated_rules, records)
+
+    assert {
+        hit["value"]
+        for hit in hits
+        if hit["kind"] == "symbol"
+    } == {"compile_json_path", "column_sql", "Set._complement"}
+    assert not {hit["value"] for hit in hits} & {"/", "."}
+    assert find_candidate_contamination(safe_seed, records) == []
+
+
+def test_reflection_proposer_repairs_contaminated_candidate_once(
+    tmp_path, monkeypatch
+):
+    config = _config(tmp_path)
+    monkeypatch.setenv("TEST_API_KEY", "secret")
+    submissions = iter(
+        [
+            "Check compile_json_path in every plan.",
+            "Check whether the plan targets the verified root cause.",
+        ]
+    )
+    agents = []
+    templates = []
+
+    class FakeModel:
+        n_calls = 0
+
+        def __init__(self, **kwargs):
+            self.config = type(
+                "Config", (), {"model_name": "provider/model"}
+            )()
+
+    class FakeEnvironment:
+        def __init__(self, **kwargs):
+            pass
+
+        def cleanup(self):
+            pass
+
+    class FakeAgent:
+        def __init__(self, submission):
+            self.submission = submission
+            self.messages = [{"role": "assistant", "content": submission}]
+
+        def run(self, task, **kwargs):
+            self.run_kwargs = kwargs
+            return "Submitted", self.submission
+
+    def build_agent(*args, **kwargs):
+        templates.append(kwargs["instance_template"])
+        agent = FakeAgent(next(submissions))
+        agents.append(agent)
+        return agent
+
+    monkeypatch.setattr(
+        "src.optimization.reflection.import_minisweagent",
+        lambda: (object, FakeModel, FakeEnvironment),
+    )
+    monkeypatch.setattr(
+        "src.optimization.reflection.build_default_agent",
+        build_agent,
+    )
+    proposer = MiniSWEReflectionProposer(config, _FakeCapacityWindow())
+    record = {
+        "instance_id": "django__django-12345",
+        "expected_resolved": False,
+        "score": 0.0,
+        "checker_output": {
+            "predicted_resolved": True,
+            "repository_evidence": [
+                {
+                    "path": "django/db/backends/base/schema.py",
+                    "symbol": "compile_json_path",
+                    "finding": "The symbol is relevant.",
+                }
+            ],
+        },
+        **_record("django__django-12345", "train")["asi"],
+    }
+
+    proposal = proposer({"rules": "seed"}, {"rules": [record]}, ["rules"])
+
+    assert proposal == {
+        "rules": "Check whether the plan targets the verified root cause."
+    }
+    assert len(agents) == 2
+    assert templates[0] == config.reflection_instance_template
+    assert "<contamination_hits>" in templates[1]
+    assert agents[1].run_kwargs["evidence_path"] == "/evidence"
+    bundle = next(config.run_dir.glob("reflection_inputs/iteration_*"))
+    initial = json.loads((bundle / "reflection_trajectory.json").read_text())
+    repair = json.loads(
+        (bundle / "reflection_repair_trajectory.json").read_text()
+    )
+    assert initial["status"] == "rejected_contamination"
+    assert initial["exit_message"] == "Check compile_json_path in every plan."
+    assert repair["status"] == "completed"
+    audit = [
+        json.loads(line)
+        for line in (config.run_dir / "audit_events.jsonl").read_text().splitlines()
+    ]
+    assert any(
+        record["event"] == "reflection_candidate_contamination_detected"
+        for record in audit
+    )
+    assert any(
+        record["event"] == "reflection_candidate_contamination_repaired"
+        for record in audit
+    )
+
+
+def test_reflection_proposer_rejects_still_contaminated_single_repair(
+    tmp_path, monkeypatch
+):
+    config = _config(tmp_path)
+    monkeypatch.setenv("TEST_API_KEY", "secret")
+    submissions = iter(
+        [
+            "Always inspect compile_json_path.",
+            "Still inspect compile_json_path.",
+        ]
+    )
+    agent_calls = 0
+
+    class FakeModel:
+        n_calls = 0
+
+        def __init__(self, **kwargs):
+            self.config = type(
+                "Config", (), {"model_name": "provider/model"}
+            )()
+
+    class FakeEnvironment:
+        def __init__(self, **kwargs):
+            pass
+
+        def cleanup(self):
+            pass
+
+    class FakeAgent:
+        def __init__(self, submission):
+            self.submission = submission
+            self.messages = [{"role": "assistant", "content": submission}]
+
+        def run(self, task, **kwargs):
+            return "Submitted", self.submission
+
+    def build_agent(*args, **kwargs):
+        nonlocal agent_calls
+        agent_calls += 1
+        return FakeAgent(next(submissions))
+
+    monkeypatch.setattr(
+        "src.optimization.reflection.import_minisweagent",
+        lambda: (object, FakeModel, FakeEnvironment),
+    )
+    monkeypatch.setattr(
+        "src.optimization.reflection.build_default_agent",
+        build_agent,
+    )
+    proposer = MiniSWEReflectionProposer(config, _FakeCapacityWindow())
+    record = {
+        "instance_id": "django__django-12345",
+        "expected_resolved": False,
+        "score": 0.0,
+        "checker_output": {
+            "predicted_resolved": True,
+            "repository_evidence": [
+                {
+                    "path": "",
+                    "symbol": "compile_json_path",
+                    "finding": "The symbol is relevant.",
+                }
+            ],
+        },
+        **_record("django__django-12345", "train")["asi"],
+    }
+
+    with pytest.raises(ValueError, match="retained case-specific strings"):
+        proposer({"rules": "seed"}, {"rules": [record]}, ["rules"])
+
+    assert agent_calls == 2
+    bundle = next(config.run_dir.glob("reflection_inputs/iteration_*"))
+    repair = json.loads(
+        (bundle / "reflection_repair_trajectory.json").read_text()
+    )
+    assert repair["status"] == "failed"
+    assert proposer.successful_proposals == 0
+    assert len(proposer.failures) == 1
+
+
 def test_metrics_include_required_reporting_values():
     metrics = classification_metrics(
         [True, True, False, False],
@@ -4118,6 +4378,104 @@ def test_metrics_include_required_reporting_values():
     assert metrics["balanced_accuracy"] == 0.5
     assert metrics["mcc"] == 0.0
     assert metrics["pass_rate"] == 0.5
+
+
+@pytest.mark.parametrize(
+    ("primary_metric", "validation_score", "scores"),
+    [
+        ("accuracy", 2 / 3, [1.0, 0.0, 1.0]),
+        ("balanced_accuracy", 0.75, [0.75, 0.0, 1.5]),
+    ],
+)
+def test_candidate_report_uses_predictions_for_configured_metric(
+    tmp_path,
+    primary_metric,
+    validation_score,
+    scores,
+):
+    train, _ = load_snapshot(_snapshot(tmp_path / "snapshot"))
+    validation = [
+        replace(
+            train[0],
+            instance_id="resolved-correct",
+            split="validation",
+            resolved=True,
+        ),
+        replace(
+            train[0],
+            instance_id="resolved-wrong",
+            split="validation",
+            resolved=True,
+        ),
+        replace(
+            train[0],
+            instance_id="unresolved-correct",
+            split="validation",
+            resolved=False,
+        ),
+    ]
+    rules = "candidate rules"
+    candidate_sha256 = text_sha256(rules)
+    predictions = [True, False, False]
+    with (tmp_path / "evaluations.jsonl").open("w", encoding="utf-8") as handle:
+        for case, prediction, score in zip(
+            validation,
+            predictions,
+            scores,
+            strict=True,
+        ):
+            handle.write(
+                json.dumps(
+                    {
+                        "candidate_sha256": candidate_sha256,
+                        "instance_id": case.instance_id,
+                        "split": "validation",
+                        "resolved": case.resolved,
+                        "score": score,
+                        "output": {"predicted_resolved": prediction},
+                    }
+                )
+                + "\n"
+            )
+
+    class Result:
+        candidates = [{"rules": rules}]
+        val_subscores = [
+            {
+                case.instance_id: score
+                for case, score in zip(validation, scores, strict=True)
+            }
+        ]
+        val_aggregate_scores = [validation_score]
+        parents = [[None]]
+        best_candidate = {"rules": rules}
+
+        @staticmethod
+        def to_dict():
+            return {"best_idx": 0}
+
+        @staticmethod
+        def candidate_tree_html():
+            return "<html></html>"
+
+    write_report(
+        Result(),
+        validation,
+        tmp_path,
+        primary_metric=primary_metric,
+    )
+
+    candidate = json.loads(
+        (tmp_path / "candidate_metrics.json").read_text(encoding="utf-8")
+    )[0]
+    assert candidate["primary_metric"] == primary_metric
+    assert candidate["validation_score"] == pytest.approx(validation_score)
+    assert candidate["metrics"]["accuracy"] == pytest.approx(2 / 3)
+    assert candidate["metrics"]["balanced_accuracy"] == pytest.approx(0.75)
+    assert [
+        record["output"]["predicted_resolved"]
+        for record in candidate["validation_predictions"]
+    ] == predictions
 
 
 def test_audited_model_records_real_response_usage(tmp_path):
@@ -4917,10 +5275,10 @@ def test_default_gepa_config_is_eight_iteration_run(monkeypatch):
     assert config.search.max_iterations == 8
     assert config.search.reflection_minibatch_size == 12
     assert config.search.primary_metric == "balanced_accuracy"
-    assert config.search.parallel == 1
+    assert config.search.parallel == 2
     assert config.checker.max_attempts == 5
     assert config.initial_rules_path.name == "gepa_initial_rules_minimal.md"
-    assert "offline-plan-verifier-balanced-b12-8it-20260722" in str(
+    assert "offline-plan-verifier-balanced-b12-p2-8it-20260723" in str(
         config.run_dir
     )
     checker_prompt = " ".join(config.checker_prompt.split())
@@ -4931,12 +5289,33 @@ def test_default_gepa_config_is_eight_iteration_run(monkeypatch):
     assert "temporary diagnostic or reproduction scripts outside" in checker_prompt
     assert "/tmp/gepa_checker_result.json" not in checker_prompt
     assert "exactly one shell action" in checker_prompt
-    assert "plan-review checklist" in config.reflection_prompt
-    assert "misleading items" in config.reflection_prompt
-    assert "Merge redundant or highly similar items" in config.reflection_prompt
-    assert "fixed Checker prompt" in config.reflection_prompt
-    assert "balanced accuracy" in config.reflection_prompt
-    assert "/tmp/candidate_rules.txt" not in config.reflection_prompt
+    assert "do not use <bash> tags" in checker_prompt
+    assert "available at /testbed, not /repo" in checker_prompt
+    assert "Saying that the result was submitted does not finish" in checker_prompt
+    reflection_prompt = " ".join(config.reflection_prompt.split())
+    assert "plan-review checklist" in reflection_prompt
+    assert "misleading items" in reflection_prompt
+    assert "Merge redundant or highly similar items" in reflection_prompt
+    assert "repository names, file paths, code symbols" in reflection_prompt
+    assert "applies to unseen repositories" in reflection_prompt
+    assert "fixed Checker prompt" in reflection_prompt
+    assert "balanced accuracy" in reflection_prompt
+    assert "Printing the checklist without that line does not finish" in (
+        reflection_prompt
+    )
+    assert "/tmp/candidate_rules.txt" not in reflection_prompt
+    reflection_instance = " ".join(
+        config.reflection_instance_template.split()
+    )
+    assert "{{evidence_path}}/manifest.json" in reflection_instance
+    assert (
+        "{{evidence_path}}/<instance_id>/checker_output.json"
+        in reflection_instance
+    )
+    assert "cases[].expected_resolved" in reflection_instance
+    assert "decision_reason" in reflection_instance
+    assert "Read manifest.json first" in reflection_instance
+    assert "Do not guess alternative filenames" in reflection_instance
     assert config.initial_rules_path.read_text(encoding="utf-8").strip() == (
         "Approve a plan only when evidence from the issue and base repository "
         "supports that its proposed change addresses the reported problem and "

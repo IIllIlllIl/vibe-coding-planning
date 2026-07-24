@@ -10,7 +10,8 @@ historical comparison, provenance, or reproduction.
 |---|---|---|
 | `SWE-bench_Verified/verified-round1-gepa-datasets/20260614_482_fdc056ae85df/` | Immutable formal 384/98 snapshot shared by current Online and Offline experiments | Active input; do not move or modify |
 | `SWE-bench_Verified/gepa-rules/` | Local destination for current Online and Offline GEPA results | Active output root |
-| `SWE-bench_Verified/gepa-rules/offline-plan-verifier-balanced-b12-8it-20260722/` | Current local Offline target | Configured, not started |
+| `SWE-bench_Verified/gepa-rules/offline-plan-verifier-balanced-b12-8it-20260722/` | Previous local Offline run | Completed with warnings; retained for protocol and rule-contamination analysis |
+| `SWE-bench_Verified/gepa-rules/offline-plan-verifier-balanced-b12-p2-8it-20260723/` | Next local Offline target | Configured, not started |
 | Remote `online-planning-hpc-policy-v3-20260715` run directory | Outcome-policy-v3 formal run targeting 8 durable iterations | Active; managed by the supervisor |
 
 The active Online rule-generation flow is:

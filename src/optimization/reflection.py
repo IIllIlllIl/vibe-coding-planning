@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import os
+import re
 from pathlib import Path
 from typing import Any, Mapping, Sequence
 
@@ -21,6 +22,19 @@ from src.optimization.audit import (
     text_sha256,
 )
 from src.optimization.config import OptimizationConfig
+
+_REFLECTION_REPAIR_INSTANCE_TEMPLATE = """
+<proposed_rules>
+{{current_rules}}
+</proposed_rules>
+<contamination_hits>
+{{contamination_hits}}
+</contamination_hits>
+
+Rewrite the complete rules once to remove or generalize every listed
+case-specific string. Preserve the general review criteria, do not introduce
+new criteria, and follow the shell submission protocol from the system prompt.
+"""
 
 
 def _write_json(path: Path, value: Any) -> None:
@@ -43,9 +57,10 @@ def save_reflection_trajectory(
     exit_status: Any = None,
     exit_message: Any = None,
     error: BaseException | None = None,
+    filename: str = "reflection_trajectory.json",
 ) -> Path:
     """Persist a redacted Reflection Agent transcript beside its evidence."""
-    path = bundle / "reflection_trajectory.json"
+    path = bundle / filename
     payload = {
         "schema_version": 1,
         "mode": mode,
@@ -61,6 +76,79 @@ def save_reflection_trajectory(
         payload["error"] = str(error)
     _write_json(path, redact_sensitive(payload))
     return path
+
+
+def find_candidate_contamination(
+    rules: str,
+    records: Sequence[Mapping[str, Any]],
+) -> list[dict[str, str]]:
+    """Find exact, high-confidence case identifiers copied into candidate rules.
+
+    This deliberately avoids fuzzy matching. A dot alone does not make a
+    Checker evidence symbol code-specific because it is also ordinary sentence
+    punctuation. Symbols are checked only when they contain ``_`` or ``::``.
+    """
+    sources: set[tuple[str, str, str]] = set()
+    for record in records:
+        instance_id = str(record.get("instance_id", "")).strip()
+        if instance_id:
+            sources.add(("instance_id", instance_id, instance_id))
+            repository_name = instance_id.rsplit("-", 1)[0]
+            if repository_name != instance_id:
+                sources.add(("repository", repository_name, instance_id))
+
+        checker_output = record.get("checker_output")
+        if not isinstance(checker_output, Mapping):
+            continue
+        evidence = checker_output.get("repository_evidence")
+        if not isinstance(evidence, Sequence) or isinstance(evidence, (str, bytes)):
+            continue
+        for item in evidence:
+            if not isinstance(item, Mapping):
+                continue
+            path = str(item.get("path", "")).strip()
+            if "/" in path and path.strip("/."):
+                sources.add(("path", path, instance_id))
+            symbol = str(item.get("symbol", "")).strip()
+            if "_" in symbol or "::" in symbol:
+                sources.add(("symbol", symbol, instance_id))
+
+    hits = []
+    for kind, value, instance_id in sorted(sources):
+        if kind == "symbol":
+            pattern = rf"(?<![A-Za-z0-9_]){re.escape(value)}(?![A-Za-z0-9_])"
+            matched = re.search(pattern, rules) is not None
+        else:
+            matched = value in rules
+        if matched:
+            hits.append(
+                {
+                    "kind": kind,
+                    "value": value,
+                    "instance_id": instance_id,
+                }
+            )
+    return hits
+
+
+def _validate_reflection_submission(
+    submission: str,
+    *,
+    exit_status: Any,
+    parent_rules: str,
+    model_calls: int,
+) -> str:
+    if not submission.strip():
+        raise ValueError(
+            "reflection agent submitted empty candidate rules "
+            f"(exit_status={exit_status}, model_calls={model_calls})"
+        )
+    proposed = submission.strip()
+    if "diff --git " in proposed:
+        raise ValueError("reflection agent produced a patch instead of rules")
+    if proposed == parent_rules.strip():
+        raise ValueError("reflection agent produced rules identical to its parent")
+    return proposed
 
 
 class EvidenceBundleWriter:
@@ -233,6 +321,7 @@ class MiniSWEReflectionProposer:
                 "candidate_sha256": parent_sha256,
                 "instance_ids": instance_ids,
                 "bundle_path": str(bundle),
+                "proposal_stage": "initial",
             },
         )
         run_args: list[str]
@@ -307,32 +396,22 @@ class MiniSWEReflectionProposer:
                     )
                     raise
                 try:
-                    if not final_submission.strip():
-                        raise ValueError(
-                            "reflection agent submitted empty candidate rules "
-                            f"(exit_status={exit_status}, "
-                            f"model_calls={getattr(model, 'n_calls', 0)})"
-                        )
-                    proposed = final_submission.strip()
-                    looks_like_patch = "diff --git " in proposed
+                    proposed = _validate_reflection_submission(
+                        final_submission,
+                        exit_status=exit_status,
+                        parent_rules=candidate["rules"],
+                        model_calls=int(getattr(model, "n_calls", 0)),
+                    )
                     self.audit.write(
                         "reflection_candidate_proposed",
                         parent_candidate_sha256=parent_sha256,
                         proposed_candidate_sha256=text_sha256(proposed),
-                        proposed_rules_empty=proposed == "",
-                        output_is_complete_replacement=not looks_like_patch,
-                        looks_like_git_patch=looks_like_patch,
+                        proposed_rules_empty=False,
+                        output_is_complete_replacement=True,
+                        looks_like_git_patch=False,
                         output_length_chars=len(proposed),
                         instance_ids=instance_ids,
                     )
-                    if looks_like_patch:
-                        raise ValueError(
-                            "reflection agent produced a patch instead of rules"
-                        )
-                    if proposed == candidate["rules"].strip():
-                        raise ValueError(
-                            "reflection agent produced rules identical to its parent"
-                        )
                 except Exception as exc:
                     save_reflection_trajectory(
                         bundle,
@@ -346,16 +425,153 @@ class MiniSWEReflectionProposer:
                         error=exc,
                     )
                     raise
-                trajectory_path = save_reflection_trajectory(
-                    bundle,
-                    agent.messages,
-                    mode="checker",
-                    candidate_sha256=parent_sha256,
-                    instance_ids=instance_ids,
-                    status="completed",
-                    exit_status=exit_status,
-                    exit_message=final_submission,
+
+                contamination_hits = find_candidate_contamination(
+                    proposed,
+                    records,
                 )
+                repair_performed = bool(contamination_hits)
+                total_trajectory_messages = len(agent.messages)
+                if contamination_hits:
+                    save_reflection_trajectory(
+                        bundle,
+                        agent.messages,
+                        mode="checker",
+                        candidate_sha256=parent_sha256,
+                        instance_ids=instance_ids,
+                        status="rejected_contamination",
+                        exit_status=exit_status,
+                        exit_message=final_submission,
+                    )
+                    self.audit.write(
+                        "reflection_candidate_contamination_detected",
+                        parent_candidate_sha256=parent_sha256,
+                        proposed_candidate_sha256=text_sha256(proposed),
+                        instance_ids=instance_ids,
+                        contamination_hits=contamination_hits,
+                    )
+                    repair_model = AuditedModel(
+                        base_model,
+                        self.usage,
+                        phase="reflection",
+                        context={
+                            "candidate_sha256": parent_sha256,
+                            "instance_ids": instance_ids,
+                            "bundle_path": str(bundle),
+                            "proposal_stage": "contamination_repair",
+                        },
+                    )
+                    repair_agent = build_default_agent(
+                        DefaultAgent,
+                        repair_model,
+                        env,
+                        system_template=self.config.reflection_prompt,
+                        instance_template=_REFLECTION_REPAIR_INSTANCE_TEMPLATE,
+                        step_limit=self.config.reflection.max_steps,
+                        cost_limit=self.config.reflection.cost_limit,
+                    )
+                    try:
+                        repair_exit_status, repair_submission = repair_agent.run(
+                            task=(
+                                "Remove the detected case-specific strings from "
+                                "the complete Checker rules."
+                            ),
+                            current_rules=proposed,
+                            evidence_path="/evidence",
+                            contamination_hits=json.dumps(
+                                contamination_hits,
+                                ensure_ascii=False,
+                                sort_keys=True,
+                            ),
+                        )
+                    except Exception as exc:
+                        save_reflection_trajectory(
+                            bundle,
+                            repair_agent.messages,
+                            mode="checker",
+                            candidate_sha256=parent_sha256,
+                            instance_ids=instance_ids,
+                            status="failed",
+                            error=exc,
+                            filename="reflection_repair_trajectory.json",
+                        )
+                        raise
+                    try:
+                        repaired = _validate_reflection_submission(
+                            repair_submission,
+                            exit_status=repair_exit_status,
+                            parent_rules=candidate["rules"],
+                            model_calls=int(
+                                getattr(repair_model, "n_calls", 0)
+                            ),
+                        )
+                        remaining_hits = find_candidate_contamination(
+                            repaired,
+                            records,
+                        )
+                        if remaining_hits:
+                            raise ValueError(
+                                "reflection repair retained case-specific "
+                                f"strings: {remaining_hits}"
+                            )
+                    except Exception as exc:
+                        save_reflection_trajectory(
+                            bundle,
+                            repair_agent.messages,
+                            mode="checker",
+                            candidate_sha256=parent_sha256,
+                            instance_ids=instance_ids,
+                            status="failed",
+                            exit_status=repair_exit_status,
+                            exit_message=repair_submission,
+                            error=exc,
+                            filename="reflection_repair_trajectory.json",
+                        )
+                        self.audit.write(
+                            "reflection_candidate_contamination_repair_failed",
+                            parent_candidate_sha256=parent_sha256,
+                            proposed_candidate_sha256=text_sha256(proposed),
+                            repaired_candidate_sha256=text_sha256(
+                                repair_submission.strip()
+                            ),
+                            instance_ids=instance_ids,
+                            error=f"{type(exc).__name__}: {exc}",
+                        )
+                        raise
+                    trajectory_path = save_reflection_trajectory(
+                        bundle,
+                        repair_agent.messages,
+                        mode="checker",
+                        candidate_sha256=parent_sha256,
+                        instance_ids=instance_ids,
+                        status="completed",
+                        exit_status=repair_exit_status,
+                        exit_message=repair_submission,
+                        filename="reflection_repair_trajectory.json",
+                    )
+                    self.audit.write(
+                        "reflection_candidate_contamination_repaired",
+                        parent_candidate_sha256=parent_sha256,
+                        original_candidate_sha256=text_sha256(proposed),
+                        repaired_candidate_sha256=text_sha256(repaired),
+                        instance_ids=instance_ids,
+                        contamination_hits=contamination_hits,
+                    )
+                    proposed = repaired
+                    exit_status = repair_exit_status
+                    final_submission = repair_submission
+                    total_trajectory_messages += len(repair_agent.messages)
+                else:
+                    trajectory_path = save_reflection_trajectory(
+                        bundle,
+                        agent.messages,
+                        mode="checker",
+                        candidate_sha256=parent_sha256,
+                        instance_ids=instance_ids,
+                        status="completed",
+                        exit_status=exit_status,
+                        exit_message=final_submission,
+                    )
                 self.audit.write(
                     "reflection_agent_completed",
                     candidate_sha256=parent_sha256,
@@ -363,9 +579,10 @@ class MiniSWEReflectionProposer:
                     trajectory_path=str(trajectory_path),
                     exit_status=exit_status,
                     exit_message=final_submission,
-                    trajectory_messages=len(agent.messages),
-                    model_calls=int(getattr(model, "n_calls", 0)),
+                    trajectory_messages=total_trajectory_messages,
+                    model_calls=int(getattr(base_model, "n_calls", 0)),
                     submission_chars=len(final_submission),
+                    contamination_repair_performed=repair_performed,
                 )
                 return {"rules": proposed}
             finally:
