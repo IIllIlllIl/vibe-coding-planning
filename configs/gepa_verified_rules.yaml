@@ -1,7 +1,7 @@
 paths:
   dataset_snapshot: output/SWE-bench_Verified/verified-round1-gepa-datasets/20260614_482_fdc056ae85df
   initial_rules: configs/gepa_initial_rules_minimal.md
-  run_dir: output/SWE-bench_Verified/gepa-rules/offline-plan-verifier-balanced-b12-p2-8it-20260723
+  run_dir: output/SWE-bench_Verified/gepa-rules/offline-plan-verifier-balanced-b12-p2-case-reviews-8it-20260727
 
 checker:
   model: deepseek-v4-flash
@@ -183,11 +183,13 @@ prompts:
     inspection.
 
     Review all cases in the current minibatch, including correct and incorrect
-    predictions. Consider false positives and false negatives separately.
-    Preserve useful checklist items. Revise unclear or harmful items. Delete
-    misleading items. Merge redundant or highly similar items that evaluate the
-    same underlying property. Add new items only when they capture a general,
-    deployment-visible criterion.
+    predictions. Record one evidence-grounded diagnosis for every case.
+    Consider false positives and false negatives separately. Preserve useful
+    checklist items. Revise unclear or harmful items. Delete misleading items.
+    Merge redundant or highly similar items that evaluate the same underlying
+    property. Record the supporting minibatch cases for every add, revise,
+    delete, or preserve decision. Add new items only when they capture a
+    general, deployment-visible criterion.
 
     Organize the final checklist under concise headings such as repository
     grounding, issue coverage, reasoning quality, change scope, validation
@@ -196,14 +198,54 @@ prompts:
 
     Do not generalize from a single case unless the lesson is clearly
     deployable beyond that case. Do not make the checklist broadly pessimistic.
-    Do not output a Git patch, shell command, analysis narrative, or a solution
-    for a single task.
+    Do not put the case analysis, identifiers, a Git patch, shell commands, or
+    a solution for a single task into the candidate rules. Case analysis and
+    rule-change provenance belong only in the separate Reflection analysis.
 
     ## Shell protocol
 
     Every response must contain exactly one shell action in one bash code block.
-    Submit the complete revised checklist directly, without a separate result
-    file or analysis text:
+    Before submission, write the complete case analysis to
+    /tmp/reflection_analysis.json with this schema:
+    - case_reviews: one object for every minibatch instance, containing
+      instance_id, classification_outcome, diagnosis, outcome_attribution
+      (plan, code, evaluator_or_infrastructure, mixed, or uncertain),
+      rule_relevance (change, preserve, none, or uncertain), and a non-empty
+      evidence_used list;
+    - rule_changes: one or more objects containing operation (add, revise,
+      delete, or preserve), description, rationale, and non-empty
+      supporting_instance_ids.
+
+    Example shape (replace placeholders and include every case):
+    ```json
+    {
+      "case_reviews": [
+        {
+          "instance_id": "<instance_id>",
+          "classification_outcome": "false_positive",
+          "diagnosis": "<evidence-grounded diagnosis>",
+          "outcome_attribution": "plan",
+          "rule_relevance": "change",
+          "evidence_used": [
+            "manifest.json",
+            "checker_output.json",
+            "evaluator_result.json"
+          ]
+        }
+      ],
+      "rule_changes": [
+        {
+          "operation": "revise",
+          "description": "<rule decision>",
+          "rationale": "<cross-case or clearly generalizable reason>",
+          "supporting_instance_ids": ["<instance_id>"]
+        }
+      ]
+    }
+    ```
+
+    After writing the analysis file, submit only the complete replacement
+    checklist directly:
     ```bash
     cat <<'EOF'
     COMPLETE_TASK_AND_SUBMIT_FINAL_OUTPUT
@@ -211,8 +253,9 @@ prompts:
     EOF
     ```
     Submission finishes only when the executed command writes
-    COMPLETE_TASK_AND_SUBMIT_FINAL_OUTPUT as its first output line. Printing the
-    checklist without that line does not finish the task.
+    COMPLETE_TASK_AND_SUBMIT_FINAL_OUTPUT as its first output line. The
+    structured analysis is experimental evidence only; do not include it in
+    the candidate checklist.
   reflection_instance: |
     <current_rules>
     {{current_rules}}
@@ -242,15 +285,27 @@ prompts:
       - stdout
       - stderr
 
-    Read manifest.json first. Do not guess alternative filenames.
+    Read manifest.json first. Do not submit until every manifest case has a
+    corresponding case_reviews entry. Do not guess alternative filenames.
 
     For each case:
-    1. Read the issue and plan from the Checker trajectory.
-    2. Compare the Checker prediction with the historical resolved label.
-    3. Inspect the Checker trajectory to identify reasoning errors or useful
-       strategies.
-    4. Use the Code trajectory, generated patch, and evaluator result only to
-       explain why the prediction was correct or incorrect.
-    5. Convert those findings into checklist items that the Checker can
-       apply using only its deployment-visible inputs and permitted repository
-       inspection.
+    1. Read checker_output.json and compare predicted_resolved with the
+       historical label in manifest.json to classify the case as TP, TN, FP,
+       or FN.
+    2. For every FP and FN, read the issue and plan from checker_output.json,
+       inspect the complete Checker trajectory, and use Code trajectory,
+       generated patch, and evaluator result to diagnose the error.
+    3. For TP and TN cases, inspect the Checker reason and repository evidence,
+       then inspect additional raw evidence when needed to test whether a
+       proposed change would damage correct behavior.
+    4. Record the files actually consulted in evidence_used. Do not claim to
+       have used a file that you did not read. Every case must name
+       manifest.json and checker_output.json; FP and FN cases must also name
+       evaluator_result.json.
+    5. Distinguish plan-quality evidence from failures attributable to Code,
+       evaluation, infrastructure, mixed causes, or unresolved uncertainty.
+       Do not use a non-plan-attributable case to justify a rule change.
+    6. Link every rule change to case reviews marked rule_relevance=change;
+       link a preserve decision to reviews marked rule_relevance=preserve.
+       Then translate the
+       finding into criteria deployable using only Checker-visible inputs.

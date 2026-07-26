@@ -4083,6 +4083,10 @@ def test_reflection_proposer_supplies_required_agent_task(
         for record in audit
         if record["event"] == "reflection_agent_completed"
     )
+    assert any(
+        record["event"] == "reflection_analysis_unavailable"
+        for record in audit
+    )
     assert completed["exit_status"] == "Submitted"
     assert completed["submission_chars"] == len("complete improved rules")
     trajectory_path = next(
@@ -4108,6 +4112,103 @@ def test_reflection_proposer_supplies_required_agent_task(
     failed_trajectory = json.loads(failed_trajectory_path.read_text())
     assert failed_trajectory["status"] == "failed"
     assert failed_trajectory["error_type"] == "ValueError"
+
+
+def test_reflection_proposer_passively_preserves_agent_analysis(
+    tmp_path,
+    monkeypatch,
+):
+    config = _config(tmp_path)
+    monkeypatch.setenv("TEST_API_KEY", "secret")
+    analysis = {
+        "case_reviews": [
+            {
+                "instance_id": "repo__one",
+                "classification_outcome": "false_positive",
+                "diagnosis": "The Checker approved a historically failed plan.",
+                "outcome_attribution": "plan",
+                "rule_relevance": "change",
+                "evidence_used": [
+                    "manifest.json",
+                    "checker_output.json",
+                    "evaluator_result.json",
+                ],
+            }
+        ],
+        "rule_changes": [
+            {
+                "operation": "revise",
+                "description": "Require verified causal support.",
+                "rationale": "The false positive relied on a weak causal claim.",
+                "supporting_instance_ids": ["repo__one"],
+            }
+        ],
+    }
+    class FakeModel:
+        def __init__(self, **kwargs):
+            self.config = type(
+                "Config", (), {"model_name": "provider/model"}
+            )()
+
+    class FakeEnvironment:
+        def __init__(self, **kwargs):
+            pass
+
+        def execute(self, command):
+            assert command == "cat /tmp/reflection_analysis.json"
+            return {"returncode": 0, "output": json.dumps(analysis)}
+
+        def cleanup(self):
+            pass
+
+    class FakeAgent:
+        messages = [{"role": "assistant", "content": "reviewed all cases"}]
+
+        def run(self, task, **kwargs):
+            return "Submitted", "Evidence-grounded replacement rules."
+
+    monkeypatch.setattr(
+        "src.optimization.reflection.import_minisweagent",
+        lambda: (object, FakeModel, FakeEnvironment),
+    )
+    monkeypatch.setattr(
+        "src.optimization.reflection.build_default_agent",
+        lambda *args, **kwargs: FakeAgent(),
+    )
+    proposer = MiniSWEReflectionProposer(config, _FakeCapacityWindow())
+    record = {
+        "instance_id": "repo__one",
+        "expected_resolved": False,
+        "score": 0.0,
+        "checker_output": {
+            "predicted_resolved": True,
+            "decision_reason": "The plan looked plausible.",
+            "repository_evidence": [],
+        },
+        **_record("repo__one", "train")["asi"],
+    }
+
+    proposal = proposer(
+        {"rules": "seed"},
+        {"rules": [record]},
+        ["rules"],
+    )
+
+    assert proposal == {"rules": "Evidence-grounded replacement rules."}
+    bundle = next(config.run_dir.glob("reflection_inputs/iteration_*"))
+    assert json.loads((bundle / "reflection_analysis.json").read_text()) == (
+        analysis
+    )
+    audit = [
+        json.loads(line)
+        for line in (config.run_dir / "audit_events.jsonl").read_text().splitlines()
+    ]
+    completed = next(
+        event
+        for event in audit
+        if event["event"] == "reflection_analysis_captured"
+    )
+    assert completed["analysis_path"].endswith("reflection_analysis.json")
 
 
 def test_candidate_contamination_check_replays_previous_run_rules():
@@ -5278,8 +5379,9 @@ def test_default_gepa_config_is_eight_iteration_run(monkeypatch):
     assert config.search.parallel == 2
     assert config.checker.max_attempts == 5
     assert config.initial_rules_path.name == "gepa_initial_rules_minimal.md"
-    assert "offline-plan-verifier-balanced-b12-p2-8it-20260723" in str(
-        config.run_dir
+    assert (
+        "offline-plan-verifier-balanced-b12-p2-case-reviews-8it-20260727"
+        in str(config.run_dir)
     )
     checker_prompt = " ".join(config.checker_prompt.split())
     assert "software plan verification assistant" in checker_prompt
@@ -5300,9 +5402,10 @@ def test_default_gepa_config_is_eight_iteration_run(monkeypatch):
     assert "applies to unseen repositories" in reflection_prompt
     assert "fixed Checker prompt" in reflection_prompt
     assert "balanced accuracy" in reflection_prompt
-    assert "Printing the checklist without that line does not finish" in (
-        reflection_prompt
-    )
+    assert "one evidence-grounded diagnosis for every case" in reflection_prompt
+    assert "/tmp/reflection_analysis.json" in reflection_prompt
+    assert "cat <<'EOF'" in reflection_prompt
+    assert "supporting_instance_ids" in reflection_prompt
     assert "/tmp/candidate_rules.txt" not in reflection_prompt
     reflection_instance = " ".join(
         config.reflection_instance_template.split()
@@ -5315,6 +5418,8 @@ def test_default_gepa_config_is_eight_iteration_run(monkeypatch):
     assert "cases[].expected_resolved" in reflection_instance
     assert "decision_reason" in reflection_instance
     assert "Read manifest.json first" in reflection_instance
+    assert "For every FP and FN" in reflection_instance
+    assert "files actually consulted" in reflection_instance
     assert "Do not guess alternative filenames" in reflection_instance
     assert config.initial_rules_path.read_text(encoding="utf-8").strip() == (
         "Approve a plan only when evidence from the issue and base repository "

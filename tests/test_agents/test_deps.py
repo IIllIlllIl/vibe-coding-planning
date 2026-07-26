@@ -6,6 +6,7 @@ import pytest
 
 from src.agents import _deps
 from src.agents._deps import (
+    DEFAULT_FORMAT_ERROR_TEMPLATE,
     build_default_agent,
     build_model,
     extract_last_assistant,
@@ -113,10 +114,31 @@ class TestBuildDefaultAgent:
             cost_limit=1.5,
         )
         assert agent.kwargs["system_template"] == "You are a planner"
+        assert agent.kwargs["format_error_template"] == DEFAULT_FORMAT_ERROR_TEMPLATE
         assert agent.kwargs["step_limit"] == 15
         assert agent.kwargs["cost_limit"] == 1.5
         assert agent.model == "m"
         assert agent.env == "env"
+
+    @pytest.mark.parametrize("action_count", [0, 2])
+    def test_format_error_uses_official_swebench_correction(self, action_count):
+        from jinja2 import StrictUndefined, Template
+
+        agent = build_default_agent(
+            FakeDefaultAgent,
+            model="m",
+            environment="env",
+            system_template="test",
+            step_limit=10,
+        )
+        rendered = Template(
+            agent.kwargs["format_error_template"],
+            undefined=StrictUndefined,
+        ).render(actions=["action"] * action_count)
+
+        assert f"found {action_count} actions" in rendered
+        assert "EXACTLY ONE action in triple backticks" in rendered
+        assert "```bash\n<action>\n```" in rendered
 
     def test_omits_cost_limit_when_none(self):
         agent = build_default_agent(

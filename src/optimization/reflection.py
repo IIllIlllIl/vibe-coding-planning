@@ -36,7 +36,6 @@ case-specific string. Preserve the general review criteria, do not introduce
 new criteria, and follow the shell submission protocol from the system prompt.
 """
 
-
 def _write_json(path: Path, value: Any) -> None:
     temp = path.with_suffix(path.suffix + ".tmp")
     temp.write_text(
@@ -44,6 +43,60 @@ def _write_json(path: Path, value: Any) -> None:
         encoding="utf-8",
     )
     temp.replace(path)
+
+
+def _capture_optional_reflection_analysis(
+    bundle: Path,
+    env: Any,
+    audit: JsonlLogger,
+    *,
+    candidate_sha256: str,
+    instance_ids: Sequence[str],
+) -> None:
+    """Best-effort preservation that never changes proposal acceptance."""
+    try:
+        result = env.execute("cat /tmp/reflection_analysis.json")
+    except Exception as exc:
+        audit.write(
+            "reflection_analysis_unavailable",
+            candidate_sha256=candidate_sha256,
+            instance_ids=list(instance_ids),
+            reason=f"{type(exc).__name__}: {exc}",
+        )
+        return
+    raw = str(result.get("output", ""))
+    if result.get("returncode") != 0:
+        audit.write(
+            "reflection_analysis_unavailable",
+            candidate_sha256=candidate_sha256,
+            instance_ids=list(instance_ids),
+            returncode=result.get("returncode"),
+        )
+        return
+    try:
+        analysis = json.loads(raw)
+    except json.JSONDecodeError as exc:
+        (bundle / "reflection_analysis_invalid.txt").write_text(
+            str(redact_sensitive(raw)),
+            encoding="utf-8",
+        )
+        audit.write(
+            "reflection_analysis_invalid",
+            candidate_sha256=candidate_sha256,
+            instance_ids=list(instance_ids),
+            reason=str(exc),
+        )
+        return
+    _write_json(
+        bundle / "reflection_analysis.json",
+        redact_sensitive(analysis),
+    )
+    audit.write(
+        "reflection_analysis_captured",
+        candidate_sha256=candidate_sha256,
+        instance_ids=list(instance_ids),
+        analysis_path=str(bundle / "reflection_analysis.json"),
+    )
 
 
 def save_reflection_trajectory(
@@ -395,6 +448,13 @@ class MiniSWEReflectionProposer:
                         error=exc,
                     )
                     raise
+                _capture_optional_reflection_analysis(
+                    bundle,
+                    env,
+                    self.audit,
+                    candidate_sha256=parent_sha256,
+                    instance_ids=instance_ids,
+                )
                 try:
                     proposed = _validate_reflection_submission(
                         final_submission,

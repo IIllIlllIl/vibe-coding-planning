@@ -2,7 +2,7 @@
 
 > Authority: current local Offline GEPA experiment contract
 >
-> Last reviewed: 2026-07-23
+> Last reviewed: 2026-07-27
 
 ## Objective
 
@@ -32,6 +32,14 @@ unmodified repository, and use temporary diagnostic scripts outside the
 repository. It may not modify repository source/tests, implement the proposed
 solution, or judge the plan from a patch it creates.
 
+Checker and Reflection both use the shared mini-swe-agent action protocol.
+After zero or multiple fenced `bash` actions, the invalid response is not
+executed. The same Agent receives the detailed correction from
+mini-swe-agent 1.17.5's official SWE-bench config—including the detected action
+count and one-action example—and must emit a new response. This is fixed
+execution feedback rather than part of the candidate rules or experiment
+prompt.
+
 Resolved labels, historical Plan/Code trajectories, patches, evaluator results,
 and scores are never Checker inputs. They are available only to Reflection as
 post-execution diagnostic evidence. Reflection runs in a lightweight container
@@ -52,12 +60,29 @@ exact matches for one generalization repair. A clean repair is returned to
 GEPA. If that single repair still contains a match, the proposal fails and GEPA
 retains its parent; there is no additional judge or unbounded retry.
 
-The Reflection instance prompt documents the evidence API explicitly. It
-directs Reflection to read `/evidence/manifest.json` first and names the
-per-instance `checker_output.json`, `plan_trajectory.json`,
-`code_trajectory.json`, `generated.patch`, and `evaluator_result.json` files
-with their relevant fields. This prevents filename and field guessing without
-requiring Reflection to read every raw trajectory in full.
+The Reflection instance prompt documents the evidence API explicitly.
+Reflection must read every case listed in `manifest.json`, read each
+`checker_output.json`, inspect the raw Checker and execution-after evidence for
+every FP and FN, and use correct cases to test whether a proposed rule would
+damage existing correct behavior. Per-instance `plan_trajectory.json`,
+`code_trajectory.json`, `generated.patch`, and `evaluator_result.json` remain
+available for deeper diagnosis. There is no additional model-facing summary:
+the structured case reviews themselves are the auditable minibatch overview.
+
+Before rules can be submitted, Reflection writes a structured analysis with
+one diagnosis and an `evidence_used` list for every minibatch case. Every add,
+revise, delete, or preserve decision also records its rationale and supporting
+case IDs. Each review separately records whether the historical result is
+attributable to planning, Code, evaluation/infrastructure, mixed causes, or
+uncertainty, and whether it supports a rule change, rule preservation, no
+rule inference, or remains uncertain.
+
+Only the complete replacement rules are returned to GEPA and later shown to
+the Checker. The outer orchestration attempts to preserve the Agent-written
+analysis as `reflection_analysis.json`; missing or invalid analysis is recorded
+but does not reject, repair, or otherwise change the proposal. The complete
+Agent trajectory remains the raw authority. The analysis is diagnostic
+evidence, never part of the candidate rules or Checker input.
 
 ## Dataset And Metric
 
@@ -95,6 +120,13 @@ The current config is [`../configs/gepa_verified_rules.yaml`](../configs/gepa_ve
 - balanced accuracy;
 - local Docker execution with two concurrent Checkers.
 
+The minibatch remains 12 for the first complete-case-review experiment. Eight
+iterations can therefore expose up to 96 epoch-shuffled training positions,
+whereas reducing the batch would simultaneously reduce coverage and increase
+parent/proposal comparison noise. Raw trajectories need not all be read in
+full: every case receives a structured review, every error receives a deeper
+diagnosis, and correct cases provide regression checks.
+
 `max_iterations=8` is the primary stop condition. GEPA's official saved state
 is cumulative, so resuming the same logical run continues toward eight total
 proposals rather than adding another eight. The worst-case planned evaluation
@@ -118,6 +150,8 @@ The run directory preserves:
 - every Checker call's complete trajectory;
 - `reflection_inputs/*/reflection_trajectory.json` inside per-proposal evidence
   bundles;
+- `reflection_analysis.json` when the Agent produced parseable JSON diagnostic
+  evidence, or `reflection_analysis_invalid.txt` when malformed;
 - `reflection_inputs/*/reflection_repair_trajectory.json` when a proposal
   requires the single contamination repair;
 - candidate rules, validation metrics, reports, errors, token use, and cost.
