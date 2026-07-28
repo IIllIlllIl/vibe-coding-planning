@@ -31,7 +31,29 @@ from src.optimization.models import (
 
 
 class CheckerRunner(Protocol):
-    def __call__(self, case: GEPACase, rules: str) -> CheckerOutput: ...
+    def __call__(
+        self,
+        case: GEPACase,
+        rules: str,
+        *,
+        retry_feedback: str = "",
+    ) -> CheckerOutput: ...
+
+
+class CheckerOutputContractError(ValueError):
+    """The Checker submitted output that the host could not validate."""
+
+
+def checker_retry_feedback(error: str) -> str:
+    """Turn one host validation error into fixed, label-free retry context."""
+    return (
+        "A previous Checker attempt was rejected by the host output validator.\n"
+        f"Validator error: {error}\n"
+        "Perform the Checker task again and ensure the final submission satisfies "
+        "the required JSON format. This feedback concerns only the output "
+        "protocol; it does not change the issue, plan, candidate rules, or "
+        "approval criteria."
+    )
 
 
 def validate_checker_output(value: dict[str, Any]) -> CheckerOutput:
@@ -121,7 +143,13 @@ class DockerChecker:
         with self._prepare_lock:
             self._prepared_images.add(image)
 
-    def __call__(self, case: GEPACase, rules: str) -> CheckerOutput:
+    def __call__(
+        self,
+        case: GEPACase,
+        rules: str,
+        *,
+        retry_feedback: str = "",
+    ) -> CheckerOutput:
         self.prepare(case)
         DefaultAgent, LitellmModel, _ = import_minisweagent()
         base_model = LitellmModel(
@@ -156,6 +184,7 @@ class DockerChecker:
             instance_id=case.instance_id,
             candidate_sha256=candidate_sha256,
             candidate_rules_empty=rules == "",
+            retry_feedback_present=bool(retry_feedback),
             checker_input_keys=sorted(checker_payload),
             repository_keys=sorted(checker_payload["repository"]),
             forbidden_keys_present=[],
@@ -196,9 +225,10 @@ class DockerChecker:
                 task=case.issue_description,
                 plan=case.plan,
                 candidate_rules=rules,
+                retry_feedback=retry_feedback,
             )
             if not final_submission.strip():
-                raise ValueError(
+                raise CheckerOutputContractError(
                     "checker did not submit JSON output "
                     f"(exit_status={exit_status})"
                 )
@@ -208,7 +238,7 @@ class DockerChecker:
                     raise ValueError("checker submission must be a JSON object")
                 parsed = validate_checker_output(value)
             except (ValueError, json.JSONDecodeError) as exc:
-                raise ValueError(
+                raise CheckerOutputContractError(
                     "checker final submission invalid "
                     f"(exit_status={exit_status}): {exc}"
                 ) from exc

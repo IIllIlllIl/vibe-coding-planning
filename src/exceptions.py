@@ -79,5 +79,13 @@ class ControllerYield(BaseException):
 OnlineControllerYield = ControllerYield
 
 
+class OfflineReflectionBlocked(BaseException):
+    """A durable Offline Reflection task failure that GEPA must not swallow."""
+
+    def __init__(self, cause: Exception) -> None:
+        super().__init__(f"{type(cause).__name__}: {cause}")
+        self.cause = cause
+
+
 class SynthesisExhaustedError(FatalError):
     """All bounded Synthesis Agent attempts failed without a proposal."""

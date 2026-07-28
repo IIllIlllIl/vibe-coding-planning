@@ -23,6 +23,22 @@ from src.optimization.reflection import (
 )
 
 
+def _failure_category(exc: Exception) -> str:
+    if isinstance(exc, MemoryError):
+        return "memory"
+    if isinstance(exc, FatalError):
+        return "fatal"
+    if isinstance(exc, TimeoutError):
+        return "timeout"
+    if isinstance(exc, OSError):
+        return "io"
+    if isinstance(exc, ValueError):
+        return "validation"
+    if isinstance(exc, RuntimeError):
+        return "runtime"
+    return "unexpected"
+
+
 def run_task(
     *,
     config_path: Path,
@@ -31,14 +47,19 @@ def run_task(
     attempt_dir: Path,
 ) -> int:
     started_at = datetime.now(timezone.utc).isoformat()
-    manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+    attempt_dir.mkdir(parents=True, exist_ok=True)
+    manifest: dict = {}
+    failure_stage = "input_load"
     try:
+        manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+        failure_stage = "config_load"
         config = load_optimization_config(config_path)
         config = replace(
             config,
             run_dir=attempt_dir,
             execution=OfflineExecutionConfig(backend="local"),
         )
+        failure_stage = "runtime_setup"
         capacity = configure_docker_capacity(
             config.docker,
             max_concurrent=1,
@@ -46,6 +67,7 @@ def run_task(
         )
         mode = str(manifest.get("mode"))
         if mode == "offline_reflection":
+            failure_stage = "reflection_execution"
             proposer = MiniSWEReflectionProposer(
                 config,
                 capacity,
@@ -75,12 +97,14 @@ def run_task(
                 )
                 return 0
         elif mode == "offline_reflection_repair":
+            failure_stage = "repair_input_load"
             source = json.loads(
                 Path(str(manifest["source_manifest"])).read_text(
                     encoding="utf-8"
                 )
             )
             records = list(source["reflective_dataset"]["rules"])
+            failure_stage = "reflection_repair_execution"
             repair = run_reflection_contamination_repair(
                 config,
                 capacity,
@@ -97,6 +121,7 @@ def run_task(
             proposal = {"rules": str(repair["rules"])}
         else:
             raise ValueError(f"unknown Offline Reflection worker mode: {mode}")
+        failure_stage = "output_write"
         atomic_json(
             output_path,
             {
@@ -123,6 +148,8 @@ def run_task(
             "fingerprint": manifest.get("fingerprint"),
             "error_type": type(exc).__name__,
             "error": str(exc),
+            "failure_stage": failure_stage,
+            "failure_category": _failure_category(exc),
         }
         atomic_json(attempt_dir / "failure.json", failure)
         atomic_json(output_path, failure)

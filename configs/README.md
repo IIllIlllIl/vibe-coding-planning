@@ -39,8 +39,8 @@ poll cadence, controller resources, or remote workdir belongs in
 
 | Config | Runtime | Purpose |
 |---|---|---|
-| `gepa_verified_rules.yaml` | ULHPC Apptainer | Two-proposal Checker-rule experiment over the full 384/98 split, using minibatch 12, balanced accuracy, repository-grounded read-only verification, and a minimal seed. Checker and Reflection tasks use `1 CPU / 4G / 35min`, with at most four workers active. |
-| `offline_gepa_supervisor.yaml` | Local tmux+caffeinate | Persistent 2-iteration launch identity with 5-minute polling and `1 CPU / 4G / 10min` controller slices. |
+| `gepa_verified_rules.yaml` | ULHPC Apptainer | Two-proposal Checker-rule experiment over the full 384/98 split, using minibatch 12, balanced accuracy, repository-grounded read-only verification, and a minimal seed. Checker output-contract retries start a fresh Agent with only the prior worker-validator error. Checker, Reflection, and repair tasks receive three total attempts; exhaustion blocks without fabricating a score or proposal. Tasks use `1 CPU / 4G / 35min`, with at most four workers active. |
+| `offline_gepa_supervisor.yaml` | Local tmux+caffeinate | Persistent 2-iteration launch identity with 30-minute polling and `1 CPU / 4G / 10min` controller slices. The supervisor waits locally and consumes no HPC allocation between controller submissions. |
 | `offline_gepa_hpc_smoke_2x2_20260728.yaml` | ULHPC Apptainer | Environment-only 2-train/2-validation, 1-iteration smoke. Its scores are not rule-quality evidence. |
 | `gepa_initial_rules_minimal.md` | Prompt text | Minimal current Offline seed intended to leave room for GEPA exploration. |
 

@@ -1,7 +1,8 @@
 {
   "schema_version": 1,
-  "generated_at": "2026-07-15",
+  "generated_at": "2026-07-28",
   "active_method": "online_gepa_planning_rules",
+  "active_offline_method": "offline_gepa_plan_verification_rules",
   "default_agent_scope": [
     "output/README.md",
     "output/catalog.json",
@@ -12,6 +13,14 @@
     "name": "online-planning-hpc-policy-v3-20260715",
     "outcome_policy_version": 3,
     "classification": "active_formal"
+  },
+  "active_local_offline_run": {
+    "name": "offline-plan-verifier-balanced-b12-p2-case-reviews-8it-20260727",
+    "classification": "active_checkpoint_baseline",
+    "resume_requires_manifest_identity": true,
+    "iteration_target_reached": true,
+    "extension_requires_explicit_policy": true,
+    "current_hpc_config_compatible": false
   },
   "archive_groups": [
     {
@@ -28,7 +37,9 @@
       "classification": "historical_valid",
       "original_paths": [
         "output/SWE-bench_Verified/gepa-rules/strict-checker-*",
-        "output/SWE-bench_Verified/gepa-rules/archive/20260622_pre_strict_checker"
+        "output/SWE-bench_Verified/gepa-rules/archive/20260622_pre_strict_checker",
+        "output/SWE-bench_Verified/gepa-rules/offline-plan-verifier-balanced-b12-8it-20260722",
+        "output/SWE-bench_Verified/gepa-rules/offline-plan-verifier-balanced-b12-p2-8it-20260723"
       ],
       "score_usable": "offline_only"
     },
@@ -79,7 +90,8 @@
       "original_paths": [
         "output/SWE-bench_Verified/test_runs_archive",
         "output/analysis_test_runs_archive",
-        "output/SWE-bench_Pro/pro-prompt-fix-test1"
+        "output/SWE-bench_Pro/pro-prompt-fix-test1",
+        "output/SWE-bench_Verified/gepa-rules/offline-interactive-checker-3it-smoke-20260721"
       ],
       "score_usable": false
     },

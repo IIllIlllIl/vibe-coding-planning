@@ -9,6 +9,7 @@ from pathlib import Path
 import shlex
 from typing import Any, Mapping, Sequence
 
+from src.exceptions import OfflineReflectionBlocked
 from src.optimization.audit import JsonlLogger, text_sha256
 from src.optimization.config import OptimizationConfig
 from src.optimization.hpc.task_batch import (
@@ -169,7 +170,7 @@ class HPCOfflineReflectionProposer:
             self.failures.append(failure)
             self.audit.write("reflection_failed", **failure)
             self.errors.write("reflection_failed", **failure)
-            raise
+            raise OfflineReflectionBlocked(exc) from exc
         initial = outputs[0]
         if initial["outcome"] == "repair_required":
             try:
@@ -188,7 +189,7 @@ class HPCOfflineReflectionProposer:
                 self.failures.append(failure)
                 self.audit.write("reflection_failed", **failure)
                 self.errors.write("reflection_failed", **failure)
-                raise
+                raise OfflineReflectionBlocked(exc) from exc
         else:
             proposal = dict(initial["proposal"])
         self.successful_proposals += 1
@@ -316,6 +317,8 @@ class HPCOfflineReflectionProposer:
         job_name = (
             f"{hpc.job_name_prefix}-{phase}-{task_dir.name[:12]}-a{attempt}"
         )
+        slurm_log_dir = task_dir / "slurm_logs" / f"attempt_{attempt:02d}"
+        slurm_log_dir.mkdir(parents=True, exist_ok=True)
         attempt_dir = task_dir / "attempts" / "task_0000" / (
             f"attempt_{attempt:02d}"
         )
@@ -327,8 +330,8 @@ class HPCOfflineReflectionProposer:
             f"#SBATCH --mem={hpc.mem}",
             f"#SBATCH --time={hpc.time}",
             "#SBATCH --array=0",
-            "#SBATCH --output=%x-%j.out",
-            "#SBATCH --error=%x-%j.err",
+            f"#SBATCH --output={slurm_log_dir}/%x-%j.out",
+            f"#SBATCH --error={slurm_log_dir}/%x-%j.err",
             "set -euo pipefail",
             "set +x",
             f"module load {shlex.quote(hpc.python_module)}",

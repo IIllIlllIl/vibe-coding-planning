@@ -14,7 +14,7 @@ from gepa.core.state import GEPAState
 from gepa.utils import MaxCandidateProposalsStopper
 
 from src.environment.docker_env import configure_docker_capacity
-from src.exceptions import ControllerYield
+from src.exceptions import ControllerYield, OfflineReflectionBlocked
 from src.optimization.audit import JsonlLogger, text_sha256
 from src.optimization.adapter import CheckerGEPAAdapter
 from src.optimization.callbacks import ProgressCallback
@@ -241,11 +241,22 @@ def _run_optimization_locked(
             worker_job_id=exc.job_id,
         )
         return None
-    except Exception as exc:
+    except (OfflineReflectionBlocked, Exception) as caught:
+        exc = (
+            caught.cause
+            if isinstance(caught, OfflineReflectionBlocked)
+            else caught
+        )
         error = f"{type(exc).__name__}: {exc}"
-        resumable, failure_kind = _classify_optimization_failure(error)
+        if isinstance(caught, OfflineReflectionBlocked):
+            resumable = False
+            failure_kind = "reflection_task_blocked"
+            failure_phase = "reflection"
+        else:
+            resumable, failure_kind = _classify_optimization_failure(error)
+            failure_phase = "optimization"
         callback.mark_failed(
-            phase="optimization",
+            phase=failure_phase,
             error=error,
             resumable=resumable,
             failure_kind=failure_kind,
@@ -273,7 +284,7 @@ def _run_optimization_locked(
         )
         audit.write(
             "run_failed",
-            phase="optimization",
+            phase=failure_phase,
             error=error,
             resumable=resumable,
             failure_kind=failure_kind,
@@ -283,7 +294,7 @@ def _run_optimization_locked(
             {
                 "schema_version": 1,
                 "status": "retryable_failed" if resumable else "failed",
-                "failure_phase": "optimization",
+                "failure_phase": failure_phase,
                 "blocking": not resumable,
                 "error_type": type(exc).__name__,
                 "error": str(exc),

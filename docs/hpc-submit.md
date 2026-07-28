@@ -109,8 +109,10 @@ conda run -n mini-swe python scripts/hpc_supervisor_service.py \
   status --launch-config configs/online_gepa_supervisor.yaml
 ```
 
-The Online supervisor currently polls every 30 minutes; the small Offline HPC
-run polls every 5 minutes. In both cases it submits only when:
+The Online and Offline supervisors currently poll every 30 minutes. The local
+polling wait consumes no HPC allocation; the longer Offline cadence reduces
+how often status checks and controller submissions can occur. In both cases the
+supervisor submits only when:
 
 - the target is not reached;
 - no active controller exists;
@@ -119,9 +121,32 @@ run polls every 5 minutes. In both cases it submits only when:
 - `controller_status.json` is not a non-recoverable failure.
 
 A transient SSH/status query failure is retained and polled again without a
-submission. A Reflection Agent failure is `retryable_failed`: the next
-controller replays the uncommitted GEPA proposal. State identity, manifest,
-OOM, and output-integrity failures remain blocking.
+submission. An Online controller-level Reflection failure is
+`retryable_failed`: the next controller replays the uncommitted GEPA proposal.
+Offline Slurm Reflection tasks use the method-specific policy below. State
+identity, manifest, OOM, and output-integrity failures remain blocking.
+
+Offline Checker output-contract retries are method-specific. After an empty,
+invalid-JSON, or schema-invalid final submission, the failed trajectory and
+validator error are preserved. A fresh Checker task receives only that exact
+validator error; labels, scores, ASI, and prior semantic output remain absent.
+The shared Slurm package continues to own only atomic task transport.
+
+Offline initial-Reflection and contamination-repair tasks receive three total
+fresh-Agent attempts. Exhaustion is persisted as the task batch's `EXHAUSTED`
+terminal state and blocks the Offline run. A dedicated controller exception
+passes through GEPA's ordinary proposal-exception boundary, so the failed
+Reflection cannot consume a normal proposal iteration. Worker records include
+diagnostic failure stage/category fields.
+
+The worker validates an Agent's final submission before writing
+`status=completed`. The controller then performs a separate host validation of
+the atomic worker envelope, fingerprint, task identity, and output schema. A
+host-validation failure preserves the original output plus
+`host_validation_failure.json` and sets the batch to `BLOCKED`; it is treated
+as transport, identity, or implementation inconsistency rather than an Agent
+retry. Terminal Slurm observations are stored per attempt, and Slurm
+stdout/stderr paths are rooted under the fingerprinted task batch.
 
 `--max-runs=0` is the default and means unlimited controller slices. A finite
 value is an explicit operator safety cap, not the recommended unattended mode.
@@ -140,9 +165,13 @@ a test, so launch commands must not inject a user-specific PATH.
 
 | Outcome | Supervisor behavior |
 |---|---|
-| Agent timeout/contract failure after configured retries | score unresolved; continue |
-| Slurm-confirmed worker `TIMEOUT` | retry only that index; after the final configured attempt, score unresolved with timeout metadata |
-| Reflection failure | leave proposal uncommitted; retry a controller slice |
+| Online Plan/Code Agent contract failure after configured retries | score unresolved; continue |
+| Offline Checker output-contract failure before retry exhaustion | start a fresh Checker with the previous validator error only |
+| Offline Checker failure after retry exhaustion | persist `EXHAUSTED` and stop without fabricating a prediction |
+| Online Slurm-confirmed rollout `TIMEOUT` | retry only that index; after the final configured attempt, score unresolved with timeout metadata |
+| Offline Reflection failure before exhaustion | retry the task as a fresh Agent |
+| Offline Reflection failure after three attempts | persist `EXHAUSTED` and block without consuming a proposal iteration |
+| Online controller-level Reflection failure | leave proposal uncommitted; retry a controller slice |
 | SSH/status/submission/transient controller failure | wait and retry |
 | OOM, disk quota, permanent provider authentication/billing/hard quota failure, corrupt state/output, fingerprint/manifest mismatch | block |
 | Formal Plan/Code mini-swe `cost_limit` / `step_limit` | disabled; worker walltime is the total rollout boundary |
@@ -178,10 +207,17 @@ input; no Agent conversation is resumed.
 - `PENDING`: wait; queue time is not execution timeout.
 - `RUNNING`: wait up to requested worker walltime plus output grace.
 - terminal with valid output: collect.
+- Offline Checker `agent_failed` with an output-contract classification: archive
+  the attempt and give its worker-validator error to the next fresh Checker
+  task.
+- `status=completed` output rejected by host validation: preserve the raw output
+  and exact validation error, set the task batch to `BLOCKED`, and do not retry
+  an Agent.
 - `TIMEOUT` without output: clean the terminal attempt workspace and retry only
-  that index. After `hpc.max_task_attempts` is exhausted, synthesize a scored
-  unresolved result from durable phase checkpoints and mark
-  `timeout_source=slurm_walltime`.
+  that index. Online rollout may synthesize a scored unresolved result from
+  durable phase checkpoints according to its outcome policy. Offline Checker
+  and Reflection instead enter `EXHAUSTED` after the configured attempts and
+  block without fabricating a prediction or proposal.
 - other terminal states without output: retry the affected index; after the
   configured attempts, block as infrastructure-invalid.
 - state missing/unknown: wait through missing-task grace, then treat as lost.

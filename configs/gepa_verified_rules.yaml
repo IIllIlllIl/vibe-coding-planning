@@ -73,7 +73,7 @@ hpc:
   poll_interval_seconds: 300
   task_output_grace_seconds: 300
   missing_task_grace_seconds: 600
-  max_task_attempts: 2
+  max_task_attempts: 3
   python_module: lang/Python/3.11
   container_module: tools/Apptainer
   python_bin: python3
@@ -142,6 +142,11 @@ prompts:
     <candidate_rules>
     {{candidate_rules}}
     </candidate_rules>
+    {% if retry_feedback %}
+    <retry_feedback>
+    {{retry_feedback}}
+    </retry_feedback>
+    {% endif %}
   reflection_system: |
     You maintain the complete rule text used by a fixed rule-bound Checker.
 

@@ -6,12 +6,12 @@ for an explicitly requested historical comparison, audit, or reproduction.
 | Directory | Contents | Score use |
 |---|---|---|
 | `online-gepa/reference/` | Completed Online GEPA smoke and HPC resource pilots | Pipeline/resource reference only |
-| `offline-gepa/` | Strict Checker GEPA runs and pre-strict predecessors | Historical offline methodology only |
+| `offline-gepa/` | Strict Checker runs, pre-strict predecessors, and superseded July 2026 Offline plan-verifier runs | Historical offline methodology only |
 | `pct/` | SWE-bench Verified, PolyBench, and Pro Plan-Code-Test runs | Historical execution evidence |
 | `pcc/` | Checker comparisons, reflection cases, and PCC inputs | Historical checker evidence |
 | `analysis/` | Flash/Pro/Kimi rule extraction and reflection analyses | Historical derived analysis |
 | `datasets/historical/` | Pilot and Checker snapshots not used by the formal Online run | Immutable reproduction inputs |
-| `tests/` | Smoke, prompt-fix, and early integration outputs | No quality claim |
+| `tests/` | Smoke, prompt-fix, early integration outputs, and the July 21 Offline interactive-checker smoke | No quality claim |
 | `operations/` | Watchdog, preheat, and local run logs | Operational evidence only |
 | `failed-or-invalid/` | Runs with known invalid scores or unusable terminal state | Never use for scoring |
 

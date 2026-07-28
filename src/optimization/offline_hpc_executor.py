@@ -39,6 +39,7 @@ def offline_checker_semantic_sha256(config: OptimizationConfig) -> str:
         root / "src" / "environment" / "apptainer_env.py",
         root / "src" / "optimization" / "checker.py",
         root / "src" / "optimization" / "offline_checker_worker.py",
+        root / "src" / "optimization" / "offline_hpc_executor.py",
     ]
     return _stable_sha256(
         {
@@ -56,6 +57,10 @@ def offline_checker_semantic_sha256(config: OptimizationConfig) -> str:
             },
             "checker_prompt": config.checker_prompt,
             "checker_instance_template": config.checker_instance_template,
+            "retry_policy": {
+                "kind": "fresh_agent_with_previous_validator_error",
+                "max_task_attempts": config.hpc.max_task_attempts,
+            },
         }
     )
 
@@ -94,6 +99,8 @@ def build_offline_checker_array_script(
     attempt: int,
 ) -> str:
     hpc = config.hpc
+    slurm_log_dir = batch_dir / "slurm_logs" / f"attempt_{attempt:02d}"
+    slurm_log_dir.mkdir(parents=True, exist_ok=True)
     index_spec = ",".join(str(index) for index in task_indices)
     array_spec = f"{index_spec}%{hpc.max_running_array_tasks}"
     config_path = hpc.worker_config_path
@@ -110,8 +117,8 @@ def build_offline_checker_array_script(
         f"#SBATCH --mem={hpc.mem}",
         f"#SBATCH --time={hpc.time}",
         f"#SBATCH --array={array_spec}",
-        "#SBATCH --output=%x-%A_%a.out",
-        "#SBATCH --error=%x-%A_%a.err",
+        f"#SBATCH --output={slurm_log_dir}/%x-%A_%a.out",
+        f"#SBATCH --error={slurm_log_dir}/%x-%A_%a.err",
         "set -euo pipefail",
         "set +x",
         f"module load {shlex.quote(hpc.python_module)}",
@@ -128,13 +135,25 @@ def build_offline_checker_array_script(
         'OUTPUT_JSON="${BATCH_DIR}/outputs/task_${TASK_ID}.json"',
         'ATTEMPT_DIR="${BATCH_DIR}/attempts/task_${TASK_ID}/attempt_${ATTEMPT_ID}"',
         'mkdir -p "${ATTEMPT_DIR}"',
+    ]
+    worker_command = (
         f"{shlex.quote(hpc.python_bin)} "
         "-m src.optimization.offline_checker_worker "
         f"--config {shlex.quote(config_path)} "
         '--task-manifest "${TASK_MANIFEST}" '
         '--output "${OUTPUT_JSON}" '
-        '--attempt-dir "${ATTEMPT_DIR}"',
-    ]
+        '--attempt-dir "${ATTEMPT_DIR}"'
+    )
+    if attempt > 1:
+        previous_dir = (
+            batch_dir / "failed_outputs" / f"attempt_{attempt - 1:02d}"
+        )
+        lines.append(
+            f"PREVIOUS_OUTPUT={shlex.quote(str(previous_dir))}"
+            '/task_${TASK_ID}.json'
+        )
+        worker_command += ' --previous-output "${PREVIOUS_OUTPUT}"'
+    lines.append(worker_command)
     return "\n".join(lines) + "\n"
 
 

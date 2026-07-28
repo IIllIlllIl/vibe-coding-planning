@@ -40,6 +40,17 @@ count and one-action example—and must emit a new response. This is fixed
 execution feedback rather than part of the candidate rules or experiment
 prompt.
 
+Final Checker output is validated by worker-side host Python after
+mini-swe-agent has accepted the completion action. If that output is empty,
+invalid JSON, or violates the Checker output schema, the failed attempt and
+complete trajectory are preserved. A configured retry starts a fresh
+Agent/container and receives only the previous worker-validator error in
+`<retry_feedback>`. It does not receive
+the historical label, score, ASI, GEPA acceptance state, or the previous
+semantic answer. Infrastructure/provider failures do not enter this feedback.
+The feedback changes only output-protocol recovery and is part of the
+fingerprinted Checker semantics.
+
 Resolved labels, historical Plan/Code trajectories, patches, evaluator results,
 and scores are never Checker inputs. They are available only to Reflection as
 post-execution diagnostic evidence. Reflection runs in a lightweight container
@@ -122,6 +133,7 @@ The current config is [`../configs/gepa_verified_rules.yaml`](../configs/gepa_ve
 - two cumulative candidate-proposal iterations;
 - balanced accuracy;
 - independent Apptainer Slurm tasks, with array throttle 4;
+- three total attempts for each failed Checker, Reflection, or repair task;
 - GEPA adapter parallelism 2.
 
 The minibatch remains 12 so each proposal must account for a meaningful
@@ -167,11 +179,20 @@ Only a `status=completed` output with matching fingerprint, instance identity,
 and schema is reusable. A killed or invalid attempt is never resumed inside an
 Agent conversation. If the configured retry policy permits another attempt,
 the whole Checker, initial Reflection, or repair task starts again in a new
-attempt directory.
+attempt directory. For a Checker output-contract failure, only the archived
+validator error is copied into the new attempt's immutable retry context; the
+previous Agent process and writable repository state are not resumed.
 Slurm terminal state and temporarily missing accounting records wait through
 configured output/missing grace periods before retry or failure. GEPA state,
 not Slurm task completion, remains the authority for whether a result affected
 the search.
+
+If a Checker, initial Reflection, or contamination-repair task exhausts all
+three attempts, its task journal enters the durable `EXHAUSTED` terminal state
+and the Offline run blocks. Reflection uses a dedicated controller exception
+that passes through GEPA's ordinary proposal-exception handler, so exhaustion
+cannot become a normal no-proposal iteration or consume the configured
+iteration target. No prediction, score, or candidate rules are fabricated.
 
 ## Local/HPC Configuration Switch
 
@@ -204,6 +225,15 @@ The run directory preserves:
   task when required;
 - `progress.json`, `audit_events.jsonl`, and `evaluations.jsonl`;
 - every Checker call's complete trajectory;
+- per-attempt `retry_feedback.json` when a fresh Checker receives a previous
+  output-validator error;
+- worker failure records with the exact exception type plus deterministic
+  `failure_stage` and `failure_category`;
+- `host_validation_failure.json` when a worker-declared completed output fails
+  controller-side envelope, identity, fingerprint, or schema validation; the
+  raw output is preserved and the batch blocks rather than retrying an Agent;
+- per-attempt `slurm_status.json` for terminal or missing-output observations,
+  plus Slurm stdout/stderr under the fingerprinted batch's `slurm_logs/`;
 - `reflection_inputs/*/reflection_trajectory.json` inside per-proposal evidence
   bundles;
 - `reflection_analysis.json` when the Agent produced parseable JSON diagnostic
@@ -212,9 +242,12 @@ The run directory preserves:
   attempt evidence, when a proposal requires contamination repair;
 - candidate rules, validation metrics, reports, errors, token use, and cost.
 
-Operational Checker exhaustion currently stops the optimization and is marked
-resumable. It must not be converted into an unresolved prediction or silently
-included in candidate comparison.
+Operational Checker exhaustion stops the optimization. It must not be converted
+into an unresolved prediction or silently included in candidate comparison.
+Operational Reflection exhaustion likewise blocks instead of being converted
+into a GEPA no-proposal iteration. `BLOCKED` and `EXHAUSTED` task journals are
+terminal and are replayed as the same failure rather than inferred again from a
+stale `SUBMITTED` state.
 
 ## Controller Entry Point
 

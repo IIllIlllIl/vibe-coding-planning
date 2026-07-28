@@ -9,7 +9,7 @@ from pathlib import Path
 import pytest
 
 from src.config import DockerConfig
-from src.exceptions import ControllerYield
+from src.exceptions import ControllerYield, OfflineReflectionBlocked
 from src.optimization.config import (
     ContainerConfig,
     ModelConfig,
@@ -17,15 +17,36 @@ from src.optimization.config import (
     OptimizationConfig,
     SearchConfig,
 )
+from src.optimization.checker import (
+    CheckerOutputContractError,
+    checker_retry_feedback,
+)
 from src.optimization.hpc.config import HPCConfig
-from src.optimization.hpc.task_batch import SlurmTaskBatch, TaskFiles, atomic_json
-from src.optimization.models import GEPACase, RepositoryRef
+from src.optimization.hpc.slurm import SlurmTaskStatus
+from src.optimization.hpc.task_batch import (
+    SlurmTaskBatch,
+    TaskAttemptsExhausted,
+    TaskBatchBlocked,
+    TaskFiles,
+    atomic_json,
+)
+from src.optimization.models import (
+    CheckerOutput,
+    GEPACase,
+    RepositoryEvidence,
+    RepositoryRef,
+)
+from src.optimization.offline_checker_worker import run_task as run_checker_task
 from src.optimization.offline_hpc_executor import (
     HPCSlurmOfflineCheckerExecutor,
+    build_offline_checker_array_script,
     offline_evaluation_fingerprint,
 )
 from src.optimization.offline_hpc_reflection import (
     HPCOfflineReflectionProposer,
+)
+from src.optimization.offline_reflection_worker import (
+    run_task as run_reflection_task,
 )
 from src.optimization.runner import run_optimization
 
@@ -126,6 +147,151 @@ def test_controller_yield_is_not_an_agent_or_gepa_error():
     assert not issubclass(ControllerYield, Exception)
 
 
+def test_offline_reflection_block_bypasses_gepa_exception_boundary():
+    assert issubclass(OfflineReflectionBlocked, BaseException)
+    assert not issubclass(OfflineReflectionBlocked, Exception)
+
+
+def test_shared_slurm_blocks_and_records_host_validation_failure(tmp_path):
+    task = TaskFiles(
+        index=0,
+        instance_id="case",
+        manifest_path=tmp_path / "input.json",
+        output_path=tmp_path / "output.json",
+        attempts_dir=tmp_path / "attempts" / "task_0000",
+    )
+    atomic_json(task.manifest_path, {"case": "case"})
+    atomic_json(task.output_path, {"status": "completed", "fingerprint": "wrong"})
+    runtime = SlurmTaskBatch(HPCConfig(submit=True))
+
+    with pytest.raises(TaskBatchBlocked, match="blocking Slurm Agent"):
+        runtime.run(
+            batch_dir=tmp_path,
+            fingerprint="fingerprint",
+            tasks=[task],
+            job_name=lambda attempt: f"job-{attempt}",
+            write_script=lambda indices, attempt: tmp_path / "unused.sbatch",
+            validate_output=lambda files, output: (_ for _ in ()).throw(
+                ValueError("output fingerprint mismatch")
+            ),
+        )
+
+    state = json.loads((tmp_path / "task_state.json").read_text())
+    assert state["phase"] == "BLOCKED"
+    assert state["active_job_id"] is None
+    failure = json.loads(
+        (
+            task.attempts_dir
+            / "attempt_01"
+            / "host_validation_failure.json"
+        ).read_text()
+    )
+    assert failure["failure_stage"] == "host_output_validation"
+    assert failure["error"] == "output fingerprint mismatch"
+    assert failure["instance_id"] == "case"
+
+
+def test_shared_slurm_records_terminal_status_and_exhaustion(
+    tmp_path,
+    monkeypatch,
+):
+    task = TaskFiles(
+        index=0,
+        instance_id="case",
+        manifest_path=tmp_path / "input.json",
+        output_path=tmp_path / "output.json",
+        attempts_dir=tmp_path / "attempts" / "task_0000",
+    )
+    atomic_json(task.manifest_path, {"case": "case"})
+    atomic_json(
+        tmp_path / "task_state.json",
+        {
+            "schema_version": 1,
+            "fingerprint": "fingerprint",
+            "phase": "SUBMITTED",
+            "active_attempt": 1,
+            "active_job_id": "123",
+            "missing_since": {},
+            "terminal_since": {},
+        },
+    )
+    monkeypatch.setattr(
+        "src.optimization.hpc.task_batch.query_slurm_task_status",
+        lambda job_id, task_index: SlurmTaskStatus(
+            state="TIMEOUT",
+            elapsed_seconds=300,
+            raw="123_0|TIMEOUT|00:05:00",
+        ),
+    )
+    runtime = SlurmTaskBatch(
+        HPCConfig(
+            submit=True,
+            max_task_attempts=1,
+            task_output_grace_seconds=0,
+        )
+    )
+
+    with pytest.raises(TaskAttemptsExhausted, match="1 attempt"):
+        runtime.run(
+            batch_dir=tmp_path,
+            fingerprint="fingerprint",
+            tasks=[task],
+            job_name=lambda attempt: f"job-{attempt}",
+            write_script=lambda indices, attempt: tmp_path / "unused.sbatch",
+            validate_output=lambda files, output: None,
+        )
+
+    state = json.loads((tmp_path / "task_state.json").read_text())
+    assert state["phase"] == "EXHAUSTED"
+    assert state["active_job_id"] is None
+    assert state["last_job_id"] == "123"
+    assert state["terminal_failure"]["failure_kind"] == "task_attempts_exhausted"
+    slurm_status = json.loads(
+        (
+            task.attempts_dir / "attempt_01" / "slurm_status.json"
+        ).read_text()
+    )
+    assert slurm_status["state"] == "TIMEOUT"
+    assert slurm_status["raw"] == "123_0|TIMEOUT|00:05:00"
+
+    with pytest.raises(TaskAttemptsExhausted, match="1 attempt"):
+        runtime.run(
+            batch_dir=tmp_path,
+            fingerprint="fingerprint",
+            tasks=[task],
+            job_name=lambda attempt: f"job-{attempt}",
+            write_script=lambda indices, attempt: tmp_path / "unused.sbatch",
+            validate_output=lambda files, output: None,
+        )
+
+
+def test_hpc_reflection_wraps_task_exhaustion_for_gepa_boundary(tmp_path):
+    proposer = HPCOfflineReflectionProposer(_config(tmp_path))
+
+    class ExhaustedRuntime:
+        def run(self, **kwargs):
+            raise TaskAttemptsExhausted(
+                "Slurm Agent tasks failed after 3 attempts: reflection"
+            )
+
+    proposer.runtime = ExhaustedRuntime()
+    with pytest.raises(
+        OfflineReflectionBlocked,
+        match="TaskAttemptsExhausted",
+    ) as caught:
+        proposer(
+            {"rules": "parent rules"},
+            {"rules": []},
+            ["rules"],
+        )
+
+    assert isinstance(caught.value.cause, TaskAttemptsExhausted)
+    assert proposer.failures[-1]["error_type"] == "TaskAttemptsExhausted"
+    assert '"event": "reflection_failed"' in (
+        proposer.config.run_dir / "audit_events.jsonl"
+    ).read_text()
+
+
 def test_offline_checker_task_boundary_excludes_labels_and_asi(tmp_path):
     batch_dir = tmp_path / "batch"
     case = _case(
@@ -167,6 +333,242 @@ def test_offline_checker_fingerprint_ignores_host_only_evidence(tmp_path):
         rules="rules",
         capture_traces=True,
     )
+
+
+def test_offline_checker_retry_script_passes_previous_failed_output(tmp_path):
+    config = replace(
+        _config(tmp_path),
+        hpc=HPCConfig(
+            submit=True,
+            worker_config_path="configs/gepa_verified_rules.yaml",
+        ),
+    )
+    batch_dir = tmp_path / "batch"
+
+    first = build_offline_checker_array_script(
+        config=config,
+        batch_dir=batch_dir,
+        task_indices=[7],
+        attempt=1,
+    )
+    retry = build_offline_checker_array_script(
+        config=config,
+        batch_dir=batch_dir,
+        task_indices=[7],
+        attempt=2,
+    )
+
+    assert "--previous-output" not in first
+    assert "--previous-output" in retry
+    assert "failed_outputs/attempt_01" in retry
+    assert "slurm_logs/attempt_02" in retry
+
+
+def test_offline_checker_worker_gives_new_agent_previous_validator_error(
+    tmp_path,
+    monkeypatch,
+):
+    config = _config(tmp_path)
+    rules_path = tmp_path / "rules.md"
+    rules_path.write_text("rules", encoding="utf-8")
+    manifest_path = tmp_path / "task.json"
+    atomic_json(
+        manifest_path,
+        {
+            "fingerprint": "fingerprint",
+            "instance_id": "org__repo-1",
+            "split": "train",
+            "rules_path": str(rules_path),
+            "checker_payload": _case(resolved=True).checker_payload(),
+        },
+    )
+    previous_output = tmp_path / "previous.json"
+    previous_error = (
+        "checker final submission invalid (exit_status=Submitted): "
+        r"Invalid \escape: line 3 column 10"
+    )
+    atomic_json(
+        previous_output,
+        {
+            "status": "agent_failed",
+            "failure_kind": "checker_output_contract",
+            "error": previous_error,
+            "expected_resolved": True,
+            "score": 0.0,
+            "generated_patch": "must not enter feedback",
+        },
+    )
+    received: list[str] = []
+
+    class FakeChecker:
+        def __init__(self, *args, **kwargs):
+            pass
+
+        def __call__(self, case, rules, *, retry_feedback=""):
+            received.append(retry_feedback)
+            return CheckerOutput(
+                True,
+                "valid",
+                (RepositoryEvidence("a.py", "symbol", "finding"),),
+                ({"role": "assistant", "content": "submitted"},),
+            )
+
+    monkeypatch.setattr(
+        "src.optimization.offline_checker_worker.load_optimization_config",
+        lambda path: config,
+    )
+    monkeypatch.setattr(
+        "src.optimization.offline_checker_worker.configure_docker_capacity",
+        lambda *args, **kwargs: object(),
+    )
+    monkeypatch.setattr(
+        "src.optimization.offline_checker_worker.DockerChecker",
+        FakeChecker,
+    )
+    output_path = tmp_path / "output.json"
+    attempt_dir = tmp_path / "attempt"
+    attempt_dir.mkdir()
+
+    assert run_checker_task(
+        config_path=tmp_path / "config.yaml",
+        task_manifest_path=manifest_path,
+        output_path=output_path,
+        attempt_dir=attempt_dir,
+        previous_output_path=previous_output,
+    ) == 0
+
+    expected_feedback = checker_retry_feedback(previous_error)
+    assert received == [expected_feedback]
+    assert "expected_resolved" not in received[0]
+    assert "generated_patch" not in received[0]
+    output = json.loads(output_path.read_text(encoding="utf-8"))
+    assert output["status"] == "completed"
+    assert output["retry_feedback"] == expected_feedback
+    saved = json.loads(
+        (attempt_dir / "retry_feedback.json").read_text(encoding="utf-8")
+    )
+    assert saved["feedback"] == expected_feedback
+
+
+def test_offline_checker_worker_preserves_failed_contract_trajectory(
+    tmp_path,
+    monkeypatch,
+):
+    config = _config(tmp_path)
+    rules_path = tmp_path / "rules.md"
+    rules_path.write_text("rules", encoding="utf-8")
+    manifest_path = tmp_path / "task.json"
+    atomic_json(
+        manifest_path,
+        {
+            "fingerprint": "fingerprint",
+            "instance_id": "org__repo-1",
+            "split": "train",
+            "rules_path": str(rules_path),
+            "checker_payload": _case(resolved=True).checker_payload(),
+        },
+    )
+
+    class FailingChecker:
+        def __init__(self, *args, **kwargs):
+            pass
+
+        def __call__(self, case, rules, *, retry_feedback=""):
+            error = CheckerOutputContractError(
+                r"checker final submission invalid: Invalid \escape"
+            )
+            error.checker_trajectory = (
+                {"role": "assistant", "content": "invalid submission"},
+            )
+            raise error
+
+    monkeypatch.setattr(
+        "src.optimization.offline_checker_worker.load_optimization_config",
+        lambda path: config,
+    )
+    monkeypatch.setattr(
+        "src.optimization.offline_checker_worker.configure_docker_capacity",
+        lambda *args, **kwargs: object(),
+    )
+    monkeypatch.setattr(
+        "src.optimization.offline_checker_worker.DockerChecker",
+        FailingChecker,
+    )
+    output_path = tmp_path / "output.json"
+    attempt_dir = tmp_path / "attempt"
+    attempt_dir.mkdir()
+
+    assert run_checker_task(
+        config_path=tmp_path / "config.yaml",
+        task_manifest_path=manifest_path,
+        output_path=output_path,
+        attempt_dir=attempt_dir,
+    ) == 1
+
+    failure = json.loads(output_path.read_text(encoding="utf-8"))
+    assert failure["status"] == "agent_failed"
+    assert failure["failure_kind"] == "checker_output_contract"
+    assert failure["failure_stage"] == "checker_execution"
+    assert failure["failure_category"] == "output_contract"
+    trajectory = json.loads(
+        (attempt_dir / "checker_trajectory.json").read_text(encoding="utf-8")
+    )
+    assert trajectory["messages"][0]["content"] == "invalid submission"
+
+
+def test_offline_checker_worker_classifies_input_failure_without_changing_status(
+    tmp_path,
+):
+    output_path = tmp_path / "output.json"
+    attempt_dir = tmp_path / "attempt"
+
+    assert run_checker_task(
+        config_path=tmp_path / "config.yaml",
+        task_manifest_path=tmp_path / "missing-task.json",
+        output_path=output_path,
+        attempt_dir=attempt_dir,
+    ) == 1
+
+    failure = json.loads(output_path.read_text(encoding="utf-8"))
+    assert failure["status"] == "agent_failed"
+    assert failure["failure_kind"] == "operational"
+    assert failure["failure_stage"] == "input_load"
+    assert failure["failure_category"] == "io"
+
+
+def test_offline_reflection_worker_records_failure_stage_without_reclassifying(
+    tmp_path,
+    monkeypatch,
+):
+    manifest_path = tmp_path / "reflection.json"
+    atomic_json(
+        manifest_path,
+        {
+            "mode": "offline_reflection",
+            "fingerprint": "fingerprint",
+            "candidate": {"rules": "rules"},
+            "reflective_dataset": {"rules": []},
+            "components_to_update": ["rules"],
+        },
+    )
+    monkeypatch.setattr(
+        "src.optimization.offline_reflection_worker.load_optimization_config",
+        lambda path: (_ for _ in ()).throw(RuntimeError("config unavailable")),
+    )
+    output_path = tmp_path / "output.json"
+    attempt_dir = tmp_path / "attempt"
+
+    assert run_reflection_task(
+        config_path=tmp_path / "config.yaml",
+        manifest_path=manifest_path,
+        output_path=output_path,
+        attempt_dir=attempt_dir,
+    ) == 1
+
+    failure = json.loads(output_path.read_text(encoding="utf-8"))
+    assert failure["status"] == "agent_failed"
+    assert failure["failure_stage"] == "config_load"
+    assert failure["failure_category"] == "runtime"
 
 
 def test_hpc_reflection_repair_is_a_second_fingerprinted_task(tmp_path):

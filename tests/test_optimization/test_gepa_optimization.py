@@ -18,13 +18,19 @@ from src.config import DockerConfig
 from src.exceptions import (
     AgentRolloutFailure,
     FatalError,
+    OfflineReflectionBlocked,
     OnlineControllerYield,
     SynthesisExhaustedError,
     TaskError,
 )
+from src.optimization.hpc.task_batch import TaskAttemptsExhausted
 from src.optimization.audit import AuditedModel, JsonlLogger, text_sha256
 from src.optimization.adapter import CheckerGEPAAdapter
-from src.optimization.checker import DockerChecker, validate_checker_output
+from src.optimization.checker import (
+    CheckerOutputContractError,
+    DockerChecker,
+    validate_checker_output,
+)
 from src.optimization.config import (
     ContainerConfig,
     ModelConfig,
@@ -5240,6 +5246,59 @@ def test_reflection_failure_below_success_threshold_marks_run_failed(tmp_path):
     assert '"event": "run_completed"' not in audit
 
 
+def test_hpc_reflection_exhaustion_blocks_without_becoming_no_proposal(
+    tmp_path,
+):
+    config = _config(tmp_path)
+
+    def checker(case, rules):
+        return CheckerOutput(
+            predicted_resolved=False,
+            decision_reason="force reflection",
+            repository_evidence=(),
+        )
+
+    class ExhaustedProposer:
+        successful_proposals = 0
+
+        def __init__(self):
+            self.failures = []
+
+        def __call__(self, candidate, reflective_dataset, components):
+            cause = TaskAttemptsExhausted(
+                "Slurm Agent tasks failed after 3 attempts: reflection"
+            )
+            self.failures.append(
+                {
+                    "error_type": type(cause).__name__,
+                    "error": str(cause),
+                }
+            )
+            raise OfflineReflectionBlocked(cause)
+
+    with pytest.raises(
+        OfflineReflectionBlocked,
+        match="TaskAttemptsExhausted",
+    ):
+        run_optimization(
+            config,
+            checker=checker,
+            proposer=ExhaustedProposer(),
+        )
+
+    status = json.loads(
+        (config.run_dir / "controller_status.json").read_text()
+    )
+    assert status["status"] == "failed"
+    assert status["blocking"] is True
+    assert status["failure_phase"] == "reflection"
+    assert status["error_type"] == "TaskAttemptsExhausted"
+    progress = json.loads((config.run_dir / "progress.json").read_text())
+    assert progress["status"] == "failed"
+    assert progress["failure_kind"] == "reflection_task_blocked"
+    assert not (config.run_dir / "candidate_metrics.json").exists()
+
+
 def test_reflection_failure_can_recover_when_success_threshold_is_met(tmp_path):
     config = _config(tmp_path)
     config = replace(
@@ -5333,6 +5392,7 @@ def test_default_gepa_config_is_two_iteration_hpc_run(monkeypatch):
     assert config.hpc.cpus_per_task == 1
     assert config.hpc.mem == "4G"
     assert config.hpc.time == "00:35:00"
+    assert config.hpc.max_task_attempts == 3
     assert config.search.max_metric_calls == 500
     assert config.search.projection_metric_calls == 342
     assert config.search.max_iterations == 2
@@ -5358,6 +5418,7 @@ def test_default_gepa_config_is_two_iteration_hpc_run(monkeypatch):
     assert "do not use <bash> tags" in checker_prompt
     assert "available at /testbed, not /repo" in checker_prompt
     assert "Saying that the result was submitted does not finish" in checker_prompt
+    assert "{{retry_feedback}}" in config.checker_instance_template
     reflection_prompt = " ".join(config.reflection_prompt.split())
     assert "plan-review checklist" in reflection_prompt
     assert "misleading items" in reflection_prompt
@@ -5474,6 +5535,7 @@ def test_checker_call_uses_apptainer_environment_when_runtime_apptainer(
         messages = [{"role": "assistant", "content": "done"}]
 
         def run(self, task, **kwargs):
+            calls["agent_run_kwargs"] = kwargs
             return (
                 "Submitted",
                 '{"predicted_resolved": true, "decision_reason": "ok", '
@@ -5531,13 +5593,80 @@ def test_checker_call_uses_apptainer_environment_when_runtime_apptainer(
         repository=RepositoryRef("org/repo", "abc", "org__1"),
         asi={},
     )
-    result = checker(case, "")
+    result = checker(case, "", retry_feedback="previous validator error")
 
     assert result.predicted_resolved is True
     assert calls["environment_kwargs"]["image"] == "test/image:latest"
     assert calls["environment_kwargs"]["cwd"] == config.docker.workdir
     assert calls["environment_kwargs"]["writable_tmpfs"] is True
+    assert calls["agent_run_kwargs"]["retry_feedback"] == (
+        "previous validator error"
+    )
     assert calls["cleaned_up"] is True
+
+
+def test_local_checker_retry_receives_only_previous_contract_error(tmp_path):
+    case = GEPACase(
+        instance_id="org__1",
+        split="train",
+        resolved=True,
+        issue_description="issue",
+        plan="plan",
+        repository=RepositoryRef("org/repo", "abc", "org__1"),
+        asi={},
+    )
+    feedback_seen: list[str] = []
+
+    class RetryingChecker:
+        def __call__(self, case, rules, *, retry_feedback=""):
+            feedback_seen.append(retry_feedback)
+            if len(feedback_seen) == 1:
+                raise CheckerOutputContractError(
+                    r"checker final submission invalid: Invalid \escape"
+                )
+            return CheckerOutput(True, "valid", ())
+
+    adapter = CheckerGEPAAdapter(
+        RetryingChecker(),
+        checker_attempts=2,
+        run_dir=tmp_path,
+    )
+    result = adapter.evaluate([case], {"rules": "rules"})
+
+    assert result.scores == [1.0]
+    assert feedback_seen[0] == ""
+    assert "Invalid \\escape" in feedback_seen[1]
+    assert "issue, plan, candidate rules" in feedback_seen[1]
+
+
+def test_local_checker_operational_retry_does_not_enter_agent_prompt(tmp_path):
+    case = GEPACase(
+        instance_id="org__1",
+        split="train",
+        resolved=True,
+        issue_description="issue",
+        plan="plan",
+        repository=RepositoryRef("org/repo", "abc", "org__1"),
+        asi={},
+    )
+    feedback_seen: list[str] = []
+
+    class RetryingChecker:
+        def __call__(self, case, rules, *, retry_feedback=""):
+            feedback_seen.append(retry_feedback)
+            if len(feedback_seen) == 1:
+                raise RuntimeError("SIF initialization failed")
+            return CheckerOutput(True, "valid", ())
+
+    adapter = CheckerGEPAAdapter(
+        RetryingChecker(),
+        checker_attempts=2,
+        run_dir=tmp_path,
+    )
+    result = adapter.evaluate([case], {"rules": "rules"})
+
+    assert result.scores == [1.0]
+    assert feedback_seen == ["", ""]
 
 
 def test_reflection_proposer_uses_apptainer_when_runtime_apptainer(

@@ -465,3 +465,78 @@ proposal 分布的影响和潜在新偏差的可解释方案。原始
   代替另一个。
 - 若考虑增加自动检查或重试，先说明它解决的重复性观测、会改变哪些 GEPA proposal
   数据，以及为什么该影响与研究问题相关；在此之前保留 Agent 原始行为。
+
+### 6.4 Iris 临时目录清理暂停（2026-07-28）
+
+- Offline 2/2 HPC environment smoke 已达到环境验证目的；远端 232 MB workdir
+  和 3.6 MB persistent run state 已删除。
+- Scratch 用户配额检查时为约 1.0 TB / 10 TB，但 inode 为
+  `839612 / 1000000`，因此字节容量不是当前风险，文件数量才是。
+- 共享 SIF cache 含 483 个 SIF、约 557.87 GiB，属于后续实验的有效缓存，不清理。
+- `shared/apptainer-tmp` 中 28 个 2026-07-20 前的
+  `build-temp-*` / `bundle-temp-*` 遗留目录已删除 12 个。登录节点删除因大量
+  metadata 操作持续约七分钟后被主动停止；当前没有清理进程运行。
+- 剩余 14 个目录：`build-temp-1620489321`、
+  `build-temp-3525381747`、`bundle-temp-3596922134`、
+  `bundle-temp-3654224338`、`bundle-temp-672988753`、
+  `build-temp-1663073231`、`build-temp-3290994169`、
+  `bundle-temp-1826367640`、
+  `bundle-temp-2331921145`、`bundle-temp-2428711331`、
+  `build-temp-2259303553`、`bundle-temp-2231734395`、
+  `bundle-temp-3379910989`、`build-temp-2808580052`。
+- 用户回来验收 2it 后，再通过低资源计算任务继续删除并重新检查 inode 配额；
+  不在登录节点恢复长时间递归删除。
+- 2026-07-28 后续清理已通过 Slurm job `5579298`
+  （`1 CPU / 4G / 30min`）完成，实际运行 `5:46`、exit `0`、MaxRSS 约
+  35 MB。上述 14 个精确目录已全部删除，`shared/apptainer-tmp` 顶层目录数为
+  0；未触及共享 SIF cache。
+- 清理后 `/mnt/scratch` 用户配额约 `1.03 TB / 10 TB`，inode 降至
+  `98,609 / 1,000,000`。Maintenance workdir 和本地生成的 submission artifacts
+  已在验证后删除。
+
+### 6.5 Offline HPC 2it 流程检查（2026-07-28）
+
+- Run identity：
+  `offline-plan-verifier-hpc-balanced-b12-2it-20260728`。
+- 目的仅为验收完整 Offline HPC 实现和配置链路：full 384/98、
+  minibatch 12、balanced accuracy、2 proposal iterations、Checker /
+  Reflection 独立 Slurm tasks、controller yield/resume、raw trajectory 和
+  persistent output。不能用两次 iteration 证明规则质量。
+- 本地 supervisor 通过 `tmux` 内的 `caffeinate -i -s` 启动，目标 2
+  iterations、30 分钟轮询、10 分钟 controller slice、无限 resume slices。
+- Worker 资源为 `1 CPU / 4G / 35min`，array throttle 4，最多两次 task
+  attempt；FairShare 启动前为 `0.293015`，未提高并发。
+- 首个 controller job `5575777` 于启动检查时在 `iris-094` 上
+  `RUNNING`。后续流程完成 1/2 iteration，并在第二轮全量 validation 的
+  `sphinx-doc__sphinx-11445` 上停止：两次 Checker 都到达 `Submitted`，但最终
+  JSON 分别因未转义反斜杠触发 `Invalid \escape`。重试 task 约三分钟、约
+  190 MB RSS，不是 walltime、OOM 或 HPC 环境失败。
+- 当前共享 task runtime 在两次 `agent_failed` 后抛出
+  `Slurm Agent tasks failed without valid atomic output`；Offline runner 只把
+  `Checker operational failure for:` 识别为 resumable，因而 supervisor 将
+  本次运行标记为 blocking 并停止。这是恢复分类缺口，不是 GEPA 质量结论。
+
+### 6.6 Checker 输出契约定向重试（2026-07-28）
+
+- 已实现最小定向反馈：只有空提交、JSON 解析失败或 Checker schema 验证失败会被
+  标记为 `checker_output_contract`。下一次 attempt 仍启动全新的 Agent 和容器，
+  只收到上一次 worker-side validator 的精确错误；不传 resolved label、score、ASI、
+  GEPA acceptance 或上一次语义答案。
+- SIF、provider、OOM、身份和其他 operational 错误不会进入 Agent prompt。失败
+  attempt 的完整 Checker trajectory、失败输出和实际 retry feedback 均独立落盘。
+- retry policy、最大 task attempts、prompt 和实现 source 均进入 Offline
+  Checker semantic hash；修改后的实验必须使用新 run identity，不能把
+  `offline-plan-verifier-hpc-balanced-b12-2it-20260728` 直接当作同语义续跑。
+- 下一次 2it 将 `hpc.max_task_attempts` 从历史 pilot 的 2 提高到 3。Checker、
+  Initial Reflection 或 contamination repair 三次失败后，task journal 写入
+  `EXHAUSTED` 并阻塞运行；Reflection 的阻塞控制异常不会被 GEPA 转换为正常
+  no-proposal iteration。
+- Checker 与 Reflection worker 新增 `failure_stage` 和
+  `failure_category`，连同既有 `error_type/error` 用于区分输入、配置、runtime
+  setup、Agent execution、repair 和 output-write 阶段。该分类暂不改变 retry、
+  score 或 blocking 策略。
+- 已修复共享 task 的失败证据边界：worker-declared completed 输出若未通过 host
+  envelope/identity/schema validation，会保留原始输出和精确
+  `host_validation_failure.json` 并进入 `BLOCKED`；terminal/missing-output
+  Slurm 状态和 stdout/stderr 也按 attempt 归档。该语义修改需要新的 run identity，
+  不得继续原 `offline-plan-verifier-hpc-balanced-b12-2it-20260728`。

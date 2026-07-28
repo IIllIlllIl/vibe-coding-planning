@@ -13,7 +13,11 @@ import uuid
 from gepa.core.adapter import EvaluationBatch
 
 from src.optimization.audit import JsonlLogger, redact_sensitive, text_sha256
-from src.optimization.checker import CheckerRunner
+from src.optimization.checker import (
+    CheckerOutputContractError,
+    CheckerRunner,
+    checker_retry_feedback,
+)
 from src.optimization.models import CheckerOutput, GEPACase
 
 
@@ -134,6 +138,7 @@ class CheckerGEPAAdapter:
         messages: Sequence[Mapping[str, Any]] = (),
         output: Mapping[str, Any] | None = None,
         error: Exception | None = None,
+        retry_feedback: str = "",
     ) -> Path | None:
         if self.run_dir is None:
             return None
@@ -158,6 +163,7 @@ class CheckerGEPAAdapter:
             "max_attempts": self.checker_attempts,
             "status": status,
             "messages": list(messages),
+            "retry_feedback": retry_feedback,
         }
         if output is not None:
             payload["output"] = dict(output)
@@ -193,6 +199,7 @@ class CheckerGEPAAdapter:
         capture_traces: bool,
     ) -> tuple[dict[str, Any], float, dict[str, Any] | None]:
         last_exc: Exception | None = None
+        retry_feedback = ""
         for attempt in range(1, self.checker_attempts + 1):
             try:
                 return self._evaluate_one_attempt(
@@ -200,9 +207,15 @@ class CheckerGEPAAdapter:
                     rules,
                     capture_traces,
                     attempt=attempt,
+                    retry_feedback=retry_feedback,
                 )
             except Exception as exc:
                 last_exc = exc
+                retry_feedback = (
+                    checker_retry_feedback(str(exc))
+                    if isinstance(exc, CheckerOutputContractError)
+                    else ""
+                )
                 details = _exception_details(exc)
                 if self.audit is not None:
                     self.audit.write(
@@ -255,12 +268,20 @@ class CheckerGEPAAdapter:
         capture_traces: bool,
         *,
         attempt: int,
+        retry_feedback: str = "",
     ) -> tuple[dict[str, Any], float, dict[str, Any] | None]:
         try:
             prepare = getattr(self.checker, "prepare", None)
             if callable(prepare):
                 prepare(case)
-            output = self.checker(case, rules)
+            if retry_feedback:
+                output = self.checker(
+                    case,
+                    rules,
+                    retry_feedback=retry_feedback,
+                )
+            else:
+                output = self.checker(case, rules)
         except Exception as exc:
             self._save_checker_trajectory(
                 case=case,
@@ -269,6 +290,7 @@ class CheckerGEPAAdapter:
                 status="failed",
                 messages=getattr(exc, "checker_trajectory", ()),
                 error=exc,
+                retry_feedback=retry_feedback,
             )
             raise
         self._save_checker_trajectory(
@@ -278,6 +300,7 @@ class CheckerGEPAAdapter:
             status="completed",
             messages=output.trajectory,
             output=output.to_dict(),
+            retry_feedback=retry_feedback,
         )
         if self.audit is not None and attempt > 1:
             self.audit.write(
@@ -447,6 +470,9 @@ class CheckerGEPAAdapter:
                     "generated_patch",
                     "evaluator_result",
                 ],
+                retry_feedback_policy=(
+                    "previous_output_validator_error_only"
+                ),
                 parallel=self.parallel,
                 checker_attempts=self.checker_attempts,
                 primary_metric=self.primary_metric,

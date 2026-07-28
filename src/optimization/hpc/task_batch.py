@@ -48,6 +48,14 @@ class TaskFiles:
     attempts_dir: Path
 
 
+class TaskBatchBlocked(RuntimeError):
+    """A task batch reached a durable blocking terminal state."""
+
+
+class TaskAttemptsExhausted(TaskBatchBlocked):
+    """All configured fresh-Agent attempts ended without valid output."""
+
+
 def atomic_json(path: Path, value: Any) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     temporary = path.with_suffix(path.suffix + ".tmp")
@@ -86,12 +94,50 @@ class SlurmTaskBatch:
             state_path,
             fingerprint=fingerprint,
         )
-        outputs, failed, blocking = self._inspect_outputs(tasks, validate_output)
-        if blocking:
-            instance_ids = ", ".join(task.instance_id for task in blocking)
-            raise RuntimeError(
-                "blocking Slurm Agent task failure: " + instance_ids
+        phase = str(state["phase"])
+        if phase in {"BLOCKED", "EXHAUSTED"}:
+            error = str(
+                state.get("terminal_failure", {}).get(
+                    "error",
+                    f"Slurm task batch is {phase.lower()}",
+                )
             )
+            error_type = (
+                TaskAttemptsExhausted
+                if phase == "EXHAUSTED"
+                else TaskBatchBlocked
+            )
+            raise error_type(error)
+
+        attempt = int(state["active_attempt"])
+        outputs, failed, blocking = self._inspect_outputs(
+            tasks,
+            validate_output,
+            attempt=attempt,
+        )
+        if blocking:
+            instance_ids = ", ".join(
+                task.instance_id for task, _ in blocking
+            )
+            details = [
+                {
+                    "instance_id": task.instance_id,
+                    **failure,
+                }
+                for task, failure in blocking
+            ]
+            error = "blocking Slurm Agent task failure: " + instance_ids
+            self._save_terminal_state(
+                state_path,
+                state,
+                phase="BLOCKED",
+                error=error,
+                failure_kind="blocking_task_output",
+                attempt=attempt,
+                job_id=state.get("active_job_id"),
+                details=details,
+            )
+            raise TaskBatchBlocked(error)
         if len(outputs) == len(tasks):
             self._save_state(
                 state_path,
@@ -101,9 +147,7 @@ class SlurmTaskBatch:
             )
             return [outputs[task.index] for task in tasks]
 
-        attempt = int(state["active_attempt"])
         job_id = state.get("active_job_id")
-        phase = str(state["phase"])
         if phase == "SUBMITTING" and not job_id:
             job_id = query_slurm_array_job_id(job_name(attempt))
             if job_id is None:
@@ -167,6 +211,14 @@ class SlurmTaskBatch:
                         now - first_missing
                         >= self.hpc.missing_task_grace_seconds
                     ):
+                        self._save_slurm_status(
+                            task,
+                            attempt=attempt,
+                            job_id=str(job_id),
+                            state="MISSING",
+                            elapsed_seconds=None,
+                            raw="",
+                        )
                         terminal_missing.append(task)
                     else:
                         active.append(task)
@@ -174,6 +226,14 @@ class SlurmTaskBatch:
                 missing_since.pop(key, None)
                 normalized = normalize_slurm_state(status.state)
                 if normalized in TERMINAL_STATES:
+                    self._save_slurm_status(
+                        task,
+                        attempt=attempt,
+                        job_id=str(job_id),
+                        state=normalized,
+                        elapsed_seconds=status.elapsed_seconds,
+                        raw=status.raw,
+                    )
                     first_terminal = float(
                         terminal_since.setdefault(key, now)
                     )
@@ -204,10 +264,27 @@ class SlurmTaskBatch:
 
         if attempt > self.hpc.max_task_attempts:
             instance_ids = ", ".join(task.instance_id for task in pending)
-            raise RuntimeError(
+            error = (
                 "Slurm Agent tasks failed without valid atomic output after "
                 f"{self.hpc.max_task_attempts} attempt(s): {instance_ids}"
             )
+            self._save_terminal_state(
+                state_path,
+                state,
+                phase="EXHAUSTED",
+                error=error,
+                failure_kind="task_attempts_exhausted",
+                attempt=self.hpc.max_task_attempts,
+                job_id=str(job_id) if job_id else None,
+                details=[
+                    {
+                        "instance_id": task.instance_id,
+                        "output_path": str(task.output_path),
+                    }
+                    for task in pending
+                ],
+            )
+            raise TaskAttemptsExhausted(error)
         if not self.hpc.submit:
             raise RuntimeError(
                 f"Slurm task batch prepared at {batch_dir}; set hpc.submit=true"
@@ -240,31 +317,151 @@ class SlurmTaskBatch:
     def _inspect_outputs(
         tasks: Sequence[TaskFiles],
         validate_output: Callable[[TaskFiles, dict[str, Any]], None],
+        *,
+        attempt: int,
     ) -> tuple[
         dict[int, dict[str, Any]],
         list[TaskFiles],
-        list[TaskFiles],
+        list[tuple[TaskFiles, dict[str, Any]]],
     ]:
         outputs: dict[int, dict[str, Any]] = {}
         failed: list[TaskFiles] = []
-        blocking: list[TaskFiles] = []
+        blocking: list[tuple[TaskFiles, dict[str, Any]]] = []
         for task in tasks:
             if not task.output_path.is_file():
                 continue
             try:
                 value = json.loads(task.output_path.read_text(encoding="utf-8"))
-                if value.get("status") == "blocking_failed":
-                    blocking.append(task)
-                    continue
-                if value.get("status") != "completed":
-                    failed.append(task)
-                    continue
-                validate_output(task, value)
-            except Exception:
+            except Exception as exc:
+                failure = SlurmTaskBatch._save_host_validation_failure(
+                    task,
+                    attempt=attempt,
+                    stage="host_output_read",
+                    exc=exc,
+                )
+                blocking.append((task, failure))
+                continue
+            if not isinstance(value, dict):
+                failure = SlurmTaskBatch._save_host_validation_failure(
+                    task,
+                    attempt=attempt,
+                    stage="host_output_read",
+                    exc=ValueError("atomic worker output must be a JSON object"),
+                )
+                blocking.append((task, failure))
+                continue
+            if value.get("status") == "blocking_failed":
+                blocking.append(
+                    (
+                        task,
+                        {
+                            "failure_stage": "worker_execution",
+                            "error_type": str(
+                                value.get("error_type", "WorkerBlockingFailure")
+                            ),
+                            "error": str(
+                                value.get("error", "worker reported blocking failure")
+                            ),
+                            "output_path": str(task.output_path),
+                        },
+                    )
+                )
+                continue
+            if value.get("status") != "completed":
                 failed.append(task)
+                continue
+            try:
+                validate_output(task, value)
+            except Exception as exc:
+                failure = SlurmTaskBatch._save_host_validation_failure(
+                    task,
+                    attempt=attempt,
+                    stage="host_output_validation",
+                    exc=exc,
+                )
+                blocking.append((task, failure))
                 continue
             outputs[task.index] = value
         return outputs, failed, blocking
+
+    @staticmethod
+    def _save_host_validation_failure(
+        task: TaskFiles,
+        *,
+        attempt: int,
+        stage: str,
+        exc: Exception,
+    ) -> dict[str, Any]:
+        failure = {
+            "schema_version": 1,
+            "failure_stage": stage,
+            "error_type": type(exc).__name__,
+            "error": str(exc),
+            "task_index": task.index,
+            "instance_id": task.instance_id,
+            "attempt": attempt,
+            "output_path": str(task.output_path),
+        }
+        atomic_json(
+            task.attempts_dir
+            / f"attempt_{attempt:02d}"
+            / "host_validation_failure.json",
+            failure,
+        )
+        return failure
+
+    @staticmethod
+    def _save_slurm_status(
+        task: TaskFiles,
+        *,
+        attempt: int,
+        job_id: str,
+        state: str,
+        elapsed_seconds: int | None,
+        raw: str,
+    ) -> None:
+        atomic_json(
+            task.attempts_dir
+            / f"attempt_{attempt:02d}"
+            / "slurm_status.json",
+            {
+                "schema_version": 1,
+                "observed_at": datetime.now(timezone.utc).isoformat(),
+                "job_id": job_id,
+                "task_index": task.index,
+                "instance_id": task.instance_id,
+                "state": state,
+                "elapsed_seconds": elapsed_seconds,
+                "raw": raw,
+            },
+        )
+
+    @staticmethod
+    def _save_terminal_state(
+        path: Path,
+        state: dict[str, Any],
+        *,
+        phase: str,
+        error: str,
+        failure_kind: str,
+        attempt: int,
+        job_id: str | None,
+        details: list[dict[str, Any]],
+    ) -> None:
+        state["last_job_id"] = job_id
+        state["terminal_failure"] = {
+            "failure_kind": failure_kind,
+            "error": error,
+            "attempt": attempt,
+            "details": details,
+        }
+        SlurmTaskBatch._save_state(
+            path,
+            state,
+            phase=phase,
+            active_attempt=attempt,
+            active_job_id=None,
+        )
 
     @staticmethod
     def _archive_failed_outputs(

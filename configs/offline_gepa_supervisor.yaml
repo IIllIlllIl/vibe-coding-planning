@@ -5,7 +5,7 @@ arguments:
   - --target-iterations
   - "2"
   - --poll-interval
-  - "300"
+  - "1800"
   - --slice-time
   - "00:10:00"
   - --max-runs
