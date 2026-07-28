@@ -1,0 +1,24 @@
+schema_version: 1
+session: offline-gepa-hpc-balanced-b12-2it-20260728
+log: .local/hpc-supervisor/offline-gepa-hpc-balanced-b12-2it-20260728.log
+arguments:
+  - --target-iterations
+  - "2"
+  - --poll-interval
+  - "300"
+  - --slice-time
+  - "00:10:00"
+  - --max-runs
+  - "0"
+  - --gepa-rules
+  - --gepa-config
+  - configs/gepa_verified_rules.yaml
+  - --job-name
+  - offline-gepa-hpc-balanced-b12-2it-20260728
+  - --remote-dir
+  - ~/hpc_runs/vibe-coding-planning-offline-balanced-b12-2it-20260728
+  - --cpus
+  - "1"
+  - --mem
+  - 4G
+  - --submit

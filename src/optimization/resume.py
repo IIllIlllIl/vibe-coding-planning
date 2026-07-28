@@ -60,7 +60,7 @@ def _source_fingerprint() -> dict[str, dict[str, str]]:
     repo_root = Path(__file__).resolve().parents[2]
     project_root = repo_root / "src" / "optimization"
     gepa_root = repo_root / "third_party" / "gepa" / "src" / "gepa"
-    project_files = sorted(project_root.glob("*.py"))
+    project_files = sorted(project_root.rglob("*.py"))
     gepa_files = [
         gepa_root / "api.py",
         gepa_root / "core" / "engine.py",
@@ -70,7 +70,8 @@ def _source_fingerprint() -> dict[str, dict[str, str]]:
     ]
     return {
         "project_optimization": {
-            path.name: _file_sha256(path) for path in project_files
+            str(path.relative_to(project_root)): _file_sha256(path)
+            for path in project_files
         },
         "vendored_gepa_core": {
             str(path.relative_to(gepa_root)): _file_sha256(path)
@@ -89,6 +90,9 @@ def _semantic_config(
     search.pop("projection_metric_calls")
     container = asdict(config.container)
     container["sif_cache_dir"] = str(container["sif_cache_dir"])
+    hpc_semantics = {
+        "max_task_attempts": config.hpc.max_task_attempts,
+    }
     return {
         "dataset": _dataset_fingerprint(config.dataset_snapshot),
         "source": _source_fingerprint(),
@@ -98,6 +102,8 @@ def _semantic_config(
         "search": search,
         "docker": asdict(config.docker),
         "container": container,
+        "execution": asdict(config.execution),
+        "hpc_semantics": hpc_semantics,
         "prompts": {
             "checker_system_sha256": text_sha256(config.checker_prompt),
             "checker_instance_sha256": text_sha256(

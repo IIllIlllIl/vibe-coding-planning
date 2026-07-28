@@ -2208,7 +2208,7 @@ def test_online_hpc_executor_writes_batch_done_and_resource_usage(
         return Result()
 
     monkeypatch.setattr(
-        "src.optimization.online_hpc_executor.subprocess.run",
+        "src.optimization.hpc.slurm.subprocess.run",
         fake_run,
     )
     executor = HPCSlurmOnlineRolloutExecutor(
@@ -2857,7 +2857,7 @@ def test_online_iteration_progress_counts_only_saved_state(tmp_path):
     callback.on_state_saved({"iteration": 5, "run_dir": str(tmp_path)})
 
     progress = json.loads(
-        (tmp_path / "online_iteration_progress.json").read_text(encoding="utf-8")
+        (tmp_path / "iteration_progress.json").read_text(encoding="utf-8")
     )
     assert progress["first_observed_completed_iterations"] == 4
     assert progress["completed_iterations"] == 5
@@ -5320,67 +5320,31 @@ def test_checker_operational_failure_marks_run_failed(tmp_path):
     assert any(record["event"] == "optimization_failed" for record in errors)
 
 
-def test_apptainer_config_loads(monkeypatch):
-    monkeypatch.setenv("DEEPSEEK_API_KEY", "secret")
-    monkeypatch.setenv("USER", "testuser")
-    repo_root = Path(__file__).resolve().parents[2]
-    config = load_optimization_config(
-        repo_root
-        / "configs"
-        / "archive"
-        / "offline_gepa"
-        / "gepa_verified_rules_reflection_smoke_apptainer.yaml"
-    )
-    assert config.container.runtime == "apptainer"
-    assert config.container.module == "tools/Apptainer"
-    assert config.container.writable_tmpfs is True
-    assert config.container.sif_cache_dir == Path(
-        "/scratch/users/testuser/vibe-coding-planning/shared/sif-cache"
-    )
-
-
-def test_strict_hpc_24h_config_loads(monkeypatch):
-    monkeypatch.setenv("DEEPSEEK_API_KEY", "secret")
-    monkeypatch.setenv("USER", "testuser")
-    repo_root = Path(__file__).resolve().parents[2]
-    config = load_optimization_config(
-        repo_root
-        / "configs"
-        / "archive"
-        / "offline_gepa"
-        / "gepa_verified_rules_strict_hpc_24h_apptainer.yaml"
-    )
-
-    assert config.checker.model == "deepseek-v4-flash"
-    assert config.reflection.model == "deepseek-v4-flash"
-    assert config.search.parallel == 4
-    assert config.search.max_metric_calls == 3000
-    assert config.container.runtime == "apptainer"
-    assert config.container.sif_cache_dir == Path(
-        "/scratch/users/testuser/vibe-coding-planning/shared/sif-cache"
-    )
-    assert "rule-bound binary classifier" in config.checker_prompt
-    assert "<candidate_rules>" in config.checker_instance_template
-
-
-def test_default_gepa_config_is_eight_iteration_run(monkeypatch):
+def test_default_gepa_config_is_two_iteration_hpc_run(monkeypatch):
     monkeypatch.setenv("DEEPSEEK_API_KEY", "secret")
     repo_root = Path(__file__).resolve().parents[2]
     config = load_optimization_config(repo_root / "configs" / "gepa_verified_rules.yaml")
 
     assert config.checker.model == "deepseek-v4-flash"
     assert config.reflection.model == "deepseek-v4-flash"
-    assert config.container.runtime == "docker"
-    assert config.search.max_metric_calls == 2000
-    assert config.search.projection_metric_calls == 1074
-    assert config.search.max_iterations == 8
+    assert config.container.runtime == "apptainer"
+    assert config.execution.backend == "hpc_slurm"
+    assert config.hpc.max_running_array_tasks == 4
+    assert config.hpc.cpus_per_task == 1
+    assert config.hpc.mem == "4G"
+    assert config.hpc.time == "00:35:00"
+    assert config.search.max_metric_calls == 500
+    assert config.search.projection_metric_calls == 342
+    assert config.search.max_iterations == 2
     assert config.search.reflection_minibatch_size == 12
     assert config.search.primary_metric == "balanced_accuracy"
     assert config.search.parallel == 2
-    assert config.checker.max_attempts == 5
+    # One worker attempt is one complete Checker Agent session. Slurm-level
+    # retries start a new session instead of resuming an interrupted one.
+    assert config.checker.max_attempts == 1
     assert config.initial_rules_path.name == "gepa_initial_rules_minimal.md"
     assert (
-        "offline-plan-verifier-balanced-b12-p2-case-reviews-8it-20260727"
+        "offline-plan-verifier-hpc-balanced-b12-2it-20260728"
         in str(config.run_dir)
     )
     checker_prompt = " ".join(config.checker_prompt.split())

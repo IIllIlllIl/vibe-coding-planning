@@ -360,7 +360,9 @@ result_path = run_dir / "result.json"
 state_path = run_dir / "gepa_state.bin"
 manifest_path = run_dir / "run_manifest.json"
 online_manifest_path = run_dir / "online_run_manifest.json"
-progress_path = run_dir / "online_iteration_progress.json"
+progress_path = run_dir / "iteration_progress.json"
+if not progress_path.is_file():
+    progress_path = run_dir / "online_iteration_progress.json"
 controller_status_path = run_dir / "controller_status.json"
 payload = {"state": "missing", "run_dir": str(run_dir)}
 if result_path.is_file():
@@ -438,6 +440,15 @@ for path in (run_dir / "hpc_rollout_batches").glob("batch_*/batch_state.json"):
         continue
     if batch_state.get("active_job_id"):
         worker_ids.add(str(batch_state["active_job_id"]))
+for path in (run_dir / "hpc_tasks").glob("**/task_state.json"):
+    try:
+        task_state = json.loads(path.read_text(encoding="utf-8"))
+    except Exception:
+        continue
+    if task_state.get("phase") == "COMPLETE":
+        continue
+    if task_state.get("active_job_id"):
+        worker_ids.add(str(task_state["active_job_id"]))
 payload["worker_states"] = {job_id: slurm_state(job_id) for job_id in sorted(worker_ids)}
 payload["active_workers"] = [
     job_id for job_id, state in payload["worker_states"].items()

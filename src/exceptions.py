@@ -60,14 +60,23 @@ class CommandTimeoutError(Exception):
         self.timeout = timeout
 
 
-class OnlineControllerYield(Exception):
-    """The controller safely stopped after persisting asynchronous HPC work."""
+class ControllerYield(BaseException):
+    """A GEPA controller safely stopped after persisting asynchronous work.
+
+    GEPA intentionally catches ordinary ``Exception`` values around proposal
+    generation and converts them into a consumed no-proposal iteration. Yield
+    is scheduler control flow, not a proposal failure, so it must pass through
+    that boundary to the runner that explicitly catches it.
+    """
 
     def __init__(self, *, batch_dir: str, job_id: str | None, reason: str) -> None:
         super().__init__(f"{reason}: batch={batch_dir} job_id={job_id}")
         self.batch_dir = batch_dir
         self.job_id = job_id
         self.reason = reason
+
+
+OnlineControllerYield = ControllerYield
 
 
 class SynthesisExhaustedError(FatalError):

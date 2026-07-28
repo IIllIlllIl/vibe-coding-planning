@@ -74,16 +74,15 @@ def write_cost_report(
     required_proposals: int = 0,
     reflection_failures: int = 0,
 ) -> None:
-    usage_path = run_dir / "usage.jsonl"
-    records = (
-        [
-            json.loads(line)
-            for line in usage_path.read_text(encoding="utf-8").splitlines()
-            if line.strip()
-        ]
-        if usage_path.is_file()
-        else []
-    )
+    # HPC Agent tasks write usage beside their immutable attempt evidence.
+    # Read every such ledger directly instead of copying records into a second
+    # authority that could be duplicated by a controller crash.
+    records = [
+        json.loads(line)
+        for usage_path in sorted(run_dir.rglob("usage.jsonl"))
+        for line in usage_path.read_text(encoding="utf-8").splitlines()
+        if line.strip()
+    ]
     checker = _phase_summary(records, "checker")
     plan = _phase_summary(records, "plan")
     code = _phase_summary(records, "code")

@@ -7,14 +7,14 @@ import hashlib
 import json
 from pathlib import Path
 from datetime import datetime, timezone
-from typing import Any, Mapping, Sequence
+from typing import Any, Mapping, Protocol, Sequence
 import uuid
 
 from gepa.core.adapter import EvaluationBatch
 
 from src.optimization.audit import JsonlLogger, redact_sensitive, text_sha256
 from src.optimization.checker import CheckerRunner
-from src.optimization.models import GEPACase
+from src.optimization.models import CheckerOutput, GEPACase
 
 
 def _exception_details(exc: Exception) -> dict[str, Any]:
@@ -34,6 +34,15 @@ def _exception_details(exc: Exception) -> dict[str, Any]:
     return details
 
 
+class CheckerBatchExecutor(Protocol):
+    def evaluate(
+        self,
+        batch: list[GEPACase],
+        rules: str,
+        capture_traces: bool,
+    ) -> list[CheckerOutput]: ...
+
+
 class CheckerGEPAAdapter:
     def __init__(
         self,
@@ -49,6 +58,7 @@ class CheckerGEPAAdapter:
         seed_rules_sha256: str | None = None,
         primary_metric: str = "accuracy",
         class_counts_by_split: Mapping[str, Mapping[bool, int]] | None = None,
+        batch_executor: CheckerBatchExecutor | None = None,
     ) -> None:
         self.checker = checker
         self.parallel = parallel
@@ -57,6 +67,7 @@ class CheckerGEPAAdapter:
         self.checker_attempts = checker_attempts
         self.startup_seed_replay = startup_seed_replay
         self.seed_rules_sha256 = seed_rules_sha256
+        self.batch_executor = batch_executor
         if primary_metric not in ("accuracy", "balanced_accuracy"):
             raise ValueError(
                 "primary_metric must be 'accuracy' or 'balanced_accuracy'"
@@ -296,6 +307,28 @@ class CheckerGEPAAdapter:
             }
         return public_output, score, trace
 
+    def _row_from_checker_output(
+        self,
+        case: GEPACase,
+        output: CheckerOutput,
+        capture_traces: bool,
+    ) -> tuple[dict[str, Any], float, dict[str, Any] | None]:
+        score_details = self._score_details(case, output.predicted_resolved)
+        public_output = {
+            "instance_id": case.instance_id,
+            **output.to_dict(),
+        }
+        trace = None
+        if capture_traces:
+            trace = {
+                "instance_id": case.instance_id,
+                "expected_resolved": case.resolved,
+                **score_details,
+                "checker_output": output.to_dict(include_trajectory=True),
+                **case.asi,
+            }
+        return public_output, float(score_details["score"]), trace
+
     def _evaluate_parallel_fail_fast(
         self,
         batch: list[GEPACase],
@@ -419,7 +452,21 @@ class CheckerGEPAAdapter:
                 primary_metric=self.primary_metric,
                 class_counts_by_split=self.class_counts_by_split,
             )
-        if self.parallel > 1:
+        if self.batch_executor is not None:
+            outputs = self.batch_executor.evaluate(
+                batch,
+                candidate["rules"],
+                capture_traces,
+            )
+            if len(outputs) != len(batch):
+                raise RuntimeError(
+                    "Offline Checker batch output count does not match input"
+                )
+            rows = [
+                self._row_from_checker_output(case, output, capture_traces)
+                for case, output in zip(batch, outputs, strict=True)
+            ]
+        elif self.parallel > 1:
             rows = self._evaluate_parallel_fail_fast(
                 batch,
                 candidate["rules"],

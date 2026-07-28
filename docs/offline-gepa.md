@@ -1,8 +1,8 @@
 # Current Offline GEPA
 
-> Authority: current local Offline GEPA experiment contract
+> Authority: current Offline GEPA experiment contract
 >
-> Last reviewed: 2026-07-27
+> Last reviewed: 2026-07-28
 
 ## Objective
 
@@ -56,9 +56,12 @@ score.
 
 When the check finds a match, the original proposal and complete trajectory are
 preserved and the same Reflection configuration receives the proposal plus the
-exact matches for one generalization repair. A clean repair is returned to
-GEPA. If that single repair still contains a match, the proposal fails and GEPA
-retains its parent; there is no additional judge or unbounded retry.
+exact matches for one generalization repair. Locally this is a second
+sequential Agent call. On HPC it is a second fingerprinted Slurm task whose
+immutable input references the completed initial proposal and evidence bundle.
+A clean repair is returned to GEPA. If that single repair still contains a
+match, the proposal fails and GEPA retains its parent; there is no additional
+judge or unbounded retry.
 
 The Reflection instance prompt documents the evidence API explicitly.
 Reflection must read every case listed in `manifest.json`, read each
@@ -116,28 +119,75 @@ The current config is [`../configs/gepa_verified_rules.yaml`](../configs/gepa_ve
 - minimal seed from `configs/gepa_initial_rules_minimal.md`;
 - epoch-shuffled train minibatches of 12;
 - instance-level validation Pareto selection;
-- eight cumulative candidate-proposal iterations;
+- two cumulative candidate-proposal iterations;
 - balanced accuracy;
-- local Docker execution with two concurrent Checkers.
+- independent Apptainer Slurm tasks, with array throttle 4;
+- GEPA adapter parallelism 2.
 
-The minibatch remains 12 for the first complete-case-review experiment. Eight
-iterations can therefore expose up to 96 epoch-shuffled training positions,
-whereas reducing the batch would simultaneously reduce coverage and increase
-parent/proposal comparison noise. Raw trajectories need not all be read in
-full: every case receives a structured review, every error receives a deeper
-diagnosis, and correct cases provide regression checks.
+The minibatch remains 12 so each proposal must account for a meaningful
+cross-case sample rather than a very small, noisy batch. Two iterations are an
+HPC execution pilot, not a sufficient rule-quality experiment. Raw trajectories
+need not all be read in full: every case receives a structured review, every
+error receives a deeper diagnosis, and correct cases provide regression checks.
 
-`max_iterations=8` is the primary stop condition. GEPA's official saved state
-is cumulative, so resuming the same logical run continues toward eight total
-proposals rather than adding another eight. The worst-case planned evaluation
-count is `98 + 8 * (12 + 12 + 98) = 1,074`. `max_metric_calls=2000` is a
-fail-safe, not the experiment target. Exhausting it before eight proposals is
+`max_iterations=2` is the primary stop condition. GEPA's official saved state
+is cumulative, so resuming the same logical run continues toward two total
+proposals rather than adding another two. The worst-case planned evaluation
+count is `98 + 2 * (12 + 12 + 98) = 342`. `max_metric_calls=500` is a
+fail-safe, not the experiment target. Exhausting it before two proposals is
 an anomaly to investigate rather than a reason to expand the budget silently.
 
-The local Offline run does not use the Online HPC supervisor. A restart uses
-the same command and run identity after confirming the failure is resumable.
+The current run uses the shared iteration-target supervisor contract. A local
+`tmux + caffeinate` service submits short controller allocations. A controller
+submits fingerprinted Checker arrays or one Reflection Agent task and then
+yields; the next controller replays the same GEPA call and collects the atomic
+output.
+
 The run manifest permits a metric-call ceiling increase but rejects changes to
 data, source, prompts, model/search semantics, seed, or iteration target.
+
+## HPC Task And Resume Boundary
+
+The shared `src/optimization/hpc/` package owns only Slurm configuration,
+status queries, deterministic submission reconciliation, grace windows, and
+the atomic task lifecycle. Offline code owns Checker/Reflection inputs, output
+validation, and GEPA scoring. Online retains its method-specific phase journal
+while importing the same Slurm configuration and command boundary.
+
+One Checker array element runs one complete Checker Agent session for one
+case. Historical labels and ASI are absent from its task manifest; scoring
+remains in the controller after output collection. Reflection is a separate
+single-element initial task whose immutable input contains the current
+candidate and all current-minibatch evidence. If deterministic contamination
+checking requests repair, the completed initial output becomes immutable input
+to a second single-element repair task. Initial and repair Agent conversations
+never share a process or writable workspace.
+
+Only a `status=completed` output with matching fingerprint, instance identity,
+and schema is reusable. A killed or invalid attempt is never resumed inside an
+Agent conversation. If the configured retry policy permits another attempt,
+the whole Checker, initial Reflection, or repair task starts again in a new
+attempt directory.
+Slurm terminal state and temporarily missing accounting records wait through
+configured output/missing grace periods before retry or failure. GEPA state,
+not Slurm task completion, remains the authority for whether a result affected
+the search.
+
+## Local/HPC Configuration Switch
+
+The algorithm has one configuration model. `execution.backend` selects only
+the execution transport:
+
+| Mode | Required config | Behavior |
+|---|---|---|
+| Local Docker | `execution.backend: local`, `container.runtime: docker` | Checker calls use local thread parallelism; Reflection and optional repair run synchronously |
+| HPC Slurm | `execution.backend: hpc_slurm`, `container.runtime: apptainer` | Checker, initial Reflection, and optional repair are independent Slurm tasks |
+| Local Apptainer | `execution.backend: local`, `container.runtime: apptainer` | Synchronous execution on a host with Apptainer and the SIF cache |
+
+`hpc.*` remains config-validated but is not used to execute local Agent calls.
+Switching backend or container runtime changes experimental semantics and
+therefore requires a new `paths.run_dir`; the run manifest rejects adopting an
+old identity.
 
 ## Evidence And State
 
@@ -146,21 +196,27 @@ The run directory preserves:
 - `run_manifest.json` for immutable logical-run identity;
 - `gepa_state.bin` and `gepa_resume_state.json` for official GEPA plus sampler,
   selector, Reflection, and accepted-candidate resume state;
+- `iteration_progress.json` and `controller_status.json` for the shared
+  supervisor contract;
+- `hpc_tasks/checker/<fingerprint>/` and
+  `hpc_tasks/reflection/<fingerprint>/` for immutable inputs, per-attempt
+  evidence, task state, atomic initial output, and nested fingerprinted repair
+  task when required;
 - `progress.json`, `audit_events.jsonl`, and `evaluations.jsonl`;
 - every Checker call's complete trajectory;
 - `reflection_inputs/*/reflection_trajectory.json` inside per-proposal evidence
   bundles;
 - `reflection_analysis.json` when the Agent produced parseable JSON diagnostic
   evidence, or `reflection_analysis_invalid.txt` when malformed;
-- `reflection_inputs/*/reflection_repair_trajectory.json` when a proposal
-  requires the single contamination repair;
+- local `reflection_inputs/*/reflection_repair_trajectory.json`, or HPC repair
+  attempt evidence, when a proposal requires contamination repair;
 - candidate rules, validation metrics, reports, errors, token use, and cost.
 
 Operational Checker exhaustion currently stops the optimization and is marked
 resumable. It must not be converted into an unresolved prediction or silently
 included in candidate comparison.
 
-## Local Entry Point
+## Controller Entry Point
 
 Only run after explicit authorization and after confirming the new run identity
 does not already contain incompatible state:
@@ -170,4 +226,6 @@ conda run -n mini-swe python -m src.optimization \
   --config configs/gepa_verified_rules.yaml
 ```
 
-No Offline supervisor is required for the configured eight-iteration run.
+The versioned unattended launch identity is
+`configs/offline_gepa_supervisor.yaml`. Starting it is an external HPC action
+and requires explicit authorization.

@@ -18,8 +18,8 @@ GEPA_CONFIG=""
 JOB_NAME="vibe-gepa"
 PARTITION="batch"
 TIME_LIMIT="02:00:00"
-CPUS="2"
-MEM="8G"
+CPUS="1"
+MEM="4G"
 GPUS="0"
 REMOTE_DIR=""
 REMOTE_DATASET_DIR="~/hpc_datasets/vibe-coding-planning"
@@ -44,8 +44,8 @@ Slurm / ulhpc-submit options:
   --job-name NAME           Slurm job name (default: vibe-gepa)
   --partition NAME          Slurm partition (default: batch)
   --time HH:MM:SS           Wall time (default: 02:00:00)
-  --cpus N                  CPUs per task (default: 2)
-  --mem SIZE                Memory per node (default: 8G)
+  --cpus N                  CPUs per task (default: 1)
+  --mem SIZE                Memory per node (default: 4G)
   --gpus N                  GPUs (default: 0)
   --remote-dir DIR          Remote project workdir on HPC
   --remote-dataset-dir DIR  Remote dataset staging root outside --remote-dir
@@ -71,12 +71,12 @@ Slurm / ulhpc-submit options:
 Examples:
   bash scripts/hpc_submit_batch.sh \
     --gepa-rules \
-    --gepa-config configs/gepa_online_planning_hpc.yaml \
-    --remote-dir '~/hpc_runs/vibe-gepa-strict-newprompt' \
-    --job-name gepa-strict-newprompt \
-    --time 24:00:00 \
-    --cpus 2 \
-    --mem 8G \
+    --gepa-config configs/gepa_verified_rules.yaml \
+    --remote-dir '~/hpc_runs/vibe-gepa-offline' \
+    --job-name offline-gepa-controller \
+    --time 02:00:00 \
+    --cpus 1 \
+    --mem 4G \
     --submit
 USAGE
 }

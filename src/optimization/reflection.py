@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from contextlib import nullcontext
 import json
 import os
 import re
@@ -204,6 +205,204 @@ def _validate_reflection_submission(
     return proposed
 
 
+class ReflectionRepairRequired(BaseException):
+    """A cleanly completed initial Reflection requires a separate repair task."""
+
+    def __init__(
+        self,
+        *,
+        proposed_rules: str,
+        contamination_hits: list[dict[str, str]],
+        bundle_path: Path,
+        instance_ids: Sequence[str],
+    ) -> None:
+        super().__init__("Reflection candidate requires contamination repair")
+        self.proposed_rules = proposed_rules
+        self.contamination_hits = list(contamination_hits)
+        self.bundle_path = bundle_path
+        self.instance_ids = list(instance_ids)
+
+
+def run_reflection_contamination_repair(
+    config: OptimizationConfig,
+    capacity_window: DockerCapacityWindow,
+    *,
+    bundle: Path,
+    trajectory_dir: Path,
+    parent_rules: str,
+    proposed_rules: str,
+    contamination_hits: Sequence[Mapping[str, str]],
+    records: Sequence[Mapping[str, Any]],
+    instance_ids: Sequence[str],
+    audit: JsonlLogger,
+    usage: JsonlLogger,
+    acquire_capacity_lease: bool = True,
+) -> dict[str, Any]:
+    """Run exactly one repair Agent from immutable initial-task evidence."""
+    trajectory_dir.mkdir(parents=True, exist_ok=True)
+    parent_sha256 = text_sha256(parent_rules)
+    DefaultAgent, LitellmModel, DockerEnvironment = import_minisweagent()
+    base_model = LitellmModel(
+        model_name=_infer_litellm_prefix(
+            config.reflection.model,
+            config.reflection.api_base,
+        ),
+        model_kwargs={
+            "api_key": os.environ[config.reflection.api_key_env],
+            "api_base": config.reflection.api_base,
+            "temperature": config.reflection.temperature,
+        },
+        cost_tracking="ignore_errors",
+    )
+    model = AuditedModel(
+        base_model,
+        usage,
+        phase="reflection",
+        context={
+            "candidate_sha256": parent_sha256,
+            "instance_ids": list(instance_ids),
+            "bundle_path": str(bundle),
+            "proposal_stage": "contamination_repair",
+        },
+    )
+    if config.container.runtime == "apptainer":
+        run_args = ["--bind", f"{bundle.resolve()}:/evidence:ro"]
+    else:
+        run_args = [
+            "--rm",
+            "--network",
+            "none",
+            "--mount",
+            f"type=bind,source={bundle.resolve()},target=/evidence,readonly",
+        ]
+    lease = (
+        capacity_window.lease()
+        if acquire_capacity_lease
+        else nullcontext()
+    )
+    with lease:
+        if config.container.runtime == "apptainer":
+            env = ApptainerEnvironment(
+                image="python:3.12-slim",
+                cwd="/evidence",
+                sif_cache_dir=config.container.sif_cache_dir,
+                capacity_window=capacity_window,
+                run_args=run_args,
+                timeout=config.reflection.timeout,
+                container_timeout="4h",
+                writable_tmpfs=config.container.writable_tmpfs,
+                network_disabled=True,
+            )
+        else:
+            env = DockerEnvironment(
+                image="python:3.12-slim",
+                cwd="/evidence",
+                run_args=run_args,
+                timeout=config.reflection.timeout,
+                container_timeout="4h",
+            )
+        try:
+            agent = build_default_agent(
+                DefaultAgent,
+                model,
+                env,
+                system_template=config.reflection_prompt,
+                instance_template=_REFLECTION_REPAIR_INSTANCE_TEMPLATE,
+                step_limit=config.reflection.max_steps,
+                cost_limit=config.reflection.cost_limit,
+            )
+            try:
+                exit_status, submission = agent.run(
+                    task=(
+                        "Remove the detected case-specific strings from the "
+                        "complete Checker rules."
+                    ),
+                    current_rules=proposed_rules,
+                    evidence_path="/evidence",
+                    contamination_hits=json.dumps(
+                        list(contamination_hits),
+                        ensure_ascii=False,
+                        sort_keys=True,
+                    ),
+                )
+            except Exception as exc:
+                save_reflection_trajectory(
+                    trajectory_dir,
+                    agent.messages,
+                    mode="checker",
+                    candidate_sha256=parent_sha256,
+                    instance_ids=instance_ids,
+                    status="failed",
+                    error=exc,
+                    filename="reflection_repair_trajectory.json",
+                )
+                raise
+            try:
+                repaired = _validate_reflection_submission(
+                    submission,
+                    exit_status=exit_status,
+                    parent_rules=parent_rules,
+                    model_calls=int(getattr(model, "n_calls", 0)),
+                )
+                remaining_hits = find_candidate_contamination(repaired, records)
+                if remaining_hits:
+                    raise ValueError(
+                        "reflection repair retained case-specific strings: "
+                        f"{remaining_hits}"
+                    )
+            except Exception as exc:
+                save_reflection_trajectory(
+                    trajectory_dir,
+                    agent.messages,
+                    mode="checker",
+                    candidate_sha256=parent_sha256,
+                    instance_ids=instance_ids,
+                    status="failed",
+                    exit_status=exit_status,
+                    exit_message=submission,
+                    error=exc,
+                    filename="reflection_repair_trajectory.json",
+                )
+                audit.write(
+                    "reflection_candidate_contamination_repair_failed",
+                    parent_candidate_sha256=parent_sha256,
+                    proposed_candidate_sha256=text_sha256(proposed_rules),
+                    repaired_candidate_sha256=text_sha256(submission.strip()),
+                    instance_ids=list(instance_ids),
+                    error=f"{type(exc).__name__}: {exc}",
+                )
+                raise
+            trajectory_path = save_reflection_trajectory(
+                trajectory_dir,
+                agent.messages,
+                mode="checker",
+                candidate_sha256=parent_sha256,
+                instance_ids=instance_ids,
+                status="completed",
+                exit_status=exit_status,
+                exit_message=submission,
+                filename="reflection_repair_trajectory.json",
+            )
+            audit.write(
+                "reflection_candidate_contamination_repaired",
+                parent_candidate_sha256=parent_sha256,
+                original_candidate_sha256=text_sha256(proposed_rules),
+                repaired_candidate_sha256=text_sha256(repaired),
+                instance_ids=list(instance_ids),
+                contamination_hits=list(contamination_hits),
+            )
+            return {
+                "rules": repaired,
+                "exit_status": exit_status,
+                "submission": submission,
+                "trajectory_path": str(trajectory_path),
+                "trajectory_messages": len(agent.messages),
+                "model_calls": int(getattr(base_model, "n_calls", 0)),
+            }
+        finally:
+            env.cleanup()
+
+
 class EvidenceBundleWriter:
     def __init__(self, run_dir: Path, *, mode: str = "checker") -> None:
         self.root = run_dir / "reflection_inputs"
@@ -292,6 +491,7 @@ class MiniSWEReflectionProposer:
         *,
         successful_proposals: int = 0,
         failures: Sequence[Mapping[str, str]] = (),
+        defer_contamination_repair: bool = False,
     ) -> None:
         self.config = config
         self.capacity_window = capacity_window
@@ -301,6 +501,7 @@ class MiniSWEReflectionProposer:
         self.errors = JsonlLogger(config.run_dir / "errors.jsonl")
         self.failures = [dict(failure) for failure in failures]
         self.successful_proposals = successful_proposals
+        self.defer_contamination_repair = defer_contamination_repair
 
     def __call__(
         self,
@@ -492,6 +693,7 @@ class MiniSWEReflectionProposer:
                 )
                 repair_performed = bool(contamination_hits)
                 total_trajectory_messages = len(agent.messages)
+                total_model_calls = int(getattr(base_model, "n_calls", 0))
                 if contamination_hits:
                     save_reflection_trajectory(
                         bundle,
@@ -510,117 +712,35 @@ class MiniSWEReflectionProposer:
                         instance_ids=instance_ids,
                         contamination_hits=contamination_hits,
                     )
-                    repair_model = AuditedModel(
-                        base_model,
-                        self.usage,
-                        phase="reflection",
-                        context={
-                            "candidate_sha256": parent_sha256,
-                            "instance_ids": instance_ids,
-                            "bundle_path": str(bundle),
-                            "proposal_stage": "contamination_repair",
-                        },
-                    )
-                    repair_agent = build_default_agent(
-                        DefaultAgent,
-                        repair_model,
-                        env,
-                        system_template=self.config.reflection_prompt,
-                        instance_template=_REFLECTION_REPAIR_INSTANCE_TEMPLATE,
-                        step_limit=self.config.reflection.max_steps,
-                        cost_limit=self.config.reflection.cost_limit,
-                    )
-                    try:
-                        repair_exit_status, repair_submission = repair_agent.run(
-                            task=(
-                                "Remove the detected case-specific strings from "
-                                "the complete Checker rules."
-                            ),
-                            current_rules=proposed,
-                            evidence_path="/evidence",
-                            contamination_hits=json.dumps(
-                                contamination_hits,
-                                ensure_ascii=False,
-                                sort_keys=True,
-                            ),
-                        )
-                    except Exception as exc:
-                        save_reflection_trajectory(
-                            bundle,
-                            repair_agent.messages,
-                            mode="checker",
-                            candidate_sha256=parent_sha256,
+                    if self.defer_contamination_repair:
+                        raise ReflectionRepairRequired(
+                            proposed_rules=proposed,
+                            contamination_hits=contamination_hits,
+                            bundle_path=bundle,
                             instance_ids=instance_ids,
-                            status="failed",
-                            error=exc,
-                            filename="reflection_repair_trajectory.json",
                         )
-                        raise
-                    try:
-                        repaired = _validate_reflection_submission(
-                            repair_submission,
-                            exit_status=repair_exit_status,
-                            parent_rules=candidate["rules"],
-                            model_calls=int(
-                                getattr(repair_model, "n_calls", 0)
-                            ),
-                        )
-                        remaining_hits = find_candidate_contamination(
-                            repaired,
-                            records,
-                        )
-                        if remaining_hits:
-                            raise ValueError(
-                                "reflection repair retained case-specific "
-                                f"strings: {remaining_hits}"
-                            )
-                    except Exception as exc:
-                        save_reflection_trajectory(
-                            bundle,
-                            repair_agent.messages,
-                            mode="checker",
-                            candidate_sha256=parent_sha256,
-                            instance_ids=instance_ids,
-                            status="failed",
-                            exit_status=repair_exit_status,
-                            exit_message=repair_submission,
-                            error=exc,
-                            filename="reflection_repair_trajectory.json",
-                        )
-                        self.audit.write(
-                            "reflection_candidate_contamination_repair_failed",
-                            parent_candidate_sha256=parent_sha256,
-                            proposed_candidate_sha256=text_sha256(proposed),
-                            repaired_candidate_sha256=text_sha256(
-                                repair_submission.strip()
-                            ),
-                            instance_ids=instance_ids,
-                            error=f"{type(exc).__name__}: {exc}",
-                        )
-                        raise
-                    trajectory_path = save_reflection_trajectory(
-                        bundle,
-                        repair_agent.messages,
-                        mode="checker",
-                        candidate_sha256=parent_sha256,
-                        instance_ids=instance_ids,
-                        status="completed",
-                        exit_status=repair_exit_status,
-                        exit_message=repair_submission,
-                        filename="reflection_repair_trajectory.json",
-                    )
-                    self.audit.write(
-                        "reflection_candidate_contamination_repaired",
-                        parent_candidate_sha256=parent_sha256,
-                        original_candidate_sha256=text_sha256(proposed),
-                        repaired_candidate_sha256=text_sha256(repaired),
-                        instance_ids=instance_ids,
+                    repair = run_reflection_contamination_repair(
+                        self.config,
+                        self.capacity_window,
+                        bundle=bundle,
+                        trajectory_dir=bundle,
+                        parent_rules=candidate["rules"],
+                        proposed_rules=proposed,
                         contamination_hits=contamination_hits,
+                        records=records,
+                        instance_ids=instance_ids,
+                        audit=self.audit,
+                        usage=self.usage,
+                        acquire_capacity_lease=False,
                     )
-                    proposed = repaired
-                    exit_status = repair_exit_status
-                    final_submission = repair_submission
-                    total_trajectory_messages += len(repair_agent.messages)
+                    proposed = str(repair["rules"])
+                    exit_status = repair["exit_status"]
+                    final_submission = str(repair["submission"])
+                    trajectory_path = Path(str(repair["trajectory_path"]))
+                    total_trajectory_messages += int(
+                        repair["trajectory_messages"]
+                    )
+                    total_model_calls += int(repair["model_calls"])
                 else:
                     trajectory_path = save_reflection_trajectory(
                         bundle,
@@ -640,7 +760,7 @@ class MiniSWEReflectionProposer:
                     exit_status=exit_status,
                     exit_message=final_submission,
                     trajectory_messages=total_trajectory_messages,
-                    model_calls=int(getattr(base_model, "n_calls", 0)),
+                    model_calls=total_model_calls,
                     submission_chars=len(final_submission),
                     contamination_repair_performed=repair_performed,
                 )

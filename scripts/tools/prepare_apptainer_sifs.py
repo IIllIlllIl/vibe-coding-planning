@@ -6,11 +6,11 @@ main loop. Run it on an HPC login or compute node before submitting a GEPA job.
 
 Examples:
     python scripts/tools/prepare_apptainer_sifs.py \
-        --config configs/archive/offline_gepa/gepa_verified_rules_reflection_smoke_apptainer.yaml
+        --config configs/gepa_verified_rules.yaml
 
     # Override SIF cache directory without editing the config:
     python scripts/tools/prepare_apptainer_sifs.py \
-        --config configs/archive/offline_gepa/gepa_verified_rules_reflection_smoke_apptainer.yaml \
+        --config configs/gepa_verified_rules.yaml \
         --sif-cache-dir /scratch/users/${USER}/vibe-sif-cache
 """
 

@@ -32,6 +32,7 @@ class ProgressCallback:
         checkpoint: Any = None,
         proposer: Any = None,
         accepted_candidates: int = 0,
+        completed_iterations: int = 0,
     ) -> None:
         self.run_dir = run_dir
         self.audit = JsonlLogger(run_dir / "audit_events.jsonl")
@@ -44,9 +45,42 @@ class ProgressCallback:
             "metric_calls_used": 0,
             "accepted_candidates": accepted_candidates,
         }
+        iteration_path = self.run_dir / "iteration_progress.json"
+        if iteration_path.is_file():
+            existing = json.loads(iteration_path.read_text(encoding="utf-8"))
+            self.first_observed_completed_iterations = int(
+                existing.get(
+                    "first_observed_completed_iterations",
+                    completed_iterations,
+                )
+            )
+        else:
+            self.first_observed_completed_iterations = completed_iterations
+        self._save_iteration_progress(
+            completed_iterations,
+            event="controller_started",
+        )
 
     def _save(self) -> None:
         _atomic_json(self.run_dir / "progress.json", self.progress)
+
+    def _save_iteration_progress(
+        self,
+        completed_iterations: int,
+        *,
+        event: str,
+    ) -> None:
+        _atomic_json(
+            self.run_dir / "iteration_progress.json",
+            {
+                "schema_version": 1,
+                "first_observed_completed_iterations": (
+                    self.first_observed_completed_iterations
+                ),
+                "completed_iterations": completed_iterations,
+                "last_event": event,
+            },
+        )
 
     def on_optimization_start(self, event: dict[str, Any]) -> None:
         self.valset_size = event["valset_size"]
@@ -203,6 +237,10 @@ class ProgressCallback:
                 proposer=self.proposer,
                 accepted_candidates=self.progress["accepted_candidates"],
             )
+        self._save_iteration_progress(
+            int(event["iteration"]),
+            event="state_saved",
+        )
 
     def on_error(self, event: dict[str, Any]) -> None:
         JsonlLogger(self.run_dir / "errors.jsonl").write(
@@ -274,4 +312,8 @@ class ProgressCallback:
                 proposer=self.proposer,
                 accepted_candidates=self.progress["accepted_candidates"],
             )
+        self._save_iteration_progress(
+            int(event["total_iterations"]),
+            event="optimization_completed",
+        )
         self._save()

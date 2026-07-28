@@ -11,6 +11,7 @@ import yaml
 
 from src.config import DockerConfig
 from src.optimization.config import ContainerConfig, ModelConfig, SearchConfig
+from src.optimization.hpc.config import HPCConfig
 
 
 @dataclass(frozen=True)
@@ -36,35 +37,7 @@ class OnlineEvaluatorConfig:
     backend: str = "swebench_docker"
 
 
-@dataclass(frozen=True)
-class OnlineHPCConfig:
-    """ULHPC job-array settings for online rollout workers.
-
-    These defaults intentionally request the smallest fairshare-friendly
-    resources we currently expect to need. Resource increases should be based
-    on sacct measurements from pilot workers. ``max_running_array_tasks`` is
-    Slurm array scheduling concurrency, not parallelism inside one worker.
-    """
-
-    submit: bool = False
-    remote_project_dir: str = "~/hpc_runs/vibe-coding-planning-online"
-    remote_task_dir: str = ""
-    remote_env_file: str = "~/.config/vibe-coding-planning/deepseek.env"
-    ulhpc_config: str = "configs/ulhpc_submit.yaml"
-    partition: str = "batch"
-    cpus_per_task: int = 1
-    mem: str = "4G"
-    time: str = "02:00:00"
-    max_running_array_tasks: int = 5
-    poll_interval_seconds: int = 300
-    task_output_grace_seconds: int = 300
-    missing_task_grace_seconds: int = 600
-    max_task_attempts: int = 2
-    python_module: str = "lang/Python/3.11"
-    container_module: str = "tools/Apptainer"
-    python_bin: str = "python3"
-    job_name_prefix: str = "online-gepa-rollout"
-    worker_config_path: str = ""
+OnlineHPCConfig = HPCConfig
 
 
 @dataclass(frozen=True)
@@ -265,12 +238,17 @@ def load_online_optimization_config(
         raise ValueError(
             "container.runtime: apptainer must not use Docker evaluator backend"
         )
-    hpc_defaults = OnlineHPCConfig()
+    hpc_defaults = HPCConfig(
+        remote_project_dir="~/hpc_runs/vibe-coding-planning-online",
+        time="02:00:00",
+        max_running_array_tasks=5,
+        job_name_prefix="online-gepa-rollout",
+    )
     try:
         default_worker_config_path = str(config_path.relative_to(root))
     except ValueError:
         default_worker_config_path = str(config_path)
-    hpc = OnlineHPCConfig(
+    hpc = HPCConfig(
         submit=bool(hpc_data.get("submit", False)),
         remote_project_dir=str(
             hpc_data.get(

@@ -67,7 +67,7 @@ class OnlineIterationProgressCallback:
     """Publish only GEPA iterations that are durable in the official state."""
 
     def __init__(self, run_dir: Path, completed_iterations: int) -> None:
-        self.path = run_dir / "online_iteration_progress.json"
+        self.path = run_dir / "iteration_progress.json"
         self.first_observed = completed_iterations
         if self.path.is_file():
             existing = json.loads(self.path.read_text(encoding="utf-8"))

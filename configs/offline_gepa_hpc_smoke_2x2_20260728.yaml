@@ -1,7 +1,10 @@
 paths:
-  dataset_snapshot: output/SWE-bench_Verified/verified-round1-gepa-datasets/20260614_482_fdc056ae85df
+  # Balanced 2-train/2-validation historical pilot. This run verifies the
+  # controller, Slurm workers, Apptainer repositories, and resume boundary;
+  # its scores are not evidence of rule quality.
+  dataset_snapshot: output/archive/datasets/historical/gepa-pilot-datasets/pilot_2_2_seed43_e2bdb83dc201
   initial_rules: configs/gepa_initial_rules_minimal.md
-  run_dir: output/SWE-bench_Verified/gepa-rules/offline-plan-verifier-hpc-balanced-b12-2it-20260728
+  run_dir: output/SWE-bench_Verified/gepa-rules/offline-hpc-env-smoke-2x2-1it-20260728
 
 checker:
   model: deepseek-v4-flash
@@ -25,21 +28,14 @@ reflection:
   timeout: 1800
 
 search:
-  # Full 384/98 snapshot, with exactly two cumulative GEPA proposal
-  # iterations after seed validation. The iteration stopper is the primary
-  # experimental control. 342 metric calls is the worst-case projection
-  # when both proposals pass the minibatch gate and receive full validation:
-  # 98 + 2 * (12 parent + 12 proposal + 98 validation).
-  # Keep a larger metric-call ceiling only as a fail-safe; reaching it before
-  # two durable iterations is an anomaly to audit rather than a normal stop.
-  max_iterations: 2
-  max_metric_calls: 500
-  projection_metric_calls: 342
-  reflection_minibatch_size: 12
+  # One proposal iteration is enough to cross Checker evaluation, Reflection,
+  # and candidate evaluation boundaries on the balanced 2/2 pilot.
+  max_iterations: 1
+  max_metric_calls: 8
+  projection_metric_calls: 8
+  reflection_minibatch_size: 2
   primary_metric: balanced_accuracy
-  # HPC concurrency is the Slurm array throttle below. The controller itself
-  # does not run a local Checker thread pool.
-  parallel: 2
+  parallel: 1
   seed: 42
   skip_perfect_score: false
   min_proposals: 1
@@ -69,16 +65,16 @@ hpc:
   cpus_per_task: 1
   mem: 4G
   time: 00:35:00
-  max_running_array_tasks: 4
+  max_running_array_tasks: 2
   poll_interval_seconds: 300
   task_output_grace_seconds: 300
   missing_task_grace_seconds: 600
-  max_task_attempts: 2
+  max_task_attempts: 1
   python_module: lang/Python/3.11
   container_module: tools/Apptainer
   python_bin: python3
-  job_name_prefix: offline-gepa-2it-20260728
-  worker_config_path: configs/gepa_verified_rules.yaml
+  job_name_prefix: offline-gepa-smoke-20260728
+  worker_config_path: configs/offline_gepa_hpc_smoke_2x2_20260728.yaml
 
 prompts:
   checker_system: |

@@ -1,8 +1,8 @@
-# Current Online GEPA Architecture
+# Current GEPA Architecture
 
 > Authority: current module and data-flow design
 >
-> Scope: Online GEPA planning rules and ULHPC rollout execution
+> Scope: Online and Offline GEPA, shared ULHPC execution
 >
 > Last reviewed: 2026-07-27
 >
@@ -21,6 +21,9 @@
 
 | Module | Responsibility |
 |---|---|
+| `src/optimization/hpc/config.py` | Method-independent Slurm resources and transport config |
+| `src/optimization/hpc/slurm.py` | Slurm submit, query, parsing, and resource snapshots |
+| `src/optimization/hpc/task_batch.py` | Fingerprint-bound atomic task reuse and clean retry |
 | `src/optimization/online_config.py` | Load and validate Online config |
 | `src/optimization/online_runner.py` | GEPA lifecycle, lock, checkpoint, status |
 | `src/optimization/online_adapter.py` | GEPA EvaluationBatch and audit boundary |
@@ -31,6 +34,10 @@
 | `src/optimization/online_reflection_reviewer.py` | Repo-grounded instance review and validation |
 | `src/optimization/online_reviewer_worker.py` | One independent Reviewer Slurm attempt |
 | `src/optimization/online_synthesis_worker.py` | One independent Synthesis Slurm attempt |
+| `src/optimization/offline_hpc_executor.py` | Label-free Checker task manifests and array collection |
+| `src/optimization/offline_checker_worker.py` | One complete Checker Agent attempt |
+| `src/optimization/offline_hpc_reflection.py` | Initial/repair Reflection task submission and collection |
+| `src/optimization/offline_reflection_worker.py` | Exactly one initial or repair Agent attempt |
 | `src/evaluator/runtime_evaluator.py` | Config-driven evaluator routing |
 | `src/evaluator/swe_apptainer_evaluator.py` | Official SWE-bench evaluation in Apptainer |
 | `scripts/hpc_resume_loop.py` | Local iteration-target supervisor |
@@ -38,6 +45,10 @@
 | `configs/online_gepa_supervisor.yaml` | Versioned local supervisor launch identity and arguments |
 
 ## 3. Runtime Data Flow
+
+The shared Slurm layer is deliberately limited to transport semantics. Online
+and Offline define different evidence, scoring, phase checkpoints, and failure
+policies; they do not share a domain-specific executor.
 
 ```text
 GEPA controller
@@ -69,6 +80,29 @@ dataset, links the persistent run directory, and submits each controller slice.
 `OUTPUTS_READY` means every worker file exists, while `COMPLETE` means the
 executor validated and returned the batch. Official GEPA state remains the
 authority for whether the metric call affected optimization.
+
+Offline follows the same controller/yield shape with a smaller method-specific
+flow:
+
+```text
+GEPA evaluation request
+  -> label-free fingerprinted Checker manifests
+  -> one complete Checker Agent per Slurm array element
+  -> controller validates outputs and computes historical-label score
+  -> one fingerprinted initial Reflection Agent task
+  -> if contaminated, one fingerprinted repair Agent task
+  -> GEPA receives the complete replacement rules and saves state
+```
+
+Interrupted Offline Agent attempts have no reusable conversational midpoint.
+Only complete, identity-bound output is reused; retry starts that phase from
+its immutable input in a new attempt directory.
+
+The initial Reflection result is a valid completed task even when its outcome
+is `repair_required`. The repair fingerprint binds the initial fingerprint,
+proposed rules, exact deterministic hits, and instance list. This preserves the
+unmodified initial trajectory while giving the repair Agent its own Slurm
+allocation, attempt history, usage ledger, and atomic result.
 
 ## 4. State Authorities
 

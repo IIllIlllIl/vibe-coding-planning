@@ -1,8 +1,8 @@
-# Online GEPA ULHPC Operations
+# GEPA ULHPC Operations
 
 > Authority: current ULHPC submission and operational contract
 >
-> Scope: Online GEPA controller, rollout arrays, supervisor, FairShare
+> Scope: Online/Offline controllers, Agent task arrays, supervisor, FairShare
 >
 > Last reviewed: 2026-07-15
 >
@@ -34,6 +34,9 @@ escalated network access.
 | Reviewer array element | 1 CPU / 4G | 55min; initial attempt plus two retries |
 | Synthesis task | 1 CPU / 4G | 55min; initial attempt plus two retries |
 | SIF preheat | 1 CPU / 4G | network/IO bound |
+| Offline Checker array element | 1 CPU / 4G | 35min; one complete Checker session |
+| Offline initial Reflection task | 1 CPU / 4G | 35min; one complete Agent session |
+| Offline contamination repair task | 1 CPU / 4G | 35min; submitted only after a deterministic hit |
 
 Each array element executes one PCT rollout or one Reviewer. Synthesis uses a
 single-element array so it follows the same submission/status contract.
@@ -52,6 +55,13 @@ Current config:
 configs/gepa_online_planning_hpc.yaml
 ```
 
+Current Offline config and supervisor identity:
+
+```text
+configs/gepa_verified_rules.yaml
+configs/offline_gepa_supervisor.yaml
+```
+
 The next policy-v3 run must use a new identity. Policy v3 scores a Slurm-proven
 worker `TIMEOUT` as unresolved, so it cannot resume a policy-v2 run directory.
 
@@ -66,7 +76,8 @@ semantics change.
 
 ## 4. Iteration-Target Supervisor
 
-Recommended local supervisor service (macOS):
+Recommended local supervisor service (macOS), selecting the appropriate
+versioned launch config:
 
 ```bash
 conda run -n mini-swe python scripts/hpc_supervisor_service.py \
@@ -78,6 +89,9 @@ run identity, iteration target, cadence, controller walltime/resources, remote
 workdir, and submit mode. Update and review that file before starting a new run;
 do not reconstruct a long invocation from a previous conversation. Runtime
 models/prompts/worker resources remain in `gepa_online_planning_hpc.yaml`.
+Offline uses the same service and resume loop with
+`configs/offline_gepa_supervisor.yaml`; its runtime prompt, metric, and worker
+resources remain in `gepa_verified_rules.yaml`.
 
 The service launches the foreground resume loop inside `tmux` under
 `caffeinate -i -s`. Closing the initiating shell therefore does not terminate
@@ -95,7 +109,8 @@ conda run -n mini-swe python scripts/hpc_supervisor_service.py \
   status --launch-config configs/online_gepa_supervisor.yaml
 ```
 
-The supervisor polls every 30 minutes and submits only when:
+The Online supervisor currently polls every 30 minutes; the small Offline HPC
+run polls every 5 minutes. In both cases it submits only when:
 
 - the target is not reached;
 - no active controller exists;
@@ -150,6 +165,13 @@ through `OUTPUTS_READY` and then `COMPLETE`. A finished array left at
 fingerprint reuse and do not count it as an optimization result.
 
 Yield must appear as `yielded`, not `failed`, in controller status and audit.
+
+For Offline, Checker task manifests deliberately exclude resolved labels,
+patches, evaluator outputs, and other ASI. The controller alone joins validated
+predictions with labels for scoring. Initial Reflection and its optional
+contamination repair are distinct fingerprinted tasks. An interrupted Checker,
+initial Reflection, or repair attempt is restarted from that task's immutable
+input; no Agent conversation is resumed.
 
 ## 6. Slurm Status Rules
 

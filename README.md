@@ -5,8 +5,9 @@ software-development Agent. It currently maintains two distinct experimental
 paths rather than assuming one is intrinsically superior:
 
 - **Offline GEPA** learns a human- and Agent-usable plan-approval standard from
-  historical Round 1 plans, resolved labels, and execution evidence. The next
-  local experiment is configured but not started.
+  historical Round 1 plans, resolved labels, and execution evidence. Its next
+  experiment is configured for independent ULHPC Checker/Reflection tasks but
+  has not been started.
 - **Online GEPA** evaluates candidate rules through current Plan-Code-Evaluator
   rollouts on ULHPC.
 
@@ -74,8 +75,12 @@ The Checker must inspect the base repository, but it may not modify repository
 source/tests or implement the proposed solution. Historical labels, patches,
 execution trajectories, and evaluator outcomes are hidden from Checker
 deployment input and are available only as Reflection diagnostics. The active
-local configuration uses the full 384/98 split, minibatch 12, balanced accuracy,
-a minimal seed, and an absolute target of eight cumulative proposals.
+HPC configuration uses the full 384/98 split, minibatch 12, balanced accuracy,
+a minimal seed, and an absolute target of two cumulative proposals. One
+Checker case and each Reflection Agent call are independently fingerprinted
+Slurm tasks. Contamination repair, when needed, is a second task bound to the
+completed initial proposal; a controller restart reuses only schema-valid
+atomic outputs.
 
 ## Environment
 
@@ -159,13 +164,16 @@ are under `output/archive/` and must not be mixed into current score analysis.
 |---|---|
 | `src/optimization/online_*.py` | Online config, runner, adapter, rollout, Reflection, HPC execution |
 | `src/optimization/{config,dataset,checker,adapter,reflection,runner,resume}.py` | Offline Checker-rule optimization |
+| `src/optimization/hpc/` | Shared Slurm configuration, commands, and atomic task lifecycle |
+| `src/optimization/offline_*worker.py` | One Offline Checker or Reflection Slurm phase |
 | `src/evaluator/` | Runtime routing and official evaluator backends |
 | `scripts/hpc_resume_loop.py` | Local iteration-target supervisor |
 | `scripts/hpc_supervisor_service.py` | Durable supervisor start/status/stop |
 | `scripts/hpc_submit_batch.sh` | `ulhpc-submit` wrapper |
 | `configs/gepa_online_planning_hpc.yaml` | Formal Online experiment configuration |
 | `configs/online_gepa_supervisor.yaml` | Persistent unattended launch configuration |
-| `configs/gepa_verified_rules.yaml` | Current local Offline experiment configuration |
+| `configs/gepa_verified_rules.yaml` | Current Offline HPC experiment configuration |
+| `configs/offline_gepa_supervisor.yaml` | Offline controller/supervisor launch identity |
 | `docs/knowledge/` | Reusable lessons extracted from historical methods |
 | `docs/reference/` | GEPA and seed-rule provenance |
 | `docs/archive/` | Non-authoritative historical documents |

@@ -3,13 +3,14 @@
 from __future__ import annotations
 
 import os
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
 import yaml
 
 from src.config import DockerConfig
+from src.optimization.hpc.config import HPCConfig
 
 
 @dataclass(frozen=True)
@@ -48,6 +49,11 @@ class ContainerConfig:
 
 
 @dataclass(frozen=True)
+class OfflineExecutionConfig:
+    backend: str = "local"
+
+
+@dataclass(frozen=True)
 class OptimizationConfig:
     dataset_snapshot: Path
     initial_rules_path: Path
@@ -61,6 +67,10 @@ class OptimizationConfig:
     checker_instance_template: str
     reflection_prompt: str
     reflection_instance_template: str
+    execution: OfflineExecutionConfig = field(
+        default_factory=OfflineExecutionConfig
+    )
+    hpc: HPCConfig = field(default_factory=HPCConfig)
 
 
 def _mapping(value: Any, name: str) -> dict[str, Any]:
@@ -104,6 +114,8 @@ def load_optimization_config(
     search_data = _mapping(raw.get("search"), "search")
     docker_data = _mapping(raw.get("docker", {}), "docker")
     container_data = _mapping(raw.get("container", {}), "container")
+    execution_data = _mapping(raw.get("execution", {}), "execution")
+    hpc_data = _mapping(raw.get("hpc", {}), "hpc")
     prompts = _mapping(raw.get("prompts"), "prompts")
     paths = _mapping(raw.get("paths"), "paths")
 
@@ -184,6 +196,92 @@ def load_optimization_config(
         raise ValueError(
             f"container.runtime must be 'docker' or 'apptainer', got {container.runtime!r}"
         )
+    execution = OfflineExecutionConfig(
+        backend=str(execution_data.get("backend", "local")),
+    )
+    if execution.backend not in ("local", "hpc_slurm"):
+        raise ValueError(
+            "execution.backend must be 'local' or 'hpc_slurm'"
+        )
+    hpc_defaults = HPCConfig()
+    try:
+        default_worker_config_path = str(config_path.relative_to(root))
+    except ValueError:
+        default_worker_config_path = str(config_path)
+    hpc = HPCConfig(
+        submit=bool(hpc_data.get("submit", hpc_defaults.submit)),
+        remote_project_dir=str(
+            hpc_data.get("remote_project_dir", hpc_defaults.remote_project_dir)
+        ),
+        remote_task_dir=str(
+            hpc_data.get("remote_task_dir", hpc_defaults.remote_task_dir)
+        ),
+        remote_env_file=str(
+            hpc_data.get("remote_env_file", hpc_defaults.remote_env_file)
+        ),
+        ulhpc_config=str(
+            hpc_data.get("ulhpc_config", hpc_defaults.ulhpc_config)
+        ),
+        partition=str(hpc_data.get("partition", hpc_defaults.partition)),
+        cpus_per_task=int(
+            hpc_data.get("cpus_per_task", hpc_defaults.cpus_per_task)
+        ),
+        mem=str(hpc_data.get("mem", hpc_defaults.mem)),
+        time=str(hpc_data.get("time", hpc_defaults.time)),
+        max_running_array_tasks=int(
+            hpc_data.get(
+                "max_running_array_tasks",
+                hpc_defaults.max_running_array_tasks,
+            )
+        ),
+        poll_interval_seconds=int(
+            hpc_data.get(
+                "poll_interval_seconds",
+                hpc_defaults.poll_interval_seconds,
+            )
+        ),
+        task_output_grace_seconds=int(
+            hpc_data.get(
+                "task_output_grace_seconds",
+                hpc_defaults.task_output_grace_seconds,
+            )
+        ),
+        missing_task_grace_seconds=int(
+            hpc_data.get(
+                "missing_task_grace_seconds",
+                hpc_defaults.missing_task_grace_seconds,
+            )
+        ),
+        max_task_attempts=int(
+            hpc_data.get("max_task_attempts", hpc_defaults.max_task_attempts)
+        ),
+        python_module=str(
+            hpc_data.get("python_module", hpc_defaults.python_module)
+        ),
+        container_module=str(
+            hpc_data.get("container_module", hpc_defaults.container_module)
+        ),
+        python_bin=str(hpc_data.get("python_bin", hpc_defaults.python_bin)),
+        job_name_prefix=str(
+            hpc_data.get("job_name_prefix", hpc_defaults.job_name_prefix)
+        ),
+        worker_config_path=str(
+            hpc_data.get("worker_config_path", default_worker_config_path)
+        ),
+    )
+    if min(
+        hpc.cpus_per_task,
+        hpc.max_running_array_tasks,
+        hpc.poll_interval_seconds,
+        hpc.task_output_grace_seconds,
+        hpc.missing_task_grace_seconds,
+        hpc.max_task_attempts,
+    ) < 1:
+        raise ValueError("hpc numeric resources and retry settings must be positive")
+    if execution.backend == "hpc_slurm" and container.runtime != "apptainer":
+        raise ValueError(
+            "Offline HPC Slurm execution requires container.runtime: apptainer"
+        )
 
     return OptimizationConfig(
         dataset_snapshot=resolve(str(paths["dataset_snapshot"])),
@@ -198,4 +296,6 @@ def load_optimization_config(
         checker_instance_template=str(prompts["checker_instance"]),
         reflection_prompt=str(prompts["reflection_system"]),
         reflection_instance_template=str(prompts["reflection_instance"]),
+        execution=execution,
+        hpc=hpc,
     )

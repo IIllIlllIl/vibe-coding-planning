@@ -151,8 +151,8 @@ prompts:
     assert "--submit-only" in result.stdout
     assert "--json" in result.stdout
     lines = result.stdout.splitlines()
-    assert lines[lines.index("--cpus") + 1] == "2"
-    assert lines[lines.index("--mem") + 1] == "8G"
+    assert lines[lines.index("--cpus") + 1] == "1"
+    assert lines[lines.index("--mem") + 1] == "4G"
     assert "--module" in result.stdout
     assert "lang/Python/3.11" in result.stdout
     assert "tools/Apptainer" in result.stdout

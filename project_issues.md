@@ -22,8 +22,72 @@ ssh -p 8022 twang@access-iris.uni.lu \
 | 2026-07-15 17:17 Europe/Luxembourg | policy-v3 seed validation array active | 574030 | 0.010887 | 0.364826 | First authoritative project baseline |
 | 2026-07-15 17:26 Europe/Luxembourg | policy-v3 seed validation: 89/98 outputs, 9 workers active | 610001 | 0.011633 | 0.364826 | FairShare unchanged; usage increased by 35971 |
 | 2026-07-16 11:36 Europe/Luxembourg | policy-v3 at 7/8 durable iterations; latest rollout array complete and awaiting collection | 750738 | 0.014363 | 0.365549 | FairShare increased by 0.000723 from the first authoritative baseline |
+| 2026-07-24 17:15 Europe/Luxembourg | post-maintenance read-only check; no `twang` jobs queued or running | 285953 | 0.014317 | 0.395111 | FairShare increased by 0.029562 from 2026-07-16; raw usage is lower after the maintenance interval |
+| 2026-07-28 10:35 Europe/Luxembourg | Offline HPC environment smoke: controller completed; one Checker worker completed and one active | 170909 | 0.013318 | 0.293015 | FairShare decreased by 0.102096 from 2026-07-24; `LevelFS=4.417003` |
 
 Future launch/progress checks must append a row before interpreting movement.
+
+The 2026-07-28 decrease cannot be attributed to the current smoke. The same
+`FairShare=0.293015` value was observed immediately before submission, and the
+completed smoke work at the recorded time was only a 24-second controller and
+one 38-second Checker task. RawUsage and EffectvUsage were also lower than on
+2026-07-24. FairTree/FairShare is relative and periodically recalculated: usage
+decay plus account and sibling-user usage can change rank even when this user's
+own counters fall. The available `sshare` snapshots do not isolate those
+components, so this remains the bounded explanation rather than a causal claim.
+
+### 0.1 Iris maintenance handoff（2026-07-21）
+
+**状态更新（2026-07-24 17:15 Europe/Luxembourg）**：维护阻塞已解除。通过
+`access-iris.uni.lu:8022` 的真实远端只读检查正常进入
+`access1.iris-cluster.uni.lux`，没有 maintenance banner 或主动断连；`sinfo`
+正常返回且 `batch`、`interactive` 等 partition 为 `up`；`squeue -u twang`
+为空；精确 `sshare` 结果已追加到上表。本地不存在 Online GEPA supervisor
+tmux 会话，只有当前 Offline GEPA 运行会话。
+
+这不表示集群容量已经完全恢复：本次 `sinfo` 摘要中 `batch` 仍有 57 个
+`fail*` 节点和 5 个 drain/drain* 节点，并且没有显示 idle batch 节点。应将
+当前状态解释为“调度服务恢复但容量仍受限”，在明确要求启动 Online smoke 前
+继续保留新 run identity，不因维护结束而自动提交。
+
+**历史阻塞**：2026-07-21 Europe/Luxembourg 曾通过
+`access-iris.uni.lu:8022` 实测。登录节点仍报告 general system update，说明维护
+期间所有 scheduled Slurm jobs 保持 `PENDING`，随后主动关闭连接。维护跟踪为
+ULHPC infrastructure issue `#34`。这是 Iris 的真实远端响应，不是 Codex sandbox
+网络错误。维护结束前不提交本次 smoke，避免只产生排队状态和含混的运行记录。
+
+**维护时记录的本地基线（历史快照）**：
+
+- Git 基线为 `9acfbf1 feat: separate online reflection slurm phases`；该提交后工作区
+  干净。当前 HEAD 已前进到 `f95c0ca feat: harden offline GEPA reflection`，
+  因此下一次 Online smoke 不能再把 `9acfbf1` 当作当前工作区事实。
+- PPT 及其生成脚本已删除，目前不属于待办。
+- 运行配置为 `configs/gepa_online_planning_hpc.yaml`，run identity 是
+  `online-planning-hpc-separate-reflection-2it-smoke-20260720`。
+- 持久化启动配置为 `configs/online_gepa_supervisor.yaml`：目标 `2` 个 durable
+  iterations、30 分钟轮询、2 小时 controller slice、controller `1 CPU / 4G`。
+- PCT、Reviewer、Synthesis 各自使用 Slurm task，均为 `1 CPU / 4G / 55min`，首次
+  attempt 加两次 selective retry；`reflection_minibatch_size=3`。
+- 本次新 identity **尚未启动或提交**，因此维修结束后应启动新 smoke，而不是接管
+  一个已存在的该 identity 远端 checkpoint。实现改动和验收风险详见 2.1、2.2。
+
+**Iris 恢复后的操作顺序**：
+
+1. [完成于 2026-07-24] 重新 SSH 检查；没有 maintenance banner，且 `sinfo`
+   能返回 partition/node 状态。
+2. [完成于 2026-07-24] `squeue -u twang` 为空，本地同名 Online supervisor
+   tmux 会话不存在。
+3. [完成于 2026-07-24] 已将精确 `sshare` 数据追加到上表；当前仍需考虑
+   fail/drain 节点和无 idle batch 节点所反映的容量限制。
+4. 确认 Git/worktree 仍与上述基线一致，运行配置与 supervisor 配置 identity 对齐，
+   远端 DeepSeek env 只在远端私有文件中加载。
+5. 先执行 supervisor `status`，再按 `docs/hpc-submit.md` 的标准入口启动：
+   `conda run -n mini-swe python scripts/hpc_supervisor_service.py start
+   --launch-config configs/online_gepa_supervisor.yaml`。确认首个 controller 和首批
+   worker 正常启动后停止主动监督，等待用户下一次进度检查指令。
+6. 进度检查严格按 2.2 风险表验收阶段隔离、fingerprint 接管、retry、score 不变性、
+   attempt evidence、Synthesis block 语义及两个 durable iterations；满足验收前不将
+   smoke 用作规则质量结论。
 
 ---
 
@@ -336,3 +400,68 @@ Synthesis exhausted 能 block 且两个 durable iteration 与 GEPA state 一致�
   - 继续使用实验专用 DeepSeek key，并在控制台设置额度/告警。
   - 运行前后检查模型统计和 key 泄漏痕迹。
   - 若再次发现 Pro 调用增长，优先在 DeepSeek 控制台禁用/轮换对应 key。
+
+---
+
+## 6. Offline GEPA 当前观测与待讨论问题
+
+- **状态**：核心搜索逻辑初步有效；继续观察，暂不增加新的控制模块或修改
+  Reflection 行为。
+- **最近运行**：
+  `offline-plan-verifier-balanced-b12-p2-case-reviews-8it-20260727`，使用
+  384 train / 98 validation、balanced accuracy、minibatch 12、parallel 2 和
+  8 iterations。运行以 `completed_with_warnings` 完成：8 个 iteration 启动，
+  7 个 proposal 成功生成，4 个候选被 instance-level Pareto 接纳，使用 670
+  metric calls。
+- **初步有效性**：最佳 candidate 1 的 validation balanced accuracy 从 seed 的
+  `0.576746` 提升到 `0.661305`，accuracy 从 `0.663265` 提升到 `0.683673`，
+  MCC 从 `0.184811` 提升到 `0.316768`；预测通过率从 `0.806122` 降到
+  `0.622449`。这表明当前 metric 切换、候选评估和 best-candidate 选择链路能够
+  产生非平凡改善，但单次 8-iteration 结果还不足以证明规则能够稳定泛化。
+
+### 6.1 Reflection Agent 行为与预期不一致
+
+本轮要求 Reflection 概览全部 12 个 minibatch 案例，并为每个案例保存结构化
+诊断。实际结果并非每轮都遵守：
+
+1. Iteration 2、3、4、6、7、8 的结构化分析均覆盖了 manifest 中全部 12 个真实
+   instance ID。
+2. Iteration 1 没有读取真实 evidence，而是声称无法读取文件，随后虚构了 4 个
+   `sample__...` 案例；保存的分析没有覆盖任何真实 minibatch instance。
+3. Iteration 5 同样虚构了 `case_001` 等案例，没有生成
+   `reflection_analysis.json`，但仍提交了候选规则；该候选后来被 GEPA 拒绝。
+4. Iteration 8 覆盖了全部真实案例，但提交的 rules 与 parent 完全相同，因现有
+   identical-rules 检查被记为一次 Reflection failure；搜索仍因已有 7 个成功
+   proposal 而正常结束。
+
+这些现象说明路径说明和逐例诊断要求提高了多数 iteration 的 evidence 使用率，
+但 prompt 不能保证黑盒 Agent 始终读取 evidence 或执行真实逐例分析。当前不加入
+helper、semantic validator、自动修复或强制重试：尚未形成能说明其必要性、对
+proposal 分布的影响和潜在新偏差的可解释方案。原始
+`reflection_trajectory.json`、manifest 和 analysis 应继续作为判断依据，避免用
+“Agent completed”或 analysis 数量代替实际 evidence 审计。
+
+### 6.2 运行可靠性与结果解释风险
+
+1. 670 次完成的 Checker evaluation 之外出现 42 次 attempt failure：34 次 Docker
+   storage/extraction、3 次 image pull、5 次 Checker 最终 JSON schema 不合法；
+   重试使搜索完成，没有再次触发整次 Checker operational failure。Docker
+   基础设施噪声仍会增加运行时间和调用量，应与规则质量问题分开报告。
+2. 本轮未记录以 shell action format 为顶层原因的 Checker evaluation failure，
+   但 5 次无效最终提交说明 Agent 输出协议仍非完全稳定。现有官方风格纠错提示先
+   保持不变，继续通过完整 trajectory 观察。
+3. Instance-level Pareto 可以接纳整体 validation balanced accuracy 低于 seed 的
+   candidate；这符合当前 GEPA selector 语义，不应把 accepted candidate 数量解释
+   为整体指标单调提高。最终质量判断仍应使用完整 validation metrics 和差异样本。
+4. Candidate 1 的改善主要来自 false positive 从 24 降到 14，同时 false negative
+   从 9 增到 17。后续需要检查具体差异样本，判断这是真正减少 seed 的通过偏置，
+   还是转向另一种过度保守偏差。
+
+### 6.3 后续观察原则
+
+- 暂不因两次 Reflection 异常立即修改实验路径；先在后续独立 run identity 中观察
+  真实 evidence 覆盖率、虚构案例、no-op proposal 和失败类型是否重复出现。
+- 每次运行同时报告 candidate acceptance 与整体 validation 指标，不能用其中一个
+  代替另一个。
+- 若考虑增加自动检查或重试，先说明它解决的重复性观测、会改变哪些 GEPA proposal
+  数据，以及为什么该影响与研究问题相关；在此之前保留 Agent 原始行为。

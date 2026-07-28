@@ -2,18 +2,31 @@
 
 from __future__ import annotations
 
+from contextlib import contextmanager
+import fcntl
+import json
+import os
+from pathlib import Path
 from typing import Any, Callable
 
 import gepa
+from gepa.core.state import GEPAState
 from gepa.utils import MaxCandidateProposalsStopper
 
 from src.environment.docker_env import configure_docker_capacity
+from src.exceptions import ControllerYield
 from src.optimization.audit import JsonlLogger, text_sha256
 from src.optimization.adapter import CheckerGEPAAdapter
 from src.optimization.callbacks import ProgressCallback
 from src.optimization.checker import DockerChecker
 from src.optimization.config import OptimizationConfig
 from src.optimization.dataset import GEPACaseLoader, load_snapshot
+from src.optimization.offline_hpc_executor import (
+    HPCSlurmOfflineCheckerExecutor,
+)
+from src.optimization.offline_hpc_reflection import (
+    HPCOfflineReflectionProposer,
+)
 from src.optimization.reflection import MiniSWEReflectionProposer
 from src.optimization.report import write_cost_report, write_report
 from src.optimization.resume import (
@@ -25,6 +38,31 @@ from src.optimization.resume import (
 
 class OptimizationRunFailed(RuntimeError):
     """Raised when GEPA returns after a swallowed component failure."""
+
+
+def _atomic_status(path: Path, value: dict[str, Any]) -> None:
+    temporary = path.with_suffix(path.suffix + ".tmp")
+    temporary.write_text(
+        json.dumps(value, indent=2, sort_keys=True) + "\n",
+        encoding="utf-8",
+    )
+    temporary.replace(path)
+
+
+@contextmanager
+def _offline_controller_lock(config: OptimizationConfig):
+    lock_path = config.run_dir / "controller.lock"
+    with lock_path.open("a+", encoding="utf-8") as handle:
+        try:
+            fcntl.flock(handle.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
+        except BlockingIOError as exc:
+            raise RuntimeError(
+                f"another GEPA controller is active for {config.run_dir}"
+            ) from exc
+        try:
+            yield
+        finally:
+            fcntl.flock(handle.fileno(), fcntl.LOCK_UN)
 
 
 def _classify_optimization_failure(error: str) -> tuple[bool, str | None]:
@@ -40,6 +78,23 @@ def run_optimization(
     proposer: Callable[..., Any] | None = None,
     optimize_fn: Callable[..., Any] = gepa.optimize,
 ) -> Any:
+    config.run_dir.mkdir(parents=True, exist_ok=True)
+    with _offline_controller_lock(config):
+        return _run_optimization_locked(
+            config,
+            checker=checker,
+            proposer=proposer,
+            optimize_fn=optimize_fn,
+        )
+
+
+def _run_optimization_locked(
+    config: OptimizationConfig,
+    *,
+    checker: Callable[..., Any] | None,
+    proposer: Callable[..., Any] | None,
+    optimize_fn: Callable[..., Any],
+) -> Any:
     train, validation = load_snapshot(config.dataset_snapshot)
     class_counts_by_split = {
         "train": {
@@ -53,7 +108,10 @@ def run_optimization(
     }
     train_loader = GEPACaseLoader(train)
     validation_loader = GEPACaseLoader(validation)
-    config.run_dir.mkdir(parents=True, exist_ok=True)
+    _atomic_status(
+        config.run_dir / "controller_status.json",
+        {"schema_version": 1, "status": "running", "pid": os.getpid()},
+    )
     initial_rules = config.initial_rules_path.read_text(encoding="utf-8").strip()
     resuming = prepare_run_manifest(config, initial_rules=initial_rules)
     search_state = ReproducibleSearchState(config, resuming=resuming)
@@ -84,12 +142,26 @@ def run_optimization(
         max_concurrent=config.search.parallel,
     )
     checker_runner = checker or DockerChecker(config, capacity)
-    proposer_runner = proposer or MiniSWEReflectionProposer(
-        config,
-        capacity,
-        successful_proposals=search_state.successful_proposals,
-        failures=search_state.reflection_failures,
+    checker_batch_executor = (
+        HPCSlurmOfflineCheckerExecutor(config)
+        if checker is None and config.execution.backend == "hpc_slurm"
+        else None
     )
+    if proposer is not None:
+        proposer_runner = proposer
+    elif config.execution.backend == "hpc_slurm":
+        proposer_runner = HPCOfflineReflectionProposer(
+            config,
+            successful_proposals=search_state.successful_proposals,
+            failures=search_state.reflection_failures,
+        )
+    else:
+        proposer_runner = MiniSWEReflectionProposer(
+            config,
+            capacity,
+            successful_proposals=search_state.successful_proposals,
+            failures=search_state.reflection_failures,
+        )
     if proposer is not None:
         proposer_runner.successful_proposals = search_state.successful_proposals
         proposer_runner.failures = list(search_state.reflection_failures)
@@ -112,12 +184,18 @@ def run_optimization(
         seed_rules_sha256=text_sha256(initial_rules),
         primary_metric=config.search.primary_metric,
         class_counts_by_split=class_counts_by_split,
+        batch_executor=checker_batch_executor,
     )
     callback = ProgressCallback(
         config.run_dir,
         checkpoint=search_state,
         proposer=proposer_runner,
         accepted_candidates=search_state.accepted_candidates,
+        completed_iterations=(
+            max(0, GEPAState.load(str(config.run_dir)).i + 1)
+            if (config.run_dir / "gepa_state.bin").is_file()
+            else 0
+        ),
     )
     iteration_stopper = (
         MaxCandidateProposalsStopper(config.search.max_iterations)
@@ -145,6 +223,24 @@ def run_optimization(
             callbacks=[callback],
             seed=config.search.seed,
         )
+    except ControllerYield as exc:
+        _atomic_status(
+            config.run_dir / "controller_status.json",
+            {
+                "schema_version": 1,
+                "status": "yielded",
+                "reason": exc.reason,
+                "batch_dir": exc.batch_dir,
+                "worker_job_id": exc.job_id,
+            },
+        )
+        audit.write(
+            "offline_controller_yielded",
+            reason=exc.reason,
+            batch_dir=exc.batch_dir,
+            worker_job_id=exc.job_id,
+        )
+        return None
     except Exception as exc:
         error = f"{type(exc).__name__}: {exc}"
         resumable, failure_kind = _classify_optimization_failure(error)
@@ -181,6 +277,17 @@ def run_optimization(
             error=error,
             resumable=resumable,
             failure_kind=failure_kind,
+        )
+        _atomic_status(
+            config.run_dir / "controller_status.json",
+            {
+                "schema_version": 1,
+                "status": "retryable_failed" if resumable else "failed",
+                "failure_phase": "optimization",
+                "blocking": not resumable,
+                "error_type": type(exc).__name__,
+                "error": str(exc),
+            },
         )
         raise
     write_report(
@@ -247,5 +354,9 @@ def run_optimization(
         required_proposals=config.search.min_proposals,
         reflection_failures=len(failures),
         stop_file_present=(config.run_dir / "gepa.stop").is_file(),
+    )
+    _atomic_status(
+        config.run_dir / "controller_status.json",
+        {"schema_version": 1, "status": run_status},
     )
     return result

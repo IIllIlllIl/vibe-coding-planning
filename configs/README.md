@@ -39,14 +39,16 @@ poll cadence, controller resources, or remote workdir belongs in
 
 | Config | Runtime | Purpose |
 |---|---|---|
-| `gepa_verified_rules.yaml` | Local Docker | Eight-proposal Checker-rule experiment over the full 384/98 split, using minibatch 12, balanced accuracy, repository-grounded read-only verification, and a minimal seed. It is configured but not started. |
+| `gepa_verified_rules.yaml` | ULHPC Apptainer | Two-proposal Checker-rule experiment over the full 384/98 split, using minibatch 12, balanced accuracy, repository-grounded read-only verification, and a minimal seed. Checker and Reflection tasks use `1 CPU / 4G / 35min`, with at most four workers active. |
+| `offline_gepa_supervisor.yaml` | Local tmux+caffeinate | Persistent 2-iteration launch identity with 5-minute polling and `1 CPU / 4G / 10min` controller slices. |
+| `offline_gepa_hpc_smoke_2x2_20260728.yaml` | ULHPC Apptainer | Environment-only 2-train/2-validation, 1-iteration smoke. Its scores are not rule-quality evidence. |
 | `gepa_initial_rules_minimal.md` | Prompt text | Minimal current Offline seed intended to leave room for GEPA exploration. |
 
 `search.max_iterations` is the primary experimental stop condition and is an
-absolute cumulative proposal target across resume. `max_metric_calls=2000` is
-only a fail-safe above the 1,074-call worst-case projection. No Offline
-supervisor is required for this run; the Online HPC supervisor is not a local
-Offline entry point. See [`../docs/offline-gepa.md`](../docs/offline-gepa.md).
+absolute cumulative proposal target across resume. `max_metric_calls=500` is
+only a fail-safe above the 342-call worst-case projection. Offline uses its own
+launch config with the shared supervisor service. See
+[`../docs/offline-gepa.md`](../docs/offline-gepa.md).
 
 ## Representative Paused Workflows
 
