@@ -540,3 +540,15 @@ proposal 分布的影响和潜在新偏差的可解释方案。原始
   `host_validation_failure.json` 并进入 `BLOCKED`；terminal/missing-output
   Slurm 状态和 stdout/stderr 也按 attempt 归档。该语义修改需要新的 run identity，
   不得继续原 `offline-plan-verifier-hpc-balanced-b12-2it-20260728`。
+
+### 6.7 Failure-evidence 2it（2026-07-29）
+
+- 新 identity：
+  `offline-plan-verifier-hpc-balanced-b12-2it-failure-evidence-20260729`。
+  本轮仅用于验收 `BLOCKED`/`EXHAUSTED`、host validation evidence、逐 attempt
+  Slurm evidence，以及两次有效 proposal iteration 的完整链路。
+- 实验参数保持 full 384/98、minibatch 12、balanced accuracy、最多三次 fresh-Agent
+  task attempt；controller 为 `1 CPU / 4G / 10min`，worker 为
+  `1 CPU / 4G / 35min`，array throttle 4。
+- 提交前 Iris 无当前用户 job；FairShare 为 `0.309483`，scratch 文件系统整体
+  使用率 35%。未基于 FairShare 提高并发或资源。
