@@ -9,6 +9,7 @@ import time
 from contextlib import nullcontext
 from dataclasses import replace
 from pathlib import Path
+from types import SimpleNamespace
 
 import pytest
 import yaml
@@ -31,6 +32,7 @@ from src.optimization.checker import (
     DockerChecker,
     validate_checker_output,
 )
+from src.optimization.callbacks import ProgressCallback
 from src.optimization.config import (
     ContainerConfig,
     ModelConfig,
@@ -2861,13 +2863,40 @@ def test_online_hpc_controller_yields_after_durable_array_submission(
 def test_online_iteration_progress_counts_only_saved_state(tmp_path):
     callback = OnlineIterationProgressCallback(tmp_path, completed_iterations=4)
     callback.on_state_saved({"iteration": 5, "run_dir": str(tmp_path)})
+    callback.on_optimization_end(
+        {
+            "total_iterations": 4,
+            "final_state": SimpleNamespace(i=4),
+        }
+    )
 
     progress = json.loads(
         (tmp_path / "iteration_progress.json").read_text(encoding="utf-8")
     )
     assert progress["first_observed_completed_iterations"] == 4
     assert progress["completed_iterations"] == 5
-    assert progress["last_event"] == "state_saved"
+    assert progress["last_event"] == "optimization_completed"
+
+
+def test_offline_optimization_end_keeps_completed_iteration_count(tmp_path):
+    callback = ProgressCallback(tmp_path, completed_iterations=0)
+    callback.on_state_saved({"iteration": 2, "run_dir": str(tmp_path)})
+    callback.on_optimization_end(
+        {
+            "best_candidate_idx": 2,
+            "total_iterations": 1,
+            "total_metric_calls": 342,
+            "final_state": SimpleNamespace(i=1),
+        }
+    )
+
+    iteration_progress = json.loads(
+        (tmp_path / "iteration_progress.json").read_text(encoding="utf-8")
+    )
+    progress = json.loads((tmp_path / "progress.json").read_text(encoding="utf-8"))
+    assert iteration_progress["completed_iterations"] == 2
+    assert iteration_progress["last_event"] == "optimization_completed"
+    assert progress["total_iterations"] == 2
 
 
 def test_online_adapter_audits_controller_yield_without_failure(tmp_path):
@@ -5404,7 +5433,7 @@ def test_default_gepa_config_is_two_iteration_hpc_run(monkeypatch):
     assert config.checker.max_attempts == 1
     assert config.initial_rules_path.name == "gepa_initial_rules_minimal.md"
     assert (
-        "offline-plan-verifier-hpc-balanced-b12-2it-20260728"
+        "offline-plan-verifier-hpc-balanced-b12-2it-failure-evidence-20260729"
         in str(config.run_dir)
     )
     checker_prompt = " ".join(config.checker_prompt.split())

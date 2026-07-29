@@ -24,6 +24,7 @@ ssh -p 8022 twang@access-iris.uni.lu \
 | 2026-07-16 11:36 Europe/Luxembourg | policy-v3 at 7/8 durable iterations; latest rollout array complete and awaiting collection | 750738 | 0.014363 | 0.365549 | FairShare increased by 0.000723 from the first authoritative baseline |
 | 2026-07-24 17:15 Europe/Luxembourg | post-maintenance read-only check; no `twang` jobs queued or running | 285953 | 0.014317 | 0.395111 | FairShare increased by 0.029562 from 2026-07-16; raw usage is lower after the maintenance interval |
 | 2026-07-28 10:35 Europe/Luxembourg | Offline HPC environment smoke: controller completed; one Checker worker completed and one active | 170909 | 0.013318 | 0.293015 | FairShare decreased by 0.102096 from 2026-07-24; `LevelFS=4.417003` |
+| 2026-07-29 20:54 Europe/Luxembourg | Failure-evidence 2it complete; supervisor stopped and user queue empty | 300652 | 0.028156 | 0.310267 | FairShare increased by 0.000784 from the pre-run `0.309483`; `LevelFS=2.089224` |
 
 Future launch/progress checks must append a row before interpreting movement.
 
@@ -552,3 +553,13 @@ proposal 分布的影响和潜在新偏差的可解释方案。原始
   `1 CPU / 4G / 35min`，array throttle 4。
 - 提交前 Iris 无当前用户 job；FairShare 为 `0.309483`，scratch 文件系统整体
   使用率 35%。未基于 FairShare 提高并发或资源。
+- 两次 proposal、342 次 metric calls 和两个 Reflection 均已完成；但 GEPA
+  optimization-end 的 `total_iterations` 实际传出零基 `state.i=1`，覆盖了
+  state-save 已写入的完成数 2。同时 Offline `result.json` 没有顶层 status，
+  supervisor 未使用已有的 `controller_status=completed`，因此持续将终态 replay
+  为新的 controller slice。结果与 metric cache 未改变，但产生无效提交和重复
+  run-level audit。
+- 修复后 Offline/Online callback 均从 `final_state.i + 1` 发布完成 proposal 数；
+  supervisor 仅在 result 顶层 status 缺失时回退到显式 terminal
+  `controller_status.json`。旧 supervisor 已在修改前停止，未将不同代码版本同步
+  到同一运行。该 run 保留为流程诊断结果，不再 resume。

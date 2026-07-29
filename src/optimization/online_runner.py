@@ -17,6 +17,7 @@ from gepa.core.state import GEPAState
 from src.environment.docker_env import configure_docker_capacity
 from src.exceptions import FatalError, OnlineControllerYield, SynthesisExhaustedError
 from src.optimization.audit import JsonlLogger, text_sha256
+from src.optimization.callbacks import completed_iterations_at_optimization_end
 from src.optimization.online_adapter import OnlinePlanningGEPAAdapter
 from src.optimization.online_config import OnlineOptimizationConfig
 from src.optimization.online_dataset import load_online_snapshot
@@ -91,7 +92,10 @@ class OnlineIterationProgressCallback:
         self._save(int(event["iteration"]), event="state_saved")
 
     def on_optimization_end(self, event: dict[str, Any]) -> None:
-        self._save(int(event["total_iterations"]), event="optimization_completed")
+        self._save(
+            completed_iterations_at_optimization_end(event),
+            event="optimization_completed",
+        )
 
 
 @contextmanager

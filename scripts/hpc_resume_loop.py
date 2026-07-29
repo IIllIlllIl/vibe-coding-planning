@@ -475,9 +475,23 @@ print(json.dumps(payload, sort_keys=True))
 
 
 def is_completed(status: dict[str, Any]) -> bool:
+    raw_run_status = status.get("status")
+    raw_controller_status = status.get("controller_status")
+    run_status = str(raw_run_status).lower() if raw_run_status is not None else ""
+    controller_status = (
+        str(raw_controller_status).lower()
+        if raw_controller_status is not None
+        else ""
+    )
     return (
         status.get("state") == "result"
-        and str(status.get("status", "")).lower() in SUCCESS_RUN_STATUSES
+        and (
+            run_status in SUCCESS_RUN_STATUSES
+            or (
+                not run_status
+                and controller_status in SUCCESS_RUN_STATUSES
+            )
+        )
     )
 
 

@@ -10,7 +10,9 @@ tasks。旧 Offline 24h 单作业和自动修复 preheat watchdog 已删除，�
   persistent run directory，并提交一个短时 GEPA controller。默认 dry-run。
 - `hpc_resume_loop.py`：读取远端统一的 `controller_status.json`、
   `iteration_progress.json` 和 `hpc_tasks/**/task_state.json`，只在没有活动
-  controller/worker 且状态可恢复时提交下一段 controller。
+  controller/worker 且状态可恢复时提交下一段 controller。iteration progress
+  是完成 proposal 的数量（`GEPA state.i + 1`），不是零基 iteration 索引；
+  `result.json` 缺少顶层状态时由显式 `controller_status.json` 判定完成。
 - `hpc_supervisor_service.py`：使用 `tmux + caffeinate` 承载本地 supervisor。
 - `internal/run_gepa_rules.py`：controller 内部调用的统一 Online/Offline GEPA
   Python 入口。

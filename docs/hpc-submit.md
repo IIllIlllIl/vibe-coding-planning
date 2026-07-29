@@ -120,6 +120,14 @@ supervisor submits only when:
 - remote state is unambiguous;
 - `controller_status.json` is not a non-recoverable failure.
 
+`completed_iterations` is a count, not GEPA's zero-based `state.i`: after an
+official state save it is the event iteration, and at optimization end it is
+`final_state.i + 1`. The optimization-end callback must not regress a larger
+saved count. A completed `result.json` does not itself carry Offline run
+quality; when its top-level status is absent, the supervisor uses the existing
+terminal `controller_status.json` status. It does not infer completion from the
+presence of a result file alone.
+
 A transient SSH/status query failure is retained and polled again without a
 submission. An Online controller-level Reflection failure is
 `retryable_failed`: the next controller replays the uncommitted GEPA proposal.

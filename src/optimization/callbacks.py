@@ -11,6 +11,11 @@ from typing import Any
 from src.optimization.audit import JsonlLogger, text_sha256
 
 
+def completed_iterations_at_optimization_end(event: dict[str, Any]) -> int:
+    """Translate GEPA's zero-based final state index into a completed count."""
+    return max(0, int(event["final_state"].i) + 1)
+
+
 def _atomic_json(path: Path, value: Any) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     fd, temp_name = tempfile.mkstemp(dir=path.parent, prefix=f".{path.name}.")
@@ -294,16 +299,17 @@ class ProgressCallback:
         self._save()
 
     def on_optimization_end(self, event: dict[str, Any]) -> None:
+        completed_iterations = completed_iterations_at_optimization_end(event)
         self.progress.update(
             status="completed",
             best_candidate_idx=event["best_candidate_idx"],
-            total_iterations=event["total_iterations"],
+            total_iterations=completed_iterations,
             metric_calls_used=event["total_metric_calls"],
         )
         self.audit.write(
             "gepa_optimization_completed",
             best_candidate_idx=event["best_candidate_idx"],
-            total_iterations=event["total_iterations"],
+            total_iterations=completed_iterations,
             total_metric_calls=event["total_metric_calls"],
         )
         if self.checkpoint is not None:
@@ -313,7 +319,7 @@ class ProgressCallback:
                 accepted_candidates=self.progress["accepted_candidates"],
             )
         self._save_iteration_progress(
-            int(event["total_iterations"]),
+            completed_iterations,
             event="optimization_completed",
         )
         self._save()

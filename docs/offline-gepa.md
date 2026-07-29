@@ -153,7 +153,11 @@ The current run uses the shared iteration-target supervisor contract. A local
 `tmux + caffeinate` service submits short controller allocations. A controller
 submits fingerprinted Checker arrays or one Reflection Agent task and then
 yields; the next controller replays the same GEPA call and collects the atomic
-output.
+output. Durable supervisor progress is the number of completed proposals:
+GEPA's zero-based final `state.i` is published as `state.i + 1`, so a terminal
+callback cannot overwrite a saved count of two with index one. On successful
+completion, `controller_status.json` supplies the terminal run status when the
+GEPA `result.json` has no top-level status field.
 
 The run manifest permits a metric-call ceiling increase but rejects changes to
 data, source, prompts, model/search semantics, seed, or iteration target.
@@ -218,7 +222,9 @@ The run directory preserves:
 - `gepa_state.bin` and `gepa_resume_state.json` for official GEPA plus sampler,
   selector, Reflection, and accepted-candidate resume state;
 - `iteration_progress.json` and `controller_status.json` for the shared
-  supervisor contract;
+  supervisor contract; the former stores a completed-proposal count and the
+  latter supplies explicit controller completion/failure rather than inferring
+  it from result-file existence;
 - `hpc_tasks/checker/<fingerprint>/` and
   `hpc_tasks/reflection/<fingerprint>/` for immutable inputs, per-attempt
   evidence, task state, atomic initial output, and nested fingerprinted repair
