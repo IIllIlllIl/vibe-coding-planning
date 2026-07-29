@@ -563,3 +563,19 @@ proposal 分布的影响和潜在新偏差的可解释方案。原始
   supervisor 仅在 result 顶层 status 缺失时回退到显式 terminal
   `controller_status.json`。旧 supervisor 已在修改前停止，未将不同代码版本同步
   到同一运行。该 run 保留为流程诊断结果，不再 resume。
+
+### 6.8 Supervisor-fix 2it（2026-07-29）
+
+- 新 identity：
+  `offline-plan-verifier-hpc-balanced-b12-2it-supervisor-fix-20260729`。
+  目标是在不改变 Offline 方法参数的情况下，重新验收完整两轮 proposal，并确认
+  修复后的完成计数和 terminal status 能让 supervisor 在 2/2 自动停止。
+- 保持 full 384/98、minibatch 12、balanced accuracy、parallel 2、
+  Checker/Reflection 最多三次 fresh-Agent task attempt；controller 为
+  `1 CPU / 4G / 10min`，worker 为 `1 CPU / 4G / 35min`，array throttle 4。
+- 启动前 Iris 用户队列为空；FairShare `0.310267`、`LevelFS=2.089224`。
+  scratch 文件系统整体容量使用率 35%、inode 使用率 2%，不提高资源或并行度。
+- 验收重点：两次 proposal 和所有证据正常完成；无重复 terminal replay；
+  `iteration_progress.completed_iterations=2`；supervisor 状态自动变为 completed；
+  同时继续记录 Checker/Reflection output-contract、重试、host validation 和任何
+  新的数据可靠性问题。

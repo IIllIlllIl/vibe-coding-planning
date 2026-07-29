@@ -5433,7 +5433,7 @@ def test_default_gepa_config_is_two_iteration_hpc_run(monkeypatch):
     assert config.checker.max_attempts == 1
     assert config.initial_rules_path.name == "gepa_initial_rules_minimal.md"
     assert (
-        "offline-plan-verifier-hpc-balanced-b12-2it-failure-evidence-20260729"
+        "offline-plan-verifier-hpc-balanced-b12-2it-supervisor-fix-20260729"
         in str(config.run_dir)
     )
     checker_prompt = " ".join(config.checker_prompt.split())

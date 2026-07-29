@@ -22,6 +22,12 @@
     "extension_requires_explicit_policy": true,
     "current_hpc_config_compatible": false
   },
+  "active_remote_offline_run": {
+    "name": "offline-plan-verifier-hpc-balanced-b12-2it-supervisor-fix-20260729",
+    "classification": "execution_diagnostic",
+    "proposal_target": 2,
+    "purpose": "verify the fixed supervisor completion contract"
+  },
   "archive_groups": [
     {
       "path": "output/archive/online-gepa/reference",

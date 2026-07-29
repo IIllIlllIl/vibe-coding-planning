@@ -1,7 +1,7 @@
 paths:
   dataset_snapshot: output/SWE-bench_Verified/verified-round1-gepa-datasets/20260614_482_fdc056ae85df
   initial_rules: configs/gepa_initial_rules_minimal.md
-  run_dir: output/SWE-bench_Verified/gepa-rules/offline-plan-verifier-hpc-balanced-b12-2it-failure-evidence-20260729
+  run_dir: output/SWE-bench_Verified/gepa-rules/offline-plan-verifier-hpc-balanced-b12-2it-supervisor-fix-20260729
 
 checker:
   model: deepseek-v4-flash
@@ -77,7 +77,7 @@ hpc:
   python_module: lang/Python/3.11
   container_module: tools/Apptainer
   python_bin: python3
-  job_name_prefix: offline-gepa-2it-evidence-20260729
+  job_name_prefix: offline-gepa-2it-supervisor-fix-20260729
   worker_config_path: configs/gepa_verified_rules.yaml
 
 prompts:
