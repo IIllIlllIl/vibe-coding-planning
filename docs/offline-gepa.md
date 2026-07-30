@@ -132,9 +132,11 @@ The current config is [`../configs/gepa_verified_rules.yaml`](../configs/gepa_ve
 - instance-level validation Pareto selection;
 - two cumulative candidate-proposal iterations;
 - balanced accuracy;
-- independent Apptainer Slurm tasks, with array throttle 4;
+- one independent Apptainer Slurm array element per Agent, with the complete
+  Checker batch submitted at once and no project-level concurrency throttle;
 - three total attempts for each failed Checker, Reflection, or repair task;
-- GEPA adapter parallelism 2.
+- local-only GEPA adapter parallelism 1; HPC task scheduling belongs only to
+  Slurm.
 
 The minibatch remains 12 so each proposal must account for a meaningful
 cross-case sample rather than a very small, noisy batch. Two iterations are an
@@ -213,6 +215,11 @@ the execution transport:
 Switching backend or container runtime changes experimental semantics and
 therefore requires a new `paths.run_dir`; the run manifest rejects adopting an
 old identity.
+
+Offline HPC rejects `hpc.max_running_array_tasks` and the legacy
+`hpc.array_concurrency` alias. Checker scripts contain the full array index set
+without a `%N` suffix. Retry arrays contain only failed task indices, also
+without a project-level running limit. Slurm is the sole scheduling authority.
 
 ## Evidence And State
 

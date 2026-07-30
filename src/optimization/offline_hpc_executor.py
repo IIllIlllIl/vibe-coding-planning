@@ -102,7 +102,6 @@ def build_offline_checker_array_script(
     slurm_log_dir = batch_dir / "slurm_logs" / f"attempt_{attempt:02d}"
     slurm_log_dir.mkdir(parents=True, exist_ok=True)
     index_spec = ",".join(str(index) for index in task_indices)
-    array_spec = f"{index_spec}%{hpc.max_running_array_tasks}"
     config_path = hpc.worker_config_path
     if not config_path:
         raise ValueError("hpc.worker_config_path is required")
@@ -116,7 +115,7 @@ def build_offline_checker_array_script(
         f"#SBATCH --cpus-per-task={hpc.cpus_per_task}",
         f"#SBATCH --mem={hpc.mem}",
         f"#SBATCH --time={hpc.time}",
-        f"#SBATCH --array={array_spec}",
+        f"#SBATCH --array={index_spec}",
         f"#SBATCH --output={slurm_log_dir}/%x-%A_%a.out",
         f"#SBATCH --error={slurm_log_dir}/%x-%A_%a.err",
         "set -euo pipefail",

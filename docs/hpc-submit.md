@@ -44,6 +44,12 @@ single-element array so it follows the same submission/status contract.
 not allocate 150 CPUs to one job. Reviewer and Synthesis submission makes the
 controller yield; neither consumes the controller walltime while running.
 
+Offline has a separate scheduling contract: one Checker Agent is one array
+element, the complete evaluation batch is submitted in one array, and the
+script has no `%N` running limit. Offline initial Reflection and repair each
+submit one single-element task. Slurm alone decides how many Offline Agents run
+at once; `search.parallel` is local-only and must be `1` for the HPC backend.
+
 Before increasing resources, inspect `sacct` and FairShare. More than 4G with
 one CPU requires measurement-based justification.
 

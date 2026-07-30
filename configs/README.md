@@ -39,8 +39,8 @@ poll cadence, controller resources, or remote workdir belongs in
 
 | Config | Runtime | Purpose |
 |---|---|---|
-| `gepa_verified_rules.yaml` | ULHPC Apptainer | Current `identity-guard-20260730` two-proposal validation config: full 384/98 split, minibatch 12, balanced accuracy, three task attempts, and `1 CPU / 4G / 35min` workers. |
-| `offline_gepa_supervisor.yaml` | Local tmux+caffeinate | Matching new session, job, run directory, and remote workdir. It uses 30-minute polling, `1 CPU / 4G / 10min` controller slices, and requires an unchanged runtime-config hash, Git commit, and clean worktree before submission. |
+| `gepa_verified_rules.yaml` | ULHPC Apptainer | Current `slurm-native-20260730` two-proposal validation: full 384/98 split, minibatch 12, balanced accuracy, three task attempts, and `1 CPU / 4G / 35min` per Agent. Each Checker batch is submitted in full without a project-level concurrency throttle. |
+| `offline_gepa_supervisor.yaml` | Local tmux+caffeinate | Matching current session, job, run directory, and remote workdir. It uses 30-minute polling, `1 CPU / 4G / 10min` controller slices, and requires an unchanged runtime-config hash, Git commit, and clean worktree before submission. |
 | `offline_gepa_hpc_smoke_2x2_20260728.yaml` | ULHPC Apptainer | Environment-only 2-train/2-validation, 1-iteration smoke. Its scores are not rule-quality evidence. |
 | `gepa_initial_rules_minimal.md` | Prompt text | Minimal current Offline seed intended to leave room for GEPA exploration. |
 

@@ -362,6 +362,36 @@ def test_offline_checker_retry_script_passes_previous_failed_output(tmp_path):
     assert "--previous-output" in retry
     assert "failed_outputs/attempt_01" in retry
     assert "slurm_logs/attempt_02" in retry
+    assert "#SBATCH --array=7" in first
+    assert "#SBATCH --array=7" in retry
+    assert "#SBATCH --array=7%" not in first
+    assert "#SBATCH --array=7%" not in retry
+
+
+def test_offline_checker_submits_complete_array_without_project_throttle(
+    tmp_path,
+):
+    config = replace(
+        _config(tmp_path),
+        hpc=HPCConfig(
+            submit=True,
+            worker_config_path="configs/gepa_verified_rules.yaml",
+        ),
+    )
+    indices = list(range(98))
+
+    script = build_offline_checker_array_script(
+        config=config,
+        batch_dir=tmp_path / "validation",
+        task_indices=indices,
+        attempt=1,
+    )
+    array_line = next(
+        line for line in script.splitlines() if line.startswith("#SBATCH --array=")
+    )
+
+    assert array_line == "#SBATCH --array=" + ",".join(map(str, indices))
+    assert "%" not in array_line
 
 
 def test_offline_checker_worker_gives_new_agent_previous_validator_error(

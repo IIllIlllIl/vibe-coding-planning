@@ -40,6 +40,6 @@ tasks。旧 Offline 24h 单作业和自动修复 preheat watchdog 已删除，�
 - DeepSeek key 只从 Iris 上权限受限的 env 文件加载，不进入参数、配置或日志。
 - Controller、Checker、initial Reflection 和按需 contamination repair 默认均为
   `1 CPU / 4G`；每次 Agent 调用对应一个 task。
-- 首次 Offline smoke 使用较小 array throttle；根据 `sacct` 的 CPU、MaxRSS 和
-  FairShare 数据决定是否增加。
+- Offline Checker 一次提交完整 batch；每个 Agent 是独立 Slurm array element，
+  项目不添加 `%N` 并发上限，由 Slurm 按队列和集群策略调度。
 - 每次变更 HPC 配置必须使用新的 run identity；不得用新语义接管旧 run directory。

@@ -208,6 +208,21 @@ def load_optimization_config(
         default_worker_config_path = str(config_path.relative_to(root))
     except ValueError:
         default_worker_config_path = str(config_path)
+    retired_offline_hpc_fields = {
+        "max_running_array_tasks",
+        "array_concurrency",
+    } & set(hpc_data)
+    if retired_offline_hpc_fields:
+        fields = ", ".join(sorted(retired_offline_hpc_fields))
+        raise ValueError(
+            "Offline HPC no longer accepts project-level Slurm concurrency "
+            f"limits ({fields}); submit every Agent task and let Slurm schedule"
+        )
+    if execution.backend == "hpc_slurm" and search.parallel != 1:
+        raise ValueError(
+            "Offline HPC requires search.parallel=1 because Agent-task "
+            "concurrency belongs to Slurm, not the GEPA controller"
+        )
     hpc = HPCConfig(
         submit=bool(hpc_data.get("submit", hpc_defaults.submit)),
         remote_project_dir=str(
@@ -228,12 +243,6 @@ def load_optimization_config(
         ),
         mem=str(hpc_data.get("mem", hpc_defaults.mem)),
         time=str(hpc_data.get("time", hpc_defaults.time)),
-        max_running_array_tasks=int(
-            hpc_data.get(
-                "max_running_array_tasks",
-                hpc_defaults.max_running_array_tasks,
-            )
-        ),
         poll_interval_seconds=int(
             hpc_data.get(
                 "poll_interval_seconds",
@@ -271,7 +280,6 @@ def load_optimization_config(
     )
     if min(
         hpc.cpus_per_task,
-        hpc.max_running_array_tasks,
         hpc.poll_interval_seconds,
         hpc.task_output_grace_seconds,
         hpc.missing_task_grace_seconds,

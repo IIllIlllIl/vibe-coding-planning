@@ -26,6 +26,7 @@ ssh -p 8022 twang@access-iris.uni.lu \
 | 2026-07-28 10:35 Europe/Luxembourg | Offline HPC environment smoke: controller completed; one Checker worker completed and one active | 170909 | 0.013318 | 0.293015 | FairShare decreased by 0.102096 from 2026-07-24; `LevelFS=4.417003` |
 | 2026-07-29 20:54 Europe/Luxembourg | Failure-evidence 2it complete; supervisor stopped and user queue empty | 300652 | 0.028156 | 0.310267 | FairShare increased by 0.000784 from the pre-run `0.309483`; `LevelFS=2.089224` |
 | 2026-07-30 Europe/Luxembourg | Stale Offline supervisor discovered after 50 controller submissions; all supervisors stopped, queue empty, invalid run/workdirs removed | 294959 | 0.030091 | 0.397618 | FairShare increased by 0.087351 from 2026-07-29; `LevelFS=1.954854`; movement is not attributable to this run alone |
+| 2026-07-30 18:22 Europe/Luxembourg | Pre-launch check for Slurm-native Offline 2it; local supervisor and Iris user queue empty, new run/workdir absent | 319217 | 0.033655 | 0.397392 | FairShare decreased by 0.000226 from the earlier 2026-07-30 check; `LevelFS=1.747850`; no concurrency limit is imposed by the project |
 
 Future launch/progress checks must append a row before interpreting movement.
 
@@ -373,8 +374,9 @@ proposal 分布的影响和潜在新偏差的可解释方案。原始
 
 ### 6.4 Offline HPC supervisor 配置身份冲突
 
-- **状态**：最小身份保护已实现，待
-  `identity-guard-20260730` 新 identity 的 2it 实跑验收。
+- **状态**：最小身份保护已实现并在 `identity-guard-20260730` 中未发生身份冲突；
+  该 run 在 1/2 durable iterations 后因调度语义不符合需求而主动停止，未验收
+  2/2 自动结束。
 - **问题**：2026-07-30 发现旧 `failure-evidence-20260729` supervisor 实际仍在
   运行。它保留旧 session/job/remote workdir，却在每个 slice 动态读取已经切换到
   `supervisor-fix-20260729` 的共享 runtime config，累计提交 50 个 controller。
@@ -395,5 +397,24 @@ proposal 分布的影响和潜在新偏差的可解释方案。原始
 - **本轮启动前证据**：2026-07-30 实查本地无 tmux session、Iris 用户队列为空；
   远端仅保留 `20260728` 与 `failure-evidence-20260729` 两个历史 persistent result，
   没有 Offline controller workdir。
-- **待验收**：使用全新 `identity-guard-20260730` identity 执行 2it，确认 manifest
-  接管、两次 durable proposal、`completed_iterations=2` 和 supervisor 自动停止。
+- **待验收**：后续全新 identity 仍需确认 manifest 接管、两次 durable proposal、
+  `completed_iterations=2` 和 supervisor 自动停止。
+
+### 6.5 Offline HPC Agent 调度契约
+
+- **需求**：一个 Agent 对应一个独立 Slurm task/array element，各自申请
+  `1 CPU / 4G`；validation、minibatch 和 selective retry 都一次提交当前完整 task
+  集合，不由项目限制同时运行数量，由 Slurm 独立决定调度并发。
+- **发现**：`identity-guard-20260730` 的 98-validation array 实际生成
+  `--array=0,...,97%4`。该 `%4` 由 2026-07-28 Offline HPC 新实现及配置主动加入，
+  不是 Slurm 或 `ulhpc-submit` 自动产生，也不是旧 Python thread scheduler。
+- **数据边界**：该 run 完成 1 个 durable iteration、134 次已记录 metric calls，
+  没有 manifest/identity 冲突；但它采用已淘汰的运行调度语义，只保留作执行诊断，
+  不 resume 为 Slurm-native 实验。
+- **当前实现与验收**：
+  1. Offline Checker 初始与 retry array 都不生成 `%N`；
+  2. Offline config 拒绝 `max_running_array_tasks` 和旧
+     `array_concurrency`，避免历史配置静默恢复 throttle；
+  3. HPC backend 要求 `search.parallel=1`，明确该字段只服务本地 adapter；
+  4. Reflection 和 contamination repair 继续各自使用单 element Slurm task；
+  5. 当前使用新 `slurm-native-20260730` identity 做 2it 验收，不接管 throttled run。

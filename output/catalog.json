@@ -22,7 +22,12 @@
     "extension_requires_explicit_policy": true,
     "current_hpc_config_compatible": false
   },
-  "active_remote_offline_run": null,
+  "active_remote_offline_run": {
+    "name": "offline-plan-verifier-hpc-balanced-b12-2it-slurm-native-20260730",
+    "classification": "execution_diagnostic",
+    "proposal_target": 2,
+    "purpose": "verify Offline Slurm-native Agent task scheduling and the full resume flow"
+  },
   "archive_groups": [
     {
       "path": "output/archive/online-gepa/reference",

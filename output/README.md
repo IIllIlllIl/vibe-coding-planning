@@ -11,7 +11,7 @@ historical comparison, provenance, or reproduction.
 | `SWE-bench_Verified/verified-round1-gepa-datasets/20260614_482_fdc056ae85df/` | Immutable formal 384/98 snapshot shared by current Online and Offline experiments | Active input; do not move or modify |
 | `SWE-bench_Verified/gepa-rules/` | Local destination for current Online and Offline GEPA results | Active output root |
 | `SWE-bench_Verified/gepa-rules/offline-plan-verifier-balanced-b12-p2-case-reviews-8it-20260727/` | Latest local Offline result under the final pre-HPC experimental flow | Completed with warnings; sole active Offline checkpoint and analysis baseline |
-| Remote Offline HPC run | No active run | The invalid `supervisor-fix-20260729` run and its workdirs were deleted; the next submission is blocked on the supervisor identity fix and must use a new identity |
+| Remote `offline-plan-verifier-hpc-balanced-b12-2it-slurm-native-20260730` run directory | Current Offline Slurm-native execution validation | Active 2-proposal test; complete Checker arrays have no project-level concurrency throttle |
 | Remote `online-planning-hpc-policy-v3-20260715` run directory | Outcome-policy-v3 formal run targeting 8 durable iterations | Active; managed by the supervisor |
 
 The active Online rule-generation flow is:
@@ -51,12 +51,13 @@ future extension therefore requires an explicit methodology decision; it must
 not be achieved by pointing the current 2-iteration HPC config, changed
 prompt/source hashes, or a new run identity at this directory.
 
-There is currently no active remote Offline run. The preserved remote
-`20260728` and `failure-evidence-20260729` results are execution diagnostics,
-not resumable current experiments. The invalid `supervisor-fix-20260729`
-persistent run and all associated remote workdirs were deleted on 2026-07-30
-after the cross-supervisor identity conflict documented in
-[`../project_issues.md`](../project_issues.md).
+The current remote Offline run is the new
+`slurm-native-20260730` execution-validation identity. The preserved remote
+`20260728`, `failure-evidence-20260729`, and throttled
+`identity-guard-20260730` results are execution diagnostics, not resumable
+current experiments. The throttled run reached one durable iteration before
+its supervisor was stopped because `%4` project-level array throttling did not
+match the required scheduling contract; the current run does not resume it.
 
 The other recent Offline directories are archived as follows:
 

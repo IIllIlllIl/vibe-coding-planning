@@ -1,8 +1,8 @@
-# Current two-iteration Offline HPC identity-guard validation run.
+# Current two-iteration Offline HPC Slurm-native validation.
 paths:
   dataset_snapshot: output/SWE-bench_Verified/verified-round1-gepa-datasets/20260614_482_fdc056ae85df
   initial_rules: configs/gepa_initial_rules_minimal.md
-  run_dir: output/SWE-bench_Verified/gepa-rules/offline-plan-verifier-hpc-balanced-b12-2it-identity-guard-20260730
+  run_dir: output/SWE-bench_Verified/gepa-rules/offline-plan-verifier-hpc-balanced-b12-2it-slurm-native-20260730
 
 checker:
   model: deepseek-v4-flash
@@ -38,9 +38,9 @@ search:
   projection_metric_calls: 342
   reflection_minibatch_size: 12
   primary_metric: balanced_accuracy
-  # HPC concurrency is the Slurm array throttle below. The controller itself
-  # does not run a local Checker thread pool.
-  parallel: 2
+  # Local-only adapter concurrency. HPC submits every Agent as an independent
+  # Slurm array element and leaves scheduling entirely to Slurm.
+  parallel: 1
   seed: 42
   skip_perfect_score: false
   min_proposals: 1
@@ -70,7 +70,6 @@ hpc:
   cpus_per_task: 1
   mem: 4G
   time: 00:35:00
-  max_running_array_tasks: 4
   poll_interval_seconds: 300
   task_output_grace_seconds: 300
   missing_task_grace_seconds: 600
@@ -78,7 +77,7 @@ hpc:
   python_module: lang/Python/3.11
   container_module: tools/Apptainer
   python_bin: python3
-  job_name_prefix: offline-gepa-2it-identity-guard-20260730
+  job_name_prefix: offline-gepa-2it-slurm-native-20260730
   worker_config_path: configs/gepa_verified_rules.yaml
 
 prompts:

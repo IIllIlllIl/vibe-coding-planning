@@ -5417,7 +5417,6 @@ def test_default_gepa_config_is_two_iteration_hpc_run(monkeypatch):
     assert config.reflection.model == "deepseek-v4-flash"
     assert config.container.runtime == "apptainer"
     assert config.execution.backend == "hpc_slurm"
-    assert config.hpc.max_running_array_tasks == 4
     assert config.hpc.cpus_per_task == 1
     assert config.hpc.mem == "4G"
     assert config.hpc.time == "00:35:00"
@@ -5427,13 +5426,13 @@ def test_default_gepa_config_is_two_iteration_hpc_run(monkeypatch):
     assert config.search.max_iterations == 2
     assert config.search.reflection_minibatch_size == 12
     assert config.search.primary_metric == "balanced_accuracy"
-    assert config.search.parallel == 2
+    assert config.search.parallel == 1
     # One worker attempt is one complete Checker Agent session. Slurm-level
     # retries start a new session instead of resuming an interrupted one.
     assert config.checker.max_attempts == 1
     assert config.initial_rules_path.name == "gepa_initial_rules_minimal.md"
     assert (
-        "offline-plan-verifier-hpc-balanced-b12-2it-supervisor-fix-20260729"
+        "offline-plan-verifier-hpc-balanced-b12-2it-slurm-native-20260730"
         in str(config.run_dir)
     )
     checker_prompt = " ".join(config.checker_prompt.split())
@@ -5480,6 +5479,32 @@ def test_default_gepa_config_is_two_iteration_hpc_run(monkeypatch):
         "supports that its proposed change addresses the reported problem and "
         "the plan includes a relevant way to validate the result."
     )
+
+
+def test_offline_hpc_rejects_project_level_slurm_concurrency_limit(
+    tmp_path,
+    monkeypatch,
+):
+    monkeypatch.setenv("DEEPSEEK_API_KEY", "secret")
+    repo_root = Path(__file__).resolve().parents[2]
+    source = (
+        repo_root / "configs" / "gepa_verified_rules.yaml"
+    ).read_text(encoding="utf-8")
+    config_path = tmp_path / "offline-with-throttle.yaml"
+    config_path.write_text(
+        source.replace(
+            "hpc:\n",
+            "hpc:\n  max_running_array_tasks: 4\n",
+            1,
+        ),
+        encoding="utf-8",
+    )
+
+    with pytest.raises(
+        ValueError,
+        match="submit every Agent task and let Slurm schedule",
+    ):
+        load_optimization_config(config_path)
 
 
 def test_docker_config_defaults_are_preserved(monkeypatch):
