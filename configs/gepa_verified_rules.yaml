@@ -1,3 +1,6 @@
+# Retained diagnostic configuration for the deleted
+# supervisor-fix-20260729 run. Do not launch or resume it. The next Offline HPC
+# run requires the supervisor identity fix and a new run identity.
 paths:
   dataset_snapshot: output/SWE-bench_Verified/verified-round1-gepa-datasets/20260614_482_fdc056ae85df
   initial_rules: configs/gepa_initial_rules_minimal.md

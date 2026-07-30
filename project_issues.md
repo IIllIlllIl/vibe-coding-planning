@@ -25,6 +25,7 @@ ssh -p 8022 twang@access-iris.uni.lu \
 | 2026-07-24 17:15 Europe/Luxembourg | post-maintenance read-only check; no `twang` jobs queued or running | 285953 | 0.014317 | 0.395111 | FairShare increased by 0.029562 from 2026-07-16; raw usage is lower after the maintenance interval |
 | 2026-07-28 10:35 Europe/Luxembourg | Offline HPC environment smoke: controller completed; one Checker worker completed and one active | 170909 | 0.013318 | 0.293015 | FairShare decreased by 0.102096 from 2026-07-24; `LevelFS=4.417003` |
 | 2026-07-29 20:54 Europe/Luxembourg | Failure-evidence 2it complete; supervisor stopped and user queue empty | 300652 | 0.028156 | 0.310267 | FairShare increased by 0.000784 from the pre-run `0.309483`; `LevelFS=2.089224` |
+| 2026-07-30 Europe/Luxembourg | Stale Offline supervisor discovered after 50 controller submissions; all supervisors stopped, queue empty, invalid run/workdirs removed | 294959 | 0.030091 | 0.397618 | FairShare increased by 0.087351 from 2026-07-29; `LevelFS=1.954854`; movement is not attributable to this run alone |
 
 Future launch/progress checks must append a row before interpreting movement.
 
@@ -36,59 +37,6 @@ one 38-second Checker task. RawUsage and EffectvUsage were also lower than on
 decay plus account and sibling-user usage can change rank even when this user's
 own counters fall. The available `sshare` snapshots do not isolate those
 components, so this remains the bounded explanation rather than a causal claim.
-
-### 0.1 Iris maintenance handoff（2026-07-21）
-
-**状态更新（2026-07-24 17:15 Europe/Luxembourg）**：维护阻塞已解除。通过
-`access-iris.uni.lu:8022` 的真实远端只读检查正常进入
-`access1.iris-cluster.uni.lux`，没有 maintenance banner 或主动断连；`sinfo`
-正常返回且 `batch`、`interactive` 等 partition 为 `up`；`squeue -u twang`
-为空；精确 `sshare` 结果已追加到上表。本地不存在 Online GEPA supervisor
-tmux 会话，只有当前 Offline GEPA 运行会话。
-
-这不表示集群容量已经完全恢复：本次 `sinfo` 摘要中 `batch` 仍有 57 个
-`fail*` 节点和 5 个 drain/drain* 节点，并且没有显示 idle batch 节点。应将
-当前状态解释为“调度服务恢复但容量仍受限”，在明确要求启动 Online smoke 前
-继续保留新 run identity，不因维护结束而自动提交。
-
-**历史阻塞**：2026-07-21 Europe/Luxembourg 曾通过
-`access-iris.uni.lu:8022` 实测。登录节点仍报告 general system update，说明维护
-期间所有 scheduled Slurm jobs 保持 `PENDING`，随后主动关闭连接。维护跟踪为
-ULHPC infrastructure issue `#34`。这是 Iris 的真实远端响应，不是 Codex sandbox
-网络错误。维护结束前不提交本次 smoke，避免只产生排队状态和含混的运行记录。
-
-**维护时记录的本地基线（历史快照）**：
-
-- Git 基线为 `9acfbf1 feat: separate online reflection slurm phases`；该提交后工作区
-  干净。当前 HEAD 已前进到 `f95c0ca feat: harden offline GEPA reflection`，
-  因此下一次 Online smoke 不能再把 `9acfbf1` 当作当前工作区事实。
-- PPT 及其生成脚本已删除，目前不属于待办。
-- 运行配置为 `configs/gepa_online_planning_hpc.yaml`，run identity 是
-  `online-planning-hpc-separate-reflection-2it-smoke-20260720`。
-- 持久化启动配置为 `configs/online_gepa_supervisor.yaml`：目标 `2` 个 durable
-  iterations、30 分钟轮询、2 小时 controller slice、controller `1 CPU / 4G`。
-- PCT、Reviewer、Synthesis 各自使用 Slurm task，均为 `1 CPU / 4G / 55min`，首次
-  attempt 加两次 selective retry；`reflection_minibatch_size=3`。
-- 本次新 identity **尚未启动或提交**，因此维修结束后应启动新 smoke，而不是接管
-  一个已存在的该 identity 远端 checkpoint。实现改动和验收风险详见 2.1、2.2。
-
-**Iris 恢复后的操作顺序**：
-
-1. [完成于 2026-07-24] 重新 SSH 检查；没有 maintenance banner，且 `sinfo`
-   能返回 partition/node 状态。
-2. [完成于 2026-07-24] `squeue -u twang` 为空，本地同名 Online supervisor
-   tmux 会话不存在。
-3. [完成于 2026-07-24] 已将精确 `sshare` 数据追加到上表；当前仍需考虑
-   fail/drain 节点和无 idle batch 节点所反映的容量限制。
-4. 确认 Git/worktree 仍与上述基线一致，运行配置与 supervisor 配置 identity 对齐，
-   远端 DeepSeek env 只在远端私有文件中加载。
-5. 先执行 supervisor `status`，再按 `docs/hpc-submit.md` 的标准入口启动：
-   `conda run -n mini-swe python scripts/hpc_supervisor_service.py start
-   --launch-config configs/online_gepa_supervisor.yaml`。确认首个 controller 和首批
-   worker 正常启动后停止主动监督，等待用户下一次进度检查指令。
-6. 进度检查严格按 2.2 风险表验收阶段隔离、fingerprint 接管、retry、score 不变性、
-   attempt evidence、Synthesis block 语义及两个 durable iterations；满足验收前不将
-   smoke 用作规则质量结论。
 
 ---
 
@@ -104,21 +52,12 @@ ULHPC infrastructure issue `#34`。这是 Iris 的真实远端响应，不是 Co
   后 evaluator score 是否保持、review attribution 是否过度归因于 plan、synthesis
   是否引用全部 instance，以及额外 token/FairShare 成本。
 
-- **2026-07-16 smoke 语义混合事故**：本地 supervisor 每个 controller slice
-  都会重新 rsync 当前工作区。修复 Reviewer 审计期间，旧 identity
-  `online-planning-hpc-two-stage-reflection-2it-smoke-20260716` 未先停止，导致
-  `batch_0001..0003` 使用 review schema v1，而 controller `5543536` 和
-  `batch_0004` 起使用未提交的 schema v2。supervisor 已停止；该 run 只保留作
-  resume/审计诊断，不得作为单一语义的规则质量实验。后续 prompt/schema/source
-  修改必须先停止 supervisor，并使用新的 run identity；提交 wrapper 还需增加
-  tracked commit/worktree semantic identity gate，避免运行中 rsync 漂移。
-
-- **Reviewer recorder completion-protocol 回归**：实验型 recorder 曾在 command
-  output 前加入 `REVIEW_COMMAND_ID`，破坏 mini-swe 对 completion marker 的精确
-  识别；三个 `batch_0004` worker 因而重复提交并最终失败。command ledger、
-  repository-state 分类和 schema-v2 claim 已整体撤回，不再位于实验路径中。
-  下一次新 identity smoke 只需确认 Reviewer 一次提交即退出、简明报告与原始
-  trajectory 均被 Synthesis bundle 保存。
+- **Supervisor 配置身份仍未固定**：历史 Online smoke 和 2026-07-30 Offline
+  冲突均证明，持久 supervisor 只固定 session/job/remote workdir，却在每个
+  controller slice 重新同步工作区并读取共享的可变配置路径。旧 session 若未停止，
+  会在配置切换后控制另一个 run。提交入口需要把启动时的 tracked commit、
+  worktree cleanliness、runtime config hash、run identity 与 remote workdir
+  绑定；任一项变化都应在提交前 block，而不是依赖人工记得停止旧 session。
 
 - **状态**：当前主线；evaluator 基础设施修复后需要重新建立可信的正式结果
 - **背景**：candidate rules 进入 Plan Agent，随后执行真实的 Plan、Code 和
@@ -315,50 +254,15 @@ Synthesis exhausted 能 block 且两个 durable iteration 与 GEPA state 一致�
 
 ## 3. HPC SIF 预热与可恢复短作业运行
 
-- **状态**：实现已完成，待真实长跑验证
-- **背景**：ULHPC Iris 不能使用 Docker daemon；GEPA Checker/Reflection 通过
-  Apptainer backend 运行。正式 384/98 快照需要大量 SWE-bench benchmark SIF，
-  因此使用共享 SIF cache 避免各实验重复拉取。
-- **当前共享目录**：
-  - SIF cache：
-    `/scratch/users/<user>/vibe-coding-planning/shared/sif-cache`
-  - Apptainer cache：
-    `/scratch/users/<user>/vibe-coding-planning/shared/apptainer-cache`
-  - Apptainer tmp：
-    `/scratch/users/<user>/vibe-coding-planning/shared/apptainer-tmp`
-- **当前状态**：
-  - 已提交 24h SIF 预热 job：`5485457 gepa-preheat-sifs-all`
-  - 最近检查状态：`PENDING (Priority)`
-  - 已存在 SIF：188 个，约 218G
-  - 预期正式快照需要约 482 个 benchmark SIF
-- **需要关注**：
-  1. SIF 预热 job 是否开始运行、是否有失败重试、是否跳过失败镜像继续后续镜像。
-  2. 预热后缺失 SIF 数量和失败列表。
-  3. strict GEPA run 在 SIF 未全部预热时是否可通过 resume 容忍按需拉取失败。
-  4. `parallel=4` 在 HPC 上是否稳定；如遇 DeepSeek rate limit、文件系统压力或镜像拉取冲突，降到 `parallel=2`。
-  5. 新增本地 supervisor 的 2h controller 上限、30min 轮询和 iteration 目标需要一次真实 run 验证。
-- **当前实现**：
-  - `scripts/hpc_submit_batch.sh` 复用新版 `ulhpc-submit` 的
-    `--stage-data`、`--link-as`、`--persistent-output`、module Python 和 Apptainer cache 参数。
-  - `scripts/hpc_resume_loop.py` 默认 `--slice-time 02:00:00`、
-    `--poll-interval 1800`、`--max-runs 0`（无限）；Online 正式运行应显式给出
-    `--target-iterations`，通过远端 persistent `run_dir`
-    判断等待、提交或停止。
-  - login preheat 的最终产物是
-    `/scratch/users/<user>/vibe-coding-planning/shared/sif-cache/*.sif`；Apptainer
-    layer cache/tmp 不是最终成果，必须位于 scratch。
-- **2026-07-06 目录清理记录**：
-  - 发现旧的 `~/.apptainer/cache` 占用 home 约 532G，当前 login preheat 进程使用
-    `/scratch/users/<user>/vibe-coding-planning/shared/apptainer-cache-login` 和
-    `apptainer-tmp-login`，因此该 home cache 不属于当前 preheat 的最终 SIF 产物。
-  - 已按保守策略将 home cache 迁移到 scratch archive：
-    `/scratch/users/<user>/vibe-coding-planning/archive/home-apptainer-cache-20260706T204123Z`
-    （约 266G），并将 `~/.apptainer/cache` 改为指向
-    `/scratch/users/<user>/vibe-coding-planning/shared/apptainer-cache-home-default`
-    的 symlink，防止后续默认 Apptainer 行为再次写入 home。
-  - 后续判断：如果 SIF preheat 完成且 GEPA/online 运行只读取
-    `shared/sif-cache/*.sif`，没有调用 archive 中的旧 layer cache，则可清理该
-    archive 释放 scratch 空间。
+- **状态**：共享 SIF cache 已支持正式 384/98 Offline 运行；旧 preheat job、
+  中间进度和已完成 tmp 清理不再作为开放项。
+- **仍需决策**：在删除
+  `/scratch/users/<user>/vibe-coding-planning/archive/home-apptainer-cache-20260706T204123Z`
+  前，先只读确认当前运行和默认 `~/.apptainer/cache` symlink 均不再引用该约
+  266G archive。删除必须使用精确路径并在之后复查 scratch quota/inode。
+- **运行约束**：共享 `sif-cache` 保留；preheat 为网络/IO 任务，保持
+  `1 CPU / 4G`，不得并发启动多个 writer。当前脚本和资源语义由
+  `docs/hpc-submit.md` 与 `scripts/README.md` 维护。
 
 ---
 
@@ -467,115 +371,26 @@ proposal 分布的影响和潜在新偏差的可解释方案。原始
 - 若考虑增加自动检查或重试，先说明它解决的重复性观测、会改变哪些 GEPA proposal
   数据，以及为什么该影响与研究问题相关；在此之前保留 Agent 原始行为。
 
-### 6.4 Iris 临时目录清理暂停（2026-07-28）
+### 6.4 Offline HPC supervisor 配置身份冲突
 
-- Offline 2/2 HPC environment smoke 已达到环境验证目的；远端 232 MB workdir
-  和 3.6 MB persistent run state 已删除。
-- Scratch 用户配额检查时为约 1.0 TB / 10 TB，但 inode 为
-  `839612 / 1000000`，因此字节容量不是当前风险，文件数量才是。
-- 共享 SIF cache 含 483 个 SIF、约 557.87 GiB，属于后续实验的有效缓存，不清理。
-- `shared/apptainer-tmp` 中 28 个 2026-07-20 前的
-  `build-temp-*` / `bundle-temp-*` 遗留目录已删除 12 个。登录节点删除因大量
-  metadata 操作持续约七分钟后被主动停止；当前没有清理进程运行。
-- 剩余 14 个目录：`build-temp-1620489321`、
-  `build-temp-3525381747`、`bundle-temp-3596922134`、
-  `bundle-temp-3654224338`、`bundle-temp-672988753`、
-  `build-temp-1663073231`、`build-temp-3290994169`、
-  `bundle-temp-1826367640`、
-  `bundle-temp-2331921145`、`bundle-temp-2428711331`、
-  `build-temp-2259303553`、`bundle-temp-2231734395`、
-  `bundle-temp-3379910989`、`build-temp-2808580052`。
-- 用户回来验收 2it 后，再通过低资源计算任务继续删除并重新检查 inode 配额；
-  不在登录节点恢复长时间递归删除。
-- 2026-07-28 后续清理已通过 Slurm job `5579298`
-  （`1 CPU / 4G / 30min`）完成，实际运行 `5:46`、exit `0`、MaxRSS 约
-  35 MB。上述 14 个精确目录已全部删除，`shared/apptainer-tmp` 顶层目录数为
-  0；未触及共享 SIF cache。
-- 清理后 `/mnt/scratch` 用户配额约 `1.03 TB / 10 TB`，inode 降至
-  `98,609 / 1,000,000`。Maintenance workdir 和本地生成的 submission artifacts
-  已在验证后删除。
-
-### 6.5 Offline HPC 2it 流程检查（2026-07-28）
-
-- Run identity：
-  `offline-plan-verifier-hpc-balanced-b12-2it-20260728`。
-- 目的仅为验收完整 Offline HPC 实现和配置链路：full 384/98、
-  minibatch 12、balanced accuracy、2 proposal iterations、Checker /
-  Reflection 独立 Slurm tasks、controller yield/resume、raw trajectory 和
-  persistent output。不能用两次 iteration 证明规则质量。
-- 本地 supervisor 通过 `tmux` 内的 `caffeinate -i -s` 启动，目标 2
-  iterations、30 分钟轮询、10 分钟 controller slice、无限 resume slices。
-- Worker 资源为 `1 CPU / 4G / 35min`，array throttle 4，最多两次 task
-  attempt；FairShare 启动前为 `0.293015`，未提高并发。
-- 首个 controller job `5575777` 于启动检查时在 `iris-094` 上
-  `RUNNING`。后续流程完成 1/2 iteration，并在第二轮全量 validation 的
-  `sphinx-doc__sphinx-11445` 上停止：两次 Checker 都到达 `Submitted`，但最终
-  JSON 分别因未转义反斜杠触发 `Invalid \escape`。重试 task 约三分钟、约
-  190 MB RSS，不是 walltime、OOM 或 HPC 环境失败。
-- 当前共享 task runtime 在两次 `agent_failed` 后抛出
-  `Slurm Agent tasks failed without valid atomic output`；Offline runner 只把
-  `Checker operational failure for:` 识别为 resumable，因而 supervisor 将
-  本次运行标记为 blocking 并停止。这是恢复分类缺口，不是 GEPA 质量结论。
-
-### 6.6 Checker 输出契约定向重试（2026-07-28）
-
-- 已实现最小定向反馈：只有空提交、JSON 解析失败或 Checker schema 验证失败会被
-  标记为 `checker_output_contract`。下一次 attempt 仍启动全新的 Agent 和容器，
-  只收到上一次 worker-side validator 的精确错误；不传 resolved label、score、ASI、
-  GEPA acceptance 或上一次语义答案。
-- SIF、provider、OOM、身份和其他 operational 错误不会进入 Agent prompt。失败
-  attempt 的完整 Checker trajectory、失败输出和实际 retry feedback 均独立落盘。
-- retry policy、最大 task attempts、prompt 和实现 source 均进入 Offline
-  Checker semantic hash；修改后的实验必须使用新 run identity，不能把
-  `offline-plan-verifier-hpc-balanced-b12-2it-20260728` 直接当作同语义续跑。
-- 下一次 2it 将 `hpc.max_task_attempts` 从历史 pilot 的 2 提高到 3。Checker、
-  Initial Reflection 或 contamination repair 三次失败后，task journal 写入
-  `EXHAUSTED` 并阻塞运行；Reflection 的阻塞控制异常不会被 GEPA 转换为正常
-  no-proposal iteration。
-- Checker 与 Reflection worker 新增 `failure_stage` 和
-  `failure_category`，连同既有 `error_type/error` 用于区分输入、配置、runtime
-  setup、Agent execution、repair 和 output-write 阶段。该分类暂不改变 retry、
-  score 或 blocking 策略。
-- 已修复共享 task 的失败证据边界：worker-declared completed 输出若未通过 host
-  envelope/identity/schema validation，会保留原始输出和精确
-  `host_validation_failure.json` 并进入 `BLOCKED`；terminal/missing-output
-  Slurm 状态和 stdout/stderr 也按 attempt 归档。该语义修改需要新的 run identity，
-  不得继续原 `offline-plan-verifier-hpc-balanced-b12-2it-20260728`。
-
-### 6.7 Failure-evidence 2it（2026-07-29）
-
-- 新 identity：
-  `offline-plan-verifier-hpc-balanced-b12-2it-failure-evidence-20260729`。
-  本轮仅用于验收 `BLOCKED`/`EXHAUSTED`、host validation evidence、逐 attempt
-  Slurm evidence，以及两次有效 proposal iteration 的完整链路。
-- 实验参数保持 full 384/98、minibatch 12、balanced accuracy、最多三次 fresh-Agent
-  task attempt；controller 为 `1 CPU / 4G / 10min`，worker 为
-  `1 CPU / 4G / 35min`，array throttle 4。
-- 提交前 Iris 无当前用户 job；FairShare 为 `0.309483`，scratch 文件系统整体
-  使用率 35%。未基于 FairShare 提高并发或资源。
-- 两次 proposal、342 次 metric calls 和两个 Reflection 均已完成；但 GEPA
-  optimization-end 的 `total_iterations` 实际传出零基 `state.i=1`，覆盖了
-  state-save 已写入的完成数 2。同时 Offline `result.json` 没有顶层 status，
-  supervisor 未使用已有的 `controller_status=completed`，因此持续将终态 replay
-  为新的 controller slice。结果与 metric cache 未改变，但产生无效提交和重复
-  run-level audit。
-- 修复后 Offline/Online callback 均从 `final_state.i + 1` 发布完成 proposal 数；
-  supervisor 仅在 result 顶层 status 缺失时回退到显式 terminal
-  `controller_status.json`。旧 supervisor 已在修改前停止，未将不同代码版本同步
-  到同一运行。该 run 保留为流程诊断结果，不再 resume。
-
-### 6.8 Supervisor-fix 2it（2026-07-29）
-
-- 新 identity：
-  `offline-plan-verifier-hpc-balanced-b12-2it-supervisor-fix-20260729`。
-  目标是在不改变 Offline 方法参数的情况下，重新验收完整两轮 proposal，并确认
-  修复后的完成计数和 terminal status 能让 supervisor 在 2/2 自动停止。
-- 保持 full 384/98、minibatch 12、balanced accuracy、parallel 2、
-  Checker/Reflection 最多三次 fresh-Agent task attempt；controller 为
-  `1 CPU / 4G / 10min`，worker 为 `1 CPU / 4G / 35min`，array throttle 4。
-- 启动前 Iris 用户队列为空；FairShare `0.310267`、`LevelFS=2.089224`。
-  scratch 文件系统整体容量使用率 35%、inode 使用率 2%，不提高资源或并行度。
-- 验收重点：两次 proposal 和所有证据正常完成；无重复 terminal replay；
-  `iteration_progress.completed_iterations=2`；supervisor 状态自动变为 completed；
-  同时继续记录 Checker/Reflection output-contract、重试、host validation 和任何
-  新的数据可靠性问题。
+- **状态**：阻塞下一次 Offline HPC 提交；先修复再使用新 identity。
+- **问题**：2026-07-30 发现旧 `failure-evidence-20260729` supervisor 实际仍在
+  运行。它保留旧 session/job/remote workdir，却在每个 slice 动态读取已经切换到
+  `supervisor-fix-20260729` 的共享 runtime config，累计提交 50 个 controller。
+  新旧 controller 因 project workdir 不同而对同一 Checker task 生成不同 manifest，
+  新 run 在 iteration 0 以 `Offline Checker task manifest mismatch` block。
+- **数据边界**：98 个 seed-validation Checker worker 虽由 Slurm 正常完成，但
+  batch 未被一致身份的 controller 收集，GEPA metric calls 和 durable iterations
+  都是 0。本次 run 不属于规则质量证据；无效 persistent run、全部 Offline remote
+  workdir 和 scratch task 残余已删除。历史有效 persistent results、dataset 和共享
+  SIF cache 保留。
+- **需要修复**：
+  1. supervisor 启动时固定 runtime config 内容/hash，而不是只保存一个后续可变的路径；
+  2. 每次提交前验证 tracked commit、clean worktree、runtime config hash、
+     run identity、job name、remote workdir 和本地 supervisor state 一致；
+  3. 启动新 identity 前列出所有同方法 tmux session，并拒绝存在会读取同一配置的
+     旧 supervisor；
+  4. 以测试覆盖“旧 supervisor + 配置路径切换”，确保提交前 block 且不创建远端
+     controller；
+  5. 修复后使用全新 run identity 重新执行 2it，验收 manifest 接管、两次 durable
+     proposal、`completed_iterations=2` 和 supervisor 自动停止。

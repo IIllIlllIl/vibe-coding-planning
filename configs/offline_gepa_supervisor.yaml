@@ -1,3 +1,6 @@
+# Retained diagnostic launch configuration for the deleted
+# supervisor-fix-20260729 run. Do not start it. The next Offline HPC run must
+# use a new session, job name, run directory, and remote workdir.
 schema_version: 1
 session: offline-gepa-hpc-balanced-b12-2it-supervisor-fix-20260729
 log: .local/hpc-supervisor/offline-gepa-hpc-balanced-b12-2it-supervisor-fix-20260729.log

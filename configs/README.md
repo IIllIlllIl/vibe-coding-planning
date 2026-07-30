@@ -35,16 +35,16 @@ budgets, evaluator, or worker resources belongs in
 poll cadence, controller resources, or remote workdir belongs in
 `online_gepa_supervisor.yaml`. Keep their run identity and job prefix aligned.
 
-## Active Offline GEPA
+## Offline GEPA
 
 | Config | Runtime | Purpose |
 |---|---|---|
-| `gepa_verified_rules.yaml` | ULHPC Apptainer | Two-proposal Checker-rule experiment over the full 384/98 split, using minibatch 12, balanced accuracy, repository-grounded read-only verification, and a minimal seed. Checker output-contract retries start a fresh Agent with only the prior worker-validator error. Checker, Reflection, and repair tasks receive three total attempts; exhaustion blocks without fabricating a score or proposal. Tasks use `1 CPU / 4G / 35min`, with at most four workers active. |
-| `offline_gepa_supervisor.yaml` | Local tmux+caffeinate | Persistent `supervisor-fix-20260729` 2-iteration launch identity with 30-minute polling and `1 CPU / 4G / 10min` controller slices. The supervisor waits locally and consumes no HPC allocation between controller submissions. |
+| `gepa_verified_rules.yaml` | ULHPC Apptainer | Retained configuration of the invalid `supervisor-fix-20260729` diagnostic: full 384/98 split, minibatch 12, balanced accuracy, three task attempts, and `1 CPU / 4G / 35min` workers. It is evidence for reproducing the supervisor identity failure, not a current launch config. |
+| `offline_gepa_supervisor.yaml` | Local tmux+caffeinate | Retained launch configuration for the deleted `supervisor-fix-20260729` run. Do not start it. A new run requires the supervisor identity gate in `project_issues.md` and a new session, job, run directory, and remote workdir. |
 | `offline_gepa_hpc_smoke_2x2_20260728.yaml` | ULHPC Apptainer | Environment-only 2-train/2-validation, 1-iteration smoke. Its scores are not rule-quality evidence. |
 | `gepa_initial_rules_minimal.md` | Prompt text | Minimal current Offline seed intended to leave room for GEPA exploration. |
 
-`search.max_iterations` is the primary experimental stop condition and is an
+There is currently no active remote Offline run. `search.max_iterations` is the primary experimental stop condition and is an
 absolute cumulative proposal target across resume. `max_metric_calls=500` is
 only a fail-safe above the 342-call worst-case projection. Offline uses its own
 launch config with the shared supervisor service. See

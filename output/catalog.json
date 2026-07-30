@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "generated_at": "2026-07-28",
+  "generated_at": "2026-07-30",
   "active_method": "online_gepa_planning_rules",
   "active_offline_method": "offline_gepa_plan_verification_rules",
   "default_agent_scope": [
@@ -22,12 +22,7 @@
     "extension_requires_explicit_policy": true,
     "current_hpc_config_compatible": false
   },
-  "active_remote_offline_run": {
-    "name": "offline-plan-verifier-hpc-balanced-b12-2it-supervisor-fix-20260729",
-    "classification": "execution_diagnostic",
-    "proposal_target": 2,
-    "purpose": "verify the fixed supervisor completion contract"
-  },
+  "active_remote_offline_run": null,
   "archive_groups": [
     {
       "path": "output/archive/online-gepa/reference",
