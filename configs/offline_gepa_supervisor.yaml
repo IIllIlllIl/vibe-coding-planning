@@ -1,9 +1,8 @@
-# Retained diagnostic launch configuration for the deleted
-# supervisor-fix-20260729 run. Do not start it. The next Offline HPC run must
-# use a new session, job name, run directory, and remote workdir.
+# Current launch identity for the two-iteration Offline HPC identity-guard
+# validation run.
 schema_version: 1
-session: offline-gepa-hpc-balanced-b12-2it-supervisor-fix-20260729
-log: .local/hpc-supervisor/offline-gepa-hpc-balanced-b12-2it-supervisor-fix-20260729.log
+session: offline-gepa-hpc-balanced-b12-2it-identity-guard-20260730
+log: .local/hpc-supervisor/offline-gepa-hpc-balanced-b12-2it-identity-guard-20260730.log
 arguments:
   - --target-iterations
   - "2"
@@ -13,13 +12,14 @@ arguments:
   - "00:10:00"
   - --max-runs
   - "0"
+  - --require-clean-worktree
   - --gepa-rules
   - --gepa-config
   - configs/gepa_verified_rules.yaml
   - --job-name
-  - offline-gepa-hpc-balanced-b12-2it-supervisor-fix-20260729
+  - offline-gepa-hpc-balanced-b12-2it-identity-guard-20260730
   - --remote-dir
-  - ~/hpc_runs/vibe-coding-planning-offline-balanced-b12-2it-supervisor-fix-20260729
+  - ~/hpc_runs/vibe-coding-planning-offline-balanced-b12-2it-identity-guard-20260730
   - --cpus
   - "1"
   - --mem

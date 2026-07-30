@@ -39,12 +39,12 @@ poll cadence, controller resources, or remote workdir belongs in
 
 | Config | Runtime | Purpose |
 |---|---|---|
-| `gepa_verified_rules.yaml` | ULHPC Apptainer | Retained configuration of the invalid `supervisor-fix-20260729` diagnostic: full 384/98 split, minibatch 12, balanced accuracy, three task attempts, and `1 CPU / 4G / 35min` workers. It is evidence for reproducing the supervisor identity failure, not a current launch config. |
-| `offline_gepa_supervisor.yaml` | Local tmux+caffeinate | Retained launch configuration for the deleted `supervisor-fix-20260729` run. Do not start it. A new run requires the supervisor identity gate in `project_issues.md` and a new session, job, run directory, and remote workdir. |
+| `gepa_verified_rules.yaml` | ULHPC Apptainer | Current `identity-guard-20260730` two-proposal validation config: full 384/98 split, minibatch 12, balanced accuracy, three task attempts, and `1 CPU / 4G / 35min` workers. |
+| `offline_gepa_supervisor.yaml` | Local tmux+caffeinate | Matching new session, job, run directory, and remote workdir. It uses 30-minute polling, `1 CPU / 4G / 10min` controller slices, and requires an unchanged runtime-config hash, Git commit, and clean worktree before submission. |
 | `offline_gepa_hpc_smoke_2x2_20260728.yaml` | ULHPC Apptainer | Environment-only 2-train/2-validation, 1-iteration smoke. Its scores are not rule-quality evidence. |
 | `gepa_initial_rules_minimal.md` | Prompt text | Minimal current Offline seed intended to leave room for GEPA exploration. |
 
-There is currently no active remote Offline run. `search.max_iterations` is the primary experimental stop condition and is an
+`search.max_iterations` is the primary experimental stop condition and is an
 absolute cumulative proposal target across resume. `max_metric_calls=500` is
 only a fail-safe above the 342-call worst-case projection. Offline uses its own
 launch config with the shared supervisor service. See

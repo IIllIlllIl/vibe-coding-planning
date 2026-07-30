@@ -6,6 +6,7 @@ from __future__ import annotations
 import argparse
 from contextlib import contextmanager
 import fcntl
+import hashlib
 import json
 import os
 import re
@@ -64,6 +65,9 @@ class SupervisorConfig:
     target_iterations: int
     once: bool
     state_file: Path
+    runtime_config_sha256: str
+    require_clean_worktree: bool
+    repo_commit: str | None
 
 
 def parse_duration(raw: str) -> int:
@@ -120,6 +124,23 @@ def _load_yaml(path: Path) -> dict[str, Any]:
     if not path.is_file():
         return {}
     return yaml.safe_load(path.read_text(encoding="utf-8")) or {}
+
+
+def _sha256(path: Path) -> str:
+    return hashlib.sha256(path.read_bytes()).hexdigest()
+
+
+def _git_output(*args: str) -> str | None:
+    result = subprocess.run(
+        ["git", *args],
+        cwd=REPO_ROOT,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    if result.returncode != 0:
+        return None
+    return result.stdout.strip()
 
 
 def _resolve_repo_path(raw: str, base: Path = REPO_ROOT) -> Path:
@@ -199,6 +220,14 @@ def parse_args(argv: list[str]) -> SupervisorConfig:
         help="Local supervisor state path (default: .local/hpc-supervisor/<job>.json).",
     )
     parser.add_argument(
+        "--require-clean-worktree",
+        action="store_true",
+        help=(
+            "Block controller submission if the tracked Git commit changes or "
+            "the worktree becomes dirty."
+        ),
+    )
+    parser.add_argument(
         "--max-runs",
         type=int,
         default=0,
@@ -244,6 +273,9 @@ def parse_args(argv: list[str]) -> SupervisorConfig:
         target_iterations=known.target_iterations,
         once=known.once,
         state_file=state_file,
+        runtime_config_sha256=_sha256(gepa_config),
+        require_clean_worktree=known.require_clean_worktree,
+        repo_commit=_git_output("rev-parse", "HEAD"),
     )
 
 
@@ -297,6 +329,29 @@ def submit_slice(config: SupervisorConfig) -> str:
     job_id = _extract_job_id(result.stdout)
     print(f"[hpc-resume] submitted job_id={job_id}")
     return job_id
+
+
+def _submission_identity_error(config: SupervisorConfig) -> str | None:
+    current_config_sha256 = _sha256(config.gepa_config)
+    if current_config_sha256 != config.runtime_config_sha256:
+        return (
+            "runtime GEPA config changed after supervisor start: "
+            f"{config.gepa_config}"
+        )
+    if not config.require_clean_worktree:
+        return None
+    current_commit = _git_output("rev-parse", "HEAD")
+    if current_commit is None or current_commit != config.repo_commit:
+        return (
+            "tracked Git commit changed after supervisor start: "
+            f"expected={config.repo_commit} actual={current_commit}"
+        )
+    worktree = _git_output("status", "--porcelain=v1", "--untracked-files=all")
+    if worktree is None:
+        return "could not inspect Git worktree before controller submission"
+    if worktree:
+        return "Git worktree is not clean before controller submission"
+    return None
 
 
 def run_dry_run(config: SupervisorConfig) -> int:
@@ -511,12 +566,16 @@ def _load_supervisor_state(config: SupervisorConfig) -> dict[str, Any]:
             "remote_run_snapshot": config.remote_run_snapshot,
             "job_name": config.job_name,
             "target_additional_iterations": config.target_iterations,
+            "runtime_config_sha256": config.runtime_config_sha256,
+            "repo_commit": config.repo_commit,
         }
     state = json.loads(config.state_file.read_text(encoding="utf-8"))
     expected = {
         "remote_run_snapshot": config.remote_run_snapshot,
         "job_name": config.job_name,
         "target_additional_iterations": config.target_iterations,
+        "runtime_config_sha256": config.runtime_config_sha256,
+        "repo_commit": config.repo_commit,
     }
     for key, value in expected.items():
         if state.get(key) != value:
@@ -585,6 +644,17 @@ def run_loop(config: SupervisorConfig) -> int:
             f"remote_run_snapshot={config.remote_run_snapshot}"
         )
         while True:
+            identity_error = _submission_identity_error(config)
+            if identity_error is not None:
+                state["status"] = "blocked_identity_mismatch"
+                state["identity_error"] = identity_error
+                _save_supervisor_state(config, state)
+                print(
+                    f"[hpc-resume] identity check failed: {identity_error}; "
+                    "not submitting",
+                    file=sys.stderr,
+                )
+                return 1
             status = remote_run_status(config)
             state["last_remote_status"] = status
             print(f"[hpc-resume] status={json.dumps(status, sort_keys=True)}")
@@ -643,6 +713,17 @@ def run_loop(config: SupervisorConfig) -> int:
                     _save_supervisor_state(config, state)
                     print("[hpc-resume] max runs reached", file=sys.stderr)
                     return 2
+                identity_error = _submission_identity_error(config)
+                if identity_error is not None:
+                    state["status"] = "blocked_identity_mismatch"
+                    state["identity_error"] = identity_error
+                    _save_supervisor_state(config, state)
+                    print(
+                        f"[hpc-resume] identity check failed: {identity_error}; "
+                        "not submitting",
+                        file=sys.stderr,
+                    )
+                    return 1
                 try:
                     job_id = submit_slice(config)
                 except Exception as exc:

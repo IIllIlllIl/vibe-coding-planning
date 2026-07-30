@@ -373,7 +373,8 @@ proposal 分布的影响和潜在新偏差的可解释方案。原始
 
 ### 6.4 Offline HPC supervisor 配置身份冲突
 
-- **状态**：阻塞下一次 Offline HPC 提交；先修复再使用新 identity。
+- **状态**：最小身份保护已实现，待
+  `identity-guard-20260730` 新 identity 的 2it 实跑验收。
 - **问题**：2026-07-30 发现旧 `failure-evidence-20260729` supervisor 实际仍在
   运行。它保留旧 session/job/remote workdir，却在每个 slice 动态读取已经切换到
   `supervisor-fix-20260729` 的共享 runtime config，累计提交 50 个 controller。
@@ -384,13 +385,15 @@ proposal 分布的影响和潜在新偏差的可解释方案。原始
   都是 0。本次 run 不属于规则质量证据；无效 persistent run、全部 Offline remote
   workdir 和 scratch task 残余已删除。历史有效 persistent results、dataset 和共享
   SIF cache 保留。
-- **需要修复**：
-  1. supervisor 启动时固定 runtime config 内容/hash，而不是只保存一个后续可变的路径；
-  2. 每次提交前验证 tracked commit、clean worktree、runtime config hash、
-     run identity、job name、remote workdir 和本地 supervisor state 一致；
-  3. 启动新 identity 前列出所有同方法 tmux session，并拒绝存在会读取同一配置的
-     旧 supervisor；
-  4. 以测试覆盖“旧 supervisor + 配置路径切换”，确保提交前 block 且不创建远端
-     controller；
-  5. 修复后使用全新 run identity 重新执行 2it，验收 manifest 接管、两次 durable
-     proposal、`completed_iterations=2` 和 supervisor 自动停止。
+- **已实现的最小保护**：
+  1. resume loop 启动时记录 runtime config SHA-256 和 Git commit，并把它们写入
+     本地 supervisor state；
+  2. 每轮以及 controller 提交前重新检查 config hash；正式 launch 还通过
+     `--require-clean-worktree` 检查 commit 未变化且 worktree 干净；
+  3. 任一不一致都会写入 `blocked_identity_mismatch` 并在提交前停止；
+  4. 回归测试覆盖运行中切换同一配置路径，确认不会产生第二次 controller 提交。
+- **本轮启动前证据**：2026-07-30 实查本地无 tmux session、Iris 用户队列为空；
+  远端仅保留 `20260728` 与 `failure-evidence-20260729` 两个历史 persistent result，
+  没有 Offline controller workdir。
+- **待验收**：使用全新 `identity-guard-20260730` identity 执行 2it，确认 manifest
+  接管、两次 durable proposal、`completed_iterations=2` 和 supervisor 自动停止。

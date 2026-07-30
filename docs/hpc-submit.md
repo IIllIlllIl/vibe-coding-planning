@@ -4,7 +4,7 @@
 >
 > Scope: Online/Offline controllers, Agent task arrays, supervisor, FairShare
 >
-> Last reviewed: 2026-07-15
+> Last reviewed: 2026-07-30
 >
 > Supersedes: `archive/mixed-design/hpc-submit-mixed-20260715.md`
 
@@ -98,6 +98,14 @@ The service launches the foreground resume loop inside `tmux` under
 the unattended supervisor. Use the same script with `status` or `stop` and the
 same `--session` to inspect or stop it. Do not launch the raw resume loop with
 `&` for an unattended run.
+
+For formal launches, pass `--require-clean-worktree`. The supervisor records
+the runtime GEPA config SHA-256 and current Git commit in its local state. It
+checks the config hash on every loop and checks the commit plus worktree
+cleanliness before every controller submission. A mismatch is recorded as
+`blocked_identity_mismatch` and stops the supervisor without submitting. This
+prevents a long-lived supervisor from silently adopting a newly edited shared
+config or source tree.
 
 The service uses `conda run --no-capture-output`, so stdout/stderr reaches the
 configured log while the supervisor is running rather than only after exit.

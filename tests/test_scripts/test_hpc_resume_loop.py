@@ -1,8 +1,10 @@
 from __future__ import annotations
 
+import hashlib
 import json
 import os
 import subprocess
+import time
 from pathlib import Path
 
 
@@ -95,6 +97,20 @@ def _env(fake_bin: Path) -> dict[str, str]:
     env["ULHPC_HOST"] = "example.invalid"
     env["ULHPC_PORT"] = "2222"
     return env
+
+
+def _config_identity(config: Path) -> dict[str, str]:
+    commit = subprocess.run(
+        ["git", "rev-parse", "HEAD"],
+        cwd=REPO_ROOT,
+        capture_output=True,
+        text=True,
+        check=True,
+    ).stdout.strip()
+    return {
+        "runtime_config_sha256": hashlib.sha256(config.read_bytes()).hexdigest(),
+        "repo_commit": commit,
+    }
 
 
 def test_hpc_resume_loop_dry_run_delegates_slice_time(tmp_path: Path) -> None:
@@ -323,6 +339,56 @@ def test_hpc_supervisor_retains_loop_after_submission_failure(tmp_path: Path) ->
     assert state["submissions"] == 0
 
 
+def test_hpc_supervisor_blocks_when_runtime_config_changes(tmp_path: Path) -> None:
+    fake_bin = tmp_path / "bin"
+    fake_bin.mkdir()
+    local_root = REPO_ROOT / ".tmp_hpc_smoke" / "test_config_identity"
+    config = _write_config(local_root)
+    fake_batch = tmp_path / "hpc_submit_batch.sh"
+    batch_log = tmp_path / "batch.log"
+    _fake_batch_script(fake_batch, batch_log)
+    statuses = tmp_path / "statuses.txt"
+    statuses.write_text('{"state":"missing"}\n', encoding="utf-8")
+    _fake_ssh(fake_bin / "ssh", statuses, tmp_path / "ssh.log")
+
+    original = config.read_text(encoding="utf-8")
+    process = subprocess.Popen(
+        [
+            "python",
+            str(SCRIPT),
+            "--poll-interval",
+            "1",
+            "--max-runs",
+            "2",
+            "--state-file",
+            str(tmp_path / "state.json"),
+            "--batch-script",
+            str(fake_batch),
+            "--gepa-rules",
+            "--gepa-config",
+            str(config),
+            "--submit",
+        ],
+        cwd=REPO_ROOT,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        text=True,
+        env=_env(fake_bin),
+    )
+    for _ in range(100):
+        if batch_log.exists():
+            break
+        time.sleep(0.02)
+    config.write_text(original + "\n# changed\n", encoding="utf-8")
+    stdout, stderr = process.communicate(timeout=5)
+
+    assert process.returncode == 1, (stdout, stderr)
+    assert batch_log.read_text(encoding="utf-8").count("--submit") == 1
+    assert "runtime GEPA config changed after supervisor start" in stderr
+    state = json.loads((tmp_path / "state.json").read_text(encoding="utf-8"))
+    assert state["status"] == "blocked_identity_mismatch"
+
+
 def test_hpc_supervisor_service_starts_with_tmux_and_caffeinate(tmp_path: Path) -> None:
     fake_bin = tmp_path / "bin"
     fake_bin.mkdir()
@@ -503,6 +569,7 @@ def test_hpc_supervisor_stops_at_additional_iteration_target(tmp_path: Path) -> 
                 "target_additional_iterations": 3,
                 "baseline_iterations": 2,
                 "target_completed_iterations": 5,
+                **_config_identity(config),
             }
         ),
         encoding="utf-8",
@@ -615,6 +682,7 @@ def test_hpc_supervisor_accepts_offline_controller_completion_status(
                 "target_additional_iterations": 2,
                 "baseline_iterations": 0,
                 "target_completed_iterations": 2,
+                **_config_identity(config),
             }
         ),
         encoding="utf-8",
