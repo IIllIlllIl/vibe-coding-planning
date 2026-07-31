@@ -10,8 +10,8 @@ historical comparison, provenance, or reproduction.
 |---|---|---|
 | `SWE-bench_Verified/verified-round1-gepa-datasets/20260614_482_fdc056ae85df/` | Immutable formal 384/98 snapshot shared by current Online and Offline experiments | Active input; do not move or modify |
 | `SWE-bench_Verified/gepa-rules/` | Local destination for current Online and Offline GEPA results | Active output root |
-| `SWE-bench_Verified/gepa-rules/offline-plan-verifier-balanced-b12-p2-case-reviews-8it-20260727/` | Latest local Offline result under the final pre-HPC experimental flow | Completed with warnings; sole active Offline checkpoint and analysis baseline |
-| Remote `offline-plan-verifier-hpc-balanced-b12-2it-slurm-native-20260730` run directory | Current Offline Slurm-native execution validation | Active 2-proposal test; complete Checker arrays have no project-level concurrency throttle |
+| `SWE-bench_Verified/gepa-rules/offline-plan-verifier-balanced-b12-p2-case-reviews-8it-20260727/` | Formal local Offline result under the final pre-HPC experimental flow | Completed with warnings; sole active Offline result and analysis baseline |
+| Remote `offline-plan-verifier-hpc-balanced-b12-8it-formal-20260731` run directory | Fresh formal Offline HPC experiment | Configured for 8 proposals; does not inherit the local candidate tree or scores |
 | Remote `online-planning-hpc-policy-v3-20260715` run directory | Outcome-policy-v3 formal run targeting 8 durable iterations | Active; managed by the supervisor |
 
 The active Online rule-generation flow is:
@@ -51,13 +51,30 @@ future extension therefore requires an explicit methodology decision; it must
 not be achieved by pointing the current 2-iteration HPC config, changed
 prompt/source hashes, or a new run identity at this directory.
 
-The current remote Offline run is the new
-`slurm-native-20260730` execution-validation identity. The preserved remote
-`20260728`, `failure-evidence-20260729`, and throttled
-`identity-guard-20260730` results are execution diagnostics, not resumable
-current experiments. The throttled run reached one durable iteration before
-its supervisor was stopped because `%4` project-level array throttling did not
-match the required scheduling contract; the current run does not resume it.
+There is no active remote Offline result. The four recent Offline HPC
+platform-validation runs through 2026-07-30 were smoke tests rather than
+formal rule-quality experiments. Their raw outputs are preserved remotely under
+`archive/tests/offline-gepa/` and excluded from the default analysis surface:
+
+| Remote archived run | Outcome | Smoke purpose |
+|---|---|---|
+| `offline-plan-verifier-hpc-balanced-b12-2it-20260728/` | Stopped after 1 durable proposal; Checker task attempts exhausted | Initial controller/worker and failure-path validation |
+| `offline-plan-verifier-hpc-balanced-b12-2it-failure-evidence-20260729/` | Produced diagnostic output under superseded supervisor semantics | Failure-evidence and retry validation |
+| `offline-plan-verifier-hpc-balanced-b12-2it-identity-guard-20260730/` | Stopped after 1 durable proposal | Identity guard validation; used superseded `%4` array throttling |
+| `offline-plan-verifier-hpc-balanced-b12-2it-slurm-native-20260730/` | Completed 2/2 proposals and 342 metric calls | End-to-end Slurm-native scheduling smoke |
+
+These runs may be used to diagnose the HPC implementation, retries,
+trajectories, and scheduling behavior. Their candidate scores must not be
+presented as formal Offline experimental results. The next formal HPC run must
+use a new run identity and must not resume any of these directories.
+
+The two retained remote project snapshots are separately archived under
+`~/hpc_runs/archive/tests/offline-gepa-workdirs/`; their result symlinks point
+to the archived evidence above.
+
+The older `strict-checker-hpc-24h-20260622/` result remains valid only for its
+historical method and is archived remotely under `archive/offline-gepa/`; it is
+not relabeled as a smoke and is not part of the current formal result surface.
 
 The other recent Offline directories are archived as follows:
 

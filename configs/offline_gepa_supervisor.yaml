@@ -1,12 +1,12 @@
-# Current two-iteration Offline HPC Slurm-native validation launch identity.
+# Formal eight-iteration Offline HPC Slurm-native launch identity.
 schema_version: 1
-session: offline-gepa-hpc-balanced-b12-2it-slurm-native-20260730
-log: .local/hpc-supervisor/offline-gepa-hpc-balanced-b12-2it-slurm-native-20260730.log
+session: offline-gepa-hpc-balanced-b12-8it-formal-20260731
+log: .local/hpc-supervisor/offline-gepa-hpc-balanced-b12-8it-formal-20260731.log
 arguments:
   - --target-iterations
-  - "2"
+  - "8"
   - --poll-interval
-  - "1800"
+  - "600"
   - --slice-time
   - "00:10:00"
   - --max-runs
@@ -16,9 +16,9 @@ arguments:
   - --gepa-config
   - configs/gepa_verified_rules.yaml
   - --job-name
-  - offline-gepa-hpc-balanced-b12-2it-slurm-native-20260730
+  - offline-gepa-hpc-balanced-b12-8it-formal-20260731
   - --remote-dir
-  - ~/hpc_runs/vibe-coding-planning-offline-balanced-b12-2it-slurm-native-20260730
+  - ~/hpc_runs/vibe-coding-planning-offline-balanced-b12-8it-formal-20260731
   - --cpus
   - "1"
   - --mem

@@ -5408,7 +5408,7 @@ def test_checker_operational_failure_marks_run_failed(tmp_path):
     assert any(record["event"] == "optimization_failed" for record in errors)
 
 
-def test_default_gepa_config_is_two_iteration_hpc_run(monkeypatch):
+def test_default_gepa_config_is_eight_iteration_formal_hpc_run(monkeypatch):
     monkeypatch.setenv("DEEPSEEK_API_KEY", "secret")
     repo_root = Path(__file__).resolve().parents[2]
     config = load_optimization_config(repo_root / "configs" / "gepa_verified_rules.yaml")
@@ -5421,9 +5421,9 @@ def test_default_gepa_config_is_two_iteration_hpc_run(monkeypatch):
     assert config.hpc.mem == "4G"
     assert config.hpc.time == "00:35:00"
     assert config.hpc.max_task_attempts == 3
-    assert config.search.max_metric_calls == 500
-    assert config.search.projection_metric_calls == 342
-    assert config.search.max_iterations == 2
+    assert config.search.max_metric_calls == 1500
+    assert config.search.projection_metric_calls == 1074
+    assert config.search.max_iterations == 8
     assert config.search.reflection_minibatch_size == 12
     assert config.search.primary_metric == "balanced_accuracy"
     assert config.search.parallel == 1
@@ -5432,7 +5432,7 @@ def test_default_gepa_config_is_two_iteration_hpc_run(monkeypatch):
     assert config.checker.max_attempts == 1
     assert config.initial_rules_path.name == "gepa_initial_rules_minimal.md"
     assert (
-        "offline-plan-verifier-hpc-balanced-b12-2it-slurm-native-20260730"
+        "offline-plan-verifier-hpc-balanced-b12-8it-formal-20260731"
         in str(config.run_dir)
     )
     checker_prompt = " ".join(config.checker_prompt.split())

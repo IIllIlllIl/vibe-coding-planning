@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "generated_at": "2026-07-30",
+  "generated_at": "2026-07-31",
   "active_method": "online_gepa_planning_rules",
   "active_offline_method": "offline_gepa_plan_verification_rules",
   "default_agent_scope": [
@@ -16,17 +16,38 @@
   },
   "active_local_offline_run": {
     "name": "offline-plan-verifier-balanced-b12-p2-case-reviews-8it-20260727",
-    "classification": "active_checkpoint_baseline",
+    "classification": "formal_local_baseline",
     "resume_requires_manifest_identity": true,
     "iteration_target_reached": true,
     "extension_requires_explicit_policy": true,
     "current_hpc_config_compatible": false
   },
   "active_remote_offline_run": {
-    "name": "offline-plan-verifier-hpc-balanced-b12-2it-slurm-native-20260730",
-    "classification": "execution_diagnostic",
-    "proposal_target": 2,
-    "purpose": "verify Offline Slurm-native Agent task scheduling and the full resume flow"
+    "name": "offline-plan-verifier-hpc-balanced-b12-8it-formal-20260731",
+    "classification": "configured_formal",
+    "proposal_target": 8,
+    "inherits_prior_search_state": false,
+    "seed": "configs/gepa_initial_rules_minimal.md"
+  },
+  "archived_remote_offline_smokes": {
+    "path": "remote:output/SWE-bench_Verified/gepa-rules/archive/tests/offline-gepa",
+    "classification": "test_only",
+    "score_usable": false,
+    "runs": [
+      "offline-plan-verifier-hpc-balanced-b12-2it-20260728",
+      "offline-plan-verifier-hpc-balanced-b12-2it-failure-evidence-20260729",
+      "offline-plan-verifier-hpc-balanced-b12-2it-identity-guard-20260730",
+      "offline-plan-verifier-hpc-balanced-b12-2it-slurm-native-20260730"
+    ],
+    "purpose": "Offline HPC platform, failure-handling, identity, scheduling, and resume smoke tests"
+  },
+  "archived_remote_offline_historical": {
+    "path": "remote:output/SWE-bench_Verified/gepa-rules/archive/offline-gepa",
+    "classification": "historical_valid",
+    "score_usable": "offline_historical_only",
+    "runs": [
+      "strict-checker-hpc-24h-20260622"
+    ]
   },
   "archive_groups": [
     {

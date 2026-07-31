@@ -53,13 +53,6 @@ components, so this remains the bounded explanation rather than a causal claim.
   后 evaluator score 是否保持、review attribution 是否过度归因于 plan、synthesis
   是否引用全部 instance，以及额外 token/FairShare 成本。
 
-- **Supervisor 配置身份仍未固定**：历史 Online smoke 和 2026-07-30 Offline
-  冲突均证明，持久 supervisor 只固定 session/job/remote workdir，却在每个
-  controller slice 重新同步工作区并读取共享的可变配置路径。旧 session 若未停止，
-  会在配置切换后控制另一个 run。提交入口需要把启动时的 tracked commit、
-  worktree cleanliness、runtime config hash、run identity 与 remote workdir
-  绑定；任一项变化都应在提交前 block，而不是依赖人工记得停止旧 session。
-
 - **状态**：当前主线；evaluator 基础设施修复后需要重新建立可信的正式结果
 - **背景**：candidate rules 进入 Plan Agent，随后执行真实的 Plan、Code 和
   evaluator rollout；HPC array、原子 batch resume、报告与输入隔离均已实现。
@@ -372,49 +365,50 @@ proposal 分布的影响和潜在新偏差的可解释方案。原始
 - 若考虑增加自动检查或重试，先说明它解决的重复性观测、会改变哪些 GEPA proposal
   数据，以及为什么该影响与研究问题相关；在此之前保留 Agent 原始行为。
 
-### 6.4 Offline HPC supervisor 配置身份冲突
+### 6.4 Offline Slurm-native 2it smoke 验收结果与开放问题（2026-07-31）
 
-- **状态**：最小身份保护已实现并在 `identity-guard-20260730` 中未发生身份冲突；
-  该 run 在 1/2 durable iterations 后因调度语义不符合需求而主动停止，未验收
-  2/2 自动结束。
-- **问题**：2026-07-30 发现旧 `failure-evidence-20260729` supervisor 实际仍在
-  运行。它保留旧 session/job/remote workdir，却在每个 slice 动态读取已经切换到
-  `supervisor-fix-20260729` 的共享 runtime config，累计提交 50 个 controller。
-  新旧 controller 因 project workdir 不同而对同一 Checker task 生成不同 manifest，
-  新 run 在 iteration 0 以 `Offline Checker task manifest mismatch` block。
-- **数据边界**：98 个 seed-validation Checker worker 虽由 Slurm 正常完成，但
-  batch 未被一致身份的 controller 收集，GEPA metric calls 和 durable iterations
-  都是 0。本次 run 不属于规则质量证据；无效 persistent run、全部 Offline remote
-  workdir 和 scratch task 残余已删除。历史有效 persistent results、dataset 和共享
-  SIF cache 保留。
-- **已实现的最小保护**：
-  1. resume loop 启动时记录 runtime config SHA-256 和 Git commit，并把它们写入
-     本地 supervisor state；
-  2. 每轮以及 controller 提交前重新检查 config hash；正式 launch 还通过
-     `--require-clean-worktree` 检查 commit 未变化且 worktree 干净；
-  3. 任一不一致都会写入 `blocked_identity_mismatch` 并在提交前停止；
-  4. 回归测试覆盖运行中切换同一配置路径，确认不会产生第二次 controller 提交。
-- **本轮启动前证据**：2026-07-30 实查本地无 tmux session、Iris 用户队列为空；
-  远端仅保留 `20260728` 与 `failure-evidence-20260729` 两个历史 persistent result，
-  没有 Offline controller workdir。
-- **待验收**：后续全新 identity 仍需确认 manifest 接管、两次 durable proposal、
-  `completed_iterations=2` 和 supervisor 自动停止。
+运行 `offline-plan-verifier-hpc-balanced-b12-2it-slurm-native-20260730`
+以 384 train / 98 validation、balanced accuracy、minibatch 12 完成。
+该运行只用于验收 HPC 平台和数据流，不是规则质量正式实验；其结果与另外三个
+Offline HPC 诊断 run 已归档到远端 `archive/tests/offline-gepa/`，不得把候选分数
+作为正式研究结论。
+结果为 2/2 durable iterations、342 metric calls 和 2 个 accepted
+candidate。Seed、candidate 1、candidate 2 的 validation balanced accuracy 分别为
+`0.599265`、`0.659467`、`0.619945`；candidate 1 为 best。Candidate 2
+虽整体分数低于 candidate 1，仍被 instance-level Pareto 接受，这符合
+selector 语义，但 accepted 数量不能代替整体 validation 质量。
 
-### 6.5 Offline HPC Agent 调度契约
+当前保留以下开放问题：
 
-- **需求**：一个 Agent 对应一个独立 Slurm task/array element，各自申请
-  `1 CPU / 4G`；validation、minibatch 和 selective retry 都一次提交当前完整 task
-  集合，不由项目限制同时运行数量，由 Slurm 独立决定调度并发。
-- **发现**：`identity-guard-20260730` 的 98-validation array 实际生成
-  `--array=0,...,97%4`。该 `%4` 由 2026-07-28 Offline HPC 新实现及配置主动加入，
-  不是 Slurm 或 `ulhpc-submit` 自动产生，也不是旧 Python thread scheduler。
-- **数据边界**：该 run 完成 1 个 durable iteration、134 次已记录 metric calls，
-  没有 manifest/identity 冲突；但它采用已淘汰的运行调度语义，只保留作执行诊断，
-  不 resume 为 Slurm-native 实验。
-- **当前实现与验收**：
-  1. Offline Checker 初始与 retry array 都不生成 `%N`；
-  2. Offline config 拒绝 `max_running_array_tasks` 和旧
-     `array_concurrency`，避免历史配置静默恢复 throttle；
-  3. HPC backend 要求 `search.parallel=1`，明确该字段只服务本地 adapter；
-  4. Reflection 和 contamination repair 继续各自使用单 element Slurm task；
-  5. 当前使用新 `slurm-native-20260730` identity 做 2it 验收，不接管 throttled run。
+1. **Supervisor 依赖本地主机持续唤醒**：`tmux + caffeinate -i -s` 能承受
+   shell 断开和 idle sleep，但 macOS 日志证明合盖后仍进入
+   `Clamshell Sleep`。远端 worker 在休眠期间已完成，但新 controller
+   只能在主机唤醒后提交。这不改变 GEPA 结果，但使 wall-clock
+   时间依赖本地运行条件。
+2. **30 分钟 cadence 累积空闲**：一个 proposal 跨越多个原子
+   Checker/Reflection 边界，每个边界最多等待 30 分钟。本次完成后已将
+   后续 Offline supervisor 配置改为 10 分钟；该修改只影响调度延迟，
+   不改变 task 输入、Agent 运行、score 或 acceptance。
+3. **Checker 输出协议仍需 retry**：实际观察到 repository evidence 字段
+   不是字符串和非法 JSON escape。Host 完整保留原始失败和 validator
+   feedback，并只重跑失败 index；本轮所有 Checker 最终成功。该机制
+   保住了数据完整性，但 retry 数和额外 token/walltime 必须继续报告。
+4. **Reflection 可超过 context window**：第二个 iteration 的首次
+   Reflection 尝试请求约 135.7 万 token，超过模型约 104.9 万上限。
+   新 Agent 的第二次尝试成功，覆盖全部 12 个 instance 并保存了分析和
+   trajectory，因此本次结果未 block。但这说明 Agent 可在 shell 读取中
+   将过大 evidence 带入对话；先审计 trajectory 的大输出来源，再决定是否
+   需要最小限制，不预设 reviewer/helper。
+5. **Best candidate 带有具体案例痕迹**：candidate 1 中出现
+   `column creation and ALTER TABLE` 以及 `weakref.ref` /
+   `WeakKeyDictionary` 等具体类比。它们没有直接 instance ID，因此通过了
+   当前轻量污染检查，但可能是 minibatch-specific 规则而非通用判断标准。
+   在将 validation 提升解释为泛化前，需要对这些痕迹与差异样本做人工审计。
+6. **中途 progress 计数语义易误解**：在 controller resume 边界曾短暂观察到
+   `metric_calls_used=0`，后续恢复为 232，最终权威结果为 342。本次没有
+   metric call 丢失，但运行中 `progress.json` 不应在未说明语义时被当作
+   单调累计账本；分析仍以最终 result、GEPA state 和逐批 task evidence 为准。
+
+下一次质量实验前先审计 candidate 1 的差异样本、Reflection 首次超限
+trajectory 和 Checker retry 分布。不因本次 2it 运行成功就推断规则已稳定
+泛化。

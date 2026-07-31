@@ -123,10 +123,11 @@ conda run -n mini-swe python scripts/hpc_supervisor_service.py \
   status --launch-config configs/online_gepa_supervisor.yaml
 ```
 
-The Online and Offline supervisors currently poll every 30 minutes. The local
-polling wait consumes no HPC allocation; the longer Offline cadence reduces
-how often status checks and controller submissions can occur. In both cases the
-supervisor submits only when:
+The Online supervisor currently polls every 30 minutes; Offline polls every
+10 minutes. The local polling wait consumes no HPC allocation. Offline uses the
+shorter cadence because one proposal crosses several short Checker/Reflection
+task boundaries, while each status probe remains read-only and does not invoke
+an Agent. In both cases the supervisor submits only when:
 
 - the target is not reached;
 - no active controller exists;

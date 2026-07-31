@@ -130,7 +130,7 @@ The current config is [`../configs/gepa_verified_rules.yaml`](../configs/gepa_ve
 - minimal seed from `configs/gepa_initial_rules_minimal.md`;
 - epoch-shuffled train minibatches of 12;
 - instance-level validation Pareto selection;
-- two cumulative candidate-proposal iterations;
+- eight cumulative candidate-proposal iterations;
 - balanced accuracy;
 - one independent Apptainer Slurm array element per Agent, with the complete
   Checker batch submitted at once and no project-level concurrency throttle;
@@ -139,20 +139,22 @@ The current config is [`../configs/gepa_verified_rules.yaml`](../configs/gepa_ve
   Slurm.
 
 The minibatch remains 12 so each proposal must account for a meaningful
-cross-case sample rather than a very small, noisy batch. Two iterations are an
-HPC execution pilot, not a sufficient rule-quality experiment. Raw trajectories
-need not all be read in full: every case receives a structured review, every
-error receives a deeper diagnosis, and correct cases provide regression checks.
+cross-case sample rather than a very small, noisy batch. The current eight
+iterations are a fresh formal run and do not inherit candidates, scores, or
+search state from the completed local 8it baseline. Raw trajectories need not
+all be read in full: every case receives a structured review, every error
+receives a deeper diagnosis, and correct cases provide regression checks.
 
-`max_iterations=2` is the primary stop condition. GEPA's official saved state
-is cumulative, so resuming the same logical run continues toward two total
-proposals rather than adding another two. The worst-case planned evaluation
-count is `98 + 2 * (12 + 12 + 98) = 342`. `max_metric_calls=500` is a
-fail-safe, not the experiment target. Exhausting it before two proposals is
+`max_iterations=8` is the primary stop condition. GEPA's official saved state
+is cumulative, so resuming the same logical run continues toward eight total
+proposals rather than adding another eight. The worst-case planned evaluation
+count is `98 + 8 * (12 + 12 + 98) = 1074`. `max_metric_calls=1500` is a
+fail-safe, not the experiment target. Exhausting it before eight proposals is
 an anomaly to investigate rather than a reason to expand the budget silently.
 
 The current run uses the shared iteration-target supervisor contract. A local
-`tmux + caffeinate` service submits short controller allocations. A controller
+`tmux + caffeinate` service polls every 10 minutes and submits short controller
+allocations. A controller
 submits fingerprinted Checker arrays or one Reflection Agent task and then
 yields; the next controller replays the same GEPA call and collects the atomic
 output. Durable supervisor progress is the number of completed proposals:
