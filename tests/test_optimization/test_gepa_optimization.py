@@ -5408,7 +5408,7 @@ def test_checker_operational_failure_marks_run_failed(tmp_path):
     assert any(record["event"] == "optimization_failed" for record in errors)
 
 
-def test_default_gepa_config_is_eight_iteration_formal_hpc_run(monkeypatch):
+def test_default_gepa_config_is_twenty_iteration_hpc_extension(monkeypatch):
     monkeypatch.setenv("DEEPSEEK_API_KEY", "secret")
     repo_root = Path(__file__).resolve().parents[2]
     config = load_optimization_config(repo_root / "configs" / "gepa_verified_rules.yaml")
@@ -5421,9 +5421,9 @@ def test_default_gepa_config_is_eight_iteration_formal_hpc_run(monkeypatch):
     assert config.hpc.mem == "4G"
     assert config.hpc.time == "00:35:00"
     assert config.hpc.max_task_attempts == 3
-    assert config.search.max_metric_calls == 1500
-    assert config.search.projection_metric_calls == 1074
-    assert config.search.max_iterations == 8
+    assert config.search.max_metric_calls == 3000
+    assert config.search.projection_metric_calls == 2538
+    assert config.search.max_iterations == 20
     assert config.search.reflection_minibatch_size == 12
     assert config.search.primary_metric == "balanced_accuracy"
     assert config.search.parallel == 1

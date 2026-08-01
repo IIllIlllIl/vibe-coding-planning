@@ -24,9 +24,12 @@
   },
   "active_remote_offline_run": {
     "name": "offline-plan-verifier-hpc-balanced-b12-8it-formal-20260731",
-    "classification": "configured_formal",
-    "proposal_target": 8,
-    "inherits_prior_search_state": false,
+    "classification": "configured_formal_extension",
+    "initial_proposal_target": 8,
+    "proposal_target": 20,
+    "extension_selected_after_initial_completion": true,
+    "inherits_local_baseline_search_state": false,
+    "continues_same_hpc_search_state": true,
     "seed": "configs/gepa_initial_rules_minimal.md"
   },
   "archived_remote_offline_smokes": {

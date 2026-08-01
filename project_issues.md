@@ -412,3 +412,18 @@ selector 语义，但 accepted 数量不能代替整体 validation 质量。
 下一次质量实验前先审计 candidate 1 的差异样本、Reflection 首次超限
 trajectory 和 Checker retry 分布。不因本次 2it 运行成功就推断规则已稳定
 泛化。
+
+### 6.5 Formal Offline HPC 8→20 iteration extension（2026-08-01）
+
+`offline-plan-verifier-hpc-balanced-b12-8it-formal-20260731` 已以 780 metric
+calls 完成最初 8it，best candidate 3 的 validation balanced accuracy 为
+`0.731158`，seed 为 `0.706342`。在观察该结果后，决定保留同一 HPC candidate
+tree、scores、RNG 和 sampler，将累计停止目标从 8 增加到 20，用于观察更长搜索
+是否继续产生稳定改善。
+
+这是结果可见后的自适应扩展，不是预注册 20it。原 8it manifest 必须先备份，扩展
+记录必须包含原 manifest、semantic config 和 checkpoint hash。除 iteration target
+及允许单调增加的 metric-call fail-safe 外，数据、prompt、模型、Checker/Reflection、
+minibatch、metric 和 GEPA selector 均不得改变。8it 与最终 20it 结果需要分别报告。
+Supervisor 的 `--target-iterations` 是相对启动 baseline 的新增数量，因此本次为
+`12`；GEPA config 的 `max_iterations` 才是累计 `20`。

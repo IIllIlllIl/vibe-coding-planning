@@ -1,4 +1,4 @@
-# Formal eight-iteration Offline HPC Slurm-native run.
+# Formal Offline HPC run extended from 8 to 20 cumulative iterations.
 paths:
   dataset_snapshot: output/SWE-bench_Verified/verified-round1-gepa-datasets/20260614_482_fdc056ae85df
   initial_rules: configs/gepa_initial_rules_minimal.md
@@ -26,16 +26,16 @@ reflection:
   timeout: 1800
 
 search:
-  # Full 384/98 snapshot, with exactly eight cumulative GEPA proposal
+  # Full 384/98 snapshot, extended to twenty cumulative GEPA proposal
   # iterations after seed validation. The iteration stopper is the primary
-  # experimental control. 1074 metric calls is the worst-case projection
+  # experimental control. 2538 metric calls is the worst-case projection
   # when all proposals pass the minibatch gate and receive full validation:
-  # 98 + 8 * (12 parent + 12 proposal + 98 validation).
+  # 98 + 20 * (12 parent + 12 proposal + 98 validation).
   # Keep a larger metric-call ceiling only as a fail-safe; reaching it before
-  # eight durable iterations is an anomaly to audit rather than a normal stop.
-  max_iterations: 8
-  max_metric_calls: 1500
-  projection_metric_calls: 1074
+  # twenty durable iterations is an anomaly to audit rather than a normal stop.
+  max_iterations: 20
+  max_metric_calls: 3000
+  projection_metric_calls: 2538
   reflection_minibatch_size: 12
   primary_metric: balanced_accuracy
   # Local-only adapter concurrency. HPC submits every Agent as an independent
@@ -77,7 +77,7 @@ hpc:
   python_module: lang/Python/3.11
   container_module: tools/Apptainer
   python_bin: python3
-  job_name_prefix: offline-gepa-8it-formal-20260731
+  job_name_prefix: offline-gepa-20it-extension-20260801
   worker_config_path: configs/gepa_verified_rules.yaml
 
 prompts:

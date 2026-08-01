@@ -130,7 +130,8 @@ The current config is [`../configs/gepa_verified_rules.yaml`](../configs/gepa_ve
 - minimal seed from `configs/gepa_initial_rules_minimal.md`;
 - epoch-shuffled train minibatches of 12;
 - instance-level validation Pareto selection;
-- eight cumulative candidate-proposal iterations;
+- twenty cumulative candidate-proposal iterations, extended after observing the
+  completed 8it checkpoint;
 - balanced accuracy;
 - one independent Apptainer Slurm array element per Agent, with the complete
   Checker batch submitted at once and no project-level concurrency throttle;
@@ -139,17 +140,21 @@ The current config is [`../configs/gepa_verified_rules.yaml`](../configs/gepa_ve
   Slurm.
 
 The minibatch remains 12 so each proposal must account for a meaningful
-cross-case sample rather than a very small, noisy batch. The current eight
-iterations are a fresh formal run and do not inherit candidates, scores, or
-search state from the completed local 8it baseline. Raw trajectories need not
-all be read in full: every case receives a structured review, every error
-receives a deeper diagnosis, and correct cases provide regression checks.
+cross-case sample rather than a very small, noisy batch. The current HPC run
+started fresh rather than inheriting the local 8it baseline. After its first
+eight iterations completed, its stopping target was explicitly extended to 20
+while retaining the same HPC candidate tree, scores, RNG, and sampler. Because
+this extension was chosen after observing the 8it outcome, analyses must report
+the 8it checkpoint separately and must not describe 20it as a preregistered
+target. Raw trajectories need not all be read in full: every case receives a
+structured review, every error receives a deeper diagnosis, and correct cases
+provide regression checks.
 
-`max_iterations=8` is the primary stop condition. GEPA's official saved state
-is cumulative, so resuming the same logical run continues toward eight total
-proposals rather than adding another eight. The worst-case planned evaluation
-count is `98 + 8 * (12 + 12 + 98) = 1074`. `max_metric_calls=1500` is a
-fail-safe, not the experiment target. Exhausting it before eight proposals is
+`max_iterations=20` is the primary stop condition. GEPA's official saved state
+is cumulative, so the extension continues from 8 toward 20 total proposals
+rather than adding 20. The total worst-case evaluation count is
+`98 + 20 * (12 + 12 + 98) = 2538`. `max_metric_calls=3000` is a fail-safe,
+not the experiment target. Exhausting it before twenty proposals is
 an anomaly to investigate rather than a reason to expand the budget silently.
 
 The current run uses the shared iteration-target supervisor contract. A local
@@ -163,8 +168,15 @@ callback cannot overwrite a saved count of two with index one. On successful
 completion, `controller_status.json` supplies the terminal run status when the
 GEPA `result.json` has no top-level status field.
 
-The run manifest permits a metric-call ceiling increase but rejects changes to
-data, source, prompts, model/search semantics, seed, or iteration target.
+The ordinary run manifest permits a metric-call ceiling increase but rejects
+changes to data, source, prompts, model/search semantics, seed, or iteration
+target. A completed target may be increased only through the explicit
+`scripts/tools/extend_offline_iteration_target.py` operation. It verifies the
+completed checkpoint, saves the original manifest, records the old/new target
+and checkpoint hashes, snapshots the 8it terminal reports, and changes no GEPA
+search state. The extension supervisor requests 12 additional iterations from
+the observed baseline of 8; its target is therefore 12 even though GEPA's
+cumulative `max_iterations` is 20.
 
 ## HPC Task And Resume Boundary
 

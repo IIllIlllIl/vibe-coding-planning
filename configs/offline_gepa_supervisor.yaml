@@ -1,10 +1,12 @@
-# Formal eight-iteration Offline HPC Slurm-native launch identity.
+# Continue the formal Offline HPC run from 8 to 20 cumulative iterations.
 schema_version: 1
-session: offline-gepa-hpc-balanced-b12-8it-formal-20260731
-log: .local/hpc-supervisor/offline-gepa-hpc-balanced-b12-8it-formal-20260731.log
+session: offline-gepa-hpc-balanced-b12-20it-extension-20260801
+log: .local/hpc-supervisor/offline-gepa-hpc-balanced-b12-20it-extension-20260801.log
 arguments:
+  # hpc_resume_loop interprets this as additional iterations from the
+  # completed baseline observed when this new supervisor identity starts.
   - --target-iterations
-  - "8"
+  - "12"
   - --poll-interval
   - "600"
   - --slice-time
@@ -16,9 +18,9 @@ arguments:
   - --gepa-config
   - configs/gepa_verified_rules.yaml
   - --job-name
-  - offline-gepa-hpc-balanced-b12-8it-formal-20260731
+  - offline-gepa-hpc-balanced-b12-20it-extension-20260801
   - --remote-dir
-  - ~/hpc_runs/vibe-coding-planning-offline-balanced-b12-8it-formal-20260731
+  - ~/hpc_runs/vibe-coding-planning-offline-balanced-b12-20it-extension-20260801
   - --cpus
   - "1"
   - --mem
