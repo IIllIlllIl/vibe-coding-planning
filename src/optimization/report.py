@@ -338,7 +338,7 @@ def write_report(
         candidates.append(
             {
                 "candidate_idx": index,
-                "rules_sha256": candidate_hash,
+                "guideline_sha256": candidate_hash,
                 "primary_metric": primary_metric,
                 "validation_score": validation_score,
                 "metrics": metrics,
@@ -356,7 +356,7 @@ def write_report(
         encoding="utf-8",
     )
     best = result.best_candidate["rules"]
-    (run_dir / "best_rules.txt").write_text(best + "\n", encoding="utf-8")
+    (run_dir / "best_guideline.txt").write_text(best + "\n", encoding="utf-8")
     (run_dir / "candidate_tree.html").write_text(
         result.candidate_tree_html(),
         encoding="utf-8",

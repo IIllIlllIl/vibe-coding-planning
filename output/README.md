@@ -10,8 +10,8 @@ historical comparison, provenance, or reproduction.
 |---|---|---|
 | `SWE-bench_Verified/verified-round1-gepa-datasets/20260614_482_fdc056ae85df/` | Immutable formal 384/98 snapshot shared by current Online and Offline experiments | Active input; do not move or modify |
 | `SWE-bench_Verified/gepa-rules/` | Local destination for current Online and Offline GEPA results | Active output root |
-| `SWE-bench_Verified/gepa-rules/offline-plan-verifier-balanced-b12-p2-case-reviews-8it-20260727/` | Formal local Offline result under the final pre-HPC experimental flow | Completed with warnings; sole active Offline result and analysis baseline |
-| Remote `offline-plan-verifier-hpc-balanced-b12-8it-formal-20260731` run directory | Formal Offline HPC experiment, extended after its 8it checkpoint | Completed 8 proposals, then configured to continue to 20 cumulative proposals; does not inherit the local baseline |
+| `SWE-bench_Verified/gepa-rules/offline-plan-verifier-balanced-b12-p2-case-reviews-8it-20260727/` | Formal local Offline result under the final pre-HPC experimental flow | Completed with warnings; retained comparison baseline |
+| `SWE-bench_Verified/gepa-rules/offline-plan-verifier-hpc-balanced-b12-8it-formal-20260731/` | Local mirror of the formal Offline HPC experiment under the frozen strong-Checker/checklist semantics | Stopped after 14 durable proposals during attempted proposal 15; frozen analysis baseline |
 | Remote `online-planning-hpc-policy-v3-20260715` run directory | Outcome-policy-v3 formal run targeting 8 durable iterations | Active; managed by the supervisor |
 
 The active Online rule-generation flow is:
@@ -24,9 +24,9 @@ task -> Plan Agent with candidate rules -> Code Agent -> evaluator
 The active Offline rule-generation flow is:
 
 ```text
-issue + historical plan + base repository + candidate rules
-  -> repo-grounded Checker -> balanced-accuracy score
-  -> GEPA reflection -> updated plan-approval rules
+issue + historical plan + base repository + candidate guideline
+  -> repo-grounded Checker -> configured label-agreement score
+  -> GEPA reflection -> updated plan-review guideline
 ```
 
 PCT, PCC/Checker, earlier Offline GEPA runs, standalone rule extraction, old
@@ -35,15 +35,18 @@ active surface.
 
 ## Offline Result Boundary
 
-Only
-`offline-plan-verifier-balanced-b12-p2-case-reviews-8it-20260727/` remains in
-the active result root. It completed 8 proposal iterations with 670 metric
-calls, 4 accepted candidates, best candidate 1, and one recorded Reflection
-failure. Its complete manifest, GEPA state, raw Checker trajectories,
-Reflection inputs, and derived reports remain together.
+Two formal Offline results remain in the active result root. The local
+`offline-plan-verifier-balanced-b12-p2-case-reviews-8it-20260727/` run completed
+8 proposal iterations with 670 metric calls, 4 accepted candidates, best
+candidate 1, and one recorded Reflection failure. The mirrored HPC
+`offline-plan-verifier-hpc-balanced-b12-8it-formal-20260731/` run reached 14
+durable proposals, then stopped during attempted proposal 15 when the provider
+reported insufficient balance. Its manifest, GEPA state, candidate tree, raw
+Checker trajectories, Reflection evidence, and task journals are retained
+together locally.
 
-The checkpoint is structurally resume-capable only under its stored semantic
-manifest and the same pre-HPC experiment semantics. The configured
+The 20260727 checkpoint is structurally resume-capable only under its stored
+semantic manifest and the same pre-HPC experiment semantics. The configured
 `max_iterations=8` target has already been reached, so an identical resume is a
 no-op rather than a new proposal. Increasing the iteration target changes the
 semantic manifest and is rejected by the current compatibility check. Any
@@ -51,10 +54,13 @@ future extension therefore requires an explicit methodology decision; it must
 not be achieved by pointing the current 2-iteration HPC config, changed
 prompt/source hashes, or a new run identity at this directory.
 
-There is no active remote Offline result. The four recent Offline HPC
-platform-validation runs through 2026-07-30 were smoke tests rather than
-formal rule-quality experiments. Their raw outputs are preserved remotely under
-`archive/tests/offline-gepa/` and excluded from the default analysis surface:
+The 20260731 HPC result is complete only as evidence for its frozen semantic
+version. It must not be resumed under the planned prompt and metric changes;
+the redesigned experiment requires a new run identity. The four preceding
+Offline HPC platform-validation runs through 2026-07-30 were smoke tests rather
+than formal rule-quality experiments. Their raw outputs are preserved remotely
+under `archive/tests/offline-gepa/` and excluded from the default analysis
+surface:
 
 | Remote archived run | Outcome | Smoke purpose |
 |---|---|---|

@@ -1,12 +1,10 @@
-# Continue the formal Offline HPC run from 8 to 20 cumulative iterations.
+# Run the six-iteration Offline guideline behavior smoke.
 schema_version: 1
-session: offline-gepa-hpc-balanced-b12-20it-extension-20260801
-log: .local/hpc-supervisor/offline-gepa-hpc-balanced-b12-20it-extension-20260801.log
+session: offline-plan-guideline-hpc-accuracy-b12-6it-smoke-20260804
+log: .local/hpc-supervisor/offline-plan-guideline-hpc-accuracy-b12-6it-smoke-20260804.log
 arguments:
-  # hpc_resume_loop interprets this as additional iterations from the
-  # completed baseline observed when this new supervisor identity starts.
-  - --target-iterations
-  - "12"
+  # The cumulative target is read from search.max_iterations in the Offline
+  # runtime config. Supervisor is the only resume entrypoint.
   - --poll-interval
   - "600"
   - --slice-time
@@ -18,9 +16,9 @@ arguments:
   - --gepa-config
   - configs/gepa_verified_rules.yaml
   - --job-name
-  - offline-gepa-hpc-balanced-b12-20it-extension-20260801
+  - offline-plan-guideline-hpc-accuracy-b12-6it-smoke-20260804
   - --remote-dir
-  - ~/hpc_runs/vibe-coding-planning-offline-balanced-b12-20it-extension-20260801
+  - ~/hpc_runs/vibe-coding-planning-offline-guideline-accuracy-b12-6it-smoke-20260804
   - --cpus
   - "1"
   - --mem

@@ -51,8 +51,8 @@ def checker_retry_feedback(error: str) -> str:
         f"Validator error: {error}\n"
         "Perform the Checker task again and ensure the final submission satisfies "
         "the required JSON format. This feedback concerns only the output "
-        "protocol; it does not change the issue, plan, candidate rules, or "
-        "approval criteria."
+        "protocol; it does not change the issue, plan, candidate guideline, "
+        "or decision task."
     )
 
 
@@ -224,6 +224,7 @@ class DockerChecker:
             exit_status, final_submission = agent.run(
                 task=case.issue_description,
                 plan=case.plan,
+                candidate_guideline=rules,
                 candidate_rules=rules,
                 retry_feedback=retry_feedback,
             )

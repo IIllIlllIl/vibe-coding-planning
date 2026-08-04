@@ -96,7 +96,7 @@ def _semantic_config(
     return {
         "dataset": _dataset_fingerprint(config.dataset_snapshot),
         "source": _source_fingerprint(),
-        "initial_rules_sha256": text_sha256(initial_rules),
+        "initial_guideline_sha256": text_sha256(initial_rules),
         "checker": asdict(config.checker),
         "reflection": asdict(config.reflection),
         "search": search,
@@ -121,7 +121,10 @@ def _semantic_config(
             "data_id": "instance_id",
             "cache_evaluation": True,
             "track_best_outputs": True,
+            # ``rules`` is the shared GEPA component key; the Offline artifact
+            # represented by that string is a plan-review guideline.
             "candidate_components": ["rules"],
+            "offline_artifact": "guideline",
         },
     }
 

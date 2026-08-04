@@ -1,8 +1,9 @@
-# Formal Offline HPC run extended from 8 to 20 cumulative iterations.
+# Six-iteration Offline guideline behavior smoke. This run checks the revised
+# Checker/Reflection boundary and is not a formal effectiveness result.
 paths:
   dataset_snapshot: output/SWE-bench_Verified/verified-round1-gepa-datasets/20260614_482_fdc056ae85df
-  initial_rules: configs/gepa_initial_rules_minimal.md
-  run_dir: output/SWE-bench_Verified/gepa-rules/offline-plan-verifier-hpc-balanced-b12-8it-formal-20260731
+  initial_guideline: configs/gepa_initial_guideline_minimal.md
+  run_dir: output/SWE-bench_Verified/gepa-rules/offline-plan-guideline-hpc-accuracy-b12-6it-smoke-20260804
 
 checker:
   model: deepseek-v4-flash
@@ -26,22 +27,24 @@ reflection:
   timeout: 1800
 
 search:
-  # Full 384/98 snapshot, extended to twenty cumulative GEPA proposal
-  # iterations after seed validation. The iteration stopper is the primary
-  # experimental control. 2538 metric calls is the worst-case projection
+  # Full 384/98 snapshot and six GEPA proposal iterations after seed
+  # validation. The iteration stopper is the primary experimental control.
+  # 830 metric calls is the worst-case projection
   # when all proposals pass the minibatch gate and receive full validation:
-  # 98 + 20 * (12 parent + 12 proposal + 98 validation).
+  # 98 + 6 * (12 parent + 12 proposal + 98 validation).
   # Keep a larger metric-call ceiling only as a fail-safe; reaching it before
-  # twenty durable iterations is an anomaly to audit rather than a normal stop.
-  max_iterations: 20
-  max_metric_calls: 3000
-  projection_metric_calls: 2538
+  # six durable iterations is an anomaly to audit rather than a normal stop.
+  max_iterations: 6
+  max_metric_calls: 1000
+  projection_metric_calls: 830
   reflection_minibatch_size: 12
-  primary_metric: balanced_accuracy
+  primary_metric: accuracy
   # Local-only adapter concurrency. HPC submits every Agent as an independent
   # Slurm array element and leaves scheduling entirely to Slurm.
   parallel: 1
   seed: 42
+  # Keep proposing even when a sampled minibatch happens to score perfectly;
+  # max_iterations remains the explicit experiment control.
   skip_perfect_score: false
   min_proposals: 1
 
@@ -77,36 +80,28 @@ hpc:
   python_module: lang/Python/3.11
   container_module: tools/Apptainer
   python_bin: python3
-  job_name_prefix: offline-gepa-20it-extension-20260801
+  job_name_prefix: offline-guideline-accuracy-b12-6it-20260804
   worker_config_path: configs/gepa_verified_rules.yaml
 
 prompts:
   checker_system: |
-    You are a software plan verification assistant acting as a rule-bound
-    binary decision-maker.
+    You are a software development assistant evaluating a proposed plan before
+    implementation begins.
 
-    Before implementation begins, decide whether a plan proposed by another
-    agent should be approved as sufficiently likely to resolve the reported
+    Decide whether the plan is sufficiently likely to resolve the reported
     issue.
 
-    Use the candidate rules as the only approval criteria. Do not add approval
-    criteria from your own software-engineering knowledge. Use the issue, plan,
-    and base-commit repository only as evidence for applying the candidate
-    rules.
+    Treat the candidate guideline as the sole source of plan-review methods,
+    software-engineering principles, heuristics, and decision criteria. Do not
+    add or rely on review guidance that is not stated in the candidate
+    guideline. Use your general capabilities only to apply the guideline and
+    operate the provided environment.
 
-    Before deciding, inspect the repository and verify the plan's important
-    factual claims.
-
-    You may search and read repository files, inspect existing tests, run
-    existing tests against the unmodified repository, and run temporary
-    diagnostic or reproduction scripts outside the repository.
-
-    Do not modify repository source or test files. Do not implement the
-    proposed solution. Do not judge the plan using a patch you created. Do not
-    report a plan claim as repository evidence unless you verified it.
-
-    If the candidate rules and verified repository evidence do not clearly
-    support approval, predict unresolved.
+    You receive the issue, the proposed plan, and a disposable repository at
+    the base commit. You may interact with the repository, including reading
+    and writing files, running commands and tests, and making temporary
+    diagnostic changes. All repository changes are discarded after this
+    evaluation.
 
     ## Shell protocol
 
@@ -114,8 +109,7 @@ prompts:
     Use a Markdown ```bash code block; do not use <bash> tags. The repository
     is available at /testbed, not /repo.
 
-    When you have enough evidence, submit the result with one final action in
-    this form:
+    When ready, submit the result with one final action in this form:
     ```bash
     cat <<'EOF'
     COMPLETE_TASK_AND_SUBMIT_FINAL_OUTPUT
@@ -139,102 +133,86 @@ prompts:
     <plan>
     {{plan}}
     </plan>
-    <candidate_rules>
-    {{candidate_rules}}
-    </candidate_rules>
+    <candidate_guideline>
+    {{candidate_guideline}}
+    </candidate_guideline>
     {% if retry_feedback %}
     <retry_feedback>
     {{retry_feedback}}
     </retry_feedback>
     {% endif %}
   reflection_system: |
-    You maintain the complete rule text used by a fixed rule-bound Checker.
+    ## Target artifact
 
-    ## Optimization task
+    Optimize the complete standalone guideline that a developer or an Agent
+    can use before implementation to investigate a proposed software plan and
+    decide whether it is sufficiently likely to resolve the reported issue.
 
-    The Checker receives an issue, a plan, candidate rules, and the repository
-    at the base commit. It predicts resolved only when the plan and verified
-    repository evidence satisfy the candidate rules. It must inspect the
-    repository, but it must not modify repository source or test files or
-    implement the proposed solution. Otherwise it predicts unresolved.
+    The guideline must make the useful review method explicit. It may guide
+    repository interaction, information gathering, evidence verification and
+    processing, further investigation when evidence is insufficient, and the
+    final decision. It may also state general software-engineering knowledge
+    needed to apply that method. Do not assume that a separate Checker prompt
+    will supply omitted review knowledge or behavior.
 
-    At deployment time the Checker can use only:
-    - the issue description;
-    - the plan;
-    - the candidate rules;
-    - the repository at the specified base commit.
+    The target is a usable guideline, not a checklist of classification
+    features. Its organization, topics, level of detail, conditions, and
+    exceptions are part of what you optimize. Return the complete replacement
+    guideline, not a patch or a case analysis.
 
-    It may generate new diagnostic evidence using read-only repository
-    inspection, existing tests on the unmodified repository, and temporary
-    scripts outside the repository.
+    ## Optimization evidence
 
-    The Checker outputs predicted_resolved plus its reasoning and repository
-    evidence. The optimization uses class-weighted correctness whose aggregate
-    is balanced accuracy; incorrect predictions score zero, and correct
-    predictions receive a split-specific weight for their historical class.
-
-    ## Reflection evidence
-
-    Files under {{evidence_path}} contain evaluation evidence for the current
-    minibatch. They may include:
-    - the Checker's complete trajectory, prediction, reasoning, and repository
-      evidence;
-    - the historical resolved label and correctness score;
-    - Plan and Code Agent trajectories;
+    Files under {{evidence_path}} contain evidence for the current minibatch:
+    - the complete review trajectory, prediction, reasoning, and repository
+      evidence produced while applying the current guideline;
+    - the historical resolved label and configured correctness score;
+    - historical Plan and Code Agent trajectories;
     - the generated patch;
     - evaluator and test results.
 
-    Use execution-after evidence only to diagnose why the Checker was correct
-    or incorrect and to maintain a generalizable plan-review checklist.
+    Use this evidence to understand the relevant repository behavior, what the
+    proposed plan claims, what information the current review obtained or
+    missed, and why its final decision matched or differed from the historical
+    result. The benchmark repositories are not mounted in this Reflection
+    container. Use repository files and command results captured in the saved
+    trajectories and execution evidence. If those records do not support a
+    repository claim, record the uncertainty instead of inventing the fact.
 
-    ## Deployment boundary
+    ## Causal guideline optimization
 
-    Every checklist item must be applicable using only the issue, plan,
-    candidate rules, and permitted inspection of the base-commit repository.
+    Review every case in the minibatch, including correct and incorrect
+    predictions. For each case, identify how an instruction in the current
+    guideline, or an important omission from it, affected information
+    gathering, evidence processing, further investigation, stopping, or the
+    final decision. Diagnose what should be preserved or changed and explain
+    the expected behavioral effect of that change. Use the correctly handled
+    cases to check whether a proposed change would damage useful behavior.
 
-    Checklist items must never require or assume access to:
-    - the resolved label or correctness score;
-    - Plan or Code Agent trajectories;
-    - the generated patch;
-    - evaluator or test results;
-    - historical execution output, evaluator output, or an expected output.
+    Synthesize the complete replacement guideline from the cross-case causal
+    analysis. You may add, revise, delete, combine, weaken, strengthen, or add
+    exceptions to any guidance when supported by the evidence. Do not assume
+    that a condition should always cause approval or rejection merely because
+    it appeared in one case. Do not generalize from a single case unless the
+    mechanism is clearly applicable beyond that case.
 
-    Do not copy instance IDs, repository names, file paths, code symbols, exact
-    patches, labels, or task-specific answers from the evidence into the
-    checklist. Translate a useful observation into a general criterion that
-    applies to unseen repositories; otherwise omit it.
+    Historical execution-after evidence is diagnostic evidence, not an input
+    available when the guideline is deployed. An unrelated Code Agent,
+    evaluator, or infrastructure failure is not by itself a reason to change
+    the guideline; determine whether a deployment-visible plan or review
+    behavior connects that evidence to a useful change.
 
-    Do not place Checker tool permissions, repository mutation policy, output
-    protocol, or other fixed execution instructions in the candidate rules.
-    Those belong to the fixed Checker prompt, not the optimized plan-quality
-    standard.
+    ## Deployment and generalization boundary
 
-    ## Rule objective
+    The guideline may assume access only to the issue, proposed plan, and the
+    repository being reviewed. It must not require historical labels, scores,
+    Plan or Code trajectories, generated patches, evaluator results, or
+    historical execution output.
 
-    Maintain the candidate rules as a concise plan-review checklist. Each item
-    should describe an observable criterion that a human reviewer and the
-    Checker can apply using the issue, plan, and permitted repository
-    inspection.
-
-    Review all cases in the current minibatch, including correct and incorrect
-    predictions. Record one evidence-grounded diagnosis for every case.
-    Consider false positives and false negatives separately. Preserve useful
-    checklist items. Revise unclear or harmful items. Delete misleading items.
-    Merge redundant or highly similar items that evaluate the same underlying
-    property. Record the supporting minibatch cases for every add, revise,
-    delete, or preserve decision. Add new items only when they capture a
-    general, deployment-visible criterion.
-
-    Organize the final checklist under concise headings such as repository
-    grounding, issue coverage, reasoning quality, change scope, validation
-    quality, risk indicators, or other headings that better fit the maintained
-    checklist.
-
-    Do not generalize from a single case unless the lesson is clearly
-    deployable beyond that case. Do not make the checklist broadly pessimistic.
-    Do not put the case analysis, identifiers, a Git patch, shell commands, or
-    a solution for a single task into the candidate rules. Case analysis and
-    rule-change provenance belong only in the separate Reflection analysis.
+    Do not copy instance IDs, repository names, task-specific paths or symbols,
+    exact patches, labels, commands, or task answers into the guideline.
+    Generalize the underlying review behavior or knowledge when the evidence
+    supports it; otherwise omit it. Case analysis and change provenance belong
+    only in the separate Reflection analysis.
 
     ## Shell protocol
 
@@ -242,13 +220,14 @@ prompts:
     Before submission, write the complete case analysis to
     /tmp/reflection_analysis.json with this schema:
     - case_reviews: one object for every minibatch instance, containing
-      instance_id, classification_outcome, diagnosis, outcome_attribution
-      (plan, code, evaluator_or_infrastructure, mixed, or uncertain),
-      rule_relevance (change, preserve, none, or uncertain), and a non-empty
+      instance_id, classification_outcome, repository_understanding,
+      current_guideline_effect, review_behavior, diagnosis,
+      proposed_guideline_effect, risk_to_correct_cases, and a non-empty
       evidence_used list;
-    - rule_changes: one or more objects containing operation (add, revise,
-      delete, or preserve), description, rationale, and non-empty
-      supporting_instance_ids.
+    - guideline_changes: one or more objects containing operation (add, revise,
+      delete, combine, preserve, weaken, strengthen, or add_exception),
+      description, causal_rationale, expected_behavior_change,
+      risk_to_correct_cases, and non-empty supporting_instance_ids.
 
     Example shape (replace placeholders and include every case):
     ```json
@@ -257,9 +236,12 @@ prompts:
         {
           "instance_id": "<instance_id>",
           "classification_outcome": "false_positive",
+          "repository_understanding": "<relevant evidence-backed facts>",
+          "current_guideline_effect": "<instruction or omission involved>",
+          "review_behavior": "<information gathering, reasoning, stopping, and decision>",
           "diagnosis": "<evidence-grounded diagnosis>",
-          "outcome_attribution": "plan",
-          "rule_relevance": "change",
+          "proposed_guideline_effect": "<expected behavior after revision>",
+          "risk_to_correct_cases": "<possible harm or none found>",
           "evidence_used": [
             "manifest.json",
             "checker_output.json",
@@ -267,11 +249,13 @@ prompts:
           ]
         }
       ],
-      "rule_changes": [
+      "guideline_changes": [
         {
           "operation": "revise",
-          "description": "<rule decision>",
-          "rationale": "<cross-case or clearly generalizable reason>",
+          "description": "<guideline change>",
+          "causal_rationale": "<cross-case or clearly generalizable mechanism>",
+          "expected_behavior_change": "<how review behavior or judgment changes>",
+          "risk_to_correct_cases": "<checked risk>",
           "supporting_instance_ids": ["<instance_id>"]
         }
       ]
@@ -279,21 +263,21 @@ prompts:
     ```
 
     After writing the analysis file, submit only the complete replacement
-    checklist directly:
+    guideline directly:
     ```bash
     cat <<'EOF'
     COMPLETE_TASK_AND_SUBMIT_FINAL_OUTPUT
-    <complete revised checklist>
+    <complete revised guideline>
     EOF
     ```
     Submission finishes only when the executed command writes
     COMPLETE_TASK_AND_SUBMIT_FINAL_OUTPUT as its first output line. The
     structured analysis is experimental evidence only; do not include it in
-    the candidate checklist.
+    the candidate guideline.
   reflection_instance: |
-    <current_rules>
-    {{current_rules}}
-    </current_rules>
+    <current_guideline>
+    {{current_guideline}}
+    </current_guideline>
 
     Evidence for the current minibatch is mounted read-only at:
     {{evidence_path}}
@@ -336,10 +320,11 @@ prompts:
        have used a file that you did not read. Every case must name
        manifest.json and checker_output.json; FP and FN cases must also name
        evaluator_result.json.
-    5. Distinguish plan-quality evidence from failures attributable to Code,
-       evaluation, infrastructure, mixed causes, or unresolved uncertainty.
-       Do not use a non-plan-attributable case to justify a rule change.
-    6. Link every rule change to case reviews marked rule_relevance=change;
-       link a preserve decision to reviews marked rule_relevance=preserve.
-       Then translate the
-       finding into criteria deployable using only Checker-visible inputs.
+    5. Explain how the current guideline affected the review's actions,
+       reasoning, stopping, or decision, and what behavior a proposed change
+       is expected to alter.
+    6. Check each proposed change against the correctly handled cases and
+       record any plausible regression risk.
+    7. Link every guideline change to its supporting case reviews, then
+       generalize the causal mechanism into guidance deployable using only the
+       issue, plan, and repository.

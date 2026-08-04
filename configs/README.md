@@ -39,16 +39,22 @@ poll cadence, controller resources, or remote workdir belongs in
 
 | Config | Runtime | Purpose |
 |---|---|---|
-| `gepa_verified_rules.yaml` | ULHPC Apptainer | Formal `20260731` run extended from 8 to 20 cumulative proposals: full 384/98 split, minibatch 12, balanced accuracy, minimal seed, three task attempts, and `1 CPU / 4G / 35min` per Agent. The extension retains the original run directory and GEPA state. |
-| `offline_gepa_supervisor.yaml` | Local tmux+caffeinate | Matching 20it extension launch identity. It uses 10-minute polling, `1 CPU / 4G / 10min` controller slices, and requires an unchanged runtime-config hash, Git commit, and clean worktree before submission. |
+| `gepa_verified_rules.yaml` | ULHPC Apptainer | Six-iteration behavior smoke for the revised Offline guideline design: minimal Checker, causal standalone-guideline Reflection, `accuracy`, minibatch 12, and a new `20260804` identity. It is a method-behavior check, not a formal effectiveness result. |
+| `offline_gepa_supervisor.yaml` | Local tmux+caffeinate | Matching native-resume launch identity. It reads the cumulative target from the Offline runtime config, uses 10-minute polling and `1 CPU / 4G / 10min` controller slices, and requires an unchanged runtime-config hash, Git commit, and clean worktree before submission. |
 | `offline_gepa_hpc_smoke_2x2_20260728.yaml` | ULHPC Apptainer | Environment-only 2-train/2-validation, 1-iteration smoke. Its scores are not rule-quality evidence. |
-| `gepa_initial_rules_minimal.md` | Prompt text | Minimal current Offline seed intended to leave room for GEPA exploration. |
+| `gepa_initial_guideline_minimal.md` | Prompt text | Minimal current Offline guideline seed intended to leave room for GEPA exploration. |
+| `gepa_initial_rules_minimal.md` | Historical prompt text | Frozen pre-guideline seed retained for archived configs and provenance. |
 
 `search.max_iterations` is the primary experimental stop condition and is an
-absolute cumulative proposal target across resume. `max_metric_calls=500` is
-only a fail-safe above the 342-call worst-case projection. Offline uses its own
+absolute cumulative proposal target across resume. For the current six-
+iteration smoke, `max_metric_calls=1000` is only a fail-safe above the 830-call
+worst-case projection. Offline uses its own
 launch config with the shared supervisor service. See
 [`../docs/offline-gepa.md`](../docs/offline-gepa.md).
+
+The current Offline smoke uses a dedicated identity. Its primary metric is
+`accuracy`, and the candidate artifact is a standalone plan-review guideline
+rather than a fixed-Checker-dependent approval checklist.
 
 ## Representative Paused Workflows
 

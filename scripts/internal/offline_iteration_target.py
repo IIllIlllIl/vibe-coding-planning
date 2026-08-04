@@ -1,23 +1,18 @@
-#!/usr/bin/env python3
-"""Explicitly extend a completed Offline GEPA iteration target."""
+"""Offline iteration-target transition used internally by the supervisor."""
 
-from __future__ import annotations
-
-import argparse
 import hashlib
 import json
 import os
 from pathlib import Path
 import shutil
 import tempfile
-from typing import Any
 
 
-def _sha256_bytes(value: bytes) -> str:
+def _sha256_bytes(value):
     return hashlib.sha256(value).hexdigest()
 
 
-def _file_sha256(path: Path) -> str:
+def _file_sha256(path):
     digest = hashlib.sha256()
     with path.open("rb") as handle:
         for chunk in iter(lambda: handle.read(1024 * 1024), b""):
@@ -25,29 +20,27 @@ def _file_sha256(path: Path) -> str:
     return digest.hexdigest()
 
 
-def _semantic_sha256(value: dict[str, Any]) -> str:
+def _semantic_sha256(value):
     encoded = json.dumps(value, ensure_ascii=False, sort_keys=True).encode()
     return _sha256_bytes(encoded)
 
 
-def _atomic_json(path: Path, value: Any) -> None:
-    fd, temporary = tempfile.mkstemp(dir=path.parent, prefix=f".{path.name}.")
+def _atomic_json(path, value):
+    fd, temporary = tempfile.mkstemp(dir=str(path.parent), prefix=".%s." % path.name)
     try:
         with os.fdopen(fd, "w", encoding="utf-8") as handle:
             json.dump(value, handle, indent=2, ensure_ascii=False, sort_keys=True)
             handle.write("\n")
-        os.replace(temporary, path)
+        os.replace(temporary, str(path))
     finally:
         if os.path.exists(temporary):
             os.unlink(temporary)
 
 
-def extend_iteration_target(
-    run_dir: Path,
-    *,
-    new_target: int,
-    reason: str,
-) -> dict[str, Any]:
+def extend_iteration_target(run_dir, new_target, reason):
+    """Reopen a completed Offline run by increasing only its iteration target."""
+
+    run_dir = Path(run_dir)
     manifest_path = run_dir / "run_manifest.json"
     state_path = run_dir / "gepa_state.bin"
     resume_path = run_dir / "gepa_resume_state.json"
@@ -56,10 +49,10 @@ def extend_iteration_target(
     required = (manifest_path, state_path, resume_path, progress_path, result_path)
     missing = [str(path) for path in required if not path.is_file()]
     if missing:
-        raise ValueError(f"completed checkpoint is missing files: {missing}")
+        raise ValueError("completed checkpoint is missing files: %s" % missing)
 
     manifest_bytes = manifest_path.read_bytes()
-    manifest = json.loads(manifest_bytes)
+    manifest = json.loads(manifest_bytes.decode("utf-8"))
     semantic = manifest.get("semantic_config")
     if not isinstance(semantic, dict):
         raise ValueError("run manifest has no semantic_config object")
@@ -71,9 +64,10 @@ def extend_iteration_target(
     if not isinstance(search, dict) or search.get("max_iterations") is None:
         raise ValueError("run manifest has no finite max_iterations")
     old_target = int(search["max_iterations"])
-    if new_target <= old_target:
+    if int(new_target) <= old_target:
         raise ValueError(
-            f"new target must increase the stored target ({new_target} <= {old_target})"
+            "new target must increase the stored target (%s <= %s)"
+            % (new_target, old_target)
         )
 
     progress = json.loads(progress_path.read_text(encoding="utf-8"))
@@ -84,22 +78,28 @@ def extend_iteration_target(
     if state_i + 1 != old_target:
         raise ValueError(
             "checkpoint iteration does not equal the stored completed target "
-            f"({state_i + 1} != {old_target})"
+            "(%s != %s)" % (state_i + 1, old_target)
         )
 
-    backup_path = run_dir / f"run_manifest.before_iteration_extension_{old_target}.json"
+    backup_path = run_dir / (
+        "run_manifest.before_iteration_extension_%s.json" % old_target
+    )
+    checkpoint_dir = run_dir / "iteration_checkpoints" / (
+        "iteration_%04d" % old_target
+    )
     if backup_path.exists():
-        raise ValueError(f"manifest backup already exists: {backup_path}")
-    backup_path.write_bytes(manifest_bytes)
-
-    checkpoint_dir = run_dir / "iteration_checkpoints" / f"iteration_{old_target:04d}"
+        raise ValueError("manifest backup already exists: %s" % backup_path)
     if checkpoint_dir.exists():
-        raise ValueError(f"iteration checkpoint already exists: {checkpoint_dir}")
+        raise ValueError("iteration checkpoint already exists: %s" % checkpoint_dir)
+
     checkpoint_dir.mkdir(parents=True)
+    backup_path.write_bytes(manifest_bytes)
     report_names = (
         "result.json",
         "candidate_metrics.json",
         "cost_report.json",
+        "best_guideline.txt",
+        # Historical checkpoints used this name; retain it when present.
         "best_rules.txt",
         "candidate_tree.html",
         "candidates.json",
@@ -110,23 +110,22 @@ def extend_iteration_target(
     for name in report_names:
         source = run_dir / name
         if source.is_file():
-            shutil.copy2(source, checkpoint_dir / name)
-    shutil.copy2(backup_path, checkpoint_dir / backup_path.name)
+            shutil.copy2(str(source), str(checkpoint_dir / name))
+    shutil.copy2(str(backup_path), str(checkpoint_dir / backup_path.name))
 
-    search["max_iterations"] = new_target
+    search["max_iterations"] = int(new_target)
     previous_manifest_sha256 = _sha256_bytes(manifest_bytes)
-    previous_semantic_sha256 = stored_semantic_hash
     history = manifest.setdefault("iteration_target_extensions", [])
     if not isinstance(history, list):
         raise ValueError("iteration_target_extensions must be a list")
     history.append(
         {
             "from": old_target,
-            "to": new_target,
-            "additional_iterations": new_target - old_target,
+            "to": int(new_target),
+            "additional_iterations": int(new_target) - old_target,
             "reason": reason,
             "previous_manifest_sha256": previous_manifest_sha256,
-            "previous_semantic_sha256": previous_semantic_sha256,
+            "previous_semantic_sha256": stored_semantic_hash,
             "checkpoint_gepa_state_i": state_i,
             "checkpoint_sha256": _file_sha256(state_path),
             "backup_file": backup_path.name,
@@ -134,40 +133,17 @@ def extend_iteration_target(
         }
     )
     manifest.setdefault("initial_max_iterations", old_target)
-    manifest["latest_max_iterations"] = new_target
+    manifest["latest_max_iterations"] = int(new_target)
     manifest["semantic_sha256"] = _semantic_sha256(semantic)
     _atomic_json(manifest_path, manifest)
-    # The supervisor treats a root result.json as terminal. Its immutable 8it
-    # copy is retained above; removing only this derived terminal marker lets
-    # the ordinary resume path collect the existing GEPA checkpoint.
     result_path.unlink()
     return {
         "run_dir": str(run_dir),
         "from": old_target,
-        "to": new_target,
-        "additional_iterations": new_target - old_target,
+        "to": int(new_target),
+        "additional_iterations": int(new_target) - old_target,
         "backup_file": backup_path.name,
         "report_checkpoint_dir": str(checkpoint_dir.relative_to(run_dir)),
         "previous_manifest_sha256": previous_manifest_sha256,
         "new_semantic_sha256": manifest["semantic_sha256"],
     }
-
-
-def main() -> None:
-    parser = argparse.ArgumentParser()
-    parser.add_argument("--run-dir", type=Path, required=True)
-    parser.add_argument("--new-target", type=int, required=True)
-    parser.add_argument("--reason", required=True)
-    args = parser.parse_args()
-    if args.new_target < 1:
-        raise SystemExit("--new-target must be positive")
-    result = extend_iteration_target(
-        args.run_dir,
-        new_target=args.new_target,
-        reason=args.reason,
-    )
-    print(json.dumps(result, indent=2, sort_keys=True))
-
-
-if __name__ == "__main__":
-    main()

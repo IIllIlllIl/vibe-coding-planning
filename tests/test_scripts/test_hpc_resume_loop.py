@@ -77,6 +77,8 @@ if [[ "$cmd" == *"VIBE_HPC_RUN_STATUS"* ]]; then
   tail -n +2 {status_sequence} > {status_sequence}.tmp
   mv {status_sequence}.tmp {status_sequence}
   printf '%s\\n' "$line"
+elif [[ "$cmd" == *"VIBE_OFFLINE_TARGET_EXTENSION"* ]]; then
+  printf '{{"from":8,"to":20,"additional_iterations":12}}\\n'
 elif [[ "$cmd" == squeue* ]]; then
   exit 0
 elif [[ "$cmd" == sacct* ]]; then
@@ -279,7 +281,6 @@ def test_hpc_supervisor_retries_status_check_failure_without_submitting(
             str(tmp_path / "state.json"),
             "--batch-script",
             str(fake_batch),
-            "--gepa-rules",
             "--gepa-config",
             str(config),
             "--submit",
@@ -535,11 +536,11 @@ def test_hpc_supervisor_waits_for_workers_without_submitting(tmp_path: Path) -> 
     assert "waiting without submission" in result.stdout
     assert not batch_log.exists()
     state = json.loads((tmp_path / "state.json").read_text(encoding="utf-8"))
-    assert state["baseline_iterations"] == 2
-    assert state["target_completed_iterations"] == 5
+    assert state["target_iterations"] == 3
+    assert state["last_completed_iterations"] == 2
 
 
-def test_hpc_supervisor_stops_at_additional_iteration_target(tmp_path: Path) -> None:
+def test_hpc_supervisor_stops_at_cumulative_iteration_target(tmp_path: Path) -> None:
     fake_bin = tmp_path / "bin"
     fake_bin.mkdir()
     local_root = REPO_ROOT / ".tmp_hpc_smoke" / "test_hpc_supervisor_target"
@@ -580,13 +581,12 @@ def test_hpc_supervisor_stops_at_additional_iteration_target(tmp_path: Path) -> 
             "python",
             str(SCRIPT),
             "--target-iterations",
-            "3",
+            "5",
             "--once",
             "--state-file",
             str(state_path),
             "--batch-script",
             str(fake_batch),
-            "--gepa-rules",
             "--gepa-config",
             str(config),
             "--submit",
@@ -601,6 +601,9 @@ def test_hpc_supervisor_stops_at_additional_iteration_target(tmp_path: Path) -> 
     assert result.returncode == 0, result.stderr
     assert "iteration target reached" in result.stdout
     assert not batch_log.exists()
+    migrated = json.loads(state_path.read_text(encoding="utf-8"))
+    assert migrated["schema_version"] == 2
+    assert migrated["target_iterations"] == 5
 
 
 def test_hpc_supervisor_rejects_completion_before_iteration_target(
@@ -633,7 +636,6 @@ def test_hpc_supervisor_rejects_completion_before_iteration_target(
             str(tmp_path / "state.json"),
             "--batch-script",
             str(fake_batch),
-            "--gepa-rules",
             "--gepa-config",
             str(config),
             "--submit",
@@ -646,7 +648,7 @@ def test_hpc_supervisor_rejects_completion_before_iteration_target(
     )
 
     assert result.returncode == 2
-    assert "completed before iteration target" in result.stderr
+    assert "completed before cumulative iteration target" in result.stderr
     assert not batch_log.exists()
 
 
@@ -672,16 +674,14 @@ def test_hpc_supervisor_accepts_offline_controller_completion_status(
     state_path.write_text(
         json.dumps(
             {
-                "schema_version": 1,
+                "schema_version": 2,
                 "submissions": 1,
                 "remote_run_snapshot": (
                     "~/hpc_run_state/vibe-coding-planning/"
                     ".tmp_hpc_smoke/test_offline_completion/run"
                 ),
                 "job_name": "vibe-gepa",
-                "target_additional_iterations": 2,
-                "baseline_iterations": 0,
-                "target_completed_iterations": 2,
+                "target_iterations": 2,
                 **_config_identity(config),
             }
         ),
@@ -716,3 +716,69 @@ def test_hpc_supervisor_accepts_offline_controller_completion_status(
     state = json.loads(state_path.read_text(encoding="utf-8"))
     assert state["last_completed_iterations"] == 2
     assert state["status"] == "completed"
+
+
+def test_offline_supervisor_natively_extends_completed_target_and_resumes(
+    tmp_path: Path,
+) -> None:
+    fake_bin = tmp_path / "bin"
+    fake_bin.mkdir()
+    local_root = REPO_ROOT / ".tmp_hpc_smoke" / "test_native_offline_extension"
+    config = _write_config(local_root)
+    config.write_text(
+        config.read_text(encoding="utf-8").replace(
+            "  max_metric_calls: 1\n",
+            "  max_metric_calls: 1\n  max_iterations: 20\n",
+        ),
+        encoding="utf-8",
+    )
+    fake_batch = tmp_path / "hpc_submit_batch.sh"
+    batch_log = tmp_path / "batch.log"
+    ssh_log = tmp_path / "ssh.log"
+    statuses = tmp_path / "statuses.txt"
+    statuses.write_text(
+        "\n".join(
+            [
+                '{"state":"result","status":"completed",'
+                '"completed_iterations":8,"first_observed_completed_iterations":0,'
+                '"active_controllers":[],"active_workers":[]}',
+                '{"state":"resumable","completed_iterations":8,'
+                '"first_observed_completed_iterations":0,'
+                '"active_controllers":[],"active_workers":[]}',
+            ]
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+    _fake_batch_script(fake_batch, batch_log)
+    _fake_ssh(fake_bin / "ssh", statuses, ssh_log)
+
+    result = subprocess.run(
+        [
+            "python",
+            str(SCRIPT),
+            "--once",
+            "--state-file",
+            str(tmp_path / "state.json"),
+            "--batch-script",
+            str(fake_batch),
+            "--gepa-rules",
+            "--gepa-config",
+            str(config),
+            "--submit",
+        ],
+        cwd=REPO_ROOT,
+        capture_output=True,
+        text=True,
+        check=False,
+        env=_env(fake_bin),
+    )
+
+    assert result.returncode == 0, (result.stdout, result.stderr)
+    assert "extended completed Offline target from=8 to=20" in result.stdout
+    assert "VIBE_OFFLINE_TARGET_EXTENSION" in ssh_log.read_text(encoding="utf-8")
+    assert batch_log.read_text(encoding="utf-8").count("--submit") == 1
+    state = json.loads((tmp_path / "state.json").read_text(encoding="utf-8"))
+    assert state["schema_version"] == 2
+    assert state["target_iterations"] == 20
+    assert state["last_iteration_target_extension"]["from"] == 8

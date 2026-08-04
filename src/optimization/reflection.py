@@ -1,4 +1,4 @@
-"""Isolated evidence bundles and mini-swe-agent rule proposer."""
+"""Isolated evidence bundles and mini-swe-agent guideline proposer."""
 
 from __future__ import annotations
 
@@ -25,16 +25,16 @@ from src.optimization.audit import (
 from src.optimization.config import OptimizationConfig
 
 _REFLECTION_REPAIR_INSTANCE_TEMPLATE = """
-<proposed_rules>
-{{current_rules}}
-</proposed_rules>
+<proposed_guideline>
+{{current_guideline}}
+</proposed_guideline>
 <contamination_hits>
 {{contamination_hits}}
 </contamination_hits>
 
-Rewrite the complete rules once to remove or generalize every listed
-case-specific string. Preserve the general review criteria, do not introduce
-new criteria, and follow the shell submission protocol from the system prompt.
+Rewrite the complete guideline once to remove or generalize every listed
+case-specific string. Preserve its general review method, do not introduce new
+guidance, and follow the shell submission protocol from the system prompt.
 """
 
 def _write_json(path: Path, value: Any) -> None:
@@ -136,7 +136,7 @@ def find_candidate_contamination(
     rules: str,
     records: Sequence[Mapping[str, Any]],
 ) -> list[dict[str, str]]:
-    """Find exact, high-confidence case identifiers copied into candidate rules.
+    """Find exact case identifiers copied into a candidate guideline.
 
     This deliberately avoids fuzzy matching. A dot alone does not make a
     Checker evidence symbol code-specific because it is also ordinary sentence
@@ -194,14 +194,14 @@ def _validate_reflection_submission(
 ) -> str:
     if not submission.strip():
         raise ValueError(
-            "reflection agent submitted empty candidate rules "
+            "reflection agent submitted an empty candidate guideline "
             f"(exit_status={exit_status}, model_calls={model_calls})"
         )
     proposed = submission.strip()
     if "diff --git " in proposed:
-        raise ValueError("reflection agent produced a patch instead of rules")
+        raise ValueError("reflection agent produced a patch instead of a guideline")
     if proposed == parent_rules.strip():
-        raise ValueError("reflection agent produced rules identical to its parent")
+        raise ValueError("reflection agent produced a guideline identical to its parent")
     return proposed
 
 
@@ -315,8 +315,9 @@ def run_reflection_contamination_repair(
                 exit_status, submission = agent.run(
                     task=(
                         "Remove the detected case-specific strings from the "
-                        "complete Checker rules."
+                        "complete review guideline."
                     ),
+                    current_guideline=proposed_rules,
                     current_rules=proposed_rules,
                     evidence_path="/evidence",
                     contamination_hits=json.dumps(
@@ -634,7 +635,11 @@ class MiniSWEReflectionProposer:
                 )
                 try:
                     exit_status, final_submission = agent.run(
-                        task="Review the current minibatch evidence and improve the complete Checker rules.",
+                        task=(
+                            "Use the current minibatch evidence to improve the "
+                            "complete standalone plan-review guideline."
+                        ),
+                        current_guideline=candidate["rules"],
                         current_rules=candidate["rules"],
                         evidence_path="/evidence",
                     )
@@ -667,7 +672,7 @@ class MiniSWEReflectionProposer:
                         "reflection_candidate_proposed",
                         parent_candidate_sha256=parent_sha256,
                         proposed_candidate_sha256=text_sha256(proposed),
-                        proposed_rules_empty=False,
+                        proposed_guideline_empty=False,
                         output_is_complete_replacement=True,
                         looks_like_git_patch=False,
                         output_length_chars=len(proposed),

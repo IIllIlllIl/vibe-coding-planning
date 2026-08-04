@@ -27,6 +27,7 @@ ssh -p 8022 twang@access-iris.uni.lu \
 | 2026-07-29 20:54 Europe/Luxembourg | Failure-evidence 2it complete; supervisor stopped and user queue empty | 300652 | 0.028156 | 0.310267 | FairShare increased by 0.000784 from the pre-run `0.309483`; `LevelFS=2.089224` |
 | 2026-07-30 Europe/Luxembourg | Stale Offline supervisor discovered after 50 controller submissions; all supervisors stopped, queue empty, invalid run/workdirs removed | 294959 | 0.030091 | 0.397618 | FairShare increased by 0.087351 from 2026-07-29; `LevelFS=1.954854`; movement is not attributable to this run alone |
 | 2026-07-30 18:22 Europe/Luxembourg | Pre-launch check for Slurm-native Offline 2it; local supervisor and Iris user queue empty, new run/workdir absent | 319217 | 0.033655 | 0.397392 | FairShare decreased by 0.000226 from the earlier 2026-07-30 check; `LevelFS=1.747850`; no concurrency limit is imposed by the project |
+| 2026-08-04 Europe/Luxembourg | Pre-launch check for the revised Offline guideline 6it behavior smoke; Iris user queue empty | 760132 | 0.137983 | 0.768265 | `LevelFS=0.426310`; this snapshot is a launch baseline, not a causal attribution to any one prior run |
 
 Future launch/progress checks must append a row before interpreting movement.
 
@@ -425,5 +426,44 @@ tree、scores、RNG 和 sampler，将累计停止目标从 8 增加到 20，用�
 记录必须包含原 manifest、semantic config 和 checkpoint hash。除 iteration target
 及允许单调增加的 metric-call fail-safe 外，数据、prompt、模型、Checker/Reflection、
 minibatch、metric 和 GEPA selector 均不得改变。8it 与最终 20it 结果需要分别报告。
-Supervisor 的 `--target-iterations` 是相对启动 baseline 的新增数量，因此本次为
-`12`；GEPA config 的 `max_iterations` 才是累计 `20`。
+最初使用了“启动 baseline 8 + 新增 12”的 supervisor 参数，并通过一次性工具迁移
+终态。该操作没有修改 GEPA 搜索状态，但入口和目标语义不够直接。现已由 supervisor
+原生负责 completed-target resume：它从 Offline runtime config 读取累计目标 `20`，
+内部保存旧终态并单调更新 manifest，然后进入同一普通 resume 路径；用户不再运行
+独立迁移命令，也不再换算新增 iteration 数量。
+
+### 6.6 Offline guideline 目标与 frozen 14it 语义修正（2026-08-04）
+
+正式 HPC run
+`offline-plan-verifier-hpc-balanced-b12-8it-formal-20260731` 在 14 个 durable
+proposal 后，于第 15 个 proposal 的 validation 阶段因 provider
+`Insufficient Balance` 停止。该 run 使用的固定 Checker prompt 已经提供了仓库检查、
+事实验证、测试和诊断脚本等方法知识；Reflection 同时被要求只维护 concise
+plan-review checklist，并禁止把 fixed execution instructions 放进 candidate rules。
+因此该 run 实际优化的是“强固定 Checker 下的批准标准”，不是可脱离实验 Checker
+直接交给开发者或其他 Agent 的完整 guideline。
+
+下一版 Offline 的目标产物必须是 standalone plan-review guideline：既指导如何与
+仓库交互、获取和处理证据、识别信息不足，也指导最终判断，并可显式包含必要且可解释
+的通用软件工程知识。固定 Checker 只负责抑制对未写入 guideline 的模型隐性知识、
+声明输入/可丢弃执行环境以及 mini-swe bash/提交协议；不再提供检查方法和审批标准。
+Checker 应允许在 disposable benchmark image 中写诊断代码、测试和临时修改。
+
+下一次实验使用新 run identity，并将 GEPA primary metric 切回 `accuracy`；balanced
+accuracy、precision/recall、MCC、pass rate 和 confusion matrix 继续作为诊断指标。
+14it 原始运行需完整镜像到本地，作为 prompt/trajectory 行为审计的冻结基线。
+
+14it 的后续审查进一步区分了 validity 与 optimization：7/14 proposals 通过
+same-minibatch gate，但只有 2 个在 98-validation 上优于各自 parent；其余 5 个均
+退化。最佳 balanced accuracy 仅从 `0.706342` 增至 `0.731158`，并在 iteration 5
+后停止提升。因此 Code Agent/历史标签偏差不是“没有明显学到知识”的充分解释；更
+直接的问题是 Reflection 产生的局部变异不能稳定泛化到当前已有 validation 数据。
+
+已经把当前 config 中的 Checker 改为最小边界：candidate guideline 是 review
+method、软件工程原则、heuristic 和判断标准的唯一来源；固定 prompt 只声明任务、
+disposable repository 的读写/运行权限及 mini-swe 协议。Reflection 也改为先定义
+standalone guideline 目标，再对每个案例建立“当前 guideline → review 行为 →
+prediction → 修改后预期行为”的因果分析；不再规定 checklist、主题章节或绝对批准
+条件。primary metric 已切换为 `accuracy`。当前 config 使用独立的 20260804 6it
+behavior-smoke identity、minibatch 12 和 830 次最坏 metric-call projection；本轮只
+用于观察目标修改后的 Agent 行为，不作为正式优化效果结论。

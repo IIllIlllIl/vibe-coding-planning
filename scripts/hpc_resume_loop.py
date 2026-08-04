@@ -23,6 +23,9 @@ import yaml
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 DEFAULT_BATCH_SCRIPT = REPO_ROOT / "scripts" / "hpc_submit_batch.sh"
+OFFLINE_TARGET_EXTENSION_SCRIPT = (
+    REPO_ROOT / "scripts" / "internal" / "offline_iteration_target.py"
+)
 TERMINAL_JOB_STATES = {
     "BOOT_FAIL",
     "CANCELLED",
@@ -68,6 +71,7 @@ class SupervisorConfig:
     runtime_config_sha256: str
     require_clean_worktree: bool
     repo_commit: str | None
+    offline_gepa: bool
 
 
 def parse_duration(raw: str) -> int:
@@ -208,7 +212,10 @@ def parse_args(argv: list[str]) -> SupervisorConfig:
         "--target-iterations",
         type=int,
         default=0,
-        help="Stop after this many additional durable GEPA iterations; 0 uses run completion.",
+        help=(
+            "Stop at this cumulative durable GEPA iteration count; "
+            "0 uses run completion."
+        ),
     )
     parser.add_argument(
         "--once",
@@ -246,6 +253,16 @@ def parse_args(argv: list[str]) -> SupervisorConfig:
     if not gepa_config_raw:
         raise SystemExit("--gepa-config is required")
     gepa_config = _resolve_repo_path(gepa_config_raw)
+    offline_gepa = "--gepa-rules" in batch_args
+    target_iterations = known.target_iterations
+    if offline_gepa and target_iterations == 0:
+        configured_target = (
+            _load_yaml(gepa_config).get("search", {}).get("max_iterations")
+        )
+        if configured_target is not None:
+            target_iterations = int(configured_target)
+    if target_iterations < 0:
+        raise SystemExit("cumulative iteration target must be non-negative")
     submit = "--submit" in batch_args
     job_name = _take_option(batch_args, "--job-name") or "vibe-gepa"
     state_file = Path(
@@ -270,12 +287,13 @@ def parse_args(argv: list[str]) -> SupervisorConfig:
         ssh_port=ssh_port,
         ssh_key=ssh_key,
         batch_script=Path(known.batch_script),
-        target_iterations=known.target_iterations,
+        target_iterations=target_iterations,
         once=known.once,
         state_file=state_file,
         runtime_config_sha256=_sha256(gepa_config),
         require_clean_worktree=known.require_clean_worktree,
         repo_commit=_git_output("rev-parse", "HEAD"),
+        offline_gepa=offline_gepa,
     )
 
 
@@ -529,6 +547,44 @@ print(json.dumps(payload, sort_keys=True))
     return json.loads(result.stdout.strip().splitlines()[-1])
 
 
+def extend_completed_offline_target(
+    config: SupervisorConfig,
+    status: dict[str, Any],
+) -> dict[str, Any]:
+    """Increase a completed Offline run target before ordinary resume."""
+
+    if not config.offline_gepa:
+        raise RuntimeError("completed-target extension is Offline-only")
+    completed = status.get("completed_iterations")
+    if completed is None:
+        raise RuntimeError("completed Offline run has no durable iteration count")
+    source = OFFLINE_TARGET_EXTENSION_SCRIPT.read_text(encoding="utf-8")
+    invocation = """
+import json
+import sys
+print(json.dumps(extend_iteration_target(
+    Path(sys.argv[1]),
+    int(sys.argv[2]),
+    "supervisor cumulative-target resume",
+), sort_keys=True))
+"""
+    remote_command = (
+        "printf VIBE_OFFLINE_TARGET_EXTENSION >/dev/null; python3 -c "
+        + shlex.quote(source + invocation)
+        + " "
+        + shlex.quote(config.remote_run_snapshot)
+        + " "
+        + shlex.quote(str(config.target_iterations))
+    )
+    result = run_command(_ssh_command(config, remote_command))
+    if result.returncode != 0:
+        error = result.stderr.strip() or result.stdout.strip()
+        raise RuntimeError(
+            "could not extend completed Offline iteration target: " + error
+        )
+    return json.loads(result.stdout.strip().splitlines()[-1])
+
+
 def is_completed(status: dict[str, Any]) -> bool:
     raw_run_status = status.get("status")
     raw_controller_status = status.get("controller_status")
@@ -561,19 +617,30 @@ def is_failed(status: dict[str, Any]) -> bool:
 def _load_supervisor_state(config: SupervisorConfig) -> dict[str, Any]:
     if not config.state_file.is_file():
         return {
-            "schema_version": 1,
+            "schema_version": 2,
             "submissions": 0,
             "remote_run_snapshot": config.remote_run_snapshot,
             "job_name": config.job_name,
-            "target_additional_iterations": config.target_iterations,
+            "target_iterations": config.target_iterations,
             "runtime_config_sha256": config.runtime_config_sha256,
             "repo_commit": config.repo_commit,
         }
     state = json.loads(config.state_file.read_text(encoding="utf-8"))
+    if state.get("schema_version") == 1:
+        previous_cumulative_target = state.get("target_completed_iterations")
+        if previous_cumulative_target is None:
+            raise RuntimeError(
+                "legacy supervisor state has no cumulative target; use a new "
+                "--state-file"
+            )
+        state["schema_version"] = 2
+        state["target_iterations"] = int(previous_cumulative_target)
+    elif state.get("schema_version") != 2:
+        raise RuntimeError("unsupported supervisor state schema")
     expected = {
         "remote_run_snapshot": config.remote_run_snapshot,
         "job_name": config.job_name,
-        "target_additional_iterations": config.target_iterations,
+        "target_iterations": config.target_iterations,
         "runtime_config_sha256": config.runtime_config_sha256,
         "repo_commit": config.repo_commit,
     }
@@ -617,18 +684,9 @@ def _iteration_target_reached(
         return False
     completed = status.get("completed_iterations")
     if completed is None:
-        state["progress_bootstrap_required"] = True
         return False
-    if "baseline_iterations" not in state:
-        baseline = completed
-        if state.get("progress_bootstrap_required"):
-            baseline = status.get("first_observed_completed_iterations", completed)
-        state["baseline_iterations"] = int(baseline)
-        state["target_completed_iterations"] = (
-            state["baseline_iterations"] + config.target_iterations
-        )
     state["last_completed_iterations"] = int(completed)
-    return int(completed) >= int(state["target_completed_iterations"])
+    return int(completed) >= config.target_iterations
 
 
 def run_loop(config: SupervisorConfig) -> int:
@@ -640,7 +698,8 @@ def run_loop(config: SupervisorConfig) -> int:
         print(
             "[hpc-resume] starting supervisor "
             f"slice_time={config.slice_time} poll_interval={config.poll_interval_seconds}s "
-            f"target_iterations={config.target_iterations} max_runs={config.max_runs} "
+            f"cumulative_target_iterations={config.target_iterations} "
+            f"max_runs={config.max_runs} "
             f"remote_run_snapshot={config.remote_run_snapshot}"
         )
         while True:
@@ -657,6 +716,10 @@ def run_loop(config: SupervisorConfig) -> int:
                 return 1
             status = remote_run_status(config)
             state["last_remote_status"] = status
+            if status.get("completed_iterations") is not None:
+                state["last_completed_iterations"] = int(
+                    status["completed_iterations"]
+                )
             print(f"[hpc-resume] status={json.dumps(status, sort_keys=True)}")
             if status.get("state") == "status_check_failed":
                 state["status"] = "waiting_after_status_check_failure"
@@ -671,30 +734,11 @@ def run_loop(config: SupervisorConfig) -> int:
                 if config.poll_interval_seconds > 0:
                     time.sleep(config.poll_interval_seconds)
                 continue
-            if is_completed(status):
-                if config.target_iterations and not _iteration_target_reached(
-                    config, status, state
-                ):
-                    state["status"] = "completed_before_iteration_target"
-                    _save_supervisor_state(config, state)
-                    print(
-                        "[hpc-resume] run completed before iteration target",
-                        file=sys.stderr,
-                    )
-                    return 2
-                state["status"] = "completed"
-                _save_supervisor_state(config, state)
-                return 0
             if is_failed(status):
                 state["status"] = "blocked"
                 _save_supervisor_state(config, state)
                 print("[hpc-resume] run is blocked; not resubmitting", file=sys.stderr)
                 return 1
-            if _iteration_target_reached(config, status, state):
-                state["status"] = "iteration_target_reached"
-                _save_supervisor_state(config, state)
-                print("[hpc-resume] iteration target reached")
-                return 0
 
             active_controllers = status.get("active_controllers", [])
             active_workers = status.get("active_workers", [])
@@ -706,46 +750,96 @@ def run_loop(config: SupervisorConfig) -> int:
                     "[hpc-resume] waiting without submission "
                     f"controllers={active_controllers} workers={active_workers}"
                 )
-            else:
-                submissions = int(state.get("submissions", 0))
-                if config.max_runs != 0 and submissions >= config.max_runs:
-                    state["status"] = "max_runs_reached"
+                _save_supervisor_state(config, state)
+                if config.once:
+                    return 0
+                if config.poll_interval_seconds > 0:
+                    time.sleep(config.poll_interval_seconds)
+                continue
+
+            if is_completed(status):
+                if not config.target_iterations or _iteration_target_reached(
+                    config, status, state
+                ):
+                    state["status"] = "completed"
                     _save_supervisor_state(config, state)
-                    print("[hpc-resume] max runs reached", file=sys.stderr)
-                    return 2
-                identity_error = _submission_identity_error(config)
-                if identity_error is not None:
-                    state["status"] = "blocked_identity_mismatch"
-                    state["identity_error"] = identity_error
+                    return 0
+                if not config.offline_gepa:
+                    state["status"] = "completed_before_iteration_target"
                     _save_supervisor_state(config, state)
                     print(
-                        f"[hpc-resume] identity check failed: {identity_error}; "
-                        "not submitting",
+                        "[hpc-resume] run completed before cumulative iteration target",
                         file=sys.stderr,
                     )
-                    return 1
+                    return 2
                 try:
-                    job_id = submit_slice(config)
+                    extension = extend_completed_offline_target(config, status)
                 except Exception as exc:
-                    state["status"] = "waiting_after_submission_failure"
-                    state["last_submission_error"] = {
+                    state["status"] = "blocked_iteration_target_extension"
+                    state["iteration_target_extension_error"] = {
                         "error_type": type(exc).__name__,
                         "error": str(exc),
                     }
                     _save_supervisor_state(config, state)
                     print(
-                        "[hpc-resume] controller submission failed; retaining "
-                        "supervisor and retrying later",
+                        "[hpc-resume] completed Offline target could not be extended: "
+                        f"{exc}",
                         file=sys.stderr,
                     )
-                    if config.once:
-                        return 0
-                    if config.poll_interval_seconds > 0:
-                        time.sleep(config.poll_interval_seconds)
-                    continue
-                state["submissions"] = submissions + 1
-                state["last_controller_job_id"] = job_id
-                state["status"] = "controller_submitted"
+                    return 1
+                state["last_iteration_target_extension"] = extension
+                state["status"] = "iteration_target_extended"
+                _save_supervisor_state(config, state)
+                print(
+                    "[hpc-resume] extended completed Offline target "
+                    f"from={extension['from']} to={extension['to']}"
+                )
+                continue
+            if _iteration_target_reached(config, status, state):
+                state["status"] = "iteration_target_reached"
+                _save_supervisor_state(config, state)
+                print("[hpc-resume] iteration target reached")
+                return 0
+
+            submissions = int(state.get("submissions", 0))
+            if config.max_runs != 0 and submissions >= config.max_runs:
+                state["status"] = "max_runs_reached"
+                _save_supervisor_state(config, state)
+                print("[hpc-resume] max runs reached", file=sys.stderr)
+                return 2
+            identity_error = _submission_identity_error(config)
+            if identity_error is not None:
+                state["status"] = "blocked_identity_mismatch"
+                state["identity_error"] = identity_error
+                _save_supervisor_state(config, state)
+                print(
+                    f"[hpc-resume] identity check failed: {identity_error}; "
+                    "not submitting",
+                    file=sys.stderr,
+                )
+                return 1
+            try:
+                job_id = submit_slice(config)
+            except Exception as exc:
+                state["status"] = "waiting_after_submission_failure"
+                state["last_submission_error"] = {
+                    "error_type": type(exc).__name__,
+                    "error": str(exc),
+                }
+                _save_supervisor_state(config, state)
+                print(
+                    "[hpc-resume] controller submission failed; retaining "
+                    "supervisor and retrying later",
+                    file=sys.stderr,
+                )
+                if config.once:
+                    return 0
+                if config.poll_interval_seconds > 0:
+                    time.sleep(config.poll_interval_seconds)
+                continue
+            state["submissions"] = submissions + 1
+            state["last_controller_job_id"] = job_id
+            state["status"] = "controller_submitted"
 
             _save_supervisor_state(config, state)
             if config.once:

@@ -4,7 +4,7 @@
 >
 > Scope: Online/Offline controllers, Agent task arrays, supervisor, FairShare
 >
-> Last reviewed: 2026-07-30
+> Last reviewed: 2026-08-04
 >
 > Supersedes: `archive/mixed-design/hpc-submit-mixed-20260715.md`
 
@@ -97,7 +97,12 @@ do not reconstruct a long invocation from a previous conversation. Runtime
 models/prompts/worker resources remain in `gepa_online_planning_hpc.yaml`.
 Offline uses the same service and resume loop with
 `configs/offline_gepa_supervisor.yaml`; its runtime prompt, metric, and worker
-resources remain in `gepa_verified_rules.yaml`.
+resources remain in `gepa_verified_rules.yaml`. Offline supervisor reads the
+cumulative iteration target from `search.max_iterations`; the operator does not
+convert a completed baseline into an additional-iteration argument. When that
+target is raised after a smaller target completed, the supervisor preserves the
+completed checkpoint, updates only the manifest target, and enters the same
+ordinary resume path.
 
 The service launches the foreground resume loop inside `tmux` under
 `caffeinate -i -s`. Closing the initiating shell therefore does not terminate

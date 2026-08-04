@@ -291,9 +291,16 @@ def load_optimization_config(
             "Offline HPC Slurm execution requires container.runtime: apptainer"
         )
 
+    initial_guideline = paths.get("initial_guideline", paths.get("initial_rules"))
+    if initial_guideline is None:
+        raise ValueError("paths.initial_guideline is required")
+
     return OptimizationConfig(
         dataset_snapshot=resolve(str(paths["dataset_snapshot"])),
-        initial_rules_path=resolve(str(paths["initial_rules"])),
+        # Internal attribute retained for compatibility with shared Online and
+        # historical Offline plumbing; new Offline configs call this artifact
+        # a guideline.
+        initial_rules_path=resolve(str(initial_guideline)),
         run_dir=resolve(str(paths["run_dir"])),
         checker=checker,
         reflection=reflection,

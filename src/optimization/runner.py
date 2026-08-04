@@ -1,4 +1,4 @@
-"""Run the native GEPA search for Checker rules."""
+"""Run the native GEPA search for an Offline plan-review guideline."""
 
 from __future__ import annotations
 
@@ -119,7 +119,7 @@ def _run_optimization_locked(
     audit.write(
         "run_started",
         seed_candidate_sha256=text_sha256(initial_rules),
-        seed_rules_empty=initial_rules == "",
+        seed_guideline_empty=initial_rules == "",
         train_instances=len(train),
         validation_instances=len(validation),
         max_metric_calls=config.search.max_metric_calls,
@@ -128,7 +128,7 @@ def _run_optimization_locked(
         reflection_minibatch_size=config.search.reflection_minibatch_size,
         parallel=config.search.parallel,
         seed=config.search.seed,
-        candidate_components=["rules"],
+        candidate_components=["guideline"],
         checker_temperature=config.checker.temperature,
         skip_perfect_score=config.search.skip_perfect_score,
         min_proposals=config.search.min_proposals,
@@ -358,7 +358,7 @@ def _run_optimization_locked(
         "run_completed",
         best_candidate_idx=result.best_idx,
         best_candidate_sha256=text_sha256(result.best_candidate["rules"]),
-        best_rules_empty=result.best_candidate["rules"] == "",
+        best_guideline_empty=result.best_candidate["rules"] == "",
         total_metric_calls=result.total_metric_calls,
         candidate_count=result.num_candidates,
         successful_proposals=successful_proposals,

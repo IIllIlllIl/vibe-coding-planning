@@ -101,7 +101,7 @@ class ProgressCallback:
             seed_candidate_sha256=text_sha256(
                 event["seed_candidate"]["rules"]
             ),
-            seed_rules_empty=event["seed_candidate"]["rules"] == "",
+            seed_guideline_empty=event["seed_candidate"]["rules"] == "",
         )
         self._save()
 
@@ -166,7 +166,7 @@ class ProgressCallback:
             "gepa_proposal_started",
             iteration=event["iteration"],
             parent_candidate_sha256=text_sha256(parent),
-            parent_rules_empty=parent == "",
+            parent_guideline_empty=parent == "",
             components=event["components"],
         )
 
@@ -176,7 +176,7 @@ class ProgressCallback:
             "gepa_proposal_completed",
             iteration=event["iteration"],
             proposed_candidate_sha256=text_sha256(proposed),
-            proposed_rules_empty=proposed == "",
+            proposed_guideline_empty=proposed == "",
             components=sorted(event["new_instructions"]),
         )
 

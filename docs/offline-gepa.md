@@ -2,35 +2,156 @@
 
 > Authority: current Offline GEPA experiment contract
 >
-> Last reviewed: 2026-07-28
+> Last reviewed: 2026-08-04
 
 ## Objective
 
-Offline GEPA learns a concise plan-approval standard that both a human reviewer
-and an Agent can apply before implementation. It does not assume that agreement
-with historical execution outcomes is identical to plan quality; held-out
-errors must be analyzed for label prevalence, Checker bias, and historical Code
-Agent effects before making that claim.
+Offline GEPA learns a standalone plan-review guideline that both a human
+reviewer and an Agent can apply before implementation. The guideline is not
+only an approval checklist. It must guide how to interact with the repository,
+obtain and process relevant evidence, recognize when important information is
+still missing, and then decide whether the proposed plan should proceed.
+
+The experiment-only Checker prompt must not silently supply software-engineering
+knowledge or investigation methods that the deployed guideline omits. Its
+fixed responsibility is limited to suppressing reliance on unstated model
+knowledge, exposing the available inputs and disposable execution environment,
+and enforcing method-independent action/output protocol. General review
+knowledge and useful interaction behavior belong in the candidate guideline so
+GEPA can optimize them and a developer can read them.
+
+Offline does not assume that agreement with historical execution outcomes is
+identical to plan quality. Held-out errors must be analyzed for label
+prevalence, Checker bias, and historical Code Agent effects before making that
+claim.
 
 ```text
-issue + historical Round 1 plan + base repository + candidate rules
+issue + historical Round 1 plan + base repository + candidate guideline
   -> fixed Checker -> predicted_resolved
-  -> class-weighted agreement with historical resolved
-  -> GEPA Reflection -> complete replacement rules
+  -> configured agreement metric against historical resolved
+  -> GEPA Reflection -> complete replacement guideline
 ```
 
-## Information Boundary
+## Experiment Status And Semantic Versions
 
-The Checker receives only the issue, historical Round 1 plan, candidate rules,
-and repository at the base commit. Its fixed system prompt supplies execution
-permissions and the output protocol; `<candidate_rules>` is inserted into the
-user message and is the only evolving approval standard.
+The formal HPC run
+`offline-plan-verifier-hpc-balanced-b12-8it-formal-20260731` used the earlier
+"strong fixed Checker + optimized approval checklist" boundary. It reached 14
+durable proposals after its observed 8it checkpoint was extended toward 20,
+then stopped during the attempted fifteenth proposal because the provider
+reported insufficient balance. Its candidate tree and raw evidence remain
+valid for analysis of that frozen semantic version, but it must not be resumed
+under the redesigned prompts or metric.
 
-The Checker must inspect the repository and verify important plan claims. It
-may search/read files, inspect existing tests, run existing tests against the
-unmodified repository, and use temporary diagnostic scripts outside the
-repository. It may not modify repository source/tests, implement the proposed
-solution, or judge the plan from a patch it creates.
+Analysis of that run found that the fixed Checker already supplied most
+repository-interaction behavior, while candidate changes mainly shifted the
+approval threshold. This conflicts with the standalone-guideline objective.
+The next experiment therefore requires a new run identity and a prompt/config
+revision. The current runtime config now stages the agreed minimal Checker,
+standalone-guideline Reflection target, causal case analysis, and `accuracy`
+metric. Its run identity and stopping budget still describe the frozen
+experiment, so it is intentionally not launch-ready. The copied run manifest
+and raw evidence, rather than the evolving current config, are the authority
+for reproducing or analyzing the frozen 14it run.
+
+## Next Experiment Requirements
+
+- Candidate text is the complete transferable plan-review guideline, not only
+  a list of approval criteria.
+- GEPA may optimize investigation behavior, evidence-processing guidance,
+  stopping/uncertainty behavior, decision guidance, organization, and necessary
+  explicit software-engineering knowledge. The project must not prescribe a
+  fixed section structure for those contents.
+- The fixed Checker prompt must not teach repository-inspection strategy or
+  plan-quality criteria. It may state the input/tool boundary, suppress use of
+  unstated model knowledge, and retain mini-swe action plus final-output
+  protocol.
+- Checker repository interaction occurs in a disposable benchmark image. It
+  may write diagnostic code or tests and make temporary source changes; these
+  changes are evidence only and never alter the historical dataset or base
+  repository outside the discarded environment.
+- Reflection receives rich current-minibatch trajectories and execution-after
+  evidence. Its prompt begins with the intended standalone artifact, does not
+  prescribe a topic taxonomy, and requires a causal account from current
+  guideline through review behavior to the proposed change.
+- The next run uses `accuracy` as the GEPA primary metric. Balanced accuracy,
+  precision/recall, MCC, pass rate, and the confusion matrix remain required
+  diagnostic reports.
+- No action-count reward is added merely to make the Checker run more commands.
+  Information-seeking quality is audited from saved trajectories and concrete
+  cases before any process metric is considered.
+
+## Staged Guideline Reflection
+
+The next Reflection prompt begins with the target artifact rather than a
+detailed description of the Checker. It asks for a complete standalone
+guideline whose investigation behavior, evidence processing, decision method,
+organization, conditions, and exceptions are all available for GEPA to
+optimize. It does not prescribe checklist sections or declare that every
+condition is an absolute approval or rejection gate.
+
+The structured review still covers every minibatch case, but it now records a
+causal chain: relevant repository understanding, the current guideline
+instruction or omission, the resulting review behavior, the diagnosis, the
+expected effect of a proposed guideline change, and risk to correctly handled
+cases. The separate `guideline_changes` records connect each textual change to
+that causal evidence.
+
+Reflection does not currently mount twelve benchmark repositories. It
+understands repository behavior from file contents, commands, and test results
+preserved in Checker, Plan, Code, patch, and evaluator evidence. The prompt
+states this boundary directly and requires uncertainty rather than an invented
+repository fact when the captured evidence is insufficient. Giving Reflection
+fresh repository access would be a separate method and infrastructure change,
+not an implicit consequence of this prompt revision.
+
+## Reflection And Search Boundary
+
+GEPA uses evidence and scores through different channels. For proposal
+generation, the parent candidate is evaluated on the current train minibatch
+with complete Checker trajectories and historical execution-after evidence;
+Reflection reads that rich bundle and proposes replacement text. For search,
+the proposal must obtain a strictly higher scalar score than its parent on the
+same minibatch before it reaches full validation. Validation then updates the
+instance-level Pareto frontier, while aggregate validation metrics identify the
+reported best candidate.
+
+The scalar gate does not mean Reflection receives only a label. It means that a
+better investigation process has no selection advantage unless it changes the
+scored prediction on the sampled cases. Validation cases are held out from
+Reflection, so their trajectories may be retained for audit but are not direct
+mutation feedback. This separation is part of GEPA's reflective search design;
+the frozen Offline problem is that its prompt narrowed rich evidence into
+checklist edits and its historical-outcome metric could disagree with actual
+pre-implementation plan quality.
+
+The frozen 14it evidence contains 14 saved structured Reflection analyses.
+Every one records reviews for all 12/12 manifest cases and declares all 12
+Checker outputs as evidence. Deeper Plan/Code/patch/evaluator reads vary by
+classification and need. This proves nominal minibatch coverage, not semantic
+understanding; review quality must still be checked against raw trajectories.
+
+The frozen run did learn a small amount under its configured objective: seven
+of 14 proposals passed the same-minibatch gate, but only two improved their
+parent on aggregate validation and the best balanced accuracy rose from
+`0.706342` to `0.731158`. The other five gated proposals generalized worse.
+This makes inaccurate historical labels a validity risk, but not a sufficient
+explanation for the weak optimization. The immediate optimization problem is
+that evidence-driven proposals frequently gained on 12 adaptive examples and
+failed to transfer even to the existing 98-case validation set.
+
+## Frozen 20260731 Information Boundary
+
+The frozen-run Checker receives only the issue, historical Round 1 plan,
+candidate rules, and repository at the base commit. Its fixed system prompt
+supplies execution permissions and the output protocol; `<candidate_rules>` is
+inserted into the user message and is the only evolving approval standard.
+
+Its fixed prompt requires the Checker to inspect the repository and verify
+important plan claims. It may search/read files, inspect existing tests, run
+existing tests against the unmodified repository, and use temporary diagnostic
+scripts outside the repository. It may not modify repository source/tests,
+implement the proposed solution, or judge the plan from a patch it creates.
 
 Checker and Reflection both use the shared mini-swe-agent action protocol.
 After zero or multiple fenced `bash` actions, the invalid response is not
@@ -98,7 +219,7 @@ but does not reject, repair, or otherwise change the proposal. The complete
 Agent trajectory remains the raw authority. The analysis is diagnostic
 evidence, never part of the candidate rules or Checker input.
 
-## Dataset And Metric
+## Frozen 20260731 Dataset And Metric
 
 The immutable snapshot is
 `output/SWE-bench_Verified/verified-round1-gepa-datasets/20260614_482_fdc056ae85df/`:
@@ -108,7 +229,7 @@ The immutable snapshot is
 | Train | 384 | 251 | 133 |
 | Validation | 98 | 64 | 34 |
 
-The primary metric is balanced accuracy. For an example in one split:
+The frozen run's primary metric is balanced accuracy. For an example in one split:
 
 ```text
 correct score = split_size / (2 * historical_class_count)
@@ -122,9 +243,11 @@ full-validation aggregate scores, and best-candidate selection. It does not
 change Checker-visible inputs. `skip_perfect_score` must remain false because
 the two classes do not share one per-example perfect score.
 
-## Search And Stopping
+## Frozen 20260731 Search And Stopping
 
-The current config is [`../configs/gepa_verified_rules.yaml`](../configs/gepa_verified_rules.yaml):
+The copied run manifest records these frozen settings. The evolving current
+config at [`../configs/gepa_verified_rules.yaml`](../configs/gepa_verified_rules.yaml)
+must not be used as their reproduction authority:
 
 - full 384/98 snapshot;
 - minimal seed from `configs/gepa_initial_rules_minimal.md`;
@@ -168,15 +291,27 @@ callback cannot overwrite a saved count of two with index one. On successful
 completion, `controller_status.json` supplies the terminal run status when the
 GEPA `result.json` has no top-level status field.
 
+## Current 20260804 Behavior Smoke
+
+The current config uses a new run identity and does not resume the frozen
+20260731 candidate tree. It keeps the full 384/98 snapshot and minibatch 12,
+but stops after six proposals and uses accuracy as the primary GEPA metric.
+Its worst-case evaluation projection is
+`98 + 6 * (12 + 12 + 98) = 830`; `max_metric_calls=1000` remains a fail-safe.
+The purpose is to observe whether the revised Checker and Reflection prompts
+produce repository-grounded, causally motivated, transferable guidelines.
+Six proposals are not enough to claim optimization effectiveness or held-out
+generalization.
+
 The ordinary run manifest permits a metric-call ceiling increase but rejects
 changes to data, source, prompts, model/search semantics, seed, or iteration
-target. A completed target may be increased only through the explicit
-`scripts/tools/extend_offline_iteration_target.py` operation. It verifies the
-completed checkpoint, saves the original manifest, records the old/new target
-and checkpoint hashes, snapshots the 8it terminal reports, and changes no GEPA
-search state. The extension supervisor requests 12 additional iterations from
-the observed baseline of 8; its target is therefore 12 even though GEPA's
-cumulative `max_iterations` is 20.
+target. Supervisor is the single resume entrypoint. For Offline runs it reads
+the cumulative target directly from `search.max_iterations`. If a run completed
+at a smaller stored target, supervisor verifies that checkpoint, saves its
+terminal reports and original manifest, records the old/new target and hashes,
+and reopens the run before invoking the ordinary resume path. It changes no
+GEPA search state. Thus a target of 20 always means 20 cumulative proposals;
+operators do not calculate or pass an additional-iteration value.
 
 ## HPC Task And Resume Boundary
 
@@ -212,7 +347,7 @@ three attempts, its task journal enters the durable `EXHAUSTED` terminal state
 and the Offline run blocks. Reflection uses a dedicated controller exception
 that passes through GEPA's ordinary proposal-exception handler, so exhaustion
 cannot become a normal no-proposal iteration or consume the configured
-iteration target. No prediction, score, or candidate rules are fabricated.
+iteration target. No prediction, score, or candidate guideline is fabricated.
 
 ## Local/HPC Configuration Switch
 
@@ -267,7 +402,11 @@ The run directory preserves:
   evidence, or `reflection_analysis_invalid.txt` when malformed;
 - local `reflection_inputs/*/reflection_repair_trajectory.json`, or HPC repair
   attempt evidence, when a proposal requires contamination repair;
-- candidate rules, validation metrics, reports, errors, token use, and cost.
+- candidate guidelines, validation metrics, reports, errors, token use, and cost;
+- `best_guideline.txt` and `guideline_sha256` in new derived reports. The
+  shared third-party GEPA state still uses the internal component key `rules`;
+  this compatibility key is not the name or intended structure of the Offline
+  artifact.
 
 Operational Checker exhaustion stops the optimization. It must not be converted
 into an unresolved prediction or silently included in candidate comparison.

@@ -6,7 +6,7 @@ from pathlib import Path
 
 import pytest
 
-from scripts.tools.extend_offline_iteration_target import (
+from scripts.internal.offline_iteration_target import (
     _semantic_sha256,
     extend_iteration_target,
 )

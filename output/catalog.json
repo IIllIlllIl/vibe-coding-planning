@@ -1,8 +1,8 @@
 {
   "schema_version": 1,
-  "generated_at": "2026-07-31",
+  "generated_at": "2026-08-04",
   "active_method": "online_gepa_planning_rules",
-  "active_offline_method": "offline_gepa_plan_verification_rules",
+  "active_offline_method": "offline_gepa_plan_review_guideline",
   "default_agent_scope": [
     "output/README.md",
     "output/catalog.json",
@@ -24,12 +24,17 @@
   },
   "active_remote_offline_run": {
     "name": "offline-plan-verifier-hpc-balanced-b12-8it-formal-20260731",
-    "classification": "configured_formal_extension",
+    "classification": "frozen_formal_analysis_baseline",
     "initial_proposal_target": 8,
     "proposal_target": 20,
+    "durable_proposals": 14,
+    "stopped_during_proposal": 15,
+    "stop_reason": "provider_insufficient_balance",
     "extension_selected_after_initial_completion": true,
     "inherits_local_baseline_search_state": false,
     "continues_same_hpc_search_state": true,
+    "resume_under_next_experiment": false,
+    "local_mirror": "output/SWE-bench_Verified/gepa-rules/offline-plan-verifier-hpc-balanced-b12-8it-formal-20260731",
     "seed": "configs/gepa_initial_rules_minimal.md"
   },
   "archived_remote_offline_smokes": {

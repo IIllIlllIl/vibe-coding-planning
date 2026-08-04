@@ -210,7 +210,7 @@ after a new or retry array is durably journaled. Audit records
 
 `online_iteration_progress.json` advances only after official GEPA state save.
 Reflection or validation work inside an uncommitted iteration does not count.
-The local supervisor targets additional durable iterations, not controller runs
+The local supervisor targets cumulative durable iterations, not controller runs
 or elapsed walltime.
 
 ## 8. Active Configuration

@@ -281,7 +281,10 @@ def resolve(raw: str) -> str:
 
 print(f"dataset_snapshot={resolve(paths.get('dataset_snapshot', ''))}")
 print(f"run_dir={resolve(paths.get('run_dir', ''))}")
-print(f"initial_rules={resolve(paths.get('initial_rules', ''))}")
+print(
+    "initial_guideline="
+    + resolve(paths.get("initial_guideline", paths.get("initial_rules", "")))
+)
 container = cfg.get("container", {}) or {}
 raw_sif_cache = str(container.get("sif_cache_dir", ""))
 remote_user = os.environ.get("ULHPC_USER")
@@ -309,7 +312,7 @@ while IFS='=' read -r KEY VALUE; do
   case "$KEY" in
     dataset_snapshot) DATASET_SNAPSHOT="$VALUE" ;;
     run_dir) RUN_DIR="$VALUE" ;;
-    initial_rules) INITIAL_RULES="$VALUE" ;;
+    initial_guideline) INITIAL_RULES="$VALUE" ;;
     sif_cache_dir) CONFIG_SIF_CACHE_DIR="$VALUE" ;;
     python_module) CONFIG_PYTHON_MODULE="$VALUE" ;;
     container_module) CONFIG_CONTAINER_MODULE="$VALUE" ;;
@@ -325,7 +328,7 @@ if [[ -z "$RUN_DIR" ]]; then
   exit 2
 fi
 if [[ -z "$INITIAL_RULES" || ! -f "$INITIAL_RULES" ]]; then
-  echo "ERROR: initial_rules file not found locally: $INITIAL_RULES" >&2
+  echo "ERROR: initial_guideline file not found locally: $INITIAL_RULES" >&2
   exit 2
 fi
 

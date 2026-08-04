@@ -4102,8 +4102,10 @@ def test_reflection_proposer_supplies_required_agent_task(
     )
 
     assert proposal == {"rules": "complete improved rules"}
-    assert calls["task"].startswith("Review the current minibatch evidence")
+    assert calls["task"].startswith("Use the current minibatch evidence")
+    assert "standalone plan-review guideline" in calls["task"]
     assert calls["run_kwargs"] == {
+        "current_guideline": "",
         "current_rules": "",
         "evidence_path": "/evidence",
     }
@@ -4781,7 +4783,7 @@ def test_native_gepa_end_to_end_without_llm(tmp_path):
     assert (config.run_dir / "candidate_tree.html").is_file()
     assert (config.run_dir / "audit_events.jsonl").is_file()
     assert (config.run_dir / "cost_report.json").is_file()
-    assert (config.run_dir / "best_rules.txt").read_text().strip() == (
+    assert (config.run_dir / "best_guideline.txt").read_text().strip() == (
         "improved rules"
     )
 
@@ -4800,7 +4802,7 @@ def test_native_gepa_end_to_end_without_llm(tmp_path):
     run_starts = [
         record for record in audit_records if record["event"] == "run_started"
     ]
-    assert run_starts[0]["seed_rules_empty"] is True
+    assert run_starts[0]["seed_guideline_empty"] is True
     assert run_starts[0]["resuming_from_state"] is False
     assert run_starts[-1]["resuming_from_state"] is True
     cost_report = json.loads(
@@ -5408,7 +5410,7 @@ def test_checker_operational_failure_marks_run_failed(tmp_path):
     assert any(record["event"] == "optimization_failed" for record in errors)
 
 
-def test_default_gepa_config_is_twenty_iteration_hpc_extension(monkeypatch):
+def test_default_gepa_config_stages_next_checker_boundary(monkeypatch):
     monkeypatch.setenv("DEEPSEEK_API_KEY", "secret")
     repo_root = Path(__file__).resolve().parents[2]
     config = load_optimization_config(repo_root / "configs" / "gepa_verified_rules.yaml")
@@ -5421,41 +5423,45 @@ def test_default_gepa_config_is_twenty_iteration_hpc_extension(monkeypatch):
     assert config.hpc.mem == "4G"
     assert config.hpc.time == "00:35:00"
     assert config.hpc.max_task_attempts == 3
-    assert config.search.max_metric_calls == 3000
-    assert config.search.projection_metric_calls == 2538
-    assert config.search.max_iterations == 20
+    assert config.search.max_metric_calls == 1000
+    assert config.search.projection_metric_calls == 830
+    assert config.search.max_iterations == 6
     assert config.search.reflection_minibatch_size == 12
-    assert config.search.primary_metric == "balanced_accuracy"
+    assert config.search.primary_metric == "accuracy"
     assert config.search.parallel == 1
     # One worker attempt is one complete Checker Agent session. Slurm-level
     # retries start a new session instead of resuming an interrupted one.
     assert config.checker.max_attempts == 1
-    assert config.initial_rules_path.name == "gepa_initial_rules_minimal.md"
+    assert config.initial_rules_path.name == "gepa_initial_guideline_minimal.md"
     assert (
-        "offline-plan-verifier-hpc-balanced-b12-8it-formal-20260731"
+        "offline-plan-guideline-hpc-accuracy-b12-6it-smoke-20260804"
         in str(config.run_dir)
     )
     checker_prompt = " ".join(config.checker_prompt.split())
-    assert "software plan verification assistant" in checker_prompt
-    assert "Before deciding, inspect the repository" in checker_prompt
-    assert "Do not modify repository source or test files" in checker_prompt
-    assert "Do not implement the proposed solution" in checker_prompt
-    assert "temporary diagnostic or reproduction scripts outside" in checker_prompt
+    assert "software development assistant" in checker_prompt
+    assert "candidate guideline as the sole source" in checker_prompt
+    assert "You may interact with the repository" in checker_prompt
+    assert "All repository changes are discarded" in checker_prompt
+    assert "Do not modify repository source or test files" not in checker_prompt
+    assert "Do not implement the proposed solution" not in checker_prompt
     assert "/tmp/gepa_checker_result.json" not in checker_prompt
     assert "exactly one shell action" in checker_prompt
     assert "do not use <bash> tags" in checker_prompt
     assert "available at /testbed, not /repo" in checker_prompt
     assert "Saying that the result was submitted does not finish" in checker_prompt
+    assert "<candidate_guideline>" in config.checker_instance_template
+    assert "{{candidate_guideline}}" in config.checker_instance_template
     assert "{{retry_feedback}}" in config.checker_instance_template
     reflection_prompt = " ".join(config.reflection_prompt.split())
-    assert "plan-review checklist" in reflection_prompt
-    assert "misleading items" in reflection_prompt
-    assert "Merge redundant or highly similar items" in reflection_prompt
-    assert "repository names, file paths, code symbols" in reflection_prompt
-    assert "applies to unseen repositories" in reflection_prompt
-    assert "fixed Checker prompt" in reflection_prompt
-    assert "balanced accuracy" in reflection_prompt
-    assert "one evidence-grounded diagnosis for every case" in reflection_prompt
+    assert "complete standalone guideline" in reflection_prompt
+    assert "not a checklist of classification features" in reflection_prompt
+    assert "Causal guideline optimization" in reflection_prompt
+    assert "current_guideline_effect" in reflection_prompt
+    assert "expected_behavior_change" in reflection_prompt
+    assert "organization, topics, level of detail" in reflection_prompt
+    assert "benchmark repositories are not mounted" in reflection_prompt
+    assert "fixed Checker prompt" not in reflection_prompt
+    assert "balanced accuracy" not in reflection_prompt
     assert "/tmp/reflection_analysis.json" in reflection_prompt
     assert "cat <<'EOF'" in reflection_prompt
     assert "supporting_instance_ids" in reflection_prompt
@@ -5474,10 +5480,11 @@ def test_default_gepa_config_is_twenty_iteration_hpc_extension(monkeypatch):
     assert "For every FP and FN" in reflection_instance
     assert "files actually consulted" in reflection_instance
     assert "Do not guess alternative filenames" in reflection_instance
+    assert "{{current_guideline}}" in config.reflection_instance_template
     assert config.initial_rules_path.read_text(encoding="utf-8").strip() == (
-        "Approve a plan only when evidence from the issue and base repository "
-        "supports that its proposed change addresses the reported problem and "
-        "the plan includes a relevant way to validate the result."
+        "Use evidence from the issue and repository to investigate whether the "
+        "proposed plan is sufficiently likely to resolve the reported problem, "
+        "then decide whether it should proceed."
     )
 
 
@@ -5690,7 +5697,7 @@ def test_local_checker_retry_receives_only_previous_contract_error(tmp_path):
     assert result.scores == [1.0]
     assert feedback_seen[0] == ""
     assert "Invalid \\escape" in feedback_seen[1]
-    assert "issue, plan, candidate rules" in feedback_seen[1]
+    assert "issue, plan, candidate guideline" in feedback_seen[1]
 
 
 def test_local_checker_operational_retry_does_not_enter_agent_prompt(tmp_path):

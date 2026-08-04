@@ -1,13 +1,16 @@
 # GEPA Planning Rules
 
-This project optimizes a planning checklist against the actual behavior of a
-software-development Agent. It currently maintains two distinct experimental
+This project optimizes a planning guideline against the actual behavior of a
+software-development Agent. The intended artifact is a standalone method that
+guides both repository investigation and the eventual plan decision; it must
+not depend on software-engineering guidance hidden in an experiment-only
+Checker prompt. The project currently maintains two distinct experimental
 paths rather than assuming one is intrinsically superior:
 
-- **Offline GEPA** learns a human- and Agent-usable plan-approval standard from
+- **Offline GEPA** learns a human- and Agent-usable plan-review guideline from
   historical Round 1 plans, resolved labels, and execution evidence. Its next
-  experiment is configured for independent ULHPC Checker/Reflection tasks but
-  has not been started.
+  experiment is pending a Checker/Reflection prompt redesign after analysis of
+  the completed 14-iteration HPC evidence.
 - **Online GEPA** evaluates candidate rules through current Plan-Code-Evaluator
   rollouts on ULHPC.
 
@@ -64,23 +67,23 @@ lessons have already been extracted into [`docs/knowledge/`](docs/knowledge/).
 ## Current Offline Design
 
 ```text
-issue + historical Round 1 plan + base repository + candidate rules
+issue + historical Round 1 plan + base repository + candidate guideline
   -> fixed repo-grounded Checker
   -> predicted_resolved
-  -> class-weighted correctness against historical resolved
-  -> GEPA Reflection proposes complete replacement rules
+  -> accuracy against historical resolved
+  -> GEPA Reflection proposes a complete replacement guideline
 ```
 
-The Checker must inspect the base repository, but it may not modify repository
-source/tests or implement the proposed solution. Historical labels, patches,
-execution trajectories, and evaluator outcomes are hidden from Checker
-deployment input and are available only as Reflection diagnostics. The active
-HPC configuration uses the full 384/98 split, minibatch 12, balanced accuracy,
-a minimal seed, and an absolute target of two cumulative proposals. One
-Checker case and each Reflection Agent call are independently fingerprinted
-Slurm tasks. Contamination repair, when needed, is a second task bound to the
-completed initial proposal; a controller restart reuses only schema-valid
-atomic outputs.
+The formal `20260731` HPC run used a now-superseded experimental boundary: its
+fixed Checker prompt supplied repository-investigation behavior while GEPA
+optimized a narrower plan-approval checklist. It reached 14 durable proposals
+before a provider-balance failure stopped the attempted fifteenth proposal.
+The complete run has been mirrored locally for analysis. The current Offline
+configuration uses a new six-iteration behavior-smoke identity, restores
+`accuracy` as its primary metric, and treats the candidate text as the complete
+transferable review guideline. Historical
+labels, patches, execution trajectories, and evaluator outcomes remain hidden
+from Checker input and available only as Reflection diagnostics.
 
 ## Environment
 
@@ -163,7 +166,7 @@ are under `output/archive/` and must not be mixed into current score analysis.
 | Path | Purpose |
 |---|---|
 | `src/optimization/online_*.py` | Online config, runner, adapter, rollout, Reflection, HPC execution |
-| `src/optimization/{config,dataset,checker,adapter,reflection,runner,resume}.py` | Offline Checker-rule optimization |
+| `src/optimization/{config,dataset,checker,adapter,reflection,runner,resume}.py` | Offline plan-review guideline optimization |
 | `src/optimization/hpc/` | Shared Slurm configuration, commands, and atomic task lifecycle |
 | `src/optimization/offline_*worker.py` | One Offline Checker or Reflection Slurm phase |
 | `src/evaluator/` | Runtime routing and official evaluator backends |
