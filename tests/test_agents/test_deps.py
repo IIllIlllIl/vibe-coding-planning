@@ -122,6 +122,12 @@ class TestBuildDefaultAgent:
         assert "Parser input: your entire assistant response" in DEFAULT_ACTION_PROTOCOL
         assert "Parser output: a list of shell bodies" in DEFAULT_ACTION_PROTOCOL
         assert 're.findall(r"```bash\\s*\\n(.*?)\\n```"' in DEFAULT_ACTION_PROTOCOL
+        assert "Do not include more than one fenced bash block" in (
+            DEFAULT_ACTION_PROTOCOL
+        )
+        assert "Do not write or\nsimulate bash blocks for later steps" in (
+            DEFAULT_ACTION_PROTOCOL
+        )
 
     def test_forwards_all_kwargs(self):
         agent = build_default_agent(
@@ -168,6 +174,8 @@ class TestBuildDefaultAgent:
         assert "received your entire previous assistant response" in rendered
         assert 're.findall(r"```bash\\s*\\n(.*?)\\n```"' in rendered
         assert "<bash>...</bash>" in rendered
+        assert "Do not include additional\nbash blocks for later steps" in rendered
+        assert "wait for its actual observation" in rendered
         assert "```bash\ntrue\n```" in rendered
 
     def test_omits_cost_limit_when_none(self):

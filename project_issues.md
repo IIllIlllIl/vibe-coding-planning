@@ -1,7 +1,45 @@
 # 项目问题记录与改进建议
 
-> 本文档只保留**当前需要关注或待决策**的开放项。历史实验记录、已完成修复和
-> 已废弃方案不在此维护；对应背景应沉淀到 `docs/` 中的设计或运行文档。
+> 本文档负责记录**当前实验进度、开放风险、下一次运行计划、验收检查和待决策项**。
+> 已完成证据只在仍直接支持当前决策时保留摘要；完整历史结果和原始证据由
+> `output/README.md`、`output/catalog.json` 与归档目录负责，稳定的方法语义由
+> `docs/` 负责。
+
+---
+
+## 当前实验状态
+
+Offline 的独立 1it action-protocol smoke 已完成。它覆盖完整 384/98 split，完成
+122 metric calls；seed validation accuracy 为 `0.704082`、balanced accuracy
+为 `0.697610`、MCC 为 `0.381364`。proposal 与 parent 在 12 个 minibatch case 上
+同为 7/12，因此 proposal 未通过严格提升 gate，也没有触发 proposal 的完整
+validation。这是协议与流程证据，不是 guideline 优化有效性的结论。
+
+该 smoke 的 Checker 共出现 134 次 FormatError，其中 127 次在下一响应立即修正；
+120 次错误是单条响应包含多个合法 fenced `bash` block。共享 DefaultAgent system
+guide 与错误反馈现已明确：每条响应只能包含一个可执行 block，不得在看到真实
+observation 前写出或模拟后续 block。这个变更只澄清既有 parser 传输协议，不增加
+Checker 的 plan-review 方法。
+
+下一次 Offline 运行配置已准备，但**尚未启动**：
+
+- identity：`offline-plan-guideline-hpc-accuracy-b12-8it-explicit-turn-contract-formal-20260805`；
+- full 384 train / 98 validation，`accuracy`，minibatch 12，seed 42；
+- 8 个累计 proposal iterations；worst-case projection 为 1074 metric calls，
+  `max_metric_calls=1200` 仅作 fail-safe；
+- 由 `configs/offline_gepa_supervisor.yaml` 作为唯一启动/resume 入口；提交前仍需
+  clean-worktree、远端 identity/queue 与 FairShare preflight。
+
+8it 验收清单：
+
+1. 完成 8 个 durable proposals，且没有 invalid 状态被误计为 score 或 iteration。
+2. 保留 Checker、Reflection、repair 的完整 trajectory、task journal 与原始输出。
+3. 对比 1it 基线的首次格式错误率、总错误率、即时修正率和 multi-block 分布。
+4. 重建每轮 parent、minibatch proposal/gate、acceptance 与完整 validation 结果。
+5. 同时报告 accuracy、balanced accuracy、precision、recall、F1、MCC、pass rate、
+   confusion matrix 与 seed/candidate 差异样本。
+6. 抽查 Reflection 是否覆盖全部 minibatch、是否出现案例污染，以及 guideline 是否
+   实际改变 Checker 的信息获取、证据处理和最终判断行为。
 
 ---
 
@@ -483,6 +521,15 @@ tree；最坏 metric-call 投影为 220，300 仅作 fail-safe。
 分类器或改变动作语义。匹配正文
 不在反馈中重复；原始 assistant response 在 parse 前已经写入对话及 raw trajectory，
 因此分析证据仍然保留。
+
+该 1it protocol smoke 已完成：122 metric calls，seed validation accuracy
+`69/98 = 0.704082`；proposal 与 parent 在同一 minibatch 均为 `7/12`，因此按 gate
+正常拒绝且未运行 proposal full validation。Checker 的 1,563 个 assistant response
+中有 134 次 FormatError，127/134 在下一响应立即纠正；但 120/134 是多 bash block，
+部分响应一次模拟数十个尚未执行的未来步骤。原 system guide 的 “wait ... before
+sending the next action” 可能被理解为当前 response 可包含一批 action。现改为仅针对
+该观测问题的明确禁止式合同：每个 response 不得有第二个 bash block，也不得在收到
+真实 observation 前预写或模拟后续步骤。后续实验必须使用新 identity。
 
 Reflection context overflow 不是单次孤立事件：当前 6it 的 6 个 Reflection task 中
 有 1 个首次尝试溢出；冻结 20260731 的 15 个 Reflection task 中有 3 个首次尝试发生

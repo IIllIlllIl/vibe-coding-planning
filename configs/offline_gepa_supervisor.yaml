@@ -1,7 +1,7 @@
-# Run the conservative-seed one-iteration Offline parser-contract smoke.
+# Run the conservative-seed eight-iteration formal Offline experiment.
 schema_version: 1
-session: offline-plan-guideline-hpc-accuracy-b12-1it-parser-contract-smoke-20260805
-log: .local/hpc-supervisor/offline-plan-guideline-hpc-accuracy-b12-1it-parser-contract-smoke-20260805.log
+session: offline-plan-guideline-hpc-accuracy-b12-8it-explicit-turn-contract-formal-20260805
+log: .local/hpc-supervisor/offline-plan-guideline-hpc-accuracy-b12-8it-explicit-turn-contract-formal-20260805.log
 arguments:
   # The cumulative target is read from search.max_iterations in the Offline
   # runtime config. Supervisor is the only resume entrypoint.
@@ -16,9 +16,9 @@ arguments:
   - --gepa-config
   - configs/gepa_verified_rules.yaml
   - --job-name
-  - offline-plan-guideline-hpc-accuracy-b12-1it-parser-contract-smoke-20260805
+  - offline-plan-guideline-hpc-accuracy-b12-8it-explicit-turn-contract-formal-20260805
   - --remote-dir
-  - ~/hpc_runs/vibe-coding-planning-offline-guideline-parser-contract-1it-smoke-20260805
+  - ~/hpc_runs/vibe-coding-planning-offline-guideline-explicit-turn-contract-8it-formal-20260805
   - --cpus
   - "1"
   - --mem

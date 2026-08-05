@@ -34,31 +34,17 @@ issue + historical Round 1 plan + base repository + candidate guideline
   -> GEPA Reflection -> complete replacement guideline
 ```
 
-## Experiment Status And Semantic Versions
+## Semantic Compatibility
 
-The formal HPC run
-`offline-plan-verifier-hpc-balanced-b12-8it-formal-20260731` used the earlier
-"strong fixed Checker + optimized approval checklist" boundary. It reached 14
-durable proposals after its observed 8it checkpoint was extended toward 20,
-then stopped during the attempted fifteenth proposal because the provider
-reported insufficient balance. Its candidate tree and raw evidence remain
-valid for analysis of that frozen semantic version, but it must not be resumed
-under the redesigned prompts or metric.
+The current standalone-guideline method is not compatible with historical
+"strong fixed Checker + optimized approval checklist" runs. A change to the
+Checker or Reflection responsibility boundary, primary metric, seed, dataset,
+model/search semantics, or shared Agent protocol requires a new run identity;
+it must not silently adopt an older candidate tree or score history. Historical
+run status and results belong in `project_issues.md` while they support a live
+decision, and in `output/README.md` plus `output/catalog.json` thereafter.
 
-Analysis of that run found that the fixed Checker already supplied most
-repository-interaction behavior, while candidate changes mainly shifted the
-approval threshold. This conflicts with the standalone-guideline objective.
-The redesigned experiment therefore uses new run identities and prompt/config
-revisions. The `20260805` decision-only-seed protocol smoke was launched to
-test the shared mini-swe action guide. Its local supervisor was paused
-during seed validation before changing the current config; its stored manifest
-and raw evidence remain the authority for that run. The current runtime config
-stages the next independent one-iteration protocol smoke with a conservative minimal seed, a
-fact-only Checker environment description, a minimal standalone-guideline
-Reflection target, the existing causal case-analysis process, `accuracy`, and
-the same shared action guide.
-
-## Next Experiment Requirements
+## Experimental Requirements
 
 - Candidate text is the complete transferable plan-review guideline, not only
   a list of approval criteria.
@@ -77,16 +63,16 @@ the same shared action guide.
   evidence. Its prompt begins with the intended standalone artifact, does not
   prescribe a topic taxonomy, and requires a causal account from current
   guideline through review behavior to the proposed change.
-- The next run uses `accuracy` as the GEPA primary metric. Balanced accuracy,
+- The current experiment uses `accuracy` as the GEPA primary metric. Balanced accuracy,
   precision/recall, MCC, pass rate, and the confusion matrix remain required
   diagnostic reports.
 - No action-count reward is added merely to make the Checker run more commands.
   Information-seeking quality is audited from saved trajectories and concrete
   cases before any process metric is considered.
 
-## Staged Guideline Reflection
+## Guideline Reflection
 
-The next Reflection prompt begins with only the target artifact rather than a
+The Reflection prompt begins with only the target artifact rather than a
 detailed description of the Checker. It asks for a complete, self-contained
 guideline and states that a separate Checker prompt will not supply omitted
 review behavior, decision guidance, or software-engineering knowledge. It does
@@ -123,38 +109,18 @@ The scalar gate does not mean Reflection receives only a label. It means that a
 better investigation process has no selection advantage unless it changes the
 scored prediction on the sampled cases. Validation cases are held out from
 Reflection, so their trajectories may be retained for audit but are not direct
-mutation feedback. This separation is part of GEPA's reflective search design;
-the frozen Offline problem is that its prompt narrowed rich evidence into
-checklist edits and its historical-outcome metric could disagree with actual
+mutation feedback. This separation is part of GEPA's reflective search design.
+It also creates a validity risk: a prompt can narrow rich evidence into
+superficial edits, while the historical-outcome metric can disagree with actual
 pre-implementation plan quality.
 
-The frozen 14it evidence contains 14 saved structured Reflection analyses.
-Every one records reviews for all 12/12 manifest cases and declares all 12
-Checker outputs as evidence. Deeper Plan/Code/patch/evaluator reads vary by
-classification and need. This proves nominal minibatch coverage, not semantic
-understanding; review quality must still be checked against raw trajectories.
+## Information Boundary
 
-The frozen run did learn a small amount under its configured objective: seven
-of 14 proposals passed the same-minibatch gate, but only two improved their
-parent on aggregate validation and the best balanced accuracy rose from
-`0.706342` to `0.731158`. The other five gated proposals generalized worse.
-This makes inaccurate historical labels a validity risk, but not a sufficient
-explanation for the weak optimization. The immediate optimization problem is
-that evidence-driven proposals frequently gained on 12 adaptive examples and
-failed to transfer even to the existing 98-case validation set.
-
-## Frozen 20260731 Information Boundary
-
-The frozen-run Checker receives only the issue, historical Round 1 plan,
-candidate rules, and repository at the base commit. Its fixed system prompt
-supplies execution permissions and the output protocol; `<candidate_rules>` is
-inserted into the user message and is the only evolving approval standard.
-
-Its fixed prompt requires the Checker to inspect the repository and verify
-important plan claims. It may search/read files, inspect existing tests, run
-existing tests against the unmodified repository, and use temporary diagnostic
-scripts outside the repository. It may not modify repository source/tests,
-implement the proposed solution, or judge the plan from a patch it creates.
+The Checker receives only the issue, historical Round 1 plan, candidate
+guideline, and repository at the base commit. Its fixed prompt exposes the
+input and disposable environment plus the method-independent action/output
+protocol; `<candidate_rules>` is inserted into the user message and is the only
+evolving review guidance.
 
 Checker and Reflection both receive the shared mini-swe-agent system guide,
 which positively states the one-fenced-`bash`-action parser contract and shows
@@ -222,7 +188,7 @@ but does not reject, repair, or otherwise change the proposal. The complete
 Agent trajectory remains the raw authority. The analysis is diagnostic
 evidence, never part of the candidate rules or Checker input.
 
-## Frozen 20260731 Dataset And Metric
+## Dataset And Metric
 
 The immutable snapshot is
 `output/SWE-bench_Verified/verified-round1-gepa-datasets/20260614_482_fdc056ae85df/`:
@@ -232,126 +198,67 @@ The immutable snapshot is
 | Train | 384 | 251 | 133 |
 | Validation | 98 | 64 | 34 |
 
-The frozen run's primary metric is balanced accuracy. For an example in one split:
+The primary metric is selected by config. `accuracy` gives each case a score of
+one for agreement and zero otherwise. The supported `balanced_accuracy` option
+uses this per-example weight within one split:
 
 ```text
 correct score = split_size / (2 * historical_class_count)
 incorrect score = 0
 ```
 
-The mean weighted score over a complete split equals balanced accuracy. The
-additive score also preserves GEPA's per-example cache and minibatch comparison
-contract. It affects Reflection evidence, parent/proposal minibatch comparison,
-full-validation aggregate scores, and best-candidate selection. It does not
-change Checker-visible inputs. `skip_perfect_score` must remain false because
-the two classes do not share one per-example perfect score.
+The mean weighted score over a complete split equals balanced accuracy. Both
+metrics preserve GEPA's per-example cache and minibatch comparison contract.
+The selected primary metric affects Reflection evidence, parent/proposal
+minibatch comparison, full-validation aggregate scores, and best-candidate
+selection; downstream reports derive their primary score from the same config.
+It does not change Checker-visible inputs. With balanced accuracy,
+`skip_perfect_score` must remain false because the classes do not share one
+per-example perfect score.
 
-## Frozen 20260731 Search And Stopping
+## Search, Stopping, And Resume
 
-The copied run manifest records these frozen settings. The evolving current
-config at [`../configs/gepa_verified_rules.yaml`](../configs/gepa_verified_rules.yaml)
-must not be used as their reproduction authority:
+`search.max_iterations` is the primary stop condition and is an absolute
+cumulative proposal target across resume. `search.max_metric_calls` is a
+fail-safe above the documented worst-case projection, not the experiment
+target. For validation size `V`, minibatch size `B`, and proposal target `I`,
+the conservative projection is `V + I * (B + B + V)`: seed validation plus
+parent minibatch, proposal minibatch, and possible proposal validation on every
+iteration. Exhausting the ceiling before the proposal target is an anomaly to
+investigate rather than a reason to expand the budget silently.
 
-- full 384/98 snapshot;
-- minimal seed from `configs/gepa_initial_rules_minimal.md`;
-- epoch-shuffled train minibatches of 12;
-- instance-level validation Pareto selection;
-- twenty cumulative candidate-proposal iterations, extended after observing the
-  completed 8it checkpoint;
-- balanced accuracy;
-- one independent Apptainer Slurm array element per Agent, with the complete
-  Checker batch submitted at once and no project-level concurrency throttle;
-- three total attempts for each failed Checker, Reflection, or repair task;
-- local-only GEPA adapter parallelism 1; HPC task scheduling belongs only to
-  Slurm.
-
-The minibatch remains 12 so each proposal must account for a meaningful
-cross-case sample rather than a very small, noisy batch. The current HPC run
-started fresh rather than inheriting the local 8it baseline. After its first
-eight iterations completed, its stopping target was explicitly extended to 20
-while retaining the same HPC candidate tree, scores, RNG, and sampler. Because
-this extension was chosen after observing the 8it outcome, analyses must report
-the 8it checkpoint separately and must not describe 20it as a preregistered
-target. Raw trajectories need not all be read in full: every case receives a
-structured review, every error receives a deeper diagnosis, and correct cases
-provide regression checks.
-
-`max_iterations=20` is the primary stop condition. GEPA's official saved state
-is cumulative, so the extension continues from 8 toward 20 total proposals
-rather than adding 20. The total worst-case evaluation count is
-`98 + 20 * (12 + 12 + 98) = 2538`. `max_metric_calls=3000` is a fail-safe,
-not the experiment target. Exhausting it before twenty proposals is
-an anomaly to investigate rather than a reason to expand the budget silently.
-
-The current run uses the shared iteration-target supervisor contract. A local
-`tmux + caffeinate` service polls every 10 minutes and submits short controller
-allocations. A controller
-submits fingerprinted Checker arrays or one Reflection Agent task and then
-yields; the next controller replays the same GEPA call and collects the atomic
-output. Durable supervisor progress is the number of completed proposals:
-GEPA's zero-based final `state.i` is published as `state.i + 1`, so a terminal
-callback cannot overwrite a saved count of two with index one. On successful
-completion, `controller_status.json` supplies the terminal run status when the
-GEPA `result.json` has no top-level status field.
-
-## Completed 20260804 Behavior Smoke
-
-The completed run used a new identity and did not resume the frozen 20260731
-candidate tree. It kept the full 384/98 snapshot and minibatch 12, stopped
-after six proposals, and used accuracy as the primary GEPA metric.
-Its worst-case evaluation projection is
-`98 + 6 * (12 + 12 + 98) = 830`; `max_metric_calls=1000` remains a fail-safe.
-The purpose is to observe whether the revised Checker and Reflection prompts
-produce repository-grounded, causally motivated, transferable guidelines.
-Six proposals are not enough to claim optimization effectiveness or held-out
-generalization.
-
-The first `20260805` smoke replaced the evidence-and-repository seed with the
-decision-only sentence `Decide whether the proposed plan should proceed.` It
-also appended a shared mini-swe action guide to every DefaultAgent system
-prompt. Its independent runtime and supervisor identity
-prevented it from adopting the completed `20260804` candidate tree. The local
-supervisor was later paused during seed validation so its protocol behavior
-could be audited before further search.
-
-That audit showed that a positive example alone did not explain the parser
-contract sufficiently. The shared system guide now gives a compact, exact
-interface: whole-response input, captured-shell-list output, matching
-expression, execute-or-reject branch, three implications, and one valid
-example. The retry feedback is deliberately more detailed: it first explains
-the observed match count and non-execution, then restates the parser logic so
-the Agent can compare it with its retained response. The parser executes only
-when exactly one lower-case `bash` fenced block is found and rejects zero or
-multiple matches without executing anything; XML-style `<bash>` tags are
-invalid. Finer error
-subtypes remain offline deductions from the raw response rather than new
-runtime classification logic. Matched block bodies are not copied into the
-feedback: the original assistant response is already retained in the same
-conversation and raw trajectory before parsing. This transport contract is
-shared by all project DefaultAgents and does not prescribe how a Checker or
-Reflection Agent performs its research task.
-
-The next staged smoke uses one proposal iteration over the full 384/98 split
-and the conservative minimal seed `Decide whether the proposed plan should
-proceed. Approve it only when the available evidence
-supports proceeding; otherwise reject it.` The conservative prior is part of
-the candidate guideline rather than the fixed Checker prompt, so it remains
-visible to a developer and mutable by GEPA. The Checker prompt now states only
-that a disposable base-commit repository exists at `/testbed` and its final
-state is discarded; it no longer enumerates reading, writing, tests, commands,
-or diagnostic changes. Reflection retains the existing per-case evidence
-analysis but no longer enumerates desired guideline behavior or rejects a
-checklist form in its target-artifact description.
+The shared iteration-target supervisor is the single launch and resume entry
+point. A local `tmux + caffeinate` service polls on its configured cadence and
+submits short controller allocations. A controller submits fingerprinted
+Checker arrays or one Reflection Agent task and then yields; the next
+controller replays the same GEPA call and collects the atomic output. Durable
+progress is the number of completed proposals.
 
 The ordinary run manifest permits a metric-call ceiling increase but rejects
 changes to data, source, prompts, model/search semantics, seed, or iteration
-target. Supervisor is the single resume entrypoint. For Offline runs it reads
-the cumulative target directly from `search.max_iterations`. If a run completed
-at a smaller stored target, supervisor verifies that checkpoint, saves its
-terminal reports and original manifest, records the old/new target and hashes,
-and reopens the run before invoking the ordinary resume path. It changes no
-GEPA search state. Thus a target of 20 always means 20 cumulative proposals;
-operators do not calculate or pass an additional-iteration value.
+target. If a completed run's cumulative target is extended, the supervisor
+verifies its checkpoint, preserves the original manifest and terminal reports,
+records the old/new targets and hashes, and reopens the same GEPA state. The
+new target is always cumulative; operators do not calculate or pass an
+additional-iteration value.
+
+## Shared Mini-swe Transport Contract
+
+Every project DefaultAgent receives the same method-independent parser guide.
+It describes the whole-response input, the exact lower-case fenced-`bash`
+matching rule, the captured action list, and the execute-or-reject result. A
+valid response contains exactly one executable fenced `bash` block. Zero or
+multiple matches, including multiple blocks that are individually valid, are
+rejected without executing any of them. The Agent must not write or simulate
+later-step blocks before receiving the actual observation for its current
+block.
+
+On rejection, the retained conversation receives a detailed correction that
+states the observed match count, confirms that nothing ran, restates the parser
+contract, and asks for one corrected block. The original response and complete
+trajectory remain raw evidence. This contract controls only Agent transport;
+it does not prescribe Checker investigation, Reflection reasoning, or
+guideline contents.
 
 ## HPC Task And Resume Boundary
 

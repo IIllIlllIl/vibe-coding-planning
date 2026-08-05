@@ -1,7 +1,7 @@
 # Documentation Index
 
 > Authority: navigation policy for project documentation
-> Last reviewed: 2026-07-22
+> Last reviewed: 2026-08-05
 
 Agents should read the smallest authoritative set that answers the task. Do not
 search `docs/archive/` unless the user explicitly requests historical audit,
@@ -13,8 +13,8 @@ Read in this order:
 
 | Document | Authority |
 |---|---|
-| [`../README.md`](../README.md) | Current project direction and entry points |
-| [`../project_issues.md`](../project_issues.md) | Open risks and next-run observations |
+| [`../README.md`](../README.md) | Project overview, methods, quick start, and entry points |
+| [`../project_issues.md`](../project_issues.md) | Current progress, open risks, next-run plan, and acceptance checks |
 | [`requirement-document.md`](requirement-document.md) | Online GEPA behavioral requirements and acceptance criteria |
 | [`architecture.md`](architecture.md) | Current modules, data flow, and ownership boundaries |
 | [`gepa-rule-optimization.md`](gepa-rule-optimization.md) | Online GEPA optimization semantics and evidence contract |

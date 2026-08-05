@@ -8,9 +8,7 @@ Checker prompt. The project currently maintains two distinct experimental
 paths rather than assuming one is intrinsically superior:
 
 - **Offline GEPA** learns a human- and Agent-usable plan-review guideline from
-  historical Round 1 plans, resolved labels, and execution evidence. Its next
-  experiment is pending a Checker/Reflection prompt redesign after analysis of
-  the completed 14-iteration HPC evidence.
+  historical Round 1 plans, resolved labels, and execution evidence.
 - **Online GEPA** evaluates candidate rules through current Plan-Code-Evaluator
   rollouts on ULHPC.
 
@@ -74,17 +72,12 @@ issue + historical Round 1 plan + base repository + candidate guideline
   -> GEPA Reflection proposes a complete replacement guideline
 ```
 
-The formal `20260731` HPC run used a now-superseded experimental boundary: its
-fixed Checker prompt supplied repository-investigation behavior while GEPA
-optimized a narrower plan-approval checklist. It reached 14 durable proposals
-before a provider-balance failure stopped the attempted fifteenth proposal.
-The earlier 14-proposal run has been mirrored locally for analysis. The
-completed `20260804` six-iteration behavior smoke restored `accuracy` and
-treated the candidate text as the complete transferable review guideline. The
-prepared `20260805` one-iteration protocol smoke uses a new identity to test
-the conservative minimal seed and shared parser-exact mini-swe system guide. Historical
-labels, patches, execution trajectories, and evaluator outcomes remain hidden
-from Checker input and available only as Reflection diagnostics.
+The candidate text is the complete transferable review guideline. The fixed
+Checker exposes the issue, proposed plan, disposable base-commit repository,
+and method-independent Agent protocol without supplying a hidden review method.
+Historical labels, patches, execution trajectories, and evaluator outcomes
+remain hidden from Checker input and are available only as Reflection
+diagnostics.
 
 ## Environment
 

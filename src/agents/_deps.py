@@ -45,8 +45,10 @@ pwd
 ls -la
 ```
 
-After execution, wait for the observation before sending the next action. When
-finished, put the task-specific submission command inside the single block.
+Do not include more than one fenced bash block in a response. Do not write or
+simulate bash blocks for later steps before receiving the actual observation.
+When finished, put the task-specific submission command inside the single
+block.
 """
 
 # Keep the execution protocol identical across every project agent built on
@@ -79,10 +81,11 @@ The opening fence therefore uses three backticks followed by lowercase `bash`
 and a newline; the closing three backticks begin on a new line. XML-style tags
 such as `<bash>...</bash>` are not recognized.
 
-Return a corrected response with exactly one bash block. Put all shell
-operations for this step into that one block as a multi-line shell script, or
-wait for the next observation before issuing another response. This is one
-complete valid response:
+Return a corrected response with exactly one bash block. That block may contain
+multiple shell commands needed for the current step. Do not include additional
+bash blocks for later steps or simulate a sequence of future actions. After
+this one block is executed, wait for its actual observation before deciding
+the next response. This is one complete valid response:
 
 ```bash
 true

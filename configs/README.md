@@ -9,7 +9,7 @@ superseded variants live under `archive/` and remain available for provenance.
 | Config | Runtime | Purpose |
 |---|---|---|
 | `gepa_online_planning_hpc.yaml` | ULHPC Apptainer | Standard formal configuration over the 384/98 split. PCT, repo-grounded Reviewer, and Synthesis are separate Slurm phases, each using `1 CPU / 4G / 55min` and at most three attempts. Reviewer/Synthesis preserve per-attempt trajectories; Synthesis no longer consumes controller walltime. |
-| `online_gepa_supervisor.yaml` | Local tmux+caffeinate | Exact launch identity for the separate-Reflection 2-iteration smoke: session/log, 30-minute cadence, unlimited controller slices, remote workdir, and `1 CPU / 4G / 2h` controller arguments. The smoke deliberately retains `reflection_minibatch_size: 3`. It is configured but not launched. |
+| `online_gepa_supervisor.yaml` | Local tmux+caffeinate | Persisted Online launch identity. It owns the session/log, polling cadence, controller-slice policy, remote workdir, and controller resources; rollout semantics remain in the runtime config. |
 | `gepa_online_planning_pilot.yaml` | local Docker | Standard small executable example for validating the Online GEPA flow locally. |
 
 Online GEPA is the current mainline. Candidate rules go only to the Plan Agent;
@@ -39,24 +39,18 @@ poll cadence, controller resources, or remote workdir belongs in
 
 | Config | Runtime | Purpose |
 |---|---|---|
-| `gepa_verified_rules.yaml` | ULHPC Apptainer | Staged one-iteration protocol smoke over the full 384/98 split. It uses a conservative minimal seed, fact-only Checker environment description, minimal Reflection target, shared parser-exact mini-swe action protocol, accuracy, and minibatch 12 under a new identity. |
+| `gepa_verified_rules.yaml` | ULHPC Apptainer | Formal eight-iteration experiment over the full 384/98 split. It uses the conservative minimal seed, fact-only Checker environment description, minimal Reflection target, explicit single-block mini-swe contract, accuracy, and minibatch 12. |
 | `offline_gepa_supervisor.yaml` | Local tmux+caffeinate | Matching native-resume launch identity. It reads the cumulative target from the Offline runtime config, uses 10-minute polling and `1 CPU / 4G / 10min` controller slices, and requires an unchanged runtime-config hash, Git commit, and clean worktree before submission. |
 | `offline_gepa_hpc_smoke_2x2_20260728.yaml` | ULHPC Apptainer | Environment-only 2-train/2-validation, 1-iteration smoke. Its scores are not rule-quality evidence. |
 | `gepa_initial_guideline_minimal.md` | Prompt text | Conservative minimal Offline guideline seed. It states the target decision and defaults to rejection without supporting evidence, but supplies no repository-investigation behavior, format, or review methodology. |
 | `gepa_initial_rules_minimal.md` | Historical prompt text | Frozen pre-guideline seed retained for archived configs and provenance. |
 
 `search.max_iterations` is the primary experimental stop condition and is an
-absolute cumulative proposal target across resume. For the current one-
-iteration protocol smoke, `max_metric_calls=300` is only a fail-safe above the
-220-call worst-case projection. Offline uses its own
+absolute cumulative proposal target across resume. For the eight-
+iteration formal run, `max_metric_calls=1200` is only a fail-safe above the
+1074-call worst-case projection. Offline uses its own
 launch config with the shared supervisor service. See
 [`../docs/offline-gepa.md`](../docs/offline-gepa.md).
-
-The completed `20260804` Offline smoke used a dedicated identity, `accuracy`,
-and a standalone plan-review guideline. Its remote raw evidence is archived as
-a test result. The prepared `20260805` one-iteration protocol smoke has a
-separate runtime and supervisor identity and must start from a new candidate
-tree.
 
 ## Representative Paused Workflows
 

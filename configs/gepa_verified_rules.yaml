@@ -1,10 +1,10 @@
-# One-iteration Offline protocol smoke for the conservative minimal seed, minimal
-# Checker/Reflection responsibility boundary, and shared parser-exact mini-swe
-# action protocol. This run is not a formal effectiveness result.
+# Eight-iteration formal Offline run for the conservative minimal seed, minimal
+# Checker/Reflection responsibility boundary, and explicit single-block
+# mini-swe action contract.
 paths:
   dataset_snapshot: output/SWE-bench_Verified/verified-round1-gepa-datasets/20260614_482_fdc056ae85df
   initial_guideline: configs/gepa_initial_guideline_minimal.md
-  run_dir: output/SWE-bench_Verified/gepa-rules/offline-plan-guideline-hpc-accuracy-b12-1it-parser-contract-smoke-20260805
+  run_dir: output/SWE-bench_Verified/gepa-rules/offline-plan-guideline-hpc-accuracy-b12-8it-explicit-turn-contract-formal-20260805
 
 checker:
   model: deepseek-v4-flash
@@ -28,16 +28,16 @@ reflection:
   timeout: 1800
 
 search:
-  # Full 384/98 snapshot and one GEPA proposal iteration after seed
+  # Full 384/98 snapshot and eight GEPA proposal iterations after seed
   # validation. The iteration stopper is the primary experimental control.
-  # 220 metric calls is the worst-case projection when the proposal passes the
-  # minibatch gate and receives full validation:
-  # 98 + 1 * (12 parent + 12 proposal + 98 validation).
+  # 1074 metric calls is the worst-case projection when every proposal passes
+  # the minibatch gate and receives full validation:
+  # 98 + 8 * (12 parent + 12 proposal + 98 validation).
   # Keep a larger metric-call ceiling only as a fail-safe; reaching it before
-  # one durable iteration is an anomaly to audit rather than a normal stop.
-  max_iterations: 1
-  max_metric_calls: 300
-  projection_metric_calls: 220
+  # eight durable iterations is an anomaly to audit rather than a normal stop.
+  max_iterations: 8
+  max_metric_calls: 1200
+  projection_metric_calls: 1074
   reflection_minibatch_size: 12
   primary_metric: accuracy
   # Local-only adapter concurrency. HPC submits every Agent as an independent
@@ -81,7 +81,7 @@ hpc:
   python_module: lang/Python/3.11
   container_module: tools/Apptainer
   python_bin: python3
-  job_name_prefix: offline-guideline-parser-contract-1it-20260805
+  job_name_prefix: offline-guideline-explicit-turn-8it-20260805
   worker_config_path: configs/gepa_verified_rules.yaml
 
 prompts:

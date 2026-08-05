@@ -5423,9 +5423,9 @@ def test_default_gepa_config_stages_next_checker_boundary(monkeypatch):
     assert config.hpc.mem == "4G"
     assert config.hpc.time == "00:35:00"
     assert config.hpc.max_task_attempts == 3
-    assert config.search.max_metric_calls == 300
-    assert config.search.projection_metric_calls == 220
-    assert config.search.max_iterations == 1
+    assert config.search.max_metric_calls == 1200
+    assert config.search.projection_metric_calls == 1074
+    assert config.search.max_iterations == 8
     assert config.search.reflection_minibatch_size == 12
     assert config.search.primary_metric == "accuracy"
     assert config.search.parallel == 1
@@ -5434,7 +5434,7 @@ def test_default_gepa_config_stages_next_checker_boundary(monkeypatch):
     assert config.checker.max_attempts == 1
     assert config.initial_rules_path.name == "gepa_initial_guideline_minimal.md"
     assert (
-        "offline-plan-guideline-hpc-accuracy-b12-1it-parser-contract-smoke-20260805"
+        "offline-plan-guideline-hpc-accuracy-b12-8it-explicit-turn-contract-formal-20260805"
         in str(config.run_dir)
     )
     checker_prompt = " ".join(config.checker_prompt.split())
