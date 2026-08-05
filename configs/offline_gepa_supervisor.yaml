@@ -1,7 +1,7 @@
-# Run the six-iteration Offline guideline behavior smoke.
+# Run the decision-only-seed and shared-protocol six-iteration Offline smoke.
 schema_version: 1
-session: offline-plan-guideline-hpc-accuracy-b12-6it-smoke-20260804
-log: .local/hpc-supervisor/offline-plan-guideline-hpc-accuracy-b12-6it-smoke-20260804.log
+session: offline-plan-guideline-hpc-accuracy-b12-6it-minseed-protocol-smoke-20260805
+log: .local/hpc-supervisor/offline-plan-guideline-hpc-accuracy-b12-6it-minseed-protocol-smoke-20260805.log
 arguments:
   # The cumulative target is read from search.max_iterations in the Offline
   # runtime config. Supervisor is the only resume entrypoint.
@@ -16,9 +16,9 @@ arguments:
   - --gepa-config
   - configs/gepa_verified_rules.yaml
   - --job-name
-  - offline-plan-guideline-hpc-accuracy-b12-6it-smoke-20260804
+  - offline-plan-guideline-hpc-accuracy-b12-6it-minseed-protocol-smoke-20260805
   - --remote-dir
-  - ~/hpc_runs/vibe-coding-planning-offline-guideline-accuracy-b12-6it-smoke-20260804
+  - ~/hpc_runs/vibe-coding-planning-offline-guideline-minseed-protocol-6it-smoke-20260805
   - --cpus
   - "1"
   - --mem

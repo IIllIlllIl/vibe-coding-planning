@@ -464,6 +464,13 @@ method、软件工程原则、heuristic 和判断标准的唯一来源；固定 
 disposable repository 的读写/运行权限及 mini-swe 协议。Reflection 也改为先定义
 standalone guideline 目标，再对每个案例建立“当前 guideline → review 行为 →
 prediction → 修改后预期行为”的因果分析；不再规定 checklist、主题章节或绝对批准
-条件。primary metric 已切换为 `accuracy`。当前 config 使用独立的 20260804 6it
-behavior-smoke identity、minibatch 12 和 830 次最坏 metric-call projection；本轮只
-用于观察目标修改后的 Agent 行为，不作为正式优化效果结论。
+条件。primary metric 已切换为 `accuracy`。20260804 6it behavior smoke 已完成；
+下一版 config 使用 decision-only seed 和所有 DefaultAgent 共用的正向 mini-swe
+action-format system guide。20260805 6it smoke 已配置独立 run/supervisor identity，
+但尚未启动；它不得复用 20260804 的 candidate tree。
+
+Reflection context overflow 不是单次孤立事件：当前 6it 的 6 个 Reflection task 中
+有 1 个首次尝试溢出；冻结 20260731 的 15 个 Reflection task 中有 3 个首次尝试发生
+同类错误；本地 8it 的 8 条 Reflection trajectory 中未发现。三次运行的 prompt 和
+runtime 不完全相同，不能把合并比例当作稳定发生率。当前决策是保留 minibatch 12，
+不加入 read/compact/host summarizer；继续保存完整失败轨迹并观察 fresh-Agent retry。

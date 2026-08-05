@@ -46,13 +46,14 @@ under the redesigned prompts or metric.
 Analysis of that run found that the fixed Checker already supplied most
 repository-interaction behavior, while candidate changes mainly shifted the
 approval threshold. This conflicts with the standalone-guideline objective.
-The next experiment therefore requires a new run identity and a prompt/config
-revision. The current runtime config now stages the agreed minimal Checker,
-standalone-guideline Reflection target, causal case analysis, and `accuracy`
-metric. Its run identity and stopping budget still describe the frozen
-experiment, so it is intentionally not launch-ready. The copied run manifest
-and raw evidence, rather than the evolving current config, are the authority
-for reproducing or analyzing the frozen 14it run.
+The redesigned experiment therefore uses a new run identity and prompt/config
+revision. The current runtime config stages the agreed minimal Checker,
+standalone-guideline Reflection target, causal case analysis, `accuracy`
+metric, decision-only seed, and shared positive mini-swe action guide. The
+prepared `20260805` six-iteration smoke has its own matching runtime and
+supervisor identity and has not been launched. Stored run manifests and raw
+evidence, rather than the evolving current config, remain the authority for
+reproducing earlier runs.
 
 ## Next Experiment Requirements
 
@@ -153,13 +154,13 @@ existing tests against the unmodified repository, and use temporary diagnostic
 scripts outside the repository. It may not modify repository source/tests,
 implement the proposed solution, or judge the plan from a patch it creates.
 
-Checker and Reflection both use the shared mini-swe-agent action protocol.
-After zero or multiple fenced `bash` actions, the invalid response is not
-executed. The same Agent receives the detailed correction from
-mini-swe-agent 1.17.5's official SWE-bench config—including the detected action
-count and one-action example—and must emit a new response. This is fixed
-execution feedback rather than part of the candidate rules or experiment
-prompt.
+Checker and Reflection both receive the shared mini-swe-agent system guide,
+which positively states the one-fenced-`bash`-action parser contract and shows
+one accepted response. After zero or multiple fenced `bash` actions, the
+invalid response is not executed. The same Agent receives the detailed
+correction from mini-swe-agent 1.17.5's official SWE-bench config—including
+the detected action count and one-action example—and must emit a new response.
+This is fixed transport guidance rather than part of the candidate guideline.
 
 Final Checker output is validated by worker-side host Python after
 mini-swe-agent has accepted the completion action. If that output is empty,
@@ -291,17 +292,23 @@ callback cannot overwrite a saved count of two with index one. On successful
 completion, `controller_status.json` supplies the terminal run status when the
 GEPA `result.json` has no top-level status field.
 
-## Current 20260804 Behavior Smoke
+## Completed 20260804 Behavior Smoke
 
-The current config uses a new run identity and does not resume the frozen
-20260731 candidate tree. It keeps the full 384/98 snapshot and minibatch 12,
-but stops after six proposals and uses accuracy as the primary GEPA metric.
+The completed run used a new identity and did not resume the frozen 20260731
+candidate tree. It kept the full 384/98 snapshot and minibatch 12, stopped
+after six proposals, and used accuracy as the primary GEPA metric.
 Its worst-case evaluation projection is
 `98 + 6 * (12 + 12 + 98) = 830`; `max_metric_calls=1000` remains a fail-safe.
 The purpose is to observe whether the revised Checker and Reflection prompts
 produce repository-grounded, causally motivated, transferable guidelines.
 Six proposals are not enough to claim optimization effectiveness or held-out
 generalization.
+
+The prepared `20260805` smoke replaces the evidence-and-repository seed with the
+decision-only sentence `Decide whether the proposed plan should proceed.` It
+also appends the shared positive mini-swe action-format guide to every
+DefaultAgent system prompt. Its new runtime and supervisor identity prevent it
+from adopting the completed `20260804` candidate tree.
 
 The ordinary run manifest permits a metric-call ceiling increase but rejects
 changes to data, source, prompts, model/search semantics, seed, or iteration

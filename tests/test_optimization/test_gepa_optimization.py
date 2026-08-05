@@ -5434,7 +5434,7 @@ def test_default_gepa_config_stages_next_checker_boundary(monkeypatch):
     assert config.checker.max_attempts == 1
     assert config.initial_rules_path.name == "gepa_initial_guideline_minimal.md"
     assert (
-        "offline-plan-guideline-hpc-accuracy-b12-6it-smoke-20260804"
+        "offline-plan-guideline-hpc-accuracy-b12-6it-minseed-protocol-smoke-20260805"
         in str(config.run_dir)
     )
     checker_prompt = " ".join(config.checker_prompt.split())
@@ -5445,8 +5445,10 @@ def test_default_gepa_config_stages_next_checker_boundary(monkeypatch):
     assert "Do not modify repository source or test files" not in checker_prompt
     assert "Do not implement the proposed solution" not in checker_prompt
     assert "/tmp/gepa_checker_result.json" not in checker_prompt
-    assert "exactly one shell action" in checker_prompt
-    assert "do not use <bash> tags" in checker_prompt
+    # Shared action syntax is appended centrally by build_default_agent; the
+    # method config keeps only Checker-specific submission semantics.
+    assert "Mini-swe action format" not in checker_prompt
+    assert "Checker submission" in checker_prompt
     assert "available at /testbed, not /repo" in checker_prompt
     assert "Saying that the result was submitted does not finish" in checker_prompt
     assert "<candidate_guideline>" in config.checker_instance_template
@@ -5482,9 +5484,7 @@ def test_default_gepa_config_stages_next_checker_boundary(monkeypatch):
     assert "Do not guess alternative filenames" in reflection_instance
     assert "{{current_guideline}}" in config.reflection_instance_template
     assert config.initial_rules_path.read_text(encoding="utf-8").strip() == (
-        "Use evidence from the issue and repository to investigate whether the "
-        "proposed plan is sufficiently likely to resolve the reported problem, "
-        "then decide whether it should proceed."
+        "Decide whether the proposed plan should proceed."
     )
 
 

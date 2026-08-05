@@ -1,9 +1,10 @@
-# Six-iteration Offline guideline behavior smoke. This run checks the revised
-# Checker/Reflection boundary and is not a formal effectiveness result.
+# Six-iteration Offline smoke for the decision-only seed and shared positive
+# mini-swe action-format guide. This run checks behavior and protocol effects;
+# it is not a formal effectiveness result.
 paths:
   dataset_snapshot: output/SWE-bench_Verified/verified-round1-gepa-datasets/20260614_482_fdc056ae85df
   initial_guideline: configs/gepa_initial_guideline_minimal.md
-  run_dir: output/SWE-bench_Verified/gepa-rules/offline-plan-guideline-hpc-accuracy-b12-6it-smoke-20260804
+  run_dir: output/SWE-bench_Verified/gepa-rules/offline-plan-guideline-hpc-accuracy-b12-6it-minseed-protocol-smoke-20260805
 
 checker:
   model: deepseek-v4-flash
@@ -80,7 +81,7 @@ hpc:
   python_module: lang/Python/3.11
   container_module: tools/Apptainer
   python_bin: python3
-  job_name_prefix: offline-guideline-accuracy-b12-6it-20260804
+  job_name_prefix: offline-guideline-minseed-protocol-6it-20260805
   worker_config_path: configs/gepa_verified_rules.yaml
 
 prompts:
@@ -103,11 +104,9 @@ prompts:
     diagnostic changes. All repository changes are discarded after this
     evaluation.
 
-    ## Shell protocol
+    ## Checker submission
 
-    Every response must contain exactly one shell action in one bash code block.
-    Use a Markdown ```bash code block; do not use <bash> tags. The repository
-    is available at /testbed, not /repo.
+    The repository is available at /testbed, not /repo.
 
     When ready, submit the result with one final action in this form:
     ```bash
@@ -214,9 +213,8 @@ prompts:
     supports it; otherwise omit it. Case analysis and change provenance belong
     only in the separate Reflection analysis.
 
-    ## Shell protocol
+    ## Reflection output and submission
 
-    Every response must contain exactly one shell action in one bash code block.
     Before submission, write the complete case analysis to
     /tmp/reflection_analysis.json with this schema:
     - case_reviews: one object for every minibatch instance, containing

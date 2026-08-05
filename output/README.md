@@ -56,11 +56,10 @@ prompt/source hashes, or a new run identity at this directory.
 
 The 20260731 HPC result is complete only as evidence for its frozen semantic
 version. It must not be resumed under the planned prompt and metric changes;
-the redesigned experiment requires a new run identity. The four preceding
-Offline HPC platform-validation runs through 2026-07-30 were smoke tests rather
-than formal rule-quality experiments. Their raw outputs are preserved remotely
-under `archive/tests/offline-gepa/` and excluded from the default analysis
-surface:
+the redesigned experiment requires a new run identity. The preceding Offline
+HPC platform/behavior runs were smoke tests rather than formal rule-quality
+experiments. Their raw outputs are preserved remotely under
+`archive/tests/offline-gepa/` and excluded from the default analysis surface:
 
 | Remote archived run | Outcome | Smoke purpose |
 |---|---|---|
@@ -68,6 +67,7 @@ surface:
 | `offline-plan-verifier-hpc-balanced-b12-2it-failure-evidence-20260729/` | Produced diagnostic output under superseded supervisor semantics | Failure-evidence and retry validation |
 | `offline-plan-verifier-hpc-balanced-b12-2it-identity-guard-20260730/` | Stopped after 1 durable proposal | Identity guard validation; used superseded `%4` array throttling |
 | `offline-plan-verifier-hpc-balanced-b12-2it-slurm-native-20260730/` | Completed 2/2 proposals and 342 metric calls | End-to-end Slurm-native scheduling smoke |
+| `offline-plan-guideline-hpc-accuracy-b12-6it-smoke-20260804/` | Completed 6/6 proposals and 438 metric calls | Revised Checker/Reflection boundary and standalone-guideline behavior smoke |
 
 These runs may be used to diagnose the HPC implementation, retries,
 trajectories, and scheduling behavior. Their candidate scores must not be

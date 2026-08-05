@@ -2,10 +2,13 @@
 
 from __future__ import annotations
 
+import re
+
 import pytest
 
 from src.agents import _deps
 from src.agents._deps import (
+    DEFAULT_ACTION_PROTOCOL,
     DEFAULT_FORMAT_ERROR_TEMPLATE,
     build_default_agent,
     build_model,
@@ -104,6 +107,15 @@ class TestBuildModel:
 
 
 class TestBuildDefaultAgent:
+    def test_shared_action_guide_example_matches_parser_once(self):
+        actions = re.findall(
+            r"```bash\s*\n(.*?)\n```",
+            DEFAULT_ACTION_PROTOCOL,
+            re.DOTALL,
+        )
+
+        assert actions == ["<one shell action or multi-line shell script>"]
+
     def test_forwards_all_kwargs(self):
         agent = build_default_agent(
             FakeDefaultAgent,
@@ -113,7 +125,13 @@ class TestBuildDefaultAgent:
             step_limit=15,
             cost_limit=1.5,
         )
-        assert agent.kwargs["system_template"] == "You are a planner"
+        system_template = agent.kwargs["system_template"]
+        assert system_template.startswith("You are a planner\n\n")
+        assert system_template.endswith(DEFAULT_ACTION_PROTOCOL)
+        assert system_template.count("## Mini-swe action format") == 1
+        assert "```bash\n<one shell action or multi-line shell script>\n```" in (
+            system_template
+        )
         assert agent.kwargs["format_error_template"] == DEFAULT_FORMAT_ERROR_TEMPLATE
         assert agent.kwargs["step_limit"] == 15
         assert agent.kwargs["cost_limit"] == 1.5

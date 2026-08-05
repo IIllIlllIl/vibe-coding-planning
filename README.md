@@ -78,10 +78,11 @@ The formal `20260731` HPC run used a now-superseded experimental boundary: its
 fixed Checker prompt supplied repository-investigation behavior while GEPA
 optimized a narrower plan-approval checklist. It reached 14 durable proposals
 before a provider-balance failure stopped the attempted fifteenth proposal.
-The complete run has been mirrored locally for analysis. The current Offline
-configuration uses a new six-iteration behavior-smoke identity, restores
-`accuracy` as its primary metric, and treats the candidate text as the complete
-transferable review guideline. Historical
+The earlier 14-proposal run has been mirrored locally for analysis. The
+completed `20260804` six-iteration behavior smoke restored `accuracy` and
+treated the candidate text as the complete transferable review guideline. The
+prepared `20260805` six-iteration smoke uses a new identity to test the
+decision-only seed and shared positive mini-swe system guide. Historical
 labels, patches, execution trajectories, and evaluator outcomes remain hidden
 from Checker input and available only as Reflection diagnostics.
 

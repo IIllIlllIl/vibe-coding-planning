@@ -15,6 +15,29 @@ from src.exceptions import FatalError
 logger = logging.getLogger(__name__)
 _MINI_SWE_AGENT_VERSION = "1.17.5"
 
+# This is transport documentation for mini-swe-agent's existing action parser,
+# not task or software-engineering guidance.  Keep it centralized so every
+# DefaultAgent sees the same positive description and executable example.
+DEFAULT_ACTION_PROTOCOL = """\
+## Mini-swe action format
+
+The action parser accepts a response in this form:
+
+<response_example>
+Optional plain-text reasoning about the next action.
+
+```bash
+<one shell action or multi-line shell script>
+```
+</response_example>
+
+The opening fence is `bash` followed by a newline. The closing fence follows
+the shell action on a new line. The response contains exactly one such action
+block. After the action runs, its output is returned as the next observation.
+Continue with another response in the same format, or use the task-specific
+submission action when the work is complete.
+"""
+
 # Keep the execution protocol identical across every project agent built on
 # mini-swe-agent's DefaultAgent.  This is the format-error feedback shipped in
 # mini-swe-agent 1.17.5's config/extra/swebench.yaml.  It is deliberately a
@@ -163,12 +186,13 @@ def build_default_agent(
 
         DefaultAgent(model, env, *, config_class=AgentConfig, **kwargs)
 
-    We pass the config fields (``system_template``, ``instance_template``,
-    ``step_limit``, ``cost_limit``) plus the shared official SWE-bench
-    ``format_error_template`` as keyword arguments and let DefaultAgent
-    forward them to its internal ``AgentConfig``. ``DefaultAgent`` is passed
-    as an explicit argument so that tests can inject a mock class without
-    patching ``_deps`` internals.
+    We append the shared positive action-format guide to the phase system
+    template, then pass the config fields (``system_template``,
+    ``instance_template``, ``step_limit``, ``cost_limit``) plus the shared
+    official SWE-bench ``format_error_template`` as keyword arguments and let
+    DefaultAgent forward them to its internal ``AgentConfig``. ``DefaultAgent``
+    is passed as an explicit argument so that tests can inject a mock class
+    without patching ``_deps`` internals.
 
     Task injection follows the official ``minisweagent/config/extra/swebench.yaml``
     pattern: the ``instance_template`` contains a literal ``{{task}}``
@@ -201,7 +225,9 @@ def build_default_agent(
         inject the task.
     """
     kwargs: dict[str, Any] = {
-        "system_template": system_template,
+        "system_template": (
+            f"{system_template.rstrip()}\n\n{DEFAULT_ACTION_PROTOCOL}"
+        ),
         "format_error_template": DEFAULT_FORMAT_ERROR_TEMPLATE,
     }
     if step_limit is not None:

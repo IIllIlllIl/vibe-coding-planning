@@ -146,13 +146,15 @@ pre-evaluation semantic gate.
 
 ## 6. Failure Boundaries
 
-- Every project Agent built through `build_default_agent` uses the detailed
-  format-error feedback shipped in mini-swe-agent 1.17.5's SWE-bench config.
+- Every project Agent built through `build_default_agent` receives one shared
+  positive system-prompt description of mini-swe-agent's accepted fenced
+  `bash` action format and executable example, plus the detailed format-error
+  feedback shipped in mini-swe-agent 1.17.5's SWE-bench config.
   When a response contains zero or multiple fenced `bash` actions,
   mini-swe-agent does not execute it: it reports the detected action count,
   repeats the one-action example, and asks the same Agent for a corrected
-  response. This shared adapter protocol does not change phase prompts, valid
-  action syntax, completion semantics, or scoring.
+  response. This shared adapter protocol documents the existing parser; it
+  does not change valid action syntax, completion semantics, or scoring.
 - Agent contract failures: structured, selective retry, possibly scored zero.
 - Operational failures: retry when safe, otherwise invalidate the metric call.
 - Cooperative yield: normal scheduling control, not failure.
