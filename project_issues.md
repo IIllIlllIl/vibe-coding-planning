@@ -459,15 +459,30 @@ same-minibatch gate，但只有 2 个在 98-validation 上优于各自 parent；
 后停止提升。因此 Code Agent/历史标签偏差不是“没有明显学到知识”的充分解释；更
 直接的问题是 Reflection 产生的局部变异不能稳定泛化到当前已有 validation 数据。
 
-已经把当前 config 中的 Checker 改为最小边界：candidate guideline 是 review
-method、软件工程原则、heuristic 和判断标准的唯一来源；固定 prompt 只声明任务、
-disposable repository 的读写/运行权限及 mini-swe 协议。Reflection 也改为先定义
-standalone guideline 目标，再对每个案例建立“当前 guideline → review 行为 →
-prediction → 修改后预期行为”的因果分析；不再规定 checklist、主题章节或绝对批准
-条件。primary metric 已切换为 `accuracy`。20260804 6it behavior smoke 已完成；
-下一版 config 使用 decision-only seed 和所有 DefaultAgent 共用的正向 mini-swe
-action-format system guide。20260805 6it smoke 已配置独立 run/supervisor identity，
-但尚未启动；它不得复用 20260804 的 candidate tree。
+已经把 Checker 改为最小边界：candidate guideline 是 review method、软件工程原则、
+heuristic 和判断标准的唯一来源；固定 prompt 只声明任务、环境事实及 mini-swe
+协议。Reflection 保留逐案例的 evidence/因果分析流程，但目标产物描述不再枚举
+guideline 应包含的行为或排斥 checklist 形式。primary metric 为 `accuracy`。
+20260804 6it behavior smoke 已完成；第一轮 20260805 smoke 使用 decision-only seed
+和所有 DefaultAgent 共用的 mini-swe action-format system guide，已启动并在 seed
+validation 期间暂停本地 supervisor，等待完整 worker 结果后审计协议行为。当前 config
+为后续独立 1it protocol smoke 使用保守 minimal seed；默认拒绝先验位于可见、可优化
+的 guideline 中，而不是固定 Checker prompt。新 config 不得复用前两轮 candidate
+tree；最坏 metric-call 投影为 220，300 仅作 fail-safe。
+
+协议审计发现第一版正向示例的信息覆盖不足：已完成的 97 个 Checker task 中共有
+252/2601 个 assistant response 触发 FormatError，78/97 个 task 至少发生一次，且
+172 次为零匹配、80 次为多匹配；零匹配中 158 次使用了 parser 不识别的 XML 风格
+`<bash>` 标签。mini-swe parser 原生只产生匹配列表及数量，旧反馈已经报告数量，但
+没有明确说明非法响应整体未执行、只接受的字面 fence 形式以及零/多匹配均拒绝。
+具体的 XML/inline-fence 等子类型是从 raw response 离线推断，并非已有 runtime 分类
+被汇报层遗漏。下一轮 smoke 前先把确定性的完整 parser 合同加入所有 DefaultAgent 的
+共享 system guide 和 FormatError 反馈：system guide 以紧凑形式明确接口输入、匹配
+列表输出、精确正则、execute-or-reject 分支、必要语义和合法示例；反馈先解释本次
+数量和未执行状态，再以更详细形式重述该合同。不新增启发式
+分类器或改变动作语义。匹配正文
+不在反馈中重复；原始 assistant response 在 parse 前已经写入对话及 raw trajectory，
+因此分析证据仍然保留。
 
 Reflection context overflow 不是单次孤立事件：当前 6it 的 6 个 Reflection task 中
 有 1 个首次尝试溢出；冻结 20260731 的 15 个 Reflection task 中有 3 个首次尝试发生

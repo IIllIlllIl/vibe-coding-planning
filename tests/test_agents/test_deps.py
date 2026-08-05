@@ -114,7 +114,14 @@ class TestBuildDefaultAgent:
             re.DOTALL,
         )
 
-        assert actions == ["<one shell action or multi-line shell script>"]
+        assert actions == ["pwd\nls -la"]
+        assert "reject_the_entire_response_without_execution" in (
+            DEFAULT_ACTION_PROTOCOL
+        )
+        assert "<bash>...</bash>" in DEFAULT_ACTION_PROTOCOL
+        assert "Parser input: your entire assistant response" in DEFAULT_ACTION_PROTOCOL
+        assert "Parser output: a list of shell bodies" in DEFAULT_ACTION_PROTOCOL
+        assert 're.findall(r"```bash\\s*\\n(.*?)\\n```"' in DEFAULT_ACTION_PROTOCOL
 
     def test_forwards_all_kwargs(self):
         agent = build_default_agent(
@@ -128,10 +135,8 @@ class TestBuildDefaultAgent:
         system_template = agent.kwargs["system_template"]
         assert system_template.startswith("You are a planner\n\n")
         assert system_template.endswith(DEFAULT_ACTION_PROTOCOL)
-        assert system_template.count("## Mini-swe action format") == 1
-        assert "```bash\n<one shell action or multi-line shell script>\n```" in (
-            system_template
-        )
+        assert system_template.count("## Mini-swe action protocol") == 1
+        assert "```bash\npwd\nls -la\n```" in system_template
         assert agent.kwargs["format_error_template"] == DEFAULT_FORMAT_ERROR_TEMPLATE
         assert agent.kwargs["step_limit"] == 15
         assert agent.kwargs["cost_limit"] == 1.5
@@ -139,7 +144,9 @@ class TestBuildDefaultAgent:
         assert agent.env == "env"
 
     @pytest.mark.parametrize("action_count", [0, 2])
-    def test_format_error_uses_official_swebench_correction(self, action_count):
+    def test_format_error_reports_parser_contract_and_non_execution(
+        self, action_count
+    ):
         from jinja2 import StrictUndefined, Template
 
         agent = build_default_agent(
@@ -154,9 +161,14 @@ class TestBuildDefaultAgent:
             undefined=StrictUndefined,
         ).render(actions=["action"] * action_count)
 
-        assert f"found {action_count} actions" in rendered
-        assert "EXACTLY ONE action in triple backticks" in rendered
-        assert "```bash\n<action>\n```" in rendered
+        assert f"recognized {action_count} executable bash code blocks" in rendered
+        assert "previous response was rejected before execution" in rendered
+        assert "None of its text or\ncommands ran" in rendered
+        assert "One complete bash\ncode block counts as one action" in rendered
+        assert "received your entire previous assistant response" in rendered
+        assert 're.findall(r"```bash\\s*\\n(.*?)\\n```"' in rendered
+        assert "<bash>...</bash>" in rendered
+        assert "```bash\ntrue\n```" in rendered
 
     def test_omits_cost_limit_when_none(self):
         agent = build_default_agent(

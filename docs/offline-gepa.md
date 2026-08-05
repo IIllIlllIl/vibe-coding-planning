@@ -2,15 +2,17 @@
 
 > Authority: current Offline GEPA experiment contract
 >
-> Last reviewed: 2026-08-04
+> Last reviewed: 2026-08-05
 
 ## Objective
 
 Offline GEPA learns a standalone plan-review guideline that both a human
-reviewer and an Agent can apply before implementation. The guideline is not
-only an approval checklist. It must guide how to interact with the repository,
-obtain and process relevant evidence, recognize when important information is
-still missing, and then decide whether the proposed plan should proceed.
+reviewer and an Agent can apply before implementation to decide whether a
+proposed plan should proceed. The experiment does not prescribe the
+guideline's format, sections, review actions, or knowledge contents; those are
+variables for GEPA to explore. Guideline acceptance is assessed separately by
+predictive performance, observable review behavior, transferability, and human
+understandability.
 
 The experiment-only Checker prompt must not silently supply software-engineering
 knowledge or investigation methods that the deployed guideline omits. Its
@@ -46,23 +48,23 @@ under the redesigned prompts or metric.
 Analysis of that run found that the fixed Checker already supplied most
 repository-interaction behavior, while candidate changes mainly shifted the
 approval threshold. This conflicts with the standalone-guideline objective.
-The redesigned experiment therefore uses a new run identity and prompt/config
-revision. The current runtime config stages the agreed minimal Checker,
-standalone-guideline Reflection target, causal case analysis, `accuracy`
-metric, decision-only seed, and shared positive mini-swe action guide. The
-prepared `20260805` six-iteration smoke has its own matching runtime and
-supervisor identity and has not been launched. Stored run manifests and raw
-evidence, rather than the evolving current config, remain the authority for
-reproducing earlier runs.
+The redesigned experiment therefore uses new run identities and prompt/config
+revisions. The `20260805` decision-only-seed protocol smoke was launched to
+test the shared mini-swe action guide. Its local supervisor was paused
+during seed validation before changing the current config; its stored manifest
+and raw evidence remain the authority for that run. The current runtime config
+stages the next independent one-iteration protocol smoke with a conservative minimal seed, a
+fact-only Checker environment description, a minimal standalone-guideline
+Reflection target, the existing causal case-analysis process, `accuracy`, and
+the same shared action guide.
 
 ## Next Experiment Requirements
 
 - Candidate text is the complete transferable plan-review guideline, not only
   a list of approval criteria.
-- GEPA may optimize investigation behavior, evidence-processing guidance,
-  stopping/uncertainty behavior, decision guidance, organization, and necessary
-  explicit software-engineering knowledge. The project must not prescribe a
-  fixed section structure for those contents.
+- The guideline's review behavior, decision policy, organization, and explicit
+  knowledge are optimization variables. The project must not prescribe their
+  contents or a fixed section structure in the Checker or Reflection prompt.
 - The fixed Checker prompt must not teach repository-inspection strategy or
   plan-quality criteria. It may state the input/tool boundary, suppress use of
   unstated model knowledge, and retain mini-swe action plus final-output
@@ -84,12 +86,12 @@ reproducing earlier runs.
 
 ## Staged Guideline Reflection
 
-The next Reflection prompt begins with the target artifact rather than a
-detailed description of the Checker. It asks for a complete standalone
-guideline whose investigation behavior, evidence processing, decision method,
-organization, conditions, and exceptions are all available for GEPA to
-optimize. It does not prescribe checklist sections or declare that every
-condition is an absolute approval or rejection gate.
+The next Reflection prompt begins with only the target artifact rather than a
+detailed description of the Checker. It asks for a complete, self-contained
+guideline and states that a separate Checker prompt will not supply omitted
+review behavior, decision guidance, or software-engineering knowledge. It does
+not enumerate desired review actions, prescribe checklist sections, or declare
+that every condition is an absolute approval or rejection gate.
 
 The structured review still covers every minibatch case, but it now records a
 causal chain: relevant repository understanding, the current guideline
@@ -304,11 +306,42 @@ produce repository-grounded, causally motivated, transferable guidelines.
 Six proposals are not enough to claim optimization effectiveness or held-out
 generalization.
 
-The prepared `20260805` smoke replaces the evidence-and-repository seed with the
+The first `20260805` smoke replaced the evidence-and-repository seed with the
 decision-only sentence `Decide whether the proposed plan should proceed.` It
-also appends the shared positive mini-swe action-format guide to every
-DefaultAgent system prompt. Its new runtime and supervisor identity prevent it
-from adopting the completed `20260804` candidate tree.
+also appended a shared mini-swe action guide to every DefaultAgent system
+prompt. Its independent runtime and supervisor identity
+prevented it from adopting the completed `20260804` candidate tree. The local
+supervisor was later paused during seed validation so its protocol behavior
+could be audited before further search.
+
+That audit showed that a positive example alone did not explain the parser
+contract sufficiently. The shared system guide now gives a compact, exact
+interface: whole-response input, captured-shell-list output, matching
+expression, execute-or-reject branch, three implications, and one valid
+example. The retry feedback is deliberately more detailed: it first explains
+the observed match count and non-execution, then restates the parser logic so
+the Agent can compare it with its retained response. The parser executes only
+when exactly one lower-case `bash` fenced block is found and rejects zero or
+multiple matches without executing anything; XML-style `<bash>` tags are
+invalid. Finer error
+subtypes remain offline deductions from the raw response rather than new
+runtime classification logic. Matched block bodies are not copied into the
+feedback: the original assistant response is already retained in the same
+conversation and raw trajectory before parsing. This transport contract is
+shared by all project DefaultAgents and does not prescribe how a Checker or
+Reflection Agent performs its research task.
+
+The next staged smoke uses one proposal iteration over the full 384/98 split
+and the conservative minimal seed `Decide whether the proposed plan should
+proceed. Approve it only when the available evidence
+supports proceeding; otherwise reject it.` The conservative prior is part of
+the candidate guideline rather than the fixed Checker prompt, so it remains
+visible to a developer and mutable by GEPA. The Checker prompt now states only
+that a disposable base-commit repository exists at `/testbed` and its final
+state is discarded; it no longer enumerates reading, writing, tests, commands,
+or diagnostic changes. Reflection retains the existing per-case evidence
+analysis but no longer enumerates desired guideline behavior or rejects a
+checklist form in its target-artifact description.
 
 The ordinary run manifest permits a metric-call ceiling increase but rejects
 changes to data, source, prompts, model/search semantics, seed, or iteration

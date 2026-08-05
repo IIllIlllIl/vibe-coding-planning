@@ -5423,9 +5423,9 @@ def test_default_gepa_config_stages_next_checker_boundary(monkeypatch):
     assert config.hpc.mem == "4G"
     assert config.hpc.time == "00:35:00"
     assert config.hpc.max_task_attempts == 3
-    assert config.search.max_metric_calls == 1000
-    assert config.search.projection_metric_calls == 830
-    assert config.search.max_iterations == 6
+    assert config.search.max_metric_calls == 300
+    assert config.search.projection_metric_calls == 220
+    assert config.search.max_iterations == 1
     assert config.search.reflection_minibatch_size == 12
     assert config.search.primary_metric == "accuracy"
     assert config.search.parallel == 1
@@ -5434,14 +5434,15 @@ def test_default_gepa_config_stages_next_checker_boundary(monkeypatch):
     assert config.checker.max_attempts == 1
     assert config.initial_rules_path.name == "gepa_initial_guideline_minimal.md"
     assert (
-        "offline-plan-guideline-hpc-accuracy-b12-6it-minseed-protocol-smoke-20260805"
+        "offline-plan-guideline-hpc-accuracy-b12-1it-parser-contract-smoke-20260805"
         in str(config.run_dir)
     )
     checker_prompt = " ".join(config.checker_prompt.split())
     assert "software development assistant" in checker_prompt
     assert "candidate guideline as the sole source" in checker_prompt
-    assert "You may interact with the repository" in checker_prompt
-    assert "All repository changes are discarded" in checker_prompt
+    assert "repository is available at /testbed" in checker_prompt
+    assert "final state is discarded" in checker_prompt
+    assert "You may interact with the repository" not in checker_prompt
     assert "Do not modify repository source or test files" not in checker_prompt
     assert "Do not implement the proposed solution" not in checker_prompt
     assert "/tmp/gepa_checker_result.json" not in checker_prompt
@@ -5456,11 +5457,13 @@ def test_default_gepa_config_stages_next_checker_boundary(monkeypatch):
     assert "{{retry_feedback}}" in config.checker_instance_template
     reflection_prompt = " ".join(config.reflection_prompt.split())
     assert "complete standalone guideline" in reflection_prompt
-    assert "not a checklist of classification features" in reflection_prompt
+    assert "guideline must be self-contained" in reflection_prompt
+    assert "not a checklist of classification features" not in reflection_prompt
+    assert "repository interaction, information gathering" not in reflection_prompt
     assert "Causal guideline optimization" in reflection_prompt
     assert "current_guideline_effect" in reflection_prompt
     assert "expected_behavior_change" in reflection_prompt
-    assert "organization, topics, level of detail" in reflection_prompt
+    assert "organization, topics, level of detail" not in reflection_prompt
     assert "benchmark repositories are not mounted" in reflection_prompt
     assert "fixed Checker prompt" not in reflection_prompt
     assert "balanced accuracy" not in reflection_prompt
@@ -5484,7 +5487,8 @@ def test_default_gepa_config_stages_next_checker_boundary(monkeypatch):
     assert "Do not guess alternative filenames" in reflection_instance
     assert "{{current_guideline}}" in config.reflection_instance_template
     assert config.initial_rules_path.read_text(encoding="utf-8").strip() == (
-        "Decide whether the proposed plan should proceed."
+        "Decide whether the proposed plan should proceed. Approve it only "
+        "when the available evidence supports proceeding; otherwise reject it."
     )
 
 

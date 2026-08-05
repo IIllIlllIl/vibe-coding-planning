@@ -16,49 +16,80 @@ logger = logging.getLogger(__name__)
 _MINI_SWE_AGENT_VERSION = "1.17.5"
 
 # This is transport documentation for mini-swe-agent's existing action parser,
-# not task or software-engineering guidance.  Keep it centralized so every
-# DefaultAgent sees the same positive description and executable example.
+# not task or software-engineering guidance. Keep it centralized so every
+# DefaultAgent receives the same parser contract.
 DEFAULT_ACTION_PROTOCOL = """\
-## Mini-swe action format
+## Mini-swe action protocol
 
-The action parser accepts a response in this form:
+Parser input: your entire assistant response as one string.
+Parser output: a list of shell bodies captured from executable bash blocks.
 
-<response_example>
+```python
+actions = re.findall(r"```bash\\s*\\n(.*?)\\n```", response_text, re.DOTALL)
+if len(actions) == 1:
+    execute(actions[0].strip())
+else:
+    reject_the_entire_response_without_execution()
+```
+
+One fenced `bash` block is one action even if it contains multiple shell
+commands. Plain text outside the block is not executed. XML tags such as
+`<bash>...</bash>` are not recognized.
+
+Valid response:
+
 Optional plain-text reasoning about the next action.
 
 ```bash
-<one shell action or multi-line shell script>
+pwd
+ls -la
 ```
-</response_example>
 
-The opening fence is `bash` followed by a newline. The closing fence follows
-the shell action on a new line. The response contains exactly one such action
-block. After the action runs, its output is returned as the next observation.
-Continue with another response in the same format, or use the task-specific
-submission action when the work is complete.
+After execution, wait for the observation before sending the next action. When
+finished, put the task-specific submission command inside the single block.
 """
 
 # Keep the execution protocol identical across every project agent built on
-# mini-swe-agent's DefaultAgent.  This is the format-error feedback shipped in
-# mini-swe-agent 1.17.5's config/extra/swebench.yaml.  It is deliberately a
-# fixed adapter-level protocol rather than an experiment prompt/config option:
-# changing it does not alter which actions are valid, only the feedback after
-# DefaultAgent has already rejected an invalid response.
+# mini-swe-agent's DefaultAgent. This parser-exact feedback retains the
+# official match count while adding the observed missing fact that a rejected
+# response was not executed. It is deliberately a fixed adapter-level protocol
+# rather than an experiment prompt/config option: it does not alter which
+# actions are valid, only the feedback after DefaultAgent has rejected one.
 DEFAULT_FORMAT_ERROR_TEMPLATE = """\
-Please always provide EXACTLY ONE action in triple backticks, found {{actions|length}} actions.
+Your previous response was rejected before execution. None of its text or
+commands ran.
 
-Please format your action in triple backticks as shown in <response_example>.
+The parser received your entire previous assistant response as one string. It
+recognized {{actions|length}} executable bash code blocks. One complete bash
+code block counts as one action, even if it contains multiple shell commands.
+The response runs only when this number is exactly 1; with 0 or more than 1,
+the parser rejects the entire response.
 
-<response_example>
-Here are some thoughts about why you want to perform the action.
+Here is the parser logic to compare against your previous response:
+
+```python
+actions = re.findall(r"```bash\\s*\\n(.*?)\\n```", response_text, re.DOTALL)
+if len(actions) == 1:
+    execute(actions[0].strip())
+else:
+    reject_the_entire_response_without_execution()
+```
+
+The opening fence therefore uses three backticks followed by lowercase `bash`
+and a newline; the closing three backticks begin on a new line. XML-style tags
+such as `<bash>...</bash>` are not recognized.
+
+Return a corrected response with exactly one bash block. Put all shell
+operations for this step into that one block as a multi-line shell script, or
+wait for the next observation before issuing another response. This is one
+complete valid response:
 
 ```bash
-<action>
+true
 ```
-</response_example>
 
-If you have completed your assignment, please consult the first message about how to
-submit your solution (you will not be able to continue working on this task after that).
+If the task is complete, put the task-specific submission action inside that
+single block.
 """
 
 _PERMANENT_PROVIDER_ERROR_MARKERS = (
@@ -186,10 +217,10 @@ def build_default_agent(
 
         DefaultAgent(model, env, *, config_class=AgentConfig, **kwargs)
 
-    We append the shared positive action-format guide to the phase system
+    We append the shared parser-exact action protocol to the phase system
     template, then pass the config fields (``system_template``,
     ``instance_template``, ``step_limit``, ``cost_limit``) plus the shared
-    official SWE-bench ``format_error_template`` as keyword arguments and let
+    parser-exact ``format_error_template`` as keyword arguments and let
     DefaultAgent forward them to its internal ``AgentConfig``. ``DefaultAgent``
     is passed as an explicit argument so that tests can inject a mock class
     without patching ``_deps`` internals.

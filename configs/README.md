@@ -39,23 +39,24 @@ poll cadence, controller resources, or remote workdir belongs in
 
 | Config | Runtime | Purpose |
 |---|---|---|
-| `gepa_verified_rules.yaml` | ULHPC Apptainer | Prepared `20260805` six-iteration behavior/protocol smoke over the full 384/98 split. It uses the decision-only seed, shared positive mini-swe action guide, accuracy, and minibatch 12 under a new identity. It is configured but not launched. |
+| `gepa_verified_rules.yaml` | ULHPC Apptainer | Staged one-iteration protocol smoke over the full 384/98 split. It uses a conservative minimal seed, fact-only Checker environment description, minimal Reflection target, shared parser-exact mini-swe action protocol, accuracy, and minibatch 12 under a new identity. |
 | `offline_gepa_supervisor.yaml` | Local tmux+caffeinate | Matching native-resume launch identity. It reads the cumulative target from the Offline runtime config, uses 10-minute polling and `1 CPU / 4G / 10min` controller slices, and requires an unchanged runtime-config hash, Git commit, and clean worktree before submission. |
 | `offline_gepa_hpc_smoke_2x2_20260728.yaml` | ULHPC Apptainer | Environment-only 2-train/2-validation, 1-iteration smoke. Its scores are not rule-quality evidence. |
-| `gepa_initial_guideline_minimal.md` | Prompt text | Minimal decision-only Offline guideline seed. It states the target decision without supplying repository-investigation behavior or review methodology. |
+| `gepa_initial_guideline_minimal.md` | Prompt text | Conservative minimal Offline guideline seed. It states the target decision and defaults to rejection without supporting evidence, but supplies no repository-investigation behavior, format, or review methodology. |
 | `gepa_initial_rules_minimal.md` | Historical prompt text | Frozen pre-guideline seed retained for archived configs and provenance. |
 
 `search.max_iterations` is the primary experimental stop condition and is an
-absolute cumulative proposal target across resume. For the current six-
-iteration smoke, `max_metric_calls=1000` is only a fail-safe above the 830-call
-worst-case projection. Offline uses its own
+absolute cumulative proposal target across resume. For the current one-
+iteration protocol smoke, `max_metric_calls=300` is only a fail-safe above the
+220-call worst-case projection. Offline uses its own
 launch config with the shared supervisor service. See
 [`../docs/offline-gepa.md`](../docs/offline-gepa.md).
 
 The completed `20260804` Offline smoke used a dedicated identity, `accuracy`,
 and a standalone plan-review guideline. Its remote raw evidence is archived as
-a test result. The prepared `20260805` smoke has a separate runtime and
-supervisor identity and must start from a new candidate tree.
+a test result. The prepared `20260805` one-iteration protocol smoke has a
+separate runtime and supervisor identity and must start from a new candidate
+tree.
 
 ## Representative Paused Workflows
 

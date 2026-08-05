@@ -81,8 +81,8 @@ before a provider-balance failure stopped the attempted fifteenth proposal.
 The earlier 14-proposal run has been mirrored locally for analysis. The
 completed `20260804` six-iteration behavior smoke restored `accuracy` and
 treated the candidate text as the complete transferable review guideline. The
-prepared `20260805` six-iteration smoke uses a new identity to test the
-decision-only seed and shared positive mini-swe system guide. Historical
+prepared `20260805` one-iteration protocol smoke uses a new identity to test
+the conservative minimal seed and shared parser-exact mini-swe system guide. Historical
 labels, patches, execution trajectories, and evaluator outcomes remain hidden
 from Checker input and available only as Reflection diagnostics.
 

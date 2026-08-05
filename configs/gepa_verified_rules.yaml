@@ -1,10 +1,10 @@
-# Six-iteration Offline smoke for the decision-only seed and shared positive
-# mini-swe action-format guide. This run checks behavior and protocol effects;
-# it is not a formal effectiveness result.
+# One-iteration Offline protocol smoke for the conservative minimal seed, minimal
+# Checker/Reflection responsibility boundary, and shared parser-exact mini-swe
+# action protocol. This run is not a formal effectiveness result.
 paths:
   dataset_snapshot: output/SWE-bench_Verified/verified-round1-gepa-datasets/20260614_482_fdc056ae85df
   initial_guideline: configs/gepa_initial_guideline_minimal.md
-  run_dir: output/SWE-bench_Verified/gepa-rules/offline-plan-guideline-hpc-accuracy-b12-6it-minseed-protocol-smoke-20260805
+  run_dir: output/SWE-bench_Verified/gepa-rules/offline-plan-guideline-hpc-accuracy-b12-1it-parser-contract-smoke-20260805
 
 checker:
   model: deepseek-v4-flash
@@ -28,16 +28,16 @@ reflection:
   timeout: 1800
 
 search:
-  # Full 384/98 snapshot and six GEPA proposal iterations after seed
+  # Full 384/98 snapshot and one GEPA proposal iteration after seed
   # validation. The iteration stopper is the primary experimental control.
-  # 830 metric calls is the worst-case projection
-  # when all proposals pass the minibatch gate and receive full validation:
-  # 98 + 6 * (12 parent + 12 proposal + 98 validation).
+  # 220 metric calls is the worst-case projection when the proposal passes the
+  # minibatch gate and receives full validation:
+  # 98 + 1 * (12 parent + 12 proposal + 98 validation).
   # Keep a larger metric-call ceiling only as a fail-safe; reaching it before
-  # six durable iterations is an anomaly to audit rather than a normal stop.
-  max_iterations: 6
-  max_metric_calls: 1000
-  projection_metric_calls: 830
+  # one durable iteration is an anomaly to audit rather than a normal stop.
+  max_iterations: 1
+  max_metric_calls: 300
+  projection_metric_calls: 220
   reflection_minibatch_size: 12
   primary_metric: accuracy
   # Local-only adapter concurrency. HPC submits every Agent as an independent
@@ -81,7 +81,7 @@ hpc:
   python_module: lang/Python/3.11
   container_module: tools/Apptainer
   python_bin: python3
-  job_name_prefix: offline-guideline-minseed-protocol-6it-20260805
+  job_name_prefix: offline-guideline-parser-contract-1it-20260805
   worker_config_path: configs/gepa_verified_rules.yaml
 
 prompts:
@@ -98,11 +98,9 @@ prompts:
     guideline. Use your general capabilities only to apply the guideline and
     operate the provided environment.
 
-    You receive the issue, the proposed plan, and a disposable repository at
-    the base commit. You may interact with the repository, including reading
-    and writing files, running commands and tests, and making temporary
-    diagnostic changes. All repository changes are discarded after this
-    evaluation.
+    You receive the issue, the proposed plan, the candidate guideline, and a
+    disposable repository at the base commit. The repository is available at
+    /testbed. Its final state is discarded after this evaluation.
 
     ## Checker submission
 
@@ -144,20 +142,14 @@ prompts:
     ## Target artifact
 
     Optimize the complete standalone guideline that a developer or an Agent
-    can use before implementation to investigate a proposed software plan and
-    decide whether it is sufficiently likely to resolve the reported issue.
+    can use before implementation to decide whether a proposed software plan
+    should proceed.
 
-    The guideline must make the useful review method explicit. It may guide
-    repository interaction, information gathering, evidence verification and
-    processing, further investigation when evidence is insufficient, and the
-    final decision. It may also state general software-engineering knowledge
-    needed to apply that method. Do not assume that a separate Checker prompt
-    will supply omitted review knowledge or behavior.
+    The guideline must be self-contained. Do not assume that a separate
+    Checker prompt will supply omitted review behavior, decision guidance, or
+    software-engineering knowledge.
 
-    The target is a usable guideline, not a checklist of classification
-    features. Its organization, topics, level of detail, conditions, and
-    exceptions are part of what you optimize. Return the complete replacement
-    guideline, not a patch or a case analysis.
+    Return the complete replacement guideline, not a patch or case analysis.
 
     ## Optimization evidence
 
