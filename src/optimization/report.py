@@ -280,9 +280,16 @@ def _candidate_validation_records(
             if isinstance(output, dict)
             else None
         )
-        if not isinstance(prediction, bool):
+        is_timeout = (
+            isinstance(output, dict)
+            and output.get("status") == "timeout"
+            and output.get("terminal_reason") == "checker_agent_timeout"
+            and prediction is None
+        )
+        if not isinstance(prediction, bool) and not is_timeout:
             raise ValueError(
-                "validation prediction must be boolean for "
+                "validation prediction must be boolean or an explicit "
+                "Checker Agent timeout for "
                 f"{candidate_hash}: {case.instance_id}"
             )
         ordered.append(record)
@@ -312,19 +319,28 @@ def write_report(
             candidate_hash=candidate_hash,
             validation=validation,
         )
-        labels = [case.resolved for case in validation]
-        predictions = [
-            record["output"]["predicted_resolved"]
-            for record in validation_predictions
+        completed_predictions = [
+            (case.resolved, record["output"]["predicted_resolved"])
+            for case, record in zip(
+                validation,
+                validation_predictions,
+                strict=True,
+            )
+            if isinstance(record["output"]["predicted_resolved"], bool)
         ]
+        labels = [label for label, _ in completed_predictions]
+        predictions = [prediction for _, prediction in completed_predictions]
         metrics = classification_metrics(labels, predictions)
         if primary_metric not in metrics:
             raise ValueError(
                 f"unsupported primary metric for candidate report: {primary_metric}"
             )
         validation_score = float(result.val_aggregate_scores[index])
+        recomputed_score = sum(
+            float(record["score"]) for record in validation_predictions
+        ) / len(validation_predictions)
         if not math.isclose(
-            float(metrics[primary_metric]),
+            recomputed_score,
             validation_score,
             rel_tol=1e-12,
             abs_tol=1e-12,
@@ -333,8 +349,9 @@ def write_report(
                 "candidate validation score does not match predictions for "
                 f"{candidate_hash}: primary_metric={primary_metric}, "
                 f"result={validation_score}, "
-                f"recomputed={metrics[primary_metric]}"
+                f"recomputed={recomputed_score}"
             )
+        timeout_count = len(validation_predictions) - len(completed_predictions)
         candidates.append(
             {
                 "candidate_idx": index,
@@ -342,6 +359,9 @@ def write_report(
                 "primary_metric": primary_metric,
                 "validation_score": validation_score,
                 "metrics": metrics,
+                "metrics_scope": "completed_checker_predictions_only",
+                "checker_timeout_count": timeout_count,
+                "checker_timeout_rate": timeout_count / len(validation_predictions),
                 "parents": result.parents[index],
                 "validation_predictions": validation_predictions,
             }

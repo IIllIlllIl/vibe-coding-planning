@@ -42,7 +42,12 @@ from src.optimization.config import (
 )
 from src.optimization.dataset import GEPACaseLoader, load_snapshot
 from src.optimization.metrics import classification_metrics
-from src.optimization.models import CheckerOutput, GEPACase, RepositoryRef
+from src.optimization.models import (
+    CheckerOutput,
+    CheckerTimeoutOutput,
+    GEPACase,
+    RepositoryRef,
+)
 from src.optimization.online_adapter import OnlinePlanningGEPAAdapter
 from src.optimization.online_config import (
     OnlineDatasetConfig,
@@ -1622,6 +1627,55 @@ def test_adapter_balanced_accuracy_requires_both_classes_per_split():
                 "validation": {True: 1, False: 1},
             },
         )
+
+
+def test_adapter_scores_explicit_checker_timeout_zero_and_preserves_trace(
+    tmp_path,
+):
+    case = GEPACase(
+        instance_id="repo__timeout",
+        split="validation",
+        resolved=True,
+        issue_description="issue",
+        plan="plan",
+        repository=RepositoryRef("repo/name", "abc", "repo__timeout"),
+        asi={"generated_patch": "historical patch"},
+    )
+
+    class TimeoutBatchExecutor:
+        def evaluate(self, batch, rules, capture_traces):
+            return [
+                CheckerTimeoutOutput(
+                    attempts=3,
+                    timeout_seconds=1800,
+                    trajectories=(
+                        ({"role": "assistant", "content": "work"},),
+                    ),
+                )
+            ]
+
+    adapter = CheckerGEPAAdapter(
+        lambda case, rules: None,
+        run_dir=tmp_path,
+        primary_metric="balanced_accuracy",
+        class_counts_by_split={
+            "train": {True: 1, False: 1},
+            "validation": {True: 1, False: 1},
+        },
+        batch_executor=TimeoutBatchExecutor(),
+    )
+
+    result = adapter.evaluate(
+        [case],
+        {"rules": "guideline"},
+        capture_traces=True,
+    )
+
+    assert result.scores == [0.0]
+    assert result.outputs[0]["status"] == "timeout"
+    assert result.outputs[0]["predicted_resolved"] is None
+    assert result.trajectories[0]["error_type"] == "checker_timeout"
+    assert result.trajectories[0]["checker_output"]["attempt_trajectories"]
 
 
 def test_adapter_retries_transient_checker_failure(tmp_path):
@@ -4616,6 +4670,79 @@ def test_candidate_report_uses_predictions_for_configured_metric(
     ] == predictions
 
 
+def test_candidate_report_keeps_checker_timeout_as_null_scored_failure(tmp_path):
+    train, _ = load_snapshot(_snapshot(tmp_path / "snapshot"))
+    validation = [
+        replace(
+            train[0],
+            instance_id="completed",
+            split="validation",
+            resolved=True,
+        ),
+        replace(
+            train[0],
+            instance_id="timed-out",
+            split="validation",
+            resolved=False,
+        ),
+    ]
+    rules = "candidate guideline"
+    candidate_sha256 = text_sha256(rules)
+    records = [
+        {
+            "candidate_sha256": candidate_sha256,
+            "instance_id": "completed",
+            "split": "validation",
+            "resolved": True,
+            "score": 1.0,
+            "output": {"predicted_resolved": True},
+        },
+        {
+            "candidate_sha256": candidate_sha256,
+            "instance_id": "timed-out",
+            "split": "validation",
+            "resolved": False,
+            "score": 0.0,
+            "output": {
+                "status": "timeout",
+                "predicted_resolved": None,
+                "terminal_reason": "checker_agent_timeout",
+            },
+        },
+    ]
+    (tmp_path / "evaluations.jsonl").write_text(
+        "".join(json.dumps(record) + "\n" for record in records),
+        encoding="utf-8",
+    )
+
+    class Result:
+        candidates = [{"rules": rules}]
+        val_aggregate_scores = [0.5]
+        parents = [[None]]
+        best_candidate = {"rules": rules}
+
+        @staticmethod
+        def to_dict():
+            return {"best_idx": 0}
+
+        @staticmethod
+        def candidate_tree_html():
+            return "<html></html>"
+
+    write_report(Result(), validation, tmp_path, primary_metric="accuracy")
+
+    candidate = json.loads(
+        (tmp_path / "candidate_metrics.json").read_text(encoding="utf-8")
+    )[0]
+    assert candidate["validation_score"] == 0.5
+    assert candidate["checker_timeout_count"] == 1
+    assert candidate["checker_timeout_rate"] == 0.5
+    assert candidate["metrics_scope"] == "completed_checker_predictions_only"
+    assert candidate["validation_predictions"][1]["output"][
+        "predicted_resolved"
+    ] is None
+
+
 def test_audited_model_records_real_response_usage(tmp_path):
     class FakeConfig:
         model_name = "provider/model"
@@ -5434,9 +5561,10 @@ def test_default_gepa_config_stages_next_checker_boundary(monkeypatch):
     assert config.checker.max_attempts == 1
     assert config.initial_rules_path.name == "gepa_initial_guideline_minimal.md"
     assert (
-        "offline-plan-guideline-hpc-accuracy-b12-8it-explicit-turn-contract-formal-20260805"
+        "offline-plan-guideline-hpc-accuracy-b12-8it-checker-timeout30m-formal-20260806"
         in str(config.run_dir)
     )
+    assert config.checker.agent_timeout_seconds == 1800
     checker_prompt = " ".join(config.checker_prompt.split())
     assert "software development assistant" in checker_prompt
     assert "candidate guideline as the sole source" in checker_prompt

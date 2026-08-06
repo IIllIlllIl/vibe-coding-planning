@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 import json
+from contextlib import contextmanager
+import signal
 import threading
 from typing import Any, Protocol
 
@@ -42,6 +44,41 @@ class CheckerRunner(Protocol):
 
 class CheckerOutputContractError(ValueError):
     """The Checker submitted output that the host could not validate."""
+
+
+class CheckerAgentTimeout(BaseException):
+    """A deadline signal that nested model libraries must not swallow."""
+
+    def __init__(self, timeout_seconds: int) -> None:
+        self.timeout_seconds = timeout_seconds
+        super().__init__(f"Checker Agent exceeded {timeout_seconds} seconds")
+
+
+@contextmanager
+def _checker_agent_deadline(timeout_seconds: int):
+    """Interrupt one main-thread Agent session while leaving cleanup time."""
+    if timeout_seconds <= 0:
+        yield
+        return
+    if threading.current_thread() is not threading.main_thread():
+        raise RuntimeError(
+            "Checker Agent soft deadline requires main-thread execution"
+        )
+    previous_handler = signal.getsignal(signal.SIGALRM)
+
+    def handle_timeout(signum, frame):
+        del signum, frame
+        raise CheckerAgentTimeout(timeout_seconds)
+
+    signal.signal(signal.SIGALRM, handle_timeout)
+    previous_timer = signal.setitimer(signal.ITIMER_REAL, timeout_seconds)
+    try:
+        yield
+    finally:
+        signal.setitimer(signal.ITIMER_REAL, 0)
+        signal.signal(signal.SIGALRM, previous_handler)
+        if previous_timer[0] > 0:
+            signal.setitimer(signal.ITIMER_REAL, *previous_timer)
 
 
 def checker_retry_feedback(error: str) -> str:
@@ -221,13 +258,16 @@ class DockerChecker:
                 step_limit=self.config.checker.max_steps,
                 cost_limit=self.config.checker.cost_limit,
             )
-            exit_status, final_submission = agent.run(
-                task=case.issue_description,
-                plan=case.plan,
-                candidate_guideline=rules,
-                candidate_rules=rules,
-                retry_feedback=retry_feedback,
-            )
+            with _checker_agent_deadline(
+                self.config.checker.agent_timeout_seconds
+            ):
+                exit_status, final_submission = agent.run(
+                    task=case.issue_description,
+                    plan=case.plan,
+                    candidate_guideline=rules,
+                    candidate_rules=rules,
+                    retry_feedback=retry_feedback,
+                )
             if not final_submission.strip():
                 raise CheckerOutputContractError(
                     "checker did not submit JSON output "
@@ -267,7 +307,7 @@ class DockerChecker:
                 parsed.repository_evidence,
                 tuple(agent.messages),
             )
-        except Exception as exc:
+        except (CheckerAgentTimeout, Exception) as exc:
             if agent is not None:
                 try:
                     exc.checker_trajectory = tuple(agent.messages)  # type: ignore[attr-defined]

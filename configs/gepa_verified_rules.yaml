@@ -1,10 +1,10 @@
 # Eight-iteration formal Offline run for the conservative minimal seed, minimal
 # Checker/Reflection responsibility boundary, and explicit single-block
-# mini-swe action contract.
+# mini-swe action contract and a 30-minute Checker Agent soft deadline.
 paths:
   dataset_snapshot: output/SWE-bench_Verified/verified-round1-gepa-datasets/20260614_482_fdc056ae85df
   initial_guideline: configs/gepa_initial_guideline_minimal.md
-  run_dir: output/SWE-bench_Verified/gepa-rules/offline-plan-guideline-hpc-accuracy-b12-8it-explicit-turn-contract-formal-20260805
+  run_dir: output/SWE-bench_Verified/gepa-rules/offline-plan-guideline-hpc-accuracy-b12-8it-checker-timeout30m-formal-20260806
 
 checker:
   model: deepseek-v4-flash
@@ -14,6 +14,9 @@ checker:
   max_steps: 500
   cost_limit: 6.0
   timeout: 1800
+  # Complete Agent-session deadline. The 35-minute Slurm allocation leaves
+  # five minutes to save the partial trajectory and structured timeout output.
+  agent_timeout_seconds: 1800
   # One Slurm task owns one complete Checker Agent session. Infrastructure
   # retry happens by restarting that task from clean input.
   max_attempts: 1
@@ -77,11 +80,12 @@ hpc:
   poll_interval_seconds: 300
   task_output_grace_seconds: 300
   missing_task_grace_seconds: 600
+  # One initial attempt plus two clean fresh-Agent retries.
   max_task_attempts: 3
   python_module: lang/Python/3.11
   container_module: tools/Apptainer
   python_bin: python3
-  job_name_prefix: offline-guideline-explicit-turn-8it-20260805
+  job_name_prefix: offline-guideline-timeout30m-8it-20260806
   worker_config_path: configs/gepa_verified_rules.yaml
 
 prompts:

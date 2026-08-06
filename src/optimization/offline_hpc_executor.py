@@ -14,10 +14,16 @@ from src.optimization.checker import validate_checker_output
 from src.optimization.config import OptimizationConfig
 from src.optimization.hpc.task_batch import (
     SlurmTaskBatch,
+    TaskAttemptsExhausted,
     TaskFiles,
     atomic_json,
 )
-from src.optimization.models import CheckerOutput, GEPACase
+from src.optimization.models import (
+    CheckerOutput,
+    CheckerResult,
+    CheckerTimeoutOutput,
+    GEPACase,
+)
 
 
 def _stable_sha256(value: Any) -> str:
@@ -43,7 +49,7 @@ def offline_checker_semantic_sha256(config: OptimizationConfig) -> str:
     ]
     return _stable_sha256(
         {
-            "schema": 1,
+            "schema": 2,
             "source": {
                 str(path.relative_to(root)): hashlib.sha256(
                     path.read_bytes()
@@ -58,7 +64,10 @@ def offline_checker_semantic_sha256(config: OptimizationConfig) -> str:
             "checker_prompt": config.checker_prompt,
             "checker_instance_template": config.checker_instance_template,
             "retry_policy": {
-                "kind": "fresh_agent_with_previous_validator_error",
+                "kind": (
+                    "fresh_agent; validator feedback only for output-contract "
+                    "failures; all-explicit-timeout exhaustion scores zero"
+                ),
                 "max_task_attempts": config.hpc.max_task_attempts,
             },
         }
@@ -171,7 +180,7 @@ class HPCSlurmOfflineCheckerExecutor:
         batch: list[GEPACase],
         rules: str,
         capture_traces: bool,
-    ) -> list[CheckerOutput]:
+    ) -> list[CheckerResult]:
         fingerprint = offline_evaluation_fingerprint(
             self.config,
             batch=batch,
@@ -207,33 +216,127 @@ class HPCSlurmOfflineCheckerExecutor:
                 raise ValueError("Offline Checker output instance mismatch")
             validate_checker_output(dict(value["checker_output"]))
 
-        outputs = self.runtime.run(
-            batch_dir=batch_dir,
-            fingerprint=fingerprint,
-            tasks=tasks,
-            job_name=lambda attempt: (
-                f"{self.config.hpc.job_name_prefix}-checker-"
-                f"{batch_dir.name[:12]}-a{attempt}"
-            ),
-            write_script=write_script,
-            validate_output=validate,
-        )
+        try:
+            outputs = self.runtime.run(
+                batch_dir=batch_dir,
+                fingerprint=fingerprint,
+                tasks=tasks,
+                job_name=lambda attempt: (
+                    f"{self.config.hpc.job_name_prefix}-checker-"
+                    f"{batch_dir.name[:12]}-a{attempt}"
+                ),
+                write_script=write_script,
+                validate_output=validate,
+            )
+        except TaskAttemptsExhausted as exc:
+            try:
+                results = self._recover_explicit_timeouts(
+                    batch_dir=batch_dir,
+                    fingerprint=fingerprint,
+                    tasks=tasks,
+                )
+            except (OSError, ValueError, KeyError, TypeError) as recovery_error:
+                raise exc from recovery_error
+            self.audit.write(
+                "offline_hpc_checker_timeout_exhaustion_scored",
+                batch_dir=str(batch_dir),
+                fingerprint=fingerprint,
+                timeout_instance_ids=[
+                    task.instance_id
+                    for task, result in zip(tasks, results, strict=True)
+                    if isinstance(result, CheckerTimeoutOutput)
+                ],
+                attempts=self.config.hpc.max_task_attempts,
+                score=0.0,
+            )
+            return results
         self.audit.write(
             "offline_hpc_checker_batch_completed",
             batch_dir=str(batch_dir),
             fingerprint=fingerprint,
             instance_ids=[case.instance_id for case in batch],
         )
-        return [
-            CheckerOutput(
-                parsed.predicted_resolved,
-                parsed.decision_reason,
-                parsed.repository_evidence,
-                tuple(dict(value["checker_output"]).get("trajectory", [])),
+        return [self._completed_result(value) for value in outputs]
+
+    @staticmethod
+    def _completed_result(value: dict[str, Any]) -> CheckerOutput:
+        checker_output = dict(value["checker_output"])
+        parsed = validate_checker_output(checker_output)
+        return CheckerOutput(
+            parsed.predicted_resolved,
+            parsed.decision_reason,
+            parsed.repository_evidence,
+            tuple(checker_output.get("trajectory", [])),
+        )
+
+    def _recover_explicit_timeouts(
+        self,
+        *,
+        batch_dir: Path,
+        fingerprint: str,
+        tasks: Sequence[TaskFiles],
+    ) -> list[CheckerResult]:
+        """Resolve only fully evidenced semantic timeouts after fresh retries."""
+        results: list[CheckerResult] = []
+        max_attempts = self.config.hpc.max_task_attempts
+        for task in tasks:
+            if task.output_path.is_file():
+                current = json.loads(task.output_path.read_text(encoding="utf-8"))
+                if current.get("status") == "completed":
+                    if current.get("fingerprint") != fingerprint:
+                        raise ValueError("Offline Checker output fingerprint mismatch")
+                    if current.get("instance_id") != task.instance_id:
+                        raise ValueError("Offline Checker output instance mismatch")
+                    results.append(self._completed_result(current))
+                    continue
+
+            attempt_failures = []
+            trajectories = []
+            for attempt in range(1, max_attempts + 1):
+                output_path = (
+                    task.output_path
+                    if attempt == max_attempts
+                    else batch_dir
+                    / "failed_outputs"
+                    / f"attempt_{attempt:02d}"
+                    / task.output_path.name
+                )
+                failure = json.loads(output_path.read_text(encoding="utf-8"))
+                if (
+                    failure.get("status") != "agent_failed"
+                    or failure.get("failure_kind") != "checker_agent_timeout"
+                    or failure.get("fingerprint") != fingerprint
+                    or failure.get("instance_id") != task.instance_id
+                ):
+                    raise ValueError(
+                        "Checker exhaustion contains a non-semantic-timeout attempt"
+                    )
+                attempt_failures.append(failure)
+                trajectory_path = (
+                    task.attempts_dir
+                    / f"attempt_{attempt:02d}"
+                    / "checker_trajectory.json"
+                )
+                if trajectory_path.is_file():
+                    trajectory = json.loads(
+                        trajectory_path.read_text(encoding="utf-8")
+                    )
+                    messages = trajectory.get("messages")
+                    if not isinstance(messages, list):
+                        raise ValueError("Checker timeout trajectory must be a list")
+                    trajectories.append(tuple(messages))
+                else:
+                    trajectories.append(())
+            if len(attempt_failures) != max_attempts:
+                raise ValueError("Checker timeout attempt evidence is incomplete")
+            results.append(
+                CheckerTimeoutOutput(
+                    attempts=max_attempts,
+                    timeout_seconds=self.config.checker.agent_timeout_seconds,
+                    trajectories=tuple(trajectories),
+                )
             )
-            for value in outputs
-            for parsed in [validate_checker_output(dict(value["checker_output"]))]
-        ]
+        return results
 
     @staticmethod
     def _prepare(

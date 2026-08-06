@@ -23,6 +23,7 @@ class ModelConfig:
     cost_limit: float
     timeout: int
     max_attempts: int = 1
+    agent_timeout_seconds: int = 0
 
 
 @dataclass(frozen=True)
@@ -86,6 +87,9 @@ def _model(data: dict[str, Any], *, checker: bool) -> ModelConfig:
     max_attempts = int(data.get("max_attempts", 1))
     if max_attempts < 1:
         raise ValueError("model max_attempts must be positive")
+    agent_timeout_seconds = int(data.get("agent_timeout_seconds", 0))
+    if agent_timeout_seconds < 0:
+        raise ValueError("model agent_timeout_seconds must be non-negative")
     return ModelConfig(
         model=str(data["model"]),
         api_base=str(data["api_base"]),
@@ -95,6 +99,7 @@ def _model(data: dict[str, Any], *, checker: bool) -> ModelConfig:
         cost_limit=float(data.get("cost_limit", 1.0)),
         timeout=int(data.get("timeout", 1800)),
         max_attempts=max_attempts,
+        agent_timeout_seconds=agent_timeout_seconds,
     )
 
 
@@ -222,6 +227,16 @@ def load_optimization_config(
         raise ValueError(
             "Offline HPC requires search.parallel=1 because Agent-task "
             "concurrency belongs to Slurm, not the GEPA controller"
+        )
+    if (
+        execution.backend == "local"
+        and checker.agent_timeout_seconds
+        and search.parallel != 1
+    ):
+        raise ValueError(
+            "Offline local execution with checker.agent_timeout_seconds "
+            "requires search.parallel=1; the soft deadline interrupts one "
+            "main-thread Agent session"
         )
     hpc = HPCConfig(
         submit=bool(hpc_data.get("submit", hpc_defaults.submit)),

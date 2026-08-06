@@ -14,14 +14,19 @@ from gepa.core.adapter import EvaluationBatch
 
 from src.optimization.audit import JsonlLogger, redact_sensitive, text_sha256
 from src.optimization.checker import (
+    CheckerAgentTimeout,
     CheckerOutputContractError,
     CheckerRunner,
     checker_retry_feedback,
 )
-from src.optimization.models import CheckerOutput, GEPACase
+from src.optimization.models import (
+    CheckerResult,
+    CheckerTimeoutOutput,
+    GEPACase,
+)
 
 
-def _exception_details(exc: Exception) -> dict[str, Any]:
+def _exception_details(exc: BaseException) -> dict[str, Any]:
     details: dict[str, Any] = {
         "error_type": type(exc).__name__,
         "error": str(exc),
@@ -44,7 +49,7 @@ class CheckerBatchExecutor(Protocol):
         batch: list[GEPACase],
         rules: str,
         capture_traces: bool,
-    ) -> list[CheckerOutput]: ...
+    ) -> list[CheckerResult]: ...
 
 
 class CheckerGEPAAdapter:
@@ -128,6 +133,43 @@ class CheckerGEPAAdapter:
             "score": class_weight if is_correct else 0.0,
         }
 
+    def _timeout_score_details(self, case: GEPACase) -> dict[str, Any]:
+        class_weight = 1.0
+        if self.primary_metric == "balanced_accuracy":
+            counts = self.class_counts_by_split[case.split]
+            total = counts[True] + counts[False]
+            class_weight = total / (2 * counts[case.resolved])
+        return {
+            "primary_metric": self.primary_metric,
+            "is_correct": False,
+            "classification_outcome": "checker_timeout",
+            "error_type": "checker_timeout",
+            "class_weight": class_weight,
+            "score": 0.0,
+        }
+
+    def _timeout_row(
+        self,
+        case: GEPACase,
+        output: CheckerTimeoutOutput,
+        capture_traces: bool,
+    ) -> tuple[dict[str, Any], float, dict[str, Any] | None]:
+        score_details = self._timeout_score_details(case)
+        public_output = {
+            "instance_id": case.instance_id,
+            **output.to_dict(),
+        }
+        trace = None
+        if capture_traces:
+            trace = {
+                "instance_id": case.instance_id,
+                "expected_resolved": case.resolved,
+                **score_details,
+                "checker_output": output.to_dict(include_trajectory=True),
+                **case.asi,
+            }
+        return public_output, 0.0, trace
+
     def _save_checker_trajectory(
         self,
         *,
@@ -137,7 +179,7 @@ class CheckerGEPAAdapter:
         status: str,
         messages: Sequence[Mapping[str, Any]] = (),
         output: Mapping[str, Any] | None = None,
-        error: Exception | None = None,
+        error: BaseException | None = None,
         retry_feedback: str = "",
     ) -> Path | None:
         if self.run_dir is None:
@@ -198,7 +240,8 @@ class CheckerGEPAAdapter:
         rules: str,
         capture_traces: bool,
     ) -> tuple[dict[str, Any], float, dict[str, Any] | None]:
-        last_exc: Exception | None = None
+        last_exc: BaseException | None = None
+        timeout_trajectories: list[tuple[dict[str, Any], ...]] = []
         retry_feedback = ""
         for attempt in range(1, self.checker_attempts + 1):
             try:
@@ -209,8 +252,12 @@ class CheckerGEPAAdapter:
                     attempt=attempt,
                     retry_feedback=retry_feedback,
                 )
-            except Exception as exc:
+            except (CheckerAgentTimeout, Exception) as exc:
                 last_exc = exc
+                if isinstance(exc, CheckerAgentTimeout):
+                    timeout_trajectories.append(
+                        tuple(getattr(exc, "checker_trajectory", ()))
+                    )
                 retry_feedback = (
                     checker_retry_feedback(str(exc))
                     if isinstance(exc, CheckerOutputContractError)
@@ -227,6 +274,21 @@ class CheckerGEPAAdapter:
                         **details,
                     )
         assert last_exc is not None
+        if (
+            isinstance(last_exc, CheckerAgentTimeout)
+            and len(timeout_trajectories) == self.checker_attempts
+        ):
+            return self._timeout_row(
+                case,
+                CheckerTimeoutOutput(
+                    attempts=self.checker_attempts,
+                    timeout_seconds=int(
+                        getattr(last_exc, "timeout_seconds", 0)
+                    ),
+                    trajectories=tuple(timeout_trajectories),
+                ),
+                capture_traces,
+            )
         details = _exception_details(last_exc)
         if self.audit is not None:
             self.audit.write(
@@ -333,9 +395,11 @@ class CheckerGEPAAdapter:
     def _row_from_checker_output(
         self,
         case: GEPACase,
-        output: CheckerOutput,
+        output: CheckerResult,
         capture_traces: bool,
     ) -> tuple[dict[str, Any], float, dict[str, Any] | None]:
+        if isinstance(output, CheckerTimeoutOutput):
+            return self._timeout_row(case, output, capture_traces)
         score_details = self._score_details(case, output.predicted_resolved)
         public_output = {
             "instance_id": case.instance_id,
@@ -500,17 +564,10 @@ class CheckerGEPAAdapter:
                 candidate_hash,
             )
         else:
-            with ThreadPoolExecutor(max_workers=self.parallel) as executor:
-                rows = list(
-                    executor.map(
-                        lambda case: self._evaluate_one(
-                            case,
-                            candidate["rules"],
-                            capture_traces,
-                        ),
-                        batch,
-                    )
-                )
+            rows = [
+                self._evaluate_one(case, candidate["rules"], capture_traces)
+                for case in batch
+            ]
         errors = [output for output, _, _ in rows if "error" in output]
         if errors:
             instance_ids = [str(output["instance_id"]) for output in errors]
@@ -538,9 +595,13 @@ class CheckerGEPAAdapter:
                     result.scores,
                     strict=True,
                 ):
-                    score_details = self._score_details(
-                        case,
-                        bool(output["predicted_resolved"]),
+                    score_details = (
+                        self._timeout_score_details(case)
+                        if output.get("status") == "timeout"
+                        else self._score_details(
+                            case,
+                            bool(output["predicted_resolved"]),
+                        )
                     )
                     handle.write(
                         json.dumps(

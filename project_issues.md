@@ -21,10 +21,24 @@ guide 与错误反馈现已明确：每条响应只能包含一个可执行 bloc
 observation 前写出或模拟后续 block。这个变更只澄清既有 parser 传输协议，不增加
 Checker 的 plan-review 方法。
 
+2026-08-06 的 8it 正式运行在 candidate 1 validation 的
+`django__django-10554` 上连续三次达到 35 分钟 Slurm 硬时限，停在 0/8 durable
+iterations。该 candidate 会要求广泛实现、测试和多后端验证；三次尝试均持续产生
+有效模型调用，因此本例支持“过度检查是 guideline 行为失败”的解释。但旧运行被
+Slurm 直接终止，来不及原子保存最终 timeout，不能把该硬终止直接计分。
+
 下一次 Offline 运行配置已准备，但**尚未启动**：
 
-- identity：`offline-plan-guideline-hpc-accuracy-b12-8it-explicit-turn-contract-formal-20260805`；
+- identity：`offline-plan-guideline-hpc-accuracy-b12-8it-checker-timeout30m-formal-20260806`；
 - full 384 train / 98 validation，`accuracy`，minibatch 12，seed 42；
+- Checker 每次 fresh Agent 会话软截止 30 分钟，Slurm allocation 保持 35 分钟，
+  预留 5 分钟保存 partial trajectory、结构化 timeout 和清理；总计三次尝试；
+- 仅当三次均有明确 `checker_agent_timeout` 证据时，该 case 以 null prediction、
+  score 0 返回 GEPA。硬 Slurm timeout、缺输出、混合失败或基础设施失败继续 block；
+- **独立未修风险**：本次 timeout 审计还发现 Apptainer 内可见宿主 home，Checker
+  曾读取旧 run artifact，形成跨运行 evidence 污染风险。该问题不属于 30/35 分钟
+  timeout 语义，本轮未顺带增加隔离机制；正式启动新 identity 前需单独确定并验收
+  home 隔离边界；
 - 8 个累计 proposal iterations；worst-case projection 为 1074 metric calls，
   `max_metric_calls=1200` 仅作 fail-safe；
 - 由 `configs/offline_gepa_supervisor.yaml` 作为唯一启动/resume 入口；提交前仍需

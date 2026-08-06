@@ -12,6 +12,7 @@ from src.environment.docker_env import configure_docker_capacity
 from src.exceptions import FatalError
 from src.optimization.audit import text_sha256
 from src.optimization.checker import (
+    CheckerAgentTimeout,
     CheckerOutputContractError,
     DockerChecker,
     checker_retry_feedback,
@@ -39,7 +40,9 @@ def _load_retry_feedback(previous_output_path: Path | None) -> str:
     return ""
 
 
-def _failure_category(exc: Exception) -> str:
+def _failure_category(exc: BaseException) -> str:
+    if isinstance(exc, CheckerAgentTimeout):
+        return "timeout"
     if isinstance(exc, CheckerOutputContractError):
         return "output_contract"
     if isinstance(exc, MemoryError):
@@ -139,7 +142,7 @@ def run_task(
             },
         )
         return 0
-    except Exception as exc:
+    except (CheckerAgentTimeout, Exception) as exc:
         failure = {
             "status": (
                 "blocking_failed"
@@ -157,14 +160,18 @@ def run_task(
             "failure_stage": failure_stage,
             "failure_category": _failure_category(exc),
             "failure_kind": (
-                "checker_output_contract"
-                if isinstance(exc, CheckerOutputContractError)
-                else "operational"
+                "checker_agent_timeout"
+                if isinstance(exc, CheckerAgentTimeout)
+                else (
+                    "checker_output_contract"
+                    if isinstance(exc, CheckerOutputContractError)
+                    else "operational"
+                )
             ),
             "retry_feedback": retry_feedback,
         }
-        trajectory = getattr(exc, "checker_trajectory", ())
-        if trajectory:
+        trajectory = getattr(exc, "checker_trajectory", None)
+        if trajectory is not None:
             atomic_json(
                 attempt_dir / "checker_trajectory.json",
                 {

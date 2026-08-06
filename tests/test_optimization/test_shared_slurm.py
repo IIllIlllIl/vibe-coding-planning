@@ -18,6 +18,7 @@ from src.optimization.config import (
     SearchConfig,
 )
 from src.optimization.checker import (
+    CheckerAgentTimeout,
     CheckerOutputContractError,
     checker_retry_feedback,
 )
@@ -32,6 +33,7 @@ from src.optimization.hpc.task_batch import (
 )
 from src.optimization.models import (
     CheckerOutput,
+    CheckerTimeoutOutput,
     GEPACase,
     RepositoryEvidence,
     RepositoryRef,
@@ -544,6 +546,134 @@ def test_offline_checker_worker_preserves_failed_contract_trajectory(
         (attempt_dir / "checker_trajectory.json").read_text(encoding="utf-8")
     )
     assert trajectory["messages"][0]["content"] == "invalid submission"
+
+
+def test_offline_checker_worker_preserves_explicit_agent_timeout(
+    tmp_path,
+    monkeypatch,
+):
+    config = _config(tmp_path)
+    rules_path = tmp_path / "rules.md"
+    rules_path.write_text("rules", encoding="utf-8")
+    manifest_path = tmp_path / "task.json"
+    atomic_json(
+        manifest_path,
+        {
+            "fingerprint": "fingerprint",
+            "instance_id": "org__repo-1",
+            "split": "train",
+            "rules_path": str(rules_path),
+            "checker_payload": _case(resolved=True).checker_payload(),
+        },
+    )
+
+    class TimingOutChecker:
+        def __init__(self, *args, **kwargs):
+            pass
+
+        def __call__(self, case, rules, *, retry_feedback=""):
+            error = CheckerAgentTimeout(1800)
+            error.checker_trajectory = (
+                {"role": "assistant", "content": "still investigating"},
+            )
+            raise error
+
+    monkeypatch.setattr(
+        "src.optimization.offline_checker_worker.load_optimization_config",
+        lambda path: config,
+    )
+    monkeypatch.setattr(
+        "src.optimization.offline_checker_worker.configure_docker_capacity",
+        lambda *args, **kwargs: object(),
+    )
+    monkeypatch.setattr(
+        "src.optimization.offline_checker_worker.DockerChecker",
+        TimingOutChecker,
+    )
+    output_path = tmp_path / "output.json"
+    attempt_dir = tmp_path / "attempt"
+
+    assert run_checker_task(
+        config_path=tmp_path / "config.yaml",
+        task_manifest_path=manifest_path,
+        output_path=output_path,
+        attempt_dir=attempt_dir,
+    ) == 1
+
+    failure = json.loads(output_path.read_text(encoding="utf-8"))
+    assert failure["status"] == "agent_failed"
+    assert failure["failure_kind"] == "checker_agent_timeout"
+    assert failure["failure_category"] == "timeout"
+    trajectory = json.loads(
+        (attempt_dir / "checker_trajectory.json").read_text(encoding="utf-8")
+    )
+    assert trajectory["messages"][0]["content"] == "still investigating"
+
+
+def test_offline_checker_recovers_only_three_explicit_timeouts(tmp_path):
+    config = replace(
+        _config(tmp_path),
+        checker=replace(_config(tmp_path).checker, agent_timeout_seconds=1800),
+        hpc=HPCConfig(max_task_attempts=3),
+    )
+    executor = HPCSlurmOfflineCheckerExecutor(config)
+    batch_dir = tmp_path / "batch"
+    task = HPCSlurmOfflineCheckerExecutor._prepare(
+        batch_dir,
+        fingerprint="fingerprint",
+        batch=[_case(resolved=True)],
+        rules="rules",
+        capture_traces=True,
+    )[0]
+    for attempt in (1, 2, 3):
+        output_path = (
+            task.output_path
+            if attempt == 3
+            else batch_dir
+            / "failed_outputs"
+            / f"attempt_{attempt:02d}"
+            / task.output_path.name
+        )
+        atomic_json(
+            output_path,
+            {
+                "status": "agent_failed",
+                "failure_kind": "checker_agent_timeout",
+                "fingerprint": "fingerprint",
+                "instance_id": task.instance_id,
+            },
+        )
+        atomic_json(
+            task.attempts_dir
+            / f"attempt_{attempt:02d}"
+            / "checker_trajectory.json",
+            {"messages": [{"role": "assistant", "content": str(attempt)}]},
+        )
+
+    results = executor._recover_explicit_timeouts(
+        batch_dir=batch_dir,
+        fingerprint="fingerprint",
+        tasks=[task],
+    )
+
+    assert len(results) == 1
+    assert isinstance(results[0], CheckerTimeoutOutput)
+    assert results[0].attempts == 3
+    assert results[0].timeout_seconds == 1800
+    assert len(results[0].trajectories) == 3
+
+    second_attempt = (
+        batch_dir / "failed_outputs" / "attempt_02" / task.output_path.name
+    )
+    invalid = json.loads(second_attempt.read_text(encoding="utf-8"))
+    invalid["failure_kind"] = "operational"
+    atomic_json(second_attempt, invalid)
+    with pytest.raises(ValueError, match="non-semantic-timeout"):
+        executor._recover_explicit_timeouts(
+            batch_dir=batch_dir,
+            fingerprint="fingerprint",
+            tasks=[task],
+        )
 
 
 def test_offline_checker_worker_classifies_input_failure_without_changing_status(

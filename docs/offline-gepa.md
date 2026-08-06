@@ -141,6 +141,14 @@ semantic answer. Infrastructure/provider failures do not enter this feedback.
 The feedback changes only output-protocol recovery and is part of the
 fingerprinted Checker semantics.
 
+The formal HPC configuration gives one complete Checker Agent session a
+30-minute soft deadline inside a 35-minute Slurm allocation. Reaching the soft
+deadline interrupts the Agent before Slurm kills the worker, leaving five
+minutes for container cleanup plus atomic failure and partial-trajectory
+writes. This session deadline is `checker.agent_timeout_seconds`; the older
+`checker.timeout` remains the per-command/SIF-preparation timeout and does not
+bound a complete Agent conversation.
+
 Resolved labels, historical Plan/Code trajectories, patches, evaluator results,
 and scores are never Checker inputs. They are available only to Reflection as
 post-execution diagnostic evidence. Reflection runs in a lightweight container
@@ -289,12 +297,26 @@ configured output/missing grace periods before retry or failure. GEPA state,
 not Slurm task completion, remains the authority for whether a result affected
 the search.
 
-If a Checker, initial Reflection, or contamination-repair task exhausts all
-three attempts, its task journal enters the durable `EXHAUSTED` terminal state
-and the Offline run blocks. Reflection uses a dedicated controller exception
-that passes through GEPA's ordinary proposal-exception handler, so exhaustion
-cannot become a normal no-proposal iteration or consume the configured
-iteration target. No prediction, score, or candidate guideline is fabricated.
+If all three fresh Checker attempts end with an explicitly written
+`checker_agent_timeout`, the host reconstructs that attempt evidence, returns
+`predicted_resolved=null`, and assigns that case score zero. The timeout and
+all available partial trajectories enter Reflection evidence. This treats
+open-ended review caused by a candidate guideline as candidate failure without
+inventing a binary prediction. A hard Slurm `TIMEOUT`, missing output, mixed
+failure kinds, output-contract exhaustion, provider failure, or infrastructure
+failure still blocks; these cannot safely be attributed to the guideline.
+
+If initial Reflection or contamination repair exhausts all three attempts, its
+task journal enters the durable `EXHAUSTED` terminal state and the Offline run
+blocks. Reflection uses a dedicated controller exception that passes through
+GEPA's ordinary proposal-exception handler, so exhaustion cannot become a
+normal no-proposal iteration or consume the configured iteration target.
+
+Candidate reports preserve timeout predictions as JSON `null`, report timeout
+count/rate separately, and recompute the GEPA validation score from the stored
+per-case scores. Ordinary confusion-matrix metrics are calculated only over
+completed binary Checker predictions and are labeled with that scope; timeout
+cases are never silently coerced to `false`.
 
 ## Local/HPC Configuration Switch
 
@@ -303,9 +325,9 @@ the execution transport:
 
 | Mode | Required config | Behavior |
 |---|---|---|
-| Local Docker | `execution.backend: local`, `container.runtime: docker` | Checker calls use local thread parallelism; Reflection and optional repair run synchronously |
+| Local Docker | `execution.backend: local`, `container.runtime: docker` | Checker calls use local thread parallelism unless `checker.agent_timeout_seconds` is enabled; the POSIX soft deadline requires `search.parallel=1`. Reflection and optional repair run synchronously |
 | HPC Slurm | `execution.backend: hpc_slurm`, `container.runtime: apptainer` | Checker, initial Reflection, and optional repair are independent Slurm tasks |
-| Local Apptainer | `execution.backend: local`, `container.runtime: apptainer` | Synchronous execution on a host with Apptainer and the SIF cache |
+| Local Apptainer | `execution.backend: local`, `container.runtime: apptainer` | Synchronous execution on a host with Apptainer and the SIF cache; an enabled Checker soft deadline requires `search.parallel=1` |
 
 `hpc.*` remains config-validated but is not used to execute local Agent calls.
 Switching backend or container runtime changes experimental semantics and

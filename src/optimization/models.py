@@ -65,3 +65,34 @@ class CheckerOutput:
         if include_trajectory:
             value["trajectory"] = list(self.trajectory)
         return value
+
+
+@dataclass(frozen=True)
+class CheckerTimeoutOutput:
+    """A semantic Checker failure after explicit Agent deadline exhaustion."""
+
+    attempts: int
+    timeout_seconds: int
+    trajectories: tuple[tuple[dict[str, Any], ...], ...] = ()
+
+    def to_dict(self, *, include_trajectory: bool = False) -> dict[str, Any]:
+        value: dict[str, Any] = {
+            "status": "timeout",
+            "predicted_resolved": None,
+            "decision_reason": (
+                "Checker did not finish within the configured Agent deadline "
+                f"after {self.attempts} attempt(s)."
+            ),
+            "repository_evidence": [],
+            "terminal_reason": "checker_agent_timeout",
+            "attempts": self.attempts,
+            "timeout_seconds": self.timeout_seconds,
+        }
+        if include_trajectory:
+            value["attempt_trajectories"] = [
+                list(messages) for messages in self.trajectories
+            ]
+        return value
+
+
+CheckerResult = CheckerOutput | CheckerTimeoutOutput
