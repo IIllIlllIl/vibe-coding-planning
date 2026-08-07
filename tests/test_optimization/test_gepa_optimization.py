@@ -5479,7 +5479,7 @@ def test_checker_operational_failure_marks_run_failed(tmp_path):
     assert any(record["event"] == "optimization_failed" for record in errors)
 
 
-def test_default_offline_config_stages_checker_stability_diagnostic(monkeypatch):
+def test_default_offline_config_stages_formal_accuracy_b8_run(monkeypatch):
     monkeypatch.setenv("DEEPSEEK_API_KEY", "secret")
     repo_root = Path(__file__).resolve().parents[2]
     config = load_optimization_config(
@@ -5493,26 +5493,25 @@ def test_default_offline_config_stages_checker_stability_diagnostic(monkeypatch)
     assert config.hpc.cpus_per_task == 1
     assert config.hpc.mem == "4G"
     assert config.hpc.time == "00:35:00"
-    assert config.hpc.max_task_attempts == 1
-    assert config.search.max_metric_calls == 294
-    assert config.search.projection_metric_calls == 294
-    assert config.search.max_iterations is None
+    assert config.hpc.max_task_attempts == 3
+    assert config.search.max_metric_calls == 1200
+    assert config.search.projection_metric_calls == 1010
+    assert config.search.max_iterations == 8
     assert config.search.reflection_minibatch_size == 8
     assert config.search.primary_metric == "accuracy"
     assert config.search.parallel == 1
     # One worker attempt is one complete Checker Agent session. Slurm-level
     # retries start a new session instead of resuming an interrupted one.
     assert config.checker.max_attempts == 1
-    assert config.initial_rules_path.name == (
-        "gepa_guideline_accuracy_b12_20260806_candidate1.md"
-    )
-    assert "offline-checker-stability-candidate1-r3-noretry-20260807" in str(
-        config.run_dir
+    assert config.initial_rules_path.name == "gepa_initial_guideline_minimal.md"
+    assert (
+        "offline-plan-guideline-hpc-accuracy-b8-default-accept-8it-formal-20260807"
+        in str(config.run_dir)
     )
     assert (
         config.initial_rules_path.read_text()
         .strip()
-        .startswith("# Guidance for Deciding Whether a Proposed Plan Should Proceed")
+        .startswith("Allow the plan to proceed unless")
     )
     assert config.checker.agent_timeout_seconds == 1800
     checker_prompt = " ".join(config.checker_prompt.split())
@@ -5561,7 +5560,7 @@ def test_default_offline_config_stages_checker_stability_diagnostic(monkeypatch)
     assert "{{current_guideline}}" in config.reflection_instance_template
     assert (
         text_sha256(config.initial_rules_path.read_text(encoding="utf-8").strip())
-        == "17e8d1c1e0f96e53b8568fd28ca63d8525ca04911da6e0c604324297bfab9925"
+        == "7a059a248467807bd57d26f028b7866b8ceba7c386f9661d877ade500072852a"
     )
 
 

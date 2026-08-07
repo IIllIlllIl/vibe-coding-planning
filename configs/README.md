@@ -39,8 +39,8 @@ poll cadence, controller resources, or remote workdir belongs in
 
 | Config | Runtime | Purpose |
 |---|---|---|
-| `gepa_verified_rules.yaml` | ULHPC Apptainer | Checker-only stability diagnostic over the same fixed 98 validation cases used by other runs on the formal snapshot. It runs the saved 20260806 best candidate three independent times with one Agent attempt per repetition, preserves complete trajectories, and does not invoke GEPA proposal or Reflection. |
-| `offline_gepa_supervisor.yaml` | Local tmux+caffeinate | Matching resumable diagnostic launch identity. It uses 10-minute polling and `1 CPU / 4G / 10min` controller slices, requires a clean unchanged commit/config, and takes completion from the diagnostic `result.json` rather than an iteration target. |
+| `gepa_verified_rules.yaml` | ULHPC Apptainer | Formal eight-iteration Offline GEPA run using the default-accept minimal seed, accuracy, Reflection minibatch eight, and three total fresh-task attempts. |
+| `offline_gepa_supervisor.yaml` | Local tmux+caffeinate | Matching formal Offline resume identity. It uses 10-minute polling and `1 CPU / 4G / 10min` controller slices, requires a clean unchanged commit/config, and reads the cumulative eight-proposal target from the runtime config. |
 | `offline_gepa_hpc_smoke_2x2_20260728.yaml` | ULHPC Apptainer | Environment-only 2-train/2-validation, 1-iteration smoke. Its scores are not rule-quality evidence. |
 | `gepa_guideline_accuracy_b12_20260806_candidate1.md` | Prompt text | Exact best candidate from `offline-plan-guideline-hpc-accuracy-b12-8it-checker-timeout30m-formal-20260806`: candidate 1, validation accuracy `73/98`, semantic SHA-256 `17e8d1c1e0f96e53b8568fd28ca63d8525ca04911da6e0c604324297bfab9925`. |
 | `gepa_initial_guideline_minimal.md` | Prompt text | Default-accept minimal Offline guideline seed. It rejects only when available evidence clearly shows a material problem, while supplying no repository-investigation behavior, format, or review methodology. |

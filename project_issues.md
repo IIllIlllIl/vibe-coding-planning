@@ -56,9 +56,32 @@ run 间始终使用同一固定 98-case validation，不重新抽样。该诊断
 以及耗尽的 worker/output-contract failure 直接作为 incomplete repetition 并保留原始
 分类；host validation、identity 或 data-integrity failure 继续 block，不伪造预测。
 
-后续 8it Offline 设计待 stability 诊断完成后恢复为新 identity：
+该 stability 诊断现已完成。98 个 case 中有 86 个取得三次完整判断，61/86
+（70.9%）三次预测一致，25/86（29.1%）发生摇摆；正确次数分布为 `3/3=51`、
+`2/3=12`、`1/3=13`、`0/3=10`。三轮共 294 个 Checker session，281 个有效、
+13 个无效；无效主要来自 6 次 final JSON/output-contract 错误、4 次环境准备命令
+超时、2 次 UTF-8 解码失败和 1 次 Checker semantic timeout。重复评估因此携带
+可观测的稳定性信息，但尚未成为正式 GEPA 的优化语义。
 
-- draft identity：`offline-plan-guideline-hpc-accuracy-b8-default-accept-8it-draft-20260807`；
+待讨论的新方案是把每次正式 Checker metric evaluation 视为原 minibatch case 的
+三次独立重复，即逻辑 minibatch 为 `B`，实际 Checker session 为 `3B`。每个重复
+继续复用现有失败处理，并恢复最多三次 fresh-task attempts；正常为每 case 三个
+session，最坏为九个。每个重复只向计分和 Reflection 暴露一个终态（首次成功结果，
+或 attempts 耗尽后的终态），所有 attempt trajectory 仍保存为原始审计证据。
+三次结果的 score 聚合、不同失败类别能否成为优化证据以及 GEPA metric-call 账本
+语义尚未确定，在这些问题明确前不得实现或用于正式搜索。
+
+该方案还会显著增加 Reflection 输入：minibatch 8 对应最多 24 份终态 Checker
+trajectory，而此前 12 份 rich-evidence trajectory 已触发约 126 万 token 的确定性
+context overflow。当前决定是先运行 default-accept seed、minibatch 8、accuracy 的
+单重复 8it 实验，检查其是否已达到验收标准；三重复正式 GEPA 仅作为后续选项，
+不进入本轮 8it。
+
+后续 8it Offline 已恢复为新的正式 identity；活动 runtime config 和 supervisor
+现在指向该实验。配置校验、相关 Offline/HPC 测试和 ULHPC dry-run 均已通过；
+clean commit 后可由 supervisor 启动：
+
+- formal identity：`offline-plan-guideline-hpc-accuracy-b8-default-accept-8it-formal-20260807`；
 - seed 改为默认接受：只有 available evidence 明确显示会使 plan 难以解决问题的
   material problem 时才拒绝；
 - Reflection minibatch 从 12 降为 8，以最小改动降低 context overflow 风险；这会

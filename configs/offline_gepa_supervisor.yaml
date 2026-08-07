@@ -1,10 +1,9 @@
-# Candidate-1 Checker-only stability diagnostic: 98 cases x 3 repetitions.
+# Formal default-accept, accuracy, minibatch-eight Offline GEPA run.
 schema_version: 1
-session: offline-checker-stability-candidate1-r3-noretry-20260807
-log: .local/hpc-supervisor/offline-checker-stability-candidate1-r3-noretry-20260807.log
+session: offline-plan-guideline-hpc-accuracy-b8-default-accept-8it-formal-20260807
+log: .local/hpc-supervisor/offline-plan-guideline-hpc-accuracy-b8-default-accept-8it-formal-20260807.log
 arguments:
-  # Completion is determined by the diagnostic result.json; there is no GEPA
-  # iteration target and no Reflection stage.
+  # The cumulative eight-proposal target is read from the runtime config.
   - --poll-interval
   - "600"
   - --slice-time
@@ -16,9 +15,9 @@ arguments:
   - --gepa-config
   - configs/gepa_verified_rules.yaml
   - --job-name
-  - offline-checker-stability-candidate1-r3-noretry-20260807
+  - offline-plan-guideline-hpc-accuracy-b8-default-accept-8it-formal-20260807
   - --remote-dir
-  - ~/hpc_runs/vibe-coding-planning-offline-checker-stability-candidate1-r3-noretry-20260807
+  - ~/hpc_runs/vibe-coding-planning-offline-guideline-accuracy-b8-default-accept-8it-formal-20260807
   - --cpus
   - "1"
   - --mem

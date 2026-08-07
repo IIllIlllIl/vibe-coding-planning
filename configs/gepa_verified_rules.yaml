@@ -1,14 +1,11 @@
-# Checker-only stability diagnostic. Evaluate the complete validation split
-# three independent times with the previous run's best candidate. Reflection,
-# GEPA candidate proposal, and fresh Slurm retry are not invoked.
-mode: offline_checker_stability
-diagnostic:
-  repetitions: 3
+# Formal eight-iteration Offline GEPA run for the default-accept minimal seed,
+# accuracy objective, minibatch eight, and the current standalone-guideline
+# Checker/Reflection responsibility boundary.
 
 paths:
   dataset_snapshot: output/SWE-bench_Verified/verified-round1-gepa-datasets/20260614_482_fdc056ae85df
-  initial_guideline: configs/gepa_guideline_accuracy_b12_20260806_candidate1.md
-  run_dir: output/SWE-bench_Verified/gepa-rules/offline-checker-stability-candidate1-r3-noretry-20260807
+  initial_guideline: configs/gepa_initial_guideline_minimal.md
+  run_dir: output/SWE-bench_Verified/gepa-rules/offline-plan-guideline-hpc-accuracy-b8-default-accept-8it-formal-20260807
 
 checker:
   model: deepseek-v4-flash
@@ -35,11 +32,12 @@ reflection:
   timeout: 1800
 
 search:
-  # Search fields remain structurally required by the shared Offline config
-  # loader but are not consumed by this Checker-only diagnostic.
-  max_iterations: null
-  max_metric_calls: 294
-  projection_metric_calls: 294
+  # Full 384/98 snapshot and eight GEPA proposals after seed validation.
+  # Worst case: 98 + 8 * (8 parent + 8 proposal + 98 validation) = 1010.
+  # The metric-call ceiling is a fail-safe; the iteration target is primary.
+  max_iterations: 8
+  max_metric_calls: 1200
+  projection_metric_calls: 1010
   reflection_minibatch_size: 8
   primary_metric: accuracy
   # Local-only adapter concurrency. HPC submits every Agent as an independent
@@ -47,7 +45,7 @@ search:
   parallel: 1
   seed: 42
   skip_perfect_score: false
-  min_proposals: 0
+  min_proposals: 1
 
 docker:
   workdir: /testbed
@@ -77,12 +75,12 @@ hpc:
   poll_interval_seconds: 300
   task_output_grace_seconds: 300
   missing_task_grace_seconds: 600
-  # Stability comes from the three configured repetitions, not retries.
-  max_task_attempts: 1
+  # One initial fresh Agent task plus two clean retries after task failure.
+  max_task_attempts: 3
   python_module: lang/Python/3.11
   container_module: tools/Apptainer
   python_bin: python3
-  job_name_prefix: offline-checker-stability-candidate1-r3-noretry-20260807
+  job_name_prefix: offline-guideline-accuracy-b8-default-accept-8it-20260807
   worker_config_path: configs/gepa_verified_rules.yaml
 
 prompts:
