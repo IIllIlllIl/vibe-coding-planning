@@ -19,6 +19,7 @@ from src.optimization.hpc.task_batch import (
     atomic_json,
 )
 from src.optimization.models import (
+    CheckerIncompleteOutput,
     CheckerOutput,
     CheckerResult,
     CheckerTimeoutOutput,
@@ -80,24 +81,26 @@ def offline_evaluation_fingerprint(
     batch: Sequence[GEPACase],
     rules: str,
     capture_traces: bool,
+    evaluation_tag: str | None = None,
 ) -> str:
     """Identify predictions without placing historical labels in worker input."""
-    return _stable_sha256(
-        {
-            "schema": 1,
-            "checker_semantic_sha256": offline_checker_semantic_sha256(config),
-            "candidate_sha256": text_sha256(rules),
-            "capture_traces": capture_traces,
-            "cases": [
-                {
-                    "instance_id": case.instance_id,
-                    "split": case.split,
-                    "checker_payload": case.checker_payload(),
-                }
-                for case in batch
-            ],
-        }
-    )
+    payload = {
+        "schema": 1,
+        "checker_semantic_sha256": offline_checker_semantic_sha256(config),
+        "candidate_sha256": text_sha256(rules),
+        "capture_traces": capture_traces,
+        "cases": [
+            {
+                "instance_id": case.instance_id,
+                "split": case.split,
+                "checker_payload": case.checker_payload(),
+            }
+            for case in batch
+        ],
+    }
+    if evaluation_tag is not None:
+        payload["evaluation_tag"] = evaluation_tag
+    return _stable_sha256(payload)
 
 
 def build_offline_checker_array_script(
@@ -114,9 +117,7 @@ def build_offline_checker_array_script(
     config_path = hpc.worker_config_path
     if not config_path:
         raise ValueError("hpc.worker_config_path is required")
-    job_name = (
-        f"{hpc.job_name_prefix}-checker-{batch_dir.name[:12]}-a{attempt}"
-    )
+    job_name = f"{hpc.job_name_prefix}-checker-{batch_dir.name[:12]}-a{attempt}"
     lines = [
         "#!/usr/bin/env bash",
         f"#SBATCH --job-name={job_name}",
@@ -153,12 +154,9 @@ def build_offline_checker_array_script(
         '--attempt-dir "${ATTEMPT_DIR}"'
     )
     if attempt > 1:
-        previous_dir = (
-            batch_dir / "failed_outputs" / f"attempt_{attempt - 1:02d}"
-        )
+        previous_dir = batch_dir / "failed_outputs" / f"attempt_{attempt - 1:02d}"
         lines.append(
-            f"PREVIOUS_OUTPUT={shlex.quote(str(previous_dir))}"
-            '/task_${TASK_ID}.json'
+            f"PREVIOUS_OUTPUT={shlex.quote(str(previous_dir))}/task_${{TASK_ID}}.json"
         )
         worker_command += ' --previous-output "${PREVIOUS_OUTPUT}"'
     lines.append(worker_command)
@@ -180,12 +178,16 @@ class HPCSlurmOfflineCheckerExecutor:
         batch: list[GEPACase],
         rules: str,
         capture_traces: bool,
-    ) -> list[CheckerResult]:
+        *,
+        evaluation_tag: str | None = None,
+        allow_incomplete: bool = False,
+    ) -> list[CheckerResult | CheckerIncompleteOutput]:
         fingerprint = offline_evaluation_fingerprint(
             self.config,
             batch=batch,
             rules=rules,
             capture_traces=capture_traces,
+            evaluation_tag=evaluation_tag,
         )
         batch_dir = self.root / fingerprint
         tasks = self._prepare(
@@ -194,6 +196,7 @@ class HPCSlurmOfflineCheckerExecutor:
             batch=batch,
             rules=rules,
             capture_traces=capture_traces,
+            evaluation_tag=evaluation_tag,
         )
 
         def write_script(indices: Sequence[int], attempt: int) -> Path:
@@ -229,6 +232,12 @@ class HPCSlurmOfflineCheckerExecutor:
                 validate_output=validate,
             )
         except TaskAttemptsExhausted as exc:
+            if allow_incomplete:
+                return self._recover_stability_incomplete(
+                    batch_dir=batch_dir,
+                    fingerprint=fingerprint,
+                    tasks=tasks,
+                )
             try:
                 results = self._recover_explicit_timeouts(
                     batch_dir=batch_dir,
@@ -254,9 +263,70 @@ class HPCSlurmOfflineCheckerExecutor:
             "offline_hpc_checker_batch_completed",
             batch_dir=str(batch_dir),
             fingerprint=fingerprint,
+            evaluation_tag=evaluation_tag,
             instance_ids=[case.instance_id for case in batch],
         )
         return [self._completed_result(value) for value in outputs]
+
+    def _recover_stability_incomplete(
+        self,
+        *,
+        batch_dir: Path,
+        fingerprint: str,
+        tasks: Sequence[TaskFiles],
+    ) -> list[CheckerResult | CheckerIncompleteOutput]:
+        """Collect valid predictions and classify exhausted diagnostic tasks."""
+        results: list[CheckerResult | CheckerIncompleteOutput] = []
+        attempt = self.config.hpc.max_task_attempts
+        for task in tasks:
+            if task.output_path.is_file():
+                value = json.loads(task.output_path.read_text(encoding="utf-8"))
+                if value.get("status") == "completed":
+                    if value.get("fingerprint") != fingerprint:
+                        raise ValueError("Offline Checker output fingerprint mismatch")
+                    if value.get("instance_id") != task.instance_id:
+                        raise ValueError("Offline Checker output instance mismatch")
+                    results.append(self._completed_result(value))
+                    continue
+            else:
+                value = {}
+
+            slurm_path = (
+                task.attempts_dir / f"attempt_{attempt:02d}" / "slurm_status.json"
+            )
+            slurm = (
+                json.loads(slurm_path.read_text(encoding="utf-8"))
+                if slurm_path.is_file()
+                else {}
+            )
+            terminal_state = slurm.get("state")
+            failure_kind = str(value.get("failure_kind") or "task_exhausted")
+            failure_category = str(
+                value.get("failure_category")
+                or ("timeout" if terminal_state == "TIMEOUT" else "infrastructure")
+            )
+            results.append(
+                CheckerIncompleteOutput(
+                    failure_kind=failure_kind,
+                    failure_category=failure_category,
+                    terminal_state=(
+                        str(terminal_state) if terminal_state is not None else None
+                    ),
+                    attempts=attempt,
+                    error=str(value.get("error", "")),
+                )
+            )
+        self.audit.write(
+            "offline_hpc_checker_stability_incomplete_collected",
+            batch_dir=str(batch_dir),
+            fingerprint=fingerprint,
+            incomplete_instance_ids=[
+                task.instance_id
+                for task, result in zip(tasks, results, strict=True)
+                if isinstance(result, CheckerIncompleteOutput)
+            ],
+        )
+        return results
 
     @staticmethod
     def _completed_result(value: dict[str, Any]) -> CheckerOutput:
@@ -318,9 +388,7 @@ class HPCSlurmOfflineCheckerExecutor:
                     / "checker_trajectory.json"
                 )
                 if trajectory_path.is_file():
-                    trajectory = json.loads(
-                        trajectory_path.read_text(encoding="utf-8")
-                    )
+                    trajectory = json.loads(trajectory_path.read_text(encoding="utf-8"))
                     messages = trajectory.get("messages")
                     if not isinstance(messages, list):
                         raise ValueError("Checker timeout trajectory must be a list")
@@ -346,6 +414,7 @@ class HPCSlurmOfflineCheckerExecutor:
         batch: Sequence[GEPACase],
         rules: str,
         capture_traces: bool,
+        evaluation_tag: str | None = None,
     ) -> list[TaskFiles]:
         tasks_dir = batch_dir / "tasks"
         outputs_dir = batch_dir / "outputs"
@@ -373,6 +442,8 @@ class HPCSlurmOfflineCheckerExecutor:
                 "rules_path": str(rules_path),
                 "checker_payload": case.checker_payload(),
             }
+            if evaluation_tag is not None:
+                payload["evaluation_tag"] = evaluation_tag
             if manifest_path.exists():
                 if json.loads(manifest_path.read_text(encoding="utf-8")) != payload:
                     raise ValueError("Offline Checker task manifest mismatch")
@@ -395,6 +466,7 @@ class HPCSlurmOfflineCheckerExecutor:
                 "fingerprint": fingerprint,
                 "candidate_sha256": text_sha256(rules),
                 "capture_traces": capture_traces,
+                "evaluation_tag": evaluation_tag,
                 "instance_ids": [case.instance_id for case in batch],
                 "contains_historical_labels": False,
             },

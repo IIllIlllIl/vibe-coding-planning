@@ -95,4 +95,26 @@ class CheckerTimeoutOutput:
         return value
 
 
+@dataclass(frozen=True)
+class CheckerIncompleteOutput:
+    """One exhausted stability-diagnostic repetition without a prediction."""
+
+    failure_kind: str
+    failure_category: str
+    terminal_state: str | None
+    attempts: int
+    error: str = ""
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "status": "incomplete",
+            "predicted_resolved": None,
+            "failure_kind": self.failure_kind,
+            "failure_category": self.failure_category,
+            "terminal_state": self.terminal_state,
+            "attempts": self.attempts,
+            "error": self.error,
+        }
+
+
 CheckerResult = CheckerOutput | CheckerTimeoutOutput

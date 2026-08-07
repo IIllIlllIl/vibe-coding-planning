@@ -453,9 +453,8 @@ def test_online_hpc_6to8_config_uses_formal_snapshot_without_instance_subset(
         repo_root / "configs" / "gepa_online_planning_hpc.yaml"
     )
 
-    assert (
-        "verified-round1-gepa-datasets/20260614_482_fdc056ae85df"
-        in str(config.dataset_snapshot)
+    assert "verified-round1-gepa-datasets/20260614_482_fdc056ae85df" in str(
+        config.dataset_snapshot
     )
     assert config.dataset.train_instance_ids == ()
     assert config.dataset.validation_instance_ids == ()
@@ -826,9 +825,7 @@ def test_online_rollout_audit_records_design_boundaries(tmp_path, monkeypatch):
         calls["code_plan"] = plan
         calls["code_model_wrapper"] = model_wrapper
         calls["code_phase_timeout_seconds"] = phase_timeout_seconds
-        return "diff --git a/a.py b/a.py\n", [
-            {"role": "assistant", "content": "code"}
-        ]
+        return "diff --git a/a.py b/a.py\n", [{"role": "assistant", "content": "code"}]
 
     monkeypatch.setattr("src.optimization.online_rollout.plan_agent.run", fake_plan_run)
     monkeypatch.setattr("src.optimization.online_rollout.code_agent.run", fake_code_run)
@@ -911,9 +908,7 @@ def test_online_rollout_retry_resumes_from_plan_checkpoint(tmp_path, monkeypatch
         calls["code"] += 1
         if calls["code"] == 1:
             raise TaskError("empty patch")
-        return "diff --git a/a.py b/a.py\n", [
-            {"role": "assistant", "content": "code"}
-        ]
+        return "diff --git a/a.py b/a.py\n", [{"role": "assistant", "content": "code"}]
 
     def fake_evaluator(*args, **kwargs):
         calls["evaluator"] += 1
@@ -990,8 +985,7 @@ def test_online_rollout_retry_resumes_from_plan_checkpoint(tmp_path, monkeypatch
         for line in (config.run_dir / "audit_events.jsonl").read_text().splitlines()
     ]
     assert any(
-        event["event"] == "online_rollout_phase_resumed"
-        and event["phase"] == "plan"
+        event["event"] == "online_rollout_phase_resumed" and event["phase"] == "plan"
         for event in audit
     )
     assert any(
@@ -1205,6 +1199,7 @@ def test_online_rollout_apptainer_uses_separate_plan_and_code_phases(
             [{"role": "assistant", "content": "code"}],
         ),
     )
+
     def fake_evaluate(
         patch,
         instance_info,
@@ -1550,9 +1545,7 @@ def test_adapter_parallel_preserves_batch_order(tmp_path):
     ]
     assert result.scores == [1.0, 0.0]
     trajectory_paths = sorted(
-        (tmp_path / "parallel-adapter").glob(
-            "checker_trajectories/*/*/*.json"
-        )
+        (tmp_path / "parallel-adapter").glob("checker_trajectories/*/*/*.json")
     )
     assert len(trajectory_paths) == 2
     trajectories = [json.loads(path.read_text()) for path in trajectory_paths]
@@ -1564,9 +1557,9 @@ def test_adapter_parallel_preserves_batch_order(tmp_path):
     assert all(item["messages"] for item in trajectories)
     audit = [
         json.loads(line)
-        for line in (
-            tmp_path / "parallel-adapter" / "audit_events.jsonl"
-        ).read_text().splitlines()
+        for line in (tmp_path / "parallel-adapter" / "audit_events.jsonl")
+        .read_text()
+        .splitlines()
     ]
     started = next(
         record for record in audit if record["event"] == "adapter_evaluation_started"
@@ -1612,8 +1605,7 @@ def test_adapter_balanced_accuracy_scores_are_additive_and_auditable(tmp_path):
     assert result.trajectories[1]["error_type"] == "false_negative"
     assert result.trajectories[3]["classification_outcome"] == "true_negative"
     assert all(
-        trace["primary_metric"] == "balanced_accuracy"
-        for trace in result.trajectories
+        trace["primary_metric"] == "balanced_accuracy" for trace in result.trajectories
     )
 
 
@@ -1648,9 +1640,7 @@ def test_adapter_scores_explicit_checker_timeout_zero_and_preserves_trace(
                 CheckerTimeoutOutput(
                     attempts=3,
                     timeout_seconds=1800,
-                    trajectories=(
-                        ({"role": "assistant", "content": "work"},),
-                    ),
+                    trajectories=(({"role": "assistant", "content": "work"},),),
                 )
             ]
 
@@ -1707,8 +1697,7 @@ def test_adapter_retries_transient_checker_failure(tmp_path):
         for line in (run_dir / "audit_events.jsonl").read_text().splitlines()
     ]
     assert any(
-        record["event"] == "checker_evaluation_attempt_failed"
-        for record in audit
+        record["event"] == "checker_evaluation_attempt_failed" for record in audit
     )
     assert any(
         record["event"] == "checker_evaluation_retried"
@@ -1896,12 +1885,15 @@ def test_online_rollout_worker_serializes_agent_failure(tmp_path, monkeypatch):
     )
     output_path = tmp_path / "output.json"
 
-    assert run_task(
-        config_path=tmp_path / "config.yaml",
-        task_manifest_path=manifest_path,
-        output_path=output_path,
-        worker_run_dir=tmp_path / "worker-run",
-    ) == 1
+    assert (
+        run_task(
+            config_path=tmp_path / "config.yaml",
+            task_manifest_path=manifest_path,
+            output_path=output_path,
+            worker_run_dir=tmp_path / "worker-run",
+        )
+        == 1
+    )
     payload = json.loads(output_path.read_text(encoding="utf-8"))
     assert payload["status"] == "agent_failed"
     assert "score" not in payload
@@ -1959,9 +1951,7 @@ def test_online_hpc_agent_failure_joins_latest_successful_phase_checkpoints(
         "phase_evidence": {
             "plan": "stale plan",
             "patch": "stale patch",
-            "code_trajectory": [
-                {"role": "assistant", "content": "stale code"}
-            ],
+            "code_trajectory": [{"role": "assistant", "content": "stale code"}],
         },
     }
 
@@ -2351,14 +2341,20 @@ def test_online_hpc_executor_reuses_completed_fingerprinted_batch(
         .read_text(encoding="utf-8")
         .splitlines()
     ]
-    assert sum(
-        event["event"] == "online_hpc_rollout_batch_completed"
-        for event in audit_events
-    ) == 1
-    assert sum(
-        event["event"] == "online_hpc_rollout_batch_reused_complete"
-        for event in audit_events
-    ) == 1
+    assert (
+        sum(
+            event["event"] == "online_hpc_rollout_batch_completed"
+            for event in audit_events
+        )
+        == 1
+    )
+    assert (
+        sum(
+            event["event"] == "online_hpc_rollout_batch_reused_complete"
+            for event in audit_events
+        )
+        == 1
+    )
 
 
 def test_online_hpc_executor_resumes_submitted_batch_and_retries_only_missing(
@@ -2518,9 +2514,7 @@ def test_online_hpc_executor_retries_failed_worker_outputs(tmp_path, monkeypatch
     retry_script = submitted_scripts[1].read_text(encoding="utf-8")
     assert "#SBATCH --array=1%2" in retry_script
     batch_dir = config.run_dir / "hpc_rollout_batches" / "batch_0001"
-    assert (
-        batch_dir / "failed_outputs" / "attempt_01" / "task_0001.json"
-    ).is_file()
+    assert (batch_dir / "failed_outputs" / "attempt_01" / "task_0001.json").is_file()
     done = json.loads((batch_dir / "batch_done.json").read_text())
     usage = json.loads((batch_dir / "resource_usage.json").read_text())
     assert done["retry_job_ids"] == ["12342"]
@@ -2761,9 +2755,7 @@ def test_online_hpc_wait_retries_slurm_timeout_before_scoring(tmp_path, monkeypa
     assert outputs[1].evaluator_result["reason"] == "worker_slurm_timeout"
     batch_dir = submitted_scripts[0].parent
     assert not list(
-        (batch_dir / "worker_runs" / "task_0001").glob(
-            "attempt_*/phase_workspaces"
-        )
+        (batch_dir / "worker_runs" / "task_0001").glob("attempt_*/phase_workspaces")
     )
     audit_events = [
         json.loads(line)
@@ -2771,10 +2763,13 @@ def test_online_hpc_wait_retries_slurm_timeout_before_scoring(tmp_path, monkeypa
         .read_text(encoding="utf-8")
         .splitlines()
     ]
-    assert sum(
-        event["event"] == "online_hpc_rollout_timeout_retriable"
-        for event in audit_events
-    ) == 2
+    assert (
+        sum(
+            event["event"] == "online_hpc_rollout_timeout_retriable"
+            for event in audit_events
+        )
+        == 2
+    )
     timeout_scored = [
         event
         for event in audit_events
@@ -2807,9 +2802,7 @@ def test_reviewer_timeout_preserves_completed_evaluator_score(tmp_path):
             encoding="utf-8",
         )
 
-    disposition = HPCSlurmOnlineRolloutExecutor._finalize_slurm_timeout(
-        task, 3
-    )
+    disposition = HPCSlurmOnlineRolloutExecutor._finalize_slurm_timeout(task, 3)
     output = store.load_output(
         task.output_path,
         expected_instance_id=task.case.instance_id,
@@ -2872,8 +2865,9 @@ def test_online_hpc_controller_yields_after_durable_array_submission(
 
     assert raised.value.job_id == "12345"
     batch_state = json.loads(
-        next(config.run_dir.glob("hpc_rollout_batches/batch_*/batch_state.json"))
-        .read_text(encoding="utf-8")
+        next(
+            config.run_dir.glob("hpc_rollout_batches/batch_*/batch_state.json")
+        ).read_text(encoding="utf-8")
     )
     assert batch_state["phase"] == "SUBMITTED"
     assert batch_state["active_job_id"] == "12345"
@@ -3149,9 +3143,12 @@ def test_online_hpc_wait_does_not_retry_other_pending_tasks_early(
         write_output(submitted_scripts[0].parent, 0)
 
     def fake_status(_job_id, task_index):
-        if task_index == 0 and not (
-            submitted_scripts[0].parent / "outputs" / "task_0000.json"
-        ).is_file():
+        if (
+            task_index == 0
+            and not (
+                submitted_scripts[0].parent / "outputs" / "task_0000.json"
+            ).is_file()
+        ):
             return SlurmTaskStatus("PENDING", 0)
         return SlurmTaskStatus("COMPLETED", 2400)
 
@@ -3264,8 +3261,7 @@ def test_online_adapter_treats_rollout_errors_as_operational(tmp_path):
         ).evaluate([train[0]], {"rules": "rules"})
 
     errors = [
-        json.loads(line)
-        for line in (run_dir / "errors.jsonl").read_text().splitlines()
+        json.loads(line) for line in (run_dir / "errors.jsonl").read_text().splitlines()
     ]
     assert errors[0]["event"] == "online_rollout_failed"
     assert errors[0]["attempts"] == 1
@@ -3869,7 +3865,9 @@ def test_online_runner_rejects_concurrent_controller_for_same_run_dir(tmp_path):
                         code_trajectory=(),
                         evaluator_result={"resolved": True},
                     ),
-                    proposer=lambda candidate, reflective_dataset, components: candidate,
+                    proposer=lambda candidate, reflective_dataset, components: (
+                        candidate
+                    ),
                     optimize_fn=lambda **kwargs: None,
                 )
         finally:
@@ -3898,8 +3896,7 @@ def test_adapter_does_not_call_checker_when_prepare_fails(tmp_path):
 
     assert calls == [f"prepare:{train[0].instance_id}"]
     errors = [
-        json.loads(line)
-        for line in (run_dir / "errors.jsonl").read_text().splitlines()
+        json.loads(line) for line in (run_dir / "errors.jsonl").read_text().splitlines()
     ]
     assert errors[0]["event"] == "checker_evaluation_failed"
 
@@ -3919,8 +3916,7 @@ def test_adapter_exhausted_checker_retries_remain_operational_failure(tmp_path):
         ).evaluate([train[0]], {"rules": "rules"})
 
     errors = [
-        json.loads(line)
-        for line in (run_dir / "errors.jsonl").read_text().splitlines()
+        json.loads(line) for line in (run_dir / "errors.jsonl").read_text().splitlines()
     ]
     assert len(errors) == 1
     assert errors[0]["event"] == "checker_evaluation_failed"
@@ -3998,8 +3994,7 @@ def test_adapter_parallel_stops_submitting_after_failure(tmp_path):
         for line in (run_dir / "audit_events.jsonl").read_text().splitlines()
     ]
     assert any(
-        record["event"] == "adapter_evaluation_aborted"
-        and record["not_started"] == 2
+        record["event"] == "adapter_evaluation_aborted" and record["not_started"] == 2
         for record in audit
     )
 
@@ -4008,14 +4003,14 @@ def test_evidence_bundle_contains_only_current_minibatch(tmp_path):
     writer = EvidenceBundleWriter(tmp_path)
     bundle = writer.write(
         [
-                {
+            {
+                "instance_id": "repo__one",
+                "issue_description": "issue",
+                "repository": {
+                    "repo": "org/repo",
+                    "base_commit": "abc123",
                     "instance_id": "repo__one",
-                    "issue_description": "issue",
-                    "repository": {
-                        "repo": "org/repo",
-                        "base_commit": "abc123",
-                        "instance_id": "repo__one",
-                    },
+                },
                 "expected_resolved": False,
                 "score": 0.0,
                 "checker_output": {"predicted_resolved": True},
@@ -4046,14 +4041,14 @@ def test_online_evidence_bundle_contains_current_rollout_only(tmp_path):
     writer = EvidenceBundleWriter(tmp_path, mode="online_planning")
     bundle = writer.write(
         [
-                {
+            {
+                "instance_id": "repo__one",
+                "issue_description": "issue",
+                "repository": {
+                    "repo": "org/repo",
+                    "base_commit": "abc123",
                     "instance_id": "repo__one",
-                    "issue_description": "issue",
-                    "repository": {
-                        "repo": "org/repo",
-                        "base_commit": "abc123",
-                        "instance_id": "repo__one",
-                    },
+                },
                 "score": 1.0,
                 "resolved": True,
                 "generated_plan": "current generated plan",
@@ -4061,23 +4056,23 @@ def test_online_evidence_bundle_contains_current_rollout_only(tmp_path):
                 "code_trajectory": [{"role": "assistant", "content": "code"}],
                 "generated_patch": "diff --git a/a.py b/a.py\n",
                 "evaluator_result": {"resolved": True},
-                    "reflection_reviewer_trajectory": [
-                        {"role": "assistant", "content": "reviewed raw evidence"}
-                    ],
-                    "attribution_hint": {"code_followed_plan": True},
-                    "reflection_review": {
-                        "instance_id": "repo__one",
-                        "plan_assessment": {
-                            "correct": "good",
-                            "missing_or_wrong": "",
-                            "repository_findings": "The symbol exists.",
-                        },
-                        "code_plan_alignment": "Code followed the plan.",
-                        "outcome_attribution": "Planning was adequate.",
-                        "planning_lesson": "keep",
-                        "uncertainty": "",
+                "reflection_reviewer_trajectory": [
+                    {"role": "assistant", "content": "reviewed raw evidence"}
+                ],
+                "attribution_hint": {"code_followed_plan": True},
+                "reflection_review": {
+                    "instance_id": "repo__one",
+                    "plan_assessment": {
+                        "correct": "good",
+                        "missing_or_wrong": "",
+                        "repository_findings": "The symbol exists.",
                     },
-                }
+                    "code_plan_alignment": "Code followed the plan.",
+                    "outcome_attribution": "Planning was adequate.",
+                    "planning_lesson": "keep",
+                    "uncertainty": "",
+                },
+            }
         ]
     )
 
@@ -4096,9 +4091,7 @@ def test_online_evidence_bundle_contains_current_rollout_only(tmp_path):
     ]
 
 
-def test_reflection_proposer_supplies_required_agent_task(
-    tmp_path, monkeypatch
-):
+def test_reflection_proposer_supplies_required_agent_task(tmp_path, monkeypatch):
     config = _config(tmp_path)
     monkeypatch.setenv("TEST_API_KEY", "secret")
     calls = {}
@@ -4106,9 +4099,7 @@ def test_reflection_proposer_supplies_required_agent_task(
     class FakeModel:
         def __init__(self, **kwargs):
             calls["model_kwargs"] = kwargs
-            self.config = type(
-                "Config", (), {"model_name": "provider/model"}
-            )()
+            self.config = type("Config", (), {"model_name": "provider/model"})()
 
     class FakeEnvironment:
         def __init__(self, **kwargs):
@@ -4170,14 +4161,9 @@ def test_reflection_proposer_supplies_required_agent_task(
         for line in (config.run_dir / "audit_events.jsonl").read_text().splitlines()
     ]
     completed = next(
-        record
-        for record in audit
-        if record["event"] == "reflection_agent_completed"
+        record for record in audit if record["event"] == "reflection_agent_completed"
     )
-    assert any(
-        record["event"] == "reflection_analysis_unavailable"
-        for record in audit
-    )
+    assert any(record["event"] == "reflection_analysis_unavailable" for record in audit)
     assert completed["exit_status"] == "Submitted"
     assert completed["submission_chars"] == len("complete improved rules")
     trajectory_path = next(
@@ -4186,9 +4172,7 @@ def test_reflection_proposer_supplies_required_agent_task(
     trajectory = json.loads(trajectory_path.read_text())
     assert trajectory["mode"] == "checker"
     assert trajectory["status"] == "completed"
-    assert trajectory["messages"] == [
-        {"role": "assistant", "content": "done"}
-    ]
+    assert trajectory["messages"] == [{"role": "assistant", "content": "done"}]
     assert completed["trajectory_path"] == str(trajectory_path)
 
     with pytest.raises(ValueError, match="identical to its parent"):
@@ -4235,11 +4219,10 @@ def test_reflection_proposer_passively_preserves_agent_analysis(
             }
         ],
     }
+
     class FakeModel:
         def __init__(self, **kwargs):
-            self.config = type(
-                "Config", (), {"model_name": "provider/model"}
-            )()
+            self.config = type("Config", (), {"model_name": "provider/model"})()
 
     class FakeEnvironment:
         def __init__(self, **kwargs):
@@ -4287,17 +4270,13 @@ def test_reflection_proposer_passively_preserves_agent_analysis(
 
     assert proposal == {"rules": "Evidence-grounded replacement rules."}
     bundle = next(config.run_dir.glob("reflection_inputs/iteration_*"))
-    assert json.loads((bundle / "reflection_analysis.json").read_text()) == (
-        analysis
-    )
+    assert json.loads((bundle / "reflection_analysis.json").read_text()) == (analysis)
     audit = [
         json.loads(line)
         for line in (config.run_dir / "audit_events.jsonl").read_text().splitlines()
     ]
     completed = next(
-        event
-        for event in audit
-        if event["event"] == "reflection_analysis_captured"
+        event for event in audit if event["event"] == "reflection_analysis_captured"
     )
     assert completed["analysis_path"].endswith("reflection_analysis.json")
 
@@ -4305,12 +4284,11 @@ def test_reflection_proposer_passively_preserves_agent_analysis(
 def test_candidate_contamination_check_replays_previous_run_rules():
     repo_root = Path(__file__).resolve().parents[2]
     contaminated_rules = (
-        repo_root
-        / "tests/fixtures/offline_gepa_contaminated_candidate_1.txt"
+        repo_root / "tests/fixtures/offline_gepa_contaminated_candidate_1.txt"
     ).read_text(encoding="utf-8")
-    safe_seed = (
-        repo_root / "configs/gepa_initial_rules_minimal.md"
-    ).read_text(encoding="utf-8")
+    safe_seed = (repo_root / "configs/gepa_initial_rules_minimal.md").read_text(
+        encoding="utf-8"
+    )
     assert text_sha256(contaminated_rules.strip()) == (
         "2009d7e35597e072cfcfcb568479c9652763e1eb514a464e8fd919b08769575a"
     )
@@ -4354,35 +4332,29 @@ def test_candidate_contamination_check_replays_previous_run_rules():
         {
             "instance_id": "pallets__flask-5014",
             "checker_output": {
-                "repository_evidence": [
-                    {"path": "/", "symbol": "reproduction"}
-                ]
+                "repository_evidence": [{"path": "/", "symbol": "reproduction"}]
             },
         },
         {
             "instance_id": "matplotlib__matplotlib-25311",
             "checker_output": {
-                "repository_evidence": [
-                    {"path": ".", "symbol": "_connect_picklable"}
-                ]
+                "repository_evidence": [{"path": ".", "symbol": "_connect_picklable"}]
             },
         },
     ]
 
     hits = find_candidate_contamination(contaminated_rules, records)
 
-    assert {
-        hit["value"]
-        for hit in hits
-        if hit["kind"] == "symbol"
-    } == {"compile_json_path", "column_sql", "Set._complement"}
+    assert {hit["value"] for hit in hits if hit["kind"] == "symbol"} == {
+        "compile_json_path",
+        "column_sql",
+        "Set._complement",
+    }
     assert not {hit["value"] for hit in hits} & {"/", "."}
     assert find_candidate_contamination(safe_seed, records) == []
 
 
-def test_reflection_proposer_repairs_contaminated_candidate_once(
-    tmp_path, monkeypatch
-):
+def test_reflection_proposer_repairs_contaminated_candidate_once(tmp_path, monkeypatch):
     config = _config(tmp_path)
     monkeypatch.setenv("TEST_API_KEY", "secret")
     submissions = iter(
@@ -4398,9 +4370,7 @@ def test_reflection_proposer_repairs_contaminated_candidate_once(
         n_calls = 0
 
         def __init__(self, **kwargs):
-            self.config = type(
-                "Config", (), {"model_name": "provider/model"}
-            )()
+            self.config = type("Config", (), {"model_name": "provider/model"})()
 
     class FakeEnvironment:
         def __init__(self, **kwargs):
@@ -4461,9 +4431,7 @@ def test_reflection_proposer_repairs_contaminated_candidate_once(
     assert agents[1].run_kwargs["evidence_path"] == "/evidence"
     bundle = next(config.run_dir.glob("reflection_inputs/iteration_*"))
     initial = json.loads((bundle / "reflection_trajectory.json").read_text())
-    repair = json.loads(
-        (bundle / "reflection_repair_trajectory.json").read_text()
-    )
+    repair = json.loads((bundle / "reflection_repair_trajectory.json").read_text())
     assert initial["status"] == "rejected_contamination"
     assert initial["exit_message"] == "Check compile_json_path in every plan."
     assert repair["status"] == "completed"
@@ -4498,9 +4466,7 @@ def test_reflection_proposer_rejects_still_contaminated_single_repair(
         n_calls = 0
 
         def __init__(self, **kwargs):
-            self.config = type(
-                "Config", (), {"model_name": "provider/model"}
-            )()
+            self.config = type("Config", (), {"model_name": "provider/model"})()
 
     class FakeEnvironment:
         def __init__(self, **kwargs):
@@ -4553,9 +4519,7 @@ def test_reflection_proposer_rejects_still_contaminated_single_repair(
 
     assert agent_calls == 2
     bundle = next(config.run_dir.glob("reflection_inputs/iteration_*"))
-    repair = json.loads(
-        (bundle / "reflection_repair_trajectory.json").read_text()
-    )
+    repair = json.loads((bundle / "reflection_repair_trajectory.json").read_text())
     assert repair["status"] == "failed"
     assert proposer.successful_proposals == 0
     assert len(proposer.failures) == 1
@@ -4738,9 +4702,9 @@ def test_candidate_report_keeps_checker_timeout_as_null_scored_failure(tmp_path)
     assert candidate["checker_timeout_count"] == 1
     assert candidate["checker_timeout_rate"] == 0.5
     assert candidate["metrics_scope"] == "completed_checker_predictions_only"
-    assert candidate["validation_predictions"][1]["output"][
-        "predicted_resolved"
-    ] is None
+    assert (
+        candidate["validation_predictions"][1]["output"]["predicted_resolved"] is None
+    )
 
 
 def test_audited_model_records_real_response_usage(tmp_path):
@@ -4874,9 +4838,7 @@ def test_cost_report_records_called_models(tmp_path):
     assert report["checker"]["models"] == {"deepseek/deepseek-v4-flash": 2}
     assert report["plan"]["models"] == {"deepseek/deepseek-v4-flash": 1}
     assert report["code"]["models"] == {"deepseek/deepseek-v4-flash": 1}
-    assert report["reflection"]["models"] == {
-        "deepseek/deepseek-v4-flash": 1
-    }
+    assert report["reflection"]["models"] == {"deepseek/deepseek-v4-flash": 1}
     assert report["combined"]["models"] == expected
     assert report["combined"]["provider_models"] == expected_provider
 
@@ -4932,9 +4894,7 @@ def test_native_gepa_end_to_end_without_llm(tmp_path):
     assert run_starts[0]["seed_guideline_empty"] is True
     assert run_starts[0]["resuming_from_state"] is False
     assert run_starts[-1]["resuming_from_state"] is True
-    cost_report = json.loads(
-        (config.run_dir / "cost_report.json").read_text()
-    )
+    cost_report = json.loads((config.run_dir / "cost_report.json").read_text())
     assert cost_report["full_run_linear_estimate"]["target_metric_calls"] == 1000
 
 
@@ -5012,9 +4972,7 @@ def test_online_gepa_end_to_end_without_llm(tmp_path):
     )
 
     assert result.best_candidate == {"rules": "improved planning rules"}
-    manifest = json.loads(
-        (config.run_dir / "online_run_manifest.json").read_text()
-    )
+    manifest = json.loads((config.run_dir / "online_run_manifest.json").read_text())
     assert manifest["mode"] == "online_planning"
     assert manifest["input_boundary"]["historical_plan_used"] is False
     assert manifest["input_boundary"]["historical_resolved_used"] is False
@@ -5073,13 +5031,10 @@ def test_split_resume_matches_continuous_search(tmp_path):
             assert components == ["rules"]
             self.successful_proposals += 1
             instance_ids = sorted(
-                record["instance_id"]
-                for record in reflective_dataset["rules"]
+                record["instance_id"] for record in reflective_dataset["rules"]
             )
             rules = " ".join(
-                item
-                for item in [candidate["rules"], *instance_ids]
-                if item
+                item for item in [candidate["rules"], *instance_ids] if item
             )
             return {"rules": rules}
 
@@ -5234,9 +5189,9 @@ def test_resume_rejects_infrastructure_source_changes(tmp_path):
     manifest_path = config.run_dir / "run_manifest.json"
     manifest = json.loads(manifest_path.read_text())
     manifest["semantic_sha256"] = "previous-source-fingerprint"
-    manifest["semantic_config"]["source"]["project_optimization"][
-        "adapter.py"
-    ] = "previous-adapter-hash"
+    manifest["semantic_config"]["source"]["project_optimization"]["adapter.py"] = (
+        "previous-adapter-hash"
+    )
     manifest_path.write_text(json.dumps(manifest), encoding="utf-8")
 
     resumed_config = replace(
@@ -5322,9 +5277,7 @@ def test_resume_accumulates_reflection_outcomes_across_processes(tmp_path):
             raise RuntimeError("first process failure")
 
     run_optimization(config, checker=checker, proposer=BrokenProposer())
-    first_state = json.loads(
-        (config.run_dir / "gepa_resume_state.json").read_text()
-    )
+    first_state = json.loads((config.run_dir / "gepa_resume_state.json").read_text())
     assert first_state["successful_proposals"] == 0
     assert len(first_state["reflection_failures"]) == 2
 
@@ -5346,9 +5299,7 @@ def test_resume_accumulates_reflection_outcomes_across_processes(tmp_path):
         checker=checker,
         proposer=SuccessfulProposer(),
     )
-    resumed_state = json.loads(
-        (config.run_dir / "gepa_resume_state.json").read_text()
-    )
+    resumed_state = json.loads((config.run_dir / "gepa_resume_state.json").read_text())
     assert resumed_state["successful_proposals"] == 1
     assert len(resumed_state["reflection_failures"]) == 2
     progress = json.loads((config.run_dir / "progress.json").read_text())
@@ -5394,9 +5345,7 @@ def test_reflection_failure_below_success_threshold_marks_run_failed(tmp_path):
     progress = json.loads((config.run_dir / "progress.json").read_text())
     assert progress["status"] == "failed"
     assert progress["failure_phase"] == "reflection"
-    cost_report = json.loads(
-        (config.run_dir / "cost_report.json").read_text()
-    )
+    cost_report = json.loads((config.run_dir / "cost_report.json").read_text())
     assert cost_report["run_quality"]["status"] == "failed"
     assert cost_report["run_quality"]["token_time_estimate_valid"] is False
     audit = (config.run_dir / "audit_events.jsonl").read_text()
@@ -5444,9 +5393,7 @@ def test_hpc_reflection_exhaustion_blocks_without_becoming_no_proposal(
             proposer=ExhaustedProposer(),
         )
 
-    status = json.loads(
-        (config.run_dir / "controller_status.json").read_text()
-    )
+    status = json.loads((config.run_dir / "controller_status.json").read_text())
     assert status["status"] == "failed"
     assert status["blocking"] is True
     assert status["failure_phase"] == "reflection"
@@ -5501,9 +5448,7 @@ def test_reflection_failure_can_recover_when_success_threshold_is_met(tmp_path):
     progress = json.loads((config.run_dir / "progress.json").read_text())
     assert progress["status"] == "completed_with_warnings"
     assert progress["reflection_failures"] == 1
-    cost_report = json.loads(
-        (config.run_dir / "cost_report.json").read_text()
-    )
+    cost_report = json.loads((config.run_dir / "cost_report.json").read_text())
     assert cost_report["run_quality"]["status"] == "completed_with_warnings"
     assert cost_report["run_quality"]["token_time_estimate_valid"] is True
 
@@ -5530,17 +5475,16 @@ def test_checker_operational_failure_marks_run_failed(tmp_path):
         json.loads(line)
         for line in (config.run_dir / "errors.jsonl").read_text().splitlines()
     ]
-    assert any(
-        record["event"] == "checker_evaluation_failed"
-        for record in errors
-    )
+    assert any(record["event"] == "checker_evaluation_failed" for record in errors)
     assert any(record["event"] == "optimization_failed" for record in errors)
 
 
-def test_default_gepa_config_stages_next_checker_boundary(monkeypatch):
+def test_default_offline_config_stages_checker_stability_diagnostic(monkeypatch):
     monkeypatch.setenv("DEEPSEEK_API_KEY", "secret")
     repo_root = Path(__file__).resolve().parents[2]
-    config = load_optimization_config(repo_root / "configs" / "gepa_verified_rules.yaml")
+    config = load_optimization_config(
+        repo_root / "configs" / "gepa_verified_rules.yaml"
+    )
 
     assert config.checker.model == "deepseek-v4-flash"
     assert config.reflection.model == "deepseek-v4-flash"
@@ -5549,20 +5493,26 @@ def test_default_gepa_config_stages_next_checker_boundary(monkeypatch):
     assert config.hpc.cpus_per_task == 1
     assert config.hpc.mem == "4G"
     assert config.hpc.time == "00:35:00"
-    assert config.hpc.max_task_attempts == 3
-    assert config.search.max_metric_calls == 1200
-    assert config.search.projection_metric_calls == 1074
-    assert config.search.max_iterations == 8
-    assert config.search.reflection_minibatch_size == 12
+    assert config.hpc.max_task_attempts == 1
+    assert config.search.max_metric_calls == 294
+    assert config.search.projection_metric_calls == 294
+    assert config.search.max_iterations is None
+    assert config.search.reflection_minibatch_size == 8
     assert config.search.primary_metric == "accuracy"
     assert config.search.parallel == 1
     # One worker attempt is one complete Checker Agent session. Slurm-level
     # retries start a new session instead of resuming an interrupted one.
     assert config.checker.max_attempts == 1
-    assert config.initial_rules_path.name == "gepa_initial_guideline_minimal.md"
+    assert config.initial_rules_path.name == (
+        "gepa_guideline_accuracy_b12_20260806_candidate1.md"
+    )
+    assert "offline-checker-stability-candidate1-r3-noretry-20260807" in str(
+        config.run_dir
+    )
     assert (
-        "offline-plan-guideline-hpc-accuracy-b12-8it-checker-timeout30m-formal-20260806"
-        in str(config.run_dir)
+        config.initial_rules_path.read_text()
+        .strip()
+        .startswith("# Guidance for Deciding Whether a Proposed Plan Should Proceed")
     )
     assert config.checker.agent_timeout_seconds == 1800
     checker_prompt = " ".join(config.checker_prompt.split())
@@ -5599,14 +5549,9 @@ def test_default_gepa_config_stages_next_checker_boundary(monkeypatch):
     assert "cat <<'EOF'" in reflection_prompt
     assert "supporting_instance_ids" in reflection_prompt
     assert "/tmp/candidate_rules.txt" not in reflection_prompt
-    reflection_instance = " ".join(
-        config.reflection_instance_template.split()
-    )
+    reflection_instance = " ".join(config.reflection_instance_template.split())
     assert "{{evidence_path}}/manifest.json" in reflection_instance
-    assert (
-        "{{evidence_path}}/<instance_id>/checker_output.json"
-        in reflection_instance
-    )
+    assert "{{evidence_path}}/<instance_id>/checker_output.json" in reflection_instance
     assert "cases[].expected_resolved" in reflection_instance
     assert "decision_reason" in reflection_instance
     assert "Read manifest.json first" in reflection_instance
@@ -5614,9 +5559,9 @@ def test_default_gepa_config_stages_next_checker_boundary(monkeypatch):
     assert "files actually consulted" in reflection_instance
     assert "Do not guess alternative filenames" in reflection_instance
     assert "{{current_guideline}}" in config.reflection_instance_template
-    assert config.initial_rules_path.read_text(encoding="utf-8").strip() == (
-        "Decide whether the proposed plan should proceed. Approve it only "
-        "when the available evidence supports proceeding; otherwise reject it."
+    assert (
+        text_sha256(config.initial_rules_path.read_text(encoding="utf-8").strip())
+        == "17e8d1c1e0f96e53b8568fd28ca63d8525ca04911da6e0c604324297bfab9925"
     )
 
 
@@ -5626,9 +5571,9 @@ def test_offline_hpc_rejects_project_level_slurm_concurrency_limit(
 ):
     monkeypatch.setenv("DEEPSEEK_API_KEY", "secret")
     repo_root = Path(__file__).resolve().parents[2]
-    source = (
-        repo_root / "configs" / "gepa_verified_rules.yaml"
-    ).read_text(encoding="utf-8")
+    source = (repo_root / "configs" / "gepa_verified_rules.yaml").read_text(
+        encoding="utf-8"
+    )
     config_path = tmp_path / "offline-with-throttle.yaml"
     config_path.write_text(
         source.replace(
@@ -5792,9 +5737,7 @@ def test_checker_call_uses_apptainer_environment_when_runtime_apptainer(
     assert calls["environment_kwargs"]["image"] == "test/image:latest"
     assert calls["environment_kwargs"]["cwd"] == config.docker.workdir
     assert calls["environment_kwargs"]["writable_tmpfs"] is True
-    assert calls["agent_run_kwargs"]["retry_feedback"] == (
-        "previous validator error"
-    )
+    assert calls["agent_run_kwargs"]["retry_feedback"] == ("previous validator error")
     assert calls["cleaned_up"] is True
 
 
@@ -5979,9 +5922,7 @@ def test_separate_reviewer_array_uses_worker_resources_and_persists_review(
                                 "planning_lesson": "lesson",
                                 "uncertainty": "",
                             },
-                            "trajectory": [
-                                {"role": "assistant", "content": "review"}
-                            ],
+                            "trajectory": [{"role": "assistant", "content": "review"}],
                         }
                     )
                 )
@@ -6089,11 +6030,12 @@ def test_reviewer_exhaustion_preserves_attempts_and_evaluator_score(
     assert submissions == 4
     assert [output.resolved for output in outputs] == [True, False]
     assert all(
-        output.reflection_review["review_status"] == "unavailable"
-        for output in outputs
+        output.reflection_review["review_status"] == "unavailable" for output in outputs
     )
     reviewer_root = config.run_dir / "hpc_rollout_batches" / "batch_0001" / "reviewer"
-    assert len(list(reviewer_root.glob("attempts/task_0000/attempt_*/failure.json"))) == 3
+    assert (
+        len(list(reviewer_root.glob("attempts/task_0000/attempt_*/failure.json"))) == 3
+    )
 
 
 def _synthesis_record() -> dict:

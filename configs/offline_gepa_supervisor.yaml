@@ -1,10 +1,10 @@
-# Run the conservative-seed eight-iteration formal Offline experiment.
+# Candidate-1 Checker-only stability diagnostic: 98 cases x 3 repetitions.
 schema_version: 1
-session: offline-plan-guideline-hpc-accuracy-b12-8it-checker-timeout30m-formal-20260806
-log: .local/hpc-supervisor/offline-plan-guideline-hpc-accuracy-b12-8it-checker-timeout30m-formal-20260806.log
+session: offline-checker-stability-candidate1-r3-noretry-20260807
+log: .local/hpc-supervisor/offline-checker-stability-candidate1-r3-noretry-20260807.log
 arguments:
-  # The cumulative target is read from search.max_iterations in the Offline
-  # runtime config. Supervisor is the only resume entrypoint.
+  # Completion is determined by the diagnostic result.json; there is no GEPA
+  # iteration target and no Reflection stage.
   - --poll-interval
   - "600"
   - --slice-time
@@ -16,9 +16,9 @@ arguments:
   - --gepa-config
   - configs/gepa_verified_rules.yaml
   - --job-name
-  - offline-plan-guideline-hpc-accuracy-b12-8it-checker-timeout30m-formal-20260806
+  - offline-checker-stability-candidate1-r3-noretry-20260807
   - --remote-dir
-  - ~/hpc_runs/vibe-coding-planning-offline-guideline-timeout30m-8it-formal-20260806
+  - ~/hpc_runs/vibe-coding-planning-offline-checker-stability-candidate1-r3-noretry-20260807
   - --cpus
   - "1"
   - --mem

@@ -1,10 +1,14 @@
-# Eight-iteration formal Offline run for the conservative minimal seed, minimal
-# Checker/Reflection responsibility boundary, and explicit single-block
-# mini-swe action contract and a 30-minute Checker Agent soft deadline.
+# Checker-only stability diagnostic. Evaluate the complete validation split
+# three independent times with the previous run's best candidate. Reflection,
+# GEPA candidate proposal, and fresh Slurm retry are not invoked.
+mode: offline_checker_stability
+diagnostic:
+  repetitions: 3
+
 paths:
   dataset_snapshot: output/SWE-bench_Verified/verified-round1-gepa-datasets/20260614_482_fdc056ae85df
-  initial_guideline: configs/gepa_initial_guideline_minimal.md
-  run_dir: output/SWE-bench_Verified/gepa-rules/offline-plan-guideline-hpc-accuracy-b12-8it-checker-timeout30m-formal-20260806
+  initial_guideline: configs/gepa_guideline_accuracy_b12_20260806_candidate1.md
+  run_dir: output/SWE-bench_Verified/gepa-rules/offline-checker-stability-candidate1-r3-noretry-20260807
 
 checker:
   model: deepseek-v4-flash
@@ -31,26 +35,19 @@ reflection:
   timeout: 1800
 
 search:
-  # Full 384/98 snapshot and eight GEPA proposal iterations after seed
-  # validation. The iteration stopper is the primary experimental control.
-  # 1074 metric calls is the worst-case projection when every proposal passes
-  # the minibatch gate and receives full validation:
-  # 98 + 8 * (12 parent + 12 proposal + 98 validation).
-  # Keep a larger metric-call ceiling only as a fail-safe; reaching it before
-  # eight durable iterations is an anomaly to audit rather than a normal stop.
-  max_iterations: 8
-  max_metric_calls: 1200
-  projection_metric_calls: 1074
-  reflection_minibatch_size: 12
+  # Search fields remain structurally required by the shared Offline config
+  # loader but are not consumed by this Checker-only diagnostic.
+  max_iterations: null
+  max_metric_calls: 294
+  projection_metric_calls: 294
+  reflection_minibatch_size: 8
   primary_metric: accuracy
   # Local-only adapter concurrency. HPC submits every Agent as an independent
   # Slurm array element and leaves scheduling entirely to Slurm.
   parallel: 1
   seed: 42
-  # Keep proposing even when a sampled minibatch happens to score perfectly;
-  # max_iterations remains the explicit experiment control.
   skip_perfect_score: false
-  min_proposals: 1
+  min_proposals: 0
 
 docker:
   workdir: /testbed
@@ -80,12 +77,12 @@ hpc:
   poll_interval_seconds: 300
   task_output_grace_seconds: 300
   missing_task_grace_seconds: 600
-  # One initial attempt plus two clean fresh-Agent retries.
-  max_task_attempts: 3
+  # Stability comes from the three configured repetitions, not retries.
+  max_task_attempts: 1
   python_module: lang/Python/3.11
   container_module: tools/Apptainer
   python_bin: python3
-  job_name_prefix: offline-guideline-timeout30m-8it-20260806
+  job_name_prefix: offline-checker-stability-candidate1-r3-noretry-20260807
   worker_config_path: configs/gepa_verified_rules.yaml
 
 prompts:

@@ -63,9 +63,12 @@ decision, and in `output/README.md` plus `output/catalog.json` thereafter.
   evidence. Its prompt begins with the intended standalone artifact, does not
   prescribe a topic taxonomy, and requires a causal account from current
   guideline through review behavior to the proposed change.
-- The current experiment uses `accuracy` as the GEPA primary metric. Balanced accuracy,
-  precision/recall, MCC, pass rate, and the confusion matrix remain required
-  diagnostic reports.
+- The next optimization run uses `accuracy` as its selected primary metric.
+  The current launch configuration is instead a Checker-only stability
+  diagnostic: it repeats the complete validation split three times, preserves
+  every trajectory, and invokes neither GEPA proposal nor Reflection.
+  Balanced accuracy, class-explicit precision/recall, MCC, pass rate, and the
+  confusion matrix remain required diagnostics for optimization runs.
 - No action-count reward is added merely to make the Checker run more commands.
   Information-seeking quality is audited from saved trajectories and concrete
   cases before any process metric is considered.
@@ -93,6 +96,15 @@ states this boundary directly and requires uncertainty rather than an invented
 repository fact when the captured evidence is insufficient. Giving Reflection
 fresh repository access would be a separate method and infrastructure change,
 not an implicit consequence of this prompt revision.
+
+The next draft uses a Reflection minibatch of eight rather than twelve. The
+immediate experimental reason is the stopped 2026-08-06 run: a twelve-case
+rich-evidence bundle led Reflection to request about 1.26 million input tokens,
+above the model's 1,048,576-token context limit, on all three fresh attempts.
+Reducing the minibatch is the smallest method-visible change that lowers this
+risk without adding a summarizer, reviewer, or evidence-pruning authority. It
+may increase proposal variance and minibatch overfitting, so eight is a trial
+setting rather than an established optimum.
 
 ## Reflection And Search Boundary
 
@@ -223,6 +235,31 @@ selection; downstream reports derive their primary score from the same config.
 It does not change Checker-visible inputs. With balanced accuracy,
 `skip_perfect_score` must remain false because the classes do not share one
 per-example perfect score.
+
+### Checker stability diagnostic
+
+The `offline_checker_stability` mode evaluates one fixed guideline on the full
+validation split three independent times. Runs using the same immutable
+snapshot use the same fixed 98 validation cases; validation is not resampled
+between runs. A repetition tag changes only the evaluation/cache identity; all
+Checker inputs, prompts, model settings, and repository environments remain the
+same. The mode does not construct a Reflection proposer and does not call
+`gepa.optimize`.
+
+For each case, `correct_count` is the number of predictions equal to the
+historical resolved label. `3/3` and `0/3` are stable decisions; `2/3` and
+`1/3` are decision flips. Prediction direction is reported separately through
+the accept-count distribution. Timeout or operationally incomplete triples are
+excluded from all four decision bins and reported as incomplete, so execution
+failure cannot masquerade as Checker uncertainty. Complete raw trajectories
+remain under the fingerprinted `hpc_tasks/checker/` batches.
+
+The current diagnostic sets `hpc.max_task_attempts=1`. Its three configured
+repetitions are the only repeated Checker sessions. A semantic timeout is
+reported as an incomplete repetition without a fresh retry. Exhausted worker
+or output-contract failures are also incomplete and keep their raw category.
+Host validation, identity, or data-integrity failures retain the existing
+blocking boundary; no failure is converted into a prediction.
 
 ## Search, Stopping, And Resume
 

@@ -39,16 +39,17 @@ poll cadence, controller resources, or remote workdir belongs in
 
 | Config | Runtime | Purpose |
 |---|---|---|
-| `gepa_verified_rules.yaml` | ULHPC Apptainer | Formal eight-iteration experiment over the full 384/98 split. It uses the conservative minimal seed, fact-only Checker environment description, minimal Reflection target, explicit single-block mini-swe contract, accuracy, and minibatch 12. |
-| `offline_gepa_supervisor.yaml` | Local tmux+caffeinate | Matching native-resume launch identity. It reads the cumulative target from the Offline runtime config, uses 10-minute polling and `1 CPU / 4G / 10min` controller slices, and requires an unchanged runtime-config hash, Git commit, and clean worktree before submission. |
+| `gepa_verified_rules.yaml` | ULHPC Apptainer | Checker-only stability diagnostic over the same fixed 98 validation cases used by other runs on the formal snapshot. It runs the saved 20260806 best candidate three independent times with one Agent attempt per repetition, preserves complete trajectories, and does not invoke GEPA proposal or Reflection. |
+| `offline_gepa_supervisor.yaml` | Local tmux+caffeinate | Matching resumable diagnostic launch identity. It uses 10-minute polling and `1 CPU / 4G / 10min` controller slices, requires a clean unchanged commit/config, and takes completion from the diagnostic `result.json` rather than an iteration target. |
 | `offline_gepa_hpc_smoke_2x2_20260728.yaml` | ULHPC Apptainer | Environment-only 2-train/2-validation, 1-iteration smoke. Its scores are not rule-quality evidence. |
-| `gepa_initial_guideline_minimal.md` | Prompt text | Conservative minimal Offline guideline seed. It states the target decision and defaults to rejection without supporting evidence, but supplies no repository-investigation behavior, format, or review methodology. |
+| `gepa_guideline_accuracy_b12_20260806_candidate1.md` | Prompt text | Exact best candidate from `offline-plan-guideline-hpc-accuracy-b12-8it-checker-timeout30m-formal-20260806`: candidate 1, validation accuracy `73/98`, semantic SHA-256 `17e8d1c1e0f96e53b8568fd28ca63d8525ca04911da6e0c604324297bfab9925`. |
+| `gepa_initial_guideline_minimal.md` | Prompt text | Default-accept minimal Offline guideline seed. It rejects only when available evidence clearly shows a material problem, while supplying no repository-investigation behavior, format, or review methodology. |
 | `gepa_initial_rules_minimal.md` | Historical prompt text | Frozen pre-guideline seed retained for archived configs and provenance. |
 
 `search.max_iterations` is the primary experimental stop condition and is an
 absolute cumulative proposal target across resume. For the eight-
-iteration formal run, `max_metric_calls=1200` is only a fail-safe above the
-1074-call worst-case projection. Offline uses its own
+iteration draft, `max_metric_calls=1200` is only a fail-safe above the
+1010-call worst-case projection. Offline uses its own
 launch config with the shared supervisor service. See
 [`../docs/offline-gepa.md`](../docs/offline-gepa.md).
 

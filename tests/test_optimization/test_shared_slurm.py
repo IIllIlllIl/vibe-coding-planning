@@ -32,6 +32,7 @@ from src.optimization.hpc.task_batch import (
     atomic_json,
 )
 from src.optimization.models import (
+    CheckerIncompleteOutput,
     CheckerOutput,
     CheckerTimeoutOutput,
     GEPACase,
@@ -182,11 +183,7 @@ def test_shared_slurm_blocks_and_records_host_validation_failure(tmp_path):
     assert state["phase"] == "BLOCKED"
     assert state["active_job_id"] is None
     failure = json.loads(
-        (
-            task.attempts_dir
-            / "attempt_01"
-            / "host_validation_failure.json"
-        ).read_text()
+        (task.attempts_dir / "attempt_01" / "host_validation_failure.json").read_text()
     )
     assert failure["failure_stage"] == "host_output_validation"
     assert failure["error"] == "output fingerprint mismatch"
@@ -249,9 +246,7 @@ def test_shared_slurm_records_terminal_status_and_exhaustion(
     assert state["last_job_id"] == "123"
     assert state["terminal_failure"]["failure_kind"] == "task_attempts_exhausted"
     slurm_status = json.loads(
-        (
-            task.attempts_dir / "attempt_01" / "slurm_status.json"
-        ).read_text()
+        (task.attempts_dir / "attempt_01" / "slurm_status.json").read_text()
     )
     assert slurm_status["state"] == "TIMEOUT"
     assert slurm_status["raw"] == "123_0|TIMEOUT|00:05:00"
@@ -289,9 +284,10 @@ def test_hpc_reflection_wraps_task_exhaustion_for_gepa_boundary(tmp_path):
 
     assert isinstance(caught.value.cause, TaskAttemptsExhausted)
     assert proposer.failures[-1]["error_type"] == "TaskAttemptsExhausted"
-    assert '"event": "reflection_failed"' in (
-        proposer.config.run_dir / "audit_events.jsonl"
-    ).read_text()
+    assert (
+        '"event": "reflection_failed"'
+        in (proposer.config.run_dir / "audit_events.jsonl").read_text()
+    )
 
 
 def test_offline_checker_task_boundary_excludes_labels_and_asi(tmp_path):
@@ -335,6 +331,80 @@ def test_offline_checker_fingerprint_ignores_host_only_evidence(tmp_path):
         rules="rules",
         capture_traces=True,
     )
+
+
+def test_offline_checker_fingerprint_separates_diagnostic_repetitions(tmp_path):
+    config = _config(tmp_path)
+    case = _case(resolved=True)
+
+    first = offline_evaluation_fingerprint(
+        config,
+        batch=[case],
+        rules="rules",
+        capture_traces=True,
+        evaluation_tag="repeat_01",
+    )
+    second = offline_evaluation_fingerprint(
+        config,
+        batch=[case],
+        rules="rules",
+        capture_traces=True,
+        evaluation_tag="repeat_02",
+    )
+
+    assert first != second
+
+
+def test_stability_collection_preserves_completed_and_marks_slurm_timeout(
+    tmp_path,
+):
+    config = replace(_config(tmp_path), hpc=HPCConfig(max_task_attempts=1))
+    executor = HPCSlurmOfflineCheckerExecutor(config)
+    batch_dir = tmp_path / "batch"
+    completed = TaskFiles(
+        index=0,
+        instance_id="completed",
+        manifest_path=tmp_path / "completed-input.json",
+        output_path=tmp_path / "completed-output.json",
+        attempts_dir=tmp_path / "completed-attempts",
+    )
+    timed_out = TaskFiles(
+        index=1,
+        instance_id="timed-out",
+        manifest_path=tmp_path / "timeout-input.json",
+        output_path=tmp_path / "timeout-output.json",
+        attempts_dir=tmp_path / "timeout-attempts",
+    )
+    atomic_json(
+        completed.output_path,
+        {
+            "status": "completed",
+            "fingerprint": "fingerprint",
+            "instance_id": "completed",
+            "checker_output": {
+                "predicted_resolved": True,
+                "decision_reason": "reason",
+                "repository_evidence": [],
+                "trajectory": [],
+            },
+        },
+    )
+    atomic_json(
+        timed_out.attempts_dir / "attempt_01" / "slurm_status.json",
+        {"state": "TIMEOUT"},
+    )
+
+    results = executor._recover_stability_incomplete(
+        batch_dir=batch_dir,
+        fingerprint="fingerprint",
+        tasks=[completed, timed_out],
+    )
+
+    assert isinstance(results[0], CheckerOutput)
+    assert isinstance(results[1], CheckerIncompleteOutput)
+    assert results[1].failure_category == "timeout"
+    assert results[1].terminal_state == "TIMEOUT"
+    assert results[1].attempts == 1
 
 
 def test_offline_checker_retry_script_passes_previous_failed_output(tmp_path):
@@ -461,13 +531,16 @@ def test_offline_checker_worker_gives_new_agent_previous_validator_error(
     attempt_dir = tmp_path / "attempt"
     attempt_dir.mkdir()
 
-    assert run_checker_task(
-        config_path=tmp_path / "config.yaml",
-        task_manifest_path=manifest_path,
-        output_path=output_path,
-        attempt_dir=attempt_dir,
-        previous_output_path=previous_output,
-    ) == 0
+    assert (
+        run_checker_task(
+            config_path=tmp_path / "config.yaml",
+            task_manifest_path=manifest_path,
+            output_path=output_path,
+            attempt_dir=attempt_dir,
+            previous_output_path=previous_output,
+        )
+        == 0
+    )
 
     expected_feedback = checker_retry_feedback(previous_error)
     assert received == [expected_feedback]
@@ -530,12 +603,15 @@ def test_offline_checker_worker_preserves_failed_contract_trajectory(
     attempt_dir = tmp_path / "attempt"
     attempt_dir.mkdir()
 
-    assert run_checker_task(
-        config_path=tmp_path / "config.yaml",
-        task_manifest_path=manifest_path,
-        output_path=output_path,
-        attempt_dir=attempt_dir,
-    ) == 1
+    assert (
+        run_checker_task(
+            config_path=tmp_path / "config.yaml",
+            task_manifest_path=manifest_path,
+            output_path=output_path,
+            attempt_dir=attempt_dir,
+        )
+        == 1
+    )
 
     failure = json.loads(output_path.read_text(encoding="utf-8"))
     assert failure["status"] == "agent_failed"
@@ -593,12 +669,15 @@ def test_offline_checker_worker_preserves_explicit_agent_timeout(
     output_path = tmp_path / "output.json"
     attempt_dir = tmp_path / "attempt"
 
-    assert run_checker_task(
-        config_path=tmp_path / "config.yaml",
-        task_manifest_path=manifest_path,
-        output_path=output_path,
-        attempt_dir=attempt_dir,
-    ) == 1
+    assert (
+        run_checker_task(
+            config_path=tmp_path / "config.yaml",
+            task_manifest_path=manifest_path,
+            output_path=output_path,
+            attempt_dir=attempt_dir,
+        )
+        == 1
+    )
 
     failure = json.loads(output_path.read_text(encoding="utf-8"))
     assert failure["status"] == "agent_failed"
@@ -644,9 +723,7 @@ def test_offline_checker_recovers_only_three_explicit_timeouts(tmp_path):
             },
         )
         atomic_json(
-            task.attempts_dir
-            / f"attempt_{attempt:02d}"
-            / "checker_trajectory.json",
+            task.attempts_dir / f"attempt_{attempt:02d}" / "checker_trajectory.json",
             {"messages": [{"role": "assistant", "content": str(attempt)}]},
         )
 
@@ -662,9 +739,7 @@ def test_offline_checker_recovers_only_three_explicit_timeouts(tmp_path):
     assert results[0].timeout_seconds == 1800
     assert len(results[0].trajectories) == 3
 
-    second_attempt = (
-        batch_dir / "failed_outputs" / "attempt_02" / task.output_path.name
-    )
+    second_attempt = batch_dir / "failed_outputs" / "attempt_02" / task.output_path.name
     invalid = json.loads(second_attempt.read_text(encoding="utf-8"))
     invalid["failure_kind"] = "operational"
     atomic_json(second_attempt, invalid)
@@ -682,12 +757,15 @@ def test_offline_checker_worker_classifies_input_failure_without_changing_status
     output_path = tmp_path / "output.json"
     attempt_dir = tmp_path / "attempt"
 
-    assert run_checker_task(
-        config_path=tmp_path / "config.yaml",
-        task_manifest_path=tmp_path / "missing-task.json",
-        output_path=output_path,
-        attempt_dir=attempt_dir,
-    ) == 1
+    assert (
+        run_checker_task(
+            config_path=tmp_path / "config.yaml",
+            task_manifest_path=tmp_path / "missing-task.json",
+            output_path=output_path,
+            attempt_dir=attempt_dir,
+        )
+        == 1
+    )
 
     failure = json.loads(output_path.read_text(encoding="utf-8"))
     assert failure["status"] == "agent_failed"
@@ -718,12 +796,15 @@ def test_offline_reflection_worker_records_failure_stage_without_reclassifying(
     output_path = tmp_path / "output.json"
     attempt_dir = tmp_path / "attempt"
 
-    assert run_reflection_task(
-        config_path=tmp_path / "config.yaml",
-        manifest_path=manifest_path,
-        output_path=output_path,
-        attempt_dir=attempt_dir,
-    ) == 1
+    assert (
+        run_reflection_task(
+            config_path=tmp_path / "config.yaml",
+            manifest_path=manifest_path,
+            output_path=output_path,
+            attempt_dir=attempt_dir,
+        )
+        == 1
+    )
 
     failure = json.loads(output_path.read_text(encoding="utf-8"))
     assert failure["status"] == "agent_failed"
@@ -806,8 +887,7 @@ def test_hpc_reflection_repair_is_a_second_fingerprinted_task(tmp_path):
     task_states = list(config.run_dir.rglob("task_state.json"))
     assert len(task_states) == 2
     assert all(
-        json.loads(path.read_text())["phase"] == "COMPLETE"
-        for path in task_states
+        json.loads(path.read_text())["phase"] == "COMPLETE" for path in task_states
     )
 
 
@@ -880,8 +960,11 @@ def test_offline_backend_is_selected_from_config(
             reason="selection_checked",
         )
 
-    assert run_optimization(
-        config,
-        proposer=lambda *args: {"rules": "new rules"},
-        optimize_fn=inspect_optimize,
-    ) is None
+    assert (
+        run_optimization(
+            config,
+            proposer=lambda *args: {"rules": "new rules"},
+            optimize_fn=inspect_optimize,
+        )
+        is None
+    )

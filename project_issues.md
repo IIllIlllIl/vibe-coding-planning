@@ -21,28 +21,57 @@ guide 与错误反馈现已明确：每条响应只能包含一个可执行 bloc
 observation 前写出或模拟后续 block。这个变更只澄清既有 parser 传输协议，不增加
 Checker 的 plan-review 方法。
 
-2026-08-06 的 8it 正式运行在 candidate 1 validation 的
-`django__django-10554` 上连续三次达到 35 分钟 Slurm 硬时限，停在 0/8 durable
-iterations。该 candidate 会要求广泛实现、测试和多后端验证；三次尝试均持续产生
-有效模型调用，因此本例支持“过度检查是 guideline 行为失败”的解释。但旧运行被
-Slurm 直接终止，来不及原子保存最终 timeout，不能把该硬终止直接计分。
+`offline-plan-guideline-hpc-accuracy-b12-8it-checker-timeout30m-formal-20260806`
+已在 5/8 durable proposals 后停止。它完成 524 metric calls 并接纳 3 个候选；最佳
+仍是 candidate 1，validation accuracy 为 `73/98 = 0.744898`，seed 为
+`68/98 = 0.693878`。candidate 2/3 分别为 `71/98` 与 `70/98`，没有继续改善。
+第 6 轮 Reflection 的十二案例 rich-evidence 输入使三次 fresh Agent 请求约
+126 万 tokens，均超过模型 1,048,576-token 上限；task 正确进入 `EXHAUSTED`，
+controller 和 supervisor 按 blocking policy 停止。相同 evidence 的 fresh retry
+不能恢复确定性 context overflow。
 
-下一次 Offline 运行配置已准备，但**尚未启动**：
+当前 `gepa_verified_rules.yaml` 和 Offline supervisor 已临时指向
+`offline-checker-stability-default-accept-r3-20260807` 诊断：对 98 个 validation
+case 使用同一 default-accept seed 独立运行 3 次 Checker，共 294 个
+Agent task。它保留全部 trajectory，不调用 GEPA proposal 或 Reflection；
+结果按每个 case 的正确次数汇总 `3/3、2/3、1/3、0/3`，并将 timeout
+或不完整三次单独报告。该诊断不会产生或选择 guideline。
 
-- identity：`offline-plan-guideline-hpc-accuracy-b12-8it-checker-timeout30m-formal-20260806`；
-- full 384 train / 98 validation，`accuracy`，minibatch 12，seed 42；
-- Checker 每次 fresh Agent 会话软截止 30 分钟，Slurm allocation 保持 35 分钟，
-  预留 5 分钟保存 partial trajectory、结构化 timeout 和清理；总计三次尝试；
-- 仅当三次均有明确 `checker_agent_timeout` 证据时，该 case 以 null prediction、
-  score 0 返回 GEPA。硬 Slurm timeout、缺输出、混合失败或基础设施失败继续 block；
-- **独立未修风险**：本次 timeout 审计还发现 Apptainer 内可见宿主 home，Checker
-  曾读取旧 run artifact，形成跨运行 evidence 污染风险。该问题不属于 30/35 分钟
-  timeout 语义，本轮未顺带增加隔离机制；正式启动新 identity 前需单独确定并验收
-  home 隔离边界；
-- 8 个累计 proposal iterations；worst-case projection 为 1074 metric calls，
-  `max_metric_calls=1200` 仅作 fail-safe；
-- 由 `configs/offline_gepa_supervisor.yaml` 作为唯一启动/resume 入口；提交前仍需
-  clean-worktree、远端 identity/queue 与 FairShare preflight。
+启动后发现首轮误用 default-accept minimal seed（semantic SHA-256
+`7a059a248467807bd57d26f028b7866b8ceba7c386f9661d877ade500072852a`），而目标应为
+20260806 运行的最优 candidate 1。本地 supervisor 已暂停，不再提交后两轮；
+已提交的首轮 98-case seed array 保留为对照，不与目标 guideline 的三次
+结果混合。该 array 最终完成 97/98 个输出；task 4 达到 35 分钟 Slurm
+walltime，以 `TIMEOUT` 结束且未产生输出。因它使用了错误 guideline 且不能
+形成三次 stability 分布，只保留这一操作摘要，原始 run/workdir 在清理后
+不作研究证据。目标 guideline 已原样保存为
+`configs/gepa_guideline_accuracy_b12_20260806_candidate1.md`，validation accuracy
+`73/98`，semantic SHA-256
+`17e8d1c1e0f96e53b8568fd28ca63d8525ca04911da6e0c604324297bfab9925`。
+
+新的 candidate-1 stability identity 为
+`offline-checker-stability-candidate1-r3-noretry-20260807`。正式 snapshot 在不同
+run 间始终使用同一固定 98-case validation，不重新抽样。该诊断设置
+`hpc.max_task_attempts=1`：三个显式 repetition 是唯一重复执行；semantic timeout
+以及耗尽的 worker/output-contract failure 直接作为 incomplete repetition 并保留原始
+分类；host validation、identity 或 data-integrity failure 继续 block，不伪造预测。
+
+后续 8it Offline 设计待 stability 诊断完成后恢复为新 identity：
+
+- draft identity：`offline-plan-guideline-hpc-accuracy-b8-default-accept-8it-draft-20260807`；
+- seed 改为默认接受：只有 available evidence 明确显示会使 plan 难以解决问题的
+  material problem 时才拒绝；
+- Reflection minibatch 从 12 降为 8，以最小改动降低 context overflow 风险；这会
+  减少每批 bad-plan 例子并可能增加过拟合，必须作为新实验变量验收；
+- 8it worst-case projection 为 `98 + 8 * (8 + 8 + 98) = 1010`，
+  `max_metric_calls=1200` 仍只作 fail-safe；
+- `primary_metric=accuracy` 已确定为下一轮的主优化指标；balanced accuracy、
+  class-explicit precision/recall、MCC、pass rate 和 confusion matrix 仍作诊断；
+- 本次 stability 诊断只判断重复是否有必要；重复结果尚未进入 score 或
+  Reflection，不得把诊断流程误认为新的 GEPA 优化语义；
+- Checker 仍使用 30 分钟 Agent soft deadline、35 分钟 Slurm allocation 和三次总
+  attempts；明确的三次 semantic timeout 才计 0，其他完整性失败继续 block；
+- Apptainer 内可见宿主 home 的跨运行 evidence 污染风险仍未解决。
 
 8it 验收清单：
 
@@ -79,6 +108,7 @@ ssh -p 8022 twang@access-iris.uni.lu \
 | 2026-07-29 20:54 Europe/Luxembourg | Failure-evidence 2it complete; supervisor stopped and user queue empty | 300652 | 0.028156 | 0.310267 | FairShare increased by 0.000784 from the pre-run `0.309483`; `LevelFS=2.089224` |
 | 2026-07-30 Europe/Luxembourg | Stale Offline supervisor discovered after 50 controller submissions; all supervisors stopped, queue empty, invalid run/workdirs removed | 294959 | 0.030091 | 0.397618 | FairShare increased by 0.087351 from 2026-07-29; `LevelFS=1.954854`; movement is not attributable to this run alone |
 | 2026-07-30 18:22 Europe/Luxembourg | Pre-launch check for Slurm-native Offline 2it; local supervisor and Iris user queue empty, new run/workdir absent | 319217 | 0.033655 | 0.397392 | FairShare decreased by 0.000226 from the earlier 2026-07-30 check; `LevelFS=1.747850`; no concurrency limit is imposed by the project |
+| 2026-08-07 Europe/Luxembourg | Pre-launch check for Checker-only validation stability diagnostic; Iris user queue empty | 1464151 | 0.273744 | 0.767694 | Current authoritative baseline before 294 independent Checker tasks |
 | 2026-08-04 Europe/Luxembourg | Pre-launch check for the revised Offline guideline 6it behavior smoke; Iris user queue empty | 760132 | 0.137983 | 0.768265 | `LevelFS=0.426310`; this snapshot is a launch baseline, not a causal attribution to any one prior run |
 
 Future launch/progress checks must append a row before interpreting movement.
