@@ -1,7 +1,7 @@
 # Formal default-accept, accuracy, minibatch-eight Offline GEPA run.
 schema_version: 1
-session: offline-plan-guideline-hpc-accuracy-b8-default-accept-8it-formal-20260807
-log: .local/hpc-supervisor/offline-plan-guideline-hpc-accuracy-b8-default-accept-8it-formal-20260807.log
+session: offline-plan-guideline-hpc-accuracy-b8-default-accept-session30m-8it-formal-20260809
+log: .local/hpc-supervisor/offline-plan-guideline-hpc-accuracy-b8-default-accept-session30m-8it-formal-20260809.log
 arguments:
   # The cumulative eight-proposal target is read from the runtime config.
   - --poll-interval
@@ -15,9 +15,9 @@ arguments:
   - --gepa-config
   - configs/gepa_verified_rules.yaml
   - --job-name
-  - offline-plan-guideline-hpc-accuracy-b8-default-accept-8it-formal-20260807
+  - offline-plan-guideline-hpc-accuracy-b8-default-accept-session30m-8it-formal-20260809
   - --remote-dir
-  - ~/hpc_runs/vibe-coding-planning-offline-guideline-accuracy-b8-default-accept-8it-formal-20260807
+  - ~/hpc_runs/vibe-coding-planning-offline-guideline-accuracy-b8-default-accept-session30m-8it-formal-20260809
   - --cpus
   - "1"
   - --mem

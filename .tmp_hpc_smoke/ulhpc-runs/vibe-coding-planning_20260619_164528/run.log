@@ -1,6 +1,0 @@
-[2026-06-19T16:45:28] INFO Starting run; local log: /Users/taoran.wang/Documents/projects/vibe-trust/vibe-coding-planning/.tmp_hpc_smoke/ulhpc-runs/vibe-coding-planning_20260619_164528/run.log
-[2026-06-19T16:45:28] INFO Connected to twang@access-iris.uni.lu:8022
-[2026-06-19T16:45:28] INFO Syncing /Users/taoran.wang/Documents/projects/vibe-trust/vibe-coding-planning -> /home/users/twang/hpc_runs/vibe-coding-planning
-[2026-06-19T16:45:31] INFO Pipeline failed: SYNC_INTEGRITY_ERROR
-[2026-06-19T16:45:31] ERROR [SYNC_INTEGRITY_ERROR] File count mismatch after sync: local=5206, remote=620.
-Suggestion: File count or checksum mismatch after sync. Retry, or check excluded files.

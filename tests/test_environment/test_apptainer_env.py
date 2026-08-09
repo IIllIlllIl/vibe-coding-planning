@@ -211,20 +211,22 @@ def test_environment_creates_git_safe_config_at_startup(tmp_path, monkeypatch):
     calls = []
 
     def fake_run(args, **kwargs):
-        calls.append(args)
+        calls.append((args, kwargs))
         return subprocess.CompletedProcess(args, returncode=0, stdout="", stderr="")
 
     monkeypatch.setattr(subprocess, "run", fake_run)
 
     _make_env(cache_dir)
 
-    startup_cmd = calls[0][-1]
+    startup_args, startup_kwargs = calls[0]
+    startup_cmd = startup_args[-1]
     match = re.search(r"echo ([^|]+) \| base64 -d", startup_cmd)
     assert match is not None
     encoded = match.group(1).strip().strip("'\"")
     decoded = base64.b64decode(encoded).decode("utf-8")
     assert "[safe]" in decoded
     assert "directory = /testbed" in decoded
+    assert startup_kwargs["timeout"] is None
 
 
 def test_environment_applies_network_and_run_args(tmp_path, monkeypatch):

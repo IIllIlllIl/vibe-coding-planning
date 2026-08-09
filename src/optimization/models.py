@@ -94,6 +94,26 @@ class CheckerTimeoutOutput:
             ]
         return value
 
+    def to_reflection_dict(self) -> dict[str, Any]:
+        """Expose only the terminal attempt selected for research evidence.
+
+        Fresh attempts are an orchestration mechanism. Their complete raw
+        trajectories remain in the per-attempt audit artifacts, while
+        Reflection sees the same one-terminal-session boundary as it does for
+        a successful Checker result.
+        """
+        return {
+            "status": "timeout",
+            "predicted_resolved": None,
+            "decision_reason": (
+                "Checker did not finish within the configured Agent deadline."
+            ),
+            "repository_evidence": [],
+            "terminal_reason": "checker_agent_timeout",
+            "timeout_seconds": self.timeout_seconds,
+            "trajectory": (list(self.trajectories[-1]) if self.trajectories else []),
+        }
+
 
 @dataclass(frozen=True)
 class CheckerIncompleteOutput:

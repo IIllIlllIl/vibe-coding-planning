@@ -264,7 +264,6 @@ class ApptainerEnvironment:
         self.execute(
             f"mkdir -p /tmp && echo {shlex.quote(encoded)} | base64 -d > "
             f"{self._git_config_path}",
-            timeout=30,
         )
 
     def _build_args(

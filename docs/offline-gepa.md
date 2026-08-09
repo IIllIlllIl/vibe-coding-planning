@@ -2,7 +2,7 @@
 
 > Authority: current Offline GEPA experiment contract
 >
-> Last reviewed: 2026-08-07
+> Last reviewed: 2026-08-09
 
 ## Objective
 
@@ -152,13 +152,17 @@ semantic answer. Infrastructure/provider failures do not enter this feedback.
 The feedback changes only output-protocol recovery and is part of the
 fingerprinted Checker semantics.
 
-The formal HPC configuration gives one complete Checker Agent session a
-30-minute soft deadline inside a 35-minute Slurm allocation. Reaching the soft
-deadline interrupts the Agent before Slurm kills the worker, leaving five
-minutes for container cleanup plus atomic failure and partial-trajectory
-writes. This session deadline is `checker.agent_timeout_seconds`; the older
-`checker.timeout` remains the per-command/SIF-preparation timeout and does not
-bound a complete Agent conversation.
+The formal HPC configuration gives one complete Checker session a 30-minute
+soft deadline inside a 35-minute Slurm allocation. The session budget starts
+before SIF preparation and repository-environment construction, so Apptainer
+startup, git safe-directory initialization, Agent work, and final-submission
+validation share one budget. There is no separate 30-second gitconfig startup
+deadline. Reaching the soft deadline interrupts the session before Slurm kills
+the worker, leaving approximately five minutes for container cleanup plus
+atomic failure and partial-trajectory writes. This session deadline is
+`checker.agent_timeout_seconds`; `checker.timeout` remains the maximum for an
+individual environment command but does not grant additional time beyond the
+session deadline.
 
 Resolved labels, historical Plan/Code trajectories, patches, evaluator results,
 and scores are never Checker inputs. They are available only to Reflection as
@@ -261,6 +265,58 @@ raw category.
 Host validation, identity, or data-integrity failures retain the existing
 blocking boundary; no failure is converted into a prediction.
 
+### Proposed repeated-minibatch evaluation (3 x 3)
+
+This is a documented next-method design, not an implemented or active search
+setting. Its purpose is to expose Checker decision instability to Reflection
+without repeating the 98-case validation or increasing the number of distinct
+training cases that Reflection must understand.
+
+1. The existing sampler selects three distinct training cases. It remains the
+   sole authority for case selection.
+2. A separate repetition layer expands each selected case into three
+   independently identified Checker evaluations, for nine Checker tasks. Each
+   repetition has a stable repetition number in its cache/task identity, while
+   the Checker prompt and Checker Agent are not told that the case is repeated.
+3. On HPC, every repetition is one independent Slurm task. All nine tasks are
+   submitted without a project-side concurrency cap; Slurm controls scheduling.
+4. Each repetition reuses the existing Checker failure policy and may use up to
+   three fresh attempts. Attempts are an automation mechanism, not experimental
+   observations: all raw attempt artifacts remain auditable, but only the first
+   successful terminal result, or the final terminal timeout after exhaustion,
+   is exposed outside that repetition. Operational or integrity exhaustion
+   retains the existing blocking behavior.
+5. The three binary correctness scores for one base case are averaged, so its
+   GEPA score is one of `0`, `1/3`, `2/3`, or `1`. Dividing by three preserves
+   the existing `[0, 1]` metric scale and makes the case weight independent of
+   the repetition count.
+6. GEPA and its sampler still see three logical cases and three logical scores.
+   Reflection receives one grouped record per base case containing the three
+   terminal Checker results and trajectories. It is told that these are
+   independent repetitions so disagreement can be interpreted as instability;
+   the exact Reflection prompt remains a pending design decision.
+7. Full validation is unchanged: each of the fixed 98 validation cases is
+   evaluated once. Repetition therefore changes proposal evidence and the
+   parent/proposal minibatch gate, not validation measurement or candidate
+   selection on the held-out split.
+
+The accounting must distinguish logical GEPA metric calls from physical Agent
+sessions. With minibatch `B=3`, one parent or proposal minibatch evaluation is
+three logical calls but nine initial Checker sessions. Attempts do not create
+additional logical scores; they only increase physical sessions after a failed
+session, to at most 27 for that evaluation. For eight proposals and validation
+size 98, the conservative GEPA-call projection remains
+`98 + 8 * (3 + 3 + 98) = 930`, while the initial physical-session projection is
+`98 + 8 * (9 + 9 + 98) = 1026` before retries.
+
+This design depends on a strict attempt-evidence boundary. A semantic timeout
+is scored as before, but Reflection sees only the last partial trajectory and
+no attempt count, retry feedback, or earlier attempt trajectories. Complete
+attempt evidence remains under the local `checker_trajectories/` or HPC
+per-attempt task directories. This prevents orchestration retries from changing
+the research evidence merely because the automation policy was configured with
+more attempts.
+
 ## Search, Stopping, And Resume
 
 `search.max_iterations` is the primary stop condition and is an absolute
@@ -337,11 +393,13 @@ the search.
 If all three fresh Checker attempts end with an explicitly written
 `checker_agent_timeout`, the host reconstructs that attempt evidence, returns
 `predicted_resolved=null`, and assigns that case score zero. The timeout and
-all available partial trajectories enter Reflection evidence. This treats
-open-ended review caused by a candidate guideline as candidate failure without
-inventing a binary prediction. A hard Slurm `TIMEOUT`, missing output, mixed
-failure kinds, output-contract exhaustion, provider failure, or infrastructure
-failure still blocks; these cannot safely be attributed to the guideline.
+the final attempt's partial trajectory enter Reflection evidence; attempt
+count, retry feedback, and earlier attempt trajectories remain only in raw
+audit artifacts. This treats open-ended review caused by a candidate guideline
+as candidate failure without making the automation retry policy part of the
+research evidence. A hard Slurm `TIMEOUT`, missing output, mixed failure kinds,
+output-contract exhaustion, provider failure, or infrastructure failure still
+blocks; these cannot safely be attributed to the guideline.
 
 If initial Reflection or contamination repair exhausts all three attempts, its
 task journal enters the durable `EXHAUSTED` terminal state and the Offline run

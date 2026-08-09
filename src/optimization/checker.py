@@ -187,6 +187,27 @@ class DockerChecker:
         *,
         retry_feedback: str = "",
     ) -> CheckerOutput:
+        # One deadline owns the complete Checker session, including repository
+        # environment startup. Infrastructure setup therefore consumes the
+        # same budget as Agent work instead of introducing a separate short
+        # timeout before the Agent begins. The enclosing Slurm allocation keeps
+        # a separate cleanup/output-writing reserve after this deadline.
+        with _checker_agent_deadline(
+            self.config.checker.agent_timeout_seconds
+        ):
+            return self._run_session(
+                case,
+                rules,
+                retry_feedback=retry_feedback,
+            )
+
+    def _run_session(
+        self,
+        case: GEPACase,
+        rules: str,
+        *,
+        retry_feedback: str = "",
+    ) -> CheckerOutput:
         self.prepare(case)
         DefaultAgent, LitellmModel, _ = import_minisweagent()
         base_model = LitellmModel(
@@ -258,16 +279,13 @@ class DockerChecker:
                 step_limit=self.config.checker.max_steps,
                 cost_limit=self.config.checker.cost_limit,
             )
-            with _checker_agent_deadline(
-                self.config.checker.agent_timeout_seconds
-            ):
-                exit_status, final_submission = agent.run(
-                    task=case.issue_description,
-                    plan=case.plan,
-                    candidate_guideline=rules,
-                    candidate_rules=rules,
-                    retry_feedback=retry_feedback,
-                )
+            exit_status, final_submission = agent.run(
+                task=case.issue_description,
+                plan=case.plan,
+                candidate_guideline=rules,
+                candidate_rules=rules,
+                retry_feedback=retry_feedback,
+            )
             if not final_submission.strip():
                 raise CheckerOutputContractError(
                     "checker did not submit JSON output "

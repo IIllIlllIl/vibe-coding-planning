@@ -5,7 +5,7 @@
 paths:
   dataset_snapshot: output/SWE-bench_Verified/verified-round1-gepa-datasets/20260614_482_fdc056ae85df
   initial_guideline: configs/gepa_initial_guideline_minimal.md
-  run_dir: output/SWE-bench_Verified/gepa-rules/offline-plan-guideline-hpc-accuracy-b8-default-accept-8it-formal-20260807
+  run_dir: output/SWE-bench_Verified/gepa-rules/offline-plan-guideline-hpc-accuracy-b8-default-accept-session30m-8it-formal-20260809
 
 checker:
   model: deepseek-v4-flash
@@ -80,7 +80,7 @@ hpc:
   python_module: lang/Python/3.11
   container_module: tools/Apptainer
   python_bin: python3
-  job_name_prefix: offline-guideline-accuracy-b8-default-accept-8it-20260807
+  job_name_prefix: offline-guideline-accuracy-b8-default-accept-session30m-8it-20260809
   worker_config_path: configs/gepa_verified_rules.yaml
 
 prompts:

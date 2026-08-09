@@ -63,23 +63,48 @@ run 间始终使用同一固定 98-case validation，不重新抽样。该诊断
 超时、2 次 UTF-8 解码失败和 1 次 Checker semantic timeout。重复评估因此携带
 可观测的稳定性信息，但尚未成为正式 GEPA 的优化语义。
 
-待讨论的新方案是把每次正式 Checker metric evaluation 视为原 minibatch case 的
-三次独立重复，即逻辑 minibatch 为 `B`，实际 Checker session 为 `3B`。每个重复
-继续复用现有失败处理，并恢复最多三次 fresh-task attempts；正常为每 case 三个
-session，最坏为九个。每个重复只向计分和 Reflection 暴露一个终态（首次成功结果，
-或 attempts 耗尽后的终态），所有 attempt trajectory 仍保存为原始审计证据。
-三次结果的 score 聚合、不同失败类别能否成为优化证据以及 GEPA metric-call 账本
-语义尚未确定，在这些问题明确前不得实现或用于正式搜索。
+待实现的 3 x 3 方案已在 `docs/offline-gepa.md` 固化：sampler 仍抽取三个不同
+train case，独立 repetition 层将其展开为九个 Checker Slurm task；每个 repetition
+复用最多三次 fresh attempts。Checker 不知道重复身份。每个 base case 的三个
+correctness score 取平均，得到 `0、1/3、2/3、1`，GEPA 仍看到三个逻辑 case；
+Reflection 按 base case 分组看到三份终态轨迹，并被告知它们是独立重复。validation
+仍对固定 98 case 各运行一次。三次 attempts 的原始证据继续保存，但 Reflection
+只看到首次成功的终态，或 semantic timeout 耗尽时最后一次 partial trajectory，
+看不到 earlier attempts、attempt count 或 retry feedback。Reflection prompt 的准确
+写法仍待讨论，重复执行尚未实现。
 
-该方案还会显著增加 Reflection 输入：minibatch 8 对应最多 24 份终态 Checker
-trajectory，而此前 12 份 rich-evidence trajectory 已触发约 126 万 token 的确定性
-context overflow。当前决定是先运行 default-accept seed、minibatch 8、accuracy 的
-单重复 8it 实验，检查其是否已达到验收标准；三重复正式 GEPA 仅作为后续选项，
-不进入本轮 8it。
+该设计把 Reflection 的一次输入控制为三组、共九份终态 Checker trajectory，低于
+此前 12 份 rich-evidence trajectory 触发 context overflow 的规模，但必须在实现后
+实测 token 使用。逻辑 GEPA call projection 为
+`98 + 8 * (3 + 3 + 98) = 930`；不含失败重试的物理 Checker session projection 为
+`98 + 8 * (9 + 9 + 98) = 1026`。attempts 只增加物理 session，不产生额外逻辑 score。
 
-后续 8it Offline 已恢复为新的正式 identity；活动 runtime config 和 supervisor
-现在指向该实验。配置校验、相关 Offline/HPC 测试和 ULHPC dry-run 均已通过；
-clean commit 后可由 supervisor 启动：
+后续 8it Offline 使用正式 identity
+`offline-plan-guideline-hpc-accuracy-b8-default-accept-8it-formal-20260807`
+启动，但在完成 1/8 durable proposal 后停止。它使用 130 metric calls、接纳 0 个
+候选；第二轮 proposal Checker batch 中 `django__django-15127` 的三个 Slurm task
+attempt 均在初始化 `/tmp/vibe_gitconfig` 时触发 30 秒 command timeout。该故障发生
+在 Checker 推理前，属于 operational failure；controller 正确 block，没有伪造
+预测或 score，当前无活动 Slurm task。本轮不能用于判断新 seed 或 minibatch 8 的
+优化效果。根因是 gitconfig 初始化通过一次完整 `apptainer exec` 执行，却使用独立
+硬编码 30 秒；容器启动长尾被误报为内部写文件命令超时。当前源码已取消该独立
+限制，并把 SIF prepare、环境构造、gitconfig、Agent 与提交校验统一纳入现有
+30 分钟 Checker session deadline。旧 checkpoint 在算法状态上停在一个 durable
+proposal 后，理论上可以重放未完成 proposal；但正式 run manifest 会拒绝变化后的
+optimization source，Checker fingerprint 也会因 `checker.py` 和
+`apptainer_env.py` 改变而创建新 evaluation batch。为得到全部八轮都使用同一已修复
+runtime 的正式证据，并避免引入一次性 manifest migration，当前建议使用新 identity
+从 seed validation 开始完整运行 8it；旧 run 保留为 infrastructure-blocked 证据。
+
+新的完整运行 identity 为
+`offline-plan-guideline-hpc-accuracy-b8-default-accept-session30m-8it-formal-20260809`。
+它保持相同 snapshot、default-accept seed、accuracy、minibatch 8、模型、prompt、
+三次 fresh attempts、30 分钟 Checker session 和 35 分钟 Slurm allocation；唯一
+方法外运行修复是删除 gitconfig 的独立 30 秒启动门槛，并让初始化消耗统一 session
+预算。该轮必须从 seed validation 开始完成八个 durable proposals，不采用旧
+candidate tree。
+
+该轮配置为：
 
 - formal identity：`offline-plan-guideline-hpc-accuracy-b8-default-accept-8it-formal-20260807`；
 - seed 改为默认接受：只有 available evidence 明确显示会使 plan 难以解决问题的
@@ -132,6 +157,7 @@ ssh -p 8022 twang@access-iris.uni.lu \
 | 2026-07-30 Europe/Luxembourg | Stale Offline supervisor discovered after 50 controller submissions; all supervisors stopped, queue empty, invalid run/workdirs removed | 294959 | 0.030091 | 0.397618 | FairShare increased by 0.087351 from 2026-07-29; `LevelFS=1.954854`; movement is not attributable to this run alone |
 | 2026-07-30 18:22 Europe/Luxembourg | Pre-launch check for Slurm-native Offline 2it; local supervisor and Iris user queue empty, new run/workdir absent | 319217 | 0.033655 | 0.397392 | FairShare decreased by 0.000226 from the earlier 2026-07-30 check; `LevelFS=1.747850`; no concurrency limit is imposed by the project |
 | 2026-08-07 Europe/Luxembourg | Pre-launch check for Checker-only validation stability diagnostic; Iris user queue empty | 1464151 | 0.273744 | 0.767694 | Current authoritative baseline before 294 independent Checker tasks |
+| 2026-08-09 Europe/Luxembourg | Pre-launch check for the session-wide 30min Offline 8it run; Iris user queue empty | 1354692 | 0.045720 | 0.700342 | FairShare is 0.067352 below the 2026-08-07 pre-launch observation; intervening runs and accounting decay mean this is a dated observation, not attribution to one run |
 | 2026-08-04 Europe/Luxembourg | Pre-launch check for the revised Offline guideline 6it behavior smoke; Iris user queue empty | 760132 | 0.137983 | 0.768265 | `LevelFS=0.426310`; this snapshot is a launch baseline, not a causal attribution to any one prior run |
 
 Future launch/progress checks must append a row before interpreting movement.

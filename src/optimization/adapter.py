@@ -165,7 +165,7 @@ class CheckerGEPAAdapter:
                 "instance_id": case.instance_id,
                 "expected_resolved": case.resolved,
                 **score_details,
-                "checker_output": output.to_dict(include_trajectory=True),
+                "checker_output": output.to_reflection_dict(),
                 **case.asi,
             }
         return public_output, 0.0, trace

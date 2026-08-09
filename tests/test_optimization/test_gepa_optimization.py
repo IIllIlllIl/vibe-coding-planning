@@ -6,7 +6,7 @@ import json
 import fcntl
 import subprocess
 import time
-from contextlib import nullcontext
+from contextlib import contextmanager, nullcontext
 from dataclasses import replace
 from pathlib import Path
 from types import SimpleNamespace
@@ -1621,7 +1621,7 @@ def test_adapter_balanced_accuracy_requires_both_classes_per_split():
         )
 
 
-def test_adapter_scores_explicit_checker_timeout_zero_and_preserves_trace(
+def test_adapter_scores_timeout_zero_and_reflects_only_terminal_attempt(
     tmp_path,
 ):
     case = GEPACase(
@@ -1640,7 +1640,11 @@ def test_adapter_scores_explicit_checker_timeout_zero_and_preserves_trace(
                 CheckerTimeoutOutput(
                     attempts=3,
                     timeout_seconds=1800,
-                    trajectories=(({"role": "assistant", "content": "work"},),),
+                    trajectories=(
+                        ({"role": "assistant", "content": "attempt one"},),
+                        ({"role": "assistant", "content": "attempt two"},),
+                        ({"role": "assistant", "content": "attempt three"},),
+                    ),
                 )
             ]
 
@@ -1665,7 +1669,14 @@ def test_adapter_scores_explicit_checker_timeout_zero_and_preserves_trace(
     assert result.outputs[0]["status"] == "timeout"
     assert result.outputs[0]["predicted_resolved"] is None
     assert result.trajectories[0]["error_type"] == "checker_timeout"
-    assert result.trajectories[0]["checker_output"]["attempt_trajectories"]
+    reflection_output = result.trajectories[0]["checker_output"]
+    assert "attempts" not in reflection_output
+    assert "attempt_trajectories" not in reflection_output
+    assert reflection_output["trajectory"] == [
+        {"role": "assistant", "content": "attempt three"}
+    ]
+    assert result.outputs[0]["attempts"] == 3
+    assert "attempt_trajectories" not in result.outputs[0]
 
 
 def test_adapter_retries_transient_checker_failure(tmp_path):
@@ -5664,6 +5675,15 @@ def test_checker_call_uses_apptainer_environment_when_runtime_apptainer(
     )
     calls = {}
 
+    @contextmanager
+    def fake_session_deadline(seconds):
+        calls["deadline_seconds"] = seconds
+        calls["session_active"] = True
+        try:
+            yield
+        finally:
+            calls["session_active"] = False
+
     class FakeModel:
         def __init__(self, **kwargs):
             calls["model_kwargs"] = kwargs
@@ -5672,6 +5692,7 @@ def test_checker_call_uses_apptainer_environment_when_runtime_apptainer(
         messages = [{"role": "assistant", "content": "done"}]
 
         def run(self, task, **kwargs):
+            assert calls["session_active"] is True
             calls["agent_run_kwargs"] = kwargs
             return (
                 "Submitted",
@@ -5681,6 +5702,7 @@ def test_checker_call_uses_apptainer_environment_when_runtime_apptainer(
 
     class FakeEnvironment:
         def __init__(self, **kwargs):
+            assert calls["session_active"] is True
             calls["environment_kwargs"] = kwargs
 
         def execute(self, command):
@@ -5697,6 +5719,7 @@ def test_checker_call_uses_apptainer_environment_when_runtime_apptainer(
             pass
 
         def ensure(self, image, *, timeout):
+            assert calls["session_active"] is True
             return tmp_path / "sif" / "image.sif"
 
     monkeypatch.setattr(
@@ -5719,6 +5742,10 @@ def test_checker_call_uses_apptainer_environment_when_runtime_apptainer(
         "src.optimization.checker.derive_image_name",
         lambda info: "test/image:latest",
     )
+    monkeypatch.setattr(
+        "src.optimization.checker._checker_agent_deadline",
+        fake_session_deadline,
+    )
 
     checker = DockerChecker(config, _FakeCapacityWindow())
     case = GEPACase(
@@ -5733,6 +5760,8 @@ def test_checker_call_uses_apptainer_environment_when_runtime_apptainer(
     result = checker(case, "", retry_feedback="previous validator error")
 
     assert result.predicted_resolved is True
+    assert calls["deadline_seconds"] == config.checker.agent_timeout_seconds
+    assert calls["session_active"] is False
     assert calls["environment_kwargs"]["image"] == "test/image:latest"
     assert calls["environment_kwargs"]["cwd"] == config.docker.workdir
     assert calls["environment_kwargs"]["writable_tmpfs"] is True

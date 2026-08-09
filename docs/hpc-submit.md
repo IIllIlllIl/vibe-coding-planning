@@ -34,7 +34,7 @@ escalated network access.
 | Reviewer array element | 1 CPU / 4G | 55min; initial attempt plus two retries |
 | Synthesis task | 1 CPU / 4G | 55min; initial attempt plus two retries |
 | SIF preheat | 1 CPU / 4G | network/IO bound |
-| Offline Checker array element | 1 CPU / 4G | 35min; one complete Checker session |
+| Offline Checker array element | 1 CPU / 4G | 35min; 30min complete session from environment startup through output validation, then approximately 5min cleanup/output reserve |
 | Offline initial Reflection task | 1 CPU / 4G | 35min; one complete Agent session |
 | Offline contamination repair task | 1 CPU / 4G | 35min; submitted only after a deterministic hit |
 
