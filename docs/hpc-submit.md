@@ -34,7 +34,7 @@ escalated network access.
 | Reviewer array element | 1 CPU / 4G | 55min; initial attempt plus two retries |
 | Synthesis task | 1 CPU / 4G | 55min; initial attempt plus two retries |
 | SIF preheat | 1 CPU / 4G | network/IO bound |
-| Offline Checker array element | 1 CPU / 4G | 35min; 30min complete session from environment startup through output validation, then approximately 5min cleanup/output reserve |
+| Offline Checker array element | 1 CPU / 4G | 35min whole worker; no nested HPC Agent deadline or reserved cleanup window |
 | Offline initial Reflection task | 1 CPU / 4G | 35min; one complete Agent session |
 | Offline contamination repair task | 1 CPU / 4G | 35min; submitted only after a deterministic hit |
 
@@ -195,10 +195,11 @@ a test, so launch commands must not inject a user-specific PATH.
 |---|---|
 | Online Plan/Code Agent contract failure after configured retries | score unresolved; continue |
 | Offline Checker output-contract failure before retry exhaustion | start a fresh Checker with the previous validator error only |
-| Offline Checker failure after retry exhaustion | persist `EXHAUSTED` and stop without fabricating a prediction |
+| Offline Checker Slurm `TIMEOUT` after retry exhaustion, with an assistant-bearing journal for every attempt | controller records semantic timeout, scores zero, exposes only the final attempt to Reflection, and continues |
+| Offline Checker exhaustion with missing/non-Agent journal, mixed failure, or non-timeout terminal state | persist `EXHAUSTED` and stop without fabricating a prediction |
 | Online Slurm-confirmed rollout `TIMEOUT` | retry only that index; after the final configured attempt, score unresolved with timeout metadata |
 | Offline Reflection failure before exhaustion | retry the task as a fresh Agent |
-| Offline Reflection failure after three attempts | persist `EXHAUSTED` and block without consuming a proposal iteration |
+| Offline Reflection failure after three attempts | persist task `EXHAUSTED`; GEPA records no proposal and samples a new minibatch on its next proposal iteration |
 | Online controller-level Reflection failure | leave proposal uncommitted; retry a controller slice |
 | SSH/status/submission/transient controller failure | wait and retry |
 | OOM, disk quota, permanent provider authentication/billing/hard quota failure, corrupt state/output, fingerprint/manifest mismatch | block |
@@ -208,6 +209,15 @@ a test, so launch commands must not inject a user-specific PATH.
 
 Local supervisor state is a cache. Remote `gepa_state.bin`, batch journals, and
 iteration progress are authoritative. Do not run two supervisors for one run.
+
+Unknown controller exceptions default to blocking because they have not been
+shown safe to score or retry. Worker raw outputs retain the concrete exception,
+stage, and message even when the controller terminal summary is coarser.
+`FatalError` is currently also a broad blocking marker: it includes permanent
+configuration, identity, disk, and provider failures as well as some SIF pull
+or container failures that may prove transient. Do not infer permanence from
+the class name alone; audit the raw artifact and Slurm state. The retry policy
+remains unchanged until repeated run evidence supports a narrower category.
 
 ## 5. Cooperative Controller Yield
 
@@ -241,11 +251,13 @@ input; no Agent conversation is resumed.
 - `status=completed` output rejected by host validation: preserve the raw output
   and exact validation error, set the task batch to `BLOCKED`, and do not retry
   an Agent.
-- `TIMEOUT` without output: clean the terminal attempt workspace and retry only
-  that index. Online rollout may synthesize a scored unresolved result from
-  durable phase checkpoints according to its outcome policy. Offline Checker
-  and Reflection instead enter `EXHAUSTED` after the configured attempts and
-  block without fabricating a prediction or proposal.
+- `TIMEOUT` without output: preserve the terminal attempt workspace and retry
+  only that index. Online rollout may synthesize a scored unresolved result
+  from durable phase checkpoints according to its outcome policy. After
+  Offline Checker retries are exhausted, the controller scores timeout only
+  when every timed-out attempt has an incrementally flushed trajectory with an
+  assistant message; otherwise it blocks. Reflection exhaustion produces no
+  proposal and GEPA moves to a newly sampled minibatch on the next iteration.
 - other terminal states without output: retry the affected index; after the
   configured attempts, block as infrastructure-invalid.
 - state missing/unknown: wait through missing-task grace, then treat as lost.

@@ -19,7 +19,6 @@ from src.config import DockerConfig
 from src.exceptions import (
     AgentRolloutFailure,
     FatalError,
-    OfflineReflectionBlocked,
     OnlineControllerYield,
     SynthesisExhaustedError,
     TaskError,
@@ -36,6 +35,7 @@ from src.optimization.callbacks import ProgressCallback
 from src.optimization.config import (
     ContainerConfig,
     ModelConfig,
+    OfflineExecutionConfig,
     OptimizationConfig,
     SearchConfig,
     load_optimization_config,
@@ -5364,10 +5364,14 @@ def test_reflection_failure_below_success_threshold_marks_run_failed(tmp_path):
     assert '"event": "run_completed"' not in audit
 
 
-def test_hpc_reflection_exhaustion_blocks_without_becoming_no_proposal(
+def test_hpc_reflection_exhaustion_moves_to_a_new_proposal_minibatch(
     tmp_path,
 ):
     config = _config(tmp_path)
+    config = replace(
+        config,
+        search=replace(config.search, min_proposals=1),
+    )
 
     def checker(case, rules):
         return CheckerOutput(
@@ -5381,8 +5385,13 @@ def test_hpc_reflection_exhaustion_blocks_without_becoming_no_proposal(
 
         def __init__(self):
             self.failures = []
+            self.calls = 0
 
         def __call__(self, candidate, reflective_dataset, components):
+            self.calls += 1
+            if self.calls > 1:
+                self.successful_proposals += 1
+                return {"rules": "recovered guideline"}
             cause = TaskAttemptsExhausted(
                 "Slurm Agent tasks failed after 3 attempts: reflection"
             )
@@ -5392,27 +5401,18 @@ def test_hpc_reflection_exhaustion_blocks_without_becoming_no_proposal(
                     "error": str(cause),
                 }
             )
-            raise OfflineReflectionBlocked(cause)
+            raise cause
 
-    with pytest.raises(
-        OfflineReflectionBlocked,
-        match="TaskAttemptsExhausted",
-    ):
-        run_optimization(
-            config,
-            checker=checker,
-            proposer=ExhaustedProposer(),
-        )
+    proposer = ExhaustedProposer()
+    run_optimization(config, checker=checker, proposer=proposer)
 
     status = json.loads((config.run_dir / "controller_status.json").read_text())
-    assert status["status"] == "failed"
-    assert status["blocking"] is True
-    assert status["failure_phase"] == "reflection"
-    assert status["error_type"] == "TaskAttemptsExhausted"
+    assert status["status"] == "completed_with_warnings"
+    assert proposer.calls >= 2
     progress = json.loads((config.run_dir / "progress.json").read_text())
-    assert progress["status"] == "failed"
-    assert progress["failure_kind"] == "reflection_task_blocked"
-    assert not (config.run_dir / "candidate_metrics.json").exists()
+    assert progress["status"] == "completed_with_warnings"
+    assert progress["reflection_failures"] == 1
+    assert (config.run_dir / "candidate_metrics.json").exists()
 
 
 def test_reflection_failure_can_recover_when_success_threshold_is_met(tmp_path):
@@ -5516,7 +5516,8 @@ def test_default_offline_config_stages_formal_accuracy_b8_run(monkeypatch):
     assert config.checker.max_attempts == 1
     assert config.initial_rules_path.name == "gepa_initial_guideline_minimal.md"
     assert (
-        "offline-plan-guideline-hpc-accuracy-b8-default-accept-8it-formal-20260807"
+        "offline-plan-guideline-hpc-accuracy-b8-default-accept-"
+        "controller-timeout-8it-20260810"
         in str(config.run_dir)
     )
     assert (
@@ -5524,7 +5525,7 @@ def test_default_offline_config_stages_formal_accuracy_b8_run(monkeypatch):
         .strip()
         .startswith("Allow the plan to proceed unless")
     )
-    assert config.checker.agent_timeout_seconds == 1800
+    assert config.checker.agent_timeout_seconds == 0
     checker_prompt = " ".join(config.checker_prompt.split())
     assert "software development assistant" in checker_prompt
     assert "candidate guideline as the sole source" in checker_prompt
@@ -5661,6 +5662,40 @@ def test_checker_prepare_uses_apptainer_sif_cache_when_runtime_apptainer(
     assert ensured == [("test/image:latest", config.checker.timeout)]
 
 
+def test_hpc_checker_delegates_wall_time_to_slurm(tmp_path, monkeypatch):
+    base_config = _config(tmp_path)
+    config = replace(
+        base_config,
+        execution=OfflineExecutionConfig(backend="hpc_slurm"),
+        checker=replace(base_config.checker, agent_timeout_seconds=1800),
+    )
+    checker = DockerChecker(config, _FakeCapacityWindow())
+    expected = CheckerOutput(True, "done", ())
+
+    monkeypatch.setattr(
+        checker,
+        "_run_session",
+        lambda case, rules, **kwargs: expected,
+    )
+    monkeypatch.setattr(
+        "src.optimization.checker._checker_agent_deadline",
+        lambda seconds: (_ for _ in ()).throw(
+            AssertionError("HPC Checker must not install an in-worker deadline")
+        ),
+    )
+
+    case = GEPACase(
+        instance_id="org__1",
+        split="train",
+        resolved=True,
+        issue_description="issue",
+        plan="plan",
+        repository=RepositoryRef("org/repo", "abc", "org__1"),
+        asi={},
+    )
+    assert checker(case, "guideline") is expected
+
+
 def test_checker_call_uses_apptainer_environment_when_runtime_apptainer(
     tmp_path, monkeypatch
 ):
@@ -5689,11 +5724,20 @@ def test_checker_call_uses_apptainer_environment_when_runtime_apptainer(
             calls["model_kwargs"] = kwargs
 
     class FakeAgent:
-        messages = [{"role": "assistant", "content": "done"}]
+        def __init__(self):
+            self.messages = []
+
+        def add_message(self, role, content, **kwargs):
+            self.messages.append(
+                {"role": role, "content": content, **kwargs}
+            )
 
         def run(self, task, **kwargs):
             assert calls["session_active"] is True
             calls["agent_run_kwargs"] = kwargs
+            self.add_message("system", "checker")
+            self.add_message("user", task)
+            self.add_message("assistant", "done")
             return (
                 "Submitted",
                 '{"predicted_resolved": true, "decision_reason": "ok", '
@@ -5757,7 +5801,13 @@ def test_checker_call_uses_apptainer_environment_when_runtime_apptainer(
         repository=RepositoryRef("org/repo", "abc", "org__1"),
         asi={},
     )
-    result = checker(case, "", retry_feedback="previous validator error")
+    trajectory_journal = tmp_path / "checker_trajectory.jsonl"
+    result = checker(
+        case,
+        "",
+        retry_feedback="previous validator error",
+        trajectory_journal_path=trajectory_journal,
+    )
 
     assert result.predicted_resolved is True
     assert calls["deadline_seconds"] == config.checker.agent_timeout_seconds
@@ -5767,6 +5817,15 @@ def test_checker_call_uses_apptainer_environment_when_runtime_apptainer(
     assert calls["environment_kwargs"]["writable_tmpfs"] is True
     assert calls["agent_run_kwargs"]["retry_feedback"] == ("previous validator error")
     assert calls["cleaned_up"] is True
+    journal = [
+        json.loads(line)
+        for line in trajectory_journal.read_text(encoding="utf-8").splitlines()
+    ]
+    assert [message["role"] for message in journal] == [
+        "system",
+        "user",
+        "assistant",
+    ]
 
 
 def test_local_checker_retry_receives_only_previous_contract_error(tmp_path):

@@ -1,7 +1,7 @@
 # Agent Budgeting And Timeout Attribution
 
-> Knowledge status: reusable across PCT and Online GEPA
-> Last reviewed: 2026-07-15
+> Knowledge status: reusable across GEPA methods
+> Last reviewed: 2026-08-10
 
 ## Budget Layers
 
@@ -28,6 +28,15 @@ problems. Online GEPA keeps that distinction and adds a Code phase deadline.
 The timer runs inside the worker so cleanup and atomic output can complete. If
 the timer cannot be installed, the task must fail operationally instead of
 running unbounded.
+
+Offline HPC intentionally uses a different, evidence-based contract. Slurm's
+35-minute wall-time is the only whole-worker deadline. The Checker worker
+incrementally flushes Agent messages, and the resumed controller may classify
+three Slurm `TIMEOUT` attempts as a scored semantic timeout only when every
+attempt proves that Agent reasoning began. This avoids depending on an
+in-process signal surviving arbitrary model/environment code while retaining a
+concrete attribution guardrail. Local Offline execution may still use its
+optional in-process deadline because it has no scheduler terminal state.
 
 ## Attribution Guardrails
 

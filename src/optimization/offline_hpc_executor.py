@@ -50,7 +50,7 @@ def offline_checker_semantic_sha256(config: OptimizationConfig) -> str:
     ]
     return _stable_sha256(
         {
-            "schema": 2,
+            "schema": 3,
             "source": {
                 str(path.relative_to(root)): hashlib.sha256(
                     path.read_bytes()
@@ -67,7 +67,8 @@ def offline_checker_semantic_sha256(config: OptimizationConfig) -> str:
             "retry_policy": {
                 "kind": (
                     "fresh_agent; validator feedback only for output-contract "
-                    "failures; all-explicit-timeout exhaustion scores zero"
+                    "failures; controller-classified evidenced Slurm timeout "
+                    "exhaustion scores zero"
                 ),
                 "max_task_attempts": config.hpc.max_task_attempts,
             },
@@ -239,7 +240,7 @@ class HPCSlurmOfflineCheckerExecutor:
                     tasks=tasks,
                 )
             try:
-                results = self._recover_explicit_timeouts(
+                results = self._recover_evidenced_timeouts(
                     batch_dir=batch_dir,
                     fingerprint=fingerprint,
                     tasks=tasks,
@@ -339,14 +340,14 @@ class HPCSlurmOfflineCheckerExecutor:
             tuple(checker_output.get("trajectory", [])),
         )
 
-    def _recover_explicit_timeouts(
+    def _recover_evidenced_timeouts(
         self,
         *,
         batch_dir: Path,
         fingerprint: str,
         tasks: Sequence[TaskFiles],
     ) -> list[CheckerResult]:
-        """Resolve only fully evidenced semantic timeouts after fresh retries."""
+        """Classify exhausted Slurm timeouts using durable worker evidence."""
         results: list[CheckerResult] = []
         max_attempts = self.config.hpc.max_task_attempts
         for task in tasks:
@@ -362,6 +363,7 @@ class HPCSlurmOfflineCheckerExecutor:
 
             attempt_failures = []
             trajectories = []
+            elapsed_seconds = []
             for attempt in range(1, max_attempts + 1):
                 output_path = (
                     task.output_path
@@ -371,17 +373,46 @@ class HPCSlurmOfflineCheckerExecutor:
                     / f"attempt_{attempt:02d}"
                     / task.output_path.name
                 )
-                failure = json.loads(output_path.read_text(encoding="utf-8"))
-                if (
-                    failure.get("status") != "agent_failed"
-                    or failure.get("failure_kind") != "checker_agent_timeout"
-                    or failure.get("fingerprint") != fingerprint
-                    or failure.get("instance_id") != task.instance_id
+                failure = (
+                    json.loads(output_path.read_text(encoding="utf-8"))
+                    if output_path.is_file()
+                    else None
+                )
+                explicit_timeout = bool(
+                    failure
+                    and failure.get("status") == "agent_failed"
+                    and failure.get("failure_kind") == "checker_agent_timeout"
+                    and failure.get("fingerprint") == fingerprint
+                    and failure.get("instance_id") == task.instance_id
+                )
+                slurm_path = (
+                    task.attempts_dir
+                    / f"attempt_{attempt:02d}"
+                    / "slurm_status.json"
+                )
+                slurm = (
+                    json.loads(slurm_path.read_text(encoding="utf-8"))
+                    if slurm_path.is_file()
+                    else {}
+                )
+                if slurm and (
+                    slurm.get("instance_id") != task.instance_id
+                    or slurm.get("task_index") != task.index
                 ):
+                    raise ValueError("Checker Slurm status identity mismatch")
+                slurm_timeout = slurm.get("state") == "TIMEOUT"
+                if not explicit_timeout and not slurm_timeout:
                     raise ValueError(
-                        "Checker exhaustion contains a non-semantic-timeout attempt"
+                        "Checker exhaustion contains a non-timeout attempt"
                     )
-                attempt_failures.append(failure)
+                if failure is not None and not explicit_timeout:
+                    raise ValueError(
+                        "Checker timeout attempt contains conflicting worker output"
+                    )
+                attempt_failures.append(failure or slurm)
+                observed_elapsed = slurm.get("elapsed_seconds")
+                if isinstance(observed_elapsed, int):
+                    elapsed_seconds.append(observed_elapsed)
                 trajectory_path = (
                     task.attempts_dir
                     / f"attempt_{attempt:02d}"
@@ -392,15 +423,43 @@ class HPCSlurmOfflineCheckerExecutor:
                     messages = trajectory.get("messages")
                     if not isinstance(messages, list):
                         raise ValueError("Checker timeout trajectory must be a list")
-                    trajectories.append(tuple(messages))
+                    trajectory = tuple(messages)
                 else:
-                    trajectories.append(())
+                    journal_path = (
+                        task.attempts_dir
+                        / f"attempt_{attempt:02d}"
+                        / "checker_trajectory.jsonl"
+                    )
+                    if not journal_path.is_file():
+                        raise ValueError(
+                            "Checker timeout attempt has no durable trajectory"
+                        )
+                    trajectory = tuple(
+                        json.loads(line)
+                        for line in journal_path.read_text(
+                            encoding="utf-8"
+                        ).splitlines()
+                        if line.strip()
+                    )
+                if not trajectory or not any(
+                    message.get("role") == "assistant"
+                    for message in trajectory
+                    if isinstance(message, dict)
+                ):
+                    raise ValueError(
+                        "Checker timeout trajectory does not show Agent reasoning"
+                    )
+                trajectories.append(trajectory)
             if len(attempt_failures) != max_attempts:
                 raise ValueError("Checker timeout attempt evidence is incomplete")
             results.append(
                 CheckerTimeoutOutput(
                     attempts=max_attempts,
-                    timeout_seconds=self.config.checker.agent_timeout_seconds,
+                    timeout_seconds=(
+                        elapsed_seconds[-1]
+                        if elapsed_seconds
+                        else self.config.checker.agent_timeout_seconds
+                    ),
                     trajectories=tuple(trajectories),
                 )
             )

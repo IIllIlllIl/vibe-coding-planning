@@ -629,3 +629,34 @@ Reflection context overflow 不是单次孤立事件：当前 6it 的 6 个 Refl
 同类错误；本地 8it 的 8 条 Reflection trajectory 中未发现。三次运行的 prompt 和
 runtime 不完全相同，不能把合并比例当作稳定发生率。当前决策是保留 minibatch 12，
 不加入 read/compact/host summarizer；继续保存完整失败轨迹并观察 fresh-Agent retry。
+
+### 6.7 Offline HPC timeout 责任边界修正（2026-08-10）
+
+20260809 的正式 8it 在 candidate validation 中暴露了 worker 内 30 分钟 SIGALRM
+与 35 分钟 Slurm walltime 的责任冲突：三个 Checker attempt 均由 Slurm 在约 35 分钟
+终止，但进程内 deadline 没有可靠地产生结构化 timeout output，controller 因此只能把
+它们当作无结果 exhaustion 并阻断。该运行不得在新语义下 resume；当前正式配置已使用
+新的 run identity。
+
+现改为 Slurm 只提供整个 Checker worker 的 35 分钟硬边界，HPC worker 不再设置
+30 分钟 session alarm。worker 每增加一条 Agent message 就增量 flush 到 attempt-local
+`checker_trajectory.jsonl`；controller 在 resume 时联合 Slurm terminal state 与该 raw
+journal 分类。只有三次均为 `TIMEOUT` 且每次 journal 都包含 assistant message，才把
+该 case 记为 timeout/0 分。缺失 Agent 证据、混合失败、非 timeout、provider 或
+identity/schema 问题继续 block。Reflection 仍只看到最后一次 trajectory，自动化 retry
+对研究输入不可见。
+
+Reflection initial/repair task 三次失败不再通过 `BaseException` 阻断整轮搜索。task
+journal 仍保留 `EXHAUSTED`，但 GEPA 将其作为普通 proposal failure：不产生 candidate、
+不计分，并在下一 proposal iteration 重新抽 minibatch。该失败会消耗一次 GEPA
+proposal-attempt/iteration 预算；数据完整性失败仍然阻断。下一轮 smoke 需要实测
+hard timeout journal 的完整度、controller 分类和 Reflection exhaustion 后的继续行为。
+
+当前仍有两个有意保留的保守边界。第一，除 cooperative yield、Reflection attempt
+exhaustion 和有充分证据的 Checker timeout 外，未知 controller exception 默认 block；
+raw worker artifact 通常保留具体 `error_type`、`failure_stage` 和错误文本，但 controller
+终态摘要的结构化分类仍较粗。第二，`FatalError` 同时覆盖永久配置/身份/provider 错误
+和部分可能暂时恢复的 SIF pull、Docker 或基础设施错误，当前均立即
+`blocking_failed`。本轮不增加异常层级或改变 retry policy，避免未经运行证据放宽数据
+保护边界。下一轮应按 raw output、Slurm terminal state 和 exception message 统计这两类
+block 的频率与根因，再决定是否仅细化记录，或对反复出现且可证明安全的类别增加重试。

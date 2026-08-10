@@ -124,6 +124,9 @@ def run_task(
             case,
             rules,
             retry_feedback=retry_feedback,
+            trajectory_journal_path=(
+                attempt_dir / "checker_trajectory.jsonl"
+            ),
         )
         failure_stage = "output_write"
         atomic_json(

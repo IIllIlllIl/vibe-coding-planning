@@ -5,7 +5,7 @@
 paths:
   dataset_snapshot: output/SWE-bench_Verified/verified-round1-gepa-datasets/20260614_482_fdc056ae85df
   initial_guideline: configs/gepa_initial_guideline_minimal.md
-  run_dir: output/SWE-bench_Verified/gepa-rules/offline-plan-guideline-hpc-accuracy-b8-default-accept-session30m-8it-formal-20260809
+  run_dir: output/SWE-bench_Verified/gepa-rules/offline-plan-guideline-hpc-accuracy-b8-default-accept-controller-timeout-8it-20260810
 
 checker:
   model: deepseek-v4-flash
@@ -15,9 +15,9 @@ checker:
   max_steps: 500
   cost_limit: 6.0
   timeout: 1800
-  # Complete Agent-session deadline. The 35-minute Slurm allocation leaves
-  # five minutes to save the partial trajectory and structured timeout output.
-  agent_timeout_seconds: 1800
+  # Local-only soft deadline. HPC delegates wall-time to Slurm and lets the
+  # resumed controller classify an evidenced terminal TIMEOUT.
+  agent_timeout_seconds: 0
   # One Slurm task owns one complete Checker Agent session. Infrastructure
   # retry happens by restarting that task from clean input.
   max_attempts: 1
@@ -80,7 +80,7 @@ hpc:
   python_module: lang/Python/3.11
   container_module: tools/Apptainer
   python_bin: python3
-  job_name_prefix: offline-guideline-accuracy-b8-default-accept-session30m-8it-20260809
+  job_name_prefix: offline-guideline-accuracy-b8-default-accept-controller-timeout-8it-20260810
   worker_config_path: configs/gepa_verified_rules.yaml
 
 prompts:

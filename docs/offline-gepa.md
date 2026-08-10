@@ -152,17 +152,21 @@ semantic answer. Infrastructure/provider failures do not enter this feedback.
 The feedback changes only output-protocol recovery and is part of the
 fingerprinted Checker semantics.
 
-The formal HPC configuration gives one complete Checker session a 30-minute
-soft deadline inside a 35-minute Slurm allocation. The session budget starts
-before SIF preparation and repository-environment construction, so Apptainer
-startup, git safe-directory initialization, Agent work, and final-submission
-validation share one budget. There is no separate 30-second gitconfig startup
-deadline. Reaching the soft deadline interrupts the session before Slurm kills
-the worker, leaving approximately five minutes for container cleanup plus
-atomic failure and partial-trajectory writes. This session deadline is
-`checker.agent_timeout_seconds`; `checker.timeout` remains the maximum for an
-individual environment command but does not grant additional time beyond the
-session deadline.
+The formal HPC configuration gives one complete Checker worker a 35-minute
+Slurm allocation. Slurm owns this wall-time; the HPC worker does not install a
+second 30-minute process alarm or reserve five minutes that the Agent cannot
+use. SIF preparation, repository-environment construction, Agent work, final
+submission, and ordinary cleanup all occur inside the one allocation.
+`checker.agent_timeout_seconds` is local-only and is `0` in the formal HPC
+config. `checker.timeout` remains the maximum for an individual environment
+operation, not a second whole-worker budget.
+
+The worker appends and flushes every Checker system, user, and assistant
+message to the attempt-local `checker_trajectory.jsonl`. This is raw evidence,
+not a classification decision. If Slurm kills the process before an atomic
+worker result can be written, the resumed controller reads the journal and the
+recorded Slurm terminal state. This separates the worker's execution duty from
+the controller's collection and outcome-policy duty.
 
 Resolved labels, historical Plan/Code trajectories, patches, evaluator results,
 and scores are never Checker inputs. They are available only to Reflection as
@@ -390,22 +394,26 @@ configured output/missing grace periods before retry or failure. GEPA state,
 not Slurm task completion, remains the authority for whether a result affected
 the search.
 
-If all three fresh Checker attempts end with an explicitly written
-`checker_agent_timeout`, the host reconstructs that attempt evidence, returns
-`predicted_resolved=null`, and assigns that case score zero. The timeout and
-the final attempt's partial trajectory enter Reflection evidence; attempt
-count, retry feedback, and earlier attempt trajectories remain only in raw
-audit artifacts. This treats open-ended review caused by a candidate guideline
-as candidate failure without making the automation retry policy part of the
-research evidence. A hard Slurm `TIMEOUT`, missing output, mixed failure kinds,
-output-contract exhaustion, provider failure, or infrastructure failure still
-blocks; these cannot safely be attributed to the guideline.
+If all three fresh Checker attempts end in Slurm `TIMEOUT` and every attempt's
+durable journal contains at least one assistant message, the controller returns
+`predicted_resolved=null` and assigns that case score zero. This proves the
+Checker reached Agent reasoning rather than timing out before the experimental
+task began. The final attempt's partial trajectory enters Reflection evidence;
+attempt count, retry feedback, and earlier attempt trajectories remain only in
+raw audit artifacts. A missing/empty journal, no assistant response, mixed
+failure kind, output-contract exhaustion, provider failure, non-timeout Slurm
+state, or identity/schema conflict still blocks rather than being attributed to
+the guideline.
 
 If initial Reflection or contamination repair exhausts all three attempts, its
-task journal enters the durable `EXHAUSTED` terminal state and the Offline run
-blocks. Reflection uses a dedicated controller exception that passes through
-GEPA's ordinary proposal-exception handler, so exhaustion cannot become a
-normal no-proposal iteration or consume the configured iteration target.
+task journal still enters the durable `EXHAUSTED` terminal state, preserving
+the exact operational failure. The proposer then raises an ordinary proposal
+exception. GEPA treats that proposal as unsuccessful and starts its next
+proposal iteration, which samples a new minibatch; it does not create a
+candidate or score the failed proposal. The failed proposal attempt does count
+toward GEPA's configured iteration/proposal-attempt limit. Identity, schema,
+host-validation, and other integrity failures still use the dedicated blocking
+exception and stop the run.
 
 Candidate reports preserve timeout predictions as JSON `null`, report timeout
 count/rate separately, and recompute the GEPA validation score from the stored
@@ -421,7 +429,7 @@ the execution transport:
 | Mode | Required config | Behavior |
 |---|---|---|
 | Local Docker | `execution.backend: local`, `container.runtime: docker` | Checker calls use local thread parallelism unless `checker.agent_timeout_seconds` is enabled; the POSIX soft deadline requires `search.parallel=1`. Reflection and optional repair run synchronously |
-| HPC Slurm | `execution.backend: hpc_slurm`, `container.runtime: apptainer` | Checker, initial Reflection, and optional repair are independent Slurm tasks |
+| HPC Slurm | `execution.backend: hpc_slurm`, `container.runtime: apptainer` | Checker, initial Reflection, and optional repair are independent Slurm tasks; Slurm wall-time plus controller evidence classification replaces the local soft deadline |
 | Local Apptainer | `execution.backend: local`, `container.runtime: apptainer` | Synchronous execution on a host with Apptainer and the SIF cache; an enabled Checker soft deadline requires `search.parallel=1` |
 
 `hpc.*` remains config-validated but is not used to execute local Agent calls.
@@ -451,6 +459,8 @@ The run directory preserves:
   task when required;
 - `progress.json`, `audit_events.jsonl`, and `evaluations.jsonl`;
 - every Checker call's complete trajectory;
+- attempt-local `checker_trajectory.jsonl` incremental journals, which preserve
+  partial Checker evidence across a hard Slurm stop;
 - per-attempt `retry_feedback.json` when a fresh Checker receives a previous
   output-validator error;
 - worker failure records with the exact exception type plus deterministic

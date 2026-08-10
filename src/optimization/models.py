@@ -69,7 +69,7 @@ class CheckerOutput:
 
 @dataclass(frozen=True)
 class CheckerTimeoutOutput:
-    """A semantic Checker failure after explicit Agent deadline exhaustion."""
+    """A semantic Checker failure after evidenced timeout exhaustion."""
 
     attempts: int
     timeout_seconds: int
@@ -80,7 +80,7 @@ class CheckerTimeoutOutput:
             "status": "timeout",
             "predicted_resolved": None,
             "decision_reason": (
-                "Checker did not finish within the configured Agent deadline "
+                "Checker did not finish within the execution wall-time "
                 f"after {self.attempts} attempt(s)."
             ),
             "repository_evidence": [],
@@ -106,7 +106,7 @@ class CheckerTimeoutOutput:
             "status": "timeout",
             "predicted_resolved": None,
             "decision_reason": (
-                "Checker did not finish within the configured Agent deadline."
+                "Checker did not finish within the execution wall-time."
             ),
             "repository_evidence": [],
             "terminal_reason": "checker_agent_timeout",

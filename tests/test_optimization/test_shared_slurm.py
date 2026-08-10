@@ -262,7 +262,7 @@ def test_shared_slurm_records_terminal_status_and_exhaustion(
         )
 
 
-def test_hpc_reflection_wraps_task_exhaustion_for_gepa_boundary(tmp_path):
+def test_hpc_reflection_exhaustion_remains_an_ordinary_proposal_failure(tmp_path):
     proposer = HPCOfflineReflectionProposer(_config(tmp_path))
 
     class ExhaustedRuntime:
@@ -272,18 +272,18 @@ def test_hpc_reflection_wraps_task_exhaustion_for_gepa_boundary(tmp_path):
             )
 
     proposer.runtime = ExhaustedRuntime()
-    with pytest.raises(
-        OfflineReflectionBlocked,
-        match="TaskAttemptsExhausted",
-    ) as caught:
+    with pytest.raises(TaskAttemptsExhausted, match="3 attempts"):
         proposer(
             {"rules": "parent rules"},
             {"rules": []},
             ["rules"],
         )
 
-    assert isinstance(caught.value.cause, TaskAttemptsExhausted)
     assert proposer.failures[-1]["error_type"] == "TaskAttemptsExhausted"
+    assert (
+        proposer.failures[-1]["outcome"]
+        == "proposal_failed_retry_new_minibatch"
+    )
     assert (
         '"event": "reflection_failed"'
         in (proposer.config.run_dir / "audit_events.jsonl").read_text()
@@ -506,7 +506,14 @@ def test_offline_checker_worker_gives_new_agent_previous_validator_error(
         def __init__(self, *args, **kwargs):
             pass
 
-        def __call__(self, case, rules, *, retry_feedback=""):
+        def __call__(
+            self,
+            case,
+            rules,
+            *,
+            retry_feedback="",
+            trajectory_journal_path=None,
+        ):
             received.append(retry_feedback)
             return CheckerOutput(
                 True,
@@ -578,7 +585,14 @@ def test_offline_checker_worker_preserves_failed_contract_trajectory(
         def __init__(self, *args, **kwargs):
             pass
 
-        def __call__(self, case, rules, *, retry_feedback=""):
+        def __call__(
+            self,
+            case,
+            rules,
+            *,
+            retry_feedback="",
+            trajectory_journal_path=None,
+        ):
             error = CheckerOutputContractError(
                 r"checker final submission invalid: Invalid \escape"
             )
@@ -647,7 +661,14 @@ def test_offline_checker_worker_preserves_explicit_agent_timeout(
         def __init__(self, *args, **kwargs):
             pass
 
-        def __call__(self, case, rules, *, retry_feedback=""):
+        def __call__(
+            self,
+            case,
+            rules,
+            *,
+            retry_feedback="",
+            trajectory_journal_path=None,
+        ):
             error = CheckerAgentTimeout(1800)
             error.checker_trajectory = (
                 {"role": "assistant", "content": "still investigating"},
@@ -689,7 +710,7 @@ def test_offline_checker_worker_preserves_explicit_agent_timeout(
     assert trajectory["messages"][0]["content"] == "still investigating"
 
 
-def test_offline_checker_recovers_only_three_explicit_timeouts(tmp_path):
+def test_offline_checker_recovers_three_evidenced_worker_timeouts(tmp_path):
     config = replace(
         _config(tmp_path),
         checker=replace(_config(tmp_path).checker, agent_timeout_seconds=1800),
@@ -727,7 +748,7 @@ def test_offline_checker_recovers_only_three_explicit_timeouts(tmp_path):
             {"messages": [{"role": "assistant", "content": str(attempt)}]},
         )
 
-    results = executor._recover_explicit_timeouts(
+    results = executor._recover_evidenced_timeouts(
         batch_dir=batch_dir,
         fingerprint="fingerprint",
         tasks=[task],
@@ -743,8 +764,82 @@ def test_offline_checker_recovers_only_three_explicit_timeouts(tmp_path):
     invalid = json.loads(second_attempt.read_text(encoding="utf-8"))
     invalid["failure_kind"] = "operational"
     atomic_json(second_attempt, invalid)
-    with pytest.raises(ValueError, match="non-semantic-timeout"):
-        executor._recover_explicit_timeouts(
+    with pytest.raises(ValueError, match="non-timeout"):
+        executor._recover_evidenced_timeouts(
+            batch_dir=batch_dir,
+            fingerprint="fingerprint",
+            tasks=[task],
+        )
+
+
+def test_offline_controller_classifies_slurm_timeout_only_with_agent_journal(
+    tmp_path,
+):
+    config = replace(
+        _config(tmp_path),
+        hpc=HPCConfig(max_task_attempts=3),
+    )
+    executor = HPCSlurmOfflineCheckerExecutor(config)
+    batch_dir = tmp_path / "batch"
+    task = HPCSlurmOfflineCheckerExecutor._prepare(
+        batch_dir,
+        fingerprint="fingerprint",
+        batch=[_case(resolved=True)],
+        rules="rules",
+        capture_traces=True,
+    )[0]
+    for attempt in (1, 2, 3):
+        attempt_dir = task.attempts_dir / f"attempt_{attempt:02d}"
+        atomic_json(
+            attempt_dir / "slurm_status.json",
+            {
+                "instance_id": task.instance_id,
+                "task_index": task.index,
+                "state": "TIMEOUT",
+                "elapsed_seconds": 2100,
+            },
+        )
+        journal = attempt_dir / "checker_trajectory.jsonl"
+        journal.parent.mkdir(parents=True, exist_ok=True)
+        journal.write_text(
+            '{"role": "system", "content": "checker"}\n'
+            f'{{"role": "assistant", "content": "attempt {attempt}"}}\n',
+            encoding="utf-8",
+        )
+
+    results = executor._recover_evidenced_timeouts(
+        batch_dir=batch_dir,
+        fingerprint="fingerprint",
+        tasks=[task],
+    )
+
+    assert isinstance(results[0], CheckerTimeoutOutput)
+    assert results[0].timeout_seconds == 2100
+    assert results[0].to_reflection_dict()["trajectory"][-1]["content"] == (
+        "attempt 3"
+    )
+
+    (task.attempts_dir / "attempt_02" / "checker_trajectory.jsonl").write_text(
+        '{"role": "system", "content": "checker"}\n',
+        encoding="utf-8",
+    )
+    with pytest.raises(ValueError, match="does not show Agent reasoning"):
+        executor._recover_evidenced_timeouts(
+            batch_dir=batch_dir,
+            fingerprint="fingerprint",
+            tasks=[task],
+        )
+
+    (task.attempts_dir / "attempt_02" / "checker_trajectory.jsonl").write_text(
+        '{"role": "assistant", "content": "working"}\n',
+        encoding="utf-8",
+    )
+    status_path = task.attempts_dir / "attempt_02" / "slurm_status.json"
+    status = json.loads(status_path.read_text(encoding="utf-8"))
+    status["state"] = "OUT_OF_MEMORY"
+    atomic_json(status_path, status)
+    with pytest.raises(ValueError, match="non-timeout"):
+        executor._recover_evidenced_timeouts(
             batch_dir=batch_dir,
             fingerprint="fingerprint",
             tasks=[task],

@@ -14,6 +14,7 @@ from src.optimization.audit import JsonlLogger, text_sha256
 from src.optimization.config import OptimizationConfig
 from src.optimization.hpc.task_batch import (
     SlurmTaskBatch,
+    TaskAttemptsExhausted,
     TaskFiles,
     atomic_json,
 )
@@ -161,6 +162,17 @@ class HPCOfflineReflectionProposer:
                 write_script=write_script,
                 validate_output=validate,
             )
+        except TaskAttemptsExhausted as exc:
+            failure = {
+                "error_type": type(exc).__name__,
+                "error": str(exc),
+                "candidate_sha256": text_sha256(candidate["rules"]),
+                "outcome": "proposal_failed_retry_new_minibatch",
+            }
+            self.failures.append(failure)
+            self.audit.write("reflection_failed", **failure)
+            self.errors.write("reflection_failed", **failure)
+            raise
         except Exception as exc:
             failure = {
                 "error_type": type(exc).__name__,
@@ -179,6 +191,18 @@ class HPCOfflineReflectionProposer:
                     initial_fingerprint=fingerprint,
                     initial_output=initial,
                 )
+            except TaskAttemptsExhausted as exc:
+                failure = {
+                    "error_type": type(exc).__name__,
+                    "error": str(exc),
+                    "candidate_sha256": text_sha256(candidate["rules"]),
+                    "proposal_stage": "contamination_repair",
+                    "outcome": "proposal_failed_retry_new_minibatch",
+                }
+                self.failures.append(failure)
+                self.audit.write("reflection_failed", **failure)
+                self.errors.write("reflection_failed", **failure)
+                raise
             except Exception as exc:
                 failure = {
                     "error_type": type(exc).__name__,

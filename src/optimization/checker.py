@@ -4,6 +4,8 @@ from __future__ import annotations
 
 import json
 from contextlib import contextmanager
+import os
+from pathlib import Path
 import signal
 import threading
 from typing import Any, Protocol
@@ -23,7 +25,12 @@ from src.environment.docker_env import (
     ensure_project_image_local,
 )
 from src.evaluator.swe_evaluator import derive_image_name
-from src.optimization.audit import AuditedModel, JsonlLogger, text_sha256
+from src.optimization.audit import (
+    AuditedModel,
+    JsonlLogger,
+    redact_sensitive,
+    text_sha256,
+)
 from src.optimization.config import OptimizationConfig
 from src.optimization.models import (
     CheckerOutput,
@@ -39,6 +46,7 @@ class CheckerRunner(Protocol):
         rules: str,
         *,
         retry_feedback: str = "",
+        trajectory_journal_path: Path | None = None,
     ) -> CheckerOutput: ...
 
 
@@ -79,6 +87,31 @@ def _checker_agent_deadline(timeout_seconds: int):
         signal.signal(signal.SIGALRM, previous_handler)
         if previous_timer[0] > 0:
             signal.setitimer(signal.ITIMER_REAL, *previous_timer)
+
+
+def _install_trajectory_journal(agent: Any, path: Path) -> None:
+    """Persist every Agent message so a hard Slurm stop keeps raw evidence."""
+    original_add_message = agent.add_message
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text("", encoding="utf-8")
+
+    def add_message(role: str, content: str, **kwargs: Any) -> None:
+        original_add_message(role, content, **kwargs)
+        record = redact_sensitive(agent.messages[-1])
+        with path.open("a", encoding="utf-8") as handle:
+            handle.write(
+                json.dumps(
+                    record,
+                    ensure_ascii=False,
+                    sort_keys=True,
+                    default=str,
+                )
+                + "\n"
+            )
+            handle.flush()
+            os.fsync(handle.fileno())
+
+    agent.add_message = add_message
 
 
 def checker_retry_feedback(error: str) -> str:
@@ -186,12 +219,20 @@ class DockerChecker:
         rules: str,
         *,
         retry_feedback: str = "",
+        trajectory_journal_path: Path | None = None,
     ) -> CheckerOutput:
-        # One deadline owns the complete Checker session, including repository
-        # environment startup. Infrastructure setup therefore consumes the
-        # same budget as Agent work instead of introducing a separate short
-        # timeout before the Agent begins. The enclosing Slurm allocation keeps
-        # a separate cleanup/output-writing reserve after this deadline.
+        # Slurm owns the HPC wall-time. The worker only executes and journals
+        # evidence; the resumed controller classifies a terminal Slurm state.
+        if self.config.execution.backend == "hpc_slurm":
+            return self._run_session(
+                case,
+                rules,
+                retry_feedback=retry_feedback,
+                trajectory_journal_path=trajectory_journal_path,
+            )
+
+        # Local execution has no external scheduler, so its optional soft
+        # deadline remains a local transport safeguard.
         with _checker_agent_deadline(
             self.config.checker.agent_timeout_seconds
         ):
@@ -199,6 +240,7 @@ class DockerChecker:
                 case,
                 rules,
                 retry_feedback=retry_feedback,
+                trajectory_journal_path=trajectory_journal_path,
             )
 
     def _run_session(
@@ -207,6 +249,7 @@ class DockerChecker:
         rules: str,
         *,
         retry_feedback: str = "",
+        trajectory_journal_path: Path | None = None,
     ) -> CheckerOutput:
         self.prepare(case)
         DefaultAgent, LitellmModel, _ = import_minisweagent()
@@ -279,6 +322,8 @@ class DockerChecker:
                 step_limit=self.config.checker.max_steps,
                 cost_limit=self.config.checker.cost_limit,
             )
+            if trajectory_journal_path is not None:
+                _install_trajectory_journal(agent, trajectory_journal_path)
             exit_status, final_submission = agent.run(
                 task=case.issue_description,
                 plan=case.plan,
