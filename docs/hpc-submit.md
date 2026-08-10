@@ -162,10 +162,12 @@ The shared Slurm package continues to own only atomic task transport.
 
 Offline initial-Reflection and contamination-repair tasks receive three total
 fresh-Agent attempts. Exhaustion is persisted as the task batch's `EXHAUSTED`
-terminal state and blocks the Offline run. A dedicated controller exception
-passes through GEPA's ordinary proposal-exception boundary, so the failed
-Reflection cannot consume a normal proposal iteration. Worker records include
-diagnostic failure stage/category fields.
+terminal state, then returned through GEPA's ordinary proposal-exception
+boundary. The failed proposal produces no candidate or score; GEPA samples a
+new minibatch on its next proposal iteration. It therefore consumes one
+proposal-attempt/iteration budget without being counted as a successful
+Reflection proposal. Worker records include diagnostic failure stage/category
+fields. Integrity and identity failures remain blocking.
 
 The worker validates an Agent's final submission before writing
 `status=completed`. The controller then performs a separate host validation of
