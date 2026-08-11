@@ -102,6 +102,28 @@ not a PCE run output. A reviewed copy is staged into the frozen input snapshot;
 workers consume that copy and the matching shared SIF, never a live download
 manifest.
 
+The active Python-199 preheat is protected locally by `tmux + caffeinate` and
+uses the tracked login-node preheater with an explicit remote image list:
+
+```bash
+conda run --no-capture-output -n mini-swe python \
+  scripts/tools/login_apptainer_sif_preheat.py \
+  --config configs/gepa_verified_rules.yaml \
+  --remote-images-json \
+    /scratch/users/twang/vibe-coding-planning/operations/polybench-python199-v1.1-20260811/images.json \
+  --provenance-output \
+    /scratch/users/twang/vibe-coding-planning/operations/polybench-python199-v1.1-20260811/v1.1-provenance.json \
+  --failed-output \
+    /scratch/users/twang/vibe-coding-planning/operations/polybench-python199-v1.1-20260811/failed-images.tsv \
+  --timeout 21600 --max-attempts 1
+```
+
+The GEPA config in this command supplies only the Apptainer runtime and shared
+SIF-cache location; `--remote-images-json` is the authority for the 199 images,
+and no GEPA run is started. This invocation is an active one-pass operation,
+not a documented resume command: the current cached-image branch would
+downgrade earlier pull-time attestation if the same manifest were reused.
+
 ## 4. Iteration-Target Supervisor
 
 Recommended local supervisor service (macOS), selecting the appropriate

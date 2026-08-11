@@ -8,10 +8,11 @@
     "output/catalog.json",
     "output/SWE-bench_Verified/verified-round1-gepa-datasets/20260614_482_fdc056ae85df",
     "output/SWE-bench_Verified/gepa-rules",
-    "output/SWE-PolyBench/polybench-guideline-validation-guidelines/20260811_seed-c1-c2-c3_3293f8e925b8"
+    "output/SWE-PolyBench/polybench-guideline-validation-guidelines/20260811_seed-c1-c2-c3_3293f8e925b8",
+    "output/SWE-PolyBench/polybench-pce-inputs/20260811_smoke2_transformers"
   ],
   "active_polybench_validation_inputs": {
-    "status": "redesign_pending_new_pce",
+    "status": "pce_input_regeneration_in_progress",
     "source_universe": "official_python_199",
     "dataset_snapshot": null,
     "historical_198_192_status": "unsafe_audit_only",
@@ -22,6 +23,33 @@
       "candidate_2",
       "candidate_3"
     ]
+  },
+  "active_polybench_image_preparation": {
+    "classification": "operational_only",
+    "status": "running_incremental_one_pass",
+    "as_of": "2026-08-11T23:03:03+02:00",
+    "requested_images": 199,
+    "terminal_records": 12,
+    "pulled_pull_attested": 4,
+    "failed": 8,
+    "remote_root": "remote:/scratch/users/twang/vibe-coding-planning/operations/polybench-python199-v1.1-20260811",
+    "manifest": "v1.1-provenance.json",
+    "frozen_dataset": false,
+    "training_usable": false,
+    "resume_safe": false,
+    "completion_requires_review": true
+  },
+  "active_polybench_pce_smoke": {
+    "classification": "test_only",
+    "status": "workers_running",
+    "as_of": "2026-08-11T23:03:03+02:00",
+    "controller_job_id": "5642300",
+    "controller_outcome": "completed_cooperative_yield",
+    "worker_job_id": "5642301",
+    "instances": 2,
+    "local_input_snapshot": "output/SWE-PolyBench/polybench-pce-inputs/20260811_smoke2_transformers",
+    "remote_run": "remote:output/SWE-PolyBench/polybench-pce-runs/smoke/hpc-smoke2-20260811",
+    "score_usable": false
   },
   "active_remote_run": {
     "name": "online-planning-hpc-policy-v3-20260715",

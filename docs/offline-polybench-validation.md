@@ -80,6 +80,29 @@ does not claim to reconstruct the pull-time digest.
 The manifest is frozen before PCE. Later execution consumes the reviewed exact
 digest/SIF identity; version fallback is not a runtime responsibility.
 
+### Image-preparation operation
+
+The current Python-199 preparation is a serial login-node operation, not a
+Slurm array and not a PCE phase. A frozen remote JSON supplies the ordered 199
+image references. For every reference, the preheater writes to a PID-qualified
+temporary SIF and atomically renames it only after a successful pull. It writes
+an incremental provenance record after every cached, pulled, or failed image.
+The active operation uses one attempt per image and a six-hour per-image upper
+bound so missing or inaccessible images remain explicit operational failures.
+
+The incremental manifest is not yet a completed PCE input. It currently has no
+top-level `complete` marker. Completion requires all of the following to be
+reviewed together: the local launcher has terminated, no remote pull or temp
+SIF remains, all 199 requested references have terminal records, failures have
+been reviewed without converting them into labels, and the accepted records
+have then been copied into an immutable input snapshot.
+
+The current implementation must not be described as resume-safe. Re-running
+the same operation against the same provenance manifest sees an earlier
+success as cached and overwrites its `pulled/pull_attested` record with weaker
+`cached/retrospective` provenance. Preserve the active one-pass evidence and
+fix or explicitly migrate that behavior before any restart.
+
 ## New PCE Evidence Generation
 
 For each image-available task, Plan, Code, and Evaluate run as separate Agent or
@@ -131,8 +154,9 @@ without becoming labels.
 
 The code path has local deterministic tests. A separate two-instance platform
 smoke config and `ulhpc-submit` controller entry now exist. Controller job
-`5642300` was submitted on 2026-08-11 and was still pending at the initial
-check, so no HPC/LLM PCE task has yet validated the workflow. No formal config
+`5642300` completed normally and yielded after submitting worker array
+`5642301`; both instance workers were running at the 2026-08-11 23:03 CEST
+snapshot. The smoke is therefore started but not yet passed. No formal config
 is active against the final Python-199 source snapshot and completed image
 manifest. Existing historical PCT code is not the authority for the new run.
 
@@ -176,3 +200,8 @@ Frozen smoke inputs and runtime evidence have distinct roots:
 `polybench-pce-runs/smoke/` contains controller, task, phase and evaluator
 evidence. Future formal evidence uses `polybench-pce-runs/formal/`; download
 operations and their incremental manifest remain outside all three run roots.
+
+At 2026-08-11 23:03 CEST the active Python-199 operation had 199 requested
+references and 12 terminal records: 4 successful `pulled/pull_attested` and 8
+failed. Another pull was active, so these counts are a progress snapshot rather
+than a final availability result.

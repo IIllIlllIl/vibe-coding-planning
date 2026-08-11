@@ -686,14 +686,26 @@ block 的频率与根因，再决定是否仅细化记录，或对反复出现�
   `/scratch/users/twang/vibe-coding-planning/operations/polybench-198-20260811/v1.1-provenance-retrospective.json`。
   login preheater 现会增量记录 cached/pulled/failed；新 pull 仅在前后 digest 一致时
   标为 `pull_attested`。
+- **活动 Python-199 下载**：本地 tmux identity 是
+  `polybench-sif-preheat-199-20260811`，由 `caffeinate -i -s` 保护。远端 image list、
+  incremental manifest 和 failure list 分别位于
+  `operations/polybench-python199-v1.1-20260811/{images.json,v1.1-provenance.json,failed-images.tsv}`。
+  该次运行请求 199 个 `:v1.1` image、每个 image 一次 attempt、单次 pull 上限 21600s。
+  2026-08-11 23:03 CEST 快照有 12 个 terminal record：4 个
+  `pulled/pull_attested`、8 个 failed，另一个 pull 正在运行；这不是最终可用率。
+- **下载开放风险**：manifest 没有 top-level `complete`，所以不能只凭文件存在判断
+  完成。更重要的是，同 manifest 直接重跑会把之前成功的 `pulled/pull_attested`
+  记录经过 cached 分支覆盖成 `cached/retrospective`。当前 one-pass 可继续运行，但在
+  修复或设计显式 migration 之前不得宣称 resume-safe，也不得直接用同一命令恢复。
 - **实现状态**：已新增与 Online 解耦的 `src/polybench_pce/` 工作流、冻结 source CSV
   工具、独立 `ulhpc-submit` 入口和两实例 platform-smoke config。它按实例提交无 `%N`
   的 Slurm element，阶段级 fresh container，三次总 attempts；耗尽、镜像不可用和
   evaluator operational failure 均只保存 raw/incomplete evidence，不制造 unresolved
   或最终 validation label。入口 dry-run 与纯本地 deterministic tests 已通过。
-  controller job `5642300` 已于 2026-08-11 提交；首次检查仍为 `PENDING`（节点被
-  drain/reserve 或优先队列占用），尚未产生 worker 或 PCE 结果，因此不能视为 HPC
-  smoke 已验收。
+  controller job `5642300` 已正常完成并以
+  `waiting_for_submitted_task_batch` cooperative yield；worker array `5642301` 的两个
+  instance 在 2026-08-11 23:03 CEST 均为 `RUNNING`。流程已正常启动但尚未产生最终
+  PCE 结果，因此不能视为 HPC smoke 已验收。
 - **仍待验收**：正式 Python-199 frozen snapshot、下载完成后的 199-image manifest
   review、正式 PCE config、实际 HPC smoke、PCE 后清洗 snapshot，以及指向新 snapshot 的
   Poly check-only config。未经 HPC smoke 前不能把新入口描述为正式数据生产完成。

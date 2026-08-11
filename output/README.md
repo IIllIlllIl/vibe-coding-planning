@@ -11,6 +11,9 @@ historical comparison, provenance, or reproduction.
 | `SWE-bench_Verified/verified-round1-gepa-datasets/20260614_482_fdc056ae85df/` | Immutable formal 384/98 snapshot shared by current Online and Offline experiments | Active input; do not move or modify |
 | `SWE-bench_Verified/gepa-rules/` | Local destination for current Online and Offline GEPA results | Active output root |
 | `SWE-PolyBench/polybench-guideline-validation-guidelines/20260811_seed-c1-c2-c3_3293f8e925b8/` | Exact seed and candidate indices 1-3 from the completed 20260810 Offline run | Frozen evaluation bundle |
+| Remote `operations/polybench-python199-v1.1-20260811/` | Incremental official `:v1.1` SIF download provenance for the frozen Python-199 image list | Active operational input preparation; not a dataset or result |
+| `SWE-PolyBench/polybench-pce-inputs/20260811_smoke2_transformers/` | Frozen two-row source and reviewed image-manifest copy staged to the PCE smoke | Smoke input only; not the future Python-199 snapshot |
+| Remote `SWE-PolyBench/polybench-pce-runs/smoke/hpc-smoke2-20260811/` | Two-instance PCE controller/worker/phase evidence | Active test-only smoke; never guideline-quality evidence |
 | `SWE-bench_Verified/gepa-rules/offline-plan-verifier-balanced-b12-p2-case-reviews-8it-20260727/` | Formal local Offline result under the final pre-HPC experimental flow | Completed with warnings; retained comparison baseline |
 | `SWE-bench_Verified/gepa-rules/offline-plan-verifier-hpc-balanced-b12-8it-formal-20260731/` | Local mirror of the formal Offline HPC experiment under the frozen strong-Checker/checklist semantics | Stopped after 14 durable proposals during attempted proposal 15; frozen analysis baseline |
 | Remote `online-planning-hpc-policy-v3-20260715` run directory | Outcome-policy-v3 formal run targeting 8 durable iterations | Active; managed by the supervisor |
@@ -33,6 +36,25 @@ issue + historical plan + base repository + candidate guideline
 PCT, PCC/Checker, earlier Offline GEPA runs, standalone rule extraction, old
 tests, and preheat logs are historical. They are intentionally absent from the
 active surface.
+
+## PolyBench Preparation And Output Boundary
+
+The replacement PolyBench validation is still being prepared. Its artifact
+classes must not be mixed:
+
+| Root | Classification | May be used as formal validation data? |
+|---|---|---|
+| Remote `operations/polybench-python199-v1.1-20260811/` | Mutable operational download list, incremental provenance, and failures | No |
+| `SWE-PolyBench/polybench-pce-inputs/` | Frozen reviewed source/image inputs staged to PCE | Only after the snapshot is declared complete |
+| `SWE-PolyBench/polybench-pce-runs/smoke/` | Platform-smoke trajectories, patches, evaluator and controller evidence | No |
+| `SWE-PolyBench/polybench-pce-runs/formal/` | Reserved formal raw PCE evidence root | Not until a separately reviewed formal run exists |
+| `SWE-PolyBench/polybench-guideline-validation-guidelines/` | Guidelines frozen before PolyBench results are viewed | Yes, as immutable model inputs only |
+
+The live download manifest is incremental and has no completion declaration.
+It must not be catalogued as a frozen dataset merely because some SIF records
+exist. The active two-instance smoke is likewise a test of transport, phase
+isolation and evidence preservation; its resolved labels and plans must not be
+included in the future PolyBench generalization score.
 
 ## Offline Result Boundary
 

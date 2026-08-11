@@ -68,6 +68,14 @@ the Online rollout workflow. Smoke results live below
 `output/SWE-PolyBench/polybench-pce-runs/smoke/`; future formal PCE results use
 a separate `polybench-pce-runs/formal/` identity.
 
+The active Python-199 SIF preheater currently names
+`gepa_verified_rules.yaml`, but this is not a GEPA experiment dependency:
+`--remote-images-json` replaces its dataset-derived image list, and the config
+is read only for the Apptainer runtime and shared SIF-cache path. There is no
+dedicated PCE-download config yet. Do not change the formal Offline config to
+control an in-flight download, and do not infer a training-data relationship
+from this operational reuse.
+
 ## Representative Paused Workflows
 
 | Config | Historical workflow represented |
