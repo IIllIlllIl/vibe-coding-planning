@@ -105,9 +105,35 @@ Image, container, provider, output-contract, patch-transport, parser, and
 evaluator-infrastructure failures remain operational outcomes. Their retry
 policy may support unattended execution but must not manufacture a label.
 
-The new PCE entry point and frozen-image consumption are not implemented in the
-current stage. Existing historical PCT code is not the authority for the new
-run.
+The independent implementation lives under `src/polybench_pce/` and is entered
+through `scripts/run_polybench_pce_hpc.py`. It does not call or modify the
+Online GEPA rollout path. One image-available instance is one uncapped Slurm
+array element; Slurm owns scheduling. Within that element, Plan, Code and
+Evaluate each receive a fresh Apptainer environment. Completed phase outputs
+are identity-bound checkpoints, while a failed phase restarts with a fresh
+Agent on the next task attempt. There are three total task attempts. Previous
+attempt failures remain raw controller evidence and are not Agent input.
+
+After three failed attempts the controller records an incomplete PCE outcome,
+the last worker output, the last Slurm status and the evidence directory. It
+does not manufacture an unresolved label. Code-patch transport failures,
+official-test timeouts and parser/evaluator failures follow this same
+operational path. Only successful official parsing and instance-level scoring
+write `evaluator_resolved`; even then `final_validation_label` remains null
+until the separately reviewed cleaning stage.
+
+`scripts/tools/freeze_polybench_pce_source.py` freezes the official CSV,
+dataset revision, complete original rows, per-row identity, Dockerfile hash and
+ordered instance universe. `src/polybench_pce/dataset.py` joins that snapshot
+to exact lowercase `:v1.1` provenance records. Image records explicitly marked
+failed are retained as availability evidence and excluded from execution
+without becoming labels.
+
+The code path has local deterministic tests. A separate two-instance platform
+smoke config and `ulhpc-submit` controller entry now exist, but no HPC/LLM PCE
+task has yet validated them and no formal config is active against the final
+Python-199 source snapshot and completed image manifest. Existing historical
+PCT code is not the authority for the new run.
 
 ## Cleaning And Validation Snapshots
 
@@ -135,5 +161,17 @@ The first historical 198-list login-node preheat was stopped before completion.
 Twenty-six complete `v1.1` SIFs were retained and received retrospective
 provenance records; they are preparation evidence, not yet the formal 199-image
 manifest. The tracked login-node preheater now records incremental OCI/SIF
-provenance for cached, pulled, and failed images. A new 199-image request and
-frozen dataset revision remain prerequisites for formal PCE.
+provenance for cached, pulled, and failed images. The new PCE implementation,
+source-freezing tool and dry-run-validated HPC submission entry are present.
+The platform smoke freezes two completed `pull_attested` Transformers images
+and source rows; it may run concurrently with the login preheater because it
+never selects an in-progress image and the two processes use separate
+Apptainer temp directories. Formal Python-199 source and image manifests,
+completed image-manifest review, an executed HPC smoke and a separate formal
+config remain prerequisites for formal PCE.
+
+Frozen smoke inputs and runtime evidence have distinct roots:
+`polybench-pce-inputs/` contains immutable staged input, while
+`polybench-pce-runs/smoke/` contains controller, task, phase and evaluator
+evidence. Future formal evidence uses `polybench-pce-runs/formal/`; download
+operations and their incremental manifest remain outside all three run roots.

@@ -159,6 +159,7 @@ ssh -p 8022 twang@access-iris.uni.lu \
 | 2026-08-07 Europe/Luxembourg | Pre-launch check for Checker-only validation stability diagnostic; Iris user queue empty | 1464151 | 0.273744 | 0.767694 | Current authoritative baseline before 294 independent Checker tasks |
 | 2026-08-09 Europe/Luxembourg | Pre-launch check for the session-wide 30min Offline 8it run; Iris user queue empty | 1354692 | 0.045720 | 0.700342 | FairShare is 0.067352 below the 2026-08-07 pre-launch observation; intervening runs and accounting decay mean this is a dated observation, not attribution to one run |
 | 2026-08-10 Europe/Luxembourg | Pre-launch check for controller-classified-timeout Offline 8it; Iris user queue empty and new run identity absent | 1347184 | 0.044258 | 0.711187 | FairShare is 0.010845 above the 2026-08-09 pre-launch observation; the change reflects accounting decay and cluster-wide relative usage, not a causal effect of one run |
+| 2026-08-11 22:57 Europe/Luxembourg | Pre-launch check for two-instance PolyBench PCE platform smoke; Slurm queue empty while the separate login-node SIF preheater remained active | 1421355 | 0.056044 | 0.716733 | `LevelFS=1.049601`; smoke requests only `1 CPU / 4G` per controller/worker and does not cap array scheduling itself |
 | 2026-08-04 Europe/Luxembourg | Pre-launch check for the revised Offline guideline 6it behavior smoke; Iris user queue empty | 760132 | 0.137983 | 0.768265 | `LevelFS=0.426310`; this snapshot is a launch baseline, not a causal attribution to any one prior run |
 
 Future launch/progress checks must append a row before interpreting movement.
@@ -685,7 +686,12 @@ block 的频率与根因，再决定是否仅细化记录，或对反复出现�
   `/scratch/users/twang/vibe-coding-planning/operations/polybench-198-20260811/v1.1-provenance-retrospective.json`。
   login preheater 现会增量记录 cached/pulled/failed；新 pull 仅在前后 digest 一致时
   标为 `pull_attested`。
-- **尚未实现**：官方 Python-199 冻结输入、正式 199-image manifest、消费精确
-  digest/SIF 的新 PCE、PCE 后清洗 snapshot，以及指向新 snapshot 的 Poly check-only
-  config。本提交只完成策略更正、旧活动输入清理和镜像 provenance 工具，避免同时
-  扩大运行流程修改面。
+- **实现状态**：已新增与 Online 解耦的 `src/polybench_pce/` 工作流、冻结 source CSV
+  工具、独立 `ulhpc-submit` 入口和两实例 platform-smoke config。它按实例提交无 `%N`
+  的 Slurm element，阶段级 fresh container，三次总 attempts；耗尽、镜像不可用和
+  evaluator operational failure 均只保存 raw/incomplete evidence，不制造 unresolved
+  或最终 validation label。入口 dry-run 与纯本地 deterministic tests 已通过，但尚未
+  实际提交 smoke。
+- **仍待验收**：正式 Python-199 frozen snapshot、下载完成后的 199-image manifest
+  review、正式 PCE config、实际 HPC smoke、PCE 后清洗 snapshot，以及指向新 snapshot 的
+  Poly check-only config。未经 HPC smoke 前不能把新入口描述为正式数据生产完成。

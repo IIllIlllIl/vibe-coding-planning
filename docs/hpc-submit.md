@@ -37,6 +37,8 @@ escalated network access.
 | Offline Checker array element | 1 CPU / 4G | 35min whole worker; no nested HPC Agent deadline or reserved cleanup window |
 | Offline initial Reflection task | 1 CPU / 4G | 35min; one complete Agent session |
 | Offline contamination repair task | 1 CPU / 4G | 35min; submitted only after a deterministic hit |
+| PolyBench PCE controller slice | 1 CPU / 4G | 10min; submits, collects, or selectively retries one frozen batch |
+| PolyBench PCE array element | 1 CPU / 4G | 55min total; one instance with fresh Plan, Code, and Evaluate containers |
 
 Each array element executes one PCT rollout or one Reviewer. Synthesis uses a
 single-element array so it follows the same submission/status contract.
@@ -49,6 +51,13 @@ element, the complete evaluation batch is submitted in one array, and the
 script has no `%N` running limit. Offline initial Reflection and repair each
 submit one single-element task. Slurm alone decides how many Offline Agents run
 at once; `search.parallel` is local-only and must be `1` for the HPC backend.
+
+PolyBench PCE uses the independent `scripts/hpc_submit_polybench_pce.sh`
+wrapper and never enters Online or Offline GEPA. One frozen image-available
+instance is one array element, the array has no `%N` cap, and Slurm owns
+scheduling. A smoke may run while the single login-node preheater downloads a
+different image only when every selected smoke SIF is already complete and
+hash-frozen and the two processes use separate Apptainer temporary paths.
 
 Before increasing resources, inspect `sacct` and FairShare. More than 4G with
 one CPU requires measurement-based justification.
@@ -79,6 +88,19 @@ output/SWE-bench_Verified/gepa-rules/
 Never point a changed semantic fingerprint at an old run directory. Use a new
 run identity when prompts, source, outcome policy, deadline, evaluator, or retry
 semantics change.
+
+PolyBench PCE keeps the three artifact roles separate:
+
+```text
+output/SWE-PolyBench/polybench-pce-inputs/       frozen source/image inputs
+output/SWE-PolyBench/polybench-pce-runs/smoke/   platform-smoke evidence only
+output/SWE-PolyBench/polybench-pce-runs/formal/  future formal raw PCE evidence
+```
+
+Image-download provenance remains under the Iris operations directory and is
+not a PCE run output. A reviewed copy is staged into the frozen input snapshot;
+workers consume that copy and the matching shared SIF, never a live download
+manifest.
 
 ## 4. Iteration-Target Supervisor
 

@@ -32,13 +32,25 @@ tasks。旧 Offline 24h 单作业和自动修复 preheat watchdog 已删除，�
   路径。
 
 在启动 worker array 前先检查共享 SIF cache。不要让大量 worker 并发拉取缺失
-镜像，也不要并发运行多个 preheat writer。
+镜像，也不要并发运行多个 preheat writer。PCE 可以和单个 login preheater 并行，
+但配置只能选择已经完整落盘并冻结 hash 的 SIF；preheater 与 PCE 必须使用不同的
+Apptainer 临时目录，且不得选择仍在写入的 `.tmp` 镜像。
 
 - `tools/freeze_offline_guideline_bundle.py`：按来源 candidate index 精确冻结 seed 与
   candidates 1-3，保留文本 hash 和已完成 Offline run provenance。
 - `run_offline_check_only.py`：读取独立的 `mode: offline_check_only` 配置，把冻结的
   guideline × validation cases 提交为一个 Slurm array；复用现有 Checker attempts，
   但不调用 GEPA 或 Reflection。
+- `tools/freeze_polybench_pce_source.py`：从固定 revision 的官方 CSV 冻结
+  PolyBench Python source universe、原始 row、Dockerfile hash 与 task-list identity。
+- `run_polybench_pce_hpc.py`：推进一次独立的 PolyBench PCE controller。每个实例是
+  一个不带 `%N` 的 Slurm array element；Plan/Code/Evaluate 分容器，三次总 attempts，
+  耗尽只记录 incomplete raw evidence，不生成最终 validation label。该入口不经过
+  Online GEPA rollout。
+- `hpc_submit_polybench_pce.sh`：通过 `ulhpc-submit` stage 冻结的 PCE source/image
+  manifest、连接 persistent run directory，并推进一个 `1 CPU / 4G / 10min`
+  controller slice。默认 dry-run；重复使用同一 config 即收集或重试同一
+  fingerprint，不需要散装远端命令。
 - `tools/login_apptainer_sif_preheat.py`：在 login node 串行准备 SIF，并增量保存
   GHCR OCI digest、源引用、SIF hash、状态和失败原因。新 pull 的前后 digest 一致时
   标为 `pull_attested`；已有缓存补录必须保持 `retrospective`，不得冒充拉取时证据。

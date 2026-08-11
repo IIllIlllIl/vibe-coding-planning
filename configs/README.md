@@ -59,6 +59,15 @@ and cleaning snapshot are frozen. The existing `gepa_verified_rules.yaml`
 remains byte-for-byte unchanged, so neither the GEPA semantic manifest nor the
 supervisor's raw-config identity is invalidated.
 
+`polybench_pce_hpc_smoke.yaml` is an isolated two-instance platform-smoke
+configuration for the new raw PCE workflow. It selects only completed,
+hash-frozen `:v1.1` SIFs and is launched by
+`scripts/hpc_submit_polybench_pce.sh`. Its outputs are operational evidence,
+not formal PolyBench validation data, and it does not call GEPA, Reflection, or
+the Online rollout workflow. Smoke results live below
+`output/SWE-PolyBench/polybench-pce-runs/smoke/`; future formal PCE results use
+a separate `polybench-pce-runs/formal/` identity.
+
 ## Representative Paused Workflows
 
 | Config | Historical workflow represented |
