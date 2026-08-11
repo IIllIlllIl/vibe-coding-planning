@@ -130,10 +130,11 @@ failed are retained as availability evidence and excluded from execution
 without becoming labels.
 
 The code path has local deterministic tests. A separate two-instance platform
-smoke config and `ulhpc-submit` controller entry now exist, but no HPC/LLM PCE
-task has yet validated them and no formal config is active against the final
-Python-199 source snapshot and completed image manifest. Existing historical
-PCT code is not the authority for the new run.
+smoke config and `ulhpc-submit` controller entry now exist. Controller job
+`5642300` was submitted on 2026-08-11 and was still pending at the initial
+check, so no HPC/LLM PCE task has yet validated the workflow. No formal config
+is active against the final Python-199 source snapshot and completed image
+manifest. Existing historical PCT code is not the authority for the new run.
 
 ## Cleaning And Validation Snapshots
 

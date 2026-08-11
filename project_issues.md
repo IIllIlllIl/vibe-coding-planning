@@ -690,8 +690,10 @@ block 的频率与根因，再决定是否仅细化记录，或对反复出现�
   工具、独立 `ulhpc-submit` 入口和两实例 platform-smoke config。它按实例提交无 `%N`
   的 Slurm element，阶段级 fresh container，三次总 attempts；耗尽、镜像不可用和
   evaluator operational failure 均只保存 raw/incomplete evidence，不制造 unresolved
-  或最终 validation label。入口 dry-run 与纯本地 deterministic tests 已通过，但尚未
-  实际提交 smoke。
+  或最终 validation label。入口 dry-run 与纯本地 deterministic tests 已通过。
+  controller job `5642300` 已于 2026-08-11 提交；首次检查仍为 `PENDING`（节点被
+  drain/reserve 或优先队列占用），尚未产生 worker 或 PCE 结果，因此不能视为 HPC
+  smoke 已验收。
 - **仍待验收**：正式 Python-199 frozen snapshot、下载完成后的 199-image manifest
   review、正式 PCE config、实际 HPC smoke、PCE 后清洗 snapshot，以及指向新 snapshot 的
   Poly check-only config。未经 HPC smoke 前不能把新入口描述为正式数据生产完成。
