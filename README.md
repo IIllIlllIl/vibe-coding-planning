@@ -163,6 +163,7 @@ are under `output/archive/` and must not be mixed into current score analysis.
 | `src/optimization/{config,dataset,checker,adapter,reflection,runner,resume}.py` | Offline plan-review guideline optimization |
 | `src/optimization/hpc/` | Shared Slurm configuration, commands, and atomic task lifecycle |
 | `src/optimization/offline_*worker.py` | One Offline Checker or Reflection Slurm phase |
+| `src/offline_check_only/` | Additive dataset-aware fixed-guideline evaluation; reuses Checker/Slurm attempts without GEPA or Reflection |
 | `src/evaluator/` | Runtime routing and official evaluator backends |
 | `scripts/hpc_resume_loop.py` | Local iteration-target supervisor |
 | `scripts/hpc_supervisor_service.py` | Durable supervisor start/status/stop |
@@ -171,6 +172,7 @@ are under `output/archive/` and must not be mixed into current score analysis.
 | `configs/online_gepa_supervisor.yaml` | Persistent unattended launch configuration |
 | `configs/gepa_verified_rules.yaml` | Current Offline HPC experiment configuration |
 | `configs/offline_gepa_supervisor.yaml` | Offline controller/supervisor launch identity |
+| `docs/offline-polybench-validation.md` | Planned PolyBench-199 PCE regeneration and guideline-only generalization contract |
 | `docs/knowledge/` | Reusable lessons extracted from historical methods |
 | `docs/reference/` | GEPA and seed-rule provenance |
 | `docs/archive/` | Non-authoritative historical documents |

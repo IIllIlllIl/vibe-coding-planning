@@ -10,6 +10,7 @@ historical comparison, provenance, or reproduction.
 |---|---|---|
 | `SWE-bench_Verified/verified-round1-gepa-datasets/20260614_482_fdc056ae85df/` | Immutable formal 384/98 snapshot shared by current Online and Offline experiments | Active input; do not move or modify |
 | `SWE-bench_Verified/gepa-rules/` | Local destination for current Online and Offline GEPA results | Active output root |
+| `SWE-PolyBench/polybench-guideline-validation-guidelines/20260811_seed-c1-c2-c3_3293f8e925b8/` | Exact seed and candidate indices 1-3 from the completed 20260810 Offline run | Frozen evaluation bundle |
 | `SWE-bench_Verified/gepa-rules/offline-plan-verifier-balanced-b12-p2-case-reviews-8it-20260727/` | Formal local Offline result under the final pre-HPC experimental flow | Completed with warnings; retained comparison baseline |
 | `SWE-bench_Verified/gepa-rules/offline-plan-verifier-hpc-balanced-b12-8it-formal-20260731/` | Local mirror of the formal Offline HPC experiment under the frozen strong-Checker/checklist semantics | Stopped after 14 durable proposals during attempted proposal 15; frozen analysis baseline |
 | Remote `online-planning-hpc-policy-v3-20260715` run directory | Outcome-policy-v3 formal run targeting 8 durable iterations | Active; managed by the supervisor |

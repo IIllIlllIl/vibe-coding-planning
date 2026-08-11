@@ -27,6 +27,12 @@ identical to plan quality. Held-out errors must be analyzed for label
 prevalence, Checker bias, and historical Code Agent effects before making that
 claim.
 
+The planned external PolyBench evaluation is specified separately in
+[`offline-polybench-validation.md`](offline-polybench-validation.md). It first
+regenerates plan/outcome evidence with a frozen official Python-199 PCE flow,
+then performs Checker-only evaluation of guidelines frozen before any PolyBench
+result is viewed. PolyBench never enters GEPA or Reflection.
+
 ```text
 issue + historical Round 1 plan + base repository + candidate guideline
   -> fixed Checker -> predicted_resolved

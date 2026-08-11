@@ -34,6 +34,15 @@ tasks。旧 Offline 24h 单作业和自动修复 preheat watchdog 已删除，�
 在启动 worker array 前先检查共享 SIF cache。不要让大量 worker 并发拉取缺失
 镜像，也不要并发运行多个 preheat writer。
 
+- `tools/freeze_offline_guideline_bundle.py`：按来源 candidate index 精确冻结 seed 与
+  candidates 1-3，保留文本 hash 和已完成 Offline run provenance。
+- `run_offline_check_only.py`：读取独立的 `mode: offline_check_only` 配置，把冻结的
+  guideline × validation cases 提交为一个 Slurm array；复用现有 Checker attempts，
+  但不调用 GEPA 或 Reflection。
+- `tools/login_apptainer_sif_preheat.py`：在 login node 串行准备 SIF，并增量保存
+  GHCR OCI digest、源引用、SIF hash、状态和失败原因。新 pull 的前后 digest 一致时
+  标为 `pull_attested`；已有缓存补录必须保持 `retrospective`，不得冒充拉取时证据。
+
 ## 安全与资源
 
 - 所有本地 Python 命令使用 `conda run -n mini-swe ...`。

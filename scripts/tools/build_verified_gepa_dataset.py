@@ -10,8 +10,8 @@ import argparse
 import hashlib
 import json
 import random
-import re
 import shutil
+import sys
 import tempfile
 from collections import Counter, defaultdict
 from datetime import datetime, timezone
@@ -22,6 +22,12 @@ from datasets import load_dataset
 
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
+if str(REPO_ROOT) not in sys.path:
+    sys.path.insert(0, str(REPO_ROOT))
+
+from src.data.plan_cleaning import placeholder_reason  # noqa: E402
+
+
 DEFAULT_PCT_ROOT = REPO_ROOT / "output/SWE-bench_Verified"
 DEFAULT_SNAPSHOT_ROOT = (
     DEFAULT_PCT_ROOT / "verified-round1-gepa-datasets"
@@ -35,23 +41,6 @@ DEFAULT_SOURCE_BATCHES = (
     "test_runs_archive/run2",
 )
 DATASET_NAME = "SWE-bench/SWE-bench_Verified"
-
-EXACT_PLACEHOLDERS = frozenset(
-    {"", "test", "test content", "placeholder", "todo", "tbd", "n/a", "none"}
-)
-GENERIC_PLACEHOLDER_PATTERNS = (
-    re.compile(r"complete the implementation as described in the pr\.?"),
-)
-PATH_ONLY_LINE_RE = re.compile(
-    r"^\s*(?:[-*]\s*)?(?:\*\*)?"
-    r"(?:file|path|source file|target file|primary file(?: to modify)?)"
-    r"(?:\*\*)?\s*:\s*`?/?"
-    r"(?:[\w.-]+/)+[\w.-]+\."
-    r"(?:py|pyi|js|ts|java|go|rs|rb|rst|md|toml|yaml|yml|json|ini|cfg)"
-    r"`?\s*[.;]?\s*$",
-    re.IGNORECASE,
-)
-
 
 def _sha256_bytes(data: bytes) -> str:
     return hashlib.sha256(data).hexdigest()
@@ -81,54 +70,6 @@ def _write_jsonl(path: Path, records: Iterable[dict[str, Any]]) -> None:
             handle.write(
                 json.dumps(record, ensure_ascii=False, sort_keys=True) + "\n"
             )
-
-
-def normalize_plan(plan: str) -> str:
-    """Normalize harmless wrapper syntax for conservative placeholder checks."""
-    text = plan.strip()
-    text = re.sub(r"\A```(?:markdown|md)?\s*", "", text, flags=re.IGNORECASE)
-    text = re.sub(r"\s*```\Z", "", text)
-    text = re.sub(
-        r"(?im)^\s*#{1,6}\s*(?:plan|implementation plan)\s*$",
-        "",
-        text,
-    )
-    return re.sub(r"\s+", " ", text).strip().lower()
-
-
-def _semantic_lines(plan: str) -> list[str]:
-    text = plan.strip()
-    text = re.sub(r"\A```(?:markdown|md)?\s*", "", text, flags=re.IGNORECASE)
-    text = re.sub(r"\s*```\Z", "", text)
-    lines = []
-    for line in text.splitlines():
-        stripped = line.strip()
-        if not stripped:
-            continue
-        if re.fullmatch(
-            r"#{1,6}\s*(?:plan|implementation plan|navigation(?:\s*\([a-z]\))?)",
-            stripped,
-            flags=re.IGNORECASE,
-        ):
-            continue
-        lines.append(stripped)
-    return lines
-
-
-def placeholder_reason(plan: str) -> str | None:
-    """Return a high-precision placeholder reason, or None."""
-    normalized = normalize_plan(plan)
-    if normalized in EXACT_PLACEHOLDERS:
-        return "EXACT_PLACEHOLDER"
-    if any(pattern.fullmatch(normalized) for pattern in GENERIC_PLACEHOLDER_PATTERNS):
-        return "GENERIC_PLACEHOLDER"
-    semantic_lines = _semantic_lines(plan)
-    if (
-        len(semantic_lines) == 1
-        and PATH_ONLY_LINE_RE.fullmatch(semantic_lines[0])
-    ):
-        return "PATH_ONLY_PLAN"
-    return None
 
 
 def _resolve_artifact(

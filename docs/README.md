@@ -19,6 +19,7 @@ Read in this order:
 | [`architecture.md`](architecture.md) | Current modules, data flow, and ownership boundaries |
 | [`gepa-rule-optimization.md`](gepa-rule-optimization.md) | Online GEPA optimization semantics and evidence contract |
 | [`offline-gepa.md`](offline-gepa.md) | Offline GEPA Checker boundary, metric, stopping, artifacts, and resume contract |
+| [`offline-polybench-validation.md`](offline-polybench-validation.md) | Planned PolyBench-199 PCE regeneration, exact-image provenance, and guideline-only generalization boundary |
 | [`hpc-submit.md`](hpc-submit.md) | Current ULHPC submission, supervisor, and FairShare operations |
 | [`../configs/README.md`](../configs/README.md) | Runtime-versus-launch configuration ownership and active config index |
 

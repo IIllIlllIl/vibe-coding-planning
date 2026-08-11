@@ -1,14 +1,28 @@
 {
   "schema_version": 1,
-  "generated_at": "2026-08-04",
+  "generated_at": "2026-08-11",
   "active_method": "online_gepa_planning_rules",
   "active_offline_method": "offline_gepa_plan_review_guideline",
   "default_agent_scope": [
     "output/README.md",
     "output/catalog.json",
     "output/SWE-bench_Verified/verified-round1-gepa-datasets/20260614_482_fdc056ae85df",
-    "output/SWE-bench_Verified/gepa-rules"
+    "output/SWE-bench_Verified/gepa-rules",
+    "output/SWE-PolyBench/polybench-guideline-validation-guidelines/20260811_seed-c1-c2-c3_3293f8e925b8"
   ],
+  "active_polybench_validation_inputs": {
+    "status": "redesign_pending_new_pce",
+    "source_universe": "official_python_199",
+    "dataset_snapshot": null,
+    "historical_198_192_status": "unsafe_audit_only",
+    "guideline_bundle": "20260811_seed-c1-c2-c3_3293f8e925b8",
+    "guidelines": [
+      "seed",
+      "candidate_1",
+      "candidate_2",
+      "candidate_3"
+    ]
+  },
   "active_remote_run": {
     "name": "online-planning-hpc-policy-v3-20260715",
     "outcome_policy_version": 3,

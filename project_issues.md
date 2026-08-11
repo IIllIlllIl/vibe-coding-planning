@@ -661,3 +661,31 @@ raw worker artifact 通常保留具体 `error_type`、`failure_stage` 和错误�
 `blocking_failed`。本轮不增加异常层级或改变 retry policy，避免未经运行证据放宽数据
 保护边界。下一轮应按 raw output、Slurm terminal state 和 exception message 统计这两类
 block 的频率与根因，再决定是否仅细化记录，或对反复出现且可证明安全的类别增加重试。
+
+### 6.8 PolyBench standalone-guideline 外部验证（2026-08-11）
+
+- **方法修正**：历史 198 条 PCT 数据及其 Raw-198/Cleaned-192 派生输入不再作为
+  正式泛化数据。旧流程没有保存 Plan/Code/Evaluate 最终 image ref/digest，并在后期
+  允许 `v1.1 -> v1.0 -> latest -> Dockerfile build`；199→198 还继承了一条旧流程
+  失败。旧数据只保留历史审计身份，活动 snapshot/config/catalog 引用已经撤下，旧的
+  198→192 清洗统计不进入新实验。
+- **新数据合同**：从一个固定 Hugging Face revision 的全部 Python 199 开始；只接受
+  官方 instance-level `:v1.1`。先冻结 OCI digest/SIF hash，再以同一 SIF 的三个独立
+  容器阶段重新执行 Plan-Code-Evaluate（新流程简称 PCE），保存 prompt/source/config、
+  model/provider/runtime、完整 trajectories、plan/patch、evaluator raw/parsed evidence
+  和所有 operational attempts。基础设施失败不得制造 unresolved label。
+- **泛化隔离**：PolyBench 只用于验证 guideline 泛化，禁止进入 GEPA/Reflection、
+  candidate 生成/接纳、prompt/metric/seed 修改或停止决策。minibatch-8 与计划中的
+  3x3 guideline 集合先全部完成并冻结，再一起运行 Poly validation；不能先查看 Poly
+  结果再决定训练哪个方案。
+- **镜像准备状态**：旧 198-list login tmux 已停止，无残留 pull 或临时 SIF。保留的
+  26 个完整 `v1.1` SIF 共 `41,813,680,128` bytes，均已补录当前 GHCR digest、SIF
+  SHA-256 和相符 source ref；由于证据是在 pull 后补录，明确标为 `retrospective`，
+  不是 pull-time attestation。远端清单位于
+  `/scratch/users/twang/vibe-coding-planning/operations/polybench-198-20260811/v1.1-provenance-retrospective.json`。
+  login preheater 现会增量记录 cached/pulled/failed；新 pull 仅在前后 digest 一致时
+  标为 `pull_attested`。
+- **尚未实现**：官方 Python-199 冻结输入、正式 199-image manifest、消费精确
+  digest/SIF 的新 PCE、PCE 后清洗 snapshot，以及指向新 snapshot 的 Poly check-only
+  config。本提交只完成策略更正、旧活动输入清理和镜像 provenance 工具，避免同时
+  扩大运行流程修改面。

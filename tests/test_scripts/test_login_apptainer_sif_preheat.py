@@ -124,6 +124,9 @@ def test_login_preheat_executes_remote_script_with_scratch_cache(
     assert payload["timeout"] == 123
     assert payload["cleanup_tmp"] is True
     assert payload["cleanup_apptainer_cache"] is False
+    assert payload["provenance_output"] == (
+        "/scratch/test/sif-cache/login_preheat_provenance.json"
+    )
 
 
 def test_login_preheat_can_request_apptainer_cache_cleanup(
@@ -187,3 +190,66 @@ def test_login_preheat_requires_positive_timeout(monkeypatch) -> None:
         assert str(exc) == "--timeout must be positive for login preheat"
     else:
         raise AssertionError("expected SystemExit")
+
+
+def test_login_preheat_can_audit_existing_remote_image_list(
+    tmp_path: Path, monkeypatch
+) -> None:
+    ulhpc = tmp_path / "ulhpc.yaml"
+    ulhpc.write_text("user: tester\nhost: example.invalid\nport: 2222\n", encoding="utf-8")
+    calls: list[tuple[list[str], dict[str, object]]] = []
+
+    def fake_run(command, **kwargs):
+        calls.append((command, kwargs))
+        remote_command = command[-1]
+        if "/remote/images.json" in remote_command:
+            return subprocess.CompletedProcess(
+                command,
+                0,
+                '["repo/one:v1.1", "repo/two:v1.1"]\n',
+                "",
+            )
+        if "cache.glob" in remote_command:
+            return subprocess.CompletedProcess(
+                command,
+                0,
+                '["repo_one_v1.1.sif"]\n',
+                "",
+            )
+        return subprocess.CompletedProcess(command, 0, "", "")
+
+    monkeypatch.setattr(
+        login_apptainer_sif_preheat,
+        "load_optimization_config",
+        lambda path, **kwargs: _config(),
+    )
+    monkeypatch.setattr(login_apptainer_sif_preheat.subprocess, "run", fake_run)
+    monkeypatch.setattr(
+        sys,
+        "argv",
+        [
+            "login_apptainer_sif_preheat.py",
+            "--config",
+            "config.yaml",
+            "--ulhpc-config",
+            str(ulhpc),
+            "--remote-images-json",
+            "/remote/images.json",
+            "--existing-only",
+        ],
+    )
+
+    assert login_apptainer_sif_preheat.main() == 0
+
+    payload = json.loads(str(calls[-1][1]["input"]))
+    assert payload["images"] == ["repo/one:v1.1"]
+
+
+def test_remote_preheat_script_records_digest_and_sif_provenance() -> None:
+    script = login_apptainer_sif_preheat._remote_script()
+    compile(script, "<remote-preheat>", "exec")
+    assert "before_and_after_pull_match" in script
+    assert '"pull_attested"' in script
+    assert '"retrospective"' in script
+    assert '"sif_sha256"' in script
+    assert "Docker-Content-Digest" in script

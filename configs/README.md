@@ -53,6 +53,12 @@ iteration draft, `max_metric_calls=1200` is only a fail-safe above the
 launch config with the shared supervisor service. See
 [`../docs/offline-gepa.md`](../docs/offline-gepa.md).
 
+The generic check-only entry point is additive. No PolyBench check-only config
+is active until the new official Python-199 PCE data, exact-v1.1 image manifest,
+and cleaning snapshot are frozen. The existing `gepa_verified_rules.yaml`
+remains byte-for-byte unchanged, so neither the GEPA semantic manifest nor the
+supervisor's raw-config identity is invalidated.
+
 ## Representative Paused Workflows
 
 | Config | Historical workflow represented |
