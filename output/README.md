@@ -56,6 +56,15 @@ exist. The active two-instance smoke is likewise a test of transport, phase
 isolation and evidence preservation; its resolved labels and plans must not be
 included in the future PolyBench generalization score.
 
+The first PCE smoke preserved valid Plan and Code checkpoints for both cases
+but failed in Evaluate because the Host deleted its own evaluator inputs during
+repository cleanup. It is retained as failed smoke evidence, not an active
+resume target. Evaluator-source changes alter the PCE fingerprint, so the old
+batch must not be advanced as attempt 2 under new code. Any future
+Evaluate-only reuse must have a new identity and explicitly cite the old
+checkpoint hashes; a complete new smoke remains necessary for end-to-end
+acceptance.
+
 ## Offline Result Boundary
 
 Two formal Offline results remain in the active result root. The local

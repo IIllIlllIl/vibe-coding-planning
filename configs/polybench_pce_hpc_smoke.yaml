@@ -5,7 +5,7 @@ purpose: platform_smoke
 paths:
   dataset_snapshot: output/SWE-PolyBench/polybench-pce-inputs/20260811_smoke2_transformers
   image_manifest: output/SWE-PolyBench/polybench-pce-inputs/20260811_smoke2_transformers/images.json
-  run_dir: output/SWE-PolyBench/polybench-pce-runs/smoke/hpc-smoke2-20260811
+  run_dir: output/SWE-PolyBench/polybench-pce-runs/smoke/hpc-smoke2-evaluator-fix-20260812
 
 plan:
   model: deepseek-v4-flash
@@ -54,7 +54,7 @@ hpc:
   python_module: lang/Python/3.11
   container_module: tools/Apptainer
   python_bin: python3
-  job_name_prefix: polybench-pce-smoke2
+  job_name_prefix: polybench-pce-evalfix
   worker_config_path: configs/polybench_pce_hpc_smoke.yaml
 
 evaluator:

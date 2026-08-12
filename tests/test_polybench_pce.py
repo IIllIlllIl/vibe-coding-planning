@@ -215,9 +215,14 @@ def test_evaluator_materializes_repo_before_writing_inputs(
 
         def execute(self, command: str, timeout: int | None = None) -> dict:
             assert events == ["environment"]
-            assert (tmp_path / "eval" / ".vibe_test.patch").is_file()
             if command.startswith("git rev-parse"):
+                assert not (tmp_path / "eval" / ".vibe_test.patch").exists()
+                assert not (tmp_path / "eval" / ".vibe_code.patch").exists()
+                assert not (tmp_path / "eval" / ".vibe_eval.sh").exists()
                 return {"returncode": 0, "output": ""}
+            assert (tmp_path / "eval" / ".vibe_test.patch").is_file()
+            assert (tmp_path / "eval" / ".vibe_code.patch").is_file()
+            assert (tmp_path / "eval" / ".vibe_eval.sh").is_file()
             if command.startswith("git apply"):
                 return {"returncode": 0, "output": ""}
             return {"returncode": 0, "output": "1 passed"}

@@ -155,9 +155,19 @@ without becoming labels.
 The code path has local deterministic tests. A separate two-instance platform
 smoke config and `ulhpc-submit` controller entry now exist. Controller job
 `5642300` completed normally and yielded after submitting worker array
-`5642301`; both instance workers were running at the 2026-08-11 23:03 CEST
-snapshot. The smoke is therefore started but not yet passed. No formal config
-is active against the final Python-199 source snapshot and completed image
+`5642301`. Both workers saved completed Plan and Code checkpoints, then exposed
+an Evaluator ordering defect: evaluator-owned patch/script files were written
+before `git clean -fd` and deleted before use. The implementation now resets
+the fresh base first and writes those inputs afterward; local regression tests
+pass, but the fix has not yet passed an HPC Evaluate or full PCE smoke.
+
+The failed batch must not be retried unchanged. Although its Plan and Code
+outputs are durable, the current checkpoint identity includes the complete PCE
+execution fingerprint, including Evaluator source. A fixed Evaluator therefore
+cannot silently resume the old run. An Evaluate-only reuse requires a new run
+identity and an explicit, hash-checked provenance link to the old Plan/Code
+checkpoints; that migration path is not yet implemented. No formal config is
+active against the final Python-199 source snapshot and completed image
 manifest. Existing historical PCT code is not the authority for the new run.
 
 ## Cleaning And Validation Snapshots

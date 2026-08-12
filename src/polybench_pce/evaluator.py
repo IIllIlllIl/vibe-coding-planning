@@ -90,13 +90,6 @@ def evaluate_polybench_apptainer(
             host_workdir=phase_workdir,
             initialize_host_workdir=True,
         )
-        (phase_workdir / ".vibe_test.patch").write_text(
-            case.test_patch, encoding="utf-8"
-        )
-        (phase_workdir / ".vibe_code.patch").write_text(patch, encoding="utf-8")
-        (phase_workdir / ".vibe_eval.sh").write_text(
-            case.test_command + "\n", encoding="utf-8"
-        )
         repository_check = env.execute(
             "git rev-parse --is-inside-work-tree >/dev/null "
             f"&& git reset --hard {case.base_commit} && git clean -fd",
@@ -108,6 +101,18 @@ def evaluate_polybench_apptainer(
                 + str(repository_check.get("output", ""))[:1000],
                 evidence={"repository_reset": repository_check},
             )
+
+        # These evaluator-owned files must be created after ``git clean -fd``.
+        # Writing them before the reset makes the cleanup delete its own inputs
+        # and deterministically turns every evaluation into an operational
+        # ``No such file or directory`` failure.
+        (phase_workdir / ".vibe_test.patch").write_text(
+            case.test_patch, encoding="utf-8"
+        )
+        (phase_workdir / ".vibe_code.patch").write_text(patch, encoding="utf-8")
+        (phase_workdir / ".vibe_eval.sh").write_text(
+            case.test_command + "\n", encoding="utf-8"
+        )
 
         test_patch_applied, test_patch_attempts = _apply_patch(
             env, ".vibe_test.patch", timeout=timeout

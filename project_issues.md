@@ -160,6 +160,7 @@ ssh -p 8022 twang@access-iris.uni.lu \
 | 2026-08-09 Europe/Luxembourg | Pre-launch check for the session-wide 30min Offline 8it run; Iris user queue empty | 1354692 | 0.045720 | 0.700342 | FairShare is 0.067352 below the 2026-08-07 pre-launch observation; intervening runs and accounting decay mean this is a dated observation, not attribution to one run |
 | 2026-08-10 Europe/Luxembourg | Pre-launch check for controller-classified-timeout Offline 8it; Iris user queue empty and new run identity absent | 1347184 | 0.044258 | 0.711187 | FairShare is 0.010845 above the 2026-08-09 pre-launch observation; the change reflects accounting decay and cluster-wide relative usage, not a causal effect of one run |
 | 2026-08-11 22:57 Europe/Luxembourg | Pre-launch check for two-instance PolyBench PCE platform smoke; Slurm queue empty while the separate login-node SIF preheater remained active | 1421355 | 0.056044 | 0.716733 | `LevelFS=1.049601`; smoke requests only `1 CPU / 4G` per controller/worker and does not cap array scheduling itself |
+| 2026-08-12 15:28 Europe/Luxembourg | Pre-launch check for full two-instance PCE smoke after Evaluator ordering fix; queue empty and new run root absent while login-node preheater handled a different Keras image | 1298796 | 0.056315 | 0.717292 | `LevelFS=1.044547`; retains `1 CPU / 4G` per controller/worker and reruns full PCE rather than resuming pre-fix checkpoints |
 | 2026-08-04 Europe/Luxembourg | Pre-launch check for the revised Offline guideline 6it behavior smoke; Iris user queue empty | 760132 | 0.137983 | 0.768265 | `LevelFS=0.426310`; this snapshot is a launch baseline, not a causal attribution to any one prior run |
 
 Future launch/progress checks must append a row before interpreting movement.
@@ -704,8 +705,18 @@ block 的频率与根因，再决定是否仅细化记录，或对反复出现�
   或最终 validation label。入口 dry-run 与纯本地 deterministic tests 已通过。
   controller job `5642300` 已正常完成并以
   `waiting_for_submitted_task_batch` cooperative yield；worker array `5642301` 的两个
-  instance 在 2026-08-11 23:03 CEST 均为 `RUNNING`。流程已正常启动但尚未产生最终
-  PCE 结果，因此不能视为 HPC smoke 已验收。
+  instance 均完成了 Plan 和 Code checkpoint，但在 Evaluate 以
+  `official PolyBench test patch could not be applied` 结束。根因不是 task patch：
+  Evaluator 先写 `.vibe_test.patch`、`.vibe_code.patch` 和 `.vibe_eval.sh`，随后执行
+  `git clean -fd` 删除了自己的未跟踪输入，所以两条 apply 命令均报
+  `No such file or directory`。源码现已改为 reset/clean 后再写 evaluator 输入，本地
+  回归测试通过；旧 task batch 不应推进 attempt 2/3，因为会确定性重复失败。
+- **PCE phase resume 边界**：旧 Plan/Code checkpoints 完整且适合在研究语义上复用，
+  但当前 checkpoint identity 绑定整个 PCE execution fingerprint，而 evaluator 源码
+  也属于该 fingerprint。修复前后 fingerprint 分别为 `720ea041…` 与 `c8be5c62…`，
+  因此现有入口会正确拒绝把新 Evaluator 当成旧 run 的普通 resume。Evaluate-only
+  复用必须使用新的 run identity，并显式记录旧 run/checkpoint 来源与 hash；该受控
+  migration 尚未实现。完整新 smoke 仍是最终端到端验收。
 - **仍待验收**：正式 Python-199 frozen snapshot、下载完成后的 199-image manifest
   review、正式 PCE config、实际 HPC smoke、PCE 后清洗 snapshot，以及指向新 snapshot 的
   Poly check-only config。未经 HPC smoke 前不能把新入口描述为正式数据生产完成。
