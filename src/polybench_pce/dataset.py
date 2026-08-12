@@ -23,17 +23,17 @@ def canonical_image_ref(instance_id: str) -> str:
     return f"ghcr.io/timesler/swe-polybench.eval.x86_64.{instance_id.lower()}:v1.1"
 
 
-def _list(value: Any) -> tuple[str, ...]:
+def _list(value: Any, *, field: str, instance_id: str) -> tuple[str, ...]:
     if isinstance(value, list):
         return tuple(str(item) for item in value)
     if isinstance(value, str):
         try:
             parsed = ast.literal_eval(value)
-        except (SyntaxError, ValueError):
-            parsed = []
+        except (SyntaxError, ValueError) as exc:
+            raise ValueError(f"{instance_id}: {field} is not a parseable list") from exc
         if isinstance(parsed, list):
             return tuple(str(item) for item in parsed)
-    return ()
+    raise ValueError(f"{instance_id}: {field} is not a list")
 
 
 def load_polybench_pce_cases(
@@ -106,8 +106,16 @@ def load_polybench_pce_cases(
                 language=str(row["language"]),
                 task_category=str(row.get("task_category", "")),
                 test_patch=str(row["test_patch"]),
-                f2p=_list(row.get("F2P", row.get("f2p", []))),
-                p2p=_list(row.get("P2P", row.get("p2p", []))),
+                f2p=_list(
+                    row.get("F2P", row.get("f2p", [])),
+                    field="F2P",
+                    instance_id=instance_id,
+                ),
+                p2p=_list(
+                    row.get("P2P", row.get("p2p", [])),
+                    field="P2P",
+                    instance_id=instance_id,
+                ),
                 test_command=str(row["test_command"]),
                 image=FrozenImage(
                     requested_ref=image_ref,

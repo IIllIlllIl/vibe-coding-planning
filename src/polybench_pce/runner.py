@@ -13,7 +13,8 @@ from src.agents import code_agent, plan_agent
 from src.config import AgentConfig, Config, EvaluatorConfig, PromptConfig, SystemConfig
 from src.environment.apptainer_env import ApptainerEnvironment, ApptainerSifCache
 from src.environment.docker_env import DockerCapacityWindow
-from src.exceptions import FatalError
+from src.evaluator.polybench_patch_policy import apply_polybench_patch_policy
+from src.exceptions import AgentTaskError, FatalError, TaskError
 from src.optimization.audit import AuditedModel, JsonlLogger
 from src.optimization.hpc.task_batch import atomic_json
 from src.polybench_pce.config import PolyBenchPCEConfig
@@ -189,7 +190,7 @@ class PolyBenchPCERunner:
                         plan_instance_template="",
                     ),
                 )
-                patch, trajectory = code_agent.run(
+                raw_patch, trajectory = code_agent.run(
                     code_config,
                     str(plan_checkpoint["plan"]),
                     case.issue_description,
@@ -211,7 +212,53 @@ class PolyBenchPCERunner:
             finally:
                 env.cleanup()
                 self._cleanup(code_workspace)
-            code_checkpoint = {"patch": patch, "trajectory": list(trajectory)}
+            raw_patch_path = self.attempt_dir / "raw_code_submission.patch"
+            raw_patch_path.write_text(raw_patch, encoding="utf-8")
+            try:
+                policy_result = apply_polybench_patch_policy(
+                    raw_patch,
+                    test_patch=case.test_patch,
+                    allow_empty=True,
+                    reject_overlap=False,
+                )
+            except TaskError as exc:
+                atomic_json(
+                    self.attempt_dir / "patch_policy_failure.json",
+                    {
+                        "schema_version": 1,
+                        "error_type": type(exc).__name__,
+                        "error": str(exc),
+                        "raw_patch_path": str(raw_patch_path),
+                    },
+                )
+                raise AgentTaskError(
+                    f"Code submission failed the PolyBench patch policy: {exc}",
+                    phase="code",
+                    reason="code_patch_policy_invalid",
+                    trajectory=list(trajectory),
+                ) from exc
+            filtered_patch = policy_result.patch
+            filtered_patch_path = self.attempt_dir / "filtered_code_submission.patch"
+            filtered_patch_path.write_text(filtered_patch, encoding="utf-8")
+            patch_policy = {
+                "policy": "exclude_test_paths_v1",
+                "kept_files": list(policy_result.kept_files),
+                "removed_files": list(policy_result.removed_files),
+                "test_overlap_files": list(policy_result.test_overlap_files),
+                "raw_patch_path": str(raw_patch_path),
+                "filtered_patch_path": str(filtered_patch_path),
+                "raw_patch_sha256": hashlib.sha256(raw_patch.encode()).hexdigest(),
+                "filtered_patch_sha256": hashlib.sha256(
+                    filtered_patch.encode()
+                ).hexdigest(),
+            }
+            atomic_json(self.attempt_dir / "patch_policy.json", patch_policy)
+            code_checkpoint = {
+                "raw_patch": raw_patch,
+                "patch": filtered_patch,
+                "patch_policy": patch_policy,
+                "trajectory": list(trajectory),
+            }
             self._save_checkpoint("code", code_checkpoint)
 
         evaluator_checkpoint = self._checkpoint("evaluate")
@@ -243,7 +290,11 @@ class PolyBenchPCERunner:
             ),
             "plan": str(plan_checkpoint["plan"]),
             "plan_trajectory": list(plan_checkpoint["trajectory"]),
+            "raw_patch": str(
+                code_checkpoint.get("raw_patch", code_checkpoint["patch"])
+            ),
             "patch": str(code_checkpoint["patch"]),
+            "patch_policy": dict(code_checkpoint.get("patch_policy", {})),
             "code_trajectory": list(code_checkpoint["trajectory"]),
             "evaluator_result": dict(evaluator_checkpoint["evaluator_result"]),
             "final_validation_label": None,

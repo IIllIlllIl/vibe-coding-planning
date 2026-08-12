@@ -110,7 +110,7 @@ evaluator phases in fresh containers derived from the same frozen SIF. Phase
 resume occurs only after a completed durable phase output; an Agent conversation
 is never resumed from an internal step.
 
-The raw PCE record should preserve, where available:
+The raw PCE record preserves, where available:
 
 - frozen dataset row and image provenance identity;
 - project Git commit and source/config/prompt hashes;
@@ -123,10 +123,27 @@ The raw PCE record should preserve, where available:
 - every infrastructure attempt without exposing retries as research evidence
   to later Agents.
 
-Only a valid evaluator terminal result creates a resolved/unresolved label.
-Image, container, provider, output-contract, patch-transport, parser, and
-evaluator-infrastructure failures remain operational outcomes. Their retry
-policy may support unattended execution but must not manufacture a label.
+Code may create temporary diagnostic tests, but test-file changes are not part
+of the evaluated submission. The Code prompt asks the Agent not to stage them,
+and a deterministic Host policy independently removes conventional test paths.
+Both raw and filtered patches, their hashes, kept/removed/overlap paths, and
+the complete trajectory are retained. A test-only submission therefore becomes
+an auditable empty generation. The Host does not repair source changes or merge
+them with the official test patch.
+
+Classification separates `task_outcome` (`resolved`, `unresolved`, or
+`unknown`), a stable `outcome_reason`, and an independent
+`retry_disposition`. Parsed test failures, empty filtered submissions,
+code-patch application failure, and code-test timeout are terminal unresolved
+outcomes. Frozen-test-patch, parser, container, provider, and infrastructure
+failures remain unknown rather than manufacturing an unresolved label.
+Transient failures may retry; identity/configuration failures block.
+
+Patch methods are preflighted before mutation, so a fallback never operates on
+a tree partially changed by a previous failed method. Every method records its
+preflight/application output, repository status, and full binary diff. F2P and
+P2P are parsed strictly; malformed lists block before scoring instead of
+silently becoming empty sets.
 
 The independent implementation lives under `src/polybench_pce/` and is entered
 through `scripts/run_polybench_pce_hpc.py`. It does not call or modify the
@@ -137,13 +154,11 @@ are identity-bound checkpoints, while a failed phase restarts with a fresh
 Agent on the next task attempt. There are three total task attempts. Previous
 attempt failures remain raw controller evidence and are not Agent input.
 
-After three failed attempts the controller records an incomplete PCE outcome,
+After three retryable failed attempts the controller records an incomplete PCE outcome,
 the last worker output, the last Slurm status and the evidence directory. It
-does not manufacture an unresolved label. Code-patch transport failures,
-official-test timeouts and parser/evaluator failures follow this same
-operational path. Only successful official parsing and instance-level scoring
-write `evaluator_resolved`; even then `final_validation_label` remains null
-until the separately reviewed cleaning stage.
+does not manufacture an unresolved label. Deterministic submission outcomes do
+not consume fresh Agent attempts. `final_validation_label` remains null until
+the separately reviewed cleaning stage.
 
 `scripts/tools/freeze_polybench_pce_source.py` freezes the official CSV,
 dataset revision, complete original rows, per-row identity, Dockerfile hash and
@@ -177,6 +192,17 @@ Plan and do not consume pre-fix checkpoints. The outer submission manifest
 binds this launch to commit `84ddf32…`. The inner PCE manifest currently records
 a null Git head because `.git` is excluded from remote sync; formal PCE must
 explicitly propagate the outer commit identity rather than infer it remotely.
+
+That smoke exposed a second independent issue: both Code submissions changed
+the same test file already changed by the official `test_patch`. The official
+patch and source hunks applied, proving this was neither a wrong frozen base nor
+a malformed diff. PCE now preserves the raw submission, filters diagnostic test
+paths, and evaluates the separately recorded implementation patch. Empty and
+non-applicable code patches follow official PolyBench scoring semantics and
+complete as unresolved instead of being retried as operational failures.
+These semantic changes use the new smoke identity
+`hpc-smoke3-patch-policy-outcomes-20260812`; neither earlier checkpoint tree is
+eligible for implicit resume.
 
 ## Cleaning And Validation Snapshots
 

@@ -730,3 +730,15 @@ block 的频率与根因，再决定是否仅细化记录，或对反复出现�
 - **仍待验收**：正式 Python-199 frozen snapshot、下载完成后的 199-image manifest
   review、正式 PCE config、实际 HPC smoke、PCE 后清洗 snapshot，以及指向新 snapshot 的
   Poly check-only config。未经 HPC smoke 前不能把新入口描述为正式数据生产完成。
+- **PCE patch/filter 与分类修正（2026-08-12）**：Evaluator-fix smoke 的两个
+  `code_patch_not_applied` 都源于 Code submission 重复修改官方 `test_patch` 已先修改的
+  `tests/test_modeling_transfo_xl.py`；官方 test patch 与 Code 的 source hunks 均能应用，
+  因此不是错误 base 或 malformed diff。PCE 现保留 raw/filtered 双 patch、hash、
+  kept/removed/overlap paths、完整 trajectory 和每种 apply 方法后的仓库状态；测试路径
+  由确定性 Host policy 从 evaluator submission 中移除。Evaluator 分类拆为独立的
+  `task_outcome/outcome_reason/retry_disposition`：empty/code-patch-not-applied/test-timeout
+  为 terminal unresolved，test-patch/parser 个例失败为有证据的 unknown，只有 transient
+  failure 重试，identity/config failure block。F2P/P2P 不再在解析失败时静默变为空集。
+  本地回归测试已通过；仍需新 HPC smoke 验收实际 Apptainer 行为，旧 smoke 不得按新
+  semantic fingerprint 推进。活动 smoke config 已切换到未提交的全新 identity
+  `hpc-smoke3-patch-policy-outcomes-20260812`，本轮尚未启动它。

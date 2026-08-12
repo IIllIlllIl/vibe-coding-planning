@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from collections import Counter
 from datetime import datetime, timezone
 import json
 from pathlib import Path
@@ -11,7 +12,11 @@ from typing import Any
 from src.exceptions import ControllerYield
 from src.optimization.hpc.task_batch import atomic_json
 from src.polybench_pce.config import PolyBenchPCEConfig
-from src.polybench_pce.dataset import file_sha256, load_polybench_pce_cases
+from src.polybench_pce.dataset import (
+    canonical_image_ref,
+    file_sha256,
+    load_polybench_pce_cases,
+)
 from src.polybench_pce.hpc_executor import (
     PolyBenchPCEHPCExecutor,
     execution_fingerprint,
@@ -65,6 +70,18 @@ def run_polybench_pce(config: PolyBenchPCEConfig) -> dict[str, Any] | None:
         for wrapper in source_rows
         if str(wrapper["source_row"]["instance_id"]) not in available_ids
     ]
+    image_records = image_manifest.get("records", {})
+    unavailable_evidence = []
+    for instance_id in unavailable:
+        image_ref = canonical_image_ref(instance_id)
+        record = image_records.get(image_ref)
+        unavailable_evidence.append(
+            {
+                "instance_id": instance_id,
+                "requested_ref": image_ref,
+                "image_record": dict(record) if isinstance(record, dict) else None,
+            }
+        )
     manifest = {
         "schema_version": 1,
         "mode": "polybench_pce",
@@ -86,6 +103,7 @@ def run_polybench_pce(config: PolyBenchPCEConfig) -> dict[str, Any] | None:
         "source_instances": len(source_rows),
         "image_available_instances": len(cases),
         "image_unavailable_instances": unavailable,
+        "image_unavailable_evidence": unavailable_evidence,
         "instance_ids": [case.instance_id for case in cases],
         "attempt_policy": {
             "total_attempts": config.hpc.max_task_attempts,
@@ -148,14 +166,34 @@ def run_polybench_pce(config: PolyBenchPCEConfig) -> dict[str, Any] | None:
     _write_jsonl(config.run_dir / "raw_pce_outcomes.jsonl", outcomes)
     completed = sum(item.get("status") == "completed" for item in outcomes)
     incomplete = len(outcomes) - completed
+    task_outcomes = Counter()
+    outcome_reasons = Counter()
+    for item in outcomes:
+        evaluator = item.get("evaluator_result")
+        if isinstance(evaluator, dict):
+            task_outcomes[str(evaluator.get("task_outcome", "unknown"))] += 1
+            outcome_reasons[str(evaluator.get("outcome_reason", "unclassified"))] += 1
+        else:
+            task_outcomes["incomplete"] += 1
+            last = item.get("last_worker_output")
+            reason = (
+                str(last.get("outcome_reason", "attempts_exhausted"))
+                if isinstance(last, dict)
+                else "attempts_exhausted"
+            )
+            outcome_reasons[reason] += 1
     summary = {
         "schema_version": 1,
         "mode": "polybench_pce",
         "status": "completed" if incomplete == 0 else "completed_with_incomplete",
         "completed_at": datetime.now(timezone.utc).isoformat(),
         "instances": len(outcomes),
+        "source_instances": len(source_rows),
+        "image_unavailable_instances": len(unavailable),
         "completed_instances": completed,
         "incomplete_instances": incomplete,
+        "task_outcomes": dict(sorted(task_outcomes.items())),
+        "outcome_reasons": dict(sorted(outcome_reasons.items())),
         "final_validation_labels_assigned": 0,
     }
     atomic_json(config.run_dir / "result.json", summary)

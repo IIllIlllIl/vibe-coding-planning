@@ -35,6 +35,17 @@ def _category(exc: BaseException) -> str:
     return "unexpected"
 
 
+def _retry_disposition(exc: BaseException) -> str:
+    explicit = getattr(exc, "retry_disposition", None)
+    if explicit:
+        return str(explicit)
+    if isinstance(exc, (FatalError, ValueError)):
+        return "block_run"
+    if isinstance(exc, AgentTaskError):
+        return "retry_fresh_agent"
+    return "retry_same_phase"
+
+
 def run_task(
     *,
     config_path: Path,
@@ -94,12 +105,18 @@ def run_task(
     except Exception as exc:
         phase = getattr(exc, "phase", stage)
         reason = getattr(exc, "reason", type(exc).__name__)
+        retry_disposition = _retry_disposition(exc)
+        outcome_reason = str(getattr(exc, "outcome_reason", reason))
         failure = {
             "schema_version": 1,
             # Match the existing Online HPC worker boundary: an individual
             # worker exception is retryable transport output. Identity/schema
             # violations are still blocked by the host-side output validator.
-            "status": "retryable_failed",
+            "status": (
+                "blocking_failed"
+                if retry_disposition == "block_run"
+                else "retryable_failed"
+            ),
             "mode": "polybench_pce",
             "fingerprint": manifest.get("fingerprint"),
             "task_index": manifest.get("task_index"),
@@ -113,6 +130,9 @@ def run_task(
             "failure_category": _category(exc),
             "terminal_phase": str(phase),
             "terminal_reason": str(reason),
+            "task_outcome": "unknown",
+            "outcome_reason": outcome_reason,
+            "retry_disposition": retry_disposition,
             "error_type": type(exc).__name__,
             "error": str(exc),
             "final_validation_label": None,

@@ -59,8 +59,17 @@ def apply_polybench_patch_policy(
     patch: str,
     *,
     test_patch: str = "",
+    allow_empty: bool = False,
+    reject_overlap: bool = True,
 ) -> PolyBenchPatchPolicyResult:
-    """Filter protected files and reject overlap with official test changes."""
+    """Filter test files and reject overlap with official test changes.
+
+    ``allow_empty`` is used by evidence-generation workflows where a submission
+    containing only diagnostic tests is itself a valid, scoreable empty
+    generation. ``reject_overlap=False`` records source-file overlap for the
+    evaluator instead of pre-empting its normal patch-application result.
+    Existing callers retain the historical rejecting behavior.
+    """
     file_diffs = _split_file_diffs(patch)
     if not file_diffs:
         raise TaskError("Code agent output is not a git patch.")
@@ -78,14 +87,14 @@ def apply_polybench_patch_policy(
         else:
             removed_files.append(path)
 
-    if not kept:
+    if not kept and not allow_empty:
         raise TaskError(
             "PolyBench patch contains no allowed submission changes after filtering. "
             f"Removed files: {', '.join(sorted(removed_files))}"
         )
 
     overlap = sorted(set(kept_files) & patch_files(test_patch))
-    if overlap:
+    if overlap and reject_overlap:
         raise TaskError(
             "PolyBench patch modifies files also changed by the official test patch: "
             + ", ".join(overlap)

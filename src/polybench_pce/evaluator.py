@@ -17,15 +17,69 @@ from src.polybench_pce.models import PolyBenchPCECase
 class PolyBenchEvaluatorOperationalError(RuntimeError):
     """The evaluator could not produce an official terminal observation."""
 
-    def __init__(self, message: str, *, evidence: dict[str, Any] | None = None) -> None:
+    def __init__(
+        self,
+        message: str,
+        *,
+        evidence: dict[str, Any] | None = None,
+        outcome_reason: str = "evaluator_operational_failure",
+        retry_disposition: str = "retry_same_phase",
+    ) -> None:
         super().__init__(message)
         self.evidence = dict(evidence or {})
+        self.outcome_reason = outcome_reason
+        self.retry_disposition = retry_disposition
 
 
-APPLY_COMMANDS = (
-    "git apply --verbose --ignore-whitespace --reject",
-    "patch --batch --fuzz=5 -p1 -f -i",
+APPLY_METHODS = (
+    (
+        "git_apply",
+        "git apply --check --ignore-whitespace",
+        "git apply --verbose --ignore-whitespace",
+    ),
+    (
+        "patch_fuzz5",
+        "patch --dry-run --batch --fuzz=5 -p1 -f -i",
+        "patch --batch --fuzz=5 -p1 -f -i",
+    ),
 )
+
+
+def _terminal_result(
+    case: PolyBenchPCECase,
+    *,
+    task_outcome: str,
+    outcome_reason: str,
+    generation: bool,
+    patch_applied: bool,
+    evidence: dict[str, Any],
+) -> dict[str, Any]:
+    """Build a terminal result while retaining the official score semantics."""
+    from poly_bench_evaluation.scoring import instance_level_scoring
+
+    score = None
+    evaluator_resolved: bool | None = None
+    if task_outcome in {"resolved", "unresolved"}:
+        score = instance_level_scoring(
+            instance_id=case.instance_id,
+            result={},
+            f2p=list(case.f2p),
+            p2p=list(case.p2p),
+            patch_applied=patch_applied,
+            generation=generation,
+        )
+        evaluator_resolved = bool(score.resolved)
+    return {
+        "status": "completed",
+        "classification_policy": "polybench_pce_outcomes_v2",
+        "terminal_kind": outcome_reason,
+        "task_outcome": task_outcome,
+        "outcome_reason": outcome_reason,
+        "retry_disposition": "no_retry",
+        "evaluator_resolved": evaluator_resolved,
+        "official_score": asdict(score) if score is not None else None,
+        **evidence,
+    }
 
 
 def _apply_patch(
@@ -35,16 +89,27 @@ def _apply_patch(
     timeout: int,
 ) -> tuple[bool, list[dict[str, Any]]]:
     attempts: list[dict[str, Any]] = []
-    for prefix in APPLY_COMMANDS:
-        result = env.execute(f"{prefix} {filename}", timeout=timeout)
+    for method, check_prefix, apply_prefix in APPLY_METHODS:
+        check = env.execute(f"{check_prefix} {filename}", timeout=timeout)
+        result: dict[str, Any] | None = None
+        if check.get("returncode") == 0:
+            result = env.execute(f"{apply_prefix} {filename}", timeout=timeout)
+        status = env.execute("git status --porcelain=v1", timeout=timeout)
+        diff = env.execute("git diff --binary --full-index", timeout=timeout)
         attempts.append(
             {
-                "command": f"{prefix} {filename}",
-                "returncode": result.get("returncode"),
-                "output": result.get("output", ""),
+                "method": method,
+                "preflight_command": f"{check_prefix} {filename}",
+                "preflight_returncode": check.get("returncode"),
+                "preflight_output": check.get("output", ""),
+                "apply_command": f"{apply_prefix} {filename}",
+                "apply_returncode": result.get("returncode") if result else None,
+                "apply_output": result.get("output", "") if result else "",
+                "repository_status_after": status,
+                "repository_diff_after": diff,
             }
         )
-        if result.get("returncode") == 0:
+        if result is not None and result.get("returncode") == 0:
             return True, attempts
     return False, attempts
 
@@ -65,13 +130,17 @@ def evaluate_polybench_apptainer(
         from poly_bench_evaluation.scoring import instance_level_scoring
     except ImportError as exc:
         raise PolyBenchEvaluatorOperationalError(
-            f"official PolyBench evaluator is unavailable: {exc}"
+            f"official PolyBench evaluator is unavailable: {exc}",
+            outcome_reason="evaluator_package_unavailable",
+            retry_disposition="block_run",
         ) from exc
 
     parser_name = REPO_TO_PARSER_CLASS.get(case.repo)
     if not parser_name:
         raise PolyBenchEvaluatorOperationalError(
-            f"official parser is unavailable for repository {case.repo}"
+            f"official parser is unavailable for repository {case.repo}",
+            outcome_reason="parser_unavailable",
+            retry_disposition="block_run",
         )
     env: ApptainerEnvironment | None = None
     try:
@@ -100,6 +169,7 @@ def evaluate_polybench_apptainer(
                 "evaluator could not reset the frozen base repository: "
                 + str(repository_check.get("output", ""))[:1000],
                 evidence={"repository_reset": repository_check},
+                outcome_reason="repository_reset_failed",
             )
 
         # These evaluator-owned files must be created after ``git clean -fd``.
@@ -118,8 +188,12 @@ def evaluate_polybench_apptainer(
             env, ".vibe_test.patch", timeout=timeout
         )
         if not test_patch_applied:
-            raise PolyBenchEvaluatorOperationalError(
-                "official PolyBench test patch could not be applied",
+            return _terminal_result(
+                case,
+                task_outcome="unknown",
+                outcome_reason="test_patch_not_applied",
+                generation=bool(patch.strip()),
+                patch_applied=False,
                 evidence={
                     "terminal_kind": "test_patch_not_applied",
                     "test_patch_attempts": test_patch_attempts,
@@ -135,8 +209,12 @@ def evaluate_polybench_apptainer(
             )
         if not generation or not code_patch_applied:
             kind = "empty_generation" if not generation else "code_patch_not_applied"
-            raise PolyBenchEvaluatorOperationalError(
-                f"evaluator cannot score {kind}",
+            return _terminal_result(
+                case,
+                task_outcome="unresolved",
+                outcome_reason=kind,
+                generation=generation,
+                patch_applied=False,
                 evidence={
                     "terminal_kind": kind,
                     "test_patch_applied": True,
@@ -152,8 +230,12 @@ def evaluate_polybench_apptainer(
             raw_output = str(test_result.get("output", ""))
             test_returncode = test_result.get("returncode")
         except CommandTimeoutError as exc:
-            raise PolyBenchEvaluatorOperationalError(
-                "official PolyBench test command timed out",
+            return _terminal_result(
+                case,
+                task_outcome="unresolved",
+                outcome_reason="test_execution_timeout",
+                generation=True,
+                patch_applied=True,
                 evidence={
                     "terminal_kind": "test_timeout",
                     "test_patch_applied": True,
@@ -162,8 +244,9 @@ def evaluate_polybench_apptainer(
                     "code_patch_attempts": code_patch_attempts,
                     "test_command": case.test_command,
                     "raw_test_output": str(exc),
+                    "test_timed_out": True,
                 },
-            ) from exc
+            )
 
         parsed: dict[str, Any] = {}
         parsers = importlib.import_module("poly_bench_evaluation.parsers")
@@ -176,19 +259,27 @@ def evaluate_polybench_apptainer(
                     "raw_test_output": raw_output,
                     "test_returncode": test_returncode,
                 },
+                outcome_reason="parser_missing",
+                retry_disposition="block_run",
             )
         try:
             parsed = getattr(parsers, parser_name)(test_content=raw_output).parse()
         except Exception as exc:
-            raise PolyBenchEvaluatorOperationalError(
-                f"official parser failed: {type(exc).__name__}: {exc}",
+            return _terminal_result(
+                case,
+                task_outcome="unknown",
+                outcome_reason="parser_failed",
+                generation=True,
+                patch_applied=True,
                 evidence={
                     "terminal_kind": "parser_failed",
                     "parser_name": parser_name,
                     "raw_test_output": raw_output,
                     "test_returncode": test_returncode,
+                    "parser_error_type": type(exc).__name__,
+                    "parser_error": str(exc),
                 },
-            ) from exc
+            )
         score = instance_level_scoring(
             instance_id=case.instance_id,
             result=parsed,
@@ -199,7 +290,13 @@ def evaluate_polybench_apptainer(
         )
         return {
             "status": "completed",
+            "classification_policy": "polybench_pce_outcomes_v2",
             "terminal_kind": "tests_parsed",
+            "task_outcome": "resolved" if score.resolved else "unresolved",
+            "outcome_reason": (
+                "tests_parsed_resolved" if score.resolved else "tests_parsed_unresolved"
+            ),
+            "retry_disposition": "no_retry",
             "evaluator_resolved": bool(score.resolved),
             "official_score": asdict(score),
             "test_patch_applied": True,

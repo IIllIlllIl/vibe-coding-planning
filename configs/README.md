@@ -67,8 +67,10 @@ not formal PolyBench validation data, and it does not call GEPA, Reflection, or
 the Online rollout workflow. Smoke results live below
 `output/SWE-PolyBench/polybench-pce-runs/smoke/`; future formal PCE results use
 a separate `polybench-pce-runs/formal/` identity. The active config uses the
-new `hpc-smoke2-evaluator-fix-20260812` identity and reruns complete PCE tasks;
-it does not resume the failed pre-fix batch.
+new `hpc-smoke3-patch-policy-outcomes-20260812` identity and reruns complete PCE
+tasks; it does not resume either earlier smoke. Code may create diagnostic
+tests, while PCE preserves the raw submission and evaluates a separately
+recorded patch with test paths filtered out.
 
 The active Python-199 SIF preheater currently names
 `gepa_verified_rules.yaml`, but this is not a GEPA experiment dependency:

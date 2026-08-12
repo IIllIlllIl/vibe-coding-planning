@@ -39,6 +39,17 @@ def test_rejects_patch_with_only_forbidden_files(path):
         apply_polybench_patch_policy(_diff(path))
 
 
+def test_allows_test_only_submission_as_empty_when_requested():
+    result = apply_polybench_patch_policy(
+        _diff("tests/test_module.py"),
+        allow_empty=True,
+    )
+
+    assert result.patch == ""
+    assert result.kept_files == ()
+    assert result.removed_files == ("tests/test_module.py",)
+
+
 @pytest.mark.parametrize(
     "path",
     [
@@ -63,6 +74,18 @@ def test_rejects_overlap_with_official_test_patch():
             _diff("src/package/module.py"),
             test_patch=_diff("src/package/module.py"),
         )
+
+
+def test_can_record_overlap_without_rejecting_for_evidence_generation():
+    patch = _diff("src/package/module.py")
+    result = apply_polybench_patch_policy(
+        patch,
+        test_patch=patch,
+        reject_overlap=False,
+    )
+
+    assert result.patch == patch
+    assert result.test_overlap_files == ("src/package/module.py",)
 
 
 def test_rejects_non_diff_output():
