@@ -11,7 +11,7 @@ historical comparison, provenance, or reproduction.
 | `SWE-bench_Verified/verified-round1-gepa-datasets/20260614_482_fdc056ae85df/` | Immutable formal 384/98 snapshot shared by current Online and Offline experiments | Active input; do not move or modify |
 | `SWE-bench_Verified/gepa-rules/` | Local destination for current Online and Offline GEPA results | Active output root |
 | `SWE-PolyBench/polybench-guideline-validation-guidelines/20260811_seed-c1-c2-c3_3293f8e925b8/` | Exact seed and candidate indices 1-3 from the completed 20260810 Offline run | Frozen evaluation bundle |
-| Remote `operations/polybench-python199-v1.1-20260811/` | Incremental official `:v1.1` SIF download provenance for the frozen Python-199 image list | Active operational input preparation; not a dataset or result |
+| Remote `operations/polybench-python199-v1.1-20260811/` | Completed official `:v1.1` availability provenance for the Python-199 image list | Operational preparation evidence; not a dataset or result |
 | `SWE-PolyBench/polybench-pce-inputs/20260811_smoke2_transformers/` | Frozen two-row source and reviewed image-manifest copy staged to the PCE smoke | Smoke input only; not the future Python-199 snapshot |
 | Remote `SWE-PolyBench/polybench-pce-runs/smoke/hpc-smoke2-20260811/` | Two-instance PCE controller/worker/phase evidence | Active test-only smoke; never guideline-quality evidence |
 | Remote `SWE-PolyBench/polybench-pce-runs/smoke/hpc-smoke2-evaluator-fix-20260812/` | Fresh two-instance end-to-end PCE evidence after fixing evaluator input ordering | Active test-only smoke; never guideline-quality evidence |
@@ -51,9 +51,12 @@ classes must not be mixed:
 | `SWE-PolyBench/polybench-pce-runs/formal/` | Reserved formal raw PCE evidence root | Not until a separately reviewed formal run exists |
 | `SWE-PolyBench/polybench-guideline-validation-guidelines/` | Guidelines frozen before PolyBench results are viewed | Yes, as immutable model inputs only |
 
-The live download manifest is incremental and has no completion declaration.
-It must not be catalogued as a frozen dataset merely because some SIF records
-exist. The active two-instance smoke is likewise a test of transport, phase
+The download manifest is complete at the operational layer: 113 exact `v1.1`
+SIFs are available and 86 references have preserved pull failures. The derived
+`v1.1-unavailable-images-20260812.json` is a cleaning-evidence snapshot, not a
+task-label file. Neither artifact is a formal PCE dataset until the available
+source/image rows are reviewed and frozen together. The two-instance smoke is
+likewise a test of transport, phase
 isolation and evidence preservation; its resolved labels and plans must not be
 included in the future PolyBench generalization score.
 

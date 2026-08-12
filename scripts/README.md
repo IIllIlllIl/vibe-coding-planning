@@ -56,8 +56,9 @@ Apptainer 临时目录，且不得选择仍在写入的 `.tmp` 镜像。
   标为 `pull_attested`；已有缓存补录必须保持 `retrospective`，不得冒充拉取时证据。
   当前 Python-199 操作用 `--remote-images-json` 覆盖 GEPA dataset 的镜像列表；传入的
   GEPA config 只提供 Apptainer runtime 和 SIF cache。manifest 每个 image 后原子更新，
-  但没有 `complete` 字段；同 manifest 原样重跑还会把此前 pull attestation 降级为
-  retrospective，因此在修复前不能把该命令称为 resume-safe。
+  schema 2 保存完整 requested universe、每次 invocation、每次失败 attempt 和
+  `complete` 状态；subset retry 不会缩小 universe，已有 `pull_attested` 也不会被
+  cached audit 降级。GHCR repository 名会规范化为小写，但 tag 保持不变。
 
 ## 安全与资源
 

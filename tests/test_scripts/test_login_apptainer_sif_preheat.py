@@ -22,7 +22,9 @@ def test_login_preheat_dry_run_filters_missing_images(
     tmp_path: Path, monkeypatch, capsys
 ) -> None:
     ulhpc = tmp_path / "ulhpc.yaml"
-    ulhpc.write_text("user: tester\nhost: example.invalid\nport: 2222\n", encoding="utf-8")
+    ulhpc.write_text(
+        "user: tester\nhost: example.invalid\nport: 2222\n", encoding="utf-8"
+    )
 
     monkeypatch.setattr(
         login_apptainer_sif_preheat,
@@ -73,7 +75,9 @@ def test_login_preheat_executes_remote_script_with_scratch_cache(
     tmp_path: Path, monkeypatch
 ) -> None:
     ulhpc = tmp_path / "ulhpc.yaml"
-    ulhpc.write_text("user: tester\nhost: example.invalid\nport: 2222\n", encoding="utf-8")
+    ulhpc.write_text(
+        "user: tester\nhost: example.invalid\nport: 2222\n", encoding="utf-8"
+    )
     captured: dict[str, object] = {}
 
     def fake_run(command, **kwargs):
@@ -133,7 +137,9 @@ def test_login_preheat_can_request_apptainer_cache_cleanup(
     tmp_path: Path, monkeypatch
 ) -> None:
     ulhpc = tmp_path / "ulhpc.yaml"
-    ulhpc.write_text("user: tester\nhost: example.invalid\nport: 2222\n", encoding="utf-8")
+    ulhpc.write_text(
+        "user: tester\nhost: example.invalid\nport: 2222\n", encoding="utf-8"
+    )
     captured: dict[str, object] = {}
 
     def fake_run(command, **kwargs):
@@ -196,7 +202,9 @@ def test_login_preheat_can_audit_existing_remote_image_list(
     tmp_path: Path, monkeypatch
 ) -> None:
     ulhpc = tmp_path / "ulhpc.yaml"
-    ulhpc.write_text("user: tester\nhost: example.invalid\nport: 2222\n", encoding="utf-8")
+    ulhpc.write_text(
+        "user: tester\nhost: example.invalid\nport: 2222\n", encoding="utf-8"
+    )
     calls: list[tuple[list[str], dict[str, object]]] = []
 
     def fake_run(command, **kwargs):
@@ -253,3 +261,22 @@ def test_remote_preheat_script_records_digest_and_sif_provenance() -> None:
     assert '"retrospective"' in script
     assert '"sif_sha256"' in script
     assert "Docker-Content-Digest" in script
+    assert '"registry_manifest_not_found"' in script
+    assert '"registry_access_forbidden"' in script
+    assert 'provenance["complete"]' in script
+    assert 'provenance.setdefault("runs", [])' in script
+    assert 'previous.get("status") in {"cached", "pulled"}' in script
+    assert 'failed_record["prior_records"]' in script
+
+
+def test_login_preheat_normalizes_only_oci_repository_case() -> None:
+    assert (
+        login_apptainer_sif_preheat._normalize_image_ref(
+            "ghcr.io/timesler/NameSpace__Repo-1:v1.1"
+        )
+        == "ghcr.io/timesler/namespace__repo-1:v1.1"
+    )
+    assert (
+        login_apptainer_sif_preheat._normalize_image_ref("python:3.12-slim")
+        == "python:3.12-slim"
+    )

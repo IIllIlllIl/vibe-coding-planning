@@ -72,13 +72,13 @@ tasks; it does not resume either earlier smoke. Code may create diagnostic
 tests, while PCE preserves the raw submission and evaluates a separately
 recorded patch with test paths filtered out.
 
-The active Python-199 SIF preheater currently names
+The completed Python-199 SIF preheater named
 `gepa_verified_rules.yaml`, but this is not a GEPA experiment dependency:
 `--remote-images-json` replaces its dataset-derived image list, and the config
 is read only for the Apptainer runtime and shared SIF-cache path. There is no
-dedicated PCE-download config yet. Do not change the formal Offline config to
-control an in-flight download, and do not infer a training-data relationship
-from this operational reuse.
+dedicated PCE-download config. Do not infer a training-data relationship from
+this operational reuse. The completed availability scan accepted exact
+official `v1.1` references only; image fallback is not configurable here.
 
 ## Representative Paused Workflows
 

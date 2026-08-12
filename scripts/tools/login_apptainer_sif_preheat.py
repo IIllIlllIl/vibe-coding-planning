@@ -8,6 +8,7 @@ the login-node workload serial and writes Apptainer cache/tmp data to scratch.
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import os
 import shlex
@@ -43,6 +44,17 @@ def _default_hpc_root() -> str:
 DEFAULT_ULHPC_CONFIG = REPO_ROOT / "configs" / "ulhpc_submit.yaml"
 
 
+def _normalize_image_ref(image: str) -> str:
+    """Normalize the OCI repository component without changing its tag."""
+    if not image.startswith("ghcr.io/"):
+        return image
+    name_and_tag = image[len("ghcr.io/") :]
+    if ":" not in name_and_tag:
+        return "ghcr.io/" + name_and_tag.lower()
+    repository, tag = name_and_tag.rsplit(":", 1)
+    return f"ghcr.io/{repository.lower()}:{tag}"
+
+
 def _load_yaml(path: Path) -> dict[str, Any]:
     if not path.is_file():
         return {}
@@ -62,7 +74,9 @@ def _ssh_config(path: Path) -> tuple[str, str, str]:
     return f"{user}@{host}", port, ssh_key
 
 
-def _ssh_command(target: str, port: str, ssh_key: str, remote_command: str) -> list[str]:
+def _ssh_command(
+    target: str, port: str, ssh_key: str, remote_command: str
+) -> list[str]:
     command = ["ssh", "-p", port]
     if ssh_key:
         command.extend(["-i", os.path.expanduser(ssh_key)])
@@ -173,7 +187,7 @@ def _parse_args() -> argparse.Namespace:
 
 
 def _remote_script() -> str:
-    return r'''
+    return r"""
 import hashlib
 import json
 import os
@@ -192,6 +206,16 @@ def image_to_sif_name(image: str) -> str:
     safe = image.replace("/", "_").replace(":", "_")
     safe = "".join(c for c in safe if c.isalnum() or c in "._-")
     return f"{safe}.sif"
+
+
+def normalize_image_ref(image: str) -> str:
+    if not image.startswith("ghcr.io/"):
+        return image
+    name_and_tag = image[len("ghcr.io/"):]
+    if ":" not in name_and_tag:
+        return "ghcr.io/" + name_and_tag.lower()
+    repository, tag = name_and_tag.rsplit(":", 1)
+    return f"ghcr.io/{repository.lower()}:{tag}"
 
 
 def utc_now() -> str:
@@ -280,10 +304,18 @@ def atomic_json(path, value):
 def failure_category(error):
     lowered = error.lower()
     if "manifest unknown" in lowered:
-        return "manifest_unknown"
+        return "registry_manifest_not_found"
+    if "403" in lowered or "forbidden" in lowered or "unauthorized" in lowered:
+        return "registry_access_forbidden"
+    if "invalid reference format" in lowered or "must be lowercase" in lowered:
+        return "invalid_image_reference"
     if "timed out" in lowered or "timeout" in lowered:
-        return "timeout"
-    return "pull_failed"
+        return "pull_timeout"
+    if "no space left" in lowered:
+        return "disk_full"
+    if "temporary failure" in lowered or "connection reset" in lowered or "tls" in lowered:
+        return "network_failure"
+    return "unexpected_pull_failure"
 
 
 payload = json.loads(sys.stdin.read())
@@ -297,7 +329,7 @@ provenance_output = Path(
 timeout = payload["timeout"]
 max_attempts = payload["max_attempts"]
 retry_backoff = payload["retry_backoff"]
-images = payload["images"]
+images = list(dict.fromkeys(normalize_image_ref(str(image)) for image in payload["images"]))
 cleanup_tmp = bool(payload.get("cleanup_tmp", True))
 cleanup_apptainer_cache = bool(payload.get("cleanup_apptainer_cache", False))
 
@@ -314,16 +346,49 @@ if provenance_output.exists():
         provenance = {}
 else:
     provenance = {}
-if provenance.get("schema_version") != 1:
+if provenance.get("schema_version") not in {1, 2}:
     provenance = {
-        "schema_version": 1,
+        "schema_version": 2,
         "created_at": utc_now(),
         "records": {},
     }
-records = provenance.setdefault("records", {})
+provenance["schema_version"] = 2
+old_records = provenance.setdefault("records", {})
+records = {}
+for old_ref, record in old_records.items():
+    normalized = normalize_image_ref(str(old_ref))
+    if record.get("status") == "failed" and record.get("error"):
+        record = dict(record)
+        previous_category = record.get("failure_category")
+        current_category = failure_category(str(record["error"]))
+        if previous_category and previous_category != current_category:
+            record["original_failure_category"] = previous_category
+        record["failure_category"] = current_category
+    if normalized not in records or record.get("status") in {"cached", "pulled"}:
+        if normalized != old_ref:
+            record = dict(record)
+            record["original_requested_ref"] = old_ref
+            record["requested_ref"] = normalized
+        records[normalized] = record
+provenance["records"] = records
 provenance["updated_at"] = utc_now()
 provenance["sif_cache_dir"] = str(sif_cache_dir)
-provenance["requested_images"] = images
+previous_requested = [
+    normalize_image_ref(str(image))
+    for image in provenance.get("requested_images", [])
+]
+provenance["requested_images"] = list(dict.fromkeys(previous_requested + images))
+run_record = {
+    "run_id": utc_now(),
+    "started_at": utc_now(),
+    "requested_images": images,
+    "max_attempts": max_attempts,
+    "retry_backoff": retry_backoff,
+    "downloader_source_sha256": payload.get("downloader_source_sha256"),
+    "status": "running",
+}
+provenance.setdefault("runs", []).append(run_record)
+provenance["complete"] = False
 atomic_json(provenance_output, provenance)
 
 print(
@@ -350,21 +415,34 @@ for image in images:
     if sif.exists():
         cached += 1
         source_ref, inspect_error = inspect_sif(apptainer_bin, sif)
-        records[image] = {
-            "status": "cached",
-            "requested_ref": image,
-            "source_ref": source_ref,
-            "source_ref_error": inspect_error,
-            "oci_digest": digest_before,
-            "oci_digest_error": digest_before_error,
-            "digest_observation": "observed_at_audit_time",
-            "provenance_strength": "retrospective",
-            "sif_path": str(sif),
-            "sif_bytes": sif.stat().st_size,
-            "sif_mtime_ns": sif.stat().st_mtime_ns,
-            "sif_sha256": sha256_file(sif, previous),
-            "recorded_at": utc_now(),
-        }
+        if previous and previous.get("status") in {"cached", "pulled"}:
+            records[image] = {
+                **previous,
+                "last_verified_at": utc_now(),
+                "last_verified_source_ref": source_ref,
+                "last_verified_source_ref_error": inspect_error,
+                "last_verified_oci_digest": digest_before,
+                "last_verified_oci_digest_error": digest_before_error,
+                "sif_bytes": sif.stat().st_size,
+                "sif_mtime_ns": sif.stat().st_mtime_ns,
+                "sif_sha256": sha256_file(sif, previous),
+            }
+        else:
+            records[image] = {
+                "status": "cached",
+                "requested_ref": image,
+                "source_ref": source_ref,
+                "source_ref_error": inspect_error,
+                "oci_digest": digest_before,
+                "oci_digest_error": digest_before_error,
+                "digest_observation": "observed_at_audit_time",
+                "provenance_strength": "retrospective",
+                "sif_path": str(sif),
+                "sif_bytes": sif.stat().st_size,
+                "sif_mtime_ns": sif.stat().st_mtime_ns,
+                "sif_sha256": sha256_file(sif, previous),
+                "recorded_at": utc_now(),
+            }
         provenance["updated_at"] = utc_now()
         atomic_json(provenance_output, provenance)
         print(
@@ -384,6 +462,7 @@ for image in images:
 
     last_error = ""
     ok = False
+    attempt_evidence = []
     for attempt in range(1, max_attempts + 1):
         temporary = sif.with_name(f"{sif.name}.tmp.login.{os.getpid()}")
         if temporary.exists():
@@ -479,6 +558,15 @@ for image in images:
             if temporary.exists():
                 temporary.unlink()
 
+        attempt_evidence.append(
+            {
+                "attempt": attempt,
+                "error": last_error,
+                "failure_category": failure_category(last_error),
+                "recorded_at": utc_now(),
+            }
+        )
+
         print(
             json.dumps(
                 {
@@ -497,15 +585,32 @@ for image in images:
 
     if not ok:
         failures.append((image, last_error))
-        records[image] = {
+        failed_record = {
             "status": "failed",
             "requested_ref": image,
             "oci_digest": digest_before,
             "oci_digest_error": digest_before_error,
             "failure_category": failure_category(last_error),
             "error": last_error,
+            "attempts": attempt_evidence,
             "recorded_at": utc_now(),
         }
+        if previous:
+            prior_records = list(previous.get("prior_records", []))
+            prior_records.append(
+                {
+                    key: value
+                    for key, value in previous.items()
+                    if key != "prior_records"
+                }
+            )
+            failed_record["prior_records"] = prior_records
+            original_category = previous.get(
+                "original_failure_category", previous.get("failure_category")
+            )
+            if original_category:
+                failed_record["original_failure_category"] = original_category
+        records[image] = failed_record
         provenance["updated_at"] = utc_now()
         atomic_json(provenance_output, provenance)
         print(
@@ -530,6 +635,28 @@ summary = {
     "total": len(images),
     "provenance_output": str(provenance_output),
 }
+terminal_statuses = {"cached", "pulled", "failed"}
+requested_set = set(provenance["requested_images"])
+provenance["complete"] = requested_set == set(records) and all(
+    records[image].get("status") in terminal_statuses for image in requested_set
+)
+provenance["completed_at"] = utc_now()
+provenance["summary"] = {
+    "requested": len(requested_set),
+    "available": sum(
+        records[image].get("status") in {"cached", "pulled"}
+        for image in requested_set
+    ),
+    "failed": sum(
+        records[image].get("status") == "failed" for image in requested_set
+    ),
+}
+run_record.update(
+    status="completed",
+    completed_at=provenance["completed_at"],
+    summary={"cached": cached, "pulled": pulled, "failed": len(failures)},
+)
+atomic_json(provenance_output, provenance)
 print(json.dumps(summary, sort_keys=True), flush=True)
 for label, directory, enabled in (
     ("apptainer_tmp", Path(os.environ["APPTAINER_TMPDIR"]), cleanup_tmp),
@@ -563,7 +690,7 @@ for label, directory, enabled in (
         flush=True,
     )
 raise SystemExit(1 if failures else 0)
-'''
+"""
 
 
 def _remote_existing_sifs(
@@ -647,17 +774,13 @@ def main() -> int:
         f"/scratch/users/{remote_user}/vibe-coding-planning",
     )
     apptainer_cache_dir = (
-        args.apptainer_cache_dir
-        or f"{remote_hpc_root}/shared/apptainer-cache-login"
+        args.apptainer_cache_dir or f"{remote_hpc_root}/shared/apptainer-cache-login"
     )
     apptainer_tmp_dir = (
-        args.apptainer_tmp_dir
-        or f"{remote_hpc_root}/shared/apptainer-tmp-login"
+        args.apptainer_tmp_dir or f"{remote_hpc_root}/shared/apptainer-tmp-login"
     )
     raw_config = _load_yaml(Path(args.config))
-    raw_sif_cache = str(
-        raw_config.get("container", {}).get("sif_cache_dir", "")
-    )
+    raw_sif_cache = str(raw_config.get("container", {}).get("sif_cache_dir", ""))
     configured_sif_cache = (
         raw_sif_cache.replace("${USER}", remote_user).replace("$USER", remote_user)
         if raw_sif_cache
@@ -665,11 +788,14 @@ def main() -> int:
     )
     sif_cache_dir = str(args.sif_cache_dir or configured_sif_cache)
     if not sif_cache_dir:
-        raise SystemExit("--sif-cache-dir is required when config has no container.sif_cache_dir")
-    failed_output = args.failed_output or f"{sif_cache_dir}/login_preheat_failed_images.txt"
+        raise SystemExit(
+            "--sif-cache-dir is required when config has no container.sif_cache_dir"
+        )
+    failed_output = (
+        args.failed_output or f"{sif_cache_dir}/login_preheat_failed_images.txt"
+    )
     provenance_output = (
-        args.provenance_output
-        or f"{sif_cache_dir}/login_preheat_provenance.json"
+        args.provenance_output or f"{sif_cache_dir}/login_preheat_provenance.json"
     )
 
     images = (
@@ -682,12 +808,17 @@ def main() -> int:
         if args.remote_images_json
         else _collect_images(config)
     )
+    images = list(dict.fromkeys(_normalize_image_ref(image) for image in images))
     if args.missing_only or args.existing_only:
         existing = _remote_existing_sifs(ssh_target, ssh_port, ssh_key, sif_cache_dir)
         if args.missing_only:
-            images = [image for image in images if _image_to_sif_name(image) not in existing]
+            images = [
+                image for image in images if _image_to_sif_name(image) not in existing
+            ]
         else:
-            images = [image for image in images if _image_to_sif_name(image) in existing]
+            images = [
+                image for image in images if _image_to_sif_name(image) in existing
+            ]
     if args.limit:
         images = images[: args.limit]
 
@@ -707,12 +838,22 @@ def main() -> int:
         "dry_run": args.dry_run,
         "cleanup_tmp": args.cleanup_tmp,
         "cleanup_apptainer_cache": args.cleanup_apptainer_cache,
+        "downloader_source_sha256": hashlib.sha256(
+            Path(__file__).read_bytes()
+        ).hexdigest(),
     }
-    print(json.dumps({"event": "login_preheat_plan", **metadata}, sort_keys=True), flush=True)
+    print(
+        json.dumps({"event": "login_preheat_plan", **metadata}, sort_keys=True),
+        flush=True,
+    )
     for image in images:
         print(
             json.dumps(
-                {"event": "selected_image", "image": image, "sif": _image_to_sif_name(image)}
+                {
+                    "event": "selected_image",
+                    "image": image,
+                    "sif": _image_to_sif_name(image),
+                }
             ),
             flush=True,
         )
@@ -733,6 +874,7 @@ def main() -> int:
         "provenance_output": provenance_output,
         "cleanup_tmp": args.cleanup_tmp,
         "cleanup_apptainer_cache": args.cleanup_apptainer_cache,
+        "downloader_source_sha256": metadata["downloader_source_sha256"],
     }
     command = "python3 -c " + shlex.quote(_remote_script())
     result = subprocess.run(

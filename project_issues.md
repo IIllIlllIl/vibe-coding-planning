@@ -687,17 +687,23 @@ block 的频率与根因，再决定是否仅细化记录，或对反复出现�
   `/scratch/users/twang/vibe-coding-planning/operations/polybench-198-20260811/v1.1-provenance-retrospective.json`。
   login preheater 现会增量记录 cached/pulled/failed；新 pull 仅在前后 digest 一致时
   标为 `pull_attested`。
-- **活动 Python-199 下载**：本地 tmux identity 是
-  `polybench-sif-preheat-199-20260811`，由 `caffeinate -i -s` 保护。远端 image list、
-  incremental manifest 和 failure list 分别位于
+- **Python-199 镜像准备结果**：远端 image list、schema-2 provenance manifest 和
+  failure list 位于
   `operations/polybench-python199-v1.1-20260811/{images.json,v1.1-provenance.json,failed-images.tsv}`。
-  该次运行请求 199 个 `:v1.1` image、每个 image 一次 attempt、单次 pull 上限 21600s。
-  2026-08-11 23:03 CEST 快照有 12 个 terminal record：4 个
-  `pulled/pull_attested`、8 个 failed，另一个 pull 正在运行；这不是最终可用率。
-- **下载开放风险**：manifest 没有 top-level `complete`，所以不能只凭文件存在判断
-  完成。更重要的是，同 manifest 直接重跑会把之前成功的 `pulled/pull_attested`
-  记录经过 cached 分支覆盖成 `cached/retrospective`。当前 one-pass 可继续运行，但在
-  修复或设计显式 migration 之前不得宣称 resume-safe，也不得直接用同一命令恢复。
+  严格 `v1.1` 扫描与大小写修复后共 199 terminal records：113 available、86 failed。
+  唯一大写 OCI repository 引用 `Significant-Gravitas__AutoGPT-4652` 经仅 repository
+  小写规范化后恢复；未尝试 `v1.0`、`latest` 或本地 build。剩余失败分为 59 个
+  `registry_manifest_not_found` 和 27 个 `registry_access_forbidden`。27 个实例均在
+  原始扫描中实际 pull 失败，并用一个 login-node focused retry 复核该类别；Iris 当前
+  没有 Docker/Containers/Apptainer registry credential，因此不在无授权情况下批量做
+  credentialed retry。
+- **下载证据与清洗边界**：preheater schema 2 保留完整 requested universe、run 与
+  attempt history、`complete` 和原有强 provenance，subset retry 不再覆盖成功记录或
+  缩小 199 universe。86 个失败已冻结为
+  `v1.1-unavailable-images-20260812.json`（SHA-256
+  `103adf123f2f2fa084197e09436eac78e361dc383c6d23f82c0623d556fec927`）。该文件只表示
+  官方 `v1.1` 镜像在当前访问路径不可用，`research_label` 明确为 null；它是 PCE 前的
+  可解释数据可用性清洗依据，不能被解释为 unresolved 或任何任务质量标签。
 - **实现状态**：已新增与 Online 解耦的 `src/polybench_pce/` 工作流、冻结 source CSV
   工具、独立 `ulhpc-submit` 入口和两实例 platform-smoke config。它按实例提交无 `%N`
   的 Slurm element，阶段级 fresh container，三次总 attempts；耗尽、镜像不可用和

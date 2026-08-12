@@ -102,8 +102,8 @@ not a PCE run output. A reviewed copy is staged into the frozen input snapshot;
 workers consume that copy and the matching shared SIF, never a live download
 manifest.
 
-The active Python-199 preheat is protected locally by `tmux + caffeinate` and
-uses the tracked login-node preheater with an explicit remote image list:
+The completed Python-199 preheat used `tmux + caffeinate` locally and the
+tracked login-node preheater with an explicit remote image list:
 
 ```bash
 conda run --no-capture-output -n mini-swe python \
@@ -119,10 +119,12 @@ conda run --no-capture-output -n mini-swe python \
 ```
 
 The GEPA config in this command supplies only the Apptainer runtime and shared
-SIF-cache location; `--remote-images-json` is the authority for the 199 images,
-and no GEPA run is started. This invocation is an active one-pass operation,
-not a documented resume command: the current cached-image branch would
-downgrade earlier pull-time attestation if the same manifest were reused.
+SIF-cache location; `--remote-images-json` is the authority for the images, and
+no GEPA run is started. The preheater normalizes the GHCR repository component
+to lowercase, never changes the requested tag, preserves stronger existing
+pull attestation, keeps the original requested universe during subset retries,
+and records invocation and attempt history. The official PolyBench operation
+accepts only `v1.1`; do not add fallback tags to a retry.
 
 ## 4. Iteration-Target Supervisor
 

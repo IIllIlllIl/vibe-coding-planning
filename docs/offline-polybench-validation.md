@@ -82,26 +82,22 @@ digest/SIF identity; version fallback is not a runtime responsibility.
 
 ### Image-preparation operation
 
-The current Python-199 preparation is a serial login-node operation, not a
-Slurm array and not a PCE phase. A frozen remote JSON supplies the ordered 199
+The Python-199 preparation is a serial login-node operation, not a Slurm array
+and not a PCE phase. A frozen remote JSON supplies the ordered 199
 image references. For every reference, the preheater writes to a PID-qualified
 temporary SIF and atomically renames it only after a successful pull. It writes
 an incremental provenance record after every cached, pulled, or failed image.
-The active operation uses one attempt per image and a six-hour per-image upper
-bound so missing or inaccessible images remain explicit operational failures.
+The completed operation used one attempt per image and a six-hour per-image
+upper bound. Targeted login-node retries used the same exact `v1.1` policy.
 
-The incremental manifest is not yet a completed PCE input. It currently has no
-top-level `complete` marker. Completion requires all of the following to be
-reviewed together: the local launcher has terminated, no remote pull or temp
-SIF remains, all 199 requested references have terminal records, failures have
-been reviewed without converting them into labels, and the accepted records
-have then been copied into an immutable input snapshot.
-
-The current implementation must not be described as resume-safe. Re-running
-the same operation against the same provenance manifest sees an earlier
-success as cached and overwrites its `pulled/pull_attested` record with weaker
-`cached/retrospective` provenance. Preserve the active one-pass evidence and
-fix or explicitly migrate that behavior before any restart.
+Manifest schema 2 keeps the original 199-reference universe when a targeted
+retry selects only a subset, records each invocation under `runs`, preserves
+prior failure evidence, and declares `complete` only when every requested
+reference has a terminal record. Re-auditing an existing successful SIF adds
+`last_verified_*` fields without replacing stronger `pulled/pull_attested`
+provenance with a retrospective record. This makes targeted retry and audit
+safe at the evidence layer; it does not make a failed registry response
+successful or permit another image tag.
 
 ## New PCE Evidence Generation
 
@@ -245,7 +241,21 @@ Frozen smoke inputs and runtime evidence have distinct roots:
 evidence. Future formal evidence uses `polybench-pce-runs/formal/`; download
 operations and their incremental manifest remain outside all three run roots.
 
-At 2026-08-11 23:03 CEST the active Python-199 operation had 199 requested
-references and 12 terminal records: 4 successful `pulled/pull_attested` and 8
-failed. Another pull was active, so these counts are a progress snapshot rather
-than a final availability result.
+The strict-`v1.1` image scan completed on 2026-08-12. Of 199 requested images,
+113 are available and 86 are unavailable under the documented anonymous GHCR
+access path. Lowercasing the OCI repository component recovered the single
+`Significant-Gravitas__AutoGPT-4652` reference. The remaining failures are 59
+`registry_manifest_not_found` responses and 27
+`registry_access_forbidden` responses. Every one of the 27 forbidden images
+failed an actual initial pull; a focused login-node retry reconfirmed that
+class. Iris has no configured Docker, Containers, or Apptainer registry
+credential, so a credentialed retry requires separate authority and is not
+silently attempted.
+
+The operational manifest is complete but is still not a PCE dataset. The
+derived `v1.1-unavailable-images-20260812.json` records all 86 exclusions with
+their raw download evidence, explicitly leaves `research_label` null, and
+states that this is image-availability cleaning only. Its SHA-256 is
+`103adf123f2f2fa084197e09436eac78e361dc383c6d23f82c0623d556fec927`.
+Formal PCE still requires a reviewed immutable source/image snapshot containing
+the 113 available cases.
