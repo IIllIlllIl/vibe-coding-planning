@@ -170,6 +170,14 @@ checkpoints; that migration path is not yet implemented. No formal config is
 active against the final Python-199 source snapshot and completed image
 manifest. Existing historical PCT code is not the authority for the new run.
 
+A complete post-fix smoke now uses the separate
+`hpc-smoke2-evaluator-fix-20260812` root. Controller `5647573` submitted fresh
+worker array `5647574` with fingerprint `b96bc352…`; both workers started from
+Plan and do not consume pre-fix checkpoints. The outer submission manifest
+binds this launch to commit `84ddf32…`. The inner PCE manifest currently records
+a null Git head because `.git` is excluded from remote sync; formal PCE must
+explicitly propagate the outer commit identity rather than infer it remotely.
+
 ## Cleaning And Validation Snapshots
 
 Data cleaning begins only after the new raw PCE snapshot is complete. Its

@@ -717,6 +717,16 @@ block 的频率与根因，再决定是否仅细化记录，或对反复出现�
   因此现有入口会正确拒绝把新 Evaluator 当成旧 run 的普通 resume。Evaluate-only
   复用必须使用新的 run identity，并显式记录旧 run/checkpoint 来源与 hash；该受控
   migration 尚未实现。完整新 smoke 仍是最终端到端验收。
+- **Evaluator-fix 完整 smoke**：新 identity
+  `hpc-smoke2-evaluator-fix-20260812` 绑定本地 commit `84ddf32`。controller job
+  `5647573` 已正常完成并 cooperative yield；全新 worker array `5647574` 的两个元素
+  已开始 attempt 1，fingerprint 为 `b96bc352…`。它从 Plan 重新运行，不读取旧 smoke
+  checkpoints。待 worker 终结后需要用同一 config 再推进 controller 收集。
+- **PCE Git provenance 缺口**：外层 `ulhpc-submit` manifest 已保存
+  `local_commit=84ddf32…`，但同步代码排除 `.git`，使 PCE 内部
+  `run_manifest.json.project_git_head` 为 null。运行内容仍由外层提交 manifest 与 PCE
+  source/config hashes 共同识别，但正式 PCE 前应把提交入口的 commit 显式传入内部
+  manifest，而不是依赖远端 `git rev-parse`。
 - **仍待验收**：正式 Python-199 frozen snapshot、下载完成后的 199-image manifest
   review、正式 PCE config、实际 HPC smoke、PCE 后清洗 snapshot，以及指向新 snapshot 的
   Poly check-only config。未经 HPC smoke 前不能把新入口描述为正式数据生产完成。
