@@ -145,6 +145,31 @@ class PolyBenchPCERunner:
         if path.exists():
             shutil.rmtree(path)
 
+    def _best_effort_environment_cleanup(
+        self, env: ApptainerEnvironment, *, phase: str
+    ) -> None:
+        try:
+            env.cleanup()
+        except Exception as exc:
+            self.audit.write(
+                "polybench_pce_environment_cleanup_failed",
+                phase=phase,
+                error_type=type(exc).__name__,
+                error=str(exc),
+            )
+
+    def _best_effort_workspace_cleanup(self, path: Path, *, phase: str) -> None:
+        try:
+            self._cleanup(path)
+        except Exception as exc:
+            self.audit.write(
+                "polybench_pce_workspace_cleanup_failed",
+                phase=phase,
+                path=str(path),
+                error_type=type(exc).__name__,
+                error=str(exc),
+            )
+
     def run(self, case: PolyBenchPCECase) -> dict[str, Any]:
         self._verify_sif(case)
         plan_checkpoint = self._checkpoint("plan")
@@ -166,10 +191,10 @@ class PolyBenchPCERunner:
                     ),
                     failure_trajectory_path=self.attempt_dir / "plan_failure.json",
                 )
+                plan_checkpoint = {"plan": plan, "trajectory": list(trajectory)}
+                self._save_checkpoint("plan", plan_checkpoint)
             finally:
-                env.cleanup()
-            plan_checkpoint = {"plan": plan, "trajectory": list(trajectory)}
-            self._save_checkpoint("plan", plan_checkpoint)
+                self._best_effort_environment_cleanup(env, phase="plan")
 
         code_checkpoint = self._checkpoint("code")
         if code_checkpoint is None:
@@ -209,57 +234,59 @@ class PolyBenchPCERunner:
                         self.config.execution.code_phase_timeout_seconds or None
                     ),
                 )
+                raw_patch_path = self.attempt_dir / "raw_code_submission.patch"
+                raw_patch_path.write_text(raw_patch, encoding="utf-8")
+                try:
+                    policy_result = apply_polybench_patch_policy(
+                        raw_patch,
+                        test_patch=case.test_patch,
+                        allow_empty=True,
+                        reject_overlap=False,
+                    )
+                except TaskError as exc:
+                    atomic_json(
+                        self.attempt_dir / "patch_policy_failure.json",
+                        {
+                            "schema_version": 1,
+                            "error_type": type(exc).__name__,
+                            "error": str(exc),
+                            "raw_patch_path": str(raw_patch_path),
+                        },
+                    )
+                    raise AgentTaskError(
+                        f"Code submission failed the PolyBench patch policy: {exc}",
+                        phase="code",
+                        reason="code_patch_policy_invalid",
+                        trajectory=list(trajectory),
+                    ) from exc
+                filtered_patch = policy_result.patch
+                filtered_patch_path = (
+                    self.attempt_dir / "filtered_code_submission.patch"
+                )
+                filtered_patch_path.write_text(filtered_patch, encoding="utf-8")
+                patch_policy = {
+                    "policy": "exclude_test_paths_v1",
+                    "kept_files": list(policy_result.kept_files),
+                    "removed_files": list(policy_result.removed_files),
+                    "test_overlap_files": list(policy_result.test_overlap_files),
+                    "raw_patch_path": str(raw_patch_path),
+                    "filtered_patch_path": str(filtered_patch_path),
+                    "raw_patch_sha256": hashlib.sha256(raw_patch.encode()).hexdigest(),
+                    "filtered_patch_sha256": hashlib.sha256(
+                        filtered_patch.encode()
+                    ).hexdigest(),
+                }
+                atomic_json(self.attempt_dir / "patch_policy.json", patch_policy)
+                code_checkpoint = {
+                    "raw_patch": raw_patch,
+                    "patch": filtered_patch,
+                    "patch_policy": patch_policy,
+                    "trajectory": list(trajectory),
+                }
+                self._save_checkpoint("code", code_checkpoint)
             finally:
-                env.cleanup()
-                self._cleanup(code_workspace)
-            raw_patch_path = self.attempt_dir / "raw_code_submission.patch"
-            raw_patch_path.write_text(raw_patch, encoding="utf-8")
-            try:
-                policy_result = apply_polybench_patch_policy(
-                    raw_patch,
-                    test_patch=case.test_patch,
-                    allow_empty=True,
-                    reject_overlap=False,
-                )
-            except TaskError as exc:
-                atomic_json(
-                    self.attempt_dir / "patch_policy_failure.json",
-                    {
-                        "schema_version": 1,
-                        "error_type": type(exc).__name__,
-                        "error": str(exc),
-                        "raw_patch_path": str(raw_patch_path),
-                    },
-                )
-                raise AgentTaskError(
-                    f"Code submission failed the PolyBench patch policy: {exc}",
-                    phase="code",
-                    reason="code_patch_policy_invalid",
-                    trajectory=list(trajectory),
-                ) from exc
-            filtered_patch = policy_result.patch
-            filtered_patch_path = self.attempt_dir / "filtered_code_submission.patch"
-            filtered_patch_path.write_text(filtered_patch, encoding="utf-8")
-            patch_policy = {
-                "policy": "exclude_test_paths_v1",
-                "kept_files": list(policy_result.kept_files),
-                "removed_files": list(policy_result.removed_files),
-                "test_overlap_files": list(policy_result.test_overlap_files),
-                "raw_patch_path": str(raw_patch_path),
-                "filtered_patch_path": str(filtered_patch_path),
-                "raw_patch_sha256": hashlib.sha256(raw_patch.encode()).hexdigest(),
-                "filtered_patch_sha256": hashlib.sha256(
-                    filtered_patch.encode()
-                ).hexdigest(),
-            }
-            atomic_json(self.attempt_dir / "patch_policy.json", patch_policy)
-            code_checkpoint = {
-                "raw_patch": raw_patch,
-                "patch": filtered_patch,
-                "patch_policy": patch_policy,
-                "trajectory": list(trajectory),
-            }
-            self._save_checkpoint("code", code_checkpoint)
+                self._best_effort_environment_cleanup(env, phase="code")
+                self._best_effort_workspace_cleanup(code_workspace, phase="code")
 
         evaluator_checkpoint = self._checkpoint("evaluate")
         if evaluator_checkpoint is None:
@@ -274,10 +301,22 @@ class PolyBenchPCERunner:
                     workdir=self.config.docker.workdir,
                     phase_workdir=eval_workspace,
                     timeout=self.config.evaluator_timeout,
+                    result_callback=lambda result: self._save_checkpoint(
+                        "evaluate", {"evaluator_result": result}
+                    ),
+                    cleanup_error_callback=lambda exc: self.audit.write(
+                        "polybench_pce_environment_cleanup_failed",
+                        phase="evaluate",
+                        error_type=type(exc).__name__,
+                        error=str(exc),
+                    ),
                 )
             finally:
-                self._cleanup(eval_workspace)
+                self._best_effort_workspace_cleanup(eval_workspace, phase="evaluate")
             evaluator_checkpoint = {"evaluator_result": evaluator_result}
+            # The official evaluator callback writes this before its own cleanup.
+            # Writing the same atomic payload again also supports test/custom
+            # evaluators that do not use the callback.
             self._save_checkpoint("evaluate", evaluator_checkpoint)
 
         return {

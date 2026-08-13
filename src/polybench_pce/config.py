@@ -117,7 +117,7 @@ def load_polybench_pce_config(
         partition=str(hpc_raw.get("partition", hpc_defaults.partition)),
         cpus_per_task=int(hpc_raw.get("cpus_per_task", 1)),
         mem=str(hpc_raw.get("mem", "4G")),
-        time=str(hpc_raw.get("time", "00:55:00")),
+        time=str(hpc_raw.get("time", "02:05:00")),
         poll_interval_seconds=int(hpc_raw.get("poll_interval_seconds", 300)),
         task_output_grace_seconds=int(hpc_raw.get("task_output_grace_seconds", 300)),
         missing_task_grace_seconds=int(hpc_raw.get("missing_task_grace_seconds", 600)),

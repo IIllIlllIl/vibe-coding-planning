@@ -38,7 +38,7 @@ escalated network access.
 | Offline initial Reflection task | 1 CPU / 4G | 35min; one complete Agent session |
 | Offline contamination repair task | 1 CPU / 4G | 35min; submitted only after a deterministic hit |
 | PolyBench PCE controller slice | 1 CPU / 4G | 10min; submits, collects, or selectively retries one frozen batch |
-| PolyBench PCE array element | 1 CPU / 4G | 55min total; one instance with fresh Plan, Code, and Evaluate containers |
+| PolyBench PCE array element | 1 CPU / 4G | 125min hard upper bound; one instance with fresh Plan, Code, and Evaluate containers |
 
 Each array element executes one PCT rollout or one Reviewer. Synthesis uses a
 single-element array so it follows the same submission/status contract.
@@ -58,6 +58,24 @@ instance is one array element, the array has no `%N` cap, and Slurm owns
 scheduling. A smoke may run while the single login-node preheater downloads a
 different image only when every selected smoke SIF is already complete and
 hash-frozen and the two processes use separate Apptainer temporary paths.
+
+The PCE worker command is the final foreground command in its Slurm script.
+Normal completion therefore exits immediately and releases the allocation;
+125 minutes is only a hard upper bound. There is no required final cleanup
+window. Plan is durable after its final plan and trajectory are saved; Code is
+durable only after raw submission, deterministic patch policy, filtered patch,
+and trajectory are saved; Evaluate is durable only after official parsing,
+classification, and raw evidence are saved. Each identity-bound checkpoint is
+written atomically before worker-side environment/workspace cleanup. Cleanup is
+best-effort and failures are audit events, not reasons to invalidate or rerun a
+completed phase. The controller only orchestrates submission, collection, and
+retry; it does not own PCE resource cleanup.
+
+If Slurm interrupts cleanup after a durable checkpoint, the next attempt starts
+at the first incomplete phase. This is treated as a fresh independent random
+draw only for phases that genuinely did not complete: repeated execution is
+assumed not to change the underlying result distribution merely because it is
+a later attempt. No Agent conversation is resumed mid-phase.
 
 Before increasing resources, inspect `sacct` and FairShare. More than 4G with
 one CPU requires measurement-based justification.

@@ -692,16 +692,17 @@ block 的频率与根因，再决定是否仅细化记录，或对反复出现�
   `operations/polybench-python199-v1.1-20260811/{images.json,v1.1-provenance.json,failed-images.tsv}`。
   严格 `v1.1` 扫描与大小写修复后共 199 terminal records：113 available、86 failed。
   唯一大写 OCI repository 引用 `Significant-Gravitas__AutoGPT-4652` 经仅 repository
-  小写规范化后恢复；未尝试 `v1.0`、`latest` 或本地 build。剩余失败分为 59 个
-  `registry_manifest_not_found` 和 27 个 `registry_access_forbidden`。27 个实例均在
-  原始扫描中实际 pull 失败，并用一个 login-node focused retry 复核该类别；Iris 当前
-  没有 Docker/Containers/Apptainer registry credential，因此不在无授权情况下批量做
-  credentialed retry。
+  小写规范化后恢复；未尝试 `v1.0`、`latest` 或本地 build。匿名扫描将剩余失败分为
+  59 个 `registry_manifest_not_found` 和 27 个 `registry_access_forbidden`。2026-08-13
+  在 Iris 交互式配置 GitHub `read:packages` credential 后，完整重试这 27 个 exact
+  `v1.1` 引用，全部明确返回 `manifest unknown`，没有恢复新 SIF。最终可解释分类为
+  86 个 `registry_manifest_not_found`，不再存在 credential ambiguity；credential
+  内容没有进入仓库、命令参数或日志。
 - **下载证据与清洗边界**：preheater schema 2 保留完整 requested universe、run 与
   attempt history、`complete` 和原有强 provenance，subset retry 不再覆盖成功记录或
-  缩小 199 universe。86 个失败已冻结为
-  `v1.1-unavailable-images-20260812.json`（SHA-256
-  `103adf123f2f2fa084197e09436eac78e361dc383c6d23f82c0623d556fec927`）。该文件只表示
+  缩小 199 universe。86 个最终失败已冻结为
+  `v1.1-unavailable-images-authenticated-20260813.json`（SHA-256
+  `84b773f0efc2df628fdf6752ce25428a3ec3818d4ace00dc5dc2af08685ede46`）。该文件只表示
   官方 `v1.1` 镜像在当前访问路径不可用，`research_label` 明确为 null；它是 PCE 前的
   可解释数据可用性清洗依据，不能被解释为 unresolved 或任何任务质量标签。
 - **实现状态**：已新增与 Online 解耦的 `src/polybench_pce/` 工作流、冻结 source CSV
@@ -748,3 +749,19 @@ block 的频率与根因，再决定是否仅细化记录，或对反复出现�
   本地回归测试已通过；仍需新 HPC smoke 验收实际 Apptainer 行为，旧 smoke 不得按新
   semantic fingerprint 推进。活动 smoke config 已切换到未提交的全新 identity
   `hpc-smoke3-patch-policy-outcomes-20260812`，本轮尚未启动它。
+- **PCE walltime 与释放边界（2026-08-13）**：smoke3 的
+  `huggingface__transformers-4759` 在约 48 分钟完成完整 PCE，另一实例在 Plan 阶段
+  撞到继承自 SWE Online 的 55 分钟 Slurm 上限。下一 smoke 使用独立 identity
+  `hpc-smoke4-walltime125-resume-boundary-20260813` 与 `1 CPU / 4G / 125min`。125 分钟
+  只是 hard upper bound；正常 worker 完成即退出并释放 allocation，超时由 Slurm
+  回收，不新增必须在末尾完成的保存或清理窗口。Plan、完成 deterministic patch
+  policy 的 Code、完成官方解析/分类的 Evaluate 现在均先写 identity-bound 原子
+  checkpoint，再执行 worker 侧 environment/workspace best-effort cleanup。cleanup
+  失败只写 audit event，不会使完整 phase 失效；controller 仍只负责编排、收集和
+  retry，不接管资源清理。若未完成 phase 需要重跑，把各次执行视为来自同一概率分布
+  的独立随机抽样，不恢复 Agent 对话中间态。本地测试已用 cleanup exception 验证下一
+  attempt 不会重跑三个完整 phase；smoke4 尚待 HPC 验收。
+- **PCE 后续工作**：smoke4 验收 resume/释放边界后，使用最终 113 个 strict-`v1.1`
+  可用 SIF 运行新的 PolyBench PCE raw-data generation；随后另行审查并把相同的
+  “完整 phase 先 checkpoint、cleanup 后置且不影响结果”边界移植到其他 PCE 流程，
+  不在本次 PolyBench 修改中改变 Online 流程。

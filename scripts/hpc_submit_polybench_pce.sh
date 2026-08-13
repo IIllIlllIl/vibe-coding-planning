@@ -36,7 +36,7 @@ Options:
   --submit                  submit; default is ulhpc-submit dry-run
   --dry-run                 explicitly retain dry-run mode
 
-The worker resources and 55-minute walltime come from the PCE config. Re-run
+The worker resources and hard walltime come from the PCE config. Re-run
 this same command with the same config to collect or selectively retry the
 fingerprinted task batch after the first controller yields.
 USAGE

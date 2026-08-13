@@ -45,8 +45,9 @@ Apptainer 临时目录，且不得选择仍在写入的 `.tmp` 镜像。
   PolyBench Python source universe、原始 row、Dockerfile hash 与 task-list identity。
 - `run_polybench_pce_hpc.py`：推进一次独立的 PolyBench PCE controller。每个实例是
   一个不带 `%N` 的 Slurm array element；Plan/Code/Evaluate 分容器，三次总 attempts，
-  耗尽只记录 incomplete raw evidence，不生成最终 validation label。该入口不经过
-  Online GEPA rollout。
+  耗尽只记录 incomplete raw evidence，不生成最终 validation label。每个完整 phase
+  先写 identity-bound 原子 checkpoint，再做 worker 侧 best-effort cleanup；cleanup
+  不会使已完成 phase 在下一 attempt 中重跑。该入口不经过 Online GEPA rollout。
 - `hpc_submit_polybench_pce.sh`：通过 `ulhpc-submit` stage 冻结的 PCE source/image
   manifest、连接 persistent run directory，并推进一个 `1 CPU / 4G / 10min`
   controller slice。默认 dry-run；重复使用同一 config 即收集或重试同一
@@ -66,6 +67,8 @@ Apptainer 临时目录，且不得选择仍在写入的 `.tmp` 镜像。
 - DeepSeek key 只从 Iris 上权限受限的 env 文件加载，不进入参数、配置或日志。
 - Controller、Checker、initial Reflection 和按需 contamination repair 默认均为
   `1 CPU / 4G`；每次 Agent 调用对应一个 task。
+- PolyBench PCE worker 使用 `1 CPU / 4G / 125min` hard upper bound；正常完成后进程
+  直接退出并释放 allocation，不保留专门的收尾时间窗。
 - Offline Checker 一次提交完整 batch；每个 Agent 是独立 Slurm array element，
   项目不添加 `%N` 并发上限，由 Slurm 按队列和集群策略调度。
 - 每次变更 HPC 配置必须使用新的 run identity；不得用新语义接管旧 run directory。

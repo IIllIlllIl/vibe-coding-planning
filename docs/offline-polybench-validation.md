@@ -200,6 +200,27 @@ These semantic changes use the new smoke identity
 `hpc-smoke3-patch-policy-outcomes-20260812`; neither earlier checkpoint tree is
 eligible for implicit resume.
 
+That smoke completed one instance in about 48 minutes and lost the other to the
+inherited 55-minute Slurm limit during Plan. The next isolated smoke identity is
+`hpc-smoke4-walltime125-resume-boundary-20260813`. It uses `1 CPU / 4G` and a
+125-minute hard upper bound. Normal completion releases the allocation
+immediately; reaching the hard limit relies on Slurm reclamation and does not
+require a final application-managed save or cleanup interval. The worker now
+writes an identity-bound atomic checkpoint after all method-relevant evidence
+for each phase is complete and before environment/workspace cleanup. Plan saves
+the final plan and trajectory; Code additionally completes the deterministic
+patch policy and preserves raw/filtered patches; Evaluate saves the official
+parser, score/classification, and raw evidence. Cleanup remains worker-owned and
+best-effort. A cleanup error is audited but cannot invalidate the checkpoint;
+an interrupted worker therefore resumes from the first genuinely incomplete
+phase without resuming an Agent conversation.
+
+This automation boundary does not select a preferred stochastic result. If an
+incomplete phase must run again, each execution is treated as an independent
+draw from the same distribution; being a later attempt is assumed not to alter
+that distribution. Completed phases are never redrawn merely because cleanup
+or later orchestration failed.
+
 ## Cleaning And Validation Snapshots
 
 Data cleaning begins only after the new raw PCE snapshot is complete. Its
@@ -241,21 +262,22 @@ Frozen smoke inputs and runtime evidence have distinct roots:
 evidence. Future formal evidence uses `polybench-pce-runs/formal/`; download
 operations and their incremental manifest remain outside all three run roots.
 
-The strict-`v1.1` image scan completed on 2026-08-12. Of 199 requested images,
-113 are available and 86 are unavailable under the documented anonymous GHCR
-access path. Lowercasing the OCI repository component recovered the single
-`Significant-Gravitas__AutoGPT-4652` reference. The remaining failures are 59
-`registry_manifest_not_found` responses and 27
-`registry_access_forbidden` responses. Every one of the 27 forbidden images
-failed an actual initial pull; a focused login-node retry reconfirmed that
-class. Iris has no configured Docker, Containers, or Apptainer registry
-credential, so a credentialed retry requires separate authority and is not
-silently attempted.
+The strict-`v1.1` image scan completed on 2026-08-12 and its authenticated
+review completed on 2026-08-13. Of 199 requested images, 113 are available and
+86 are unavailable. Lowercasing the OCI repository component recovered the
+single `Significant-Gravitas__AutoGPT-4652` reference. The initial anonymous
+scan classified 59 failures as `registry_manifest_not_found` and 27 as
+`registry_access_forbidden`. A GitHub `read:packages` credential was configured
+interactively on Iris without entering the repository, command arguments, or
+logs; all 27 then returned `manifest unknown`. The final strict-`v1.1`
+classification is therefore 86 `registry_manifest_not_found`, with no remaining
+credential ambiguity and no fallback tag or local build.
 
-The operational manifest is complete but is still not a PCE dataset. The
-derived `v1.1-unavailable-images-20260812.json` records all 86 exclusions with
-their raw download evidence, explicitly leaves `research_label` null, and
-states that this is image-availability cleaning only. Its SHA-256 is
-`103adf123f2f2fa084197e09436eac78e361dc383c6d23f82c0623d556fec927`.
+The operational manifest is complete but is still not a PCE dataset. The final
+derived `v1.1-unavailable-images-authenticated-20260813.json` records all 86
+exclusions with anonymous and authenticated attempt evidence, explicitly
+leaves `research_label` null, and states that this is image-availability
+cleaning only. Its SHA-256 is
+`84b773f0efc2df628fdf6752ce25428a3ec3818d4ace00dc5dc2af08685ede46`.
 Formal PCE still requires a reviewed immutable source/image snapshot containing
 the 113 available cases.

@@ -136,7 +136,7 @@ def _config(tmp_path: Path, snapshot: Path, image_manifest: Path) -> Path:
             "submit": True,
             "cpus_per_task": 1,
             "mem": "4G",
-            "time": "00:55:00",
+            "time": "02:05:00",
             "max_task_attempts": 3,
             "worker_config_path": str(path),
         },
@@ -239,8 +239,10 @@ def test_array_submits_all_indices_without_percent_cap(tmp_path: Path) -> None:
     )
     assert "#SBATCH --array=0,1,2\n" in script
     assert "#SBATCH --array=0,1,2%" not in script
+    assert "#SBATCH --time=02:05:00" in script
     assert "-m src.polybench_pce.worker" in script
     assert '--attempt "${ATTEMPT}"' in script
+    assert script.rstrip().endswith('--attempt "${ATTEMPT}"')
 
 
 def test_evaluator_materializes_repo_before_writing_inputs(
@@ -318,9 +320,12 @@ def test_evaluator_materializes_repo_before_writing_inputs(
         workdir="/testbed",
         phase_workdir=tmp_path / "eval",
         timeout=30,
+        result_callback=lambda result: events.append(
+            f"checkpoint:{result['terminal_kind']}"
+        ),
     )
     assert result["terminal_kind"] == "tests_parsed"
-    assert events == ["environment", "cleanup"]
+    assert events == ["environment", "checkpoint:tests_parsed", "cleanup"]
 
 
 def test_evaluator_scores_code_patch_apply_failure_as_unresolved(
@@ -494,6 +499,69 @@ def test_runner_reuses_only_completed_phase_checkpoints(
         checkpoint_dir=checkpoint_dir,
         checkpoint_identity="identity",
         attempt_dir=tmp_path / "attempt-2",
+        evaluator=lambda *args, **kwargs: pytest.fail("evaluator should resume"),
+    ).run(case)
+    assert second == first
+    assert calls.count("plan") == calls.count("code") == calls.count("evaluate") == 1
+
+
+def test_runner_keeps_completed_checkpoints_when_cleanup_fails(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    snapshot, images, _ = _frozen_inputs(tmp_path)
+    case = load_polybench_pce_cases(snapshot, images)[0][0]
+    config = load_polybench_pce_config(
+        _config(tmp_path, snapshot, images), require_api_keys=False
+    )
+    monkeypatch.setenv("DEEPSEEK_API_KEY", "test-only")
+    calls: list[str] = []
+
+    class Env:
+        def cleanup(self) -> None:
+            calls.append("cleanup_failed")
+            raise RuntimeError("synthetic cleanup failure")
+
+    monkeypatch.setattr(PolyBenchPCERunner, "_verify_sif", lambda self, case: None)
+    monkeypatch.setattr(
+        PolyBenchPCERunner, "_environment", lambda self, case, **kwargs: Env()
+    )
+    monkeypatch.setattr(
+        "src.polybench_pce.runner.plan_agent.run",
+        lambda *args, **kwargs: (calls.append("plan") or "plan", [{"plan": 1}]),
+    )
+    monkeypatch.setattr(
+        "src.polybench_pce.runner.code_agent.run",
+        lambda *args, **kwargs: (
+            calls.append("code") or _diff("src/module.py"),
+            [{"code": 1}],
+        ),
+    )
+
+    def evaluator(*args: object, **kwargs: object) -> dict:
+        calls.append("evaluate")
+        result = {"status": "completed", "terminal_kind": "tests_parsed"}
+        kwargs["result_callback"](result)
+        kwargs["cleanup_error_callback"](RuntimeError("synthetic eval cleanup"))
+        return result
+
+    checkpoint_dir = tmp_path / "checkpoints-cleanup"
+    first = PolyBenchPCERunner(
+        config,
+        SimpleNamespace(),
+        checkpoint_dir=checkpoint_dir,
+        checkpoint_identity="identity-cleanup",
+        attempt_dir=tmp_path / "attempt-cleanup-1",
+        evaluator=evaluator,
+    ).run(case)
+    assert first["pce_status"] == "completed"
+    assert calls.count("plan") == calls.count("code") == calls.count("evaluate") == 1
+
+    second = PolyBenchPCERunner(
+        config,
+        SimpleNamespace(),
+        checkpoint_dir=checkpoint_dir,
+        checkpoint_identity="identity-cleanup",
+        attempt_dir=tmp_path / "attempt-cleanup-2",
         evaluator=lambda *args, **kwargs: pytest.fail("evaluator should resume"),
     ).run(case)
     assert second == first

@@ -5,7 +5,7 @@ from __future__ import annotations
 from dataclasses import asdict
 import importlib
 from pathlib import Path
-from typing import Any
+from typing import Any, Callable
 
 from src.environment.apptainer_env import ApptainerEnvironment
 from src.exceptions import CommandTimeoutError
@@ -123,8 +123,16 @@ def evaluate_polybench_apptainer(
     workdir: str,
     phase_workdir: Path,
     timeout: int,
+    result_callback: Callable[[dict[str, Any]], None] | None = None,
+    cleanup_error_callback: Callable[[BaseException], None] | None = None,
 ) -> dict[str, Any]:
     """Return raw official evidence without deciding validation inclusion."""
+
+    def completed(result: dict[str, Any]) -> dict[str, Any]:
+        if result_callback is not None:
+            result_callback(result)
+        return result
+
     try:
         from poly_bench_evaluation.constants import REPO_TO_PARSER_CLASS
         from poly_bench_evaluation.scoring import instance_level_scoring
@@ -188,16 +196,18 @@ def evaluate_polybench_apptainer(
             env, ".vibe_test.patch", timeout=timeout
         )
         if not test_patch_applied:
-            return _terminal_result(
-                case,
-                task_outcome="unknown",
-                outcome_reason="test_patch_not_applied",
-                generation=bool(patch.strip()),
-                patch_applied=False,
-                evidence={
-                    "terminal_kind": "test_patch_not_applied",
-                    "test_patch_attempts": test_patch_attempts,
-                },
+            return completed(
+                _terminal_result(
+                    case,
+                    task_outcome="unknown",
+                    outcome_reason="test_patch_not_applied",
+                    generation=bool(patch.strip()),
+                    patch_applied=False,
+                    evidence={
+                        "terminal_kind": "test_patch_not_applied",
+                        "test_patch_attempts": test_patch_attempts,
+                    },
+                )
             )
 
         generation = bool(patch.strip())
@@ -209,20 +219,22 @@ def evaluate_polybench_apptainer(
             )
         if not generation or not code_patch_applied:
             kind = "empty_generation" if not generation else "code_patch_not_applied"
-            return _terminal_result(
-                case,
-                task_outcome="unresolved",
-                outcome_reason=kind,
-                generation=generation,
-                patch_applied=False,
-                evidence={
-                    "terminal_kind": kind,
-                    "test_patch_applied": True,
-                    "test_patch_attempts": test_patch_attempts,
-                    "code_patch_applied": False,
-                    "code_patch_attempts": code_patch_attempts,
-                    "test_command": case.test_command,
-                },
+            return completed(
+                _terminal_result(
+                    case,
+                    task_outcome="unresolved",
+                    outcome_reason=kind,
+                    generation=generation,
+                    patch_applied=False,
+                    evidence={
+                        "terminal_kind": kind,
+                        "test_patch_applied": True,
+                        "test_patch_attempts": test_patch_attempts,
+                        "code_patch_applied": False,
+                        "code_patch_attempts": code_patch_attempts,
+                        "test_command": case.test_command,
+                    },
+                )
             )
 
         try:
@@ -230,22 +242,24 @@ def evaluate_polybench_apptainer(
             raw_output = str(test_result.get("output", ""))
             test_returncode = test_result.get("returncode")
         except CommandTimeoutError as exc:
-            return _terminal_result(
-                case,
-                task_outcome="unresolved",
-                outcome_reason="test_execution_timeout",
-                generation=True,
-                patch_applied=True,
-                evidence={
-                    "terminal_kind": "test_timeout",
-                    "test_patch_applied": True,
-                    "test_patch_attempts": test_patch_attempts,
-                    "code_patch_applied": True,
-                    "code_patch_attempts": code_patch_attempts,
-                    "test_command": case.test_command,
-                    "raw_test_output": str(exc),
-                    "test_timed_out": True,
-                },
+            return completed(
+                _terminal_result(
+                    case,
+                    task_outcome="unresolved",
+                    outcome_reason="test_execution_timeout",
+                    generation=True,
+                    patch_applied=True,
+                    evidence={
+                        "terminal_kind": "test_timeout",
+                        "test_patch_applied": True,
+                        "test_patch_attempts": test_patch_attempts,
+                        "code_patch_applied": True,
+                        "code_patch_attempts": code_patch_attempts,
+                        "test_command": case.test_command,
+                        "raw_test_output": str(exc),
+                        "test_timed_out": True,
+                    },
+                )
             )
 
         parsed: dict[str, Any] = {}
@@ -265,20 +279,22 @@ def evaluate_polybench_apptainer(
         try:
             parsed = getattr(parsers, parser_name)(test_content=raw_output).parse()
         except Exception as exc:
-            return _terminal_result(
-                case,
-                task_outcome="unknown",
-                outcome_reason="parser_failed",
-                generation=True,
-                patch_applied=True,
-                evidence={
-                    "terminal_kind": "parser_failed",
-                    "parser_name": parser_name,
-                    "raw_test_output": raw_output,
-                    "test_returncode": test_returncode,
-                    "parser_error_type": type(exc).__name__,
-                    "parser_error": str(exc),
-                },
+            return completed(
+                _terminal_result(
+                    case,
+                    task_outcome="unknown",
+                    outcome_reason="parser_failed",
+                    generation=True,
+                    patch_applied=True,
+                    evidence={
+                        "terminal_kind": "parser_failed",
+                        "parser_name": parser_name,
+                        "raw_test_output": raw_output,
+                        "test_returncode": test_returncode,
+                        "parser_error_type": type(exc).__name__,
+                        "parser_error": str(exc),
+                    },
+                )
             )
         score = instance_level_scoring(
             instance_id=case.instance_id,
@@ -288,27 +304,35 @@ def evaluate_polybench_apptainer(
             patch_applied=True,
             generation=True,
         )
-        return {
-            "status": "completed",
-            "classification_policy": "polybench_pce_outcomes_v2",
-            "terminal_kind": "tests_parsed",
-            "task_outcome": "resolved" if score.resolved else "unresolved",
-            "outcome_reason": (
-                "tests_parsed_resolved" if score.resolved else "tests_parsed_unresolved"
-            ),
-            "retry_disposition": "no_retry",
-            "evaluator_resolved": bool(score.resolved),
-            "official_score": asdict(score),
-            "test_patch_applied": True,
-            "test_patch_attempts": test_patch_attempts,
-            "code_patch_applied": True,
-            "code_patch_attempts": code_patch_attempts,
-            "test_command": case.test_command,
-            "test_returncode": test_returncode,
-            "test_timed_out": False,
-            "raw_test_output": raw_output,
-            "parsed_test_result": parsed,
-        }
+        return completed(
+            {
+                "status": "completed",
+                "classification_policy": "polybench_pce_outcomes_v2",
+                "terminal_kind": "tests_parsed",
+                "task_outcome": "resolved" if score.resolved else "unresolved",
+                "outcome_reason": (
+                    "tests_parsed_resolved"
+                    if score.resolved
+                    else "tests_parsed_unresolved"
+                ),
+                "retry_disposition": "no_retry",
+                "evaluator_resolved": bool(score.resolved),
+                "official_score": asdict(score),
+                "test_patch_applied": True,
+                "test_patch_attempts": test_patch_attempts,
+                "code_patch_applied": True,
+                "code_patch_attempts": code_patch_attempts,
+                "test_command": case.test_command,
+                "test_returncode": test_returncode,
+                "test_timed_out": False,
+                "raw_test_output": raw_output,
+                "parsed_test_result": parsed,
+            }
+        )
     finally:
         if env is not None:
-            env.cleanup()
+            try:
+                env.cleanup()
+            except Exception as exc:
+                if cleanup_error_callback is not None:
+                    cleanup_error_callback(exc)

@@ -52,8 +52,9 @@ classes must not be mixed:
 | `SWE-PolyBench/polybench-guideline-validation-guidelines/` | Guidelines frozen before PolyBench results are viewed | Yes, as immutable model inputs only |
 
 The download manifest is complete at the operational layer: 113 exact `v1.1`
-SIFs are available and 86 references have preserved pull failures. The derived
-`v1.1-unavailable-images-20260812.json` is a cleaning-evidence snapshot, not a
+SIFs are available and 86 references are confirmed manifest-not-found after
+authenticated retry. The derived
+`v1.1-unavailable-images-authenticated-20260813.json` is a cleaning-evidence snapshot, not a
 task-label file. Neither artifact is a formal PCE dataset until the available
 source/image rows are reviewed and frozen together. The two-instance smoke is
 likewise a test of transport, phase
