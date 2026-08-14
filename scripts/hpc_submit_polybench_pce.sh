@@ -94,6 +94,7 @@ if [[ $REQUIRE_CLEAN -eq 1 ]] && [[ -n "$(git -C "$REPO_ROOT" status --porcelain
   echo "ERROR: --require-clean-worktree requires a clean Git worktree" >&2
   exit 2
 fi
+LOCAL_GIT_HEAD="$(git -C "$REPO_ROOT" rev-parse HEAD)"
 if [[ -z "$ULHPC_CONFIG" ]]; then
   ULHPC_CONFIG="$REPO_ROOT/configs/ulhpc_submit.yaml"
 fi
@@ -192,6 +193,7 @@ set -euo pipefail
 export APPTAINER_CACHEDIR="$REMOTE_APPTAINER_CACHE_DIR"
 export APPTAINER_TMPDIR="$REMOTE_APPTAINER_TMP_DIR"
 export ULHPC_APPTAINER_SIF_CACHE_DIR="$REMOTE_APPTAINER_SIF_CACHE_DIR"
+export VIBE_PROJECT_GIT_HEAD="$LOCAL_GIT_HEAD"
 mkdir -p "\$APPTAINER_CACHEDIR" "\$APPTAINER_TMPDIR"
 REMOTE_ENV_FILE="$REMOTE_ENV_FILE"
 if [[ "\$REMOTE_ENV_FILE" == "~/"* ]]; then

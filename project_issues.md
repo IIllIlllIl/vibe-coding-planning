@@ -814,3 +814,10 @@ block 的频率与根因，再决定是否仅细化记录，或对反复出现�
   快照、受保护 Slurm 日志与新旧路径 fetch、accounting 有界退避、FairShare 分隔线解析、
   PENDING 提示延迟和同秒本地日志身份。该报告尚未作为本仓库依赖版本验证；收到其提交
   或安装摘要后，再用下一次 smoke 验收，当前文档不把报告等同于已部署事实。
+- **正式 PolyBench PCE 提交准备（2026-08-14）**：新增
+  `configs/polybench_pce_hpc_formal.yaml`，绑定已冻结 113-case exact-`v1.1` 输入和独立
+  `polybench-pce-runs/formal/python113-v11-pce-20260814` 输出身份；资源为每 task
+  `1 CPU / 4G / 125min`、三次总 attempts、无 `%N` 并发上限。提交入口现把 clean local
+  commit 通过 `VIBE_PROJECT_GIT_HEAD` 传给 controller，修复远端排除 `.git` 时内部
+  `project_git_head=null` 的 provenance 缺口，不改变 PCE Agent、checkpoint、retry 或
+  evaluator 语义。

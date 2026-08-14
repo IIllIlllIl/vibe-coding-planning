@@ -5,7 +5,9 @@ from __future__ import annotations
 from collections import Counter
 from datetime import datetime, timezone
 import json
+import os
 from pathlib import Path
+import re
 import subprocess
 from typing import Any
 
@@ -38,6 +40,11 @@ def _write_jsonl(path: Path, rows: list[dict[str, Any]]) -> None:
 
 
 def _git_head() -> str | None:
+    submitted_head = os.environ.get("VIBE_PROJECT_GIT_HEAD")
+    if submitted_head is not None:
+        if not re.fullmatch(r"[0-9a-f]{40}", submitted_head):
+            raise ValueError("VIBE_PROJECT_GIT_HEAD must be a full lowercase Git SHA")
+        return submitted_head
     result = subprocess.run(
         ["git", "rev-parse", "HEAD"],
         capture_output=True,

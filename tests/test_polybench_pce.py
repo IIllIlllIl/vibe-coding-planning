@@ -13,7 +13,7 @@ from scripts.tools.freeze_polybench_pce_source import freeze
 from src.environment.docker_env import DockerCapacityWindow
 from src.optimization.hpc.task_batch import TaskFiles
 from src.polybench_pce.config import load_polybench_pce_config
-from src.polybench_pce.controller import run_polybench_pce
+from src.polybench_pce.controller import _git_head, run_polybench_pce
 from src.polybench_pce.dataset import canonical_image_ref, load_polybench_pce_cases
 from src.polybench_pce.evaluator import evaluate_polybench_apptainer
 from src.polybench_pce.hpc_executor import (
@@ -158,6 +158,17 @@ def test_dataset_requires_exact_lowercase_v11_frozen_image(tmp_path: Path) -> No
     assert cases[0].image.requested_ref.endswith("org__repo-1:v1.1")
     assert cases[0].f2p == ("test_fixed",)
     assert cases[0].to_dict()["image"]["sif_sha256"] == cases[0].image.sif_sha256
+
+
+def test_controller_uses_explicit_submission_git_head(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    expected = "a" * 40
+    monkeypatch.setenv("VIBE_PROJECT_GIT_HEAD", expected)
+    assert _git_head() == expected
+    monkeypatch.setenv("VIBE_PROJECT_GIT_HEAD", "not-a-commit")
+    with pytest.raises(ValueError, match="full lowercase Git SHA"):
+        _git_head()
 
 
 def test_dataset_rejects_malformed_test_lists_instead_of_scoring_empty(

@@ -78,6 +78,13 @@ Code may create diagnostic
 tests, while PCE preserves the raw submission and evaluates a separately
 recorded patch with test paths filtered out.
 
+`polybench_pce_hpc_formal.yaml` is the formal raw-data configuration for the
+frozen 113-case exact-`v1.1` input. It uses a separate
+`polybench-pce-runs/formal/python113-v11-pce-20260814` identity, submits one
+uncapped Slurm element per task, and retains the smoke-proven `1 CPU / 4G /
+125min` worker boundary with three total attempts. It does not run GEPA,
+Reflection, or guideline evaluation.
+
 The completed Python-199 SIF preheater named
 `gepa_verified_rules.yaml`, but this is not a GEPA experiment dependency:
 `--remote-images-json` replaces its dataset-derived image list, and the config
