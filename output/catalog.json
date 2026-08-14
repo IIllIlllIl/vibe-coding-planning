@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "generated_at": "2026-08-11",
+  "generated_at": "2026-08-14",
   "active_method": "online_gepa_planning_rules",
   "active_offline_method": "offline_gepa_plan_review_guideline",
   "default_agent_scope": [
@@ -9,12 +9,14 @@
     "output/SWE-bench_Verified/verified-round1-gepa-datasets/20260614_482_fdc056ae85df",
     "output/SWE-bench_Verified/gepa-rules",
     "output/SWE-PolyBench/polybench-guideline-validation-guidelines/20260811_seed-c1-c2-c3_3293f8e925b8",
-    "output/SWE-PolyBench/polybench-pce-inputs/20260811_smoke2_transformers"
+    "output/SWE-PolyBench/polybench-pce-inputs/20260814_python113_v11_8c7d9485d1d0"
   ],
   "active_polybench_validation_inputs": {
-    "status": "pce_input_regeneration_in_progress",
+    "status": "formal_pce_input_frozen",
     "source_universe": "official_python_199",
-    "dataset_snapshot": null,
+    "dataset_snapshot": "output/SWE-PolyBench/polybench-pce-inputs/20260814_python113_v11_8c7d9485d1d0",
+    "instances": 113,
+    "ordered_instance_ids_sha256": "8c7d9485d1d077101469e4e80e41b3c009d7fced3e62dd28632d1e9b065d3fc4",
     "historical_198_192_status": "unsafe_audit_only",
     "guideline_bundle": "20260811_seed-c1-c2-c3_3293f8e925b8",
     "guidelines": [
@@ -26,35 +28,38 @@
   },
   "active_polybench_image_preparation": {
     "classification": "operational_only",
-    "status": "running_incremental_one_pass",
-    "as_of": "2026-08-11T23:03:03+02:00",
+    "status": "complete_archived_locally",
+    "as_of": "2026-08-14",
     "requested_images": 199,
-    "terminal_records": 12,
-    "pulled_pull_attested": 4,
-    "failed": 8,
-    "remote_root": "remote:/scratch/users/twang/vibe-coding-planning/operations/polybench-python199-v1.1-20260811",
+    "terminal_records": 199,
+    "available": 113,
+    "failed": 86,
+    "local_archive": "output/archive/operations/polybench-python199-v1.1-20260811",
     "manifest": "v1.1-provenance.json",
-    "frozen_dataset": false,
+    "frozen_dataset": true,
     "training_usable": false,
     "resume_safe": false,
-    "completion_requires_review": true
+    "completion_requires_review": false,
+    "remote_working_copy_removed": true
   },
   "active_polybench_pce_smoke": {
     "classification": "test_only",
-    "status": "workers_running",
-    "as_of": "2026-08-12T15:30:49+02:00",
-    "controller_job_id": "5647573",
-    "controller_outcome": "completed_cooperative_yield",
-    "worker_job_id": "5647574",
+    "status": "complete_archived_locally",
+    "as_of": "2026-08-14",
+    "controller_job_id": "5670870",
+    "controller_outcome": "complete",
+    "worker_job_id": "5661319",
     "instances": 2,
-    "execution_fingerprint": "b96bc3521a29835fdaa510eb1d19ff461259694872b50df419e3b8da07cde820",
-    "outer_submission_commit": "84ddf320caaeea6fc323b7abf3b1c4377fa63f32",
+    "execution_fingerprint": "f873352c0025eb3c8e0d3d965e0b46154804286985554d8ed71dc2adc939403a",
+    "outer_submission_commit": "43de39107e802eb97585d03fc8f6d040f6cfa972",
+    "collection_submission_commit": "020f26185c2c3b1d97cb2e968832ae5a705825f8",
     "inner_project_git_head": null,
-    "completed_plan_checkpoints": 0,
-    "completed_code_checkpoints": 0,
-    "completed_evaluations": 0,
+    "completed_plan_checkpoints": 2,
+    "completed_code_checkpoints": 2,
+    "completed_evaluations": 2,
     "local_input_snapshot": "output/SWE-PolyBench/polybench-pce-inputs/20260811_smoke2_transformers",
-    "remote_run": "remote:output/SWE-PolyBench/polybench-pce-runs/smoke/hpc-smoke2-evaluator-fix-20260812",
+    "local_archive": "output/archive/tests/polybench-pce/hpc-smoke4-walltime125-resume-boundary-20260813",
+    "remote_working_copy_removed": true,
     "score_usable": false
   },
   "prior_polybench_pce_smoke": {
@@ -189,7 +194,9 @@
         "output/SWE-bench_Verified/test_runs_archive",
         "output/analysis_test_runs_archive",
         "output/SWE-bench_Pro/pro-prompt-fix-test1",
-        "output/SWE-bench_Verified/gepa-rules/offline-interactive-checker-3it-smoke-20260721"
+        "output/SWE-bench_Verified/gepa-rules/offline-interactive-checker-3it-smoke-20260721",
+        "remote:output/SWE-PolyBench/polybench-pce-runs/smoke/hpc-smoke3-patch-policy-outcomes-20260812",
+        "remote:output/SWE-PolyBench/polybench-pce-runs/smoke/hpc-smoke4-walltime125-resume-boundary-20260813"
       ],
       "score_usable": false
     },
@@ -200,7 +207,9 @@
         "output/local-run-logs",
         "output/login-preheat-logs-newprompt",
         "output/*watchdog*.json",
-        "output/*preheat*.log"
+        "output/*preheat*.log",
+        "remote:/scratch/users/twang/vibe-coding-planning/operations/polybench-python199-v1.1-20260811",
+        ".tmp_hpc_smoke/ulhpc-runs/*polybench*"
       ],
       "score_usable": false
     },

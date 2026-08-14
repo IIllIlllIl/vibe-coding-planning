@@ -216,6 +216,78 @@ def test_source_freezer_records_exact_csv_and_row_identity(tmp_path: Path) -> No
     assert wrapper["dockerfile_sha256"] == hashlib.sha256(b"FROM base").hexdigest()
 
 
+def test_source_freezer_selects_and_copies_exact_available_images(
+    tmp_path: Path,
+) -> None:
+    csv_path = tmp_path / "source.csv"
+    csv_path.write_text(
+        "instance_id,problem_statement,repo,base_commit,language,test_patch,test_command\n"
+        'Org__Repo-1,Fix one,org/repo,abc,Python,"patch","pytest -q"\n'
+        'Org__Repo-2,Fix two,org/repo,def,Python,"patch","pytest -q"\n',
+        encoding="utf-8",
+    )
+    image_provenance = tmp_path / "provenance.json"
+    image_provenance.write_text(
+        json.dumps(
+            {
+                "complete": True,
+                "records": {
+                    canonical_image_ref("Org__Repo-1"): {
+                        "status": "pulled",
+                        "sif_path": "/cache/one.sif",
+                        "sif_sha256": "one",
+                        "sif_bytes": 1,
+                        "provenance_strength": "pull_attested",
+                        "oci_digest": "sha256:one",
+                    },
+                    canonical_image_ref("Org__Repo-2"): {"status": "failed"},
+                },
+            }
+        ),
+        encoding="utf-8",
+    )
+    unavailable = tmp_path / "unavailable.json"
+    unavailable.write_text(
+        json.dumps(
+            {
+                "unavailable_images": [
+                    {"instance_id": "Org__Repo-2", "research_label": None}
+                ]
+            }
+        ),
+        encoding="utf-8",
+    )
+    output = tmp_path / "frozen-available"
+
+    manifest = freeze(
+        csv_path,
+        output,
+        revision="revision-sha",
+        expected_instances=1,
+        image_provenance=image_provenance,
+        image_provenance_origin="remote/operations/provenance.json",
+        unavailable_evidence=unavailable,
+    )
+
+    assert manifest["instances"] == 1
+    assert manifest["selection"] == {
+        "kind": "exact_v1.1_available_images",
+        "accepted_statuses": ["cached", "pulled"],
+        "source_instances": 2,
+        "available_instances": 1,
+        "unavailable_instances": 1,
+        "tag": "v1.1",
+        "tag_fallback": False,
+        "local_build_fallback": False,
+    }
+    assert manifest["image_manifest_sha256"] == _sha(output / "images.json")
+    assert manifest["unavailable_evidence_sha256"] == _sha(
+        output / "unavailable-images.json"
+    )
+    wrapper = json.loads((output / "instances.jsonl").read_text())
+    assert wrapper["source_row"]["instance_id"] == "Org__Repo-1"
+
+
 def test_config_rejects_host_side_array_concurrency(tmp_path: Path) -> None:
     snapshot, images, _ = _frozen_inputs(tmp_path)
     path = _config(tmp_path, snapshot, images)

@@ -11,8 +11,8 @@ for an explicitly requested historical comparison, audit, or reproduction.
 | `pcc/` | Checker comparisons, reflection cases, and PCC inputs | Historical checker evidence |
 | `analysis/` | Flash/Pro/Kimi rule extraction and reflection analyses | Historical derived analysis |
 | `datasets/historical/` | Pilot and Checker snapshots not used by the formal Online run | Immutable reproduction inputs |
-| `tests/` | Smoke, prompt-fix, early integration outputs, and the July 21 Offline interactive-checker smoke | No quality claim |
-| `operations/` | Watchdog, preheat, and local run logs | Operational evidence only |
+| `tests/` | Smoke, prompt-fix, early integration outputs, the July 21 Offline interactive-checker smoke, and locally mirrored PolyBench PCE smoke3/4 evidence | No quality claim |
+| `operations/` | Watchdog, preheat and local run logs, frozen Python-199 image-preparation evidence, and PolyBench `ulhpc-submit` submission logs | Operational evidence only |
 | `failed-or-invalid/` | Runs with known invalid scores or unusable terminal state | Never use for scoring |
 
 Archive policy:

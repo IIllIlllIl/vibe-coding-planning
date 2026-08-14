@@ -782,10 +782,35 @@ block 的频率与根因，再决定是否仅细化记录，或对反复出现�
   本地测试覆盖 evaluator callback-before-cleanup、三个 cleanup failure 与下一次完整
   checkpoint reuse；该源码变化会进入 Online execution fingerprint，不能用于无声
   resume 旧 Online run。
-- **Iris controller 收集阻塞（2026-08-14）**：smoke4 两个 worker 均在 attempt 1
+- **Iris controller 收集阻塞（2026-08-14，已恢复）**：smoke4 两个 worker 均在 attempt 1
   完成，但再次提交只读收集 controller 时，Iris `sbatch` 返回
   `User's group not permitted to use this partition`。远端 `sinfo` 显示 `batch` up，
   Slurm association/default account 为 `michail.papadakis`，显式 account 与已分配 QOS
   的 `sbatch --test-only` 仍被同样拒绝，因此不是 PCE resume、资源大小或 FairShare
-  根因。停止重复提交；persistent worker outputs/checkpoints 保持完整，待账户/Unix group
-  partition authorization 恢复后用同一 smoke config 收集。
+  根因。当时停止重复提交并保留 persistent worker outputs/checkpoints；随后 authorization
+  恢复并由下述 controller 完成收集。`ulhpc-submit` 客户端问题另交其维护 Agent 处理。
+- **Smoke4 最终收集（2026-08-14）**：partition authorization 恢复后，controller
+  `5670870` 使用同一 config 在 4 秒内完成；它复用 worker array `5661319` 的两份完整
+  output，没有提交新 worker。最终为 2/2 complete、0 incomplete、1 resolved、1
+  unresolved，task journal 为 `COMPLETE`。因此端到端 platform-smoke 前置条件已经完成；
+  smoke label 仍不得进入正式泛化评价。
+- **正式 113-case 输入冻结（2026-08-14）**：冻结路径为
+  `output/SWE-PolyBench/polybench-pce-inputs/20260814_python113_v11_8c7d9485d1d0/`。
+  它从 revision `d56445f9940eae4e9d2974ec66820c2f1d7754e6` 的官方 Python-199
+  CSV，按完整 exact-`v1.1` provenance 的 `cached/pulled` 状态确定性选出 113 项；同时
+  保存完整 199 项 image provenance 与 86 项 authenticated unavailable evidence。
+  ordered instance-ID SHA-256 为 `8c7d9485d1d077101469e4e80e41b3c009d7fced3e62dd28632d1e9b065d3fc4`。
+  选择不读取 PCE label、guideline prediction 或 smoke outcome。下一步仍需单独的正式
+  config/run identity、内部 Git provenance 修复和 113-case raw PCE 运行。
+- **HPC 证据归档与残留清理（2026-08-14）**：smoke3/4 共 49 个文件在删除前逐文件
+  hash 聚合校验一致（`aec746f2…`），现保存在
+  `output/archive/tests/polybench-pce/`；Python-199 operations 的 14 个文件也以远端/本地
+  相同聚合 hash `681bb12c…` 保存在 `output/archive/operations/`。相关外层
+  `ulhpc-submit` 日志也已本地归档。远端队列为空后，已删除这两个 smoke working state、
+  Python-199 operations working copy、旧 `vibe-polybench-pce` 同步快照和两个遗留 login
+  Apptainer 临时目录；正式共享 SIF cache 未删除。
+- **`ulhpc-submit` 修复交接（2026-08-14，待上游提交/安装后验收）**：维护 Agent 报告已
+  修正 Slurm account/QOS/partition 授权分类、完整 `sbatch` 错误保留、每次提交独立远端
+  快照、受保护 Slurm 日志与新旧路径 fetch、accounting 有界退避、FairShare 分隔线解析、
+  PENDING 提示延迟和同秒本地日志身份。该报告尚未作为本仓库依赖版本验证；收到其提交
+  或安装摘要后，再用下一次 smoke 验收，当前文档不把报告等同于已部署事实。

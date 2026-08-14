@@ -53,9 +53,10 @@ iteration draft, `max_metric_calls=1200` is only a fail-safe above the
 launch config with the shared supervisor service. See
 [`../docs/offline-gepa.md`](../docs/offline-gepa.md).
 
-The generic check-only entry point is additive. No PolyBench check-only config
-is active until the new official Python-199 PCE data, exact-v1.1 image manifest,
-and cleaning snapshot are frozen. The existing `gepa_verified_rules.yaml`
+The generic check-only entry point is additive. The reviewed 113-case
+source/exact-v1.1 input is now frozen, but no PolyBench check-only config is
+active until formal PCE data and its separately reviewed cleaning snapshot are
+frozen. The existing `gepa_verified_rules.yaml`
 remains byte-for-byte unchanged, so neither the GEPA semantic manifest nor the
 supervisor's raw-config identity is invalidated.
 
@@ -70,6 +71,9 @@ a separate `polybench-pce-runs/formal/` identity. The active config uses the
 new `hpc-smoke4-walltime125-resume-boundary-20260813` identity and a 125-minute
 hard worker limit. A completed worker exits immediately; no reserved cleanup
 window is part of the result contract. It does not resume an earlier smoke.
+Worker array `5661319` completed both instances and collection controller
+`5670870` reused them without launching another worker; this config remains a
+completed smoke rather than the future formal config.
 Code may create diagnostic
 tests, while PCE preserves the raw submission and evaluates a separately
 recorded patch with test paths filtered out.

@@ -3,7 +3,7 @@
 > Authority: planned external validation contract for the current standalone
 > Offline guideline method
 >
-> Last reviewed: 2026-08-11
+> Last reviewed: 2026-08-14
 
 ## Purpose And Non-Training Boundary
 
@@ -163,14 +163,11 @@ to exact lowercase `:v1.1` provenance records. Image records explicitly marked
 failed are retained as availability evidence and excluded from execution
 without becoming labels.
 
-The code path has local deterministic tests. A separate two-instance platform
-smoke config and `ulhpc-submit` controller entry now exist. Controller job
-`5642300` completed normally and yielded after submitting worker array
-`5642301`. Both workers saved completed Plan and Code checkpoints, then exposed
-an Evaluator ordering defect: evaluator-owned patch/script files were written
-before `git clean -fd` and deleted before use. The implementation now resets
-the fresh base first and writes those inputs afterward; local regression tests
-pass, but the fix has not yet passed an HPC Evaluate or full PCE smoke.
+The code path has local deterministic tests and an independently identified
+two-instance platform-smoke config. The earlier smoke identities retained the
+Evaluator ordering, patch-policy, classification and walltime defects that led
+to their replacements; they remain diagnostic evidence and are not formal PCE
+data.
 
 The failed batch must not be retried unchanged. Although its Plan and Code
 outputs are durable, the current checkpoint identity includes the complete PCE
@@ -221,6 +218,16 @@ draw from the same distribution; being a later attempt is assumed not to alter
 that distribution. Completed phases are never redrawn merely because cleanup
 or later orchestration failed.
 
+The final platform smoke completed end to end under
+`hpc-smoke4-walltime125-resume-boundary-20260813`. Worker array `5661319`
+completed both instances on attempt 1 with all Plan, Code, Evaluate and final
+outputs durable. A later controller job, `5670870`, reused those outputs,
+submitted no new worker, and completed collection in four seconds. The final
+controller result is 2/2 complete, 0 incomplete, 1 resolved and 1 unresolved.
+This validates transport, phase isolation, checkpoint-before-cleanup and
+controller collection for the smoke scope; the two labels remain test-only
+evidence and do not enter the PolyBench generalization dataset.
+
 ## Cleaning And Validation Snapshots
 
 Data cleaning begins only after the new raw PCE snapshot is complete. Its
@@ -243,18 +250,11 @@ differences without using them to train or revise any guideline.
 
 ## Current Preparation State
 
-The first historical 198-list login-node preheat was stopped before completion.
-Twenty-six complete `v1.1` SIFs were retained and received retrospective
-provenance records; they are preparation evidence, not yet the formal 199-image
-manifest. The tracked login-node preheater now records incremental OCI/SIF
-provenance for cached, pulled, and failed images. The new PCE implementation,
-source-freezing tool and dry-run-validated HPC submission entry are present.
-The platform smoke freezes two completed `pull_attested` Transformers images
-and source rows; it may run concurrently with the login preheater because it
-never selects an in-progress image and the two processes use separate
-Apptainer temp directories. Formal Python-199 source and image manifests,
-completed image-manifest review, an executed HPC smoke and a separate formal
-config remain prerequisites for formal PCE.
+The historical 198-list preparation remains retired evidence. The replacement
+strict-`v1.1` image scan, authenticated review and end-to-end two-instance HPC
+smoke are complete. The source-freezing tool now deterministically joins the
+official Python-199 CSV to the complete image provenance and refuses missing,
+non-terminal or non-`v1.1` availability state.
 
 Frozen smoke inputs and runtime evidence have distinct roots:
 `polybench-pce-inputs/` contains immutable staged input, while
@@ -273,11 +273,19 @@ logs; all 27 then returned `manifest unknown`. The final strict-`v1.1`
 classification is therefore 86 `registry_manifest_not_found`, with no remaining
 credential ambiguity and no fallback tag or local build.
 
-The operational manifest is complete but is still not a PCE dataset. The final
-derived `v1.1-unavailable-images-authenticated-20260813.json` records all 86
-exclusions with anonymous and authenticated attempt evidence, explicitly
-leaves `research_label` null, and states that this is image-availability
-cleaning only. Its SHA-256 is
+The reviewed immutable input is frozen locally at
+`output/SWE-PolyBench/polybench-pce-inputs/20260814_python113_v11_8c7d9485d1d0/`.
+It contains 113 source rows in original CSV order, the complete 199-record image
+provenance, and the 86-record authenticated unavailability evidence. Its
+ordered instance-ID SHA-256 is
+`8c7d9485d1d077101469e4e80e41b3c009d7fced3e62dd28632d1e9b065d3fc4`;
+the source CSV SHA-256 is
+`17ad661b20e9af1e2067fbbc2e2658a21137d56693570d1d07f966d8bc0408b7`;
+the image provenance SHA-256 is
+`0913e4a5a0064e3decce5b01c259973cbb01cbe6ab40fd57f6ca0c5f1ed53afd`;
+and the unavailability evidence SHA-256 is
 `84b773f0efc2df628fdf6752ce25428a3ec3818d4ace00dc5dc2af08685ede46`.
-Formal PCE still requires a reviewed immutable source/image snapshot containing
-the 113 available cases.
+Selection depends only on exact-image availability (`cached` or `pulled`), not
+PCE labels, guideline predictions or smoke outcomes. The loader accepts all
+113 unique cases and their strict test metadata. A formal PCE config and run
+identity are still required before raw PCE generation begins.

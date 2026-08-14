@@ -11,10 +11,10 @@ historical comparison, provenance, or reproduction.
 | `SWE-bench_Verified/verified-round1-gepa-datasets/20260614_482_fdc056ae85df/` | Immutable formal 384/98 snapshot shared by current Online and Offline experiments | Active input; do not move or modify |
 | `SWE-bench_Verified/gepa-rules/` | Local destination for current Online and Offline GEPA results | Active output root |
 | `SWE-PolyBench/polybench-guideline-validation-guidelines/20260811_seed-c1-c2-c3_3293f8e925b8/` | Exact seed and candidate indices 1-3 from the completed 20260810 Offline run | Frozen evaluation bundle |
-| Remote `operations/polybench-python199-v1.1-20260811/` | Completed official `:v1.1` availability provenance for the Python-199 image list | Operational preparation evidence; not a dataset or result |
-| `SWE-PolyBench/polybench-pce-inputs/20260811_smoke2_transformers/` | Frozen two-row source and reviewed image-manifest copy staged to the PCE smoke | Smoke input only; not the future Python-199 snapshot |
-| Remote `SWE-PolyBench/polybench-pce-runs/smoke/hpc-smoke2-20260811/` | Two-instance PCE controller/worker/phase evidence | Active test-only smoke; never guideline-quality evidence |
-| Remote `SWE-PolyBench/polybench-pce-runs/smoke/hpc-smoke2-evaluator-fix-20260812/` | Fresh two-instance end-to-end PCE evidence after fixing evaluator input ordering | Active test-only smoke; never guideline-quality evidence |
+| `archive/operations/polybench-python199-v1.1-20260811/` | Local mirror of the completed official `:v1.1` Python-199 availability operation | Operational preparation evidence; remote working copy removed |
+| `SWE-PolyBench/polybench-pce-inputs/20260814_python113_v11_8c7d9485d1d0/` | Official Python rows joined to the reviewed exact-`v1.1` availability evidence | Complete immutable formal PCE input; 113 cases |
+| `SWE-PolyBench/polybench-pce-inputs/20260811_smoke2_transformers/` | Frozen two-row source and reviewed image-manifest copy staged to the PCE smoke | Smoke input only; not formal input |
+| `archive/tests/polybench-pce/` | Locally mirrored smoke3 diagnostic evidence and completed smoke4 evidence | Test only; remote working copies removed |
 | `SWE-bench_Verified/gepa-rules/offline-plan-verifier-balanced-b12-p2-case-reviews-8it-20260727/` | Formal local Offline result under the final pre-HPC experimental flow | Completed with warnings; retained comparison baseline |
 | `SWE-bench_Verified/gepa-rules/offline-plan-verifier-hpc-balanced-b12-8it-formal-20260731/` | Local mirror of the formal Offline HPC experiment under the frozen strong-Checker/checklist semantics | Stopped after 14 durable proposals during attempted proposal 15; frozen analysis baseline |
 | Remote `online-planning-hpc-policy-v3-20260715` run directory | Outcome-policy-v3 formal run targeting 8 durable iterations | Active; managed by the supervisor |
@@ -40,26 +40,31 @@ active surface.
 
 ## PolyBench Preparation And Output Boundary
 
-The replacement PolyBench validation is still being prepared. Its artifact
-classes must not be mixed:
+The replacement PolyBench input is frozen, while formal PCE evidence has not
+yet been generated. Its artifact classes must not be mixed:
 
 | Root | Classification | May be used as formal validation data? |
 |---|---|---|
-| Remote `operations/polybench-python199-v1.1-20260811/` | Mutable operational download list, incremental provenance, and failures | No |
-| `SWE-PolyBench/polybench-pce-inputs/` | Frozen reviewed source/image inputs staged to PCE | Only after the snapshot is declared complete |
+| `archive/operations/polybench-python199-v1.1-20260811/` | Frozen local mirror of operational download provenance and failures | No |
+| `SWE-PolyBench/polybench-pce-inputs/` | Frozen reviewed source/image inputs staged to PCE | Yes only for snapshots whose manifest declares complete and non-provisional |
 | `SWE-PolyBench/polybench-pce-runs/smoke/` | Platform-smoke trajectories, patches, evaluator and controller evidence | No |
 | `SWE-PolyBench/polybench-pce-runs/formal/` | Reserved formal raw PCE evidence root | Not until a separately reviewed formal run exists |
 | `SWE-PolyBench/polybench-guideline-validation-guidelines/` | Guidelines frozen before PolyBench results are viewed | Yes, as immutable model inputs only |
 
-The download manifest is complete at the operational layer: 113 exact `v1.1`
-SIFs are available and 86 references are confirmed manifest-not-found after
-authenticated retry. The derived
-`v1.1-unavailable-images-authenticated-20260813.json` is a cleaning-evidence snapshot, not a
-task-label file. Neither artifact is a formal PCE dataset until the available
-source/image rows are reviewed and frozen together. The two-instance smoke is
+The complete formal input snapshot is
+`20260814_python113_v11_8c7d9485d1d0`: 113 exact `v1.1` SIFs are available and
+86 references are confirmed manifest-not-found after authenticated retry. It
+freezes the official source rows, complete 199-record image provenance and
+86-record unavailability evidence together. The exclusions are environment
+availability decisions with null research labels. The two-instance smoke is
 likewise a test of transport, phase
 isolation and evidence preservation; its resolved labels and plans must not be
 included in the future PolyBench generalization score.
+
+Smoke4 worker array `5661319` completed 2/2 cases on attempt 1. Collection
+controller `5670870` reused those outputs without submitting new workers and
+recorded 2 complete, 0 incomplete, 1 resolved and 1 unresolved. This closes the
+platform-smoke prerequisite; it does not make the smoke a validation result.
 
 The first PCE smoke preserved valid Plan and Code checkpoints for both cases
 but failed in Evaluate because the Host deleted its own evaluator inputs during
@@ -68,7 +73,8 @@ resume target. Evaluator-source changes alter the PCE fingerprint, so the old
 batch must not be advanced as attempt 2 under new code. Any future
 Evaluate-only reuse must have a new identity and explicitly cite the old
 checkpoint hashes; a complete new smoke remains necessary for end-to-end
-acceptance.
+acceptance. That requirement was later satisfied by smoke4; the failed smoke
+itself remains ineligible for resume or validation use.
 
 ## Offline Result Boundary
 
