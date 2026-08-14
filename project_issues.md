@@ -821,3 +821,11 @@ block 的频率与根因，再决定是否仅细化记录，或对反复出现�
   commit 通过 `VIBE_PROJECT_GIT_HEAD` 传给 controller，修复远端排除 `.git` 时内部
   `project_git_head=null` 的 provenance 缺口，不改变 PCE Agent、checkpoint、retry 或
   evaluator 语义。
+- **正式 PolyBench PCE 已启动（2026-08-14）**：clean commit `10ff821…` 下的 controller
+  `5671976` 在 3 秒内成功完成并 cooperative yield；worker array `5671978` 一次提交全部
+  113 个 element，execution fingerprint 为 `bbb38332…`。首次状态检查为 100 RUNNING、
+  13 PENDING (`QOSMaxJobsPerUserLimit`)，证明没有项目侧 `%N` 限流，实际并发由 Iris/QOS
+  管理。内部 `run_manifest.json.project_git_head` 正确为完整 `10ff821…`，上轮 provenance
+  缺口已在真实 HPC controller 中验收。当前只生成 raw PCE evidence，不分配最终
+  validation label；worker 完成后仍需再次运行同一 controller config 进行收集/选择性
+  retry。

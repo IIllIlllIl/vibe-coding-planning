@@ -292,5 +292,8 @@ PCE labels, guideline predictions or smoke outcomes. The loader accepts all
 `python113-v11-pce-20260814`. The submission entry explicitly propagates the
 committed local Git SHA into the remote controller manifest because `.git` is
 not synchronized; malformed or missing explicit identities cannot silently
-become another commit. Formal raw PCE generation must still be launched and
-collected before data cleaning begins.
+become another commit. Formal controller `5671976` submitted worker array
+`5671978` for all 113 cases and yielded successfully; its manifest records
+commit `10ff821da6060b78061b93b88ff32dea955a2bf8` and execution fingerprint
+`bbb38332871505fe4542076ad817832727897e4c42e57a822dea025001097306`.
+The array must finish and be collected before data cleaning begins.

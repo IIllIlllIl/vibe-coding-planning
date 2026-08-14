@@ -62,6 +62,20 @@
     "remote_working_copy_removed": true,
     "score_usable": false
   },
+  "active_polybench_pce_formal": {
+    "classification": "formal_raw_generation",
+    "status": "workers_submitted",
+    "as_of": "2026-08-14",
+    "controller_job_id": "5671976",
+    "controller_outcome": "completed_cooperative_yield",
+    "worker_job_id": "5671978",
+    "instances": 113,
+    "execution_fingerprint": "bbb38332871505fe4542076ad817832727897e4c42e57a822dea025001097306",
+    "project_git_head": "10ff821da6060b78061b93b88ff32dea955a2bf8",
+    "run": "remote:output/SWE-PolyBench/polybench-pce-runs/formal/python113-v11-pce-20260814",
+    "final_validation_labels_assigned": false,
+    "score_usable": false
+  },
   "prior_polybench_pce_smoke": {
     "classification": "test_only",
     "status": "failed_evaluator_ordering_bug",

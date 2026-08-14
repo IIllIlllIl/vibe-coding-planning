@@ -15,6 +15,7 @@ historical comparison, provenance, or reproduction.
 | `SWE-PolyBench/polybench-pce-inputs/20260814_python113_v11_8c7d9485d1d0/` | Official Python rows joined to the reviewed exact-`v1.1` availability evidence | Complete immutable formal PCE input; 113 cases |
 | `SWE-PolyBench/polybench-pce-inputs/20260811_smoke2_transformers/` | Frozen two-row source and reviewed image-manifest copy staged to the PCE smoke | Smoke input only; not formal input |
 | `archive/tests/polybench-pce/` | Locally mirrored smoke3 diagnostic evidence and completed smoke4 evidence | Test only; remote working copies removed |
+| Remote `SWE-PolyBench/polybench-pce-runs/formal/python113-v11-pce-20260814/` | Raw PCE generation for all 113 frozen exact-`v1.1` cases | Active formal generation; not yet collected or cleaned |
 | `SWE-bench_Verified/gepa-rules/offline-plan-verifier-balanced-b12-p2-case-reviews-8it-20260727/` | Formal local Offline result under the final pre-HPC experimental flow | Completed with warnings; retained comparison baseline |
 | `SWE-bench_Verified/gepa-rules/offline-plan-verifier-hpc-balanced-b12-8it-formal-20260731/` | Local mirror of the formal Offline HPC experiment under the frozen strong-Checker/checklist semantics | Stopped after 14 durable proposals during attempted proposal 15; frozen analysis baseline |
 | Remote `online-planning-hpc-policy-v3-20260715` run directory | Outcome-policy-v3 formal run targeting 8 durable iterations | Active; managed by the supervisor |
