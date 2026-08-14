@@ -271,7 +271,8 @@ a test, so launch commands must not inject a user-specific PATH.
 | OOM, disk quota, permanent provider authentication/billing/hard quota failure, corrupt state/output, fingerprint/manifest mismatch | block |
 | Formal Plan/Code mini-swe `cost_limit` / `step_limit` | disabled; worker walltime is the total rollout boundary |
 | Transient provider rate limiting | retryable; do not classify as permanent account quota exhaustion |
-| Repository/SIF/evaluator harness or cleanup integrity failure | block |
+| Repository/SIF/evaluator harness, checkpoint, or clean-workspace initialization failure | block |
+| Online/PolyBench post-checkpoint Apptainer or disposable-workspace cleanup failure | preserve completed phase, audit warning, continue collection |
 
 Local supervisor state is a cache. Remote `gepa_state.bin`, batch journals, and
 iteration progress are authoritative. Do not run two supervisors for one run.

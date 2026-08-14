@@ -4,7 +4,7 @@
 >
 > Scope: Online and Offline GEPA, shared ULHPC execution
 >
-> Last reviewed: 2026-07-27
+> Last reviewed: 2026-08-14
 >
 > Supersedes: `archive/mixed-design/architecture-pct-era-20260715.md`
 
@@ -160,6 +160,11 @@ pre-evaluation semantic gate.
 - Cooperative yield: normal scheduling control, not failure.
 - Controller walltime: recover from durable GEPA/batch state.
 - Worker hard kill: reuse only checkpoints completed before the kill.
+- Formal Apptainer phases persist the complete method result before resource
+  cleanup. A post-checkpoint environment/workspace cleanup failure is audited
+  but cannot erase the phase or cause another stochastic Plan/Code/Evaluator
+  draw. Failure to prepare a clean workspace or write/validate the checkpoint
+  remains blocking.
 - Slurm-confirmed worker timeout: selectively retried, then scored unresolved
   with timeout attribution only after the shared attempt limit;
   other hard kills remain operational failures.
@@ -177,7 +182,8 @@ pre-evaluation semantic gate.
   beginning of that phase. No mid-conversation resume is required.
 - Task storage separates immutable input, per-attempt trajectory/failure
   records, disposable workspaces, and the single authoritative successful
-  result. Workspace cleanup never removes attempt evidence.
+  result. Workspace cleanup never removes attempt evidence and is not a
+  controller responsibility.
 - Exhausted Reviewer Agent failures produce an unavailable review without
   changing the evaluator score. Exhausted Synthesis Agent failures are blocking
   because no trustworthy proposal exists and the failure rate must be inspected.

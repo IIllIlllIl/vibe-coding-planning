@@ -11,7 +11,7 @@ from __future__ import annotations
 import json
 import logging
 from pathlib import Path
-from typing import Any
+from typing import Any, Callable
 
 from src.environment.apptainer_env import ApptainerEnvironment
 from src.environment.docker_env import DockerCapacityWindow
@@ -39,22 +39,33 @@ def evaluate_apptainer(
     run_id_suffix: str = "",
     phase_workdir: Path,
     persistent_log_root: Path | None = None,
+    result_callback: Callable[[dict[str, Any]], None] | None = None,
+    cleanup_error_callback: Callable[[BaseException], None] | None = None,
 ) -> dict[str, Any]:
     """Evaluate one SWE-bench patch in an Apptainer-backed environment."""
+
+    def completed(result: dict[str, Any]) -> dict[str, Any]:
+        if result_callback is not None:
+            result_callback(result)
+        return result
+
     try:
         from swebench.harness.grading import get_eval_report
         from swebench.harness.test_spec.test_spec import make_test_spec
     except ImportError as exc:
         raise FatalError(
-            "swebench is not installed. "
-            "Please install it: pip install swebench>=4.1.0"
+            "swebench is not installed. Please install it: pip install swebench>=4.1.0"
         ) from exc
 
     instance_id = instance_info.get("instance_id")
     if not instance_id:
         raise FatalError("instance_info missing 'instance_id' field.")
     dataset_type = instance_info.get("dataset_type", "")
-    if dataset_type == "polybench" or dataset_type == "pro" or "dockerhub_tag" in instance_info:
+    if (
+        dataset_type == "polybench"
+        or dataset_type == "pro"
+        or "dockerhub_tag" in instance_info
+    ):
         raise FatalError(
             "Apptainer SWE-bench evaluator currently supports standard "
             "SWE-bench/Verified instances only; Pro and PolyBench must use "
@@ -84,7 +95,6 @@ def evaluate_apptainer(
         timeout,
     )
     env: ApptainerEnvironment | None = None
-    eval_completed = False
     report: dict[str, Any] = {}
     stdout_text = ""
     stderr_text = ""
@@ -109,15 +119,13 @@ def evaluate_apptainer(
         # phase_workdir is bind-mounted over /testbed. Write large artifacts on
         # the host so their contents never become part of an execve argv.
         phase_workdir.mkdir(parents=True, exist_ok=True)
-        (phase_workdir / ".vibe_patch.diff").write_text(
-            patch or "", encoding="utf-8"
-        )
+        (phase_workdir / ".vibe_patch.diff").write_text(patch or "", encoding="utf-8")
         (phase_workdir / ".vibe_eval.sh").write_text(
             test_spec.eval_script, encoding="utf-8"
         )
 
         repository_check = env.execute(
-            'git rev-parse --is-inside-work-tree >/dev/null '
+            "git rev-parse --is-inside-work-tree >/dev/null "
             '&& test -n "$(git ls-files | head -n 1)"',
             timeout=60,
         )
@@ -139,32 +147,44 @@ def evaluate_apptainer(
             stderr_text = f"Patch apply failed:\n{apply_output}"
             error_info = stderr_text
             run_log_path.write_text(stderr_text, encoding="utf-8")
-            return _result(False, stdout_text, stderr_text, log_dir, error_info, report)
+            return completed(
+                _result(False, stdout_text, stderr_text, log_dir, error_info, report)
+            )
 
-        before = env.execute(
-            "git -c core.fileMode=false diff",
-            timeout=timeout,
-        ).get("output", "").strip()
+        before = (
+            env.execute(
+                "git -c core.fileMode=false diff",
+                timeout=timeout,
+            )
+            .get("output", "")
+            .strip()
+        )
         try:
             eval_result = env.execute("/bin/bash .vibe_eval.sh", timeout=timeout)
         except CommandTimeoutError as exc:
             stderr_text = str(exc)
             error_info = "official_tests_timed_out"
             run_log_path.write_text(stderr_text, encoding="utf-8")
-            return _result(
-                False,
-                stdout_text,
-                stderr_text,
-                log_dir,
-                error_info,
-                report,
+            return completed(
+                _result(
+                    False,
+                    stdout_text,
+                    stderr_text,
+                    log_dir,
+                    error_info,
+                    report,
+                )
             )
         stdout_text = eval_result.get("output", "")
         test_output_path.write_text(stdout_text, encoding="utf-8")
-        after = env.execute(
-            "git -c core.fileMode=false diff",
-            timeout=timeout,
-        ).get("output", "").strip()
+        after = (
+            env.execute(
+                "git -c core.fileMode=false diff",
+                timeout=timeout,
+            )
+            .get("output", "")
+            .strip()
+        )
         log_lines = [
             f"patch_apply_output:\n{apply_output}",
             f"git_diff_before:\n{before}",
@@ -186,7 +206,12 @@ def evaluate_apptainer(
             include_tests_status=True,
         )
         report_path.write_text(json.dumps(report, indent=4), encoding="utf-8")
-        eval_completed = True
+        inst_report = report.get(instance_id, {}) if report else {}
+        resolved = bool(inst_report.get("resolved", False))
+        stderr_text = stderr_text or inst_report.get("error", "")
+        return completed(
+            _result(resolved, stdout_text, stderr_text, log_dir, error_info, report)
+        )
     except FatalError:
         raise
     except CommandTimeoutError as exc:
@@ -201,14 +226,14 @@ def evaluate_apptainer(
         ) from exc
     finally:
         if env is not None:
-            env.cleanup()
+            try:
+                env.cleanup()
+            except Exception as exc:
+                if cleanup_error_callback is None:
+                    raise
+                cleanup_error_callback(exc)
 
-    inst_report = report.get(instance_id, {}) if report else {}
-    resolved = bool(inst_report.get("resolved", False)) if eval_completed else False
-    stderr_text = stderr_text or inst_report.get("error", "")
-    if not eval_completed and error_info is None:
-        error_info = stderr_text or "Apptainer SWE evaluation completed=False"
-    return _result(resolved, stdout_text, stderr_text, log_dir, error_info, report)
+    raise AssertionError("unreachable evaluator state")
 
 
 def _result(

@@ -238,8 +238,9 @@ components, so this remains the bounded explanation rather than a causal claim.
   - Evaluator resolved/unresolved 使用 1/0；Plan/Code Agent 空提交、未提交、
     Agent 单命令超时在固定重试用尽后计 0；正式 HPC Plan/Code 的 mini-swe
     step/cost limits 已禁用，统一由 worker walltime 提供总边界。
-  - repository/SIF/OOM/checkpoint identity/evaluator harness/output integrity/
-    cleanup 失败保持 invalid 并停止当前 metric call；不设置主观可信分数。
+  - repository/SIF/OOM/checkpoint identity/write/evaluator harness/output
+    integrity/无法建立 clean workspace 保持 invalid 并停止当前 metric call；完整
+    phase checkpoint 之后的 Apptainer/workspace cleanup 失败只审计，不改变结果。
     Reflection、SSH/status、提交和普通 controller 异常自动恢复。
   - outcome policy v4 纳入 evaluation fingerprint；最终 scored Agent failure 按
     phase checkpoint 拼接完整 evidence chain 后进入 Reflection。
@@ -760,8 +761,31 @@ block 的频率与根因，再决定是否仅细化记录，或对反复出现�
   失败只写 audit event，不会使完整 phase 失效；controller 仍只负责编排、收集和
   retry，不接管资源清理。若未完成 phase 需要重跑，把各次执行视为来自同一概率分布
   的独立随机抽样，不恢复 Agent 对话中间态。本地测试已用 cleanup exception 验证下一
-  attempt 不会重跑三个完整 phase；smoke4 尚待 HPC 验收。
-- **PCE 后续工作**：smoke4 验收 resume/释放边界后，使用最终 113 个 strict-`v1.1`
-  可用 SIF 运行新的 PolyBench PCE raw-data generation；随后另行审查并把相同的
-  “完整 phase 先 checkpoint、cleanup 后置且不影响结果”边界移植到其他 PCE 流程，
-  不在本次 PolyBench 修改中改变 Online 流程。
+  attempt 不会重跑三个完整 phase。smoke4 worker array `5661319` 已在 attempt 1 完成
+  两个实例：分别耗时 22:36 与 40:05，三个 phase checkpoint 和最终 output 均完整，
+  disposable workspace 已清空，且 worker 远早于 125min hard limit 主动退出，验证了
+  正常完成即释放 allocation。该轮没有发生中断，因此实际跨-attempt resume 仍只由
+  deterministic test 覆盖。
+- **PCE 后续工作**：使用最终 113 个 strict-`v1.1` 可用 SIF 运行新的 PolyBench PCE
+  raw-data generation。smoke4 的 `transformers-3716` `MaxRSS=4193100K`，接近 4G，
+  但 ULHPC 超过 4G 需申请 2 CPU；由于 Agent workload 无法利用第二个 CPU且会增加
+  TRES/FairShare 消耗，当前不直接提升为 `2 CPU / 8G`，正式配置继续讨论并明确 OOM
+  风险。相同 checkpoint-before-cleanup 边界现已进入 Online PCE 实现审查与修复。
+- **Online PCE checkpoint/cleanup 边界（2026-08-14）**：Online Apptainer 原实现与
+  PolyBench 修复前相同，Plan 在 environment stop 后、Code 在 stop/workspace delete
+  后、Evaluator 在内部 environment cleanup 和外层 workspace delete 后才写 checkpoint；
+  cleanup 三次失败还会使完整方法结果 `FatalError`。现已改为 Plan 的 plan+trajectory、
+  Code 的 submitted patch+trajectory、Evaluator 的官方 score/raw result 各自先写
+  identity-bound 原子 checkpoint，再做 worker 侧 cleanup。正式 Apptainer 的
+  post-checkpoint cleanup 失败只写 audit warning，不改变 score 或触发重抽样；无法建立
+  clean workspace、checkpoint 写入/校验失败仍然 block，Docker teardown 保持严格。
+  本地测试覆盖 evaluator callback-before-cleanup、三个 cleanup failure 与下一次完整
+  checkpoint reuse；该源码变化会进入 Online execution fingerprint，不能用于无声
+  resume 旧 Online run。
+- **Iris controller 收集阻塞（2026-08-14）**：smoke4 两个 worker 均在 attempt 1
+  完成，但再次提交只读收集 controller 时，Iris `sbatch` 返回
+  `User's group not permitted to use this partition`。远端 `sinfo` 显示 `batch` up，
+  Slurm association/default account 为 `michail.papadakis`，显式 account 与已分配 QOS
+  的 `sbatch --test-only` 仍被同样拒绝，因此不是 PCE resume、资源大小或 FairShare
+  根因。停止重复提交；persistent worker outputs/checkpoints 保持完整，待账户/Unix group
+  partition authorization 恢复后用同一 smoke config 收集。

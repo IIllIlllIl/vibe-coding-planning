@@ -158,7 +158,16 @@ class TestEvaluateTimeout:
     ):
         captured = {}
 
-        def capture(test_spec, pred, rm_image, force_rebuild, client, run_id, timeout, rewrite_reports):
+        def capture(
+            test_spec,
+            pred,
+            rm_image,
+            force_rebuild,
+            client,
+            run_id,
+            timeout,
+            rewrite_reports,
+        ):
             captured["timeout"] = timeout
             captured["rm_image"] = rm_image
             return {"completed": True, "resolved": False}
@@ -177,7 +186,16 @@ class TestEvaluateTimeout:
     ):
         captured = {}
 
-        def capture(test_spec, pred, rm_image, force_rebuild, client, run_id, timeout, rewrite_reports):
+        def capture(
+            test_spec,
+            pred,
+            rm_image,
+            force_rebuild,
+            client,
+            run_id,
+            timeout,
+            rewrite_reports,
+        ):
             captured["timeout"] = timeout
             return {"completed": True, "resolved": True}
 
@@ -194,7 +212,16 @@ class TestEvaluateTimeout:
     ):
         captured = {}
 
-        def capture(test_spec, pred, rm_image, force_rebuild, client, run_id, timeout, rewrite_reports):
+        def capture(
+            test_spec,
+            pred,
+            rm_image,
+            force_rebuild,
+            client,
+            run_id,
+            timeout,
+            rewrite_reports,
+        ):
             captured["rm_image"] = rm_image
             return {"completed": True, "resolved": False}
 
@@ -225,7 +252,9 @@ class TestEvaluateCompletedFalse:
     @patch("swebench.harness.run_evaluation.run_instance")
     @patch("swebench.harness.test_spec.test_spec.make_test_spec")
     @patch("docker.from_env")
-    def test_completed_false_returns_failure(self, mock_docker, mock_make_spec, mock_run_instance, instance_info):
+    def test_completed_false_returns_failure(
+        self, mock_docker, mock_make_spec, mock_run_instance, instance_info
+    ):
         mock_run_instance.return_value = {"completed": False, "resolved": False}
 
         result = swe_evaluator.evaluate("diff content", instance_info)
@@ -239,10 +268,20 @@ class TestEvaluateReport:
     @patch("swebench.harness.run_evaluation.run_instance")
     @patch("swebench.harness.test_spec.test_spec.make_test_spec")
     @patch("docker.from_env")
-    def test_reads_report_json(self, mock_docker, mock_make_spec, mock_run_instance, instance_info):
+    def test_reads_report_json(
+        self, mock_docker, mock_make_spec, mock_run_instance, instance_info
+    ):
         import tempfile
+
         with tempfile.TemporaryDirectory() as tmpdir:
-            log_dir = Path(tmpdir) / "logs" / "run_evaluation" / "eval_astropy__astropy-14539" / "plan-code-test" / "astropy__astropy-14539"
+            log_dir = (
+                Path(tmpdir)
+                / "logs"
+                / "run_evaluation"
+                / "eval_astropy__astropy-14539"
+                / "plan-code-test"
+                / "astropy__astropy-14539"
+            )
             log_dir.mkdir(parents=True)
             report = {
                 "astropy__astropy-14539": {
@@ -250,7 +289,9 @@ class TestEvaluateReport:
                     "error": "",
                 }
             }
-            (log_dir / "report.json").write_text(json_mod.dumps(report), encoding="utf-8")
+            (log_dir / "report.json").write_text(
+                json_mod.dumps(report), encoding="utf-8"
+            )
 
             with patch("src.evaluator.swe_evaluator.Path") as mock_path_cls:
                 mock_path_cls.return_value.resolve.return_value = log_dir
@@ -311,6 +352,9 @@ class TestEvaluateApptainer:
             phase_workdir=phase_workdir,
             persistent_log_root=persistent_log_root,
             timeout=123,
+            result_callback=lambda result: commands.append(
+                f"checkpoint:{result['resolved']}"
+            ),
         )
 
         assert result["resolved"] is True
@@ -320,7 +364,9 @@ class TestEvaluateApptainer:
         mock_make_spec.assert_called_once_with(instance_info, namespace="swebench")
         mock_get_report.assert_called_once()
         assert any(".vibe_patch.diff" in command for command in commands)
-        assert any("git rev-parse --is-inside-work-tree" in command for command in commands)
+        assert any(
+            "git rev-parse --is-inside-work-tree" in command for command in commands
+        )
         assert any("/bin/bash .vibe_eval.sh" in command for command in commands)
         assert max(map(len, commands)) < 1000
         assert (phase_workdir / ".vibe_patch.diff").read_text(encoding="utf-8") == (
@@ -329,7 +375,7 @@ class TestEvaluateApptainer:
         assert (phase_workdir / ".vibe_eval.sh").read_text(
             encoding="utf-8"
         ) == eval_script
-        assert commands[-1] == "cleanup"
+        assert commands[-2:] == ["checkpoint:True", "cleanup"]
 
     @patch("src.evaluator.swe_apptainer_evaluator.ApptainerEnvironment")
     @patch("swebench.harness.grading.get_eval_report")
@@ -540,7 +586,9 @@ class TestImportSwebench:
         assert swebench is not None
 
     def test_import_swebench_failure(self):
-        with patch("builtins.__import__", side_effect=ImportError("No module named 'swebench'")):
+        with patch(
+            "builtins.__import__", side_effect=ImportError("No module named 'swebench'")
+        ):
             with pytest.raises(FatalError, match="swebench"):
                 swe_evaluator._import_swebench()
 

@@ -4,7 +4,7 @@
 >
 > Scope: Online GEPA planning-rule optimization, outcome policy v4, HPC rollout
 >
-> Last reviewed: 2026-07-20
+> Last reviewed: 2026-08-14
 >
 > Supersedes: `archive/mixed-design/requirement-document-pct-era-20260715.md`
 
@@ -57,8 +57,12 @@ Every rollout is either `scored` or `invalid`.
   `hpc.max_task_attempts`; only the final exhausted attempt becomes scored
   unresolved with timeout attribution. Missing output with unknown state cannot
   be inferred as timeout.
-- Repository, SIF, OOM, checkpoint identity, evaluator harness, transfer,
-  output-integrity, disk/quota, and cleanup failures remain invalid and block.
+- Repository, SIF, OOM, checkpoint identity/write, evaluator harness, transfer,
+  output-integrity, disk/quota, and failure to establish a clean phase workspace
+  remain invalid and block. After a complete identity-bound phase checkpoint is
+  durable, Apptainer/environment or disposable-workspace cleanup failure is an
+  audited operational warning: it cannot invalidate the phase, change its score,
+  or cause the Agent/Evaluator to be sampled again.
 - Formal HPC Plan/Code agents do not use mini-swe step or cost limits; the
   55-minute worker allocation is their total rollout boundary. Permanent
   provider authentication, billing, or hard-quota failure remains invalid and
@@ -95,6 +99,11 @@ Every rollout is either `scored` or `invalid`.
   terminal-missing indices.
 - Plan, Code, Evaluator, and instance-reviewer checkpoints are atomic and
   identity-bound.
+- A Plan checkpoint is written after the final plan and trajectory are complete;
+  a Code checkpoint is written after the submitted patch and trajectory are
+  complete; an Evaluator checkpoint is written after official scoring and raw
+  result evidence are complete. Formal Apptainer environment/workspace cleanup
+  happens only after the corresponding checkpoint.
 - A completed instance review contains only planning analysis, Code-plan
   alignment, outcome attribution, a possible planning lesson, and uncertainty.
   Reviewer trajectory and raw rollout evidence are preserved so Synthesis may
@@ -134,12 +143,17 @@ Every rollout is either `scored` or `invalid`.
 
 ## 6. Storage And Cleanup
 
-- Code workspaces are removed after patch and trajectory extraction.
+- Code workspaces are removed after patch/trajectory checkpointing.
 - Only the Code Agent's staged submission crosses into the clean Evaluator
   workspace. Unstaged diagnostic tests remain visible in the Code trajectory
   but the writable Code repository itself never crosses the phase boundary.
-- Evaluator workspaces are removed after report/log extraction.
-- Cleanup failure is infrastructure-invalid.
+- Evaluator workspaces are removed after the official result checkpoint is
+  durable.
+- Before-phase cleanup and clean-workspace initialization remain strict because
+  stale state could contaminate evidence. Post-checkpoint cleanup is best-effort:
+  failure is audited and may leave disposable storage for later maintenance, but
+  does not reopen or invalidate a completed phase. Worker exit releases the
+  Slurm allocation; controller collection does not own cleanup.
 - Current run state and official dataset snapshots are durable; temporary writable
   repositories and generated container caches follow bounded retention policies.
 - Archived output is outside the default Agent working set.

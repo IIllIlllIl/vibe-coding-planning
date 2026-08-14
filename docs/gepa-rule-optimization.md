@@ -4,7 +4,7 @@
 >
 > Scope: candidate planning rules, rollout evidence, Reflection, policy v4
 >
-> Last reviewed: 2026-07-20
+> Last reviewed: 2026-08-14
 >
 > Supersedes: `archive/mixed-design/gepa-rule-optimization-mixed-20260715.md`
 
@@ -133,8 +133,10 @@ exceptions never instantiate that type and therefore cannot silently become 0.
 - final Plan/Code Agent contract failure after all attempts -> 0;
 - Slurm-confirmed worker timeout -> selectively retry, then 0 with timeout
   attribution only after the final configured attempt;
-- repository/SIF/OOM/checkpoint identity/evaluator harness/output-integrity/
-  cleanup failure -> invalid and blocking.
+- repository/SIF/OOM/checkpoint identity or write/evaluator harness/
+  output-integrity/dirty phase initialization -> invalid and blocking;
+- environment or disposable-workspace cleanup failure after a complete durable
+  phase checkpoint -> preserve the phase and score, record an audit warning.
 
 The Code phase has a controlled 2400-second deadline. The worker writes
 `code_phase_deadline_exceeded` before Slurm termination. Three total attempts
@@ -190,6 +192,21 @@ Plan succeeded    -> retry clean Code
 Code succeeded    -> retry clean Evaluator
 Evaluator success -> emit completed output
 ```
+
+For formal Apptainer execution, each successful transition is ordered as:
+
+```text
+complete method output and evidence -> atomic phase checkpoint
+                                    -> best-effort environment/workspace cleanup
+```
+
+Plan completion means final plan plus trajectory; Code completion means the
+submitted patch plus trajectory; Evaluator completion means official scoring
+and raw result evidence. Cleanup does not become research evidence and cannot
+select a replacement draw after one of these checkpoints exists. Failure to
+start from a clean workspace or to write/validate the checkpoint remains
+blocking. Docker teardown retains its existing strict behavior; this change is
+for the formal Online HPC Apptainer path.
 
 Code retry never continues a half-written repository. It reuses only the
 successful Plan artifact and starts a new clean Code workspace. This is a

@@ -1208,6 +1208,7 @@ def test_online_rollout_apptainer_uses_separate_plan_and_code_phases(
         phase_workdir,
         persistent_log_root,
         run_id_suffix,
+        **_callbacks,
     ):
         code_workdir = Path(env_kwargs[1]["host_workdir"])
         assert not code_workdir.exists()
@@ -1298,7 +1299,9 @@ def test_online_rollout_workspace_cleanup_retries(tmp_path, monkeypatch):
     assert not workspace.exists()
 
 
-def test_online_rollout_workspace_cleanup_failure_is_fatal(tmp_path, monkeypatch):
+def test_online_rollout_workspace_cleanup_failure_before_checkpoint_is_fatal(
+    tmp_path, monkeypatch
+):
     config = _online_config(tmp_path)
     runner = OnlinePCTRolloutRunner(config, _FakeCapacityWindow())
     workspace = tmp_path / "workspace"
@@ -1309,7 +1312,7 @@ def test_online_rollout_workspace_cleanup_failure_is_fatal(tmp_path, monkeypatch
     )
     monkeypatch.setattr("src.optimization.online_rollout.time.sleep", lambda _: None)
 
-    with pytest.raises(FatalError, match="Failed to remove code phase workspace"):
+    with pytest.raises(FatalError, match="before a durable checkpoint"):
         runner._remove_phase_workspace(
             workspace,
             instance_id="org__repo-1",
@@ -1317,11 +1320,162 @@ def test_online_rollout_workspace_cleanup_failure_is_fatal(tmp_path, monkeypatch
             phase="code",
         )
 
+    assert workspace.exists()
     audit = [
         json.loads(line)
         for line in (config.run_dir / "audit_events.jsonl").read_text().splitlines()
     ]
     assert audit[-1]["event"] == "online_phase_workspace_cleanup_failed"
+
+
+def test_online_rollout_workspace_cleanup_failure_after_checkpoint_is_audited(
+    tmp_path, monkeypatch
+):
+    config = _online_config(tmp_path)
+    checkpoint_dir = tmp_path / "checkpoints-workspace-cleanup"
+    runner = OnlinePCTRolloutRunner(
+        config,
+        _FakeCapacityWindow(),
+        checkpoint_dir=checkpoint_dir,
+        checkpoint_identity="workspace-cleanup",
+    )
+    runner._write_checkpoint(
+        "code", {"patch": "diff --git a/a.py b/a.py\n", "code_trajectory": []}
+    )
+    workspace = tmp_path / "workspace-after-checkpoint"
+    workspace.mkdir()
+    monkeypatch.setattr(
+        "src.optimization.online_rollout.shutil.rmtree",
+        lambda path: (_ for _ in ()).throw(OSError("quota metadata failure")),
+    )
+    monkeypatch.setattr("src.optimization.online_rollout.time.sleep", lambda _: None)
+
+    runner._remove_phase_workspace(
+        workspace,
+        instance_id="org__repo-1",
+        candidate_sha256="abc",
+        phase="code",
+    )
+
+    assert workspace.exists()
+    audit = [
+        json.loads(line)
+        for line in (config.run_dir / "audit_events.jsonl").read_text().splitlines()
+    ]
+    assert audit[-1]["event"] == "online_phase_workspace_cleanup_failed"
+
+
+def test_online_apptainer_cleanup_failure_preserves_completed_phase_checkpoints(
+    tmp_path, monkeypatch
+):
+    config = _online_config(tmp_path)
+    config = replace(
+        config,
+        container=ContainerConfig(
+            runtime="apptainer",
+            sif_cache_dir=tmp_path / "sifs",
+        ),
+        evaluator=OnlineEvaluatorConfig(
+            timeout=config.evaluator.timeout,
+            backend="swebench_apptainer",
+        ),
+    )
+    case = load_online_snapshot(config.dataset_snapshot)[0][0]
+    monkeypatch.setenv("TEST_API_KEY", "secret")
+    calls = {"plan": 0, "code": 0, "evaluator": 0}
+
+    class FakeApptainerEnvironment:
+        def __init__(self, **kwargs):
+            pass
+
+        def cleanup(self):
+            raise OSError("synthetic environment cleanup failure")
+
+    monkeypatch.setattr(
+        "src.optimization.online_rollout.ApptainerEnvironment",
+        FakeApptainerEnvironment,
+    )
+    monkeypatch.setattr(
+        "src.optimization.online_rollout.OnlinePCTRolloutRunner._load_instance_info",
+        lambda self, case: {
+            "instance_id": case.instance_id,
+            "repo": "org/repo",
+            "base_commit": "abc123",
+            "repo_path": "",
+        },
+    )
+    monkeypatch.setattr(
+        "src.optimization.online_rollout.derive_image_name",
+        lambda info: "test/image:latest",
+    )
+
+    def fake_plan(*args, **kwargs):
+        calls["plan"] += 1
+        return "plan", [{"role": "assistant", "content": "plan"}]
+
+    def fake_code(*args, **kwargs):
+        calls["code"] += 1
+        return "diff --git a/a.py b/a.py\n", [{"role": "assistant", "content": "code"}]
+
+    def fake_evaluate(*args, **kwargs):
+        calls["evaluator"] += 1
+        result = {"resolved": True, "report": {}}
+        kwargs["result_callback"](result)
+        kwargs["cleanup_error_callback"](OSError("synthetic evaluator cleanup failure"))
+        return result
+
+    monkeypatch.setattr("src.optimization.online_rollout.plan_agent.run", fake_plan)
+    monkeypatch.setattr("src.optimization.online_rollout.code_agent.run", fake_code)
+    monkeypatch.setattr(
+        "src.optimization.online_rollout.evaluate_online_patch", fake_evaluate
+    )
+    checkpoint_dir = tmp_path / "checkpoints-cleanup"
+    runner = OnlinePCTRolloutRunner(
+        config,
+        _FakeCapacityWindow(),
+        checkpoint_dir=checkpoint_dir,
+        checkpoint_identity="cleanup-boundary",
+    )
+    first = runner(case, "candidate planning rules")
+
+    assert first.resolved is True
+    assert calls == {"plan": 1, "code": 1, "evaluator": 1}
+    assert {path.name for path in checkpoint_dir.glob("*.json")} == {
+        "plan.json",
+        "code.json",
+        "evaluator.json",
+    }
+
+    monkeypatch.setattr(
+        "src.optimization.online_rollout.plan_agent.run",
+        lambda *args, **kwargs: pytest.fail("Plan should resume"),
+    )
+    monkeypatch.setattr(
+        "src.optimization.online_rollout.code_agent.run",
+        lambda *args, **kwargs: pytest.fail("Code should resume"),
+    )
+    monkeypatch.setattr(
+        "src.optimization.online_rollout.evaluate_online_patch",
+        lambda *args, **kwargs: pytest.fail("Evaluator should resume"),
+    )
+    resumed = OnlinePCTRolloutRunner(
+        config,
+        _FakeCapacityWindow(),
+        checkpoint_dir=checkpoint_dir,
+        checkpoint_identity="cleanup-boundary",
+    )(case, "candidate planning rules")
+
+    assert resumed == first
+    cleanup_events = [
+        json.loads(line)
+        for line in (config.run_dir / "audit_events.jsonl").read_text().splitlines()
+        if "cleanup_failed" in line
+    ]
+    assert {event["phase"] for event in cleanup_events} == {
+        "plan",
+        "code",
+        "evaluator",
+    }
 
 
 def test_config_requires_zero_checker_temperature(tmp_path, monkeypatch):
@@ -5517,8 +5671,7 @@ def test_default_offline_config_stages_formal_accuracy_b8_run(monkeypatch):
     assert config.initial_rules_path.name == "gepa_initial_guideline_minimal.md"
     assert (
         "offline-plan-guideline-hpc-accuracy-b8-default-accept-"
-        "controller-timeout-8it-20260810"
-        in str(config.run_dir)
+        "controller-timeout-8it-20260810" in str(config.run_dir)
     )
     assert (
         config.initial_rules_path.read_text()
@@ -5728,9 +5881,7 @@ def test_checker_call_uses_apptainer_environment_when_runtime_apptainer(
             self.messages = []
 
         def add_message(self, role, content, **kwargs):
-            self.messages.append(
-                {"role": role, "content": content, **kwargs}
-            )
+            self.messages.append({"role": role, "content": content, **kwargs})
 
         def run(self, task, **kwargs):
             assert calls["session_active"] is True

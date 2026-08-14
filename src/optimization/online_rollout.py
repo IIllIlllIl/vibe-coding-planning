@@ -204,12 +204,17 @@ class OnlinePCTRolloutRunner:
                                 "code_trajectory": [],
                             },
                         ) from exc
+                    self._write_checkpoint(
+                        "plan",
+                        {"plan": plan, "plan_trajectory": list(plan_trajectory)},
+                    )
                 finally:
-                    self._stop_environment(plan_env)
-                self._write_checkpoint(
-                    "plan",
-                    {"plan": plan, "plan_trajectory": list(plan_trajectory)},
-                )
+                    self._stop_environment_after_checkpoint(
+                        plan_env,
+                        instance_id=case.instance_id,
+                        candidate_sha256=candidate_sha256,
+                        phase="plan",
+                    )
             else:
                 plan = str(plan_checkpoint["plan"])
                 plan_trajectory = list(plan_checkpoint["plan_trajectory"])
@@ -251,8 +256,7 @@ class OnlinePCTRolloutRunner:
                             case.issue_description,
                             code_env,
                             phase_timeout_seconds=(
-                                self.config.execution.code_phase_timeout_seconds
-                                or None
+                                self.config.execution.code_phase_timeout_seconds or None
                             ),
                             model_wrapper=lambda model: AuditedModel(
                                 model,
@@ -295,9 +299,18 @@ class OnlinePCTRolloutRunner:
                                 "code_trajectory": [],
                             },
                         ) from exc
+                    self._write_checkpoint(
+                        "code",
+                        {"patch": patch, "code_trajectory": list(code_trajectory)},
+                    )
                 finally:
                     try:
-                        self._stop_environment(code_env)
+                        self._stop_environment_after_checkpoint(
+                            code_env,
+                            instance_id=case.instance_id,
+                            candidate_sha256=candidate_sha256,
+                            phase="code",
+                        )
                     finally:
                         if code_workspace is not None:
                             self._remove_phase_workspace(
@@ -306,10 +319,6 @@ class OnlinePCTRolloutRunner:
                                 candidate_sha256=candidate_sha256,
                                 phase="code",
                             )
-                self._write_checkpoint(
-                    "code",
-                    {"patch": patch, "code_trajectory": list(code_trajectory)},
-                )
             else:
                 patch = str(code_checkpoint["patch"])
                 code_trajectory = list(code_checkpoint["code_trajectory"])
@@ -338,6 +347,24 @@ class OnlinePCTRolloutRunner:
                     receives_patch=True,
                 )
                 try:
+                    evaluator_callbacks = {}
+                    if (
+                        self.config.evaluator.backend == "swebench_apptainer"
+                        and self._checkpoint_path("evaluator") is not None
+                    ):
+                        evaluator_callbacks = {
+                            "result_callback": lambda result: self._write_checkpoint(
+                                "evaluator", {"evaluator_result": result}
+                            ),
+                            "cleanup_error_callback": lambda exc: self.audit.write(
+                                "online_phase_environment_cleanup_failed",
+                                instance_id=case.instance_id,
+                                candidate_sha256=candidate_sha256,
+                                phase="evaluator",
+                                error_type=type(exc).__name__,
+                                error=str(exc),
+                            ),
+                        }
                     evaluator_result = evaluate_online_patch(
                         patch,
                         instance_info,
@@ -346,6 +373,7 @@ class OnlinePCTRolloutRunner:
                         phase_workdir=eval_workdir,
                         persistent_log_root=eval_log_root,
                         run_id_suffix="_online_gepa",
+                        **evaluator_callbacks,
                     )
                 finally:
                     self._remove_phase_workspace(
@@ -648,9 +676,14 @@ class OnlinePCTRolloutRunner:
                     error_type=type(exc).__name__,
                     error=str(exc),
                 )
+                checkpoint_phase = "evaluator" if phase == "eval" else phase
+                checkpoint_path = self._checkpoint_path(checkpoint_phase)
+                if checkpoint_path is not None and checkpoint_path.is_file():
+                    return
                 raise FatalError(
                     f"Failed to remove {phase} phase workspace after "
-                    f"{max_attempts} attempts: {path}: {exc}"
+                    f"{max_attempts} attempts before a durable checkpoint: "
+                    f"{path}: {exc}"
                 ) from exc
 
     def _stop_environment(
@@ -661,3 +694,30 @@ class OnlinePCTRolloutRunner:
             env.cleanup()
         else:
             env.stop()
+
+    def _stop_environment_after_checkpoint(
+        self,
+        env: DockerEnvWrapper | ApptainerEnvironment,
+        *,
+        instance_id: str,
+        candidate_sha256: str,
+        phase: str,
+    ) -> None:
+        try:
+            self._stop_environment(env)
+        except Exception as exc:
+            checkpoint_path = self._checkpoint_path(phase)
+            if (
+                not isinstance(env, ApptainerEnvironment)
+                or checkpoint_path is None
+                or not checkpoint_path.is_file()
+            ):
+                raise
+            self.audit.write(
+                "online_phase_environment_cleanup_failed",
+                instance_id=instance_id,
+                candidate_sha256=candidate_sha256,
+                phase=phase,
+                error_type=type(exc).__name__,
+                error=str(exc),
+            )
