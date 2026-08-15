@@ -30,6 +30,8 @@ def _category(exc: BaseException) -> str:
         return "timeout"
     if isinstance(exc, OSError):
         return "io"
+    if isinstance(exc, UnicodeError):
+        return "encoding"
     if isinstance(exc, ValueError):
         return "validation"
     return "unexpected"
@@ -39,6 +41,11 @@ def _retry_disposition(exc: BaseException) -> str:
     explicit = getattr(exc, "retry_disposition", None)
     if explicit:
         return str(explicit)
+    # UnicodeDecodeError is a ValueError subclass, but invalid bytes emitted
+    # by a repository command are an execution failure, not evidence that the
+    # frozen input or task identity is invalid.
+    if isinstance(exc, UnicodeError):
+        return "retry_same_phase"
     if isinstance(exc, (FatalError, ValueError)):
         return "block_run"
     if isinstance(exc, AgentTaskError):

@@ -35,6 +35,7 @@ from src.optimization.callbacks import ProgressCallback
 from src.optimization.config import (
     ContainerConfig,
     ModelConfig,
+    OfflineSearchConfig,
     OfflineExecutionConfig,
     OptimizationConfig,
     SearchConfig,
@@ -165,7 +166,7 @@ def _config(tmp_path: Path) -> OptimizationConfig:
         run_dir=tmp_path / "run",
         checker=model,
         reflection=model,
-        search=SearchConfig(
+        search=OfflineSearchConfig(
             max_metric_calls=10,
             projection_metric_calls=1000,
             reflection_minibatch_size=1,
@@ -1831,6 +1832,139 @@ def test_adapter_scores_timeout_zero_and_reflects_only_terminal_attempt(
     ]
     assert result.outputs[0]["attempts"] == 3
     assert "attempt_trajectories" not in result.outputs[0]
+
+
+def test_adapter_repeats_only_train_cases_and_groups_reflection_evidence(
+    tmp_path,
+):
+    train, validation = load_snapshot(_snapshot(tmp_path / "snapshot"))
+
+    class RecordingBatchExecutor:
+        calls = []
+
+        def evaluate(self, batch, rules, capture_traces):
+            self.calls.append(list(batch))
+            return [
+                CheckerOutput(
+                    predicted_resolved=(case.repetition_index != 1),
+                    decision_reason=f"repetition {case.repetition_index}",
+                    repository_evidence=(),
+                    trajectory=(
+                        {
+                            "role": "assistant",
+                            "content": f"terminal {case.repetition_index}",
+                        },
+                    ),
+                )
+                for case in batch
+            ]
+
+    executor = RecordingBatchExecutor()
+    adapter = CheckerGEPAAdapter(
+        lambda case, rules: None,
+        batch_executor=executor,
+        train_case_repetitions=3,
+        run_dir=tmp_path / "repeated-run",
+    )
+
+    result = adapter.evaluate(
+        train,
+        {"rules": "guideline"},
+        capture_traces=True,
+    )
+
+    physical = executor.calls[0]
+    assert len(physical) == 6
+    assert [case.instance_id for case in physical] == [
+        train[0].instance_id,
+        train[0].instance_id,
+        train[0].instance_id,
+        train[1].instance_id,
+        train[1].instance_id,
+        train[1].instance_id,
+    ]
+    assert [case.repetition_index for case in physical] == [0, 1, 2, 0, 1, 2]
+    assert all("repetition_index" not in case.checker_payload() for case in physical)
+    assert len(result.outputs) == len(train)
+    assert result.scores == pytest.approx([2 / 3, 2 / 3])
+    assert result.trajectories is not None
+    grouped = result.trajectories[0]["checker_output"]
+    assert grouped["status"] == "repeated_checker_aggregate"
+    assert [item["repetition_index"] for item in grouped["repetitions"]] == [
+        0,
+        1,
+        2,
+    ]
+    assert [
+        item["checker_output"]["trajectory"][0]["content"]
+        for item in grouped["repetitions"]
+    ] == ["terminal 0", "terminal 1", "terminal 2"]
+    evaluation_rows = [
+        json.loads(line)
+        for line in (tmp_path / "repeated-run" / "evaluations.jsonl")
+        .read_text(encoding="utf-8")
+        .splitlines()
+    ]
+    assert len(evaluation_rows) == 2
+    assert evaluation_rows[0]["score"] == pytest.approx(2 / 3)
+    assert evaluation_rows[0]["is_correct"] is None
+    assert (
+        evaluation_rows[0]["classification_outcome"]
+        == "repeated_checker_aggregate"
+    )
+
+    validation_result = adapter.evaluate(
+        validation,
+        {"rules": "guideline"},
+        capture_traces=False,
+    )
+    assert len(executor.calls[1]) == len(validation)
+    assert all(case.repetition_index is None for case in executor.calls[1])
+    assert all(
+        output.get("status") != "repeated_checker_aggregate"
+        for output in validation_result.outputs
+    )
+
+
+def test_adapter_repeated_timeout_reflection_hides_attempt_history(tmp_path):
+    train, _ = load_snapshot(_snapshot(tmp_path / "snapshot"))
+
+    class TimeoutBatchExecutor:
+        def evaluate(self, batch, rules, capture_traces):
+            return [
+                CheckerTimeoutOutput(
+                    attempts=3,
+                    timeout_seconds=1800,
+                    trajectories=(
+                        ({"role": "assistant", "content": "old one"},),
+                        ({"role": "assistant", "content": "old two"},),
+                        (
+                            {
+                                "role": "assistant",
+                                "content": f"final {case.repetition_index}",
+                            },
+                        ),
+                    ),
+                )
+                for case in batch
+            ]
+
+    result = CheckerGEPAAdapter(
+        lambda case, rules: None,
+        batch_executor=TimeoutBatchExecutor(),
+        train_case_repetitions=3,
+    ).evaluate([train[0]], {"rules": "guideline"}, capture_traces=True)
+
+    assert result.scores == [0.0]
+    repetitions = result.trajectories[0]["checker_output"]["repetitions"]
+    assert len(repetitions) == 3
+    serialized = json.dumps(repetitions)
+    assert "old one" not in serialized
+    assert "old two" not in serialized
+    assert all(
+        len(item["checker_output"]["trajectory"]) == 1
+        for item in repetitions
+    )
 
 
 def test_adapter_retries_transient_checker_failure(tmp_path):
@@ -4519,6 +4653,37 @@ def test_candidate_contamination_check_replays_previous_run_rules():
     assert find_candidate_contamination(safe_seed, records) == []
 
 
+def test_candidate_contamination_check_reads_grouped_repetition_evidence():
+    records = [
+        {
+            "instance_id": "org__repo-1",
+            "checker_output": {
+                "status": "repeated_checker_aggregate",
+                "repetitions": [
+                    {
+                        "repetition_index": 0,
+                        "checker_output": {
+                            "repository_evidence": [
+                                {
+                                    "path": "src/private_module.py",
+                                    "symbol": "private_symbol",
+                                }
+                            ]
+                        },
+                    }
+                ],
+            },
+        }
+    ]
+
+    hits = find_candidate_contamination(
+        "Always inspect src/private_module.py and private_symbol.",
+        records,
+    )
+
+    assert {hit["kind"] for hit in hits} == {"path", "symbol"}
+
+
 def test_reflection_proposer_repairs_contaminated_candidate_once(tmp_path, monkeypatch):
     config = _config(tmp_path)
     monkeypatch.setenv("TEST_API_KEY", "secret")
@@ -5063,6 +5228,61 @@ def test_native_gepa_end_to_end_without_llm(tmp_path):
     assert cost_report["full_run_linear_estimate"]["target_metric_calls"] == 1000
 
 
+def test_native_gepa_repetition_config_keeps_sampler_logical(tmp_path):
+    config = _config(tmp_path)
+    config = replace(
+        config,
+        search=replace(
+            config.search,
+            train_case_repetitions=3,
+            max_iterations=1,
+        ),
+    )
+    calls = []
+
+    def checker(case, rules):
+        calls.append((case.split, case.instance_id, case.repetition_index))
+        return CheckerOutput(
+            predicted_resolved=rules == "improved guideline",
+            decision_reason="deterministic repeated checker",
+            repository_evidence=(),
+        )
+
+    class Proposer:
+        successful_proposals = 0
+        failures = []
+
+        def __call__(self, candidate, reflective_dataset, components):
+            records = list(reflective_dataset["rules"])
+            assert len(records) == 1
+            assert records[0]["repetition_count"] == 3
+            assert len(records[0]["checker_output"]["repetitions"]) == 3
+            self.successful_proposals += 1
+            return {"rules": "improved guideline"}
+
+    run_optimization(config, checker=checker, proposer=Proposer())
+
+    train_calls = [call for call in calls if call[0] == "train"]
+    validation_calls = [call for call in calls if call[0] == "validation"]
+    assert train_calls
+    assert len(train_calls) % 3 == 0
+    assert all(
+        [call[2] for call in train_calls[index : index + 3]] == [0, 1, 2]
+        for index in range(0, len(train_calls), 3)
+    )
+    assert validation_calls
+    assert all(call[2] is None for call in validation_calls)
+    audit = [
+        json.loads(line)
+        for line in (config.run_dir / "audit_events.jsonl")
+        .read_text(encoding="utf-8")
+        .splitlines()
+    ]
+    started = next(record for record in audit if record["event"] == "run_started")
+    assert started["reflection_minibatch_size"] == 1
+    assert started["train_case_repetitions"] == 3
+
+
 def test_offline_max_iterations_stops_after_exact_proposal_count(tmp_path):
     config = _config(tmp_path)
     config = replace(
@@ -5309,6 +5529,20 @@ def test_resume_rejects_semantic_changes_and_budget_decrease(tmp_path):
     ):
         run_optimization(
             changed_prompt,
+            checker=checker,
+            proposer=Proposer(),
+        )
+
+    changed_repetitions = replace(
+        config,
+        search=replace(config.search, train_case_repetitions=3),
+    )
+    with pytest.raises(
+        IncompatibleOptimizationRun,
+        match="configuration or source differs",
+    ):
+        run_optimization(
+            changed_repetitions,
             checker=checker,
             proposer=Proposer(),
         )
@@ -5663,6 +5897,7 @@ def test_default_offline_config_stages_formal_accuracy_b8_run(monkeypatch):
     assert config.search.projection_metric_calls == 1010
     assert config.search.max_iterations == 8
     assert config.search.reflection_minibatch_size == 8
+    assert config.search.train_case_repetitions == 1
     assert config.search.primary_metric == "accuracy"
     assert config.search.parallel == 1
     # One worker attempt is one complete Checker Agent session. Slurm-level

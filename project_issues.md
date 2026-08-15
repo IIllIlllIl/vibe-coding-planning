@@ -63,15 +63,21 @@ run 间始终使用同一固定 98-case validation，不重新抽样。该诊断
 超时、2 次 UTF-8 解码失败和 1 次 Checker semantic timeout。重复评估因此携带
 可观测的稳定性信息，但尚未成为正式 GEPA 的优化语义。
 
-待实现的 3 x 3 方案已在 `docs/offline-gepa.md` 固化：sampler 仍抽取三个不同
+3 x 3 的执行与聚合层现已实现：sampler 仍抽取三个不同
 train case，独立 repetition 层将其展开为九个 Checker Slurm task；每个 repetition
 复用最多三次 fresh attempts。Checker 不知道重复身份。每个 base case 的三个
 correctness score 取平均，得到 `0、1/3、2/3、1`，GEPA 仍看到三个逻辑 case；
-Reflection 按 base case 分组看到三份终态轨迹，并被告知它们是独立重复。validation
+Reflection 按 base case 分组看到三份带 repetition index 的终态轨迹。validation
 仍对固定 98 case 各运行一次。三次 attempts 的原始证据继续保存，但 Reflection
 只看到首次成功的终态，或 semantic timeout 耗尽时最后一次 partial trajectory，
-看不到 earlier attempts、attempt count 或 retry feedback。Reflection prompt 的准确
-写法仍待讨论，重复执行尚未实现。
+看不到 earlier attempts、attempt count 或 retry feedback。配置入口为
+`search.train_case_repetitions`，默认 `1`；设为 `3` 时只扩展 train batch，固定
+validation 仍为单次。repetition index 已进入 task manifest、fingerprint、worker
+output 和 Host identity validation，但不会进入 Checker payload。Adapter 在返回 GEPA
+前恢复为每个 base case 一个平均 score 和一份 grouped evidence；关闭配置时沿用原有
+schema。Reflection prompt 如何解释三次分歧仍待讨论，尚未启动 3 x 3 实验。
+本地 `tests/test_optimization/` 共 155 项通过；全仓测试目前在收集阶段被既有的
+SIF preheat watchdog 常量导入错误阻断，该问题不属于 3 x 3 流程且本轮未混入修复。
 
 该设计把 Reflection 的一次输入控制为三组、共九份终态 Checker trajectory，低于
 此前 12 份 rich-evidence trajectory 触发 context overflow 的规模，但必须在实现后
@@ -829,3 +835,38 @@ block 的频率与根因，再决定是否仅细化记录，或对反复出现�
   缺口已在真实 HPC controller 中验收。当前只生成 raw PCE evidence，不分配最终
   validation label；worker 完成后仍需再次运行同一 controller config 进行收集/选择性
   retry。
+- **正式 PCE 首轮收集前分类问题（2026-08-15）**：113 个 task 已全部离开首轮队列，
+  107 个已有完整输出，6 个需要 retry/收集，其中
+  `huggingface__transformers-23796` 的 Code 阶段读取 repository command output 时发生
+  `UnicodeDecodeError`。该异常继承 `ValueError`，被 worker 的宽泛规则误标为
+  `blocking_failed/validation`，会在 controller 收集时阻断其余安全重试。现将
+  `UnicodeError` 明确分类为 transient `encoding/retry_same_phase`；冻结 input、身份和
+  schema 的真正 `ValueError` 仍 block。当前 run 的兼容恢复必须保留 attempt-1 原始
+  `failure.json`，只修正可变 controller inbox 的 disposition 并留下 repair evidence，
+  然后使用原始 `10ff821…` 提交快照继续相同 fingerprint，不能用新 source hash 重跑
+  已完成的 107 个 task。
+  首次兼容收集 controller `5673271` 还暴露了独立路径身份问题：更新后的
+  `ulhpc-submit` 每次使用新远端 source snapshot，而 PCE manifest 原先逐字比较 snapshot
+  内的绝对 dataset/image 路径，因此同一 commit、相同冻结 hash 和相同 fingerprint
+  仍在 3 秒内被拒绝，且没有提交 worker。manifest compatibility 现只忽略这两个临时
+  mount path；所有内容 hash、image identity、execution fingerprint、source/config hash
+  和 Git provenance 仍必须完全一致。
+  当前 run 使用保留的原始 `10ff821…` remote snapshot 完成兼容收集：controller
+  `5673324` 只登记 task 45 的 terminal grace，controller `5673328` 随后提交 attempt-2
+  array `5673329`，且 array 精确包含 `8,12,29,40,45,76` 六个 index；其余 107 个完整
+  task 未重跑。六个 element 当时均使用每 task `1 CPU / 4G / 125min`，其最终结果见下项。
+- **正式 PolyBench PCE 与清洗已完成（2026-08-15）**：attempt-2 恢复 4/6，最终
+  attempt-3 又恢复 1 个；controller `5673460` 将运行冻结为
+  `completed_with_incomplete`。113 个 source case 中有 111 个 parsed-test outcome、
+  一个 Evaluate timeout 和一个三次 Code attempt 耗尽。完整 formal run 已镜像到本地
+  `output/SWE-PolyBench/polybench-pce-runs/formal/python113-v11-pce-20260814/`。
+  `huggingface__transformers-8747` 以 `PCE_INCOMPLETE` 来源排除；
+  `huggingface__transformers-12981` 以 `TEST_EXECUTION_TIMEOUT` 来源排除；二者均不制造
+  unresolved label。111 个 test-parsed case 为 59 resolved / 52 unresolved。
+  随后复用 Verified 500→482 的 `resolved-placeholder-high-precision-v1`：仅在 resolved、
+  evaluated implementation patch 非空时检查 `EXACT_PLACEHOLDER`、
+  `GENERIC_PLACEHOLDER`、`PATH_ONLY_PLAN`，本轮零命中。最终冻结 snapshot 为
+  `20260815_python111_testparsed_26dad63b5cf3`，ordered-ID SHA-256 为
+  `26dad63b5cf34bc945a0a3363de13becc66f7503895d5ea23feef7cdda56bf29`。
+  下一步仍是 2it 3x3 platform/behavior smoke；PolyBench 结果不得反馈到 3x3 guideline
+  生成或 prompt 设计。

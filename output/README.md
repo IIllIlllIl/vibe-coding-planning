@@ -13,9 +13,10 @@ historical comparison, provenance, or reproduction.
 | `SWE-PolyBench/polybench-guideline-validation-guidelines/20260811_seed-c1-c2-c3_3293f8e925b8/` | Exact seed and candidate indices 1-3 from the completed 20260810 Offline run | Frozen evaluation bundle |
 | `archive/operations/polybench-python199-v1.1-20260811/` | Local mirror of the completed official `:v1.1` Python-199 availability operation | Operational preparation evidence; remote working copy removed |
 | `SWE-PolyBench/polybench-pce-inputs/20260814_python113_v11_8c7d9485d1d0/` | Official Python rows joined to the reviewed exact-`v1.1` availability evidence | Complete immutable formal PCE input; 113 cases |
+| `SWE-PolyBench/polybench-pce-runs/formal/python113-v11-pce-20260814/` | Complete local mirror of formal PCE trajectories, attempts, checkpoints, evaluator evidence and controller state | Raw formal evidence; 113 cases, not a Checker input |
+| `SWE-PolyBench/polybench-guideline-validation-datasets/20260815_python111_testparsed_26dad63b5cf3/` | Derived PolyBench Checker-only validation snapshot | Active immutable input; 111 parsed-test cases |
 | `SWE-PolyBench/polybench-pce-inputs/20260811_smoke2_transformers/` | Frozen two-row source and reviewed image-manifest copy staged to the PCE smoke | Smoke input only; not formal input |
 | `archive/tests/polybench-pce/` | Locally mirrored smoke3 diagnostic evidence and completed smoke4 evidence | Test only; remote working copies removed |
-| Remote `SWE-PolyBench/polybench-pce-runs/formal/python113-v11-pce-20260814/` | Raw PCE generation for all 113 frozen exact-`v1.1` cases | Active formal generation; not yet collected or cleaned |
 | `SWE-bench_Verified/gepa-rules/offline-plan-verifier-balanced-b12-p2-case-reviews-8it-20260727/` | Formal local Offline result under the final pre-HPC experimental flow | Completed with warnings; retained comparison baseline |
 | `SWE-bench_Verified/gepa-rules/offline-plan-verifier-hpc-balanced-b12-8it-formal-20260731/` | Local mirror of the formal Offline HPC experiment under the frozen strong-Checker/checklist semantics | Stopped after 14 durable proposals during attempted proposal 15; frozen analysis baseline |
 | Remote `online-planning-hpc-policy-v3-20260715` run directory | Outcome-policy-v3 formal run targeting 8 durable iterations | Active; managed by the supervisor |
@@ -41,15 +42,16 @@ active surface.
 
 ## PolyBench Preparation And Output Boundary
 
-The replacement PolyBench input is frozen, while formal PCE evidence has not
-yet been generated. Its artifact classes must not be mixed:
+The replacement PolyBench input, formal PCE evidence and cleaned validation
+snapshot are frozen. Their artifact classes must not be mixed:
 
 | Root | Classification | May be used as formal validation data? |
 |---|---|---|
 | `archive/operations/polybench-python199-v1.1-20260811/` | Frozen local mirror of operational download provenance and failures | No |
 | `SWE-PolyBench/polybench-pce-inputs/` | Frozen reviewed source/image inputs staged to PCE | Yes only for snapshots whose manifest declares complete and non-provisional |
 | `SWE-PolyBench/polybench-pce-runs/smoke/` | Platform-smoke trajectories, patches, evaluator and controller evidence | No |
-| `SWE-PolyBench/polybench-pce-runs/formal/` | Reserved formal raw PCE evidence root | Not until a separately reviewed formal run exists |
+| `SWE-PolyBench/polybench-pce-runs/formal/` | Formal raw PCE evidence, including failed attempts and operational outcomes | No; derive a reviewed validation snapshot first |
+| `SWE-PolyBench/polybench-guideline-validation-datasets/` | Labelled validation inputs derived by a frozen, guideline-independent cleaning policy | Yes, for Checker-only external validation; never for GEPA/Reflection |
 | `SWE-PolyBench/polybench-guideline-validation-guidelines/` | Guidelines frozen before PolyBench results are viewed | Yes, as immutable model inputs only |
 
 The complete formal input snapshot is
@@ -66,6 +68,15 @@ Smoke4 worker array `5661319` completed 2/2 cases on attempt 1. Collection
 controller `5670870` reused those outputs without submitting new workers and
 recorded 2 complete, 0 incomplete, 1 resolved and 1 unresolved. This closes the
 platform-smoke prerequisite; it does not make the smoke a validation result.
+
+The formal run subsequently completed all three-attempt controller semantics.
+Of 113 source cases, 111 produced parsed test outcomes, one Evaluate command
+timed out, and one Code task exhausted three attempts. The complete raw run is
+mirrored locally. The active derived snapshot excludes those two non-parsed
+outcomes without manufacturing labels, then applies the same resolved-only,
+non-empty-patch placeholder policy used for SWE-bench Verified 500-to-482.
+No PolyBench plan matched that placeholder policy, leaving 111 cases: 59
+resolved and 52 unresolved.
 
 The first PCE smoke preserved valid Plan and Code checkpoints for both cases
 but failed in Evaluate because the Host deleted its own evaluator inputs during

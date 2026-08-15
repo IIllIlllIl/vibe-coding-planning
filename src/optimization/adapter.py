@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from concurrent.futures import FIRST_COMPLETED, Future, ThreadPoolExecutor, wait
+from dataclasses import replace
 import hashlib
 import json
 from pathlib import Path
@@ -68,6 +69,7 @@ class CheckerGEPAAdapter:
         primary_metric: str = "accuracy",
         class_counts_by_split: Mapping[str, Mapping[bool, int]] | None = None,
         batch_executor: CheckerBatchExecutor | None = None,
+        train_case_repetitions: int = 1,
     ) -> None:
         self.checker = checker
         self.parallel = parallel
@@ -77,6 +79,9 @@ class CheckerGEPAAdapter:
         self.startup_seed_replay = startup_seed_replay
         self.seed_rules_sha256 = seed_rules_sha256
         self.batch_executor = batch_executor
+        if train_case_repetitions < 1:
+            raise ValueError("train_case_repetitions must be positive")
+        self.train_case_repetitions = train_case_repetitions
         if primary_metric not in ("accuracy", "balanced_accuracy"):
             raise ValueError(
                 "primary_metric must be 'accuracy' or 'balanced_accuracy'"
@@ -192,6 +197,8 @@ class CheckerGEPAAdapter:
             / candidate_sha256[:12]
             / case.instance_id
         )
+        if case.repetition_index is not None:
+            root = root / f"repetition_{case.repetition_index:02d}"
         root.mkdir(parents=True, exist_ok=True)
         path = root / f"{call_id}.json"
         payload: dict[str, Any] = {
@@ -207,6 +214,8 @@ class CheckerGEPAAdapter:
             "messages": list(messages),
             "retry_feedback": retry_feedback,
         }
+        if case.repetition_index is not None:
+            payload["repetition_index"] = case.repetition_index
         if output is not None:
             payload["output"] = dict(output)
         if error is not None:
@@ -416,6 +425,101 @@ class CheckerGEPAAdapter:
             }
         return public_output, float(score_details["score"]), trace
 
+    def _expand_train_repetitions(
+        self,
+        batch: Sequence[GEPACase],
+    ) -> tuple[list[GEPACase], int]:
+        """Expand logical train cases without changing Checker-visible input."""
+        split_values = {case.split for case in batch}
+        if len(split_values) > 1:
+            raise ValueError("Offline GEPA evaluation batches may not mix splits")
+        repetitions = (
+            self.train_case_repetitions
+            if split_values == {"train"}
+            else 1
+        )
+        if repetitions == 1:
+            return list(batch), 1
+        return [
+            replace(case, repetition_index=repetition_index)
+            for case in batch
+            for repetition_index in range(repetitions)
+        ], repetitions
+
+    def _aggregate_repetition_rows(
+        self,
+        logical_batch: Sequence[GEPACase],
+        rows: Sequence[
+            tuple[dict[str, Any], float, dict[str, Any] | None]
+        ],
+        *,
+        repetitions: int,
+        capture_traces: bool,
+    ) -> list[tuple[dict[str, Any], float, dict[str, Any] | None]]:
+        if repetitions == 1:
+            return list(rows)
+        expected = len(logical_batch) * repetitions
+        if len(rows) != expected:
+            raise RuntimeError(
+                "repeated Checker row count does not match logical batch"
+            )
+        aggregated = []
+        for logical_index, case in enumerate(logical_batch):
+            start = logical_index * repetitions
+            group = list(rows[start : start + repetitions])
+            score = sum(row[1] for row in group) / repetitions
+            repetition_outputs = [
+                {
+                    "repetition_index": repetition_index,
+                    "score": repetition_score,
+                    "checker_output": output,
+                }
+                for repetition_index, (output, repetition_score, _) in enumerate(group)
+            ]
+            public_output = {
+                "instance_id": case.instance_id,
+                "status": "repeated_checker_aggregate",
+                "repetition_count": repetitions,
+                "score": score,
+                "repetitions": repetition_outputs,
+            }
+            trace = None
+            if capture_traces:
+                trace_repetitions = []
+                for repetition_index, (_, repetition_score, item_trace) in enumerate(
+                    group
+                ):
+                    if item_trace is None:
+                        raise RuntimeError(
+                            "repeated Checker reflection evidence is missing"
+                        )
+                    trace_repetitions.append(
+                        {
+                            "repetition_index": repetition_index,
+                            "score": repetition_score,
+                            "is_correct": item_trace.get("is_correct"),
+                            "classification_outcome": item_trace.get(
+                                "classification_outcome"
+                            ),
+                            "checker_output": item_trace["checker_output"],
+                        }
+                    )
+                trace = {
+                    "instance_id": case.instance_id,
+                    "expected_resolved": case.resolved,
+                    "primary_metric": self.primary_metric,
+                    "score": score,
+                    "repetition_count": repetitions,
+                    "checker_output": {
+                        "status": "repeated_checker_aggregate",
+                        "repetition_count": repetitions,
+                        "repetitions": trace_repetitions,
+                    },
+                    **case.asi,
+                }
+            aggregated.append((public_output, score, trace))
+        return aggregated
+
     def _evaluate_parallel_fail_fast(
         self,
         batch: list[GEPACase],
@@ -513,6 +617,7 @@ class CheckerGEPAAdapter:
                 scores=[row[1] for row in rows],
                 trajectories=None,
             )
+        execution_batch, repetitions = self._expand_train_repetitions(batch)
         if self.audit is not None:
             self.audit.write(
                 "adapter_evaluation_started",
@@ -529,6 +634,7 @@ class CheckerGEPAAdapter:
                 ],
                 checker_forbidden_fields=[
                     "resolved",
+                    "repetition_index",
                     "plan_trajectory",
                     "code_trajectory",
                     "generated_patch",
@@ -539,26 +645,32 @@ class CheckerGEPAAdapter:
                 ),
                 parallel=self.parallel,
                 checker_attempts=self.checker_attempts,
+                logical_case_count=len(batch),
+                physical_checker_calls=len(execution_batch),
+                train_case_repetitions=repetitions,
+                repetition_indices=[
+                    case.repetition_index for case in execution_batch
+                ],
                 primary_metric=self.primary_metric,
                 class_counts_by_split=self.class_counts_by_split,
             )
         if self.batch_executor is not None:
             outputs = self.batch_executor.evaluate(
-                batch,
+                execution_batch,
                 candidate["rules"],
                 capture_traces,
             )
-            if len(outputs) != len(batch):
+            if len(outputs) != len(execution_batch):
                 raise RuntimeError(
                     "Offline Checker batch output count does not match input"
                 )
             rows = [
                 self._row_from_checker_output(case, output, capture_traces)
-                for case, output in zip(batch, outputs, strict=True)
+                for case, output in zip(execution_batch, outputs, strict=True)
             ]
         elif self.parallel > 1:
             rows = self._evaluate_parallel_fail_fast(
-                batch,
+                execution_batch,
                 candidate["rules"],
                 capture_traces,
                 candidate_hash,
@@ -566,7 +678,7 @@ class CheckerGEPAAdapter:
         else:
             rows = [
                 self._evaluate_one(case, candidate["rules"], capture_traces)
-                for case in batch
+                for case in execution_batch
             ]
         errors = [output for output, _, _ in rows if "error" in output]
         if errors:
@@ -575,6 +687,12 @@ class CheckerGEPAAdapter:
                 "Checker operational failure for: "
                 + ", ".join(instance_ids)
             )
+        rows = self._aggregate_repetition_rows(
+            batch,
+            rows,
+            repetitions=repetitions,
+            capture_traces=capture_traces,
+        )
         result = EvaluationBatch(
             outputs=[row[0] for row in rows],
             scores=[row[1] for row in rows],
@@ -595,14 +713,28 @@ class CheckerGEPAAdapter:
                     result.scores,
                     strict=True,
                 ):
-                    score_details = (
-                        self._timeout_score_details(case)
-                        if output.get("status") == "timeout"
-                        else self._score_details(
-                            case,
-                            bool(output["predicted_resolved"]),
+                    if output.get("status") == "repeated_checker_aggregate":
+                        score_details = {
+                            "is_correct": None,
+                            "classification_outcome": (
+                                "repeated_checker_aggregate"
+                            ),
+                            "error_type": None,
+                            "class_weight": (
+                                self._score_details(case, case.resolved)[
+                                    "class_weight"
+                                ]
+                            ),
+                        }
+                    else:
+                        score_details = (
+                            self._timeout_score_details(case)
+                            if output.get("status") == "timeout"
+                            else self._score_details(
+                                case,
+                                bool(output["predicted_resolved"]),
+                            )
                         )
-                    )
                     handle.write(
                         json.dumps(
                             {

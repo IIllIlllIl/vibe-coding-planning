@@ -275,12 +275,15 @@ raw category.
 Host validation, identity, or data-integrity failures retain the existing
 blocking boundary; no failure is converted into a prediction.
 
-### Proposed repeated-minibatch evaluation (3 x 3)
+### Repeated-minibatch evaluation (3 x 3)
 
-This is a documented next-method design, not an implemented or active search
-setting. Its purpose is to expose Checker decision instability to Reflection
-without repeating the 98-case validation or increasing the number of distinct
-training cases that Reflection must understand.
+The repetition layer is implemented but remains opt-in. Set
+`search.reflection_minibatch_size: 3` and
+`search.train_case_repetitions: 3` under a new run identity to activate the
+3 x 3 method. The default repetition count is one, preserving the ordinary
+single-evaluation flow. Its purpose is to expose Checker decision instability
+to Reflection without repeating the 98-case validation or increasing the
+number of distinct training cases that Reflection must understand.
 
 1. The existing sampler selects three distinct training cases. It remains the
    sole authority for case selection.
@@ -302,9 +305,9 @@ training cases that Reflection must understand.
    the repetition count.
 6. GEPA and its sampler still see three logical cases and three logical scores.
    Reflection receives one grouped record per base case containing the three
-   terminal Checker results and trajectories. It is told that these are
-   independent repetitions so disagreement can be interpreted as instability;
-   the exact Reflection prompt remains a pending design decision.
+   terminal Checker results and trajectories. The evidence JSON records the
+   repetition count and index. The exact Reflection instruction for using that
+   disagreement remains a pending prompt-design decision.
 7. Full validation is unchanged: each of the fixed 98 validation cases is
    evaluated once. Repetition therefore changes proposal evidence and the
    parent/proposal minibatch gate, not validation measurement or candidate
@@ -326,6 +329,15 @@ attempt evidence remains under the local `checker_trajectories/` or HPC
 per-attempt task directories. This prevents orchestration retries from changing
 the research evidence merely because the automation policy was configured with
 more attempts.
+
+Implementation boundaries are explicit: the sampler returns logical cases;
+the Adapter expands only train batches, the local or HPC Checker executor runs
+the physical calls, and the Adapter restores one score and one grouped evidence
+record per logical case before returning to GEPA. Repetition identity is part
+of the HPC task manifest, output validation and evaluation fingerprint, but is
+excluded from `checker_payload`. Validation cases are never expanded. With the
+configuration disabled, output and Reflection evidence retain the pre-existing
+single-call schema.
 
 ## Search, Stopping, And Resume
 

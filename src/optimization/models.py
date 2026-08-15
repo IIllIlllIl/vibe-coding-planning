@@ -22,6 +22,10 @@ class GEPACase:
     plan: str
     repository: RepositoryRef
     asi: dict[str, Any]
+    # Controller-only identity for independently repeated Checker calls.  It
+    # is deliberately absent from ``checker_payload`` so the Checker cannot
+    # tell whether a logical case was repeated.
+    repetition_index: int | None = None
 
     def checker_payload(self) -> dict[str, Any]:
         return {

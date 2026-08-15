@@ -154,18 +154,32 @@ def find_candidate_contamination(
         checker_output = record.get("checker_output")
         if not isinstance(checker_output, Mapping):
             continue
-        evidence = checker_output.get("repository_evidence")
-        if not isinstance(evidence, Sequence) or isinstance(evidence, (str, bytes)):
-            continue
-        for item in evidence:
-            if not isinstance(item, Mapping):
+        outputs = [checker_output]
+        repetitions = checker_output.get("repetitions")
+        if isinstance(repetitions, Sequence) and not isinstance(
+            repetitions, (str, bytes)
+        ):
+            outputs.extend(
+                item["checker_output"]
+                for item in repetitions
+                if isinstance(item, Mapping)
+                and isinstance(item.get("checker_output"), Mapping)
+            )
+        for output in outputs:
+            evidence = output.get("repository_evidence")
+            if not isinstance(evidence, Sequence) or isinstance(
+                evidence, (str, bytes)
+            ):
                 continue
-            path = str(item.get("path", "")).strip()
-            if "/" in path and path.strip("/."):
-                sources.add(("path", path, instance_id))
-            symbol = str(item.get("symbol", "")).strip()
-            if "_" in symbol or "::" in symbol:
-                sources.add(("symbol", symbol, instance_id))
+            for item in evidence:
+                if not isinstance(item, Mapping):
+                    continue
+                path = str(item.get("path", "")).strip()
+                if "/" in path and path.strip("/."):
+                    sources.add(("path", path, instance_id))
+                symbol = str(item.get("symbol", "")).strip()
+                if "_" in symbol or "::" in symbol:
+                    sources.add(("symbol", symbol, instance_id))
 
     hits = []
     for kind, value, instance_id in sorted(sources):
@@ -478,6 +492,11 @@ class EvidenceBundleWriter:
                         else {"resolved": record["resolved"]}
                     ),
                     "score": record["score"],
+                    **(
+                        {"repetition_count": record["repetition_count"]}
+                        if "repetition_count" in record
+                        else {}
+                    ),
                 }
             )
         _write_json(bundle / "manifest.json", {"mode": self.mode, "cases": manifest})

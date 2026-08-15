@@ -126,6 +126,7 @@ def _run_optimization_locked(
         max_iterations=config.search.max_iterations,
         projection_metric_calls=config.search.projection_metric_calls,
         reflection_minibatch_size=config.search.reflection_minibatch_size,
+        train_case_repetitions=config.search.train_case_repetitions,
         parallel=config.search.parallel,
         seed=config.search.seed,
         candidate_components=["guideline"],
@@ -185,6 +186,7 @@ def _run_optimization_locked(
         primary_metric=config.search.primary_metric,
         class_counts_by_split=class_counts_by_split,
         batch_executor=checker_batch_executor,
+        train_case_repetitions=config.search.train_case_repetitions,
     )
     callback = ProgressCallback(
         config.run_dir,

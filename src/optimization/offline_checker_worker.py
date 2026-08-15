@@ -94,6 +94,11 @@ def run_task(
                 instance_id=str(repository["instance_id"]),
             ),
             asi={},
+            repetition_index=(
+                int(manifest["repetition_index"])
+                if manifest.get("repetition_index") is not None
+                else None
+            ),
         )
         failure_stage = "retry_context"
         retry_feedback = _load_retry_feedback(previous_output_path)
@@ -129,21 +134,21 @@ def run_task(
             ),
         )
         failure_stage = "output_write"
-        atomic_json(
-            output_path,
-            {
-                "status": "completed",
-                "started_at": started_at,
-                "finished_at": datetime.now(timezone.utc).isoformat(),
-                "mode": "offline_checker",
-                "fingerprint": manifest["fingerprint"],
-                "instance_id": case.instance_id,
-                "split": case.split,
-                "candidate_sha256": text_sha256(rules),
-                "retry_feedback": retry_feedback,
-                "checker_output": output.to_dict(include_trajectory=True),
-            },
-        )
+        completed = {
+            "status": "completed",
+            "started_at": started_at,
+            "finished_at": datetime.now(timezone.utc).isoformat(),
+            "mode": "offline_checker",
+            "fingerprint": manifest["fingerprint"],
+            "instance_id": case.instance_id,
+            "split": case.split,
+            "candidate_sha256": text_sha256(rules),
+            "retry_feedback": retry_feedback,
+            "checker_output": output.to_dict(include_trajectory=True),
+        }
+        if case.repetition_index is not None:
+            completed["repetition_index"] = case.repetition_index
+        atomic_json(output_path, completed)
         return 0
     except (CheckerAgentTimeout, Exception) as exc:
         failure = {
@@ -173,6 +178,8 @@ def run_task(
             ),
             "retry_feedback": retry_feedback,
         }
+        if manifest.get("repetition_index") is not None:
+            failure["repetition_index"] = manifest["repetition_index"]
         trajectory = getattr(exc, "checker_trajectory", None)
         if trajectory is not None:
             atomic_json(

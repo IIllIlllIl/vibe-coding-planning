@@ -54,6 +54,19 @@ def _git_head() -> str | None:
     return result.stdout.strip() if result.returncode == 0 else None
 
 
+def _run_manifest_compatible(
+    existing: dict[str, Any],
+    proposed: dict[str, Any],
+) -> bool:
+    """Compare research identity without transient staged mount paths."""
+    operational_paths = {"dataset_snapshot", "image_manifest"}
+    return {
+        key: value for key, value in existing.items() if key not in operational_paths
+    } == {
+        key: value for key, value in proposed.items() if key not in operational_paths
+    }
+
+
 def run_polybench_pce(config: PolyBenchPCEConfig) -> dict[str, Any] | None:
     cases, dataset_manifest, image_manifest = load_polybench_pce_cases(
         config.dataset_snapshot,
@@ -126,7 +139,10 @@ def run_polybench_pce(config: PolyBenchPCEConfig) -> dict[str, Any] | None:
     }
     manifest_path = config.run_dir / "run_manifest.json"
     if manifest_path.is_file():
-        if json.loads(manifest_path.read_text(encoding="utf-8")) != manifest:
+        existing_manifest = json.loads(
+            manifest_path.read_text(encoding="utf-8")
+        )
+        if not _run_manifest_compatible(existing_manifest, manifest):
             raise ValueError("PolyBench PCE run manifest differs from existing run")
     else:
         atomic_json(manifest_path, manifest)

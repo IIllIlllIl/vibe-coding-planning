@@ -3,7 +3,7 @@
 > Authority: planned external validation contract for the current standalone
 > Offline guideline method
 >
-> Last reviewed: 2026-08-14
+> Last reviewed: 2026-08-15
 
 ## Purpose And Non-Training Boundary
 
@@ -13,7 +13,8 @@ GEPA training, Reflection, candidate proposal, candidate acceptance, guideline
 repair, prompt design, metric selection, or stopping decisions.
 
 All guideline-producing experiments that will be compared, including the
-current minibatch-eight run and the planned 3x3 design, must finish and freeze
+current minibatch-eight run and the planned 3x3 run using the implemented
+repetition layer, must finish and freeze
 their candidate identities before any new PolyBench Checker result is viewed.
 They are then evaluated together. A later method change informed by PolyBench
 would require a different untouched benchmark for a new final generalization
@@ -134,6 +135,9 @@ code-patch application failure, and code-test timeout are terminal unresolved
 outcomes. Frozen-test-patch, parser, container, provider, and infrastructure
 failures remain unknown rather than manufacturing an unresolved label.
 Transient failures may retry; identity/configuration failures block.
+Repository command-output decoding failures are transient execution failures,
+not frozen-input validation failures; they retry from the first incomplete
+phase while preserving the original failed attempt.
 
 Patch methods are preflighted before mutation, so a fallback never operates on
 a tree partially changed by a previous failed method. Every method records its
@@ -149,6 +153,12 @@ Evaluate each receive a fresh Apptainer environment. Completed phase outputs
 are identity-bound checkpoints, while a failed phase restarts with a fresh
 Agent on the next task attempt. There are three total task attempts. Previous
 attempt failures remain raw controller evidence and are not Agent input.
+
+`ulhpc-submit` may stage the same committed source and frozen input under a new
+remote workdir on each controller invocation. Run-manifest compatibility
+therefore treats absolute staged dataset/image paths as operational locations;
+the frozen manifest hashes, image identity, execution fingerprint,
+source/config hashes and Git provenance remain authoritative and must match.
 
 After three retryable failed attempts the controller records an incomplete PCE outcome,
 the last worker output, the last Slurm status and the evidence directory. It
@@ -240,8 +250,43 @@ calls.
 After data and image manifests are frozen, the existing additive
 `src/offline_check_only/` path may be configured for the new snapshot. It
 reuses the current Checker and one-Agent-per-Slurm-task transport without GEPA
-or Reflection. No active PolyBench check-only config exists until the new PCE
-and cleaning inputs pass review.
+or Reflection. The frozen 111-case snapshot now satisfies the data prerequisite;
+an active PolyBench check-only config has not yet been created.
+
+The formal PCE run is now complete. Its 113 exact-`v1.1` source cases produced
+111 parsed-test outcomes, one Evaluate test timeout and one Code-stage
+incomplete outcome after three attempts. The validation source policy keeps
+only the 111 parsed-test outcomes:
+
+- `huggingface__transformers-8747` is recorded as `PCE_INCOMPLETE`; three fresh
+  Code attempts each reached the 1800-second command limit without producing a
+  Code checkpoint or an evaluable patch.
+- `huggingface__transformers-12981` is recorded as
+  `TEST_EXECUTION_TIMEOUT`; Plan and Code completed, but the official Evaluate
+  command reached its 1800-second limit without parsed F2P/P2P evidence.
+
+Neither case is converted to unresolved. Their complete raw PCE records remain
+in the locally mirrored formal run.
+
+The subsequent plan cleaning reuses the exact conservative policy that reduced
+the historical SWE-bench Verified source from 500 to 482. It excludes a plan
+only when the PCE outcome is resolved, the evaluated implementation patch is
+non-empty, and the plan is one of three high-precision placeholder forms:
+`EXACT_PLACEHOLDER`, `GENERIC_PLACEHOLDER`, or `PATH_ONLY_PLAN`. Unresolved
+placeholder plans remain valid negative examples. Short plans, plans without a
+particular section, and plans that name only one relevant file but contain
+additional semantic guidance are not excluded. Applying that policy to the 111
+parsed-test PolyBench outcomes excluded zero further cases.
+
+The immutable derived snapshot is
+`output/SWE-PolyBench/polybench-guideline-validation-datasets/20260815_python111_testparsed_26dad63b5cf3/`.
+It contains 59 resolved and 52 unresolved cases. Its ordered instance-ID
+SHA-256 is `26dad63b5cf34bc945a0a3363de13becc66f7503895d5ea23feef7cdda56bf29`;
+its validation JSONL SHA-256 is
+`fcc3d3842e93a403399cd559593e7de7ba9adebacd751685def19e040ca3b328`.
+`source_exclusions.json` preserves the two non-test-parsed exclusions, while
+`exclusions.json` records the zero placeholder exclusions. The deterministic
+builder is `scripts/tools/build_polybench_pce_validation_snapshot.py`.
 
 For every reported view, include accuracy, balanced accuracy, MCC,
 class-explicit precision/recall/F1, pass/reject rates, confusion matrix,
@@ -296,4 +341,8 @@ become another commit. Formal controller `5671976` submitted worker array
 `5671978` for all 113 cases and yielded successfully; its manifest records
 commit `10ff821da6060b78061b93b88ff32dea955a2bf8` and execution fingerprint
 `bbb38332871505fe4542076ad817832727897e4c42e57a822dea025001097306`.
-The array must finish and be collected before data cleaning begins.
+The formal run finished with 112 workflow-complete tasks and one attempt-
+exhausted incomplete task. Its complete raw evidence was mirrored locally on
+2026-08-15. The separately frozen validation snapshot uses only the 111
+test-parsed outcomes and applies the historical conservative placeholder policy
+without additional exclusions.

@@ -13,7 +13,11 @@ from scripts.tools.freeze_polybench_pce_source import freeze
 from src.environment.docker_env import DockerCapacityWindow
 from src.optimization.hpc.task_batch import TaskFiles
 from src.polybench_pce.config import load_polybench_pce_config
-from src.polybench_pce.controller import _git_head, run_polybench_pce
+from src.polybench_pce.controller import (
+    _git_head,
+    _run_manifest_compatible,
+    run_polybench_pce,
+)
 from src.polybench_pce.dataset import canonical_image_ref, load_polybench_pce_cases
 from src.polybench_pce.evaluator import evaluate_polybench_apptainer
 from src.polybench_pce.hpc_executor import (
@@ -21,7 +25,7 @@ from src.polybench_pce.hpc_executor import (
     build_array_script,
 )
 from src.polybench_pce.runner import PolyBenchPCERunner
-from src.polybench_pce.worker import _retry_disposition
+from src.polybench_pce.worker import _category, _retry_disposition
 from src.exceptions import AgentTaskError, FatalError
 
 
@@ -171,6 +175,25 @@ def test_controller_uses_explicit_submission_git_head(
         _git_head()
 
 
+def test_controller_manifest_ignores_only_transient_staged_paths() -> None:
+    existing = {
+        "execution_fingerprint": "fingerprint",
+        "dataset_snapshot": "/old/workdir/input",
+        "dataset_manifest_sha256": "dataset-hash",
+        "image_manifest": "/old/workdir/input/images.json",
+        "image_manifest_sha256": "image-hash",
+    }
+    relocated = {
+        **existing,
+        "dataset_snapshot": "/new/workdir/input",
+        "image_manifest": "/new/workdir/input/images.json",
+    }
+    changed_data = {**relocated, "dataset_manifest_sha256": "different"}
+
+    assert _run_manifest_compatible(existing, relocated)
+    assert not _run_manifest_compatible(existing, changed_data)
+
+
 def test_dataset_rejects_malformed_test_lists_instead_of_scoring_empty(
     tmp_path: Path,
 ) -> None:
@@ -201,6 +224,9 @@ def test_worker_retry_policy_blocks_identity_but_retries_fresh_agent() -> None:
         )
         == "retry_fresh_agent"
     )
+    decode_error = UnicodeDecodeError("utf-8", b"\xcb", 0, 1, "invalid")
+    assert _category(decode_error) == "encoding"
+    assert _retry_disposition(decode_error) == "retry_same_phase"
 
 
 def test_source_freezer_records_exact_csv_and_row_identity(tmp_path: Path) -> None:

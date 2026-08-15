@@ -94,6 +94,11 @@ def offline_evaluation_fingerprint(
             {
                 "instance_id": case.instance_id,
                 "split": case.split,
+                **(
+                    {"repetition_index": case.repetition_index}
+                    if case.repetition_index is not None
+                    else {}
+                ),
                 "checker_payload": case.checker_payload(),
             }
             for case in batch
@@ -174,6 +179,21 @@ class HPCSlurmOfflineCheckerExecutor:
         self.runtime = SlurmTaskBatch(config.hpc)
         self.audit = JsonlLogger(config.run_dir / "audit_events.jsonl")
 
+    @staticmethod
+    def _validate_task_identity(
+        task: TaskFiles,
+        value: dict[str, Any],
+        *,
+        fingerprint: str,
+    ) -> None:
+        if value.get("fingerprint") != fingerprint:
+            raise ValueError("Offline Checker output fingerprint mismatch")
+        if value.get("instance_id") != task.instance_id:
+            raise ValueError("Offline Checker output instance mismatch")
+        manifest = json.loads(task.manifest_path.read_text(encoding="utf-8"))
+        if value.get("repetition_index") != manifest.get("repetition_index"):
+            raise ValueError("Offline Checker output repetition mismatch")
+
     def evaluate(
         self,
         batch: list[GEPACase],
@@ -214,10 +234,11 @@ class HPCSlurmOfflineCheckerExecutor:
             return path
 
         def validate(task: TaskFiles, value: dict[str, Any]) -> None:
-            if value.get("fingerprint") != fingerprint:
-                raise ValueError("Offline Checker output fingerprint mismatch")
-            if value.get("instance_id") != task.instance_id:
-                raise ValueError("Offline Checker output instance mismatch")
+            self._validate_task_identity(
+                task,
+                value,
+                fingerprint=fingerprint,
+            )
             validate_checker_output(dict(value["checker_output"]))
 
         try:
@@ -266,6 +287,7 @@ class HPCSlurmOfflineCheckerExecutor:
             fingerprint=fingerprint,
             evaluation_tag=evaluation_tag,
             instance_ids=[case.instance_id for case in batch],
+            repetition_indices=[case.repetition_index for case in batch],
         )
         return [self._completed_result(value) for value in outputs]
 
@@ -283,10 +305,11 @@ class HPCSlurmOfflineCheckerExecutor:
             if task.output_path.is_file():
                 value = json.loads(task.output_path.read_text(encoding="utf-8"))
                 if value.get("status") == "completed":
-                    if value.get("fingerprint") != fingerprint:
-                        raise ValueError("Offline Checker output fingerprint mismatch")
-                    if value.get("instance_id") != task.instance_id:
-                        raise ValueError("Offline Checker output instance mismatch")
+                    self._validate_task_identity(
+                        task,
+                        value,
+                        fingerprint=fingerprint,
+                    )
                     results.append(self._completed_result(value))
                     continue
             else:
@@ -354,10 +377,11 @@ class HPCSlurmOfflineCheckerExecutor:
             if task.output_path.is_file():
                 current = json.loads(task.output_path.read_text(encoding="utf-8"))
                 if current.get("status") == "completed":
-                    if current.get("fingerprint") != fingerprint:
-                        raise ValueError("Offline Checker output fingerprint mismatch")
-                    if current.get("instance_id") != task.instance_id:
-                        raise ValueError("Offline Checker output instance mismatch")
+                    self._validate_task_identity(
+                        task,
+                        current,
+                        fingerprint=fingerprint,
+                    )
                     results.append(self._completed_result(current))
                     continue
 
@@ -385,6 +409,16 @@ class HPCSlurmOfflineCheckerExecutor:
                     and failure.get("fingerprint") == fingerprint
                     and failure.get("instance_id") == task.instance_id
                 )
+                if explicit_timeout:
+                    manifest = json.loads(
+                        task.manifest_path.read_text(encoding="utf-8")
+                    )
+                    if failure.get("repetition_index") != manifest.get(
+                        "repetition_index"
+                    ):
+                        raise ValueError(
+                            "Checker timeout repetition identity mismatch"
+                        )
                 slurm_path = (
                     task.attempts_dir
                     / f"attempt_{attempt:02d}"
@@ -501,6 +535,8 @@ class HPCSlurmOfflineCheckerExecutor:
                 "rules_path": str(rules_path),
                 "checker_payload": case.checker_payload(),
             }
+            if case.repetition_index is not None:
+                payload["repetition_index"] = case.repetition_index
             if evaluation_tag is not None:
                 payload["evaluation_tag"] = evaluation_tag
             if manifest_path.exists():
@@ -527,6 +563,9 @@ class HPCSlurmOfflineCheckerExecutor:
                 "capture_traces": capture_traces,
                 "evaluation_tag": evaluation_tag,
                 "instance_ids": [case.instance_id for case in batch],
+                "repetition_indices": [
+                    case.repetition_index for case in batch
+                ],
                 "contains_historical_labels": False,
             },
         )

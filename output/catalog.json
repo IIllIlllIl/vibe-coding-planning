@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "generated_at": "2026-08-14",
+  "generated_at": "2026-08-15",
   "active_method": "online_gepa_planning_rules",
   "active_offline_method": "offline_gepa_plan_review_guideline",
   "default_agent_scope": [
@@ -9,14 +9,22 @@
     "output/SWE-bench_Verified/verified-round1-gepa-datasets/20260614_482_fdc056ae85df",
     "output/SWE-bench_Verified/gepa-rules",
     "output/SWE-PolyBench/polybench-guideline-validation-guidelines/20260811_seed-c1-c2-c3_3293f8e925b8",
-    "output/SWE-PolyBench/polybench-pce-inputs/20260814_python113_v11_8c7d9485d1d0"
+    "output/SWE-PolyBench/polybench-pce-inputs/20260814_python113_v11_8c7d9485d1d0",
+    "output/SWE-PolyBench/polybench-guideline-validation-datasets/20260815_python111_testparsed_26dad63b5cf3"
   ],
   "active_polybench_validation_inputs": {
-    "status": "formal_pce_input_frozen",
+    "status": "cleaned_snapshot_frozen",
     "source_universe": "official_python_199",
-    "dataset_snapshot": "output/SWE-PolyBench/polybench-pce-inputs/20260814_python113_v11_8c7d9485d1d0",
-    "instances": 113,
-    "ordered_instance_ids_sha256": "8c7d9485d1d077101469e4e80e41b3c009d7fced3e62dd28632d1e9b065d3fc4",
+    "pce_input_snapshot": "output/SWE-PolyBench/polybench-pce-inputs/20260814_python113_v11_8c7d9485d1d0",
+    "dataset_snapshot": "output/SWE-PolyBench/polybench-guideline-validation-datasets/20260815_python111_testparsed_26dad63b5cf3",
+    "instances": 111,
+    "resolved": 59,
+    "unresolved": 52,
+    "ordered_instance_ids_sha256": "26dad63b5cf34bc945a0a3363de13becc66f7503895d5ea23feef7cdda56bf29",
+    "selection_policy": "official-v1.1-image-available-and-test-parsed-v1",
+    "cleaning_policy": "resolved-placeholder-high-precision-v1",
+    "source_excluded_instances": 2,
+    "placeholder_excluded_instances": 0,
     "historical_198_192_status": "unsafe_audit_only",
     "guideline_bundle": "20260811_seed-c1-c2-c3_3293f8e925b8",
     "guidelines": [
@@ -64,15 +72,25 @@
   },
   "active_polybench_pce_formal": {
     "classification": "formal_raw_generation",
-    "status": "workers_submitted",
-    "as_of": "2026-08-14",
+    "status": "completed_with_incomplete",
+    "as_of": "2026-08-15",
     "controller_job_id": "5671976",
-    "controller_outcome": "completed_cooperative_yield",
+    "final_controller_job_id": "5673460",
+    "controller_outcome": "completed_with_incomplete",
     "worker_job_id": "5671978",
+    "retry_worker_job_ids": [
+      "5673329",
+      "5673454"
+    ],
     "instances": 113,
+    "workflow_completed_instances": 112,
+    "test_parsed_instances": 111,
+    "evaluation_timeout_instances": 1,
+    "attempt_exhausted_instances": 1,
     "execution_fingerprint": "bbb38332871505fe4542076ad817832727897e4c42e57a822dea025001097306",
     "project_git_head": "10ff821da6060b78061b93b88ff32dea955a2bf8",
-    "run": "remote:output/SWE-PolyBench/polybench-pce-runs/formal/python113-v11-pce-20260814",
+    "run": "output/SWE-PolyBench/polybench-pce-runs/formal/python113-v11-pce-20260814",
+    "local_mirror_complete": true,
     "final_validation_labels_assigned": false,
     "score_usable": false
   },

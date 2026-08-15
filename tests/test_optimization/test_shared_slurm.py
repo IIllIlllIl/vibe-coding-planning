@@ -13,9 +13,9 @@ from src.exceptions import ControllerYield, OfflineReflectionBlocked
 from src.optimization.config import (
     ContainerConfig,
     ModelConfig,
+    OfflineSearchConfig,
     OfflineExecutionConfig,
     OptimizationConfig,
-    SearchConfig,
 )
 from src.optimization.checker import (
     CheckerAgentTimeout,
@@ -82,7 +82,7 @@ def _config(tmp_path: Path) -> OptimizationConfig:
         run_dir=tmp_path / "run",
         checker=model,
         reflection=replace(model, temperature=0.7),
-        search=SearchConfig(10, 10, 2, 42, 1),
+        search=OfflineSearchConfig(10, 10, 2, 42, 1),
         docker=DockerConfig(),
         container=ContainerConfig(runtime="apptainer"),
         checker_prompt="checker",
@@ -355,6 +355,49 @@ def test_offline_checker_fingerprint_separates_diagnostic_repetitions(tmp_path):
     assert first != second
 
 
+def test_offline_checker_repetition_identity_is_fingerprinted_and_manifested(
+    tmp_path,
+):
+    config = _config(tmp_path)
+    base = _case(resolved=True)
+    first_case = replace(base, repetition_index=0)
+    second_case = replace(base, repetition_index=1)
+
+    first = offline_evaluation_fingerprint(
+        config,
+        batch=[first_case],
+        rules="rules",
+        capture_traces=True,
+    )
+    second = offline_evaluation_fingerprint(
+        config,
+        batch=[second_case],
+        rules="rules",
+        capture_traces=True,
+    )
+    tasks = HPCSlurmOfflineCheckerExecutor._prepare(
+        tmp_path / "repeated-batch",
+        fingerprint="fingerprint",
+        batch=[first_case, second_case],
+        rules="rules",
+        capture_traces=True,
+    )
+
+    assert first != second
+    manifests = [
+        json.loads(task.manifest_path.read_text(encoding="utf-8"))
+        for task in tasks
+    ]
+    assert [item["repetition_index"] for item in manifests] == [0, 1]
+    assert all("repetition_index" not in item["checker_payload"] for item in manifests)
+    batch_manifest = json.loads(
+        (tmp_path / "repeated-batch" / "manifest.json").read_text(
+            encoding="utf-8"
+        )
+    )
+    assert batch_manifest["repetition_indices"] == [0, 1]
+
+
 def test_stability_collection_preserves_completed_and_marks_slurm_timeout(
     tmp_path,
 ):
@@ -374,6 +417,10 @@ def test_stability_collection_preserves_completed_and_marks_slurm_timeout(
         manifest_path=tmp_path / "timeout-input.json",
         output_path=tmp_path / "timeout-output.json",
         attempts_dir=tmp_path / "timeout-attempts",
+    )
+    atomic_json(
+        completed.manifest_path,
+        {"repetition_index": None},
     )
     atomic_json(
         completed.output_path,
@@ -480,6 +527,7 @@ def test_offline_checker_worker_gives_new_agent_previous_validator_error(
             "fingerprint": "fingerprint",
             "instance_id": "org__repo-1",
             "split": "train",
+            "repetition_index": 2,
             "rules_path": str(rules_path),
             "checker_payload": _case(resolved=True).checker_payload(),
         },
@@ -555,6 +603,7 @@ def test_offline_checker_worker_gives_new_agent_previous_validator_error(
     assert "generated_patch" not in received[0]
     output = json.loads(output_path.read_text(encoding="utf-8"))
     assert output["status"] == "completed"
+    assert output["repetition_index"] == 2
     assert output["retry_feedback"] == expected_feedback
     saved = json.loads(
         (attempt_dir / "retry_feedback.json").read_text(encoding="utf-8")

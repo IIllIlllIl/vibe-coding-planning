@@ -39,6 +39,9 @@ search:
   max_metric_calls: 1200
   projection_metric_calls: 1010
   reflection_minibatch_size: 8
+  # Opt-in train-only repetition layer. A future 3 x 3 run uses minibatch 3
+  # with this set to 3; validation remains single-pass.
+  train_case_repetitions: 1
   primary_metric: accuracy
   # Local-only adapter concurrency. HPC submits every Agent as an independent
   # Slurm array element and leaves scheduling entirely to Slurm.

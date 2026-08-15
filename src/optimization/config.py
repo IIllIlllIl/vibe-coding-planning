@@ -40,6 +40,13 @@ class SearchConfig:
 
 
 @dataclass(frozen=True)
+class OfflineSearchConfig(SearchConfig):
+    """Offline-only search semantics layered over shared GEPA settings."""
+
+    train_case_repetitions: int = 1
+
+
+@dataclass(frozen=True)
 class ContainerConfig:
     """Container runtime selection for GEPA (Docker or Apptainer)."""
 
@@ -61,7 +68,7 @@ class OptimizationConfig:
     run_dir: Path
     checker: ModelConfig
     reflection: ModelConfig
-    search: SearchConfig
+    search: OfflineSearchConfig
     docker: DockerConfig
     container: ContainerConfig
     checker_prompt: str
@@ -131,7 +138,7 @@ def load_optimization_config(
                     f"environment variable {model_config.api_key_env} is not set"
                 )
 
-    search = SearchConfig(
+    search = OfflineSearchConfig(
         max_metric_calls=int(search_data["max_metric_calls"]),
         projection_metric_calls=int(
             search_data.get(
@@ -152,12 +159,16 @@ def load_optimization_config(
             else None
         ),
         primary_metric=str(search_data.get("primary_metric", "accuracy")),
+        train_case_repetitions=int(
+            search_data.get("train_case_repetitions", 1)
+        ),
     )
     if min(
         search.max_metric_calls,
         search.projection_metric_calls,
         search.reflection_minibatch_size,
         search.parallel,
+        search.train_case_repetitions,
     ) < 1:
         raise ValueError("search budgets and parallelism must be positive")
     if search.min_proposals < 0:
