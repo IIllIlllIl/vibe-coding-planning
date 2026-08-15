@@ -313,6 +313,38 @@ def test_offline_checker_task_boundary_excludes_labels_and_asi(tmp_path):
     assert '"resolved"' not in serialized
     assert "generated_patch" not in serialized
     assert "evaluator_result" not in serialized
+    assert manifest["rules_path"] == "../candidate_rules.txt"
+
+
+def test_offline_checker_manifest_survives_new_controller_snapshot(tmp_path):
+    persistent_batch = tmp_path / "persistent-batch"
+    persistent_batch.mkdir()
+    first_batch = tmp_path / "snapshot-one" / "batch"
+    second_batch = tmp_path / "snapshot-two" / "batch"
+    first_batch.parent.mkdir()
+    second_batch.parent.mkdir()
+    first_batch.symlink_to(persistent_batch, target_is_directory=True)
+    second_batch.symlink_to(persistent_batch, target_is_directory=True)
+    case = _case(resolved=True)
+
+    first = HPCSlurmOfflineCheckerExecutor._prepare(
+        first_batch,
+        fingerprint="fingerprint",
+        batch=[case],
+        rules="rules",
+        capture_traces=False,
+    )
+    second = HPCSlurmOfflineCheckerExecutor._prepare(
+        second_batch,
+        fingerprint="fingerprint",
+        batch=[case],
+        rules="rules",
+        capture_traces=False,
+    )
+
+    assert first[0].manifest_path.resolve() == second[0].manifest_path.resolve()
+    manifest = json.loads(second[0].manifest_path.read_text(encoding="utf-8"))
+    assert manifest["rules_path"] == "../candidate_rules.txt"
 
 
 def test_offline_checker_fingerprint_ignores_host_only_evidence(tmp_path):
@@ -518,9 +550,12 @@ def test_offline_checker_worker_gives_new_agent_previous_validator_error(
     monkeypatch,
 ):
     config = _config(tmp_path)
-    rules_path = tmp_path / "rules.md"
+    batch_dir = tmp_path / "batch"
+    tasks_dir = batch_dir / "tasks"
+    tasks_dir.mkdir(parents=True)
+    rules_path = batch_dir / "candidate_rules.txt"
     rules_path.write_text("rules", encoding="utf-8")
-    manifest_path = tmp_path / "task.json"
+    manifest_path = tasks_dir / "task_0000.json"
     atomic_json(
         manifest_path,
         {
@@ -528,7 +563,7 @@ def test_offline_checker_worker_gives_new_agent_previous_validator_error(
             "instance_id": "org__repo-1",
             "split": "train",
             "repetition_index": 2,
-            "rules_path": str(rules_path),
+            "rules_path": "../candidate_rules.txt",
             "checker_payload": _case(resolved=True).checker_payload(),
         },
     )
@@ -1033,6 +1068,18 @@ def test_hpc_reflection_repair_is_a_second_fingerprinted_task(tmp_path):
     assert all(
         json.loads(path.read_text())["phase"] == "COMPLETE" for path in task_states
     )
+    repair_manifest_path = next(
+        config.run_dir.rglob("repair_tasks/*/input.json")
+    )
+    repair_manifest = json.loads(repair_manifest_path.read_text())
+    assert not Path(repair_manifest["source_manifest"]).is_absolute()
+    assert not Path(repair_manifest["evidence_bundle"]).is_absolute()
+    assert (
+        repair_manifest_path.parent / repair_manifest["source_manifest"]
+    ).resolve().is_file()
+    assert (
+        repair_manifest_path.parent / repair_manifest["evidence_bundle"]
+    ).resolve().is_dir()
 
 
 def _write_runner_inputs(config: OptimizationConfig) -> None:

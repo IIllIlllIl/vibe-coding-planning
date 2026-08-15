@@ -5,6 +5,7 @@ from __future__ import annotations
 from dataclasses import asdict
 import hashlib
 import json
+import os
 from pathlib import Path
 import shlex
 from typing import Any, Mapping, Sequence
@@ -256,8 +257,16 @@ class HPCOfflineReflectionProposer:
             "mode": "offline_reflection_repair",
             "fingerprint": repair_fingerprint,
             "initial_fingerprint": initial_fingerprint,
-            "source_manifest": str(initial_task_dir / "input.json"),
-            "evidence_bundle": str(initial_output["evidence_bundle"]),
+            # These worker locators are relative to this repair manifest so
+            # they remain stable across independent controller snapshots.
+            "source_manifest": os.path.relpath(
+                (initial_task_dir / "input.json").resolve(),
+                start=manifest_path.parent.resolve(),
+            ),
+            "evidence_bundle": os.path.relpath(
+                Path(str(initial_output["evidence_bundle"])).resolve(),
+                start=manifest_path.parent.resolve(),
+            ),
             "proposed_rules": initial_output["proposed_rules"],
             "contamination_hits": initial_output["contamination_hits"],
             "instance_ids": initial_output["instance_ids"],

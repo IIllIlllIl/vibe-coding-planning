@@ -532,7 +532,10 @@ class HPCSlurmOfflineCheckerExecutor:
                 "split": case.split,
                 "capture_traces": capture_traces,
                 "candidate_sha256": text_sha256(rules),
-                "rules_path": str(rules_path),
+                # Worker input paths are relative to the task manifest.  The
+                # batch is persistent, while each controller runs from a new
+                # ulhpc-submit source snapshot whose absolute path changes.
+                "rules_path": "../candidate_rules.txt",
                 "checker_payload": case.checker_payload(),
             }
             if case.repetition_index is not None:

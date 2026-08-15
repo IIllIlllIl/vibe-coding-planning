@@ -2,7 +2,7 @@
 
 > Authority: current Offline GEPA experiment contract
 >
-> Last reviewed: 2026-08-09
+> Last reviewed: 2026-08-16
 
 ## Objective
 
@@ -173,6 +173,15 @@ not a classification decision. If Slurm kills the process before an atomic
 worker result can be written, the resumed controller reads the journal and the
 recorded Slurm terminal state. This separates the worker's execution duty from
 the controller's collection and outcome-policy duty.
+
+Offline HPC task manifests must remain valid across controller slices. Each
+`ulhpc-submit` call may execute from a different immutable source snapshot,
+while the run directory and task batches are persistent. Worker file locators
+stored in Checker and Reflection-repair manifests are therefore relative to
+their manifest, not absolute paths through a controller snapshot. Candidate
+text remains protected by its SHA-256 and exact content check. A changed
+candidate, case payload, repetition identity, prompt/runtime fingerprint, or
+output identity still blocks; a changed operational mount prefix does not.
 
 Resolved labels, historical Plan/Code trajectories, patches, evaluator results,
 and scores are never Checker inputs. They are available only to Reflection as

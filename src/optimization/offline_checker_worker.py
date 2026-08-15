@@ -60,6 +60,13 @@ def _failure_category(exc: BaseException) -> str:
     return "unexpected"
 
 
+def _manifest_path(manifest_path: Path, value: object) -> Path:
+    path = Path(str(value))
+    if path.is_absolute():
+        return path
+    return manifest_path.parent / path
+
+
 def run_task(
     *,
     config_path: Path,
@@ -76,7 +83,10 @@ def run_task(
     failure_stage = "input_load"
     try:
         manifest = json.loads(task_manifest_path.read_text(encoding="utf-8"))
-        rules = Path(str(manifest["rules_path"])).read_text(encoding="utf-8")
+        rules = _manifest_path(
+            task_manifest_path,
+            manifest["rules_path"],
+        ).read_text(encoding="utf-8")
         payload = dict(manifest["checker_payload"])
         repository = dict(payload["repository"])
         case = GEPACase(

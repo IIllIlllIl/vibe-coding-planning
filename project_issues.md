@@ -870,3 +870,27 @@ block 的频率与根因，再决定是否仅细化记录，或对反复出现�
   `26dad63b5cf34bc945a0a3363de13becc66f7503895d5ea23feef7cdda56bf29`。
   下一步仍是 2it 3x3 platform/behavior smoke；PolyBench 结果不得反馈到 3x3 guideline
   生成或 prompt 设计。
+- **3 x 3 两轮 smoke 已准备（2026-08-15）**：新身份
+  `offline-plan-guideline-hpc-accuracy-b3x3-2it-smoke-20260815` 使用完整 384/98
+  Verified snapshot、accuracy、默认接受 minimal seed、minibatch 3 和
+  `train_case_repetitions=3`。每个 train batch 展开为 9 个 Checker Slurm element，
+  GEPA/Reflection 仍看到 3 个 base case；98-case validation 不重复。该运行只验收
+  repetition task identity、分数组合、Reflection evidence 分组、resume 和 controller
+  行为，不作为 guideline 质量结论。Reflection prompt 本轮不增加 repetition-specific
+  内容，待 smoke 原始行为可见后再讨论。supervisor 已通过 `tmux + caffeinate` 启动；
+  首个 controller `5673463` 在 9 秒内正常 cooperative yield，并提交无 `%N` 限流的
+  98-case seed-validation array `5673464`。该 batch 是单次 validation，因此没有
+  repetition identity；3 x 3 展开将在 proposal train batch 首次出现。
+- **3 x 3 smoke 跨 controller manifest 阻断（2026-08-16，代码已修复、待重跑）**：
+  seed validation array `5673464` 完成 97/98 个输出，一个 element 达到 35min
+  Slurm walltime；第二个 controller `5673581` 本应收集并选择性重试，却在
+  iteration 0 以 `Offline Checker task manifest mismatch` 阻断，因此本轮没有进入
+  train repetition，不能验收 3 x 3。根因是 Checker task manifest 把首个独立
+  `ulhpc-submit` source snapshot 下的绝对 `candidate_rules.txt` 路径当成 immutable
+  payload；下一 controller 的 snapshot ID 改变后，候选 SHA、fingerprint 和 case
+  均相同，完整 JSON 比较仍产生假 mismatch。现改为相对于 task manifest 的
+  guideline locator，worker 同时兼容既有绝对路径；同源的 Reflection repair
+  `source_manifest` 和 `evidence_bundle` locator 也改为相对路径。内容 hash、任务
+  fingerprint、case/repetition identity 和 host output validation 均未放宽。回归测试
+  通过两个不同 snapshot symlink 指向同一 persistent batch，验证第二次 `_prepare`
+  可复用原 manifest；下一步使用新 run identity 重跑 2it smoke。

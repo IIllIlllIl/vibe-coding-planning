@@ -307,6 +307,15 @@ contamination repair are distinct fingerprinted tasks. An interrupted Checker,
 initial Reflection, or repair attempt is restarted from that task's immutable
 input; no Agent conversation is resumed.
 
+Every controller submission may have a different
+`.ulhpc_submit/runs/<id>/workdir` source prefix. Persistent Offline task
+manifests must not treat that operational prefix as research identity. Checker
+guideline and Reflection-repair input paths are stored relative to the task
+manifest and resolved by the worker. Content hashes, fingerprints, case and
+repetition identities, and immutable payloads remain strict. This permits a
+finished or partially finished task batch to be collected from a later
+controller snapshot without weakening corruption detection.
+
 ## 6. Slurm Status Rules
 
 - `PENDING`: wait; queue time is not execution timeout.

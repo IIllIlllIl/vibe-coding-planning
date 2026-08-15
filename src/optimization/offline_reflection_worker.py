@@ -39,6 +39,13 @@ def _failure_category(exc: Exception) -> str:
     return "unexpected"
 
 
+def _manifest_path(manifest_path: Path, value: object) -> Path:
+    path = Path(str(value))
+    if path.is_absolute():
+        return path
+    return manifest_path.parent / path
+
+
 def run_task(
     *,
     config_path: Path,
@@ -99,7 +106,10 @@ def run_task(
         elif mode == "offline_reflection_repair":
             failure_stage = "repair_input_load"
             source = json.loads(
-                Path(str(manifest["source_manifest"])).read_text(
+                _manifest_path(
+                    manifest_path,
+                    manifest["source_manifest"],
+                ).read_text(
                     encoding="utf-8"
                 )
             )
@@ -108,7 +118,10 @@ def run_task(
             repair = run_reflection_contamination_repair(
                 config,
                 capacity,
-                bundle=Path(str(manifest["evidence_bundle"])),
+                bundle=_manifest_path(
+                    manifest_path,
+                    manifest["evidence_bundle"],
+                ),
                 trajectory_dir=attempt_dir,
                 parent_rules=str(source["candidate"]["rules"]),
                 proposed_rules=str(manifest["proposed_rules"]),
