@@ -881,7 +881,7 @@ block 的频率与根因，再决定是否仅细化记录，或对反复出现�
   首个 controller `5673463` 在 9 秒内正常 cooperative yield，并提交无 `%N` 限流的
   98-case seed-validation array `5673464`。该 batch 是单次 validation，因此没有
   repetition identity；3 x 3 展开将在 proposal train batch 首次出现。
-- **3 x 3 smoke 跨 controller manifest 阻断（2026-08-16，代码已修复、待重跑）**：
+- **3 x 3 smoke 跨 controller manifest 阻断（2026-08-16，已修复并重跑）**：
   seed validation array `5673464` 完成 97/98 个输出，一个 element 达到 35min
   Slurm walltime；第二个 controller `5673581` 本应收集并选择性重试，却在
   iteration 0 以 `Offline Checker task manifest mismatch` 阻断，因此本轮没有进入
@@ -893,4 +893,29 @@ block 的频率与根因，再决定是否仅细化记录，或对反复出现�
   `source_manifest` 和 `evidence_bundle` locator 也改为相对路径。内容 hash、任务
   fingerprint、case/repetition identity 和 host output validation 均未放宽。回归测试
   通过两个不同 snapshot symlink 指向同一 persistent batch，验证第二次 `_prepare`
-  可复用原 manifest；下一步使用新 run identity 重跑 2it smoke。
+  可复用原 manifest；随后使用新 run identity 重跑的结果见下项。
+- **3 x 3 post-fix smoke 完成（2026-08-16）**：新身份
+  `offline-plan-guideline-hpc-accuracy-b3x3-2it-smoke-postfix-20260816`
+  已完成累计 2/2 proposals。16 个短 controller slice 跨独立 source snapshot 正常
+  收集任务，没有再次出现 manifest mismatch；四个 parent/proposal train batch 均实际
+  展开为 9 个独立 Checker task，三个 98-case validation batch 保持单次评估，两个
+  Reflection task 均完成。Seed validation 为 `70/98 = 0.714286`，candidate 1/2 均为
+  `63/98 = 0.642857`；两者因 minibatch/instance-Pareto gate 被接受，但都没有超过全局
+  seed。出现两次 timeout exhaustion 并按零分保留，证明错误路径可继续；本轮仍只是
+  platform/behavior smoke，不能据此声称 3 x 3 提升 guideline quality。另有两个后续
+  分析注意点：candidate diagnostics 默认排除未完成 prediction，因而 seed 显示
+  `70/97`，与 GEPA 的 `70/98` 分母不同；controller replay 会重复写 lifecycle audit
+  event，但 fingerprinted Checker output 没有被重跑。
+- **3 x 3 累计 2→8 配置已准备（2026-08-16，尚未启动）**：保留上述完整 checkpoint
+  与原 2it runtime/supervisor config，新建
+  `offline_gepa_hpc_3x3_8it_extension_20260816.yaml`，在同一个 persistent run directory
+  上把累计目标改为 8、逻辑 metric-call projection 改为 `930`、fail-safe ceiling 改为
+  `1200`。数据、seed、prompt、model、accuracy、sampler 和 3 x 3 repetition 语义不变。
+  新 supervisor 使用独立 local/remote launch identity 并要求 clean worktree；启动时应
+  先由 native iteration-target transition 归档 iteration-2 terminal reports，再进入普通
+  resume。最终报告必须披露 staged 2→8 provenance，不能称为预先声明的一次性 8it run。
+- **3 x 3 HPC 残留审查（2026-08-16）**：Iris 队列为空。已删除不可续跑的首次
+  manifest-mismatch smoke 的 503 MB remote-project staging；其 232 MB persistent
+  diagnosis（manifest、error、已完成 Checker evidence）继续保留。post-fix checkpoint
+  的 984 MB persistent state 和约 4 GB 独立提交快照均保留到累计 8it 完成，以维持
+  resume 与外层提交审计。共享 `apptainer-tmp` 为空，未删除 SIF cache 或其他正式 run。

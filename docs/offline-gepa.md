@@ -374,6 +374,18 @@ records the old/new targets and hashes, and reopens the same GEPA state. The
 new target is always cumulative; operators do not calculate or pass an
 additional-iteration value.
 
+The current 3 x 3 staged run uses this contract explicitly. The completed
+`offline-plan-guideline-hpc-accuracy-b3x3-2it-smoke-postfix-20260816` run is
+the frozen two-proposal checkpoint. Its extension config sets the cumulative
+target to eight, the conservative logical-call projection to `930`, and the
+fail-safe ceiling to `1200`, while preserving the same run directory, dataset,
+seed guideline, prompts, models, accuracy metric, sampler, and 3 x 3 repetition
+semantics. A new supervisor identity points at that same persistent run and
+requires a clean worktree; the old two-iteration supervisor state is not
+retargeted. Reports must describe this as a staged 2-to-8 continuation because
+the retained run identity contains `2it-smoke`, even if the final checkpoint
+reaches eight proposals.
+
 ## Shared Mini-swe Transport Contract
 
 Every project DefaultAgent receives the same method-independent parser guide.

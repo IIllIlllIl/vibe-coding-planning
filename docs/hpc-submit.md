@@ -4,7 +4,7 @@
 >
 > Scope: Online/Offline controllers, Agent task arrays, supervisor, FairShare
 >
-> Last reviewed: 2026-08-04
+> Last reviewed: 2026-08-16
 >
 > Supersedes: `archive/mixed-design/hpc-submit-mixed-20260715.md`
 
@@ -167,6 +167,14 @@ convert a completed baseline into an additional-iteration argument. When that
 target is raised after a smaller target completed, the supervisor preserves the
 completed checkpoint, updates only the manifest target, and enters the same
 ordinary resume path.
+
+A staged extension uses a new supervisor launch identity but keeps the runtime
+`paths.run_dir` unchanged. Preserve the exact completed-stage configs for
+provenance, raise the new runtime config's cumulative target and metric-call
+ceiling, and launch through the supervisor rather than assembling an ad-hoc
+resume command. The current concrete example is
+`offline_gepa_supervisor_3x3_8it_extension_20260816.yaml`, which resumes the
+checkpoint produced by the matching post-fix two-iteration config.
 
 The service launches the foreground resume loop inside `tmux` under
 `caffeinate -i -s`. Closing the initiating shell therefore does not terminate

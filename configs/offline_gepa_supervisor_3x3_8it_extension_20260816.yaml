@@ -1,0 +1,27 @@
+# Resume the completed two-iteration 3 x 3 checkpoint to a cumulative target
+# of eight proposals. This launch identity is new; the runtime run_dir remains
+# the same so the iteration-target transition reopens the existing GEPA state.
+schema_version: 1
+session: offline-plan-guideline-hpc-accuracy-b3x3-8it-extension-20260816
+log: .local/hpc-supervisor/offline-plan-guideline-hpc-accuracy-b3x3-8it-extension-20260816.log
+arguments:
+  # The cumulative eight-proposal target is read from the runtime config.
+  - --poll-interval
+  - "600"
+  - --slice-time
+  - "00:10:00"
+  - --max-runs
+  - "0"
+  - --gepa-rules
+  - --gepa-config
+  - configs/offline_gepa_hpc_3x3_8it_extension_20260816.yaml
+  - --job-name
+  - offline-plan-guideline-hpc-accuracy-b3x3-8it-extension-20260816
+  - --remote-dir
+  - ~/hpc_runs/vibe-coding-planning-offline-guideline-accuracy-b3x3-8it-extension-20260816
+  - --cpus
+  - "1"
+  - --mem
+  - 4G
+  - --submit
+  - --require-clean-worktree
