@@ -74,3 +74,24 @@ def test_rejects_extension_before_completed_target(tmp_path: Path) -> None:
 
     with pytest.raises(ValueError, match="only after completion"):
         extend_iteration_target(run_dir, new_target=20, reason="invalid")
+
+
+def test_expands_remote_home_in_completed_run_path(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    home = tmp_path / "remote-home"
+    run_path = home / "run"
+    run_path.mkdir(parents=True)
+    run_dir, _ = _completed_run(run_path)
+    monkeypatch.setenv("HOME", str(home))
+
+    result = extend_iteration_target(
+        "~/run",
+        new_target=20,
+        reason="supervisor cumulative-target resume",
+    )
+
+    assert result["from"] == 8
+    assert result["to"] == 20
+    assert not (run_dir / "result.json").exists()

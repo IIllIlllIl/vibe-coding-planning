@@ -919,3 +919,9 @@ block 的频率与根因，再决定是否仅细化记录，或对反复出现�
   diagnosis（manifest、error、已完成 Checker evidence）继续保留。post-fix checkpoint
   的 984 MB persistent state 和约 4 GB 独立提交快照均保留到累计 8it 完成，以维持
   resume 与外层提交审计。共享 `apptainer-tmp` 为空，未删除 SIF cache 或其他正式 run。
+- **2→8 首次 resume 启动的 home-path 阻断（2026-08-16，已修复）**：新 supervisor
+  在提交 Slurm 前安全停止。远端状态检查能由 shell 展开默认 `~/hpc_run_state/...`，但
+  iteration-target transition 把同一字符串作为 quoted Python argument 传入，原 helper
+  未调用 `expanduser()`，因而误报完整 checkpoint 文件全部缺失；实际 2it checkpoint
+  没有损坏或修改，也没有提交 worker。helper 现显式展开远端 home，并用临时 HOME 下的
+  `~/run` 回归测试覆盖该真实入口语义。

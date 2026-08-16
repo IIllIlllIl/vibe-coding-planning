@@ -40,7 +40,10 @@ def _atomic_json(path, value):
 def extend_iteration_target(run_dir, new_target, reason):
     """Reopen a completed Offline run by increasing only its iteration target."""
 
-    run_dir = Path(run_dir)
+    # The supervisor's default remote state root is expressed with ``~/``.
+    # Unlike a path embedded directly in a shell command, this value arrives as
+    # a quoted Python argument and therefore needs explicit user expansion.
+    run_dir = Path(run_dir).expanduser()
     manifest_path = run_dir / "run_manifest.json"
     state_path = run_dir / "gepa_state.bin"
     resume_path = run_dir / "gepa_resume_state.json"
