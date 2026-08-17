@@ -186,8 +186,10 @@ The additive implementation is under `src/polybench_pcce/`:
 
 `scripts/run_polybench_pcce_hpc.py` advances one controller slice.
 `scripts/hpc_submit_polybench_pcce.sh` stages the frozen source, validation,
-and historical PCE evidence through `ulhpc-submit`; rerunning the same command
-collects or advances the next phase. `configs/polybench_pcce_hpc_smoke.yaml`
+and a single-file bundle containing only the frozen historical PCE outcome
+table through `ulhpc-submit`; it does not upload historical PCE attempts or
+workspaces. Rerunning the same command collects or advances the next phase.
+`configs/polybench_pcce_hpc_smoke.yaml`
 selects two frozen validation cases and the frozen seed guideline. Its run root
 is below `polybench-pcce-runs/smoke/` and is not formal evidence.
 

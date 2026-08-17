@@ -963,3 +963,8 @@ block 的频率与根因，再决定是否仅细化记录，或对反复出现�
   全量 pytest 尚未进入执行，因既有 `login_sif_preheat_watchdog.py` 在 collection 时
   仍导入已不存在的
   `DEFAULT_APPTAINER_CACHE_DIR`。该问题不在本次 PCCE 修改路径中，暂未顺带修复。
+  首次 smoke 提交在进入 Slurm 前被 `ulhpc-submit` 阻止：旧 wrapper 为读取一个冻结
+  outcome JSONL 而上传整个 641 MiB 历史 PCE run，其中两个 workspace symlink 触发
+  file-count integrity mismatch。入口现改为临时构造只含该原始 JSONL 的单文件目录并
+  stage 到相同远端输入路径；内容 hash 和 PCCE dataset 语义不变，也不再传输历史
+  attempts/workspaces。
