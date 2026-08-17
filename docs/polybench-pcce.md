@@ -193,6 +193,13 @@ workspaces. Rerunning the same command collects or advances the next phase.
 selects two frozen validation cases and the frozen seed guideline. Its run root
 is below `polybench-pcce-runs/smoke/` and is not formal evidence.
 
+`configs/polybench_pcce_supervisor_smoke.yaml` is the persistent local launch
+identity. Through the shared `hpc_supervisor_service.py` and
+`hpc_resume_loop.py`, it waits while a Controller or worker is active and
+submits the next Controller slice after a completed wave. The supervisor reads
+workflow state but never edits checkpoints, review decisions, feedback,
+rejection counts, plans, or CE results.
+
 Completed plan and Checker outputs are identity-bound checkpoints inside each
 review wave. Code/Evaluate reuse the existing PCE runner without entering its
 controller or changing the historical PCE run. Task manifests store paths

@@ -47,6 +47,17 @@ prompts:
     return config
 
 
+def _write_workflow_config(root: Path) -> Path:
+    run_dir = root / "run"
+    config = root / "workflow.yaml"
+    config.parent.mkdir(parents=True, exist_ok=True)
+    config.write_text(
+        f"mode: polybench_pcce\npaths:\n  run_dir: {run_dir}\n",
+        encoding="utf-8",
+    )
+    return config
+
+
 def _fake_batch_script(path: Path, log_path: Path) -> None:
     path.write_text(
         f"""#!/usr/bin/env bash
@@ -152,6 +163,86 @@ def test_hpc_resume_loop_dry_run_delegates_slice_time(tmp_path: Path) -> None:
     assert "24:00:00" not in batch_log.read_text(encoding="utf-8")
     assert "--dry-run" in batch_log.read_text(encoding="utf-8")
     assert "--submit" not in batch_log.read_text(encoding="utf-8")
+
+
+def test_hpc_resume_loop_accepts_non_gepa_workflow_config(tmp_path: Path) -> None:
+    local_root = REPO_ROOT / ".tmp_hpc_smoke" / "test_workflow_resume_dry"
+    config = _write_workflow_config(local_root)
+    fake_batch = tmp_path / "hpc_submit_workflow.sh"
+    batch_log = tmp_path / "batch.log"
+    _fake_batch_script(fake_batch, batch_log)
+
+    result = subprocess.run(
+        [
+            "python",
+            str(SCRIPT),
+            "--slice-time",
+            "00:10:00",
+            "--batch-script",
+            str(fake_batch),
+            "--state-file",
+            str(tmp_path / "state.json"),
+            "--config",
+            str(config),
+            "--job-name",
+            "workflow-dry-test",
+        ],
+        cwd=REPO_ROOT,
+        capture_output=True,
+        text=True,
+        check=False,
+        env=_env(tmp_path),
+    )
+
+    assert result.returncode == 0, result.stderr
+    batch_text = batch_log.read_text(encoding="utf-8")
+    assert f"--config\n{config}" in batch_text
+    assert "--time\n00:10:00" in batch_text
+    assert "--dry-run" in batch_text
+
+
+def test_hpc_resume_loop_treats_completed_with_incomplete_as_terminal(
+    tmp_path: Path,
+) -> None:
+    fake_bin = tmp_path / "bin"
+    fake_bin.mkdir()
+    local_root = REPO_ROOT / ".tmp_hpc_smoke" / "test_workflow_terminal"
+    config = _write_workflow_config(local_root)
+    fake_batch = tmp_path / "hpc_submit_workflow.sh"
+    batch_log = tmp_path / "batch.log"
+    statuses = tmp_path / "statuses.txt"
+    statuses.write_text(
+        '{"state":"result","status":"completed_with_incomplete"}\n',
+        encoding="utf-8",
+    )
+    _fake_batch_script(fake_batch, batch_log)
+    _fake_ssh(fake_bin / "ssh", statuses, tmp_path / "ssh.log")
+
+    result = subprocess.run(
+        [
+            "python",
+            str(SCRIPT),
+            "--poll-interval",
+            "0",
+            "--batch-script",
+            str(fake_batch),
+            "--state-file",
+            str(tmp_path / "state.json"),
+            "--config",
+            str(config),
+            "--submit",
+        ],
+        cwd=REPO_ROOT,
+        capture_output=True,
+        text=True,
+        check=False,
+        env=_env(fake_bin),
+    )
+
+    assert result.returncode == 0, result.stderr
+    assert not batch_log.exists()
+    state = json.loads((tmp_path / "state.json").read_text(encoding="utf-8"))
+    assert state["status"] == "completed"
 
 
 def test_hpc_resume_loop_resubmits_until_completed(tmp_path: Path) -> None:
@@ -385,7 +476,7 @@ def test_hpc_supervisor_blocks_when_runtime_config_changes(tmp_path: Path) -> No
 
     assert process.returncode == 1, (stdout, stderr)
     assert batch_log.read_text(encoding="utf-8").count("--submit") == 1
-    assert "runtime GEPA config changed after supervisor start" in stderr
+    assert "runtime config changed after supervisor start" in stderr
     state = json.loads((tmp_path / "state.json").read_text(encoding="utf-8"))
     assert state["status"] == "blocked_identity_mismatch"
 
@@ -398,7 +489,7 @@ def test_hpc_supervisor_service_starts_with_tmux_and_caffeinate(tmp_path: Path) 
     tmux.write_text(
         "#!/usr/bin/env bash\n"
         f"printf '%s\\n' \"$*\" >> {tmux_log}\n"
-        "if [[ \"$1\" == has-session ]]; then exit 1; fi\n"
+        'if [[ "$1" == has-session ]]; then exit 1; fi\n'
         "exit 0\n",
         encoding="utf-8",
     )
@@ -446,7 +537,7 @@ def test_hpc_supervisor_service_uses_persisted_launch_config(tmp_path: Path) -> 
     tmux.write_text(
         "#!/usr/bin/env bash\n"
         f"printf '%s\\n' \"$*\" >> {tmux_log}\n"
-        "if [[ \"$1\" == has-session ]]; then exit 1; fi\n"
+        'if [[ "$1" == has-session ]]; then exit 1; fi\n'
         "exit 0\n",
         encoding="utf-8",
     )
@@ -490,6 +581,46 @@ arguments:
     assert "hpc_resume_loop.py --target-iterations 8" in invocation
     assert "configs/gepa_online_planning_hpc.yaml --submit" in invocation
     assert "conda run --no-capture-output -n mini-swe" in invocation
+
+
+def test_pcce_supervisor_launch_config_uses_shared_resume_loop(
+    tmp_path: Path,
+) -> None:
+    fake_bin = tmp_path / "bin"
+    fake_bin.mkdir()
+    tmux_log = tmp_path / "tmux.log"
+    tmux = fake_bin / "tmux"
+    tmux.write_text(
+        "#!/usr/bin/env bash\n"
+        f"printf '%s\\n' \"$*\" >> {tmux_log}\n"
+        'if [[ "$1" == has-session ]]; then exit 1; fi\n'
+        "exit 0\n",
+        encoding="utf-8",
+    )
+    tmux.chmod(0o755)
+    env = os.environ.copy()
+    env["PATH"] = f"{fake_bin}{os.pathsep}{env['PATH']}"
+
+    result = subprocess.run(
+        [
+            "python",
+            str(SERVICE_SCRIPT),
+            "start",
+            "--launch-config",
+            "configs/polybench_pcce_supervisor_smoke.yaml",
+        ],
+        cwd=REPO_ROOT,
+        capture_output=True,
+        text=True,
+        check=False,
+        env=env,
+    )
+
+    assert result.returncode == 0, result.stderr
+    invocation = tmux_log.read_text(encoding="utf-8")
+    assert "hpc_resume_loop.py --poll-interval 300" in invocation
+    assert "--batch-script scripts/hpc_submit_polybench_pcce.sh" in invocation
+    assert "--config configs/polybench_pcce_hpc_smoke.yaml" in invocation
 
 
 def test_hpc_supervisor_waits_for_workers_without_submitting(tmp_path: Path) -> None:

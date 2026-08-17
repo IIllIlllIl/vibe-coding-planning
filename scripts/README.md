@@ -1,8 +1,8 @@
 # `scripts/` 运行入口
 
-当前 GEPA HPC 采用一个本地 supervisor、短时 controller 和独立 Slurm Agent
-tasks。旧 Offline 24h 单作业和自动修复 preheat watchdog 已删除，不再作为运行
-入口。
+当前 GEPA 和 PCCE HPC 采用一个本地 supervisor、短时 controller 和独立 Slurm
+Agent tasks。旧 Offline 24h 单作业和自动修复 preheat watchdog 已删除，不再作为
+运行入口。
 
 ## Controller 与 supervisor
 
@@ -10,7 +10,9 @@ tasks。旧 Offline 24h 单作业和自动修复 preheat watchdog 已删除，�
   persistent run directory，并提交一个短时 GEPA controller。默认 dry-run。
 - `hpc_resume_loop.py`：读取远端统一的 `controller_status.json`、
   `iteration_progress.json` 和 `hpc_tasks/**/task_state.json`，只在没有活动
-  controller/worker 且状态可恢复时提交下一段 controller。iteration progress
+  controller/worker 且状态可恢复时提交下一段 controller。它接受 GEPA 的
+  `--gepa-config` 或其他 workflow 的 `--config`，但不解释 Agent/实验阶段语义。
+  GEPA iteration progress
   是完成 proposal 的数量（`GEPA state.i + 1`），不是零基 iteration 索引；
   `result.json` 缺少顶层状态时由显式 `controller_status.json` 判定完成。
 - `hpc_supervisor_service.py`：使用 `tmux + caffeinate` 承载本地 supervisor。
@@ -19,7 +21,8 @@ tasks。旧 Offline 24h 单作业和自动修复 preheat watchdog 已删除，�
 
 正式运行应使用受版本控制的 supervisor launch config，不要从历史日志拼接启动
 参数。Online 当前配置是 `configs/online_gepa_supervisor.yaml`；Offline HPC 应使用
-独立的新配置与 run identity。
+独立的新配置与 run identity；PCCE smoke 使用
+`configs/polybench_pcce_supervisor_smoke.yaml`。
 
 ## SIF 工具
 

@@ -427,6 +427,8 @@ def test_submit_wrapper_stages_baseline_directory_and_keeps_dry_run(
     assert "--dry-run" in result.stdout
     assert "raw_pce_outcomes.jsonl:" not in result.stdout
     assert "baseline_stage=single-file frozen outcome bundle" in result.stdout
+    assert "VIBE_CONTROLLER_GIT_HEAD" in result.stdout
+    assert "RUN_MANIFEST" in result.stdout
     assert str(ROOT / "output/SWE-PolyBench/polybench-pce-runs/formal") not in (
         result.stdout
     )

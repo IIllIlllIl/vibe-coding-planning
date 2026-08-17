@@ -39,7 +39,11 @@ TERMINAL_JOB_STATES = {
     "SPECIAL_EXIT",
     "TIMEOUT",
 }
-SUCCESS_RUN_STATUSES = {"completed", "completed_with_warnings"}
+SUCCESS_RUN_STATUSES = {
+    "completed",
+    "completed_with_incomplete",
+    "completed_with_warnings",
+}
 FAILED_RUN_STATUSES = {"failed"}
 BLOCKING_STATUS_STATES = {
     "controller_failed",
@@ -53,7 +57,7 @@ BLOCKING_STATUS_STATES = {
 @dataclass(frozen=True)
 class SupervisorConfig:
     batch_args: list[str]
-    gepa_config: Path
+    runtime_config: Path
     slice_time: str
     check_interval_seconds: int
     poll_interval_seconds: int
@@ -159,13 +163,13 @@ def _repo_relative(path: Path, label: str) -> str:
         raise SystemExit(f"{label} must be inside the repository: {path}") from exc
 
 
-def _remote_run_snapshot(batch_args: list[str], gepa_config: Path) -> str:
-    gepa = _load_yaml(gepa_config)
-    paths = gepa.get("paths", {})
+def _remote_run_snapshot(batch_args: list[str], runtime_config: Path) -> str:
+    runtime = _load_yaml(runtime_config)
+    paths = runtime.get("paths", {})
     run_dir_raw = paths.get("run_dir")
     if not run_dir_raw:
-        raise SystemExit(f"GEPA config has no paths.run_dir: {gepa_config}")
-    run_dir = _resolve_repo_path(str(run_dir_raw), gepa_config.parent.parent)
+        raise SystemExit(f"runtime config has no paths.run_dir: {runtime_config}")
+    run_dir = _resolve_repo_path(str(run_dir_raw), runtime_config.parent.parent)
     run_rel = _repo_relative(run_dir, "run_dir")
     remote_run_dir = (
         _take_option(batch_args, "--remote-run-dir")
@@ -196,8 +200,8 @@ def _ssh_config(batch_args: list[str]) -> tuple[str, str, str]:
 def parse_args(argv: list[str]) -> SupervisorConfig:
     parser = argparse.ArgumentParser(
         description=(
-            "Repeatedly submit short resumable GEPA jobs through "
-            "scripts/hpc_submit_batch.sh."
+            "Repeatedly submit short resumable HPC controller slices through "
+            "a workflow-specific submit wrapper."
         ),
         allow_abbrev=False,
     )
@@ -250,14 +254,18 @@ def parse_args(argv: list[str]) -> SupervisorConfig:
     if known.target_iterations < 0:
         raise SystemExit("--target-iterations must be non-negative")
     gepa_config_raw = _take_option(batch_args, "--gepa-config")
-    if not gepa_config_raw:
-        raise SystemExit("--gepa-config is required")
-    gepa_config = _resolve_repo_path(gepa_config_raw)
+    workflow_config_raw = _take_option(batch_args, "--config")
+    if gepa_config_raw and workflow_config_raw:
+        raise SystemExit("use only one of --gepa-config or --config")
+    runtime_config_raw = gepa_config_raw or workflow_config_raw
+    if not runtime_config_raw:
+        raise SystemExit("--gepa-config or --config is required")
+    runtime_config = _resolve_repo_path(runtime_config_raw)
     offline_gepa = "--gepa-rules" in batch_args
     target_iterations = known.target_iterations
     if offline_gepa and target_iterations == 0:
         configured_target = (
-            _load_yaml(gepa_config).get("search", {}).get("max_iterations")
+            _load_yaml(runtime_config).get("search", {}).get("max_iterations")
         )
         if configured_target is not None:
             target_iterations = int(configured_target)
@@ -275,13 +283,13 @@ def parse_args(argv: list[str]) -> SupervisorConfig:
     ssh_target, ssh_port, ssh_key = _ssh_config(batch_args)
     return SupervisorConfig(
         batch_args=batch_args,
-        gepa_config=gepa_config,
+        runtime_config=runtime_config,
         slice_time=known.slice_time,
         check_interval_seconds=parse_duration(known.check_interval),
         poll_interval_seconds=parse_duration(known.poll_interval),
         max_runs=known.max_runs,
         submit=submit,
-        remote_run_snapshot=_remote_run_snapshot(batch_args, gepa_config),
+        remote_run_snapshot=_remote_run_snapshot(batch_args, runtime_config),
         job_name=job_name,
         ssh_target=ssh_target,
         ssh_port=ssh_port,
@@ -290,7 +298,7 @@ def parse_args(argv: list[str]) -> SupervisorConfig:
         target_iterations=target_iterations,
         once=known.once,
         state_file=state_file,
-        runtime_config_sha256=_sha256(gepa_config),
+        runtime_config_sha256=_sha256(runtime_config),
         require_clean_worktree=known.require_clean_worktree,
         repo_commit=_git_output("rev-parse", "HEAD"),
         offline_gepa=offline_gepa,
@@ -305,7 +313,9 @@ def _ssh_command(config: SupervisorConfig, remote_command: str) -> list[str]:
     return command
 
 
-def run_command(command: list[str], *, check: bool = False) -> subprocess.CompletedProcess[str]:
+def run_command(
+    command: list[str], *, check: bool = False
+) -> subprocess.CompletedProcess[str]:
     return subprocess.run(command, capture_output=True, text=True, check=check)
 
 
@@ -350,12 +360,9 @@ def submit_slice(config: SupervisorConfig) -> str:
 
 
 def _submission_identity_error(config: SupervisorConfig) -> str | None:
-    current_config_sha256 = _sha256(config.gepa_config)
+    current_config_sha256 = _sha256(config.runtime_config)
     if current_config_sha256 != config.runtime_config_sha256:
-        return (
-            "runtime GEPA config changed after supervisor start: "
-            f"{config.gepa_config}"
-        )
+        return f"runtime config changed after supervisor start: {config.runtime_config}"
     if not config.require_clean_worktree:
         return None
     current_commit = _git_output("rev-parse", "HEAD")
@@ -397,9 +404,7 @@ def get_job_state(config: SupervisorConfig, job_id: str) -> str:
         return _state_base(result.stdout)
 
     sacct = (
-        "sacct -n -P -j "
-        + shlex.quote(job_id)
-        + " --format=State,ExitCode | head -n 1"
+        "sacct -n -P -j " + shlex.quote(job_id) + " --format=State,ExitCode | head -n 1"
     )
     result = run_command(_ssh_command(config, sacct))
     if result.returncode == 0 and result.stdout.strip():
@@ -590,19 +595,11 @@ def is_completed(status: dict[str, Any]) -> bool:
     raw_controller_status = status.get("controller_status")
     run_status = str(raw_run_status).lower() if raw_run_status is not None else ""
     controller_status = (
-        str(raw_controller_status).lower()
-        if raw_controller_status is not None
-        else ""
+        str(raw_controller_status).lower() if raw_controller_status is not None else ""
     )
-    return (
-        status.get("state") == "result"
-        and (
-            run_status in SUCCESS_RUN_STATUSES
-            or (
-                not run_status
-                and controller_status in SUCCESS_RUN_STATUSES
-            )
-        )
+    return status.get("state") == "result" and (
+        run_status in SUCCESS_RUN_STATUSES
+        or (not run_status and controller_status in SUCCESS_RUN_STATUSES)
     )
 
 
@@ -656,7 +653,9 @@ def _load_supervisor_state(config: SupervisorConfig) -> dict[str, Any]:
 def _save_supervisor_state(config: SupervisorConfig, state: dict[str, Any]) -> None:
     config.state_file.parent.mkdir(parents=True, exist_ok=True)
     temp = config.state_file.with_suffix(config.state_file.suffix + ".tmp")
-    temp.write_text(json.dumps(state, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+    temp.write_text(
+        json.dumps(state, indent=2, sort_keys=True) + "\n", encoding="utf-8"
+    )
     temp.replace(config.state_file)
 
 
@@ -717,9 +716,7 @@ def run_loop(config: SupervisorConfig) -> int:
             status = remote_run_status(config)
             state["last_remote_status"] = status
             if status.get("completed_iterations") is not None:
-                state["last_completed_iterations"] = int(
-                    status["completed_iterations"]
-                )
+                state["last_completed_iterations"] = int(status["completed_iterations"])
             print(f"[hpc-resume] status={json.dumps(status, sort_keys=True)}")
             if status.get("state") == "status_check_failed":
                 state["status"] = "waiting_after_status_check_failure"

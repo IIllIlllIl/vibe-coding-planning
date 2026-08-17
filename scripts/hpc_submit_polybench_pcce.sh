@@ -189,7 +189,15 @@ set -euo pipefail
 export APPTAINER_CACHEDIR="$HPC_ROOT/shared/apptainer-cache"
 export APPTAINER_TMPDIR="$HPC_ROOT/shared/apptainer-tmp"
 export ULHPC_APPTAINER_SIF_CACHE_DIR="$SIF_CACHE_DIR"
-export VIBE_PROJECT_GIT_HEAD="$LOCAL_GIT_HEAD"
+export VIBE_CONTROLLER_GIT_HEAD="$LOCAL_GIT_HEAD"
+RUN_MANIFEST="$RUN_REL/run_manifest.json"
+if [[ -f "\$RUN_MANIFEST" ]]; then
+  VIBE_PROJECT_GIT_HEAD="\$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1], encoding="utf-8"))["project_git_head"])' "\$RUN_MANIFEST")"
+else
+  VIBE_PROJECT_GIT_HEAD="$LOCAL_GIT_HEAD"
+fi
+export VIBE_PROJECT_GIT_HEAD
+echo "[polybench-pcce-controller] source_git_head=\$VIBE_CONTROLLER_GIT_HEAD run_git_head=\$VIBE_PROJECT_GIT_HEAD"
 mkdir -p "\$APPTAINER_CACHEDIR" "\$APPTAINER_TMPDIR"
 REMOTE_ENV_FILE="$REMOTE_ENV_FILE"
 if [[ "\$REMOTE_ENV_FILE" == "~/"* ]]; then

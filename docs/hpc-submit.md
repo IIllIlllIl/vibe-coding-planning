@@ -91,6 +91,23 @@ rejection increments that counter; the third rejection terminates the method
 without Code. Each PC/CE batch submits all eligible cases without `%N`, leaving
 scheduling to Slurm.
 
+PCCE is advanced unattended through the same local `tmux + caffeinate`
+supervisor service as GEPA, using
+`configs/polybench_pcce_supervisor_smoke.yaml`. The shared resume loop accepts
+the PCCE runtime through `--config`, observes `hpc_tasks/**/task_state.json`,
+and submits a new 10-minute Controller only when no Controller or worker is
+active. It has no iteration target and stops on terminal `result.json` or a
+blocking `controller_status.json`. A five-minute local poll consumes no HPC
+allocation.
+
+When a PCCE run already has a manifest, a later Controller submission preserves
+that manifest's `project_git_head` as the experiment provenance value. The
+actual code snapshot used by each new Controller remains recorded by
+`ulhpc-submit`. Resume still requires identical runtime-config, PCCE semantic,
+data, guideline, and prompt hashes; this separation permits operational-only
+supervisor/wrapper fixes without treating a changed PCCE method as the same
+experiment.
+
 Before increasing resources, inspect `sacct` and FairShare. More than 4G with
 one CPU requires measurement-based justification.
 

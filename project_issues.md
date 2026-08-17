@@ -968,3 +968,13 @@ block 的频率与根因，再决定是否仅细化记录，或对反复出现�
   file-count integrity mismatch。入口现改为临时构造只含该原始 JSONL 的单文件目录并
   stage 到相同远端输入路径；内容 hash 和 PCCE dataset 语义不变，也不再传输历史
   attempts/workspaces。
+  第一次 PC wave 的两个 worker 均在 attempt 1 完成：一例 proceed、一例带独立
+  `revision_feedback` 的 reject，耗时约 5–6 分钟，未出现 workflow failure；两例各有
+  一次 mini-swe action-format 错误（0 block / 2 blocks），均由同一 Agent 根据详细
+  parser feedback 修复。初始入口只提交一次 Controller slice，worker 完成后无人自动
+  收集，暴露出 PCCE 尚未接入 supervisor。现已让共享 `hpc_resume_loop.py` 同时接受
+  非 GEPA `--config`，并新增版本化 `polybench_pcce_supervisor_smoke.yaml`；它只轮询
+  durable Controller/task state 和重提 Controller，不改变 PCCE 实验状态。当前 run 的
+  runtime config SHA-256 仍为 `d2f88df098004bfc9b699c9d80f5ad8f296be3b3df892ed5ee95f090cc91671b`；
+  PCCE 源码/配置未随 supervisor 修改。wrapper 在 resume 时保留既有 manifest 的实验
+  Git head，而每次实际 Controller head 仍由 `ulhpc-submit` manifest/log 记录。
