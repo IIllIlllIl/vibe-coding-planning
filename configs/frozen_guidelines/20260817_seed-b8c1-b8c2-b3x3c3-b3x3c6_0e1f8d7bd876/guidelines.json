@@ -1,0 +1,157 @@
+[
+  {
+    "evaluation_role": "primary",
+    "guideline": "Allow the plan to proceed unless the available evidence clearly shows a material problem that makes it unlikely to resolve the reported issue.",
+    "guideline_sha256": "7a059a248467807bd57d26f028b7866b8ceba7c386f9661d877ade500072852a",
+    "label": "seed",
+    "selection_reason": "Common default-accept seed control shared byte-for-byte by both source runs.",
+    "source_candidate_index": 0,
+    "source_id": "b8",
+    "source_validation": {
+      "checker_timeout_count": 0,
+      "metrics": {
+        "accuracy": 0.6938775510204082,
+        "balanced_accuracy": 0.6622242647058824,
+        "f1": 0.765625,
+        "fn": 15,
+        "fp": 15,
+        "mcc": 0.3244485294117647,
+        "pass_rate": 0.6530612244897959,
+        "precision": 0.765625,
+        "recall": 0.765625,
+        "tn": 19,
+        "tp": 49
+      },
+      "metrics_scope": "completed_checker_predictions_only",
+      "parents": [
+        null
+      ],
+      "primary_metric": "accuracy",
+      "validation_score": 0.6938775510204082
+    }
+  },
+  {
+    "evaluation_role": "primary",
+    "guideline": "# Plan Review Guideline\n\nDecide whether the proposed plan is sufficiently likely to resolve the reported issue. Start from the permissive position that the plan should proceed unless the repository and plan together clearly demonstrate a material problem that would make the plan unlikely to work. A material problem must be grounded in repository evidence, not in the plan's wording or presentation style.\n\n## When to approve\n\nApprove when the plan, possibly after routine adaptation, points at the behavior that must change and the change can be implemented with the repository's actual code.\n\n- The plan may use outdated, incomplete, or renamed APIs; it may cite the wrong line numbers; it may contain illustrative pseudo-code that does not compile; it may leave the patch section truncated or empty. These are not material problems by themselves. Instead, check whether equivalent data, methods, or execution paths exist in the repository and whether a developer following the plan's core strategy could straightforwardly implement the needed behavior.\n- The plan does not need to predict every test update or every edge case. Expected-output churn in CLI tests, exact-line-number differences, and similar routine adjustments are not blockers.\n- If the available evidence does not clearly show a blocking problem, approve.\n\n## When to reject\n\nReject only when the repository and plan establish one of the following:\n\n1. **The plan is effectively a placeholder.** A plan with no implementation step, no strategy, or only test wording such as \"Test plan\" or \"test content\" cannot resolve a behavior-defect issue, because tests alone do not change behavior. No further repository investigation is needed for such a plan.\n\n2. **The plan targets the wrong mechanism or the wrong execution path.** If the plan explicitly modifies a component that the repository evidence shows is never used by the reported behavior, and no equivalent change is proposed at the actual path, then the plan is materially insufficient. This is true even when the plan is detailed and sounds plausible.\n\n3. **The plan's core strategy cannot be realized with actual repository code.** If the needed equivalent APIs, data sources, or hooks do not exist and the plan provides no fallback, reject.\n\n4. **The plan's concrete code fails on a repository-supported variant of the abstraction involved.** If the plan's stated implementation (not merely illustrative pseudo-code) reads an attribute, calls a method, or constructs an object in a way that is invalid for a supported variant that the issue itself highlights or that the repository clearly documents, the plan is materially insufficient unless the plan uses the repository's canonical accessor or fallback for that variant, or explicitly directs a developer to perform that adaptation. Wrong line numbers and renamed APIs remain non-material; a provable crash or wrong behavior on a supported configuration is not.\n\n5. **The plan's concrete change conflicts with an existing integration or customization path.** When the plan modifies a component that has repository-visible callers, subclasses, constructor signatures, overrides, or resource-propagation/customization hooks on the reported path, verify that the plan's concrete change stays compatible with those paths. If the plan would break, bypass, or fail to account for an existing hook needed for the reported behavior, reject unless the plan addresses it.\n\nDo not reject because the plan skips details that a competent implementer would normally fill in during development. Do not reject because the plan's patch sketch is not directly applicable when the described behavior can be adapted to the real repository.\n\n## Required investigation before rejection\n\n- Read the issue and identify the concrete behavior that must change.\n- Read the plan and identify the component or mechanism the plan intends to change.\n- Trace the repository path that actually produces the reported behavior.\n- Check whether the plan's target component is on that path.\n- If the plan names APIs or methods that do not exist, search for the closest equivalent and decide whether the plan's strategy can be carried out through it.\n- **Check integration points of modified components.** For any class, method, or function the plan changes, search the repository for callers, subclasses, overrides, constructor invocations, and tests that exercise that component. Open the relevant usages and confirm the plan's concrete change is compatible with the contracts they establish (constructor arguments, override signatures, resource-sharing or resource-override mechanisms, and similar hooks).\n- **Check supported variants of pluggable abstractions.** If the plan reads a field or attribute on a user-supplied, pluggable, or extensible abstraction, verify that the attribute is guaranteed to exist. If the issue or repository documentation shows the attribute may be absent, optional, or named differently, confirm that the plan's stated code handles that case through the repository's canonical accessor or an explicit fallback. When feasible, stub or construct that variant in memory and run the plan's code path to confirm it does not crash.\n- When feasible and relevant, apply the change in memory or run a focused reproduction to confirm whether the plan's approach works.\n- If the repository evidence leaves uncertainty about whether the plan would work, the default is to approve.\n\nThe goal is to judge whether the plan is likely to resolve the issue, not whether its prose is perfectly aligned with the current repository.",
+    "guideline_sha256": "bd48ee54f6a688cb9a409d2a4017896da00d03926e736665565eef24a707d83a",
+    "label": "b8_candidate_2",
+    "selection_reason": "Highest SWE validation accuracy, balanced accuracy, and MCC in the completed minibatch-eight run.",
+    "source_candidate_index": 2,
+    "source_id": "b8",
+    "source_validation": {
+      "checker_timeout_count": 0,
+      "metrics": {
+        "accuracy": 0.7551020408163265,
+        "balanced_accuracy": 0.7159926470588236,
+        "f1": 0.8181818181818182,
+        "fn": 10,
+        "fp": 14,
+        "mcc": 0.44615249331310924,
+        "pass_rate": 0.6938775510204082,
+        "precision": 0.7941176470588235,
+        "recall": 0.84375,
+        "tn": 20,
+        "tp": 54
+      },
+      "metrics_scope": "completed_checker_predictions_only",
+      "parents": [
+        1
+      ],
+      "primary_metric": "accuracy",
+      "validation_score": 0.7551020408163265
+    }
+  },
+  {
+    "evaluation_role": "primary",
+    "guideline": "Decide whether the proposed plan is sufficiently viable to resolve the reported issue. Proceed unless the available evidence clearly shows that the plan is fundamentally incapable of leading to the correct fix.\n\nBefore deciding:\n\n1. Read the issue and the plan together. Identify the required behavior and the plan's intended change, even when the patch section is partial or truncated. A plan is evaluated for its direction, not for polished prose.\n   - Treat any expected behavior stated in the issue as a contract. If the plan's described output or behavior contradicts that contract, treat that as a strong signal of non-viability, not merely a rendering or wording mismatch.\n\n2. Locate the actual implementation in the repository rather than trusting the plan's file lists. Search for the relevant lookup, expression, path construction, field-handling, or attribute-handling code; inspect the code that produces the reported behavior. Confirm whether the plan's named files are accurate and whether the real source of the defect is elsewhere.\n   - Also inspect existing tests and call-sites that constrain the affected function, output, or attribute. The plan must be consistent with those constraints, not just with the reported reproduction.\n\n3. Corroborate with repository evidence. Use cheap reproduction when possible: inspect generated output, call the relevant helper directly, construct the failing object, or trace the code path. Verify that the reported failure exists and that the plan's intended change would address it.\n   - Verify that the plan's intended change preserves existing supported behavior and satisfies tests relevant to the affected component. When the issue does not state an exact expected output, infer the expected behavior from existing tests, documentation, analogous code paths, and consumer call-sites.\n\n4. Judge viability, not polish. Incomplete patch text, approximate line numbers, truncated output, or inaccurate helper-file names are not by themselves material problems when the plan correctly identifies the root cause and intended change, and repository inspection shows a correct implementation is reachable from that direction. A plan is viable when a competent implementer following its intent can land in the correct code area and use existing patterns to implement the fix.\n\n5. Distinguish wrong details from a wrong concept:\n   - Wrong details include wrong line numbers, a missing patch, a slightly wrong helper-file name, or a different code location that still realizes the same stated remedy.\n   - A wrong concept occurs when the plan's stated remedy would change output or API behavior that the issue or existing tests require preserving; when the plan works around a missing attribute/API that consumers or tests require; or when a correct implementation would have to abandon the plan's stated remedy in order to pass.\n   - If the plan appears too broad, consider whether it can be scoped. A global-sounding change is not fatal when the plan's actual scope is the affected lookup, output path, or code path and a scoped implementation preserving existing behavior exists.\n   - When a plan proposes a workaround for a missing attribute/API rather than fixing that API, inspect tests and consumers that touch the attribute. If they require the attribute/API to exist with a specific shape, the plan must supply it; a localized workaround that leaves the contract broken is not viable.\n\n6. Reject only when at least one of the following is clearly shown with repository evidence:\n   - The core diagnosis is wrong or contradicts the code.\n   - The intended change, even after reasonable adaptation, cannot resolve the reported behavior.\n   - No implementation can both follow the plan's stated intent and preserve existing supported behavior while satisfying the issue's expected behavior and relevant tests.\n   - The plan works around a public attribute/API that tests or consumers require, instead of providing that attribute/API.\n   - The plan is so incomplete that no implementable direction is inferable.\n\nDo not reject because the plan lacks a complete patch, lacks tests, uses approximate locations, or would require an implementer to make small adjustments. Approval is a pre-implementation decision that a correct fix can reasonably be reached; it is not an endorsement of every detail. However, a plan whose stated remedy conflicts with the issue's expected behavior or with repository-enforced contracts is not a small-adjustment problem; it is a fundamental mismatch.",
+    "guideline_sha256": "793064c424bcaf73e04fd7c8a402c75cedc656b1e55832c63b9c7d32fc2927ef",
+    "label": "b3x3_candidate_6",
+    "selection_reason": "Highest SWE validation accuracy in the completed train-only 3x3 run.",
+    "source_candidate_index": 6,
+    "source_id": "b3x3",
+    "source_validation": {
+      "checker_timeout_count": 0,
+      "metrics": {
+        "accuracy": 0.7346938775510204,
+        "balanced_accuracy": 0.6452205882352942,
+        "f1": 0.821917808219178,
+        "fn": 4,
+        "fp": 22,
+        "mcc": 0.37404229692004404,
+        "pass_rate": 0.8367346938775511,
+        "precision": 0.7317073170731707,
+        "recall": 0.9375,
+        "tn": 12,
+        "tp": 60
+      },
+      "metrics_scope": "completed_checker_predictions_only",
+      "parents": [
+        3
+      ],
+      "primary_metric": "accuracy",
+      "validation_score": 0.7346938775510204
+    }
+  },
+  {
+    "evaluation_role": "reserve",
+    "guideline": "# Plan Review Guideline\n\nDecide whether the proposed plan is sufficiently likely to resolve the reported issue. Start from the permissive position that the plan should proceed unless the repository and plan together clearly demonstrate a material problem that would make the plan unlikely to work. A material problem must be grounded in repository evidence, not in the plan's wording or presentation style.\n\n## When to approve\n\nApprove when the plan, possibly after routine adaptation, points at the behavior that must change and the change can be implemented with the repository's actual code.\n\n- The plan may use outdated, incomplete, or renamed APIs; it may cite the wrong line numbers; it may contain illustrative pseudo-code that does not compile. These are not material problems by themselves. Instead, check whether equivalent data, methods, or execution paths exist in the repository and whether a developer following the plan's core strategy could straightforwardly implement the needed behavior.\n- The plan does not need to predict every test update or every edge case. It only needs a clear implementation strategy that reaches the code responsible for the reported behavior.\n- If the available evidence does not clearly show a blocking problem, approve.\n\n## When to reject\n\nReject only when the repository and plan establish one of the following:\n\n1. The plan is effectively a placeholder. A plan with no implementation step, no strategy, or only test wording such as \"Test plan\" or \"test content\" cannot resolve a behavior-defect issue, because tests alone do not change behavior. No further repository investigation is needed for such a plan.\n\n2. The plan targets the wrong mechanism or the wrong execution path. If the plan explicitly modifies a component that the repository evidence shows is never used by the reported behavior, and no equivalent change is proposed at the actual path, then the plan is materially insufficient. This is true even when the plan is detailed and sounds plausible.\n\n3. The plan's core strategy cannot be realized with actual repository code. If the needed equivalent APIs, data sources, or hooks do not exist and the plan provides no fallback, reject.\n\nDo not reject because the plan skips details that a competent implementer would normally fill in during development. Do not reject because the plan's patch sketch is not directly applicable when the described behavior can be adapted to the real repository.\n\n## Required investigation before rejection\n\n- Read the issue and identify the concrete behavior that must change.\n- Read the plan and identify the component or mechanism the plan intends to change.\n- Trace the repository path that actually produces the reported behavior.\n- Check whether the plan's target component is on that path.\n- If the plan names APIs or methods that do not exist, search for the closest equivalent and decide whether the plan's strategy can be carried out through it.\n- When feasible and relevant, apply the change in memory or run a focused reproduction to confirm whether the plan's approach works.\n- If the repository evidence leaves uncertainty about whether the plan would work, the default is to approve.\n\nThe goal is to judge whether the plan is likely to resolve the issue, not whether its prose is perfectly aligned with the current repository.",
+    "guideline_sha256": "4a759662e08916a5bd852c8e197550aebed62eab31f905dd93692ccb78c2171d",
+    "label": "b8_candidate_1",
+    "selection_reason": "Direct parent of candidate 2 with fewer false rejections, higher rejection precision, and a shorter guideline.",
+    "source_candidate_index": 1,
+    "source_id": "b8",
+    "source_validation": {
+      "checker_timeout_count": 0,
+      "metrics": {
+        "accuracy": 0.7448979591836735,
+        "balanced_accuracy": 0.6668198529411764,
+        "f1": 0.8251748251748252,
+        "fn": 5,
+        "fp": 20,
+        "mcc": 0.40171387199981956,
+        "pass_rate": 0.8061224489795918,
+        "precision": 0.7468354430379747,
+        "recall": 0.921875,
+        "tn": 14,
+        "tp": 59
+      },
+      "metrics_scope": "completed_checker_predictions_only",
+      "parents": [
+        0
+      ],
+      "primary_metric": "accuracy",
+      "validation_score": 0.7448979591836735
+    }
+  },
+  {
+    "evaluation_role": "reserve",
+    "guideline": "Decide whether the proposed plan is sufficiently viable to resolve the reported issue. Proceed unless the available evidence clearly shows that the plan is fundamentally incapable of leading to the correct fix.\n\nBefore deciding:\n\n1. Read the issue and the plan together. Identify the required behavior and the plan's intended change, even when the patch section is partial or truncated. A plan is evaluated for its direction, not for polished prose.\n\n2. Locate the actual implementation in the repository rather than trusting the plan's file lists. Search for the relevant lookup, expression, path construction, or field-handling code; inspect the code that produces the reported behavior. Confirm whether the plan's named files are accurate and whether the real source of the defect is elsewhere.\n\n3. Corroborate with repository evidence. Use cheap reproduction when possible: inspect generated SQL, call the relevant helper directly, or trace the code path. Verify that the reported failure exists and that the plan's intended change would address it.\n\n4. Judge viability, not polish. Incomplete patch text, approximate line numbers, truncated output, or inaccurate helper-file names are not by themselves material problems when the plan correctly identifies the root cause and intended change, and repository inspection shows a correct implementation is reachable from that direction. A plan is viable when a competent implementer following its intent can land in the correct code area and use existing patterns to implement the fix.\n\n5. Distinguish wrong details from a wrong concept:\n   - If the plan's specific patch targets nonexistent functions but its stated remedy is logically correct and can be realized in the actual code path, treat the plan as viable and expect implementation to adapt.\n   - Reject only when the plan's core diagnosis is contradicted by the repository, the intended change cannot produce the reported behavior, or no reasonable implementation reaching the correct fix exists.\n   - If the plan appears too broad, consider whether it can be scoped. A global-sounding change is not fatal when the plan's actual scope is the affected lookup or code path and a scoped implementation preserving existing behavior exists.\n\n6. Reject only when at least one of the following is clearly shown with repository evidence:\n   - The core diagnosis is wrong or contradicts the code.\n   - The intended change, even after reasonable adaptation, cannot resolve the reported behavior.\n   - No implementation can preserve existing supported behavior while following the plan's intent.\n   - The plan is so incomplete that no implementable direction is inferable.\n\nDo not reject because the plan lacks a complete patch, lacks tests, uses approximate locations, or would require an implementer to make small adjustments. Approval is a pre-implementation decision that a correct fix can reasonably be reached; it is not an endorsement of every detail.",
+    "guideline_sha256": "26631ede5feeb2e4e2bccde4e932631d750cc20d0aab36956ef3712ce34eea74",
+    "label": "b3x3_candidate_3",
+    "selection_reason": "Direct parent of candidate 6 representing the more permissive, lower-false-rejection operating point.",
+    "source_candidate_index": 3,
+    "source_id": "b3x3",
+    "source_validation": {
+      "checker_timeout_count": 0,
+      "metrics": {
+        "accuracy": 0.7142857142857143,
+        "balanced_accuracy": 0.6020220588235294,
+        "f1": 0.8157894736842106,
+        "fn": 2,
+        "fp": 26,
+        "mcc": 0.3208574949811232,
+        "pass_rate": 0.8979591836734694,
+        "precision": 0.7045454545454546,
+        "recall": 0.96875,
+        "tn": 8,
+        "tp": 62
+      },
+      "metrics_scope": "completed_checker_predictions_only",
+      "parents": [
+        0
+      ],
+      "primary_metric": "accuracy",
+      "validation_score": 0.7142857142857143
+    }
+  }
+]

@@ -925,3 +925,20 @@ block 的频率与根因，再决定是否仅细化记录，或对反复出现�
   未调用 `expanduser()`，因而误报完整 checkpoint 文件全部缺失；实际 2it checkpoint
   没有损坏或修改，也没有提交 worker。helper 现显式展开远端 home，并用临时 HOME 下的
   `~/run` 回归测试覆盖该真实入口语义。
+- **PolyBench guideline 集合已冻结（2026-08-17）**：tracked bundle
+  `configs/frozen_guidelines/20260817_seed-b8c1-b8c2-b3x3c3-b3x3c6_0e1f8d7bd876/`
+  在任何新 Poly Checker output 产生前冻结，content SHA-256 为
+  `0e1f8d7bd876c4d7f1760c1729ccb456afbc7034a34ba8f2f88d8f29478c85d6`。
+  Primary 为公共 seed、minibatch-eight candidate 2 和 3x3 candidate 6；reserve 为
+  两者更短且更宽松的直接父候选 minibatch-eight candidate 1 和 3x3 candidate 3。
+  manifest 保存每份文本 hash、source run/candidate/parent、compact SWE validation
+  metrics 和两个 source artifact 集合的 hash。Reserve 是否进入 confirmatory stage
+  仍需在 primary 启动前把“效果一般”量化并 commit；若看过 primary Poly 结果后才决定，
+  reserve 只能报告为 exploratory，不能用来选择对外声称的 validation winner。
+- **PolyBench check-only 当前进度（2026-08-17）**：111-case、59 resolved / 52
+  unresolved 的 cleaned snapshot 已在本地冻结；Iris shared cache 中保留 113 个
+  official-v1.1 PolyBench SIF（约 195G），因此所选 111 cases 的镜像准备来源仍在。
+  当前 Iris 队列为空，没有 check-only persistent run、metrics/result 或 active config；
+  111-case dataset 也尚未由 submit wrapper stage 到 remote dataset root。也就是说 PCE、
+  cleaning 和 guideline freezing 已完成，但 primary `111 x 3 = 333` Checker validation
+  尚未配置或启动。

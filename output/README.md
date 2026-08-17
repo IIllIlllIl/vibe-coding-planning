@@ -10,7 +10,7 @@ historical comparison, provenance, or reproduction.
 |---|---|---|
 | `SWE-bench_Verified/verified-round1-gepa-datasets/20260614_482_fdc056ae85df/` | Immutable formal 384/98 snapshot shared by current Online and Offline experiments | Active input; do not move or modify |
 | `SWE-bench_Verified/gepa-rules/` | Local destination for current Online and Offline GEPA results | Active output root |
-| `SWE-PolyBench/polybench-guideline-validation-guidelines/20260811_seed-c1-c2-c3_3293f8e925b8/` | Exact seed and candidate indices 1-3 from the completed 20260810 Offline run | Frozen evaluation bundle |
+| `../configs/frozen_guidelines/20260817_seed-b8c1-b8c2-b3x3c3-b3x3c6_0e1f8d7bd876/` | Exact common seed, minibatch-eight candidates 1/2, and 3x3 candidates 3/6 | Active tracked evaluation bundle; three primary and two reserve guidelines |
 | `archive/operations/polybench-python199-v1.1-20260811/` | Local mirror of the completed official `:v1.1` Python-199 availability operation | Operational preparation evidence; remote working copy removed |
 | `SWE-PolyBench/polybench-pce-inputs/20260814_python113_v11_8c7d9485d1d0/` | Official Python rows joined to the reviewed exact-`v1.1` availability evidence | Complete immutable formal PCE input; 113 cases |
 | `SWE-PolyBench/polybench-pce-runs/formal/python113-v11-pce-20260814/` | Complete local mirror of formal PCE trajectories, attempts, checkpoints, evaluator evidence and controller state | Raw formal evidence; 113 cases, not a Checker input |
@@ -53,6 +53,7 @@ snapshot are frozen. Their artifact classes must not be mixed:
 | `SWE-PolyBench/polybench-pce-runs/formal/` | Formal raw PCE evidence, including failed attempts and operational outcomes | No; derive a reviewed validation snapshot first |
 | `SWE-PolyBench/polybench-guideline-validation-datasets/` | Labelled validation inputs derived by a frozen, guideline-independent cleaning policy | Yes, for Checker-only external validation; never for GEPA/Reflection |
 | `SWE-PolyBench/polybench-guideline-validation-guidelines/` | Guidelines frozen before PolyBench results are viewed | Yes, as immutable model inputs only |
+| `../configs/frozen_guidelines/` | Compact tracked guideline bundles with exact text and multi-run provenance | Yes; current authority for the staged five-guideline evaluation |
 
 The complete formal input snapshot is
 `20260814_python113_v11_8c7d9485d1d0`: 113 exact `v1.1` SIFs are available and

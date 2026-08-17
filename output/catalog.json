@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "generated_at": "2026-08-15",
+  "generated_at": "2026-08-17",
   "active_method": "online_gepa_planning_rules",
   "active_offline_method": "offline_gepa_plan_review_guideline",
   "default_agent_scope": [
@@ -8,7 +8,7 @@
     "output/catalog.json",
     "output/SWE-bench_Verified/verified-round1-gepa-datasets/20260614_482_fdc056ae85df",
     "output/SWE-bench_Verified/gepa-rules",
-    "output/SWE-PolyBench/polybench-guideline-validation-guidelines/20260811_seed-c1-c2-c3_3293f8e925b8",
+    "configs/frozen_guidelines/20260817_seed-b8c1-b8c2-b3x3c3-b3x3c6_0e1f8d7bd876",
     "output/SWE-PolyBench/polybench-pce-inputs/20260814_python113_v11_8c7d9485d1d0",
     "output/SWE-PolyBench/polybench-guideline-validation-datasets/20260815_python111_testparsed_26dad63b5cf3"
   ],
@@ -26,13 +26,26 @@
     "source_excluded_instances": 2,
     "placeholder_excluded_instances": 0,
     "historical_198_192_status": "unsafe_audit_only",
-    "guideline_bundle": "20260811_seed-c1-c2-c3_3293f8e925b8",
+    "guideline_bundle": "20260817_seed-b8c1-b8c2-b3x3c3-b3x3c6_0e1f8d7bd876",
+    "guideline_bundle_content_sha256": "0e1f8d7bd876c4d7f1760c1729ccb456afbc7034a34ba8f2f88d8f29478c85d6",
     "guidelines": [
       "seed",
-      "candidate_1",
-      "candidate_2",
-      "candidate_3"
-    ]
+      "b8_candidate_2",
+      "b3x3_candidate_6",
+      "b8_candidate_1",
+      "b3x3_candidate_3"
+    ],
+    "primary_guidelines": [
+      "seed",
+      "b8_candidate_2",
+      "b3x3_candidate_6"
+    ],
+    "reserve_guidelines": [
+      "b8_candidate_1",
+      "b3x3_candidate_3"
+    ],
+    "reserve_activation_status": "criterion_pending_before_primary_launch",
+    "check_only_status": "not_configured_or_started"
   },
   "active_polybench_image_preparation": {
     "classification": "operational_only",

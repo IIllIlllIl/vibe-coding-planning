@@ -3,7 +3,7 @@
 > Authority: planned external validation contract for the current standalone
 > Offline guideline method
 >
-> Last reviewed: 2026-08-15
+> Last reviewed: 2026-08-17
 
 ## Purpose And Non-Training Boundary
 
@@ -252,6 +252,26 @@ After data and image manifests are frozen, the existing additive
 reuses the current Checker and one-Agent-per-Slurm-task transport without GEPA
 or Reflection. The frozen 111-case snapshot now satisfies the data prerequisite;
 an active PolyBench check-only config has not yet been created.
+
+The guideline prerequisite is now also frozen. The tracked bundle is
+`configs/frozen_guidelines/20260817_seed-b8c1-b8c2-b3x3c3-b3x3c6_0e1f8d7bd876/`
+with content SHA-256
+`0e1f8d7bd876c4d7f1760c1729ccb456afbc7034a34ba8f2f88d8f29478c85d6`.
+It contains five exact strings selected before any new PolyBench Checker
+output: the common seed; minibatch-eight candidates 1 and 2; and train-only
+3x3 candidates 3 and 6. Its manifest binds every text to the completed source
+run's candidates, candidate metrics, run manifest and progress hashes.
+
+Evaluation is staged. The primary stage contains `seed`, `b8_candidate_2`, and
+`b3x3_candidate_6`, the two per-run accuracy winners. `b8_candidate_1` and
+`b3x3_candidate_3` are frozen reserve inputs representing their winners'
+shorter, more permissive direct parents. A quantitative meaning of "primary
+effect is insufficient" must be committed before the primary launch if reserve
+results are to remain part of a confirmatory external-validation protocol. If
+reserve activation is decided only after inspecting primary PolyBench outcomes,
+the reserve stage must be reported as exploratory and cannot be used to select
+the claimed external-validation winner. No guideline may be modified in either
+stage.
 
 The formal PCE run is now complete. Its 113 exact-`v1.1` source cases produced
 111 parsed-test outcomes, one Evaluate test timeout and one Code-stage

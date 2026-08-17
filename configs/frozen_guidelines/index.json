@@ -1,0 +1,15 @@
+{
+  "active_bundle_id": "20260817_seed-b8c1-b8c2-b3x3c3-b3x3c6_0e1f8d7bd876",
+  "bundles": [
+    {
+      "bundle_id": "20260817_seed-b8c1-b8c2-b3x3c3-b3x3c6_0e1f8d7bd876",
+      "bundle_path": "configs/frozen_guidelines/20260817_seed-b8c1-b8c2-b3x3c3-b3x3c6_0e1f8d7bd876",
+      "content_sha256": "0e1f8d7bd876c4d7f1760c1729ccb456afbc7034a34ba8f2f88d8f29478c85d6",
+      "source_run_ids": [
+        "offline-plan-guideline-hpc-accuracy-b8-default-accept-controller-timeout-8it-20260810",
+        "offline-plan-guideline-hpc-accuracy-b3x3-2it-smoke-postfix-20260816"
+      ]
+    }
+  ],
+  "schema_version": 1
+}
