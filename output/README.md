@@ -15,7 +15,8 @@ historical comparison, provenance, or reproduction.
 | `SWE-PolyBench/polybench-pce-inputs/20260814_python113_v11_8c7d9485d1d0/` | Official Python rows joined to the reviewed exact-`v1.1` availability evidence | Complete immutable formal PCE input; 113 cases |
 | `SWE-PolyBench/polybench-pce-runs/formal/python113-v11-pce-20260814/` | Complete local mirror of formal PCE trajectories, attempts, checkpoints, evaluator evidence and controller state | Raw formal evidence; 113 cases, not a Checker input |
 | `SWE-PolyBench/polybench-guideline-validation-datasets/20260815_python111_testparsed_26dad63b5cf3/` | Derived PolyBench Checker-only validation snapshot | Active immutable input; 111 parsed-test cases |
-| `SWE-PolyBench/polybench-pcce-runs/smoke/` | PCCE orchestration, review-loop, checkpoint and PC-to-CE platform evidence | Planned smoke output root; never formal validation evidence |
+| `SWE-PolyBench/polybench-pcce-runs/smoke/` | PCCE orchestration, review-loop, checkpoint and PC-to-CE platform evidence | Completed two-case platform smoke; never formal validation evidence |
+| `SWE-PolyBench/polybench-pcce-runs/formal/seed-python111-20260817/` | Formal seed-guideline PCCE deployment evaluation | Prepared new run identity; no result until formally launched and completed |
 | `SWE-PolyBench/polybench-pce-inputs/20260811_smoke2_transformers/` | Frozen two-row source and reviewed image-manifest copy staged to the PCE smoke | Smoke input only; not formal input |
 | `archive/tests/polybench-pce/` | Locally mirrored smoke3 diagnostic evidence and completed smoke4 evidence | Test only; remote working copies removed |
 | `SWE-bench_Verified/gepa-rules/offline-plan-verifier-balanced-b12-p2-case-reviews-8it-20260727/` | Formal local Offline result under the final pre-HPC experimental flow | Completed with warnings; retained comparison baseline |
@@ -54,8 +55,8 @@ snapshot are frozen. Their artifact classes must not be mixed:
 | `SWE-PolyBench/polybench-pce-runs/formal/` | Formal raw PCE evidence, including failed attempts and operational outcomes | No; derive a reviewed validation snapshot first |
 | `SWE-PolyBench/polybench-guideline-validation-datasets/` | Labelled validation inputs derived by a frozen, guideline-independent cleaning policy | Yes, for Checker-only external validation; never for GEPA/Reflection |
 | `SWE-PolyBench/polybench-guideline-validation-guidelines/` | Guidelines frozen before PolyBench results are viewed | Yes, as immutable model inputs only |
-| `SWE-PolyBench/polybench-pcce-runs/smoke/` | PCCE platform-flow evidence using provisional prompts | No |
-| `SWE-PolyBench/polybench-pcce-runs/formal/` | Future paired deployment-oriented guideline evaluation | Only after prompt/schema, guideline selection, metric, and threshold are frozen |
+| `SWE-PolyBench/polybench-pcce-runs/smoke/` | Completed PCCE platform-flow evidence | No |
+| `SWE-PolyBench/polybench-pcce-runs/formal/` | Paired deployment-oriented guideline evaluation with frozen run identities | Yes for the predeclared descriptive endpoints after the individual run completes |
 | `../configs/frozen_guidelines/` | Compact tracked guideline bundles with exact text and multi-run provenance | Yes; current authority for the staged five-guideline evaluation |
 
 The complete formal input snapshot is

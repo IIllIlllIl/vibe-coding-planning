@@ -51,6 +51,8 @@ poll cadence, controller resources, or remote workdir belongs in
 | `frozen_guidelines/20260817_seed-b8c1-b8c2-b3x3c3-b3x3c6_0e1f8d7bd876/` | Frozen text bundle | Tracked five-guideline PolyBench input frozen before check-only results: common seed plus minibatch-eight candidates 1/2 and 3x3 candidates 3/6. Primary evaluation uses seed and the two accuracy winners; the two direct-parent alternatives are reserve inputs. |
 | `polybench_pcce_hpc_smoke.yaml` | ULHPC Apptainer | Two-case PCCE platform-flow smoke using paired historical PCE plans, the frozen seed guideline, three workflow task attempts, and a distinct three-valid-rejection experimental budget. It owns dedicated Checker decision/feedback and Planner revision prompts; smoke evidence is not yet a formal method result. |
 | `polybench_pcce_supervisor_smoke.yaml` | Local tmux+caffeinate | Persistent launch identity for the two-case PCCE smoke. It reuses the shared HPC resume loop at the same ten-minute cadence as Offline and repeatedly submits 10-minute PCCE Controller slices until the workflow reaches a terminal result or blocking failure. |
+| `polybench_pcce_hpc_formal_seed.yaml` | ULHPC Apptainer | Formal PCCE evaluation of the frozen seed guideline over every member of the cleaned 111-case PolyBench snapshot. It freezes the smoke-accepted prompts, three valid-rejection method budget, three workflow attempts, and uncapped one-case Slurm arrays under a new formal run identity. |
+| `polybench_pcce_supervisor_formal_seed.yaml` | Local tmux+caffeinate | Clean-worktree-guarded formal seed launch identity. It advances the formal PCCE run with 10-minute Controller slices and polling while preserving the runtime config as method authority. |
 | `gepa_guideline_accuracy_b12_20260806_candidate1.md` | Prompt text | Exact best candidate from `offline-plan-guideline-hpc-accuracy-b12-8it-checker-timeout30m-formal-20260806`: candidate 1, validation accuracy `73/98`, semantic SHA-256 `17e8d1c1e0f96e53b8568fd28ca63d8525ca04911da6e0c604324297bfab9925`. |
 | `gepa_initial_guideline_minimal.md` | Prompt text | Default-accept minimal Offline guideline seed. It rejects only when available evidence clearly shows a material problem, while supplying no repository-investigation behavior, format, or review methodology. |
 | `gepa_initial_rules_minimal.md` | Historical prompt text | Frozen pre-guideline seed retained for archived configs and provenance. |
@@ -110,6 +112,15 @@ Start or inspect the matching unattended supervisor through
 `configs/polybench_pcce_supervisor_smoke.yaml`. The launch config is operational
 identity only; PCCE Agent, prompt, data, rejection-budget, and worker semantics
 remain entirely in `polybench_pcce_hpc_smoke.yaml` and the frozen inputs.
+
+The completed two-case smoke exercised both branches: one frozen plan passed
+the first review, while one was rejected, revised by the Planner, passed its
+second review, and then completed Code/Evaluate. Both CE outcomes were parsed
+and resolved, all workflow tasks completed on their first task attempt, and no
+Slurm task remained active. The formal seed pair
+`polybench_pcce_hpc_formal_seed.yaml` and
+`polybench_pcce_supervisor_formal_seed.yaml` therefore preserves the accepted
+method and transport while removing only the smoke's two-instance selector.
 
 The completed Python-199 SIF preheater named
 `gepa_verified_rules.yaml`, but this is not a GEPA experiment dependency:

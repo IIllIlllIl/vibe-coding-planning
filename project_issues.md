@@ -942,7 +942,7 @@ block 的频率与根因，再决定是否仅细化记录，或对反复出现�
   111-case dataset 也尚未由 submit wrapper stage 到 remote dataset root。也就是说 PCE、
   cleaning 和 guideline freezing 已完成，但 primary `111 x 3 = 333` Checker validation
   尚未配置或启动。
-- **PolyBench PCCE 部署场景评估设计与平台实现（2026-08-17，待 smoke）**：权威设计文档
+- **PolyBench PCCE 部署场景评估设计与平台实现（2026-08-17，smoke 已完成）**：权威设计文档
   `docs/polybench-pcce.md`。PCCE 把已完成正式 PCE 的冻结 plan 作为每个 case 的第一轮
   输入，与无 Checker 的历史 PCE 形成 plan-boundary 配对基线；第一轮不重新采样
   Planner，只有 Checker 有效拒绝后才让 Planner 根据结构化反馈生成完整替换 plan。
@@ -979,3 +979,16 @@ block 的频率与根因，再决定是否仅细化记录，或对反复出现�
   runtime config SHA-256 仍为 `d2f88df098004bfc9b699c9d80f5ad8f296be3b3df892ed5ee95f090cc91671b`；
   PCCE 源码/配置未随 supervisor 修改。wrapper 在 resume 时保留既有 manifest 的实验
   Git head，而每次实际 Controller head 仍由 `ulhpc-submit` manifest/log 记录。
+  supervisor 后续自动完成 reject -> Planner revision -> second review -> CE -> final
+  collection：首例首轮通过，第二例首轮拒绝、修订后第二轮通过；两例新的 CE 均得到
+  parsed resolved outcome。所有 PC/CE workflow task 都在 attempt 1 完成，最终无活动
+  Slurm task；smoke 的 2/2 只验收流程，不作为 guideline 效果证据。
+- **正式 seed PCCE 已准备、尚未启动（2026-08-17）**：新增
+  `polybench_pcce_hpc_formal_seed.yaml` 与
+  `polybench_pcce_supervisor_formal_seed.yaml`。正式 run identity 为
+  `polybench-pcce-runs/formal/seed-python111-20260817`，使用冻结 seed 和全部 111 个
+  cleaned cases；除移除 smoke 的两例筛选外，Checker/Planner prompts、三次有效拒绝、
+  三次 workflow attempts、fresh CE、无 `%N` array 和 `1 CPU / 4G / 125min` worker
+  均保持不变。预声明报告 overall resolved、同例历史 PCE resolved、paired difference、
+  first-review pass、pass-after-revision 与 rejection-exhaustion；本条不记录未发生的运行
+  结果，也不设查看结果后的 post-hoc threshold。

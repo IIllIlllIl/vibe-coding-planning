@@ -93,7 +93,9 @@ scheduling to Slurm.
 
 PCCE is advanced unattended through the same local `tmux + caffeinate`
 supervisor service as GEPA, using
-`configs/polybench_pcce_supervisor_smoke.yaml`. The shared resume loop accepts
+`configs/polybench_pcce_supervisor_smoke.yaml` for the completed platform smoke
+or `configs/polybench_pcce_supervisor_formal_seed.yaml` for the prepared formal
+seed run. The shared resume loop accepts
 the PCCE runtime through `--config`, observes `hpc_tasks/**/task_state.json`,
 and submits a new 10-minute Controller only when no Controller or worker is
 active. It has no iteration target and stops on terminal `result.json` or a
@@ -150,8 +152,14 @@ PCCE keeps its paired deployment evaluation separate as well:
 
 ```text
 output/SWE-PolyBench/polybench-pcce-runs/smoke/   platform-flow evidence only
-output/SWE-PolyBench/polybench-pcce-runs/formal/  future frozen-method evidence
+output/SWE-PolyBench/polybench-pcce-runs/formal/  formal frozen-method evidence
 ```
+
+The prepared first formal identity is
+`polybench-pcce-runs/formal/seed-python111-20260817`, driven by
+`configs/polybench_pcce_hpc_formal_seed.yaml` and its matching supervisor
+launch config. It selects all 111 cleaned cases and the frozen seed guideline;
+it must not reuse the completed smoke run directory.
 
 Image-download provenance remains under the Iris operations directory and is
 not a PCE run output. A reviewed copy is staged into the frozen input snapshot;

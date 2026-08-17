@@ -623,6 +623,47 @@ def test_pcce_supervisor_launch_config_uses_shared_resume_loop(
     assert "--config configs/polybench_pcce_hpc_smoke.yaml" in invocation
 
 
+def test_formal_pcce_supervisor_launch_config_uses_formal_seed_runtime(
+    tmp_path: Path,
+) -> None:
+    fake_bin = tmp_path / "bin"
+    fake_bin.mkdir()
+    tmux_log = tmp_path / "tmux.log"
+    tmux = fake_bin / "tmux"
+    tmux.write_text(
+        "#!/usr/bin/env bash\n"
+        f"printf '%s\\n' \"$*\" >> {tmux_log}\n"
+        'if [[ "$1" == has-session ]]; then exit 1; fi\n'
+        "exit 0\n",
+        encoding="utf-8",
+    )
+    tmux.chmod(0o755)
+    env = os.environ.copy()
+    env["PATH"] = f"{fake_bin}{os.pathsep}{env['PATH']}"
+
+    result = subprocess.run(
+        [
+            "python",
+            str(SERVICE_SCRIPT),
+            "start",
+            "--launch-config",
+            "configs/polybench_pcce_supervisor_formal_seed.yaml",
+        ],
+        cwd=REPO_ROOT,
+        capture_output=True,
+        text=True,
+        check=False,
+        env=env,
+    )
+
+    assert result.returncode == 0, result.stderr
+    invocation = tmux_log.read_text(encoding="utf-8")
+    assert "hpc_resume_loop.py --poll-interval 600" in invocation
+    assert "--batch-script scripts/hpc_submit_polybench_pcce.sh" in invocation
+    assert "--config configs/polybench_pcce_hpc_formal_seed.yaml" in invocation
+    assert "--require-clean-worktree" in invocation
+
+
 def test_hpc_supervisor_waits_for_workers_without_submitting(tmp_path: Path) -> None:
     fake_bin = tmp_path / "bin"
     fake_bin.mkdir()

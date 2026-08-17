@@ -22,7 +22,8 @@ Agent tasks。旧 Offline 24h 单作业和自动修复 preheat watchdog 已删�
 正式运行应使用受版本控制的 supervisor launch config，不要从历史日志拼接启动
 参数。Online 当前配置是 `configs/online_gepa_supervisor.yaml`；Offline HPC 应使用
 独立的新配置与 run identity；PCCE smoke 使用
-`configs/polybench_pcce_supervisor_smoke.yaml`。
+`configs/polybench_pcce_supervisor_smoke.yaml`，正式 seed PCCE 使用
+`configs/polybench_pcce_supervisor_formal_seed.yaml`。
 
 ## SIF 工具
 

@@ -227,13 +227,32 @@ and the paired difference from historical PCE. A rejected-after-three case is
 a PCCE method failure for end-to-end utility, but an infrastructure-incomplete
 case has no manufactured research label.
 
-## Decisions Still Required Before A Formal Run
+## Accepted Smoke And Formal Seed Run
 
-- freeze the exact Checker decision/feedback schema and minimal prompt change;
-- freeze the Planner revision prompt and the information it may see;
-- state whether all frozen primary guidelines receive PCCE or whether PCCE is
-  a later evaluation of a preselected guideline;
-- define the confirmatory paired statistic and acceptance threshold before
-  viewing PCCE outcomes;
-- execute and accept the isolated platform smoke, then assign a new formal run
-  identity separate from PCE and Checker-only output roots.
+The two-case platform smoke completed the full supervised workflow. One case
+passed its first Checker review; the other was rejected, received a fresh
+Planner revision, passed its second review, and then entered Code/Evaluate.
+Both CE tasks produced parsed resolved outcomes. No workflow task exhausted
+its retry budget, and the supervisor stopped only after observing the terminal
+result. This accepts the isolated PCCE transport, phase-boundary resume, and
+prompt/schema contract for the first formal run; the 2/2 smoke result is not
+method-quality evidence.
+
+The first formal PCCE evaluation deliberately uses only the frozen seed
+guideline. Its config is `configs/polybench_pcce_hpc_formal_seed.yaml`, its
+launch identity is `configs/polybench_pcce_supervisor_formal_seed.yaml`, and its
+new output root is
+`output/SWE-PolyBench/polybench-pcce-runs/formal/seed-python111-20260817`.
+An empty `pcce.instance_ids` selects all 111 cases from the immutable cleaned
+snapshot. Everything else is held equal to the accepted smoke: exact first PCE
+plans, Checker and Planner prompts, three valid-rejection limit, three workflow
+task attempts, fresh CE execution, uncapped one-case arrays, and `1 CPU / 4G /
+125min` workers.
+
+This seed run establishes the no-learned-guideline PCCE deployment baseline.
+Primary descriptive endpoints are overall PCCE resolved rate, historical PCE
+resolved rate on the same cases, their paired difference, first-review pass
+rate, pass-after-revision rate, and rejection-exhaustion rate. It does not set
+a post-hoc guideline acceptance threshold. Later candidate-guideline PCCE runs
+must retain a separate run identity and must not use seed outcomes to modify
+their already frozen guideline text.

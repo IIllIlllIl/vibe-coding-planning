@@ -13,6 +13,7 @@ from src.optimization.models import CheckerOutput, RepositoryEvidence
 from src.optimization.audit import text_sha256
 from src.polybench_pcce.config import load_polybench_pcce_config
 from src.polybench_pcce.controller import _review_assignments, run_polybench_pcce
+from src.polybench_pcce.dataset import load_pcce_cases
 from src.polybench_pcce.models import PCCECase, PCReviewAssignment
 from src.polybench_pcce.runner import PolyBenchPCCERunner
 from src.polybench_pcce.runner import validate_pcce_checker_output
@@ -63,6 +64,32 @@ def _config(tmp_path: Path):
         pce=replace(config.pce, run_dir=tmp_path / "run"),
         checker=replace(config.checker, run_dir=tmp_path / "run"),
     )
+
+
+def test_formal_seed_config_selects_all_frozen_cases_and_preserves_smoke_method():
+    smoke = load_polybench_pcce_config(
+        ROOT / "configs/polybench_pcce_hpc_smoke.yaml",
+        require_api_keys=False,
+    )
+    formal = load_polybench_pcce_config(
+        ROOT / "configs/polybench_pcce_hpc_formal_seed.yaml",
+        require_api_keys=False,
+    )
+    cases, _ = load_pcce_cases(formal)
+
+    assert len(cases) == 111
+    assert formal.instance_ids == ()
+    assert formal.guideline_path == smoke.guideline_path
+    assert formal.checker_prompt == smoke.checker_prompt
+    assert formal.checker_instance_template == smoke.checker_instance_template
+    assert formal.plan_revision_prompt == smoke.plan_revision_prompt
+    assert (
+        formal.plan_revision_instance_template
+        == smoke.plan_revision_instance_template
+    )
+    assert formal.max_review_rejections == smoke.max_review_rejections == 3
+    assert formal.hpc.max_task_attempts == smoke.hpc.max_task_attempts == 3
+    assert formal.run_dir != smoke.run_dir
 
 
 def test_review_budget_advances_only_for_completed_rejection() -> None:
@@ -401,8 +428,16 @@ def test_controller_routes_pass_to_ce_and_stops_after_three_rejections(
     assert by_id["pass"]["accepted_review_index"] == 1
 
 
+@pytest.mark.parametrize(
+    "config_path",
+    [
+        "configs/polybench_pcce_hpc_smoke.yaml",
+        "configs/polybench_pcce_hpc_formal_seed.yaml",
+    ],
+)
 def test_submit_wrapper_stages_baseline_directory_and_keeps_dry_run(
     tmp_path: Path,
+    config_path: str,
 ) -> None:
     fake = tmp_path / "ulhpc-submit"
     fake.write_text("#!/usr/bin/env bash\nprintf '%s\\n' \"$@\"\n", encoding="utf-8")
@@ -414,7 +449,7 @@ def test_submit_wrapper_stages_baseline_directory_and_keeps_dry_run(
             "bash",
             "scripts/hpc_submit_polybench_pcce.sh",
             "--config",
-            "configs/polybench_pcce_hpc_smoke.yaml",
+            config_path,
             "--dry-run",
         ],
         cwd=ROOT,
