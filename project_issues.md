@@ -973,7 +973,8 @@ block 的频率与根因，再决定是否仅细化记录，或对反复出现�
   一次 mini-swe action-format 错误（0 block / 2 blocks），均由同一 Agent 根据详细
   parser feedback 修复。初始入口只提交一次 Controller slice，worker 完成后无人自动
   收集，暴露出 PCCE 尚未接入 supervisor。现已让共享 `hpc_resume_loop.py` 同时接受
-  非 GEPA `--config`，并新增版本化 `polybench_pcce_supervisor_smoke.yaml`；它只轮询
+  非 GEPA `--config`，并新增版本化 `polybench_pcce_supervisor_smoke.yaml`；它按与
+  Offline 相同的 10 分钟 cadence，只轮询
   durable Controller/task state 和重提 Controller，不改变 PCCE 实验状态。当前 run 的
   runtime config SHA-256 仍为 `d2f88df098004bfc9b699c9d80f5ad8f296be3b3df892ed5ee95f090cc91671b`；
   PCCE 源码/配置未随 supervisor 修改。wrapper 在 resume 时保留既有 manifest 的实验

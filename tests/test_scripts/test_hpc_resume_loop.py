@@ -618,7 +618,7 @@ def test_pcce_supervisor_launch_config_uses_shared_resume_loop(
 
     assert result.returncode == 0, result.stderr
     invocation = tmux_log.read_text(encoding="utf-8")
-    assert "hpc_resume_loop.py --poll-interval 300" in invocation
+    assert "hpc_resume_loop.py --poll-interval 600" in invocation
     assert "--batch-script scripts/hpc_submit_polybench_pcce.sh" in invocation
     assert "--config configs/polybench_pcce_hpc_smoke.yaml" in invocation
 

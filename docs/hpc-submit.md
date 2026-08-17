@@ -97,7 +97,7 @@ supervisor service as GEPA, using
 the PCCE runtime through `--config`, observes `hpc_tasks/**/task_state.json`,
 and submits a new 10-minute Controller only when no Controller or worker is
 active. It has no iteration target and stops on terminal `result.json` or a
-blocking `controller_status.json`. A five-minute local poll consumes no HPC
+blocking `controller_status.json`. A ten-minute local poll consumes no HPC
 allocation.
 
 When a PCCE run already has a manifest, a later Controller submission preserves

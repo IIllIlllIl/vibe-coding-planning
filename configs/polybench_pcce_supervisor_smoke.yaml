@@ -3,7 +3,7 @@ session: polybench-pcce-paired-two-case-smoke-20260817
 log: .local/hpc-supervisor/polybench-pcce-paired-two-case-smoke-20260817.log
 arguments:
   - --poll-interval
-  - "300"
+  - "600"
   - --slice-time
   - "00:10:00"
   - --max-runs
