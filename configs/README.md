@@ -49,6 +49,7 @@ poll cadence, controller resources, or remote workdir belongs in
 | `offline_gepa_hpc_3x3_8it_extension_20260816.yaml` | ULHPC Apptainer | Cumulative eight-proposal target for the same post-fix checkpoint and candidate tree. Only the target, metric-call fail-safe/projection, and operational task config identity differ from the retained two-proposal runtime config. |
 | `offline_gepa_supervisor_3x3_8it_extension_20260816.yaml` | Local tmux+caffeinate | New clean-worktree-guarded supervisor identity that performs the native 2-to-8 iteration-target transition, then resumes the ordinary Offline flow against the same persistent run directory. |
 | `frozen_guidelines/20260817_seed-b8c1-b8c2-b3x3c3-b3x3c6_0e1f8d7bd876/` | Frozen text bundle | Tracked five-guideline PolyBench input frozen before check-only results: common seed plus minibatch-eight candidates 1/2 and 3x3 candidates 3/6. Primary evaluation uses seed and the two accuracy winners; the two direct-parent alternatives are reserve inputs. |
+| `polybench_pcce_hpc_smoke.yaml` | ULHPC Apptainer | Two-case PCCE platform-flow smoke using paired historical PCE plans, the frozen seed guideline, three workflow task attempts, and a distinct three-valid-rejection experimental budget. It owns dedicated Checker decision/feedback and Planner revision prompts; smoke evidence is not yet a formal method result. |
 | `gepa_guideline_accuracy_b12_20260806_candidate1.md` | Prompt text | Exact best candidate from `offline-plan-guideline-hpc-accuracy-b12-8it-checker-timeout30m-formal-20260806`: candidate 1, validation accuracy `73/98`, semantic SHA-256 `17e8d1c1e0f96e53b8568fd28ca63d8525ca04911da6e0c604324297bfab9925`. |
 | `gepa_initial_guideline_minimal.md` | Prompt text | Default-accept minimal Offline guideline seed. It rejects only when available evidence clearly shows a material problem, while supplying no repository-investigation behavior, format, or review methodology. |
 | `gepa_initial_rules_minimal.md` | Historical prompt text | Frozen pre-guideline seed retained for archived configs and provenance. |
@@ -91,6 +92,17 @@ frozen 113-case exact-`v1.1` input. It uses a separate
 uncapped Slurm element per task, and retains the smoke-proven `1 CPU / 4G /
 125min` worker boundary with three total attempts. It does not run GEPA,
 Reflection, or guideline evaluation.
+
+`polybench_pcce_hpc_smoke.yaml` is additive and does not alter the completed
+PCE or Offline GEPA configs. It reads two members of the frozen 111-case
+snapshot, joins their exact historical PCE plans, and writes only below
+`polybench-pcce-runs/smoke/`. It is advanced through
+`scripts/hpc_submit_polybench_pcce.sh`. Workflow `task_attempt` is controlled
+by `hpc.max_task_attempts`; the independent experimental rejection limit is
+`pcce.max_review_rejections` and is currently fixed at three. The two cases are
+the smallest practical branch-oriented smoke: they do not guarantee both
+Checker decisions, but allow proceed and reject/revision behavior to surface
+without submitting the formal 111-case evaluation.
 
 The completed Python-199 SIF preheater named
 `gepa_verified_rules.yaml`, but this is not a GEPA experiment dependency:

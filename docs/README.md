@@ -20,6 +20,7 @@ Read in this order:
 | [`gepa-rule-optimization.md`](gepa-rule-optimization.md) | Online GEPA optimization semantics and evidence contract |
 | [`offline-gepa.md`](offline-gepa.md) | Offline GEPA Checker boundary, metric, stopping, artifacts, and resume contract |
 | [`offline-polybench-validation.md`](offline-polybench-validation.md) | Current PolyBench-199 image preparation, PCE regeneration, exact-image provenance, and guideline-only generalization boundary |
+| [`polybench-pcce.md`](polybench-pcce.md) | Planned paired PolyBench Plan-Check-Code-Evaluate deployment evaluation, including review and workflow retry semantics |
 | [`hpc-submit.md`](hpc-submit.md) | Current ULHPC submission, supervisor, and FairShare operations |
 | [`../configs/README.md`](../configs/README.md) | Runtime-versus-launch configuration ownership and active config index |
 

@@ -8,7 +8,7 @@ import os
 from pathlib import Path
 import signal
 import threading
-from typing import Any, Protocol
+from typing import Any, Callable, Protocol
 
 from src.agents._deps import (
     _infer_litellm_prefix,
@@ -47,6 +47,8 @@ class CheckerRunner(Protocol):
         *,
         retry_feedback: str = "",
         trajectory_journal_path: Path | None = None,
+        output_validator: Callable[[dict[str, Any]], CheckerOutput] = ...,
+        completion_callback: Callable[[CheckerOutput], None] | None = None,
     ) -> CheckerOutput: ...
 
 
@@ -69,9 +71,7 @@ def _checker_agent_deadline(timeout_seconds: int):
         yield
         return
     if threading.current_thread() is not threading.main_thread():
-        raise RuntimeError(
-            "Checker Agent soft deadline requires main-thread execution"
-        )
+        raise RuntimeError("Checker Agent soft deadline requires main-thread execution")
     previous_handler = signal.getsignal(signal.SIGALRM)
 
     def handle_timeout(signum, frame):
@@ -155,7 +155,9 @@ def _asi_leakage_categories(
     leaked = []
     for key, value in case.asi.items():
         serialized = (
-            value if isinstance(value, str) else json.dumps(
+            value
+            if isinstance(value, str)
+            else json.dumps(
                 value,
                 ensure_ascii=False,
                 sort_keys=True,
@@ -220,6 +222,10 @@ class DockerChecker:
         *,
         retry_feedback: str = "",
         trajectory_journal_path: Path | None = None,
+        output_validator: Callable[
+            [dict[str, Any]], CheckerOutput
+        ] = validate_checker_output,
+        completion_callback: Callable[[CheckerOutput], None] | None = None,
     ) -> CheckerOutput:
         # Slurm owns the HPC wall-time. The worker only executes and journals
         # evidence; the resumed controller classifies a terminal Slurm state.
@@ -229,18 +235,20 @@ class DockerChecker:
                 rules,
                 retry_feedback=retry_feedback,
                 trajectory_journal_path=trajectory_journal_path,
+                output_validator=output_validator,
+                completion_callback=completion_callback,
             )
 
         # Local execution has no external scheduler, so its optional soft
         # deadline remains a local transport safeguard.
-        with _checker_agent_deadline(
-            self.config.checker.agent_timeout_seconds
-        ):
+        with _checker_agent_deadline(self.config.checker.agent_timeout_seconds):
             return self._run_session(
                 case,
                 rules,
                 retry_feedback=retry_feedback,
                 trajectory_journal_path=trajectory_journal_path,
+                output_validator=output_validator,
+                completion_callback=completion_callback,
             )
 
     def _run_session(
@@ -250,6 +258,10 @@ class DockerChecker:
         *,
         retry_feedback: str = "",
         trajectory_journal_path: Path | None = None,
+        output_validator: Callable[
+            [dict[str, Any]], CheckerOutput
+        ] = validate_checker_output,
+        completion_callback: Callable[[CheckerOutput], None] | None = None,
     ) -> CheckerOutput:
         self.prepare(case)
         DefaultAgent, LitellmModel, _ = import_minisweagent()
@@ -259,9 +271,7 @@ class DockerChecker:
                 self.config.checker.api_base,
             ),
             model_kwargs={
-                "api_key": __import__("os").environ[
-                    self.config.checker.api_key_env
-                ],
+                "api_key": __import__("os").environ[self.config.checker.api_key_env],
                 "api_base": self.config.checker.api_base,
                 "temperature": 0.0,
             },
@@ -333,14 +343,13 @@ class DockerChecker:
             )
             if not final_submission.strip():
                 raise CheckerOutputContractError(
-                    "checker did not submit JSON output "
-                    f"(exit_status={exit_status})"
+                    f"checker did not submit JSON output (exit_status={exit_status})"
                 )
             try:
                 value = json.loads(final_submission)
                 if not isinstance(value, dict):
                     raise ValueError("checker submission must be a JSON object")
-                parsed = validate_checker_output(value)
+                parsed = output_validator(value)
             except (ValueError, json.JSONDecodeError) as exc:
                 raise CheckerOutputContractError(
                     "checker final submission invalid "
@@ -364,12 +373,19 @@ class DockerChecker:
                     "Checker trajectory contains forbidden ASI content: "
                     + ", ".join(leaked_categories)
                 )
-            return CheckerOutput(
+            completed = CheckerOutput(
                 parsed.predicted_resolved,
                 parsed.decision_reason,
                 parsed.repository_evidence,
                 tuple(agent.messages),
+                parsed.revision_feedback,
             )
+            # PCCE uses this boundary to make a valid Agent decision durable
+            # before disposable-environment cleanup. Existing Offline callers
+            # omit the callback and retain identical behavior.
+            if completion_callback is not None:
+                completion_callback(completed)
+            return completed
         except (CheckerAgentTimeout, Exception) as exc:
             if agent is not None:
                 try:

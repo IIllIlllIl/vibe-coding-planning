@@ -39,6 +39,8 @@ escalated network access.
 | Offline contamination repair task | 1 CPU / 4G | 35min; submitted only after a deterministic hit |
 | PolyBench PCE controller slice | 1 CPU / 4G | 10min; submits, collects, or selectively retries one frozen batch |
 | PolyBench PCE array element | 1 CPU / 4G | 125min hard upper bound; one instance with fresh Plan, Code, and Evaluate containers |
+| PolyBench PCCE controller slice | 1 CPU / 4G | 10min; collects or submits one PC review wave or the final CE batch |
+| PolyBench PCCE PC/CE array element | 1 CPU / 4G | 125min hard upper bound; one case, with no project-level array concurrency cap |
 
 Each array element executes one PCT rollout or one Reviewer. Synthesis uses a
 single-element array so it follows the same submission/status contract.
@@ -77,6 +79,18 @@ draw only for phases that genuinely did not complete: repeated execution is
 assumed not to change the underlying result distribution merely because it is
 a later attempt. No Agent conversation is resumed mid-phase.
 
+PolyBench PCCE uses the separate
+`scripts/hpc_submit_polybench_pcce.sh` wrapper and
+`src/polybench_pcce/` controller. The first PC wave reviews the exact frozen
+historical PCE plan. Later PC waves contain one fresh Planner revision and one
+fresh Checker review; a pass routes the case to a separate CE task that reuses
+the PCE Code/Evaluate phase runner. Every completed Agent phase is checkpointed
+before advancing. Workflow task retries resume only the first incomplete phase
+and do not increment the experimental rejection counter. Only a valid Checker
+rejection increments that counter; the third rejection terminates the method
+without Code. Each PC/CE batch submits all eligible cases without `%N`, leaving
+scheduling to Slurm.
+
 Before increasing resources, inspect `sacct` and FairShare. More than 4G with
 one CPU requires measurement-based justification.
 
@@ -113,6 +127,13 @@ PolyBench PCE keeps the three artifact roles separate:
 output/SWE-PolyBench/polybench-pce-inputs/       frozen source/image inputs
 output/SWE-PolyBench/polybench-pce-runs/smoke/   platform-smoke evidence only
 output/SWE-PolyBench/polybench-pce-runs/formal/  future formal raw PCE evidence
+```
+
+PCCE keeps its paired deployment evaluation separate as well:
+
+```text
+output/SWE-PolyBench/polybench-pcce-runs/smoke/   platform-flow evidence only
+output/SWE-PolyBench/polybench-pcce-runs/formal/  future frozen-method evidence
 ```
 
 Image-download provenance remains under the Iris operations directory and is

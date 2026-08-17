@@ -173,6 +173,7 @@ are under `output/archive/` and must not be mixed into current score analysis.
 | `configs/gepa_verified_rules.yaml` | Current Offline HPC experiment configuration |
 | `configs/offline_gepa_supervisor.yaml` | Offline controller/supervisor launch identity |
 | `docs/offline-polybench-validation.md` | Current PolyBench-199 image preparation, PCE regeneration, and guideline-only generalization contract |
+| `docs/polybench-pcce.md` | Planned paired Plan-Check-Code-Evaluate deployment evaluation and its two independent attempt layers |
 | `docs/knowledge/` | Reusable lessons extracted from historical methods |
 | `docs/reference/` | GEPA and seed-rule provenance |
 | `docs/archive/` | Non-authoritative historical documents |

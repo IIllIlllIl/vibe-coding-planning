@@ -52,6 +52,8 @@ class CheckerOutput:
     decision_reason: str
     repository_evidence: tuple[RepositoryEvidence, ...]
     trajectory: tuple[dict[str, Any], ...] = ()
+    # PCCE-only actionable feedback. Offline classification leaves this empty.
+    revision_feedback: str = ""
 
     def to_dict(self, *, include_trajectory: bool = False) -> dict[str, Any]:
         value: dict[str, Any] = {

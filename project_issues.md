@@ -942,3 +942,24 @@ block 的频率与根因，再决定是否仅细化记录，或对反复出现�
   111-case dataset 也尚未由 submit wrapper stage 到 remote dataset root。也就是说 PCE、
   cleaning 和 guideline freezing 已完成，但 primary `111 x 3 = 333` Checker validation
   尚未配置或启动。
+- **PolyBench PCCE 部署场景评估设计与平台实现（2026-08-17，待 smoke）**：权威设计文档
+  `docs/polybench-pcce.md`。PCCE 把已完成正式 PCE 的冻结 plan 作为每个 case 的第一轮
+  输入，与无 Checker 的历史 PCE 形成 plan-boundary 配对基线；第一轮不重新采样
+  Planner，只有 Checker 有效拒绝后才让 Planner 根据结构化反馈生成完整替换 plan。
+  设计严格区分流程层 `task_attempt` 与实验层 `review_rejection`：前者只恢复未完成的
+  Slurm/Agent 原子阶段，不消耗研究预算且不向 Agent 暴露失败尝试；后者只在 PC 正常
+  完成并得到有效拒绝时递增，最多三次有效拒绝，第三次拒绝后不进入 Code。任意一轮
+  `proceed` 后进入新的 Code-Evaluate 执行。PCCE 使用独立 controller/config/run root，
+  不修改现有 PCE、Online 或 Offline GEPA 流程。已新增独立
+  `src/polybench_pcce/` controller/worker/PC-CE Slurm transport、原子
+  plan/checker/code/evaluate checkpoint、两案例 smoke config 与 `ulhpc-submit` 入口；
+  相关 PCCE/PCE/check-only 与 submit-wrapper dry-run 回归最初共 26 项通过。Checker
+  现使用独立的 `should_proceed`、`decision_reason`、`revision_feedback` schema；Planner
+  使用独立修订 prompt，根据 issue、previous plan 和 feedback 生成完整替换 plan，但不
+  承担是否通过的决策。两个 Agent 都在有效输出后、cleanup 前写入 identity-bound 原子
+  checkpoint；Controller 驱动的流程重试可从 checkpoint 封装结果而不重跑 Agent。CE
+  manifest 同时绑定 accepted review、accepted plan 文本及其 SHA-256。Checker/Planner
+  prompt 行为、正式比较指标、验收阈值与参与的 guideline 集合仍须在正式运行前冻结。
+  全量 pytest 尚未进入执行，因既有 `login_sif_preheat_watchdog.py` 在 collection 时
+  仍导入已不存在的
+  `DEFAULT_APPTAINER_CACHE_DIR`。该问题不在本次 PCCE 修改路径中，暂未顺带修复。
