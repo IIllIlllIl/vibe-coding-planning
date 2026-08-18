@@ -11,7 +11,7 @@ import yaml
 
 from scripts.tools.freeze_polybench_pce_source import freeze
 from src.environment.docker_env import DockerCapacityWindow
-from src.optimization.hpc.task_batch import TaskFiles
+from src.optimization.hpc.task_batch import TaskFiles, atomic_json
 from src.polybench_pce.config import load_polybench_pce_config
 from src.polybench_pce.controller import (
     _git_head,
@@ -23,11 +23,13 @@ from src.polybench_pce.evaluator import (
     PolyBenchEvaluatorOperationalError,
     evaluate_polybench_apptainer,
 )
+from src.polybench_pce.evaluator_resume import _prepare as prepare_evaluator_resume
 from src.polybench_pce.hpc_executor import (
     PolyBenchPCEHPCExecutor,
     build_array_script,
 )
 from src.polybench_pce.runner import PolyBenchPCERunner
+from src.polybench_pce.runner import checkpoint_identity
 from src.polybench_pce.worker import _category, _retry_disposition
 from src.exceptions import AgentTaskError, FatalError
 
@@ -793,3 +795,74 @@ def test_runner_preserves_raw_patch_and_filters_diagnostic_tests(
     assert (attempt_dir / "filtered_code_submission.patch").read_text() == _diff(
         "src/module.py"
     )
+
+
+def test_evaluator_resume_reidentifies_preserved_plan_and_code_checkpoints(
+    tmp_path: Path,
+) -> None:
+    snapshot, images, _ = _frozen_inputs(tmp_path)
+    config = load_polybench_pce_config(
+        _config(tmp_path, snapshot, images), require_api_keys=False
+    )
+    case = load_polybench_pce_cases(snapshot, images)[0][0]
+    source_fingerprint = "source-fingerprint"
+    atomic_json(
+        config.run_dir / "run_manifest.json",
+        {"execution_fingerprint": source_fingerprint},
+    )
+    source_checkpoints = (
+        config.run_dir
+        / "hpc_tasks"
+        / "pce"
+        / source_fingerprint
+        / "checkpoints"
+        / "task_0000"
+    )
+    source_identity = checkpoint_identity(
+        case, execution_fingerprint=source_fingerprint
+    )
+    for phase, payload in (
+        ("plan", {"plan": "preserved", "trajectory": [{"plan": True}]}),
+        (
+            "code",
+            {
+                "raw_patch": _diff("src/module.py"),
+                "patch": _diff("src/module.py"),
+                "patch_policy": {},
+                "trajectory": [{"code": True}],
+            },
+        ),
+    ):
+        atomic_json(
+            source_checkpoints / f"{phase}.json",
+            {
+                "schema_version": 1,
+                "checkpoint_identity": source_identity,
+                "phase": phase,
+                "payload": payload,
+            },
+        )
+
+    batch_dir, repair_fingerprint, tasks, skipped = prepare_evaluator_resume(
+        config, [case], repair_id="cleanenv-test"
+    )
+
+    assert skipped == []
+    assert [task.index for task in tasks] == [0]
+    target_identity = checkpoint_identity(
+        case, execution_fingerprint=repair_fingerprint
+    )
+    for phase in ("plan", "code"):
+        copied = json.loads(
+            (
+                batch_dir / "checkpoints" / "task_0000" / f"{phase}.json"
+            ).read_text()
+        )
+        assert copied["checkpoint_identity"] == target_identity
+        assert copied["phase"] == phase
+    assert not (
+        batch_dir / "checkpoints" / "task_0000" / "evaluate.json"
+    ).exists()
+    task_manifest = json.loads(tasks[0].manifest_path.read_text())
+    assert task_manifest["fingerprint"] == repair_fingerprint
+    assert task_manifest["instance_id"] == case.instance_id

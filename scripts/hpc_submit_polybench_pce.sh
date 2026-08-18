@@ -19,6 +19,7 @@ REMOTE_APPTAINER_TMP_DIR=""
 REMOTE_APPTAINER_SIF_CACHE_DIR=""
 ULHPC_CONFIG=""
 REQUIRE_CLEAN=0
+EVALUATOR_REPAIR_ID=""
 
 usage() {
   cat <<'USAGE'
@@ -33,6 +34,7 @@ Options:
   --time HH:MM:SS           controller slice walltime (default: 00:10:00)
   --remote-dir DIR          remote synced project directory
   --require-clean-worktree  reject an uncommitted source/config identity
+  --resume-evaluator ID     reuse validated Plan/Code checkpoints and rerun only Evaluate
   --submit                  submit; default is ulhpc-submit dry-run
   --dry-run                 explicitly retain dry-run mode
 
@@ -57,6 +59,7 @@ while [[ $# -gt 0 ]]; do
     --remote-apptainer-sif-cache-dir) REMOTE_APPTAINER_SIF_CACHE_DIR="$2"; shift 2 ;;
     --ulhpc-config) ULHPC_CONFIG="$2"; shift 2 ;;
     --require-clean-worktree) REQUIRE_CLEAN=1; shift ;;
+    --resume-evaluator) EVALUATOR_REPAIR_ID="$2"; shift 2 ;;
     --submit) SUBMIT=1; shift ;;
     --dry-run) SUBMIT=0; shift ;;
     -h|--help) usage; exit 0 ;;
@@ -74,6 +77,10 @@ PY
 )"
 if [[ -z "$CONFIG" ]]; then
   echo "ERROR: --config is required" >&2
+  exit 2
+fi
+if [[ -n "$EVALUATOR_REPAIR_ID" ]] && [[ ! "$EVALUATOR_REPAIR_ID" =~ ^[A-Za-z0-9_.-]+$ ]]; then
+  echo "ERROR: --resume-evaluator must match [A-Za-z0-9_.-]+" >&2
   exit 2
 fi
 CONFIG_ABS="$(
@@ -202,7 +209,12 @@ fi
 set +x
 source "\$REMOTE_ENV_FILE"
 test -n "\${DEEPSEEK_API_KEY:-}" || exit 2
-python3 scripts/run_polybench_pce_hpc.py --config "$CONFIG_REL"
+if [[ -n "$EVALUATOR_REPAIR_ID" ]]; then
+  python3 scripts/resume_polybench_pce_evaluator.py \
+    --config "$CONFIG_REL" --repair-id "$EVALUATOR_REPAIR_ID"
+else
+  python3 scripts/run_polybench_pce_hpc.py --config "$CONFIG_REL"
+fi
 EOF
 )
 
@@ -226,5 +238,6 @@ echo "[polybench-pce-submit] mode=$([[ $SUBMIT -eq 1 ]] && echo submit || echo d
 echo "[polybench-pce-submit] config=$CONFIG_REL"
 echo "[polybench-pce-submit] dataset=$DATASET_REL"
 echo "[polybench-pce-submit] run=$RUN_REL"
+echo "[polybench-pce-submit] evaluator_repair=${EVALUATOR_REPAIR_ID:-none}"
 echo "[polybench-pce-submit] controller_resources=$CPUS CPU/$MEM/$TIME_LIMIT"
 "${CMD[@]}"

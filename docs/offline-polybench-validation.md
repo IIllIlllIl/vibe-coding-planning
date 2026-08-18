@@ -374,3 +374,11 @@ did not execute, so the 59/52 derived label snapshot is frozen for provenance
 but is not score-usable until Evaluate is rerun from the preserved Plan/Code
 evidence under the clean-environment runtime. PolyBench validation remains
 held out from guideline training throughout this repair.
+
+The evaluator-only recovery entry is
+`scripts/hpc_submit_polybench_pce.sh --resume-evaluator <repair-id>`. It creates
+an independent repair manifest and task batch under the original run's
+`evaluator_repairs/` directory, copies only identity-validated Plan and Code
+checkpoints, and starts each case at Evaluate. Original outputs remain the
+provenance authority for the pre-fix run; repaired outputs are never silently
+written over them.

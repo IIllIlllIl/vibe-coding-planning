@@ -61,6 +61,15 @@ scheduling. A smoke may run while the single login-node preheater downloads a
 different image only when every selected smoke SIF is already complete and
 hash-frozen and the two processes use separate Apptainer temporary paths.
 
+When evaluator semantics change but completed Plan/Code evidence remains the
+intended fixed input, use the wrapper's explicit `--resume-evaluator ID` mode.
+It validates and re-identifies the old Plan/Code checkpoints into a separate
+`evaluator_repairs/ID/` batch, leaves the original Evaluate checkpoints and
+outputs untouched, invokes no LLM, and reuses the ordinary Slurm task retry
+contract. Running the ordinary PCE controller after a semantic source change
+is not evaluator-only resume: its new fingerprint would create a new full PCE
+batch.
+
 The PCE worker command is the final foreground command in its Slurm script.
 Normal completion therefore exits immediately and releases the allocation;
 125 minutes is only a hard upper bound. There is no required final cleanup

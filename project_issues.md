@@ -36,6 +36,11 @@ evaluator 在 shell return code 126/127 时停止 parsing，并按 operational f
 PolyBench retry 分类和 Online parser 不被调用。下一步先以新、明确记录的 evaluator
 修复身份复用正式 PCE 的 frozen Plan/Code 输入重跑 Evaluate；确认结果后再决定 seed
 PCCE 的 Evaluate resume，禁止直接把旧 evaluate checkpoint 当作已完成。
+该 evaluator-only 入口现已实现为 PCE wrapper 的
+`--resume-evaluator <repair-id>`：它在原 run 下建立独立 repair manifest/batch，验证并
+重新绑定已有 Plan/Code checkpoint identity，不覆盖旧 Evaluate/output，不调用 LLM，
+并复用既有三次 task attempts。普通 PCE controller 在 evaluator source 改变后会产生
+新 fingerprint，因此不得冒充 evaluate-only resume。
 
 Offline 的独立 1it action-protocol smoke 已完成。它覆盖完整 384/98 split，完成
 122 metric calls；seed validation accuracy 为 `0.704082`、balanced accuracy
