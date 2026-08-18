@@ -430,6 +430,96 @@ def test_offline_checker_repetition_identity_is_fingerprinted_and_manifested(
     assert batch_manifest["repetition_indices"] == [0, 1]
 
 
+def test_shared_slurm_reopens_misclassified_checker_contract_block(tmp_path):
+    task = TaskFiles(
+        index=0,
+        instance_id="case",
+        manifest_path=tmp_path / "tasks" / "task_0000.json",
+        output_path=tmp_path / "outputs" / "task_0000.json",
+        attempts_dir=tmp_path / "attempts" / "task_0000",
+    )
+    atomic_json(task.manifest_path, {"instance_id": "case"})
+    atomic_json(
+        task.output_path,
+        {
+            "status": "blocking_failed",
+            "instance_id": "case",
+            "error_type": "CheckerOutputContractError",
+            "error": "Extra data after JSON",
+            "retry_disposition": "block_run",
+        },
+    )
+    atomic_json(
+        tmp_path / "task_state.json",
+        {
+            "schema_version": 1,
+            "fingerprint": "fingerprint",
+            "phase": "BLOCKED",
+            "active_attempt": 1,
+            "active_job_id": None,
+            "last_job_id": "123",
+            "terminal_failure": {
+                "failure_kind": "blocking_task_output",
+                "error": "blocking Slurm Agent task failure: case",
+                "attempt": 1,
+                "details": [
+                    {
+                        "instance_id": "case",
+                        "error_type": "CheckerOutputContractError",
+                        "error": "Extra data after JSON",
+                    }
+                ],
+            },
+        },
+    )
+    submissions: list[Path] = []
+
+    def submit(script: Path) -> str:
+        submissions.append(script)
+        return "456"
+
+    def write_script(indices, attempt):
+        assert list(indices) == [0]
+        assert attempt == 2
+        path = tmp_path / "attempt_02.sbatch"
+        path.write_text("#!/bin/sh\n", encoding="utf-8")
+        return path
+
+    runtime = SlurmTaskBatch(
+        HPCConfig(submit=True, max_task_attempts=3),
+        submitter=submit,
+    )
+    with pytest.raises(ControllerYield) as yielded:
+        runtime.run(
+            batch_dir=tmp_path,
+            fingerprint="fingerprint",
+            tasks=[task],
+            job_name=lambda attempt: f"job-{attempt}",
+            write_script=write_script,
+            validate_output=lambda files, output: None,
+        )
+
+    assert yielded.value.job_id == "456"
+    state = json.loads((tmp_path / "task_state.json").read_text())
+    assert state["phase"] == "SUBMITTED"
+    assert state["active_attempt"] == 2
+    assert state["active_job_id"] == "456"
+    assert "terminal_failure" not in state
+    assert len(submissions) == 1
+    archived = tmp_path / "failed_outputs" / "attempt_01" / "task_0000.json"
+    assert json.loads(archived.read_text())["error_type"] == (
+        "CheckerOutputContractError"
+    )
+    records = [
+        json.loads(line)
+        for line in (tmp_path / "operational_reclassifications.jsonl")
+        .read_text()
+        .splitlines()
+    ]
+    assert records[0]["prior_state"]["phase"] == "BLOCKED"
+    assert records[0]["new_phase"] == "SUBMITTED"
+
+
 def test_stability_collection_preserves_completed_and_marks_slurm_timeout(
     tmp_path,
 ):

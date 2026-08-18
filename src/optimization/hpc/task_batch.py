@@ -38,6 +38,13 @@ TERMINAL_STATES = {
     "TIMEOUT",
 }
 
+# Compatibility for worker outputs written before the PCCE contract-error
+# inheritance bug was discovered. CheckerOutputContractError is a ValueError,
+# so those workers labelled a recoverable malformed Agent submission as
+# blocking. The Controller owns the final task-attempt decision and may safely
+# retry this one evidence-rich Agent failure without changing method inputs.
+RETRYABLE_WORKER_ERROR_TYPES = {"CheckerOutputContractError"}
+
 
 @dataclass(frozen=True)
 class TaskFiles:
@@ -95,6 +102,9 @@ class SlurmTaskBatch:
             fingerprint=fingerprint,
         )
         phase = str(state["phase"])
+        if phase == "BLOCKED" and self._is_recoverable_contract_block(state):
+            self._reopen_contract_block(state_path, state, batch_dir=batch_dir)
+            phase = str(state["phase"])
         if phase in {"BLOCKED", "EXHAUSTED"}:
             error = str(
                 state.get("terminal_failure", {}).get(
@@ -350,7 +360,9 @@ class SlurmTaskBatch:
                 )
                 blocking.append((task, failure))
                 continue
-            if value.get("status") == "blocking_failed":
+            if value.get("status") == "blocking_failed" and not (
+                value.get("error_type") in RETRYABLE_WORKER_ERROR_TYPES
+            ):
                 blocking.append(
                     (
                         task,
@@ -383,6 +395,51 @@ class SlurmTaskBatch:
                 continue
             outputs[task.index] = value
         return outputs, failed, blocking
+
+    @staticmethod
+    def _is_recoverable_contract_block(state: dict[str, Any]) -> bool:
+        failure = state.get("terminal_failure")
+        if not isinstance(failure, dict):
+            return False
+        if failure.get("failure_kind") != "blocking_task_output":
+            return False
+        details = failure.get("details")
+        return bool(details) and all(
+            isinstance(item, dict)
+            and item.get("error_type") in RETRYABLE_WORKER_ERROR_TYPES
+            for item in details
+        )
+
+    @staticmethod
+    def _reopen_contract_block(
+        state_path: Path,
+        state: dict[str, Any],
+        *,
+        batch_dir: Path,
+    ) -> None:
+        evidence_path = batch_dir / "operational_reclassifications.jsonl"
+        record = {
+            "schema_version": 1,
+            "recorded_at": datetime.now(timezone.utc).isoformat(),
+            "reason": "recoverable_checker_output_contract_misclassification",
+            "prior_state": dict(state),
+            "new_phase": "SUBMITTED",
+            "new_active_job_id": state.get("last_job_id"),
+        }
+        evidence_path.parent.mkdir(parents=True, exist_ok=True)
+        with evidence_path.open("a", encoding="utf-8") as handle:
+            handle.write(json.dumps(record, ensure_ascii=False, sort_keys=True) + "\n")
+            handle.flush()
+        state.pop("terminal_failure", None)
+        SlurmTaskBatch._save_state(
+            state_path,
+            state,
+            phase="SUBMITTED",
+            active_attempt=int(state["active_attempt"]),
+            active_job_id=(
+                str(state["last_job_id"]) if state.get("last_job_id") else None
+            ),
+        )
 
     @staticmethod
     def _save_host_validation_failure(

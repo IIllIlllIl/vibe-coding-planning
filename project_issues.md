@@ -983,7 +983,7 @@ block 的频率与根因，再决定是否仅细化记录，或对反复出现�
   collection：首例首轮通过，第二例首轮拒绝、修订后第二轮通过；两例新的 CE 均得到
   parsed resolved outcome。所有 PC/CE workflow task 都在 attempt 1 完成，最终无活动
   Slurm task；smoke 的 2/2 只验收流程，不作为 guideline 效果证据。
-- **正式 seed PCCE 已准备、尚未启动（2026-08-17）**：新增
+- **正式 seed PCCE 已启动（2026-08-17）**：新增
   `polybench_pcce_hpc_formal_seed.yaml` 与
   `polybench_pcce_supervisor_formal_seed.yaml`。正式 run identity 为
   `polybench-pcce-runs/formal/seed-python111-20260817`，使用冻结 seed 和全部 111 个
@@ -992,3 +992,19 @@ block 的频率与根因，再决定是否仅细化记录，或对反复出现�
   均保持不变。预声明报告 overall resolved、同例历史 PCE resolved、paired difference、
   first-review pass、pass-after-revision 与 rejection-exhaustion；本条不记录未发生的运行
   结果，也不设查看结果后的 post-hoc threshold。
+- **正式 seed PCCE 首轮 contract-error 阻断（2026-08-18）**：首轮 111 个 PC
+  worker 已结束，109 个产生有效决定（86 proceed / 23 reject）；
+  `huggingface__transformers-13919` 与 `keras-team__keras-19863` 的 final
+  submission 在合法 JSON 后混入同一 action 的诊断 stdout/stderr，触发
+  `CheckerOutputContractError: Extra data`。失败证据与 trajectory 均保留，但
+  `CheckerOutputContractError` 继承 `ValueError`，PCCE worker 原先先命中宽泛的
+  `ValueError -> block_run` 分支，导致两例在 attempt 1 阻断而未使用剩余两次 workflow
+  attempts。为保留 109 个昂贵且有效的同方法结果，修复位于不参与 PCCE method semantic
+  hash 的共享 Controller transport classifier：它只把已有
+  `CheckerOutputContractError` worker evidence 视为 retryable，其他 blocking output 与
+  普通冻结输入/验证 `ValueError` 仍阻断。对于已经落盘的同类 `BLOCKED` state，Controller
+  先把完整 prior state 追加到 `operational_reclassifications.jsonl`，再恢复同一
+  fingerprint/batch 的 attempt 2；原失败 output 随普通 retry 机制归档，109 个 completed
+  outputs 不变。当前 supervisor 已安全停止，尚未启动 review revision 或 CE；修复通过
+  共享 Slurm、PCCE 与 supervisor 共 51 项回归，commit 后可由原 formal supervisor
+  原生 resume。

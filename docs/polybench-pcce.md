@@ -119,6 +119,17 @@ Workflow retries:
 - follow the existing PCE/HPC retry classification and configured workflow
   attempt ceiling.
 
+The shared Controller transport is the final authority for whether a durable
+worker failure consumes another task attempt. A historical PCCE worker bug
+labelled `CheckerOutputContractError` as blocking because that exception is a
+`ValueError`. The transport now narrowly reclassifies only that named,
+evidence-bearing failure as retryable. If it encounters the already-persisted
+legacy `BLOCKED` state, it appends the complete prior state to
+`operational_reclassifications.jsonl`, reopens the same fingerprint and batch,
+and submits only the affected cases at the next attempt number. Completed case
+outputs are neither redrawn nor rewritten. This is automation recovery, not a
+Checker decision or method-budget event.
+
 A valid Checker rejection is not a workflow failure and must never trigger an
 infrastructure retry of the same review.
 

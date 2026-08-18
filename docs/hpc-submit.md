@@ -102,6 +102,15 @@ active. It has no iteration target and stops on terminal `result.json` or a
 blocking `controller_status.json`. A ten-minute local poll consumes no HPC
 allocation.
 
+One bounded compatibility rule exists in the shared task-batch Controller:
+legacy worker evidence whose exact `error_type` is
+`CheckerOutputContractError` is retryable even when the old worker labelled it
+`blocking_failed` through the exception's `ValueError` inheritance. Reopening
+such a persisted block records the complete previous task state in
+`operational_reclassifications.jsonl` and resumes the same batch at the next
+workflow attempt. No completed output is rerun, and other blocking failures
+remain blocking.
+
 When a PCCE run already has a manifest, a later Controller submission preserves
 that manifest's `project_git_head` as the experiment provenance value. The
 actual code snapshot used by each new Controller remains recorded by
