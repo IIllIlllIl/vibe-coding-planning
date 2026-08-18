@@ -19,7 +19,10 @@ from src.polybench_pce.controller import (
     run_polybench_pce,
 )
 from src.polybench_pce.dataset import canonical_image_ref, load_polybench_pce_cases
-from src.polybench_pce.evaluator import evaluate_polybench_apptainer
+from src.polybench_pce.evaluator import (
+    PolyBenchEvaluatorOperationalError,
+    evaluate_polybench_apptainer,
+)
 from src.polybench_pce.hpc_executor import (
     PolyBenchPCEHPCExecutor,
     build_array_script,
@@ -498,6 +501,64 @@ def test_evaluator_scores_code_patch_apply_failure_as_unresolved(
         == "partial change"
     )
     assert result["code_patch_attempts"][0]["apply_returncode"] is None
+
+
+def test_evaluator_retries_when_test_command_did_not_execute(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    snapshot, images, _ = _frozen_inputs(tmp_path)
+    case = load_polybench_pce_cases(snapshot, images)[0][0]
+
+    class FakeEnv:
+        def __init__(self, **kwargs: object) -> None:
+            Path(str(kwargs["host_workdir"])).mkdir(parents=True, exist_ok=True)
+
+        def execute(self, command: str, timeout: int | None = None) -> dict:
+            if command.startswith("git rev-parse"):
+                return {"returncode": 0, "output": ""}
+            if command.startswith("git status") or command.startswith("git diff"):
+                return {"returncode": 0, "output": ""}
+            if command.startswith("git apply"):
+                return {"returncode": 0, "output": "applied"}
+            if command == "/bin/bash .vibe_eval.sh":
+                return {
+                    "returncode": 127,
+                    "output": "pytest: cannot execute: required file not found",
+                }
+            raise AssertionError(command)
+
+        def cleanup(self) -> None:
+            pass
+
+    monkeypatch.setattr("src.polybench_pce.evaluator.ApptainerEnvironment", FakeEnv)
+    monkeypatch.setitem(
+        __import__(
+            "poly_bench_evaluation.constants", fromlist=["REPO_TO_PARSER_CLASS"]
+        ).REPO_TO_PARSER_CLASS,
+        "org/repo",
+        "ParserMustNotRun",
+    )
+
+    with pytest.raises(PolyBenchEvaluatorOperationalError) as exc_info:
+        evaluate_polybench_apptainer(
+            _diff("src/module.py"),
+            case,
+            container=SimpleNamespace(
+                sif_cache_dir=tmp_path / "cache", writable_tmpfs=True
+            ),
+            capacity_window=DockerCapacityWindow(
+                max_concurrent=1, max_cached_images=1, min_free_gb=1
+            ),
+            workdir="/testbed",
+            phase_workdir=tmp_path / "eval-command-not-executed",
+            timeout=30,
+        )
+
+    error = exc_info.value
+    assert error.outcome_reason == "test_command_not_executed"
+    assert error.retry_disposition == "retry_same_phase"
+    assert error.evidence["test_returncode"] == 127
+    assert "cannot execute" in error.evidence["raw_test_output"]
 
 
 def test_exhausted_attempts_are_raw_incomplete_not_labels(tmp_path: Path) -> None:

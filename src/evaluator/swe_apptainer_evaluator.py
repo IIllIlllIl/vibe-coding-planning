@@ -27,6 +27,8 @@ GIT_APPLY_CMDS = (
     "patch --batch --fuzz=5 -p1 -i",
 )
 
+COMMAND_NOT_EXECUTED_RETURNCODES = frozenset({126, 127})
+
 
 def evaluate_apptainer(
     patch: str,
@@ -177,6 +179,12 @@ def evaluate_apptainer(
             )
         stdout_text = eval_result.get("output", "")
         test_output_path.write_text(stdout_text, encoding="utf-8")
+        if eval_result.get("returncode") in COMMAND_NOT_EXECUTED_RETURNCODES:
+            raise FatalError(
+                "official SWE-bench test command did not execute "
+                f"(returncode={eval_result.get('returncode')}): "
+                f"{stdout_text[:500]}"
+            )
         after = (
             env.execute(
                 "git -c core.fileMode=false diff",

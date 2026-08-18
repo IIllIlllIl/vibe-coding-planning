@@ -9,6 +9,34 @@
 
 ## 当前实验状态
 
+2026-08-18 的 evaluator 审计确认，HPC 共用 `ApptainerEnvironment` 默认继承提交用户
+环境并挂载 home，使宿主 `~/.local/bin` 与 `~/.local/lib` 能覆盖冻结 SIF 内的可执行
+文件和 Python 包。正式 PolyBench PCE 的 111 个 test-parsed outcome 中有 3 个 shell
+return code 127（测试命令未执行）却被 parser 记为普通 unresolved；正式 seed PCCE 的
+110 个 CE outcome 中有 72 个 return code 127、8 个 return code 126，同样被错误记为
+`tests_parsed_unresolved/no_retry`。因此当前 PolyBench PCE 派生的 59/52 label snapshot
+和 seed PCCE resolved 汇总在重跑 Evaluate 前均不可用于方法效果结论；已完成的
+Plan、Code、Checker、patch 和 trajectory 仍是可复用的原始证据。
+
+同一问题也影响历史 Online HPC `online-planning-hpc-policy-v3-20260715`：远端保存的
+99 个 evaluator result 全部含 `/home/users/twang/.local`，48 个含 ImportError、
+ModuleNotFoundError 或 Python site 初始化错误。并非每个痕迹都改变最终判定，但运行
+环境未被冻结，因此该 run 现标记为 environment-contaminated，不能再作为正式 Online
+分数或候选质量证据；只保留为流程、trajectory 和故障审计数据。当前 482-case
+Offline 历史 PCE snapshot 来自 Docker，未发现宿主路径或 126/127 污染；其中另有一条
+validation case `psf__requests-1142` 是已知 evaluator operational failure，应在未来
+新 snapshot 中单独处理，但不属于本次 Apptainer 故障。
+
+修复采用两层最小契约：所有 Apptainer exec（包括首次 repository materialization）
+增加 `--cleanenv --no-home`，使 SIF 环境成为执行权威；PolyBench 与 Online SWE
+evaluator 在 shell return code 126/127 时停止 parsing，并按 operational failure
+进入既有 task retry，而不是制造 unresolved。Iris Apptainer 1.2.1 的真实 SIF
+只读验证显示，修复组合清除了注入的 `PYTHONPATH`，PATH 不再包含宿主
+`~/.local/bin`，宿主 pytest 也不可见。单元测试同时覆盖参数构造、workspace 初次复制、
+PolyBench retry 分类和 Online parser 不被调用。下一步先以新、明确记录的 evaluator
+修复身份复用正式 PCE 的 frozen Plan/Code 输入重跑 Evaluate；确认结果后再决定 seed
+PCCE 的 Evaluate resume，禁止直接把旧 evaluate checkpoint 当作已完成。
+
 Offline 的独立 1it action-protocol smoke 已完成。它覆盖完整 384/98 split，完成
 122 metric calls；seed validation accuracy 为 `0.704082`、balanced accuracy
 为 `0.697610`、MCC 为 `0.381364`。proposal 与 parent 在 12 个 minibatch case 上

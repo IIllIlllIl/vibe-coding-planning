@@ -198,6 +198,7 @@ def test_environment_execute_builds_expected_apptainer_args(
     args = calls[-1]
     assert args[0] == "apptainer"
     assert args[1] == "exec"
+    assert args[2:4] == ["--cleanenv", "--no-home"]
     assert "--writable-tmpfs" in args
     env_index = args.index(f"GIT_CONFIG_GLOBAL={env._git_config_path}")
     assert args[env_index - 1] == "--env"
@@ -293,6 +294,7 @@ def test_environment_host_workdir_is_initialized_and_bound(tmp_path, monkeypatch
         capacity_window=_TrackingCapacityWindow(),
         host_workdir=host_workdir,
     )
+    assert popen_calls[0][2:4] == ["--cleanenv", "--no-home"]
     assert popen_calls[0][-1] == "cd /testbed && tar -cf - ."
 
     calls.clear()

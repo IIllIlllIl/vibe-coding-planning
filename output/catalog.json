@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "generated_at": "2026-08-17",
+  "generated_at": "2026-08-18",
   "active_method": "online_gepa_planning_rules",
   "active_offline_method": "offline_gepa_plan_review_guideline",
   "default_agent_scope": [
@@ -13,7 +13,7 @@
     "output/SWE-PolyBench/polybench-guideline-validation-datasets/20260815_python111_testparsed_26dad63b5cf3"
   ],
   "active_polybench_validation_inputs": {
-    "status": "cleaned_snapshot_frozen",
+    "status": "frozen_but_score_unsafe_pending_evaluator_rerun",
     "source_universe": "official_python_199",
     "pce_input_snapshot": "output/SWE-PolyBench/polybench-pce-inputs/20260814_python113_v11_8c7d9485d1d0",
     "dataset_snapshot": "output/SWE-PolyBench/polybench-guideline-validation-datasets/20260815_python111_testparsed_26dad63b5cf3",
@@ -45,7 +45,9 @@
       "b3x3_candidate_3"
     ],
     "reserve_activation_status": "criterion_pending_before_primary_launch",
-    "check_only_status": "not_configured_or_started"
+    "check_only_status": "blocked_on_evaluator_rerun",
+    "known_command_not_executed_labels": 3,
+    "score_usable": false
   },
   "active_polybench_image_preparation": {
     "classification": "operational_only",
@@ -84,8 +86,8 @@
     "score_usable": false
   },
   "active_polybench_pce_formal": {
-    "classification": "formal_raw_generation",
-    "status": "completed_with_incomplete",
+    "classification": "formal_raw_generation_environment_contaminated",
+    "status": "completed_with_incomplete_pending_evaluator_rerun",
     "as_of": "2026-08-15",
     "controller_job_id": "5671976",
     "final_controller_job_id": "5673460",
@@ -105,7 +107,9 @@
     "run": "output/SWE-PolyBench/polybench-pce-runs/formal/python113-v11-pce-20260814",
     "local_mirror_complete": true,
     "final_validation_labels_assigned": false,
-    "score_usable": false
+    "score_usable": false,
+    "known_command_not_executed_outcomes": 3,
+    "plan_code_evidence_reusable": true
   },
   "prior_polybench_pce_smoke": {
     "classification": "test_only",
@@ -125,7 +129,11 @@
   "active_remote_run": {
     "name": "online-planning-hpc-policy-v3-20260715",
     "outcome_policy_version": 3,
-    "classification": "active_formal"
+    "classification": "historical_environment_contaminated",
+    "score_usable": false,
+    "trajectory_audit_usable": true,
+    "evaluator_results_with_host_local_path": 99,
+    "evaluator_results_audited": 99
   },
   "active_local_offline_run": {
     "name": "offline-plan-verifier-balanced-b12-p2-case-reviews-8it-20260727",

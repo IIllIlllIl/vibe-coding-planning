@@ -424,6 +424,49 @@ class TestEvaluateApptainer:
     @patch("src.evaluator.swe_apptainer_evaluator.ApptainerEnvironment")
     @patch("swebench.harness.grading.get_eval_report")
     @patch("swebench.harness.test_spec.test_spec.make_test_spec")
+    def test_rejects_test_command_that_did_not_execute(
+        self,
+        mock_make_spec,
+        mock_get_report,
+        mock_env_cls,
+        tmp_path,
+        instance_info,
+    ):
+        mock_make_spec.return_value = SimpleNamespace(eval_script="pytest")
+
+        class FakeEnv:
+            def execute(self, command, cwd="", *, timeout=None):
+                if command == "/bin/bash .vibe_eval.sh":
+                    return {
+                        "returncode": 127,
+                        "output": "pytest: cannot execute: required file not found",
+                    }
+                return {"returncode": 0, "output": ""}
+
+            def cleanup(self):
+                pass
+
+        mock_env_cls.return_value = FakeEnv()
+
+        with pytest.raises(FatalError, match="test command did not execute"):
+            evaluate_apptainer(
+                "diff --git a/a.py b/a.py\n",
+                instance_info,
+                container=ContainerConfig(
+                    runtime="apptainer",
+                    sif_cache_dir=tmp_path / "sifs",
+                ),
+                capacity_window=object(),
+                phase_workdir=tmp_path / "eval-workdir",
+                persistent_log_root=tmp_path / "logs",
+                timeout=123,
+            )
+
+        mock_get_report.assert_not_called()
+
+    @patch("src.evaluator.swe_apptainer_evaluator.ApptainerEnvironment")
+    @patch("swebench.harness.grading.get_eval_report")
+    @patch("swebench.harness.test_spec.test_spec.make_test_spec")
     def test_keeps_grading_failure_infrastructure_invalid(
         self,
         mock_make_spec,

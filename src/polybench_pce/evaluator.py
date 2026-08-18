@@ -44,6 +44,11 @@ APPLY_METHODS = (
     ),
 )
 
+# POSIX shells use 126 when a command was found but could not be executed and
+# 127 when it could not be found.  Neither is evidence that the submitted code
+# failed the benchmark tests: the tests did not start.
+COMMAND_NOT_EXECUTED_RETURNCODES = frozenset({126, 127})
+
 
 def _terminal_result(
     case: PolyBenchPCECase,
@@ -260,6 +265,25 @@ def evaluate_polybench_apptainer(
                         "test_timed_out": True,
                     },
                 )
+            )
+
+        if test_returncode in COMMAND_NOT_EXECUTED_RETURNCODES:
+            raise PolyBenchEvaluatorOperationalError(
+                "official PolyBench test command did not execute "
+                f"(returncode={test_returncode})",
+                evidence={
+                    "terminal_kind": "test_command_not_executed",
+                    "test_patch_applied": True,
+                    "test_patch_attempts": test_patch_attempts,
+                    "code_patch_applied": True,
+                    "code_patch_attempts": code_patch_attempts,
+                    "test_command": case.test_command,
+                    "test_returncode": test_returncode,
+                    "raw_test_output": raw_output,
+                    "test_timed_out": False,
+                },
+                outcome_reason="test_command_not_executed",
+                retry_disposition="retry_same_phase",
             )
 
         parsed: dict[str, Any] = {}

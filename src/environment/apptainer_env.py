@@ -222,6 +222,8 @@ class ApptainerEnvironment:
             [
                 "apptainer",
                 "exec",
+                "--cleanenv",
+                "--no-home",
                 str(self._sif_path),
                 "bash",
                 "-lc",
@@ -272,7 +274,12 @@ class ApptainerEnvironment:
         command: str,
         timeout: int | None,
     ) -> list[str]:
-        args: list[str] = ["apptainer", "exec"]
+        # Apptainer otherwise inherits the submitting user's environment and
+        # binds their home directory.  That lets host-side executables and
+        # Python packages (notably ~/.local/bin and ~/.local/lib) override the
+        # frozen image, so the same SIF can evaluate differently as the login
+        # environment changes.  Keep the image's environment authoritative.
+        args: list[str] = ["apptainer", "exec", "--cleanenv", "--no-home"]
         if self._writable_tmpfs:
             args.append("--writable-tmpfs")
         if self._network_disabled:

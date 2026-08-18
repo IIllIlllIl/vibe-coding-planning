@@ -366,3 +366,11 @@ exhausted incomplete task. Its complete raw evidence was mirrored locally on
 2026-08-15. The separately frozen validation snapshot uses only the 111
 test-parsed outcomes and applies the historical conservative placeholder policy
 without additional exclusions.
+
+An evaluator audit on 2026-08-18 found that three of those 111 “test-parsed”
+outcomes had shell return code 127: a host `~/.local/bin/pytest` entry was
+visible inside Apptainer but its interpreter no longer existed. Those commands
+did not execute, so the 59/52 derived label snapshot is frozen for provenance
+but is not score-usable until Evaluate is rerun from the preserved Plan/Code
+evidence under the clean-environment runtime. PolyBench validation remains
+held out from guideline training throughout this repair.
