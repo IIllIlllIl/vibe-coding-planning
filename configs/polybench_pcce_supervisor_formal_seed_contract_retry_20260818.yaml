@@ -2,8 +2,8 @@
 # reclassification patch. The runtime config and persistent formal run remain
 # unchanged; only the clean source commit and local supervisor state are new.
 schema_version: 1
-session: polybench-pcce-seed-formal-contract-retry-20260818
-log: .local/hpc-supervisor/polybench-pcce-seed-formal-contract-retry-20260818.log
+session: polybench-pcce-seed-formal-contract-retry-submit-20260818
+log: .local/hpc-supervisor/polybench-pcce-seed-formal-contract-retry-submit-20260818.log
 arguments:
   - --poll-interval
   - "600"
@@ -12,7 +12,9 @@ arguments:
   - --max-runs
   - "0"
   - --state-file
-  - .local/hpc-supervisor/polybench-pcce-seed-formal-contract-retry-20260818.json
+  - .local/hpc-supervisor/polybench-pcce-seed-formal-contract-retry-submit-20260818.json
+  - --recover-controller-error-type-once
+  - TaskBatchBlocked
   - --require-clean-worktree
   - --batch-script
   - scripts/hpc_submit_polybench_pcce.sh

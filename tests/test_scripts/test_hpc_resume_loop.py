@@ -350,6 +350,57 @@ def test_hpc_resume_loop_stops_on_failed_result(tmp_path: Path) -> None:
     assert not batch_log.exists()
 
 
+def test_hpc_resume_loop_allows_one_named_controller_failure_recovery(
+    tmp_path: Path,
+) -> None:
+    fake_bin = tmp_path / "bin"
+    fake_bin.mkdir()
+    local_root = REPO_ROOT / ".tmp_hpc_smoke" / "test_controller_recovery"
+    config = _write_workflow_config(local_root)
+    fake_batch = tmp_path / "hpc_submit_batch.sh"
+    batch_log = tmp_path / "batch.log"
+    statuses = tmp_path / "statuses.txt"
+    statuses.write_text(
+        '{"state":"controller_failed","controller_status":"failed",'
+        '"error_type":"TaskBatchBlocked"}\n',
+        encoding="utf-8",
+    )
+    _fake_batch_script(fake_batch, batch_log)
+    _fake_ssh(fake_bin / "ssh", statuses, tmp_path / "ssh.log")
+    state_file = tmp_path / "state.json"
+
+    result = subprocess.run(
+        [
+            "python",
+            str(SCRIPT),
+            "--once",
+            "--poll-interval",
+            "0",
+            "--state-file",
+            str(state_file),
+            "--recover-controller-error-type-once",
+            "TaskBatchBlocked",
+            "--batch-script",
+            str(fake_batch),
+            "--config",
+            str(config),
+            "--submit",
+        ],
+        cwd=REPO_ROOT,
+        capture_output=True,
+        text=True,
+        check=False,
+        env=_env(fake_bin),
+    )
+
+    assert result.returncode == 0, result.stderr
+    assert "allowing one audited Controller recovery" in result.stdout
+    assert batch_log.is_file()
+    state = json.loads(state_file.read_text(encoding="utf-8"))
+    assert state["controller_failure_recoveries"] == 1
+    assert state["status"] == "controller_submitted"
+
+
 def test_hpc_supervisor_retries_status_check_failure_without_submitting(
     tmp_path: Path,
 ) -> None:
@@ -703,9 +754,10 @@ def test_formal_pcce_contract_retry_uses_new_supervisor_state_only(
     assert "--job-name polybench-pcce-seed-formal-20260817" in invocation
     assert (
         "--state-file .local/hpc-supervisor/"
-        "polybench-pcce-seed-formal-contract-retry-20260818.json"
+        "polybench-pcce-seed-formal-contract-retry-submit-20260818.json"
         in invocation
     )
+    assert "--recover-controller-error-type-once TaskBatchBlocked" in invocation
     assert "--require-clean-worktree" in invocation
 
 

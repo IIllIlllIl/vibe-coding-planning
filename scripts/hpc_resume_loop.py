@@ -76,6 +76,7 @@ class SupervisorConfig:
     require_clean_worktree: bool
     repo_commit: str | None
     offline_gepa: bool
+    recover_controller_error_types_once: tuple[str, ...]
 
 
 def parse_duration(raw: str) -> int:
@@ -245,6 +246,16 @@ def parse_args(argv: list[str]) -> SupervisorConfig:
         help="Maximum submitted slices; 0 means unlimited.",
     )
     parser.add_argument(
+        "--recover-controller-error-type-once",
+        action="append",
+        default=[],
+        help=(
+            "Permit one Controller submission from a named blocking "
+            "controller error. Intended only for an audited operational "
+            "repair launch identity. May be repeated for distinct types."
+        ),
+    )
+    parser.add_argument(
         "--batch-script",
         default=os.environ.get("VIBE_HPC_SUBMIT_BATCH", str(DEFAULT_BATCH_SCRIPT)),
     )
@@ -302,6 +313,9 @@ def parse_args(argv: list[str]) -> SupervisorConfig:
         require_clean_worktree=known.require_clean_worktree,
         repo_commit=_git_output("rev-parse", "HEAD"),
         offline_gepa=offline_gepa,
+        recover_controller_error_types_once=tuple(
+            sorted(set(known.recover_controller_error_type_once))
+        ),
     )
 
 
@@ -621,6 +635,9 @@ def _load_supervisor_state(config: SupervisorConfig) -> dict[str, Any]:
             "target_iterations": config.target_iterations,
             "runtime_config_sha256": config.runtime_config_sha256,
             "repo_commit": config.repo_commit,
+            "recover_controller_error_types_once": list(
+                config.recover_controller_error_types_once
+            ),
         }
     state = json.loads(config.state_file.read_text(encoding="utf-8"))
     if state.get("schema_version") == 1:
@@ -640,9 +657,16 @@ def _load_supervisor_state(config: SupervisorConfig) -> dict[str, Any]:
         "target_iterations": config.target_iterations,
         "runtime_config_sha256": config.runtime_config_sha256,
         "repo_commit": config.repo_commit,
+        "recover_controller_error_types_once": list(
+            config.recover_controller_error_types_once
+        ),
     }
     for key, value in expected.items():
-        if state.get(key) != value:
+        actual = state.get(key)
+        if key == "recover_controller_error_types_once" and actual is None:
+            actual = []
+            state[key] = actual
+        if actual != value:
             raise RuntimeError(
                 f"supervisor state differs at {key}; use the original options "
                 "or a new --state-file"
@@ -731,11 +755,27 @@ def run_loop(config: SupervisorConfig) -> int:
                 if config.poll_interval_seconds > 0:
                     time.sleep(config.poll_interval_seconds)
                 continue
-            if is_failed(status):
+            recoverable_controller_error = (
+                status.get("error_type")
+                in config.recover_controller_error_types_once
+                and int(state.get("controller_failure_recoveries", 0)) < 1
+            )
+            if is_failed(status) and not recoverable_controller_error:
                 state["status"] = "blocked"
                 _save_supervisor_state(config, state)
                 print("[hpc-resume] run is blocked; not resubmitting", file=sys.stderr)
                 return 1
+            if is_failed(status):
+                state["last_controller_failure_recovery"] = {
+                    "error_type": status.get("error_type"),
+                    "controller_status": status.get("controller_status"),
+                }
+                state["status"] = "recovering_controller_failure"
+                _save_supervisor_state(config, state)
+                print(
+                    "[hpc-resume] allowing one audited Controller recovery "
+                    f"for error_type={status.get('error_type')}"
+                )
 
             active_controllers = status.get("active_controllers", [])
             active_workers = status.get("active_workers", [])
@@ -837,6 +877,10 @@ def run_loop(config: SupervisorConfig) -> int:
             state["submissions"] = submissions + 1
             state["last_controller_job_id"] = job_id
             state["status"] = "controller_submitted"
+            if recoverable_controller_error:
+                state["controller_failure_recoveries"] = int(
+                    state.get("controller_failure_recoveries", 0)
+                ) + 1
 
             _save_supervisor_state(config, state)
             if config.once:

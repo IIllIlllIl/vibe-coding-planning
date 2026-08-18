@@ -111,6 +111,15 @@ such a persisted block records the complete previous task state in
 workflow attempt. No completed output is rerun, and other blocking failures
 remain blocking.
 
+The generic supervisor remains fail-closed on every persisted Controller
+failure. An audited repair launch may name one expected operational error with
+`--recover-controller-error-type-once`; that launch may submit exactly one
+Controller from that error state. The option does not reclassify worker output,
+does not bypass the task-batch classifier, and cannot repeatedly submit if the
+same Controller error recurs. The formal seed contract repair uses this narrow
+permission only for `TaskBatchBlocked` so the repaired Controller can inspect
+and reclassify the two already-preserved worker records.
+
 When a PCCE run already has a manifest, a later Controller submission preserves
 that manifest's `project_git_head` as the experiment provenance value. The
 actual code snapshot used by each new Controller remains recorded by
