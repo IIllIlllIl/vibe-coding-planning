@@ -1007,4 +1007,8 @@ block 的频率与根因，再决定是否仅细化记录，或对反复出现�
   fingerprint/batch 的 attempt 2；原失败 output 随普通 retry 机制归档，109 个 completed
   outputs 不变。当前 supervisor 已安全停止，尚未启动 review revision 或 CE；修复通过
   共享 Slurm、PCCE 与 supervisor 共 51 项回归，commit 后可由原 formal supervisor
-  原生 resume。
+  原生 resume。首次尝试重启原 launch identity 时，本地 supervisor state 的 commit
+  guard 在任何远端提交前正确阻止 `12d08a8 -> 55cee7d`；因此新增
+  `polybench_pcce_supervisor_formal_seed_contract_retry_20260818.yaml`，以新的本地
+  session/log/state 绑定修复 commit，同时继续指向完全相同的 formal runtime config、
+  Controller job name 和远端 persistent run。旧 supervisor state 保持不变。
