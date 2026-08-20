@@ -102,7 +102,10 @@ def _prepare(
     skipped: list[str] = []
     for index, case in enumerate(cases):
         source_checkpoints = source_batch / "checkpoints" / f"task_{index:04d}"
-        if not (source_checkpoints / "code.json").is_file():
+        if not all(
+            (source_checkpoints / f"{phase}.json").is_file()
+            for phase in ("plan", "code")
+        ):
             skipped.append(case.instance_id)
             continue
         source_identity = checkpoint_identity(
@@ -155,7 +158,7 @@ def _prepare(
             **manifest,
             "task_count": len(tasks),
             "instance_ids": [task.instance_id for task in tasks],
-            "skipped_without_code_checkpoint": skipped,
+            "skipped_without_completed_plan_or_code": skipped,
         },
     )
     return batch_dir, repair_fingerprint, tasks, skipped
@@ -228,7 +231,7 @@ def resume_polybench_pce_evaluator(
         "repair_id": repair_id,
         "repair_fingerprint": fingerprint,
         "evaluated_instances": len(outputs),
-        "skipped_without_code_checkpoint": skipped,
+        "skipped_without_completed_plan_or_code": skipped,
         "resolved": sum(
             bool(row["evaluator_result"].get("evaluator_resolved")) for row in outputs
         ),

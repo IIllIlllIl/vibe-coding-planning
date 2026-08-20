@@ -200,6 +200,14 @@ def test_environment_execute_builds_expected_apptainer_args(
     assert args[1] == "exec"
     assert args[2:4] == ["--cleanenv", "--no-home"]
     assert "--writable-tmpfs" in args
+    home_env_index = args.index("HOME=/tmp/vibe_home")
+    assert args[home_env_index - 1] == "--env"
+    binds = [
+        args[index + 1]
+        for index, value in enumerate(args[:-1])
+        if value == "--bind"
+    ]
+    assert any(value.endswith(":/tmp/vibe_home") for value in binds)
     env_index = args.index(f"GIT_CONFIG_GLOBAL={env._git_config_path}")
     assert args[env_index - 1] == "--env"
     assert str(cache_dir / "python_3.12-slim.sif") in args
@@ -295,14 +303,38 @@ def test_environment_host_workdir_is_initialized_and_bound(tmp_path, monkeypatch
         host_workdir=host_workdir,
     )
     assert popen_calls[0][2:4] == ["--cleanenv", "--no-home"]
+    assert "HOME=/tmp/vibe_home" in popen_calls[0]
     assert popen_calls[0][-1] == "cd /testbed && tar -cf - ."
 
     calls.clear()
     env.execute("git status")
 
     args = calls[-1]
-    bind_index = args.index("--bind")
-    assert args[bind_index + 1] == f"{host_workdir}:/testbed"
+    binds = [
+        args[index + 1]
+        for index, value in enumerate(args[:-1])
+        if value == "--bind"
+    ]
+    assert f"{host_workdir}:/testbed" in binds
+
+
+def test_environment_uses_phase_local_home_and_removes_it_on_cleanup(
+    tmp_path, monkeypatch
+):
+    cache_dir = tmp_path / "sifs"
+
+    def fake_run(args, **kwargs):
+        return subprocess.CompletedProcess(args, returncode=0, stdout="", stderr="")
+
+    monkeypatch.setattr(subprocess, "run", fake_run)
+
+    env = _make_env(cache_dir)
+    isolated_home = Path(env._isolated_home.name)
+    assert isolated_home.is_dir()
+
+    env.cleanup()
+
+    assert not isolated_home.exists()
 
 
 def test_environment_get_template_vars_and_cleanup(tmp_path, monkeypatch):

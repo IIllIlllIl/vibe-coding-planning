@@ -860,9 +860,44 @@ def test_evaluator_resume_reidentifies_preserved_plan_and_code_checkpoints(
         )
         assert copied["checkpoint_identity"] == target_identity
         assert copied["phase"] == phase
+        expected_payload = {
+            "plan": {"plan": "preserved", "trajectory": [{"plan": True}]},
+            "code": {
+                "raw_patch": _diff("src/module.py"),
+                "patch": _diff("src/module.py"),
+                "patch_policy": {},
+                "trajectory": [{"code": True}],
+            },
+        }[phase]
+        assert copied["payload"] == expected_payload
     assert not (
         batch_dir / "checkpoints" / "task_0000" / "evaluate.json"
     ).exists()
     task_manifest = json.loads(tasks[0].manifest_path.read_text())
     assert task_manifest["fingerprint"] == repair_fingerprint
     assert task_manifest["instance_id"] == case.instance_id
+
+
+def test_evaluator_resume_skips_case_without_complete_plan_and_code(
+    tmp_path: Path,
+) -> None:
+    snapshot, images, _ = _frozen_inputs(tmp_path)
+    config = load_polybench_pce_config(
+        _config(tmp_path, snapshot, images), require_api_keys=False
+    )
+    case = load_polybench_pce_cases(snapshot, images)[0][0]
+    source_fingerprint = "source-fingerprint"
+    atomic_json(
+        config.run_dir / "run_manifest.json",
+        {"execution_fingerprint": source_fingerprint},
+    )
+    (
+        config.run_dir / "hpc_tasks" / "pce" / source_fingerprint
+    ).mkdir(parents=True)
+
+    _, _, tasks, skipped = prepare_evaluator_resume(
+        config, [case], repair_id="incomplete-source"
+    )
+
+    assert tasks == []
+    assert skipped == [case.instance_id]

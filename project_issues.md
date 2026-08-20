@@ -27,8 +27,17 @@ Offline 历史 PCE snapshot 来自 Docker，未发现宿主路径或 126/127 污
 validation case `psf__requests-1142` 是已知 evaluator operational failure，应在未来
 新 snapshot 中单独处理，但不属于本次 Apptainer 故障。
 
-修复采用两层最小契约：所有 Apptainer exec（包括首次 repository materialization）
-增加 `--cleanenv --no-home`，使 SIF 环境成为执行权威；PolyBench 与 Online SWE
+第一轮 evaluator repair `cleanenv-nohome-20260818` 已对 112 个具有 Code checkpoint
+的案例完成 Evaluate，全部在 attempt 1 产生可解析输出，且 126/127 和宿主 Python
+site-package 初始化污染均消失。但它也证实 `--no-home` 不会改写 `$HOME`：容器仍看到
+不存在或不可写的 `/home/users/twang`，至少五个案例出现直接 HOME/cache 路径错误，
+22 个结果相对旧污染数据发生翻转，故 provisional 65/47 不可作为正式标签。该 repair
+保留为诊断证据，不执行最终收集。
+
+修复现采用三层最小契约：所有 Apptainer exec（包括首次 repository materialization）
+增加 `--cleanenv --no-home`，并把每个 phase 独立的新临时目录绑定为可写的
+`/tmp/vibe_home`、显式设置 `HOME=/tmp/vibe_home`，使 SIF 环境成为执行权威而不暴露
+真实宿主 home/cache；PolyBench 与 Online SWE
 evaluator 在 shell return code 126/127 时停止 parsing，并按 operational failure
 进入既有 task retry，而不是制造 unresolved。Iris Apptainer 1.2.1 的真实 SIF
 只读验证显示，修复组合清除了注入的 `PYTHONPATH`，PATH 不再包含宿主
@@ -38,9 +47,12 @@ PolyBench retry 分类和 Online parser 不被调用。下一步先以新、明�
 PCCE 的 Evaluate resume，禁止直接把旧 evaluate checkpoint 当作已完成。
 该 evaluator-only 入口现已实现为 PCE wrapper 的
 `--resume-evaluator <repair-id>`：它在原 run 下建立独立 repair manifest/batch，验证并
-重新绑定已有 Plan/Code checkpoint identity，不覆盖旧 Evaluate/output，不调用 LLM，
-并复用既有三次 task attempts。普通 PCE controller 在 evaluator source 改变后会产生
-新 fingerprint，因此不得冒充 evaluate-only resume。
+重新绑定同时存在的已完成 Plan/Code checkpoint identity，不覆盖或改写其 payload、旧
+Evaluate/output，不调用 LLM，并复用既有三次 task attempts；缺少任一完成 checkpoint
+的案例明确 skipped，schema/identity 损坏则 block。普通 PCE controller 在 evaluator
+source 改变后会产生新 fingerprint，因此不得冒充 evaluate-only resume。下一步先以
+HOME 敏感案例和正常对照做回归，再用新 repair identity 重跑 Evaluate；4G 内存本轮
+虽有若干近上限案例但无 OOM，暂不修改资源配置。
 
 Offline 的独立 1it action-protocol smoke 已完成。它覆盖完整 384/98 split，完成
 122 metric calls；seed validation accuracy 为 `0.704082`、balanced accuracy

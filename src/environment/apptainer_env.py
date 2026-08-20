@@ -15,6 +15,7 @@ import shlex
 import shutil
 import subprocess
 import sys
+import tempfile
 from pathlib import Path
 from typing import Any
 
@@ -173,6 +174,8 @@ class ApptainerEnvironment:
         self._network_disabled = network_disabled
         self._git_safe_dirs = list(git_safe_directories or [cwd])
         self._git_config_path = "/tmp/vibe_gitconfig"
+        self._container_home = "/tmp/vibe_home"
+        self._isolated_home: tempfile.TemporaryDirectory[str] | None = None
         self._host_workdir = Path(host_workdir) if host_workdir is not None else None
         self._initialize_host_workdir = initialize_host_workdir
 
@@ -188,13 +191,29 @@ class ApptainerEnvironment:
         self._lease = capacity_window.lease()
         self._lease.__enter__()
         try:
+            self._prepare_isolated_home()
             if self._host_workdir is not None:
                 self._prepare_host_workdir()
             self._ensure_git_config()
         except BaseException:
+            if self._isolated_home is not None:
+                self._isolated_home.cleanup()
+                self._isolated_home = None
             self._lease.__exit__(*sys.exc_info())
             self._lease = None
             raise
+
+    def _prepare_isolated_home(self) -> None:
+        """Bind a phase-local writable HOME without exposing the real home."""
+        self._isolated_home = tempfile.TemporaryDirectory(
+            prefix="vibe-apptainer-home-"
+        )
+        self._run_args.extend(
+            [
+                "--bind",
+                f"{self._isolated_home.name}:{self._container_home}",
+            ]
+        )
 
     def _prepare_host_workdir(self) -> None:
         """Create a persistent host workdir and bind it to the container cwd.
@@ -218,12 +237,17 @@ class ApptainerEnvironment:
 
     def _copy_container_cwd_to_host_workdir(self) -> None:
         assert self._host_workdir is not None
+        assert self._isolated_home is not None
         source = subprocess.Popen(
             [
                 "apptainer",
                 "exec",
                 "--cleanenv",
                 "--no-home",
+                "--bind",
+                f"{self._isolated_home.name}:{self._container_home}",
+                "--env",
+                f"HOME={self._container_home}",
                 str(self._sif_path),
                 "bash",
                 "-lc",
@@ -285,7 +309,14 @@ class ApptainerEnvironment:
         if self._network_disabled:
             args.extend(["--net", "--network", "none"])
         args.extend(self._run_args)
-        args.extend(["--env", f"GIT_CONFIG_GLOBAL={self._git_config_path}"])
+        args.extend(
+            [
+                "--env",
+                f"HOME={self._container_home}",
+                "--env",
+                f"GIT_CONFIG_GLOBAL={self._git_config_path}",
+            ]
+        )
         args.append(str(self._sif_path))
         # container_timeout is kept for API compatibility with DockerEnvironment;
         # Apptainer exec does not expose an equivalent flag, so we rely on the
@@ -346,3 +377,6 @@ class ApptainerEnvironment:
         if self._lease is not None:
             self._lease.__exit__(None, None, None)
             self._lease = None
+        if self._isolated_home is not None:
+            self._isolated_home.cleanup()
+            self._isolated_home = None

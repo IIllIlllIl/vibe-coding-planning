@@ -378,7 +378,23 @@ held out from guideline training throughout this repair.
 The evaluator-only recovery entry is
 `scripts/hpc_submit_polybench_pce.sh --resume-evaluator <repair-id>`. It creates
 an independent repair manifest and task batch under the original run's
-`evaluator_repairs/` directory, copies only identity-validated Plan and Code
-checkpoints, and starts each case at Evaluate. Original outputs remain the
-provenance authority for the pre-fix run; repaired outputs are never silently
-written over them.
+`evaluator_repairs/` directory. A case is eligible only when both completed Plan
+and Code checkpoints exist and pass source identity/schema validation. Their
+payloads are copied unchanged as JSON values under the repair identity;
+missing Plan/Code completion is recorded as skipped, while malformed or
+identity-mismatched checkpoints block the repair. The ordinary PCE runner then
+loads those checkpoints and starts at Evaluate, so resumed Evaluate and direct
+Evaluate over the same fixed Plan/Code use the same evaluator path. Original
+outputs remain the provenance authority for the pre-fix run; repaired outputs
+are never silently written over them.
+
+The first repair diagnostic, `cleanenv-nohome-20260818`, completed 112 Evaluate
+workers in one attempt and eliminated shell return codes 126/127 and host
+Python/site-package initialization failures. It also exposed that Apptainer's
+`--no-home` suppresses the home bind but does not replace the inherited `HOME`
+value: tests still saw the nonexistent or unwritable `/home/users/twang`,
+causing cache/path failures and contaminating multiple labels. Its provisional
+65/47 resolved split is diagnostic only and must not become the held-out
+validation authority. The runtime now supplies a fresh writable phase-local
+HOME; validation requires a new repair identity and targeted HOME-sensitive
+regression before another full evaluator repair is accepted.

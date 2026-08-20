@@ -82,13 +82,16 @@ best-effort and failures are audit events, not reasons to invalidate or rerun a
 completed phase. The controller only orchestrates submission, collection, and
 retry; it does not own PCE resource cleanup.
 
-Every project Apptainer invocation uses `--cleanenv --no-home`. The frozen SIF,
+Every project Apptainer environment uses `--cleanenv --no-home` and binds a new
+phase-local host temporary directory as `/tmp/vibe_home`, with
+`HOME=/tmp/vibe_home`. That directory persists across commands within the one
+Agent/Evaluator phase and is removed by environment cleanup. The frozen SIF,
 explicit binds and explicitly injected variables are the runtime authority;
-the submitting user's `PATH`, `PYTHONPATH`, `~/.local/bin` and
-`~/.local/lib` must not enter Agent or evaluator execution. Evaluators treat
-shell return codes 126 and 127 as operational “command did not execute”
-failures and route them through task retry rather than parsing them as an
-unresolved benchmark outcome.
+the submitting user's `PATH`, `PYTHONPATH`, `~/.local/bin`, `~/.local/lib`,
+home files and cache must not enter execution, while software that needs a
+writable HOME still works. Evaluators treat shell return codes 126 and 127 as
+operational “command did not execute” failures and route them through task
+retry rather than parsing them as an unresolved benchmark outcome.
 
 If Slurm interrupts cleanup after a durable checkpoint, the next attempt starts
 at the first incomplete phase. This is treated as a fresh independent random
