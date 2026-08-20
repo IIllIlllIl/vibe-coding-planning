@@ -21,6 +21,7 @@ ULHPC_CONFIG=""
 REQUIRE_CLEAN=0
 EVALUATOR_REPAIR_ID=""
 EVALUATOR_REPAIR_INSTANCES=()
+EVALUATOR_REPAIR_INSTANCE_COUNT=0
 
 usage() {
   cat <<'USAGE'
@@ -63,7 +64,11 @@ while [[ $# -gt 0 ]]; do
     --ulhpc-config) ULHPC_CONFIG="$2"; shift 2 ;;
     --require-clean-worktree) REQUIRE_CLEAN=1; shift ;;
     --resume-evaluator) EVALUATOR_REPAIR_ID="$2"; shift 2 ;;
-    --resume-evaluator-instance) EVALUATOR_REPAIR_INSTANCES+=("$2"); shift 2 ;;
+    --resume-evaluator-instance)
+      EVALUATOR_REPAIR_INSTANCES+=("$2")
+      EVALUATOR_REPAIR_INSTANCE_COUNT=$((EVALUATOR_REPAIR_INSTANCE_COUNT + 1))
+      shift 2
+      ;;
     --submit) SUBMIT=1; shift ;;
     --dry-run) SUBMIT=0; shift ;;
     -h|--help) usage; exit 0 ;;
@@ -87,16 +92,18 @@ if [[ -n "$EVALUATOR_REPAIR_ID" ]] && [[ ! "$EVALUATOR_REPAIR_ID" =~ ^[A-Za-z0-9
   echo "ERROR: --resume-evaluator must match [A-Za-z0-9_.-]+" >&2
   exit 2
 fi
-if [[ ${#EVALUATOR_REPAIR_INSTANCES[@]} -gt 0 ]] && [[ -z "$EVALUATOR_REPAIR_ID" ]]; then
+if [[ $EVALUATOR_REPAIR_INSTANCE_COUNT -gt 0 ]] && [[ -z "$EVALUATOR_REPAIR_ID" ]]; then
   echo "ERROR: --resume-evaluator-instance requires --resume-evaluator" >&2
   exit 2
 fi
-for instance_id in "${EVALUATOR_REPAIR_INSTANCES[@]}"; do
-  if [[ ! "$instance_id" =~ ^[A-Za-z0-9_.-]+$ ]]; then
-    echo "ERROR: --resume-evaluator-instance must match [A-Za-z0-9_.-]+" >&2
-    exit 2
-  fi
-done
+if [[ $EVALUATOR_REPAIR_INSTANCE_COUNT -gt 0 ]]; then
+  for instance_id in "${EVALUATOR_REPAIR_INSTANCES[@]}"; do
+    if [[ ! "$instance_id" =~ ^[A-Za-z0-9_.-]+$ ]]; then
+      echo "ERROR: --resume-evaluator-instance must match [A-Za-z0-9_.-]+" >&2
+      exit 2
+    fi
+  done
+fi
 CONFIG_ABS="$(
   conda run --no-capture-output -n mini-swe python - "$REPO_ROOT" "$CONFIG" <<'PY'
 import sys
@@ -209,9 +216,11 @@ CONFIG_REL="${CONFIG_ABS#$REPO_ROOT/}"
 REMOTE_DATASET="$REMOTE_DATASET_DIR/$DATASET_REL"
 REMOTE_RUN="$REMOTE_RUN_DIR/$RUN_REL"
 EVALUATOR_INSTANCE_ARGS=""
-for instance_id in "${EVALUATOR_REPAIR_INSTANCES[@]}"; do
-  EVALUATOR_INSTANCE_ARGS+=" --instance-id $instance_id"
-done
+if [[ $EVALUATOR_REPAIR_INSTANCE_COUNT -gt 0 ]]; then
+  for instance_id in "${EVALUATOR_REPAIR_INSTANCES[@]}"; do
+    EVALUATOR_INSTANCE_ARGS+=" --instance-id $instance_id"
+  done
+fi
 
 REMOTE_SCRIPT=$(cat <<EOF
 set -euo pipefail
