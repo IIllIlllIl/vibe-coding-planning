@@ -69,6 +69,10 @@ outputs untouched, invokes no LLM, and reuses the ordinary Slurm task retry
 contract. Running the ordinary PCE controller after a semantic source change
 is not evaluator-only resume: its new fingerprint would create a new full PCE
 batch.
+For a targeted runtime regression, repeat
+`--resume-evaluator-instance INSTANCE_ID`; selection is fingerprinted and uses
+the instance's original full-snapshot task index, so it cannot remap another
+case's Plan/Code checkpoints. Omitting the filter retains the full repair.
 
 The PCE worker command is the final foreground command in its Slurm script.
 Normal completion therefore exits immediately and releases the allocation;

@@ -901,3 +901,27 @@ def test_evaluator_resume_skips_case_without_complete_plan_and_code(
 
     assert tasks == []
     assert skipped == [case.instance_id]
+
+
+def test_evaluator_resume_rejects_unknown_instance_filter(tmp_path: Path) -> None:
+    snapshot, images, _ = _frozen_inputs(tmp_path)
+    config = load_polybench_pce_config(
+        _config(tmp_path, snapshot, images), require_api_keys=False
+    )
+    case = load_polybench_pce_cases(snapshot, images)[0][0]
+    source_fingerprint = "source-fingerprint"
+    atomic_json(
+        config.run_dir / "run_manifest.json",
+        {"execution_fingerprint": source_fingerprint},
+    )
+    (
+        config.run_dir / "hpc_tasks" / "pce" / source_fingerprint
+    ).mkdir(parents=True)
+
+    with pytest.raises(ValueError, match="unknown instance_ids"):
+        prepare_evaluator_resume(
+            config,
+            [case],
+            repair_id="filtered",
+            instance_ids=["missing__case-1"],
+        )

@@ -54,6 +54,7 @@ def _prepare(
     cases: Sequence[PolyBenchPCECase],
     *,
     repair_id: str,
+    instance_ids: Sequence[str] | None = None,
 ) -> tuple[Path, str, list[TaskFiles], list[str]]:
     if not re.fullmatch(r"[A-Za-z0-9_.-]+", repair_id):
         raise ValueError("repair_id must match [A-Za-z0-9_.-]+")
@@ -64,6 +65,21 @@ def _prepare(
     source_batch = config.run_dir / "hpc_tasks" / "pce" / source_fingerprint
     if not source_batch.is_dir():
         raise ValueError(f"source PCE batch is missing: {source_batch}")
+    requested = list(instance_ids or [])
+    if len(requested) != len(set(requested)):
+        raise ValueError("evaluator repair instance_ids must be unique")
+    requested_set = set(requested)
+    known_ids = {case.instance_id for case in cases}
+    unknown = sorted(requested_set - known_ids)
+    if unknown:
+        raise ValueError(
+            "evaluator repair requested unknown instance_ids: " + ", ".join(unknown)
+        )
+    selected = [
+        (index, case)
+        for index, case in enumerate(cases)
+        if not requested or case.instance_id in requested_set
+    ]
     repair_fingerprint = _hash(
         {
             "schema": 1,
@@ -73,7 +89,7 @@ def _prepare(
             "evaluator_semantic_sha256": pce_semantic_sha256(config),
             "instances": [
                 {"instance_id": case.instance_id, "row_sha256": case.row_sha256}
-                for case in cases
+                for _, case in selected
             ],
         }
     )
@@ -86,6 +102,7 @@ def _prepare(
         "source_execution_fingerprint": source_fingerprint,
         "repair_fingerprint": repair_fingerprint,
         "evaluator_semantic_sha256": pce_semantic_sha256(config),
+        "selected_instance_ids": [case.instance_id for _, case in selected],
         "created_at": datetime.now(timezone.utc).isoformat(),
     }
     manifest_path = repair_root / "run_manifest.json"
@@ -100,7 +117,7 @@ def _prepare(
 
     tasks: list[TaskFiles] = []
     skipped: list[str] = []
-    for index, case in enumerate(cases):
+    for index, case in selected:
         source_checkpoints = source_batch / "checkpoints" / f"task_{index:04d}"
         if not all(
             (source_checkpoints / f"{phase}.json").is_file()
@@ -165,14 +182,17 @@ def _prepare(
 
 
 def resume_polybench_pce_evaluator(
-    config: PolyBenchPCEConfig, *, repair_id: str
+    config: PolyBenchPCEConfig,
+    *,
+    repair_id: str,
+    instance_ids: Sequence[str] | None = None,
 ) -> dict[str, Any] | None:
     """Submit/collect a new evaluator batch from validated old Plan/Code state."""
     cases, _, _ = load_polybench_pce_cases(
         config.dataset_snapshot, config.image_manifest
     )
     batch_dir, fingerprint, tasks, skipped = _prepare(
-        config, cases, repair_id=repair_id
+        config, cases, repair_id=repair_id, instance_ids=instance_ids
     )
 
     def write_script(indices: Sequence[int], attempt: int) -> Path:

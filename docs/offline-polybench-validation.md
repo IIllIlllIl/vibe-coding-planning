@@ -398,3 +398,14 @@ causing cache/path failures and contaminating multiple labels. Its provisional
 validation authority. The runtime now supplies a fresh writable phase-local
 HOME; validation requires a new repair identity and targeted HOME-sensitive
 regression before another full evaluator repair is accepted.
+
+The targeted repair filter is exposed as repeatable
+`--resume-evaluator-instance INSTANCE_ID`. The isolated-HOME smoke identity is
+`isolated-home-smoke-20260820`: it evaluates the five directly affected cases
+`langchain-ai__langchain-5450`, `huggingface__transformers-30899`,
+`huggingface__transformers-29449`, `huggingface__transformers-31448`, and
+`yt-dlp__yt-dlp-5933`, plus resolved/unresolved controls
+`langchain-ai__langchain-4579` and `keras-team__keras-19863`. Acceptance requires
+all seven eligible checkpoints to start directly at Evaluate, no host-home or
+126/127 evidence, no HOME/cache permission failure, and unchanged copied
+Plan/Code payloads. Labels are diagnostic until those runtime checks pass.

@@ -21,9 +21,12 @@ def main() -> int:
     parser = argparse.ArgumentParser(allow_abbrev=False)
     parser.add_argument("--config", required=True, type=Path)
     parser.add_argument("--repair-id", required=True)
+    parser.add_argument("--instance-id", action="append", default=[])
     args = parser.parse_args()
     result = resume_polybench_pce_evaluator(
-        load_polybench_pce_config(args.config), repair_id=args.repair_id
+        load_polybench_pce_config(args.config),
+        repair_id=args.repair_id,
+        instance_ids=args.instance_id or None,
     )
     if result is None:
         print("PolyBench evaluator repair yielded after durable asynchronous work.")

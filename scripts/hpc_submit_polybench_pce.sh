@@ -20,6 +20,7 @@ REMOTE_APPTAINER_SIF_CACHE_DIR=""
 ULHPC_CONFIG=""
 REQUIRE_CLEAN=0
 EVALUATOR_REPAIR_ID=""
+EVALUATOR_REPAIR_INSTANCES=()
 
 usage() {
   cat <<'USAGE'
@@ -35,6 +36,8 @@ Options:
   --remote-dir DIR          remote synced project directory
   --require-clean-worktree  reject an uncommitted source/config identity
   --resume-evaluator ID     reuse validated Plan/Code checkpoints and rerun only Evaluate
+  --resume-evaluator-instance ID
+                            restrict repair to this instance; repeat as needed
   --submit                  submit; default is ulhpc-submit dry-run
   --dry-run                 explicitly retain dry-run mode
 
@@ -60,6 +63,7 @@ while [[ $# -gt 0 ]]; do
     --ulhpc-config) ULHPC_CONFIG="$2"; shift 2 ;;
     --require-clean-worktree) REQUIRE_CLEAN=1; shift ;;
     --resume-evaluator) EVALUATOR_REPAIR_ID="$2"; shift 2 ;;
+    --resume-evaluator-instance) EVALUATOR_REPAIR_INSTANCES+=("$2"); shift 2 ;;
     --submit) SUBMIT=1; shift ;;
     --dry-run) SUBMIT=0; shift ;;
     -h|--help) usage; exit 0 ;;
@@ -83,6 +87,16 @@ if [[ -n "$EVALUATOR_REPAIR_ID" ]] && [[ ! "$EVALUATOR_REPAIR_ID" =~ ^[A-Za-z0-9
   echo "ERROR: --resume-evaluator must match [A-Za-z0-9_.-]+" >&2
   exit 2
 fi
+if [[ ${#EVALUATOR_REPAIR_INSTANCES[@]} -gt 0 ]] && [[ -z "$EVALUATOR_REPAIR_ID" ]]; then
+  echo "ERROR: --resume-evaluator-instance requires --resume-evaluator" >&2
+  exit 2
+fi
+for instance_id in "${EVALUATOR_REPAIR_INSTANCES[@]}"; do
+  if [[ ! "$instance_id" =~ ^[A-Za-z0-9_.-]+$ ]]; then
+    echo "ERROR: --resume-evaluator-instance must match [A-Za-z0-9_.-]+" >&2
+    exit 2
+  fi
+done
 CONFIG_ABS="$(
   conda run --no-capture-output -n mini-swe python - "$REPO_ROOT" "$CONFIG" <<'PY'
 import sys
@@ -194,6 +208,10 @@ RUN_REL="${RUN_DIR#$REPO_ROOT/}"
 CONFIG_REL="${CONFIG_ABS#$REPO_ROOT/}"
 REMOTE_DATASET="$REMOTE_DATASET_DIR/$DATASET_REL"
 REMOTE_RUN="$REMOTE_RUN_DIR/$RUN_REL"
+EVALUATOR_INSTANCE_ARGS=""
+for instance_id in "${EVALUATOR_REPAIR_INSTANCES[@]}"; do
+  EVALUATOR_INSTANCE_ARGS+=" --instance-id $instance_id"
+done
 
 REMOTE_SCRIPT=$(cat <<EOF
 set -euo pipefail
@@ -211,7 +229,7 @@ source "\$REMOTE_ENV_FILE"
 test -n "\${DEEPSEEK_API_KEY:-}" || exit 2
 if [[ -n "$EVALUATOR_REPAIR_ID" ]]; then
   python3 scripts/resume_polybench_pce_evaluator.py \
-    --config "$CONFIG_REL" --repair-id "$EVALUATOR_REPAIR_ID"
+    --config "$CONFIG_REL" --repair-id "$EVALUATOR_REPAIR_ID"$EVALUATOR_INSTANCE_ARGS
 else
   python3 scripts/run_polybench_pce_hpc.py --config "$CONFIG_REL"
 fi
@@ -239,5 +257,6 @@ echo "[polybench-pce-submit] config=$CONFIG_REL"
 echo "[polybench-pce-submit] dataset=$DATASET_REL"
 echo "[polybench-pce-submit] run=$RUN_REL"
 echo "[polybench-pce-submit] evaluator_repair=${EVALUATOR_REPAIR_ID:-none}"
+echo "[polybench-pce-submit] evaluator_instances=${EVALUATOR_REPAIR_INSTANCES[*]:-all}"
 echo "[polybench-pce-submit] controller_resources=$CPUS CPU/$MEM/$TIME_LIMIT"
 "${CMD[@]}"

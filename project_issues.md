@@ -54,6 +54,13 @@ source 改变后会产生新 fingerprint，因此不得冒充 evaluate-only resu
 HOME 敏感案例和正常对照做回归，再用新 repair identity 重跑 Evaluate；4G 内存本轮
 虽有若干近上限案例但无 OOM，暂不修改资源配置。
 
+下一轮低成本回归身份为 `isolated-home-smoke-20260820`，只选取五个有直接 HOME
+错误证据的案例（LangChain 5450、Transformers 30899/29449/31448、yt-dlp 5933）和
+两个正常 resolved/unresolved 对照（LangChain 4579、Keras 19863）。repeatable
+instance filter 保留原完整 snapshot task index，并进入与全量 repair 相同的 evaluator
+路径。验收检查为 7 个任务均从 Evaluate 开始、复制的 Plan/Code payload 不变、无真实
+宿主 HOME/126/127/HOME-cache permission 证据；通过前不启动全量 repair。
+
 Offline 的独立 1it action-protocol smoke 已完成。它覆盖完整 384/98 split，完成
 122 metric calls；seed validation accuracy 为 `0.704082`、balanced accuracy
 为 `0.697610`、MCC 为 `0.381364`。proposal 与 parent 在 12 个 minibatch case 上
