@@ -198,16 +198,12 @@ def test_environment_execute_builds_expected_apptainer_args(
     args = calls[-1]
     assert args[0] == "apptainer"
     assert args[1] == "exec"
-    assert args[2:4] == ["--cleanenv", "--no-home"]
+    assert args[2] == "--cleanenv"
+    assert "--no-home" not in args
     assert "--writable-tmpfs" in args
-    home_env_index = args.index("HOME=/tmp/vibe_home")
-    assert args[home_env_index - 1] == "--env"
-    binds = [
-        args[index + 1]
-        for index, value in enumerate(args[:-1])
-        if value == "--bind"
-    ]
-    assert any(value.endswith(":/tmp/vibe_home") for value in binds)
+    home_index = args.index("--home")
+    assert args[home_index + 1].endswith(":/tmp/vibe_home")
+    assert "HOME=/tmp/vibe_home" not in args
     env_index = args.index(f"GIT_CONFIG_GLOBAL={env._git_config_path}")
     assert args[env_index - 1] == "--env"
     assert str(cache_dir / "python_3.12-slim.sif") in args
@@ -302,8 +298,11 @@ def test_environment_host_workdir_is_initialized_and_bound(tmp_path, monkeypatch
         capacity_window=_TrackingCapacityWindow(),
         host_workdir=host_workdir,
     )
-    assert popen_calls[0][2:4] == ["--cleanenv", "--no-home"]
-    assert "HOME=/tmp/vibe_home" in popen_calls[0]
+    assert popen_calls[0][2] == "--cleanenv"
+    assert "--no-home" not in popen_calls[0]
+    home_index = popen_calls[0].index("--home")
+    assert popen_calls[0][home_index + 1].endswith(":/tmp/vibe_home")
+    assert "HOME=/tmp/vibe_home" not in popen_calls[0]
     assert popen_calls[0][-1] == "cd /testbed && tar -cf - ."
 
     calls.clear()

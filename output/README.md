@@ -83,6 +83,14 @@ non-empty-patch placeholder policy used for SWE-bench Verified 500-to-482.
 No PolyBench plan matched that placeholder policy, leaving 111 cases: 59
 resolved and 52 unresolved.
 
+Evaluator repair evidence remains nested under the formal run rather than
+becoming a validation snapshot. `isolated-home-smoke-20260820` is a seven-case
+failed diagnostic: it removed host `~/.local` and 126/127 contamination but its
+ordinary bind plus `--env HOME=...` did not replace Apptainer 1.2.1's runtime
+HOME. Its complete raw evidence is mirrored locally and its 1/6 resolved split
+must not be used as labels. The corrected native-`--home` regression uses the
+separate identity `isolated-home-native-smoke-20260820`.
+
 The first PCE smoke preserved valid Plan and Code checkpoints for both cases
 but failed in Evaluate because the Host deleted its own evaluator inputs during
 repository cleanup. It is retained as failed smoke evidence, not an active

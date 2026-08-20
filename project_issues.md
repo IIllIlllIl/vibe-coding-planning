@@ -34,10 +34,18 @@ site-package 初始化污染均消失。但它也证实 `--no-home` 不会改写
 22 个结果相对旧污染数据发生翻转，故 provisional 65/47 不可作为正式标签。该 repair
 保留为诊断证据，不执行最终收集。
 
+第一轮 writable-HOME 实现使用 `--no-home`、普通 bind 和
+`--env HOME=/tmp/vibe_home`。定向 run `isolated-home-smoke-20260820` 的 7/7 Evaluate
+均完成，Plan/Code 输入逐字段保持不变且 126/127、宿主 `~/.local` 污染消失；但五个
+HOME-sensitive case 仍访问 `/home/users/twang` 或 `/home/users`，因此其 1 resolved / 6
+unresolved 只保留为诊断结果。根因是 Apptainer 1.2.1 明确禁止通过
+`APPTAINERENV_HOME`/`--env HOME=...` 覆盖特殊变量 HOME，并在环境组装末尾重新设置为
+runtime `homeDest`；参数存在不等于生效。
+
 修复现采用三层最小契约：所有 Apptainer exec（包括首次 repository materialization）
-增加 `--cleanenv --no-home`，并把每个 phase 独立的新临时目录绑定为可写的
-`/tmp/vibe_home`、显式设置 `HOME=/tmp/vibe_home`，使 SIF 环境成为执行权威而不暴露
-真实宿主 home/cache；PolyBench 与 Online SWE
+使用 `--cleanenv --home <phase-local-host-temp>:/tmp/vibe_home`，由 Apptainer 原生 home
+语义同时设置挂载和 `homeDest`，使 SIF 环境成为执行权威而不暴露真实宿主 home/cache；
+PolyBench 与 Online SWE
 evaluator 在 shell return code 126/127 时停止 parsing，并按 operational failure
 进入既有 task retry，而不是制造 unresolved。Iris Apptainer 1.2.1 的真实 SIF
 只读验证显示，修复组合清除了注入的 `PYTHONPATH`，PATH 不再包含宿主
@@ -54,7 +62,7 @@ source 改变后会产生新 fingerprint，因此不得冒充 evaluate-only resu
 HOME 敏感案例和正常对照做回归，再用新 repair identity 重跑 Evaluate；4G 内存本轮
 虽有若干近上限案例但无 OOM，暂不修改资源配置。
 
-下一轮低成本回归身份为 `isolated-home-smoke-20260820`，只选取五个有直接 HOME
+下一轮低成本回归身份为 `isolated-home-native-smoke-20260820`，只选取五个有直接 HOME
 错误证据的案例（LangChain 5450、Transformers 30899/29449/31448、yt-dlp 5933）和
 两个正常 resolved/unresolved 对照（LangChain 4579、Keras 19863）。repeatable
 instance filter 保留原完整 snapshot task index，并进入与全量 repair 相同的 evaluator
@@ -220,6 +228,7 @@ ssh -p 8022 twang@access-iris.uni.lu \
 | 2026-08-11 22:57 Europe/Luxembourg | Pre-launch check for two-instance PolyBench PCE platform smoke; Slurm queue empty while the separate login-node SIF preheater remained active | 1421355 | 0.056044 | 0.716733 | `LevelFS=1.049601`; smoke requests only `1 CPU / 4G` per controller/worker and does not cap array scheduling itself |
 | 2026-08-12 15:28 Europe/Luxembourg | Pre-launch check for full two-instance PCE smoke after Evaluator ordering fix; queue empty and new run root absent while login-node preheater handled a different Keras image | 1298796 | 0.056315 | 0.717292 | `LevelFS=1.044547`; retains `1 CPU / 4G` per controller/worker and reruns full PCE rather than resuming pre-fix checkpoints |
 | 2026-08-04 Europe/Luxembourg | Pre-launch check for the revised Offline guideline 6it behavior smoke; Iris user queue empty | 760132 | 0.137983 | 0.768265 | `LevelFS=0.426310`; this snapshot is a launch baseline, not a causal attribution to any one prior run |
+| 2026-08-20 14:48 Europe/Luxembourg | Post isolated-HOME evaluator smoke; Iris user queue empty | 1025431 | 0.124519 | 0.122658 | `LevelFS=0.472407`; since 2026-08-12, 1526 top-level jobs used about 148.51 allocated CPU-hours: Offline 74.76h, PCE 49.88h, PCCE 23.87h. The current seven-worker smoke used only about 0.08h and cannot explain the decrease. With a five-day usage half-life and `batch` billing weights `CPU=1, Mem=0.25G`, each `1 CPU / 4G` task has roughly two billing units while allocated. |
 
 Future launch/progress checks must append a row before interpreting movement.
 
@@ -489,8 +498,20 @@ Synthesis exhausted 能 block 且两个 durable iteration 与 GEPA state 一致�
   3. HPC 作业是否只从远端私有 env 文件读取 `DEEPSEEK_API_KEY`，不通过命令行、本地同步或 heredoc 传输明文 key。
   4. `git remote -v` 是否保持无 token URL。
   5. dry-run / generated Slurm script / `.ulhpc_submit/` / `.tmp_hpc_smoke/` 是否不包含真实 secret。
+  6. 已准备 OpenCode Go 凭据 `OPENCODE_GO`，未来计划让模型配置显式选择官方
+     DeepSeek API 或 OpenCode Go，而不是在运行脚本中写死 provider。预期的 OpenCode
+     Go 配置语义为 `model=openai/deepseek-v4-flash`、
+     `api_base=https://opencode.ai/zen/go/v1`、`api_key_env=OPENCODE_GO`；接入前仍需
+     消除活跃 HPC 路径对 `DEEPSEEK_API_KEY` 的硬编码检查，并以独立 smoke 验证
+     LiteLLM/mini-swe-agent 的响应协议、usage 和错误分类。
 - **当前建议**：
   - 继续使用实验专用 DeepSeek key，并在控制台设置额度/告警。
+  - 为保证当前正式实验的数据可靠性和跨 run 可比性，现阶段所有研究运行继续固定
+    使用 DeepSeek 官方 API；OpenCode Go 仅作为待实现的可选 provider，不修改或
+    resume 既有 run，也不与官方 API 结果混合比较。
+  - 后续实现 provider 配置切换时保留现有 DeepSeek 配置不变；OpenCode Go 使用新
+    config 和新 run identity，并在 manifest 中记录 provider/model/api base（不记录
+    key）。
   - 运行前后检查模型统计和 key 泄漏痕迹。
   - 若再次发现 Pro 调用增长，优先在 DeepSeek 控制台禁用/轮换对应 key。
 

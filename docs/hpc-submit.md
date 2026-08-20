@@ -86,9 +86,12 @@ best-effort and failures are audit events, not reasons to invalidate or rerun a
 completed phase. The controller only orchestrates submission, collection, and
 retry; it does not own PCE resource cleanup.
 
-Every project Apptainer environment uses `--cleanenv --no-home` and binds a new
-phase-local host temporary directory as `/tmp/vibe_home`, with
-`HOME=/tmp/vibe_home`. That directory persists across commands within the one
+Every project Apptainer environment uses `--cleanenv` and native
+`--home <phase-local-host-temp>:/tmp/vibe_home`. Apptainer 1.2.1 does not permit
+overriding its special HOME variable through `--env`, so a normal bind plus
+`--env HOME=...` is not an equivalent isolation mechanism. The native home
+option makes the fresh writable directory both the mount and runtime
+`homeDest`. That directory persists across commands within the one
 Agent/Evaluator phase and is removed by environment cleanup. The frozen SIF,
 explicit binds and explicitly injected variables are the runtime authority;
 the submitting user's `PATH`, `PYTHONPATH`, `~/.local/bin`, `~/.local/lib`,

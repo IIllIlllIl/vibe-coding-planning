@@ -395,13 +395,24 @@ Python/site-package initialization failures. It also exposed that Apptainer's
 value: tests still saw the nonexistent or unwritable `/home/users/twang`,
 causing cache/path failures and contaminating multiple labels. Its provisional
 65/47 resolved split is diagnostic only and must not become the held-out
-validation authority. The runtime now supplies a fresh writable phase-local
-HOME; validation requires a new repair identity and targeted HOME-sensitive
-regression before another full evaluator repair is accepted.
+validation authority.
+
+The first writable-HOME attempt, `isolated-home-smoke-20260820`, used a normal
+bind plus `--env HOME=/tmp/vibe_home`. All seven targeted Evaluate tasks
+completed and retained byte-equivalent Plan/Code inputs, while 126/127 and host
+`~/.local` injection disappeared. However, all five HOME-sensitive cases still
+used `/home/users/twang` or attempted to create `/home/users`. Apptainer 1.2.1
+treats HOME specially: runtime environment overrides cannot replace it, and the
+runtime resets it to its computed `homeDest`. This run is diagnostic only. The
+corrected runtime uses native
+`--home <phase-local-host-temp>:/tmp/vibe_home`, which makes the isolated mount
+the runtime `homeDest` rather than trying to override HOME afterward.
 
 The targeted repair filter is exposed as repeatable
-`--resume-evaluator-instance INSTANCE_ID`. The isolated-HOME smoke identity is
-`isolated-home-smoke-20260820`: it evaluates the five directly affected cases
+`--resume-evaluator-instance INSTANCE_ID`. The completed failed diagnostic is
+`isolated-home-smoke-20260820`; its corrected successor is
+`isolated-home-native-smoke-20260820`. Both evaluate the five directly affected
+cases
 `langchain-ai__langchain-5450`, `huggingface__transformers-30899`,
 `huggingface__transformers-29449`, `huggingface__transformers-31448`, and
 `yt-dlp__yt-dlp-5933`, plus resolved/unresolved controls

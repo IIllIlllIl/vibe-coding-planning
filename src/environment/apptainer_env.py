@@ -204,13 +204,13 @@ class ApptainerEnvironment:
             raise
 
     def _prepare_isolated_home(self) -> None:
-        """Bind a phase-local writable HOME without exposing the real home."""
+        """Set a phase-local writable HOME without exposing the real home."""
         self._isolated_home = tempfile.TemporaryDirectory(
             prefix="vibe-apptainer-home-"
         )
         self._run_args.extend(
             [
-                "--bind",
+                "--home",
                 f"{self._isolated_home.name}:{self._container_home}",
             ]
         )
@@ -243,11 +243,8 @@ class ApptainerEnvironment:
                 "apptainer",
                 "exec",
                 "--cleanenv",
-                "--no-home",
-                "--bind",
+                "--home",
                 f"{self._isolated_home.name}:{self._container_home}",
-                "--env",
-                f"HOME={self._container_home}",
                 str(self._sif_path),
                 "bash",
                 "-lc",
@@ -303,7 +300,7 @@ class ApptainerEnvironment:
         # Python packages (notably ~/.local/bin and ~/.local/lib) override the
         # frozen image, so the same SIF can evaluate differently as the login
         # environment changes.  Keep the image's environment authoritative.
-        args: list[str] = ["apptainer", "exec", "--cleanenv", "--no-home"]
+        args: list[str] = ["apptainer", "exec", "--cleanenv"]
         if self._writable_tmpfs:
             args.append("--writable-tmpfs")
         if self._network_disabled:
@@ -311,8 +308,6 @@ class ApptainerEnvironment:
         args.extend(self._run_args)
         args.extend(
             [
-                "--env",
-                f"HOME={self._container_home}",
                 "--env",
                 f"GIT_CONFIG_GLOBAL={self._git_config_path}",
             ]
