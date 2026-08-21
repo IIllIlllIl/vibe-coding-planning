@@ -431,3 +431,14 @@ because its test command reached the evaluator's 1800-second limit without a
 parsed result. The frozen decision and operational evidence are recorded in
 [`reference/polybench_pce_cleaning_20260821.md`](reference/polybench_pce_cleaning_20260821.md).
 This selection does not inspect resolved labels or guideline performance.
+
+The repaired PCCE audit subsequently identified 23 parsed evaluator outputs
+with explicit missing model-cache or network-download evidence. Because nine
+of those cases nevertheless resolved, dependency preparation must cover the
+full 23-case evidence-derived scope rather than selecting only unresolved
+outcomes. The frozen case list and cache contract are recorded in
+[`reference/polybench_dependency_preheat_scope_20260821.md`](reference/polybench_dependency_preheat_scope_20260821.md).
+The planned repair leaves official SIFs unchanged, freezes a separate cache,
+mounts it read-only into Evaluate only, disables evaluator network access, and
+then runs one new PCE and one new PCCE Evaluate-only identity over fixed
+Plan/Code evidence.

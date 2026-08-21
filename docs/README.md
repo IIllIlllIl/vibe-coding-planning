@@ -46,6 +46,7 @@ source of current runtime behavior:
 - `gepa_template_snapshot.md`
 - `third_party_gepa.md`
 - `polybench_pce_cleaning_20260821.md`
+- `polybench_dependency_preheat_scope_20260821.md`
 
 ## Archive
 

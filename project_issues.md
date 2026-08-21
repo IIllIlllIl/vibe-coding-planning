@@ -52,7 +52,7 @@ evaluator 在 shell return code 126/127 时停止 parsing，并按 operational f
 `~/.local/bin`，宿主 pytest 也不可见。单元测试同时覆盖参数构造、workspace 初次复制、
 PolyBench retry 分类和 Online parser 不被调用。正式 PCE 已使用新、明确记录的
 evaluator repair identity 复用 frozen Plan/Code 输入重跑 Evaluate；旧 evaluate
-checkpoint 未被当作完成结果。seed PCCE 的 Evaluate-only repair 已准备但尚未提交。
+checkpoint 未被当作完成结果。seed PCCE 的 Evaluate-only repair 随后已完成。
 该 evaluator-only 入口现已实现为 PCE wrapper 的
 `--resume-evaluator <repair-id>`：它在原 run 下建立独立 repair manifest/batch，验证并
 重新绑定同时存在的已完成 Plan/Code checkpoint identity，不覆盖或改写其 payload、旧
@@ -83,8 +83,20 @@ HOME、126/127 或 HOME/cache permission 证据；该回归通过后才启动了
 独立 `isolated-home-seed-repair-20260821` Evaluate-only 入口和 supervisor identity：
 它验证 accepted review 与 Plan/Code checkpoint，重新绑定新 evaluator fingerprint，
 只对 110 个 Checker 放行并进入 CE 的 case 重跑 Evaluate；唯一三次 review 后仍拒绝的
-case 保持方法结果，不制造 Code/Evaluate。下一步是提交该 supervisor 并验收 repaired
-PCCE evaluator evidence。
+case 保持方法结果，不制造 Code/Evaluate。该 repair 的 110 个 Evaluate task 全部在
+workflow attempt 1 完成，得到 68 resolved / 42 unresolved；另一个 case 保持三次
+Checker 拒绝的方法结果。
+
+本次 repaired PCCE 中 23/110 个 pytest 输出含明确网络或离线模型缓存错误，其中
+14 个最终 unresolved、9 个 resolved。它们都正常结束并生成 parsed result，因此不会
+触发用于 operational failure 的三次 workflow attempts。放弃通过两个额外在线
+Evaluate draw 判断 transient failure：该设计仍受网络波动影响，而且只选择 unresolved
+案例会让环境修复依赖待修复标签。当前冻结全部 23 条的 case-level 预下载范围，计划在
+每个精确 SIF 中准备独立 cache、离线验证后以 manifest/hash 冻结，并只读挂载给
+Evaluate。官方 SIF、Planner、Checker、Code 均不改变；PCE/PCCE 将使用同一缓存各建立
+一个新的 Evaluate-only identity，旧结果不覆盖。名单与验收语义见
+`docs/reference/polybench_dependency_preheat_scope_20260821.md`。预下载及新 Evaluate
+尚未启动。
 
 Offline 的独立 1it action-protocol smoke 已完成。它覆盖完整 384/98 split，完成
 122 metric calls；seed validation accuracy 为 `0.704082`、balanced accuracy

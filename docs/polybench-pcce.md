@@ -283,3 +283,20 @@ fixed method evidence. The prepared repair launch is
 using repair identity `isolated-home-seed-repair-20260821`. It selects all 110
 cases that passed the Checker and reached CE; the one case rejected after three
 reviews remains a method outcome and has no Code/Evaluate task to repair.
+
+That repair completed all 110 Evaluate tasks on workflow attempt 1: 68 were
+resolved and 42 unresolved, while the one Checker-exhausted case remained
+without Code/Evaluate. Raw pytest evidence in 23 outputs contains explicit
+network or offline model-cache errors; 14 of those outputs are unresolved.
+Because those pytest commands terminated and parsed normally, the operational
+three-attempt policy did not and should not retry them automatically.
+
+Repeated online Evaluate draws were considered and rejected as the next repair:
+they would remain sensitive to network fluctuation without defining a stable
+evaluator input. Instead, the next step is a separately frozen dependency
+cache covering all 23 outputs with explicit missing-cache/download evidence,
+including the nine that already resolved. The official SIFs remain unchanged.
+One new PCE and one new PCCE Evaluate-only identity will bind the same frozen
+cache read-only into Evaluate, run without network, and preserve all earlier
+outputs. The exact scope and acceptance contract are recorded in
+[`reference/polybench_dependency_preheat_scope_20260821.md`](reference/polybench_dependency_preheat_scope_20260821.md).

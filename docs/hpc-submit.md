@@ -136,6 +136,15 @@ validates and re-identifies completed PCCE Plan/Code checkpoints and invokes no
 Checker, Planner, or Code Agent. The formal seed repair launch config is
 `configs/polybench_pcce_supervisor_formal_seed_evaluator_repair_20260821.yaml`.
 
+External test dependencies are not part of a SIF preheat. The planned
+PolyBench dependency preheat keeps official SIFs unchanged and builds a
+separate manifest-hashed cache using each exact SIF. Formal repaired Evaluate
+will bind that cache read-only into the isolated evaluator HOME, expose it to
+no Agent phase, and disable evaluator network access. PCE and PCCE must name
+the same dependency-manifest hash under separate new evaluator identities.
+Incomplete download transfers may resume before the cache is frozen; formal
+Evaluate does not use repeated draws to average over network fluctuation.
+
 For a read-only progress snapshot without invoking Codex or submitting work:
 
 ```bash
