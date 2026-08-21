@@ -56,6 +56,13 @@ Apptainer 临时目录，且不得选择仍在写入的 `.tmp` 镜像。
   manifest、连接 persistent run directory，并推进一个 `1 CPU / 4G / 10min`
   controller slice。默认 dry-run；重复使用同一 config 即收集或重试同一
   fingerprint，不需要散装远端命令。
+- `hpc_submit_polybench_pcce.sh --resume-evaluator ID`：从已完成的 PCCE
+  Plan/Code checkpoint 建立独立 Evaluate-only repair；不重跑 Checker、Planner、Code，
+  不覆盖原始 CE evidence。配合 repair 专属 supervisor config 使用。
+- `hpc_run_status.py`：只读查询 persistent run 或 evaluator repair 的
+  `result.json`、controller 状态、各 task batch 的 task/output/failure 数量、活动
+  Slurm job 和当前用户队列。示例：
+  `conda run -n mini-swe python scripts/hpc_run_status.py --config configs/polybench_pcce_hpc_formal_seed.yaml --repair-id isolated-home-seed-repair-20260821`。
 - `tools/login_apptainer_sif_preheat.py`：在 login node 串行准备 SIF，并增量保存
   GHCR OCI digest、源引用、SIF hash、状态和失败原因。新 pull 的前后 digest 一致时
   标为 `pull_attested`；已有缓存补录必须保持 `retrospective`，不得冒充拉取时证据。

@@ -129,6 +129,25 @@ active. It has no iteration target and stops on terminal `result.json` or a
 blocking `controller_status.json`. A ten-minute local poll consumes no HPC
 allocation.
 
+For a PCCE evaluator-only repair, pass the same `--resume-evaluator ID` to the
+PCCE wrapper and supervisor. The shared resume loop then monitors
+`RUN/evaluator_repairs/ID`, not the already-completed parent run. The repair
+validates and re-identifies completed PCCE Plan/Code checkpoints and invokes no
+Checker, Planner, or Code Agent. The formal seed repair launch config is
+`configs/polybench_pcce_supervisor_formal_seed_evaluator_repair_20260821.yaml`.
+
+For a read-only progress snapshot without invoking Codex or submitting work:
+
+```bash
+conda run -n mini-swe python scripts/hpc_run_status.py \
+  --config configs/polybench_pcce_hpc_formal_seed.yaml \
+  --repair-id isolated-home-seed-repair-20260821
+```
+
+The command reports the final/controller status, each persistent task batch's
+task/output/failure counts and active Slurm state, plus the current user queue.
+It never submits, cancels, retries, or changes remote files.
+
 One bounded compatibility rule exists in the shared task-batch Controller:
 legacy worker evidence whose exact `error_type` is
 `CheckerOutputContractError` is retryable even when the old worker labelled it

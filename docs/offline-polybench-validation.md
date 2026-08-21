@@ -420,3 +420,14 @@ cases
 all seven eligible checkpoints to start directly at Evaluate, no host-home or
 126/127 evidence, no HOME/cache permission failure, and unchanged copied
 Plan/Code payloads. Labels are diagnostic until those runtime checks pass.
+
+The corrected full repair `isolated-home-formal-repair-20260820` completed on
+2026-08-21. It reused 112 validated Plan/Code checkpoints, produced 111 parsed
+test outcomes and one semantic test timeout, and reported 73 resolved / 39
+unresolved workflow outcomes. For labelled validation, only the 111 parsed
+outcomes are retained. `huggingface__transformers-8747` is excluded because no
+completed Code checkpoint exists; `huggingface__transformers-12981` is excluded
+because its test command reached the evaluator's 1800-second limit without a
+parsed result. The frozen decision and operational evidence are recorded in
+[`reference/polybench_pce_cleaning_20260821.md`](reference/polybench_pce_cleaning_20260821.md).
+This selection does not inspect resolved labels or guideline performance.

@@ -7,6 +7,8 @@ import subprocess
 import time
 from pathlib import Path
 
+from scripts.hpc_resume_loop import _remote_run_snapshot
+
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 SCRIPT = REPO_ROOT / "scripts" / "hpc_resume_loop.py"
@@ -56,6 +58,15 @@ def _write_workflow_config(root: Path) -> Path:
         encoding="utf-8",
     )
     return config
+
+
+def test_evaluator_repair_supervisor_monitors_repair_root() -> None:
+    config = REPO_ROOT / "configs/polybench_pcce_hpc_formal_seed.yaml"
+    snapshot = _remote_run_snapshot(["--resume-evaluator", "native-home"], config)
+    assert snapshot.endswith(
+        "/output/SWE-PolyBench/polybench-pcce-runs/formal/"
+        "seed-python111-20260817/evaluator_repairs/native-home"
+    )
 
 
 def _fake_batch_script(path: Path, log_path: Path) -> None:
@@ -754,8 +765,7 @@ def test_formal_pcce_contract_retry_uses_new_supervisor_state_only(
     assert "--job-name polybench-pcce-seed-formal-20260817" in invocation
     assert (
         "--state-file .local/hpc-supervisor/"
-        "polybench-pcce-seed-formal-contract-retry-submit-20260818.json"
-        in invocation
+        "polybench-pcce-seed-formal-contract-retry-submit-20260818.json" in invocation
     )
     assert "--recover-controller-error-type-once TaskBatchBlocked" in invocation
     assert "--require-clean-worktree" in invocation

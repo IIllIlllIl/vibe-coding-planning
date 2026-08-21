@@ -67,7 +67,7 @@ def _case_dict(case: PCCECase) -> dict[str, Any]:
     }
 
 
-def _array_script(
+def build_array_script(
     *,
     config: PolyBenchPCCEConfig,
     batch_dir: Path,
@@ -269,7 +269,7 @@ class PolyBenchPCCEHPCExecutor:
         def write_script(indices: Sequence[int], attempt: int) -> Path:
             path = batch_dir / f"{phase}_array_attempt_{attempt:02d}.sbatch"
             path.write_text(
-                _array_script(
+                build_array_script(
                     config=self.config,
                     batch_dir=batch_dir,
                     indices=indices,

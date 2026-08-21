@@ -15,6 +15,7 @@ REMOTE_RUN_DIR="~/hpc_run_state/vibe-coding-planning"
 REMOTE_ENV_FILE="~/.config/vibe-coding-planning/deepseek.env"
 ULHPC_CONFIG=""
 REQUIRE_CLEAN=0
+EVALUATOR_REPAIR_ID=""
 
 usage() {
   cat <<'USAGE'
@@ -29,6 +30,7 @@ Options:
   --time HH:MM:SS           controller slice walltime (default: 00:10:00)
   --remote-dir DIR          remote synced project directory
   --require-clean-worktree  reject an uncommitted source/config identity
+  --resume-evaluator ID     reuse validated PCCE Plan/Code checkpoints and rerun Evaluate
   --submit                  submit; default is ulhpc-submit dry-run
   --dry-run                 explicitly retain dry-run mode
 
@@ -50,6 +52,7 @@ while [[ $# -gt 0 ]]; do
     --remote-env-file) REMOTE_ENV_FILE="$2"; shift 2 ;;
     --ulhpc-config) ULHPC_CONFIG="$2"; shift 2 ;;
     --require-clean-worktree) REQUIRE_CLEAN=1; shift ;;
+    --resume-evaluator) EVALUATOR_REPAIR_ID="$2"; shift 2 ;;
     --submit) SUBMIT=1; shift ;;
     --dry-run) SUBMIT=0; shift ;;
     -h|--help) usage; exit 0 ;;
@@ -65,6 +68,10 @@ PY
 )"
 if [[ -z "$CONFIG" ]]; then
   echo "ERROR: --config is required" >&2
+  exit 2
+fi
+if [[ -n "$EVALUATOR_REPAIR_ID" ]] && [[ ! "$EVALUATOR_REPAIR_ID" =~ ^[A-Za-z0-9_.-]+$ ]]; then
+  echo "ERROR: --resume-evaluator must match [A-Za-z0-9_.-]+" >&2
   exit 2
 fi
 CONFIG_ABS="$(conda run --no-capture-output -n mini-swe python - "$REPO_ROOT" "$CONFIG" <<'PY'
@@ -206,7 +213,12 @@ fi
 set +x
 source "\$REMOTE_ENV_FILE"
 test -n "\${DEEPSEEK_API_KEY:-}" || exit 2
-python3 scripts/run_polybench_pcce_hpc.py --config "$CONFIG_REL"
+if [[ -n "$EVALUATOR_REPAIR_ID" ]]; then
+  python3 scripts/resume_polybench_pcce_evaluator.py \
+    --config "$CONFIG_REL" --repair-id "$EVALUATOR_REPAIR_ID"
+else
+  python3 scripts/run_polybench_pcce_hpc.py --config "$CONFIG_REL"
+fi
 EOF
 )
 
@@ -235,5 +247,6 @@ echo "[polybench-pcce-submit] validation=$VALIDATION_REL"
 echo "[polybench-pcce-submit] baseline=$PCE_BASELINE_REL"
 echo "[polybench-pcce-submit] baseline_stage=single-file frozen outcome bundle"
 echo "[polybench-pcce-submit] run=$RUN_REL"
+echo "[polybench-pcce-submit] evaluator_repair=${EVALUATOR_REPAIR_ID:-none}"
 echo "[polybench-pcce-submit] controller_resources=$CPUS CPU/$MEM/$TIME_LIMIT"
 "${CMD[@]}"

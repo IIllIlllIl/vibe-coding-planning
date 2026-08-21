@@ -176,7 +176,13 @@ def _remote_run_snapshot(batch_args: list[str], runtime_config: Path) -> str:
         _take_option(batch_args, "--remote-run-dir")
         or "~/hpc_run_state/vibe-coding-planning"
     )
-    return f"{remote_run_dir.rstrip('/')}/{run_rel}"
+    snapshot = f"{remote_run_dir.rstrip('/')}/{run_rel}"
+    evaluator_repair = _take_option(batch_args, "--resume-evaluator")
+    if evaluator_repair:
+        if not re.fullmatch(r"[A-Za-z0-9_.-]+", evaluator_repair):
+            raise SystemExit("--resume-evaluator must match [A-Za-z0-9_.-]+")
+        snapshot += f"/evaluator_repairs/{evaluator_repair}"
+    return snapshot
 
 
 def _ssh_config(batch_args: list[str]) -> tuple[str, str, str]:

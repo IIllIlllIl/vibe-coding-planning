@@ -200,6 +200,14 @@ The additive implementation is under `src/polybench_pcce/`:
 and a single-file bundle containing only the frozen historical PCE outcome
 table through `ulhpc-submit`; it does not upload historical PCE attempts or
 workspaces. Rerunning the same command collects or advances the next phase.
+When only evaluator semantics changed, the same wrapper's explicit
+`--resume-evaluator ID` mode creates an independent repair below
+`evaluator_repairs/ID`. It validates the original accepted review and completed
+PCCE Plan/Code checkpoints, copies their payloads under a new evaluator
+fingerprint, and starts directly at Evaluate. It never calls Checker, Planner,
+or Code and never overwrites the original CE output. The repair supervisor must
+monitor the repair subdirectory rather than the already-completed parent run;
+the shared resume loop derives that subdirectory from `--resume-evaluator`.
 `configs/polybench_pcce_hpc_smoke.yaml`
 selects two frozen validation cases and the frozen seed guideline. Its run root
 is below `polybench-pcce-runs/smoke/` and is not formal evidence.
@@ -267,3 +275,11 @@ rate, pass-after-revision rate, and rejection-exhaustion rate. It does not set
 a post-hoc guideline acceptance threshold. Later candidate-guideline PCCE runs
 must retain a separate run identity and must not use seed outcomes to modify
 their already frozen guideline text.
+
+The first formal seed run's original Evaluate evidence is environment-
+contaminated. Its PC decisions, accepted plans, and Code checkpoints remain the
+fixed method evidence. The prepared repair launch is
+`configs/polybench_pcce_supervisor_formal_seed_evaluator_repair_20260821.yaml`,
+using repair identity `isolated-home-seed-repair-20260821`. It selects all 110
+cases that passed the Checker and reached CE; the one case rejected after three
+reviews remains a method outcome and has no Code/Evaluate task to repair.

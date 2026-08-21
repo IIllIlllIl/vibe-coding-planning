@@ -45,6 +45,7 @@ source of current runtime behavior:
 - `gepa_initial_rules_gpt_seed_provenance.md`
 - `gepa_template_snapshot.md`
 - `third_party_gepa.md`
+- `polybench_pce_cleaning_20260821.md`
 
 ## Archive
 

@@ -50,24 +50,41 @@ evaluator 在 shell return code 126/127 时停止 parsing，并按 operational f
 进入既有 task retry，而不是制造 unresolved。Iris Apptainer 1.2.1 的真实 SIF
 只读验证显示，修复组合清除了注入的 `PYTHONPATH`，PATH 不再包含宿主
 `~/.local/bin`，宿主 pytest 也不可见。单元测试同时覆盖参数构造、workspace 初次复制、
-PolyBench retry 分类和 Online parser 不被调用。下一步先以新、明确记录的 evaluator
-修复身份复用正式 PCE 的 frozen Plan/Code 输入重跑 Evaluate；确认结果后再决定 seed
-PCCE 的 Evaluate resume，禁止直接把旧 evaluate checkpoint 当作已完成。
+PolyBench retry 分类和 Online parser 不被调用。正式 PCE 已使用新、明确记录的
+evaluator repair identity 复用 frozen Plan/Code 输入重跑 Evaluate；旧 evaluate
+checkpoint 未被当作完成结果。seed PCCE 的 Evaluate-only repair 已准备但尚未提交。
 该 evaluator-only 入口现已实现为 PCE wrapper 的
 `--resume-evaluator <repair-id>`：它在原 run 下建立独立 repair manifest/batch，验证并
 重新绑定同时存在的已完成 Plan/Code checkpoint identity，不覆盖或改写其 payload、旧
 Evaluate/output，不调用 LLM，并复用既有三次 task attempts；缺少任一完成 checkpoint
 的案例明确 skipped，schema/identity 损坏则 block。普通 PCE controller 在 evaluator
-source 改变后会产生新 fingerprint，因此不得冒充 evaluate-only resume。下一步先以
-HOME 敏感案例和正常对照做回归，再用新 repair identity 重跑 Evaluate；4G 内存本轮
-虽有若干近上限案例但无 OOM，暂不修改资源配置。
+source 改变后会产生新 fingerprint，因此不得冒充 evaluate-only resume。HOME 敏感
+案例回归和全量 repair 均已通过该入口完成；4G 内存本轮虽有若干近上限案例但无 OOM，
+暂不修改资源配置。
 
 下一轮低成本回归身份为 `isolated-home-native-smoke-20260820`，只选取五个有直接 HOME
 错误证据的案例（LangChain 5450、Transformers 30899/29449/31448、yt-dlp 5933）和
 两个正常 resolved/unresolved 对照（LangChain 4579、Keras 19863）。repeatable
 instance filter 保留原完整 snapshot task index，并进入与全量 repair 相同的 evaluator
-路径。验收检查为 7 个任务均从 Evaluate 开始、复制的 Plan/Code payload 不变、无真实
-宿主 HOME/126/127/HOME-cache permission 证据；通过前不启动全量 repair。
+路径。7 个任务均从 Evaluate 开始、复制的 Plan/Code payload 不变，且没有真实宿主
+HOME、126/127 或 HOME/cache permission 证据；该回归通过后才启动了全量 repair。
+
+上述回归和全量 repair 均已完成。`isolated-home-formal-repair-20260820` 对 112 个
+可复用 Plan/Code checkpoint 全部在 attempt 1 写出 durable Evaluate output：111 个
+测试正常结束并被官方 parser 解析，`huggingface__transformers-12981` 达到 evaluator
+内部 1800 秒测试上限且无 parsed result；`huggingface__transformers-8747` 因原 Code
+未完成而未进入 repair。两者按与标签和 guideline 表现无关的 evidence-completeness
+策略排除，固定清洗记录见
+`docs/reference/polybench_pce_cleaning_20260821.md`。111 个 included case 中没有
+126/127、宿主 HOME、patch apply 或 SIF operational failure。
+
+正式 seed PCCE 的 PC/Checker/Code 证据完整，但 110 个 CE 的旧 Evaluate 受相同环境
+污染。普通 PCCE resume 会直接复用旧 `ce_outcomes.jsonl`，不能用于修复。当前已准备
+独立 `isolated-home-seed-repair-20260821` Evaluate-only 入口和 supervisor identity：
+它验证 accepted review 与 Plan/Code checkpoint，重新绑定新 evaluator fingerprint，
+只对 110 个 Checker 放行并进入 CE 的 case 重跑 Evaluate；唯一三次 review 后仍拒绝的
+case 保持方法结果，不制造 Code/Evaluate。下一步是提交该 supervisor 并验收 repaired
+PCCE evaluator evidence。
 
 Offline 的独立 1it action-protocol smoke 已完成。它覆盖完整 384/98 split，完成
 122 metric calls；seed validation accuracy 为 `0.704082`、balanced accuracy

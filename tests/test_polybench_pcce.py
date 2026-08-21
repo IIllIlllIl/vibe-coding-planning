@@ -11,14 +11,17 @@ import pytest
 
 from src.optimization.models import CheckerOutput, RepositoryEvidence
 from src.optimization.audit import text_sha256
+from src.optimization.hpc.task_batch import atomic_json
 from src.polybench_pcce.config import load_polybench_pcce_config
 from src.polybench_pcce.controller import _review_assignments, run_polybench_pcce
 from src.polybench_pcce.dataset import load_pcce_cases
+from src.polybench_pcce.evaluator_resume import _prepare as prepare_evaluator_resume
 from src.polybench_pcce.models import PCCECase, PCReviewAssignment
 from src.polybench_pcce.runner import PolyBenchPCCERunner
 from src.polybench_pcce.runner import validate_pcce_checker_output
 from src.polybench_pcce.worker import run_task
 from src.polybench_pce.models import FrozenImage, PolyBenchPCECase
+from src.polybench_pce.runner import checkpoint_identity
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -84,8 +87,7 @@ def test_formal_seed_config_selects_all_frozen_cases_and_preserves_smoke_method(
     assert formal.checker_instance_template == smoke.checker_instance_template
     assert formal.plan_revision_prompt == smoke.plan_revision_prompt
     assert (
-        formal.plan_revision_instance_template
-        == smoke.plan_revision_instance_template
+        formal.plan_revision_instance_template == smoke.plan_revision_instance_template
     )
     assert formal.max_review_rejections == smoke.max_review_rejections == 3
     assert formal.hpc.max_task_attempts == smoke.hpc.max_task_attempts == 3
@@ -468,3 +470,117 @@ def test_submit_wrapper_stages_baseline_directory_and_keeps_dry_run(
         result.stdout
     )
     assert "scripts/run_polybench_pcce_hpc.py" in result.stdout
+
+
+def test_pcce_evaluator_resume_reidentifies_fixed_plan_and_code(
+    tmp_path: Path,
+) -> None:
+    config = _config(tmp_path)
+    case = _case("pass", True)
+    source_fingerprint = "source-ce-fingerprint"
+    atomic_json(
+        config.run_dir / "run_manifest.json",
+        {
+            "mode": "polybench_pcce",
+            "pcce_semantic_sha256": "source-semantic",
+        },
+    )
+    source_batch = config.run_dir / "hpc_tasks" / "ce" / source_fingerprint
+    atomic_json(
+        source_batch / "manifest.json",
+        {"instance_ids": [case.instance_id]},
+    )
+    review = config.run_dir / "reviews" / "review_01" / f"{case.instance_id}.json"
+    accepted_plan = "accepted plan"
+    atomic_json(
+        review,
+        {
+            "status": "completed",
+            "instance_id": case.instance_id,
+            "plan": accepted_plan,
+            "checker_output": {"should_proceed": True},
+        },
+    )
+    source_task = {
+        "fingerprint": source_fingerprint,
+        "instance_id": case.instance_id,
+        "accepted_review_relpath": str(review.relative_to(config.run_dir)),
+        "accepted_plan": accepted_plan,
+    }
+    atomic_json(source_batch / "tasks" / "task_0000.json", source_task)
+    ce_outcomes = config.run_dir / "ce_outcomes.jsonl"
+    ce_outcomes.write_text(
+        json.dumps(
+            {
+                "status": "completed",
+                "pcce_status": "completed",
+                "fingerprint": source_fingerprint,
+                "instance_id": case.instance_id,
+                "plan": accepted_plan,
+            }
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+    source_identity = checkpoint_identity(
+        case.source, execution_fingerprint=source_fingerprint
+    )
+    for phase, payload in (
+        ("plan", {"plan": accepted_plan, "trajectory": []}),
+        ("code", {"patch": "diff", "raw_patch": "diff", "trajectory": []}),
+    ):
+        atomic_json(
+            source_batch / "checkpoints" / "task_0000" / f"{phase}.json",
+            {
+                "schema_version": 1,
+                "checkpoint_identity": source_identity,
+                "phase": phase,
+                "payload": payload,
+            },
+        )
+
+    batch, fingerprint, tasks, _ = prepare_evaluator_resume(
+        config, [case], repair_id="native-home"
+    )
+
+    assert [task.instance_id for task in tasks] == [case.instance_id]
+    target_identity = checkpoint_identity(
+        case.source, execution_fingerprint=fingerprint
+    )
+    for phase in ("plan", "code"):
+        copied = json.loads(
+            (batch / "checkpoints" / "task_0000" / f"{phase}.json").read_text()
+        )
+        assert copied["checkpoint_identity"] == target_identity
+        assert copied["phase"] == phase
+    assert not (batch / "checkpoints" / "task_0000" / "evaluate.json").exists()
+    repair_task = json.loads(tasks[0].manifest_path.read_text())
+    assert repair_task["phase"] == "ce"
+    assert repair_task["accepted_plan"] == accepted_plan
+
+
+def test_submit_wrapper_selects_pcce_evaluator_repair(tmp_path: Path) -> None:
+    fake = tmp_path / "ulhpc-submit"
+    fake.write_text("#!/usr/bin/env bash\nprintf '%s\\n' \"$@\"\n", encoding="utf-8")
+    fake.chmod(0o755)
+    env = os.environ.copy()
+    env.update(ULHPC_SUBMIT_BIN=str(fake), ULHPC_USER="tester")
+    result = subprocess.run(
+        [
+            "bash",
+            "scripts/hpc_submit_polybench_pcce.sh",
+            "--config",
+            "configs/polybench_pcce_hpc_formal_seed.yaml",
+            "--resume-evaluator",
+            "native-home",
+            "--dry-run",
+        ],
+        cwd=ROOT,
+        env=env,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert result.returncode == 0, result.stderr
+    assert "scripts/resume_polybench_pcce_evaluator.py" in result.stdout
+    assert '--repair-id "native-home"' in result.stdout
