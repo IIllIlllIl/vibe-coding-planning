@@ -74,6 +74,9 @@ Apptainer 临时目录，且不得选择仍在写入的 `.tmp` 镜像。
 - `tools/login_polybench_dependency_preheat.py`：在 Iris login node 内逐个使用案例的
   frozen SIF 下载 evidence-derived Hugging Face 依赖；依赖写入显式 bind 的独立 cache，
   每个 artifact 冻结 revision 并用断网容器复核。它不修改 SIF，也不调用 LLM。
+- `tools/freeze_polybench_dependency_cache.py`：只读扫描完成的远端 cache，冻结成功
+  artifact revision、逐文件 SHA-256、SIF identity 与 evaluator membership；不下载、
+  不执行评估。
 
 ## 安全与资源
 

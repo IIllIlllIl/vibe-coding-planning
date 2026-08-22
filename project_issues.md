@@ -103,6 +103,15 @@ repo 拉取约 5.7G，因此正式配置采用 evidence-derived file profiles。
 `--home` 写入未在独立 `apptainer exec` 间持久化，正式实现改用显式 dependency-cache
 bind。新 Evaluate 尚未启动。
 
+69 个成功 artifact 已冻结为 manifest
+`59d4fb29b6fee89c5699680ef021e6f932ca5485eaaf4fb2b1fbbfa9cebaa2bd`，包含
+1,540 个文件/链接条目和逐文件 hash。`huggingface__transformers-25636` 因必需的
+`ArthurZ/flax-tiny-random-bert-sharded` 无法访问而按环境不可冻结排除；该决策与历史
+label 和 guideline 表现无关。下一步使用 15158、20136、langchain-5450 的固定 PCE
+Plan/Code checkpoint 做三案例 Evaluate-only 断网 smoke；验收环境命中，不以
+resolved 比例为成功条件。设计见
+`docs/reference/polybench_dependency_cache_snapshot_20260822.md`。
+
 Offline 的独立 1it action-protocol smoke 已完成。它覆盖完整 384/98 split，完成
 122 metric calls；seed validation accuracy 为 `0.704082`、balanced accuracy
 为 `0.697610`、MCC 为 `0.381364`。proposal 与 parent 在 12 个 minibatch case 上

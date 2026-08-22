@@ -293,23 +293,26 @@ class PolyBenchPCERunner:
             eval_workspace = self.attempt_dir / "workspaces" / "evaluate"
             self._cleanup(eval_workspace)
             try:
-                evaluator_result = self.evaluator(
-                    str(code_checkpoint["patch"]),
-                    case,
-                    container=self.config.container,
-                    capacity_window=self.capacity_window,
-                    workdir=self.config.docker.workdir,
-                    phase_workdir=eval_workspace,
-                    timeout=self.config.evaluator_timeout,
-                    result_callback=lambda result: self._save_checkpoint(
+                evaluator_options: dict[str, Any] = {
+                    "container": self.config.container,
+                    "capacity_window": self.capacity_window,
+                    "workdir": self.config.docker.workdir,
+                    "phase_workdir": eval_workspace,
+                    "timeout": self.config.evaluator_timeout,
+                    "result_callback": lambda result: self._save_checkpoint(
                         "evaluate", {"evaluator_result": result}
                     ),
-                    cleanup_error_callback=lambda exc: self.audit.write(
+                    "cleanup_error_callback": lambda exc: self.audit.write(
                         "polybench_pce_environment_cleanup_failed",
                         phase="evaluate",
                         error_type=type(exc).__name__,
                         error=str(exc),
                     ),
+                }
+                if self.config.dependency_cache is not None:
+                    evaluator_options["dependency_cache"] = self.config.dependency_cache
+                evaluator_result = self.evaluator(
+                    str(code_checkpoint["patch"]), case, **evaluator_options
                 )
             finally:
                 self._best_effort_workspace_cleanup(eval_workspace, phase="evaluate")

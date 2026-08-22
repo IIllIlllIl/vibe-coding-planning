@@ -12,7 +12,7 @@ import yaml
 from scripts.tools.freeze_polybench_pce_source import freeze
 from src.environment.docker_env import DockerCapacityWindow
 from src.optimization.hpc.task_batch import TaskFiles, atomic_json
-from src.polybench_pce.config import load_polybench_pce_config
+from src.polybench_pce.config import DependencyCacheConfig, load_polybench_pce_config
 from src.polybench_pce.controller import (
     _git_head,
     _run_manifest_compatible,
@@ -21,6 +21,7 @@ from src.polybench_pce.controller import (
 from src.polybench_pce.dataset import canonical_image_ref, load_polybench_pce_cases
 from src.polybench_pce.evaluator import (
     PolyBenchEvaluatorOperationalError,
+    _dependency_cache_runtime,
     evaluate_polybench_apptainer,
 )
 from src.polybench_pce.evaluator_resume import _prepare as prepare_evaluator_resume
@@ -337,6 +338,90 @@ def test_config_rejects_host_side_array_concurrency(tmp_path: Path) -> None:
     raw["hpc"]["max_running_array_tasks"] = 4
     path.write_text(yaml.safe_dump(raw))
     with pytest.raises(ValueError, match="leaves concurrency to Slurm"):
+        load_polybench_pce_config(path, require_api_keys=False)
+
+
+def test_dependency_cache_runtime_is_read_only_offline_and_identity_bound(
+    tmp_path: Path,
+) -> None:
+    snapshot, images, _ = _frozen_inputs(tmp_path)
+    case = load_polybench_pce_cases(snapshot, images)[0][0]
+    cache = tmp_path / "dependencies"
+    (cache / "instances" / case.instance_id / "dependency-cache").mkdir(parents=True)
+    dependency = DependencyCacheConfig(
+        manifest_path=tmp_path / "manifest.json",
+        manifest_sha256="a" * 64,
+        remote_cache_root=cache,
+        included_instances=(case.instance_id,),
+        instance_sif_sha256=((case.instance_id, case.image.sif_sha256),),
+        network_disabled=True,
+    )
+
+    args, network_disabled = _dependency_cache_runtime(case, dependency)
+
+    assert network_disabled is True
+    assert args[:2] == [
+        "--bind",
+        f"{cache}/instances/{case.instance_id}/dependency-cache:/dependency-cache:ro",
+    ]
+    assert "HF_HOME=/dependency-cache" in args
+    assert "TRANSFORMERS_OFFLINE=1" in args
+    assert "HF_HUB_OFFLINE=1" in args
+
+    excluded = DependencyCacheConfig(
+        manifest_path=dependency.manifest_path,
+        manifest_sha256=dependency.manifest_sha256,
+        remote_cache_root=cache,
+        included_instances=(),
+        instance_sif_sha256=(),
+        network_disabled=True,
+    )
+    with pytest.raises(
+        PolyBenchEvaluatorOperationalError,
+        match="outside frozen dependency-cache membership",
+    ):
+        _dependency_cache_runtime(case, excluded)
+
+
+def test_config_loads_content_addressed_dependency_manifest(tmp_path: Path) -> None:
+    snapshot, images, _ = _frozen_inputs(tmp_path)
+    case = load_polybench_pce_cases(snapshot, images)[0][0]
+    path = _config(tmp_path, snapshot, images)
+    cache_root = tmp_path / "dependencies"
+    manifest_path = tmp_path / "dependency-manifest.json"
+    manifest_path.write_text(
+        json.dumps(
+            {
+                "purpose": "polybench_evaluator_dependency_cache_snapshot",
+                "remote_cache_root": str(cache_root),
+                "membership": {
+                    "included_instances": [case.instance_id],
+                    "excluded_instances": [],
+                },
+                "instances": {case.instance_id: {"sif_sha256": case.image.sif_sha256}},
+            },
+            sort_keys=True,
+        ),
+        encoding="utf-8",
+    )
+    raw = yaml.safe_load(path.read_text(encoding="utf-8"))
+    raw["paths"]["dependency_cache_manifest"] = str(manifest_path)
+    raw["dependency_cache"] = {
+        "manifest_sha256": _sha(manifest_path),
+        "network_disabled": True,
+    }
+    path.write_text(yaml.safe_dump(raw), encoding="utf-8")
+
+    config = load_polybench_pce_config(path, require_api_keys=False)
+
+    assert config.dependency_cache is not None
+    assert config.dependency_cache.manifest_sha256 == _sha(manifest_path)
+    assert config.dependency_cache.included_instances == (case.instance_id,)
+    assert config.dependency_cache.network_disabled is True
+
+    raw["dependency_cache"]["manifest_sha256"] = "0" * 64
+    path.write_text(yaml.safe_dump(raw), encoding="utf-8")
+    with pytest.raises(ValueError, match="manifest sha256 mismatch"):
         load_polybench_pce_config(path, require_api_keys=False)
 
 
@@ -854,9 +939,7 @@ def test_evaluator_resume_reidentifies_preserved_plan_and_code_checkpoints(
     )
     for phase in ("plan", "code"):
         copied = json.loads(
-            (
-                batch_dir / "checkpoints" / "task_0000" / f"{phase}.json"
-            ).read_text()
+            (batch_dir / "checkpoints" / "task_0000" / f"{phase}.json").read_text()
         )
         assert copied["checkpoint_identity"] == target_identity
         assert copied["phase"] == phase
@@ -870,9 +953,7 @@ def test_evaluator_resume_reidentifies_preserved_plan_and_code_checkpoints(
             },
         }[phase]
         assert copied["payload"] == expected_payload
-    assert not (
-        batch_dir / "checkpoints" / "task_0000" / "evaluate.json"
-    ).exists()
+    assert not (batch_dir / "checkpoints" / "task_0000" / "evaluate.json").exists()
     task_manifest = json.loads(tasks[0].manifest_path.read_text())
     assert task_manifest["fingerprint"] == repair_fingerprint
     assert task_manifest["instance_id"] == case.instance_id
@@ -891,9 +972,7 @@ def test_evaluator_resume_skips_case_without_complete_plan_and_code(
         config.run_dir / "run_manifest.json",
         {"execution_fingerprint": source_fingerprint},
     )
-    (
-        config.run_dir / "hpc_tasks" / "pce" / source_fingerprint
-    ).mkdir(parents=True)
+    (config.run_dir / "hpc_tasks" / "pce" / source_fingerprint).mkdir(parents=True)
 
     _, _, tasks, skipped = prepare_evaluator_resume(
         config, [case], repair_id="incomplete-source"
@@ -914,9 +993,7 @@ def test_evaluator_resume_rejects_unknown_instance_filter(tmp_path: Path) -> Non
         config.run_dir / "run_manifest.json",
         {"execution_fingerprint": source_fingerprint},
     )
-    (
-        config.run_dir / "hpc_tasks" / "pce" / source_fingerprint
-    ).mkdir(parents=True)
+    (config.run_dir / "hpc_tasks" / "pce" / source_fingerprint).mkdir(parents=True)
 
     with pytest.raises(ValueError, match="unknown instance_ids"):
         prepare_evaluator_resume(

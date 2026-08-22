@@ -11,6 +11,7 @@ from src.environment.apptainer_env import ApptainerEnvironment
 from src.exceptions import CommandTimeoutError
 from src.optimization.config import ContainerConfig
 from src.environment.docker_env import DockerCapacityWindow
+from src.polybench_pce.config import DependencyCacheConfig
 from src.polybench_pce.models import PolyBenchPCECase
 
 
@@ -48,6 +49,48 @@ APPLY_METHODS = (
 # 127 when it could not be found.  Neither is evidence that the submitted code
 # failed the benchmark tests: the tests did not start.
 COMMAND_NOT_EXECUTED_RETURNCODES = frozenset({126, 127})
+
+
+def _dependency_cache_runtime(
+    case: PolyBenchPCECase,
+    dependency_cache: DependencyCacheConfig,
+) -> tuple[list[str], bool]:
+    if case.instance_id not in dependency_cache.included_instances:
+        raise PolyBenchEvaluatorOperationalError(
+            f"instance is outside frozen dependency-cache membership: {case.instance_id}",
+            outcome_reason="dependency_cache_instance_excluded",
+            retry_disposition="block_run",
+        )
+    sif_hashes = dict(dependency_cache.instance_sif_sha256)
+    if sif_hashes.get(case.instance_id) != case.image.sif_sha256:
+        raise PolyBenchEvaluatorOperationalError(
+            "dependency cache and evaluator SIF identities differ",
+            outcome_reason="dependency_cache_sif_mismatch",
+            retry_disposition="block_run",
+        )
+    host_cache = (
+        dependency_cache.remote_cache_root
+        / "instances"
+        / case.instance_id
+        / "dependency-cache"
+    )
+    if not host_cache.is_dir():
+        raise PolyBenchEvaluatorOperationalError(
+            f"frozen dependency cache is missing: {host_cache}",
+            outcome_reason="dependency_cache_missing",
+            retry_disposition="block_run",
+        )
+    run_args = ["--bind", f"{host_cache}:/dependency-cache:ro"]
+    for key, value in {
+        "HF_HOME": "/dependency-cache",
+        "HF_HUB_CACHE": "/dependency-cache/hub",
+        "HUGGINGFACE_HUB_CACHE": "/dependency-cache/hub",
+        "TRANSFORMERS_CACHE": "/dependency-cache/hub",
+        "TRANSFORMERS_OFFLINE": "1",
+        "HF_HUB_OFFLINE": "1",
+    }.items():
+        run_args.extend(["--env", f"{key}={value}"])
+    return run_args, dependency_cache.network_disabled
 
 
 def _terminal_result(
@@ -130,10 +173,17 @@ def evaluate_polybench_apptainer(
     timeout: int,
     result_callback: Callable[[dict[str, Any]], None] | None = None,
     cleanup_error_callback: Callable[[BaseException], None] | None = None,
+    dependency_cache: DependencyCacheConfig | None = None,
 ) -> dict[str, Any]:
     """Return raw official evidence without deciding validation inclusion."""
 
     def completed(result: dict[str, Any]) -> dict[str, Any]:
+        if dependency_cache is not None:
+            result["dependency_cache"] = {
+                "manifest_sha256": dependency_cache.manifest_sha256,
+                "network_disabled": dependency_cache.network_disabled,
+                "container_path": "/dependency-cache",
+            }
         if result_callback is not None:
             result_callback(result)
         return result
@@ -157,6 +207,12 @@ def evaluate_polybench_apptainer(
         )
     env: ApptainerEnvironment | None = None
     try:
+        run_args: list[str] = []
+        network_disabled = False
+        if dependency_cache is not None:
+            run_args, network_disabled = _dependency_cache_runtime(
+                case, dependency_cache
+            )
         # The directory must be empty when ApptainerEnvironment is created:
         # that constructor materializes the image's /testbed into it.  Only
         # then do we add evaluator-owned inputs to the bound workspace.
@@ -171,6 +227,8 @@ def evaluate_polybench_apptainer(
             git_safe_directories=[workdir],
             host_workdir=phase_workdir,
             initialize_host_workdir=True,
+            run_args=run_args,
+            network_disabled=network_disabled,
         )
         repository_check = env.execute(
             "git rev-parse --is-inside-work-tree >/dev/null "

@@ -75,6 +75,14 @@ def pce_semantic_sha256(config: PolyBenchPCEConfig) -> str:
             },
             "execution": asdict(config.execution),
             "evaluator_timeout": config.evaluator_timeout,
+            "dependency_cache": (
+                {
+                    "manifest_sha256": config.dependency_cache.manifest_sha256,
+                    "network_disabled": config.dependency_cache.network_disabled,
+                }
+                if config.dependency_cache is not None
+                else None
+            ),
             "prompts": {
                 "plan_system": config.plan_prompt,
                 "plan_instance": config.plan_instance_template,

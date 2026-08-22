@@ -151,6 +151,14 @@ the exact case SIF, and accepts an artifact only after a network-disabled lookup
 succeeds. Download profiles avoid cloning unrelated framework weights. Native
 Apptainer `--home` writes were not persistent across these Iris exec calls, so
 the dependency cache must use the explicit bind.
+
+The frozen 2026-08-22 snapshot and its first three-case network-isolation smoke
+are specified in
+`docs/reference/polybench_dependency_cache_snapshot_20260822.md`. Cache use is
+config-optional, so existing PCE/PCCE identities retain their old behavior.
+When enabled, the evaluator requires manifest membership and matching SIF
+hashes, binds only the case cache read-only, disables container networking, and
+records the manifest hash in both evaluator semantics and raw output.
 Incomplete download transfers may resume before the cache is frozen; formal
 Evaluate does not use repeated draws to average over network fluctuation.
 

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+import hashlib
 import os
 from pathlib import Path
 from typing import Any
@@ -12,6 +13,16 @@ import yaml
 from src.config import DockerConfig
 from src.optimization.config import ContainerConfig, ModelConfig
 from src.optimization.hpc.config import HPCConfig
+
+
+@dataclass(frozen=True)
+class DependencyCacheConfig:
+    manifest_path: Path
+    manifest_sha256: str
+    remote_cache_root: Path
+    included_instances: tuple[str, ...]
+    instance_sif_sha256: tuple[tuple[str, str], ...]
+    network_disabled: bool
 
 
 @dataclass(frozen=True)
@@ -37,6 +48,7 @@ class PolyBenchPCEConfig:
     code_instance_template: str
     nrpv_block: str
     evaluator_timeout: int
+    dependency_cache: DependencyCacheConfig | None = None
 
 
 def _mapping(value: Any, name: str) -> dict[str, Any]:
@@ -56,6 +68,14 @@ def _model(value: dict[str, Any], *, temperature: float) -> ModelConfig:
         timeout=int(value.get("timeout", 1800)),
         max_attempts=1,
     )
+
+
+def _file_sha256(path: Path) -> str:
+    digest = hashlib.sha256()
+    with path.open("rb") as handle:
+        for chunk in iter(lambda: handle.read(1024 * 1024), b""):
+            digest.update(chunk)
+    return digest.hexdigest()
 
 
 def load_polybench_pce_config(
@@ -147,6 +167,35 @@ def load_polybench_pce_config(
     if evaluator_timeout < 1:
         raise ValueError("evaluator.timeout must be positive")
 
+    dependency_cache: DependencyCacheConfig | None = None
+    dependency_raw = raw.get("dependency_cache")
+    if dependency_raw is not None:
+        dependency_values = _mapping(dependency_raw, "dependency_cache")
+        manifest_path = resolve(str(paths["dependency_cache_manifest"]))
+        manifest_sha256 = str(dependency_values["manifest_sha256"])
+        if _file_sha256(manifest_path) != manifest_sha256:
+            raise ValueError("dependency cache manifest sha256 mismatch")
+        manifest = _mapping(
+            yaml.safe_load(manifest_path.read_text(encoding="utf-8")),
+            "dependency cache manifest",
+        )
+        if manifest.get("purpose") != "polybench_evaluator_dependency_cache_snapshot":
+            raise ValueError("dependency cache manifest has the wrong purpose")
+        membership = _mapping(manifest.get("membership"), "dependency membership")
+        included = tuple(str(value) for value in membership["included_instances"])
+        instances = _mapping(manifest.get("instances"), "dependency instances")
+        dependency_cache = DependencyCacheConfig(
+            manifest_path=manifest_path,
+            manifest_sha256=manifest_sha256,
+            remote_cache_root=Path(str(manifest["remote_cache_root"])),
+            included_instances=included,
+            instance_sif_sha256=tuple(
+                (instance_id, str(instances[instance_id]["sif_sha256"]))
+                for instance_id in included
+            ),
+            network_disabled=bool(dependency_values.get("network_disabled", True)),
+        )
+
     return PolyBenchPCEConfig(
         config_path=config_path,
         dataset_snapshot=resolve(str(paths["dataset_snapshot"])),
@@ -171,4 +220,5 @@ def load_polybench_pce_config(
         code_instance_template=str(prompts["code_instance"]),
         nrpv_block=str(prompts.get("nrpv_block", "")),
         evaluator_timeout=evaluator_timeout,
+        dependency_cache=dependency_cache,
     )
