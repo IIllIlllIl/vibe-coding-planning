@@ -95,8 +95,13 @@ Evaluate draw 判断 transient failure：该设计仍受网络波动影响，而
 每个精确 SIF 中准备独立 cache、离线验证后以 manifest/hash 冻结，并只读挂载给
 Evaluate。官方 SIF、Planner、Checker、Code 均不改变；PCE/PCCE 将使用同一缓存各建立
 一个新的 Evaluate-only identity，旧结果不覆盖。名单与验收语义见
-`docs/reference/polybench_dependency_preheat_scope_20260821.md`。预下载及新 Evaluate
-尚未启动。
+`docs/reference/polybench_dependency_preheat_scope_20260821.md`。预下载实现已于
+2026-08-22 完成：配置覆盖 23 cases、70 个 case-artifact 请求（49 个不同 repo），
+每个 artifact 冻结 Hub revision，并在同一 SIF 的断网容器中复核命中。单例 smoke
+`20260822_15158_v4` 通过，按需 tokenizer cache 为 744K；full-snapshot smoke 曾为同一
+repo 拉取约 5.7G，因此正式配置采用 evidence-derived file profiles。Iris native
+`--home` 写入未在独立 `apptainer exec` 间持久化，正式实现改用显式 dependency-cache
+bind。新 Evaluate 尚未启动。
 
 Offline 的独立 1it action-protocol smoke 已完成。它覆盖完整 384/98 split，完成
 122 metric calls；seed validation accuracy 为 `0.704082`、balanced accuracy

@@ -142,6 +142,15 @@ separate manifest-hashed cache using each exact SIF. Formal repaired Evaluate
 will bind that cache read-only into the isolated evaluator HOME, expose it to
 no Agent phase, and disable evaluator network access. PCE and PCCE must name
 the same dependency-manifest hash under separate new evaluator identities.
+
+The tracked login-node entry point is
+`scripts/tools/login_polybench_dependency_preheat.py`, configured by
+`configs/polybench_dependency_preheat_20260822.yaml`. It runs serially, uses an
+explicit host-to-container cache bind, freezes the Hub revision returned inside
+the exact case SIF, and accepts an artifact only after a network-disabled lookup
+succeeds. Download profiles avoid cloning unrelated framework weights. Native
+Apptainer `--home` writes were not persistent across these Iris exec calls, so
+the dependency cache must use the explicit bind.
 Incomplete download transfers may resume before the cache is frozen; formal
 Evaluate does not use repeated draws to average over network fluctuation.
 

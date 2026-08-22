@@ -71,6 +71,9 @@ Apptainer 临时目录，且不得选择仍在写入的 `.tmp` 镜像。
   schema 2 保存完整 requested universe、每次 invocation、每次失败 attempt 和
   `complete` 状态；subset retry 不会缩小 universe，已有 `pull_attested` 也不会被
   cached audit 降级。GHCR repository 名会规范化为小写，但 tag 保持不变。
+- `tools/login_polybench_dependency_preheat.py`：在 Iris login node 内逐个使用案例的
+  frozen SIF 下载 evidence-derived Hugging Face 依赖；依赖写入显式 bind 的独立 cache，
+  每个 artifact 冻结 revision 并用断网容器复核。它不修改 SIF，也不调用 LLM。
 
 ## 安全与资源
 
