@@ -112,6 +112,13 @@ Plan/Code checkpoint 做三案例 Evaluate-only 断网 smoke；验收环境命�
 resolved 比例为成功条件。设计见
 `docs/reference/polybench_dependency_cache_snapshot_20260822.md`。
 
+首轮 dependency-cache smoke 的 Slurm、checkpoint reuse、断网和结果收集均正常，
+但功能验收未通过：15158 命中缓存；20136 的文件存在但缺少默认 `main` ref；
+langchain-5450 需要 SentenceTransformers 2.2.2 的 legacy flat cache，且测试还使用了
+原名单遗漏的 `sentence-transformers/all-mpnet-base-v2`。OpenCode 报告曾把 LangChain
+的 Hugging Face DNS 错误误归为其他互联网测试，原始 evidence 已由 Codex 复核。
+修复使用新的 v2 cache/manifest/repair identity，不修改首轮证据。
+
 Offline 的独立 1it action-protocol smoke 已完成。它覆盖完整 384/98 split，完成
 122 metric calls；seed validation accuracy 为 `0.704082`、balanced accuracy
 为 `0.697610`、MCC 为 `0.381364`。proposal 与 parent 在 12 个 minibatch case 上

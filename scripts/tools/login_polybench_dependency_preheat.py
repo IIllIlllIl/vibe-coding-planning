@@ -70,8 +70,21 @@ import inspect, json, os
 from huggingface_hub import model_info, snapshot_download
 repo = os.environ["VIBE_HF_REPO"]
 profile = os.environ["VIBE_PROFILE"]
+backend = os.environ["VIBE_CACHE_BACKEND"]
 revision = model_info(repo).sha
-kwargs = {"repo_id": repo, "revision": revision, "cache_dir": os.environ["VIBE_CACHE_DIR"]}
+if backend == "sentence_transformers_legacy":
+    from sentence_transformers.util import snapshot_download as legacy_snapshot_download
+    path = legacy_snapshot_download(
+        repo_id=repo,
+        revision=revision,
+        cache_dir=os.environ["VIBE_SENTENCE_TRANSFORMERS_HOME"],
+        library_name="sentence-transformers",
+        ignore_files=["flax_model.msgpack", "rust_model.ot", "tf_model.h5"],
+    )
+    print(json.dumps({"repo_id": repo, "revision": revision, "profile": profile,
+                      "backend": backend, "snapshot_path": path}))
+    raise SystemExit(0)
+kwargs = {"repo_id": repo, "revision": "main", "cache_dir": os.environ["VIBE_CACHE_DIR"]}
 common = [
     "*.json", "**/*.json", "*.txt", "**/*.txt", "*.model", "**/*.model",
     "*.spm", "**/*.spm", "tokenizer*", "**/tokenizer*", "vocab*",
@@ -92,17 +105,27 @@ if "max_workers" in inspect.signature(snapshot_download).parameters:
     kwargs["max_workers"] = 1
 path = snapshot_download(**kwargs)
 print(json.dumps({"repo_id": repo, "revision": revision, "profile": profile,
-                  "snapshot_path": path}))
+                  "backend": backend, "snapshot_path": path}))
 """
 verify_code = r"""
 import inspect, json, os
 from huggingface_hub import snapshot_download
 repo = os.environ["VIBE_HF_REPO"]
 revision = os.environ["VIBE_HF_REVISION"]
+backend = os.environ["VIBE_CACHE_BACKEND"]
+if backend == "sentence_transformers_legacy":
+    root = os.path.join(os.environ["VIBE_SENTENCE_TRANSFORMERS_HOME"], repo.replace("/", "_"))
+    if not os.path.isfile(os.path.join(root, "modules.json")):
+        raise SystemExit("legacy SentenceTransformer cache lacks modules.json: " + root)
+    print(json.dumps({"repo_id": repo, "revision": revision,
+                      "backend": backend, "snapshot_path": root}))
+    raise SystemExit(0)
 kwargs = {"repo_id": repo, "revision": revision, "local_files_only": True,
           "cache_dir": os.environ["VIBE_CACHE_DIR"]}
+kwargs["revision"] = "main"
 path = snapshot_download(**kwargs)
-print(json.dumps({"repo_id": repo, "revision": revision, "snapshot_path": path}))
+print(json.dumps({"repo_id": repo, "revision": revision,
+                  "backend": backend, "snapshot_path": path}))
 """
 
 def sha256(path):
@@ -128,6 +151,8 @@ def apptainer_python(apptainer, sif, home, cache, code, env, *, offline):
         "HUGGINGFACE_HUB_CACHE": "/dependency-cache/hub",
         "TRANSFORMERS_CACHE": "/dependency-cache/hub",
         "VIBE_CACHE_DIR": "/dependency-cache/hub",
+        "SENTENCE_TRANSFORMERS_HOME": "/dependency-cache/sentence_transformers",
+        "VIBE_SENTENCE_TRANSFORMERS_HOME": "/dependency-cache/sentence_transformers",
         **env,
     }
     for key, value in values.items():
@@ -144,7 +169,7 @@ for item in payload["instances"]:
     record = state["instances"].setdefault(
         instance_id,
         {"status": "running", "artifacts": {}, "sif_sha256": item["sif_sha256"],
-         "profile": item["profile"]},
+         "profile": item["profile"], "backend": item["backend"]},
     )
     home = root / "instances" / instance_id / "home-cache"
     cache = root / "instances" / instance_id / "dependency-cache"
@@ -171,20 +196,23 @@ for item in payload["instances"]:
         try:
             result = apptainer_python(
                 payload["remote_apptainer_bin"], str(sif), home, cache, download_code,
-                {"VIBE_HF_REPO": repo, "VIBE_PROFILE": item["profile"]}, offline=False,
+                {"VIBE_HF_REPO": repo, "VIBE_PROFILE": item["profile"],
+                 "VIBE_CACHE_BACKEND": item["backend"]}, offline=False,
             )
             if result.returncode != 0:
                 raise RuntimeError((result.stderr or result.stdout)[-2000:])
             info = json.loads(result.stdout.strip().splitlines()[-1])
             verify = apptainer_python(
                 payload["remote_apptainer_bin"], str(sif), home, cache, verify_code,
-                {"VIBE_HF_REPO": repo, "VIBE_HF_REVISION": info["revision"]},
+                {"VIBE_HF_REPO": repo, "VIBE_HF_REVISION": info["revision"],
+                 "VIBE_CACHE_BACKEND": item["backend"]},
                 offline=True,
             )
             if verify.returncode != 0:
                 raise RuntimeError("offline verification failed: " + (verify.stderr or verify.stdout)[-2000:])
             artifact.update(
-                status="completed", revision=info["revision"], completed_at=now()
+                status="completed", revision=info["revision"],
+                backend=item["backend"], completed_at=now()
             )
         except Exception as exc:
             artifact.update(
@@ -225,6 +253,9 @@ def _load(path: Path) -> tuple[dict[str, Any], list[dict[str, Any]]]:
         artifacts = spec.get("artifacts")
         if not isinstance(artifacts, list) or not artifacts:
             raise ValueError(f"{instance_id}: artifacts must be a non-empty list")
+        backend = str(spec.get("backend", "huggingface_hub"))
+        if backend not in {"huggingface_hub", "sentence_transformers_legacy"}:
+            raise ValueError(f"{instance_id}: unsupported cache backend {backend!r}")
         matches = [value for key, value in records.items() if instance_id in key]
         if len(matches) != 1:
             raise ValueError(
@@ -235,6 +266,7 @@ def _load(path: Path) -> tuple[dict[str, Any], list[dict[str, Any]]]:
             {
                 "instance_id": instance_id,
                 "profile": profile,
+                "backend": backend,
                 "artifacts": list(artifacts),
                 "sif_path": image["sif_path"],
                 "sif_sha256": image["sif_sha256"],

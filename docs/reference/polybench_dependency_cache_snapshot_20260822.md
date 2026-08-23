@@ -56,3 +56,20 @@ functional test failure can still demonstrate that dependency preparation
 worked; this smoke validates environment control, not patch correctness or a
 guideline. An offline cache miss fails the smoke and requires a newly frozen
 cache/manifest identity rather than silently enabling network access.
+
+## First-smoke result and v2 correction
+
+The first smoke completed operationally, but failed the cache acceptance
+criterion for two of three cases. `transformers-20136` had the requested files
+but no default-branch ref, so normal `from_pretrained(repo_id)` calls could not
+resolve them. `langchain-5450` additionally uses SentenceTransformers 2.2.2's
+legacy flat cache rather than the modern Hub layout and exercised the omitted
+`sentence-transformers/all-mpnet-base-v2` model. The old 23-case manifest remains
+immutable evidence and is not reclassified as successful.
+
+The corrective v2 preparation uses a new cache identity. Modern Hub downloads
+prepare and offline-verify the default `main` ref while separately recording
+the resolved commit. LangChain artifacts use the exact SIF's legacy
+SentenceTransformer downloader and cache directory, and its evaluator receives
+`SENTENCE_TRANSFORMERS_HOME`. The next smoke must use a new manifest and repair
+identity; no outcome from the first smoke may be overwritten.

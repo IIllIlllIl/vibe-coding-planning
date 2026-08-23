@@ -86,6 +86,7 @@ def _dependency_cache_runtime(
         "HF_HUB_CACHE": "/dependency-cache/hub",
         "HUGGINGFACE_HUB_CACHE": "/dependency-cache/hub",
         "TRANSFORMERS_CACHE": "/dependency-cache/hub",
+        "SENTENCE_TRANSFORMERS_HOME": "/dependency-cache/sentence_transformers",
         "TRANSFORMERS_OFFLINE": "1",
         "HF_HUB_OFFLINE": "1",
     }.items():
