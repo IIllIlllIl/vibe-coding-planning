@@ -24,6 +24,36 @@ def _hash(value: Any) -> str:
     ).hexdigest()
 
 
+def load_evaluator_repair_subset(
+    path: Path,
+    *,
+    expected_dependency_manifest_sha256: str | None = None,
+) -> tuple[str, ...]:
+    """Load one frozen evaluator-repair membership shared by PCE and PCCE."""
+    value = json.loads(path.read_text(encoding="utf-8"))
+    if not isinstance(value, dict):
+        raise ValueError("evaluator repair subset must be a JSON object")
+    if value.get("schema_version") != 1:
+        raise ValueError("evaluator repair subset has unsupported schema_version")
+    if value.get("purpose") != "polybench_evaluator_repair_subset":
+        raise ValueError("evaluator repair subset has the wrong purpose")
+    manifest_sha256 = value.get("dependency_manifest_sha256")
+    if (
+        expected_dependency_manifest_sha256 is not None
+        and manifest_sha256 != expected_dependency_manifest_sha256
+    ):
+        raise ValueError("evaluator repair subset dependency manifest mismatch")
+    raw_ids = value.get("instance_ids")
+    if not isinstance(raw_ids, list) or not raw_ids:
+        raise ValueError("evaluator repair subset instance_ids must be non-empty")
+    instance_ids = tuple(str(instance_id) for instance_id in raw_ids)
+    if len(instance_ids) != len(set(instance_ids)):
+        raise ValueError("evaluator repair subset instance_ids must be unique")
+    if any(not re.fullmatch(r"[A-Za-z0-9_.-]+", value) for value in instance_ids):
+        raise ValueError("evaluator repair subset contains an invalid instance_id")
+    return instance_ids
+
+
 def _copy_checkpoint(
     source: Path,
     target: Path,

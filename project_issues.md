@@ -128,6 +128,16 @@ v4 real-loader consumer 已完成最终 Controller 收集：3/3 均为 attempt 1
 准备为新的 `polybench_dependency_preheat_formal_v2_20260823.yaml` 配置和独立远端
 staging identity；尚未启动。预期排除仍只有不可访问 Flax fixture 的 25636，但
 freeze 会在任何新增失败或排除时停止，不能静默改变正式范围。
+该完整 preheat 已于 2026-08-23 正常结束：23/23 instances、70/71 artifacts，唯一
+失败严格为预期的 25636/ArthurZ Flax 401；22 个实例可用，SIF hash 无不一致，成功
+artifact 无 revision 缺失。正式 real-loader manifest 已冻结为
+`5399603f62f8425a7768f908530a841f234984abea8b3906d5bf0658ab9dd990`，包含
+1,564 个文件/链接条目和 21,277,986,097 bytes。尚未启动正式 PCE/PCCE Evaluate
+repair；下一步先补齐并验收二者一致的 frozen subset 选择入口。
+该入口现已实现：一个绑定上述 manifest SHA 的 22-case JSON 同时传给 PCE/PCCE；
+两个 repair manifest 都会冻结实际成员，PCCE 复制 checkpoint 时保留源 CE task
+index，避免 subset 重编号造成证据错配。正式 PCE/PCCE runtime config 已准备；本轮
+先提交 PCE，PCCE 仅准备入口并等待 PCE 验收后由同一 OpenCode 对话继续。
 该 smoke 证明 20136 与 langchain-5450 已修复，但 15158 在首轮和 v3 均为相同的
 63 passed / 24 failed；此前“15158 命中缓存”的结论是把无 DNS exception 错当成
 loader 成功。其精确 SIF 使用 Transformers 4.16.0.dev0，真实 tokenizer loader

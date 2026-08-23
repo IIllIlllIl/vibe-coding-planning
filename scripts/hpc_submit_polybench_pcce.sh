@@ -16,6 +16,7 @@ REMOTE_ENV_FILE="~/.config/vibe-coding-planning/deepseek.env"
 ULHPC_CONFIG=""
 REQUIRE_CLEAN=0
 EVALUATOR_REPAIR_ID=""
+EVALUATOR_REPAIR_INSTANCES_FILE=""
 
 usage() {
   cat <<'USAGE'
@@ -31,6 +32,8 @@ Options:
   --remote-dir DIR          remote synced project directory
   --require-clean-worktree  reject an uncommitted source/config identity
   --resume-evaluator ID     reuse validated PCCE Plan/Code checkpoints and rerun Evaluate
+  --resume-evaluator-instances-file PATH
+                            frozen JSON subset shared by PCE and PCCE
   --submit                  submit; default is ulhpc-submit dry-run
   --dry-run                 explicitly retain dry-run mode
 
@@ -53,6 +56,7 @@ while [[ $# -gt 0 ]]; do
     --ulhpc-config) ULHPC_CONFIG="$2"; shift 2 ;;
     --require-clean-worktree) REQUIRE_CLEAN=1; shift ;;
     --resume-evaluator) EVALUATOR_REPAIR_ID="$2"; shift 2 ;;
+    --resume-evaluator-instances-file) EVALUATOR_REPAIR_INSTANCES_FILE="$2"; shift 2 ;;
     --submit) SUBMIT=1; shift ;;
     --dry-run) SUBMIT=0; shift ;;
     -h|--help) usage; exit 0 ;;
@@ -74,6 +78,10 @@ if [[ -n "$EVALUATOR_REPAIR_ID" ]] && [[ ! "$EVALUATOR_REPAIR_ID" =~ ^[A-Za-z0-9
   echo "ERROR: --resume-evaluator must match [A-Za-z0-9_.-]+" >&2
   exit 2
 fi
+if [[ -n "$EVALUATOR_REPAIR_INSTANCES_FILE" ]] && [[ -z "$EVALUATOR_REPAIR_ID" ]]; then
+  echo "ERROR: --resume-evaluator-instances-file requires --resume-evaluator" >&2
+  exit 2
+fi
 CONFIG_ABS="$(conda run --no-capture-output -n mini-swe python - "$REPO_ROOT" "$CONFIG" <<'PY'
 import sys
 from pathlib import Path
@@ -85,6 +93,26 @@ PY
 if [[ ! -f "$CONFIG_ABS" ]]; then
   echo "ERROR: config not found: $CONFIG" >&2
   exit 2
+fi
+EVALUATOR_REPAIR_INSTANCES_FILE_ABS=""
+EVALUATOR_REPAIR_INSTANCES_FILE_REL=""
+if [[ -n "$EVALUATOR_REPAIR_INSTANCES_FILE" ]]; then
+  EVALUATOR_REPAIR_INSTANCES_FILE_ABS="$(
+    conda run --no-capture-output -n mini-swe python - "$REPO_ROOT" "$EVALUATOR_REPAIR_INSTANCES_FILE" <<'PY'
+import sys
+from pathlib import Path
+root = Path(sys.argv[1])
+path = Path(sys.argv[2])
+print((path if path.is_absolute() else root / path).resolve())
+PY
+  )"
+  if [[ ! -f "$EVALUATOR_REPAIR_INSTANCES_FILE_ABS" ]]; then
+    echo "ERROR: evaluator subset not found: $EVALUATOR_REPAIR_INSTANCES_FILE" >&2
+    exit 2
+  fi
+  case "$EVALUATOR_REPAIR_INSTANCES_FILE_ABS" in "$REPO_ROOT"/*) ;; *)
+    echo "ERROR: evaluator subset must be inside the repository" >&2; exit 2;; esac
+  EVALUATOR_REPAIR_INSTANCES_FILE_REL="${EVALUATOR_REPAIR_INSTANCES_FILE_ABS#$REPO_ROOT/}"
 fi
 if [[ $REQUIRE_CLEAN -eq 1 ]] && [[ -n "$(git -C "$REPO_ROOT" status --porcelain)" ]]; then
   echo "ERROR: --require-clean-worktree requires a clean Git worktree" >&2
@@ -215,7 +243,8 @@ source "\$REMOTE_ENV_FILE"
 test -n "\${DEEPSEEK_API_KEY:-}" || exit 2
 if [[ -n "$EVALUATOR_REPAIR_ID" ]]; then
   python3 scripts/resume_polybench_pcce_evaluator.py \
-    --config "$CONFIG_REL" --repair-id "$EVALUATOR_REPAIR_ID"
+    --config "$CONFIG_REL" --repair-id "$EVALUATOR_REPAIR_ID" \
+    ${EVALUATOR_REPAIR_INSTANCES_FILE_REL:+--instance-ids-file "$EVALUATOR_REPAIR_INSTANCES_FILE_REL"}
 else
   python3 scripts/run_polybench_pcce_hpc.py --config "$CONFIG_REL"
 fi
@@ -248,5 +277,6 @@ echo "[polybench-pcce-submit] baseline=$PCE_BASELINE_REL"
 echo "[polybench-pcce-submit] baseline_stage=single-file frozen outcome bundle"
 echo "[polybench-pcce-submit] run=$RUN_REL"
 echo "[polybench-pcce-submit] evaluator_repair=${EVALUATOR_REPAIR_ID:-none}"
+echo "[polybench-pcce-submit] evaluator_instances_file=${EVALUATOR_REPAIR_INSTANCES_FILE_REL:-none}"
 echo "[polybench-pcce-submit] controller_resources=$CPUS CPU/$MEM/$TIME_LIMIT"
 "${CMD[@]}"

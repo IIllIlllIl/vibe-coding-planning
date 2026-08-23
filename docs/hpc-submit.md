@@ -136,6 +136,16 @@ validates and re-identifies completed PCCE Plan/Code checkpoints and invokes no
 Checker, Planner, or Code Agent. The formal seed repair launch config is
 `configs/polybench_pcce_supervisor_formal_seed_evaluator_repair_20260821.yaml`.
 
+Evaluator repair can be restricted reproducibly with
+`--resume-evaluator-instances-file PATH`. The JSON file is parsed by the
+Controller, its ordered IDs enter the repair fingerprint and manifest, and PCCE
+preserves every selected case's original CE task index while copying Plan/Code
+checkpoints. The accepted formal-v2 file is
+`configs/frozen_dependency_caches/polybench_evaluator_dependencies_formal_v2_20260823/evaluator_repair_subset.json`;
+it is bound to the dependency-manifest SHA and shared unchanged by PCE and
+PCCE. PCE still accepts repeated `--resume-evaluator-instance` for small
+diagnostics, but those flags and the frozen file cannot be mixed.
+
 External test dependencies are not part of a SIF preheat. The planned
 PolyBench dependency preheat keeps official SIFs unchanged and builds a
 separate manifest-hashed cache using each exact SIF. Formal repaired Evaluate
@@ -144,13 +154,18 @@ no Agent phase, and disable evaluator network access. PCE and PCCE must name
 the same dependency-manifest hash under separate new evaluator identities.
 
 The tracked login-node entry point is
-`scripts/tools/login_polybench_dependency_preheat.py`, configured by
-`configs/polybench_dependency_preheat_20260822.yaml`. It runs serially, uses an
-explicit host-to-container cache bind, freezes the Hub revision returned inside
-the exact case SIF, and accepts an artifact only after a network-disabled lookup
-succeeds. Download profiles avoid cloning unrelated framework weights. Native
-Apptainer `--home` writes were not persistent across these Iris exec calls, so
-the dependency cache must use the explicit bind.
+`scripts/tools/login_polybench_dependency_preheat.py`. The accepted full
+real-loader preparation is configured by
+`configs/polybench_dependency_preheat_formal_v2_20260823.yaml`; the earlier
+`polybench_dependency_preheat_20260822.yaml` identity remains immutable
+historical evidence. The entry point runs serially, uses an explicit
+host-to-container cache bind, freezes the Hub revision returned inside the
+exact case SIF, and accepts an artifact only after a network-disabled lookup
+succeeds. Tokenizer profiles use the exact SIF's Transformers loader and the
+LangChain case uses its legacy SentenceTransformer layout. Download profiles
+avoid cloning unrelated framework weights. Native Apptainer `--home` writes
+were not persistent across these Iris exec calls, so the dependency cache must
+use the explicit bind.
 
 The frozen 2026-08-22 snapshot and its first three-case network-isolation smoke
 are specified in
@@ -160,7 +175,12 @@ When enabled, the evaluator requires manifest membership and matching SIF
 hashes, binds only the case cache read-only, disables container networking, and
 records the manifest hash in both evaluator semantics and raw output.
 Incomplete download transfers may resume before the cache is frozen; formal
-Evaluate does not use repeated draws to average over network fluctuation.
+Evaluate does not use repeated draws to average over network fluctuation. The
+prepared formal repair runtimes are
+`configs/polybench_pce_hpc_dependency_cache_formal_v2.yaml` and
+`configs/polybench_pcce_hpc_dependency_cache_formal_seed_v2.yaml`. They reuse
+the existing formal run directories and fixed upstream checkpoints under new
+repair identities; only Evaluate receives the cache and disabled network.
 
 For a read-only progress snapshot without invoking Codex or submitting work:
 

@@ -113,3 +113,32 @@ SentenceTransformer backend and both observed models, and other profiles retain
 the existing Hub backend. Its new staging identity must finish before a formal
 manifest is frozen; completion of a download request alone is not acceptance of
 the later official-test consumer.
+
+## Accepted complete formal-v2 snapshot
+
+The fresh full preparation completed on 2026-08-23 with exactly the frozen
+expectation: 23 instances and 71 artifact requests reached terminal state, 70
+artifacts completed with revisions, and only
+`huggingface__transformers-25636` was excluded because the documented
+`ArthurZ/flax-tiny-random-bert-sharded` repository remained inaccessible (HTTP
+401 / `RepositoryNotFoundError`). All 23 observed SIF hashes matched the input
+manifest and no completed artifact lacked a revision.
+
+The accepted manifest is
+`configs/frozen_dependency_caches/polybench_evaluator_dependencies_formal_v2_20260823/manifest.json`
+with SHA-256
+`5399603f62f8425a7768f908530a841f234984abea8b3906d5bf0658ab9dd990`.
+It contains 22 eligible instances, 1,564 file/symlink inventory entries, and
+21,277,986,097 inventoried regular-file bytes. The remote cache remains at the
+manifest-addressed staging identity and must now be treated as read-only.
+Formal PCE or PCCE evaluator repair has not yet been launched from this
+snapshot.
+
+The accepted 22-case evaluation membership is frozen separately at
+`configs/frozen_dependency_caches/polybench_evaluator_dependencies_formal_v2_20260823/evaluator_repair_subset.json`.
+It records the manifest SHA and supplies one identical ordered subset to both
+repair controllers. PCE and PCCE retain their own source runs and repair
+identities, but evaluate the same cases under the same dependency snapshot.
+Selection changes neither preserved Plan/Checker/Code evidence nor original
+task indices; it only determines which completed Code checkpoints enter the new
+Evaluate batch.

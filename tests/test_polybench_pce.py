@@ -3,7 +3,9 @@ from __future__ import annotations
 from dataclasses import dataclass
 import hashlib
 import json
+import os
 from pathlib import Path
+import subprocess
 from types import SimpleNamespace
 
 import pytest
@@ -24,7 +26,10 @@ from src.polybench_pce.evaluator import (
     _dependency_cache_runtime,
     evaluate_polybench_apptainer,
 )
-from src.polybench_pce.evaluator_resume import _prepare as prepare_evaluator_resume
+from src.polybench_pce.evaluator_resume import (
+    _prepare as prepare_evaluator_resume,
+    load_evaluator_repair_subset,
+)
 from src.polybench_pce.hpc_executor import (
     PolyBenchPCEHPCExecutor,
     build_array_script,
@@ -33,6 +38,9 @@ from src.polybench_pce.runner import PolyBenchPCERunner
 from src.polybench_pce.runner import checkpoint_identity
 from src.polybench_pce.worker import _category, _retry_disposition
 from src.exceptions import AgentTaskError, FatalError
+
+
+ROOT = Path(__file__).resolve().parents[1]
 
 
 def _sha(path: Path) -> str:
@@ -1002,3 +1010,85 @@ def test_evaluator_resume_rejects_unknown_instance_filter(tmp_path: Path) -> Non
             repair_id="filtered",
             instance_ids=["missing__case-1"],
         )
+
+
+def test_evaluator_repair_subset_is_bound_to_dependency_manifest(tmp_path: Path) -> None:
+    subset = tmp_path / "subset.json"
+    subset.write_text(
+        json.dumps(
+            {
+                "schema_version": 1,
+                "purpose": "polybench_evaluator_repair_subset",
+                "dependency_manifest_sha256": "manifest-sha",
+                "instance_ids": ["org__repo-1", "org__repo-2"],
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    assert load_evaluator_repair_subset(
+        subset, expected_dependency_manifest_sha256="manifest-sha"
+    ) == ("org__repo-1", "org__repo-2")
+    with pytest.raises(ValueError, match="dependency manifest mismatch"):
+        load_evaluator_repair_subset(
+            subset, expected_dependency_manifest_sha256="different-sha"
+        )
+
+
+def test_formal_dependency_repair_config_changes_only_evaluator_runtime() -> None:
+    base = load_polybench_pce_config(
+        ROOT / "configs/polybench_pce_hpc_formal.yaml", require_api_keys=False
+    )
+    repair = load_polybench_pce_config(
+        ROOT / "configs/polybench_pce_hpc_dependency_cache_formal_v2.yaml",
+        require_api_keys=False,
+    )
+
+    assert repair.dataset_snapshot == base.dataset_snapshot
+    assert repair.image_manifest == base.image_manifest
+    assert repair.run_dir == base.run_dir
+    assert repair.plan == base.plan
+    assert repair.code == base.code
+    assert repair.plan_prompt == base.plan_prompt
+    assert repair.plan_instance_template == base.plan_instance_template
+    assert repair.code_prompt == base.code_prompt
+    assert repair.code_instance_template == base.code_instance_template
+    assert repair.nrpv_block == base.nrpv_block
+    assert repair.dependency_cache is not None
+    assert len(repair.dependency_cache.included_instances) == 22
+    assert repair.dependency_cache.network_disabled is True
+
+
+def test_pce_submit_wrapper_forwards_frozen_evaluator_subset(tmp_path: Path) -> None:
+    fake = tmp_path / "ulhpc-submit"
+    fake.write_text("#!/usr/bin/env bash\nprintf '%s\\n' \"$@\"\n", encoding="utf-8")
+    fake.chmod(0o755)
+    subset = (
+        "configs/frozen_dependency_caches/"
+        "polybench_evaluator_dependencies_formal_v2_20260823/"
+        "evaluator_repair_subset.json"
+    )
+    env = os.environ.copy()
+    env.update(ULHPC_SUBMIT_BIN=str(fake), ULHPC_USER="tester")
+    result = subprocess.run(
+        [
+            "bash",
+            "scripts/hpc_submit_polybench_pce.sh",
+            "--config",
+            "configs/polybench_pce_hpc_dependency_cache_formal_v2.yaml",
+            "--resume-evaluator",
+            "formal-v2",
+            "--resume-evaluator-instances-file",
+            subset,
+            "--dry-run",
+        ],
+        cwd=ROOT,
+        env=env,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+
+    assert result.returncode == 0, result.stderr
+    assert "scripts/resume_polybench_pce_evaluator.py" in result.stdout
+    assert f"--instance-ids-file {subset}" in result.stdout

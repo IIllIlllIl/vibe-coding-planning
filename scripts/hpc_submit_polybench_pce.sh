@@ -22,6 +22,7 @@ REQUIRE_CLEAN=0
 EVALUATOR_REPAIR_ID=""
 EVALUATOR_REPAIR_INSTANCES=()
 EVALUATOR_REPAIR_INSTANCE_COUNT=0
+EVALUATOR_REPAIR_INSTANCES_FILE=""
 
 usage() {
   cat <<'USAGE'
@@ -39,6 +40,8 @@ Options:
   --resume-evaluator ID     reuse validated Plan/Code checkpoints and rerun only Evaluate
   --resume-evaluator-instance ID
                             restrict repair to this instance; repeat as needed
+  --resume-evaluator-instances-file PATH
+                            frozen JSON subset shared by PCE and PCCE
   --submit                  submit; default is ulhpc-submit dry-run
   --dry-run                 explicitly retain dry-run mode
 
@@ -69,6 +72,10 @@ while [[ $# -gt 0 ]]; do
       EVALUATOR_REPAIR_INSTANCE_COUNT=$((EVALUATOR_REPAIR_INSTANCE_COUNT + 1))
       shift 2
       ;;
+    --resume-evaluator-instances-file)
+      EVALUATOR_REPAIR_INSTANCES_FILE="$2"
+      shift 2
+      ;;
     --submit) SUBMIT=1; shift ;;
     --dry-run) SUBMIT=0; shift ;;
     -h|--help) usage; exit 0 ;;
@@ -96,6 +103,14 @@ if [[ $EVALUATOR_REPAIR_INSTANCE_COUNT -gt 0 ]] && [[ -z "$EVALUATOR_REPAIR_ID" 
   echo "ERROR: --resume-evaluator-instance requires --resume-evaluator" >&2
   exit 2
 fi
+if [[ -n "$EVALUATOR_REPAIR_INSTANCES_FILE" ]] && [[ -z "$EVALUATOR_REPAIR_ID" ]]; then
+  echo "ERROR: --resume-evaluator-instances-file requires --resume-evaluator" >&2
+  exit 2
+fi
+if [[ $EVALUATOR_REPAIR_INSTANCE_COUNT -gt 0 ]] && [[ -n "$EVALUATOR_REPAIR_INSTANCES_FILE" ]]; then
+  echo "ERROR: evaluator instance flags and file are mutually exclusive" >&2
+  exit 2
+fi
 if [[ $EVALUATOR_REPAIR_INSTANCE_COUNT -gt 0 ]]; then
   for instance_id in "${EVALUATOR_REPAIR_INSTANCES[@]}"; do
     if [[ ! "$instance_id" =~ ^[A-Za-z0-9_.-]+$ ]]; then
@@ -117,6 +132,26 @@ PY
 if [[ ! -f "$CONFIG_ABS" ]]; then
   echo "ERROR: config not found: $CONFIG" >&2
   exit 2
+fi
+EVALUATOR_REPAIR_INSTANCES_FILE_ABS=""
+EVALUATOR_REPAIR_INSTANCES_FILE_REL=""
+if [[ -n "$EVALUATOR_REPAIR_INSTANCES_FILE" ]]; then
+  EVALUATOR_REPAIR_INSTANCES_FILE_ABS="$(
+    conda run --no-capture-output -n mini-swe python - "$REPO_ROOT" "$EVALUATOR_REPAIR_INSTANCES_FILE" <<'PY'
+import sys
+from pathlib import Path
+root = Path(sys.argv[1])
+path = Path(sys.argv[2])
+print((path if path.is_absolute() else root / path).resolve())
+PY
+  )"
+  if [[ ! -f "$EVALUATOR_REPAIR_INSTANCES_FILE_ABS" ]]; then
+    echo "ERROR: evaluator subset not found: $EVALUATOR_REPAIR_INSTANCES_FILE" >&2
+    exit 2
+  fi
+  case "$EVALUATOR_REPAIR_INSTANCES_FILE_ABS" in "$REPO_ROOT"/*) ;; *)
+    echo "ERROR: evaluator subset must be inside the repository" >&2; exit 2;; esac
+  EVALUATOR_REPAIR_INSTANCES_FILE_REL="${EVALUATOR_REPAIR_INSTANCES_FILE_ABS#$REPO_ROOT/}"
 fi
 if [[ $REQUIRE_CLEAN -eq 1 ]] && [[ -n "$(git -C "$REPO_ROOT" status --porcelain)" ]]; then
   echo "ERROR: --require-clean-worktree requires a clean Git worktree" >&2
@@ -221,6 +256,9 @@ if [[ $EVALUATOR_REPAIR_INSTANCE_COUNT -gt 0 ]]; then
     EVALUATOR_INSTANCE_ARGS+=" --instance-id $instance_id"
   done
 fi
+if [[ -n "$EVALUATOR_REPAIR_INSTANCES_FILE_REL" ]]; then
+  EVALUATOR_INSTANCE_ARGS=" --instance-ids-file $EVALUATOR_REPAIR_INSTANCES_FILE_REL"
+fi
 
 REMOTE_SCRIPT=$(cat <<EOF
 set -euo pipefail
@@ -267,5 +305,6 @@ echo "[polybench-pce-submit] dataset=$DATASET_REL"
 echo "[polybench-pce-submit] run=$RUN_REL"
 echo "[polybench-pce-submit] evaluator_repair=${EVALUATOR_REPAIR_ID:-none}"
 echo "[polybench-pce-submit] evaluator_instances=${EVALUATOR_REPAIR_INSTANCES[*]:-all}"
+echo "[polybench-pce-submit] evaluator_instances_file=${EVALUATOR_REPAIR_INSTANCES_FILE_REL:-none}"
 echo "[polybench-pce-submit] controller_resources=$CPUS CPU/$MEM/$TIME_LIMIT"
 "${CMD[@]}"

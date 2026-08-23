@@ -13,6 +13,7 @@ if str(REPO_ROOT) not in sys.path:
 
 from src.polybench_pce.config import load_polybench_pce_config  # noqa: E402
 from src.polybench_pce.evaluator_resume import (  # noqa: E402
+    load_evaluator_repair_subset,
     resume_polybench_pce_evaluator,
 )
 
@@ -22,11 +23,25 @@ def main() -> int:
     parser.add_argument("--config", required=True, type=Path)
     parser.add_argument("--repair-id", required=True)
     parser.add_argument("--instance-id", action="append", default=[])
+    parser.add_argument("--instance-ids-file", type=Path)
     args = parser.parse_args()
+    if args.instance_id and args.instance_ids_file:
+        parser.error("--instance-id and --instance-ids-file are mutually exclusive")
+    config = load_polybench_pce_config(args.config)
+    instance_ids = args.instance_id or None
+    if args.instance_ids_file:
+        instance_ids = load_evaluator_repair_subset(
+            args.instance_ids_file,
+            expected_dependency_manifest_sha256=(
+                config.dependency_cache.manifest_sha256
+                if config.dependency_cache is not None
+                else None
+            ),
+        )
     result = resume_polybench_pce_evaluator(
-        load_polybench_pce_config(args.config),
+        config,
         repair_id=args.repair_id,
-        instance_ids=args.instance_id or None,
+        instance_ids=instance_ids,
     )
     if result is None:
         print("PolyBench evaluator repair yielded after durable asynchronous work.")

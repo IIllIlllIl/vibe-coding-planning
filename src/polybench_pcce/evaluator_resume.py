@@ -63,6 +63,7 @@ def _prepare(
     cases: Sequence[PCCECase],
     *,
     repair_id: str,
+    instance_ids: Sequence[str] | None = None,
 ) -> tuple[Path, str, list[TaskFiles], list[dict[str, Any]]]:
     if not re.fullmatch(r"[A-Za-z0-9_.-]+", repair_id):
         raise ValueError("repair_id must match [A-Za-z0-9_.-]+")
@@ -86,6 +87,30 @@ def _prepare(
     case_by_id = {case.instance_id: case for case in cases}
     if not set(source_ids).issubset(case_by_id):
         raise ValueError("source PCCE CE outcomes are outside the frozen case set")
+    requested = list(instance_ids or [])
+    if len(requested) != len(set(requested)):
+        raise ValueError("PCCE evaluator repair instance_ids must be unique")
+    requested_set = set(requested)
+    unknown = sorted(requested_set - set(case_by_id))
+    if unknown:
+        raise ValueError(
+            "PCCE evaluator repair requested unknown instance_ids: "
+            + ", ".join(unknown)
+        )
+    missing_ce = sorted(requested_set - set(source_ids))
+    if missing_ce:
+        raise ValueError(
+            "PCCE evaluator repair requested instances without CE evidence: "
+            + ", ".join(missing_ce)
+        )
+    selected = [
+        (index, instance_id, source_output)
+        for index, (instance_id, source_output) in enumerate(
+            zip(source_ids, source_ce, strict=True)
+        )
+        if not requested or instance_id in requested_set
+    ]
+    selected_ids = [instance_id for _, instance_id, _ in selected]
 
     repair_fingerprint = _hash(
         {
@@ -100,7 +125,7 @@ def _prepare(
                     "instance_id": row["instance_id"],
                     "accepted_plan_sha256": text_sha256(str(row["plan"])),
                 }
-                for row in source_ce
+                for _, _, row in selected
             ],
         }
     )
@@ -114,7 +139,7 @@ def _prepare(
         "source_ce_fingerprint": source_fingerprint,
         "source_pcce_semantic_sha256": source_manifest["pcce_semantic_sha256"],
         "evaluator_semantic_sha256": pce_semantic_sha256(config.pce),
-        "selected_instance_ids": source_ids,
+        "selected_instance_ids": selected_ids,
         "excluded_without_ce": [
             case.instance_id
             for case in cases
@@ -137,9 +162,7 @@ def _prepare(
         atomic_json(manifest_path, manifest)
 
     tasks: list[TaskFiles] = []
-    for index, (instance_id, source_output) in enumerate(
-        zip(source_ids, source_ce, strict=True)
-    ):
+    for index, instance_id, source_output in selected:
         case = case_by_id[instance_id]
         source_task_path = source_batch / "tasks" / f"task_{index:04d}.json"
         source_task = json.loads(source_task_path.read_text(encoding="utf-8"))
@@ -221,17 +244,20 @@ def _prepare(
             )
         )
     atomic_json(batch_dir / "manifest.json", {**manifest, "task_count": len(tasks)})
-    return batch_dir, repair_fingerprint, tasks, source_ce
+    return batch_dir, repair_fingerprint, tasks, [row for _, _, row in selected]
 
 
 def resume_polybench_pcce_evaluator(
     config: PolyBenchPCCEConfig,
     *,
     repair_id: str,
+    instance_ids: Sequence[str] | None = None,
 ) -> dict[str, Any] | None:
     """Submit or collect Evaluate-only tasks from fixed PCCE Code checkpoints."""
     cases, _ = load_pcce_cases(config)
-    batch_dir, fingerprint, tasks, _ = _prepare(config, cases, repair_id=repair_id)
+    batch_dir, fingerprint, tasks, _ = _prepare(
+        config, cases, repair_id=repair_id, instance_ids=instance_ids
+    )
     repair_root = config.run_dir / "evaluator_repairs" / repair_id
     status_path = repair_root / "controller_status.json"
     atomic_json(
@@ -317,8 +343,14 @@ def resume_polybench_pcce_evaluator(
             else "unknown"
         ] += 1
     source_method_rows = _read_jsonl(config.run_dir / "pcce_outcomes.jsonl")
-    rejected = sum(
+    source_rejected = sum(
         row.get("method_status") == "checker_rejected_after_3_reviews"
+        for row in source_method_rows
+    )
+    selected_ids = {task.instance_id for task in tasks}
+    selected_rejected = sum(
+        row.get("method_status") == "checker_rejected_after_3_reviews"
+        and row.get("instance_id") in selected_ids
         for row in source_method_rows
     )
     summary = {
@@ -328,8 +360,10 @@ def resume_polybench_pcce_evaluator(
         "repair_id": repair_id,
         "repair_fingerprint": fingerprint,
         "instances": len(cases),
+        "selected_instances": len(tasks),
         "evaluated_instances": len(outputs),
-        "checker_rejected_without_code": rejected,
+        "checker_rejected_without_code": selected_rejected,
+        "source_checker_rejected_without_code": source_rejected,
         "resolved": outcome_counts["resolved"],
         "unresolved": outcome_counts["unresolved"],
         "unknown": outcome_counts["unknown"],

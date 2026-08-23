@@ -94,6 +94,32 @@ def test_formal_seed_config_selects_all_frozen_cases_and_preserves_smoke_method(
     assert formal.run_dir != smoke.run_dir
 
 
+def test_formal_pcce_dependency_repair_config_preserves_method() -> None:
+    base = load_polybench_pcce_config(
+        ROOT / "configs/polybench_pcce_hpc_formal_seed.yaml",
+        require_api_keys=False,
+    )
+    repair = load_polybench_pcce_config(
+        ROOT / "configs/polybench_pcce_hpc_dependency_cache_formal_seed_v2.yaml",
+        require_api_keys=False,
+    )
+
+    assert repair.source_snapshot == base.source_snapshot
+    assert repair.validation_snapshot == base.validation_snapshot
+    assert repair.pce_outcomes == base.pce_outcomes
+    assert repair.guideline_path == base.guideline_path
+    assert repair.run_dir == base.run_dir
+    assert repair.instance_ids == base.instance_ids
+    assert repair.checker_prompt == base.checker_prompt
+    assert repair.checker_instance_template == base.checker_instance_template
+    assert repair.plan_revision_prompt == base.plan_revision_prompt
+    assert (
+        repair.plan_revision_instance_template
+        == base.plan_revision_instance_template
+    )
+    assert repair.pce.dependency_cache is not None
+
+
 def test_review_budget_advances_only_for_completed_rejection() -> None:
     cases = [_case("a"), _case("b"), _case("c")]
     prior = [
@@ -559,6 +585,99 @@ def test_pcce_evaluator_resume_reidentifies_fixed_plan_and_code(
     assert repair_task["accepted_plan"] == accepted_plan
 
 
+def test_pcce_evaluator_resume_subset_preserves_source_task_index(
+    tmp_path: Path,
+) -> None:
+    config = _config(tmp_path)
+    cases = [_case("first", True), _case("second", False)]
+    source_fingerprint = "source-ce-fingerprint"
+    atomic_json(
+        config.run_dir / "run_manifest.json",
+        {
+            "mode": "polybench_pcce",
+            "pcce_semantic_sha256": "source-semantic",
+        },
+    )
+    source_batch = config.run_dir / "hpc_tasks" / "ce" / source_fingerprint
+    atomic_json(
+        source_batch / "manifest.json",
+        {"instance_ids": [case.instance_id for case in cases]},
+    )
+    outcomes = []
+    for index, case in enumerate(cases):
+        accepted_plan = f"accepted plan {index}"
+        review = (
+            config.run_dir
+            / "reviews"
+            / "review_01"
+            / f"{case.instance_id}.json"
+        )
+        atomic_json(
+            review,
+            {
+                "status": "completed",
+                "instance_id": case.instance_id,
+                "plan": accepted_plan,
+                "checker_output": {"should_proceed": True},
+            },
+        )
+        atomic_json(
+            source_batch / "tasks" / f"task_{index:04d}.json",
+            {
+                "fingerprint": source_fingerprint,
+                "instance_id": case.instance_id,
+                "accepted_review_relpath": str(review.relative_to(config.run_dir)),
+                "accepted_plan": accepted_plan,
+            },
+        )
+        outcomes.append(
+            {
+                "status": "completed",
+                "pcce_status": "completed",
+                "fingerprint": source_fingerprint,
+                "instance_id": case.instance_id,
+                "plan": accepted_plan,
+            }
+        )
+        identity = checkpoint_identity(
+            case.source, execution_fingerprint=source_fingerprint
+        )
+        for phase, payload in (
+            ("plan", {"plan": accepted_plan, "trajectory": []}),
+            ("code", {"patch": f"diff-{index}", "trajectory": []}),
+        ):
+            atomic_json(
+                source_batch
+                / "checkpoints"
+                / f"task_{index:04d}"
+                / f"{phase}.json",
+                {
+                    "schema_version": 1,
+                    "checkpoint_identity": identity,
+                    "phase": phase,
+                    "payload": payload,
+                },
+            )
+    (config.run_dir / "ce_outcomes.jsonl").write_text(
+        "".join(json.dumps(row) + "\n" for row in outcomes), encoding="utf-8"
+    )
+
+    batch, _, tasks, selected = prepare_evaluator_resume(
+        config,
+        cases,
+        repair_id="subset",
+        instance_ids=[cases[1].instance_id],
+    )
+
+    assert [(task.index, task.instance_id) for task in tasks] == [
+        (1, cases[1].instance_id)
+    ]
+    assert [row["instance_id"] for row in selected] == [cases[1].instance_id]
+    assert not (batch / "tasks" / "task_0000.json").exists()
+    task = json.loads((batch / "tasks" / "task_0001.json").read_text())
+    assert task["accepted_plan"] == "accepted plan 1"
+
+
 def test_submit_wrapper_selects_pcce_evaluator_repair(tmp_path: Path) -> None:
     fake = tmp_path / "ulhpc-submit"
     fake.write_text("#!/usr/bin/env bash\nprintf '%s\\n' \"$@\"\n", encoding="utf-8")
@@ -570,9 +689,15 @@ def test_submit_wrapper_selects_pcce_evaluator_repair(tmp_path: Path) -> None:
             "bash",
             "scripts/hpc_submit_polybench_pcce.sh",
             "--config",
-            "configs/polybench_pcce_hpc_formal_seed.yaml",
+            "configs/polybench_pcce_hpc_dependency_cache_formal_seed_v2.yaml",
             "--resume-evaluator",
             "native-home",
+            "--resume-evaluator-instances-file",
+            (
+                "configs/frozen_dependency_caches/"
+                "polybench_evaluator_dependencies_formal_v2_20260823/"
+                "evaluator_repair_subset.json"
+            ),
             "--dry-run",
         ],
         cwd=ROOT,
@@ -584,3 +709,4 @@ def test_submit_wrapper_selects_pcce_evaluator_repair(tmp_path: Path) -> None:
     assert result.returncode == 0, result.stderr
     assert "scripts/resume_polybench_pcce_evaluator.py" in result.stdout
     assert '--repair-id "native-home"' in result.stdout
+    assert "--instance-ids-file configs/frozen_dependency_caches/" in result.stdout
