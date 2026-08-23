@@ -67,9 +67,20 @@ legacy flat cache rather than the modern Hub layout and exercised the omitted
 `sentence-transformers/all-mpnet-base-v2` model. The old 23-case manifest remains
 immutable evidence and is not reclassified as successful.
 
-The corrective v2 preparation uses a new cache identity. Modern Hub downloads
+The corrective preparation uses a new cache identity. Modern Hub downloads
 prepare and offline-verify the default `main` ref while separately recording
 the resolved commit. LangChain artifacts use the exact SIF's legacy
 SentenceTransformer downloader and cache directory, and its evaluator receives
 `SENTENCE_TRANSFORMERS_HOME`. The next smoke must use a new manifest and repair
 identity; no outcome from the first smoke may be overwritten.
+
+An initial v2 preparation was written concurrently by two launchers and is
+therefore excluded regardless of its terminal state. The preheater now takes a
+non-blocking single-writer lock per cache identity. The accepted corrective
+input is the fresh v3 root frozen by
+`configs/frozen_dependency_caches/polybench_evaluator_dependencies_smoke_v3_20260823/manifest.json`
+(SHA-256 `42c6cc0e98df42c7c2e66c0689a38a0d0040cd0b3fe30642ead3a5f76b995fbf`):
+3 instances and 4 artifact requests completed with no failure. The corrective
+Evaluate-only consumer is
+`configs/polybench_pce_hpc_dependency_cache_smoke_v2.yaml`; it must use a new
+repair identity and retain the first-smoke outputs unchanged.

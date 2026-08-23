@@ -121,6 +121,8 @@ langchain-5450 需要 SentenceTransformers 2.2.2 的 legacy flat cache，且测�
 首次 v2 preparation 被多个 OpenCode/Codex launcher 同时写入同一 state；即使最终
 显示 completed，该 cache identity 也按污染废弃。preheater 现对 identity 持有单一
 非阻塞 writer lock，正式修复改用全新的 `20260823_smoke3_loader_v3` root。
+v3 已完成 3/3 实例和 4/4 artifact 并冻结为独立 manifest；下一步以新 repair
+identity 运行三案例 Evaluate-only smoke，验收真实 loader 在禁网条件下是否命中缓存。
 
 Offline 的独立 1it action-protocol smoke 已完成。它覆盖完整 384/98 split，完成
 122 metric calls；seed validation accuracy 为 `0.704082`、balanced accuracy
