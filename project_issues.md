@@ -123,6 +123,11 @@ langchain-5450 需要 SentenceTransformers 2.2.2 的 legacy flat cache，且测�
 非阻塞 writer lock，正式修复改用全新的 `20260823_smoke3_loader_v3` root。
 v3 已完成 3/3 实例和 4/4 artifact 并冻结为独立 manifest；下一步以新 repair
 identity 运行三案例 Evaluate-only smoke，验收真实 loader 在禁网条件下是否命中缓存。
+该 smoke 证明 20136 与 langchain-5450 已修复，但 15158 在首轮和 v3 均为相同的
+63 passed / 24 failed；此前“15158 命中缓存”的结论是把无 DNS exception 错当成
+loader 成功。其精确 SIF 使用 Transformers 4.16.0.dev0，真实 tokenizer loader
+不能消费仅由 Hub snapshot API 验收的 cache。下一身份改由精确 SIF 内的
+`AutoTokenizer.from_pretrained` 同时负责在线准备与禁网复核。
 
 Offline 的独立 1it action-protocol smoke 已完成。它覆盖完整 384/98 split，完成
 122 metric calls；seed validation accuracy 为 `0.704082`、balanced accuracy

@@ -90,6 +90,14 @@ if backend == "sentence_transformers_legacy":
     print(json.dumps({"repo_id": repo, "revision": revision, "profile": profile,
                       "backend": backend, "snapshot_path": path}))
     raise SystemExit(0)
+if backend == "transformers_tokenizer":
+    from transformers import AutoTokenizer
+    cache_dir = os.environ["VIBE_CACHE_DIR"]
+    AutoTokenizer.from_pretrained(repo, cache_dir=cache_dir, use_fast=False)
+    AutoTokenizer.from_pretrained(repo, cache_dir=cache_dir, use_fast=True)
+    print(json.dumps({"repo_id": repo, "revision": revision, "profile": profile,
+                      "backend": backend, "snapshot_path": cache_dir}))
+    raise SystemExit(0)
 kwargs = {"repo_id": repo, "revision": "main", "cache_dir": os.environ["VIBE_CACHE_DIR"]}
 common = [
     "*.json", "**/*.json", "*.txt", "**/*.txt", "*.model", "**/*.model",
@@ -125,6 +133,18 @@ if backend == "sentence_transformers_legacy":
         raise SystemExit("legacy SentenceTransformer cache lacks modules.json: " + root)
     print(json.dumps({"repo_id": repo, "revision": revision,
                       "backend": backend, "snapshot_path": root}))
+    raise SystemExit(0)
+if backend == "transformers_tokenizer":
+    from transformers import AutoTokenizer
+    cache_dir = os.environ["VIBE_CACHE_DIR"]
+    AutoTokenizer.from_pretrained(
+        repo, cache_dir=cache_dir, local_files_only=True, use_fast=False
+    )
+    AutoTokenizer.from_pretrained(
+        repo, cache_dir=cache_dir, local_files_only=True, use_fast=True
+    )
+    print(json.dumps({"repo_id": repo, "revision": revision,
+                      "backend": backend, "snapshot_path": cache_dir}))
     raise SystemExit(0)
 kwargs = {"repo_id": repo, "revision": revision, "local_files_only": True,
           "cache_dir": os.environ["VIBE_CACHE_DIR"]}
@@ -260,7 +280,11 @@ def _load(path: Path) -> tuple[dict[str, Any], list[dict[str, Any]]]:
         if not isinstance(artifacts, list) or not artifacts:
             raise ValueError(f"{instance_id}: artifacts must be a non-empty list")
         backend = str(spec.get("backend", "huggingface_hub"))
-        if backend not in {"huggingface_hub", "sentence_transformers_legacy"}:
+        if backend not in {
+            "huggingface_hub",
+            "sentence_transformers_legacy",
+            "transformers_tokenizer",
+        }:
             raise ValueError(f"{instance_id}: unsupported cache backend {backend!r}")
         matches = [value for key, value in records.items() if instance_id in key]
         if len(matches) != 1:
