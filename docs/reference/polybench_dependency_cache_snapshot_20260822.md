@@ -101,3 +101,15 @@ unchanged. The v4 snapshot is frozen at
 with SHA-256 `3acb713b5e963b6480eebc243926f2f155821147115a722ae0988c9e63e3502a`.
 Its consumer config is `configs/polybench_pce_hpc_dependency_cache_smoke_v3.yaml`
 and must use another new repair identity.
+
+The v4 consumer completed its final Controller collection with all three fixed
+Plan/Code cases resolved and officially parsed under disabled networking. No
+cache-load, DNS, HTTP, or Hub download error remained, and no worker needed a
+second attempt. The accepted next preparation input is the fresh complete
+23-case config `configs/polybench_dependency_preheat_formal_v2_20260823.yaml`.
+It does not modify or compose any earlier frozen cache: tokenizer-profile cases
+use the exact Transformers loader, LangChain retains the smoke-verified legacy
+SentenceTransformer backend and both observed models, and other profiles retain
+the existing Hub backend. Its new staging identity must finish before a formal
+manifest is frozen; completion of a download request alone is not acceptance of
+the later official-test consumer.

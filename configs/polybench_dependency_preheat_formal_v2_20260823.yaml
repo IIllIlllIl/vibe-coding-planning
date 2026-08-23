@@ -1,0 +1,42 @@
+# Fresh formal preparation of the complete evidence-derived 23-case scope.
+# This identity supersedes neither the immutable 20260822 snapshot nor any
+# three-case smoke cache. Every tokenizer-profile artifact is prepared and
+# verified by the exact Transformers loader inside its case SIF.
+schema_version: 1
+purpose: polybench_evaluator_dependency_preheat
+
+image_manifest: output/SWE-PolyBench/polybench-pce-inputs/20260814_python113_v11_8c7d9485d1d0/images.json
+remote_cache_root: /scratch/users/twang/vibe-coding-planning/shared/polybench-dependency-cache/staging/20260823_polybench23_real_loader_v2
+remote_apptainer_bin: /mnt/aiongpfs/apps/resif/iris-rhel8/2020b/broadwell/software/Apptainer/1.2.1/bin/apptainer
+artifact_timeout_seconds: 21600
+
+# Freeze-time assertions. The inaccessible ArthurZ Flax fixture is retained
+# as evidence and is the only expected failure/exclusion. Any additional
+# failure makes freezing stop for review rather than silently changing scope.
+expected_failed_artifacts: 1
+expected_excluded_instances: [huggingface__transformers-25636]
+
+instances:
+  huggingface__transformers-15158: {profile: tokenizer, backend: transformers_tokenizer, artifacts: [bert-base-uncased]}
+  huggingface__transformers-16661: {profile: tokenizer, backend: transformers_tokenizer, artifacts: [google/byt5-small, google/canine-s, hf-internal-testing/tiny-random-bert]}
+  huggingface__transformers-17082: {profile: tokenizer, backend: transformers_tokenizer, artifacts: [microsoft/deberta-base]}
+  huggingface__transformers-19590: {profile: tokenizer, backend: transformers_tokenizer, artifacts: [bert-base-uncased]}
+  huggingface__transformers-19657: {profile: pytorch, backend: huggingface_hub, artifacts: [hf-internal-testing/tiny-random-bert, hf-internal-testing/tiny-random-distilbert]}
+  huggingface__transformers-20136: {profile: pytorch, backend: huggingface_hub, artifacts: [google/owlvit-base-patch32]}
+  huggingface__transformers-22649: {profile: pytorch, backend: huggingface_hub, artifacts: [hf-internal-testing/tiny-random-OPTModel, hf-internal-testing/tiny-random-OPTForCausalLM, hf-internal-testing/tiny-random-OPTForQuestionAnswering, hf-internal-testing/tiny-random-OPTForSequenceClassification]}
+  huggingface__transformers-23141: {profile: tokenizer, backend: transformers_tokenizer, artifacts: [hf-internal-testing/tiny-random-WhisperModel]}
+  huggingface__transformers-23796: {profile: tokenizer, backend: transformers_tokenizer, artifacts: [openai/whisper-small.en, openai/whisper-tiny]}
+  huggingface__transformers-24238: {profile: config, backend: huggingface_hub, artifacts: [gpt2]}
+  huggingface__transformers-25636: {profile: flax, backend: huggingface_hub, artifacts: [ArthurZ/flax-tiny-random-bert-sharded, hf-internal-testing/tiny-bert-flax-only]}
+  huggingface__transformers-25765: {profile: tokenizer, backend: transformers_tokenizer, artifacts: [hf-internal-testing/tiny-random-MegaModel, hf-internal-testing/tiny-random-MegaForCausalLM, hf-internal-testing/tiny-random-MegaForMaskedLM, hf-internal-testing/tiny-random-MegaForQuestionAnswering, hf-internal-testing/tiny-random-MegaForSequenceClassification, hf-internal-testing/tiny-random-MegaForTokenClassification]}
+  huggingface__transformers-26164: {profile: tokenizer, backend: transformers_tokenizer, artifacts: [hf-internal-testing/tiny-random-WhisperModel]}
+  huggingface__transformers-26839: {profile: pytorch, backend: huggingface_hub, artifacts: [hf-internal-testing/tiny-random-IdeficsModel]}
+  huggingface__transformers-27114: {profile: pytorch, backend: huggingface_hub, artifacts: [hf-internal-testing/tiny-bert-pt-only, hf-internal-testing/tiny-random-bert, hf-internal-testing/tiny-random-bert-safetensors, hf-internal-testing/tiny-random-bert-sharded, hf-internal-testing/tiny-random-bert-sharded-safetensors, hf-internal-testing/tiny-random-bert-sharded-subfolder, hf-internal-testing/tiny-random-bert-subfolder, hf-internal-testing/tiny-random-bert-variant, hf-internal-testing/tiny-random-bert-variant-safe, hf-internal-testing/tiny-random-bert-variant-sharded, hf-internal-testing/tiny-random-bert-variant-sharded-safe, joaogante/tiny-random-gpt2-with-generation-config, patrickvonplaten/t5-tiny-random]}
+  huggingface__transformers-27717: {profile: tokenizer, backend: transformers_tokenizer, artifacts: [bert-base-uncased, facebook/nllb-200-distilled-600M, hf-internal-testing/tiny-random-nllb]}
+  huggingface__transformers-28071: {profile: pytorch, backend: huggingface_hub, artifacts: [hf-internal-testing/tiny-random-SpeechT5ForSpeechToText, hf-internal-testing/tiny-random-SpeechT5Model, microsoft/speecht5_tts]}
+  huggingface__transformers-28563: {profile: pytorch, backend: huggingface_hub, artifacts: [hf-internal-testing/tiny-random-WhisperForCausalLM, hf-internal-testing/tiny-random-WhisperModel]}
+  huggingface__transformers-29519: {profile: pytorch, backend: huggingface_hub, artifacts: [hf-internal-testing/tiny-bert-pt-only, hf-internal-testing/tiny-random-GPTBigCodeModel, hf-internal-testing/tiny-random-RobertaModel, hf-internal-testing/tiny-random-bert, hf-internal-testing/tiny-random-bert-safetensors, hf-internal-testing/tiny-random-bert-sharded, hf-internal-testing/tiny-random-bert-sharded-safetensors, hf-internal-testing/tiny-random-bert-sharded-subfolder, hf-internal-testing/tiny-random-bert-subfolder, hf-internal-testing/tiny-random-bert-variant, hf-internal-testing/tiny-random-bert-variant-safe, hf-internal-testing/tiny-random-bert-variant-sharded, hf-internal-testing/tiny-random-bert-variant-sharded-safe, hf-tiny-model-private/tiny-random-MCTCTModel, joaogante/tiny-random-gpt2-with-generation-config, openai-community/gpt2, patrickvonplaten/t5-tiny-random]}
+  huggingface__transformers-29563: {profile: pytorch, backend: huggingface_hub, artifacts: [ArthurZ/mamba-2.8b]}
+  huggingface__transformers-29675: {profile: pytorch, backend: huggingface_hub, artifacts: [google-t5/t5-small]}
+  huggingface__transformers-29688: {profile: pytorch, backend: huggingface_hub, artifacts: [hf-internal-testing/tiny-random-WhisperForCausalLM, hf-internal-testing/tiny-random-WhisperModel]}
+  langchain-ai__langchain-5450: {profile: pytorch, backend: sentence_transformers_legacy, artifacts: [hkunlp/instructor-base, sentence-transformers/all-mpnet-base-v2]}

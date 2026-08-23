@@ -123,6 +123,11 @@ langchain-5450 需要 SentenceTransformers 2.2.2 的 legacy flat cache，且测�
 非阻塞 writer lock，正式修复改用全新的 `20260823_smoke3_loader_v3` root。
 v3 已完成 3/3 实例和 4/4 artifact 并冻结为独立 manifest；下一步以新 repair
 identity 运行三案例 Evaluate-only smoke，验收真实 loader 在禁网条件下是否命中缓存。
+v4 real-loader consumer 已完成最终 Controller 收集：3/3 均为 attempt 1、
+`tests_parsed`、resolved，且没有 cache/network error。完整 23-case 的下一次输入已
+准备为新的 `polybench_dependency_preheat_formal_v2_20260823.yaml` 配置和独立远端
+staging identity；尚未启动。预期排除仍只有不可访问 Flax fixture 的 25636，但
+freeze 会在任何新增失败或排除时停止，不能静默改变正式范围。
 该 smoke 证明 20136 与 langchain-5450 已修复，但 15158 在首轮和 v3 均为相同的
 63 passed / 24 failed；此前“15158 命中缓存”的结论是把无 DNS exception 错当成
 loader 成功。其精确 SIF 使用 Transformers 4.16.0.dev0，真实 tokenizer loader
