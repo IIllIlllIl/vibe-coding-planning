@@ -128,6 +128,9 @@ identity 运行三案例 Evaluate-only smoke，验收真实 loader 在禁网条�
 loader 成功。其精确 SIF 使用 Transformers 4.16.0.dev0，真实 tokenizer loader
 不能消费仅由 Hub snapshot API 验收的 cache。下一身份改由精确 SIF 内的
 `AutoTokenizer.from_pretrained` 同时负责在线准备与禁网复核。
+v4 preparation 已完成 3/3 实例、4/4 artifact 并冻结；15158 inventory 由现代 Hub
+目录变为其 Transformers 4.16 消费的 4 组 legacy hash/data/metadata 文件。下一轮
+三案例 smoke 使用独立 manifest、config 和 repair identity 验收真实测试行为。
 
 Offline 的独立 1it action-protocol smoke 已完成。它覆盖完整 384/98 split，完成
 122 metric calls；seed validation accuracy 为 `0.704082`、balanced accuracy

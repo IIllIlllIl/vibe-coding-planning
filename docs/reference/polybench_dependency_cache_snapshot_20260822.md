@@ -84,3 +84,20 @@ input is the fresh v3 root frozen by
 Evaluate-only consumer is
 `configs/polybench_pce_hpc_dependency_cache_smoke_v2.yaml`; it must use a new
 repair identity and retain the first-smoke outputs unchanged.
+
+The v3 consumer confirmed the OWL-ViT and SentenceTransformers fixes, but also
+showed that both the original and v3 snapshots left `transformers-15158` with
+the same 24 `bert-base-uncased` loader failures. The earlier first-smoke report
+had incorrectly treated the absence of a DNS exception as a cache hit. Its
+Transformers 4.16.0.dev0 consumer uses the legacy Transformers tokenizer cache,
+so a Hub-level offline lookup was not a sufficient acceptance test.
+
+The next cache identity is v4. For the tokenizer case, preparation and offline
+verification both call `AutoTokenizer.from_pretrained` inside the exact frozen
+SIF (slow and fast variants); the resulting inventory contains the legacy
+hashed files and metadata consumed by that version. The other two backends are
+unchanged. The v4 snapshot is frozen at
+`configs/frozen_dependency_caches/polybench_evaluator_dependencies_smoke_v4_20260823/manifest.json`
+with SHA-256 `3acb713b5e963b6480eebc243926f2f155821147115a722ae0988c9e63e3502a`.
+Its consumer config is `configs/polybench_pce_hpc_dependency_cache_smoke_v3.yaml`
+and must use another new repair identity.
