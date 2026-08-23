@@ -2,9 +2,11 @@ schema_version: 1
 purpose: polybench_evaluator_dependency_preheat
 
 image_manifest: output/SWE-PolyBench/polybench-pce-inputs/20260814_python113_v11_8c7d9485d1d0/images.json
-remote_cache_root: /scratch/users/twang/vibe-coding-planning/shared/polybench-dependency-cache/staging/20260823_smoke3_loader_v2
+remote_cache_root: /scratch/users/twang/vibe-coding-planning/shared/polybench-dependency-cache/staging/20260823_smoke3_loader_v3
 remote_apptainer_bin: /mnt/aiongpfs/apps/resif/iris-rhel8/2020b/broadwell/software/Apptainer/1.2.1/bin/apptainer
 artifact_timeout_seconds: 21600
+expected_failed_artifacts: 0
+expected_excluded_instances: []
 
 instances:
   huggingface__transformers-15158:

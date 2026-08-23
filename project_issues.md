@@ -118,6 +118,9 @@ langchain-5450 需要 SentenceTransformers 2.2.2 的 legacy flat cache，且测�
 原名单遗漏的 `sentence-transformers/all-mpnet-base-v2`。OpenCode 报告曾把 LangChain
 的 Hugging Face DNS 错误误归为其他互联网测试，原始 evidence 已由 Codex 复核。
 修复使用新的 v2 cache/manifest/repair identity，不修改首轮证据。
+首次 v2 preparation 被多个 OpenCode/Codex launcher 同时写入同一 state；即使最终
+显示 completed，该 cache identity 也按污染废弃。preheater 现对 identity 持有单一
+非阻塞 writer lock，正式修复改用全新的 `20260823_smoke3_loader_v3` root。
 
 Offline 的独立 1it action-protocol smoke 已完成。它覆盖完整 384/98 split，完成
 122 metric calls；seed validation accuracy 为 `0.704082`、balanced accuracy

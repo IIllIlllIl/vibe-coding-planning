@@ -119,14 +119,22 @@ print(json.dumps(manifest, indent=2, sort_keys=True))
 """
 
 
-def _validate(manifest: dict[str, object], expected_root: str) -> None:
+def _validate(
+    manifest: dict[str, object],
+    expected_root: str,
+    *,
+    expected_instances: set[str],
+    expected_artifacts: int,
+    expected_failed_artifacts: int,
+    expected_excluded_instances: set[str],
+) -> dict[str, int]:
     if manifest.get("purpose") != "polybench_evaluator_dependency_cache_snapshot":
         raise ValueError("remote output has the wrong purpose")
     if manifest.get("remote_cache_root") != expected_root:
         raise ValueError("remote cache root changed while freezing")
     instances = manifest.get("instances")
-    if not isinstance(instances, dict) or len(instances) != 23:
-        raise ValueError("expected exactly 23 prepared instances")
+    if not isinstance(instances, dict) or set(instances) != expected_instances:
+        raise ValueError("prepared instances differ from the frozen config")
     artifacts = [
         artifact
         for instance in instances.values()
@@ -134,21 +142,29 @@ def _validate(manifest: dict[str, object], expected_root: str) -> None:
     ]
     completed = [item for item in artifacts if item["status"] == "completed"]
     failed = [item for item in artifacts if item["status"] == "failed"]
-    if len(artifacts) != 70 or len(completed) != 69 or len(failed) != 1:
-        raise ValueError("expected 69 completed and one failed artifact request")
+    if len(artifacts) != expected_artifacts:
+        raise ValueError("artifact request count differs from the frozen config")
+    if len(failed) != expected_failed_artifacts:
+        raise ValueError("failed artifact count differs from the frozen config")
+    if len(completed) + len(failed) != len(artifacts):
+        raise ValueError("an artifact has a non-terminal status")
     if any(not item.get("revision") for item in completed):
         raise ValueError("a completed artifact is missing its frozen revision")
     membership = manifest["membership"]
-    if len(membership["included_instances"]) != 22:
-        raise ValueError("expected exactly 22 included instances")
-    excluded = membership["excluded_instances"]
-    if [item["instance_id"] for item in excluded] != [
-        "huggingface__transformers-25636"
-    ]:
-        raise ValueError("the frozen exclusion is not transformers-25636")
+    excluded = {item["instance_id"] for item in membership["excluded_instances"]}
+    if excluded != expected_excluded_instances:
+        raise ValueError("excluded instances differ from the frozen config")
+    included = set(membership["included_instances"])
+    if included != expected_instances - expected_excluded_instances:
+        raise ValueError("included instances differ from the frozen config")
     for instance in instances.values():
         if instance["sif_sha256"] != instance["observed_sif_sha256"]:
             raise ValueError("an observed SIF hash differs from its frozen hash")
+    return {
+        "included_instances": len(included),
+        "excluded_instances": len(excluded),
+        "completed_artifacts": len(completed),
+    }
 
 
 def main() -> int:
@@ -160,6 +176,14 @@ def main() -> int:
 
     config = yaml.safe_load(args.config.read_text(encoding="utf-8")) or {}
     remote_root = str(config["remote_cache_root"])
+    configured_instances = config.get("instances") or {}
+    expected_instances = set(configured_instances)
+    expected_artifacts = sum(
+        len(instance.get("artifacts") or [])
+        for instance in configured_instances.values()
+    )
+    expected_failed_artifacts = int(config.get("expected_failed_artifacts", 0))
+    expected_excluded_instances = set(config.get("expected_excluded_instances") or [])
     target, port, key = _ssh_config(args.ulhpc_config.resolve())
     command = "python3 -c " + shlex.quote(_remote_program())
     result = subprocess.run(
@@ -172,7 +196,14 @@ def main() -> int:
     if result.returncode != 0:
         return result.returncode
     manifest = json.loads(result.stdout)
-    _validate(manifest, remote_root)
+    counts = _validate(
+        manifest,
+        remote_root,
+        expected_instances=expected_instances,
+        expected_artifacts=expected_artifacts,
+        expected_failed_artifacts=expected_failed_artifacts,
+        expected_excluded_instances=expected_excluded_instances,
+    )
     canonical = json.dumps(manifest, indent=2, sort_keys=True) + "\n"
     manifest_sha = hashlib.sha256(canonical.encode("utf-8")).hexdigest()
     output = args.output.resolve()
@@ -186,9 +217,7 @@ def main() -> int:
                 "event": "polybench_dependency_cache_frozen",
                 "output": str(output),
                 "manifest_sha256": manifest_sha,
-                "included_instances": 22,
-                "excluded_instances": 1,
-                "completed_artifacts": 69,
+                **counts,
             },
             sort_keys=True,
         )
