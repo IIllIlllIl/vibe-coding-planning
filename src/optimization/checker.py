@@ -24,6 +24,7 @@ from src.environment.docker_env import (
     DockerEnvWrapper,
     ensure_project_image_local,
 )
+from src.environment.repository_baseline import restore_repository_to_base
 from src.evaluator.swe_evaluator import derive_image_name
 from src.optimization.audit import (
     AuditedModel,
@@ -49,6 +50,7 @@ class CheckerRunner(Protocol):
         trajectory_journal_path: Path | None = None,
         output_validator: Callable[[dict[str, Any]], CheckerOutput] = ...,
         completion_callback: Callable[[CheckerOutput], None] | None = None,
+        repository_baseline_dir: Path | None = None,
     ) -> CheckerOutput: ...
 
 
@@ -226,6 +228,7 @@ class DockerChecker:
             [dict[str, Any]], CheckerOutput
         ] = validate_checker_output,
         completion_callback: Callable[[CheckerOutput], None] | None = None,
+        repository_baseline_dir: Path | None = None,
     ) -> CheckerOutput:
         # Slurm owns the HPC wall-time. The worker only executes and journals
         # evidence; the resumed controller classifies a terminal Slurm state.
@@ -237,6 +240,7 @@ class DockerChecker:
                 trajectory_journal_path=trajectory_journal_path,
                 output_validator=output_validator,
                 completion_callback=completion_callback,
+                repository_baseline_dir=repository_baseline_dir,
             )
 
         # Local execution has no external scheduler, so its optional soft
@@ -249,6 +253,7 @@ class DockerChecker:
                 trajectory_journal_path=trajectory_journal_path,
                 output_validator=output_validator,
                 completion_callback=completion_callback,
+                repository_baseline_dir=repository_baseline_dir,
             )
 
     def _run_session(
@@ -262,6 +267,7 @@ class DockerChecker:
             [dict[str, Any]], CheckerOutput
         ] = validate_checker_output,
         completion_callback: Callable[[CheckerOutput], None] | None = None,
+        repository_baseline_dir: Path | None = None,
     ) -> CheckerOutput:
         self.prepare(case)
         DefaultAgent, LitellmModel, _ = import_minisweagent()
@@ -322,6 +328,13 @@ class DockerChecker:
                     self.config.docker.workdir,
                     timeout=self.config.checker.timeout,
                     instance_info=instance_info,
+                )
+            if repository_baseline_dir is not None:
+                restore_repository_to_base(
+                    env,
+                    str(instance_info.get("base_commit", "")),
+                    phase="checker",
+                    evidence_dir=repository_baseline_dir,
                 )
             agent = build_default_agent(
                 DefaultAgent,

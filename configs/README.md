@@ -51,7 +51,7 @@ poll cadence, controller resources, or remote workdir belongs in
 | `frozen_guidelines/20260817_seed-b8c1-b8c2-b3x3c3-b3x3c6_0e1f8d7bd876/` | Frozen text bundle | Tracked five-guideline PolyBench input frozen before check-only results: common seed plus minibatch-eight candidates 1/2 and 3x3 candidates 3/6. Primary evaluation uses seed and the two accuracy winners; the two direct-parent alternatives are reserve inputs. |
 | `polybench_pcce_hpc_smoke.yaml` | ULHPC Apptainer | Two-case PCCE platform-flow smoke using paired historical PCE plans, the frozen seed guideline, three workflow task attempts, and a distinct three-valid-rejection experimental budget. It owns dedicated Checker decision/feedback and Planner revision prompts; smoke evidence is not yet a formal method result. |
 | `polybench_pcce_supervisor_smoke.yaml` | Local tmux+caffeinate | Persistent launch identity for the two-case PCCE smoke. It reuses the shared HPC resume loop at the same ten-minute cadence as Offline and repeatedly submits 10-minute PCCE Controller slices until the workflow reaches a terminal result or blocking failure. |
-| `polybench_pcce_hpc_formal_seed.yaml` | ULHPC Apptainer | Formal PCCE evaluation of the frozen seed guideline over every member of the cleaned 111-case PolyBench snapshot. It freezes the smoke-accepted prompts, three valid-rejection method budget, three workflow attempts, and uncapped one-case Slurm arrays under a new formal run identity. |
+| `polybench_pcce_hpc_formal_seed.yaml` | ULHPC Apptainer | Frozen diagnostic identity of the first 111-case seed PCCE run. Do not relaunch or use its scores: Agent phases did not verify a clean `base_commit`, and CE inherited the PCE `git add -A`/Host-filter patch boundary. |
 | `polybench_dependency_preheat_20260822.yaml` | Iris login node | Frozen 23-case evaluator-dependency preheat plan. Each case uses its exact official-v1.1 SIF and an evidence-derived download profile; the separate cache does not modify the SIF or any PCE/PCCE result. |
 | `polybench_dependency_preheat_smoke_v2_20260823.yaml` | Iris login node | Corrective three-case cache preparation: Hub artifacts retain a `main` ref, while LangChain uses its exact legacy SentenceTransformer layout and includes both models exercised by the tests. |
 | `polybench_dependency_preheat_smoke_v3_20260823.yaml` | Iris login node | Follow-up three-case preparation using the exact Transformers tokenizer loader for the legacy 15158 SIF, plus the already-correct Hub and SentenceTransformer backends. |
@@ -59,8 +59,11 @@ poll cadence, controller resources, or remote workdir belongs in
 | `polybench_pce_hpc_dependency_cache_smoke.yaml` | ULHPC Apptainer | Three-case Evaluate-only smoke over preserved PCE Plan/Code checkpoints. It binds the frozen dependency cache read-only, disables container networking, and invokes no LLM. |
 | `polybench_pce_hpc_dependency_cache_smoke_v2.yaml` | ULHPC Apptainer | Corrective three-case Evaluate-only smoke using the loader-compatible v3 cache snapshot and a new repair identity. |
 | `polybench_pce_hpc_dependency_cache_smoke_v3.yaml` | ULHPC Apptainer | Three-case Evaluate-only regression smoke using the v4 cache whose legacy tokenizer artifact was prepared and verified through the exact Transformers loader. |
-| `polybench_pce_hpc_dependency_cache_formal_v2.yaml` | ULHPC Apptainer | Formal PCE Evaluate-only repair over preserved Plan/Code checkpoints, with the accepted real-loader cache mounted read-only and evaluator networking disabled. |
-| `polybench_pcce_hpc_dependency_cache_formal_seed_v2.yaml` | ULHPC Apptainer | Matching formal seed-PCCE Evaluate-only repair; it uses the same cache semantics and does not rerun PC or Code. |
+| `polybench_pce_hpc_dependency_cache_formal_v2.yaml` | ULHPC Apptainer | Completed diagnostic PCE Evaluate-only repair over preserved Plan/Code checkpoints. Its cache/network mechanism remains reusable, but its scores inherit invalid upstream Agent repository/patch provenance. |
+| `polybench_pce_hpc_repository_boundary_smoke_20260824.yaml` | ULHPC Apptainer | Prepared two-case full PCE smoke for explicit dataset-`base_commit` restore/verification, exact current Online Code prompt, Agent-owned staging without Host transformation, and evaluator-owned empty-patch classification. Uses a new output identity; not formal score data. |
+| `polybench_pcce_hpc_repository_boundary_smoke_20260824.yaml` | ULHPC Apptainer | Prepared paired follow-up smoke over the corrected two-case PCE output. It exercises Checker and any Planner revision from a verified base, then inherits the corrected Code/Evaluate path. It must start only after the PCE smoke is collected. |
+| `polybench_pce_supervisor_repository_boundary_smoke_20260824.yaml` / `polybench_pcce_supervisor_repository_boundary_smoke_20260824.yaml` | Local tmux+caffeinate | Ordered clean-worktree launch identities for the corrected two-case smoke. Run PCE first; start PCCE only after PCE has collected `raw_pce_outcomes.jsonl`. Both poll every ten minutes. |
+| `polybench_pcce_hpc_dependency_cache_formal_seed_v2.yaml` | ULHPC Apptainer | Matching completed diagnostic seed-PCCE Evaluate-only repair. It did not rerun PC or Code and therefore cannot repair their repository/patch provenance. |
 | `frozen_dependency_caches/polybench_evaluator_dependencies_20260822/` | Frozen input | Tracked file/revision/hash manifest for 69 prepared artifact requests; its membership contains 22 eligible cases and explicitly excludes `transformers-25636` because one required repository was inaccessible. |
 | `frozen_dependency_caches/polybench_evaluator_dependencies_formal_v2_20260823/` | Frozen input | Accepted full real-loader snapshot for formal evaluator repair: 70 completed artifact requests across 22 eligible cases, with the same evidence-backed 25636 exclusion and a fail-closed file/revision/SIF inventory. Its manifest-bound subset JSON is the shared PCE/PCCE selection authority. |
 | `polybench_pcce_supervisor_formal_seed.yaml` | Local tmux+caffeinate | Clean-worktree-guarded formal seed launch identity. It advances the formal PCCE run with 10-minute Controller slices and polling while preserving the runtime config as method authority. |
@@ -98,9 +101,8 @@ window is part of the result contract. It does not resume an earlier smoke.
 Worker array `5661319` completed both instances and collection controller
 `5670870` reused them without launching another worker; this config remains a
 completed smoke rather than the future formal config.
-Code may create diagnostic
-tests, while PCE preserves the raw submission and evaluates a separately
-recorded patch with test paths filtered out.
+Code may create diagnostic tests. Current PCE/PCCE code preserves the exact
+Agent-staged submission and applies no Host path filtering or patch repair.
 
 `polybench_pce_hpc_formal.yaml` is the formal raw-data configuration for the
 frozen 113-case exact-`v1.1` input. It uses a separate
@@ -108,6 +110,13 @@ frozen 113-case exact-`v1.1` input. It uses a separate
 uncapped Slurm element per task, and retains the smoke-proven `1 CPU / 4G /
 125min` worker boundary with three total attempts. It does not run GEPA,
 Reflection, or guideline evaluation.
+
+This config is retained for provenance and must not be relaunched as a formal
+method run. Its Code submission command ends in `git add -A`, its Host applies
+test-path filtering, and its Agent phases do not restore and verify the frozen
+SIF against `base_commit`. The resulting PCE evidence and downstream seed PCCE
+comparison are diagnostic only. A corrected run requires a new config and run
+identity; evaluator-only resume cannot repair the affected Plan/Code boundary.
 
 `polybench_pcce_hpc_smoke.yaml` is additive and does not alter the completed
 PCE or Offline GEPA configs. It reads two members of the frozen 111-case

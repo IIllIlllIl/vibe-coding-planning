@@ -61,6 +61,16 @@ scheduling. A smoke may run while the single login-node preheater downloads a
 different image only when every selected smoke SIF is already complete and
 hash-frozen and the two processes use separate Apptainer temporary paths.
 
+Current corrected PCE/PCCE workers do not trust a fresh SIF worktree as clean.
+Before each Plan, Checker, Planner-revision, Code, or Evaluate phase they check
+that the dataset `base_commit` exists, restore it with `git reset --hard` plus
+`git clean -fd`, verify exact `HEAD` and empty porcelain status, and retain the
+before/after evidence outside `/testbed`. A missing commit, failed reset, HEAD
+mismatch, or remaining non-ignored change is an identity/environment block,
+not an Agent retry or benchmark failure. The repository-boundary smoke uses
+`configs/polybench_pce_hpc_repository_boundary_smoke_20260824.yaml` and a new
+output identity; it must not resume the invalid historical formal checkpoints.
+
 When evaluator semantics change but completed Plan/Code evidence remains the
 intended fixed input, use the wrapper's explicit `--resume-evaluator ID` mode.
 It validates and re-identifies the old Plan/Code checkpoints into a separate
@@ -78,8 +88,8 @@ The PCE worker command is the final foreground command in its Slurm script.
 Normal completion therefore exits immediately and releases the allocation;
 125 minutes is only a hard upper bound. There is no required final cleanup
 window. Plan is durable after its final plan and trajectory are saved; Code is
-durable only after raw submission, deterministic patch policy, filtered patch,
-and trajectory are saved; Evaluate is durable only after official parsing,
+durable only after the exact Agent-staged submission, its hash, and trajectory
+are saved; Evaluate is durable only after official parsing,
 classification, and raw evidence are saved. Each identity-bound checkpoint is
 written atomically before worker-side environment/workspace cleanup. Cleanup is
 best-effort and failures are audit events, not reasons to invalidate or rerun a

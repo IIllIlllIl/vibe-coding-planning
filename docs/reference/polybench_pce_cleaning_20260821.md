@@ -4,6 +4,13 @@
 > 2026-08-21. This file records selection reasons, not model-performance-based
 > exclusions.
 
+> Score-use notice (2026-08-24): the evidence-blind 111-case membership remains
+> valid provenance, but the associated PCE labels, plans, and Code patches are
+> diagnostic only. A later audit found that Agent phases did not verify a clean
+> `base_commit`, and final `git add -A` could capture pre-existing SIF worktree
+> changes. The membership may be reused prospectively only with fresh
+> Plan/Code/Evaluate evidence under a corrected repository and patch boundary.
+
 ## Source universe
 
 - Frozen source: `20260814_python113_v11_8c7d9485d1d0`

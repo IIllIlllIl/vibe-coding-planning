@@ -128,6 +128,54 @@ v4 real-loader consumer 已完成最终 Controller 收集：3/3 均为 attempt 1
 准备为新的 `polybench_dependency_preheat_formal_v2_20260823.yaml` 配置和独立远端
 staging identity；尚未启动。预期排除仍只有不可访问 Flax fixture 的 25636，但
 freeze 会在任何新增失败或排除时停止，不能静默改变正式范围。
+
+2026-08-23 的正式 dependency-cache PCE/PCCE Evaluate overlay 已完成并在本地冻结。
+23 个证据定义案例中，`huggingface__transformers-15843` 因 seed Checker 三轮拒绝而
+没有 PCCE Code checkpoint，其余 22 个两侧均在 attempt 1 完成。将这 22 条按
+instance ID 覆盖旧 repair、其余结果保持不变后，全量配对结果为 PCE 79/111、seed
+PCCE 75/111：75 个 resolved→resolved、31 个 unresolved→unresolved、0 个
+unresolved→resolved、4 个 resolved→unresolved，另有 1 个 baseline unresolved 在
+Code 前被拒绝。派生快照位于
+`output/SWE-PolyBench/polybench-pcce-runs/formal/seed-python111-20260817/comparisons/pce-vs-seed-pcce-updated-20260823/`。
+当前 seed Checker 没有显示 resolved-rate 改善：23 个修改后放行案例中净退化 3 个，
+87 个首轮放行案例中净退化 1 个。`transformers-29519` 的新输出仍混有显式离线缓存
+缺失和任务相关失败，保留为已知环境局限，不进行按表现清洗。
+进一步逐案例审计发现 `langchain-ai__langchain-4420` 的 replacement plan 明确要求
+不修改代码，Code Agent 也只运行了已通过的目标测试，但最终 `git add -A` 将 SIF
+工作树预先存在的 `Dockerfile/.dockerignore` 差异收进 submission，随后官方测试失败。
+因此 4 个 resolved→unresolved 中至少 1 个是 raw-patch 边界污染，不能归因于
+Checker/Planner。当前按预先声明的“只覆盖 22 个 dependency cases、其余保留”策略
+不删除该案例；后续候选 PCCE 前需决定是否以初始 worktree diff 为基线提取 Agent
+增量 patch，并对既有 seed 结果保留这一局限。
+
+**2026-08-24 PCE/PCCE repository/patch 边界审计（阻断新的正式评估）**：问题不只限于
+`langchain-ai__langchain-4420`。正式 PCE/PCCE Code prompt 一方面要求 Agent 只 stage
+预期实现，另一方面最终强制 `git add -A`，会重新纳入所有修改、删除和未跟踪文件；
+随后 Host 仅按常规 test path 过滤，既可能漏掉基础设施/诊断文件，也可能误删本应提交
+的测试。冻结 SIF 至少已确认存在 Agent 运行前的 `Dockerfile/.dockerignore` working-tree
+差异。Plan、PCCE Checker、Planner revision 和 Code 虽各用独立环境，但都没有在 Agent
+启动前执行并验证 `git reset --hard <base_commit> && git clean -fd`；PolyBench
+Evaluator 则显式 reset，因此 Agent 与评估器并非处于同一仓库基线。当前 Online
+Apptainer 也只实现了阶段级独立 workspace：Plan/Code 没有显式 clean-base 验证，
+SWE-bench Apptainer Evaluator 也只检查仓库存在而没有 reset。它尚未达到需求文档声明
+的 clean-base 不变量；不过当前 Online prompt 已取消最终 `git add -A`，污染链比
+PCE/PCCE 少一环。
+
+当前正式 PCE、seed PCCE、其 Evaluate-only repair 和派生 79/111 对 75/111 比较全部
+降级为诊断 provenance，不得用于判断 seed Checker 或 guideline 效果；既有输出保持
+原样，不进行事后覆盖。Evaluate-only subset repair 和冻结 dependency cache 机制本身
+仍可用于未来可信 Plan/Code 输入的网络隔离，但不能修复本轮上游 Agent 所见仓库或
+patch provenance。2026-08-24 已先删除当前 PCE/PCCE 共用 Code 路径的 Host path
+过滤：runner 现在将 Agent staged submission 原样保存、checkpoint 并交给 Evaluator，
+测试文件不再由 Host删除；历史 `polybench_patch_policy` 仅保留给非本流程的旧入口。
+该中间状态已于 2026-08-24 补齐实现，但尚待真实 Apptainer smoke：每个 PCE/PCCE
+Agent 显式恢复并验证数据集 `base_commit`，保存 reset 前后 HEAD/status/diff；新 smoke
+配置逐字符复制当前 Online 的 Agent-owned staging/final diff prompt；真正 empty
+generation 进入 Evaluator并记 unresolved，不触发 Code retry。113/113 冻结 SIF 均包含
+声明 commit 且初始 HEAD 匹配，但 113/113 均有至少一个非 ignored worktree entry，证明
+恢复机制确有必要。PCE/PCCE 语义哈希已纳入共享恢复源码，防止错误复用旧 checkpoint。
+下一步必须使用新 identity 完成两案例 full PCE/PCCE smoke；不得 resume 当前正式
+Plan/Code checkpoint。
 该完整 preheat 已于 2026-08-23 正常结束：23/23 instances、70/71 artifacts，唯一
 失败严格为预期的 25636/ArthurZ Flax 401；22 个实例可用，SIF hash 无不一致，成功
 artifact 无 revision 缺失。正式 real-loader manifest 已冻结为

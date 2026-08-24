@@ -87,8 +87,8 @@
   },
   "active_polybench_pce_formal": {
     "classification": "formal_raw_generation_environment_contaminated",
-    "status": "completed_with_incomplete_pending_evaluator_rerun",
-    "as_of": "2026-08-15",
+    "status": "completed_diagnostic_invalid_agent_repository_boundary",
+    "as_of": "2026-08-24",
     "controller_job_id": "5671976",
     "final_controller_job_id": "5673460",
     "controller_outcome": "completed_with_incomplete",
@@ -109,7 +109,8 @@
     "final_validation_labels_assigned": false,
     "score_usable": false,
     "known_command_not_executed_outcomes": 3,
-    "plan_code_evidence_reusable": true
+    "plan_code_evidence_reusable": false,
+    "known_repository_boundary_issue": "Agent phases did not restore and verify base_commit; final git add -A could capture pre-existing SIF worktree changes"
   },
   "prior_polybench_pce_smoke": {
     "classification": "test_only",

@@ -109,6 +109,12 @@ def run_polybench_pcce(config: PolyBenchPCCEConfig) -> dict[str, Any] | None:
         "workflow_task_attempts": config.hpc.max_task_attempts,
         "workflow_attempts_consume_review_budget": False,
         "historical_pce_code_evaluate_reused": False,
+        "repository_baseline": {
+            "declared_revision": "dataset_base_commit",
+            "restore": "git reset --hard <base_commit> && git clean -fd",
+            "verified_agent_phases": ["checker", "plan_revision", "code"],
+            "evaluate_verified_by_pce_runner": True,
+        },
     }
     manifest_path = config.run_dir / "run_manifest.json"
     if manifest_path.is_file():

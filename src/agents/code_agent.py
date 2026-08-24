@@ -104,6 +104,7 @@ def run(
     model_wrapper: Callable[[Any], Any] | None = None,
     failure_trajectory_path: Path | None = None,
     phase_timeout_seconds: float | None = None,
+    allow_empty_submission: bool = False,
 ) -> tuple[str, list[dict[str, Any]]]:
     """Run the code generation agent.
 
@@ -117,8 +118,9 @@ def run(
     Returns:
         A tuple of ``(patch_text, trajectory_messages)``. ``patch_text``
         is the raw ``git diff --cached`` output captured by the submission
-        command. Apart from requiring a non-empty formal submission, no Host
-        path policy, semantic filtering, or patch repair is applied.
+        command. No Host path policy, semantic filtering, or patch repair is
+        applied. Callers may explicitly allow an empty formal submission when
+        the evaluator owns that outcome classification.
 
     Raises:
         TaskError: If the agent terminates without submitting (e.g.
@@ -197,7 +199,7 @@ def run(
         )
     patch_text = _extract_result(exception_name, exception_msg, agent.messages)
 
-    if not patch_text or not patch_text.strip():
+    if (not patch_text or not patch_text.strip()) and not allow_empty_submission:
         _write_failure_trajectory(
             failure_trajectory_path, agent.messages, exception_name, exception_msg
         )

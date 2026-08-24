@@ -277,8 +277,7 @@ must retain a separate run identity and must not use seed outcomes to modify
 their already frozen guideline text.
 
 The first formal seed run's original Evaluate evidence is environment-
-contaminated. Its PC decisions, accepted plans, and Code checkpoints remain the
-fixed method evidence. The prepared repair launch is
+contaminated. The prepared repair launch is
 `configs/polybench_pcce_supervisor_formal_seed_evaluator_repair_20260821.yaml`,
 using repair identity `isolated-home-seed-repair-20260821`. It selects all 110
 cases that passed the Checker and reached CE; the one case rejected after three
@@ -300,3 +299,61 @@ One new PCE and one new PCCE Evaluate-only identity will bind the same frozen
 cache read-only into Evaluate, run without network, and preserve all earlier
 outputs. The exact scope and acceptance contract are recorded in
 [`reference/polybench_dependency_preheat_scope_20260821.md`](reference/polybench_dependency_preheat_scope_20260821.md).
+
+The frozen dependency-cache repair completed on 2026-08-23. One of the 23
+source cases had no PCCE Code checkpoint because the seed Checker rejected all
+three submitted plans, so the paired Evaluate overlay contains 22 cases. Both
+PCE and PCCE reused their fixed Plan/Code evidence, used the same frozen
+dependency manifest, disabled evaluator network access, and completed all 22
+Evaluate tasks on workflow attempt 1. The new rows replace the corresponding
+rows from the earlier full evaluator repairs; all other cases retain their
+earlier repaired outcome. This is an evidence-defined overlay, not a
+performance-based selection.
+
+The resulting 111-case comparison is materialized under
+`seed-python111-20260817/comparisons/pce-vs-seed-pcce-updated-20260823` with
+source hashes and per-case evaluator authority. PCE resolves 79/111 cases;
+seed PCCE resolves 75/111, with one additional Checker-exhausted case counted
+as a method failure. The paired transitions are 75 resolved-to-resolved, 31
+unresolved-to-unresolved, zero unresolved-to-resolved, four
+resolved-to-unresolved, and one baseline-unresolved case rejected before Code.
+Among the 23 cases revised and subsequently accepted by the Checker, PCE
+resolves 17 and PCCE resolves 14; among 87 first-review passes, PCE resolves 62
+and PCCE resolves 61. These descriptive results do not show a seed-Checker
+benefit. One overlaid case (`huggingface__transformers-29519`) still contains
+explicit offline-cache failures in addition to task-relevant failures; this
+residual environment limitation is preserved rather than silently excluded.
+The retained non-network cases also expose a separate raw-patch limitation:
+for `langchain-ai__langchain-4420`, the accepted replacement plan required no
+code change and the Code Agent only ran the already-passing test, but its final
+`git add -A` captured pre-existing SIF worktree changes to `Dockerfile` and
+`.dockerignore`. That patch then failed the official test. The case remains in
+the predeclared merge, but one of the four apparent regressions therefore
+cannot be attributed to Checker-guided plan revision.
+
+The 2026-08-24 repository-baseline audit broadens that limitation. The formal
+PCE/PCCE prompt's final `git add -A` contradicts its earlier instruction to
+stage only intended implementation changes. More importantly, fresh Agent
+containers were isolated from one another but did not reset and verify the SIF
+working tree against `base_commit`. Thus the frozen first plans, Checker
+decisions, revised plans, and Code submissions may all have been produced from
+an unverified repository state, while Evaluate started from an explicitly
+reset repository. The comparison, all evaluator repairs, and their counts are
+now diagnostic records only and are not valid evidence of seed-Checker effect.
+
+This finding does not invalidate Evaluate-only repair as an automation
+mechanism. A frozen dependency cache, disabled evaluator network, atomic
+Evaluate checkpoint, and subset repair remain useful once the upstream Plan
+and Code evidence is trustworthy. They cannot, however, repair upstream Agent
+reasoning or patch provenance. Candidate-guideline PCCE evaluation and reuse of
+the current seed Plan/Code checkpoints are paused until a new workflow identity
+enforces and records a clean `base_commit` for every Agent, adopts the current
+Online Agent-owned staging prompt without final `git add -A`, removes Host
+path filtering (already removed from the shared PCE/PCCE Code runner on
+2026-08-24), and represents intentional empty submissions as scoreable empty
+generations. Those code changes are now implemented: PCE/PCCE restore and
+verify the dataset `base_commit` before every Agent, preserve before/after
+evidence, use the exact current Online Code prompt in the new smoke config,
+apply no Host patch transformation, and let empty staged submissions reach the
+Evaluator. They remain pre-formal until the new two-case PCE/PCCE smoke has
+validated real Apptainer behavior; old checkpoints remain ineligible.

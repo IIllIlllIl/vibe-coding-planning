@@ -127,6 +127,18 @@ evaluator result. Candidate rules never enter Code or Evaluator inputs. A
 repo-grounded reviewer may read the candidate, current rollout evidence, and
 clean base repository; synthesis reads the reviews and current evidence bundle.
 
+Independent environments guarantee that edits made by one Agent phase do not
+enter the next phase. They do not, by themselves, prove that the
+repository embedded in a benchmark image has a clean working tree at its
+declared `base_commit`. The 2026-08-24 PolyBench audit found frozen SIFs whose
+`HEAD` identified the expected commit while every audited working tree had at
+least one non-ignored entry. Current PCE/PCCE now restores the dataset-declared
+commit before Plan, Checker, Planner revision, Code, and Evaluate, verifies the
+exact `HEAD` and an empty porcelain status, and saves before/after evidence
+outside the repository. Online still copies or exposes the SIF repository
+without this explicit check. Therefore new Online formal runs must not treat a
+fresh container as equivalent to a verified clean Git working tree.
+
 The instance reviewer runs inside the matching disposable benchmark SIF. It may
 execute focused tests, write diagnostic scripts/tests, temporarily apply the
 generated patch, or make a counterfactual edit. `/evidence` remains read-only;
@@ -136,13 +148,17 @@ repository states or decide whether an Agent observation is semantically true.
 Synthesis may read the raw Reviewer trajectory and rollout evidence whenever a
 concise report is ambiguous or contradictory.
 
-Code may create or modify diagnostic tests inside its workspace. Code itself
-chooses the staged submission returned by mini-swe-agent; the Host does not
-apply test-path filtering or silently rewrite that patch. The Evaluator starts
-from a clean base repository and receives only the staged submission, while the
-Code trajectory remains available to Reflection. Patch syntax/application and
-official-test failures are scored unresolved rather than rejected by a
-pre-evaluation semantic gate.
+Under the intended Online contract, Code may create or modify diagnostic tests
+inside its workspace and chooses the staged submission returned by
+mini-swe-agent; the Host does not apply test-path filtering or silently rewrite
+that patch. The Evaluator must start from a clean base repository and receive
+only the staged submission, while the Code trajectory remains available to
+Reflection. Patch syntax/application and official-test failures are scored
+unresolved rather than rejected by a pre-evaluation semantic gate. The current
+PolyBench evaluator explicitly resets and cleans before patch application; the
+current SWE-bench Apptainer evaluator only checks that a repository exists and
+must be brought under the same verified-baseline invariant before the next
+formal Online run.
 
 ## 6. Failure Boundaries
 

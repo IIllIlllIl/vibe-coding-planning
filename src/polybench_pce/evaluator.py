@@ -8,9 +8,10 @@ from pathlib import Path
 from typing import Any, Callable
 
 from src.environment.apptainer_env import ApptainerEnvironment
-from src.exceptions import CommandTimeoutError
+from src.exceptions import CommandTimeoutError, FatalError
 from src.optimization.config import ContainerConfig
 from src.environment.docker_env import DockerCapacityWindow
+from src.environment.repository_baseline import restore_repository_to_base
 from src.polybench_pce.config import DependencyCacheConfig
 from src.polybench_pce.models import PolyBenchPCECase
 
@@ -175,6 +176,7 @@ def evaluate_polybench_apptainer(
     result_callback: Callable[[dict[str, Any]], None] | None = None,
     cleanup_error_callback: Callable[[BaseException], None] | None = None,
     dependency_cache: DependencyCacheConfig | None = None,
+    repository_baseline_dir: Path | None = None,
 ) -> dict[str, Any]:
     """Return raw official evidence without deciding validation inclusion."""
 
@@ -231,18 +233,31 @@ def evaluate_polybench_apptainer(
             run_args=run_args,
             network_disabled=network_disabled,
         )
-        repository_check = env.execute(
-            "git rev-parse --is-inside-work-tree >/dev/null "
-            f"&& git reset --hard {case.base_commit} && git clean -fd",
-            timeout=120,
-        )
-        if repository_check.get("returncode") != 0:
-            raise PolyBenchEvaluatorOperationalError(
-                "evaluator could not reset the frozen base repository: "
-                + str(repository_check.get("output", ""))[:1000],
-                evidence={"repository_reset": repository_check},
-                outcome_reason="repository_reset_failed",
+        try:
+            restore_repository_to_base(
+                env,
+                case.base_commit,
+                phase="evaluate",
+                evidence_dir=(
+                    repository_baseline_dir
+                    if repository_baseline_dir is not None
+                    else phase_workdir.parent / "evaluate_repository_baseline"
+                ),
             )
+        except FatalError as exc:
+            raise PolyBenchEvaluatorOperationalError(
+                f"evaluator could not restore the frozen base repository: {exc}",
+                evidence={"error_type": type(exc).__name__, "error": str(exc)},
+                outcome_reason="repository_reset_failed",
+                retry_disposition="block_run",
+            ) from exc
+        except Exception as exc:
+            raise PolyBenchEvaluatorOperationalError(
+                f"evaluator repository restore did not execute: {exc}",
+                evidence={"error_type": type(exc).__name__, "error": str(exc)},
+                outcome_reason="repository_reset_failed",
+                retry_disposition="retry_same_phase",
+            ) from exc
 
         # These evaluator-owned files must be created after ``git clean -fd``.
         # Writing them before the reset makes the cleanup delete its own inputs

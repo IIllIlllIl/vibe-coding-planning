@@ -164,6 +164,9 @@ def test_first_review_reuses_frozen_plan_and_maps_current_checker_output(
         def __call__(self, checker_case, guideline, **kwargs):
             FakeChecker.calls += 1
             assert checker_case.plan == case.baseline_plan
+            assert kwargs["repository_baseline_dir"] == (
+                tmp_path / "attempt" / "repository_baselines" / "checker"
+            )
             output = CheckerOutput(
                 False,
                 "missing evidence",

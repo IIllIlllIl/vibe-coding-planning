@@ -44,13 +44,14 @@ def offline_checker_semantic_sha256(config: OptimizationConfig) -> str:
     source_paths = [
         root / "src" / "agents" / "_deps.py",
         root / "src" / "environment" / "apptainer_env.py",
+        root / "src" / "environment" / "repository_baseline.py",
         root / "src" / "optimization" / "checker.py",
         root / "src" / "optimization" / "offline_checker_worker.py",
         root / "src" / "optimization" / "offline_hpc_executor.py",
     ]
     return _stable_sha256(
         {
-            "schema": 3,
+            "schema": 4,
             "source": {
                 str(path.relative_to(root)): hashlib.sha256(
                     path.read_bytes()

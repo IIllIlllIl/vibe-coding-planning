@@ -136,6 +136,12 @@ def run_polybench_pce(config: PolyBenchPCEConfig) -> dict[str, Any] | None:
             "code": "fresh_apptainer",
             "evaluate": "fresh_apptainer",
         },
+        "repository_baseline": {
+            "declared_revision": "dataset_base_commit",
+            "restore": "git reset --hard <base_commit> && git clean -fd",
+            "verified_phases": ["plan", "code", "evaluate"],
+            "evidence": "attempt/repository_baselines/<phase>/repository_baseline.json",
+        },
     }
     manifest_path = config.run_dir / "run_manifest.json"
     if manifest_path.is_file():

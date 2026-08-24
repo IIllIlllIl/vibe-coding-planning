@@ -233,6 +233,23 @@ class TestRunValidation:
             code_agent.run(config, "Plan", "Issue", mock_env)
 
     @patch("src.agents.code_agent.import_minisweagent")
+    def test_explicit_caller_can_delegate_empty_patch_to_evaluator(
+        self, mock_import, config, mock_env
+    ):
+        mock_import.return_value = (MockDefaultAgentEmpty, MockLiteLLMModel, object)
+
+        patch_text, messages = code_agent.run(
+            config,
+            "Plan",
+            "Issue",
+            mock_env,
+            allow_empty_submission=True,
+        )
+
+        assert patch_text == ""
+        assert len(messages) == 3
+
+    @patch("src.agents.code_agent.import_minisweagent")
     def test_empty_output_persists_failure_trajectory(
         self, mock_import, config, mock_env, tmp_path
     ):

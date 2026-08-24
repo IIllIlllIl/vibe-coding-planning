@@ -58,11 +58,12 @@ def pce_semantic_sha256(config: PolyBenchPCEConfig) -> str:
         root / "src" / "agents" / "plan_agent.py",
         root / "src" / "agents" / "code_agent.py",
         root / "src" / "environment" / "apptainer_env.py",
+        root / "src" / "environment" / "repository_baseline.py",
         *sorted((root / "src" / "polybench_pce").glob("*.py")),
     ]
     return _stable_hash(
         {
-            "schema": 1,
+            "schema": 2,
             "source": {
                 str(path.relative_to(root)): file_sha256(path) for path in sources
             },

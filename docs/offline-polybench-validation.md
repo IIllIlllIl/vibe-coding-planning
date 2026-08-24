@@ -3,7 +3,7 @@
 > Authority: planned external validation contract for the current standalone
 > Offline guideline method
 >
-> Last reviewed: 2026-08-17
+> Last reviewed: 2026-08-24
 
 ## Purpose And Non-Training Boundary
 
@@ -107,6 +107,15 @@ evaluator phases in fresh containers derived from the same frozen SIF. Phase
 resume occurs only after a completed durable phase output; an Agent conversation
 is never resumed from an internal step.
 
+Fresh-container isolation is supplemented by a Git baseline boundary. Before
+each Plan or Code Agent, and again before Evaluate, the workflow checks that the
+dataset-declared `base_commit` exists, runs `git reset --hard <base_commit> &&
+git clean -fd`, and verifies exact `HEAD` plus an empty non-ignored worktree.
+PCCE applies the same boundary before each Checker and Planner revision. Raw
+before/after evidence is stored outside the repository workspace. The complete
+113-SIF audit is recorded in
+`docs/reference/polybench_base_commit_audit_20260824.md`.
+
 The raw PCE record preserves, where available:
 
 - frozen dataset row and image provenance identity;
@@ -120,17 +129,22 @@ The raw PCE record preserves, where available:
 - every infrastructure attempt without exposing retries as research evidence
   to later Agents.
 
-Code may create temporary diagnostic tests, but test-file changes are not part
-of the evaluated submission. The Code prompt asks the Agent not to stage them,
-and a deterministic Host policy independently removes conventional test paths.
-Both raw and filtered patches, their hashes, kept/removed/overlap paths, and
-the complete trajectory are retained. A test-only submission therefore becomes
-an auditable empty generation. The Host does not repair source changes or merge
-them with the official test patch.
+Code may create temporary diagnostic tests, but the Agent owns the choice of
+which changes to stage for submission. The Host preserves that staged patch and
+its hash byte-for-byte and does not remove conventional test paths or otherwise
+repair the selection. Diagnostic changes that the Agent intentionally leaves
+unstaged remain visible only in its trajectory. A poorly selected staged patch
+continues to the clean Evaluator and normally becomes unresolved evidence.
+The new smoke copies the current formal Online Code prompt exactly: the Agent
+inspects all changes, clears staging, stages only its intended submission, and
+returns `git diff --cached --binary --full-index`. The Host does not append
+`git add -A`. An intentional empty staged diff is a valid Code result and
+reaches Evaluate as `empty_generation`/unresolved; it is not an operational
+retry.
 
 Classification separates `task_outcome` (`resolved`, `unresolved`, or
 `unknown`), a stable `outcome_reason`, and an independent
-`retry_disposition`. Parsed test failures, empty filtered submissions,
+`retry_disposition`. Parsed test failures, empty submissions,
 code-patch application failure, and code-test timeout are terminal unresolved
 outcomes. Frozen-test-patch, parser, container, provider, and infrastructure
 failures remain unknown rather than manufacturing an unresolved label.
@@ -215,8 +229,8 @@ immediately; reaching the hard limit relies on Slurm reclamation and does not
 require a final application-managed save or cleanup interval. The worker now
 writes an identity-bound atomic checkpoint after all method-relevant evidence
 for each phase is complete and before environment/workspace cleanup. Plan saves
-the final plan and trajectory; Code additionally completes the deterministic
-patch policy and preserves raw/filtered patches; Evaluate saves the official
+the final plan and trajectory; Code additionally preserves the exact staged
+submission and its hash without Host transformation; Evaluate saves the official
 parser, score/classification, and raw evidence. Cleanup remains worker-owned and
 best-effort. A cleanup error is audited but cannot invalidate the checkpoint;
 an interrupted worker therefore resumes from the first genuinely incomplete
@@ -442,3 +456,25 @@ The planned repair leaves official SIFs unchanged, freezes a separate cache,
 mounts it read-only into Evaluate only, disables evaluator network access, and
 then runs one new PCE and one new PCCE Evaluate-only identity over fixed
 Plan/Code evidence.
+
+The formal dependency-cache repair completed on 2026-08-23 for the 22 cases
+having both PCE and PCCE Code checkpoints. The resulting overlay is retained as
+diagnostic provenance, not as score-usable PCE/PCCE evidence. A subsequent
+repository-baseline audit found that the formal Code prompt ended with
+`git add -A`, while at least one exact frozen SIF already contained uncommitted
+`Dockerfile` and `.dockerignore` differences before the Code Agent ran. PCE and
+PCCE Plan, Checker, revision, and Code environments exposed or copied the SIF
+working tree without first restoring and verifying `base_commit`. The
+Evaluator did restore the base commit, so Agent reasoning and patch extraction
+did not share one verified repository baseline.
+
+The materialized comparison under
+`output/SWE-PolyBench/polybench-pcce-runs/formal/seed-python111-20260817/comparisons/pce-vs-seed-pcce-updated-20260823/`
+is frozen unchanged. Its descriptive counts (PCE 79/111 and seed PCCE 75/111)
+must not be used to assess Checker or guideline quality. Evaluate-only repair
+remains a valid mechanism for isolating evaluator-network effects when its
+Plan and Code inputs are trustworthy, but it cannot repair an Agent-visible
+repository mismatch or a contaminated Code submission. The next formal PCE
+and PCCE identities require an audited clean repository at every Agent phase,
+Agent-owned staged patch selection without final `git add -A`, and a true empty
+generation path before any Plan/Code evidence is reused.

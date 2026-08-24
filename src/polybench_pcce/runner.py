@@ -14,6 +14,7 @@ from src.agents import plan_agent
 from src.config import AgentConfig, Config, EvaluatorConfig, PromptConfig, SystemConfig
 from src.environment.apptainer_env import ApptainerEnvironment, ApptainerSifCache
 from src.environment.docker_env import DockerCapacityWindow
+from src.environment.repository_baseline import restore_repository_to_base
 from src.exceptions import FatalError
 from src.optimization.audit import AuditedModel, JsonlLogger, text_sha256
 from src.optimization.checker import DockerChecker
@@ -216,6 +217,16 @@ class PolyBenchPCCERunner:
                 )
                 env = self._environment(assignment)
                 try:
+                    restore_repository_to_base(
+                        env,
+                        assignment.case.source.base_commit,
+                        phase="plan_revision",
+                        evidence_dir=(
+                            self.attempt_dir
+                            / "repository_baselines"
+                            / "plan_revision"
+                        ),
+                    )
                     plan, trajectory = plan_agent.run(
                         self._plan_config(),
                         revision_task,
@@ -279,6 +290,9 @@ class PolyBenchPCCERunner:
                 trajectory_journal_path=self.attempt_dir / "checker_trajectory.jsonl",
                 output_validator=validate_pcce_checker_output,
                 completion_callback=save_completed_checker,
+                repository_baseline_dir=(
+                    self.attempt_dir / "repository_baselines" / "checker"
+                ),
             )
             checker_payload = _checkpoint(checker_path, identity, "checker")
             if checker_payload is None:

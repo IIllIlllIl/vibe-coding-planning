@@ -458,6 +458,10 @@ def test_evaluator_materializes_repo_before_writing_inputs(
     snapshot, images, _ = _frozen_inputs(tmp_path)
     case = load_polybench_pce_cases(snapshot, images)[0][0]
     events: list[str] = []
+    monkeypatch.setattr(
+        "src.polybench_pce.evaluator.restore_repository_to_base",
+        lambda *args, **kwargs: events.append("baseline"),
+    )
 
     class FakeEnv:
         def __init__(self, **kwargs: object) -> None:
@@ -468,7 +472,7 @@ def test_evaluator_materializes_repo_before_writing_inputs(
             events.append("environment")
 
         def execute(self, command: str, timeout: int | None = None) -> dict:
-            assert events == ["environment"]
+            assert events == ["environment", "baseline"]
             if command.startswith("git rev-parse"):
                 assert not (tmp_path / "eval" / ".vibe_test.patch").exists()
                 assert not (tmp_path / "eval" / ".vibe_code.patch").exists()
@@ -532,7 +536,12 @@ def test_evaluator_materializes_repo_before_writing_inputs(
         ),
     )
     assert result["terminal_kind"] == "tests_parsed"
-    assert events == ["environment", "checkpoint:tests_parsed", "cleanup"]
+    assert events == [
+        "environment",
+        "baseline",
+        "checkpoint:tests_parsed",
+        "cleanup",
+    ]
 
 
 def test_evaluator_scores_code_patch_apply_failure_as_unresolved(
@@ -540,6 +549,10 @@ def test_evaluator_scores_code_patch_apply_failure_as_unresolved(
 ) -> None:
     snapshot, images, _ = _frozen_inputs(tmp_path)
     case = load_polybench_pce_cases(snapshot, images)[0][0]
+    monkeypatch.setattr(
+        "src.polybench_pce.evaluator.restore_repository_to_base",
+        lambda *args, **kwargs: None,
+    )
 
     class FakeEnv:
         def __init__(self, **kwargs: object) -> None:
@@ -603,6 +616,10 @@ def test_evaluator_retries_when_test_command_did_not_execute(
 ) -> None:
     snapshot, images, _ = _frozen_inputs(tmp_path)
     case = load_polybench_pce_cases(snapshot, images)[0][0]
+    monkeypatch.setattr(
+        "src.polybench_pce.evaluator.restore_repository_to_base",
+        lambda *args, **kwargs: None,
+    )
 
     class FakeEnv:
         def __init__(self, **kwargs: object) -> None:
@@ -709,6 +726,25 @@ def test_controller_persists_raw_pce_without_final_label(
     assert manifest["contains_reflection"] is False
 
 
+def test_repository_boundary_smoke_freezes_agent_owned_submission_prompt() -> None:
+    root = Path(__file__).resolve().parents[1]
+    smoke = yaml.safe_load(
+        (
+            root
+            / "configs"
+            / "polybench_pce_hpc_repository_boundary_smoke_20260824.yaml"
+        ).read_text()
+    )["prompts"]
+
+    assert "git add -A" not in smoke["code_instance"]
+    assert (
+        "git diff --cached --binary --full-index" in smoke["code_instance"]
+    )
+    assert "stage only the changes you intend" in " ".join(
+        smoke["code_instance"].split()
+    )
+
+
 def test_runner_reuses_only_completed_phase_checkpoints(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
@@ -719,6 +755,10 @@ def test_runner_reuses_only_completed_phase_checkpoints(
     )
     monkeypatch.setenv("DEEPSEEK_API_KEY", "test-only")
     calls: list[str] = []
+    monkeypatch.setattr(
+        "src.polybench_pce.runner.restore_repository_to_base",
+        lambda *args, **kwargs: calls.append(f"baseline:{kwargs['phase']}"),
+    )
 
     class Env:
         def cleanup(self) -> None:
@@ -757,6 +797,7 @@ def test_runner_reuses_only_completed_phase_checkpoints(
     ).run(case)
     assert first["final_validation_label"] is None
     assert calls.count("plan") == calls.count("code") == calls.count("evaluate") == 1
+    assert calls.count("baseline:plan") == calls.count("baseline:code") == 1
 
     second = PolyBenchPCERunner(
         config,
@@ -768,6 +809,7 @@ def test_runner_reuses_only_completed_phase_checkpoints(
     ).run(case)
     assert second == first
     assert calls.count("plan") == calls.count("code") == calls.count("evaluate") == 1
+    assert calls.count("baseline:plan") == calls.count("baseline:code") == 1
 
 
 def test_runner_keeps_completed_checkpoints_when_cleanup_fails(
@@ -780,6 +822,10 @@ def test_runner_keeps_completed_checkpoints_when_cleanup_fails(
     )
     monkeypatch.setenv("DEEPSEEK_API_KEY", "test-only")
     calls: list[str] = []
+    monkeypatch.setattr(
+        "src.polybench_pce.runner.restore_repository_to_base",
+        lambda *args, **kwargs: calls.append(f"baseline:{kwargs['phase']}"),
+    )
 
     class Env:
         def cleanup(self) -> None:
@@ -833,7 +879,7 @@ def test_runner_keeps_completed_checkpoints_when_cleanup_fails(
     assert calls.count("plan") == calls.count("code") == calls.count("evaluate") == 1
 
 
-def test_runner_preserves_raw_patch_and_filters_diagnostic_tests(
+def test_runner_preserves_agent_staged_patch_without_host_filtering(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     snapshot, images, _ = _frozen_inputs(tmp_path)
@@ -842,6 +888,10 @@ def test_runner_preserves_raw_patch_and_filters_diagnostic_tests(
         _config(tmp_path, snapshot, images), require_api_keys=False
     )
     monkeypatch.setenv("DEEPSEEK_API_KEY", "test-only")
+    monkeypatch.setattr(
+        "src.polybench_pce.runner.restore_repository_to_base",
+        lambda *args, **kwargs: None,
+    )
 
     class Env:
         def cleanup(self) -> None:
@@ -856,10 +906,13 @@ def test_runner_preserves_raw_patch_and_filters_diagnostic_tests(
         lambda *args, **kwargs: ("plan", [{"plan": True}]),
     )
     raw_patch = _diff("src/module.py") + _diff("tests/test_module.py")
-    monkeypatch.setattr(
-        "src.polybench_pce.runner.code_agent.run",
-        lambda *args, **kwargs: (raw_patch, [{"code": True}]),
-    )
+    code_kwargs: list[dict] = []
+
+    def code_run(*args: object, **kwargs: object) -> tuple[str, list[dict]]:
+        code_kwargs.append(dict(kwargs))
+        return raw_patch, [{"code": True}]
+
+    monkeypatch.setattr("src.polybench_pce.runner.code_agent.run", code_run)
     evaluated: list[str] = []
 
     def evaluator(patch: str, *args: object, **kwargs: object) -> dict:
@@ -874,20 +927,79 @@ def test_runner_preserves_raw_patch_and_filters_diagnostic_tests(
     result = PolyBenchPCERunner(
         config,
         SimpleNamespace(),
-        checkpoint_dir=tmp_path / "checkpoints-filter",
-        checkpoint_identity="identity-filter",
+        checkpoint_dir=tmp_path / "checkpoints-agent-owned",
+        checkpoint_identity="identity-agent-owned",
         attempt_dir=attempt_dir,
         evaluator=evaluator,
     ).run(case)
 
     assert result["raw_patch"] == raw_patch
-    assert result["patch"] == _diff("src/module.py")
-    assert evaluated == [_diff("src/module.py")]
-    assert result["patch_policy"]["removed_files"] == ["tests/test_module.py"]
+    assert result["patch"] == raw_patch
+    assert evaluated == [raw_patch]
+    assert code_kwargs[0]["allow_empty_submission"] is True
+    assert result["patch_submission"] == {
+        "policy": "agent_owned_staged_submission_v1",
+        "patch_path": str(attempt_dir / "raw_code_submission.patch"),
+        "patch_sha256": hashlib.sha256(raw_patch.encode()).hexdigest(),
+        "empty_submission": False,
+        "host_patch_transformation": False,
+    }
     assert (attempt_dir / "raw_code_submission.patch").read_text() == raw_patch
-    assert (attempt_dir / "filtered_code_submission.patch").read_text() == _diff(
-        "src/module.py"
+    assert not (attempt_dir / "filtered_code_submission.patch").exists()
+    assert json.loads((attempt_dir / "patch_submission.json").read_text())[
+        "host_patch_transformation"
+    ] is False
+
+
+def test_runner_sends_empty_agent_submission_to_evaluator(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    snapshot, images, _ = _frozen_inputs(tmp_path)
+    case = load_polybench_pce_cases(snapshot, images)[0][0]
+    config = load_polybench_pce_config(
+        _config(tmp_path, snapshot, images), require_api_keys=False
     )
+    monkeypatch.setenv("DEEPSEEK_API_KEY", "test-only")
+
+    class Env:
+        def cleanup(self) -> None:
+            pass
+
+    monkeypatch.setattr(PolyBenchPCERunner, "_verify_sif", lambda *args: None)
+    monkeypatch.setattr(PolyBenchPCERunner, "_environment", lambda *args, **kwargs: Env())
+    monkeypatch.setattr(
+        "src.polybench_pce.runner.restore_repository_to_base",
+        lambda *args, **kwargs: None,
+    )
+    monkeypatch.setattr(
+        "src.polybench_pce.runner.plan_agent.run",
+        lambda *args, **kwargs: ("plan", []),
+    )
+    monkeypatch.setattr(
+        "src.polybench_pce.runner.code_agent.run",
+        lambda *args, **kwargs: ("", [{"submitted": "empty"}]),
+    )
+
+    def evaluator(patch: str, *args: object, **kwargs: object) -> dict:
+        assert patch == ""
+        return {
+            "status": "completed",
+            "terminal_kind": "empty_generation",
+            "task_outcome": "unresolved",
+        }
+
+    result = PolyBenchPCERunner(
+        config,
+        SimpleNamespace(),
+        checkpoint_dir=tmp_path / "checkpoints-empty",
+        checkpoint_identity="identity-empty",
+        attempt_dir=tmp_path / "attempt-empty",
+        evaluator=evaluator,
+    ).run(case)
+
+    assert result["patch"] == ""
+    assert result["patch_submission"]["empty_submission"] is True
+    assert result["evaluator_result"]["task_outcome"] == "unresolved"
 
 
 def test_evaluator_resume_reidentifies_preserved_plan_and_code_checkpoints(

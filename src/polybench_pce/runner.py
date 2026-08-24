@@ -13,8 +13,8 @@ from src.agents import code_agent, plan_agent
 from src.config import AgentConfig, Config, EvaluatorConfig, PromptConfig, SystemConfig
 from src.environment.apptainer_env import ApptainerEnvironment, ApptainerSifCache
 from src.environment.docker_env import DockerCapacityWindow
-from src.evaluator.polybench_patch_policy import apply_polybench_patch_policy
-from src.exceptions import AgentTaskError, FatalError, TaskError
+from src.environment.repository_baseline import restore_repository_to_base
+from src.exceptions import FatalError
 from src.optimization.audit import AuditedModel, JsonlLogger
 from src.optimization.hpc.task_batch import atomic_json
 from src.polybench_pce.config import PolyBenchPCEConfig
@@ -176,6 +176,12 @@ class PolyBenchPCERunner:
         if plan_checkpoint is None:
             env = self._environment(case, timeout=self.config.plan.timeout)
             try:
+                restore_repository_to_base(
+                    env,
+                    case.base_commit,
+                    phase="plan",
+                    evidence_dir=self.attempt_dir / "repository_baselines" / "plan",
+                )
                 plan, trajectory = plan_agent.run(
                     self._base_config(self.config.plan),
                     case.issue_description,
@@ -206,6 +212,12 @@ class PolyBenchPCERunner:
                 host_workdir=code_workspace,
             )
             try:
+                restore_repository_to_base(
+                    env,
+                    case.base_commit,
+                    phase="code",
+                    evidence_dir=self.attempt_dir / "repository_baselines" / "code",
+                )
                 base_code_config = self._base_config(self.config.code)
                 code_config = replace(
                     base_code_config,
@@ -233,54 +245,22 @@ class PolyBenchPCERunner:
                     phase_timeout_seconds=(
                         self.config.execution.code_phase_timeout_seconds or None
                     ),
+                    allow_empty_submission=True,
                 )
                 raw_patch_path = self.attempt_dir / "raw_code_submission.patch"
                 raw_patch_path.write_text(raw_patch, encoding="utf-8")
-                try:
-                    policy_result = apply_polybench_patch_policy(
-                        raw_patch,
-                        test_patch=case.test_patch,
-                        allow_empty=True,
-                        reject_overlap=False,
-                    )
-                except TaskError as exc:
-                    atomic_json(
-                        self.attempt_dir / "patch_policy_failure.json",
-                        {
-                            "schema_version": 1,
-                            "error_type": type(exc).__name__,
-                            "error": str(exc),
-                            "raw_patch_path": str(raw_patch_path),
-                        },
-                    )
-                    raise AgentTaskError(
-                        f"Code submission failed the PolyBench patch policy: {exc}",
-                        phase="code",
-                        reason="code_patch_policy_invalid",
-                        trajectory=list(trajectory),
-                    ) from exc
-                filtered_patch = policy_result.patch
-                filtered_patch_path = (
-                    self.attempt_dir / "filtered_code_submission.patch"
-                )
-                filtered_patch_path.write_text(filtered_patch, encoding="utf-8")
-                patch_policy = {
-                    "policy": "exclude_test_paths_v1",
-                    "kept_files": list(policy_result.kept_files),
-                    "removed_files": list(policy_result.removed_files),
-                    "test_overlap_files": list(policy_result.test_overlap_files),
-                    "raw_patch_path": str(raw_patch_path),
-                    "filtered_patch_path": str(filtered_patch_path),
-                    "raw_patch_sha256": hashlib.sha256(raw_patch.encode()).hexdigest(),
-                    "filtered_patch_sha256": hashlib.sha256(
-                        filtered_patch.encode()
-                    ).hexdigest(),
+                submission = {
+                    "policy": "agent_owned_staged_submission_v1",
+                    "patch_path": str(raw_patch_path),
+                    "patch_sha256": hashlib.sha256(raw_patch.encode()).hexdigest(),
+                    "empty_submission": not bool(raw_patch.strip()),
+                    "host_patch_transformation": False,
                 }
-                atomic_json(self.attempt_dir / "patch_policy.json", patch_policy)
+                atomic_json(self.attempt_dir / "patch_submission.json", submission)
                 code_checkpoint = {
                     "raw_patch": raw_patch,
-                    "patch": filtered_patch,
-                    "patch_policy": patch_policy,
+                    "patch": raw_patch,
+                    "patch_submission": submission,
                     "trajectory": list(trajectory),
                 }
                 self._save_checkpoint("code", code_checkpoint)
@@ -298,6 +278,9 @@ class PolyBenchPCERunner:
                     "capacity_window": self.capacity_window,
                     "workdir": self.config.docker.workdir,
                     "phase_workdir": eval_workspace,
+                    "repository_baseline_dir": (
+                        self.attempt_dir / "repository_baselines" / "evaluate"
+                    ),
                     "timeout": self.config.evaluator_timeout,
                     "result_callback": lambda result: self._save_checkpoint(
                         "evaluate", {"evaluator_result": result}
@@ -336,7 +319,7 @@ class PolyBenchPCERunner:
                 code_checkpoint.get("raw_patch", code_checkpoint["patch"])
             ),
             "patch": str(code_checkpoint["patch"]),
-            "patch_policy": dict(code_checkpoint.get("patch_policy", {})),
+            "patch_submission": dict(code_checkpoint.get("patch_submission", {})),
             "code_trajectory": list(code_checkpoint["trajectory"]),
             "evaluator_result": dict(evaluator_checkpoint["evaluator_result"]),
             "final_validation_label": None,
