@@ -174,7 +174,12 @@ class PolyBenchPCCERunner:
             api_key=os.environ[model.api_key_env],
         )
 
-    def _environment(self, assignment: PCReviewAssignment) -> ApptainerEnvironment:
+    def _environment(
+        self,
+        assignment: PCReviewAssignment,
+        *,
+        host_workdir: Path,
+    ) -> ApptainerEnvironment:
         case = assignment.case.source
         return ApptainerEnvironment(
             image=case.image.requested_ref,
@@ -184,7 +189,22 @@ class PolyBenchPCCERunner:
             timeout=self.config.pce.plan.timeout,
             writable_tmpfs=self.config.pce.container.writable_tmpfs,
             git_safe_directories=[self.config.pce.docker.workdir],
+            host_workdir=host_workdir,
+            initialize_host_workdir=True,
         )
+
+    def _cleanup_workspace(self, path: Path, *, phase: str) -> None:
+        try:
+            if path.exists():
+                shutil.rmtree(path)
+        except Exception as exc:
+            self.audit.write(
+                "pcce_workspace_cleanup_failed",
+                phase=phase,
+                path=str(path),
+                error_type=type(exc).__name__,
+                error=str(exc),
+            )
 
     def run_pc(
         self,
@@ -215,7 +235,15 @@ class PolyBenchPCCERunner:
                     + assignment.previous_feedback
                     + "\n</checker_feedback>"
                 )
-                env = self._environment(assignment)
+                revision_workspace = (
+                    self.attempt_dir / "workspaces" / "plan_revision"
+                )
+                if revision_workspace.exists():
+                    shutil.rmtree(revision_workspace)
+                env = self._environment(
+                    assignment,
+                    host_workdir=revision_workspace,
+                )
                 try:
                     restore_repository_to_base(
                         env,
@@ -256,6 +284,9 @@ class PolyBenchPCCERunner:
                         self.audit.write(
                             "pcce_cleanup_failed", phase="plan_revision", error=str(exc)
                         )
+                    self._cleanup_workspace(
+                        revision_workspace, phase="plan_revision"
+                    )
             if assignment.review_index == 1:
                 _save_checkpoint(plan_path, identity, "plan", plan_payload)
 
@@ -284,16 +315,25 @@ class PolyBenchPCCERunner:
                     },
                 )
 
-            DockerChecker(checker_config, self.capacity)(
-                PCCECheckerCase(assignment.case.source, str(plan_payload["plan"]), {}),  # type: ignore[arg-type]
-                guideline,
-                trajectory_journal_path=self.attempt_dir / "checker_trajectory.jsonl",
-                output_validator=validate_pcce_checker_output,
-                completion_callback=save_completed_checker,
-                repository_baseline_dir=(
-                    self.attempt_dir / "repository_baselines" / "checker"
-                ),
-            )
+            checker_workspace = self.attempt_dir / "workspaces" / "checker"
+            if checker_workspace.exists():
+                shutil.rmtree(checker_workspace)
+            try:
+                DockerChecker(checker_config, self.capacity)(
+                    PCCECheckerCase(assignment.case.source, str(plan_payload["plan"]), {}),  # type: ignore[arg-type]
+                    guideline,
+                    trajectory_journal_path=(
+                        self.attempt_dir / "checker_trajectory.jsonl"
+                    ),
+                    output_validator=validate_pcce_checker_output,
+                    completion_callback=save_completed_checker,
+                    repository_baseline_dir=(
+                        self.attempt_dir / "repository_baselines" / "checker"
+                    ),
+                    apptainer_host_workdir=checker_workspace,
+                )
+            finally:
+                self._cleanup_workspace(checker_workspace, phase="checker")
             checker_payload = _checkpoint(checker_path, identity, "checker")
             if checker_payload is None:
                 raise FatalError("PCCE Checker completed without a durable checkpoint")

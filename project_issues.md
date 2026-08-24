@@ -176,6 +176,12 @@ generation 进入 Evaluator并记 unresolved，不触发 Code retry。113/113 �
 恢复机制确有必要。PCE/PCCE 语义哈希已纳入共享恢复源码，防止错误复用旧 checkpoint。
 下一步必须使用新 identity 完成两案例 full PCE/PCCE smoke；不得 resume 当前正式
 Plan/Code checkpoint。
+2026-08-24 首次 boundary smoke 在 LLM 调用前确定性失败：SIF 内 `/testbed/.git`
+为 root:root 755，Iris 的非特权用户即使使用 `--writable-tmpfs` 也无法创建
+`index.lock`。三次 attempts 对同一环境错误无意义。现已改为 Plan、Checker、Planner
+revision、Code、Evaluate 各自先从冻结 SIF materialize 独立的用户可写 host workspace，
+再恢复和验证 `base_commit`；restore 失败也改为 identity/environment block，避免消耗
+fresh-Agent attempts。该修复仍待新 identity 的替代 smoke 验收。
 该完整 preheat 已于 2026-08-23 正常结束：23/23 instances、70/71 artifacts，唯一
 失败严格为预期的 25636/ArthurZ Flax 401；22 个实例可用，SIF hash 无不一致，成功
 artifact 无 revision 缺失。正式 real-loader manifest 已冻结为

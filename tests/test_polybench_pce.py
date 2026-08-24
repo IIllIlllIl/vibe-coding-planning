@@ -765,10 +765,16 @@ def test_runner_reuses_only_completed_phase_checkpoints(
             calls.append("cleanup")
 
     monkeypatch.setattr(PolyBenchPCERunner, "_verify_sif", lambda self, case: None)
+    environment_kwargs: list[dict[str, object]] = []
+
+    def environment(self, case, **kwargs):
+        environment_kwargs.append(dict(kwargs))
+        return Env()
+
     monkeypatch.setattr(
         PolyBenchPCERunner,
         "_environment",
-        lambda self, case, **kwargs: Env(),
+        environment,
     )
     monkeypatch.setattr(
         "src.polybench_pce.runner.plan_agent.run",
@@ -798,6 +804,11 @@ def test_runner_reuses_only_completed_phase_checkpoints(
     assert first["final_validation_label"] is None
     assert calls.count("plan") == calls.count("code") == calls.count("evaluate") == 1
     assert calls.count("baseline:plan") == calls.count("baseline:code") == 1
+    assert [Path(str(kwargs["host_workdir"])).name for kwargs in environment_kwargs] == [
+        "plan",
+        "code",
+    ]
+    assert all(kwargs["host_workdir"] is not None for kwargs in environment_kwargs)
 
     second = PolyBenchPCERunner(
         config,

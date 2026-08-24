@@ -70,6 +70,11 @@ mismatch, or remaining non-ignored change is an identity/environment block,
 not an Agent retry or benchmark failure. The repository-boundary smoke uses
 `configs/polybench_pce_hpc_repository_boundary_smoke_20260824.yaml` and a new
 output identity; it must not resume the invalid historical formal checkpoints.
+Every phase receives a separately materialized, user-owned host workspace bound
+to `/testbed`. Do not rely on `--writable-tmpfs` alone: on Iris it does not let
+the unprivileged task user write a root-owned SIF `/testbed/.git`. The failed
+initial boundary smoke is diagnostic evidence and must not be resumed after
+this semantic correction.
 
 When evaluator semantics change but completed Plan/Code evidence remains the
 intended fixed input, use the wrapper's explicit `--resume-evaluator ID` mode.

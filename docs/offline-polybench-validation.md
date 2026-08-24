@@ -116,6 +116,15 @@ before/after evidence is stored outside the repository workspace. The complete
 113-SIF audit is recorded in
 `docs/reference/polybench_base_commit_audit_20260824.md`.
 
+The first real-Apptainer boundary smoke exposed that `--writable-tmpfs` does
+not make a root-owned `/testbed/.git` writable to an unprivileged Iris user.
+Plan failed while creating `.git/index.lock` before any LLM call. The corrected
+runner therefore materializes `/testbed` from the frozen SIF into a fresh,
+phase-local host directory and bind-mounts that user-owned directory for Plan,
+Checker, Planner revision, Code, and Evaluate. Baseline restore and verification
+run only after materialization; the phase workspace is discarded after its
+durable checkpoint, while baseline evidence remains outside it.
+
 The raw PCE record preserves, where available:
 
 - frozen dataset row and image provenance identity;

@@ -174,7 +174,13 @@ class PolyBenchPCERunner:
         self._verify_sif(case)
         plan_checkpoint = self._checkpoint("plan")
         if plan_checkpoint is None:
-            env = self._environment(case, timeout=self.config.plan.timeout)
+            plan_workspace = self.attempt_dir / "workspaces" / "plan"
+            self._cleanup(plan_workspace)
+            env = self._environment(
+                case,
+                timeout=self.config.plan.timeout,
+                host_workdir=plan_workspace,
+            )
             try:
                 restore_repository_to_base(
                     env,
@@ -201,6 +207,7 @@ class PolyBenchPCERunner:
                 self._save_checkpoint("plan", plan_checkpoint)
             finally:
                 self._best_effort_environment_cleanup(env, phase="plan")
+                self._best_effort_workspace_cleanup(plan_workspace, phase="plan")
 
         code_checkpoint = self._checkpoint("code")
         if code_checkpoint is None:

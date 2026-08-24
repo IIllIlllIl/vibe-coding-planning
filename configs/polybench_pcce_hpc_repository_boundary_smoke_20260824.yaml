@@ -8,11 +8,11 @@ paths:
   source_snapshot: output/SWE-PolyBench/polybench-pce-inputs/20260814_python113_v11_8c7d9485d1d0
   image_manifest: output/SWE-PolyBench/polybench-pce-inputs/20260814_python113_v11_8c7d9485d1d0/images.json
   validation_snapshot: output/SWE-PolyBench/polybench-guideline-validation-datasets/20260815_python111_testparsed_26dad63b5cf3
-  pce_outcomes: output/SWE-PolyBench/polybench-pce-runs/smoke/repository-boundary-20260824/raw_pce_outcomes.jsonl
+  pce_outcomes: output/SWE-PolyBench/polybench-pce-runs/smoke/repository-boundary-v2-20260824/raw_pce_outcomes.jsonl
   guideline: configs/frozen_guidelines/20260817_seed-b8c1-b8c2-b3x3c3-b3x3c6_0e1f8d7bd876/seed.md
   pce_runtime_config: configs/polybench_pce_hpc_repository_boundary_smoke_20260824.yaml
   checker_runtime_config: configs/gepa_verified_rules.yaml
-  run_dir: output/SWE-PolyBench/polybench-pcce-runs/smoke/repository-boundary-20260824
+  run_dir: output/SWE-PolyBench/polybench-pcce-runs/smoke/repository-boundary-v2-20260824
 
 pcce:
   guideline_label: seed
@@ -120,5 +120,5 @@ hpc:
   python_module: lang/Python/3.11
   container_module: tools/Apptainer
   python_bin: python3
-  job_name_prefix: pcce-base-smoke
+  job_name_prefix: pcce-base-v2-smoke
   worker_config_path: configs/polybench_pcce_hpc_repository_boundary_smoke_20260824.yaml

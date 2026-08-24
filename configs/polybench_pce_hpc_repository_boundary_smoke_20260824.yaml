@@ -6,7 +6,7 @@ purpose: repository_boundary_smoke
 paths:
   dataset_snapshot: output/SWE-PolyBench/polybench-pce-inputs/20260811_smoke2_transformers
   image_manifest: output/SWE-PolyBench/polybench-pce-inputs/20260811_smoke2_transformers/images.json
-  run_dir: output/SWE-PolyBench/polybench-pce-runs/smoke/repository-boundary-20260824
+  run_dir: output/SWE-PolyBench/polybench-pce-runs/smoke/repository-boundary-v2-20260824
 
 plan:
   model: deepseek-v4-flash
@@ -55,7 +55,7 @@ hpc:
   python_module: lang/Python/3.11
   container_module: tools/Apptainer
   python_bin: python3
-  job_name_prefix: pce-base-smoke
+  job_name_prefix: pce-base-v2-smoke
   worker_config_path: configs/polybench_pce_hpc_repository_boundary_smoke_20260824.yaml
 
 evaluator:

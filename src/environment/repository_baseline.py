@@ -92,7 +92,7 @@ def restore_repository_to_base(
     after_head = evidence["after"]["head"]
     after_status = evidence["after"]["status"]
     if restore["returncode"] != 0:
-        raise RuntimeError(
+        raise FatalError(
             f"{phase} repository restore failed: {restore['output'][:500]}"
         )
     if after_head["returncode"] != 0:

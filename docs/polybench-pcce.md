@@ -355,5 +355,9 @@ generations. Those code changes are now implemented: PCE/PCCE restore and
 verify the dataset `base_commit` before every Agent, preserve before/after
 evidence, use the exact current Online Code prompt in the new smoke config,
 apply no Host patch transformation, and let empty staged submissions reach the
-Evaluator. They remain pre-formal until the new two-case PCE/PCCE smoke has
-validated real Apptainer behavior; old checkpoints remain ineligible.
+Evaluator. The first new PCE smoke then found that Plan's raw SIF `/testbed`
+was root-owned and could not create `.git/index.lock`; `--writable-tmpfs` did
+not change Unix ownership permissions. Plan, Checker, and Planner revision now
+use the same phase-local, user-owned materialized workspace boundary already
+used by Code and Evaluate. A replacement two-case PCE/PCCE smoke must validate
+that correction before formal use; old checkpoints remain ineligible.

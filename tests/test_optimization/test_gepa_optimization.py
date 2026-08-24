@@ -6193,6 +6193,7 @@ def test_checker_call_uses_apptainer_environment_when_runtime_apptainer(
         "",
         retry_feedback="previous validator error",
         trajectory_journal_path=trajectory_journal,
+        apptainer_host_workdir=tmp_path / "checker-workspace",
     )
 
     assert result.predicted_resolved is True
@@ -6201,6 +6202,10 @@ def test_checker_call_uses_apptainer_environment_when_runtime_apptainer(
     assert calls["environment_kwargs"]["image"] == "test/image:latest"
     assert calls["environment_kwargs"]["cwd"] == config.docker.workdir
     assert calls["environment_kwargs"]["writable_tmpfs"] is True
+    assert calls["environment_kwargs"]["host_workdir"] == (
+        tmp_path / "checker-workspace"
+    )
+    assert calls["environment_kwargs"]["initialize_host_workdir"] is True
     assert calls["agent_run_kwargs"]["retry_feedback"] == ("previous validator error")
     assert calls["cleaned_up"] is True
     journal = [

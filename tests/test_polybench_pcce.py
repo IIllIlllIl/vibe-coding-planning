@@ -167,6 +167,9 @@ def test_first_review_reuses_frozen_plan_and_maps_current_checker_output(
             assert kwargs["repository_baseline_dir"] == (
                 tmp_path / "attempt" / "repository_baselines" / "checker"
             )
+            assert kwargs["apptainer_host_workdir"] == (
+                tmp_path / "attempt" / "workspaces" / "checker"
+            )
             output = CheckerOutput(
                 False,
                 "missing evidence",
@@ -192,6 +195,62 @@ def test_first_review_reuses_frozen_plan_and_maps_current_checker_output(
     assert first["checker_output"]["revision_feedback"] == "missing evidence"
     assert first["rejection_count_after_review"] == 1
     assert FakeChecker.calls == 1
+
+
+def test_revised_plan_uses_phase_local_writable_repository(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    config = _config(tmp_path)
+    case = _case("a")
+    assignment = PCReviewAssignment(case, 2, 1, "old plan", "fix the call site")
+    monkeypatch.setattr("src.polybench_pcce.runner._verify_sif", lambda *args: None)
+    observed: dict[str, object] = {}
+
+    class FakeEnvironment:
+        def cleanup(self) -> None:
+            observed["environment_cleaned"] = True
+
+    def environment(self, assignment, *, host_workdir):
+        observed["host_workdir"] = host_workdir
+        host_workdir.mkdir(parents=True)
+        return FakeEnvironment()
+
+    monkeypatch.setattr(PolyBenchPCCERunner, "_environment", environment)
+    monkeypatch.setattr(
+        "src.polybench_pcce.runner.restore_repository_to_base",
+        lambda *args, **kwargs: observed.update(baseline_phase=kwargs["phase"]),
+    )
+    monkeypatch.setattr(
+        "src.polybench_pcce.runner.plan_agent.run",
+        lambda *args, **kwargs: ("revised plan", [{"role": "assistant"}]),
+    )
+
+    class FakeChecker:
+        def __init__(self, *args, **kwargs):
+            pass
+
+        def __call__(self, checker_case, guideline, **kwargs):
+            output = CheckerOutput(True, "ready", (), (), "")
+            kwargs["completion_callback"](output)
+            return output
+
+    monkeypatch.setattr("src.polybench_pcce.runner.DockerChecker", FakeChecker)
+    attempt_dir = tmp_path / "attempt"
+    result = PolyBenchPCCERunner(
+        config,
+        object(),  # type: ignore[arg-type]
+        checkpoint_dir=tmp_path / "checkpoints",
+        attempt_dir=attempt_dir,
+    ).run_pc(assignment, fingerprint="fp", guideline="guide")
+
+    assert result["plan"] == "revised plan"
+    assert observed["host_workdir"] == (
+        attempt_dir / "workspaces" / "plan_revision"
+    )
+    assert observed["baseline_phase"] == "plan_revision"
+    assert observed["environment_cleaned"] is True
+    assert not (attempt_dir / "workspaces" / "plan_revision").exists()
 
 
 def test_pcce_checker_schema_separates_decision_from_revision_feedback() -> None:
