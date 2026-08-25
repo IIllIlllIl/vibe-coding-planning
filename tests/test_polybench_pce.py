@@ -1247,6 +1247,25 @@ def test_formal_dependency_repair_config_changes_only_evaluator_runtime() -> Non
     assert repair.dependency_cache.network_disabled is True
 
 
+def test_clean_formal_pce_config_uses_smoke_validated_submission_boundary() -> None:
+    config = load_polybench_pce_config(
+        ROOT / "configs/polybench_pce_hpc_formal_clean_20260825.yaml",
+        require_api_keys=False,
+    )
+    normalized = " ".join(config.code_instance_template.split())
+
+    assert config.dataset_snapshot.name == "20260814_python113_v11_8c7d9485d1d0"
+    assert config.run_dir.name == "python113-v11-clean-boundary-v1-20260825"
+    assert config.hpc.worker_config_path == (
+        "configs/polybench_pce_hpc_formal_clean_20260825.yaml"
+    )
+    assert "git diff --cached --binary --full-index" in normalized
+    assert "do not stage test files, test fixtures" in normalized
+    assert "git add -A" not in normalized
+    assert "official evaluator" not in normalized.lower()
+    assert config.dependency_cache is None
+
+
 def test_pce_submit_wrapper_forwards_frozen_evaluator_subset(tmp_path: Path) -> None:
     fake = tmp_path / "ulhpc-submit"
     fake.write_text("#!/usr/bin/env bash\nprintf '%s\\n' \"$@\"\n", encoding="utf-8")

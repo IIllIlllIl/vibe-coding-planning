@@ -3,7 +3,7 @@
 > Authority: planned external validation contract for the current standalone
 > Offline guideline method
 >
-> Last reviewed: 2026-08-24
+> Last reviewed: 2026-08-25
 
 ## Purpose And Non-Training Boundary
 
@@ -493,3 +493,17 @@ repository mismatch or a contaminated Code submission. The next formal PCE
 and PCCE identities require an audited clean repository at every Agent phase,
 Agent-owned staged patch selection without final `git add -A`, and a true empty
 generation path before any Plan/Code evidence is reused.
+
+The replacement raw-data identity is
+`python113-v11-clean-boundary-v1-20260825`, configured by
+`configs/polybench_pce_hpc_formal_clean_20260825.yaml`. It runs all 113 frozen
+exact-`v1.1` inputs through the v3-smoke-accepted clean-repository and
+Agent-owned staged-patch boundary. Its initial Evaluate phase retains the
+ordinary evaluator behavior. The frozen dependency cache covers only 22
+evidence-defined cases, while enabling it makes manifest membership mandatory;
+therefore it is not attached to the 113-case initial config. After the raw run
+is inspected, those 22 cases may be reevaluated under the existing
+manifest-bound evaluator-only repair, which preserves Plan and Code bytes and
+invokes no LLM. The new PCE dataset and scores remain provisional until that
+overlay and the conservative cleaning record are reviewed. PCCE starts only
+after this PCE authority is frozen.

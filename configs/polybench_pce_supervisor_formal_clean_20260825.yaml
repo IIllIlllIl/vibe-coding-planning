@@ -1,0 +1,20 @@
+schema_version: 1
+session: polybench-pce-formal-clean-v1-20260825
+log: .local/hpc-supervisor/polybench-pce-formal-clean-v1-20260825.log
+arguments:
+  - --poll-interval
+  - "600"
+  - --slice-time
+  - "00:10:00"
+  - --max-runs
+  - "0"
+  - --require-clean-worktree
+  - --batch-script
+  - scripts/hpc_submit_polybench_pce.sh
+  - --config
+  - configs/polybench_pce_hpc_formal_clean_20260825.yaml
+  - --job-name
+  - polybench-pce-formal-clean-v1-20260825
+  - --remote-dir
+  - ~/hpc_runs/vibe-polybench-pce
+  - --submit

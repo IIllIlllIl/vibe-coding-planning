@@ -81,6 +81,17 @@ unstaged because Evaluate applies the official test patch separately. The
 staged implementation patch is evaluated unchanged; the unstaged diff,
 untracked paths, staged paths, and final status are retained only as evidence.
 
+The corrected 113-case launch uses
+`configs/polybench_pce_hpc_formal_clean_20260825.yaml` and
+`configs/polybench_pce_supervisor_formal_clean_20260825.yaml`. The supervisor
+polls every ten minutes and advances only the new
+`python113-v11-clean-boundary-v1-20260825` identity. The first pass intentionally
+uses the ordinary evaluator. Do not enable a partial dependency manifest on
+the full batch: the evaluator fails closed for cases outside that manifest.
+After the raw PCE is reviewed, use the already frozen 22-case subset only via a
+separate evaluator-only repair identity. Do not launch PCCE before the clean
+PCE evidence and any repair overlay have been accepted.
+
 When evaluator semantics change but completed Plan/Code evidence remains the
 intended fixed input, use the wrapper's explicit `--resume-evaluator ID` mode.
 It validates and re-identifies the old Plan/Code checkpoints into a separate

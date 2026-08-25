@@ -189,6 +189,26 @@ PolyBench test-patch 冲突：Code 有意识 stage 了测试文件，官方 test
 使整份 submission 无法应用。v3 将 Git index 明确定义为 implementation submission，
 要求 tests/fixtures/debugging changes 保持 unstaged；Host 不过滤路径，只分别保留 staged
 paths、unstaged diff、untracked paths 和 status，Evaluate 仍只接收 Agent staged bytes。
+2026-08-25 的 v3 两案例 PCE/PCCE smoke 已完成并冻结到本地。PCE 两例均在 attempt 1
+完成 `tests_parsed`，结果为 1 resolved / 1 unresolved；Plan、Code、Evaluate 每阶段都从
+SIF 中声明的 `base_commit` 清除 `Dockerfile` 后得到 clean workspace。两例 Code 均只
+stage implementation source，测试修改保持 unstaged，Agent submission 与实际 staged
+patch hash 一致，因此未再出现 test-patch overlap。PCCE 两个 Checker 也都在 attempt 1
+从 clean base 完成并首轮放行，随后 CE 在 attempt 1 得到相同的 1 resolved / 1 unresolved；
+Checker input boundary 未见 label/ASI 泄漏。由于两例均首轮放行，Planner revision 的真实
+Agent 路径仍未由本轮动态覆盖，只保留确定性测试和与其他阶段相同的 workspace 机制证据。
+mini-swe action protocol 噪声仍未消失：PCE Plan/Code、PCCE Checker/Code 的八个 Agent
+session 中共观察到 8 条被 parser 拒绝的响应（0、2、4、5 或 7 个 executable block），
+均由同一 Agent 根据详细 feedback 修正并完成，没有进入 workflow attempt retry，也没有
+改变 score；这是已知效率成本，不是本轮数据可靠性 block。PCE 的 4759 worker
+`MaxRSS=4193092K`，接近 4G 请求上限但正常完成；正式大批量运行前继续观察 OOM/长尾，
+不据单个 smoke 样本直接增加 CPU 或改变方法配置。
+基于该验收，新的 113-case PCE 已准备为
+`python113-v11-clean-boundary-v1-20260825`，不复用旧 formal checkpoint。首轮保持已验证
+的普通 Evaluator；冻结 dependency cache 仅覆盖 22 个 evidence-defined case，不能直接
+挂到 113-case config，否则其余 91 例会被 membership fail-closed 阻断。原始 PCE 验收后
+再用现有 22-case manifest-bound evaluator-only repair 隔离网络依赖，不重跑 Plan/Code；
+repair 与保守清洗完成前不冻结新的正式 label，也不启动 PCCE。
 该完整 preheat 已于 2026-08-23 正常结束：23/23 instances、70/71 artifacts，唯一
 失败严格为预期的 25636/ArthurZ Flax 401；22 个实例可用，SIF hash 无不一致，成功
 artifact 无 revision 缺失。正式 real-loader manifest 已冻结为

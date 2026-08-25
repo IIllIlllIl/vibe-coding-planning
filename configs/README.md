@@ -61,6 +61,8 @@ poll cadence, controller resources, or remote workdir belongs in
 | `polybench_pce_hpc_dependency_cache_smoke_v3.yaml` | ULHPC Apptainer | Three-case Evaluate-only regression smoke using the v4 cache whose legacy tokenizer artifact was prepared and verified through the exact Transformers loader. |
 | `polybench_pce_hpc_dependency_cache_formal_v2.yaml` | ULHPC Apptainer | Completed diagnostic PCE Evaluate-only repair over preserved Plan/Code checkpoints. Its cache/network mechanism remains reusable, but its scores inherit invalid upstream Agent repository/patch provenance. |
 | `polybench_pce_hpc_repository_boundary_smoke_20260824.yaml` | ULHPC Apptainer | Prepared two-case full PCE smoke for explicit dataset-`base_commit` restore/verification, exact current Online Code prompt, Agent-owned staging without Host transformation, and evaluator-owned empty-patch classification. Uses a new output identity; not formal score data. |
+| `polybench_pce_hpc_formal_clean_20260825.yaml` | ULHPC Apptainer | Corrected 113-case raw PCE identity using the v3-smoke-accepted clean-`base_commit` phase boundary and Agent-owned staged implementation patch. Its first pass uses the ordinary evaluator; the predeclared 22-case dependency-cache repair is a separate post-review Evaluate-only step. |
+| `polybench_pce_supervisor_formal_clean_20260825.yaml` | Local tmux+caffeinate | Persistent ten-minute supervisor for the corrected formal PCE. It advances only this PCE identity and requires a clean worktree. |
 | `polybench_pcce_hpc_repository_boundary_smoke_20260824.yaml` | ULHPC Apptainer | Prepared paired follow-up smoke over the corrected two-case PCE output. It exercises Checker and any Planner revision from a verified base, then inherits the corrected Code/Evaluate path. It must start only after the PCE smoke is collected. |
 | `polybench_pce_supervisor_repository_boundary_smoke_20260824.yaml` / `polybench_pcce_supervisor_repository_boundary_smoke_20260824.yaml` | Local tmux+caffeinate | Ordered clean-worktree launch identities for the corrected two-case smoke. Run PCE first; start PCCE only after PCE has collected `raw_pce_outcomes.jsonl`. Both poll every ten minutes. |
 | `polybench_pcce_hpc_dependency_cache_formal_seed_v2.yaml` | ULHPC Apptainer | Matching completed diagnostic seed-PCCE Evaluate-only repair. It did not rerun PC or Code and therefore cannot repair their repository/patch provenance. |
@@ -117,6 +119,17 @@ test-path filtering, and its Agent phases do not restore and verify the frozen
 SIF against `base_commit`. The resulting PCE evidence and downstream seed PCCE
 comparison are diagnostic only. A corrected run requires a new config and run
 identity; evaluator-only resume cannot repair the affected Plan/Code boundary.
+
+The corrected replacement is
+`polybench_pce_hpc_formal_clean_20260825.yaml`, with run identity
+`python113-v11-clean-boundary-v1-20260825`. It was derived from the accepted v3
+two-case boundary smoke rather than from the retired formal config. The initial
+113-case pass deliberately keeps the ordinary evaluator behavior already
+smoked. After its raw evidence is inspected, the existing manifest-bound
+22-case dependency-cache entry may run as a separate evaluator-only repair;
+that repair must not rerun or alter Plan or Code. Scores are not frozen as the
+new clean comparison authority until evaluator repair and conservative data
+cleaning are reviewed.
 
 `polybench_pcce_hpc_smoke.yaml` is additive and does not alter the completed
 PCE or Offline GEPA configs. It reads two members of the frozen 111-case
