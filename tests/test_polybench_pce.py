@@ -740,9 +740,70 @@ def test_repository_boundary_smoke_freezes_agent_owned_submission_prompt() -> No
     assert (
         "git diff --cached --binary --full-index" in smoke["code_instance"]
     )
-    assert "stage only the changes you intend" in " ".join(
-        smoke["code_instance"].split()
+    normalized = " ".join(smoke["code_instance"].split())
+    assert "do not stage test files, test fixtures" in normalized
+    assert "Git staging area is the implementation-submission boundary" in normalized
+    assert "MUST remain unstaged" in normalized
+    assert "official evaluator" not in normalized.lower()
+
+
+def _stub_workspace_evidence(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(
+        PolyBenchPCERunner,
+        "_capture_code_workspace_evidence",
+        lambda self, env, *, submitted_patch: {
+            "policy": "agent_classified_staged_implementation_v1",
+            "implementation_submission": {
+                "agent_submission_sha256": hashlib.sha256(
+                    submitted_patch.encode()
+                ).hexdigest()
+            },
+        },
     )
+
+
+def test_runner_freezes_staged_and_unstaged_code_workspace_evidence(
+    tmp_path: Path,
+) -> None:
+    submitted = _diff("src/module.py")
+
+    class Env:
+        def execute(self, command: str, timeout: int | None = None) -> dict:
+            assert timeout == 120
+            outputs = {
+                "git diff --cached --binary --full-index": submitted,
+                "git diff --cached --name-only": "src/module.py\n",
+                "git diff --binary --full-index": _diff("tests/test_module.py"),
+                "git ls-files --others --exclude-standard": "tests/new_test.py\n",
+                "git status --porcelain=v1 --untracked-files=all": (
+                    "M  src/module.py\n M tests/test_module.py\n?? tests/new_test.py\n"
+                ),
+            }
+            return {"returncode": 0, "output": outputs[command]}
+
+    runner = PolyBenchPCERunner(
+        SimpleNamespace(),  # type: ignore[arg-type]
+        SimpleNamespace(),  # type: ignore[arg-type]
+        checkpoint_dir=tmp_path / "checkpoints",
+        checkpoint_identity="identity",
+        attempt_dir=tmp_path / "attempt",
+    )
+    evidence = runner._capture_code_workspace_evidence(
+        Env(),  # type: ignore[arg-type]
+        submitted_patch=submitted,
+    )
+
+    assert evidence["implementation_submission"]["staged_paths"] == [
+        "src/module.py"
+    ]
+    assert evidence["implementation_submission"]["matches_agent_submission"] is True
+    assert evidence["diagnostic_changes"]["untracked_paths"] == [
+        "tests/new_test.py"
+    ]
+    assert (tmp_path / "attempt" / "unstaged_diagnostic_changes.patch").read_text(
+        encoding="utf-8"
+    ) == _diff("tests/test_module.py")
+    assert (tmp_path / "attempt" / "code_workspace_evidence.json").is_file()
 
 
 def test_runner_reuses_only_completed_phase_checkpoints(
@@ -754,6 +815,7 @@ def test_runner_reuses_only_completed_phase_checkpoints(
         _config(tmp_path, snapshot, images), require_api_keys=False
     )
     monkeypatch.setenv("DEEPSEEK_API_KEY", "test-only")
+    _stub_workspace_evidence(monkeypatch)
     calls: list[str] = []
     monkeypatch.setattr(
         "src.polybench_pce.runner.restore_repository_to_base",
@@ -832,6 +894,7 @@ def test_runner_keeps_completed_checkpoints_when_cleanup_fails(
         _config(tmp_path, snapshot, images), require_api_keys=False
     )
     monkeypatch.setenv("DEEPSEEK_API_KEY", "test-only")
+    _stub_workspace_evidence(monkeypatch)
     calls: list[str] = []
     monkeypatch.setattr(
         "src.polybench_pce.runner.restore_repository_to_base",
@@ -899,6 +962,7 @@ def test_runner_preserves_agent_staged_patch_without_host_filtering(
         _config(tmp_path, snapshot, images), require_api_keys=False
     )
     monkeypatch.setenv("DEEPSEEK_API_KEY", "test-only")
+    _stub_workspace_evidence(monkeypatch)
     monkeypatch.setattr(
         "src.polybench_pce.runner.restore_repository_to_base",
         lambda *args, **kwargs: None,
@@ -949,7 +1013,7 @@ def test_runner_preserves_agent_staged_patch_without_host_filtering(
     assert evaluated == [raw_patch]
     assert code_kwargs[0]["allow_empty_submission"] is True
     assert result["patch_submission"] == {
-        "policy": "agent_owned_staged_submission_v1",
+        "policy": "agent_classified_staged_implementation_v1",
         "patch_path": str(attempt_dir / "raw_code_submission.patch"),
         "patch_sha256": hashlib.sha256(raw_patch.encode()).hexdigest(),
         "empty_submission": False,
@@ -971,6 +1035,7 @@ def test_runner_sends_empty_agent_submission_to_evaluator(
         _config(tmp_path, snapshot, images), require_api_keys=False
     )
     monkeypatch.setenv("DEEPSEEK_API_KEY", "test-only")
+    _stub_workspace_evidence(monkeypatch)
 
     class Env:
         def cleanup(self) -> None:

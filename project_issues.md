@@ -170,18 +170,25 @@ patch provenance。2026-08-24 已先删除当前 PCE/PCCE 共用 Code 路径的 
 测试文件不再由 Host删除；历史 `polybench_patch_policy` 仅保留给非本流程的旧入口。
 该中间状态已于 2026-08-24 补齐实现，但尚待真实 Apptainer smoke：每个 PCE/PCCE
 Agent 显式恢复并验证数据集 `base_commit`，保存 reset 前后 HEAD/status/diff；新 smoke
-配置逐字符复制当前 Online 的 Agent-owned staging/final diff prompt；真正 empty
+配置以当前 Online 的 Agent-owned staging/final diff prompt 为基础；真正 empty
 generation 进入 Evaluator并记 unresolved，不触发 Code retry。113/113 冻结 SIF 均包含
 声明 commit 且初始 HEAD 匹配，但 113/113 均有至少一个非 ignored worktree entry，证明
 恢复机制确有必要。PCE/PCCE 语义哈希已纳入共享恢复源码，防止错误复用旧 checkpoint。
-下一步必须使用新 identity 完成两案例 full PCE/PCCE smoke；不得 resume 当前正式
-Plan/Code checkpoint。
+v2 已使用新 identity 完成两案例 full PCE/PCCE smoke；当前正式 Plan/Code checkpoint
+仍不得 resume。
 2026-08-24 首次 boundary smoke 在 LLM 调用前确定性失败：SIF 内 `/testbed/.git`
 为 root:root 755，Iris 的非特权用户即使使用 `--writable-tmpfs` 也无法创建
 `index.lock`。三次 attempts 对同一环境错误无意义。现已改为 Plan、Checker、Planner
 revision、Code、Evaluate 各自先从冻结 SIF materialize 独立的用户可写 host workspace，
 再恢复和验证 `base_commit`；restore 失败也改为 identity/environment block，避免消耗
-fresh-Agent attempts。该修复仍待新 identity 的替代 smoke 验收。
+fresh-Agent attempts。该修复已由 v2 smoke 验收。
+v2 smoke 已验证 PCE Plan/Code/Evaluate 与 PCCE Checker/Code/Evaluate 的可写
+workspace 和 clean-base 边界，未再出现 `index.lock`；Planner revision 未自然触发，
+但其 Agent prompt/model/input 未改变，只复用同一 workspace 机制。v2 同时发现一次
+PolyBench test-patch 冲突：Code 有意识 stage 了测试文件，官方 test patch 先应用后
+使整份 submission 无法应用。v3 将 Git index 明确定义为 implementation submission，
+要求 tests/fixtures/debugging changes 保持 unstaged；Host 不过滤路径，只分别保留 staged
+paths、unstaged diff、untracked paths 和 status，Evaluate 仍只接收 Agent staged bytes。
 该完整 preheat 已于 2026-08-23 正常结束：23/23 instances、70/71 artifacts，唯一
 失败严格为预期的 25636/ArthurZ Flax 401；22 个实例可用，SIF hash 无不一致，成功
 artifact 无 revision 缺失。正式 real-loader manifest 已冻结为

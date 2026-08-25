@@ -75,6 +75,11 @@ to `/testbed`. Do not rely on `--writable-tmpfs` alone: on Iris it does not let
 the unprivileged task user write a root-owned SIF `/testbed/.git`. The failed
 initial boundary smoke is diagnostic evidence and must not be resumed after
 this semantic correction.
+The follow-up v3 smoke additionally verifies the Code submission split required
+by PolyBench: the Agent may create and run tests, but tests and fixtures remain
+unstaged because Evaluate applies the official test patch separately. The
+staged implementation patch is evaluated unchanged; the unstaged diff,
+untracked paths, staged paths, and final status are retained only as evidence.
 
 When evaluator semantics change but completed Plan/Code evidence remains the
 intended fixed input, use the wrapper's explicit `--resume-evaluator ID` mode.

@@ -353,11 +353,21 @@ path filtering (already removed from the shared PCE/PCCE Code runner on
 2026-08-24), and represents intentional empty submissions as scoreable empty
 generations. Those code changes are now implemented: PCE/PCCE restore and
 verify the dataset `base_commit` before every Agent, preserve before/after
-evidence, use the exact current Online Code prompt in the new smoke config,
+evidence, derive the Code protocol from Online without Host path filtering,
 apply no Host patch transformation, and let empty staged submissions reach the
 Evaluator. The first new PCE smoke then found that Plan's raw SIF `/testbed`
 was root-owned and could not create `.git/index.lock`; `--writable-tmpfs` did
 not change Unix ownership permissions. Plan, Checker, and Planner revision now
 use the same phase-local, user-owned materialized workspace boundary already
-used by Code and Evaluate. A replacement two-case PCE/PCCE smoke must validate
-that correction before formal use; old checkpoints remain ineligible.
+used by Code and Evaluate. The v2 two-case PCE/PCCE smoke validated that
+correction; old checkpoints remain ineligible.
+
+The accepted v2 smoke subsequently exposed one PolyBench-specific submission
+collision: Code intentionally staged a test file that overlapped the official
+test patch, so a patch valid against `base_commit` could not be applied after
+the evaluator installed its tests. The v3 smoke therefore keeps tests available
+for Code diagnosis but defines two explicit Git channels: staged changes are
+implementation submission, while tests/fixtures/debugging changes must remain
+unstaged. The runner records both channels before cleanup, but only the staged
+implementation patch reaches Evaluate. This is prompt-owned classification,
+not Host path filtering.

@@ -139,15 +139,21 @@ The raw PCE record preserves, where available:
   to later Agents.
 
 Code may create temporary diagnostic tests, but the Agent owns the choice of
-which changes to stage for submission. The Host preserves that staged patch and
-its hash byte-for-byte and does not remove conventional test paths or otherwise
-repair the selection. Diagnostic changes that the Agent intentionally leaves
+which implementation changes to stage for submission. PolyBench supplies its
+own official test patch, so Code is explicitly instructed to leave every test,
+fixture, and temporary diagnostic change unstaged even when the approved plan
+asks it to create and run tests. The Host preserves the staged implementation
+patch byte-for-byte and does not remove paths or repair the selection. Before
+workspace cleanup it separately freezes staged paths, the unstaged tracked diff,
+the untracked path list, and final repository status as diagnostic evidence.
+Diagnostic changes that the Agent intentionally leaves
 unstaged remain visible only in its trajectory. A poorly selected staged patch
 continues to the clean Evaluator and normally becomes unresolved evidence.
-The new smoke copies the current formal Online Code prompt exactly: the Agent
-inspects all changes, clears staging, stages only its intended submission, and
-returns `git diff --cached --binary --full-index`. The Host does not append
-`git add -A`. An intentional empty staged diff is a valid Code result and
+The new smoke derives from the formal Online Code prompt but adds the
+PolyBench-specific implementation/test split above. The Agent inspects all
+changes, clears staging, stages only its implementation submission, and returns
+`git diff --cached --binary --full-index`. The Host does not append `git add -A`.
+An intentional empty staged diff is a valid Code result and
 reaches Evaluate as `empty_generation`/unresolved; it is not an operational
 retry.
 

@@ -170,6 +170,68 @@ class PolyBenchPCERunner:
                 error=str(exc),
             )
 
+    def _capture_code_workspace_evidence(
+        self,
+        env: ApptainerEnvironment,
+        *,
+        submitted_patch: str,
+    ) -> dict[str, Any]:
+        """Freeze the Agent-owned implementation/diagnostic split."""
+
+        commands = {
+            "staged_patch": "git diff --cached --binary --full-index",
+            "staged_paths": "git diff --cached --name-only",
+            "unstaged_patch": "git diff --binary --full-index",
+            "untracked_paths": "git ls-files --others --exclude-standard",
+            "status": "git status --porcelain=v1 --untracked-files=all",
+        }
+        observations: dict[str, dict[str, Any]] = {}
+        for name, command in commands.items():
+            observation = dict(env.execute(command, timeout=120))
+            observations[name] = {
+                "command": command,
+                "returncode": observation.get("returncode"),
+                "output": str(observation.get("output", "")),
+            }
+            if observation.get("returncode") != 0:
+                raise RuntimeError(
+                    f"could not capture Code workspace {name}: "
+                    f"{str(observation.get('output', ''))[:500]}"
+                )
+
+        unstaged_patch = observations["unstaged_patch"]["output"]
+        unstaged_path = self.attempt_dir / "unstaged_diagnostic_changes.patch"
+        unstaged_path.write_text(unstaged_patch, encoding="utf-8")
+        staged_patch = observations["staged_patch"]["output"]
+        evidence = {
+            "schema_version": 1,
+            "policy": "agent_classified_staged_implementation_v1",
+            "implementation_submission": {
+                "staged_paths": observations["staged_paths"]["output"].splitlines(),
+                "observed_patch_sha256": hashlib.sha256(
+                    staged_patch.encode()
+                ).hexdigest(),
+                "agent_submission_sha256": hashlib.sha256(
+                    submitted_patch.encode()
+                ).hexdigest(),
+                "comparison": "terminal_newlines_ignored",
+                "matches_agent_submission": (
+                    staged_patch.rstrip("\n") == submitted_patch.rstrip("\n")
+                ),
+            },
+            "diagnostic_changes": {
+                "unstaged_patch_path": str(unstaged_path),
+                "unstaged_patch_sha256": hashlib.sha256(
+                    unstaged_patch.encode()
+                ).hexdigest(),
+                "unstaged_patch_chars": len(unstaged_patch),
+                "untracked_paths": observations["untracked_paths"]["output"].splitlines(),
+            },
+            "repository_status": observations["status"],
+        }
+        atomic_json(self.attempt_dir / "code_workspace_evidence.json", evidence)
+        return evidence
+
     def run(self, case: PolyBenchPCECase) -> dict[str, Any]:
         self._verify_sif(case)
         plan_checkpoint = self._checkpoint("plan")
@@ -256,8 +318,12 @@ class PolyBenchPCERunner:
                 )
                 raw_patch_path = self.attempt_dir / "raw_code_submission.patch"
                 raw_patch_path.write_text(raw_patch, encoding="utf-8")
+                workspace_evidence = self._capture_code_workspace_evidence(
+                    env,
+                    submitted_patch=raw_patch,
+                )
                 submission = {
-                    "policy": "agent_owned_staged_submission_v1",
+                    "policy": "agent_classified_staged_implementation_v1",
                     "patch_path": str(raw_patch_path),
                     "patch_sha256": hashlib.sha256(raw_patch.encode()).hexdigest(),
                     "empty_submission": not bool(raw_patch.strip()),
@@ -268,6 +334,7 @@ class PolyBenchPCERunner:
                     "raw_patch": raw_patch,
                     "patch": raw_patch,
                     "patch_submission": submission,
+                    "workspace_evidence": workspace_evidence,
                     "trajectory": list(trajectory),
                 }
                 self._save_checkpoint("code", code_checkpoint)
@@ -327,6 +394,9 @@ class PolyBenchPCERunner:
             ),
             "patch": str(code_checkpoint["patch"]),
             "patch_submission": dict(code_checkpoint.get("patch_submission", {})),
+            "code_workspace_evidence": dict(
+                code_checkpoint.get("workspace_evidence", {})
+            ),
             "code_trajectory": list(code_checkpoint["trajectory"]),
             "evaluator_result": dict(evaluator_checkpoint["evaluator_result"]),
             "final_validation_label": None,

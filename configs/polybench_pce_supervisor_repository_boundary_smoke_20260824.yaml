@@ -1,6 +1,6 @@
 schema_version: 1
-session: polybench-pce-repository-boundary-v2-smoke-20260824
-log: .local/hpc-supervisor/polybench-pce-repository-boundary-v2-smoke-20260824.log
+session: polybench-pce-repository-boundary-v3-smoke-20260825
+log: .local/hpc-supervisor/polybench-pce-repository-boundary-v3-smoke-20260825.log
 arguments:
   - --poll-interval
   - "600"
@@ -14,7 +14,7 @@ arguments:
   - --config
   - configs/polybench_pce_hpc_repository_boundary_smoke_20260824.yaml
   - --job-name
-  - polybench-pce-base-v2-smoke-20260824
+  - polybench-pce-base-v3-smoke-20260825
   - --remote-dir
   - ~/hpc_runs/vibe-polybench-pce
   - --submit
