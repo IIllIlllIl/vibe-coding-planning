@@ -1,0 +1,121 @@
+# Evaluate-only dependency-cache repair for the corrected 99-case b8-c2 PCCE.
+# It reuses fixed accepted plans and Code checkpoints and invokes no LLM.
+mode: polybench_pcce
+purpose: formal_b8_candidate2_clean_pce_dependency_cache_evaluator_repair
+
+paths:
+  source_snapshot: output/SWE-PolyBench/polybench-pce-inputs/20260814_python113_v11_8c7d9485d1d0
+  image_manifest: output/SWE-PolyBench/polybench-pce-inputs/20260814_python113_v11_8c7d9485d1d0/images.json
+  validation_snapshot: output/SWE-PolyBench/polybench-guideline-validation-datasets/20260826_python99_cleanpce_depcache_03619730229d
+  pce_outcomes: output/SWE-PolyBench/polybench-guideline-validation-datasets/20260826_python99_cleanpce_depcache_03619730229d/paired_pce_outcomes.jsonl
+  guideline: configs/frozen_guidelines/20260817_seed-b8c1-b8c2-b3x3c3-b3x3c6_0e1f8d7bd876/b8_candidate_2.md
+  pce_runtime_config: configs/polybench_pce_hpc_dependency_cache_clean_20260825.yaml
+  checker_runtime_config: configs/gepa_verified_rules.yaml
+  run_dir: output/SWE-PolyBench/polybench-pcce-runs/formal/b8-candidate2-python99-clean-pce-v1-20260826
+
+pcce:
+  guideline_label: b8_candidate_2
+  validation_file: validation.jsonl
+  max_review_rejections: 3
+  instance_ids: []
+
+prompts:
+  checker_system: |
+    You are a software development assistant reviewing a proposed plan before
+    implementation.
+
+    Apply the candidate guideline to decide whether the submitted plan should
+    proceed to implementation or should first be revised.
+
+    Treat the candidate guideline as the sole source of plan-review methods,
+    software-engineering principles, heuristics, and decision criteria. Do not
+    add or rely on review guidance that is not stated in the candidate
+    guideline. Use your general capabilities only to apply the guideline and
+    operate the provided environment.
+
+    You receive the issue, proposed plan, candidate guideline, and a disposable
+    repository at the base commit. The repository is available at /testbed.
+    Its final state is discarded after this review.
+
+    When ready, submit the result with one final action in this form:
+    ```bash
+    cat <<'EOF'
+    COMPLETE_TASK_AND_SUBMIT_FINAL_OUTPUT
+    {
+      "should_proceed": false,
+      "decision_reason": "...",
+      "revision_feedback": "...",
+      "repository_evidence": [
+        {"path": "...", "symbol": "...", "finding": "..."}
+      ]
+    }
+    EOF
+    ```
+
+    If should_proceed is true, revision_feedback must be an empty string. If
+    should_proceed is false, revision_feedback must state what material problem
+    the replacement plan needs to address. Submission finishes only when the
+    executed command writes COMPLETE_TASK_AND_SUBMIT_FINAL_OUTPUT as its first
+    output line. Do not run another command after submitting.
+
+  checker_instance: |
+    <issue>
+    {{task}}
+    </issue>
+    <plan>
+    {{plan}}
+    </plan>
+    <candidate_guideline>
+    {{candidate_guideline}}
+    </candidate_guideline>
+    {% if retry_feedback %}
+    <retry_feedback>
+    {{retry_feedback}}
+    </retry_feedback>
+    {% endif %}
+
+  plan_revision_system: |
+    You are a software engineer revising a plan that another agent will
+    implement. The Checker owns the decision about whether the plan should
+    proceed. Your task is to produce the revised plan, not to make that
+    decision.
+
+    The repository is available at /testbed and is disposable. You can read
+    and write files and run commands or tests while preparing the revised plan.
+    These repository changes are diagnostic and are not submitted.
+
+    Write the complete revised plan to /tmp/plan.md. When ready, submit with
+    exactly:
+
+    ```bash
+    echo COMPLETE_TASK_AND_SUBMIT_FINAL_OUTPUT && cat /tmp/plan.md
+    ```
+
+    ## Plan Format
+    {{nrpv_block}}
+
+  plan_revision_instance: |
+    {{task}}
+
+    <instructions>
+    Revise the previous plan in response to the feedback. Use the repository to
+    check the plan and the feedback when necessary. Submit a complete
+    replacement plan, not a patch or a list of incremental edits.
+    </instructions>
+
+hpc:
+  submit: true
+  partition: batch
+  cpus_per_task: 1
+  mem: 4G
+  time: "00:45:00"
+  poll_interval_seconds: 300
+  task_output_grace_seconds: 300
+  missing_task_grace_seconds: 600
+  max_task_attempts: 3
+  remote_env_file: ~/.config/vibe-coding-planning/deepseek.env
+  python_module: lang/Python/3.11
+  container_module: tools/Apptainer
+  python_bin: python3
+  job_name_prefix: polybench-pcce-b8c2-clean99-depcache
+  worker_config_path: configs/polybench_pcce_hpc_dependency_cache_formal_b8_candidate2_clean_20260826.yaml

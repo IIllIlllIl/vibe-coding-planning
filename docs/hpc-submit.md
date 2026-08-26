@@ -213,6 +213,14 @@ repair ID `clean-depcache-v1-20260826`, and the 21-case clean99 subset. It uses
 `1 CPU / 4G / 45min` per Evaluate worker and a ten-minute Controller slice;
 no Checker, Planner, Code Agent, or LLM is invoked.
 
+Candidate 2 uses
+`configs/polybench_pcce_supervisor_formal_b8_candidate2_clean_20260826.yaml`.
+Its normal run must complete before launching the separately frozen
+`polybench_pcce_supervisor_formal_b8_candidate2_dependency_cache_clean_20260826.yaml`;
+the latter uses the same `clean-depcache-v1-20260826` repair ID within the new
+candidate run root and the same clean99 subset. Never point the seed repair
+config at the candidate run or reuse seed checkpoints.
+
 External test dependencies are not part of a SIF preheat. The planned
 PolyBench dependency preheat keeps official SIFs unchanged and builds a
 separate manifest-hashed cache using each exact SIF. Formal repaired Evaluate

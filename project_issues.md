@@ -247,7 +247,16 @@ read-only cache、禁网 evaluator 下重跑最终 99-case universe 中的 21-ca
 Checker、Planner、Code 或 LLM，也不覆盖普通 CE evidence。原 full-22 subset 保留为
 cache provenance；新 `evaluator_repair_subset_clean99.json` 仅排除不属于 clean-PCE
 paired universe 的 `transformers-27717`。repair 尚未启动；完成并覆盖后再判断 seed
-PCCE 退化，并以同一 evaluator policy 执行 candidate 2。
+PCCE 退化，并以同一 evaluator policy 执行 candidate 2。该 repair 随后完成：21/21
+outputs，14 resolved / 7 unresolved / 0 unknown，未发生 workflow retry；本地与 Iris
+镜像均为 196 files、35,823,158 bytes，tree SHA-256 为 `dea7b88e8eea7356…`。
+相对 ordinary CE，`15158/16661/17082/24238` 四例从 unresolved 变为 resolved，0 例
+反向变化，因此正式 overlay 后 seed PCCE 为 `66/99`，对 fixed PCE `70/99` 仍差 4 例。
+下一 primary 已预先配置为 frozen b8 candidate 2：新 run root
+`b8-candidate2-python99-clean-pce-v1-20260826`；除 guideline 与 run/job identity 外，
+99-case input、prompts、budgets、attempts、Code/Evaluate 和资源保持 seed 相同。其独立
+21-case dependency repair config/supervisor 也在普通 candidate 结果产生前冻结，禁止
+根据普通分数选择是否 repair。
 该完整 preheat 已于 2026-08-23 正常结束：23/23 instances、70/71 artifacts，唯一
 失败严格为预期的 25636/ArthurZ Flax 401；22 个实例可用，SIF hash 无不一致，成功
 artifact 无 revision 缺失。正式 real-loader manifest 已冻结为

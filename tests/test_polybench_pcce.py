@@ -175,6 +175,51 @@ def test_clean_seed_pcce_dependency_repair_preserves_current_method() -> None:
     assert "huggingface__transformers-27717" not in subset
 
 
+def test_b8_candidate2_pcce_changes_only_guideline_and_run_identity() -> None:
+    seed = load_polybench_pcce_config(
+        ROOT / "configs/polybench_pcce_hpc_formal_seed_clean_20260826.yaml",
+        require_api_keys=False,
+    )
+    candidate = load_polybench_pcce_config(
+        ROOT
+        / "configs/polybench_pcce_hpc_formal_b8_candidate2_clean_20260826.yaml",
+        require_api_keys=False,
+    )
+    repair = load_polybench_pcce_config(
+        ROOT
+        / "configs/"
+        "polybench_pcce_hpc_dependency_cache_formal_b8_candidate2_clean_20260826.yaml",
+        require_api_keys=False,
+    )
+
+    assert candidate.source_snapshot == seed.source_snapshot
+    assert candidate.validation_snapshot == seed.validation_snapshot
+    assert candidate.pce_outcomes == seed.pce_outcomes
+    assert candidate.instance_ids == seed.instance_ids
+    assert candidate.checker_prompt == seed.checker_prompt
+    assert candidate.checker_instance_template == seed.checker_instance_template
+    assert candidate.plan_revision_prompt == seed.plan_revision_prompt
+    assert (
+        candidate.plan_revision_instance_template
+        == seed.plan_revision_instance_template
+    )
+    assert candidate.max_review_rejections == seed.max_review_rejections == 3
+    assert candidate.hpc.max_task_attempts == seed.hpc.max_task_attempts == 3
+    assert candidate.hpc.time == seed.hpc.time == "00:45:00"
+    assert candidate.run_dir != seed.run_dir
+    assert candidate.guideline_label == "b8_candidate_2"
+    assert text_sha256(candidate.guideline_path.read_text(encoding="utf-8")) == (
+        "bd48ee54f6a688cb9a409d2a4017896da00d03926e736665565eef24a707d83a"
+    )
+
+    assert repair.run_dir == candidate.run_dir
+    assert repair.guideline_path == candidate.guideline_path
+    assert repair.checker_prompt == candidate.checker_prompt
+    assert repair.plan_revision_prompt == candidate.plan_revision_prompt
+    assert repair.pce.dependency_cache is not None
+    assert repair.pce.dependency_cache.network_disabled is True
+
+
 def test_review_budget_advances_only_for_completed_rejection() -> None:
     cases = [_case("a"), _case("b"), _case("c")]
     prior = [

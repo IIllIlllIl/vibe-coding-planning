@@ -26,7 +26,9 @@ Agent tasks。旧 Offline 24h 单作业和自动修复 preheat watchdog 已删�
 `configs/polybench_pcce_supervisor_formal_seed_clean_20260826.yaml`。完成后的
 seed dependency-cache Evaluate-only repair 使用独立的
 `configs/polybench_pcce_supervisor_formal_seed_dependency_cache_clean_20260826.yaml`；
-它不会重跑 Checker、Planner 或 Code。
+它不会重跑 Checker、Planner 或 Code。Candidate 2 使用
+`configs/polybench_pcce_supervisor_formal_b8_candidate2_clean_20260826.yaml`，其
+dependency-cache repair 也在 candidate 启动前以独立 supervisor 配置冻结。
 
 ## SIF 工具
 

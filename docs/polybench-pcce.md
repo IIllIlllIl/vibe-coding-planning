@@ -364,6 +364,25 @@ cache and disabled-network semantics used by the paired PCE repair. Original
 CE evidence remains immutable under the parent run. The repair has not been
 launched yet.
 
+The repair subsequently completed all 21 selected cases with 14 resolved and
+7 unresolved, no unknown result and no workflow retry. The local and Iris
+repair trees both contain 196 files and 35,823,158 bytes with ordered tree
+SHA-256 `dea7b88e8eea735642ffea7ac28bf5f68cbd3730517483912b53e0a3da21cff2`.
+Exactly four ordinary-evaluator failures changed to resolved (`15158`, `16661`,
+`17082`, and `24238`), with no reverse flip. Overlaying only those 21 evaluator
+results changes seed PCCE from 62/99 to **66/99**, versus the fixed PCE baseline
+of 70/99. The remaining four-case deficit is therefore the method comparison
+to carry forward; 62/99 is retained only as unrepaired provenance.
+
+The next predeclared primary comparison is frozen b8 candidate 2. Runtime
+`configs/polybench_pcce_hpc_formal_b8_candidate2_clean_20260826.yaml` uses a
+new `b8-candidate2-python99-clean-pce-v1-20260826` run root. Dataset, baseline,
+Checker/Planner prompts, rejection budget, operational attempts, Code/Evaluate
+runtime, and resources are byte-identical to seed; only guideline text and
+run/job identity change. Its separate dependency-cache runtime and supervisor
+are also frozen before launch and must apply the same 21-case overlay policy
+after the ordinary candidate run completes.
+
 The 2026-08-24 repository-baseline audit broadens that limitation. The formal
 PCE/PCCE prompt's final `git add -A` contradicts its earlier instruction to
 stage only intended implementation changes. More importantly, fresh Agent
