@@ -1,7 +1,7 @@
-# Persistent local supervisor for the corrected 100-case seed PCCE run.
+# Persistent local supervisor for the corrected 99-case seed PCCE run.
 schema_version: 1
-session: polybench-pcce-seed-clean100-20260826
-log: .local/hpc-supervisor/polybench-pcce-seed-clean100-20260826.log
+session: polybench-pcce-seed-clean99-20260826
+log: .local/hpc-supervisor/polybench-pcce-seed-clean99-20260826.log
 arguments:
   - --poll-interval
   - "600"
@@ -15,7 +15,7 @@ arguments:
   - --config
   - configs/polybench_pcce_hpc_formal_seed_clean_20260826.yaml
   - --job-name
-  - polybench-pcce-seed-clean100-20260826
+  - polybench-pcce-seed-clean99-20260826
   - --remote-dir
   - ~/hpc_runs/vibe-polybench-pcce
   - --submit

@@ -161,9 +161,11 @@ scheduling to Slurm.
 
 The corrected formal PCCE is prepared as
 `configs/polybench_pcce_hpc_formal_seed_clean_20260826.yaml` with the new
-`seed-python100-clean-pce-v1-20260826` run identity. It selects exactly the 100
-members of the frozen clean-PCE `tests_parsed` snapshot and uses a 45-minute
-PC/CE worker hard limit. The superseded 111-case configs are archived under
+`seed-python99-clean-pce-v1-20260826` run identity. It selects exactly the 99
+members of the final frozen clean-PCE snapshot: the accepted 21-case dependency
+repair is overlaid without changing Plan/Code, and `transformers-25636` is
+excluded because a required evaluator dependency could not be frozen. It uses
+a 45-minute PC/CE worker hard limit. The superseded 111-case configs are archived under
 `configs/archive/polybench_pcce/`; their old inputs and 125-minute setting are
 historical provenance.
 
@@ -319,10 +321,10 @@ output/SWE-PolyBench/polybench-pcce-runs/formal/  formal frozen-method evidence
 ```
 
 The corrected prepared formal identity is
-`polybench-pcce-runs/formal/seed-python100-clean-pce-v1-20260826`, driven by
+`polybench-pcce-runs/formal/seed-python99-clean-pce-v1-20260826`, driven by
 `configs/polybench_pcce_hpc_formal_seed_clean_20260826.yaml` and its matching
-supervisor. It selects all 100 cases frozen from the clean PCE's parsed-test
-intersection and the frozen seed guideline; it does not reuse the completed
+supervisor. It selects all 99 cases in the final repaired clean-PCE snapshot
+and the frozen seed guideline; it does not reuse the completed
 smoke or archived 111-case diagnostic directory.
 
 Image-download provenance remains under the Iris operations directory and is

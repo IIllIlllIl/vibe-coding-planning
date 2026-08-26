@@ -1,23 +1,23 @@
 # Formal paired Plan-Check-Code-Evaluate evaluation of the frozen seed
-# guideline over the 100 clean-PCE cases with parsed official tests.
+# guideline over the final 99 clean-PCE cases with reliable parsed official tests.
 mode: polybench_pcce
-purpose: formal_seed_clean_pce_python100
+purpose: formal_seed_clean_pce_python99
 
 paths:
   source_snapshot: output/SWE-PolyBench/polybench-pce-inputs/20260814_python113_v11_8c7d9485d1d0
   image_manifest: output/SWE-PolyBench/polybench-pce-inputs/20260814_python113_v11_8c7d9485d1d0/images.json
-  validation_snapshot: output/SWE-PolyBench/polybench-guideline-validation-datasets/20260825_python100_cleanpce_testparsed_887d4ec9df49
-  pce_outcomes: output/SWE-PolyBench/polybench-guideline-validation-datasets/20260825_python100_cleanpce_testparsed_887d4ec9df49/paired_pce_outcomes.jsonl
+  validation_snapshot: output/SWE-PolyBench/polybench-guideline-validation-datasets/20260826_python99_cleanpce_depcache_03619730229d
+  pce_outcomes: output/SWE-PolyBench/polybench-guideline-validation-datasets/20260826_python99_cleanpce_depcache_03619730229d/paired_pce_outcomes.jsonl
   guideline: configs/frozen_guidelines/20260817_seed-b8c1-b8c2-b3x3c3-b3x3c6_0e1f8d7bd876/seed.md
   pce_runtime_config: configs/polybench_pce_hpc_formal_clean_20260825.yaml
   checker_runtime_config: configs/gepa_verified_rules.yaml
-  run_dir: output/SWE-PolyBench/polybench-pcce-runs/formal/seed-python100-clean-pce-v1-20260826
+  run_dir: output/SWE-PolyBench/polybench-pcce-runs/formal/seed-python99-clean-pce-v1-20260826
 
 pcce:
   guideline_label: seed
   validation_file: validation.jsonl
   max_review_rejections: 3
-  # Empty means every member of the frozen 100-case validation snapshot.
+  # Empty means every member of the frozen 99-case validation snapshot.
   instance_ids: []
 
 prompts:
@@ -118,5 +118,5 @@ hpc:
   python_module: lang/Python/3.11
   container_module: tools/Apptainer
   python_bin: python3
-  job_name_prefix: polybench-pcce-seed-clean100
+  job_name_prefix: polybench-pcce-seed-clean99
   worker_config_path: configs/polybench_pcce_hpc_formal_seed_clean_20260826.yaml

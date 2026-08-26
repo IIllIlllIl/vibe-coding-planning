@@ -1,0 +1,15 @@
+{
+  "schema_version": 1,
+  "purpose": "polybench_clean_pce_environment_exclusions",
+  "policy": "exclude-only-explicitly-unfreezable-evaluator-dependency-v1",
+  "dependency_manifest_sha256": "5399603f62f8425a7768f908530a841f234984abea8b3906d5bf0658ab9dd990",
+  "exclusions": [
+    {
+      "instance_id": "huggingface__transformers-25636",
+      "reason": "Required evaluator fixture could not be frozen from the official dependency source",
+      "reason_code": "EVALUATOR_DEPENDENCY_UNFREEZABLE",
+      "artifact": "ArthurZ/flax-tiny-random-bert-sharded",
+      "evidence": "Hugging Face repository lookup returned 401/RepositoryNotFound during the frozen dependency preheat"
+    }
+  ]
+}

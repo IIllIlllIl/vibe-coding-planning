@@ -10,18 +10,18 @@
     "output/SWE-bench_Verified/gepa-rules",
     "configs/frozen_guidelines/20260817_seed-b8c1-b8c2-b3x3c3-b3x3c6_0e1f8d7bd876",
     "output/SWE-PolyBench/polybench-pce-inputs/20260814_python113_v11_8c7d9485d1d0",
-    "output/SWE-PolyBench/polybench-guideline-validation-datasets/20260825_python100_cleanpce_testparsed_887d4ec9df49"
+    "output/SWE-PolyBench/polybench-guideline-validation-datasets/20260826_python99_cleanpce_depcache_03619730229d"
   ],
   "active_polybench_validation_inputs": {
-    "status": "frozen_clean_pce_membership_pending_22_case_evaluator_repair_review",
+    "status": "frozen_clean_pce_with_accepted_dependency_repair",
     "source_universe": "official_python_199",
     "pce_input_snapshot": "output/SWE-PolyBench/polybench-pce-inputs/20260814_python113_v11_8c7d9485d1d0",
-    "dataset_snapshot": "output/SWE-PolyBench/polybench-guideline-validation-datasets/20260825_python100_cleanpce_testparsed_887d4ec9df49",
-    "instances": 100,
-    "resolved": 67,
-    "unresolved": 33,
-    "ordered_instance_ids_sha256": "887d4ec9df49cfe6815c0f6b4b6257d465d4504e32ed9488756774aea043cf66",
-    "selection_policy": "official-v1.1-image-available-and-test-parsed-v1",
+    "dataset_snapshot": "output/SWE-PolyBench/polybench-guideline-validation-datasets/20260826_python99_cleanpce_depcache_03619730229d",
+    "instances": 99,
+    "resolved": 70,
+    "unresolved": 29,
+    "ordered_instance_ids_sha256": "03619730229ddef347fb4a6ecfaa63e71d7e5559e421dbf2760bbdffba6447c4",
+    "selection_policy": "clean-pce-test-parsed-with-frozen-evaluator-overlay-v1",
     "cleaning_policy": "resolved-placeholder-high-precision-v1",
     "source_excluded_instances": 13,
     "placeholder_excluded_instances": 0,
@@ -45,10 +45,11 @@
       "b3x3_candidate_3"
     ],
     "reserve_activation_status": "criterion_pending_before_primary_launch",
-    "check_only_status": "blocked_on_evaluator_rerun",
-    "paired_pce_outcomes_sha256": "1e04fffcaae00ea82f4c75e4ebaabcec4acfae6c15fecb627bee03ba602c4312",
+    "check_only_status": "ready_not_launched",
+    "paired_pce_outcomes_sha256": "fd1a808b97c0afd31c83c85f2e39f19b652dd29a320969b9955230f7a64bc3f3",
     "dependency_repair_instances": 21,
-    "score_usable": false
+    "environment_excluded_instances": 1,
+    "score_usable": true
   },
   "active_polybench_image_preparation": {
     "classification": "operational_only",
@@ -115,7 +116,7 @@
   },
   "active_polybench_pce_formal": {
     "classification": "formal_raw_generation_clean_repository_boundary",
-    "status": "raw_outputs_frozen_pending_dependency_repair_review",
+    "status": "final_validation_frozen",
     "as_of": "2026-08-26",
     "instances": 113,
     "atomic_outputs": 113,
@@ -128,21 +129,25 @@
     "project_git_head": "e54ea04aa335d8d842741c55b7a6db04872263b3",
     "run": "output/SWE-PolyBench/polybench-pce-runs/formal/python113-v11-clean-boundary-v1-20260825",
     "local_mirror_complete": true,
-    "paired_snapshot": "output/SWE-PolyBench/polybench-guideline-validation-datasets/20260825_python100_cleanpce_testparsed_887d4ec9df49",
+    "paired_snapshot": "output/SWE-PolyBench/polybench-guideline-validation-datasets/20260826_python99_cleanpce_depcache_03619730229d",
     "dependency_repair_instances": 21,
-    "dependency_repair_status": "prepared_not_launched",
-    "score_usable": false
+    "dependency_repair_status": "completed_and_frozen_locally",
+    "environment_excluded_instances": 1,
+    "final_instances": 99,
+    "final_resolved": 70,
+    "final_unresolved": 29,
+    "score_usable": true
   },
   "prepared_polybench_pcce_seed": {
     "status": "prepared_not_launched",
     "config": "configs/polybench_pcce_hpc_formal_seed_clean_20260826.yaml",
     "supervisor": "configs/polybench_pcce_supervisor_formal_seed_clean_20260826.yaml",
-    "run": "output/SWE-PolyBench/polybench-pcce-runs/formal/seed-python100-clean-pce-v1-20260826",
-    "instances": 100,
+    "run": "output/SWE-PolyBench/polybench-pcce-runs/formal/seed-python99-clean-pce-v1-20260826",
+    "instances": 99,
     "worker_time": "00:45:00",
     "cpus_per_task": 1,
     "memory": "4G",
-    "launch_blocker": "review the 21-case clean-PCE evaluator repair"
+    "launch_blocker": null
   },
   "prior_polybench_pce_smoke": {
     "classification": "test_only",

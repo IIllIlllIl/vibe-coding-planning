@@ -531,3 +531,21 @@ only these 100 cases, and uses a 45-minute PC/CE worker limit. Its launch still
 waits for review of the separate 21-case PCE evaluator repair. The original
 dependency scope has 22 members, but `transformers-27717` has no completed
 clean-PCE Plan/Code checkpoint and is outside this 100-case paired universe.
+
+The evaluator-only repair `clean-depcache-v1-20260826` is now complete and
+mirrored locally. Its remote and local trees both contain 195 files and
+94,850,311 bytes; their ordered file-hash tree digest is identical. All 21
+selected outputs are `completed/tests_parsed`: 16 resolved and 5 unresolved.
+Relative to the ordinary evaluator, four cases changed from unresolved to
+resolved (`transformers-15158`, `16661`, `17082`, and `24238`); no case changed
+in the opposite direction. The overlay verifies that every source-row hash and
+Plan is byte-identical to the parent PCE evidence and replaces only the
+evaluator result.
+
+`transformers-25636` is the one member of the original 23-case dependency-risk
+scope whose required `ArthurZ/flax-tiny-random-bert-sharded` fixture returned
+401/RepositoryNotFound and could not be frozen. It is therefore excluded by the
+predeclared environment policy rather than assigned a repaired label. The final
+immutable paired snapshot is
+`20260826_python99_cleanpce_depcache_03619730229d`: 99 cases, 70 resolved and
+29 unresolved. Its parent 100-case snapshot remains immutable provenance.

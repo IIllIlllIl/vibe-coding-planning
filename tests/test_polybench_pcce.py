@@ -80,7 +80,10 @@ def test_clean_formal_seed_config_selects_only_clean_pce_cases():
     )
     cases, _ = load_pcce_cases(formal)
 
-    assert len(cases) == 100
+    assert len(cases) == 99
+    assert "huggingface__transformers-25636" not in {
+        case.instance_id for case in cases
+    }
     assert formal.instance_ids == ()
     assert formal.guideline_path == smoke.guideline_path
     assert formal.checker_prompt == smoke.checker_prompt

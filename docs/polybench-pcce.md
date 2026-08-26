@@ -330,11 +330,13 @@ code change and the Code Agent only ran the already-passing test, but its final
 the predeclared merge, but one of the four apparent regressions therefore
 cannot be attributed to Checker-guided plan revision.
 
-The corrected seed evaluation instead uses the clean-boundary PCE. Its frozen
-paired input is `20260825_python100_cleanpce_testparsed_887d4ec9df49`:
-exactly 100/113 PCE cases reached parsed official tests, with 67 resolved and
-33 unresolved, and the conservative placeholder policy excluded no additional
-case. The snapshot also contains an ordered, source-hash-bound projection of
+The corrected seed evaluation instead uses the clean-boundary PCE. Its final
+paired input is `20260826_python99_cleanpce_depcache_03619730229d`:
+the parent PCE had 100/113 parsed official-test cases, the accepted dependency
+repair overlays 21 evaluator results, and the explicitly unfreezable
+`transformers-25636` environment case is excluded. The final membership is 99
+cases (70 resolved, 29 unresolved). The snapshot also contains an ordered,
+source-hash-bound projection of
 the PCE outputs supplying each first plan and baseline result, so membership
 and baseline-plan provenance cannot drift without carrying Agent trajectories
 into the PCCE input.
@@ -342,11 +344,11 @@ into the PCCE input.
 The new runtime is
 `configs/polybench_pcce_hpc_formal_seed_clean_20260826.yaml`, its supervisor is
 `configs/polybench_pcce_supervisor_formal_seed_clean_20260826.yaml`, and its
-output root is `seed-python100-clean-pce-v1-20260826`. It selects all and only
-those 100 cases, retains the accepted PCCE prompts and three-valid-rejection
+output root is `seed-python99-clean-pce-v1-20260826`. It selects all and only
+those 99 cases, retains the accepted PCCE prompts and three-valid-rejection
 budget, uses three operational attempts, and requests `1 CPU / 4G / 45min` per
-PC/CE worker. It remains unlaunched until the 21 eligible members of the
-predeclared PCE dependency scope have been repaired and reviewed.
+PC/CE worker. The 21 eligible dependency cases have been repaired and reviewed;
+the run remains unlaunched pending explicit submission.
 
 The 2026-08-24 repository-baseline audit broadens that limitation. The formal
 PCE/PCCE prompt's final `git add -A` contradicts its earlier instruction to

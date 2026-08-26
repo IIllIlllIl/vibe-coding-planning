@@ -77,6 +77,9 @@ Apptainer 临时目录，且不得选择仍在写入的 `.tmp` 镜像。
 - `tools/freeze_polybench_dependency_cache.py`：只读扫描完成的远端 cache，冻结成功
   artifact revision、逐文件 SHA-256、SIF identity 与 evaluator membership；不下载、
   不执行评估。
+- `tools/finalize_polybench_pce_validation_snapshot.py`：从不可变 clean-PCE paired
+  snapshot 派生最终验证快照；只接受完整的 Evaluate-only repair，逐例验证 source row
+  与 Plan 未改变，显式覆盖 evaluator 结果，并将预先记录的环境排除写入独立 provenance。
 
 ## 安全与资源
 

@@ -226,9 +226,18 @@ hash 的最小 ordered `paired_pce_outcomes.jsonl`；完整 trajectories 只留�
 避免 PCCE membership 与 first-plan authority 分离或携带无关上下文。新 seed
 PCCE config/supervisor 分别为 `polybench_pcce_hpc_formal_seed_clean_20260826.yaml` 和
 `polybench_pcce_supervisor_formal_seed_clean_20260826.yaml`，新 run identity 为
-`seed-python100-clean-pce-v1-20260826`，每个 PC/CE worker 为 `1 CPU / 4G / 45min`。
+`seed-python99-clean-pce-v1-20260826`，每个 PC/CE worker 为 `1 CPU / 4G / 45min`。
 旧 111-case 正式/repair configs 已移动至 `configs/archive/polybench_pcce/`。尚未启动
-新 PCCE；启动前仍需完成并验收冻结的 21-case clean-PCE evaluator repair。
+新 PCCE。2026-08-26 该 21-case repair 已完成并完整镜像到本地：远端/本地均为
+195 files、94,850,311 bytes，ordered tree SHA 一致；21/21 均为
+`completed/tests_parsed`，其中 16 resolved、5 unresolved。overlay 逐条验证 row hash
+和 Plan 未改变，只替换 evaluator result；相对普通 evaluator 有 4 条
+unresolved→resolved、0 条反向翻转。原 23-case 风险范围中的
+`transformers-25636` 因必需的 `ArthurZ/flax-tiny-random-bert-sharded` 返回
+401/RepositoryNotFound，正是预先声明的唯一不可冻结依赖案例，按环境排除而非按
+guideline 表现排除。最终 immutable paired snapshot 为
+`20260826_python99_cleanpce_depcache_03619730229d`：99 cases，70 resolved、
+29 unresolved；seed PCCE 仍未启动。
 该完整 preheat 已于 2026-08-23 正常结束：23/23 instances、70/71 artifacts，唯一
 失败严格为预期的 25636/ArthurZ Flax 401；22 个实例可用，SIF hash 无不一致，成功
 artifact 无 revision 缺失。正式 real-loader manifest 已冻结为
