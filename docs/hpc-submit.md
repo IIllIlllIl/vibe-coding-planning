@@ -196,11 +196,22 @@ Evaluator repair can be restricted reproducibly with
 `--resume-evaluator-instances-file PATH`. The JSON file is parsed by the
 Controller, its ordered IDs enter the repair fingerprint and manifest, and PCCE
 preserves every selected case's original CE task index while copying Plan/Code
-checkpoints. The accepted formal-v2 file is
+checkpoints. The full accepted formal-v2 file is
 `configs/frozen_dependency_caches/polybench_evaluator_dependencies_formal_v2_20260823/evaluator_repair_subset.json`;
-it is bound to the dependency-manifest SHA and shared unchanged by PCE and
-PCCE. PCE still accepts repeated `--resume-evaluator-instance` for small
-diagnostics, but those flags and the frozen file cannot be mixed.
+it is bound to the dependency-manifest SHA and contains all 22 cache-eligible
+cases. The current final paired universe uses the separately frozen
+`evaluator_repair_subset_clean99.json`, which removes only `transformers-27717`
+because that case has no clean PCE checkpoint and is outside the final 99.
+PCE still accepts repeated `--resume-evaluator-instance` for small diagnostics,
+but those flags and the frozen file cannot be mixed.
+
+The current seed PCCE repair launch identity is
+`configs/polybench_pcce_supervisor_formal_seed_dependency_cache_clean_20260826.yaml`.
+It invokes the PCCE wrapper with
+`configs/polybench_pcce_hpc_dependency_cache_formal_seed_clean_20260826.yaml`,
+repair ID `clean-depcache-v1-20260826`, and the 21-case clean99 subset. It uses
+`1 CPU / 4G / 45min` per Evaluate worker and a ten-minute Controller slice;
+no Checker, Planner, Code Agent, or LLM is invoked.
 
 External test dependencies are not part of a SIF preheat. The planned
 PolyBench dependency preheat keeps official SIFs unchanged and builds a

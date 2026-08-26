@@ -347,8 +347,22 @@ The new runtime is
 output root is `seed-python99-clean-pce-v1-20260826`. It selects all and only
 those 99 cases, retains the accepted PCCE prompts and three-valid-rejection
 budget, uses three operational attempts, and requests `1 CPU / 4G / 45min` per
-PC/CE worker. The 21 eligible dependency cases have been repaired and reviewed;
-the run remains unlaunched pending explicit submission.
+PC/CE worker. The ordinary PCCE run completed, but its 21 dependency-risk cases
+were not evaluated under the same frozen cache authority as the paired PCE
+baseline. Its uncorrected score therefore must not be interpreted as the final
+seed-versus-PCE effect.
+
+The additive repair runtime is
+`configs/polybench_pcce_hpc_dependency_cache_formal_seed_clean_20260826.yaml`.
+Its supervisor uses repair identity `clean-depcache-v1-20260826` and the frozen
+`evaluator_repair_subset_clean99.json`. That subset is the exact 21-case
+intersection between the accepted 22-case dependency manifest and the final
+99-case paired universe; `transformers-27717` is absent because it has no clean
+PCE/PCCE membership. The repair copies and re-identifies the completed PCCE
+Plan and Code checkpoints, then reruns only Evaluate with the same read-only
+cache and disabled-network semantics used by the paired PCE repair. Original
+CE evidence remains immutable under the parent run. The repair has not been
+launched yet.
 
 The 2026-08-24 repository-baseline audit broadens that limitation. The formal
 PCE/PCCE prompt's final `git add -A` contradicts its earlier instruction to

@@ -21,6 +21,7 @@ from src.polybench_pcce.runner import PolyBenchPCCERunner
 from src.polybench_pcce.runner import validate_pcce_checker_output
 from src.polybench_pcce.worker import run_task
 from src.polybench_pce.models import FrozenImage, PolyBenchPCECase
+from src.polybench_pce.evaluator_resume import load_evaluator_repair_subset
 from src.polybench_pce.runner import checkpoint_identity
 
 
@@ -124,6 +125,54 @@ def test_formal_pcce_dependency_repair_config_preserves_method() -> None:
         == base.plan_revision_instance_template
     )
     assert repair.pce.dependency_cache is not None
+
+
+def test_clean_seed_pcce_dependency_repair_preserves_current_method() -> None:
+    base = load_polybench_pcce_config(
+        ROOT / "configs/polybench_pcce_hpc_formal_seed_clean_20260826.yaml",
+        require_api_keys=False,
+    )
+    repair = load_polybench_pcce_config(
+        ROOT
+        / "configs/"
+        "polybench_pcce_hpc_dependency_cache_formal_seed_clean_20260826.yaml",
+        require_api_keys=False,
+    )
+
+    assert repair.source_snapshot == base.source_snapshot
+    assert repair.validation_snapshot == base.validation_snapshot
+    assert repair.pce_outcomes == base.pce_outcomes
+    assert repair.guideline_path == base.guideline_path
+    assert repair.run_dir == base.run_dir
+    assert repair.instance_ids == base.instance_ids
+    assert repair.checker_prompt == base.checker_prompt
+    assert repair.checker_instance_template == base.checker_instance_template
+    assert repair.plan_revision_prompt == base.plan_revision_prompt
+    assert (
+        repair.plan_revision_instance_template
+        == base.plan_revision_instance_template
+    )
+    assert repair.hpc.time == base.hpc.time == "00:45:00"
+    assert repair.pce.dependency_cache is not None
+    assert repair.pce.dependency_cache.network_disabled is True
+
+    subset_path = (
+        ROOT
+        / "configs/frozen_dependency_caches/"
+        "polybench_evaluator_dependencies_formal_v2_20260823/"
+        "evaluator_repair_subset_clean99.json"
+    )
+    subset = load_evaluator_repair_subset(
+        subset_path,
+        expected_dependency_manifest_sha256=(
+            repair.pce.dependency_cache.manifest_sha256
+        ),
+    )
+    cases, _ = load_pcce_cases(repair)
+    case_ids = {case.instance_id for case in cases}
+    assert len(subset) == 21
+    assert set(subset).issubset(case_ids)
+    assert "huggingface__transformers-27717" not in subset
 
 
 def test_review_budget_advances_only_for_completed_rejection() -> None:
@@ -761,15 +810,15 @@ def test_submit_wrapper_selects_pcce_evaluator_repair(tmp_path: Path) -> None:
             "bash",
             "scripts/hpc_submit_polybench_pcce.sh",
             "--config",
-            "configs/archive/polybench_pcce/"
-            "polybench_pcce_hpc_dependency_cache_formal_seed_v2.yaml",
+            "configs/"
+            "polybench_pcce_hpc_dependency_cache_formal_seed_clean_20260826.yaml",
             "--resume-evaluator",
-            "native-home",
+            "clean-depcache-v1-20260826",
             "--resume-evaluator-instances-file",
             (
                 "configs/frozen_dependency_caches/"
                 "polybench_evaluator_dependencies_formal_v2_20260823/"
-                "evaluator_repair_subset.json"
+                "evaluator_repair_subset_clean99.json"
             ),
             "--dry-run",
         ],
@@ -781,5 +830,5 @@ def test_submit_wrapper_selects_pcce_evaluator_repair(tmp_path: Path) -> None:
     )
     assert result.returncode == 0, result.stderr
     assert "scripts/resume_polybench_pcce_evaluator.py" in result.stdout
-    assert '--repair-id "native-home"' in result.stdout
+    assert '--repair-id "clean-depcache-v1-20260826"' in result.stdout
     assert "--instance-ids-file configs/frozen_dependency_caches/" in result.stdout

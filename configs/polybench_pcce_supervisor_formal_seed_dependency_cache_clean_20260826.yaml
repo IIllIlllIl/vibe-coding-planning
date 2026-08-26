@@ -1,0 +1,25 @@
+# Persistent local supervisor for the corrected seed PCCE dependency repair.
+schema_version: 1
+session: polybench-pcce-seed-clean99-depcache-20260826
+log: .local/hpc-supervisor/polybench-pcce-seed-clean99-depcache-20260826.log
+arguments:
+  - --poll-interval
+  - "600"
+  - --slice-time
+  - "00:10:00"
+  - --max-runs
+  - "0"
+  - --require-clean-worktree
+  - --batch-script
+  - scripts/hpc_submit_polybench_pcce.sh
+  - --config
+  - configs/polybench_pcce_hpc_dependency_cache_formal_seed_clean_20260826.yaml
+  - --job-name
+  - polybench-pcce-seed-clean99-depcache-20260826
+  - --remote-dir
+  - ~/hpc_runs/vibe-polybench-pcce
+  - --resume-evaluator
+  - clean-depcache-v1-20260826
+  - --resume-evaluator-instances-file
+  - configs/frozen_dependency_caches/polybench_evaluator_dependencies_formal_v2_20260823/evaluator_repair_subset_clean99.json
+  - --submit

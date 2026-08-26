@@ -237,7 +237,17 @@ unresolved→resolved、0 条反向翻转。原 23-case 风险范围中的
 401/RepositoryNotFound，正是预先声明的唯一不可冻结依赖案例，按环境排除而非按
 guideline 表现排除。最终 immutable paired snapshot 为
 `20260826_python99_cleanpce_depcache_03619730229d`：99 cases，70 resolved、
-29 unresolved；seed PCCE 仍未启动。
+29 unresolved；随后 seed PCCE 已完成普通 evaluator，但其 21 个 dependency-risk
+案例未使用同一冻结 cache，因此普通 `62/99` 不是最终可比较分数。当前已准备独立
+PCCE Evaluate-only repair：runtime
+`polybench_pcce_hpc_dependency_cache_formal_seed_clean_20260826.yaml`、supervisor
+`polybench_pcce_supervisor_formal_seed_dependency_cache_clean_20260826.yaml`、repair ID
+`clean-depcache-v1-20260826`。它只复制并重标识既有 Plan/Code checkpoints，在同一
+read-only cache、禁网 evaluator 下重跑最终 99-case universe 中的 21-case 交集，不调用
+Checker、Planner、Code 或 LLM，也不覆盖普通 CE evidence。原 full-22 subset 保留为
+cache provenance；新 `evaluator_repair_subset_clean99.json` 仅排除不属于 clean-PCE
+paired universe 的 `transformers-27717`。repair 尚未启动；完成并覆盖后再判断 seed
+PCCE 退化，并以同一 evaluator policy 执行 candidate 2。
 该完整 preheat 已于 2026-08-23 正常结束：23/23 instances、70/71 artifacts，唯一
 失败严格为预期的 25636/ArthurZ Flax 401；22 个实例可用，SIF hash 无不一致，成功
 artifact 无 revision 缺失。正式 real-loader manifest 已冻结为

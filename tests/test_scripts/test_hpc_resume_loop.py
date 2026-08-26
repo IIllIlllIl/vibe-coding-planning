@@ -732,6 +732,56 @@ def test_formal_pcce_supervisor_launch_config_uses_formal_seed_runtime(
     assert "--require-clean-worktree" in invocation
 
 
+def test_clean_seed_pcce_dependency_repair_supervisor_selects_frozen_subset(
+    tmp_path: Path,
+) -> None:
+    fake_bin = tmp_path / "bin"
+    fake_bin.mkdir()
+    tmux_log = tmp_path / "tmux.log"
+    tmux = fake_bin / "tmux"
+    tmux.write_text(
+        "#!/usr/bin/env bash\n"
+        f"printf '%s\\n' \"$*\" >> {tmux_log}\n"
+        'if [[ "$1" == has-session ]]; then exit 1; fi\n'
+        "exit 0\n",
+        encoding="utf-8",
+    )
+    tmux.chmod(0o755)
+    env = os.environ.copy()
+    env["PATH"] = f"{fake_bin}{os.pathsep}{env['PATH']}"
+
+    result = subprocess.run(
+        [
+            "python",
+            str(SERVICE_SCRIPT),
+            "start",
+            "--launch-config",
+            "configs/"
+            "polybench_pcce_supervisor_formal_seed_dependency_cache_clean_20260826.yaml",
+        ],
+        cwd=REPO_ROOT,
+        capture_output=True,
+        text=True,
+        check=False,
+        env=env,
+    )
+
+    assert result.returncode == 0, result.stderr
+    invocation = tmux_log.read_text(encoding="utf-8")
+    assert "--resume-evaluator clean-depcache-v1-20260826" in invocation
+    assert (
+        "--config configs/"
+        "polybench_pcce_hpc_dependency_cache_formal_seed_clean_20260826.yaml"
+        in invocation
+    )
+    assert (
+        "--resume-evaluator-instances-file configs/frozen_dependency_caches/"
+        "polybench_evaluator_dependencies_formal_v2_20260823/"
+        "evaluator_repair_subset_clean99.json" in invocation
+    )
+    assert "--require-clean-worktree" in invocation
+
+
 def test_formal_pcce_contract_retry_uses_new_supervisor_state_only(
     tmp_path: Path,
 ) -> None:

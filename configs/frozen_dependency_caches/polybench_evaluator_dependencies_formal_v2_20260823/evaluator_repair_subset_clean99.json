@@ -1,0 +1,28 @@
+{
+  "schema_version": 1,
+  "purpose": "polybench_evaluator_repair_subset",
+  "dependency_manifest_sha256": "5399603f62f8425a7768f908530a841f234984abea8b3906d5bf0658ab9dd990",
+  "instance_ids": [
+    "huggingface__transformers-15158",
+    "huggingface__transformers-16661",
+    "huggingface__transformers-17082",
+    "huggingface__transformers-19590",
+    "huggingface__transformers-19657",
+    "huggingface__transformers-20136",
+    "huggingface__transformers-22649",
+    "huggingface__transformers-23141",
+    "huggingface__transformers-23796",
+    "huggingface__transformers-24238",
+    "huggingface__transformers-25765",
+    "huggingface__transformers-26164",
+    "huggingface__transformers-26839",
+    "huggingface__transformers-27114",
+    "huggingface__transformers-28071",
+    "huggingface__transformers-28563",
+    "huggingface__transformers-29519",
+    "huggingface__transformers-29563",
+    "huggingface__transformers-29675",
+    "huggingface__transformers-29688",
+    "langchain-ai__langchain-5450"
+  ]
+}

@@ -23,7 +23,10 @@ Agent tasks。旧 Offline 24h 单作业和自动修复 preheat watchdog 已删�
 参数。Online 当前配置是 `configs/online_gepa_supervisor.yaml`；Offline HPC 应使用
 独立的新配置与 run identity；PCCE smoke 使用
 `configs/polybench_pcce_supervisor_smoke.yaml`，正式 seed PCCE 使用
-`configs/polybench_pcce_supervisor_formal_seed_clean_20260826.yaml`。
+`configs/polybench_pcce_supervisor_formal_seed_clean_20260826.yaml`。完成后的
+seed dependency-cache Evaluate-only repair 使用独立的
+`configs/polybench_pcce_supervisor_formal_seed_dependency_cache_clean_20260826.yaml`；
+它不会重跑 Checker、Planner 或 Code。
 
 ## SIF 工具
 
