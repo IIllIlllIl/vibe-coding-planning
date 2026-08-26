@@ -15,6 +15,8 @@ historical comparison, provenance, or reproduction.
 | `SWE-PolyBench/polybench-pce-inputs/20260814_python113_v11_8c7d9485d1d0/` | Official Python rows joined to the reviewed exact-`v1.1` availability evidence | Complete immutable formal PCE input; 113 cases |
 | `SWE-PolyBench/polybench-pce-runs/formal/python113-v11-pce-20260814/` | Complete local mirror of formal PCE trajectories, attempts, checkpoints, evaluator evidence and controller state | Diagnostic only: Agent phases did not verify a clean `base_commit`, and final `git add -A` could capture pre-existing SIF changes; Plan/Code and scores are not formal reusable evidence |
 | `SWE-PolyBench/polybench-guideline-validation-datasets/20260815_python111_testparsed_26dad63b5cf3/` | Derived PolyBench Checker-only validation snapshot | Membership authority only: the repaired evaluator confirms the same 111 parsed-case membership, but old labels remain score-unsafe |
+| `SWE-PolyBench/polybench-pce-runs/formal/python113-v11-clean-boundary-v1-20260825/` | Complete local mirror of the corrected clean-boundary PCE evidence | Active formal raw evidence: 113 outputs, of which 100 reached parsed official tests; controller block evidence remains preserved |
+| `SWE-PolyBench/polybench-guideline-validation-datasets/20260825_python100_cleanpce_testparsed_887d4ec9df49/` | Frozen clean-PCE paired validation input | Active 100-case membership and first-plan authority; labels remain pending the separate 21-case evaluator-repair review |
 | `SWE-PolyBench/polybench-pcce-runs/smoke/` | PCCE orchestration, review-loop, checkpoint and PC-to-CE platform evidence | Completed two-case platform smoke; never formal validation evidence |
 | `SWE-PolyBench/polybench-pcce-runs/formal/seed-python111-20260817/` | Frozen seed-guideline PCCE deployment diagnostic | Not score-usable: PC/Code inherited the unverified SIF baseline and `git add -A` patch boundary; the 79/111 versus 75/111 overlay is retained only for provenance |
 | `SWE-PolyBench/polybench-pce-inputs/20260811_smoke2_transformers/` | Frozen two-row source and reviewed image-manifest copy staged to the PCE smoke | Smoke input only; not formal input |
@@ -82,6 +84,16 @@ outcomes without manufacturing labels, then applies the same resolved-only,
 non-empty-patch placeholder policy used for SWE-bench Verified 500-to-482.
 No PolyBench plan matched that placeholder policy, leaving 111 cases: 59
 resolved and 52 unresolved.
+
+The corrected clean-boundary PCE supersedes that diagnostic as the active raw
+source. It preserves 113/113 atomic outputs locally and yields 100
+`tests_parsed` cases: 67 resolved and 33 unresolved. Thirteen non-parsed cases
+remain explicit source exclusions, and the conservative placeholder policy
+removes zero more cases. The paired snapshot stores the same ordered PCE output
+projections used by PCCE, so its membership and baseline plans share one
+authority while full trajectories remain only in the raw run.
+The corrected seed PCCE is configured but not yet launched; the predeclared
+21-case clean-PCE dependency repair must be reviewed first.
 
 Evaluator repair evidence remains nested under the formal run rather than
 becoming a validation snapshot. `isolated-home-smoke-20260820` is a seven-case

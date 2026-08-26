@@ -164,9 +164,17 @@ while IFS='=' read -r KEY VALUE; do
   esac
 done <<< "$VALUES"
 PCE_BASELINE_DIR="$(dirname "$PCE_OUTCOMES")"
-PCE_STAGE_DIR="$(mktemp -d /tmp/polybench-pcce-pce.XXXXXX)"
-trap 'rm -rf "$PCE_STAGE_DIR"' EXIT
-cp "$PCE_OUTCOMES" "$PCE_STAGE_DIR/$(basename "$PCE_OUTCOMES")"
+PCE_STAGE_DIR=""
+PCE_BASELINE_STAGE="validation snapshot"
+case "$PCE_OUTCOMES" in
+  "$VALIDATION_SNAPSHOT"/*) ;;
+  *)
+    PCE_STAGE_DIR="$(mktemp -d /tmp/polybench-pcce-pce.XXXXXX)"
+    trap 'rm -rf "$PCE_STAGE_DIR"' EXIT
+    cp "$PCE_OUTCOMES" "$PCE_STAGE_DIR/$(basename "$PCE_OUTCOMES")"
+    PCE_BASELINE_STAGE="single-file frozen outcome bundle"
+    ;;
+esac
 
 for required in "$SOURCE_SNAPSHOT/manifest.json" "$VALIDATION_SNAPSHOT/manifest.json" "$PCE_OUTCOMES" "$IMAGE_MANIFEST"; do
   if [[ ! -f "$required" ]]; then
@@ -259,7 +267,13 @@ CMD=(
   --module lang/Python/3.11 --module tools/Apptainer --python python3 --no-conda
   --stage-data "$SOURCE_SNAPSHOT:$REMOTE_SOURCE" --link-as "$SOURCE_REL"
   --stage-data "$VALIDATION_SNAPSHOT:$REMOTE_VALIDATION" --link-as "$VALIDATION_REL"
-  --stage-data "$PCE_STAGE_DIR:$REMOTE_PCE_BASELINE" --link-as "$PCE_BASELINE_REL"
+)
+if [[ -n "$PCE_STAGE_DIR" ]]; then
+  CMD+=(
+    --stage-data "$PCE_STAGE_DIR:$REMOTE_PCE_BASELINE" --link-as "$PCE_BASELINE_REL"
+  )
+fi
+CMD+=(
   --persistent-output "$RUN_REL:$REMOTE_RUN"
   --apptainer-cache-dir "$HPC_ROOT/shared/apptainer-cache"
   --apptainer-tmp-dir "$HPC_ROOT/shared/apptainer-tmp"
@@ -274,7 +288,7 @@ echo "[polybench-pcce-submit] config=$CONFIG_REL"
 echo "[polybench-pcce-submit] source=$SOURCE_REL"
 echo "[polybench-pcce-submit] validation=$VALIDATION_REL"
 echo "[polybench-pcce-submit] baseline=$PCE_BASELINE_REL"
-echo "[polybench-pcce-submit] baseline_stage=single-file frozen outcome bundle"
+echo "[polybench-pcce-submit] baseline_stage=$PCE_BASELINE_STAGE"
 echo "[polybench-pcce-submit] run=$RUN_REL"
 echo "[polybench-pcce-submit] evaluator_repair=${EVALUATOR_REPAIR_ID:-none}"
 echo "[polybench-pcce-submit] evaluator_instances_file=${EVALUATOR_REPAIR_INSTANCES_FILE_REL:-none}"

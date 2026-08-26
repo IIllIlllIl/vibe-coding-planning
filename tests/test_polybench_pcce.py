@@ -69,18 +69,18 @@ def _config(tmp_path: Path):
     )
 
 
-def test_formal_seed_config_selects_all_frozen_cases_and_preserves_smoke_method():
+def test_clean_formal_seed_config_selects_only_clean_pce_cases():
     smoke = load_polybench_pcce_config(
         ROOT / "configs/polybench_pcce_hpc_smoke.yaml",
         require_api_keys=False,
     )
     formal = load_polybench_pcce_config(
-        ROOT / "configs/polybench_pcce_hpc_formal_seed.yaml",
+        ROOT / "configs/polybench_pcce_hpc_formal_seed_clean_20260826.yaml",
         require_api_keys=False,
     )
     cases, _ = load_pcce_cases(formal)
 
-    assert len(cases) == 111
+    assert len(cases) == 100
     assert formal.instance_ids == ()
     assert formal.guideline_path == smoke.guideline_path
     assert formal.checker_prompt == smoke.checker_prompt
@@ -91,16 +91,19 @@ def test_formal_seed_config_selects_all_frozen_cases_and_preserves_smoke_method(
     )
     assert formal.max_review_rejections == smoke.max_review_rejections == 3
     assert formal.hpc.max_task_attempts == smoke.hpc.max_task_attempts == 3
+    assert formal.hpc.time == "00:45:00"
     assert formal.run_dir != smoke.run_dir
 
 
 def test_formal_pcce_dependency_repair_config_preserves_method() -> None:
     base = load_polybench_pcce_config(
-        ROOT / "configs/polybench_pcce_hpc_formal_seed.yaml",
+        ROOT / "configs/archive/polybench_pcce/polybench_pcce_hpc_formal_seed.yaml",
         require_api_keys=False,
     )
     repair = load_polybench_pcce_config(
-        ROOT / "configs/polybench_pcce_hpc_dependency_cache_formal_seed_v2.yaml",
+        ROOT
+        / "configs/archive/polybench_pcce/"
+        "polybench_pcce_hpc_dependency_cache_formal_seed_v2.yaml",
         require_api_keys=False,
     )
 
@@ -522,7 +525,7 @@ def test_controller_routes_pass_to_ce_and_stops_after_three_rejections(
     "config_path",
     [
         "configs/polybench_pcce_hpc_smoke.yaml",
-        "configs/polybench_pcce_hpc_formal_seed.yaml",
+        "configs/polybench_pcce_hpc_formal_seed_clean_20260826.yaml",
     ],
 )
 def test_submit_wrapper_stages_baseline_directory_and_keeps_dry_run(
@@ -551,7 +554,11 @@ def test_submit_wrapper_stages_baseline_directory_and_keeps_dry_run(
     assert result.returncode == 0, result.stderr
     assert "--dry-run" in result.stdout
     assert "raw_pce_outcomes.jsonl:" not in result.stdout
-    assert "baseline_stage=single-file frozen outcome bundle" in result.stdout
+    if "formal_seed_clean" in config_path:
+        assert "baseline_stage=validation snapshot" in result.stdout
+        assert "/tmp/polybench-pcce-pce." not in result.stdout
+    else:
+        assert "baseline_stage=single-file frozen outcome bundle" in result.stdout
     assert "VIBE_CONTROLLER_GIT_HEAD" in result.stdout
     assert "RUN_MANIFEST" in result.stdout
     assert str(ROOT / "output/SWE-PolyBench/polybench-pce-runs/formal") not in (
@@ -751,7 +758,8 @@ def test_submit_wrapper_selects_pcce_evaluator_repair(tmp_path: Path) -> None:
             "bash",
             "scripts/hpc_submit_polybench_pcce.sh",
             "--config",
-            "configs/polybench_pcce_hpc_dependency_cache_formal_seed_v2.yaml",
+            "configs/archive/polybench_pcce/"
+            "polybench_pcce_hpc_dependency_cache_formal_seed_v2.yaml",
             "--resume-evaluator",
             "native-home",
             "--resume-evaluator-instances-file",

@@ -1,0 +1,28 @@
+# Supervisor identity for the corrected PCE's 21-case dependency-cache
+# Evaluate-only repair. It reuses fixed Plan/Code checkpoints and invokes no LLM.
+schema_version: 1
+session: polybench-pce-clean-depcache-repair-20260826
+log: .local/hpc-supervisor/polybench-pce-clean-depcache-repair-20260826.log
+arguments:
+  - --poll-interval
+  - "600"
+  - --slice-time
+  - "00:10:00"
+  - --max-runs
+  - "0"
+  - --state-file
+  - .local/hpc-supervisor/polybench-pce-clean-depcache-repair-20260826.json
+  - --require-clean-worktree
+  - --batch-script
+  - scripts/hpc_submit_polybench_pce.sh
+  - --config
+  - configs/polybench_pce_hpc_dependency_cache_clean_20260825.yaml
+  - --job-name
+  - polybench-pce-clean-depcache-21
+  - --remote-dir
+  - ~/hpc_runs/vibe-polybench-pce
+  - --resume-evaluator
+  - clean-depcache-v1-20260826
+  - --resume-evaluator-instances-file
+  - configs/frozen_dependency_caches/polybench_evaluator_dependencies_formal_v2_20260823/clean_pce_repair_subset_20260826.json
+  - --submit

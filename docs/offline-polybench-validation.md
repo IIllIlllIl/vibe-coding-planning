@@ -507,3 +507,27 @@ manifest-bound evaluator-only repair, which preserves Plan and Code bytes and
 invokes no LLM. The new PCE dataset and scores remain provisional until that
 overlay and the conservative cleaning record are reviewed. PCCE starts only
 after this PCE authority is frozen.
+
+The clean-run repair configuration is
+`configs/polybench_pce_hpc_dependency_cache_clean_20260825.yaml`. It targets
+`python113-v11-clean-boundary-v1-20260825`, retains the exact clean-run
+Plan/Code semantics, and changes only Evaluate by binding the frozen dependency
+cache read-only and disabling evaluator networking. The subsequent corrected
+PCCE receives a new run identity and a 45-minute PC/CE worker ceiling; the
+historical `seed-python111-20260817` configuration remains immutable.
+
+The completed clean PCE now has 113/113 atomic worker outputs. Exactly 100
+cases reached `tests_parsed` (67 resolved and 33 unresolved); the remaining 13
+are preserved as operational/source exclusions rather than being assigned an
+unresolved label. The conservative resolved-placeholder policy excludes zero
+additional cases. The frozen paired snapshot is
+`20260825_python100_cleanpce_testparsed_887d4ec9df49`; it contains both the
+Checker validation rows and a source-hash-bound minimal projection of the PCE
+outputs supplying PCCE's first plans and baseline results. Full trajectories
+remain in the raw PCE run rather than entering the PCCE input. The corrected
+seed PCCE runtime is
+`configs/polybench_pcce_hpc_formal_seed_clean_20260826.yaml`, selects all and
+only these 100 cases, and uses a 45-minute PC/CE worker limit. Its launch still
+waits for review of the separate 21-case PCE evaluator repair. The original
+dependency scope has 22 members, but `transformers-27717` has no completed
+clean-PCE Plan/Code checkpoint and is outside this 100-case paired universe.

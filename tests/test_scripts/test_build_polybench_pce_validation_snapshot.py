@@ -203,3 +203,37 @@ def test_existing_snapshot_must_be_identical(tmp_path: Path) -> None:
         assert "differs" in str(exc)
     else:
         raise AssertionError("mutated frozen snapshot was accepted")
+
+
+def test_optional_paired_outcomes_match_the_test_parsed_membership(
+    tmp_path: Path,
+) -> None:
+    source, run = _fixture(tmp_path)
+    output = tmp_path / "paired"
+    manifest = build_snapshot(
+        source_snapshot=source,
+        pce_run=run,
+        output_dir=output,
+        repository_root=tmp_path,
+        include_paired_pce_outcomes=True,
+    )
+
+    paired = [
+        json.loads(line)
+        for line in (output / "paired_pce_outcomes.jsonl").read_text().splitlines()
+    ]
+    raw = [
+        json.loads(line)
+        for line in (output / "raw_validation.jsonl").read_text().splitlines()
+    ]
+    assert [item["instance_id"] for item in paired] == [
+        item["instance_id"] for item in raw
+    ]
+    assert all(item["status"] == "completed" for item in paired)
+    assert all("plan_trajectory" not in item for item in paired)
+    assert all("code_trajectory" not in item for item in paired)
+    assert all(item["source_output_sha256"] for item in paired)
+    assert manifest["paired_pce_outcomes_file"] == "paired_pce_outcomes.jsonl"
+    assert manifest["paired_pce_outcomes_sha256"] == _sha(
+        output / "paired_pce_outcomes.jsonl"
+    )

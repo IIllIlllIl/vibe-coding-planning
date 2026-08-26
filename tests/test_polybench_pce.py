@@ -1266,6 +1266,66 @@ def test_clean_formal_pce_config_uses_smoke_validated_submission_boundary() -> N
     assert config.dependency_cache is None
 
 
+def test_clean_dependency_repair_changes_only_evaluator_runtime() -> None:
+    base = load_polybench_pce_config(
+        ROOT / "configs/polybench_pce_hpc_formal_clean_20260825.yaml",
+        require_api_keys=False,
+    )
+    repair = load_polybench_pce_config(
+        ROOT / "configs/polybench_pce_hpc_dependency_cache_clean_20260825.yaml",
+        require_api_keys=False,
+    )
+
+    assert repair.dataset_snapshot == base.dataset_snapshot
+    assert repair.image_manifest == base.image_manifest
+    assert repair.run_dir == base.run_dir
+    assert repair.plan == base.plan
+    assert repair.code == base.code
+    assert repair.plan_prompt == base.plan_prompt
+    assert repair.plan_instance_template == base.plan_instance_template
+    assert repair.code_prompt == base.code_prompt
+    assert repair.code_instance_template == base.code_instance_template
+    assert repair.nrpv_block == base.nrpv_block
+    assert repair.dependency_cache is not None
+    assert len(repair.dependency_cache.included_instances) == 22
+    assert repair.dependency_cache.network_disabled is True
+    assert repair.hpc.time == base.hpc.time
+    assert repair.hpc.worker_config_path == (
+        "configs/polybench_pce_hpc_dependency_cache_clean_20260825.yaml"
+    )
+
+
+def test_clean_dependency_repair_subset_is_the_paired_membership_intersection() -> None:
+    root = (
+        ROOT
+        / "configs/frozen_dependency_caches/"
+        "polybench_evaluator_dependencies_formal_v2_20260823"
+    )
+    original = set(
+        load_evaluator_repair_subset(root / "evaluator_repair_subset.json")
+    )
+    clean = load_evaluator_repair_subset(
+        root / "clean_pce_repair_subset_20260826.json",
+        expected_dependency_manifest_sha256=(
+            "5399603f62f8425a7768f908530a841f234984abea8b3906d5bf0658ab9dd990"
+        ),
+    )
+    validation = [
+        json.loads(line)
+        for line in (
+            ROOT
+            / "output/SWE-PolyBench/polybench-guideline-validation-datasets/"
+            "20260825_python100_cleanpce_testparsed_887d4ec9df49/validation.jsonl"
+        ).read_text(encoding="utf-8").splitlines()
+        if line.strip()
+    ]
+    validation_ids = {str(row["instance_id"]) for row in validation}
+
+    assert set(clean) == original & validation_ids
+    assert len(clean) == 21
+    assert "huggingface__transformers-27717" not in clean
+
+
 def test_pce_submit_wrapper_forwards_frozen_evaluator_subset(tmp_path: Path) -> None:
     fake = tmp_path / "ulhpc-submit"
     fake.write_text("#!/usr/bin/env bash\nprintf '%s\\n' \"$@\"\n", encoding="utf-8")

@@ -61,7 +61,10 @@ def _write_workflow_config(root: Path) -> Path:
 
 
 def test_evaluator_repair_supervisor_monitors_repair_root() -> None:
-    config = REPO_ROOT / "configs/polybench_pcce_hpc_formal_seed.yaml"
+    config = (
+        REPO_ROOT
+        / "configs/archive/polybench_pcce/polybench_pcce_hpc_formal_seed.yaml"
+    )
     snapshot = _remote_run_snapshot(["--resume-evaluator", "native-home"], config)
     assert snapshot.endswith(
         "/output/SWE-PolyBench/polybench-pcce-runs/formal/"
@@ -709,7 +712,7 @@ def test_formal_pcce_supervisor_launch_config_uses_formal_seed_runtime(
             str(SERVICE_SCRIPT),
             "start",
             "--launch-config",
-            "configs/polybench_pcce_supervisor_formal_seed.yaml",
+            "configs/polybench_pcce_supervisor_formal_seed_clean_20260826.yaml",
         ],
         cwd=REPO_ROOT,
         capture_output=True,
@@ -722,7 +725,10 @@ def test_formal_pcce_supervisor_launch_config_uses_formal_seed_runtime(
     invocation = tmux_log.read_text(encoding="utf-8")
     assert "hpc_resume_loop.py --poll-interval 600" in invocation
     assert "--batch-script scripts/hpc_submit_polybench_pcce.sh" in invocation
-    assert "--config configs/polybench_pcce_hpc_formal_seed.yaml" in invocation
+    assert (
+        "--config configs/polybench_pcce_hpc_formal_seed_clean_20260826.yaml"
+        in invocation
+    )
     assert "--require-clean-worktree" in invocation
 
 
@@ -750,7 +756,8 @@ def test_formal_pcce_contract_retry_uses_new_supervisor_state_only(
             str(SERVICE_SCRIPT),
             "start",
             "--launch-config",
-            "configs/polybench_pcce_supervisor_formal_seed_contract_retry_20260818.yaml",
+            "configs/archive/polybench_pcce/"
+            "polybench_pcce_supervisor_formal_seed_contract_retry_20260818.yaml",
         ],
         cwd=REPO_ROOT,
         capture_output=True,

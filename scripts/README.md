@@ -23,7 +23,7 @@ Agent tasks。旧 Offline 24h 单作业和自动修复 preheat watchdog 已删�
 参数。Online 当前配置是 `configs/online_gepa_supervisor.yaml`；Offline HPC 应使用
 独立的新配置与 run identity；PCCE smoke 使用
 `configs/polybench_pcce_supervisor_smoke.yaml`，正式 seed PCCE 使用
-`configs/polybench_pcce_supervisor_formal_seed.yaml`。
+`configs/polybench_pcce_supervisor_formal_seed_clean_20260826.yaml`。
 
 ## SIF 工具
 
@@ -62,7 +62,7 @@ Apptainer 临时目录，且不得选择仍在写入的 `.tmp` 镜像。
 - `hpc_run_status.py`：只读查询 persistent run 或 evaluator repair 的
   `result.json`、controller 状态、各 task batch 的 task/output/failure 数量、活动
   Slurm job 和当前用户队列。示例：
-  `conda run -n mini-swe python scripts/hpc_run_status.py --config configs/polybench_pcce_hpc_formal_seed.yaml --repair-id isolated-home-seed-repair-20260821`。
+  `conda run -n mini-swe python scripts/hpc_run_status.py --config configs/polybench_pcce_hpc_formal_seed_clean_20260826.yaml`。
 - `tools/login_apptainer_sif_preheat.py`：在 login node 串行准备 SIF，并增量保存
   GHCR OCI digest、源引用、SIF hash、状态和失败原因。新 pull 的前后 digest 一致时
   标为 `pull_attested`；已有缓存补录必须保持 `retrospective`，不得冒充拉取时证据。

@@ -1,6 +1,7 @@
 # New local supervisor identity for the operational contract-error
 # reclassification patch. The runtime config and persistent formal run remain
 # unchanged; only the clean source commit and local supervisor state are new.
+# Archived supervisor identity; retained for provenance only.
 schema_version: 1
 session: polybench-pcce-seed-formal-contract-retry-submit-20260818
 log: .local/hpc-supervisor/polybench-pcce-seed-formal-contract-retry-submit-20260818.log

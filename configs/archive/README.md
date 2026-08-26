@@ -7,6 +7,8 @@ directory, model budget, historical failure context, and referenced files.
 - `online_tests/`: dated Online GEPA smoke, resource, and resume runs.
 - `offline_gepa/`: paused offline GEPA pilots and runtime variants.
 - `pct_runs/`: paused PCT continuation, completion, and retry runs.
+- `polybench_pcce/`: superseded formal PCCE runtimes and supervisor identities
+  retained for diagnostic provenance only.
 - `gepa_legacy/`: superseded offline GEPA definitions.
 
 The top-level `configs/README.md` lists the active Online GEPA configs and the

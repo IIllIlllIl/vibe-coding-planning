@@ -209,6 +209,26 @@ session 中共观察到 8 条被 parser 拒绝的响应（0、2、4、5 或 7 �
 挂到 113-case config，否则其余 91 例会被 membership fail-closed 阻断。原始 PCE 验收后
 再用现有 22-case manifest-bound evaluator-only repair 隔离网络依赖，不重跑 Plan/Code；
 repair 与保守清洗完成前不冻结新的正式 label，也不启动 PCCE。
+2026-08-25 已新增 clean-run 专用的 dependency repair runtime；完成 clean PCE 后，
+原 22-case cache scope 与新 PCE 的 completed Plan/Code 交集为 21 cases，
+`transformers-27717` 因 Plan timeout 被排除。repair 配置
+`polybench_pce_hpc_dependency_cache_clean_20260825.yaml`：它指向
+`python113-v11-clean-boundary-v1-20260825`，保持该运行的 Plan/Code 语义不变，
+只增加冻结 dependency cache 与 Evaluate 禁网。下一轮 corrected seed PCCE 不修改或
+resume 历史 `seed-python111-20260817`；需等待本轮 PCE `tests_parsed` authority 冻结后
+生成新 snapshot/config/run identity，PC/CE Slurm 硬上限定为 45 分钟。
+2026-08-26 已验收 Keras 定向 retry：worker `5733691_112` 在 38m28s 内完成，
+`tests_parsed/resolved`，clean PCE 达到 113/113 原子输出。按冻结规则只保留 100 个
+`tests_parsed` 案例（67 resolved / 33 unresolved），13 个非 parsed 结果只作为 source
+exclusion 保存，不制造 unresolved label；placeholder policy 额外排除 0 个。新 snapshot
+为 `20260825_python100_cleanpce_testparsed_887d4ec9df49`，同时冻结带 raw output
+hash 的最小 ordered `paired_pce_outcomes.jsonl`；完整 trajectories 只留在 raw PCE，
+避免 PCCE membership 与 first-plan authority 分离或携带无关上下文。新 seed
+PCCE config/supervisor 分别为 `polybench_pcce_hpc_formal_seed_clean_20260826.yaml` 和
+`polybench_pcce_supervisor_formal_seed_clean_20260826.yaml`，新 run identity 为
+`seed-python100-clean-pce-v1-20260826`，每个 PC/CE worker 为 `1 CPU / 4G / 45min`。
+旧 111-case 正式/repair configs 已移动至 `configs/archive/polybench_pcce/`。尚未启动
+新 PCCE；启动前仍需完成并验收冻结的 21-case clean-PCE evaluator repair。
 该完整 preheat 已于 2026-08-23 正常结束：23/23 instances、70/71 artifacts，唯一
 失败严格为预期的 25636/ArthurZ Flax 401；22 个实例可用，SIF hash 无不一致，成功
 artifact 无 revision 缺失。正式 real-loader manifest 已冻结为

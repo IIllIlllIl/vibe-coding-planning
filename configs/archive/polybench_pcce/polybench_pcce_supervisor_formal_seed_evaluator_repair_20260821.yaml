@@ -1,6 +1,7 @@
 # Supervisor identity for the seed PCCE native-HOME Evaluate-only repair.
 # It reuses completed PC and Code checkpoints and never calls Checker, Planner,
 # or Code again. The repair has an independent output identity.
+# Archived supervisor identity; retained for provenance only.
 schema_version: 1
 session: polybench-pcce-seed-evaluator-repair-20260821
 log: .local/hpc-supervisor/polybench-pcce-seed-evaluator-repair-20260821.log

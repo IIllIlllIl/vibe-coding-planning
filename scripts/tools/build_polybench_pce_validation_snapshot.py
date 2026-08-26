@@ -156,6 +156,7 @@ def build_snapshot(
     repository_root: Path,
     expected_source_instances: int | None = None,
     expected_test_parsed_instances: int | None = None,
+    include_paired_pce_outcomes: bool = False,
 ) -> dict[str, Any]:
     source_snapshot = source_snapshot.resolve()
     pce_run = pce_run.resolve()
@@ -207,6 +208,7 @@ def build_snapshot(
         raise ValueError("PCE outputs do not cover the frozen instance universe")
 
     raw_cases: list[dict[str, Any]] = []
+    paired_pce_outcomes: list[dict[str, Any]] = []
     source_exclusions: list[dict[str, Any]] = []
     cleaning_exclusions: list[dict[str, Any]] = []
     for instance_id in ordered_ids:
@@ -269,6 +271,21 @@ def build_snapshot(
             },
         }
         raw_cases.append(case)
+        paired_pce_outcomes.append(
+            {
+                "schema_version": 1,
+                "instance_id": instance_id,
+                "row_sha256": str(wrapper["row_sha256"]),
+                "status": "completed",
+                "pce_status": "completed",
+                "attempt": output.get("attempt"),
+                "plan": plan,
+                "evaluator_result": evaluator,
+                "source_output_path": _relative(output_path, repository_root),
+                "source_output_sha256": _sha256(output_path),
+                "source_execution_fingerprint": fingerprint,
+            }
+        )
         placeholder = placeholder_reason(plan)
         if resolved and patch.strip() and placeholder:
             cleaning_exclusions.append(
@@ -304,6 +321,9 @@ def build_snapshot(
     _write_jsonl(validation_path, cleaned_cases)
     _write_json(exclusions_path, cleaning_exclusions)
     _write_json(source_exclusions_path, source_exclusions)
+    paired_outcomes_path = temporary / "paired_pce_outcomes.jsonl"
+    if include_paired_pce_outcomes:
+        _write_jsonl(paired_outcomes_path, paired_pce_outcomes)
 
     raw_resolved = sum(bool(case["resolved"]) for case in raw_cases)
     cleaned_resolved = sum(bool(case["resolved"]) for case in cleaned_cases)
@@ -364,6 +384,13 @@ def build_snapshot(
         "source_exclusions_file": source_exclusions_path.name,
         "source_exclusions_sha256": _sha256(source_exclusions_path),
     }
+    if include_paired_pce_outcomes:
+        manifest.update(
+            {
+                "paired_pce_outcomes_file": paired_outcomes_path.name,
+                "paired_pce_outcomes_sha256": _sha256(paired_outcomes_path),
+            }
+        )
     _write_json(temporary / "manifest.json", manifest)
     if output_dir.exists():
         existing = _read_json(output_dir / "manifest.json")
@@ -372,7 +399,10 @@ def build_snapshot(
             ("validation_sha256", "validation_file"),
             ("exclusions_sha256", "exclusions_file"),
             ("source_exclusions_sha256", "source_exclusions_file"),
+            ("paired_pce_outcomes_sha256", "paired_pce_outcomes_file"),
         ):
+            if field not in existing and field not in manifest:
+                continue
             current_path = output_dir / str(existing.get(filename_field, ""))
             if not current_path.is_file() or _sha256(current_path) != existing.get(field):
                 shutil.rmtree(temporary)
@@ -395,6 +425,14 @@ def main() -> int:
     parser.add_argument("--repository-root", type=Path, default=Path.cwd())
     parser.add_argument("--expected-source-instances", type=int)
     parser.add_argument("--expected-test-parsed-instances", type=int)
+    parser.add_argument(
+        "--include-paired-pce-outcomes",
+        action="store_true",
+        help=(
+            "freeze a source-hash-bound projection of the test-parsed PCE "
+            "outputs beside the validation rows for paired PCCE input"
+        ),
+    )
     args = parser.parse_args()
     manifest = build_snapshot(
         source_snapshot=args.source_snapshot,
@@ -403,6 +441,7 @@ def main() -> int:
         repository_root=args.repository_root,
         expected_source_instances=args.expected_source_instances,
         expected_test_parsed_instances=args.expected_test_parsed_instances,
+        include_paired_pce_outcomes=args.include_paired_pce_outcomes,
     )
     print(json.dumps(manifest, ensure_ascii=False, indent=2, sort_keys=True))
     return 0

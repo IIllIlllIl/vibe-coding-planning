@@ -1,7 +1,7 @@
-# Formal paired Plan-Check-Code-Evaluate evaluation of the frozen seed
-# guideline over all 111 cleaned PolyBench Python cases.
+# Archived Evaluate-only repair of the superseded diagnostic seed PCCE run.
+# PC and Code were never rerun.
 mode: polybench_pcce
-purpose: formal_seed_evaluation
+purpose: formal_seed_dependency_cache_evaluator_repair
 
 paths:
   source_snapshot: output/SWE-PolyBench/polybench-pce-inputs/20260814_python113_v11_8c7d9485d1d0
@@ -9,7 +9,7 @@ paths:
   validation_snapshot: output/SWE-PolyBench/polybench-guideline-validation-datasets/20260815_python111_testparsed_26dad63b5cf3
   pce_outcomes: output/SWE-PolyBench/polybench-pce-runs/formal/python113-v11-pce-20260814/raw_pce_outcomes.jsonl
   guideline: configs/frozen_guidelines/20260817_seed-b8c1-b8c2-b3x3c3-b3x3c6_0e1f8d7bd876/seed.md
-  pce_runtime_config: configs/polybench_pce_hpc_formal.yaml
+  pce_runtime_config: configs/polybench_pce_hpc_dependency_cache_formal_v2.yaml
   checker_runtime_config: configs/gepa_verified_rules.yaml
   run_dir: output/SWE-PolyBench/polybench-pcce-runs/formal/seed-python111-20260817
 
@@ -17,7 +17,6 @@ pcce:
   guideline_label: seed
   validation_file: validation.jsonl
   max_review_rejections: 3
-  # Empty means every member of the frozen 111-case validation snapshot.
   instance_ids: []
 
 prompts:
@@ -58,7 +57,6 @@ prompts:
     the replacement plan needs to address. Submission finishes only when the
     executed command writes COMPLETE_TASK_AND_SUBMIT_FINAL_OUTPUT as its first
     output line. Do not run another command after submitting.
-
   checker_instance: |
     <issue>
     {{task}}
@@ -74,7 +72,6 @@ prompts:
     {{retry_feedback}}
     </retry_feedback>
     {% endif %}
-
   plan_revision_system: |
     You are a software engineer revising a plan that another agent will
     implement. The Checker owns the decision about whether the plan should
@@ -94,7 +91,6 @@ prompts:
 
     ## Plan Format
     {{nrpv_block}}
-
   plan_revision_instance: |
     {{task}}
 
@@ -118,5 +114,5 @@ hpc:
   python_module: lang/Python/3.11
   container_module: tools/Apptainer
   python_bin: python3
-  job_name_prefix: polybench-pcce-seed
-  worker_config_path: configs/polybench_pcce_hpc_formal_seed.yaml
+  job_name_prefix: polybench-pcce-seed-depcache-v2
+  worker_config_path: configs/polybench_pcce_hpc_dependency_cache_formal_seed_v2.yaml

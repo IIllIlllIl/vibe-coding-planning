@@ -40,7 +40,7 @@ escalated network access.
 | PolyBench PCE controller slice | 1 CPU / 4G | 10min; submits, collects, or selectively retries one frozen batch |
 | PolyBench PCE array element | 1 CPU / 4G | 125min hard upper bound; one instance with fresh Plan, Code, and Evaluate containers |
 | PolyBench PCCE controller slice | 1 CPU / 4G | 10min; collects or submits one PC review wave or the final CE batch |
-| PolyBench PCCE PC/CE array element | 1 CPU / 4G | 125min hard upper bound; one case, with no project-level array concurrency cap |
+| PolyBench PCCE PC/CE array element | 1 CPU / 4G | The next corrected formal identity uses a 45min hard upper bound; historical diagnostic configs retain their frozen 125min value |
 
 Each array element executes one PCT rollout or one Reviewer. Synthesis uses a
 single-element array so it follows the same submission/status contract.
@@ -88,9 +88,19 @@ polls every ten minutes and advances only the new
 `python113-v11-clean-boundary-v1-20260825` identity. The first pass intentionally
 uses the ordinary evaluator. Do not enable a partial dependency manifest on
 the full batch: the evaluator fails closed for cases outside that manifest.
-After the raw PCE is reviewed, use the already frozen 22-case subset only via a
-separate evaluator-only repair identity. Do not launch PCCE before the clean
-PCE evidence and any repair overlay have been accepted.
+After the raw PCE is reviewed, intersect the frozen 22-case dependency scope
+with completed clean-PCE Plan/Code. The resulting 21-case subset excludes
+`transformers-27717`, whose Plan timed out and which is outside the paired
+100-case universe. Use that subset only via a separate evaluator-only repair
+identity. Do not launch PCCE before the clean PCE evidence and repair overlay
+have been accepted.
+The prepared runtime for that clean repair is
+`configs/polybench_pce_hpc_dependency_cache_clean_20260825.yaml`; launch it
+with the frozen `evaluator_repair_subset.json` and a new repair ID. It points to
+the corrected run directory and deliberately leaves the raw run untouched.
+Its unattended launch identity is
+`configs/polybench_pce_supervisor_dependency_cache_clean_20260826.yaml`, which
+fixes both the repair ID and frozen subset path.
 
 When evaluator semantics change but completed Plan/Code evidence remains the
 intended fixed input, use the wrapper's explicit `--resume-evaluator ID` mode.
@@ -149,23 +159,36 @@ rejection increments that counter; the third rejection terminates the method
 without Code. Each PC/CE batch submits all eligible cases without `%N`, leaving
 scheduling to Slurm.
 
+The corrected formal PCCE is prepared as
+`configs/polybench_pcce_hpc_formal_seed_clean_20260826.yaml` with the new
+`seed-python100-clean-pce-v1-20260826` run identity. It selects exactly the 100
+members of the frozen clean-PCE `tests_parsed` snapshot and uses a 45-minute
+PC/CE worker hard limit. The superseded 111-case configs are archived under
+`configs/archive/polybench_pcce/`; their old inputs and 125-minute setting are
+historical provenance.
+
 PCCE is advanced unattended through the same local `tmux + caffeinate`
 supervisor service as GEPA, using
 `configs/polybench_pcce_supervisor_smoke.yaml` for the completed platform smoke
-or `configs/polybench_pcce_supervisor_formal_seed.yaml` for the prepared formal
-seed run. The shared resume loop accepts
+or `configs/polybench_pcce_supervisor_formal_seed_clean_20260826.yaml` for the
+prepared corrected seed run. The shared resume loop accepts
 the PCCE runtime through `--config`, observes `hpc_tasks/**/task_state.json`,
 and submits a new 10-minute Controller only when no Controller or worker is
 active. It has no iteration target and stops on terminal `result.json` or a
 blocking `controller_status.json`. A ten-minute local poll consumes no HPC
 allocation.
 
+When the frozen paired PCE bundle is already inside the validation snapshot,
+the submit wrapper stages that directory once. Historical layouts whose PCE
+bundle lives elsewhere retain the single-file staging path. Never stage both
+sources onto the same remote directory.
+
 For a PCCE evaluator-only repair, pass the same `--resume-evaluator ID` to the
 PCCE wrapper and supervisor. The shared resume loop then monitors
 `RUN/evaluator_repairs/ID`, not the already-completed parent run. The repair
 validates and re-identifies completed PCCE Plan/Code checkpoints and invokes no
-Checker, Planner, or Code Agent. The formal seed repair launch config is
-`configs/polybench_pcce_supervisor_formal_seed_evaluator_repair_20260821.yaml`.
+Checker, Planner, or Code Agent. The superseded diagnostic repair launch config
+is archived under `configs/archive/polybench_pcce/`.
 
 Evaluator repair can be restricted reproducibly with
 `--resume-evaluator-instances-file PATH`. The JSON file is parsed by the
@@ -207,9 +230,9 @@ hashes, binds only the case cache read-only, disables container networking, and
 records the manifest hash in both evaluator semantics and raw output.
 Incomplete download transfers may resume before the cache is frozen; formal
 Evaluate does not use repeated draws to average over network fluctuation. The
-prepared formal repair runtimes are
+archived diagnostic formal repair runtimes are
 `configs/polybench_pce_hpc_dependency_cache_formal_v2.yaml` and
-`configs/polybench_pcce_hpc_dependency_cache_formal_seed_v2.yaml`. They reuse
+`configs/archive/polybench_pcce/polybench_pcce_hpc_dependency_cache_formal_seed_v2.yaml`. They reuse
 the existing formal run directories and fixed upstream checkpoints under new
 repair identities; only Evaluate receives the cache and disabled network.
 
@@ -217,8 +240,7 @@ For a read-only progress snapshot without invoking Codex or submitting work:
 
 ```bash
 conda run -n mini-swe python scripts/hpc_run_status.py \
-  --config configs/polybench_pcce_hpc_formal_seed.yaml \
-  --repair-id isolated-home-seed-repair-20260821
+  --config configs/polybench_pcce_hpc_formal_seed_clean_20260826.yaml
 ```
 
 The command reports the final/controller status, each persistent task batch's
@@ -296,11 +318,12 @@ output/SWE-PolyBench/polybench-pcce-runs/smoke/   platform-flow evidence only
 output/SWE-PolyBench/polybench-pcce-runs/formal/  formal frozen-method evidence
 ```
 
-The prepared first formal identity is
-`polybench-pcce-runs/formal/seed-python111-20260817`, driven by
-`configs/polybench_pcce_hpc_formal_seed.yaml` and its matching supervisor
-launch config. It selects all 111 cleaned cases and the frozen seed guideline;
-it must not reuse the completed smoke run directory.
+The corrected prepared formal identity is
+`polybench-pcce-runs/formal/seed-python100-clean-pce-v1-20260826`, driven by
+`configs/polybench_pcce_hpc_formal_seed_clean_20260826.yaml` and its matching
+supervisor. It selects all 100 cases frozen from the clean PCE's parsed-test
+intersection and the frozen seed guideline; it does not reuse the completed
+smoke or archived 111-case diagnostic directory.
 
 Image-download provenance remains under the Iris operations directory and is
 not a PCE run output. A reviewed copy is staged into the frozen input snapshot;
