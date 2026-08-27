@@ -257,6 +257,12 @@ outputs，14 resolved / 7 unresolved / 0 unknown，未发生 workflow retry；�
 99-case input、prompts、budgets、attempts、Code/Evaluate 和资源保持 seed 相同。其独立
 21-case dependency repair config/supervisor 也在普通 candidate 结果产生前冻结，禁止
 根据普通分数选择是否 repair。
+2026-08-27 candidate 2 普通运行完成为 `62 resolved / 36 unresolved / 1
+operational_incomplete`。唯一 incomplete 为 `transformers-26164`：第二轮 PC task 三次
+attempt 均无 worker output，未产生 CE/Code checkpoint。通用 21-case dependency scope
+包含该例，因此不能直接交给 Evaluate-only repair；本轮冻结派生的
+`evaluator_repair_subset_clean99_b8c2_ce20.json`，只取其余 20 个具备 completed CE
+证据的案例。26164 保持 operational incomplete，不重跑 Agent、不制造 evaluator label。
 该完整 preheat 已于 2026-08-23 正常结束：23/23 instances、70/71 artifacts，唯一
 失败严格为预期的 25636/ArthurZ Flax 401；22 个实例可用，SIF hash 无不一致，成功
 artifact 无 revision 缺失。正式 real-loader manifest 已冻结为

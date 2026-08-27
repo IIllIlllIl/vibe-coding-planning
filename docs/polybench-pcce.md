@@ -380,8 +380,19 @@ new `b8-candidate2-python99-clean-pce-v1-20260826` run root. Dataset, baseline,
 Checker/Planner prompts, rejection budget, operational attempts, Code/Evaluate
 runtime, and resources are byte-identical to seed; only guideline text and
 run/job identity change. Its separate dependency-cache runtime and supervisor
-are also frozen before launch and must apply the same 21-case overlay policy
-after the ordinary candidate run completes.
+were prepared before launch and must apply the same dependency-cache evaluator
+policy after the ordinary candidate run completes, restricted to cases with
+completed candidate CE evidence.
+
+The ordinary candidate-2 run completed on 2026-08-27 with 99 cases: 62
+resolved, 36 unresolved, and one operationally incomplete case. The incomplete
+case, `huggingface__transformers-26164`, exhausted three workflow attempts in
+PC review 2 without producing a worker output, so it has no accepted Plan/Code
+CE checkpoint and cannot enter evaluator-only repair. The repair membership is
+therefore frozen as `evaluator_repair_subset_clean99_b8c2_ce20.json`, the exact
+20-case intersection of the common 21-case dependency scope and candidate-2
+completed CE evidence. This preserves the incomplete outcome and changes no
+upstream Agent result.
 
 The 2026-08-24 repository-baseline audit broadens that limitation. The formal
 PCE/PCCE prompt's final `git add -A` contradicts its earlier instruction to

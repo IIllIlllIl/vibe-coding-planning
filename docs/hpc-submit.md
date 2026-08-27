@@ -218,8 +218,12 @@ Candidate 2 uses
 Its normal run must complete before launching the separately frozen
 `polybench_pcce_supervisor_formal_b8_candidate2_dependency_cache_clean_20260826.yaml`;
 the latter uses the same `clean-depcache-v1-20260826` repair ID within the new
-candidate run root and the same clean99 subset. Never point the seed repair
-config at the candidate run or reuse seed checkpoints.
+candidate run root. Its ordinary run completed with one operationally incomplete
+PC case, `transformers-26164`, which has no Code/Evaluate checkpoint. The repair
+therefore uses the frozen 20-case CE-evidence intersection
+`evaluator_repair_subset_clean99_b8c2_ce20.json`; it does not rerun or relabel
+that incomplete case. Never point the seed repair config at the candidate run
+or reuse seed checkpoints.
 
 External test dependencies are not part of a SIF preheat. The planned
 PolyBench dependency preheat keeps official SIFs unchanged and builds a

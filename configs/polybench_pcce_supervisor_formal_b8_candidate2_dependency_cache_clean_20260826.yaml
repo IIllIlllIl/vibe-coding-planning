@@ -21,5 +21,5 @@ arguments:
   - --resume-evaluator
   - clean-depcache-v1-20260826
   - --resume-evaluator-instances-file
-  - configs/frozen_dependency_caches/polybench_evaluator_dependencies_formal_v2_20260823/evaluator_repair_subset_clean99.json
+  - configs/frozen_dependency_caches/polybench_evaluator_dependencies_formal_v2_20260823/evaluator_repair_subset_clean99_b8c2_ce20.json
   - --submit

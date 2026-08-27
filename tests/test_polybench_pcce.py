@@ -219,6 +219,30 @@ def test_b8_candidate2_pcce_changes_only_guideline_and_run_identity() -> None:
     assert repair.pce.dependency_cache is not None
     assert repair.pce.dependency_cache.network_disabled is True
 
+    subset_path = (
+        ROOT
+        / "configs/frozen_dependency_caches/"
+        "polybench_evaluator_dependencies_formal_v2_20260823/"
+        "evaluator_repair_subset_clean99_b8c2_ce20.json"
+    )
+    subset = load_evaluator_repair_subset(
+        subset_path,
+        expected_dependency_manifest_sha256=(
+            repair.pce.dependency_cache.manifest_sha256
+        ),
+    )
+    assert len(subset) == 20
+    assert "huggingface__transformers-26164" not in subset
+    clean99_subset = load_evaluator_repair_subset(
+        subset_path.with_name("evaluator_repair_subset_clean99.json"),
+        expected_dependency_manifest_sha256=(
+            repair.pce.dependency_cache.manifest_sha256
+        ),
+    )
+    assert set(clean99_subset) - set(subset) == {
+        "huggingface__transformers-26164"
+    }
+
 
 def test_review_budget_advances_only_for_completed_rejection() -> None:
     cases = [_case("a"), _case("b"), _case("c")]
