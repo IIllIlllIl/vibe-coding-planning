@@ -6,11 +6,11 @@
 #
 # Usage:
 #   bash scripts/run_batch.sh           # real run
-#   bash scripts/run_batch.sh --config configs/polybench_full199_pct.yaml
+#   bash scripts/run_batch.sh --config configs/archive/pct_runs/polybench_full199_pct.yaml
 #   bash scripts/run_batch.sh --dry-run # list SKIP/RUN, no pipeline calls
 #   bash scripts/run_batch.sh --instances FILE  # override instance list
 #   bash scripts/run_batch.sh --run-analysis --analysis-model MODEL --analysis-output-dir DIR
-#   bash scripts/run_batch.sh --analysis-only --analysis-config configs/analysis_kimi_opencode.yaml
+#   bash scripts/run_batch.sh --analysis-only --analysis-config configs/archive/legacy_analysis/analysis_kimi_opencode.yaml
 #   bash scripts/run_batch.sh --checker-comparison --parallel 3
 #   bash scripts/run_batch.sh --checker-recovery --parallel 1
 #   bash scripts/run_batch.sh --gepa-rules --gepa-config configs/gepa_verified_rules.yaml

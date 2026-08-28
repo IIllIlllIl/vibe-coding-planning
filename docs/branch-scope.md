@@ -50,13 +50,17 @@ excluded from v1 optimization. The first implementation must use hard labels
 and per-example 0/1 candidate scores; soft labels and confidence weighting are
 out of scope.
 
-## Temporarily retained historical paths
+## Archived surface And Temporarily Retained Code
 
-This first branch stage deliberately retains Online GEPA, PCT/PCC, Pro, old
-analysis modules, archives, and superseded configs. Retention prevents premature
-deletion before the new Behavioral path exposes its true shared dependencies.
-These paths are not active research authority and should not appear in ordinary
-Agent searches or new design citations.
+Standalone Online GEPA/PCT/old-analysis authority documents, top-level configs,
+and Online resource-pilot scripts are behind `docs/archive/`,
+`configs/archive/`, and `scripts/archive/`. This reduces ordinary search noise
+without deleting their history.
+
+Online GEPA, PCT/PCC, Pro, and old analysis source modules remain temporarily
+present. Mixed shared entrypoints also remain when moving them would require
+code-level dependency decisions. These paths are not active research authority
+and should not appear in ordinary Agent searches or new design citations.
 
 Broad pruning begins only after all of the following exist:
 
@@ -68,7 +72,7 @@ Broad pruning begins only after all of the following exist:
 - an import/reachability report from the retained Offline, PCE/PCCE, and new
   Behavioral entry points.
 
-Pruning must be a separate commit from Behavioral implementation.
+Further code pruning must be a separate commit from Behavioral implementation.
 
 ## Frozen evidence
 

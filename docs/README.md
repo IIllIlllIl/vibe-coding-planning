@@ -14,15 +14,13 @@ Read in this order:
 | Document | Authority |
 |---|---|
 | [`../README.md`](../README.md) | Project overview, methods, quick start, and entry points |
+| [`branch-scope.md`](branch-scope.md) | Active Behavioral, retained foundation, frozen evidence, and archive boundary |
 | [`../project_issues.md`](../project_issues.md) | Current progress, open risks, next-run plan, and acceptance checks |
-| [`requirement-document.md`](requirement-document.md) | Online GEPA behavioral requirements and acceptance criteria |
-| [`architecture.md`](architecture.md) | Current modules, data flow, and ownership boundaries |
-| [`gepa-rule-optimization.md`](gepa-rule-optimization.md) | Online GEPA optimization semantics and evidence contract |
 | [`offline-gepa.md`](offline-gepa.md) | Offline GEPA Checker boundary, metric, stopping, artifacts, and resume contract |
 | [`swe-chat-preheat.md`](swe-chat-preheat.md) | Behavioral v1 frozen dataset/repository acquisition, identity, verification, and login-preheat boundary |
 | [`offline-polybench-validation.md`](offline-polybench-validation.md) | Current PolyBench-199 image preparation, PCE regeneration, exact-image provenance, and guideline-only generalization boundary |
 | [`polybench-pcce.md`](polybench-pcce.md) | Current paired PolyBench Plan-Check-Code-Evaluate deployment evaluation, including accepted smoke, formal seed run, review, and workflow retry semantics |
-| [`hpc-submit.md`](hpc-submit.md) | Current ULHPC submission, supervisor, and FairShare operations |
+| [`hpc-submit.md`](hpc-submit.md) | Behavioral-branch credential, preheat, retained Slurm, and FairShare safety |
 | [`../configs/README.md`](../configs/README.md) | Runtime-versus-launch configuration ownership and active config index |
 
 ## Reusable Knowledge
@@ -52,7 +50,7 @@ source of current runtime behavior:
 
 ## Archive
 
-`archive/` preserves superseded plans, mixed-design documents, reports, and
-migration records. Archive documents are non-authoritative. Reusable decisions
-must be cited through `knowledge/`, not by making an Agent reconstruct the old
-methodology.
+`archive/` preserves superseded Online/PCT/PCC plans, mixed-design documents,
+reports, and migration records. Archive documents are non-authoritative.
+Reusable decisions must be cited through `knowledge/`, not by making an Agent
+reconstruct the old methodology.

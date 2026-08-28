@@ -1,114 +1,50 @@
-# `scripts/` 运行入口
+# Script Entry Points
 
-当前 GEPA 和 PCCE HPC 采用一个本地 supervisor、短时 controller 和独立 Slurm
-Agent tasks。旧 Offline 24h 单作业和自动修复 preheat watchdog 已删除，不再作为
-运行入口。
+## Active Behavioral Source Acquisition
 
-## Controller 与 supervisor
+- `tools/freeze_swe_chat_preheat_inputs.py` freezes the complete fixed-revision
+  Hub file manifest and the ordered repository request manifest. Formal preheat
+  consumes those JSON files rather than reinterpreting Parquet.
+- `tools/login_swe_chat_preheat.py` downloads and verifies the dataset and Git
+  mirrors on Iris with a single-writer lock, bounded retries, resumable state,
+  and atomic promotion.
+- `swe_chat_preheat_service.py` runs that bounded login preheater through local
+  `tmux + caffeinate`. It submits no Slurm job and invokes no Agent or LLM.
 
-- `hpc_submit_batch.sh`：通过 `ulhpc-submit` 同步代码、stage dataset、连接
-  persistent run directory，并提交一个短时 GEPA controller。默认 dry-run。
-- `hpc_resume_loop.py`：读取远端统一的 `controller_status.json`、
-  `iteration_progress.json` 和 `hpc_tasks/**/task_state.json`，只在没有活动
-  controller/worker 且状态可恢复时提交下一段 controller。它接受 GEPA 的
-  `--gepa-config` 或其他 workflow 的 `--config`，但不解释 Agent/实验阶段语义。
-  GEPA iteration progress
-  是完成 proposal 的数量（`GEPA state.i + 1`），不是零基 iteration 索引；
-  `result.json` 缺少顶层状态时由显式 `controller_status.json` 判定完成。
-- `hpc_supervisor_service.py`：使用 `tmux + caffeinate` 承载本地 supervisor。
-- `internal/run_gepa_rules.py`：controller 内部调用的统一 Online/Offline GEPA
-  Python 入口。
+The authority is `docs/swe-chat-preheat.md`. Starting the service remains a
+separate explicitly approved operation after read-only remote preflight.
 
-正式运行应使用受版本控制的 supervisor launch config，不要从历史日志拼接启动
-参数。Online 当前配置是 `configs/online_gepa_supervisor.yaml`；Offline HPC 应使用
-独立的新配置与 run identity；PCCE smoke 使用
-`configs/polybench_pcce_supervisor_smoke.yaml`，正式 seed PCCE 使用
-`configs/polybench_pcce_supervisor_formal_seed_clean_20260826.yaml`。完成后的
-seed dependency-cache Evaluate-only repair 使用独立的
-`configs/polybench_pcce_supervisor_formal_seed_dependency_cache_clean_20260826.yaml`；
-它不会重跑 Checker、Planner 或 Code。Candidate 2 使用
-`configs/polybench_pcce_supervisor_formal_b8_candidate2_clean_20260826.yaml`，其
-dependency-cache repair 也在 candidate 启动前以独立 supervisor 配置冻结。
+## Retained Offline And PolyBench Infrastructure
 
-## SWE-chat source acquisition
+- `hpc_submit_batch.sh`, `hpc_resume_loop.py`, and
+  `hpc_supervisor_service.py` are shared controller/supervisor infrastructure
+  retained for Offline reproducibility.
+- `internal/run_gepa_rules.py` is the retained Offline GEPA controller entry.
+- `run_offline_check_only.py` is the additive fixed-guideline evaluation path.
+- `hpc_submit_polybench_pce.sh`, `run_polybench_pce_hpc.py`,
+  `hpc_submit_polybench_pcce.sh`, and `run_polybench_pcce_hpc.py` preserve the
+  completed PCE/PCCE platform.
+- `hpc_run_status.py` is the read-only status entry for retained persistent
+  workflows.
+- SIF and dependency preheaters remain because frozen PolyBench evidence and
+  evaluator reproduction still reach them. They are not part of SWE-chat
+  acquisition.
 
-- `tools/freeze_swe_chat_preheat_inputs.py`：从固定 Hugging Face revision 和
-  已验证的 `repositories.parquet` 一次性冻结完整 source-file manifest 与有序的
-  205 项 repository request manifest。正式 preheat 不重新解释 Parquet。
-- `tools/login_swe_chat_preheat.py`：在 Iris login node 上以单 writer 下载完整
-  SWE-chat snapshot，并串行准备 Git bare mirrors。它区分 semantic identity 与每次
-  invocation 的 operational policy，使用 source-provided hash 加本地 observed
-  SHA-256 验证 dataset，并原子提升完成 artifact。
-- `swe_chat_preheat_service.py`：通过本地 `tmux + caffeinate` 承载有界、可恢复的
-  SWE-chat login preheat。它不提交 Slurm，不调用 LLM，也不执行 episode extraction。
+Completed workflows are not authorized launch defaults. Do not infer a new run
+from the presence of an executable script.
 
-权威边界与命令见 `docs/swe-chat-preheat.md`。正式启动前仍需独立批准 remote
-credential/Python/disk preflight 和下载操作。
+## Historical Archive
 
-## SIF 工具
+- `archive/online_gepa/` contains the former Online resource-pilot preparation,
+  worker, and submit scripts.
+- `archive/legacy_entrypoints/` contains superseded checker, retry, migration,
+  and OpenCode entrypoints.
+- `archive/docker_cleanup_daemon/` contains the retired cleanup daemon.
 
-- `tools/prepare_apptainer_sifs.py`：列出并串行准备某个 GEPA 配置所需的 SIF。
-- `tools/submit_apptainer_sif_preheat.sh`：提交一个明确、低资源的单次 preheat。
-- `tools/hpc_sif_preheat_loop.py`：历史切片工具；除非明确授权，不应作为无人值守
-  自动提交入口。
-- `tools/login_apptainer_sif_preheat.py` 和
-  `tools/login_sif_preheat_watchdog.py`：历史 login-node 工具，不是正式运行默认
-  路径。
+`run_batch.sh` and `long_run_watchdog.py` remain temporarily at top level
+because they mix historical behavior with references still reached by retained
+Offline tests. They are not current entrypoints and will be considered only in
+the later import/reachability cleanup.
 
-在启动 worker array 前先检查共享 SIF cache。不要让大量 worker 并发拉取缺失
-镜像，也不要并发运行多个 preheat writer。PCE 可以和单个 login preheater 并行，
-但配置只能选择已经完整落盘并冻结 hash 的 SIF；preheater 与 PCE 必须使用不同的
-Apptainer 临时目录，且不得选择仍在写入的 `.tmp` 镜像。
-
-- `tools/freeze_offline_guideline_bundle.py`：按来源 candidate index 精确冻结 seed 与
-  candidates 1-3，保留文本 hash 和已完成 Offline run provenance。
-- `run_offline_check_only.py`：读取独立的 `mode: offline_check_only` 配置，把冻结的
-  guideline × validation cases 提交为一个 Slurm array；复用现有 Checker attempts，
-  但不调用 GEPA 或 Reflection。
-- `tools/freeze_polybench_pce_source.py`：从固定 revision 的官方 CSV 冻结
-  PolyBench Python source universe、原始 row、Dockerfile hash 与 task-list identity。
-- `run_polybench_pce_hpc.py`：推进一次独立的 PolyBench PCE controller。每个实例是
-  一个不带 `%N` 的 Slurm array element；Plan/Code/Evaluate 分容器，三次总 attempts，
-  耗尽只记录 incomplete raw evidence，不生成最终 validation label。每个完整 phase
-  先写 identity-bound 原子 checkpoint，再做 worker 侧 best-effort cleanup；cleanup
-  不会使已完成 phase 在下一 attempt 中重跑。该入口不经过 Online GEPA rollout。
-- `hpc_submit_polybench_pce.sh`：通过 `ulhpc-submit` stage 冻结的 PCE source/image
-  manifest、连接 persistent run directory，并推进一个 `1 CPU / 4G / 10min`
-  controller slice。默认 dry-run；重复使用同一 config 即收集或重试同一
-  fingerprint，不需要散装远端命令。
-- `hpc_submit_polybench_pcce.sh --resume-evaluator ID`：从已完成的 PCCE
-  Plan/Code checkpoint 建立独立 Evaluate-only repair；不重跑 Checker、Planner、Code，
-  不覆盖原始 CE evidence。配合 repair 专属 supervisor config 使用。
-- `hpc_run_status.py`：只读查询 persistent run 或 evaluator repair 的
-  `result.json`、controller 状态、各 task batch 的 task/output/failure 数量、活动
-  Slurm job 和当前用户队列。示例：
-  `conda run -n mini-swe python scripts/hpc_run_status.py --config configs/polybench_pcce_hpc_formal_seed_clean_20260826.yaml`。
-- `tools/login_apptainer_sif_preheat.py`：在 login node 串行准备 SIF，并增量保存
-  GHCR OCI digest、源引用、SIF hash、状态和失败原因。新 pull 的前后 digest 一致时
-  标为 `pull_attested`；已有缓存补录必须保持 `retrospective`，不得冒充拉取时证据。
-  当前 Python-199 操作用 `--remote-images-json` 覆盖 GEPA dataset 的镜像列表；传入的
-  GEPA config 只提供 Apptainer runtime 和 SIF cache。manifest 每个 image 后原子更新，
-  schema 2 保存完整 requested universe、每次 invocation、每次失败 attempt 和
-  `complete` 状态；subset retry 不会缩小 universe，已有 `pull_attested` 也不会被
-  cached audit 降级。GHCR repository 名会规范化为小写，但 tag 保持不变。
-- `tools/login_polybench_dependency_preheat.py`：在 Iris login node 内逐个使用案例的
-  frozen SIF 下载 evidence-derived Hugging Face 依赖；依赖写入显式 bind 的独立 cache，
-  每个 artifact 冻结 revision 并用断网容器复核。它不修改 SIF，也不调用 LLM。
-- `tools/freeze_polybench_dependency_cache.py`：只读扫描完成的远端 cache，冻结成功
-  artifact revision、逐文件 SHA-256、SIF identity 与 evaluator membership；不下载、
-  不执行评估。
-- `tools/finalize_polybench_pce_validation_snapshot.py`：从不可变 clean-PCE paired
-  snapshot 派生最终验证快照；只接受完整的 Evaluate-only repair，逐例验证 source row
-  与 Plan 未改变，显式覆盖 evaluator 结果，并将预先记录的环境排除写入独立 provenance。
-
-## 安全与资源
-
-- 所有本地 Python 命令使用 `conda run -n mini-swe ...`。
-- DeepSeek key 只从 Iris 上权限受限的 env 文件加载，不进入参数、配置或日志。
-- Controller、Checker、initial Reflection 和按需 contamination repair 默认均为
-  `1 CPU / 4G`；每次 Agent 调用对应一个 task。
-- PolyBench PCE worker 使用 `1 CPU / 4G / 125min` hard upper bound；正常完成后进程
-  直接退出并释放 allocation，不保留专门的收尾时间窗。
-- Offline Checker 一次提交完整 batch；每个 Agent 是独立 Slurm array element，
-  项目不添加 `%N` 并发上限，由 Slurm 按队列和集群策略调度。
-- 每次变更 HPC 配置必须使用新的 run identity；不得用新语义接管旧 run directory。
+All Python commands use `conda run -n mini-swe`. No LLM, GEPA, Docker,
+Apptainer, HPC, PCE, or PCCE operation starts without explicit authorization.

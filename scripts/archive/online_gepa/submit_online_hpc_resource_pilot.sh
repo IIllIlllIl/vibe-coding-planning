@@ -30,7 +30,7 @@ INSTANCE_IDS=()
 usage() {
   cat <<'USAGE'
 Usage:
-  bash scripts/tools/submit_online_hpc_resource_pilot.sh [options]
+  bash scripts/archive/online_gepa/submit_online_hpc_resource_pilot.sh [options]
 
 Online pilot options:
   --config PATH          Online GEPA config file
@@ -61,10 +61,10 @@ Slurm / ulhpc-submit options:
 
 Examples:
   # 1-minute smoke to verify sync/module/bootstrap behavior.
-  bash scripts/tools/submit_online_hpc_resource_pilot.sh --time 00:01:00 --submit
+  bash scripts/archive/online_gepa/submit_online_hpc_resource_pilot.sh --time 00:01:00 --submit
 
   # 20-minute resource measurement pilot.
-  bash scripts/tools/submit_online_hpc_resource_pilot.sh --time 00:20:00 --submit
+  bash scripts/archive/online_gepa/submit_online_hpc_resource_pilot.sh --time 00:20:00 --submit
 USAGE
 }
 
@@ -185,7 +185,7 @@ if [[ "$TASK_INDEX" -ge "$LIMIT" ]]; then
   exit 2
 fi
 
-REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)"
 CONFIG_ABS="$(python -c "from pathlib import Path; print((Path('$REPO_ROOT') / '$CONFIG').resolve())")"
 if [[ ! -f "$CONFIG_ABS" ]]; then
   echo "ERROR: config not found: $CONFIG" >&2
@@ -367,7 +367,7 @@ test -f "$DATASET_REL/manifest.json" || {
   exit 2
 }
 $REMOTE_INSTALL_DEPS
-python3 scripts/tools/run_online_hpc_resource_worker.py \
+python3 scripts/archive/online_gepa/run_online_hpc_resource_worker.py \
   --config "$CONFIG_REL" \
   --split "$SPLIT" \
   --limit "$LIMIT" \

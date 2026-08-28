@@ -15,11 +15,13 @@ from pathlib import Path
 import sys
 from typing import Sequence
 
-REPO_ROOT = Path(__file__).resolve().parents[2]
+REPO_ROOT = Path(__file__).resolve().parents[3]
 if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
 
-from scripts.tools.prepare_online_hpc_resource_pilot import _select_cases  # noqa: E402
+from scripts.archive.online_gepa.prepare_online_hpc_resource_pilot import (  # noqa: E402
+    _select_cases,
+)
 from src.optimization.online_config import load_online_optimization_config  # noqa: E402
 from src.optimization.online_dataset import load_online_snapshot  # noqa: E402
 from src.optimization.online_hpc_executor import OnlineRolloutBatchStore  # noqa: E402

@@ -92,7 +92,7 @@ from src.optimization.reflection import (
 from src.optimization.report import write_cost_report, write_report
 from src.optimization.runner import OptimizationRunFailed, run_optimization
 from src.optimization.resume import IncompatibleOptimizationRun
-from scripts.tools.prepare_online_hpc_resource_pilot import prepare_pilot
+from scripts.archive.online_gepa.prepare_online_hpc_resource_pilot import prepare_pilot
 
 
 def _record(instance_id: str, split: str, *, resolved: bool = True) -> dict:
@@ -451,7 +451,7 @@ def test_online_hpc_6to8_config_uses_formal_snapshot_without_instance_subset(
     repo_root = Path(__file__).resolve().parents[2]
 
     config = load_online_optimization_config(
-        repo_root / "configs" / "gepa_online_planning_hpc.yaml"
+        repo_root / "configs" / "archive" / "online_gepa" / "gepa_online_planning_hpc.yaml"
     )
 
     assert "verified-round1-gepa-datasets/20260614_482_fdc056ae85df" in str(
@@ -489,7 +489,9 @@ def test_online_hpc_6to8_config_uses_formal_snapshot_without_instance_subset(
 )
 def test_current_online_configs_omit_retired_plan_code_limits(config_name):
     repo_root = Path(__file__).resolve().parents[2]
-    raw = yaml.safe_load((repo_root / "configs" / config_name).read_text())
+    raw = yaml.safe_load(
+        (repo_root / "configs" / "archive" / "online_gepa" / config_name).read_text()
+    )
 
     for phase in ("plan", "code"):
         assert "max_steps" not in raw[phase]
@@ -506,7 +508,9 @@ def test_current_online_configs_omit_retired_plan_code_limits(config_name):
 )
 def test_current_online_code_prompt_delegates_patch_selection_to_agent(config_name):
     repo_root = Path(__file__).resolve().parents[2]
-    raw = yaml.safe_load((repo_root / "configs" / config_name).read_text())
+    raw = yaml.safe_load(
+        (repo_root / "configs" / "archive" / "online_gepa" / config_name).read_text()
+    )
     prompt = raw["prompts"]["code_instance"]
 
     assert "may create or modify tests" in prompt
@@ -526,7 +530,9 @@ def test_current_online_reviewer_prompt_keeps_raw_evidence_available(
     config_name,
 ):
     repo_root = Path(__file__).resolve().parents[2]
-    raw = yaml.safe_load((repo_root / "configs" / config_name).read_text())
+    raw = yaml.safe_load(
+        (repo_root / "configs" / "archive" / "online_gepa" / config_name).read_text()
+    )
     prompt = raw["prompts"]["reflection_reviewer_system"]
 
     assert "attribution questions" in prompt

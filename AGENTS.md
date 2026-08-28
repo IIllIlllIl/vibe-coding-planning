@@ -19,9 +19,10 @@ v1. Read, in order:
 
 Do not browse `docs/archive/`, `configs/archive/`, `scripts/archive/`, or
 `output/archive/` by default. Online GEPA, PCT/PCC, Pro, old analysis paths, and
-superseded configs are historical reference only even while their files remain
-temporarily present. Use `git show main:<path>` when explicit historical detail
-is required.
+superseded configs are historical reference only. Their standalone documents,
+configs, and operator scripts have begun moving behind archive boundaries;
+historical source modules remain temporarily present for later reachability
+analysis. Use `git show main:<path>` when explicit historical detail is required.
 
 Do not broadly delete historical code until the Behavioral data skeleton exists
 and import/reachability analysis identifies the real dependency boundary.

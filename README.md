@@ -20,6 +20,8 @@ and GEPA Reflection only.
 - On the 98-case common terminal intersection, PCE / Seed / candidate 2 resolve
   69 / 66 / 66 cases.
 - No new PCCE, check-only, Offline GEPA, or Behavioral experiment is authorized.
+- The fixed-revision SWE-chat source and repository acquisition layer is
+  implemented and locally tested; no remote preheat has started yet.
 - The Behavioral dataset, episode extractor, labels, prompts, adapter, and
   config have not yet been implemented.
 
@@ -59,10 +61,11 @@ The current implementation surface is:
 
 ## Historical paths
 
-Online GEPA, PCT/PCC, Pro, old analysis pipelines, archive trees, and superseded
-configs remain in this branch temporarily so dependency reachability can be
-measured after the Behavioral skeleton exists. They are not active research
-authority and should not be searched by default.
+Standalone Online GEPA/PCT/old-analysis documents, configs, and resource-pilot
+scripts are archived in this branch. Historical source modules and mixed shared
+entrypoints remain temporarily so dependency reachability can be measured after
+the Behavioral skeleton exists. None are active research authority or default
+search targets.
 
 The unmodified historical baseline is commit
 `95807f9f581eb3b2fc25f2b60100e5cf2f91b9c1` on `main`. Read a historical file

@@ -64,15 +64,17 @@ is currently authorized.
 ## Branch engineering plan
 
 Phase 1 establishes this focused documentation surface and a separately
-runnable no-LLM Offline regression suite. It does not delete historical code.
+runnable no-LLM Offline regression suite. A follow-up surface cleanup archives
+unambiguously historical Online/PCT documents, configs, and operator scripts,
+without deleting historical source modules or frozen evidence.
 
 Phase 2 implements the minimal Behavioral data skeleton and its deterministic
 tests in commits separate from branch cleanup.
 
-Phase 3 records import/reachability evidence and removes unreachable Online,
-archive, and older-method paths in a dedicated cleanup commit. Existing Offline
-GEPA and frozen PolyBench reproduction tests must remain green before and after
-that cleanup.
+Phase 3 records import/reachability evidence and removes unreachable Online and
+older-method source paths in a dedicated cleanup commit. Existing Offline GEPA
+and frozen PolyBench reproduction tests must remain green before and after that
+cleanup.
 
 ## Known validity constraints
 

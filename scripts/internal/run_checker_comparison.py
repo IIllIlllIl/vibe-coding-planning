@@ -208,7 +208,9 @@ def _arm_config(
 
 def main() -> int:
     parser = argparse.ArgumentParser()
-    parser.add_argument("--config", default="configs/polybench_full199_pct.yaml")
+    parser.add_argument(
+        "--config", default="configs/archive/pct_runs/polybench_full199_pct.yaml"
+    )
     parser.add_argument("--input-results", type=Path, default=DEFAULT_INPUT)
     parser.add_argument("--output", type=Path, default=DEFAULT_OUTPUT)
     parser.add_argument(

@@ -574,7 +574,7 @@ def test_hpc_supervisor_service_starts_with_tmux_and_caffeinate(tmp_path: Path) 
             "--poll-interval",
             "1800",
             "--gepa-config",
-            "configs/gepa_online_planning_pilot.yaml",
+            "configs/archive/online_gepa/gepa_online_planning_pilot.yaml",
             "--submit",
         ],
         cwd=REPO_ROOT,
@@ -617,7 +617,7 @@ arguments:
   - --target-iterations
   - "8"
   - --gepa-config
-  - configs/gepa_online_planning_hpc.yaml
+  - configs/archive/online_gepa/gepa_online_planning_hpc.yaml
   - --submit
 """,
         encoding="utf-8",
@@ -644,7 +644,7 @@ arguments:
     invocation = tmux_log.read_text(encoding="utf-8")
     assert "new-session -d -s persisted-online-gepa" in invocation
     assert "hpc_resume_loop.py --target-iterations 8" in invocation
-    assert "configs/gepa_online_planning_hpc.yaml --submit" in invocation
+    assert "configs/archive/online_gepa/gepa_online_planning_hpc.yaml --submit" in invocation
     assert "conda run --no-capture-output -n mini-swe" in invocation
 
 
