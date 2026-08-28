@@ -20,7 +20,7 @@ operational:
   ulhpc_config: configs/ulhpc_submit.yaml
   remote_root: /scratch/users/twang/vibe-coding-planning/operations/swe-chat-f66cca95-preheat-v1-20260829
   remote_hf_env_file: ~/.config/vibe-coding-planning/huggingface.env
-  remote_python: python3
+  remote_python: /usr/bin/python3.11
   hf_max_workers: 4
   dataset_max_attempts: 3
   repository_batch_size: 5
