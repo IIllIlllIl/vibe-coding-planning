@@ -30,6 +30,21 @@ seed dependency-cache Evaluate-only repair 使用独立的
 `configs/polybench_pcce_supervisor_formal_b8_candidate2_clean_20260826.yaml`，其
 dependency-cache repair 也在 candidate 启动前以独立 supervisor 配置冻结。
 
+## SWE-chat source acquisition
+
+- `tools/freeze_swe_chat_preheat_inputs.py`：从固定 Hugging Face revision 和
+  已验证的 `repositories.parquet` 一次性冻结完整 source-file manifest 与有序的
+  205 项 repository request manifest。正式 preheat 不重新解释 Parquet。
+- `tools/login_swe_chat_preheat.py`：在 Iris login node 上以单 writer 下载完整
+  SWE-chat snapshot，并串行准备 Git bare mirrors。它区分 semantic identity 与每次
+  invocation 的 operational policy，使用 source-provided hash 加本地 observed
+  SHA-256 验证 dataset，并原子提升完成 artifact。
+- `swe_chat_preheat_service.py`：通过本地 `tmux + caffeinate` 承载有界、可恢复的
+  SWE-chat login preheat。它不提交 Slurm，不调用 LLM，也不执行 episode extraction。
+
+权威边界与命令见 `docs/swe-chat-preheat.md`。正式启动前仍需独立批准 remote
+credential/Python/disk preflight 和下载操作。
+
 ## SIF 工具
 
 - `tools/prepare_apptainer_sifs.py`：列出并串行准备某个 GEPA 配置所需的 SIF。

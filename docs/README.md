@@ -1,7 +1,7 @@
 # Documentation Index
 
 > Authority: navigation policy for project documentation
-> Last reviewed: 2026-08-28
+> Last reviewed: 2026-08-29
 
 Agents should read the smallest authoritative set that answers the task. Do not
 search `docs/archive/` unless the user explicitly requests historical audit,
@@ -19,6 +19,7 @@ Read in this order:
 | [`architecture.md`](architecture.md) | Current modules, data flow, and ownership boundaries |
 | [`gepa-rule-optimization.md`](gepa-rule-optimization.md) | Online GEPA optimization semantics and evidence contract |
 | [`offline-gepa.md`](offline-gepa.md) | Offline GEPA Checker boundary, metric, stopping, artifacts, and resume contract |
+| [`swe-chat-preheat.md`](swe-chat-preheat.md) | Behavioral v1 frozen dataset/repository acquisition, identity, verification, and login-preheat boundary |
 | [`offline-polybench-validation.md`](offline-polybench-validation.md) | Current PolyBench-199 image preparation, PCE regeneration, exact-image provenance, and guideline-only generalization boundary |
 | [`polybench-pcce.md`](polybench-pcce.md) | Current paired PolyBench Plan-Check-Code-Evaluate deployment evaluation, including accepted smoke, formal seed run, review, and workflow retry semantics |
 | [`hpc-submit.md`](hpc-submit.md) | Current ULHPC submission, supervisor, and FairShare operations |

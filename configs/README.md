@@ -4,6 +4,18 @@ The top level contains only active configs and one representative executable
 config for each paused workflow. Date-specific runs, smoke tests, retries, and
 superseded variants live under `archive/` and remain available for provenance.
 
+## Behavioral source acquisition
+
+| Config | Runtime | Purpose |
+|---|---|---|
+| `swe_chat_login_preheat_v1_20260829.yaml` | Iris login node | Frozen SWE-chat revision plus 205-repository requested universe. Semantic source identity is separated from retry, batching, timeout, path, and supervisor policy. It downloads no container and performs no episode extraction or labeling. |
+
+The matching frozen inputs live under
+`frozen_swe_chat_preheat/f66cca95b14caaa4177f7ed5eaa424608dadcffa/`.
+Changing either manifest or repository acquisition semantics requires a new
+identity; operational-only tuning is recorded per invocation and may resume the
+same source acquisition.
+
 ## Active Online GEPA
 
 | Config | Runtime | Purpose |
