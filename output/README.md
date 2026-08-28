@@ -21,7 +21,7 @@ historical comparison, provenance, or reproduction.
 | `SWE-PolyBench/polybench-pcce-runs/smoke/` | PCCE orchestration, review-loop, checkpoint and PC-to-CE platform evidence | Completed two-case platform smoke; never formal validation evidence |
 | `SWE-PolyBench/polybench-pcce-runs/formal/seed-python111-20260817/` | Frozen seed-guideline PCCE deployment diagnostic | Not score-usable: PC/Code inherited the unverified SIF baseline and `git add -A` patch boundary; the 79/111 versus 75/111 overlay is retained only for provenance |
 | `SWE-PolyBench/polybench-pcce-runs/formal/seed-python99-clean-pce-v1-20260826/` | Corrected seed-guideline PCCE run and independent evaluator repair | Complete formal evidence mirrored locally; ordinary score 62/99, accepted 21-case dependency overlay 66/99, fixed PCE baseline 70/99 |
-| `SWE-PolyBench/polybench-pcce-runs/formal/b8-candidate2-python99-clean-pce-v1-20260826/` | Prepared primary candidate-2 PCCE identity | Not launched; must use the same 99-case input and post-run 21-case dependency overlay as seed |
+| `SWE-PolyBench/polybench-pcce-runs/formal/b8-candidate2-python99-clean-pce-v1-20260826/` | Corrected candidate-2 PCCE run and independent evaluator repair | Complete evidence mirrored locally; ordinary result 62 resolved / 36 unresolved / 1 operationally incomplete, accepted 20-case dependency overlay gives 66 resolved / 32 unresolved / 1 incomplete |
 | `SWE-PolyBench/polybench-pce-inputs/20260811_smoke2_transformers/` | Frozen two-row source and reviewed image-manifest copy staged to the PCE smoke | Smoke input only; not formal input |
 | `archive/tests/polybench-pce/` | Locally mirrored smoke3 diagnostic evidence and completed smoke4 evidence | Test only; remote working copies removed |
 | `SWE-bench_Verified/gepa-rules/offline-plan-verifier-balanced-b12-p2-case-reviews-8it-20260727/` | Formal local Offline result under the final pre-HPC experimental flow | Completed with warnings; retained comparison baseline |
@@ -95,9 +95,12 @@ remain explicit source exclusions, and the conservative placeholder policy
 removes zero more cases. The paired snapshot stores the same ordered PCE output
 projections used by PCCE, so its membership and baseline plans share one
 authority while full trajectories remain only in the raw run.
-The corrected seed PCCE is configured but not yet launched; the predeclared
-The 21-case clean-PCE dependency repair is complete and frozen locally; the
-final 99-case paired snapshot is the PCCE authority.
+The corrected 21-case clean-PCE dependency repair is complete and frozen
+locally; the final 99-case paired snapshot is the PCCE authority. Corrected
+Seed and candidate-2 PCCE evidence is also complete. The first PCCE
+method-quality stage is paused after neither guideline improved the paired PCE
+baseline; further candidate launches under the unchanged method are not part
+of the active output plan.
 
 Evaluator repair evidence remains nested under the formal run rather than
 becoming a validation snapshot. `isolated-home-smoke-20260820` is a seven-case

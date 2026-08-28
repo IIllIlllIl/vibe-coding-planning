@@ -9,6 +9,23 @@
 
 ## 当前实验状态
 
+**2026-08-28 Offline/PCCE 阶段收尾**：第一轮 clean PolyBench PCCE 方法效果评估已经
+完成并暂停。冻结 PCE baseline 为 70/99 resolved；完成相同 frozen dependency-cache
+evaluator overlay 后，Seed PCCE 为 66/99，minibatch-eight candidate 2 为 66 resolved、
+32 unresolved、1 个 operational incomplete。在三者都有 terminal method result 的
+98-case 交集上，PCE/Seed/C2 分别为 69/66/66。单独的 95-case 行为审计中，两份
+guideline 都没有把任何 PCE-unresolved 案例修复为 resolved；C2 的拒绝 precision 和
+bad-plan recall 还低于 Seed。因此目前不继续用同一 PCCE prompt/三轮反馈流程运行
+candidate 6 或 reserve guideline，也不把 PolyBench 结果反馈给现有 GEPA candidate
+tree。平台、raw trajectories 和 evaluator repair 机制保留；下一步先重新设计并分别
+度量首轮分类、反馈完整性、replacement-plan 质量和端到端 intervention benefit。
+冻结结论、failure taxonomy、适用范围和下一设计验收项见
+`docs/knowledge/offline-pcce-stage-findings.md`。
+
+当前没有获准启动的新 PCCE、check-only 或 GEPA 运行。本节以下长时间线保留为证据
+provenance；其中“准备”“尚未启动”“下一步运行”等表述只描述对应日期当时的状态，
+不得覆盖上述 2026-08-28 当前决定。
+
 2026-08-18 的 evaluator 审计确认，HPC 共用 `ApptainerEnvironment` 默认继承提交用户
 环境并挂载 home，使宿主 `~/.local/bin` 与 `~/.local/lib` 能覆盖冻结 SIF 内的可执行
 文件和 Python 包。正式 PolyBench PCE 的 111 个 test-parsed outcome 中有 3 个 shell
@@ -733,8 +750,14 @@ Synthesis exhausted 能 block 且两个 durable iteration 与 GEPA state 一致�
 
 ## 6. Offline GEPA 当前观测与待讨论问题
 
-- **状态**：核心搜索逻辑初步有效；继续观察，暂不增加新的控制模块或修改
-  Reflection 行为。
+- **当前状态（2026-08-28）**：现有 Offline 搜索和 Seed/C2 PCCE 结果均已冻结，
+  PCCE 方法质量扩展暂停。核心搜索可以产生非平凡 SWE validation 改善，但 C2 未将
+  该改善转化为更好的 PolyBench 端到端结果或更精确的 reject set。下一任务是设计
+  新实验，不是继续增加当前 candidate 的 iteration 或在同一 PCCE 流程中试更多
+  guideline。阶段结论见
+  `docs/knowledge/offline-pcce-stage-findings.md`。
+- **历史状态说明**：下列 2026-07 至 2026-08 的小节保留当时观测和决策依据；其中
+  “继续观察”或“下一轮”不再是当前运行指令。
 - **最近运行**：
   `offline-plan-verifier-balanced-b12-p2-case-reviews-8it-20260727`，使用
   384 train / 98 validation、balanced accuracy、minibatch 12、parallel 2 和

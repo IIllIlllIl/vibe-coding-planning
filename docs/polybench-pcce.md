@@ -1,9 +1,9 @@
 # PolyBench Plan-Check-Code-Evaluate Design
 
-> Authority: implemented platform flow and planned paired
+> Authority: implemented platform flow and completed first paired
 > deployment-oriented evaluation of frozen Offline guidelines
 >
-> Last reviewed: 2026-08-26
+> Last reviewed: 2026-08-28
 
 ## Research Question And Boundary
 
@@ -29,6 +29,25 @@ PolyBench remains held out from guideline optimization. PCCE results,
 trajectories, feedback, labels, and error analysis must not enter GEPA,
 Reflection, guideline repair, candidate selection, or prompt tuning for a
 confirmatory generalization claim.
+
+## Current Stage Status
+
+The first clean PCCE method-quality stage is complete and paused. Its frozen
+99-case PCE baseline resolves 70 cases. After applying the predeclared frozen
+dependency-cache evaluator policy, Seed PCCE resolves 66/99; candidate 2
+resolves 66 of 98 method-complete cases and has one operationally incomplete
+case. On the 98-case common terminal intersection the counts are PCE 69, Seed
+66, and candidate 2 66. Neither PCCE method repaired a PCE-unresolved case in
+the separate 95-case behavior audit.
+
+These results do not support launching more frozen guidelines under the
+unchanged PCCE method merely to search for a better PolyBench outcome. The
+platform and raw evidence remain reusable, but the next experimental design
+must separate classification quality, feedback completeness, revised-plan
+quality, and end-to-end intervention benefit. The frozen evidence,
+classification tables, failure taxonomy, limitations, and next-design
+requirements are summarized in
+[`knowledge/offline-pcce-stage-findings.md`](knowledge/offline-pcce-stage-findings.md).
 
 ## Paired First Plan
 
@@ -276,7 +295,7 @@ must retain a separate run identity and must not use seed outcomes to modify
 their already frozen guideline text.
 
 That archived seed run's original Evaluate evidence is environment-
-contaminated. The prepared repair launch is
+contaminated. Its completed repair launch used
 `configs/archive/polybench_pcce/polybench_pcce_supervisor_formal_seed_evaluator_repair_20260821.yaml`,
 using repair identity `isolated-home-seed-repair-20260821`. It selects all 110
 cases that passed the Checker and reached CE; the one case rejected after three
@@ -361,8 +380,8 @@ intersection between the accepted 22-case dependency manifest and the final
 PCE/PCCE membership. The repair copies and re-identifies the completed PCCE
 Plan and Code checkpoints, then reruns only Evaluate with the same read-only
 cache and disabled-network semantics used by the paired PCE repair. Original
-CE evidence remains immutable under the parent run. The repair has not been
-launched yet.
+CE evidence remains immutable under the parent run. The completed result is
+described below.
 
 The repair subsequently completed all 21 selected cases with 14 resolved and
 7 unresolved, no unknown result and no workflow retry. The local and Iris
@@ -374,14 +393,14 @@ results changes seed PCCE from 62/99 to **66/99**, versus the fixed PCE baseline
 of 70/99. The remaining four-case deficit is therefore the method comparison
 to carry forward; 62/99 is retained only as unrepaired provenance.
 
-The next predeclared primary comparison is frozen b8 candidate 2. Runtime
+The following predeclared primary comparison was frozen b8 candidate 2. Runtime
 `configs/polybench_pcce_hpc_formal_b8_candidate2_clean_20260826.yaml` uses a
 new `b8-candidate2-python99-clean-pce-v1-20260826` run root. Dataset, baseline,
 Checker/Planner prompts, rejection budget, operational attempts, Code/Evaluate
 runtime, and resources are byte-identical to seed; only guideline text and
 run/job identity change. Its separate dependency-cache runtime and supervisor
-were prepared before launch and must apply the same dependency-cache evaluator
-policy after the ordinary candidate run completes, restricted to cases with
+were prepared before launch and applied the same dependency-cache evaluator
+policy after the ordinary candidate run completed, restricted to cases with
 completed candidate CE evidence.
 
 The ordinary candidate-2 run completed on 2026-08-27 with 99 cases: 62
@@ -393,6 +412,14 @@ therefore frozen as `evaluator_repair_subset_clean99_b8c2_ce20.json`, the exact
 20-case intersection of the common 21-case dependency scope and candidate-2
 completed CE evidence. This preserves the incomplete outcome and changes no
 upstream Agent result.
+
+The candidate-2 repair subsequently completed all 20 selected cases with 14
+resolved and 6 unresolved, no unknown result. Overlaying only those repaired
+Evaluate rows changes candidate 2 to 66 resolved, 32 unresolved, and the same
+one operationally incomplete case. On the 98 cases with terminal Seed and C2
+outcomes, both resolve 66 while the fixed PCE baseline resolves 69. This closes
+the predeclared Seed/C2 comparison; candidate 6 and the reserve guidelines are
+not launched under the unchanged method.
 
 The 2026-08-24 repository-baseline audit broadens that limitation. The formal
 PCE/PCCE prompt's final `git add -A` contradicts its earlier instruction to

@@ -44,10 +44,10 @@ poll cadence, controller resources, or remote workdir belongs in
 | `offline_gepa_hpc_smoke_2x2_20260728.yaml` | ULHPC Apptainer | Environment-only 2-train/2-validation, 1-iteration smoke. Its scores are not rule-quality evidence. |
 | `offline_gepa_hpc_smoke_3x3_2it_20260815.yaml` | ULHPC Apptainer | Retained identity of the stopped cross-snapshot-manifest diagnostic. It blocked at iteration 0 before train repetition; do not reuse it for the post-fix smoke. |
 | `offline_gepa_supervisor_3x3_2it_20260815.yaml` | Local tmux+caffeinate | Matching stopped supervisor identity retained for diagnosis; a post-fix smoke requires a new launch and run identity. |
-| `offline_gepa_hpc_smoke_3x3_2it_postfix_20260816.yaml` | ULHPC Apptainer | Exact completed post-fix 3 x 3 baseline. It reached the cumulative two-proposal target and is retained unchanged as the first stage of the planned 2-to-8 extension. |
+| `offline_gepa_hpc_smoke_3x3_2it_postfix_20260816.yaml` | ULHPC Apptainer | Exact completed post-fix 3 x 3 baseline. It reached the cumulative two-proposal target and is retained unchanged as the first stage of the completed 2-to-8 extension. |
 | `offline_gepa_supervisor_3x3_2it_postfix_20260816.yaml` | Local tmux+caffeinate | Exact stopped supervisor identity for the completed two-proposal stage; do not restart it with a different target. |
-| `offline_gepa_hpc_3x3_8it_extension_20260816.yaml` | ULHPC Apptainer | Cumulative eight-proposal target for the same post-fix checkpoint and candidate tree. Only the target, metric-call fail-safe/projection, and operational task config identity differ from the retained two-proposal runtime config. |
-| `offline_gepa_supervisor_3x3_8it_extension_20260816.yaml` | Local tmux+caffeinate | New clean-worktree-guarded supervisor identity that performs the native 2-to-8 iteration-target transition, then resumes the ordinary Offline flow against the same persistent run directory. |
+| `offline_gepa_hpc_3x3_8it_extension_20260816.yaml` | ULHPC Apptainer | Completed cumulative eight-proposal extension of the same post-fix checkpoint and candidate tree. Only the target, metric-call fail-safe/projection, and operational task config identity differed from the retained two-proposal runtime config. |
+| `offline_gepa_supervisor_3x3_8it_extension_20260816.yaml` | Local tmux+caffeinate | Retained clean-worktree-guarded supervisor identity that performed the native 2-to-8 iteration-target transition and resumed the ordinary Offline flow against the same persistent run directory. |
 | `frozen_guidelines/20260817_seed-b8c1-b8c2-b3x3c3-b3x3c6_0e1f8d7bd876/` | Frozen text bundle | Tracked five-guideline PolyBench input frozen before check-only results: common seed plus minibatch-eight candidates 1/2 and 3x3 candidates 3/6. Primary evaluation uses seed and the two accuracy winners; the two direct-parent alternatives are reserve inputs. |
 | `polybench_pcce_hpc_smoke.yaml` | ULHPC Apptainer | Two-case PCCE platform-flow smoke using paired historical PCE plans, the frozen seed guideline, three workflow task attempts, and a distinct three-valid-rejection experimental budget. It owns dedicated Checker decision/feedback and Planner revision prompts; smoke evidence is not yet a formal method result. |
 | `polybench_pcce_supervisor_smoke.yaml` | Local tmux+caffeinate | Persistent launch identity for the two-case PCCE smoke. It reuses the shared HPC resume loop at the same ten-minute cadence as Offline and repeatedly submits 10-minute PCCE Controller slices until the workflow reaches a terminal result or blocking failure. |
@@ -62,16 +62,16 @@ poll cadence, controller resources, or remote workdir belongs in
 | `polybench_pce_hpc_dependency_cache_formal_v2.yaml` | ULHPC Apptainer | Completed diagnostic PCE Evaluate-only repair over preserved Plan/Code checkpoints. Its cache/network mechanism remains reusable, but its scores inherit invalid upstream Agent repository/patch provenance. |
 | `polybench_pce_hpc_repository_boundary_smoke_20260824.yaml` | ULHPC Apptainer | Prepared two-case full PCE smoke for explicit dataset-`base_commit` restore/verification, exact current Online Code prompt, Agent-owned staging without Host transformation, and evaluator-owned empty-patch classification. Uses a new output identity; not formal score data. |
 | `polybench_pce_hpc_formal_clean_20260825.yaml` | ULHPC Apptainer | Corrected 113-case raw PCE identity using the v3-smoke-accepted clean-`base_commit` phase boundary and Agent-owned staged implementation patch. Its first pass uses the ordinary evaluator; the predeclared 22-case dependency-cache repair is a separate post-review Evaluate-only step. |
-| `polybench_pce_hpc_dependency_cache_clean_20260825.yaml` | ULHPC Apptainer | Prepared Evaluate-only dependency-cache runtime for the corrected `python113-v11-clean-boundary-v1-20260825` run. It keeps the clean run's exact Plan/Code prompts and checkpoints and changes only evaluator cache/network semantics. |
-| `polybench_pce_supervisor_dependency_cache_clean_20260826.yaml` | Local tmux+caffeinate | Prepared ten-minute supervisor identity for the corrected PCE's 21 eligible dependency cases. The original cache scope has 22 members, but `transformers-27717` lacks clean-PCE Plan/Code and is outside the paired 100-case universe. |
+| `polybench_pce_hpc_dependency_cache_clean_20260825.yaml` | ULHPC Apptainer | Completed 21-case Evaluate-only dependency-cache runtime for corrected `python113-v11-clean-boundary-v1-20260825`. It kept Plan/Code fixed and changed only evaluator cache/network semantics. |
+| `polybench_pce_supervisor_dependency_cache_clean_20260826.yaml` | Local tmux+caffeinate | Completed ten-minute supervisor identity for the corrected PCE repair. The original cache scope has 22 members, but `transformers-27717` lacks clean-PCE Plan/Code and is outside the paired 100-case universe. |
 | `polybench_pce_supervisor_formal_clean_20260825.yaml` | Local tmux+caffeinate | Persistent ten-minute supervisor for the corrected formal PCE. It advances only this PCE identity and requires a clean worktree. |
-| `polybench_pcce_hpc_formal_seed_clean_20260826.yaml` | ULHPC Apptainer | Corrected formal seed PCCE over exactly the final 99 clean-PCE cases. Its paired baseline overlays the accepted 21-case dependency repair, excludes the single explicitly unfreezable `transformers-25636` environment case, and gives each PC/CE task a 45-minute hard limit. |
-| `polybench_pcce_supervisor_formal_seed_clean_20260826.yaml` | Local tmux+caffeinate | Prepared ten-minute clean-worktree supervisor identity for the corrected 99-case seed PCCE. |
-| `polybench_pcce_hpc_dependency_cache_formal_seed_clean_20260826.yaml` | ULHPC Apptainer | Evaluate-only repair runtime for the completed corrected seed PCCE. It keeps the same 99-case method/run identity, points Evaluate at the accepted frozen dependency cache, disables evaluator networking, and invokes no LLM. |
-| `polybench_pcce_supervisor_formal_seed_dependency_cache_clean_20260826.yaml` | Local tmux+caffeinate | Ten-minute supervisor for the seed PCCE's independent `clean-depcache-v1-20260826` repair over the frozen 21-case clean-PCE intersection. |
-| `polybench_pcce_hpc_formal_b8_candidate2_clean_20260826.yaml` | ULHPC Apptainer | Prepared primary candidate-2 PCCE over the same final 99 cases. Relative to corrected seed PCCE it changes only the frozen guideline and run/job identity. |
-| `polybench_pcce_supervisor_formal_b8_candidate2_clean_20260826.yaml` | Local tmux+caffeinate | Prepared ten-minute clean-worktree launch identity for candidate 2. |
-| `polybench_pcce_hpc_dependency_cache_formal_b8_candidate2_clean_20260826.yaml` / `polybench_pcce_supervisor_formal_b8_candidate2_dependency_cache_clean_20260826.yaml` | ULHPC Apptainer / local supervisor | Candidate-2 Evaluate-only repair using the same cache manifest, repair ID, network policy, and worker budget as seed. Its frozen `evaluator_repair_subset_clean99_b8c2_ce20.json` is the 20-case intersection with completed candidate-2 CE evidence; `transformers-26164` is excluded because its PC workflow exhausted before Code/Evaluate. |
+| `polybench_pcce_hpc_formal_seed_clean_20260826.yaml` | ULHPC Apptainer | Completed corrected Seed PCCE over the final 99 clean-PCE cases. Its accepted evaluator overlay gives 66/99 resolved against the paired PCE baseline's 70/99. Retained for evidence; do not relaunch. |
+| `polybench_pcce_supervisor_formal_seed_clean_20260826.yaml` | Local tmux+caffeinate | Completed ten-minute supervisor identity for the corrected Seed PCCE; retained only for launch provenance. |
+| `polybench_pcce_hpc_dependency_cache_formal_seed_clean_20260826.yaml` | ULHPC Apptainer | Completed 21-case Evaluate-only repair for Seed. It used the accepted frozen cache with networking disabled and invoked no LLM. |
+| `polybench_pcce_supervisor_formal_seed_dependency_cache_clean_20260826.yaml` | Local tmux+caffeinate | Completed supervisor identity for Seed repair `clean-depcache-v1-20260826`. |
+| `polybench_pcce_hpc_formal_b8_candidate2_clean_20260826.yaml` | ULHPC Apptainer | Completed candidate-2 PCCE over the same 99 cases: 62 resolved, 36 unresolved, one operationally incomplete before evaluator overlay. Retained for evidence; do not relaunch. |
+| `polybench_pcce_supervisor_formal_b8_candidate2_clean_20260826.yaml` | Local tmux+caffeinate | Completed ten-minute candidate-2 launch identity; retained only for provenance. |
+| `polybench_pcce_hpc_dependency_cache_formal_b8_candidate2_clean_20260826.yaml` / `polybench_pcce_supervisor_formal_b8_candidate2_dependency_cache_clean_20260826.yaml` | ULHPC Apptainer / local supervisor | Completed 20-case candidate-2 Evaluate-only repair. The overlay gives 66 resolved / 32 unresolved / 1 operationally incomplete; `transformers-26164` remains incomplete because PC exhausted before Code/Evaluate. |
 | `polybench_pcce_hpc_repository_boundary_smoke_20260824.yaml` | ULHPC Apptainer | Prepared paired follow-up smoke over the corrected two-case PCE output. It exercises Checker and any Planner revision from a verified base, then inherits the corrected Code/Evaluate path. It must start only after the PCE smoke is collected. |
 | `polybench_pce_supervisor_repository_boundary_smoke_20260824.yaml` / `polybench_pcce_supervisor_repository_boundary_smoke_20260824.yaml` | Local tmux+caffeinate | Ordered clean-worktree launch identities for the corrected two-case smoke. Run PCE first; start PCCE only after PCE has collected `raw_pce_outcomes.jsonl`. Both poll every ten minutes. |
 | `frozen_dependency_caches/polybench_evaluator_dependencies_20260822/` | Frozen input | Tracked file/revision/hash manifest for 69 prepared artifact requests; its membership contains 22 eligible cases and explicitly excludes `transformers-25636` because one required repository was inaccessible. |
@@ -87,10 +87,11 @@ iteration draft, `max_metric_calls=1200` is only a fail-safe above the
 launch config with the shared supervisor service. See
 [`../docs/offline-gepa.md`](../docs/offline-gepa.md).
 
-The generic check-only entry point is additive. The reviewed 113-case
-source/exact-v1.1 input is now frozen, but no PolyBench check-only config is
-active until formal PCE data and its separately reviewed cleaning snapshot are
-frozen. The existing `gepa_verified_rules.yaml`
+The generic check-only entry point is additive. The clean 99-case paired input
+is frozen, but no PolyBench check-only run was launched before the first PCCE
+stage was paused. A future check-only study requires a new predeclared design
+and run identity; it must not silently reuse PolyBench findings to alter the
+existing GEPA tree. The existing `gepa_verified_rules.yaml`
 remains byte-for-byte unchanged, so neither the GEPA semantic manifest nor the
 supervisor's raw-config identity is invalidated.
 
@@ -161,7 +162,8 @@ Slurm task remained active. The corrected formal seed pair
 `polybench_pcce_hpc_formal_seed_clean_20260826.yaml` and
 `polybench_pcce_supervisor_formal_seed_clean_20260826.yaml` preserves that
 accepted method and transport while replacing the diagnostic 111-case input
-with the 100-case clean-PCE parsed-test snapshot and a 45-minute worker limit.
+with the final 99-case clean-PCE dependency-repaired snapshot and a 45-minute
+worker limit. The run and its evaluator repair are complete.
 
 The completed Python-199 SIF preheater named
 `gepa_verified_rules.yaml`, but this is not a GEPA experiment dependency:

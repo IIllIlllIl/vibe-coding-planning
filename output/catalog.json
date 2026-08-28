@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "generated_at": "2026-08-26",
+  "generated_at": "2026-08-28",
   "active_method": "online_gepa_planning_rules",
   "active_offline_method": "offline_gepa_plan_review_guideline",
   "default_agent_scope": [
@@ -10,7 +10,9 @@
     "output/SWE-bench_Verified/gepa-rules",
     "configs/frozen_guidelines/20260817_seed-b8c1-b8c2-b3x3c3-b3x3c6_0e1f8d7bd876",
     "output/SWE-PolyBench/polybench-pce-inputs/20260814_python113_v11_8c7d9485d1d0",
-    "output/SWE-PolyBench/polybench-guideline-validation-datasets/20260826_python99_cleanpce_depcache_03619730229d"
+    "output/SWE-PolyBench/polybench-guideline-validation-datasets/20260826_python99_cleanpce_depcache_03619730229d",
+    "output/SWE-PolyBench/polybench-pcce-runs/formal/seed-python99-clean-pce-v1-20260826",
+    "output/SWE-PolyBench/polybench-pcce-runs/formal/b8-candidate2-python99-clean-pce-v1-20260826"
   ],
   "active_polybench_validation_inputs": {
     "status": "frozen_clean_pce_with_accepted_dependency_repair",
@@ -44,8 +46,8 @@
       "b8_candidate_1",
       "b3x3_candidate_3"
     ],
-    "reserve_activation_status": "criterion_pending_before_primary_launch",
-    "check_only_status": "ready_not_launched",
+    "reserve_activation_status": "post_primary_results_exploratory_only",
+    "check_only_status": "not_launched_stage_paused",
     "paired_pce_outcomes_sha256": "fd1a808b97c0afd31c83c85f2e39f19b652dd29a320969b9955230f7a64bc3f3",
     "dependency_repair_instances": 21,
     "environment_excluded_instances": 1,
@@ -138,16 +140,39 @@
     "final_unresolved": 29,
     "score_usable": true
   },
-  "prepared_polybench_pcce_seed": {
-    "status": "prepared_not_launched",
-    "config": "configs/polybench_pcce_hpc_formal_seed_clean_20260826.yaml",
-    "supervisor": "configs/polybench_pcce_supervisor_formal_seed_clean_20260826.yaml",
-    "run": "output/SWE-PolyBench/polybench-pcce-runs/formal/seed-python99-clean-pce-v1-20260826",
-    "instances": 99,
-    "worker_time": "00:45:00",
-    "cpus_per_task": 1,
-    "memory": "4G",
-    "launch_blocker": null
+  "completed_polybench_pcce_stage": {
+    "status": "complete_paused_for_redesign",
+    "as_of": "2026-08-28",
+    "paired_pce_instances": 99,
+    "paired_pce_resolved": 70,
+    "paired_pce_unresolved": 29,
+    "seed": {
+      "config": "configs/polybench_pcce_hpc_formal_seed_clean_20260826.yaml",
+      "supervisor": "configs/polybench_pcce_supervisor_formal_seed_clean_20260826.yaml",
+      "run": "output/SWE-PolyBench/polybench-pcce-runs/formal/seed-python99-clean-pce-v1-20260826",
+      "method_complete": 99,
+      "corrected_resolved": 66,
+      "corrected_unresolved": 33,
+      "dependency_repair_instances": 21
+    },
+    "b8_candidate_2": {
+      "config": "configs/polybench_pcce_hpc_formal_b8_candidate2_clean_20260826.yaml",
+      "supervisor": "configs/polybench_pcce_supervisor_formal_b8_candidate2_clean_20260826.yaml",
+      "run": "output/SWE-PolyBench/polybench-pcce-runs/formal/b8-candidate2-python99-clean-pce-v1-20260826",
+      "method_complete": 98,
+      "corrected_resolved": 66,
+      "corrected_unresolved": 32,
+      "operationally_incomplete": 1,
+      "dependency_repair_instances": 20
+    },
+    "common_terminal_instances": 98,
+    "common_terminal_pce_resolved": 69,
+    "common_terminal_seed_resolved": 66,
+    "common_terminal_b8_candidate_2_resolved": 66,
+    "comparison_scope": "use the 98-case common-terminal intersection when comparing all three methods",
+    "operational_incomplete_not_scored": true,
+    "score_usable": true,
+    "next_action": "redesign_before_any_additional_guideline_pcce_launch"
   },
   "prior_polybench_pce_smoke": {
     "classification": "test_only",

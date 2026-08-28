@@ -1,9 +1,9 @@
 # Offline Guideline PolyBench Generalization Validation
 
-> Authority: planned external validation contract for the current standalone
-> Offline guideline method
+> Authority: external validation contract and frozen first-stage outcome for
+> the current standalone Offline guideline method
 >
-> Last reviewed: 2026-08-25
+> Last reviewed: 2026-08-28
 
 ## Purpose And Non-Training Boundary
 
@@ -13,8 +13,7 @@ GEPA training, Reflection, candidate proposal, candidate acceptance, guideline
 repair, prompt design, metric selection, or stopping decisions.
 
 All guideline-producing experiments that will be compared, including the
-current minibatch-eight run and the planned 3x3 run using the implemented
-repetition layer, must finish and freeze
+completed minibatch-eight and 3x3 runs, must finish and freeze
 their candidate identities before any new PolyBench Checker result is viewed.
 They are then evaluated together. A later method change informed by PolyBench
 would require a different untouched benchmark for a new final generalization
@@ -208,14 +207,14 @@ Evaluator ordering, patch-policy, classification and walltime defects that led
 to their replacements; they remain diagnostic evidence and are not formal PCE
 data.
 
-The failed batch must not be retried unchanged. Although its Plan and Code
+At that stage, the failed batch could not be retried unchanged. Although its Plan and Code
 outputs are durable, the current checkpoint identity includes the complete PCE
 execution fingerprint, including Evaluator source. A fixed Evaluator therefore
-cannot silently resume the old run. An Evaluate-only reuse requires a new run
+could not silently resume the old run. An Evaluate-only reuse required a new run
 identity and an explicit, hash-checked provenance link to the old Plan/Code
-checkpoints; that migration path is not yet implemented. No formal config is
-active against the final Python-199 source snapshot and completed image
-manifest. Existing historical PCT code is not the authority for the new run.
+checkpoints. That migration path was subsequently implemented as the explicit
+evaluator-repair workflow documented below. Existing historical PCT code is not
+the authority for the current evidence.
 
 A complete post-fix smoke now uses the separate
 `hpc-smoke2-evaluator-fix-20260812` root. Controller `5647573` submitted fresh
@@ -291,16 +290,14 @@ output: the common seed; minibatch-eight candidates 1 and 2; and train-only
 3x3 candidates 3 and 6. Its manifest binds every text to the completed source
 run's candidates, candidate metrics, run manifest and progress hashes.
 
-Evaluation is staged. The primary stage contains `seed`, `b8_candidate_2`, and
-`b3x3_candidate_6`, the two per-run accuracy winners. `b8_candidate_1` and
-`b3x3_candidate_3` are frozen reserve inputs representing their winners'
-shorter, more permissive direct parents. A quantitative meaning of "primary
-effect is insufficient" must be committed before the primary launch if reserve
-results are to remain part of a confirmatory external-validation protocol. If
-reserve activation is decided only after inspecting primary PolyBench outcomes,
-the reserve stage must be reported as exploratory and cannot be used to select
-the claimed external-validation winner. No guideline may be modified in either
-stage.
+The guideline bundle originally predeclared `seed`, `b8_candidate_2`, and
+`b3x3_candidate_6` as primary inputs, with `b8_candidate_1` and
+`b3x3_candidate_3` as reserves. The first clean PCCE stage ran Seed and
+`b8_candidate_2`, then paused after neither improved the paired PCE baseline.
+Because that decision followed inspection of their PolyBench outcomes, any
+future candidate-6 or reserve evaluation would be exploratory. It cannot be
+used to select a confirmatory external-validation winner, and no frozen
+guideline may be modified in place.
 
 The formal PCE run is now complete. Its 113 exact-`v1.1` source cases produced
 111 parsed-test outcomes, one Evaluate test timeout and one Code-stage
@@ -467,7 +464,7 @@ of those cases nevertheless resolved, dependency preparation must cover the
 full 23-case evidence-derived scope rather than selecting only unresolved
 outcomes. The frozen case list and cache contract are recorded in
 [`reference/polybench_dependency_preheat_scope_20260821.md`](reference/polybench_dependency_preheat_scope_20260821.md).
-The planned repair leaves official SIFs unchanged, freezes a separate cache,
+The repair design leaves official SIFs unchanged, freezes a separate cache,
 mounts it read-only into Evaluate only, disables evaluator network access, and
 then runs one new PCE and one new PCCE Evaluate-only identity over fixed
 Plan/Code evidence.
@@ -549,3 +546,20 @@ predeclared environment policy rather than assigned a repaired label. The final
 immutable paired snapshot is
 `20260826_python99_cleanpce_depcache_03619730229d`: 99 cases, 70 resolved and
 29 unresolved. Its parent 100-case snapshot remains immutable provenance.
+
+## First-Stage Outcome And Boundary
+
+The clean paired PCCE stage is complete for the minimal Seed and frozen
+minibatch-eight candidate 2. Corrected Seed PCCE resolves 66/99. Candidate 2
+resolves 66 of 98 method-complete cases and has one operationally incomplete
+PC case; on the common 98-case terminal intersection, PCE resolves 69 and both
+PCCE guidelines resolve 66. Candidate 2 therefore does not reproduce its SWE
+validation improvement as an end-to-end PolyBench gain.
+
+This stage is closed rather than extended to candidate 6 or reserve guidelines
+under the unchanged method. The result is evidence for redesign, not new
+Offline GEPA training data. Any prompt, guideline, metric, or workflow change
+informed by these outcomes requires a new experiment identity and a new
+untouched final holdout for a confirmatory generalization claim. See
+[`knowledge/offline-pcce-stage-findings.md`](knowledge/offline-pcce-stage-findings.md)
+for the behavior audit and next-design requirements.

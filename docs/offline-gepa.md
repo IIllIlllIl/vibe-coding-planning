@@ -2,7 +2,7 @@
 
 > Authority: current Offline GEPA experiment contract
 >
-> Last reviewed: 2026-08-16
+> Last reviewed: 2026-08-28
 
 ## Objective
 
@@ -27,7 +27,17 @@ identical to plan quality. Held-out errors must be analyzed for label
 prevalence, Checker bias, and historical Code Agent effects before making that
 claim.
 
-The planned external PolyBench evaluation is specified separately in
+The first clean external PCCE stage confirms that this distinction is
+material. Frozen candidate 2 improved the repeatedly used SWE validation split
+but did not improve end-to-end PolyBench resolution or rejection precision
+over the minimal Seed. The current search implementation remains the authority
+for reproducing its frozen method, but further guideline-quality claims are
+paused pending a new design that separates first-plan classification, feedback
+completeness, revised-plan quality, and intervention benefit. PolyBench
+evidence must not be fed back into the existing GEPA run. See
+[`knowledge/offline-pcce-stage-findings.md`](knowledge/offline-pcce-stage-findings.md).
+
+The external PolyBench evaluation is specified separately in
 [`offline-polybench-validation.md`](offline-polybench-validation.md). It first
 regenerates plan/outcome evidence with a frozen official Python-199 PCE flow,
 then performs Checker-only evaluation of guidelines frozen before any PolyBench

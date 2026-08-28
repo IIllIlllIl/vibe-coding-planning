@@ -4,7 +4,7 @@
 >
 > Scope: Online/Offline controllers, Agent task arrays, supervisor, FairShare
 >
-> Last reviewed: 2026-08-16
+> Last reviewed: 2026-08-28
 >
 > Supersedes: `archive/mixed-design/hpc-submit-mixed-20260715.md`
 
@@ -40,7 +40,7 @@ escalated network access.
 | PolyBench PCE controller slice | 1 CPU / 4G | 10min; submits, collects, or selectively retries one frozen batch |
 | PolyBench PCE array element | 1 CPU / 4G | 125min hard upper bound; one instance with fresh Plan, Code, and Evaluate containers |
 | PolyBench PCCE controller slice | 1 CPU / 4G | 10min; collects or submits one PC review wave or the final CE batch |
-| PolyBench PCCE PC/CE array element | 1 CPU / 4G | The next corrected formal identity uses a 45min hard upper bound; historical diagnostic configs retain their frozen 125min value |
+| PolyBench PCCE PC/CE array element | 1 CPU / 4G | Corrected formal identities use a 45min hard upper bound; historical diagnostic configs retain their frozen 125min value |
 
 Each array element executes one PCT rollout or one Reviewer. Synthesis uses a
 single-element array so it follows the same submission/status contract.
@@ -88,16 +88,16 @@ polls every ten minutes and advances only the new
 `python113-v11-clean-boundary-v1-20260825` identity. The first pass intentionally
 uses the ordinary evaluator. Do not enable a partial dependency manifest on
 the full batch: the evaluator fails closed for cases outside that manifest.
-After the raw PCE is reviewed, intersect the frozen 22-case dependency scope
-with completed clean-PCE Plan/Code. The resulting 21-case subset excludes
+After the raw PCE was reviewed, the frozen 22-case dependency scope was
+intersected with completed clean-PCE Plan/Code. The resulting 21-case subset excludes
 `transformers-27717`, whose Plan timed out and which is outside the paired
-100-case universe. Use that subset only via a separate evaluator-only repair
-identity. Do not launch PCCE before the clean PCE evidence and repair overlay
-have been accepted.
-The prepared runtime for that clean repair is
-`configs/polybench_pce_hpc_dependency_cache_clean_20260825.yaml`; launch it
-with the frozen `evaluator_repair_subset.json` and a new repair ID. It points to
-the corrected run directory and deliberately leaves the raw run untouched.
+100-case universe. That subset was evaluated only through a separate,
+completed evaluator-repair identity before PCCE was launched.
+The retained runtime for that clean repair is
+`configs/polybench_pce_hpc_dependency_cache_clean_20260825.yaml`; it was
+launched with the frozen `evaluator_repair_subset.json` and a separate repair
+ID. It points to the corrected run directory and deliberately leaves the raw
+run untouched.
 Its unattended launch identity is
 `configs/polybench_pce_supervisor_dependency_cache_clean_20260826.yaml`, which
 fixes both the repair ID and frozen subset path.
@@ -159,7 +159,7 @@ rejection increments that counter; the third rejection terminates the method
 without Code. Each PC/CE batch submits all eligible cases without `%N`, leaving
 scheduling to Slurm.
 
-The corrected formal PCCE is prepared as
+The corrected formal Seed PCCE completed under
 `configs/polybench_pcce_hpc_formal_seed_clean_20260826.yaml` with the new
 `seed-python99-clean-pce-v1-20260826` run identity. It selects exactly the 99
 members of the final frozen clean-PCE snapshot: the accepted 21-case dependency
@@ -173,7 +173,7 @@ PCCE is advanced unattended through the same local `tmux + caffeinate`
 supervisor service as GEPA, using
 `configs/polybench_pcce_supervisor_smoke.yaml` for the completed platform smoke
 or `configs/polybench_pcce_supervisor_formal_seed_clean_20260826.yaml` for the
-prepared corrected seed run. The shared resume loop accepts
+completed corrected Seed run. The shared resume loop accepts
 the PCCE runtime through `--config`, observes `hpc_tasks/**/task_state.json`,
 and submits a new 10-minute Controller only when no Controller or worker is
 active. It has no iteration target and stops on terminal `result.json` or a
@@ -205,7 +205,7 @@ because that case has no clean PCE checkpoint and is outside the final 99.
 PCE still accepts repeated `--resume-evaluator-instance` for small diagnostics,
 but those flags and the frozen file cannot be mixed.
 
-The current seed PCCE repair launch identity is
+The completed Seed PCCE repair launch identity is
 `configs/polybench_pcce_supervisor_formal_seed_dependency_cache_clean_20260826.yaml`.
 It invokes the PCCE wrapper with
 `configs/polybench_pcce_hpc_dependency_cache_formal_seed_clean_20260826.yaml`,
@@ -213,23 +213,25 @@ repair ID `clean-depcache-v1-20260826`, and the 21-case clean99 subset. It uses
 `1 CPU / 4G / 45min` per Evaluate worker and a ten-minute Controller slice;
 no Checker, Planner, Code Agent, or LLM is invoked.
 
-Candidate 2 uses
+The completed candidate-2 run used
 `configs/polybench_pcce_supervisor_formal_b8_candidate2_clean_20260826.yaml`.
-Its normal run must complete before launching the separately frozen
+Its normal run completed before the separately frozen
 `polybench_pcce_supervisor_formal_b8_candidate2_dependency_cache_clean_20260826.yaml`;
 the latter uses the same `clean-depcache-v1-20260826` repair ID within the new
 candidate run root. Its ordinary run completed with one operationally incomplete
 PC case, `transformers-26164`, which has no Code/Evaluate checkpoint. The repair
 therefore uses the frozen 20-case CE-evidence intersection
 `evaluator_repair_subset_clean99_b8c2_ce20.json`; it does not rerun or relabel
-that incomplete case. Never point the seed repair config at the candidate run
-or reuse seed checkpoints.
+that incomplete case. The repair also completed. Never point the Seed repair
+config at the candidate run or reuse Seed checkpoints. These launch commands
+are retained for provenance; the current PCCE stage is paused and should not
+be restarted without a new experimental decision and run identity.
 
-External test dependencies are not part of a SIF preheat. The planned
-PolyBench dependency preheat keeps official SIFs unchanged and builds a
+External test dependencies are not part of a SIF preheat. The completed
+PolyBench dependency preheat kept official SIFs unchanged and built a
 separate manifest-hashed cache using each exact SIF. Formal repaired Evaluate
-will bind that cache read-only into the isolated evaluator HOME, expose it to
-no Agent phase, and disable evaluator network access. PCE and PCCE must name
+binds that cache read-only into the isolated evaluator HOME, exposes it to
+no Agent phase, and disables evaluator network access. PCE and PCCE must name
 the same dependency-manifest hash under separate new evaluator identities.
 
 The tracked login-node entry point is
@@ -333,7 +335,7 @@ PolyBench PCE keeps the three artifact roles separate:
 ```text
 output/SWE-PolyBench/polybench-pce-inputs/       frozen source/image inputs
 output/SWE-PolyBench/polybench-pce-runs/smoke/   platform-smoke evidence only
-output/SWE-PolyBench/polybench-pce-runs/formal/  future formal raw PCE evidence
+output/SWE-PolyBench/polybench-pce-runs/formal/  formal raw PCE evidence
 ```
 
 PCCE keeps its paired deployment evaluation separate as well:
@@ -343,7 +345,7 @@ output/SWE-PolyBench/polybench-pcce-runs/smoke/   platform-flow evidence only
 output/SWE-PolyBench/polybench-pcce-runs/formal/  formal frozen-method evidence
 ```
 
-The corrected prepared formal identity is
+The completed corrected Seed identity is
 `polybench-pcce-runs/formal/seed-python99-clean-pce-v1-20260826`, driven by
 `configs/polybench_pcce_hpc_formal_seed_clean_20260826.yaml` and its matching
 supervisor. It selects all 99 cases in the final repaired clean-PCE snapshot

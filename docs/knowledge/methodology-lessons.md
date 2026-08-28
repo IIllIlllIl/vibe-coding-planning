@@ -1,7 +1,7 @@
 # Methodology Evolution And Reusable Lessons
 
 > Knowledge status: rationale, not runtime authority
-> Last reviewed: 2026-07-22
+> Last reviewed: 2026-08-28
 
 ## Evolution
 
@@ -32,3 +32,20 @@
 Historical documents remain useful for provenance. They are not authoritative
 for current behavior; current Offline semantics are restated in
 [`../offline-gepa.md`](../offline-gepa.md).
+
+## First Clean Offline PCCE Stage
+
+The first clean PolyBench deployment evaluation is now complete for the
+default-accept Seed and minibatch-eight candidate 2. Neither improved the
+no-Checker PCE resolved count, and neither repaired a PCE-unresolved case in
+the common behavior-audit subset. Candidate 2's SWE validation improvement did
+not transfer to a more precise PolyBench reject set.
+
+The reusable lesson is to separate three questions that the first PCCE design
+combined: whether the first plan should be rejected, whether the feedback is a
+complete repair specification, and whether a fresh Planner/Code execution
+improves the official outcome. A guideline can identify one genuine plan
+inaccuracy while still making a harmful deployment decision or supplying
+insufficient revision feedback. Detailed evidence and the next-design
+requirements are frozen in
+[`offline-pcce-stage-findings.md`](offline-pcce-stage-findings.md).

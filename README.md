@@ -26,6 +26,15 @@ Earlier Offline GEPA runs are archived evidence; current Offline behavior is
 defined by [`docs/offline-gepa.md`](docs/offline-gepa.md) and
 [`configs/gepa_verified_rules.yaml`](configs/gepa_verified_rules.yaml).
 
+The first clean PolyBench PCCE deployment stage is complete and paused. The
+minimal Seed and frozen minibatch-eight candidate 2 both failed to improve the
+paired no-Checker PCE baseline, and candidate 2 did not improve the common-set
+resolved count over Seed. The execution platform remains reusable, but the
+next study must redesign the separation between first-plan classification,
+revision-feedback completeness, revised-plan quality, and end-to-end benefit.
+See
+[`docs/knowledge/offline-pcce-stage-findings.md`](docs/knowledge/offline-pcce-stage-findings.md).
+
 ## Agent Working Set
 
 Read these files in order:
@@ -174,6 +183,7 @@ are under `output/archive/` and must not be mixed into current score analysis.
 | `configs/offline_gepa_supervisor.yaml` | Offline controller/supervisor launch identity |
 | `docs/offline-polybench-validation.md` | Current PolyBench-199 image preparation, PCE regeneration, and guideline-only generalization contract |
 | `docs/polybench-pcce.md` | Current paired Plan-Check-Code-Evaluate deployment evaluation, formal seed run, and its two independent attempt layers |
+| `docs/knowledge/offline-pcce-stage-findings.md` | Frozen Seed/C2 PCCE result, failure taxonomy, limitations, and next-design requirements |
 | `docs/knowledge/` | Reusable lessons extracted from historical methods |
 | `docs/reference/` | GEPA and seed-rule provenance |
 | `docs/archive/` | Non-authoritative historical documents |
