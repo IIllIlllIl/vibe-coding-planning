@@ -276,7 +276,35 @@ preserved under `slices/`. The final parser reads a JSON stream with stable
 physical-line, entry, and block positions; `slices-final/` is the sole Stage-2
 authority.
 
-Stage 2 records `explicit_approval` and `explicit_rejection` as observed
-behavior signals, not final ACCEPT/DO_NOT_ACCEPT labels. Label policy,
-repository-state reconstruction, deduplication, and splits remain separate
-next-stage decisions.
+The v1 annotation universe retains all 141 eligible slices. Its label target is
+developer behavior at P1—the first Agent-submitted structured Plan artifact
+that has no earlier developer feedback or revision of another structured Plan.
+The uniquely matched platform result immediately following that P1 is the
+primary signal: explicit approval maps to ACCEPT (57 cases), while explicit
+rejection maps to DO_NOT_ACCEPT (84 cases). This is a
+decision-boundary proxy for whether the developer allowed implementation, not
+a claim that the Plan was optimal or that later code succeeded.
+
+Under this behavioral ground truth, the 57 matched approvals are labeled
+ACCEPT and the 84 matched rejections are labeled DO_NOT_ACCEPT in the Stage-2
+annotation base. Rejection reasons still require classification as explanatory
+evidence: changed intent or interruption may show why the developer rejected
+P1, but do not erase the observed decision-boundary behavior. Later prompts and
+Plans may explain P1 behavior but cannot relabel a later revised Plan as P1.
+Repository availability is operational evidence and does not alter a behavioral
+label. Repository-state reconstruction, deduplication, splits, and the GEPA
+input schema remain separate next-stage decisions.
+
+The first authenticated recovery overlay added no mirrors. Because the
+repository-interactive Checker requires a verified local mirror, the ten cases
+across the two unavailable repositories are conservatively excluded from the
+Offline GEPA-eligible universe with reason `repository_not_found`. The resulting
+pool has 131 cases: 54 ACCEPT and 77 DO_NOT_ACCEPT. Their behavioral labels are
+not changed; the exclusion is solely repository-state feasibility.
+
+The authority for this additive cleaning step is
+`configs/frozen_swe_chat_cleaning/f66cca95b14caaa4177f7ed5eaa424608dadcffa/repository-availability-cleaning-v1-manifest.json`,
+with content SHA-256
+`9c0a8a67fded5c1bfb430e73bb550d0fec7b99849ab200a0d8248796d21e4329`.
+It derives the 131-case universe as the frozen 141 Stage-2 eligible cases minus
+the ten explicitly enumerated exclusions; the Stage-2 manifest is not edited.

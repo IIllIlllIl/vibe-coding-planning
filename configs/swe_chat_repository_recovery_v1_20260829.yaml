@@ -1,0 +1,23 @@
+schema_version: 1
+purpose: swe_chat_login_repository_recovery
+recovery_id: swe-chat-repository-recovery-v1-20260829
+
+semantic:
+  request_manifest: configs/frozen_swe_chat_repository_recovery/f66cca95b14caaa4177f7ed5eaa424608dadcffa/repository-recovery-request-manifest.json
+  request_manifest_sha256: 483a0f88bd3e849a02483dff89d4f8d64ce4cd7270006f309acf6d285a7c0055
+  repository_clone_mode: mirror
+  git_lfs_smudge: false
+  recurse_submodules: false
+
+operational:
+  ulhpc_config: configs/ulhpc_submit.yaml
+  remote_root: /scratch/users/twang/vibe-coding-planning/operations/swe-chat-repository-recovery-v1-20260829
+  remote_github_env_file: ~/.config/vibe-coding-planning/github.env
+  remote_python: /usr/bin/python3.11
+  repository_timeout_seconds: 3600
+  repository_max_attempts: 1
+  repository_failure_policy: skip_and_report
+
+supervisor:
+  session: swe-chat-repository-recovery-v1-20260829
+  log: output/SWE-chat/preheat-logs/swe-chat-repository-recovery-v1-20260829.log

@@ -98,6 +98,13 @@ not worker-internal parallelism.
 - SWE-chat acquisition: `scripts/tools/login_swe_chat_preheat.py` and
   `scripts/swe_chat_preheat_service.py`.
 
+Authenticated SWE-chat repository recovery uses the same login-node supervisor,
+not Slurm. Iris must provide a mode-600 private file at
+`~/.config/vibe-coding-planning/github.env` that sets `GITHUB_TOKEN`. The
+recovery script sources it remotely with shell tracing disabled and passes the
+credential to Git only through a temporary AskPass helper; never place the
+token in a config, command argument, Git URL, submitted file, or log.
+
 Completed configs and evidence are not launch defaults. Any new experiment
 requires frozen inputs, a distinct run identity and directory, budget, stopping
 condition, acceptance criteria, and explicit approval.

@@ -70,6 +70,32 @@ or source-availability follow-up is a separate later operation over that report.
 Dataset identity, integrity, authentication, and exhausted-download failures
 remain fail-closed because no valid source snapshot exists without the dataset.
 
+### Authenticated recovery overlay
+
+The completed first pass left two repository mirrors unavailable, affecting ten
+of the 141 eligible Stage-2 cases. The frozen recovery request manifest names
+only `BIDEquity/outbid-dirigent` and `matthsena/reef-coder`; it is derived from
+the original final report and the frozen Stage-2 manifest, not from a fresh
+interpretation of dataset Parquet.
+
+Recovery uses a separate semantic identity and remote root. It reads
+`GITHUB_TOKEN` only from the private Iris file
+`~/.config/vibe-coding-planning/github.env`, exposes it to Git through a
+temporary AskPass helper, and removes that helper before completion. The token
+is absent from Git URLs, the SSH payload, tracked configuration, logs, state,
+and manifests. Each repository is attempted once, verified and atomically
+promoted on success, or skipped and reported on failure. The original 205-item
+preheat state and final manifest remain immutable provenance.
+
+The frozen recovery identity completed with `completed_with_repository_skips`:
+both requests returned GitHub `Repository not found`, so it added zero mirrors.
+GitHub deliberately does not distinguish a nonexistent repository from a
+private repository the token cannot access. This result therefore establishes
+source unavailability under the supplied account permissions, not which of
+those two causes applies. Acquisition preserves that terminal evidence; the
+separate data-cleaning layer excludes the ten affected cases from the Offline
+GEPA-eligible universe.
+
 ## Single Writer And Resume
 
 The remote root owns an `fcntl` writer lock and atomically replaced `state.json`.
@@ -114,3 +140,11 @@ conda run -n mini-swe python scripts/swe_chat_preheat_service.py start \
 Starting that service requires separate user approval after remote credential,
 Python, disk, and read-only access preflight. It uses local
 `tmux + caffeinate`; it does not submit Slurm, start an Agent, or invoke an LLM.
+
+The bounded authenticated recovery uses the same supervisor wrapper with its
+independent config:
+
+```bash
+conda run -n mini-swe python scripts/swe_chat_preheat_service.py start \
+  --config configs/swe_chat_repository_recovery_v1_20260829.yaml
+```

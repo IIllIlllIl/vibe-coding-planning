@@ -26,6 +26,12 @@ Current decisions are:
 - Use at most the first clean Plan Mode episode from each SWE-chat session.
 - Treat later plan revisions as post-boundary diagnostic evidence, not separate
   v1 classification examples.
+- Retain the 141 eligible Stage-2 slices as the annotation universe and label
+  immediate developer behavior toward P1: the 57 matched approvals are ACCEPT
+  and the 84 matched rejections are DO_NOT_ACCEPT.
+- Exclude the ten cases whose two repositories remained unavailable after
+  authenticated recovery. The repository-ready Offline GEPA pool is 131 cases:
+  54 ACCEPT and 77 DO_NOT_ACCEPT.
 - Optimize high-confidence `ACCEPT` versus `DO_NOT_ACCEPT` labels.
 - Preserve ambiguous cases for analysis but exclude them from v1 GEPA
   optimization.
@@ -36,8 +42,8 @@ Current decisions are:
 
 ## Open design issues
 
-1. Freeze the final high-precision mapping from observed approval/rejection
-   evidence to ACCEPT/DO_NOT_ACCEPT labels and retain ambiguous cases.
+1. Classify rejection reasons as controlled explanatory evidence without
+   changing the 84 observed DO_NOT_ACCEPT labels.
 2. Define treatment of rejection/revision feedback, later Plans, silence,
    topic change, and implementation behavior in controlled Reflection evidence.
 3. Map the frozen Checker-visible and Reflection-only case schema into the

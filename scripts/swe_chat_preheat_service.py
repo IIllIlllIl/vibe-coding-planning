@@ -12,6 +12,13 @@ import yaml
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 PREHEAT_SCRIPT = REPO_ROOT / "scripts" / "tools" / "login_swe_chat_preheat.py"
+RECOVERY_SCRIPT = (
+    REPO_ROOT / "scripts" / "tools" / "login_swe_chat_repository_recovery.py"
+)
+PURPOSE_SCRIPTS = {
+    "swe_chat_login_preheat": PREHEAT_SCRIPT,
+    "swe_chat_login_repository_recovery": RECOVERY_SCRIPT,
+}
 
 
 def _run(arguments: list[str]) -> subprocess.CompletedProcess[str]:
@@ -22,9 +29,10 @@ def _has_session(session: str) -> bool:
     return _run(["tmux", "has-session", "-t", session]).returncode == 0
 
 
-def _load_config(path: Path) -> tuple[str, Path, Path]:
+def _load_config(path: Path) -> tuple[str, Path, Path, Path]:
     raw = yaml.safe_load(path.read_text(encoding="utf-8")) or {}
-    if raw.get("schema_version") != 1 or raw.get("purpose") != "swe_chat_login_preheat":
+    purpose = raw.get("purpose")
+    if raw.get("schema_version") != 1 or purpose not in PURPOSE_SCRIPTS:
         raise ValueError("SWE-chat preheat config has the wrong schema or purpose")
     supervisor = raw.get("supervisor") or {}
     session = supervisor.get("session")
@@ -40,7 +48,7 @@ def _load_config(path: Path) -> tuple[str, Path, Path]:
     ulhpc_path = Path(str(ulhpc)).expanduser()
     if not ulhpc_path.is_absolute():
         ulhpc_path = REPO_ROOT / ulhpc_path
-    return session, log_path.resolve(), ulhpc_path.resolve()
+    return session, log_path.resolve(), ulhpc_path.resolve(), PURPOSE_SCRIPTS[purpose]
 
 
 def parse_args() -> argparse.Namespace:
@@ -53,7 +61,7 @@ def parse_args() -> argparse.Namespace:
 def main() -> int:
     args = parse_args()
     config_path = args.config.resolve()
-    session, log_path, ulhpc_path = _load_config(config_path)
+    session, log_path, ulhpc_path, entrypoint = _load_config(config_path)
     if args.action == "status":
         running = _has_session(session)
         print("running" if running else "stopped")
@@ -78,7 +86,7 @@ def main() -> int:
         "-n",
         "mini-swe",
         "python",
-        str(PREHEAT_SCRIPT),
+        str(entrypoint),
         "--config",
         str(config_path),
         "--ulhpc-config",

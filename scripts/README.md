@@ -8,8 +8,12 @@
 - `tools/login_swe_chat_preheat.py` downloads and verifies the dataset and Git
   mirrors on Iris with a single-writer lock, resumable state, atomic promotion,
   bounded dataset retries, and first-pass repository skip-and-report behavior.
+- `tools/login_swe_chat_repository_recovery.py` consumes the frozen two-repo
+  recovery manifest, uses the private Iris GitHub token through temporary
+  AskPass, and writes an independent verified recovery overlay.
 - `swe_chat_preheat_service.py` runs that bounded login preheater through local
-  `tmux + caffeinate`. It submits no Slurm job and invokes no Agent or LLM.
+  `tmux + caffeinate`, dispatching either acquisition config. It submits no
+  Slurm job and invokes no Agent or LLM.
 - `tools/build_swe_chat_stage1_selection.py` deterministically selects whole
   high-agent-authorship trajectories with at least one structured non-empty
   Plan, preserving disjoint recovery pools without reading behavioral results.
