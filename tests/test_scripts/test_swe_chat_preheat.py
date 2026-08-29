@@ -87,7 +87,7 @@ def _minimal_plan_files(tmp_path: Path) -> tuple[Path, dict, dict]:
                     "dataset_max_attempts": 2,
                     "repository_batch_size": 1,
                     "repository_timeout_seconds": 10,
-                    "repository_max_attempts": 2,
+                    "repository_failure_policy": "skip_and_report",
                 },
                 "supervisor": {"session": "test", "log": "output/test.log"},
             }
@@ -99,9 +99,7 @@ def _minimal_plan_files(tmp_path: Path) -> tuple[Path, dict, dict]:
 
 def test_source_manifest_preserves_distinct_git_and_lfs_hashes() -> None:
     siblings = [
-        SimpleNamespace(
-            rfilename="README.md", size=7, blob_id="git-blob", lfs=None
-        ),
+        SimpleNamespace(rfilename="README.md", size=7, blob_id="git-blob", lfs=None),
         SimpleNamespace(
             rfilename="data.parquet",
             size=11,
@@ -159,9 +157,10 @@ def test_semantic_identity_ignores_operational_policy(tmp_path: Path) -> None:
     second = preheat.load_plan(config)
 
     assert first["semantic_identity"] == second["semantic_identity"]
-    assert preheat._payload(first, config)["operational_policy"] != preheat._payload(
-        second, config
-    )["operational_policy"]
+    assert (
+        preheat._payload(first, config)["operational_policy"]
+        != preheat._payload(second, config)["operational_policy"]
+    )
 
 
 def test_semantic_identity_changes_with_repository_manifest(tmp_path: Path) -> None:
@@ -243,7 +242,9 @@ def test_remote_program_promotes_dataset_and_mirror_without_network(
     working = tmp_path / "working"
     working.mkdir()
     subprocess.run(["git", "init", "-q"], cwd=working, check=True)
-    subprocess.run(["git", "config", "user.email", "test@example.invalid"], cwd=working, check=True)
+    subprocess.run(
+        ["git", "config", "user.email", "test@example.invalid"], cwd=working, check=True
+    )
     subprocess.run(["git", "config", "user.name", "Test"], cwd=working, check=True)
     (working / "file.txt").write_text("repository\n", encoding="utf-8")
     subprocess.run(["git", "add", "file.txt"], cwd=working, check=True)
@@ -276,20 +277,20 @@ def test_remote_program_promotes_dataset_and_mirror_without_network(
     }
     payload = {
         "remote_root": str(remote_root),
-        "semantic_identity": hashlib.sha256(preheat.canonical_bytes(semantic)).hexdigest(),
+        "semantic_identity": hashlib.sha256(
+            preheat.canonical_bytes(semantic)
+        ).hexdigest(),
         "semantic_contract": semantic,
         "source_manifest": source_manifest,
         "repository_manifest": {
-            "requests": [
-                {"index": 0, "repo_id": "owner/repo", "url": str(working)}
-            ]
+            "requests": [{"index": 0, "repo_id": "owner/repo", "url": str(working)}]
         },
         "operational_policy": {
             "hf_max_workers": 1,
             "dataset_max_attempts": 2,
             "repository_batch_size": 1,
             "repository_timeout_seconds": 30,
-            "repository_max_attempts": 2,
+            "repository_failure_policy": "skip_and_report",
         },
         "downloader_sha256": "3" * 64,
         "config_sha256": "4" * 64,
@@ -343,9 +344,7 @@ def test_remote_program_promotes_dataset_and_mirror_without_network(
     # A crash after atomic promotion but before the state update is recoverable,
     # and changing an operational setting does not change semantic identity.
     state["dataset"]["status"] = "pending"
-    (remote_root / "state.json").write_text(
-        json.dumps(state), encoding="utf-8"
-    )
+    (remote_root / "state.json").write_text(json.dumps(state), encoding="utf-8")
     payload["operational_policy"]["hf_max_workers"] = 2
     resumed = subprocess.run(
         ["python", "-c", preheat._remote_program()],
@@ -356,21 +355,119 @@ def test_remote_program_promotes_dataset_and_mirror_without_network(
         env=env,
     )
     assert resumed.returncode == 0, resumed.stderr
-    resumed_state = json.loads(
-        (remote_root / "state.json").read_text(encoding="utf-8")
-    )
+    resumed_state = json.loads((remote_root / "state.json").read_text(encoding="utf-8"))
     assert resumed_state["status"] == "completed"
     assert len(resumed_state["invocations"]) == 2
     assert resumed_state["invocations"][1]["config_sha256"] == "4" * 64
-    assert (
-        resumed_state["invocations"][1]["operational_policy"]["hf_max_workers"]
-        == 2
+    assert resumed_state["invocations"][1]["operational_policy"]["hf_max_workers"] == 2
+
+
+def test_remote_program_reclassifies_legacy_failures_and_skips_new_failure(
+    tmp_path: Path,
+) -> None:
+    remote_root = tmp_path / "remote"
+    remote_root.mkdir()
+    semantic = {
+        "dataset_id": "SALT-NLP/SWE-chat",
+        "revision": REVISION,
+        "source_manifest_sha256": "1" * 64,
+        "repository_manifest_sha256": "2" * 64,
+        "repository_clone_mode": "mirror",
+        "git_lfs_smudge": False,
+        "recurse_submodules": False,
+    }
+    semantic_identity = hashlib.sha256(preheat.canonical_bytes(semantic)).hexdigest()
+    requests = [
+        {
+            "index": 0,
+            "repo_id": "owner/blocked",
+            "url": "https://github.com/owner/blocked",
+        },
+        {
+            "index": 1,
+            "repo_id": "owner/retryable",
+            "url": "https://github.com/owner/retryable",
+        },
+        {
+            "index": 2,
+            "repo_id": "owner/new-failure",
+            "url": str(tmp_path / "missing-repository"),
+        },
+    ]
+    inaccessible_error = (
+        "RuntimeError: fatal: could not read Username for "
+        "'https://github.com': terminal prompts disabled"
+    )
+    state = {
+        "schema_version": 1,
+        "status": "blocked",
+        "semantic_identity": semantic_identity,
+        "semantic_contract": semantic,
+        "dataset": {"status": "completed", "attempts": []},
+        "repositories": {
+            "owner/blocked": {
+                "index": 0,
+                "url": requests[0]["url"],
+                "status": "blocked",
+                "failure_category": "attempts_exhausted",
+                "last_error": inaccessible_error,
+                "attempts": [{"status": "failed"}, {"status": "failed"}],
+            },
+            "owner/retryable": {
+                "index": 1,
+                "url": requests[1]["url"],
+                "status": "retryable_failed",
+                "failure_category": "retryable_failure",
+                "last_error": inaccessible_error,
+                "attempts": [{"status": "failed"}],
+            },
+            "owner/new-failure": {
+                "index": 2,
+                "url": requests[2]["url"],
+                "status": "pending",
+                "attempts": [],
+            },
+        },
+        "invocations": [],
+    }
+    (remote_root / "state.json").write_text(json.dumps(state), encoding="utf-8")
+    payload = {
+        "remote_root": str(remote_root),
+        "semantic_identity": semantic_identity,
+        "semantic_contract": semantic,
+        "source_manifest": {"files": []},
+        "repository_manifest": {"requests": requests},
+        "operational_policy": {
+            "hf_max_workers": 1,
+            "dataset_max_attempts": 2,
+            "repository_batch_size": 3,
+            "repository_timeout_seconds": 30,
+            "repository_failure_policy": "skip_and_report",
+        },
+        "downloader_sha256": "3" * 64,
+        "config_sha256": "4" * 64,
+    }
+
+    result = subprocess.run(
+        ["python", "-c", preheat._remote_program()],
+        input=json.dumps(payload),
+        capture_output=True,
+        text=True,
+        check=False,
     )
 
+    assert result.returncode == 0, result.stderr
+    resumed = json.loads((remote_root / "state.json").read_text(encoding="utf-8"))
+    assert resumed["status"] == "completed_with_repository_skips"
+    assert {item["status"] for item in resumed["repositories"].values()} == {"skipped"}
+    assert len(resumed["operational_reclassifications"]) == 2
+    assert len(resumed["repositories"]["owner/blocked"]["attempts"]) == 2
+    assert len(resumed["repositories"]["owner/retryable"]["attempts"]) == 1
+    assert len(resumed["repositories"]["owner/new-failure"]["attempts"]) == 1
+    assert (remote_root / "final_manifest.json").is_file()
 
-def test_service_builds_tmux_caffeinate_command(
-    tmp_path: Path, monkeypatch
-) -> None:
+
+def test_service_builds_tmux_caffeinate_command(tmp_path: Path, monkeypatch) -> None:
     config = tmp_path / "config.yaml"
     config.write_text(
         yaml.safe_dump(
@@ -420,3 +517,4 @@ def test_tracked_frozen_universe_and_config_are_consistent() -> None:
     assert config["repositories"]["requested_count"] == 205
     assert len(config["repositories"]["requests"]) == 205
     assert len({x["repo_id"] for x in config["repositories"]["requests"]}) == 205
+    assert config["operational"]["repository_failure_policy"] == "skip_and_report"

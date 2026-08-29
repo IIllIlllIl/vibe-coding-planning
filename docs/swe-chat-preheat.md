@@ -28,12 +28,12 @@ Semantic identity covers the dataset ID/revision, both frozen-manifest hashes,
 mirror clone mode, skipped Git LFS smudge, and non-recursive submodule policy.
 A semantic change requires a new preheat identity and remote root.
 
-Batch size, timeout, retry count, Hugging Face worker count, polling cadence,
-paths, and downloader implementation are operational provenance. Each remote
-invocation records its policy and downloader hash, but an operational-only
-change may continue the same semantic acquisition. A code change that alters
-the requested or accepted artifacts is semantic and still requires a new
-identity.
+Batch size, timeout, dataset retry count, repository failure policy, Hugging
+Face worker count, polling cadence, paths, and downloader implementation are
+operational provenance. Each remote invocation records its policy and
+downloader hash, but an operational-only change may continue the same semantic
+acquisition. A code change that alters the requested or accepted artifacts is
+semantic and still requires a new identity.
 
 ## Dataset Verification
 
@@ -57,17 +57,27 @@ cloned as bare mirrors with `GIT_LFS_SKIP_SMUDGE=1`, checked with
 `git fsck --connectivity-only`, assigned a sorted-ref hash, and atomically
 promoted under `repositories/<owner>/<repo>.git`.
 
-Stable GitHub not-found results become terminal `source_unavailable`
-acquisition evidence. Timeouts and network failures are retryable only within
-the configured bound. They are never converted into Behavioral exclusions or
-labels. A run whose only unavailable artifacts are source exclusions may end
-as `completed_with_source_exclusions`.
+Repository acquisition is a first-pass availability scan. Any clone timeout,
+authentication requirement, not-found response, network failure, or other Git
+error becomes terminal `skipped` evidence for that repository after its first
+attempt. The exact category, error, timing, and attempt remain in `state.json`;
+the preheater continues through the full ordered 205-request universe.
+
+Repository skips never become Behavioral exclusions or labels. A completed
+scan with one or more skips ends as `completed_with_repository_skips` and writes
+the complete successes and skip evidence to `final_manifest.json`. GitHub-token
+or source-availability follow-up is a separate later operation over that report.
+Dataset identity, integrity, authentication, and exhausted-download failures
+remain fail-closed because no valid source snapshot exists without the dataset.
 
 ## Single Writer And Resume
 
 The remote root owns an `fcntl` writer lock and atomically replaced `state.json`.
 Completed dataset and repository artifacts are verified and skipped on resume.
-The local loop stops on success, a blocking failure, exhausted attempts,
+When resuming state created under the earlier repository retry/block policy,
+failed repository records are reclassified to `skipped` with an explicit
+`operational_reclassifications` audit entry; their original attempts and errors
+are preserved. The local loop stops on success, a dataset blocking failure,
 bounded no-progress cycles, or the maximum cycle count.
 
 The Hugging Face token is read only on Iris from the configured private env

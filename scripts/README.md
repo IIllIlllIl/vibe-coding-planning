@@ -6,8 +6,8 @@
   Hub file manifest and the ordered repository request manifest. Formal preheat
   consumes those JSON files rather than reinterpreting Parquet.
 - `tools/login_swe_chat_preheat.py` downloads and verifies the dataset and Git
-  mirrors on Iris with a single-writer lock, bounded retries, resumable state,
-  and atomic promotion.
+  mirrors on Iris with a single-writer lock, resumable state, atomic promotion,
+  bounded dataset retries, and first-pass repository skip-and-report behavior.
 - `swe_chat_preheat_service.py` runs that bounded login preheater through local
   `tmux + caffeinate`. It submits no Slurm job and invokes no Agent or LLM.
 

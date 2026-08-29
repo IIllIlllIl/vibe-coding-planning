@@ -25,7 +25,7 @@ operational:
   dataset_max_attempts: 3
   repository_batch_size: 5
   repository_timeout_seconds: 3600
-  repository_max_attempts: 2
+  repository_failure_policy: skip_and_report
   check_interval_seconds: 60
   max_cycles: 60
   max_no_progress_cycles: 3

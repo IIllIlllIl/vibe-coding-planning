@@ -65,7 +65,10 @@ def load_plan(config_path: Path) -> dict[str, Any]:
     expected_repository_hash = semantic.get("repository_manifest_sha256")
     if expected_source_hash and expected_source_hash != source["content_sha256"]:
         raise ValueError("source manifest does not match configured hash")
-    if expected_repository_hash and expected_repository_hash != repositories["content_sha256"]:
+    if (
+        expected_repository_hash
+        and expected_repository_hash != repositories["content_sha256"]
+    ):
         raise ValueError("repository manifest does not match configured hash")
     semantic_contract = {
         "schema_version": 1,
@@ -95,7 +98,7 @@ def load_plan(config_path: Path) -> dict[str, Any]:
 
 
 def _remote_program() -> str:
-    return r'''
+    return r"""
 import fcntl
 import hashlib
 import json
@@ -172,6 +175,8 @@ def verify_dataset(directory):
 
 def classify_failure(error):
     lowered = error.lower()
+    if "could not read username for 'https://github.com'" in lowered and "terminal prompts disabled" in lowered:
+        return "authentication_or_source_unavailable"
     if "repository not found" in lowered or "not found" in lowered or "error: 404" in lowered:
         return "source_unavailable"
     if "401" in lowered or "unauthorized" in lowered or "gatedrepoerror" in lowered:
@@ -241,6 +246,31 @@ if state.get("semantic_identity") != payload["semantic_identity"]:
 expected_repositories = {x["repo_id"] for x in payload["repository_manifest"]["requests"]}
 if set(state.get("repositories", {})) != expected_repositories:
     raise SystemExit("existing SWE-chat preheat state has a different repository universe")
+
+if payload["operational_policy"]["repository_failure_policy"] != "skip_and_report":
+    raise SystemExit("unsupported repository failure policy")
+for repo_id, record in state["repositories"].items():
+    if record.get("status") not in {"blocked", "retryable_failed"}:
+        continue
+    previous_status = record["status"]
+    previous_category = record.get("failure_category")
+    category = classify_failure(record.get("last_error", ""))
+    record.update(
+        status="skipped",
+        failure_category=category,
+        skipped_at=now(),
+    )
+    state.setdefault("operational_reclassifications", []).append(
+        {
+            "at": now(),
+            "repo_id": repo_id,
+            "from_status": previous_status,
+            "from_failure_category": previous_category,
+            "to_status": "skipped",
+            "to_failure_category": category,
+            "reason": "repository_failure_policy_changed_to_skip_and_report",
+        }
+    )
 
 invocation = {
     "started_at": now(),
@@ -328,8 +358,7 @@ if dataset.get("status") == "completed":
     candidates = [
         (repo_id, record)
         for repo_id, record in sorted(state["repositories"].items(), key=lambda item: item[1]["index"])
-        if record.get("status") in {"pending", "retryable_failed"}
-        and len(record.get("attempts", [])) < payload["operational_policy"]["repository_max_attempts"]
+        if record.get("status") == "pending"
     ][:payload["operational_policy"]["repository_batch_size"]]
     for repo_id, record in candidates:
         owner, name = repo_id.split("/", 1)
@@ -361,38 +390,24 @@ if dataset.get("status") == "completed":
         except subprocess.TimeoutExpired as exc:
             error = f"timed out after {exc.timeout}s"
             attempt.update(status="failed", category="retryable_timeout", error=error, completed_at=now())
-            record.update(status="retryable_failed", failure_category="retryable_timeout", last_error=error, updated_at=now())
+            record.update(status="skipped", failure_category="retryable_timeout", last_error=error, skipped_at=now(), updated_at=now())
         except Exception as exc:
             error = f"{type(exc).__name__}: {exc}"
             category = classify_failure(error)
             attempt.update(status="failed", category=category, error=error[-2000:], completed_at=now())
-            if category == "source_unavailable":
-                status = "source_unavailable"
-            elif category in {"authentication_blocked", "disk_blocked"}:
-                status = "blocked"
-            else:
-                status = "retryable_failed"
-            record.update(status=status, failure_category=category, last_error=error[-2000:], updated_at=now())
+            record.update(status="skipped", failure_category=category, last_error=error[-2000:], skipped_at=now(), updated_at=now())
         finally:
             if temporary.exists():
                 shutil.rmtree(temporary)
         atomic_json(state_path, state)
         print(json.dumps({"event": "repository_finished", "repo_id": repo_id, "status": record["status"]}, sort_keys=True), flush=True)
 
-for record in state["repositories"].values():
-    if (
-        record.get("status") == "retryable_failed"
-        and len(record.get("attempts", [])) >= payload["operational_policy"]["repository_max_attempts"]
-    ):
-        record["status"] = "blocked"
-        record["failure_category"] = "attempts_exhausted"
-
 repo_statuses = [item.get("status") for item in state["repositories"].values()]
-terminal = {"completed", "source_unavailable"}
-if dataset.get("status") == "blocked" or "blocked" in repo_statuses:
+terminal = {"completed", "skipped", "source_unavailable"}
+if dataset.get("status") == "blocked":
     state["status"] = "blocked"
 elif dataset.get("status") == "completed" and all(status in terminal for status in repo_statuses):
-    state["status"] = "completed_with_source_exclusions" if "source_unavailable" in repo_statuses else "completed"
+    state["status"] = "completed_with_repository_skips" if set(repo_statuses) - {"completed"} else "completed"
     state["completed_at"] = now()
     final = {
         "schema_version": 1,
@@ -413,12 +428,13 @@ summary = {
     "status": state["status"],
     "dataset_status": state["dataset"].get("status"),
     "repositories_completed": sum(x == "completed" for x in repo_statuses),
+    "repositories_skipped": sum(x in {"skipped", "source_unavailable"} for x in repo_statuses),
     "repositories_unavailable": sum(x == "source_unavailable" for x in repo_statuses),
-    "repositories_pending": sum(x in {"pending", "retryable_failed"} for x in repo_statuses),
+    "repositories_pending": sum(x == "pending" for x in repo_statuses),
     "repositories_blocked": sum(x == "blocked" for x in repo_statuses),
 }
 print(json.dumps(summary, sort_keys=True), flush=True)
-'''
+"""
 
 
 def _payload(plan: dict[str, Any], config_path: Path) -> dict[str, Any]:
@@ -430,10 +446,17 @@ def _payload(plan: dict[str, Any], config_path: Path) -> dict[str, Any]:
         "repository_timeout_seconds": int(
             operational.get("repository_timeout_seconds", 3600)
         ),
-        "repository_max_attempts": int(operational.get("repository_max_attempts", 2)),
+        "repository_failure_policy": str(
+            operational.get("repository_failure_policy", "")
+        ),
     }
-    if any(value < 1 for value in policy.values()):
+    numeric_policy = {
+        key: value for key, value in policy.items() if isinstance(value, int)
+    }
+    if any(value < 1 for value in numeric_policy.values()):
         raise ValueError("operational counts and timeouts must be positive")
+    if policy["repository_failure_policy"] != "skip_and_report":
+        raise ValueError("repository_failure_policy must be skip_and_report")
     return {
         "remote_root": str(operational["remote_root"]),
         "semantic_identity": plan["semantic_identity"],
@@ -499,10 +522,12 @@ def _remote_status(plan: dict[str, Any], ulhpc_config: Path) -> int:
     state_path = Path(str(plan["operational"]["remote_root"])) / "state.json"
     code = (
         "from pathlib import Path; import sys; p=Path(sys.argv[1]); "
-        "print(p.read_text() if p.is_file() else '{\"status\":\"missing\"}')"
+        'print(p.read_text() if p.is_file() else \'{"status":"missing"}\')'
     )
     command = "python3 -c " + shlex.quote(code) + " " + shlex.quote(str(state_path))
-    return subprocess.run(_ssh_command(target, port, key, command), check=False).returncode
+    return subprocess.run(
+        _ssh_command(target, port, key, command), check=False
+    ).returncode
 
 
 def parse_args() -> argparse.Namespace:
@@ -549,19 +574,27 @@ def main() -> int:
         returncode, summary = _run_remote(plan, config_path, ulhpc_config)
         if returncode != 0 or summary is None:
             return returncode or 2
-        if summary["status"] in {"completed", "completed_with_source_exclusions"}:
+        if summary["status"] in {
+            "completed",
+            "completed_with_repository_skips",
+            "completed_with_source_exclusions",
+        }:
             return 0
         if summary["status"] == "blocked":
             return 2
         progress = (
             summary["dataset_status"],
             summary["repositories_completed"],
+            summary["repositories_skipped"],
             summary["repositories_unavailable"],
         )
         no_progress = no_progress + 1 if progress == previous_progress else 0
         previous_progress = progress
         if no_progress >= max_no_progress:
-            print("SWE-chat preheat made no progress across bounded cycles", file=sys.stderr)
+            print(
+                "SWE-chat preheat made no progress across bounded cycles",
+                file=sys.stderr,
+            )
             return 2
         if interval > 0:
             time.sleep(interval)
