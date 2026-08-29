@@ -15,9 +15,10 @@ Read in this order:
 |---|---|
 | [`../README.md`](../README.md) | Project overview, methods, quick start, and entry points |
 | [`branch-scope.md`](branch-scope.md) | Active Behavioral, retained foundation, frozen evidence, and archive boundary |
-| [`../project_issues.md`](../project_issues.md) | Current progress, open risks, next-run plan, and acceptance checks |
+| [`../project_issues.md`](../project_issues.md) | Current research decisions and unresolved methodological risks; not a run-progress log |
 | [`offline-gepa.md`](offline-gepa.md) | Offline GEPA Checker boundary, metric, stopping, artifacts, and resume contract |
 | [`swe-chat-preheat.md`](swe-chat-preheat.md) | Behavioral v1 frozen dataset/repository acquisition, identity, verification, and login-preheat boundary |
+| [`swe-chat-data-cleaning.md`](swe-chat-data-cleaning.md) | Behavioral v1 selection/slicing policy, frozen funnel, source-quality audit, recovery pools, and evidence boundary |
 | [`offline-polybench-validation.md`](offline-polybench-validation.md) | Current PolyBench-199 image preparation, PCE regeneration, exact-image provenance, and guideline-only generalization boundary |
 | [`polybench-pcce.md`](polybench-pcce.md) | Current paired PolyBench Plan-Check-Code-Evaluate deployment evaluation, including accepted smoke, formal seed run, review, and workflow retry semantics |
 | [`hpc-submit.md`](hpc-submit.md) | Behavioral-branch credential, preheat, retained Slurm, and FairShare safety |

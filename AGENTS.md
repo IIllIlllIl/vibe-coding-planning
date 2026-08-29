@@ -8,14 +8,15 @@ v1. Read, in order:
 
 | Path | Authority |
 |---|---|
-| `README.md` | Branch objective, current state, and entry points |
+| `README.md` | Branch objective, frozen research baseline, and entry points |
 | `docs/branch-scope.md` | Active versus historical path boundary |
-| `project_issues.md` | Current decisions, open risks, and next tasks |
+| `project_issues.md` | Current decisions and unresolved methodological risks; not progress tracking |
+| `docs/swe-chat-data-cleaning.md` | Frozen Behavioral selection/slicing policy, source-quality findings, and evidence boundary |
 | `docs/offline-gepa.md` | Existing Offline Checker, score, Reflection, search, and resume contract |
 | `docs/knowledge/offline-pcce-stage-findings.md` | Frozen Seed/C2 PolyBench result and next-design requirements |
 | `docs/polybench-pcce.md` | Implemented PCCE platform semantics |
 | `docs/offline-polybench-validation.md` | Frozen PolyBench evidence and external-validation boundary |
-| `configs/gepa_verified_rules.yaml` | Existing reproducible Offline config; retained, not authorized to run |
+| `configs/gepa_verified_rules.yaml` | Existing reproducible Offline config; retained, not a launch default |
 
 Do not browse `docs/archive/`, `configs/archive/`, `scripts/archive/`, or
 `output/archive/` by default. Online GEPA, PCT/PCC, Pro, old analysis paths, and
@@ -24,8 +25,9 @@ configs, and operator scripts have begun moving behind archive boundaries;
 historical source modules remain temporarily present for later reachability
 analysis. Use `git show main:<path>` when explicit historical detail is required.
 
-Do not broadly delete historical code until the Behavioral data skeleton exists
-and import/reachability analysis identifies the real dependency boundary.
+Do not broadly delete historical code until the remaining Behavioral label and
+adapter boundaries are explicit and import/reachability analysis identifies the
+real dependency boundary.
 Preserve the current Offline GEPA and frozen PolyBench reproduction semantics.
 Avoid modifying `third_party/gepa`; any such change requires a concrete,
 documented experimental need.

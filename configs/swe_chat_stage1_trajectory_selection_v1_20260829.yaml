@@ -1,0 +1,17 @@
+schema_version: 1
+purpose: swe_chat_stage1_trajectory_selection
+selection_id: swe-chat-stage1-high-agent-explicit-plan-v1-20260829
+
+source:
+  dataset_id: SALT-NLP/SWE-chat
+  revision: f66cca95b14caaa4177f7ed5eaa424608dadcffa
+  source_manifest: configs/frozen_swe_chat_preheat/f66cca95b14caaa4177f7ed5eaa424608dadcffa/dataset-source-manifest.json
+  source_manifest_sha256: ed879622bae1890145f310cde340697427ed72415dc094723dc95e6a70fc4746
+
+selection:
+  minimum_agent_percentage_inclusive: 99
+  explicit_plan_marker:
+    turn_type: tool_use
+    tool_name: ExitPlanMode
+    json_field: plan
+    require_nonempty_after_strip: true

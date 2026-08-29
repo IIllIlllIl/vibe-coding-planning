@@ -1,0 +1,282 @@
+# SWE-chat Behavioral Data Cleaning
+
+> Authority: Behavioral v1 data-cleaning decisions, conservative exclusion
+> pools, and the boundary between trajectory selection and episode extraction
+>
+> Frozen source revision: `f66cca95b14caaa4177f7ed5eaa424608dadcffa`
+
+## Research Population
+
+Behavioral v1 studies plan acceptance in conservative vibe-coding sessions.
+The first filter therefore uses near-total agent code authorship as an
+operational population definition. It does not treat authorship percentage as
+a Plan-quality label and never exposes that post-session field to a Checker.
+
+The initial policy intentionally favors precision over coverage. Excluded
+session IDs remain in named recovery pools so a later data-shortage decision
+can broaden one rule at a time without reconstructing the original funnel.
+
+## Stage 1: Trajectory Selection
+
+Stage 1 selects whole session trajectories. It does not choose a Plan Decision
+Episode and does not read developer reactions or assign behavioral labels.
+
+A session is selected exactly when both conditions hold:
+
+1. `agent_percentage` is finite, in `[0, 100]`, and at least `99`;
+2. `conversations.parquet` contains at least one row with
+   `turn_type == "tool_use"`, `tool_name == "ExitPlanMode"`, and a parseable
+   `tool_input_json.plan` that is non-empty after stripping whitespace.
+
+The second condition deliberately requires the structured Plan payload. Text
+mentions of "plan", `assistant_response` prose, `tool_result` duplicates, and
+empty `ExitPlanMode` calls are insufficient.
+
+The policy is frozen in
+`configs/swe_chat_stage1_trajectory_selection_v1_20260829.yaml`. The generated
+manifest is
+`configs/frozen_swe_chat_cleaning/f66cca95b14caaa4177f7ed5eaa424608dadcffa/stage1-high-agent-explicit-plan-v1.json`,
+with content SHA-256
+`69e04e849f7e67ae888679701383106aa51e8d31738d91a4df99a1cbfd9fafba`.
+
+### Frozen funnel
+
+| Decision | Sessions |
+|---|---:|
+| `sessions.parquet` universe | 5,851 |
+| Missing or invalid `agent_percentage` | 282 |
+| Valid percentage below 99 | 3,216 |
+| Passed `agent_percentage >= 99` | 2,353 |
+| Passed authorship but no structured non-empty Plan | 2,183 |
+| Stage-1 selected trajectories | 170 |
+
+The selected trajectories contain 287 structured non-empty Plan events across
+45 repositories. All 170 are Claude Code `manual-commit` sessions. This is a
+high-precision Claude Plan Mode population, not evidence that the same marker
+captures planning behavior for OpenCode, Codex, Gemini CLI, or other agents.
+
+The recovery pools also show where more data could come from:
+
+- 451 below-threshold sessions contain a structured non-empty Plan;
+- 22 sessions with missing/invalid authorship percentage contain one;
+- 2,183 high-agent sessions lack the required structured Plan marker.
+
+Changing any of those exclusions is a new selection policy and must produce a
+new manifest identity. It must not modify this frozen manifest in place.
+
+### Source exclusions
+
+`conversations.parquet` contains 3,817 rows for 40 session IDs absent from
+`sessions.parquet`; six of those orphan IDs contain a structured non-empty Plan.
+They cannot pass the authorship filter because their session metadata and
+`agent_percentage` are unavailable. The manifest records all 40 IDs, row
+counts, and Plan-event counts under `source_exclusions` rather than silently
+discarding them or coercing a percentage.
+
+Seven `ExitPlanMode` tool uses in the 5,851-session universe have no non-empty
+Plan payload. No malformed JSON payload was observed. These are recorded but
+do not satisfy the explicit-Plan rule.
+
+### Frozen-source consistency audit
+
+The official dataset README describes `turn_id` as globally unique and the
+Parquet tables as relationally complete. A direct audit of the frozen revision
+found that those assumptions do not hold everywhere. These are source-data
+properties, not acquisition corruption: the five locally inspected Parquet
+files match the Hugging Face LFS SHA-256 values in the frozen source manifest.
+
+The audit was projected onto both frozen cleaning stages:
+
+| Source condition | Full source | Stage-1 selected | Stage-2 eligible |
+|---|---:|---:|---:|
+| Duplicate `turn_id` | 2,302 IDs / 4,767 rows / 34 sessions | 0 | 0 |
+| Physical-row `turn_number` regression | 110 sessions | 3 | 0 |
+| Conversation session absent from `sessions` | 40 sessions / 3,817 rows | 0 | 0 |
+| Conversation checkpoint absent from `checkpoints` | 1 session / 86 rows | 0 | 0 |
+| Canonical checkpoint absent from `checkpoints` | 1 session | 0 | 0 |
+| Empty `session_logs.transcript_path` | 1 session / 1 row | 0 | 0 |
+
+The three Stage-1 trajectories with a physical-row order regression are all
+continuation sessions. Stage 2 excludes all three under
+`continuation_context`, so none of the 141 eligible slices intersects any of
+the audited conditions. This conclusion applies only to the frozen Stage-2
+eligible set; the 170-row Stage-1 manifest remains a trajectory-selection and
+recovery-pool authority, not a clean labeling universe by itself.
+
+Downstream code must not use `turn_id` as a unique key or treat Parquet physical
+row order as event order. Stage 2 instead uses raw-transcript source positions,
+`tool_call_id`, and the normalized Plan hash to identify the decision boundary.
+Repository-state construction must separately validate checkpoint and commit
+references; the zero overlap above does not establish that a usable base commit
+has already been reconstructed for every eligible case. Source rows are never
+repaired in place, and any future selection-policy expansion must rerun this
+intersection audit before producing a new eligible universe.
+
+## Information Preserved For Episode Design
+
+The Stage-1 manifest stores no Plan text. For each selected trajectory it keeps
+the session/repository identity, transcript pointer, authorship metadata,
+context availability, Plan Mode event counts, and for every qualifying Plan:
+
+- `turn_number`;
+- `tool_call_id`;
+- normalized Plan character count;
+- normalized Plan SHA-256;
+- sorted `tool_input_json` keys.
+
+This is enough to reproduce membership and locate candidate boundaries without
+putting developer reactions into the selection layer.
+
+Observed structure that matters for the next stage:
+
+| Feature | Observation |
+|---|---:|
+| Selected trajectories with one non-empty Plan | 111 |
+| Selected trajectories with multiple non-empty Plans | 59 |
+| Selected trajectories with normalized `EnterPlanMode` | 54 |
+| Selected trajectories flagged as continuation | 26 |
+| Selected trajectories with non-empty `context_md` | 138 |
+| First qualifying Plan turn, median / P90 / max | 128 / 552 / 5,102 |
+| Plan characters, median / P90 / max | 4,272 / 9,674 / 25,677 |
+
+Consequences for episode slicing:
+
+- `ExitPlanMode` tool use plus its non-empty `plan` is the reliable decision
+  boundary; normalized `EnterPlanMode` is not present often enough to define
+  every episode start.
+- The task request and repository investigation can precede Enter Plan Mode, so
+  an Enter-to-Exit slice would discard relevant pre-decision evidence.
+- Multiple Plans must remain intact until a separate first-clean-episode rule
+  defines whether an earlier failed/tool-error Plan blocks later selection.
+- Continuation sessions need an explicit context-completeness audit before they
+  can be called clean. `context_md`, summary entries, and system-injected state
+  are evidence to inspect, not automatic proof of completeness.
+- The future Checker-visible slice should end at the Plan-bearing tool use.
+  Its matched tool result, developer reaction, later Plan revisions, and
+  implementation trajectory are post-boundary evidence only.
+
+## Build And Reproduction
+
+The deterministic, no-LLM builder is
+`scripts/tools/build_swe_chat_stage1_selection.py`. It scans the frozen
+`sessions.parquet`, `session_logs.parquet`, and projected structural columns of
+`conversations.parquet`. It does not run an Agent, inspect repository contents,
+or use behavioral outcomes.
+
+The formal build used the separate remote derived identity:
+
+```text
+/scratch/users/twang/vibe-coding-planning/derived/
+  swe-chat-stage1-high-agent-explicit-plan-v1-20260829/
+```
+
+The initial diagnostic manifest in that directory was superseded before
+freezing because it counted orphan conversation rows without preserving their
+session IDs. The preserved `stage1-trajectory-selection.final.json` adds the
+40-record source-exclusion pool without changing the 170 selected sessions.
+The tracked frozen manifest is the authority.
+
+## Stage-1 Handoff
+
+At the Stage-1 freeze, the following decisions were intentionally deferred:
+
+- which candidate Plan becomes the first clean episode;
+- whether continuation context is complete;
+- ACCEPT versus DO_NOT_ACCEPT labels;
+- Checker-visible versus Reflection-only field projections;
+- exact repository state or base commit at the decision boundary;
+- task/repository/session deduplication and train/validation splits.
+
+Stage 2 below resolves the first-Plan boundary, continuation exclusion, and
+projection schema through a separate manifest rather than editing Stage 1.
+Labels, repository state, deduplication, and splits remain open.
+
+## Stage 2: First-Plan Slice
+
+Stage 2 implements the accepted Behavioral v1 boundary without changing the
+Stage-1 trajectory universe. It selects the first Plan-bearing
+`ExitPlanMode` tool use in each of the 170 trajectories.
+
+The slice starts at the captured raw session beginning and ends with that
+Plan-bearing tool-use block. The boundary tool result is the first
+Reflection-only event. Later developer prompts, assistant-visible responses,
+tool calls/results, and revised Plans remain Reflection-only evidence and never
+become independent v1 examples.
+
+### Content authority and projection
+
+`conversations.parquet` truncates tool-result content to 10KB. Stage 2 uses it
+for normalized turn indexes, marker validation, continuation/summary detection,
+and queue metadata, but uses each raw transcript JSONL as the content authority.
+This preserves full pre-Plan repository-query results.
+
+The Checker projection includes, in raw order:
+
+- ordinary and system-injected user messages;
+- assistant text responses, including visible clarification questions;
+- tool-use blocks and their complete inputs;
+- tool-result blocks and their complete raw content;
+- the first Plan-bearing `ExitPlanMode` tool use and proposed Plan.
+
+It excludes assistant `thinking` blocks, progress/hooks, file-history snapshots,
+system metadata, the matched Exit result, and everything after the boundary.
+`context_md` is also excluded: inspection showed that it summarizes user
+prompts across the whole completed session and would leak future prompts into
+the decision-time context.
+
+The Reflection-only projection contains the full matched Exit result, all later
+non-thinking user/assistant/tool blocks, every later revised Plan, and separate
+normalized post-boundary summary/queue metadata. Raw transcript paths and
+omission counts remain available for audit.
+
+### Conservative clean result
+
+The policy is frozen in
+`configs/swe_chat_stage2_first_plan_slice_v1_20260829.yaml`. Full case files are
+stored under the separate remote derived identity:
+
+```text
+/scratch/users/twang/vibe-coding-planning/derived/
+  swe-chat-stage2-first-plan-slice-v1-20260829/slices-final/
+```
+
+The compact tracked manifest is
+`configs/frozen_swe_chat_cleaning/f66cca95b14caaa4177f7ed5eaa424608dadcffa/stage2-first-plan-slice-v1-manifest.json`,
+with content SHA-256
+`72e6422fdf1e52766b8003d0c9d5dd035a8b6d227c3bb7cc2ddb9d7c594f94bb`.
+
+| Stage-2 outcome | Cases |
+|---|---:|
+| Stage-1 source trajectories | 170 |
+| Conservatively eligible slices | 141 |
+| Conservatively excluded slices | 29 |
+| Eligible explicit approval signals | 57 |
+| Eligible explicit rejection signals | 84 |
+
+Exclusion reasons are preserved and may overlap:
+
+- 26 continuation-context cases;
+- two of those continuation cases also contain a pre-boundary summary;
+- three tool-error behavior results.
+
+No case was excluded for a missing/duplicate boundary, missing result,
+out-of-order result, missing first user prompt, nonzero session start, missing
+transcript, or an earlier Exit before the selected Plan. The 29 excluded case
+files still retain their slices and Reflection evidence for audit; they are not
+eligible for the initial optimization pool.
+
+The 170 cases contain 120,333,159 bytes of canonical case JSON. All case hashes,
+the final boundary event, absence of matched results from Checker context,
+absence of projected thinking, raw full-tool-result authority, and later Plan
+counts were independently verified against the compact manifest.
+
+One source transcript contains two JSON objects concatenated on one physical
+line. The first diagnostic build stopped on that format variant and remains
+preserved under `slices/`. The final parser reads a JSON stream with stable
+physical-line, entry, and block positions; `slices-final/` is the sole Stage-2
+authority.
+
+Stage 2 records `explicit_approval` and `explicit_rejection` as observed
+behavior signals, not final ACCEPT/DO_NOT_ACCEPT labels. Label policy,
+repository-state reconstruction, deduplication, and splits remain separate
+next-stage decisions.

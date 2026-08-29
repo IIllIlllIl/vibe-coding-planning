@@ -10,9 +10,15 @@
   bounded dataset retries, and first-pass repository skip-and-report behavior.
 - `swe_chat_preheat_service.py` runs that bounded login preheater through local
   `tmux + caffeinate`. It submits no Slurm job and invokes no Agent or LLM.
+- `tools/build_swe_chat_stage1_selection.py` deterministically selects whole
+  high-agent-authorship trajectories with at least one structured non-empty
+  Plan, preserving disjoint recovery pools without reading behavioral results.
+- `tools/build_swe_chat_stage2_slices.py` builds one first-Plan case per Stage-1
+  trajectory from full raw transcripts, excludes assistant thinking from both
+  projections, and separates decision-time context from behavioral evidence.
 
-The authority is `docs/swe-chat-preheat.md`. Starting the service remains a
-separate explicitly approved operation after read-only remote preflight.
+Source-acquisition authority is `docs/swe-chat-preheat.md`; Stage-1 and Stage-2
+cleaning authority is `docs/swe-chat-data-cleaning.md`.
 
 ## Retained Offline And PolyBench Infrastructure
 

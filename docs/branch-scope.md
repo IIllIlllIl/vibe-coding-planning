@@ -27,8 +27,8 @@ The active implementation and evidence surface is limited to:
    evaluation path without GEPA or Reflection.
 4. Shared Agent, repository, container, evaluator, Slurm, audit, and output
    utilities actually reached by those systems.
-5. The forthcoming Behavioral episode schema, deterministic dataset builder,
-   label policy, adapter semantics, and no-leakage tests.
+5. The Behavioral episode schema and deterministic dataset builders, followed
+   by the label policy, adapter semantics, and no-leakage tests.
 
 Existing Offline and PolyBench semantics are reproduction authorities, not the
 new Behavioral supervision design. New work must use a new dataset identity,

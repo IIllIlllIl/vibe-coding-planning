@@ -1,6 +1,7 @@
 # Output Workspace
 
-This directory exposes the current Online and Offline GEPA experiment surface.
+This directory exposes the current Behavioral, Offline GEPA, and frozen
+PolyBench experiment surface.
 Agents should not search `output/archive/` unless a task explicitly asks for
 historical comparison, provenance, or reproduction.
 
@@ -8,8 +9,9 @@ historical comparison, provenance, or reproduction.
 
 | Path | Purpose | Status |
 |---|---|---|
-| `SWE-bench_Verified/verified-round1-gepa-datasets/20260614_482_fdc056ae85df/` | Immutable formal 384/98 snapshot shared by current Online and Offline experiments | Active input; do not move or modify |
-| `SWE-bench_Verified/gepa-rules/` | Local destination for current Online and Offline GEPA results | Active output root |
+| `../configs/frozen_swe_chat_cleaning/f66cca95b14caaa4177f7ed5eaa424608dadcffa/` | Compact Stage-1 trajectory decisions and Stage-2 first-Plan slice manifest | Active frozen Behavioral input; full 120MB cases remain in the documented Iris derived root |
+| `SWE-bench_Verified/verified-round1-gepa-datasets/20260614_482_fdc056ae85df/` | Immutable formal 384/98 snapshot retained by Offline experiments and historical Online reproduction | Active retained input; do not move or modify |
+| `SWE-bench_Verified/gepa-rules/` | Local destination for retained Offline and historical Online GEPA results | Retained output root |
 | `../configs/frozen_guidelines/20260817_seed-b8c1-b8c2-b3x3c3-b3x3c6_0e1f8d7bd876/` | Exact common seed, minibatch-eight candidates 1/2, and 3x3 candidates 3/6 | Active tracked evaluation bundle; three primary and two reserve guidelines |
 | `archive/operations/polybench-python199-v1.1-20260811/` | Local mirror of the completed official `:v1.1` Python-199 availability operation | Operational preparation evidence; remote working copy removed |
 | `SWE-PolyBench/polybench-pce-inputs/20260814_python113_v11_8c7d9485d1d0/` | Official Python rows joined to the reviewed exact-`v1.1` availability evidence | Complete immutable formal PCE input; 113 cases |
@@ -27,13 +29,6 @@ historical comparison, provenance, or reproduction.
 | `SWE-bench_Verified/gepa-rules/offline-plan-verifier-balanced-b12-p2-case-reviews-8it-20260727/` | Formal local Offline result under the final pre-HPC experimental flow | Completed with warnings; retained comparison baseline |
 | `SWE-bench_Verified/gepa-rules/offline-plan-verifier-hpc-balanced-b12-8it-formal-20260731/` | Local mirror of the formal Offline HPC experiment under the frozen strong-Checker/checklist semantics | Stopped after 14 durable proposals during attempted proposal 15; frozen analysis baseline |
 | Remote `online-planning-hpc-policy-v3-20260715` run directory | Historical Outcome-policy-v3 run | Environment-contaminated; trajectory audit only, scores/candidates are not formal evidence |
-
-The active Online rule-generation flow is:
-
-```text
-task -> Plan Agent with candidate rules -> Code Agent -> evaluator
-     -> structured outcome -> GEPA reflection -> updated planning rules
-```
 
 The active Offline rule-generation flow is:
 
@@ -158,7 +153,7 @@ experiments. Their raw outputs are preserved remotely under
 
 These runs may be used to diagnose the HPC implementation, retries,
 trajectories, and scheduling behavior. Their candidate scores must not be
-presented as formal Offline experimental results. The next formal HPC run must
+presented as formal Offline experimental results. Any new formal HPC run must
 use a new run identity and must not resume any of these directories.
 
 The two retained remote project snapshots are separately archived under
@@ -190,12 +185,13 @@ path families.
 
 Rules for agents and scripts:
 
-1. Do not use archived scores as evidence for current Online GEPA quality.
+1. Do not use archived scores as evidence for current Behavioral or Offline
+   GEPA quality.
 2. Do not resume an archived run without an explicit user request and identity
    validation.
 3. Do not mix outcome-policy versions in score comparisons.
-4. Keep current Online/Offline GEPA run directories and the formal dataset
-   snapshot outside `archive/`.
+4. Keep retained Offline GEPA run directories and formal dataset snapshots
+   outside `archive/`.
 5. Put new smoke/test outputs under an explicitly named test path and archive
    them after the test is reviewed.
 

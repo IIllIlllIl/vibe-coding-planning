@@ -11,7 +11,7 @@ not see developer reactions, later plan revisions, implementation trajectories,
 or downstream outcomes. Those post-boundary records may support dataset labels
 and GEPA Reflection only.
 
-## Current status
+## Frozen research baseline
 
 - The first clean PolyBench PCCE stage is complete and paused.
 - Paired PCE resolves 70/99 cases; Seed PCCE resolves 66/99.
@@ -19,15 +19,20 @@ and GEPA Reflection only.
   incomplete case.
 - On the 98-case common terminal intersection, PCE / Seed / candidate 2 resolve
   69 / 66 / 66 cases.
-- No new PCCE, check-only, Offline GEPA, or Behavioral experiment is authorized.
-- The fixed-revision SWE-chat source and repository acquisition layer is
-  implemented and locally tested; no remote preheat has started yet.
-- The Behavioral dataset, episode extractor, labels, prompts, adapter, and
-  config have not yet been implemented.
+- The fixed-revision SWE-chat source acquisition is complete: the dataset is
+  verified and all 205 repository requests reached terminal status, with 188
+  mirrors completed and 17 repositories skipped for later audit.
+- Behavioral Stage 1 deterministically selects 170 high-agent-authorship
+  trajectories with a structured non-empty Plan and preserves all exclusions
+  in a frozen manifest.
+- Behavioral Stage 2 freezes 141 conservatively eligible first-Plan slices and
+  29 audited exclusions with physically separated Checker-visible and
+  Reflection-only evidence.
 
-The next implementation milestone is a no-LLM Behavioral data skeleton with a
-strict Checker-visible versus Reflection-only schema. It must precede any broad
-historical-code deletion.
+These are frozen stage results, not a live progress log. Current unresolved
+methodological decisions are maintained only in `project_issues.md`. Launching
+any new experiment still requires an explicit user instruction and a new
+frozen experimental contract.
 
 ## Active research surface
 
@@ -37,13 +42,16 @@ Read these files in order:
    requirements.
 2. [`docs/branch-scope.md`](docs/branch-scope.md) — branch boundary, retained
    systems, and historical-reference policy.
-3. [`project_issues.md`](project_issues.md) — current decisions, risks, and next
-   tasks only.
-4. [`docs/offline-gepa.md`](docs/offline-gepa.md) — current Offline Checker,
+3. [`project_issues.md`](project_issues.md) — current decisions and unresolved
+   methodological risks only; it is not a run-progress log.
+4. [`docs/swe-chat-data-cleaning.md`](docs/swe-chat-data-cleaning.md) — current
+   Behavioral trajectory selection and the evidence available for episode
+   slicing.
+5. [`docs/offline-gepa.md`](docs/offline-gepa.md) — current Offline Checker,
    metric, Reflection, search, and resume semantics.
-5. [`docs/knowledge/offline-pcce-stage-findings.md`](docs/knowledge/offline-pcce-stage-findings.md)
+6. [`docs/knowledge/offline-pcce-stage-findings.md`](docs/knowledge/offline-pcce-stage-findings.md)
    — frozen first-stage PolyBench findings.
-6. [`docs/polybench-pcce.md`](docs/polybench-pcce.md) and
+7. [`docs/polybench-pcce.md`](docs/polybench-pcce.md) and
    [`docs/offline-polybench-validation.md`](docs/offline-polybench-validation.md)
    — implemented PCE/PCCE and external-evidence boundaries.
 

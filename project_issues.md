@@ -4,25 +4,22 @@
 > timelines remain available from
 > `main@95807f9f581eb3b2fc25f2b60100e5cf2f91b9c1`.
 
-## Current state
+## Current decision constraints
 
-The first clean PolyBench PCCE stage is complete and paused. PCE resolves 70/99
-cases, Seed PCCE resolves 66/99, and candidate 2 has 66 resolved, 32 unresolved,
-and one operationally incomplete case. On the common 98-case terminal
-intersection, PCE / Seed / C2 resolve 69 / 66 / 66. Neither guideline repaired a
-PCE-unresolved case in the separate 95-case behavior audit.
+The frozen evidence behind these constraints is maintained in
+`docs/knowledge/offline-pcce-stage-findings.md`; the frozen Behavioral data
+funnel and source-quality findings are maintained in
+`docs/swe-chat-data-cleaning.md`. They are not duplicated here as live status.
 
-Therefore:
+Current decisions are:
 
 - do not launch candidate 6, reserve guidelines, check-only, or another run of
   the unchanged PCCE prompt/three-rejection method;
 - do not feed PolyBench results into the existing GEPA candidate tree;
 - retain the Offline/PCE/PCCE platform, raw evidence, checkpoints, evaluator
   repairs, and reproduction semantics;
-- design Behavioral Plan Acceptability before running a new experiment.
-
-No new LLM, GEPA, Docker, Apptainer, HPC, PCE, PCCE, check-only, or OpenCode run
-is currently authorized.
+- require an explicit user instruction and a new frozen contract before any
+  new experiment is launched.
 
 ## Accepted Behavioral v1 direction
 
@@ -39,42 +36,24 @@ is currently authorized.
 
 ## Open design issues
 
-1. Locate and verify the SWE-chat data source, schema, license, and snapshot
-   identity without guessing.
-2. Define a deterministic Plan Decision Episode and the first-clean-episode
-   rule.
-3. Define high-precision evidence for acceptance, rejection/revision, ambiguous
-   clarification, silence, topic change, continued implementation, tool error,
-   and context interruption.
-4. Specify Checker-visible and Reflection-only schemas with a testable
-   no-leakage boundary.
-5. Determine whether repository state and base commit can be reconstructed
+1. Freeze the final high-precision mapping from observed approval/rejection
+   evidence to ACCEPT/DO_NOT_ACCEPT labels and retain ambiguous cases.
+2. Define treatment of rejection/revision feedback, later Plans, silence,
+   topic change, and implementation behavior in controlled Reflection evidence.
+3. Map the frozen Checker-visible and Reflection-only case schema into the
+   Offline adapter while retaining a testable no-leakage boundary.
+4. Determine whether repository state and base commit can be reconstructed
    reliably for each episode.
-6. Define session/task/repository/near-duplicate split and leakage checks.
-7. Select the smallest adapter from the new case schema to the existing
+5. Define session/task/repository/near-duplicate split and leakage checks.
+6. Select the smallest adapter from the new case schema to the existing
    Checker, Adapter, Reflection, and runner.
-8. Decide whether accuracy remains the v1 search metric and which diagnostics
+7. Decide whether accuracy remains the v1 search metric and which diagnostics
    are mandatory: rejection precision, bad-plan recall, balanced accuracy, MCC,
    class prevalence, and confusion matrix.
-9. Predeclare data volume, class balance, minibatch, seed guideline, budget,
+8. Predeclare data volume, class balance, minibatch, seed guideline, budget,
    stopping conditions, and acceptance criteria before any LLM run.
-10. Build and audit the dataset path without LLM calls before smoke or formal
-    optimization.
-
-## Branch engineering plan
-
-Phase 1 establishes this focused documentation surface and a separately
-runnable no-LLM Offline regression suite. A follow-up surface cleanup archives
-unambiguously historical Online/PCT documents, configs, and operator scripts,
-without deleting historical source modules or frozen evidence.
-
-Phase 2 implements the minimal Behavioral data skeleton and its deterministic
-tests in commits separate from branch cleanup.
-
-Phase 3 records import/reachability evidence and removes unreachable Online and
-older-method source paths in a dedicated cleanup commit. Existing Offline GEPA
-and frozen PolyBench reproduction tests must remain green before and after that
-cleanup.
+9. Manually audit the frozen first-Plan projections and complete the remaining
+   no-LLM dataset schema before smoke or formal optimization.
 
 ## Known validity constraints
 

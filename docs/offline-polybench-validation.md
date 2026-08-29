@@ -486,24 +486,21 @@ is frozen unchanged. Its descriptive counts (PCE 79/111 and seed PCCE 75/111)
 must not be used to assess Checker or guideline quality. Evaluate-only repair
 remains a valid mechanism for isolating evaluator-network effects when its
 Plan and Code inputs are trustworthy, but it cannot repair an Agent-visible
-repository mismatch or a contaminated Code submission. The next formal PCE
-and PCCE identities require an audited clean repository at every Agent phase,
-Agent-owned staged patch selection without final `git add -A`, and a true empty
-generation path before any Plan/Code evidence is reused.
+repository mismatch or a contaminated Code submission. The replacement formal
+PCE and PCCE identities therefore required an audited clean repository at every
+Agent phase, Agent-owned staged patch selection without final `git add -A`, and
+a true empty generation path before any Plan/Code evidence was reused.
 
 The replacement raw-data identity is
 `python113-v11-clean-boundary-v1-20260825`, configured by
-`configs/polybench_pce_hpc_formal_clean_20260825.yaml`. It runs all 113 frozen
+`configs/polybench_pce_hpc_formal_clean_20260825.yaml`. It ran all 113 frozen
 exact-`v1.1` inputs through the v3-smoke-accepted clean-repository and
-Agent-owned staged-patch boundary. Its initial Evaluate phase retains the
+Agent-owned staged-patch boundary. Its initial Evaluate phase retained the
 ordinary evaluator behavior. The frozen dependency cache covers only 22
 evidence-defined cases, while enabling it makes manifest membership mandatory;
-therefore it is not attached to the 113-case initial config. After the raw run
-is inspected, those 22 cases may be reevaluated under the existing
-manifest-bound evaluator-only repair, which preserves Plan and Code bytes and
-invokes no LLM. The new PCE dataset and scores remain provisional until that
-overlay and the conservative cleaning record are reviewed. PCCE starts only
-after this PCE authority is frozen.
+therefore it was not attached to the 113-case initial config. The later
+manifest-bound evaluator-only repair preserved Plan and Code bytes, invoked no
+LLM, and contributed to the final frozen 99-case authority described below.
 
 The clean-run repair configuration is
 `configs/polybench_pce_hpc_dependency_cache_clean_20260825.yaml`. It targets
@@ -513,7 +510,7 @@ cache read-only and disabling evaluator networking. The subsequent corrected
 PCCE receives a new run identity and a 45-minute PC/CE worker ceiling; the
 historical `seed-python111-20260817` configuration remains immutable.
 
-The completed clean PCE now has 113/113 atomic worker outputs. Exactly 100
+The completed clean PCE has 113/113 atomic worker outputs. Exactly 100
 cases reached `tests_parsed` (67 resolved and 33 unresolved); the remaining 13
 are preserved as operational/source exclusions rather than being assigned an
 unresolved label. The conservative resolved-placeholder policy excludes zero
@@ -521,13 +518,10 @@ additional cases. The frozen paired snapshot is
 `20260825_python100_cleanpce_testparsed_887d4ec9df49`; it contains both the
 Checker validation rows and a source-hash-bound minimal projection of the PCE
 outputs supplying PCCE's first plans and baseline results. Full trajectories
-remain in the raw PCE run rather than entering the PCCE input. The corrected
-seed PCCE runtime is
-`configs/polybench_pcce_hpc_formal_seed_clean_20260826.yaml`, selects all and
-only these 100 cases, and uses a 45-minute PC/CE worker limit. Its launch still
-waits for review of the separate 21-case PCE evaluator repair. The original
-dependency scope has 22 members, but `transformers-27717` has no completed
-clean-PCE Plan/Code checkpoint and is outside this 100-case paired universe.
+remain in the raw PCE run rather than entering the PCCE input. This intermediate
+100-case snapshot preceded the reviewed 21-case evaluator repair and final
+environment exclusion. Corrected PCCE used the resulting 99-case authority,
+not this intermediate parent snapshot.
 
 The evaluator-only repair `clean-depcache-v1-20260826` is now complete and
 mirrored locally. Its remote and local trees both contain 195 files and

@@ -9,15 +9,20 @@ tracked does not authorize its execution.
 |---|---|
 | `swe_chat_login_preheat_v1_20260829.yaml` | Fixed SWE-chat revision, frozen source/repository manifests, login-node destination, bounded acquisition policy, and supervisor identity. |
 | `frozen_swe_chat_preheat/f66cca95b14caaa4177f7ed5eaa424608dadcffa/` | Complete 5,858-file source manifest and ordered 205-repository request manifest consumed by the preheater. |
+| `swe_chat_stage1_trajectory_selection_v1_20260829.yaml` | Conservative `agent_percentage >= 99` plus structured non-empty Plan trajectory-selection policy; it defines no episode or label. |
+| `swe_chat_stage2_first_plan_slice_v1_20260829.yaml` | Session-start through first Plan-bearing Exit boundary, raw-content authority, projection, and conservative clean policy. |
+| `frozen_swe_chat_cleaning/f66cca95b14caaa4177f7ed5eaa424608dadcffa/` | Frozen Stage-1 decisions plus the compact Stage-2 manifest for 141 eligible first-Plan slices and 29 audited exclusions. |
 
-Acquisition stops at source materialization. These files do not define episode
-selection, labels, splits, Checker inputs, or GEPA optimization.
+Acquisition stops at source materialization. Stage 1 selects whole trajectories;
+Stage 2 projects the first Plan episode and separates Checker-visible from
+Reflection-only evidence. Neither cleaning stage defines a final label, split,
+or GEPA optimization.
 
 ## Retained Research Foundations
 
 | Path | Status |
 |---|---|
-| `gepa_verified_rules.yaml` | Frozen existing Offline GEPA method/configuration; retained for regression and adaptation, not currently authorized to run. |
+| `gepa_verified_rules.yaml` | Frozen existing Offline GEPA method/configuration; retained for regression and adaptation, not a launch default. |
 | `offline_gepa_supervisor.yaml` | Matching completed Offline supervisor identity; provenance only. |
 | `gepa_initial_guideline_minimal.md` | Existing minimal Offline guideline seed. |
 | `frozen_guidelines/` | Immutable guideline bundles used by completed PolyBench comparisons. |
