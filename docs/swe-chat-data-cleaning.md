@@ -189,7 +189,9 @@ At the Stage-1 freeze, the following decisions were intentionally deferred:
 
 Stage 2 below resolves the first-Plan boundary, continuation exclusion, and
 projection schema through a separate manifest rather than editing Stage 1.
-Labels, repository state, deduplication, and splits remain open.
+Those later decisions are now resolved by the additive authorities documented
+below; this Stage-1 handoff remains the provenance of what was still open when
+Stage 1 was frozen.
 
 ## Stage 2: First-Plan Slice
 
@@ -293,7 +295,8 @@ P1, but do not erase the observed decision-boundary behavior. Later prompts and
 Plans may explain P1 behavior but cannot relabel a later revised Plan as P1.
 Repository availability is operational evidence and does not alter a behavioral
 label. Repository-state reconstruction, deduplication, splits, and the GEPA
-input schema remain separate next-stage decisions.
+input schema remain separate downstream layers; their later authorities do not
+edit or reinterpret the Stage-2 annotation base.
 
 The first authenticated recovery overlay added no mirrors. Because the
 repository-interactive Checker requires a verified local mirror, the ten cases
@@ -408,3 +411,36 @@ Its byte SHA-256 is
 The separate remote identity is
 `swe-chat-temporal-repository-proxy-v1-20260830`. The builder uses no LLM,
 behavior label, post-P1 evidence, transcript shell execution, Docker, or Slurm.
+
+## Formal GEPA split
+
+The formal Behavioral v1 optimization input uses all 131 repository-ready
+cases. Its deterministic split assignment does not inspect behavioral labels.
+Repositories are atomic, and repositories joined by an exact normalized Plan,
+an exact normalized pre-P1 user context, or a normalized Plan 5-shingle
+Jaccard score of at least 0.90 form one atomic duplicate component. Every
+component containing any of the eight Stage-B/C development-smoke cases enters
+train; all remaining components enter validation.
+
+| Formal split | Cases | ACCEPT | DO_NOT_ACCEPT | Repositories |
+|---|---:|---:|---:|---:|
+| Train | 84 | 38 | 46 | 8 |
+| Validation | 47 | 16 | 31 | 29 |
+
+The audit found no cross-repository exact Plan pairs, exact user-context pairs,
+or thresholded near-Plan pairs in this universe, and no repository or duplicate
+component crosses the split. All eight development-exposed cases are in train.
+The resulting validation set participates in GEPA candidate selection; it is
+not an untouched final holdout and cannot support an untouched-generalization
+claim.
+
+The tracked split authority is
+`configs/frozen_swe_chat_behavioral_formal/swe-chat-behavioral-formal-repository-holdout-v1-20260830.json`,
+with content SHA-256
+`c7d423dbbd8965ec534e7a37d3c993f78bb0167708f8946ed092f8285dc54b94`.
+The no-LLM freezer is
+`scripts/tools/freeze_swe_chat_behavioral_formal_split.py`. The materialized
+snapshot is generated from the frozen Stage-2 cases, repository-availability
+cleaning, temporal proxies, and this split via the existing snapshot builder;
+invoke it as a module from the repository root so project imports resolve:
+`conda run -n mini-swe python -m scripts.tools.build_swe_chat_behavioral_gepa_snapshot`.

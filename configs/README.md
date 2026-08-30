@@ -16,19 +16,20 @@ tracked does not authorize its execution.
 | `swe_chat_repository_reconstruction_audit_v1_20260830.yaml` | Frozen candidate-parent and conservative structured-write replay audit semantics; this is an audit config, not an experiment launch config. |
 | `swe_chat_temporal_repository_proxy_v1_20260830.yaml` | Label-free approximate pre-session commit selection for the 131 repository-ready cases; excludes Entire-managed refs and known current-session commits/descendants. |
 | `gepa_behavioral_acceptability_neutral_seed.md` | Neutral initial Behavioral candidate guideline; it is not a fixed Checker/Reflection prompt and contains no default accept/reject policy. |
-| `gepa_behavioral_acceptability_smoke_v1_20260830.yaml` | Stage-A-only Behavioral smoke contract: fixed prompts, DeepSeek V4 Flash Agent budgets, 8-case fixture requirements, one-proposal GEPA ceiling, and FairShare-aligned HPC resources. It is explicitly not launch-authorized or runnable until the fixture and remaining runtime wiring exist. |
+| `gepa_behavioral_acceptability_smoke_v2_20260830.yaml` | Completed Stage C v2 method identity: bounded no-container runtime and one full GEPA proposal on the eight-case development fixture. |
+| `frozen_swe_chat_behavioral_smoke/` | Frozen eight-case development fixture assignment; all exposed cases are formal-train-only. |
+| `frozen_swe_chat_behavioral_formal/` | Complete 131-case repository/duplicate-component split authority: 84 train and 47 validation with no repository overlap. |
+| `gepa_behavioral_acceptability_formal_8it_v1_20260830.yaml` | Prepared formal accuracy/batch-eight/eight-iteration semantic contract. It is not launch-authorized. |
+| `behavioral_gepa_formal_8it_supervisor_v1_20260830.yaml` | Prepared supervisor identity and FairShare-aligned resources; intentionally omits `--submit` pending explicit approval. |
 | `frozen_swe_chat_cleaning/f66cca95b14caaa4177f7ed5eaa424608dadcffa/` | Frozen Stage-1 decisions, compact Stage-2 manifest for 141 labeled first-Plan slices, additive repository-availability cleaning yielding 131 cases, exact-reconstruction audit summary, and 131-case temporal-proxy manifest. |
 
 Acquisition stops at source materialization. Stage 1 selects whole trajectories;
 Stage 2 projects the first Plan episode and separates Checker-visible from
 Reflection-only evidence. The additive repository-availability manifest freezes
-behavioral labels and the 131-case feasible universe; split and the formal GEPA
-run contract remain undecided. The Stage-A smoke contract fixes the first
-development-smoke prompts, fixture shape, models, budgets, stopping condition,
-and operational acceptance criteria without supplying a fixture or authorizing
-execution. The implemented Behavioral schema fixes the information projection,
-but no runnable Behavioral experiment config exists. The
-reconstruction audit verifies an exact parent
+behavioral labels and the 131-case feasible universe. Stage C v2 completed the
+ordered prompt/runtime smoke. The formal split and run semantics are now
+prepared, but the supervisor intentionally cannot submit until a separate
+launch-authorization change. The reconstruction audit verifies an exact parent
 candidate for only two ACCEPT cases. The separate temporal-proxy manifest gives
 all 131 cases an explicitly approximate pre-session source checkout without
 reinterpreting that negative audit.
@@ -63,7 +64,7 @@ must not be edited or relaunched in place.
 Archive paths are non-authoritative. Prefer `git show main:<path>` when exact
 pre-branch paths or bytes are required.
 
-Any runnable Behavioral dataset or experiment config needs frozen inputs, an
-explicit split, a run identity, model/runtime identity, budget, stopping
-condition, acceptance criteria, raw-evidence policy, and user authorization
-before execution. The tracked Stage-A smoke contract is not that authorization.
+Any Behavioral launch needs frozen inputs, an explicit split, a run identity,
+model/runtime identity, budget, stopping condition, acceptance criteria,
+raw-evidence policy, and user authorization. The prepared formal files satisfy
+the mechanical prerequisites but are not that authorization.

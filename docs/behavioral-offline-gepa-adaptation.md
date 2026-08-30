@@ -1,7 +1,7 @@
 # Behavioral Offline GEPA Adaptation Boundary
 
-> Status: information-flow foundation and Stage-A smoke contract implemented;
-> formal snapshot and runtime wiring are not implemented
+> Status: Stage C v2 completed; formal 131-case split, snapshot, and eight-
+> iteration launch contract prepared but not launch-authorized
 >
 > Scope: information flow and minimum project-side changes for Behavioral Plan
 > Acceptability v1
@@ -15,10 +15,10 @@ developer behavior at the first Plan decision boundary.
 
 The deployment-time task is `ACCEPT` versus `DO_NOT_ACCEPT` for P1. The
 repository is an explicitly approximate pre-session proxy. Captured pre-P1
-tool results are authoritative when repository content differs. The first
-development-smoke Checker and Reflection wording is fixed in
-`configs/gepa_behavioral_acceptability_smoke_v1_20260830.yaml`. It remains a
-non-runnable Stage-A contract until the named fixture and execution path exist.
+tool results are authoritative when repository content differs. The accepted
+development-smoke Checker and Reflection wording is frozen in
+`configs/gepa_behavioral_acceptability_smoke_v2_20260830.yaml`; the prepared
+formal configuration reuses those prompts byte-for-byte.
 
 The initial candidate guideline is the deliberately neutral one-sentence file
 `configs/gepa_behavioral_acceptability_neutral_seed.md`. It supplies no
@@ -125,9 +125,9 @@ confidence validation, proxy-manifest binding, split-disjoint IDs, and a
 `checker_payload()` that returns only the decision-time projection.
 
 The historical `dataset.py` path remains usable for frozen Offline
-reproduction. Config now has an explicit `task.semantics`; the current runner
-does not yet dispatch the Behavioral loader, so no formal run is launchable.
-Task semantics must never be inferred from field presence.
+reproduction. Config and CLI dispatch select the Behavioral loader and runner
+only through explicit `task.semantics`; task semantics are never inferred from
+field presence.
 
 ### Repository execution backend
 
@@ -136,10 +136,9 @@ detached, disposable shared-object clone without mutating the preheated bare
 mirror. Semantic snapshot identity stores only a relative mirror path; the
 configured repository root supplies host-specific operational policy.
 
-The current `DockerChecker` derives a SWE-bench image and restores a benchmark
-`base_commit`; it cannot execute mirror-only cases unchanged. Add a separate
-Behavioral Checker runner that uses the implemented materializer and exposes
-the checkout through mini-swe-agent's local environment.
+The separate Behavioral Checker runner uses the temporal-proxy materializer
+and mini-swe-agent's local environment. It does not enter the historical
+`DockerChecker` path.
 
 Because mirrors are immutable shared acquisition artifacts, concurrent Checker
 calls should not attach ordinary Git worktrees that mutate shared mirror
@@ -154,8 +153,9 @@ new value `predicted_resolved`. It retains decision reason, repository evidence,
 and complete trajectory. The smoke Checker prompt changes only the task and
 input boundary: the proxy is supplementary evidence, while conflicting
 pre-decision transcript observations are authoritative. Review strategy remains
-owned by the candidate guideline. Checker execution, timeout/validator retry,
-and instance-template mapping remain deferred.
+owned by the candidate guideline. Checker execution, bounded per-command
+timeout, output validation, instance-template mapping, and Slurm task retry are
+implemented.
 
 ### Adapter and metric traces
 
@@ -165,13 +165,16 @@ reflective-dataset interface while using `observed_decision` and
 `predicted_accept`. The Behavioral case's separate worker projection contains
 repository materialization data but no label or Reflection evidence.
 
-Evaluation caching, full historical retry/audit behavior, HPC batch execution,
-and formal reporting are not yet wired into the runner.
+Evaluation caching, retry/audit behavior, label-free HPC task manifests,
+Behavioral batch execution, resume identity, and formal reporting are wired
+through the retained GEPA runner semantics.
 
 Accuracy and balanced-accuracy support can be reused mechanically after the
 positive class is defined as ACCEPT. The balanced 8-case development smoke uses
-accuracy as its primary mechanical score and balanced accuracy as a diagnostic;
-the formal experiment metric remains a separate design decision.
+accuracy as its primary mechanical score and balanced accuracy as a diagnostic.
+The prepared formal v1 run keeps accuracy as its search metric and requires
+balanced accuracy, MCC, both-class precision/recall, confusion matrix, pass
+rate, and incomplete count as diagnostics.
 
 ### Reflection evidence writer
 
@@ -188,45 +191,36 @@ than an objective plan-quality truth. The smoke Reflection prompt permits
 controlled post-decision evidence only for attribution and diagnosis and
 forbids promoting it into deployment-time requirements.
 
-The existing Reflection proposer selects this bundle mode from explicit task
-semantics. Its container assumptions are not the no-container Behavioral
-execution path and remain deferred.
+The Reflection proposer selects this bundle mode from explicit task semantics.
+Behavioral Reflection uses a separate no-container worker; post-boundary
+evidence never enters Checker task manifests.
 
 ### Runner, HPC worker, and config dispatch
 
-Offline config now parses an explicit task semantic plus temporal-Git-proxy
-repository and workspace roots. Runner dispatch must next select the Behavioral
-loader, Checker, Adapter trace vocabulary, and Reflection bundle mode. The
-Offline Slurm worker currently reconstructs a
-label-free historical `GEPACase` and always loads Apptainer; it must instead
-deserialize the Behavioral Checker payload and use the Git backend without
-placing supervision or post-boundary evidence in task files.
+Offline config parses an explicit task semantic plus temporal-Git-proxy
+repository and workspace roots. Behavioral runner dispatch selects the loader,
+Checker, Adapter vocabulary, reports, and Reflection mode. Its Slurm worker
+deserializes a label-free Behavioral payload and uses the Git backend;
+supervision, scores, and post-boundary evidence are absent from task files.
+Historical Offline retains its Apptainer path.
 
 Run fingerprints must include the new task semantic, dataset manifest,
 temporal-proxy manifest, repository backend, prompts, and new source modules. A
 Behavioral run always has a new run directory and cannot resume the old
 candidate tree.
 
-### Development smoke contract
+### Completed development smoke
 
-The first smoke has three ordered stages. Stage A is local and no-LLM: it
-checks config parsing, exact prompt and evidence vocabulary, leakage boundaries,
-snapshot construction, proxy materialization, and unchanged historical Offline
-semantics. Stage B will use four balanced train cases for separate local Checker
-and Reflection prompt units. Stage C will use the same four train cases plus
-four previously unused validation cases for one full HPC GEPA proposal.
+The smoke used three ordered stages: local no-LLM contracts, four balanced
+local Checker/Reflection prompt units, then one full HPC GEPA proposal on a
+separate balanced 4-train/4-validation development fixture. All eight exposed
+cases are development data and may enter formal train only.
 
-The eight cases must be balanced by observed decision and proxy source within
-each split, with no session, repository, or declared deduplication group shared
-between train and validation. Once exposed by the smoke they are development
-data: they may later enter formal training, but not formal validation or an
-untouched holdout.
-
-Both Agents use `deepseek-v4-flash` with the existing Offline per-Agent limits.
-The HPC stage uses one CPU, 4G, and 35 minutes per task, one train repetition,
-minibatch four, accuracy, one proposal, a 16-call projection, and a 20-call
-fail-safe. Metric improvement is not a smoke acceptance condition; invalid or
-operationally incomplete decisions are never coerced into a behavioral class.
+Stage C v2 completed one proposal iteration with 16 logical metric calls, one
+accepted candidate, zero incomplete Checker outcomes, and zero audited Checker
+leakage. Both seed and proposal scored 0.5 on the four-case development
+validation set, so the neutral seed remained best. This proves flow integrity,
+not guideline effectiveness.
 
 ### Reports and tests
 
@@ -236,16 +230,13 @@ rejection, label-free worker projection, acceptability scoring and Reflection
 evidence, exact clean detached materialization, disposable workspace cleanup,
 the exact neutral seed, and the unchanged focused Offline regressions.
 
-Still required: freeze the real split, then report ACCEPT/DO_NOT_ACCEPT
-prevalence, confusion matrix, acceptance and
-rejection precision/recall, balanced accuracy, MCC, and operationally
-incomplete calls with behavioral terminology. Required no-LLM tests include:
-
-- real worker task serialization and Behavioral worker dispatch;
-- transcript observations preserved separately from repository files in the
-  Checker template;
-- resume rejection after any dataset, task-semantic, prompt, backend, or source
-  change.
+The formal split freezer assigns repository/duplicate components without using
+labels: every component containing a Stage-B/C case enters train and every
+remaining component enters validation. The frozen result is 84 train cases
+from eight repositories and 47 validation cases from 29 repositories, with no
+repository, exact normalized Plan/context, or thresholded Plan near-duplicate
+crossing the split. Formal validation is GEPA candidate-selection data, not an
+untouched final holdout.
 
 ## Components retained unchanged
 
@@ -263,7 +254,7 @@ semantic renaming of labels/traces, not the GEPA search algorithm.
 
 ## Deferred decisions
 
-- split and near-duplicate policy;
-- the exact deterministic membership of the 8-case smoke fixture;
-- formal-run primary metric, data volume, budget, and success thresholds;
+- how rejection reasons should be classified for analysis without relabeling
+  observed behavior;
+- what independent data can support a later untouched-generalization claim;
 - whether any cases should receive no repository access as an ablation.

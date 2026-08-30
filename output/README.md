@@ -10,6 +10,8 @@ historical comparison, provenance, or reproduction.
 | Path | Purpose | Status |
 |---|---|---|
 | `../configs/frozen_swe_chat_cleaning/f66cca95b14caaa4177f7ed5eaa424608dadcffa/` | Compact Stage-1 trajectory decisions and Stage-2 first-Plan slice manifest | Active frozen Behavioral input; full 120MB cases remain in the documented Iris derived root |
+| `SWE-chat/behavioral-gepa-datasets/formal-repository-holdout-v1-20260830/` | Complete 131-case Behavioral GEPA snapshot derived from frozen Stage-2 cases, repository cleaning, temporal proxies, and the formal split | Prepared formal input: 84 train / 47 validation, source hashes verified; validation is candidate-selection data, not an untouched holdout |
+| Remote `behavioral-gepa-smoke-v2-20260830/stage-c-hpc-gepa-smoke-v2` | Complete one-proposal Behavioral GEPA Stage C evidence | Platform/prompt smoke only: 16 logical metric calls, zero incomplete, seed and proposal both 0.5; no effectiveness claim |
 | `SWE-bench_Verified/verified-round1-gepa-datasets/20260614_482_fdc056ae85df/` | Immutable formal 384/98 snapshot retained by Offline experiments and historical Online reproduction | Active retained input; do not move or modify |
 | `SWE-bench_Verified/gepa-rules/` | Local destination for retained Offline and historical Online GEPA results | Retained output root |
 | `../configs/frozen_guidelines/20260817_seed-b8c1-b8c2-b3x3c3-b3x3c6_0e1f8d7bd876/` | Exact common seed, minibatch-eight candidates 1/2, and 3x3 candidates 3/6 | Active tracked evaluation bundle; three primary and two reserve guidelines |

@@ -413,6 +413,54 @@ def test_behavioral_smoke_prompts_preserve_information_responsibilities() -> Non
     assert "predicted_resolved" not in combined_reflection
 
 
+def test_behavioral_formal_8it_contract_is_frozen_but_not_launch_authorized() -> None:
+    root = Path(__file__).parents[2]
+    config_path = (
+        root / "configs/gepa_behavioral_acceptability_formal_8it_v1_20260830.yaml"
+    )
+    supervisor_path = (
+        root / "configs/behavioral_gepa_formal_8it_supervisor_v1_20260830.yaml"
+    )
+    raw = yaml.safe_load(config_path.read_text(encoding="utf-8"))
+    smoke = yaml.safe_load(
+        (
+            root / "configs/gepa_behavioral_acceptability_smoke_v2_20260830.yaml"
+        ).read_text(encoding="utf-8")
+    )
+    supervisor = yaml.safe_load(supervisor_path.read_text(encoding="utf-8"))
+    config = load_optimization_config(config_path, require_api_keys=False)
+
+    contract = raw["experiment_contract"]
+    assert contract["status"] == "prepared_not_launched"
+    assert contract["launch_authorized"] is False
+    assert contract["dataset"] == {
+        "split_manifest_content_sha256": (
+            "c7d423dbbd8965ec534e7a37d3c993f78bb0167708f8946ed092f8285dc54b94"
+        ),
+        "train_cases": 84,
+        "validation_cases": 47,
+        "train_repositories": 8,
+        "validation_repositories": 29,
+        "repository_or_duplicate_component_overlap": 0,
+        "development_exposed_cases_in_train_only": True,
+        "validation_is_candidate_selection_data_not_untouched_holdout": True,
+    }
+    assert config.search.max_iterations == 8
+    assert config.search.reflection_minibatch_size == 8
+    assert config.search.projection_metric_calls == 551
+    assert config.search.max_metric_calls == 700
+    assert config.search.primary_metric == "accuracy"
+    assert config.search.train_case_repetitions == 1
+    assert config.container.runtime == "none"
+    assert config.hpc.cpus_per_task == 1
+    assert config.hpc.mem == "4G"
+    assert config.hpc.time == "00:35:00"
+    assert raw["prompts"] == smoke["prompts"]
+    assert raw["checker"] == smoke["checker"]
+    assert raw["reflection"] == smoke["reflection"]
+    assert "--submit" not in supervisor["arguments"]
+
+
 def test_behavioral_reflection_analysis_requires_new_vocabulary_and_all_cases() -> None:
     review = {
         "instance_id": "case-1",

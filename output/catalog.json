@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "generated_at": "2026-08-29",
+  "generated_at": "2026-08-30",
   "active_method": "behavioral_plan_acceptability_v1",
   "active_offline_method": "offline_gepa_plan_review_guideline",
   "default_agent_scope": [
@@ -8,6 +8,8 @@
     "output/catalog.json",
     "docs/swe-chat-data-cleaning.md",
     "configs/frozen_swe_chat_cleaning/f66cca95b14caaa4177f7ed5eaa424608dadcffa",
+    "configs/frozen_swe_chat_behavioral_formal/swe-chat-behavioral-formal-repository-holdout-v1-20260830.json",
+    "output/SWE-chat/behavioral-gepa-datasets/formal-repository-holdout-v1-20260830",
     "output/SWE-bench_Verified/verified-round1-gepa-datasets/20260614_482_fdc056ae85df",
     "output/SWE-bench_Verified/gepa-rules",
     "configs/frozen_guidelines/20260817_seed-b8c1-b8c2-b3x3c3-b3x3c6_0e1f8d7bd876",
@@ -17,7 +19,7 @@
     "output/SWE-PolyBench/polybench-pcce-runs/formal/b8-candidate2-python99-clean-pce-v1-20260826"
   ],
   "active_behavioral_data": {
-    "status": "stage2_first_plan_slices_frozen_no_final_labels",
+    "status": "formal_snapshot_prepared_not_launched",
     "dataset_id": "SALT-NLP/SWE-chat",
     "revision": "f66cca95b14caaa4177f7ed5eaa424608dadcffa",
     "stage1_manifest": "configs/frozen_swe_chat_cleaning/f66cca95b14caaa4177f7ed5eaa424608dadcffa/stage1-high-agent-explicit-plan-v1.json",
@@ -30,8 +32,20 @@
     "stage2_excluded_cases": 29,
     "eligible_explicit_approval": 57,
     "eligible_explicit_rejection": 84,
-    "labels_assigned": false,
-    "score_usable": false
+    "repository_ready_cases": 131,
+    "repository_ready_accept": 54,
+    "repository_ready_do_not_accept": 77,
+    "formal_split_manifest": "configs/frozen_swe_chat_behavioral_formal/swe-chat-behavioral-formal-repository-holdout-v1-20260830.json",
+    "formal_split_manifest_sha256": "c7d423dbbd8965ec534e7a37d3c993f78bb0167708f8946ed092f8285dc54b94",
+    "formal_snapshot": "output/SWE-chat/behavioral-gepa-datasets/formal-repository-holdout-v1-20260830",
+    "formal_train_cases": 84,
+    "formal_validation_cases": 47,
+    "formal_train_repositories": 8,
+    "formal_validation_repositories": 29,
+    "formal_validation_role": "candidate_selection_not_untouched_holdout",
+    "stage_c_v2_status": "completed_flow_smoke_no_effectiveness_claim",
+    "labels_assigned": true,
+    "score_usable": true
   },
   "active_polybench_validation_inputs": {
     "status": "frozen_clean_pce_with_accepted_dependency_repair",

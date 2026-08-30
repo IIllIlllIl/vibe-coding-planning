@@ -62,6 +62,19 @@ Current decisions are:
   contracts, bounded local Checker/Reflection units, then one full HPC GEPA
   proposal on a separate balanced 8-case development fixture. Smoke metric
   improvement is not an acceptance requirement.
+- Stage C v2 satisfied that flow contract: one proposal iteration, 16 logical
+  metric calls, zero incomplete decisions, zero audited Checker leakage, and
+  complete raw evidence/reporting. Seed and proposal both scored 0.5 on the
+  development validation cases, so this is platform evidence only.
+- The formal split is label-independent and repository-disjoint. Every
+  repository/duplicate component containing a smoke-exposed case enters train;
+  all remaining components enter validation. The result is 84 train cases
+  across eight repositories and 47 validation cases across 29 repositories.
+  Formal validation is candidate-selection data, not an untouched holdout.
+- The formal accuracy/batch-eight/eight-iteration config and snapshot are
+  prepared under a new identity. Launch remains explicitly unauthorized until
+  the user approves the frozen 551-call projection, 700-call fail-safe, run
+  identity, stopping conditions, and acceptance criteria.
 
 ## Open design issues
 
@@ -69,21 +82,12 @@ Current decisions are:
    changing the 84 observed DO_NOT_ACCEPT labels.
 2. Define treatment of rejection/revision feedback, later Plans, silence,
    topic change, and implementation behavior in controlled Reflection evidence.
-3. Freeze the real session/task/repository/near-duplicate split with
-   deterministic leakage checks. The implemented source-to-snapshot builder
-   requires a complete exact-universe split manifest, and the loader enforces
-   the final Checker boundary and split-disjoint IDs.
-4. Wire the implemented temporal-proxy materializer and Behavioral Adapter into
-   the local Checker, runner, Offline worker, retry/audit path, and resume
-   identity without changing third-party GEPA.
-5. Decide whether accuracy remains the v1 search metric and which diagnostics
-   are mandatory: rejection precision, bad-plan recall, balanced accuracy, MCC,
-   class prevalence, and confusion matrix.
-6. Predeclare formal-run data volume, class balance, minibatch, budget,
-   stopping conditions, and acceptance criteria before any formal LLM run; the
-   development-smoke contract does not settle those choices.
-7. Deterministically select and manually audit the frozen 8-case smoke fixture,
-   then complete worker/runtime/report wiring before its local LLM or HPC stage.
+3. Obtain explicit launch approval for the prepared formal 8-iteration run;
+   do not convert its validation data into an untouched-generalization claim.
+4. Decide what independent dataset or future collection can serve as a final
+   untouched evaluation after GEPA candidate selection.
+5. Decide whether no-repository or stricter-proxy subsets are useful ablations
+   after the primary formal run, without changing the primary contract.
 
 ## Known validity constraints
 
