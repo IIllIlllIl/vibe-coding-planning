@@ -3,8 +3,8 @@
 
 experiment_contract:
   identity: swe-chat-behavioral-acceptability-formal-8it-v2-20260830
-  status: prepared_not_launched
-  launch_authorized: false
+  status: launch_authorized
+  launch_authorized: true
   purpose: optimize_a_generalizable_behavioral_plan_review_guideline
   dataset:
     split_manifest_content_sha256: c7d423dbbd8965ec534e7a37d3c993f78bb0167708f8946ed092f8285dc54b94
@@ -15,7 +15,14 @@ experiment_contract:
     train_repositories: 8
     validation_repositories: 29
     repository_or_duplicate_component_overlap: 0
-    development_exposed_cases_in_train_only: true
+    development_fixture_cases_in_train_only: true
+    validation_operational_preflight:
+      case_id: cf4618ba-7f51-4a75-bef9-5fa32a9f003b#first-plan
+      purpose: unlabeled_context_and_runtime_smoke_only
+      observed_decision_exposed_to_checker: false
+      post_boundary_evidence_exposed_to_checker: false
+      reflection_or_gepa_optimization_used: false
+      prompt_or_seed_changed_from_result: false
     validation_is_candidate_selection_data_not_untouched_holdout: true
   claims_excluded:
     - untouched_holdout_generalization

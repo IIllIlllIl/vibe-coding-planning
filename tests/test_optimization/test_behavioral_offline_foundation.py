@@ -461,7 +461,7 @@ def test_behavioral_formal_8it_contract_is_frozen_but_not_launch_authorized() ->
     assert "--submit" not in supervisor["arguments"]
 
 
-def test_behavioral_formal_v2_binds_media_projection_without_prompt_drift() -> None:
+def test_behavioral_formal_v2_launch_contract_has_no_prompt_drift() -> None:
     root = Path(__file__).parents[2]
     config_path = (
         root / "configs/gepa_behavioral_acceptability_formal_8it_v2_20260830.yaml"
@@ -479,14 +479,23 @@ def test_behavioral_formal_v2_binds_media_projection_without_prompt_drift() -> N
     config = load_optimization_config(config_path, require_api_keys=False)
 
     contract = raw["experiment_contract"]
-    assert contract["status"] == "prepared_not_launched"
-    assert contract["launch_authorized"] is False
+    assert contract["status"] == "launch_authorized"
+    assert contract["launch_authorized"] is True
     assert contract["dataset"]["snapshot_manifest_content_sha256"] == (
         "ff18d5dacd5cd9e0d7dba9ead504cd4a8a16a9e03f3c771606b5b5e516e3e21c"
     )
     assert contract["dataset"]["checker_media_projection"] == (
         "omit-base64-media-preserve-descriptor-v1"
     )
+    assert contract["dataset"]["development_fixture_cases_in_train_only"] is True
+    assert contract["dataset"]["validation_operational_preflight"] == {
+        "case_id": "cf4618ba-7f51-4a75-bef9-5fa32a9f003b#first-plan",
+        "purpose": "unlabeled_context_and_runtime_smoke_only",
+        "observed_decision_exposed_to_checker": False,
+        "post_boundary_evidence_exposed_to_checker": False,
+        "reflection_or_gepa_optimization_used": False,
+        "prompt_or_seed_changed_from_result": False,
+    }
     assert "media-projected" in str(config.dataset_snapshot)
     assert config.search.max_iterations == 8
     assert config.search.reflection_minibatch_size == 8
@@ -494,7 +503,7 @@ def test_behavioral_formal_v2_binds_media_projection_without_prompt_drift() -> N
     assert raw["prompts"] == smoke["prompts"]
     assert raw["checker"] == smoke["checker"]
     assert raw["reflection"] == smoke["reflection"]
-    assert "--submit" not in supervisor["arguments"]
+    assert "--submit" in supervisor["arguments"]
 
 
 def test_behavioral_reflection_analysis_requires_new_vocabulary_and_all_cases() -> None:

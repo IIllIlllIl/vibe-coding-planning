@@ -28,6 +28,4 @@ arguments:
   - "1"
   - --mem
   - 4G
-
-# Intentionally no --submit. Add it only after explicit launch approval and
-# after experiment_contract.launch_authorized is frozen to true in a launch commit.
+  - --submit
