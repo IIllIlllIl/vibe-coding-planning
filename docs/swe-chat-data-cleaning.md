@@ -444,3 +444,32 @@ snapshot is generated from the frozen Stage-2 cases, repository-availability
 cleaning, temporal proxies, and this split via the existing snapshot builder;
 invoke it as a module from the repository root so project imports resolve:
 `conda run -n mini-swe python -m scripts.tools.build_swe_chat_behavioral_gepa_snapshot`.
+
+### Checker-visible media projection
+
+The initial materialized formal snapshot exposed a modality mismatch during
+the launch preflight: three cases contained 11 structured image blocks whose
+PNG bytes were embedded as base64 in the pre-P1 event stream. One train case
+alone would have placed roughly 4.7 million base64 characters into a text-only
+Checker prompt. This was not a wall-time problem and must not be handled by
+silently truncating the session.
+
+The replacement snapshot applies
+`omit-base64-media-preserve-descriptor-v1` only to Checker-visible pre-P1 image
+blocks. It preserves the event position, surrounding text, media type, encoded
+and decoded sizes, decoded SHA-256, and a pointer to the frozen Stage-2 raw
+authority, while omitting the binary payload from the text prompt. Ordinary
+text and tool results, the proposed Plan, and all Reflection-only evidence are
+unchanged. The frozen Stage-2 case files remain byte-identical.
+
+The projection affects three cases and 11 images, omitting 4,932,188 encoded
+characters representing 3,699,135 decoded bytes. The tracked snapshot authority
+is
+`configs/frozen_swe_chat_behavioral_formal/swe-chat-behavioral-media-projected-snapshot-v1-20260830.json`,
+with content SHA-256
+`ff18d5dacd5cd9e0d7dba9ead504cd4a8a16a9e03f3c771606b5b5e516e3e21c`.
+Its no-LLM context census leaves the longest train input at approximately
+199,636 `cl100k_base` tokens and the longest validation input at approximately
+414,989 tokens. Those counts are diagnostics, not provider-authoritative token
+counts; the two extrema require a separate prompt/runtime smoke before formal
+launch.

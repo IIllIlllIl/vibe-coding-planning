@@ -3,12 +3,17 @@
 from __future__ import annotations
 
 import argparse
+import base64
+import binascii
 import hashlib
 import json
 from pathlib import Path
 from typing import Any
 
 from src.optimization.behavioral_models import TASK_SEMANTICS
+
+
+CHECKER_MEDIA_PROJECTION = "omit-base64-media-preserve-descriptor-v1"
 
 
 def _load(path: Path) -> dict[str, Any]:
@@ -42,6 +47,48 @@ def _content_sha256(value: dict[str, Any]) -> str:
 def _mirror_relpath(repo_id: str) -> str:
     owner, name = repo_id.split("/", 1)
     return f"{owner}/{name}.git"
+
+
+def _project_checker_media(value: Any, stats: dict[str, int]) -> Any:
+    """Replace embedded base64 images with deterministic text-visible metadata."""
+    if isinstance(value, list):
+        return [_project_checker_media(item, stats) for item in value]
+    if not isinstance(value, dict):
+        return value
+    source = value.get("source")
+    if (
+        value.get("type") == "image"
+        and isinstance(source, dict)
+        and source.get("type") == "base64"
+        and isinstance(source.get("data"), str)
+    ):
+        encoded = source["data"]
+        try:
+            decoded = base64.b64decode(encoded, validate=True)
+        except (binascii.Error, ValueError) as exc:
+            raise ValueError("Checker-visible image contains invalid base64") from exc
+        stats["payloads_omitted"] += 1
+        stats["encoded_characters_omitted"] += len(encoded)
+        stats["decoded_bytes_preserved_by_hash"] += len(decoded)
+        projected_source = {key: item for key, item in source.items() if key != "data"}
+        projected_source["data_projection"] = {
+            "status": "omitted_from_checker_text",
+            "encoded_characters": len(encoded),
+            "decoded_bytes": len(decoded),
+            "decoded_sha256": hashlib.sha256(decoded).hexdigest(),
+            "raw_authority": "frozen_stage2_case",
+        }
+        return {
+            key: (
+                projected_source
+                if key == "source"
+                else _project_checker_media(item, stats)
+            )
+            for key, item in value.items()
+        }
+    return {
+        key: _project_checker_media(item, stats) for key, item in value.items()
+    }
 
 
 def build_snapshot(
@@ -87,6 +134,12 @@ def build_snapshot(
         raise ValueError("split assignments contain duplicate case IDs")
 
     rows: dict[str, list[dict[str, Any]]] = {"train": [], "validation": []}
+    projection_totals = {
+        "affected_cases": 0,
+        "payloads_omitted": 0,
+        "encoded_characters_omitted": 0,
+        "decoded_bytes_preserved_by_hash": 0,
+    }
     for case_id in sorted(assignments):
         assignment = assignments[case_id]
         split_name = assignment.get("split")
@@ -110,6 +163,18 @@ def build_snapshot(
         repo_id = str(source["selection_provenance"]["repo_id"])
         if proxy["repo_id"] != repo_id:
             raise ValueError(f"{case_id}: repository identity mismatch")
+        case_projection = {
+            "payloads_omitted": 0,
+            "encoded_characters_omitted": 0,
+            "decoded_bytes_preserved_by_hash": 0,
+        }
+        checker_events = _project_checker_media(
+            source["checker_visible"]["events"], case_projection
+        )
+        if case_projection["payloads_omitted"]:
+            projection_totals["affected_cases"] += 1
+        for key in case_projection:
+            projection_totals[key] += case_projection[key]
 
         rows[split_name].append(
             {
@@ -117,7 +182,7 @@ def build_snapshot(
                 "split": split_name,
                 "task_semantics": TASK_SEMANTICS,
                 "checker_input": {
-                    "pre_p1_context": source["checker_visible"]["events"],
+                    "pre_p1_context": checker_events,
                     "proposed_plan_p1": source["checker_visible"]["proposed_plan"],
                     "repository_proxy": {
                         "repo": repo_id,
@@ -143,6 +208,10 @@ def build_snapshot(
                     "repository_state_semantics": proxy["repository_state_semantics"],
                     "stage2_case_sha256": stage2_entry["case_sha256"],
                     "dedup_group": assignment.get("dedup_group"),
+                    "checker_media_projection": {
+                        "policy": CHECKER_MEDIA_PROJECTION,
+                        **case_projection,
+                    },
                 },
             }
         )
@@ -169,6 +238,12 @@ def build_snapshot(
         "split_manifest_sha256": split["content_sha256"],
         "case_universe": case_universe,
         "source_case_hashes_verified": True,
+        "checker_media_projection": {
+            "policy": CHECKER_MEDIA_PROJECTION,
+            "scope": "checker_visible_pre_p1_context_only",
+            "raw_stage2_cases_unchanged": True,
+            **projection_totals,
+        },
     }
     (output_dir / "manifest.json").write_text(
         json.dumps(manifest, indent=2, ensure_ascii=False, sort_keys=True) + "\n",

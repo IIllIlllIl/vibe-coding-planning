@@ -1,13 +1,15 @@
-# Superseded pre-launch formal contract retained for audit. Its snapshot
-# rendered embedded image base64 into Checker text; do not launch it.
+# Prepared media-projected formal eight-iteration SWE-chat Behavioral Plan
+# Acceptability run. This supersedes prepared v1 but does not authorize launch.
 
 experiment_contract:
-  identity: swe-chat-behavioral-acceptability-formal-8it-v1-20260830
-  status: superseded_before_launch
+  identity: swe-chat-behavioral-acceptability-formal-8it-v2-20260830
+  status: prepared_not_launched
   launch_authorized: false
   purpose: optimize_a_generalizable_behavioral_plan_review_guideline
   dataset:
     split_manifest_content_sha256: c7d423dbbd8965ec534e7a37d3c993f78bb0167708f8946ed092f8285dc54b94
+    snapshot_manifest_content_sha256: ff18d5dacd5cd9e0d7dba9ead504cd4a8a16a9e03f3c771606b5b5e516e3e21c
+    checker_media_projection: omit-base64-media-preserve-descriptor-v1
     train_cases: 84
     validation_cases: 47
     train_repositories: 8
@@ -35,9 +37,9 @@ experiment_contract:
     estimate_is_not_a_spending_guarantee: true
 
 paths:
-  dataset_snapshot: output/SWE-chat/behavioral-gepa-datasets/formal-repository-holdout-v1-20260830
+  dataset_snapshot: output/SWE-chat/behavioral-gepa-datasets/formal-repository-holdout-media-projected-v1-20260830
   initial_guideline: configs/gepa_behavioral_acceptability_neutral_seed.md
-  run_dir: output/SWE-chat/behavioral-gepa-runs/formal/repository-holdout-accuracy-b8-8it-v1-20260830
+  run_dir: output/SWE-chat/behavioral-gepa-runs/formal/repository-holdout-media-projected-accuracy-b8-8it-v2-20260830
 
 task:
   semantics: behavioral_plan_acceptability_v1
@@ -45,7 +47,7 @@ task:
 behavioral_repository:
   backend: temporal_git_proxy
   repositories_root: /scratch/users/${USER}/vibe-coding-planning/operations/swe-chat-f66cca95-preheat-v1-20260829/repositories
-  workspace_root: /scratch/users/${USER}/vibe-coding-planning/behavioral-gepa-workspaces/formal-8it-v1-20260830
+  workspace_root: /scratch/users/${USER}/vibe-coding-planning/behavioral-gepa-workspaces/formal-8it-v2-20260830
 
 checker:
   model: deepseek-v4-flash
@@ -109,8 +111,8 @@ hpc:
   max_task_attempts: 3
   python_module: lang/Python/3.11
   python_bin: python3
-  job_name_prefix: behavioral-acceptability-formal-8it-v1-20260830
-  worker_config_path: configs/gepa_behavioral_acceptability_formal_8it_v1_20260830.yaml
+  job_name_prefix: behavioral-acceptability-formal-8it-v2-20260830
+  worker_config_path: configs/gepa_behavioral_acceptability_formal_8it_v2_20260830.yaml
 
 prompts:
   checker_system: |

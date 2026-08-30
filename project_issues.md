@@ -71,8 +71,11 @@ Current decisions are:
   all remaining components enter validation. The result is 84 train cases
   across eight repositories and 47 validation cases across 29 repositories.
   Formal validation is candidate-selection data, not an untouched holdout.
-- The formal accuracy/batch-eight/eight-iteration config and snapshot are
-  prepared under a new identity. Launch remains explicitly unauthorized until
+- The media-projected formal accuracy/batch-eight/eight-iteration v2 config and
+  snapshot supersede prepared v1 before launch. They omit structured image
+  base64 only from Checker text while preserving hashed descriptors and the
+  frozen raw authority. Launch remains explicitly unauthorized until the two
+  projected context extrema pass a separate Checker smoke and
   the user approves the frozen 551-call projection, 700-call fail-safe, run
   identity, stopping conditions, and acceptance criteria.
 

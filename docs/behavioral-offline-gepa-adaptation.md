@@ -1,7 +1,7 @@
 # Behavioral Offline GEPA Adaptation Boundary
 
-> Status: Stage C v2 completed; formal 131-case split, snapshot, and eight-
-> iteration launch contract prepared but not launch-authorized
+> Status: Stage C v2 completed; media-projected formal 131-case snapshot and
+> eight-iteration v2 contract prepared but not launch-authorized
 >
 > Scope: information flow and minimum project-side changes for Behavioral Plan
 > Acceptability v1
@@ -18,7 +18,7 @@ repository is an explicitly approximate pre-session proxy. Captured pre-P1
 tool results are authoritative when repository content differs. The accepted
 development-smoke Checker and Reflection wording is frozen in
 `configs/gepa_behavioral_acceptability_smoke_v2_20260830.yaml`; the prepared
-formal configuration reuses those prompts byte-for-byte.
+formal v2 configuration reuses those prompts byte-for-byte.
 
 The initial candidate guideline is the deliberately neutral one-sentence file
 `configs/gepa_behavioral_acceptability_neutral_seed.md`. It supplies no
@@ -237,6 +237,13 @@ from eight repositories and 47 validation cases from 29 repositories, with no
 repository, exact normalized Plan/context, or thresholded Plan near-duplicate
 crossing the split. Formal validation is GEPA candidate-selection data, not an
 untouched final holdout.
+
+Launch preflight found structured PNG base64 embedded in the Checker text for
+three cases. The superseding formal v2 snapshot omits only those binary payloads
+while retaining deterministic media descriptors and the unchanged frozen raw
+authority. No prompt or GEPA search setting changed. A two-extrema Checker
+smoke remains required because the projected longest validation context exceeds
+the largest prompt exercised in Stage C.
 
 ## Components retained unchanged
 

@@ -19,8 +19,10 @@ tracked does not authorize its execution.
 | `gepa_behavioral_acceptability_smoke_v2_20260830.yaml` | Completed Stage C v2 method identity: bounded no-container runtime and one full GEPA proposal on the eight-case development fixture. |
 | `frozen_swe_chat_behavioral_smoke/` | Frozen eight-case development fixture assignment; all exposed cases are formal-train-only. |
 | `frozen_swe_chat_behavioral_formal/` | Complete 131-case repository/duplicate-component split authority: 84 train and 47 validation with no repository overlap. |
-| `gepa_behavioral_acceptability_formal_8it_v1_20260830.yaml` | Prepared formal accuracy/batch-eight/eight-iteration semantic contract. It is not launch-authorized. |
-| `behavioral_gepa_formal_8it_supervisor_v1_20260830.yaml` | Prepared supervisor identity and FairShare-aligned resources; intentionally omits `--submit` pending explicit approval. |
+| `gepa_behavioral_acceptability_formal_8it_v1_20260830.yaml` | Superseded pre-launch contract retained for audit; its snapshot rendered image base64 into Checker text and must not be launched. |
+| `behavioral_gepa_formal_8it_supervisor_v1_20260830.yaml` | Superseded non-submitting supervisor retained with formal v1. |
+| `gepa_behavioral_acceptability_formal_8it_v2_20260830.yaml` | Current prepared formal contract using the media-projected snapshot; prompts/search remain unchanged and launch is not authorized. |
+| `behavioral_gepa_formal_8it_supervisor_v2_20260830.yaml` | Current prepared v2 supervisor; intentionally omits `--submit`. |
 | `frozen_swe_chat_cleaning/f66cca95b14caaa4177f7ed5eaa424608dadcffa/` | Frozen Stage-1 decisions, compact Stage-2 manifest for 141 labeled first-Plan slices, additive repository-availability cleaning yielding 131 cases, exact-reconstruction audit summary, and 131-case temporal-proxy manifest. |
 
 Acquisition stops at source materialization. Stage 1 selects whole trajectories;
@@ -28,8 +30,10 @@ Stage 2 projects the first Plan episode and separates Checker-visible from
 Reflection-only evidence. The additive repository-availability manifest freezes
 behavioral labels and the 131-case feasible universe. Stage C v2 completed the
 ordered prompt/runtime smoke. The formal split and run semantics are now
-prepared, but the supervisor intentionally cannot submit until a separate
-launch-authorization change. The reconstruction audit verifies an exact parent
+prepared. Formal v1 was superseded before launch after its context census found
+embedded image bytes; v2 binds the deterministic media-projected snapshot. Its
+supervisor intentionally cannot submit until a separate launch-authorization
+change. The reconstruction audit verifies an exact parent
 candidate for only two ACCEPT cases. The separate temporal-proxy manifest gives
 all 131 cases an explicitly approximate pre-session source checkout without
 reinterpreting that negative audit.

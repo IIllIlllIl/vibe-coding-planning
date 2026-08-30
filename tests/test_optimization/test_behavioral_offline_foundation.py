@@ -431,7 +431,7 @@ def test_behavioral_formal_8it_contract_is_frozen_but_not_launch_authorized() ->
     config = load_optimization_config(config_path, require_api_keys=False)
 
     contract = raw["experiment_contract"]
-    assert contract["status"] == "prepared_not_launched"
+    assert contract["status"] == "superseded_before_launch"
     assert contract["launch_authorized"] is False
     assert contract["dataset"] == {
         "split_manifest_content_sha256": (
@@ -455,6 +455,42 @@ def test_behavioral_formal_8it_contract_is_frozen_but_not_launch_authorized() ->
     assert config.hpc.cpus_per_task == 1
     assert config.hpc.mem == "4G"
     assert config.hpc.time == "00:35:00"
+    assert raw["prompts"] == smoke["prompts"]
+    assert raw["checker"] == smoke["checker"]
+    assert raw["reflection"] == smoke["reflection"]
+    assert "--submit" not in supervisor["arguments"]
+
+
+def test_behavioral_formal_v2_binds_media_projection_without_prompt_drift() -> None:
+    root = Path(__file__).parents[2]
+    config_path = (
+        root / "configs/gepa_behavioral_acceptability_formal_8it_v2_20260830.yaml"
+    )
+    supervisor_path = (
+        root / "configs/behavioral_gepa_formal_8it_supervisor_v2_20260830.yaml"
+    )
+    raw = yaml.safe_load(config_path.read_text(encoding="utf-8"))
+    smoke = yaml.safe_load(
+        (
+            root / "configs/gepa_behavioral_acceptability_smoke_v2_20260830.yaml"
+        ).read_text(encoding="utf-8")
+    )
+    supervisor = yaml.safe_load(supervisor_path.read_text(encoding="utf-8"))
+    config = load_optimization_config(config_path, require_api_keys=False)
+
+    contract = raw["experiment_contract"]
+    assert contract["status"] == "prepared_not_launched"
+    assert contract["launch_authorized"] is False
+    assert contract["dataset"]["snapshot_manifest_content_sha256"] == (
+        "ff18d5dacd5cd9e0d7dba9ead504cd4a8a16a9e03f3c771606b5b5e516e3e21c"
+    )
+    assert contract["dataset"]["checker_media_projection"] == (
+        "omit-base64-media-preserve-descriptor-v1"
+    )
+    assert "media-projected" in str(config.dataset_snapshot)
+    assert config.search.max_iterations == 8
+    assert config.search.reflection_minibatch_size == 8
+    assert config.search.projection_metric_calls == 551
     assert raw["prompts"] == smoke["prompts"]
     assert raw["checker"] == smoke["checker"]
     assert raw["reflection"] == smoke["reflection"]

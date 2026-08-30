@@ -1,0 +1,41 @@
+{
+  "schema_version": 1,
+  "snapshot_id": "swe-chat-behavioral-media-projected-snapshot-v1-20260830",
+  "complete": true,
+  "provisional": false,
+  "source_split_content_sha256": "c7d423dbbd8965ec534e7a37d3c993f78bb0167708f8946ed092f8285dc54b94",
+  "projection_policy": "omit-base64-media-preserve-descriptor-v1",
+  "projection_scope": "checker_visible_pre_p1_context_only",
+  "raw_stage2_cases_unchanged": true,
+  "counts": {
+    "train": 84,
+    "validation": 47,
+    "affected_cases": 3,
+    "payloads_omitted": 11,
+    "encoded_characters_omitted": 4932188,
+    "decoded_bytes_preserved_by_hash": 3699135
+  },
+  "file_sha256": {
+    "manifest.json": "925ae5065d50b66d2d17faf25d76090e85feb8df7dc377b63038e1a9bcbdd380",
+    "train.jsonl": "53ab1e67085c1782187f818f9043ce34ffbd34af209ab45955584b846011ecd7",
+    "validation.jsonl": "895033d93137bea651a021624b450e73bfe6e0adddab8181cfdd903ed046ec19"
+  },
+  "context_census": {
+    "tokenizer": "cl100k_base",
+    "status": "approximate_diagnostic_not_provider_authority",
+    "p50_tokens": 42428,
+    "p90_tokens": 114868,
+    "p95_tokens": 133598,
+    "cases_over_128000_tokens": 8,
+    "maximum_train": {
+      "case_id": "b2b5366b-6963-4be6-be4a-ce094982febd#first-plan",
+      "tokens": 199636
+    },
+    "maximum_validation": {
+      "case_id": "cf4618ba-7f51-4a75-bef9-5fa32a9f003b#first-plan",
+      "tokens": 414989
+    }
+  },
+  "builder_sha256": "720964c8cbae5e0d0d20b6cede26829f0373749ee321acca20818f499fd6aa8e",
+  "content_sha256": "ff18d5dacd5cd9e0d7dba9ead504cd4a8a16a9e03f3c771606b5b5e516e3e21c"
+}
