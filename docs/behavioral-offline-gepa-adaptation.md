@@ -1,7 +1,7 @@
 # Behavioral Offline GEPA Adaptation Boundary
 
-> Status: information-flow foundation implemented; formal snapshot, runtime
-> wiring, and prompts are not implemented
+> Status: information-flow foundation and Stage-A smoke contract implemented;
+> formal snapshot and runtime wiring are not implemented
 >
 > Scope: information flow and minimum project-side changes for Behavioral Plan
 > Acceptability v1
@@ -15,8 +15,10 @@ developer behavior at the first Plan decision boundary.
 
 The deployment-time task is `ACCEPT` versus `DO_NOT_ACCEPT` for P1. The
 repository is an explicitly approximate pre-session proxy. Captured pre-P1
-tool results are authoritative when repository content differs. The exact
-Checker and Reflection wording is intentionally deferred.
+tool results are authoritative when repository content differs. The first
+development-smoke Checker and Reflection wording is fixed in
+`configs/gepa_behavioral_acceptability_smoke_v1_20260830.yaml`. It remains a
+non-runnable Stage-A contract until the named fixture and execution path exist.
 
 The initial candidate guideline is the deliberately neutral one-sentence file
 `configs/gepa_behavioral_acceptability_neutral_seed.md`. It supplies no
@@ -149,14 +151,17 @@ environment reconstruction is required for Behavioral v1.
 
 `BehavioralCheckerOutput` uses `predicted_accept` and never silently calls the
 new value `predicted_resolved`. It retains decision reason, repository evidence,
-and complete trajectory. Checker execution, timeout/validator retry, instance-
-template mapping, and final prompt wording remain deferred.
+and complete trajectory. The smoke Checker prompt changes only the task and
+input boundary: the proxy is supplementary evidence, while conflicting
+pre-decision transcript observations are authoritative. Review strategy remains
+owned by the candidate guideline. Checker execution, timeout/validator retry,
+and instance-template mapping remain deferred.
 
 ### Adapter and metric traces
 
 `BehavioralGEPAAdapter` reuses GEPA's `EvaluationBatch`, one `rules` component,
 scalar score, optional balanced-accuracy weighting, train repetitions, and
-reflective-dataset interface while using `expected_decision` and
+reflective-dataset interface while using `observed_decision` and
 `predicted_accept`. The Behavioral case's separate worker projection contains
 repository materialization data but no label or Reflection evidence.
 
@@ -164,8 +169,9 @@ Evaluation caching, full historical retry/audit behavior, HPC batch execution,
 and formal reporting are not yet wired into the runner.
 
 Accuracy and balanced-accuracy support can be reused mechanically after the
-positive class is defined as ACCEPT. Choosing the primary metric remains a
-separate experiment-design decision.
+positive class is defined as ACCEPT. The balanced 8-case development smoke uses
+accuracy as its primary mechanical score and balanced accuracy as a diagnostic;
+the formal experiment metric remains a separate design decision.
 
 ### Reflection evidence writer
 
@@ -176,9 +182,15 @@ immediate P1 result, developer reaction, later Plans/results, controlled
 post-boundary events, and proxy-risk metadata. It must not expect historical
 Plan/Code trajectories, generated patches, or evaluator results.
 
+Behavioral traces and bundles call the supervision fields `observed_decision`
+and `observed_accept`, emphasizing that they record developer behavior rather
+than an objective plan-quality truth. The smoke Reflection prompt permits
+controlled post-decision evidence only for attribution and diagnosis and
+forbids promoting it into deployment-time requirements.
+
 The existing Reflection proposer selects this bundle mode from explicit task
-semantics. Its runtime/container assumptions and prompt content are not yet the
-Behavioral execution path and remain deferred.
+semantics. Its container assumptions are not the no-container Behavioral
+execution path and remain deferred.
 
 ### Runner, HPC worker, and config dispatch
 
@@ -194,6 +206,27 @@ Run fingerprints must include the new task semantic, dataset manifest,
 temporal-proxy manifest, repository backend, prompts, and new source modules. A
 Behavioral run always has a new run directory and cannot resume the old
 candidate tree.
+
+### Development smoke contract
+
+The first smoke has three ordered stages. Stage A is local and no-LLM: it
+checks config parsing, exact prompt and evidence vocabulary, leakage boundaries,
+snapshot construction, proxy materialization, and unchanged historical Offline
+semantics. Stage B will use four balanced train cases for separate local Checker
+and Reflection prompt units. Stage C will use the same four train cases plus
+four previously unused validation cases for one full HPC GEPA proposal.
+
+The eight cases must be balanced by observed decision and proxy source within
+each split, with no session, repository, or declared deduplication group shared
+between train and validation. Once exposed by the smoke they are development
+data: they may later enter formal training, but not formal validation or an
+untouched holdout.
+
+Both Agents use `deepseek-v4-flash` with the existing Offline per-Agent limits.
+The HPC stage uses one CPU, 4G, and 35 minutes per task, one train repetition,
+minibatch four, accuracy, one proposal, a 16-call projection, and a 20-call
+fail-safe. Metric improvement is not a smoke acceptance condition; invalid or
+operationally incomplete decisions are never coerced into a behavioral class.
 
 ### Reports and tests
 
@@ -230,9 +263,7 @@ semantic renaming of labels/traces, not the GEPA search algorithm.
 
 ## Deferred decisions
 
-- Checker and Reflection prompt wording;
-- how the fixed prompt describes dirty/missing/conflicting repository state;
 - split and near-duplicate policy;
-- primary optimization metric and success thresholds;
-- minibatch size, budget, and stopping conditions;
+- the exact deterministic membership of the 8-case smoke fixture;
+- formal-run primary metric, data volume, budget, and success thresholds;
 - whether any cases should receive no repository access as an ablation.

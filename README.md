@@ -53,8 +53,8 @@ Read these files in order:
 5. [`docs/offline-gepa.md`](docs/offline-gepa.md) — current Offline Checker,
    metric, Reflection, search, and resume semantics.
 6. [`docs/behavioral-offline-gepa-adaptation.md`](docs/behavioral-offline-gepa-adaptation.md)
-   — Behavioral information boundary and minimum Offline adapter changes;
-   prompt design is deferred.
+   — Behavioral information boundary, minimum Offline adapter changes, and the
+   staged development-smoke contract.
 7. [`docs/knowledge/offline-pcce-stage-findings.md`](docs/knowledge/offline-pcce-stage-findings.md)
    — frozen first-stage PolyBench findings.
 8. [`docs/polybench-pcce.md`](docs/polybench-pcce.md) and
@@ -75,7 +75,9 @@ The current implementation surface is:
 - `src/optimization/behavioral_*.py` and
   `tests/test_optimization/test_behavioral_offline_foundation.py` for the
   Behavioral schema, acceptability Adapter, evidence projection, and disposable
-  temporal-proxy checkout foundation.
+  temporal-proxy checkout foundation;
+- `configs/gepa_behavioral_acceptability_smoke_v1_20260830.yaml` for the
+  non-runnable Stage-A prompt, fixture, model, budget, and acceptance contract.
 
 ## Historical paths
 

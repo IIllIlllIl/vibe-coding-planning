@@ -492,8 +492,8 @@ class EvidenceBundleWriter:
                 _write_json(
                     case_dir / "behavioral_supervision.json",
                     {
-                        "expected_decision": record["expected_decision"],
-                        "expected_accept": record["expected_accept"],
+                        "observed_decision": record["observed_decision"],
+                        "observed_accept": record["observed_accept"],
                         "score": record["score"],
                     },
                 )
@@ -514,7 +514,7 @@ class EvidenceBundleWriter:
                         else (
                             {"resolved": record["resolved"]}
                             if self.mode == "online_planning"
-                            else {"expected_decision": record["expected_decision"]}
+                            else {"observed_decision": record["observed_decision"]}
                         )
                     ),
                     "score": record["score"],

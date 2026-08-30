@@ -7,11 +7,13 @@ from pathlib import Path
 import subprocess
 
 import pytest
+import yaml
 
 from src.optimization.behavioral_adapter import BehavioralGEPAAdapter
 from src.optimization.behavioral_dataset import load_behavioral_snapshot
 from src.optimization.behavioral_models import BehavioralCheckerOutput
 from src.optimization.behavioral_repository import materialize_repository_proxy
+from src.optimization.config import load_optimization_config
 from src.optimization.reflection import EvidenceBundleWriter
 
 
@@ -141,7 +143,10 @@ def test_behavioral_adapter_scores_behavior_and_reflects_later_evidence(tmp_path
     assert result.scores == [1.0]
     assert result.outputs[0]["predicted_accept"] is True
     assert "predicted_resolved" not in result.outputs[0]
-    assert result.trajectories[0]["expected_decision"] == "ACCEPT"
+    assert result.trajectories[0]["observed_decision"] == "ACCEPT"
+    assert result.trajectories[0]["observed_accept"] is True
+    assert "expected_decision" not in result.trajectories[0]
+    assert "expected_accept" not in result.trajectories[0]
     assert "developer reaction" in json.dumps(result.trajectories[0])
     assert "developer reaction" not in json.dumps(observed[0])
     assert "mirror_relpath" not in result.trajectories[0]["repository_proxy_provenance"]
@@ -152,8 +157,8 @@ def test_behavioral_reflection_bundle_has_controlled_post_boundary_evidence(
 ):
     record = {
         "instance_id": "case-one",
-        "expected_decision": "DO_NOT_ACCEPT",
-        "expected_accept": False,
+        "observed_decision": "DO_NOT_ACCEPT",
+        "observed_accept": False,
         "score": 0.0,
         "checker_output": {"predicted_accept": True, "trajectory": []},
         "reflection_evidence": {"developer_reaction": "revise P1"},
@@ -168,9 +173,17 @@ def test_behavioral_reflection_bundle_has_controlled_post_boundary_evidence(
     assert (
         json.loads(
             (case_dir / "behavioral_supervision.json").read_text(encoding="utf-8")
-        )["expected_decision"]
+        )["observed_decision"]
         == "DO_NOT_ACCEPT"
     )
+    supervision = json.loads(
+        (case_dir / "behavioral_supervision.json").read_text(encoding="utf-8")
+    )
+    assert supervision["observed_accept"] is False
+    assert "expected_decision" not in supervision
+    assert "expected_accept" not in supervision
+    manifest = json.loads((bundle / "manifest.json").read_text(encoding="utf-8"))
+    assert manifest["cases"][0]["observed_decision"] == "DO_NOT_ACCEPT"
     assert "revise P1" in (case_dir / "post_boundary_evidence.json").read_text(
         encoding="utf-8"
     )
@@ -222,3 +235,83 @@ def test_behavioral_seed_is_exactly_neutral() -> None:
         "Evaluate whether the proposed plan should be accepted for implementation "
         "based on the information available at the time of the decision."
     )
+
+
+def test_behavioral_smoke_contract_freezes_prompts_and_budgets() -> None:
+    path = (
+        Path(__file__).parents[2]
+        / "configs"
+        / "gepa_behavioral_acceptability_smoke_v1_20260830.yaml"
+    )
+    raw = yaml.safe_load(path.read_text(encoding="utf-8"))
+    config = load_optimization_config(path, require_api_keys=False)
+
+    assert raw["smoke_contract"]["status"] == "stage_a_contract_only"
+    assert raw["smoke_contract"]["launch_authorized"] is False
+    assert raw["smoke_contract"]["fixture"] == {
+        "total_cases": 8,
+        "train_cases": 4,
+        "validation_cases": 4,
+        "cases_per_split_by_decision": {
+            "ACCEPT": 2,
+            "DO_NOT_ACCEPT": 2,
+        },
+        "cases_per_split_by_proxy_source": {
+            "recorded_branch": 2,
+            "all_reachable_refs": 2,
+        },
+        "no_session_repository_or_dedup_group_overlap_between_splits": True,
+        "development_exposed_cases_may_enter_formal_train_only": True,
+    }
+    assert config.task.semantics == "behavioral_plan_acceptability_v1"
+    assert config.checker.model == config.reflection.model == "deepseek-v4-flash"
+    assert config.checker.temperature == 0.0
+    assert config.reflection.temperature == 0.7
+    assert config.search.max_iterations == 1
+    assert config.search.reflection_minibatch_size == 4
+    assert config.search.train_case_repetitions == 1
+    assert config.search.projection_metric_calls == 16
+    assert config.search.max_metric_calls == 20
+    assert config.search.primary_metric == "accuracy"
+    assert config.hpc.cpus_per_task == 1
+    assert config.hpc.mem == "4G"
+    assert config.hpc.time == "00:35:00"
+    assert config.hpc.max_task_attempts == 3
+
+
+def test_behavioral_smoke_prompts_preserve_information_responsibilities() -> None:
+    path = (
+        Path(__file__).parents[2]
+        / "configs"
+        / "gepa_behavioral_acceptability_smoke_v1_20260830.yaml"
+    )
+    config = load_optimization_config(path, require_api_keys=False)
+    checker = config.checker_prompt
+    checker_instance = config.checker_instance_template
+    reflection = config.reflection_prompt
+    reflection_instance = config.reflection_instance_template
+
+    assert "sole source of plan-review methods" in checker
+    assert "predicted_accept" in checker
+    assert "predicted_resolved" not in checker
+    assert checker.count("approximate pre-session proxy") == 1
+    assert (
+        "When it conflicts with repository observations recorded in the "
+        "pre-decision session context, treat the recorded observation as "
+        "authoritative."
+    ) in " ".join(checker.split())
+    assert "proxy age" not in checker.lower()
+    assert "fallback" not in checker.lower()
+    assert "{{pre_p1_context}}" in checker_instance
+    assert "{{proposed_plan_p1}}" in checker_instance
+    assert "{{repository_proxy_commit}}" in checker_instance
+    assert "{{candidate_guideline}}" in checker_instance
+
+    combined_reflection = reflection + reflection_instance
+    assert "observed developer decision" in reflection
+    assert "Behavioral evidence attribution" in reflection
+    assert "observed_decision" in reflection_instance
+    assert "observed_accept" in reflection_instance
+    assert "expected_decision" not in combined_reflection
+    assert "expected_accept" not in combined_reflection
+    assert "predicted_resolved" not in combined_reflection

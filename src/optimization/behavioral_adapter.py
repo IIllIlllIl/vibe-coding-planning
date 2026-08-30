@@ -72,8 +72,8 @@ class BehavioralGEPAAdapter:
             trace = {
                 "instance_id": case.instance_id,
                 "task_semantics": "behavioral_plan_acceptability_v1",
-                "expected_decision": case.decision,
-                "expected_accept": case.accepted,
+                "observed_decision": case.decision,
+                "observed_accept": case.accepted,
                 "score": score,
                 "primary_metric": self.primary_metric,
                 "is_correct": output.predicted_accept == case.accepted,
@@ -123,8 +123,8 @@ class BehavioralGEPAAdapter:
                 trace = {
                     "instance_id": case.instance_id,
                     "task_semantics": "behavioral_plan_acceptability_v1",
-                    "expected_decision": case.decision,
-                    "expected_accept": case.accepted,
+                    "observed_decision": case.decision,
+                    "observed_accept": case.accepted,
                     "score": score,
                     "primary_metric": self.primary_metric,
                     "repetition_count": repetitions,
@@ -154,7 +154,7 @@ class BehavioralGEPAAdapter:
                             {
                                 "instance_id": case.instance_id,
                                 "split": case.split,
-                                "expected_decision": case.decision,
+                                "observed_decision": case.decision,
                                 "score": score,
                                 "output": output,
                             },

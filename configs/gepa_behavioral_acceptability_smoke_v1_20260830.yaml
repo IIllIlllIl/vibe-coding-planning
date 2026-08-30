@@ -1,0 +1,387 @@
+# Stage-A contract for the first SWE-chat Behavioral Plan Acceptability smoke.
+# This file freezes prompts, budgets, fixture requirements, and the intended HPC
+# transport. It is not launchable until the named fixture and the remaining
+# Behavioral runner/worker/no-container Reflection wiring exist.
+
+smoke_contract:
+  identity: swe-chat-behavioral-acceptability-smoke-v1-20260830
+  status: stage_a_contract_only
+  launch_authorized: false
+  purpose: validate_information_flow_prompt_sanity_and_one_gepa_proposal
+  claims_excluded:
+    - guideline_effectiveness
+    - generalization
+    - model_comparison
+  fixture:
+    total_cases: 8
+    train_cases: 4
+    validation_cases: 4
+    cases_per_split_by_decision:
+      ACCEPT: 2
+      DO_NOT_ACCEPT: 2
+    cases_per_split_by_proxy_source:
+      recorded_branch: 2
+      all_reachable_refs: 2
+    no_session_repository_or_dedup_group_overlap_between_splits: true
+    development_exposed_cases_may_enter_formal_train_only: true
+  stages:
+    stage_a: local_no_llm_contract_tests
+    stage_b: local_checker_and_reflection_prompt_units
+    stage_c: hpc_full_one_proposal_gepa_smoke
+  acceptance:
+    metric_improvement_required: false
+    operationally_incomplete_is_a_decision: false
+    one_valid_reflection_proposal_required: true
+    raw_evidence_required: true
+
+paths:
+  dataset_snapshot: /scratch/users/${USER}/vibe-coding-planning/derived/swe-chat-behavioral-gepa-smoke-v1-20260830/snapshot
+  initial_guideline: configs/gepa_behavioral_acceptability_neutral_seed.md
+  run_dir: /scratch/users/${USER}/vibe-coding-planning/behavioral-gepa-runs/swe-chat-behavioral-acceptability-smoke-v1-20260830
+
+task:
+  semantics: behavioral_plan_acceptability_v1
+
+behavioral_repository:
+  backend: temporal_git_proxy
+  repositories_root: /scratch/users/${USER}/vibe-coding-planning/operations/swe-chat-f66cca95-preheat-v1-20260829/repositories
+  workspace_root: /scratch/users/${USER}/vibe-coding-planning/behavioral-gepa-workspaces/smoke-v1-20260830
+
+checker:
+  model: deepseek-v4-flash
+  api_base: https://api.deepseek.com
+  api_key_env: DEEPSEEK_API_KEY
+  temperature: 0.0
+  max_steps: 500
+  cost_limit: 6.0
+  timeout: 1800
+  agent_timeout_seconds: 0
+  max_attempts: 1
+
+reflection:
+  model: deepseek-v4-flash
+  api_base: https://api.deepseek.com
+  api_key_env: DEEPSEEK_API_KEY
+  temperature: 0.7
+  max_steps: 100
+  cost_limit: 3.0
+  timeout: 1800
+
+search:
+  max_iterations: 1
+  max_metric_calls: 20
+  projection_metric_calls: 16
+  reflection_minibatch_size: 4
+  train_case_repetitions: 1
+  primary_metric: accuracy
+  parallel: 1
+  seed: 42
+  skip_perfect_score: false
+  min_proposals: 1
+
+# Retained only because the current shared config schema requires these fields.
+# Behavioral Checker execution uses temporal Git proxies rather than images.
+docker:
+  workdir: /testbed
+  timeout: 30
+  min_free_gb: 20
+  max_cached_images: 75
+
+# The current shared HPC schema requires Apptainer. Behavioral v1 must not use
+# this as authority to run Reflection in a container; its no-container runtime
+# remains an explicit launch prerequisite.
+container:
+  runtime: apptainer
+  module: tools/Apptainer
+  sif_cache_dir: /scratch/users/${USER}/vibe-coding-planning/shared/sif-cache
+  writable_tmpfs: true
+
+execution:
+  backend: hpc_slurm
+
+hpc:
+  submit: true
+  remote_project_dir: ~/hpc_runs/vibe-coding-planning-behavioral
+  remote_task_dir: /scratch/users/${USER}/vibe-coding-planning/behavioral-gepa-tasks
+  remote_env_file: ~/.config/vibe-coding-planning/deepseek.env
+  ulhpc_config: configs/ulhpc_submit.yaml
+  partition: batch
+  cpus_per_task: 1
+  mem: 4G
+  time: 00:35:00
+  poll_interval_seconds: 300
+  task_output_grace_seconds: 300
+  missing_task_grace_seconds: 600
+  max_task_attempts: 3
+  python_module: lang/Python/3.11
+  container_module: tools/Apptainer
+  python_bin: python3
+  job_name_prefix: behavioral-acceptability-smoke-v1-20260830
+  worker_config_path: configs/gepa_behavioral_acceptability_smoke_v1_20260830.yaml
+
+prompts:
+  checker_system: |
+    You are evaluating a proposed software plan before implementation.
+
+    Decide whether the proposed plan should be accepted for implementation at
+    this decision point.
+
+    Treat the candidate guideline as the sole source of plan-review methods,
+    principles, heuristics, and decision criteria. Do not add or rely on review
+    guidance that is not stated in the candidate guideline. Use your general
+    capabilities only to apply the guideline and inspect the provided evidence
+    or environment.
+
+    You receive the captured session context available before the plan
+    decision, the proposed plan, the candidate guideline, and a disposable
+    repository checkout.
+
+    The repository at /testbed is an approximate pre-session proxy, not an
+    exact reconstruction of the repository state at the plan decision. When it
+    conflicts with repository observations recorded in the pre-decision
+    session context, treat the recorded observation as authoritative.
+    Otherwise, the proxy may be used as supplementary evidence.
+
+    Use only information available before the plan decision. Do not assume or
+    infer the observed developer decision, later developer feedback, plan
+    revisions, implementation behavior, or any other event after the decision.
+
+    ## Checker submission
+
+    When ready, submit the result with one final action in this form:
+    ```bash
+    cat <<'EOF'
+    COMPLETE_TASK_AND_SUBMIT_FINAL_OUTPUT
+    {
+      "predicted_accept": false,
+      "decision_reason": "...",
+      "repository_evidence": [
+        {"path": "...", "symbol": "...", "finding": "..."}
+      ]
+    }
+    EOF
+    ```
+    Submission finishes only when the executed command writes
+    COMPLETE_TASK_AND_SUBMIT_FINAL_OUTPUT as its first output line. Saying that
+    the result was submitted does not finish the task. Do not run any other
+    command after submitting.
+
+  checker_instance: |
+    <pre_decision_context>
+    {{pre_p1_context}}
+    </pre_decision_context>
+
+    <proposed_plan>
+    {{proposed_plan_p1}}
+    </proposed_plan>
+
+    <repository_proxy>
+    repository: {{repository_repo}}
+    proxy_commit: {{repository_proxy_commit}}
+    </repository_proxy>
+
+    <candidate_guideline>
+    {{candidate_guideline}}
+    </candidate_guideline>
+
+    {% if retry_feedback %}
+    <retry_feedback>
+    {{retry_feedback}}
+    </retry_feedback>
+    {% endif %}
+
+  reflection_system: |
+    ## Target artifact
+
+    Optimize the complete standalone guideline that a developer or an Agent
+    can use before implementation to decide whether a proposed software plan
+    should be accepted for implementation at that decision point.
+
+    The guideline must be self-contained. Do not assume that a separate
+    Checker prompt will supply omitted review behavior, decision guidance,
+    software-engineering knowledge, or investigation methods.
+
+    Return the complete replacement guideline, not a patch or case analysis.
+
+    ## Optimization evidence
+
+    The evidence for each case contains:
+
+    - the Checker input, prediction, reasoning, trajectory, and evidence used;
+    - the observed developer decision: ACCEPT or DO_NOT_ACCEPT;
+    - the configured correctness score;
+    - the matched platform approval or rejection event;
+    - the immediate developer response when available;
+    - directly related plan revisions and their decision results when available;
+    - controlled non-thinking post-decision events;
+    - limited repository-proxy provenance needed to diagnose conflicts or
+      inappropriate reliance on the approximate checkout.
+
+    Use this evidence to understand why the current guideline produced its
+    decision and what the observed developer behavior reveals about useful
+    plan-review behavior.
+
+    Post-decision evidence is available only for optimization and diagnosis. It
+    must not be treated as information that would have been available to the
+    deployed Checker at the original decision point.
+
+    The repositories are not mounted for fresh investigation during
+    Reflection. Use the captured Checker trajectory, pre-decision observations,
+    and controlled evidence bundle. If those records do not support a
+    repository or causal claim, record the uncertainty instead of inventing the
+    fact.
+
+    Assistant thinking from the captured SWE-chat session is not evidence and
+    is not included.
+
+    ## Causal guideline optimization
+
+    Review every case in the minibatch, including both correct and incorrect
+    predictions.
+
+    For each case, determine how the current guideline affected the
+    interpretation of the task, use of available decision-time evidence,
+    evaluation of the proposed plan, and final acceptance decision.
+
+    For an incorrect prediction, identify why the current guideline, when
+    applied to the decision-time evidence, produced a decision that differed
+    from the observed developer decision. Determine whether a generalizable
+    change to the guideline could have produced a decision better aligned with
+    the observed developer decision using only information available before
+    that decision.
+
+    For a correct prediction, identify useful behavior that should be preserved
+    and assess whether proposed changes would damage it.
+
+    Use post-decision developer feedback and directly related plan revisions
+    only to diagnose the original decision. Do not turn information that first
+    appeared after the decision into a requirement that the Checker was
+    expected to know beforehand.
+
+    Synthesize a complete replacement guideline from patterns that generalize
+    across cases. You may add, revise, delete, combine, weaken, strengthen,
+    preserve, or add exceptions to guidance when supported by the evidence. Do
+    not infer a universal acceptance or rejection rule from one case.
+
+    ## Behavioral evidence attribution
+
+    An observed DO_NOT_ACCEPT decision does not by itself imply that the
+    proposed plan was defective.
+
+    Before learning from a rejection, distinguish evidence attributable to the
+    proposed plan or pre-decision information from post-decision requirement
+    changes, pauses, unrelated tasks, operational issues, or other causes
+    unavailable at the decision point.
+
+    If the available evidence does not support attributing the rejection to a
+    generalizable plan-review issue visible before the decision, record that
+    limitation and do not force a guideline change from the case.
+
+    Likewise, an ACCEPT decision does not imply that later implementation
+    succeeded or that the plan was objectively correct. Learn from the
+    developer decision at the time it was made, not from downstream outcomes.
+
+    Later implementation success or failure is not the Behavioral v1 label and
+    must not be used to redefine the original acceptance decision.
+
+    ## Deployment and generalization boundary
+
+    The guideline may assume access only to information available before the
+    plan decision under the configured Checker setting.
+
+    It must not require the observed developer decision, approval or rejection
+    events, developer feedback first provided after the decision, later or
+    revised plans, implementation behavior, downstream outcomes, labels,
+    scores, split membership, or operational audit fields.
+
+    Do not copy case IDs, session IDs, repository names, task-specific paths,
+    symbols, exact developer feedback, labels, or task answers into the
+    guideline.
+
+    Generalize the underlying review behavior when supported by the evidence;
+    otherwise omit it. Case analysis and change provenance belong only in the
+    separate Reflection analysis.
+
+    ## Reflection analysis
+
+    Before submission, write the complete analysis to
+    /tmp/reflection_analysis.json.
+
+    It must contain:
+
+    - case_reviews: one object for every minibatch case;
+    - guideline_changes: the proposed additions, revisions, deletions,
+      combinations, preservations, weakenings, strengthenings, or exceptions.
+
+    Each case_reviews object must contain instance_id,
+    classification_outcome, decision_time_evidence, current_guideline_effect,
+    checker_behavior, behavioral_evidence_attribution, diagnosis,
+    proposed_guideline_effect, risk_to_correct_cases, and a non-empty
+    evidence_used list.
+
+    Each guideline_changes object must contain operation, description,
+    causal_rationale, expected_behavior_change, risk_to_correct_cases, and
+    non-empty supporting_instance_ids.
+
+    Case and session identifiers may appear in the analysis as evidence
+    provenance, but they must not appear in the submitted guideline.
+
+    ## Reflection submission
+
+    After writing the analysis file, submit only the complete replacement
+    guideline:
+    ```bash
+    cat <<'EOF'
+    COMPLETE_TASK_AND_SUBMIT_FINAL_OUTPUT
+    <complete revised guideline>
+    EOF
+    ```
+    Submission finishes only when the executed command writes
+    COMPLETE_TASK_AND_SUBMIT_FINAL_OUTPUT as its first output line.
+
+    The structured analysis is diagnostic evidence only. Do not include it in
+    the candidate guideline.
+
+  reflection_instance: |
+    <current_guideline>
+    {{current_guideline}}
+    </current_guideline>
+
+    Evidence for the current minibatch is mounted read-only at:
+    {{evidence_path}}
+
+    Evidence layout:
+
+    - {{evidence_path}}/manifest.json
+      - mode
+      - cases[].instance_id
+      - cases[].observed_decision
+      - cases[].score
+      - cases[].repetition_count when repetitions are enabled
+
+    - {{evidence_path}}/<instance_id>/checker_output.json
+      - predicted_accept
+      - decision_reason
+      - repository_evidence
+      - trajectory
+      - the Checker input as recorded in that trajectory
+
+    - {{evidence_path}}/<instance_id>/behavioral_supervision.json
+      - observed_decision
+      - observed_accept
+      - score
+
+    - {{evidence_path}}/<instance_id>/post_boundary_evidence.json
+      - matched P1 result
+      - immediate developer response when available
+      - controlled later events and directly related later plans/results when
+        available
+
+    - {{evidence_path}}/<instance_id>/repository_proxy_provenance.json
+      - limited provenance and conflict-risk information for Reflection
+        diagnosis
+
+    Read manifest.json first. Review every listed case and inspect its Checker
+    output and relevant evidence. Do not submit until every manifest case has
+    one case_reviews entry. Do not guess alternative filenames or unavailable
+    evidence.
