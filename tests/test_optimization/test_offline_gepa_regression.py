@@ -15,6 +15,7 @@ from src.optimization.config import (
     ModelConfig,
     OfflineSearchConfig,
     OptimizationConfig,
+    TaskConfig,
     load_optimization_config,
 )
 from src.optimization.dataset import GEPACaseLoader, load_snapshot
@@ -261,6 +262,28 @@ def test_resume_manifest_rejects_semantic_prompt_change(tmp_path):
     ):
         prepare_run_manifest(changed, initial_rules=seed)
 
+    changed_task = replace(
+        config,
+        task=TaskConfig(semantics="behavioral_plan_acceptability_v1"),
+    )
+    with pytest.raises(
+        IncompatibleOptimizationRun, match="configuration or source differs"
+    ):
+        prepare_run_manifest(changed_task, initial_rules=seed)
+
+    relocated_repository_cache = replace(
+        config,
+        behavioral_repository=replace(
+            config.behavioral_repository,
+            repositories_root=tmp_path / "another-mirror-root",
+            workspace_root=tmp_path / "another-workspace-root",
+        ),
+    )
+    assert (
+        prepare_run_manifest(relocated_repository_cache, initial_rules=seed)
+        is False
+    )
+
 
 def test_tracked_offline_config_remains_reproduction_identity():
     repo_root = Path(__file__).resolve().parents[2]
@@ -270,6 +293,7 @@ def test_tracked_offline_config_remains_reproduction_identity():
     )
 
     assert config.execution.backend == "hpc_slurm"
+    assert config.task.semantics == "historical_resolution"
     assert config.container.runtime == "apptainer"
     assert config.search.primary_metric == "accuracy"
     assert config.search.max_iterations == 8

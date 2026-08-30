@@ -20,6 +20,18 @@
 - `tools/build_swe_chat_stage2_slices.py` builds one first-Plan case per Stage-1
   trajectory from full raw transcripts, excludes assistant thinking from both
   projections, and separates decision-time context from behavioral evidence.
+- `tools/audit_swe_chat_repository_reconstruction.py` tests the frozen
+  canonical-checkpoint-parent hypothesis against pre-P1 `Read` evidence and
+  conservatively audits structured `Write`/`Edit` replayability. It never runs
+  transcript shell commands or delegated agents.
+- `tools/build_swe_chat_temporal_repository_proxies.py` selects one explicitly
+  approximate source commit strictly before each repository-ready session. It
+  excludes Entire-managed refs and known current-session commits/descendants,
+  and reads no behavior label or post-P1 evidence.
+- `tools/build_swe_chat_behavioral_gepa_snapshot.py` joins frozen Stage-2 case
+  files, repository-availability cleaning, temporal proxies, and a separately
+  frozen complete split into the strict Behavioral Checker/supervision/
+  Reflection/audit snapshot. It cannot choose or infer the split.
 
 Source-acquisition authority is `docs/swe-chat-preheat.md`; Stage-1 and Stage-2
 cleaning authority is `docs/swe-chat-data-cleaning.md`.

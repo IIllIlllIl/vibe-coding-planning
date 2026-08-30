@@ -308,3 +308,103 @@ with content SHA-256
 `9c0a8a67fded5c1bfb430e73bb550d0fec7b99849ab200a0d8248796d21e4329`.
 It derives the 131-case universe as the frozen 141 Stage-2 eligible cases minus
 the ten explicitly enumerated exclusions; the Stage-2 manifest is not edited.
+
+## Repository reconstruction audit
+
+Repository availability does not imply that the repository state at P1 is
+known. A separate deterministic audit tested the conservative reconstruction
+policy against all 131 repository-ready cases. For each case it used the
+parent of the first valid commit associated with the session's canonical
+checkpoint only when that checkpoint belongs to one session, then compared
+pre-P1 `Read` tool results with files at that candidate commit.
+
+The resulting case-by-case table is the reconstruction matrix: one row per
+case recording whether a candidate exists, whether checkpoint ownership is
+unambiguous, whether pre-P1 operations may have changed the worktree, and
+whether observed file content matches. “Matrix” is only a compact audit table;
+it is not a new dataset split or Git worktree mechanism.
+
+| Reconstruction outcome | Cases |
+|---|---:|
+| No parent candidate | 59 |
+| Canonical checkpoint shared by multiple sessions | 41 |
+| Pre-P1 operations, but no structured writes to replay | 13 |
+| Structured-write replay blocked by other opaque side effects | 8 |
+| Candidate content mismatch | 8 |
+| Verified parent candidate | 2 |
+
+Option 1 verified only two cases, both ACCEPT examples from
+`ClusterCockpit/cc-backend`. Option 2 conservatively attempted to admit cases
+whose pre-P1 changes could be reconstructed by replaying structured
+`Write`/`Edit` operations in order. It added no cases: all eight structured-
+write candidates also contain at least one command or delegated operation with
+unbounded worktree effects, such as build/test execution, deletion, remote
+execution, or an opaque subagent. Those operations were not executed or
+silently ignored.
+
+Therefore the canonical-checkpoint-parent policy, with or without conservative
+structured-write replay, is too sparse and one-class to define the Behavioral
+v1 Offline GEPA pool. The 131 cases remain the repository-available annotation
+universe, but only the two enumerated audit rows currently have a verified P1
+base under this policy. A later policy may search additional commit candidates
+or define a different evidence contract; it requires a new frozen identity and
+must not reinterpret this audit in place.
+
+The compact authority is
+`configs/frozen_swe_chat_cleaning/f66cca95b14caaa4177f7ed5eaa424608dadcffa/repository-reconstruction-option1-option2-v1-summary.json`,
+with content SHA-256
+`94a3948aa687a5b87b886eaf96c211ae93007c5722fff9b2416bad484a81e105`.
+It binds the tested config and auditor hashes and points to the complete remote
+per-case audit. No LLM, GEPA, Docker, Slurm job, or repository command replay
+was used.
+
+## Temporal repository proxy
+
+Behavioral v1 does not require the repository to be an exact P1 worktree. It
+uses an explicitly approximate source-code proxy from before the session, while
+captured pre-P1 tool results remain authoritative when they conflict with the
+proxy. This is a different environment contract, not a reinterpretation of the
+failed exact-reconstruction audit above.
+
+For each of the 131 repository-ready cases, the deterministic proxy builder:
+
+1. takes `sessions.created_at` as the temporal boundary;
+2. requires the Git committer timestamp second to be strictly less than the
+   session-creation second, excluding the whole boundary second;
+3. excludes every commit associated with the session's checkpoints and every
+   candidate that is a descendant of one of those commits present in the
+   mirror;
+4. prefers the recorded branch when that ref retains a safe candidate;
+5. otherwise selects the latest safe commit from ordinary source refs under
+   heads, remotes, tags, and pull-request refs;
+6. excludes Entire-managed metadata and shadow refs from the source universe.
+
+The frozen manifest contains one proxy commit and tree for every case. It
+records selection provenance and time distance but no behavioral label,
+developer reaction, later Plan, or post-boundary trajectory.
+
+| Proxy result | Cases |
+|---|---:|
+| Total temporal proxies | 131 |
+| Recorded-branch proxy | 67 |
+| All-source-refs fallback | 64 |
+| Recorded branch ref available | 69 |
+| Repositories | 37 |
+
+The commit-to-session gap is at least one second by construction; median / P90
+/ P95 / maximum are 1,017 / 55,314 / 79,665 / 1,644,939 seconds. A fallback may
+come from a different branch and is context rather than a claim about the exact
+historical worktree. Git timestamps can also be backdated. The exclusion rules
+prevent known current-session commits and descendants from entering the proxy,
+but cannot prove that every remaining Git object was publicly reachable at the
+original session time.
+
+The tracked authority is
+`configs/frozen_swe_chat_cleaning/f66cca95b14caaa4177f7ed5eaa424608dadcffa/temporal-repository-proxy-v1-manifest.json`,
+with content SHA-256
+`5f6c7d5fefca28a67250eb5a5d540084d9b80490b64b29624f16dcc3bf1b5f51`.
+Its byte SHA-256 is
+`869c1770d038376dabbdbee5b1f0b1a8b1705b794e47573cda62cb68271ac635`.
+The separate remote identity is
+`swe-chat-temporal-repository-proxy-v1-20260830`. The builder uses no LLM,
+behavior label, post-P1 evidence, transcript shell execution, Docker, or Slurm.

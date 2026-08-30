@@ -28,6 +28,9 @@ and GEPA Reflection only.
 - Behavioral Stage 2 freezes 141 conservatively eligible first-Plan slices and
   29 audited exclusions with physically separated Checker-visible and
   Reflection-only evidence.
+- All 131 repository-ready cases have a frozen, explicitly approximate
+  pre-session temporal repository proxy: 67 from a retained recorded branch
+  and 64 from an ordinary source-ref fallback.
 
 These are frozen stage results, not a live progress log. Current unresolved
 methodological decisions are maintained only in `project_issues.md`. Launching
@@ -49,9 +52,12 @@ Read these files in order:
    slicing.
 5. [`docs/offline-gepa.md`](docs/offline-gepa.md) — current Offline Checker,
    metric, Reflection, search, and resume semantics.
-6. [`docs/knowledge/offline-pcce-stage-findings.md`](docs/knowledge/offline-pcce-stage-findings.md)
+6. [`docs/behavioral-offline-gepa-adaptation.md`](docs/behavioral-offline-gepa-adaptation.md)
+   — Behavioral information boundary and minimum Offline adapter changes;
+   prompt design is deferred.
+7. [`docs/knowledge/offline-pcce-stage-findings.md`](docs/knowledge/offline-pcce-stage-findings.md)
    — frozen first-stage PolyBench findings.
-7. [`docs/polybench-pcce.md`](docs/polybench-pcce.md) and
+8. [`docs/polybench-pcce.md`](docs/polybench-pcce.md) and
    [`docs/offline-polybench-validation.md`](docs/offline-polybench-validation.md)
    — implemented PCE/PCCE and external-evidence boundaries.
 
@@ -65,7 +71,11 @@ The current implementation surface is:
 - `third_party/gepa/` for the existing search implementation, which should not
   be changed without a concrete experimental need;
 - `tests/test_optimization/test_offline_gepa_regression.py` for the focused,
-  no-LLM Offline acceptance suite.
+  no-LLM historical Offline acceptance suite;
+- `src/optimization/behavioral_*.py` and
+  `tests/test_optimization/test_behavioral_offline_foundation.py` for the
+  Behavioral schema, acceptability Adapter, evidence projection, and disposable
+  temporal-proxy checkout foundation.
 
 ## Historical paths
 
@@ -104,7 +114,8 @@ The focused no-LLM regression entry point is:
 
 ```bash
 conda run -n mini-swe pytest -q --no-cov \
-  tests/test_optimization/test_offline_gepa_regression.py
+  tests/test_optimization/test_offline_gepa_regression.py \
+  tests/test_optimization/test_behavioral_offline_foundation.py
 ```
 
 Do not launch an LLM, GEPA, Docker, Apptainer, HPC, PCE, or PCCE run merely to

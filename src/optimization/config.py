@@ -62,6 +62,18 @@ class OfflineExecutionConfig:
 
 
 @dataclass(frozen=True)
+class TaskConfig:
+    semantics: str = "historical_resolution"
+
+
+@dataclass(frozen=True)
+class BehavioralRepositoryConfig:
+    backend: str = "temporal_git_proxy"
+    repositories_root: Path = Path("/tmp/vibe-behavioral-mirrors")
+    workspace_root: Path = Path("/tmp/vibe-behavioral-checkouts")
+
+
+@dataclass(frozen=True)
 class OptimizationConfig:
     dataset_snapshot: Path
     initial_rules_path: Path
@@ -79,6 +91,10 @@ class OptimizationConfig:
         default_factory=OfflineExecutionConfig
     )
     hpc: HPCConfig = field(default_factory=HPCConfig)
+    task: TaskConfig = field(default_factory=TaskConfig)
+    behavioral_repository: BehavioralRepositoryConfig = field(
+        default_factory=BehavioralRepositoryConfig
+    )
 
 
 def _mapping(value: Any, name: str) -> dict[str, Any]:
@@ -127,6 +143,10 @@ def load_optimization_config(
     docker_data = _mapping(raw.get("docker", {}), "docker")
     container_data = _mapping(raw.get("container", {}), "container")
     execution_data = _mapping(raw.get("execution", {}), "execution")
+    task_data = _mapping(raw.get("task", {}), "task")
+    repository_data = _mapping(
+        raw.get("behavioral_repository", {}), "behavioral_repository"
+    )
     hpc_data = _mapping(raw.get("hpc", {}), "hpc")
     prompts = _mapping(raw.get("prompts"), "prompts")
     paths = _mapping(raw.get("paths"), "paths")
@@ -219,6 +239,27 @@ def load_optimization_config(
         raise ValueError(
             "execution.backend must be 'local' or 'hpc_slurm'"
         )
+    task = TaskConfig(
+        semantics=str(task_data.get("semantics", "historical_resolution"))
+    )
+    if task.semantics not in (
+        "historical_resolution",
+        "behavioral_plan_acceptability_v1",
+    ):
+        raise ValueError(f"unsupported task.semantics: {task.semantics!r}")
+    behavioral_repository = BehavioralRepositoryConfig(
+        backend=str(repository_data.get("backend", "temporal_git_proxy")),
+        repositories_root=resolve(
+            str(
+                repository_data.get("repositories_root", "/tmp/vibe-behavioral-mirrors")
+            )
+        ),
+        workspace_root=resolve(
+            str(repository_data.get("workspace_root", "/tmp/vibe-behavioral-checkouts"))
+        ),
+    )
+    if behavioral_repository.backend != "temporal_git_proxy":
+        raise ValueError("behavioral_repository.backend must be 'temporal_git_proxy'")
     hpc_defaults = HPCConfig()
     try:
         default_worker_config_path = str(config_path.relative_to(root))
@@ -339,4 +380,6 @@ def load_optimization_config(
         reflection_instance_template=str(prompts["reflection_instance"]),
         execution=execution,
         hpc=hpc,
+        task=task,
+        behavioral_repository=behavioral_repository,
     )

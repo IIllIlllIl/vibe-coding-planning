@@ -422,7 +422,11 @@ class EvidenceBundleWriter:
     def __init__(self, run_dir: Path, *, mode: str = "checker") -> None:
         self.root = run_dir / "reflection_inputs"
         self.mode = mode
-        if mode not in {"checker", "online_planning"}:
+        if mode not in {
+            "checker",
+            "online_planning",
+            "behavioral_acceptability",
+        }:
             raise ValueError(f"unknown reflection evidence mode: {mode}")
         existing = [
             int(path.name.rsplit("_", 1)[-1])
@@ -449,7 +453,7 @@ class EvidenceBundleWriter:
                     encoding="utf-8",
                 )
                 _write_json(case_dir / "evaluator_result.json", record["evaluator_result"])
-            else:
+            elif self.mode == "online_planning":
                 (case_dir / "task.md").write_text(
                     str(record["issue_description"]),
                     encoding="utf-8",
@@ -483,13 +487,35 @@ class EvidenceBundleWriter:
                     case_dir / "reviewer_trajectory.json",
                     record.get("reflection_reviewer_trajectory", []),
                 )
+            else:
+                _write_json(case_dir / "checker_output.json", record["checker_output"])
+                _write_json(
+                    case_dir / "behavioral_supervision.json",
+                    {
+                        "expected_decision": record["expected_decision"],
+                        "expected_accept": record["expected_accept"],
+                        "score": record["score"],
+                    },
+                )
+                _write_json(
+                    case_dir / "post_boundary_evidence.json",
+                    record["reflection_evidence"],
+                )
+                _write_json(
+                    case_dir / "repository_proxy_provenance.json",
+                    record["repository_proxy_provenance"],
+                )
             manifest.append(
                 {
                     "instance_id": instance_id,
                     **(
                         {"expected_resolved": record["expected_resolved"]}
                         if self.mode == "checker"
-                        else {"resolved": record["resolved"]}
+                        else (
+                            {"resolved": record["resolved"]}
+                            if self.mode == "online_planning"
+                            else {"expected_decision": record["expected_decision"]}
+                        )
                     ),
                     "score": record["score"],
                     **(
@@ -515,7 +541,12 @@ class MiniSWEReflectionProposer:
     ) -> None:
         self.config = config
         self.capacity_window = capacity_window
-        self.bundles = EvidenceBundleWriter(config.run_dir)
+        evidence_mode = (
+            "behavioral_acceptability"
+            if config.task.semantics == "behavioral_plan_acceptability_v1"
+            else "checker"
+        )
+        self.bundles = EvidenceBundleWriter(config.run_dir, mode=evidence_mode)
         self.audit = JsonlLogger(config.run_dir / "audit_events.jsonl")
         self.usage = JsonlLogger(config.run_dir / "usage.jsonl")
         self.errors = JsonlLogger(config.run_dir / "errors.jsonl")

@@ -30,14 +30,27 @@ Current decisions are:
   immediate developer behavior toward P1: the 57 matched approvals are ACCEPT
   and the 84 matched rejections are DO_NOT_ACCEPT.
 - Exclude the ten cases whose two repositories remained unavailable after
-  authenticated recovery. The repository-ready Offline GEPA pool is 131 cases:
-  54 ACCEPT and 77 DO_NOT_ACCEPT.
+  authenticated recovery. The repository-available candidate pool is 131
+  cases: 54 ACCEPT and 77 DO_NOT_ACCEPT.
+- Do not treat the canonical checkpoint's first-commit parent as the general P1
+  base. The frozen audit verifies only two ACCEPT cases; conservative structured
+  `Write`/`Edit` replay adds none because all eight candidates have additional
+  opaque worktree effects.
+- Use the separately frozen temporal repository policy for Behavioral v1. All
+  131 repository-ready cases have an explicitly approximate source commit
+  strictly before the session boundary: 67 from the retained recorded branch
+  and 64 from ordinary source refs. Entire-managed refs and known current-
+  session commits/descendants are excluded. Captured pre-P1 tool results are
+  authoritative when they conflict with the proxy.
 - Optimize high-confidence `ACCEPT` versus `DO_NOT_ACCEPT` labels.
 - Preserve ambiguous cases for analysis but exclude them from v1 GEPA
   optimization.
 - Keep per-example 0/1 candidate scores and rich controlled Reflection evidence.
 - Keep the fixed Checker prompt minimal; the candidate guideline owns the
   review method and software-engineering reasoning.
+- Use the neutral initial candidate guideline: “Evaluate whether the proposed
+  plan should be accepted for implementation based on the information
+  available at the time of the decision.” This seed is not fixed prompt text.
 - Adapt through dataset/config/task semantics before changing GEPA search logic.
 
 ## Open design issues
@@ -46,19 +59,19 @@ Current decisions are:
    changing the 84 observed DO_NOT_ACCEPT labels.
 2. Define treatment of rejection/revision feedback, later Plans, silence,
    topic change, and implementation behavior in controlled Reflection evidence.
-3. Map the frozen Checker-visible and Reflection-only case schema into the
-   Offline adapter while retaining a testable no-leakage boundary.
-4. Determine whether repository state and base commit can be reconstructed
-   reliably for each episode.
-5. Define session/task/repository/near-duplicate split and leakage checks.
-6. Select the smallest adapter from the new case schema to the existing
-   Checker, Adapter, Reflection, and runner.
-7. Decide whether accuracy remains the v1 search metric and which diagnostics
+3. Freeze the real session/task/repository/near-duplicate split with
+   deterministic leakage checks. The implemented source-to-snapshot builder
+   requires a complete exact-universe split manifest, and the loader enforces
+   the final Checker boundary and split-disjoint IDs.
+4. Wire the implemented temporal-proxy materializer and Behavioral Adapter into
+   the local Checker, runner, Offline worker, retry/audit path, and resume
+   identity without changing third-party GEPA.
+5. Decide whether accuracy remains the v1 search metric and which diagnostics
    are mandatory: rejection precision, bad-plan recall, balanced accuracy, MCC,
    class prevalence, and confusion matrix.
-8. Predeclare data volume, class balance, minibatch, seed guideline, budget,
+6. Predeclare data volume, class balance, minibatch, budget,
    stopping conditions, and acceptance criteria before any LLM run.
-9. Manually audit the frozen first-Plan projections and complete the remaining
+7. Manually audit the frozen first-Plan projections and complete the remaining
    no-LLM dataset schema before smoke or formal optimization.
 
 ## Known validity constraints

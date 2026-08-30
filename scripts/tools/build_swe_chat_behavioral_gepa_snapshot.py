@@ -1,0 +1,178 @@
+"""Build a frozen Behavioral GEPA snapshot from separately frozen inputs."""
+
+from __future__ import annotations
+
+import argparse
+import hashlib
+import json
+from pathlib import Path
+from typing import Any
+
+from src.optimization.behavioral_models import TASK_SEMANTICS
+
+
+def _load(path: Path) -> dict[str, Any]:
+    value = json.loads(path.read_text(encoding="utf-8"))
+    if not isinstance(value, dict):
+        raise ValueError(f"expected JSON object: {path}")
+    return value
+
+
+def _sha256(path: Path) -> str:
+    digest = hashlib.sha256()
+    with path.open("rb") as handle:
+        for block in iter(lambda: handle.read(1024 * 1024), b""):
+            digest.update(block)
+    return digest.hexdigest()
+
+
+def _mirror_relpath(repo_id: str) -> str:
+    owner, name = repo_id.split("/", 1)
+    return f"{owner}/{name}.git"
+
+
+def build_snapshot(
+    *,
+    stage2_manifest_path: Path,
+    stage2_case_root: Path,
+    repository_cleaning_path: Path,
+    proxy_manifest_path: Path,
+    split_manifest_path: Path,
+    output_dir: Path,
+) -> dict[str, Any]:
+    if output_dir.exists():
+        raise FileExistsError(f"snapshot output already exists: {output_dir}")
+    stage2 = _load(stage2_manifest_path)
+    cleaning = _load(repository_cleaning_path)
+    proxies = _load(proxy_manifest_path)
+    split = _load(split_manifest_path)
+    if not split.get("complete") or split.get("provisional"):
+        raise ValueError("split manifest must be complete and non-provisional")
+
+    excluded = {item["case_id"] for item in cleaning["excluded_cases"]}
+    eligible = {
+        item["case_id"]: item
+        for item in stage2["cases"]
+        if item["status"] == "eligible" and item["case_id"] not in excluded
+    }
+    proxy_by_id = {item["case_id"]: item for item in proxies["cases"]}
+    assignments = {item["case_id"]: item for item in split.get("assignments", [])}
+    if set(proxy_by_id) != set(eligible):
+        raise ValueError("temporal proxy cases do not match repository-ready cases")
+    if set(assignments) != set(eligible):
+        raise ValueError("split assignments do not match repository-ready cases")
+    if len(assignments) != len(split.get("assignments", [])):
+        raise ValueError("split assignments contain duplicate case IDs")
+
+    rows: dict[str, list[dict[str, Any]]] = {"train": [], "validation": []}
+    for case_id in sorted(eligible):
+        assignment = assignments[case_id]
+        split_name = assignment.get("split")
+        if split_name not in rows:
+            raise ValueError(f"{case_id}: invalid split {split_name!r}")
+        stage2_entry = eligible[case_id]
+        case_path = stage2_case_root / stage2_entry["case_path"]
+        if _sha256(case_path) != stage2_entry["case_sha256"]:
+            raise ValueError(f"{case_id}: Stage-2 case hash mismatch")
+        source = _load(case_path)
+        if source["case_id"] != case_id:
+            raise ValueError(f"{case_id}: Stage-2 case identity mismatch")
+        behavior_signal = source["reflection_only"]["behavior_signal"]
+        if behavior_signal == "explicit_approval":
+            decision = "ACCEPT"
+        elif behavior_signal == "explicit_rejection":
+            decision = "DO_NOT_ACCEPT"
+        else:
+            raise ValueError(f"{case_id}: unsupported high-confidence signal")
+        proxy = proxy_by_id[case_id]
+        repo_id = str(source["selection_provenance"]["repo_id"])
+        if proxy["repo_id"] != repo_id:
+            raise ValueError(f"{case_id}: repository identity mismatch")
+
+        rows[split_name].append(
+            {
+                "instance_id": case_id,
+                "split": split_name,
+                "task_semantics": TASK_SEMANTICS,
+                "checker_input": {
+                    "pre_p1_context": source["checker_visible"]["events"],
+                    "proposed_plan_p1": source["checker_visible"]["proposed_plan"],
+                    "repository_proxy": {
+                        "repo": repo_id,
+                        "proxy_commit": proxy["proxy_commit"],
+                        "instance_id": case_id,
+                        "state_semantics": proxy["repository_state_semantics"],
+                        "conflict_authority": "pre_p1_observed_tool_results",
+                    },
+                },
+                "supervision": {
+                    "decision": decision,
+                    "confidence": "high",
+                    "signal": behavior_signal,
+                },
+                "reflection_evidence": source["reflection_only"],
+                "audit_provenance": {
+                    "mirror_relpath": _mirror_relpath(repo_id),
+                    "proxy_source": proxy["proxy_source"],
+                    "recorded_branch_ref_available": proxy[
+                        "recorded_branch_ref_available"
+                    ],
+                    "time_gap_seconds": proxy["time_gap_seconds"],
+                    "repository_state_semantics": proxy["repository_state_semantics"],
+                    "stage2_case_sha256": stage2_entry["case_sha256"],
+                    "dedup_group": assignment.get("dedup_group"),
+                },
+            }
+        )
+
+    output_dir.mkdir(parents=True)
+    for split_name in ("train", "validation"):
+        (output_dir / f"{split_name}.jsonl").write_text(
+            "".join(
+                json.dumps(row, ensure_ascii=False, sort_keys=True) + "\n"
+                for row in rows[split_name]
+            ),
+            encoding="utf-8",
+        )
+    manifest = {
+        "schema_version": 1,
+        "complete": True,
+        "provisional": False,
+        "task_semantics": TASK_SEMANTICS,
+        "train_instances": len(rows["train"]),
+        "validation_instances": len(rows["validation"]),
+        "stage2_manifest_sha256": stage2["content_sha256"],
+        "repository_cleaning_manifest_sha256": cleaning["content_sha256"],
+        "temporal_proxy_manifest_sha256": proxies["content_sha256"],
+        "split_manifest_sha256": split["content_sha256"],
+        "source_case_hashes_verified": True,
+    }
+    (output_dir / "manifest.json").write_text(
+        json.dumps(manifest, indent=2, ensure_ascii=False, sort_keys=True) + "\n",
+        encoding="utf-8",
+    )
+    return manifest
+
+
+def main() -> int:
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--stage2-manifest", required=True, type=Path)
+    parser.add_argument("--stage2-case-root", required=True, type=Path)
+    parser.add_argument("--repository-cleaning", required=True, type=Path)
+    parser.add_argument("--proxy-manifest", required=True, type=Path)
+    parser.add_argument("--split-manifest", required=True, type=Path)
+    parser.add_argument("--output-dir", required=True, type=Path)
+    args = parser.parse_args()
+    build_snapshot(
+        stage2_manifest_path=args.stage2_manifest,
+        stage2_case_root=args.stage2_case_root,
+        repository_cleaning_path=args.repository_cleaning,
+        proxy_manifest_path=args.proxy_manifest,
+        split_manifest_path=args.split_manifest,
+        output_dir=args.output_dir,
+    )
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())
