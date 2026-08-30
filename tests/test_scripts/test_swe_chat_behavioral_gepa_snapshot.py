@@ -16,6 +16,14 @@ def _write(path: Path, value: dict) -> str:
     return hashlib.sha256(path.read_bytes()).hexdigest()
 
 
+def _split_hash(value: dict) -> str:
+    payload = dict(value)
+    payload.pop("content_sha256", None)
+    return hashlib.sha256(
+        json.dumps(payload, sort_keys=True, separators=(",", ":")).encode("utf-8")
+    ).hexdigest()
+
+
 def _inputs(root: Path) -> dict[str, Path]:
     cases = root / "stage2-cases"
     case_entries = []
@@ -72,22 +80,21 @@ def _inputs(root: Path) -> dict[str, Path]:
             ],
         },
     )
-    _write(
-        split,
-        {
-            "complete": True,
-            "provisional": False,
-            "content_sha256": "split",
-            "assignments": [
-                {"case_id": "case-0", "split": "train", "dedup_group": "g0"},
-                {
-                    "case_id": "case-1",
-                    "split": "validation",
-                    "dedup_group": "g1",
-                },
-            ],
-        },
-    )
+    split_value = {
+        "complete": True,
+        "provisional": False,
+        "case_universe": "all_repository_ready",
+        "assignments": [
+            {"case_id": "case-0", "split": "train", "dedup_group": "g0"},
+            {
+                "case_id": "case-1",
+                "split": "validation",
+                "dedup_group": "g1",
+            },
+        ],
+    }
+    split_value["content_sha256"] = _split_hash(split_value)
+    _write(split, split_value)
     return {
         "stage2_manifest_path": stage2,
         "stage2_case_root": cases,
@@ -116,7 +123,23 @@ def test_snapshot_builder_requires_complete_exact_split_universe(tmp_path):
     inputs = _inputs(tmp_path)
     split = json.loads(inputs["split_manifest_path"].read_text(encoding="utf-8"))
     split["assignments"].pop()
+    split["content_sha256"] = _split_hash(split)
     _write(inputs["split_manifest_path"], split)
 
     with pytest.raises(ValueError, match="split assignments"):
         build_snapshot(**inputs, output_dir=tmp_path / "snapshot")
+
+
+def test_snapshot_builder_accepts_frozen_explicit_subset(tmp_path):
+    inputs = _inputs(tmp_path)
+    split = json.loads(inputs["split_manifest_path"].read_text(encoding="utf-8"))
+    split["case_universe"] = "explicit_subset"
+    split["assignments"] = split["assignments"][:1]
+    split["content_sha256"] = _split_hash(split)
+    _write(inputs["split_manifest_path"], split)
+
+    manifest = build_snapshot(**inputs, output_dir=tmp_path / "snapshot")
+
+    assert manifest["case_universe"] == "explicit_subset"
+    assert manifest["train_instances"] == 1
+    assert manifest["validation_instances"] == 0

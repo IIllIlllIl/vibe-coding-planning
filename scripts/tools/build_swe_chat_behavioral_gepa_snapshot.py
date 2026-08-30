@@ -26,6 +26,19 @@ def _sha256(path: Path) -> str:
     return digest.hexdigest()
 
 
+def _content_sha256(value: dict[str, Any]) -> str:
+    payload = dict(value)
+    payload.pop("content_sha256", None)
+    return hashlib.sha256(
+        json.dumps(
+            payload,
+            ensure_ascii=False,
+            sort_keys=True,
+            separators=(",", ":"),
+        ).encode("utf-8")
+    ).hexdigest()
+
+
 def _mirror_relpath(repo_id: str) -> str:
     owner, name = repo_id.split("/", 1)
     return f"{owner}/{name}.git"
@@ -46,6 +59,8 @@ def build_snapshot(
     cleaning = _load(repository_cleaning_path)
     proxies = _load(proxy_manifest_path)
     split = _load(split_manifest_path)
+    if split.get("content_sha256") != _content_sha256(split):
+        raise ValueError("split manifest content hash mismatch")
     if not split.get("complete") or split.get("provisional"):
         raise ValueError("split manifest must be complete and non-provisional")
 
@@ -59,13 +74,20 @@ def build_snapshot(
     assignments = {item["case_id"]: item for item in split.get("assignments", [])}
     if set(proxy_by_id) != set(eligible):
         raise ValueError("temporal proxy cases do not match repository-ready cases")
-    if set(assignments) != set(eligible):
-        raise ValueError("split assignments do not match repository-ready cases")
+    case_universe = split.get("case_universe", "all_repository_ready")
+    if case_universe == "all_repository_ready":
+        if set(assignments) != set(eligible):
+            raise ValueError("split assignments do not match repository-ready cases")
+    elif case_universe == "explicit_subset":
+        if not assignments or not set(assignments) <= set(eligible):
+            raise ValueError("split subset contains unavailable cases")
+    else:
+        raise ValueError(f"unsupported split case_universe: {case_universe!r}")
     if len(assignments) != len(split.get("assignments", [])):
         raise ValueError("split assignments contain duplicate case IDs")
 
     rows: dict[str, list[dict[str, Any]]] = {"train": [], "validation": []}
-    for case_id in sorted(eligible):
+    for case_id in sorted(assignments):
         assignment = assignments[case_id]
         split_name = assignment.get("split")
         if split_name not in rows:
@@ -145,6 +167,7 @@ def build_snapshot(
         "repository_cleaning_manifest_sha256": cleaning["content_sha256"],
         "temporal_proxy_manifest_sha256": proxies["content_sha256"],
         "split_manifest_sha256": split["content_sha256"],
+        "case_universe": case_universe,
         "source_case_hashes_verified": True,
     }
     (output_dir / "manifest.json").write_text(

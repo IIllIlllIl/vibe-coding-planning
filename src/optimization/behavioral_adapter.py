@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import replace
+import hashlib
 import json
 from pathlib import Path
 from typing import Any, Callable, Mapping, Sequence
@@ -30,6 +31,9 @@ class BehavioralGEPAAdapter:
         primary_metric: str = "accuracy",
         class_counts_by_split: Mapping[str, Mapping[bool, int]] | None = None,
         train_case_repetitions: int = 1,
+        batch_executor: Any = None,
+        startup_seed_replay: Mapping[str, tuple[dict[str, Any], float]] | None = None,
+        seed_rules_sha256: str | None = None,
     ) -> None:
         if primary_metric not in ("accuracy", "balanced_accuracy"):
             raise ValueError("unsupported Behavioral primary metric")
@@ -40,6 +44,9 @@ class BehavioralGEPAAdapter:
         self.run_dir = run_dir
         self.primary_metric = primary_metric
         self.train_case_repetitions = train_case_repetitions
+        self.batch_executor = batch_executor
+        self.startup_seed_replay = dict(startup_seed_replay or {}) or None
+        self.seed_rules_sha256 = seed_rules_sha256
         self.class_counts_by_split = {
             split: {bool(label): int(count) for label, count in counts.items()}
             for split, counts in (class_counts_by_split or {}).items()
@@ -85,6 +92,32 @@ class BehavioralGEPAAdapter:
             }
         return public_output, score, trace
 
+    def _row_from_checker_output(
+        self,
+        case: BehavioralGEPACase,
+        output: BehavioralCheckerOutput,
+        capture_traces: bool,
+    ) -> tuple[dict[str, Any], float, dict[str, Any] | None]:
+        score = self._score(case, output.predicted_accept)
+        public_output = {"instance_id": case.instance_id, **output.to_dict()}
+        trace = None
+        if capture_traces:
+            trace = {
+                "instance_id": case.instance_id,
+                "task_semantics": "behavioral_plan_acceptability_v1",
+                "observed_decision": case.decision,
+                "observed_accept": case.accepted,
+                "score": score,
+                "primary_metric": self.primary_metric,
+                "is_correct": output.predicted_accept == case.accepted,
+                "checker_output": output.to_dict(include_trajectory=True),
+                "reflection_evidence": case.reflection_evidence,
+                "repository_proxy_provenance": (
+                    case.reflection_repository_provenance()
+                ),
+            }
+        return public_output, score, trace
+
     def evaluate(
         self,
         batch: list[BehavioralGEPACase],
@@ -95,18 +128,51 @@ class BehavioralGEPAAdapter:
             raise ValueError("candidate must contain only the string component rules")
         if len({case.split for case in batch}) > 1:
             raise ValueError("Behavioral GEPA evaluation batches may not mix splits")
+        candidate_sha256 = hashlib.sha256(
+            candidate["rules"].encode("utf-8")
+        ).hexdigest()
+        if (
+            self.startup_seed_replay is not None
+            and candidate_sha256 == self.seed_rules_sha256
+            and not capture_traces
+            and {case.instance_id for case in batch} == set(self.startup_seed_replay)
+        ):
+            rows = [self.startup_seed_replay[case.instance_id] for case in batch]
+            self.startup_seed_replay = None
+            return EvaluationBatch(
+                outputs=[row[0] for row in rows],
+                scores=[row[1] for row in rows],
+                trajectories=None,
+            )
         repetitions = (
             self.train_case_repetitions if batch and batch[0].split == "train" else 1
         )
         rows: list[tuple[dict[str, Any], float, dict[str, Any] | None]] = []
-        for case in batch:
-            physical = [
-                replace(case, repetition_index=index) for index in range(repetitions)
+        physical_cases = [
+            replace(case, repetition_index=index)
+            for case in batch
+            for index in range(repetitions)
+        ]
+        if self.batch_executor is not None:
+            outputs = self.batch_executor.evaluate(
+                physical_cases,
+                candidate["rules"],
+                capture_traces,
+            )
+            if len(outputs) != len(physical_cases):
+                raise RuntimeError("Behavioral Checker batch output count mismatch")
+            all_physical_rows = [
+                self._row_from_checker_output(case, output, capture_traces)
+                for case, output in zip(physical_cases, outputs, strict=True)
             ]
-            physical_rows = [
+        else:
+            all_physical_rows = [
                 self._evaluate_physical(item, candidate["rules"], capture_traces)
-                for item in physical
+                for item in physical_cases
             ]
+        for case_index, case in enumerate(batch):
+            start = case_index * repetitions
+            physical_rows = all_physical_rows[start : start + repetitions]
             if repetitions == 1:
                 rows.append(physical_rows[0])
                 continue
@@ -152,10 +218,18 @@ class BehavioralGEPAAdapter:
                     handle.write(
                         json.dumps(
                             {
+                                "candidate_sha256": candidate_sha256,
                                 "instance_id": case.instance_id,
                                 "split": case.split,
                                 "observed_decision": case.decision,
+                                "observed_accept": case.accepted,
                                 "score": score,
+                                "primary_metric": self.primary_metric,
+                                "is_correct": (
+                                    output.get("predicted_accept") == case.accepted
+                                    if isinstance(output.get("predicted_accept"), bool)
+                                    else None
+                                ),
                                 "output": output,
                             },
                             ensure_ascii=False,

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from dataclasses import replace
 import json
 from pathlib import Path
 import subprocess
@@ -11,9 +12,20 @@ import yaml
 
 from src.optimization.behavioral_adapter import BehavioralGEPAAdapter
 from src.optimization.behavioral_dataset import load_behavioral_snapshot
+from src.optimization.behavioral_hpc_executor import (
+    HPCSlurmBehavioralCheckerExecutor,
+    build_behavioral_checker_array_script,
+)
 from src.optimization.behavioral_models import BehavioralCheckerOutput
 from src.optimization.behavioral_repository import materialize_repository_proxy
+from src.optimization.behavioral_runner import run_behavioral_optimization
+from src.optimization.behavioral_runtime import (
+    render_pre_p1_context,
+    validate_behavioral_checker_output,
+    validate_behavioral_reflection_analysis,
+)
 from src.optimization.config import load_optimization_config
+from src.optimization.offline_hpc_reflection import HPCOfflineReflectionProposer
 from src.optimization.reflection import EvidenceBundleWriter
 
 
@@ -83,6 +95,36 @@ def _snapshot(root: Path) -> Path:
     return root
 
 
+def _balanced_snapshot(root: Path) -> Path:
+    root.mkdir()
+    for split in ("train", "validation"):
+        rows = [
+            _record(
+                f"{split}-case-{index}",
+                split,
+                "ACCEPT" if index % 2 == 0 else "DO_NOT_ACCEPT",
+            )
+            for index in range(4)
+        ]
+        (root / f"{split}.jsonl").write_text(
+            "".join(json.dumps(row) + "\n" for row in rows),
+            encoding="utf-8",
+        )
+    (root / "manifest.json").write_text(
+        json.dumps(
+            {
+                "complete": True,
+                "provisional": False,
+                "task_semantics": "behavioral_plan_acceptability_v1",
+                "train_instances": 4,
+                "validation_instances": 4,
+            }
+        ),
+        encoding="utf-8",
+    )
+    return root
+
+
 def _run(*args: str, cwd: Path | None = None) -> str:
     return subprocess.run(
         args, cwd=cwd, check=True, capture_output=True, text=True
@@ -109,6 +151,43 @@ def test_behavioral_snapshot_projects_only_pre_boundary_information(tmp_path):
     assert "ACCEPT" not in worker
     assert "reflection_evidence" not in worker
     assert len(validation) == 1
+
+
+def test_behavioral_context_rendering_preserves_complete_original_order() -> None:
+    events = [
+        {"turn_number": 0, "turn_type": "user_prompt", "content": "first"},
+        {"turn_number": 1, "turn_type": "tool_use", "content": "second"},
+        {"turn_number": 2, "turn_type": "tool_result", "content": "third"},
+    ]
+
+    rendered = render_pre_p1_context(events)
+
+    assert json.loads(rendered) == events
+    assert rendered.index("first") < rendered.index("second") < rendered.index("third")
+
+
+def test_behavioral_checker_output_contract_is_exact() -> None:
+    output = validate_behavioral_checker_output(
+        {
+            "predicted_accept": False,
+            "decision_reason": "The plan lacks decision-time support.",
+            "repository_evidence": [
+                {"path": "src/a.py", "symbol": "parse", "finding": "Observed"}
+            ],
+        }
+    )
+    assert output.predicted_accept is False
+    assert output.decision_reason == "The plan lacks decision-time support."
+
+    with pytest.raises(ValueError, match="unexpected or missing keys"):
+        validate_behavioral_checker_output(
+            {
+                "predicted_accept": False,
+                "decision_reason": "reason",
+                "repository_evidence": [],
+                "observed_accept": False,
+            }
+        )
 
 
 def test_behavioral_snapshot_rejects_checker_boundary_leakage(tmp_path):
@@ -246,8 +325,8 @@ def test_behavioral_smoke_contract_freezes_prompts_and_budgets() -> None:
     raw = yaml.safe_load(path.read_text(encoding="utf-8"))
     config = load_optimization_config(path, require_api_keys=False)
 
-    assert raw["smoke_contract"]["status"] == "stage_a_contract_only"
-    assert raw["smoke_contract"]["launch_authorized"] is False
+    assert raw["smoke_contract"]["status"] == "stage_c_launchable"
+    assert raw["smoke_contract"]["launch_authorized"] is True
     assert raw["smoke_contract"]["fixture"] == {
         "total_cases": 8,
         "train_cases": 4,
@@ -277,6 +356,7 @@ def test_behavioral_smoke_contract_freezes_prompts_and_budgets() -> None:
     assert config.hpc.mem == "4G"
     assert config.hpc.time == "00:35:00"
     assert config.hpc.max_task_attempts == 3
+    assert config.container.runtime == "none"
 
 
 def test_behavioral_smoke_prompts_preserve_information_responsibilities() -> None:
@@ -314,4 +394,164 @@ def test_behavioral_smoke_prompts_preserve_information_responsibilities() -> Non
     assert "observed_accept" in reflection_instance
     assert "expected_decision" not in combined_reflection
     assert "expected_accept" not in combined_reflection
+    assert "expected_behavior_change" not in combined_reflection
+    assert "intended_behavior_change" in reflection
+    assert "post-boundary facts as decision-time evidence" in reflection
+    assert "Do not cat" in reflection
+    assert "one case and one field at a time" in " ".join(reflection.split())
     assert "predicted_resolved" not in combined_reflection
+
+
+def test_behavioral_reflection_analysis_requires_new_vocabulary_and_all_cases() -> None:
+    review = {
+        "instance_id": "case-1",
+        "classification_outcome": "correct_accept",
+        "decision_time_evidence": "The plan covers the stated request.",
+        "current_guideline_effect": "The guideline preserved scope checking.",
+        "checker_behavior": "The Checker accepted.",
+        "behavioral_evidence_attribution": "The matched approval supports the label.",
+        "diagnosis": "Preserve this behavior.",
+        "proposed_guideline_effect": "No change for this case.",
+        "risk_to_correct_cases": "None identified.",
+        "evidence_used": ["checker_output.json", "behavioral_supervision.json"],
+    }
+    change = {
+        "operation": "preserve_scope_check",
+        "description": "Preserve explicit scope checking.",
+        "causal_rationale": "It supported the observed decision.",
+        "intended_behavior_change": "None for already correct cases.",
+        "risk_to_correct_cases": "None identified.",
+        "supporting_instance_ids": ["case-1"],
+    }
+    validate_behavioral_reflection_analysis(
+        {"case_reviews": [review], "guideline_changes": [change]}, ["case-1"]
+    )
+
+    legacy_change = dict(change)
+    legacy_change["expected_behavior_change"] = legacy_change.pop(
+        "intended_behavior_change"
+    )
+    with pytest.raises(ValueError, match="guideline change"):
+        validate_behavioral_reflection_analysis(
+            {"case_reviews": [review], "guideline_changes": [legacy_change]},
+            ["case-1"],
+        )
+    with pytest.raises(ValueError, match="every case exactly once"):
+        validate_behavioral_reflection_analysis(
+            {"case_reviews": [review], "guideline_changes": [change]},
+            ["case-1", "case-2"],
+        )
+
+
+def test_behavioral_hpc_manifests_exclude_supervision_and_post_boundary(
+    tmp_path,
+) -> None:
+    train, _ = load_behavioral_snapshot(_snapshot(tmp_path / "snapshot"))
+    config_path = (
+        Path(__file__).parents[2]
+        / "configs/gepa_behavioral_acceptability_smoke_v1_20260830.yaml"
+    )
+    config = load_optimization_config(config_path, require_api_keys=False)
+    config = replace(config, run_dir=tmp_path / "run")
+    executor = HPCSlurmBehavioralCheckerExecutor(config)
+    batch_dir = tmp_path / "batch"
+    tasks = executor._prepare(
+        batch_dir,
+        fingerprint="f" * 64,
+        batch=train,
+        rules="neutral",
+        capture_traces=True,
+    )
+
+    manifest = json.loads(tasks[0].manifest_path.read_text(encoding="utf-8"))
+    serialized = json.dumps(manifest, sort_keys=True)
+    assert manifest["mode"] == "behavioral_checker"
+    assert "observed_decision" not in serialized
+    assert "observed_accept" not in serialized
+    assert "reflection_evidence" not in serialized
+    assert "developer reaction" not in serialized
+    assert "score" not in serialized
+    batch_manifest = json.loads(
+        (batch_dir / "manifest.json").read_text(encoding="utf-8")
+    )
+    assert batch_manifest["contains_observed_decision"] is False
+    assert batch_manifest["contains_post_boundary_evidence"] is False
+
+
+def test_behavioral_hpc_scripts_use_no_container_and_one_worker_per_task(
+    tmp_path,
+) -> None:
+    config_path = (
+        Path(__file__).parents[2]
+        / "configs/gepa_behavioral_acceptability_smoke_v1_20260830.yaml"
+    )
+    config = replace(
+        load_optimization_config(config_path, require_api_keys=False),
+        run_dir=tmp_path / "run",
+    )
+    checker = build_behavioral_checker_array_script(
+        config=config,
+        batch_dir=tmp_path / "checker",
+        task_indices=[0, 1, 2, 3],
+        attempt=1,
+    )
+    reflection = HPCOfflineReflectionProposer(config)._script(
+        tmp_path / "reflection", 1
+    )
+
+    for script in (checker, reflection):
+        assert "#SBATCH --cpus-per-task=1" in script
+        assert "#SBATCH --mem=4G" in script
+        assert "#SBATCH --time=00:35:00" in script
+        assert "Apptainer" not in script
+        assert "module load" not in script
+        assert "%" not in next(
+            line for line in script.splitlines() if line.startswith("#SBATCH --array")
+        )
+    assert "src.optimization.behavioral_checker_worker" in checker
+    assert "src.optimization.behavioral_reflection_worker" in reflection
+
+
+def test_behavioral_runner_completes_one_real_gepa_iteration_without_llm(
+    tmp_path,
+) -> None:
+    config_path = (
+        Path(__file__).parents[2]
+        / "configs/gepa_behavioral_acceptability_smoke_v1_20260830.yaml"
+    )
+    config = load_optimization_config(config_path, require_api_keys=False)
+    config = replace(
+        config,
+        dataset_snapshot=_balanced_snapshot(tmp_path / "snapshot"),
+        run_dir=tmp_path / "run",
+        execution=replace(config.execution, backend="local"),
+    )
+
+    def checker(case, _guideline):
+        return BehavioralCheckerOutput(
+            predicted_accept=case.accepted,
+            decision_reason="deterministic no-LLM fixture decision",
+            repository_evidence=(),
+        )
+
+    class Proposer:
+        successful_proposals = 0
+        failures = []
+
+        def __call__(self, candidate, reflective_dataset, components_to_update):
+            assert components_to_update == ["rules"]
+            assert len(reflective_dataset["rules"]) == 4
+            self.successful_proposals += 1
+            return {"rules": candidate["rules"] + "\nPreserve decision-time scope."}
+
+    result = run_behavioral_optimization(
+        config,
+        checker=checker,
+        proposer=Proposer(),
+    )
+
+    assert result is not None
+    assert (config.run_dir / "behavioral_candidate_metrics.json").is_file()
+    assert json.loads(
+        (config.run_dir / "controller_status.json").read_text(encoding="utf-8")
+    )["status"] == "completed"

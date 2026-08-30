@@ -1,12 +1,10 @@
-# Stage-A contract for the first SWE-chat Behavioral Plan Acceptability smoke.
-# This file freezes prompts, budgets, fixture requirements, and the intended HPC
-# transport. It is not launchable until the named fixture and the remaining
-# Behavioral runner/worker/no-container Reflection wiring exist.
+# Frozen development contract for the first SWE-chat Behavioral Plan
+# Acceptability smoke. Stage C uses exactly one GEPA proposal on HPC.
 
 smoke_contract:
   identity: swe-chat-behavioral-acceptability-smoke-v1-20260830
-  status: stage_a_contract_only
-  launch_authorized: false
+  status: stage_c_launchable
+  launch_authorized: true
   purpose: validate_information_flow_prompt_sanity_and_one_gepa_proposal
   claims_excluded:
     - guideline_effectiveness
@@ -35,9 +33,9 @@ smoke_contract:
     raw_evidence_required: true
 
 paths:
-  dataset_snapshot: /scratch/users/${USER}/vibe-coding-planning/derived/swe-chat-behavioral-gepa-smoke-v1-20260830/snapshot
+  dataset_snapshot: output/SWE-chat/behavioral-gepa-smoke-v1-20260830/stage-c-development-snapshot-v1
   initial_guideline: configs/gepa_behavioral_acceptability_neutral_seed.md
-  run_dir: /scratch/users/${USER}/vibe-coding-planning/behavioral-gepa-runs/swe-chat-behavioral-acceptability-smoke-v1-20260830
+  run_dir: output/SWE-chat/behavioral-gepa-smoke-v1-20260830/stage-c-hpc-gepa-smoke-v1
 
 task:
   semantics: behavioral_plan_acceptability_v1
@@ -87,14 +85,8 @@ docker:
   min_free_gb: 20
   max_cached_images: 75
 
-# The current shared HPC schema requires Apptainer. Behavioral v1 must not use
-# this as authority to run Reflection in a container; its no-container runtime
-# remains an explicit launch prerequisite.
 container:
-  runtime: apptainer
-  module: tools/Apptainer
-  sif_cache_dir: /scratch/users/${USER}/vibe-coding-planning/shared/sif-cache
-  writable_tmpfs: true
+  runtime: none
 
 execution:
   backend: hpc_slurm
@@ -114,7 +106,6 @@ hpc:
   missing_task_grace_seconds: 600
   max_task_attempts: 3
   python_module: lang/Python/3.11
-  container_module: tools/Apptainer
   python_bin: python3
   job_name_prefix: behavioral-acceptability-smoke-v1-20260830
   worker_config_path: configs/gepa_behavioral_acceptability_smoke_v1_20260830.yaml
@@ -136,9 +127,9 @@ prompts:
     decision, the proposed plan, the candidate guideline, and a disposable
     repository checkout.
 
-    The repository at /testbed is an approximate pre-session proxy, not an
-    exact reconstruction of the repository state at the plan decision. When it
-    conflicts with repository observations recorded in the pre-decision
+    The repository in the current working directory is an approximate pre-session proxy,
+    not an exact reconstruction of the repository state at the plan decision.
+    When it conflicts with repository observations recorded in the pre-decision
     session context, treat the recorded observation as authoritative.
     Otherwise, the proxy may be used as supplementary evidence.
 
@@ -234,6 +225,15 @@ prompts:
     Assistant thinking from the captured SWE-chat session is not evidence and
     is not included.
 
+    The evidence bundle contains large raw JSON files. Inspect all four cases,
+    but keep tool observations bounded: start from manifest.json, inspect one
+    case and one field at a time with jq, and first list trajectory message
+    roles, indexes, and lengths before selecting relevant messages. Do not cat,
+    recursively concatenate, or print an entire checker_output.json,
+    post_boundary_evidence.json, case directory, or evidence bundle in one
+    action. The raw files remain authoritative even though they must be read in
+    bounded projections.
+
     ## Causal guideline optimization
 
     Review every case in the minibatch, including both correct and incorrect
@@ -319,9 +319,19 @@ prompts:
     proposed_guideline_effect, risk_to_correct_cases, and a non-empty
     evidence_used list.
 
+    decision_time_evidence must contain only facts available before P1 was
+    approved or rejected. Put the observed decision, matched platform event,
+    later developer response, revised plans, implementation behavior, and
+    downstream outcomes only in behavioral_evidence_attribution. Never cite
+    those post-boundary facts as decision-time evidence, even when they support
+    the diagnosis.
+
     Each guideline_changes object must contain operation, description,
-    causal_rationale, expected_behavior_change, risk_to_correct_cases, and
+    causal_rationale, intended_behavior_change, risk_to_correct_cases, and
     non-empty supporting_instance_ids.
+
+    Do not use any field whose name begins with expected_. Behavioral
+    supervision is observed developer behavior, not an expected answer.
 
     Case and session identifiers may appear in the analysis as evidence
     provenance, but they must not appear in the submitted guideline.

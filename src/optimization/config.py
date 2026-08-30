@@ -228,9 +228,10 @@ def load_optimization_config(
         sif_cache_dir=resolve(str(container_data.get("sif_cache_dir", "/tmp/vibe-sif-cache"))),
         writable_tmpfs=bool(container_data.get("writable_tmpfs", True)),
     )
-    if container.runtime not in ("docker", "apptainer"):
+    if container.runtime not in ("docker", "apptainer", "none"):
         raise ValueError(
-            f"container.runtime must be 'docker' or 'apptainer', got {container.runtime!r}"
+            "container.runtime must be 'docker', 'apptainer', or 'none', "
+            f"got {container.runtime!r}"
         )
     execution = OfflineExecutionConfig(
         backend=str(execution_data.get("backend", "local")),
@@ -353,10 +354,21 @@ def load_optimization_config(
         hpc.max_task_attempts,
     ) < 1:
         raise ValueError("hpc numeric resources and retry settings must be positive")
-    if execution.backend == "hpc_slurm" and container.runtime != "apptainer":
+    if task.semantics == "historical_resolution" and container.runtime == "none":
+        raise ValueError("historical Offline execution requires a container runtime")
+    if (
+        execution.backend == "hpc_slurm"
+        and task.semantics == "historical_resolution"
+        and container.runtime != "apptainer"
+    ):
         raise ValueError(
             "Offline HPC Slurm execution requires container.runtime: apptainer"
         )
+    if (
+        task.semantics == "behavioral_plan_acceptability_v1"
+        and container.runtime != "none"
+    ):
+        raise ValueError("Behavioral v1 requires container.runtime: none")
 
     initial_guideline = paths.get("initial_guideline", paths.get("initial_rules"))
     if initial_guideline is None:

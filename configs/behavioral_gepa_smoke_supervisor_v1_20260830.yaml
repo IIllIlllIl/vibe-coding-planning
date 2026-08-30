@@ -1,0 +1,27 @@
+schema_version: 1
+session: behavioral-gepa-stage-c-smoke-v1-20260830
+log: .local/hpc-supervisor/behavioral-gepa-stage-c-smoke-v1-20260830.log
+arguments:
+  - --poll-interval
+  - "120"
+  - --slice-time
+  - "00:08:00"
+  - --max-runs
+  - "30"
+  - --require-clean-worktree
+  - --gepa-rules
+  - --gepa-config
+  - configs/gepa_behavioral_acceptability_smoke_v1_20260830.yaml
+  - --job-name
+  - behavioral-gepa-stage-c-smoke-v1-20260830
+  - --remote-dir
+  - ~/hpc_runs/vibe-coding-planning-behavioral-stage-c-smoke-v1-20260830
+  - --remote-dataset-dir
+  - /scratch/users/twang/vibe-coding-planning/behavioral-gepa-datasets
+  - --remote-run-dir
+  - /scratch/users/twang/vibe-coding-planning/behavioral-gepa-run-state
+  - --cpus
+  - "1"
+  - --mem
+  - 4G
+  - --submit
