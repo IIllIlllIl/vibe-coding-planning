@@ -161,6 +161,11 @@ def validate_behavioral_reflection_analysis(
         raise ValueError("Behavioral Reflection provenance lists must be non-empty")
 
 
+def behavioral_shell_command_timeout(config: OptimizationConfig) -> int:
+    """Return the per-command limit for the no-container Agent environment."""
+    return config.docker.timeout
+
+
 class BehavioralLocalChecker:
     """Run one Behavioral Checker in a disposable temporal-proxy checkout."""
 
@@ -219,7 +224,8 @@ class BehavioralLocalChecker:
             workspace_root=self.config.behavioral_repository.workspace_root,
         ) as checkout:
             environment = LocalEnvironment(
-                cwd=str(checkout), timeout=self.config.checker.timeout
+                cwd=str(checkout),
+                timeout=behavioral_shell_command_timeout(self.config),
             )
             agent = build_default_agent(
                 DefaultAgent,
@@ -353,7 +359,8 @@ class BehavioralLocalReflectionProposer:
             context=context,
         )
         environment = LocalEnvironment(
-            cwd=str(bundle), timeout=self.config.reflection.timeout
+            cwd=str(bundle),
+            timeout=behavioral_shell_command_timeout(self.config),
         )
         agent = build_default_agent(
             DefaultAgent,

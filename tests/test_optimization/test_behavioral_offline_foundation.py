@@ -20,6 +20,7 @@ from src.optimization.behavioral_models import BehavioralCheckerOutput
 from src.optimization.behavioral_repository import materialize_repository_proxy
 from src.optimization.behavioral_runner import run_behavioral_optimization
 from src.optimization.behavioral_runtime import (
+    behavioral_shell_command_timeout,
     render_pre_p1_context,
     validate_behavioral_checker_output,
     validate_behavioral_reflection_analysis,
@@ -188,6 +189,16 @@ def test_behavioral_checker_output_contract_is_exact() -> None:
                 "observed_accept": False,
             }
         )
+
+
+def test_behavioral_shell_commands_use_the_short_environment_timeout() -> None:
+    config = load_optimization_config(
+        Path("configs/gepa_behavioral_acceptability_smoke_v1_20260830.yaml")
+    )
+
+    assert config.checker.timeout == 1800
+    assert config.reflection.timeout == 1800
+    assert behavioral_shell_command_timeout(config) == 30
 
 
 def test_behavioral_snapshot_rejects_checker_boundary_leakage(tmp_path):
@@ -552,6 +563,9 @@ def test_behavioral_runner_completes_one_real_gepa_iteration_without_llm(
 
     assert result is not None
     assert (config.run_dir / "behavioral_candidate_metrics.json").is_file()
-    assert json.loads(
-        (config.run_dir / "controller_status.json").read_text(encoding="utf-8")
-    )["status"] == "completed"
+    assert (
+        json.loads(
+            (config.run_dir / "controller_status.json").read_text(encoding="utf-8")
+        )["status"]
+        == "completed"
+    )
