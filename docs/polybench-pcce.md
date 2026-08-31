@@ -88,6 +88,14 @@ trajectory, patch, evaluator result, or later PCCE outcome. It is not asked to
 predict `resolved` as a training label in this workflow. Its decision controls
 the next workflow phase.
 
+The additive `checker_only` execution mode stops after the frozen first plan's
+first review. It uses the same Checker prompt, repository checkout, output
+contract, worker retry, and raw trajectory capture as PCCE, but schedules no
+Planner, Code, or Evaluate work. Its PC task manifest also omits the historical
+resolved value, test patch, test selectors, test command, source row, and PCE
+outcome identity. Labels remain controller-side for reporting. Existing
+`full_pcce` configs retain their original three-review and CE semantics.
+
 The Planner receives the issue, previous plan, and revision feedback. It does
 not receive the Checker's hidden reasoning or full trajectory. This preserves
 the actionable intervention while avoiding an accidental side channel through

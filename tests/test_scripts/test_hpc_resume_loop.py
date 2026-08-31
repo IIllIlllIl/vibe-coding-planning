@@ -732,6 +732,49 @@ def test_formal_pcce_supervisor_launch_config_uses_formal_seed_runtime(
     assert "--require-clean-worktree" in invocation
 
 
+def test_c4_checker_only_supervisor_uses_pcce_resume_loop(tmp_path: Path) -> None:
+    fake_bin = tmp_path / "bin"
+    fake_bin.mkdir()
+    tmux_log = tmp_path / "tmux.log"
+    tmux = fake_bin / "tmux"
+    tmux.write_text(
+        "#!/usr/bin/env bash\n"
+        f"printf '%s\\n' \"$*\" >> {tmux_log}\n"
+        'if [[ "$1" == has-session ]]; then exit 1; fi\n'
+        "exit 0\n",
+        encoding="utf-8",
+    )
+    tmux.chmod(0o755)
+    env = os.environ.copy()
+    env["PATH"] = f"{fake_bin}{os.pathsep}{env['PATH']}"
+
+    result = subprocess.run(
+        [
+            "python",
+            str(SERVICE_SCRIPT),
+            "start",
+            "--launch-config",
+            "configs/polybench_pc_checker_only_c4_balanced20_supervisor_v1_20260831.yaml",
+        ],
+        cwd=REPO_ROOT,
+        capture_output=True,
+        text=True,
+        check=False,
+        env=env,
+    )
+
+    assert result.returncode == 0, result.stderr
+    invocation = tmux_log.read_text(encoding="utf-8")
+    assert "caffeinate -i -s" in invocation
+    assert "--batch-script scripts/hpc_submit_polybench_pcce.sh" in invocation
+    assert (
+        "--config configs/polybench_pc_checker_only_c4_balanced20_v1_20260831.yaml"
+        in invocation
+    )
+    assert "--require-clean-worktree" in invocation
+    assert "--submit" in invocation
+
+
 def test_clean_seed_pcce_dependency_repair_supervisor_selects_frozen_subset(
     tmp_path: Path,
 ) -> None:

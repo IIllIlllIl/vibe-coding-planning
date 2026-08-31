@@ -45,7 +45,9 @@ cleaning authority is `docs/swe-chat-data-cleaning.md`.
 - `run_offline_check_only.py` is the additive fixed-guideline evaluation path.
 - `hpc_submit_polybench_pce.sh`, `run_polybench_pce_hpc.py`,
   `hpc_submit_polybench_pcce.sh`, and `run_polybench_pcce_hpc.py` preserve the
-  completed PCE/PCCE platform.
+  completed PCE/PCCE platform. The PCCE entry points also support the additive
+  config-declared `checker_only` mode, which schedules exactly one PC wave and
+  emits classification reports without Planner, Code, or Evaluate phases.
 - `hpc_run_status.py` is the read-only status entry for retained persistent
   workflows.
 - SIF and dependency preheaters remain because frozen PolyBench evidence and

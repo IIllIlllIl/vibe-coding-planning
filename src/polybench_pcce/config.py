@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, replace
+import json
 import os
 from pathlib import Path
 from typing import Any
@@ -22,6 +23,7 @@ class PolyBenchPCCEConfig:
     validation_snapshot: Path
     validation_file: str
     pce_outcomes: Path
+    selection_manifest: Path | None
     guideline_path: Path
     guideline_label: str
     checker_prompt: str
@@ -29,6 +31,7 @@ class PolyBenchPCCEConfig:
     plan_revision_prompt: str
     plan_revision_instance_template: str
     run_dir: Path
+    execution_mode: str
     max_review_rejections: int
     instance_ids: tuple[str, ...]
     pce: PolyBenchPCEConfig
@@ -111,15 +114,37 @@ def load_polybench_pcce_config(
         raise ValueError("PolyBench PCCE workers must remain 1 CPU / 4G")
     if hpc.max_task_attempts < 1:
         raise ValueError("hpc.max_task_attempts must be positive")
+    execution_mode = str(method.get("execution_mode", "full_pcce"))
+    if execution_mode not in {"full_pcce", "checker_only"}:
+        raise ValueError("pcce.execution_mode must be 'full_pcce' or 'checker_only'")
     max_rejections = int(method.get("max_review_rejections", 3))
-    if max_rejections != 3:
-        raise ValueError("the current PCCE method requires exactly three rejections")
+    expected_rejections = 1 if execution_mode == "checker_only" else 3
+    if max_rejections != expected_rejections:
+        raise ValueError(
+            f"{execution_mode} requires max_review_rejections: {expected_rejections}"
+        )
     validation_file = str(method.get("validation_file", "validation.jsonl"))
     if Path(validation_file).name != validation_file:
         raise ValueError("pcce.validation_file must be a file name")
+    selection_manifest = (
+        resolve(str(paths["selection_manifest"]))
+        if paths.get("selection_manifest")
+        else None
+    )
     selected_raw = method.get("instance_ids", [])
     if not isinstance(selected_raw, list):
         raise ValueError("pcce.instance_ids must be a list")
+    if selection_manifest is not None:
+        if selected_raw:
+            raise ValueError(
+                "selection_manifest and inline pcce.instance_ids are mutually exclusive"
+            )
+        selection = json.loads(selection_manifest.read_text(encoding="utf-8"))
+        if selection.get("schema_version") != 1:
+            raise ValueError("selection manifest must use schema_version: 1")
+        selected_raw = selection.get("selected_instance_ids")
+        if not isinstance(selected_raw, list) or not selected_raw:
+            raise ValueError("selection manifest requires selected_instance_ids")
     instance_ids = tuple(str(item) for item in selected_raw)
     if len(set(instance_ids)) != len(instance_ids):
         raise ValueError("pcce.instance_ids must be unique")
@@ -135,6 +160,12 @@ def load_polybench_pcce_config(
         hpc=hpc,
     )
     checker = replace(checker, run_dir=run_dir, hpc=hpc)
+    plan_revision_prompt = str(prompts.get("plan_revision_system", ""))
+    plan_revision_instance = str(prompts.get("plan_revision_instance", ""))
+    if execution_mode == "full_pcce" and (
+        not plan_revision_prompt or not plan_revision_instance
+    ):
+        raise ValueError("full_pcce requires both plan-revision prompts")
     return PolyBenchPCCEConfig(
         config_path=config_path,
         source_snapshot=source_snapshot,
@@ -142,13 +173,15 @@ def load_polybench_pcce_config(
         validation_snapshot=resolve(str(paths["validation_snapshot"])),
         validation_file=validation_file,
         pce_outcomes=resolve(str(paths["pce_outcomes"])),
+        selection_manifest=selection_manifest,
         guideline_path=resolve(str(paths["guideline"])),
         guideline_label=str(method["guideline_label"]),
         checker_prompt=str(prompts["checker_system"]),
         checker_instance_template=str(prompts["checker_instance"]),
-        plan_revision_prompt=str(prompts["plan_revision_system"]),
-        plan_revision_instance_template=str(prompts["plan_revision_instance"]),
+        plan_revision_prompt=plan_revision_prompt,
+        plan_revision_instance_template=plan_revision_instance,
         run_dir=run_dir,
+        execution_mode=execution_mode,
         max_review_rejections=max_rejections,
         instance_ids=instance_ids,
         pce=pce,

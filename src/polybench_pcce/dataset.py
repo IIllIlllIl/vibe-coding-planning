@@ -41,6 +41,16 @@ def load_pcce_cases(
     expected = validation_manifest.get("validation_sha256")
     if expected and file_sha256(validation_path) != expected:
         raise ValueError("PCCE validation file differs from its frozen manifest")
+    if config.selection_manifest is not None:
+        selection = json.loads(config.selection_manifest.read_text(encoding="utf-8"))
+        declared = {
+            "source_manifest_sha256": file_sha256(validation_manifest_path),
+            "source_validation_sha256": file_sha256(validation_path),
+            "source_pce_outcomes_sha256": file_sha256(config.pce_outcomes),
+        }
+        for field, actual in declared.items():
+            if selection.get(field) != actual:
+                raise ValueError(f"selection manifest {field} differs from source")
     validation_rows = _jsonl(validation_path)
     validation_ids = [str(row["instance_id"]) for row in validation_rows]
     if len(set(validation_ids)) != len(validation_ids):
@@ -106,4 +116,9 @@ def load_pcce_cases(
         "validation_manifest_sha256": file_sha256(validation_manifest_path),
         "validation_file_sha256": file_sha256(validation_path),
         "pce_outcomes_sha256": file_sha256(config.pce_outcomes),
+        "selection_manifest_sha256": (
+            file_sha256(config.selection_manifest)
+            if config.selection_manifest is not None
+            else None
+        ),
     }

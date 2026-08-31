@@ -23,6 +23,10 @@ tracked does not authorize its execution.
 | `behavioral_gepa_formal_8it_supervisor_v1_20260830.yaml` | Superseded non-submitting supervisor retained with formal v1. |
 | `gepa_behavioral_acceptability_formal_8it_v2_20260830.yaml` | Authorized formal contract using the media-projected snapshot; prompts/search remain unchanged after the unlabeled extreme-context preflight. |
 | `behavioral_gepa_formal_8it_supervisor_v2_20260830.yaml` | Authorized v2 supervisor with bounded resumable submission. |
+| `frozen_polybench_pc_quick/c4-balanced20-v1-20260831.json` | Frozen balanced 20-case external diagnostic selection, including conservative workflow/noise exclusions and deterministic sampling identity. |
+| `frozen_guidelines/behavioral-formal-c4-v1-20260831/` | Exact Behavioral formal candidate 4 text and source identity for the PolyBench diagnostic. |
+| `polybench_pc_checker_only_c4_balanced20_v1_20260831.yaml` | Prepared one-review C4 PolyBench diagnostic; it cannot enter Planner, Code, or Evaluate. |
+| `polybench_pc_checker_only_c4_balanced20_supervisor_v1_20260831.yaml` | Persistent bounded supervisor for that prepared diagnostic; presence does not authorize launch. |
 | `frozen_swe_chat_cleaning/f66cca95b14caaa4177f7ed5eaa424608dadcffa/` | Frozen Stage-1 decisions, compact Stage-2 manifest for 141 labeled first-Plan slices, additive repository-availability cleaning yielding 131 cases, exact-reconstruction audit summary, and 131-case temporal-proxy manifest. |
 
 Acquisition stops at source materialization. Stage 1 selects whole trajectories;
