@@ -8,6 +8,8 @@ arguments:
   - "00:10:00"
   - --max-runs
   - "0"
+  - --state-file
+  - .local/hpc-supervisor/polybench-pc-c4-balanced20-v1-20260831.json
   - --require-clean-worktree
   - --batch-script
   - scripts/hpc_submit_polybench_pcce.sh

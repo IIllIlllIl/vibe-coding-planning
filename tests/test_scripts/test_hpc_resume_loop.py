@@ -778,6 +778,10 @@ def test_c4_checker_only_supervisor_uses_pcce_resume_loop(tmp_path: Path) -> Non
     assert result.returncode == 0, result.stderr
     invocation = tmux_log.read_text(encoding="utf-8")
     assert "caffeinate -i -s" in invocation
+    assert (
+        "--state-file .local/hpc-supervisor/"
+        "polybench-pc-c4-balanced20-v1-20260831.json" in invocation
+    )
     assert "--batch-script scripts/hpc_submit_polybench_pcce.sh" in invocation
     assert (
         "--ulhpc-config /Users/taoran.wang/.config/ulhpc-submit/config.yaml"
