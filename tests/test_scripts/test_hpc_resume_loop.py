@@ -780,6 +780,10 @@ def test_c4_checker_only_supervisor_uses_pcce_resume_loop(tmp_path: Path) -> Non
     assert "caffeinate -i -s" in invocation
     assert "--batch-script scripts/hpc_submit_polybench_pcce.sh" in invocation
     assert (
+        "--ulhpc-config /Users/taoran.wang/.config/ulhpc-submit/config.yaml"
+        in invocation
+    )
+    assert (
         "--config configs/polybench_pc_checker_only_c4_balanced20_v1_20260831.yaml"
         in invocation
     )

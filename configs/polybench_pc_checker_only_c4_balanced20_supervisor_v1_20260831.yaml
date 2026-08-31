@@ -11,6 +11,8 @@ arguments:
   - --require-clean-worktree
   - --batch-script
   - scripts/hpc_submit_polybench_pcce.sh
+  - --ulhpc-config
+  - /Users/taoran.wang/.config/ulhpc-submit/config.yaml
   - --config
   - configs/polybench_pc_checker_only_c4_balanced20_v1_20260831.yaml
   - --job-name
