@@ -14,7 +14,7 @@ arguments:
   - "0"
   - --gepa-rules
   - --gepa-config
-  - configs/offline_gepa_hpc_3x3_8it_extension_20260816.yaml
+  - configs/archive/offline_gepa/offline_gepa_hpc_3x3_8it_extension_20260816.yaml
   - --job-name
   - offline-plan-guideline-hpc-accuracy-b3x3-8it-extension-20260816
   - --remote-dir

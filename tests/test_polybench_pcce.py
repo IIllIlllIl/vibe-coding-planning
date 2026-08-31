@@ -60,7 +60,7 @@ def _case(instance_id: str, resolved: bool = False) -> PCCECase:
 
 def _config(tmp_path: Path):
     config = load_polybench_pcce_config(
-        ROOT / "configs/polybench_pcce_hpc_smoke.yaml",
+        ROOT / "configs/archive/polybench_pcce/polybench_pcce_hpc_smoke.yaml",
         require_api_keys=False,
     )
     return replace(
@@ -73,7 +73,7 @@ def _config(tmp_path: Path):
 
 def test_clean_formal_seed_config_selects_only_clean_pce_cases():
     smoke = load_polybench_pcce_config(
-        ROOT / "configs/polybench_pcce_hpc_smoke.yaml",
+        ROOT / "configs/archive/polybench_pcce/polybench_pcce_hpc_smoke.yaml",
         require_api_keys=False,
     )
     formal = load_polybench_pcce_config(
@@ -803,7 +803,7 @@ def test_checker_only_controller_stops_after_first_review_without_ce(
 @pytest.mark.parametrize(
     "config_path",
     [
-        "configs/polybench_pcce_hpc_smoke.yaml",
+        "configs/archive/polybench_pcce/polybench_pcce_hpc_smoke.yaml",
         "configs/polybench_pcce_hpc_formal_seed_clean_20260826.yaml",
         "configs/polybench_pc_checker_only_c4_balanced20_v1_20260831.yaml",
     ],

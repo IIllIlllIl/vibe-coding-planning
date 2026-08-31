@@ -3,7 +3,7 @@
 This branch treats configuration files as three different classes. A file being
 tracked does not authorize its execution.
 
-## Active Behavioral Acquisition
+## Current Behavioral Surface
 
 | Path | Purpose |
 |---|---|
@@ -19,12 +19,11 @@ tracked does not authorize its execution.
 | `gepa_behavioral_acceptability_smoke_v2_20260830.yaml` | Completed Stage C v2 method identity: bounded no-container runtime and one full GEPA proposal on the eight-case development fixture. |
 | `frozen_swe_chat_behavioral_smoke/` | Frozen eight-case development fixture assignment; all exposed cases are formal-train-only. |
 | `frozen_swe_chat_behavioral_formal/` | Complete 131-case repository/duplicate-component split authority: 84 train and 47 validation with no repository overlap. |
-| `gepa_behavioral_acceptability_formal_8it_v1_20260830.yaml` | Superseded pre-launch contract retained for audit; its snapshot rendered image base64 into Checker text and must not be launched. |
-| `behavioral_gepa_formal_8it_supervisor_v1_20260830.yaml` | Superseded non-submitting supervisor retained with formal v1. |
 | `gepa_behavioral_acceptability_formal_8it_v2_20260830.yaml` | Completed formal contract using the media-projected snapshot; immutable run identity, not a relaunch default. Its opening pre-launch comment is retained provenance and is superseded by `experiment_contract.status`. |
 | `behavioral_gepa_formal_8it_supervisor_v2_20260830.yaml` | Completed v2 supervisor identity; provenance only. |
 | `frozen_polybench_pc_quick/c4-balanced20-v1-20260831.json` | Frozen balanced 20-case external diagnostic selection, including conservative workflow/noise exclusions and deterministic sampling identity. |
 | `frozen_guidelines/behavioral-formal-c4-v1-20260831/` | Exact Behavioral formal candidate 4 text and source identity for the PolyBench diagnostic. |
+| `frozen_guidelines/behavioral-formal-all-candidates-v1-20260831/` | Local frozen backup of all six exact formal candidate texts, run identity, terminal state, cost report, lineage, and compact validation metrics; large raw trajectories remain on Iris. |
 | `polybench_pc_checker_only_c4_balanced20_v1_20260831.yaml` | Completed one-review C4 PolyBench diagnostic; it cannot enter Planner, Code, or Evaluate. |
 | `polybench_pc_checker_only_c4_balanced20_supervisor_v1_20260831.yaml` | Completed bounded supervisor identity; provenance only. |
 | `frozen_swe_chat_cleaning/f66cca95b14caaa4177f7ed5eaa424608dadcffa/` | Frozen Stage-1 decisions, compact Stage-2 manifest for 141 labeled first-Plan slices, additive repository-availability cleaning yielding 131 cases, exact-reconstruction audit summary, and 131-case temporal-proxy manifest. |
@@ -35,11 +34,12 @@ Reflection-only evidence. The additive repository-availability manifest freezes
 behavioral labels and the 131-case feasible universe. Stage C v2 completed the
 ordered prompt/runtime smoke. The formal split and run semantics are frozen.
 Formal v1 was superseded before launch after its context census found embedded
-image bytes; v2 binds the deterministic media-projected snapshot and completed
-the authorized eight-iteration run. The reconstruction audit verifies an exact parent
-candidate for only two ACCEPT cases. The separate temporal-proxy manifest gives
-all 131 cases an explicitly approximate pre-session source checkout without
-reinterpreting that negative audit.
+image bytes; its exact config is archived under `archive/behavioral_gepa/`.
+V2 binds the deterministic media-projected snapshot and completed the
+authorized eight-iteration run. The reconstruction audit verifies an exact
+parent candidate for only two ACCEPT cases. The separate temporal-proxy
+manifest gives all 131 cases an explicitly approximate pre-session source
+checkout without reinterpreting that negative audit.
 
 ## Retained Research Foundations
 
@@ -52,9 +52,11 @@ reinterpreting that negative audit.
 | `frozen_dependency_caches/` | Immutable evaluator dependency evidence and subsets. |
 
 Top-level `polybench_pce_*`, `polybench_pcce_*`, and
-`polybench_dependency_preheat_*` configs preserve exact completed platform and
-evaluator-repair identities. They are frozen evidence, not launch defaults, and
-must not be edited or relaunched in place.
+`polybench_dependency_preheat_*` configs are limited to the retained platform,
+completed clean formal evidence, and the current C4 diagnostic. Superseded
+smoke, preheat, and repository-boundary configs are archived. Retained configs
+are frozen evidence, not launch defaults, and must not be edited or relaunched
+in place.
 
 ## Historical Archive
 
@@ -65,7 +67,11 @@ must not be edited or relaunched in place.
 | `archive/pct_runs/` | PCT-era configs and manifests, including the former full PolyBench PCT config. |
 | `archive/legacy_analysis/` | Kimi/OpenCode-era analysis configuration. |
 | `archive/offline_gepa/` | Superseded Offline pilots and runtime variants. |
+| `archive/behavioral_gepa/` | Superseded Behavioral v1 smoke/formal configs and supervisors. |
+| `archive/polybench_pce/` | Superseded PCE smoke, dependency-cache smoke, and repository-boundary configs. |
 | `archive/polybench_pcce/` | Superseded diagnostic PCCE configs. |
+| `archive/polybench_preheat/` | Superseded dependency-preheat and preheat-smoke configs. |
+| `archive/pro/` | Legacy SWE-bench Pro instance inputs with no active Behavioral reachability. |
 | `archive/gepa_legacy/` | Earlier Offline definitions. |
 
 Archive paths are non-authoritative. Prefer `git show main:<path>` when exact

@@ -1,6 +1,6 @@
 paths:
   dataset_snapshot: output/SWE-bench_Verified/verified-round1-gepa-datasets/20260614_482_fdc056ae85df
-  initial_rules: configs/gepa_initial_rules_gpt_seed.md
+  initial_rules: configs/archive/offline_gepa/gepa_initial_rules_gpt_seed.md
   run_dir: output/SWE-bench_Verified/gepa-rules/formal-pilot-gpt-seed-mc116
 
 checker:

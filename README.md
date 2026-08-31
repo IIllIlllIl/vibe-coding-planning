@@ -48,25 +48,23 @@ frozen experimental contract.
 
 Read these files in order:
 
-1. [`AGENTS.md`](AGENTS.md) — operational, environment, credential, and cleanup
-   requirements.
-2. [`docs/branch-scope.md`](docs/branch-scope.md) — branch boundary, retained
+1. [`docs/branch-scope.md`](docs/branch-scope.md) — branch boundary, retained
    systems, and historical-reference policy.
-3. [`project_issues.md`](project_issues.md) — current decisions and unresolved
+2. [`project_issues.md`](project_issues.md) — current decisions and unresolved
    methodological risks only; it is not a run-progress log.
-4. [`docs/swe-chat-data-cleaning.md`](docs/swe-chat-data-cleaning.md) — current
+3. [`docs/swe-chat-data-cleaning.md`](docs/swe-chat-data-cleaning.md) — current
    Behavioral trajectory selection and the evidence available for episode
    slicing.
-5. [`docs/offline-gepa.md`](docs/offline-gepa.md) — current Offline Checker,
+4. [`docs/offline-gepa.md`](docs/offline-gepa.md) — current Offline Checker,
    metric, Reflection, search, and resume semantics.
-6. [`docs/behavioral-offline-gepa-adaptation.md`](docs/behavioral-offline-gepa-adaptation.md)
+5. [`docs/behavioral-offline-gepa-adaptation.md`](docs/behavioral-offline-gepa-adaptation.md)
    — Behavioral information boundary, minimum Offline adapter changes, and the
    staged development-smoke contract.
-7. [`docs/knowledge/offline-pcce-stage-findings.md`](docs/knowledge/offline-pcce-stage-findings.md)
+6. [`docs/knowledge/offline-pcce-stage-findings.md`](docs/knowledge/offline-pcce-stage-findings.md)
    — frozen first-stage PolyBench findings.
-8. [`docs/knowledge/behavioral-gepa-initial-findings.md`](docs/knowledge/behavioral-gepa-initial-findings.md)
+7. [`docs/knowledge/behavioral-gepa-initial-findings.md`](docs/knowledge/behavioral-gepa-initial-findings.md)
    — frozen first Behavioral search and C4 external-diagnostic findings.
-9. [`docs/polybench-pcce.md`](docs/polybench-pcce.md) and
+8. [`docs/polybench-pcce.md`](docs/polybench-pcce.md) and
    [`docs/offline-polybench-validation.md`](docs/offline-polybench-validation.md)
    — implemented PCE/PCCE and external-evidence boundaries.
 

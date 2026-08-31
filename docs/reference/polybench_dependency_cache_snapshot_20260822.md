@@ -26,7 +26,7 @@ preheat staging directory is not used as a writable cache after this point.
 ## Three-case network-isolation smoke
 
 The first consumer is an Evaluate-only PCE repair using
-`configs/polybench_pce_hpc_dependency_cache_smoke.yaml`. It reuses the existing
+`configs/archive/polybench_pce/polybench_pce_hpc_dependency_cache_smoke.yaml`. It reuses the existing
 formal PCE Plan and Code checkpoints, invokes no LLM, and selects:
 
 | Instance | Coverage reason |
@@ -82,7 +82,7 @@ input is the fresh v3 root frozen by
 (SHA-256 `42c6cc0e98df42c7c2e66c0689a38a0d0040cd0b3fe30642ead3a5f76b995fbf`):
 3 instances and 4 artifact requests completed with no failure. The corrective
 Evaluate-only consumer is
-`configs/polybench_pce_hpc_dependency_cache_smoke_v2.yaml`; it must use a new
+`configs/archive/polybench_pce/polybench_pce_hpc_dependency_cache_smoke_v2.yaml`; it must use a new
 repair identity and retain the first-smoke outputs unchanged.
 
 The v3 consumer confirmed the OWL-ViT and SentenceTransformers fixes, but also
@@ -99,7 +99,7 @@ hashed files and metadata consumed by that version. The other two backends are
 unchanged. The v4 snapshot is frozen at
 `configs/frozen_dependency_caches/polybench_evaluator_dependencies_smoke_v4_20260823/manifest.json`
 with SHA-256 `3acb713b5e963b6480eebc243926f2f155821147115a722ae0988c9e63e3502a`.
-Its consumer config is `configs/polybench_pce_hpc_dependency_cache_smoke_v3.yaml`
+Its consumer config is `configs/archive/polybench_pce/polybench_pce_hpc_dependency_cache_smoke_v3.yaml`
 and must use another new repair identity.
 
 The v4 consumer completed its final Controller collection with all three fixed

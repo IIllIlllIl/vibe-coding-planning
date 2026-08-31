@@ -1,0 +1,106 @@
+{
+  "run_quality": {
+    "status": "completed",
+    "successful_proposals": 8,
+    "required_proposals": 1,
+    "reflection_failures": 0,
+    "reflection_observed": true,
+    "token_time_estimate_valid": true,
+    "limitations": []
+  },
+  "checker": {
+    "calls": 1353,
+    "successful_calls": 1353,
+    "models": {
+      "deepseek/deepseek-v4-flash": 1353
+    },
+    "provider_models": {
+      "deepseek-v4-flash": 1353
+    },
+    "duration_seconds_total": 53137.454865739914,
+    "duration_seconds_mean": 39.27380256152248,
+    "duration_seconds_p50": 27.348896473180503,
+    "duration_seconds_p95": 116.20159736811183,
+    "prompt_tokens": 79225684,
+    "completion_tokens": 6220786,
+    "total_tokens": 85446470,
+    "reported_cost_usd": 12.919480879999998
+  },
+  "plan": {
+    "calls": 0,
+    "successful_calls": 0,
+    "models": {},
+    "provider_models": {},
+    "duration_seconds_total": 0,
+    "duration_seconds_mean": 0.0,
+    "duration_seconds_p50": 0.0,
+    "duration_seconds_p95": 0.0,
+    "prompt_tokens": 0,
+    "completion_tokens": 0,
+    "total_tokens": 0,
+    "reported_cost_usd": 0
+  },
+  "code": {
+    "calls": 0,
+    "successful_calls": 0,
+    "models": {},
+    "provider_models": {},
+    "duration_seconds_total": 0,
+    "duration_seconds_mean": 0.0,
+    "duration_seconds_p50": 0.0,
+    "duration_seconds_p95": 0.0,
+    "prompt_tokens": 0,
+    "completion_tokens": 0,
+    "total_tokens": 0,
+    "reported_cost_usd": 0
+  },
+  "reflection": {
+    "calls": 211,
+    "successful_calls": 211,
+    "models": {
+      "deepseek/deepseek-v4-flash": 211
+    },
+    "provider_models": {
+      "deepseek-v4-flash": 211
+    },
+    "duration_seconds_total": 4175.937532937387,
+    "duration_seconds_mean": 19.791173141883352,
+    "duration_seconds_p50": 7.992840057006106,
+    "duration_seconds_p95": 68.1110864749644,
+    "prompt_tokens": 9406154,
+    "completion_tokens": 493363,
+    "total_tokens": 9899517,
+    "reported_cost_usd": 1.1153595279999997
+  },
+  "combined": {
+    "calls": 1564,
+    "models": {
+      "deepseek/deepseek-v4-flash": 1564
+    },
+    "provider_models": {
+      "deepseek-v4-flash": 1564
+    },
+    "total_tokens": 95345987,
+    "reported_cost_usd": 14.034840407999997
+  },
+  "observed": {
+    "metric_calls": 410,
+    "model_api_calls_per_metric_call": 3.8146341463414632,
+    "tokens_per_metric_call": 232551.18780487805,
+    "cost_usd_per_metric_call": 0.034231318068292674
+  },
+  "full_run_linear_estimate": {
+    "token_time_valid": true,
+    "target_metric_calls": 551,
+    "estimated_checker_api_calls": 1818.3000000000002,
+    "estimated_plan_api_calls": 0.0,
+    "estimated_code_api_calls": 0.0,
+    "estimated_reflection_api_calls": 283.56341463414634,
+    "estimated_total_tokens": 128135704.48048781,
+    "estimated_reported_cost_usd": 18.861456255629268,
+    "estimated_serial_model_seconds": 77023.60783334437,
+    "estimated_wall_seconds_with_parallelism": 77023.60783334437,
+    "method": "linear extrapolation from observed pilot API calls",
+    "budget_semantics": "GEPA checks max_metric_calls at iteration boundaries; observed calls may exceed the configured soft limit"
+  }
+}

@@ -56,7 +56,7 @@ hpc:
   container_module: tools/Apptainer
   python_bin: python3
   job_name_prefix: pce-base-v3-smoke
-  worker_config_path: configs/polybench_pce_hpc_repository_boundary_smoke_20260824.yaml
+  worker_config_path: configs/archive/polybench_pce/polybench_pce_hpc_repository_boundary_smoke_20260824.yaml
 
 evaluator:
   timeout: 1800

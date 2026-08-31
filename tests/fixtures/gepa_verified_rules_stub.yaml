@@ -1,6 +1,6 @@
 paths:
   dataset_snapshot: output/SWE-bench_Verified/gepa-pilot-datasets/pilot_2_2_seed43_e2bdb83dc201
-  initial_rules: configs/gepa_initial_rules_gpt_seed.md
+  initial_rules: configs/archive/offline_gepa/gepa_initial_rules_gpt_seed.md
   run_dir: /tmp/gepa-rules-stub-run-openai
 
 checker:

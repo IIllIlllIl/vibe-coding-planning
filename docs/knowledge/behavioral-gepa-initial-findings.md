@@ -92,10 +92,11 @@ decision behavior rather than label equivalence.
   `configs/gepa_behavioral_acceptability_formal_8it_v2_20260830.yaml`
 - Formal remote run:
   `/scratch/users/twang/vibe-coding-planning/behavioral-gepa-run-state/output/SWE-chat/behavioral-gepa-runs/formal/repository-holdout-media-projected-accuracy-b8-8it-v2-20260830`
+- Frozen local all-candidate result bundle:
+  `configs/frozen_guidelines/behavioral-formal-all-candidates-v1-20260831/`
 - Frozen C4 text and provenance:
   `configs/frozen_guidelines/behavioral-formal-c4-v1-20260831/`
 - Frozen PolyBench diagnostic selection:
   `configs/frozen_polybench_pc_quick/c4-balanced20-v1-20260831.json`
 - PolyBench PC-only remote run:
   `~/hpc_run_state/vibe-coding-planning/output/SWE-PolyBench/polybench-pc-checker-only-runs/development/c4-balanced20-v1-20260831`
-

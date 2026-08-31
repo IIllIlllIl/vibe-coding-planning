@@ -225,7 +225,7 @@ def main() -> int:
     parser.add_argument(
         "--config",
         type=Path,
-        default=Path("configs/gepa_behavioral_acceptability_smoke_v1_20260830.yaml"),
+        default=Path("configs/gepa_behavioral_acceptability_smoke_v2_20260830.yaml"),
     )
     parser.add_argument(
         "--identity",

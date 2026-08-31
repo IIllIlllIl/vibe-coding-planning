@@ -12,7 +12,7 @@ arguments:
   - --batch-script
   - scripts/hpc_submit_polybench_pce.sh
   - --config
-  - configs/polybench_pce_hpc_repository_boundary_smoke_20260824.yaml
+  - configs/archive/polybench_pce/polybench_pce_hpc_repository_boundary_smoke_20260824.yaml
   - --job-name
   - polybench-pce-base-v3-smoke-20260825
   - --remote-dir

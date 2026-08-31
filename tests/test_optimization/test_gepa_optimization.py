@@ -4591,7 +4591,9 @@ def test_candidate_contamination_check_replays_previous_run_rules():
     contaminated_rules = (
         repo_root / "tests/fixtures/offline_gepa_contaminated_candidate_1.txt"
     ).read_text(encoding="utf-8")
-    safe_seed = (repo_root / "configs/gepa_initial_rules_minimal.md").read_text(
+    safe_seed = (
+        repo_root / "configs/archive/offline_gepa/gepa_initial_rules_minimal.md"
+    ).read_text(
         encoding="utf-8"
     )
     assert text_sha256(contaminated_rules.strip()) == (

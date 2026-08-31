@@ -1,12 +1,18 @@
-# Formal raw PCE generation for the frozen Python-113 exact-v1.1 input.
-# This workflow does not call GEPA, Reflection, or guideline evaluation.
+# Evaluate-only smoke over fixed formal PCE Plan/Code checkpoints. It verifies
+# that three formerly network-affected cases can run with a frozen, read-only
+# dependency cache and container networking disabled. It calls no LLM.
 mode: polybench_pce
-purpose: formal_raw_pce
+purpose: dependency_cache_evaluator_smoke
 
 paths:
   dataset_snapshot: output/SWE-PolyBench/polybench-pce-inputs/20260814_python113_v11_8c7d9485d1d0
   image_manifest: output/SWE-PolyBench/polybench-pce-inputs/20260814_python113_v11_8c7d9485d1d0/images.json
   run_dir: output/SWE-PolyBench/polybench-pce-runs/formal/python113-v11-pce-20260814
+  dependency_cache_manifest: configs/frozen_dependency_caches/polybench_evaluator_dependencies_20260822/manifest.json
+
+dependency_cache:
+  manifest_sha256: 59d4fb29b6fee89c5699680ef021e6f932ca5485eaaf4fb2b1fbbfa9cebaa2bd
+  network_disabled: true
 
 plan:
   model: deepseek-v4-flash
@@ -55,8 +61,8 @@ hpc:
   python_module: lang/Python/3.11
   container_module: tools/Apptainer
   python_bin: python3
-  job_name_prefix: polybench-pce-formal
-  worker_config_path: configs/polybench_pce_hpc_formal.yaml
+  job_name_prefix: polybench-depcache-smoke
+  worker_config_path: configs/archive/polybench_pce/polybench_pce_hpc_dependency_cache_smoke.yaml
 
 evaluator:
   timeout: 1800

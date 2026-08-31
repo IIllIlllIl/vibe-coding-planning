@@ -684,7 +684,7 @@ def test_pcce_supervisor_launch_config_uses_shared_resume_loop(
             str(SERVICE_SCRIPT),
             "start",
             "--launch-config",
-            "configs/polybench_pcce_supervisor_smoke.yaml",
+            "configs/archive/polybench_pcce/polybench_pcce_supervisor_smoke.yaml",
         ],
         cwd=REPO_ROOT,
         capture_output=True,
@@ -697,7 +697,10 @@ def test_pcce_supervisor_launch_config_uses_shared_resume_loop(
     invocation = tmux_log.read_text(encoding="utf-8")
     assert "hpc_resume_loop.py --poll-interval 600" in invocation
     assert "--batch-script scripts/hpc_submit_polybench_pcce.sh" in invocation
-    assert "--config configs/polybench_pcce_hpc_smoke.yaml" in invocation
+    assert (
+        "--config configs/archive/polybench_pcce/polybench_pcce_hpc_smoke.yaml"
+        in invocation
+    )
 
 
 def test_formal_pcce_supervisor_launch_config_uses_formal_seed_runtime(

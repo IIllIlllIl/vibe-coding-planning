@@ -2,7 +2,7 @@ mode: online_planning
 
 paths:
   dataset_snapshot: output/archive/datasets/historical/gepa-pilot-datasets/pilot_6_4_seed42_73df941adb4d
-  initial_rules: configs/gepa_initial_rules_gpt_seed.md
+  initial_rules: configs/archive/offline_gepa/gepa_initial_rules_gpt_seed.md
   run_dir: output/SWE-bench_Verified/gepa-rules/online-planning-pilot
 
 dataset:

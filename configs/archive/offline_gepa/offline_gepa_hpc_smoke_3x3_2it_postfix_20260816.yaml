@@ -83,7 +83,7 @@ hpc:
   container_module: tools/Apptainer
   python_bin: python3
   job_name_prefix: offline-guideline-accuracy-b3x3-2it-smoke-postfix-20260816
-  worker_config_path: configs/offline_gepa_hpc_smoke_3x3_2it_postfix_20260816.yaml
+  worker_config_path: configs/archive/offline_gepa/offline_gepa_hpc_smoke_3x3_2it_postfix_20260816.yaml
 
 prompts:
   checker_system: |

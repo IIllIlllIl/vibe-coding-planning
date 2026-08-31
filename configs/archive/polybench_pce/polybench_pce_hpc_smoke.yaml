@@ -1,18 +1,11 @@
-# Corrective Evaluate-only smoke over the same fixed formal PCE Plan/Code
-# checkpoints. It verifies the loader-compatible v3 dependency snapshot and
-# invokes no LLM.
+# Platform-only two-instance smoke. Its outputs are not formal validation data.
 mode: polybench_pce
-purpose: dependency_cache_evaluator_smoke_v2
+purpose: platform_smoke
 
 paths:
-  dataset_snapshot: output/SWE-PolyBench/polybench-pce-inputs/20260814_python113_v11_8c7d9485d1d0
-  image_manifest: output/SWE-PolyBench/polybench-pce-inputs/20260814_python113_v11_8c7d9485d1d0/images.json
-  run_dir: output/SWE-PolyBench/polybench-pce-runs/formal/python113-v11-pce-20260814
-  dependency_cache_manifest: configs/frozen_dependency_caches/polybench_evaluator_dependencies_smoke_v3_20260823/manifest.json
-
-dependency_cache:
-  manifest_sha256: 42c6cc0e98df42c7c2e66c0689a38a0d0040cd0b3fe30642ead3a5f76b995fbf
-  network_disabled: true
+  dataset_snapshot: output/SWE-PolyBench/polybench-pce-inputs/20260811_smoke2_transformers
+  image_manifest: output/SWE-PolyBench/polybench-pce-inputs/20260811_smoke2_transformers/images.json
+  run_dir: output/SWE-PolyBench/polybench-pce-runs/smoke/hpc-smoke4-walltime125-resume-boundary-20260813
 
 plan:
   model: deepseek-v4-flash
@@ -52,6 +45,8 @@ hpc:
   partition: batch
   cpus_per_task: 1
   mem: 4G
+  # Hard upper bound only. A completed worker exits immediately and releases
+  # its allocation; no final cleanup window is reserved or required.
   time: "02:05:00"
   poll_interval_seconds: 300
   task_output_grace_seconds: 300
@@ -61,8 +56,8 @@ hpc:
   python_module: lang/Python/3.11
   container_module: tools/Apptainer
   python_bin: python3
-  job_name_prefix: polybench-depcache-v2
-  worker_config_path: configs/polybench_pce_hpc_dependency_cache_smoke_v2.yaml
+  job_name_prefix: polybench-pce-walltime125
+  worker_config_path: configs/archive/polybench_pce/polybench_pce_hpc_smoke.yaml
 
 evaluator:
   timeout: 1800

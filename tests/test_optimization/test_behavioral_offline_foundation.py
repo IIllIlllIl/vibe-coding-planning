@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import replace
+import hashlib
 import json
 from pathlib import Path
 import subprocess
@@ -193,7 +194,7 @@ def test_behavioral_checker_output_contract_is_exact() -> None:
 
 def test_behavioral_shell_commands_use_the_short_environment_timeout() -> None:
     config = load_optimization_config(
-        Path("configs/gepa_behavioral_acceptability_smoke_v1_20260830.yaml")
+        Path("configs/gepa_behavioral_acceptability_smoke_v2_20260830.yaml")
     )
 
     assert config.checker.timeout == 1800
@@ -331,7 +332,7 @@ def test_behavioral_smoke_contract_freezes_prompts_and_budgets() -> None:
     path = (
         Path(__file__).parents[2]
         / "configs"
-        / "gepa_behavioral_acceptability_smoke_v1_20260830.yaml"
+        / "gepa_behavioral_acceptability_smoke_v2_20260830.yaml"
     )
     raw = yaml.safe_load(path.read_text(encoding="utf-8"))
     config = load_optimization_config(path, require_api_keys=False)
@@ -374,7 +375,7 @@ def test_behavioral_smoke_prompts_preserve_information_responsibilities() -> Non
     path = (
         Path(__file__).parents[2]
         / "configs"
-        / "gepa_behavioral_acceptability_smoke_v1_20260830.yaml"
+        / "gepa_behavioral_acceptability_smoke_v2_20260830.yaml"
     )
     config = load_optimization_config(path, require_api_keys=False)
     checker = config.checker_prompt
@@ -416,10 +417,12 @@ def test_behavioral_smoke_prompts_preserve_information_responsibilities() -> Non
 def test_behavioral_formal_8it_contract_is_frozen_but_not_launch_authorized() -> None:
     root = Path(__file__).parents[2]
     config_path = (
-        root / "configs/gepa_behavioral_acceptability_formal_8it_v1_20260830.yaml"
+        root
+        / "configs/archive/behavioral_gepa/gepa_behavioral_acceptability_formal_8it_v1_20260830.yaml"
     )
     supervisor_path = (
-        root / "configs/behavioral_gepa_formal_8it_supervisor_v1_20260830.yaml"
+        root
+        / "configs/archive/behavioral_gepa/behavioral_gepa_formal_8it_supervisor_v1_20260830.yaml"
     )
     raw = yaml.safe_load(config_path.read_text(encoding="utf-8"))
     smoke = yaml.safe_load(
@@ -553,7 +556,7 @@ def test_behavioral_hpc_manifests_exclude_supervision_and_post_boundary(
     train, _ = load_behavioral_snapshot(_snapshot(tmp_path / "snapshot"))
     config_path = (
         Path(__file__).parents[2]
-        / "configs/gepa_behavioral_acceptability_smoke_v1_20260830.yaml"
+        / "configs/gepa_behavioral_acceptability_smoke_v2_20260830.yaml"
     )
     config = load_optimization_config(config_path, require_api_keys=False)
     config = replace(config, run_dir=tmp_path / "run")
@@ -587,7 +590,7 @@ def test_behavioral_hpc_scripts_use_no_container_and_one_worker_per_task(
 ) -> None:
     config_path = (
         Path(__file__).parents[2]
-        / "configs/gepa_behavioral_acceptability_smoke_v1_20260830.yaml"
+        / "configs/gepa_behavioral_acceptability_smoke_v2_20260830.yaml"
     )
     config = replace(
         load_optimization_config(config_path, require_api_keys=False),
@@ -621,7 +624,7 @@ def test_behavioral_runner_completes_one_real_gepa_iteration_without_llm(
 ) -> None:
     config_path = (
         Path(__file__).parents[2]
-        / "configs/gepa_behavioral_acceptability_smoke_v1_20260830.yaml"
+        / "configs/gepa_behavioral_acceptability_smoke_v2_20260830.yaml"
     )
     config = load_optimization_config(config_path, require_api_keys=False)
     config = replace(
@@ -662,3 +665,38 @@ def test_behavioral_runner_completes_one_real_gepa_iteration_without_llm(
         )["status"]
         == "completed"
     )
+
+
+def test_frozen_behavioral_formal_candidate_bundle_is_self_consistent() -> None:
+    root = Path(__file__).parents[2]
+    bundle = (
+        root
+        / "configs/frozen_guidelines/behavioral-formal-all-candidates-v1-20260831"
+    )
+    manifest = json.loads((bundle / "manifest.json").read_text(encoding="utf-8"))
+    candidates = json.loads((bundle / "candidates.json").read_text(encoding="utf-8"))
+    metrics = json.loads(
+        (bundle / "candidate_metrics_summary.json").read_text(encoding="utf-8")
+    )["candidates"]
+    progress = json.loads((bundle / "progress.json").read_text(encoding="utf-8"))
+
+    assert len(candidates) == len(metrics) == 6
+    assert progress["status"] == "completed"
+    assert progress["iteration"] == 8
+    assert progress["best_candidate_idx"] == 1
+    assert progress["metric_calls_used"] == 410
+    assert manifest["semantic_sha256"] == (
+        json.loads((bundle / "run_manifest.json").read_text(encoding="utf-8"))[
+            "semantic_sha256"
+        ]
+    )
+
+    for index, (candidate, metric) in enumerate(zip(candidates, metrics, strict=True)):
+        assert metric["candidate_idx"] == index
+        assert hashlib.sha256(candidate["rules"].encode()).hexdigest() == metric[
+            "guideline_sha256"
+        ]
+
+    assert candidates[4]["rules"].encode() == (
+        root / "configs/frozen_guidelines/behavioral-formal-c4-v1-20260831/c4.md"
+    ).read_bytes()

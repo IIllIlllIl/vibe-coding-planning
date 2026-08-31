@@ -1,17 +1,17 @@
-# Evaluate-only smoke over fixed formal PCE Plan/Code checkpoints. It verifies
-# that three formerly network-affected cases can run with a frozen, read-only
-# dependency cache and container networking disabled. It calls no LLM.
+# Corrective Evaluate-only smoke over the same fixed formal PCE Plan/Code
+# checkpoints. It verifies the loader-compatible v3 dependency snapshot and
+# invokes no LLM.
 mode: polybench_pce
-purpose: dependency_cache_evaluator_smoke
+purpose: dependency_cache_evaluator_smoke_v2
 
 paths:
   dataset_snapshot: output/SWE-PolyBench/polybench-pce-inputs/20260814_python113_v11_8c7d9485d1d0
   image_manifest: output/SWE-PolyBench/polybench-pce-inputs/20260814_python113_v11_8c7d9485d1d0/images.json
   run_dir: output/SWE-PolyBench/polybench-pce-runs/formal/python113-v11-pce-20260814
-  dependency_cache_manifest: configs/frozen_dependency_caches/polybench_evaluator_dependencies_20260822/manifest.json
+  dependency_cache_manifest: configs/frozen_dependency_caches/polybench_evaluator_dependencies_smoke_v3_20260823/manifest.json
 
 dependency_cache:
-  manifest_sha256: 59d4fb29b6fee89c5699680ef021e6f932ca5485eaaf4fb2b1fbbfa9cebaa2bd
+  manifest_sha256: 42c6cc0e98df42c7c2e66c0689a38a0d0040cd0b3fe30642ead3a5f76b995fbf
   network_disabled: true
 
 plan:
@@ -61,8 +61,8 @@ hpc:
   python_module: lang/Python/3.11
   container_module: tools/Apptainer
   python_bin: python3
-  job_name_prefix: polybench-depcache-smoke
-  worker_config_path: configs/polybench_pce_hpc_dependency_cache_smoke.yaml
+  job_name_prefix: polybench-depcache-v2
+  worker_config_path: configs/archive/polybench_pce/polybench_pce_hpc_dependency_cache_smoke_v2.yaml
 
 evaluator:
   timeout: 1800

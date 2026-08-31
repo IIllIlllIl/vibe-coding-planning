@@ -379,7 +379,7 @@ and the unavailability evidence SHA-256 is
 Selection depends only on exact-image availability (`cached` or `pulled`), not
 PCE labels, guideline predictions or smoke outcomes. The loader accepts all
 113 unique cases and their strict test metadata. The formal raw-data config is
-`configs/polybench_pce_hpc_formal.yaml`, with the independent run identity
+`configs/archive/polybench_pce/polybench_pce_hpc_formal.yaml`, with the independent run identity
 `python113-v11-pce-20260814`. The submission entry explicitly propagates the
 committed local Git SHA into the remote controller manifest because `.git` is
 not synchronized; malformed or missing explicit identities cannot silently

@@ -3,7 +3,7 @@ paths:
   # controller, Slurm workers, Apptainer repositories, and resume boundary;
   # its scores are not evidence of rule quality.
   dataset_snapshot: output/archive/datasets/historical/gepa-pilot-datasets/pilot_2_2_seed43_e2bdb83dc201
-  initial_rules: configs/gepa_initial_rules_minimal.md
+  initial_rules: configs/archive/offline_gepa/gepa_initial_rules_minimal.md
   run_dir: output/SWE-bench_Verified/gepa-rules/offline-hpc-env-smoke-2x2-1it-20260728
 
 checker:
@@ -74,7 +74,7 @@ hpc:
   container_module: tools/Apptainer
   python_bin: python3
   job_name_prefix: offline-gepa-smoke-20260728
-  worker_config_path: configs/offline_gepa_hpc_smoke_2x2_20260728.yaml
+  worker_config_path: configs/archive/offline_gepa/offline_gepa_hpc_smoke_2x2_20260728.yaml
 
 prompts:
   checker_system: |

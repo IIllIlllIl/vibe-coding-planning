@@ -1,11 +1,10 @@
-# Cumulative eight-iteration extension of the completed post-fix 3 x 3 run.
-# Keep the same run_dir so the supervisor extends the exact two-iteration
-# checkpoint instead of starting a new candidate tree.
+# Two-iteration Offline GEPA platform/behavior smoke for the opt-in 3 x 3
+# train repetition layer. It is not a rule-quality experiment.
 
 paths:
   dataset_snapshot: output/SWE-bench_Verified/verified-round1-gepa-datasets/20260614_482_fdc056ae85df
   initial_guideline: configs/gepa_initial_guideline_minimal.md
-  run_dir: output/SWE-bench_Verified/gepa-rules/offline-plan-guideline-hpc-accuracy-b3x3-2it-smoke-postfix-20260816
+  run_dir: output/SWE-bench_Verified/gepa-rules/offline-plan-guideline-hpc-accuracy-b3x3-2it-smoke-20260815
 
 checker:
   model: deepseek-v4-flash
@@ -32,15 +31,14 @@ reflection:
   timeout: 1800
 
 search:
-  # Full 384/98 snapshot and eight cumulative GEPA proposals after seed
-  # validation. GEPA sees
-  # 98 + 8 * (3 parent + 3 proposal + 98 validation) = 930 logical
+  # Full 384/98 snapshot and two GEPA proposals after seed validation.
+  # GEPA sees 98 + 2 * (3 parent + 3 proposal + 98 validation) = 306 logical
   # metric calls. The train-only repetition layer expands each three-case
   # parent/proposal batch to nine Checker tasks; validation remains single-pass.
   # max_metric_calls is only a fail-safe; max_iterations is primary.
-  max_iterations: 8
-  max_metric_calls: 1200
-  projection_metric_calls: 930
+  max_iterations: 2
+  max_metric_calls: 400
+  projection_metric_calls: 306
   reflection_minibatch_size: 3
   train_case_repetitions: 3
   primary_metric: accuracy
@@ -84,8 +82,8 @@ hpc:
   python_module: lang/Python/3.11
   container_module: tools/Apptainer
   python_bin: python3
-  job_name_prefix: offline-guideline-accuracy-b3x3-8it-extension-20260816
-  worker_config_path: configs/offline_gepa_hpc_3x3_8it_extension_20260816.yaml
+  job_name_prefix: offline-guideline-accuracy-b3x3-2it-smoke-20260815
+  worker_config_path: configs/archive/offline_gepa/offline_gepa_hpc_smoke_3x3_2it_20260815.yaml
 
 prompts:
   checker_system: |

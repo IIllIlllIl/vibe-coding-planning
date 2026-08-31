@@ -11,6 +11,7 @@
     "configs/frozen_swe_chat_cleaning/f66cca95b14caaa4177f7ed5eaa424608dadcffa",
     "configs/frozen_swe_chat_behavioral_formal/swe-chat-behavioral-formal-repository-holdout-v1-20260830.json",
     "output/SWE-chat/behavioral-gepa-datasets/formal-repository-holdout-media-projected-v1-20260830",
+    "configs/frozen_guidelines/behavioral-formal-all-candidates-v1-20260831",
     "output/SWE-bench_Verified/verified-round1-gepa-datasets/20260614_482_fdc056ae85df",
     "output/SWE-bench_Verified/gepa-rules",
     "configs/frozen_guidelines/20260817_seed-b8c1-b8c2-b3x3c3-b3x3c6_0e1f8d7bd876",
@@ -60,6 +61,8 @@
       "operationally_incomplete_validation_predictions": 0,
       "primary_metric": "accuracy",
       "gepa_best_candidate_idx": 1,
+      "local_candidate_bundle": "configs/frozen_guidelines/behavioral-formal-all-candidates-v1-20260831",
+      "local_candidates_sha256": "c6ab1590b9b3c312865abc79218dc8d479aa38ec80aabf9b4cfd060bc7331e30",
       "top_accuracy": 0.5957446808510638,
       "candidate_4_accuracy": 0.5957446808510638,
       "candidate_4_balanced_accuracy": 0.5877016129032258,
@@ -287,7 +290,7 @@
     "continues_same_hpc_search_state": true,
     "resume_under_next_experiment": false,
     "local_mirror": "output/SWE-bench_Verified/gepa-rules/offline-plan-verifier-hpc-balanced-b12-8it-formal-20260731",
-    "seed": "configs/gepa_initial_rules_minimal.md"
+    "seed": "configs/archive/offline_gepa/gepa_initial_rules_minimal.md"
   },
   "archived_remote_offline_smokes": {
     "path": "remote:output/SWE-bench_Verified/gepa-rules/archive/tests/offline-gepa",

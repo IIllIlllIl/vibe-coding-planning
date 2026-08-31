@@ -14,6 +14,11 @@ opencode_logs/
 .local/hpc-supervisor/
 .ulhpc_submit/
 
+# Worktree-local agent instruction files. Project authority belongs in the
+# tracked README/docs surface; keep local Codex/Claude policy out of snapshots.
+/AGENTS.md
+/CLAUDE.md
+
 # Environment variables
 .env
 configs/ulhpc_submit.yaml

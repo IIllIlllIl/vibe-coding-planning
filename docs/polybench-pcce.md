@@ -248,11 +248,11 @@ fingerprint, and starts directly at Evaluate. It never calls Checker, Planner,
 or Code and never overwrites the original CE output. The repair supervisor must
 monitor the repair subdirectory rather than the already-completed parent run;
 the shared resume loop derives that subdirectory from `--resume-evaluator`.
-`configs/polybench_pcce_hpc_smoke.yaml`
+`configs/archive/polybench_pcce/polybench_pcce_hpc_smoke.yaml`
 selects two frozen validation cases and the frozen seed guideline. Its run root
 is below `polybench-pcce-runs/smoke/` and is not formal evidence.
 
-`configs/polybench_pcce_supervisor_smoke.yaml` is the persistent local launch
+`configs/archive/polybench_pcce/polybench_pcce_supervisor_smoke.yaml` is the archived persistent local launch
 identity. Through the shared `hpc_supervisor_service.py` and
 `hpc_resume_loop.py`, it waits while a Controller or worker is active and
 submits the next Controller slice after a completed wave. The supervisor reads
