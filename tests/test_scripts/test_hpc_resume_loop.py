@@ -7,12 +7,24 @@ import subprocess
 import time
 from pathlib import Path
 
-from scripts.hpc_resume_loop import _remote_run_snapshot
+from scripts.hpc_resume_loop import _remote_run_snapshot, _repo_relative
 
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 SCRIPT = REPO_ROOT / "scripts" / "hpc_resume_loop.py"
 SERVICE_SCRIPT = REPO_ROOT / "scripts" / "hpc_supervisor_service.py"
+
+
+def test_repo_relative_preserves_worktree_local_symlink(tmp_path: Path) -> None:
+    linked_target = tmp_path / "shared-output"
+    linked_target.mkdir()
+    link = REPO_ROOT / ".tmp_hpc_smoke" / "linked-output"
+    link.parent.mkdir(parents=True, exist_ok=True)
+    link.symlink_to(linked_target, target_is_directory=True)
+
+    assert _repo_relative(link / "run", "run_dir") == (
+        ".tmp_hpc_smoke/linked-output/run"
+    )
 
 
 def _write_config(root: Path) -> Path:

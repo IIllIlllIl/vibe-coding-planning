@@ -158,8 +158,13 @@ def _resolve_repo_path(raw: str, base: Path = REPO_ROOT) -> Path:
 
 
 def _repo_relative(path: Path, label: str) -> str:
+    # Preserve the lexical worktree path. Focused worktrees intentionally link
+    # large frozen output trees to the main worktree; resolving that symlink
+    # would incorrectly classify an in-repository run identity as external.
+    root = Path(os.path.abspath(REPO_ROOT))
+    candidate = Path(os.path.abspath(path))
     try:
-        return path.resolve().relative_to(REPO_ROOT.resolve()).as_posix()
+        return candidate.relative_to(root).as_posix()
     except ValueError as exc:
         raise SystemExit(f"{label} must be inside the repository: {path}") from exc
 
