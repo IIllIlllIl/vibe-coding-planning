@@ -1,12 +1,13 @@
 {
   "schema_version": 1,
-  "generated_at": "2026-08-30",
+  "generated_at": "2026-08-31",
   "active_method": "behavioral_plan_acceptability_v1",
   "active_offline_method": "offline_gepa_plan_review_guideline",
   "default_agent_scope": [
     "output/README.md",
     "output/catalog.json",
     "docs/swe-chat-data-cleaning.md",
+    "docs/knowledge/behavioral-gepa-initial-findings.md",
     "configs/frozen_swe_chat_cleaning/f66cca95b14caaa4177f7ed5eaa424608dadcffa",
     "configs/frozen_swe_chat_behavioral_formal/swe-chat-behavioral-formal-repository-holdout-v1-20260830.json",
     "output/SWE-chat/behavioral-gepa-datasets/formal-repository-holdout-media-projected-v1-20260830",
@@ -19,7 +20,7 @@
     "output/SWE-PolyBench/polybench-pcce-runs/formal/b8-candidate2-python99-clean-pce-v1-20260826"
   ],
   "active_behavioral_data": {
-    "status": "formal_snapshot_prepared_not_launched",
+    "status": "initial_formal_gepa_and_c4_pc_diagnostic_completed",
     "dataset_id": "SALT-NLP/SWE-chat",
     "revision": "f66cca95b14caaa4177f7ed5eaa424608dadcffa",
     "stage1_manifest": "configs/frozen_swe_chat_cleaning/f66cca95b14caaa4177f7ed5eaa424608dadcffa/stage1-high-agent-explicit-plan-v1.json",
@@ -47,6 +48,37 @@
     "formal_validation_repositories": 29,
     "formal_validation_role": "candidate_selection_not_untouched_holdout",
     "stage_c_v2_status": "completed_flow_smoke_no_effectiveness_claim",
+    "formal_run": {
+      "status": "completed",
+      "identity": "repository-holdout-media-projected-accuracy-b8-8it-v2-20260830",
+      "remote_run": "/scratch/users/twang/vibe-coding-planning/behavioral-gepa-run-state/output/SWE-chat/behavioral-gepa-runs/formal/repository-holdout-media-projected-accuracy-b8-8it-v2-20260830",
+      "completed_iterations": 8,
+      "successful_proposals": 8,
+      "accepted_candidates": 5,
+      "full_validation_candidates": 6,
+      "logical_metric_calls": 410,
+      "operationally_incomplete_validation_predictions": 0,
+      "primary_metric": "accuracy",
+      "gepa_best_candidate_idx": 1,
+      "top_accuracy": 0.5957446808510638,
+      "candidate_4_accuracy": 0.5957446808510638,
+      "candidate_4_balanced_accuracy": 0.5877016129032258,
+      "candidate_4_mcc": 0.16717914239066592,
+      "validation_role": "candidate_selection_not_untouched_holdout"
+    },
+    "polybench_c4_pc_only_diagnostic": {
+      "status": "completed",
+      "selection_manifest": "configs/frozen_polybench_pc_quick/c4-balanced20-v1-20260831.json",
+      "guideline_bundle": "configs/frozen_guidelines/behavioral-formal-c4-v1-20260831",
+      "remote_run": "~/hpc_run_state/vibe-coding-planning/output/SWE-PolyBench/polybench-pc-checker-only-runs/development/c4-balanced20-v1-20260831",
+      "instances": 20,
+      "resolved_labels": 10,
+      "unresolved_labels": 10,
+      "operationally_incomplete": 0,
+      "c4_accuracy": 0.65,
+      "seed_accuracy_on_same_cases": 0.6,
+      "classification": "development_external_diagnostic_not_untouched_holdout"
+    },
     "labels_assigned": true,
     "score_usable": true
   },

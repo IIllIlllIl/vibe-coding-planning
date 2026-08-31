@@ -72,12 +72,17 @@ Current decisions are:
   across eight repositories and 47 validation cases across 29 repositories.
   Formal validation is candidate-selection data, not an untouched holdout.
 - The media-projected formal accuracy/batch-eight/eight-iteration v2 config and
-  snapshot supersede prepared v1 before launch. They omit structured image
-  base64 only from Checker text while preserving hashed descriptors and the
-  frozen raw authority. Launch remains explicitly unauthorized until the two
-  projected context extrema pass a separate Checker smoke and
-  the user approves the frozen 551-call projection, 700-call fail-safe, run
-  identity, stopping conditions, and acceptance criteria.
+  snapshot superseded v1 before launch. They omit structured image base64 only
+  from Checker text while preserving hashed descriptors and the frozen raw
+  authority. The extrema smoke passed and the authorized formal run completed
+  all eight proposal iterations with no incomplete validation prediction.
+- Treat candidate 1 as the GEPA primary-metric winner by first-maximum
+  tie-breaking, not as an unqualified overall winner. Candidate 4 tied its
+  accuracy and was selected for the first external diagnostic because its
+  balanced accuracy, MCC, and class-recall balance were stronger.
+- Treat the completed 20-case C4 PolyBench PC-only comparison as a directional
+  development diagnostic. It is neither an untouched holdout nor evidence of
+  downstream intervention benefit.
 
 ## Open design issues
 
@@ -85,12 +90,16 @@ Current decisions are:
    changing the 84 observed DO_NOT_ACCEPT labels.
 2. Define treatment of rejection/revision feedback, later Plans, silence,
    topic change, and implementation behavior in controlled Reflection evidence.
-3. Obtain explicit launch approval for the prepared formal 8-iteration run;
-   do not convert its validation data into an untouched-generalization claim.
+3. Predeclare how multiple validation metrics select one guideline when
+   accuracy ties or conflicts with class balance.
 4. Decide what independent dataset or future collection can serve as a final
    untouched evaluation after GEPA candidate selection.
 5. Decide whether no-repository or stricter-proxy subsets are useful ablations
    after the primary formal run, without changing the primary contract.
+6. Fix and regression-test the PolyBench PC-only CLI summary path: the
+   controller writes a complete result, then `run_polybench_pcce_hpc.py`
+   currently exits nonzero by reading the full-PCCE-only `method_outcomes`
+   field.
 
 ## Known validity constraints
 

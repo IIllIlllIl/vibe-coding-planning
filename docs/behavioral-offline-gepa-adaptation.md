@@ -1,7 +1,7 @@
 # Behavioral Offline GEPA Adaptation Boundary
 
-> Status: Stage C v2 completed; media-projected formal 131-case snapshot and
-> eight-iteration v2 contract prepared but not launch-authorized
+> Status: Stage C v2 and the first media-projected formal eight-iteration run
+> completed
 >
 > Scope: information flow and minimum project-side changes for Behavioral Plan
 > Acceptability v1
@@ -17,8 +17,8 @@ The deployment-time task is `ACCEPT` versus `DO_NOT_ACCEPT` for P1. The
 repository is an explicitly approximate pre-session proxy. Captured pre-P1
 tool results are authoritative when repository content differs. The accepted
 development-smoke Checker and Reflection wording is frozen in
-`configs/gepa_behavioral_acceptability_smoke_v2_20260830.yaml`; the prepared
-formal v2 configuration reuses those prompts byte-for-byte.
+`configs/gepa_behavioral_acceptability_smoke_v2_20260830.yaml`; the completed
+formal v2 configuration reused those prompts byte-for-byte.
 
 The initial candidate guideline is the deliberately neutral one-sentence file
 `configs/gepa_behavioral_acceptability_neutral_seed.md`. It supplies no
@@ -59,7 +59,7 @@ remain failures and are not coerced into a behavioral decision.
 
 ### Reflection-only evidence
 
-- the expected behavioral decision and candidate score;
+- the observed behavioral decision and candidate score;
 - the complete Checker output and Checker trajectory;
 - the matched P1 approval/rejection result;
 - the following developer prompt and other non-thinking post-boundary events;
@@ -172,9 +172,9 @@ through the retained GEPA runner semantics.
 Accuracy and balanced-accuracy support can be reused mechanically after the
 positive class is defined as ACCEPT. The balanced 8-case development smoke uses
 accuracy as its primary mechanical score and balanced accuracy as a diagnostic.
-The prepared formal v1 run keeps accuracy as its search metric and requires
-balanced accuracy, MCC, both-class precision/recall, confusion matrix, pass
-rate, and incomplete count as diagnostics.
+The formal v2 run kept accuracy as its search metric and reported balanced
+accuracy, MCC, both-class precision/recall, confusion matrix, pass rate, and
+incomplete count as diagnostics.
 
 ### Reflection evidence writer
 
@@ -241,9 +241,19 @@ untouched final holdout.
 Launch preflight found structured PNG base64 embedded in the Checker text for
 three cases. The superseding formal v2 snapshot omits only those binary payloads
 while retaining deterministic media descriptors and the unchanged frozen raw
-authority. No prompt or GEPA search setting changed. A two-extrema Checker
-smoke remains required because the projected longest validation context exceeds
-the largest prompt exercised in Stage C.
+authority. No prompt or GEPA search setting changed. The two-extrema Checker
+smoke then passed before the formal run was authorized.
+
+### Completed formal run
+
+The formal v2 run completed eight proposal iterations on 84 train and 47
+validation cases with 410 logical metric calls, eight successful Reflection
+proposals, five accepted candidates, and no operationally incomplete
+validation prediction. Candidate 1 is the recorded accuracy winner by
+first-maximum tie-breaking; candidate 4 tied its 59.6% accuracy and had better
+balanced secondary metrics. Full results and interpretation belong to
+`knowledge/behavioral-gepa-initial-findings.md`, not this implementation
+contract.
 
 ## Components retained unchanged
 

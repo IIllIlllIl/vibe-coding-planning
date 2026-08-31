@@ -12,6 +12,8 @@ v1. Read, in order:
 | `docs/branch-scope.md` | Active versus historical path boundary |
 | `project_issues.md` | Current decisions and unresolved methodological risks; not progress tracking |
 | `docs/swe-chat-data-cleaning.md` | Frozen Behavioral selection/slicing policy, source-quality findings, and evidence boundary |
+| `docs/behavioral-offline-gepa-adaptation.md` | Implemented Behavioral information flow and runtime boundary |
+| `docs/knowledge/behavioral-gepa-initial-findings.md` | Frozen first Behavioral search and C4 external-diagnostic findings |
 | `docs/offline-gepa.md` | Existing Offline Checker, score, Reflection, search, and resume contract |
 | `docs/knowledge/offline-pcce-stage-findings.md` | Frozen Seed/C2 PolyBench result and next-design requirements |
 | `docs/polybench-pcce.md` | Implemented PCCE platform semantics |

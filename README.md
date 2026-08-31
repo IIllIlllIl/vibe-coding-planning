@@ -31,6 +31,13 @@ and GEPA Reflection only.
 - All 131 repository-ready cases have a frozen, explicitly approximate
   pre-session temporal repository proxy: 67 from a retained recorded branch
   and 64 from an ordinary source-ref fallback.
+- The first formal Behavioral GEPA run completed eight proposal iterations on
+  the repository-disjoint 84-train/47-validation split. Candidates 1 and 4
+  tied at 59.6% validation accuracy; candidate 4 had the stronger balanced
+  secondary metrics and was selected for the first external diagnostic.
+- The 20-case balanced PolyBench PC-only diagnostic completed without an
+  incomplete decision. C4 scored 65% versus the historical Seed's 60%, a
+  directional small-sample result rather than a generalization claim.
 
 These are frozen stage results, not a live progress log. Current unresolved
 methodological decisions are maintained only in `project_issues.md`. Launching
@@ -57,7 +64,9 @@ Read these files in order:
    staged development-smoke contract.
 7. [`docs/knowledge/offline-pcce-stage-findings.md`](docs/knowledge/offline-pcce-stage-findings.md)
    — frozen first-stage PolyBench findings.
-8. [`docs/polybench-pcce.md`](docs/polybench-pcce.md) and
+8. [`docs/knowledge/behavioral-gepa-initial-findings.md`](docs/knowledge/behavioral-gepa-initial-findings.md)
+   — frozen first Behavioral search and C4 external-diagnostic findings.
+9. [`docs/polybench-pcce.md`](docs/polybench-pcce.md) and
    [`docs/offline-polybench-validation.md`](docs/offline-polybench-validation.md)
    — implemented PCE/PCCE and external-evidence boundaries.
 
@@ -76,8 +85,9 @@ The current implementation surface is:
   `tests/test_optimization/test_behavioral_offline_foundation.py` for the
   Behavioral schema, acceptability Adapter, evidence projection, and disposable
   temporal-proxy checkout foundation;
-- `configs/gepa_behavioral_acceptability_smoke_v1_20260830.yaml` for the
-  non-runnable Stage-A prompt, fixture, model, budget, and acceptance contract.
+- `configs/gepa_behavioral_acceptability_smoke_v2_20260830.yaml` and
+  `configs/gepa_behavioral_acceptability_formal_8it_v2_20260830.yaml` for the
+  completed smoke and formal Behavioral method identities.
 
 ## Historical paths
 

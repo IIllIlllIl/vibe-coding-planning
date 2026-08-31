@@ -1,7 +1,7 @@
 # Documentation Index
 
 > Authority: navigation policy for project documentation
-> Last reviewed: 2026-08-29
+> Last reviewed: 2026-08-31
 
 Agents should read the smallest authoritative set that answers the task. Do not
 search `docs/archive/` unless the user explicitly requests historical audit,
@@ -19,7 +19,7 @@ Read in this order:
 | [`offline-gepa.md`](offline-gepa.md) | Offline GEPA Checker boundary, metric, stopping, artifacts, and resume contract |
 | [`swe-chat-preheat.md`](swe-chat-preheat.md) | Behavioral v1 frozen dataset/repository acquisition, identity, verification, and login-preheat boundary |
 | [`swe-chat-data-cleaning.md`](swe-chat-data-cleaning.md) | Behavioral v1 selection/slicing policy, frozen funnel, source-quality audit, recovery pools, and evidence boundary |
-| [`behavioral-offline-gepa-adaptation.md`](behavioral-offline-gepa-adaptation.md) | Implemented Behavioral information-flow foundation, remaining Offline runtime wiring, and deferred prompts |
+| [`behavioral-offline-gepa-adaptation.md`](behavioral-offline-gepa-adaptation.md) | Implemented Behavioral information flow, runtime boundary, and completed smoke/formal flow |
 | [`offline-polybench-validation.md`](offline-polybench-validation.md) | Current PolyBench-199 image preparation, PCE regeneration, exact-image provenance, and guideline-only generalization boundary |
 | [`polybench-pcce.md`](polybench-pcce.md) | Current paired PolyBench Plan-Check-Code-Evaluate deployment evaluation, including accepted smoke, formal seed run, review, and workflow retry semantics |
 | [`hpc-submit.md`](hpc-submit.md) | Behavioral-branch credential, preheat, retained Slurm, and FairShare safety |
@@ -38,6 +38,7 @@ offline GEPA, and production failures:
 | [`knowledge/cleanup-lifecycle.md`](knowledge/cleanup-lifecycle.md) | Changing repository/SIF/workspace cleanup |
 | [`knowledge/methodology-lessons.md`](knowledge/methodology-lessons.md) | Comparing Online GEPA with PCT, PCC, or offline GEPA |
 | [`knowledge/offline-pcce-stage-findings.md`](knowledge/offline-pcce-stage-findings.md) | Designing the next Offline guideline evaluation from the completed clean PolyBench Seed/C2 PCCE evidence |
+| [`knowledge/behavioral-gepa-initial-findings.md`](knowledge/behavioral-gepa-initial-findings.md) | Designing the next experiment from the completed first Behavioral search and C4 PolyBench PC-only diagnostic |
 
 ## Reference
 

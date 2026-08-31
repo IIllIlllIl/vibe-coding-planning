@@ -96,6 +96,19 @@ resolved value, test patch, test selectors, test command, source row, and PCE
 outcome identity. Labels remain controller-side for reporting. Existing
 `full_pcce` configs retain their original three-review and CE semantics.
 
+The first `checker_only` diagnostic completed on the frozen balanced 20-case
+development subset with 20/20 valid C4 decisions and no incomplete outcome.
+C4 scored 13/20 versus the historical Seed's 12/20 on the same cases. This is
+a small directional classification diagnostic; it is not a PCCE result and
+supports no implementation-benefit or untouched-generalization claim. Stable
+interpretation belongs to
+`knowledge/behavioral-gepa-initial-findings.md`.
+
+The result files are complete, but the collection wrapper currently exits
+nonzero after writing them because `run_polybench_pcce_hpc.py` prints the
+full-PCCE-only `method_outcomes` field. This is an operational CLI summary bug,
+not an incomplete Checker outcome; it must be fixed before the mode is reused.
+
 The Planner receives the issue, previous plan, and revision feedback. It does
 not receive the Checker's hidden reasoning or full trajectory. This preserves
 the actionable intervention while avoiding an accidental side channel through

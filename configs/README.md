@@ -21,12 +21,12 @@ tracked does not authorize its execution.
 | `frozen_swe_chat_behavioral_formal/` | Complete 131-case repository/duplicate-component split authority: 84 train and 47 validation with no repository overlap. |
 | `gepa_behavioral_acceptability_formal_8it_v1_20260830.yaml` | Superseded pre-launch contract retained for audit; its snapshot rendered image base64 into Checker text and must not be launched. |
 | `behavioral_gepa_formal_8it_supervisor_v1_20260830.yaml` | Superseded non-submitting supervisor retained with formal v1. |
-| `gepa_behavioral_acceptability_formal_8it_v2_20260830.yaml` | Authorized formal contract using the media-projected snapshot; prompts/search remain unchanged after the unlabeled extreme-context preflight. |
-| `behavioral_gepa_formal_8it_supervisor_v2_20260830.yaml` | Authorized v2 supervisor with bounded resumable submission. |
+| `gepa_behavioral_acceptability_formal_8it_v2_20260830.yaml` | Completed formal contract using the media-projected snapshot; immutable run identity, not a relaunch default. Its opening pre-launch comment is retained provenance and is superseded by `experiment_contract.status`. |
+| `behavioral_gepa_formal_8it_supervisor_v2_20260830.yaml` | Completed v2 supervisor identity; provenance only. |
 | `frozen_polybench_pc_quick/c4-balanced20-v1-20260831.json` | Frozen balanced 20-case external diagnostic selection, including conservative workflow/noise exclusions and deterministic sampling identity. |
 | `frozen_guidelines/behavioral-formal-c4-v1-20260831/` | Exact Behavioral formal candidate 4 text and source identity for the PolyBench diagnostic. |
-| `polybench_pc_checker_only_c4_balanced20_v1_20260831.yaml` | Prepared one-review C4 PolyBench diagnostic; it cannot enter Planner, Code, or Evaluate. |
-| `polybench_pc_checker_only_c4_balanced20_supervisor_v1_20260831.yaml` | Persistent bounded supervisor for that prepared diagnostic; presence does not authorize launch. |
+| `polybench_pc_checker_only_c4_balanced20_v1_20260831.yaml` | Completed one-review C4 PolyBench diagnostic; it cannot enter Planner, Code, or Evaluate. |
+| `polybench_pc_checker_only_c4_balanced20_supervisor_v1_20260831.yaml` | Completed bounded supervisor identity; provenance only. |
 | `frozen_swe_chat_cleaning/f66cca95b14caaa4177f7ed5eaa424608dadcffa/` | Frozen Stage-1 decisions, compact Stage-2 manifest for 141 labeled first-Plan slices, additive repository-availability cleaning yielding 131 cases, exact-reconstruction audit summary, and 131-case temporal-proxy manifest. |
 
 Acquisition stops at source materialization. Stage 1 selects whole trajectories;
@@ -35,8 +35,8 @@ Reflection-only evidence. The additive repository-availability manifest freezes
 behavioral labels and the 131-case feasible universe. Stage C v2 completed the
 ordered prompt/runtime smoke. The formal split and run semantics are frozen.
 Formal v1 was superseded before launch after its context census found embedded
-image bytes; v2 binds the deterministic media-projected snapshot and is
-launch-authorized. The reconstruction audit verifies an exact parent
+image bytes; v2 binds the deterministic media-projected snapshot and completed
+the authorized eight-iteration run. The reconstruction audit verifies an exact parent
 candidate for only two ACCEPT cases. The separate temporal-proxy manifest gives
 all 131 cases an explicitly approximate pre-session source checkout without
 reinterpreting that negative audit.
@@ -71,7 +71,7 @@ must not be edited or relaunched in place.
 Archive paths are non-authoritative. Prefer `git show main:<path>` when exact
 pre-branch paths or bytes are required.
 
-Any Behavioral launch needs frozen inputs, an explicit split, a run identity,
+Any new Behavioral launch needs frozen inputs, an explicit split, a run identity,
 model/runtime identity, budget, stopping condition, acceptance criteria,
-raw-evidence policy, and user authorization. The prepared formal files satisfy
-the mechanical prerequisites but are not that authorization.
+raw-evidence policy, and user authorization. Completed configs are provenance,
+not authorization to resume, extend, or relaunch them.
