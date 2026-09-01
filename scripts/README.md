@@ -53,11 +53,16 @@ cleaning authority is `docs/swe-chat-data-cleaning.md`.
 - `tools/freeze_swe_verified_pce_source.py` freezes the fixed-revision complete
   SWE-Verified source rows; `tools/freeze_swe_verified_sif_manifest.py` audits
   selected existing SIF bytes and verifies each official base commit.
+- `tools/freeze_swe_verified_pce_selection.py` deterministically freezes the
+  repository-covering quick-validation membership without using Plan or
+  execution outcomes.
 - `hpc_submit_swe_verified_pce.sh` / `run_swe_verified_pce_hpc.py` and
   `hpc_submit_swe_verified_pcce.sh` / `run_swe_verified_pcce_hpc.py` are the
   additive current-prompt SWE-Verified evaluation entry points. The PCE smoke
   reuses `hpc_resume_loop.py` and `hpc_supervisor_service.py` through its
   bounded launch config; tracked configs are not authorization by themselves.
+  The quick50 formal config uses the same entry point only after every frozen
+  member has an audited selection-scoped SIF record.
 - SIF and dependency preheaters remain because frozen PolyBench evidence and
   evaluator reproduction still reach them. They are not part of SWE-chat
   acquisition.

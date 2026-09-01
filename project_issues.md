@@ -100,12 +100,11 @@ Current decisions are:
    controller writes a complete result, then `run_polybench_pcce_hpc.py`
    currently exits nonzero by reading the full-PCCE-only `method_outcomes`
    field.
-7. Predeclare the approximately 50-case SWE-Verified quick-validation sampling
-   policy and membership without reading new PCE/PCCE outcomes. Exclude the two
-   development-smoke cases and do not call the result an untouched holdout.
-8. Audit the selected Iris SIF bytes and verify every official base commit.
-   Retrospective hashes must remain labeled retrospective rather than being
-   upgraded to pull-time OCI provenance.
+7. Acquire the frozen quick50 member `pydata__xarray-6744`, then freeze the
+   50-record selection-scoped Iris SIF manifest. The other 49 selected SIFs and
+   official base commits passed the 2026-09-01 read-only audit. Acquisition
+   failure must not change membership, and retrospective hashes must remain
+   labeled retrospective rather than pull-time OCI provenance.
 
 ## Known validity constraints
 

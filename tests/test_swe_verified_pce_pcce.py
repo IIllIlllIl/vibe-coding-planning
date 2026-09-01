@@ -23,6 +23,7 @@ from src.swe_verified_pce.evaluator import _apply_patch, _terminal
 from src.swe_verified_pce.hpc_executor import recover_exhausted_evaluator_timeout
 from src.swe_verified_pce.models import SWEVerifiedPCECase
 from src.swe_verified_pce.runner import checkpoint_identity
+from scripts.tools.freeze_swe_verified_pce_selection import freeze_selection
 
 
 def _stable(value: object) -> str:
@@ -350,6 +351,114 @@ def test_tracked_smoke_configs_bind_two_case_selection_and_phase_policies() -> N
     )
     assert arguments[arguments.index("--config") + 1] == (
         "configs/swe_verified_pce_smoke_v1.yaml"
+    )
+    assert "--require-clean-worktree" in arguments
+    assert "--submit" in arguments
+
+
+def test_quick_selection_is_deterministic_and_covers_repositories(
+    tmp_path: Path,
+) -> None:
+    root = tmp_path / "source"
+    root.mkdir()
+    rows = []
+    for repo, count in (("a/one", 3), ("b/two", 2), ("c/three", 1)):
+        for index in range(count):
+            row = _row(f"{repo.replace('/', '__')}-{index}")
+            row["repo"] = repo
+            rows.append(
+                {
+                    "instance_id": row["instance_id"],
+                    "row_sha256": hashlib.sha256(_stable(row).encode()).hexdigest(),
+                    "source_row": row,
+                }
+            )
+    instances = root / "instances.jsonl"
+    instances.write_text("".join(_stable(row) + "\n" for row in rows), encoding="utf-8")
+    manifest = {
+        "dataset": "SWE-bench/SWE-bench_Verified",
+        "revision": "fixed",
+        "complete": True,
+        "provisional": False,
+        "instances": len(rows),
+        "instances_file": instances.name,
+        "instances_sha256": file_sha256(instances),
+    }
+    (root / "manifest.json").write_text(json.dumps(manifest), encoding="utf-8")
+
+    arguments = {
+        "source_snapshot": root,
+        "selection_id": "fixture",
+        "seed": "fixed-seed",
+        "size": 4,
+        "excluded_instance_ids": {"a__one-0"},
+    }
+    first = freeze_selection(**arguments)
+    second = freeze_selection(**arguments)
+
+    assert first == second
+    assert len(first["selected_instance_ids"]) == 4
+    assert "a__one-0" not in first["selected_instance_ids"]
+    assert set(first["repository_distribution"]["selected"]) == {
+        "a/one",
+        "b/two",
+        "c/three",
+    }
+    assert [case["selection_role"] for case in first["selected_cases"]].count(
+        "repository_coverage"
+    ) == 3
+
+
+def test_tracked_quick50_pce_contract_is_frozen() -> None:
+    config = load_swe_verified_pce_config(
+        "configs/swe_verified_pce_quick50_v1_20260901.yaml",
+        require_api_keys=False,
+    )
+    selection = json.loads(config.selection_manifest.read_text(encoding="utf-8"))
+    smoke = json.loads(
+        Path(
+            "configs/frozen_swe_verified_smoke/swe-verified-development-smoke-v1.json"
+        ).read_text(encoding="utf-8")
+    )
+
+    assert len(config.instance_ids) == 50
+    assert len(set(config.instance_ids)) == 50
+    assert selection["source_instance_count"] == 500
+    assert selection["eligible_instance_count"] == 498
+    assert set(config.instance_ids).isdisjoint(smoke["selected_instance_ids"])
+    assert len(selection["repository_distribution"]["selected"]) == 12
+    assert selection["selection_policy"] == {
+        "membership_substitution_on_acquisition_failure": False,
+        "name": "one_per_repository_then_global_sha256_rank",
+        "outcome_independent": True,
+        "repository_coverage_count": 12,
+        "seed": "swe-verified-quick50-repository-coverage-v1-20260901",
+        "target_size": 50,
+        "uses_plan_or_pce_pcce_outcomes": False,
+    }
+    assert config.run_dir.name == "current-prompt-quick50-v1-20260901"
+    assert config.plan.max_steps == 0
+    assert config.plan.cost_limit == 0.0
+    assert config.plan.max_attempts == 3
+    assert config.code.max_steps == 0
+    assert config.code.cost_limit == 0.0
+    assert config.code.max_attempts == 3
+    assert config.hpc.cpus_per_task == 1
+    assert config.hpc.mem == "4G"
+    assert config.hpc.time == "00:45:00"
+    assert config.hpc.max_task_attempts == 3
+
+    supervisor = yaml.safe_load(
+        Path("configs/swe_verified_pce_quick50_supervisor_v1_20260901.yaml").read_text(
+            encoding="utf-8"
+        )
+    )
+    arguments = supervisor["arguments"]
+    assert arguments[arguments.index("--max-runs") + 1] == "24"
+    assert arguments[arguments.index("--poll-interval") + 1] == "300"
+    assert arguments[arguments.index("--slice-time") + 1] == "00:10:00"
+    assert arguments[arguments.index("--config") + 1] == (
+        "configs/swe_verified_pce_quick50_v1_20260901.yaml"
     )
     assert "--require-clean-worktree" in arguments
     assert "--submit" in arguments

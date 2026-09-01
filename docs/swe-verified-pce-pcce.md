@@ -34,10 +34,26 @@ that provenance is declared; it is not represented as an original pull-time
 OCI attestation.
 
 The two-case development smoke selection is frozen in
-`configs/frozen_swe_verified_smoke/`. Both cases are excluded from the future
-quick validation and from any untouched holdout. The planned approximately
-50-case quick validation membership is not yet frozen and must be selected
-without reading new PCE or PCCE outcomes.
+`configs/frozen_swe_verified_smoke/`. Both cases are excluded from quick
+validation and from any untouched holdout.
+
+The 50-case quick-validation membership is frozen in
+`configs/frozen_swe_verified_quick_validation/`. Starting from all 500 official
+rows, the deterministic policy excludes the two smoke cases, chooses the
+lowest fixed-seed hash in each of the 12 repositories, then fills the remaining
+38 positions by the same global hash rank. It reads no Plan, PCE, or PCCE
+outcome. This deliberately coverage-oriented sample is a bounded development
+diagnostic, not a prevalence-exact random sample or untouched holdout. The
+same exact 50 cases must be used by PCE, neutral-seed PCCE, and C4 PCCE;
+acquisition failure may not replace a selected case.
+
+The formal PCE runtime is prepared in
+`configs/swe_verified_pce_quick50_v1_20260901.yaml`, with its bounded
+supervisor entry alongside it. A read-only Iris audit on 2026-09-01 found 49
+selected SIFs and verified all 49 corresponding official base commits. The
+selected `pydata__xarray-6744` SIF was absent. Formal launch remains blocked
+until that fixed image is acquired and a 50-record selection-scoped image
+manifest is frozen; this missing prerequisite does not alter membership.
 
 ### PCE development smoke contract
 
@@ -137,9 +153,11 @@ The required order is:
 2. audit the two selected SIFs and base commits on Iris;
 3. explicitly authorized two-case PCE smoke;
 4. paired neutral-seed and C4 PCCE smoke using those exact new PCE plans;
-5. freeze an outcome-independent quick-validation selection of approximately
-   50 different cases, excluding all smoke cases;
-6. run paired PCE, seed PCCE, and C4 PCCE under new immutable run identities.
+5. freeze an outcome-independent 50-case quick-validation selection excluding
+   all smoke cases (complete);
+6. acquire and audit every selected SIF, then freeze the selection-scoped image
+   manifest (49/50 currently available and verified);
+7. run paired PCE, seed PCCE, and C4 PCCE under new immutable run identities.
 
 Smoke checks pipeline correctness only. The quick validation is a bounded
 generalization diagnostic, not an untouched final holdout.
