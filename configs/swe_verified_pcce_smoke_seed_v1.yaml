@@ -1,0 +1,43 @@
+mode: swe_verified_pcce
+purpose: development_smoke_paired_seed
+
+paths:
+  source_snapshot: output/SWE-bench_Verified/swe-verified-pce-inputs/20260831_verified500_91aa3ed5
+  image_manifest: output/SWE-bench_Verified/swe-verified-pce-inputs/20260831_verified500_91aa3ed5/images.json
+  selection_manifest: configs/frozen_swe_verified_smoke/swe-verified-development-smoke-v1.json
+  pce_outcomes: output/SWE-bench_Verified/swe-verified-pce-runs/smoke/current-prompt-v1-20260901/raw_pce_outcomes.jsonl
+  guideline: configs/frozen_guidelines/behavioral-neutral-seed-v1/seed.md
+  pce_runtime_config: configs/swe_verified_pce_smoke_v1.yaml
+  checker_runtime_config: configs/gepa_verified_rules.yaml
+  prompt_source_config: configs/polybench_pcce_hpc_formal_seed_clean_20260826.yaml
+  run_dir: output/SWE-bench_Verified/swe-verified-pcce-runs/smoke/neutral-seed-v1
+
+pcce:
+  guideline_label: seed
+  max_review_rejections: 3
+
+checker:
+  max_steps: 0
+  cost_limit: 0.0
+  agent_timeout_seconds: 0
+  max_attempts: 3
+
+hpc:
+  submit: true
+  partition: batch
+  cpus_per_task: 1
+  mem: 4G
+  poll_interval_seconds: 300
+  task_output_grace_seconds: 300
+  missing_task_grace_seconds: 600
+  max_task_attempts: 3
+  remote_env_file: ~/.config/vibe-coding-planning/deepseek.env
+  python_module: lang/Python/3.11
+  container_module: tools/Apptainer
+  python_bin: python3
+  job_name_prefix: swe-verified-pcce-seed-smoke-v1
+  worker_config_path: configs/swe_verified_pcce_smoke_seed_v1.yaml
+  phase_times:
+    first_review: "00:45:00"
+    revision_review: "00:45:00"
+    ce: "00:45:00"

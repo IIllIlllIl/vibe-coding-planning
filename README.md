@@ -67,6 +67,9 @@ Read these files in order:
 8. [`docs/polybench-pcce.md`](docs/polybench-pcce.md) and
    [`docs/offline-polybench-validation.md`](docs/offline-polybench-validation.md)
    — implemented PCE/PCCE and external-evidence boundaries.
+9. [`docs/swe-verified-pce-pcce.md`](docs/swe-verified-pce-pcce.md) — additive
+   SWE-Verified PCE/PCCE generalization workflow, phase isolation, evaluator
+   semantics, and smoke-to-quick-validation order.
 
 The current implementation surface is:
 
@@ -75,6 +78,8 @@ The current implementation surface is:
 - `src/polybench_pce/` and `src/polybench_pcce/` for the frozen external
   execution/evaluation platform;
 - `src/offline_check_only/` for additive fixed-guideline evaluation;
+- `src/swe_verified_pce/` and `src/swe_verified_pcce/` for independent current-
+  prompt SWE-Verified PCE and paired Seed/C4 PCCE evaluation;
 - `third_party/gepa/` for the existing search implementation, which should not
   be changed without a concrete experimental need;
 - `tests/test_optimization/test_offline_gepa_regression.py` for the focused,

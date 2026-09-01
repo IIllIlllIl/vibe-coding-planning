@@ -1,0 +1,11 @@
+{
+  "schema_version": 1,
+  "bundle_id": "behavioral-neutral-seed-v1",
+  "candidate_index": 0,
+  "guideline_file": "seed.md",
+  "guideline_file_sha256": "c778684da91184bb181a5cf5af40b10d4955c732c080d0007da92aed1a4716da",
+  "source_guideline_sha256": "c34f503ee90dca908d47bf2b112ab1393044762a3d667cb63e2f90308fb99f75",
+  "source_bundle": "configs/frozen_guidelines/behavioral-formal-all-candidates-v1-20260831",
+  "source_artifact": "candidates.json",
+  "source_field": "[0].rules"
+}

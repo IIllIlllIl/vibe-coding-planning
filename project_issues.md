@@ -100,6 +100,12 @@ Current decisions are:
    controller writes a complete result, then `run_polybench_pcce_hpc.py`
    currently exits nonzero by reading the full-PCCE-only `method_outcomes`
    field.
+7. Predeclare the approximately 50-case SWE-Verified quick-validation sampling
+   policy and membership without reading new PCE/PCCE outcomes. Exclude the two
+   development-smoke cases and do not call the result an untouched holdout.
+8. Audit the selected Iris SIF bytes and verify every official base commit.
+   Retrospective hashes must remain labeled retrospective rather than being
+   upgraded to pull-time OCI provenance.
 
 ## Known validity constraints
 
@@ -113,3 +119,8 @@ Current decisions are:
 - PolyBench findings may motivate the new design but cannot support a new
   untouched-generalization claim without a different final holdout.
 - Operationally incomplete outcomes must not be coerced into research labels.
+- SWE-Verified has no process-level Code or evaluator deadline. Slurm owns the
+  45-minute worker walltime. Three evidenced Slurm timeouts after a durable
+  Evaluate-start marker become `unknown`; other exhaustion remains operational.
+  Paired comparison uses the PCE/Seed/C4 non-unknown intersection while
+  retaining the full predeclared cohort and exclusion accounting.

@@ -22,6 +22,7 @@ Read in this order:
 | [`behavioral-offline-gepa-adaptation.md`](behavioral-offline-gepa-adaptation.md) | Implemented Behavioral information flow, runtime boundary, and completed smoke/formal flow |
 | [`offline-polybench-validation.md`](offline-polybench-validation.md) | Current PolyBench-199 image preparation, PCE regeneration, exact-image provenance, and guideline-only generalization boundary |
 | [`polybench-pcce.md`](polybench-pcce.md) | Current paired PolyBench Plan-Check-Code-Evaluate deployment evaluation, including accepted smoke, formal seed run, review, and workflow retry semantics |
+| [`swe-verified-pce-pcce.md`](swe-verified-pce-pcce.md) | Independent current-prompt SWE-Verified PCE/PCCE data boundary, evaluator semantics, frozen smoke, and planned quick validation |
 | [`hpc-submit.md`](hpc-submit.md) | Behavioral-branch credential, preheat, retained Slurm, and FairShare safety |
 | [`../configs/README.md`](../configs/README.md) | Runtime-versus-launch configuration ownership and active config index |
 

@@ -94,6 +94,9 @@ not worker-internal parallelism.
   `scripts/hpc_supervisor_service.py` with a new approved run identity.
 - PolyBench PCE/PCCE: `scripts/hpc_submit_polybench_pce.sh` and
   `scripts/hpc_submit_polybench_pcce.sh`.
+- SWE-Verified PCE/PCCE: `scripts/hpc_submit_swe_verified_pce.sh` and
+  `scripts/hpc_submit_swe_verified_pcce.sh`; their selection-scoped SIF
+  manifest must be frozen and base-commit verified before submission.
 - Read-only status: `scripts/hpc_run_status.py`.
 - SWE-chat acquisition: `scripts/tools/login_swe_chat_preheat.py` and
   `scripts/swe_chat_preheat_service.py`.

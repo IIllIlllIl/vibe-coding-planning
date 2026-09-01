@@ -50,6 +50,14 @@ cleaning authority is `docs/swe-chat-data-cleaning.md`.
   emits classification reports without Planner, Code, or Evaluate phases.
 - `hpc_run_status.py` is the read-only status entry for retained persistent
   workflows.
+- `tools/freeze_swe_verified_pce_source.py` freezes the fixed-revision complete
+  SWE-Verified source rows; `tools/freeze_swe_verified_sif_manifest.py` audits
+  selected existing SIF bytes and verifies each official base commit.
+- `hpc_submit_swe_verified_pce.sh` / `run_swe_verified_pce_hpc.py` and
+  `hpc_submit_swe_verified_pcce.sh` / `run_swe_verified_pcce_hpc.py` are the
+  additive current-prompt SWE-Verified evaluation entry points. The PCE smoke
+  reuses `hpc_resume_loop.py` and `hpc_supervisor_service.py` through its
+  bounded launch config; tracked configs are not authorization by themselves.
 - SIF and dependency preheaters remain because frozen PolyBench evidence and
   evaluator reproduction still reach them. They are not part of SWE-chat
   acquisition.

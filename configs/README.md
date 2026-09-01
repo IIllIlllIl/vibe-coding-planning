@@ -26,6 +26,12 @@ tracked does not authorize its execution.
 | `frozen_guidelines/behavioral-formal-all-candidates-v1-20260831/` | Local frozen backup of all six exact formal candidate texts, run identity, terminal state, cost report, lineage, and compact validation metrics; large raw trajectories remain on Iris. |
 | `polybench_pc_checker_only_c4_balanced20_v1_20260831.yaml` | Completed one-review C4 PolyBench diagnostic; it cannot enter Planner, Code, or Evaluate. |
 | `polybench_pc_checker_only_c4_balanced20_supervisor_v1_20260831.yaml` | Completed bounded supervisor identity; provenance only. |
+| `frozen_swe_verified_smoke/swe-verified-development-smoke-v1.json` | Frozen two-case development-only SWE-Verified membership; excluded from future quick validation and holdout use. |
+| `swe_verified_pce_smoke_v1.yaml` | Prepared two-case current-prompt PCE-only smoke runtime; its frozen SIF/base-commit audit and pass contract are bound to the development selection. |
+| `swe_verified_pce_smoke_supervisor_v1_20260901.yaml` | Bounded 12-slice supervisor identity for the prepared two-case PCE smoke; presence does not authorize launch. |
+| `swe_verified_pcce_smoke_seed_v1.yaml` | Unlaunched paired neutral-seed PCCE smoke template consuming the exact new PCE plans. |
+| `swe_verified_pcce_smoke_c4_v1.yaml` | Unlaunched paired C4 PCCE smoke template consuming the same exact new PCE plans. |
+| `frozen_guidelines/behavioral-neutral-seed-v1/` | Exact neutral Behavioral guideline and hash manifest for the paired comparison. |
 | `frozen_swe_chat_cleaning/f66cca95b14caaa4177f7ed5eaa424608dadcffa/` | Frozen Stage-1 decisions, compact Stage-2 manifest for 141 labeled first-Plan slices, additive repository-availability cleaning yielding 131 cases, exact-reconstruction audit summary, and 131-case temporal-proxy manifest. |
 
 Acquisition stops at source materialization. Stage 1 selects whole trajectories;
