@@ -27,6 +27,10 @@ def load_pcce_cases(
         config.source_snapshot,
         config.image_manifest,
     )
+    image_manifest_sha256 = file_sha256(config.image_manifest)
+    expected_images = getattr(config, "expected_image_manifest_sha256", None)
+    if expected_images is not None and expected_images != image_manifest_sha256:
+        raise ValueError("PCCE image manifest differs from its frozen SHA-256")
     source_manifest_path = config.source_snapshot / "manifest.json"
     selection = json.loads(config.selection_manifest.read_text(encoding="utf-8"))
     declared_source = selection.get("source_manifest_sha256")
@@ -43,6 +47,10 @@ def load_pcce_cases(
     ):
         raise ValueError("image manifest belongs to another selection")
 
+    pce_outcomes_sha256 = file_sha256(config.pce_outcomes)
+    expected_outcomes = getattr(config, "expected_pce_outcomes_sha256", None)
+    if expected_outcomes is not None and expected_outcomes != pce_outcomes_sha256:
+        raise ValueError("PCCE PCE outcomes differ from their frozen SHA-256")
     outcomes = _jsonl(config.pce_outcomes)
     outcome_by_id: dict[str, dict[str, Any]] = {}
     for outcome in outcomes:
@@ -90,7 +98,7 @@ def load_pcce_cases(
     return cases, {
         "source_manifest": source_manifest,
         "source_manifest_sha256": file_sha256(source_manifest_path),
-        "image_manifest_sha256": file_sha256(config.image_manifest),
+        "image_manifest_sha256": image_manifest_sha256,
         "selection_manifest_sha256": file_sha256(config.selection_manifest),
-        "pce_outcomes_sha256": file_sha256(config.pce_outcomes),
+        "pce_outcomes_sha256": pce_outcomes_sha256,
     }

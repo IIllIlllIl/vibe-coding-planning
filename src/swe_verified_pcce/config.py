@@ -46,6 +46,8 @@ class SWEVerifiedPCCEConfig:
     hpc: HPCConfig
     phase_times: PCCEPhaseTimes
     execution_mode: str
+    expected_pce_outcomes_sha256: str | None
+    expected_image_manifest_sha256: str | None
 
 
 def _mapping(value: Any, name: str) -> dict[str, Any]:
@@ -146,6 +148,18 @@ def load_swe_verified_pcce_config(
     max_rejections = int(method.get("max_review_rejections", 3))
     if max_rejections != 3:
         raise ValueError("SWE-Verified full PCCE requires three review rejections")
+    expected_pce_outcomes_sha256 = method.get("pce_outcomes_sha256")
+    expected_image_manifest_sha256 = method.get("image_manifest_sha256")
+    for name, value in (
+        ("pcce.pce_outcomes_sha256", expected_pce_outcomes_sha256),
+        ("pcce.image_manifest_sha256", expected_image_manifest_sha256),
+    ):
+        if value is not None and (
+            not isinstance(value, str)
+            or len(value) != 64
+            or any(character not in "0123456789abcdef" for character in value)
+        ):
+            raise ValueError(f"{name} must be a lowercase SHA-256")
     selection_manifest = resolve(str(paths["selection_manifest"]))
     selection = json.loads(selection_manifest.read_text(encoding="utf-8"))
     selected = selection.get("selected_instance_ids")
@@ -215,4 +229,6 @@ def load_swe_verified_pcce_config(
         hpc=hpc,
         phase_times=phase_times,
         execution_mode="full_pcce",
+        expected_pce_outcomes_sha256=expected_pce_outcomes_sha256,
+        expected_image_manifest_sha256=expected_image_manifest_sha256,
     )

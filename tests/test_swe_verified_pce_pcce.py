@@ -221,6 +221,47 @@ def test_pcce_loader_keeps_plan_when_pce_evaluation_is_unknown(tmp_path: Path) -
     assert paired[0].baseline_resolved is None
 
 
+def test_pcce_loader_rejects_a_different_frozen_pce_outcome(tmp_path: Path) -> None:
+    source, images, case = _snapshot(tmp_path)
+    outcomes = tmp_path / "outcomes.jsonl"
+    outcomes.write_text(
+        json.dumps(
+            {
+                "instance_id": case.instance_id,
+                "row_sha256": case.row_sha256,
+                "status": "completed",
+                "pce_status": "completed",
+                "plan": "# Exact new plan",
+                "evaluator_result": {"evaluator_resolved": True},
+            }
+        )
+        + "\n"
+    )
+    selection = tmp_path / "selection.json"
+    selection.write_text(
+        json.dumps(
+            {
+                "schema_version": 1,
+                "selected_instance_ids": [case.instance_id],
+                "source_manifest_sha256": file_sha256(source / "manifest.json"),
+                "image_manifest_sha256": file_sha256(images),
+            }
+        )
+    )
+    config = SimpleNamespace(
+        source_snapshot=source,
+        image_manifest=images,
+        pce_outcomes=outcomes,
+        selection_manifest=selection,
+        instance_ids=(case.instance_id,),
+        expected_image_manifest_sha256=file_sha256(images),
+        expected_pce_outcomes_sha256="0" * 64,
+    )
+
+    with pytest.raises(ValueError, match="PCE outcomes differ"):
+        load_pcce_cases(config)
+
+
 def test_pcce_array_script_uses_phase_specific_time(tmp_path: Path) -> None:
     hpc = SimpleNamespace(
         job_name_prefix="verified",
@@ -459,6 +500,52 @@ def test_tracked_quick50_pce_contract_is_frozen() -> None:
     assert arguments[arguments.index("--slice-time") + 1] == "00:10:00"
     assert arguments[arguments.index("--config") + 1] == (
         "configs/swe_verified_pce_quick50_v1_20260901.yaml"
+    )
+    assert "--require-clean-worktree" in arguments
+    assert "--submit" in arguments
+
+
+def test_tracked_quick50_seed_pcce_contract_is_frozen() -> None:
+    config = load_swe_verified_pcce_config(
+        "configs/swe_verified_pcce_quick50_seed_v1_20260901.yaml",
+        require_api_keys=False,
+    )
+
+    assert len(config.instance_ids) == 50
+    assert config.guideline_label == "seed"
+    assert config.guideline_path.name == "seed.md"
+    assert config.max_review_rejections == 3
+    assert config.expected_pce_outcomes_sha256 == (
+        "1f1e4420ec160d89a144a669d6cfc27ba1b131f35f6b76d59cf496c80650e753"
+    )
+    assert config.expected_image_manifest_sha256 == (
+        "fc7db0f468aaf5366981ba46d9db992aec452b991d1e27ff55dd538bf84f0290"
+    )
+    assert config.checker.checker.max_steps == 0
+    assert config.checker.checker.cost_limit == 0.0
+    assert config.checker.checker.agent_timeout_seconds == 0
+    assert config.checker.checker.max_attempts == 3
+    assert config.hpc.cpus_per_task == 1
+    assert config.hpc.mem == "4G"
+    assert config.hpc.max_task_attempts == 3
+    assert config.phase_times.first_review == "00:45:00"
+    assert config.phase_times.revision_review == "00:45:00"
+    assert config.phase_times.ce == "00:45:00"
+
+    supervisor = yaml.safe_load(
+        Path(
+            "configs/swe_verified_pcce_quick50_seed_supervisor_v1_20260901.yaml"
+        ).read_text(encoding="utf-8")
+    )
+    arguments = supervisor["arguments"]
+    assert arguments[arguments.index("--max-runs") + 1] == "24"
+    assert arguments[arguments.index("--poll-interval") + 1] == "300"
+    assert arguments[arguments.index("--slice-time") + 1] == "00:10:00"
+    assert arguments[arguments.index("--batch-script") + 1] == (
+        "scripts/hpc_submit_swe_verified_pcce.sh"
+    )
+    assert arguments[arguments.index("--config") + 1] == (
+        "configs/swe_verified_pcce_quick50_seed_v1_20260901.yaml"
     )
     assert "--require-clean-worktree" in arguments
     assert "--submit" in arguments

@@ -100,11 +100,9 @@ Current decisions are:
    controller writes a complete result, then `run_polybench_pcce_hpc.py`
    currently exits nonzero by reading the full-PCCE-only `method_outcomes`
    field.
-7. Acquire the frozen quick50 member `pydata__xarray-6744`, then freeze the
-   50-record selection-scoped Iris SIF manifest. The other 49 selected SIFs and
-   official base commits passed the 2026-09-01 read-only audit. Acquisition
-   failure must not change membership, and retrospective hashes must remain
-   labeled retrospective rather than pull-time OCI provenance.
+7. After paired Seed and C4 PCCE complete, report their common non-unknown
+   intersection with PCE and retain all operational exclusions. Do not select
+   or revise either guideline from this quick-validation result.
 
 ## Known validity constraints
 

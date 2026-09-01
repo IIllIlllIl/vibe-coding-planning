@@ -32,8 +32,10 @@ tracked does not authorize its execution.
 | `swe_verified_pcce_smoke_seed_v1.yaml` | Unlaunched paired neutral-seed PCCE smoke template consuming the exact new PCE plans. |
 | `swe_verified_pcce_smoke_c4_v1.yaml` | Unlaunched paired C4 PCCE smoke template consuming the same exact new PCE plans. |
 | `frozen_swe_verified_quick_validation/swe-verified-quick50-v1-20260901.json` | Outcome-independent 50-case repository-covering quick-validation membership; excludes smoke and is shared by PCE/Seed/C4. |
-| `swe_verified_pce_quick50_v1_20260901.yaml` | Prepared formal PCE runtime for the frozen quick50; launch remains blocked until its 50-record image manifest exists. |
-| `swe_verified_pce_quick50_supervisor_v1_20260901.yaml` | Bounded formal PCE supervisor entry; tracked preparation is not launch authorization. |
+| `swe_verified_pce_quick50_v1_20260901.yaml` | Completed formal PCE runtime for the frozen quick50; 50/50 terminal outcomes are the paired PCCE baseline. |
+| `swe_verified_pce_quick50_supervisor_v1_20260901.yaml` | Completed bounded formal PCE supervisor identity; provenance only. |
+| `swe_verified_pcce_quick50_seed_v1_20260901.yaml` | Paired neutral-seed quick50 PCCE runtime, bound to the exact completed PCE outcomes and 50-record image manifest. |
+| `swe_verified_pcce_quick50_seed_supervisor_v1_20260901.yaml` | Bounded neutral-seed PCCE supervisor entry; tracked preparation is not launch authorization. |
 | `frozen_guidelines/behavioral-neutral-seed-v1/` | Exact neutral Behavioral guideline and hash manifest for the paired comparison. |
 | `frozen_swe_chat_cleaning/f66cca95b14caaa4177f7ed5eaa424608dadcffa/` | Frozen Stage-1 decisions, compact Stage-2 manifest for 141 labeled first-Plan slices, additive repository-availability cleaning yielding 131 cases, exact-reconstruction audit summary, and 131-case temporal-proxy manifest. |
 

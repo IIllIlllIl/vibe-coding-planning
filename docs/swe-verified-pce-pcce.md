@@ -49,11 +49,23 @@ acquisition failure may not replace a selected case.
 
 The formal PCE runtime is prepared in
 `configs/swe_verified_pce_quick50_v1_20260901.yaml`, with its bounded
-supervisor entry alongside it. A read-only Iris audit on 2026-09-01 found 49
-selected SIFs and verified all 49 corresponding official base commits. The
-selected `pydata__xarray-6744` SIF was absent. Formal launch remains blocked
-until that fixed image is acquired and a 50-record selection-scoped image
-manifest is frozen; this missing prerequisite does not alter membership.
+supervisor entry alongside it. The missing `pydata__xarray-6744` SIF was
+subsequently acquired without substituting membership. The frozen
+selection-scoped image manifest contains 50 audited SIF identities, and all 50
+official base commits were verified.
+
+The quick50 PCE completed with 50/50 operationally complete outcomes: 41
+resolved and 9 unresolved, with no unknown result. Two cases reused their
+durable Plan checkpoint and completed on task attempt 2. This is the paired
+baseline for both PCCE methods, not an effectiveness result by itself. The
+exact `raw_pce_outcomes.jsonl` SHA-256 is
+`1f1e4420ec160d89a144a669d6cfc27ba1b131f35f6b76d59cf496c80650e753`.
+
+The neutral-seed PCCE runtime and supervisor are prepared in
+`configs/swe_verified_pcce_quick50_seed_v1_20260901.yaml` and its matching
+supervisor config. The runtime rejects any PCE outcome or image manifest whose
+bytes differ from the frozen hashes, while C4 must later consume these same
+paired inputs under a distinct run identity.
 
 ### PCE development smoke contract
 
@@ -156,8 +168,9 @@ The required order is:
 5. freeze an outcome-independent 50-case quick-validation selection excluding
    all smoke cases (complete);
 6. acquire and audit every selected SIF, then freeze the selection-scoped image
-   manifest (49/50 currently available and verified);
-7. run paired PCE, seed PCCE, and C4 PCCE under new immutable run identities.
+   manifest (complete);
+7. run paired PCE, seed PCCE, and C4 PCCE under new immutable run identities
+   (PCE complete; Seed prepared; C4 not yet prepared or launched).
 
 Smoke checks pipeline correctness only. The quick validation is a bounded
 generalization diagnostic, not an untouched final holdout.
