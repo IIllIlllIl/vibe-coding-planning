@@ -100,9 +100,12 @@ Current decisions are:
    controller writes a complete result, then `run_polybench_pcce_hpc.py`
    currently exits nonzero by reading the full-PCCE-only `method_outcomes`
    field.
-7. After paired Seed and C4 PCCE complete, report their common non-unknown
-   intersection with PCE and retain all operational exclusions. Do not select
-   or revise either guideline from this quick-validation result.
+7. The paired Seed PCCE completed all 50 cases with 37 resolved and 13
+   unresolved, including no repair of the nine PCE-unresolved cases and four
+   regressions from the PCE-resolved set. After C4 PCCE completes, report the
+   common non-unknown PCE/Seed/C4 intersection and retain all operational
+   exclusions. Do not select or revise either guideline from this
+   quick-validation result.
 
 ## Known validity constraints
 

@@ -551,6 +551,86 @@ def test_tracked_quick50_seed_pcce_contract_is_frozen() -> None:
     assert "--submit" in arguments
 
 
+def test_tracked_quick50_c4_pcce_contract_is_paired_with_seed() -> None:
+    seed_raw = yaml.safe_load(
+        Path("configs/swe_verified_pcce_quick50_seed_v1_20260901.yaml").read_text(
+            encoding="utf-8"
+        )
+    )
+    c4_raw = yaml.safe_load(
+        Path("configs/swe_verified_pcce_quick50_c4_v1_20260902.yaml").read_text(
+            encoding="utf-8"
+        )
+    )
+    for payload in (seed_raw, c4_raw):
+        payload.pop("purpose")
+        payload["paths"].pop("guideline")
+        payload["paths"].pop("run_dir")
+        payload["pcce"].pop("guideline_label")
+        payload["hpc"].pop("job_name_prefix")
+        payload["hpc"].pop("worker_config_path")
+    assert c4_raw == seed_raw
+
+    seed = load_swe_verified_pcce_config(
+        "configs/swe_verified_pcce_quick50_seed_v1_20260901.yaml",
+        require_api_keys=False,
+    )
+    c4 = load_swe_verified_pcce_config(
+        "configs/swe_verified_pcce_quick50_c4_v1_20260902.yaml",
+        require_api_keys=False,
+    )
+
+    assert c4.instance_ids == seed.instance_ids
+    assert c4.source_snapshot == seed.source_snapshot
+    assert c4.image_manifest == seed.image_manifest
+    assert c4.selection_manifest == seed.selection_manifest
+    assert c4.pce_outcomes == seed.pce_outcomes
+    assert c4.pce.plan == seed.pce.plan
+    assert c4.pce.code == seed.pce.code
+    assert c4.pce.container == seed.pce.container
+    assert c4.checker_prompt == seed.checker_prompt
+    assert c4.checker_instance_template == seed.checker_instance_template
+    assert c4.plan_revision_prompt == seed.plan_revision_prompt
+    assert c4.plan_revision_instance_template == seed.plan_revision_instance_template
+    assert c4.checker.container == seed.checker.container
+    assert c4.expected_pce_outcomes_sha256 == seed.expected_pce_outcomes_sha256
+    assert c4.expected_image_manifest_sha256 == seed.expected_image_manifest_sha256
+    assert c4.guideline_label == "behavioral_formal_c4"
+    assert c4.guideline_path.name == "c4.md"
+    assert file_sha256(c4.guideline_path) == (
+        "1e7c68a2c14175dda9a9a8bb16455061c50b9961aafb6eedc030cdbef21e1ebd"
+    )
+    assert c4.run_dir != seed.run_dir
+    assert c4.max_review_rejections == seed.max_review_rejections == 3
+    assert c4.checker.checker.max_steps == seed.checker.checker.max_steps == 0
+    assert c4.checker.checker.cost_limit == seed.checker.checker.cost_limit == 0.0
+    assert c4.checker.checker.agent_timeout_seconds == 0
+    assert seed.checker.checker.agent_timeout_seconds == 0
+    assert c4.checker.checker.max_attempts == seed.checker.checker.max_attempts == 3
+    assert c4.hpc.cpus_per_task == seed.hpc.cpus_per_task == 1
+    assert c4.hpc.mem == seed.hpc.mem == "4G"
+    assert c4.hpc.max_task_attempts == seed.hpc.max_task_attempts == 3
+    assert c4.phase_times == seed.phase_times
+
+    supervisor = yaml.safe_load(
+        Path(
+            "configs/swe_verified_pcce_quick50_c4_supervisor_v1_20260902.yaml"
+        ).read_text(encoding="utf-8")
+    )
+    arguments = supervisor["arguments"]
+    assert arguments[arguments.index("--max-runs") + 1] == "24"
+    assert arguments[arguments.index("--poll-interval") + 1] == "300"
+    assert arguments[arguments.index("--slice-time") + 1] == "00:10:00"
+    assert arguments[arguments.index("--batch-script") + 1] == (
+        "scripts/hpc_submit_swe_verified_pcce.sh"
+    )
+    assert arguments[arguments.index("--config") + 1] == (
+        "configs/swe_verified_pcce_quick50_c4_v1_20260902.yaml"
+    )
+    assert "--require-clean-worktree" in arguments
+    assert "--submit" in arguments
+
+
 def test_controller_recovers_only_three_evidenced_evaluator_slurm_timeouts(
     tmp_path: Path,
 ) -> None:

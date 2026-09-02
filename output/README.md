@@ -23,6 +23,18 @@ interpretation belongs to
 `../docs/knowledge/behavioral-gepa-initial-findings.md`; this file only locates
 artifacts.
 
+## SWE-Verified Quick Validation
+
+| Path | Classification | Status and permitted use |
+|---|---|---|
+| `SWE-bench_Verified/swe-verified-pce-runs/quick-validation/current-prompt-quick50-v1-20260901/` | Paired quick-validation baseline | Completed 50-case current-prompt PCE; exact Plans and terminal outcomes are inputs to both PCCE methods |
+| `SWE-bench_Verified/swe-verified-pcce-runs/quick-validation/neutral-seed-v1-20260901/` | Paired quick-validation evidence | Completed Seed PCCE; local copy contains terminal outcomes, reviews, manifest, and summary while phase-level raw evidence remains on Iris |
+
+This coverage-oriented 50-case cohort is development evidence, not an
+untouched holdout or a prevalence estimate. C4 is prepared but has no output
+until separately authorized and launched. Stable method and result semantics
+belong to `../docs/swe-verified-pce-pcce.md`.
+
 ## Frozen Offline And PolyBench Evidence
 
 | Path | Classification | Status and permitted use |

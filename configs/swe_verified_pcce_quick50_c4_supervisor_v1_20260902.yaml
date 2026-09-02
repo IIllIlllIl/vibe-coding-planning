@@ -1,0 +1,28 @@
+schema_version: 1
+session: swe-verified-pcce-quick50-c4-v1-20260902
+log: .local/hpc-supervisor/swe-verified-pcce-quick50-c4-v1-20260902.log
+arguments:
+  - --poll-interval
+  - "300"
+  - --slice-time
+  - "00:10:00"
+  - --max-runs
+  - "24"
+  - --state-file
+  - .local/hpc-supervisor/swe-verified-pcce-quick50-c4-v1-20260902.json
+  - --require-clean-worktree
+  - --batch-script
+  - scripts/hpc_submit_swe_verified_pcce.sh
+  - --config
+  - configs/swe_verified_pcce_quick50_c4_v1_20260902.yaml
+  - --ulhpc-config
+  - /Users/taoran.wang/.config/ulhpc-submit/config.yaml
+  - --job-name
+  - swe-verified-pcce-quick50-c4-v1-20260902
+  - --remote-dir
+  - ~/hpc_runs/vibe-swe-verified-pcce-quick50-c4-v1-20260902
+  - --remote-dataset-dir
+  - /scratch/users/twang/vibe-coding-planning/swe-verified-pcce-datasets
+  - --remote-run-dir
+  - /scratch/users/twang/vibe-coding-planning/swe-verified-pcce-run-state
+  - --submit

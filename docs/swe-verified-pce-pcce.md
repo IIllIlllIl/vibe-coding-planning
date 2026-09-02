@@ -3,7 +3,7 @@
 > Authority: the independent SWE-Verified Plan-Code-Evaluate and paired
 > Plan-Check-Code-Evaluate data, phase, and evidence contract
 >
-> Last reviewed: 2026-09-01
+> Last reviewed: 2026-09-02
 
 ## Purpose
 
@@ -61,11 +61,23 @@ baseline for both PCCE methods, not an effectiveness result by itself. The
 exact `raw_pce_outcomes.jsonl` SHA-256 is
 `1f1e4420ec160d89a144a669d6cfc27ba1b131f35f6b76d59cf496c80650e753`.
 
-The neutral-seed PCCE runtime and supervisor are prepared in
+The neutral-seed PCCE runtime and supervisor completed under
 `configs/swe_verified_pcce_quick50_seed_v1_20260901.yaml` and its matching
-supervisor config. The runtime rejects any PCE outcome or image manifest whose
-bytes differ from the frozen hashes, while C4 must later consume these same
-paired inputs under a distinct run identity.
+supervisor config. All 50 cases reached a terminal method result: 34 Plans
+passed the first review, 15 passed after revision, and one was rejected after
+three reviews. End-to-end outcomes were 37 resolved and 13 unresolved, with no
+unknown or operationally incomplete case. Relative to the paired PCE baseline,
+the Seed run repaired none of the nine PCE-unresolved cases and changed four
+PCE-resolved cases to unresolved. Two PC tasks required a second Slurm attempt;
+both completed without changing membership or terminal semantics.
+
+The prepared C4 runtime is
+`configs/swe_verified_pcce_quick50_c4_v1_20260902.yaml`, with its matching
+supervisor config. It consumes the same frozen selection, exact PCE outcome
+bytes, image manifest, prompt/runtime sources, and operational policy under a
+distinct guideline and run identity. Both PCCE runtimes reject any PCE outcome
+or image manifest whose bytes differ from the frozen hashes. C4 is prepared but
+has not been launched.
 
 ### PCE development smoke contract
 
@@ -170,7 +182,7 @@ The required order is:
 6. acquire and audit every selected SIF, then freeze the selection-scoped image
    manifest (complete);
 7. run paired PCE, seed PCCE, and C4 PCCE under new immutable run identities
-   (PCE complete; Seed prepared; C4 not yet prepared or launched).
+   (PCE and Seed complete; C4 prepared but not launched).
 
 Smoke checks pipeline correctness only. The quick validation is a bounded
 generalization diagnostic, not an untouched final holdout.
