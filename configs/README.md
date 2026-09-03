@@ -26,6 +26,8 @@ tracked does not authorize its execution.
 | `frozen_guidelines/behavioral-formal-all-candidates-v1-20260831/` | Local frozen backup of all six exact formal candidate texts, run identity, terminal state, cost report, lineage, and compact validation metrics; large raw trajectories remain on Iris. |
 | `polybench_pc_checker_only_c4_balanced20_v1_20260831.yaml` | Completed one-review C4 PolyBench diagnostic; it cannot enter Planner, Code, or Evaluate. |
 | `polybench_pc_checker_only_c4_balanced20_supervisor_v1_20260831.yaml` | Completed bounded supervisor identity; provenance only. |
+| `polybench_pcce_c4_balanced20_full_v1_20260903.yaml` | Prepared end-to-end C4 PCCE development diagnostic on the same frozen balanced 20-case selection and paired PCE evidence. |
+| `polybench_pcce_c4_balanced20_full_supervisor_v1_20260903.yaml` | Bounded 24-slice supervisor entry for the end-to-end C4 diagnostic; presence is not launch authorization. |
 | `frozen_swe_verified_smoke/swe-verified-development-smoke-v1.json` | Frozen two-case development-only SWE-Verified membership; excluded from future quick validation and holdout use. |
 | `swe_verified_pce_smoke_v1.yaml` | Prepared two-case current-prompt PCE-only smoke runtime; its frozen SIF/base-commit audit and pass contract are bound to the development selection. |
 | `swe_verified_pce_smoke_supervisor_v1_20260901.yaml` | Bounded 12-slice supervisor identity for the prepared two-case PCE smoke; presence does not authorize launch. |

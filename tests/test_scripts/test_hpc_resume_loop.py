@@ -798,6 +798,59 @@ def test_c4_checker_only_supervisor_uses_pcce_resume_loop(tmp_path: Path) -> Non
     assert "--submit" in invocation
 
 
+def test_c4_full_pcce_supervisor_is_bounded_and_uses_pcce_resume_loop(
+    tmp_path: Path,
+) -> None:
+    fake_bin = tmp_path / "bin"
+    fake_bin.mkdir()
+    tmux_log = tmp_path / "tmux.log"
+    tmux = fake_bin / "tmux"
+    tmux.write_text(
+        "#!/usr/bin/env bash\n"
+        f"printf '%s\\n' \"$*\" >> {tmux_log}\n"
+        'if [[ "$1" == has-session ]]; then exit 1; fi\n'
+        "exit 0\n",
+        encoding="utf-8",
+    )
+    tmux.chmod(0o755)
+    env = os.environ.copy()
+    env["PATH"] = f"{fake_bin}{os.pathsep}{env['PATH']}"
+
+    result = subprocess.run(
+        [
+            "python",
+            str(SERVICE_SCRIPT),
+            "start",
+            "--launch-config",
+            "configs/polybench_pcce_c4_balanced20_full_supervisor_v1_20260903.yaml",
+        ],
+        cwd=REPO_ROOT,
+        capture_output=True,
+        text=True,
+        check=False,
+        env=env,
+    )
+
+    assert result.returncode == 0, result.stderr
+    invocation = tmux_log.read_text(encoding="utf-8")
+    assert "caffeinate -i -s" in invocation
+    assert "hpc_resume_loop.py --poll-interval 300" in invocation
+    assert "--slice-time 00:10:00" in invocation
+    assert "--max-runs 24" in invocation
+    assert (
+        "--state-file .local/hpc-supervisor/"
+        "polybench-pcce-c4-balanced20-v1-20260903.json" in invocation
+    )
+    assert "--batch-script scripts/hpc_submit_polybench_pcce.sh" in invocation
+    assert (
+        "--config configs/polybench_pcce_c4_balanced20_full_v1_20260903.yaml"
+        in invocation
+    )
+    assert "--job-name polybench-pcce-c4-balanced20-v1-20260903" in invocation
+    assert "--require-clean-worktree" in invocation
+    assert "--submit" in invocation
+
+
 def test_clean_seed_pcce_dependency_repair_supervisor_selects_frozen_subset(
     tmp_path: Path,
 ) -> None:

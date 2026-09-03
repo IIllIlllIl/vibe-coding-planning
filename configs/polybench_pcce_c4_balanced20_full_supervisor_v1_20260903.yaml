@@ -1,0 +1,24 @@
+schema_version: 1
+session: polybench-pcce-c4-balanced20-v1-20260903
+log: .local/hpc-supervisor/polybench-pcce-c4-balanced20-v1-20260903.log
+arguments:
+  - --poll-interval
+  - "300"
+  - --slice-time
+  - "00:10:00"
+  - --max-runs
+  - "24"
+  - --state-file
+  - .local/hpc-supervisor/polybench-pcce-c4-balanced20-v1-20260903.json
+  - --require-clean-worktree
+  - --batch-script
+  - scripts/hpc_submit_polybench_pcce.sh
+  - --ulhpc-config
+  - /Users/taoran.wang/.config/ulhpc-submit/config.yaml
+  - --config
+  - configs/polybench_pcce_c4_balanced20_full_v1_20260903.yaml
+  - --job-name
+  - polybench-pcce-c4-balanced20-v1-20260903
+  - --remote-dir
+  - ~/hpc_runs/vibe-polybench-pcce-c4-balanced20-v1-20260903
+  - --submit

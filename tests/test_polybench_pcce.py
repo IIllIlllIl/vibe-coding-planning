@@ -126,6 +126,49 @@ def test_c4_checker_only_config_freezes_balanced_twenty_and_seed_prompt() -> Non
     )
 
 
+def test_c4_full_pcce_config_reuses_balanced_twenty_and_current_method() -> None:
+    checker_only = load_polybench_pcce_config(
+        ROOT / "configs/polybench_pc_checker_only_c4_balanced20_v1_20260831.yaml",
+        require_api_keys=False,
+    )
+    full = load_polybench_pcce_config(
+        ROOT / "configs/polybench_pcce_c4_balanced20_full_v1_20260903.yaml",
+        require_api_keys=False,
+    )
+    seed = load_polybench_pcce_config(
+        ROOT
+        / "configs/polybench_pcce_hpc_dependency_cache_formal_seed_clean_20260826.yaml",
+        require_api_keys=False,
+    )
+    cases, _ = load_pcce_cases(full)
+
+    assert full.execution_mode == "full_pcce"
+    assert full.max_review_rejections == 3
+    assert full.selection_manifest == checker_only.selection_manifest
+    assert {case.instance_id for case in cases} == set(checker_only.instance_ids)
+    assert len(cases) == 20
+    assert sum(case.baseline_resolved for case in cases) == 10
+    assert full.source_snapshot == checker_only.source_snapshot
+    assert full.validation_snapshot == checker_only.validation_snapshot
+    assert full.pce_outcomes == checker_only.pce_outcomes
+    assert full.image_manifest == checker_only.image_manifest
+    assert full.guideline_path == checker_only.guideline_path
+    assert full.checker_prompt == seed.checker_prompt
+    assert full.checker_instance_template == seed.checker_instance_template
+    assert full.plan_revision_prompt == seed.plan_revision_prompt
+    assert full.plan_revision_instance_template == seed.plan_revision_instance_template
+    assert full.pce.dependency_cache is not None
+    assert full.pce.dependency_cache.network_disabled is True
+    assert full.hpc.cpus_per_task == 1
+    assert full.hpc.mem == "4G"
+    assert full.hpc.time == "00:45:00"
+    assert full.hpc.max_task_attempts == 3
+    assert full.run_dir != checker_only.run_dir
+    assert text_sha256(full.guideline_path.read_text(encoding="utf-8")) == (
+        "1e7c68a2c14175dda9a9a8bb16455061c50b9961aafb6eedc030cdbef21e1ebd"
+    )
+
+
 def test_c4_balanced_twenty_selection_is_reproducible() -> None:
     selection_path = (
         ROOT
