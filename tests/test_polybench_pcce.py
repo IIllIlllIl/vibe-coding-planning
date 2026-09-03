@@ -107,7 +107,7 @@ def test_c4_checker_only_config_freezes_balanced_twenty_and_seed_prompt() -> Non
     )
     seed = load_polybench_pcce_config(
         ROOT
-        / "configs/polybench_pcce_hpc_dependency_cache_formal_seed_clean_20260826.yaml",
+        / "configs/polybench_pcce_hpc_formal_seed_clean_20260826.yaml",
         require_api_keys=False,
     )
     cases, _ = load_pcce_cases(config)
@@ -137,7 +137,7 @@ def test_c4_full_pcce_config_reuses_balanced_twenty_and_current_method() -> None
     )
     seed = load_polybench_pcce_config(
         ROOT
-        / "configs/polybench_pcce_hpc_dependency_cache_formal_seed_clean_20260826.yaml",
+        / "configs/polybench_pcce_hpc_formal_seed_clean_20260826.yaml",
         require_api_keys=False,
     )
     cases, _ = load_pcce_cases(full)
@@ -157,8 +157,7 @@ def test_c4_full_pcce_config_reuses_balanced_twenty_and_current_method() -> None
     assert full.checker_instance_template == seed.checker_instance_template
     assert full.plan_revision_prompt == seed.plan_revision_prompt
     assert full.plan_revision_instance_template == seed.plan_revision_instance_template
-    assert full.pce.dependency_cache is not None
-    assert full.pce.dependency_cache.network_disabled is True
+    assert full.pce.dependency_cache is None
     assert full.hpc.cpus_per_task == 1
     assert full.hpc.mem == "4G"
     assert full.hpc.time == "00:45:00"

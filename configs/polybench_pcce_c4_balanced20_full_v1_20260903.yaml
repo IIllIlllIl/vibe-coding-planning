@@ -11,7 +11,9 @@ paths:
   pce_outcomes: output/SWE-PolyBench/polybench-guideline-validation-datasets/20260826_python99_cleanpce_depcache_03619730229d/paired_pce_outcomes.jsonl
   selection_manifest: configs/frozen_polybench_pc_quick/c4-balanced20-v1-20260831.json
   guideline: configs/frozen_guidelines/behavioral-formal-c4-v1-20260831/c4.md
-  pce_runtime_config: configs/polybench_pce_hpc_dependency_cache_clean_20260825.yaml
+  # Match the original fresh Seed PCCE evaluator semantics. The frozen
+  # dependency cache is a scoped repair input, not a universe-wide runtime.
+  pce_runtime_config: configs/polybench_pce_hpc_formal_clean_20260825.yaml
   checker_runtime_config: configs/gepa_verified_rules.yaml
   run_dir: output/SWE-PolyBench/polybench-pcce-runs/development/c4-balanced20-full-v1-20260903
 
