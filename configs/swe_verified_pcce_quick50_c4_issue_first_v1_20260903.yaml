@@ -1,0 +1,71 @@
+# Paired Planner-v2 diagnostic on every P1 rejected by the completed C4
+# SWE-Verified quick50 run. Review-1 is frozen evidence and is not rerun.
+mode: swe_verified_pcce
+purpose: quick_validation_behavioral_c4_issue_first_revision
+
+paths:
+  source_snapshot: output/SWE-bench_Verified/swe-verified-pce-inputs/20260831_verified500_91aa3ed5
+  image_manifest: output/SWE-bench_Verified/swe-verified-pce-inputs/20260831_verified500_91aa3ed5/quick50-v1-20260901/images.json
+  selection_manifest: configs/frozen_swe_verified_quick_validation/swe-verified-quick50-v1-20260901.json
+  pce_outcomes: output/SWE-bench_Verified/swe-verified-pce-runs/quick-validation/current-prompt-quick50-v1-20260901/raw_pce_outcomes.jsonl
+  guideline: configs/frozen_guidelines/behavioral-formal-c4-v1-20260831/c4.md
+  pce_runtime_config: configs/swe_verified_pce_quick50_v1_20260901.yaml
+  checker_runtime_config: configs/gepa_verified_rules.yaml
+  prompt_source_config: configs/pcce_issue_first_revision_prompt_v1_20260903.yaml
+  first_review_seed: configs/frozen_swe_verified_pcce_revision/issue-first-v1-20260903/review_01_rejections.json
+  run_dir: output/SWE-bench_Verified/swe-verified-pcce-runs/quick-validation/behavioral-c4-issue-first-v1-20260903
+
+pcce:
+  guideline_label: behavioral_formal_c4_issue_first_revision_v1
+  max_review_rejections: 3
+  pce_outcomes_sha256: 1f1e4420ec160d89a144a669d6cfc27ba1b131f35f6b76d59cf496c80650e753
+  image_manifest_sha256: fc7db0f468aaf5366981ba46d9db992aec452b991d1e27ff55dd538bf84f0290
+  first_review_seed_sha256: aee40f887efbe608d4cf1048777991b63687237fa538c63847a433c0f5c99cb2
+  # This subset is determined only by the frozen C4 Review-1 decision, not by
+  # PCE or PCCE resolution. It therefore includes both repair opportunities
+  # and regression risks.
+  instance_ids:
+    - astropy__astropy-14096
+    - matplotlib__matplotlib-21568
+    - psf__requests-6028
+    - pylint-dev__pylint-7080
+    - django__django-13809
+    - django__django-15563
+    - scikit-learn__scikit-learn-10297
+    - scikit-learn__scikit-learn-10908
+    - pylint-dev__pylint-4970
+    - django__django-10973
+    - pylint-dev__pylint-6386
+    - sympy__sympy-20801
+    - django__django-15127
+    - django__django-15252
+    - sympy__sympy-24443
+    - sympy__sympy-13798
+
+checker:
+  max_steps: 0
+  cost_limit: 0.0
+  agent_timeout_seconds: 0
+  max_attempts: 3
+
+hpc:
+  submit: true
+  partition: batch
+  cpus_per_task: 1
+  mem: 4G
+  poll_interval_seconds: 300
+  task_output_grace_seconds: 300
+  missing_task_grace_seconds: 600
+  max_task_attempts: 3
+  remote_env_file: ~/.config/vibe-coding-planning/deepseek.env
+  python_module: lang/Python/3.11
+  container_module: tools/Apptainer
+  python_bin: python3
+  job_name_prefix: swe-verified-pcce-c4-issue-first-v1-20260903
+  worker_config_path: configs/swe_verified_pcce_quick50_c4_issue_first_v1_20260903.yaml
+  phase_times:
+    # Retained for the shared config schema; Review-1 is consumed from the
+    # frozen seed and no Review-1 Slurm task is submitted.
+    first_review: "00:45:00"
+    revision_review: "00:45:00"
+    ce: "00:45:00"

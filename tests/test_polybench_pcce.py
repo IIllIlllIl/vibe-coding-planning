@@ -8,6 +8,7 @@ import os
 import subprocess
 
 import pytest
+import yaml
 
 from src.optimization.models import CheckerOutput, RepositoryEvidence
 from src.optimization.audit import text_sha256
@@ -27,6 +28,32 @@ from src.polybench_pce.runner import checkpoint_identity
 
 
 ROOT = Path(__file__).resolve().parents[1]
+
+
+def test_issue_first_prompt_source_changes_only_revision_policy(tmp_path: Path):
+    original_path = (
+        ROOT / "configs/polybench_pcce_c4_balanced20_full_v1_20260903.yaml"
+    )
+    original = load_polybench_pcce_config(original_path, require_api_keys=False)
+    payload = yaml.safe_load(original_path.read_text(encoding="utf-8"))
+    payload["paths"]["prompt_source_config"] = (
+        "configs/pcce_issue_first_revision_prompt_v1_20260903.yaml"
+    )
+    payload.pop("prompts")
+    candidate_path = tmp_path / "polybench-pcce-issue-first.yaml"
+    candidate_path.write_text(yaml.safe_dump(payload), encoding="utf-8")
+
+    candidate = load_polybench_pcce_config(candidate_path, require_api_keys=False)
+
+    assert candidate.checker_prompt == original.checker_prompt
+    assert candidate.checker_instance_template == original.checker_instance_template
+    assert candidate.plan_revision_prompt != original.plan_revision_prompt
+    assert "The original issue is the objective" in candidate.plan_revision_prompt
+    assert "Do not optimize for approval" in candidate.plan_revision_prompt
+    assert "provided as advisory evidence" in candidate.plan_revision_prompt
+    assert "Checker feedback as advisory evidence" in (
+        candidate.plan_revision_instance_template
+    )
 
 
 def _source(instance_id: str) -> PolyBenchPCECase:

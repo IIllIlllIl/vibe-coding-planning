@@ -65,7 +65,15 @@ def load_polybench_pcce_config(
     paths = _mapping(raw.get("paths"), "paths")
     method = _mapping(raw.get("pcce"), "pcce")
     hpc_raw = _mapping(raw.get("hpc"), "hpc")
-    prompts = _mapping(raw.get("prompts"), "prompts")
+    prompt_source = paths.get("prompt_source_config")
+    if prompt_source:
+        prompt_raw = (
+            yaml.safe_load(resolve(str(prompt_source)).read_text(encoding="utf-8"))
+            or {}
+        )
+        prompts = _mapping(prompt_raw.get("prompts"), "prompt source prompts")
+    else:
+        prompts = _mapping(raw.get("prompts"), "prompts")
     pce_config_path = resolve(str(paths["pce_runtime_config"]))
     checker_config_path = resolve(str(paths["checker_runtime_config"]))
     pce = load_polybench_pce_config(

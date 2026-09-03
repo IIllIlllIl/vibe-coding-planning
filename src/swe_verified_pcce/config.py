@@ -46,6 +46,8 @@ class SWEVerifiedPCCEConfig:
     hpc: HPCConfig
     phase_times: PCCEPhaseTimes
     execution_mode: str
+    first_review_seed: Path | None
+    expected_first_review_seed_sha256: str | None
     expected_pce_outcomes_sha256: str | None
     expected_image_manifest_sha256: str | None
 
@@ -169,9 +171,40 @@ def load_swe_verified_pcce_config(
         or not selected
     ):
         raise ValueError("selection manifest requires selected_instance_ids")
-    instance_ids = tuple(str(value) for value in selected)
-    if len(set(instance_ids)) != len(instance_ids):
+    parent_instance_ids = tuple(str(value) for value in selected)
+    if len(set(parent_instance_ids)) != len(parent_instance_ids):
         raise ValueError("selected instance IDs must be unique")
+    requested = method.get("instance_ids")
+    if requested is None:
+        instance_ids = parent_instance_ids
+    else:
+        if not isinstance(requested, list) or not requested:
+            raise ValueError("pcce.instance_ids must be a non-empty list")
+        instance_ids = tuple(str(value) for value in requested)
+        if len(set(instance_ids)) != len(instance_ids):
+            raise ValueError("pcce.instance_ids must be unique")
+        if not set(instance_ids).issubset(parent_instance_ids):
+            raise ValueError("pcce.instance_ids must belong to the frozen selection")
+
+    first_review_seed_raw = paths.get("first_review_seed")
+    first_review_seed = (
+        resolve(str(first_review_seed_raw)) if first_review_seed_raw else None
+    )
+    expected_first_review_seed_sha256 = method.get("first_review_seed_sha256")
+    if first_review_seed is not None:
+        if requested is None:
+            raise ValueError("a frozen first-review seed requires pcce.instance_ids")
+        if (
+            not isinstance(expected_first_review_seed_sha256, str)
+            or len(expected_first_review_seed_sha256) != 64
+            or any(
+                character not in "0123456789abcdef"
+                for character in expected_first_review_seed_sha256
+            )
+        ):
+            raise ValueError("pcce.first_review_seed_sha256 must be a SHA-256")
+    elif expected_first_review_seed_sha256 is not None:
+        raise ValueError("first-review seed SHA-256 requires paths.first_review_seed")
 
     run_dir = resolve(str(paths["run_dir"]))
     source_snapshot = resolve(str(paths["source_snapshot"]))
@@ -228,7 +261,11 @@ def load_swe_verified_pcce_config(
         checker=checker,
         hpc=hpc,
         phase_times=phase_times,
-        execution_mode="full_pcce",
+        execution_mode=(
+            "from_frozen_first_review" if first_review_seed is not None else "full_pcce"
+        ),
+        first_review_seed=first_review_seed,
+        expected_first_review_seed_sha256=expected_first_review_seed_sha256,
         expected_pce_outcomes_sha256=expected_pce_outcomes_sha256,
         expected_image_manifest_sha256=expected_image_manifest_sha256,
     )

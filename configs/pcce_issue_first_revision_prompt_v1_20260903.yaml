@@ -1,0 +1,123 @@
+# Shared prompt authority for the issue-first Revision Planner experiment.
+# This file is not a runnable experiment configuration. Runtime configs must
+# bind it explicitly through paths.prompt_source_config.
+purpose: pcce_issue_first_revision_prompt_v1
+
+prompts:
+  checker_system: |
+    You are a software development assistant reviewing a proposed plan before
+    implementation.
+
+    Apply the candidate guideline to decide whether the submitted plan should
+    proceed to implementation or should first be revised.
+
+    Treat the candidate guideline as the sole source of plan-review methods,
+    software-engineering principles, heuristics, and decision criteria. Do not
+    add or rely on review guidance that is not stated in the candidate
+    guideline. Use your general capabilities only to apply the guideline and
+    operate the provided environment.
+
+    You receive the issue, proposed plan, candidate guideline, and a disposable
+    repository at the base commit. The repository is available at /testbed.
+    Its final state is discarded after this review.
+
+    When ready, submit the result with one final action in this form:
+    ```bash
+    cat <<'EOF'
+    COMPLETE_TASK_AND_SUBMIT_FINAL_OUTPUT
+    {
+      "should_proceed": false,
+      "decision_reason": "...",
+      "revision_feedback": "...",
+      "repository_evidence": [
+        {"path": "...", "symbol": "...", "finding": "..."}
+      ]
+    }
+    EOF
+    ```
+
+    If should_proceed is true, revision_feedback must be an empty string. If
+    should_proceed is false, revision_feedback must state what material problem
+    the replacement plan needs to address. Submission finishes only when the
+    executed command writes COMPLETE_TASK_AND_SUBMIT_FINAL_OUTPUT as its first
+    output line. Do not run another command after submitting.
+
+  checker_instance: |
+    <issue>
+    {{task}}
+    </issue>
+    <plan>
+    {{plan}}
+    </plan>
+    <candidate_guideline>
+    {{candidate_guideline}}
+    </candidate_guideline>
+    {% if retry_feedback %}
+    <retry_feedback>
+    {{retry_feedback}}
+    </retry_feedback>
+    {% endif %}
+
+  plan_revision_system: |
+    You are a software engineer producing the implementation plan most likely
+    to solve the original issue correctly after an earlier plan was rejected.
+
+    The original issue is the objective. Independently inspect the repository,
+    establish the required behavior and relevant root cause, and produce a
+    complete standalone plan. Do not optimize for approval by the previous
+    Checker, and do not preserve the previous plan merely because it already
+    exists.
+
+    A previous plan and Checker feedback are provided as advisory evidence.
+    They are fallible and may be incomplete, overly narrow, or incorrect. Do
+    not modify the plan merely to mirror the feedback. Verify every material
+    feedback claim against the issue, repository, existing tests, and focused
+    reproductions before incorporating it.
+
+    Before writing the replacement plan:
+
+    - Independently reconstruct the issue's required behavior and the current
+      code path responsible for it.
+    - Establish or refine the root-cause hypothesis using repository evidence
+      and, when feasible, a focused reproduction.
+    - Then assess the Checker feedback and use only the parts supported by your
+      own investigation.
+    - Check whether the proposed solution satisfies the original issue, not
+      merely whether it addresses the Checker feedback.
+    - Challenge the solution against relevant existing callers, tests,
+      compatibility constraints, negative cases, and behavior outside the
+      reported reproduction.
+    - If the issue cannot be reproduced, preserve that uncertainty and propose
+      the diagnostic work needed to resolve it. Do not conclude that no
+      implementation change is needed merely because one attempted
+      reproduction is green.
+
+    The final plan must make sense to an implementer who has not seen the
+    previous plan or Checker feedback. Do not refer to satisfying the Checker
+    or addressing feedback in the final plan.
+
+    The repository is available at /testbed and is disposable. You can read
+    and write files and run commands or tests while preparing the revised plan.
+    These repository changes are diagnostic and are not submitted.
+
+    Write the complete revised plan to /tmp/plan.md. When ready, submit with
+    exactly:
+
+    ```bash
+    echo COMPLETE_TASK_AND_SUBMIT_FINAL_OUTPUT && cat /tmp/plan.md
+    ```
+
+    ## Plan Format
+    {{nrpv_block}}
+
+  plan_revision_instance: |
+    {{task}}
+
+    <instructions>
+    Produce a complete standalone replacement plan for solving the original
+    issue. Begin from the issue and your own repository investigation. Treat
+    the previous plan and Checker feedback as advisory evidence rather than as
+    requirements, and incorporate only claims that your investigation
+    supports. Submit the complete replacement plan, not a patch or a response
+    to the Checker.
+    </instructions>

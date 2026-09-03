@@ -10,6 +10,11 @@ import yaml
 
 from src.optimization.hpc.task_batch import TaskFiles
 from src.swe_verified_pcce.config import load_swe_verified_pcce_config
+from src.swe_verified_pcce.controller import (
+    _load_first_review_seed,
+    _review_assignments,
+    run_swe_verified_pcce,
+)
 from src.swe_verified_pcce.dataset import load_pcce_cases
 from src.swe_verified_pcce.hpc_executor import _case_dict, build_array_script
 from src.swe_verified_pcce.models import PCCECase
@@ -24,10 +29,42 @@ from src.swe_verified_pce.hpc_executor import recover_exhausted_evaluator_timeou
 from src.swe_verified_pce.models import SWEVerifiedPCECase
 from src.swe_verified_pce.runner import checkpoint_identity
 from scripts.tools.freeze_swe_verified_pce_selection import freeze_selection
+from scripts.tools.freeze_pcce_rejected_first_reviews import (
+    freeze_rejected_first_reviews,
+)
 
 
 def _stable(value: object) -> str:
     return json.dumps(value, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
+
+
+def test_swe_verified_accepts_issue_first_revision_prompt_source(
+    tmp_path: Path,
+) -> None:
+    root = Path(__file__).resolve().parents[1]
+    original_path = root / "configs/swe_verified_pcce_quick50_c4_v1_20260902.yaml"
+    original = load_swe_verified_pcce_config(original_path, require_api_keys=False)
+    payload = yaml.safe_load(original_path.read_text(encoding="utf-8"))
+    payload["paths"]["prompt_source_config"] = (
+        "configs/pcce_issue_first_revision_prompt_v1_20260903.yaml"
+    )
+    candidate_path = tmp_path / "swe-verified-pcce-issue-first.yaml"
+    candidate_path.write_text(yaml.safe_dump(payload), encoding="utf-8")
+
+    candidate = load_swe_verified_pcce_config(
+        candidate_path,
+        require_api_keys=False,
+    )
+
+    assert candidate.checker_prompt == original.checker_prompt
+    assert candidate.checker_instance_template == original.checker_instance_template
+    assert candidate.plan_revision_prompt != original.plan_revision_prompt
+    assert "The original issue is the objective" in candidate.plan_revision_prompt
+    assert "Do not optimize for approval" in candidate.plan_revision_prompt
+    assert "provided as advisory evidence" in candidate.plan_revision_prompt
+    assert "Checker feedback as advisory evidence" in (
+        candidate.plan_revision_instance_template
+    )
 
 
 def _row(instance_id: str = "owner__repo-1") -> dict[str, object]:
@@ -143,6 +180,173 @@ def test_pc_manifest_projection_omits_outcome_and_official_tests(
     assert "baseline_outcome_sha256" not in payload
     for forbidden in ("GOLD", "TEST", "test_fail", "test_pass"):
         assert forbidden not in serialized
+
+
+def test_frozen_rejected_review_starts_at_p2_without_outcome_fields(
+    tmp_path: Path,
+) -> None:
+    _, _, source_case = _snapshot(tmp_path)
+    case = PCCECase(source_case, "# P1", False, "d" * 64)
+    raw = tmp_path / "review_01.jsonl"
+    raw_row = {
+        "instance_id": case.instance_id,
+        "status": "completed",
+        "review_index": 1,
+        "rejection_count_before_review": 0,
+        "rejection_count_after_review": 1,
+        "plan": "# P1",
+        "plan_source": "frozen_new_pce",
+        "checker_output": {
+            "should_proceed": False,
+            "decision_reason": "unsupported root cause",
+            "revision_feedback": "Re-establish the root cause.",
+            "repository_evidence": [{"path": "src/a.py", "finding": "fact"}],
+            "trajectory": [{"content": "omitted raw evidence"}],
+        },
+        "baseline_pce_resolved": False,
+        "pcce_resolved": False,
+    }
+    raw.write_text(json.dumps(raw_row) + "\n", encoding="utf-8")
+    payload = freeze_rejected_first_reviews(
+        raw,
+        source_run_id="source-run",
+        source_run_manifest_sha256="a" * 64,
+    )
+    seed = tmp_path / "seed.json"
+    seed.write_text(_stable(payload) + "\n", encoding="utf-8")
+    config = SimpleNamespace(
+        first_review_seed=seed,
+        expected_first_review_seed_sha256=file_sha256(seed),
+    )
+
+    loaded_payload, records = _load_first_review_seed(config, [case])
+    assert loaded_payload == payload
+    assert records is not None
+    serialized = json.dumps(records)
+    assert "baseline_pce_resolved" not in serialized
+    assert "pcce_resolved" not in serialized
+    assert "trajectory" not in serialized
+
+    assignments = _review_assignments([case], records, 2)
+    assert len(assignments) == 1
+    assert assignments[0].review_index == 2
+    assert assignments[0].rejection_count == 1
+    assert assignments[0].input_plan == "# P1"
+    assert assignments[0].previous_feedback == "Re-establish the root cause."
+
+
+def test_controller_does_not_rerun_a_frozen_first_review(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    _, _, source_case = _snapshot(tmp_path)
+    case = PCCECase(source_case, "# P1", False, "d" * 64)
+    seed_payload = {
+        "schema_version": 1,
+        "artifact_type": "pcce_rejected_first_review_seed",
+        "outcome_independent": True,
+        "source_run_id": "source-run",
+        "source_run_manifest_sha256": "a" * 64,
+        "source_review_sha256": "b" * 64,
+        "selected_instance_ids": [case.instance_id],
+        "records": [
+            {
+                "instance_id": case.instance_id,
+                "status": "completed",
+                "review_index": 1,
+                "rejection_count_before_review": 0,
+                "rejection_count_after_review": 1,
+                "plan": "# P1",
+                "checker_output": {
+                    "should_proceed": False,
+                    "revision_feedback": "Re-establish the root cause.",
+                },
+            }
+        ],
+    }
+    seed = tmp_path / "seed.json"
+    seed.write_text(_stable(seed_payload) + "\n", encoding="utf-8")
+    files = {}
+    for name in ("config", "images", "selection"):
+        path = tmp_path / f"{name}.json"
+        path.write_text("{}\n", encoding="utf-8")
+        files[name] = path
+    guideline = tmp_path / "guideline.md"
+    guideline.write_text("guideline\n", encoding="utf-8")
+    config = SimpleNamespace(
+        first_review_seed=seed,
+        expected_first_review_seed_sha256=file_sha256(seed),
+        run_dir=tmp_path / "run",
+        guideline_path=guideline,
+        config_path=files["config"],
+        image_manifest=files["images"],
+        selection_manifest=files["selection"],
+        guideline_label="c4-issue-first",
+        execution_mode="from_frozen_first_review",
+        max_review_rejections=3,
+        hpc=SimpleNamespace(max_task_attempts=3),
+    )
+    identities = {
+        "source_manifest_sha256": "c" * 64,
+        "pce_outcomes_sha256": "d" * 64,
+        "selection_manifest_sha256": file_sha256(files["selection"]),
+    }
+    observed_reviews: list[int] = []
+
+    class FakeExecutor:
+        def __init__(self, _config) -> None:
+            pass
+
+        def run_pc(self, assignments):
+            observed_reviews.extend(item.review_index for item in assignments)
+            assert [item.review_index for item in assignments] == [2]
+            return [
+                {
+                    "instance_id": case.instance_id,
+                    "status": "completed",
+                    "review_index": 2,
+                    "rejection_count_before_review": 1,
+                    "rejection_count_after_review": 1,
+                    "plan": "# P2",
+                    "checker_output": {
+                        "should_proceed": True,
+                        "revision_feedback": "",
+                    },
+                }
+            ]
+
+        def run_ce(self, assignments):
+            assert len(assignments) == 1
+            assert assignments[0].accepted_plan == "# P2"
+            return [
+                {
+                    "instance_id": case.instance_id,
+                    "status": "completed",
+                    "evaluator_result": {"evaluator_resolved": True},
+                }
+            ]
+
+    monkeypatch.setattr(
+        "src.swe_verified_pcce.controller.load_pcce_cases",
+        lambda _config: ([case], identities),
+    )
+    monkeypatch.setattr(
+        "src.swe_verified_pcce.controller.pcce_semantic_sha256",
+        lambda _config: "semantic",
+    )
+    monkeypatch.setattr("src.swe_verified_pcce.controller._git_head", lambda: "head")
+    monkeypatch.setattr(
+        "src.swe_verified_pcce.controller.SWEVerifiedPCCEHPCExecutor",
+        FakeExecutor,
+    )
+
+    result = run_swe_verified_pcce(config)
+
+    assert observed_reviews == [2]
+    assert result is not None
+    assert result["method_outcomes"] == {"resolved": 1}
+    persisted = json.loads((config.run_dir / "run_manifest.json").read_text())
+    assert persisted["first_review"]["executed_in_this_run"] is False
 
 
 def test_pcce_loader_pairs_exact_new_pce_plan(tmp_path: Path) -> None:
@@ -626,6 +830,43 @@ def test_tracked_quick50_c4_pcce_contract_is_paired_with_seed() -> None:
     )
     assert arguments[arguments.index("--config") + 1] == (
         "configs/swe_verified_pcce_quick50_c4_v1_20260902.yaml"
+    )
+    assert "--require-clean-worktree" in arguments
+    assert "--submit" in arguments
+
+
+def test_tracked_issue_first_c4_pcce_starts_from_frozen_rejections() -> None:
+    config = load_swe_verified_pcce_config(
+        "configs/swe_verified_pcce_quick50_c4_issue_first_v1_20260903.yaml",
+        require_api_keys=False,
+    )
+    seed = json.loads(config.first_review_seed.read_text(encoding="utf-8"))
+
+    assert config.execution_mode == "from_frozen_first_review"
+    assert len(config.instance_ids) == 16
+    assert tuple(seed["selected_instance_ids"]) == config.instance_ids
+    assert seed["outcome_independent"] is True
+    assert seed["source_review_sha256"] == (
+        "b2cb06ead5561b9f0aecc456aebb044ea4a5fc5e7e866fdfa35910aa0972e1d8"
+    )
+    assert file_sha256(config.first_review_seed) == (
+        config.expected_first_review_seed_sha256
+    )
+    assert "The original issue is the objective" in config.plan_revision_prompt
+    assert "provided as advisory evidence" in config.plan_revision_prompt
+    assert config.max_review_rejections == 3
+    assert config.phase_times.revision_review == "00:45:00"
+    assert config.phase_times.ce == "00:45:00"
+
+    supervisor = yaml.safe_load(
+        Path(
+            "configs/"
+            "swe_verified_pcce_quick50_c4_issue_first_supervisor_v1_20260903.yaml"
+        ).read_text(encoding="utf-8")
+    )
+    arguments = supervisor["arguments"]
+    assert arguments[arguments.index("--config") + 1] == (
+        "configs/swe_verified_pcce_quick50_c4_issue_first_v1_20260903.yaml"
     )
     assert "--require-clean-worktree" in arguments
     assert "--submit" in arguments

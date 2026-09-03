@@ -54,6 +54,50 @@ def _review_artifact(
     )
 
 
+def _load_first_review_seed(
+    config: SWEVerifiedPCCEConfig,
+    cases: list[PCCECase],
+) -> tuple[dict[str, Any] | None, list[dict[str, Any]] | None]:
+    if config.first_review_seed is None:
+        return None, None
+    if file_sha256(config.first_review_seed) != config.expected_first_review_seed_sha256:
+        raise ValueError("frozen first-review seed differs from its SHA-256")
+    payload = json.loads(config.first_review_seed.read_text(encoding="utf-8"))
+    records = payload.get("records")
+    if (
+        payload.get("schema_version") != 1
+        or payload.get("artifact_type") != "pcce_rejected_first_review_seed"
+        or payload.get("outcome_independent") is not True
+        or not isinstance(records, list)
+    ):
+        raise ValueError("invalid frozen first-review seed contract")
+    expected_ids = [case.instance_id for case in cases]
+    if payload.get("selected_instance_ids") != expected_ids or [
+        row.get("instance_id") for row in records if isinstance(row, dict)
+    ] != expected_ids:
+        raise ValueError("frozen first-review seed identity differs from cases")
+    case_by_id = {case.instance_id: case for case in cases}
+    for row in records:
+        if not isinstance(row, dict):
+            raise ValueError("frozen first-review seed contains a non-object row")
+        instance_id = str(row.get("instance_id", ""))
+        checker = row.get("checker_output")
+        if (
+            row.get("status") != "completed"
+            or row.get("review_index") != 1
+            or row.get("rejection_count_before_review") != 0
+            or row.get("rejection_count_after_review") != 1
+            or not isinstance(checker, dict)
+            or checker.get("should_proceed") is not False
+            or not isinstance(checker.get("revision_feedback"), str)
+            or not checker["revision_feedback"].strip()
+        ):
+            raise ValueError(f"invalid rejected Review-1 seed row: {instance_id}")
+        if str(row.get("plan", "")).strip() != case_by_id[instance_id].baseline_plan:
+            raise ValueError(f"frozen Review-1 P1 differs from paired PCE: {instance_id}")
+    return payload, records
+
+
 def _review_assignments(
     cases: list[PCCECase],
     prior: list[dict[str, Any]] | None,
@@ -86,6 +130,7 @@ def _review_assignments(
 
 def run_swe_verified_pcce(config: SWEVerifiedPCCEConfig) -> dict[str, Any] | None:
     cases, identities = load_pcce_cases(config)
+    first_review_seed, seeded_first_review = _load_first_review_seed(config, cases)
     config.run_dir.mkdir(parents=True, exist_ok=True)
     guideline = config.guideline_path.read_text(encoding="utf-8")
     manifest = {
@@ -104,12 +149,33 @@ def run_swe_verified_pcce(config: SWEVerifiedPCCEConfig) -> dict[str, Any] | Non
         "guideline_sha256": text_sha256(guideline),
         "instance_ids": [case.instance_id for case in cases],
         "paired_first_plan": True,
-        "execution_mode": "full_pcce",
+        "execution_mode": config.execution_mode,
         "max_review_rejections": config.max_review_rejections,
         "workflow_task_attempts": config.hpc.max_task_attempts,
         "workflow_attempts_consume_review_budget": False,
         "historical_pce_code_evaluate_reused": False,
         "planner_code_evaluate_enabled": True,
+        "first_review": {
+            "executed_in_this_run": seeded_first_review is None,
+            "seed_artifact_sha256": (
+                file_sha256(config.first_review_seed)
+                if config.first_review_seed is not None
+                else None
+            ),
+            "source_run_id": (
+                first_review_seed.get("source_run_id") if first_review_seed else None
+            ),
+            "source_run_manifest_sha256": (
+                first_review_seed.get("source_run_manifest_sha256")
+                if first_review_seed
+                else None
+            ),
+            "source_review_sha256": (
+                first_review_seed.get("source_review_sha256")
+                if first_review_seed
+                else None
+            ),
+        },
         "repository_baseline": {
             "declared_revision": "dataset_base_commit",
             "restore": "git reset --hard <base_commit> && git clean -fd",
@@ -133,7 +199,27 @@ def run_swe_verified_pcce(config: SWEVerifiedPCCEConfig) -> dict[str, Any] | Non
     review_results: dict[int, list[dict[str, Any]]] = {}
     try:
         prior: list[dict[str, Any]] | None = None
-        for review_index in range(1, config.max_review_rejections + 1):
+        first_review_index = 1
+        if seeded_first_review is not None:
+            review_results[1] = seeded_first_review
+            prior = seeded_first_review
+            wave_path = config.run_dir / "reviews" / "review_01.jsonl"
+            if wave_path.is_file():
+                if _read_jsonl(wave_path) != seeded_first_review:
+                    raise ValueError("persisted Review-1 seed differs from frozen input")
+            else:
+                _write_jsonl(wave_path, seeded_first_review)
+            for result in seeded_first_review:
+                artifact = _review_artifact(config, 1, str(result["instance_id"]))
+                if artifact.is_file():
+                    if json.loads(artifact.read_text(encoding="utf-8")) != result:
+                        raise ValueError("persisted Review-1 artifact differs from seed")
+                else:
+                    atomic_json(artifact, result)
+            first_review_index = 2
+        for review_index in range(
+            first_review_index, config.max_review_rejections + 1
+        ):
             assignments = _review_assignments(cases, prior, review_index)
             if not assignments:
                 break

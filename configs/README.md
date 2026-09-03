@@ -21,6 +21,7 @@ tracked does not authorize its execution.
 | `frozen_swe_chat_behavioral_formal/` | Complete 131-case repository/duplicate-component split authority: 84 train and 47 validation with no repository overlap. |
 | `gepa_behavioral_acceptability_formal_8it_v2_20260830.yaml` | Completed formal contract using the media-projected snapshot; immutable run identity, not a relaunch default. Its opening pre-launch comment is retained provenance and is superseded by `experiment_contract.status`. |
 | `behavioral_gepa_formal_8it_supervisor_v2_20260830.yaml` | Completed v2 supervisor identity; provenance only. |
+| `pcce_issue_first_revision_prompt_v1_20260903.yaml` | Non-runnable shared prompt authority for the next C4 PCCE diagnostic. It makes solving the original issue the Revision Planner's system-level objective and treats the previous plan and Checker feedback as fallible advisory evidence; it intentionally retains the existing `revision_feedback`-only payload for the first anti-anchoring comparison. |
 | `frozen_polybench_pc_quick/c4-balanced20-v1-20260831.json` | Frozen balanced 20-case external diagnostic selection, including conservative workflow/noise exclusions and deterministic sampling identity. |
 | `frozen_guidelines/behavioral-formal-c4-v1-20260831/` | Exact Behavioral formal candidate 4 text and source identity for the PolyBench diagnostic. |
 | `frozen_guidelines/behavioral-formal-all-candidates-v1-20260831/` | Local frozen backup of all six exact formal candidate texts, run identity, terminal state, cost report, lineage, and compact validation metrics; large raw trajectories remain on Iris. |
@@ -40,6 +41,9 @@ tracked does not authorize its execution.
 | `swe_verified_pcce_quick50_seed_supervisor_v1_20260901.yaml` | Completed bounded neutral-seed PCCE supervisor identity; provenance only. |
 | `swe_verified_pcce_quick50_c4_v1_20260902.yaml` | Prepared paired Behavioral C4 quick50 PCCE runtime using the same exact selection, PCE outcomes, image manifest, prompts, and operational policy as Seed. |
 | `swe_verified_pcce_quick50_c4_supervisor_v1_20260902.yaml` | Bounded C4 PCCE supervisor entry; tracked preparation is not launch authorization. |
+| `frozen_swe_verified_pcce_revision/issue-first-v1-20260903/` | Compact outcome-independent projection of all 16 completed C4 Review-1 rejections from quick50, bound to the authoritative raw wave and source run manifest hashes. It contains P1 and review evidence but omits trajectories. |
+| `swe_verified_pcce_quick50_c4_issue_first_v1_20260903.yaml` | Prepared Planner-v2 diagnostic on all 16 C4-rejected quick50 paths. It consumes frozen Review-1 rather than rerunning it, then permits unchanged C4 review of P2/P3 and paired Code/Evaluate. |
+| `swe_verified_pcce_quick50_c4_issue_first_supervisor_v1_20260903.yaml` | Prepared bounded supervisor identity for the issue-first SWE-Verified diagnostic; presence does not authorize launch. |
 | `frozen_guidelines/behavioral-neutral-seed-v1/` | Exact neutral Behavioral guideline and hash manifest for the paired comparison. |
 | `frozen_swe_chat_cleaning/f66cca95b14caaa4177f7ed5eaa424608dadcffa/` | Frozen Stage-1 decisions, compact Stage-2 manifest for 141 labeled first-Plan slices, additive repository-availability cleaning yielding 131 cases, exact-reconstruction audit summary, and 131-case temporal-proxy manifest. |
 

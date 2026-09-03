@@ -56,7 +56,8 @@ def pcce_semantic_sha256(config: SWEVerifiedPCCEConfig) -> str:
                 "plan_revision_instance": config.plan_revision_instance_template,
             },
             "max_review_rejections": config.max_review_rejections,
-            "execution_mode": "full_pcce",
+            "execution_mode": config.execution_mode,
+            "first_review_seed_sha256": config.expected_first_review_seed_sha256,
             "phase_times": {
                 "first_review": config.phase_times.first_review,
                 "revision_review": config.phase_times.revision_review,
