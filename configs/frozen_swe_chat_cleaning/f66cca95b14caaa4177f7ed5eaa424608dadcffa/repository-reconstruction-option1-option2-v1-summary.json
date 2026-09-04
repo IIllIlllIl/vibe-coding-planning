@@ -1,0 +1,48 @@
+{
+  "schema_version": 1,
+  "purpose": "swe_chat_repository_reconstruction_summary",
+  "dataset_id": "SALT-NLP/SWE-chat",
+  "revision": "f66cca95b14caaa4177f7ed5eaa424608dadcffa",
+  "audit_id": "swe-chat-repository-reconstruction-option1-option2-v1-20260830",
+  "stage2_manifest_sha256": "72e6422fdf1e52766b8003d0c9d5dd035a8b6d227c3bb7cc2ddb9d7c594f94bb",
+  "repository_cleaning_manifest_sha256": "9c0a8a67fded5c1bfb430e73bb550d0fec7b99849ab200a0d8248796d21e4329",
+  "auditor_sha256": "5c85467b35d458a40d9215ec5c04ba327f9823b3c39dad9c8e257c53eb1ff437",
+  "config_sha256": "041e0ff63090121d8893c7c447f8b355af0a1d6296d2a7a4c18a46ff633d69a8",
+  "remote_audit_path": "/scratch/users/twang/vibe-coding-planning/derived/swe-chat-repository-reconstruction-option1-option2-v1-20260830/reconstruction-audit.json",
+  "remote_audit_content_sha256": "c6e1d80e9457a6bf0d0b1b7bcd81a0b44d2eb3855e6cc0580c231b4b2ebe72d6",
+  "counts": {
+    "cases": 131,
+    "labels": {
+      "ACCEPT": 54,
+      "DO_NOT_ACCEPT": 77
+    },
+    "statuses": {
+      "AMBIGUOUS_CHECKPOINT": 41,
+      "CONTENT_MISMATCH": 8,
+      "NO_BASE_CANDIDATE": 59,
+      "PRE_P1_MUTATION": 13,
+      "REPLAY_UNSUPPORTED": 8,
+      "VERIFIED_BASE_CANDIDATE": 2
+    },
+    "verified_by_option1": 2,
+    "verified_by_option2": 0
+  },
+  "verified_cases": [
+    {
+      "case_id": "039c7932-07b5-4d72-987c-d7fa070361c1#first-plan",
+      "repo_id": "ClusterCockpit/cc-backend",
+      "label": "ACCEPT",
+      "candidate_parent_commit": "ac0a4cc39acd14a318f3305ce6a956f2e21d9874",
+      "matched_read_tool_calls": 7
+    },
+    {
+      "case_id": "88c65864-3f29-4b06-bbe1-7fab0c4a0142#first-plan",
+      "repo_id": "ClusterCockpit/cc-backend",
+      "label": "ACCEPT",
+      "candidate_parent_commit": "3d99aec185a96a637106fca69661e9e3ba7c6d3d",
+      "matched_read_tool_calls": 4
+    }
+  ],
+  "conclusion": "The canonical-checkpoint-parent policy is too sparse and one-class for Behavioral v1. Conservative structured Write/Edit replay adds no cases because every replay candidate also contains at least one operation with unbounded worktree effects. This audit does not define an Offline GEPA dataset.",
+  "content_sha256": "94a3948aa687a5b87b886eaf96c211ae93007c5722fff9b2416bad484a81e105"
+}

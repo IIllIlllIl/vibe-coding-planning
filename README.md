@@ -1,192 +1,138 @@
-# GEPA Planning Rules
+# Behavioral Plan Acceptability Research
 
-This project optimizes a planning guideline against the actual behavior of a
-software-development Agent. The intended artifact is a standalone method that
-guides both repository investigation and the eventual plan decision; it must
-not depend on software-engineering guidance hidden in an experiment-only
-Checker prompt. The project currently maintains two distinct experimental
-paths rather than assuming one is intrinsically superior:
+This branch develops a deployable, explainable plan-review guideline at the
+Plan-to-Implementation boundary. It starts from the current Offline GEPA search
+implementation and the completed clean PolyBench PCE/PCCE evidence, then adds
+SWE-chat Behavioral Plan Acceptability v1 as a new supervision design.
 
-- **Offline GEPA** learns a human- and Agent-usable plan-review guideline from
-  historical Round 1 plans, resolved labels, and execution evidence.
-- **Online GEPA** evaluates candidate rules through current Plan-Code-Evaluator
-  rollouts on ULHPC.
+The active research question is whether the evidence available before
+implementation supports accepting a proposed plan. Deployment-time review must
+not see developer reactions, later plan revisions, implementation trajectories,
+or downstream outcomes. Those post-boundary records may support dataset labels
+and GEPA Reflection only.
 
-Online GEPA uses this flow:
+## Frozen research baseline
 
-```text
-task + candidate rules -> Plan Agent -> plan
-task + plan             -> Code Agent -> patch
-task + patch            -> official evaluator -> outcome
-current rollout evidence -> GEPA Reflection -> updated rules
-```
+- The first clean PolyBench PCCE stage is complete and paused.
+- Paired PCE resolves 70/99 cases; Seed PCCE resolves 66/99.
+- Candidate 2 resolves 66 cases, leaves 32 unresolved, and has one operationally
+  incomplete case.
+- On the 98-case common terminal intersection, PCE / Seed / candidate 2 resolve
+  69 / 66 / 66 cases.
+- The fixed-revision SWE-chat source acquisition is complete: the dataset is
+  verified and all 205 repository requests reached terminal status, with 188
+  mirrors completed and 17 repositories skipped for later audit.
+- Behavioral Stage 1 deterministically selects 170 high-agent-authorship
+  trajectories with a structured non-empty Plan and preserves all exclusions
+  in a frozen manifest.
+- Behavioral Stage 2 freezes 141 conservatively eligible first-Plan slices and
+  29 audited exclusions with physically separated Checker-visible and
+  Reflection-only evidence.
+- All 131 repository-ready cases have a frozen, explicitly approximate
+  pre-session temporal repository proxy: 67 from a retained recorded branch
+  and 64 from an ordinary source-ref fallback.
+- The first formal Behavioral GEPA run completed eight proposal iterations on
+  the repository-disjoint 84-train/47-validation split. Candidates 1 and 4
+  tied at 59.6% validation accuracy; candidate 4 had the stronger balanced
+  secondary metrics and was selected for the first external diagnostic.
+- The 20-case balanced PolyBench PC-only diagnostic completed without an
+  incomplete decision. C4 scored 65% versus the historical Seed's 60%, a
+  directional small-sample result rather than a generalization claim.
 
-PCT, PCC/Checker, and standalone rule extraction remain historical methods.
-Earlier Offline GEPA runs are archived evidence; current Offline behavior is
-defined by [`docs/offline-gepa.md`](docs/offline-gepa.md) and
-[`configs/gepa_verified_rules.yaml`](configs/gepa_verified_rules.yaml).
+These are frozen stage results, not a live progress log. Current unresolved
+methodological decisions are maintained only in `project_issues.md`. Launching
+any new experiment still requires an explicit user instruction and a new
+frozen experimental contract.
 
-The first clean PolyBench PCCE deployment stage is complete and paused. The
-minimal Seed and frozen minibatch-eight candidate 2 both failed to improve the
-paired no-Checker PCE baseline, and candidate 2 did not improve the common-set
-resolved count over Seed. The execution platform remains reusable, but the
-next study must redesign the separation between first-plan classification,
-revision-feedback completeness, revised-plan quality, and end-to-end benefit.
-See
-[`docs/knowledge/offline-pcce-stage-findings.md`](docs/knowledge/offline-pcce-stage-findings.md).
-
-## Agent Working Set
+## Active research surface
 
 Read these files in order:
 
-1. [`project_issues.md`](project_issues.md) for current risks and observations.
-2. [`docs/README.md`](docs/README.md) for the authoritative documentation map.
-3. [`docs/requirement-document.md`](docs/requirement-document.md) for behavior
-   and validity requirements.
-4. [`docs/architecture.md`](docs/architecture.md) for current modules and state.
-5. [`docs/gepa-rule-optimization.md`](docs/gepa-rule-optimization.md) for Online
-   optimization and outcome-policy semantics.
-6. [`docs/offline-gepa.md`](docs/offline-gepa.md) for Offline Checker, metric,
-   stopping, and resume semantics.
-7. [`docs/hpc-submit.md`](docs/hpc-submit.md) before any ULHPC operation.
-8. [`configs/gepa_online_planning_hpc.yaml`](configs/gepa_online_planning_hpc.yaml)
-   for formal models, prompts, budgets, and resources.
-9. [`configs/online_gepa_supervisor.yaml`](configs/online_gepa_supervisor.yaml)
-   for the exact unattended launch identity and controller arguments.
+1. [`docs/branch-scope.md`](docs/branch-scope.md) — branch boundary, retained
+   systems, and historical-reference policy.
+2. [`project_issues.md`](project_issues.md) — current decisions and unresolved
+   methodological risks only; it is not a run-progress log.
+3. [`docs/swe-chat-data-cleaning.md`](docs/swe-chat-data-cleaning.md) — current
+   Behavioral trajectory selection and the evidence available for episode
+   slicing.
+4. [`docs/offline-gepa.md`](docs/offline-gepa.md) — current Offline Checker,
+   metric, Reflection, search, and resume semantics.
+5. [`docs/behavioral-offline-gepa-adaptation.md`](docs/behavioral-offline-gepa-adaptation.md)
+   — Behavioral information boundary, minimum Offline adapter changes, and the
+   staged development-smoke contract.
+6. [`docs/knowledge/offline-pcce-stage-findings.md`](docs/knowledge/offline-pcce-stage-findings.md)
+   — frozen first-stage PolyBench findings.
+7. [`docs/knowledge/behavioral-gepa-initial-findings.md`](docs/knowledge/behavioral-gepa-initial-findings.md)
+   — frozen first Behavioral search and C4 external-diagnostic findings.
+8. [`docs/polybench-pcce.md`](docs/polybench-pcce.md) and
+   [`docs/offline-polybench-validation.md`](docs/offline-polybench-validation.md)
+   — implemented PCE/PCCE and external-evidence boundaries.
+9. [`docs/swe-verified-pce-pcce.md`](docs/swe-verified-pce-pcce.md) — additive
+   SWE-Verified PCE/PCCE generalization workflow, phase isolation, evaluator
+   semantics, and smoke-to-quick-validation order.
 
-Do not browse `docs/archive/` or `output/archive/` unless the user explicitly
-requests historical comparison, audit, or reproduction. Transferable PCT/PCC
-lessons have already been extracted into [`docs/knowledge/`](docs/knowledge/).
+The current implementation surface is:
 
-## Current Online Design
+- the Offline modules under `src/optimization/`, plus its shared `hpc/`
+  infrastructure;
+- `src/polybench_pce/` and `src/polybench_pcce/` for the frozen external
+  execution/evaluation platform;
+- `src/offline_check_only/` for additive fixed-guideline evaluation;
+- `src/swe_verified_pce/` and `src/swe_verified_pcce/` for independent current-
+  prompt SWE-Verified PCE and paired Seed/C4 PCCE evaluation;
+- `third_party/gepa/` for the existing search implementation, which should not
+  be changed without a concrete experimental need;
+- `tests/test_optimization/test_offline_gepa_regression.py` for the focused,
+  no-LLM historical Offline acceptance suite;
+- `src/optimization/behavioral_*.py` and
+  `tests/test_optimization/test_behavioral_offline_foundation.py` for the
+  Behavioral schema, acceptability Adapter, evidence projection, and disposable
+  temporal-proxy checkout foundation;
+- `configs/gepa_behavioral_acceptability_smoke_v2_20260830.yaml` and
+  `configs/gepa_behavioral_acceptability_formal_8it_v2_20260830.yaml` for the
+  completed smoke and formal Behavioral method identities.
 
-- Candidate rules are visible to the Plan Agent only.
-- Code receives the issue, generated plan, and a clean repository.
-- Evaluator receives only the patch and official test metadata.
-- Reflection receives evidence from the current rollout minibatch.
-- Historical plans, patches, labels, ASI, and archived scores never enter a
-  current rollout.
-- HPC rollout uses one independent `1 CPU / 4G` Slurm array element per case.
-- Fingerprinted batch journals and phase checkpoints support selective resume.
-- Outcome policy v3 separates scored Agent/evaluator outcomes from invalid
-  infrastructure failures.
+## Historical paths
 
-## Current Offline Design
+Standalone Online GEPA/PCT/old-analysis documents, configs, and resource-pilot
+scripts are archived in this branch. Historical source modules and mixed shared
+entrypoints remain temporarily so dependency reachability can be measured after
+the Behavioral skeleton exists. None are active research authority or default
+search targets.
 
-```text
-issue + historical Round 1 plan + base repository + candidate guideline
-  -> fixed repo-grounded Checker
-  -> predicted_resolved
-  -> accuracy against historical resolved
-  -> GEPA Reflection proposes a complete replacement guideline
+The unmodified historical baseline is commit
+`95807f9f581eb3b2fc25f2b60100e5cf2f91b9c1` on `main`. Read a historical file
+without restoring it into this branch with, for example:
+
+```bash
+git show main:src/optimization/online_runner.py
+git show main:docs/gepa-rule-optimization.md
 ```
 
-The candidate text is the complete transferable review guideline. The fixed
-Checker exposes the issue, proposed plan, disposable base-commit repository,
-and method-independent Agent protocol without supplying a hidden review method.
-Historical labels, patches, execution trajectories, and evaluator outcomes
-remain hidden from Checker input and are available only as Reflection
-diagnostics.
+Frozen datasets and raw outputs are intentionally not duplicated by Git. This
+worktree uses Git-ignored local references to the two exact data roots in the
+main worktree: `output/SWE-bench_Verified` and `output/SWE-PolyBench`. Those
+references are local setup, never committed branch content.
 
-## Environment
+## Environment and safe validation
 
-Use the `mini-swe` conda environment for all Python commands:
+Use the `mini-swe` conda environment for every Python command:
 
 ```bash
 conda run -n mini-swe python -c \
   "import minisweagent; print(minisweagent.__version__)"
 ```
 
-Expected mini-swe-agent version: `1.17.5`.
+Expected versions are Python 3.12.13 and `mini-swe-agent==1.17.5`.
 
-Validate the formal Online config without calling an external model:
-
-```bash
-conda run -n mini-swe python -c \
-  "from src.optimization.online_config import load_online_optimization_config as load; load('configs/gepa_online_planning_hpc.yaml', require_api_keys=False)"
-```
-
-Validate the Offline config without calling an external model:
-
-```bash
-conda run -n mini-swe python -c \
-  "from src.optimization.config import load_optimization_config as load; load('configs/gepa_verified_rules.yaml', require_api_keys=False)"
-```
-
-Run the relevant test suite:
+The focused no-LLM regression entry point is:
 
 ```bash
 conda run -n mini-swe pytest -q --no-cov \
-  tests/test_optimization/test_gepa_optimization.py \
-  tests/test_scripts/test_hpc_resume_loop.py
+  tests/test_optimization/test_offline_gepa_regression.py \
+  tests/test_optimization/test_behavioral_offline_foundation.py
 ```
 
-## Formal Online Experiment
-
-The formal snapshot contains 384 train and 98 validation instances:
-
-```text
-output/SWE-bench_Verified/verified-round1-gepa-datasets/
-  20260614_482_fdc056ae85df/
-```
-
-The standard configuration uses:
-
-- full 384/98 dataset;
-- Reflection minibatch size 3;
-- up to 150 independent Slurm workers;
-- separate PCT, Reviewer, and Synthesis Slurm phases, each using
-  `1 CPU / 4G / 55min`;
-- Code phase soft budget 40 minutes;
-- three total attempts;
-- short cooperative controller slices managed by a local 30-minute supervisor.
-- unattended supervisor lifecycle is anchored by `tmux + caffeinate`.
-
-Submission and resume commands are intentionally kept in
-[`docs/hpc-submit.md`](docs/hpc-submit.md), so resource and credential rules are
-read before a job is launched.
-
-Start or inspect the formal supervisor from its persisted launch config; do not
-reconstruct its arguments from chat history:
-
-```bash
-conda run -n mini-swe python scripts/hpc_supervisor_service.py \
-  start --launch-config configs/online_gepa_supervisor.yaml
-```
-
-## Output Boundary
-
-[`output/README.md`](output/README.md) defines the active output working set.
-[`output/catalog.json`](output/catalog.json) records archive classification and
-original path families.
-
-Only the formal dataset and current Online/Offline GEPA result root remain
-active. Historical PCT/PCC and earlier Offline/test/analysis/operations outputs
-are under `output/archive/` and must not be mixed into current score analysis.
-
-## Repository Map
-
-| Path | Purpose |
-|---|---|
-| `src/optimization/online_*.py` | Online config, runner, adapter, rollout, Reflection, HPC execution |
-| `src/optimization/{config,dataset,checker,adapter,reflection,runner,resume}.py` | Offline plan-review guideline optimization |
-| `src/optimization/hpc/` | Shared Slurm configuration, commands, and atomic task lifecycle |
-| `src/optimization/offline_*worker.py` | One Offline Checker or Reflection Slurm phase |
-| `src/offline_check_only/` | Additive dataset-aware fixed-guideline evaluation; reuses Checker/Slurm attempts without GEPA or Reflection |
-| `src/evaluator/` | Runtime routing and official evaluator backends |
-| `scripts/hpc_resume_loop.py` | Local iteration-target supervisor |
-| `scripts/hpc_supervisor_service.py` | Durable supervisor start/status/stop |
-| `scripts/hpc_submit_batch.sh` | `ulhpc-submit` wrapper |
-| `configs/gepa_online_planning_hpc.yaml` | Formal Online experiment configuration |
-| `configs/online_gepa_supervisor.yaml` | Persistent unattended launch configuration |
-| `configs/gepa_verified_rules.yaml` | Current Offline HPC experiment configuration |
-| `configs/offline_gepa_supervisor.yaml` | Offline controller/supervisor launch identity |
-| `docs/offline-polybench-validation.md` | Current PolyBench-199 image preparation, PCE regeneration, and guideline-only generalization contract |
-| `docs/polybench-pcce.md` | Current paired Plan-Check-Code-Evaluate deployment evaluation, formal seed run, and its two independent attempt layers |
-| `docs/knowledge/offline-pcce-stage-findings.md` | Frozen Seed/C2 PCCE result, failure taxonomy, limitations, and next-design requirements |
-| `docs/knowledge/` | Reusable lessons extracted from historical methods |
-| `docs/reference/` | GEPA and seed-rule provenance |
-| `docs/archive/` | Non-authoritative historical documents |
-
-Current unresolved decisions and next-run checks belong in
-[`project_issues.md`](project_issues.md), not in this overview.
+Do not launch an LLM, GEPA, Docker, Apptainer, HPC, PCE, or PCCE run merely to
+validate this branch. New experiments require frozen inputs, a new run identity,
+budget, stopping conditions, acceptance criteria, and explicit authorization.

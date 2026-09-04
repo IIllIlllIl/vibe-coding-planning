@@ -1,0 +1,57 @@
+{
+  "schema_version": 1,
+  "selection_id": "polybench-c4-pc-quick-balanced20-v1-20260831",
+  "purpose": "development external diagnostic; not an untouched holdout or a population-prevalence estimate",
+  "source_snapshot_id": "20260826_python99_cleanpce_depcache_03619730229d",
+  "source_manifest_sha256": "2125d88a208f7869a237a013f628798bf1851edf11b5388f499d0f5abefdac31",
+  "source_validation_sha256": "b3327cabefd57d103e4e70448dc15f5c72afd61a69ad9134274f9230de018cc0",
+  "source_pce_outcomes_sha256": "fd1a808b97c0afd31c83c85f2e39f19b652dd29a320969b9955230f7a64bc3f3",
+  "selection_policy": {
+    "starting_universe": "95-case conditional behavior audit",
+    "starting_counts": {"resolved": 67, "unresolved": 28},
+    "placeholder_policy": "existing high-precision placeholder_reason; zero matches",
+    "noise_policy": "exclude only frozen PCE outcomes dominated by directly evidenced evaluator or environment noise",
+    "post_cleaning_counts": {"resolved": 67, "unresolved": 24},
+    "sampling_seed": "polybench-c4-pc-quick-v1-20260831",
+    "sampling_order": "ascending SHA256(seed + NUL + instance_id) within label and repository strata",
+    "target": "10 resolved and 10 unresolved with repository-proportional integer allocations",
+    "repository_allocations": {
+      "resolved": {"huggingface/transformers": 6, "keras-team/keras": 2, "langchain-ai/langchain": 1, "yt-dlp/yt-dlp": 1},
+      "unresolved": {"Significant-Gravitas/AutoGPT": 1, "huggingface/transformers": 4, "keras-team/keras": 3, "langchain-ai/langchain": 1, "yt-dlp/yt-dlp": 1}
+    }
+  },
+  "workflow_exclusions": [
+    "huggingface__transformers-26164",
+    "huggingface__transformers-22458",
+    "huggingface__transformers-27114",
+    "langchain-ai__langchain-4420"
+  ],
+  "noise_exclusions": [
+    {"instance_id": "huggingface__transformers-19590", "reason": "target test required an unavailable online tokenizer download"},
+    {"instance_id": "huggingface__transformers-19657", "reason": "broad test suite was dominated by offline model-download failures"},
+    {"instance_id": "huggingface__transformers-29519", "reason": "broad test suite mixed relevant assertions with many offline model-download failures"},
+    {"instance_id": "keras-team__keras-18871", "reason": "test startup failed in the environment before task behavior could be evaluated"}
+  ],
+  "selected_instance_ids": [
+    "huggingface__transformers-13865",
+    "huggingface__transformers-20136",
+    "huggingface__transformers-28071",
+    "huggingface__transformers-29311",
+    "huggingface__transformers-30934",
+    "huggingface__transformers-31646",
+    "keras-team__keras-19190",
+    "keras-team__keras-19838",
+    "langchain-ai__langchain-5584",
+    "yt-dlp__yt-dlp-4841",
+    "Significant-Gravitas__AutoGPT-4652",
+    "huggingface__transformers-27663",
+    "huggingface__transformers-28398",
+    "huggingface__transformers-29675",
+    "huggingface__transformers-30899",
+    "keras-team__keras-19466",
+    "keras-team__keras-19863",
+    "keras-team__keras-20002",
+    "langchain-ai__langchain-20064",
+    "yt-dlp__yt-dlp-5195"
+  ]
+}

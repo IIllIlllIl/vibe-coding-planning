@@ -4,11 +4,19 @@ import os
 import subprocess
 from pathlib import Path
 
-from scripts.tools.run_online_hpc_resource_worker import prepare_worker_task
+from scripts.archive.online_gepa.run_online_hpc_resource_worker import (
+    prepare_worker_task,
+)
 
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
-SUBMIT_SCRIPT = REPO_ROOT / "scripts" / "tools" / "submit_online_hpc_resource_pilot.sh"
+SUBMIT_SCRIPT = (
+    REPO_ROOT
+    / "scripts"
+    / "archive"
+    / "online_gepa"
+    / "submit_online_hpc_resource_pilot.sh"
+)
 
 
 def _write_snapshot(root: Path) -> Path:
@@ -201,7 +209,7 @@ container_module: tools/Apptainer
     assert "/scratch/test/apptainer-tmp" in result.stdout
     assert "--apptainer-sif-cache-dir" in result.stdout
     assert "/scratch/test/sif-cache" in result.stdout
-    assert "scripts/tools/run_online_hpc_resource_worker.py" in result.stdout
+    assert "scripts/archive/online_gepa/run_online_hpc_resource_worker.py" in result.stdout
     assert "--instance-id repo__train1" in result.stdout
     assert "source \"$ENV_FILE\"" in result.stdout
     assert "DEEPSEEK_API_KEY" in result.stdout

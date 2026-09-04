@@ -1,0 +1,33 @@
+schema_version: 1
+session: behavioral-gepa-formal-8it-v1-20260830
+log: .local/hpc-supervisor/behavioral-gepa-formal-8it-v1-20260830.log
+arguments:
+  - --poll-interval
+  - "120"
+  - --slice-time
+  - "00:08:00"
+  - --max-runs
+  - "120"
+  - --state-file
+  - .local/hpc-supervisor/behavioral-gepa-formal-8it-v1-20260830.json
+  - --require-clean-worktree
+  - --gepa-rules
+  - --gepa-config
+  - configs/archive/behavioral_gepa/gepa_behavioral_acceptability_formal_8it_v1_20260830.yaml
+  - --ulhpc-config
+  - /Users/taoran.wang/.config/ulhpc-submit/config.yaml
+  - --job-name
+  - behavioral-gepa-formal-8it-v1-20260830
+  - --remote-dir
+  - ~/hpc_runs/vibe-coding-planning-behavioral-formal-8it-v1-20260830
+  - --remote-dataset-dir
+  - /scratch/users/twang/vibe-coding-planning/behavioral-gepa-datasets
+  - --remote-run-dir
+  - /scratch/users/twang/vibe-coding-planning/behavioral-gepa-run-state
+  - --cpus
+  - "1"
+  - --mem
+  - 4G
+
+# Intentionally no --submit. Add it only after explicit launch approval and
+# after experiment_contract.launch_authorized is frozen to true in a launch commit.

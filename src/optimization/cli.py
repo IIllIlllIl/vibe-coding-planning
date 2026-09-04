@@ -10,6 +10,7 @@ import yaml
 
 from src.optimization.config import load_optimization_config
 from src.optimization.checker_stability import run_checker_stability
+from src.optimization.behavioral_runner import run_behavioral_optimization
 from src.optimization.online_config import load_online_optimization_config
 from src.optimization.online_runner import run_online_optimization
 from src.optimization.runner import run_optimization
@@ -31,4 +32,8 @@ def main() -> None:
             config_path=Path(args.config).resolve(),
         )
     else:
-        run_optimization(load_optimization_config(args.config))
+        config = load_optimization_config(args.config)
+        if config.task.semantics == "behavioral_plan_acceptability_v1":
+            run_behavioral_optimization(config)
+        else:
+            run_optimization(config)

@@ -1,0 +1,150 @@
+{
+  "initial_max_metric_calls": 700,
+  "latest_max_metric_calls": 700,
+  "semantic_config": {
+    "checker": {
+      "agent_timeout_seconds": 0,
+      "api_base": "https://api.deepseek.com",
+      "api_key_env": "DEEPSEEK_API_KEY",
+      "cost_limit": 6.0,
+      "max_attempts": 1,
+      "max_steps": 500,
+      "model": "deepseek-v4-flash",
+      "temperature": 0.0,
+      "timeout": 1800
+    },
+    "container": {
+      "module": "tools/Apptainer",
+      "runtime": "none",
+      "sif_cache_dir": "/tmp/vibe-sif-cache",
+      "writable_tmpfs": true
+    },
+    "dataset": {
+      "manifest.json": "925ae5065d50b66d2d17faf25d76090e85feb8df7dc377b63038e1a9bcbdd380",
+      "train.jsonl": "53ab1e67085c1782187f818f9043ce34ffbd34af209ab45955584b846011ecd7",
+      "validation.jsonl": "895033d93137bea651a021624b450e73bfe6e0adddab8181cfdd903ed046ec19"
+    },
+    "docker": {
+      "delete_images_after_instance": true,
+      "image_builder_script": "./scripts/build_docker_images.sh",
+      "max_cached_images": 75,
+      "min_free_gb": 20,
+      "polybench_build_fallback": false,
+      "polybench_build_timeout": 3600,
+      "polybench_pull_timeout": 600,
+      "timeout": 30,
+      "workdir": "/testbed"
+    },
+    "execution": {
+      "backend": "hpc_slurm"
+    },
+    "gepa": {
+      "batch_sampler": "epoch_shuffled",
+      "cache_evaluation": true,
+      "candidate_components": [
+        "rules"
+      ],
+      "candidate_selection_strategy": "pareto",
+      "data_id": "instance_id",
+      "frontier_type": "instance",
+      "offline_artifact": "guideline",
+      "track_best_outputs": true
+    },
+    "hpc_semantics": {
+      "max_task_attempts": 3
+    },
+    "initial_guideline_sha256": "c34f503ee90dca908d47bf2b112ab1393044762a3d667cb63e2f90308fb99f75",
+    "prompts": {
+      "checker_instance_sha256": "1aa0241360917b18244faab536e30d3e5291070356a3fd6cdd0556894818e451",
+      "checker_system_sha256": "7b28e3c2249ce578580607998d9950aceac31bc99b3d52e1e56309a842fa2d1a",
+      "reflection_instance_sha256": "546e2e6262717e251f130587e432b1b7f537dbbdb4029bc9c70fefc1067198d0",
+      "reflection_system_sha256": "b30f8bd113108bb36987a5f0a45b58623da2b61a61acc3439f228608eeb48264"
+    },
+    "reflection": {
+      "agent_timeout_seconds": 0,
+      "api_base": "https://api.deepseek.com",
+      "api_key_env": "DEEPSEEK_API_KEY",
+      "cost_limit": 3.0,
+      "max_attempts": 1,
+      "max_steps": 100,
+      "model": "deepseek-v4-flash",
+      "temperature": 0.7,
+      "timeout": 1800
+    },
+    "repository_backend": {
+      "backend": "temporal_git_proxy"
+    },
+    "search": {
+      "max_iterations": 8,
+      "min_proposals": 1,
+      "parallel": 1,
+      "primary_metric": "accuracy",
+      "reflection_minibatch_size": 8,
+      "seed": 42,
+      "skip_perfect_score": false,
+      "train_case_repetitions": 1
+    },
+    "source": {
+      "project_optimization": {
+        "__init__.py": "3ede4c315ff1875f867d9bc2cb257e5fa69f4a1a63f79a6250cfe6f810639e3b",
+        "__main__.py": "859bb0b03b728001d76130a3d513c2e163f880bd838e2d2fa540358da61f0a0f",
+        "adapter.py": "275aa14d741661c697abebf5e37d842a1511093d616ad33e340aa5bf266190af",
+        "audit.py": "85ae3a9d2f61981ae276c87a53b91749f6a3f01773663f1e84fdcef967002590",
+        "behavioral_adapter.py": "a40139a4763d58733e92c0847e6d2e6ba82a6e2bb0e666775ed87e89cc43098e",
+        "behavioral_checker_worker.py": "28e753dbb4f0cd53ba4970b8aabbda84946c69b5e887d93893596760d2fde0b5",
+        "behavioral_dataset.py": "bf0c76bd4a30a658961ee7dcafaa4a3d86bdf4fd6e6e9bbc826623d682d81786",
+        "behavioral_hpc_executor.py": "5beb31e618f1020b94e6c1acbff18e11d2e552e3fefe1ab9393d2350515627e0",
+        "behavioral_models.py": "2f1850ea34781f534679016ec5428b037872cc610b85501141cf4e67ccf99f4b",
+        "behavioral_reflection_worker.py": "01ed7b019d095e1ae2917c8c413c28e00ef20d7919019ae0207e37b12d9a0a82",
+        "behavioral_report.py": "4ecb03f3837d7a82cb1c206fb503d32c45001ac9728b5bd7154d92d110690ff0",
+        "behavioral_repository.py": "6b7211be9f16c9b5581216ba50c548d7ce4c90f23e4127386bf1280e5e5923e0",
+        "behavioral_runner.py": "3131e3254fb5586069bc4193172b085d891d51f458877f3960fb241850e3b4b4",
+        "behavioral_runtime.py": "3820782760fe20a99002a6932304b3c7f93f146b2369a33878736e990133fa0e",
+        "callbacks.py": "9b1015514fe8b7752569c067f4c658bbb504171119256ab89c73ba4a844de90a",
+        "checker.py": "f2df5f6a21cf2956a879442a20e50d207bccf6c3146952dffb4e6acc8a0df0d3",
+        "checker_stability.py": "181fe746bb5f5fe3657256612f677068351cd7bca9b1924932d49cdd132193f4",
+        "cli.py": "e32fc9ff75abfb7783a0cbdd3eddb358965fe84612ed164ff4f8cb4a55f81499",
+        "config.py": "59016c47e6f9476442ceface987828f0a328a8193f8339ba1bfe6fef440ecb7a",
+        "dataset.py": "c063e24872c3487d61248c88f5ba1ed4e2a63322a4194ac80af4e0452cb16fc4",
+        "hpc/__init__.py": "816c0e55409418e89edba6bb597213c0c859ff74a58097cfc3c66523de6da31c",
+        "hpc/config.py": "0a709c76e2a9ac6b16e9c8a414a9de2be4d6e08495527ce0632530ca0661ea26",
+        "hpc/slurm.py": "9d2dc4f91728d71e6fbb74abe1050a1268a6f54cc43353b80a1f5fda03ce841e",
+        "hpc/task_batch.py": "472e9211f4108bd33f2f27479f1044ca0597c04e0e2189e872a5b2451be3bb57",
+        "metrics.py": "2ccba939affad749023128e7bd2e7d74a3e0acce38adb2a801155559d265afea",
+        "models.py": "e10ceaa820a9561e4392a7924f726e8caabd0b25ee81bad69fa340472d96e348",
+        "offline_checker_worker.py": "c88719eb10e5a88aa59db30a6b9f8b18a33e7b1f014109f866074d6d996f0608",
+        "offline_hpc_executor.py": "b876dee8e86805dd166a540414dbef469beaa6ab209a0a3cb5c560f98a2a521d",
+        "offline_hpc_reflection.py": "55f26a1bb93bd13e1de3cf28f1703c88fe311924aab5e5629e260f732a7997f9",
+        "offline_reflection_worker.py": "e6a50f7bab1bf751631f3ac15bb253f1c2087cf0ea5f3fb2b7a09266772c9003",
+        "online_adapter.py": "0d74e3fc00ca0ec540ab73d7ff6bcb263535da81443fc77c86b49d8252832bde",
+        "online_config.py": "2d8a2a77b12cf78c34841e9f2109fa437311497952d4738f3640b9b5ab22cdcb",
+        "online_dataset.py": "5e166f6a650d19ada6b8ac152ad4b1fb505eea6767424463a6c1aa41e88d1c58",
+        "online_hpc_executor.py": "fc4370bed2fbfc7748cdb6db563b15919c4241a14706c4b80b7feb5ea010e5a3",
+        "online_models.py": "5aca40865661c39587b8238618b596567c009ea27b1c967e9acfe733c327f041",
+        "online_reflection.py": "0006626ff8c61688feadf4c0a8a28cd2809945289200d766a23323c8904bdc16",
+        "online_reflection_reviewer.py": "d0fe716045da28de0d06a08ae50ceea56acf734832616f0e55920056bcb9e59c",
+        "online_reviewer_worker.py": "a9c5e44958e6ef547b8119e806f330f81b9296c4cedd8edb4fb4f59d26348842",
+        "online_rollout.py": "142e1d316a93e71423b8d3cf28f1bcf9cdeae09f5df39431cc9ffb365c0f59a9",
+        "online_rollout_worker.py": "13207758782eefdd8bcf7daa3cb00c16d431095888e248824c14295b3ca6b802",
+        "online_runner.py": "a48fb9877b8b9127eca46c6614e6b61f7d94e737fba8e1e620a9c4e809df3cc5",
+        "online_synthesis_worker.py": "bc2c9b30c17775f039ac4bbd2a38ec15f90fb584263000bd6708ce036b928f8c",
+        "reflection.py": "88f30210e4393eaf884e13a2fdd1bbbe944558b3f84369fbc42b3b0f5dcd1c53",
+        "report.py": "143b747d46fd88ce7cd97116941e190d9504ed2f12d99bf03a7517d6481c2f3c",
+        "resume.py": "f2c68bbbb3c5af8156c1cb8fb85d3a246fd26721880c57aeac90c51106a18e1c",
+        "runner.py": "330d304c36b62defa6bd5073b9b1731191398068ed396a4565fc77272afbe5a8"
+      },
+      "vendored_gepa_core": {
+        "api.py": "839d1c6020e84f79834f21936bab7fe1e3dc9c4f9fc3c9e556e23ed2e4297d3b",
+        "core/engine.py": "92627720354261b9eb5359337b9b237a2a29ebf179b22a4b724b737bde81a088",
+        "core/state.py": "08108908eb922808c2ad134c9717d32b107581a5766e6b99199c248d538999e5",
+        "strategies/batch_sampler.py": "b9323860533d7f8e6a2c488ba3a5e7f41c06496415f26230fc76c96d42a05add",
+        "strategies/candidate_selector.py": "c2565e251d0cdc00d7548dde7fd0316190c97a64bc130ea86ea6e2fc8a232cfd"
+      }
+    },
+    "task": {
+      "semantics": "behavioral_plan_acceptability_v1"
+    }
+  },
+  "semantic_sha256": "73865fb542d9db5993bbd0530994c57f0a8175a7b5d3869b64f1b03e06885008",
+  "version": 1
+}

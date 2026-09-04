@@ -1,0 +1,36 @@
+{
+  "schema_version": 1,
+  "bundle_id": "behavioral-formal-all-candidates-v1-20260831",
+  "source_run": "repository-holdout-media-projected-accuracy-b8-8it-v2-20260830",
+  "source_remote_run": "/scratch/users/twang/vibe-coding-planning/behavioral-gepa-run-state/output/SWE-chat/behavioral-gepa-runs/formal/repository-holdout-media-projected-accuracy-b8-8it-v2-20260830",
+  "semantic_sha256": "73865fb542d9db5993bbd0530994c57f0a8175a7b5d3869b64f1b03e06885008",
+  "authority": {
+    "candidate_texts": "candidates.json",
+    "run_identity": "run_manifest.json",
+    "terminal_state": "progress.json",
+    "cost_and_usage": "cost_report.json",
+    "validation_summary": "candidate_metrics_summary.json",
+    "raw_checker_and_reflection_evidence": "remote_run_only"
+  },
+  "source_artifact_sha256": {
+    "candidates.json": "c6ab1590b9b3c312865abc79218dc8d479aa38ec80aabf9b4cfd060bc7331e30",
+    "run_manifest.json": "a2559cf36d7d453208ee375832dbd87461926b9620a15fe62f51035a22a112ec",
+    "progress.json": "0dfc011a50888630636de333c1d0c5effa8a663e75dcff9fd5d83c80baa64f15",
+    "cost_report.json": "33c86af4044b825d475fcf2b842c7a9ad889d0b15c64115ffb20a54e2f2ac2df"
+  },
+  "terminal_state": {
+    "status": "completed",
+    "completed_iterations": 8,
+    "metric_calls_used": 410,
+    "successful_proposals": 8,
+    "accepted_candidates": 5,
+    "full_validation_candidates": 6,
+    "best_candidate_idx_by_primary_metric_first_max": 1
+  },
+  "notes": [
+    "All six exact guideline texts are stored in candidates.json under [index].rules.",
+    "Validation participated in candidate selection and is not an untouched holdout.",
+    "Candidate 1 and candidate 4 tie on the configured accuracy metric; candidate 4 was selected afterward for the first PolyBench diagnostic using broader class-balance evidence.",
+    "Large per-call trajectories and raw Reflection evidence remain under source_remote_run and are not duplicated in Git."
+  ]
+}

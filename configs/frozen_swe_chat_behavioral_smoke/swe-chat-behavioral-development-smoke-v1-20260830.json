@@ -1,0 +1,64 @@
+{
+  "schema_version": 1,
+  "fixture_id": "swe-chat-behavioral-development-smoke-v1-20260830",
+  "purpose": "development_only_stage_b_and_stage_c_smoke",
+  "complete": true,
+  "provisional": false,
+  "case_universe": "explicit_subset",
+  "content_sha256": "bc18953ddcbe15e3975a606cec7cbaba556357797ce1c8047fc3c11b5293002b",
+  "selection_policy": {
+    "train_source": "four_cases_exposed_by_stage_b",
+    "validation_source": "previously_unexposed_smallest_case_per_label_and_proxy_source_after_repo_exclusion",
+    "development_data_only": true,
+    "formal_validation_or_holdout_eligible": false,
+    "balance_per_split": {
+      "ACCEPT": 2,
+      "DO_NOT_ACCEPT": 2,
+      "recorded_branch": 2,
+      "all_reachable_refs": 2
+    },
+    "no_session_repository_or_dedup_group_overlap_between_splits": true
+  },
+  "assignments": [
+    {
+      "case_id": "00468b34-359e-43a2-b0bb-30677f1aee5e#first-plan",
+      "split": "train",
+      "dedup_group": "repo:entireio/cli"
+    },
+    {
+      "case_id": "01bdfe47-aa15-42ed-bb6a-71aedb7e8063#first-plan",
+      "split": "train",
+      "dedup_group": "repo:henryph24/neuralips26"
+    },
+    {
+      "case_id": "02bf0eec-e39b-4d26-876b-22a2af646441#first-plan",
+      "split": "train",
+      "dedup_group": "repo:marcus-sa/brain"
+    },
+    {
+      "case_id": "039c7932-07b5-4d72-987c-d7fa070361c1#first-plan",
+      "split": "train",
+      "dedup_group": "repo:ClusterCockpit/cc-backend"
+    },
+    {
+      "case_id": "44c37ad3-f40c-41b9-8b74-127f3f88cc96#first-plan",
+      "split": "validation",
+      "dedup_group": "repo:kgcrom/cluefin"
+    },
+    {
+      "case_id": "a00ebf48-ebdc-4121-bc43-d4d2c47231de#first-plan",
+      "split": "validation",
+      "dedup_group": "repo:135yshr/documents"
+    },
+    {
+      "case_id": "d30e9458-c95a-46bd-ac6d-badf1d09f6a2#first-plan",
+      "split": "validation",
+      "dedup_group": "repo:armelhbobdad/bmad-module-skill-forge"
+    },
+    {
+      "case_id": "e58a7526-b044-46ca-ba54-30796d7fb0cd#first-plan",
+      "split": "validation",
+      "dedup_group": "repo:shunkakinoki/dotfiles"
+    }
+  ]
+}

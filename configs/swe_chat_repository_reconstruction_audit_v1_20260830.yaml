@@ -1,0 +1,35 @@
+schema_version: 1
+purpose: swe_chat_repository_reconstruction_audit
+audit_id: swe-chat-repository-reconstruction-option1-option2-v1-20260830
+
+semantic:
+  dataset_id: SALT-NLP/SWE-chat
+  revision: f66cca95b14caaa4177f7ed5eaa424608dadcffa
+  stage2_manifest: configs/frozen_swe_chat_cleaning/f66cca95b14caaa4177f7ed5eaa424608dadcffa/stage2-first-plan-slice-v1-manifest.json
+  stage2_manifest_sha256: 72e6422fdf1e52766b8003d0c9d5dd035a8b6d227c3bb7cc2ddb9d7c594f94bb
+  repository_cleaning_manifest: configs/frozen_swe_chat_cleaning/f66cca95b14caaa4177f7ed5eaa424608dadcffa/repository-availability-cleaning-v1-manifest.json
+  repository_cleaning_manifest_sha256: 9c0a8a67fded5c1bfb430e73bb550d0fec7b99849ab200a0d8248796d21e4329
+  candidate_commit: parent_of_first_valid_canonical_checkpoint_commit
+  require_single_session_checkpoint: true
+  reject_pre_p1_repository_mutation: true
+  read_only_subagent_types:
+    - Explore
+    - Plan
+  verification_evidence: pre_p1_read_tool_results
+  read_result_parser: claude_numbered_lines_arrow_pipe_or_tab_v2
+  read_only_shell_policy: strict_allowlist_v2
+  pilot_selection: descending_comparable_read_count_then_case_id
+  structured_write_replay_fallback:
+    enabled: true
+    replay_tools:
+      - Write
+      - Edit
+    ignored_shell_semantics: read_only_or_git_add_commit_push_only
+    unsupported_tool_policy: exclude
+
+operational:
+  dataset_root: /scratch/users/twang/vibe-coding-planning/operations/swe-chat-f66cca95-preheat-v1-20260829/dataset
+  cases_root: /scratch/users/twang/vibe-coding-planning/derived/swe-chat-stage2-first-plan-slice-v1-20260829/slices-final/cases
+  repositories_root: /scratch/users/twang/vibe-coding-planning/operations/swe-chat-f66cca95-preheat-v1-20260829/repositories
+  output_root: /scratch/users/twang/vibe-coding-planning/derived/swe-chat-repository-reconstruction-option1-option2-v1-20260830
+  pilot_case_count: 10

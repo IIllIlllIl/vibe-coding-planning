@@ -732,7 +732,7 @@ def test_repository_boundary_smoke_freezes_agent_owned_submission_prompt() -> No
         (
             root
             / "configs"
-            / "polybench_pce_hpc_repository_boundary_smoke_20260824.yaml"
+            / "archive/polybench_pce/polybench_pce_hpc_repository_boundary_smoke_20260824.yaml"
         ).read_text()
     )["prompts"]
 
@@ -1225,7 +1225,8 @@ def test_evaluator_repair_subset_is_bound_to_dependency_manifest(tmp_path: Path)
 
 def test_formal_dependency_repair_config_changes_only_evaluator_runtime() -> None:
     base = load_polybench_pce_config(
-        ROOT / "configs/polybench_pce_hpc_formal.yaml", require_api_keys=False
+        ROOT / "configs/archive/polybench_pce/polybench_pce_hpc_formal.yaml",
+        require_api_keys=False,
     )
     repair = load_polybench_pce_config(
         ROOT / "configs/polybench_pce_hpc_dependency_cache_formal_v2.yaml",

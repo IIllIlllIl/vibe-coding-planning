@@ -1,0 +1,12 @@
+{
+  "status": "completed",
+  "iteration": 8,
+  "metric_calls_used": 410,
+  "accepted_candidates": 5,
+  "trainset_size": 84,
+  "valset_size": 47,
+  "metric_calls_remaining": 290,
+  "latest_candidate_idx": 5,
+  "best_candidate_idx": 1,
+  "total_iterations": 8
+}

@@ -88,6 +88,27 @@ trajectory, patch, evaluator result, or later PCCE outcome. It is not asked to
 predict `resolved` as a training label in this workflow. Its decision controls
 the next workflow phase.
 
+The additive `checker_only` execution mode stops after the frozen first plan's
+first review. It uses the same Checker prompt, repository checkout, output
+contract, worker retry, and raw trajectory capture as PCCE, but schedules no
+Planner, Code, or Evaluate work. Its PC task manifest also omits the historical
+resolved value, test patch, test selectors, test command, source row, and PCE
+outcome identity. Labels remain controller-side for reporting. Existing
+`full_pcce` configs retain their original three-review and CE semantics.
+
+The first `checker_only` diagnostic completed on the frozen balanced 20-case
+development subset with 20/20 valid C4 decisions and no incomplete outcome.
+C4 scored 13/20 versus the historical Seed's 12/20 on the same cases. This is
+a small directional classification diagnostic; it is not a PCCE result and
+supports no implementation-benefit or untouched-generalization claim. Stable
+interpretation belongs to
+`knowledge/behavioral-gepa-initial-findings.md`.
+
+The result files are complete, but the collection wrapper currently exits
+nonzero after writing them because `run_polybench_pcce_hpc.py` prints the
+full-PCCE-only `method_outcomes` field. This is an operational CLI summary bug,
+not an incomplete Checker outcome; it must be fixed before the mode is reused.
+
 The Planner receives the issue, previous plan, and revision feedback. It does
 not receive the Checker's hidden reasoning or full trajectory. This preserves
 the actionable intervention while avoiding an accidental side channel through
@@ -227,11 +248,11 @@ fingerprint, and starts directly at Evaluate. It never calls Checker, Planner,
 or Code and never overwrites the original CE output. The repair supervisor must
 monitor the repair subdirectory rather than the already-completed parent run;
 the shared resume loop derives that subdirectory from `--resume-evaluator`.
-`configs/polybench_pcce_hpc_smoke.yaml`
+`configs/archive/polybench_pcce/polybench_pcce_hpc_smoke.yaml`
 selects two frozen validation cases and the frozen seed guideline. Its run root
 is below `polybench-pcce-runs/smoke/` and is not formal evidence.
 
-`configs/polybench_pcce_supervisor_smoke.yaml` is the persistent local launch
+`configs/archive/polybench_pcce/polybench_pcce_supervisor_smoke.yaml` is the archived persistent local launch
 identity. Through the shared `hpc_supervisor_service.py` and
 `hpc_resume_loop.py`, it waits while a Controller or worker is active and
 submits the next Controller slice after a completed wave. The supervisor reads

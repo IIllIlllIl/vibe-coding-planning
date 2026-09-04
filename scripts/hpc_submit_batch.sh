@@ -299,6 +299,8 @@ if ulhpc_config and ulhpc_config.exists():
     ulhpc = yaml.safe_load(ulhpc_config.read_text(encoding="utf-8")) or {}
 print(f"python_module={ulhpc.get('python_module', '')}")
 print(f"container_module={ulhpc.get('container_module', '')}")
+print(f"task_semantics={cfg.get('task', {}).get('semantics', 'historical_resolution')}")
+print(f"container_runtime={container.get('runtime', 'docker')}")
 PY
 )
 
@@ -308,6 +310,8 @@ INITIAL_RULES=""
 CONFIG_SIF_CACHE_DIR=""
 CONFIG_PYTHON_MODULE=""
 CONFIG_CONTAINER_MODULE=""
+TASK_SEMANTICS=""
+CONTAINER_RUNTIME=""
 while IFS='=' read -r KEY VALUE; do
   case "$KEY" in
     dataset_snapshot) DATASET_SNAPSHOT="$VALUE" ;;
@@ -316,6 +320,8 @@ while IFS='=' read -r KEY VALUE; do
     sif_cache_dir) CONFIG_SIF_CACHE_DIR="$VALUE" ;;
     python_module) CONFIG_PYTHON_MODULE="$VALUE" ;;
     container_module) CONFIG_CONTAINER_MODULE="$VALUE" ;;
+    task_semantics) TASK_SEMANTICS="$VALUE" ;;
+    container_runtime) CONTAINER_RUNTIME="$VALUE" ;;
   esac
 done <<< "$CONFIG_VALUES"
 
@@ -334,10 +340,18 @@ fi
 
 PYTHON_MODULE="${ULHPC_PYTHON_MODULE:-${CONFIG_PYTHON_MODULE:-lang/Python/3.11}}"
 CONTAINER_MODULE="${ULHPC_CONTAINER_MODULE:-${CONFIG_CONTAINER_MODULE:-tools/Apptainer}}"
-if [[ -z "$REMOTE_APPTAINER_SIF_CACHE_DIR" ]]; then
+BEHAVIORAL_NO_CONTAINER=0
+if [[ "$TASK_SEMANTICS" == "behavioral_plan_acceptability_v1" ]]; then
+  BEHAVIORAL_NO_CONTAINER=1
+  if [[ "$CONTAINER_RUNTIME" != "none" ]]; then
+    echo "ERROR: Behavioral v1 requires container.runtime=none" >&2
+    exit 2
+  fi
+fi
+if [[ $BEHAVIORAL_NO_CONTAINER -eq 0 && -z "$REMOTE_APPTAINER_SIF_CACHE_DIR" ]]; then
   REMOTE_APPTAINER_SIF_CACHE_DIR="$CONFIG_SIF_CACHE_DIR"
 fi
-if [[ -z "$REMOTE_APPTAINER_SIF_CACHE_DIR" ]]; then
+if [[ $BEHAVIORAL_NO_CONTAINER -eq 0 && -z "$REMOTE_APPTAINER_SIF_CACHE_DIR" ]]; then
   echo "ERROR: --remote-apptainer-sif-cache-dir is required when GEPA config has no container.sif_cache_dir" >&2
   exit 2
 fi
@@ -364,6 +378,27 @@ fi
 REMOTE_DATASET_SNAPSHOT="$REMOTE_DATASET_DIR/$DATASET_REL"
 REMOTE_RUN_SNAPSHOT="$REMOTE_RUN_DIR/$RUN_DIR_REL"
 
+if [[ $BEHAVIORAL_NO_CONTAINER -eq 1 ]]; then
+REMOTE_SCRIPT=$(cat <<EOF
+set -euo pipefail
+echo "[vibe-gepa] started at \$(date) on \$(hostname)"
+test -f "$DATASET_REL/manifest.json" || {
+  echo "[vibe-gepa] dataset snapshot missing after staging: $DATASET_REL" >&2
+  exit 2
+}
+REMOTE_ENV_FILE="$REMOTE_ENV_FILE"
+if [[ "\$REMOTE_ENV_FILE" == "~/"* ]]; then
+  REMOTE_ENV_FILE="\$HOME/\${REMOTE_ENV_FILE#\~/}"
+fi
+test -f "\$REMOTE_ENV_FILE" || exit 2
+set +x
+source "\$REMOTE_ENV_FILE"
+test -n "\${DEEPSEEK_API_KEY:-}" || exit 2
+python3 -m pip install --quiet --user -e third_party/gepa || true
+python3 scripts/internal/run_gepa_rules.py --config "$GEPA_CONFIG_REL"
+EOF
+)
+else
 REMOTE_SCRIPT=$(cat <<EOF
 set -euo pipefail
 echo "[vibe-gepa] started at \$(date) on \$(hostname)"
@@ -397,6 +432,7 @@ echo "[vibe-gepa] GEPA exited with rc=\$GEPA_RC at \$(date)"
 exit \$GEPA_RC
 EOF
 )
+fi
 
 ULHPC_CMD=(
   "$ULHPC_SUBMIT_BIN"
@@ -411,17 +447,22 @@ ULHPC_CMD=(
   --time "$TIME_LIMIT"
   --gpus "$GPUS"
   --module "$PYTHON_MODULE"
-  --module "$CONTAINER_MODULE"
   --python python3
   --no-conda
   --stage-data "$DATASET_SNAPSHOT:$REMOTE_DATASET_SNAPSHOT"
   --link-as "$DATASET_REL"
   --persistent-output "$RUN_DIR_REL:$REMOTE_RUN_SNAPSHOT"
-  --apptainer-cache-dir "$REMOTE_APPTAINER_CACHE_DIR"
-  --apptainer-tmp-dir "$REMOTE_APPTAINER_TMP_DIR"
-  --apptainer-sif-cache-dir "$REMOTE_APPTAINER_SIF_CACHE_DIR"
   --remote-ignore-extra
 )
+
+if [[ $BEHAVIORAL_NO_CONTAINER -eq 0 ]]; then
+  ULHPC_CMD+=(
+    --module "$CONTAINER_MODULE"
+    --apptainer-cache-dir "$REMOTE_APPTAINER_CACHE_DIR"
+    --apptainer-tmp-dir "$REMOTE_APPTAINER_TMP_DIR"
+    --apptainer-sif-cache-dir "$REMOTE_APPTAINER_SIF_CACHE_DIR"
+  )
+fi
 
 if [[ -n "$ULHPC_CONFIG" ]]; then
   ULHPC_CMD+=(--config "$ULHPC_CONFIG")

@@ -9,7 +9,7 @@ paths:
   validation_snapshot: output/SWE-PolyBench/polybench-guideline-validation-datasets/20260815_python111_testparsed_26dad63b5cf3
   pce_outcomes: output/SWE-PolyBench/polybench-pce-runs/formal/python113-v11-pce-20260814/raw_pce_outcomes.jsonl
   guideline: configs/frozen_guidelines/20260817_seed-b8c1-b8c2-b3x3c3-b3x3c6_0e1f8d7bd876/seed.md
-  pce_runtime_config: configs/polybench_pce_hpc_formal.yaml
+  pce_runtime_config: configs/archive/polybench_pce/polybench_pce_hpc_formal.yaml
   checker_runtime_config: configs/gepa_verified_rules.yaml
   run_dir: output/SWE-PolyBench/polybench-pcce-runs/formal/seed-python111-20260817
 

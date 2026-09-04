@@ -59,9 +59,12 @@ class HPCOfflineReflectionProposer:
     ) -> dict[str, str]:
         if components_to_update != ["rules"]:
             raise ValueError("GEPA may only update the rules component")
+        behavioral = self.config.task.semantics == "behavioral_plan_acceptability_v1"
+        mode = "behavioral_reflection" if behavioral else "offline_reflection"
         fingerprint = _stable_sha256(
             {
                 "schema": 1,
+                "mode": mode,
                 "candidate": candidate,
                 "reflective_dataset": reflective_dataset,
                 "components_to_update": components_to_update,
@@ -85,7 +88,7 @@ class HPCOfflineReflectionProposer:
         task_dir.mkdir(parents=True, exist_ok=True)
         payload = {
             "schema_version": 1,
-            "mode": "offline_reflection",
+            "mode": mode,
             "fingerprint": fingerprint,
             "candidate": candidate,
             "reflective_dataset": reflective_dataset,
@@ -355,6 +358,16 @@ class HPCOfflineReflectionProposer:
         attempt_dir = task_dir / "attempts" / "task_0000" / (
             f"attempt_{attempt:02d}"
         )
+        behavioral = self.config.task.semantics == "behavioral_plan_acceptability_v1"
+        module_lines = [] if behavioral else [
+            f"module load {shlex.quote(hpc.python_module)}",
+            f"module load {shlex.quote(hpc.container_module)}",
+        ]
+        worker_module = (
+            "src.optimization.behavioral_reflection_worker"
+            if behavioral
+            else "src.optimization.offline_reflection_worker"
+        )
         lines = [
             "#!/usr/bin/env bash",
             f"#SBATCH --job-name={job_name}",
@@ -367,15 +380,14 @@ class HPCOfflineReflectionProposer:
             f"#SBATCH --error={slurm_log_dir}/%x-%j.err",
             "set -euo pipefail",
             "set +x",
-            f"module load {shlex.quote(hpc.python_module)}",
-            f"module load {shlex.quote(hpc.container_module)}",
+            *module_lines,
             f"ENV_FILE={shlex.quote(hpc.remote_env_file)}",
             'ENV_FILE="${ENV_FILE/#\\~/$HOME}"',
             'source "${ENV_FILE}"',
             'test -n "${DEEPSEEK_API_KEY:-}" || exit 2',
             f"mkdir -p {shlex.quote(str(attempt_dir))}",
             f"{shlex.quote(hpc.python_bin)} "
-            "-m src.optimization.offline_reflection_worker "
+            f"-m {worker_module} "
             f"--config {shlex.quote(config_path)} "
             f"--manifest {shlex.quote(str(task_dir / 'input.json'))} "
             f"--output {shlex.quote(str(task_dir / 'result.json'))} "

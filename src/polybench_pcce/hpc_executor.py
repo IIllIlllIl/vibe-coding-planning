@@ -52,19 +52,29 @@ def pcce_semantic_sha256(config: PolyBenchPCCEConfig) -> str:
                 "plan_revision_instance": config.plan_revision_instance_template,
             },
             "max_review_rejections": config.max_review_rejections,
+            "execution_mode": config.execution_mode,
             "guideline_sha256": file_sha256(config.guideline_path),
             "task_attempts": config.hpc.max_task_attempts,
         }
     )
 
 
-def _case_dict(case: PCCECase) -> dict[str, Any]:
-    return {
-        "source": case.source.to_dict(),
+def _case_dict(case: PCCECase, *, include_outcome: bool = True) -> dict[str, Any]:
+    source = case.source.to_dict()
+    if not include_outcome:
+        # A Checker-only worker needs repository identity and the issue, but no
+        # benchmark test or downstream outcome evidence.
+        source.update(test_patch="", f2p=[], p2p=[], test_command="", source_row={})
+    value = {
+        "source": source,
         "baseline_plan": case.baseline_plan,
-        "baseline_resolved": case.baseline_resolved,
-        "baseline_outcome_sha256": case.baseline_outcome_sha256,
     }
+    if include_outcome:
+        value.update(
+            baseline_resolved=case.baseline_resolved,
+            baseline_outcome_sha256=case.baseline_outcome_sha256,
+        )
+    return value
 
 
 def build_array_script(
@@ -235,7 +245,12 @@ class PolyBenchPCCEHPCExecutor:
                 "fingerprint": fingerprint,
                 "task_index": index,
                 "instance_id": case.instance_id,
-                "case": _case_dict(case),
+                "case": _case_dict(
+                    case,
+                    include_outcome=(
+                        self.config.execution_mode == "full_pcce" or phase == "ce"
+                    ),
+                ),
                 **extra,
             }
             if (

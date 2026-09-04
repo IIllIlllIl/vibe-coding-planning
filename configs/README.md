@@ -1,202 +1,102 @@
-# Config Guide
+# Configuration Index
 
-The top level contains only active configs and one representative executable
-config for each paused workflow. Date-specific runs, smoke tests, retries, and
-superseded variants live under `archive/` and remain available for provenance.
+This branch treats configuration files as three different classes. A file being
+tracked does not authorize its execution.
 
-## Active Online GEPA
+## Current Behavioral Surface
 
-| Config | Runtime | Purpose |
-|---|---|---|
-| `gepa_online_planning_hpc.yaml` | ULHPC Apptainer | Standard formal configuration over the 384/98 split. PCT, repo-grounded Reviewer, and Synthesis are separate Slurm phases, each using `1 CPU / 4G / 55min` and at most three attempts. Reviewer/Synthesis preserve per-attempt trajectories; Synthesis no longer consumes controller walltime. |
-| `online_gepa_supervisor.yaml` | Local tmux+caffeinate | Persisted Online launch identity. It owns the session/log, polling cadence, controller-slice policy, remote workdir, and controller resources; rollout semantics remain in the runtime config. |
-| `gepa_online_planning_pilot.yaml` | local Docker | Standard small executable example for validating the Online GEPA flow locally. |
-
-Online GEPA is the current mainline. Candidate rules go only to the Plan Agent;
-Code receives the issue and generated plan, and Reflection receives evidence
-created by the current rollout.
-
-Code may write diagnostic tests in its isolated workspace and is responsible
-for staging the final submission it wants the clean official evaluator to run.
-The Host requires a formal non-empty submission and preserves its bytes across
-checkpoint/worker transfer, but does not filter paths or repair the patch.
-Malformed, incomplete, or poorly selected patches are evaluator-visible Code
-outcomes and normally score unresolved rather than blocking the run.
-
-The SIF instance reviewer may also run focused tests or make temporary
-diagnostic/counterfactual edits after inspecting the untouched base. These edits
-are discarded with its SIF overlay. Its full trajectory and the immutable
-rollout evidence remain available to synthesis; no Host semantic command ledger
-or repository-state classifier sits between the two agents.
-
-The runtime config and launch config have separate authority: changing prompts,
-budgets, evaluator, or worker resources belongs in
-`gepa_online_planning_hpc.yaml`; changing the run identity, iteration target,
-poll cadence, controller resources, or remote workdir belongs in
-`online_gepa_supervisor.yaml`. Keep their run identity and job prefix aligned.
-
-## Offline GEPA
-
-| Config | Runtime | Purpose |
-|---|---|---|
-| `gepa_verified_rules.yaml` | ULHPC Apptainer | Formal eight-iteration Offline GEPA run using the default-accept minimal seed, accuracy, Reflection minibatch eight, and three total fresh-task attempts. |
-| `offline_gepa_supervisor.yaml` | Local tmux+caffeinate | Matching formal Offline resume identity. It uses 10-minute polling and `1 CPU / 4G / 10min` controller slices, requires a clean unchanged commit/config, and reads the cumulative eight-proposal target from the runtime config. |
-| `offline_gepa_hpc_smoke_2x2_20260728.yaml` | ULHPC Apptainer | Environment-only 2-train/2-validation, 1-iteration smoke. Its scores are not rule-quality evidence. |
-| `offline_gepa_hpc_smoke_3x3_2it_20260815.yaml` | ULHPC Apptainer | Retained identity of the stopped cross-snapshot-manifest diagnostic. It blocked at iteration 0 before train repetition; do not reuse it for the post-fix smoke. |
-| `offline_gepa_supervisor_3x3_2it_20260815.yaml` | Local tmux+caffeinate | Matching stopped supervisor identity retained for diagnosis; a post-fix smoke requires a new launch and run identity. |
-| `offline_gepa_hpc_smoke_3x3_2it_postfix_20260816.yaml` | ULHPC Apptainer | Exact completed post-fix 3 x 3 baseline. It reached the cumulative two-proposal target and is retained unchanged as the first stage of the completed 2-to-8 extension. |
-| `offline_gepa_supervisor_3x3_2it_postfix_20260816.yaml` | Local tmux+caffeinate | Exact stopped supervisor identity for the completed two-proposal stage; do not restart it with a different target. |
-| `offline_gepa_hpc_3x3_8it_extension_20260816.yaml` | ULHPC Apptainer | Completed cumulative eight-proposal extension of the same post-fix checkpoint and candidate tree. Only the target, metric-call fail-safe/projection, and operational task config identity differed from the retained two-proposal runtime config. |
-| `offline_gepa_supervisor_3x3_8it_extension_20260816.yaml` | Local tmux+caffeinate | Retained clean-worktree-guarded supervisor identity that performed the native 2-to-8 iteration-target transition and resumed the ordinary Offline flow against the same persistent run directory. |
-| `frozen_guidelines/20260817_seed-b8c1-b8c2-b3x3c3-b3x3c6_0e1f8d7bd876/` | Frozen text bundle | Tracked five-guideline PolyBench input frozen before check-only results: common seed plus minibatch-eight candidates 1/2 and 3x3 candidates 3/6. Primary evaluation uses seed and the two accuracy winners; the two direct-parent alternatives are reserve inputs. |
-| `polybench_pcce_hpc_smoke.yaml` | ULHPC Apptainer | Two-case PCCE platform-flow smoke using paired historical PCE plans, the frozen seed guideline, three workflow task attempts, and a distinct three-valid-rejection experimental budget. It owns dedicated Checker decision/feedback and Planner revision prompts; smoke evidence is not yet a formal method result. |
-| `polybench_pcce_supervisor_smoke.yaml` | Local tmux+caffeinate | Persistent launch identity for the two-case PCCE smoke. It reuses the shared HPC resume loop at the same ten-minute cadence as Offline and repeatedly submits 10-minute PCCE Controller slices until the workflow reaches a terminal result or blocking failure. |
-| `archive/polybench_pcce/` | Archived PCCE provenance | Frozen configs and supervisors for the superseded 111-case seed diagnostic and its repairs. Do not relaunch or use those scores. |
-| `polybench_dependency_preheat_20260822.yaml` | Iris login node | Frozen 23-case evaluator-dependency preheat plan. Each case uses its exact official-v1.1 SIF and an evidence-derived download profile; the separate cache does not modify the SIF or any PCE/PCCE result. |
-| `polybench_dependency_preheat_smoke_v2_20260823.yaml` | Iris login node | Corrective three-case cache preparation: Hub artifacts retain a `main` ref, while LangChain uses its exact legacy SentenceTransformer layout and includes both models exercised by the tests. |
-| `polybench_dependency_preheat_smoke_v3_20260823.yaml` | Iris login node | Follow-up three-case preparation using the exact Transformers tokenizer loader for the legacy 15158 SIF, plus the already-correct Hub and SentenceTransformer backends. |
-| `polybench_dependency_preheat_formal_v2_20260823.yaml` | Iris login node | Fresh complete 23-case preparation identity after the real-loader smoke: all tokenizer profiles use their exact Transformers loader, LangChain uses its legacy SentenceTransformer cache with both observed models, and every other profile keeps the existing Hub backend. Freeze remains fail-closed on any exclusion beyond the one evidence-backed inaccessible Flax fixture. |
-| `polybench_pce_hpc_dependency_cache_smoke.yaml` | ULHPC Apptainer | Three-case Evaluate-only smoke over preserved PCE Plan/Code checkpoints. It binds the frozen dependency cache read-only, disables container networking, and invokes no LLM. |
-| `polybench_pce_hpc_dependency_cache_smoke_v2.yaml` | ULHPC Apptainer | Corrective three-case Evaluate-only smoke using the loader-compatible v3 cache snapshot and a new repair identity. |
-| `polybench_pce_hpc_dependency_cache_smoke_v3.yaml` | ULHPC Apptainer | Three-case Evaluate-only regression smoke using the v4 cache whose legacy tokenizer artifact was prepared and verified through the exact Transformers loader. |
-| `polybench_pce_hpc_dependency_cache_formal_v2.yaml` | ULHPC Apptainer | Completed diagnostic PCE Evaluate-only repair over preserved Plan/Code checkpoints. Its cache/network mechanism remains reusable, but its scores inherit invalid upstream Agent repository/patch provenance. |
-| `polybench_pce_hpc_repository_boundary_smoke_20260824.yaml` | ULHPC Apptainer | Prepared two-case full PCE smoke for explicit dataset-`base_commit` restore/verification, exact current Online Code prompt, Agent-owned staging without Host transformation, and evaluator-owned empty-patch classification. Uses a new output identity; not formal score data. |
-| `polybench_pce_hpc_formal_clean_20260825.yaml` | ULHPC Apptainer | Corrected 113-case raw PCE identity using the v3-smoke-accepted clean-`base_commit` phase boundary and Agent-owned staged implementation patch. Its first pass uses the ordinary evaluator; the predeclared 22-case dependency-cache repair is a separate post-review Evaluate-only step. |
-| `polybench_pce_hpc_dependency_cache_clean_20260825.yaml` | ULHPC Apptainer | Completed 21-case Evaluate-only dependency-cache runtime for corrected `python113-v11-clean-boundary-v1-20260825`. It kept Plan/Code fixed and changed only evaluator cache/network semantics. |
-| `polybench_pce_supervisor_dependency_cache_clean_20260826.yaml` | Local tmux+caffeinate | Completed ten-minute supervisor identity for the corrected PCE repair. The original cache scope has 22 members, but `transformers-27717` lacks clean-PCE Plan/Code and is outside the paired 100-case universe. |
-| `polybench_pce_supervisor_formal_clean_20260825.yaml` | Local tmux+caffeinate | Persistent ten-minute supervisor for the corrected formal PCE. It advances only this PCE identity and requires a clean worktree. |
-| `polybench_pcce_hpc_formal_seed_clean_20260826.yaml` | ULHPC Apptainer | Completed corrected Seed PCCE over the final 99 clean-PCE cases. Its accepted evaluator overlay gives 66/99 resolved against the paired PCE baseline's 70/99. Retained for evidence; do not relaunch. |
-| `polybench_pcce_supervisor_formal_seed_clean_20260826.yaml` | Local tmux+caffeinate | Completed ten-minute supervisor identity for the corrected Seed PCCE; retained only for launch provenance. |
-| `polybench_pcce_hpc_dependency_cache_formal_seed_clean_20260826.yaml` | ULHPC Apptainer | Completed 21-case Evaluate-only repair for Seed. It used the accepted frozen cache with networking disabled and invoked no LLM. |
-| `polybench_pcce_supervisor_formal_seed_dependency_cache_clean_20260826.yaml` | Local tmux+caffeinate | Completed supervisor identity for Seed repair `clean-depcache-v1-20260826`. |
-| `polybench_pcce_hpc_formal_b8_candidate2_clean_20260826.yaml` | ULHPC Apptainer | Completed candidate-2 PCCE over the same 99 cases: 62 resolved, 36 unresolved, one operationally incomplete before evaluator overlay. Retained for evidence; do not relaunch. |
-| `polybench_pcce_supervisor_formal_b8_candidate2_clean_20260826.yaml` | Local tmux+caffeinate | Completed ten-minute candidate-2 launch identity; retained only for provenance. |
-| `polybench_pcce_hpc_dependency_cache_formal_b8_candidate2_clean_20260826.yaml` / `polybench_pcce_supervisor_formal_b8_candidate2_dependency_cache_clean_20260826.yaml` | ULHPC Apptainer / local supervisor | Completed 20-case candidate-2 Evaluate-only repair. The overlay gives 66 resolved / 32 unresolved / 1 operationally incomplete; `transformers-26164` remains incomplete because PC exhausted before Code/Evaluate. |
-| `polybench_pcce_hpc_repository_boundary_smoke_20260824.yaml` | ULHPC Apptainer | Prepared paired follow-up smoke over the corrected two-case PCE output. It exercises Checker and any Planner revision from a verified base, then inherits the corrected Code/Evaluate path. It must start only after the PCE smoke is collected. |
-| `polybench_pce_supervisor_repository_boundary_smoke_20260824.yaml` / `polybench_pcce_supervisor_repository_boundary_smoke_20260824.yaml` | Local tmux+caffeinate | Ordered clean-worktree launch identities for the corrected two-case smoke. Run PCE first; start PCCE only after PCE has collected `raw_pce_outcomes.jsonl`. Both poll every ten minutes. |
-| `frozen_dependency_caches/polybench_evaluator_dependencies_20260822/` | Frozen input | Tracked file/revision/hash manifest for 69 prepared artifact requests; its membership contains 22 eligible cases and explicitly excludes `transformers-25636` because one required repository was inaccessible. |
-| `frozen_dependency_caches/polybench_evaluator_dependencies_formal_v2_20260823/` | Frozen input | Accepted full real-loader snapshot for formal evaluator repair: 70 completed artifact requests across 22 eligible cases, with the same evidence-backed 25636 exclusion and a fail-closed file/revision/SIF inventory. The original subset retains all 22; `evaluator_repair_subset_clean99.json` freezes the 21-case clean99 intersection, and method-specific derived subsets may only remove cases that lack completed CE evidence. |
-| `gepa_guideline_accuracy_b12_20260806_candidate1.md` | Prompt text | Exact best candidate from `offline-plan-guideline-hpc-accuracy-b12-8it-checker-timeout30m-formal-20260806`: candidate 1, validation accuracy `73/98`, semantic SHA-256 `17e8d1c1e0f96e53b8568fd28ca63d8525ca04911da6e0c604324297bfab9925`. |
-| `gepa_initial_guideline_minimal.md` | Prompt text | Default-accept minimal Offline guideline seed. It rejects only when available evidence clearly shows a material problem, while supplying no repository-investigation behavior, format, or review methodology. |
-| `gepa_initial_rules_minimal.md` | Historical prompt text | Frozen pre-guideline seed retained for archived configs and provenance. |
-
-`search.max_iterations` is the primary experimental stop condition and is an
-absolute cumulative proposal target across resume. For the eight-
-iteration draft, `max_metric_calls=1200` is only a fail-safe above the
-1010-call worst-case projection. Offline uses its own
-launch config with the shared supervisor service. See
-[`../docs/offline-gepa.md`](../docs/offline-gepa.md).
-
-The generic check-only entry point is additive. The clean 99-case paired input
-is frozen, but no PolyBench check-only run was launched before the first PCCE
-stage was paused. A future check-only study requires a new predeclared design
-and run identity; it must not silently reuse PolyBench findings to alter the
-existing GEPA tree. The existing `gepa_verified_rules.yaml`
-remains byte-for-byte unchanged, so neither the GEPA semantic manifest nor the
-supervisor's raw-config identity is invalidated.
-
-`polybench_pce_hpc_smoke.yaml` is an isolated two-instance platform-smoke
-configuration for the new raw PCE workflow. It selects only completed,
-hash-frozen `:v1.1` SIFs and is launched by
-`scripts/hpc_submit_polybench_pce.sh`. Its outputs are operational evidence,
-not formal PolyBench validation data, and it does not call GEPA, Reflection, or
-the Online rollout workflow. Smoke results live below
-`output/SWE-PolyBench/polybench-pce-runs/smoke/`; future formal PCE results use
-a separate `polybench-pce-runs/formal/` identity. The active config uses the
-new `hpc-smoke4-walltime125-resume-boundary-20260813` identity and a 125-minute
-hard worker limit. A completed worker exits immediately; no reserved cleanup
-window is part of the result contract. It does not resume an earlier smoke.
-Worker array `5661319` completed both instances and collection controller
-`5670870` reused them without launching another worker; this config remains a
-completed smoke rather than the future formal config.
-Code may create diagnostic tests. Current PCE/PCCE code preserves the exact
-Agent-staged submission and applies no Host path filtering or patch repair.
-
-`polybench_pce_hpc_formal.yaml` is the formal raw-data configuration for the
-frozen 113-case exact-`v1.1` input. It uses a separate
-`polybench-pce-runs/formal/python113-v11-pce-20260814` identity, submits one
-uncapped Slurm element per task, and retains the smoke-proven `1 CPU / 4G /
-125min` worker boundary with three total attempts. It does not run GEPA,
-Reflection, or guideline evaluation.
-
-This config is retained for provenance and must not be relaunched as a formal
-method run. Its Code submission command ends in `git add -A`, its Host applies
-test-path filtering, and its Agent phases do not restore and verify the frozen
-SIF against `base_commit`. The resulting PCE evidence and downstream seed PCCE
-comparison are diagnostic only. A corrected run requires a new config and run
-identity; evaluator-only resume cannot repair the affected Plan/Code boundary.
-
-The corrected replacement is
-`polybench_pce_hpc_formal_clean_20260825.yaml`, with run identity
-`python113-v11-clean-boundary-v1-20260825`. It was derived from the accepted v3
-two-case boundary smoke rather than from the retired formal config. The initial
-113-case pass deliberately keeps the ordinary evaluator behavior already
-smoked. After its raw evidence is inspected, the existing manifest-bound
-22-case dependency-cache entry may run as a separate evaluator-only repair;
-that repair must not rerun or alter Plan or Code. Scores are not frozen as the
-new clean comparison authority until evaluator repair and conservative data
-cleaning are reviewed.
-
-`polybench_pcce_hpc_smoke.yaml` is additive and does not alter the completed
-PCE or Offline GEPA configs. It reads two members of the frozen 111-case
-snapshot, joins their exact historical PCE plans, and writes only below
-`polybench-pcce-runs/smoke/`. It is advanced through
-`scripts/hpc_submit_polybench_pcce.sh`. Workflow `task_attempt` is controlled
-by `hpc.max_task_attempts`; the independent experimental rejection limit is
-`pcce.max_review_rejections` and is currently fixed at three. The two cases are
-the smallest practical branch-oriented smoke: they do not guarantee both
-Checker decisions, but allow proceed and reject/revision behavior to surface
-without submitting the formal 111-case evaluation.
-
-Start or inspect the matching unattended supervisor through
-`scripts/hpc_supervisor_service.py` with
-`configs/polybench_pcce_supervisor_smoke.yaml`. The launch config is operational
-identity only; PCCE Agent, prompt, data, rejection-budget, and worker semantics
-remain entirely in `polybench_pcce_hpc_smoke.yaml` and the frozen inputs.
-
-The completed two-case smoke exercised both branches: one frozen plan passed
-the first review, while one was rejected, revised by the Planner, passed its
-second review, and then completed Code/Evaluate. Both CE outcomes were parsed
-and resolved, all workflow tasks completed on their first task attempt, and no
-Slurm task remained active. The corrected formal seed pair
-`polybench_pcce_hpc_formal_seed_clean_20260826.yaml` and
-`polybench_pcce_supervisor_formal_seed_clean_20260826.yaml` preserves that
-accepted method and transport while replacing the diagnostic 111-case input
-with the final 99-case clean-PCE dependency-repaired snapshot and a 45-minute
-worker limit. The run and its evaluator repair are complete.
-
-The completed Python-199 SIF preheater named
-`gepa_verified_rules.yaml`, but this is not a GEPA experiment dependency:
-`--remote-images-json` replaces its dataset-derived image list, and the config
-is read only for the Apptainer runtime and shared SIF-cache path. There is no
-dedicated PCE-download config. Do not infer a training-data relationship from
-this operational reuse. The completed availability scan accepted exact
-official `v1.1` references only; image fallback is not configurable here.
-
-## Representative Paused Workflows
-
-| Config | Historical workflow represented |
+| Path | Purpose |
 |---|---|
-| `polybench_full199_pct.yaml` | PCT/PCC-era PolyBench data collection and checker evaluation. |
-| `analysis_kimi_opencode.yaml` | Per-case rule extraction/aggregation analysis. |
-| `gepa_initial_rules_gpt_seed.md` | Immutable historical seed retained with provenance; not used by the current Offline config. |
+| `swe_chat_login_preheat_v1_20260829.yaml` | Fixed SWE-chat revision, frozen source/repository manifests, login-node destination, bounded acquisition policy, and supervisor identity. |
+| `frozen_swe_chat_preheat/f66cca95b14caaa4177f7ed5eaa424608dadcffa/` | Complete 5,858-file source manifest and ordered 205-repository request manifest consumed by the preheater. |
+| `swe_chat_repository_recovery_v1_20260829.yaml` | Independent login-node recovery policy for the two unavailable mirrors affecting ten eligible cases. |
+| `frozen_swe_chat_repository_recovery/f66cca95b14caaa4177f7ed5eaa424608dadcffa/` | Frozen two-item recovery request manifest linked to the parent preheat and Stage-2 identities. |
+| `swe_chat_stage1_trajectory_selection_v1_20260829.yaml` | Conservative `agent_percentage >= 99` plus structured non-empty Plan trajectory-selection policy; it defines no episode or label. |
+| `swe_chat_stage2_first_plan_slice_v1_20260829.yaml` | Session-start through first Plan-bearing Exit boundary, raw-content authority, projection, and conservative clean policy. |
+| `swe_chat_repository_reconstruction_audit_v1_20260830.yaml` | Frozen candidate-parent and conservative structured-write replay audit semantics; this is an audit config, not an experiment launch config. |
+| `swe_chat_temporal_repository_proxy_v1_20260830.yaml` | Label-free approximate pre-session commit selection for the 131 repository-ready cases; excludes Entire-managed refs and known current-session commits/descendants. |
+| `gepa_behavioral_acceptability_neutral_seed.md` | Neutral initial Behavioral candidate guideline; it is not a fixed Checker/Reflection prompt and contains no default accept/reject policy. |
+| `gepa_behavioral_acceptability_smoke_v2_20260830.yaml` | Completed Stage C v2 method identity: bounded no-container runtime and one full GEPA proposal on the eight-case development fixture. |
+| `frozen_swe_chat_behavioral_smoke/` | Frozen eight-case development fixture assignment; all exposed cases are formal-train-only. |
+| `frozen_swe_chat_behavioral_formal/` | Complete 131-case repository/duplicate-component split authority: 84 train and 47 validation with no repository overlap. |
+| `gepa_behavioral_acceptability_formal_8it_v2_20260830.yaml` | Completed formal contract using the media-projected snapshot; immutable run identity, not a relaunch default. Its opening pre-launch comment is retained provenance and is superseded by `experiment_contract.status`. |
+| `behavioral_gepa_formal_8it_supervisor_v2_20260830.yaml` | Completed v2 supervisor identity; provenance only. |
+| `pcce_issue_first_revision_prompt_v1_20260903.yaml` | Non-runnable shared prompt authority for the next C4 PCCE diagnostic. It makes solving the original issue the Revision Planner's system-level objective and treats the previous plan and Checker feedback as fallible advisory evidence; it intentionally retains the existing `revision_feedback`-only payload for the first anti-anchoring comparison. |
+| `frozen_polybench_pc_quick/c4-balanced20-v1-20260831.json` | Frozen balanced 20-case external diagnostic selection, including conservative workflow/noise exclusions and deterministic sampling identity. |
+| `frozen_guidelines/behavioral-formal-c4-v1-20260831/` | Exact Behavioral formal candidate 4 text and source identity for the PolyBench diagnostic. |
+| `frozen_guidelines/behavioral-formal-all-candidates-v1-20260831/` | Local frozen backup of all six exact formal candidate texts, run identity, terminal state, cost report, lineage, and compact validation metrics; large raw trajectories remain on Iris. |
+| `polybench_pc_checker_only_c4_balanced20_v1_20260831.yaml` | Completed one-review C4 PolyBench diagnostic; it cannot enter Planner, Code, or Evaluate. |
+| `polybench_pc_checker_only_c4_balanced20_supervisor_v1_20260831.yaml` | Completed bounded supervisor identity; provenance only. |
+| `polybench_pcce_c4_balanced20_full_v1_20260903.yaml` | Prepared end-to-end C4 PCCE development diagnostic on the same frozen balanced 20-case selection and paired PCE evidence. |
+| `polybench_pcce_c4_balanced20_full_supervisor_v1_20260903.yaml` | Bounded 24-slice supervisor entry for the end-to-end C4 diagnostic; presence is not launch authorization. |
+| `frozen_swe_verified_smoke/swe-verified-development-smoke-v1.json` | Frozen two-case development-only SWE-Verified membership; excluded from future quick validation and holdout use. |
+| `swe_verified_pce_smoke_v1.yaml` | Prepared two-case current-prompt PCE-only smoke runtime; its frozen SIF/base-commit audit and pass contract are bound to the development selection. |
+| `swe_verified_pce_smoke_supervisor_v1_20260901.yaml` | Bounded 12-slice supervisor identity for the prepared two-case PCE smoke; presence does not authorize launch. |
+| `swe_verified_pcce_smoke_seed_v1.yaml` | Unlaunched paired neutral-seed PCCE smoke template consuming the exact new PCE plans. |
+| `swe_verified_pcce_smoke_c4_v1.yaml` | Unlaunched paired C4 PCCE smoke template consuming the same exact new PCE plans. |
+| `frozen_swe_verified_quick_validation/swe-verified-quick50-v1-20260901.json` | Outcome-independent 50-case repository-covering quick-validation membership; excludes smoke and is shared by PCE/Seed/C4. |
+| `swe_verified_pce_quick50_v1_20260901.yaml` | Completed formal PCE runtime for the frozen quick50; 50/50 terminal outcomes are the paired PCCE baseline. |
+| `swe_verified_pce_quick50_supervisor_v1_20260901.yaml` | Completed bounded formal PCE supervisor identity; provenance only. |
+| `swe_verified_pcce_quick50_seed_v1_20260901.yaml` | Completed paired neutral-seed quick50 PCCE runtime, bound to the exact completed PCE outcomes and 50-record image manifest. |
+| `swe_verified_pcce_quick50_seed_supervisor_v1_20260901.yaml` | Completed bounded neutral-seed PCCE supervisor identity; provenance only. |
+| `swe_verified_pcce_quick50_c4_v1_20260902.yaml` | Prepared paired Behavioral C4 quick50 PCCE runtime using the same exact selection, PCE outcomes, image manifest, prompts, and operational policy as Seed. |
+| `swe_verified_pcce_quick50_c4_supervisor_v1_20260902.yaml` | Bounded C4 PCCE supervisor entry; tracked preparation is not launch authorization. |
+| `frozen_swe_verified_pcce_revision/issue-first-v1-20260903/` | Compact outcome-independent projection of all 16 completed C4 Review-1 rejections from quick50, bound to the authoritative raw wave and source run manifest hashes. It contains P1 and review evidence but omits trajectories. |
+| `swe_verified_pcce_quick50_c4_issue_first_v1_20260903.yaml` | Prepared Planner-v2 diagnostic on all 16 C4-rejected quick50 paths. It consumes frozen Review-1 rather than rerunning it, then permits unchanged C4 review of P2/P3 and paired Code/Evaluate. |
+| `swe_verified_pcce_quick50_c4_issue_first_supervisor_v1_20260903.yaml` | Prepared bounded supervisor identity for the issue-first SWE-Verified diagnostic; presence does not authorize launch. |
+| `frozen_guidelines/behavioral-neutral-seed-v1/` | Exact neutral Behavioral guideline and hash manifest for the paired comparison. |
+| `frozen_swe_chat_cleaning/f66cca95b14caaa4177f7ed5eaa424608dadcffa/` | Frozen Stage-1 decisions, compact Stage-2 manifest for 141 labeled first-Plan slices, additive repository-availability cleaning yielding 131 cases, exact-reconstruction audit summary, and 131-case temporal-proxy manifest. |
 
-## Archive
+Acquisition stops at source materialization. Stage 1 selects whole trajectories;
+Stage 2 projects the first Plan episode and separates Checker-visible from
+Reflection-only evidence. The additive repository-availability manifest freezes
+behavioral labels and the 131-case feasible universe. Stage C v2 completed the
+ordered prompt/runtime smoke. The formal split and run semantics are frozen.
+Formal v1 was superseded before launch after its context census found embedded
+image bytes; its exact config is archived under `archive/behavioral_gepa/`.
+V2 binds the deterministic media-projected snapshot and completed the
+authorized eight-iteration run. The reconstruction audit verifies an exact
+parent candidate for only two ACCEPT cases. The separate temporal-proxy
+manifest gives all 131 cases an explicitly approximate pre-session source
+checkout without reinterpreting that negative audit.
+
+## Retained Research Foundations
+
+| Path | Status |
+|---|---|
+| `gepa_verified_rules.yaml` | Frozen existing Offline GEPA method/configuration; retained for regression and adaptation, not a launch default. |
+| `offline_gepa_supervisor.yaml` | Matching completed Offline supervisor identity; provenance only. |
+| `gepa_initial_guideline_minimal.md` | Existing minimal Offline guideline seed. |
+| `frozen_guidelines/` | Immutable guideline bundles used by completed PolyBench comparisons. |
+| `frozen_dependency_caches/` | Immutable evaluator dependency evidence and subsets. |
+
+Top-level `polybench_pce_*`, `polybench_pcce_*`, and
+`polybench_dependency_preheat_*` configs are limited to the retained platform,
+completed clean formal evidence, and the current C4 diagnostic. Superseded
+smoke, preheat, and repository-boundary configs are archived. Retained configs
+are frozen evidence, not launch defaults, and must not be edited or relaunched
+in place.
+
+## Historical Archive
 
 | Directory | Contents |
 |---|---|
-| `archive/online_tests/` | Date-specific Online GEPA smoke, resource pilot, and invalid resume configs. |
-| `archive/offline_gepa/` | Offline GEPA pilots, smoke tests, alternate runtimes, and superseded rule seeds. |
-| `archive/pct_runs/` | PCT continuation, completion, and retry manifests/configs. |
-| `archive/gepa_legacy/` | Earlier superseded offline GEPA configuration. |
+| `archive/online_gepa/` | Former Online GEPA formal, pilot, and supervisor configs. |
+| `archive/online_tests/` | Dated Online GEPA smoke, resource, and resume configs. |
+| `archive/pct_runs/` | PCT-era configs and manifests, including the former full PolyBench PCT config. |
+| `archive/legacy_analysis/` | Kimi/OpenCode-era analysis configuration. |
+| `archive/offline_gepa/` | Superseded Offline pilots and runtime variants. |
+| `archive/behavioral_gepa/` | Superseded Behavioral v1 smoke/formal configs and supervisors. |
+| `archive/polybench_pce/` | Superseded PCE smoke, dependency-cache smoke, and repository-boundary configs. |
+| `archive/polybench_pcce/` | Superseded diagnostic PCCE configs. |
+| `archive/polybench_preheat/` | Superseded dependency-preheat and preheat-smoke configs. |
+| `archive/pro/` | Legacy SWE-bench Pro instance inputs with no active Behavioral reachability. |
+| `archive/gepa_legacy/` | Earlier Offline definitions. |
 
-Archived configs are intentionally executable for reproduction, but they are
-not defaults and should not be copied into a new experiment without reviewing
-their output path and historical failure context.
+Archive paths are non-authoritative. Prefer `git show main:<path>` when exact
+pre-branch paths or bytes are required.
 
-## Model Safety
-
-Current GEPA rule-optimization configs should use `deepseek-v4-flash` for both
-Checker and Reflection. Do not add `deepseek-v4-pro`, Kimi, or other providers
-to GEPA configs unless the experiment explicitly requires it and the run plan
-documents why.
+Any new Behavioral launch needs frozen inputs, an explicit split, a run identity,
+model/runtime identity, budget, stopping condition, acceptance criteria,
+raw-evidence policy, and user authorization. Completed configs are provenance,
+not authorization to resume, extend, or relaunch them.

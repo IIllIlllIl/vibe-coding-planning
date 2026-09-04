@@ -9,6 +9,14 @@
         "offline-plan-guideline-hpc-accuracy-b8-default-accept-controller-timeout-8it-20260810",
         "offline-plan-guideline-hpc-accuracy-b3x3-2it-smoke-postfix-20260816"
       ]
+    },
+    {
+      "bundle_id": "behavioral-formal-all-candidates-v1-20260831",
+      "bundle_path": "configs/frozen_guidelines/behavioral-formal-all-candidates-v1-20260831",
+      "candidates_sha256": "c6ab1590b9b3c312865abc79218dc8d479aa38ec80aabf9b4cfd060bc7331e30",
+      "source_run_ids": [
+        "repository-holdout-media-projected-accuracy-b8-8it-v2-20260830"
+      ]
     }
   ],
   "schema_version": 1

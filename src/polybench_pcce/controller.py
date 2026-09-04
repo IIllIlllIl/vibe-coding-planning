@@ -5,6 +5,7 @@ from __future__ import annotations
 from collections import Counter
 from datetime import datetime, timezone
 import json
+import math
 from pathlib import Path
 from typing import Any
 
@@ -41,6 +42,102 @@ def _write_jsonl(path: Path, rows: list[dict[str, Any]]) -> None:
         encoding="utf-8",
     )
     temporary.replace(path)
+
+
+def _ratio(numerator: int, denominator: int) -> float | None:
+    return numerator / denominator if denominator else None
+
+
+def _class_metrics(tp: int, fp: int, fn: int) -> dict[str, float | None]:
+    precision = _ratio(tp, tp + fp)
+    recall = _ratio(tp, tp + fn)
+    return {
+        "precision": precision,
+        "recall": recall,
+        "f1": (
+            2 * precision * recall / (precision + recall)
+            if precision is not None
+            and recall is not None
+            and precision + recall
+            else None
+        ),
+    }
+
+
+def _checker_only_result(
+    config: PolyBenchPCCEConfig,
+    cases: list[PCCECase],
+    reviews: list[dict[str, Any]],
+) -> dict[str, Any]:
+    """Persist first-review decisions without invoking revision or CE phases."""
+    by_id = {str(item["instance_id"]): item for item in reviews}
+    rows: list[dict[str, Any]] = []
+    tp = tn = fp = fn = incomplete = 0
+    for case in cases:
+        review = by_id.get(case.instance_id)
+        checker = review.get("checker_output") if isinstance(review, dict) else None
+        proceed = checker.get("should_proceed") if isinstance(checker, dict) else None
+        if not isinstance(proceed, bool):
+            incomplete += 1
+            correct = False
+        else:
+            correct = proceed == case.baseline_resolved
+            if proceed and case.baseline_resolved:
+                tn += 1
+            elif proceed:
+                fn += 1
+            elif case.baseline_resolved:
+                fp += 1
+            else:
+                tp += 1
+        rows.append(
+            {
+                "instance_id": case.instance_id,
+                "baseline_pce_resolved": case.baseline_resolved,
+                "predicted_should_proceed": proceed,
+                "correct": correct,
+                "review": review,
+            }
+        )
+    _write_jsonl(config.run_dir / "pc_outcomes.jsonl", rows)
+    completed = len(cases) - incomplete
+    bad_recall = _ratio(tp, tp + fn)
+    good_recall = _ratio(tn, tn + fp)
+    mcc_denominator = math.sqrt((tp + fp) * (tp + fn) * (tn + fp) * (tn + fn))
+    summary = {
+        "schema_version": 1,
+        "mode": "polybench_pc_checker_only",
+        "status": "completed" if not incomplete else "completed_with_incomplete",
+        "completed_at": datetime.now(timezone.utc).isoformat(),
+        "instances": len(cases),
+        "completed": completed,
+        "operationally_incomplete": incomplete,
+        "accuracy": _ratio(tp + tn, len(cases)),
+        "completed_only_accuracy": _ratio(tp + tn, completed),
+        "balanced_accuracy": (
+            (bad_recall + good_recall) / 2
+            if bad_recall is not None and good_recall is not None
+            else None
+        ),
+        "mcc": (
+            (tp * tn - fp * fn) / mcc_denominator if mcc_denominator else None
+        ),
+        "confusion_rejection_positive": {
+            "reject_bad_tp": tp,
+            "reject_good_fp": fp,
+            "accept_good_tn": tn,
+            "accept_bad_fn": fn,
+        },
+        "rejection_precision": _ratio(tp, tp + fp),
+        "bad_plan_recall": bad_recall,
+        "accept_precision": _ratio(tn, tn + fn),
+        "good_plan_recall": good_recall,
+        "rejected_as_positive": _class_metrics(tp, fp, fn),
+        "accepted_as_positive": _class_metrics(tn, fn, fp),
+    }
+    atomic_json(config.run_dir / "result.json", summary)
+    atomic_json(config.run_dir / "controller_status.json", summary)
+    return summary
 
 
 def _review_artifact(
@@ -101,19 +198,32 @@ def run_polybench_pcce(config: PolyBenchPCCEConfig) -> dict[str, Any] | None:
         "validation_manifest_sha256": identities["validation_manifest_sha256"],
         "validation_file_sha256": identities["validation_file_sha256"],
         "pce_outcomes_sha256": identities["pce_outcomes_sha256"],
+        "selection_manifest_sha256": (
+            file_sha256(config.selection_manifest)
+            if config.selection_manifest is not None
+            else None
+        ),
         "guideline_label": config.guideline_label,
         "guideline_sha256": text_sha256(guideline),
         "instance_ids": [case.instance_id for case in cases],
         "paired_first_plan": True,
+        "execution_mode": config.execution_mode,
         "max_review_rejections": config.max_review_rejections,
         "workflow_task_attempts": config.hpc.max_task_attempts,
         "workflow_attempts_consume_review_budget": False,
         "historical_pce_code_evaluate_reused": False,
+        "planner_code_evaluate_enabled": config.execution_mode == "full_pcce",
         "repository_baseline": {
             "declared_revision": "dataset_base_commit",
             "restore": "git reset --hard <base_commit> && git clean -fd",
-            "verified_agent_phases": ["checker", "plan_revision", "code"],
-            "evaluate_verified_by_pce_runner": True,
+            "verified_agent_phases": (
+                ["checker"]
+                if config.execution_mode == "checker_only"
+                else ["checker", "plan_revision", "code"]
+            ),
+            "evaluate_verified_by_pce_runner": (
+                config.execution_mode == "full_pcce"
+            ),
         },
     }
     manifest_path = config.run_dir / "run_manifest.json"
@@ -175,6 +285,9 @@ def run_polybench_pcce(config: PolyBenchPCCEConfig) -> dict[str, Any] | None:
                     and checker.get("should_proceed") is True
                 ):
                     accepted[instance_id] = (review_index, result)
+
+        if config.execution_mode == "checker_only":
+            return _checker_only_result(config, cases, review_results.get(1, []))
 
         ce_assignments = [
             CEAssignment(

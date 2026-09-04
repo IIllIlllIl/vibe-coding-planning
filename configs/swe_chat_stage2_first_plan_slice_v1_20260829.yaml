@@ -1,0 +1,51 @@
+schema_version: 1
+purpose: swe_chat_stage2_first_plan_slice
+slice_id: swe-chat-stage2-first-plan-slice-v1-20260829
+
+source:
+  dataset_id: SALT-NLP/SWE-chat
+  revision: f66cca95b14caaa4177f7ed5eaa424608dadcffa
+  stage1_manifest: configs/frozen_swe_chat_cleaning/f66cca95b14caaa4177f7ed5eaa424608dadcffa/stage1-high-agent-explicit-plan-v1.json
+  stage1_manifest_sha256: 69e04e849f7e67ae888679701383106aa51e8d31738d91a4df99a1cbfd9fafba
+
+episode:
+  unit: first_plan_per_session
+  start: captured_session_start
+  end:
+    turn_type: tool_use
+    tool_name: ExitPlanMode
+    plan_source: tool_input_json.plan
+    include_boundary_event_in_checker_context: true
+  checker_visible_turn_types:
+    - system_injected
+    - user_prompt
+    - assistant_response
+    - tool_use
+    - tool_result
+  reflection_only_turn_types:
+    - system_injected
+    - user_prompt
+    - assistant_response
+    - tool_use
+    - tool_result
+    - summary
+    - queue_operation
+  excluded_from_projected_context:
+    - assistant_thinking
+    - system_event
+    - file_snapshot
+    - progress
+  conservative_exclusions:
+    - continuation_context
+    - pre_boundary_summary
+    - missing_transcript_path
+    - nonpositive_total_committed
+    - session_turns_do_not_start_at_zero
+    - missing_first_turn_marker
+    - first_plan_is_not_first_exit_plan_mode
+    - boundary_event_not_unique
+    - decision_result_not_unique
+    - decision_result_not_after_boundary
+    - no_user_prompt_before_boundary
+    - tool_error_behavior_signal
+    - unrecognized_behavior_signal

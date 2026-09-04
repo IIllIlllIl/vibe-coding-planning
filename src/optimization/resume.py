@@ -103,6 +103,10 @@ def _semantic_config(
         "docker": asdict(config.docker),
         "container": container,
         "execution": asdict(config.execution),
+        "task": asdict(config.task),
+        "repository_backend": {
+            "backend": config.behavioral_repository.backend,
+        },
         "hpc_semantics": hpc_semantics,
         "prompts": {
             "checker_system_sha256": text_sha256(config.checker_prompt),

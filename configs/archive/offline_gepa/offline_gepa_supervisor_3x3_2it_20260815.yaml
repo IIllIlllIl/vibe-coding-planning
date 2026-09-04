@@ -1,0 +1,24 @@
+# Two-iteration 3 x 3 Offline GEPA platform/behavior smoke.
+schema_version: 1
+session: offline-plan-guideline-hpc-accuracy-b3x3-2it-smoke-20260815
+log: .local/hpc-supervisor/offline-plan-guideline-hpc-accuracy-b3x3-2it-smoke-20260815.log
+arguments:
+  # The cumulative two-proposal target is read from the runtime config.
+  - --poll-interval
+  - "600"
+  - --slice-time
+  - "00:10:00"
+  - --max-runs
+  - "0"
+  - --gepa-rules
+  - --gepa-config
+  - configs/archive/offline_gepa/offline_gepa_hpc_smoke_3x3_2it_20260815.yaml
+  - --job-name
+  - offline-plan-guideline-hpc-accuracy-b3x3-2it-smoke-20260815
+  - --remote-dir
+  - ~/hpc_runs/vibe-coding-planning-offline-guideline-accuracy-b3x3-2it-smoke-20260815
+  - --cpus
+  - "1"
+  - --mem
+  - 4G
+  - --submit

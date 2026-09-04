@@ -1,0 +1,10 @@
+{
+  "schema_version": 1,
+  "bundle_id": "behavioral-formal-c4-v1-20260831",
+  "candidate_index": 4,
+  "guideline_file": "c4.md",
+  "guideline_sha256": "1e7c68a2c14175dda9a9a8bb16455061c50b9961aafb6eedc030cdbef21e1ebd",
+  "source_run": "repository-holdout-media-projected-accuracy-b8-8it-v2-20260830",
+  "source_artifact": "candidates.json",
+  "source_field": "[4].rules"
+}

@@ -8,6 +8,7 @@ import os
 import subprocess
 
 import pytest
+import yaml
 
 from src.optimization.models import CheckerOutput, RepositoryEvidence
 from src.optimization.audit import text_sha256
@@ -20,12 +21,39 @@ from src.polybench_pcce.models import PCCECase, PCReviewAssignment
 from src.polybench_pcce.runner import PolyBenchPCCERunner
 from src.polybench_pcce.runner import validate_pcce_checker_output
 from src.polybench_pcce.worker import run_task
+from src.polybench_pcce.hpc_executor import _case_dict
 from src.polybench_pce.models import FrozenImage, PolyBenchPCECase
 from src.polybench_pce.evaluator_resume import load_evaluator_repair_subset
 from src.polybench_pce.runner import checkpoint_identity
 
 
 ROOT = Path(__file__).resolve().parents[1]
+
+
+def test_issue_first_prompt_source_changes_only_revision_policy(tmp_path: Path):
+    original_path = (
+        ROOT / "configs/polybench_pcce_c4_balanced20_full_v1_20260903.yaml"
+    )
+    original = load_polybench_pcce_config(original_path, require_api_keys=False)
+    payload = yaml.safe_load(original_path.read_text(encoding="utf-8"))
+    payload["paths"]["prompt_source_config"] = (
+        "configs/pcce_issue_first_revision_prompt_v1_20260903.yaml"
+    )
+    payload.pop("prompts")
+    candidate_path = tmp_path / "polybench-pcce-issue-first.yaml"
+    candidate_path.write_text(yaml.safe_dump(payload), encoding="utf-8")
+
+    candidate = load_polybench_pcce_config(candidate_path, require_api_keys=False)
+
+    assert candidate.checker_prompt == original.checker_prompt
+    assert candidate.checker_instance_template == original.checker_instance_template
+    assert candidate.plan_revision_prompt != original.plan_revision_prompt
+    assert "The original issue is the objective" in candidate.plan_revision_prompt
+    assert "Do not optimize for approval" in candidate.plan_revision_prompt
+    assert "provided as advisory evidence" in candidate.plan_revision_prompt
+    assert "Checker feedback as advisory evidence" in (
+        candidate.plan_revision_instance_template
+    )
 
 
 def _source(instance_id: str) -> PolyBenchPCECase:
@@ -59,7 +87,7 @@ def _case(instance_id: str, resolved: bool = False) -> PCCECase:
 
 def _config(tmp_path: Path):
     config = load_polybench_pcce_config(
-        ROOT / "configs/polybench_pcce_hpc_smoke.yaml",
+        ROOT / "configs/archive/polybench_pcce/polybench_pcce_hpc_smoke.yaml",
         require_api_keys=False,
     )
     return replace(
@@ -72,7 +100,7 @@ def _config(tmp_path: Path):
 
 def test_clean_formal_seed_config_selects_only_clean_pce_cases():
     smoke = load_polybench_pcce_config(
-        ROOT / "configs/polybench_pcce_hpc_smoke.yaml",
+        ROOT / "configs/archive/polybench_pcce/polybench_pcce_hpc_smoke.yaml",
         require_api_keys=False,
     )
     formal = load_polybench_pcce_config(
@@ -97,6 +125,125 @@ def test_clean_formal_seed_config_selects_only_clean_pce_cases():
     assert formal.hpc.max_task_attempts == smoke.hpc.max_task_attempts == 3
     assert formal.hpc.time == "00:45:00"
     assert formal.run_dir != smoke.run_dir
+
+
+def test_c4_checker_only_config_freezes_balanced_twenty_and_seed_prompt() -> None:
+    config = load_polybench_pcce_config(
+        ROOT / "configs/polybench_pc_checker_only_c4_balanced20_v1_20260831.yaml",
+        require_api_keys=False,
+    )
+    seed = load_polybench_pcce_config(
+        ROOT
+        / "configs/polybench_pcce_hpc_formal_seed_clean_20260826.yaml",
+        require_api_keys=False,
+    )
+    cases, _ = load_pcce_cases(config)
+
+    assert config.execution_mode == "checker_only"
+    assert config.max_review_rejections == 1
+    assert config.selection_manifest is not None
+    assert len(cases) == 20
+    assert sum(case.baseline_resolved for case in cases) == 10
+    assert config.checker_prompt == seed.checker_prompt
+    assert config.checker_instance_template == seed.checker_instance_template
+    assert config.plan_revision_prompt == ""
+    assert config.plan_revision_instance_template == ""
+    assert text_sha256(config.guideline_path.read_text(encoding="utf-8")) == (
+        "1e7c68a2c14175dda9a9a8bb16455061c50b9961aafb6eedc030cdbef21e1ebd"
+    )
+
+
+def test_c4_full_pcce_config_reuses_balanced_twenty_and_current_method() -> None:
+    checker_only = load_polybench_pcce_config(
+        ROOT / "configs/polybench_pc_checker_only_c4_balanced20_v1_20260831.yaml",
+        require_api_keys=False,
+    )
+    full = load_polybench_pcce_config(
+        ROOT / "configs/polybench_pcce_c4_balanced20_full_v1_20260903.yaml",
+        require_api_keys=False,
+    )
+    seed = load_polybench_pcce_config(
+        ROOT
+        / "configs/polybench_pcce_hpc_formal_seed_clean_20260826.yaml",
+        require_api_keys=False,
+    )
+    cases, _ = load_pcce_cases(full)
+
+    assert full.execution_mode == "full_pcce"
+    assert full.max_review_rejections == 3
+    assert full.selection_manifest == checker_only.selection_manifest
+    assert {case.instance_id for case in cases} == set(checker_only.instance_ids)
+    assert len(cases) == 20
+    assert sum(case.baseline_resolved for case in cases) == 10
+    assert full.source_snapshot == checker_only.source_snapshot
+    assert full.validation_snapshot == checker_only.validation_snapshot
+    assert full.pce_outcomes == checker_only.pce_outcomes
+    assert full.image_manifest == checker_only.image_manifest
+    assert full.guideline_path == checker_only.guideline_path
+    assert full.checker_prompt == seed.checker_prompt
+    assert full.checker_instance_template == seed.checker_instance_template
+    assert full.plan_revision_prompt == seed.plan_revision_prompt
+    assert full.plan_revision_instance_template == seed.plan_revision_instance_template
+    assert full.pce.dependency_cache is None
+    assert full.hpc.cpus_per_task == 1
+    assert full.hpc.mem == "4G"
+    assert full.hpc.time == "00:45:00"
+    assert full.hpc.max_task_attempts == 3
+    assert full.run_dir != checker_only.run_dir
+    assert text_sha256(full.guideline_path.read_text(encoding="utf-8")) == (
+        "1e7c68a2c14175dda9a9a8bb16455061c50b9961aafb6eedc030cdbef21e1ebd"
+    )
+
+
+def test_c4_balanced_twenty_selection_is_reproducible() -> None:
+    selection_path = (
+        ROOT
+        / "configs/frozen_polybench_pc_quick/c4-balanced20-v1-20260831.json"
+    )
+    selection = json.loads(selection_path.read_text(encoding="utf-8"))
+    source = (
+        ROOT
+        / "output/SWE-PolyBench/polybench-guideline-validation-datasets/"
+        "20260826_python99_cleanpce_depcache_03619730229d/validation.jsonl"
+    )
+    rows = [json.loads(line) for line in source.read_text().splitlines()]
+    excluded = set(selection["workflow_exclusions"]) | {
+        item["instance_id"] for item in selection["noise_exclusions"]
+    }
+    pool = [row for row in rows if row["instance_id"] not in excluded]
+    assert len(pool) == 91
+    assert sum(row["resolved"] for row in pool) == 67
+
+    selected: set[str] = set()
+    seed = selection["selection_policy"]["sampling_seed"]
+    allocations = selection["selection_policy"]["repository_allocations"]
+    for label_name, label in (("resolved", True), ("unresolved", False)):
+        for repo, count in allocations[label_name].items():
+            stratum = [
+                row
+                for row in pool
+                if row["resolved"] is label
+                and row["checker_input"]["repository"]["repo"] == repo
+            ]
+            stratum.sort(
+                key=lambda row: hashlib.sha256(
+                    f"{seed}\0{row['instance_id']}".encode()
+                ).hexdigest()
+            )
+            selected.update(row["instance_id"] for row in stratum[:count])
+    assert selected == set(selection["selected_instance_ids"])
+
+
+def test_checker_only_pc_manifest_omits_outcome_and_evaluator_evidence() -> None:
+    value = _case_dict(_case("case", True), include_outcome=False)
+
+    assert "baseline_resolved" not in value
+    assert "baseline_outcome_sha256" not in value
+    assert value["source"]["test_patch"] == ""
+    assert value["source"]["f2p"] == []
+    assert value["source"]["p2p"] == []
+    assert value["source"]["test_command"] == ""
+    assert value["source"]["source_row"] == {}
 
 
 def test_formal_pcce_dependency_repair_config_preserves_method() -> None:
@@ -642,11 +789,92 @@ def test_controller_routes_pass_to_ce_and_stops_after_three_rejections(
     assert by_id["pass"]["accepted_review_index"] == 1
 
 
+def test_checker_only_controller_stops_after_first_review_without_ce(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    base = _config(tmp_path)
+    config = replace(
+        base,
+        execution_mode="checker_only",
+        max_review_rejections=1,
+        selection_manifest=None,
+    )
+    cases = [_case("good", True), _case("bad", False), _case("incomplete", False)]
+    identities = {
+        "validation_manifest_sha256": "validation-manifest",
+        "validation_file_sha256": "validation-file",
+        "pce_outcomes_sha256": "pce-outcomes",
+    }
+    monkeypatch.setattr(
+        "src.polybench_pcce.controller.load_pcce_cases", lambda _: (cases, identities)
+    )
+    monkeypatch.setattr(
+        "src.polybench_pcce.controller.pcce_semantic_sha256", lambda _: "semantic"
+    )
+    monkeypatch.setattr("src.polybench_pcce.controller._git_head", lambda: "a" * 40)
+    monkeypatch.setattr(
+        "src.polybench_pcce.controller.file_sha256",
+        lambda path: hashlib.sha256(str(path).encode()).hexdigest(),
+    )
+
+    class FakeExecutor:
+        pc_calls = 0
+
+        def __init__(self, _):
+            pass
+
+        def run_pc(self, assignments):
+            FakeExecutor.pc_calls += 1
+            rows = []
+            for assignment in assignments:
+                if assignment.case.instance_id == "incomplete":
+                    rows.append(
+                        {"status": "incomplete", "instance_id": "incomplete"}
+                    )
+                    continue
+                proceed = assignment.case.instance_id == "good"
+                rows.append(
+                    {
+                        "status": "completed",
+                        "instance_id": assignment.case.instance_id,
+                        "plan": assignment.input_plan,
+                        "rejection_count_before_review": 0,
+                        "rejection_count_after_review": int(not proceed),
+                        "checker_output": {
+                            "should_proceed": proceed,
+                            "revision_feedback": "" if proceed else "revise",
+                        },
+                    }
+                )
+            return rows
+
+        def run_ce(self, _assignments):
+            raise AssertionError("checker-only mode must not invoke CE")
+
+    monkeypatch.setattr(
+        "src.polybench_pcce.controller.PolyBenchPCCEHPCExecutor", FakeExecutor
+    )
+    result = run_polybench_pcce(config)
+
+    assert result is not None
+    assert FakeExecutor.pc_calls == 1
+    assert result["mode"] == "polybench_pc_checker_only"
+    assert result["status"] == "completed_with_incomplete"
+    assert result["operationally_incomplete"] == 1
+    assert result["accuracy"] == pytest.approx(2 / 3)
+    assert result["completed_only_accuracy"] == 1.0
+    assert not (config.run_dir / "ce_outcomes.jsonl").exists()
+    assert not (config.run_dir / "pcce_outcomes.jsonl").exists()
+    assert (config.run_dir / "pc_outcomes.jsonl").is_file()
+
+
 @pytest.mark.parametrize(
     "config_path",
     [
-        "configs/polybench_pcce_hpc_smoke.yaml",
+        "configs/archive/polybench_pcce/polybench_pcce_hpc_smoke.yaml",
         "configs/polybench_pcce_hpc_formal_seed_clean_20260826.yaml",
+        "configs/polybench_pc_checker_only_c4_balanced20_v1_20260831.yaml",
     ],
 )
 def test_submit_wrapper_stages_baseline_directory_and_keeps_dry_run(
@@ -675,7 +903,7 @@ def test_submit_wrapper_stages_baseline_directory_and_keeps_dry_run(
     assert result.returncode == 0, result.stderr
     assert "--dry-run" in result.stdout
     assert "raw_pce_outcomes.jsonl:" not in result.stdout
-    if "formal_seed_clean" in config_path:
+    if "smoke" not in config_path:
         assert "baseline_stage=validation snapshot" in result.stdout
         assert "/tmp/polybench-pcce-pce." not in result.stdout
     else:

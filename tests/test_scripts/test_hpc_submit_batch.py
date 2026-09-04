@@ -48,7 +48,7 @@ def test_hpc_submit_batch_finds_ulhpc_submit_next_to_conda_exe(tmp_path) -> None
             str(SCRIPT),
             "--gepa-rules",
             "--gepa-config",
-            "configs/gepa_online_planning_hpc.yaml",
+            "configs/gepa_verified_rules.yaml",
             "--remote-dir",
             "~/hpc_runs/conda-fallback-test",
         ],

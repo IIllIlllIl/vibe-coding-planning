@@ -39,8 +39,10 @@ def _case(value: dict[str, Any]) -> PCCECase:
     return PCCECase(
         source=PolyBenchPCECase.from_dict(dict(value["source"])),
         baseline_plan=str(value["baseline_plan"]),
-        baseline_resolved=bool(value["baseline_resolved"]),
-        baseline_outcome_sha256=str(value["baseline_outcome_sha256"]),
+        # Checker-only PC manifests intentionally omit post-implementation
+        # outcome fields. Full PCCE and CE manifests retain them unchanged.
+        baseline_resolved=bool(value.get("baseline_resolved", False)),
+        baseline_outcome_sha256=str(value.get("baseline_outcome_sha256", "")),
     )
 
 

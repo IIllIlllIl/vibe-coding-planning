@@ -1,13 +1,13 @@
 # GEPA 反射 Prompt 模板快照
 
 > **历史快照**：本文件记录 2026-04-30 从上游 `gepa-ai/gepa` 提取的原始模板，用于对比和溯源。
-> **当前架构（2026-05-19 起）**：`src/prompts/gepa_reflection.py` 不再维护 `DEFAULT_REFLECTION_TEMPLATE` 常量或 `render()` 函数。反射 Prompt 模板的唯一可信源为 `config.yaml` 的 `prompts.reflection_prompt_template`，变量通过 `agent.run(**kwargs)` 由 `mini-swe-agent` 在 agent 内部做 Jinja `StrictUndefined` 渲染。详见 `docs/requirement-document.md` 版本 6.2 及 `docs/architecture.md` §5.3。
+> **历史架构（2026-05-19 起）**：`src/prompts/gepa_reflection.py` 不再维护 `DEFAULT_REFLECTION_TEMPLATE` 常量或 `render()` 函数。反射 Prompt 模板的唯一可信源为 `config.yaml` 的 `prompts.reflection_prompt_template`，变量通过 `agent.run(**kwargs)` 由 `mini-swe-agent` 在 agent 内部做 Jinja `StrictUndefined` 渲染。详见 `docs/archive/online-gepa/requirement-document.md` 版本 6.2 及 `docs/archive/online-gepa/architecture.md` §5.3。
 
 ## 来源
 
 - **上游仓库**: `gepa-ai/gepa` (https://github.com/gepa-ai/gepa)
 - **提取日期**: 2026-04-30
-- **提取方式**: 人工从需求文档 `docs/requirement-document.md` 附录 A 转录为 Python 字符串常量
+- **提取方式**: 人工从历史需求文档 `docs/archive/online-gepa/requirement-document.md` 附录 A 转录为 Python 字符串常量
 - **需求文档版本**: RE-FINAL (2026-04-30)
 
 ## 说明

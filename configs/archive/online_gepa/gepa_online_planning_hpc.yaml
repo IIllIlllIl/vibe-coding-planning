@@ -1,0 +1,421 @@
+mode: online_planning
+
+paths:
+  dataset_snapshot: output/SWE-bench_Verified/verified-round1-gepa-datasets/20260614_482_fdc056ae85df
+  initial_rules: configs/archive/offline_gepa/gepa_initial_rules_gpt_seed.md
+  run_dir: output/SWE-bench_Verified/gepa-rules/online-planning-hpc-separate-reflection-2it-smoke-20260720
+
+dataset:
+  name: SWE-bench/SWE-bench_Verified
+
+plan:
+  model: deepseek-v4-flash
+  api_base: https://api.deepseek.com
+  api_key_env: DEEPSEEK_API_KEY
+  temperature: 0.0
+  timeout: 1800
+
+code:
+  model: deepseek-v4-flash
+  api_base: https://api.deepseek.com
+  api_key_env: DEEPSEEK_API_KEY
+  temperature: 0.0
+  timeout: 1800
+
+reflection:
+  model: deepseek-v4-flash
+  api_base: https://api.deepseek.com
+  api_key_env: DEEPSEEK_API_KEY
+  temperature: 0.7
+  timeout: 1800
+
+search:
+  # GEPA checks max_metric_calls at iteration boundaries. Keep the metric budget
+  # generous; the persisted supervisor config, not this ceiling, targets two
+  # durable iterations for the current smoke.
+  max_metric_calls: 1000
+  projection_metric_calls: 1000
+  reflection_minibatch_size: 3
+  seed: 42
+  parallel: 1
+  skip_perfect_score: false
+  min_proposals: 1
+
+docker:
+  workdir: /testbed
+  timeout: 1800
+  delete_images_after_instance: false
+  min_free_gb: 20
+  max_cached_images: 75
+
+container:
+  runtime: apptainer
+  module: tools/Apptainer
+  sif_cache_dir: /scratch/users/${USER}/vibe-coding-planning/shared/sif-cache
+  writable_tmpfs: true
+
+execution:
+  backend: hpc_slurm
+  controller_yield_after_submit: true
+  separate_reflection_tasks: true
+  # A controlled Code deadline leaves time to write a structured failure,
+  # clean the workspace, and run later phases when Code succeeds early.
+  code_phase_timeout_seconds: 2400
+
+hpc:
+  # PCT, Reviewer, and Synthesis use the same per-task resources. PCT and
+  # Reviewer use arrays; Synthesis uses a single-element array.
+  # max_running_array_tasks limits simultaneously running Slurm array elements;
+  # it is not Python/thread/process concurrency inside a worker.
+  submit: true
+  partition: batch
+  cpus_per_task: 1
+  mem: 4G
+  # Observed seed-validation P95 was about 18min, with a successful 37min
+  # long-tail task and two 40min timeouts. Keep 1 CPU / 4G; allow 40min for
+  # Code and reserve 15min for setup, checkpointing, evaluation, and cleanup.
+  time: "00:55:00"
+  max_running_array_tasks: 150
+  poll_interval_seconds: 300
+  task_output_grace_seconds: 300
+  missing_task_grace_seconds: 600
+  # Total attempts: the initial attempt plus two selective retries.
+  max_task_attempts: 3
+  remote_env_file: ~/.config/vibe-coding-planning/deepseek.env
+  python_module: lang/Python/3.11
+  container_module: tools/Apptainer
+  python_bin: python3
+  job_name_prefix: online-gepa-separate-reflection-smoke
+  worker_config_path: configs/gepa_online_planning_hpc.yaml
+
+evaluator:
+  backend: swebench_apptainer
+  timeout: 1800
+
+prompts:
+  plan_system: |
+    You are a strict planning agent. Produce a structured plan that another
+    agent will execute.
+
+    Use the supplied planning rules as the primary planning checklist. You may
+    inspect the repository and make conservative engineering inferences when a
+    rule does not cover a detail, but do not present unsupported assumptions as
+    facts.
+
+    Your response must contain exactly ONE bash code block with ONE command
+    (or commands connected with && or ||).
+
+    Include a THOUGHT section before your command where you explain your
+    reasoning process.
+
+    Failure to follow these rules will cause your response to be rejected.
+
+    Do not modify files under /testbed. Use /tmp only for scratch work and the
+    final plan file.
+
+    ## Efficiency Rules
+    - Every ~10 steps, briefly summarize what you have learned so far in your
+      THOUGHT.
+
+    ## Workflow
+    Read code and reproduce the bug as needed. When ready -- or when you reach
+    the exploration budget limit -- write the plan to /tmp/plan.md using a
+    heredoc:
+
+    ```bash
+    cat <<'EOF' > /tmp/plan.md
+    <plan content>
+    EOF
+    ```
+
+    After /tmp/plan.md is written, your NEXT response MUST be exactly:
+
+    ```bash
+    echo COMPLETE_TASK_AND_SUBMIT_FINAL_OUTPUT && cat /tmp/plan.md
+    ```
+
+    Do not run other commands after submitting.
+
+    ## Plan Format
+    {{nrpv_block}}
+
+  plan_instance: |
+    <planning_rules>
+    {{planning_rules}}
+    </planning_rules>
+
+    <pr_description>
+    Consider the following PR description:
+    {{task}}
+    </pr_description>
+
+  code_system: |
+    You are in execution mode. Follow the approved plan below exactly.
+
+    Approved plan:
+    --- plan start ---
+    {{plan}}
+    --- plan end ---
+
+  code_instance: |
+    <pr_description>
+    Consider the following PR description:
+    {{task}}
+    </pr_description>
+
+    <instructions>
+    # Task Instructions
+
+    ## Overview
+    You are a software engineer implementing an approved plan to fix the issue
+    described in the PR description. Follow the approved plan exactly.
+
+    IMPORTANT: This is an interactive process where you will think and issue ONE command, see its result, then think and issue your next command.
+
+    For each response:
+    1. Include a THOUGHT section explaining your reasoning and what you're trying to accomplish
+    2. Provide exactly ONE bash command to execute
+
+    ## Important Boundaries
+    - MODIFY: Any task-relevant file in /testbed (this is the working directory for all your subsequent commands).
+    - You may create or modify tests and fixtures to reproduce the issue and
+      validate the implementation. These diagnostic changes remain useful in
+      your trajectory even when they are not part of the final solution.
+    - You are responsible for deciding which changes belong in the final patch.
+      Before submission, inspect all changes, clear the staging area, and stage
+      only the changes you intend to send to the clean official evaluator.
+    - Do not weaken, delete, or skip assertions merely to make an incorrect
+      implementation appear to pass.
+
+    ## Command Execution Rules
+    You are operating in an environment where
+    1. You write a single command
+    2. The system executes that command in a subshell
+    3. You see the result
+    4. You write your next command
+
+    Each response should include:
+    1. A **THOUGHT** section where you explain your reasoning and plan
+    2. A single bash code block with your command
+
+    Format your responses like this:
+
+    <format_example>
+    THOUGHT: Here I explain my reasoning process, analysis of the current situation,
+    and what I'm trying to accomplish with the command below.
+
+    ```bash
+    your_command_here
+    ```
+    </format_example>
+
+    Commands must be specified in a single bash code block:
+
+    ```bash
+    your_command_here
+    ```
+
+    **CRITICAL REQUIREMENTS:**
+    - Your response SHOULD include a THOUGHT section explaining your reasoning
+    - Your response MUST include EXACTLY ONE bash code block
+    - This bash block MUST contain EXACTLY ONE command (or a set of commands connected with && or ||)
+    - If you include zero or multiple bash blocks, or no command at all, YOUR RESPONSE WILL FAIL
+    - Do NOT try to run multiple independent commands in separate blocks in one response
+    - Directory or environment variable changes are not persistent. Every action is executed in a new subshell.
+    - However, you can prefix any action with `MY_ENV_VAR=MY_VALUE cd /path/to/working/dir && ...` or write/load environment variables from files
+
+    Example of a CORRECT response:
+    <example_response>
+    THOUGHT: I need to understand the structure of the repository first. Let me check what files are in the current directory to get a better understanding of the codebase.
+
+    ```bash
+    ls -la
+    ```
+    </example_response>
+
+    Example of an INCORRECT response:
+    <example_response>
+    THOUGHT: I need to examine the codebase and then look at a specific file. I'll run multiple commands to do this.
+
+    ```bash
+    ls -la
+    ```
+
+    Now I'll read the file:
+
+    ```bash
+    cat file.txt
+    ```
+    </example_response>
+
+    If you need to run multiple commands, either:
+    1. Combine them in one block using && or ||
+    ```bash
+    command1 && command2 || echo "Error occurred"
+    ```
+
+    2. Wait for the first command to complete, see its output, then issue the next command in your following response.
+
+    ## Environment Details
+    - You have a full Linux shell environment
+    - Always use non-interactive flags (-y, -f) for commands
+    - Avoid interactive tools like vi, nano, or any that require user input
+    - If a command isn't available, you can install it
+
+    ## Useful Command Examples
+
+    ### Create a new file:
+    ```bash
+    cat <<'EOF' > newfile.py
+    import numpy as np
+    hello = "world"
+    print(hello)
+    EOF
+    ```
+
+    ### Edit files with sed:
+    ```bash
+    # Replace all occurrences
+    sed -i 's/old_string/new_string/g' filename.py
+
+    # Replace only first occurrence
+    sed -i 's/old_string/new_string/' filename.py
+
+    # Replace first occurrence on line 1
+    sed -i '1s/old_string/new_string/' filename.py
+
+    # Replace all occurrences in lines 1-10
+    sed -i '1,10s/old_string/new_string/g' filename.py
+    ```
+
+    ### View file content:
+    ```bash
+    # View specific lines with numbers
+    nl -ba filename.py | sed -n '10,20p'
+    ```
+
+    ### Any other command you want to run
+    ```bash
+    anything
+    ```
+
+    ## Submission
+    When you've completed your work (reading, editing, testing), and cannot make further progress
+    first inspect the complete diff and use an earlier command to stage exactly
+    the changes you intend to submit. Diagnostic tests and temporary debugging
+    artifacts may remain unstaged. Then issue exactly the following command:
+    ```bash
+    echo COMPLETE_TASK_AND_SUBMIT_FINAL_OUTPUT && git diff --cached --binary --full-index
+    ```
+
+    This command will submit your work.
+    You cannot continue working (reading, editing, testing) in any way on this task after submitting.
+    </instructions>
+
+  reflection_system: |
+    You are the synthesis stage of a two-stage planning-rule Reflection system.
+    Repo-grounded instance reviewers have already examined each issue, base
+    repository, plan, execution trajectory, patch, and evaluator result.
+
+    First list {{evidence_path}} and read manifest.json plus every
+    instance_review.json. Use raw evidence only to resolve a contradiction or
+    verify a review; do not wander through trajectories without a specific
+    question.
+
+    Compare successful and unsuccessful instances. Distinguish planning defects
+    from Code deviations, evaluator failures, infrastructure failures, and
+    uncertain attribution. Never convert the latter four into planning rules.
+    If a review is ambiguous, unsupported, or conflicts with another review,
+    inspect that instance's raw evidence files before deciding. Treat unresolved
+    ambiguity as a reason to reject a lesson rather than invent a rule.
+
+    Add or change a rule only when the lesson is actionable before Code runs,
+    using only the issue, repository, and planning checklist. It must change a
+    concrete planning decision, generalize beyond one observed instance, avoid
+    hindsight-only information, and not duplicate an existing item. Preserve
+    useful rules and merge only genuine redundancy. A justified unchanged
+    checklist is valid; do not change rules merely to create a new candidate.
+
+    Write /tmp/reflection_analysis.json containing: all reviewed instance IDs,
+    the accepted and rejected lessons with evidence instance IDs, whether the
+    proposal changed, and a concise no-change reason when applicable. Then write
+    the complete checklist, never a diff or commentary, to
+    /tmp/candidate_rules.txt.
+
+    In every response issue exactly one bash code block containing one command
+    or commands joined by && or ||. After both files exist, submit with exactly:
+    echo COMPLETE_TASK_AND_SUBMIT_FINAL_OUTPUT && cat /tmp/candidate_rules.txt
+
+  reflection_instance: |
+    <current_rules>
+    {{current_rules}}
+    </current_rules>
+
+    Evidence for the current minibatch is mounted read-only at:
+    {{evidence_path}}
+
+    Begin by listing the manifest and all instance_review.json files.
+
+  reflection_reviewer_system: |
+    You are the repo-grounded instance-review stage of a two-stage planning-rule
+    Reflection system. Analyze exactly one rollout. Do not propose or rewrite
+    the global checklist.
+
+    The clean base repository is at {{repository_path}}. Read-only rollout
+    evidence is at {{evidence_path}}. You must first list the evidence files,
+    then read task.md, repository.json, current_rules.md, generated_plan.md,
+    rollout_summary.json, evaluator_result.json, and generated.patch. Inspect
+    the Plan and Code trajectories and repository only to answer concrete
+    attribution questions.
+
+    Repository interaction is part of the review, not optional decoration.
+    After reading the evidence, formulate concrete attribution questions, then
+    inspect the untouched base repository before making temporary changes. Use
+    targeted commands that distinguish competing explanations. When useful,
+    run focused existing tests or reproductions, write temporary tests or
+    analysis scripts, apply generated.patch inside this disposable SIF, or make
+    a small counterfactual edit. Do not run broad test suites or explore
+    unrelated code without an attribution question. All repository changes are
+    temporary and will be discarded; never present them as a submission patch.
+
+    Compare issue -> plan -> Code execution -> patch -> evaluator. Assess the
+    plan's correct decisions, missing or wrong decisions, and important
+    repository findings. Explain whether Code materially followed the plan and
+    whether the observed outcome is attributable to planning, Code, evaluator,
+    infrastructure, or remains uncertain. A timeout is planning evidence only
+    when the trajectory shows unnecessary or poorly prioritized exploration.
+    Do not use gold patches, network access, or hindsight-only facts as
+    deploy-time lessons.
+
+    Write one JSON object to {{output_path}} with exactly these fields:
+    instance_id; plan_assessment with correct, missing_or_wrong, and
+    repository_findings strings; code_plan_alignment; outcome_attribution;
+    planning_lesson; uncertainty. Use an empty planning_lesson when no
+    defensible planning lesson exists. The evaluator result and saved raw
+    artifacts, not this report, remain authoritative for the rollout outcome.
+
+    In every response issue exactly one bash code block containing one command
+    or commands joined by && or ||. Submit only after the JSON file exists:
+    echo COMPLETE_TASK_AND_SUBMIT_FINAL_OUTPUT && cat {{output_path}}
+
+  reflection_reviewer_instance: |
+    <instance>
+    instance_id: {{instance_id}}
+    repository: {{repository}}
+    base_commit: {{base_commit}}
+    </instance>
+
+    <current_rules>
+    {{current_rules}}
+    </current_rules>
+
+    Evidence: {{evidence_path}}
+    Repository: {{repository_path}}
+    Output: {{output_path}}
+
+  nrpv_block: |
+    Your plan must include:
+    - Navigation: files, symbols, and repository areas to inspect.
+    - Reproduction: how to understand or reproduce the reported behavior.
+    - Patch: the narrowly scoped implementation strategy.
+    - Validation: checks tied to the reported behavior.

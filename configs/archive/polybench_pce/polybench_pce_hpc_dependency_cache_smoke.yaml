@@ -1,0 +1,145 @@
+# Evaluate-only smoke over fixed formal PCE Plan/Code checkpoints. It verifies
+# that three formerly network-affected cases can run with a frozen, read-only
+# dependency cache and container networking disabled. It calls no LLM.
+mode: polybench_pce
+purpose: dependency_cache_evaluator_smoke
+
+paths:
+  dataset_snapshot: output/SWE-PolyBench/polybench-pce-inputs/20260814_python113_v11_8c7d9485d1d0
+  image_manifest: output/SWE-PolyBench/polybench-pce-inputs/20260814_python113_v11_8c7d9485d1d0/images.json
+  run_dir: output/SWE-PolyBench/polybench-pce-runs/formal/python113-v11-pce-20260814
+  dependency_cache_manifest: configs/frozen_dependency_caches/polybench_evaluator_dependencies_20260822/manifest.json
+
+dependency_cache:
+  manifest_sha256: 59d4fb29b6fee89c5699680ef021e6f932ca5485eaaf4fb2b1fbbfa9cebaa2bd
+  network_disabled: true
+
+plan:
+  model: deepseek-v4-flash
+  api_base: https://api.deepseek.com
+  api_key_env: DEEPSEEK_API_KEY
+  temperature: 0.0
+  max_steps: 0
+  cost_limit: 0.0
+  timeout: 1800
+
+code:
+  model: deepseek-v4-flash
+  api_base: https://api.deepseek.com
+  api_key_env: DEEPSEEK_API_KEY
+  temperature: 0.0
+  max_steps: 0
+  cost_limit: 0.0
+  timeout: 1800
+
+docker:
+  workdir: /testbed
+  timeout: 1800
+  min_free_gb: 20
+  max_cached_images: 75
+
+container:
+  runtime: apptainer
+  module: tools/Apptainer
+  sif_cache_dir: /scratch/users/${USER}/vibe-coding-planning/shared/sif-cache
+  writable_tmpfs: true
+
+execution:
+  code_phase_timeout_seconds: 2400
+
+hpc:
+  submit: true
+  partition: batch
+  cpus_per_task: 1
+  mem: 4G
+  time: "02:05:00"
+  poll_interval_seconds: 300
+  task_output_grace_seconds: 300
+  missing_task_grace_seconds: 600
+  max_task_attempts: 3
+  remote_env_file: ~/.config/vibe-coding-planning/deepseek.env
+  python_module: lang/Python/3.11
+  container_module: tools/Apptainer
+  python_bin: python3
+  job_name_prefix: polybench-depcache-smoke
+  worker_config_path: configs/archive/polybench_pce/polybench_pce_hpc_dependency_cache_smoke.yaml
+
+evaluator:
+  timeout: 1800
+
+prompts:
+  plan_system: |
+    You are a software engineer producing a structured plan that another agent
+    will execute. Inspect the repository before deciding what should change.
+
+    Each response must contain a THOUGHT section and exactly one executable bash
+    code block. The parser executes only that one block; a response with zero or
+    multiple bash blocks is rejected without execution. Do not send a second
+    action before receiving the observation for the current action.
+
+    Do not modify files under /testbed. Use /tmp for scratch work and write the
+    final plan to /tmp/plan.md. When ready, submit with exactly:
+
+    ```bash
+    echo COMPLETE_TASK_AND_SUBMIT_FINAL_OUTPUT && cat /tmp/plan.md
+    ```
+
+    ## Plan Format
+    {{nrpv_block}}
+
+  plan_instance: |
+    <pr_description>
+    Consider the following PR description:
+    {{task}}
+    </pr_description>
+
+  code_system: |
+    You are in execution mode. Follow the approved plan below exactly.
+
+    Approved plan:
+    --- plan start ---
+    {{plan}}
+    --- plan end ---
+
+  code_instance: |
+    <pr_description>
+    Consider the following PR description:
+    {{task}}
+    </pr_description>
+
+    <instructions>
+    Implement the approved plan in /testbed. You may inspect and temporarily
+    modify source, tests and fixtures and run diagnostic or validation
+    commands. Test changes are diagnostic evidence and are excluded from the
+    final patch by the host. Before submission, stage only intended
+    implementation changes; do not stage diagnostic test changes.
+
+    Each response must contain a THOUGHT section and exactly one executable bash
+    code block. The parser executes only that block; zero or multiple blocks are
+    rejected without execution. Do not send another action before receiving the
+    current observation.
+
+    Submit with exactly:
+
+    ```bash
+    echo COMPLETE_TASK_AND_SUBMIT_FINAL_OUTPUT && git add -A && git diff --cached
+    ```
+    </instructions>
+
+  nrpv_block: |
+    # Plan
+
+    ## Navigation (N)
+    - Locate the relevant source files, functions, classes and modules.
+    - Explain how the affected code is structured.
+
+    ## Reproduction (R)
+    - Give concrete steps to reproduce or verify the issue.
+    - State expected and actual behavior.
+
+    ## Patch (P)
+    - Name each file to change and describe the exact logic change.
+    - Include important edge cases without writing complete file contents.
+
+    ## Validation (V)
+    - Give concrete tests or checks for correctness and regressions.

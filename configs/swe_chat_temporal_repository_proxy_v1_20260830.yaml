@@ -1,0 +1,32 @@
+schema_version: 1
+purpose: swe_chat_temporal_repository_proxy
+proxy_id: swe-chat-temporal-repository-proxy-v1-20260830
+
+semantic:
+  dataset_id: SALT-NLP/SWE-chat
+  revision: f66cca95b14caaa4177f7ed5eaa424608dadcffa
+  stage2_manifest: configs/frozen_swe_chat_cleaning/f66cca95b14caaa4177f7ed5eaa424608dadcffa/stage2-first-plan-slice-v1-manifest.json
+  stage2_manifest_sha256: 72e6422fdf1e52766b8003d0c9d5dd035a8b6d227c3bb7cc2ddb9d7c594f94bb
+  repository_cleaning_manifest: configs/frozen_swe_chat_cleaning/f66cca95b14caaa4177f7ed5eaa424608dadcffa/repository-availability-cleaning-v1-manifest.json
+  repository_cleaning_manifest_sha256: 9c0a8a67fded5c1bfb430e73bb550d0fec7b99849ab200a0d8248796d21e4329
+  time_authority: sessions.created_at
+  timestamp_rule: commit_timestamp_second_strictly_less_than_session_second
+  candidate_priority:
+    - recorded_branch
+    - all_reachable_refs
+  exclude_entire_managed_refs: true
+  source_ref_namespaces:
+    - refs/heads
+    - refs/remotes
+    - refs/tags
+    - refs/pull
+  exclude_session_checkpoint_commits: true
+  exclude_descendants_of_present_session_checkpoint_commits: true
+  repository_state_semantics: approximate_pre_session_proxy
+  checker_conflict_authority: pre_p1_observed_tool_results
+  post_boundary_evidence_used: false
+  behavioral_label_used: false
+
+operational:
+  dataset_root: /scratch/users/twang/vibe-coding-planning/operations/swe-chat-f66cca95-preheat-v1-20260829/dataset
+  repositories_root: /scratch/users/twang/vibe-coding-planning/operations/swe-chat-f66cca95-preheat-v1-20260829/repositories

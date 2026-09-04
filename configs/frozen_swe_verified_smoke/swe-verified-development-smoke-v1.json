@@ -1,0 +1,62 @@
+{
+  "schema_version": 1,
+  "selection_id": "swe-verified-development-smoke-v1-20260831",
+  "purpose": "development_only_pce_pcce_contract_and_runtime_smoke",
+  "dataset": "SWE-bench/SWE-bench_Verified",
+  "dataset_revision": "91aa3ed51b709be6457e12d00300a6a596d4c6a3",
+  "source_manifest_sha256": "bec1150dbf55c29c0893226c20578bee031406d78db305cdfef7b2b80965143a",
+  "selected_instance_ids": [
+    "astropy__astropy-12907",
+    "django__django-10097"
+  ],
+  "selection_policy": {
+    "fixed_before_runtime": true,
+    "different_repositories": true,
+    "present_in_frozen_500_case_source": true,
+    "present_in_legacy_482_case_image_universe": true,
+    "outcome_independent": true
+  },
+  "usage_constraints": {
+    "development_only": true,
+    "exclude_from_future_quick_validation": true,
+    "exclude_from_untouched_validation_or_holdout": true
+  },
+  "pce_smoke_contract": {
+    "workflow": "current_prompt_pce_only",
+    "run_identity": "swe-verified-pce-smoke-current-prompt-v1-20260901",
+    "case_count": 2,
+    "worker_resources": {
+      "cpus_per_task": 1,
+      "memory": "4G",
+      "walltime": "00:45:00",
+      "max_task_attempts": 3
+    },
+    "supervisor_budget": {
+      "controller_slice_time": "00:10:00",
+      "poll_interval_seconds": 300,
+      "max_controller_submissions": 12
+    },
+    "acceptance": {
+      "completed_terminal_records": 2,
+      "allowed_task_outcomes": [
+        "resolved",
+        "unresolved",
+        "unknown"
+      ],
+      "operationally_incomplete_allowed": 0,
+      "resolution_improvement_required": false,
+      "required_phase_checkpoints": [
+        "plan",
+        "code",
+        "evaluate"
+      ],
+      "raw_agent_and_evaluator_evidence_required": true
+    },
+    "scope_exclusions": [
+      "pcce",
+      "gepa",
+      "guideline_effectiveness",
+      "generalization_claim"
+    ]
+  }
+}

@@ -1,0 +1,35 @@
+schema_version: 1
+purpose: swe_chat_login_preheat
+preheat_id: swe-chat-f66cca95-source-repos-v1-20260829
+
+# These fields define what the acquisition must produce. Changing any of them
+# requires a new preheat identity and remote root.
+semantic:
+  source_manifest: configs/frozen_swe_chat_preheat/f66cca95b14caaa4177f7ed5eaa424608dadcffa/dataset-source-manifest.json
+  source_manifest_sha256: ed879622bae1890145f310cde340697427ed72415dc094723dc95e6a70fc4746
+  repository_manifest: configs/frozen_swe_chat_preheat/f66cca95b14caaa4177f7ed5eaa424608dadcffa/repository-request-manifest.json
+  repository_manifest_sha256: df6c4bb0cc7a9c66cae020386a7469768932548f5406d8a01891cf7dacf6a600
+  repository_clone_mode: mirror
+  git_lfs_smudge: false
+  recurse_submodules: false
+
+# These fields control how the same semantic acquisition is completed. Every
+# invocation records its operational policy, but changing these values alone
+# does not create a different source identity.
+operational:
+  ulhpc_config: configs/ulhpc_submit.yaml
+  remote_root: /scratch/users/twang/vibe-coding-planning/operations/swe-chat-f66cca95-preheat-v1-20260829
+  remote_hf_env_file: ~/.config/vibe-coding-planning/huggingface.env
+  remote_python: /usr/bin/python3.11
+  hf_max_workers: 4
+  dataset_max_attempts: 3
+  repository_batch_size: 5
+  repository_timeout_seconds: 3600
+  repository_failure_policy: skip_and_report
+  check_interval_seconds: 60
+  max_cycles: 60
+  max_no_progress_cycles: 3
+
+supervisor:
+  session: swe-chat-preheat-v1-20260829
+  log: output/SWE-chat/preheat-logs/swe-chat-preheat-v1-20260829.log
