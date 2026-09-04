@@ -5,7 +5,9 @@ from __future__ import annotations
 from dataclasses import replace
 import hashlib
 import json
+import os
 from pathlib import Path
+import subprocess
 
 import yaml
 
@@ -16,8 +18,16 @@ from src.offline_check_only.guidelines import load_guidelines
 from src.offline_check_only.report import report_views
 from src.offline_check_only.runner import run_check_only
 from src.optimization.config import load_optimization_config
-from src.optimization.models import CheckerOutput, CheckerTimeoutOutput
+from src.optimization.models import (
+    CheckerIncompleteOutput,
+    CheckerOutput,
+    CheckerTimeoutOutput,
+)
 from src.optimization.resume import _source_fingerprint
+from scripts.tools.freeze_swe_verified_pc_only_inputs import (
+    freeze_guidelines,
+    freeze_snapshot,
+)
 
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
@@ -231,7 +241,97 @@ def test_reports_keep_timeouts_in_accuracy_denominator():
     assert views["raw"]["accuracy"] == 2 / 3
     assert views["raw"]["completed_only_accuracy"] == 1.0
     assert views["raw"]["timeouts"] == 1
+    assert views["raw"]["operationally_incomplete"] == 0
     assert views["cleaned"]["cases"] == 2
+
+
+def test_reports_distinguish_operationally_incomplete_from_timeout():
+    cases = [
+        CheckOnlyCase("a", "train", True, "i", "p", {}, "", "Python"),
+        CheckOnlyCase("b", "validation", False, "i", "p", {}, "", "Python"),
+    ]
+    results = [
+        CheckerOutput(True, "ok", ()),
+        CheckerIncompleteOutput("worker_error", "infrastructure", "FAILED", 3),
+    ]
+    views = report_views(cases, results)
+    assert views["raw"]["accuracy"] == 0.5
+    assert views["raw"]["timeouts"] == 0
+    assert views["raw"]["operationally_incomplete"] == 1
+    assert views["train"]["completed"] == 1
+    assert views["validation"]["completed"] == 0
+
+
+def test_verified_pc_only_freezer_is_deterministic_and_removes_asi(tmp_path):
+    source = tmp_path / "source"
+    seed = tmp_path / "seed"
+    c4 = tmp_path / "c4"
+    output = tmp_path / "output"
+    bundle = tmp_path / "bundle"
+    for path in (source, seed, c4):
+        path.mkdir()
+    source_case = {
+        "instance_id": "org__repo-1",
+        "split": "train",
+        "resolved": True,
+        "checker_input": {
+            "issue_description": "issue",
+            "plan": "plan",
+            "repository": {
+                "repo": "org/repo",
+                "base_commit": "abc",
+                "instance_id": "org__repo-1",
+            },
+        },
+        "asi": {"future": "must not survive"},
+    }
+    source_cases = source / "cases.jsonl"
+    source_exclusions = source / "exclusions.json"
+    source_cases.write_text(json.dumps(source_case) + "\n", encoding="utf-8")
+    source_exclusions.write_text("[]\n", encoding="utf-8")
+    (source / "manifest.json").write_text(
+        json.dumps(
+            {
+                "complete": True,
+                "provisional": False,
+                "immutable": True,
+                "dataset": "SWE-bench/SWE-bench_Verified",
+                "snapshot_id": "fixture",
+                "selected_instances": 1,
+                "excluded_instances": 0,
+                "cleaning_policy": "fixture",
+                "cases_sha256": _sha256(source_cases),
+                "exclusions_sha256": _sha256(source_exclusions),
+            }
+        ),
+        encoding="utf-8",
+    )
+    for guideline_source, bundle_id, filename, text in (
+        (seed, "seed-source", "seed.md", "neutral seed\n"),
+        (c4, "c4-source", "c4.md", "candidate four\n"),
+    ):
+        guideline_path = guideline_source / filename
+        guideline_path.write_text(text, encoding="utf-8")
+        (guideline_source / "manifest.json").write_text(
+            json.dumps(
+                {
+                    "bundle_id": bundle_id,
+                    "guideline_file": filename,
+                    "guideline_sha256": _sha256(guideline_path),
+                }
+            ),
+            encoding="utf-8",
+        )
+
+    first_manifest = freeze_snapshot(source, output)
+    first_bundle = freeze_guidelines(seed, c4, bundle)
+    first_bytes = (output / "manifest.json").read_bytes()
+    assert freeze_snapshot(source, output) == first_manifest
+    assert freeze_guidelines(seed, c4, bundle) == first_bundle
+    assert (output / "manifest.json").read_bytes() == first_bytes
+    projected = (output / "cases.jsonl").read_text(encoding="utf-8")
+    assert "asi" not in projected
+    assert "swebench" in projected
 
 
 def test_check_only_controller_writes_four_reports_without_gepa(tmp_path, monkeypatch):
@@ -264,3 +364,71 @@ def test_check_only_controller_writes_four_reports_without_gepa(tmp_path, monkey
     manifest = json.loads((config.run_dir / "run_manifest.json").read_text())
     assert manifest["contains_gepa"] is False
     assert manifest["contains_reflection"] is False
+    paired = json.loads((config.run_dir / "paired_comparison.json").read_text())
+    assert paired["complete_cases"] == 2
+    assert paired["excluded_incomplete_cases"] == 0
+    assert paired["correctness_transitions"]["both_correct"] == 1
+    assert paired["correctness_transitions"]["both_incorrect"] == 1
+
+
+def test_prepared_verified_clean482_pc_only_contract():
+    config = load_check_only_config(
+        REPO_ROOT
+        / "configs/swe_verified_pc_checker_only_seed_c4_clean482_v1_20260904.yaml",
+        require_api_keys=False,
+    )
+    cases, manifest = load_validation_cases(config.dataset)
+    guidelines, guideline_manifest = load_guidelines(
+        config.guideline_bundle,
+        config.guideline_labels,
+    )
+    raw_cases = (config.dataset.snapshot / "cases.jsonl").read_text(encoding="utf-8")
+
+    assert len(cases) == 482
+    assert sum(case.resolved for case in cases) == 315
+    assert sum(case.split == "train" for case in cases) == 384
+    assert sum(case.split == "validation" for case in cases) == 98
+    assert len(cases) * len(guidelines) == 964
+    assert manifest["contains_asi"] is False
+    assert '"asi"' not in raw_cases
+    assert config.guideline_labels == (
+        "behavioral_neutral_seed",
+        "behavioral_c4",
+    )
+    assert guideline_manifest["immutable"] is True
+    assert config.runtime.checker.max_steps == 0
+    assert config.runtime.checker.cost_limit == 0.0
+    assert config.runtime.checker.agent_timeout_seconds == 0
+    assert config.runtime.checker.max_attempts == 3
+    assert config.runtime.hpc.max_task_attempts == 3
+    assert config.runtime.hpc.time == "00:45:00"
+    assert config.runtime.hpc.cpus_per_task == 1
+    assert config.runtime.hpc.mem == "4G"
+
+
+def test_offline_check_only_submit_wrapper_is_dry_and_stages_frozen_input(tmp_path):
+    fake = tmp_path / "ulhpc-submit"
+    fake.write_text("#!/usr/bin/env bash\nprintf '%s\\n' \"$@\"\n", encoding="utf-8")
+    fake.chmod(0o755)
+    env = os.environ.copy()
+    env.update(ULHPC_SUBMIT_BIN=str(fake), ULHPC_USER="tester")
+    result = subprocess.run(
+        [
+            "bash",
+            "scripts/hpc_submit_offline_check_only.sh",
+            "--config",
+            "configs/swe_verified_pc_checker_only_seed_c4_clean482_v1_20260904.yaml",
+            "--dry-run",
+        ],
+        cwd=REPO_ROOT,
+        env=env,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert result.returncode == 0, result.stderr
+    assert "--dry-run" in result.stdout
+    assert "scripts/run_offline_check_only.py" in result.stdout
+    assert "configs/frozen_swe_verified_pc_only/" in result.stdout
+    assert "source \"$REMOTE_ENV_FILE\"" in result.stdout
+    assert "DEEPSEEK_API_KEY" in result.stdout

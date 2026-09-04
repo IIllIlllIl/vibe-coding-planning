@@ -1,0 +1,30 @@
+{
+  "bundle_id": "behavioral-neutral-seed-c4-paired-v1-20260904",
+  "complete": true,
+  "immutable": true,
+  "schema_version": 1,
+  "selected": [
+    {
+      "guideline_sha256": "c778684da91184bb181a5cf5af40b10d4955c732c080d0007da92aed1a4716da",
+      "label": "behavioral_neutral_seed",
+      "path": "behavioral_neutral_seed.md"
+    },
+    {
+      "guideline_sha256": "1e7c68a2c14175dda9a9a8bb16455061c50b9961aafb6eedc030cdbef21e1ebd",
+      "label": "behavioral_c4",
+      "path": "behavioral_c4.md"
+    }
+  ],
+  "sources": {
+    "behavioral_c4": {
+      "bundle_id": "behavioral-formal-c4-v1-20260831",
+      "guideline_sha256": "1e7c68a2c14175dda9a9a8bb16455061c50b9961aafb6eedc030cdbef21e1ebd",
+      "manifest_sha256": "a24852a849eba52f0398df8de6330e8e8d5cd64def8f1a29349fea925e5c6795"
+    },
+    "behavioral_neutral_seed": {
+      "bundle_id": "behavioral-neutral-seed-v1",
+      "guideline_sha256": "c778684da91184bb181a5cf5af40b10d4955c732c080d0007da92aed1a4716da",
+      "manifest_sha256": "5caee744a88160c900f98f5b9fdbc8cd35c313192ebcaae3dca74e3ff913e9f1"
+    }
+  }
+}

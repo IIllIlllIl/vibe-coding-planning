@@ -1,0 +1,26 @@
+schema_version: 1
+session: swe-verified-pc-only-seed-c4-clean482-v1-20260904
+log: .local/hpc-supervisor/swe-verified-pc-only-seed-c4-clean482-v1-20260904.log
+arguments:
+  - --poll-interval
+  - "300"
+  - --slice-time
+  - "00:10:00"
+  - --max-runs
+  - "24"
+  - --state-file
+  - .local/hpc-supervisor/swe-verified-pc-only-seed-c4-clean482-v1-20260904.json
+  - --require-clean-worktree
+  - --batch-script
+  - scripts/hpc_submit_offline_check_only.sh
+  - --config
+  - configs/swe_verified_pc_checker_only_seed_c4_clean482_v1_20260904.yaml
+  - --ulhpc-config
+  - /Users/taoran.wang/.config/ulhpc-submit/config.yaml
+  - --job-name
+  - swe-verified-pc-only-seed-c4-clean482-v1-20260904
+  - --remote-dir
+  - ~/hpc_runs/vibe-swe-verified-pc-only-clean482-v1-20260904
+  - --remote-run-dir
+  - /scratch/users/twang/vibe-coding-planning/swe-verified-pc-only-run-state
+  - --submit

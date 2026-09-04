@@ -55,7 +55,9 @@ def load_validation_cases(
         raise ValueError("configured dataset.language differs from snapshot manifest")
 
     case_path = root / dataset.case_file
-    expected_hash = manifest.get("raw_validation_sha256")
+    expected_hash = manifest.get("case_file_sha256")
+    if expected_hash is None:
+        expected_hash = manifest.get("raw_validation_sha256")
     if dataset.case_file == "validation.jsonl":
         expected_hash = manifest.get("validation_sha256")
     if expected_hash and file_sha256(case_path) != expected_hash:
@@ -109,7 +111,9 @@ def load_validation_cases(
         )
     if len({case.instance_id for case in cases}) != len(cases):
         raise ValueError("validation instance IDs must be unique")
-    expected_count = (manifest.get("raw") or {}).get("instances")
+    expected_count = (manifest.get("cases") or {}).get("instances")
+    if expected_count is None:
+        expected_count = (manifest.get("raw") or {}).get("instances")
     if dataset.case_file == "validation.jsonl":
         expected_count = (manifest.get("cleaned") or {}).get("instances")
     if expected_count is not None and len(cases) != int(expected_count):

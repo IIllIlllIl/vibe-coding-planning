@@ -40,6 +40,7 @@ belong to `../docs/swe-verified-pce-pcce.md`.
 | Path | Classification | Status and permitted use |
 |---|---|---|
 | `SWE-bench_Verified/verified-round1-gepa-datasets/20260614_482_fdc056ae85df/` | Frozen retained Offline input | Historical Offline reproduction only |
+| `../configs/frozen_swe_verified_pc_only/20260904_clean482_historical-round1_3a18b1e4f9ed/` | Frozen prepared diagnostic input | Compact ASI-free projection of the same 482 historical Round-1 plans for an unlaunched paired neutral-Seed/C4 PC-only run; not a pristine holdout and not current-PCE-prompt data |
 | `SWE-bench_Verified/gepa-rules/offline-plan-verifier-balanced-b12-p2-case-reviews-8it-20260727/` | Formal local Offline baseline | Completed with warnings; frozen comparison baseline |
 | `SWE-bench_Verified/gepa-rules/offline-plan-verifier-hpc-balanced-b12-8it-formal-20260731/` | Formal HPC Offline baseline | Stopped after 14 durable proposals; frozen analysis baseline, not resumable under the Behavioral method |
 | `SWE-PolyBench/polybench-pce-runs/formal/python113-v11-clean-boundary-v1-20260825/` | Frozen clean-boundary PCE raw evidence | Source for the reviewed paired validation snapshot |
@@ -63,6 +64,10 @@ limitations.
 - Smoke and development outputs prove bounded flow properties only.
 - Completed configs and run directories are provenance, not authorization to
   resume, extend, or relaunch an experiment.
+- Prepared inputs and configs are not result evidence. In particular, the
+  cleaned-482 PC-only diagnostic has no score until separately authorized and
+  completed; its historical `resolved` value is downstream execution evidence,
+  not a direct developer-acceptability or intrinsic-plan-quality label.
 - `catalog.json` is the machine-readable index. A conflict between this prose
   and a verified frozen manifest must be resolved in favor of the manifest and
   corrected here.

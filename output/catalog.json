@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "generated_at": "2026-09-02",
+  "generated_at": "2026-09-04",
   "active_method": "behavioral_plan_acceptability_v1",
   "active_offline_method": "offline_gepa_plan_review_guideline",
   "default_agent_scope": [
@@ -15,6 +15,8 @@
     "output/SWE-bench_Verified/swe-verified-pce-runs/quick-validation/current-prompt-quick50-v1-20260901",
     "output/SWE-bench_Verified/swe-verified-pcce-runs/quick-validation/neutral-seed-v1-20260901",
     "output/SWE-bench_Verified/verified-round1-gepa-datasets/20260614_482_fdc056ae85df",
+    "configs/frozen_swe_verified_pc_only/20260904_clean482_historical-round1_3a18b1e4f9ed",
+    "configs/frozen_guidelines/behavioral-neutral-seed-c4-paired-v1-20260904",
     "output/SWE-bench_Verified/gepa-rules",
     "configs/frozen_guidelines/20260817_seed-b8c1-b8c2-b3x3c3-b3x3c6_0e1f8d7bd876",
     "output/SWE-PolyBench/polybench-pce-inputs/20260814_python113_v11_8c7d9485d1d0",
@@ -119,6 +121,22 @@
       "guideline_sha256": "1e7c68a2c14175dda9a9a8bb16455061c50b9961aafb6eedc030cdbef21e1ebd"
     },
     "comparison_scope": "report the PCE/Seed/C4 common non-unknown intersection without tuning either guideline"
+  },
+  "prepared_swe_verified_pc_only_clean482": {
+    "status": "prepared_not_launched",
+    "classification": "paired_diagnostic_not_pristine_holdout",
+    "snapshot": "configs/frozen_swe_verified_pc_only/20260904_clean482_historical-round1_3a18b1e4f9ed",
+    "snapshot_manifest_sha256": "523978697a06852ac32eee88d0aad68ebcbe97ea6b35c537a53345e180745974",
+    "source_cases_sha256": "3a18b1e4f9edf7cc2e9b00940be9d5bc32e187309369cacc8f256fa64750ac23",
+    "projected_cases_sha256": "5dcc5fabe8ca816b68073856985db91b22ab759ce757c4ae6c5f124e8bce4548",
+    "instances": 482,
+    "resolved": 315,
+    "unresolved": 167,
+    "task_count": 964,
+    "guideline_bundle": "configs/frozen_guidelines/behavioral-neutral-seed-c4-paired-v1-20260904",
+    "guideline_bundle_manifest_sha256": "b5df71506d527407f612e4191c98b619288dc875651efc5189990c9e389cc7b7",
+    "config": "configs/swe_verified_pc_checker_only_seed_c4_clean482_v1_20260904.yaml",
+    "interpretation": "historical Round-1 plan classification against downstream resolved labels; no GEPA, Reflection, Planner, Code, or Evaluate"
   },
   "active_polybench_validation_inputs": {
     "status": "frozen_clean_pce_with_accepted_dependency_repair",

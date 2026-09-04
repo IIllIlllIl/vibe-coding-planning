@@ -5,7 +5,7 @@ from __future__ import annotations
 from datetime import datetime, timezone
 import json
 from pathlib import Path
-from typing import Any
+from typing import Any, cast
 
 from src.exceptions import ControllerYield
 from src.offline_check_only.config import CheckOnlyConfig, file_sha256
@@ -15,7 +15,12 @@ from src.offline_check_only.guidelines import load_guidelines
 from src.offline_check_only.report import report_views
 from src.optimization.audit import text_sha256
 from src.optimization.hpc.task_batch import atomic_json
-from src.optimization.models import CheckerOutput, CheckerResult
+from src.optimization.models import (
+    CheckerIncompleteOutput,
+    CheckerOutput,
+    CheckerResult,
+    CheckerTimeoutOutput,
+)
 from src.optimization.offline_hpc_executor import offline_checker_semantic_sha256
 
 
@@ -79,10 +84,14 @@ def _manifest(
 
 def _prediction_row(
     case: CheckOnlyCase,
-    result: CheckerResult,
+    result: CheckerResult | CheckerIncompleteOutput,
     label: str,
 ) -> dict[str, Any]:
-    output = result.to_dict(include_trajectory=False)
+    output = (
+        result.to_dict(include_trajectory=False)
+        if isinstance(result, (CheckerOutput, CheckerTimeoutOutput))
+        else result.to_dict()
+    )
     return {
         "instance_id": case.instance_id,
         "guideline_label": label,
@@ -166,7 +175,7 @@ def run_check_only(config: CheckOnlyConfig) -> dict[str, Any] | None:
         )
         raise
 
-    by_label: dict[str, list[CheckerResult]] = {}
+    by_label: dict[str, list[CheckerResult | CheckerIncompleteOutput]] = {}
     offset = 0
     metrics: dict[str, Any] = {}
     for label in config.guideline_labels:
@@ -204,12 +213,94 @@ def run_check_only(config: CheckOnlyConfig) -> dict[str, Any] | None:
                 }
             )
     _write_jsonl(config.run_dir / "differences.jsonl", differences)
+    paired_indices = [
+        index
+        for index in range(len(cases))
+        if all(isinstance(by_label[label][index], CheckerOutput) for label in config.guideline_labels)
+    ]
+    paired_index_set = set(paired_indices)
+    paired_cases = [cases[index] for index in paired_indices]
+    paired_metrics = {
+        label: report_views(
+            paired_cases,
+            [by_label[label][index] for index in paired_indices],
+        )
+        for label in config.guideline_labels
+    }
+    paired_comparison: dict[str, Any] = {
+        "complete_cases": len(paired_indices),
+        "excluded_incomplete_cases": len(cases) - len(paired_indices),
+        "excluded_instance_ids": [
+            case.instance_id
+            for index, case in enumerate(cases)
+            if index not in paired_index_set
+        ],
+        "metrics": paired_metrics,
+    }
+    if len(config.guideline_labels) == 2:
+        reference, candidate = config.guideline_labels
+        paired_rows = [
+            (
+                cases[index],
+                cast(CheckerOutput, by_label[reference][index]),
+                cast(CheckerOutput, by_label[candidate][index]),
+            )
+            for index in paired_indices
+        ]
+        paired_comparison["reference_guideline"] = reference
+        paired_comparison["candidate_guideline"] = candidate
+        paired_comparison["prediction_transitions"] = {
+            "both_accept": sum(
+                reference_result.predicted_resolved
+                and candidate_result.predicted_resolved
+                for _, reference_result, candidate_result in paired_rows
+            ),
+            "both_reject": sum(
+                not reference_result.predicted_resolved
+                and not candidate_result.predicted_resolved
+                for _, reference_result, candidate_result in paired_rows
+            ),
+            "reference_accept_candidate_reject": sum(
+                reference_result.predicted_resolved
+                and not candidate_result.predicted_resolved
+                for _, reference_result, candidate_result in paired_rows
+            ),
+            "reference_reject_candidate_accept": sum(
+                not reference_result.predicted_resolved
+                and candidate_result.predicted_resolved
+                for _, reference_result, candidate_result in paired_rows
+            ),
+        }
+        paired_comparison["correctness_transitions"] = {
+            "both_correct": sum(
+                reference_result.predicted_resolved == case.resolved
+                and candidate_result.predicted_resolved == case.resolved
+                for case, reference_result, candidate_result in paired_rows
+            ),
+            "both_incorrect": sum(
+                reference_result.predicted_resolved != case.resolved
+                and candidate_result.predicted_resolved != case.resolved
+                for case, reference_result, candidate_result in paired_rows
+            ),
+            "reference_only_correct": sum(
+                reference_result.predicted_resolved == case.resolved
+                and candidate_result.predicted_resolved != case.resolved
+                for case, reference_result, candidate_result in paired_rows
+            ),
+            "candidate_only_correct": sum(
+                reference_result.predicted_resolved != case.resolved
+                and candidate_result.predicted_resolved == case.resolved
+                for case, reference_result, candidate_result in paired_rows
+            ),
+        }
+    atomic_json(config.run_dir / "paired_comparison.json", paired_comparison)
     result = {
         "schema_version": 1,
         "mode": "offline_check_only",
         "run_status": "completed",
         "completed_at": datetime.now(timezone.utc).isoformat(),
         "metrics": metrics,
+        "paired_comparison": paired_comparison,
         "difference_cases": len(differences),
     }
     atomic_json(config.run_dir / "result.json", result)

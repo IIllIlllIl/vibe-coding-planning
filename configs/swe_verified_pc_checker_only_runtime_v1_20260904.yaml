@@ -1,0 +1,129 @@
+# Shared Checker runtime for the paired 482-case SWE-Verified PC-only diagnostic.
+# Reflection and search fields are parser compatibility only and are never invoked.
+paths:
+  dataset_snapshot: configs/frozen_swe_verified_pc_only/20260904_clean482_historical-round1_3a18b1e4f9ed
+  initial_guideline: configs/frozen_guidelines/behavioral-neutral-seed-c4-paired-v1-20260904/behavioral_neutral_seed.md
+  run_dir: output/SWE-bench_Verified/pc-checker-only-runs/clean482/seed-c4-v1-20260904
+
+checker:
+  model: deepseek-v4-flash
+  api_base: https://api.deepseek.com
+  api_key_env: DEEPSEEK_API_KEY
+  temperature: 0.0
+  max_steps: 0
+  cost_limit: 0.0
+  timeout: 1800
+  max_attempts: 3
+  agent_timeout_seconds: 0
+
+reflection:
+  model: deepseek-v4-flash
+  api_base: https://api.deepseek.com
+  api_key_env: DEEPSEEK_API_KEY
+  temperature: 0.7
+  max_steps: 1
+  cost_limit: 0.0
+  timeout: 1800
+  max_attempts: 1
+  agent_timeout_seconds: 0
+
+search:
+  max_metric_calls: 1
+  projection_metric_calls: 1
+  reflection_minibatch_size: 1
+  train_case_repetitions: 1
+  primary_metric: accuracy
+  parallel: 1
+  seed: 42
+  skip_perfect_score: false
+  min_proposals: 0
+
+docker:
+  workdir: /testbed
+  timeout: 1800
+  min_free_gb: 20
+  max_cached_images: 75
+
+container:
+  runtime: apptainer
+  module: tools/Apptainer
+  sif_cache_dir: /scratch/users/${USER}/vibe-coding-planning/shared/sif-cache
+  writable_tmpfs: true
+
+execution:
+  backend: hpc_slurm
+
+task:
+  semantics: historical_resolution
+
+hpc:
+  submit: true
+  remote_project_dir: ~/hpc_runs/vibe-swe-verified-pc-only-clean482-v1-20260904
+  remote_task_dir: /scratch/users/${USER}/vibe-coding-planning/swe-verified-pc-only-tasks
+  remote_env_file: ~/.config/vibe-coding-planning/deepseek.env
+  ulhpc_config: configs/ulhpc_submit.yaml
+  partition: batch
+  cpus_per_task: 1
+  mem: 4G
+  time: "00:45:00"
+  poll_interval_seconds: 300
+  task_output_grace_seconds: 300
+  missing_task_grace_seconds: 600
+  max_task_attempts: 3
+  python_module: lang/Python/3.11
+  container_module: tools/Apptainer
+  python_bin: python3
+  job_name_prefix: swe-verified-pc-only-clean482-v1-20260904
+  worker_config_path: configs/swe_verified_pc_checker_only_seed_c4_clean482_v1_20260904.yaml
+
+prompts:
+  checker_system: |
+    You are a software development assistant evaluating a proposed plan before
+    implementation begins.
+
+    Decide whether the plan is sufficiently likely to resolve the reported
+    issue.
+
+    Treat the candidate guideline as the sole source of plan-review methods,
+    software-engineering principles, heuristics, and decision criteria. Do not
+    add or rely on review guidance that is not stated in the candidate
+    guideline. Use your general capabilities only to apply the guideline and
+    operate the provided environment.
+
+    You receive the issue, proposed plan, candidate guideline, and a disposable
+    repository at the exact base commit. The repository is available at
+    /testbed and its final state is discarded.
+
+    When ready, submit the result with one final action in this form:
+    ```bash
+    cat <<'EOF'
+    COMPLETE_TASK_AND_SUBMIT_FINAL_OUTPUT
+    {
+      "predicted_resolved": false,
+      "decision_reason": "...",
+      "repository_evidence": [
+        {"path": "...", "symbol": "...", "finding": "..."}
+      ]
+    }
+    EOF
+    ```
+    Submission finishes only when the executed command writes
+    COMPLETE_TASK_AND_SUBMIT_FINAL_OUTPUT as its first output line. Do not run
+    another command after submitting.
+  checker_instance: |
+    <issue>
+    {{task}}
+    </issue>
+    <plan>
+    {{plan}}
+    </plan>
+    <candidate_guideline>
+    {{candidate_guideline}}
+    </candidate_guideline>
+    {% if retry_feedback %}
+    <retry_feedback>
+    {{retry_feedback}}
+    </retry_feedback>
+    {% endif %}
+  reflection_system: "Unused by offline_check_only."
+  reflection_instance: "Unused by offline_check_only: {{evidence_path}}"

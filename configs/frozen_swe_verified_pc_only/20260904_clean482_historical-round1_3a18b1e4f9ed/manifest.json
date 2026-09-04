@@ -1,0 +1,42 @@
+{
+  "case_file": "cases.jsonl",
+  "case_file_sha256": "5dcc5fabe8ca816b68073856985db91b22ab759ce757c4ae6c5f124e8bce4548",
+  "cases": {
+    "instances": 482,
+    "resolved": 315,
+    "splits": {
+      "train": {
+        "instances": 384,
+        "resolved": 251,
+        "unresolved": 133
+      },
+      "validation": {
+        "instances": 98,
+        "resolved": 64,
+        "unresolved": 34
+      }
+    },
+    "unresolved": 167
+  },
+  "complete": true,
+  "contains_asi": false,
+  "dataset": "SWE-bench/SWE-bench_Verified",
+  "dataset_type": "swebench",
+  "exclusions_file": "exclusions.json",
+  "exclusions_sha256": "37517e5f3dc66819f61f5a7bb8ace1921282415f10551d2defa5c3eb0985b570",
+  "immutable": true,
+  "language": "Python",
+  "projection_policy": "checker_visible_input_plus_historical_binary_label_v1",
+  "provisional": false,
+  "purpose": "swe_verified_historical_plan_pc_only",
+  "schema_version": 1,
+  "snapshot_id": "20260904_clean482_historical-round1_3a18b1e4f9ed",
+  "source": {
+    "cases_sha256": "3a18b1e4f9edf7cc2e9b00940be9d5bc32e187309369cacc8f256fa64750ac23",
+    "cleaning_policy": "resolved-placeholder-high-precision-v1",
+    "excluded_instances": 18,
+    "exclusions_sha256": "98066951f7747a292a9974fbd455a2628d0b0fb286f2bb718c314663a723c909",
+    "manifest_sha256": "6f85a2a142fa0a46483ac9f21fa0cdf239a30473b86530875898a6778d1b873b",
+    "snapshot_id": "20260614_482_fdc056ae85df"
+  }
+}

@@ -14,7 +14,7 @@ from src.offline_check_only.dataset import CheckOnlyCase
 from src.optimization.audit import text_sha256
 from src.optimization.checker import validate_checker_output
 from src.optimization.hpc.task_batch import TaskAttemptsExhausted, TaskFiles, atomic_json
-from src.optimization.models import CheckerResult
+from src.optimization.models import CheckerIncompleteOutput, CheckerResult
 from src.optimization.offline_hpc_executor import (
     HPCSlurmOfflineCheckerExecutor,
     offline_checker_semantic_sha256,
@@ -135,7 +135,7 @@ class CheckOnlyHPCExecutor(HPCSlurmOfflineCheckerExecutor):
     def evaluate_assignments(
         self,
         assignments: list[CheckerAssignment],
-    ) -> list[CheckerResult]:
+    ) -> list[CheckerResult | CheckerIncompleteOutput]:
         fingerprint = check_only_fingerprint(self.check_only_config, assignments)
         batch_dir = self.root / fingerprint
         tasks = self._prepare_assignments(batch_dir, fingerprint, assignments)
@@ -174,7 +174,7 @@ class CheckOnlyHPCExecutor(HPCSlurmOfflineCheckerExecutor):
             )
         except TaskAttemptsExhausted as exc:
             try:
-                return self._recover_evidenced_timeouts(
+                return self._recover_stability_incomplete(
                     batch_dir=batch_dir,
                     fingerprint=fingerprint,
                     tasks=tasks,

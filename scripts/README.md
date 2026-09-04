@@ -43,6 +43,14 @@ cleaning authority is `docs/swe-chat-data-cleaning.md`.
   retained for Offline reproducibility.
 - `internal/run_gepa_rules.py` is the retained Offline GEPA controller entry.
 - `run_offline_check_only.py` is the additive fixed-guideline evaluation path.
+- `tools/freeze_swe_verified_pc_only_inputs.py` deterministically projects the
+  frozen cleaned-482 historical dataset down to Checker-visible fields plus its
+  controller-only label and freezes exact Seed/C4 guideline copies. It removes
+  ASI rather than carrying post-plan execution evidence into the new input.
+- `hpc_submit_offline_check_only.sh` syncs that tracked compact snapshot with
+  the worktree and advances
+  the resumable fixed-guideline controller. Its default is dry-run; the tracked
+  supervisor/config do not authorize submission.
 - `hpc_submit_polybench_pce.sh`, `run_polybench_pce_hpc.py`,
   `hpc_submit_polybench_pcce.sh`, and `run_polybench_pcce_hpc.py` preserve the
   completed PCE/PCCE platform. The PCCE entry points also support the additive

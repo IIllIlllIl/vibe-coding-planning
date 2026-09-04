@@ -6,7 +6,12 @@ import math
 from typing import Any, Sequence
 
 from src.offline_check_only.dataset import CheckOnlyCase
-from src.optimization.models import CheckerOutput, CheckerResult
+from src.optimization.models import (
+    CheckerIncompleteOutput,
+    CheckerOutput,
+    CheckerResult,
+    CheckerTimeoutOutput,
+)
 
 
 def _ratio(numerator: int, denominator: int) -> float | None:
@@ -26,7 +31,7 @@ def _class_metrics(tp: int, fp: int, fn: int) -> dict[str, float | None]:
 
 def summarize(
     cases: Sequence[CheckOnlyCase],
-    results: Sequence[CheckerResult],
+    results: Sequence[CheckerResult | CheckerIncompleteOutput],
 ) -> dict[str, Any]:
     if len(cases) != len(results):
         raise ValueError("case and result counts differ")
@@ -45,7 +50,10 @@ def summarize(
     return {
         "cases": len(cases),
         "completed": len(completed),
-        "timeouts": len(cases) - len(completed),
+        "timeouts": sum(isinstance(result, CheckerTimeoutOutput) for result in results),
+        "operationally_incomplete": sum(
+            isinstance(result, CheckerIncompleteOutput) for result in results
+        ),
         "correct": tp + tn,
         "accuracy": _ratio(tp + tn, len(cases)),
         "completed_only_accuracy": _ratio(tp + tn, len(completed)),
@@ -65,7 +73,7 @@ def summarize(
 
 def report_views(
     cases: Sequence[CheckOnlyCase],
-    results: Sequence[CheckerResult],
+    results: Sequence[CheckerResult | CheckerIncompleteOutput],
 ) -> dict[str, dict[str, Any]]:
     selectors = {
         "raw": lambda case: True,
@@ -76,6 +84,8 @@ def report_views(
         "non_bug_fix_cleaned": lambda case: (
             not case.excluded_from_cleaned and case.task_category != "Bug Fix"
         ),
+        "train": lambda case: case.split == "train",
+        "validation": lambda case: case.split == "validation",
     }
     views: dict[str, dict[str, Any]] = {}
     for name, include in selectors.items():

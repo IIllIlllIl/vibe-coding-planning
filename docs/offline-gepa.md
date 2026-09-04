@@ -43,6 +43,16 @@ regenerates plan/outcome evidence with a frozen official Python-199 PCE flow,
 then performs Checker-only evaluation of guidelines frozen before any PolyBench
 result is viewed. PolyBench never enters GEPA or Reflection.
 
+The additive `offline_check_only` path evaluates one or more frozen guidelines
+on one frozen case set without constructing GEPA or Reflection and without
+running Planner, Code, or Evaluate. Each guideline receives the identical
+issue, plan, and repository state. Reports retain per-guideline full-set
+metrics, but paired claims use only the intersection with a valid prediction
+from every guideline. Exhausted operational work is recorded as incomplete,
+never coerced to `predicted_resolved: false`. This path can diagnose transfer
+of review decisions; agreement with a historical `resolved` label remains a
+downstream proxy rather than a direct measure of plan quality.
+
 ```text
 issue + historical Round 1 plan + base repository + candidate guideline
   -> fixed Checker -> predicted_resolved
