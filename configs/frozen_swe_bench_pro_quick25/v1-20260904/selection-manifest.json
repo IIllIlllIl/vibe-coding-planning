@@ -1,0 +1,231 @@
+{
+  "dataset": "ScaleAI/SWE-bench_Pro",
+  "dataset_revision": "7ab5114912baf22bb098818e604c02fe7ad2c11f",
+  "eligible_instance_count": 266,
+  "official_task_rendering": "problem_statement + Requirements + New interfaces introduced",
+  "purpose": "development PCE-PC-PCCE quick diagnostic; not a population estimate or untouched holdout",
+  "schema_version": 1,
+  "selected_cases": [
+    {
+      "instance_id": "instance_ansible__ansible-415e08c2970757472314e515cb63a51ad825c45e-v7eee2454f617569fd6889f2211f75bc02a35f9f8",
+      "rank_sha256": "0d1ae7004b06883d2b02352585f54e7a15bb06f15a9534dbd6bb1355de3c685a",
+      "repo": "ansible/ansible",
+      "selection_role": "repository_and_task_kind_proportional_stratum",
+      "task_kind": "bug"
+    },
+    {
+      "instance_id": "instance_ansible__ansible-942424e10b2095a173dbd78e7128f52f7995849b-v30a923fb5c164d6cd18280c02422f75e611e8fb2",
+      "rank_sha256": "155f5e0c453db156ec7b43467d2e96e3fb678df1a1942caf274a21fc55fce1d3",
+      "repo": "ansible/ansible",
+      "selection_role": "repository_and_task_kind_proportional_stratum",
+      "task_kind": "bug"
+    },
+    {
+      "instance_id": "instance_ansible__ansible-de01db08d00c8d2438e1ba5989c313ba16a145b0-vba6da65a0f3baefda7a058ebbd0a8dcafb8512f5",
+      "rank_sha256": "17acc10802372ceb1b0b9b60de5719b0270a11b4fb0931c121eb4d629966139e",
+      "repo": "ansible/ansible",
+      "selection_role": "repository_and_task_kind_proportional_stratum",
+      "task_kind": "bug"
+    },
+    {
+      "instance_id": "instance_ansible__ansible-cd473dfb2fdbc97acf3293c134b21cbbcfa89ec3-vba6da65a0f3baefda7a058ebbd0a8dcafb8512f5",
+      "rank_sha256": "231b71c10c7061f5b48df08320674a36c5d3038a71081e606acf0ddd1415b7d2",
+      "repo": "ansible/ansible",
+      "selection_role": "repository_and_task_kind_proportional_stratum",
+      "task_kind": "bug"
+    },
+    {
+      "instance_id": "instance_ansible__ansible-e0c91af45fa9af575d10fd3e724ebc59d2b2d6ac-v30a923fb5c164d6cd18280c02422f75e611e8fb2",
+      "rank_sha256": "238f3e9eb9d5767d4f0849138d8986cf5523e699f6ef33b05ce67c787574ca4d",
+      "repo": "ansible/ansible",
+      "selection_role": "repository_and_task_kind_proportional_stratum",
+      "task_kind": "enhancement"
+    },
+    {
+      "instance_id": "instance_ansible__ansible-622a493ae03bd5e5cf517d336fc426e9d12208c7-v906c969b551b346ef54a2c0b41e04f632b7b73c2",
+      "rank_sha256": "0a5a355f9c5c01a88291614dd4949cc064b3e841dc9dd8da2443ba2892229f59",
+      "repo": "ansible/ansible",
+      "selection_role": "repository_and_task_kind_proportional_stratum",
+      "task_kind": "feature"
+    },
+    {
+      "instance_id": "instance_ansible__ansible-c1f2df47538b884a43320f53e787197793b105e8-v906c969b551b346ef54a2c0b41e04f632b7b73c2",
+      "rank_sha256": "0c981e0029d389f4fc99f258a387263f5bf93eb51063e4d091709e8f290eed7f",
+      "repo": "ansible/ansible",
+      "selection_role": "repository_and_task_kind_proportional_stratum",
+      "task_kind": "feature"
+    },
+    {
+      "instance_id": "instance_ansible__ansible-c616e54a6e23fa5616a1d56d243f69576164ef9b-v1055803c3a812189a1133297f7f5468579283f86",
+      "rank_sha256": "14f4a39da0448928fe0d0d54f2027be4f124c7f60df6af6236ef26bc0c80d1b8",
+      "repo": "ansible/ansible",
+      "selection_role": "repository_and_task_kind_proportional_stratum",
+      "task_kind": "mixed"
+    },
+    {
+      "instance_id": "instance_ansible__ansible-5d253a13807e884b7ce0b6b57a963a45e2f0322c-v1055803c3a812189a1133297f7f5468579283f86",
+      "rank_sha256": "1739d9f1c2268071f3208bbcb1781f7852da2c3fa812a74330b5ce9cbb4174af",
+      "repo": "ansible/ansible",
+      "selection_role": "repository_and_task_kind_proportional_stratum",
+      "task_kind": "mixed"
+    },
+    {
+      "instance_id": "instance_internetarchive__openlibrary-431442c92887a3aece3f8aa771dd029738a80eb1-v76304ecdb3a5954fcf13feb710e8c40fcf24b73c",
+      "rank_sha256": "1a2b4784b8541a76d004bf7fbde22daad5cafee7f3a6a046ce19250c22b31fbc",
+      "repo": "internetarchive/openlibrary",
+      "selection_role": "repository_and_task_kind_proportional_stratum",
+      "task_kind": "bug"
+    },
+    {
+      "instance_id": "instance_internetarchive__openlibrary-e390c1212055dd84a262a798e53487e771d3fb64-v8717e18970bcdc4e0d2cea3b1527752b21e74866",
+      "rank_sha256": "2936257a1036463be8128d52ddc73ea7128785c3c5625abd5fc46297a54f8f62",
+      "repo": "internetarchive/openlibrary",
+      "selection_role": "repository_and_task_kind_proportional_stratum",
+      "task_kind": "bug"
+    },
+    {
+      "instance_id": "instance_internetarchive__openlibrary-5069b09e5f64428dce59b33455c8bb17fe577070-v8717e18970bcdc4e0d2cea3b1527752b21e74866",
+      "rank_sha256": "100aaa9f94c5cb2c115c48c4b4786dfc484d3ca727c4e04e1eeaae579fbda146",
+      "repo": "internetarchive/openlibrary",
+      "selection_role": "repository_and_task_kind_proportional_stratum",
+      "task_kind": "enhancement"
+    },
+    {
+      "instance_id": "instance_internetarchive__openlibrary-fad4a40acf5ff5f06cd7441a5c7baf41a7d81fe4-vfa6ff903cb27f336e17654595dd900fa943dcd91",
+      "rank_sha256": "11e1300692ce30b5ab6047667c75ed6fb79bf9a7e3099394ee75d30461afe92b",
+      "repo": "internetarchive/openlibrary",
+      "selection_role": "repository_and_task_kind_proportional_stratum",
+      "task_kind": "enhancement"
+    },
+    {
+      "instance_id": "instance_internetarchive__openlibrary-3f580a5f244c299d936d73d9e327ba873b6401d9-v0f5aece3601a5b4419f7ccec1dbda2071be28ee4",
+      "rank_sha256": "18d70aadc5b1d948d6668d3e7d38849984494db8375bc1350e685764b8574606",
+      "repo": "internetarchive/openlibrary",
+      "selection_role": "repository_and_task_kind_proportional_stratum",
+      "task_kind": "enhancement"
+    },
+    {
+      "instance_id": "instance_internetarchive__openlibrary-d109cc7e6e161170391f98f9a6fa1d02534c18e4-ve8c8d62a2b60610a3c4631f5f23ed866bada9818",
+      "rank_sha256": "1bad4be9bcb4d4d6d59991e752a3a7aa30da3315152a6940014b2bf2c7417686",
+      "repo": "internetarchive/openlibrary",
+      "selection_role": "repository_and_task_kind_proportional_stratum",
+      "task_kind": "feature"
+    },
+    {
+      "instance_id": "instance_internetarchive__openlibrary-7cbfb812ef0e1f9716e2d6e85d538a96fcb79d13-vfa6ff903cb27f336e17654595dd900fa943dcd91",
+      "rank_sha256": "1dc41923ee7f4e5351616849f167569fea743ef5a91d99551faffe2ff59a4f35",
+      "repo": "internetarchive/openlibrary",
+      "selection_role": "repository_and_task_kind_proportional_stratum",
+      "task_kind": "feature"
+    },
+    {
+      "instance_id": "instance_internetarchive__openlibrary-58999808a17a26b387f8237860a7a524d1e2d262-v08d8e8889ec945ab821fb156c04c7d2e2810debb",
+      "rank_sha256": "2606abb60c8f103eb20c7f2b30b4ed1181962d71abbdbdf6319495a12ea3bcf5",
+      "repo": "internetarchive/openlibrary",
+      "selection_role": "repository_and_task_kind_proportional_stratum",
+      "task_kind": "feature"
+    },
+    {
+      "instance_id": "instance_internetarchive__openlibrary-de6ae10512f1b5ef585c8341b451bc49c9fd4996-vfa6ff903cb27f336e17654595dd900fa943dcd91",
+      "rank_sha256": "07daed0ff8888d1ba0a774a64bb6fad044877bc85c373bc8b7a64ac4518bae60",
+      "repo": "internetarchive/openlibrary",
+      "selection_role": "repository_and_task_kind_proportional_stratum",
+      "task_kind": "mixed"
+    },
+    {
+      "instance_id": "instance_qutebrowser__qutebrowser-c0be28ebee3e1837aaf3f30ec534ccd6d038f129-v9f8e9d96c85c85a605e382f1510bd08563afc566",
+      "rank_sha256": "18dc7baf15492a5366188c3c9f64d7ea12f71913c5d095af249b2bba59fd11f1",
+      "repo": "qutebrowser/qutebrowser",
+      "selection_role": "repository_and_task_kind_proportional_stratum",
+      "task_kind": "bug"
+    },
+    {
+      "instance_id": "instance_qutebrowser__qutebrowser-8d05f0282a271bfd45e614238bd1b555c58b3fc1-v35616345bb8052ea303186706cec663146f0f184",
+      "rank_sha256": "230a7cd751eb9ec455df8409f22c12ae40b6b9765dbaca8a99c6a173767bbfcc",
+      "repo": "qutebrowser/qutebrowser",
+      "selection_role": "repository_and_task_kind_proportional_stratum",
+      "task_kind": "bug"
+    },
+    {
+      "instance_id": "instance_qutebrowser__qutebrowser-f91ace96223cac8161c16dd061907e138fe85111-v059c6fdc75567943479b23ebca7c07b5e9a7f34c",
+      "rank_sha256": "04ad666c710af96c58d108cbdcd23c1f8aa917e8b36bb6e2d3593755c878d717",
+      "repo": "qutebrowser/qutebrowser",
+      "selection_role": "repository_and_task_kind_proportional_stratum",
+      "task_kind": "enhancement"
+    },
+    {
+      "instance_id": "instance_qutebrowser__qutebrowser-e64622cd2df5b521342cf4a62e0d4cb8f8c9ae5a-v363c8a7e5ccdf6968fc7ab84a2053ac78036691d",
+      "rank_sha256": "2a23dbd8b5286783c3549ec86a682b725bd374ef5bab952c819c12f8d8fd7d1f",
+      "repo": "qutebrowser/qutebrowser",
+      "selection_role": "repository_and_task_kind_proportional_stratum",
+      "task_kind": "enhancement"
+    },
+    {
+      "instance_id": "instance_qutebrowser__qutebrowser-0aa57e4f7243024fa4bba8853306691b5dbd77b3-v5149fcda2a9a6fe1d35dfed1bade1444a11ef271",
+      "rank_sha256": "0f15858162bcb580efcfd23decbb4f61cf2972622ab9873eb41c6b7c0cefeaf0",
+      "repo": "qutebrowser/qutebrowser",
+      "selection_role": "repository_and_task_kind_proportional_stratum",
+      "task_kind": "feature"
+    },
+    {
+      "instance_id": "instance_qutebrowser__qutebrowser-305e7c96d5e2fdb3b248b27dfb21042fb2b7e0b8-v2ef375ac784985212b1805e1d0431dc8f1b3c171",
+      "rank_sha256": "14fe3cf53aaa23586eff80409e5acf10ed78d4ec925ae9cedae98af6366678f1",
+      "repo": "qutebrowser/qutebrowser",
+      "selection_role": "repository_and_task_kind_proportional_stratum",
+      "task_kind": "feature"
+    },
+    {
+      "instance_id": "instance_qutebrowser__qutebrowser-52708364b5f91e198defb022d1a5b4b3ebd9b563-v2ef375ac784985212b1805e1d0431dc8f1b3c171",
+      "rank_sha256": "0280d04264fc9ce905ef4c2fea696da06eb2ef990995591a226352241ac26dd2",
+      "repo": "qutebrowser/qutebrowser",
+      "selection_role": "repository_and_task_kind_proportional_stratum",
+      "task_kind": "mixed"
+    }
+  ],
+  "selected_instance_count": 25,
+  "selection_id": "swe-bench-pro-python-quick25-v1-20260904",
+  "selection_matrix": {
+    "ansible/ansible": {
+      "bug": 4,
+      "enhancement": 1,
+      "feature": 2,
+      "mixed": 2
+    },
+    "internetarchive/openlibrary": {
+      "bug": 2,
+      "enhancement": 3,
+      "feature": 3,
+      "mixed": 1
+    },
+    "qutebrowser/qutebrowser": {
+      "bug": 2,
+      "enhancement": 2,
+      "feature": 2,
+      "mixed": 1
+    }
+  },
+  "selection_seed": "swe-bench-pro-python-quick25-v1-20260904",
+  "selection_uses_outcomes_plans_patches_or_tests": false,
+  "source_bucket_counts": {
+    "ansible/ansible": {
+      "bug": 41,
+      "enhancement": 7,
+      "feature": 26,
+      "mixed": 22
+    },
+    "internetarchive/openlibrary": {
+      "bug": 20,
+      "enhancement": 27,
+      "feature": 32,
+      "mixed": 12
+    },
+    "qutebrowser/qutebrowser": {
+      "bug": 19,
+      "enhancement": 30,
+      "feature": 17,
+      "mixed": 13
+    }
+  },
+  "source_manifest_sha256": "529c6de76bf4914eaf3e0a2274a08d59fbb5ae6990d497df745496c6bc40c5fd",
+  "source_request_manifest_sha256": "f1a7bd4824f6401dbf47d76e4a4387da18cc1a699b21188f92d0132072d9ca88"
+}

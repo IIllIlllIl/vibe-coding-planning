@@ -1,0 +1,29 @@
+schema_version: 1
+purpose: swe_bench_pro_sif_preheat
+preheat_id: swe-bench-pro-python-quick25-v1-20260904
+
+semantic:
+  preheat_images: configs/frozen_swe_bench_pro_quick25/v1-20260904/preheat-images.json
+  preheat_images_sha256: a2647dd24388babbafc1b8eed1b18b36a8ad888a36bf772cc8d0caa1fae2e9cf
+  expected_images: 25
+  dataset_revision: 7ab5114912baf22bb098818e604c02fe7ad2c11f
+  repository_workdir: /app
+
+operational:
+  ulhpc_config: configs/ulhpc_submit.yaml
+  sif_cache_dir: /scratch/users/twang/vibe-coding-planning/shared/sif-cache
+  apptainer_bin: /mnt/aiongpfs/apps/resif/iris-rhel8/2020b/broadwell/software/Apptainer/1.2.1/bin/apptainer
+  apptainer_cache_dir: /scratch/users/twang/vibe-coding-planning/operations/swe-bench-pro-python-quick25-v1-20260904/apptainer-cache
+  apptainer_tmp_dir: /scratch/users/twang/vibe-coding-planning/operations/swe-bench-pro-python-quick25-v1-20260904/apptainer-tmp
+  provenance_output: /scratch/users/twang/vibe-coding-planning/operations/swe-bench-pro-python-quick25-v1-20260904/preheat-provenance.json
+  failed_output: /scratch/users/twang/vibe-coding-planning/operations/swe-bench-pro-python-quick25-v1-20260904/preheat-failures.tsv
+  lock_file: /scratch/users/twang/vibe-coding-planning/shared/sif-cache/.single-writer-preheat.lock
+  pull_timeout_seconds: 3600
+  max_attempts: 3
+  retry_backoff_seconds: 60
+  failure_policy: skip_and_report
+  cleanup_apptainer_cache: false
+
+supervisor:
+  session: swe-bench-pro-quick25-preheat-v1-20260904
+  log: output/SWE-bench_Pro/preheat-logs/quick25-v1-20260904.log

@@ -89,7 +89,10 @@ def _parse_args() -> argparse.Namespace:
         description="Pre-pull Apptainer SIFs on a ULHPC access/login node",
         allow_abbrev=False,
     )
-    parser.add_argument("--config", required=True, help="GEPA YAML config path")
+    parser.add_argument(
+        "--config",
+        help="GEPA YAML config path; optional with --images-json and --sif-cache-dir",
+    )
     parser.add_argument(
         "--ulhpc-config",
         default=str(DEFAULT_ULHPC_CONFIG),
@@ -147,11 +150,19 @@ def _parse_args() -> argparse.Namespace:
         help="Audit only image refs whose expected SIF already exists remotely",
     )
     parser.add_argument(
+        "--images-json",
+        help="Read images from a local JSON list or an object with an 'images' list",
+    )
+    parser.add_argument(
         "--remote-images-json",
         help=(
             "Read the image list from a remote JSON list or an object with an "
             "'images' list instead of deriving it from the GEPA dataset"
         ),
+    )
+    parser.add_argument(
+        "--lock-file",
+        help="Remote single-writer lock file (default: <sif-cache-dir>/.preheat.lock)",
     )
     parser.add_argument(
         "--failed-output",
@@ -188,6 +199,7 @@ def _parse_args() -> argparse.Namespace:
 
 def _remote_script() -> str:
     return r"""
+import fcntl
 import hashlib
 import json
 import os
@@ -238,24 +250,36 @@ def sha256_file(path, previous=None):
     return digest.hexdigest()
 
 
-def ghcr_digest(image):
-    prefix = "ghcr.io/"
-    if not image.startswith(prefix) or "@" in image:
-        return None, "digest lookup supports tagged ghcr.io references only"
-    name_and_tag = image[len(prefix):]
+def registry_digest(image):
+    if "@" in image:
+        return None, "digest lookup requires a tagged image reference"
+    if image.startswith("ghcr.io/"):
+        registry = "ghcr.io"
+        service = "ghcr.io"
+        token_endpoint = "https://ghcr.io/token"
+        manifest_endpoint = "https://ghcr.io/v2"
+        name_and_tag = image[len("ghcr.io/"):]
+    else:
+        registry = "docker.io"
+        service = "registry.docker.io"
+        token_endpoint = "https://auth.docker.io/token"
+        manifest_endpoint = "https://registry-1.docker.io/v2"
+        name_and_tag = image
+        if "/" not in name_and_tag:
+            name_and_tag = "library/" + name_and_tag
     if ":" not in name_and_tag:
-        return None, "GHCR image reference has no explicit tag"
+        return None, f"{registry} image reference has no explicit tag"
     repository, tag = name_and_tag.rsplit(":", 1)
     try:
         query = urllib.parse.urlencode(
-            {"service": "ghcr.io", "scope": f"repository:{repository}:pull"}
+            {"service": service, "scope": f"repository:{repository}:pull"}
         )
         with urllib.request.urlopen(
-            "https://ghcr.io/token?" + query, timeout=60
+            token_endpoint + "?" + query, timeout=60
         ) as response:
             token = json.load(response)["token"]
         request = urllib.request.Request(
-            f"https://ghcr.io/v2/{repository}/manifests/{tag}",
+            f"{manifest_endpoint}/{repository}/manifests/{tag}",
             method="HEAD",
             headers={
                 "Authorization": "Bearer " + token,
@@ -268,7 +292,7 @@ def ghcr_digest(image):
         with urllib.request.urlopen(request, timeout=60) as response:
             digest = response.headers.get("Docker-Content-Digest")
         if not digest:
-            return None, "GHCR response omitted Docker-Content-Digest"
+            return None, f"{registry} response omitted Docker-Content-Digest"
         return digest, None
     except (OSError, KeyError, ValueError, urllib.error.URLError) as exc:
         return None, f"{type(exc).__name__}: {exc}"
@@ -321,6 +345,7 @@ def failure_category(error):
 payload = json.loads(sys.stdin.read())
 apptainer_bin = payload["apptainer_bin"]
 sif_cache_dir = Path(payload["sif_cache_dir"])
+lock_file = Path(payload["lock_file"])
 failed_output = Path(payload["failed_output"])
 provenance_output = Path(
     payload.get("provenance_output")
@@ -338,6 +363,20 @@ os.environ["APPTAINER_TMPDIR"] = payload["apptainer_tmp_dir"]
 Path(os.environ["APPTAINER_CACHEDIR"]).mkdir(parents=True, exist_ok=True)
 Path(os.environ["APPTAINER_TMPDIR"]).mkdir(parents=True, exist_ok=True)
 sif_cache_dir.mkdir(parents=True, exist_ok=True)
+lock_file.parent.mkdir(parents=True, exist_ok=True)
+lock_handle = lock_file.open("a+", encoding="utf-8")
+try:
+    fcntl.flock(lock_handle.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
+except BlockingIOError:
+    print(
+        json.dumps({"event": "single_writer_lock_busy", "lock_file": str(lock_file)}),
+        flush=True,
+    )
+    raise SystemExit(3)
+lock_handle.seek(0)
+lock_handle.truncate()
+lock_handle.write(json.dumps({"pid": os.getpid(), "started_at": utc_now()}) + "\n")
+lock_handle.flush()
 
 if provenance_output.exists():
     try:
@@ -411,7 +450,7 @@ failures = []
 for image in images:
     sif = sif_cache_dir / image_to_sif_name(image)
     previous = records.get(image) if isinstance(records.get(image), dict) else None
-    digest_before, digest_before_error = ghcr_digest(image)
+    digest_before, digest_before_error = registry_digest(image)
     if sif.exists():
         cached += 1
         source_ref, inspect_error = inspect_sif(apptainer_bin, sif)
@@ -505,7 +544,7 @@ for image in images:
                 pulled += 1
                 ok = True
                 size = sif.stat().st_size
-                digest_after, digest_after_error = ghcr_digest(image)
+                digest_after, digest_after_error = registry_digest(image)
                 source_ref, inspect_error = inspect_sif(apptainer_bin, sif)
                 digest_matches = bool(
                     digest_before
@@ -749,6 +788,16 @@ def _remote_images_from_json(
     return list(json.loads(result.stdout.strip().splitlines()[-1]))
 
 
+def _images_from_json(path: Path) -> list[str]:
+    value = json.loads(path.read_text(encoding="utf-8"))
+    images = value.get("images") if isinstance(value, dict) else value
+    if not isinstance(images, list) or not all(isinstance(item, str) for item in images):
+        raise ValueError("images JSON must be a string list or an object with an images list")
+    if len(images) != len(set(images)):
+        raise ValueError("images JSON contains duplicate image references")
+    return images
+
+
 def main() -> int:
     args = _parse_args()
     if args.timeout <= 0:
@@ -761,9 +810,19 @@ def main() -> int:
         raise SystemExit("--limit must be >= 0")
     if args.missing_only and args.existing_only:
         raise SystemExit("--missing-only and --existing-only are mutually exclusive")
+    if args.images_json and args.remote_images_json:
+        raise SystemExit("--images-json and --remote-images-json are mutually exclusive")
+    if not args.config and not (args.images_json and args.sif_cache_dir):
+        raise SystemExit(
+            "--config is required unless --images-json and --sif-cache-dir are provided"
+        )
 
-    config = load_optimization_config(args.config, require_api_keys=False)
-    if config.container.runtime != "apptainer":
+    config = (
+        load_optimization_config(args.config, require_api_keys=False)
+        if args.config
+        else None
+    )
+    if config is not None and config.container.runtime != "apptainer":
         raise SystemExit(
             f"config container.runtime is {config.container.runtime!r}; expected 'apptainer'"
         )
@@ -779,12 +838,12 @@ def main() -> int:
     apptainer_tmp_dir = (
         args.apptainer_tmp_dir or f"{remote_hpc_root}/shared/apptainer-tmp-login"
     )
-    raw_config = _load_yaml(Path(args.config))
+    raw_config = _load_yaml(Path(args.config)) if args.config else {}
     raw_sif_cache = str(raw_config.get("container", {}).get("sif_cache_dir", ""))
     configured_sif_cache = (
         raw_sif_cache.replace("${USER}", remote_user).replace("$USER", remote_user)
         if raw_sif_cache
-        else str(config.container.sif_cache_dir)
+        else str(config.container.sif_cache_dir) if config is not None else ""
     )
     sif_cache_dir = str(args.sif_cache_dir or configured_sif_cache)
     if not sif_cache_dir:
@@ -797,9 +856,12 @@ def main() -> int:
     provenance_output = (
         args.provenance_output or f"{sif_cache_dir}/login_preheat_provenance.json"
     )
+    lock_file = args.lock_file or f"{sif_cache_dir}/.preheat.lock"
 
     images = (
-        _remote_images_from_json(
+        _images_from_json(Path(args.images_json))
+        if args.images_json
+        else _remote_images_from_json(
             ssh_target,
             ssh_port,
             ssh_key,
@@ -834,6 +896,8 @@ def main() -> int:
         "missing_only": args.missing_only,
         "existing_only": args.existing_only,
         "remote_images_json": args.remote_images_json,
+        "images_json": args.images_json,
+        "lock_file": lock_file,
         "provenance_output": provenance_output,
         "dry_run": args.dry_run,
         "cleanup_tmp": args.cleanup_tmp,
@@ -872,6 +936,7 @@ def main() -> int:
         "retry_backoff": args.retry_backoff,
         "failed_output": failed_output,
         "provenance_output": provenance_output,
+        "lock_file": lock_file,
         "cleanup_tmp": args.cleanup_tmp,
         "cleanup_apptainer_cache": args.cleanup_apptainer_cache,
         "downloader_source_sha256": metadata["downloader_source_sha256"],

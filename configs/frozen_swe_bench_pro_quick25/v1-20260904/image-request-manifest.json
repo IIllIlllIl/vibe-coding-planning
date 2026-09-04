@@ -1,0 +1,261 @@
+{
+  "contains_solution_or_test_evidence": false,
+  "dataset_revision": "7ab5114912baf22bb098818e604c02fe7ad2c11f",
+  "purpose": "swe_bench_pro_python_quick25_sif_acquisition_requests",
+  "request_count": 25,
+  "requests": [
+    {
+      "base_commit": "f05bcf569367904985c0e5796a4c14ce0b7d4be9",
+      "dockerhub_tag": "ansible.ansible-ansible__ansible-415e08c2970757472314e515cb63a51ad825c45e-v7eee2454f617569fd6889f2211f75bc02a35f9f8",
+      "image_ref": "jefzda/sweap-images:ansible.ansible-ansible__ansible-415e08c2970757472314e515cb63a51ad825c45e-v7eee2454f617569fd6889f2211f75bc02a35f9f8",
+      "instance_id": "instance_ansible__ansible-415e08c2970757472314e515cb63a51ad825c45e-v7eee2454f617569fd6889f2211f75bc02a35f9f8",
+      "ordinal": 22,
+      "repo": "ansible/ansible",
+      "repo_language": "python",
+      "sif_filename": "jefzda_sweap-images_ansible.ansible-ansible__ansible-415e08c2970757472314e515cb63a51ad825c45e-v7eee2454f617569fd6889f2211f75bc02a35f9f8.sif"
+    },
+    {
+      "base_commit": "dd44449b6ec454a46426a020608fe3763287101f",
+      "dockerhub_tag": "ansible.ansible-ansible__ansible-942424e10b2095a173dbd78e7128f52f7995849b-v30a923fb5c164d6cd18280c02422f75e611e8fb2",
+      "image_ref": "jefzda/sweap-images:ansible.ansible-ansible__ansible-942424e10b2095a173dbd78e7128f52f7995849b-v30a923fb5c164d6cd18280c02422f75e611e8fb2",
+      "instance_id": "instance_ansible__ansible-942424e10b2095a173dbd78e7128f52f7995849b-v30a923fb5c164d6cd18280c02422f75e611e8fb2",
+      "ordinal": 46,
+      "repo": "ansible/ansible",
+      "repo_language": "python",
+      "sif_filename": "jefzda_sweap-images_ansible.ansible-ansible__ansible-942424e10b2095a173dbd78e7128f52f7995849b-v30a923fb5c164d6cd18280c02422f75e611e8fb2.sif"
+    },
+    {
+      "base_commit": "fc8197e32675dd0343939f107b5f017993e36f62",
+      "dockerhub_tag": "ansible.ansible-ansible__ansible-de01db08d00c8d2438e1ba5989c313ba16a145b0-vba6da65a0f3baefda7a058ebbd0a8dcafb8512f5",
+      "image_ref": "jefzda/sweap-images:ansible.ansible-ansible__ansible-de01db08d00c8d2438e1ba5989c313ba16a145b0-vba6da65a0f3baefda7a058ebbd0a8dcafb8512f5",
+      "instance_id": "instance_ansible__ansible-de01db08d00c8d2438e1ba5989c313ba16a145b0-vba6da65a0f3baefda7a058ebbd0a8dcafb8512f5",
+      "ordinal": 79,
+      "repo": "ansible/ansible",
+      "repo_language": "python",
+      "sif_filename": "jefzda_sweap-images_ansible.ansible-ansible__ansible-de01db08d00c8d2438e1ba5989c313ba16a145b0-vba6da65a0f3baefda7a058ebbd0a8dcafb8512f5.sif"
+    },
+    {
+      "base_commit": "e8ae7211dabbd07093f50d6dfb383da3bb14f13d",
+      "dockerhub_tag": "ansible.ansible-ansible__ansible-cd473dfb2fdbc97acf3293c134b21cbbcfa89ec3-vba6da65a0f3baefda7a058ebbd0a8dcafb8512f5",
+      "image_ref": "jefzda/sweap-images:ansible.ansible-ansible__ansible-cd473dfb2fdbc97acf3293c134b21cbbcfa89ec3-vba6da65a0f3baefda7a058ebbd0a8dcafb8512f5",
+      "instance_id": "instance_ansible__ansible-cd473dfb2fdbc97acf3293c134b21cbbcfa89ec3-vba6da65a0f3baefda7a058ebbd0a8dcafb8512f5",
+      "ordinal": 69,
+      "repo": "ansible/ansible",
+      "repo_language": "python",
+      "sif_filename": "jefzda_sweap-images_ansible.ansible-ansible__ansible-cd473dfb2fdbc97acf3293c134b21cbbcfa89ec3-vba6da65a0f3baefda7a058ebbd0a8dcafb8512f5.sif"
+    },
+    {
+      "base_commit": "5d15af3a9563271615fa1d0f5a99a175bfe41a9f",
+      "dockerhub_tag": "ansible.ansible-ansible__ansible-e0c91af45fa9af575d10fd3e724ebc59d2b2d6ac-v30a923fb5c164d6cd18280c02422f75e611e8fb2",
+      "image_ref": "jefzda/sweap-images:ansible.ansible-ansible__ansible-e0c91af45fa9af575d10fd3e724ebc59d2b2d6ac-v30a923fb5c164d6cd18280c02422f75e611e8fb2",
+      "instance_id": "instance_ansible__ansible-e0c91af45fa9af575d10fd3e724ebc59d2b2d6ac-v30a923fb5c164d6cd18280c02422f75e611e8fb2",
+      "ordinal": 82,
+      "repo": "ansible/ansible",
+      "repo_language": "python",
+      "sif_filename": "jefzda_sweap-images_ansible.ansible-ansible__ansible-e0c91af45fa9af575d10fd3e724ebc59d2b2d6ac-v30a923fb5c164d6cd18280c02422f75e611e8fb2.sif"
+    },
+    {
+      "base_commit": "f4502a8f1ce71d88cc90f4b4f6c2899943441ebf",
+      "dockerhub_tag": "ansible.ansible-ansible__ansible-622a493ae03bd5e5cf517d336fc426e9d12208c7-v906c969b551b346ef54a2c0b41e04f632b7b73c2",
+      "image_ref": "jefzda/sweap-images:ansible.ansible-ansible__ansible-622a493ae03bd5e5cf517d336fc426e9d12208c7-v906c969b551b346ef54a2c0b41e04f632b7b73c2",
+      "instance_id": "instance_ansible__ansible-622a493ae03bd5e5cf517d336fc426e9d12208c7-v906c969b551b346ef54a2c0b41e04f632b7b73c2",
+      "ordinal": 34,
+      "repo": "ansible/ansible",
+      "repo_language": "python",
+      "sif_filename": "jefzda_sweap-images_ansible.ansible-ansible__ansible-622a493ae03bd5e5cf517d336fc426e9d12208c7-v906c969b551b346ef54a2c0b41e04f632b7b73c2.sif"
+    },
+    {
+      "base_commit": "57596edcca0ef3bc4d0d90a55d33ac433b407abb",
+      "dockerhub_tag": "ansible.ansible-ansible__ansible-c1f2df47538b884a43320f53e787197793b105e8-v906c969b551b346ef54a2c0b41e04f632b7b73c2",
+      "image_ref": "jefzda/sweap-images:ansible.ansible-ansible__ansible-c1f2df47538b884a43320f53e787197793b105e8-v906c969b551b346ef54a2c0b41e04f632b7b73c2",
+      "instance_id": "instance_ansible__ansible-c1f2df47538b884a43320f53e787197793b105e8-v906c969b551b346ef54a2c0b41e04f632b7b73c2",
+      "ordinal": 66,
+      "repo": "ansible/ansible",
+      "repo_language": "python",
+      "sif_filename": "jefzda_sweap-images_ansible.ansible-ansible__ansible-c1f2df47538b884a43320f53e787197793b105e8-v906c969b551b346ef54a2c0b41e04f632b7b73c2.sif"
+    },
+    {
+      "base_commit": "b479adddce8fe46a2df5469f130cf7b6ad70fdc4",
+      "dockerhub_tag": "ansible.ansible-ansible__ansible-c616e54a6e23fa5616a1d56d243f69576164ef9b-v1055803c3a812189a1133297f7f5468579283f86",
+      "image_ref": "jefzda/sweap-images:ansible.ansible-ansible__ansible-c616e54a6e23fa5616a1d56d243f69576164ef9b-v1055803c3a812189a1133297f7f5468579283f86",
+      "instance_id": "instance_ansible__ansible-c616e54a6e23fa5616a1d56d243f69576164ef9b-v1055803c3a812189a1133297f7f5468579283f86",
+      "ordinal": 67,
+      "repo": "ansible/ansible",
+      "repo_language": "python",
+      "sif_filename": "jefzda_sweap-images_ansible.ansible-ansible__ansible-c616e54a6e23fa5616a1d56d243f69576164ef9b-v1055803c3a812189a1133297f7f5468579283f86.sif"
+    },
+    {
+      "base_commit": "14e7f05318ddc421330209eece0e891d0eaef10d",
+      "dockerhub_tag": "ansible.ansible-ansible__ansible-5d253a13807e884b7ce0b6b57a963a45e2f0322c-v1055803c3a812189a1133297f7f5468579283f86",
+      "image_ref": "jefzda/sweap-images:ansible.ansible-ansible__ansible-5d253a13807e884b7ce0b6b57a963a45e2f0322c-v1055803c3a812189a1133297f7f5468579283f86",
+      "instance_id": "instance_ansible__ansible-5d253a13807e884b7ce0b6b57a963a45e2f0322c-v1055803c3a812189a1133297f7f5468579283f86",
+      "ordinal": 30,
+      "repo": "ansible/ansible",
+      "repo_language": "python",
+      "sif_filename": "jefzda_sweap-images_ansible.ansible-ansible__ansible-5d253a13807e884b7ce0b6b57a963a45e2f0322c-v1055803c3a812189a1133297f7f5468579283f86.sif"
+    },
+    {
+      "base_commit": "188a76779dbd2368d73313ad15cae639c295eb21",
+      "dockerhub_tag": "internetarchive.openlibrary-internetarchive__openlibrary-431442c92887a3aece3f8aa771dd029738a80eb1-v76304ecdb3a5954fcf13feb710e8c",
+      "image_ref": "jefzda/sweap-images:internetarchive.openlibrary-internetarchive__openlibrary-431442c92887a3aece3f8aa771dd029738a80eb1-v76304ecdb3a5954fcf13feb710e8c",
+      "instance_id": "instance_internetarchive__openlibrary-431442c92887a3aece3f8aa771dd029738a80eb1-v76304ecdb3a5954fcf13feb710e8c40fcf24b73c",
+      "ordinal": 120,
+      "repo": "internetarchive/openlibrary",
+      "repo_language": "python",
+      "sif_filename": "jefzda_sweap-images_internetarchive.openlibrary-internetarchive__openlibrary-431442c92887a3aece3f8aa771dd029738a80eb1-v76304ecdb3a5954fcf13feb710e8c.sif"
+    },
+    {
+      "base_commit": "a08e565962ccbbd2931c7e2821bd37067a97f339",
+      "dockerhub_tag": "internetarchive.openlibrary-internetarchive__openlibrary-e390c1212055dd84a262a798e53487e771d3fb64-v8717e18970bcdc4e0d2cea3b15277",
+      "image_ref": "jefzda/sweap-images:internetarchive.openlibrary-internetarchive__openlibrary-e390c1212055dd84a262a798e53487e771d3fb64-v8717e18970bcdc4e0d2cea3b15277",
+      "instance_id": "instance_internetarchive__openlibrary-e390c1212055dd84a262a798e53487e771d3fb64-v8717e18970bcdc4e0d2cea3b1527752b21e74866",
+      "ordinal": 179,
+      "repo": "internetarchive/openlibrary",
+      "repo_language": "python",
+      "sif_filename": "jefzda_sweap-images_internetarchive.openlibrary-internetarchive__openlibrary-e390c1212055dd84a262a798e53487e771d3fb64-v8717e18970bcdc4e0d2cea3b15277.sif"
+    },
+    {
+      "base_commit": "facafbe7339ca48a33e0d07e089e99b2cf6235df",
+      "dockerhub_tag": "internetarchive.openlibrary-internetarchive__openlibrary-5069b09e5f64428dce59b33455c8bb17fe577070-v8717e18970bcdc4e0d2cea3b15277",
+      "image_ref": "jefzda/sweap-images:internetarchive.openlibrary-internetarchive__openlibrary-5069b09e5f64428dce59b33455c8bb17fe577070-v8717e18970bcdc4e0d2cea3b15277",
+      "instance_id": "instance_internetarchive__openlibrary-5069b09e5f64428dce59b33455c8bb17fe577070-v8717e18970bcdc4e0d2cea3b1527752b21e74866",
+      "ordinal": 124,
+      "repo": "internetarchive/openlibrary",
+      "repo_language": "python",
+      "sif_filename": "jefzda_sweap-images_internetarchive.openlibrary-internetarchive__openlibrary-5069b09e5f64428dce59b33455c8bb17fe577070-v8717e18970bcdc4e0d2cea3b15277.sif"
+    },
+    {
+      "base_commit": "afb819f8166c6dff4295c6802cc0b55b67f05731",
+      "dockerhub_tag": "internetarchive.openlibrary-internetarchive__openlibrary-fad4a40acf5ff5f06cd7441a5c7baf41a7d81fe4-vfa6ff903cb27f336e17654595dd90",
+      "image_ref": "jefzda/sweap-images:internetarchive.openlibrary-internetarchive__openlibrary-fad4a40acf5ff5f06cd7441a5c7baf41a7d81fe4-vfa6ff903cb27f336e17654595dd90",
+      "instance_id": "instance_internetarchive__openlibrary-fad4a40acf5ff5f06cd7441a5c7baf41a7d81fe4-vfa6ff903cb27f336e17654595dd900fa943dcd91",
+      "ordinal": 185,
+      "repo": "internetarchive/openlibrary",
+      "repo_language": "python",
+      "sif_filename": "jefzda_sweap-images_internetarchive.openlibrary-internetarchive__openlibrary-fad4a40acf5ff5f06cd7441a5c7baf41a7d81fe4-vfa6ff903cb27f336e17654595dd90.sif"
+    },
+    {
+      "base_commit": "46d7d325e6ed4b4de998d69c0e89893274ad5d60",
+      "dockerhub_tag": "internetarchive.openlibrary-internetarchive__openlibrary-3f580a5f244c299d936d73d9e327ba873b6401d9-v0f5aece3601a5b4419f7ccec1dbda",
+      "image_ref": "jefzda/sweap-images:internetarchive.openlibrary-internetarchive__openlibrary-3f580a5f244c299d936d73d9e327ba873b6401d9-v0f5aece3601a5b4419f7ccec1dbda",
+      "instance_id": "instance_internetarchive__openlibrary-3f580a5f244c299d936d73d9e327ba873b6401d9-v0f5aece3601a5b4419f7ccec1dbda2071be28ee4",
+      "ordinal": 117,
+      "repo": "internetarchive/openlibrary",
+      "repo_language": "python",
+      "sif_filename": "jefzda_sweap-images_internetarchive.openlibrary-internetarchive__openlibrary-3f580a5f244c299d936d73d9e327ba873b6401d9-v0f5aece3601a5b4419f7ccec1dbda.sif"
+    },
+    {
+      "base_commit": "daf93507208f2206f8950e3bb5fffac7caf80520",
+      "dockerhub_tag": "internetarchive.openlibrary-internetarchive__openlibrary-d109cc7e6e161170391f98f9a6fa1d02534c18e4-ve8c8d62a2b60610a3c4631f5f23ed",
+      "image_ref": "jefzda/sweap-images:internetarchive.openlibrary-internetarchive__openlibrary-d109cc7e6e161170391f98f9a6fa1d02534c18e4-ve8c8d62a2b60610a3c4631f5f23ed",
+      "instance_id": "instance_internetarchive__openlibrary-d109cc7e6e161170391f98f9a6fa1d02534c18e4-ve8c8d62a2b60610a3c4631f5f23ed866bada9818",
+      "ordinal": 172,
+      "repo": "internetarchive/openlibrary",
+      "repo_language": "python",
+      "sif_filename": "jefzda_sweap-images_internetarchive.openlibrary-internetarchive__openlibrary-d109cc7e6e161170391f98f9a6fa1d02534c18e4-ve8c8d62a2b60610a3c4631f5f23ed.sif"
+    },
+    {
+      "base_commit": "20e8fee0e879ca47c0a1259fec0a5ab1e292aa1f",
+      "dockerhub_tag": "internetarchive.openlibrary-internetarchive__openlibrary-7cbfb812ef0e1f9716e2d6e85d538a96fcb79d13-vfa6ff903cb27f336e17654595dd90",
+      "image_ref": "jefzda/sweap-images:internetarchive.openlibrary-internetarchive__openlibrary-7cbfb812ef0e1f9716e2d6e85d538a96fcb79d13-vfa6ff903cb27f336e17654595dd90",
+      "instance_id": "instance_internetarchive__openlibrary-7cbfb812ef0e1f9716e2d6e85d538a96fcb79d13-vfa6ff903cb27f336e17654595dd900fa943dcd91",
+      "ordinal": 145,
+      "repo": "internetarchive/openlibrary",
+      "repo_language": "python",
+      "sif_filename": "jefzda_sweap-images_internetarchive.openlibrary-internetarchive__openlibrary-7cbfb812ef0e1f9716e2d6e85d538a96fcb79d13-vfa6ff903cb27f336e17654595dd90.sif"
+    },
+    {
+      "base_commit": "6e5fa4b4afcbbf022aff88732f1d458be31fc086",
+      "dockerhub_tag": "internetarchive.openlibrary-internetarchive__openlibrary-58999808a17a26b387f8237860a7a524d1e2d262-v08d8e8889ec945ab821fb156c04c7",
+      "image_ref": "jefzda/sweap-images:internetarchive.openlibrary-internetarchive__openlibrary-58999808a17a26b387f8237860a7a524d1e2d262-v08d8e8889ec945ab821fb156c04c7",
+      "instance_id": "instance_internetarchive__openlibrary-58999808a17a26b387f8237860a7a524d1e2d262-v08d8e8889ec945ab821fb156c04c7d2e2810debb",
+      "ordinal": 127,
+      "repo": "internetarchive/openlibrary",
+      "repo_language": "python",
+      "sif_filename": "jefzda_sweap-images_internetarchive.openlibrary-internetarchive__openlibrary-58999808a17a26b387f8237860a7a524d1e2d262-v08d8e8889ec945ab821fb156c04c7.sif"
+    },
+    {
+      "base_commit": "02e8f0cc1e68830a66cb6bc4ee9f3b81463d5e65",
+      "dockerhub_tag": "internetarchive.openlibrary-internetarchive__openlibrary-de6ae10512f1b5ef585c8341b451bc49c9fd4996-vfa6ff903cb27f336e17654595dd90",
+      "image_ref": "jefzda/sweap-images:internetarchive.openlibrary-internetarchive__openlibrary-de6ae10512f1b5ef585c8341b451bc49c9fd4996-vfa6ff903cb27f336e17654595dd90",
+      "instance_id": "instance_internetarchive__openlibrary-de6ae10512f1b5ef585c8341b451bc49c9fd4996-vfa6ff903cb27f336e17654595dd900fa943dcd91",
+      "ordinal": 176,
+      "repo": "internetarchive/openlibrary",
+      "repo_language": "python",
+      "sif_filename": "jefzda_sweap-images_internetarchive.openlibrary-internetarchive__openlibrary-de6ae10512f1b5ef585c8341b451bc49c9fd4996-vfa6ff903cb27f336e17654595dd90.sif"
+    },
+    {
+      "base_commit": "690813e1b10fee83660a6740ab3aabc575a9b125",
+      "dockerhub_tag": "qutebrowser.qutebrowser-qutebrowser__qutebrowser-c0be28ebee3e1837aaf3f30ec534ccd6d038f129-v9f8e9d96c85c85a605e382f1510bd08563afc",
+      "image_ref": "jefzda/sweap-images:qutebrowser.qutebrowser-qutebrowser__qutebrowser-c0be28ebee3e1837aaf3f30ec534ccd6d038f129-v9f8e9d96c85c85a605e382f1510bd08563afc",
+      "instance_id": "instance_qutebrowser__qutebrowser-c0be28ebee3e1837aaf3f30ec534ccd6d038f129-v9f8e9d96c85c85a605e382f1510bd08563afc566",
+      "ordinal": 241,
+      "repo": "qutebrowser/qutebrowser",
+      "repo_language": "python",
+      "sif_filename": "jefzda_sweap-images_qutebrowser.qutebrowser-qutebrowser__qutebrowser-c0be28ebee3e1837aaf3f30ec534ccd6d038f129-v9f8e9d96c85c85a605e382f1510bd08563afc.sif"
+    },
+    {
+      "base_commit": "190bab127d9e8421940f5f3fdc738d1c7ec02193",
+      "dockerhub_tag": "qutebrowser.qutebrowser-qutebrowser__qutebrowser-8d05f0282a271bfd45e614238bd1b555c58b3fc1-v35616345bb8052ea303186706cec663146f0f",
+      "image_ref": "jefzda/sweap-images:qutebrowser.qutebrowser-qutebrowser__qutebrowser-8d05f0282a271bfd45e614238bd1b555c58b3fc1-v35616345bb8052ea303186706cec663146f0f",
+      "instance_id": "instance_qutebrowser__qutebrowser-8d05f0282a271bfd45e614238bd1b555c58b3fc1-v35616345bb8052ea303186706cec663146f0f184",
+      "ordinal": 229,
+      "repo": "qutebrowser/qutebrowser",
+      "repo_language": "python",
+      "sif_filename": "jefzda_sweap-images_qutebrowser.qutebrowser-qutebrowser__qutebrowser-8d05f0282a271bfd45e614238bd1b555c58b3fc1-v35616345bb8052ea303186706cec663146f0f.sif"
+    },
+    {
+      "base_commit": "ebfe9b7aa0c4ba9d451f993e08955004aaec4345",
+      "dockerhub_tag": "qutebrowser.qutebrowser-qutebrowser__qutebrowser-f91ace96223cac8161c16dd061907e138fe85111-v059c6fdc75567943479b23ebca7c07b5e9a7f",
+      "image_ref": "jefzda/sweap-images:qutebrowser.qutebrowser-qutebrowser__qutebrowser-f91ace96223cac8161c16dd061907e138fe85111-v059c6fdc75567943479b23ebca7c07b5e9a7f",
+      "instance_id": "instance_qutebrowser__qutebrowser-f91ace96223cac8161c16dd061907e138fe85111-v059c6fdc75567943479b23ebca7c07b5e9a7f34c",
+      "ordinal": 260,
+      "repo": "qutebrowser/qutebrowser",
+      "repo_language": "python",
+      "sif_filename": "jefzda_sweap-images_qutebrowser.qutebrowser-qutebrowser__qutebrowser-f91ace96223cac8161c16dd061907e138fe85111-v059c6fdc75567943479b23ebca7c07b5e9a7f.sif"
+    },
+    {
+      "base_commit": "09925f74817cf7a970f166342f81886a1d27ee35",
+      "dockerhub_tag": "qutebrowser.qutebrowser-qutebrowser__qutebrowser-e64622cd2df5b521342cf4a62e0d4cb8f8c9ae5a-v363c8a7e5ccdf6968fc7ab84a2053ac780366",
+      "image_ref": "jefzda/sweap-images:qutebrowser.qutebrowser-qutebrowser__qutebrowser-e64622cd2df5b521342cf4a62e0d4cb8f8c9ae5a-v363c8a7e5ccdf6968fc7ab84a2053ac780366",
+      "instance_id": "instance_qutebrowser__qutebrowser-e64622cd2df5b521342cf4a62e0d4cb8f8c9ae5a-v363c8a7e5ccdf6968fc7ab84a2053ac78036691d",
+      "ordinal": 251,
+      "repo": "qutebrowser/qutebrowser",
+      "repo_language": "python",
+      "sif_filename": "jefzda_sweap-images_qutebrowser.qutebrowser-qutebrowser__qutebrowser-e64622cd2df5b521342cf4a62e0d4cb8f8c9ae5a-v363c8a7e5ccdf6968fc7ab84a2053ac780366.sif"
+    },
+    {
+      "base_commit": "e8a7c6b257478bd39810f19c412f484ada6a3dc6",
+      "dockerhub_tag": "qutebrowser.qutebrowser-qutebrowser__qutebrowser-0aa57e4f7243024fa4bba8853306691b5dbd77b3-v5149fcda2a9a6fe1d35dfed1bade1444a11ef",
+      "image_ref": "jefzda/sweap-images:qutebrowser.qutebrowser-qutebrowser__qutebrowser-0aa57e4f7243024fa4bba8853306691b5dbd77b3-v5149fcda2a9a6fe1d35dfed1bade1444a11ef",
+      "instance_id": "instance_qutebrowser__qutebrowser-0aa57e4f7243024fa4bba8853306691b5dbd77b3-v5149fcda2a9a6fe1d35dfed1bade1444a11ef271",
+      "ordinal": 189,
+      "repo": "qutebrowser/qutebrowser",
+      "repo_language": "python",
+      "sif_filename": "jefzda_sweap-images_qutebrowser.qutebrowser-qutebrowser__qutebrowser-0aa57e4f7243024fa4bba8853306691b5dbd77b3-v5149fcda2a9a6fe1d35dfed1bade1444a11ef.sif"
+    },
+    {
+      "base_commit": "1aec789f4d010dfebae3cceac2c71ebeafe81e08",
+      "dockerhub_tag": "qutebrowser.qutebrowser-qutebrowser__qutebrowser-305e7c96d5e2fdb3b248b27dfb21042fb2b7e0b8-v2ef375ac784985212b1805e1d0431dc8f1b3c",
+      "image_ref": "jefzda/sweap-images:qutebrowser.qutebrowser-qutebrowser__qutebrowser-305e7c96d5e2fdb3b248b27dfb21042fb2b7e0b8-v2ef375ac784985212b1805e1d0431dc8f1b3c",
+      "instance_id": "instance_qutebrowser__qutebrowser-305e7c96d5e2fdb3b248b27dfb21042fb2b7e0b8-v2ef375ac784985212b1805e1d0431dc8f1b3c171",
+      "ordinal": 201,
+      "repo": "qutebrowser/qutebrowser",
+      "repo_language": "python",
+      "sif_filename": "jefzda_sweap-images_qutebrowser.qutebrowser-qutebrowser__qutebrowser-305e7c96d5e2fdb3b248b27dfb21042fb2b7e0b8-v2ef375ac784985212b1805e1d0431dc8f1b3c.sif"
+    },
+    {
+      "base_commit": "a0710124a1790237aa4f2a17e2f7011a074143b4",
+      "dockerhub_tag": "qutebrowser.qutebrowser-qutebrowser__qutebrowser-52708364b5f91e198defb022d1a5b4b3ebd9b563-v2ef375ac784985212b1805e1d0431dc8f1b3c",
+      "image_ref": "jefzda/sweap-images:qutebrowser.qutebrowser-qutebrowser__qutebrowser-52708364b5f91e198defb022d1a5b4b3ebd9b563-v2ef375ac784985212b1805e1d0431dc8f1b3c",
+      "instance_id": "instance_qutebrowser__qutebrowser-52708364b5f91e198defb022d1a5b4b3ebd9b563-v2ef375ac784985212b1805e1d0431dc8f1b3c171",
+      "ordinal": 215,
+      "repo": "qutebrowser/qutebrowser",
+      "repo_language": "python",
+      "sif_filename": "jefzda_sweap-images_qutebrowser.qutebrowser-qutebrowser__qutebrowser-52708364b5f91e198defb022d1a5b4b3ebd9b563-v2ef375ac784985212b1805e1d0431dc8f1b3c.sif"
+    }
+  ],
+  "schema_version": 1,
+  "selection_id": "swe-bench-pro-python-quick25-v1-20260904",
+  "source_request_manifest_sha256": "f1a7bd4824f6401dbf47d76e4a4387da18cc1a699b21188f92d0132072d9ca88"
+}

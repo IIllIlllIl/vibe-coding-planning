@@ -64,6 +64,17 @@ cleaning authority is `docs/swe-chat-data-cleaning.md`.
 - `tools/freeze_swe_verified_pce_selection.py` deterministically freezes the
   repository-covering quick-validation membership without using Plan or
   execution outcomes.
+- `tools/freeze_swe_bench_pro_metadata.py` freezes an exact SWE-bench Pro Hub
+  source identity and projects its Python rows into a solution-free image
+  request manifest. Registry availability and downloaded SIF evidence remain
+  separate operational records rather than mutable fields in this authority.
+- `tools/freeze_swe_bench_pro_quick25.py` freezes the outcome-independent Pro
+  Python quick diagnostic by repository and coarse task-kind strata, then
+  projects only its selected SIF acquisition requests.
+- `swe_bench_pro_preheat_service.py` starts or inspects the bounded quick25 SIF
+  acquisition under local `tmux + caffeinate`. It delegates serial pulling,
+  resume, digest/SIF provenance, atomic promotion, and failure reporting to
+  `tools/login_apptainer_sif_preheat.py`; it never starts PCE or an Agent.
 - `hpc_submit_swe_verified_pce.sh` / `run_swe_verified_pce_hpc.py` and
   `hpc_submit_swe_verified_pcce.sh` / `run_swe_verified_pcce_hpc.py` are the
   additive current-prompt SWE-Verified evaluation entry points. The PCE smoke

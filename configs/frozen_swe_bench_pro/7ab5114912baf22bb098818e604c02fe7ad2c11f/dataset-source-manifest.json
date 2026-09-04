@@ -1,0 +1,53 @@
+{
+  "columns": [
+    "repo",
+    "instance_id",
+    "base_commit",
+    "patch",
+    "test_patch",
+    "problem_statement",
+    "requirements",
+    "interface",
+    "repo_language",
+    "fail_to_pass",
+    "pass_to_pass",
+    "issue_specificity",
+    "issue_categories",
+    "before_repo_set_cmd",
+    "selected_test_files_to_run",
+    "dockerhub_tag"
+  ],
+  "dataset": "ScaleAI/SWE-bench_Pro",
+  "instance_ids_sha256": "b249c4a382aa5540047f270cc6082a7333aba7ab9b050545c420b2d374a2dca5",
+  "legacy_consistency": {
+    "mac_ansible96": {
+      "count": 96,
+      "exact_set_match": true,
+      "file_sha256": "9bdc1962a84d8e015559fd0065af46d9e6f28201ebeb8485daea8a08a210c6cd",
+      "subset_of_python_universe": true
+    },
+    "python266": {
+      "count": 266,
+      "exact_order_match": false,
+      "exact_set_match": true,
+      "file_sha256": "2fae5455b9142f3d8b0b8ffb62e0d792302587a726471e85aabd59b41ef47785"
+    }
+  },
+  "purpose": "swe_bench_pro_source_identity",
+  "python_selection": {
+    "count": 266,
+    "instance_ids_sha256": "fda4110c24dddbc8755fa64ab4bf23d00c53ed6e344a1bf4777027475cfba743",
+    "predicate": "casefold(trim(repo_language)) == 'python'",
+    "repositories": {
+      "ansible/ansible": 96,
+      "internetarchive/openlibrary": 91,
+      "qutebrowser/qutebrowser": 79
+    }
+  },
+  "revision": "7ab5114912baf22bb098818e604c02fe7ad2c11f",
+  "rows": 731,
+  "schema_version": 1,
+  "source_file": "data/test-00000-of-00001.parquet",
+  "source_parquet_bytes": 7816820,
+  "source_parquet_sha256": "c8cd7115496ad4e9a8b21d088cef576a65bf821bb542b24336f13f714cef13f8"
+}

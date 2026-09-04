@@ -98,6 +98,21 @@ in place.
 | `archive/pro/` | Legacy SWE-bench Pro instance inputs with no active Behavioral reachability. |
 | `archive/gepa_legacy/` | Earlier Offline definitions. |
 
+`frozen_swe_bench_pro/<hub-revision>/` is the immutable source-acquisition
+authority for a future Pro evaluation. It records the exact Hub Parquet
+identity and the full Python image-request universe without patches, tests, or
+issue text. It does not assert that an image is currently downloadable,
+executable, or free of future-history leakage; those are separately audited
+operational properties.
+
+`frozen_swe_bench_pro_quick25/v1-20260904/` is the outcome-independent
+development quick selection: 9 Ansible, 9 OpenLibrary, and 7 qutebrowser cases,
+proportionally stratified into bug, feature, enhancement, and mixed task kinds.
+Its `preheat-images.json` is the small direct input for SIF acquisition; the
+selection is not a population estimate or an untouched holdout.
+
+| `swe_bench_pro_quick25_preheat_v1_20260904.yaml` | Frozen quick25 SIF acquisition identity, serial skip-and-report policy, dedicated scratch paths, single-writer lock, and local supervisor identity. It authorizes no launch by itself. |
+
 Archive paths are non-authoritative. Prefer `git show main:<path>` when exact
 pre-branch paths or bytes are required.
 

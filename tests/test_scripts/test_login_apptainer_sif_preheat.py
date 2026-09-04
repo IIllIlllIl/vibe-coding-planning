@@ -253,6 +253,46 @@ def test_login_preheat_can_audit_existing_remote_image_list(
     assert payload["images"] == ["repo/one:v1.1"]
 
 
+def test_login_preheat_reads_local_frozen_image_list_without_gepa_config(
+    tmp_path: Path, monkeypatch
+) -> None:
+    ulhpc = tmp_path / "ulhpc.yaml"
+    ulhpc.write_text(
+        "user: tester\nhost: example.invalid\nport: 2222\n", encoding="utf-8"
+    )
+    images = tmp_path / "images.json"
+    images.write_text(
+        json.dumps({"images": ["jefzda/sweap-images:one"]}), encoding="utf-8"
+    )
+    captured: dict[str, object] = {}
+
+    def fake_run(command, **kwargs):
+        captured["input"] = kwargs.get("input")
+        return subprocess.CompletedProcess(command, 0, "", "")
+
+    monkeypatch.setattr(login_apptainer_sif_preheat.subprocess, "run", fake_run)
+    monkeypatch.setattr(
+        sys,
+        "argv",
+        [
+            "login_apptainer_sif_preheat.py",
+            "--images-json",
+            str(images),
+            "--sif-cache-dir",
+            "/scratch/test/sif-cache",
+            "--ulhpc-config",
+            str(ulhpc),
+            "--lock-file",
+            "/scratch/test/preheat.lock",
+        ],
+    )
+
+    assert login_apptainer_sif_preheat.main() == 0
+    payload = json.loads(str(captured["input"]))
+    assert payload["images"] == ["jefzda/sweap-images:one"]
+    assert payload["lock_file"] == "/scratch/test/preheat.lock"
+
+
 def test_remote_preheat_script_records_digest_and_sif_provenance() -> None:
     script = login_apptainer_sif_preheat._remote_script()
     compile(script, "<remote-preheat>", "exec")
@@ -261,6 +301,10 @@ def test_remote_preheat_script_records_digest_and_sif_provenance() -> None:
     assert '"retrospective"' in script
     assert '"sif_sha256"' in script
     assert "Docker-Content-Digest" in script
+    assert "auth.docker.io/token" in script
+    assert "registry-1.docker.io/v2" in script
+    assert "fcntl.LOCK_EX | fcntl.LOCK_NB" in script
+    assert '"single_writer_lock_busy"' in script
     assert '"registry_manifest_not_found"' in script
     assert '"registry_access_forbidden"' in script
     assert 'provenance["complete"]' in script
