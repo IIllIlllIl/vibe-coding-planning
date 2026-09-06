@@ -127,7 +127,12 @@ than implementing project-specific submodule reconstruction.
 
 The submit entry is `scripts/hpc_submit_swe_bench_pro_pce.sh`, with 1 CPU,
 4 GiB, and 45 minutes per worker. The ancestor-only three-case smoke is an
-invalidated workflow diagnostic, not a Pro result. The official-workspace
-semantics use new run directories and fingerprints and require a new
-three-repository smoke before quick25 launch. Neither smoke nor quick25 is an
-untouched-holdout result.
+invalidated workflow diagnostic, not a Pro result. Its official-workspace
+replacement completed all three Ansible, OpenLibrary, and qutebrowser cases:
+all nine Plan/Code/Evaluate baselines had the declared HEAD and empty staging,
+the intentionally dirty OpenLibrary workspace was preserved, no Agent history
+access was observed, and all three official evaluations resolved. Worker
+elapsed times were 8:27--20:02 and peak memory was 1.1--2.3 GiB under the
+1 CPU / 4 GiB / 45 minute allocation. This establishes workflow readiness,
+not effectiveness. The quick25 uses a separate run identity; neither smoke nor
+quick25 is an untouched-holdout result.

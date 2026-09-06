@@ -43,11 +43,13 @@ belong to `../docs/swe-verified-pce-pcce.md`.
 | `SWE-bench_Pro/pce-inputs/quick25-v1-20260904/` | Prepared development input | 25 exact Pro rows, pinned evaluator assets, and separate retired-containment and active official-workspace image manifests; the incomplete ancestor-only smoke is not a Pro result |
 | `SWE-bench_Pro/image-audit/direct-login-v1-20260906/` | Raw repository audit evidence | Read-only 25-image audit showing each SIF at its declared base but retaining later evaluator history; official build artifacts may leave the worktree dirty |
 | `SWE-bench_Pro/image-audit/ancestor-only-smoke-v1-20260906/` | Raw containment evidence | Real one-image smoke showing exact clean base retention and removal of all refs, remotes, non-ancestor commits, and the gold commit |
+| `SWE-bench_Pro/pce-runs/smoke/official-sif-current-prompt-v1-20260906/` | Raw development smoke evidence | Three complete official-SIF PCE trajectories, including the intentionally dirty OpenLibrary workspace; 3/3 operationally complete, 3 resolved, and no observed Git-history access |
 
 The first three-repository smoke invalidated ancestor-only repository
 replacement because it removed official OpenLibrary build state. Active PCE
 now preserves fresh official SIF workspaces and audits observed history access;
-the replacement smoke has not run. See `../docs/swe-bench-pro-pce.md`.
+the replacement smoke passed its workflow criteria. See
+`../docs/swe-bench-pro-pce.md`.
 
 ## Frozen Offline And PolyBench Evidence
 

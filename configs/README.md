@@ -117,7 +117,7 @@ the original 17/25 provenance remains unchanged. This is image-availability
 evidence, not a base-commit audit or experiment result.
 
 | `swe_bench_pro_quick25_preheat_v1_20260904.yaml` | Frozen quick25 SIF acquisition identity, serial skip-and-report policy, dedicated scratch paths, single-writer lock, and local supervisor identity. It authorizes no launch by itself. |
-| `swe_bench_pro_pce_quick25_v1_20260906.yaml` | Prepared official-SIF Pro current-prompt PCE quick25 runtime. It preserves official build artifacts, records dirty baselines, and excludes observed Git-history access as `unknown`. Full launch requires the replacement smoke. |
+| `swe_bench_pro_pce_quick25_v1_20260906.yaml` | Prepared official-SIF Pro current-prompt PCE quick25 runtime. It preserves official build artifacts, records dirty baselines, and excludes observed Git-history access as `unknown`. The replacement smoke passed 3/3 before launch authorization. |
 | `swe_bench_pro_pce_smoke_v1_20260906.yaml` | Three-case official-SIF Pro PCE workflow smoke: the first frozen quick25 entry from each repository. It uses a new run identity after invalidating the ancestor-only diagnostic and supports no effectiveness claim. |
 
 Archive paths are non-authoritative. Prefer `git show main:<path>` when exact

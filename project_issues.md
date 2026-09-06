@@ -114,12 +114,13 @@ Current decisions are:
    Code retain `--containall`, and observed Agent Git-history exploration makes
    a case `unknown`. Network policy remains unchanged. The Slurm audit had 21 valid
    inspections and four `dubious ownership` operational failures; the direct
-   SquashFS audit remains the 25/25 authority. The three-repository PCE smoke
-   verified containment end to end for Ansible and qutebrowser, but OpenLibrary
-   failed closed before its Agent call because `vendor/infogami` was dirty
-   after base restore. That smoke is invalidated diagnostic provenance. Run a
-   new official-workspace smoke before authorizing quick25 and report latent
-   history visibility as a limitation.
+   SquashFS audit remains the 25/25 authority. The ancestor-only
+   three-repository smoke completed Ansible and qutebrowser but failed closed
+   on the officially dirty OpenLibrary workspace, so it remains invalidated
+   diagnostic provenance. The replacement official-workspace smoke completed
+   3/3 cases, preserved OpenLibrary state, produced all nine phase baselines,
+   and observed no Agent Git-history access. Quick25 is operationally
+   authorized; latent history visibility remains a reported limitation.
 
 ## Known validity constraints
 
