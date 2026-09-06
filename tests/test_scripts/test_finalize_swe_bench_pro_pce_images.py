@@ -70,31 +70,25 @@ def test_finalize_pro_pce_images_binds_all_evidence(tmp_path: Path) -> None:
     original = tmp_path / "original.json"
     overlay = tmp_path / "overlay.json"
     audit = tmp_path / "audit.json"
-    smoke = tmp_path / "smoke.txt"
-    containment = tmp_path / "repository.py"
     output = tmp_path / "images.json"
     _write_json(original, {"records": original_records})
     _write_json(overlay, {"runs": [{"records": overlay_records}]})
     _write_json(audit, {"summary": {"audited": 25}, "records": audit_records})
-    smoke.write_text("verified=true\n")
-    containment.write_text("# frozen implementation\n")
 
     value = finalize(
         source_snapshot=snapshot,
         original_provenance=original,
         recovery_overlay=overlay,
         direct_audit=audit,
-        containment_smoke=smoke,
-        containment_source=containment,
         output=output,
     )
 
     assert len(value["records"]) == 25
-    assert value["agent_history_policy"] == "future_history_inaccessible_v1"
-    assert value["agent_history_implementation_sha256"] == file_sha256(containment)
+    assert value["agent_workspace_policy"] == "official_sif_workspace_v1"
+    assert value["history_contamination_policy"] == "observed_git_history_access_v1"
     assert value["direct_history_audit_sha256"] == file_sha256(audit)
     assert all(
-        record["gold_test_commit_available_before_containment"] is True
+        record["gold_test_commit_available_in_official_sif"] is True
         for record in value["records"].values()
     )
     assert finalize(
@@ -102,7 +96,5 @@ def test_finalize_pro_pce_images_binds_all_evidence(tmp_path: Path) -> None:
         original_provenance=original,
         recovery_overlay=overlay,
         direct_audit=audit,
-        containment_smoke=smoke,
-        containment_source=containment,
         output=output,
     ) == value

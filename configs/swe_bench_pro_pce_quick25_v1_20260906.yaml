@@ -1,15 +1,15 @@
 mode: swe_bench_pro_pce
-purpose: prepared_development_quick25_current_prompt_pce_only
+purpose: prepared_development_quick25_official_sif_current_prompt_pce_only
 
 # The selection-scoped images.json verifies all 25 base commits and binds the
-# tested Plan/Code history-containment implementation. Launch still requires a
-# clean committed source identity and explicit user approval.
+# official-SIF workspace and observed-history-access policies. Launch still
+# requires a clean committed source identity and explicit user approval.
 paths:
   dataset_snapshot: output/SWE-bench_Pro/pce-inputs/quick25-v1-20260904
-  image_manifest: output/SWE-bench_Pro/pce-inputs/quick25-v1-20260904/image-audit/images.json
+  image_manifest: output/SWE-bench_Pro/pce-inputs/quick25-v1-20260904/image-audit-official-sif-v1/images.json
   selection_manifest: configs/frozen_swe_bench_pro_quick25/v1-20260904/selection-manifest.json
   prompt_source_config: configs/polybench_pce_hpc_formal_clean_20260825.yaml
-  run_dir: output/SWE-bench_Pro/pce-runs/quick25/current-prompt-v1-20260906
+  run_dir: output/SWE-bench_Pro/pce-runs/quick25/official-sif-current-prompt-v1-20260906
 
 plan:
   model: deepseek-v4-flash
@@ -57,7 +57,7 @@ hpc:
   python_module: lang/Python/3.11
   container_module: tools/Apptainer
   python_bin: python3
-  job_name_prefix: swe-bench-pro-pce-quick25-v1-20260906
+  job_name_prefix: swe-bench-pro-pce-quick25-official-sif-v1-20260906
   worker_config_path: configs/swe_bench_pro_pce_quick25_v1_20260906.yaml
 
 evaluator:

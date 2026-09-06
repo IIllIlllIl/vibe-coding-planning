@@ -12,8 +12,7 @@ from src.swe_bench_pro_pce.evaluator import (
     strip_binary_hunks,
 )
 from src.swe_bench_pro_pce.hpc_executor import SWEBenchProPCEHPCExecutor
-from src.swe_bench_pro_pce.repository import materialize_ancestor_only_repository
-from src.swe_bench_pro_pce.runner import SWEBenchProPCERunner
+from src.swe_bench_pro_pce.runner import HISTORY_COMMAND, SWEBenchProPCERunner
 from src.swe_verified_pce.dataset import file_sha256
 
 
@@ -66,10 +65,8 @@ def _fixture(tmp_path: Path):
     images.write_text(json.dumps({
         "source_manifest_sha256": file_sha256(snapshot / "manifest.json"),
         "selection_manifest_sha256": selection_hash,
-        "agent_history_policy": "future_history_inaccessible_v1",
-        "agent_history_implementation_sha256": file_sha256(
-            ROOT / "src/swe_bench_pro_pce/repository.py"
-        ),
+        "agent_workspace_policy": "official_sif_workspace_v1",
+        "history_contamination_policy": "observed_git_history_access_v1",
         "records": {image: {
             "instance_id": "case-1", "status": "audited",
             "sif_path": "/cache/case.sif", "sif_bytes": 1,
@@ -104,30 +101,30 @@ def test_pro_loader_requires_verified_base_commit(tmp_path: Path) -> None:
         raise AssertionError("unverified Pro base commit was accepted")
 
 
-def test_pro_loader_rejects_uncontained_future_history(tmp_path: Path) -> None:
+def test_pro_loader_requires_official_workspace_policy(tmp_path: Path) -> None:
     snapshot, images = _fixture(tmp_path)
     value = json.loads(images.read_text())
-    value.pop("agent_history_policy")
+    value.pop("agent_workspace_policy")
     images.write_text(json.dumps(value))
     try:
         load_swe_bench_pro_pce_cases(snapshot, images)
     except ValueError as exc:
-        assert "future-history containment" in str(exc)
+        assert "official SIF workspace policy" in str(exc)
     else:
-        raise AssertionError("Pro image without history containment was accepted")
+        raise AssertionError("Pro image without official workspace policy was accepted")
 
 
-def test_pro_loader_rejects_changed_containment_implementation(tmp_path: Path) -> None:
+def test_pro_loader_requires_history_contamination_policy(tmp_path: Path) -> None:
     snapshot, images = _fixture(tmp_path)
     value = json.loads(images.read_text())
-    value["agent_history_implementation_sha256"] = "0" * 64
+    value.pop("history_contamination_policy")
     images.write_text(json.dumps(value))
     try:
         load_swe_bench_pro_pce_cases(snapshot, images)
     except ValueError as exc:
-        assert "implementation identity" in str(exc)
+        assert "contamination policy" in str(exc)
     else:
-        raise AssertionError("changed Pro containment implementation was accepted")
+        raise AssertionError("Pro image without contamination policy was accepted")
 
 
 def test_pro_binary_patch_policy_matches_official_exclusion() -> None:
@@ -137,54 +134,42 @@ def test_pro_binary_patch_policy_matches_official_exclusion() -> None:
     assert "GIT binary patch" not in result
 
 
-def test_ancestor_only_repository_removes_future_objects_and_remotes(
+def test_history_contamination_patterns_are_narrow() -> None:
+    assert HISTORY_COMMAND.search("git log --oneline -5")
+    assert HISTORY_COMMAND.search("git reflog")
+    assert HISTORY_COMMAND.search("git branch -a")
+    assert HISTORY_COMMAND.search("git rev-list --all")
+    assert not HISTORY_COMMAND.search("git status --short")
+    assert not HISTORY_COMMAND.search("git diff --cached")
+
+
+def test_pro_official_workspace_baseline_allows_unstaged_build_artifacts(
     tmp_path: Path,
 ) -> None:
-    import subprocess
+    class FakeEnvironment:
+        def execute(self, command, timeout=None):
+            if command == "git rev-parse HEAD":
+                return {"returncode": 0, "output": "a" * 40 + "\n"}
+            if command.startswith("git cat-file -e"):
+                return {"returncode": 0, "output": ""}
+            if command == "git diff --cached --binary --full-index":
+                return {"returncode": 0, "output": ""}
+            if command.startswith("git status"):
+                return {"returncode": 0, "output": " M vendor/infogami\n"}
+            return {"returncode": 0, "output": " c50a vendor/infogami\n"}
 
-    repository = tmp_path / "repository"
-    repository.mkdir()
-
-    def git(*args: str) -> subprocess.CompletedProcess[str]:
-        return subprocess.run(
-            ["git", "-C", str(repository), *args],
-            capture_output=True,
-            text=True,
-            check=True,
-        )
-
-    git("init", "-q")
-    git("config", "user.email", "fixture@example.invalid")
-    git("config", "user.name", "Fixture")
-    (repository / "value.txt").write_text("base\n")
-    git("add", "value.txt")
-    git("commit", "-qm", "base")
-    base = git("rev-parse", "HEAD").stdout.strip()
-    (repository / "value.txt").write_text("future\n")
-    git("commit", "-qam", "future")
-    future = git("rev-parse", "HEAD").stdout.strip()
-    git("checkout", "--detach", "-q", base)
-
-    evidence = materialize_ancestor_only_repository(
-        repository,
-        base,
+    case = SimpleNamespace(base_commit="a" * 40)
+    SWEBenchProPCERunner._restore_agent_repository(
+        object(),
+        FakeEnvironment(),
+        case,
+        phase="plan",
+        host_workdir=tmp_path / "workspace",
         evidence_dir=tmp_path / "evidence",
-        forbidden_commits=(future,),
     )
-
-    assert evidence["verified"] is True
-    assert evidence["policy"] == "future_history_inaccessible_v1"
-    assert git("rev-parse", "HEAD").stdout.strip() == base
-    assert git("status", "--porcelain=v1").stdout == ""
-    assert git("remote").stdout == ""
-    unavailable = subprocess.run(
-        ["git", "-C", str(repository), "cat-file", "-e", f"{future}^{{commit}}"],
-        capture_output=True,
-        text=True,
-        check=False,
-    )
-    assert unavailable.returncode != 0
-    assert not (repository / ".git" / "objects" / "info" / "alternates").exists()
+    evidence = json.loads((tmp_path / "evidence/repository_baseline.json").read_text())
+    assert evidence["workspace_is_allowed_to_be_dirty"] is True
+    assert evidence["observations"]["status"]["output"] == " M vendor/infogami\n"
 
 
 def test_pro_evaluator_keeps_gold_test_checkout_after_patch(
@@ -203,6 +188,8 @@ def test_pro_evaluator_keeps_gold_test_checkout_after_patch(
 
         def execute(self, command, timeout=None):
             commands.append(command)
+            if command == "git rev-parse HEAD":
+                return {"returncode": 0, "output": "a" * 40 + "\n"}
             if command.startswith("bash /workspace/run_script.sh"):
                 (self.official / "stdout.log").write_text("test_a PASSED\ntest_b PASSED\n")
                 (self.official / "stderr.log").write_text("")
@@ -226,10 +213,6 @@ def test_pro_evaluator_keeps_gold_test_checkout_after_patch(
         "src.swe_bench_pro_pce.evaluator.ApptainerEnvironment", FakeEnvironment
     )
     monkeypatch.setattr(
-        "src.swe_bench_pro_pce.evaluator.restore_repository_to_base",
-        lambda *args, **kwargs: None,
-    )
-    monkeypatch.setattr(
         "src.swe_bench_pro_pce.evaluator._apply_patch",
         lambda *args, **kwargs: (True, [{"command": "git apply"}]),
     )
@@ -247,6 +230,7 @@ def test_pro_evaluator_keeps_gold_test_checkout_after_patch(
 
     assert result["task_outcome"] == "resolved"
     setup_index = commands.index("git checkout testsha -- tests/test_a.py")
+    assert "git reset --hard " + "a" * 40 not in commands
     test_index = next(i for i, value in enumerate(commands) if value.startswith("bash /workspace/run_script.sh"))
     assert setup_index < test_index
 

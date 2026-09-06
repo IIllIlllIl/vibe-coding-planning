@@ -71,7 +71,7 @@ Read these files in order:
    SWE-Verified PCE/PCCE generalization workflow, phase isolation, evaluator
    semantics, and smoke-to-quick-validation order.
 10. [`docs/swe-bench-pro-pce.md`](docs/swe-bench-pro-pce.md) — completed Pro
-    quick25 acquisition, repository-history audit and containment, and the
+    quick25 acquisition, repository-history audit, official-SIF policy, and the
     prepared but not launched Pro PCE adapter.
 
 The current implementation surface is:

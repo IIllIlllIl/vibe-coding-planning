@@ -1,12 +1,12 @@
 mode: swe_bench_pro_pce
-purpose: three_repository_development_workflow_smoke_only
+purpose: three_repository_official_sif_development_workflow_smoke_only
 
 paths:
   dataset_snapshot: output/SWE-bench_Pro/pce-inputs/quick25-v1-20260904
-  image_manifest: output/SWE-bench_Pro/pce-inputs/quick25-v1-20260904/image-audit/images.json
+  image_manifest: output/SWE-bench_Pro/pce-inputs/quick25-v1-20260904/image-audit-official-sif-v1/images.json
   selection_manifest: configs/frozen_swe_bench_pro_pce_smoke/v1-20260906/selection-manifest.json
   prompt_source_config: configs/polybench_pce_hpc_formal_clean_20260825.yaml
-  run_dir: output/SWE-bench_Pro/pce-runs/smoke/current-prompt-v1-20260906
+  run_dir: output/SWE-bench_Pro/pce-runs/smoke/official-sif-current-prompt-v1-20260906
 
 plan:
   model: deepseek-v4-flash
@@ -54,7 +54,7 @@ hpc:
   python_module: lang/Python/3.11
   container_module: tools/Apptainer
   python_bin: python3
-  job_name_prefix: swe-bench-pro-pce-smoke-v1-20260906
+  job_name_prefix: swe-bench-pro-pce-smoke-official-sif-v1-20260906
   worker_config_path: configs/swe_bench_pro_pce_smoke_v1_20260906.yaml
 
 evaluator:

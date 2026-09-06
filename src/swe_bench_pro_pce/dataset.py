@@ -62,15 +62,10 @@ def load_swe_bench_pro_pce_cases(
         "selection_manifest_sha256"
     ):
         raise ValueError("Pro image manifest belongs to another selection")
-    if images.get("agent_history_policy") != "future_history_inaccessible_v1":
-        raise ValueError(
-            "Pro Plan/Code future-history containment has not been verified"
-        )
-    implementation = Path(__file__).with_name("repository.py")
-    if images.get("agent_history_implementation_sha256") != file_sha256(
-        implementation
-    ):
-        raise ValueError("Pro history containment implementation identity differs")
+    if images.get("agent_workspace_policy") != "official_sif_workspace_v1":
+        raise ValueError("Pro official SIF workspace policy is not frozen")
+    if images.get("history_contamination_policy") != "observed_git_history_access_v1":
+        raise ValueError("Pro Git-history contamination policy is not frozen")
     records = images.get("records")
     if not isinstance(records, dict):
         raise ValueError("Pro image manifest has no records mapping")

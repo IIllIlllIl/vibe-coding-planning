@@ -11,8 +11,7 @@ from typing import Any, Callable
 
 from src.environment.apptainer_env import ApptainerEnvironment
 from src.environment.docker_env import DockerCapacityWindow
-from src.environment.repository_baseline import restore_repository_to_base
-from src.exceptions import FatalError
+from src.optimization.hpc.task_batch import atomic_json
 from src.optimization.config import ContainerConfig
 from src.swe_bench_pro_pce.models import SWEBenchProPCECase
 from src.swe_verified_pce.dataset import file_sha256
@@ -120,20 +119,45 @@ def evaluate_swe_bench_pro_apptainer(
             initialize_host_workdir=True,
             run_args=["--bind", f"{official}:/workspace"],
         )
-        try:
-            restore_repository_to_base(
-                env,
-                case.base_commit,
-                phase="evaluate",
-                evidence_dir=repository_baseline_dir
-                or phase_workdir.parent / "evaluate_repository_baseline",
-            )
-        except FatalError as exc:
+        baseline = {
+            "schema_version": 1,
+            "policy": "official_sif_workspace_v1",
+            "phase": "evaluate",
+            "workspace_is_allowed_to_be_dirty": True,
+            "head": dict(env.execute("git rev-parse HEAD", timeout=120)),
+            "base": dict(
+                env.execute(
+                    f"git cat-file -e '{case.base_commit}^{{commit}}'", timeout=120
+                )
+            ),
+            "staged": dict(
+                env.execute("git diff --cached --binary --full-index", timeout=120)
+            ),
+            "status": dict(
+                env.execute(
+                    "git status --porcelain=v1 --untracked-files=all", timeout=120
+                )
+            ),
+        }
+        atomic_json(
+            (repository_baseline_dir or phase_workdir.parent / "evaluate_repository_baseline")
+            / "repository_baseline.json",
+            baseline,
+        )
+        if (
+            baseline["head"].get("returncode") != 0
+            or str(baseline["head"].get("output", "")).strip()
+            != case.base_commit
+            or baseline["base"].get("returncode") != 0
+            or baseline["staged"].get("returncode") != 0
+            or str(baseline["staged"].get("output", ""))
+        ):
             raise SWEBenchProEvaluatorOperationalError(
-                f"could not restore the frozen Pro base commit: {exc}",
-                outcome_reason="repository_reset_failed",
+                "official Pro evaluator workspace baseline is invalid",
+                outcome_reason="official_workspace_baseline_invalid",
                 retry_disposition="block_run",
-            ) from exc
+                evidence={"repository_baseline": baseline},
+            )
         if not cleaned_patch.strip():
             return completed(
                 _terminal(

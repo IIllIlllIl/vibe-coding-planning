@@ -85,8 +85,8 @@ cleaning authority is `docs/swe-chat-data-cleaning.md`.
   exact SIF bytes and declared `/app` base commits.
 - `tools/finalize_swe_bench_pro_pce_images.py` deterministically combines the
   frozen selection, immutable acquisition provenance, direct 25-image history
-  audit, real containment smoke, and containment implementation hash into the
-  selection-scoped PCE image manifest.
+  audit, official-SIF workspace policy, and observed-history-access exclusion
+  into the selection-scoped PCE image manifest.
 - `hpc_submit_swe_bench_pro_sif_audit.sh` stages the prepared source snapshot
   and runs that non-LLM audit with 1 CPU / 4G / 10 minutes. It is dry-run by
   default and also records exposed commits not ancestral to each base.

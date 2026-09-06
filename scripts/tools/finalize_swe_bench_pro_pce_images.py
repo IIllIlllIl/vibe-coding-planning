@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Combine Pro acquisition, SIF audit, and containment evidence for PCE."""
+"""Combine Pro acquisition and official-SIF audit evidence for PCE."""
 
 from __future__ import annotations
 
@@ -25,25 +25,12 @@ def _load(path: Path) -> dict[str, Any]:
     return value
 
 
-def _smoke(path: Path) -> dict[str, str]:
-    result = {}
-    for line in path.read_text(encoding="utf-8").splitlines():
-        key, separator, value = line.partition("=")
-        if separator:
-            result[key] = value
-    if result.get("verified") != "true":
-        raise ValueError("real Pro containment smoke is not verified")
-    return result
-
-
 def finalize(
     *,
     source_snapshot: Path,
     original_provenance: Path,
     recovery_overlay: Path,
     direct_audit: Path,
-    containment_smoke: Path,
-    containment_source: Path,
     output: Path,
 ) -> dict[str, Any]:
     source_manifest = source_snapshot / "manifest.json"
@@ -79,8 +66,6 @@ def finalize(
     audits = {record["instance_id"]: record for record in audit_value["records"]}
     if audit_value.get("summary", {}).get("audited") != 25 or len(audits) != 25:
         raise ValueError("direct Pro SIF audit is incomplete")
-    _smoke(containment_smoke)
-
     records = {}
     for instance_id, row in rows.items():
         image = "jefzda/sweap-images:" + row["dockerhub_tag"]
@@ -111,9 +96,9 @@ def finalize(
             "oci_digest": acquired.get("oci_digest"),
             "expected_base_commit": row["base_commit"],
             "base_commit_verified": True,
-            "pre_containment_non_ancestor_commit_count": audit["non_ancestor_count"],
-            "pre_containment_ref_count": audit["ref_count"],
-            "gold_test_commit_available_before_containment": True,
+            "official_sif_non_ancestor_commit_count": audit["non_ancestor_count"],
+            "official_sif_ref_count": audit["ref_count"],
+            "gold_test_commit_available_in_official_sif": True,
         }
     value = {
         "schema_version": 1,
@@ -123,10 +108,10 @@ def finalize(
         "original_provenance_sha256": file_sha256(original_provenance),
         "recovery_overlay_sha256": file_sha256(recovery_overlay),
         "direct_history_audit_sha256": file_sha256(direct_audit),
-        "containment_smoke_sha256": file_sha256(containment_smoke),
-        "agent_history_policy": "future_history_inaccessible_v1",
-        "agent_history_implementation_sha256": file_sha256(containment_source),
-        "agent_history_scope": "phase_local_plan_and_code_only",
+        "agent_workspace_policy": "official_sif_workspace_v1",
+        "history_contamination_policy": "observed_git_history_access_v1",
+        "latent_future_history_present": True,
+        "official_build_artifacts_preserved": True,
         "network_policy": "unchanged_from_current_swe_pce",
         "records": records,
     }
@@ -147,8 +132,6 @@ def main() -> int:
     parser.add_argument("--original-provenance", required=True, type=Path)
     parser.add_argument("--recovery-overlay", required=True, type=Path)
     parser.add_argument("--direct-audit", required=True, type=Path)
-    parser.add_argument("--containment-smoke", required=True, type=Path)
-    parser.add_argument("--containment-source", required=True, type=Path)
     parser.add_argument("--output", required=True, type=Path)
     value = finalize(**vars(parser.parse_args()))
     print(json.dumps({"records": len(value["records"]), "manifest_id": value["manifest_id"]}, sort_keys=True))

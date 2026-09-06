@@ -106,13 +106,20 @@ Current decisions are:
    common non-unknown PCE/Seed/C4 intersection and retain all operational
    exclusions. Do not select or revise either guideline from this
    quick-validation result.
-8. The 25-image Pro audit confirmed that clean base checkouts still expose the
-   evaluator's gold commit and substantial non-ancestor history. Plan and Code
-   therefore use a verified phase-local ancestor-only clone plus Apptainer
-   `--containall`; Evaluate retains the full image repository. Network policy
-   remains unchanged. A real-image containment smoke passed, but no Pro PCE has
-   run; use a small development smoke before quick25 after a clean commit and
-   explicit approval. The pending Slurm audit is independent replication only.
+8. The 25-image Pro audit confirmed that base checkouts expose the evaluator's
+   gold commit and substantial non-ancestor history. An ancestor-only clone was
+   rejected after the first PCE smoke showed that it discards official
+   OpenLibrary submodules and build artifacts. Plan, Code, and Evaluate now use
+   separate fresh official SIF workspaces without generic reset/clean; Plan and
+   Code retain `--containall`, and observed Agent Git-history exploration makes
+   a case `unknown`. Network policy remains unchanged. The Slurm audit had 21 valid
+   inspections and four `dubious ownership` operational failures; the direct
+   SquashFS audit remains the 25/25 authority. The three-repository PCE smoke
+   verified containment end to end for Ansible and qutebrowser, but OpenLibrary
+   failed closed before its Agent call because `vendor/infogami` was dirty
+   after base restore. That smoke is invalidated diagnostic provenance. Run a
+   new official-workspace smoke before authorizing quick25 and report latent
+   history visibility as a limitation.
 
 ## Known validity constraints
 

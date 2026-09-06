@@ -10,7 +10,7 @@ This development path asks whether the current Plan and Code prompts can
 produce an executable Pro baseline before paired Seed/C4 review. The quick25
 selection is outcome-independent but deliberately stratified across only the
 three Python repositories; it is neither a population estimate nor an
-untouched holdout. No Pro PCE result exists yet.
+untouched holdout. No usable Pro quick25 PCE result exists yet.
 
 The source is `ScaleAI/SWE-bench_Pro` at revision
 `7ab5114912baf22bb098818e604c02fe7ad2c11f`. The frozen membership contains
@@ -65,39 +65,69 @@ the ignored local
 `output/SWE-bench_Pro/pce-inputs/quick25-v1-20260904/`; it contains 25 rows and
 pinned evaluator assets.
 
-## Repository-history audit and containment
+## Official image boundary and history audit
 
 A direct, read-only SquashFS audit covered all 25 cached images. Every `/app`
-checkout was clean at its declared base and contained the base object, but all
+checkout had `HEAD` at its declared base and contained the base object, but all
 25 also retained the evaluator's later gold-test commit and other history not
 ancestral to the base. The number of non-ancestor commits ranged from 1,788 to
-21,968 (median 7,309), and the images exposed 143 to 698 refs. Thus resetting
-the checkout to the base does not establish the Agent's temporal boundary.
+21,968 (median 7,309), and the images exposed 143 to 698 refs. The official
+build may also leave task-specific unstaged or untracked artifacts, so neither
+resetting nor cleaning the checkout is a faithful way to establish the Agent's
+temporal boundary.
 
-Plan and Code now replace each disposable phase checkout with a local clone
-whose only root is the declared base. The implementation verifies a detached,
-clean base, no refs, no remotes, no alternates, no non-ancestor commits, and
-that evaluator-only gold commits are unavailable. A real Ansible-image smoke
-reduced 15,660 non-ancestor commits and 692 refs to zero while retaining the
-exact base and a clean tree. Agent containers additionally use Apptainer
-`--containall`, so evaluator assets and controller task files outside the
-explicit phase binds are not visible. Network policy is unchanged from the
-current SWE PCE; this change addresses repository history, not networking.
+The first containment prototype replaced `/app` with an ancestor-only clone.
+A real Ansible-image diagnostic proved that this removes refs, remotes,
+non-ancestor commits, and the gold commit. The three-repository PCE smoke then
+showed that the transformation is not faithful to the official Pro image:
+OpenLibrary images intentionally initialize `vendor/infogami`, create an
+`infogami` symlink, install dependencies, and run build steps after checking
+out the task base. A top-level clone discards that prepared worktree. This
+prototype is retired from the active runtime; its raw evidence is retained
+only as provenance.
 
-Evaluation intentionally continues to use a fresh full image checkout because
-the official evaluator needs the gold test commit. The selection-scoped
-`image-audit/images.json` binds the 25 SIF identities, source selection, direct
-audit, real containment smoke, and containment implementation hash. The loader
-rejects a missing policy, an unverified base, or a changed implementation.
-The still-pending independent Slurm audit is replication evidence only and is
-not a launch dependency.
+Plan, Code, and Evaluate instead receive separate fresh workspaces initialized
+from the official SIF without an additional reset, clean, or clone. Each phase
+requires the official image HEAD to equal the declared base, the base object to
+exist, and the initial staging area to be empty. Official unstaged/untracked
+build artifacts and initialized submodules are recorded and preserved. Plan
+and Code retain Apptainer `--containall`, so controller files and evaluator
+assets outside explicit binds remain hidden. Network policy is unchanged.
+
+This official-compatible choice leaves later Git history latent in the Agent
+workspace. Complete Plan and Code trajectories are therefore checked for
+observed history exploration (`git log`, reflog, all-branch/ref enumeration,
+and equivalent commands). A detected access makes the case `unknown` and
+preserves, but does not score, its evaluator result. Absence of a detected
+access supports only "no observed use of future history", not structural
+inaccessibility.
+
+Evaluation uses a fresh official image workspace because the evaluator needs
+the prepared dependencies and gold test commit. It applies only the Agent
+patch, performs the frozen official test-file checkout, and runs the frozen
+official script/parser without a generic repository cleanup. The
+selection-scoped official-workspace image manifest binds all 25 SIF identities,
+source selection, direct audit, and the explicit contamination policy.
+The independent Slurm/Apptainer audit completed in 3 minutes with 21/25 valid
+Git inspections. Four checks were operationally incomplete because Git refused
+the container-owned `/app` checkout as a dubious ownership directory; they do
+not establish missing base objects. The direct SquashFS audit remains the
+25/25 authority, while the 21 successful Slurm checks independently reproduce
+future-history exposure. The audit script's ownership issue is not inherited
+by Plan/Code, which reconstruct their repositories on the host.
+
+An audit of all nine OpenLibrary cases confirmed that every official SIF has an
+initialized `vendor/infogami` at the exact gitlink commit; six top-level trees
+are dirty and seven nested repositories contain build-generated untracked
+content. Fresh top-level clones are clean only because all nine submodules are
+left empty. This evidence motivates preserving the official workspace rather
+than implementing project-specific submodule reconstruction.
 
 ## Submission boundary
 
-The submit entry is `scripts/hpc_submit_swe_bench_pro_pce.sh`. Its dry run has
-passed with 1 CPU, 4 GiB, and 45 minutes per worker, but no Pro PCE Agent or
-evaluator has run. Preparation is not launch authorization: submission still
-requires a clean committed source identity and explicit user approval. Because
-the phase-local containment and `--containall` wiring are new, the first launch
-should be a small development smoke before the full quick25 PCE. Neither a
-smoke nor quick25 is an untouched-holdout result.
+The submit entry is `scripts/hpc_submit_swe_bench_pro_pce.sh`, with 1 CPU,
+4 GiB, and 45 minutes per worker. The ancestor-only three-case smoke is an
+invalidated workflow diagnostic, not a Pro result. The official-workspace
+semantics use new run directories and fingerprints and require a new
+three-repository smoke before quick25 launch. Neither smoke nor quick25 is an
+untouched-holdout result.

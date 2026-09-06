@@ -40,13 +40,14 @@ belong to `../docs/swe-verified-pce-pcce.md`.
 | Path | Classification | Status and permitted use |
 |---|---|---|
 | `SWE-bench_Pro/preheat-logs/node-tmp-recovery-v1-20260906/` | Raw operational evidence | Local backup of jobs 5825867/5826100 and the preserved original 17/25 provenance |
-| `SWE-bench_Pro/pce-inputs/quick25-v1-20260904/` | Prepared development input | 25 exact Pro rows plus pinned evaluator assets and a selection-scoped image manifest binding all base audits and Plan/Code history containment; no PCE has run |
-| `SWE-bench_Pro/image-audit/direct-login-v1-20260906/` | Raw repository audit evidence | Read-only 25-image audit showing clean base checkouts but later evaluator history in every SIF |
+| `SWE-bench_Pro/pce-inputs/quick25-v1-20260904/` | Prepared development input | 25 exact Pro rows, pinned evaluator assets, and separate retired-containment and active official-workspace image manifests; the incomplete ancestor-only smoke is not a Pro result |
+| `SWE-bench_Pro/image-audit/direct-login-v1-20260906/` | Raw repository audit evidence | Read-only 25-image audit showing each SIF at its declared base but retaining later evaluator history; official build artifacts may leave the worktree dirty |
 | `SWE-bench_Pro/image-audit/ancestor-only-smoke-v1-20260906/` | Raw containment evidence | Real one-image smoke showing exact clean base retention and removal of all refs, remotes, non-ancestor commits, and the gold commit |
 
-The quick25 SIF cache and repository preflight are complete, but no Pro PCE
-Agent or evaluator run has started. See `../docs/swe-bench-pro-pce.md` for the
-submission and interpretation boundaries.
+The first three-repository smoke invalidated ancestor-only repository
+replacement because it removed official OpenLibrary build state. Active PCE
+now preserves fresh official SIF workspaces and audits observed history access;
+the replacement smoke has not run. See `../docs/swe-bench-pro-pce.md`.
 
 ## Frozen Offline And PolyBench Evidence
 
