@@ -53,7 +53,12 @@ def _package_identity(import_name: str, distribution_name: str) -> dict[str, str
     }
 
 
-def pce_semantic_sha256(config: SWEVerifiedPCEConfig) -> str:
+def pce_semantic_sha256(
+    config: SWEVerifiedPCEConfig,
+    *,
+    additional_sources: Sequence[Path] = (),
+    third_party_identity: dict[str, Any] | None = None,
+) -> str:
     root = Path(__file__).resolve().parents[2]
     sources = [
         root / "src" / "agents" / "_deps.py",
@@ -62,6 +67,7 @@ def pce_semantic_sha256(config: SWEVerifiedPCEConfig) -> str:
         root / "src" / "environment" / "apptainer_env.py",
         root / "src" / "environment" / "repository_baseline.py",
         *sorted((root / "src" / "swe_verified_pce").glob("*.py")),
+        *additional_sources,
     ]
     return _stable_hash(
         {
@@ -88,6 +94,7 @@ def pce_semantic_sha256(config: SWEVerifiedPCEConfig) -> str:
             "third_party": {
                 "mini_swe_agent": _package_identity("minisweagent", "mini-swe-agent"),
                 "swebench": _package_identity("swebench", "swebench"),
+                **(third_party_identity or {}),
             },
         }
     )
@@ -96,11 +103,13 @@ def pce_semantic_sha256(config: SWEVerifiedPCEConfig) -> str:
 def execution_fingerprint(
     config: SWEVerifiedPCEConfig,
     cases: Sequence[SWEVerifiedPCECase],
+    *,
+    semantic_sha256: str | None = None,
 ) -> str:
     return _stable_hash(
         {
             "schema": 1,
-            "semantic_sha256": pce_semantic_sha256(config),
+            "semantic_sha256": semantic_sha256 or pce_semantic_sha256(config),
             "dataset_manifest_sha256": file_sha256(
                 config.dataset_snapshot / "manifest.json"
             ),
@@ -129,6 +138,8 @@ def recover_exhausted_evaluator_timeout(
     task: TaskFiles,
     fingerprint: str,
     max_attempts: int,
+    case_from_dict: Any = SWEVerifiedPCECase.from_dict,
+    runner_class: Any = SWEVerifiedPCERunner,
 ) -> dict[str, Any] | None:
     """Convert only three evidenced evaluator Slurm timeouts to unknown."""
 
@@ -138,7 +149,7 @@ def recover_exhausted_evaluator_timeout(
     manifest = json.loads(task.manifest_path.read_text(encoding="utf-8"))
     case_value = dict(manifest["case"])
     source_value = dict(case_value.get("source", case_value))
-    case = SWEVerifiedPCECase.from_dict(source_value)
+    case = case_from_dict(source_value)
     identity = checkpoint_identity(case, execution_fingerprint=fingerprint)
     checkpoint_dir = batch_dir / "checkpoints" / f"task_{task.index:04d}"
 
@@ -198,7 +209,7 @@ def recover_exhausted_evaluator_timeout(
             "payload": {"evaluator_result": evaluator_result},
         },
     )
-    result = SWEVerifiedPCERunner._completed_result(
+    result = runner_class._completed_result(
         plan, code, {"evaluator_result": evaluator_result}
     )
     return {
@@ -219,9 +230,11 @@ def build_array_script(
     batch_dir: Path,
     indices: Sequence[int],
     attempt: int,
+    worker_module: str = "src.swe_verified_pce.worker",
+    label: str = "SWE-Verified PCE",
 ) -> str:
     if not indices:
-        raise ValueError("SWE-Verified PCE array requires at least one task")
+        raise ValueError(f"{label} array requires at least one task")
     hpc = config.hpc
     config_path = hpc.worker_config_path
     if not config_path:
@@ -258,7 +271,7 @@ def build_array_script(
         'CHECKPOINT_DIR="${BATCH_DIR}/checkpoints/task_${TASK_ID}"',
         'mkdir -p "${ATTEMPT_DIR}" "${CHECKPOINT_DIR}"',
         (
-            f"{shlex.quote(hpc.python_bin)} -m src.swe_verified_pce.worker "
+            f"{shlex.quote(hpc.python_bin)} -m {shlex.quote(worker_module)} "
             f"--config {shlex.quote(config_path)} "
             '--task-manifest "${TASK_MANIFEST}" '
             '--output "${OUTPUT_JSON}" '
@@ -271,12 +284,21 @@ def build_array_script(
 
 
 class SWEVerifiedPCEHPCExecutor:
+    mode = "swe_verified_pce"
+    worker_module = "src.swe_verified_pce.worker"
+    label = "SWE-Verified PCE"
+    case_from_dict = staticmethod(SWEVerifiedPCECase.from_dict)
+    runner_class = SWEVerifiedPCERunner
+
     def __init__(self, config: SWEVerifiedPCEConfig) -> None:
         self.config = config
         self.runtime = SlurmTaskBatch(config.hpc)
 
+    def execution_fingerprint(self, cases: Sequence[SWEVerifiedPCECase]) -> str:
+        return execution_fingerprint(self.config, cases)
+
     def evaluate(self, cases: list[SWEVerifiedPCECase]) -> list[dict[str, Any]]:
-        fingerprint = execution_fingerprint(self.config, cases)
+        fingerprint = self.execution_fingerprint(cases)
         batch_dir = self.config.run_dir / "hpc_tasks" / "pce" / fingerprint
         tasks = self._prepare(batch_dir, fingerprint, cases)
 
@@ -288,6 +310,8 @@ class SWEVerifiedPCEHPCExecutor:
                     batch_dir=batch_dir,
                     indices=indices,
                     attempt=attempt,
+                    worker_module=self.worker_module,
+                    label=self.label,
                 ),
                 encoding="utf-8",
             )
@@ -295,9 +319,9 @@ class SWEVerifiedPCEHPCExecutor:
 
         def validate(task: TaskFiles, value: dict[str, Any]) -> None:
             if value.get("fingerprint") != fingerprint:
-                raise ValueError("SWE-Verified PCE output fingerprint mismatch")
+                raise ValueError(f"{self.label} output fingerprint mismatch")
             if value.get("instance_id") != task.instance_id:
-                raise ValueError("SWE-Verified PCE output instance mismatch")
+                raise ValueError(f"{self.label} output instance mismatch")
             if value.get("pce_status") != "completed":
                 raise ValueError("completed worker output lacks completed PCE evidence")
             if value.get("final_validation_label") is not None:
@@ -317,8 +341,8 @@ class SWEVerifiedPCEHPCExecutor:
         except TaskAttemptsExhausted:
             return self._collect_exhausted(batch_dir, fingerprint, tasks)
 
-    @staticmethod
     def _prepare(
+        self,
         batch_dir: Path,
         fingerprint: str,
         cases: Sequence[SWEVerifiedPCECase],
@@ -331,7 +355,7 @@ class SWEVerifiedPCEHPCExecutor:
             attempts_dir = batch_dir / "attempts" / f"task_{task_id}"
             payload = {
                 "schema_version": 1,
-                "mode": "swe_verified_pce",
+                "mode": self.mode,
                 "fingerprint": fingerprint,
                 "task_index": index,
                 "instance_id": case.instance_id,
@@ -353,7 +377,7 @@ class SWEVerifiedPCEHPCExecutor:
             batch_dir / "manifest.json",
             {
                 "schema_version": 1,
-                "mode": "swe_verified_pce",
+                "mode": self.mode,
                 "fingerprint": fingerprint,
                 "task_count": len(tasks),
                 "instance_ids": [case.instance_id for case in cases],
@@ -383,6 +407,8 @@ class SWEVerifiedPCEHPCExecutor:
                 task=task,
                 fingerprint=fingerprint,
                 max_attempts=max_attempts,
+                case_from_dict=self.case_from_dict,
+                runner_class=self.runner_class,
             )
             if recovered is not None:
                 results.append(recovered)
@@ -400,7 +426,7 @@ class SWEVerifiedPCEHPCExecutor:
                     "schema_version": 1,
                     "status": "incomplete",
                     "pce_status": "incomplete",
-                    "mode": "swe_verified_pce",
+                    "mode": self.mode,
                     "fingerprint": fingerprint,
                     "task_index": task.index,
                     "instance_id": task.instance_id,

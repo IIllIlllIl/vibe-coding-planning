@@ -111,7 +111,13 @@ proportionally stratified into bug, feature, enhancement, and mixed task kinds.
 Its `preheat-images.json` is the small direct input for SIF acquisition; the
 selection is not a population estimate or an untouched holdout.
 
+Its additive `preheat-recovery-overlay-job-5826100.json` closes acquisition at
+25/25 by combining one node-local smoke recovery with seven subsequent pulls;
+the original 17/25 provenance remains unchanged. This is image-availability
+evidence, not a base-commit audit or experiment result.
+
 | `swe_bench_pro_quick25_preheat_v1_20260904.yaml` | Frozen quick25 SIF acquisition identity, serial skip-and-report policy, dedicated scratch paths, single-writer lock, and local supervisor identity. It authorizes no launch by itself. |
+| `swe_bench_pro_pce_quick25_v1_20260906.yaml` | Prepared Pro current-prompt PCE quick25 runtime. All 25 bases are audited and the selection-scoped manifest binds phase-local Plan/Code future-history containment. No PCE has run; launch still requires a clean committed source identity and explicit approval, with a small development smoke first. |
 
 Archive paths are non-authoritative. Prefer `git show main:<path>` when exact
 pre-branch paths or bytes are required.

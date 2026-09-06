@@ -75,6 +75,24 @@ cleaning authority is `docs/swe-chat-data-cleaning.md`.
   acquisition under local `tmux + caffeinate`. It delegates serial pulling,
   resume, digest/SIF provenance, atomic promotion, and failure reporting to
   `tools/login_apptainer_sif_preheat.py`; it never starts PCE or an Agent.
+- `tools/finalize_swe_bench_pro_preheat.py` creates the non-destructive 25/25
+  recovery overlay from the frozen requests, original provenance, and two
+  completed Slurm logs.
+- `tools/freeze_swe_bench_pro_pce_inputs.py` freezes the selected full source
+  rows and project-pinned official run/parser/Dockerfile assets without
+  changing the quick25 membership.
+- `tools/freeze_swe_bench_pro_sif_manifest.py` is the pre-launch Iris audit for
+  exact SIF bytes and declared `/app` base commits.
+- `tools/finalize_swe_bench_pro_pce_images.py` deterministically combines the
+  frozen selection, immutable acquisition provenance, direct 25-image history
+  audit, real containment smoke, and containment implementation hash into the
+  selection-scoped PCE image manifest.
+- `hpc_submit_swe_bench_pro_sif_audit.sh` stages the prepared source snapshot
+  and runs that non-LLM audit with 1 CPU / 4G / 10 minutes. It is dry-run by
+  default and also records exposed commits not ancestral to each base.
+- `hpc_submit_swe_bench_pro_pce.sh` reuses the current SWE PCE staging wrapper
+  with Pro identities. It is dry-run by default and cannot proceed without the
+  audited selection-scoped `images.json`; no Pro PCE has yet been launched.
 - `hpc_submit_swe_verified_pce.sh` / `run_swe_verified_pce_hpc.py` and
   `hpc_submit_swe_verified_pcce.sh` / `run_swe_verified_pcce_hpc.py` are the
   additive current-prompt SWE-Verified evaluation entry points. The PCE smoke

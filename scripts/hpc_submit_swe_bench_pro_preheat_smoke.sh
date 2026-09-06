@@ -11,6 +11,8 @@ APPTAINER_CACHE="/scratch/users/twang/vibe-coding-planning/operations/swe-bench-
 LOCK_FILE="/scratch/users/twang/vibe-coding-planning/shared/sif-cache/.single-writer-preheat.lock"
 JOB_NAME="pro-q25-node-tmp-smoke"
 WALLTIME="02:00:00"
+MEMORY="4G"
+ALL_MISSING=0
 SUBMIT=0
 
 usage() {
@@ -19,6 +21,8 @@ Usage: bash scripts/hpc_submit_swe_bench_pro_preheat_smoke.sh [options]
 
 Options:
   --instance-id ID       One exact request from the frozen quick25 manifest
+  --all-missing          Visit all frozen requests and pull only missing SIFs
+  --mem SIZE             Slurm memory (default: 4G)
   --time HH:MM:SS        Slurm wall time (default: 02:00:00)
   --submit               Submit; default is an ulhpc-submit dry-run
 USAGE
@@ -27,6 +31,8 @@ USAGE
 while [[ $# -gt 0 ]]; do
   case "$1" in
     --instance-id) INSTANCE_ID="$2"; shift 2 ;;
+    --all-missing) ALL_MISSING=1; shift ;;
+    --mem) MEMORY="$2"; shift 2 ;;
     --time) WALLTIME="$2"; shift 2 ;;
     --submit) SUBMIT=1; shift ;;
     -h|--help) usage; exit 0 ;;
@@ -41,33 +47,43 @@ test -f "$ULHPC_CONFIG" || { echo "ERROR: worktree-local ULHPC config not found"
 EMPTY_PROJECT="$REPO_ROOT/.tmp_hpc_smoke/pro-preheat-empty-project"
 mkdir -p "$EMPTY_PROJECT"
 
-REQUEST_VALUES=$(conda run -n mini-swe python -c '
+REQUEST_COMMANDS=$(conda run -n mini-swe python -c '
 import json
+import shlex
 import sys
 from pathlib import Path
 
 manifest = json.loads(Path(sys.argv[1]).read_text(encoding="utf-8"))
-matches = [row for row in manifest["requests"] if row["instance_id"] == sys.argv[2]]
-if len(matches) != 1:
+rows = manifest["requests"] if sys.argv[3] == "1" else [
+    row for row in manifest["requests"] if row["instance_id"] == sys.argv[2]
+]
+if not rows or (sys.argv[3] == "0" and len(rows) != 1):
     raise SystemExit("instance_id must identify exactly one frozen quick25 request")
-row = matches[0]
-print(row["image_ref"])
-print(row["sif_filename"])
-' "$MANIFEST" "$INSTANCE_ID")
-IMAGE_REF=$(printf '%s\n' "$REQUEST_VALUES" | sed -n '1p')
-SIF_NAME=$(printf '%s\n' "$REQUEST_VALUES" | sed -n '2p')
-[[ "$IMAGE_REF" == jefzda/sweap-images:* ]] || { echo "ERROR: unexpected image ref" >&2; exit 2; }
-[[ "$SIF_NAME" == *.sif && "$SIF_NAME" != */* ]] || { echo "ERROR: unsafe SIF filename" >&2; exit 2; }
+for row in rows:
+    image = row["image_ref"]
+    sif = row["sif_filename"]
+    if not image.startswith("jefzda/sweap-images:"):
+        raise SystemExit("unexpected image ref")
+    if not sif.endswith(".sif") or "/" in sif:
+        raise SystemExit("unsafe SIF filename")
+    print(shlex.join(["pull_one", image, sif, row["instance_id"]]))
+' "$MANIFEST" "$INSTANCE_ID" "$ALL_MISSING")
+REQUEST_COUNT=$(printf '%s\n' "$REQUEST_COMMANDS" | wc -l | tr -d ' ')
+FIRST_IMAGE=$(printf '%s\n' "$REQUEST_COMMANDS" | sed -n '1s/^pull_one \([^ ]*\).*/\1/p')
+
+if [[ "$ALL_MISSING" -eq 1 ]]; then
+  REMOTE_DIR="/scratch/users/twang/vibe-coding-planning/runs/swe-bench-pro-preheat-node-tmp-recovery-v1-20260906"
+  JOB_NAME="pro-q25-node-tmp-recovery"
+fi
 
 REMOTE_SCRIPT=$(cat <<EOF
 set -euo pipefail
 echo "[pro-preheat-smoke] started_at=\$(date --iso-8601=seconds) host=\$(hostname) job_id=\${SLURM_JOB_ID}"
 NODE_TMP="/tmp/vibe-pro-preheat-\${SLURM_JOB_ID}"
-FINAL_SIF="$SIF_CACHE/$SIF_NAME"
-PARTIAL_SIF="$SIF_CACHE/.$SIF_NAME.partial.\${SLURM_JOB_ID}"
+PARTIAL_SIF=""
 cleanup() {
   rm -rf "\$NODE_TMP"
-  rm -f "\$PARTIAL_SIF"
+  if [[ -n "\$PARTIAL_SIF" ]]; then rm -f "\$PARTIAL_SIF"; fi
 }
 trap cleanup EXIT
 mkdir -p "\$NODE_TMP" "$SIF_CACHE" "$APPTAINER_CACHE"
@@ -79,17 +95,41 @@ df -h "\$NODE_TMP"
 df -i "\$NODE_TMP"
 exec 9>"$LOCK_FILE"
 flock -n 9 || { echo "[pro-preheat-smoke] single-writer lock busy" >&2; exit 75; }
-if [[ -f "\$FINAL_SIF" ]]; then
-  apptainer inspect "\$FINAL_SIF" >/dev/null
-  echo "[pro-preheat-smoke] already_available bytes=\$(stat -c %s "\$FINAL_SIF")"
-  exit 0
-fi
-apptainer pull "\$PARTIAL_SIF" "docker://$IMAGE_REF"
-apptainer inspect "\$PARTIAL_SIF" >/dev/null
-echo "[pro-preheat-smoke] sif_sha256=\$(sha256sum "\$PARTIAL_SIF" | awk '{print \$1}')"
-echo "[pro-preheat-smoke] sif_bytes=\$(stat -c %s "\$PARTIAL_SIF")"
-mv "\$PARTIAL_SIF" "\$FINAL_SIF"
-echo "[pro-preheat-smoke] completed_at=\$(date --iso-8601=seconds) final_sif=\$FINAL_SIF"
+cached=0
+pulled=0
+failures=0
+pull_one() {
+  image_ref="\$1"
+  sif_name="\$2"
+  instance_id="\$3"
+  final_sif="$SIF_CACHE/\$sif_name"
+  PARTIAL_SIF="$SIF_CACHE/.\$sif_name.partial.\${SLURM_JOB_ID}"
+  if [[ -f "\$final_sif" ]]; then
+    apptainer inspect "\$final_sif" >/dev/null
+    cached=\$((cached + 1))
+    echo "[pro-preheat-smoke] cached instance_id=\$instance_id bytes=\$(stat -c %s "\$final_sif")"
+    return
+  fi
+  echo "[pro-preheat-smoke] pulling instance_id=\$instance_id image=\$image_ref"
+  if ! apptainer pull "\$PARTIAL_SIF" "docker://\$image_ref"; then
+    failures=\$((failures + 1))
+    echo "[pro-preheat-smoke] failed instance_id=\$instance_id" >&2
+    rm -f "\$PARTIAL_SIF"
+    find "\$NODE_TMP" -mindepth 1 -maxdepth 1 -exec rm -rf -- {} +
+    PARTIAL_SIF=""
+    return
+  fi
+  apptainer inspect "\$PARTIAL_SIF" >/dev/null
+  echo "[pro-preheat-smoke] sif_sha256=\$(sha256sum "\$PARTIAL_SIF" | awk '{print \$1}') instance_id=\$instance_id"
+  echo "[pro-preheat-smoke] sif_bytes=\$(stat -c %s "\$PARTIAL_SIF") instance_id=\$instance_id"
+  mv "\$PARTIAL_SIF" "\$final_sif"
+  PARTIAL_SIF=""
+  pulled=\$((pulled + 1))
+}
+$REQUEST_COMMANDS
+echo "[pro-preheat-smoke] summary cached=\$cached pulled=\$pulled failed=\$failures requested=$REQUEST_COUNT"
+echo "[pro-preheat-smoke] completed_at=\$(date --iso-8601=seconds)"
+if [[ "\$failures" -ne 0 ]]; then exit 1; fi
 EOF
 )
 
@@ -106,7 +146,7 @@ ULHPC_CMD=(
   --nodes 1
   --ntasks 1
   --cpus 1
-  --mem 4G
+  --mem "$MEMORY"
   --time "$WALLTIME"
   --gpus 0
   --module tools/Apptainer
@@ -121,7 +161,7 @@ fi
 ULHPC_CMD+=(-- bash -c "$REMOTE_SCRIPT")
 
 echo "[pro-preheat-smoke] mode=$([[ "$SUBMIT" -eq 1 ]] && echo submit || echo dry-run)"
-echo "[pro-preheat-smoke] instance_id=$INSTANCE_ID"
-echo "[pro-preheat-smoke] image_ref=$IMAGE_REF"
-echo "[pro-preheat-smoke] resources=1cpu/4G/$WALLTIME"
+echo "[pro-preheat-smoke] selection=$([[ "$ALL_MISSING" -eq 1 ]] && echo all-missing || echo "$INSTANCE_ID")"
+echo "[pro-preheat-smoke] request_count=$REQUEST_COUNT first_image=$FIRST_IMAGE"
+echo "[pro-preheat-smoke] resources=1cpu/$MEMORY/$WALLTIME"
 exec "${ULHPC_CMD[@]}"

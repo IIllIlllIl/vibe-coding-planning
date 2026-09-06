@@ -19,6 +19,9 @@ REMOTE_APPTAINER_TMP_DIR=""
 REMOTE_APPTAINER_SIF_CACHE_DIR=""
 ULHPC_CONFIG=""
 REQUIRE_CLEAN=0
+EXPECTED_MODE="${VIBE_PCE_CONFIG_MODE:-swe_verified_pce}"
+RUNNER_SCRIPT="${VIBE_PCE_RUNNER_SCRIPT:-scripts/run_swe_verified_pce_hpc.py}"
+SUBMIT_LABEL="${VIBE_PCE_SUBMIT_LABEL:-swe-verified-pce-submit}"
 
 usage() {
   cat <<'USAGE'
@@ -99,7 +102,7 @@ if [[ -z "$ULHPC_CONFIG" ]]; then
   ULHPC_CONFIG="$REPO_ROOT/configs/ulhpc_submit.yaml"
 fi
 
-VALUES="$(conda run --no-capture-output -n mini-swe python - "$CONFIG_ABS" <<'PY'
+VALUES="$(conda run --no-capture-output -n mini-swe python - "$CONFIG_ABS" "$EXPECTED_MODE" <<'PY'
 import os
 import sys
 from pathlib import Path
@@ -107,8 +110,8 @@ import yaml
 
 path = Path(sys.argv[1])
 data = yaml.safe_load(path.read_text(encoding="utf-8")) or {}
-if data.get("mode") != "swe_verified_pce":
-    raise SystemExit("config mode must be swe_verified_pce")
+if data.get("mode") != sys.argv[2]:
+    raise SystemExit("config mode must be " + sys.argv[2])
 root = path.parents[1] if path.parent.name == "configs" else Path.cwd()
 def resolve(value):
     candidate = Path(os.path.expandvars(str(value))).expanduser()
@@ -205,7 +208,7 @@ fi
 set +x
 source "\$REMOTE_ENV_FILE"
 test -n "\${DEEPSEEK_API_KEY:-}" || exit 2
-python3 scripts/run_swe_verified_pce_hpc.py --config "$CONFIG_REL"
+python3 "$RUNNER_SCRIPT" --config "$CONFIG_REL"
 EOF
 )
 
@@ -225,9 +228,9 @@ CMD=(
 [[ $SUBMIT -eq 0 ]] && CMD+=(--dry-run)
 CMD+=(-- bash -c "$REMOTE_SCRIPT")
 
-echo "[swe-verified-pce-submit] mode=$([[ $SUBMIT -eq 1 ]] && echo submit || echo dry-run)"
-echo "[swe-verified-pce-submit] config=$CONFIG_REL"
-echo "[swe-verified-pce-submit] dataset=$DATASET_REL"
-echo "[swe-verified-pce-submit] run=$RUN_REL"
-echo "[swe-verified-pce-submit] controller_resources=$CPUS CPU/$MEM/$TIME_LIMIT"
+echo "[$SUBMIT_LABEL] mode=$([[ $SUBMIT -eq 1 ]] && echo submit || echo dry-run)"
+echo "[$SUBMIT_LABEL] config=$CONFIG_REL"
+echo "[$SUBMIT_LABEL] dataset=$DATASET_REL"
+echo "[$SUBMIT_LABEL] run=$RUN_REL"
+echo "[$SUBMIT_LABEL] controller_resources=$CPUS CPU/$MEM/$TIME_LIMIT"
 "${CMD[@]}"

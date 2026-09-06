@@ -70,6 +70,9 @@ Read these files in order:
 9. [`docs/swe-verified-pce-pcce.md`](docs/swe-verified-pce-pcce.md) — additive
    SWE-Verified PCE/PCCE generalization workflow, phase isolation, evaluator
    semantics, and smoke-to-quick-validation order.
+10. [`docs/swe-bench-pro-pce.md`](docs/swe-bench-pro-pce.md) — completed Pro
+    quick25 acquisition, repository-history audit and containment, and the
+    prepared but not launched Pro PCE adapter.
 
 The current implementation surface is:
 
@@ -80,6 +83,8 @@ The current implementation surface is:
 - `src/offline_check_only/` for additive fixed-guideline evaluation;
 - `src/swe_verified_pce/` and `src/swe_verified_pcce/` for independent current-
   prompt SWE-Verified PCE and paired Seed/C4 PCCE evaluation;
+- `src/swe_bench_pro_pce/` for the additive Pro task/image/evaluator adapter
+  that reuses the current SWE PCE phase and retry implementation;
 - `third_party/gepa/` for the existing search implementation, which should not
   be changed without a concrete experimental need;
 - `tests/test_optimization/test_offline_gepa_regression.py` for the focused,

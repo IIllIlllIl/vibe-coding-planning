@@ -1,0 +1,99 @@
+{
+  "artifact_type": "swe_bench_pro_preheat_recovery_overlay",
+  "original_provenance_sha256": "7891d712a33056d32e7703dccf5e069f86ae3d077ba91837c824ffb103c0a3ec",
+  "preserves_original_failure_provenance": true,
+  "request_manifest_sha256": "e1eb497664cf28e382da6347979aead3c969d8f0eabcefbbc25d497ea35637dd",
+  "runs": [
+    {
+      "job_id": "5825867",
+      "records": [
+        {
+          "acquisition": "node_local_tmp_single_image_smoke",
+          "instance_id": "instance_internetarchive__openlibrary-5069b09e5f64428dce59b33455c8bb17fe577070-v8717e18970bcdc4e0d2cea3b1527752b21e74866",
+          "requested_ref": "jefzda/sweap-images:internetarchive.openlibrary-internetarchive__openlibrary-5069b09e5f64428dce59b33455c8bb17fe577070-v8717e18970bcdc4e0d2cea3b15277",
+          "sif_bytes": 1103642624,
+          "sif_path": "/scratch/users/twang/vibe-coding-planning/shared/sif-cache/jefzda_sweap-images_internetarchive.openlibrary-internetarchive__openlibrary-5069b09e5f64428dce59b33455c8bb17fe577070-v8717e18970bcdc4e0d2cea3b15277.sif",
+          "sif_sha256": "4607b453fa09e39ba65a2bc541b4ab8a8e8a97debbacbe02c9207cecc8e53cba"
+        }
+      ],
+      "role": "single_image_node_tmp_smoke",
+      "stdout_sha256": "2f4009e41bd4d00e965e41bb9af4e28c1e77e9257f1de984a11a671de3b4600f"
+    },
+    {
+      "job_id": "5826100",
+      "records": [
+        {
+          "acquisition": "node_local_tmp_all_missing_recovery",
+          "instance_id": "instance_internetarchive__openlibrary-3f580a5f244c299d936d73d9e327ba873b6401d9-v0f5aece3601a5b4419f7ccec1dbda2071be28ee4",
+          "requested_ref": "jefzda/sweap-images:internetarchive.openlibrary-internetarchive__openlibrary-3f580a5f244c299d936d73d9e327ba873b6401d9-v0f5aece3601a5b4419f7ccec1dbda",
+          "sif_bytes": 866680832,
+          "sif_path": "/scratch/users/twang/vibe-coding-planning/shared/sif-cache/jefzda_sweap-images_internetarchive.openlibrary-internetarchive__openlibrary-3f580a5f244c299d936d73d9e327ba873b6401d9-v0f5aece3601a5b4419f7ccec1dbda.sif",
+          "sif_sha256": "48f8e32161f4ef72040aff596f04cc2c1a673520454b959282433c633e21c721"
+        },
+        {
+          "acquisition": "node_local_tmp_all_missing_recovery",
+          "instance_id": "instance_internetarchive__openlibrary-431442c92887a3aece3f8aa771dd029738a80eb1-v76304ecdb3a5954fcf13feb710e8c40fcf24b73c",
+          "requested_ref": "jefzda/sweap-images:internetarchive.openlibrary-internetarchive__openlibrary-431442c92887a3aece3f8aa771dd029738a80eb1-v76304ecdb3a5954fcf13feb710e8c",
+          "sif_bytes": 982138880,
+          "sif_path": "/scratch/users/twang/vibe-coding-planning/shared/sif-cache/jefzda_sweap-images_internetarchive.openlibrary-internetarchive__openlibrary-431442c92887a3aece3f8aa771dd029738a80eb1-v76304ecdb3a5954fcf13feb710e8c.sif",
+          "sif_sha256": "fe7b76f396f3999c206e9dead68e42405d1a9caa5af01da2be39c12fcf62d21a"
+        },
+        {
+          "acquisition": "node_local_tmp_all_missing_recovery",
+          "instance_id": "instance_internetarchive__openlibrary-58999808a17a26b387f8237860a7a524d1e2d262-v08d8e8889ec945ab821fb156c04c7d2e2810debb",
+          "requested_ref": "jefzda/sweap-images:internetarchive.openlibrary-internetarchive__openlibrary-58999808a17a26b387f8237860a7a524d1e2d262-v08d8e8889ec945ab821fb156c04c7",
+          "sif_bytes": 908681216,
+          "sif_path": "/scratch/users/twang/vibe-coding-planning/shared/sif-cache/jefzda_sweap-images_internetarchive.openlibrary-internetarchive__openlibrary-58999808a17a26b387f8237860a7a524d1e2d262-v08d8e8889ec945ab821fb156c04c7.sif",
+          "sif_sha256": "ba841d1535ef9e15bf8c22f65d1abf09b13aadcb90020d247234f7483a32e26b"
+        },
+        {
+          "acquisition": "node_local_tmp_all_missing_recovery",
+          "instance_id": "instance_internetarchive__openlibrary-7cbfb812ef0e1f9716e2d6e85d538a96fcb79d13-vfa6ff903cb27f336e17654595dd900fa943dcd91",
+          "requested_ref": "jefzda/sweap-images:internetarchive.openlibrary-internetarchive__openlibrary-7cbfb812ef0e1f9716e2d6e85d538a96fcb79d13-vfa6ff903cb27f336e17654595dd90",
+          "sif_bytes": 626499584,
+          "sif_path": "/scratch/users/twang/vibe-coding-planning/shared/sif-cache/jefzda_sweap-images_internetarchive.openlibrary-internetarchive__openlibrary-7cbfb812ef0e1f9716e2d6e85d538a96fcb79d13-vfa6ff903cb27f336e17654595dd90.sif",
+          "sif_sha256": "caead20326b8c339c6199b426fa400544513dce6135d340d7b489fe92afaf082"
+        },
+        {
+          "acquisition": "node_local_tmp_all_missing_recovery",
+          "instance_id": "instance_internetarchive__openlibrary-de6ae10512f1b5ef585c8341b451bc49c9fd4996-vfa6ff903cb27f336e17654595dd900fa943dcd91",
+          "requested_ref": "jefzda/sweap-images:internetarchive.openlibrary-internetarchive__openlibrary-de6ae10512f1b5ef585c8341b451bc49c9fd4996-vfa6ff903cb27f336e17654595dd90",
+          "sif_bytes": 731865088,
+          "sif_path": "/scratch/users/twang/vibe-coding-planning/shared/sif-cache/jefzda_sweap-images_internetarchive.openlibrary-internetarchive__openlibrary-de6ae10512f1b5ef585c8341b451bc49c9fd4996-vfa6ff903cb27f336e17654595dd90.sif",
+          "sif_sha256": "892427570803e91f5287372b254803e4ed0066908ad492f9257b5bd676c98878"
+        },
+        {
+          "acquisition": "node_local_tmp_all_missing_recovery",
+          "instance_id": "instance_internetarchive__openlibrary-e390c1212055dd84a262a798e53487e771d3fb64-v8717e18970bcdc4e0d2cea3b1527752b21e74866",
+          "requested_ref": "jefzda/sweap-images:internetarchive.openlibrary-internetarchive__openlibrary-e390c1212055dd84a262a798e53487e771d3fb64-v8717e18970bcdc4e0d2cea3b15277",
+          "sif_bytes": 1103581184,
+          "sif_path": "/scratch/users/twang/vibe-coding-planning/shared/sif-cache/jefzda_sweap-images_internetarchive.openlibrary-internetarchive__openlibrary-e390c1212055dd84a262a798e53487e771d3fb64-v8717e18970bcdc4e0d2cea3b15277.sif",
+          "sif_sha256": "732e23fc11fe57b9da291decf3f67feed91f663cf49a51f08c40bfe1bdda229a"
+        },
+        {
+          "acquisition": "node_local_tmp_all_missing_recovery",
+          "instance_id": "instance_internetarchive__openlibrary-fad4a40acf5ff5f06cd7441a5c7baf41a7d81fe4-vfa6ff903cb27f336e17654595dd900fa943dcd91",
+          "requested_ref": "jefzda/sweap-images:internetarchive.openlibrary-internetarchive__openlibrary-fad4a40acf5ff5f06cd7441a5c7baf41a7d81fe4-vfa6ff903cb27f336e17654595dd90",
+          "sif_bytes": 689897472,
+          "sif_path": "/scratch/users/twang/vibe-coding-planning/shared/sif-cache/jefzda_sweap-images_internetarchive.openlibrary-internetarchive__openlibrary-fad4a40acf5ff5f06cd7441a5c7baf41a7d81fe4-vfa6ff903cb27f336e17654595dd90.sif",
+          "sif_sha256": "3d8b7e78ec8a7910cbb003ee9eb87d65890176f58af3da2b422ffdb8089cb342"
+        }
+      ],
+      "role": "all_missing_node_tmp_recovery",
+      "stdout_sha256": "ae47ad46ee7066be0f67165efea7ba94ea6c26c501adf2fd121dc8e7d28204cb",
+      "summary": {
+        "cached": 18,
+        "failed": 0,
+        "pulled": 7,
+        "requested": 25
+      }
+    }
+  ],
+  "schema_version": 1,
+  "selection_id": "swe-bench-pro-python-quick25-v1-20260904",
+  "terminal_availability": {
+    "available": 25,
+    "failed": 0,
+    "requested": 25
+  }
+}

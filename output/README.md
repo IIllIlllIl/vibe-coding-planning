@@ -35,6 +35,19 @@ untouched holdout or a prevalence estimate. C4 is prepared but has no output
 until separately authorized and launched. Stable method and result semantics
 belong to `../docs/swe-verified-pce-pcce.md`.
 
+## SWE-bench Pro Quick25
+
+| Path | Classification | Status and permitted use |
+|---|---|---|
+| `SWE-bench_Pro/preheat-logs/node-tmp-recovery-v1-20260906/` | Raw operational evidence | Local backup of jobs 5825867/5826100 and the preserved original 17/25 provenance |
+| `SWE-bench_Pro/pce-inputs/quick25-v1-20260904/` | Prepared development input | 25 exact Pro rows plus pinned evaluator assets and a selection-scoped image manifest binding all base audits and Plan/Code history containment; no PCE has run |
+| `SWE-bench_Pro/image-audit/direct-login-v1-20260906/` | Raw repository audit evidence | Read-only 25-image audit showing clean base checkouts but later evaluator history in every SIF |
+| `SWE-bench_Pro/image-audit/ancestor-only-smoke-v1-20260906/` | Raw containment evidence | Real one-image smoke showing exact clean base retention and removal of all refs, remotes, non-ancestor commits, and the gold commit |
+
+The quick25 SIF cache and repository preflight are complete, but no Pro PCE
+Agent or evaluator run has started. See `../docs/swe-bench-pro-pce.md` for the
+submission and interpretation boundaries.
+
 ## Frozen Offline And PolyBench Evidence
 
 | Path | Classification | Status and permitted use |

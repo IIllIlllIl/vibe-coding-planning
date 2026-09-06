@@ -61,12 +61,14 @@ class SWEVerifiedPCERunner:
                 optimization_info_level=1,
                 model=model.model,
                 api_base=model.api_base,
-                dataset="SWE-bench/SWE-bench_Verified",
-                dataset_type="swe_verified",
+                dataset=getattr(
+                    self.config, "dataset", "SWE-bench/SWE-bench_Verified"
+                ),
+                dataset_type=getattr(self.config, "dataset_type", "swe_verified"),
                 language_filter="",
                 instances=[],
                 output_dir=str(self.attempt_dir),
-                batch_id="swe_verified_pce",
+                batch_id=getattr(self.config, "mode", "swe_verified_pce"),
                 skip_completed_rounds=True,
             ),
             prompts=PromptConfig(
@@ -135,9 +137,31 @@ class SWEVerifiedPCERunner:
             capacity_window=self.capacity_window,
             timeout=timeout,
             writable_tmpfs=self.config.container.writable_tmpfs,
+            run_args=self._agent_container_run_args(),
             git_safe_directories=[self.config.docker.workdir],
             host_workdir=host_workdir,
             initialize_host_workdir=host_workdir is not None,
+        )
+
+    @staticmethod
+    def _agent_container_run_args() -> list[str]:
+        return []
+
+    def _restore_agent_repository(
+        self,
+        env: ApptainerEnvironment,
+        case: SWEVerifiedPCECase,
+        *,
+        phase: str,
+        host_workdir: Path,
+        evidence_dir: Path,
+    ) -> None:
+        _ = host_workdir
+        restore_repository_to_base(
+            env,
+            case.base_commit,
+            phase=phase,
+            evidence_dir=evidence_dir,
         )
 
     @staticmethod
@@ -246,10 +270,11 @@ class SWEVerifiedPCERunner:
                 host_workdir=plan_workspace,
             )
             try:
-                restore_repository_to_base(
+                self._restore_agent_repository(
                     env,
-                    case.base_commit,
+                    case,
                     phase="plan",
+                    host_workdir=plan_workspace,
                     evidence_dir=self.attempt_dir / "repository_baselines" / "plan",
                 )
                 plan, trajectory = plan_agent.run(
@@ -262,7 +287,7 @@ class SWEVerifiedPCERunner:
                         phase="plan",
                         context={
                             "instance_id": case.instance_id,
-                            "mode": "swe_verified_pce",
+                            "mode": getattr(self.config, "mode", "swe_verified_pce"),
                         },
                     ),
                     failure_trajectory_path=self.attempt_dir / "plan_failure.json",
@@ -283,10 +308,11 @@ class SWEVerifiedPCERunner:
                 host_workdir=code_workspace,
             )
             try:
-                restore_repository_to_base(
+                self._restore_agent_repository(
                     env,
-                    case.base_commit,
+                    case,
                     phase="code",
+                    host_workdir=code_workspace,
                     evidence_dir=self.attempt_dir / "repository_baselines" / "code",
                 )
                 base_code_config = self._base_config(self.config.code)
@@ -309,7 +335,7 @@ class SWEVerifiedPCERunner:
                         phase="code",
                         context={
                             "instance_id": case.instance_id,
-                            "mode": "swe_verified_pce",
+                            "mode": getattr(self.config, "mode", "swe_verified_pce"),
                         },
                     ),
                     failure_trajectory_path=self.attempt_dir / "code_failure.json",

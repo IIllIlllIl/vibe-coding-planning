@@ -106,6 +106,13 @@ Current decisions are:
    common non-unknown PCE/Seed/C4 intersection and retain all operational
    exclusions. Do not select or revise either guideline from this
    quick-validation result.
+8. The 25-image Pro audit confirmed that clean base checkouts still expose the
+   evaluator's gold commit and substantial non-ancestor history. Plan and Code
+   therefore use a verified phase-local ancestor-only clone plus Apptainer
+   `--containall`; Evaluate retains the full image repository. Network policy
+   remains unchanged. A real-image containment smoke passed, but no Pro PCE has
+   run; use a small development smoke before quick25 after a clean commit and
+   explicit approval. The pending Slurm audit is independent replication only.
 
 ## Known validity constraints
 
