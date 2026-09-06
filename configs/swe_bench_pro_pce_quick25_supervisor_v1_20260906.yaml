@@ -1,0 +1,29 @@
+schema_version: 1
+session: swe-bench-pro-pce-quick25-official-sif-v1-20260906
+log: .local/hpc-supervisor/swe-bench-pro-pce-quick25-official-sif-v1-20260906.log
+arguments:
+  - --poll-interval
+  - "300"
+  - --slice-time
+  - "00:10:00"
+  - --max-runs
+  - "12"
+  - --state-file
+  - .local/hpc-supervisor/swe-bench-pro-pce-quick25-official-sif-v1-20260906-quota-repair.json
+  - --recover-controller-error-type-once
+  - TaskBatchBlocked
+  - --batch-script
+  - scripts/hpc_submit_swe_bench_pro_pce.sh
+  - --config
+  - configs/swe_bench_pro_pce_quick25_v1_20260906.yaml
+  - --ulhpc-config
+  - /Users/taoran.wang/.config/ulhpc-submit/config.yaml
+  - --job-name
+  - swe-bench-pro-pce-quick25-official-sif-controller-20260906
+  - --remote-dir
+  - ~/hpc_runs/vibe-swe-bench-pro-pce-quick25-official-sif-20260906
+  - --remote-dataset-dir
+  - ~/hpc_datasets/vibe-coding-planning
+  - --remote-run-dir
+  - ~/hpc_run_state/vibe-coding-planning
+  - --submit
