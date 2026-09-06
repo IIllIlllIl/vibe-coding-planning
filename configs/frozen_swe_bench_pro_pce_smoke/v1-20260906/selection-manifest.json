@@ -1,0 +1,34 @@
+{
+  "dataset": "ScaleAI/SWE-bench_Pro",
+  "dataset_revision": "7ab5114912baf22bb098818e604c02fe7ad2c11f",
+  "parent_selection_id": "swe-bench-pro-python-quick25-v1-20260904",
+  "purpose": "three-repository development PCE workflow smoke; not an effectiveness result or untouched holdout",
+  "schema_version": 1,
+  "selected_cases": [
+    {
+      "instance_id": "instance_ansible__ansible-415e08c2970757472314e515cb63a51ad825c45e-v7eee2454f617569fd6889f2211f75bc02a35f9f8",
+      "parent_rank_sha256": "0d1ae7004b06883d2b02352585f54e7a15bb06f15a9534dbd6bb1355de3c685a",
+      "repo": "ansible/ansible",
+      "selection_role": "first_parent_manifest_entry_per_repository",
+      "task_kind": "bug"
+    },
+    {
+      "instance_id": "instance_internetarchive__openlibrary-431442c92887a3aece3f8aa771dd029738a80eb1-v76304ecdb3a5954fcf13feb710e8c40fcf24b73c",
+      "parent_rank_sha256": "1a2b4784b8541a76d004bf7fbde22daad5cafee7f3a6a046ce19250c22b31fbc",
+      "repo": "internetarchive/openlibrary",
+      "selection_role": "first_parent_manifest_entry_per_repository",
+      "task_kind": "bug"
+    },
+    {
+      "instance_id": "instance_qutebrowser__qutebrowser-c0be28ebee3e1837aaf3f30ec534ccd6d038f129-v9f8e9d96c85c85a605e382f1510bd08563afc566",
+      "parent_rank_sha256": "18dc7baf15492a5366188c3c9f64d7ea12f71913c5d095af249b2bba59fd11f1",
+      "repo": "qutebrowser/qutebrowser",
+      "selection_role": "first_parent_manifest_entry_per_repository",
+      "task_kind": "bug"
+    }
+  ],
+  "selected_instance_count": 3,
+  "selection_id": "swe-bench-pro-pce-three-repository-smoke-v1-20260906",
+  "selection_rule": "choose the first listed quick25 case for each repository, preserving parent manifest order",
+  "selection_uses_outcomes_plans_patches_or_tests": false
+}
