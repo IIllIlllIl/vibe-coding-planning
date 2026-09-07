@@ -124,6 +124,8 @@ evidence, not a base-commit audit or experiment result.
 | `swe_bench_pro_pcce_quick25_c4_issue_first_supervisor_v1_20260907.yaml` | Bounded five-minute-poll supervisor for the prepared Pro PCCE identity; not launch authorization. |
 | `swe_bench_pro_pcce_smoke_c4_issue_first_v1_20260907.yaml` | Three-repository development smoke for Pro PCCE, including the sole PCE-unresolved quick25 case; workflow evidence only. |
 | `swe_bench_pro_pcce_smoke_c4_issue_first_supervisor_v1_20260907.yaml` | Bounded supervisor identity for the authorized Pro PCCE smoke. |
+| `swe_bench_pro_pcce_smoke_c4_issue_first_v2_20260907.yaml` | Replacement development smoke with identical membership and semantics after fixing the Pro Checker `/app` binding; v1 remains failed operational evidence. |
+| `swe_bench_pro_pcce_smoke_c4_issue_first_supervisor_v2_20260907.yaml` | Bounded supervisor identity for the replacement v2 smoke; presence is not launch authorization. |
 
 Archive paths are non-authoritative. Prefer `git show main:<path>` when exact
 pre-branch paths or bytes are required.

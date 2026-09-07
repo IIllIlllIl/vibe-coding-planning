@@ -74,6 +74,11 @@ the official `/app` workspace, use `--containall`, and record observed Git
 history access as operationally incomplete; Code/Evaluate dispatches through
 the same official Pro evaluator used by PCE. The prepared quick25 config and
 supervisor are launch-inert until a separate smoke is frozen and approved.
+The first three-case PCCE smoke terminated before any LLM call because the
+shared Checker runtime still pointed at SWE-Verified's `/testbed`; all Pro SIFs
+use `/app`. That failed identity is retained as operational evidence. The v2
+replacement changes only this dataset-specific workdir binding and leaves its
+membership, prompts, review policy, and resource limits unchanged.
 
 ## Official image boundary and history audit
 

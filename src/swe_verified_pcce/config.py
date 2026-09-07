@@ -231,6 +231,11 @@ def load_swe_verified_pcce_config(
         checker,
         run_dir=run_dir,
         hpc=hpc,
+        docker=(
+            replace(checker.docker, workdir=pce.docker.workdir)
+            if is_pro
+            else checker.docker
+        ),
         checker=replace(
             checker.checker,
             max_steps=int(checker_overrides["max_steps"]),

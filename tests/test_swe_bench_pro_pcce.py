@@ -16,7 +16,7 @@ from src.optimization.models import CheckerOutput
 
 
 CONFIG = Path("configs/swe_bench_pro_pcce_quick25_c4_issue_first_v1_20260907.yaml")
-SMOKE_CONFIG = Path("configs/swe_bench_pro_pcce_smoke_c4_issue_first_v1_20260907.yaml")
+SMOKE_CONFIG = Path("configs/swe_bench_pro_pcce_smoke_c4_issue_first_v2_20260907.yaml")
 
 
 def _config():
@@ -25,6 +25,8 @@ def _config():
 
 def test_pro_pcce_frozen_inputs_pair_exactly_and_hide_evaluator_fields() -> None:
     config = _config()
+    assert config.pce.docker.workdir == "/app"
+    assert config.checker.docker.workdir == "/app"
     cases, identities = load_pcce_cases(config)
     assert len(cases) == 25
     assert sum(case.baseline_resolved is True for case in cases) == 24
@@ -39,6 +41,17 @@ def test_pro_pcce_frozen_inputs_pair_exactly_and_hide_evaluator_fields() -> None
     assert source["fail_to_pass"] == source["pass_to_pass"] == []
     assert source["source_row"] == {}
     assert "baseline_resolved" not in manifest_case
+
+
+def test_verified_pcce_checker_workdir_is_unchanged() -> None:
+    from src.swe_verified_pcce.config import load_swe_verified_pcce_config
+
+    config = load_swe_verified_pcce_config(
+        "configs/swe_verified_pcce_quick50_c4_issue_first_v1_20260903.yaml",
+        require_api_keys=False,
+    )
+    assert config.pce.docker.workdir == "/testbed"
+    assert config.checker.docker.workdir == "/testbed"
 
 
 def test_pro_prompt_binding_only_changes_official_repository_path() -> None:
@@ -195,7 +208,7 @@ def test_pro_pcce_smoke_is_three_repository_development_subset() -> None:
     assert sum(case.baseline_resolved is False for case in cases) == 1
     supervisor = yaml.safe_load(
         Path(
-            "configs/swe_bench_pro_pcce_smoke_c4_issue_first_supervisor_v1_20260907.yaml"
+            "configs/swe_bench_pro_pcce_smoke_c4_issue_first_supervisor_v2_20260907.yaml"
         ).read_text()
     )
     assert "--require-clean-worktree" in supervisor["arguments"]
