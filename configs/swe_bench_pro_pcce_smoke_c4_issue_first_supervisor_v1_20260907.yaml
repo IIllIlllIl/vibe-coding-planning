@@ -1,0 +1,28 @@
+schema_version: 1
+session: swe-bench-pro-pcce-smoke-c4-issue-first-v1-20260907
+log: .local/hpc-supervisor/swe-bench-pro-pcce-smoke-c4-issue-first-v1-20260907.log
+arguments:
+  - --poll-interval
+  - "300"
+  - --slice-time
+  - "00:10:00"
+  - --max-runs
+  - "16"
+  - --state-file
+  - .local/hpc-supervisor/swe-bench-pro-pcce-smoke-c4-issue-first-v1-20260907.json
+  - --require-clean-worktree
+  - --batch-script
+  - scripts/hpc_submit_swe_bench_pro_pcce.sh
+  - --config
+  - configs/swe_bench_pro_pcce_smoke_c4_issue_first_v1_20260907.yaml
+  - --ulhpc-config
+  - /Users/taoran.wang/.config/ulhpc-submit/config.yaml
+  - --job-name
+  - swe-bench-pro-pcce-smoke-c4-issue-first-controller-v1-20260907
+  - --remote-dir
+  - ~/hpc_runs/vibe-swe-bench-pro-pcce-smoke-c4-issue-first-v1-20260907
+  - --remote-dataset-dir
+  - /scratch/users/twang/vibe-coding-planning/swe-bench-pro-pcce-smoke-datasets
+  - --remote-run-dir
+  - /scratch/users/twang/vibe-coding-planning/swe-bench-pro-pcce-smoke-run-state
+  - --submit

@@ -95,8 +95,8 @@ from pathlib import Path
 import yaml
 path = Path(sys.argv[1])
 data = yaml.safe_load(path.read_text(encoding="utf-8")) or {}
-if data.get("mode") != "swe_verified_pcce":
-    raise SystemExit("config mode must be swe_verified_pcce")
+if data.get("mode") not in {"swe_verified_pcce", "swe_bench_pro_pcce"}:
+    raise SystemExit("config mode must be swe_verified_pcce or swe_bench_pro_pcce")
 root = path.parents[1] if path.parent.name == "configs" else Path.cwd()
 def resolve(value):
     candidate = Path(os.path.expandvars(str(value))).expanduser()
@@ -111,6 +111,7 @@ for key in ("source_snapshot", "pce_outcomes", "run_dir"):
     print(key + "=" + str(resolve(paths[key])))
 print("image_manifest=" + str(resolve(paths["image_manifest"])))
 print("sif_cache_dir=" + str(container["sif_cache_dir"]))
+print("mode=" + str(data["mode"]))
 PY
 )"
 
@@ -119,6 +120,7 @@ PCE_OUTCOMES=""
 IMAGE_MANIFEST=""
 RUN_DIR=""
 SIF_CACHE_DIR=""
+PCCE_MODE=""
 while IFS='=' read -r KEY VALUE; do
   case "$KEY" in
     source_snapshot) SOURCE_SNAPSHOT="$VALUE" ;;
@@ -126,6 +128,7 @@ while IFS='=' read -r KEY VALUE; do
     image_manifest) IMAGE_MANIFEST="$VALUE" ;;
     run_dir) RUN_DIR="$VALUE" ;;
     sif_cache_dir) SIF_CACHE_DIR="$VALUE" ;;
+    mode) PCCE_MODE="$VALUE" ;;
   esac
 done <<< "$VALUES"
 PCE_BASELINE_DIR="$(dirname "$PCE_OUTCOMES")"
@@ -200,7 +203,7 @@ else
   VIBE_PROJECT_GIT_HEAD="$LOCAL_GIT_HEAD"
 fi
 export VIBE_PROJECT_GIT_HEAD
-echo "[swe-verified-pcce-controller] source_git_head=\$VIBE_CONTROLLER_GIT_HEAD run_git_head=\$VIBE_PROJECT_GIT_HEAD"
+echo "[pcce-controller] mode=$PCCE_MODE source_git_head=\$VIBE_CONTROLLER_GIT_HEAD run_git_head=\$VIBE_PROJECT_GIT_HEAD"
 mkdir -p "\$APPTAINER_CACHEDIR" "\$APPTAINER_TMPDIR"
 REMOTE_ENV_FILE="$REMOTE_ENV_FILE"
 if [[ "\$REMOTE_ENV_FILE" == "~/"* ]]; then
@@ -209,7 +212,11 @@ fi
 set +x
 source "\$REMOTE_ENV_FILE"
 test -n "\${DEEPSEEK_API_KEY:-}" || exit 2
-python3 scripts/run_swe_verified_pcce_hpc.py --config "$CONFIG_REL"
+if [[ "$PCCE_MODE" == "swe_bench_pro_pcce" ]]; then
+  python3 scripts/run_swe_bench_pro_pcce_hpc.py --config "$CONFIG_REL"
+else
+  python3 scripts/run_swe_verified_pcce_hpc.py --config "$CONFIG_REL"
+fi
 EOF
 )
 
@@ -236,7 +243,7 @@ CMD+=(
 [[ $SUBMIT -eq 0 ]] && CMD+=(--dry-run)
 CMD+=(-- bash -c "$REMOTE_SCRIPT")
 
-echo "[swe-verified-pcce-submit] mode=$([[ $SUBMIT -eq 1 ]] && echo submit || echo dry-run)"
+echo "[pcce-submit] action=$([[ $SUBMIT -eq 1 ]] && echo submit || echo dry-run) pcce_mode=$PCCE_MODE"
 echo "[swe-verified-pcce-submit] config=$CONFIG_REL"
 echo "[swe-verified-pcce-submit] source=$SOURCE_REL"
 echo "[swe-verified-pcce-submit] baseline=$PCE_BASELINE_REL"

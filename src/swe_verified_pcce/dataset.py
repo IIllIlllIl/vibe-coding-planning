@@ -10,6 +10,7 @@ from typing import Any
 from src.swe_verified_pcce.config import SWEVerifiedPCCEConfig
 from src.swe_verified_pcce.models import PCCECase
 from src.swe_verified_pce.dataset import file_sha256, load_swe_verified_pce_cases
+from src.swe_bench_pro_pce.dataset import load_swe_bench_pro_pce_cases
 
 
 def _jsonl(path: Path) -> list[dict[str, Any]]:
@@ -23,10 +24,15 @@ def _jsonl(path: Path) -> list[dict[str, Any]]:
 def load_pcce_cases(
     config: SWEVerifiedPCCEConfig,
 ) -> tuple[list[PCCECase], dict[str, Any]]:
-    source_cases, source_manifest, image_manifest = load_swe_verified_pce_cases(
-        config.source_snapshot,
-        config.image_manifest,
-    )
+    dataset_type = getattr(config, "dataset_type", "swe_verified")
+    if dataset_type == "pro":
+        source_cases, source_manifest, image_manifest = load_swe_bench_pro_pce_cases(
+            config.source_snapshot, config.image_manifest
+        )
+    else:
+        source_cases, source_manifest, image_manifest = load_swe_verified_pce_cases(
+            config.source_snapshot, config.image_manifest
+        )
     image_manifest_sha256 = file_sha256(config.image_manifest)
     expected_images = getattr(config, "expected_image_manifest_sha256", None)
     if expected_images is not None and expected_images != image_manifest_sha256:
@@ -34,7 +40,12 @@ def load_pcce_cases(
     source_manifest_path = config.source_snapshot / "manifest.json"
     selection = json.loads(config.selection_manifest.read_text(encoding="utf-8"))
     declared_source = selection.get("source_manifest_sha256")
-    if declared_source != file_sha256(source_manifest_path):
+    source_identity = (
+        str(source_manifest.get("source_manifest_sha256", ""))
+        if dataset_type == "pro"
+        else file_sha256(source_manifest_path)
+    )
+    if declared_source is not None and declared_source != source_identity:
         raise ValueError("selection manifest source identity differs")
     declared_images = selection.get("image_manifest_sha256")
     if declared_images is not None and declared_images != file_sha256(

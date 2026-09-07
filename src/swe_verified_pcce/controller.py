@@ -129,13 +129,15 @@ def _review_assignments(
 
 
 def run_swe_verified_pcce(config: SWEVerifiedPCCEConfig) -> dict[str, Any] | None:
+    mode = getattr(config, "mode", "swe_verified_pcce")
+    dataset_type = getattr(config, "dataset_type", "swe_verified")
     cases, identities = load_pcce_cases(config)
     first_review_seed, seeded_first_review = _load_first_review_seed(config, cases)
     config.run_dir.mkdir(parents=True, exist_ok=True)
     guideline = config.guideline_path.read_text(encoding="utf-8")
     manifest = {
         "schema_version": 1,
-        "mode": "swe_verified_pcce",
+        "mode": mode,
         "contains_gepa": False,
         "contains_reflection": False,
         "project_git_head": _git_head(),
@@ -176,12 +178,23 @@ def run_swe_verified_pcce(config: SWEVerifiedPCCEConfig) -> dict[str, Any] | Non
                 else None
             ),
         },
-        "repository_baseline": {
-            "declared_revision": "dataset_base_commit",
-            "restore": "git reset --hard <base_commit> && git clean -fd",
-            "verified_agent_phases": ["checker", "plan_revision", "code"],
-            "evaluate_verified_by_pce_runner": True,
-        },
+        "repository_baseline": (
+            {
+                "declared_revision": "dataset_base_commit",
+                "restore": "none; preserve official SIF workspace",
+                "validation": "official_sif_workspace_v1",
+                "verified_agent_phases": ["checker", "plan_revision", "code"],
+                "evaluate_by_official_pro_evaluator": True,
+                "git_history_access_policy": "observed access invalidates the case",
+            }
+            if dataset_type == "pro"
+            else {
+                "declared_revision": "dataset_base_commit",
+                "restore": "git reset --hard <base_commit> && git clean -fd",
+                "verified_agent_phases": ["checker", "plan_revision", "code"],
+                "evaluate_verified_by_pce_runner": True,
+            }
+        ),
     }
     manifest_path = config.run_dir / "run_manifest.json"
     if manifest_path.is_file():
@@ -192,7 +205,7 @@ def run_swe_verified_pcce(config: SWEVerifiedPCCEConfig) -> dict[str, Any] | Non
     status_path = config.run_dir / "controller_status.json"
     atomic_json(
         status_path,
-        {"schema_version": 1, "mode": "swe_verified_pcce", "status": "running"},
+        {"schema_version": 1, "mode": mode, "status": "running"},
     )
     executor = SWEVerifiedPCCEHPCExecutor(config)
 
@@ -294,7 +307,7 @@ def run_swe_verified_pcce(config: SWEVerifiedPCCEConfig) -> dict[str, Any] | Non
             status_path,
             {
                 "schema_version": 1,
-                "mode": "swe_verified_pcce",
+                "mode": mode,
                 "status": "yielded",
                 "reason": exc.reason,
                 "batch_dir": exc.batch_dir,
@@ -307,7 +320,7 @@ def run_swe_verified_pcce(config: SWEVerifiedPCCEConfig) -> dict[str, Any] | Non
             status_path,
             {
                 "schema_version": 1,
-                "mode": "swe_verified_pcce",
+                "mode": mode,
                 "status": "failed",
                 "error_type": type(exc).__name__,
                 "error": str(exc),
@@ -357,7 +370,11 @@ def run_swe_verified_pcce(config: SWEVerifiedPCCEConfig) -> dict[str, Any] | Non
             )
             continue
         terminal = latest.get(instance_id)
-        if terminal is None or terminal.get("status") != "completed":
+        if (
+            terminal is None
+            or terminal.get("status") != "completed"
+            or terminal.get("pc_status") != "completed"
+        ):
             method_status = "operational_incomplete"
             rejection_count = None
         else:
@@ -379,7 +396,7 @@ def run_swe_verified_pcce(config: SWEVerifiedPCCEConfig) -> dict[str, Any] | Non
     _write_jsonl(config.run_dir / "pcce_outcomes.jsonl", final_rows)
     summary = {
         "schema_version": 1,
-        "mode": "swe_verified_pcce",
+        "mode": mode,
         "status": "completed"
         if not counts["operational_incomplete"]
         else "completed_with_incomplete",

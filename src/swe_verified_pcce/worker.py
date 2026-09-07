@@ -18,6 +18,8 @@ from src.swe_verified_pcce.models import CEAssignment, PCCECase, PCReviewAssignm
 from src.swe_verified_pcce.runner import SWEVerifiedPCCERunner
 from src.swe_verified_pce.evaluator import SWEVerifiedEvaluatorOperationalError
 from src.swe_verified_pce.models import SWEVerifiedPCECase
+from src.swe_bench_pro_pce.models import SWEBenchProPCECase
+from src.swe_bench_pro_pce.evaluator import SWEBenchProEvaluatorOperationalError
 
 
 def _retry_disposition(exc: BaseException) -> str:
@@ -35,9 +37,12 @@ def _retry_disposition(exc: BaseException) -> str:
     return "retry_same_phase"
 
 
-def _case(value: dict[str, Any]) -> PCCECase:
+def _case(value: dict[str, Any], *, dataset_type: str = "swe_verified") -> PCCECase:
+    source_type = (
+        SWEBenchProPCECase if dataset_type == "pro" else SWEVerifiedPCECase
+    )
     return PCCECase(
-        source=SWEVerifiedPCECase.from_dict(dict(value["source"])),
+        source=source_type.from_dict(dict(value["source"])),
         baseline_plan=str(value["baseline_plan"]),
         # Checker-only PC manifests intentionally omit post-implementation
         # outcome fields. Full PCCE and CE manifests retain them unchanged.
@@ -67,7 +72,9 @@ def run_task(
         manifest = json.loads(task_manifest_path.read_text(encoding="utf-8"))
         config = load_swe_verified_pcce_config(config_path)
         phase = str(manifest["phase"])
-        case = _case(dict(manifest["case"]))
+        if manifest.get("mode") != config.mode:
+            raise FatalError("PCCE worker manifest mode mismatch")
+        case = _case(dict(manifest["case"]), dataset_type=config.dataset_type)
         capacity = configure_docker_capacity(
             config.pce.docker,
             max_concurrent=1,
@@ -128,7 +135,7 @@ def run_task(
             {
                 "schema_version": 1,
                 "status": "completed",
-                "mode": "swe_verified_pcce",
+                "mode": config.mode,
                 "phase": phase,
                 "fingerprint": manifest["fingerprint"],
                 "task_index": manifest["task_index"],
@@ -147,7 +154,7 @@ def run_task(
             "status": "blocking_failed"
             if disposition == "block_run"
             else "retryable_failed",
-            "mode": "swe_verified_pcce",
+            "mode": config.mode if "config" in locals() else manifest.get("mode"),
             "phase": manifest.get("phase"),
             "fingerprint": manifest.get("fingerprint"),
             "task_index": manifest.get("task_index"),
@@ -166,7 +173,10 @@ def run_task(
         if trajectory is not None:
             failure["failure_trajectory"] = list(trajectory)
         evidence = getattr(exc, "evidence", None)
-        if isinstance(exc, SWEVerifiedEvaluatorOperationalError) and isinstance(
+        if isinstance(
+            exc,
+            (SWEVerifiedEvaluatorOperationalError, SWEBenchProEvaluatorOperationalError),
+        ) and isinstance(
             evidence, dict
         ):
             failure["evaluator_evidence"] = evidence

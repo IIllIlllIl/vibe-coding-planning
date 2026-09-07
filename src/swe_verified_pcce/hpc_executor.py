@@ -24,6 +24,7 @@ from src.swe_verified_pce.hpc_executor import (
     pce_semantic_sha256,
     recover_exhausted_evaluator_timeout,
 )
+from src.swe_bench_pro_pce.hpc_executor import SWEBenchProPCEHPCExecutor
 
 
 def _stable(value: Any) -> str:
@@ -47,7 +48,11 @@ def pcce_semantic_sha256(config: SWEVerifiedPCCEConfig) -> str:
             "sources": {
                 str(path.relative_to(root)): file_sha256(path) for path in sources
             },
-            "pce_semantic_sha256": pce_semantic_sha256(config.pce),
+            "pce_semantic_sha256": (
+                SWEBenchProPCEHPCExecutor(config.pce).semantic_sha256()
+                if config.dataset_type == "pro"
+                else pce_semantic_sha256(config.pce)
+            ),
             "checker_semantic_sha256": offline_checker_semantic_sha256(config.checker),
             "prompts": {
                 "checker_system": config.checker_prompt,
@@ -107,7 +112,7 @@ def build_array_script(
     hpc = config.hpc
     worker_time = time_limit or hpc.time
     if worker_time != "00:45:00":
-        raise ValueError("every SWE-Verified PCCE worker requires 45 minutes")
+        raise ValueError("every PCCE worker requires 45 minutes")
     logs = batch_dir / "slurm_logs" / f"attempt_{attempt:02d}"
     logs.mkdir(parents=True, exist_ok=True)
     index_spec = ",".join(str(index) for index in indices)
@@ -268,7 +273,7 @@ class SWEVerifiedPCCEHPCExecutor:
             output = batch_dir / "outputs" / f"task_{index:04d}.json"
             payload = {
                 "schema_version": 1,
-                "mode": "swe_verified_pcce",
+                "mode": self.config.mode,
                 "phase": phase,
                 "fingerprint": fingerprint,
                 "task_index": index,
@@ -296,7 +301,7 @@ class SWEVerifiedPCCEHPCExecutor:
             batch_dir / "manifest.json",
             {
                 "schema_version": 1,
-                "mode": "swe_verified_pcce_batch",
+                "mode": f"{self.config.mode}_batch",
                 "phase": phase,
                 "fingerprint": fingerprint,
                 "task_count": len(tasks),
@@ -329,6 +334,12 @@ class SWEVerifiedPCCEHPCExecutor:
                 raise ValueError("PCCE worker output phase mismatch")
             if phase == "pc":
                 checker = value.get("checker_output")
+                if (
+                    value.get("pc_status") == "operationally_incomplete"
+                    and value.get("terminal_reason")
+                    == "agent_git_history_access_detected"
+                ):
+                    return
                 if (
                     value.get("pc_status") != "completed"
                     or not isinstance(checker, dict)
@@ -376,7 +387,7 @@ class SWEVerifiedPCCEHPCExecutor:
             if recovered is not None:
                 manifest = json.loads(task.manifest_path.read_text(encoding="utf-8"))
                 recovered.update(
-                    mode="swe_verified_pcce",
+                    mode=self.config.mode,
                     phase="ce",
                     pcce_status="completed",
                     accepted_review_relpath=manifest["accepted_review_relpath"],
@@ -387,7 +398,7 @@ class SWEVerifiedPCCEHPCExecutor:
                     {
                         "schema_version": 1,
                         "status": "incomplete",
-                        "mode": "swe_verified_pcce",
+                        "mode": self.config.mode,
                         "phase": phase,
                         "fingerprint": fingerprint,
                         "task_index": task.index,

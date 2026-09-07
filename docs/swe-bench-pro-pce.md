@@ -1,8 +1,8 @@
 # SWE-bench Pro Quick25 PCE
 
-> Authority: Pro quick25 acquisition closeout and the additive PCE preparation
+> Authority: Pro quick25 acquisition, completed PCE, and additive PCCE preparation
 >
-> Last reviewed: 2026-09-06
+> Last reviewed: 2026-09-07
 
 ## Scope
 
@@ -10,7 +10,8 @@ This development path asks whether the current Plan and Code prompts can
 produce an executable Pro baseline before paired Seed/C4 review. The quick25
 selection is outcome-independent but deliberately stratified across only the
 three Python repositories; it is neither a population estimate nor an
-untouched holdout. No usable Pro quick25 PCE result exists yet.
+untouched holdout. The official-workspace PCE completed 25/25 cases: 24
+resolved and one unresolved, with no operationally incomplete case.
 
 The source is `ScaleAI/SWE-bench_Pro` at revision
 `7ab5114912baf22bb098818e604c02fe7ad2c11f`. The frozen membership contains
@@ -64,6 +65,15 @@ The prepared config is
 the ignored local
 `output/SWE-bench_Pro/pce-inputs/quick25-v1-20260904/`; it contains 25 rows and
 pinned evaluator assets.
+
+The paired C4 PCCE adapter keeps the same issue-first review semantics, three
+review opportunities, three task attempts, and 45-minute 1 CPU / 4 GiB workers
+used by the current SWE-Verified path. Its Pro backend changes only the
+dataset/runtime boundary: Checker and Revision Planner preserve and validate
+the official `/app` workspace, use `--containall`, and record observed Git
+history access as operationally incomplete; Code/Evaluate dispatches through
+the same official Pro evaluator used by PCE. The prepared quick25 config and
+supervisor are launch-inert until a separate smoke is frozen and approved.
 
 ## Official image boundary and history audit
 

@@ -1,0 +1,45 @@
+mode: swe_bench_pro_pcce
+purpose: prepared_quick25_behavioral_c4_issue_first_official_pro_pcce
+
+paths:
+  source_snapshot: output/SWE-bench_Pro/pce-inputs/quick25-v1-20260904
+  image_manifest: output/SWE-bench_Pro/pce-inputs/quick25-v1-20260904/image-audit-official-sif-v1/images.json
+  selection_manifest: configs/frozen_swe_bench_pro_quick25/v1-20260904/selection-manifest.json
+  pce_outcomes: output/SWE-bench_Pro/pce-runs/quick25/official-sif-current-prompt-v1-20260906/raw_pce_outcomes.jsonl
+  guideline: configs/frozen_guidelines/behavioral-formal-c4-v1-20260831/c4.md
+  pce_runtime_config: configs/swe_bench_pro_pce_quick25_v1_20260906.yaml
+  checker_runtime_config: configs/gepa_verified_rules.yaml
+  prompt_source_config: configs/pcce_issue_first_revision_prompt_pro_v1_20260907.yaml
+  run_dir: output/SWE-bench_Pro/pcce-runs/quick25/behavioral-c4-issue-first-v1-20260907
+
+pcce:
+  guideline_label: behavioral_formal_c4_issue_first_revision_v1
+  max_review_rejections: 3
+  pce_outcomes_sha256: 2e06d834e9873f1ef732b8d6b8355b0ee3d3b09bf915a9aa942c7c2fa8f8f710
+  image_manifest_sha256: 8caab7e61536664ecaa0723b5ac7dbebea0e38c4707693393589151203fb26a5
+
+checker:
+  max_steps: 0
+  cost_limit: 0.0
+  agent_timeout_seconds: 0
+  max_attempts: 3
+
+hpc:
+  submit: true
+  partition: batch
+  cpus_per_task: 1
+  mem: 4G
+  poll_interval_seconds: 300
+  task_output_grace_seconds: 300
+  missing_task_grace_seconds: 600
+  max_task_attempts: 3
+  remote_env_file: ~/.config/vibe-coding-planning/deepseek.env
+  python_module: lang/Python/3.11
+  container_module: tools/Apptainer
+  python_bin: python3
+  job_name_prefix: swe-bench-pro-pcce-c4-issue-first-v1-20260907
+  worker_config_path: configs/swe_bench_pro_pcce_quick25_c4_issue_first_v1_20260907.yaml
+  phase_times:
+    first_review: "00:45:00"
+    revision_review: "00:45:00"
+    ce: "00:45:00"

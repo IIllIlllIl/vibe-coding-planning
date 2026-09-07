@@ -12,10 +12,8 @@ import yaml
 
 from src.optimization.config import OptimizationConfig, load_optimization_config
 from src.optimization.hpc.config import HPCConfig
-from src.swe_verified_pce.config import (
-    SWEVerifiedPCEConfig,
-    load_swe_verified_pce_config,
-)
+from src.swe_verified_pce.config import load_swe_verified_pce_config
+from src.swe_bench_pro_pce.config import load_swe_bench_pro_pce_config
 
 
 @dataclass(frozen=True)
@@ -41,7 +39,7 @@ class SWEVerifiedPCCEConfig:
     run_dir: Path
     max_review_rejections: int
     instance_ids: tuple[str, ...]
-    pce: SWEVerifiedPCEConfig
+    pce: Any
     checker: OptimizationConfig
     hpc: HPCConfig
     phase_times: PCCEPhaseTimes
@@ -50,6 +48,8 @@ class SWEVerifiedPCCEConfig:
     expected_first_review_seed_sha256: str | None
     expected_pce_outcomes_sha256: str | None
     expected_image_manifest_sha256: str | None
+    mode: str = "swe_verified_pcce"
+    dataset_type: str = "swe_verified"
 
 
 def _mapping(value: Any, name: str) -> dict[str, Any]:
@@ -65,8 +65,10 @@ def load_swe_verified_pcce_config(
 ) -> SWEVerifiedPCCEConfig:
     config_path = Path(path).resolve()
     raw = yaml.safe_load(config_path.read_text(encoding="utf-8")) or {}
-    if raw.get("mode") != "swe_verified_pcce":
-        raise ValueError("SWE-Verified PCCE config requires mode: swe_verified_pcce")
+    mode = str(raw.get("mode", ""))
+    if mode not in {"swe_verified_pcce", "swe_bench_pro_pcce"}:
+        raise ValueError("PCCE config requires a supported PCCE mode")
+    is_pro = mode == "swe_bench_pro_pcce"
     root = (
         config_path.parents[1] if config_path.parent.name == "configs" else Path.cwd()
     )
@@ -89,22 +91,24 @@ def load_swe_verified_pcce_config(
         prompts = _mapping(raw.get("prompts"), "prompts")
     hpc_raw = _mapping(raw.get("hpc"), "hpc")
     phase_raw = _mapping(hpc_raw.get("phase_times"), "hpc.phase_times")
-    pce = load_swe_verified_pce_config(
-        resolve(str(paths["pce_runtime_config"])),
-        require_api_keys=require_api_keys,
+    pce_loader = (
+        load_swe_bench_pro_pce_config if is_pro else load_swe_verified_pce_config
+    )
+    pce = pce_loader(
+        resolve(str(paths["pce_runtime_config"])), require_api_keys=require_api_keys
     )
     checker = load_optimization_config(
         resolve(str(paths["checker_runtime_config"])),
         require_api_keys=require_api_keys,
     )
     if pce.container.runtime != "apptainer" or checker.container.runtime != "apptainer":
-        raise ValueError("SWE-Verified PCCE requires Apptainer runtimes")
+        raise ValueError("PCCE requires Apptainer runtimes")
     if pce.container.sif_cache_dir != checker.container.sif_cache_dir:
         raise ValueError("PCE and Checker must use the same SIF cache")
     if checker.execution.backend != "hpc_slurm":
-        raise ValueError("SWE-Verified PCCE requires an hpc_slurm Checker runtime")
+        raise ValueError("PCCE requires an hpc_slurm Checker runtime")
     if "max_running_array_tasks" in hpc_raw or "array_concurrency" in hpc_raw:
-        raise ValueError("SWE-Verified PCCE leaves array concurrency to Slurm")
+        raise ValueError("PCCE leaves array concurrency to Slurm")
 
     defaults = HPCConfig()
     hpc = HPCConfig(
@@ -128,13 +132,18 @@ def load_swe_verified_pcce_config(
             hpc_raw.get("container_module", defaults.container_module)
         ),
         python_bin=str(hpc_raw.get("python_bin", defaults.python_bin)),
-        job_name_prefix=str(hpc_raw.get("job_name_prefix", "swe-verified-pcce")),
+        job_name_prefix=str(
+            hpc_raw.get(
+                "job_name_prefix",
+                "swe-bench-pro-pcce" if is_pro else "swe-verified-pcce",
+            )
+        ),
         worker_config_path=str(hpc_raw.get("worker_config_path", str(config_path))),
     )
     if hpc.cpus_per_task != 1 or hpc.mem != "4G":
-        raise ValueError("SWE-Verified PCCE workers must remain 1 CPU / 4G")
+        raise ValueError("PCCE workers must remain 1 CPU / 4G")
     if hpc.max_task_attempts != 3:
-        raise ValueError("SWE-Verified PCCE requires exactly three total attempts")
+        raise ValueError("PCCE requires exactly three total attempts")
     phase_times = PCCEPhaseTimes(
         first_review=str(phase_raw["first_review"]),
         revision_review=str(phase_raw["revision_review"]),
@@ -145,11 +154,11 @@ def load_swe_verified_pcce_config(
         phase_times.revision_review,
         phase_times.ce,
     ) != ("00:45:00", "00:45:00", "00:45:00"):
-        raise ValueError("every SWE-Verified PCCE phase requires a 45-minute walltime")
+        raise ValueError("every PCCE phase requires a 45-minute walltime")
 
     max_rejections = int(method.get("max_review_rejections", 3))
     if max_rejections != 3:
-        raise ValueError("SWE-Verified full PCCE requires three review rejections")
+        raise ValueError("full PCCE requires three review rejections")
     expected_pce_outcomes_sha256 = method.get("pce_outcomes_sha256")
     expected_image_manifest_sha256 = method.get("image_manifest_sha256")
     for name, value in (
@@ -164,14 +173,14 @@ def load_swe_verified_pcce_config(
             raise ValueError(f"{name} must be a lowercase SHA-256")
     selection_manifest = resolve(str(paths["selection_manifest"]))
     selection = json.loads(selection_manifest.read_text(encoding="utf-8"))
-    selected = selection.get("selected_instance_ids")
-    if (
-        selection.get("schema_version") != 1
-        or not isinstance(selected, list)
-        or not selected
-    ):
-        raise ValueError("selection manifest requires selected_instance_ids")
-    parent_instance_ids = tuple(str(value) for value in selected)
+    selected = selection.get("selected_cases") if is_pro else selection.get(
+        "selected_instance_ids"
+    )
+    if selection.get("schema_version") != 1 or not isinstance(selected, list) or not selected:
+        raise ValueError("selection manifest lacks selected cases")
+    parent_instance_ids = tuple(
+        str(value["instance_id"] if is_pro else value) for value in selected
+    )
     if len(set(parent_instance_ids)) != len(parent_instance_ids):
         raise ValueError("selected instance IDs must be unique")
     requested = method.get("instance_ids")
@@ -236,7 +245,7 @@ def load_swe_verified_pcce_config(
         or checker.checker.agent_timeout_seconds != 0
         or checker.checker.max_attempts != hpc.max_task_attempts
     ):
-        raise ValueError("SWE-Verified Checker limits must defer to Slurm attempts")
+        raise ValueError("PCCE Checker limits must defer to Slurm attempts")
     revision_system = str(prompts.get("plan_revision_system", ""))
     revision_instance = str(prompts.get("plan_revision_instance", ""))
     if not revision_system or not revision_instance:
@@ -268,4 +277,15 @@ def load_swe_verified_pcce_config(
         expected_first_review_seed_sha256=expected_first_review_seed_sha256,
         expected_pce_outcomes_sha256=expected_pce_outcomes_sha256,
         expected_image_manifest_sha256=expected_image_manifest_sha256,
+        mode=mode,
+        dataset_type="pro" if is_pro else "swe_verified",
     )
+
+
+def load_swe_bench_pro_pcce_config(
+    path: str | Path, *, require_api_keys: bool = True
+) -> SWEVerifiedPCCEConfig:
+    config = load_swe_verified_pcce_config(path, require_api_keys=require_api_keys)
+    if config.mode != "swe_bench_pro_pcce":
+        raise ValueError("Pro PCCE config requires mode: swe_bench_pro_pcce")
+    return config

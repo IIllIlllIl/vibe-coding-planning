@@ -40,6 +40,40 @@ def _command_strings(value: Any) -> list[str]:
     return commands
 
 
+def validate_official_sif_workspace(
+    env: Any, case: Any, *, phase: str, evidence_dir: Path
+) -> None:
+    """Record and validate the official Pro workspace without rewriting it."""
+    commands = {
+        "head": "git rev-parse HEAD",
+        "base": f"git cat-file -e '{case.base_commit}^{{commit}}'",
+        "staged": "git diff --cached --binary --full-index",
+        "status": "git status --porcelain=v1 --untracked-files=all",
+        "submodules": "git submodule status --recursive || true",
+    }
+    observations = {
+        name: dict(env.execute(command, timeout=120))
+        for name, command in commands.items()
+    }
+    evidence = {
+        "schema_version": 1,
+        "policy": "official_sif_workspace_v1",
+        "phase": phase,
+        "declared_base_commit": case.base_commit,
+        "workspace_is_allowed_to_be_dirty": True,
+        "observations": observations,
+    }
+    atomic_json(evidence_dir / "repository_baseline.json", evidence)
+    if (
+        observations["head"].get("returncode") != 0
+        or str(observations["head"].get("output", "")).strip() != case.base_commit
+        or observations["base"].get("returncode") != 0
+        or observations["staged"].get("returncode") != 0
+        or str(observations["staged"].get("output", ""))
+    ):
+        raise FatalError("official Pro SIF workspace baseline is invalid")
+
+
 class SWEBenchProPCERunner(SWEVerifiedPCERunner):
     def __init__(self, config, capacity_window, **kwargs):
         kwargs.setdefault(
@@ -64,35 +98,9 @@ class SWEBenchProPCERunner(SWEVerifiedPCERunner):
         evidence_dir: Path,
     ) -> None:
         _ = host_workdir
-        commands = {
-            "head": "git rev-parse HEAD",
-            "base": f"git cat-file -e '{case.base_commit}^{{commit}}'",
-            "staged": "git diff --cached --binary --full-index",
-            "status": "git status --porcelain=v1 --untracked-files=all",
-            "submodules": "git submodule status --recursive || true",
-        }
-        observations = {
-            name: dict(env.execute(command, timeout=120))
-            for name, command in commands.items()
-        }
-        evidence = {
-            "schema_version": 1,
-            "policy": "official_sif_workspace_v1",
-            "phase": phase,
-            "declared_base_commit": case.base_commit,
-            "workspace_is_allowed_to_be_dirty": True,
-            "observations": observations,
-        }
-        atomic_json(evidence_dir / "repository_baseline.json", evidence)
-        if (
-            observations["head"].get("returncode") != 0
-            or str(observations["head"].get("output", "")).strip()
-            != case.base_commit
-            or observations["base"].get("returncode") != 0
-            or observations["staged"].get("returncode") != 0
-            or str(observations["staged"].get("output", ""))
-        ):
-            raise FatalError("official Pro SIF workspace baseline is invalid")
+        validate_official_sif_workspace(
+            env, case, phase=phase, evidence_dir=evidence_dir
+        )
 
     def run(self, case):
         result = super().run(case)

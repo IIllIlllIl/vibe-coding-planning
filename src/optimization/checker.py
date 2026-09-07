@@ -52,6 +52,8 @@ class CheckerRunner(Protocol):
         completion_callback: Callable[[CheckerOutput], None] | None = None,
         repository_baseline_dir: Path | None = None,
         apptainer_host_workdir: Path | None = None,
+        repository_initializer: Callable[[Any, Path], None] | None = None,
+        apptainer_run_args: list[str] | None = None,
     ) -> CheckerOutput: ...
 
 
@@ -231,6 +233,8 @@ class DockerChecker:
         completion_callback: Callable[[CheckerOutput], None] | None = None,
         repository_baseline_dir: Path | None = None,
         apptainer_host_workdir: Path | None = None,
+        repository_initializer: Callable[[Any, Path], None] | None = None,
+        apptainer_run_args: list[str] | None = None,
     ) -> CheckerOutput:
         # Slurm owns the HPC wall-time. The worker only executes and journals
         # evidence; the resumed controller classifies a terminal Slurm state.
@@ -244,6 +248,8 @@ class DockerChecker:
                 completion_callback=completion_callback,
                 repository_baseline_dir=repository_baseline_dir,
                 apptainer_host_workdir=apptainer_host_workdir,
+                repository_initializer=repository_initializer,
+                apptainer_run_args=apptainer_run_args,
             )
 
         # Local execution has no external scheduler, so its optional soft
@@ -258,6 +264,8 @@ class DockerChecker:
                 completion_callback=completion_callback,
                 repository_baseline_dir=repository_baseline_dir,
                 apptainer_host_workdir=apptainer_host_workdir,
+                repository_initializer=repository_initializer,
+                apptainer_run_args=apptainer_run_args,
             )
 
     def _run_session(
@@ -273,6 +281,8 @@ class DockerChecker:
         completion_callback: Callable[[CheckerOutput], None] | None = None,
         repository_baseline_dir: Path | None = None,
         apptainer_host_workdir: Path | None = None,
+        repository_initializer: Callable[[Any, Path], None] | None = None,
+        apptainer_run_args: list[str] | None = None,
     ) -> CheckerOutput:
         self.prepare(case)
         DefaultAgent, LitellmModel, _ = import_minisweagent()
@@ -320,6 +330,7 @@ class DockerChecker:
                 env = ApptainerEnvironment(
                     image=image,
                     cwd=self.config.docker.workdir,
+                    run_args=apptainer_run_args,
                     sif_cache_dir=self.config.container.sif_cache_dir,
                     capacity_window=self.capacity_window,
                     timeout=self.config.checker.timeout,
@@ -337,12 +348,15 @@ class DockerChecker:
                     instance_info=instance_info,
                 )
             if repository_baseline_dir is not None:
-                restore_repository_to_base(
-                    env,
-                    str(instance_info.get("base_commit", "")),
-                    phase="checker",
-                    evidence_dir=repository_baseline_dir,
-                )
+                if repository_initializer is None:
+                    restore_repository_to_base(
+                        env,
+                        str(instance_info.get("base_commit", "")),
+                        phase="checker",
+                        evidence_dir=repository_baseline_dir,
+                    )
+                else:
+                    repository_initializer(env, repository_baseline_dir)
             agent = build_default_agent(
                 DefaultAgent,
                 model,

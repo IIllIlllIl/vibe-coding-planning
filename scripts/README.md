@@ -92,7 +92,13 @@ cleaning authority is `docs/swe-chat-data-cleaning.md`.
   default and also records exposed commits not ancestral to each base.
 - `hpc_submit_swe_bench_pro_pce.sh` reuses the current SWE PCE staging wrapper
   with Pro identities. It is dry-run by default and cannot proceed without the
-  audited selection-scoped `images.json`; no Pro PCE has yet been launched.
+  audited selection-scoped `images.json`; the quick25 completed 25/25 with 24
+  resolved and one unresolved.
+- `hpc_submit_swe_bench_pro_pcce.sh` /
+  `run_swe_bench_pro_pcce_hpc.py` are the Pro binding of the shared resumable
+  PCCE controller. They preserve the official `/app` workspace and dispatch
+  Code/Evaluate to the official Pro evaluator; tracked config and supervisor
+  files do not authorize launch.
 - `hpc_submit_swe_verified_pce.sh` / `run_swe_verified_pce_hpc.py` and
   `hpc_submit_swe_verified_pcce.sh` / `run_swe_verified_pcce_hpc.py` are the
   additive current-prompt SWE-Verified evaluation entry points. The PCE smoke

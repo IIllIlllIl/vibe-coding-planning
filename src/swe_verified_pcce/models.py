@@ -6,12 +6,9 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
-from src.swe_verified_pce.models import SWEVerifiedPCECase
-
-
 @dataclass(frozen=True)
 class PCCECase:
-    source: SWEVerifiedPCECase
+    source: Any
     baseline_plan: str
     baseline_resolved: bool | None
     baseline_outcome_sha256: str
@@ -39,7 +36,7 @@ class CEAssignment:
 
 @dataclass(frozen=True)
 class PCCECheckerCase:
-    source: SWEVerifiedPCECase
+    source: Any
     plan: str
     asi: dict[str, Any]
 
@@ -52,14 +49,6 @@ class PCCECheckerCase:
         return self.source.issue_description
 
     def checker_payload(self) -> dict[str, Any]:
-        return {
-            "issue_description": self.issue_description,
-            "plan": self.plan,
-            "repository": {
-                "repo": self.source.repo,
-                "base_commit": self.source.base_commit,
-                "instance_id": self.source.instance_id,
-                "dataset_type": "swe_verified",
-                "image_name": self.source.image.requested_ref,
-            },
-        }
+        payload = self.source.agent_projection()
+        payload["plan"] = self.plan
+        return payload

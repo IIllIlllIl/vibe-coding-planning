@@ -28,6 +28,12 @@ from src.swe_verified_pcce.models import (
 )
 from src.swe_verified_pce.dataset import file_sha256
 from src.swe_verified_pce.runner import SWEVerifiedPCERunner, checkpoint_identity
+from src.swe_bench_pro_pce.runner import (
+    HISTORY_COMMAND,
+    SWEBenchProPCERunner,
+    _command_strings,
+    validate_official_sif_workspace,
+)
 
 
 def _checkpoint(path: Path, identity: str, phase: str) -> dict[str, Any] | None:
@@ -152,12 +158,12 @@ class SWEVerifiedPCCERunner:
                 optimization_info_level=1,
                 model=model.model,
                 api_base=model.api_base,
-                dataset="SWE-bench/SWE-bench_Verified",
-                dataset_type="swe_verified",
+                dataset=self.config.pce.dataset,
+                dataset_type=self.config.dataset_type,
                 language_filter="",
                 instances=[],
                 output_dir=str(self.attempt_dir),
-                batch_id="swe_verified_pcce_revision",
+                batch_id=f"{self.config.mode}_revision",
                 skip_completed_rounds=True,
             ),
             prompts=PromptConfig(
@@ -190,6 +196,7 @@ class SWEVerifiedPCCERunner:
             cwd=self.config.pce.docker.workdir,
             sif_cache_dir=self.config.pce.container.sif_cache_dir,
             capacity_window=self.capacity,
+            run_args=["--containall"] if self.config.dataset_type == "pro" else None,
             timeout=self.config.pce.plan.timeout,
             writable_tmpfs=self.config.pce.container.writable_tmpfs,
             git_safe_directories=[self.config.pce.docker.workdir],
@@ -209,6 +216,40 @@ class SWEVerifiedPCCERunner:
                 error_type=type(exc).__name__,
                 error=str(exc),
             )
+
+    def _initialize_repository(
+        self, env: Any, assignment: PCReviewAssignment, *, phase: str, evidence_dir: Path
+    ) -> None:
+        if self.config.dataset_type == "pro":
+            validate_official_sif_workspace(
+                env, assignment.case.source, phase=phase, evidence_dir=evidence_dir
+            )
+        else:
+            restore_repository_to_base(
+                env,
+                assignment.case.source.base_commit,
+                phase=phase,
+                evidence_dir=evidence_dir,
+            )
+
+    def _history_contamination(
+        self, trajectories: list[Any], *, phase: str
+    ) -> dict[str, Any] | None:
+        if self.config.dataset_type != "pro":
+            return None
+        commands: list[str] = []
+        for trajectory in trajectories:
+            commands.extend(_command_strings(trajectory))
+        matches = [command for command in commands if HISTORY_COMMAND.search(command)]
+        evidence = {
+            "schema_version": 1,
+            "policy": "observed_git_history_access_v1",
+            "history_access_detected": bool(matches),
+            "matching_commands": matches,
+            "latent_history_present": True,
+        }
+        atomic_json(self.attempt_dir / f"{phase}_history_contamination.json", evidence)
+        return evidence
 
     def run_pc(
         self,
@@ -247,13 +288,13 @@ class SWEVerifiedPCCERunner:
                     host_workdir=revision_workspace,
                 )
                 try:
-                    restore_repository_to_base(
+                    self._initialize_repository(
                         env,
-                        assignment.case.source.base_commit,
+                        assignment,
                         phase="plan_revision",
-                        evidence_dir=(
-                            self.attempt_dir / "repository_baselines" / "plan_revision"
-                        ),
+                        evidence_dir=self.attempt_dir
+                        / "repository_baselines"
+                        / "plan_revision",
                     )
                     plan, trajectory = plan_agent.run(
                         self._plan_config(),
@@ -266,7 +307,7 @@ class SWEVerifiedPCCERunner:
                             context={
                                 "instance_id": assignment.case.instance_id,
                                 "review_index": assignment.review_index,
-                                "mode": "swe_verified_pcce",
+                                "mode": self.config.mode,
                             },
                         ),
                         failure_trajectory_path=self.attempt_dir / "plan_failure.json",
@@ -276,6 +317,9 @@ class SWEVerifiedPCCERunner:
                         "trajectory": list(trajectory),
                         "source": "planner_revision",
                     }
+                    plan_payload["history_contamination"] = self._history_contamination(
+                        [plan_payload["trajectory"]], phase="plan_revision"
+                    )
                     _save_checkpoint(plan_path, identity, "plan", plan_payload)
                 finally:
                     try:
@@ -287,6 +331,18 @@ class SWEVerifiedPCCERunner:
                     self._cleanup_workspace(revision_workspace, phase="plan_revision")
             if assignment.review_index == 1:
                 _save_checkpoint(plan_path, identity, "plan", plan_payload)
+
+        plan_history = plan_payload.get("history_contamination")
+        if isinstance(plan_history, dict) and plan_history.get("history_access_detected"):
+            return {
+                "pc_status": "operationally_incomplete",
+                "terminal_reason": "agent_git_history_access_detected",
+                "review_index": assignment.review_index,
+                "plan": str(plan_payload["plan"]),
+                "plan_source": str(plan_payload["source"]),
+                "plan_trajectory": list(plan_payload["trajectory"]),
+                "history_contamination": plan_history,
+            }
 
         checker_path = self.checkpoint_dir / "checker.json"
         checker_payload = _checkpoint(checker_path, identity, "checker")
@@ -331,12 +387,39 @@ class SWEVerifiedPCCERunner:
                         self.attempt_dir / "repository_baselines" / "checker"
                     ),
                     apptainer_host_workdir=checker_workspace,
+                    repository_initializer=(
+                        lambda env, evidence_dir: self._initialize_repository(
+                            env,
+                            assignment,
+                            phase="checker",
+                            evidence_dir=evidence_dir,
+                        )
+                    )
+                    if self.config.dataset_type == "pro"
+                    else None,
+                    apptainer_run_args=(
+                        ["--containall"] if self.config.dataset_type == "pro" else None
+                    ),
                 )
             finally:
                 self._cleanup_workspace(checker_workspace, phase="checker")
             checker_payload = _checkpoint(checker_path, identity, "checker")
             if checker_payload is None:
                 raise FatalError("PCCE Checker completed without a durable checkpoint")
+        pc_history = self._history_contamination(
+            [plan_payload.get("trajectory", []), checker_payload.get("trajectory", [])],
+            phase="pc",
+        )
+        if isinstance(pc_history, dict) and pc_history.get("history_access_detected"):
+            return {
+                "pc_status": "operationally_incomplete",
+                "terminal_reason": "agent_git_history_access_detected",
+                "review_index": assignment.review_index,
+                "plan": str(plan_payload["plan"]),
+                "plan_source": str(plan_payload["source"]),
+                "plan_trajectory": list(plan_payload["trajectory"]),
+                "history_contamination": pc_history,
+            }
 
         return {
             "pc_status": "completed",
@@ -363,7 +446,12 @@ class SWEVerifiedPCCERunner:
             _save_checkpoint(plan_path, identity, "plan", plan_payload)
         elif existing.get("plan") != assignment.accepted_plan:
             raise FatalError("PCCE CE accepted-plan checkpoint mismatch")
-        result = SWEVerifiedPCERunner(
+        pce_runner = (
+            SWEBenchProPCERunner
+            if self.config.dataset_type == "pro"
+            else SWEVerifiedPCERunner
+        )
+        result = pce_runner(
             self.config.pce,
             self.capacity,
             checkpoint_dir=self.checkpoint_dir,

@@ -22,6 +22,7 @@ tracked does not authorize its execution.
 | `gepa_behavioral_acceptability_formal_8it_v2_20260830.yaml` | Completed formal contract using the media-projected snapshot; immutable run identity, not a relaunch default. Its opening pre-launch comment is retained provenance and is superseded by `experiment_contract.status`. |
 | `behavioral_gepa_formal_8it_supervisor_v2_20260830.yaml` | Completed v2 supervisor identity; provenance only. |
 | `pcce_issue_first_revision_prompt_v1_20260903.yaml` | Non-runnable shared prompt authority for the next C4 PCCE diagnostic. It makes solving the original issue the Revision Planner's system-level objective and treats the previous plan and Checker feedback as fallible advisory evidence; it intentionally retains the existing `revision_feedback`-only payload for the first anti-anchoring comparison. |
+| `pcce_issue_first_revision_prompt_pro_v1_20260907.yaml` | Pro operational binding of the same issue-first prompt; only the repository path changes from `/testbed` to the official SIF path `/app`. |
 | `frozen_polybench_pc_quick/c4-balanced20-v1-20260831.json` | Frozen balanced 20-case external diagnostic selection, including conservative workflow/noise exclusions and deterministic sampling identity. |
 | `frozen_guidelines/behavioral-formal-c4-v1-20260831/` | Exact Behavioral formal candidate 4 text and source identity for the PolyBench diagnostic. |
 | `frozen_guidelines/behavioral-formal-all-candidates-v1-20260831/` | Local frozen backup of all six exact formal candidate texts, run identity, terminal state, cost report, lineage, and compact validation metrics; large raw trajectories remain on Iris. |
@@ -119,6 +120,10 @@ evidence, not a base-commit audit or experiment result.
 | `swe_bench_pro_quick25_preheat_v1_20260904.yaml` | Frozen quick25 SIF acquisition identity, serial skip-and-report policy, dedicated scratch paths, single-writer lock, and local supervisor identity. It authorizes no launch by itself. |
 | `swe_bench_pro_pce_quick25_v1_20260906.yaml` | Prepared official-SIF Pro current-prompt PCE quick25 runtime. It preserves official build artifacts, records dirty baselines, and excludes observed Git-history access as `unknown`. The replacement smoke passed 3/3 before launch authorization. |
 | `swe_bench_pro_pce_smoke_v1_20260906.yaml` | Three-case official-SIF Pro PCE workflow smoke: the first frozen quick25 entry from each repository. It uses a new run identity after invalidating the ancestor-only diagnostic and supports no effectiveness claim. |
+| `swe_bench_pro_pcce_quick25_c4_issue_first_v1_20260907.yaml` | Prepared paired C4 issue-first Pro PCCE identity over the exact 25 completed PCE plans; preserves official SIF workspaces and uses the official Pro evaluator. Not launch authorization. |
+| `swe_bench_pro_pcce_quick25_c4_issue_first_supervisor_v1_20260907.yaml` | Bounded five-minute-poll supervisor for the prepared Pro PCCE identity; not launch authorization. |
+| `swe_bench_pro_pcce_smoke_c4_issue_first_v1_20260907.yaml` | Three-repository development smoke for Pro PCCE, including the sole PCE-unresolved quick25 case; workflow evidence only. |
+| `swe_bench_pro_pcce_smoke_c4_issue_first_supervisor_v1_20260907.yaml` | Bounded supervisor identity for the authorized Pro PCCE smoke. |
 
 Archive paths are non-authoritative. Prefer `git show main:<path>` when exact
 pre-branch paths or bytes are required.
