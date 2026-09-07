@@ -5,7 +5,9 @@ from __future__ import annotations
 from collections import Counter
 from datetime import datetime, timezone
 import json
+import os
 from pathlib import Path
+import re
 from typing import Any
 
 from src.exceptions import ControllerYield
@@ -41,6 +43,61 @@ def _write_jsonl(path: Path, rows: list[dict[str, Any]]) -> None:
         encoding="utf-8",
     )
     temporary.replace(path)
+
+
+def _allow_operational_semantic_migration(
+    config: SWEVerifiedPCCEConfig,
+    existing: dict[str, Any],
+    proposed: dict[str, Any],
+) -> bool:
+    """Allow one explicit, audited code-only recovery of a frozen run."""
+    prior_git = os.environ.get("VIBE_OPERATIONAL_MIGRATION_FROM_GIT_HEAD")
+    prior_semantic = os.environ.get(
+        "VIBE_OPERATIONAL_MIGRATION_FROM_PCCE_SEMANTIC_SHA256"
+    )
+    controller_git = os.environ.get("VIBE_CONTROLLER_GIT_HEAD")
+    if not prior_git and not prior_semantic:
+        return False
+    if not (
+        isinstance(prior_git, str)
+        and re.fullmatch(r"[0-9a-f]{40}", prior_git)
+        and isinstance(prior_semantic, str)
+        and re.fullmatch(r"[0-9a-f]{64}", prior_semantic)
+        and isinstance(controller_git, str)
+        and re.fullmatch(r"[0-9a-f]{40}", controller_git)
+    ):
+        raise ValueError("invalid explicit PCCE operational migration identity")
+    if (
+        existing.get("project_git_head") != prior_git
+        or proposed.get("project_git_head") != prior_git
+        or existing.get("pcce_semantic_sha256") != prior_semantic
+        or controller_git == prior_git
+    ):
+        raise ValueError("PCCE operational migration source identity mismatch")
+    differing = {
+        key
+        for key in set(existing) | set(proposed)
+        if existing.get(key) != proposed.get(key)
+    }
+    if differing != {"pcce_semantic_sha256"}:
+        raise ValueError(
+            "PCCE operational migration contains non-code identity changes: "
+            + ", ".join(sorted(differing))
+        )
+    record = {
+        "schema_version": 1,
+        "migration_kind": "retry_classification_runtime_fix",
+        "scientific_project_git_head": prior_git,
+        "controller_project_git_head": controller_git,
+        "prior_pcce_semantic_sha256": prior_semantic,
+        "controller_pcce_semantic_sha256": proposed["pcce_semantic_sha256"],
+        "semantic_inputs_changed": False,
+    }
+    path = config.run_dir / "operational_code_migrations.jsonl"
+    prior_records = _read_jsonl(path) if path.is_file() else []
+    if record not in prior_records:
+        _write_jsonl(path, [*prior_records, record])
+    return True
 
 
 def _review_artifact(
@@ -198,7 +255,10 @@ def run_swe_verified_pcce(config: SWEVerifiedPCCEConfig) -> dict[str, Any] | Non
     }
     manifest_path = config.run_dir / "run_manifest.json"
     if manifest_path.is_file():
-        if json.loads(manifest_path.read_text(encoding="utf-8")) != manifest:
+        existing_manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+        if existing_manifest != manifest and not _allow_operational_semantic_migration(
+            config, existing_manifest, manifest
+        ):
             raise ValueError("SWE-Verified PCCE run manifest differs from existing run")
     else:
         atomic_json(manifest_path, manifest)

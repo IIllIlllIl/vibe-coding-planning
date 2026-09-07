@@ -12,6 +12,7 @@ from src.optimization.hpc.task_batch import TaskFiles
 from src.optimization.checker import CheckerOutputContractError
 from src.swe_verified_pcce.config import load_swe_verified_pcce_config
 from src.swe_verified_pcce.controller import (
+    _allow_operational_semantic_migration,
     _load_first_review_seed,
     _review_assignments,
     run_swe_verified_pcce,
@@ -39,6 +40,40 @@ from scripts.tools.freeze_pcce_rejected_first_reviews import (
 def test_swe_verified_checker_contract_failure_retries_with_fresh_agent():
     error = CheckerOutputContractError("extra data after submitted JSON")
     assert _retry_disposition(error) == "retry_fresh_agent"
+
+
+def test_explicit_operational_migration_allows_only_semantic_code_hash(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    old_git = "a" * 40
+    new_git = "b" * 40
+    old_semantic = "c" * 64
+    new_semantic = "d" * 64
+    config = SimpleNamespace(run_dir=tmp_path)
+    existing = {
+        "project_git_head": old_git,
+        "pcce_semantic_sha256": old_semantic,
+        "config_sha256": "frozen",
+    }
+    proposed = {**existing, "pcce_semantic_sha256": new_semantic}
+    monkeypatch.setenv("VIBE_OPERATIONAL_MIGRATION_FROM_GIT_HEAD", old_git)
+    monkeypatch.setenv(
+        "VIBE_OPERATIONAL_MIGRATION_FROM_PCCE_SEMANTIC_SHA256", old_semantic
+    )
+    monkeypatch.setenv("VIBE_CONTROLLER_GIT_HEAD", new_git)
+
+    assert _allow_operational_semantic_migration(config, existing, proposed)
+    record = json.loads(
+        (tmp_path / "operational_code_migrations.jsonl").read_text()
+    )
+    assert record["scientific_project_git_head"] == old_git
+    assert record["controller_project_git_head"] == new_git
+    assert record["semantic_inputs_changed"] is False
+
+    with pytest.raises(ValueError, match="non-code identity changes"):
+        _allow_operational_semantic_migration(
+            config, existing, {**proposed, "config_sha256": "changed"}
+        )
 
 
 def _stable(value: object) -> str:

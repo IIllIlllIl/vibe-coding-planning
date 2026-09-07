@@ -15,6 +15,8 @@ REMOTE_RUN_DIR="~/hpc_run_state/vibe-coding-planning"
 REMOTE_ENV_FILE="~/.config/vibe-coding-planning/deepseek.env"
 ULHPC_CONFIG=""
 REQUIRE_CLEAN=0
+OPERATIONAL_MIGRATION_FROM_GIT_HEAD=""
+OPERATIONAL_MIGRATION_FROM_PCCE_SEMANTIC_SHA256=""
 
 usage() {
   cat <<'USAGE'
@@ -31,6 +33,11 @@ Options:
   --require-clean-worktree  reject an uncommitted source/config identity
   --submit                  submit; default is ulhpc-submit dry-run
   --dry-run                 explicitly retain dry-run mode
+  --operational-migration-from-git-head SHA
+                            explicitly resume a frozen run after an audited
+                            code-only operational fix
+  --operational-migration-from-pcce-semantic-sha256 SHA
+                            expected prior PCCE semantic identity
 
 Re-run the same command and config to collect an existing PC/CE batch or
 submit the next fingerprinted workflow phase. Worker resources come from the
@@ -50,6 +57,8 @@ while [[ $# -gt 0 ]]; do
     --remote-env-file) REMOTE_ENV_FILE="$2"; shift 2 ;;
     --ulhpc-config) ULHPC_CONFIG="$2"; shift 2 ;;
     --require-clean-worktree) REQUIRE_CLEAN=1; shift ;;
+    --operational-migration-from-git-head) OPERATIONAL_MIGRATION_FROM_GIT_HEAD="$2"; shift 2 ;;
+    --operational-migration-from-pcce-semantic-sha256) OPERATIONAL_MIGRATION_FROM_PCCE_SEMANTIC_SHA256="$2"; shift 2 ;;
     --submit) SUBMIT=1; shift ;;
     --dry-run) SUBMIT=0; shift ;;
     -h|--help) usage; exit 0 ;;
@@ -66,6 +75,13 @@ PY
 if [[ -z "$CONFIG" ]]; then
   echo "ERROR: --config is required" >&2
   exit 2
+fi
+if [[ -n "$OPERATIONAL_MIGRATION_FROM_GIT_HEAD" || -n "$OPERATIONAL_MIGRATION_FROM_PCCE_SEMANTIC_SHA256" ]]; then
+  if [[ ! "$OPERATIONAL_MIGRATION_FROM_GIT_HEAD" =~ ^[0-9a-f]{40}$ ]] || \
+     [[ ! "$OPERATIONAL_MIGRATION_FROM_PCCE_SEMANTIC_SHA256" =~ ^[0-9a-f]{64}$ ]]; then
+    echo "ERROR: operational migration requires a full prior Git SHA and PCCE semantic SHA-256" >&2
+    exit 2
+  fi
 fi
 CONFIG_ABS="$(conda run --no-capture-output -n mini-swe python - "$REPO_ROOT" "$CONFIG" <<'PY'
 import sys
@@ -196,6 +212,8 @@ export APPTAINER_CACHEDIR="$HPC_ROOT/shared/apptainer-cache"
 export APPTAINER_TMPDIR="$HPC_ROOT/shared/apptainer-tmp"
 export ULHPC_APPTAINER_SIF_CACHE_DIR="$SIF_CACHE_DIR"
 export VIBE_CONTROLLER_GIT_HEAD="$LOCAL_GIT_HEAD"
+export VIBE_OPERATIONAL_MIGRATION_FROM_GIT_HEAD="$OPERATIONAL_MIGRATION_FROM_GIT_HEAD"
+export VIBE_OPERATIONAL_MIGRATION_FROM_PCCE_SEMANTIC_SHA256="$OPERATIONAL_MIGRATION_FROM_PCCE_SEMANTIC_SHA256"
 RUN_MANIFEST="$RUN_REL/run_manifest.json"
 if [[ -f "\$RUN_MANIFEST" ]]; then
   VIBE_PROJECT_GIT_HEAD="\$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1], encoding="utf-8"))["project_git_head"])' "\$RUN_MANIFEST")"
