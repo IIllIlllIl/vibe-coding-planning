@@ -280,6 +280,12 @@ class TestPermanentProviderErrors:
             "cost limit exceeded; insufficient balance wording from local report",
         )
 
+    def test_submitted_artifact_is_not_provider_failure(self):
+        raise_for_permanent_provider_error(
+            "Submitted",
+            "Use web.unauthorized when the authenticated user is absent.",
+        )
+
     def test_transient_rate_limit_is_not_permanent(self):
         raise_for_permanent_provider_error(
             "RateLimitError",

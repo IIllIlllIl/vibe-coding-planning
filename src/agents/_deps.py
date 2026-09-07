@@ -286,7 +286,11 @@ def raise_for_permanent_provider_error(
     retried and scored unresolved. Provider authentication, billing, and hard
     quota failures cannot be repaired by rerunning an instance.
     """
-    if exception_name == "LimitsExceeded":
+    # mini-swe-agent returns the submitted artifact as ``exception_message``
+    # for a successful ``Submitted`` exit.  That artifact can legitimately
+    # mention application concepts such as ``web.unauthorized``; it is not a
+    # provider exception and must never be classified from content markers.
+    if exception_name in {"Submitted", "LimitsExceeded"}:
         return
     normalized = f"{exception_name}: {exception_message}".lower()
     if any(marker in normalized for marker in _PERMANENT_PROVIDER_ERROR_MARKERS):

@@ -9,6 +9,7 @@ import pytest
 import yaml
 
 from src.optimization.hpc.task_batch import TaskFiles
+from src.optimization.checker import CheckerOutputContractError
 from src.swe_verified_pcce.config import load_swe_verified_pcce_config
 from src.swe_verified_pcce.controller import (
     _load_first_review_seed,
@@ -18,6 +19,7 @@ from src.swe_verified_pcce.controller import (
 from src.swe_verified_pcce.dataset import load_pcce_cases
 from src.swe_verified_pcce.hpc_executor import _case_dict, build_array_script
 from src.swe_verified_pcce.models import PCCECase
+from src.swe_verified_pcce.worker import _retry_disposition
 from src.swe_verified_pce.dataset import (
     canonical_image_ref,
     file_sha256,
@@ -32,6 +34,11 @@ from scripts.tools.freeze_swe_verified_pce_selection import freeze_selection
 from scripts.tools.freeze_pcce_rejected_first_reviews import (
     freeze_rejected_first_reviews,
 )
+
+
+def test_swe_verified_checker_contract_failure_retries_with_fresh_agent():
+    error = CheckerOutputContractError("extra data after submitted JSON")
+    assert _retry_disposition(error) == "retry_fresh_agent"
 
 
 def _stable(value: object) -> str:

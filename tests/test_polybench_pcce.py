@@ -12,6 +12,7 @@ import yaml
 
 from src.optimization.models import CheckerOutput, RepositoryEvidence
 from src.optimization.audit import text_sha256
+from src.optimization.checker import CheckerOutputContractError
 from src.optimization.hpc.task_batch import atomic_json
 from src.polybench_pcce.config import load_polybench_pcce_config
 from src.polybench_pcce.controller import _review_assignments, run_polybench_pcce
@@ -20,7 +21,7 @@ from src.polybench_pcce.evaluator_resume import _prepare as prepare_evaluator_re
 from src.polybench_pcce.models import PCCECase, PCReviewAssignment
 from src.polybench_pcce.runner import PolyBenchPCCERunner
 from src.polybench_pcce.runner import validate_pcce_checker_output
-from src.polybench_pcce.worker import run_task
+from src.polybench_pcce.worker import _retry_disposition, run_task
 from src.polybench_pcce.hpc_executor import _case_dict
 from src.polybench_pce.models import FrozenImage, PolyBenchPCECase
 from src.polybench_pce.evaluator_resume import load_evaluator_repair_subset
@@ -28,6 +29,11 @@ from src.polybench_pce.runner import checkpoint_identity
 
 
 ROOT = Path(__file__).resolve().parents[1]
+
+
+def test_checker_output_contract_failure_retries_with_fresh_agent():
+    error = CheckerOutputContractError("extra data after submitted JSON")
+    assert _retry_disposition(error) == "retry_fresh_agent"
 
 
 def test_issue_first_prompt_source_changes_only_revision_policy(tmp_path: Path):

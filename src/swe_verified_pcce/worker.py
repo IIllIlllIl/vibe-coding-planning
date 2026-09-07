@@ -28,12 +28,12 @@ def _retry_disposition(exc: BaseException) -> str:
         return str(explicit)
     if isinstance(exc, UnicodeError):
         return "retry_same_phase"
-    if isinstance(exc, (FatalError, ValueError, MemoryError)):
-        return "block_run"
     if isinstance(
         exc, (AgentTaskError, CheckerAgentTimeout, CheckerOutputContractError)
     ):
         return "retry_fresh_agent"
+    if isinstance(exc, (FatalError, ValueError, MemoryError)):
+        return "block_run"
     return "retry_same_phase"
 
 
