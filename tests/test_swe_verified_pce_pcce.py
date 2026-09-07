@@ -18,7 +18,11 @@ from src.swe_verified_pcce.controller import (
     run_swe_verified_pcce,
 )
 from src.swe_verified_pcce.dataset import load_pcce_cases
-from src.swe_verified_pcce.hpc_executor import _case_dict, build_array_script
+from src.swe_verified_pcce.hpc_executor import (
+    _case_dict,
+    build_array_script,
+    execution_semantic_sha256,
+)
 from src.swe_verified_pcce.models import PCCECase
 from src.swe_verified_pcce.worker import _retry_disposition
 from src.swe_verified_pce.dataset import (
@@ -74,6 +78,16 @@ def test_explicit_operational_migration_allows_only_semantic_code_hash(
         _allow_operational_semantic_migration(
             config, existing, {**proposed, "config_sha256": "changed"}
         )
+
+
+def test_operational_migration_preserves_frozen_task_fingerprint_semantic(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    prior = "c" * 64
+    monkeypatch.setenv(
+        "VIBE_OPERATIONAL_MIGRATION_FROM_PCCE_SEMANTIC_SHA256", prior
+    )
+    assert execution_semantic_sha256(SimpleNamespace()) == prior
 
 
 def _stable(value: object) -> str:

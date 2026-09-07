@@ -5,7 +5,9 @@ from __future__ import annotations
 import hashlib
 import json
 from dataclasses import replace
+import os
 from pathlib import Path
+import re
 import shlex
 from typing import Any, Sequence
 
@@ -72,6 +74,18 @@ def pcce_semantic_sha256(config: SWEVerifiedPCCEConfig) -> str:
             "task_attempts": config.hpc.max_task_attempts,
         }
     )
+
+
+def execution_semantic_sha256(config: SWEVerifiedPCCEConfig) -> str:
+    """Keep frozen task fingerprints stable during an audited code recovery."""
+    prior = os.environ.get(
+        "VIBE_OPERATIONAL_MIGRATION_FROM_PCCE_SEMANTIC_SHA256"
+    )
+    if prior is None or prior == "":
+        return pcce_semantic_sha256(config)
+    if not re.fullmatch(r"[0-9a-f]{64}", prior):
+        raise ValueError("invalid prior PCCE semantic SHA-256")
+    return prior
 
 
 def _case_dict(case: PCCECase, *, include_outcome: bool = True) -> dict[str, Any]:
@@ -166,7 +180,7 @@ class SWEVerifiedPCCEHPCExecutor:
         self.config = config
 
     def run_pc(self, assignments: Sequence[PCReviewAssignment]) -> list[dict[str, Any]]:
-        semantic = pcce_semantic_sha256(self.config)
+        semantic = execution_semantic_sha256(self.config)
         fingerprint = _stable(
             {
                 "schema": 1,
@@ -225,7 +239,7 @@ class SWEVerifiedPCCEHPCExecutor:
             {
                 "schema": 1,
                 "phase": "ce",
-                "semantic": pcce_semantic_sha256(self.config),
+                "semantic": execution_semantic_sha256(self.config),
                 "assignments": [
                     {
                         "instance_id": item.case.instance_id,
