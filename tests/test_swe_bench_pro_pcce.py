@@ -64,6 +64,16 @@ def test_pro_prompt_binding_only_changes_official_repository_path() -> None:
     assert {key: value.replace("/app", "/testbed") for key, value in pro.items()} == verified
 
 
+def test_pro_v2_prompt_binding_only_changes_official_repository_path() -> None:
+    verified = yaml.safe_load(
+        Path("configs/pcce_issue_first_revision_prompt_v2_20260908.yaml").read_text()
+    )["prompts"]
+    pro = yaml.safe_load(
+        Path("configs/pcce_issue_first_revision_prompt_pro_v2_20260908.yaml").read_text()
+    )["prompts"]
+    assert {key: value.replace("/app", "/testbed") for key, value in pro.items()} == verified
+
+
 def test_pro_pcce_uses_official_workspace_policy_and_rejects_history(tmp_path: Path) -> None:
     config = _config()
     case = load_pcce_cases(config)[0][0]

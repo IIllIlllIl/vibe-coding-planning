@@ -1,0 +1,49 @@
+{
+  "schema_version": 1,
+  "selection_id": "polybench-c5-prompt-v2-safe67-smoke5-v1-20260908",
+  "purpose": "Outcome-selected development smoke for the combined C5 guideline and v2 Checker/Revision-Planner protocol; not a holdout, effectiveness estimate, or prevalence sample",
+  "parent_analysis": "configs/frozen_rq2_analysis/rq2-c4-pcce-failure-analysis-v1-20260908/pcce_case_outcomes.jsonl",
+  "source_snapshot_id": "20260826_python99_cleanpce_depcache_03619730229d",
+  "source_manifest_sha256": "2125d88a208f7869a237a013f628798bf1851edf11b5388f499d0f5abefdac31",
+  "source_validation_sha256": "b3327cabefd57d103e4e70448dc15f5c72afd61a69ad9134274f9230de018cc0",
+  "source_pce_outcomes_sha256": "fd1a808b97c0afd31c83c85f2e39f19b652dd29a320969b9955230f7a64bc3f3",
+  "source_safe67_outcomes_sha256": "62b5ddc79c3270afeafc27a8ced9d19b70d0b673cefef0c0e217a700df2a23cd",
+  "c5_guideline_sha256": "34c2a670918df51642a4a2fe5a3669ee95f25e179604fc9fecee7a81e405a7bc",
+  "prompt_source_sha256": "0b5ce01b7238bcabf7516cb49aeb9c2f835c1731fc00f1a7089281dc8f7a8058",
+  "selection_policy": {
+    "required": [
+      "member of the frozen workspace-safe safe67 development analysis",
+      "PolyBench execution backend",
+      "paired original PCE outcome is UNRESOLVED",
+      "existing analysis identifies an initial-Checker or revision/later-Checker Plan-stage failure opportunity"
+    ],
+    "case_roles": {
+      "langchain-ai__langchain-20064": "initial Checker observed substring behavior but accepted a falsifiable causal claim",
+      "yt-dlp__yt-dlp-5195": "initial Checker accepted a Plan that omitted an adjacent assignment path",
+      "huggingface__transformers-27663": "revision independently reanalyzed the repository but introduced an ordinary-resize compatibility defect accepted by the later Checker",
+      "huggingface__transformers-28398": "revision retained an incompatible API contract accepted by the later Checker",
+      "huggingface__transformers-30899": "revision broadened fallback semantics and the later Checker missed the negative boundary"
+    },
+    "excluded_classes": [
+      "workspace-isolation-confounded cases",
+      "pure Code-Agent fidelity failures",
+      "evaluator or dependency failures"
+    ]
+  },
+  "selected_instance_ids": [
+    "langchain-ai__langchain-20064",
+    "yt-dlp__yt-dlp-5195",
+    "huggingface__transformers-27663",
+    "huggingface__transformers-28398",
+    "huggingface__transformers-30899"
+  ],
+  "smoke_success_contract": [
+    "all five cases reach terminal operational results",
+    "Checker and Revision Planner use C5 plus the v2 prompt authority",
+    "all Checker outputs satisfy the structured decision contract",
+    "rejected cases complete the configured memoryless review/revision flow",
+    "official evaluator results and raw trajectories are preserved",
+    "outcome improvement is not required for smoke success"
+  ],
+  "analysis_boundary": "Cases were deliberately selected using prior Checker, Planner, and evaluator failures. Results diagnose whether the combined prompt can exercise the intended mechanisms; they are not held-out evidence of effectiveness or generalization."
+}

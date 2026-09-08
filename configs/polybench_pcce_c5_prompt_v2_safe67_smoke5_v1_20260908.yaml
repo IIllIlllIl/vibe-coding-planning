@@ -1,0 +1,40 @@
+# Outcome-selected workspace-safe development smoke for the combined C5
+# guideline and v2 Checker/Revision-Planner prompt. This is not a holdout.
+mode: polybench_pcce
+purpose: behavioral_c5_prompt_v2_safe67_smoke5_development
+
+paths:
+  source_snapshot: output/SWE-PolyBench/polybench-pce-inputs/20260814_python113_v11_8c7d9485d1d0
+  image_manifest: output/SWE-PolyBench/polybench-pce-inputs/20260814_python113_v11_8c7d9485d1d0/images.json
+  validation_snapshot: output/SWE-PolyBench/polybench-guideline-validation-datasets/20260826_python99_cleanpce_depcache_03619730229d
+  pce_outcomes: output/SWE-PolyBench/polybench-guideline-validation-datasets/20260826_python99_cleanpce_depcache_03619730229d/paired_pce_outcomes.jsonl
+  selection_manifest: configs/frozen_polybench_pcce_development/c5-prompt-v2-safe67-smoke5-v1-20260908.json
+  guideline: configs/development_guidelines/behavioral_c5_pcce_v1.md
+  prompt_source_config: configs/pcce_issue_first_revision_prompt_v2_20260908.yaml
+  pce_runtime_config: configs/polybench_pce_hpc_formal_clean_20260825.yaml
+  checker_runtime_config: configs/gepa_verified_rules.yaml
+  run_dir: output/SWE-PolyBench/polybench-pcce-runs/development/c5-prompt-v2-safe67-smoke5-v1-20260908
+
+pcce:
+  guideline_label: behavioral_c5_prompt_v2_v1
+  execution_mode: full_pcce
+  validation_file: validation.jsonl
+  max_review_rejections: 3
+  instance_ids: []
+
+hpc:
+  submit: true
+  partition: batch
+  cpus_per_task: 1
+  mem: 4G
+  time: "00:45:00"
+  poll_interval_seconds: 300
+  task_output_grace_seconds: 300
+  missing_task_grace_seconds: 600
+  max_task_attempts: 3
+  remote_env_file: ~/.config/vibe-coding-planning/deepseek.env
+  python_module: lang/Python/3.11
+  container_module: tools/Apptainer
+  python_bin: python3
+  job_name_prefix: polybench-pcce-c5-prompt-v2-smoke5-v1-20260908
+  worker_config_path: configs/polybench_pcce_c5_prompt_v2_safe67_smoke5_v1_20260908.yaml

@@ -63,6 +63,32 @@ def test_issue_first_prompt_source_changes_only_revision_policy(tmp_path: Path):
     )
 
 
+def test_issue_first_v2_adds_checker_grounding_and_revision_contract_review(
+    tmp_path: Path,
+):
+    original_path = (
+        ROOT / "configs/polybench_pcce_c4_balanced20_full_v1_20260903.yaml"
+    )
+    payload = yaml.safe_load(original_path.read_text(encoding="utf-8"))
+    payload["paths"]["prompt_source_config"] = (
+        "configs/pcce_issue_first_revision_prompt_v2_20260908.yaml"
+    )
+    payload.pop("prompts")
+    candidate_path = tmp_path / "polybench-pcce-issue-first-v2.yaml"
+    candidate_path.write_text(yaml.safe_dump(payload), encoding="utf-8")
+
+    candidate = load_polybench_pcce_config(candidate_path, require_api_keys=False)
+
+    assert "complete submitted Plan" in candidate.checker_prompt
+    assert "consistent with the repository observations" in candidate.checker_prompt
+    assert "rather than from the" in candidate.plan_revision_prompt
+    assert "Checker\'s" in candidate.plan_revision_prompt
+    assert "concern list" in candidate.plan_revision_prompt
+    assert "materially affected" in candidate.plan_revision_prompt
+    assert "consumers" in candidate.plan_revision_prompt
+    assert "negative-path tests" in candidate.plan_revision_prompt
+
+
 def test_c5_repair3_config_freezes_outcome_selected_development_cases() -> None:
     config = load_polybench_pcce_config(
         ROOT / "configs/polybench_pcce_c5_repair3_v1_20260908.yaml",
@@ -91,6 +117,40 @@ def test_c5_repair3_config_freezes_outcome_selected_development_cases() -> None:
     assert identities["selection_manifest_sha256"] == hashlib.sha256(
         config.selection_manifest.read_bytes()  # type: ignore[union-attr]
     ).hexdigest()
+
+
+def test_c5_prompt_v2_safe67_smoke_freezes_five_plan_stage_failures() -> None:
+    config = load_polybench_pcce_config(
+        ROOT
+        / "configs/polybench_pcce_c5_prompt_v2_safe67_smoke5_v1_20260908.yaml",
+        require_api_keys=False,
+    )
+    cases, identities = load_pcce_cases(config)
+
+    assert config.execution_mode == "full_pcce"
+    assert config.max_review_rejections == 3
+    assert config.guideline_label == "behavioral_c5_prompt_v2_v1"
+    assert config.instance_ids == (
+        "langchain-ai__langchain-20064",
+        "yt-dlp__yt-dlp-5195",
+        "huggingface__transformers-27663",
+        "huggingface__transformers-28398",
+        "huggingface__transformers-30899",
+    )
+    assert len(cases) == len(config.instance_ids)
+    assert {case.instance_id for case in cases} == set(config.instance_ids)
+    assert all(not case.baseline_resolved for case in cases)
+    assert "complete submitted Plan" in config.checker_prompt
+    assert "repository observations" in config.checker_prompt
+    assert "rather than from the" in config.plan_revision_prompt
+    assert "negative-path tests" in config.plan_revision_prompt
+    assert identities["selection_manifest_sha256"] == hashlib.sha256(
+        config.selection_manifest.read_bytes()  # type: ignore[union-attr]
+    ).hexdigest()
+    assert config.hpc.cpus_per_task == 1
+    assert config.hpc.mem == "4G"
+    assert config.hpc.time == "00:45:00"
+    assert config.hpc.max_task_attempts == 3
 
 
 def _source(instance_id: str) -> PolyBenchPCECase:
