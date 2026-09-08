@@ -62,6 +62,36 @@ def test_issue_first_prompt_source_changes_only_revision_policy(tmp_path: Path):
     )
 
 
+def test_c5_repair3_config_freezes_outcome_selected_development_cases() -> None:
+    config = load_polybench_pcce_config(
+        ROOT / "configs/polybench_pcce_c5_repair3_v1_20260908.yaml",
+        require_api_keys=False,
+    )
+    cases, identities = load_pcce_cases(config)
+
+    assert config.execution_mode == "full_pcce"
+    assert config.max_review_rejections == 3
+    assert config.guideline_label == "behavioral_c5_pcce_v1"
+    assert config.instance_ids == (
+        "huggingface__transformers-27663",
+        "huggingface__transformers-28398",
+        "huggingface__transformers-30899",
+    )
+    assert [case.instance_id for case in cases] == list(config.instance_ids)
+    assert all(not case.baseline_resolved for case in cases)
+    assert "The original issue is the objective" in config.plan_revision_prompt
+    assert "Distinguish an identifiable Plan" in config.guideline_path.read_text(
+        encoding="utf-8"
+    )
+    assert config.hpc.cpus_per_task == 1
+    assert config.hpc.mem == "4G"
+    assert config.hpc.time == "00:45:00"
+    assert config.hpc.max_task_attempts == 3
+    assert identities["selection_manifest_sha256"] == hashlib.sha256(
+        config.selection_manifest.read_bytes()  # type: ignore[union-attr]
+    ).hexdigest()
+
+
 def _source(instance_id: str) -> PolyBenchPCECase:
     return PolyBenchPCECase(
         instance_id=instance_id,

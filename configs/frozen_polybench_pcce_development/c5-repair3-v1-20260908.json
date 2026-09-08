@@ -1,0 +1,29 @@
+{
+  "schema_version": 1,
+  "selection_id": "polybench-c5-pcce-repair3-v1-20260908",
+  "purpose": "Outcome-selected development diagnostic of the revised guideline; not a holdout, effectiveness estimate, or prevalence sample",
+  "parent_selection": "configs/frozen_polybench_pc_quick/c4-balanced20-v1-20260831.json",
+  "source_snapshot_id": "20260826_python99_cleanpce_depcache_03619730229d",
+  "source_manifest_sha256": "2125d88a208f7869a237a013f628798bf1851edf11b5388f499d0f5abefdac31",
+  "source_validation_sha256": "b3327cabefd57d103e4e70448dc15f5c72afd61a69ad9134274f9230de018cc0",
+  "source_pce_outcomes_sha256": "fd1a808b97c0afd31c83c85f2e39f19b652dd29a320969b9955230f7a64bc3f3",
+  "source_c4_guideline_sha256": "1e7c68a2c14175dda9a9a8bb16455061c50b9961aafb6eedc030cdbef21e1ebd",
+  "source_safe67_outcomes_sha256": "62b5ddc79c3270afeafc27a8ced9d19b70d0b673cefef0c0e217a700df2a23cd",
+  "selection_policy": {
+    "required": [
+      "member of the frozen PolyBench balanced20 development selection",
+      "workspace-safe in the frozen safe67 analysis",
+      "paired original PCE outcome is UNRESOLVED",
+      "C4 Review-1 decision is DO_NOT_ACCEPT"
+    ],
+    "excluded": {
+      "huggingface__transformers-29675": "official evaluator could not load an uncached model with network disabled and did not exercise the target behavior"
+    }
+  },
+  "selected_instance_ids": [
+    "huggingface__transformers-27663",
+    "huggingface__transformers-28398",
+    "huggingface__transformers-30899"
+  ],
+  "analysis_boundary": "These cases were selected using prior C4 and evaluator outcomes. Results are mechanism diagnostics only and cannot be reported as held-out generalization evidence."
+}
