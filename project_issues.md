@@ -121,6 +121,15 @@ Current decisions are:
    3/3 cases, preserved OpenLibrary state, produced all nine phase baselines,
    and observed no Agent Git-history access. Quick25 is operationally
    authorized; latent history visibility remains a reported limitation.
+9. Pro C4 PCCE is paused after all three review waves. Its CE wave retained 15
+   terminal evaluator outputs at the pause boundary, but eight OpenLibrary
+   workspaces exhausted quota while extracting their large prepared
+   `node_modules` trees, and failure-artifact writes hit the same quota. The
+   local supervisor is stopped and already-submitted work was not cancelled.
+   Before any resume, re-inventory the final CE state, move only disposable
+   phase workspaces to a measured quota-safe location, smoke one affected
+   OpenLibrary case, and preserve the existing semantic identity and completed
+   checkpoints. Operational failures must not be counted as unresolved.
 
 ## Known validity constraints
 

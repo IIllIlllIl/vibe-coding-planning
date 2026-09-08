@@ -1,6 +1,6 @@
 # SWE-bench Pro Quick25 PCE
 
-> Authority: Pro quick25 acquisition, completed PCE, and additive PCCE preparation
+> Authority: Pro quick25 acquisition, completed PCE, and paused PCCE recovery
 >
 > Last reviewed: 2026-09-07
 
@@ -79,6 +79,57 @@ shared Checker runtime still pointed at SWE-Verified's `/testbed`; all Pro SIFs
 use `/app`. That failed identity is retained as operational evidence. The v2
 replacement changes only this dataset-specific workdir binding and leaves its
 membership, prompts, review policy, and resource limits unchanged.
+
+## Paused C4 PCCE state
+
+The authorized C4 issue-first quick25 run uses the immutable identity
+`behavioral-c4-issue-first-v1-20260907`, config
+`configs/swe_bench_pro_pcce_quick25_c4_issue_first_v1_20260907.yaml`, and
+remote run root
+`/scratch/users/twang/vibe-coding-planning/swe-bench-pro-pcce-run-state/output/SWE-bench_Pro/pcce-runs/quick25/behavioral-c4-issue-first-v1-20260907`.
+Its three review waves completed. The final CE wave was then paused as an
+operationally incomplete development run; it is not a reportable paired PCCE
+result.
+
+At the pause boundary, 15 cases had terminal official evaluations (13 resolved,
+2 unresolved), one qutebrowser case had a `blocking_failed` output without an
+evaluator result, one Ansible CE worker was still completing its already-
+submitted allocation, and eight OpenLibrary cases had no Code/Evaluate output.
+The completed checkpoints and raw evidence remain durable and must not be
+rerun or rewritten when this identity is resumed. Because the last submitted
+allocation was intentionally allowed to finish after the local supervisor was
+stopped, its final checkpoint must be re-inventoried before calculating the
+exact resume set.
+
+All eight common OpenLibrary failures occurred while extracting the official
+workspace's large `node_modules` tree and reported `Disk quota exceeded`.
+Writing the worker's own `failure.json.tmp` then hit the same quota, so the
+absence of failure artifacts is not evidence that these workers succeeded.
+Slurm accounting and stderr are the authority for this failure. These cases
+are operationally incomplete, never unresolved.
+
+The local automatic supervisor session
+`swe-bench-pro-pcce-c4-final-recovery-20260907` was stopped on 2026-09-07 so
+that the paused path cannot consume two further attempts with the same storage
+failure. No submitted Slurm task was cancelled. Before resuming Pro:
+
+1. inventory the final state left by job `5863255` and preserve every terminal
+   CE output;
+2. measure the relevant user quota and locate both official-workspace
+   extraction and failure-artifact writes;
+3. move only disposable phase workspaces to a quota-suitable node-local or
+   scratch location, while keeping durable checkpoints in the current run;
+4. regression-smoke one affected OpenLibrary case and verify exact official-SIF
+   workspace semantics, cleanup, and durable failure reporting;
+5. resume only the operationally incomplete task indices under the same
+   semantic run identity and three-attempt contract.
+
+This storage correction must not change membership, PCE plans, C4, the
+issue-first revision prompt, Agent/evaluator visibility, official evaluator,
+or classification semantics. Pro is currently deprioritized because its
+official images contain large prepared workspaces and latent future Git history,
+making it substantially less operationally tractable than the current
+SWE-chat/PolyBench analysis path.
 
 ## Official image boundary and history audit
 
