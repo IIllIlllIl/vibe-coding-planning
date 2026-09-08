@@ -41,6 +41,8 @@ offline GEPA, and production failures:
 | [`knowledge/methodology-lessons.md`](knowledge/methodology-lessons.md) | Comparing Online GEPA with PCT, PCC, or offline GEPA |
 | [`knowledge/offline-pcce-stage-findings.md`](knowledge/offline-pcce-stage-findings.md) | Designing the next Offline guideline evaluation from the completed clean PolyBench Seed/C2 PCCE evidence |
 | [`knowledge/behavioral-gepa-initial-findings.md`](knowledge/behavioral-gepa-initial-findings.md) | Designing the next experiment from the completed first Behavioral search and C4 PolyBench PC-only diagnostic |
+| [`knowledge/rq1-plan-deficiency-motivation.md`](knowledge/rq1-plan-deficiency-motivation.md) | Using two SWE-chat autonomous-recovery cases to motivate the distinction between Plan deficiency and Plan blocker, with explicit correctness limits |
+| [`knowledge/rq2-c4-safe67-deficiency-reactions.md`](knowledge/rq2-c4-safe67-deficiency-reactions.md) | Reviewing the frozen C4-derived taxonomy and deficiency-instance R0–R3/RX annotations after workspace-confounded cases are excluded |
 
 ## Reference
 

@@ -1,0 +1,29 @@
+{
+  "schema_version": 1,
+  "identity": "rq2-c4-safe67-deficiency-reactions-v1-20260908",
+  "analysis_boundary": "C4 review_01 plus paired original-PCE first execution only; no later PCCE rounds, revised Plans, or post-intervention Code/CE",
+  "source_case_count": 70,
+  "workspace_excluded_case_count": 3,
+  "safe_case_count": 67,
+  "safe_c4_rejected_case_count": 21,
+  "deficiency_instance_count": 39,
+  "reaction_counts": {"R0":7,"R1":12,"R2":8,"R3":11,"RX":1},
+  "inputs": {
+    "c4_path": "configs/frozen_guidelines/behavioral-formal-c4-v1-20260831/c4.md",
+    "c4_sha256": "1e7c68a2c14175dda9a9a8bb16455061c50b9961aafb6eedc030cdbef21e1ebd",
+    "workspace_exclusions_path": "configs/frozen_rq2_analysis/workspace-isolation-exclusions-v1-20260908.json",
+    "workspace_exclusions_sha256": "5984e9ea024be7358b3b9a1f09923fa87e25adcaf844f8c6655292b6cc11d083",
+    "verified_pce_sha256": "1f1e4420ec160d89a144a669d6cfc27ba1b131f35f6b76d59cf496c80650e753",
+    "verified_c4_review_01_sha256": "b2cb06ead5561b9f0aecc456aebb044ea4a5fc5e7e866fdfa35910aa0972e1d8",
+    "polybench_c4_review_01_sha256": "53dfc877fbadf8b142109e0cfb6d6d945e629f65956caff3b417fcf821353b3a",
+    "polybench_paired_pce_sha256": "fd1a808b97c0afd31c83c85f2e39f19b652dd29a320969b9955230f7a64bc3f3"
+  },
+  "outputs": {
+    "taxonomy_path": "configs/frozen_rq2_analysis/rq2-c4-safe67-reactions-v1-20260908/taxonomy.json",
+    "taxonomy_sha256": "a721e404f5fda3ce269db40a0842dd2081cc966227b5f75f314cdcd6e2969a1e",
+    "annotations_path": "configs/frozen_rq2_analysis/rq2-c4-safe67-reactions-v1-20260908/annotations.jsonl",
+    "annotations_sha256": "ca290e194ec3703c05643a920a0ec62e08fa3d1bf4d85764a16e821da237f7c3",
+    "report_path": "docs/knowledge/rq2-c4-safe67-deficiency-reactions.md"
+  },
+  "interpretation_boundary": "Descriptive feasibility annotations only; R labels are not normative acceptance rules and counts are not prevalence estimates."
+}

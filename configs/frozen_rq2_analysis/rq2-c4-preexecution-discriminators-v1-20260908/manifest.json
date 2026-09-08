@@ -1,0 +1,18 @@
+{
+  "schema_version": 1,
+  "identity": "rq2-c4-preexecution-discriminators-v1-20260908",
+  "source_annotation_identity": "rq2-c4-safe67-deficiency-reactions-v1-20260908",
+  "source_annotation_path": "configs/frozen_rq2_analysis/rq2-c4-safe67-reactions-v1-20260908/annotations.jsonl",
+  "source_taxonomy_path": "configs/frozen_rq2_analysis/rq2-c4-safe67-reactions-v1-20260908/taxonomy.json",
+  "safe_universe_cases": 67,
+  "source_concerns": 39,
+  "true_deficiency_features": 38,
+  "excluded_rx": 1,
+  "evidence_boundary": "Task, P1, decision-time repository state/observations, C4 review_01 and frozen taxonomy only. R labels are contrast labels; coder trajectory, patch and evaluator evidence are not feature inputs.",
+  "outputs": {
+    "features": "configs/frozen_rq2_analysis/rq2-c4-preexecution-discriminators-v1-20260908/features.jsonl",
+    "discriminators": "configs/frozen_rq2_analysis/rq2-c4-preexecution-discriminators-v1-20260908/discriminators.json",
+    "report": "docs/knowledge/rq2-c4-preexecution-discriminators.md"
+  },
+  "interpretation_boundary": "Exploratory contrastive analysis; no normative acceptance mapping, causal estimate, prevalence claim, or C4 revision."
+}

@@ -1,0 +1,33 @@
+{
+  "schema_version": 1,
+  "identity": "rq2-first-round-pc-only-workspace-isolation-exclusions-v1-20260908",
+  "scope": "RQ2 analyses joining a historical PCE coder execution to an independently executed C4 first review",
+  "source_universe": {
+    "case_count": 70,
+    "inventory_sha256": "a9c833e8bcd700c1f33f23e8b6e6408404eeae1f30a646f3dae0b259e1036ab9",
+    "verified_pce_sha256": "1f1e4420ec160d89a144a669d6cfc27ba1b131f35f6b76d59cf496c80650e753",
+    "verified_c4_review_01_sha256": "b2cb06ead5561b9f0aecc456aebb044ea4a5fc5e7e866fdfa35910aa0972e1d8",
+    "polybench_c4_review_01_sha256": "53dfc877fbadf8b142109e0cfb6d6d945e629f65956caff3b417fcf821353b3a",
+    "polybench_paired_pce_sha256": "fd1a808b97c0afd31c83c85f2e39f19b652dd29a320969b9955230f7a64bc3f3"
+  },
+  "policy": "Preserve frozen source evidence; exclude these cases only from downstream analyses that interpret the historical PCE execution as an isolated Plan-to-Code run.",
+  "reason_code": "WORKSPACE_ISOLATION_CONFOUNDED",
+  "excluded_cases": [
+    {
+      "dataset": "PolyBench",
+      "instance_id": "huggingface__transformers-20136",
+      "evidence": "Planner created /tmp/pr20136.diff and the historical coder directly reused it; the independent C4 Checker could not see that file."
+    },
+    {
+      "dataset": "SWE-bench Verified",
+      "instance_id": "pylint-dev__pylint-4970",
+      "evidence": "Planner created /tmp/shim/sitecustomize.py and the historical coder directly reused the shim."
+    },
+    {
+      "dataset": "SWE-bench Verified",
+      "instance_id": "django__django-16136",
+      "evidence": "Planner created /tmp/repro2.py and the historical coder directly reused the reproduction script."
+    }
+  ],
+  "clean_analysis_case_count": 67
+}

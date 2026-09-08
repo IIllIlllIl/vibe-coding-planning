@@ -52,6 +52,7 @@ tracked does not authorize its execution.
 | `frozen_guidelines/behavioral-neutral-seed-v1/` | Exact neutral Behavioral guideline and hash manifest for the paired comparison. |
 | `frozen_guidelines/behavioral-neutral-seed-c4-paired-v1-20260904/` | Exact immutable two-guideline bundle for the prepared full cleaned-482 PC-only comparison. |
 | `frozen_swe_verified_pc_only/20260904_clean482_historical-round1_3a18b1e4f9ed/` | Compact immutable ASI-free projection of the cleaned historical Round-1 cases; 482 labels are controller-only and the Checker sees only issue, plan, and repository identity. |
+| `frozen_rq2_analysis/` | Frozen scoped exclusion and manual annotation authorities for RQ2 analysis; preserves the original 70-case sources while excluding three workspace-confounded PCE executions from the 67-case clean downstream analysis. |
 | `swe_verified_pc_checker_only_runtime_v1_20260904.yaml` | Shared historical-resolution Checker runtime: DeepSeek V4 Flash, no Agent step/cost/deadline cap, three attempts, and one 1 CPU / 4G / 45-minute Slurm worker per task. Reflection/search fields are parser-only and are not executed. |
 | `swe_verified_pc_checker_only_seed_c4_clean482_v1_20260904.yaml` | Prepared, unlaunched paired Seed/C4 PC-only diagnostic over all 482 cleaned historical Round-1 plans. It performs no GEPA, Reflection, Planner, Code, or Evaluate phase. |
 | `swe_verified_pc_checker_only_seed_c4_clean482_supervisor_v1_20260904.yaml` | Bounded supervisor identity for the prepared 964-task diagnostic; presence does not authorize launch. |

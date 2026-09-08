@@ -1,0 +1,22 @@
+{
+  "schema_version": 1,
+  "identity": "rq2-c4-blind-validation-v1-20260908",
+  "source_annotation_identity": "rq2-c4-safe67-deficiency-reactions-v1-20260908",
+  "true_deficiency_instances": 38,
+  "excluded_rx": ["django__django-15252/D1"],
+  "procedure": "A no-reaction decision-time bundle was frozen; a fresh-context independent annotator read only that bundle and the fixed PD definitions; blind_preexecution_features.jsonl was written and hashed before frozen R labels were joined by the primary analyst.",
+  "blind_input": {
+    "path": "configs/frozen_rq2_analysis/rq2-c4-blind-validation-v1-20260908/blind_input.jsonl",
+    "sha256": "1b08c30770e1ee688b32b45fe4455695517d179a550522d89598e820953771b0"
+  },
+  "blind_annotations": {
+    "path": "configs/frozen_rq2_analysis/rq2-c4-blind-validation-v1-20260908/blind_preexecution_features.jsonl",
+    "sha256": "865027af85cf48b1397b8114f437d19a2d93879ef4a1fdd6ae079b0eccb30957"
+  },
+  "important_limitations": [
+    "The independent annotator was blind to downstream R labels and prior PD annotations, but the deficiency descriptions and C4 review evidence were fixed inputs as required.",
+    "This is one independent annotation pass, not inter-rater reliability measurement.",
+    "Multiple deficiency instances from one case may be causally linked and are not independent samples.",
+    "Reaction labels were joined only after the blind artifact hash was fixed; blind PD values were not revised after reveal."
+  ]
+}

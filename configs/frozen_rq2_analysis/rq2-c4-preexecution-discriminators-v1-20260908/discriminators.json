@@ -1,0 +1,107 @@
+{
+  "schema_version": 1,
+  "identity": "rq2-c4-preexecution-discriminators-v1-20260908",
+  "source_annotation_identity": "rq2-c4-safe67-deficiency-reactions-v1-20260908",
+  "analysis_unit_count": 38,
+  "excluded_from_contrast": [{"case_id":"django__django-15252","deficiency_id":"D1","reason":"NOT_PLAN_DEFICIENCY_RX"}],
+  "candidate_discriminators": [
+    {
+      "id": "PD1",
+      "name": "Core-strategy preservation under correction",
+      "definition": "Whether correcting the deficiency leaves the Plan's principal mechanism and target path intact, rather than requiring a new causal account, target, or design.",
+      "supported_categories": ["E1","E2","E3","C2","C3"],
+      "r1_evidence": ["scikit-learn__scikit-learn-10908/D1","pylint-dev__pylint-6386/D1","sympy__sympy-24443/D1","keras-team__keras-19838/D1"],
+      "r2_r3_evidence": ["astropy__astropy-14096/D1","matplotlib__matplotlib-21568/D1","pylint-dev__pylint-7080/D1","huggingface__transformers-28398/D1","sympy__sympy-13798/D1"],
+      "exceptions": ["R0 cases have no observed recovery and therefore cannot validate recoverability."],
+      "separates": ["R1_vs_R2","R1_vs_R3"],
+      "confidence": "HIGH"
+    },
+    {
+      "id": "PD2",
+      "name": "Bounded, uniquely recoverable repository fact",
+      "definition": "The correction is determined by a small, explicit repository contract such as one symbol definition, signature, adjacent caller, tensor shape, or existing helper, with little design choice.",
+      "supported_categories": ["E1","E3","S3","C2","C3","S4"],
+      "r1_evidence": ["scikit-learn__scikit-learn-10908/D1","django__django-10973/D1","pylint-dev__pylint-6386/D1","django__django-15127/D1","sympy__sympy-24443/D1"],
+      "r2_r3_evidence": ["matplotlib__matplotlib-21568/D1","huggingface__transformers-28398/D1","huggingface__transformers-30899/D1"],
+      "exceptions": ["Direct falsifiability alone is insufficient: several R2/R3 core-mechanism defects were also directly falsifiable."],
+      "separates": ["R1_vs_R2","R1_vs_R3"],
+      "confidence": "HIGH"
+    },
+    {
+      "id": "PD3",
+      "name": "Pre-bounded blast radius",
+      "definition": "P1 and decision-time repository evidence identify the materially affected consumers or show that the correction is confined to one local contract.",
+      "supported_categories": ["S1","S4","C3","E1"],
+      "r1_evidence": ["django__django-10973/D2","pylint-dev__pylint-6386/D2","yt-dlp__yt-dlp-4841/D2"],
+      "r2_r3_evidence": ["psf__requests-6028/D2","huggingface__transformers-27663/D2","huggingface__transformers-29675/D1","django__django-15563/D2"],
+      "exceptions": ["scikit-learn__scikit-learn-10908/D2 and yt-dlp__yt-dlp-4841/D1 are R0 censored shared-impact cases; they do not establish cheap recovery."],
+      "separates": ["R1_vs_R3","R1_vs_R2"],
+      "confidence": "HIGH"
+    },
+    {
+      "id": "PD4",
+      "name": "Diagnostic reproduction discriminates the reported failure",
+      "definition": "A proposed pre-execution reproduction or test fails on the base state for the relevant reason and can distinguish candidate mechanisms, rather than already passing or exercising another path.",
+      "supported_categories": ["E2","C2","C3","E3"],
+      "r1_evidence": ["keras-team__keras-19838/D1","sympy__sympy-24443/D1"],
+      "r2_r3_evidence": ["pylint-dev__pylint-7080/D1","pylint-dev__pylint-7080/D2","django__django-15563/D2","sympy__sympy-13798/D1","huggingface__transformers-27663/D1"],
+      "exceptions": ["Some R1 corrections required adding a missing direct test, so deficient validation does not by itself imply substantial recovery."],
+      "separates": ["R1_vs_R2","R1_vs_R3"],
+      "confidence": "MODERATE"
+    },
+    {
+      "id": "PD5",
+      "name": "Central choice closure",
+      "definition": "P1 commits to a coherent behavior for a central branch or external contract, instead of leaving mutually incompatible or causally necessary choices unresolved.",
+      "supported_categories": ["C2","E2","S4"],
+      "r1_evidence": ["scikit-learn__scikit-learn-10297/D1"],
+      "r2_r3_evidence": ["django__django-15563/D1","sympy__sympy-13798/D1","huggingface__transformers-28398/D2"],
+      "exceptions": ["Only four primary C2 observations exist; this is a strong within-C2 pattern but sparse cross-category evidence."],
+      "separates": ["R1_vs_R2","R1_vs_R3"],
+      "confidence": "MODERATE"
+    }
+  ],
+  "cross_category_principles": [
+    {
+      "id": "CP1",
+      "name": "Correction topology",
+      "definition": "Local substitution within an intact causal strategy contrasts with correction that relocates the failure boundary or changes the mechanism.",
+      "categories": ["E1","E2","E3","C2","C3"],
+      "confidence": "HIGH",
+      "later_refinement_suitability": "PROMISING_CANDIDATE"
+    },
+    {
+      "id": "CP2",
+      "name": "Evidence-to-correction determinacy",
+      "definition": "A unique answer exposed by a routine lookup contrasts with evidence that only disproves P1 and leaves substantial diagnosis or design work.",
+      "categories": ["E1","E2","E3","S3","C2"],
+      "confidence": "HIGH",
+      "later_refinement_suitability": "PROMISING_CANDIDATE"
+    },
+    {
+      "id": "CP3",
+      "name": "Risk-surface boundedness",
+      "definition": "A local or enumerated contract contrasts with a shared, cross-cutting, or external surface whose consumers and compatibility obligations are unbounded in P1.",
+      "categories": ["S1","S4","C3","E1"],
+      "confidence": "HIGH",
+      "later_refinement_suitability": "PROMISING_CANDIDATE"
+    },
+    {
+      "id": "CP4",
+      "name": "Pre-execution falsification quality",
+      "definition": "A discriminating base-state reproduction narrows recovery; a passing or path-mismatched test leaves diagnosis unresolved.",
+      "categories": ["E2","E3","C2","C3"],
+      "confidence": "MODERATE",
+      "later_refinement_suitability": "CANDIDATE_REQUIRING_MORE_CASES"
+    }
+  ],
+  "rx_safeguard_candidate": {
+    "case_id": "django__django-15252",
+    "deficiency_id": "D1",
+    "failure_mode": "The Checker quoted a function signature containing plan=None, then concluded that plan=[] was an invalid or nonexistent keyword argument.",
+    "minimal_guardrail": "Before relying on a repository fact in a rejection, check that the conclusion is logically consistent with the cited observation and do not report an unexecuted lookup as observed evidence.",
+    "changes_search_strategy": false,
+    "status": "CANDIDATE_SAFEGUARD_ONLY",
+    "reason": "One confirmed case supports a generic consistency check, not a hard new decision rule."
+  }
+}

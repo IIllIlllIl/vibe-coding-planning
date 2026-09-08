@@ -1,0 +1,34 @@
+{
+  "schema_version": 1,
+  "identity": "rq2-c4-pcce-failure-analysis-v1-20260908",
+  "purpose": "Development-set diagnosis of the current C4-based PCCE workflow; no C4 refinement or RQ3 evaluation",
+  "source_universe": 70,
+  "workspace_exclusions": [
+    "huggingface__transformers-20136",
+    "pylint-dev__pylint-4970",
+    "django__django-16136"
+  ],
+  "safe_universe": 67,
+  "safe_c4_rejected": 21,
+  "reference_concerns": 39,
+  "true_deficiencies": 38,
+  "important_boundary": "The 39 concern boundaries were induced from C4 review_01 itself. Concern coverage measures whether those known C4 concerns reached Planner-facing revision_feedback; it cannot estimate recall against all true P1 deficiencies.",
+  "inputs": {
+    "safe_annotations_sha256": "ca290e194ec3703c05643a920a0ec62e08fa3d1bf4d85764a16e821da237f7c3",
+    "verified_pcce_outcomes_sha256": "db381b8a558375818eacc24aca171358a81d5ad84c91e529da90d437d2da8f04",
+    "verified_review_01_sha256": "b2cb06ead5561b9f0aecc456aebb044ea4a5fc5e7e866fdfa35910aa0972e1d8",
+    "verified_review_02_sha256": "716e4ee2ff52d9da55442d1c6e425019d14bb3c2838fc5b9890ec6d652bd8316",
+    "verified_review_03_sha256": "f08e775a0ab6f0b280eebd90eaded67b0c2471915fd457637bd7ec84bb16b15b",
+    "polybench_pcce_outcomes_sha256": "e7fb544f866b5ae4de32888ae737d16854158a9e8c1c8d3bcd9a254793e082e3",
+    "polybench_review_01_sha256": "53dfc877fbadf8b142109e0cfb6d6d945e629f65956caff3b417fcf821353b3a",
+    "polybench_review_02_sha256": "4666b3c76bf594b41928ae46173f742921b29685471fe1868950ef901ea16c5f"
+  },
+  "outputs": {
+    "pcce_case_outcomes.jsonl": "62b5ddc79c3270afeafc27a8ced9d19b70d0b673cefef0c0e217a700df2a23cd",
+    "pcce_concern_coverage.jsonl": "73a8efca90d71dd48e93c7e9cff93151df1aa07ab3de028a532078417a6fa290",
+    "pcce_revision_trace.jsonl": "6bc40b2df583f3ac273baa749e75a716b2e6ccb07c281f340ff92889553d8356",
+    "pcce_anchoring_audit.jsonl": "3634ee4300a5c5443feeb6686a34a88b04b70657356c8fdacca9a102ab899381",
+    "pcce_failure_attribution.jsonl": "c121a301cc14c844f5c169c68badb20644f2a9bf83be8d1f1ddc1db8cf42cc32"
+  },
+  "development_set_boundary": "These 67 cases may be used for mechanism discovery and later C4+ development, but not for the main RQ3 evaluation of that derived workflow."
+}
