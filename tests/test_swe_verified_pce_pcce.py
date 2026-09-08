@@ -35,6 +35,8 @@ from src.swe_verified_pce.evaluator import _apply_patch, _terminal
 from src.swe_verified_pce.hpc_executor import recover_exhausted_evaluator_timeout
 from src.swe_verified_pce.models import SWEVerifiedPCECase
 from src.swe_verified_pce.runner import checkpoint_identity
+from src.swe_verified_pce.runner import SWEVerifiedPCERunner
+from src.swe_verified_pcce.runner import SWEVerifiedPCCERunner
 from scripts.tools.freeze_swe_verified_pce_selection import freeze_selection
 from scripts.tools.freeze_pcce_rejected_first_reviews import (
     freeze_rejected_first_reviews,
@@ -44,6 +46,52 @@ from scripts.tools.freeze_pcce_rejected_first_reviews import (
 def test_swe_verified_checker_contract_failure_retries_with_fresh_agent():
     error = CheckerOutputContractError("extra data after submitted JSON")
     assert _retry_disposition(error) == "retry_fresh_agent"
+
+
+def test_swe_verified_agent_environments_isolate_tmp(tmp_path, monkeypatch):
+    pce_observed = {}
+    pcce_observed = {}
+
+    class FakePCEEnvironment:
+        def __init__(self, **kwargs):
+            pce_observed.update(kwargs)
+
+    monkeypatch.setattr(
+        "src.swe_verified_pce.runner.ApptainerEnvironment", FakePCEEnvironment
+    )
+    pce = object.__new__(SWEVerifiedPCERunner)
+    pce.config = SimpleNamespace(
+        docker=SimpleNamespace(workdir="/testbed"),
+        container=SimpleNamespace(sif_cache_dir=tmp_path, writable_tmpfs=True),
+    )
+    pce.capacity_window = SimpleNamespace()
+    source = SimpleNamespace(image=SimpleNamespace(requested_ref="image:v1"))
+    pce._environment(source, timeout=10, host_workdir=tmp_path / "plan")
+
+    class FakePCCEEnvironment:
+        def __init__(self, **kwargs):
+            pcce_observed.update(kwargs)
+
+    monkeypatch.setattr(
+        "src.swe_verified_pcce.runner.ApptainerEnvironment", FakePCCEEnvironment
+    )
+    pcce = object.__new__(SWEVerifiedPCCERunner)
+    pcce.config = SimpleNamespace(
+        dataset_type="verified",
+        pce=SimpleNamespace(
+            docker=SimpleNamespace(workdir="/testbed"),
+            container=SimpleNamespace(sif_cache_dir=tmp_path, writable_tmpfs=True),
+            plan=SimpleNamespace(timeout=10),
+        ),
+    )
+    pcce.capacity = SimpleNamespace()
+    assignment = SimpleNamespace(case=SimpleNamespace(source=source))
+    pcce._environment(assignment, host_workdir=tmp_path / "checker")
+
+    assert pce_observed["run_args"] == ["--containall"]
+    assert pce_observed["isolate_tmp"] is True
+    assert pcce_observed["run_args"] == ["--containall"]
+    assert pcce_observed["isolate_tmp"] is True
 
 
 def test_explicit_operational_migration_allows_only_semantic_code_hash(

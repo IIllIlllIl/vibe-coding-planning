@@ -54,6 +54,7 @@ class CheckerRunner(Protocol):
         apptainer_host_workdir: Path | None = None,
         repository_initializer: Callable[[Any, Path], None] | None = None,
         apptainer_run_args: list[str] | None = None,
+        apptainer_isolate_tmp: bool = False,
     ) -> CheckerOutput: ...
 
 
@@ -235,6 +236,7 @@ class DockerChecker:
         apptainer_host_workdir: Path | None = None,
         repository_initializer: Callable[[Any, Path], None] | None = None,
         apptainer_run_args: list[str] | None = None,
+        apptainer_isolate_tmp: bool = False,
     ) -> CheckerOutput:
         # Slurm owns the HPC wall-time. The worker only executes and journals
         # evidence; the resumed controller classifies a terminal Slurm state.
@@ -250,6 +252,7 @@ class DockerChecker:
                 apptainer_host_workdir=apptainer_host_workdir,
                 repository_initializer=repository_initializer,
                 apptainer_run_args=apptainer_run_args,
+                apptainer_isolate_tmp=apptainer_isolate_tmp,
             )
 
         # Local execution has no external scheduler, so its optional soft
@@ -266,6 +269,7 @@ class DockerChecker:
                 apptainer_host_workdir=apptainer_host_workdir,
                 repository_initializer=repository_initializer,
                 apptainer_run_args=apptainer_run_args,
+                apptainer_isolate_tmp=apptainer_isolate_tmp,
             )
 
     def _run_session(
@@ -283,6 +287,7 @@ class DockerChecker:
         apptainer_host_workdir: Path | None = None,
         repository_initializer: Callable[[Any, Path], None] | None = None,
         apptainer_run_args: list[str] | None = None,
+        apptainer_isolate_tmp: bool = False,
     ) -> CheckerOutput:
         self.prepare(case)
         DefaultAgent, LitellmModel, _ = import_minisweagent()
@@ -338,6 +343,7 @@ class DockerChecker:
                     git_safe_directories=[self.config.docker.workdir],
                     host_workdir=apptainer_host_workdir,
                     initialize_host_workdir=apptainer_host_workdir is not None,
+                    isolate_tmp=apptainer_isolate_tmp,
                 )
             else:
                 env = DockerEnvWrapper(self.config.docker, self.capacity_window)

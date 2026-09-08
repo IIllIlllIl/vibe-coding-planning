@@ -186,11 +186,13 @@ class PolyBenchPCCERunner:
             cwd=self.config.pce.docker.workdir,
             sif_cache_dir=self.config.pce.container.sif_cache_dir,
             capacity_window=self.capacity,
+            run_args=["--containall"],
             timeout=self.config.pce.plan.timeout,
             writable_tmpfs=self.config.pce.container.writable_tmpfs,
             git_safe_directories=[self.config.pce.docker.workdir],
             host_workdir=host_workdir,
             initialize_host_workdir=True,
+            isolate_tmp=True,
         )
 
     def _cleanup_workspace(self, path: Path, *, phase: str) -> None:
@@ -331,6 +333,8 @@ class PolyBenchPCCERunner:
                         self.attempt_dir / "repository_baselines" / "checker"
                     ),
                     apptainer_host_workdir=checker_workspace,
+                    apptainer_run_args=["--containall"],
+                    apptainer_isolate_tmp=True,
                 )
             finally:
                 self._cleanup_workspace(checker_workspace, phase="checker")

@@ -885,6 +885,28 @@ def test_runner_reuses_only_completed_phase_checkpoints(
     assert calls.count("baseline:plan") == calls.count("baseline:code") == 1
 
 
+def test_polybench_agent_environment_isolates_tmp(tmp_path, monkeypatch):
+    observed = {}
+
+    class FakeEnvironment:
+        def __init__(self, **kwargs):
+            observed.update(kwargs)
+
+    monkeypatch.setattr("src.polybench_pce.runner.ApptainerEnvironment", FakeEnvironment)
+    runner = object.__new__(PolyBenchPCERunner)
+    runner.config = SimpleNamespace(
+        docker=SimpleNamespace(workdir="/testbed"),
+        container=SimpleNamespace(sif_cache_dir=tmp_path, writable_tmpfs=True),
+    )
+    runner.capacity_window = SimpleNamespace()
+    case = SimpleNamespace(image=SimpleNamespace(requested_ref="image:v1"))
+
+    runner._environment(case, timeout=10, host_workdir=tmp_path / "plan")
+
+    assert observed["run_args"] == ["--containall"]
+    assert observed["isolate_tmp"] is True
+
+
 def test_runner_keeps_completed_checkpoints_when_cleanup_fails(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:

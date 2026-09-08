@@ -135,9 +135,11 @@ class PolyBenchPCERunner:
             capacity_window=self.capacity_window,
             timeout=timeout,
             writable_tmpfs=self.config.container.writable_tmpfs,
+            run_args=["--containall"],
             git_safe_directories=[self.config.docker.workdir],
             host_workdir=host_workdir,
             initialize_host_workdir=host_workdir is not None,
+            isolate_tmp=True,
         )
 
     @staticmethod

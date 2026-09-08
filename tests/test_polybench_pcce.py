@@ -6,6 +6,7 @@ import json
 from pathlib import Path
 import os
 import subprocess
+from types import SimpleNamespace
 
 import pytest
 import yaml
@@ -132,6 +133,33 @@ def _config(tmp_path: Path):
         pce=replace(config.pce, run_dir=tmp_path / "run"),
         checker=replace(config.checker, run_dir=tmp_path / "run"),
     )
+
+
+def test_polybench_pc_environment_isolates_tmp(tmp_path: Path, monkeypatch):
+    observed = {}
+
+    class FakeEnvironment:
+        def __init__(self, **kwargs):
+            observed.update(kwargs)
+
+    monkeypatch.setattr("src.polybench_pcce.runner.ApptainerEnvironment", FakeEnvironment)
+    runner = object.__new__(PolyBenchPCCERunner)
+    runner.config = SimpleNamespace(
+        pce=SimpleNamespace(
+            docker=SimpleNamespace(workdir="/testbed"),
+            container=SimpleNamespace(sif_cache_dir=tmp_path, writable_tmpfs=True),
+            plan=SimpleNamespace(timeout=10),
+        )
+    )
+    runner.capacity = SimpleNamespace()
+    assignment = SimpleNamespace(
+        case=SimpleNamespace(source=SimpleNamespace(image=SimpleNamespace(requested_ref="image:v1")))
+    )
+
+    runner._environment(assignment, host_workdir=tmp_path / "checker")
+
+    assert observed["run_args"] == ["--containall"]
+    assert observed["isolate_tmp"] is True
 
 
 def test_clean_formal_seed_config_selects_only_clean_pce_cases():
@@ -457,6 +485,7 @@ def test_first_review_reuses_frozen_plan_and_maps_current_checker_output(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
+    monkeypatch.setenv("DEEPSEEK_API_KEY", "test-only")
     config = _config(tmp_path)
     case = _case("a")
     assignment = PCReviewAssignment(case, 1, 0, case.baseline_plan, "")
@@ -508,6 +537,7 @@ def test_revised_plan_uses_phase_local_writable_repository(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
+    monkeypatch.setenv("DEEPSEEK_API_KEY", "test-only")
     config = _config(tmp_path)
     case = _case("a")
     assignment = PCReviewAssignment(case, 2, 1, "old plan", "fix the call site")
@@ -538,6 +568,8 @@ def test_revised_plan_uses_phase_local_writable_repository(
             pass
 
         def __call__(self, checker_case, guideline, **kwargs):
+            observed["checker_run_args"] = kwargs["apptainer_run_args"]
+            observed["checker_isolate_tmp"] = kwargs["apptainer_isolate_tmp"]
             output = CheckerOutput(True, "ready", (), (), "")
             kwargs["completion_callback"](output)
             return output
@@ -557,6 +589,8 @@ def test_revised_plan_uses_phase_local_writable_repository(
     )
     assert observed["baseline_phase"] == "plan_revision"
     assert observed["environment_cleaned"] is True
+    assert observed["checker_run_args"] == ["--containall"]
+    assert observed["checker_isolate_tmp"] is True
     assert not (attempt_dir / "workspaces" / "plan_revision").exists()
 
 

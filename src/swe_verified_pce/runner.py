@@ -141,11 +141,12 @@ class SWEVerifiedPCERunner:
             git_safe_directories=[self.config.docker.workdir],
             host_workdir=host_workdir,
             initialize_host_workdir=host_workdir is not None,
+            isolate_tmp=True,
         )
 
     @staticmethod
     def _agent_container_run_args() -> list[str]:
-        return []
+        return ["--containall"]
 
     def _restore_agent_repository(
         self,

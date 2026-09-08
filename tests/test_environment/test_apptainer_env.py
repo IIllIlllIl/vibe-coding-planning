@@ -336,6 +336,48 @@ def test_environment_uses_phase_local_home_and_removes_it_on_cleanup(
     assert not isolated_home.exists()
 
 
+def test_environment_uses_persistent_phase_local_tmp_and_removes_it_on_cleanup(
+    tmp_path, monkeypatch
+):
+    cache_dir = tmp_path / "sifs"
+    calls = []
+
+    def fake_run(args, **kwargs):
+        calls.append(args)
+        return subprocess.CompletedProcess(args, returncode=0, stdout="", stderr="")
+
+    monkeypatch.setattr(subprocess, "run", fake_run)
+    cache_dir.mkdir()
+    (cache_dir / "python_3.12-slim.sif").write_text("sif", encoding="utf-8")
+    env = ApptainerEnvironment(
+        image="python:3.12-slim",
+        cwd="/testbed",
+        sif_cache_dir=cache_dir,
+        capacity_window=_TrackingCapacityWindow(),
+        run_args=["--containall"],
+        isolate_tmp=True,
+    )
+    isolated_tmp = Path(env._isolated_tmp.name)
+    calls.clear()
+
+    env.execute("touch /tmp/sentinel")
+    env.execute("test -f /tmp/sentinel")
+
+    for args in calls:
+        binds = [
+            args[index + 1]
+            for index, value in enumerate(args[:-1])
+            if value == "--bind"
+        ]
+        assert f"{isolated_tmp}:/tmp" in binds
+        assert "--containall" in args
+    assert isolated_tmp.is_dir()
+
+    env.cleanup()
+
+    assert not isolated_tmp.exists()
+
+
 def test_environment_get_template_vars_and_cleanup(tmp_path, monkeypatch):
     cache_dir = tmp_path / "sifs"
 

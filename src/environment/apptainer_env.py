@@ -164,6 +164,7 @@ class ApptainerEnvironment:
         git_safe_directories: list[str] | None = None,
         host_workdir: Path | None = None,
         initialize_host_workdir: bool = True,
+        isolate_tmp: bool = False,
     ) -> None:
         self._image = image
         self._cwd = cwd
@@ -178,6 +179,8 @@ class ApptainerEnvironment:
         self._isolated_home: tempfile.TemporaryDirectory[str] | None = None
         self._host_workdir = Path(host_workdir) if host_workdir is not None else None
         self._initialize_host_workdir = initialize_host_workdir
+        self._isolate_tmp = isolate_tmp
+        self._isolated_tmp: tempfile.TemporaryDirectory[str] | None = None
 
         self._cache = ApptainerSifCache(sif_cache_dir, capacity_window)
         # Pull the SIF on demand if it is not already cached. This lets a GEPA
@@ -192,6 +195,8 @@ class ApptainerEnvironment:
         self._lease.__enter__()
         try:
             self._prepare_isolated_home()
+            if self._isolate_tmp:
+                self._prepare_isolated_tmp()
             if self._host_workdir is not None:
                 self._prepare_host_workdir()
             self._ensure_git_config()
@@ -199,6 +204,9 @@ class ApptainerEnvironment:
             if self._isolated_home is not None:
                 self._isolated_home.cleanup()
                 self._isolated_home = None
+            if self._isolated_tmp is not None:
+                self._isolated_tmp.cleanup()
+                self._isolated_tmp = None
             self._lease.__exit__(*sys.exc_info())
             self._lease = None
             raise
@@ -213,6 +221,20 @@ class ApptainerEnvironment:
                 "--home",
                 f"{self._isolated_home.name}:{self._container_home}",
             ]
+        )
+
+    def _prepare_isolated_tmp(self) -> None:
+        """Bind one persistent /tmp for this Agent phase only.
+
+        ``execute()`` starts a fresh ``apptainer exec`` for every tool action.
+        A phase-local host directory keeps temporary files visible between
+        actions in one phase without exposing them to later Agent phases.
+        """
+        self._isolated_tmp = tempfile.TemporaryDirectory(
+            prefix="vibe-apptainer-tmp-"
+        )
+        self._run_args.extend(
+            ["--bind", f"{self._isolated_tmp.name}:/tmp"]
         )
 
     def _prepare_host_workdir(self) -> None:
@@ -375,3 +397,6 @@ class ApptainerEnvironment:
         if self._isolated_home is not None:
             self._isolated_home.cleanup()
             self._isolated_home = None
+        if self._isolated_tmp is not None:
+            self._isolated_tmp.cleanup()
+            self._isolated_tmp = None

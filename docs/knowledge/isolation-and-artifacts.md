@@ -19,6 +19,11 @@ all commands in one Code phase to share a writable `/testbed`; otherwise edits
 disappear and the final diff becomes empty. Separate phases must not share
 implicit container state.
 
+For Apptainer PCE/PCCE Agents, this includes `/tmp`: each Plan, Checker,
+revision, and Code environment uses `--containall` plus its own host directory
+bound to `/tmp`. The bind persists across tool actions within one Agent phase
+and is destroyed at phase cleanup. It is never reused by another phase.
+
 Allowed cross-phase artifacts:
 
 ```text
@@ -30,6 +35,9 @@ Reflection -> current rollout evidence bundle
 
 Artifacts must carry identity/hash metadata. Large patch and evaluator scripts
 are transferred through bind-mounted files, not encoded into process argv.
+An unmanifested file in `/tmp` is not a cross-phase artifact. A Plan that needs
+such a file during Code must instruct Code to reconstruct it from recorded
+inputs; implicit inheritance is prohibited.
 
 ## Why Clean Retry Matters
 
