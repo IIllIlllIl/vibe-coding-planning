@@ -16,6 +16,7 @@ from src.optimization.audit import text_sha256
 from src.optimization.checker import CheckerOutputContractError
 from src.optimization.hpc.task_batch import atomic_json
 from src.polybench_pcce.config import load_polybench_pcce_config
+from src.polybench_pcce.ce_replay import prepare_ce_replay
 from src.polybench_pcce.controller import _review_assignments, run_polybench_pcce
 from src.polybench_pcce.dataset import load_pcce_cases
 from src.polybench_pcce.evaluator_resume import _prepare as prepare_evaluator_resume
@@ -176,6 +177,57 @@ def test_pcce_runtime_overrides_remove_agent_limits_and_widen_git_timeout(
     assert config.pce.execution.repository_command_timeout_seconds == 600
     assert config.checker.checker.max_steps == 0
     assert config.checker.checker.cost_limit == 0.0
+
+
+def test_ce_replay_freezes_accepted_plan_without_code_checkpoint(
+    tmp_path: Path,
+) -> None:
+    config = _config(tmp_path)
+    case = load_pcce_cases(config)[0][0]
+    source_semantic = "source-semantic"
+    atomic_json(
+        config.run_dir / "run_manifest.json",
+        {"mode": "polybench_pcce", "pcce_semantic_sha256": source_semantic},
+    )
+    review_relpath = Path("reviews/review_01") / f"{case.instance_id}.json"
+    review_path = config.run_dir / review_relpath
+    review = {
+        "status": "completed",
+        "instance_id": case.instance_id,
+        "plan": "frozen accepted plan",
+        "checker_output": {"should_proceed": True},
+    }
+    atomic_json(review_path, review)
+    manifest_path = tmp_path / "accepted-plans.json"
+    atomic_json(
+        manifest_path,
+        {
+            "schema_version": 1,
+            "purpose": "polybench_pcce_accepted_plan_ce_replay",
+            "source_pcce_semantic_sha256": source_semantic,
+            "accepted_plans": [
+                {
+                    "instance_id": case.instance_id,
+                    "accepted_review_relpath": str(review_relpath),
+                    "accepted_review_sha256": hashlib.sha256(
+                        review_path.read_bytes()
+                    ).hexdigest(),
+                    "accepted_plan_sha256": text_sha256("frozen accepted plan"),
+                }
+            ],
+        },
+    )
+
+    batch_dir, _, tasks = prepare_ce_replay(
+        config, replay_id="replay-v1", manifest_path=manifest_path
+    )
+
+    checkpoint_dir = batch_dir / "checkpoints/task_0000"
+    assert (checkpoint_dir / "plan.json").is_file()
+    assert not (checkpoint_dir / "code.json").exists()
+    task = json.loads(tasks[0].manifest_path.read_text(encoding="utf-8"))
+    assert task["accepted_plan"] == "frozen accepted plan"
+    assert task["accepted_review_relpath"] == str(review_relpath)
 
 
 def _source(instance_id: str) -> PolyBenchPCECase:

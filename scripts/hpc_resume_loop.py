@@ -187,6 +187,11 @@ def _remote_run_snapshot(batch_args: list[str], runtime_config: Path) -> str:
         if not re.fullmatch(r"[A-Za-z0-9_.-]+", evaluator_repair):
             raise SystemExit("--resume-evaluator must match [A-Za-z0-9_.-]+")
         snapshot += f"/evaluator_repairs/{evaluator_repair}"
+    ce_replay = _take_option(batch_args, "--replay-ce")
+    if ce_replay:
+        if not re.fullmatch(r"[A-Za-z0-9_.-]+", ce_replay):
+            raise SystemExit("--replay-ce must match [A-Za-z0-9_.-]+")
+        snapshot += f"/ce_replays/{ce_replay}"
     return snapshot
 
 

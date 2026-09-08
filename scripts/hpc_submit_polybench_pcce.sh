@@ -17,6 +17,8 @@ ULHPC_CONFIG=""
 REQUIRE_CLEAN=0
 EVALUATOR_REPAIR_ID=""
 EVALUATOR_REPAIR_INSTANCES_FILE=""
+CE_REPLAY_ID=""
+CE_REPLAY_MANIFEST=""
 
 usage() {
   cat <<'USAGE'
@@ -34,6 +36,8 @@ Options:
   --resume-evaluator ID     reuse validated PCCE Plan/Code checkpoints and rerun Evaluate
   --resume-evaluator-instances-file PATH
                             frozen JSON subset shared by PCE and PCCE
+  --replay-ce ID            rerun Code+Evaluate from frozen accepted Plans
+  --replay-ce-manifest PATH frozen accepted-Plan manifest
   --submit                  submit; default is ulhpc-submit dry-run
   --dry-run                 explicitly retain dry-run mode
 
@@ -57,12 +61,27 @@ while [[ $# -gt 0 ]]; do
     --require-clean-worktree) REQUIRE_CLEAN=1; shift ;;
     --resume-evaluator) EVALUATOR_REPAIR_ID="$2"; shift 2 ;;
     --resume-evaluator-instances-file) EVALUATOR_REPAIR_INSTANCES_FILE="$2"; shift 2 ;;
+    --replay-ce) CE_REPLAY_ID="$2"; shift 2 ;;
+    --replay-ce-manifest) CE_REPLAY_MANIFEST="$2"; shift 2 ;;
     --submit) SUBMIT=1; shift ;;
     --dry-run) SUBMIT=0; shift ;;
     -h|--help) usage; exit 0 ;;
     *) echo "ERROR: unknown option: $1" >&2; usage >&2; exit 2 ;;
   esac
 done
+
+if [[ -n "$EVALUATOR_REPAIR_ID" && -n "$CE_REPLAY_ID" ]]; then
+  echo "ERROR: evaluator repair and CE replay are mutually exclusive" >&2
+  exit 2
+fi
+if [[ -n "$CE_REPLAY_ID" ]] && [[ ! "$CE_REPLAY_ID" =~ ^[A-Za-z0-9_.-]+$ ]]; then
+  echo "ERROR: --replay-ce must match [A-Za-z0-9_.-]+" >&2
+  exit 2
+fi
+if [[ -n "$CE_REPLAY_ID" && -z "$CE_REPLAY_MANIFEST" ]] || [[ -z "$CE_REPLAY_ID" && -n "$CE_REPLAY_MANIFEST" ]]; then
+  echo "ERROR: --replay-ce and --replay-ce-manifest must be used together" >&2
+  exit 2
+fi
 
 REPO_ROOT="$(conda run --no-capture-output -n mini-swe python - "${BASH_SOURCE[0]}" <<'PY'
 import sys
@@ -113,6 +132,20 @@ PY
   case "$EVALUATOR_REPAIR_INSTANCES_FILE_ABS" in "$REPO_ROOT"/*) ;; *)
     echo "ERROR: evaluator subset must be inside the repository" >&2; exit 2;; esac
   EVALUATOR_REPAIR_INSTANCES_FILE_REL="${EVALUATOR_REPAIR_INSTANCES_FILE_ABS#$REPO_ROOT/}"
+fi
+CE_REPLAY_MANIFEST_REL=""
+if [[ -n "$CE_REPLAY_MANIFEST" ]]; then
+  CE_REPLAY_MANIFEST_ABS="$(conda run --no-capture-output -n mini-swe python - "$REPO_ROOT" "$CE_REPLAY_MANIFEST" <<'PY'
+import sys
+from pathlib import Path
+root, path = Path(sys.argv[1]), Path(sys.argv[2])
+print((path if path.is_absolute() else root / path).resolve())
+PY
+)"
+  case "$CE_REPLAY_MANIFEST_ABS" in "$REPO_ROOT"/*) ;; *)
+    echo "ERROR: CE replay manifest must be inside the repository" >&2; exit 2;; esac
+  [[ -f "$CE_REPLAY_MANIFEST_ABS" ]] || { echo "ERROR: CE replay manifest not found" >&2; exit 2; }
+  CE_REPLAY_MANIFEST_REL="${CE_REPLAY_MANIFEST_ABS#$REPO_ROOT/}"
 fi
 if [[ $REQUIRE_CLEAN -eq 1 ]] && [[ -n "$(git -C "$REPO_ROOT" status --porcelain)" ]]; then
   echo "ERROR: --require-clean-worktree requires a clean Git worktree" >&2
@@ -249,7 +282,11 @@ fi
 set +x
 source "\$REMOTE_ENV_FILE"
 test -n "\${DEEPSEEK_API_KEY:-}" || exit 2
-if [[ -n "$EVALUATOR_REPAIR_ID" ]]; then
+if [[ -n "$CE_REPLAY_ID" ]]; then
+  python3 scripts/replay_polybench_pcce_ce.py \
+    --config "$CONFIG_REL" --replay-id "$CE_REPLAY_ID" \
+    --manifest "$CE_REPLAY_MANIFEST_REL"
+elif [[ -n "$EVALUATOR_REPAIR_ID" ]]; then
   python3 scripts/resume_polybench_pcce_evaluator.py \
     --config "$CONFIG_REL" --repair-id "$EVALUATOR_REPAIR_ID" \
     ${EVALUATOR_REPAIR_INSTANCES_FILE_REL:+--instance-ids-file "$EVALUATOR_REPAIR_INSTANCES_FILE_REL"}
@@ -292,5 +329,7 @@ echo "[polybench-pcce-submit] baseline_stage=$PCE_BASELINE_STAGE"
 echo "[polybench-pcce-submit] run=$RUN_REL"
 echo "[polybench-pcce-submit] evaluator_repair=${EVALUATOR_REPAIR_ID:-none}"
 echo "[polybench-pcce-submit] evaluator_instances_file=${EVALUATOR_REPAIR_INSTANCES_FILE_REL:-none}"
+echo "[polybench-pcce-submit] ce_replay=${CE_REPLAY_ID:-none}"
+echo "[polybench-pcce-submit] ce_replay_manifest=${CE_REPLAY_MANIFEST_REL:-none}"
 echo "[polybench-pcce-submit] controller_resources=$CPUS CPU/$MEM/$TIME_LIMIT"
 "${CMD[@]}"

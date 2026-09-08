@@ -1,0 +1,28 @@
+schema_version: 1
+session: polybench-pcce-c5-prompt-v2-smoke5-ce-replay-v1-20260908
+log: .local/hpc-supervisor/polybench-pcce-c5-prompt-v2-smoke5-ce-replay-v1-20260908.log
+arguments:
+  - --poll-interval
+  - "300"
+  - --slice-time
+  - "00:10:00"
+  - --max-runs
+  - "24"
+  - --state-file
+  - .local/hpc-supervisor/polybench-pcce-c5-prompt-v2-smoke5-ce-replay-v1-20260908.json
+  - --require-clean-worktree
+  - --batch-script
+  - scripts/hpc_submit_polybench_pcce.sh
+  - --ulhpc-config
+  - /Users/taoran.wang/.config/ulhpc-submit/config.yaml
+  - --config
+  - configs/polybench_pcce_c5_prompt_v2_smoke5_ce_replay_v1_20260908.yaml
+  - --replay-ce
+  - accepted-plan-code-evaluate-v1-20260908
+  - --replay-ce-manifest
+  - configs/frozen_polybench_pcce_development/c5-prompt-v2-smoke5-accepted-plans-v1-20260908.json
+  - --job-name
+  - polybench-pcce-c5-prompt-v2-smoke5-ce-replay-v1-20260908
+  - --remote-dir
+  - ~/hpc_runs/vibe-polybench-pcce-c5-prompt-v2-smoke5-ce-replay-v1-20260908
+  - --submit

@@ -1,0 +1,31 @@
+{
+  "schema_version": 1,
+  "purpose": "polybench_pcce_accepted_plan_ce_replay",
+  "source_pcce_semantic_sha256": "0a1d6fa9226e4e4fb91cf9ea52c76dc83cc0adae22d5c126cd0cb59fde15058a",
+  "accepted_plans": [
+    {
+      "instance_id": "huggingface__transformers-28398",
+      "accepted_review_relpath": "reviews/review_02/huggingface__transformers-28398.json",
+      "accepted_review_sha256": "ff866bf18a5ff0575100172955eb6d34aff62b4695ea4030e53da12e9f56a986",
+      "accepted_plan_sha256": "2c77fe1f293919a1296001e4b2dc25e300908d596c5891e8bdfcc04fe28c929a"
+    },
+    {
+      "instance_id": "huggingface__transformers-30899",
+      "accepted_review_relpath": "reviews/review_01/huggingface__transformers-30899.json",
+      "accepted_review_sha256": "ae0a25b49ffc405b3528b6a737bbbb3ad0dc3bdeee8dd14525e8cb0ecf0ed48d",
+      "accepted_plan_sha256": "e06d777821f07dcb0114424525d686cf301261490d410bef4f9ebb7a9977a2fd"
+    },
+    {
+      "instance_id": "langchain-ai__langchain-20064",
+      "accepted_review_relpath": "reviews/review_01/langchain-ai__langchain-20064.json",
+      "accepted_review_sha256": "32082b106770bf629749bbdb22bb2268c33d40ace103cc770e32dcb18461a2cb",
+      "accepted_plan_sha256": "30651b67fe48ef34269a0b807334e386e2ed6c016e31836f5edc45b839779a5c"
+    },
+    {
+      "instance_id": "yt-dlp__yt-dlp-5195",
+      "accepted_review_relpath": "reviews/review_01/yt-dlp__yt-dlp-5195.json",
+      "accepted_review_sha256": "c1a14d5a4c9dfb7f248fcf67a7eda59f69be7ee57666835dd78a37a2ebda379f",
+      "accepted_plan_sha256": "da9574a75cb7e919eab7214f9a2a2f705e7822d47c978dd1703a064c8ea4fefd"
+    }
+  ]
+}
