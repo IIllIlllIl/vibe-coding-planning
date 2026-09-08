@@ -173,6 +173,7 @@ def evaluate_polybench_apptainer(
     workdir: str,
     phase_workdir: Path,
     timeout: int,
+    repository_command_timeout: int = 120,
     result_callback: Callable[[dict[str, Any]], None] | None = None,
     cleanup_error_callback: Callable[[BaseException], None] | None = None,
     dependency_cache: DependencyCacheConfig | None = None,
@@ -243,6 +244,7 @@ def evaluate_polybench_apptainer(
                     if repository_baseline_dir is not None
                     else phase_workdir.parent / "evaluate_repository_baseline"
                 ),
+                timeout=repository_command_timeout,
             )
         except FatalError as exc:
             raise PolyBenchEvaluatorOperationalError(
@@ -321,25 +323,21 @@ def evaluate_polybench_apptainer(
             raw_output = str(test_result.get("output", ""))
             test_returncode = test_result.get("returncode")
         except CommandTimeoutError as exc:
-            return completed(
-                _terminal_result(
-                    case,
-                    task_outcome="unresolved",
-                    outcome_reason="test_execution_timeout",
-                    generation=True,
-                    patch_applied=True,
-                    evidence={
-                        "terminal_kind": "test_timeout",
-                        "test_patch_applied": True,
-                        "test_patch_attempts": test_patch_attempts,
-                        "code_patch_applied": True,
-                        "code_patch_attempts": code_patch_attempts,
-                        "test_command": case.test_command,
-                        "raw_test_output": str(exc),
-                        "test_timed_out": True,
-                    },
-                )
-            )
+            raise PolyBenchEvaluatorOperationalError(
+                "official PolyBench test command timed out",
+                evidence={
+                    "terminal_kind": "test_timeout",
+                    "test_patch_applied": True,
+                    "test_patch_attempts": test_patch_attempts,
+                    "code_patch_applied": True,
+                    "code_patch_attempts": code_patch_attempts,
+                    "test_command": case.test_command,
+                    "raw_test_output": str(exc),
+                    "test_timed_out": True,
+                },
+                outcome_reason="test_execution_timeout",
+                retry_disposition="retry_same_phase",
+            ) from exc
 
         if test_returncode in COMMAND_NOT_EXECUTED_RETURNCODES:
             raise PolyBenchEvaluatorOperationalError(

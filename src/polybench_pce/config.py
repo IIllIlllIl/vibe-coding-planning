@@ -28,6 +28,7 @@ class DependencyCacheConfig:
 @dataclass(frozen=True)
 class PCEExecutionConfig:
     code_phase_timeout_seconds: int = 2400
+    repository_command_timeout_seconds: int = 120
 
 
 @dataclass(frozen=True)
@@ -159,10 +160,15 @@ def load_polybench_pce_config(
     execution = PCEExecutionConfig(
         code_phase_timeout_seconds=int(
             execution_raw.get("code_phase_timeout_seconds", 2400)
-        )
+        ),
+        repository_command_timeout_seconds=int(
+            execution_raw.get("repository_command_timeout_seconds", 120)
+        ),
     )
     if execution.code_phase_timeout_seconds < 0:
         raise ValueError("code_phase_timeout_seconds must be non-negative")
+    if execution.repository_command_timeout_seconds < 1:
+        raise ValueError("repository_command_timeout_seconds must be positive")
     evaluator_timeout = int(evaluator_raw.get("timeout", 1800))
     if evaluator_timeout < 1:
         raise ValueError("evaluator.timeout must be positive")

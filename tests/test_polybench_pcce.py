@@ -153,6 +153,31 @@ def test_c5_prompt_v2_safe67_smoke_freezes_five_plan_stage_failures() -> None:
     assert config.hpc.max_task_attempts == 3
 
 
+def test_pcce_runtime_overrides_remove_agent_limits_and_widen_git_timeout(
+    tmp_path: Path,
+) -> None:
+    source = (
+        ROOT
+        / "configs/polybench_pcce_c5_prompt_v2_safe67_smoke5_v1_20260908.yaml"
+    )
+    payload = yaml.safe_load(source.read_text(encoding="utf-8"))
+    payload["runtime"] = {
+        "code_phase_timeout_seconds": 0,
+        "repository_command_timeout_seconds": 600,
+        "checker_max_steps": 0,
+        "checker_cost_limit": 0.0,
+    }
+    candidate = tmp_path / "pcce-runtime.yaml"
+    candidate.write_text(yaml.safe_dump(payload), encoding="utf-8")
+
+    config = load_polybench_pcce_config(candidate, require_api_keys=False)
+
+    assert config.pce.execution.code_phase_timeout_seconds == 0
+    assert config.pce.execution.repository_command_timeout_seconds == 600
+    assert config.checker.checker.max_steps == 0
+    assert config.checker.checker.cost_limit == 0.0
+
+
 def _source(instance_id: str) -> PolyBenchPCECase:
     return PolyBenchPCECase(
         instance_id=instance_id,

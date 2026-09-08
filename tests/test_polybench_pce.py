@@ -37,7 +37,7 @@ from src.polybench_pce.hpc_executor import (
 from src.polybench_pce.runner import PolyBenchPCERunner
 from src.polybench_pce.runner import checkpoint_identity
 from src.polybench_pce.worker import _category, _retry_disposition
-from src.exceptions import AgentTaskError, FatalError
+from src.exceptions import AgentTaskError, CommandTimeoutError, FatalError
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -149,7 +149,10 @@ def _config(tmp_path: Path, snapshot: Path, image_manifest: Path) -> Path:
             "runtime": "apptainer",
             "sif_cache_dir": str(tmp_path / "cache"),
         },
-        "execution": {"code_phase_timeout_seconds": 2400},
+        "execution": {
+            "code_phase_timeout_seconds": 2400,
+            "repository_command_timeout_seconds": 600,
+        },
         "hpc": {
             "submit": True,
             "cpus_per_task": 1,
@@ -673,6 +676,62 @@ def test_evaluator_retries_when_test_command_did_not_execute(
     assert "cannot execute" in error.evidence["raw_test_output"]
 
 
+def test_evaluator_timeout_is_retryable_operational_evidence(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    snapshot, images, _ = _frozen_inputs(tmp_path)
+    case = load_polybench_pce_cases(snapshot, images)[0][0]
+    monkeypatch.setattr(
+        "src.polybench_pce.evaluator.restore_repository_to_base",
+        lambda *args, **kwargs: None,
+    )
+
+    class FakeEnv:
+        def __init__(self, **kwargs: object) -> None:
+            Path(str(kwargs["host_workdir"])).mkdir(parents=True, exist_ok=True)
+
+        def execute(self, command: str, timeout: int | None = None) -> dict:
+            if command.startswith("git apply"):
+                return {"returncode": 0, "output": "applied"}
+            if command.startswith("git status") or command.startswith("git diff"):
+                return {"returncode": 0, "output": ""}
+            if command == "/bin/bash .vibe_eval.sh":
+                raise CommandTimeoutError(command, timeout)
+            raise AssertionError(command)
+
+        def cleanup(self) -> None:
+            pass
+
+    monkeypatch.setattr("src.polybench_pce.evaluator.ApptainerEnvironment", FakeEnv)
+    monkeypatch.setitem(
+        __import__(
+            "poly_bench_evaluation.constants", fromlist=["REPO_TO_PARSER_CLASS"]
+        ).REPO_TO_PARSER_CLASS,
+        "org/repo",
+        "ParserMustNotRun",
+    )
+
+    with pytest.raises(PolyBenchEvaluatorOperationalError) as exc_info:
+        evaluate_polybench_apptainer(
+            _diff("src/module.py"),
+            case,
+            container=SimpleNamespace(
+                sif_cache_dir=tmp_path / "cache", writable_tmpfs=True
+            ),
+            capacity_window=DockerCapacityWindow(
+                max_concurrent=1, max_cached_images=1, min_free_gb=1
+            ),
+            workdir="/testbed",
+            phase_workdir=tmp_path / "eval-timeout",
+            timeout=1800,
+        )
+
+    error = exc_info.value
+    assert error.outcome_reason == "test_execution_timeout"
+    assert error.retry_disposition == "retry_same_phase"
+    assert error.evidence["test_timed_out"] is True
+
+
 def test_exhausted_attempts_are_raw_incomplete_not_labels(tmp_path: Path) -> None:
     snapshot, images, _ = _frozen_inputs(tmp_path)
     config = load_polybench_pce_config(
@@ -769,7 +828,7 @@ def test_runner_freezes_staged_and_unstaged_code_workspace_evidence(
 
     class Env:
         def execute(self, command: str, timeout: int | None = None) -> dict:
-            assert timeout == 120
+            assert timeout == 600
             outputs = {
                 "git diff --cached --binary --full-index": submitted,
                 "git diff --cached --name-only": "src/module.py\n",
@@ -782,7 +841,9 @@ def test_runner_freezes_staged_and_unstaged_code_workspace_evidence(
             return {"returncode": 0, "output": outputs[command]}
 
     runner = PolyBenchPCERunner(
-        SimpleNamespace(),  # type: ignore[arg-type]
+        SimpleNamespace(
+            execution=SimpleNamespace(repository_command_timeout_seconds=600)
+        ),  # type: ignore[arg-type]
         SimpleNamespace(),  # type: ignore[arg-type]
         checkpoint_dir=tmp_path / "checkpoints",
         checkpoint_identity="identity",

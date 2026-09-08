@@ -256,6 +256,9 @@ class PolyBenchPCCERunner:
                             / "repository_baselines"
                             / "plan_revision"
                         ),
+                        timeout=(
+                            self.config.pce.execution.repository_command_timeout_seconds
+                        ),
                     )
                     plan, trajectory = plan_agent.run(
                         self._plan_config(),
@@ -333,6 +336,17 @@ class PolyBenchPCCERunner:
                         self.attempt_dir / "repository_baselines" / "checker"
                     ),
                     apptainer_host_workdir=checker_workspace,
+                    repository_initializer=lambda env, evidence_dir: (
+                        restore_repository_to_base(
+                            env,
+                            assignment.case.source.base_commit,
+                            phase="checker",
+                            evidence_dir=evidence_dir,
+                            timeout=(
+                                self.config.pce.execution.repository_command_timeout_seconds
+                            ),
+                        )
+                    ),
                     apptainer_run_args=["--containall"],
                     apptainer_isolate_tmp=True,
                 )

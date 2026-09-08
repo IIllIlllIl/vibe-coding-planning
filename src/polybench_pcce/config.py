@@ -12,7 +12,11 @@ import yaml
 
 from src.optimization.config import OptimizationConfig, load_optimization_config
 from src.optimization.hpc.config import HPCConfig
-from src.polybench_pce.config import PolyBenchPCEConfig, load_polybench_pce_config
+from src.polybench_pce.config import (
+    PCEExecutionConfig,
+    PolyBenchPCEConfig,
+    load_polybench_pce_config,
+)
 
 
 @dataclass(frozen=True)
@@ -65,6 +69,7 @@ def load_polybench_pcce_config(
     paths = _mapping(raw.get("paths"), "paths")
     method = _mapping(raw.get("pcce"), "pcce")
     hpc_raw = _mapping(raw.get("hpc"), "hpc")
+    runtime_raw = _mapping(raw.get("runtime", {}), "runtime")
     prompt_source = paths.get("prompt_source_config")
     if prompt_source:
         prompt_raw = (
@@ -84,6 +89,44 @@ def load_polybench_pcce_config(
         checker_config_path,
         require_api_keys=require_api_keys,
     )
+    if runtime_raw:
+        pce = replace(
+            pce,
+            execution=PCEExecutionConfig(
+                code_phase_timeout_seconds=int(
+                    runtime_raw.get(
+                        "code_phase_timeout_seconds",
+                        pce.execution.code_phase_timeout_seconds,
+                    )
+                ),
+                repository_command_timeout_seconds=int(
+                    runtime_raw.get(
+                        "repository_command_timeout_seconds",
+                        pce.execution.repository_command_timeout_seconds,
+                    )
+                ),
+            ),
+        )
+        checker = replace(
+            checker,
+            checker=replace(
+                checker.checker,
+                max_steps=int(
+                    runtime_raw.get("checker_max_steps", checker.checker.max_steps)
+                ),
+                cost_limit=float(
+                    runtime_raw.get("checker_cost_limit", checker.checker.cost_limit)
+                ),
+            ),
+        )
+    if pce.execution.code_phase_timeout_seconds < 0:
+        raise ValueError("runtime.code_phase_timeout_seconds must be non-negative")
+    if pce.execution.repository_command_timeout_seconds < 1:
+        raise ValueError(
+            "runtime.repository_command_timeout_seconds must be positive"
+        )
+    if checker.checker.max_steps < 0 or checker.checker.cost_limit < 0:
+        raise ValueError("runtime Checker limits must be non-negative")
     if pce.container.runtime != "apptainer" or checker.container.runtime != "apptainer":
         raise ValueError("PolyBench PCCE requires Apptainer PCE and Checker runtimes")
     if pce.container.sif_cache_dir != checker.container.sif_cache_dir:

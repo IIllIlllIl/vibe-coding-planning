@@ -189,7 +189,12 @@ class PolyBenchPCERunner:
         }
         observations: dict[str, dict[str, Any]] = {}
         for name, command in commands.items():
-            observation = dict(env.execute(command, timeout=120))
+            observation = dict(
+                env.execute(
+                    command,
+                    timeout=self.config.execution.repository_command_timeout_seconds,
+                )
+            )
             observations[name] = {
                 "command": command,
                 "returncode": observation.get("returncode"),
@@ -251,6 +256,7 @@ class PolyBenchPCERunner:
                     case.base_commit,
                     phase="plan",
                     evidence_dir=self.attempt_dir / "repository_baselines" / "plan",
+                    timeout=self.config.execution.repository_command_timeout_seconds,
                 )
                 plan, trajectory = plan_agent.run(
                     self._base_config(self.config.plan),
@@ -288,6 +294,7 @@ class PolyBenchPCERunner:
                     case.base_commit,
                     phase="code",
                     evidence_dir=self.attempt_dir / "repository_baselines" / "code",
+                    timeout=self.config.execution.repository_command_timeout_seconds,
                 )
                 base_code_config = self._base_config(self.config.code)
                 code_config = replace(
@@ -358,6 +365,9 @@ class PolyBenchPCERunner:
                         self.attempt_dir / "repository_baselines" / "evaluate"
                     ),
                     "timeout": self.config.evaluator_timeout,
+                    "repository_command_timeout": (
+                        self.config.execution.repository_command_timeout_seconds
+                    ),
                     "result_callback": lambda result: self._save_checkpoint(
                         "evaluate", {"evaluator_result": result}
                     ),
