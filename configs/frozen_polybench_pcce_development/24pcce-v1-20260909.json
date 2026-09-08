@@ -1,0 +1,75 @@
+{
+  "schema_version": 1,
+  "selection_id": "polybench-24pcce-v1-20260909",
+  "purpose": "Failure-enriched PolyBench development evaluation for C5 plus the v2 Checker/Revision-Planner prompt; not a prevalence sample, untouched holdout, or confirmatory generalization set",
+  "source_snapshot_id": "20260826_python99_cleanpce_depcache_03619730229d",
+  "source_manifest_sha256": "2125d88a208f7869a237a013f628798bf1851edf11b5388f499d0f5abefdac31",
+  "source_validation_sha256": "b3327cabefd57d103e4e70448dc15f5c72afd61a69ad9134274f9230de018cc0",
+  "source_pce_outcomes_sha256": "fd1a808b97c0afd31c83c85f2e39f19b652dd29a320969b9955230f7a64bc3f3",
+  "c5_guideline_sha256": "34c2a670918df51642a4a2fe5a3669ee95f25e179604fc9fecee7a81e405a7bc",
+  "prompt_source_sha256": "0b5ce01b7238bcabf7516cb49aeb9c2f835c1731fc00f1a7089281dc8f7a8058",
+  "selection_policy": {
+    "source_universe": "99-case frozen clean PolyBench PCE validation snapshot",
+    "required": [
+      "not selected by c4-balanced20-v1-20260831",
+      "not one of the four known evaluator/environment-noise cases",
+      "historical Planner trajectory contains no /tmp artifact reference other than the protocol-owned /tmp/plan.md",
+      "complete frozen issue, P1, PCE Code trajectory, patch, and terminal evaluator outcome"
+    ],
+    "known_noise_exclusions": [
+      "huggingface__transformers-19590",
+      "huggingface__transformers-19657",
+      "huggingface__transformers-29519",
+      "keras-team__keras-18871"
+    ],
+    "candidate_census": {
+      "source_cases": 99,
+      "prior_balanced20_excluded": 20,
+      "known_noise_excluded": 4,
+      "extra_tmp_reference_excluded": 28,
+      "eligible": 47,
+      "eligible_pce_resolved": 37,
+      "eligible_pce_unresolved": 10
+    },
+    "selection": "Include all 10 eligible PCE-unresolved cases, then deterministically select 14 PCE-resolved controls using repository coverage quotas.",
+    "deterministic_seed": "polybench-c5-expanded-safe24-v1-20260908",
+    "resolved_repository_quotas": {
+      "huggingface/transformers": 8,
+      "keras-team/keras": 3,
+      "langchain-ai/langchain": 2,
+      "yt-dlp/yt-dlp": 1
+    }
+  },
+  "selected_instance_ids": [
+    "huggingface__transformers-13693",
+    "huggingface__transformers-18851",
+    "huggingface__transformers-26568",
+    "huggingface__transformers-27463",
+    "huggingface__transformers-28517",
+    "huggingface__transformers-29449",
+    "huggingface__transformers-30602",
+    "huggingface__transformers-6098",
+    "keras-team__keras-18975",
+    "keras-team__keras-19201",
+    "keras-team__keras-19484",
+    "langchain-ai__langchain-19331",
+    "langchain-ai__langchain-5609",
+    "yt-dlp__yt-dlp-9862",
+    "huggingface__transformers-22920",
+    "huggingface__transformers-23223",
+    "huggingface__transformers-31217",
+    "huggingface__transformers-4759",
+    "keras-team__keras-18553",
+    "keras-team__keras-19826",
+    "keras-team__keras-19937",
+    "keras-team__keras-19973",
+    "langchain-ai__langchain-4009",
+    "langchain-ai__langchain-5625"
+  ],
+  "baseline_composition": {
+    "pce_resolved": 14,
+    "pce_unresolved": 10,
+    "total": 24
+  },
+  "interpretation_boundary": "This deliberately enriches PCE failures to observe U-to-R opportunities and includes historical Seed/C2 exposure. It supports development diagnosis of R-to-R, R-to-U, U-to-R, and U-to-U transitions, but not natural prevalence or held-out generalization claims."
+}

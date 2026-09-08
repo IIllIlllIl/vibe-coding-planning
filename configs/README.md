@@ -34,6 +34,9 @@ tracked does not authorize its execution.
 | `frozen_polybench_pcce_development/c5-repair3-v1-20260908.json` | Outcome-selected three-case PolyBench development rerun membership: prior PCE unresolved, C4 Review-1 rejected, workspace-safe, and evaluator-observable. It explicitly excludes transformers-29675 and is not held-out evidence. |
 | `polybench_pcce_c5_repair3_v1_20260908.yaml` | Prepared full issue-first PCCE rerun of the frozen three cases using the development C5 guideline; starts again from P1 and does not reuse old C4 reviews. |
 | `polybench_pcce_c5_repair3_supervisor_v1_20260908.yaml` | Bounded supervisor for the prepared three-case development rerun; presence does not authorize launch. |
+| `frozen_polybench_pcce_development/24pcce-v1-20260909.json` | Frozen `24pcce` development selection: 24 cases disjoint from balanced20, conservatively excluding known noise and historical cross-phase `/tmp` risks; all 10 eligible PCE failures plus 14 deterministic repository-covering resolved controls. |
+| `polybench_pcce_24pcce_c5_prompt_v2_v1_20260909.yaml` | Prepared full PCCE development evaluation on `24pcce` using C5 and the v2 Checker/Revision-Planner prompt, explicit uncapped Agent phases, three attempts, and 1-hour workers. |
+| `polybench_pcce_24pcce_c5_prompt_v2_supervisor_v1_20260909.yaml` | Bounded supervisor for the prepared `24pcce` run; tracked preparation is not launch authorization. |
 | `frozen_swe_verified_smoke/swe-verified-development-smoke-v1.json` | Frozen two-case development-only SWE-Verified membership; excluded from future quick validation and holdout use. |
 | `swe_verified_pce_smoke_v1.yaml` | Prepared two-case current-prompt PCE-only smoke runtime; its frozen SIF/base-commit audit and pass contract are bound to the development selection. |
 | `swe_verified_pce_smoke_supervisor_v1_20260901.yaml` | Bounded 12-slice supervisor identity for the prepared two-case PCE smoke; presence does not authorize launch. |

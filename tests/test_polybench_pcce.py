@@ -154,6 +154,41 @@ def test_c5_prompt_v2_safe67_smoke_freezes_five_plan_stage_failures() -> None:
     assert config.hpc.max_task_attempts == 3
 
 
+def test_24pcce_freezes_disjoint_safe_development_selection() -> None:
+    config = load_polybench_pcce_config(
+        ROOT / "configs/polybench_pcce_24pcce_c5_prompt_v2_v1_20260909.yaml",
+        require_api_keys=False,
+    )
+    cases, identities = load_pcce_cases(config)
+    manifest = json.loads(config.selection_manifest.read_text(encoding="utf-8"))
+    balanced20 = json.loads(
+        (
+            ROOT
+            / "configs/frozen_polybench_pc_quick/c4-balanced20-v1-20260831.json"
+        ).read_text(encoding="utf-8")
+    )
+
+    assert config.execution_mode == "full_pcce"
+    assert config.guideline_label == "behavioral_c5_prompt_v2_v1"
+    assert len(cases) == 24
+    assert sum(case.baseline_resolved for case in cases) == 14
+    assert sum(not case.baseline_resolved for case in cases) == 10
+    assert set(manifest["selected_instance_ids"]).isdisjoint(
+        balanced20["selected_instance_ids"]
+    )
+    assert config.pce.execution.code_phase_timeout_seconds == 0
+    assert config.pce.execution.repository_command_timeout_seconds == 600
+    assert config.checker.checker.max_steps == 0
+    assert config.checker.checker.cost_limit == 0.0
+    assert config.hpc.cpus_per_task == 1
+    assert config.hpc.mem == "4G"
+    assert config.hpc.time == "01:00:00"
+    assert config.hpc.max_task_attempts == 3
+    assert identities["selection_manifest_sha256"] == hashlib.sha256(
+        config.selection_manifest.read_bytes()
+    ).hexdigest()
+
+
 def test_pcce_runtime_overrides_remove_agent_limits_and_widen_git_timeout(
     tmp_path: Path,
 ) -> None:

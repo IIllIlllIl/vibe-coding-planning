@@ -1,0 +1,24 @@
+schema_version: 1
+session: polybench-pcce-24pcce-c5-v1-20260909
+log: .local/hpc-supervisor/polybench-pcce-24pcce-c5-v1-20260909.log
+arguments:
+  - --poll-interval
+  - "300"
+  - --slice-time
+  - "00:10:00"
+  - --max-runs
+  - "48"
+  - --state-file
+  - .local/hpc-supervisor/polybench-pcce-24pcce-c5-v1-20260909.json
+  - --require-clean-worktree
+  - --batch-script
+  - scripts/hpc_submit_polybench_pcce.sh
+  - --ulhpc-config
+  - /Users/taoran.wang/.config/ulhpc-submit/config.yaml
+  - --config
+  - configs/polybench_pcce_24pcce_c5_prompt_v2_v1_20260909.yaml
+  - --job-name
+  - polybench-pcce-24pcce-c5-v1-20260909
+  - --remote-dir
+  - ~/hpc_runs/vibe-polybench-pcce-24pcce-c5-v1-20260909
+  - --submit
