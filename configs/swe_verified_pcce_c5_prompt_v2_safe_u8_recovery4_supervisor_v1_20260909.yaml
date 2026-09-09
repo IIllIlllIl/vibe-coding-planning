@@ -1,0 +1,24 @@
+schema_version: 1
+session: swe-verified-pcce-c5-safe-u8-recovery4-v1-20260909
+log: .local/hpc-supervisor/swe-verified-pcce-c5-safe-u8-recovery4-v1-20260909.log
+arguments:
+  - --poll-interval
+  - "300"
+  - --slice-time
+  - "00:10:00"
+  - --max-runs
+  - "36"
+  - --state-file
+  - .local/hpc-supervisor/swe-verified-pcce-c5-safe-u8-recovery4-v1-20260909.json
+  - --require-clean-worktree
+  - --batch-script
+  - scripts/hpc_submit_swe_verified_pcce.sh
+  - --ulhpc-config
+  - /Users/taoran.wang/.config/ulhpc-submit/config.yaml
+  - --config
+  - configs/swe_verified_pcce_c5_prompt_v2_safe_u8_recovery4_v1_20260909.yaml
+  - --job-name
+  - swe-verified-pcce-c5-safe-u8-recovery4-v1-20260909
+  - --remote-dir
+  - ~/hpc_runs/vibe-swe-verified-pcce-c5-safe-u8-recovery4-v1-20260909
+  - --submit

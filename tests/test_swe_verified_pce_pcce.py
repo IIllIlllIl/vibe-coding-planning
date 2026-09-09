@@ -1083,6 +1083,37 @@ def test_tracked_c5_safe_u8_pcce_is_exact_workspace_safe_pce_failure_subset() ->
     assert "--submit" in arguments
 
 
+def test_tracked_c5_safe_u8_recovery_preserves_rejected_first_review() -> None:
+    config = load_swe_verified_pcce_config(
+        "configs/swe_verified_pcce_c5_prompt_v2_safe_u8_recovery4_v1_20260909.yaml",
+        require_api_keys=False,
+    )
+    seed = json.loads(config.first_review_seed.read_text(encoding="utf-8"))
+    expected_ids = (
+        "matplotlib__matplotlib-26466",
+        "django__django-15127",
+        "pylint-dev__pylint-6528",
+        "sympy__sympy-13798",
+    )
+
+    assert config.execution_mode == "from_frozen_first_review"
+    assert config.instance_ids == expected_ids
+    assert tuple(seed["selected_instance_ids"]) == expected_ids
+    assert seed["instances"] == 4
+    assert seed["source_run_id"] == (
+        "swe-verified-pcce-c5-safe-u8-v1-20260909"
+    )
+    assert seed["source_review_sha256"] == (
+        "10c6edbccc0ebd8766a4092cc18fa7afcf448ad8792cf3d716bafe498b5d6b40"
+    )
+    assert file_sha256(config.first_review_seed) == (
+        config.expected_first_review_seed_sha256
+    )
+    assert config.guideline_label == "behavioral_c5_prompt_v2_v1"
+    assert config.phase_times.revision_review == "00:45:00"
+    assert config.phase_times.ce == "00:45:00"
+
+
 def test_controller_recovers_only_three_evidenced_evaluator_slurm_timeouts(
     tmp_path: Path,
 ) -> None:
