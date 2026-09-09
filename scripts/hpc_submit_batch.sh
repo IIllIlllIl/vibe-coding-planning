@@ -378,6 +378,7 @@ fi
 
 REMOTE_DATASET_SNAPSHOT="$REMOTE_DATASET_DIR/$DATASET_REL"
 REMOTE_RUN_SNAPSHOT="$REMOTE_RUN_DIR/$RUN_DIR_REL"
+DATASET_SYNC_EXCLUDE="$(basename "$DATASET_REL")"
 
 # The frozen dataset is staged separately and linked back at DATASET_REL.
 # Exclude it from the project rsync so that --link-as never collides with a
@@ -386,17 +387,19 @@ EFFECTIVE_ULHPC_CONFIG="$ULHPC_CONFIG"
 if [[ -n "$ULHPC_CONFIG" ]]; then
   EFFECTIVE_ULHPC_CONFIG="$(mktemp "${TMPDIR:-/tmp}/vibe-ulhpc-config.XXXXXX.yaml")"
   chmod 600 "$EFFECTIVE_ULHPC_CONFIG"
-  python - "$ULHPC_CONFIG" "$EFFECTIVE_ULHPC_CONFIG" "$DATASET_REL" <<'PY'
+  python - "$ULHPC_CONFIG" "$EFFECTIVE_ULHPC_CONFIG" "$DATASET_SYNC_EXCLUDE" <<'PY'
 import sys
 from pathlib import Path
 
 import yaml
 
-source, target, dataset_rel = map(Path, sys.argv[1:])
+source = Path(sys.argv[1])
+target = Path(sys.argv[2])
+dataset_exclude = sys.argv[3]
 config = yaml.safe_load(source.read_text(encoding="utf-8")) or {}
 excludes = list(config.get("sync_excludes") or [])
-if str(dataset_rel) not in excludes:
-    excludes.append(str(dataset_rel))
+if dataset_exclude not in excludes:
+    excludes.append(dataset_exclude)
 config["sync_excludes"] = excludes
 target.write_text(yaml.safe_dump(config, sort_keys=False), encoding="utf-8")
 PY
@@ -511,7 +514,7 @@ echo "[hpc-submit] remote-apptainer-tmp-dir=$REMOTE_APPTAINER_TMP_DIR"
 echo "[hpc-submit] remote-apptainer-sif-cache-dir=$REMOTE_APPTAINER_SIF_CACHE_DIR"
 echo "[hpc-submit] remote-env-file=$REMOTE_ENV_FILE"
 echo "[hpc-submit] dataset_snapshot=$DATASET_SNAPSHOT"
-echo "[hpc-submit] project-sync-exclude=$DATASET_REL"
+echo "[hpc-submit] project-sync-exclude=$DATASET_SYNC_EXCLUDE"
 echo "[hpc-submit] run_dir=$RUN_DIR"
 echo "[hpc-submit] invoking ulhpc-submit..."
 

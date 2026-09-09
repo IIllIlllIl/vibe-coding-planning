@@ -181,7 +181,7 @@ prompts:
     assert "remote-run-snapshot=~/hpc_run_state/test/" in result.stdout
     assert "--stage-data" in result.stdout
     assert "--link-as" in result.stdout
-    assert f"- {snapshot.relative_to(REPO_ROOT)}" in result.stdout
+    assert f"- {snapshot.name}" in result.stdout
     assert "--persistent-output" in result.stdout
     assert "~/hpc_run_state/test/" in result.stdout
     assert "remote-apptainer-cache-dir=/scratch/test/apptainer-cache" in (

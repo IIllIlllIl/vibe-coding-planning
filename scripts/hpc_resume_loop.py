@@ -885,7 +885,11 @@ def run_loop(config: SupervisorConfig) -> int:
                 terminal_submission_error = next(
                     (
                         marker
-                        for marker in ("SYNC_DISK_FULL", "STAGING_ERROR")
+                        for marker in (
+                            "SYNC_DISK_FULL",
+                            "SYNC_INTEGRITY_ERROR",
+                            "STAGING_ERROR",
+                        )
                         if marker in str(exc)
                     ),
                     None,
