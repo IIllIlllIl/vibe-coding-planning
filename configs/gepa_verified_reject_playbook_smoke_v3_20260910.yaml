@@ -1,0 +1,115 @@
+schema_version: 1
+mode: offline_reject_playbook
+status: launch_authorized
+run_id: verified-reject-playbook-smoke-v3-20260910
+purpose: validate separated Reflector artifact transport, self-check, and retry feedback
+
+paths:
+  dataset_snapshot: configs/frozen_swe_verified_playbook_gepa/20260909_clean444_25e5ce38271c
+  initial_rules: configs/development_guidelines/offline_gepa_reject_playbook_seed_v1.json
+  run_dir: output/SWE-bench_Verified/gepa-reject-playbook-runs/smoke-v3-20260910
+
+task:
+  semantics: offline_reject_playbook_v3
+
+container:
+  runtime: none
+  sif_cache_dir: /scratch/users/twang/vibe-coding-planning/shared/sif-cache
+
+execution:
+  backend: hpc_slurm
+
+inputs:
+  dataset_snapshot: configs/frozen_swe_verified_playbook_gepa/20260909_clean444_25e5ce38271c
+  initial_playbook: configs/development_guidelines/offline_gepa_reject_playbook_seed_v1.json
+  initial_playbook_sha256: da2676ca8b9a4d78e0d3d21bb560650c4d9aafe616088e3d00f8e18f2a3d4e7e
+  prompt_bundle: configs/prompts/offline_gepa_reject_playbook_v3_20260910.yaml
+  prompt_bundle_sha256: afd3838b014ab650239eec41dc7df047c2b0615f2bc03e7f3888bda7eac9d596
+  train_instance_ids:
+    - astropy__astropy-12907
+    - django__django-10097
+    - django__django-10880
+    - sympy__sympy-22080
+  validation_instance_ids:
+    - django__django-10554
+    - django__django-11095
+
+models:
+  checker:
+    model: deepseek-v4-flash
+    temperature: 0.0
+  reflector:
+    model: deepseek-v4-flash
+    temperature: 0.0
+  curator:
+    model: deepseek-v4-flash
+    temperature: 0.0
+  refiner:
+    model: deepseek-v4-flash
+    temperature: 0.0
+
+search:
+  max_iterations: 1
+  reflection_minibatch_size: 2
+  max_metric_calls: 8
+  seed: 42
+  perfect_score: 0.0
+  skip_perfect_score: false
+
+reflection:
+  rounds: 1
+  rounds_are_configurable: true
+  evidence_image: python:3.12-slim
+  evidence_sif_cache_dir: /scratch/users/twang/vibe-coding-planning/shared/sif-cache
+  max_steps: 20
+  command_timeout_seconds: 120
+
+length:
+  maximum_visible_tokens: 10000
+  maximum_bullet_tokens: 128
+
+stopping:
+  stop_after_candidate_proposals: 1
+  abort_on_operational_incomplete: true
+
+success_criteria:
+  - Checker receives only issue, Plan, and Checker-visible bullet text.
+  - Raw Agent completion is durable before Host validation.
+  - Invalid Agent output retries only its array element and is never scored.
+  - Reflector artifact JSON is read separately from terminal stdout/stderr diagnostics.
+  - Reflector validates its JSON artifact before submission.
+  - A Reflector retry receives the prior Host validation error.
+  - Every Checker response validates and host OR aggregation is recorded.
+  - Every selected Reflection case receives a complete per-bullet attribution.
+  - Reflection reads a repository-free, read-only evidence bundle on demand.
+  - Host updates counters and applies a valid Curator delta or an empty delta.
+  - Seed and proposed candidate both receive the expected evaluations.
+  - Raw prompts, responses, trajectories, scores, fingerprints, and timings are retained.
+  - Controller yields immediately after each durable Slurm Agent-wave submission.
+  - Completed array elements are reused and only missing or failed elements are retried.
+
+operational_incomplete_policy: >-
+  Model, transport, timeout, parsing infrastructure, missing-artifact, or
+  exhausted Agent-output-contract failures are operationally incomplete and
+  are not converted to Bad or INVALID.
+
+hpc:
+  submit: true
+  partition: batch
+  cpus_per_task: 1
+  mem: 4G
+  controller_slice_time: "00:30:00"
+  agent_time: "00:35:00"
+  poll_interval_seconds: 30
+  max_running_array_tasks: 8
+  max_task_attempts: 2
+  task_output_grace_seconds: 120
+  missing_task_grace_seconds: 300
+  remote_env_file: ~/.config/vibe-coding-planning/deepseek.env
+  python_module: lang/Python/3.11
+  container_module: tools/Apptainer
+  job_name_prefix: verified-reject-playbook-smoke-v3-20260910
+
+readiness:
+  runnable: true
+  missing: []

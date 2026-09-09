@@ -49,7 +49,7 @@ def run_task(
         if previous_output_path is not None and previous_output_path.is_file():
             previous = json.loads(previous_output_path.read_text(encoding="utf-8"))
             retry_feedback = str(previous.get("error", ""))
-        if role == "checker":
+        if role in {"checker", "reflector"}:
             values["retry_feedback"] = retry_feedback
         if role == "reflector":
             stage = "agent_execution"
@@ -60,6 +60,7 @@ def run_task(
                 instance_template=prompts[f"{role}_instance"],
                 evidence_dir=str(manifest["evidence_dir"]),
                 internal_playbook=str(values["internal_playbook"]),
+                retry_feedback=str(values["retry_feedback"]),
             )
         else:
             stage = "prompt_render"

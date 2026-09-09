@@ -19,11 +19,14 @@ tracked does not authorize its execution.
 | `development_guidelines/offline_gepa_reject_playbook_seed_v1.json` | One-bullet structured seed for the new reject-playbook method; internal IDs/counters are projected out before Checker execution. |
 | `prompts/offline_gepa_reject_playbook_v1_20260909.yaml` | Frozen prompt authority from the completed first Playbook smoke; retained unchanged for provenance. |
 | `prompts/offline_gepa_reject_playbook_v2_20260910.yaml` | Repaired prompt bundle with an explicit Checker evidence-array schema and file-backed, tool-using per-case Reflection. |
+| `prompts/offline_gepa_reject_playbook_v3_20260910.yaml` | Reflector artifact/self-check authority after v2 exposed stdout/stderr submission contamination; includes positive JSON structure and retry feedback. |
 | `frozen_swe_verified_playbook_gepa/20260909_clean444_25e5ce38271c/` | Eligibility-cleaned immutable Verified development snapshot with 444 cases and exhaustive exclusion/audit authorities. |
 | `gepa_verified_reject_playbook_smoke_v1_20260909.yaml` | Completed diagnostic 4-train/2-validation smoke; distributed execution worked, but Checker schema ambiguity and inline Reflection overflow prevented a proposal. |
 | `gepa_verified_reject_playbook_smoke_v2_20260910.yaml` | Repaired, launch-unauthorized successor with raw-completion checkpointing, Host-validation retry, repository-free evidence mounts, and a 128-token per-bullet validity cap. |
 | `gepa_verified_reject_playbook_smoke_supervisor_v2_20260910.yaml` | Launch-unauthorized local supervisor identity for the repaired v2 smoke. |
 | `gepa_verified_reject_playbook_smoke_supervisor_v3_20260910.yaml` | Replacement supervisor identity after the pre-submission v2 config-hash mismatch; preserves the failed v2 supervisor state. |
+| `gepa_verified_reject_playbook_smoke_v3_20260910.yaml` | Launch-authorized successor that tests separated Reflector artifact transport, JSON self-check, and retry feedback. |
+| `gepa_verified_reject_playbook_smoke_supervisor_v4_20260910.yaml` | Fresh supervisor identity for the v3 smoke; preserves all blocked v2 run state. |
 | `gepa_verified_reject_playbook_smoke_supervisor_v1_20260909.yaml` | Prepared 30-second local supervisor identity for the Playbook smoke; presence does not authorize launch. |
 | `gepa_behavioral_acceptability_smoke_v2_20260830.yaml` | Completed Stage C v2 method identity: bounded no-container runtime and one full GEPA proposal on the eight-case development fixture. |
 | `frozen_swe_chat_behavioral_smoke/` | Frozen eight-case development fixture assignment; all exposed cases are formal-train-only. |

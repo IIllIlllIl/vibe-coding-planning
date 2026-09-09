@@ -1,0 +1,31 @@
+schema_version: 1
+session: verified-reject-playbook-smoke-v4-20260910
+log: .local/hpc-supervisor/verified-reject-playbook-smoke-v4-20260910.log
+arguments:
+  - --poll-interval
+  - "30"
+  - --slice-time
+  - "00:30:00"
+  - --max-runs
+  - "30"
+  - --state-file
+  - .local/hpc-supervisor/verified-reject-playbook-smoke-v4-20260910.json
+  - --require-clean-worktree
+  - --gepa-rules
+  - --gepa-config
+  - configs/gepa_verified_reject_playbook_smoke_v3_20260910.yaml
+  - --ulhpc-config
+  - /Users/taoran.wang/.config/ulhpc-submit/config.yaml
+  - --job-name
+  - verified-reject-playbook-smoke-v4-20260910
+  - --remote-dir
+  - /scratch/users/twang/vibe-coding-planning/controller-staging/verified-reject-playbook-smoke-v4-20260910
+  - --remote-dataset-dir
+  - /scratch/users/twang/vibe-coding-planning/playbook-gepa-datasets
+  - --remote-run-dir
+  - /scratch/users/twang/vibe-coding-planning/playbook-gepa-run-state
+  - --cpus
+  - "1"
+  - --mem
+  - 4G
+  - --submit

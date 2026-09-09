@@ -378,6 +378,11 @@ class ApptainerEnvironment:
 
         return {
             "output": (result.stdout or "") + (result.stderr or ""),
+            # Keep the legacy combined stream for mini-swe-agent's interactive
+            # observations, while exposing separated authorities to callers
+            # that consume machine-readable artifacts.
+            "stdout": result.stdout or "",
+            "stderr": result.stderr or "",
             "returncode": result.returncode,
         }
 

@@ -556,6 +556,15 @@ def test_evidence_reflector_disables_implicit_cwd_mount(
         def __init__(self, **kwargs):
             captured.update(kwargs)
 
+        def execute(self, command, **kwargs):
+            captured["artifact_command"] = (command, kwargs)
+            return {
+                "output": '{"instance_id":"case","bullet_tags":[]}WARNING',
+                "stdout": '{"instance_id":"case","bullet_tags":[]}',
+                "stderr": "WARNING",
+                "returncode": 0,
+            }
+
         def cleanup(self):
             captured["cleaned"] = True
 
@@ -564,7 +573,7 @@ def test_evidence_reflector_disables_implicit_cwd_mount(
 
         def run(self, **kwargs):
             captured["task"] = kwargs
-            return "Submitted", '{"instance_id":"case","bullet_tags":[]}'
+            return "Submitted", '{"instance_id":"case"}WARNING'
 
     monkeypatch.setenv("TEST_API_KEY", "not-a-secret")
     monkeypatch.setattr(
@@ -594,18 +603,23 @@ def test_evidence_reflector_disables_implicit_cwd_mount(
         instance_template="instance",
         evidence_dir=str(evidence),
         internal_playbook="playbook",
+        retry_feedback="previous JSON was malformed",
     )
 
     assert output["instance_id"] == "case"
     assert captured["run_args"] == [
         "--no-mount",
         "cwd",
+        "--pwd",
+        "/evidence",
         "--bind",
         f"{evidence.resolve()}:/evidence:ro",
     ]
     assert captured["network_disabled"] is True
     assert captured["isolate_tmp"] is True
     assert captured["cwd"] == "/evidence"
+    assert captured["task"]["retry_feedback"] == "previous JSON was malformed"
+    assert captured["artifact_command"][0] == "cat /tmp/reflection.json"
     assert captured["cleaned"] is True
 
 

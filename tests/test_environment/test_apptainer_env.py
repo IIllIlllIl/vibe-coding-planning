@@ -195,6 +195,8 @@ def test_environment_execute_builds_expected_apptainer_args(
     result = env.execute("echo hello")
 
     assert result["returncode"] == 0
+    assert result["stdout"] == ""
+    assert result["stderr"] == ""
     args = calls[-1]
     assert args[0] == "apptainer"
     assert args[1] == "exec"

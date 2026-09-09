@@ -376,6 +376,17 @@ before Host validation, retries only the invalid array element with validator
 feedback, restores file-backed Reflection evidence, and treats exhausted
 proposal work as operationally incomplete.
 
+The v2 smoke completed its Checker work but exhausted both Reflector attempts.
+The saved JSON files were generally valid; the terminal submission was polluted
+by an Apptainer working-directory warning because the environment combined
+stdout and stderr. The v3 prompt/runtime repair therefore treats
+`/tmp/reflection.json` as a separate Agent artifact authority, reads only its
+stdout, retains stderr as diagnostics, supplies a complete positive JSON
+template, requires an explicit JSON self-check, and gives Reflector retries the
+prior Host validation error. The v3 prompt authority is
+`configs/prompts/offline_gepa_reject_playbook_v3_20260910.yaml`; no v3 smoke is
+authorized merely by this documentation.
+
 The smoke implementation uses the established
 distributed GEPA execution contract rather than calling Agents inside the
 controller. The local supervisor submits short controller allocations. A

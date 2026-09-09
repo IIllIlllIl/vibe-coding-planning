@@ -72,6 +72,7 @@ def run_evidence_reflector(
     instance_template: str,
     evidence_dir: str,
     internal_playbook: str,
+    retry_feedback: str = "",
 ) -> tuple[dict[str, Any], list[dict[str, Any]]]:
     """Run a tool-using Reflector over a read-only, repository-free bundle."""
     DefaultAgent, LitellmModel, _ = import_minisweagent()
@@ -105,6 +106,8 @@ def run_evidence_reflector(
         run_args=[
             "--no-mount",
             "cwd",
+            "--pwd",
+            "/evidence",
             "--bind",
             f"{Path(evidence_dir).resolve()}:/evidence:ro",
         ],
@@ -126,6 +129,7 @@ def run_evidence_reflector(
             task="Attribute this case to every active rejection rule.",
             evidence_path="/evidence",
             internal_playbook=internal_playbook,
+            retry_feedback=retry_feedback,
         )
         raise_for_permanent_provider_error(exit_status, submission)
         if exit_status != "Submitted":
@@ -135,12 +139,36 @@ def run_evidence_reflector(
             )
             error.trajectory = list(agent.messages)  # type: ignore[attr-defined]
             raise error
+        # The submitted terminal observation may contain container diagnostics.
+        # Treat the Agent-authored file as the data authority and read only its
+        # stdout; stderr remains separate diagnostic evidence.
+        artifact = environment.execute(
+            "cat /tmp/reflection.json",
+            cwd="/evidence",
+            timeout=int(reflection_config.get("command_timeout_seconds", 120)),
+        )
+        trajectory = [
+            *list(agent.messages),
+            {
+                "role": "host_artifact_read",
+                "content": {
+                    "path": "/tmp/reflection.json",
+                    "returncode": artifact["returncode"],
+                    "stderr": artifact.get("stderr", ""),
+                    "terminal_submission": submission,
+                },
+            },
+        ]
+        if artifact["returncode"] != 0:
+            error = RuntimeError("Reflector artifact could not be read")
+            error.trajectory = trajectory  # type: ignore[attr-defined]
+            raise error
         try:
-            return _json_object(submission), list(agent.messages)
+            return _json_object(str(artifact.get("stdout", ""))), trajectory
         except (ValueError, json.JSONDecodeError) as exc:
             error = PlaybookAgentOutputContractError(str(exc))
-            error.raw_response = submission  # type: ignore[attr-defined]
-            error.trajectory = list(agent.messages)  # type: ignore[attr-defined]
+            error.raw_response = artifact.get("stdout", "")  # type: ignore[attr-defined]
+            error.trajectory = trajectory  # type: ignore[attr-defined]
             raise error from exc
     finally:
         environment.cleanup()
