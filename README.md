@@ -5,11 +5,13 @@ Plan-to-Implementation boundary. It starts from the current Offline GEPA search
 implementation and the completed clean PolyBench PCE/PCCE evidence, then adds
 SWE-chat Behavioral Plan Acceptability v1 as a new supervision design.
 
-The active research question is whether the evidence available before
-implementation supports accepting a proposed plan. Deployment-time review must
-not see developer reactions, later plan revisions, implementation trajectories,
-or downstream outcomes. Those post-boundary records may support dataset labels
-and GEPA Reflection only.
+The active research question has progressed from behavioral acceptance
+classification to learning which decision-time-identifiable Plan deficiencies
+justify intervention and how review feedback can improve downstream execution.
+Deployment-time review must not see developer reactions, later plan revisions,
+implementation trajectories, or downstream outcomes. Those post-boundary
+records may support labels, controlled Reflection evidence, and retrospective
+development analysis only.
 
 ## Frozen research baseline
 
@@ -38,6 +40,18 @@ and GEPA Reflection only.
 - The 20-case balanced PolyBench PC-only diagnostic completed without an
   incomplete decision. C4 scored 65% versus the historical Seed's 60%, a
   directional small-sample result rather than a generalization claim.
+- On the paired SWE-Verified quick50, PCE resolved 41/50, the neutral Seed
+  PCCE resolved 37/50, and C4 PCCE preserved the PCE result at 41/50. C4
+  created no new resolved case in that complete run.
+- The workspace-safe C4 development analysis contains 67 cases with 49
+  resolved-to-resolved and 18 unresolved-to-unresolved transitions. It has
+  already been used for RQ2 mechanism discovery and cannot be the principal
+  held-out evaluation of a guideline derived from it.
+- The development C5 safe-U8 diagnostic now has a terminal 2/8 resolved result:
+  four direct first-review accepts remained unresolved, while four frozen
+  first-review rejections were operationally recovered through revision and
+  later review, producing two resolved and two unresolved outcomes. This is
+  small, outcome-selected development evidence, not a generalization result.
 
 These are frozen stage results, not a live progress log. Current unresolved
 methodological decisions are maintained only in `project_issues.md`. Launching
@@ -64,15 +78,19 @@ Read these files in order:
    — frozen first-stage PolyBench findings.
 7. [`docs/knowledge/behavioral-gepa-initial-findings.md`](docs/knowledge/behavioral-gepa-initial-findings.md)
    — frozen first Behavioral search and C4 external-diagnostic findings.
-8. [`docs/polybench-pcce.md`](docs/polybench-pcce.md) and
+8. [`docs/knowledge/rq2-c4-safe67-deficiency-reactions.md`](docs/knowledge/rq2-c4-safe67-deficiency-reactions.md),
+   [`docs/knowledge/rq2-c4-blind-discriminator-validation.md`](docs/knowledge/rq2-c4-blind-discriminator-validation.md),
+   and [`docs/knowledge/rq2-c4-pcce-failure-analysis.md`](docs/knowledge/rq2-c4-pcce-failure-analysis.md)
+   — frozen development evidence behind the next GEPA supervision redesign.
+9. [`docs/polybench-pcce.md`](docs/polybench-pcce.md) and
    [`docs/offline-polybench-validation.md`](docs/offline-polybench-validation.md)
    — implemented PCE/PCCE and external-evidence boundaries.
-9. [`docs/swe-verified-pce-pcce.md`](docs/swe-verified-pce-pcce.md) — additive
+10. [`docs/swe-verified-pce-pcce.md`](docs/swe-verified-pce-pcce.md) — additive
    SWE-Verified PCE/PCCE generalization workflow, phase isolation, evaluator
-   semantics, and smoke-to-quick-validation order.
-10. [`docs/swe-bench-pro-pce.md`](docs/swe-bench-pro-pce.md) — completed Pro
-    quick25 acquisition, repository-history audit, official-SIF policy, and the
-    prepared but not launched Pro PCE adapter.
+   semantics, completed quick50 comparison, and C5 safe-U8 development result.
+11. [`docs/swe-bench-pro-pce.md`](docs/swe-bench-pro-pce.md) — completed Pro
+    quick25 PCE, repository-history audit, official-SIF policy, and paused C4
+    PCCE path.
 
 The current implementation surface is:
 
@@ -82,7 +100,7 @@ The current implementation surface is:
   execution/evaluation platform;
 - `src/offline_check_only/` for additive fixed-guideline evaluation;
 - `src/swe_verified_pce/` and `src/swe_verified_pcce/` for independent current-
-  prompt SWE-Verified PCE and paired Seed/C4 PCCE evaluation;
+  prompt SWE-Verified PCE and paired Seed/C4/C5 development evaluation;
 - `src/swe_bench_pro_pce/` for the additive Pro task/image/evaluator adapter
   that reuses the current SWE PCE phase and retry implementation;
 - `third_party/gepa/` for the existing search implementation, which should not

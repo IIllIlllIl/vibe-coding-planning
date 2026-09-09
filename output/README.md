@@ -29,11 +29,14 @@ artifacts.
 |---|---|---|
 | `SWE-bench_Verified/swe-verified-pce-runs/quick-validation/current-prompt-quick50-v1-20260901/` | Paired quick-validation baseline | Completed 50-case current-prompt PCE; exact Plans and terminal outcomes are inputs to both PCCE methods |
 | `SWE-bench_Verified/swe-verified-pcce-runs/quick-validation/neutral-seed-v1-20260901/` | Paired quick-validation evidence | Completed Seed PCCE; local copy contains terminal outcomes, reviews, manifest, and summary while phase-level raw evidence remains on Iris |
+| Remote `/scratch/users/twang/vibe-coding-planning/swe-verified-pcce-run-state/output/SWE-bench_Verified/swe-verified-pcce-runs/quick-validation/behavioral-c4-v1-20260902/` | Paired quick-validation evidence | Completed C4 PCCE: 41/50 resolved, 9/50 unresolved, and no paired transition relative to PCE |
+| Remote `/scratch/users/twang/vibe-coding-planning/swe-verified-pcce-run-state/output/SWE-bench_Verified/swe-verified-pcce-runs/quick-validation/behavioral-c4-issue-first-v1-20260903/` | Rejected-subset development diagnostic | Reused the 16 frozen C4 Review-1 rejections; 15 terminal cases with two U-to-R and two R-to-U, plus one operationally incomplete case |
+| Remote `~/hpc_run_state/vibe-coding-planning/output/SWE-bench_Verified/swe-verified-pcce-runs/development/c5-prompt-v2-safe-u8-v1-20260909/` and `...safe-u8-recovery4-v1-20260909/` | Outcome-selected development evidence | Combined safe-U8 C5 result is 2 resolved / 6 unresolved; the recovery starts from four frozen Review-1 rejections and does not rerun them |
 
 This coverage-oriented 50-case cohort is development evidence, not an
-untouched holdout or a prevalence estimate. C4 is prepared but has no output
-until separately authorized and launched. Stable method and result semantics
-belong to `../docs/swe-verified-pce-pcce.md`.
+untouched holdout or a prevalence estimate. The safe-U8 subset is additionally
+outcome-selected and may support mechanism diagnosis only. Stable method and
+result semantics belong to `../docs/swe-verified-pce-pcce.md`.
 
 ## SWE-bench Pro Quick25
 
@@ -64,12 +67,16 @@ the replacement smoke passed its workflow criteria. See
 | `SWE-PolyBench/polybench-pcce-runs/formal/seed-python99-clean-pce-v1-20260826/` | Frozen PCCE evidence | Seed: 66/99 after accepted repair |
 | `SWE-PolyBench/polybench-pcce-runs/formal/b8-candidate2-python99-clean-pce-v1-20260826/` | Frozen PCCE evidence | Candidate 2: 66 resolved / 32 unresolved / 1 incomplete after accepted repair |
 | Remote `~/hpc_run_state/vibe-coding-planning/output/SWE-PolyBench/polybench-pc-checker-only-runs/development/c4-balanced20-v1-20260831/` | Development external diagnostic | C4 13/20 versus historical Seed 12/20; one Checker review only, with no Planner, Code, or Evaluate |
+| Remote `~/hpc_run_state/vibe-coding-planning/output/SWE-PolyBench/polybench-pcce-runs/development/c4-balanced20-full-v1-20260903/` | Development PCCE evidence | Completed 20/20: 10 resolved and 10 unresolved, preserving every paired PCE outcome |
+| Remote `~/hpc_run_state/vibe-coding-planning/output/SWE-PolyBench/polybench-pcce-runs/development/c5-repair3-v1-20260908/` | Outcome-selected development evidence | Completed 3/3: one resolved and two unresolved; the sole U-to-R passed Review 1 and is not intervention-mediated |
+| Remote `~/hpc_run_state/vibe-coding-planning/output/SWE-PolyBench/polybench-pcce-runs/development/24pcce-c5-prompt-v2-v1-20260909/` | Failure-enriched development evidence | 10 resolved, 10 unresolved, and four operationally incomplete; no U-to-R among terminal cases |
 
 The initial clean PCCE stage is closed. PolyBench results must not enter the old
-GEPA candidate tree, and the 20-case C4 subset is neither a population estimate
-nor an untouched holdout. See `../docs/knowledge/offline-pcce-stage-findings.md`
-and `../docs/knowledge/behavioral-gepa-initial-findings.md` for conclusions and
-limitations.
+GEPA candidate tree. The later C4/C5 runs are development-exposed and may inform
+redesign, but neither the balanced20 nor the outcome-enriched C5 subsets are a
+population estimate or untouched holdout. See
+`../docs/knowledge/offline-pcce-stage-findings.md` and
+`../docs/knowledge/behavioral-gepa-initial-findings.md` for frozen conclusions.
 
 ## Artifact Boundaries
 

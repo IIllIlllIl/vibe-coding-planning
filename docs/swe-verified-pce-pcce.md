@@ -3,7 +3,7 @@
 > Authority: the independent SWE-Verified Plan-Code-Evaluate and paired
 > Plan-Check-Code-Evaluate data, phase, and evidence contract
 >
-> Last reviewed: 2026-09-02
+> Last reviewed: 2026-09-09
 
 ## Purpose
 
@@ -71,13 +71,34 @@ the Seed run repaired none of the nine PCE-unresolved cases and changed four
 PCE-resolved cases to unresolved. Two PC tasks required a second Slurm attempt;
 both completed without changing membership or terminal semantics.
 
-The prepared C4 runtime is
+The C4 runtime
 `configs/swe_verified_pcce_quick50_c4_v1_20260902.yaml`, with its matching
-supervisor config. It consumes the same frozen selection, exact PCE outcome
+supervisor config, completed over the same 50 cases. It consumed the same
+frozen selection, exact PCE outcome
 bytes, image manifest, prompt/runtime sources, and operational policy under a
 distinct guideline and run identity. Both PCCE runtimes reject any PCE outcome
-or image manifest whose bytes differ from the frozen hashes. C4 is prepared but
-has not been launched.
+or image manifest whose bytes differ from the frozen hashes. C4 resolved 41/50
+with no incomplete result: all 41 paired PCE successes remained resolved and
+all nine paired PCE failures remained unresolved. Thus C4 avoided the Seed's
+four regressions but created no new resolved case.
+
+The subsequent issue-first diagnostic reused the 16 frozen C4 first-review
+rejections rather than rerunning Review 1. Fifteen cases reached a terminal
+method result and one remained operationally incomplete; the terminal
+transitions were nine R-to-R, two R-to-U, two U-to-R, and two U-to-U. This is a
+rejected-subset Planner diagnostic, not a second complete quick50 result.
+
+The later C5 safe-U8 development diagnostic deliberately selected the eight
+workspace-safe PCE-unresolved quick50 cases. Four Plans passed Review 1 and all
+four remained unresolved. The other four frozen Review-1 rejections initially
+could not enter revision because the Verified adapter omitted its dataset
+identity. The additive recovery fixed that runtime field without rerunning
+Review 1; all four replacement Plans later passed review and reached official
+evaluation, producing two resolved and two unresolved outcomes. Combined C5
+safe-U8 is therefore two resolved and six unresolved. Because membership was
+selected using the PCE outcome and the same cases informed prior C4/C5
+development, this result is mechanism evidence only, not held-out effectiveness
+or a rate estimate.
 
 ### PCE development smoke contract
 
@@ -181,8 +202,10 @@ The required order is:
    all smoke cases (complete);
 6. acquire and audit every selected SIF, then freeze the selection-scoped image
    manifest (complete);
-7. run paired PCE, seed PCCE, and C4 PCCE under new immutable run identities
-   (PCE and Seed complete; C4 prepared but not launched).
+7. run paired PCE, Seed PCCE, and C4 PCCE under immutable run identities
+   (complete);
+8. retain the issue-first and C5 safe-U8 runs as explicitly outcome-exposed
+   development diagnostics, not extensions of the quick50 comparison.
 
 Smoke checks pipeline correctness only. The quick validation is a bounded
 generalization diagnostic, not an untouched final holdout.

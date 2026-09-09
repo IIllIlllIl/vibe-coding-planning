@@ -86,27 +86,31 @@ Current decisions are:
 
 ## Open design issues
 
-1. Classify rejection reasons as controlled explanatory evidence without
-   changing the 84 observed DO_NOT_ACCEPT labels.
-2. Define treatment of rejection/revision feedback, later Plans, silence,
-   topic change, and implementation behavior in controlled Reflection evidence.
-3. Predeclare how multiple validation metrics select one guideline when
-   accuracy ties or conflicts with class balance.
-4. Decide what independent dataset or future collection can serve as a final
-   untouched evaluation after GEPA candidate selection.
-5. Decide whether no-repository or stricter-proxy subsets are useful ablations
-   after the primary formal run, without changing the primary contract.
+1. Redesign the GEPA learning objective before another broad PCCE run. The
+   current evidence separates deficiency detection, intervention materiality,
+   feedback completeness, revised-Plan quality, Code fidelity, and evaluator
+   outcome; a single historical-resolution or behavioral-acceptance score has
+   not optimized that complete chain.
+2. Decide which units receive candidate scores and which downstream evidence
+   is Reflection-only. Candidate comparison must not convert PCE outcome,
+   R0--R3 reaction, or a stochastic U-to-R directly into Plan-quality truth.
+3. Preserve the deployment boundary: Checker inputs end at the Plan decision;
+   later revisions, implementation trajectories, developer feedback, and
+   evaluator evidence may inform controlled supervision or retrospective
+   development analysis only.
+4. Predeclare a new development/validation/held-out split. The Behavioral
+   47-case validation, safe67, balanced20, repair3, 24pcce, and safe-U8 cases
+   are already development-exposed and cannot become the principal held-out
+   evaluation of a method derived from them.
+5. Define an intervention-benefit endpoint that distinguishes an actual
+   rejection/revision-mediated U-to-R from a first-review ACCEPT followed by a
+   different stochastic Code result. Report R-to-U and operationally incomplete
+   outcomes alongside any repair.
 6. Fix and regression-test the PolyBench PC-only CLI summary path: the
    controller writes a complete result, then `run_polybench_pcce_hpc.py`
    currently exits nonzero by reading the full-PCCE-only `method_outcomes`
    field.
-7. The paired Seed PCCE completed all 50 cases with 37 resolved and 13
-   unresolved, including no repair of the nine PCE-unresolved cases and four
-   regressions from the PCE-resolved set. After C4 PCCE completes, report the
-   common non-unknown PCE/Seed/C4 intersection and retain all operational
-   exclusions. Do not select or revise either guideline from this
-   quick-validation result.
-8. The 25-image Pro audit confirmed that base checkouts expose the evaluator's
+7. The 25-image Pro audit confirmed that base checkouts expose the evaluator's
    gold commit and substantial non-ancestor history. An ancestor-only clone was
    rejected after the first PCE smoke showed that it discards official
    OpenLibrary submodules and build artifacts. Plan, Code, and Evaluate now use
@@ -121,7 +125,7 @@ Current decisions are:
    3/3 cases, preserved OpenLibrary state, produced all nine phase baselines,
    and observed no Agent Git-history access. Quick25 is operationally
    authorized; latent history visibility remains a reported limitation.
-9. Pro C4 PCCE is paused after all three review waves. Its CE wave retained 15
+8. Pro C4 PCCE is paused after all three review waves. Its CE wave retained 15
    terminal evaluator outputs at the pause boundary, but eight OpenLibrary
    workspaces exhausted quota while extracting their large prepared
    `node_modules` trees, and failure-artifact writes hit the same quota. The
@@ -130,6 +134,24 @@ Current decisions are:
    phase workspaces to a measured quota-safe location, smoke one affected
    OpenLibrary case, and preserve the existing semantic identity and completed
    checkpoints. Operational failures must not be counted as unresolved.
+
+## Completed development evidence relevant to redesign
+
+- SWE-Verified quick50 is complete: PCE 41/50, neutral Seed PCCE 37/50,
+  and C4 PCCE 41/50. Seed introduced four R-to-U transitions; C4 preserved all
+  PCE outcomes but produced no U-to-R.
+- The original C4 safe67 analysis has 49 R-to-R and 18 U-to-U cases. It is a
+  mechanism-development set, not future RQ3 evaluation data.
+- PolyBench C5 repair3 produced one U-to-R and two U-to-U outcomes, but the
+  sole U-to-R passed Review 1 and is not evidence of intervention benefit.
+- PolyBench C5 24pcce ended with 10 resolved, 10 unresolved, and four
+  operationally incomplete outcomes; its terminal cases contain no U-to-R.
+- C5 safe-U8 selected all eight cases from known PCE failures. Four direct
+  Review-1 accepts remained unresolved. Four frozen Review-1 rejections were
+  recovered through revision and later review, producing two resolved and two
+  unresolved outcomes. These two revision-mediated U-to-R cases are useful
+  mechanism evidence but are too selected and too few for an effectiveness or
+  generalization claim.
 
 ## Known validity constraints
 

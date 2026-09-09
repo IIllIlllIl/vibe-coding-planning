@@ -3,7 +3,7 @@
 > Authority: implemented platform flow and completed first paired
 > deployment-oriented evaluation of frozen Offline guidelines
 >
-> Last reviewed: 2026-08-28
+> Last reviewed: 2026-09-09
 
 ## Research Question And Boundary
 
@@ -48,6 +48,17 @@ quality, and end-to-end intervention benefit. The frozen evidence,
 classification tables, failure taxonomy, limitations, and next-design
 requirements are summarized in
 [`knowledge/offline-pcce-stage-findings.md`](knowledge/offline-pcce-stage-findings.md).
+
+Subsequent C4/C5 runs are explicitly development evidence, not a continuation
+of that held-out stage. C4 PC-only scored 13/20 against the historical Seed's
+12/20 on the balanced20 subset; full C4 PCCE then preserved the paired PCE
+split exactly at 10 resolved / 10 unresolved. C5 repair3 produced one resolved
+and two unresolved outcomes, but its sole U-to-R passed Review 1 and therefore
+does not demonstrate intervention benefit. The separate C5 `24pcce` run ended
+with 10 resolved, 10 unresolved, and four operationally incomplete outcomes;
+its 20 terminal cases contained no U-to-R. These outcome-exposed diagnostics,
+and the analyses derived from them, may inform redesign but cannot restore an
+untouched PolyBench generalization claim.
 
 ## Paired First Plan
 

@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "generated_at": "2026-09-04",
+  "generated_at": "2026-09-09",
   "active_method": "behavioral_plan_acceptability_v1",
   "active_offline_method": "offline_gepa_plan_review_guideline",
   "default_agent_scope": [
@@ -90,7 +90,7 @@
     "score_usable": true
   },
   "active_swe_verified_quick_validation": {
-    "status": "pce_and_seed_complete_c4_prepared_not_launched",
+    "status": "pce_seed_c4_complete_c5_safe_u8_development_complete",
     "classification": "coverage_oriented_development_diagnostic_not_untouched_holdout",
     "selection_manifest": "configs/frozen_swe_verified_quick_validation/swe-verified-quick50-v1-20260901.json",
     "instances": 50,
@@ -116,14 +116,41 @@
       "rejected_after_three": 1
     },
     "c4_pcce": {
-      "status": "prepared_not_launched",
+      "status": "completed",
       "config": "configs/swe_verified_pcce_quick50_c4_v1_20260902.yaml",
-      "guideline_sha256": "1e7c68a2c14175dda9a9a8bb16455061c50b9961aafb6eedc030cdbef21e1ebd"
+      "guideline_sha256": "1e7c68a2c14175dda9a9a8bb16455061c50b9961aafb6eedc030cdbef21e1ebd",
+      "run": "output/SWE-bench_Verified/swe-verified-pcce-runs/quick-validation/behavioral-c4-v1-20260902",
+      "result_sha256": "e26caf26610c4dd3f356957290ac3a2481c0fa3ea6b3caf265f6d62e6d463292",
+      "pcce_outcomes_sha256": "db381b8a558375818eacc24aca171358a81d5ad84c91e529da90d437d2da8f04",
+      "method_complete": 50,
+      "resolved": 41,
+      "unresolved": 9,
+      "operationally_incomplete": 0,
+      "resolved_to_resolved": 41,
+      "resolved_to_unresolved": 0,
+      "unresolved_to_resolved": 0,
+      "unresolved_to_unresolved": 9
     },
-    "comparison_scope": "report the PCE/Seed/C4 common non-unknown intersection without tuning either guideline"
+    "c5_safe_u8_development": {
+      "classification": "outcome_selected_development_mechanism_evidence",
+      "instances": 8,
+      "baseline_unresolved": 8,
+      "direct_first_review_accepts": 4,
+      "direct_accept_resolved": 0,
+      "frozen_first_review_rejections": 4,
+      "recovery_resolved": 2,
+      "recovery_unresolved": 2,
+      "combined_resolved": 2,
+      "combined_unresolved": 6,
+      "original_outcomes_sha256": "7c044562c8b40a883a8f453d90f4c1418d95b971a0d726bed07ee84761867680",
+      "recovery_result_sha256": "3645d955953086edf22e3376bddea2ad460299554e097bd99ad576a32ce184a4",
+      "recovery_outcomes_sha256": "237390a590cef2290b339cb3d330c0d9909ceb7eccc9e08593a4faca77fcb491",
+      "supports_generalization_claim": false
+    },
+    "comparison_scope": "quick50 PCE/Seed/C4 is complete development evidence; safe-U8 is outcome-selected mechanism evidence only"
   },
   "prepared_swe_bench_pro_quick25": {
-    "status": "official_sif_smoke_passed_quick25_authorized_not_launched",
+    "status": "quick25_pce_complete_c4_pcce_paused_operationally_incomplete",
     "classification": "stratified_development_diagnostic_not_untouched_holdout",
     "dataset": "ScaleAI/SWE-bench_Pro",
     "dataset_revision": "7ab5114912baf22bb098818e604c02fe7ad2c11f",
@@ -164,8 +191,19 @@
       "summary_sha256": "ae0a4578383f3a13fc626037a27f52aeef2d28f137bc63c7cbd40df394c7293f",
       "supports_effectiveness_claim": false
     },
-    "launch_authorized": true,
-    "score_usable": false
+    "quick25_pce": {
+      "run": "output/SWE-bench_Pro/pce-runs/quick25/official-sif-current-prompt-v1-20260906",
+      "outcomes_sha256": "2e06d834e9873f1ef732b8d6b8355b0ee3d3b09bf915a9aa942c7c2fa8f8f710",
+      "instances": 25,
+      "resolved": 24,
+      "unresolved": 1,
+      "unknown": 0,
+      "operationally_incomplete": 0
+    },
+    "c4_pcce_status": "paused_operationally_incomplete_after_review_waves",
+    "launch_authorized": false,
+    "pce_score_usable": true,
+    "c4_pcce_score_usable": false
   },
   "prepared_swe_verified_pc_only_clean482": {
     "status": "prepared_not_launched",
@@ -342,6 +380,39 @@
     "operational_incomplete_not_scored": true,
     "score_usable": true,
     "next_action": "redesign_before_any_additional_guideline_pcce_launch"
+  },
+  "polybench_pcce_development_evidence": {
+    "classification": "development_exposed_not_untouched_holdout",
+    "as_of": "2026-09-09",
+    "c4_balanced20": {
+      "run": "output/SWE-PolyBench/polybench-pcce-runs/development/c4-balanced20-full-v1-20260903",
+      "outcomes_sha256": "e7fb544f866b5ae4de32888ae737d16854158a9e8c1c8d3bcd9a254793e082e3",
+      "instances": 20,
+      "resolved": 10,
+      "unresolved": 10,
+      "unresolved_to_resolved": 0,
+      "resolved_to_unresolved": 0
+    },
+    "c5_repair3": {
+      "run": "output/SWE-PolyBench/polybench-pcce-runs/development/c5-repair3-v1-20260908",
+      "outcomes_sha256": "843be816e549845923437f4a02696ae3b60f2f7eed09878fb8939aa19a2d77c7",
+      "instances": 3,
+      "resolved": 1,
+      "unresolved": 2,
+      "unresolved_to_resolved": 1,
+      "intervention_mediated_unresolved_to_resolved": 0
+    },
+    "c5_24pcce": {
+      "run": "output/SWE-PolyBench/polybench-pcce-runs/development/24pcce-c5-prompt-v2-v1-20260909",
+      "outcomes_sha256": "d4fd1e6b8ccf5f841b84c6d24cf91f556a138754ca29b9907f1385c32aff9d83",
+      "instances": 24,
+      "resolved": 10,
+      "unresolved": 10,
+      "operationally_incomplete": 4,
+      "terminal_unresolved_to_resolved": 0,
+      "terminal_resolved_to_unresolved": 1
+    },
+    "supports_generalization_claim": false
   },
   "prior_polybench_pce_smoke": {
     "classification": "test_only",

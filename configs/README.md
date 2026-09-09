@@ -21,22 +21,22 @@ tracked does not authorize its execution.
 | `frozen_swe_chat_behavioral_formal/` | Complete 131-case repository/duplicate-component split authority: 84 train and 47 validation with no repository overlap. |
 | `gepa_behavioral_acceptability_formal_8it_v2_20260830.yaml` | Completed formal contract using the media-projected snapshot; immutable run identity, not a relaunch default. Its opening pre-launch comment is retained provenance and is superseded by `experiment_contract.status`. |
 | `behavioral_gepa_formal_8it_supervisor_v2_20260830.yaml` | Completed v2 supervisor identity; provenance only. |
-| `pcce_issue_first_revision_prompt_v1_20260903.yaml` | Non-runnable shared prompt authority for the next C4 PCCE diagnostic. It makes solving the original issue the Revision Planner's system-level objective and treats the previous plan and Checker feedback as fallible advisory evidence; it intentionally retains the existing `revision_feedback`-only payload for the first anti-anchoring comparison. |
+| `pcce_issue_first_revision_prompt_v1_20260903.yaml` | Non-runnable frozen prompt authority used by the completed C4 issue-first diagnostics. It makes solving the original issue the Revision Planner's system-level objective and treats the previous plan and Checker feedback as fallible advisory evidence. |
 | `pcce_issue_first_revision_prompt_pro_v1_20260907.yaml` | Pro operational binding of the same issue-first prompt; only the repository path changes from `/testbed` to the official SIF path `/app`. |
 | `frozen_polybench_pc_quick/c4-balanced20-v1-20260831.json` | Frozen balanced 20-case external diagnostic selection, including conservative workflow/noise exclusions and deterministic sampling identity. |
 | `frozen_guidelines/behavioral-formal-c4-v1-20260831/` | Exact Behavioral formal candidate 4 text and source identity for the PolyBench diagnostic. |
 | `frozen_guidelines/behavioral-formal-all-candidates-v1-20260831/` | Local frozen backup of all six exact formal candidate texts, run identity, terminal state, cost report, lineage, and compact validation metrics; large raw trajectories remain on Iris. |
 | `polybench_pc_checker_only_c4_balanced20_v1_20260831.yaml` | Completed one-review C4 PolyBench diagnostic; it cannot enter Planner, Code, or Evaluate. |
 | `polybench_pc_checker_only_c4_balanced20_supervisor_v1_20260831.yaml` | Completed bounded supervisor identity; provenance only. |
-| `polybench_pcce_c4_balanced20_full_v1_20260903.yaml` | Prepared end-to-end C4 PCCE development diagnostic on the same frozen balanced 20-case selection and paired PCE evidence. |
-| `polybench_pcce_c4_balanced20_full_supervisor_v1_20260903.yaml` | Bounded 24-slice supervisor entry for the end-to-end C4 diagnostic; presence is not launch authorization. |
+| `polybench_pcce_c4_balanced20_full_v1_20260903.yaml` | Completed end-to-end C4 PCCE development diagnostic on the frozen balanced20: 10 resolved / 10 unresolved, identical paired outcome counts to PCE. |
+| `polybench_pcce_c4_balanced20_full_supervisor_v1_20260903.yaml` | Completed supervisor identity for the balanced20 C4 run; provenance only. |
 | `development_guidelines/behavioral_c5_pcce_v1.md` | Development-only C4-derived guideline: Review Procedure 1--5 is retained and the decision section distinguishes an identifiable deficiency from a material pre-coding blocker. It is not frozen evaluation evidence. |
 | `frozen_polybench_pcce_development/c5-repair3-v1-20260908.json` | Outcome-selected three-case PolyBench development rerun membership: prior PCE unresolved, C4 Review-1 rejected, workspace-safe, and evaluator-observable. It explicitly excludes transformers-29675 and is not held-out evidence. |
-| `polybench_pcce_c5_repair3_v1_20260908.yaml` | Prepared full issue-first PCCE rerun of the frozen three cases using the development C5 guideline; starts again from P1 and does not reuse old C4 reviews. |
-| `polybench_pcce_c5_repair3_supervisor_v1_20260908.yaml` | Bounded supervisor for the prepared three-case development rerun; presence does not authorize launch. |
+| `polybench_pcce_c5_repair3_v1_20260908.yaml` | Completed full issue-first C5 development rerun of three PCE-unresolved cases: one resolved and two unresolved. The sole U-to-R passed Review 1 and is not intervention-mediated. |
+| `polybench_pcce_c5_repair3_supervisor_v1_20260908.yaml` | Completed supervisor identity for C5 repair3; provenance only. |
 | `frozen_polybench_pcce_development/24pcce-v1-20260909.json` | Frozen `24pcce` development selection: 24 cases disjoint from balanced20, conservatively excluding known noise and historical cross-phase `/tmp` risks; all 10 eligible PCE failures plus 14 deterministic repository-covering resolved controls. |
-| `polybench_pcce_24pcce_c5_prompt_v2_v1_20260909.yaml` | Prepared full PCCE development evaluation on `24pcce` using C5 and the v2 Checker/Revision-Planner prompt, explicit uncapped Agent phases, three attempts, and 1-hour workers. |
-| `polybench_pcce_24pcce_c5_prompt_v2_supervisor_v1_20260909.yaml` | Bounded supervisor for the prepared `24pcce` run; tracked preparation is not launch authorization. |
+| `polybench_pcce_24pcce_c5_prompt_v2_v1_20260909.yaml` | Completed-with-incomplete C5 development evaluation: 10 resolved, 10 unresolved, and four operationally incomplete; the 20 terminal cases contain no U-to-R transition. |
+| `polybench_pcce_24pcce_c5_prompt_v2_supervisor_v1_20260909.yaml` | Completed supervisor identity for `24pcce`; provenance only. |
 | `frozen_swe_verified_smoke/swe-verified-development-smoke-v1.json` | Frozen two-case development-only SWE-Verified membership; excluded from future quick validation and holdout use. |
 | `swe_verified_pce_smoke_v1.yaml` | Prepared two-case current-prompt PCE-only smoke runtime; its frozen SIF/base-commit audit and pass contract are bound to the development selection. |
 | `swe_verified_pce_smoke_supervisor_v1_20260901.yaml` | Bounded 12-slice supervisor identity for the prepared two-case PCE smoke; presence does not authorize launch. |
@@ -47,16 +47,16 @@ tracked does not authorize its execution.
 | `swe_verified_pce_quick50_supervisor_v1_20260901.yaml` | Completed bounded formal PCE supervisor identity; provenance only. |
 | `swe_verified_pcce_quick50_seed_v1_20260901.yaml` | Completed paired neutral-seed quick50 PCCE runtime, bound to the exact completed PCE outcomes and 50-record image manifest. |
 | `swe_verified_pcce_quick50_seed_supervisor_v1_20260901.yaml` | Completed bounded neutral-seed PCCE supervisor identity; provenance only. |
-| `swe_verified_pcce_quick50_c4_v1_20260902.yaml` | Prepared paired Behavioral C4 quick50 PCCE runtime using the same exact selection, PCE outcomes, image manifest, prompts, and operational policy as Seed. |
-| `swe_verified_pcce_quick50_c4_supervisor_v1_20260902.yaml` | Bounded C4 PCCE supervisor entry; tracked preparation is not launch authorization. |
+| `swe_verified_pcce_quick50_c4_v1_20260902.yaml` | Completed paired Behavioral C4 quick50 PCCE: 41 resolved / 9 unresolved, preserving every paired PCE outcome. |
+| `swe_verified_pcce_quick50_c4_supervisor_v1_20260902.yaml` | Completed C4 quick50 supervisor identity; provenance only. |
 | `frozen_swe_verified_pcce_revision/issue-first-v1-20260903/` | Compact outcome-independent projection of all 16 completed C4 Review-1 rejections from quick50, bound to the authoritative raw wave and source run manifest hashes. It contains P1 and review evidence but omits trajectories. |
-| `swe_verified_pcce_quick50_c4_issue_first_v1_20260903.yaml` | Prepared Planner-v2 diagnostic on all 16 C4-rejected quick50 paths. It consumes frozen Review-1 rather than rerunning it, then permits unchanged C4 review of P2/P3 and paired Code/Evaluate. |
-| `swe_verified_pcce_quick50_c4_issue_first_supervisor_v1_20260903.yaml` | Prepared bounded supervisor identity for the issue-first SWE-Verified diagnostic; presence does not authorize launch. |
-| `swe_verified_pcce_c5_prompt_v2_safe_u8_v1_20260909.yaml` | Prepared outcome-selected development diagnostic over the eight workspace-safe PCE-unresolved quick50 cases. It keeps the parent quick50 selection/SIF authority, binds the exact subset through `pcce.instance_ids`, and uses C5 plus the v2 Checker/Revision-Planner prompt; it is not held-out evidence. |
-| `swe_verified_pcce_c5_prompt_v2_safe_u8_supervisor_v1_20260909.yaml` | Bounded supervisor for the prepared SWE-Verified safe-U8 C5 diagnostic; tracked preparation is not launch authorization. |
+| `swe_verified_pcce_quick50_c4_issue_first_v1_20260903.yaml` | Completed-with-incomplete Planner-v2 diagnostic on the 16 frozen C4 Review-1 rejections: 15 terminal cases, two U-to-R, two R-to-U, and one operationally incomplete. |
+| `swe_verified_pcce_quick50_c4_issue_first_supervisor_v1_20260903.yaml` | Completed issue-first diagnostic supervisor identity; provenance only. |
+| `swe_verified_pcce_c5_prompt_v2_safe_u8_v1_20260909.yaml` | Completed-with-incomplete first C5 pass over eight outcome-selected PCE-unresolved cases: four direct accepts reached CE and remained unresolved; four frozen Review-1 rejections required operational recovery. |
+| `swe_verified_pcce_c5_prompt_v2_safe_u8_supervisor_v1_20260909.yaml` | Completed original safe-U8 supervisor identity; provenance only. |
 | `frozen_swe_verified_pcce_revision/c5-safe-u8-recovery-v1-20260909/` | Frozen projection of the four completed C5 Review-1 rejections from safe-U8, used to preserve the scientific review evidence while recovering from the Verified revision runtime field bug. |
-| `swe_verified_pcce_c5_prompt_v2_safe_u8_recovery4_v1_20260909.yaml` | Four-case operational recovery that starts from the frozen C5 Review-1 rejections and reruns only revision, later review, Code, and Evaluate under a distinct run identity. |
-| `swe_verified_pcce_c5_prompt_v2_safe_u8_recovery4_supervisor_v1_20260909.yaml` | Bounded supervisor for the safe-U8 recovery4 run; tracked preparation is not launch authorization. |
+| `swe_verified_pcce_c5_prompt_v2_safe_u8_recovery4_v1_20260909.yaml` | Completed four-case operational recovery from frozen C5 Review-1 rejections: all four passed after revision and reached CE, producing two resolved and two unresolved outcomes. |
+| `swe_verified_pcce_c5_prompt_v2_safe_u8_recovery4_supervisor_v1_20260909.yaml` | Completed safe-U8 recovery4 supervisor identity; provenance only. |
 | `frozen_guidelines/behavioral-neutral-seed-v1/` | Exact neutral Behavioral guideline and hash manifest for the paired comparison. |
 | `frozen_guidelines/behavioral-neutral-seed-c4-paired-v1-20260904/` | Exact immutable two-guideline bundle for the prepared full cleaned-482 PC-only comparison. |
 | `frozen_swe_verified_pc_only/20260904_clean482_historical-round1_3a18b1e4f9ed/` | Compact immutable ASI-free projection of the cleaned historical Round-1 cases; 482 labels are controller-only and the Checker sees only issue, plan, and repository identity. |
