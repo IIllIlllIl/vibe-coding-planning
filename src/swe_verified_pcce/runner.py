@@ -158,7 +158,11 @@ class SWEVerifiedPCCERunner:
                 optimization_info_level=1,
                 model=model.model,
                 api_base=model.api_base,
-                dataset=self.config.pce.dataset,
+                dataset=getattr(
+                    self.config.pce,
+                    "dataset",
+                    "SWE-bench/SWE-bench_Verified",
+                ),
                 dataset_type=self.config.dataset_type,
                 language_filter="",
                 instances=[],

@@ -64,6 +64,24 @@ def test_pro_prompt_binding_only_changes_official_repository_path() -> None:
     assert {key: value.replace("/app", "/testbed") for key, value in pro.items()} == verified
 
 
+def test_pro_revision_plan_config_preserves_pro_dataset(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    config = _config()
+    monkeypatch.setenv(config.pce.plan.api_key_env, "test-placeholder")
+    runner = SWEVerifiedPCCERunner(
+        config,
+        SimpleNamespace(),
+        checkpoint_dir=tmp_path / "checkpoints",
+        attempt_dir=tmp_path / "attempt",
+    )
+
+    plan_config = runner._plan_config()
+
+    assert plan_config.system.dataset == "ScaleAI/SWE-bench_Pro"
+    assert plan_config.system.dataset_type == "pro"
+
+
 def test_pro_v2_prompt_binding_only_changes_official_repository_path() -> None:
     verified = yaml.safe_load(
         Path("configs/pcce_issue_first_revision_prompt_v2_20260908.yaml").read_text()

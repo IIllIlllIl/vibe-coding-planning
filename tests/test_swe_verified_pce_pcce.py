@@ -94,6 +94,27 @@ def test_swe_verified_agent_environments_isolate_tmp(tmp_path, monkeypatch):
     assert pcce_observed["isolate_tmp"] is True
 
 
+def test_verified_revision_plan_config_uses_canonical_dataset_without_pce_field(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    config = load_swe_verified_pcce_config(
+        "configs/swe_verified_pcce_c5_prompt_v2_safe_u8_v1_20260909.yaml",
+        require_api_keys=False,
+    )
+    monkeypatch.setenv(config.pce.plan.api_key_env, "test-placeholder")
+    runner = SWEVerifiedPCCERunner(
+        config,
+        SimpleNamespace(),
+        checkpoint_dir=tmp_path / "checkpoints",
+        attempt_dir=tmp_path / "attempt",
+    )
+
+    plan_config = runner._plan_config()
+
+    assert plan_config.system.dataset == "SWE-bench/SWE-bench_Verified"
+    assert plan_config.system.dataset_type == "swe_verified"
+
+
 def test_explicit_operational_migration_allows_only_semantic_code_hash(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
