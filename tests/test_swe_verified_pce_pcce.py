@@ -976,6 +976,92 @@ def test_tracked_issue_first_c4_pcce_starts_from_frozen_rejections() -> None:
     assert "--submit" in arguments
 
 
+def test_tracked_c5_safe_u8_pcce_is_exact_workspace_safe_pce_failure_subset() -> None:
+    config_path = Path(
+        "configs/swe_verified_pcce_c5_prompt_v2_safe_u8_v1_20260909.yaml"
+    )
+    config = load_swe_verified_pcce_config(config_path, require_api_keys=False)
+
+    expected_ids = {
+        "psf__requests-6028",
+        "pydata__xarray-6938",
+        "sphinx-doc__sphinx-7440",
+        "sphinx-doc__sphinx-8056",
+        "matplotlib__matplotlib-26466",
+        "django__django-15127",
+        "pylint-dev__pylint-6528",
+        "sympy__sympy-13798",
+    }
+    outcomes = [
+        json.loads(line)
+        for line in config.pce_outcomes.read_text(encoding="utf-8").splitlines()
+        if line.strip()
+    ]
+    unresolved_ids = {
+        row["instance_id"]
+        for row in outcomes
+        if row["evaluator_result"]["task_outcome"] == "unresolved"
+    }
+    exclusions = json.loads(
+        Path(
+            "configs/frozen_rq2_analysis/"
+            "workspace-isolation-exclusions-v1-20260908.json"
+        ).read_text(encoding="utf-8")
+    )
+    excluded_verified = {
+        row["instance_id"]
+        for row in exclusions["excluded_cases"]
+        if row["dataset"] == "SWE-bench Verified"
+    }
+
+    assert set(config.instance_ids) == expected_ids
+    assert expected_ids == unresolved_ids - excluded_verified
+    assert "pylint-dev__pylint-4970" not in config.instance_ids
+    assert config.guideline_label == "behavioral_c5_prompt_v2_v1"
+    assert file_sha256(config.guideline_path) == (
+        "34c2a670918df51642a4a2fe5a3669ee95f25e179604fc9fecee7a81e405a7bc"
+    )
+    assert "Apply the candidate guideline to the complete submitted Plan" in (
+        config.checker_prompt
+    )
+    assert "re-evaluate the proposed solution" in config.plan_revision_prompt
+    assert "from the original task and repository evidence" in (
+        config.plan_revision_prompt
+    )
+    assert config.expected_pce_outcomes_sha256 == (
+        "1f1e4420ec160d89a144a669d6cfc27ba1b131f35f6b76d59cf496c80650e753"
+    )
+    assert config.expected_image_manifest_sha256 == (
+        "fc7db0f468aaf5366981ba46d9db992aec452b991d1e27ff55dd538bf84f0290"
+    )
+    assert config.max_review_rejections == 3
+    assert config.checker.checker.max_steps == 0
+    assert config.checker.checker.cost_limit == 0.0
+    assert config.checker.checker.agent_timeout_seconds == 0
+    assert config.checker.checker.max_attempts == 3
+    assert config.hpc.cpus_per_task == 1
+    assert config.hpc.mem == "4G"
+    assert config.hpc.max_task_attempts == 3
+    assert config.phase_times.first_review == "00:45:00"
+    assert config.phase_times.revision_review == "00:45:00"
+    assert config.phase_times.ce == "00:45:00"
+
+    supervisor = yaml.safe_load(
+        Path(
+            "configs/"
+            "swe_verified_pcce_c5_prompt_v2_safe_u8_supervisor_v1_20260909.yaml"
+        ).read_text(encoding="utf-8")
+    )
+    arguments = supervisor["arguments"]
+    assert arguments[arguments.index("--batch-script") + 1] == (
+        "scripts/hpc_submit_swe_verified_pcce.sh"
+    )
+    assert arguments[arguments.index("--config") + 1] == str(config_path)
+    assert arguments[arguments.index("--max-runs") + 1] == "36"
+    assert "--require-clean-worktree" in arguments
+    assert "--submit" in arguments
+
+
 def test_controller_recovers_only_three_evidenced_evaluator_slurm_timeouts(
     tmp_path: Path,
 ) -> None:
