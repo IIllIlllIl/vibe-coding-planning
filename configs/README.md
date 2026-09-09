@@ -23,6 +23,7 @@ tracked does not authorize its execution.
 | `gepa_verified_reject_playbook_smoke_v1_20260909.yaml` | Completed diagnostic 4-train/2-validation smoke; distributed execution worked, but Checker schema ambiguity and inline Reflection overflow prevented a proposal. |
 | `gepa_verified_reject_playbook_smoke_v2_20260910.yaml` | Repaired, launch-unauthorized successor with raw-completion checkpointing, Host-validation retry, repository-free evidence mounts, and a 128-token per-bullet validity cap. |
 | `gepa_verified_reject_playbook_smoke_supervisor_v2_20260910.yaml` | Launch-unauthorized local supervisor identity for the repaired v2 smoke. |
+| `gepa_verified_reject_playbook_smoke_supervisor_v3_20260910.yaml` | Replacement supervisor identity after the pre-submission v2 config-hash mismatch; preserves the failed v2 supervisor state. |
 | `gepa_verified_reject_playbook_smoke_supervisor_v1_20260909.yaml` | Prepared 30-second local supervisor identity for the Playbook smoke; presence does not authorize launch. |
 | `gepa_behavioral_acceptability_smoke_v2_20260830.yaml` | Completed Stage C v2 method identity: bounded no-container runtime and one full GEPA proposal on the eight-case development fixture. |
 | `frozen_swe_chat_behavioral_smoke/` | Frozen eight-case development fixture assignment; all exposed cases are formal-train-only. |
