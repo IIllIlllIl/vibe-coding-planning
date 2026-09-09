@@ -882,16 +882,25 @@ def run_loop(config: SupervisorConfig) -> int:
             try:
                 job_id = submit_slice(config)
             except Exception as exc:
-                if "SYNC_DISK_FULL" in str(exc):
-                    state["status"] = "blocked_submission_disk_full"
+                terminal_submission_error = next(
+                    (
+                        marker
+                        for marker in ("SYNC_DISK_FULL", "STAGING_ERROR")
+                        if marker in str(exc)
+                    ),
+                    None,
+                )
+                if terminal_submission_error is not None:
+                    state["status"] = "blocked_submission_error"
                     state["last_submission_error"] = {
                         "error_type": type(exc).__name__,
                         "error": str(exc),
+                        "marker": terminal_submission_error,
                     }
                     _save_supervisor_state(config, state)
                     print(
                         "[hpc-resume] controller submission blocked by "
-                        "SYNC_DISK_FULL; stopping without retry",
+                        f"{terminal_submission_error}; stopping without retry",
                         file=sys.stderr,
                     )
                     return 1

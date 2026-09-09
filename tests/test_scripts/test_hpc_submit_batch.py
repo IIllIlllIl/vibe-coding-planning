@@ -71,7 +71,16 @@ def test_hpc_submit_batch_dry_run_uses_remote_env_file_without_local_key(
     fake_bin.mkdir()
     fake_ulhpc = fake_bin / "ulhpc-submit"
     fake_ulhpc.write_text(
-        "#!/usr/bin/env bash\nprintf '%s\\n' \"$@\"\nexit 0\n",
+        """#!/usr/bin/env bash
+args=("$@")
+printf '%s\n' "$@"
+for ((i=0; i<${#args[@]}; i++)); do
+  if [[ "${args[$i]}" == "--config" ]]; then
+    cat "${args[$((i + 1))]}"
+  fi
+done
+exit 0
+""",
         encoding="utf-8",
     )
     fake_ulhpc.chmod(0o755)
@@ -116,6 +125,11 @@ prompts:
     env = os.environ.copy()
     env["PATH"] = f"{fake_bin}{os.pathsep}{env['PATH']}"
     env["DEEPSEEK_API_KEY"] = "secret-should-not-appear"
+    ulhpc_config = tmp_path / "ulhpc.yaml"
+    ulhpc_config.write_text(
+        "host: example.invalid\nuser: tester\nsync_excludes:\n- .git\n",
+        encoding="utf-8",
+    )
 
     result = subprocess.run(
         [
@@ -136,6 +150,8 @@ prompts:
             "/scratch/test/apptainer-tmp",
             "--remote-env-file",
             "~/.config/vibe-coding-planning/deepseek.env",
+            "--ulhpc-config",
+            str(ulhpc_config),
         ],
         cwd=REPO_ROOT,
         capture_output=True,
@@ -165,6 +181,7 @@ prompts:
     assert "remote-run-snapshot=~/hpc_run_state/test/" in result.stdout
     assert "--stage-data" in result.stdout
     assert "--link-as" in result.stdout
+    assert f"- {snapshot.relative_to(REPO_ROOT)}" in result.stdout
     assert "--persistent-output" in result.stdout
     assert "~/hpc_run_state/test/" in result.stdout
     assert "remote-apptainer-cache-dir=/scratch/test/apptainer-cache" in (
