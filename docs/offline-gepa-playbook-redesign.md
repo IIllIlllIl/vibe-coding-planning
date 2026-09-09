@@ -391,7 +391,7 @@ The earlier controller-direct `DirectPlaybookAgents` and its custom
 boundary; it does not disable Slurm Agent workers or distributed execution.
 
 The smoke uses `1 CPU / 4G` for each Agent array element, up to eight concurrent
-elements, a 20-minute Agent limit, two fresh-Agent attempts, and a
+elements, a 35-minute Agent limit, two fresh-Agent attempts, and a
 `1 CPU / 4G / 30-minute` controller ceiling. The supervisor polls every 30
 seconds; controller jobs normally terminate immediately after durable Agent
 submission instead of holding the full allocation.

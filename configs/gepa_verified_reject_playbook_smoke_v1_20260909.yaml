@@ -87,7 +87,7 @@ hpc:
   cpus_per_task: 1
   mem: 4G
   controller_slice_time: "00:30:00"
-  agent_time: "00:20:00"
+  agent_time: "00:35:00"
   poll_interval_seconds: 30
   max_running_array_tasks: 8
   max_task_attempts: 2
