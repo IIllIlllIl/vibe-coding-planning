@@ -1,0 +1,12 @@
+{
+  "bullets": [
+    {
+      "harmful": 0,
+      "helpful": 0,
+      "id": "plan-00001",
+      "lineage": [],
+      "text": "The Plan is a placeholder or contains no actionable implementation strategy."
+    }
+  ],
+  "schema_version": 1
+}

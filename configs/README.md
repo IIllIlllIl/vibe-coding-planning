@@ -16,6 +16,11 @@ tracked does not authorize its execution.
 | `swe_chat_repository_reconstruction_audit_v1_20260830.yaml` | Frozen candidate-parent and conservative structured-write replay audit semantics; this is an audit config, not an experiment launch config. |
 | `swe_chat_temporal_repository_proxy_v1_20260830.yaml` | Label-free approximate pre-session commit selection for the 131 repository-ready cases; excludes Entire-managed refs and known current-session commits/descendants. |
 | `gepa_behavioral_acceptability_neutral_seed.md` | Neutral initial Behavioral candidate guideline; it is not a fixed Checker/Reflection prompt and contains no default accept/reject policy. |
+| `development_guidelines/offline_gepa_reject_playbook_seed_v1.json` | One-bullet structured seed for the new reject-playbook method; internal IDs/counters are projected out before Checker execution. |
+| `prompts/offline_gepa_reject_playbook_v1_20260909.yaml` | ACE-inspired Checker, per-case Reflector, delta Curator, and conditional length-Refiner prompt bundle. |
+| `frozen_swe_verified_playbook_gepa/20260909_clean444_25e5ce38271c/` | Eligibility-cleaned immutable Verified development snapshot with 444 cases and exhaustive exclusion/audit authorities. |
+| `gepa_verified_reject_playbook_smoke_v1_20260909.yaml` | Prepared, unlaunched 4-train/2-validation distributed smoke: fingerprinted Checker/Reflector arrays and singleton Curator/conditional Refiner tasks. |
+| `gepa_verified_reject_playbook_smoke_supervisor_v1_20260909.yaml` | Prepared 30-second local supervisor identity for the Playbook smoke; presence does not authorize launch. |
 | `gepa_behavioral_acceptability_smoke_v2_20260830.yaml` | Completed Stage C v2 method identity: bounded no-container runtime and one full GEPA proposal on the eight-case development fixture. |
 | `frozen_swe_chat_behavioral_smoke/` | Frozen eight-case development fixture assignment; all exposed cases are formal-train-only. |
 | `frozen_swe_chat_behavioral_formal/` | Complete 131-case repository/duplicate-component split authority: 84 train and 47 validation with no repository overlap. |

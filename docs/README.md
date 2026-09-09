@@ -16,6 +16,7 @@ Read in this order:
 | [`../README.md`](../README.md) | Project overview, methods, quick start, and entry points |
 | [`branch-scope.md`](branch-scope.md) | Active Behavioral, retained foundation, frozen evidence, and archive boundary |
 | [`../project_issues.md`](../project_issues.md) | Current research decisions and unresolved methodological risks; not a run-progress log |
+| [`offline-gepa-playbook-redesign.md`](offline-gepa-playbook-redesign.md) | Reject-playbook method, cleaned development data, prompts, distributed Slurm Agent waves, resume contract, and prepared smoke |
 | [`offline-gepa.md`](offline-gepa.md) | Offline GEPA Checker boundary, metric, stopping, artifacts, and resume contract |
 | [`swe-chat-preheat.md`](swe-chat-preheat.md) | Behavioral v1 frozen dataset/repository acquisition, identity, verification, and login-preheat boundary |
 | [`swe-chat-data-cleaning.md`](swe-chat-data-cleaning.md) | Behavioral v1 selection/slicing policy, frozen funnel, source-quality audit, recovery pools, and evidence boundary |

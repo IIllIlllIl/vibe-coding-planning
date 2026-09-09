@@ -21,6 +21,36 @@ Current decisions are:
 - require an explicit user instruction and a new frozen contract before any
   new experiment is launched.
 
+## Accepted next Offline GEPA direction
+
+The next method is specified in
+`docs/offline-gepa-playbook-redesign.md`. Its deterministic method and
+distributed Slurm execution path are implemented and contract-tested. The
+bounded smoke is prepared but has not been launched.
+
+- Keep the task as cost-sensitive classification; do not add Replan, Code, or
+  Evaluate phases to candidate evaluation.
+- Optimize a human-readable `Reject the plan when:` playbook whose bullets
+  each express one Plan failure pattern.
+- Do not let the Checker inspect a repository. It sees only the issue, Plan,
+  temporary bullet numbers, and bullet text; stable IDs and helpful/harmful
+  counters remain Reflection-only metadata.
+- Have the Checker classify every bullet, then derive the Plan decision in the
+  host: any trigger means REJECT and no trigger means ACCEPT.
+- Use historical `RESOLVED` / `UNRESOLVED` as the explicitly scoped
+  implementation-success proxy and score ACCEPT/REJECT on Good/Bad as
+  `0/-1/-5/0`; invalid output scores `-100`.
+- Replace single-stage Reflection with one structured per-case Reflector and
+  one cross-case Curator. The Reflector assigns helpful, neutral, or harmful
+  tags from trajectories and outcome evidence; the host updates counters and
+  the Curator proposes local playbook changes.
+- Trigger length management only when the Checker-visible projection exceeds
+  10,000 frozen-tokenizer tokens. An Agent may deduplicate, compress, and merge;
+  any remaining counter-based whole-bullet pruning is deterministic and never
+  delegated to an LLM.
+- The eligibility-cleaned Verified derivative, prompt bundle, and distributed
+  smoke contract are now prepared. Their presence does not authorize launch.
+
 ## Accepted Behavioral v1 direction
 
 - Use at most the first clean Plan Mode episode from each SWE-chat session.
@@ -86,27 +116,35 @@ Current decisions are:
 
 ## Open design issues
 
-1. Redesign the GEPA learning objective before another broad PCCE run. The
-   current evidence separates deficiency detection, intervention materiality,
-   feedback completeness, revised-Plan quality, Code fidelity, and evaluator
-   outcome; a single historical-resolution or behavioral-acceptance score has
-   not optimized that complete chain.
-2. Decide which units receive candidate scores and which downstream evidence
-   is Reflection-only. Candidate comparison must not convert PCE outcome,
-   R0--R3 reaction, or a stochastic U-to-R directly into Plan-quality truth.
-3. Preserve the deployment boundary: Checker inputs end at the Plan decision;
-   later revisions, implementation trajectories, developer feedback, and
-   evaluator evidence may inform controlled supervision or retrospective
-   development analysis only.
-4. Predeclare a new development/validation/held-out split. The Behavioral
+1. Run the prepared Playbook GEPA smoke and inspect per-rule Checker format,
+   per-case Reflector attribution, Curator delta quality, Slurm wave resume,
+   and the measured Agent/runtime budget before freezing a formal run.
+2. Decide after smoke evidence whether to add a new-bullet protection period
+   or change the configured one-round Reflector; neither is hard-coded.
+3. Audit any future formal/held-out split separately. The eligibility-cleaned
+   444-case snapshot preserves the historical development split and is not a
+   held-out generalization authority.
+4. Continue monitoring outcome authority, exact/near duplicates and repository leakage,
+   placeholders, and `/tmp` or other transient-state dependencies. The last
+   category must account for the historical topology mismatch where the PCE
+   Planner and Coder could share `/tmp` but the PCCE Checker could not observe
+   the same directory. This is eligibility cleaning, not construction of a new
+   test set; retain an internal GEPA train/validation role only for search and
+   selection. PolyBench is the planned external evaluation dataset. Any later
+   eligibility-policy change requires a new frozen snapshot identity.
+5. Preserve the new deployment boundary: the Checker does not access a
+   repository and sees neither stable IDs nor counters. Historical labels,
+   trajectories, patches, evaluator evidence, and rule attribution are
+   Reflection-only.
+6. Predeclare a new development/validation/held-out split. The Behavioral
    47-case validation, safe67, balanced20, repair3, 24pcce, and safe-U8 cases
    are already development-exposed and cannot become the principal held-out
    evaluation of a method derived from them.
-5. Define an intervention-benefit endpoint that distinguishes an actual
+7. Define an intervention-benefit endpoint that distinguishes an actual
    rejection/revision-mediated U-to-R from a first-review ACCEPT followed by a
    different stochastic Code result. Report R-to-U and operationally incomplete
    outcomes alongside any repair.
-6. Fix and regression-test the PolyBench PC-only CLI summary path: the
+8. Fix and regression-test the PolyBench PC-only CLI summary path: the
    controller writes a complete result, then `run_polybench_pcce_hpc.py`
    currently exits nonzero by reading the full-PCCE-only `method_outcomes`
    field.

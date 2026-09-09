@@ -14,6 +14,7 @@ from src.optimization.behavioral_runner import run_behavioral_optimization
 from src.optimization.online_config import load_online_optimization_config
 from src.optimization.online_runner import run_online_optimization
 from src.optimization.runner import run_optimization
+from src.optimization.playbook_cli import run_from_config as run_playbook_from_config
 
 
 def main() -> None:
@@ -22,7 +23,9 @@ def main() -> None:
     args = parser.parse_args()
     logging.basicConfig(level=logging.INFO)
     raw = yaml.safe_load(Path(args.config).read_text(encoding="utf-8")) or {}
-    if raw.get("mode") == "online_planning":
+    if raw.get("mode") == "offline_reject_playbook":
+        run_playbook_from_config(args.config)
+    elif raw.get("mode") == "online_planning":
         run_online_optimization(load_online_optimization_config(args.config))
     elif raw.get("mode") == "offline_checker_stability":
         diagnostic = raw.get("diagnostic") or {}

@@ -1,0 +1,38 @@
+{
+  "audit_ledger_sha256": "beb8dd99a3fe330c9b893347c15ab8e93fc92f25f8b59c23bb194ff850ee0e90",
+  "cases_sha256": "51c7c6f666a1177539c1797e4540cde750b1385f6b7b7557c8cb5c78f909b73b",
+  "cleaning_policy": "verified-playbook-eligibility-v1",
+  "complete": true,
+  "duplicate_policy": "retain lexicographically first exact normalized Plan",
+  "excluded_instances": 38,
+  "exclusions_sha256": "1c9cf2b6ad737fbfaeccd73289cda49e3deacc9544462366b0b9a80ce035c648",
+  "immutable": true,
+  "known_workspace_confounds": [
+    "django__django-16136",
+    "pylint-dev__pylint-4970"
+  ],
+  "ordered_retained_ids_sha256": "25e5ce38271ce86ae30820d99a77fe19441f1faf7592b9e0fb721517da39f585",
+  "preserves_source_split": true,
+  "provisional": false,
+  "reason_counts": {
+    "EXACT_PLAN_DUPLICATE_EXTRA_COPY": 1,
+    "KNOWN_WORKSPACE_CONFOUND": 2,
+    "OUTCOME_AUTHORITY_INVALID": 1,
+    "TMP_TOPOLOGY_CONFOUND": 35
+  },
+  "resolved": 293,
+  "retained_instances": 444,
+  "schema_version": 1,
+  "source_cases_sha256": "3a18b1e4f9edf7cc2e9b00940be9d5bc32e187309369cacc8f256fa64750ac23",
+  "source_instances": 482,
+  "source_manifest_sha256": "6f85a2a142fa0a46483ac9f21fa0cdf239a30473b86530875898a6778d1b873b",
+  "source_snapshot": "output/SWE-bench_Verified/verified-round1-gepa-datasets/20260614_482_fdc056ae85df",
+  "tmp_policy": "exclude final-plan /tmp mention or Planner/Coder shared non-plan /tmp path",
+  "train_instances": 356,
+  "train_resolved": 235,
+  "train_sha256": "29ae72761d0c6f54316be7d05b94925d7649073f9043a43e57082742666ca81a",
+  "unresolved": 151,
+  "validation_instances": 88,
+  "validation_resolved": 58,
+  "validation_sha256": "12cc06f818c6616b5f060ff5784810cd3e7d5860e9c17dad26bd800093b0aa0f"
+}
