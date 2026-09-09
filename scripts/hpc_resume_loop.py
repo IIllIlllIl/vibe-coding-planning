@@ -383,7 +383,15 @@ def submit_slice(config: SupervisorConfig) -> str:
     if result.stderr:
         print(result.stderr, end="", file=sys.stderr)
     if result.returncode != 0:
-        raise RuntimeError(f"hpc_submit_batch failed with rc={result.returncode}")
+        detail = "\n".join(
+            part.strip()
+            for part in (result.stdout, result.stderr)
+            if part.strip()
+        )
+        raise RuntimeError(
+            f"hpc_submit_batch failed with rc={result.returncode}"
+            + (f"\n{detail}" if detail else "")
+        )
     job_id = _extract_job_id(result.stdout)
     print(f"[hpc-resume] submitted job_id={job_id}")
     return job_id
@@ -874,6 +882,19 @@ def run_loop(config: SupervisorConfig) -> int:
             try:
                 job_id = submit_slice(config)
             except Exception as exc:
+                if "SYNC_DISK_FULL" in str(exc):
+                    state["status"] = "blocked_submission_disk_full"
+                    state["last_submission_error"] = {
+                        "error_type": type(exc).__name__,
+                        "error": str(exc),
+                    }
+                    _save_supervisor_state(config, state)
+                    print(
+                        "[hpc-resume] controller submission blocked by "
+                        "SYNC_DISK_FULL; stopping without retry",
+                        file=sys.stderr,
+                    )
+                    return 1
                 state["status"] = "waiting_after_submission_failure"
                 state["last_submission_error"] = {
                     "error_type": type(exc).__name__,

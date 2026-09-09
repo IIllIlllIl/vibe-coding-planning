@@ -508,6 +508,50 @@ def test_hpc_supervisor_retains_loop_after_submission_failure(tmp_path: Path) ->
     assert state["submissions"] == 0
 
 
+def test_hpc_supervisor_stops_after_sync_disk_full(tmp_path: Path) -> None:
+    fake_bin = tmp_path / "bin"
+    fake_bin.mkdir()
+    local_root = REPO_ROOT / ".tmp_hpc_smoke" / "test_submission_disk_full"
+    config = _write_config(local_root)
+    fake_batch = tmp_path / "hpc_submit_batch.sh"
+    fake_batch.write_text(
+        "#!/usr/bin/env bash\nprintf 'SYNC_DISK_FULL: quota exceeded\\n' >&2\nexit 1\n",
+        encoding="utf-8",
+    )
+    fake_batch.chmod(0o755)
+    statuses = tmp_path / "statuses.txt"
+    statuses.write_text('{"state":"missing"}\n', encoding="utf-8")
+    _fake_ssh(fake_bin / "ssh", statuses, tmp_path / "ssh.log")
+    state_path = tmp_path / "state.json"
+
+    result = subprocess.run(
+        [
+            "python",
+            str(SCRIPT),
+            "--once",
+            "--state-file",
+            str(state_path),
+            "--batch-script",
+            str(fake_batch),
+            "--gepa-rules",
+            "--gepa-config",
+            str(config),
+            "--submit",
+        ],
+        cwd=REPO_ROOT,
+        capture_output=True,
+        text=True,
+        check=False,
+        env=_env(fake_bin),
+    )
+
+    assert result.returncode == 1
+    assert "stopping without retry" in result.stderr
+    state = json.loads(state_path.read_text(encoding="utf-8"))
+    assert state["status"] == "blocked_submission_disk_full"
+    assert state["submissions"] == 0
+
+
 def test_hpc_supervisor_blocks_when_runtime_config_changes(tmp_path: Path) -> None:
     fake_bin = tmp_path / "bin"
     fake_bin.mkdir()
