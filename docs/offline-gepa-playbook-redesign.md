@@ -102,12 +102,23 @@ The Plan-level score is cost-sensitive and maximized by GEPA:
 |---|---:|---:|
 | ACCEPT | 0 | -1 |
 | REJECT | -5 | 0 |
-| INVALID | -100 | -100 |
+| structurally INVALID candidate | -100 | -100 |
 
 The fivefold false-rejection penalty encodes the deployment preference against
 unfriendly repeated rejection. Operationally incomplete or authority-uncertain
 cases must not be silently converted to `UNRESOLVED`; their eligibility and
 handling are fixed by the future cleaned dataset contract.
+
+`INVALID` is reserved for a candidate playbook that violates the frozen
+playbook contract, including a bullet longer than 128 Checker-model tokens. It does not mean
+that a Checker returned malformed JSON. Checker output-contract failures retain
+the raw Agent completion, receive Host validation feedback, and retry as fresh
+Agent attempts; exhaustion is operationally incomplete and is not scored.
+An overlength candidate receives `-100` per evaluated case without invoking
+the Checker.
+The global 10,000-token trigger is counted with the configured Checker model's
+tokenizer, not whitespace-delimited words; the same count is supplied to the
+Refiner and used by deterministic pruning.
 
 Negative score support, a perfect score of zero, reporting, and any GEPA
 skip-perfect behavior require project-side contract tests. Accuracy, balanced
@@ -122,7 +133,7 @@ ordinary full-validation evaluation does not create Reflector calls.
 
 ### Stage 1: Per-Case Reflector
 
-One Reflector reads one case's:
+One Reflector reads one case's repository-free evidence bundle:
 
 - issue and Plan;
 - current internal playbook and Checker-visible projection;
@@ -146,6 +157,12 @@ do not change counters.
 
 The Reflector neither edits the playbook nor updates counters. Its structured
 output and full trajectory are immutable proposal evidence.
+
+Large trajectories are stored as separate files rather than interpolated into
+one model request. As in the earlier Offline GEPA, the bundle is mounted
+read-only into an isolated generic evidence environment and the Reflector reads
+manifest-listed files on demand. No SWE repository is mounted, and the Checker
+continues to receive neither this bundle nor any container/SIF information.
 
 ### Stage 2: Curator
 
@@ -331,20 +348,35 @@ by this redesign.
 
 ## Prompt And Smoke Preparation
 
-The first ACE-inspired prompt bundle is
+The first ACE-inspired prompt bundle was
 `configs/prompts/offline_gepa_reject_playbook_v1_20260909.yaml`. It defines a
 per-rule no-repository Checker, configurable-round per-case Reflector,
 delta-only Curator, and length-only Refiner. Checker information isolation is
 an adapter contract rather than a prompt-only instruction.
 
-The prepared but launch-unauthorized smoke contract is
+The completed first smoke contract is
 `configs/gepa_verified_reject_playbook_smoke_v1_20260909.yaml`. It freezes four
 train cases, two validation cases, one candidate proposal, at most eight
 metric calls, a one-bullet placeholder seed, prompt and seed fingerprints,
 success criteria, and the operational-incomplete policy. Reflection begins at
 one round but remains configuration-controlled for later smoke comparison.
 
-The smoke is runnable but remains launch-unauthorized. It uses the established
+That smoke validated distributed submission and information isolation but
+exposed two contract defects: ambiguous `plan_evidence` typing made valid
+Checker reasoning score as malformed output, and inline historical trajectories
+overflowed one Reflector context. It produced no candidate and is diagnostic,
+not a successful method smoke. Its prompt, config, run, and fingerprints remain
+unchanged for provenance.
+
+The repaired, launch-unauthorized successor is
+`configs/gepa_verified_reject_playbook_smoke_v2_20260910.yaml`, using
+`configs/prompts/offline_gepa_reject_playbook_v2_20260910.yaml`. It makes
+`plan_evidence` an explicit string array, checkpoints raw Agent completion
+before Host validation, retries only the invalid array element with validator
+feedback, restores file-backed Reflection evidence, and treats exhausted
+proposal work as operationally incomplete.
+
+The smoke implementation uses the established
 distributed GEPA execution contract rather than calling Agents inside the
 controller. The local supervisor submits short controller allocations. A
 controller advances GEPA only until an Agent wave is needed, submits one
@@ -362,13 +394,14 @@ The task granularity is:
 - counter updates, OR aggregation, operation application, and final pruning
   remain deterministic host operations.
 
-Every wave is fingerprint-bound. Completed task outputs are reused, only
-missing or operationally failed indices are retried, and every attempt retains
-its own manifest, trajectory, failure evidence, and Slurm status. Checker task
-manifests contain only issue, Plan, and the temporary Checker-visible playbook;
-labels and historical evidence are joined by the controller only after output
-collection. Reflector manifests deliberately contain the retrospective
-evidence permitted by the method.
+Every wave is fingerprint-bound. Completed validated task outputs are reused;
+only missing, operationally failed, or Agent-output-contract-failed indices are
+retried. Every attempt retains its raw Agent completion or trajectory,
+validation failure, and Slurm status. Checker prompt values contain only issue,
+Plan, the temporary Checker-visible playbook, and Host validator feedback on a
+fresh retry; labels and historical evidence are joined only after collection.
+Reflector manifests point to the retrospective evidence permitted by the
+method instead of embedding it in the model request.
 
 ### Reused execution authorities
 

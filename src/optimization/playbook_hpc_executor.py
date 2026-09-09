@@ -10,6 +10,14 @@ from typing import Any, Mapping, Sequence
 
 from src.optimization.hpc.config import HPCConfig
 from src.optimization.hpc.task_batch import SlurmTaskBatch, TaskFiles, atomic_json
+from src.optimization.playbook import (
+    PlaybookBullet,
+    RejectPlaybook,
+    apply_curator_operations,
+    apply_refiner_operations,
+    validate_checker_result,
+    validate_reflector_review,
+)
 
 
 def _sha(value: Any) -> str:
@@ -40,6 +48,12 @@ class PlaybookHPCExecutor:
                 "task_index": index, "instance_id": item.get("instance_id"),
                 "prompt_values": dict(item["prompt_values"]),
             }
+            if "validation_playbook" in item:
+                payload["validation_playbook"] = item["validation_playbook"]
+            if "validation_rule_count" in item:
+                payload["validation_rule_count"] = item["validation_rule_count"]
+            if "evidence_dir" in item:
+                payload["evidence_dir"] = item["evidence_dir"]
             if manifest.is_file() and json.loads(manifest.read_text()) != payload:
                 raise ValueError("playbook task manifest mismatch")
             if not manifest.exists():
@@ -73,11 +87,20 @@ class PlaybookHPCExecutor:
                 f"ATTEMPT={attempt}", 'ATTEMPT_ID="$(printf "%02d" "$ATTEMPT")"',
                 'ATTEMPT_DIR="$BATCH_DIR/attempts/task_${TASK_ID}/attempt_${ATTEMPT_ID}"',
                 'mkdir -p "$ATTEMPT_DIR"',
+                *(
+                    [f"module load {shlex.quote(self.hpc.container_module)}"]
+                    if role == "reflector" else []
+                ),
                 f"{shlex.quote(self.hpc.python_bin)} -m src.optimization.playbook_worker "
                 f"--config {shlex.quote(str(self.config_path))} "
                 '--manifest "$BATCH_DIR/tasks/task_${TASK_ID}.json" '
                 '--output "$BATCH_DIR/outputs/task_${TASK_ID}.json" '
-                '--attempt-dir "$ATTEMPT_DIR"',
+                '--attempt-dir "$ATTEMPT_DIR" '
+                + (
+                    '--previous-output "$BATCH_DIR/failed_outputs/'
+                    f'attempt_{attempt - 1:02d}/task_${{TASK_ID}}.json"'
+                    if attempt > 1 else ""
+                ),
             ]
             path.write_text("\n".join(lines) + "\n", encoding="utf-8")
             return path
@@ -89,6 +112,26 @@ class PlaybookHPCExecutor:
                 raise ValueError("playbook worker output schema mismatch")
             if not isinstance(value.get("trajectory"), list):
                 raise ValueError("playbook worker trajectory missing")
+            task_manifest = json.loads(task.manifest_path.read_text(encoding="utf-8"))
+            agent_output = value["agent_output"]
+            if role == "checker":
+                playbook = RejectPlaybook(tuple(
+                    PlaybookBullet(f"host-{index:05d}", "Host validation rule")
+                    for index in range(1, int(task_manifest["validation_rule_count"]) + 1)
+                ))
+                validate_checker_result(agent_output, playbook)
+            else:
+                playbook = RejectPlaybook.parse(task_manifest["validation_playbook"])
+            if role == "reflector":
+                validate_reflector_review(
+                    agent_output,
+                    instance_id=task.instance_id,
+                    playbook=playbook,
+                )
+            elif role == "curator":
+                apply_curator_operations(playbook, agent_output)
+            elif role == "refiner":
+                apply_refiner_operations(playbook, agent_output)
 
         return self.runtime.run(
             batch_dir=batch_dir, fingerprint=fingerprint, tasks=tasks,

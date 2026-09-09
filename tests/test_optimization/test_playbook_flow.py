@@ -1,7 +1,9 @@
 from __future__ import annotations
 
 from dataclasses import replace
+import hashlib
 import json
+from pathlib import Path
 
 import pytest
 
@@ -25,6 +27,8 @@ from src.optimization.hpc.task_batch import SlurmTaskBatch
 from src.optimization.playbook_hpc_executor import PlaybookHPCExecutor
 from src.optimization.playbook_hpc_agents import HPCPlaybookChecker, HPCPlaybookProposalAgents
 from src.optimization import playbook_worker
+from src.optimization import playbook_runtime
+from src.optimization.playbook_cli import _token_counter, _validate_frozen_inputs
 
 
 def _playbook(*bullets: PlaybookBullet) -> RejectPlaybook:
@@ -75,6 +79,30 @@ def test_checker_projection_hides_ids_and_counters_and_host_uses_or() -> None:
     assert validate_checker_result(_raw(False, False), playbook).rejected is False
 
 
+def test_playbook_config_rejects_frozen_input_fingerprint_drift(tmp_path) -> None:
+    seed = tmp_path / "seed.json"
+    prompt = tmp_path / "prompt.yaml"
+    seed.write_text("seed")
+    prompt.write_text("prompt")
+    config = tmp_path / "config.yaml"
+    raw = {
+        "inputs": {
+            "initial_playbook": str(seed),
+            "initial_playbook_sha256": "0" * 64,
+            "prompt_bundle": str(prompt),
+            "prompt_bundle_sha256": hashlib.sha256(prompt.read_bytes()).hexdigest(),
+        }
+    }
+    with pytest.raises(ValueError, match="initial_playbook fingerprint mismatch"):
+        _validate_frozen_inputs(config, raw)
+
+
+def test_playbook_length_uses_model_tokens_not_whitespace_words() -> None:
+    count = _token_counter("deepseek-v4-flash")
+    text = "Reject the plan when: The Plan is a placeholder."
+    assert count(text) > len(text.split())
+
+
 def test_checker_contract_requires_every_rule_in_order() -> None:
     playbook = _playbook(PlaybookBullet("plan-00001", "It is a placeholder."))
     bad = _raw(False)
@@ -87,7 +115,7 @@ def test_checker_contract_requires_every_rule_in_order() -> None:
         raise AssertionError("invalid ordinal was accepted")
 
 
-def test_adapter_derives_cost_sensitive_scores_and_invalid_penalty() -> None:
+def test_adapter_derives_cost_sensitive_scores_and_rejects_bad_checker_contract() -> None:
     playbook = _playbook(PlaybookBullet("plan-00001", "It is a placeholder."))
 
     def reject_checker(checker_input):
@@ -107,11 +135,10 @@ def test_adapter_derives_cost_sensitive_scores_and_invalid_penalty() -> None:
         del checker_input
         return {"rule_results": []}, []
 
-    invalid = PlaybookGEPAAdapter(invalid_checker, proposer=None).evaluate(
-        [_case(resolved=False)], {"rules": playbook.serialize()}
-    )
-    assert invalid.scores == [-100.0]
-    assert invalid.outputs[0]["derived_decision"] == "INVALID"
+    with pytest.raises(ValueError, match="one result per playbook bullet"):
+        PlaybookGEPAAdapter(invalid_checker, proposer=None).evaluate(
+            [_case(resolved=False)], {"rules": playbook.serialize()}
+        )
 
 
 def test_adapter_does_not_convert_operational_failure_to_invalid() -> None:
@@ -125,6 +152,32 @@ def test_adapter_does_not_convert_operational_failure_to_invalid() -> None:
         PlaybookGEPAAdapter(failed_checker, proposer=None).evaluate(
             [_case(resolved=False)], {"rules": playbook.serialize()}
         )
+
+
+def test_overlength_bullet_is_invalid_without_calling_checker() -> None:
+    playbook = _playbook(
+        PlaybookBullet("plan-00001", "one two three four five")
+    )
+
+    def checker(_):
+        raise AssertionError("invalid candidates must not call the Checker")
+
+    result = PlaybookGEPAAdapter(
+        checker,
+        proposer=None,
+        token_counter=lambda text: len(text.split()),
+        maximum_bullet_tokens=4,
+    ).evaluate(
+        [_case(resolved=True), replace(_case(resolved=False), instance_id="case-2")],
+        {"rules": playbook.serialize()},
+        capture_traces=True,
+    )
+
+    assert result.scores == [-100.0, -100.0]
+    assert all(item["derived_decision"] == "INVALID" for item in result.outputs)
+    assert result.outputs[0]["invalid_bullet_ids"] == ["plan-00001"]
+    assert result.trajectories is not None
+    assert result.trajectories[0]["score"] == -100.0
 
 
 def test_two_stage_proposer_attributes_then_counts_then_curates() -> None:
@@ -382,8 +435,9 @@ def test_playbook_worker_writes_atomic_agent_evidence(tmp_path, monkeypatch) -> 
     manifest.write_text(json.dumps({
         "role": "checker", "fingerprint": "abc", "task_index": 0,
         "instance_id": "case", "prompt_values": {
-            "issue": "issue", "plan": "plan", "checker_visible_playbook": "rules"
-        },
+            "issue": "issue", "plan": "plan", "checker_visible_playbook": "rules",
+            "retry_feedback": "",
+        }, "validation_rule_count": 1,
     }))
     class FakeModel:
         def __init__(self, _config): pass
@@ -399,12 +453,170 @@ def test_playbook_worker_writes_atomic_agent_evidence(tmp_path, monkeypatch) -> 
     assert value["status"] == "completed"
     assert value["fingerprint"] == "abc"
     assert value["trajectory"]
+    raw = json.loads((tmp_path / "attempt/agent_completion.json").read_text())
+    assert raw["status"] == "agent_completed"
 
 
-def test_hpc_proposal_agents_use_reflector_waves_and_singletons() -> None:
+def test_playbook_worker_checkpoints_invalid_agent_output_before_failure(
+    tmp_path, monkeypatch
+) -> None:
+    prompts = tmp_path / "prompts.yaml"
+    prompts.write_text(
+        "checker_system: system\n"
+        "checker_instance: '{{ issue }} {{ plan }} {{ checker_visible_playbook }}'\n"
+    )
+    config = tmp_path / "config.yaml"
+    config.write_text(
+        f"inputs:\n  prompt_bundle: {prompts}\nmodels:\n  checker:\n    model: fake\n",
+        encoding="utf-8",
+    )
+    playbook = _playbook(PlaybookBullet("plan-00001", "placeholder"))
+    manifest = tmp_path / "input.json"
+    manifest.write_text(json.dumps({
+        "role": "checker", "fingerprint": "abc", "task_index": 0,
+        "instance_id": "case", "validation_rule_count": 1,
+        "prompt_values": {
+            "issue": "issue", "plan": "plan",
+            "checker_visible_playbook": playbook.render_for_checker(),
+            "retry_feedback": "",
+        },
+    }))
+
+    class FakeModel:
+        def __init__(self, _config): pass
+        def __call__(self, system, user):
+            return {"rule_results": []}, [{"role": "assistant", "content": "raw"}]
+
+    monkeypatch.setattr(playbook_worker, "PromptModel", FakeModel)
+    output = tmp_path / "output.json"
+    attempt = tmp_path / "attempt"
+    assert playbook_worker.run_task(
+        config_path=config, manifest_path=manifest, output_path=output,
+        attempt_dir=attempt,
+    ) == 1
+    assert json.loads((attempt / "agent_completion.json").read_text())["status"] == "agent_completed"
+    failure = json.loads(output.read_text())
+    assert failure["status"] == "agent_failed"
+    assert failure["failure_kind"] == "agent_output_contract"
+
+
+def test_playbook_worker_gives_host_validation_feedback_to_fresh_retry(
+    tmp_path, monkeypatch
+) -> None:
+    prompts = tmp_path / "prompts.yaml"
+    prompts.write_text(
+        "checker_system: system\n"
+        "checker_instance: >-\n"
+        "  {{ issue }} {{ plan }} {{ checker_visible_playbook }}"
+        " {% if retry_feedback %}HOST: {{ retry_feedback }}{% endif %}\n"
+    )
+    config = tmp_path / "config.yaml"
+    config.write_text(
+        f"inputs:\n  prompt_bundle: {prompts}\nmodels:\n  checker:\n    model: fake\n",
+        encoding="utf-8",
+    )
+    playbook = _playbook(PlaybookBullet("plan-00001", "placeholder"))
+    manifest = tmp_path / "input.json"
+    manifest.write_text(json.dumps({
+        "role": "checker", "fingerprint": "abc", "task_index": 0,
+        "instance_id": "case", "validation_rule_count": 1,
+        "prompt_values": {
+            "issue": "issue", "plan": "plan",
+            "checker_visible_playbook": playbook.render_for_checker(),
+            "retry_feedback": "",
+        },
+    }))
+    previous = tmp_path / "previous.json"
+    previous.write_text(json.dumps({"error": "plan_evidence must be an array"}))
+    seen = {}
+
+    class FakeModel:
+        def __init__(self, _config): pass
+        def __call__(self, system, user):
+            seen["user"] = user
+            return _raw(False), []
+
+    monkeypatch.setattr(playbook_worker, "PromptModel", FakeModel)
+    assert playbook_worker.run_task(
+        config_path=config, manifest_path=manifest,
+        output_path=tmp_path / "output.json", attempt_dir=tmp_path / "attempt",
+        previous_output_path=previous,
+    ) == 0
+    assert "HOST: plan_evidence must be an array" in seen["user"]
+
+
+def test_evidence_reflector_disables_implicit_cwd_mount(
+    tmp_path, monkeypatch
+) -> None:
+    evidence = tmp_path / "evidence"
+    evidence.mkdir()
+    captured = {}
+
+    class FakeEnvironment:
+        def __init__(self, **kwargs):
+            captured.update(kwargs)
+
+        def cleanup(self):
+            captured["cleaned"] = True
+
+    class FakeAgent:
+        messages = [{"role": "assistant", "content": "submitted"}]
+
+        def run(self, **kwargs):
+            captured["task"] = kwargs
+            return "Submitted", '{"instance_id":"case","bullet_tags":[]}'
+
+    monkeypatch.setenv("TEST_API_KEY", "not-a-secret")
+    monkeypatch.setattr(
+        playbook_runtime,
+        "import_minisweagent",
+        lambda: (object, object, None),
+    )
+    monkeypatch.setattr(playbook_runtime, "build_model", lambda *args: object())
+    monkeypatch.setattr(playbook_runtime, "ApptainerEnvironment", FakeEnvironment)
+    monkeypatch.setattr(
+        playbook_runtime,
+        "build_default_agent",
+        lambda *args, **kwargs: FakeAgent(),
+    )
+    monkeypatch.setattr(
+        playbook_runtime,
+        "raise_for_permanent_provider_error",
+        lambda *args: None,
+    )
+
+    output, _ = playbook_runtime.run_evidence_reflector(
+        model_config={"model": "fake", "api_key_env": "TEST_API_KEY"},
+        reflection_config={
+            "evidence_sif_cache_dir": str(tmp_path / "cache"),
+        },
+        system="system",
+        instance_template="instance",
+        evidence_dir=str(evidence),
+        internal_playbook="playbook",
+    )
+
+    assert output["instance_id"] == "case"
+    assert captured["run_args"] == [
+        "--no-mount",
+        "cwd",
+        "--bind",
+        f"{evidence.resolve()}:/evidence:ro",
+    ]
+    assert captured["network_disabled"] is True
+    assert captured["isolate_tmp"] is True
+    assert captured["cwd"] == "/evidence"
+    assert captured["cleaned"] is True
+
+
+def test_hpc_proposal_agents_use_file_backed_reflector_waves_and_singletons(
+    tmp_path,
+) -> None:
     calls = []
     playbook = _playbook(PlaybookBullet("plan-00001", "placeholder"))
     class Executor:
+        run_dir = tmp_path / "run"
+
         def run_wave(self, role, items):
             calls.append((role, len(items), items))
             if role == "reflector":
@@ -419,7 +631,68 @@ def test_hpc_proposal_agents_use_reflector_waves_and_singletons() -> None:
     reviews = agents.reflect_batch(records, rounds=2)
     assert [call[:2] for call in calls[:2]] == [("reflector", 3), ("reflector", 3)]
     assert all(item["round"] == 2 for item in reviews)
-    assert "prior_reflection" in calls[1][2][0]["prompt_values"]
+    assert "reflection_case_bundle" not in calls[0][2][0]["prompt_values"]
+    assert calls[0][2][0]["prompt_values"]["evidence_path"] == "/evidence"
+    second_evidence = calls[1][2][0]["evidence_dir"]
+    assert (Path(second_evidence) / "prior_reflection.json").is_file()
+    manifest = json.loads((Path(second_evidence) / "manifest.json").read_text())
+    assert manifest["contains_repository"] is False
+    assert set(manifest["files"]) == {
+        "classification.json", "plan_trajectory.json", "code_trajectory.json",
+        "evaluator_result.json", "generated.patch", "prior_reflection.json",
+    }
     assert agents.curate(playbook, reviews)["operations"] == []
     assert agents.refine(playbook) == playbook
-    assert [call[:2] for call in calls[-2:]] == [("curator", 1), ("refiner", 1)]
+    assert [call[:2] for call in calls[-2:]] == [
+        ("curator", 1), ("refiner", 1)
+    ]
+
+
+def test_runner_marks_reflection_failure_as_operationally_incomplete(
+    tmp_path,
+) -> None:
+    playbook = _playbook(PlaybookBullet("plan-00001", "placeholder"))
+    playbook_path = tmp_path / "seed.json"
+    playbook_path.write_text(playbook.serialize())
+    snapshot = tmp_path / "dataset"
+    snapshot.mkdir()
+    case = _case(resolved=True)
+    row = {
+        "instance_id": case.instance_id, "split": case.split,
+        "resolved": case.resolved, "checker_input": case.checker_payload(),
+        "asi": case.asi,
+    }
+    (snapshot / "manifest.json").write_text(json.dumps({
+        "complete": True, "provisional": False,
+        "train_instances": 1, "validation_instances": 1,
+    }))
+    (snapshot / "train.jsonl").write_text(json.dumps(row) + "\n")
+    validation = {
+        **row,
+        "instance_id": "repo__repo-2",
+        "split": "validation",
+        "checker_input": {
+            **row["checker_input"],
+            "repository": {
+                **row["checker_input"]["repository"],
+                "instance_id": "repo__repo-2",
+            },
+        },
+    }
+    (snapshot / "validation.jsonl").write_text(json.dumps(validation) + "\n")
+
+    class Proposer:
+        failures = [{"error_type": "TaskAttemptsExhausted", "error": "reflector failed"}]
+        successful_proposals = 0
+
+    adapter = PlaybookGEPAAdapter(lambda _: (_raw(False), []), Proposer())
+    with pytest.raises(RuntimeError, match="operationally incomplete"):
+        run_playbook_search(
+            dataset_snapshot=snapshot, initial_playbook_path=playbook_path,
+            run_dir=tmp_path / "run", adapter=adapter, max_metric_calls=2,
+            max_iterations=1, seed=1,
+            optimize_fn=lambda **_: object(),
+            abort_on_operational_incomplete=True,
+        )
+    status = json.loads((tmp_path / "run/controller_status.json").read_text())
+    assert status["status"] == "failed"

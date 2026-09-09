@@ -21,10 +21,12 @@ def test_repo_relative_preserves_worktree_local_symlink(tmp_path: Path) -> None:
     link = REPO_ROOT / ".tmp_hpc_smoke" / "linked-output"
     link.parent.mkdir(parents=True, exist_ok=True)
     link.symlink_to(linked_target, target_is_directory=True)
-
-    assert _repo_relative(link / "run", "run_dir") == (
-        ".tmp_hpc_smoke/linked-output/run"
-    )
+    try:
+        assert _repo_relative(link / "run", "run_dir") == (
+            ".tmp_hpc_smoke/linked-output/run"
+        )
+    finally:
+        link.unlink(missing_ok=True)
 
 
 def _write_config(root: Path) -> Path:

@@ -13,8 +13,8 @@ from src.optimization.playbook import (
     apply_curator_operations,
     apply_reflector_counters,
     classification_cost,
-    invalid_score,
     manage_playbook_length,
+    overlength_bullet_ids,
     validate_checker_result,
     validate_curator_proposal,
     validate_reflector_review,
@@ -126,10 +126,20 @@ class TwoStagePlaybookProposer:
 class PlaybookGEPAAdapter:
     """Evaluate structured candidates through a no-repository Checker."""
 
-    def __init__(self, checker: PlaybookChecker | None, proposer: Any, *, batch_checker: Any = None) -> None:
+    def __init__(
+        self,
+        checker: PlaybookChecker | None,
+        proposer: Any,
+        *,
+        batch_checker: Any = None,
+        token_counter: Callable[[str], int] | None = None,
+        maximum_bullet_tokens: int | None = None,
+    ) -> None:
         self.checker = checker
         self.batch_checker = batch_checker
         self.propose_new_texts = proposer
+        self.token_counter = token_counter
+        self.maximum_bullet_tokens = maximum_bullet_tokens
 
     def evaluate(
         self,
@@ -144,6 +154,44 @@ class PlaybookGEPAAdapter:
         outputs: list[dict[str, Any]] = []
         scores: list[float] = []
         traces: list[dict[str, Any]] = []
+        invalid_bullets: list[str] = []
+        if self.maximum_bullet_tokens is not None:
+            if self.token_counter is None:
+                raise ValueError("bullet token cap requires a token counter")
+            invalid_bullets = overlength_bullet_ids(
+                playbook,
+                token_counter=self.token_counter,
+                maximum_bullet_tokens=self.maximum_bullet_tokens,
+            )
+        if invalid_bullets:
+            for case in batch:
+                output = {
+                    "instance_id": case.instance_id,
+                    "derived_decision": "INVALID",
+                    "rule_results": [],
+                    "invalid_reason": "bullet_token_limit_exceeded",
+                    "invalid_bullet_ids": invalid_bullets,
+                }
+                outputs.append(output)
+                scores.append(-100.0)
+                if capture_traces:
+                    traces.append({
+                        "instance_id": case.instance_id,
+                        "ground_truth": "GOOD" if case.resolved else "BAD",
+                        "resolved_proxy": case.resolved,
+                        "score": -100.0,
+                        "issue": case.issue_description,
+                        "plan": case.plan,
+                        "internal_playbook": playbook.serialize(),
+                        "checker_visible_playbook": visible,
+                        "checker_output": output,
+                        "historical_evidence": case.asi,
+                    })
+            return EvaluationBatch(
+                outputs=outputs,
+                scores=scores,
+                trajectories=traces if capture_traces else None,
+            )
         if self.batch_checker is not None:
             raw_results = self.batch_checker.evaluate_batch(batch, playbook)
         else:
@@ -155,27 +203,13 @@ class PlaybookGEPAAdapter:
                 "checker_visible_playbook": visible,
             }) for case in batch]
         for case, (raw, trajectory) in zip(batch, raw_results, strict=True):
-            # Transport, model, timeout, and other operational errors remain
-            # operational failures.  Only a returned but malformed Checker
-            # result receives the explicitly defined INVALID score.
-            try:
-                checked = validate_checker_result(
-                    raw, playbook, trajectory=trajectory
-                )
-                score = classification_cost(
-                    resolved=case.resolved, rejected=checked.rejected
-                )
-                output = checked.to_dict()
-                invalid = False
-                error = None
-            except Exception as exc:
-                score = invalid_score()
-                output = {
-                    "derived_decision": "INVALID",
-                    "rule_results": [],
-                }
-                invalid = True
-                error = f"{type(exc).__name__}: {exc}"
+            checked = validate_checker_result(
+                raw, playbook, trajectory=trajectory
+            )
+            score = classification_cost(
+                resolved=case.resolved, rejected=checked.rejected
+            )
+            output = checked.to_dict()
             outputs.append({"instance_id": case.instance_id, **output})
             scores.append(score)
             if capture_traces:
@@ -185,8 +219,8 @@ class PlaybookGEPAAdapter:
                         "ground_truth": "GOOD" if case.resolved else "BAD",
                         "resolved_proxy": case.resolved,
                         "score": score,
-                        "invalid": invalid,
-                        "error": error,
+                        "issue": case.issue_description,
+                        "plan": case.plan,
                         "internal_playbook": playbook.serialize(),
                         "checker_visible_playbook": visible,
                         "checker_output": output,

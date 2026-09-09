@@ -191,8 +191,20 @@ def classification_cost(*, resolved: bool, rejected: bool) -> float:
     return 0.0 if resolved else -1.0
 
 
-def invalid_score() -> float:
-    return -100.0
+def overlength_bullet_ids(
+    playbook: RejectPlaybook,
+    *,
+    token_counter: Callable[[str], int],
+    maximum_bullet_tokens: int,
+) -> list[str]:
+    """Return bullets that violate the candidate-level hard length cap."""
+    if maximum_bullet_tokens < 1:
+        raise ValueError("maximum_bullet_tokens must be positive")
+    return [
+        bullet.id
+        for bullet in playbook.bullets
+        if token_counter(bullet.text) > maximum_bullet_tokens
+    ]
 
 
 _REFLECTOR_TAGS = frozenset({"helpful", "neutral", "harmful"})

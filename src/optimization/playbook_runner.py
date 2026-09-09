@@ -57,6 +57,7 @@ def _run_playbook_search_unlocked(
     reflection_minibatch_size: int = 2,
     runtime_config_path: Path | None = None,
     prompt_bundle_path: Path | None = None,
+    abort_on_operational_incomplete: bool = False,
 ) -> Any:
     """Run the new flow without selecting or constructing any LLM agent."""
     if max_metric_calls < 1:
@@ -101,6 +102,7 @@ def _run_playbook_search_unlocked(
                 Path(__file__).with_name("playbook_adapter.py"),
                 Path(__file__).with_name("playbook_hpc_executor.py"),
                 Path(__file__).with_name("playbook_hpc_agents.py"),
+                Path(__file__).with_name("playbook_runtime.py"),
                 Path(__file__).with_name("playbook_worker.py"),
             )
         },
@@ -170,6 +172,14 @@ def _run_playbook_search_unlocked(
             callbacks=[callback],
             seed=seed,
         )
+        proposal_failures = list(
+            getattr(adapter.propose_new_texts, "failures", [])
+        )
+        if abort_on_operational_incomplete and proposal_failures:
+            raise RuntimeError(
+                "Playbook proposal was operationally incomplete: "
+                + str(proposal_failures[-1].get("error", "unknown failure"))
+            )
     except ControllerYield as exc:
         write_status("yielded", reason=exc.reason, batch_dir=exc.batch_dir,
                      worker_job_id=exc.job_id)
