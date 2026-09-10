@@ -870,3 +870,59 @@ def test_runner_marks_reflection_failure_as_operationally_incomplete(
         )
     status = json.loads((tmp_path / "run/controller_status.json").read_text())
     assert status["status"] == "failed"
+
+
+def test_fresh_formal_30it_contract_uses_atomic_seed_and_v5_prompts() -> None:
+    repo_root = Path(__file__).resolve().parents[2]
+    config_path = (
+        repo_root
+        / "configs/gepa_verified_reject_playbook_formal_30it_v2_20260910.yaml"
+    )
+    raw = yaml.safe_load(config_path.read_text(encoding="utf-8"))
+
+    _validate_frozen_inputs(config_path, raw)
+    seed = RejectPlaybook.parse(
+        (repo_root / raw["inputs"]["initial_playbook"]).read_text(encoding="utf-8")
+    )
+    assert len(seed.bullets) == 1
+    assert seed.bullets[0].text == "The Plan is a placeholder."
+    assert seed.bullets[0].helpful == seed.bullets[0].harmful == 0
+
+    prompts = yaml.safe_load(
+        (repo_root / raw["inputs"]["prompt_bundle"]).read_text(encoding="utf-8")
+    )
+    reflector = " ".join(prompts["reflector_system"].split())
+    curator = " ".join(prompts["curator_system"].split())
+    assert "could reasonably have been discovered during planning" in reflector
+    assert "The historical Planner need not actually have" in reflector
+    assert "must not depend on facts that became available only after" in reflector
+    assert "create at most one bullet" in curator
+    assert "Create exactly one bullet for each" not in curator
+    assert "must not require a post-implementation" in curator
+
+    assert raw["run_id"] == "verified-reject-playbook-formal-30it-v2-20260910"
+    assert raw["search"]["max_iterations"] == 30
+    assert raw["search"]["reflection_minibatch_size"] == 8
+    assert raw["reflection"]["rounds"] == 3
+    assert raw["length"]["maximum_bullet_tokens"] == 64
+    assert raw["hpc"]["max_task_attempts"] == 3
+    assert raw["readiness"] == {
+        "runnable": True,
+        "launched": False,
+        "missing": [],
+    }
+
+    supervisor = yaml.safe_load(
+        (
+            repo_root
+            / "configs/gepa_verified_reject_playbook_formal_30it_supervisor_v2_20260910.yaml"
+        ).read_text(encoding="utf-8")
+    )
+    arguments = supervisor["arguments"]
+    assert arguments[arguments.index("--target-iterations") + 1] == "30"
+    assert arguments[arguments.index("--gepa-config") + 1] == str(
+        config_path.relative_to(repo_root)
+    )
+    assert "formal-30it-v2-20260910" in arguments[
+        arguments.index("--remote-dir") + 1
+    ]

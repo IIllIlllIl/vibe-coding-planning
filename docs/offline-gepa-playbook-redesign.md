@@ -553,3 +553,23 @@ playbook plus all eight final-round case reflections. It submits only the
 Curator singleton. Checker, Reflector, Code Execution, and GEPA search are not
 rerun. Each prompt revision should use a new replay run identity and prompt
 fingerprint while retaining the frozen source-task fingerprint.
+
+The replay confirmed that the atomicity and readability constraints can turn
+eight case reflections into a small set of short, independent bullets without
+mechanical case-to-bullet mapping. It also clarified the intended evidence
+boundary: downstream evidence may reveal a Plan deficiency when the relevant
+condition already existed and could reasonably have been discovered before
+implementation through planning, software-engineering reasoning, or repository
+exploration. The historical Planner need not actually have found it. A bullet
+must not instead require a historical Code action, test outcome, evaluator
+result, runtime failure, or environment incident as its trigger.
+
+Fresh runs use the atomic seed
+`configs/development_guidelines/offline_gepa_reject_playbook_seed_v2.json`,
+whose sole rule is `The Plan is a placeholder.` The earlier v1 seed remains
+unchanged because it is fingerprinted by completed and resumable experiments.
+The paired prompt authority is
+`configs/prompts/offline_gepa_reject_playbook_v5_20260910.yaml`. The fresh
+30-proposal contract is
+`configs/gepa_verified_reject_playbook_formal_30it_v2_20260910.yaml`; it starts
+a new candidate tree rather than importing or resuming earlier candidates.

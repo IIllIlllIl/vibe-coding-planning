@@ -17,9 +17,13 @@ tracked does not authorize its execution.
 | `swe_chat_temporal_repository_proxy_v1_20260830.yaml` | Label-free approximate pre-session commit selection for the 131 repository-ready cases; excludes Entire-managed refs and known current-session commits/descendants. |
 | `gepa_behavioral_acceptability_neutral_seed.md` | Neutral initial Behavioral candidate guideline; it is not a fixed Checker/Reflection prompt and contains no default accept/reject policy. |
 | `development_guidelines/offline_gepa_reject_playbook_seed_v1.json` | One-bullet structured seed for the new reject-playbook method; internal IDs/counters are projected out before Checker execution. |
+| `development_guidelines/offline_gepa_reject_playbook_seed_v2.json` | Atomic one-bullet seed (`The Plan is a placeholder.`) for fresh runs; v1 remains frozen provenance. |
 | `prompts/offline_gepa_reject_playbook_v1_20260909.yaml` | Frozen prompt authority from the completed first Playbook smoke; retained unchanged for provenance. |
 | `prompts/offline_gepa_reject_playbook_v2_20260910.yaml` | Repaired prompt bundle with an explicit Checker evidence-array schema and file-backed, tool-using per-case Reflection. |
 | `prompts/offline_gepa_reject_playbook_v3_20260910.yaml` | Reflector artifact/self-check authority after v2 exposed stdout/stderr submission contamination; includes positive JSON structure and retry feedback. |
+| `prompts/offline_gepa_reject_playbook_v5_20260910.yaml` | Atomic-playbook prompt with retrospective learning from deficiencies discoverable before implementation, while post-implementation facts remain ineligible as bullet triggers. |
+| `gepa_verified_reject_playbook_formal_30it_v2_20260910.yaml` | Fresh, launch-unauthorized 30-proposal contract using clean375, seed v2, prompt v5, three Reflection rounds, and the 64-token bullet gate. |
+| `gepa_verified_reject_playbook_formal_30it_supervisor_v2_20260910.yaml` | Dedicated clean-worktree supervisor identity for the fresh 30-proposal v2 contract; presence does not authorize launch. |
 | `frozen_swe_verified_playbook_gepa/20260909_clean444_25e5ce38271c/` | Eligibility-cleaned immutable Verified development snapshot with 444 cases and exhaustive exclusion/audit authorities. |
 | `gepa_verified_reject_playbook_smoke_v1_20260909.yaml` | Completed diagnostic 4-train/2-validation smoke; distributed execution worked, but Checker schema ambiguity and inline Reflection overflow prevented a proposal. |
 | `gepa_verified_reject_playbook_smoke_v2_20260910.yaml` | Repaired, launch-unauthorized successor with raw-completion checkpointing, Host-validation retry, repository-free evidence mounts, and a 128-token per-bullet validity cap. |
