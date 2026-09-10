@@ -1,0 +1,40 @@
+schema_version: 1
+mode: offline_reject_playbook_curator_replay
+status: ready_not_launched
+run_id: verified-candidate1-curator-replay-v1-20260910
+purpose: replay the exact pre-Candidate-1 Curator scene without rerunning Checker or Reflector
+
+paths:
+  run_dir: output/SWE-bench_Verified/gepa-reject-playbook-runs/candidate1-curator-replay-v1-20260910
+
+inputs:
+  prompt_bundle: configs/prompts/offline_gepa_reject_playbook_v4_20260910.yaml
+  prompt_bundle_sha256: a4585b4decc09adc19538f06167c87fc1bd4134dc8467a1b8236bd3d596395d8
+
+replay:
+  source_curator_task: /scratch/users/twang/vibe-coding-planning/playbook-gepa-run-state/output/SWE-bench_Verified/gepa-reject-playbook-runs/formal-12it-v1-20260910/hpc_tasks/curator/cdba7676d88ce36faddd66e5d54ca9b4db8241eb418d84d5a43901cec10145e0/tasks/task_0000.json
+  source_curator_task_sha256: f946428566dade389d9c148e6937c586f4b7b9f1ad593032130070a36fc4214d
+
+models:
+  checker: {model: deepseek-v4-flash, temperature: 0.0}
+  curator: {model: deepseek-v4-flash, temperature: 0.0}
+
+length:
+  maximum_visible_tokens: 10000
+  maximum_bullet_tokens: 64
+
+hpc:
+  submit: true
+  partition: batch
+  cpus_per_task: 1
+  mem: 4G
+  agent_time: "00:35:00"
+  max_running_array_tasks: 1
+  poll_interval_seconds: 30
+  task_output_grace_seconds: 120
+  missing_task_grace_seconds: 300
+  max_task_attempts: 3
+  remote_env_file: ~/.config/vibe-coding-planning/deepseek.env
+  python_module: lang/Python/3.11
+  python_bin: python3
+  job_name_prefix: verified-candidate1-curator-replay-v1-20260910

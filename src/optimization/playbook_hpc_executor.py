@@ -15,6 +15,7 @@ from src.optimization.playbook import (
     RejectPlaybook,
     apply_curator_operations,
     apply_refiner_operations,
+    validate_bullet_token_limit,
     validate_checker_result,
     validate_reflector_review,
 )
@@ -26,11 +27,22 @@ def _sha(value: Any) -> str:
 
 
 class PlaybookHPCExecutor:
-    def __init__(self, *, config_path: Path, run_dir: Path, hpc: HPCConfig) -> None:
+    def __init__(self, *, config_path: Path, run_dir: Path, hpc: HPCConfig,
+                 token_counter=None, maximum_bullet_tokens: int | None = None) -> None:
         self.config_path = config_path
         self.run_dir = run_dir
         self.hpc = hpc
         self.runtime = SlurmTaskBatch(hpc)
+        self.token_counter = token_counter
+        self.maximum_bullet_tokens = maximum_bullet_tokens
+
+    def batch_dir_for(self, role: str, items: Sequence[Mapping[str, Any]]) -> Path:
+        semantic = {
+            "schema": 1, "role": role,
+            "config_sha256": hashlib.sha256(self.config_path.read_bytes()).hexdigest(),
+            "items": list(items),
+        }
+        return self.run_dir / "hpc_tasks" / role / _sha(semantic)
 
     def run_wave(self, role: str, items: Sequence[Mapping[str, Any]]) -> list[dict[str, Any]]:
         semantic = {
@@ -39,7 +51,7 @@ class PlaybookHPCExecutor:
             "items": list(items),
         }
         fingerprint = _sha(semantic)
-        batch_dir = self.run_dir / "hpc_tasks" / role / fingerprint
+        batch_dir = self.batch_dir_for(role, items)
         tasks = []
         for index, item in enumerate(items):
             manifest = batch_dir / "tasks" / f"task_{index:04d}.json"
@@ -129,7 +141,15 @@ class PlaybookHPCExecutor:
                     playbook=playbook,
                 )
             elif role == "curator":
-                apply_curator_operations(playbook, agent_output)
+                proposed = apply_curator_operations(playbook, agent_output)
+                if self.maximum_bullet_tokens is not None:
+                    if self.token_counter is None:
+                        raise ValueError("Curator bullet cap requires a token counter")
+                    validate_bullet_token_limit(
+                        proposed,
+                        token_counter=self.token_counter,
+                        maximum_bullet_tokens=self.maximum_bullet_tokens,
+                    )
             elif role == "refiner":
                 apply_refiner_operations(playbook, agent_output)
 

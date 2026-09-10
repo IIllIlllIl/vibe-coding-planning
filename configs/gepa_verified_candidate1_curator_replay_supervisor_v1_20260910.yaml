@@ -1,0 +1,33 @@
+schema_version: 1
+session: verified-candidate1-curator-replay-v1-20260910
+log: .local/hpc-supervisor/verified-candidate1-curator-replay-v1-20260910.log
+arguments:
+  - --poll-interval
+  - "30"
+  - --slice-time
+  - "00:30:00"
+  - --target-iterations
+  - "1"
+  - --max-runs
+  - "20"
+  - --state-file
+  - .local/hpc-supervisor/verified-candidate1-curator-replay-v1-20260910.json
+  - --require-clean-worktree
+  - --gepa-rules
+  - --gepa-config
+  - configs/gepa_verified_candidate1_curator_replay_v1_20260910.yaml
+  - --ulhpc-config
+  - /Users/taoran.wang/.config/ulhpc-submit/config.yaml
+  - --job-name
+  - verified-candidate1-curator-replay-v1-20260910
+  - --remote-dir
+  - /scratch/users/twang/vibe-coding-planning/controller-staging/verified-candidate1-curator-replay-v1-20260910
+  - --remote-dataset-dir
+  - /scratch/users/twang/vibe-coding-planning/playbook-gepa-datasets
+  - --remote-run-dir
+  - /scratch/users/twang/vibe-coding-planning/playbook-gepa-run-state
+  - --cpus
+  - "1"
+  - --mem
+  - 4G
+  - --submit

@@ -8,9 +8,14 @@ from pathlib import Path
 from typing import Any, Callable, Mapping, Sequence
 
 from src.optimization.models import GEPACase
-from src.optimization.playbook import RejectPlaybook, apply_refiner_operations
+from src.optimization.playbook import (
+    RejectPlaybook,
+    apply_curator_operations,
+    apply_refiner_operations,
+    overlength_bullet_ids,
+)
 from src.optimization.playbook_hpc_executor import PlaybookHPCExecutor
-from src.optimization.hpc.task_batch import atomic_json
+from src.optimization.hpc.task_batch import TaskAttemptsExhausted, atomic_json
 
 
 class HPCPlaybookChecker:
@@ -36,10 +41,12 @@ class HPCPlaybookProposalAgents:
         executor: PlaybookHPCExecutor,
         *,
         maximum_tokens: int,
+        maximum_bullet_tokens: int | None = None,
         token_counter: Callable[[str], int] | None = None,
     ) -> None:
         self.executor = executor
         self.maximum_tokens = maximum_tokens
+        self.maximum_bullet_tokens = maximum_bullet_tokens
         self.token_counter = token_counter or (lambda text: len(text.split()))
 
     def _write_reflection_evidence(
@@ -112,7 +119,35 @@ class HPCPlaybookProposalAgents:
             "counted_internal_playbook": counted.serialize(),
             "case_reflections": json.dumps(list(reviews), ensure_ascii=False),
         }}
-        return self.executor.run_wave("curator", [item])[0]["agent_output"]
+        try:
+            return self.executor.run_wave("curator", [item])[0]["agent_output"]
+        except TaskAttemptsExhausted:
+            # Length-invalid Curator outputs are method candidates, not
+            # operationally incomplete cases. Recover the last durable Agent
+            # completion only when it is structurally valid and its sole
+            # remaining defect is the configured per-bullet cap. Evaluation
+            # then assigns the frozen INVALID score (-100).
+            if self.maximum_bullet_tokens is None:
+                raise
+            batch_dir = self.executor.batch_dir_for("curator", [item])
+            completions = sorted(
+                (batch_dir / "attempts" / "task_0000").glob(
+                    "attempt_*/agent_completion.json"
+                )
+            )
+            if not completions:
+                raise
+            completion = json.loads(completions[-1].read_text(encoding="utf-8"))
+            output = completion.get("agent_output")
+            proposed = apply_curator_operations(counted, output)
+            invalid = overlength_bullet_ids(
+                proposed,
+                token_counter=self.token_counter,
+                maximum_bullet_tokens=self.maximum_bullet_tokens,
+            )
+            if not invalid:
+                raise
+            return output
 
     def refine(self, playbook: RejectPlaybook) -> RejectPlaybook:
         item = {"validation_playbook": playbook.serialize(), "prompt_values": {

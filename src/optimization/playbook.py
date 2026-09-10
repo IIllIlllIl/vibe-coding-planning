@@ -207,6 +207,29 @@ def overlength_bullet_ids(
     ]
 
 
+class BulletTokenLimitError(ValueError):
+    """A structurally valid candidate contains an overlength bullet."""
+
+
+def validate_bullet_token_limit(
+    playbook: RejectPlaybook,
+    *,
+    token_counter: Callable[[str], int],
+    maximum_bullet_tokens: int,
+) -> RejectPlaybook:
+    """Reject overlength bullets with retry-safe, actionable feedback."""
+    counts = [(bullet.id, token_counter(bullet.text)) for bullet in playbook.bullets]
+    violations = [item for item in counts if item[1] > maximum_bullet_tokens]
+    if violations:
+        details = ", ".join(f"{bullet_id}={tokens}" for bullet_id, tokens in violations)
+        raise BulletTokenLimitError(
+            "Curator proposal exceeds the per-bullet token limit "
+            f"({maximum_bullet_tokens}): {details}. Shorten each listed bullet; "
+            "each bullet must remain one complete rejection rule."
+        )
+    return playbook
+
+
 _REFLECTOR_TAGS = frozenset({"helpful", "neutral", "harmful"})
 
 

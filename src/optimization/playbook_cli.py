@@ -74,11 +74,18 @@ def run_from_config(path: str | Path, *, agents: Any | None = None, optimize_fn=
             job_name_prefix=str(h["job_name_prefix"]),
             worker_config_path=str(config_path),
         )
-        executor = PlaybookHPCExecutor(config_path=config_path, run_dir=run_dir, hpc=hpc)
+        executor = PlaybookHPCExecutor(
+            config_path=config_path,
+            run_dir=run_dir,
+            hpc=hpc,
+            token_counter=count_tokens,
+            maximum_bullet_tokens=int(raw["length"]["maximum_bullet_tokens"]),
+        )
         checker = HPCPlaybookChecker(executor)
         proposal_agents = HPCPlaybookProposalAgents(
             executor,
             maximum_tokens=int(raw["length"]["maximum_visible_tokens"]),
+            maximum_bullet_tokens=int(raw["length"]["maximum_bullet_tokens"]),
             token_counter=count_tokens,
         )
         proposer = TwoStagePlaybookProposer(

@@ -8,6 +8,7 @@ import json
 from pathlib import Path
 
 import yaml
+import litellm
 
 from src.optimization.hpc.task_batch import atomic_json
 from src.optimization.playbook_runtime import (
@@ -18,7 +19,7 @@ from src.optimization.playbook_runtime import (
 )
 from src.optimization.playbook import (
     PlaybookBullet, RejectPlaybook, apply_curator_operations, apply_refiner_operations,
-    validate_checker_result, validate_reflector_review,
+    validate_bullet_token_limit, validate_checker_result, validate_reflector_review,
 )
 
 
@@ -65,6 +66,13 @@ def run_task(
         else:
             stage = "prompt_render"
             user = _render(prompts[f"{role}_instance"], **values)
+            if role == "curator" and retry_feedback:
+                user += (
+                    "\n<host_validation_feedback>"
+                    + retry_feedback
+                    + "</host_validation_feedback>\n"
+                    "Return a complete corrected Curator JSON object.\n"
+                )
             stage = "agent_execution"
             output, trajectory = PromptModel(config["models"][role])(
                 prompts[f"{role}_system"], user
@@ -98,7 +106,14 @@ def run_task(
                 playbook=playbook,
             )
         elif role == "curator":
-            apply_curator_operations(playbook, output)
+            proposed = apply_curator_operations(playbook, output)
+            validate_bullet_token_limit(
+                proposed,
+                token_counter=lambda text: int(litellm.token_counter(
+                    model=str(config["models"]["checker"]["model"]), text=text
+                )),
+                maximum_bullet_tokens=int(config["length"]["maximum_bullet_tokens"]),
+            )
         elif role == "refiner":
             apply_refiner_operations(playbook, output)
         stage = "output_write"

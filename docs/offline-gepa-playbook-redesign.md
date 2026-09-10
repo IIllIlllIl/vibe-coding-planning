@@ -110,12 +110,18 @@ cases must not be silently converted to `UNRESOLVED`; their eligibility and
 handling are fixed by the future cleaned dataset contract.
 
 `INVALID` is reserved for a candidate playbook that violates the frozen
-playbook contract, including a bullet longer than 128 Checker-model tokens. It does not mean
+playbook contract, including a bullet longer than 64 Checker-model tokens. It does not mean
 that a Checker returned malformed JSON. Checker output-contract failures retain
 the raw Agent completion, receive Host validation feedback, and retry as fresh
 Agent attempts; exhaustion is operationally incomplete and is not scored.
 An overlength candidate receives `-100` per evaluated case without invoking
 the Checker.
+Curator length validation happens after its raw Agent completion is durable.
+An overlength ADD, REVISE, or MERGE receives concrete Host feedback and is
+retried with a fresh Curator, up to three attempts. If all three structurally
+valid proposals remain overlength, the last proposal becomes an `INVALID`
+candidate scored at `-100`; this specific exhaustion is not operationally
+incomplete.
 The global 10,000-token trigger is counted with the configured Checker model's
 tokenizer, not whitespace-delimited words; the same count is supplied to the
 Refiner and used by deterministic pruning.
@@ -530,7 +536,16 @@ The earlier controller-direct `DirectPlaybookAgents` and its custom
 boundary; it does not disable Slurm Agent workers or distributed execution.
 
 The smoke uses `1 CPU / 4G` for each Agent array element, up to eight concurrent
-elements, a 35-minute Agent limit, two fresh-Agent attempts, and a
+elements, a 35-minute Agent limit, three fresh-Agent attempts, and a
 `1 CPU / 4G / 30-minute` controller ceiling. The supervisor polls every 30
 seconds; controller jobs normally terminate immediately after durable Agent
 submission instead of holding the full allocation.
+
+### Candidate 1 Curator replay
+
+`configs/gepa_verified_candidate1_curator_replay_v1_20260910.yaml` reuses the
+fingerprinted Curator task immediately preceding Candidate 1: the counted seed
+playbook plus all eight final-round case reflections. It submits only the
+Curator singleton. Checker, Reflector, Code Execution, and GEPA search are not
+rerun. Each prompt revision should use a new replay run identity and prompt
+fingerprint while retaining the frozen source-task fingerprint.

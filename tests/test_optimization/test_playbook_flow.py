@@ -6,13 +6,16 @@ import json
 from pathlib import Path
 
 import pytest
+import yaml
 
 from src.optimization.models import GEPACase, RepositoryRef
 from src.optimization.playbook import (
+    BulletTokenLimitError,
     PlaybookBullet,
     RejectPlaybook,
     apply_curator_operations,
     manage_playbook_length,
+    validate_bullet_token_limit,
     validate_checker_result,
 )
 from src.optimization.playbook_adapter import (
@@ -23,7 +26,7 @@ from src.optimization.playbook_adapter import (
 from src.optimization.playbook_runner import run_playbook_search
 from src.exceptions import ControllerYield
 from src.optimization.hpc.config import HPCConfig
-from src.optimization.hpc.task_batch import SlurmTaskBatch
+from src.optimization.hpc.task_batch import SlurmTaskBatch, TaskAttemptsExhausted
 from src.optimization.playbook_hpc_executor import PlaybookHPCExecutor
 from src.optimization.playbook_hpc_agents import HPCPlaybookChecker, HPCPlaybookProposalAgents
 from src.optimization import playbook_worker
@@ -37,6 +40,44 @@ from src.optimization.playbook_cli import (
 
 def _playbook(*bullets: PlaybookBullet) -> RejectPlaybook:
     return RejectPlaybook(tuple(bullets))
+
+
+def test_curator_bullet_limit_reports_ids_and_token_counts() -> None:
+    playbook = _playbook(
+        PlaybookBullet("plan-00001", "short rule"),
+        PlaybookBullet("plan-00002", "one two three four five"),
+    )
+    with pytest.raises(
+        BulletTokenLimitError,
+        match=r"per-bullet token limit \(4\): plan-00002=5",
+    ):
+        validate_bullet_token_limit(
+            playbook, token_counter=lambda text: len(text.split()),
+            maximum_bullet_tokens=4,
+        )
+
+
+def test_v4_prompts_freeze_atomic_curation_and_duplicate_only_merge() -> None:
+    prompts = yaml.safe_load(Path(
+        "configs/prompts/offline_gepa_reject_playbook_v4_20260910.yaml"
+    ).read_text(encoding="utf-8"))
+    reflector = prompts["reflector_system"]
+    curator = prompts["curator_system"]
+    refiner = prompts["refiner_system"]
+    assert "attributable to the Plan" in reflector
+    assert "did not follow it or implemented it incorrectly" in reflector
+    assert "Do not mechanically map each case" in curator
+    assert "Create exactly one bullet for each distinct eligible failure mode" in curator
+    assert "distinct failure modes must become separate bullets" in curator
+    assert "equivalent findings from different cases" in curator
+    assert "exactly one failure mode" in curator
+    assert "no more than 32" in curator
+    assert "over 64" in curator
+    assert "Briefly record these self-check decisions" in curator
+    assert "language-level duplicates" in curator
+    assert "If either source bullet could trigger" in curator
+    assert "language-level duplicates" in refiner
+    assert "Leave distinct but related bullets separate" in refiner
 
 
 def _case(*, resolved: bool) -> GEPACase:
@@ -562,6 +603,73 @@ def test_playbook_worker_gives_host_validation_feedback_to_fresh_retry(
     assert "HOST: plan_evidence must be an array" in seen["user"]
 
 
+def test_curator_worker_retries_overlength_completion_with_host_feedback(
+    tmp_path, monkeypatch
+) -> None:
+    prompts = tmp_path / "prompts.yaml"
+    prompts.write_text(
+        "curator_system: system\n"
+        "curator_instance: '{{ counted_internal_playbook }} {{ case_reflections }}'\n",
+        encoding="utf-8",
+    )
+    config = tmp_path / "config.yaml"
+    config.write_text(
+        f"inputs:\n  prompt_bundle: {prompts}\n"
+        "models:\n  checker:\n    model: fake\n  curator:\n    model: fake\n"
+        "length:\n  maximum_bullet_tokens: 4\n",
+        encoding="utf-8",
+    )
+    playbook = _playbook(PlaybookBullet("plan-00001", "placeholder"))
+    manifest = tmp_path / "input.json"
+    manifest.write_text(json.dumps({
+        "role": "curator", "fingerprint": "abc", "task_index": 0,
+        "instance_id": None, "validation_playbook": playbook.serialize(),
+        "prompt_values": {
+            "counted_internal_playbook": playbook.serialize(),
+            "case_reflections": "[]",
+        },
+    }))
+    responses = iter([
+        {"reasoning": "long", "operations": [{
+            "type": "ADD", "content": "one two three four five",
+            "supporting_instance_ids": ["case"], "risk_analysis": "risk",
+        }]},
+        {"reasoning": "short", "operations": [{
+            "type": "ADD", "content": "one two three",
+            "supporting_instance_ids": ["case"], "risk_analysis": "risk",
+        }]},
+    ])
+    users = []
+
+    class FakeModel:
+        def __init__(self, _config): pass
+        def __call__(self, system, user):
+            users.append(user)
+            return next(responses), []
+
+    monkeypatch.setattr(playbook_worker, "PromptModel", FakeModel)
+    monkeypatch.setattr(
+        playbook_worker.litellm, "token_counter",
+        lambda *, model, text: len(text.split()),
+    )
+    first_output = tmp_path / "first.json"
+    assert playbook_worker.run_task(
+        config_path=config, manifest_path=manifest, output_path=first_output,
+        attempt_dir=tmp_path / "attempt_01",
+    ) == 1
+    first = json.loads(first_output.read_text())
+    assert first["error_type"] == "BulletTokenLimitError"
+    assert (tmp_path / "attempt_01/agent_completion.json").is_file()
+
+    assert playbook_worker.run_task(
+        config_path=config, manifest_path=manifest,
+        output_path=tmp_path / "second.json", attempt_dir=tmp_path / "attempt_02",
+        previous_output_path=first_output,
+    ) == 0
+    assert "plan-00002=5" in users[1]
+    assert "Return a complete corrected Curator JSON object" in users[1]
+
+
 def test_evidence_reflector_disables_implicit_cwd_mount(
     tmp_path, monkeypatch
 ) -> None:
@@ -683,6 +791,35 @@ def test_hpc_proposal_agents_use_file_backed_reflector_waves_and_singletons(
     assert [call[:2] for call in calls[-2:]] == [
         ("curator", 1), ("refiner", 1)
     ]
+
+
+def test_exhausted_curator_length_retries_return_invalid_candidate(tmp_path) -> None:
+    counted = _playbook(PlaybookBullet("plan-00001", "placeholder"))
+    output = {"reasoning": "still long", "operations": [{
+        "type": "ADD", "content": "one two three four five",
+        "supporting_instance_ids": ["case"], "risk_analysis": "risk",
+    }]}
+
+    class Executor:
+        run_dir = tmp_path / "run"
+
+        def batch_dir_for(self, role, items):
+            return self.run_dir / "hpc_tasks" / role / "fingerprint"
+
+        def run_wave(self, role, items):
+            batch = self.batch_dir_for(role, items)
+            completion = batch / "attempts/task_0000/attempt_03/agent_completion.json"
+            completion.parent.mkdir(parents=True)
+            completion.write_text(json.dumps({"agent_output": output}))
+            raise TaskAttemptsExhausted("three attempts")
+
+    agents = HPCPlaybookProposalAgents(
+        Executor(), maximum_tokens=10_000, maximum_bullet_tokens=4,
+        token_counter=lambda text: len(text.split()),
+    )
+    recovered = agents.curate(counted, [])
+    proposed = apply_curator_operations(counted, recovered)
+    assert proposed.bullets[-1].text == "one two three four five"
 
 
 def test_runner_marks_reflection_failure_as_operationally_incomplete(
