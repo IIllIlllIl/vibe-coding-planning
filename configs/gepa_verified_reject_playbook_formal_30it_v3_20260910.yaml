@@ -1,0 +1,97 @@
+schema_version: 1
+mode: offline_reject_playbook
+status: ready_not_launched
+run_id: verified-reject-playbook-formal-30it-v3-20260910
+purpose: fresh formal development search with Slurm-owned Reflector session limits
+
+paths:
+  dataset_snapshot: configs/frozen_swe_verified_playbook_gepa/20260910_clean375_127b1627efee
+  initial_rules: configs/development_guidelines/offline_gepa_reject_playbook_seed_v2.json
+  run_dir: output/SWE-bench_Verified/gepa-reject-playbook-runs/formal-30it-v3-20260910
+
+task:
+  semantics: offline_reject_playbook_v5
+container:
+  runtime: none
+  sif_cache_dir: /scratch/users/twang/vibe-coding-planning/shared/sif-cache
+execution:
+  backend: hpc_slurm
+
+inputs:
+  dataset_snapshot: configs/frozen_swe_verified_playbook_gepa/20260910_clean375_127b1627efee
+  initial_playbook: configs/development_guidelines/offline_gepa_reject_playbook_seed_v2.json
+  initial_playbook_sha256: 16e09571f484f355300dc29f7a828ba8d9b5ca691152ffb8b3b1f2d13d5f83e4
+  prompt_bundle: configs/prompts/offline_gepa_reject_playbook_v5_20260910.yaml
+  prompt_bundle_sha256: 69094346971696addedab449783d6e70973d42db3a58950813c49166d1e26dad
+  train_instance_ids: null
+  validation_instance_ids: null
+
+models:
+  checker: {model: deepseek-v4-flash, temperature: 0.0}
+  reflector: {model: deepseek-v4-flash, temperature: 0.0}
+  curator: {model: deepseek-v4-flash, temperature: 0.0}
+  refiner: {model: deepseek-v4-flash, temperature: 0.0}
+search:
+  max_iterations: 30
+  reflection_minibatch_size: 8
+  max_metric_calls: 3000
+  seed: 42
+  perfect_score: 0.0
+  skip_perfect_score: true
+reflection:
+  rounds: 3
+  rounds_are_configurable: false
+  evidence_image: python:3.12-slim
+  evidence_sif_cache_dir: /scratch/users/twang/vibe-coding-planning/shared/sif-cache
+  command_timeout_seconds: 1800
+length:
+  maximum_visible_tokens: 2048
+  maximum_bullet_tokens: 64
+
+budget:
+  expected_elapsed_hours_excluding_queue: "approximately 10-15 from observed v2 orchestration throughput"
+  metric_call_fail_safe: 3000
+  candidate_proposals: 30
+  reflection_cases_per_proposal: 8
+  reflection_rounds_per_case: 3
+stopping:
+  stop_after_candidate_proposals: 30
+  abort_on_operational_incomplete: true
+success_criteria:
+  - Start a fresh candidate tree from the atomic one-bullet v2 seed; do not resume or import candidates from an earlier run.
+  - Use exactly the immutable clean375 train and validation splits without resampling.
+  - Attempt thirty GEPA candidate proposals with eight selected Reflection cases each.
+  - Every selected case receives three sequential, durable Reflection rounds.
+  - Reflector sessions have no internal step limit; each command is capped at 1800 seconds and the complete task is capped by the 35-minute Slurm wall time.
+  - Checker sees only issue, Plan, and visible bullet text; IDs, counters, labels, repository, trajectories, and evaluator evidence remain hidden.
+  - Retrospective evidence may reveal only deficiencies that existed and could have been discovered before implementation; post-implementation facts cannot be bullet triggers.
+  - Curator receives only final per-case reflections and the counted internal playbook.
+  - Every visible bullet remains at most 64 model tokens and the playbook remains at most 2048 model tokens.
+  - Operational failures remain incomplete and are never converted to Bad or INVALID.
+  - Raw Agent evidence, scores, fingerprints, task attempts, checkpoints, and candidate lineage remain durable.
+  - The run stops after thirty proposals or the 3000-call fail-safe, whichever occurs first.
+operational_incomplete_policy: >-
+  Model, transport, timeout, parsing infrastructure, missing-artifact, or
+  exhausted Agent-output-contract failures are operationally incomplete and
+  are not converted to Bad or INVALID.
+
+hpc:
+  submit: true
+  partition: batch
+  cpus_per_task: 1
+  mem: 4G
+  controller_slice_time: "00:30:00"
+  agent_time: "00:35:00"
+  poll_interval_seconds: 30
+  max_running_array_tasks: 0
+  max_task_attempts: 3
+  task_output_grace_seconds: 120
+  missing_task_grace_seconds: 300
+  remote_env_file: ~/.config/vibe-coding-planning/deepseek.env
+  python_module: lang/Python/3.11
+  container_module: tools/Apptainer
+  job_name_prefix: verified-reject-playbook-formal-30it-v3-20260910
+readiness:
+  runnable: true
+  launched: false
+  missing: []

@@ -24,6 +24,8 @@ tracked does not authorize its execution.
 | `prompts/offline_gepa_reject_playbook_v5_20260910.yaml` | Atomic-playbook prompt with retrospective learning from deficiencies discoverable before implementation, while post-implementation facts remain ineligible as bullet triggers. |
 | `gepa_verified_reject_playbook_formal_30it_v2_20260910.yaml` | Fresh, launch-unauthorized 30-proposal contract using clean375, seed v2, prompt v5, three Reflection rounds, and the 64-token bullet gate. |
 | `gepa_verified_reject_playbook_formal_30it_supervisor_v2_20260910.yaml` | Dedicated clean-worktree supervisor identity for the fresh 30-proposal v2 contract; presence does not authorize launch. |
+| `gepa_verified_reject_playbook_formal_30it_v3_20260910.yaml` | Replacement fresh 30-proposal contract: no Reflector step limit, 1800-second per-command timeout, and 35-minute Slurm task authority. |
+| `gepa_verified_reject_playbook_formal_30it_supervisor_v3_20260910.yaml` | Dedicated, launch-unauthorized supervisor identity for the step-limit repair. |
 | `frozen_swe_verified_playbook_gepa/20260909_clean444_25e5ce38271c/` | Eligibility-cleaned immutable Verified development snapshot with 444 cases and exhaustive exclusion/audit authorities. |
 | `gepa_verified_reject_playbook_smoke_v1_20260909.yaml` | Completed diagnostic 4-train/2-validation smoke; distributed execution worked, but Checker schema ambiguity and inline Reflection overflow prevented a proposal. |
 | `gepa_verified_reject_playbook_smoke_v2_20260910.yaml` | Repaired, launch-unauthorized successor with raw-completion checkpointing, Host-validation retry, repository-free evidence mounts, and a 128-token per-bullet validity cap. |

@@ -122,7 +122,7 @@ retried with a fresh Curator, up to three attempts. If all three structurally
 valid proposals remain overlength, the last proposal becomes an `INVALID`
 candidate scored at `-100`; this specific exhaustion is not operationally
 incomplete.
-The global 10,000-token trigger is counted with the configured Checker model's
+The global 2,048-token trigger is counted with the configured Checker model's
 tokenizer, not whitespace-delimited words; the same count is supplied to the
 Refiner and used by deterministic pruning.
 
@@ -194,14 +194,14 @@ misleading evidence.
 ## Length Management
 
 Length is measured deterministically on the Checker-visible projection. The
-maximum is **10,000 tokens** under a tokenizer and version that must be frozen
+maximum is **2,048 tokens** under a tokenizer and version that must be frozen
 in the implementation contract.
 
 After Curator output:
 
-1. If the rendered playbook is at most 10,000 tokens, no length-management
+1. If the rendered playbook is at most 2,048 tokens, no length-management
    Agent runs.
-2. If it exceeds 10,000 tokens, a semantic Refiner removes duplication,
+2. If it exceeds 2,048 tokens, a semantic Refiner removes duplication,
    compresses wording, and merges genuinely overlapping bullets. It must not
    add new rejection knowledge or inspect case trajectories.
 3. The host renders and counts again.
@@ -505,7 +505,7 @@ The task granularity is:
 - one Checker array element per case and candidate evaluation;
 - one Reflector array element per selected minibatch case and reflection round;
 - one Curator array element per proposal;
-- one Refiner array element only when the visible candidate exceeds 10,000
+- one Refiner array element only when the visible candidate exceeds 2,048
   tokens;
 - counter updates, OR aggregation, operation application, and final pruning
   remain deterministic host operations.
@@ -573,3 +573,12 @@ The paired prompt authority is
 30-proposal contract is
 `configs/gepa_verified_reject_playbook_formal_30it_v2_20260910.yaml`; it starts
 a new candidate tree rather than importing or resuming earlier candidates.
+
+That v2 contract exposed a control-plane regression: its tool-using Reflector
+retained an internal 20-step limit and a 120-second command timeout. Three early
+Reflector tasks reached `LimitsExceeded`, causing otherwise avoidable retry
+waves. The replacement v3 contract removes the internal step limit, restores
+the 1800-second per-command ceiling, and leaves the complete Agent-session
+ceiling to the 35-minute Slurm task wall time. Because runtime source and
+execution semantics changed, v3 starts a fresh candidate tree and does not
+resume v2 state.

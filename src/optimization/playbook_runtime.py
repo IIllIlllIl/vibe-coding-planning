@@ -111,7 +111,7 @@ def run_evidence_reflector(
             "--bind",
             f"{Path(evidence_dir).resolve()}:/evidence:ro",
         ],
-        timeout=int(reflection_config.get("command_timeout_seconds", 120)),
+        timeout=int(reflection_config.get("command_timeout_seconds", 1800)),
         writable_tmpfs=True,
         network_disabled=True,
         isolate_tmp=True,
@@ -123,7 +123,10 @@ def run_evidence_reflector(
             environment,
             system_template=system,
             instance_template=instance_template,
-            step_limit=int(reflection_config.get("max_steps", 20)),
+            # The Slurm task wall time owns the complete Agent-session limit.
+            # Keep only the per-command environment timeout here; an internal
+            # step cap can discard a valid artifact before atomic completion.
+            step_limit=0,
         )
         exit_status, submission = agent.run(
             task="Attribute this case to every active rejection rule.",
@@ -145,7 +148,7 @@ def run_evidence_reflector(
         artifact = environment.execute(
             "cat /tmp/reflection.json",
             cwd="/evidence",
-            timeout=int(reflection_config.get("command_timeout_seconds", 120)),
+            timeout=int(reflection_config.get("command_timeout_seconds", 1800)),
         )
         trajectory = [
             *list(agent.messages),

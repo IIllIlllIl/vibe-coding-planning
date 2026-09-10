@@ -460,7 +460,7 @@ def test_hpc_checker_wave_submits_one_array_and_hides_outcome(tmp_path) -> None:
     config = tmp_path / "config.yaml"
     config.write_text("mode: offline_reject_playbook\n", encoding="utf-8")
     hpc = HPCConfig(
-        submit=True, worker_config_path=str(config), max_running_array_tasks=8,
+        submit=True, worker_config_path=str(config), max_running_array_tasks=0,
         job_name_prefix="playbook-smoke",
     )
     executor = PlaybookHPCExecutor(config_path=config, run_dir=tmp_path / "run", hpc=hpc)
@@ -473,6 +473,7 @@ def test_hpc_checker_wave_submits_one_array_and_hides_outcome(tmp_path) -> None:
     assert len(submitted) == 1
     script = submitted[0].read_text(encoding="utf-8")
     assert "#SBATCH --array=0,1" in script
+    assert "#SBATCH --array=0,1%" not in script
     manifests = sorted((tmp_path / "run/hpc_tasks/checker").glob("*/tasks/*.json"))
     assert len(manifests) == 2
     serialized = "\n".join(path.read_text() for path in manifests)
@@ -708,10 +709,14 @@ def test_evidence_reflector_disables_implicit_cwd_mount(
     )
     monkeypatch.setattr(playbook_runtime, "build_model", lambda *args: object())
     monkeypatch.setattr(playbook_runtime, "ApptainerEnvironment", FakeEnvironment)
+    def fake_build_default_agent(*args, **kwargs):
+        captured["agent_build"] = kwargs
+        return FakeAgent()
+
     monkeypatch.setattr(
         playbook_runtime,
         "build_default_agent",
-        lambda *args, **kwargs: FakeAgent(),
+        fake_build_default_agent,
     )
     monkeypatch.setattr(
         playbook_runtime,
@@ -743,8 +748,13 @@ def test_evidence_reflector_disables_implicit_cwd_mount(
     assert captured["network_disabled"] is True
     assert captured["isolate_tmp"] is True
     assert captured["cwd"] == "/evidence"
+    assert captured["timeout"] == 1800
+    assert captured["agent_build"]["step_limit"] == 0
     assert captured["task"]["retry_feedback"] == "previous JSON was malformed"
-    assert captured["artifact_command"][0] == "cat /tmp/reflection.json"
+    assert captured["artifact_command"] == (
+        "cat /tmp/reflection.json",
+        {"cwd": "/evidence", "timeout": 1800},
+    )
     assert captured["cleaned"] is True
 
 
@@ -924,5 +934,37 @@ def test_fresh_formal_30it_contract_uses_atomic_seed_and_v5_prompts() -> None:
         config_path.relative_to(repo_root)
     )
     assert "formal-30it-v2-20260910" in arguments[
+        arguments.index("--remote-dir") + 1
+    ]
+
+
+def test_replacement_formal_contract_delegates_reflector_limit_to_slurm() -> None:
+    repo_root = Path(__file__).resolve().parents[2]
+    config_path = (
+        repo_root
+        / "configs/gepa_verified_reject_playbook_formal_30it_v3_20260910.yaml"
+    )
+    raw = yaml.safe_load(config_path.read_text(encoding="utf-8"))
+
+    _validate_frozen_inputs(config_path, raw)
+    assert "max_steps" not in raw["reflection"]
+    assert raw["reflection"]["command_timeout_seconds"] == 1800
+    assert raw["length"]["maximum_visible_tokens"] == 2048
+    assert raw["hpc"]["agent_time"] == "00:35:00"
+    assert raw["hpc"]["max_running_array_tasks"] == 0
+    assert raw["paths"]["run_dir"].endswith("formal-30it-v3-20260910")
+    assert "resume" not in raw
+
+    supervisor = yaml.safe_load(
+        (
+            repo_root
+            / "configs/gepa_verified_reject_playbook_formal_30it_supervisor_v3_20260910.yaml"
+        ).read_text(encoding="utf-8")
+    )
+    arguments = supervisor["arguments"]
+    assert arguments[arguments.index("--gepa-config") + 1] == str(
+        config_path.relative_to(repo_root)
+    )
+    assert "formal-30it-v3-20260910" in arguments[
         arguments.index("--remote-dir") + 1
     ]
