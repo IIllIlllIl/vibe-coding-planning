@@ -225,6 +225,23 @@ fi
 if [[ -z "${ULHPC_USER:-}" ]]; then
   export ULHPC_USER="$ULHPC_REMOTE_USER"
 fi
+read -r ULHPC_REMOTE_HOST ULHPC_REMOTE_PORT ULHPC_REMOTE_KEY < <(
+  python - "${ULHPC_CONFIG:-}" <<'PY'
+import os
+import sys
+from pathlib import Path
+import yaml
+
+data = {}
+if len(sys.argv) > 1 and sys.argv[1] and Path(sys.argv[1]).is_file():
+    data = yaml.safe_load(Path(sys.argv[1]).read_text(encoding="utf-8")) or {}
+print(
+    os.environ.get("ULHPC_HOST") or data.get("host", "access-iris.uni.lu"),
+    os.environ.get("ULHPC_PORT") or data.get("port", "8022"),
+    os.path.expanduser(os.environ.get("ULHPC_SSH_KEY") or data.get("ssh_key", "")),
+)
+PY
+)
 VIBE_HPC_ROOT="${VIBE_HPC_ROOT:-/scratch/users/${ULHPC_REMOTE_USER}/vibe-coding-planning}"
 if [[ -z "$REMOTE_APPTAINER_CACHE_DIR" ]]; then
   REMOTE_APPTAINER_CACHE_DIR="${VIBE_HPC_ROOT}/shared/apptainer-cache"
@@ -301,6 +318,7 @@ print(f"python_module={ulhpc.get('python_module', '')}")
 print(f"container_module={ulhpc.get('container_module', '')}")
 print(f"task_semantics={cfg.get('task', {}).get('semantics', 'historical_resolution')}")
 print(f"container_runtime={container.get('runtime', 'docker')}")
+print(f"resume_predecessor_config={cfg.get('resume', {}).get('predecessor_config', '')}")
 PY
 )
 
@@ -312,6 +330,7 @@ CONFIG_PYTHON_MODULE=""
 CONFIG_CONTAINER_MODULE=""
 TASK_SEMANTICS=""
 CONTAINER_RUNTIME=""
+RESUME_PREDECESSOR_CONFIG=""
 while IFS='=' read -r KEY VALUE; do
   case "$KEY" in
     dataset_snapshot) DATASET_SNAPSHOT="$VALUE" ;;
@@ -322,6 +341,7 @@ while IFS='=' read -r KEY VALUE; do
     container_module) CONFIG_CONTAINER_MODULE="$VALUE" ;;
     task_semantics) TASK_SEMANTICS="$VALUE" ;;
     container_runtime) CONTAINER_RUNTIME="$VALUE" ;;
+    resume_predecessor_config) RESUME_PREDECESSOR_CONFIG="$VALUE" ;;
   esac
 done <<< "$CONFIG_VALUES"
 
@@ -379,6 +399,10 @@ fi
 REMOTE_DATASET_SNAPSHOT="$REMOTE_DATASET_DIR/$DATASET_REL"
 REMOTE_RUN_SNAPSHOT="$REMOTE_RUN_DIR/$RUN_DIR_REL"
 DATASET_SYNC_EXCLUDE="$(basename "$DATASET_REL")"
+DATASET_FAMILY_SYNC_EXCLUDE=""
+if [[ "$(basename "$(dirname "$DATASET_REL")")" == frozen_* ]]; then
+  DATASET_FAMILY_SYNC_EXCLUDE="$(basename "$(dirname "$DATASET_REL")")"
+fi
 
 # The frozen dataset is staged separately and linked back at DATASET_REL.
 # Exclude it from the project rsync so that --link-as never collides with a
@@ -387,7 +411,8 @@ EFFECTIVE_ULHPC_CONFIG="$ULHPC_CONFIG"
 if [[ -n "$ULHPC_CONFIG" ]]; then
   EFFECTIVE_ULHPC_CONFIG="$(mktemp "${TMPDIR:-/tmp}/vibe-ulhpc-config.XXXXXX.yaml")"
   chmod 600 "$EFFECTIVE_ULHPC_CONFIG"
-  python - "$ULHPC_CONFIG" "$EFFECTIVE_ULHPC_CONFIG" "$DATASET_SYNC_EXCLUDE" <<'PY'
+  python - "$ULHPC_CONFIG" "$EFFECTIVE_ULHPC_CONFIG" \
+    "$DATASET_SYNC_EXCLUDE" "$DATASET_FAMILY_SYNC_EXCLUDE" <<'PY'
 import sys
 from pathlib import Path
 
@@ -396,10 +421,13 @@ import yaml
 source = Path(sys.argv[1])
 target = Path(sys.argv[2])
 dataset_exclude = sys.argv[3]
+dataset_family_exclude = sys.argv[4]
 config = yaml.safe_load(source.read_text(encoding="utf-8")) or {}
 excludes = list(config.get("sync_excludes") or [])
 if dataset_exclude not in excludes:
     excludes.append(dataset_exclude)
+if dataset_family_exclude and dataset_family_exclude not in excludes:
+    excludes.append(dataset_family_exclude)
 config["sync_excludes"] = excludes
 target.write_text(yaml.safe_dump(config, sort_keys=False), encoding="utf-8")
 PY
@@ -422,6 +450,12 @@ test -f "\$REMOTE_ENV_FILE" || exit 2
 set +x
 source "\$REMOTE_ENV_FILE"
 test -n "\${DEEPSEEK_API_KEY:-}" || exit 2
+if [[ -n "$RESUME_PREDECESSOR_CONFIG" ]]; then
+  python3 scripts/internal/extend_playbook_budget.py \
+    --run-dir "$RUN_DIR_REL" \
+    --old-config "$RESUME_PREDECESSOR_CONFIG" \
+    --new-config "$GEPA_CONFIG_REL"
+fi
 python3 -m pip install --quiet --user -e third_party/gepa || true
 python3 scripts/internal/run_gepa_rules.py --config "$GEPA_CONFIG_REL"
 EOF
@@ -453,6 +487,12 @@ test -n "\${DEEPSEEK_API_KEY:-}" || {
   echo "[vibe-gepa] DEEPSEEK_API_KEY missing after sourcing \$REMOTE_ENV_FILE" >&2
   exit 2
 }
+if [[ -n "$RESUME_PREDECESSOR_CONFIG" ]]; then
+  python3 scripts/internal/extend_playbook_budget.py \
+    --run-dir "$RUN_DIR_REL" \
+    --old-config "$RESUME_PREDECESSOR_CONFIG" \
+    --new-config "$GEPA_CONFIG_REL"
+fi
 python3 -m pip install --quiet --user -e third_party/gepa || true
 python3 scripts/internal/run_gepa_rules.py --config "$GEPA_CONFIG_REL"
 GEPA_RC=\$?
@@ -468,6 +508,7 @@ ULHPC_CMD=(
   --json
   --local-dir "$REPO_ROOT"
   --remote-dir "$REMOTE_DIR"
+  --no-sync
   --job-name "$JOB_NAME"
   --partition "$PARTITION"
   --cpus "$CPUS"
@@ -517,6 +558,39 @@ echo "[hpc-submit] dataset_snapshot=$DATASET_SNAPSHOT"
 echo "[hpc-submit] project-sync-exclude=$DATASET_SYNC_EXCLUDE"
 echo "[hpc-submit] run_dir=$RUN_DIR"
 echo "[hpc-submit] invoking ulhpc-submit..."
+
+# Controllers and their worker waves never overlap the next supervisor
+# submission. Reuse one fixed source tree so short controller slices do not
+# accumulate full repository copies under .ulhpc_submit/runs.
+RSYNC_SSH="ssh -p $ULHPC_REMOTE_PORT"
+if [[ -n "$ULHPC_REMOTE_KEY" ]]; then
+  RSYNC_SSH+=" -i $ULHPC_REMOTE_KEY"
+fi
+SYNC_EXCLUDES=()
+while IFS= read -r pattern; do
+  [[ -n "$pattern" ]] && SYNC_EXCLUDES+=(--exclude "$pattern")
+done < <(python - "$EFFECTIVE_ULHPC_CONFIG" <<'PY'
+import sys, yaml
+from pathlib import Path
+data = yaml.safe_load(Path(sys.argv[1]).read_text(encoding="utf-8")) or {}
+for value in data.get("sync_excludes") or []:
+    print(value)
+PY
+)
+RSYNC_CMD=(rsync -az --delete -e "$RSYNC_SSH" "${SYNC_EXCLUDES[@]}" "$REPO_ROOT/" "$ULHPC_REMOTE_USER@$ULHPC_REMOTE_HOST:$REMOTE_DIR/")
+if [[ "$SUBMIT" -eq 0 ]]; then
+  printf '[hpc-submit] dry-run fixed-worktree sync:'
+  printf ' %q' "${RSYNC_CMD[@]}"
+  printf '\n'
+else
+  SSH_CMD=(ssh -p "$ULHPC_REMOTE_PORT")
+  if [[ -n "$ULHPC_REMOTE_KEY" ]]; then
+    SSH_CMD+=(-i "$ULHPC_REMOTE_KEY")
+  fi
+  SSH_CMD+=("$ULHPC_REMOTE_USER@$ULHPC_REMOTE_HOST")
+  "${SSH_CMD[@]}" "mkdir -p $(printf '%q' "$REMOTE_DIR")"
+  "${RSYNC_CMD[@]}"
+fi
 
 set +e
 "${ULHPC_CMD[@]}"

@@ -166,6 +166,8 @@ prompts:
     assert "--conda-env mini-swe" not in result.stdout
     assert "--submit-only" in result.stdout
     assert "--json" in result.stdout
+    assert "--no-sync" in result.stdout
+    assert "dry-run fixed-worktree sync:" in result.stdout
     lines = result.stdout.splitlines()
     assert lines[lines.index("--cpus") + 1] == "1"
     assert lines[lines.index("--mem") + 1] == "4G"
@@ -210,6 +212,66 @@ prompts:
         '"$ULHPC_APPTAINER_SIF_CACHE_DIR"'
     ) in result.stdout
     assert "--remote-ignore-extra" in result.stdout
+
+
+def test_hpc_submit_batch_fixed_sync_excludes_persistent_and_staged_data(
+    tmp_path: Path,
+) -> None:
+    fake_bin = tmp_path / "bin"
+    fake_bin.mkdir()
+    command_log = tmp_path / "commands.log"
+    for name in ("ssh", "rsync", "ulhpc-submit"):
+        executable = fake_bin / name
+        executable.write_text(
+            "#!/usr/bin/env bash\n"
+            f"printf '{name} %s\\n' \"$*\" >> {command_log}\n"
+            + ("printf '{\"job_id\":\"123\"}\\n'\n" if name == "ulhpc-submit" else "")
+            + "exit 0\n",
+            encoding="utf-8",
+        )
+        executable.chmod(0o755)
+
+    family = REPO_ROOT / ".tmp_hpc_smoke" / "frozen_family"
+    snapshot = family / "selected"
+    snapshot.mkdir(parents=True, exist_ok=True)
+    (snapshot / "manifest.json").write_text("{}", encoding="utf-8")
+    rules = REPO_ROOT / ".tmp_hpc_smoke" / "fixed-rules.md"
+    rules.write_text("1. rule\n", encoding="utf-8")
+    config = REPO_ROOT / ".tmp_hpc_smoke" / "fixed-gepa.yaml"
+    config.write_text(
+        f"paths:\n  dataset_snapshot: {snapshot}\n  initial_rules: {rules}\n"
+        f"  run_dir: {REPO_ROOT / '.tmp_hpc_smoke' / 'fixed-run'}\n"
+        "task:\n  semantics: offline_reject_playbook_v1\n"
+        "container:\n  runtime: none\n",
+        encoding="utf-8",
+    )
+    submit_config = tmp_path / "ulhpc.yaml"
+    submit_config.write_text(
+        "host: example.invalid\nport: 8022\nuser: tester\n"
+        "sync_excludes:\n- .git\n- output\n- .ulhpc_submit\n",
+        encoding="utf-8",
+    )
+    env = os.environ.copy()
+    env["PATH"] = f"{fake_bin}{os.pathsep}{env['PATH']}"
+    env["ULHPC_SUBMIT_BIN"] = str(fake_bin / "ulhpc-submit")
+
+    result = subprocess.run(
+        [
+            "bash", str(SCRIPT), "--gepa-rules", "--gepa-config", str(config),
+            "--remote-dir", "/scratch/test/fixed-controller", "--ulhpc-config",
+            str(submit_config), "--submit",
+        ],
+        cwd=REPO_ROOT, capture_output=True, text=True, check=False, env=env,
+    )
+
+    assert result.returncode == 0, result.stderr
+    logged = command_log.read_text(encoding="utf-8")
+    assert "rsync -az --delete" in logged
+    assert "--exclude output" in logged
+    assert "--exclude frozen_family" in logged
+    assert "/scratch/test/fixed-controller/" in logged
+    assert "ulhpc-submit" in logged and "--no-sync" in logged
+    assert "--persistent-output" in logged
 
 
 def test_hpc_submit_batch_defaults_to_remote_user_from_config(tmp_path) -> None:

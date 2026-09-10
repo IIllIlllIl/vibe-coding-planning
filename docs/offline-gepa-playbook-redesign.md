@@ -453,6 +453,35 @@ Agent array element remains `1 CPU / 4G / 35 minutes`, with at most eight runnin
 elements. The run is ready but not launched; formal launch still requires an
 explicit instruction.
 
+The run subsequently reached six durable iterations in approximately one
+active hour, then stopped during the next Controller submission. This was a
+staging-quota failure, not a GEPA or Agent failure: contemporary
+`ulhpc-submit` created one complete run-scoped workdir per short Controller
+slice, and 37 copies occupied approximately 26 GB. The earlier Behavioral
+eight-iteration run used the same mechanism, but its 34 smaller copies occupied
+only approximately 9.4 GB; the still-earlier Offline workflow reused a fixed
+remote tree.
+
+The repaired submit wrapper restores that fixed-tree property without changing
+the distributed experiment. At the supervisor's existing quiescent submission
+boundary it synchronizes code into the dedicated `--remote-dir`, excluding
+`output`, `.ulhpc_submit`, and the complete frozen dataset family staged
+separately. `ulhpc-submit --no-sync` then submits from that fixed tree. No next
+sync occurs while a Controller or Agent worker is active. Persistent run-state,
+dataset staging, task attempts, Agent artifacts, and checkpoints are unchanged
+and are never cleanup targets.
+
+The authorized continuation is
+`configs/gepa_verified_reject_playbook_formal_30it_resume_v1_20260910.yaml`,
+paired with its `formal_30it_resume` supervisor config. It retains the same
+logical run and changes cumulative iterations from 12 to 30 and the metric-call
+fail-safe from 1,200 to 3,000. Before resume,
+`scripts/internal/extend_playbook_budget.py` verifies that predecessor and
+successor configs differ only in whitelisted budget/documentation fields,
+checks the predecessor fingerprint, records the transition, and atomically
+updates the manifest fingerprint. It is idempotent and refuses changes to data,
+split, prompts, models, scoring, sampling, Reflection, or run paths.
+
 The smoke implementation uses the established
 distributed GEPA execution contract rather than calling Agents inside the
 controller. The local supervisor submits short controller allocations. A
