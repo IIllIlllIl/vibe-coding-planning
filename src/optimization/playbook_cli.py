@@ -41,6 +41,12 @@ def _token_counter(model: str):
     return lambda text: int(litellm.token_counter(model=model, text=text))
 
 
+def _optional_instance_ids(inputs: dict[str, Any], key: str) -> list[str] | None:
+    """Use the frozen snapshot's complete split when a formal config says null."""
+    value = inputs.get(key)
+    return None if value is None else list(value)
+
+
 def run_from_config(path: str | Path, *, agents: Any | None = None, optimize_fn=None):
     config_path = Path(path)
     raw = yaml.safe_load(config_path.read_text(encoding="utf-8")) or {}
@@ -121,8 +127,10 @@ def run_from_config(path: str | Path, *, agents: Any | None = None, optimize_fn=
         max_iterations=int(raw["search"]["max_iterations"]),
         seed=int(raw["search"]["seed"]),
         skip_perfect_score=bool(raw["search"]["skip_perfect_score"]),
-        train_instance_ids=list(raw["inputs"]["train_instance_ids"]),
-        validation_instance_ids=list(raw["inputs"]["validation_instance_ids"]),
+        train_instance_ids=_optional_instance_ids(raw["inputs"], "train_instance_ids"),
+        validation_instance_ids=_optional_instance_ids(
+            raw["inputs"], "validation_instance_ids"
+        ),
         reflection_minibatch_size=int(raw["search"]["reflection_minibatch_size"]),
         abort_on_operational_incomplete=bool(
             raw.get("stopping", {}).get("abort_on_operational_incomplete", False)

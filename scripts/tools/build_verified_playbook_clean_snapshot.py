@@ -66,6 +66,16 @@ def _plan_quality_reasons(instance_id: str) -> list[str]:
     return reasons
 
 
+def _has_abrupt_ending(plan: str) -> bool:
+    """Detect a Plan cut off immediately after an introductory colon."""
+    tail = plan.rstrip()
+    while True:
+        stripped = re.sub(r"(?:\*\*|__|`)+$", "", tail).rstrip()
+        if stripped == tail:
+            return tail.endswith(":")
+        tail = stripped
+
+
 def build(source: Path, output: Path) -> None:
     if output.exists():
         raise FileExistsError(f"refusing to modify existing output: {output}")
@@ -107,6 +117,8 @@ def build(source: Path, output: Path) -> None:
         if plan_mentions_tmp or shared_paths:
             reasons.append("TMP_TOPOLOGY_CONFOUND")
         reasons.extend(_plan_quality_reasons(instance_id))
+        if _has_abrupt_ending(row["checker_input"]["plan"]):
+            reasons.append("ABRUPT_ENDING_PLAN")
         ledger.append({
             "instance_id": instance_id,
             "source_split": row["split"],
@@ -139,7 +151,7 @@ def build(source: Path, output: Path) -> None:
         "complete": True,
         "provisional": False,
         "immutable": True,
-        "cleaning_policy": "verified-playbook-eligibility-v2",
+        "cleaning_policy": "verified-playbook-eligibility-v3",
         "source_snapshot": str(source),
         "source_manifest_sha256": _sha256(source_manifest_path),
         "source_cases_sha256": _sha256(source / "cases.jsonl"),
@@ -159,7 +171,8 @@ def build(source: Path, output: Path) -> None:
         "duplicate_policy": "retain lexicographically first exact normalized Plan",
         "plan_artifact_policy": (
             "exclude the frozen human-audited trivial placeholder and "
-            "truncated or structurally incomplete Plan instances"
+            "truncated or structurally incomplete Plan instances, plus Plans "
+            "ending at an introductory colon after trailing Markdown cleanup"
         ),
         "ordered_retained_ids_sha256": hashlib.sha256("\n".join(row["instance_id"] for row in retained).encode()).hexdigest(),
         "cases_sha256": _sha256(output / "cases.jsonl"),

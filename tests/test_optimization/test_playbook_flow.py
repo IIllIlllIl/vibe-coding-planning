@@ -28,7 +28,11 @@ from src.optimization.playbook_hpc_executor import PlaybookHPCExecutor
 from src.optimization.playbook_hpc_agents import HPCPlaybookChecker, HPCPlaybookProposalAgents
 from src.optimization import playbook_worker
 from src.optimization import playbook_runtime
-from src.optimization.playbook_cli import _token_counter, _validate_frozen_inputs
+from src.optimization.playbook_cli import (
+    _optional_instance_ids,
+    _token_counter,
+    _validate_frozen_inputs,
+)
 
 
 def _playbook(*bullets: PlaybookBullet) -> RejectPlaybook:
@@ -399,6 +403,15 @@ def test_reflection_round_count_is_configurable_and_passes_prior() -> None:
         None,
         {"round": 1, "instance_id": "case-1"},
         {"round": 2, "instance_id": "case-1"},
+    ]
+
+
+def test_formal_playbook_config_can_select_the_complete_frozen_splits() -> None:
+    inputs = {"train_instance_ids": None, "validation_instance_ids": None}
+    assert _optional_instance_ids(inputs, "train_instance_ids") is None
+    assert _optional_instance_ids(inputs, "validation_instance_ids") is None
+    assert _optional_instance_ids({"train_instance_ids": ["case-1"]}, "train_instance_ids") == [
+        "case-1"
     ]
 
 

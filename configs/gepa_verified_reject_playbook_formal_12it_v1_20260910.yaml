@@ -1,0 +1,107 @@
+schema_version: 1
+mode: offline_reject_playbook
+status: ready_not_launched
+run_id: verified-reject-playbook-formal-12it-v1-20260910
+purpose: formal development search for a human-readable when-to-reject Plan checklist
+
+paths:
+  dataset_snapshot: configs/frozen_swe_verified_playbook_gepa/20260910_clean375_127b1627efee
+  initial_rules: configs/development_guidelines/offline_gepa_reject_playbook_seed_v1.json
+  run_dir: output/SWE-bench_Verified/gepa-reject-playbook-runs/formal-12it-v1-20260910
+
+task:
+  semantics: offline_reject_playbook_v3
+
+container:
+  runtime: none
+  sif_cache_dir: /scratch/users/twang/vibe-coding-planning/shared/sif-cache
+
+execution:
+  backend: hpc_slurm
+
+inputs:
+  dataset_snapshot: configs/frozen_swe_verified_playbook_gepa/20260910_clean375_127b1627efee
+  initial_playbook: configs/development_guidelines/offline_gepa_reject_playbook_seed_v1.json
+  initial_playbook_sha256: da2676ca8b9a4d78e0d3d21bb560650c4d9aafe616088e3d00f8e18f2a3d4e7e
+  prompt_bundle: configs/prompts/offline_gepa_reject_playbook_v3_20260910.yaml
+  prompt_bundle_sha256: afd3838b014ab650239eec41dc7df047c2b0615f2bc03e7f3888bda7eac9d596
+  # null means the complete immutable split in dataset_snapshot, not resampling.
+  train_instance_ids: null
+  validation_instance_ids: null
+
+models:
+  checker: {model: deepseek-v4-flash, temperature: 0.0}
+  reflector: {model: deepseek-v4-flash, temperature: 0.0}
+  curator: {model: deepseek-v4-flash, temperature: 0.0}
+  refiner: {model: deepseek-v4-flash, temperature: 0.0}
+
+search:
+  max_iterations: 12
+  reflection_minibatch_size: 8
+  max_metric_calls: 1200
+  seed: 42
+  perfect_score: 0.0
+  skip_perfect_score: true
+
+reflection:
+  # Round 2 corrected round 1's attribution error in the reflect3 smoke; the
+  # formal design retains round 3 as an explicit attribution-stability pass.
+  rounds: 3
+  rounds_are_configurable: false
+  evidence_image: python:3.12-slim
+  evidence_sif_cache_dir: /scratch/users/twang/vibe-coding-planning/shared/sif-cache
+  max_steps: 20
+  command_timeout_seconds: 120
+
+length:
+  maximum_visible_tokens: 10000
+  maximum_bullet_tokens: 128
+
+budget:
+  expected_elapsed_hours_excluding_queue: "12-18"
+  metric_call_fail_safe: 1200
+  candidate_proposals: 12
+  reflection_cases_per_proposal: 8
+  reflection_rounds_per_case: 3
+
+stopping:
+  stop_after_candidate_proposals: 12
+  abort_on_operational_incomplete: true
+
+success_criteria:
+  - Use exactly the immutable clean375 train and validation splits without resampling.
+  - Attempt twelve GEPA candidate proposals with eight selected Reflection cases each.
+  - Every selected case receives three sequential, durable Reflection rounds.
+  - Checker sees only issue, Plan, and visible bullet text; IDs, counters, labels, repository, trajectories, and evaluator evidence remain hidden.
+  - Curator receives only final per-case reflections and the counted internal playbook.
+  - Every visible bullet remains at most 128 model tokens and the playbook remains at most 10000 model tokens.
+  - Operational failures remain incomplete and are never converted to Bad or INVALID.
+  - Raw Agent evidence, scores, fingerprints, task attempts, checkpoints, and candidate lineage remain durable.
+  - The run stops after twelve proposals or the 1200-call fail-safe, whichever occurs first.
+
+operational_incomplete_policy: >-
+  Model, transport, timeout, parsing infrastructure, missing-artifact, or
+  exhausted Agent-output-contract failures are operationally incomplete and
+  are not converted to Bad or INVALID.
+
+hpc:
+  submit: true
+  partition: batch
+  cpus_per_task: 1
+  mem: 4G
+  controller_slice_time: "00:30:00"
+  agent_time: "00:35:00"
+  poll_interval_seconds: 30
+  max_running_array_tasks: 8
+  max_task_attempts: 2
+  task_output_grace_seconds: 120
+  missing_task_grace_seconds: 300
+  remote_env_file: ~/.config/vibe-coding-planning/deepseek.env
+  python_module: lang/Python/3.11
+  container_module: tools/Apptainer
+  job_name_prefix: verified-reject-playbook-formal-12it-v1-20260910
+
+readiness:
+  runnable: true
+  launched: false
+  missing: []

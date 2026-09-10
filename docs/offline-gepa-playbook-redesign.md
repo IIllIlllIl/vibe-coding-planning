@@ -336,6 +336,18 @@ and 144 unresolved. Its v2 ledger remains exhaustive over all 482 source rows;
 46 rows are excluded in total. The older clean444 snapshot remains frozen for
 reproduction of the completed smoke and is not modified.
 
+A third immutable pass applies only the agreed `ABRUPT_ENDING_PLAN` exclusion:
+after trimming whitespace and trailing Markdown emphasis/backtick markers, a
+Plan ending in an introductory colon is treated as a truncated artifact. This
+catches endings such as `Run:`, `Current code:**`, and `Before:` without using
+absence of a Validation section as an exclusion. The v3 authority is
+`configs/frozen_swe_verified_playbook_gepa/20260910_clean375_127b1627efee/`.
+It retains 375 cases: 297 train and 78 validation, with 259 resolved and 116
+unresolved. Sixty-six source rows carry the abrupt-ending reason, five overlap
+earlier exclusions, so this pass removes 61 additional clean436 rows. Seven
+retained cases still lack a recognized Validation heading; they remain useful
+potential Plan-deficiency evidence and are not removed by this policy.
+
 The completed historical Offline GEPA minibatch-eight/eight-iteration run used
 716 logical metric calls and six full validation evaluations. Its authoritative
 audit interval was 2026-08-10 11:15:18 UTC through 23:50:08 UTC, approximately
@@ -411,7 +423,35 @@ already correct classification. Expected active runtime is approximately 20
 minutes excluding Slurm queue delay; the 35-minute per-Agent ceiling is a
 failure bound, not an expected duration. The paired supervisor config is
 `configs/gepa_verified_reject_playbook_reflect3_smoke_supervisor_v1_20260910.yaml`.
-It is prepared but not launched.
+The smoke completed on the frozen clean436 input at commit `c492ae2`. All three
+sequential Reflector waves, both Checker waves, and the Curator completed on
+their first task attempt with no operationally incomplete result. The three
+attributions for `astropy__astropy-13033` evolved from `harmful` to `neutral`
+to `neutral`; the Curator returned an empty delta, so no candidate beyond the
+seed was evaluated. The active work took approximately 12 minutes and validates
+three-round transport/resume behavior, not candidate-generation effectiveness.
+
+The first reflection labeled the sole non-triggering placeholder rule harmful
+because the complete rule set accepted a Bad case. That conflated an individual
+rule's faithful abstention with missing rule coverage. Given the previous
+reflection as evidence, round 2 corrected the attribution to neutral and
+separated the concrete-but-wrong Plan from the anti-placeholder rule. Round 3
+kept the same attribution and mainly increased confidence and explanatory
+stability; it added no new actionable distinction. The formal design nonetheless
+freezes three rounds as a conservative attribution-stability pass, by explicit
+method decision rather than because the smoke demonstrated additional third-round
+information gain.
+
+The prepared formal development run is
+`configs/gepa_verified_reject_playbook_formal_12it_v1_20260910.yaml`, paired with
+`configs/gepa_verified_reject_playbook_formal_12it_supervisor_v1_20260910.yaml`.
+It consumes the complete immutable clean375 train/validation splits (297/78),
+uses an eight-case Reflection minibatch, three sequential Reflection rounds per
+case, twelve candidate proposals, and a 1,200 metric-call fail-safe. The frozen
+expected elapsed budget is 12--18 active hours excluding Slurm queue delay. Each
+Agent array element remains `1 CPU / 4G / 35 minutes`, with at most eight running
+elements. The run is ready but not launched; formal launch still requires an
+explicit instruction.
 
 The smoke implementation uses the established
 distributed GEPA execution contract rather than calling Agents inside the

@@ -1,0 +1,42 @@
+{
+  "audit_ledger_sha256": "9f55dbb5df47870960c5c3afe01941bc24c0dfa1bee2fb9b2ca2537eec70d813",
+  "cases_sha256": "6ecd2ef2c046d575b69fd7cb490a73c36b8447d741871109b21b71735cdbb6a5",
+  "cleaning_policy": "verified-playbook-eligibility-v3",
+  "complete": true,
+  "duplicate_policy": "retain lexicographically first exact normalized Plan",
+  "excluded_instances": 107,
+  "exclusions_sha256": "288226f379f25501871d7678a94fa766f06cf04c83a73f6edfa9e547eaeddb7f",
+  "immutable": true,
+  "known_workspace_confounds": [
+    "django__django-16136",
+    "pylint-dev__pylint-4970"
+  ],
+  "ordered_retained_ids_sha256": "127b1627efee945b826d2276734281335dc6bfafff234147d51790670b395389",
+  "plan_artifact_policy": "exclude the frozen human-audited trivial placeholder and truncated or structurally incomplete Plan instances, plus Plans ending at an introductory colon after trailing Markdown cleanup",
+  "preserves_source_split": true,
+  "provisional": false,
+  "reason_counts": {
+    "ABRUPT_ENDING_PLAN": 66,
+    "EXACT_PLAN_DUPLICATE_EXTRA_COPY": 1,
+    "KNOWN_WORKSPACE_CONFOUND": 2,
+    "OUTCOME_AUTHORITY_INVALID": 1,
+    "TMP_TOPOLOGY_CONFOUND": 35,
+    "TRIVIAL_PLACEHOLDER_PLAN": 5,
+    "TRUNCATED_OR_STRUCTURALLY_INCOMPLETE_PLAN": 3
+  },
+  "resolved": 259,
+  "retained_instances": 375,
+  "schema_version": 1,
+  "source_cases_sha256": "3a18b1e4f9edf7cc2e9b00940be9d5bc32e187309369cacc8f256fa64750ac23",
+  "source_instances": 482,
+  "source_manifest_sha256": "6f85a2a142fa0a46483ac9f21fa0cdf239a30473b86530875898a6778d1b873b",
+  "source_snapshot": "output/SWE-bench_Verified/verified-round1-gepa-datasets/20260614_482_fdc056ae85df",
+  "tmp_policy": "exclude final-plan /tmp mention or Planner/Coder shared non-plan /tmp path",
+  "train_instances": 297,
+  "train_resolved": 205,
+  "train_sha256": "c1c575d1485403422c16c6c3900230477af6f1929e30b048c4e0d922904545a8",
+  "unresolved": 116,
+  "validation_instances": 78,
+  "validation_resolved": 54,
+  "validation_sha256": "350baaa7f7e8ca0539fd88026a7ad5714ce1997a2b5d7a77c1fa91bfd8896248"
+}
