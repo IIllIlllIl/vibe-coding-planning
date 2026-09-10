@@ -5,7 +5,15 @@ run_id: verified-candidate1-curator-replay-v1-20260910
 purpose: replay the exact pre-Candidate-1 Curator scene without rerunning Checker or Reflector
 
 paths:
+  dataset_snapshot: configs/frozen_swe_verified_playbook_gepa/20260910_clean375_127b1627efee
+  initial_rules: configs/development_guidelines/offline_gepa_reject_playbook_seed_v1.json
   run_dir: output/SWE-bench_Verified/gepa-reject-playbook-runs/candidate1-curator-replay-v1-20260910
+
+task:
+  semantics: offline_reject_playbook_v1
+container:
+  runtime: none
+  sif_cache_dir: /scratch/users/twang/vibe-coding-planning/shared/sif-cache
 
 inputs:
   prompt_bundle: configs/prompts/offline_gepa_reject_playbook_v4_20260910.yaml
