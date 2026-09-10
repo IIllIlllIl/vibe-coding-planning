@@ -1,0 +1,41 @@
+{
+  "audit_ledger_sha256": "ec78abde06f75c7bec73de03be8f7f1427537897ab760f15cffd2ebc31877230",
+  "cases_sha256": "8781d411d33069bc59ae070c33c9b900653b46cbdefd5b27f0008eff0ea08476",
+  "cleaning_policy": "verified-playbook-eligibility-v2",
+  "complete": true,
+  "duplicate_policy": "retain lexicographically first exact normalized Plan",
+  "excluded_instances": 46,
+  "exclusions_sha256": "05a5a2d54d7ef9d8ff9416e95985606a41dea2a2c8653697df7fa6bec071a85b",
+  "immutable": true,
+  "known_workspace_confounds": [
+    "django__django-16136",
+    "pylint-dev__pylint-4970"
+  ],
+  "ordered_retained_ids_sha256": "4c0e9c40440eef41da210899bd8ea7f36e5d140291379df59cc3fefdd95a772f",
+  "plan_artifact_policy": "exclude the frozen human-audited trivial placeholder and truncated or structurally incomplete Plan instances",
+  "preserves_source_split": true,
+  "provisional": false,
+  "reason_counts": {
+    "EXACT_PLAN_DUPLICATE_EXTRA_COPY": 1,
+    "KNOWN_WORKSPACE_CONFOUND": 2,
+    "OUTCOME_AUTHORITY_INVALID": 1,
+    "TMP_TOPOLOGY_CONFOUND": 35,
+    "TRIVIAL_PLACEHOLDER_PLAN": 5,
+    "TRUNCATED_OR_STRUCTURALLY_INCOMPLETE_PLAN": 3
+  },
+  "resolved": 292,
+  "retained_instances": 436,
+  "schema_version": 1,
+  "source_cases_sha256": "3a18b1e4f9edf7cc2e9b00940be9d5bc32e187309369cacc8f256fa64750ac23",
+  "source_instances": 482,
+  "source_manifest_sha256": "6f85a2a142fa0a46483ac9f21fa0cdf239a30473b86530875898a6778d1b873b",
+  "source_snapshot": "output/SWE-bench_Verified/verified-round1-gepa-datasets/20260614_482_fdc056ae85df",
+  "tmp_policy": "exclude final-plan /tmp mention or Planner/Coder shared non-plan /tmp path",
+  "train_instances": 349,
+  "train_resolved": 234,
+  "train_sha256": "beb92d1e6899f528bbfb7c236aeafea2f93444cc97dc82dec7f227a41d54e110",
+  "unresolved": 144,
+  "validation_instances": 87,
+  "validation_resolved": 58,
+  "validation_sha256": "78bd0b50a179b6c3f02091f2c1463fdbdf5ebc1091fd871ba3da3eb2f73e5d53"
+}

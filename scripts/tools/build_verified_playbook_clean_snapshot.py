@@ -17,6 +17,18 @@ KNOWN_WORKSPACE_CONFOUNDS = {
     "django__django-16136",
     "pylint-dev__pylint-4970",
 }
+TRIVIAL_PLAN_INSTANCES = {
+    "django__django-10973",
+    "django__django-12039",
+    "django__django-13401",
+    "django__django-13512",
+    "sympy__sympy-22080",
+}
+INCOMPLETE_PLAN_INSTANCES = {
+    "django__django-10097",
+    "django__django-14351",
+    "sympy__sympy-24539",
+}
 
 
 def _sha256(path: Path) -> str:
@@ -42,6 +54,16 @@ def _tmp_paths(value: Any) -> set[str]:
 
 def _normalized_plan(row: dict[str, Any]) -> str:
     return re.sub(r"\s+", " ", row["checker_input"]["plan"].strip().casefold())
+
+
+def _plan_quality_reasons(instance_id: str) -> list[str]:
+    """Return frozen, human-audited Plan-artifact exclusions."""
+    reasons = []
+    if instance_id in TRIVIAL_PLAN_INSTANCES:
+        reasons.append("TRIVIAL_PLACEHOLDER_PLAN")
+    if instance_id in INCOMPLETE_PLAN_INSTANCES:
+        reasons.append("TRUNCATED_OR_STRUCTURALLY_INCOMPLETE_PLAN")
+    return reasons
 
 
 def build(source: Path, output: Path) -> None:
@@ -84,6 +106,7 @@ def build(source: Path, output: Path) -> None:
             reasons.append("EXACT_PLAN_DUPLICATE_EXTRA_COPY")
         if plan_mentions_tmp or shared_paths:
             reasons.append("TMP_TOPOLOGY_CONFOUND")
+        reasons.extend(_plan_quality_reasons(instance_id))
         ledger.append({
             "instance_id": instance_id,
             "source_split": row["split"],
@@ -116,7 +139,7 @@ def build(source: Path, output: Path) -> None:
         "complete": True,
         "provisional": False,
         "immutable": True,
-        "cleaning_policy": "verified-playbook-eligibility-v1",
+        "cleaning_policy": "verified-playbook-eligibility-v2",
         "source_snapshot": str(source),
         "source_manifest_sha256": _sha256(source_manifest_path),
         "source_cases_sha256": _sha256(source / "cases.jsonl"),
@@ -134,6 +157,10 @@ def build(source: Path, output: Path) -> None:
         "known_workspace_confounds": sorted(KNOWN_WORKSPACE_CONFOUNDS),
         "tmp_policy": "exclude final-plan /tmp mention or Planner/Coder shared non-plan /tmp path",
         "duplicate_policy": "retain lexicographically first exact normalized Plan",
+        "plan_artifact_policy": (
+            "exclude the frozen human-audited trivial placeholder and "
+            "truncated or structurally incomplete Plan instances"
+        ),
         "ordered_retained_ids_sha256": hashlib.sha256("\n".join(row["instance_id"] for row in retained).encode()).hexdigest(),
         "cases_sha256": _sha256(output / "cases.jsonl"),
         "train_sha256": _sha256(output / "train.jsonl"),

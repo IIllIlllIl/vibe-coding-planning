@@ -38,6 +38,10 @@ cleaning authority is `docs/swe-chat-data-cleaning.md`.
 
 ## Retained Offline And PolyBench Infrastructure
 
+- `tools/build_verified_playbook_clean_snapshot.py` deterministically rebuilds
+  the immutable Verified playbook eligibility snapshot, including outcome,
+  duplicate, workspace, `/tmp`, trivial-placeholder, and human-audited
+  incomplete-Plan exclusions.
 - `hpc_submit_batch.sh`, `hpc_resume_loop.py`, and
   `hpc_supervisor_service.py` are shared controller/supervisor infrastructure
   retained for Offline reproducibility.

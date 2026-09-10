@@ -393,9 +393,13 @@ def test_reflection_round_count_is_configurable_and_passes_prior() -> None:
         seen.append(prior)
         return {"round": len(seen), "instance_id": record["instance_id"]}
 
-    reflector = ConfigurableRoundReflector(call, rounds=2)
-    assert reflector({"instance_id": "case-1"})["round"] == 2
-    assert seen == [None, {"round": 1, "instance_id": "case-1"}]
+    reflector = ConfigurableRoundReflector(call, rounds=3)
+    assert reflector({"instance_id": "case-1"})["round"] == 3
+    assert seen == [
+        None,
+        {"round": 1, "instance_id": "case-1"},
+        {"round": 2, "instance_id": "case-1"},
+    ]
 
 
 def test_hpc_checker_wave_submits_one_array_and_hides_outcome(tmp_path) -> None:
@@ -642,9 +646,11 @@ def test_hpc_proposal_agents_use_file_backed_reflector_waves_and_singletons(
     agents = HPCPlaybookProposalAgents(Executor(), maximum_tokens=10_000)
     records = [{"instance_id": f"case-{i}", "internal_playbook": playbook.serialize()}
                for i in range(3)]
-    reviews = agents.reflect_batch(records, rounds=2)
-    assert [call[:2] for call in calls[:2]] == [("reflector", 3), ("reflector", 3)]
-    assert all(item["round"] == 2 for item in reviews)
+    reviews = agents.reflect_batch(records, rounds=3)
+    assert [call[:2] for call in calls[:3]] == [
+        ("reflector", 3), ("reflector", 3), ("reflector", 3),
+    ]
+    assert all(item["round"] == 3 for item in reviews)
     assert "reflection_case_bundle" not in calls[0][2][0]["prompt_values"]
     assert calls[0][2][0]["prompt_values"]["evidence_path"] == "/evidence"
     second_evidence = calls[1][2][0]["evidence_dir"]
@@ -655,6 +661,10 @@ def test_hpc_proposal_agents_use_file_backed_reflector_waves_and_singletons(
         "classification.json", "plan_trajectory.json", "code_trajectory.json",
         "evaluator_result.json", "generated.patch", "prior_reflection.json",
     }
+    third_evidence = calls[2][2][0]["evidence_dir"]
+    assert json.loads(
+        (Path(third_evidence) / "prior_reflection.json").read_text()
+    )["round"] == 2
     assert agents.curate(playbook, reviews)["operations"] == []
     assert agents.refine(playbook) == playbook
     assert [call[:2] for call in calls[-2:]] == [

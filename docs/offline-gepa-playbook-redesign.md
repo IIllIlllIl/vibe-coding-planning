@@ -322,6 +322,20 @@ Overlapping reasons mean these category counts must not be added. No case was
 removed merely to reach a target dataset size. The deterministic builder is
 `scripts/tools/build_verified_playbook_clean_snapshot.py`.
 
+A second immutable eligibility pass audited final Plan length and structural
+completeness. It excludes five trivial one-line artifacts and three
+human-confirmed truncated or structurally incomplete artifacts. These are
+recorded separately as `TRIVIAL_PLACEHOLDER_PLAN` and
+`TRUNCATED_OR_STRUCTURALLY_INCOMPLETE_PLAN`; the latter includes one historically
+resolved case, demonstrating why resolved outcome alone is not a Plan-artifact
+quality check. The resulting authority is
+`configs/frozen_swe_verified_playbook_gepa/20260910_clean436_4c0e9c40440e/`.
+
+It contains 436 retained cases: 349 train and 87 validation, with 292 resolved
+and 144 unresolved. Its v2 ledger remains exhaustive over all 482 source rows;
+46 rows are excluded in total. The older clean444 snapshot remains frozen for
+reproduction of the completed smoke and is not modified.
+
 The completed historical Offline GEPA minibatch-eight/eight-iteration run used
 716 logical metric calls and six full validation evaluations. Its authoritative
 audit interval was 2026-08-10 11:15:18 UTC through 23:50:08 UTC, approximately
@@ -386,6 +400,18 @@ template, requires an explicit JSON self-check, and gives Reflector retries the
 prior Host validation error. The v3 prompt authority is
 `configs/prompts/offline_gepa_reject_playbook_v3_20260910.yaml`; no v3 smoke is
 authorized merely by this documentation.
+
+The next bounded smoke is
+`configs/gepa_verified_reject_playbook_reflect3_smoke_v1_20260910.yaml`. It uses
+the clean436 authority, two train cases, one validation case, a one-case
+Reflection minibatch, three sequential Reflection rounds, one proposal, and at
+most five metric calls. `skip_perfect_score: true` makes the smoke exercise the
+nonzero-loss case instead of spending its only Reflection slot reinforcing an
+already correct classification. Expected active runtime is approximately 20
+minutes excluding Slurm queue delay; the 35-minute per-Agent ceiling is a
+failure bound, not an expected duration. The paired supervisor config is
+`configs/gepa_verified_reject_playbook_reflect3_smoke_supervisor_v1_20260910.yaml`.
+It is prepared but not launched.
 
 The smoke implementation uses the established
 distributed GEPA execution contract rather than calling Agents inside the

@@ -1,0 +1,677 @@
+[
+  {
+    "action": "exclude",
+    "instance_id": "astropy__astropy-14365",
+    "reason_codes": [
+      "TMP_TOPOLOGY_CONFOUND"
+    ],
+    "resolved": false,
+    "source_split": "validation",
+    "tmp_audit": {
+      "final_plan_mentions_tmp": true,
+      "shared_non_plan_tmp_paths": [
+        "/tmp/test.qdp"
+      ]
+    }
+  },
+  {
+    "action": "exclude",
+    "instance_id": "django__django-10097",
+    "reason_codes": [
+      "TRUNCATED_OR_STRUCTURALLY_INCOMPLETE_PLAN"
+    ],
+    "resolved": false,
+    "source_split": "train",
+    "tmp_audit": {
+      "final_plan_mentions_tmp": false,
+      "shared_non_plan_tmp_paths": []
+    }
+  },
+  {
+    "action": "exclude",
+    "instance_id": "django__django-10973",
+    "reason_codes": [
+      "TRIVIAL_PLACEHOLDER_PLAN"
+    ],
+    "resolved": false,
+    "source_split": "train",
+    "tmp_audit": {
+      "final_plan_mentions_tmp": false,
+      "shared_non_plan_tmp_paths": []
+    }
+  },
+  {
+    "action": "exclude",
+    "instance_id": "django__django-11964",
+    "reason_codes": [
+      "TMP_TOPOLOGY_CONFOUND"
+    ],
+    "resolved": false,
+    "source_split": "validation",
+    "tmp_audit": {
+      "final_plan_mentions_tmp": true,
+      "shared_non_plan_tmp_paths": [
+        "/tmp/repro.py"
+      ]
+    }
+  },
+  {
+    "action": "exclude",
+    "instance_id": "django__django-12039",
+    "reason_codes": [
+      "TRIVIAL_PLACEHOLDER_PLAN"
+    ],
+    "resolved": false,
+    "source_split": "train",
+    "tmp_audit": {
+      "final_plan_mentions_tmp": false,
+      "shared_non_plan_tmp_paths": []
+    }
+  },
+  {
+    "action": "exclude",
+    "instance_id": "django__django-12325",
+    "reason_codes": [
+      "TMP_TOPOLOGY_CONFOUND"
+    ],
+    "resolved": true,
+    "source_split": "train",
+    "tmp_audit": {
+      "final_plan_mentions_tmp": true,
+      "shared_non_plan_tmp_paths": [
+        "/tmp/test_repro.py"
+      ]
+    }
+  },
+  {
+    "action": "exclude",
+    "instance_id": "django__django-12754",
+    "reason_codes": [
+      "TMP_TOPOLOGY_CONFOUND"
+    ],
+    "resolved": true,
+    "source_split": "train",
+    "tmp_audit": {
+      "final_plan_mentions_tmp": true,
+      "shared_non_plan_tmp_paths": [
+        "/tmp/reproduce.py"
+      ]
+    }
+  },
+  {
+    "action": "exclude",
+    "instance_id": "django__django-13109",
+    "reason_codes": [
+      "TMP_TOPOLOGY_CONFOUND"
+    ],
+    "resolved": true,
+    "source_split": "validation",
+    "tmp_audit": {
+      "final_plan_mentions_tmp": true,
+      "shared_non_plan_tmp_paths": []
+    }
+  },
+  {
+    "action": "exclude",
+    "instance_id": "django__django-13401",
+    "reason_codes": [
+      "TRIVIAL_PLACEHOLDER_PLAN"
+    ],
+    "resolved": false,
+    "source_split": "validation",
+    "tmp_audit": {
+      "final_plan_mentions_tmp": false,
+      "shared_non_plan_tmp_paths": []
+    }
+  },
+  {
+    "action": "exclude",
+    "instance_id": "django__django-13410",
+    "reason_codes": [
+      "TMP_TOPOLOGY_CONFOUND"
+    ],
+    "resolved": true,
+    "source_split": "train",
+    "tmp_audit": {
+      "final_plan_mentions_tmp": true,
+      "shared_non_plan_tmp_paths": [
+        "/tmp/test_lock",
+        "/tmp/test_lock_bug.py"
+      ]
+    }
+  },
+  {
+    "action": "exclude",
+    "instance_id": "django__django-13512",
+    "reason_codes": [
+      "TRIVIAL_PLACEHOLDER_PLAN"
+    ],
+    "resolved": false,
+    "source_split": "train",
+    "tmp_audit": {
+      "final_plan_mentions_tmp": false,
+      "shared_non_plan_tmp_paths": []
+    }
+  },
+  {
+    "action": "exclude",
+    "instance_id": "django__django-13670",
+    "reason_codes": [
+      "TMP_TOPOLOGY_CONFOUND"
+    ],
+    "resolved": true,
+    "source_split": "validation",
+    "tmp_audit": {
+      "final_plan_mentions_tmp": true,
+      "shared_non_plan_tmp_paths": [
+        "/tmp/test_dateformat_y.py"
+      ]
+    }
+  },
+  {
+    "action": "exclude",
+    "instance_id": "django__django-14034",
+    "reason_codes": [
+      "TMP_TOPOLOGY_CONFOUND"
+    ],
+    "resolved": false,
+    "source_split": "train",
+    "tmp_audit": {
+      "final_plan_mentions_tmp": true,
+      "shared_non_plan_tmp_paths": [
+        "/tmp/test_bug.py"
+      ]
+    }
+  },
+  {
+    "action": "exclude",
+    "instance_id": "django__django-14349",
+    "reason_codes": [
+      "TMP_TOPOLOGY_CONFOUND"
+    ],
+    "resolved": true,
+    "source_split": "train",
+    "tmp_audit": {
+      "final_plan_mentions_tmp": false,
+      "shared_non_plan_tmp_paths": [
+        "/tmp/portage/dev-python/django-3.2.1/work/Django-3.2.1/tests/validators/tests.py"
+      ]
+    }
+  },
+  {
+    "action": "exclude",
+    "instance_id": "django__django-14351",
+    "reason_codes": [
+      "TRUNCATED_OR_STRUCTURALLY_INCOMPLETE_PLAN"
+    ],
+    "resolved": false,
+    "source_split": "train",
+    "tmp_audit": {
+      "final_plan_mentions_tmp": false,
+      "shared_non_plan_tmp_paths": []
+    }
+  },
+  {
+    "action": "exclude",
+    "instance_id": "django__django-14787",
+    "reason_codes": [
+      "TMP_TOPOLOGY_CONFOUND"
+    ],
+    "resolved": true,
+    "source_split": "train",
+    "tmp_audit": {
+      "final_plan_mentions_tmp": true,
+      "shared_non_plan_tmp_paths": [
+        "/tmp/test_repro.py"
+      ]
+    }
+  },
+  {
+    "action": "exclude",
+    "instance_id": "django__django-15280",
+    "reason_codes": [
+      "TMP_TOPOLOGY_CONFOUND"
+    ],
+    "resolved": true,
+    "source_split": "train",
+    "tmp_audit": {
+      "final_plan_mentions_tmp": true,
+      "shared_non_plan_tmp_paths": [
+        "/tmp/test_repro.py"
+      ]
+    }
+  },
+  {
+    "action": "exclude",
+    "instance_id": "django__django-16136",
+    "reason_codes": [
+      "KNOWN_WORKSPACE_CONFOUND"
+    ],
+    "resolved": false,
+    "source_split": "train",
+    "tmp_audit": {
+      "final_plan_mentions_tmp": false,
+      "shared_non_plan_tmp_paths": []
+    }
+  },
+  {
+    "action": "exclude",
+    "instance_id": "django__django-16454",
+    "reason_codes": [
+      "TMP_TOPOLOGY_CONFOUND"
+    ],
+    "resolved": false,
+    "source_split": "train",
+    "tmp_audit": {
+      "final_plan_mentions_tmp": false,
+      "shared_non_plan_tmp_paths": [
+        "/tmp/subparserstest/./manage.py"
+      ]
+    }
+  },
+  {
+    "action": "exclude",
+    "instance_id": "django__django-16950",
+    "reason_codes": [
+      "EXACT_PLAN_DUPLICATE_EXTRA_COPY"
+    ],
+    "resolved": false,
+    "source_split": "train",
+    "tmp_audit": {
+      "final_plan_mentions_tmp": false,
+      "shared_non_plan_tmp_paths": []
+    }
+  },
+  {
+    "action": "exclude",
+    "instance_id": "matplotlib__matplotlib-20826",
+    "reason_codes": [
+      "TMP_TOPOLOGY_CONFOUND"
+    ],
+    "resolved": false,
+    "source_split": "train",
+    "tmp_audit": {
+      "final_plan_mentions_tmp": true,
+      "shared_non_plan_tmp_paths": [
+        "/tmp/test_bug.png"
+      ]
+    }
+  },
+  {
+    "action": "exclude",
+    "instance_id": "matplotlib__matplotlib-22871",
+    "reason_codes": [
+      "TMP_TOPOLOGY_CONFOUND"
+    ],
+    "resolved": false,
+    "source_split": "train",
+    "tmp_audit": {
+      "final_plan_mentions_tmp": true,
+      "shared_non_plan_tmp_paths": [
+        "/tmp/test_bug.png"
+      ]
+    }
+  },
+  {
+    "action": "exclude",
+    "instance_id": "matplotlib__matplotlib-23476",
+    "reason_codes": [
+      "TMP_TOPOLOGY_CONFOUND"
+    ],
+    "resolved": true,
+    "source_split": "train",
+    "tmp_audit": {
+      "final_plan_mentions_tmp": true,
+      "shared_non_plan_tmp_paths": [
+        "/tmp/test.pickle"
+      ]
+    }
+  },
+  {
+    "action": "exclude",
+    "instance_id": "matplotlib__matplotlib-24570",
+    "reason_codes": [
+      "TMP_TOPOLOGY_CONFOUND"
+    ],
+    "resolved": true,
+    "source_split": "train",
+    "tmp_audit": {
+      "final_plan_mentions_tmp": false,
+      "shared_non_plan_tmp_paths": [
+        "/tmp/test_align_{align}.png"
+      ]
+    }
+  },
+  {
+    "action": "exclude",
+    "instance_id": "matplotlib__matplotlib-25311",
+    "reason_codes": [
+      "TMP_TOPOLOGY_CONFOUND"
+    ],
+    "resolved": true,
+    "source_split": "train",
+    "tmp_audit": {
+      "final_plan_mentions_tmp": true,
+      "shared_non_plan_tmp_paths": [
+        "/tmp/output.png",
+        "/tmp/test_unpickle_draggable.py"
+      ]
+    }
+  },
+  {
+    "action": "exclude",
+    "instance_id": "psf__requests-1142",
+    "reason_codes": [
+      "OUTCOME_AUTHORITY_INVALID"
+    ],
+    "resolved": false,
+    "source_split": "validation",
+    "tmp_audit": {
+      "final_plan_mentions_tmp": false,
+      "shared_non_plan_tmp_paths": []
+    }
+  },
+  {
+    "action": "exclude",
+    "instance_id": "psf__requests-1921",
+    "reason_codes": [
+      "TMP_TOPOLOGY_CONFOUND"
+    ],
+    "resolved": true,
+    "source_split": "validation",
+    "tmp_audit": {
+      "final_plan_mentions_tmp": true,
+      "shared_non_plan_tmp_paths": []
+    }
+  },
+  {
+    "action": "exclude",
+    "instance_id": "psf__requests-5414",
+    "reason_codes": [
+      "TMP_TOPOLOGY_CONFOUND"
+    ],
+    "resolved": false,
+    "source_split": "train",
+    "tmp_audit": {
+      "final_plan_mentions_tmp": true,
+      "shared_non_plan_tmp_paths": []
+    }
+  },
+  {
+    "action": "exclude",
+    "instance_id": "pylint-dev__pylint-4604",
+    "reason_codes": [
+      "TMP_TOPOLOGY_CONFOUND"
+    ],
+    "resolved": false,
+    "source_split": "train",
+    "tmp_audit": {
+      "final_plan_mentions_tmp": true,
+      "shared_non_plan_tmp_paths": [
+        "/tmp/a.py",
+        "/tmp/test_type_comment.py"
+      ]
+    }
+  },
+  {
+    "action": "exclude",
+    "instance_id": "pylint-dev__pylint-4661",
+    "reason_codes": [
+      "TMP_TOPOLOGY_CONFOUND"
+    ],
+    "resolved": false,
+    "source_split": "train",
+    "tmp_audit": {
+      "final_plan_mentions_tmp": true,
+      "shared_non_plan_tmp_paths": [
+        "/tmp/xdg_test",
+        "/tmp/xdg_test/pylint"
+      ]
+    }
+  },
+  {
+    "action": "exclude",
+    "instance_id": "pylint-dev__pylint-4970",
+    "reason_codes": [
+      "KNOWN_WORKSPACE_CONFOUND",
+      "TMP_TOPOLOGY_CONFOUND"
+    ],
+    "resolved": false,
+    "source_split": "train",
+    "tmp_audit": {
+      "final_plan_mentions_tmp": true,
+      "shared_non_plan_tmp_paths": [
+        "/tmp/f1.py",
+        "/tmp/f2.py",
+        "/tmp/test_fix.py"
+      ]
+    }
+  },
+  {
+    "action": "exclude",
+    "instance_id": "pylint-dev__pylint-6528",
+    "reason_codes": [
+      "TMP_TOPOLOGY_CONFOUND"
+    ],
+    "resolved": true,
+    "source_split": "train",
+    "tmp_audit": {
+      "final_plan_mentions_tmp": true,
+      "shared_non_plan_tmp_paths": [
+        "/tmp/test_ignore",
+        "/tmp/test_ignore/.a",
+        "/tmp/test_ignore/.a/foo.py",
+        "/tmp/test_ignore/bar.py"
+      ]
+    }
+  },
+  {
+    "action": "exclude",
+    "instance_id": "pylint-dev__pylint-7080",
+    "reason_codes": [
+      "TMP_TOPOLOGY_CONFOUND"
+    ],
+    "resolved": true,
+    "source_split": "train",
+    "tmp_audit": {
+      "final_plan_mentions_tmp": true,
+      "shared_non_plan_tmp_paths": []
+    }
+  },
+  {
+    "action": "exclude",
+    "instance_id": "pylint-dev__pylint-7277",
+    "reason_codes": [
+      "TMP_TOPOLOGY_CONFOUND"
+    ],
+    "resolved": true,
+    "source_split": "validation",
+    "tmp_audit": {
+      "final_plan_mentions_tmp": true,
+      "shared_non_plan_tmp_paths": [
+        "/tmp/repro.py"
+      ]
+    }
+  },
+  {
+    "action": "exclude",
+    "instance_id": "pytest-dev__pytest-10081",
+    "reason_codes": [
+      "TMP_TOPOLOGY_CONFOUND"
+    ],
+    "resolved": true,
+    "source_split": "train",
+    "tmp_audit": {
+      "final_plan_mentions_tmp": true,
+      "shared_non_plan_tmp_paths": [
+        "/tmp/test_skip_class.py"
+      ]
+    }
+  },
+  {
+    "action": "exclude",
+    "instance_id": "pytest-dev__pytest-10356",
+    "reason_codes": [
+      "TMP_TOPOLOGY_CONFOUND"
+    ],
+    "resolved": false,
+    "source_split": "validation",
+    "tmp_audit": {
+      "final_plan_mentions_tmp": true,
+      "shared_non_plan_tmp_paths": [
+        "/tmp/test_repro.py"
+      ]
+    }
+  },
+  {
+    "action": "exclude",
+    "instance_id": "pytest-dev__pytest-5262",
+    "reason_codes": [
+      "TMP_TOPOLOGY_CONFOUND"
+    ],
+    "resolved": true,
+    "source_split": "train",
+    "tmp_audit": {
+      "final_plan_mentions_tmp": false,
+      "shared_non_plan_tmp_paths": [
+        "/tmp/pytest-issue-ve3/lib/python3.7/site-packages/pytest.py"
+      ]
+    }
+  },
+  {
+    "action": "exclude",
+    "instance_id": "pytest-dev__pytest-7490",
+    "reason_codes": [
+      "TMP_TOPOLOGY_CONFOUND"
+    ],
+    "resolved": true,
+    "source_split": "train",
+    "tmp_audit": {
+      "final_plan_mentions_tmp": true,
+      "shared_non_plan_tmp_paths": [
+        "/tmp/test_xfail_dynamic.py"
+      ]
+    }
+  },
+  {
+    "action": "exclude",
+    "instance_id": "pytest-dev__pytest-7521",
+    "reason_codes": [
+      "TMP_TOPOLOGY_CONFOUND"
+    ],
+    "resolved": true,
+    "source_split": "train",
+    "tmp_audit": {
+      "final_plan_mentions_tmp": true,
+      "shared_non_plan_tmp_paths": [
+        "/tmp/pytest_reproducers",
+        "/tmp/test_repro.py"
+      ]
+    }
+  },
+  {
+    "action": "exclude",
+    "instance_id": "sphinx-doc__sphinx-8593",
+    "reason_codes": [
+      "TMP_TOPOLOGY_CONFOUND"
+    ],
+    "resolved": true,
+    "source_split": "validation",
+    "tmp_audit": {
+      "final_plan_mentions_tmp": true,
+      "shared_non_plan_tmp_paths": [
+        "/tmp/test_repro",
+        "/tmp/test_repro/conf.py",
+        "/tmp/test_repro/example.py",
+        "/tmp/test_repro/index.rst"
+      ]
+    }
+  },
+  {
+    "action": "exclude",
+    "instance_id": "sphinx-doc__sphinx-8595",
+    "reason_codes": [
+      "TMP_TOPOLOGY_CONFOUND"
+    ],
+    "resolved": false,
+    "source_split": "train",
+    "tmp_audit": {
+      "final_plan_mentions_tmp": true,
+      "shared_non_plan_tmp_paths": [
+        "/tmp/test_module.py"
+      ]
+    }
+  },
+  {
+    "action": "exclude",
+    "instance_id": "sphinx-doc__sphinx-8721",
+    "reason_codes": [
+      "TMP_TOPOLOGY_CONFOUND"
+    ],
+    "resolved": true,
+    "source_split": "validation",
+    "tmp_audit": {
+      "final_plan_mentions_tmp": true,
+      "shared_non_plan_tmp_paths": [
+        "/tmp/test_project"
+      ]
+    }
+  },
+  {
+    "action": "exclude",
+    "instance_id": "sphinx-doc__sphinx-9230",
+    "reason_codes": [
+      "TMP_TOPOLOGY_CONFOUND"
+    ],
+    "resolved": true,
+    "source_split": "train",
+    "tmp_audit": {
+      "final_plan_mentions_tmp": true,
+      "shared_non_plan_tmp_paths": [
+        "/tmp/python_backup.py",
+        "/tmp/repro"
+      ]
+    }
+  },
+  {
+    "action": "exclude",
+    "instance_id": "sphinx-doc__sphinx-9658",
+    "reason_codes": [
+      "TMP_TOPOLOGY_CONFOUND"
+    ],
+    "resolved": false,
+    "source_split": "train",
+    "tmp_audit": {
+      "final_plan_mentions_tmp": true,
+      "shared_non_plan_tmp_paths": [
+        "/tmp/test_repro5.py"
+      ]
+    }
+  },
+  {
+    "action": "exclude",
+    "instance_id": "sympy__sympy-22080",
+    "reason_codes": [
+      "TRIVIAL_PLACEHOLDER_PLAN"
+    ],
+    "resolved": false,
+    "source_split": "train",
+    "tmp_audit": {
+      "final_plan_mentions_tmp": false,
+      "shared_non_plan_tmp_paths": []
+    }
+  },
+  {
+    "action": "exclude",
+    "instance_id": "sympy__sympy-24539",
+    "reason_codes": [
+      "TRUNCATED_OR_STRUCTURALLY_INCOMPLETE_PLAN"
+    ],
+    "resolved": true,
+    "source_split": "train",
+    "tmp_audit": {
+      "final_plan_mentions_tmp": false,
+      "shared_non_plan_tmp_paths": []
+    }
+  }
+]
