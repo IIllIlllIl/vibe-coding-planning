@@ -56,7 +56,9 @@ development analysis only.
 These are frozen stage results, not a live progress log. Current unresolved
 methodological decisions are maintained only in `project_issues.md`. Launching
 any new experiment still requires an explicit user instruction and a new
-frozen experimental contract.
+frozen experimental contract. Documentation ownership and runtime-status
+authority are defined in
+[`docs/documentation-authority.md`](docs/documentation-authority.md).
 
 ## Active research surface
 
@@ -64,31 +66,33 @@ Read these files in order:
 
 1. [`docs/branch-scope.md`](docs/branch-scope.md) — branch boundary, retained
    systems, and historical-reference policy.
-2. [`project_issues.md`](project_issues.md) — current decisions and unresolved
+2. [`docs/documentation-authority.md`](docs/documentation-authority.md) — where
+   durable methods, findings, open decisions, and live run state belong.
+3. [`project_issues.md`](project_issues.md) — current decisions and unresolved
    methodological risks only; it is not a run-progress log.
-3. [`docs/swe-chat-data-cleaning.md`](docs/swe-chat-data-cleaning.md) — current
+4. [`docs/swe-chat-data-cleaning.md`](docs/swe-chat-data-cleaning.md) — current
    Behavioral trajectory selection and the evidence available for episode
    slicing.
-4. [`docs/offline-gepa.md`](docs/offline-gepa.md) — current Offline Checker,
+5. [`docs/offline-gepa.md`](docs/offline-gepa.md) — current Offline Checker,
    metric, Reflection, search, and resume semantics.
-5. [`docs/behavioral-offline-gepa-adaptation.md`](docs/behavioral-offline-gepa-adaptation.md)
+6. [`docs/behavioral-offline-gepa-adaptation.md`](docs/behavioral-offline-gepa-adaptation.md)
    — Behavioral information boundary, minimum Offline adapter changes, and the
    staged development-smoke contract.
-6. [`docs/knowledge/offline-pcce-stage-findings.md`](docs/knowledge/offline-pcce-stage-findings.md)
+7. [`docs/knowledge/offline-pcce-stage-findings.md`](docs/knowledge/offline-pcce-stage-findings.md)
    — frozen first-stage PolyBench findings.
-7. [`docs/knowledge/behavioral-gepa-initial-findings.md`](docs/knowledge/behavioral-gepa-initial-findings.md)
+8. [`docs/knowledge/behavioral-gepa-initial-findings.md`](docs/knowledge/behavioral-gepa-initial-findings.md)
    — frozen first Behavioral search and C4 external-diagnostic findings.
-8. [`docs/knowledge/rq2-c4-safe67-deficiency-reactions.md`](docs/knowledge/rq2-c4-safe67-deficiency-reactions.md),
+9. [`docs/knowledge/rq2-c4-safe67-deficiency-reactions.md`](docs/knowledge/rq2-c4-safe67-deficiency-reactions.md),
    [`docs/knowledge/rq2-c4-blind-discriminator-validation.md`](docs/knowledge/rq2-c4-blind-discriminator-validation.md),
    and [`docs/knowledge/rq2-c4-pcce-failure-analysis.md`](docs/knowledge/rq2-c4-pcce-failure-analysis.md)
    — frozen development evidence behind the next GEPA supervision redesign.
-9. [`docs/polybench-pcce.md`](docs/polybench-pcce.md) and
+10. [`docs/polybench-pcce.md`](docs/polybench-pcce.md) and
    [`docs/offline-polybench-validation.md`](docs/offline-polybench-validation.md)
    — implemented PCE/PCCE and external-evidence boundaries.
-10. [`docs/swe-verified-pce-pcce.md`](docs/swe-verified-pce-pcce.md) — additive
+11. [`docs/swe-verified-pce-pcce.md`](docs/swe-verified-pce-pcce.md) — additive
    SWE-Verified PCE/PCCE generalization workflow, phase isolation, evaluator
    semantics, completed quick50 comparison, and C5 safe-U8 development result.
-11. [`docs/swe-bench-pro-pce.md`](docs/swe-bench-pro-pce.md) — completed Pro
+12. [`docs/swe-bench-pro-pce.md`](docs/swe-bench-pro-pce.md) — completed Pro
     quick25 PCE, repository-history audit, official-SIF policy, and paused C4
     PCCE path.
 

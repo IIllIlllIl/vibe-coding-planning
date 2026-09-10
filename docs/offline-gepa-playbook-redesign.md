@@ -1,9 +1,9 @@
 # Offline GEPA Reject-Playbook Redesign
 
-> Status: deterministic method and distributed smoke path implemented; smoke
-> prepared but not launched
+> Authority: Offline GEPA reject-playbook method, development provenance, and
+> reusable execution semantics
 >
-> Scope: the next Offline GEPA method, replacing the current single-decision
+> Scope: the Offline GEPA method replacing the prior single-decision
 > guideline proposal while retaining third-party GEPA search where practical
 
 ## Objective And Boundary
@@ -378,7 +378,12 @@ The agreed order is:
 No existing frozen dataset, candidate tree, guideline, or result is modified
 by this redesign.
 
-## Prompt And Smoke Preparation
+## Development Provenance And Method-Changing Findings
+
+This section retains terminal development evidence only when it changed the
+method or is required to reproduce it. Live iteration counts, queue state,
+candidate rankings, and ETAs remain runtime-artifact concerns as defined in
+`documentation-authority.md`.
 
 The first ACE-inspired prompt bundle was
 `configs/prompts/offline_gepa_reject_playbook_v1_20260909.yaml`. It defines a
@@ -400,7 +405,7 @@ overflowed one Reflector context. It produced no candidate and is diagnostic,
 not a successful method smoke. Its prompt, config, run, and fingerprints remain
 unchanged for provenance.
 
-The repaired, launch-unauthorized successor is
+The repaired successor was
 `configs/gepa_verified_reject_playbook_smoke_v2_20260910.yaml`, using
 `configs/prompts/offline_gepa_reject_playbook_v2_20260910.yaml`. It makes
 `plan_evidence` an explicit string array, checkpoints raw Agent completion
@@ -419,7 +424,7 @@ prior Host validation error. The v3 prompt authority is
 `configs/prompts/offline_gepa_reject_playbook_v3_20260910.yaml`; no v3 smoke is
 authorized merely by this documentation.
 
-The next bounded smoke is
+The three-round bounded smoke used
 `configs/gepa_verified_reject_playbook_reflect3_smoke_v1_20260910.yaml`. It uses
 the clean436 authority, two train cases, one validation case, a one-case
 Reflection minibatch, three sequential Reflection rounds, one proposal, and at
@@ -448,7 +453,7 @@ freezes three rounds as a conservative attribution-stability pass, by explicit
 method decision rather than because the smoke demonstrated additional third-round
 information gain.
 
-The prepared formal development run is
+The formal development contract was
 `configs/gepa_verified_reject_playbook_formal_12it_v1_20260910.yaml`, paired with
 `configs/gepa_verified_reject_playbook_formal_12it_supervisor_v1_20260910.yaml`.
 It consumes the complete immutable clean375 train/validation splits (297/78),
@@ -456,8 +461,7 @@ uses an eight-case Reflection minibatch, three sequential Reflection rounds per
 case, twelve candidate proposals, and a 1,200 metric-call fail-safe. The frozen
 expected elapsed budget is 12--18 active hours excluding Slurm queue delay. Each
 Agent array element remains `1 CPU / 4G / 35 minutes`, with at most eight running
-elements. The run is ready but not launched; formal launch still requires an
-explicit instruction.
+elements. Launch authority remained a separate explicit user decision.
 
 The run subsequently reached six durable iterations in approximately one
 active hour, then stopped during the next Controller submission. This was a

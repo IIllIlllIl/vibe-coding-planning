@@ -1,7 +1,6 @@
 # Documentation Index
 
 > Authority: navigation policy for project documentation
-> Last reviewed: 2026-09-09
 
 Agents should read the smallest authoritative set that answers the task. Do not
 search `docs/archive/` unless the user explicitly requests historical audit,
@@ -14,9 +13,10 @@ Read in this order:
 | Document | Authority |
 |---|---|
 | [`../README.md`](../README.md) | Project overview, methods, quick start, and entry points |
+| [`documentation-authority.md`](documentation-authority.md) | Ownership and lifecycle rules for durable documentation and live runtime state |
 | [`branch-scope.md`](branch-scope.md) | Active Behavioral, retained foundation, frozen evidence, and archive boundary |
 | [`../project_issues.md`](../project_issues.md) | Current research decisions and unresolved methodological risks; not a run-progress log |
-| [`offline-gepa-playbook-redesign.md`](offline-gepa-playbook-redesign.md) | Reject-playbook method, cleaned development data, prompts, distributed Slurm Agent waves, resume contract, and prepared smoke |
+| [`offline-gepa-playbook-redesign.md`](offline-gepa-playbook-redesign.md) | Reject-playbook method, cleaned development data, prompt provenance, distributed Slurm Agent waves, and resume contract |
 | [`offline-gepa.md`](offline-gepa.md) | Offline GEPA Checker boundary, metric, stopping, artifacts, and resume contract |
 | [`swe-chat-preheat.md`](swe-chat-preheat.md) | Behavioral v1 frozen dataset/repository acquisition, identity, verification, and login-preheat boundary |
 | [`swe-chat-data-cleaning.md`](swe-chat-data-cleaning.md) | Behavioral v1 selection/slicing policy, frozen funnel, source-quality audit, recovery pools, and evidence boundary |
