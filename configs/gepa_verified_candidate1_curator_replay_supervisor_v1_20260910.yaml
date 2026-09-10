@@ -1,6 +1,6 @@
 schema_version: 1
-session: verified-candidate1-curator-replay-v1-20260910
-log: .local/hpc-supervisor/verified-candidate1-curator-replay-v1-20260910.log
+session: verified-candidate1-curator-replay-v2-20260910
+log: .local/hpc-supervisor/verified-candidate1-curator-replay-v2-20260910.log
 arguments:
   - --poll-interval
   - "30"
@@ -11,7 +11,7 @@ arguments:
   - --max-runs
   - "20"
   - --state-file
-  - .local/hpc-supervisor/verified-candidate1-curator-replay-v1-20260910.json
+  - .local/hpc-supervisor/verified-candidate1-curator-replay-v2-20260910.json
   - --require-clean-worktree
   - --gepa-rules
   - --gepa-config
