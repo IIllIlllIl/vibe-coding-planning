@@ -1,20 +1,24 @@
 # ULHPC Operations For The Behavioral Branch
 
-> Authority: credential, FairShare, and launch safety for the retained Offline,
-> PolyBench, and SWE-chat acquisition paths
+> Authority: credential, FairShare, storage, and launch safety for ACE + Safe
+> PCE; older workflow entries are retained reproduction notes
 >
 > Last reviewed: 2026-08-29
 
 ## Scope
 
-This branch has three operational classes:
+This branch has five operational classes:
 
-1. SWE-chat frozen source acquisition runs directly on the Iris login node. It
+1. Safe PCE and later ACE-PCCE submit one Agent/evaluator per Slurm array
+   element and use the shared supervisor/runtime storage defaults.
+2. ACE playbook optimization uses its distributed Checker, Reflector, and
+   Curator workers with the same shared supervisor lifecycle.
+3. SWE-chat frozen source acquisition is historical and runs directly on the Iris login node. It
    downloads the fixed dataset revision and Git mirrors, but submits no Slurm
    job and starts no Agent or experiment.
-2. Existing Offline GEPA and PolyBench PCE/PCCE wrappers are retained only for
+4. Existing Offline GEPA and PolyBench PCE/PCCE wrappers are retained only for
    exact reproduction and future explicitly approved adaptations.
-3. Online GEPA and earlier PCT/PCC operations are historical. Their former
+5. Online GEPA and earlier PCT/PCC operations are historical. Their former
    operations document is archived at
    `archive/online-gepa/hpc-submit-online-era.md` and is not a current launch
    guide.
@@ -98,6 +102,9 @@ not worker-internal parallelism.
   `scripts/hpc_submit_swe_verified_pcce.sh`; their selection-scoped SIF
   manifest must be frozen and base-commit verified before submission.
 - Read-only status: `scripts/hpc_run_status.py`.
+- Shared path and conservative submission-copy lifecycle:
+  `scripts/hpc_runtime.py`. New supervisors opt in with `--reclaim-staging`
+  and derive an experiment-specific staging directory from `job_name`.
 - SWE-chat acquisition: `scripts/tools/login_swe_chat_preheat.py` and
   `scripts/swe_chat_preheat_service.py`.
 
@@ -111,3 +118,15 @@ token in a config, command argument, Git URL, submitted file, or log.
 Completed configs and evidence are not launch defaults. Any new experiment
 requires frozen inputs, a distinct run identity and directory, budget, stopping
 condition, acceptance criteria, and explicit approval.
+
+New result authorities use
+`/scratch/users/$USER/vibe-coding-planning/run_state`; do not introduce new
+home-based result roots. A workflow-specific submit wrapper may remain while
+its Agent environment differs, but it must delegate polling, resume, and
+submission-copy lifecycle to the shared supervisor/runtime layer.
+
+New supervisor launch YAMLs omit remote storage arguments. The shared
+supervisor derives an experiment-specific staging root from `job_name` and uses
+the canonical dataset and run-state roots from `scripts/hpc_runtime.py`. An
+explicit path remains supported only for audited historical reproduction or a
+documented storage exception.

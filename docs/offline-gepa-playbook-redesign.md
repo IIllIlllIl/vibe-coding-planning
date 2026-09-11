@@ -181,10 +181,20 @@ minibatch. It:
 3. emits localized `ADD`, `REVISE`, `DELETE`, or `MERGE` operations and a
    separate change analysis; the host validates and applies them.
 
-Counter arithmetic is host-owned. A retained ID must preserve its complete
-bullet record. A substantively revised or merged rule receives a new ID, starts
-with zero counters, and records input IDs in lineage. The Curator cannot assign
-or rewrite evidence counters.
+Counter arithmetic is host-owned and global to one run rather than local to a
+GEPA candidate branch. The host records immutable attribution by normalized
+bullet text and instance ID, so revisiting the same case does not manufacture a
+second vote. Before reflection, a parent candidate is hydrated from this
+run-level ledger; after a complete valid proposal, new helpful/harmful evidence
+is atomically persisted under the run directory. Failed Agent attempts and
+invalid Curator or Refiner output do not update the ledger. The Checker never
+receives this evidence.
+
+A retained ID must preserve its complete bullet record. An exactly matching
+rule on another branch shares the global evidence for that text. A
+substantively revised or merged rule receives a new ID and new semantic text,
+starts with zero counters, and records input IDs in lineage. The Curator cannot
+assign or rewrite evidence counters.
 
 The Curator must not expose IDs or counters in Checker-visible bullet text.
 Rule-ID and counter inheritance for substantive revisions and merges must be
@@ -433,7 +443,7 @@ nonzero-loss case instead of spending its only Reflection slot reinforcing an
 already correct classification. Expected active runtime is approximately 20
 minutes excluding Slurm queue delay; the 35-minute per-Agent ceiling is a
 failure bound, not an expected duration. The paired supervisor config is
-`configs/gepa_verified_reject_playbook_reflect3_smoke_supervisor_v1_20260910.yaml`.
+`configs/archive/supervisor_launches/gepa_verified_reject_playbook_reflect3_smoke_supervisor_v1_20260910.yaml`.
 The smoke completed on the frozen clean436 input at commit `c492ae2`. All three
 sequential Reflector waves, both Checker waves, and the Curator completed on
 their first task attempt with no operationally incomplete result. The three
@@ -455,7 +465,7 @@ information gain.
 
 The formal development contract was
 `configs/gepa_verified_reject_playbook_formal_12it_v1_20260910.yaml`, paired with
-`configs/gepa_verified_reject_playbook_formal_12it_supervisor_v1_20260910.yaml`.
+`configs/archive/supervisor_launches/gepa_verified_reject_playbook_formal_12it_supervisor_v1_20260910.yaml`.
 It consumes the complete immutable clean375 train/validation splits (297/78),
 uses an eight-case Reflection minibatch, three sequential Reflection rounds per
 case, twelve candidate proposals, and a 1,200 metric-call fail-safe. The frozen

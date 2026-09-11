@@ -470,7 +470,7 @@ def test_behavioral_formal_v2_launch_contract_has_no_prompt_drift() -> None:
         root / "configs/gepa_behavioral_acceptability_formal_8it_v2_20260830.yaml"
     )
     supervisor_path = (
-        root / "configs/behavioral_gepa_formal_8it_supervisor_v2_20260830.yaml"
+        root / "configs/archive/supervisor_launches/behavioral_gepa_formal_8it_supervisor_v2_20260830.yaml"
     )
     raw = yaml.safe_load(config_path.read_text(encoding="utf-8"))
     smoke = yaml.safe_load(

@@ -1,0 +1,88 @@
+# Prepared ten-case development smoke. Presence does not authorize launch.
+mode: swe_verified_pce
+purpose: safe_pce_boundary_and_human_audit_development_smoke
+
+paths:
+  dataset_snapshot: output/SWE-bench_Verified/swe-verified-pce-inputs/20260831_verified500_91aa3ed5
+  image_manifest: output/SWE-bench_Verified/swe-verified-pce-inputs/20260831_verified500_91aa3ed5/safe-pce-audit10-v3-20260912/images.json
+  selection_manifest: configs/frozen_swe_verified_smoke/swe-verified-safe-pce-audit10-v3-20260912.json
+  prompt_source_config: configs/polybench_pce_hpc_formal_clean_20260825.yaml
+  plan_prompt_source_config: configs/prompts/swe_verified_safe_pce_planner_v1_20260911.yaml
+  run_dir: output/SWE-bench_Verified/swe-verified-pce-runs/development/safe-pce-audit10-v3-20260912
+
+plan:
+  model: deepseek-v4-flash
+  api_base: https://api.deepseek.com
+  api_key_env: DEEPSEEK_API_KEY
+  temperature: 0.0
+  max_steps: 0
+  cost_limit: 0.0
+  timeout: 1800
+  max_attempts: 3
+  submission_protocol: direct_final_plan_v1
+
+code:
+  model: deepseek-v4-flash
+  api_base: https://api.deepseek.com
+  api_key_env: DEEPSEEK_API_KEY
+  temperature: 0.0
+  max_steps: 0
+  cost_limit: 0.0
+  timeout: 1800
+  max_attempts: 3
+
+docker:
+  workdir: /testbed
+  timeout: 1800
+  min_free_gb: 20
+  max_cached_images: 75
+
+container:
+  runtime: apptainer
+  module: tools/Apptainer
+  sif_cache_dir: /scratch/users/${USER}/vibe-coding-planning/shared/sif-cache
+  writable_tmpfs: true
+
+hpc:
+  submit: true
+  partition: batch
+  cpus_per_task: 1
+  mem: 4G
+  time: "00:45:00"
+  poll_interval_seconds: 300
+  task_output_grace_seconds: 300
+  missing_task_grace_seconds: 600
+  max_task_attempts: 3
+  remote_env_file: ~/.config/vibe-coding-planning/deepseek.env
+  python_module: lang/Python/3.11
+  container_module: tools/Apptainer
+  python_bin: python3
+  job_name_prefix: swe-verified-safe-pce-audit10-v3-20260912
+  worker_config_path: configs/swe_verified_safe_pce_audit10_v3_20260912.yaml
+
+evaluator:
+  slurm_timeout_outcome: unknown
+
+experiment_contract:
+  selected_cases: 10
+  selection: frozen_coverage_driven_human_audit_cases
+  repositories: 9
+  plan_prompt_sha256: 107579eba0e935b48ee8caff1c23982d366fa507a6dd0ae750bcf22576b5b102
+  code_prompt_source_sha256: 91288205b4a78f4bdadb858bcd05b03f45f27cb5de081ffa1dac23c131b02596
+  plan_authority: direct_model_terminal_response_after_FINAL_PLAN
+  agent_network_policy: network_available_with_host_git_remote_blacklist
+  local_git_history_policy: base_commit_and_existing_ancestors_allowed
+  target_repository_install_policy: prompt_forbidden
+  historical_run_inputs: none
+  required_prelaunch_authority: selection_scoped_sif_hash_and_base_commit_audit
+  success_criteria:
+    - all ten cases produce direct terminal Plan submissions and atomic Plan checkpoints
+    - Plan checkpoint hashes match the exact text handed to Code
+    - Planner and Code trajectories show use or explicit inspection of the existing SIF project environment
+    - any attempted remote Git operation is returned to the Agent as a blocked command and is not executed
+    - neither Agent installs or upgrades the target repository
+    - all ten cases reach terminal evaluator outcomes without operationally incomplete phases
+    - issue, Plan, Code patch, outcome, and raw trajectories remain available for manual audit
+  stopping: finish_all_ten_cases_or_report_operational_incomplete
+  operational_incomplete_policy: transport_provider_timeout_or_infrastructure_failure_is_not_unresolved
+  launched: false

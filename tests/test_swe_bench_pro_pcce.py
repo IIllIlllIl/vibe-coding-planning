@@ -214,7 +214,7 @@ def test_pro_pcce_worker_script_and_supervisor_keep_frozen_limits(tmp_path: Path
 
     supervisor = yaml.safe_load(
         Path(
-            "configs/swe_bench_pro_pcce_quick25_c4_issue_first_supervisor_v1_20260907.yaml"
+            "configs/archive/supervisor_launches/swe_bench_pro_pcce_quick25_c4_issue_first_supervisor_v1_20260907.yaml"
         ).read_text()
     )
     arguments = supervisor["arguments"]
@@ -236,7 +236,7 @@ def test_pro_pcce_smoke_is_three_repository_development_subset() -> None:
     assert sum(case.baseline_resolved is False for case in cases) == 1
     supervisor = yaml.safe_load(
         Path(
-            "configs/swe_bench_pro_pcce_smoke_c4_issue_first_supervisor_v2_20260907.yaml"
+            "configs/archive/supervisor_launches/swe_bench_pro_pcce_smoke_c4_issue_first_supervisor_v2_20260907.yaml"
         ).read_text()
     )
     assert "--require-clean-worktree" in supervisor["arguments"]

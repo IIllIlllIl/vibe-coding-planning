@@ -97,6 +97,7 @@ def run_from_config(path: str | Path, *, agents: Any | None = None, optimize_fn=
             token_counter=count_tokens,
             semantic_refiner=proposal_agents.refine,
             maximum_tokens=int(raw["length"]["maximum_visible_tokens"]),
+            global_counter_path=run_dir / "global_counter_ledger.json",
         )
         adapter = PlaybookGEPAAdapter(
             None,
@@ -115,6 +116,7 @@ def run_from_config(path: str | Path, *, agents: Any | None = None, optimize_fn=
             token_counter=count_tokens,
             semantic_refiner=runtime.refiner,
             maximum_tokens=int(raw["length"]["maximum_visible_tokens"]),
+            global_counter_path=run_dir / "global_counter_ledger.json",
         )
         adapter = PlaybookGEPAAdapter(
             runtime.checker,

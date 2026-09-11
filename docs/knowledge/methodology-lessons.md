@@ -9,7 +9,8 @@
 |---|---|---|
 | PCT | Real Plan-Code-Test trajectories and execution failure evidence | Did not directly optimize one deployable global rule set |
 | PCC/Checker | Structured plan-quality diagnosis and held-out classification | Prediction of historical resolved is indirect relative to actual execution |
-| Offline GEPA | Active low-cost route for learning an inspectable, standalone plan-review guideline that covers both repository investigation and judgment; reuses historical execution evidence for Reflection | The frozen 20260731 design placed too much investigation knowledge in the fixed Checker and optimized a narrower checklist. It also optimizes Checker agreement with historical labels, so label/Checker bias and transfer to actual plan quality require held-out analysis |
+| Offline GEPA | Historical foundation for candidate/Pareto/checkpoint machinery and evidence-rich Reflection | Its guideline format, repository-interactive Checker, and historical-label objective were superseded by the ACE playbook design |
+| ACE + Safe PCE | Active stage: learn an atomic human-readable reject playbook, then generate trustworthy Plan-Code-Evaluate evidence under a direct artifact boundary | Safe PCE smoke and later ACE-PCCE must establish that improved classification can support useful intervention |
 | Online GEPA | Optimizes rules through current Plan-Code-Evaluator rollouts | Expensive and sensitive to Agent/evaluator/infrastructure noise |
 
 ## What Online Reuses
@@ -29,9 +30,10 @@
 - Cross-policy score comparisons.
 - Treating infrastructure failure as unresolved.
 
-Historical documents remain useful for provenance. They are not authoritative
-for current behavior; current Offline semantics are restated in
-[`../offline-gepa.md`](../offline-gepa.md).
+Historical documents remain useful for provenance and failure analysis. They
+are not authoritative for current ACE + Safe PCE behavior; current boundaries
+are restated in [`../offline-gepa-playbook-redesign.md`](../offline-gepa-playbook-redesign.md)
+and [`../swe-verified-pce-pcce.md`](../swe-verified-pce-pcce.md).
 
 ## First Clean Offline PCCE Stage
 

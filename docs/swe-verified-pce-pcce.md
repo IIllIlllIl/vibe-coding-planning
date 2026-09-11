@@ -1,17 +1,21 @@
-# SWE-Verified PCE/PCCE Generalization Workflow
+# ACE + Safe PCE on SWE-bench Verified
 
-> Authority: the independent SWE-Verified Plan-Code-Evaluate and paired
-> Plan-Check-Code-Evaluate data, phase, and evidence contract
+> Authority: current Safe PCE source/artifact/execution boundary and retained
+> historical PCE/PCCE diagnostic evidence
 >
 > Last reviewed: 2026-09-09
 
 ## Purpose
 
-This workflow tests whether the Behavioral guideline transfers to the
-authoritative SWE-bench Verified task distribution. It regenerates the first
-Plan with the current project PCE prompts, then compares paired PCCE runs using
-the neutral Behavioral seed and frozen candidate 4. Historical Round-1 plans
-are not reused because their planning prompt and runtime identity differ.
+The active workflow regenerates trustworthy Plan-Code-Evaluate evidence for the
+ACE stage. It uses direct Plan submission, isolated Plan and Code workspaces, a
+new selection-scoped SIF authority, and the official evaluator. It does not
+reuse historical Round-1 or quick50 Plans, outcomes, image manifests, or paired
+C4/C5 identities as new experiment inputs.
+
+The quick50 and Seed/C4/C5 results below are retained only as failure-analysis
+evidence that motivated Safe PCE and ACE-PCCE. They are not the current
+baseline or a source of cases for the new experiment.
 
 The implementation is additive under `src/swe_verified_pce/` and
 `src/swe_verified_pcce/`. It does not change the retained PolyBench workflow or
@@ -129,7 +133,7 @@ is:
 
 ```bash
 conda run -n mini-swe python scripts/hpc_supervisor_service.py start \
-  --launch-config configs/swe_verified_pce_smoke_supervisor_v1_20260901.yaml
+  --launch-config configs/archive/supervisor_launches/swe_verified_pce_smoke_supervisor_v1_20260901.yaml
 ```
 
 With no retry, worker execution is bounded by one 45-minute allocation plus
@@ -232,7 +236,7 @@ existing `unknown` policy.
 The runtime is
 `configs/swe_verified_recovered_plan_ce2_v1_20260911.yaml`; its paired local
 supervisor is
-`configs/swe_verified_recovered_plan_ce2_supervisor_v1_20260911.yaml`. Each of
+`configs/archive/supervisor_launches/swe_verified_recovered_plan_ce2_supervisor_v1_20260911.yaml`. Each of
 the two Slurm array elements requests `1 CPU / 4G / 45min`, with three total
 operational attempts and five-minute supervisor polling. The authorized replay
 completed both cases on 2026-09-11 with two terminal `resolved` outcomes and no
@@ -290,9 +294,34 @@ The launch-unauthorized two-case contract is
 `configs/swe_verified_safe_pce_smoke_v1_20260911.yaml`, its Planner prompt is
 `configs/prompts/swe_verified_safe_pce_planner_v1_20260911.yaml`, and its
 supervisor is
-`configs/swe_verified_safe_pce_smoke_supervisor_v1_20260911.yaml`. It reuses
+`configs/archive/supervisor_launches/swe_verified_safe_pce_smoke_supervisor_v1_20260911.yaml`. It reuses
 the already outcome-exposed historical development-smoke membership solely to
 test transport and execution. A successful smoke requires direct terminal
 responses, exact preservation through the Plan checkpoint and Code handoff,
 and two operationally complete evaluator outcomes; it makes no quality or
 generalization claim.
+
+The repository-boundary successor keeps the runtime authority at
+`configs/swe_verified_safe_pce_boundary_smoke_v2_20260911.yaml`. Its failed v2
+supervisor launch is archived without mutation. The reviewed replacement is
+`configs/archive/supervisor_launches/swe_verified_safe_pce_boundary_smoke_supervisor_v3_20260911.yaml`:
+it omits remote storage paths, accepts the shared supervisor defaults, and
+enables inactive submission-copy reclamation. Its presence does not authorize
+launch.
+
+The prepared human-audit successor expands this boundary probe to ten
+development-only cases from nine repositories. Selection is driven by distinct
+Safe PCE transport, environment, planning, compatibility, and implementation
+risk coverage rather than historical R/U balance. It is frozen in
+`configs/frozen_swe_verified_smoke/swe-verified-safe-pce-audit10-v3-20260912.json`
+and runs through `configs/swe_verified_safe_pce_audit10_v3_20260912.yaml`.
+Selection spans transport corruption, environment and remote-Git behavior,
+apparently sufficient Plans with both outcomes, visible blockers with both
+outcomes, compatibility risk, uncertain repository-dependent scope, competing
+output contracts, edge semantics, and symbolic behavior. This is richer
+manual-audit material, not a quality estimate or held-out evaluation.
+Historical outcomes are known because the cases came from prior failure
+analysis, but they are not runtime inputs or success criteria. Before launch,
+the ten existing SIFs require a new selection-scoped byte-hash and base-commit
+audit; the runtime intentionally does not bind a quick50 or other historical
+run manifest.

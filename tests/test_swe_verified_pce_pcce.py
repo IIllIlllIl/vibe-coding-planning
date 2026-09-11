@@ -41,6 +41,9 @@ from src.swe_verified_pce.runner import checkpoint_identity
 from src.swe_verified_pce.plan_replay import _RecoveredPlanExecutor
 from src.swe_verified_pce.runner import SWEVerifiedPCERunner
 from src.swe_verified_pcce.runner import SWEVerifiedPCCERunner
+from scripts.tools.freeze_pcce_rejected_first_reviews import (
+    freeze_rejected_first_reviews,
+)
 from scripts.tools.freeze_swe_verified_pce_selection import freeze_selection
 
 
@@ -115,7 +118,7 @@ def test_recovered_plan_ce2_config_binds_two_plans_and_supervisor() -> None:
     assert all(row["plan_sha256"] for row in replay["recovered_plans"])
     supervisor = yaml.safe_load(
         Path(
-            "configs/swe_verified_recovered_plan_ce2_supervisor_v1_20260911.yaml"
+            "configs/archive/supervisor_launches/swe_verified_recovered_plan_ce2_supervisor_v1_20260911.yaml"
         ).read_text()
     )
     arguments = supervisor["arguments"]
@@ -173,17 +176,71 @@ def test_safe_pce_boundary_smoke_freezes_case8_and_git_boundary_probe() -> None:
 
     supervisor = yaml.safe_load(
         Path(
-            "configs/swe_verified_safe_pce_smoke_supervisor_v1_20260911.yaml"
+            "configs/archive/supervisor_launches/"
+            "swe_verified_safe_pce_boundary_smoke_supervisor_v3_20260911.yaml"
         ).read_text()
     )
     arguments = supervisor["arguments"]
     assert "--require-clean-worktree" in arguments
+    assert "--reclaim-staging" in arguments
     assert arguments[arguments.index("--config") + 1] == (
-        "configs/swe_verified_safe_pce_smoke_v1_20260911.yaml"
+        "configs/swe_verified_safe_pce_boundary_smoke_v2_20260911.yaml"
     )
-from scripts.tools.freeze_pcce_rejected_first_reviews import (
-    freeze_rejected_first_reviews,
-)
+    assert "--remote-dir" not in arguments
+    assert "--remote-dataset-dir" not in arguments
+    assert "--remote-run-dir" not in arguments
+
+
+def test_safe_pce_audit10_freezes_balanced_diverse_development_cases() -> None:
+    config = load_swe_verified_pce_config(
+        "configs/swe_verified_safe_pce_audit10_v3_20260912.yaml",
+        require_api_keys=False,
+    )
+    selection = json.loads(config.selection_manifest.read_text(encoding="utf-8"))
+
+    assert len(config.instance_ids) == 10
+    assert len(set(config.instance_ids)) == 10
+    assert config.instance_ids == tuple(selection["selected_instance_ids"])
+    assert selection["selection_policy"]["selection_basis"] == (
+        "distinct_safe_pce_failure_and_reasoning_risk_coverage"
+    )
+    assert (
+        selection["selection_policy"]["historical_outcomes_used_as_runtime_inputs"]
+        is False
+    )
+    assert selection["selection_policy"]["repository_count"] == 9
+    wrappers = [
+        json.loads(line)
+        for line in (config.dataset_snapshot / "instances.jsonl")
+        .read_text(encoding="utf-8")
+        .splitlines()
+        if line.strip()
+    ]
+    source = {wrapper["instance_id"]: wrapper for wrapper in wrappers}
+    selected_rows = {row["instance_id"]: row for row in selection["selected_rows"]}
+    assert set(config.instance_ids) <= set(source)
+    assert all(
+        source[instance_id]["row_sha256"] == selected_rows[instance_id]["row_sha256"]
+        for instance_id in config.instance_ids
+    )
+    assert not config.image_manifest.exists()
+    assert config.plan_submission_protocol == "direct_final_plan_v1"
+    assert config.run_dir.name == "safe-pce-audit10-v3-20260912"
+
+    supervisor = yaml.safe_load(
+        Path(
+            "configs/swe_verified_safe_pce_audit10_supervisor_v1_20260912.yaml"
+        ).read_text(encoding="utf-8")
+    )
+    arguments = supervisor["arguments"]
+    assert "--reclaim-staging" in arguments
+    assert "--require-clean-worktree" in arguments
+    assert arguments[arguments.index("--config") + 1] == (
+        "configs/swe_verified_safe_pce_audit10_v3_20260912.yaml"
+    )
+    assert "--remote-dir" not in arguments
+    assert "--remote-dataset-dir" not in arguments
+    assert "--remote-run-dir" not in arguments
 
 
 def test_swe_verified_checker_contract_failure_retries_with_fresh_agent():
@@ -853,7 +910,7 @@ def test_tracked_smoke_configs_bind_two_case_selection_and_phase_policies() -> N
     assert contract["acceptance"]["operationally_incomplete_allowed"] == 0
 
     supervisor = yaml.safe_load(
-        Path("configs/swe_verified_pce_smoke_supervisor_v1_20260901.yaml").read_text(
+        Path("configs/archive/supervisor_launches/swe_verified_pce_smoke_supervisor_v1_20260901.yaml").read_text(
             encoding="utf-8"
         )
     )
@@ -964,7 +1021,7 @@ def test_tracked_quick50_pce_contract_is_frozen() -> None:
     assert config.hpc.max_task_attempts == 3
 
     supervisor = yaml.safe_load(
-        Path("configs/swe_verified_pce_quick50_supervisor_v1_20260901.yaml").read_text(
+        Path("configs/archive/supervisor_launches/swe_verified_pce_quick50_supervisor_v1_20260901.yaml").read_text(
             encoding="utf-8"
         )
     )
@@ -1008,7 +1065,7 @@ def test_tracked_quick50_seed_pcce_contract_is_frozen() -> None:
 
     supervisor = yaml.safe_load(
         Path(
-            "configs/swe_verified_pcce_quick50_seed_supervisor_v1_20260901.yaml"
+            "configs/archive/supervisor_launches/swe_verified_pcce_quick50_seed_supervisor_v1_20260901.yaml"
         ).read_text(encoding="utf-8")
     )
     arguments = supervisor["arguments"]
@@ -1088,7 +1145,7 @@ def test_tracked_quick50_c4_pcce_contract_is_paired_with_seed() -> None:
 
     supervisor = yaml.safe_load(
         Path(
-            "configs/swe_verified_pcce_quick50_c4_supervisor_v1_20260902.yaml"
+            "configs/archive/supervisor_launches/swe_verified_pcce_quick50_c4_supervisor_v1_20260902.yaml"
         ).read_text(encoding="utf-8")
     )
     arguments = supervisor["arguments"]
@@ -1130,8 +1187,8 @@ def test_tracked_issue_first_c4_pcce_starts_from_frozen_rejections() -> None:
 
     supervisor = yaml.safe_load(
         Path(
-            "configs/"
-            "swe_verified_pcce_quick50_c4_issue_first_supervisor_v1_20260903.yaml"
+                "configs/archive/supervisor_launches/"
+                "swe_verified_pcce_quick50_c4_issue_first_supervisor_v1_20260903.yaml"
         ).read_text(encoding="utf-8")
     )
     arguments = supervisor["arguments"]
@@ -1214,8 +1271,8 @@ def test_tracked_c5_safe_u8_pcce_is_exact_workspace_safe_pce_failure_subset() ->
 
     supervisor = yaml.safe_load(
         Path(
-            "configs/"
-            "swe_verified_pcce_c5_prompt_v2_safe_u8_supervisor_v1_20260909.yaml"
+                "configs/archive/supervisor_launches/"
+                "swe_verified_pcce_c5_prompt_v2_safe_u8_supervisor_v1_20260909.yaml"
         ).read_text(encoding="utf-8")
     )
     arguments = supervisor["arguments"]

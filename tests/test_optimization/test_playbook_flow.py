@@ -270,6 +270,138 @@ def test_two_stage_proposer_attributes_then_counts_then_curates() -> None:
     assert proposer.successful_proposals == 1
 
 
+def test_two_stage_proposer_counters_are_global_across_branches() -> None:
+    seed = _playbook(PlaybookBullet("plan-00001", "It is a placeholder."))
+
+    def reflector(record):
+        return {
+            "instance_id": record["instance_id"],
+            "reasoning": "Attribution.",
+            "error_identification": "Error.",
+            "root_cause_analysis": "Cause.",
+            "correct_approach": "Approach.",
+            "key_insight": "Insight.",
+            "bullet_tags": [{
+                "id": "plan-00001", "tag": record["tag"],
+                "attribution": "Observed evidence.", "confidence": "high",
+            }],
+            "uncertainty": "Resolved remains a proxy.",
+        }
+
+    seen = []
+
+    def curator(counted, reviews, records):
+        del reviews, records
+        seen.append((counted.bullets[0].helpful, counted.bullets[0].harmful))
+        return {"reasoning": "No durable change.", "operations": []}
+
+    proposer = TwoStagePlaybookProposer(
+        reflector=reflector,
+        curator=curator,
+        token_counter=lambda text: len(text.split()),
+    )
+    first = proposer(
+        {"rules": seed.serialize()},
+        {"rules": [{"instance_id": "repo__repo-1", "tag": "helpful"}]},
+        ["rules"],
+    )
+    # A sibling branch supplies the original zero-count Seed again.
+    second = proposer(
+        {"rules": seed.serialize()},
+        {"rules": [{"instance_id": "repo__repo-2", "tag": "harmful"}]},
+        ["rules"],
+    )
+
+    assert RejectPlaybook.parse(first["rules"]).bullets[0].helpful == 1
+    final = RejectPlaybook.parse(second["rules"]).bullets[0]
+    assert (final.helpful, final.harmful) == (1, 1)
+    assert seen == [(1, 0), (1, 1)]
+    assert proposer.global_counters.snapshot() == {
+        "it is a placeholder.": {"helpful": 1, "harmful": 1}
+    }
+
+
+def test_failed_proposal_does_not_commit_global_counters() -> None:
+    seed = _playbook(PlaybookBullet("plan-00001", "It is a placeholder."))
+
+    def reflector(record):
+        return {
+            "instance_id": record["instance_id"],
+            "reasoning": "Attribution.",
+            "error_identification": "Error.",
+            "root_cause_analysis": "Cause.",
+            "correct_approach": "Approach.",
+            "key_insight": "Insight.",
+            "bullet_tags": [{
+                "id": "plan-00001", "tag": "helpful",
+                "attribution": "Observed evidence.", "confidence": "high",
+            }],
+            "uncertainty": "Resolved remains a proxy.",
+        }
+
+    proposer = TwoStagePlaybookProposer(
+        reflector=reflector,
+        curator=lambda *_: {
+            "reasoning": "Invalid operation.",
+            "operations": [{
+                "type": "DELETE", "target_id": "missing",
+                "supporting_instance_ids": ["repo__repo-1"],
+                "risk_analysis": "Could remove a useful rule.",
+            }],
+        },
+        token_counter=lambda text: len(text.split()),
+    )
+    with pytest.raises(ValueError):
+        proposer(
+            {"rules": seed.serialize()},
+            {"rules": [{"instance_id": "repo__repo-1"}]},
+            ["rules"],
+        )
+    assert proposer.global_counters.snapshot() == {
+        "it is a placeholder.": {"helpful": 0, "harmful": 0}
+    }
+
+
+def test_global_counters_persist_and_do_not_recount_a_case(tmp_path) -> None:
+    seed = _playbook(PlaybookBullet("plan-00001", "It is a placeholder."))
+    ledger = tmp_path / "global_counter_ledger.json"
+
+    def reflector(record):
+        return {
+            "instance_id": record["instance_id"],
+            "reasoning": "Attribution.",
+            "error_identification": "Error.",
+            "root_cause_analysis": "Cause.",
+            "correct_approach": "Approach.",
+            "key_insight": "Insight.",
+            "bullet_tags": [{
+                "id": "plan-00001", "tag": "helpful",
+                "attribution": "Observed evidence.", "confidence": "high",
+            }],
+            "uncertainty": "Resolved remains a proxy.",
+        }
+
+    def build_proposer():
+        return TwoStagePlaybookProposer(
+            reflector=reflector,
+            curator=lambda *_: {
+                "reasoning": "No durable change.", "operations": []
+            },
+            token_counter=lambda text: len(text.split()),
+            global_counter_path=ledger,
+        )
+
+    record = {"rules": [{"instance_id": "repo__repo-1"}]}
+    first = build_proposer()
+    first({"rules": seed.serialize()}, record, ["rules"])
+    assert ledger.is_file()
+
+    resumed = build_proposer()
+    result = resumed({"rules": seed.serialize()}, record, ["rules"])
+    bullet = RejectPlaybook.parse(result["rules"]).bullets[0]
+    assert (bullet.helpful, bullet.harmful) == (1, 0)
+
+
 def test_curator_cannot_change_host_owned_counters() -> None:
     parent = _playbook(PlaybookBullet("plan-00001", "It is a placeholder."))
 
@@ -925,7 +1057,7 @@ def test_fresh_formal_30it_contract_uses_atomic_seed_and_v5_prompts() -> None:
     supervisor = yaml.safe_load(
         (
             repo_root
-            / "configs/gepa_verified_reject_playbook_formal_30it_supervisor_v2_20260910.yaml"
+            / "configs/archive/supervisor_launches/gepa_verified_reject_playbook_formal_30it_supervisor_v2_20260910.yaml"
         ).read_text(encoding="utf-8")
     )
     arguments = supervisor["arguments"]
@@ -958,7 +1090,7 @@ def test_replacement_formal_contract_delegates_reflector_limit_to_slurm() -> Non
     supervisor = yaml.safe_load(
         (
             repo_root
-            / "configs/gepa_verified_reject_playbook_formal_30it_supervisor_v3_20260910.yaml"
+            / "configs/archive/supervisor_launches/gepa_verified_reject_playbook_formal_30it_supervisor_v3_20260910.yaml"
         ).read_text(encoding="utf-8")
     )
     arguments = supervisor["arguments"]

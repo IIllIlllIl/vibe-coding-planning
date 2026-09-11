@@ -1,9 +1,11 @@
 # Behavioral Plan Acceptability Research
 
-This branch develops a deployable, explainable plan-review guideline at the
-Plan-to-Implementation boundary. It starts from the current Offline GEPA search
-implementation and the completed clean PolyBench PCE/PCCE evidence, then adds
-SWE-chat Behavioral Plan Acceptability v1 as a new supervision design.
+This branch is now in the **ACE + Safe PCE** stage. It develops a human-readable
+reject playbook, regenerates trustworthy Plan-Code-Evaluate evidence through
+Safe PCE, and will evaluate the selected playbook through ACE-PCCE. Earlier
+Offline GEPA, Behavioral C4/C5, quick50, safe67, and PolyBench runs are retained
+only to explain failed designs and motivate safeguards. They are not input,
+selection, image, baseline, or launch authorities for the new experiment.
 
 The active research question has progressed from behavioral acceptance
 classification to learning which decision-time-identifiable Plan deficiencies
@@ -13,7 +15,7 @@ implementation trajectories, or downstream outcomes. Those post-boundary
 records may support labels, controlled Reflection evidence, and retrospective
 development analysis only.
 
-## Frozen research baseline
+## Historical diagnostic evidence
 
 - The first clean PolyBench PCCE stage is complete and paused.
 - Paired PCE resolves 70/99 cases; Seed PCCE resolves 66/99.
@@ -60,21 +62,22 @@ frozen experimental contract. Documentation ownership and runtime-status
 authority are defined in
 [`docs/documentation-authority.md`](docs/documentation-authority.md).
 
-## Active research surface
+## Active ACE + Safe PCE surface
 
 Read these files in order:
 
-1. [`docs/branch-scope.md`](docs/branch-scope.md) — branch boundary, retained
-   systems, and historical-reference policy.
+1. [`docs/branch-scope.md`](docs/branch-scope.md) — current ACE + Safe PCE
+   boundary and historical-reference policy.
 2. [`docs/documentation-authority.md`](docs/documentation-authority.md) — where
    durable methods, findings, open decisions, and live run state belong.
 3. [`project_issues.md`](project_issues.md) — current decisions and unresolved
    methodological risks only; it is not a run-progress log.
-4. [`docs/swe-chat-data-cleaning.md`](docs/swe-chat-data-cleaning.md) — current
-   Behavioral trajectory selection and the evidence available for episode
-   slicing.
-5. [`docs/offline-gepa.md`](docs/offline-gepa.md) — current Offline Checker,
-   metric, Reflection, search, and resume semantics.
+4. [`docs/offline-gepa-playbook-redesign.md`](docs/offline-gepa-playbook-redesign.md)
+   — current ACE playbook representation, prompts, scoring, counters, and
+   distributed optimization semantics.
+5. [`docs/swe-verified-pce-pcce.md`](docs/swe-verified-pce-pcce.md) — current
+   Safe PCE artifact, environment, evaluator, and smoke boundary; its earlier
+   quick50/C4/C5 sections are explicitly historical diagnostics.
 6. [`docs/behavioral-offline-gepa-adaptation.md`](docs/behavioral-offline-gepa-adaptation.md)
    — Behavioral information boundary, minimum Offline adapter changes, and the
    staged development-smoke contract.
@@ -89,9 +92,8 @@ Read these files in order:
 10. [`docs/polybench-pcce.md`](docs/polybench-pcce.md) and
    [`docs/offline-polybench-validation.md`](docs/offline-polybench-validation.md)
    — implemented PCE/PCCE and external-evidence boundaries.
-11. [`docs/swe-verified-pce-pcce.md`](docs/swe-verified-pce-pcce.md) — additive
-   SWE-Verified PCE/PCCE generalization workflow, phase isolation, evaluator
-   semantics, completed quick50 comparison, and C5 safe-U8 development result.
+11. [`docs/swe-verified-pce-pcce.md`](docs/swe-verified-pce-pcce.md) — Safe PCE
+   source of truth for the new stage.
 12. [`docs/swe-bench-pro-pce.md`](docs/swe-bench-pro-pce.md) — completed Pro
     quick25 PCE, repository-history audit, official-SIF policy, and paused C4
     PCCE path.
@@ -100,11 +102,11 @@ The current implementation surface is:
 
 - the Offline modules under `src/optimization/`, plus its shared `hpc/`
   infrastructure;
-- `src/polybench_pce/` and `src/polybench_pcce/` for the frozen external
-  execution/evaluation platform;
+- `src/swe_verified_pce/` for the active Safe PCE data-generation path;
+- `src/optimization/playbook_*.py` for the active ACE playbook search path;
+- `src/polybench_pce/`, `src/polybench_pcce/`, and historical
+  `src/swe_verified_pcce/` only where code is deliberately reused or audited;
 - `src/offline_check_only/` for additive fixed-guideline evaluation;
-- `src/swe_verified_pce/` and `src/swe_verified_pcce/` for independent current-
-  prompt SWE-Verified PCE and paired Seed/C4/C5 development evaluation;
 - `src/swe_bench_pro_pce/` for the additive Pro task/image/evaluator adapter
   that reuses the current SWE PCE phase and retry implementation;
 - `third_party/gepa/` for the existing search implementation, which should not

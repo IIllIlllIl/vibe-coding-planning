@@ -19,6 +19,12 @@ latest candidate, or estimated completion time.
 | `docs/reference/` | Stable third-party or provenance references | Current project behavior |
 | Archive trees | Superseded material retained for audit or reproduction | Current authority |
 
+Supervisor launch YAMLs are operational identities, not workflow
+implementations. Keep only the next reviewed launch identity beside current
+configs. Move terminal, superseded, or paused identities to
+`configs/archive/supervisor_launches/`; do not duplicate their transient queue
+or progress state in documentation.
+
 ## Runtime Authority
 
 For an active or recently completed run, inspect runtime artifacts rather than

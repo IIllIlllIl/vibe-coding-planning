@@ -50,8 +50,12 @@ cleaning authority is `docs/swe-chat-data-cleaning.md`.
   derives the budget-reduced balanced20 development set and its nested
   smoke10 subset from that frozen balanced40 authority.
 - `hpc_submit_batch.sh`, `hpc_resume_loop.py`, and
-  `hpc_supervisor_service.py` are shared controller/supervisor infrastructure
-  retained for Offline reproducibility.
+  `hpc_supervisor_service.py` are shared controller/supervisor infrastructure.
+  `hpc_runtime.py` is their workflow-independent callable storage/lifecycle
+  layer: it defines the canonical scratch layout and conservatively reclaims
+  only inactive ulhpc-submit code workdirs. New workflow Controllers retain
+  their phase DAG and checkpoints but must not duplicate supervisor polling or
+  staging cleanup.
 - `internal/run_gepa_rules.py` is the retained Offline GEPA controller entry.
 - `run_offline_check_only.py` is the additive fixed-guideline evaluation path.
 - `tools/freeze_swe_verified_pc_only_inputs.py` deterministically projects the
@@ -129,6 +133,10 @@ Completed workflows are not authorized launch defaults. Do not infer a new run
 from the presence of an executable script.
 
 ## Historical Archive
+
+- `../configs/archive/supervisor_launches/` contains completed, superseded,
+  paused, and reproduction-only supervisor launch identities. They are YAML
+  invocations, not separate supervisor implementations.
 
 - `archive/online_gepa/` contains the former Online resource-pilot preparation,
   worker, and submit scripts.

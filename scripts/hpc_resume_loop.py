@@ -20,12 +20,18 @@ from typing import Any
 
 import yaml
 
+try:
+    from scripts.hpc_runtime import HpcLayout
+except ModuleNotFoundError:  # Direct ``python scripts/hpc_resume_loop.py``.
+    from hpc_runtime import HpcLayout
+
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 DEFAULT_BATCH_SCRIPT = REPO_ROOT / "scripts" / "hpc_submit_batch.sh"
 OFFLINE_TARGET_EXTENSION_SCRIPT = (
     REPO_ROOT / "scripts" / "internal" / "offline_iteration_target.py"
 )
+HPC_RUNTIME_SCRIPT = REPO_ROOT / "scripts" / "hpc_runtime.py"
 TERMINAL_JOB_STATES = {
     "BOOT_FAIL",
     "CANCELLED",
@@ -77,6 +83,8 @@ class SupervisorConfig:
     repo_commit: str | None
     offline_gepa: bool
     recover_controller_error_types_once: tuple[str, ...]
+    reclaim_staging: bool
+    remote_staging_root: str | None
 
 
 def parse_duration(raw: str) -> int:
@@ -127,6 +135,26 @@ def _remove_options(args: list[str], options: set[str]) -> list[str]:
 
 def _remove_flags(args: list[str], flags: set[str]) -> list[str]:
     return [arg for arg in args if arg not in flags]
+
+
+def _submit_wrapper_supports(path: Path, option: str) -> bool:
+    try:
+        return option in path.read_text(encoding="utf-8")
+    except OSError:
+        return False
+
+
+def _with_default_remote_paths(
+    args: list[str], *, batch_script: Path, remote_user: str, job_name: str
+) -> list[str]:
+    defaults = HpcLayout.for_user(remote_user).supervisor_paths(job_name)
+    resolved = list(args)
+    for option, value in defaults.items():
+        if _take_option(resolved, option) is None and _submit_wrapper_supports(
+            batch_script, option
+        ):
+            resolved.extend([option, value])
+    return resolved
 
 
 def _load_yaml(path: Path) -> dict[str, Any]:
@@ -272,6 +300,14 @@ def parse_args(argv: list[str]) -> SupervisorConfig:
         ),
     )
     parser.add_argument(
+        "--reclaim-staging",
+        action="store_true",
+        help=(
+            "After remote status proves no Controller or worker is active, "
+            "remove only ulhpc-submit workdirs below the exact --remote-dir."
+        ),
+    )
+    parser.add_argument(
         "--batch-script",
         default=os.environ.get("VIBE_HPC_SUBMIT_BATCH", str(DEFAULT_BATCH_SCRIPT)),
     )
@@ -308,6 +344,14 @@ def parse_args(argv: list[str]) -> SupervisorConfig:
         / f"{re.sub(r'[^A-Za-z0-9_.-]+', '_', job_name)}.json"
     )
     ssh_target, ssh_port, ssh_key = _ssh_config(batch_args)
+    batch_script = Path(known.batch_script)
+    batch_args = _with_default_remote_paths(
+        batch_args,
+        batch_script=batch_script,
+        remote_user=ssh_target.split("@", 1)[0],
+        job_name=job_name,
+    )
+    remote_staging_root = _take_option(batch_args, "--remote-dir")
     return SupervisorConfig(
         batch_args=batch_args,
         runtime_config=runtime_config,
@@ -321,7 +365,7 @@ def parse_args(argv: list[str]) -> SupervisorConfig:
         ssh_target=ssh_target,
         ssh_port=ssh_port,
         ssh_key=ssh_key,
-        batch_script=Path(known.batch_script),
+        batch_script=batch_script,
         target_iterations=target_iterations,
         once=known.once,
         state_file=state_file,
@@ -332,6 +376,8 @@ def parse_args(argv: list[str]) -> SupervisorConfig:
         recover_controller_error_types_once=tuple(
             sorted(set(known.recover_controller_error_type_once))
         ),
+        reclaim_staging=known.reclaim_staging,
+        remote_staging_root=remote_staging_root,
     )
 
 
@@ -590,6 +636,32 @@ print(json.dumps(payload, sort_keys=True))
     return json.loads(result.stdout.strip().splitlines()[-1])
 
 
+def reclaim_remote_staging(config: SupervisorConfig) -> dict[str, Any]:
+    """Reclaim inactive submission copies through the shared lifecycle module."""
+
+    if not config.reclaim_staging:
+        return {"removed": 0, "disabled": True}
+    if config.remote_staging_root is None:
+        raise RuntimeError("staging reclamation has no exact remote root")
+    source = HPC_RUNTIME_SCRIPT.read_text(encoding="utf-8")
+    invocation = """
+import json
+import sys
+print(json.dumps(reclaim_submission_workdirs(sys.argv[1]), sort_keys=True))
+"""
+    remote_command = (
+        "printf VIBE_HPC_STAGING_RECLAIM >/dev/null; python3 -c "
+        + shlex.quote(source + invocation)
+        + " "
+        + shlex.quote(config.remote_staging_root)
+    )
+    result = run_command(_ssh_command(config, remote_command))
+    if result.returncode != 0:
+        error = result.stderr.strip() or result.stdout.strip()
+        raise RuntimeError(f"remote staging reclamation failed: {error}")
+    return json.loads(result.stdout.strip().splitlines()[-1])
+
+
 def extend_completed_offline_target(
     config: SupervisorConfig,
     status: dict[str, Any],
@@ -662,6 +734,8 @@ def _load_supervisor_state(config: SupervisorConfig) -> dict[str, Any]:
             "recover_controller_error_types_once": list(
                 config.recover_controller_error_types_once
             ),
+            "reclaim_staging": config.reclaim_staging,
+            "remote_staging_root": config.remote_staging_root,
         }
     state = json.loads(config.state_file.read_text(encoding="utf-8"))
     if state.get("schema_version") == 1:
@@ -684,11 +758,16 @@ def _load_supervisor_state(config: SupervisorConfig) -> dict[str, Any]:
         "recover_controller_error_types_once": list(
             config.recover_controller_error_types_once
         ),
+        "reclaim_staging": config.reclaim_staging,
+        "remote_staging_root": config.remote_staging_root,
     }
     for key, value in expected.items():
         actual = state.get(key)
         if key == "recover_controller_error_types_once" and actual is None:
             actual = []
+            state[key] = actual
+        if key == "reclaim_staging" and actual is None:
+            actual = False
             state[key] = actual
         if actual != value:
             raise RuntimeError(
@@ -779,6 +858,39 @@ def run_loop(config: SupervisorConfig) -> int:
                 if config.poll_interval_seconds > 0:
                     time.sleep(config.poll_interval_seconds)
                 continue
+            active_controllers = status.get("active_controllers", [])
+            active_workers = status.get("active_workers", [])
+            if active_controllers or active_workers:
+                state["status"] = (
+                    "waiting_controller" if active_controllers else "waiting_workers"
+                )
+                print(
+                    "[hpc-resume] waiting without submission "
+                    f"controllers={active_controllers} workers={active_workers}"
+                )
+                _save_supervisor_state(config, state)
+                if config.once:
+                    return 0
+                if config.poll_interval_seconds > 0:
+                    time.sleep(config.poll_interval_seconds)
+                continue
+
+            try:
+                cleanup = reclaim_remote_staging(config)
+            except Exception as exc:
+                state["status"] = "blocked_staging_reclamation"
+                state["staging_reclamation_error"] = str(exc)
+                _save_supervisor_state(config, state)
+                print(f"[hpc-resume] staging reclamation failed: {exc}", file=sys.stderr)
+                return 1
+            if cleanup.get("removed"):
+                state["last_staging_reclamation"] = cleanup
+                _save_supervisor_state(config, state)
+                print(
+                    "[hpc-resume] reclaimed inactive submission workdirs "
+                    f"count={cleanup['removed']}"
+                )
+
             recoverable_controller_error = (
                 status.get("error_type")
                 in config.recover_controller_error_types_once
@@ -800,23 +912,6 @@ def run_loop(config: SupervisorConfig) -> int:
                     "[hpc-resume] allowing one audited Controller recovery "
                     f"for error_type={status.get('error_type')}"
                 )
-
-            active_controllers = status.get("active_controllers", [])
-            active_workers = status.get("active_workers", [])
-            if active_controllers or active_workers:
-                state["status"] = (
-                    "waiting_controller" if active_controllers else "waiting_workers"
-                )
-                print(
-                    "[hpc-resume] waiting without submission "
-                    f"controllers={active_controllers} workers={active_workers}"
-                )
-                _save_supervisor_state(config, state)
-                if config.once:
-                    return 0
-                if config.poll_interval_seconds > 0:
-                    time.sleep(config.poll_interval_seconds)
-                continue
 
             if is_completed(status):
                 if not config.target_iterations or _iteration_target_reached(

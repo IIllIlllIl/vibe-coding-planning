@@ -1,4 +1,4 @@
-# Behavioral Plan Acceptability Branch Scope
+# ACE + Safe PCE Branch Scope
 
 > Authority: active-versus-historical boundary for
 > `research/behavioral-plan-acceptability-v1`
@@ -7,10 +7,10 @@
 
 ## Purpose
 
-This branch develops SWE-chat Behavioral Plan Acceptability v1 on top of the
-existing Offline GEPA search and the completed clean PolyBench PCE/PCCE
-evidence. Its intended artifact is a transferable, explainable guideline for
-deciding whether a proposed software plan should cross into implementation.
+This branch now develops an ACE-style reject playbook and a trustworthy Safe
+PCE evidence source. The intended artifact remains a transferable,
+human-readable checklist for deciding whether a proposed software plan should
+cross into implementation, followed by ACE-PCCE evaluation.
 
 The branch is ordinary Git history, not an orphan snapshot. Deleted or later
 pruned material remains readable from `main` and the baseline commit.
@@ -19,19 +19,23 @@ pruned material remains readable from `main` and the baseline commit.
 
 The active implementation and evidence surface is limited to:
 
-1. Offline GEPA candidate-guideline optimization, repository-interactive
-   Checker, per-example metric scores, Reflection, instance-level Pareto search,
-   contamination checks, and checkpoint/resume behavior.
-2. Clean PolyBench PCE/PCCE platform and frozen first-stage evidence.
-3. Offline check-only infrastructure where it supplies a fixed-guideline
-   evaluation path without GEPA or Reflection.
+1. ACE reject-playbook optimization: repository-free per-bullet Checker,
+   structured Reflector, Curator, global counters, deterministic validity and
+   length gates, and GEPA candidate/checkpoint machinery.
+2. Safe PCE on SWE-bench Verified: direct Plan submission, phase isolation,
+   exact Plan-to-Code handoff, conservative Agent acquisition boundary, and the
+   official evaluator.
+3. The next ACE-PCCE adapter, after Safe PCE produces trustworthy plans and
+   outcomes.
 4. Shared Agent, repository, container, evaluator, Slurm, audit, and output
    utilities actually reached by those systems.
-5. The Behavioral episode schema and deterministic dataset builders, followed
-   by the label policy, adapter semantics, and no-leakage tests.
+5. Historical Offline, Behavioral, PolyBench, quick50, C2/C4/C5, and safe67
+   artifacts only when diagnosing earlier failure modes or reusing a tested
+   execution component.
 
-Existing Offline and PolyBench semantics are reproduction authorities, not the
-new Behavioral supervision design. New work must use a new dataset identity,
+Existing Offline, PolyBench, quick50, and C2/C4/C5 semantics are historical
+reproduction and failure-analysis authorities, not new experiment inputs or
+baselines. New work must use a new dataset identity,
 config, run directory, prompt identity, and acceptance contract.
 
 ## Behavioral information boundary

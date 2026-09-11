@@ -1,6 +1,7 @@
-# Current Offline GEPA
+# Retained Pre-ACE Offline GEPA
 
-> Authority: current Offline GEPA experiment contract
+> Authority: historical method and regression contract; not a current launch or
+> experiment-design authority
 >
 > Last reviewed: 2026-08-28
 
@@ -559,5 +560,5 @@ conda run -n mini-swe python -m src.optimization \
 ```
 
 The versioned unattended launch identity is
-`configs/offline_gepa_supervisor.yaml`. Starting it is an external HPC action
+`configs/archive/supervisor_launches/offline_gepa_supervisor.yaml`. Starting it is an external HPC action
 and requires explicit authorization.

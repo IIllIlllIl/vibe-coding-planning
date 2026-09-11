@@ -1,7 +1,7 @@
-# PolyBench Plan-Check-Code-Evaluate Design
+# Retained PolyBench Plan-Check-Code-Evaluate Design
 
-> Authority: implemented platform flow and completed first paired
-> deployment-oriented evaluation of frozen Offline guidelines
+> Authority: historical platform/results and audited component-reuse evidence;
+> not the current ACE-PCCE experiment contract
 >
 > Last reviewed: 2026-09-09
 
@@ -491,7 +491,7 @@ claim. The full 20-case development run remains unlaunched.
 
 The new runtime is
 `configs/polybench_pcce_hpc_formal_seed_clean_20260826.yaml`, its supervisor is
-`configs/polybench_pcce_supervisor_formal_seed_clean_20260826.yaml`, and its
+`configs/archive/supervisor_launches/polybench_pcce_supervisor_formal_seed_clean_20260826.yaml`, and its
 output root is `seed-python99-clean-pce-v1-20260826`. It selects all and only
 those 99 cases, retains the accepted PCCE prompts and three-valid-rejection
 budget, uses three operational attempts, and requests `1 CPU / 4G / 45min` per

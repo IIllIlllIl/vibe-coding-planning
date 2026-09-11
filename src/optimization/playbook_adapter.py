@@ -2,6 +2,9 @@
 
 from __future__ import annotations
 
+from dataclasses import replace
+import json
+from pathlib import Path
 from typing import Any, Callable, Mapping, Protocol, Sequence
 
 from gepa.core.adapter import EvaluationBatch
@@ -11,7 +14,6 @@ from src.optimization.playbook import (
     MAX_VISIBLE_TOKENS,
     RejectPlaybook,
     apply_curator_operations,
-    apply_reflector_counters,
     classification_cost,
     manage_playbook_length,
     overlength_bullet_ids,
@@ -29,6 +31,119 @@ class PlaybookChecker(Protocol):
 
 Reflector = Callable[[Mapping[str, Any]], Mapping[str, Any]]
 Curator = Callable[[RejectPlaybook, Sequence[Mapping[str, Any]], Sequence[Mapping[str, Any]]], Mapping[str, Any]]
+
+
+def _rule_identity(text: str) -> str:
+    """Use exact normalized rule text as its cross-branch identity."""
+    return " ".join(text.casefold().split())
+
+
+class GlobalPlaybookCounters:
+    """Accumulate unique-case attribution across branches, hidden from Checker."""
+
+    def __init__(self, path: Path | None = None) -> None:
+        self.path = path
+        self._counts: dict[str, tuple[int, int]] = {}
+        self._observations: dict[str, dict[str, str]] = {}
+        if path is not None and path.is_file():
+            raw = json.loads(path.read_text(encoding="utf-8"))
+            if raw.get("schema_version") != 1:
+                raise ValueError("unsupported global counter ledger schema")
+            self._counts = {
+                key: (int(value["helpful"]), int(value["harmful"]))
+                for key, value in raw["counts"].items()
+            }
+            self._observations = {
+                key: dict(value) for key, value in raw["observations"].items()
+            }
+
+    def hydrate(self, playbook: RejectPlaybook) -> RejectPlaybook:
+        bullets = []
+        for bullet in playbook.bullets:
+            key = _rule_identity(bullet.text)
+            known = self._counts.get(key)
+            if known is None:
+                known = (bullet.helpful, bullet.harmful)
+            else:
+                known = (
+                    max(known[0], bullet.helpful),
+                    max(known[1], bullet.harmful),
+                )
+            self._counts[key] = known
+            bullets.append(replace(bullet, helpful=known[0], harmful=known[1]))
+        return RejectPlaybook(tuple(bullets))
+
+    def apply_reviews(
+        self,
+        playbook: RejectPlaybook,
+        reviews: Sequence[Mapping[str, Any]],
+    ) -> tuple[RejectPlaybook, list[tuple[str, str, str]]]:
+        pending: list[tuple[str, str, str]] = []
+        deltas = {
+            _rule_identity(bullet.text): {"helpful": 0, "harmful": 0}
+            for bullet in playbook.bullets
+        }
+        identities = {
+            bullet.id: _rule_identity(bullet.text) for bullet in playbook.bullets
+        }
+        for review in reviews:
+            instance_id = str(review["instance_id"])
+            for tag in review["bullet_tags"]:
+                label = str(tag["tag"])
+                if label not in {"helpful", "harmful"}:
+                    continue
+                key = identities[str(tag["id"])]
+                if instance_id in self._observations.get(key, {}):
+                    continue
+                pending.append((key, instance_id, label))
+                deltas[key][label] += 1
+        counted = RejectPlaybook(tuple(
+            replace(
+                bullet,
+                helpful=bullet.helpful
+                + deltas[_rule_identity(bullet.text)]["helpful"],
+                harmful=bullet.harmful
+                + deltas[_rule_identity(bullet.text)]["harmful"],
+            )
+            for bullet in playbook.bullets
+        ))
+        return counted, pending
+
+    def commit(
+        self,
+        counted: RejectPlaybook,
+        pending: Sequence[tuple[str, str, str]],
+    ) -> None:
+        for key, instance_id, label in pending:
+            self._observations.setdefault(key, {})[instance_id] = label
+        for bullet in counted.bullets:
+            self._counts[_rule_identity(bullet.text)] = (
+                bullet.helpful,
+                bullet.harmful,
+            )
+        self._persist()
+
+    def _persist(self) -> None:
+        if self.path is None:
+            return
+        self.path.parent.mkdir(parents=True, exist_ok=True)
+        payload = {
+            "schema_version": 1,
+            "counts": self.snapshot(),
+            "observations": self._observations,
+        }
+        temporary = self.path.with_suffix(self.path.suffix + ".tmp")
+        temporary.write_text(
+            json.dumps(payload, ensure_ascii=False, indent=2, sort_keys=True) + "\n",
+            encoding="utf-8",
+        )
+        temporary.replace(self.path)
+
+    def snapshot(self) -> dict[str, dict[str, int]]:
+        return {
+            key: {"helpful": value[0], "harmful": value[1]}
+            for key, value in sorted(self._counts.items())
+        }
 
 
 class ConfigurableRoundReflector:
@@ -68,6 +183,7 @@ class TwoStagePlaybookProposer:
         semantic_refiner: Callable[[RejectPlaybook], RejectPlaybook] | None = None,
         maximum_tokens: int = MAX_VISIBLE_TOKENS,
         batch_reflector: Callable[[Sequence[Mapping[str, Any]]], Sequence[Mapping[str, Any]]] | None = None,
+        global_counter_path: Path | None = None,
     ) -> None:
         self.reflector = reflector
         self.curator = curator
@@ -78,6 +194,7 @@ class TwoStagePlaybookProposer:
         self.successful_proposals = 0
         self.failures: list[dict[str, str]] = []
         self.last_length_report: dict[str, Any] | None = None
+        self.global_counters = GlobalPlaybookCounters(global_counter_path)
 
     def __call__(
         self,
@@ -87,7 +204,9 @@ class TwoStagePlaybookProposer:
     ) -> dict[str, str]:
         if components_to_update != ["rules"]:
             raise ValueError("playbook GEPA may update only rules")
-        parent = RejectPlaybook.parse(candidate["rules"])
+        parent = self.global_counters.hydrate(
+            RejectPlaybook.parse(candidate["rules"])
+        )
         records = list(reflective_dataset["rules"])
         try:
             raw_reviews = (
@@ -103,7 +222,9 @@ class TwoStagePlaybookProposer:
                 )
                 for record, raw in zip(records, raw_reviews, strict=True)
             ]
-            counted = apply_reflector_counters(parent, reviews)
+            counted, pending_counter_events = self.global_counters.apply_reviews(
+                parent, reviews
+            )
             operations = self.curator(counted, reviews, records)
             proposed = apply_curator_operations(counted, operations)
             proposed = validate_curator_proposal(counted, proposed)
@@ -119,6 +240,10 @@ class TwoStagePlaybookProposer:
                 {"error_type": type(exc).__name__, "error": str(exc)}
             )
             raise
+        # Only a fully valid proposal contributes global evidence. Failed Agent
+        # attempts and invalid Curator/Refiner output cannot increment counters.
+        self.global_counters.commit(counted, pending_counter_events)
+        proposed = self.global_counters.hydrate(proposed)
         self.successful_proposals += 1
         return {"rules": proposed.serialize()}
 

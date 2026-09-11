@@ -14,17 +14,17 @@ Read in this order:
 |---|---|
 | [`../README.md`](../README.md) | Project overview, methods, quick start, and entry points |
 | [`documentation-authority.md`](documentation-authority.md) | Ownership and lifecycle rules for durable documentation and live runtime state |
-| [`branch-scope.md`](branch-scope.md) | Active Behavioral, retained foundation, frozen evidence, and archive boundary |
+| [`branch-scope.md`](branch-scope.md) | Active ACE + Safe PCE systems, retained failure-analysis evidence, and archive boundary |
 | [`../project_issues.md`](../project_issues.md) | Current research decisions and unresolved methodological risks; not a run-progress log |
 | [`offline-gepa-playbook-redesign.md`](offline-gepa-playbook-redesign.md) | Reject-playbook method, cleaned development data, prompt provenance, distributed Slurm Agent waves, and resume contract |
-| [`offline-gepa.md`](offline-gepa.md) | Offline GEPA Checker boundary, metric, stopping, artifacts, and resume contract |
-| [`swe-chat-preheat.md`](swe-chat-preheat.md) | Behavioral v1 frozen dataset/repository acquisition, identity, verification, and login-preheat boundary |
-| [`swe-chat-data-cleaning.md`](swe-chat-data-cleaning.md) | Behavioral v1 selection/slicing policy, frozen funnel, source-quality audit, recovery pools, and evidence boundary |
-| [`behavioral-offline-gepa-adaptation.md`](behavioral-offline-gepa-adaptation.md) | Implemented Behavioral information flow, runtime boundary, and completed smoke/formal flow |
-| [`offline-polybench-validation.md`](offline-polybench-validation.md) | Current PolyBench-199 image preparation, PCE regeneration, exact-image provenance, and guideline-only generalization boundary |
-| [`polybench-pcce.md`](polybench-pcce.md) | Current paired PolyBench Plan-Check-Code-Evaluate deployment evaluation, including accepted smoke, formal seed run, review, and workflow retry semantics |
-| [`swe-verified-pce-pcce.md`](swe-verified-pce-pcce.md) | Independent current-prompt SWE-Verified PCE/PCCE boundary, completed quick50 comparison, and C5 safe-U8 development result |
-| [`swe-bench-pro-pce.md`](swe-bench-pro-pce.md) | Pro quick25 acquisition, history audit, official-SIF workspace policy, contamination exclusion, and submission boundary |
+| [`offline-gepa.md`](offline-gepa.md) | Retained pre-ACE Offline GEPA contract; historical method and regression authority only |
+| [`swe-chat-preheat.md`](swe-chat-preheat.md) | Historical Behavioral-v1 acquisition authority; not an ACE + Safe PCE input |
+| [`swe-chat-data-cleaning.md`](swe-chat-data-cleaning.md) | Historical Behavioral-v1 selection and cleaning authority |
+| [`behavioral-offline-gepa-adaptation.md`](behavioral-offline-gepa-adaptation.md) | Retained Behavioral-v1 method and completed-run authority |
+| [`offline-polybench-validation.md`](offline-polybench-validation.md) | Historical PolyBench PCE platform and failure-analysis authority |
+| [`polybench-pcce.md`](polybench-pcce.md) | Historical paired PCCE methods/results plus components considered for ACE-PCCE reuse |
+| [`swe-verified-pce-pcce.md`](swe-verified-pce-pcce.md) | Active Safe PCE boundary and smoke contract; quick50 and C4/C5 content is historical diagnostic evidence |
+| [`swe-bench-pro-pce.md`](swe-bench-pro-pce.md) | Paused historical Pro diagnostic and reusable official-SIF lessons |
 | [`hpc-submit.md`](hpc-submit.md) | Behavioral-branch credential, preheat, retained Slurm, and FairShare safety |
 | [`../configs/README.md`](../configs/README.md) | Runtime-versus-launch configuration ownership and active config index |
 
@@ -39,9 +39,10 @@ offline GEPA, and production failures:
 | [`knowledge/checkpoint-and-retry.md`](knowledge/checkpoint-and-retry.md) | Changing resume, retries, or batch takeover |
 | [`knowledge/isolation-and-artifacts.md`](knowledge/isolation-and-artifacts.md) | Changing Agent visibility, workspaces, or evidence flow |
 | [`knowledge/cleanup-lifecycle.md`](knowledge/cleanup-lifecycle.md) | Changing repository/SIF/workspace cleanup |
+| [`knowledge/hpc-result-retention.md`](knowledge/hpc-result-retention.md) | Choosing current result/staging/dataset/SIF roots or locating retained historical evidence |
 | [`knowledge/methodology-lessons.md`](knowledge/methodology-lessons.md) | Comparing Online GEPA with PCT, PCC, or offline GEPA |
-| [`knowledge/offline-pcce-stage-findings.md`](knowledge/offline-pcce-stage-findings.md) | Designing the next Offline guideline evaluation from the completed clean PolyBench Seed/C2 PCCE evidence |
-| [`knowledge/behavioral-gepa-initial-findings.md`](knowledge/behavioral-gepa-initial-findings.md) | Designing the next experiment from the completed first Behavioral search and C4 PolyBench PC-only diagnostic |
+| [`knowledge/offline-pcce-stage-findings.md`](knowledge/offline-pcce-stage-findings.md) | Understanding why the old Seed/C2 PCCE design was abandoned |
+| [`knowledge/behavioral-gepa-initial-findings.md`](knowledge/behavioral-gepa-initial-findings.md) | Understanding the first Behavioral search and why C4 did not become the new method |
 | [`knowledge/rq1-plan-deficiency-motivation.md`](knowledge/rq1-plan-deficiency-motivation.md) | Using two SWE-chat autonomous-recovery cases to motivate the distinction between Plan deficiency and Plan blocker, with explicit correctness limits |
 | [`knowledge/rq1-preliminary-plan-deficiency-case-analysis.md`](knowledge/rq1-preliminary-plan-deficiency-case-analysis.md) | Reviewing the preliminary SWE-chat and PolyBench deficiency/recovery cases and their historical selection boundaries |
 | [`knowledge/rq2-c4-first-round-pc-only-feasibility-pilot.md`](knowledge/rq2-c4-first-round-pc-only-feasibility-pilot.md) | Reconstructing the original 70-case C4 first-review and paired-PCE feasibility evidence |

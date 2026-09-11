@@ -7,7 +7,11 @@ import subprocess
 import time
 from pathlib import Path
 
-from scripts.hpc_resume_loop import _remote_run_snapshot, _repo_relative
+from scripts.hpc_resume_loop import (
+    _remote_run_snapshot,
+    _repo_relative,
+    _with_default_remote_paths,
+)
 
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
@@ -191,6 +195,37 @@ def test_hpc_resume_loop_dry_run_delegates_slice_time(tmp_path: Path) -> None:
     assert "24:00:00" not in batch_log.read_text(encoding="utf-8")
     assert "--dry-run" in batch_log.read_text(encoding="utf-8")
     assert "--submit" not in batch_log.read_text(encoding="utf-8")
+
+
+def test_supervisor_supplies_canonical_remote_paths() -> None:
+    args = _with_default_remote_paths(
+        ["--config", "configs/workflow.yaml"],
+        batch_script=REPO_ROOT / "scripts/hpc_submit_swe_verified_pce.sh",
+        remote_user="tester",
+        job_name="safe-smoke-v3",
+    )
+    assert _take_arg(args, "--remote-dir") == "~/hpc_runs/safe-smoke-v3"
+    assert _take_arg(args, "--remote-dataset-dir") == (
+        "/scratch/users/tester/vibe-coding-planning/datasets"
+    )
+    assert _take_arg(args, "--remote-run-dir") == (
+        "/scratch/users/tester/vibe-coding-planning/run_state"
+    )
+
+
+def _take_arg(args: list[str], option: str) -> str:
+    return args[args.index(option) + 1]
+
+
+def test_explicit_remote_path_overrides_supervisor_default() -> None:
+    args = _with_default_remote_paths(
+        ["--remote-run-dir", "/scratch/frozen/run", "--config", "old.yaml"],
+        batch_script=REPO_ROOT / "scripts/hpc_submit_swe_verified_pce.sh",
+        remote_user="tester",
+        job_name="historical-replay",
+    )
+    assert args.count("--remote-run-dir") == 1
+    assert _take_arg(args, "--remote-run-dir") == "/scratch/frozen/run"
 
 
 def test_hpc_resume_loop_accepts_non_gepa_workflow_config(tmp_path: Path) -> None:
@@ -817,7 +852,7 @@ def test_formal_pcce_supervisor_launch_config_uses_formal_seed_runtime(
             str(SERVICE_SCRIPT),
             "start",
             "--launch-config",
-            "configs/polybench_pcce_supervisor_formal_seed_clean_20260826.yaml",
+            "configs/archive/supervisor_launches/polybench_pcce_supervisor_formal_seed_clean_20260826.yaml",
         ],
         cwd=REPO_ROOT,
         capture_output=True,
@@ -859,7 +894,7 @@ def test_c4_checker_only_supervisor_uses_pcce_resume_loop(tmp_path: Path) -> Non
             str(SERVICE_SCRIPT),
             "start",
             "--launch-config",
-            "configs/polybench_pc_checker_only_c4_balanced20_supervisor_v1_20260831.yaml",
+            "configs/archive/supervisor_launches/polybench_pc_checker_only_c4_balanced20_supervisor_v1_20260831.yaml",
         ],
         cwd=REPO_ROOT,
         capture_output=True,
@@ -912,7 +947,7 @@ def test_c4_full_pcce_supervisor_is_bounded_and_uses_pcce_resume_loop(
             str(SERVICE_SCRIPT),
             "start",
             "--launch-config",
-            "configs/polybench_pcce_c4_balanced20_full_supervisor_v1_20260903.yaml",
+            "configs/archive/supervisor_launches/polybench_pcce_c4_balanced20_full_supervisor_v1_20260903.yaml",
         ],
         cwd=REPO_ROOT,
         capture_output=True,
@@ -965,7 +1000,7 @@ def test_c5_repair3_supervisor_is_bounded_and_uses_pcce_resume_loop(
             str(SERVICE_SCRIPT),
             "start",
             "--launch-config",
-            "configs/polybench_pcce_c5_repair3_supervisor_v1_20260908.yaml",
+            "configs/archive/supervisor_launches/polybench_pcce_c5_repair3_supervisor_v1_20260908.yaml",
         ],
         cwd=REPO_ROOT,
         capture_output=True,
@@ -1011,8 +1046,8 @@ def test_clean_seed_pcce_dependency_repair_supervisor_selects_frozen_subset(
             str(SERVICE_SCRIPT),
             "start",
             "--launch-config",
-            "configs/"
-            "polybench_pcce_supervisor_formal_seed_dependency_cache_clean_20260826.yaml",
+                "configs/archive/supervisor_launches/"
+                "polybench_pcce_supervisor_formal_seed_dependency_cache_clean_20260826.yaml",
         ],
         cwd=REPO_ROOT,
         capture_output=True,

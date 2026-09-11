@@ -1,0 +1,81 @@
+{
+  "schema_version": 1,
+  "selection_id": "swe-verified-safe-pce-audit10-v3-20260912",
+  "purpose": "development_only_safe_pce_boundary_and_human_audit_smoke",
+  "dataset": "SWE-bench/SWE-bench_Verified",
+  "dataset_revision": "91aa3ed51b709be6457e12d00300a6a596d4c6a3",
+  "source_manifest_sha256": "bec1150dbf55c29c0893226c20578bee031406d78db305cdfef7b2b80965143a",
+  "selected_instance_ids": [
+    "astropy__astropy-13033",
+    "django__django-10097",
+    "pytest-dev__pytest-10051",
+    "django__django-10554",
+    "pallets__flask-5014",
+    "scikit-learn__scikit-learn-12973",
+    "pydata__xarray-2905",
+    "sphinx-doc__sphinx-10435",
+    "matplotlib__matplotlib-20488",
+    "sympy__sympy-12419"
+  ],
+  "selected_rows": [
+    {
+      "instance_id": "astropy__astropy-13033",
+      "row_sha256": "6d9e2cb53d09e7548b95f959d73521f6fcd48f28234e6bb17525c68b7610c665",
+      "coverage": "historical_plan_transport_corruption"
+    },
+    {
+      "instance_id": "django__django-10097",
+      "row_sha256": "70d53e3e16a583329df18e6f0182ffca620777a69025806b8d6ac2c08c804356",
+      "coverage": "prior_git_fetch_attempt_dependency_install_and_incomplete_plan"
+    },
+    {
+      "instance_id": "pytest-dev__pytest-10051",
+      "row_sha256": "846fada4df002172cf57a28f635b89eba5ee2c215c40c0a8252e81fc3e55bd8e",
+      "coverage": "straightforward_state_identity_preservation"
+    },
+    {
+      "instance_id": "django__django-10554",
+      "row_sha256": "e6e14913eed7432cfc1cc31a24d9e15aa8893dfe9399ae4abcab8245cade8b82",
+      "coverage": "planner_to_code_fidelity_and_mutation_isolation"
+    },
+    {
+      "instance_id": "pallets__flask-5014",
+      "row_sha256": "5cc7ccbd782cf546cdded80c0811a572ba428ecace70022e5982477ad6a47489",
+      "coverage": "natural_language_requirement_and_whitespace_edge_case"
+    },
+    {
+      "instance_id": "scikit-learn__scikit-learn-12973",
+      "row_sha256": "18dbca8ab1db9148194eef4a198264c0ff4e225f34f70ca68b828ef5a7bb803e",
+      "coverage": "public_api_compatibility_blocker"
+    },
+    {
+      "instance_id": "pydata__xarray-2905",
+      "row_sha256": "9df1b94e93753b3e09bdb5fc440f93014dcbdc3dee232eb57c76e3a25fd60879",
+      "coverage": "repository_dependent_scope_uncertainty"
+    },
+    {
+      "instance_id": "sphinx-doc__sphinx-10435",
+      "row_sha256": "a102569aca10443858076a15d00b544a8b68308d8dca2ca64b7888f97ba85d34",
+      "coverage": "competing_output_contracts"
+    },
+    {
+      "instance_id": "matplotlib__matplotlib-20488",
+      "row_sha256": "7e889c587a45f9977bda2a5b3f695f1660581b075ba18a46500f2b1b7e34abc7",
+      "coverage": "overlapping_behavior_policies_and_edge_semantics"
+    },
+    {
+      "instance_id": "sympy__sympy-12419",
+      "row_sha256": "cd161eac4c43f86ee7892058d5f272f857123e13039380bb51b1e31e514e97de",
+      "coverage": "symbolic_semantics_and_exact_mathematical_representation"
+    }
+  ],
+  "selection_policy": {
+    "fixed_before_runtime": true,
+    "development_only": true,
+    "outcome_exposed": true,
+    "selection_basis": "distinct_safe_pce_failure_and_reasoning_risk_coverage",
+    "historical_outcomes_used_as_runtime_inputs": false,
+    "repository_count": 9,
+    "quality_or_generalization_claim": false
+  }
+}

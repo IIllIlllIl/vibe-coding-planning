@@ -6,6 +6,11 @@
 
 ## Current decision constraints
 
+The active stage is ACE + Safe PCE. Old Offline GEPA, Behavioral C4/C5,
+quick50, safe67, and PolyBench outcomes may explain prior failures and motivate
+new safeguards, but must not supply cases, labels, image manifests, candidate
+selection, comparison baselines, or launch identity to the new experiment.
+
 The frozen evidence behind these constraints is maintained in
 `docs/knowledge/offline-pcce-stage-findings.md`; the frozen Behavioral data
 funnel and source-quality findings are maintained in
@@ -21,7 +26,7 @@ Current decisions are:
 - require an explicit user instruction and a new frozen contract before any
   new experiment is launched.
 
-## Accepted next Offline GEPA direction
+## Accepted ACE playbook direction
 
 The next method is specified in
 `docs/offline-gepa-playbook-redesign.md`. Its deterministic method and
@@ -52,7 +57,7 @@ state remains in runtime artifacts.
 - The eligibility-cleaned Verified derivative, prompt bundle, and distributed
   execution contract do not themselves authorize an experiment launch.
 
-## Accepted Behavioral v1 direction
+## Historical Behavioral v1 decisions
 
 - Use at most the first clean Plan Mode episode from each SWE-chat session.
 - Treat later plan revisions as post-boundary diagnostic evidence, not separate
