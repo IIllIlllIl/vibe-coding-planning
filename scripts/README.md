@@ -117,6 +117,10 @@ cleaning authority is `docs/swe-chat-data-cleaning.md`.
   bounded launch config; tracked configs are not authorization by themselves.
   The quick50 formal config uses the same entry point only after every frozen
   member has an audited selection-scoped SIF record.
+- `hpc_submit_swe_verified_plan_ce_replay.sh` and
+  `run_swe_verified_plan_ce_replay_hpc.py` reuse that same transport for a
+  frozen recovered-Plan Code+Evaluate diagnostic. The replay preloads the Plan
+  checkpoint and does not invoke a Planner or Checker.
 - SIF and dependency preheaters remain because frozen PolyBench evidence and
   evaluator reproduction still reach them. They are not part of SWE-chat
   acquisition.

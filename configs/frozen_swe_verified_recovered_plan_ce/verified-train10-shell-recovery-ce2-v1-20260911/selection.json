@@ -1,0 +1,15 @@
+{
+  "purpose": "recovered_shell_damaged_plan_ce_replay",
+  "schema_version": 1,
+  "selected_instance_ids": [
+    "sympy__sympy-18211",
+    "astropy__astropy-14539"
+  ],
+  "selection_id": "verified-train10-shell-recovery-ce2-v1-20260911",
+  "selection_policy": {
+    "outcome_independent": false,
+    "use": "artifact_recovery_diagnostic_only",
+    "uses_human_audit": true
+  },
+  "source_manifest_sha256": "bec1150dbf55c29c0893226c20578bee031406d78db305cdfef7b2b80965143a"
+}

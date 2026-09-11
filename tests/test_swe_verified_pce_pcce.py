@@ -32,12 +32,97 @@ from src.swe_verified_pce.dataset import (
 )
 from src.swe_verified_pce.config import load_swe_verified_pce_config
 from src.swe_verified_pce.evaluator import _apply_patch, _terminal
-from src.swe_verified_pce.hpc_executor import recover_exhausted_evaluator_timeout
-from src.swe_verified_pce.models import SWEVerifiedPCECase
+from src.swe_verified_pce.hpc_executor import (
+    SWEVerifiedPCEHPCExecutor,
+    recover_exhausted_evaluator_timeout,
+)
+from src.swe_verified_pce.models import FrozenImage, SWEVerifiedPCECase
 from src.swe_verified_pce.runner import checkpoint_identity
+from src.swe_verified_pce.plan_replay import _RecoveredPlanExecutor
 from src.swe_verified_pce.runner import SWEVerifiedPCERunner
 from src.swe_verified_pcce.runner import SWEVerifiedPCCERunner
 from scripts.tools.freeze_swe_verified_pce_selection import freeze_selection
+
+
+def test_recovered_plan_executor_preloads_identity_bound_plan_checkpoint(
+    tmp_path: Path, monkeypatch
+) -> None:
+    case = SWEVerifiedPCECase(
+        instance_id="owner__repo-1",
+        row_sha256="a" * 64,
+        issue_description="issue",
+        repo="owner/repo",
+        base_commit="b" * 40,
+        version="",
+        difficulty="",
+        environment_setup_commit="",
+        test_patch="tests",
+        fail_to_pass=("test_x",),
+        pass_to_pass=(),
+        gold_patch="gold",
+        image=FrozenImage(
+            requested_ref="image",
+            sif_path="/sif",
+            sif_sha256="c" * 64,
+            sif_bytes=1,
+            provenance_strength="retrospective",
+        ),
+        source_row={},
+    )
+    task = TaskFiles(
+        0,
+        case.instance_id,
+        tmp_path / "tasks" / "task_0000.json",
+        tmp_path / "outputs" / "task_0000.json",
+        tmp_path / "attempts" / "task_0000",
+    )
+    monkeypatch.setattr(
+        SWEVerifiedPCEHPCExecutor,
+        "_prepare",
+        lambda self, batch_dir, fingerprint, cases: [task],
+    )
+    executor = object.__new__(_RecoveredPlanExecutor)
+    executor.plans = {case.instance_id: "# Plan\nImplement the focused fix."}
+    executor._prepare(tmp_path, "d" * 64, [case])
+    checkpoint = json.loads(
+        (tmp_path / "checkpoints/task_0000/plan.json").read_text()
+    )
+    assert checkpoint["phase"] == "plan"
+    assert checkpoint["payload"] == {
+        "plan": "# Plan\nImplement the focused fix.",
+        "trajectory": [],
+        "source": "frozen_recovered_plan",
+    }
+    assert checkpoint["checkpoint_identity"] == checkpoint_identity(
+        case, execution_fingerprint="d" * 64
+    )
+
+
+def test_recovered_plan_ce2_config_binds_two_plans_and_supervisor() -> None:
+    config = load_swe_verified_pce_config(
+        "configs/swe_verified_recovered_plan_ce2_v1_20260911.yaml",
+        require_api_keys=False,
+    )
+    replay_path = Path(
+        "configs/frozen_swe_verified_recovered_plan_ce/"
+        "verified-train10-shell-recovery-ce2-v1-20260911/replay.json"
+    )
+    replay = json.loads(replay_path.read_text())
+    assert [row["instance_id"] for row in replay["recovered_plans"]] == list(
+        config.instance_ids
+    )
+    assert replay["image_manifest_sha256"] == file_sha256(config.image_manifest)
+    assert all(row["plan_sha256"] for row in replay["recovered_plans"])
+    supervisor = yaml.safe_load(
+        Path(
+            "configs/swe_verified_recovered_plan_ce2_supervisor_v1_20260911.yaml"
+        ).read_text()
+    )
+    arguments = supervisor["arguments"]
+    assert arguments[arguments.index("--batch-script") + 1] == (
+        "scripts/hpc_submit_swe_verified_plan_ce_replay.sh"
+    )
+    assert "--require-clean-worktree" in arguments
 from scripts.tools.freeze_pcce_rejected_first_reviews import (
     freeze_rejected_first_reviews,
 )

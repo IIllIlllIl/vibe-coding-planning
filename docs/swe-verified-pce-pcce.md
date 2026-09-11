@@ -209,3 +209,30 @@ The required order is:
 
 Smoke checks pipeline correctness only. The quick validation is a bounded
 generalization diagnostic, not an untouched final holdout.
+
+## Recovered-Plan CE replay
+
+The development-only `verified-train10-shell-recovery-ce2-v1-20260911`
+replay isolates two historical Plans whose Markdown backticks were removed by
+shell command substitution while `/tmp/plan.md` was written. The intact Plan
+text is recovered as an exact substring of the preserved Planner trajectory;
+it is not regenerated or repaired by another model. Its frozen manifest binds
+the corrupted Plan, recovered Plan, source trajectory, selection, official
+source snapshot, and selection-scoped SIF identities by SHA-256.
+
+`src/swe_verified_pce/plan_replay.py` reuses the mature Verified PCE Slurm
+transport and worker. It preloads the recovered text as the identity-bound Plan
+checkpoint, so only Code and the official evaluator run. Plan and Checker model
+calls are forbidden by construction. The resulting outcome is an independent
+Code sample from the recovered Plan: it neither overwrites the historical PCE
+label nor represents Checker-mediated improvement. Operational failure remains
+distinct from unresolved, and exhausted evidenced evaluator timeouts retain the
+existing `unknown` policy.
+
+The prepared runtime is
+`configs/swe_verified_recovered_plan_ce2_v1_20260911.yaml`; its paired local
+supervisor is
+`configs/swe_verified_recovered_plan_ce2_supervisor_v1_20260911.yaml`. Each of
+the two Slurm array elements requests `1 CPU / 4G / 45min`, with three total
+operational attempts and five-minute supervisor polling. Preparation does not
+authorize launch.
