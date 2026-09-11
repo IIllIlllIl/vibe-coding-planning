@@ -3,6 +3,7 @@ from __future__ import annotations
 import hashlib
 import json
 from pathlib import Path
+import subprocess
 from types import SimpleNamespace
 
 import pytest
@@ -45,6 +46,27 @@ from scripts.tools.freeze_pcce_rejected_first_reviews import (
     freeze_rejected_first_reviews,
 )
 from scripts.tools.freeze_swe_verified_pce_selection import freeze_selection
+
+
+REPO_ROOT = Path(__file__).resolve().parents[1]
+
+
+def test_safe_pce_config_does_not_import_optional_gepa_runtime() -> None:
+    result = subprocess.run(
+        [
+            "python",
+            "-c",
+            (
+                "import sys; import src.swe_verified_pce.config; "
+                "assert 'gepa' not in sys.modules"
+            ),
+        ],
+        cwd=REPO_ROOT,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert result.returncode == 0, result.stderr
 
 
 def test_recovered_plan_executor_preloads_identity_bound_plan_checkpoint(
