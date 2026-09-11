@@ -32,6 +32,9 @@ tracked does not authorize its execution.
 | `polybench_ace_pcce_candidate3_balanced20_v1_20260911.yaml` | Prepared, launch-unauthorized Candidate-3 ACE-PCCE development contract on the frozen 10-resolved/10-unresolved selection. |
 | `polybench_ace_pcce_candidate3_smoke10_v1_20260911.yaml` | Completed 5-resolved/5-unresolved ACE-PCCE smoke contract; direct initial acceptance scheduled no CE. |
 | `polybench_ace_pcce_candidate3_smoke10_supervisor_v1_20260911.yaml` | Dedicated clean-worktree supervisor identity used for the completed ten-case smoke. |
+| `prompts/swe_verified_safe_pce_planner_v1_20260911.yaml` | Direct-terminal initial Planner prompt aligned with the ACE replanner's repository-grounded, standalone-Plan role; Plan text never traverses shell or tmp. |
+| `swe_verified_safe_pce_smoke_v1_20260911.yaml` | Prepared, launch-unauthorized two-case Safe PCE contract using direct `FINAL_PLAN` submission and the retained Verified Code/evaluator path. |
+| `swe_verified_safe_pce_smoke_supervisor_v1_20260911.yaml` | Dedicated, launch-unauthorized clean-worktree supervisor identity for the Safe PCE transport smoke. |
 | `frozen_swe_verified_playbook_gepa/20260909_clean444_25e5ce38271c/` | Eligibility-cleaned immutable Verified development snapshot with 444 cases and exhaustive exclusion/audit authorities. |
 | `gepa_verified_reject_playbook_smoke_v1_20260909.yaml` | Completed diagnostic 4-train/2-validation smoke; distributed execution worked, but Checker schema ambiguity and inline Reflection overflow prevented a proposal. |
 | `gepa_verified_reject_playbook_smoke_v2_20260910.yaml` | Repaired, launch-unauthorized successor with raw-completion checkpointing, Host-validation retry, repository-free evidence mounts, and a 128-token per-bullet validity cap. |

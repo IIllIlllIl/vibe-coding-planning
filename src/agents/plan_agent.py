@@ -1,11 +1,11 @@
 """Plan generation agent.
 
 Uses DefaultAgent's interactive step loop so the agent can explore the
-codebase (via cat, grep, ls, etc.) before producing the structured Plan
-text. The agent writes the plan to ``/tmp/plan.md`` and submits with
-``echo COMPLETE_TASK_AND_SUBMIT_FINAL_OUTPUT && cat /tmp/plan.md``;
-the host then reads the file directly so empty/whitespace plans surface
-as TaskError rather than silently passing downstream.
+codebase (via cat, grep, ls, etc.) before producing the structured Plan.
+Safe-PCE prompts terminate with a direct ``FINAL_PLAN`` response intercepted
+before the shell action parser. Legacy prompts may still submit through the
+ordinary mini-swe stdout marker and retain their historical phase-local-file
+preference for frozen-run compatibility.
 """
 
 from __future__ import annotations
@@ -26,6 +26,40 @@ from src.config import Config
 from src.exceptions import AgentTaskError, CommandTimeoutError
 
 logger = logging.getLogger(__name__)
+
+DIRECT_PLAN_MARKER = "FINAL_PLAN"
+_DIRECT_PLAN_PAYLOAD_PREFIX = "__VIBE_DIRECT_PLAN_V1__\n"
+
+PLAN_ACTION_PROTOCOL = """\
+## Planner action and final-submission protocol
+
+During repository exploration, return exactly one executable bash block per
+response. The parser executes the shell body captured from that block. Wait for
+its real observation before choosing the next action.
+
+When the Plan is complete, do not execute another command and do not write the
+Plan to a file. Return a terminal response whose first non-whitespace text is
+exactly `FINAL_PLAN` on its own line. Put the complete Plan directly after that
+line. A terminal response contains no bash action block. The Host intercepts it
+before shell parsing and preserves the remaining text verbatim.
+"""
+
+
+def _direct_plan_agent_class(default_agent: type, submitted: type) -> type:
+    """Add a Plan-only terminal response without changing mini-swe-agent."""
+
+    class DirectPlanAgent(default_agent):
+        def get_observation(self, response: dict[str, Any]) -> dict[str, Any]:
+            content = str(response.get("content", ""))
+            candidate = content.lstrip()
+            marker = DIRECT_PLAN_MARKER + "\n"
+            if candidate.startswith(marker):
+                plan = candidate[len(marker) :]
+                raise submitted(_DIRECT_PLAN_PAYLOAD_PREFIX + plan)
+            return super().get_observation(response)
+
+    DirectPlanAgent.__name__ = f"DirectPlan{default_agent.__name__}"
+    return DirectPlanAgent
 
 
 def _extract_result(agent: Any, exception_name: str, exception_msg: str) -> str | None:
@@ -71,6 +105,7 @@ def run(
     planning_rules: str = "",
     model_wrapper: Callable[[Any], Any] | None = None,
     failure_trajectory_path: Path | None = None,
+    require_direct_submission: bool = False,
 ) -> tuple[str, list[dict[str, Any]]]:
     """Run the plan generation agent.
 
@@ -96,6 +131,13 @@ def run(
         FatalError: If mini-swe-agent is not installed.
     """
     DefaultAgent, LitellmModel, _ = import_minisweagent()
+    from minisweagent.agents.default import Submitted
+
+    PlanAgent = (
+        _direct_plan_agent_class(DefaultAgent, Submitted)
+        if require_direct_submission
+        else DefaultAgent
+    )
 
     # Pass the raw system_template verbatim. The {{nrpv_block}} Jinja
     # placeholder is rendered at agent.run() time via the extra_template_vars
@@ -115,14 +157,18 @@ def run(
     if model_wrapper is not None:
         model = model_wrapper(model)
 
+    agent_kwargs: dict[str, Any] = {}
+    if require_direct_submission:
+        agent_kwargs["action_protocol"] = PLAN_ACTION_PROTOCOL
     agent = build_default_agent(
-        DefaultAgent,
+        PlanAgent,
         model=model,
         environment=env,
         system_template=system_template,
         step_limit=config.agent.max_steps,
         cost_limit=config.agent.cost_limit,
         instance_template=instance_template,
+        **agent_kwargs,
     )
 
     logger.info(
@@ -146,10 +192,33 @@ def run(
         ) from exc
     raise_for_permanent_provider_error(exception_name, exception_msg)
 
-    # Try to read plan from the file the agent wrote in the container
-    plan_text = _read_plan_from_file(env)
-    if plan_text is None:
-        plan_text = _extract_result(agent, exception_name, exception_msg)
+    submitted_text = _extract_result(agent, exception_name, exception_msg)
+    direct_submission = bool(
+        submitted_text is not None
+        and submitted_text.startswith(_DIRECT_PLAN_PAYLOAD_PREFIX)
+    )
+    if direct_submission:
+        # Safe PCE authority: exact model terminal text, intercepted before
+        # action parsing and therefore never reconstructed through /tmp.
+        plan_text = submitted_text[len(_DIRECT_PLAN_PAYLOAD_PREFIX) :]
+    elif require_direct_submission and exception_name == "Submitted":
+        _write_failure_trajectory(
+            failure_trajectory_path, agent.messages, exception_name, exception_msg
+        )
+        raise AgentTaskError(
+            "Planner used the legacy stdout submission path; Safe PCE requires "
+            "a direct FINAL_PLAN terminal response.",
+            phase="plan",
+            reason="plan_direct_submission_required",
+            trajectory=agent.messages,
+        )
+    else:
+        # Preserve legacy Online/GEPA/PCE semantics outside the explicitly
+        # fingerprinted Safe PCE protocol. Those frozen experiments preferred
+        # their phase-local file and are not silently migrated here.
+        plan_text = _read_plan_from_file(env)
+        if plan_text is None:
+            plan_text = submitted_text
 
     if not plan_text or not plan_text.strip():
         _write_failure_trajectory(

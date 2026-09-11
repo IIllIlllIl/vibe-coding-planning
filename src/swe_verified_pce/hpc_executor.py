@@ -83,6 +83,7 @@ def pce_semantic_sha256(
                 "sif_cache_dir": str(config.container.sif_cache_dir),
             },
             "slurm_evaluator_timeout_outcome": (config.slurm_evaluator_timeout_outcome),
+            "plan_submission_protocol": config.plan_submission_protocol,
             "prompts": {
                 "plan_system": config.plan_prompt,
                 "plan_instance": config.plan_instance_template,

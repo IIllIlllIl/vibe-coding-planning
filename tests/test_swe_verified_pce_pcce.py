@@ -123,6 +123,41 @@ def test_recovered_plan_ce2_config_binds_two_plans_and_supervisor() -> None:
         "scripts/hpc_submit_swe_verified_plan_ce_replay.sh"
     )
     assert "--require-clean-worktree" in arguments
+
+
+def test_safe_pce_smoke_uses_direct_plan_prompt_and_retained_code_prompt() -> None:
+    safe = load_swe_verified_pce_config(
+        "configs/swe_verified_safe_pce_smoke_v1_20260911.yaml",
+        require_api_keys=False,
+    )
+    retained = load_swe_verified_pce_config(
+        "configs/swe_verified_pce_smoke_v1.yaml",
+        require_api_keys=False,
+    )
+
+    assert "FINAL_PLAN" in safe.plan_prompt
+    assert "/tmp" not in safe.plan_prompt
+    assert safe.plan_submission_protocol == "direct_final_plan_v1"
+    assert retained.plan_submission_protocol == "legacy_stdout_v1"
+    assert safe.code_prompt == retained.code_prompt
+    assert safe.code_instance_template == retained.code_instance_template
+    assert safe.nrpv_block == retained.nrpv_block
+    assert safe.instance_ids == retained.instance_ids
+    assert safe.run_dir != retained.run_dir
+    assert safe.hpc.worker_config_path.endswith(
+        "swe_verified_safe_pce_smoke_v1_20260911.yaml"
+    )
+
+    supervisor = yaml.safe_load(
+        Path(
+            "configs/swe_verified_safe_pce_smoke_supervisor_v1_20260911.yaml"
+        ).read_text()
+    )
+    arguments = supervisor["arguments"]
+    assert "--require-clean-worktree" in arguments
+    assert arguments[arguments.index("--config") + 1] == (
+        "configs/swe_verified_safe_pce_smoke_v1_20260911.yaml"
+    )
 from scripts.tools.freeze_pcce_rejected_first_reviews import (
     freeze_rejected_first_reviews,
 )

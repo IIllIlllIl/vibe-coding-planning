@@ -213,6 +213,7 @@ def build_default_agent(
     step_limit: int | None,
     cost_limit: float | None = None,
     instance_template: str | None = None,
+    action_protocol: str = DEFAULT_ACTION_PROTOCOL,
 ) -> Any:
     """Build a DefaultAgent with explicit config kwargs.
 
@@ -260,7 +261,7 @@ def build_default_agent(
     """
     kwargs: dict[str, Any] = {
         "system_template": (
-            f"{system_template.rstrip()}\n\n{DEFAULT_ACTION_PROTOCOL}"
+            f"{system_template.rstrip()}\n\n{action_protocol}"
         ),
         "format_error_template": DEFAULT_FORMAT_ERROR_TEMPLATE,
     }

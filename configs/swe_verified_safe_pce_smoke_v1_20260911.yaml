@@ -1,0 +1,80 @@
+# Prepared two-case development smoke. Presence does not authorize launch.
+mode: swe_verified_pce
+purpose: safe_plan_artifact_development_smoke
+
+paths:
+  dataset_snapshot: output/SWE-bench_Verified/swe-verified-pce-inputs/20260831_verified500_91aa3ed5
+  image_manifest: output/SWE-bench_Verified/swe-verified-pce-inputs/20260831_verified500_91aa3ed5/images.json
+  selection_manifest: configs/frozen_swe_verified_smoke/swe-verified-development-smoke-v1.json
+  prompt_source_config: configs/polybench_pce_hpc_formal_clean_20260825.yaml
+  plan_prompt_source_config: configs/prompts/swe_verified_safe_pce_planner_v1_20260911.yaml
+  run_dir: output/SWE-bench_Verified/swe-verified-pce-runs/development/safe-plan-artifact-smoke-v1-20260911
+
+plan:
+  model: deepseek-v4-flash
+  api_base: https://api.deepseek.com
+  api_key_env: DEEPSEEK_API_KEY
+  temperature: 0.0
+  max_steps: 0
+  cost_limit: 0.0
+  timeout: 1800
+  max_attempts: 3
+  submission_protocol: direct_final_plan_v1
+
+code:
+  model: deepseek-v4-flash
+  api_base: https://api.deepseek.com
+  api_key_env: DEEPSEEK_API_KEY
+  temperature: 0.0
+  max_steps: 0
+  cost_limit: 0.0
+  timeout: 1800
+  max_attempts: 3
+
+docker:
+  workdir: /testbed
+  timeout: 1800
+  min_free_gb: 20
+  max_cached_images: 75
+
+container:
+  runtime: apptainer
+  module: tools/Apptainer
+  sif_cache_dir: /scratch/users/${USER}/vibe-coding-planning/shared/sif-cache
+  writable_tmpfs: true
+
+hpc:
+  submit: true
+  partition: batch
+  cpus_per_task: 1
+  mem: 4G
+  time: "00:45:00"
+  poll_interval_seconds: 300
+  task_output_grace_seconds: 300
+  missing_task_grace_seconds: 600
+  max_task_attempts: 3
+  remote_env_file: ~/.config/vibe-coding-planning/deepseek.env
+  python_module: lang/Python/3.11
+  container_module: tools/Apptainer
+  python_bin: python3
+  job_name_prefix: swe-verified-safe-pce-smoke-v1-20260911
+  worker_config_path: configs/swe_verified_safe_pce_smoke_v1_20260911.yaml
+
+evaluator:
+  slurm_timeout_outcome: unknown
+
+experiment_contract:
+  selected_cases: 2
+  selection: frozen_historical_development_smoke
+  plan_authority: direct_model_terminal_response_after_FINAL_PLAN
+  planner_tmp_transfer: forbidden
+  coder_inputs:
+    - issue_text
+    - exact_checkpointed_plan_text
+  success_criteria:
+    - both Planner terminal responses start with FINAL_PLAN and contain no bash action
+    - exact Markdown code fences and shell-sensitive text survive the Plan checkpoint
+    - Coder receives the exact checkpointed Plan text and no Planner workspace or tmp file
+    - both cases reach a terminal evaluator outcome without operationally incomplete phases
+  stopping: finish_both_cases_or_report_operational_incomplete
+  launched: false

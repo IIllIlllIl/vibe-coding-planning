@@ -292,8 +292,26 @@ class SWEVerifiedPCERunner:
                         },
                     ),
                     failure_trajectory_path=self.attempt_dir / "plan_failure.json",
+                    require_direct_submission=(
+                        getattr(
+                            self.config,
+                            "plan_submission_protocol",
+                            "legacy_stdout_v1",
+                        )
+                        == "direct_final_plan_v1"
+                    ),
                 )
-                plan_checkpoint = {"plan": plan, "trajectory": list(trajectory)}
+                submission_protocol = getattr(
+                    self.config,
+                    "plan_submission_protocol",
+                    "legacy_stdout_v1",
+                )
+                plan_checkpoint = {
+                    "plan": plan,
+                    "plan_sha256": hashlib.sha256(plan.encode()).hexdigest(),
+                    "submission_protocol": submission_protocol,
+                    "trajectory": list(trajectory),
+                }
                 self._save_checkpoint("plan", plan_checkpoint)
             finally:
                 self._best_effort_environment_cleanup(env, phase="plan")
@@ -301,6 +319,12 @@ class SWEVerifiedPCERunner:
 
         code_checkpoint = self._checkpoint("code")
         if code_checkpoint is None:
+            plan_text = str(plan_checkpoint["plan"])
+            recorded_plan_sha256 = plan_checkpoint.get("plan_sha256")
+            if recorded_plan_sha256 is not None and recorded_plan_sha256 != (
+                hashlib.sha256(plan_text.encode()).hexdigest()
+            ):
+                raise FatalError("PCE Plan checkpoint content hash mismatch")
             code_workspace = self.attempt_dir / "workspaces" / "code"
             self._cleanup(code_workspace)
             env = self._environment(
@@ -327,7 +351,7 @@ class SWEVerifiedPCERunner:
                 )
                 raw_patch, trajectory = code_agent.run(
                     code_config,
-                    str(plan_checkpoint["plan"]),
+                    plan_text,
                     case.issue_description,
                     env,
                     model_wrapper=lambda model: AuditedModel(

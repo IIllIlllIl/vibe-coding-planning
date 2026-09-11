@@ -58,6 +58,14 @@ class MockDefaultAgentSpaces(MockDefaultAgent):
         return ("Submitted", "  plan with spaces  ")
 
 
+class MockDefaultAgentDirect(MockDefaultAgent):
+    def run(self, **kwargs):
+        MockDefaultAgent.last_run_kwargs = kwargs
+        plan = "# Plan\n\n```python\nprint('$() and `ticks`')\n```"
+        self.messages[-1]["content"] = "FINAL_PLAN\n" + plan
+        return ("Submitted", plan_agent._DIRECT_PLAN_PAYLOAD_PREFIX + plan)
+
+
 class MockDefaultAgentLimitExceeded(MockDefaultAgent):
     """Simulates step-limit exhaustion — falls back to last assistant message."""
 
@@ -137,6 +145,40 @@ class TestRunSuccess:
         plan, _ = plan_agent.run(config, "Fix parser bug", mock_env)
         assert plan == "plan with spaces"
 
+    def test_direct_plan_terminal_preserves_markdown_without_shell(self):
+        class SubmittedForTest(Exception):
+            pass
+
+        class BaseAgent:
+            def get_observation(self, _response):
+                raise AssertionError("shell parser must not receive FINAL_PLAN")
+
+        agent = plan_agent._direct_plan_agent_class(
+            BaseAgent, SubmittedForTest
+        )()
+        text = "# Plan\n\n```python\nprint('$() and `ticks`')\n```\n"
+        with pytest.raises(SubmittedForTest) as raised:
+            agent.get_observation({"content": "FINAL_PLAN\n" + text})
+
+        assert str(raised.value) == (
+            plan_agent._DIRECT_PLAN_PAYLOAD_PREFIX + text
+        )
+
+    def test_nonterminal_response_still_uses_shell_action_path(self):
+        class SubmittedForTest(Exception):
+            pass
+
+        class BaseAgent:
+            def get_observation(self, response):
+                return {"received": response["content"]}
+
+        agent = plan_agent._direct_plan_agent_class(
+            BaseAgent, SubmittedForTest
+        )()
+        assert agent.get_observation({"content": "```bash\npwd\n```"}) == {
+            "received": "```bash\npwd\n```"
+        }
+
     @patch("src.agents.plan_agent.import_minisweagent")
     def test_limit_exceeded_raises_task_error(self, mock_import, config, mock_env):
         """When DefaultAgent hits a limit without submitting, raise TaskError."""
@@ -144,8 +186,67 @@ class TestRunSuccess:
         with pytest.raises(TaskError, match="terminated without a submission"):
             plan_agent.run(config, "Fix parser bug", mock_env)
 
+    @patch("src.agents.plan_agent.import_minisweagent")
+    def test_safe_pce_requires_direct_terminal_submission(
+        self, mock_import, config, mock_env
+    ):
+        mock_import.return_value = (MockDefaultAgent, MockLiteLLMModel, object)
+        with pytest.raises(TaskError, match="direct FINAL_PLAN"):
+            plan_agent.run(
+                config,
+                "Fix parser bug",
+                mock_env,
+                require_direct_submission=True,
+            )
+
+    @patch("src.agents.plan_agent.import_minisweagent")
+    def test_safe_pce_returns_exact_direct_plan(
+        self, mock_import, config, mock_env
+    ):
+        mock_import.return_value = (
+            MockDefaultAgentDirect,
+            MockLiteLLMModel,
+            object,
+        )
+        plan, _ = plan_agent.run(
+            config,
+            "Fix parser bug",
+            mock_env,
+            require_direct_submission=True,
+        )
+        assert plan == "# Plan\n\n```python\nprint('$() and `ticks`')\n```"
+        system = MockDefaultAgent.last_kwargs["system_template"]
+        assert "Planner action and final-submission protocol" in system
+        assert "Mini-swe action protocol" not in system
+
 
 class TestRunValidation:
+    @patch("src.agents.plan_agent.import_minisweagent")
+    def test_submitted_plan_cannot_be_overridden_by_tmp_file(
+        self, mock_import, config
+    ):
+        mock_import.return_value = (
+            MockDefaultAgentDirect,
+            MockLiteLLMModel,
+            object,
+        )
+
+        class Environment:
+            def execute(self, _command):
+                return {
+                    "returncode": 0,
+                    "stdout": "corrupted temporary Plan",
+                    "stderr": "",
+                }
+
+        plan, _ = plan_agent.run(
+            config,
+            "Fix parser bug",
+            Environment(),
+            require_direct_submission=True,
+        )
+        assert plan == "# Plan\n\n```python\nprint('$() and `ticks`')\n```"
+
     def test_plan_artifact_uses_stdout_not_apptainer_stderr(self):
         class Environment:
             def execute(self, _command):

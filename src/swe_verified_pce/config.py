@@ -34,6 +34,7 @@ class SWEVerifiedPCEConfig:
     code_instance_template: str
     nrpv_block: str
     slurm_evaluator_timeout_outcome: str
+    plan_submission_protocol: str
 
 
 def _mapping(value: Any, name: str) -> dict[str, Any]:
@@ -79,6 +80,15 @@ def load_swe_verified_pce_config(
 
     paths = _mapping(raw.get("paths"), "paths")
     plan = _model(_mapping(raw.get("plan"), "plan"), temperature=0.0)
+    plan_raw = _mapping(raw.get("plan"), "plan")
+    plan_submission_protocol = str(
+        plan_raw.get("submission_protocol", "legacy_stdout_v1")
+    )
+    if plan_submission_protocol not in {
+        "legacy_stdout_v1",
+        "direct_final_plan_v1",
+    }:
+        raise ValueError("unsupported SWE-Verified Plan submission protocol")
     code = _model(_mapping(raw.get("code"), "code"), temperature=0.0)
     for model in (plan, code):
         if require_api_keys and not os.environ.get(model.api_key_env):
@@ -92,6 +102,22 @@ def load_swe_verified_pce_config(
         prompts = _mapping(prompt_raw.get("prompts"), "prompt source prompts")
     else:
         prompts = _mapping(raw.get("prompts"), "prompts")
+    plan_prompt_source = paths.get("plan_prompt_source_config")
+    if plan_prompt_source:
+        plan_prompt_raw = (
+            yaml.safe_load(
+                resolve(str(plan_prompt_source)).read_text(encoding="utf-8")
+            )
+            or {}
+        )
+        plan_prompts = _mapping(
+            plan_prompt_raw.get("prompts"), "plan prompt source prompts"
+        )
+        prompts = {
+            **prompts,
+            "plan_system": str(plan_prompts["plan_system"]),
+            "plan_instance": str(plan_prompts["plan_instance"]),
+        }
     container_raw = _mapping(raw.get("container"), "container")
     hpc_raw = _mapping(raw.get("hpc"), "hpc")
     evaluator_raw = _mapping(raw.get("evaluator"), "evaluator")
@@ -191,4 +217,5 @@ def load_swe_verified_pce_config(
         code_instance_template=str(prompts["code_instance"]),
         nrpv_block=str(prompts.get("nrpv_block", "")),
         slurm_evaluator_timeout_outcome=slurm_evaluator_timeout_outcome,
+        plan_submission_protocol=plan_submission_protocol,
     )

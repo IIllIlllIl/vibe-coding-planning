@@ -241,3 +241,47 @@ from historical PCE-unresolved to resolved under an independent Code sample
 from the recovered Plan. This is evidence that the shell-corrupted Plan was a
 material data defect; it is not Checker-mediated U-to-R evidence and does not
 replace either historical label.
+
+## Safe PCE Plan-artifact boundary
+
+The prepared Safe PCE successor retains the Verified source/SIF authorities,
+one-case-per-array-worker execution, phase-local Apptainer workspaces,
+base-commit restoration, atomic Plan/Code/Evaluate checkpoints, bounded task
+attempts, and official evaluator. It changes the Planner artifact boundary;
+it does not reinterpret or resume the historical PCE run.
+
+During repository exploration the Planner continues to issue one ordinary
+shell action at a time. At completion it returns `FINAL_PLAN` on its own line
+followed directly by the standalone Markdown Plan. A project-local
+DefaultAgent adapter recognizes that terminal response before the shell action
+parser, so Plan code fences, backticks, `$()` expressions, quotes, and Jinja
+fragments are never executed or reconstructed through a shell command. No
+third-party source is modified.
+
+The marker-stripped text is the Plan authority. Safe PCE rejects a legacy
+stdout/file submission and retries the Planner; a temporary file can never
+override submitted text. The atomic Plan checkpoint records the exact text,
+its SHA-256, the direct-submission protocol, and the raw trajectory. Before
+Code starts, the Host verifies the stored hash. Code then receives only the
+issue and that exact Plan string in a fresh base-commit workspace; no Planner
+workspace, environment variable, or `/tmp` artifact crosses the phase
+boundary.
+
+Initial Safe PCE planning and ACE-PCCE replanning now share the same core role:
+independently inspect repository evidence, preserve the issue objective, and
+produce a complete standalone Plan with implementation locations, behavioral
+changes, compatibility constraints, and focused validation. Their task-local
+differences remain explicit: initial planning has no developer concerns and
+returns only a Plan, whereas ACE replanning answers active concerns as well as
+returning the revised Plan.
+
+The launch-unauthorized two-case contract is
+`configs/swe_verified_safe_pce_smoke_v1_20260911.yaml`, its Planner prompt is
+`configs/prompts/swe_verified_safe_pce_planner_v1_20260911.yaml`, and its
+supervisor is
+`configs/swe_verified_safe_pce_smoke_supervisor_v1_20260911.yaml`. It reuses
+the already outcome-exposed historical development-smoke membership solely to
+test transport and execution. A successful smoke requires direct terminal
+responses, exact preservation through the Plan checkpoint and Code handoff,
+and two operationally complete evaluator outcomes; it makes no quality or
+generalization claim.
