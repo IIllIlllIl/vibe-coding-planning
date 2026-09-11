@@ -267,6 +267,17 @@ issue and that exact Plan string in a fresh base-commit workspace; no Planner
 workspace, environment variable, or `/tmp` artifact crosses the phase
 boundary.
 
+Safe PCE Plan and Code workspaces keep network access for development
+diagnostics, but the Apptainer execution boundary rejects remote Git
+operations (`clone`, `fetch`, `pull`, `ls-remote`, `remote update`, and remote
+submodule update). Local history already present at the frozen base commit
+remains available. Both prompts direct the Agent to use the SIF's existing
+project environment, trying `/opt/miniconda3/envs/testbed/bin/python` first,
+and prohibit installing or upgrading the target repository. This is a
+conservative accidental-leakage blacklist, not a complete network-isolation
+claim; future smoke evidence must record any blocked command and any remaining
+package/network behavior.
+
 Initial Safe PCE planning and ACE-PCCE replanning now share the same core role:
 independently inspect repository evidence, preserve the issue objective, and
 produce a complete standalone Plan with implementation locations, behavioral

@@ -37,6 +37,15 @@ prompts:
     questions, not authoritative findings. Independently inspect the repository
     and decide whether each concern is correct.
 
+    Use the project environment already provided in the SIF when reproducing
+    behavior or running tests. First try
+    `/opt/miniconda3/envs/testbed/bin/python` and its corresponding tools; if
+    that path is unavailable, inspect the existing environments before
+    concluding that a dependency is missing. Do not install or upgrade the
+    target repository from the network. Remote Git operations such as clone,
+    fetch, pull, and ls-remote are unavailable. You may inspect the local Git
+    history already present at the frozen base commit.
+
     Answer the concerns with concrete repository evidence. If a concern exposes
     a real deficiency, revise the Plan to fix it. If it is unsupported, explain
     why and retain the sound parts of the Plan. The original issue remains the

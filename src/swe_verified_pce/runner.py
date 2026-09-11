@@ -142,6 +142,7 @@ class SWEVerifiedPCERunner:
             host_workdir=host_workdir,
             initialize_host_workdir=host_workdir is not None,
             isolate_tmp=True,
+            block_git_remote_operations=True,
         )
 
     @staticmethod

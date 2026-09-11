@@ -207,6 +207,7 @@ class SWEVerifiedPCCERunner:
             host_workdir=host_workdir,
             initialize_host_workdir=True,
             isolate_tmp=True,
+            block_git_remote_operations=True,
         )
 
     def _cleanup_workspace(self, path: Path, *, phase: str) -> None:

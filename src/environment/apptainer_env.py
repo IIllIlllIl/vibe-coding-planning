@@ -25,6 +25,61 @@ from src.exceptions import CommandTimeoutError, FatalError
 logger = logging.getLogger(__name__)
 
 
+def _blocked_git_remote_operation(command: str) -> str | None:
+    """Return the disallowed remote Git operation in an Agent shell command."""
+
+    try:
+        lexer = shlex.shlex(command, posix=True, punctuation_chars=";&|()")
+        lexer.whitespace_split = True
+        tokens = list(lexer)
+    except ValueError:
+        # Let bash report malformed quoting; this policy is not a shell parser.
+        return None
+
+    separators = {";", "&&", "||", "|", "&", "(", ")"}
+    start = 0
+    for end in range(len(tokens) + 1):
+        if end < len(tokens) and tokens[end] not in separators:
+            continue
+        segment = tokens[start:end]
+        start = end + 1
+        for index, token in enumerate(segment):
+            if Path(token).name != "git":
+                continue
+            args = segment[index + 1 :]
+            cursor = 0
+            while cursor < len(args):
+                arg = args[cursor]
+                if arg in {"-C", "-c", "--git-dir", "--work-tree", "--namespace"}:
+                    cursor += 2
+                    continue
+                if arg.startswith(("--git-dir=", "--work-tree=", "--namespace=")):
+                    cursor += 1
+                    continue
+                if arg.startswith("-"):
+                    cursor += 1
+                    continue
+                if arg in {"clone", "fetch", "pull", "ls-remote"}:
+                    return arg
+                remaining = args[cursor + 1 :]
+                if arg == "remote":
+                    remote_action = next(
+                        (item for item in remaining if not item.startswith("-")),
+                        None,
+                    )
+                    if remote_action == "update":
+                        return "remote update"
+                if arg == "submodule" and "--remote" in remaining:
+                    submodule_action = next(
+                        (item for item in remaining if not item.startswith("-")),
+                        None,
+                    )
+                    if submodule_action == "update":
+                        return "submodule update --remote"
+                break
+    return None
+
+
 def _image_to_sif_name(image: str) -> str:
     """Map a Docker image reference to a safe SIF file name.
 
@@ -165,6 +220,7 @@ class ApptainerEnvironment:
         host_workdir: Path | None = None,
         initialize_host_workdir: bool = True,
         isolate_tmp: bool = False,
+        block_git_remote_operations: bool = False,
     ) -> None:
         self._image = image
         self._cwd = cwd
@@ -180,6 +236,7 @@ class ApptainerEnvironment:
         self._host_workdir = Path(host_workdir) if host_workdir is not None else None
         self._initialize_host_workdir = initialize_host_workdir
         self._isolate_tmp = isolate_tmp
+        self._block_git_remote_operations = block_git_remote_operations
         self._isolated_tmp: tempfile.TemporaryDirectory[str] | None = None
 
         self._cache = ApptainerSifCache(sif_cache_dir, capacity_window)
@@ -356,6 +413,20 @@ class ApptainerEnvironment:
         timeout: int | None = None,
     ) -> dict[str, Any]:
         """Execute a shell command inside the Apptainer container."""
+        blocked_operation = _blocked_git_remote_operation(command)
+        if self._block_git_remote_operations and blocked_operation is not None:
+            message = (
+                "Command blocked by the experiment boundary: remote Git "
+                f"operation 'git {blocked_operation}' is unavailable. Inspect "
+                "the repository and history already present at the frozen base "
+                "commit instead.\n"
+            )
+            return {
+                "output": message,
+                "stdout": "",
+                "stderr": message,
+                "returncode": 126,
+            }
         actual_cwd = cwd or self._cwd
         effective_timeout = timeout if timeout is not None else self._timeout
         args = self._build_args(actual_cwd, command, effective_timeout)

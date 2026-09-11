@@ -451,6 +451,13 @@ that remains explicit in the current Plan. Only an all-`cleared` result enters
 Code; unresolved concerns and their distinct statuses remain durable input to
 the next dialogue turn.
 
+The repository-aware revision and Code phases use the same conservative Agent
+environment policy as Safe PCE: use the existing SIF project environment,
+permit local base-commit history, and reject remote Git acquisition at the
+Apptainer command boundary. Checker phases remain repository-free. The policy
+does not disable all networking and therefore must not be described as strict
+network isolation.
+
 Direct first-review acceptance is not an intervention and therefore does not
 resample Code. Its frozen paired PCE outcome is carried forward with
 `method_status=completed_no_intervention` and

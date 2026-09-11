@@ -137,6 +137,10 @@ def test_safe_pce_smoke_uses_direct_plan_prompt_and_retained_code_prompt() -> No
 
     assert "FINAL_PLAN" in safe.plan_prompt
     assert "/tmp" not in safe.plan_prompt
+    assert "/opt/miniconda3/envs/testbed/bin/python" in safe.plan_prompt
+    assert "Remote Git operations" in safe.plan_prompt
+    assert "/opt/miniconda3/envs/testbed/bin/python" in safe.code_prompt
+    assert "Remote Git operations" in safe.code_prompt
     assert safe.plan_submission_protocol == "direct_final_plan_v1"
     assert retained.plan_submission_protocol == "legacy_stdout_v1"
     assert safe.code_prompt == retained.code_prompt
@@ -147,6 +151,25 @@ def test_safe_pce_smoke_uses_direct_plan_prompt_and_retained_code_prompt() -> No
     assert safe.hpc.worker_config_path.endswith(
         "swe_verified_safe_pce_smoke_v1_20260911.yaml"
     )
+
+
+def test_safe_pce_boundary_smoke_freezes_case8_and_git_boundary_probe() -> None:
+    config = load_swe_verified_pce_config(
+        "configs/swe_verified_safe_pce_boundary_smoke_v2_20260911.yaml",
+        require_api_keys=False,
+    )
+
+    assert config.instance_ids == (
+        "astropy__astropy-13033",
+        "django__django-10097",
+    )
+    assert config.plan_submission_protocol == "direct_final_plan_v1"
+    assert config.run_dir.name == "safe-boundary-smoke-v2-20260911"
+    assert config.hpc.worker_config_path.endswith(
+        "swe_verified_safe_pce_boundary_smoke_v2_20260911.yaml"
+    )
+    assert "/opt/miniconda3/envs/testbed/bin/python" in config.plan_prompt
+    assert "/opt/miniconda3/envs/testbed/bin/python" in config.code_prompt
 
     supervisor = yaml.safe_load(
         Path(
@@ -210,8 +233,10 @@ def test_swe_verified_agent_environments_isolate_tmp(tmp_path, monkeypatch):
 
     assert pce_observed["run_args"] == ["--containall"]
     assert pce_observed["isolate_tmp"] is True
+    assert pce_observed["block_git_remote_operations"] is True
     assert pcce_observed["run_args"] == ["--containall"]
     assert pcce_observed["isolate_tmp"] is True
+    assert pcce_observed["block_git_remote_operations"] is True
 
 
 def test_verified_revision_plan_config_uses_canonical_dataset_without_pce_field(

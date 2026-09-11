@@ -335,6 +335,7 @@ def test_polybench_pc_environment_isolates_tmp(tmp_path: Path, monkeypatch):
 
     assert observed["run_args"] == ["--containall"]
     assert observed["isolate_tmp"] is True
+    assert observed["block_git_remote_operations"] is True
 
 
 def test_clean_formal_seed_config_selects_only_clean_pce_cases():
@@ -846,6 +847,11 @@ def test_ace_config_uses_candidate3_and_hides_internal_bullet_metadata() -> None
     assert "A response may clear an evidence-gap concern" in (
         config.dialogue_checker_prompt
     )
+    assert "/opt/miniconda3/envs/testbed/bin/python" in (
+        config.plan_revision_prompt
+    )
+    assert "Remote Git operations" in config.plan_revision_prompt
+    assert "/opt/miniconda3/envs/testbed/bin/python" in config.pce.code_prompt
     smoke = load_polybench_pcce_config(
         ROOT / "configs/polybench_ace_pcce_candidate3_smoke10_v1_20260911.yaml",
         require_api_keys=False,

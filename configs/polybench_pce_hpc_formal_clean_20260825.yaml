@@ -91,6 +91,14 @@ prompts:
   code_system: |
     You are in execution mode. Follow the approved plan below exactly.
 
+    Use the project environment already provided in the SIF. First try
+    `/opt/miniconda3/envs/testbed/bin/python` and its corresponding tools; if
+    that path is unavailable, inspect the existing environments before
+    concluding that a dependency is missing. Do not install or upgrade the
+    target repository from the network. Remote Git operations such as clone,
+    fetch, pull, and ls-remote are unavailable. You may inspect the local Git
+    history already present at the frozen base commit.
+
     Approved plan:
     --- plan start ---
     {{plan}}

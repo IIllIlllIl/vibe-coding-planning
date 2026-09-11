@@ -1,0 +1,30 @@
+{
+  "schema_version": 1,
+  "selection_id": "swe-verified-safe-pce-boundary-smoke-v2-20260911",
+  "purpose": "development_only_safe_plan_transport_environment_and_git_boundary_smoke",
+  "dataset": "SWE-bench/SWE-bench_Verified",
+  "dataset_revision": "91aa3ed51b709be6457e12d00300a6a596d4c6a3",
+  "source_manifest_sha256": "bec1150dbf55c29c0893226c20578bee031406d78db305cdfef7b2b80965143a",
+  "selected_instance_ids": [
+    "astropy__astropy-13033",
+    "django__django-10097"
+  ],
+  "selected_rows": [
+    {
+      "instance_id": "astropy__astropy-13033",
+      "row_sha256": "6d9e2cb53d09e7548b95f959d73521f6fcd48f28234e6bb17525c68b7610c665",
+      "coverage": "historical_case8_plan_transport_corruption"
+    },
+    {
+      "instance_id": "django__django-10097",
+      "row_sha256": "70d53e3e16a583329df18e6f0182ffca620777a69025806b8d6ac2c08c804356",
+      "coverage": "prior_git_fetch_attempt_and_base_python_dependency_install"
+    }
+  ],
+  "selection_policy": {
+    "fixed_before_runtime": true,
+    "development_only": true,
+    "outcome_exposed": true,
+    "quality_or_generalization_claim": false
+  }
+}

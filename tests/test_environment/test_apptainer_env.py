@@ -163,7 +163,13 @@ def test_environment_pulls_missing_sif_on_demand(tmp_path, monkeypatch):
     assert env._sif_path.exists()
 
 
-def _make_env(cache_dir: Path, *, network_disabled: bool = False, run_args=None):
+def _make_env(
+    cache_dir: Path,
+    *,
+    network_disabled: bool = False,
+    block_git_remote_operations: bool = False,
+    run_args=None,
+):
     cache_dir.mkdir(parents=True, exist_ok=True)
     sif = cache_dir / "python_3.12-slim.sif"
     sif.write_text("sif", encoding="utf-8")
@@ -173,6 +179,7 @@ def _make_env(cache_dir: Path, *, network_disabled: bool = False, run_args=None)
         sif_cache_dir=cache_dir,
         capacity_window=_TrackingCapacityWindow(),
         network_disabled=network_disabled,
+        block_git_remote_operations=block_git_remote_operations,
         run_args=run_args,
     )
 
@@ -260,6 +267,58 @@ def test_environment_applies_network_and_run_args(tmp_path, monkeypatch):
     assert "none" in args
     bind_index = args.index("--bind")
     assert args[bind_index + 1] == "/host:/container:ro"
+
+
+def test_environment_blocks_remote_git_but_allows_local_history(tmp_path, monkeypatch):
+    cache_dir = tmp_path / "sifs"
+    calls = []
+
+    def fake_run(args, **kwargs):
+        calls.append(args)
+        return subprocess.CompletedProcess(
+            args, returncode=0, stdout="local history", stderr=""
+        )
+
+    monkeypatch.setattr(subprocess, "run", fake_run)
+    env = _make_env(cache_dir, block_git_remote_operations=True)
+    calls.clear()
+
+    allowed = env.execute("git log --oneline -5")
+    blocked = env.execute("cd /testbed && git -C . fetch origin main")
+
+    assert allowed["returncode"] == 0
+    assert allowed["stdout"] == "local history"
+    assert blocked["returncode"] == 126
+    assert "git fetch" in blocked["stderr"]
+    assert len(calls) == 1
+
+
+@pytest.mark.parametrize(
+    "command",
+    [
+        "git clone https://example.invalid/repo.git",
+        "git pull --ff-only",
+        "git ls-remote origin",
+        "git remote update",
+        "git submodule update --remote",
+    ],
+)
+def test_environment_blocks_each_remote_git_form(command, tmp_path, monkeypatch):
+    cache_dir = tmp_path / "sifs"
+    calls = []
+    monkeypatch.setattr(
+        subprocess,
+        "run",
+        lambda args, **kwargs: calls.append(args)
+        or subprocess.CompletedProcess(args, returncode=0, stdout="", stderr=""),
+    )
+    env = _make_env(cache_dir, block_git_remote_operations=True)
+    calls.clear()
+
+    result = env.execute(command)
+
+    assert result["returncode"] == 126
+    assert calls == []
 
 
 def test_environment_host_workdir_is_initialized_and_bound(tmp_path, monkeypatch):
