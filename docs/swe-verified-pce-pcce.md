@@ -229,10 +229,15 @@ label nor represents Checker-mediated improvement. Operational failure remains
 distinct from unresolved, and exhausted evidenced evaluator timeouts retain the
 existing `unknown` policy.
 
-The prepared runtime is
+The runtime is
 `configs/swe_verified_recovered_plan_ce2_v1_20260911.yaml`; its paired local
 supervisor is
 `configs/swe_verified_recovered_plan_ce2_supervisor_v1_20260911.yaml`. Each of
 the two Slurm array elements requests `1 CPU / 4G / 45min`, with three total
-operational attempts and five-minute supervisor polling. Preparation does not
-authorize launch.
+operational attempts and five-minute supervisor polling. The authorized replay
+completed both cases on 2026-09-11 with two terminal `resolved` outcomes and no
+operationally incomplete case. In particular, `astropy__astropy-14539` changed
+from historical PCE-unresolved to resolved under an independent Code sample
+from the recovered Plan. This is evidence that the shell-corrupted Plan was a
+material data defect; it is not Checker-mediated U-to-R evidence and does not
+replace either historical label.

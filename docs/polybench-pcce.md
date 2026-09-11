@@ -465,11 +465,22 @@ development selection, not a claim that it improved the asymmetric scalar
 objective: the Seed remained scalar-best. The budget-reduced development
 contract uses a deterministic 10-resolved / 10-unresolved subset of
 balanced40. Its smoke halves that again to five resolved and five unresolved
-cases while remaining a strict subset of the 20-case run. The prepared,
-launch-unauthorized configs are
-`configs/polybench_ace_pcce_candidate3_balanced20_v1_20260911.yaml` and
+cases while remaining a strict subset of the 20-case run. The 20-case config
+`configs/polybench_ace_pcce_candidate3_balanced20_v1_20260911.yaml` remains
+launch-unauthorized. The authorized smoke used
 `configs/polybench_ace_pcce_candidate3_smoke10_v1_20260911.yaml`, with prompt
 authority `configs/prompts/polybench_ace_pcce_v1_20260911.yaml`.
+
+The smoke completed all ten cases on 2026-09-11 without an operationally
+incomplete case. Initial review accepted seven Plans; the Host reused their
+paired historical PCE outcomes and scheduled no Code execution. Three Plans
+triggered one rule each, received a repository-aware Planner response and
+complete revised Plan, were cleared by the Dialogue Checker on review 2, and
+then ran Code and evaluation. The terminal transition table was `R->R=5` and
+`U->U=5`, with no `U->R` or `R->U`. Thus the smoke validates distributed
+branching, information isolation, checkpoint/resume, dialogue artifacts, and
+the no-intervention/no-resampling policy; it provides no intervention-benefit
+claim. The full 20-case development run remains unlaunched.
 
 The new runtime is
 `configs/polybench_pcce_hpc_formal_seed_clean_20260826.yaml`, its supervisor is
