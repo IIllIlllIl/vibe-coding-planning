@@ -8,6 +8,7 @@ import time
 from pathlib import Path
 
 from scripts.hpc_resume_loop import (
+    REMOTE_EMBEDDED_PYTHON,
     _remote_run_snapshot,
     _repo_relative,
     _with_default_remote_paths,
@@ -17,6 +18,10 @@ from scripts.hpc_resume_loop import (
 REPO_ROOT = Path(__file__).resolve().parents[2]
 SCRIPT = REPO_ROOT / "scripts" / "hpc_resume_loop.py"
 SERVICE_SCRIPT = REPO_ROOT / "scripts" / "hpc_supervisor_service.py"
+
+
+def test_embedded_remote_modules_use_modern_iris_python() -> None:
+    assert REMOTE_EMBEDDED_PYTHON == "python3.11"
 
 
 def test_repo_relative_preserves_worktree_local_symlink(tmp_path: Path) -> None:

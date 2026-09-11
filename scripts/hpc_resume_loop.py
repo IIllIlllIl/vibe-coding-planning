@@ -32,6 +32,10 @@ OFFLINE_TARGET_EXTENSION_SCRIPT = (
     REPO_ROOT / "scripts" / "internal" / "offline_iteration_target.py"
 )
 HPC_RUNTIME_SCRIPT = REPO_ROOT / "scripts" / "hpc_runtime.py"
+# Iris exposes Python 3.6 as ``python3`` on non-interactive login shells.  The
+# shared lifecycle modules use current Python syntax, so embedded module calls
+# must select the available modern interpreter explicitly.
+REMOTE_EMBEDDED_PYTHON = "python3.11"
 TERMINAL_JOB_STATES = {
     "BOOT_FAIL",
     "CANCELLED",
@@ -650,7 +654,7 @@ import sys
 print(json.dumps(reclaim_submission_workdirs(sys.argv[1]), sort_keys=True))
 """
     remote_command = (
-        "printf VIBE_HPC_STAGING_RECLAIM >/dev/null; python3 -c "
+        f"printf VIBE_HPC_STAGING_RECLAIM >/dev/null; {REMOTE_EMBEDDED_PYTHON} -c "
         + shlex.quote(source + invocation)
         + " "
         + shlex.quote(config.remote_staging_root)
@@ -684,7 +688,7 @@ print(json.dumps(extend_iteration_target(
 ), sort_keys=True))
 """
     remote_command = (
-        "printf VIBE_OFFLINE_TARGET_EXTENSION >/dev/null; python3 -c "
+        f"printf VIBE_OFFLINE_TARGET_EXTENSION >/dev/null; {REMOTE_EMBEDDED_PYTHON} -c "
         + shlex.quote(source + invocation)
         + " "
         + shlex.quote(config.remote_run_snapshot)
