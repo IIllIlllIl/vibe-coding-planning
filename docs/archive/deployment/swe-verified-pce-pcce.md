@@ -1,4 +1,4 @@
-# ACE + Safe PCE on SWE-bench Verified
+# Archived SWE-Verified PCE/PCCE Stage
 
 > Authority: current Safe PCE source/artifact/execution boundary and retained
 > historical PCE/PCCE diagnostic evidence

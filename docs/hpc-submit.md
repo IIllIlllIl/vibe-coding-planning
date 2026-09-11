@@ -48,7 +48,8 @@ diagnosing Iris, VPN, SSH, or credentials.
 
 ## SWE-chat Login Preheat
 
-The acquisition contract and commands are defined in `swe-chat-preheat.md`.
+The historical acquisition contract and commands are archived in
+`archive/mixed-design/swe-chat-preheat.md`.
 Before starting its supervisor, verify read-only that:
 
 - the fixed Hugging Face revision is accessible with the remote token;

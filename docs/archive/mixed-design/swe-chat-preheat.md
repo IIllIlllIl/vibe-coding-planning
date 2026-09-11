@@ -1,4 +1,4 @@
-# SWE-chat Frozen Source Acquisition
+# Archived SWE-chat Frozen Source Acquisition
 
 > Authority: Behavioral v1 source-acquisition boundary and login-preheat
 > contract

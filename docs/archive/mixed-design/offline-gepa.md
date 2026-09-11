@@ -1,4 +1,4 @@
-# Retained Pre-ACE Offline GEPA
+# Archived Pre-ACE Offline GEPA
 
 > Authority: historical method and regression contract; not a current launch or
 > experiment-design authority

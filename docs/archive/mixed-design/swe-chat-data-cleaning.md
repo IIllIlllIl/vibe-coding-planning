@@ -1,4 +1,4 @@
-# SWE-chat Behavioral Data Cleaning
+# Archived SWE-chat Behavioral Data Cleaning
 
 > Authority: Behavioral v1 data-cleaning decisions, conservative exclusion
 > pools, and the boundary between trajectory selection and episode extraction

@@ -1,4 +1,4 @@
-# SWE-bench Pro Quick25 PCE
+# Archived SWE-bench Pro Quick25 PCE
 
 > Authority: Pro quick25 acquisition, completed PCE, and paused PCCE recovery
 >

@@ -1,4 +1,4 @@
-# Behavioral Offline GEPA Adaptation Boundary
+# Archived Behavioral Offline GEPA Adaptation Boundary
 
 > Status: Stage C v2 and the first media-projected formal eight-iteration run
 > completed

@@ -75,12 +75,11 @@ Read these files in order:
 4. [`docs/offline-gepa-playbook-redesign.md`](docs/offline-gepa-playbook-redesign.md)
    — current ACE playbook representation, prompts, scoring, counters, and
    distributed optimization semantics.
-5. [`docs/swe-verified-pce-pcce.md`](docs/swe-verified-pce-pcce.md) — current
+5. [`docs/safe-pce.md`](docs/safe-pce.md) — current
    Safe PCE artifact, environment, evaluator, and smoke boundary; its earlier
    quick50/C4/C5 sections are explicitly historical diagnostics.
-6. [`docs/behavioral-offline-gepa-adaptation.md`](docs/behavioral-offline-gepa-adaptation.md)
-   — Behavioral information boundary, minimum Offline adapter changes, and the
-   staged development-smoke contract.
+6. [`docs/knowledge/methodology-lessons.md`](docs/knowledge/methodology-lessons.md)
+   — reusable lessons from superseded experiment stages.
 7. [`docs/knowledge/offline-pcce-stage-findings.md`](docs/knowledge/offline-pcce-stage-findings.md)
    — frozen first-stage PolyBench findings.
 8. [`docs/knowledge/behavioral-gepa-initial-findings.md`](docs/knowledge/behavioral-gepa-initial-findings.md)
@@ -89,14 +88,8 @@ Read these files in order:
    [`docs/knowledge/rq2-c4-blind-discriminator-validation.md`](docs/knowledge/rq2-c4-blind-discriminator-validation.md),
    and [`docs/knowledge/rq2-c4-pcce-failure-analysis.md`](docs/knowledge/rq2-c4-pcce-failure-analysis.md)
    — frozen development evidence behind the next GEPA supervision redesign.
-10. [`docs/polybench-pcce.md`](docs/polybench-pcce.md) and
-   [`docs/offline-polybench-validation.md`](docs/offline-polybench-validation.md)
-   — implemented PCE/PCCE and external-evidence boundaries.
-11. [`docs/swe-verified-pce-pcce.md`](docs/swe-verified-pce-pcce.md) — Safe PCE
-   source of truth for the new stage.
-12. [`docs/swe-bench-pro-pce.md`](docs/swe-bench-pro-pce.md) — completed Pro
-    quick25 PCE, repository-history audit, official-SIF policy, and paused C4
-    PCCE path.
+10. Historical PCE/PCCE method documents under `docs/archive/deployment/` only
+    when an explicit failure audit or reproduction requires them.
 
 The current implementation surface is:
 

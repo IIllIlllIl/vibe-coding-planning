@@ -14,7 +14,8 @@ selection, comparison baselines, or launch identity to the new experiment.
 The frozen evidence behind these constraints is maintained in
 `docs/knowledge/offline-pcce-stage-findings.md`; the frozen Behavioral data
 funnel and source-quality findings are maintained in
-`docs/swe-chat-data-cleaning.md`. They are not duplicated here as live status.
+`docs/archive/mixed-design/swe-chat-data-cleaning.md`. They are not duplicated
+here as live status.
 
 Current decisions are:
 

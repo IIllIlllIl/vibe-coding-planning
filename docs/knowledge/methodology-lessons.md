@@ -33,7 +33,7 @@
 Historical documents remain useful for provenance and failure analysis. They
 are not authoritative for current ACE + Safe PCE behavior; current boundaries
 are restated in [`../offline-gepa-playbook-redesign.md`](../offline-gepa-playbook-redesign.md)
-and [`../swe-verified-pce-pcce.md`](../swe-verified-pce-pcce.md).
+and [`../safe-pce.md`](../safe-pce.md).
 
 ## First Clean Offline PCCE Stage
 

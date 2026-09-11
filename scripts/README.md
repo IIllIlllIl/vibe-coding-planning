@@ -33,8 +33,9 @@
   frozen complete split into the strict Behavioral Checker/supervision/
   Reflection/audit snapshot. It cannot choose or infer the split.
 
-Source-acquisition authority is `docs/swe-chat-preheat.md`; Stage-1 and Stage-2
-cleaning authority is `docs/swe-chat-data-cleaning.md`.
+Historical source-acquisition authority is
+`docs/archive/mixed-design/swe-chat-preheat.md`; Stage-1 and Stage-2 cleaning
+authority is `docs/archive/mixed-design/swe-chat-data-cleaning.md`.
 
 ## Retained Offline And PolyBench Infrastructure
 

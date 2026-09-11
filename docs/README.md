@@ -17,14 +17,7 @@ Read in this order:
 | [`branch-scope.md`](branch-scope.md) | Active ACE + Safe PCE systems, retained failure-analysis evidence, and archive boundary |
 | [`../project_issues.md`](../project_issues.md) | Current research decisions and unresolved methodological risks; not a run-progress log |
 | [`offline-gepa-playbook-redesign.md`](offline-gepa-playbook-redesign.md) | Reject-playbook method, cleaned development data, prompt provenance, distributed Slurm Agent waves, and resume contract |
-| [`offline-gepa.md`](offline-gepa.md) | Retained pre-ACE Offline GEPA contract; historical method and regression authority only |
-| [`swe-chat-preheat.md`](swe-chat-preheat.md) | Historical Behavioral-v1 acquisition authority; not an ACE + Safe PCE input |
-| [`swe-chat-data-cleaning.md`](swe-chat-data-cleaning.md) | Historical Behavioral-v1 selection and cleaning authority |
-| [`behavioral-offline-gepa-adaptation.md`](behavioral-offline-gepa-adaptation.md) | Retained Behavioral-v1 method and completed-run authority |
-| [`offline-polybench-validation.md`](offline-polybench-validation.md) | Historical PolyBench PCE platform and failure-analysis authority |
-| [`polybench-pcce.md`](polybench-pcce.md) | Historical paired PCCE methods/results plus components considered for ACE-PCCE reuse |
-| [`swe-verified-pce-pcce.md`](swe-verified-pce-pcce.md) | Active Safe PCE boundary and smoke contract; quick50 and C4/C5 content is historical diagnostic evidence |
-| [`swe-bench-pro-pce.md`](swe-bench-pro-pce.md) | Paused historical Pro diagnostic and reusable official-SIF lessons |
+| [`safe-pce.md`](safe-pce.md) | Current Safe PCE selection, direct artifact transport, phase isolation, Agent environment, evaluator, and audit10 smoke contract |
 | [`hpc-submit.md`](hpc-submit.md) | Behavioral-branch credential, preheat, retained Slurm, and FairShare safety |
 | [`../configs/README.md`](../configs/README.md) | Runtime-versus-launch configuration ownership and active config index |
 
@@ -67,6 +60,7 @@ source of current runtime behavior:
 ## Archive
 
 `archive/` preserves superseded Online/PCT/PCC plans, mixed-design documents,
-reports, and migration records. Archive documents are non-authoritative.
+Behavioral/Offline methods, PCE/PCCE deployment workflows, reports, and
+migration records. Archive documents are non-authoritative.
 Reusable decisions must be cited through `knowledge/`, not by making an Agent
 reconstruct the old methodology.

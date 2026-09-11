@@ -1,4 +1,4 @@
-# Retained PolyBench Plan-Check-Code-Evaluate Design
+# Archived PolyBench Plan-Check-Code-Evaluate Design
 
 > Authority: historical platform/results and audited component-reuse evidence;
 > not the current ACE-PCCE experiment contract

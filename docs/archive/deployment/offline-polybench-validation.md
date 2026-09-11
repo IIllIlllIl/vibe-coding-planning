@@ -1,4 +1,4 @@
-# Offline Guideline PolyBench Generalization Validation
+# Archived Offline Guideline PolyBench Generalization Validation
 
 > Authority: external validation contract and frozen first-stage outcome for
 > the current standalone Offline guideline method
