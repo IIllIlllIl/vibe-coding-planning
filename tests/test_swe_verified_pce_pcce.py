@@ -223,7 +223,17 @@ def test_safe_pce_audit10_freezes_balanced_diverse_development_cases() -> None:
         source[instance_id]["row_sha256"] == selected_rows[instance_id]["row_sha256"]
         for instance_id in config.instance_ids
     )
-    assert not config.image_manifest.exists()
+    cases, _, images = load_swe_verified_pce_cases(
+        config.dataset_snapshot,
+        config.image_manifest,
+    )
+    loaded = {case.instance_id for case in cases}
+    assert set(config.instance_ids) <= loaded
+    assert len(images["records"]) == 10
+    assert all(record["base_commit_verified"] for record in images["records"].values())
+    assert images["manifest_id"] == (
+        "beaa8feaa1c852f05ebf26b856cafe74f0f6adfa06ed37a3d99aa264676f26b9"
+    )
     assert config.plan_submission_protocol == "direct_final_plan_v1"
     assert config.run_dir.name == "safe-pce-audit10-v3-20260912"
 

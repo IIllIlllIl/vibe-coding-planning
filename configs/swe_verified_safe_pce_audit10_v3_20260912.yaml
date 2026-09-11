@@ -4,7 +4,7 @@ purpose: safe_pce_boundary_and_human_audit_development_smoke
 
 paths:
   dataset_snapshot: output/SWE-bench_Verified/swe-verified-pce-inputs/20260831_verified500_91aa3ed5
-  image_manifest: output/SWE-bench_Verified/swe-verified-pce-inputs/20260831_verified500_91aa3ed5/safe-pce-audit10-v3-20260912/images.json
+  image_manifest: configs/frozen_swe_verified_smoke/safe-pce-audit10-v3-20260912-images.json
   selection_manifest: configs/frozen_swe_verified_smoke/swe-verified-safe-pce-audit10-v3-20260912.json
   prompt_source_config: configs/polybench_pce_hpc_formal_clean_20260825.yaml
   plan_prompt_source_config: configs/prompts/swe_verified_safe_pce_planner_v1_20260911.yaml
@@ -85,4 +85,4 @@ experiment_contract:
     - issue, Plan, Code patch, outcome, and raw trajectories remain available for manual audit
   stopping: finish_all_ten_cases_or_report_operational_incomplete
   operational_incomplete_policy: transport_provider_timeout_or_infrastructure_failure_is_not_unresolved
-  launched: false
+  launched: true

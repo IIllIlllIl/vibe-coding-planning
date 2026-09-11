@@ -95,10 +95,14 @@ CPU, 4G, and 45 minutes per Agent/evaluator array element, three operational
 attempts, five-minute controller polling, shared storage defaults, and inactive
 staging reclamation.
 
-Before launch, the ten existing SIFs require a new selection-scoped byte-hash
-and base-commit audit at the image-manifest path named by the runtime. The
-submit wrapper refuses to launch while that frozen input is absent. Presence of
-the runtime or supervisor does not authorize launch.
+The ten existing SIFs were independently re-audited on compute node
+`iris-096` by Slurm job `5939144`: all ten byte hashes were frozen and all ten
+official base commits were present. The tracked selection-scoped authority is
+`configs/frozen_swe_verified_smoke/safe-pce-audit10-v3-20260912-images.json`
+with manifest ID
+`beaa8feaa1c852f05ebf26b856cafe74f0f6adfa06ed37a3d99aa264676f26b9`.
+The runtime and supervisor are operationally ready, but their presence alone
+does not authorize launch.
 
 Smoke acceptance requires all ten cases to preserve direct Plan text through
 the checkpoint and Code handoff, retain raw Plan/Code/evaluator evidence, obey

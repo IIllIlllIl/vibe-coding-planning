@@ -149,8 +149,8 @@ for required in "$DATASET_SNAPSHOT/manifest.json" "$IMAGE_MANIFEST"; do
 done
 case "$DATASET_SNAPSHOT" in "$REPO_ROOT"/*) ;; *)
   echo "ERROR: dataset_snapshot must be inside the repository" >&2; exit 2;; esac
-case "$IMAGE_MANIFEST" in "$DATASET_SNAPSHOT"/*) ;; *)
-  echo "ERROR: image_manifest must be inside dataset_snapshot for atomic staging" >&2; exit 2;; esac
+case "$IMAGE_MANIFEST" in "$REPO_ROOT"/*) ;; *)
+  echo "ERROR: image_manifest must be inside the repository" >&2; exit 2;; esac
 case "$RUN_DIR" in "$REPO_ROOT"/*) ;; *)
   echo "ERROR: run_dir must be inside the repository" >&2; exit 2;; esac
 case "$CONFIG_ABS" in "$REPO_ROOT"/*) ;; *)
