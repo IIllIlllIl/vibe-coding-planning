@@ -17,9 +17,15 @@ from src.environment.docker_env import DockerCapacityWindow
 from src.environment.repository_baseline import restore_repository_to_base
 from src.exceptions import FatalError
 from src.optimization.audit import AuditedModel, JsonlLogger, text_sha256
-from src.optimization.checker import DockerChecker
+from src.optimization.checker import CheckerOutputContractError, DockerChecker
 from src.optimization.hpc.task_batch import atomic_json
 from src.optimization.models import CheckerOutput, RepositoryEvidence
+from src.optimization.playbook import RejectPlaybook, validate_checker_result
+from src.optimization.playbook_runtime import (
+    PlaybookAgentOutputContractError,
+    PromptModel,
+    _render,
+)
 from src.polybench_pcce.config import PolyBenchPCCEConfig
 from src.polybench_pcce.models import CEAssignment, PCCECheckerCase, PCReviewAssignment
 from src.polybench_pce.dataset import file_sha256
@@ -82,6 +88,7 @@ def _review_identity(
         "rejection_count": assignment.rejection_count,
         "input_plan_sha256": text_sha256(assignment.input_plan),
         "previous_feedback_sha256": text_sha256(assignment.previous_feedback),
+        "active_concerns": list(assignment.active_concerns),
         "guideline_sha256": text_sha256(guideline),
     }
     return hashlib.sha256(
@@ -124,6 +131,70 @@ def validate_pcce_checker_output(value: dict[str, Any]) -> CheckerOutput:
     )
 
 
+def validate_dialogue_checker_output(
+    value: dict[str, Any], active_concerns: tuple[dict[str, Any], ...]
+) -> dict[str, Any]:
+    if not isinstance(value, dict) or set(value) != {"concern_results"}:
+        raise ValueError("Dialogue Checker output must contain only concern_results")
+    rows = value["concern_results"]
+    if not isinstance(rows, list) or len(rows) != len(active_concerns):
+        raise ValueError("Dialogue Checker must return one result per active concern")
+    normalized = []
+    for concern, row in zip(active_concerns, rows, strict=True):
+        if not isinstance(row, dict) or set(row) != {
+            "rule_number",
+            "status",
+            "reason",
+        }:
+            raise ValueError("Dialogue Checker concern result has an invalid schema")
+        if row["rule_number"] != concern["rule_number"]:
+            raise ValueError("Dialogue Checker concern identity mismatch")
+        if row["status"] not in {
+            "cleared",
+            "needs_clarification",
+            "still_blocking",
+        }:
+            raise ValueError("Dialogue Checker concern status is invalid")
+        if not isinstance(row["reason"], str) or not row["reason"].strip():
+            raise ValueError("Dialogue Checker reason must be non-empty")
+        normalized.append(
+            {
+                "rule_number": row["rule_number"],
+                "status": row["status"],
+                "reason": row["reason"].strip(),
+            }
+        )
+    return {"concern_results": normalized}
+
+
+def _validate_planner_response(value: str) -> dict[str, Any]:
+    try:
+        parsed = json.loads(value)
+        if not isinstance(parsed, dict) or set(parsed) != {
+            "developer_response",
+            "revised_plan",
+        }:
+            raise ValueError(
+                "output must contain developer_response and revised_plan"
+            )
+        if not isinstance(parsed["developer_response"], str) or not parsed[
+            "developer_response"
+        ].strip():
+            raise ValueError("developer_response must be non-empty")
+        if not isinstance(parsed["revised_plan"], str) or not parsed[
+            "revised_plan"
+        ].strip():
+            raise ValueError("revised_plan must be non-empty")
+    except (ValueError, json.JSONDecodeError) as exc:
+        raise CheckerOutputContractError(
+            f"ACE Planner output contract invalid: {exc}"
+        ) from exc
+    return {
+        "developer_response": parsed["developer_response"].strip(),
+        "revised_plan": parsed["revised_plan"].strip(),
+    }
+
+
 class PolyBenchPCCERunner:
     def __init__(
         self,
@@ -158,7 +229,11 @@ class PolyBenchPCCERunner:
             ),
             prompts=PromptConfig(
                 plan_generation_prompt=self.config.plan_revision_prompt,
-                plan_instance_template=self.config.plan_revision_instance_template,
+                plan_instance_template=(
+                    "{{task}}"
+                    if self.config.execution_mode == "ace_pcce"
+                    else self.config.plan_revision_instance_template
+                ),
                 code_generation_prompt=self.config.pce.code_prompt,
                 code_instance_template=self.config.pce.code_instance_template,
                 nrpv_block=self.config.pce.nrpv_block,
@@ -208,6 +283,231 @@ class PolyBenchPCCERunner:
                 error=str(exc),
             )
 
+    def _prompt_model_config(self) -> dict[str, Any]:
+        model = self.config.checker.checker
+        return {
+            "model": model.model,
+            "api_base": model.api_base,
+            "api_key_env": model.api_key_env,
+            "temperature": 0.0,
+        }
+
+    def _run_ace_initial_checker(
+        self,
+        assignment: PCReviewAssignment,
+        *,
+        identity: str,
+        playbook: RejectPlaybook,
+    ) -> dict[str, Any]:
+        checker_path = self.checkpoint_dir / "checker.json"
+        existing = _checkpoint(checker_path, identity, "checker")
+        if existing is not None:
+            return existing
+        visible = playbook.render_for_checker()
+        user = _render(
+            self.config.checker_instance_template,
+            issue=assignment.case.source.issue_description,
+            plan=assignment.input_plan,
+            checker_visible_playbook=visible,
+            retry_feedback=assignment.retry_feedback,
+        )
+        try:
+            raw, trajectory = PromptModel(self._prompt_model_config())(
+                self.config.checker_prompt, user
+            )
+            parsed = validate_checker_result(raw, playbook, trajectory=trajectory)
+        except (PlaybookAgentOutputContractError, ValueError) as exc:
+            raise CheckerOutputContractError(
+                f"ACE initial Checker output contract invalid: {exc}"
+            ) from exc
+        triggered = [
+            {
+                "rule_number": result.rule_number,
+                "rule_text": playbook.bullets[result.rule_number - 1].text,
+                "plan_evidence": list(result.plan_evidence),
+                "reason": result.reason,
+            }
+            for result in parsed.rule_results
+            if result.triggered
+        ]
+        payload = {
+            "stage": "initial_playbook_checker",
+            "should_proceed": not triggered,
+            "rule_results": [result.to_dict() for result in parsed.rule_results],
+            "triggered_rules": triggered,
+            "revision_feedback": "",
+            "trajectory": trajectory,
+        }
+        _save_checkpoint(checker_path, identity, "checker", payload)
+        return payload
+
+    def _run_ace_revision(
+        self,
+        assignment: PCReviewAssignment,
+        *,
+        identity: str,
+    ) -> dict[str, Any]:
+        plan_path = self.checkpoint_dir / "plan.json"
+        existing = _checkpoint(plan_path, identity, "plan")
+        if existing is not None:
+            return existing
+        revision_task = _render(
+            self.config.plan_revision_instance_template,
+            issue=assignment.case.source.issue_description,
+            current_plan=assignment.input_plan,
+            developer_concerns=json.dumps(
+                list(assignment.active_concerns), ensure_ascii=False, indent=2
+            ),
+            previous_dialogue_feedback=assignment.previous_feedback,
+            host_validation_feedback=assignment.retry_feedback,
+        )
+        revision_workspace = self.attempt_dir / "workspaces" / "plan_revision"
+        if revision_workspace.exists():
+            shutil.rmtree(revision_workspace)
+        env = self._environment(assignment, host_workdir=revision_workspace)
+        try:
+            restore_repository_to_base(
+                env,
+                assignment.case.source.base_commit,
+                phase="plan_revision",
+                evidence_dir=self.attempt_dir
+                / "repository_baselines"
+                / "plan_revision",
+                timeout=self.config.pce.execution.repository_command_timeout_seconds,
+            )
+            response, trajectory = plan_agent.run(
+                self._plan_config(),
+                revision_task,
+                env,
+                model_wrapper=lambda model: AuditedModel(
+                    model,
+                    self.usage,
+                    phase="plan_revision",
+                    context={
+                        "instance_id": assignment.case.instance_id,
+                        "review_index": assignment.review_index,
+                        "mode": "polybench_ace_pcce",
+                    },
+                ),
+                failure_trajectory_path=self.attempt_dir / "plan_failure.json",
+            )
+            parsed = _validate_planner_response(response)
+            payload = {
+                "plan": parsed["revised_plan"],
+                "developer_response": parsed["developer_response"],
+                "trajectory": list(trajectory),
+                "source": "ace_planner_dialogue",
+            }
+            _save_checkpoint(plan_path, identity, "plan", payload)
+            return payload
+        finally:
+            try:
+                env.cleanup()
+            except Exception as exc:
+                self.audit.write(
+                    "pcce_cleanup_failed", phase="plan_revision", error=str(exc)
+                )
+            self._cleanup_workspace(revision_workspace, phase="plan_revision")
+
+    def _run_ace_dialogue_checker(
+        self,
+        assignment: PCReviewAssignment,
+        plan_payload: dict[str, Any],
+        *,
+        identity: str,
+    ) -> dict[str, Any]:
+        checker_path = self.checkpoint_dir / "checker.json"
+        existing = _checkpoint(checker_path, identity, "checker")
+        if existing is not None:
+            return existing
+        user = _render(
+            self.config.dialogue_checker_instance_template,
+            issue=assignment.case.source.issue_description,
+            previous_plan=assignment.input_plan,
+            current_plan=str(plan_payload["plan"]),
+            developer_concerns=json.dumps(
+                list(assignment.active_concerns), ensure_ascii=False, indent=2
+            ),
+            planner_response=str(plan_payload["developer_response"]),
+            retry_feedback=assignment.retry_feedback,
+        )
+        try:
+            raw, trajectory = PromptModel(self._prompt_model_config())(
+                self.config.dialogue_checker_prompt, user
+            )
+            parsed = validate_dialogue_checker_output(raw, assignment.active_concerns)
+        except (PlaybookAgentOutputContractError, ValueError) as exc:
+            raise CheckerOutputContractError(
+                f"ACE Dialogue Checker output contract invalid: {exc}"
+            ) from exc
+        unresolved = [
+            {
+                **concern,
+                "dialogue_status": result["status"],
+                "dialogue_reason": result["reason"],
+            }
+            for concern, result in zip(
+                assignment.active_concerns,
+                parsed["concern_results"],
+                strict=True,
+            )
+            if result["status"] != "cleared"
+        ]
+        feedback = "\n".join(
+            f"Rule {item['rule_number']} [{item['dialogue_status']}]: "
+            f"{item['dialogue_reason']}"
+            for item in unresolved
+        )
+        payload = {
+            "stage": "dialogue_checker",
+            "should_proceed": not unresolved,
+            "concern_results": parsed["concern_results"],
+            "unresolved_concerns": unresolved,
+            "revision_feedback": feedback,
+            "trajectory": trajectory,
+        }
+        _save_checkpoint(checker_path, identity, "checker", payload)
+        return payload
+
+    def _run_ace_pc(
+        self,
+        assignment: PCReviewAssignment,
+        *,
+        fingerprint: str,
+        guideline: str,
+    ) -> dict[str, Any]:
+        playbook = RejectPlaybook.parse(guideline)
+        identity = _review_identity(assignment, fingerprint, playbook.serialize())
+        self.checkpoint_dir.mkdir(parents=True, exist_ok=True)
+        if assignment.review_index == 1:
+            plan_payload = {
+                "plan": assignment.input_plan,
+                "trajectory": [],
+                "source": "frozen_historical_pce",
+            }
+            checker_payload = self._run_ace_initial_checker(
+                assignment, identity=identity, playbook=playbook
+            )
+        else:
+            _verify_sif(self.config, assignment, self.capacity)
+            plan_payload = self._run_ace_revision(assignment, identity=identity)
+            checker_payload = self._run_ace_dialogue_checker(
+                assignment, plan_payload, identity=identity
+            )
+        return {
+            "pc_status": "completed",
+            "review_index": assignment.review_index,
+            "rejection_count_before_review": assignment.rejection_count,
+            "rejection_count_after_review": assignment.rejection_count
+            + (not bool(checker_payload["should_proceed"])),
+            "plan": str(plan_payload["plan"]),
+            "plan_source": str(plan_payload["source"]),
+            "plan_trajectory": list(plan_payload["trajectory"]),
+            "developer_response": plan_payload.get("developer_response", ""),
+            "active_concerns": list(assignment.active_concerns),
+            "checker_output": checker_payload,
+        }
+
     def run_pc(
         self,
         assignment: PCReviewAssignment,
@@ -215,6 +515,10 @@ class PolyBenchPCCERunner:
         fingerprint: str,
         guideline: str,
     ) -> dict[str, Any]:
+        if self.config.execution_mode == "ace_pcce":
+            return self._run_ace_pc(
+                assignment, fingerprint=fingerprint, guideline=guideline
+            )
         _verify_sif(self.config, assignment, self.capacity)
         identity = _review_identity(assignment, fingerprint, guideline)
         self.checkpoint_dir.mkdir(parents=True, exist_ok=True)

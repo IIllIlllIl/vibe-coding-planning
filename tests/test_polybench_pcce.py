@@ -21,10 +21,13 @@ from src.polybench_pcce.controller import _review_assignments, run_polybench_pcc
 from src.polybench_pcce.dataset import load_pcce_cases
 from src.polybench_pcce.evaluator_resume import _prepare as prepare_evaluator_resume
 from src.polybench_pcce.models import PCCECase, PCReviewAssignment
-from src.polybench_pcce.runner import PolyBenchPCCERunner
-from src.polybench_pcce.runner import validate_pcce_checker_output
+from src.polybench_pcce.runner import (
+    PolyBenchPCCERunner,
+    validate_dialogue_checker_output,
+    validate_pcce_checker_output,
+)
 from src.polybench_pcce.worker import _retry_disposition, run_task
-from src.polybench_pcce.hpc_executor import _case_dict
+from src.polybench_pcce.hpc_executor import _case_dict, build_array_script
 from src.polybench_pce.models import FrozenImage, PolyBenchPCECase
 from src.polybench_pce.evaluator_resume import load_evaluator_repair_subset
 from src.polybench_pce.runner import checkpoint_identity
@@ -790,6 +793,159 @@ def test_pcce_checker_schema_separates_decision_from_revision_feedback() -> None
         )
 
 
+def test_dialogue_checker_three_state_contract() -> None:
+    concerns = (
+        {"rule_number": 1, "rule_text": "The Plan is a placeholder."},
+        {"rule_number": 3, "rule_text": "The Plan asserts unverified internals."},
+    )
+    parsed = validate_dialogue_checker_output(
+        {
+            "concern_results": [
+                {"rule_number": 1, "status": "cleared", "reason": "Now concrete."},
+                {
+                    "rule_number": 3,
+                    "status": "needs_clarification",
+                    "reason": "No caller or path was identified.",
+                },
+            ]
+        },
+        concerns,
+    )
+    assert [row["status"] for row in parsed["concern_results"]] == [
+        "cleared",
+        "needs_clarification",
+    ]
+    with pytest.raises(ValueError, match="identity mismatch"):
+        validate_dialogue_checker_output(
+            {
+                "concern_results": [
+                    {"rule_number": 2, "status": "cleared", "reason": "x"},
+                    {"rule_number": 3, "status": "cleared", "reason": "y"},
+                ]
+            },
+            concerns,
+        )
+
+
+def test_ace_config_uses_candidate3_and_hides_internal_bullet_metadata() -> None:
+    from src.optimization.playbook import RejectPlaybook
+
+    config = load_polybench_pcce_config(
+        ROOT / "configs/polybench_ace_pcce_candidate3_balanced20_v1_20260911.yaml",
+        require_api_keys=False,
+    )
+    playbook = RejectPlaybook.parse(config.guideline_path.read_text(encoding="utf-8"))
+    visible = playbook.render_for_checker()
+
+    assert config.execution_mode == "ace_pcce"
+    assert len(config.instance_ids) == 20
+    assert len(playbook.bullets) == 4
+    assert "plan-00001" not in visible
+    assert "helpful" not in visible
+    assert "harmful" not in visible
+    assert "A response may clear an evidence-gap concern" in (
+        config.dialogue_checker_prompt
+    )
+    smoke = load_polybench_pcce_config(
+        ROOT / "configs/polybench_ace_pcce_candidate3_smoke10_v1_20260911.yaml",
+        require_api_keys=False,
+    )
+    assert smoke.execution_mode == "ace_pcce"
+    assert len(smoke.instance_ids) == 10
+    assert set(smoke.instance_ids) < set(config.instance_ids)
+    assert smoke.guideline_path == config.guideline_path
+    assert smoke.checker_prompt == config.checker_prompt
+
+
+def test_ace_retry_script_supplies_previous_host_failure(tmp_path: Path) -> None:
+    config = load_polybench_pcce_config(
+        ROOT / "configs/polybench_ace_pcce_candidate3_balanced20_v1_20260911.yaml",
+        require_api_keys=False,
+    )
+    script = build_array_script(
+        config=config,
+        batch_dir=tmp_path / "batch",
+        indices=[0, 3],
+        attempt=2,
+        phase="pc",
+    )
+    assert "--array=0,3" in script
+    assert "--previous-output" in script
+    assert "failed_outputs/attempt_01/task_${TASK_ID}.json" in script
+
+
+def test_ace_initial_checker_uses_prompt_only_and_host_derives_trigger(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    config = replace(
+        _config(tmp_path),
+        execution_mode="ace_pcce",
+        checker_prompt="checker",
+        checker_instance_template=(
+            "<issue>{{ issue }}</issue><plan>{{ plan }}</plan>"
+            "<playbook>{{ checker_visible_playbook }}</playbook>"
+        ),
+    )
+    case = _case("a")
+    assignment = PCReviewAssignment(case, 1, 0, case.baseline_plan, "")
+    guideline = json.dumps(
+        {
+            "schema_version": 1,
+            "bullets": [
+                {
+                    "id": "plan-00001",
+                    "text": "The Plan is a placeholder.",
+                    "helpful": 2,
+                    "harmful": 1,
+                    "lineage": [],
+                }
+            ],
+        }
+    )
+
+    monkeypatch.setattr(
+        "src.polybench_pcce.runner._verify_sif",
+        lambda *args: pytest.fail("initial ACE Checker must not require a SIF"),
+    )
+
+    class FakePromptModel:
+        def __init__(self, _config):
+            pass
+
+        def __call__(self, system, user):
+            assert system == "checker"
+            assert "Rule 1. The Plan is a placeholder." in user
+            assert "plan-00001" not in user
+            assert "helpful" not in user
+            return (
+                {
+                    "rule_results": [
+                        {
+                            "rule_number": 1,
+                            "triggered": True,
+                            "plan_evidence": ["TODO"],
+                            "reason": "No strategy.",
+                        }
+                    ]
+                },
+                [{"role": "assistant"}],
+            )
+
+    monkeypatch.setattr("src.polybench_pcce.runner.PromptModel", FakePromptModel)
+    result = PolyBenchPCCERunner(
+        config,
+        object(),  # type: ignore[arg-type]
+        checkpoint_dir=tmp_path / "checkpoints",
+        attempt_dir=tmp_path / "attempt",
+    ).run_pc(assignment, fingerprint="fp", guideline=guideline)
+
+    checker = result["checker_output"]
+    assert checker["should_proceed"] is False
+    assert checker["stage"] == "initial_playbook_checker"
+    assert checker["triggered_rules"][0]["rule_number"] == 1
+
+
 def test_checker_checkpoint_survives_post_completion_cleanup_failure(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
@@ -1029,6 +1185,124 @@ def test_controller_routes_pass_to_ce_and_stops_after_three_rejections(
     assert by_id["reject"]["pcce_resolved"] is False
     assert by_id["infra"]["pcce_resolved"] is None
     assert by_id["pass"]["accepted_review_index"] == 1
+
+
+def test_ace_controller_skips_ce_for_initial_accept_and_runs_ce_after_revision(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    config = replace(
+        _config(tmp_path),
+        execution_mode="ace_pcce",
+        dialogue_checker_prompt="dialogue",
+        dialogue_checker_instance_template="dialogue instance",
+    )
+    cases = [_case("direct", True), _case("revised", False)]
+    identities = {
+        "validation_manifest_sha256": "validation-manifest",
+        "validation_file_sha256": "validation-file",
+        "pce_outcomes_sha256": "pce-outcomes",
+    }
+    monkeypatch.setattr(
+        "src.polybench_pcce.controller.load_pcce_cases", lambda _: (cases, identities)
+    )
+    monkeypatch.setattr(
+        "src.polybench_pcce.controller.pcce_semantic_sha256", lambda _: "semantic"
+    )
+    monkeypatch.setattr("src.polybench_pcce.controller._git_head", lambda: "a" * 40)
+    monkeypatch.setattr(
+        "src.polybench_pcce.controller.file_sha256",
+        lambda path: hashlib.sha256(str(path).encode()).hexdigest(),
+    )
+
+    class FakeExecutor:
+        ce_ids: list[str] = []
+
+        def __init__(self, _):
+            pass
+
+        def run_pc(self, assignments):
+            rows = []
+            for assignment in assignments:
+                if assignment.review_index == 1:
+                    rejected = assignment.case.instance_id == "revised"
+                    rows.append(
+                        {
+                            "status": "completed",
+                            "instance_id": assignment.case.instance_id,
+                            "plan": assignment.input_plan,
+                            "rejection_count_before_review": 0,
+                            "rejection_count_after_review": int(rejected),
+                            "checker_output": {
+                                "stage": "initial_playbook_checker",
+                                "should_proceed": not rejected,
+                                "triggered_rules": [
+                                    {
+                                        "rule_number": 2,
+                                        "rule_text": "Missing supporting change.",
+                                        "plan_evidence": ["one file only"],
+                                        "reason": "A supporting edit is absent.",
+                                    }
+                                ]
+                                if rejected
+                                else [],
+                                "revision_feedback": "",
+                            },
+                        }
+                    )
+                else:
+                    assert assignment.case.instance_id == "revised"
+                    assert assignment.active_concerns[0]["rule_number"] == 2
+                    rows.append(
+                        {
+                            "status": "completed",
+                            "instance_id": "revised",
+                            "plan": "revised plan",
+                            "rejection_count_before_review": 1,
+                            "rejection_count_after_review": 1,
+                            "checker_output": {
+                                "stage": "dialogue_checker",
+                                "should_proceed": True,
+                                "unresolved_concerns": [],
+                                "revision_feedback": "",
+                            },
+                        }
+                    )
+            return rows
+
+        def run_ce(self, assignments):
+            FakeExecutor.ce_ids = [item.case.instance_id for item in assignments]
+            return [
+                {
+                    "status": "completed",
+                    "instance_id": item.case.instance_id,
+                    "evaluator_result": {"evaluator_resolved": True},
+                }
+                for item in assignments
+            ]
+
+    monkeypatch.setattr(
+        "src.polybench_pcce.controller.PolyBenchPCCEHPCExecutor", FakeExecutor
+    )
+    result = run_polybench_pcce(config)
+
+    assert result is not None
+    assert FakeExecutor.ce_ids == ["revised"]
+    assert result["first_review_outcomes_reused"] == 1
+    rows = {
+        row["instance_id"]: row
+        for row in (
+            json.loads(line)
+            for line in (config.run_dir / "pcce_outcomes.jsonl")
+            .read_text(encoding="utf-8")
+            .splitlines()
+            if line.strip()
+        )
+    }
+    assert rows["direct"]["method_status"] == "completed_no_intervention"
+    assert rows["direct"]["outcome_source"] == "paired_historical_pce_reused"
+    assert rows["direct"]["ce_output"] is None
+    assert rows["revised"]["accepted_review_index"] == 2
 
 
 def test_checker_only_controller_stops_after_first_review_without_ce(

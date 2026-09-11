@@ -1,0 +1,28 @@
+schema_version: 1
+session: polybench-ace-pcce-c3-smoke10-v1-20260911
+log: .local/hpc-supervisor/polybench-ace-pcce-c3-smoke10-v1-20260911.log
+arguments:
+  - --poll-interval
+  - "300"
+  - --slice-time
+  - "00:10:00"
+  - --max-runs
+  - "30"
+  - --state-file
+  - .local/hpc-supervisor/polybench-ace-pcce-c3-smoke10-v1-20260911.json
+  - --require-clean-worktree
+  - --batch-script
+  - scripts/hpc_submit_polybench_pcce.sh
+  - --ulhpc-config
+  - /Users/taoran.wang/.config/ulhpc-submit/config.yaml
+  - --config
+  - configs/polybench_ace_pcce_candidate3_smoke10_v1_20260911.yaml
+  - --job-name
+  - polybench-ace-pcce-c3-smoke10-v1-20260911
+  - --remote-dir
+  - ~/hpc_runs/vibe-polybench-ace-pcce-c3-smoke10-v1-20260911
+  - --remote-dataset-dir
+  - ~/hpc_datasets/vibe-coding-planning
+  - --remote-run-dir
+  - ~/hpc_run_state/vibe-coding-planning
+  - --submit

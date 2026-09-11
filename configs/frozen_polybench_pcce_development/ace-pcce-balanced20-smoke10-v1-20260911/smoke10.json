@@ -1,0 +1,50 @@
+{
+  "baseline_composition": {
+    "pce_resolved": 5,
+    "pce_unresolved": 5,
+    "repositories": {
+      "Significant-Gravitas/AutoGPT": 1,
+      "huggingface/transformers": 5,
+      "keras-team/keras": 3,
+      "langchain-ai/langchain": 1
+    },
+    "total": 10
+  },
+  "cleaning_audit_sha256": "0e4ab9b3823fed6225c0a896ba664582886dac99943890eb457ac0b581c0c2a2",
+  "interpretation_boundary": "Failure-enriched ACE-PCCE development selection; not a prevalence sample, untouched holdout, or confirmatory result.",
+  "parent_selection": "balanced20.json",
+  "parent_selection_sha256": "9624f9e3961ba0be85bd8a578593747ec1fda72780ac62f8c9733667c469dcd3",
+  "purpose": "Ten-case ACE-PCCE end-to-end smoke",
+  "schema_version": 1,
+  "selected_instance_ids": [
+    "Significant-Gravitas__AutoGPT-4652",
+    "huggingface__transformers-4759",
+    "huggingface__transformers-22458",
+    "huggingface__transformers-28115",
+    "huggingface__transformers-29311",
+    "huggingface__transformers-31646",
+    "langchain-ai__langchain-5609",
+    "keras-team__keras-19838",
+    "keras-team__keras-19937",
+    "keras-team__keras-20002"
+  ],
+  "selection_id": "polybench-ace-pcce-smoke10-v1-20260911",
+  "selection_policy": {
+    "repository_allocation": "largest-remainder proportional allocation within each PCE label",
+    "repository_quotas": {
+      "resolved": {
+        "huggingface/transformers": 3,
+        "keras-team/keras": 1,
+        "langchain-ai/langchain": 1
+      },
+      "unresolved": {
+        "Significant-Gravitas/AutoGPT": 1,
+        "huggingface/transformers": 2,
+        "keras-team/keras": 2
+      }
+    },
+    "seed": "polybench-ace-pcce-smoke10-v1-20260911",
+    "target": "5 PCE-resolved and 5 PCE-unresolved cases",
+    "within_stratum_order": "ascending SHA256(seed + NUL + instance_id), then instance_id"
+  }
+}

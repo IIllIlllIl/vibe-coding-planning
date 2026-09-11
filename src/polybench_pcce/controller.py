@@ -158,7 +158,8 @@ def _review_assignments(
 ) -> list[PCReviewAssignment]:
     if review_index == 1:
         return [
-            PCReviewAssignment(case, 1, 0, case.baseline_plan, "") for case in cases
+            PCReviewAssignment(case, 1, 0, case.baseline_plan, "", ())
+            for case in cases
         ]
     if prior is None:
         raise ValueError("later PCCE review requires the preceding review results")
@@ -169,6 +170,17 @@ def _review_assignments(
         if result.get("status") != "completed" or not isinstance(checker, dict):
             continue
         if checker.get("should_proceed") is False:
+            stage = checker.get("stage")
+            if stage == "initial_playbook_checker":
+                concerns = checker.get("triggered_rules", [])
+            elif stage == "dialogue_checker":
+                concerns = checker.get("unresolved_concerns", [])
+            else:
+                concerns = []
+            if stage in {"initial_playbook_checker", "dialogue_checker"} and (
+                not isinstance(concerns, list) or not concerns
+            ):
+                raise ValueError("rejected ACE review requires active concerns")
             assignments.append(
                 PCReviewAssignment(
                     case=case_by_id[str(result["instance_id"])],
@@ -176,6 +188,7 @@ def _review_assignments(
                     rejection_count=int(result["rejection_count_after_review"]),
                     input_plan=str(result["plan"]),
                     previous_feedback=str(checker.get("revision_feedback", "")),
+                    active_concerns=tuple(dict(item) for item in concerns),
                 )
             )
     return assignments
@@ -212,6 +225,9 @@ def run_polybench_pcce(config: PolyBenchPCCEConfig) -> dict[str, Any] | None:
         "workflow_task_attempts": config.hpc.max_task_attempts,
         "workflow_attempts_consume_review_budget": False,
         "historical_pce_code_evaluate_reused": False,
+        "first_review_accept_reuses_paired_pce_outcome": (
+            config.execution_mode == "ace_pcce"
+        ),
         "planner_code_evaluate_enabled": config.execution_mode == "full_pcce",
         "repository_baseline": {
             "declared_revision": "dataset_base_commit",
@@ -219,6 +235,8 @@ def run_polybench_pcce(config: PolyBenchPCCEConfig) -> dict[str, Any] | None:
             "verified_agent_phases": (
                 ["checker"]
                 if config.execution_mode == "checker_only"
+                else ["plan_revision", "code"]
+                if config.execution_mode == "ace_pcce"
                 else ["checker", "plan_revision", "code"]
             ),
             "evaluate_verified_by_pce_runner": (
@@ -299,6 +317,10 @@ def run_polybench_pcce(config: PolyBenchPCCEConfig) -> dict[str, Any] | None:
             )
             for case in cases
             if case.instance_id in accepted
+            and not (
+                config.execution_mode == "ace_pcce"
+                and accepted[case.instance_id][0] == 1
+            )
         ]
         ce_path = config.run_dir / "ce_outcomes.jsonl"
         if ce_assignments:
@@ -348,6 +370,23 @@ def run_polybench_pcce(config: PolyBenchPCCEConfig) -> dict[str, Any] | None:
         instance_id = case.instance_id
         if instance_id in accepted:
             review_index, review = accepted[instance_id]
+            if config.execution_mode == "ace_pcce" and review_index == 1:
+                resolved = case.baseline_resolved
+                counts["resolved" if resolved else "unresolved"] += 1
+                final_rows.append(
+                    {
+                        "instance_id": instance_id,
+                        "method_status": "completed_no_intervention",
+                        "baseline_pce_resolved": case.baseline_resolved,
+                        "accepted_review_index": 1,
+                        "review_rejections": 0,
+                        "pcce_resolved": resolved,
+                        "outcome_source": "paired_historical_pce_reused",
+                        "accepted_plan_sha256": text_sha256(str(review["plan"])),
+                        "ce_output": None,
+                    }
+                )
+                continue
             ce = ce_by_id.get(instance_id)
             if ce is not None and ce.get("status") == "completed":
                 evaluator = ce.get("evaluator_result")
@@ -387,7 +426,9 @@ def run_polybench_pcce(config: PolyBenchPCCEConfig) -> dict[str, Any] | None:
             method_status = "operational_incomplete"
             rejection_count = None
         else:
-            method_status = "checker_rejected_after_3_reviews"
+            method_status = (
+                f"checker_rejected_after_{config.max_review_rejections}_reviews"
+            )
             rejection_count = int(terminal["rejection_count_after_review"])
         counts[method_status] += 1
         final_rows.append(
@@ -397,7 +438,8 @@ def run_polybench_pcce(config: PolyBenchPCCEConfig) -> dict[str, Any] | None:
                 "baseline_pce_resolved": case.baseline_resolved,
                 "review_rejections": rejection_count,
                 "pcce_resolved": False
-                if method_status == "checker_rejected_after_3_reviews"
+                if method_status
+                == f"checker_rejected_after_{config.max_review_rejections}_reviews"
                 else None,
                 "terminal_review": terminal,
             }
@@ -419,7 +461,14 @@ def run_polybench_pcce(config: PolyBenchPCCEConfig) -> dict[str, Any] | None:
             for item in review_results.get(1, [])
         ),
         "passed_after_revision": sum(index > 1 for index, _ in accepted.values()),
-        "rejected_after_three": counts["checker_rejected_after_3_reviews"],
+        "rejected_after_three": counts[
+            f"checker_rejected_after_{config.max_review_rejections}_reviews"
+        ],
+        "first_review_outcomes_reused": sum(
+            index == 1 for index, _ in accepted.values()
+        )
+        if config.execution_mode == "ace_pcce"
+        else 0,
     }
     atomic_json(config.run_dir / "result.json", summary)
     atomic_json(status_path, summary)

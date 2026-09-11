@@ -42,6 +42,13 @@ cleaning authority is `docs/swe-chat-data-cleaning.md`.
   the immutable Verified playbook eligibility snapshot, including outcome,
   duplicate, workspace, `/tmp`, trivial-placeholder, and human-audited
   incomplete-Plan exclusions.
+- `tools/freeze_polybench_ace_pcce_selection.py` audits the frozen clean99
+  PolyBench authority for shared Planner/Code `/tmp` artifacts, frozen
+  dependency/network scope, and abrupt Plan endings, then freezes clean69 and
+  a deterministic label-balanced 40-case ACE-PCCE development selection.
+- `tools/freeze_polybench_ace_pcce_budget_selections.py` deterministically
+  derives the budget-reduced balanced20 development set and its nested
+  smoke10 subset from that frozen balanced40 authority.
 - `hpc_submit_batch.sh`, `hpc_resume_loop.py`, and
   `hpc_supervisor_service.py` are shared controller/supervisor infrastructure
   retained for Offline reproducibility.

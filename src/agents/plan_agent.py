@@ -52,7 +52,10 @@ def _read_plan_from_file(env: Any) -> str | None:
     try:
         result = env.execute("cat /tmp/plan.md")
         if result.get("returncode") == 0:
-            content = result.get("output", "").strip()
+            # Machine-readable Plan artifacts use stdout as their authority.
+            # Apptainer diagnostics belong to stderr and must not be appended
+            # to JSON or Plan text consumed by the host.
+            content = result.get("stdout", result.get("output", "")).strip()
             if content:
                 return content
     except Exception:

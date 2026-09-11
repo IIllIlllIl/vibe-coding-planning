@@ -392,6 +392,85 @@ the PCE outputs supplying each first plan and baseline result, so membership
 and baseline-plan provenance cannot drift without carrying Agent trajectories
 into the PCCE input.
 
+### ACE-PCCE development cleaning and selection
+
+The planned ACE-PCCE development evaluation applies a new, frozen eligibility
+audit to that 99-case authority. It excludes a case when historical Planner
+and Code trajectories share the same non-protocol `/tmp` path, when the case
+belongs to the frozen evaluator dependency-cache/network scope, or when its
+Plan ends at an introductory colon after trailing Markdown cleanup. The audit
+does not use ACE candidate decisions or later PCCE outcomes.
+
+The exhaustive ledger and selections are frozen under
+`configs/frozen_polybench_pcce_development/ace-pcce-clean69-balanced40-v1-20260911/`.
+The `/tmp` rule matches 14 cases, the dependency rule 21, and the abrupt-ending
+rule zero; five cases match both nonempty rules. Their union excludes 30 and
+retains 69 cases: 46 PCE-resolved and 23 PCE-unresolved. These counts must not
+be interpreted as new method performance.
+
+The paired `balanced40.json` selects 20 resolved and 20 unresolved cases. It
+allocates each label's quota across repositories by largest remainder, then
+uses a frozen SHA-256 ordering within each label/repository stratum. This
+failure-enriched selection is intended to measure interception, preservation,
+and intervention-mediated transitions within a bounded runtime. It is neither
+a prevalence sample nor an untouched or confirmatory holdout.
+
+### ACE-PCCE extension
+
+The additive `ace_pcce` execution mode preserves the existing PCCE Slurm task
+transport, workflow attempts, atomic Agent checkpoints, resume semantics,
+phase-local repository restoration, Code runner, and official evaluator. It
+changes only the experimental review flow:
+
+```text
+frozen paired Plan
+  -> repository-free per-rule Playbook Checker
+       | no trigger -> reuse paired historical PCE outcome; no Code/Evaluate
+       | trigger    -> repository-aware code agent answers developer concerns
+                         and supplies a complete current Plan
+                         -> repository-free Dialogue Checker
+                              | all cleared -> Code -> Evaluate
+                              | otherwise   -> another response/revision,
+                                               up to the frozen rejection budget
+```
+
+The initial Checker uses the same prompt and per-rule result schema as ACE
+training. It receives only issue, Plan, and the visible numbered rule text;
+playbook IDs and counters, repository/SIF details, labels, Code trajectories,
+and evaluator evidence are excluded from its prompt. The Host deterministically
+derives rejection when at least one rule triggers and constructs the developer
+concern list from those triggered results.
+
+The code agent treats that list as fallible developer questions, independently
+inspects the base-commit repository, answers every active concern with concrete
+evidence, and emits a complete standalone current Plan. The Dialogue Checker
+then sees the Plans, questions, and response but no repository. For each active
+concern it returns `cleared`, `needs_clarification`, or `still_blocking`. A
+response may clear an evidence gap, but cannot explain away a contradiction
+that remains explicit in the current Plan. Only an all-`cleared` result enters
+Code; unresolved concerns and their distinct statuses remain durable input to
+the next dialogue turn.
+
+Direct first-review acceptance is not an intervention and therefore does not
+resample Code. Its frozen paired PCE outcome is carried forward with
+`method_status=completed_no_intervention` and
+`outcome_source=paired_historical_pce_reused`. Only cases with an actual
+initial rejection and subsequent dialogue clearance execute new Code and
+Evaluate phases. Any resulting U-to-R must consequently be reported as
+intervention-mediated; operationally incomplete phases remain distinct.
+
+Candidate 3 was selected before this PCCE run because its rejection precision
+was the highest among the six learned v3 candidates (12/27, 44.4%). This is a
+development selection, not a claim that it improved the asymmetric scalar
+objective: the Seed remained scalar-best. The budget-reduced development
+contract uses a deterministic 10-resolved / 10-unresolved subset of
+balanced40. Its smoke halves that again to five resolved and five unresolved
+cases while remaining a strict subset of the 20-case run. The prepared,
+launch-unauthorized configs are
+`configs/polybench_ace_pcce_candidate3_balanced20_v1_20260911.yaml` and
+`configs/polybench_ace_pcce_candidate3_smoke10_v1_20260911.yaml`, with prompt
+authority `configs/prompts/polybench_ace_pcce_v1_20260911.yaml`.
+
 The new runtime is
 `configs/polybench_pcce_hpc_formal_seed_clean_20260826.yaml`, its supervisor is
 `configs/polybench_pcce_supervisor_formal_seed_clean_20260826.yaml`, and its

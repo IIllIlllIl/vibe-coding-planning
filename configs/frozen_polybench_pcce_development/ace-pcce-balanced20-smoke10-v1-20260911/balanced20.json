@@ -1,0 +1,63 @@
+{
+  "baseline_composition": {
+    "pce_resolved": 10,
+    "pce_unresolved": 10,
+    "repositories": {
+      "Significant-Gravitas/AutoGPT": 1,
+      "huggingface/transformers": 9,
+      "keras-team/keras": 6,
+      "langchain-ai/langchain": 3,
+      "yt-dlp/yt-dlp": 1
+    },
+    "total": 20
+  },
+  "cleaning_audit_sha256": "0e4ab9b3823fed6225c0a896ba664582886dac99943890eb457ac0b581c0c2a2",
+  "interpretation_boundary": "Failure-enriched ACE-PCCE development selection; not a prevalence sample, untouched holdout, or confirmatory result.",
+  "parent_selection": "balanced40.json",
+  "parent_selection_sha256": "4f51ee2efcf9711c5fe1c075b5f96f959d5c1687a3c0f59e7d578ac9144d826e",
+  "purpose": "Bounded Candidate-3 ACE-PCCE development evaluation",
+  "schema_version": 1,
+  "selected_instance_ids": [
+    "Significant-Gravitas__AutoGPT-4652",
+    "huggingface__transformers-4759",
+    "huggingface__transformers-7078",
+    "huggingface__transformers-21345",
+    "huggingface__transformers-22458",
+    "huggingface__transformers-28115",
+    "huggingface__transformers-29311",
+    "huggingface__transformers-29449",
+    "huggingface__transformers-31217",
+    "huggingface__transformers-31646",
+    "langchain-ai__langchain-5609",
+    "langchain-ai__langchain-5625",
+    "langchain-ai__langchain-6765",
+    "yt-dlp__yt-dlp-5195",
+    "keras-team__keras-18871",
+    "keras-team__keras-19459",
+    "keras-team__keras-19773",
+    "keras-team__keras-19838",
+    "keras-team__keras-19937",
+    "keras-team__keras-20002"
+  ],
+  "selection_id": "polybench-ace-pcce-balanced20-v1-20260911",
+  "selection_policy": {
+    "repository_allocation": "largest-remainder proportional allocation within each PCE label",
+    "repository_quotas": {
+      "resolved": {
+        "huggingface/transformers": 6,
+        "keras-team/keras": 2,
+        "langchain-ai/langchain": 2
+      },
+      "unresolved": {
+        "Significant-Gravitas/AutoGPT": 1,
+        "huggingface/transformers": 3,
+        "keras-team/keras": 4,
+        "langchain-ai/langchain": 1,
+        "yt-dlp/yt-dlp": 1
+      }
+    },
+    "seed": "polybench-ace-pcce-balanced20-v1-20260911",
+    "target": "10 PCE-resolved and 10 PCE-unresolved cases",
+    "within_stratum_order": "ascending SHA256(seed + NUL + instance_id), then instance_id"
+  }
+}

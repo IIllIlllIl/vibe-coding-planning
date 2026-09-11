@@ -582,3 +582,20 @@ the 1800-second per-command ceiling, and leaves the complete Agent-session
 ceiling to the 35-minute Slurm task wall time. Because runtime source and
 execution semantics changed, v3 starts a fresh candidate tree and does not
 resume v2 state.
+
+The v3 run subsequently completed all 30 proposal iterations with 882 logical
+metric calls and produced six accepted candidates in addition to the Seed.
+On its 78-case development validation set (54 resolved, 24 unresolved), the
+asymmetric scalar objective retained candidate 0, the one-rule Seed, as best:
+its aggregate score was -0.3718. The six learned candidates scored from
+-0.6026 to -1.5897. Learned candidates increased bad-plan recall from 0 to a
+maximum of 0.625, but also increased costly false rejection from one case to
+between five and 23 cases; the recall gain therefore did not improve the
+declared scalar objective. These are resolved-proxy classification results,
+not PCCE or intervention-benefit evidence.
+
+A compact local authority is frozen at
+`configs/frozen_guidelines/ace-formal-v3-all-candidates-v1-20260911/`. It
+contains the semantically exact Seed and six playbooks, the exact run manifest,
+candidate lineage, and reconstructed validation metrics. The large raw GEPA
+result and Agent evidence remain under the run's Iris authority.

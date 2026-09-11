@@ -41,6 +41,8 @@ class PolyBenchPCCEConfig:
     pce: PolyBenchPCEConfig
     checker: OptimizationConfig
     hpc: HPCConfig
+    dialogue_checker_prompt: str = ""
+    dialogue_checker_instance_template: str = ""
 
 
 def _mapping(value: Any, name: str) -> dict[str, Any]:
@@ -166,8 +168,11 @@ def load_polybench_pcce_config(
     if hpc.max_task_attempts < 1:
         raise ValueError("hpc.max_task_attempts must be positive")
     execution_mode = str(method.get("execution_mode", "full_pcce"))
-    if execution_mode not in {"full_pcce", "checker_only"}:
-        raise ValueError("pcce.execution_mode must be 'full_pcce' or 'checker_only'")
+    if execution_mode not in {"full_pcce", "checker_only", "ace_pcce"}:
+        raise ValueError(
+            "pcce.execution_mode must be 'full_pcce', 'checker_only', or "
+            "'ace_pcce'"
+        )
     max_rejections = int(method.get("max_review_rejections", 3))
     expected_rejections = 1 if execution_mode == "checker_only" else 3
     if max_rejections != expected_rejections:
@@ -213,10 +218,16 @@ def load_polybench_pcce_config(
     checker = replace(checker, run_dir=run_dir, hpc=hpc)
     plan_revision_prompt = str(prompts.get("plan_revision_system", ""))
     plan_revision_instance = str(prompts.get("plan_revision_instance", ""))
-    if execution_mode == "full_pcce" and (
+    dialogue_checker_prompt = str(prompts.get("dialogue_checker_system", ""))
+    dialogue_checker_instance = str(prompts.get("dialogue_checker_instance", ""))
+    if execution_mode in {"full_pcce", "ace_pcce"} and (
         not plan_revision_prompt or not plan_revision_instance
     ):
-        raise ValueError("full_pcce requires both plan-revision prompts")
+        raise ValueError(f"{execution_mode} requires both plan-revision prompts")
+    if execution_mode == "ace_pcce" and (
+        not dialogue_checker_prompt or not dialogue_checker_instance
+    ):
+        raise ValueError("ace_pcce requires both dialogue-Checker prompts")
     return PolyBenchPCCEConfig(
         config_path=config_path,
         source_snapshot=source_snapshot,
@@ -231,6 +242,8 @@ def load_polybench_pcce_config(
         checker_instance_template=str(prompts["checker_instance"]),
         plan_revision_prompt=plan_revision_prompt,
         plan_revision_instance_template=plan_revision_instance,
+        dialogue_checker_prompt=dialogue_checker_prompt,
+        dialogue_checker_instance_template=dialogue_checker_instance,
         run_dir=run_dir,
         execution_mode=execution_mode,
         max_review_rejections=max_rejections,

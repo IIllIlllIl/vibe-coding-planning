@@ -1,0 +1,33 @@
+{
+  "bullets": [
+    {
+      "harmful": 0,
+      "helpful": 0,
+      "id": "plan-00001",
+      "lineage": [],
+      "text": "The Plan is a placeholder."
+    },
+    {
+      "harmful": 0,
+      "helpful": 0,
+      "id": "plan-00002",
+      "lineage": [],
+      "text": "The Plan prescribes a fix that omits a required supporting change, so it cannot resolve the stated bug."
+    },
+    {
+      "harmful": 0,
+      "helpful": 0,
+      "id": "plan-00003",
+      "lineage": [],
+      "text": "The Plan specifies changes to code whose implementation it did not inspect, asserting unverified internals as fact."
+    },
+    {
+      "harmful": 0,
+      "helpful": 0,
+      "id": "plan-00004",
+      "lineage": [],
+      "text": "The Plan leaves its central design decision open, presenting interchangeable alternatives instead of committing to one."
+    }
+  ],
+  "schema_version": 1
+}

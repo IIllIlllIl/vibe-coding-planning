@@ -1,0 +1,32 @@
+{
+  "initial_max_metric_calls": 3000,
+  "latest_max_metric_calls": 3000,
+  "semantic_config": {
+    "dataset": {
+      "manifest.json": "dc21db19746c53153b3aaa41915f7c6ed7a50c95731201f109941792ecd6f935",
+      "train.jsonl": "c1c575d1485403422c16c6c3900230477af6f1929e30b048c4e0d922904545a8",
+      "validation.jsonl": "350baaa7f7e8ca0539fd88026a7ad5714ce1997a2b5d7a77c1fa91bfd8896248"
+    },
+    "initial_playbook": "16e09571f484f355300dc29f7a828ba8d9b5ca691152ffb8b3b1f2d13d5f83e4",
+    "prompt_bundle": "69094346971696addedab449783d6e70973d42db3a58950813c49166d1e26dad",
+    "runtime_config": "fbfee6295efb4d2f2e9fb986e89e158a47c4dfffe1b26bf6fbd278a3a2a82c15",
+    "schema_version": 1,
+    "search": {
+      "reflection_minibatch_size": 8,
+      "seed": 42,
+      "skip_perfect_score": true
+    },
+    "selection": {"train": null, "validation": null},
+    "source": {
+      "playbook.py": "8842efaa36b1784b9c47517ea599bdcae4342cc95965dd90314ca9778404ec1e",
+      "playbook_adapter.py": "4e21a200db231343e6cc7789c3b72a471add489a8d49f03865972b37c310a9a4",
+      "playbook_hpc_agents.py": "572cfb59dfbcbce17bf8a295d62461f98ca8b1364b6207d4e6beac6029e82725",
+      "playbook_hpc_executor.py": "63daa5a8fb6428634fbc59932e6f6ec45d62ec03dce25b01eee6501da230773e",
+      "playbook_runner.py": "6992b7fe07a29d90369b53b93d4457080ced47b14f2384e5423b34fc6402937b",
+      "playbook_runtime.py": "d2d94db708c318547f556d88b2658eb7860d7a838b6cda3edcf0f0fdddc295f2",
+      "playbook_worker.py": "fe9cfde253e4a4e1a22b3756153aceaaa1e637ee0f8474df342980c56a211147"
+    }
+  },
+  "semantic_sha256": "bfa965fde7bed72e471c7a72cb57647bd2aff3209f6a4e090b82434b1a9596a2",
+  "version": 1
+}

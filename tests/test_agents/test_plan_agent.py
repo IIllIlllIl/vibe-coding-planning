@@ -146,6 +146,23 @@ class TestRunSuccess:
 
 
 class TestRunValidation:
+    def test_plan_artifact_uses_stdout_not_apptainer_stderr(self):
+        class Environment:
+            def execute(self, _command):
+                return {
+                    "returncode": 0,
+                    "stdout": '{"revised_plan":"safe"}',
+                    "stderr": "WARNING: unrelated apptainer diagnostic",
+                    "output": (
+                        '{"revised_plan":"safe"}'
+                        "WARNING: unrelated apptainer diagnostic"
+                    ),
+                }
+
+        assert plan_agent._read_plan_from_file(Environment()) == (
+            '{"revised_plan":"safe"}'
+        )
+
     @patch("src.agents.plan_agent.import_minisweagent")
     def test_empty_plan_raises_task_error(self, mock_import, config, mock_env):
         mock_import.return_value = (MockDefaultAgentEmpty, MockLiteLLMModel, object)

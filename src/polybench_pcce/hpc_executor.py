@@ -50,6 +50,8 @@ def pcce_semantic_sha256(config: PolyBenchPCCEConfig) -> str:
                 "checker_instance": config.checker_instance_template,
                 "plan_revision_system": config.plan_revision_prompt,
                 "plan_revision_instance": config.plan_revision_instance_template,
+                "dialogue_checker_system": config.dialogue_checker_prompt,
+                "dialogue_checker_instance": config.dialogue_checker_instance_template,
             },
             "max_review_rejections": config.max_review_rejections,
             "execution_mode": config.execution_mode,
@@ -62,8 +64,8 @@ def pcce_semantic_sha256(config: PolyBenchPCCEConfig) -> str:
 def _case_dict(case: PCCECase, *, include_outcome: bool = True) -> dict[str, Any]:
     source = case.source.to_dict()
     if not include_outcome:
-        # A Checker-only worker needs repository identity and the issue, but no
-        # benchmark test or downstream outcome evidence.
+        # Checker-only and ACE PC workers need repository identity and the
+        # issue, but no benchmark test or downstream outcome evidence.
         source.update(test_patch="", f2p=[], p2p=[], test_command="", source_row={})
     value = {
         "source": source,
@@ -128,7 +130,13 @@ def build_array_script(
                     '--output "${OUTPUT_JSON}" '
                     '--attempt-dir "${ATTEMPT_DIR}" '
                     '--checkpoint-dir "${CHECKPOINT_DIR}" '
-                    '--attempt "${ATTEMPT}"'
+                    '--attempt "${ATTEMPT}" '
+                    + (
+                        '--previous-output "${BATCH_DIR}/failed_outputs/'
+                        f'attempt_{attempt - 1:02d}/task_${{TASK_ID}}.json"'
+                        if attempt > 1
+                        else ""
+                    )
                 ),
             ]
         )
@@ -155,6 +163,7 @@ class PolyBenchPCCEHPCExecutor:
                         "rejection_count": item.rejection_count,
                         "input_plan_sha256": text_sha256(item.input_plan),
                         "previous_feedback_sha256": text_sha256(item.previous_feedback),
+                        "active_concerns": list(item.active_concerns),
                     }
                     for item in assignments
                 ],
@@ -185,6 +194,7 @@ class PolyBenchPCCEHPCExecutor:
                 "rejection_count": item.rejection_count,
                 "input_plan": item.input_plan,
                 "previous_feedback": item.previous_feedback,
+                "active_concerns": list(item.active_concerns),
                 "guideline_relpath": str(
                     guideline_artifact.relative_to(self.config.run_dir)
                 ),

@@ -1,0 +1,23 @@
+{
+  "best_idx": 0,
+  "candidate_count": 7,
+  "dataset": {
+    "pce_resolved": 54,
+    "pce_unresolved": 24,
+    "total": 78
+  },
+  "interpretation": "Development validation under the resolved proxy and asymmetric score; not downstream PCCE evidence.",
+  "metrics": [
+    {"accuracy": 0.6794871795, "aggregate_score": -0.3717948718, "bad_plan_recall": 0.0, "candidate_idx": 0, "false_accepts": 24, "false_rejects": 1, "rejection_precision": 0.0, "true_rejects": 0},
+    {"accuracy": 0.6538461538, "aggregate_score": -0.6025641026, "bad_plan_recall": 0.0833333333, "candidate_idx": 1, "false_accepts": 22, "false_rejects": 5, "rejection_precision": 0.2857142857, "true_rejects": 2},
+    {"accuracy": 0.5897435897, "aggregate_score": -1.1282051282, "bad_plan_recall": 0.25, "candidate_idx": 2, "false_accepts": 18, "false_rejects": 14, "rejection_precision": 0.3, "true_rejects": 6},
+    {"accuracy": 0.6538461538, "aggregate_score": -1.1153846154, "bad_plan_recall": 0.5, "candidate_idx": 3, "false_accepts": 12, "false_rejects": 15, "rejection_precision": 0.4444444444, "true_rejects": 12},
+    {"accuracy": 0.5897435897, "aggregate_score": -1.5897435897, "bad_plan_recall": 0.625, "candidate_idx": 4, "false_accepts": 9, "false_rejects": 23, "rejection_precision": 0.3947368421, "true_rejects": 15},
+    {"accuracy": 0.641025641, "aggregate_score": -1.0256410256, "bad_plan_recall": 0.375, "candidate_idx": 5, "false_accepts": 15, "false_rejects": 13, "rejection_precision": 0.4090909091, "true_rejects": 9},
+    {"accuracy": 0.6025641026, "aggregate_score": -1.3205128205, "bad_plan_recall": 0.4583333333, "candidate_idx": 6, "false_accepts": 13, "false_rejects": 18, "rejection_precision": 0.3793103448, "true_rejects": 11}
+  ],
+  "parents": [[null], [0], [1], [0], [3], [3], [2]],
+  "remote_authority": "/scratch/users/twang/vibe-coding-planning/playbook-gepa-run-state/output/SWE-bench_Verified/gepa-reject-playbook-runs/formal-30it-v3-20260910",
+  "score_matrix": {"good_accept": 0, "good_reject": -5, "bad_accept": -1, "bad_reject": 0, "invalid": -100},
+  "total_metric_calls": 882
+}

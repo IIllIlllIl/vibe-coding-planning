@@ -54,6 +54,7 @@ def run_task(
     attempt_dir: Path,
     checkpoint_dir: Path,
     attempt: int,
+    previous_output_path: Path | None = None,
 ) -> int:
     started = datetime.now(timezone.utc).isoformat()
     attempt_dir.mkdir(parents=True, exist_ok=True)
@@ -76,6 +77,12 @@ def run_task(
             attempt_dir=attempt_dir,
         )
         stage = f"{phase}_execution"
+        retry_feedback = ""
+        if previous_output_path is not None and previous_output_path.is_file():
+            previous_output = json.loads(
+                previous_output_path.read_text(encoding="utf-8")
+            )
+            retry_feedback = str(previous_output.get("error", ""))
         if phase == "pc":
             guideline = (config.run_dir / str(manifest["guideline_relpath"])).read_text(
                 encoding="utf-8"
@@ -89,6 +96,10 @@ def run_task(
                     rejection_count=int(manifest["rejection_count"]),
                     input_plan=str(manifest["input_plan"]),
                     previous_feedback=str(manifest.get("previous_feedback", "")),
+                    active_concerns=tuple(
+                        dict(item) for item in manifest.get("active_concerns", [])
+                    ),
+                    retry_feedback=retry_feedback,
                 ),
                 fingerprint=str(manifest["fingerprint"]),
                 guideline=guideline,
@@ -179,6 +190,7 @@ def main() -> int:
     parser.add_argument("--attempt-dir", required=True, type=Path)
     parser.add_argument("--checkpoint-dir", required=True, type=Path)
     parser.add_argument("--attempt", required=True, type=int)
+    parser.add_argument("--previous-output", type=Path)
     args = parser.parse_args()
     return run_task(
         config_path=args.config,
@@ -187,6 +199,7 @@ def main() -> int:
         attempt_dir=args.attempt_dir,
         checkpoint_dir=args.checkpoint_dir,
         attempt=args.attempt,
+        previous_output_path=args.previous_output,
     )
 
 

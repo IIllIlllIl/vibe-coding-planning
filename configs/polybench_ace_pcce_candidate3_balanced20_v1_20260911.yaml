@@ -1,0 +1,52 @@
+# Prepared development evaluation. This file does not authorize launch.
+mode: polybench_pcce
+status: ready_not_launched
+purpose: ace_pcce_candidate3_balanced20_development
+
+paths:
+  source_snapshot: output/SWE-PolyBench/polybench-pce-inputs/20260814_python113_v11_8c7d9485d1d0
+  image_manifest: output/SWE-PolyBench/polybench-pce-inputs/20260814_python113_v11_8c7d9485d1d0/images.json
+  validation_snapshot: output/SWE-PolyBench/polybench-guideline-validation-datasets/20260826_python99_cleanpce_depcache_03619730229d
+  pce_outcomes: output/SWE-PolyBench/polybench-guideline-validation-datasets/20260826_python99_cleanpce_depcache_03619730229d/paired_pce_outcomes.jsonl
+  selection_manifest: configs/frozen_polybench_pcce_development/ace-pcce-balanced20-smoke10-v1-20260911/balanced20.json
+  guideline: configs/frozen_guidelines/ace-formal-v3-candidate3-v1-20260911/candidate3.json
+  prompt_source_config: configs/prompts/polybench_ace_pcce_v1_20260911.yaml
+  pce_runtime_config: configs/polybench_pce_hpc_formal_clean_20260825.yaml
+  checker_runtime_config: configs/gepa_verified_rules.yaml
+  run_dir: output/SWE-PolyBench/polybench-pcce-runs/development/ace-candidate3-balanced20-v1-20260911
+
+pcce:
+  guideline_label: ace_formal_v3_candidate3
+  execution_mode: ace_pcce
+  validation_file: validation.jsonl
+  max_review_rejections: 3
+  instance_ids: []
+
+hpc:
+  submit: true
+  partition: batch
+  cpus_per_task: 1
+  mem: 4G
+  time: "00:45:00"
+  poll_interval_seconds: 300
+  task_output_grace_seconds: 300
+  missing_task_grace_seconds: 600
+  max_task_attempts: 3
+  remote_env_file: ~/.config/vibe-coding-planning/deepseek.env
+  python_module: lang/Python/3.11
+  container_module: tools/Apptainer
+  python_bin: python3
+  job_name_prefix: polybench-ace-pcce-c3-b20-v1-20260911
+  worker_config_path: configs/polybench_ace_pcce_candidate3_balanced20_v1_20260911.yaml
+
+experiment_contract:
+  input_universe: clean69
+  selected_cases: 20
+  selection: balanced10_resolved_10_unresolved
+  paired_first_plan: true
+  first_review_accept_policy: reuse_paired_historical_pce_outcome_without_ce
+  intervention_ce_policy: run_only_after_initial_rejection_and_dialogue_clearance
+  review_budget: 3_total_checker_rejections
+  success_standard: intervention_mediated_transitions_reported_separately
+  operational_incomplete_policy: never_convert_to_unresolved
+  launched: false

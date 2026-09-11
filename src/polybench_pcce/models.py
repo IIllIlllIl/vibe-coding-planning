@@ -28,6 +28,8 @@ class PCReviewAssignment:
     rejection_count: int
     input_plan: str
     previous_feedback: str
+    active_concerns: tuple[dict[str, Any], ...] = ()
+    retry_feedback: str = ""
 
 
 @dataclass(frozen=True)
