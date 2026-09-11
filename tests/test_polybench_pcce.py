@@ -855,6 +855,9 @@ def test_ace_config_uses_candidate3_and_hides_internal_bullet_metadata() -> None
     assert set(smoke.instance_ids) < set(config.instance_ids)
     assert smoke.guideline_path == config.guideline_path
     assert smoke.checker_prompt == config.checker_prompt
+    for loaded in (config, smoke):
+        _, identities = load_pcce_cases(loaded)
+        assert identities["selection_manifest_sha256"]
 
 
 def test_ace_retry_script_supplies_previous_host_failure(tmp_path: Path) -> None:

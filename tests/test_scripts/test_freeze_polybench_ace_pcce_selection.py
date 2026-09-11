@@ -2,6 +2,9 @@ import hashlib
 import json
 from pathlib import Path
 
+from scripts.tools.freeze_polybench_ace_pcce_budget_selections import (
+    build as build_budget_selections,
+)
 from scripts.tools.freeze_polybench_ace_pcce_selection import _has_abrupt_ending
 
 
@@ -89,3 +92,38 @@ def test_budget_selections_are_balanced_and_nested() -> None:
     assert smoke10["baseline_composition"]["pce_unresolved"] == 5
     assert formal20["parent_selection_sha256"] == _sha256(FROZEN / "balanced40.json")
     assert smoke10["parent_selection_sha256"] == _sha256(BUDGET / "balanced20.json")
+
+
+def test_budget_runtime_manifests_preserve_membership_and_source_authority() -> None:
+    clean = json.loads((FROZEN / "clean69.json").read_text(encoding="utf-8"))
+    for name in ("balanced20", "smoke10"):
+        frozen = json.loads((BUDGET / f"{name}.json").read_text(encoding="utf-8"))
+        runtime = json.loads(
+            (BUDGET / f"{name}-runtime-authority-v2.json").read_text(
+                encoding="utf-8"
+            )
+        )
+        assert runtime["selected_instance_ids"] == frozen["selected_instance_ids"]
+        assert runtime["source_selection_sha256"] == _sha256(
+            BUDGET / f"{name}.json"
+        )
+        for field in (
+            "source_manifest_sha256",
+            "source_validation_sha256",
+            "source_pce_outcomes_sha256",
+        ):
+            assert runtime[field] == clean[field]
+
+
+def test_budget_selection_builder_propagates_source_authority(tmp_path: Path) -> None:
+    output = tmp_path / "budget"
+    build_budget_selections(FROZEN, output)
+    clean = json.loads((FROZEN / "clean69.json").read_text(encoding="utf-8"))
+    for name in ("balanced20.json", "smoke10.json"):
+        generated = json.loads((output / name).read_text(encoding="utf-8"))
+        for field in (
+            "source_manifest_sha256",
+            "source_validation_sha256",
+            "source_pce_outcomes_sha256",
+        ):
+            assert generated[field] == clean[field]

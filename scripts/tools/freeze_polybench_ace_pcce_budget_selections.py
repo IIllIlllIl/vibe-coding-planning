@@ -81,6 +81,7 @@ def _manifest(
     quotas: dict[str, dict[str, int]],
     per_label: int,
     seed: str,
+    source_authority: dict[str, str],
 ) -> dict[str, Any]:
     selected_rows = [rows[instance_id] for instance_id in selected]
     return {
@@ -90,6 +91,7 @@ def _manifest(
         "parent_selection": parent.name,
         "parent_selection_sha256": _sha256(parent),
         "cleaning_audit_sha256": audit_sha256,
+        **source_authority,
         "selection_policy": {
             "target": f"{per_label} PCE-resolved and {per_label} PCE-unresolved cases",
             "repository_allocation": (
@@ -123,6 +125,13 @@ def build(parent_dir: Path, output: Path) -> None:
     parent40 = parent_dir / "balanced40.json"
     audit_path = parent_dir / "cleaning_audit.jsonl"
     parent = json.loads(parent40.read_text(encoding="utf-8"))
+    clean = json.loads((parent_dir / "clean69.json").read_text(encoding="utf-8"))
+    authority_fields = (
+        "source_manifest_sha256",
+        "source_validation_sha256",
+        "source_pce_outcomes_sha256",
+    )
+    source_authority = {field: clean[field] for field in authority_fields}
     audit = [
         json.loads(line)
         for line in audit_path.read_text(encoding="utf-8").splitlines()
@@ -151,6 +160,7 @@ def build(parent_dir: Path, output: Path) -> None:
             quotas=formal_quotas,
             per_label=10,
             seed=formal_seed,
+            source_authority=source_authority,
         ),
     )
 
@@ -171,6 +181,7 @@ def build(parent_dir: Path, output: Path) -> None:
             quotas=smoke_quotas,
             per_label=5,
             seed=smoke_seed,
+            source_authority=source_authority,
         ),
     )
 

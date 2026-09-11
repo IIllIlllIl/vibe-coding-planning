@@ -8,7 +8,7 @@ paths:
   image_manifest: output/SWE-PolyBench/polybench-pce-inputs/20260814_python113_v11_8c7d9485d1d0/images.json
   validation_snapshot: output/SWE-PolyBench/polybench-guideline-validation-datasets/20260826_python99_cleanpce_depcache_03619730229d
   pce_outcomes: output/SWE-PolyBench/polybench-guideline-validation-datasets/20260826_python99_cleanpce_depcache_03619730229d/paired_pce_outcomes.jsonl
-  selection_manifest: configs/frozen_polybench_pcce_development/ace-pcce-balanced20-smoke10-v1-20260911/smoke10.json
+  selection_manifest: configs/frozen_polybench_pcce_development/ace-pcce-balanced20-smoke10-v1-20260911/smoke10-runtime-authority-v2.json
   guideline: configs/frozen_guidelines/ace-formal-v3-candidate3-v1-20260911/candidate3.json
   prompt_source_config: configs/prompts/polybench_ace_pcce_v1_20260911.yaml
   pce_runtime_config: configs/polybench_pce_hpc_formal_clean_20260825.yaml
