@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import json
+from pathlib import Path
+import subprocess
 
 import pytest
 
@@ -22,6 +24,10 @@ class FakeEnvironment:
         if command.startswith("git reset --hard"):
             self.restored = True
             return {"returncode": 0, "output": "HEAD is now at abc"}
+        if command.startswith("git checkout --detach"):
+            return {"returncode": 0, "output": "HEAD is now at abc"}
+        if command.startswith("git fsck --unreachable"):
+            return {"returncode": 0, "output": ""}
         if command == "git rev-parse HEAD":
             return {"returncode": 0, "output": "abc\n"}
         if command.startswith("git status"):
@@ -64,3 +70,82 @@ def test_restore_blocks_when_worktree_remains_dirty(tmp_path) -> None:
             phase="checker",
             evidence_dir=tmp_path,
         )
+
+
+def test_restore_can_prune_future_history(tmp_path) -> None:
+    env = FakeEnvironment()
+
+    evidence = restore_repository_to_base(
+        env,
+        "abc",
+        phase="plan",
+        evidence_dir=tmp_path,
+        prune_future_history=True,
+    )
+
+    assert evidence["future_history_prune"]["returncode"] == 0
+    assert evidence["future_history_check"]["output"] == ""
+    assert any("git reflog expire" in command for command in env.commands)
+    assert any("git fsck --unreachable" in command for command in env.commands)
+
+
+def test_future_commit_is_unavailable_after_real_repository_prune(
+    tmp_path: Path,
+) -> None:
+    repository = tmp_path / "repo"
+    repository.mkdir()
+
+    def git(*args: str) -> str:
+        result = subprocess.run(
+            ["git", *args],
+            cwd=repository,
+            capture_output=True,
+            text=True,
+            check=True,
+        )
+        return result.stdout.strip()
+
+    git("init", "-q")
+    git("config", "user.email", "test@example.invalid")
+    git("config", "user.name", "Test")
+    (repository / "value.txt").write_text("base\n", encoding="utf-8")
+    git("add", "value.txt")
+    git("commit", "-qm", "base")
+    base = git("rev-parse", "HEAD")
+    (repository / "value.txt").write_text("future\n", encoding="utf-8")
+    git("commit", "-qam", "future")
+    future = git("rev-parse", "HEAD")
+    git("tag", "future-tag")
+
+    class LocalGitEnvironment:
+        def execute(self, command: str, timeout: int | None = None) -> dict:
+            result = subprocess.run(
+                ["bash", "-lc", command],
+                cwd=repository,
+                capture_output=True,
+                text=True,
+                check=False,
+                timeout=timeout,
+            )
+            return {
+                "returncode": result.returncode,
+                "output": result.stdout + result.stderr,
+            }
+
+    restore_repository_to_base(
+        LocalGitEnvironment(),
+        base,
+        phase="plan",
+        evidence_dir=tmp_path / "evidence",
+        prune_future_history=True,
+    )
+
+    assert git("rev-parse", "HEAD") == base
+    missing = subprocess.run(
+        ["git", "cat-file", "-e", f"{future}^{{commit}}"],
+        cwd=repository,
+        capture_output=True,
+        check=False,
+    )
+    assert missing.returncode != 0
+    assert git("for-each-ref", "--format=%(refname)") == ("refs/heads/vibe-frozen-base")

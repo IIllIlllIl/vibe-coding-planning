@@ -66,6 +66,7 @@ def run_task(
     attempt_dir.mkdir(parents=True, exist_ok=True)
     manifest: dict[str, Any] = {}
     case: SWEVerifiedPCECase | None = None
+    config = None
     stage = "input_load"
     try:
         manifest = json.loads(task_manifest_path.read_text(encoding="utf-8"))
@@ -91,6 +92,10 @@ def run_task(
         )
         result = runner.run(case)
         stage = "output_write"
+        attempt_relative_path = attempt_dir.relative_to(config.run_dir).as_posix()
+        checkpoint_relative_path = checkpoint_dir.relative_to(
+            config.run_dir
+        ).as_posix()
         atomic_json(
             output_path,
             {
@@ -102,8 +107,8 @@ def run_task(
                 "instance_id": case.instance_id,
                 "row_sha256": case.row_sha256,
                 "attempt": attempt,
-                "attempt_evidence_dir": str(attempt_dir),
-                "checkpoint_dir": str(checkpoint_dir),
+                "attempt_evidence_relative_path": attempt_relative_path,
+                "checkpoint_relative_path": checkpoint_relative_path,
                 "started_at": started_at,
                 "finished_at": datetime.now(timezone.utc).isoformat(),
                 **result,
@@ -130,8 +135,16 @@ def run_task(
             "task_index": manifest.get("task_index"),
             "instance_id": case.instance_id if case else manifest.get("instance_id"),
             "attempt": attempt,
-            "attempt_evidence_dir": str(attempt_dir),
-            "checkpoint_dir": str(checkpoint_dir),
+            "attempt_evidence_relative_path": (
+                attempt_dir.relative_to(config.run_dir).as_posix()
+                if config is not None
+                else None
+            ),
+            "checkpoint_relative_path": (
+                checkpoint_dir.relative_to(config.run_dir).as_posix()
+                if config is not None
+                else None
+            ),
             "started_at": started_at,
             "finished_at": datetime.now(timezone.utc).isoformat(),
             "failure_stage": stage,

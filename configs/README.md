@@ -46,6 +46,8 @@ labels, image manifests, output roots, or baseline identities in a new run.
 | `hpc_supervisor.example.yaml` | Non-runnable template using supervisor-derived staging/dataset/run-state paths and conservative staging reclamation. |
 | `swe_verified_safe_pce_audit10_v3_20260912.yaml` | Launch-authorized ten-case Safe PCE boundary and human-audit smoke spanning nine repositories and distinct failure/reasoning risks; its independent 10/10 SIF/base-commit audit is frozen beside the selection. |
 | `swe_verified_safe_pce_audit10_supervisor_v1_20260912.yaml` | Reviewed launch identity for the ten-case Safe PCE audit smoke; it uses shared default paths and conservative staging reclamation. Presence does not authorize launch. |
+| `swe_verified_safe_pce_audit10_v4_20260912.yaml` | Prepared replacement audit10 smoke with exact issue-URL allowlists, Agent source-acquisition blocking, and base-and-ancestor-only local Git history. |
+| `swe_verified_safe_pce_audit10_supervisor_v2_20260912.yaml` | Prepared supervisor identity for the v4 source-boundary smoke; presence does not authorize launch. |
 | `swe_verified_safe_pce_smoke_v1_20260911.yaml` | Prepared, launch-unauthorized two-case Safe PCE contract using direct `FINAL_PLAN` submission and the retained Verified Code/evaluator path. |
 | `frozen_swe_verified_playbook_gepa/20260909_clean444_25e5ce38271c/` | Eligibility-cleaned immutable Verified development snapshot with 444 cases and exhaustive exclusion/audit authorities. |
 | `gepa_verified_reject_playbook_smoke_v1_20260909.yaml` | Completed diagnostic 4-train/2-validation smoke; distributed execution worked, but Checker schema ambiguity and inline Reflection overflow prevented a proposal. |

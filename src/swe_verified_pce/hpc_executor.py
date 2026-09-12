@@ -120,6 +120,11 @@ def execution_fingerprint(
                 if config.selection_manifest is not None
                 else None
             ),
+            "source_access_manifest_sha256": (
+                file_sha256(config.source_access_manifest)
+                if config.source_access_manifest is not None
+                else None
+            ),
             "cases": [
                 {
                     "instance_id": case.instance_id,

@@ -40,6 +40,15 @@ quotes, and template fragments in the Plan therefore cannot be executed or
 reconstructed as shell. Legacy stdout/file submission is rejected and retried;
 no `/tmp` file can override the submitted Plan.
 
+For direct Safe PCE submissions, the Host validates but never repairs the Plan.
+The artifact must start with `# Plan`, contain exactly one nonempty Navigation,
+Reproduction, Patch, and Validation section in that order, and contain no known
+tool-protocol residue. An invalid submission raises an Agent contract failure
+before any Plan checkpoint is written, so the ordinary bounded Slurm retry
+starts a fresh Planner. The Host removes only the fixed `FINAL_PLAN` transport
+framing and preserves the remaining Plan text without trimming or normalizing
+it.
+
 The Host records the exact Plan text, hash, submission protocol, and raw
 trajectory atomically. It verifies the hash before Code starts. Code receives
 only the issue and that Plan string in a fresh base-commit workspace. Planner
@@ -51,19 +60,44 @@ fixtures remain outside the submitted patch, and the official evaluator applies
 the official test patch separately. Operational or infrastructure failure is
 never converted to `unresolved`.
 
+An empty Code submission is an Agent contract failure, not an evaluator
+outcome. It is rejected before the Code checkpoint is written. The retained
+Plan checkpoint is then reused while the bounded Slurm retry starts a fresh
+Code Agent; exhausting those retries remains operationally incomplete rather
+than becoming `unresolved`.
+
+Retained artifact references are relative to the canonical run directory, not
+to an `ulhpc-submit` staging copy. Consolidated rows include the Plan and Patch
+SHA-256 values directly. Submission workdirs may therefore be reclaimed without
+leaving the result authority dependent on their absolute paths.
+
 ## Agent Environment Boundary
 
 Planner and Code use the dependencies already present in the SIF, trying
-`/opt/miniconda3/envs/testbed/bin/python` first. Prompts prohibit installing or
-upgrading the target repository. Network access is not globally disabled, but
-the Apptainer command boundary rejects remote Git acquisition: `clone`,
-`fetch`, `pull`, `ls-remote`, `remote update`, and remote submodule update.
-Local history present in the frozen image remains available.
+`/opt/miniconda3/envs/testbed/bin/python` first. Before either Agent starts, its
+disposable repository is detached at the dataset base commit; other local
+refs, reflogs, and unreachable objects are removed. The evaluator keeps the
+official repository preparation path and does not receive this Agent-only
+history restriction.
 
-This is a conservative accidental-leakage blacklist, not a complete network
-isolation claim. Smoke review must inspect trajectories for blocked commands,
-package installation, unexpected network use, and whether Agents actually use
-or inspect the supplied project environment.
+Each run may bind a frozen task-level source-access manifest. Its exact HTTP
+URLs come only from the frozen issue description and are shared by all attempts
+for that task. At the Agent command boundary:
+
+- local shell, tests, base-and-ancestor Git history, local editable installs,
+  and non-target package installs remain available;
+- all remote Git acquisition is rejected;
+- `curl` may read only exact listed URLs without redirect following; `wget`,
+  observed Python HTTP clients, dynamic URLs, and unlisted URLs are rejected
+  because their redirect/source boundary is not reliably auditable here;
+- target-package installation and pip URL/VCS installation are rejected.
+
+The Host returns a rejected command with status 126 and an observation; it does
+not rewrite or execute the command. Later Agent action may recover normally.
+The policy does not infer that every allowed non-target package is a necessary
+test dependency, and it is a conservative accidental-leakage guard rather than
+a security sandbox. Raw trajectories are the authority for smoke analysis of
+missed and mistaken blocks.
 
 ## Audit10 Development Smoke
 
@@ -88,12 +122,22 @@ dimensions, but they are not runtime inputs, a balancing objective, or success
 criteria. This is development-only manual-audit material, not a quality,
 prevalence, or held-out generalization estimate.
 
-The runtime is `configs/swe_verified_safe_pce_audit10_v3_20260912.yaml`; the
-only next-launch identity is
-`configs/swe_verified_safe_pce_audit10_supervisor_v1_20260912.yaml`. It uses one
+The completed unsafe runtime is
+`configs/swe_verified_safe_pce_audit10_v3_20260912.yaml`. Its prepared
+replacement is `configs/swe_verified_safe_pce_audit10_v4_20260912.yaml`, with
+supervisor identity
+`configs/swe_verified_safe_pce_audit10_supervisor_v2_20260912.yaml`. It uses one
 CPU, 4G, and 45 minutes per Agent/evaluator array element, three operational
-attempts, five-minute controller polling, shared storage defaults, and inactive
-staging reclamation.
+attempts, five-minute controller polling, shared storage defaults, and
+conservative staging reclamation.
+
+The replacement additionally freezes
+`configs/frozen_swe_verified_smoke/safe-pce-audit10-source-access-v1-20260912.json`.
+Six selected tasks contain issue URLs and four contain none, so trajectory
+review can inspect allowed task sources, blocked non-task sources, and cases
+that should require no network. The smoke must not claim complete containment:
+review explicitly checks unrecognized clients, URL construction, pip behavior,
+local-history visibility, and environment failures caused by the policy.
 
 The ten existing SIFs were independently re-audited on compute node
 `iris-096` by Slurm job `5939144`: all ten byte hashes were frozen and all ten
@@ -109,6 +153,18 @@ the checkpoint and Code handoff, retain raw Plan/Code/evaluator evidence, obey
 the repository and acquisition boundary, and reach a terminal evaluator result
 without operationally incomplete phases. No resolved-count improvement is
 required.
+
+The smoke completed 10/10 cases (8 resolved, 2 unresolved), but its data-quality
+audit found confirmed post-decision implementation leakage in four cases. The
+current blacklist blocks remote Git commands but does not prevent downloading
+later source through other clients, and the frozen repositories expose later or
+unreachable Git objects. Two terminal Plans also contain provider protocol
+residue, and one unresolved result is an empty Code submission rather than an
+official-test failure. Consequently, this run validates orchestration and
+artifact transport only; none of its outcomes is currently certified as Safe
+PCE training evidence. See
+[`knowledge/safe-pce-audit10-data-quality.md`](knowledge/safe-pce-audit10-data-quality.md)
+for the case-level audit and required boundary repairs.
 
 ## Historical Evidence
 

@@ -26,10 +26,7 @@ def test_image_to_sif_name_mapping():
         )
         == "swebench_sweb.eval.x86_64.astropy_1776_astropy-12907_latest.sif"
     )
-    assert (
-        _image_to_sif_name("python:3.12-slim")
-        == "python_3.12-slim.sif"
-    )
+    assert _image_to_sif_name("python:3.12-slim") == "python_3.12-slim.sif"
     assert _image_to_sif_name("repo.io/image:tag") == "repo.io_image_tag.sif"
 
 
@@ -168,6 +165,8 @@ def _make_env(
     *,
     network_disabled: bool = False,
     block_git_remote_operations: bool = False,
+    source_access_allowed_urls=None,
+    source_access_target_packages=None,
     run_args=None,
 ):
     cache_dir.mkdir(parents=True, exist_ok=True)
@@ -180,13 +179,13 @@ def _make_env(
         capacity_window=_TrackingCapacityWindow(),
         network_disabled=network_disabled,
         block_git_remote_operations=block_git_remote_operations,
+        source_access_allowed_urls=source_access_allowed_urls,
+        source_access_target_packages=source_access_target_packages,
         run_args=run_args,
     )
 
 
-def test_environment_execute_builds_expected_apptainer_args(
-    tmp_path, monkeypatch
-):
+def test_environment_execute_builds_expected_apptainer_args(tmp_path, monkeypatch):
     cache_dir = tmp_path / "sifs"
     calls = []
 
@@ -309,8 +308,10 @@ def test_environment_blocks_each_remote_git_form(command, tmp_path, monkeypatch)
     monkeypatch.setattr(
         subprocess,
         "run",
-        lambda args, **kwargs: calls.append(args)
-        or subprocess.CompletedProcess(args, returncode=0, stdout="", stderr=""),
+        lambda args, **kwargs: (
+            calls.append(args)
+            or subprocess.CompletedProcess(args, returncode=0, stdout="", stderr="")
+        ),
     )
     env = _make_env(cache_dir, block_git_remote_operations=True)
     calls.clear()
@@ -319,6 +320,110 @@ def test_environment_blocks_each_remote_git_form(command, tmp_path, monkeypatch)
 
     assert result["returncode"] == 126
     assert calls == []
+
+
+def test_source_access_allows_exact_issue_url_and_blocks_other_http(
+    tmp_path, monkeypatch
+):
+    cache_dir = tmp_path / "sifs"
+    calls = []
+    monkeypatch.setattr(
+        subprocess,
+        "run",
+        lambda args, **kwargs: (
+            calls.append(args)
+            or subprocess.CompletedProcess(args, returncode=0, stdout="ok", stderr="")
+        ),
+    )
+    env = _make_env(
+        cache_dir,
+        source_access_allowed_urls=["https://docs.example.org/exact?page=1"],
+        source_access_target_packages=["target-project"],
+    )
+    calls.clear()
+
+    allowed = env.execute("curl https://docs.example.org/exact?page=1")
+    blocked = env.execute("curl https://docs.example.org/other")
+
+    assert allowed["returncode"] == 0
+    assert blocked["returncode"] == 126
+    assert "absent from the frozen task allowlist" in blocked["stderr"]
+    assert len(calls) == 1
+
+
+@pytest.mark.parametrize(
+    "command, reason",
+    [
+        ("curl -L https://docs.example.org/exact", "redirect"),
+        ("python -c 'import requests; requests.get(url)'", "dynamic"),
+        ("pip install target_project", "target package"),
+        ("python -m pip install git+https://example.org/repo.git", "VCS"),
+        ("git fetch origin main", "remote Git"),
+    ],
+)
+def test_source_access_blocks_observed_future_source_paths(
+    command, reason, tmp_path, monkeypatch
+):
+    cache_dir = tmp_path / "sifs"
+    calls = []
+    monkeypatch.setattr(
+        subprocess,
+        "run",
+        lambda args, **kwargs: (
+            calls.append(args)
+            or subprocess.CompletedProcess(args, returncode=0, stdout="", stderr="")
+        ),
+    )
+    env = _make_env(
+        cache_dir,
+        source_access_allowed_urls=["https://docs.example.org/exact"],
+        source_access_target_packages=["target-project"],
+    )
+    calls.clear()
+
+    result = env.execute(command)
+
+    assert result["returncode"] == 126
+    if reason == "dynamic":
+        assert "no-redirect" in result["stderr"].lower()
+    else:
+        assert reason.lower() in result["stderr"].lower()
+    assert calls == []
+
+
+@pytest.mark.parametrize(
+    "command",
+    [
+        "pip install pytest",
+        "python -m pip install -e .",
+        "git log --all --oneline",
+        "python -m pytest -q",
+    ],
+)
+def test_source_access_allows_local_work_and_non_target_dependencies(
+    command, tmp_path, monkeypatch
+):
+    cache_dir = tmp_path / "sifs"
+    calls = []
+    monkeypatch.setattr(
+        subprocess,
+        "run",
+        lambda args, **kwargs: (
+            calls.append(args)
+            or subprocess.CompletedProcess(args, returncode=0, stdout="ok", stderr="")
+        ),
+    )
+    env = _make_env(
+        cache_dir,
+        source_access_allowed_urls=[],
+        source_access_target_packages=["target-project"],
+    )
+    calls.clear()
+
+    result = env.execute(command)
+
+    assert result["returncode"] == 0
+    assert len(calls) == 1
 
 
 def test_environment_host_workdir_is_initialized_and_bound(tmp_path, monkeypatch):
@@ -371,9 +476,7 @@ def test_environment_host_workdir_is_initialized_and_bound(tmp_path, monkeypatch
 
     args = calls[-1]
     binds = [
-        args[index + 1]
-        for index, value in enumerate(args[:-1])
-        if value == "--bind"
+        args[index + 1] for index, value in enumerate(args[:-1]) if value == "--bind"
     ]
     assert f"{host_workdir}:/testbed" in binds
 

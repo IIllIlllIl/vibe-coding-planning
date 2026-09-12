@@ -11,6 +11,7 @@ from __future__ import annotations
 import base64
 import logging
 import os
+import re
 import shlex
 import shutil
 import subprocess
@@ -18,11 +19,32 @@ import sys
 import tempfile
 from pathlib import Path
 from typing import Any
+from urllib.parse import urlsplit, urlunsplit
 
 from src.environment.docker_env import DockerCapacityWindow
 from src.exceptions import CommandTimeoutError, FatalError
 
 logger = logging.getLogger(__name__)
+
+_HTTP_URL_RE = re.compile(r"https?://[^\s'\"<>]+", re.IGNORECASE)
+_PYTHON_HTTP_MARKERS = (
+    "requests.",
+    "httpx.",
+    "urllib.request",
+    "urlopen(",
+    "http.client",
+)
+
+
+def _canonical_http_url(value: str) -> str:
+    """Canonicalize only the stable, exact-match parts of an HTTP URL."""
+
+    parsed = urlsplit(value.rstrip(".,;:)]}"))
+    if parsed.scheme.lower() not in {"http", "https"} or not parsed.netloc:
+        raise ValueError(f"not an HTTP URL: {value}")
+    return urlunsplit(
+        (parsed.scheme.lower(), parsed.netloc.lower(), parsed.path, parsed.query, "")
+    )
 
 
 def _blocked_git_remote_operation(command: str) -> str | None:
@@ -77,6 +99,84 @@ def _blocked_git_remote_operation(command: str) -> str | None:
                     if submodule_action == "update":
                         return "submodule update --remote"
                 break
+    return None
+
+
+def _blocked_network_source_operation(
+    command: str,
+    *,
+    allowed_urls: frozenset[str],
+    target_packages: frozenset[str],
+) -> str | None:
+    """Return why a common Agent source-acquisition command is disallowed.
+
+    This small command-level policy is an experimental guardrail, not a
+    security sandbox. It covers acquisition paths observed in prior PCE
+    trajectories and rejects dynamic HTTP requests that cannot be compared
+    with the frozen task allowlist.
+    """
+
+    remote_git = _blocked_git_remote_operation(command)
+    if remote_git is not None:
+        return f"remote Git operation 'git {remote_git}'"
+
+    lower = command.lower()
+    pip_install = bool(
+        re.search(
+            r"(?:^|[;&|()]|\s)(?:python(?:3(?:\.\d+)?)?\s+-m\s+)?"
+            r"(?:[^\s;&|()]*/)?pip(?:3)?\s+install(?:\s|$)",
+            lower,
+        )
+    )
+    if pip_install:
+        if re.search(r"(?:git\+|https?://)", command, re.IGNORECASE):
+            return "pip installation from a remote URL or VCS source"
+        try:
+            tokens = shlex.split(command)
+        except ValueError:
+            tokens = command.split()
+        normalized_tokens = {
+            re.sub(
+                r"[-_.]+",
+                "-",
+                re.split(r"[<>=!~;@]", token.split("[", 1)[0], maxsplit=1)[0].lower(),
+            )
+            for token in tokens
+            if token and not token.startswith("-")
+        }
+        if normalized_tokens & target_packages:
+            package = sorted(normalized_tokens & target_packages)[0]
+            return f"installation or upgrade of target package '{package}'"
+
+    is_curl_or_wget = bool(
+        re.search(
+            r"(?:^|[;&|()]|\s)(?:[^\s;&|()]*/)?(?:curl|wget)(?:\s|$)",
+            lower,
+        )
+    )
+    is_python_http = any(marker in lower for marker in _PYTHON_HTTP_MARKERS)
+    if is_curl_or_wget or is_python_http:
+        if (
+            re.search(r"(?:^|[;&|()]|\s)(?:[^\s;&|()]*/)?wget(?:\s|$)", lower)
+            or is_python_http
+        ):
+            return (
+                "HTTP client cannot enforce this experiment's no-redirect "
+                "boundary; use curl without -L for an exact task URL"
+            )
+        urls = _HTTP_URL_RE.findall(command)
+        if not urls:
+            return "HTTP request with a dynamic or non-auditable URL"
+        for url in urls:
+            try:
+                canonical = _canonical_http_url(url)
+            except ValueError:
+                return f"malformed HTTP URL '{url}'"
+            if canonical not in allowed_urls:
+                return f"HTTP URL is absent from the frozen task allowlist: {canonical}"
+        if re.search(r"(?:^|\s)(?:-L|--location)(?:\s|$)", command):
+            return "HTTP redirect following is outside the exact-URL allowlist"
+
     return None
 
 
@@ -172,9 +272,7 @@ class ApptainerSifCache:
             if result.returncode != 0:
                 tmp_sif.unlink(missing_ok=True)
                 stderr = (result.stderr or result.stdout or "").strip()
-                raise FatalError(
-                    f"Apptainer pull failed for {image}: {stderr[:1000]}"
-                )
+                raise FatalError(f"Apptainer pull failed for {image}: {stderr[:1000]}")
             if not tmp_sif.exists():
                 tmp_sif.unlink(missing_ok=True)
                 raise FatalError(
@@ -221,6 +319,8 @@ class ApptainerEnvironment:
         initialize_host_workdir: bool = True,
         isolate_tmp: bool = False,
         block_git_remote_operations: bool = False,
+        source_access_allowed_urls: list[str] | None = None,
+        source_access_target_packages: list[str] | None = None,
     ) -> None:
         self._image = image
         self._cwd = cwd
@@ -237,6 +337,17 @@ class ApptainerEnvironment:
         self._initialize_host_workdir = initialize_host_workdir
         self._isolate_tmp = isolate_tmp
         self._block_git_remote_operations = block_git_remote_operations
+        self._source_access_allowed_urls = frozenset(
+            _canonical_http_url(value) for value in (source_access_allowed_urls or [])
+        )
+        self._source_access_target_packages = frozenset(
+            re.sub(r"[-_.]+", "-", value.lower())
+            for value in (source_access_target_packages or [])
+        )
+        self._source_access_policy_enabled = (
+            source_access_allowed_urls is not None
+            or source_access_target_packages is not None
+        )
         self._isolated_tmp: tempfile.TemporaryDirectory[str] | None = None
 
         self._cache = ApptainerSifCache(sif_cache_dir, capacity_window)
@@ -270,9 +381,7 @@ class ApptainerEnvironment:
 
     def _prepare_isolated_home(self) -> None:
         """Set a phase-local writable HOME without exposing the real home."""
-        self._isolated_home = tempfile.TemporaryDirectory(
-            prefix="vibe-apptainer-home-"
-        )
+        self._isolated_home = tempfile.TemporaryDirectory(prefix="vibe-apptainer-home-")
         self._run_args.extend(
             [
                 "--home",
@@ -287,12 +396,8 @@ class ApptainerEnvironment:
         A phase-local host directory keeps temporary files visible between
         actions in one phase without exposing them to later Agent phases.
         """
-        self._isolated_tmp = tempfile.TemporaryDirectory(
-            prefix="vibe-apptainer-tmp-"
-        )
-        self._run_args.extend(
-            ["--bind", f"{self._isolated_tmp.name}:/tmp"]
-        )
+        self._isolated_tmp = tempfile.TemporaryDirectory(prefix="vibe-apptainer-tmp-")
+        self._run_args.extend(["--bind", f"{self._isolated_tmp.name}:/tmp"])
 
     def _prepare_host_workdir(self) -> None:
         """Create a persistent host workdir and bind it to the container cwd.
@@ -413,13 +518,22 @@ class ApptainerEnvironment:
         timeout: int | None = None,
     ) -> dict[str, Any]:
         """Execute a shell command inside the Apptainer container."""
-        blocked_operation = _blocked_git_remote_operation(command)
-        if self._block_git_remote_operations and blocked_operation is not None:
+        blocked_reason = None
+        if self._source_access_policy_enabled:
+            blocked_reason = _blocked_network_source_operation(
+                command,
+                allowed_urls=self._source_access_allowed_urls,
+                target_packages=self._source_access_target_packages,
+            )
+        elif self._block_git_remote_operations:
+            blocked_operation = _blocked_git_remote_operation(command)
+            if blocked_operation is not None:
+                blocked_reason = f"remote Git operation 'git {blocked_operation}'"
+        if blocked_reason is not None:
             message = (
-                "Command blocked by the experiment boundary: remote Git "
-                f"operation 'git {blocked_operation}' is unavailable. Inspect "
-                "the repository and history already present at the frozen base "
-                "commit instead.\n"
+                "Command blocked by the experiment source boundary: "
+                f"{blocked_reason}. Use the repository at the frozen base "
+                "commit or an exact URL supplied by the task.\n"
             )
             return {
                 "output": message,

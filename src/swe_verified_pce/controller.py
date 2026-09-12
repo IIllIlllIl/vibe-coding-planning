@@ -155,6 +155,11 @@ def run_swe_verified_pce(config: SWEVerifiedPCEConfig) -> dict[str, Any] | None:
             if config.selection_manifest is not None
             else None
         ),
+        "source_access_manifest_sha256": (
+            file_sha256(config.source_access_manifest)
+            if config.source_access_manifest is not None
+            else None
+        ),
         "source_instances": len(source_rows),
         "image_available_instances": len(all_image_available_cases),
         "execution_instances": len(cases),
@@ -175,6 +180,7 @@ def run_swe_verified_pce(config: SWEVerifiedPCEConfig) -> dict[str, Any] | None:
         "repository_baseline": {
             "declared_revision": "dataset_base_commit",
             "restore": "git reset --hard <base_commit> && git clean -fd",
+            "agent_future_history": "refs_reflogs_and_unreachable_objects_pruned",
             "verified_phases": ["plan", "code", "evaluate"],
             "evidence": "attempt/repository_baselines/<phase>/repository_baseline.json",
         },

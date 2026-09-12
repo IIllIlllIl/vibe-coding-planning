@@ -9,7 +9,16 @@ import pytest
 
 from src.agents import plan_agent
 from src.config import AgentConfig, Config, PromptConfig, SystemConfig
-from src.exceptions import FatalError, TaskError
+from src.exceptions import AgentTaskError, FatalError, TaskError
+
+
+DIRECT_PLAN_TEXT = (
+    "# Plan\n\n"
+    "## Navigation (N)\nInspect `file.py`.\n\n"
+    "## Reproduction (R)\nRun the focused reproduction.\n\n"
+    "## Patch (P)\nUpdate the affected branch.\n\n"
+    "## Validation (V)\nRun the focused test."
+)
 
 
 class MockLiteLLMModel:
@@ -61,9 +70,16 @@ class MockDefaultAgentSpaces(MockDefaultAgent):
 class MockDefaultAgentDirect(MockDefaultAgent):
     def run(self, **kwargs):
         MockDefaultAgent.last_run_kwargs = kwargs
-        plan = "# Plan\n\n```python\nprint('$() and `ticks`')\n```"
+        plan = DIRECT_PLAN_TEXT
         self.messages[-1]["content"] = "FINAL_PLAN\n" + plan
         return ("Submitted", plan_agent._DIRECT_PLAN_PAYLOAD_PREFIX + plan)
+
+
+class MockDefaultAgentDirectTrailingWhitespace(MockDefaultAgent):
+    def run(self, **kwargs):
+        plan = DIRECT_PLAN_TEXT + "\n\n"
+        self.messages[-1]["content"] = "FINAL_PLAN\n" + plan
+        return "Submitted", plan_agent._DIRECT_PLAN_PAYLOAD_PREFIX + plan
 
 
 class MockDefaultAgentLimitExceeded(MockDefaultAgent):
@@ -140,10 +156,10 @@ class TestRunSuccess:
         )
 
     @patch("src.agents.plan_agent.import_minisweagent")
-    def test_plan_trimmed(self, mock_import, config, mock_env):
+    def test_plan_not_trimmed_by_host(self, mock_import, config, mock_env):
         mock_import.return_value = (MockDefaultAgentSpaces, MockLiteLLMModel, object)
         plan, _ = plan_agent.run(config, "Fix parser bug", mock_env)
-        assert plan == "plan with spaces"
+        assert plan == "  plan with spaces  "
 
     def test_direct_plan_terminal_preserves_markdown_without_shell(self):
         class SubmittedForTest(Exception):
@@ -214,13 +230,66 @@ class TestRunSuccess:
             mock_env,
             require_direct_submission=True,
         )
-        assert plan == "# Plan\n\n```python\nprint('$() and `ticks`')\n```"
+        assert plan == DIRECT_PLAN_TEXT
         system = MockDefaultAgent.last_kwargs["system_template"]
         assert "Planner action and final-submission protocol" in system
         assert "Mini-swe action protocol" not in system
 
+    @patch("src.agents.plan_agent.import_minisweagent")
+    def test_safe_pce_preserves_valid_plan_trailing_whitespace(
+        self, mock_import, config, mock_env
+    ):
+        mock_import.return_value = (
+            MockDefaultAgentDirectTrailingWhitespace,
+            MockLiteLLMModel,
+            object,
+        )
+        plan, _ = plan_agent.run(
+            config,
+            "Fix parser bug",
+            mock_env,
+            require_direct_submission=True,
+        )
+        assert plan == DIRECT_PLAN_TEXT + "\n\n"
+
 
 class TestRunValidation:
+    @pytest.mark.parametrize(
+        ("plan", "message"),
+        [
+            ("plain text", "must start"),
+            (
+                "# Plan\n\n## Navigation (N)\nx\n\n## Reproduction (R)\nx\n\n"
+                "## Patch (P)\nx\n\n## Validation (V)\nx\n</parameter>",
+                "protocol residue",
+            ),
+            (
+                "# Plan\n\n## Navigation (N)\nx\n\n## Reproduction (R)\nx\n\n"
+                "## Patch (P)\nx\n\n## Validation (V)\n",
+                "section is empty",
+            ),
+        ],
+    )
+    @patch("src.agents.plan_agent.import_minisweagent")
+    def test_safe_pce_rejects_invalid_markdown_without_rewriting(
+        self, mock_import, plan, message, config, mock_env
+    ):
+        class InvalidDirect(MockDefaultAgent):
+            def run(self, **kwargs):
+                self.messages[-1]["content"] = "FINAL_PLAN\n" + plan
+                return "Submitted", plan_agent._DIRECT_PLAN_PAYLOAD_PREFIX + plan
+
+        mock_import.return_value = (InvalidDirect, MockLiteLLMModel, object)
+        with pytest.raises(AgentTaskError, match=message) as caught:
+            plan_agent.run(
+                config,
+                "Fix parser bug",
+                mock_env,
+                require_direct_submission=True,
+            )
+        assert caught.value.reason == "plan_invalid_markdown"
+        assert caught.value.trajectory[-1]["content"] == "FINAL_PLAN\n" + plan
+
     @patch("src.agents.plan_agent.import_minisweagent")
     def test_submitted_plan_cannot_be_overridden_by_tmp_file(
         self, mock_import, config
@@ -245,7 +314,7 @@ class TestRunValidation:
             Environment(),
             require_direct_submission=True,
         )
-        assert plan == "# Plan\n\n```python\nprint('$() and `ticks`')\n```"
+        assert plan.startswith("# Plan\n")
 
     def test_plan_artifact_uses_stdout_not_apptainer_stderr(self):
         class Environment:

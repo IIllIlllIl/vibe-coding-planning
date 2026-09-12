@@ -46,6 +46,16 @@ class SWEVerifiedPCERunner:
         self.audit = JsonlLogger(attempt_dir / "audit_events.jsonl")
         self.usage = JsonlLogger(attempt_dir / "usage.jsonl")
 
+    def _authority_relative_path(self, path: Path) -> str:
+        """Represent retained artifacts relative to the canonical run root."""
+
+        try:
+            return path.relative_to(self.config.run_dir).as_posix()
+        except ValueError as exc:
+            raise FatalError(
+                f"PCE artifact is outside the canonical run directory: {path}"
+            ) from exc
+
     def _agent_config(self, model: Any) -> AgentConfig:
         return AgentConfig(
             max_steps=model.max_steps,
@@ -61,9 +71,7 @@ class SWEVerifiedPCERunner:
                 optimization_info_level=1,
                 model=model.model,
                 api_base=model.api_base,
-                dataset=getattr(
-                    self.config, "dataset", "SWE-bench/SWE-bench_Verified"
-                ),
+                dataset=getattr(self.config, "dataset", "SWE-bench/SWE-bench_Verified"),
                 dataset_type=getattr(self.config, "dataset_type", "swe_verified"),
                 language_filter="",
                 instances=[],
@@ -130,6 +138,18 @@ class SWEVerifiedPCERunner:
         timeout: int,
         host_workdir: Path | None = None,
     ) -> ApptainerEnvironment:
+        if getattr(self.config, "source_access_manifest", None) is not None:
+            expected_issue_sha = self.config.source_access_issue_sha256_by_instance[
+                case.instance_id
+            ]
+            observed_issue_sha = hashlib.sha256(
+                case.issue_description.encode()
+            ).hexdigest()
+            if observed_issue_sha != expected_issue_sha:
+                raise FatalError(
+                    "source access allowlist issue identity mismatch for "
+                    f"{case.instance_id}"
+                )
         return ApptainerEnvironment(
             image=case.image.requested_ref,
             cwd=self.config.docker.workdir,
@@ -143,6 +163,16 @@ class SWEVerifiedPCERunner:
             initialize_host_workdir=host_workdir is not None,
             isolate_tmp=True,
             block_git_remote_operations=True,
+            source_access_allowed_urls=(
+                list(self.config.source_access_by_instance[case.instance_id])
+                if getattr(self.config, "source_access_manifest", None) is not None
+                else None
+            ),
+            source_access_target_packages=(
+                [case.repo.split("/", 1)[-1]]
+                if getattr(self.config, "source_access_manifest", None) is not None
+                else None
+            ),
         )
 
     @staticmethod
@@ -164,6 +194,7 @@ class SWEVerifiedPCERunner:
             case.base_commit,
             phase=phase,
             evidence_dir=evidence_dir,
+            prune_future_history=True,
         )
 
     @staticmethod
@@ -246,7 +277,9 @@ class SWEVerifiedPCERunner:
                 ),
             },
             "diagnostic_changes": {
-                "unstaged_patch_path": str(unstaged_path),
+                "unstaged_patch_relative_path": self._authority_relative_path(
+                    unstaged_path
+                ),
                 "unstaged_patch_sha256": hashlib.sha256(
                     unstaged_patch.encode()
                 ).hexdigest(),
@@ -366,13 +399,14 @@ class SWEVerifiedPCERunner:
                     ),
                     failure_trajectory_path=self.attempt_dir / "code_failure.json",
                     phase_timeout_seconds=None,
-                    allow_empty_submission=True,
                 )
                 raw_patch_path = self.attempt_dir / "raw_code_submission.patch"
                 raw_patch_path.write_text(raw_patch, encoding="utf-8")
                 submission = {
                     "policy": "agent_classified_staged_implementation_v1",
-                    "patch_path": str(raw_patch_path),
+                    "patch_relative_path": self._authority_relative_path(
+                        raw_patch_path
+                    ),
                     "patch_sha256": hashlib.sha256(raw_patch.encode()).hexdigest(),
                     "empty_submission": not bool(raw_patch.strip()),
                     "host_patch_transformation": False,
@@ -467,11 +501,15 @@ class SWEVerifiedPCERunner:
                 )
             ),
             "plan": str(plan_checkpoint["plan"]),
+            "plan_sha256": str(plan_checkpoint["plan_sha256"]),
             "plan_trajectory": list(plan_checkpoint["trajectory"]),
             "raw_patch": str(
                 code_checkpoint.get("raw_patch", code_checkpoint["patch"])
             ),
             "patch": str(code_checkpoint["patch"]),
+            "patch_sha256": str(
+                code_checkpoint.get("patch_submission", {}).get("patch_sha256", "")
+            ),
             "patch_submission": dict(code_checkpoint.get("patch_submission", {})),
             "code_workspace_evidence": dict(
                 code_checkpoint.get("workspace_evidence", {})

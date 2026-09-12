@@ -37,6 +37,7 @@ def restore_repository_to_base(
     phase: str,
     evidence_dir: Path,
     timeout: int = 120,
+    prune_future_history: bool = False,
 ) -> dict[str, Any]:
     """Reset and clean the disposable repository, then verify the result."""
 
@@ -78,6 +79,23 @@ def restore_repository_to_base(
         f"git reset --hard {quoted_commit} && git clean -fd",
         timeout=timeout,
     )
+    if prune_future_history and evidence["restore"]["returncode"] == 0:
+        evidence["future_history_prune"] = _run(
+            env,
+            "git checkout --detach "
+            f"{quoted_commit} && "
+            "git for-each-ref --format='%(refname)' refs/heads refs/tags "
+            'refs/remotes | while read ref; do git update-ref -d "$ref"; done && '
+            f"git update-ref refs/heads/vibe-frozen-base {quoted_commit} && "
+            "git reflog expire --expire=now --all && "
+            "git gc --prune=now",
+            timeout=timeout,
+        )
+        evidence["future_history_check"] = _run(
+            env,
+            "git fsck --unreachable --no-reflogs --no-progress",
+            timeout=timeout,
+        )
     evidence["after"] = {
         "head": _run(env, "git rev-parse HEAD", timeout=timeout),
         "status": _run(
@@ -95,6 +113,18 @@ def restore_repository_to_base(
         raise FatalError(
             f"{phase} repository restore failed: {restore['output'][:500]}"
         )
+    if prune_future_history:
+        prune = evidence["future_history_prune"]
+        check = evidence["future_history_check"]
+        if prune["returncode"] != 0:
+            raise FatalError(
+                f"{phase} future-history prune failed: {prune['output'][:500]}"
+            )
+        if check["returncode"] != 0 or check["output"].strip():
+            raise FatalError(
+                f"{phase} repository retains unreachable future objects: "
+                f"{check['output'][:500]}"
+            )
     if after_head["returncode"] != 0:
         raise RuntimeError(f"{phase} repository HEAD could not be read after restore")
     if after_head["output"].strip() != commit:

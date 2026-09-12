@@ -11,6 +11,7 @@ from typing import Any
 import yaml
 
 from src.config import DockerConfig
+from src.environment.apptainer_env import _canonical_http_url
 from src.optimization.config import ContainerConfig, ModelConfig
 from src.optimization.hpc.config import HPCConfig
 
@@ -21,6 +22,9 @@ class SWEVerifiedPCEConfig:
     dataset_snapshot: Path
     image_manifest: Path
     selection_manifest: Path | None
+    source_access_manifest: Path | None
+    source_access_by_instance: dict[str, tuple[str, ...]]
+    source_access_issue_sha256_by_instance: dict[str, str]
     instance_ids: tuple[str, ...]
     run_dir: Path
     plan: ModelConfig
@@ -105,9 +109,7 @@ def load_swe_verified_pce_config(
     plan_prompt_source = paths.get("plan_prompt_source_config")
     if plan_prompt_source:
         plan_prompt_raw = (
-            yaml.safe_load(
-                resolve(str(plan_prompt_source)).read_text(encoding="utf-8")
-            )
+            yaml.safe_load(resolve(str(plan_prompt_source)).read_text(encoding="utf-8"))
             or {}
         )
         plan_prompts = _mapping(
@@ -192,11 +194,52 @@ def load_swe_verified_pce_config(
         if len(set(instance_ids)) != len(instance_ids):
             raise ValueError("selected instance IDs must be unique")
 
+    source_access_by_instance: dict[str, tuple[str, ...]] = {}
+    source_access_issue_sha256_by_instance: dict[str, str] = {}
+    source_access_manifest = (
+        resolve(str(paths["source_access_manifest"]))
+        if paths.get("source_access_manifest")
+        else None
+    )
+    if source_access_manifest is not None:
+        source_access_raw = json.loads(
+            source_access_manifest.read_text(encoding="utf-8")
+        )
+        if source_access_raw.get("schema_version") != 1:
+            raise ValueError("source access manifest requires schema_version 1")
+        task_allowlists = source_access_raw.get("task_allowlists")
+        if not isinstance(task_allowlists, list):
+            raise ValueError("source access manifest requires task_allowlists")
+        for entry in task_allowlists:
+            if not isinstance(entry, dict) or not isinstance(
+                entry.get("allowed_urls"), list
+            ):
+                raise ValueError("each task allowlist requires allowed_urls")
+            instance_id = str(entry.get("instance_id", ""))
+            if not instance_id or instance_id in source_access_by_instance:
+                raise ValueError(
+                    "task allowlist instance IDs must be nonempty and unique"
+                )
+            source_access_by_instance[instance_id] = tuple(
+                _canonical_http_url(str(url)) for url in entry["allowed_urls"]
+            )
+            issue_sha256 = str(entry.get("issue_sha256", ""))
+            if len(issue_sha256) != 64:
+                raise ValueError("each task allowlist requires issue_sha256")
+            source_access_issue_sha256_by_instance[instance_id] = issue_sha256
+        if set(source_access_by_instance) != set(instance_ids):
+            raise ValueError(
+                "source access manifest must exactly cover selected instances"
+            )
+
     return SWEVerifiedPCEConfig(
         config_path=config_path,
         dataset_snapshot=resolve(str(paths["dataset_snapshot"])),
         image_manifest=resolve(str(paths["image_manifest"])),
         selection_manifest=selection_manifest,
+        source_access_manifest=source_access_manifest,
+        source_access_by_instance=source_access_by_instance,
+        source_access_issue_sha256_by_instance=(source_access_issue_sha256_by_instance),
         instance_ids=instance_ids,
         run_dir=resolve(str(paths["run_dir"])),
         plan=plan,

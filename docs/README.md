@@ -45,6 +45,7 @@ offline GEPA, and production failures:
 | [`knowledge/rq2-c4-pcce-failure-analysis.md`](knowledge/rq2-c4-pcce-failure-analysis.md) | Safe67 Checker-feedback, Plan-revision, and downstream PCCE failure-chain analysis |
 | [`knowledge/rq2-zero-u-to-r-opportunity-audit.md`](knowledge/rq2-zero-u-to-r-opportunity-audit.md) | Focused audit of why the original safe67 C4 workflow produced no unresolved-to-resolved transition |
 | [`knowledge/swe-verified-plan-outcome-solvability-audit.md`](knowledge/swe-verified-plan-outcome-solvability-audit.md) | Development audit separating historical Plan-artifact trustworthiness from task-plus-Plan outcome interpretability |
+| [`knowledge/safe-pce-audit10-data-quality.md`](knowledge/safe-pce-audit10-data-quality.md) | Audit10 structural integrity, post-decision leakage, protocol-residue, outcome-authority, and evidence-retention findings |
 
 ## Reference
 

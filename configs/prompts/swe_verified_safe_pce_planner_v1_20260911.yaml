@@ -32,6 +32,14 @@ prompts:
     response. The artifact is the Plan itself, not a filesystem path, shell
     command, Python string, JSON wrapper, or explanation about saved output.
 
+    Before submitting, inspect your complete final response. Submit only when
+    the text after FINAL_PLAN is a standalone Markdown Plan that starts with
+    `# Plan`, contains exactly one non-empty Navigation, Reproduction, Patch,
+    and Validation section in that order, and contains no tool-call wrappers,
+    XML or DSML tags, simulated observations, or protocol text. If any check
+    fails, correct the Plan yourself before submitting. Do not ask the Host to
+    clean or repair it.
+
   plan_instance: |
     <issue>
     {{task}}

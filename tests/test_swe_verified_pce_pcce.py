@@ -11,6 +11,7 @@ import yaml
 
 from src.optimization.hpc.task_batch import TaskFiles
 from src.optimization.checker import CheckerOutputContractError
+from src.exceptions import AgentTaskError, FatalError
 from src.swe_verified_pcce.config import load_swe_verified_pcce_config
 from src.swe_verified_pcce.controller import (
     _allow_operational_semantic_migration,
@@ -109,9 +110,7 @@ def test_recovered_plan_executor_preloads_identity_bound_plan_checkpoint(
     executor = object.__new__(_RecoveredPlanExecutor)
     executor.plans = {case.instance_id: "# Plan\nImplement the focused fix."}
     executor._prepare(tmp_path, "d" * 64, [case])
-    checkpoint = json.loads(
-        (tmp_path / "checkpoints/task_0000/plan.json").read_text()
-    )
+    checkpoint = json.loads((tmp_path / "checkpoints/task_0000/plan.json").read_text())
     assert checkpoint["phase"] == "plan"
     assert checkpoint["payload"] == {
         "plan": "# Plan\nImplement the focused fix.",
@@ -275,9 +274,68 @@ def test_safe_pce_audit10_freezes_balanced_diverse_development_cases() -> None:
     assert "--remote-run-dir" not in arguments
 
 
+def test_safe_pce_audit10_v4_freezes_task_source_allowlists() -> None:
+    config = load_swe_verified_pce_config(
+        "configs/swe_verified_safe_pce_audit10_v4_20260912.yaml",
+        require_api_keys=False,
+    )
+    assert config.source_access_manifest is not None
+    assert set(config.source_access_by_instance) == set(config.instance_ids)
+    assert set(config.source_access_issue_sha256_by_instance) == set(
+        config.instance_ids
+    )
+    assert config.source_access_by_instance["django__django-10097"] == (
+        "http://foo/bar@example.com",
+        "https://github.com/django/django/pull/10097",
+    )
+    assert config.source_access_by_instance["sympy__sympy-12419"] == ()
+    wrappers = {
+        row["instance_id"]: row["source_row"]
+        for row in map(
+            json.loads,
+            (config.dataset_snapshot / "instances.jsonl")
+            .read_text(encoding="utf-8")
+            .splitlines(),
+        )
+    }
+    assert all(
+        hashlib.sha256(wrappers[instance_id]["problem_statement"].encode()).hexdigest()
+        == config.source_access_issue_sha256_by_instance[instance_id]
+        for instance_id in config.instance_ids
+    )
+
+    supervisor = yaml.safe_load(
+        Path(
+            "configs/swe_verified_safe_pce_audit10_supervisor_v2_20260912.yaml"
+        ).read_text(encoding="utf-8")
+    )
+    arguments = supervisor["arguments"]
+    assert "--reclaim-staging" in arguments
+    assert "--require-clean-worktree" in arguments
+    assert arguments[arguments.index("--config") + 1] == (
+        "configs/swe_verified_safe_pce_audit10_v4_20260912.yaml"
+    )
+
+
 def test_swe_verified_checker_contract_failure_retries_with_fresh_agent():
     error = CheckerOutputContractError("extra data after submitted JSON")
     assert _retry_disposition(error) == "retry_fresh_agent"
+
+
+@pytest.mark.parametrize("reason", ["plan_invalid_markdown", "code_empty_patch"])
+def test_safe_pce_agent_contract_failure_retries_with_fresh_agent(reason: str):
+    error = AgentTaskError("invalid Agent submission", phase="plan", reason=reason)
+    assert _retry_disposition(error) == "retry_fresh_agent"
+
+
+def test_safe_pce_authority_paths_are_relative_to_run_root(tmp_path: Path):
+    runner = object.__new__(SWEVerifiedPCERunner)
+    runner.config = SimpleNamespace(run_dir=tmp_path / "run")
+    retained = tmp_path / "run" / "hpc_tasks" / "pce" / "fp" / "plan.json"
+
+    assert runner._authority_relative_path(retained) == ("hpc_tasks/pce/fp/plan.json")
+    with pytest.raises(FatalError, match="outside the canonical run"):
+        runner._authority_relative_path(tmp_path / "staging" / "plan.json")
 
 
 def test_swe_verified_agent_environments_isolate_tmp(tmp_path, monkeypatch):
@@ -370,9 +428,7 @@ def test_explicit_operational_migration_allows_only_semantic_code_hash(
     monkeypatch.setenv("VIBE_CONTROLLER_GIT_HEAD", new_git)
 
     assert _allow_operational_semantic_migration(config, existing, proposed)
-    record = json.loads(
-        (tmp_path / "operational_code_migrations.jsonl").read_text()
-    )
+    record = json.loads((tmp_path / "operational_code_migrations.jsonl").read_text())
     assert record["scientific_project_git_head"] == old_git
     assert record["controller_project_git_head"] == new_git
     assert record["semantic_inputs_changed"] is False
@@ -387,9 +443,7 @@ def test_operational_migration_preserves_frozen_task_fingerprint_semantic(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     prior = "c" * 64
-    monkeypatch.setenv(
-        "VIBE_OPERATIONAL_MIGRATION_FROM_PCCE_SEMANTIC_SHA256", prior
-    )
+    monkeypatch.setenv("VIBE_OPERATIONAL_MIGRATION_FROM_PCCE_SEMANTIC_SHA256", prior)
     assert execution_semantic_sha256(SimpleNamespace()) == prior
 
 
@@ -942,9 +996,9 @@ def test_tracked_smoke_configs_bind_two_case_selection_and_phase_policies() -> N
     assert contract["acceptance"]["operationally_incomplete_allowed"] == 0
 
     supervisor = yaml.safe_load(
-        Path("configs/archive/supervisor_launches/swe_verified_pce_smoke_supervisor_v1_20260901.yaml").read_text(
-            encoding="utf-8"
-        )
+        Path(
+            "configs/archive/supervisor_launches/swe_verified_pce_smoke_supervisor_v1_20260901.yaml"
+        ).read_text(encoding="utf-8")
     )
     arguments = supervisor["arguments"]
     assert arguments[arguments.index("--max-runs") + 1] == "12"
@@ -1053,9 +1107,9 @@ def test_tracked_quick50_pce_contract_is_frozen() -> None:
     assert config.hpc.max_task_attempts == 3
 
     supervisor = yaml.safe_load(
-        Path("configs/archive/supervisor_launches/swe_verified_pce_quick50_supervisor_v1_20260901.yaml").read_text(
-            encoding="utf-8"
-        )
+        Path(
+            "configs/archive/supervisor_launches/swe_verified_pce_quick50_supervisor_v1_20260901.yaml"
+        ).read_text(encoding="utf-8")
     )
     arguments = supervisor["arguments"]
     assert arguments[arguments.index("--max-runs") + 1] == "24"
@@ -1219,8 +1273,8 @@ def test_tracked_issue_first_c4_pcce_starts_from_frozen_rejections() -> None:
 
     supervisor = yaml.safe_load(
         Path(
-                "configs/archive/supervisor_launches/"
-                "swe_verified_pcce_quick50_c4_issue_first_supervisor_v1_20260903.yaml"
+            "configs/archive/supervisor_launches/"
+            "swe_verified_pcce_quick50_c4_issue_first_supervisor_v1_20260903.yaml"
         ).read_text(encoding="utf-8")
     )
     arguments = supervisor["arguments"]
@@ -1303,8 +1357,8 @@ def test_tracked_c5_safe_u8_pcce_is_exact_workspace_safe_pce_failure_subset() ->
 
     supervisor = yaml.safe_load(
         Path(
-                "configs/archive/supervisor_launches/"
-                "swe_verified_pcce_c5_prompt_v2_safe_u8_supervisor_v1_20260909.yaml"
+            "configs/archive/supervisor_launches/"
+            "swe_verified_pcce_c5_prompt_v2_safe_u8_supervisor_v1_20260909.yaml"
         ).read_text(encoding="utf-8")
     )
     arguments = supervisor["arguments"]
@@ -1334,9 +1388,7 @@ def test_tracked_c5_safe_u8_recovery_preserves_rejected_first_review() -> None:
     assert config.instance_ids == expected_ids
     assert tuple(seed["selected_instance_ids"]) == expected_ids
     assert seed["instances"] == 4
-    assert seed["source_run_id"] == (
-        "swe-verified-pcce-c5-safe-u8-v1-20260909"
-    )
+    assert seed["source_run_id"] == ("swe-verified-pcce-c5-safe-u8-v1-20260909")
     assert seed["source_review_sha256"] == (
         "10c6edbccc0ebd8766a4092cc18fa7afcf448ad8792cf3d716bafe498b5d6b40"
     )
@@ -1370,7 +1422,14 @@ def test_controller_recovers_only_three_evidenced_evaluator_slurm_timeouts(
     )
     identity = checkpoint_identity(case, execution_fingerprint="fp")
     for phase, payload in (
-        ("plan", {"plan": "# Plan", "trajectory": []}),
+        (
+            "plan",
+            {
+                "plan": "# Plan",
+                "plan_sha256": hashlib.sha256(b"# Plan").hexdigest(),
+                "trajectory": [],
+            },
+        ),
         (
             "code",
             {

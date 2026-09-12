@@ -256,6 +256,15 @@ prompts:
     first inspect the complete diff and use an earlier command to clear the
     staging area and stage only implementation changes. Test files, test
     fixtures, and temporary debugging artifacts MUST remain unstaged. Then
+    verify the real current repository state with `git status --short` and
+    `git diff --cached --stat`. Submit only after at least one task-relevant
+    implementation file is staged and `git diff --cached` is non-empty. If a
+    previous response was rejected by the action parser, assume none of its
+    commands ran and verify the repository again. Never claim that edits,
+    tests, or staging occurred unless their actual observations confirmed
+    them.
+
+    After completing those checks,
     issue exactly the following command:
     ```bash
     echo COMPLETE_TASK_AND_SUBMIT_FINAL_OUTPUT && git diff --cached --binary --full-index

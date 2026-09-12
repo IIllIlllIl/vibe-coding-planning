@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import logging
 import json
+import re
 from collections.abc import Callable
 from pathlib import Path
 from typing import Any
@@ -29,6 +30,22 @@ logger = logging.getLogger(__name__)
 
 DIRECT_PLAN_MARKER = "FINAL_PLAN"
 _DIRECT_PLAN_PAYLOAD_PREFIX = "__VIBE_DIRECT_PLAN_V1__\n"
+_DIRECT_PLAN_HEADINGS = (
+    "# Plan",
+    "## Navigation (N)",
+    "## Reproduction (R)",
+    "## Patch (P)",
+    "## Validation (V)",
+)
+_PROTOCOL_RESIDUE = (
+    "</parameter>",
+    "<berkeleyos>",
+    "</berkeleyos>",
+    "<result>",
+    "</result>",
+    "<｜｜DSML｜｜",
+    "</｜｜DSML｜｜",
+)
 
 PLAN_ACTION_PROTOCOL = """\
 ## Planner action and final-submission protocol
@@ -73,7 +90,35 @@ def _extract_result(agent: Any, exception_name: str, exception_msg: str) -> str 
     passing an unfinished / invalid plan downstream.
     """
     if exception_name == "Submitted":
-        return exception_msg.strip()
+        return exception_msg
+    return None
+
+
+def _direct_plan_markdown_error(plan: str) -> str | None:
+    """Return a format error without changing the submitted Plan."""
+
+    if not plan or not plan.strip():
+        return "the submitted Plan is empty"
+    if not plan.startswith("# Plan\n"):
+        return "the Plan must start exactly with '# Plan' followed by a newline"
+    for residue in _PROTOCOL_RESIDUE:
+        if residue in plan:
+            return f"the Plan contains tool-protocol residue {residue!r}"
+
+    positions: list[int] = []
+    for heading in _DIRECT_PLAN_HEADINGS:
+        matches = list(re.finditer(rf"(?m)^{re.escape(heading)}\s*$", plan))
+        if len(matches) != 1:
+            return f"the Plan must contain exactly one {heading!r} heading"
+        positions.append(matches[0].start())
+    if positions != sorted(positions):
+        return "the Plan headings are not in N/R/P/V order"
+
+    for index, heading in enumerate(_DIRECT_PLAN_HEADINGS[1:], start=1):
+        start = positions[index] + len(heading)
+        end = positions[index + 1] if index + 1 < len(positions) else len(plan)
+        if not plan[start:end].strip():
+            return f"the {heading!r} section is empty"
     return None
 
 
@@ -89,8 +134,8 @@ def _read_plan_from_file(env: Any) -> str | None:
             # Machine-readable Plan artifacts use stdout as their authority.
             # Apptainer diagnostics belong to stderr and must not be appended
             # to JSON or Plan text consumed by the host.
-            content = result.get("stdout", result.get("output", "")).strip()
-            if content:
+            content = str(result.get("stdout", result.get("output", "")))
+            if content.strip():
                 return content
     except Exception:
         pass
@@ -201,6 +246,21 @@ def run(
         # Safe PCE authority: exact model terminal text, intercepted before
         # action parsing and therefore never reconstructed through /tmp.
         plan_text = submitted_text[len(_DIRECT_PLAN_PAYLOAD_PREFIX) :]
+        format_error = _direct_plan_markdown_error(plan_text)
+        if format_error is not None:
+            _write_failure_trajectory(
+                failure_trajectory_path,
+                agent.messages,
+                exception_name,
+                exception_msg,
+            )
+            raise AgentTaskError(
+                f"Planner direct submission is not valid standalone Markdown: "
+                f"{format_error}.",
+                phase="plan",
+                reason="plan_invalid_markdown",
+                trajectory=agent.messages,
+            )
     elif require_direct_submission and exception_name == "Submitted":
         _write_failure_trajectory(
             failure_trajectory_path, agent.messages, exception_name, exception_msg
@@ -245,7 +305,7 @@ def run(
             trajectory=agent.messages,
         )
 
-    return plan_text.strip(), agent.messages
+    return plan_text, agent.messages
 
 
 def _write_failure_trajectory(
