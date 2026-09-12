@@ -274,46 +274,29 @@ def test_safe_pce_audit10_freezes_balanced_diverse_development_cases() -> None:
     assert "--remote-run-dir" not in arguments
 
 
-def test_safe_pce_audit10_v4_freezes_task_source_allowlists() -> None:
+def test_safe_pce_audit10_v5_prepares_source_boundary_replay() -> None:
     config = load_swe_verified_pce_config(
-        "configs/swe_verified_safe_pce_audit10_v4_20260912.yaml",
+        "configs/swe_verified_safe_pce_audit10_v5_20260912.yaml",
         require_api_keys=False,
     )
-    assert config.source_access_manifest is not None
-    assert set(config.source_access_by_instance) == set(config.instance_ids)
-    assert set(config.source_access_issue_sha256_by_instance) == set(
-        config.instance_ids
+    raw = yaml.safe_load(config.config_path.read_text(encoding="utf-8"))
+    assert len(config.instance_ids) == 10
+    assert config.run_dir.name == "safe-pce-audit10-v5-20260912"
+    assert raw["experiment_contract"]["agent_source_policy"] == (
+        "conservative_blacklist_v1"
     )
-    assert config.source_access_by_instance["django__django-10097"] == (
-        "http://foo/bar@example.com",
-        "https://github.com/django/django/pull/10097",
-    )
-    assert config.source_access_by_instance["sympy__sympy-12419"] == ()
-    wrappers = {
-        row["instance_id"]: row["source_row"]
-        for row in map(
-            json.loads,
-            (config.dataset_snapshot / "instances.jsonl")
-            .read_text(encoding="utf-8")
-            .splitlines(),
-        )
-    }
-    assert all(
-        hashlib.sha256(wrappers[instance_id]["problem_statement"].encode()).hexdigest()
-        == config.source_access_issue_sha256_by_instance[instance_id]
-        for instance_id in config.instance_ids
-    )
+    assert raw["experiment_contract"]["launched"] is False
 
     supervisor = yaml.safe_load(
         Path(
-            "configs/swe_verified_safe_pce_audit10_supervisor_v2_20260912.yaml"
+            "configs/swe_verified_safe_pce_audit10_supervisor_v3_20260912.yaml"
         ).read_text(encoding="utf-8")
     )
     arguments = supervisor["arguments"]
-    assert "--reclaim-staging" in arguments
     assert "--require-clean-worktree" in arguments
+    assert "--reclaim-staging" in arguments
     assert arguments[arguments.index("--config") + 1] == (
-        "configs/swe_verified_safe_pce_audit10_v4_20260912.yaml"
+        "configs/swe_verified_safe_pce_audit10_v5_20260912.yaml"
     )
 
 
@@ -355,8 +338,15 @@ def test_swe_verified_agent_environments_isolate_tmp(tmp_path, monkeypatch):
         container=SimpleNamespace(sif_cache_dir=tmp_path, writable_tmpfs=True),
     )
     pce.capacity_window = SimpleNamespace()
-    source = SimpleNamespace(image=SimpleNamespace(requested_ref="image:v1"))
-    pce._environment(source, timeout=10, host_workdir=tmp_path / "plan")
+    pce.source_access_path = tmp_path / "source_access.jsonl"
+    source = SimpleNamespace(
+        image=SimpleNamespace(requested_ref="image:v1"),
+        instance_id="example__repo-1",
+        issue_description="See https://docs.example/page",
+    )
+    pce._environment(
+        source, timeout=10, phase="plan", host_workdir=tmp_path / "plan"
+    )
 
     class FakePCCEEnvironment:
         def __init__(self, **kwargs):
@@ -380,10 +370,12 @@ def test_swe_verified_agent_environments_isolate_tmp(tmp_path, monkeypatch):
 
     assert pce_observed["run_args"] == ["--containall"]
     assert pce_observed["isolate_tmp"] is True
-    assert pce_observed["block_git_remote_operations"] is True
+    assert pce_observed["source_access_prompt_urls"] == [
+        "https://docs.example/page"
+    ]
+    assert pce_observed["source_access_context"]["phase"] == "plan"
     assert pcce_observed["run_args"] == ["--containall"]
     assert pcce_observed["isolate_tmp"] is True
-    assert pcce_observed["block_git_remote_operations"] is True
 
 
 def test_verified_revision_plan_config_uses_canonical_dataset_without_pce_field(

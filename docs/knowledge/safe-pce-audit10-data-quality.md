@@ -2,11 +2,11 @@
 
 > Scope: `safe-pce-audit10-v3-20260912`
 
-This document freezes the completed v3 audit and is not a launch guide. The
-prepared v4 successor addresses the observed Plan/Code submission contracts,
-prunes Agent-visible Git state to the base commit and its ancestors, and binds
-an exact task-level URL allowlist. Its effectiveness remains a smoke question,
-not an established result.
+This document freezes the completed v3 audit and is not a launch guide. Later
+code addresses the observed Plan/Code submission contracts, prunes
+Agent-visible Git state to the base commit and its ancestors, and implements a
+small source-acquisition blacklist with separate audit evidence. Its
+effectiveness remains a successor-smoke question, not an established result.
 >
 > Audited: 2026-09-12
 >

@@ -11,7 +11,6 @@ from __future__ import annotations
 import base64
 import logging
 import os
-import re
 import shlex
 import shutil
 import subprocess
@@ -19,165 +18,16 @@ import sys
 import tempfile
 from pathlib import Path
 from typing import Any
-from urllib.parse import urlsplit, urlunsplit
 
 from src.environment.docker_env import DockerCapacityWindow
+from src.environment.source_access import (
+    append_source_access_event,
+    canonical_http_url,
+    classify_source_access,
+)
 from src.exceptions import CommandTimeoutError, FatalError
 
 logger = logging.getLogger(__name__)
-
-_HTTP_URL_RE = re.compile(r"https?://[^\s'\"<>]+", re.IGNORECASE)
-_PYTHON_HTTP_MARKERS = (
-    "requests.",
-    "httpx.",
-    "urllib.request",
-    "urlopen(",
-    "http.client",
-)
-
-
-def _canonical_http_url(value: str) -> str:
-    """Canonicalize only the stable, exact-match parts of an HTTP URL."""
-
-    parsed = urlsplit(value.rstrip(".,;:)]}"))
-    if parsed.scheme.lower() not in {"http", "https"} or not parsed.netloc:
-        raise ValueError(f"not an HTTP URL: {value}")
-    return urlunsplit(
-        (parsed.scheme.lower(), parsed.netloc.lower(), parsed.path, parsed.query, "")
-    )
-
-
-def _blocked_git_remote_operation(command: str) -> str | None:
-    """Return the disallowed remote Git operation in an Agent shell command."""
-
-    try:
-        lexer = shlex.shlex(command, posix=True, punctuation_chars=";&|()")
-        lexer.whitespace_split = True
-        tokens = list(lexer)
-    except ValueError:
-        # Let bash report malformed quoting; this policy is not a shell parser.
-        return None
-
-    separators = {";", "&&", "||", "|", "&", "(", ")"}
-    start = 0
-    for end in range(len(tokens) + 1):
-        if end < len(tokens) and tokens[end] not in separators:
-            continue
-        segment = tokens[start:end]
-        start = end + 1
-        for index, token in enumerate(segment):
-            if Path(token).name != "git":
-                continue
-            args = segment[index + 1 :]
-            cursor = 0
-            while cursor < len(args):
-                arg = args[cursor]
-                if arg in {"-C", "-c", "--git-dir", "--work-tree", "--namespace"}:
-                    cursor += 2
-                    continue
-                if arg.startswith(("--git-dir=", "--work-tree=", "--namespace=")):
-                    cursor += 1
-                    continue
-                if arg.startswith("-"):
-                    cursor += 1
-                    continue
-                if arg in {"clone", "fetch", "pull", "ls-remote"}:
-                    return arg
-                remaining = args[cursor + 1 :]
-                if arg == "remote":
-                    remote_action = next(
-                        (item for item in remaining if not item.startswith("-")),
-                        None,
-                    )
-                    if remote_action == "update":
-                        return "remote update"
-                if arg == "submodule" and "--remote" in remaining:
-                    submodule_action = next(
-                        (item for item in remaining if not item.startswith("-")),
-                        None,
-                    )
-                    if submodule_action == "update":
-                        return "submodule update --remote"
-                break
-    return None
-
-
-def _blocked_network_source_operation(
-    command: str,
-    *,
-    allowed_urls: frozenset[str],
-    target_packages: frozenset[str],
-) -> str | None:
-    """Return why a common Agent source-acquisition command is disallowed.
-
-    This small command-level policy is an experimental guardrail, not a
-    security sandbox. It covers acquisition paths observed in prior PCE
-    trajectories and rejects dynamic HTTP requests that cannot be compared
-    with the frozen task allowlist.
-    """
-
-    remote_git = _blocked_git_remote_operation(command)
-    if remote_git is not None:
-        return f"remote Git operation 'git {remote_git}'"
-
-    lower = command.lower()
-    pip_install = bool(
-        re.search(
-            r"(?:^|[;&|()]|\s)(?:python(?:3(?:\.\d+)?)?\s+-m\s+)?"
-            r"(?:[^\s;&|()]*/)?pip(?:3)?\s+install(?:\s|$)",
-            lower,
-        )
-    )
-    if pip_install:
-        if re.search(r"(?:git\+|https?://)", command, re.IGNORECASE):
-            return "pip installation from a remote URL or VCS source"
-        try:
-            tokens = shlex.split(command)
-        except ValueError:
-            tokens = command.split()
-        normalized_tokens = {
-            re.sub(
-                r"[-_.]+",
-                "-",
-                re.split(r"[<>=!~;@]", token.split("[", 1)[0], maxsplit=1)[0].lower(),
-            )
-            for token in tokens
-            if token and not token.startswith("-")
-        }
-        if normalized_tokens & target_packages:
-            package = sorted(normalized_tokens & target_packages)[0]
-            return f"installation or upgrade of target package '{package}'"
-
-    is_curl_or_wget = bool(
-        re.search(
-            r"(?:^|[;&|()]|\s)(?:[^\s;&|()]*/)?(?:curl|wget)(?:\s|$)",
-            lower,
-        )
-    )
-    is_python_http = any(marker in lower for marker in _PYTHON_HTTP_MARKERS)
-    if is_curl_or_wget or is_python_http:
-        if (
-            re.search(r"(?:^|[;&|()]|\s)(?:[^\s;&|()]*/)?wget(?:\s|$)", lower)
-            or is_python_http
-        ):
-            return (
-                "HTTP client cannot enforce this experiment's no-redirect "
-                "boundary; use curl without -L for an exact task URL"
-            )
-        urls = _HTTP_URL_RE.findall(command)
-        if not urls:
-            return "HTTP request with a dynamic or non-auditable URL"
-        for url in urls:
-            try:
-                canonical = _canonical_http_url(url)
-            except ValueError:
-                return f"malformed HTTP URL '{url}'"
-            if canonical not in allowed_urls:
-                return f"HTTP URL is absent from the frozen task allowlist: {canonical}"
-        if re.search(r"(?:^|\s)(?:-L|--location)(?:\s|$)", command):
-            return "HTTP redirect following is outside the exact-URL allowlist"
-
-    return None
 
 
 def _image_to_sif_name(image: str) -> str:
@@ -318,9 +168,9 @@ class ApptainerEnvironment:
         host_workdir: Path | None = None,
         initialize_host_workdir: bool = True,
         isolate_tmp: bool = False,
-        block_git_remote_operations: bool = False,
-        source_access_allowed_urls: list[str] | None = None,
-        source_access_target_packages: list[str] | None = None,
+        source_access_prompt_urls: list[str] | None = None,
+        source_access_log_path: Path | None = None,
+        source_access_context: dict[str, Any] | None = None,
     ) -> None:
         self._image = image
         self._cwd = cwd
@@ -336,18 +186,12 @@ class ApptainerEnvironment:
         self._host_workdir = Path(host_workdir) if host_workdir is not None else None
         self._initialize_host_workdir = initialize_host_workdir
         self._isolate_tmp = isolate_tmp
-        self._block_git_remote_operations = block_git_remote_operations
-        self._source_access_allowed_urls = frozenset(
-            _canonical_http_url(value) for value in (source_access_allowed_urls or [])
+        self._source_access_prompt_urls = frozenset(
+            canonical_http_url(value) for value in (source_access_prompt_urls or [])
         )
-        self._source_access_target_packages = frozenset(
-            re.sub(r"[-_.]+", "-", value.lower())
-            for value in (source_access_target_packages or [])
-        )
-        self._source_access_policy_enabled = (
-            source_access_allowed_urls is not None
-            or source_access_target_packages is not None
-        )
+        self._source_access_log_path = source_access_log_path
+        self._source_access_context = dict(source_access_context or {})
+        self._source_access_event_index = 0
         self._isolated_tmp: tempfile.TemporaryDirectory[str] | None = None
 
         self._cache = ApptainerSifCache(sif_cache_dir, capacity_window)
@@ -518,22 +362,26 @@ class ApptainerEnvironment:
         timeout: int | None = None,
     ) -> dict[str, Any]:
         """Execute a shell command inside the Apptainer container."""
-        blocked_reason = None
-        if self._source_access_policy_enabled:
-            blocked_reason = _blocked_network_source_operation(
+        source_event = None
+        if self._source_access_log_path is not None:
+            source_event = classify_source_access(
                 command,
-                allowed_urls=self._source_access_allowed_urls,
-                target_packages=self._source_access_target_packages,
+                prompt_urls=self._source_access_prompt_urls,
             )
-        elif self._block_git_remote_operations:
-            blocked_operation = _blocked_git_remote_operation(command)
-            if blocked_operation is not None:
-                blocked_reason = f"remote Git operation 'git {blocked_operation}'"
-        if blocked_reason is not None:
+        if source_event is not None and source_event["decision"] == "block":
+            self._record_source_event(
+                source_event,
+                command=command,
+                executed=False,
+                execution_status="blocked",
+                returncode=126,
+            )
             message = (
-                "Command blocked by the experiment source boundary: "
-                f"{blocked_reason}. Use the repository at the frozen base "
-                "commit or an exact URL supplied by the task.\n"
+                "Command blocked by the experiment source boundary "
+                f"({source_event['reason']}). Inspect the repository and its "
+                "available history, use the supplied SIF environment, or read "
+                "an exact URL included in the task with a read-only HTTP "
+                "request.\n"
             )
             return {
                 "output": message,
@@ -553,13 +401,38 @@ class ApptainerEnvironment:
                 timeout=effective_timeout,
             )
         except FileNotFoundError as exc:
+            if source_event is not None:
+                self._record_source_event(
+                    source_event,
+                    command=command,
+                    executed=False,
+                    execution_status="apptainer_missing",
+                    returncode=None,
+                )
             raise FatalError(
                 "Apptainer CLI not found. "
                 "Load the Apptainer module before running, e.g. "
                 "'module load tools/Apptainer'."
             ) from exc
         except subprocess.TimeoutExpired as exc:
+            if source_event is not None:
+                self._record_source_event(
+                    source_event,
+                    command=command,
+                    executed=True,
+                    execution_status="timeout",
+                    returncode=None,
+                )
             raise CommandTimeoutError(command, exc.timeout) from exc
+
+        if source_event is not None:
+            self._record_source_event(
+                source_event,
+                command=command,
+                executed=True,
+                execution_status="completed",
+                returncode=result.returncode,
+            )
 
         return {
             "output": (result.stdout or "") + (result.stderr or ""),
@@ -570,6 +443,32 @@ class ApptainerEnvironment:
             "stderr": result.stderr or "",
             "returncode": result.returncode,
         }
+
+    def _record_source_event(
+        self,
+        event: dict[str, Any],
+        *,
+        command: str,
+        executed: bool,
+        execution_status: str,
+        returncode: int | None,
+    ) -> None:
+        if self._source_access_log_path is None:
+            return
+        self._source_access_event_index += 1
+        record = {
+            **self._source_access_context,
+            **event,
+            "event_index": self._source_access_event_index,
+            "executed": executed,
+            "execution_status": execution_status,
+            "returncode": returncode,
+        }
+        append_source_access_event(
+            self._source_access_log_path,
+            record,
+            command=command,
+        )
 
     def get_template_vars(self) -> dict[str, Any]:
         """Return template variables for prompt rendering."""

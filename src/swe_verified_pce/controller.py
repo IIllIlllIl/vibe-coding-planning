@@ -12,6 +12,7 @@ import subprocess
 from typing import Any
 
 from src.exceptions import ControllerYield
+from src.environment.source_access import SOURCE_ACCESS_POLICY_VERSION
 from src.optimization.hpc.task_batch import atomic_json
 from src.swe_verified_pce.config import SWEVerifiedPCEConfig
 from src.swe_verified_pce.dataset import (
@@ -155,11 +156,6 @@ def run_swe_verified_pce(config: SWEVerifiedPCEConfig) -> dict[str, Any] | None:
             if config.selection_manifest is not None
             else None
         ),
-        "source_access_manifest_sha256": (
-            file_sha256(config.source_access_manifest)
-            if config.source_access_manifest is not None
-            else None
-        ),
         "source_instances": len(source_rows),
         "image_available_instances": len(all_image_available_cases),
         "execution_instances": len(cases),
@@ -180,9 +176,16 @@ def run_swe_verified_pce(config: SWEVerifiedPCEConfig) -> dict[str, Any] | None:
         "repository_baseline": {
             "declared_revision": "dataset_base_commit",
             "restore": "git reset --hard <base_commit> && git clean -fd",
-            "agent_future_history": "refs_reflogs_and_unreachable_objects_pruned",
+            "agent_future_history": "multilingual_timesafe_prune",
             "verified_phases": ["plan", "code", "evaluate"],
             "evidence": "attempt/repository_baselines/<phase>/repository_baseline.json",
+        },
+        "agent_source_access": {
+            "policy_version": SOURCE_ACCESS_POLICY_VERSION,
+            "prompt_url_source": "literal_http_urls_in_frozen_issue_description",
+            "evidence": "attempt/source_access.jsonl",
+            "applies_to": ["plan", "code"],
+            "applies_to_evaluator": False,
         },
     }
     manifest_path = config.run_dir / "run_manifest.json"

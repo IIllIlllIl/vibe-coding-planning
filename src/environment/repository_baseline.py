@@ -80,20 +80,31 @@ def restore_repository_to_base(
         timeout=timeout,
     )
     if prune_future_history and evidence["restore"]["returncode"] == 0:
+        evidence["base_commit_epoch"] = _run(
+            env,
+            f"git show -s --format=%ct {quoted_commit}",
+            timeout=timeout,
+        )
         evidence["future_history_prune"] = _run(
             env,
-            "git checkout --detach "
-            f"{quoted_commit} && "
-            "git for-each-ref --format='%(refname)' refs/heads refs/tags "
-            'refs/remotes | while read ref; do git update-ref -d "$ref"; done && '
-            f"git update-ref refs/heads/vibe-frozen-base {quoted_commit} && "
+            f"TARGET_EPOCH=$(git show -s --format=%ct {quoted_commit}) && "
+            "for remote in $(git remote); do git remote remove \"$remote\" "
+            "|| exit 1; done && "
+            "for tag in $(git tag -l); do "
+            "TAG_EPOCH=$(git log -1 --format=%ct \"$tag\" 2>/dev/null || echo 0); "
+            "if [ \"${TAG_EPOCH:-0}\" -gt \"$TARGET_EPOCH\" ]; then "
+            "git tag -d \"$tag\" >/dev/null 2>&1 || true; fi; done && "
+            "CURRENT_BRANCH=$(git symbolic-ref --quiet --short HEAD || true); "
+            "for branch in $(git for-each-ref --format='%(refname:short)' "
+            "refs/heads); do if [ \"$branch\" != \"$CURRENT_BRANCH\" ]; then "
+            "git branch -D \"$branch\" >/dev/null 2>&1 || exit 1; fi; done && "
             "git reflog expire --expire=now --all && "
-            "git gc --prune=now",
+            "git gc --prune=now --aggressive",
             timeout=timeout,
         )
         evidence["future_history_check"] = _run(
             env,
-            "git fsck --unreachable --no-reflogs --no-progress",
+            "git log --all --format='%H %ct'",
             timeout=timeout,
         )
     evidence["after"] = {
@@ -114,16 +125,35 @@ def restore_repository_to_base(
             f"{phase} repository restore failed: {restore['output'][:500]}"
         )
     if prune_future_history:
+        base_epoch_result = evidence["base_commit_epoch"]
         prune = evidence["future_history_prune"]
         check = evidence["future_history_check"]
+        if base_epoch_result["returncode"] != 0:
+            raise FatalError(
+                f"{phase} base-commit timestamp could not be read: "
+                f"{base_epoch_result['output'][:500]}"
+            )
         if prune["returncode"] != 0:
             raise FatalError(
                 f"{phase} future-history prune failed: {prune['output'][:500]}"
             )
-        if check["returncode"] != 0 or check["output"].strip():
+        try:
+            base_epoch = int(base_epoch_result["output"].strip())
+            later_commits = []
+            for line in check["output"].splitlines():
+                fields = line.rsplit(maxsplit=1)
+                if len(fields) != 2:
+                    raise ValueError(line)
+                if int(fields[1]) > base_epoch:
+                    later_commits.append(line)
+        except ValueError as exc:
             raise FatalError(
-                f"{phase} repository retains unreachable future objects: "
-                f"{check['output'][:500]}"
+                f"{phase} future-history timestamp check was malformed"
+            ) from exc
+        if check["returncode"] != 0 or later_commits:
+            raise FatalError(
+                f"{phase} repository retains commits newer than base: "
+                f"{' | '.join(later_commits)[:500]}"
             )
     if after_head["returncode"] != 0:
         raise RuntimeError(f"{phase} repository HEAD could not be read after restore")

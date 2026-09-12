@@ -14,6 +14,10 @@ from src.config import AgentConfig, Config, EvaluatorConfig, PromptConfig, Syste
 from src.environment.apptainer_env import ApptainerEnvironment, ApptainerSifCache
 from src.environment.docker_env import DockerCapacityWindow
 from src.environment.repository_baseline import restore_repository_to_base
+from src.environment.source_access import (
+    SOURCE_ACCESS_POLICY_VERSION,
+    extract_http_urls,
+)
 from src.exceptions import FatalError
 from src.optimization.audit import AuditedModel, JsonlLogger
 from src.optimization.hpc.task_batch import atomic_json
@@ -45,6 +49,9 @@ class SWEVerifiedPCERunner:
         self.evaluator = evaluator
         self.audit = JsonlLogger(attempt_dir / "audit_events.jsonl")
         self.usage = JsonlLogger(attempt_dir / "usage.jsonl")
+        self.source_access_path = attempt_dir / "source_access.jsonl"
+        self.source_access_path.parent.mkdir(parents=True, exist_ok=True)
+        self.source_access_path.touch(exist_ok=True)
 
     def _authority_relative_path(self, path: Path) -> str:
         """Represent retained artifacts relative to the canonical run root."""
@@ -136,20 +143,9 @@ class SWEVerifiedPCERunner:
         case: SWEVerifiedPCECase,
         *,
         timeout: int,
+        phase: str,
         host_workdir: Path | None = None,
     ) -> ApptainerEnvironment:
-        if getattr(self.config, "source_access_manifest", None) is not None:
-            expected_issue_sha = self.config.source_access_issue_sha256_by_instance[
-                case.instance_id
-            ]
-            observed_issue_sha = hashlib.sha256(
-                case.issue_description.encode()
-            ).hexdigest()
-            if observed_issue_sha != expected_issue_sha:
-                raise FatalError(
-                    "source access allowlist issue identity mismatch for "
-                    f"{case.instance_id}"
-                )
         return ApptainerEnvironment(
             image=case.image.requested_ref,
             cwd=self.config.docker.workdir,
@@ -162,17 +158,12 @@ class SWEVerifiedPCERunner:
             host_workdir=host_workdir,
             initialize_host_workdir=host_workdir is not None,
             isolate_tmp=True,
-            block_git_remote_operations=True,
-            source_access_allowed_urls=(
-                list(self.config.source_access_by_instance[case.instance_id])
-                if getattr(self.config, "source_access_manifest", None) is not None
-                else None
-            ),
-            source_access_target_packages=(
-                [case.repo.split("/", 1)[-1]]
-                if getattr(self.config, "source_access_manifest", None) is not None
-                else None
-            ),
+            source_access_prompt_urls=list(extract_http_urls(case.issue_description)),
+            source_access_log_path=self.source_access_path,
+            source_access_context={
+                "instance_id": case.instance_id,
+                "phase": phase,
+            },
         )
 
     @staticmethod
@@ -302,6 +293,7 @@ class SWEVerifiedPCERunner:
             env = self._environment(
                 case,
                 timeout=self.config.plan.timeout,
+                phase="plan",
                 host_workdir=plan_workspace,
             )
             try:
@@ -364,6 +356,7 @@ class SWEVerifiedPCERunner:
             env = self._environment(
                 case,
                 timeout=self.config.code.timeout,
+                phase="code",
                 host_workdir=code_workspace,
             )
             try:
@@ -482,9 +475,17 @@ class SWEVerifiedPCERunner:
             # evaluators that do not use the callback.
             self._save_checkpoint("evaluate", evaluator_checkpoint)
 
-        return self._completed_result(
+        result = self._completed_result(
             plan_checkpoint, code_checkpoint, evaluator_checkpoint
         )
+        result["source_access"] = {
+            "policy_version": SOURCE_ACCESS_POLICY_VERSION,
+            "log_relative_path": self._authority_relative_path(
+                self.source_access_path
+            ),
+            "log_sha256": file_sha256(self.source_access_path),
+        }
+        return result
 
     @staticmethod
     def _completed_result(

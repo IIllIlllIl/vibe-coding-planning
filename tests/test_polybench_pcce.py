@@ -335,7 +335,6 @@ def test_polybench_pc_environment_isolates_tmp(tmp_path: Path, monkeypatch):
 
     assert observed["run_args"] == ["--containall"]
     assert observed["isolate_tmp"] is True
-    assert observed["block_git_remote_operations"] is True
 
 
 def test_clean_formal_seed_config_selects_only_clean_pce_cases():

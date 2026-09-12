@@ -75,29 +75,34 @@ leaving the result authority dependent on their absolute paths.
 
 Planner and Code use the dependencies already present in the SIF, trying
 `/opt/miniconda3/envs/testbed/bin/python` first. Before either Agent starts, its
-disposable repository is detached at the dataset base commit; other local
-refs, reflogs, and unreachable objects are removed. The evaluator keeps the
-official repository preparation path and does not receive this Agent-only
-history restriction.
+disposable repository is reset to the dataset base commit using the SWE-bench
+Multilingual time-safe pattern: remotes and other branches are removed, tags
+newer than the base are deleted with a shell `for` loop, reflogs expire, and
+unreferenced objects are pruned. A final check rejects any remaining ref-visible
+commit newer than the base. Older history and tags remain available. The
+evaluator keeps the official repository preparation path and does not receive
+this Agent-only history restriction.
 
-Each run may bind a frozen task-level source-access manifest. Its exact HTTP
-URLs come only from the frozen issue description and are shared by all attempts
-for that task. At the Agent command boundary:
+Safe PCE also applies a small Agent-only source-acquisition policy at the shell
+execution boundary. It does not disable networking. It blocks remote Git
+acquisition, pip downloads and ambiguous/remote installs, write-like HTTP
+requests, and non-Prompt URLs that visibly identify common solution surfaces
+such as GitHub pull requests, commits, diffs, raw files, and package archives.
+Clear local installs such as `pip install -e . --no-deps` remain available.
+Other read-only HTTP is allowed and marked for later review.
 
-- local shell, tests, base-and-ancestor Git history, local editable installs,
-  and non-target package installs remain available;
-- all remote Git acquisition is rejected;
-- `curl` may read only exact listed URLs without redirect following; `wget`,
-  observed Python HTTP clients, dynamic URLs, and unlisted URLs are rejected
-  because their redirect/source boundary is not reliably auditable here;
-- target-package installation and pip URL/VCS installation are rejected.
+Prompt URLs are extracted mechanically from the frozen issue description. The
+comparison is exact after normalizing scheme/host and removing URL fragments;
+path and query remain part of the identity. A Prompt URL authorizes only a
+read-only HTTP request, not Git or pip acquisition. Prompt URLs that themselves
+point to a likely solution surface remain accessible but are marked for review.
 
-The Host returns a rejected command with status 126 and an observation; it does
-not rewrite or execute the command. Later Agent action may recover normally.
-The policy does not infer that every allowed non-target package is a necessary
-test dependency, and it is a conservative accidental-leakage guard rather than
-a security sandbox. Raw trajectories are the authority for smoke analysis of
-missed and mistaken blocks.
+Every classified command produces a separate `source_access.jsonl` event. A
+blocked command returns status 126 to the Agent and is not executed. The Host
+does not rewrite the command, Plan, patch, or outcome. Query values and raw
+commands are omitted from this log; hashes retain stable audit identity. This
+is an accidental-leakage reduction and post-filtering aid, not a security
+sandbox. It applies to Plan and Code Agents, never the official evaluator.
 
 ## Audit10 Development Smoke
 
@@ -123,21 +128,11 @@ criteria. This is development-only manual-audit material, not a quality,
 prevalence, or held-out generalization estimate.
 
 The completed unsafe runtime is
-`configs/swe_verified_safe_pce_audit10_v3_20260912.yaml`. Its prepared
-replacement is `configs/swe_verified_safe_pce_audit10_v4_20260912.yaml`, with
-supervisor identity
-`configs/swe_verified_safe_pce_audit10_supervisor_v2_20260912.yaml`. It uses one
-CPU, 4G, and 45 minutes per Agent/evaluator array element, three operational
-attempts, five-minute controller polling, shared storage defaults, and
-conservative staging reclamation.
-
-The replacement additionally freezes
-`configs/frozen_swe_verified_smoke/safe-pce-audit10-source-access-v1-20260912.json`.
-Six selected tasks contain issue URLs and four contain none, so trajectory
-review can inspect allowed task sources, blocked non-task sources, and cases
-that should require no network. The smoke must not claim complete containment:
-review explicitly checks unrecognized clients, URL construction, pip behavior,
-local-history visibility, and environment failures caused by the policy.
+`configs/swe_verified_safe_pce_audit10_v3_20260912.yaml`. A successor smoke must
+retain its frozen ten-case input while using a new run identity. Its review must
+compare the known four leakage cases with the six cases in which no source
+acquisition was previously observed, and inspect both missed and mistaken
+blocks. Preparing a config does not authorize launch.
 
 The ten existing SIFs were independently re-audited on compute node
 `iris-096` by Slurm job `5939144`: all ten byte hashes were frozen and all ten

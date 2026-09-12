@@ -66,6 +66,7 @@ def pce_semantic_sha256(
         root / "src" / "agents" / "code_agent.py",
         root / "src" / "environment" / "apptainer_env.py",
         root / "src" / "environment" / "repository_baseline.py",
+        root / "src" / "environment" / "source_access.py",
         *sorted((root / "src" / "swe_verified_pce").glob("*.py")),
         *additional_sources,
     ]
@@ -118,11 +119,6 @@ def execution_fingerprint(
             "selection_manifest_sha256": (
                 file_sha256(config.selection_manifest)
                 if config.selection_manifest is not None
-                else None
-            ),
-            "source_access_manifest_sha256": (
-                file_sha256(config.source_access_manifest)
-                if config.source_access_manifest is not None
                 else None
             ),
             "cases": [

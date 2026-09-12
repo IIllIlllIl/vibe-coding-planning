@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import os
 from pathlib import Path
 import subprocess
 
@@ -24,10 +25,12 @@ class FakeEnvironment:
         if command.startswith("git reset --hard"):
             self.restored = True
             return {"returncode": 0, "output": "HEAD is now at abc"}
-        if command.startswith("git checkout --detach"):
-            return {"returncode": 0, "output": "HEAD is now at abc"}
-        if command.startswith("git fsck --unreachable"):
+        if command.startswith("git show -s --format=%ct"):
+            return {"returncode": 0, "output": "100\n"}
+        if command.startswith("TARGET_EPOCH="):
             return {"returncode": 0, "output": ""}
+        if command.startswith("git log --all --format="):
+            return {"returncode": 0, "output": "abc 100\n"}
         if command == "git rev-parse HEAD":
             return {"returncode": 0, "output": "abc\n"}
         if command.startswith("git status"):
@@ -84,9 +87,13 @@ def test_restore_can_prune_future_history(tmp_path) -> None:
     )
 
     assert evidence["future_history_prune"]["returncode"] == 0
-    assert evidence["future_history_check"]["output"] == ""
+    assert evidence["base_commit_epoch"]["output"] == "100\n"
+    assert evidence["future_history_check"]["output"] == "abc 100\n"
+    assert any("git remote remove" in command for command in env.commands)
+    assert any("TAG_EPOCH" in command for command in env.commands)
     assert any("git reflog expire" in command for command in env.commands)
-    assert any("git fsck --unreachable" in command for command in env.commands)
+    assert any("git gc --prune=now --aggressive" in command for command in env.commands)
+    assert all("while read" not in command for command in env.commands)
 
 
 def test_future_commit_is_unavailable_after_real_repository_prune(
@@ -105,17 +112,36 @@ def test_future_commit_is_unavailable_after_real_repository_prune(
         )
         return result.stdout.strip()
 
+    def commit_at(date: str, *args: str) -> None:
+        env = {"GIT_AUTHOR_DATE": date, "GIT_COMMITTER_DATE": date}
+        subprocess.run(
+            ["git", *args],
+            cwd=repository,
+            capture_output=True,
+            text=True,
+            check=True,
+            env={**os.environ, **env},
+        )
+
     git("init", "-q")
     git("config", "user.email", "test@example.invalid")
     git("config", "user.name", "Test")
+    (repository / "history.txt").write_text("ancestor\n", encoding="utf-8")
+    git("add", "history.txt")
+    commit_at("2000-01-01T00:00:00Z", "commit", "-qm", "ancestor")
+    ancestor = git("rev-parse", "HEAD")
+    git("tag", "old-tag")
     (repository / "value.txt").write_text("base\n", encoding="utf-8")
     git("add", "value.txt")
-    git("commit", "-qm", "base")
+    commit_at("2000-01-02T00:00:00Z", "commit", "-qm", "base")
     base = git("rev-parse", "HEAD")
     (repository / "value.txt").write_text("future\n", encoding="utf-8")
-    git("commit", "-qam", "future")
+    commit_at("2000-01-03T00:00:00Z", "commit", "-qam", "future")
     future = git("rev-parse", "HEAD")
     git("tag", "future-tag")
+    git("branch", "future-branch")
+    git("remote", "add", "origin", "https://example.invalid/repo.git")
+    git("update-ref", "refs/remotes/origin/future", future)
 
     class LocalGitEnvironment:
         def execute(self, command: str, timeout: int | None = None) -> dict:
@@ -141,6 +167,8 @@ def test_future_commit_is_unavailable_after_real_repository_prune(
     )
 
     assert git("rev-parse", "HEAD") == base
+    assert git("merge-base", "--is-ancestor", ancestor, base) == ""
+    assert git("cat-file", "-t", ancestor) == "commit"
     missing = subprocess.run(
         ["git", "cat-file", "-e", f"{future}^{{commit}}"],
         cwd=repository,
@@ -148,4 +176,6 @@ def test_future_commit_is_unavailable_after_real_repository_prune(
         check=False,
     )
     assert missing.returncode != 0
-    assert git("for-each-ref", "--format=%(refname)") == ("refs/heads/vibe-frozen-base")
+    assert git("branch", "--format=%(refname:short)") in {"main", "master"}
+    assert git("tag", "-l") == "old-tag"
+    assert git("remote") == ""
