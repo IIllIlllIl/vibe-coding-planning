@@ -178,6 +178,7 @@ class SWEVerifiedPCERunner:
         phase: str,
         host_workdir: Path,
         evidence_dir: Path,
+        timeout: int,
     ) -> None:
         _ = host_workdir
         restore_repository_to_base(
@@ -185,6 +186,7 @@ class SWEVerifiedPCERunner:
             case.base_commit,
             phase=phase,
             evidence_dir=evidence_dir,
+            timeout=timeout,
             prune_future_history=True,
         )
 
@@ -303,6 +305,7 @@ class SWEVerifiedPCERunner:
                     phase="plan",
                     host_workdir=plan_workspace,
                     evidence_dir=self.attempt_dir / "repository_baselines" / "plan",
+                    timeout=self.config.plan.timeout,
                 )
                 plan, trajectory = plan_agent.run(
                     self._base_config(self.config.plan),
@@ -366,6 +369,7 @@ class SWEVerifiedPCERunner:
                     phase="code",
                     host_workdir=code_workspace,
                     evidence_dir=self.attempt_dir / "repository_baselines" / "code",
+                    timeout=self.config.code.timeout,
                 )
                 base_code_config = self._base_config(self.config.code)
                 code_config = replace(

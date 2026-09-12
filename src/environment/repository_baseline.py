@@ -10,7 +10,7 @@ from typing import Any
 from src.exceptions import FatalError
 
 
-def _run(env: Any, command: str, *, timeout: int) -> dict[str, Any]:
+def _run(env: Any, command: str, *, timeout: int | None) -> dict[str, Any]:
     result = dict(env.execute(command, timeout=timeout))
     return {
         "command": command,
@@ -36,7 +36,7 @@ def restore_repository_to_base(
     *,
     phase: str,
     evidence_dir: Path,
-    timeout: int = 120,
+    timeout: int | None = None,
     prune_future_history: bool = False,
 ) -> dict[str, Any]:
     """Reset and clean the disposable repository, then verify the result."""

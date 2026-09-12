@@ -300,6 +300,30 @@ def test_safe_pce_audit10_v5_prepares_source_boundary_replay() -> None:
     )
 
 
+def test_safe_pce_audit10_v6_uses_configured_baseline_timeout() -> None:
+    config = load_swe_verified_pce_config(
+        "configs/swe_verified_safe_pce_audit10_v6_20260912.yaml",
+        require_api_keys=False,
+    )
+    raw = yaml.safe_load(config.config_path.read_text(encoding="utf-8"))
+    assert len(config.instance_ids) == 10
+    assert config.plan.timeout == config.code.timeout == 1800
+    assert raw["experiment_contract"]["repository_baseline_command_timeout"] == (
+        "inherit_phase_1800_seconds"
+    )
+    assert raw["experiment_contract"]["launched"] is True
+
+    supervisor = yaml.safe_load(
+        Path(
+            "configs/swe_verified_safe_pce_audit10_supervisor_v4_20260912.yaml"
+        ).read_text(encoding="utf-8")
+    )
+    arguments = supervisor["arguments"]
+    assert arguments[arguments.index("--config") + 1] == (
+        "configs/swe_verified_safe_pce_audit10_v6_20260912.yaml"
+    )
+
+
 def test_swe_verified_checker_contract_failure_retries_with_fresh_agent():
     error = CheckerOutputContractError("extra data after submitted JSON")
     assert _retry_disposition(error) == "retry_fresh_agent"

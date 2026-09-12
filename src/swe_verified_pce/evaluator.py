@@ -137,6 +137,7 @@ def evaluate_swe_verified_apptainer(
                 phase="evaluate",
                 evidence_dir=repository_baseline_dir
                 or phase_workdir.parent / "evaluate_repository_baseline",
+                timeout=command_timeout,
             )
         except FatalError as exc:
             raise SWEVerifiedEvaluatorOperationalError(

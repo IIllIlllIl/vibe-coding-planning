@@ -17,9 +17,11 @@ class FakeEnvironment:
         self.clean_after = clean_after
         self.restored = False
         self.commands: list[str] = []
+        self.timeouts: list[int | None] = []
 
     def execute(self, command: str, timeout: int | None = None) -> dict:
         self.commands.append(command)
+        self.timeouts.append(timeout)
         if command.startswith("git cat-file"):
             return {"returncode": 0 if self.base_present else 1, "output": ""}
         if command.startswith("git reset --hard"):
@@ -83,6 +85,7 @@ def test_restore_can_prune_future_history(tmp_path) -> None:
         "abc",
         phase="plan",
         evidence_dir=tmp_path,
+        timeout=1800,
         prune_future_history=True,
     )
 
@@ -94,6 +97,13 @@ def test_restore_can_prune_future_history(tmp_path) -> None:
     assert any("git reflog expire" in command for command in env.commands)
     assert any("git gc --prune=now --aggressive" in command for command in env.commands)
     assert all("while read" not in command for command in env.commands)
+    assert set(env.timeouts) == {1800}
+
+
+def test_restore_has_no_hidden_command_timeout(tmp_path) -> None:
+    env = FakeEnvironment()
+    restore_repository_to_base(env, "abc", phase="code", evidence_dir=tmp_path)
+    assert set(env.timeouts) == {None}
 
 
 def test_future_commit_is_unavailable_after_real_repository_prune(
