@@ -74,14 +74,25 @@ leaving the result authority dependent on their absolute paths.
 ## Agent Environment Boundary
 
 Planner and Code use the dependencies already present in the SIF, trying
-`/opt/miniconda3/envs/testbed/bin/python` first. Before either Agent starts, its
-disposable repository is reset to the dataset base commit using the SWE-bench
-Multilingual time-safe pattern: remotes and other branches are removed, tags
+`/opt/miniconda3/envs/testbed/bin/python` first. Their Apptainer execution uses
+`--containall`, disables the automatic host-current-directory mount, and binds
+only the phase-local `/testbed`, HOME, and `/tmp` directories needed by the
+Agent. The image's `/opt/miniconda3/pkgs` download/unpack cache is masked by an
+empty read-only phase-local directory; the actual testbed environment remains
+available. This boundary is based on path provenance, not a semantic guess
+about which repository files are relevant: the complete current `/testbed`
+repository remains visible.
+
+Before either Agent starts, its disposable repository is reset to the dataset
+base commit using the SWE-bench Multilingual time-safe pattern: remotes and
+other branches are removed, tags
 newer than the base are deleted with a shell `for` loop, reflogs expire, and
 unreferenced objects are pruned. A final check rejects any remaining ref-visible
 commit newer than the base. Older history and tags remain available. The
-evaluator keeps the official repository preparation path and does not receive
-this Agent-only history restriction.
+evaluator instead starts from a fresh immutable-SIF copy, verifies that its HEAD
+matches the declared base commit, records the SIF's existing status and diff,
+and performs no reset or clean. This preserves official harness preparation and
+does not expose the Evaluator to Agent workspace state.
 
 Safe PCE also applies a small Agent-only source-acquisition policy at the shell
 execution boundary. It does not disable networking. It blocks remote Git
@@ -102,7 +113,12 @@ blocked command returns status 126 to the Agent and is not executed. The Host
 does not rewrite the command, Plan, patch, or outcome. Query values and raw
 commands are omitted from this log; hashes retain stable audit identity. This
 is an accidental-leakage reduction and post-filtering aid, not a security
-sandbox. It applies to Plan and Code Agents, never the official evaluator.
+sandbox. It applies to Plan and Code Agents, never the official evaluator. The
+version-2 command segmentation uses the `bashlex` AST to identify commands
+inside ordinary lists, unquoted-newline boundaries, compound statements,
+subshells, and command substitutions. This closes the observed
+`cd`-then-newline-then-`curl` miss. Runtime-generated commands remain an audit
+and post-filtering concern rather than a syntactic command-splitting claim.
 
 ## Audit10 Development Smoke
 

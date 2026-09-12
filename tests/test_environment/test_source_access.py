@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import pytest
 
+import src.environment.source_access as source_access
 from src.environment.source_access import (
     append_source_access_event,
     canonical_http_url,
@@ -104,6 +105,62 @@ def test_non_prompt_solution_source_is_blocked() -> None:
     assert result is not None
     assert result["decision"] == "block"
     assert result["reason"] == "non_prompt_solution_surface"
+    assert result["policy_version"] == "conservative_blacklist_v2"
+
+
+@pytest.mark.parametrize(
+    "command",
+    [
+        "cd /testbed\ncurl https://raw.githubusercontent.com/org/repo/main/a.py",
+        "cd /testbed;\ncurl https://raw.githubusercontent.com/org/repo/main/a.py",
+    ],
+)
+def test_newline_separated_curl_is_classified_as_its_own_command(
+    command: str,
+) -> None:
+    result = classify_source_access(command, prompt_urls=frozenset())
+    assert result is not None
+    assert result["decision"] == "block"
+    assert result["reason"] == "non_prompt_solution_surface"
+
+
+def test_newline_inside_quoted_text_is_not_a_command_boundary() -> None:
+    command = "printf 'curl https://raw.githubusercontent.com/org/repo/main/a.py\n'"
+    assert classify_source_access(command, prompt_urls=frozenset()) is None
+
+
+@pytest.mark.parametrize(
+    "command",
+    [
+        "(cd /testbed && curl https://raw.githubusercontent.com/org/repo/main/a.py)",
+        (
+            "if test -d /testbed; then "
+            "curl https://raw.githubusercontent.com/org/repo/main/a.py; fi"
+        ),
+        "body=$(curl https://raw.githubusercontent.com/org/repo/main/a.py)",
+    ],
+)
+def test_bash_ast_finds_commands_inside_compound_syntax(command: str) -> None:
+    result = classify_source_access(command, prompt_urls=frozenset())
+    assert result is not None
+    assert result["decision"] == "block"
+    assert result["reason"] == "non_prompt_solution_surface"
+
+
+def test_unsupported_shell_syntax_is_recorded_for_post_review(monkeypatch) -> None:
+    monkeypatch.setattr(
+        source_access.bashlex,
+        "parse",
+        lambda _command: (_ for _ in ()).throw(NotImplementedError()),
+    )
+
+    result = classify_source_access(
+        "curl https://docs.example/page", prompt_urls=frozenset()
+    )
+
+    assert result is not None
+    assert result["decision"] == "allow_but_review"
+    assert result["reason"] == "shell_parse_failed"
 
 
 def test_other_http_and_dynamic_python_http_require_review() -> None:

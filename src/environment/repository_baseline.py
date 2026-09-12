@@ -166,3 +166,69 @@ def restore_repository_to_base(
     if after_status["output"].strip():
         raise FatalError(f"{phase} repository is not clean after base restore")
     return evidence
+
+
+def verify_repository_at_base(
+    env: Any,
+    base_commit: str,
+    *,
+    phase: str,
+    evidence_dir: Path,
+    timeout: int | None = None,
+) -> dict[str, Any]:
+    """Verify a prepared repository without changing its files or Git state.
+
+    Official evaluator images may contain tracked preparation changes required
+    by their test harness.  Evaluator workspaces are freshly copied from the
+    immutable SIF, so resetting them would erase that preparation.  This check
+    records the starting state and requires the image to be based at the
+    dataset-declared commit, but deliberately performs no reset or clean.
+    """
+
+    commit = base_commit.strip()
+    if not commit:
+        raise FatalError(f"{phase} repository baseline has an empty base_commit")
+    quoted_object = shlex.quote(f"{commit}^{{commit}}")
+    evidence: dict[str, Any] = {
+        "schema_version": 1,
+        "phase": phase,
+        "policy": "preserve_immutable_sif_preparation_v1",
+        "declared_base_commit": commit,
+        "observed": {
+            "head": _run(env, "git rev-parse HEAD", timeout=timeout),
+            "status": _run(
+                env,
+                "git status --porcelain=v1 --untracked-files=all",
+                timeout=timeout,
+            ),
+            "unstaged_diff": _run(
+                env, "git diff --binary --full-index", timeout=timeout
+            ),
+            "staged_diff": _run(
+                env, "git diff --cached --binary --full-index", timeout=timeout
+            ),
+        },
+    }
+    evidence["base_commit_check"] = _run(
+        env, f"git cat-file -e {quoted_object}", timeout=timeout
+    )
+    _write_evidence(evidence_dir, evidence)
+
+    head = evidence["observed"]["head"]
+    status = evidence["observed"]["status"]
+    if evidence["base_commit_check"]["returncode"] != 0:
+        raise FatalError(
+            f"{phase} repository does not contain declared base_commit {commit}"
+        )
+    if head["returncode"] != 0:
+        raise RuntimeError(f"{phase} repository HEAD could not be read")
+    if head["output"].strip() != commit:
+        raise FatalError(
+            f"{phase} repository HEAD does not match declared base_commit {commit}"
+        )
+    if status["returncode"] != 0:
+        raise RuntimeError(f"{phase} repository status could not be read")
+    for name in ("unstaged_diff", "staged_diff"):
+        if evidence["observed"][name]["returncode"] != 0:
+            raise RuntimeError(f"{phase} repository {name} could not be read")
+    return evidence

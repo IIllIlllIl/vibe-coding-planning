@@ -200,13 +200,14 @@ class SWEVerifiedPCCERunner:
             cwd=self.config.pce.docker.workdir,
             sif_cache_dir=self.config.pce.container.sif_cache_dir,
             capacity_window=self.capacity,
-            run_args=["--containall"],
+            run_args=["--containall", "--no-mount", "cwd"],
             timeout=self.config.pce.plan.timeout,
             writable_tmpfs=self.config.pce.container.writable_tmpfs,
             git_safe_directories=[self.config.pce.docker.workdir],
             host_workdir=host_workdir,
             initialize_host_workdir=True,
             isolate_tmp=True,
+            masked_container_paths=["/opt/miniconda3/pkgs"],
         )
 
     def _cleanup_workspace(self, path: Path, *, phase: str) -> None:

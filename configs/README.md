@@ -48,8 +48,9 @@ labels, image manifests, output roots, or baseline identities in a new run.
 | `swe_verified_safe_pce_audit10_supervisor_v1_20260912.yaml` | Reviewed launch identity for the ten-case Safe PCE audit smoke; it uses shared default paths and conservative staging reclamation. Presence does not authorize launch. |
 | `swe_verified_safe_pce_audit10_v5_20260912.yaml` | Prepared, unlaunched audit10 replay for the conservative Agent source blacklist, exact Prompt URL reads, and independent source-access audit evidence. |
 | `swe_verified_safe_pce_audit10_supervisor_v3_20260912.yaml` | Prepared supervisor identity for the v5 source-boundary smoke; presence does not authorize launch. |
-| `swe_verified_safe_pce_audit10_v6_20260912.yaml` | Authorized replacement for the v5 diagnostic failure; repository-baseline commands inherit the declared 1800-second phase timeout. |
-| `swe_verified_safe_pce_audit10_supervisor_v4_20260912.yaml` | Supervisor identity for the authorized v6 source-boundary smoke. |
+| `swe_verified_safe_pce_audit10_v6_20260912.yaml` | Stopped 8/10 successor smoke; retained as source-boundary and retry evidence, not a relaunch identity. |
+| `swe_verified_safe_pce_audit10_v7_20260913.yaml` | Authorized ten-case regression smoke for evaluator preservation, Bash-AST source auditing, package-cache masking, human-review Plans, and durable evidence references. |
+| `swe_verified_safe_pce_audit10_supervisor_v5_20260913.yaml` | Current reviewed supervisor identity for the v7 regression smoke. |
 | `swe_verified_safe_pce_smoke_v1_20260911.yaml` | Prepared, launch-unauthorized two-case Safe PCE contract using direct `FINAL_PLAN` submission and the retained Verified Code/evaluator path. |
 | `frozen_swe_verified_playbook_gepa/20260909_clean444_25e5ce38271c/` | Eligibility-cleaned immutable Verified development snapshot with 444 cases and exhaustive exclusion/audit authorities. |
 | `gepa_verified_reject_playbook_smoke_v1_20260909.yaml` | Completed diagnostic 4-train/2-validation smoke; distributed execution worked, but Checker schema ambiguity and inline Reflection overflow prevented a proposal. |

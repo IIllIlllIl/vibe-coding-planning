@@ -1,5 +1,6 @@
 # Core dependencies
 mini-swe-agent==1.17.5
+bashlex==0.18
 swebench>=4.1.0
 pyyaml>=6.0.0
 packaging>=22.0

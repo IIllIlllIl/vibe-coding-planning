@@ -23,6 +23,10 @@ For Apptainer PCE/PCCE Agents, this includes `/tmp`: each Plan, Checker,
 revision, and Code environment uses `--containall` plus its own host directory
 bound to `/tmp`. The bind persists across tool actions within one Agent phase
 and is destroyed at phase cleanup. It is never reused by another phase.
+Automatic host-CWD mounting is disabled. The complete task repository remains
+available at the explicitly bound `/testbed`, while the SIF's Conda package
+download/unpack cache at `/opt/miniconda3/pkgs` is hidden behind an empty
+read-only phase-local bind. The testbed environment itself remains available.
 
 Allowed cross-phase artifacts:
 

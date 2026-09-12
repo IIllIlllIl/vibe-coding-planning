@@ -33,7 +33,11 @@ from src.swe_verified_pce.dataset import (
     load_swe_verified_pce_cases,
 )
 from src.swe_verified_pce.config import load_swe_verified_pce_config
-from src.swe_verified_pce.evaluator import _apply_patch, _terminal
+from src.swe_verified_pce.evaluator import (
+    _apply_patch,
+    _terminal,
+    evaluate_swe_verified_apptainer,
+)
 from src.swe_verified_pce.hpc_executor import (
     SWEVerifiedPCEHPCExecutor,
     recover_exhausted_evaluator_timeout,
@@ -177,6 +181,21 @@ def test_safe_pce_smoke_uses_direct_plan_prompt_and_retained_code_prompt() -> No
     )
 
 
+def test_safe_pce_planner_v2_targets_human_review_and_exact_submission() -> None:
+    prompt = yaml.safe_load(
+        Path("configs/prompts/swe_verified_safe_pce_planner_v2_20260912.yaml")
+        .read_text(encoding="utf-8")
+    )["prompts"]["plan_system"]
+
+    assert "planning mode with a human developer" in prompt
+    assert "developer to review before any implementation begins" in prompt
+    assert "has not inspected this repository" in prompt
+    assert "Treat `/testbed` as the repository authority" in prompt
+    assert "Keep the Plan concise and easy to scan" in prompt
+    assert "It may later guide a coding agent" not in prompt
+    assert "exactly follows the demonstrated terminal-response structure" in prompt
+
+
 def test_safe_pce_boundary_smoke_freezes_case8_and_git_boundary_probe() -> None:
     config = load_swe_verified_pce_config(
         "configs/swe_verified_safe_pce_boundary_smoke_v2_20260911.yaml",
@@ -315,12 +334,49 @@ def test_safe_pce_audit10_v6_uses_configured_baseline_timeout() -> None:
 
     supervisor = yaml.safe_load(
         Path(
-            "configs/swe_verified_safe_pce_audit10_supervisor_v4_20260912.yaml"
+            "configs/archive/supervisor_launches/"
+            "swe_verified_safe_pce_audit10_supervisor_v4_20260912.yaml"
         ).read_text(encoding="utf-8")
     )
     arguments = supervisor["arguments"]
     assert arguments[arguments.index("--config") + 1] == (
         "configs/swe_verified_safe_pce_audit10_v6_20260912.yaml"
+    )
+
+
+def test_safe_pce_audit10_v7_freezes_repaired_boundary_smoke() -> None:
+    config = load_swe_verified_pce_config(
+        "configs/swe_verified_safe_pce_audit10_v7_20260913.yaml",
+        require_api_keys=False,
+    )
+    raw = yaml.safe_load(config.config_path.read_text(encoding="utf-8"))
+    contract = raw["experiment_contract"]
+    assert len(config.instance_ids) == 10
+    assert config.run_dir.name == "safe-pce-audit10-v7-20260913"
+    assert contract["agent_source_policy"] == "conservative_blacklist_v2"
+    assert contract["shell_command_parser"] == "bashlex_ast"
+    assert contract["plan_audience"] == "human_developer_before_implementation"
+    assert contract["evaluator_repository_policy"] == (
+        "verify_fresh_immutable_sif_without_reset_or_clean"
+    )
+    assert hashlib.sha256(config.plan_prompt.encode()).hexdigest() == contract[
+        "plan_prompt_text_sha256"
+    ]
+    assert hashlib.sha256(config.code_prompt.encode()).hexdigest() == contract[
+        "code_prompt_text_sha256"
+    ]
+    assert contract["launched"] is True
+
+    supervisor = yaml.safe_load(
+        Path(
+            "configs/swe_verified_safe_pce_audit10_supervisor_v5_20260913.yaml"
+        ).read_text(encoding="utf-8")
+    )
+    arguments = supervisor["arguments"]
+    assert "--require-clean-worktree" in arguments
+    assert "--reclaim-staging" in arguments
+    assert arguments[arguments.index("--config") + 1] == (
+        "configs/swe_verified_safe_pce_audit10_v7_20260913.yaml"
     )
 
 
@@ -392,14 +448,16 @@ def test_swe_verified_agent_environments_isolate_tmp(tmp_path, monkeypatch):
     assignment = SimpleNamespace(case=SimpleNamespace(source=source))
     pcce._environment(assignment, host_workdir=tmp_path / "checker")
 
-    assert pce_observed["run_args"] == ["--containall"]
+    assert pce_observed["run_args"] == ["--containall", "--no-mount", "cwd"]
     assert pce_observed["isolate_tmp"] is True
+    assert pce_observed["masked_container_paths"] == ["/opt/miniconda3/pkgs"]
     assert pce_observed["source_access_prompt_urls"] == [
         "https://docs.example/page"
     ]
     assert pce_observed["source_access_context"]["phase"] == "plan"
-    assert pcce_observed["run_args"] == ["--containall"]
+    assert pcce_observed["run_args"] == ["--containall", "--no-mount", "cwd"]
     assert pcce_observed["isolate_tmp"] is True
+    assert pcce_observed["masked_container_paths"] == ["/opt/miniconda3/pkgs"]
 
 
 def test_verified_revision_plan_config_uses_canonical_dataset_without_pce_field(
@@ -968,6 +1026,80 @@ def test_evaluator_patch_commands_keep_only_the_loose_command_timeout() -> None:
         ("git apply --check .vibe_code.patch", 1800),
         ("git apply --verbose .vibe_code.patch", 1800),
     ]
+
+
+def test_verified_evaluator_preserves_prepared_sif_repository(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    import swebench.harness.grading as grading
+    import swebench.harness.test_spec.test_spec as test_spec_module
+
+    instances = []
+
+    class Environment:
+        def __init__(self, **kwargs):
+            self.commands = []
+            self.cleaned = False
+            instances.append(self)
+
+        def execute(self, command: str, *, timeout: int | None = None):
+            self.commands.append(command)
+            if command == "git rev-parse HEAD":
+                return {"returncode": 0, "output": "abc\n"}
+            if command.startswith("git status"):
+                return {"returncode": 0, "output": " M tox.ini\n"}
+            if command.startswith("git diff"):
+                return {"returncode": 0, "output": "official SIF preparation"}
+            if command.startswith("git cat-file"):
+                return {"returncode": 0, "output": ""}
+            if command.startswith("git apply"):
+                return {"returncode": 0, "output": ""}
+            if command == "/bin/bash .vibe_eval.sh":
+                return {"returncode": 0, "output": "test passed"}
+            raise AssertionError(command)
+
+        def cleanup(self):
+            self.cleaned = True
+
+    monkeypatch.setattr(
+        "src.swe_verified_pce.evaluator.ApptainerEnvironment", Environment
+    )
+    monkeypatch.setattr(
+        test_spec_module,
+        "make_test_spec",
+        lambda *_args, **_kwargs: SimpleNamespace(eval_script="pytest -rA"),
+    )
+    monkeypatch.setattr(
+        grading,
+        "get_eval_report",
+        lambda **_kwargs: {"owner__repo-1": {"resolved": True}},
+    )
+    case = SimpleNamespace(
+        instance_id="owner__repo-1",
+        base_commit="abc",
+        image=SimpleNamespace(requested_ref="image:v1"),
+        evaluator_input=lambda: {},
+    )
+
+    result = evaluate_swe_verified_apptainer(
+        "diff --git a/a.py b/a.py\n",
+        case,
+        container=SimpleNamespace(sif_cache_dir=tmp_path, writable_tmpfs=True),
+        capacity_window=SimpleNamespace(),
+        workdir="/testbed",
+        phase_workdir=tmp_path / "evaluate",
+        command_timeout=1800,
+        repository_baseline_dir=tmp_path / "baseline",
+    )
+
+    assert result["task_outcome"] == "resolved"
+    assert not any(command.startswith("git reset") for command in instances[0].commands)
+    assert not any(command.startswith("git clean") for command in instances[0].commands)
+    evidence = json.loads(
+        (tmp_path / "baseline/repository_baseline.json").read_text()
+    )
+    assert evidence["observed"]["status"]["output"] == " M tox.ini\n"
+    assert instances[0].cleaned is True
 
 
 def test_tracked_smoke_configs_bind_two_case_selection_and_phase_policies() -> None:

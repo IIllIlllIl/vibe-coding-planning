@@ -158,6 +158,7 @@ class SWEVerifiedPCERunner:
             host_workdir=host_workdir,
             initialize_host_workdir=host_workdir is not None,
             isolate_tmp=True,
+            masked_container_paths=["/opt/miniconda3/pkgs"],
             source_access_prompt_urls=list(extract_http_urls(case.issue_description)),
             source_access_log_path=self.source_access_path,
             source_access_context={
@@ -168,7 +169,7 @@ class SWEVerifiedPCERunner:
 
     @staticmethod
     def _agent_container_run_args() -> list[str]:
-        return ["--containall"]
+        return ["--containall", "--no-mount", "cwd"]
 
     def _restore_agent_repository(
         self,

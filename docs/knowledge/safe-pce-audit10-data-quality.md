@@ -140,3 +140,34 @@ The human-review rendering is at
 `output/SWE-bench_Verified/swe-verified-pce-runs/development/safe-pce-audit10-v3-20260912/manual-review.md`.
 It deliberately omits all findings above and exposes only Task, Repo/base
 commit, exact Plan, and final result.
+
+## Successor smoke comparison
+
+`safe-pce-audit10-v6-20260912` reused the same frozen ten-case selection, image
+manifest, and Planner-v1 prompt. It changed the execution boundary rather than
+the sampled tasks: Agent-visible future Git history was pruned, source-access
+events were recorded and conservatively blocked, malformed Plan and empty-patch
+submissions retried, and hashes plus portable evidence references were retained.
+
+| Property | audit10 v3 | audit10 v6 |
+|---|---|---|
+| Purpose | Baseline end-to-end and data-quality audit | Successor boundary smoke |
+| Terminal coverage | 10/10 consolidated | 8/10 worker outputs; stopped before consolidation |
+| Agent future-history pruning | No | Yes |
+| Source-access audit/blacklist | Remote Git only | Git, pip, and selected HTTP surfaces |
+| Invalid Plan / empty patch | Became dirty artifact or task failure | Host rejected and retried |
+| Scientific disposition | Contaminated development evidence | Incomplete development evidence |
+
+The successor confirmed that checkpoint-preserving retries and Git-history
+pruning work, but it exposed four remaining classes of boundary defect:
+
+- shell parsing could miss a newline-separated download command;
+- the image package cache exposed later source outside `/testbed`;
+- the evaluator reset erased official SIF test-harness preparation;
+- the Planner protocol and audience produced avoidable formatting retries and
+  overly implementation-oriented Plans.
+
+The current unvalidated successor code addresses those four classes with Bash
+AST command parsing, a masked package-cache path, evaluator verification without
+reset, and a human-review Planner-v2 prompt. These are implementation claims,
+not experimental results, until another smoke exercises them on HPC.

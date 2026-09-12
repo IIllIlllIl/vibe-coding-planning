@@ -7,7 +7,7 @@ from typing import Any, Callable
 
 from src.environment.apptainer_env import ApptainerEnvironment
 from src.environment.docker_env import DockerCapacityWindow
-from src.environment.repository_baseline import restore_repository_to_base
+from src.environment.repository_baseline import verify_repository_at_base
 from src.exceptions import FatalError
 from src.optimization.config import ContainerConfig
 from src.swe_verified_pce.models import SWEVerifiedPCECase
@@ -131,7 +131,7 @@ def evaluate_swe_verified_apptainer(
             initialize_host_workdir=True,
         )
         try:
-            restore_repository_to_base(
+            verify_repository_at_base(
                 env,
                 case.base_commit,
                 phase="evaluate",
@@ -141,14 +141,14 @@ def evaluate_swe_verified_apptainer(
             )
         except FatalError as exc:
             raise SWEVerifiedEvaluatorOperationalError(
-                f"evaluator could not restore the frozen base repository: {exc}",
-                outcome_reason="repository_reset_failed",
+                f"evaluator SIF repository does not match the frozen base: {exc}",
+                outcome_reason="evaluator_sif_base_mismatch",
                 retry_disposition="block_run",
             ) from exc
         except Exception as exc:
             raise SWEVerifiedEvaluatorOperationalError(
-                f"evaluator repository restore did not execute: {exc}",
-                outcome_reason="repository_reset_failed",
+                f"evaluator SIF repository inspection did not execute: {exc}",
+                outcome_reason="evaluator_sif_inspection_failed",
                 retry_disposition="retry_same_phase",
             ) from exc
 

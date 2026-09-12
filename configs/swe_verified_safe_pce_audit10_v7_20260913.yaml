@@ -1,0 +1,94 @@
+# Authorized ten-case regression smoke for repaired Safe PCE boundaries.
+mode: swe_verified_pce
+purpose: safe_pce_repaired_boundary_regression_smoke
+
+paths:
+  dataset_snapshot: output/SWE-bench_Verified/swe-verified-pce-inputs/20260831_verified500_91aa3ed5
+  image_manifest: configs/frozen_swe_verified_smoke/safe-pce-audit10-v3-20260912-images.json
+  selection_manifest: configs/frozen_swe_verified_smoke/swe-verified-safe-pce-audit10-v3-20260912.json
+  prompt_source_config: configs/polybench_pce_hpc_formal_clean_20260825.yaml
+  plan_prompt_source_config: configs/prompts/swe_verified_safe_pce_planner_v2_20260912.yaml
+  run_dir: output/SWE-bench_Verified/swe-verified-pce-runs/development/safe-pce-audit10-v7-20260913
+
+plan:
+  model: deepseek-v4-flash
+  api_base: https://api.deepseek.com
+  api_key_env: DEEPSEEK_API_KEY
+  temperature: 0.0
+  max_steps: 0
+  cost_limit: 0.0
+  timeout: 1800
+  max_attempts: 3
+  submission_protocol: direct_final_plan_v1
+
+code:
+  model: deepseek-v4-flash
+  api_base: https://api.deepseek.com
+  api_key_env: DEEPSEEK_API_KEY
+  temperature: 0.0
+  max_steps: 0
+  cost_limit: 0.0
+  timeout: 1800
+  max_attempts: 3
+
+docker:
+  workdir: /testbed
+  timeout: 1800
+  min_free_gb: 20
+  max_cached_images: 75
+
+container:
+  runtime: apptainer
+  module: tools/Apptainer
+  sif_cache_dir: /scratch/users/${USER}/vibe-coding-planning/shared/sif-cache
+  writable_tmpfs: true
+
+hpc:
+  submit: true
+  partition: batch
+  cpus_per_task: 1
+  mem: 4G
+  time: "00:45:00"
+  poll_interval_seconds: 300
+  task_output_grace_seconds: 300
+  missing_task_grace_seconds: 600
+  max_task_attempts: 3
+  remote_env_file: ~/.config/vibe-coding-planning/deepseek.env
+  python_module: lang/Python/3.11
+  container_module: tools/Apptainer
+  python_bin: python3
+  job_name_prefix: swe-verified-safe-pce-audit10-v7-20260913
+  worker_config_path: configs/swe_verified_safe_pce_audit10_v7_20260913.yaml
+
+evaluator:
+  slurm_timeout_outcome: unknown
+
+experiment_contract:
+  selected_cases: 10
+  selection: frozen_coverage_driven_human_audit_cases
+  repositories: 9
+  plan_prompt_text_sha256: 26053ab98b666c659ad0fddb5d2fa5e4cbc6e85071f723c2641fb0ac8155b8ed
+  code_prompt_text_sha256: 853c3bef65df3c559d8a800689a8e8a42d4474e1b4f7710579175061d1fe1bdb
+  plan_authority: direct_model_terminal_response_after_FINAL_PLAN
+  plan_audience: human_developer_before_implementation
+  local_git_history_policy: multilingual_timesafe_base_and_ancestors
+  repository_baseline_command_timeout: inherit_phase_1800_seconds
+  agent_source_policy: conservative_blacklist_v2
+  shell_command_parser: bashlex_ast
+  prompt_url_source: literal_http_urls_in_frozen_issue_description
+  non_prompt_http_policy: allow_but_review
+  agent_filesystem_policy: complete_testbed_with_host_cwd_disabled_and_package_cache_masked
+  evaluator_repository_policy: verify_fresh_immutable_sif_without_reset_or_clean
+  evaluator_source_policy: none
+  historical_run_inputs: none
+  success_criteria:
+    - all ten cases reach terminal or explicitly operationally incomplete outcomes
+    - newline and compound-shell source access is blocked or logged without a silent parser miss
+    - Plan and Code cannot read source from the image package download cache
+    - evaluator preparation from the immutable SIF survives through official evaluation
+    - malformed Plans and empty patches retry without Host rewriting
+    - terminal Plans are standalone Markdown suitable for human pre-implementation review
+    - consolidated rows retain Plan and patch hashes plus run-relative evidence references
+  stopping: finish_all_ten_cases_or_report_operational_incomplete
+  operational_incomplete_policy: transport_provider_timeout_or_infrastructure_failure_is_not_unresolved
+  launched: true

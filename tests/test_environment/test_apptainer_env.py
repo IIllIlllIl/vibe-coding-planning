@@ -443,6 +443,71 @@ def test_environment_uses_persistent_phase_local_tmp_and_removes_it_on_cleanup(
     assert not isolated_tmp.exists()
 
 
+def test_environment_masks_image_path_with_phase_local_empty_directory(
+    tmp_path, monkeypatch
+):
+    cache_dir = tmp_path / "sifs"
+    calls = []
+
+    def fake_run(args, **kwargs):
+        calls.append(args)
+        return subprocess.CompletedProcess(args, returncode=0, stdout="", stderr="")
+
+    monkeypatch.setattr(subprocess, "run", fake_run)
+    cache_dir.mkdir()
+    (cache_dir / "python_3.12-slim.sif").write_text("sif", encoding="utf-8")
+    env = ApptainerEnvironment(
+        image="python:3.12-slim",
+        cwd="/testbed",
+        sif_cache_dir=cache_dir,
+        capacity_window=_TrackingCapacityWindow(),
+        run_args=["--containall", "--no-mount", "cwd"],
+        masked_container_paths=["/opt/miniconda3/pkgs"],
+    )
+    masked_directory = Path(env._masked_directories[0].name)
+    calls.clear()
+
+    env.execute("find /opt/miniconda3/pkgs -mindepth 1 -print -quit")
+
+    args = calls[-1]
+    binds = [
+        args[index + 1]
+        for index, value in enumerate(args[:-1])
+        if value == "--bind"
+    ]
+    assert f"{masked_directory}:/opt/miniconda3/pkgs:ro" in binds
+    assert masked_directory.is_dir()
+    assert list(masked_directory.iterdir()) == []
+    assert args[args.index("--no-mount") + 1] == "cwd"
+
+    env.cleanup()
+
+    assert not masked_directory.exists()
+
+
+@pytest.mark.parametrize("path", ["relative", "/", "/opt/../secret"])
+def test_environment_rejects_unsafe_mask_targets(tmp_path, monkeypatch, path):
+    cache_dir = tmp_path / "sifs"
+    monkeypatch.setattr(
+        subprocess,
+        "run",
+        lambda args, **kwargs: subprocess.CompletedProcess(
+            args, returncode=0, stdout="", stderr=""
+        ),
+    )
+    cache_dir.mkdir()
+    (cache_dir / "python_3.12-slim.sif").write_text("sif", encoding="utf-8")
+
+    with pytest.raises(ValueError, match="masked container path"):
+        ApptainerEnvironment(
+            image="python:3.12-slim",
+            cwd="/testbed",
+            sif_cache_dir=cache_dir,
+            capacity_window=_TrackingCapacityWindow(),
+            masked_container_paths=[path],
+        )
+
+
 def test_environment_get_template_vars_and_cleanup(tmp_path, monkeypatch):
     cache_dir = tmp_path / "sifs"
 

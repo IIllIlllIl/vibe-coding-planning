@@ -55,10 +55,29 @@ response. The parser executes the shell body captured from that block. Wait for
 its real observation before choosing the next action.
 
 When the Plan is complete, do not execute another command and do not write the
-Plan to a file. Return a terminal response whose first non-whitespace text is
-exactly `FINAL_PLAN` on its own line. Put the complete Plan directly after that
-line. A terminal response contains no bash action block. The Host intercepts it
-before shell parsing and preserves the remaining text verbatim.
+Plan to a file. Return one terminal response using exactly this structure,
+replacing the descriptive lines with the complete Plan:
+
+FINAL_PLAN
+# Plan
+
+## Navigation (N)
+Repository locations and relevant behavior.
+
+## Reproduction (R)
+How to observe the current and expected behavior.
+
+## Patch (P)
+The proposed implementation changes.
+
+## Validation (V)
+Focused checks for the proposed change.
+
+The terminal response must contain no text outside that structure and no bash
+action block. `FINAL_PLAN` and every heading shown above must each occur exactly
+once and in that order. A malformed terminal response is rejected and no Plan
+artifact is saved. The Host intercepts a valid response before shell parsing
+and preserves the Plan text verbatim.
 """
 
 

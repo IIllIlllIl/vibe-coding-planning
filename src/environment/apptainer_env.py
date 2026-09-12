@@ -16,7 +16,7 @@ import shutil
 import subprocess
 import sys
 import tempfile
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 from typing import Any
 
 from src.environment.docker_env import DockerCapacityWindow
@@ -168,6 +168,7 @@ class ApptainerEnvironment:
         host_workdir: Path | None = None,
         initialize_host_workdir: bool = True,
         isolate_tmp: bool = False,
+        masked_container_paths: list[str] | None = None,
         source_access_prompt_urls: list[str] | None = None,
         source_access_log_path: Path | None = None,
         source_access_context: dict[str, Any] | None = None,
@@ -186,6 +187,7 @@ class ApptainerEnvironment:
         self._host_workdir = Path(host_workdir) if host_workdir is not None else None
         self._initialize_host_workdir = initialize_host_workdir
         self._isolate_tmp = isolate_tmp
+        self._masked_container_paths = tuple(masked_container_paths or ())
         self._source_access_prompt_urls = frozenset(
             canonical_http_url(value) for value in (source_access_prompt_urls or [])
         )
@@ -193,6 +195,7 @@ class ApptainerEnvironment:
         self._source_access_context = dict(source_access_context or {})
         self._source_access_event_index = 0
         self._isolated_tmp: tempfile.TemporaryDirectory[str] | None = None
+        self._masked_directories: list[tempfile.TemporaryDirectory[str]] = []
 
         self._cache = ApptainerSifCache(sif_cache_dir, capacity_window)
         # Pull the SIF on demand if it is not already cached. This lets a GEPA
@@ -211,6 +214,7 @@ class ApptainerEnvironment:
                 self._prepare_isolated_tmp()
             if self._host_workdir is not None:
                 self._prepare_host_workdir()
+            self._prepare_masked_paths()
             self._ensure_git_config()
         except BaseException:
             if self._isolated_home is not None:
@@ -219,6 +223,9 @@ class ApptainerEnvironment:
             if self._isolated_tmp is not None:
                 self._isolated_tmp.cleanup()
                 self._isolated_tmp = None
+            for directory in self._masked_directories:
+                directory.cleanup()
+            self._masked_directories.clear()
             self._lease.__exit__(*sys.exc_info())
             self._lease = None
             raise
@@ -262,6 +269,21 @@ class ApptainerEnvironment:
                 f"{self._host_workdir}:{self._cwd}",
             ]
         )
+
+    def _prepare_masked_paths(self) -> None:
+        """Hide image paths behind empty phase-local read-only directories."""
+
+        for value in self._masked_container_paths:
+            target = PurePosixPath(value)
+            if not target.is_absolute() or target == PurePosixPath("/"):
+                raise ValueError(f"masked container path must be absolute: {value}")
+            if ".." in target.parts:
+                raise ValueError(f"masked container path cannot contain '..': {value}")
+            directory = tempfile.TemporaryDirectory(prefix="vibe-apptainer-mask-")
+            self._masked_directories.append(directory)
+            self._run_args.extend(
+                ["--bind", f"{directory.name}:{target.as_posix()}:ro"]
+            )
 
     def _copy_container_cwd_to_host_workdir(self) -> None:
         assert self._host_workdir is not None
@@ -489,3 +511,6 @@ class ApptainerEnvironment:
         if self._isolated_tmp is not None:
             self._isolated_tmp.cleanup()
             self._isolated_tmp = None
+        for directory in self._masked_directories:
+            directory.cleanup()
+        self._masked_directories.clear()

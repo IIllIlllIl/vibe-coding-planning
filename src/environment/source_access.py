@@ -6,19 +6,22 @@ import hashlib
 import json
 from pathlib import Path
 import re
-import shlex
 from typing import Any
 from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
 
+import bashlex
 
-SOURCE_ACCESS_POLICY_VERSION = "conservative_blacklist_v1"
+
+SOURCE_ACCESS_POLICY_VERSION = "conservative_blacklist_v2"
 
 _URL_RE = re.compile(r"https?://[^\s'\"<>]+", re.IGNORECASE)
-_SHELL_SEPARATORS = {";", "&&", "||", "|", "&", "(", ")"}
 _PYTHON_HTTP_RE = re.compile(
     r"(?i)(?:urllib\.request|\burlopen\s*\(|\burlretrieve\s*\(|"
     r"\brequests\s*\.\s*(?:get|post|put|patch|delete|request)\s*\(|"
     r"\bhttpx\s*\.\s*(?:get|post|put|patch|delete|request)\s*\()"
+)
+_SOURCE_TOOL_RE = re.compile(
+    r"(?i)(?:^|[^A-Za-z0-9_])(?:git|curl|wget|pip|pip3)(?:$|[^A-Za-z0-9_])"
 )
 
 
@@ -50,22 +53,34 @@ def extract_http_urls(text: str) -> tuple[str, ...]:
     return tuple(values)
 
 
-def _shell_segments(command: str) -> list[list[str]]:
+def _shell_segments(command: str) -> tuple[list[list[str]], bool]:
+    """Return every syntactic Bash command as its word/assignment tokens."""
+
+    class CommandVisitor(bashlex.ast.nodevisitor):
+        def __init__(self) -> None:
+            self.segments: list[list[str]] = []
+
+        def visitcommand(self, _node: Any, parts: list[Any]) -> bool:
+            segment = [
+                str(part.word)
+                for part in parts
+                if part.kind in {"assignment", "word"}
+            ]
+            if segment:
+                self.segments.append(segment)
+            # Continue into command/process substitutions contained in words.
+            return True
+
     try:
-        lexer = shlex.shlex(command, posix=True, punctuation_chars=";&|()")
-        lexer.whitespace_split = True
-        tokens = list(lexer)
-    except ValueError:
-        return []
-    segments: list[list[str]] = []
-    start = 0
-    for end in range(len(tokens) + 1):
-        if end < len(tokens) and tokens[end] not in _SHELL_SEPARATORS:
-            continue
-        if tokens[start:end]:
-            segments.append(tokens[start:end])
-        start = end + 1
-    return segments
+        trees = bashlex.parse(command)
+    except (bashlex.errors.ParsingError, NotImplementedError):
+        # Some Bash syntax unsupported by bashlex may still execute. Preserve
+        # that uncertainty as audit evidence instead of silently classifying it.
+        return [], True
+    visitor = CommandVisitor()
+    for tree in trees:
+        visitor.visit(tree)
+    return visitor.segments, False
 
 
 def _invocation(segment: list[str]) -> list[str]:
@@ -156,35 +171,75 @@ def _pip_operation(segment: list[str]) -> tuple[str, bool] | None:
     return None
 
 
-def _http_client(command: str, segments: list[list[str]]) -> str | None:
+def _http_client(
+    command: str, segments: list[list[str]]
+) -> tuple[str, list[str] | None] | None:
     for segment in segments:
         invocation = _invocation(segment)
         if invocation:
             name = Path(invocation[0]).name.lower()
             if name in {"curl", "wget"}:
-                return name
+                return name, segment
     if _PYTHON_HTTP_RE.search(command):
-        return "python_http"
+        return "python_http", None
     return None
 
 
-def _is_mutating_http(command: str, client: str) -> bool:
-    lower = command.lower()
+def _is_mutating_http(
+    command: str,
+    client: str,
+    segment: list[str] | None,
+) -> bool:
+    invocation = _invocation(segment or [])
+    args = invocation[1:]
     if client == "curl":
-        return bool(
-            re.search(r"(?:^|\s)(?:-d|--data(?:-raw|-binary|-urlencode)?|--form|"
-                      r"-t|--upload-file)(?:\s|=)", lower)
-            or re.search(r"(?:^|\s)-F(?:\s|$)", command)
-            or re.search(r"(?:^|\s)-X\s*(?:POST|PUT|PATCH|DELETE)\b", command)
-            or re.search(
-                r"(?:^|\s)--request\s*(?:post|put|patch|delete)\b", lower
-            )
+        data_prefixes = (
+            "-d",
+            "-F",
+            "-T",
+            "--data=",
+            "--data-raw=",
+            "--data-binary=",
+            "--data-urlencode=",
+            "--form=",
+            "--upload-file=",
         )
+        for index, value in enumerate(args):
+            if value in {
+                "-d",
+                "-F",
+                "-T",
+                "--data",
+                "--data-raw",
+                "--data-binary",
+                "--data-urlencode",
+                "--form",
+                "--upload-file",
+            } or any(
+                value.startswith(prefix) and value != prefix
+                for prefix in data_prefixes
+            ):
+                return True
+            if value in {"-X", "--request"} and index + 1 < len(args):
+                if args[index + 1].upper() in {"POST", "PUT", "PATCH", "DELETE"}:
+                    return True
+            if value.upper().startswith("-X") and value[2:].upper() in {
+                "POST",
+                "PUT",
+                "PATCH",
+                "DELETE",
+            }:
+                return True
+            if value.lower().startswith("--request=") and value.split(
+                "=", 1
+            )[1].upper() in {"POST", "PUT", "PATCH", "DELETE"}:
+                return True
+        return False
     if client == "wget":
-        return bool(
-            re.search(
-                r"(?:^|\s)(?:--post-data|--post-file|--method)(?:\s|=)", lower
-            )
+        return any(
+            value in {"--post-data", "--post-file", "--method"}
+            or value.startswith(("--post-data=", "--post-file=", "--method="))
+            for value in args
         )
     if client == "python_http":
         return bool(re.search(r"(?i)\.(?:post|put|patch|delete)\s*\(", command))
@@ -219,7 +274,7 @@ def classify_source_access(
 ) -> dict[str, Any] | None:
     """Classify only commands relevant to external source acquisition."""
 
-    segments = _shell_segments(command)
+    segments, shell_parse_failed = _shell_segments(command)
     urls = extract_http_urls(command)
     git_operation = next(
         (value for segment in segments if (value := _git_operation(segment))), None
@@ -236,10 +291,21 @@ def classify_source_access(
             return None
         return _decision("block", "pip_remote", operation, urls, prompt_urls)
 
-    client = _http_client(command, segments)
-    if client is None:
+    client_match = _http_client(command, segments)
+    if client_match is None:
+        if shell_parse_failed and (
+            urls or _SOURCE_TOOL_RE.search(command) or _PYTHON_HTTP_RE.search(command)
+        ):
+            return _decision(
+                "allow_but_review",
+                "shell_parse_failed",
+                "unknown",
+                urls,
+                prompt_urls,
+            )
         return None
-    if _is_mutating_http(command, client):
+    client, client_segment = client_match
+    if _is_mutating_http(command, client, client_segment):
         return _decision("block", "http_mutation", client, urls, prompt_urls)
     if not urls:
         return _decision(

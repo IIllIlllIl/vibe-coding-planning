@@ -175,10 +175,20 @@ def run_swe_verified_pce(config: SWEVerifiedPCEConfig) -> dict[str, Any] | None:
         },
         "repository_baseline": {
             "declared_revision": "dataset_base_commit",
-            "restore": "git reset --hard <base_commit> && git clean -fd",
+            "agent_restore": "git reset --hard <base_commit> && git clean -fd",
             "agent_future_history": "multilingual_timesafe_prune",
+            "evaluator": "verify immutable SIF HEAD and preserve harness preparation",
             "verified_phases": ["plan", "code", "evaluate"],
             "evidence": "attempt/repository_baselines/<phase>/repository_baseline.json",
+        },
+        "agent_filesystem": {
+            "container": "containall_without_automatic_host_cwd",
+            "explicit_repository": "/testbed",
+            "isolated_state": ["HOME", "/tmp"],
+            "masked_image_paths": ["/opt/miniconda3/pkgs"],
+            "selection_policy": "fixed_path_provenance_not_semantic_relevance",
+            "applies_to": ["plan", "code"],
+            "applies_to_evaluator": False,
         },
         "agent_source_access": {
             "policy_version": SOURCE_ACCESS_POLICY_VERSION,

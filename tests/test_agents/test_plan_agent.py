@@ -234,6 +234,9 @@ class TestRunSuccess:
         system = MockDefaultAgent.last_kwargs["system_template"]
         assert "Planner action and final-submission protocol" in system
         assert "Mini-swe action protocol" not in system
+        assert "FINAL_PLAN\n# Plan\n" in system
+        assert "must contain no text outside that structure" in system
+        assert "malformed terminal response is rejected" in system
 
     @patch("src.agents.plan_agent.import_minisweagent")
     def test_safe_pce_preserves_valid_plan_trailing_whitespace(
