@@ -285,7 +285,7 @@ def test_safe_pce_audit10_v5_prepares_source_boundary_replay() -> None:
     assert raw["experiment_contract"]["agent_source_policy"] == (
         "conservative_blacklist_v1"
     )
-    assert raw["experiment_contract"]["launched"] is False
+    assert raw["experiment_contract"]["launched"] is True
 
     supervisor = yaml.safe_load(
         Path(

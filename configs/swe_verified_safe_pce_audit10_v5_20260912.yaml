@@ -85,4 +85,4 @@ experiment_contract:
     - Plan and patch authorities are never rewritten by the Host
   stopping: finish_all_ten_cases_or_report_operational_incomplete
   operational_incomplete_policy: transport_provider_timeout_or_infrastructure_failure_is_not_unresolved
-  launched: false
+  launched: true
