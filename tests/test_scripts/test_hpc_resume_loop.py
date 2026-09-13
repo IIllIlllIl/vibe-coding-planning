@@ -95,6 +95,17 @@ def test_evaluator_repair_supervisor_monitors_repair_root() -> None:
     )
 
 
+def test_swe_verified_evaluator_repair_supervisor_monitors_repair_root() -> None:
+    config = REPO_ROOT / "configs/swe_verified_safe_pce_audit10_v7_20260913.yaml"
+    snapshot = _remote_run_snapshot(
+        ["--evaluator-repair-id", "evalfix-v1"], config
+    )
+    assert snapshot.endswith(
+        "/output/SWE-bench_Verified/swe-verified-pce-runs/development/"
+        "safe-pce-audit10-v7-20260913/evaluator_repairs/evalfix-v1"
+    )
+
+
 def _fake_batch_script(path: Path, log_path: Path) -> None:
     path.write_text(
         f"""#!/usr/bin/env bash

@@ -3,7 +3,7 @@
 > Authority: current ACE-stage Plan-Code-Evaluate data, artifact, execution,
 > evaluator, and smoke contract
 >
-> Last reviewed: 2026-09-12
+> Last reviewed: 2026-09-13
 
 ## Purpose
 
@@ -89,10 +89,22 @@ other branches are removed, tags
 newer than the base are deleted with a shell `for` loop, reflogs expire, and
 unreferenced objects are pruned. A final check rejects any remaining ref-visible
 commit newer than the base. Older history and tags remain available. The
-evaluator instead starts from a fresh immutable-SIF copy, verifies that its HEAD
-matches the declared base commit, records the SIF's existing status and diff,
-and performs no reset or clean. This preserves official harness preparation and
-does not expose the Evaluator to Agent workspace state.
+evaluator instead starts from a fresh immutable-SIF copy and performs no reset
+or clean. The official SWE-bench Python image builder may leave HEAD at the
+dataset base or at one direct child whose subject is `SWE-bench`; the latter
+freezes tracked harness preparation performed during the image build. The Host
+verifies this exact lineage, the frozen SIF identity, and the absence of dirty
+tracked changes before evaluation. Preserving that prepared commit is necessary
+for official test-output parsing and does not expose the Evaluator to Agent
+workspace state.
+
+If an evaluator-only defect is found after Plan and Code checkpoints have been
+atomically frozen, `scripts/resume_swe_verified_pce_evaluator.py` creates a new
+identity-bound repair tree under `evaluator_repairs/<repair-id>`. It copies and
+re-identifies only validated Plan/Code checkpoint payloads, never edits the
+source run, and submits only the Evaluate phase. The repair has its own semantic
+fingerprint, task manifests, attempts, raw outcomes, and summary; cases without
+both completed checkpoints are skipped rather than synthesized.
 
 Safe PCE also applies a small Agent-only source-acquisition policy at the shell
 execution boundary. It does not disable networking. It blocks remote Git

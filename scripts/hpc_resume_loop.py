@@ -214,7 +214,9 @@ def _remote_run_snapshot(batch_args: list[str], runtime_config: Path) -> str:
         or "~/hpc_run_state/vibe-coding-planning"
     )
     snapshot = f"{remote_run_dir.rstrip('/')}/{run_rel}"
-    evaluator_repair = _take_option(batch_args, "--resume-evaluator")
+    evaluator_repair = _take_option(batch_args, "--resume-evaluator") or _take_option(
+        batch_args, "--evaluator-repair-id"
+    )
     if evaluator_repair:
         if not re.fullmatch(r"[A-Za-z0-9_.-]+", evaluator_repair):
             raise SystemExit("--resume-evaluator must match [A-Za-z0-9_.-]+")

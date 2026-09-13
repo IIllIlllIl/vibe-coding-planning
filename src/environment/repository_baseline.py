@@ -168,7 +168,7 @@ def restore_repository_to_base(
     return evidence
 
 
-def verify_repository_at_base(
+def verify_swebench_evaluator_repository(
     env: Any,
     base_commit: str,
     *,
@@ -176,13 +176,18 @@ def verify_repository_at_base(
     evidence_dir: Path,
     timeout: int | None = None,
 ) -> dict[str, Any]:
-    """Verify a prepared repository without changing its files or Git state.
+    """Verify an official prepared SWE-bench repository without rewriting it.
 
-    Official evaluator images may contain tracked preparation changes required
-    by their test harness.  Evaluator workspaces are freshly copied from the
-    immutable SIF, so resetting them would erase that preparation.  This check
-    records the starting state and requires the image to be based at the
-    dataset-declared commit, but deliberately performs no reset or clean.
+    The official Python image builder resets the repository to ``base_commit``,
+    performs the repository installation, and then creates one commit with the
+    subject ``SWE-bench`` so tracked preparation changes do not pollute the
+    submitted patch.  A fresh immutable evaluator SIF may therefore start
+    either exactly at ``base_commit`` or at that single preparation child.
+
+    Preserve that prepared HEAD: resetting it can remove test-reporting setup
+    required by the official result parser.  The frozen SIF hash authenticates
+    the image bytes; this check binds its repository lineage to the dataset
+    base and rejects arbitrary descendants or dirty tracked state.
     """
 
     commit = base_commit.strip()
@@ -192,10 +197,16 @@ def verify_repository_at_base(
     evidence: dict[str, Any] = {
         "schema_version": 1,
         "phase": phase,
-        "policy": "preserve_immutable_sif_preparation_v1",
+        "policy": "official_swebench_prepared_head_v1",
         "declared_base_commit": commit,
         "observed": {
             "head": _run(env, "git rev-parse HEAD", timeout=timeout),
+            "head_parents": _run(
+                env, "git rev-list --parents -n 1 HEAD", timeout=timeout
+            ),
+            "head_subject": _run(
+                env, "git show -s --format=%s HEAD", timeout=timeout
+            ),
             "status": _run(
                 env,
                 "git status --porcelain=v1 --untracked-files=all",
@@ -207,6 +218,11 @@ def verify_repository_at_base(
             "staged_diff": _run(
                 env, "git diff --cached --binary --full-index", timeout=timeout
             ),
+            "base_to_head_name_status": _run(
+                env,
+                f"git diff --name-status {shlex.quote(commit)}..HEAD",
+                timeout=timeout,
+            ),
         },
     }
     evidence["base_commit_check"] = _run(
@@ -215,20 +231,39 @@ def verify_repository_at_base(
     _write_evidence(evidence_dir, evidence)
 
     head = evidence["observed"]["head"]
-    status = evidence["observed"]["status"]
+    head_parents = evidence["observed"]["head_parents"]
+    head_subject = evidence["observed"]["head_subject"]
     if evidence["base_commit_check"]["returncode"] != 0:
         raise FatalError(
             f"{phase} repository does not contain declared base_commit {commit}"
         )
     if head["returncode"] != 0:
         raise RuntimeError(f"{phase} repository HEAD could not be read")
-    if head["output"].strip() != commit:
+    if head_parents["returncode"] != 0 or head_subject["returncode"] != 0:
+        raise RuntimeError(f"{phase} repository HEAD lineage could not be read")
+    observed_head = head["output"].strip()
+    parent_fields = head_parents["output"].split()
+    direct_official_preparation = (
+        len(parent_fields) == 2
+        and parent_fields[0] == observed_head
+        and parent_fields[1] == commit
+        and head_subject["output"].strip() == "SWE-bench"
+    )
+    if observed_head != commit and not direct_official_preparation:
         raise FatalError(
-            f"{phase} repository HEAD does not match declared base_commit {commit}"
+            f"{phase} repository HEAD is neither the declared base_commit nor "
+            "its official SWE-bench preparation child"
         )
-    if status["returncode"] != 0:
-        raise RuntimeError(f"{phase} repository status could not be read")
-    for name in ("unstaged_diff", "staged_diff"):
+    for name in (
+        "status",
+        "unstaged_diff",
+        "staged_diff",
+        "base_to_head_name_status",
+    ):
         if evidence["observed"][name]["returncode"] != 0:
             raise RuntimeError(f"{phase} repository {name} could not be read")
+    if evidence["observed"]["unstaged_diff"]["output"].strip():
+        raise FatalError(f"{phase} repository has unstaged tracked changes")
+    if evidence["observed"]["staged_diff"]["output"].strip():
+        raise FatalError(f"{phase} repository has staged changes")
     return evidence

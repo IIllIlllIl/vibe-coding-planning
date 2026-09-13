@@ -9,7 +9,7 @@ import pytest
 
 from src.environment.repository_baseline import (
     restore_repository_to_base,
-    verify_repository_at_base,
+    verify_swebench_evaluator_repository,
 )
 from src.exceptions import FatalError
 
@@ -21,12 +21,18 @@ class FakeEnvironment:
         base_present: bool = True,
         clean_after: bool = True,
         head: str = "abc",
+        head_parent: str | None = None,
+        head_subject: str = "base",
         diff_readable: bool = True,
+        tracked_diff: str = "",
     ):
         self.base_present = base_present
         self.clean_after = clean_after
         self.head = head
+        self.head_parent = head_parent
+        self.head_subject = head_subject
         self.diff_readable = diff_readable
+        self.tracked_diff = tracked_diff
         self.restored = False
         self.commands: list[str] = []
         self.timeouts: list[int | None] = []
@@ -47,13 +53,20 @@ class FakeEnvironment:
             return {"returncode": 0, "output": "abc 100\n"}
         if command == "git rev-parse HEAD":
             return {"returncode": 0, "output": f"{self.head}\n"}
+        if command == "git rev-list --parents -n 1 HEAD":
+            parent = f" {self.head_parent}" if self.head_parent else ""
+            return {"returncode": 0, "output": f"{self.head}{parent}\n"}
+        if command == "git show -s --format=%s HEAD":
+            return {"returncode": 0, "output": f"{self.head_subject}\n"}
         if command.startswith("git status"):
             output = "" if self.restored and self.clean_after else "?? dirty.txt\n"
             return {"returncode": 0, "output": output}
+        if command.startswith("git diff --name-status"):
+            return {"returncode": 0, "output": "M\ttox.ini\n"}
         if command.startswith("git diff"):
             return {
                 "returncode": 0 if self.diff_readable else 1,
-                "output": "dirty diff",
+                "output": self.tracked_diff,
             }
         raise AssertionError(command)
 
@@ -121,10 +134,14 @@ def test_restore_has_no_hidden_command_timeout(tmp_path) -> None:
     assert set(env.timeouts) == {None}
 
 
-def test_verify_at_base_preserves_sif_preparation(tmp_path) -> None:
-    env = FakeEnvironment()
+def test_verify_swebench_evaluator_accepts_and_preserves_preparation_child(
+    tmp_path,
+) -> None:
+    env = FakeEnvironment(
+        head="prepared", head_parent="abc", head_subject="SWE-bench"
+    )
 
-    evidence = verify_repository_at_base(
+    evidence = verify_swebench_evaluator_repository(
         env,
         "abc",
         phase="evaluate",
@@ -132,21 +149,34 @@ def test_verify_at_base_preserves_sif_preparation(tmp_path) -> None:
         timeout=1800,
     )
 
-    assert evidence["policy"] == "preserve_immutable_sif_preparation_v1"
+    assert evidence["policy"] == "official_swebench_prepared_head_v1"
     assert evidence["observed"]["status"]["output"] == "?? dirty.txt\n"
-    assert evidence["observed"]["unstaged_diff"]["output"] == "dirty diff"
+    assert evidence["observed"]["head_parents"]["output"] == "prepared abc\n"
+    assert evidence["observed"]["head_subject"]["output"] == "SWE-bench\n"
     assert not any(command.startswith("git reset") for command in env.commands)
     assert not any(command.startswith("git clean") for command in env.commands)
     assert set(env.timeouts) == {1800}
     saved = json.loads((tmp_path / "repository_baseline.json").read_text())
-    assert saved["policy"] == "preserve_immutable_sif_preparation_v1"
+    assert saved["policy"] == "official_swebench_prepared_head_v1"
 
 
-def test_verify_at_base_rejects_wrong_head_without_rewriting(tmp_path) -> None:
+def test_verify_swebench_evaluator_accepts_exact_base(tmp_path) -> None:
+    env = FakeEnvironment()
+
+    verify_swebench_evaluator_repository(
+        env, "abc", phase="evaluate", evidence_dir=tmp_path
+    )
+
+    assert env.restored is False
+
+
+def test_verify_swebench_evaluator_rejects_unrelated_head_without_rewriting(
+    tmp_path,
+) -> None:
     env = FakeEnvironment(head="future")
 
-    with pytest.raises(FatalError, match="does not match"):
-        verify_repository_at_base(
+    with pytest.raises(FatalError, match="neither"):
+        verify_swebench_evaluator_repository(
             env,
             "abc",
             phase="evaluate",
@@ -157,11 +187,29 @@ def test_verify_at_base_rejects_wrong_head_without_rewriting(tmp_path) -> None:
     assert not any(command.startswith("git reset") for command in env.commands)
 
 
-def test_verify_at_base_requires_complete_diff_evidence(tmp_path) -> None:
+def test_verify_swebench_evaluator_rejects_nonofficial_direct_child(tmp_path) -> None:
+    env = FakeEnvironment(head="child", head_parent="abc", head_subject="feature")
+
+    with pytest.raises(FatalError, match="neither"):
+        verify_swebench_evaluator_repository(
+            env, "abc", phase="evaluate", evidence_dir=tmp_path
+        )
+
+
+def test_verify_swebench_evaluator_rejects_dirty_tracked_state(tmp_path) -> None:
+    env = FakeEnvironment(tracked_diff="dirty diff")
+
+    with pytest.raises(FatalError, match="unstaged tracked"):
+        verify_swebench_evaluator_repository(
+            env, "abc", phase="evaluate", evidence_dir=tmp_path
+        )
+
+
+def test_verify_swebench_evaluator_requires_complete_diff_evidence(tmp_path) -> None:
     env = FakeEnvironment(diff_readable=False)
 
     with pytest.raises(RuntimeError, match="diff could not be read"):
-        verify_repository_at_base(
+        verify_swebench_evaluator_repository(
             env,
             "abc",
             phase="evaluate",

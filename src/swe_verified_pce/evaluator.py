@@ -7,7 +7,7 @@ from typing import Any, Callable
 
 from src.environment.apptainer_env import ApptainerEnvironment
 from src.environment.docker_env import DockerCapacityWindow
-from src.environment.repository_baseline import verify_repository_at_base
+from src.environment.repository_baseline import verify_swebench_evaluator_repository
 from src.exceptions import FatalError
 from src.optimization.config import ContainerConfig
 from src.swe_verified_pce.models import SWEVerifiedPCECase
@@ -131,7 +131,7 @@ def evaluate_swe_verified_apptainer(
             initialize_host_workdir=True,
         )
         try:
-            verify_repository_at_base(
+            verify_swebench_evaluator_repository(
                 env,
                 case.base_commit,
                 phase="evaluate",
@@ -141,8 +141,8 @@ def evaluate_swe_verified_apptainer(
             )
         except FatalError as exc:
             raise SWEVerifiedEvaluatorOperationalError(
-                f"evaluator SIF repository does not match the frozen base: {exc}",
-                outcome_reason="evaluator_sif_base_mismatch",
+                f"evaluator SIF repository is not an official prepared base: {exc}",
+                outcome_reason="evaluator_sif_preparation_mismatch",
                 retry_disposition="block_run",
             ) from exc
         except Exception as exc:

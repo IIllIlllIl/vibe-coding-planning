@@ -1,0 +1,41 @@
+schema_version: 1
+session: swe-verified-safe-pce-audit10-v7-evalfix-v1-20260913
+log: .local/hpc-supervisor/swe-verified-safe-pce-audit10-v7-evalfix-v1-20260913.log
+arguments:
+  - --poll-interval
+  - "300"
+  - --slice-time
+  - "00:10:00"
+  - --max-runs
+  - "12"
+  - --state-file
+  - .local/hpc-supervisor/swe-verified-safe-pce-audit10-v7-evalfix-v1-20260913.json
+  - --reclaim-staging
+  - --require-clean-worktree
+  - --batch-script
+  - scripts/hpc_submit_swe_verified_pce.sh
+  - --config
+  - configs/swe_verified_safe_pce_audit10_v7_20260913.yaml
+  - --evaluator-repair-id
+  - safe-pce-audit10-v7-evalfix-v1-20260913
+  - --evaluator-repair-instance
+  - astropy__astropy-13033
+  - --evaluator-repair-instance
+  - django__django-10097
+  - --evaluator-repair-instance
+  - pytest-dev__pytest-10051
+  - --evaluator-repair-instance
+  - pallets__flask-5014
+  - --evaluator-repair-instance
+  - scikit-learn__scikit-learn-12973
+  - --evaluator-repair-instance
+  - pydata__xarray-2905
+  - --evaluator-repair-instance
+  - sphinx-doc__sphinx-10435
+  - --evaluator-repair-instance
+  - matplotlib__matplotlib-20488
+  - --ulhpc-config
+  - /Users/taoran.wang/.config/ulhpc-submit/config.yaml
+  - --job-name
+  - swe-verified-safe-pce-audit10-v7-evalfix-v1-20260913
+  - --submit

@@ -22,6 +22,8 @@ REQUIRE_CLEAN=0
 EXPECTED_MODE="${VIBE_PCE_CONFIG_MODE:-swe_verified_pce}"
 RUNNER_SCRIPT="${VIBE_PCE_RUNNER_SCRIPT:-scripts/run_swe_verified_pce_hpc.py}"
 SUBMIT_LABEL="${VIBE_PCE_SUBMIT_LABEL:-swe-verified-pce-submit}"
+EVALUATOR_REPAIR_ID=""
+EVALUATOR_REPAIR_INSTANCES=()
 
 usage() {
   cat <<'USAGE'
@@ -36,6 +38,9 @@ Options:
   --time HH:MM:SS           controller slice walltime (default: 00:10:00)
   --remote-dir DIR          remote synced project directory
   --require-clean-worktree  reject an uncommitted source/config identity
+  --evaluator-repair-id ID  replay only Evaluate from preserved Plan/Code
+  --evaluator-repair-instance ID
+                            select one replay case; may be repeated
   --submit                  submit; default is ulhpc-submit dry-run
   --dry-run                 explicitly retain dry-run mode
 
@@ -60,12 +65,32 @@ while [[ $# -gt 0 ]]; do
     --remote-apptainer-sif-cache-dir) REMOTE_APPTAINER_SIF_CACHE_DIR="$2"; shift 2 ;;
     --ulhpc-config) ULHPC_CONFIG="$2"; shift 2 ;;
     --require-clean-worktree) REQUIRE_CLEAN=1; shift ;;
+    --evaluator-repair-id) EVALUATOR_REPAIR_ID="$2"; shift 2 ;;
+    --evaluator-repair-instance) EVALUATOR_REPAIR_INSTANCES+=("$2"); shift 2 ;;
     --submit) SUBMIT=1; shift ;;
     --dry-run) SUBMIT=0; shift ;;
     -h|--help) usage; exit 0 ;;
     *) echo "ERROR: unknown option: $1" >&2; usage >&2; exit 2 ;;
   esac
 done
+
+if [[ -n "$EVALUATOR_REPAIR_ID" ]]; then
+  [[ "$EVALUATOR_REPAIR_ID" =~ ^[A-Za-z0-9_.-]+$ ]] || {
+    echo "ERROR: invalid evaluator repair ID" >&2; exit 2;
+  }
+  if [[ ${#EVALUATOR_REPAIR_INSTANCES[@]} -eq 0 ]]; then
+    echo "ERROR: evaluator repair requires at least one selected instance" >&2
+    exit 2
+  fi
+  for INSTANCE_ID in "${EVALUATOR_REPAIR_INSTANCES[@]}"; do
+    [[ "$INSTANCE_ID" =~ ^[A-Za-z0-9_.-]+$ ]] || {
+      echo "ERROR: invalid evaluator repair instance: $INSTANCE_ID" >&2; exit 2;
+    }
+  done
+elif [[ ${#EVALUATOR_REPAIR_INSTANCES[@]} -ne 0 ]]; then
+  echo "ERROR: evaluator repair instances require --evaluator-repair-id" >&2
+  exit 2
+fi
 
 REPO_ROOT="$(
   conda run --no-capture-output -n mini-swe python - "${BASH_SOURCE[0]}" <<'PY'
@@ -194,6 +219,14 @@ CONFIG_REL="${CONFIG_ABS#$REPO_ROOT/}"
 REMOTE_DATASET="$REMOTE_DATASET_DIR/$DATASET_REL"
 REMOTE_RUN="$REMOTE_RUN_DIR/$RUN_REL"
 
+REMOTE_RUNNER_COMMAND="python3 $RUNNER_SCRIPT --config $CONFIG_REL"
+if [[ -n "$EVALUATOR_REPAIR_ID" ]]; then
+  REMOTE_RUNNER_COMMAND="python3 scripts/resume_swe_verified_pce_evaluator.py --config $CONFIG_REL --repair-id $EVALUATOR_REPAIR_ID"
+  for INSTANCE_ID in "${EVALUATOR_REPAIR_INSTANCES[@]}"; do
+    REMOTE_RUNNER_COMMAND+=" --instance-id $INSTANCE_ID"
+  done
+fi
+
 REMOTE_SCRIPT=$(cat <<EOF
 set -euo pipefail
 export APPTAINER_CACHEDIR="$REMOTE_APPTAINER_CACHE_DIR"
@@ -208,7 +241,7 @@ fi
 set +x
 source "\$REMOTE_ENV_FILE"
 test -n "\${DEEPSEEK_API_KEY:-}" || exit 2
-python3 "$RUNNER_SCRIPT" --config "$CONFIG_REL"
+$REMOTE_RUNNER_COMMAND
 EOF
 )
 
@@ -233,4 +266,7 @@ echo "[$SUBMIT_LABEL] config=$CONFIG_REL"
 echo "[$SUBMIT_LABEL] dataset=$DATASET_REL"
 echo "[$SUBMIT_LABEL] run=$RUN_REL"
 echo "[$SUBMIT_LABEL] controller_resources=$CPUS CPU/$MEM/$TIME_LIMIT"
+if [[ -n "$EVALUATOR_REPAIR_ID" ]]; then
+  echo "[$SUBMIT_LABEL] evaluator_repair=$EVALUATOR_REPAIR_ID instances=${#EVALUATOR_REPAIR_INSTANCES[@]}"
+fi
 "${CMD[@]}"

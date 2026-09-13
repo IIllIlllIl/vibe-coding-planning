@@ -38,6 +38,7 @@ from src.swe_verified_pce.evaluator import (
     _terminal,
     evaluate_swe_verified_apptainer,
 )
+from src.swe_verified_pce.evaluator_resume import _prepare as prepare_evaluator_resume
 from src.swe_verified_pce.hpc_executor import (
     SWEVerifiedPCEHPCExecutor,
     recover_exhausted_evaluator_timeout,
@@ -51,6 +52,7 @@ from scripts.tools.freeze_pcce_rejected_first_reviews import (
     freeze_rejected_first_reviews,
 )
 from scripts.tools.freeze_swe_verified_pce_selection import freeze_selection
+from scripts import resume_swe_verified_pce_evaluator as evaluator_resume_script
 
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
@@ -378,6 +380,20 @@ def test_safe_pce_audit10_v7_freezes_repaired_boundary_smoke() -> None:
     assert arguments[arguments.index("--config") + 1] == (
         "configs/swe_verified_safe_pce_audit10_v7_20260913.yaml"
     )
+
+    repair_supervisor = yaml.safe_load(
+        Path(
+            "configs/swe_verified_safe_pce_audit10_v7_evaluator_repair_"
+            "supervisor_v1_20260913.yaml"
+        ).read_text(encoding="utf-8")
+    )
+    repair_arguments = repair_supervisor["arguments"]
+    assert repair_arguments[repair_arguments.index("--evaluator-repair-id") + 1] == (
+        "safe-pce-audit10-v7-evalfix-v1-20260913"
+    )
+    assert repair_arguments.count("--evaluator-repair-instance") == 8
+    assert "django__django-10554" not in repair_arguments
+    assert "sympy__sympy-12419" not in repair_arguments
 
 
 def test_swe_verified_checker_contract_failure_retries_with_fresh_agent():
@@ -1045,11 +1061,17 @@ def test_verified_evaluator_preserves_prepared_sif_repository(
         def execute(self, command: str, *, timeout: int | None = None):
             self.commands.append(command)
             if command == "git rev-parse HEAD":
-                return {"returncode": 0, "output": "abc\n"}
+                return {"returncode": 0, "output": "prepared\n"}
+            if command == "git rev-list --parents -n 1 HEAD":
+                return {"returncode": 0, "output": "prepared abc\n"}
+            if command == "git show -s --format=%s HEAD":
+                return {"returncode": 0, "output": "SWE-bench\n"}
             if command.startswith("git status"):
-                return {"returncode": 0, "output": " M tox.ini\n"}
+                return {"returncode": 0, "output": ""}
+            if command.startswith("git diff --name-status"):
+                return {"returncode": 0, "output": "M\ttox.ini\n"}
             if command.startswith("git diff"):
-                return {"returncode": 0, "output": "official SIF preparation"}
+                return {"returncode": 0, "output": ""}
             if command.startswith("git cat-file"):
                 return {"returncode": 0, "output": ""}
             if command.startswith("git apply"):
@@ -1098,8 +1120,141 @@ def test_verified_evaluator_preserves_prepared_sif_repository(
     evidence = json.loads(
         (tmp_path / "baseline/repository_baseline.json").read_text()
     )
-    assert evidence["observed"]["status"]["output"] == " M tox.ini\n"
+    assert evidence["observed"]["head"]["output"] == "prepared\n"
+    assert evidence["observed"]["base_to_head_name_status"]["output"] == (
+        "M\ttox.ini\n"
+    )
     assert instances[0].cleaned is True
+
+
+def test_verified_evaluator_resume_reidentifies_preserved_checkpoints(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    _, _, case = _snapshot(tmp_path)
+    run_dir = tmp_path / "run"
+    config = SimpleNamespace(run_dir=run_dir)
+    source_fingerprint = "source-fingerprint"
+    (run_dir / "run_manifest.json").parent.mkdir(parents=True)
+    (run_dir / "run_manifest.json").write_text(
+        json.dumps({"execution_fingerprint": source_fingerprint}), encoding="utf-8"
+    )
+    source = (
+        run_dir
+        / "hpc_tasks"
+        / "pce"
+        / source_fingerprint
+        / "checkpoints"
+        / "task_0000"
+    )
+    source.mkdir(parents=True)
+    source_identity = checkpoint_identity(
+        case, execution_fingerprint=source_fingerprint
+    )
+    for phase, payload in (
+        ("plan", {"plan": "# Plan\n", "trajectory": [{"plan": True}]}),
+        ("code", {"raw_patch": "patch", "patch": "patch", "trajectory": []}),
+    ):
+        (source / f"{phase}.json").write_text(
+            json.dumps(
+                {
+                    "schema_version": 1,
+                    "checkpoint_identity": source_identity,
+                    "phase": phase,
+                    "payload": payload,
+                }
+            ),
+            encoding="utf-8",
+        )
+    monkeypatch.setattr(
+        "src.swe_verified_pce.evaluator_resume.pce_semantic_sha256",
+        lambda _config: "evaluator-semantic",
+    )
+
+    batch, repair_fingerprint, tasks, skipped = prepare_evaluator_resume(
+        config, [case], repair_id="evalfix-v1"
+    )
+
+    assert skipped == []
+    assert [task.index for task in tasks] == [0]
+    target_identity = checkpoint_identity(
+        case, execution_fingerprint=repair_fingerprint
+    )
+    for phase in ("plan", "code"):
+        copied = json.loads(
+            (batch / "checkpoints" / "task_0000" / f"{phase}.json").read_text()
+        )
+        assert copied["checkpoint_identity"] == target_identity
+        assert copied["payload"] == json.loads(
+            (source / f"{phase}.json").read_text()
+        )["payload"]
+    assert not (batch / "checkpoints" / "task_0000" / "evaluate.json").exists()
+
+
+def test_verified_evaluator_resume_skips_incomplete_and_rejects_unknown(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    _, _, case = _snapshot(tmp_path)
+    run_dir = tmp_path / "run"
+    config = SimpleNamespace(run_dir=run_dir)
+    (run_dir / "run_manifest.json").parent.mkdir(parents=True)
+    (run_dir / "run_manifest.json").write_text(
+        json.dumps({"execution_fingerprint": "source"}), encoding="utf-8"
+    )
+    (run_dir / "hpc_tasks" / "pce" / "source").mkdir(parents=True)
+    monkeypatch.setattr(
+        "src.swe_verified_pce.evaluator_resume.pce_semantic_sha256",
+        lambda _config: "evaluator-semantic",
+    )
+
+    _, _, tasks, skipped = prepare_evaluator_resume(
+        config, [case], repair_id="incomplete"
+    )
+    assert tasks == []
+    assert skipped == [case.instance_id]
+    with pytest.raises(ValueError, match="unknown instance_ids"):
+        prepare_evaluator_resume(
+            config,
+            [case],
+            repair_id="unknown",
+            instance_ids=["missing__case-1"],
+        )
+
+
+def test_verified_evaluator_resume_cli_persists_waiting_status(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    config = SimpleNamespace(run_dir=tmp_path / "run")
+    monkeypatch.setattr(
+        evaluator_resume_script,
+        "load_swe_verified_pce_config",
+        lambda _path: config,
+    )
+    monkeypatch.setattr(
+        evaluator_resume_script,
+        "resume_swe_verified_pce_evaluator",
+        lambda *_args, **_kwargs: None,
+    )
+    monkeypatch.setattr(
+        "sys.argv",
+        [
+            "resume_swe_verified_pce_evaluator.py",
+            "--config",
+            "config.yaml",
+            "--repair-id",
+            "repair-v1",
+            "--instance-id",
+            "owner__repo-1",
+        ],
+    )
+
+    assert evaluator_resume_script.main() == 0
+    status = json.loads(
+        (
+            config.run_dir
+            / "evaluator_repairs/repair-v1/controller_status.json"
+        ).read_text()
+    )
+    assert status["status"] == "waiting_workers"
 
 
 def test_tracked_smoke_configs_bind_two_case_selection_and_phase_policies() -> None:
