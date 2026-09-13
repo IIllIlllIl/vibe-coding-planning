@@ -43,6 +43,7 @@ from src.swe_verified_pce.evaluator import (
 from src.swe_verified_pce.evaluator_resume import _prepare as prepare_evaluator_resume
 from src.swe_verified_pce.hpc_executor import (
     SWEVerifiedPCEHPCExecutor,
+    build_array_script as build_pce_array_script,
     recover_exhausted_evaluator_timeout,
 )
 from src.swe_verified_pce.models import FrozenImage, SWEVerifiedPCECase
@@ -187,8 +188,9 @@ def test_safe_pce_smoke_uses_direct_plan_prompt_and_retained_code_prompt() -> No
 
 def test_safe_pce_planner_v2_targets_human_review_and_exact_submission() -> None:
     prompt = yaml.safe_load(
-        Path("configs/prompts/swe_verified_safe_pce_planner_v2_20260912.yaml")
-        .read_text(encoding="utf-8")
+        Path(
+            "configs/prompts/swe_verified_safe_pce_planner_v2_20260912.yaml"
+        ).read_text(encoding="utf-8")
     )["prompts"]["plan_system"]
 
     assert "planning mode with a human developer" in prompt
@@ -243,7 +245,9 @@ def test_safe_pce_planner_v5_uses_template_and_revised_planning_boundaries() -> 
     assert "Investigate only until" in v5
     assert "smallest implementation path needed to explain the issue" in normalized
     assert "Use the frozen repository and the environment already provided" in v5
-    assert "replace the target repository with a remotely obtained version" in normalized
+    assert (
+        "replace the target repository with a remotely obtained version" in normalized
+    )
     assert "Remote Git operations" in normalized
     assert "local Git history already present at the frozen base commit" in normalized
     assert "materially affects another behavior or must preserve it" in normalized
@@ -302,12 +306,14 @@ def test_safe_pce_audit10_v8_binds_flexible_markdown_smoke() -> None:
     assert config.plan_submission_protocol == "direct_final_markdown_v2"
     assert "{{nrpv_block}}" not in config.plan_prompt
     assert "Navigation (N)" not in config.plan_prompt
-    assert hashlib.sha256(config.plan_prompt.encode()).hexdigest() == contract[
-        "plan_prompt_text_sha256"
-    ]
-    assert hashlib.sha256(config.code_prompt.encode()).hexdigest() == contract[
-        "code_prompt_text_sha256"
-    ]
+    assert (
+        hashlib.sha256(config.plan_prompt.encode()).hexdigest()
+        == contract["plan_prompt_text_sha256"]
+    )
+    assert (
+        hashlib.sha256(config.code_prompt.encode()).hexdigest()
+        == contract["code_prompt_text_sha256"]
+    )
     assert contract["comparison_run"] == "safe-pce-audit10-v7-20260913"
     assert contract["launched"] is True
 
@@ -338,12 +344,14 @@ def test_safe_pce_audit10_v9_binds_revised_prompt_diagnostic() -> None:
     assert config.plan_submission_protocol == "direct_final_markdown_v3"
     assert "Investigate only until" in config.plan_prompt
     assert "materially affects another behavior" in config.plan_prompt
-    assert hashlib.sha256(config.plan_prompt.encode()).hexdigest() == contract[
-        "plan_prompt_text_sha256"
-    ]
-    assert hashlib.sha256(config.code_prompt.encode()).hexdigest() == contract[
-        "code_prompt_text_sha256"
-    ]
+    assert (
+        hashlib.sha256(config.plan_prompt.encode()).hexdigest()
+        == contract["plan_prompt_text_sha256"]
+    )
+    assert (
+        hashlib.sha256(config.code_prompt.encode()).hexdigest()
+        == contract["code_prompt_text_sha256"]
+    )
     assert contract["source_audit_disposition"] == (
         "no_training_authority_until_case_level_review"
     )
@@ -387,23 +395,21 @@ def test_safe_pce_anchor_ablation4_v10_changes_only_planning_guidance() -> None:
     assert "localized issues" not in config.plan_prompt
     assert "cross-cutting issues" not in config.plan_prompt
     assert "make that responsibility explicit" not in config.plan_prompt
-    assert hashlib.sha256(config.plan_prompt.encode()).hexdigest() == contract[
-        "plan_prompt_text_sha256"
-    ]
-    assert hashlib.sha256(config.code_prompt.encode()).hexdigest() == contract[
-        "code_prompt_text_sha256"
-    ]
-    assert images["selection_manifest_sha256"] == file_sha256(
-        config.selection_manifest
+    assert (
+        hashlib.sha256(config.plan_prompt.encode()).hexdigest()
+        == contract["plan_prompt_text_sha256"]
     )
+    assert (
+        hashlib.sha256(config.code_prompt.encode()).hexdigest()
+        == contract["code_prompt_text_sha256"]
+    )
+    assert images["selection_manifest_sha256"] == file_sha256(config.selection_manifest)
     assert len(images["records"]) == 4
     assert set(config.instance_ids) == {
         record["instance_id"] for record in images["records"].values()
     }
     assert selection["selection_policy"]["outcome_exposed"] is True
-    assert contract["comparison_run"] == (
-        "safe-pce-audit10-v9-claude-plan-20260913"
-    )
+    assert contract["comparison_run"] == ("safe-pce-audit10-v9-claude-plan-20260913")
     assert contract["held_constant_known_defects"] == [
         "direct_final_markdown_v3_provider_protocol_residue",
         "conservative_blacklist_v2_with_known_source_audit_gap",
@@ -440,14 +446,17 @@ def test_safe_pce_terminal10_v11_combines_selected_final_contracts() -> None:
     assert "localized issues" not in config.plan_prompt
     assert "cross-cutting issues" not in config.plan_prompt
     assert "make that responsibility explicit" not in config.plan_prompt
-    assert hashlib.sha256(config.plan_prompt.encode()).hexdigest() == contract[
-        "plan_prompt_text_sha256"
-    ]
-    assert hashlib.sha256(config.code_prompt.encode()).hexdigest() == contract[
-        "code_prompt_text_sha256"
-    ]
-    assert hashlib.sha256(config.code_instance_template.encode()).hexdigest() == (
-        contract["code_instance_prompt_text_sha256"]
+    assert (
+        hashlib.sha256(config.plan_prompt.encode()).hexdigest()
+        == contract["plan_prompt_text_sha256"]
+    )
+    assert (
+        hashlib.sha256(config.code_prompt.encode()).hexdigest()
+        == contract["code_prompt_text_sha256"]
+    )
+    assert (
+        hashlib.sha256(config.code_instance_template.encode()).hexdigest()
+        == (contract["code_instance_prompt_text_sha256"])
     )
     combined_code_prompt = config.code_prompt + config.code_instance_template
     assert "already provided in the SIF" in combined_code_prompt
@@ -464,8 +473,7 @@ def test_safe_pce_terminal10_v11_combines_selected_final_contracts() -> None:
 
     supervisor = yaml.safe_load(
         Path(
-            "configs/swe_verified_safe_pce_terminal10_v11_"
-            "supervisor_v1_20260913.yaml"
+            "configs/swe_verified_safe_pce_terminal10_v11_supervisor_v1_20260913.yaml"
         ).read_text(encoding="utf-8")
     )
     arguments = supervisor["arguments"]
@@ -496,28 +504,34 @@ def test_safe_pce_human_boundary3_v12_freezes_semantic_boundary_rerun() -> None:
     assert config.hpc.cpus_per_task == 1
     assert config.hpc.mem == "4G"
     assert config.hpc.time == "00:45:00"
-    assert hashlib.sha256(config.plan_prompt.encode()).hexdigest() == contract[
-        "plan_prompt_text_sha256"
-    ]
-    assert hashlib.sha256(config.code_prompt.encode()).hexdigest() == contract[
-        "code_prompt_text_sha256"
-    ]
-    assert hashlib.sha256(
-        plan_agent.HUMAN_BOUNDED_MARKDOWN_PLAN_ACTION_PROTOCOL.encode()
-    ).hexdigest() == contract["plan_action_protocol_text_sha256"]
-    assert images["selection_manifest_sha256"] == file_sha256(
-        config.selection_manifest
+    assert (
+        hashlib.sha256(config.plan_prompt.encode()).hexdigest()
+        == contract["plan_prompt_text_sha256"]
     )
+    assert (
+        hashlib.sha256(config.code_prompt.encode()).hexdigest()
+        == contract["code_prompt_text_sha256"]
+    )
+    assert (
+        hashlib.sha256(
+            plan_agent.HUMAN_BOUNDED_MARKDOWN_PLAN_ACTION_PROTOCOL.encode()
+        ).hexdigest()
+        == contract["plan_action_protocol_text_sha256"]
+    )
+    assert images["selection_manifest_sha256"] == file_sha256(config.selection_manifest)
     image_identity_payload = dict(images)
     image_identity = image_identity_payload.pop("manifest_id")
-    assert image_identity == hashlib.sha256(
-        json.dumps(
-            image_identity_payload,
-            ensure_ascii=False,
-            sort_keys=True,
-            separators=(",", ":"),
-        ).encode()
-    ).hexdigest()
+    assert (
+        image_identity
+        == hashlib.sha256(
+            json.dumps(
+                image_identity_payload,
+                ensure_ascii=False,
+                sort_keys=True,
+                separators=(",", ":"),
+            ).encode()
+        ).hexdigest()
+    )
     assert len(images["records"]) == 3
     assert set(config.instance_ids) == {
         record["instance_id"] for record in images["records"].values()
@@ -541,6 +555,132 @@ def test_safe_pce_human_boundary3_v12_freezes_semantic_boundary_rerun() -> None:
     assert arguments[arguments.index("--config") + 1] == (
         "configs/swe_verified_safe_pce_human_boundary3_v12_20260913.yaml"
     )
+
+
+def test_safe_pce_formal500_v1_freezes_full_input_and_60_minute_budget(
+    tmp_path: Path,
+) -> None:
+    config = load_swe_verified_pce_config(
+        "configs/swe_verified_safe_pce_formal500_v1_20260914.yaml",
+        require_api_keys=False,
+    )
+    raw = yaml.safe_load(config.config_path.read_text(encoding="utf-8"))
+    contract = raw["experiment_contract"]
+    input_contract_path = REPO_ROOT / contract["input_contract"]
+    input_contract = json.loads(input_contract_path.read_text(encoding="utf-8"))
+    source_manifest = json.loads(
+        (config.dataset_snapshot / "manifest.json").read_text(encoding="utf-8")
+    )
+    source_rows = [
+        json.loads(line)
+        for line in (config.dataset_snapshot / "instances.jsonl")
+        .read_text(encoding="utf-8")
+        .splitlines()
+        if line.strip()
+    ]
+
+    assert config.selection_manifest is None
+    assert config.instance_ids == ()
+    assert source_manifest["instances"] == len(source_rows) == 500
+    assert len({row["instance_id"] for row in source_rows}) == 500
+    assert (
+        file_sha256(config.dataset_snapshot / "manifest.json")
+        == contract["source_manifest_sha256"]
+    )
+    assert (
+        file_sha256(config.dataset_snapshot / "instances.jsonl")
+        == contract["instances_sha256"]
+    )
+    assert file_sha256(input_contract_path) == contract["input_contract_sha256"]
+    assert input_contract["source_instances"] == 500
+    assert input_contract["execution_universe"]["policy"] == (
+        "all_rows_in_frozen_source_order"
+    )
+    assert input_contract["preparation_census"]["expected_sifs_present"] == 483
+    assert input_contract["preparation_census"]["expected_sifs_missing"] == 17
+    assert len(input_contract["preparation_census"]["missing_instance_ids"]) == 17
+    assert (
+        input_contract["preparation_census"]["expected_sifs_present"]
+        + input_contract["preparation_census"]["expected_sifs_missing"]
+        == 500
+    )
+    assert set(input_contract["preparation_census"]["missing_instance_ids"]) <= {
+        row["instance_id"] for row in source_rows
+    }
+    assert set(input_contract["preparation_census"]["missing_images"]) == {
+        canonical_image_ref(instance_id)
+        for instance_id in input_contract["preparation_census"]["missing_instance_ids"]
+    }
+    assert config.hpc.cpus_per_task == 1
+    assert config.hpc.mem == "4G"
+    assert config.hpc.time == "01:00:00"
+    assert config.hpc.max_task_attempts == 3
+    assert config.plan.timeout == config.code.timeout == 1800
+    assert config.plan_submission_protocol == "direct_human_markdown_v5"
+    assert (
+        hashlib.sha256(config.plan_prompt.encode()).hexdigest()
+        == contract["plan_prompt_text_sha256"]
+    )
+    assert (
+        hashlib.sha256(config.plan_instance_template.encode()).hexdigest()
+        == (contract["plan_instance_prompt_text_sha256"])
+    )
+    assert (
+        hashlib.sha256(config.code_prompt.encode()).hexdigest()
+        == contract["code_prompt_text_sha256"]
+    )
+    assert (
+        hashlib.sha256(config.code_instance_template.encode()).hexdigest()
+        == (contract["code_instance_prompt_text_sha256"])
+    )
+    assert contract["selected_cases"] == 500
+    assert contract["status"] == "prepared_pending_full_sif_audit"
+    assert contract["launched"] is False
+    assert (
+        contract["postprocessing"]["scan_actual_executions_not_only_model_proposals"]
+        is True
+    )
+    assert contract["postprocessing"]["inspect_every_actually_executed_url"] is True
+    assert contract["postprocessing"]["preserve_raw_artifacts"] is True
+
+    array_script = build_pce_array_script(
+        config=config,
+        batch_dir=tmp_path / "formal500-array",
+        indices=[0, 499],
+        attempt=1,
+    )
+    assert "#SBATCH --array=0,499" in array_script
+    assert "#SBATCH --cpus-per-task=1" in array_script
+    assert "#SBATCH --mem=4G" in array_script
+    assert "#SBATCH --time=01:00:00" in array_script
+
+    supervisor = yaml.safe_load(
+        Path(
+            "configs/swe_verified_safe_pce_formal500_v1_supervisor_20260914.yaml"
+        ).read_text(encoding="utf-8")
+    )
+    arguments = supervisor["arguments"]
+    assert "--require-clean-worktree" in arguments
+    assert "--reclaim-staging" in arguments
+    assert arguments[arguments.index("--poll-interval") + 1] == "300"
+    assert arguments[arguments.index("--max-runs") + 1] == "12"
+    assert arguments[arguments.index("--config") + 1] == (
+        "configs/swe_verified_safe_pce_formal500_v1_20260914.yaml"
+    )
+
+
+def test_safe_pce_rejects_unreviewed_worker_walltime(tmp_path: Path) -> None:
+    raw = yaml.safe_load(
+        Path("configs/swe_verified_safe_pce_formal500_v1_20260914.yaml").read_text(
+            encoding="utf-8"
+        )
+    )
+    raw["hpc"]["time"] = "00:50:00"
+    config_path = tmp_path / "unreviewed-walltime.yaml"
+    config_path.write_text(yaml.safe_dump(raw, sort_keys=False), encoding="utf-8")
+
+    with pytest.raises(ValueError, match="reviewed 45- or 60-minute walltime"):
+        load_swe_verified_pce_config(config_path, require_api_keys=False)
 
 
 def test_safe_pce_boundary_smoke_freezes_case8_and_git_boundary_probe() -> None:
@@ -706,12 +846,14 @@ def test_safe_pce_audit10_v7_freezes_repaired_boundary_smoke() -> None:
     assert contract["evaluator_repository_policy"] == (
         "verify_fresh_immutable_sif_without_reset_or_clean"
     )
-    assert hashlib.sha256(config.plan_prompt.encode()).hexdigest() == contract[
-        "plan_prompt_text_sha256"
-    ]
-    assert hashlib.sha256(config.code_prompt.encode()).hexdigest() == contract[
-        "code_prompt_text_sha256"
-    ]
+    assert (
+        hashlib.sha256(config.plan_prompt.encode()).hexdigest()
+        == contract["plan_prompt_text_sha256"]
+    )
+    assert (
+        hashlib.sha256(config.code_prompt.encode()).hexdigest()
+        == contract["code_prompt_text_sha256"]
+    )
     assert contract["launched"] is True
 
     supervisor = yaml.safe_load(
@@ -859,9 +1001,7 @@ def test_swe_verified_agent_environments_isolate_tmp(tmp_path, monkeypatch):
         instance_id="example__repo-1",
         issue_description="See https://docs.example/page",
     )
-    pce._environment(
-        source, timeout=10, phase="plan", host_workdir=tmp_path / "plan"
-    )
+    pce._environment(source, timeout=10, phase="plan", host_workdir=tmp_path / "plan")
 
     class FakePCCEEnvironment:
         def __init__(self, **kwargs):
@@ -886,9 +1026,7 @@ def test_swe_verified_agent_environments_isolate_tmp(tmp_path, monkeypatch):
     assert pce_observed["run_args"] == ["--containall", "--no-mount", "cwd"]
     assert pce_observed["isolate_tmp"] is True
     assert pce_observed["masked_container_paths"] == ["/opt/miniconda3/pkgs"]
-    assert pce_observed["source_access_prompt_urls"] == [
-        "https://docs.example/page"
-    ]
+    assert pce_observed["source_access_prompt_urls"] == ["https://docs.example/page"]
     assert pce_observed["source_access_context"]["phase"] == "plan"
     assert pcce_observed["run_args"] == ["--containall", "--no-mount", "cwd"]
     assert pcce_observed["isolate_tmp"] is True
@@ -1536,9 +1674,7 @@ def test_verified_evaluator_preserves_prepared_sif_repository(
     assert result["task_outcome"] == "resolved"
     assert not any(command.startswith("git reset") for command in instances[0].commands)
     assert not any(command.startswith("git clean") for command in instances[0].commands)
-    evidence = json.loads(
-        (tmp_path / "baseline/repository_baseline.json").read_text()
-    )
+    evidence = json.loads((tmp_path / "baseline/repository_baseline.json").read_text())
     assert evidence["observed"]["head"]["output"] == "prepared\n"
     assert evidence["observed"]["base_to_head_name_status"]["output"] == (
         "M\ttox.ini\n"
@@ -1558,12 +1694,7 @@ def test_verified_evaluator_resume_reidentifies_preserved_checkpoints(
         json.dumps({"execution_fingerprint": source_fingerprint}), encoding="utf-8"
     )
     source = (
-        run_dir
-        / "hpc_tasks"
-        / "pce"
-        / source_fingerprint
-        / "checkpoints"
-        / "task_0000"
+        run_dir / "hpc_tasks" / "pce" / source_fingerprint / "checkpoints" / "task_0000"
     )
     source.mkdir(parents=True)
     source_identity = checkpoint_identity(
@@ -1603,9 +1734,10 @@ def test_verified_evaluator_resume_reidentifies_preserved_checkpoints(
             (batch / "checkpoints" / "task_0000" / f"{phase}.json").read_text()
         )
         assert copied["checkpoint_identity"] == target_identity
-        assert copied["payload"] == json.loads(
-            (source / f"{phase}.json").read_text()
-        )["payload"]
+        assert (
+            copied["payload"]
+            == json.loads((source / f"{phase}.json").read_text())["payload"]
+        )
     assert not (batch / "checkpoints" / "task_0000" / "evaluate.json").exists()
 
 
@@ -1669,8 +1801,7 @@ def test_verified_evaluator_resume_cli_persists_waiting_status(
     assert evaluator_resume_script.main() == 0
     status = json.loads(
         (
-            config.run_dir
-            / "evaluator_repairs/repair-v1/controller_status.json"
+            config.run_dir / "evaluator_repairs/repair-v1/controller_status.json"
         ).read_text()
     )
     assert status["status"] == "waiting_workers"

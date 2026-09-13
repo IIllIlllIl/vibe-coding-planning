@@ -178,8 +178,10 @@ def load_swe_verified_pce_config(
         raise ValueError("SWE-Verified PCE requires exactly three total attempts")
     if hpc.cpus_per_task != 1 or hpc.mem != "4G":
         raise ValueError("SWE-Verified PCE workers must remain 1 CPU / 4G")
-    if hpc.time != "00:45:00":
-        raise ValueError("SWE-Verified PCE workers require a 45-minute walltime")
+    if hpc.time not in {"00:45:00", "01:00:00"}:
+        raise ValueError(
+            "SWE-Verified PCE workers require a reviewed 45- or 60-minute walltime"
+        )
 
     slurm_evaluator_timeout_outcome = str(
         evaluator_raw.get("slurm_timeout_outcome", "")

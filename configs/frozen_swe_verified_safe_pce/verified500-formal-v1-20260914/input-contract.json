@@ -1,0 +1,71 @@
+{
+  "schema_version": 1,
+  "input_id": "swe-verified-safe-pce-verified500-formal-v1-20260914",
+  "purpose": "full_swe_verified_safe_pce_raw_evidence_generation",
+  "dataset": "SWE-bench/SWE-bench_Verified",
+  "dataset_revision": "91aa3ed51b709be6457e12d00300a6a596d4c6a3",
+  "dataset_snapshot": "output/SWE-bench_Verified/swe-verified-pce-inputs/20260831_verified500_91aa3ed5",
+  "source_manifest_sha256": "bec1150dbf55c29c0893226c20578bee031406d78db305cdfef7b2b80965143a",
+  "instances_sha256": "8d6f5c64fe448432264ced781ac9bc987fc38b668ade6de39592a23ad1a9ef1f",
+  "instance_ids_sha256": "fad0fdea4fc2315e9b78cdf80882a32e32393297052e502e0e63c79ad648fb85",
+  "source_instances": 500,
+  "execution_universe": {
+    "selection_manifest": null,
+    "policy": "all_rows_in_frozen_source_order",
+    "outcome_dependent_selection": false,
+    "historical_run_membership_used": false
+  },
+  "required_image_authority": {
+    "path": "output/SWE-bench_Verified/swe-verified-pce-inputs/20260831_verified500_91aa3ed5/formal500-v1-20260914/images.json",
+    "expected_records": 500,
+    "all_records_require_frozen_sif_sha256": true,
+    "all_records_require_verified_base_commit": true,
+    "status": "pending"
+  },
+  "preparation_census": {
+    "observed_at": "2026-09-14",
+    "remote_sif_cache": "/scratch/users/twang/vibe-coding-planning/shared/sif-cache",
+    "expected_sifs_present": 483,
+    "expected_sifs_missing": 17,
+    "census_is_input_authority": false,
+    "missing_instance_ids": [
+      "django__django-12125",
+      "django__django-13033",
+      "django__django-13513",
+      "django__django-13516",
+      "django__django-15103",
+      "django__django-15315",
+      "django__django-15987",
+      "pytest-dev__pytest-6197",
+      "pytest-dev__pytest-6202",
+      "pytest-dev__pytest-7324",
+      "scikit-learn__scikit-learn-14053",
+      "scikit-learn__scikit-learn-14710",
+      "sphinx-doc__sphinx-8551",
+      "sympy__sympy-13878",
+      "sympy__sympy-14248",
+      "sympy__sympy-16450",
+      "sympy__sympy-20590"
+    ],
+    "missing_images": [
+      "swebench/sweb.eval.x86_64.django_1776_django-12125:latest",
+      "swebench/sweb.eval.x86_64.django_1776_django-13033:latest",
+      "swebench/sweb.eval.x86_64.django_1776_django-13513:latest",
+      "swebench/sweb.eval.x86_64.django_1776_django-13516:latest",
+      "swebench/sweb.eval.x86_64.django_1776_django-15103:latest",
+      "swebench/sweb.eval.x86_64.django_1776_django-15315:latest",
+      "swebench/sweb.eval.x86_64.django_1776_django-15987:latest",
+      "swebench/sweb.eval.x86_64.pytest-dev_1776_pytest-6197:latest",
+      "swebench/sweb.eval.x86_64.pytest-dev_1776_pytest-6202:latest",
+      "swebench/sweb.eval.x86_64.pytest-dev_1776_pytest-7324:latest",
+      "swebench/sweb.eval.x86_64.scikit-learn_1776_scikit-learn-14053:latest",
+      "swebench/sweb.eval.x86_64.scikit-learn_1776_scikit-learn-14710:latest",
+      "swebench/sweb.eval.x86_64.sphinx-doc_1776_sphinx-8551:latest",
+      "swebench/sweb.eval.x86_64.sympy_1776_sympy-13878:latest",
+      "swebench/sweb.eval.x86_64.sympy_1776_sympy-14248:latest",
+      "swebench/sweb.eval.x86_64.sympy_1776_sympy-16450:latest",
+      "swebench/sweb.eval.x86_64.sympy_1776_sympy-20590:latest"
+    ]
+  },
+  "launch_gate": "do_not_launch_until_the_500_record_image_authority_is_frozen_and_validated"
+}

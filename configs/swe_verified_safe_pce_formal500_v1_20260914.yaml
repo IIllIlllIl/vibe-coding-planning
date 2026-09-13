@@ -1,0 +1,142 @@
+# Full SWE-bench Verified Safe PCE raw-evidence run. This configuration is not
+# launchable until the declared 500-record SIF/base-commit manifest is frozen.
+mode: swe_verified_pce
+purpose: safe_pce_verified500_formal_raw_evidence
+
+paths:
+  dataset_snapshot: output/SWE-bench_Verified/swe-verified-pce-inputs/20260831_verified500_91aa3ed5
+  image_manifest: output/SWE-bench_Verified/swe-verified-pce-inputs/20260831_verified500_91aa3ed5/formal500-v1-20260914/images.json
+  prompt_source_config: configs/polybench_pce_hpc_formal_clean_20260825.yaml
+  plan_prompt_source_config: configs/prompts/swe_verified_safe_pce_planner_v6_anchor_ablation_20260913.yaml
+  code_prompt_source_config: configs/prompts/swe_verified_safe_pce_code_v1_20260913.yaml
+  run_dir: output/SWE-bench_Verified/swe-verified-pce-runs/formal/safe-pce-verified500-v1-20260914
+
+plan:
+  model: deepseek-v4-flash
+  api_base: https://api.deepseek.com
+  api_key_env: DEEPSEEK_API_KEY
+  temperature: 0.0
+  max_steps: 0
+  cost_limit: 0.0
+  timeout: 1800
+  max_attempts: 3
+  submission_protocol: direct_human_markdown_v5
+
+code:
+  model: deepseek-v4-flash
+  api_base: https://api.deepseek.com
+  api_key_env: DEEPSEEK_API_KEY
+  temperature: 0.0
+  max_steps: 0
+  cost_limit: 0.0
+  timeout: 1800
+  max_attempts: 3
+
+docker:
+  workdir: /testbed
+  timeout: 1800
+  min_free_gb: 20
+  max_cached_images: 75
+
+container:
+  runtime: apptainer
+  module: tools/Apptainer
+  sif_cache_dir: /scratch/users/${USER}/vibe-coding-planning/shared/sif-cache
+  writable_tmpfs: true
+
+hpc:
+  submit: true
+  partition: batch
+  cpus_per_task: 1
+  mem: 4G
+  time: "01:00:00"
+  poll_interval_seconds: 300
+  task_output_grace_seconds: 300
+  missing_task_grace_seconds: 600
+  max_task_attempts: 3
+  remote_env_file: ~/.config/vibe-coding-planning/deepseek.env
+  python_module: lang/Python/3.11
+  container_module: tools/Apptainer
+  python_bin: python3
+  job_name_prefix: swe-verified-safe-pce-formal500-v1-20260914
+  worker_config_path: configs/swe_verified_safe_pce_formal500_v1_20260914.yaml
+
+evaluator:
+  slurm_timeout_outcome: unknown
+
+experiment_contract:
+  status: prepared_pending_full_sif_audit
+  launched: false
+  input_contract: configs/frozen_swe_verified_safe_pce/verified500-formal-v1-20260914/input-contract.json
+  input_contract_sha256: db57255a30817b172c1a4aef5a12cbe606114e41866159993272194c3273f860
+  input_universe: all_500_rows_in_frozen_source_order
+  split: none_raw_evidence_generation
+  selected_cases: 500
+  dataset_revision: 91aa3ed51b709be6457e12d00300a6a596d4c6a3
+  source_manifest_sha256: bec1150dbf55c29c0893226c20578bee031406d78db305cdfef7b2b80965143a
+  instances_sha256: 8d6f5c64fe448432264ced781ac9bc987fc38b668ade6de39592a23ad1a9ef1f
+  required_image_records: 500
+  prelaunch_gate:
+    - acquire_the_17_missing_frozen_sifs
+    - freeze_exact_sha256_and_verify_declared_base_commit_for_all_500_sifs
+    - validate_that_the_runtime_loader_returns_exactly_500_unique_cases
+    - change_status_to_launch_authorized_in_a_reviewed_clean_commit
+  plan_prompt_text_sha256: dac5af971a23630878f3a223a15a55f308c020762603fd76db2f5599127af4e1
+  plan_instance_prompt_text_sha256: d4dac141293d6b6ba9f17e9eb436f36c2f4dc2430039d01b90d40f8de7893d1f
+  plan_action_protocol_text_sha256: ce1781dbbf5a8d4633e59f82e5969e1dee176e54f3dd251acfa45ae8e6c64b3e
+  code_prompt_text_sha256: cf626bf468fe674e53cc81640083bb674ce6536a7b4b9e575e41ece6ac6ef6f3
+  code_instance_prompt_text_sha256: fb9cc998e7c3e7484ce5c19b3c355dc899e9fcd774b3c5080a98c1a16e4a8fc0
+  plan_authority: exact_model_text_between_START_PLAN_and_END_PLAN
+  raw_plan_authority: complete_model_terminal_response_with_sha256
+  plan_submission_protocol: direct_human_markdown_v5
+  plan_format: standalone_task_adaptive_markdown_without_required_nrpv_sections
+  plan_audience: human_developer_before_implementation
+  plan_search_strategy: four_instruction_anchor_ablation
+  local_git_history_policy: multilingual_timesafe_base_and_ancestors
+  agent_source_policy: conservative_blacklist_v3
+  source_audit_index: all_attempts_case_level_summary_plus_event_logs
+  shell_command_parser: bashlex_ast_with_observed_timeout_wrapper
+  prompt_url_source: literal_http_urls_in_frozen_issue_description
+  non_prompt_http_policy: allow_but_review
+  agent_filesystem_policy: complete_testbed_with_host_cwd_disabled_and_package_cache_masked
+  evaluator_repository_policy: verify_fresh_immutable_sif_without_reset_or_clean
+  evaluator_source_policy: none
+  historical_run_inputs: none
+  budget:
+    cases: 500
+    planner_and_code_command_timeout_seconds: 1800
+    slurm_worker_walltime: "01:00:00"
+    agent_attempts: 3
+    supervisor_slices: 12
+  stopping: finish_all_500_cases_or_report_each_operationally_incomplete_case
+  success_criteria:
+    - exactly_500_frozen_cases_enter_the_runtime
+    - every_case_reaches_a_terminal_or_explicitly_operationally_incomplete_outcome
+    - valid_submissions_begin_with_START_PLAN_and_end_with_END_PLAN
+    - only_exact_markdown_between_the_markers_enters_the_plan_checkpoint_and_code_input
+    - malformed_boundaries_and_empty_patches_retry_without_host_rewriting
+    - official_evaluator_outcomes_are_preserved_without_relabeling_operational_failures
+  operational_incomplete_policy: transport_provider_timeout_infrastructure_failure_or_exhausted_evaluator_is_not_unresolved
+  postprocessing:
+    raw_run_is_not_automatically_training_authority: true
+    preserve_raw_artifacts: true
+    create_separate_cleaning_ledger_and_derived_dataset: true
+    scan_sources:
+      - complete_planner_trajectory_for_every_attempt
+      - complete_code_trajectory_for_every_attempt
+      - source_access_event_logs
+    scan_actual_executions_not_only_model_proposals: true
+    inspect_every_actually_executed_url: true
+    minimum_future_source_indicators:
+      - target_repository_pull_request_pages
+      - target_repository_commit_pages
+      - target_repository_compare_pages
+      - patch_or_diff_resources
+      - raw_target_repository_files_not_frozen_in_the_task
+      - derived_commit_files_or_commits_pages
+    leakage_disposition: exclude_from_clean_training_derivative_without_changing_raw_pce_outcome
+    operational_disposition: unknown_or_incomplete_is_never_converted_to_unresolved
+  known_limitations:
+    - lightweight_source_policy_is_not_a_security_sandbox
+    - source_access_event_logs_are_supplementary_and_do_not_replace_full_trajectory_audit
+    - successful_future_source_access_is_removed_only_in_the_postprocessed_derivative

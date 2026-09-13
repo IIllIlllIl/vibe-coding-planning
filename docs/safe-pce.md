@@ -3,7 +3,7 @@
 > Authority: current ACE-stage Plan-Code-Evaluate data, artifact, execution,
 > evaluator, and smoke contract
 >
-> Last reviewed: 2026-09-13
+> Last reviewed: 2026-09-14
 
 ## Purpose
 
@@ -14,9 +14,10 @@ artifacts may explain earlier failures but are not inputs to this experiment.
 
 The source dataset is the complete 500-row `SWE-bench/SWE-bench_Verified`
 snapshot at revision `91aa3ed51b709be6457e12d00300a6a596d4c6a3`.
-Every experiment freezes its own case selection and selection-scoped SIF
-manifest. A usable image record binds the source manifest, requested image,
-exact SIF bytes, and a successful check that the official base commit exists in
+A subset experiment freezes its own case selection and selection-scoped SIF
+manifest; the full run instead binds the complete source manifest directly. A
+usable image record binds the source manifest, requested image, exact SIF
+bytes, and a successful check that the official base commit exists in
 `/testbed`.
 
 ## Phase And Artifact Boundary
@@ -25,7 +26,7 @@ Each Slurm array element owns one case:
 
 ```text
 frozen task + verified base commit
-  -> isolated Planner workspace -> bounded FINAL_PLAN ... END_PLAN submission
+  -> isolated Planner workspace -> bounded START_PLAN ... END_PLAN submission
   -> atomic Plan checkpoint + SHA-256 verification
   -> fresh isolated Code workspace(issue + exact Plan text)
   -> atomic patch checkpoint
@@ -33,10 +34,10 @@ frozen task + verified base commit
   -> resolved | unresolved | unknown
 ```
 
-The current `direct_final_markdown_v4` completion protocol is:
+The current `direct_human_markdown_v5` completion protocol is:
 
 ```text
-FINAL_PLAN
+START_PLAN
 # Plan
 
 <task-specific Markdown Plan>
@@ -142,7 +143,7 @@ while the event logs remain the detailed authority.
 
 This is an accidental-leakage reduction and post-filtering aid, not a security
 sandbox. It applies to Plan and Code Agents, never the official evaluator. The
-The command segmentation uses the `bashlex` AST to identify commands
+command segmentation uses the `bashlex` AST to identify commands
 inside ordinary lists, unquoted-newline boundaries, compound statements,
 subshells, and command substitutions. This closes the observed
 `cd`-then-newline-then-`curl` miss. Policy v3 also unwraps the observed GNU
@@ -271,6 +272,36 @@ The prepared terminal10 v11 smoke applies that selected v6 prompt to the full
 frozen audit10 coverage set. It is the first prepared run to select bounded
 `direct_final_markdown_v4`, source policy v3, and the all-attempt source audit
 index together. It is unlaunched and does not authorize a 500-case run.
+
+## Formal 500-case preparation
+
+The formal Safe PCE input universe is every row, in source order, from the
+fixed 500-row Verified snapshot; it has no historical quick-selection or
+outcome-based membership. Its runtime uses the v6 task-adaptive Planner prompt,
+the v5 symmetric human-review Plan boundary, the dedicated Code prompt, and one
+1 CPU / 4G / 60-minute Slurm element per case. Plan and Code command timeouts
+remain 1,800 seconds, each case has exactly three total attempts, evaluator
+exhaustion remains `unknown`, and Slurm—not an application concurrency cap—owns
+array scheduling.
+
+The formal identity is prepared but not launchable yet. A read-only cache
+census found 483 of the 500 expected SIF names and an exact 17-image gap. Before
+launch, those images must be acquired and a new 500-record manifest must bind
+every exact SIF SHA-256 to a successful declared-base-commit check. The frozen
+preparation authority is
+`configs/frozen_swe_verified_safe_pce/verified500-formal-v1-20260914/input-contract.json`;
+neither the old two-record root manifest nor any smoke selection manifest may
+substitute for it.
+
+The runtime output is raw evidence, not an automatically clean ACE dataset.
+Postprocessing must preserve it and create a separate cleaning ledger and
+derived dataset. For every attempt it must inspect the complete Planner and
+Code trajectories, identify URLs in commands that were actually executed, and
+use `source_access.jsonl` only as supplementary indexing evidence. Successful
+access to later pull-request, commit, compare, patch/diff, raw-source, or
+derived commit/files surfaces excludes the case from the clean derivative
+without rewriting its raw PCE outcome. Operationally incomplete and `unknown`
+cases are likewise never converted to `unresolved`.
 
 ## Historical Evidence
 
