@@ -1,0 +1,46 @@
+{
+  "created_at": "2026-09-13T20:00:00+00:00",
+  "manifest_id": "e27808a18c1560f2c1b204d5cf38b90732d57fb6ab5d074f139af5abd10830aa",
+  "purpose": "swe_verified_sif_snapshot",
+  "records": {
+    "swebench/sweb.eval.x86_64.django_1776_django-10097:latest": {
+      "base_commit_verification_output": "",
+      "base_commit_verified": true,
+      "expected_base_commit": "b9cf764be62e77b4777b3a75ec256f6209a57671",
+      "instance_id": "django__django-10097",
+      "oci_digest": null,
+      "provenance_strength": "retrospective",
+      "sif_bytes": 1121632256,
+      "sif_path": "/scratch/users/twang/vibe-coding-planning/shared/sif-cache/swebench_sweb.eval.x86_64.django_1776_django-10097_latest.sif",
+      "sif_sha256": "2af91cbb6f0636973c967885fb55e7ff18dbd15cdd1f2e2a72c579ba4a88d75b",
+      "status": "audited"
+    },
+    "swebench/sweb.eval.x86_64.django_1776_django-10554:latest": {
+      "base_commit_verification_output": "",
+      "base_commit_verified": true,
+      "expected_base_commit": "14d026cccb144c6877294ba4cd4e03ebf0842498",
+      "instance_id": "django__django-10554",
+      "oci_digest": null,
+      "provenance_strength": "retrospective",
+      "sif_bytes": 1063411712,
+      "sif_path": "/scratch/users/twang/vibe-coding-planning/shared/sif-cache/swebench_sweb.eval.x86_64.django_1776_django-10554_latest.sif",
+      "sif_sha256": "6dc57f34aa7279de54014ac8fa44f79faf4ae5942aa34316f58b5741141f1e28",
+      "status": "audited"
+    },
+    "swebench/sweb.eval.x86_64.pytest-dev_1776_pytest-10051:latest": {
+      "base_commit_verification_output": "",
+      "base_commit_verified": true,
+      "expected_base_commit": "aa55975c7d3f6c9f6d7f68accc41bb7cadf0eb9a",
+      "instance_id": "pytest-dev__pytest-10051",
+      "oci_digest": null,
+      "provenance_strength": "retrospective",
+      "sif_bytes": 944574464,
+      "sif_path": "/scratch/users/twang/vibe-coding-planning/shared/sif-cache/swebench_sweb.eval.x86_64.pytest-dev_1776_pytest-10051_latest.sif",
+      "sif_sha256": "7753b841e19b2561300783a95bed477a790547e8a6b65e4d107f94ae8cd908ee",
+      "status": "audited"
+    }
+  },
+  "schema_version": 1,
+  "selection_manifest_sha256": "364cff099f4a9e96f8d604ec0dc21c2cfa5c948aba6988ed2734b22c7fbff84d",
+  "source_manifest_sha256": "bec1150dbf55c29c0893226c20578bee031406d78db305cdfef7b2b80965143a"
+}

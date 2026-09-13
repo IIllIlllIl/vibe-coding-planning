@@ -9,6 +9,7 @@ from types import SimpleNamespace
 import pytest
 import yaml
 
+from src.agents import plan_agent
 from src.environment.source_access import SOURCE_ACCESS_POLICY_VERSION
 from src.optimization.hpc.task_batch import TaskFiles
 from src.optimization.checker import CheckerOutputContractError
@@ -274,6 +275,20 @@ def test_safe_pce_config_accepts_bounded_markdown_protocol(tmp_path: Path) -> No
     assert config.plan_submission_protocol == "direct_final_markdown_v4"
 
 
+def test_safe_pce_config_accepts_human_bounded_markdown_protocol(
+    tmp_path: Path,
+) -> None:
+    source = Path("configs/swe_verified_safe_pce_audit10_v8_claude_plan_20260913.yaml")
+    raw = yaml.safe_load(source.read_text(encoding="utf-8"))
+    raw["plan"]["submission_protocol"] = "direct_human_markdown_v5"
+    path = tmp_path / "human-bounded-template-protocol.yaml"
+    path.write_text(yaml.safe_dump(raw), encoding="utf-8")
+
+    config = load_swe_verified_pce_config(path, require_api_keys=False)
+
+    assert config.plan_submission_protocol == "direct_human_markdown_v5"
+
+
 def test_safe_pce_audit10_v8_binds_flexible_markdown_smoke() -> None:
     config = load_swe_verified_pce_config(
         "configs/swe_verified_safe_pce_audit10_v8_claude_plan_20260913.yaml",
@@ -444,6 +459,7 @@ def test_safe_pce_terminal10_v11_combines_selected_final_contracts() -> None:
     assert contract["source_audit_index"] == (
         "all_attempts_case_level_summary_plus_event_logs"
     )
+    assert contract["status"] == "prepared_not_launched"
     assert contract["launched"] is False
 
     supervisor = yaml.safe_load(
@@ -458,6 +474,72 @@ def test_safe_pce_terminal10_v11_combines_selected_final_contracts() -> None:
     assert arguments[arguments.index("--poll-interval") + 1] == "300"
     assert arguments[arguments.index("--config") + 1] == (
         "configs/swe_verified_safe_pce_terminal10_v11_20260913.yaml"
+    )
+
+
+def test_safe_pce_human_boundary3_v12_freezes_semantic_boundary_rerun() -> None:
+    config = load_swe_verified_pce_config(
+        "configs/swe_verified_safe_pce_human_boundary3_v12_20260913.yaml",
+        require_api_keys=False,
+    )
+    raw = yaml.safe_load(config.config_path.read_text(encoding="utf-8"))
+    contract = raw["experiment_contract"]
+    images = json.loads(config.image_manifest.read_text(encoding="utf-8"))
+
+    assert config.instance_ids == (
+        "django__django-10097",
+        "pytest-dev__pytest-10051",
+        "django__django-10554",
+    )
+    assert config.run_dir.name == "safe-pce-human-boundary3-v12-20260913"
+    assert config.plan_submission_protocol == "direct_human_markdown_v5"
+    assert config.hpc.cpus_per_task == 1
+    assert config.hpc.mem == "4G"
+    assert config.hpc.time == "00:45:00"
+    assert hashlib.sha256(config.plan_prompt.encode()).hexdigest() == contract[
+        "plan_prompt_text_sha256"
+    ]
+    assert hashlib.sha256(config.code_prompt.encode()).hexdigest() == contract[
+        "code_prompt_text_sha256"
+    ]
+    assert hashlib.sha256(
+        plan_agent.HUMAN_BOUNDED_MARKDOWN_PLAN_ACTION_PROTOCOL.encode()
+    ).hexdigest() == contract["plan_action_protocol_text_sha256"]
+    assert images["selection_manifest_sha256"] == file_sha256(
+        config.selection_manifest
+    )
+    image_identity_payload = dict(images)
+    image_identity = image_identity_payload.pop("manifest_id")
+    assert image_identity == hashlib.sha256(
+        json.dumps(
+            image_identity_payload,
+            ensure_ascii=False,
+            sort_keys=True,
+            separators=(",", ":"),
+        ).encode()
+    ).hexdigest()
+    assert len(images["records"]) == 3
+    assert set(config.instance_ids) == {
+        record["instance_id"] for record in images["records"].values()
+    }
+    assert contract["plan_authority"] == (
+        "exact_model_text_between_START_PLAN_and_END_PLAN"
+    )
+    assert contract["status"] == "launch_authorized"
+    assert contract["launched"] is True
+
+    supervisor = yaml.safe_load(
+        Path(
+            "configs/swe_verified_safe_pce_human_boundary3_v12_"
+            "supervisor_v1_20260913.yaml"
+        ).read_text(encoding="utf-8")
+    )
+    arguments = supervisor["arguments"]
+    assert "--require-clean-worktree" in arguments
+    assert "--reclaim-staging" in arguments
+    assert arguments[arguments.index("--poll-interval") + 1] == "300"
+    assert arguments[arguments.index("--config") + 1] == (
+        "configs/swe_verified_safe_pce_human_boundary3_v12_20260913.yaml"
     )
 
 

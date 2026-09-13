@@ -335,6 +335,7 @@ class SWEVerifiedPCERunner:
                             plan_agent.DIRECT_MARKDOWN_PROTOCOL,
                             plan_agent.DIRECT_MARKDOWN_TEMPLATE_PROTOCOL,
                             plan_agent.DIRECT_BOUNDED_MARKDOWN_PROTOCOL,
+                            plan_agent.DIRECT_HUMAN_BOUNDED_MARKDOWN_PROTOCOL,
                         }
                     ),
                     direct_submission_protocol=submission_protocol,
@@ -345,9 +346,25 @@ class SWEVerifiedPCERunner:
                     "submission_protocol": submission_protocol,
                     "trajectory": list(trajectory),
                 }
-                if submission_protocol == plan_agent.DIRECT_BOUNDED_MARKDOWN_PROTOCOL:
+                if submission_protocol in {
+                    plan_agent.DIRECT_BOUNDED_MARKDOWN_PROTOCOL,
+                    plan_agent.DIRECT_HUMAN_BOUNDED_MARKDOWN_PROTOCOL,
+                }:
+                    start_marker = (
+                        plan_agent.DIRECT_HUMAN_PLAN_MARKER
+                        if submission_protocol
+                        == plan_agent.DIRECT_HUMAN_BOUNDED_MARKDOWN_PROTOCOL
+                        else plan_agent.DIRECT_PLAN_MARKER
+                    )
+                    end_marker = (
+                        plan_agent.DIRECT_HUMAN_PLAN_END_MARKER
+                        if submission_protocol
+                        == plan_agent.DIRECT_HUMAN_BOUNDED_MARKDOWN_PROTOCOL
+                        else plan_agent.DIRECT_PLAN_END_MARKER
+                    )
                     raw_submission = plan_agent.direct_plan_terminal_response(
-                        trajectory
+                        trajectory,
+                        start_marker=start_marker,
                     )
                     if raw_submission is None:
                         raise FatalError(
@@ -360,8 +377,8 @@ class SWEVerifiedPCERunner:
                                 raw_submission.encode()
                             ).hexdigest(),
                             "plan_boundary": {
-                                "start_marker": plan_agent.DIRECT_PLAN_MARKER,
-                                "end_marker": plan_agent.DIRECT_PLAN_END_MARKER,
+                                "start_marker": start_marker,
+                                "end_marker": end_marker,
                             },
                         }
                     )

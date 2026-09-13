@@ -1,0 +1,40 @@
+{
+  "schema_version": 1,
+  "selection_id": "swe-verified-safe-pce-human-boundary3-v1-20260913",
+  "purpose": "development_only_human_semantic_plan_boundary_smoke",
+  "dataset": "SWE-bench/SWE-bench_Verified",
+  "dataset_revision": "91aa3ed51b709be6457e12d00300a6a596d4c6a3",
+  "source_manifest_sha256": "bec1150dbf55c29c0893226c20578bee031406d78db305cdfef7b2b80965143a",
+  "parent_selection_id": "swe-verified-safe-pce-audit10-v3-20260912",
+  "selected_instance_ids": [
+    "django__django-10097",
+    "pytest-dev__pytest-10051",
+    "django__django-10554"
+  ],
+  "selected_rows": [
+    {
+      "instance_id": "django__django-10097",
+      "row_sha256": "70d53e3e16a583329df18e6f0182ffca620777a69025806b8d6ac2c08c804356",
+      "coverage": "v11_missing_end_marker_after_repeated_action_protocol_rejections"
+    },
+    {
+      "instance_id": "pytest-dev__pytest-10051",
+      "row_sha256": "846fada4df002172cf57a28f635b89eba5ee2c215c40c0a8252e81fc3e55bd8e",
+      "coverage": "v11_missing_end_marker_and_protocol_residue_across_attempts"
+    },
+    {
+      "instance_id": "django__django-10554",
+      "row_sha256": "e6e14913eed7432cfc1cc31a24d9e15aa8893dfe9399ae4abcab8245cade8b82",
+      "coverage": "repeated_safe_boundary_planner_timeout_and_context_growth"
+    }
+  ],
+  "selection_policy": {
+    "fixed_before_runtime": true,
+    "development_only": true,
+    "outcome_exposed": true,
+    "selection_basis": "three_nonterminal_v11_cases_selected_for_boundary_and_long_tail_diagnosis",
+    "historical_outcomes_used_as_runtime_inputs": false,
+    "repository_count": 2,
+    "quality_or_generalization_claim": false
+  }
+}

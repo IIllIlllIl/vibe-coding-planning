@@ -34,6 +34,12 @@ BOUNDED_MARKDOWN_RAW = (
     + "END_PLAN\n"
     + "Here is another explanation.</parameter>"
 )
+HUMAN_BOUNDED_MARKDOWN_RAW = (
+    "START_PLAN\n"
+    + BOUNDED_MARKDOWN_PLAN
+    + "END_PLAN\n"
+    + "Provider trailer retained only as raw evidence.</parameter>"
+)
 
 
 class MockLiteLLMModel:
@@ -113,6 +119,16 @@ class MockDefaultAgentDirectBoundedMarkdown(MockDefaultAgent):
             "Submitted",
             plan_agent._DIRECT_PLAN_ENVELOPE_PAYLOAD_PREFIX
             + BOUNDED_MARKDOWN_RAW,
+        )
+
+
+class MockDefaultAgentDirectHumanBoundedMarkdown(MockDefaultAgent):
+    def run(self, **kwargs):
+        self.messages[-1]["content"] = HUMAN_BOUNDED_MARKDOWN_RAW
+        return (
+            "Submitted",
+            plan_agent._DIRECT_PLAN_ENVELOPE_PAYLOAD_PREFIX
+            + HUMAN_BOUNDED_MARKDOWN_RAW,
         )
 
 
@@ -248,6 +264,28 @@ class TestRunSuccess:
         assert str(raised.value) == (
             plan_agent._DIRECT_PLAN_ENVELOPE_PAYLOAD_PREFIX
             + BOUNDED_MARKDOWN_RAW
+        )
+
+    def test_human_bounded_terminal_uses_start_plan_interception(self):
+        class SubmittedForTest(Exception):
+            pass
+
+        class BaseAgent:
+            def get_observation(self, _response):
+                raise AssertionError("shell parser must not receive START_PLAN")
+
+        agent = plan_agent._direct_plan_agent_class(
+            BaseAgent,
+            SubmittedForTest,
+            bounded=True,
+            start_marker=plan_agent.DIRECT_HUMAN_PLAN_MARKER,
+        )()
+        with pytest.raises(SubmittedForTest) as raised:
+            agent.get_observation({"content": HUMAN_BOUNDED_MARKDOWN_RAW})
+
+        assert str(raised.value) == (
+            plan_agent._DIRECT_PLAN_ENVELOPE_PAYLOAD_PREFIX
+            + HUMAN_BOUNDED_MARKDOWN_RAW
         )
 
     @patch("src.agents.plan_agent.import_minisweagent")
@@ -393,6 +431,71 @@ class TestRunSuccess:
             in system
         )
         assert "only the exact text between" in " ".join(system.split())
+
+    @patch("src.agents.plan_agent.import_minisweagent")
+    def test_human_bounded_markdown_uses_semantic_markers_and_direct_audience(
+        self, mock_import, config, mock_env
+    ):
+        mock_import.return_value = (
+            MockDefaultAgentDirectHumanBoundedMarkdown,
+            MockLiteLLMModel,
+            object,
+        )
+
+        plan, messages = plan_agent.run(
+            config,
+            "Fix parser bug",
+            mock_env,
+            require_direct_submission=True,
+            direct_submission_protocol=(
+                plan_agent.DIRECT_HUMAN_BOUNDED_MARKDOWN_PROTOCOL
+            ),
+        )
+
+        assert plan == BOUNDED_MARKDOWN_PLAN
+        assert plan_agent.direct_plan_terminal_response(
+            messages,
+            start_marker=plan_agent.DIRECT_HUMAN_PLAN_MARKER,
+        ) == HUMAN_BOUNDED_MARKDOWN_RAW
+        assert "Provider trailer" not in plan
+        system = MockDefaultAgent.last_kwargs["system_template"]
+        normalized = " ".join(system.split())
+        assert (
+            "START_PLAN\n# Plan\n\n[[TASK_SPECIFIC_MARKDOWN_PLAN]]\nEND_PLAN"
+            in system
+        )
+        assert "marks where the Plan begins" in normalized
+        assert "shown directly and verbatim to the human developer" in normalized
+        assert "only text treated as the Plan" in normalized
+
+    @patch("src.agents.plan_agent.import_minisweagent")
+    def test_human_bounded_markdown_rejects_missing_end_marker(
+        self, mock_import, config, mock_env
+    ):
+        class MissingHumanEndMarker(MockDefaultAgent):
+            def run(self, **kwargs):
+                raw = "START_PLAN\n" + DIRECT_MARKDOWN_TEXT
+                self.messages[-1]["content"] = raw
+                return (
+                    "Submitted",
+                    plan_agent._DIRECT_PLAN_ENVELOPE_PAYLOAD_PREFIX + raw,
+                )
+
+        mock_import.return_value = (
+            MissingHumanEndMarker,
+            MockLiteLLMModel,
+            object,
+        )
+        with pytest.raises(AgentTaskError, match="missing an exact 'END_PLAN'"):
+            plan_agent.run(
+                config,
+                "Fix parser bug",
+                mock_env,
+                require_direct_submission=True,
+                direct_submission_protocol=(
+                    plan_agent.DIRECT_HUMAN_BOUNDED_MARKDOWN_PROTOCOL
+                ),
+            )
 
 
 class TestRunValidation:
