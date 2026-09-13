@@ -332,6 +332,7 @@ class SWEVerifiedPCERunner:
                         in {
                             plan_agent.DIRECT_NRPV_PROTOCOL,
                             plan_agent.DIRECT_MARKDOWN_PROTOCOL,
+                            plan_agent.DIRECT_MARKDOWN_TEMPLATE_PROTOCOL,
                         }
                     ),
                     direct_submission_protocol=submission_protocol,

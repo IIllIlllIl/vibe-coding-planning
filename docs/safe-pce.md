@@ -207,6 +207,29 @@ Reproduction, Patch, or Validation headings. The comparison should examine
 exploration depth, timeout rate, Plan readability, and material evidence—not
 interpret independent Code outcomes as a direct measure of prompt quality.
 
+V8 was stopped after two task attempts rather than consolidated. At that point,
+seven cases had official-test resolved outcomes, two had substantive Plans
+rejected for a trailing `</parameter>`, and one remained operationally
+incomplete after two 45-minute timeouts. Six paired Plan checkpoints show that
+the flexible Plans were about 19% shorter on average than v7 NRPV Plans, while
+long exploratory trajectories remained. The reliability audit also found two
+confirmed later-source acquisitions and one malformed Xarray Plan that the v2
+validator missed. Therefore v8 is a prompt/boundary diagnostic only, not Safe
+PCE data authority. See
+[`knowledge/safe-pce-audit10-v8-claude-plan-diagnostic.md`](knowledge/safe-pce-audit10-v8-claude-plan-diagnostic.md).
+
+The prepared successor terminal contract is versioned separately as
+`direct_final_markdown_v3`. It gives the model a positive replaceable template,
+rejects an unexpanded placeholder and the observed `</description>` residue,
+and still preserves valid model text verbatim. Its Planner prompt tells the
+Agent to use the frozen repository and provided environment, not replace the
+target repository with a remotely obtained version, and treats remote Git as
+unavailable. It preserves base-ancestor Git history as legitimate decision-time
+evidence and does not require the disposable Planner workspace to remain read
+only. Submission syntax has one authority in the centrally appended action
+protocol rather than being duplicated in the method prompt. It does not alter
+the v8 prompt or artifacts.
+
 ## Historical Evidence
 
 The complete former SWE-Verified PCE/PCCE workflow, including quick50 and

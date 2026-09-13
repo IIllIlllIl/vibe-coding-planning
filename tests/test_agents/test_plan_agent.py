@@ -294,8 +294,48 @@ class TestRunSuccess:
         assert "[The complete standalone Markdown Plan" not in system
         assert "## Navigation (N)" not in system
 
+    @patch("src.agents.plan_agent.import_minisweagent")
+    def test_safe_pce_template_protocol_shows_positive_replaceable_example(
+        self, mock_import, config, mock_env
+    ):
+        mock_import.return_value = (
+            MockDefaultAgentDirectMarkdown,
+            MockLiteLLMModel,
+            object,
+        )
+
+        plan, _ = plan_agent.run(
+            config,
+            "Fix parser bug",
+            mock_env,
+            require_direct_submission=True,
+            direct_submission_protocol=(plan_agent.DIRECT_MARKDOWN_TEMPLATE_PROTOCOL),
+        )
+
+        assert plan == DIRECT_MARKDOWN_TEXT
+        system = MockDefaultAgent.last_kwargs["system_template"]
+        normalized = " ".join(system.split())
+        assert "FINAL_PLAN\n# Plan\n\n[[TASK_SPECIFIC_MARKDOWN_PLAN]]" in system
+        assert "Remove the placeholder itself" in system
+        assert "the Host validates but never edits the response" in normalized
+        assert "XML or DSML tag" in normalized
+        assert "simulated observation" in normalized
+        assert "## Navigation (N)" not in system
+
 
 class TestRunValidation:
+    def test_description_text_is_not_blanket_rejected_as_protocol_residue(self):
+        plan = "# Plan\n\nUpdate the literal `</description>` parsing behavior."
+
+        assert (
+            plan_agent._direct_plan_markdown_error(
+                plan,
+                require_nrpv=False,
+                forbidden_placeholder=plan_agent.DIRECT_MARKDOWN_PLAN_PLACEHOLDER,
+            )
+            is None
+        )
+
     @pytest.mark.parametrize(
         ("plan", "message"),
         [
@@ -329,6 +369,47 @@ class TestRunValidation:
                 mock_env,
                 require_direct_submission=True,
             )
+        assert caught.value.reason == "plan_invalid_markdown"
+        assert caught.value.trajectory[-1]["content"] == "FINAL_PLAN\n" + plan
+
+    @pytest.mark.parametrize(
+        ("plan", "message"),
+        [
+            (
+                "# Plan\n\n[[TASK_SPECIFIC_MARKDOWN_PLAN]]",
+                "unexpanded template placeholder",
+            ),
+            (
+                "# Plan\nUseful task-specific plan.\n</description>\nExtra text.",
+                "protocol residue",
+            ),
+        ],
+    )
+    @patch("src.agents.plan_agent.import_minisweagent")
+    def test_template_markdown_rejects_unexpanded_or_protocol_text(
+        self, mock_import, plan, message, config, mock_env
+    ):
+        class InvalidTemplateMarkdown(MockDefaultAgent):
+            def run(self, **kwargs):
+                self.messages[-1]["content"] = "FINAL_PLAN\n" + plan
+                return "Submitted", plan_agent._DIRECT_PLAN_PAYLOAD_PREFIX + plan
+
+        mock_import.return_value = (
+            InvalidTemplateMarkdown,
+            MockLiteLLMModel,
+            object,
+        )
+        with pytest.raises(AgentTaskError, match=message) as caught:
+            plan_agent.run(
+                config,
+                "Fix parser bug",
+                mock_env,
+                require_direct_submission=True,
+                direct_submission_protocol=(
+                    plan_agent.DIRECT_MARKDOWN_TEMPLATE_PROTOCOL
+                ),
+            )
+
         assert caught.value.reason == "plan_invalid_markdown"
         assert caught.value.trajectory[-1]["content"] == "FINAL_PLAN\n" + plan
 

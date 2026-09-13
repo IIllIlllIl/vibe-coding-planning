@@ -88,6 +88,7 @@ def load_swe_verified_pce_config(
         "legacy_stdout_v1",
         "direct_final_plan_v1",
         "direct_final_markdown_v2",
+        "direct_final_markdown_v3",
     }:
         raise ValueError("unsupported SWE-Verified Plan submission protocol")
     code = _model(_mapping(raw.get("code"), "code"), temperature=0.0)

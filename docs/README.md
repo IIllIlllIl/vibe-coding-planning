@@ -46,6 +46,7 @@ offline GEPA, and production failures:
 | [`knowledge/rq2-zero-u-to-r-opportunity-audit.md`](knowledge/rq2-zero-u-to-r-opportunity-audit.md) | Focused audit of why the original safe67 C4 workflow produced no unresolved-to-resolved transition |
 | [`knowledge/swe-verified-plan-outcome-solvability-audit.md`](knowledge/swe-verified-plan-outcome-solvability-audit.md) | Development audit separating historical Plan-artifact trustworthiness from task-plus-Plan outcome interpretability |
 | [`knowledge/safe-pce-audit10-data-quality.md`](knowledge/safe-pce-audit10-data-quality.md) | Audit10 structural integrity, post-decision leakage, protocol-residue, outcome-authority, and evidence-retention findings |
+| [`knowledge/safe-pce-audit10-v8-claude-plan-diagnostic.md`](knowledge/safe-pce-audit10-v8-claude-plan-diagnostic.md) | Stopped v8 same-case comparison of NRPV and Claude-style Plans, terminal-format failures, exploration depth, and remaining source-boundary defects |
 
 ## Reference
 

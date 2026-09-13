@@ -167,7 +167,11 @@ pruning work, but it exposed four remaining classes of boundary defect:
 - the Planner protocol and audience produced avoidable formatting retries and
   overly implementation-oriented Plans.
 
-The current unvalidated successor code addresses those four classes with Bash
-AST command parsing, a masked package-cache path, evaluator verification without
-reset, and a human-review Planner-v2 prompt. These are implementation claims,
-not experimental results, until another smoke exercises them on HPC.
+V7 subsequently exercised Bash-AST command parsing, package-cache masking,
+evaluator verification without reset, and the human-review Planner on HPC. V8
+then tested a flexible Claude-style Plan on the same cases. That diagnostic
+found that a leading `timeout` wrapper can still hide an inner HTTP or pip
+client from the lightweight classifier, and that provider-protocol residue can
+still reach otherwise substantive Plans. The current authority for those
+successor findings is
+[`safe-pce-audit10-v8-claude-plan-diagnostic.md`](safe-pce-audit10-v8-claude-plan-diagnostic.md).

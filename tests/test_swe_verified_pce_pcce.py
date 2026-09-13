@@ -226,6 +226,41 @@ def test_safe_pce_planner_v4_uses_claude_style_search_and_no_nrpv() -> None:
     assert "instead of following a fixed section template" in normalized
 
 
+def test_safe_pce_planner_v5_uses_template_and_revised_planning_boundaries() -> None:
+    v5 = yaml.safe_load(
+        Path(
+            "configs/prompts/swe_verified_safe_pce_planner_v5_20260913.yaml"
+        ).read_text(encoding="utf-8")
+    )["prompts"]["plan_system"]
+    normalized = " ".join(v5.split())
+
+    assert "FINAL_PLAN" not in v5
+    assert "[[TASK_SPECIFIC_MARKDOWN_PLAN]]" not in v5
+    assert "Navigation (N)" not in v5
+    assert "Reproduction (R)" not in v5
+    assert "Investigate only until" in v5
+    assert "smallest implementation path needed to explain the issue" in normalized
+    assert "Use the frozen repository and the environment already provided" in v5
+    assert "replace the target repository with a remotely obtained version" in normalized
+    assert "Remote Git operations" in normalized
+    assert "local Git history already present at the frozen base commit" in normalized
+    assert "materially affects another behavior or must preserve it" in normalized
+    assert "make that responsibility explicit in the Plan" in normalized
+    assert "Do not modify repository files while planning" not in v5
+
+
+def test_safe_pce_config_accepts_template_markdown_protocol(tmp_path: Path) -> None:
+    source = Path("configs/swe_verified_safe_pce_audit10_v8_claude_plan_20260913.yaml")
+    raw = yaml.safe_load(source.read_text(encoding="utf-8"))
+    raw["plan"]["submission_protocol"] = "direct_final_markdown_v3"
+    path = tmp_path / "template-protocol.yaml"
+    path.write_text(yaml.safe_dump(raw), encoding="utf-8")
+
+    config = load_swe_verified_pce_config(path, require_api_keys=False)
+
+    assert config.plan_submission_protocol == "direct_final_markdown_v3"
+
+
 def test_safe_pce_audit10_v8_binds_flexible_markdown_smoke() -> None:
     config = load_swe_verified_pce_config(
         "configs/swe_verified_safe_pce_audit10_v8_claude_plan_20260913.yaml",
@@ -259,6 +294,44 @@ def test_safe_pce_audit10_v8_binds_flexible_markdown_smoke() -> None:
     assert "--reclaim-staging" in arguments
     assert arguments[arguments.index("--config") + 1] == (
         "configs/swe_verified_safe_pce_audit10_v8_claude_plan_20260913.yaml"
+    )
+
+
+def test_safe_pce_audit10_v9_binds_revised_prompt_diagnostic() -> None:
+    config = load_swe_verified_pce_config(
+        "configs/swe_verified_safe_pce_audit10_v9_claude_plan_20260913.yaml",
+        require_api_keys=False,
+    )
+    raw = yaml.safe_load(config.config_path.read_text(encoding="utf-8"))
+    contract = raw["experiment_contract"]
+
+    assert len(config.instance_ids) == 10
+    assert config.run_dir.name == "safe-pce-audit10-v9-claude-plan-20260913"
+    assert config.plan_submission_protocol == "direct_final_markdown_v3"
+    assert "Investigate only until" in config.plan_prompt
+    assert "materially affects another behavior" in config.plan_prompt
+    assert hashlib.sha256(config.plan_prompt.encode()).hexdigest() == contract[
+        "plan_prompt_text_sha256"
+    ]
+    assert hashlib.sha256(config.code_prompt.encode()).hexdigest() == contract[
+        "code_prompt_text_sha256"
+    ]
+    assert contract["source_audit_disposition"] == (
+        "no_training_authority_until_case_level_review"
+    )
+    assert contract["launched"] is True
+
+    supervisor = yaml.safe_load(
+        Path(
+            "configs/swe_verified_safe_pce_audit10_v9_claude_plan_"
+            "supervisor_v1_20260913.yaml"
+        ).read_text(encoding="utf-8")
+    )
+    arguments = supervisor["arguments"]
+    assert "--require-clean-worktree" in arguments
+    assert "--reclaim-staging" in arguments
+    assert arguments[arguments.index("--config") + 1] == (
+        "configs/swe_verified_safe_pce_audit10_v9_claude_plan_20260913.yaml"
     )
 
 

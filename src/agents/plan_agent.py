@@ -39,6 +39,8 @@ _DIRECT_PLAN_HEADINGS = (
 )
 DIRECT_NRPV_PROTOCOL = "direct_final_plan_v1"
 DIRECT_MARKDOWN_PROTOCOL = "direct_final_markdown_v2"
+DIRECT_MARKDOWN_TEMPLATE_PROTOCOL = "direct_final_markdown_v3"
+DIRECT_MARKDOWN_PLAN_PLACEHOLDER = "[[TASK_SPECIFIC_MARKDOWN_PLAN]]"
 _PROTOCOL_RESIDUE = (
     "</parameter>",
     "<berkeleyos>",
@@ -48,6 +50,7 @@ _PROTOCOL_RESIDUE = (
     "<｜｜DSML｜｜",
     "</｜｜DSML｜｜",
 )
+_PROTOCOL_RESIDUE_LINES = ("</description>",)
 
 PLAN_ACTION_PROTOCOL = """\
 ## Planner action and final-submission protocol
@@ -105,6 +108,37 @@ rejected and no Plan artifact is saved. The Host intercepts a valid response
 before shell parsing and preserves the Plan text verbatim.
 """
 
+MARKDOWN_PLAN_TEMPLATE_ACTION_PROTOCOL = f"""\
+## Planner action and final-submission protocol
+
+During repository exploration, return exactly one executable bash block per
+response. The parser executes the shell body captured from that block. Wait for
+its real observation before choosing the next action.
+
+When the Plan is complete, do not execute another command and do not write the
+Plan to a file. Copy this terminal-response template exactly, replacing the
+placeholder with the complete task-specific Markdown Plan body:
+
+FINAL_PLAN
+# Plan
+
+{DIRECT_MARKDOWN_PLAN_PLACEHOLDER}
+
+Keep the first two lines exactly as shown. Remove the placeholder itself. The
+replacement may use task-appropriate Markdown headings; no fixed subsection
+headings are required. End the response when the Plan ends. There is no closing
+marker and no text may appear outside the Plan.
+
+Before submitting, inspect the complete response. Submit only when it matches
+the template with the placeholder fully replaced, contains substantive
+task-specific content after `# Plan`, and contains no text outside the Plan,
+bash action block, tool-call wrapper, XML or DSML tag, simulated observation,
+or protocol text. A malformed terminal response is rejected and no Plan
+artifact is saved. Correct any problem before submitting; the Host validates
+but never edits the response. A valid Plan is intercepted before shell parsing
+and preserved verbatim.
+"""
+
 
 def _direct_plan_agent_class(default_agent: type, submitted: type) -> type:
     """Add a Plan-only terminal response without changing mini-swe-agent."""
@@ -142,6 +176,7 @@ def _direct_plan_markdown_error(
     plan: str,
     *,
     require_nrpv: bool = True,
+    forbidden_placeholder: str | None = None,
 ) -> str | None:
     """Return a format error without changing the submitted Plan."""
 
@@ -152,6 +187,12 @@ def _direct_plan_markdown_error(
     for residue in _PROTOCOL_RESIDUE:
         if residue in plan:
             return f"the Plan contains tool-protocol residue {residue!r}"
+    plan_lines = {line.strip() for line in plan.splitlines()}
+    for residue in _PROTOCOL_RESIDUE_LINES:
+        if residue in plan_lines:
+            return f"the Plan contains tool-protocol residue {residue!r}"
+    if forbidden_placeholder is not None and forbidden_placeholder in plan:
+        return "the Plan still contains the unexpanded template placeholder"
 
     plan_headings = list(re.finditer(r"(?m)^# Plan\s*$", plan))
     if len(plan_headings) != 1:
@@ -265,6 +306,8 @@ def run(
             agent_kwargs["action_protocol"] = PLAN_ACTION_PROTOCOL
         elif direct_submission_protocol == DIRECT_MARKDOWN_PROTOCOL:
             agent_kwargs["action_protocol"] = MARKDOWN_PLAN_ACTION_PROTOCOL
+        elif direct_submission_protocol == DIRECT_MARKDOWN_TEMPLATE_PROTOCOL:
+            agent_kwargs["action_protocol"] = MARKDOWN_PLAN_TEMPLATE_ACTION_PROTOCOL
         else:
             raise ValueError(
                 f"unsupported direct Plan submission protocol: "
@@ -314,6 +357,11 @@ def run(
         format_error = _direct_plan_markdown_error(
             plan_text,
             require_nrpv=(direct_submission_protocol == DIRECT_NRPV_PROTOCOL),
+            forbidden_placeholder=(
+                DIRECT_MARKDOWN_PLAN_PLACEHOLDER
+                if direct_submission_protocol == DIRECT_MARKDOWN_TEMPLATE_PROTOCOL
+                else None
+            ),
         )
         if format_error is not None:
             _write_failure_trajectory(

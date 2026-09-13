@@ -53,8 +53,11 @@ labels, image manifests, output roots, or baseline identities in a new run.
 | `swe_verified_safe_pce_audit10_supervisor_v5_20260913.yaml` | Completed supervisor identity for the v7 regression smoke. |
 | `swe_verified_safe_pce_audit10_v7_evaluator_repair_supervisor_v1_20260913.yaml` | Completed evaluator-only replay identity for the eight v7 cases with Plan and Code checkpoints. |
 | `prompts/swe_verified_safe_pce_planner_v4_20260913.yaml` | Claude-style Planner prompt with minimum-sufficient repository investigation, task-adaptive depth, developer-approval readiness, and flexible standalone Markdown output. |
-| `swe_verified_safe_pce_audit10_v8_claude_plan_20260913.yaml` | Same-case comparison smoke for the Claude-style Planner; removes required NRPV sections while retaining the repaired Safe PCE execution boundaries. |
-| `swe_verified_safe_pce_audit10_v8_claude_plan_supervisor_v1_20260913.yaml` | Current reviewed supervisor identity for the v8 Claude-style Plan comparison smoke. |
+| `prompts/swe_verified_safe_pce_planner_v5_20260913.yaml` | Revised Claude-style method prompt with a compact stopping policy, material-responsibility transfer, and a single centrally appended positive terminal protocol. |
+| `swe_verified_safe_pce_audit10_v8_claude_plan_20260913.yaml` | Stopped, unconsolidated same-case Claude-style Planner diagnostic; retained as v8 authority and not a relaunch or training-data identity. |
+| `swe_verified_safe_pce_audit10_v8_claude_plan_supervisor_v1_20260913.yaml` | Stopped v8 supervisor identity retained for operational provenance. |
+| `swe_verified_safe_pce_audit10_v9_claude_plan_20260913.yaml` | Launch-authorized same-case v5 Prompt diagnostic; no outcome has training authority until case-level source review. |
+| `swe_verified_safe_pce_audit10_v9_claude_plan_supervisor_v1_20260913.yaml` | Reviewed supervisor identity for the v9 Prompt diagnostic smoke. |
 | `swe_verified_safe_pce_smoke_v1_20260911.yaml` | Prepared, launch-unauthorized two-case Safe PCE contract using direct `FINAL_PLAN` submission and the retained Verified Code/evaluator path. |
 | `frozen_swe_verified_playbook_gepa/20260909_clean444_25e5ce38271c/` | Eligibility-cleaned immutable Verified development snapshot with 444 cases and exhaustive exclusion/audit authorities. |
 | `gepa_verified_reject_playbook_smoke_v1_20260909.yaml` | Completed diagnostic 4-train/2-validation smoke; distributed execution worked, but Checker schema ambiguity and inline Reflection overflow prevented a proposal. |
