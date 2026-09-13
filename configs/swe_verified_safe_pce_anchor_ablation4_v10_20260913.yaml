@@ -1,0 +1,112 @@
+# Authorized four-case ablation of observed Planner prompt anchors.
+mode: swe_verified_pce
+purpose: safe_pce_planner_prompt_anchor_ablation
+
+paths:
+  dataset_snapshot: output/SWE-bench_Verified/swe-verified-pce-inputs/20260831_verified500_91aa3ed5
+  image_manifest: configs/frozen_swe_verified_smoke/safe-pce-anchor-ablation4-v1-20260913-images.json
+  selection_manifest: configs/frozen_swe_verified_smoke/swe-verified-safe-pce-anchor-ablation4-v1-20260913.json
+  prompt_source_config: configs/polybench_pce_hpc_formal_clean_20260825.yaml
+  plan_prompt_source_config: configs/prompts/swe_verified_safe_pce_planner_v6_anchor_ablation_20260913.yaml
+  run_dir: output/SWE-bench_Verified/swe-verified-pce-runs/development/safe-pce-anchor-ablation4-v10-20260913
+
+plan:
+  model: deepseek-v4-flash
+  api_base: https://api.deepseek.com
+  api_key_env: DEEPSEEK_API_KEY
+  temperature: 0.0
+  max_steps: 0
+  cost_limit: 0.0
+  timeout: 1800
+  max_attempts: 3
+  submission_protocol: direct_final_markdown_v3
+
+code:
+  model: deepseek-v4-flash
+  api_base: https://api.deepseek.com
+  api_key_env: DEEPSEEK_API_KEY
+  temperature: 0.0
+  max_steps: 0
+  cost_limit: 0.0
+  timeout: 1800
+  max_attempts: 3
+
+docker:
+  workdir: /testbed
+  timeout: 1800
+  min_free_gb: 20
+  max_cached_images: 75
+
+container:
+  runtime: apptainer
+  module: tools/Apptainer
+  sif_cache_dir: /scratch/users/${USER}/vibe-coding-planning/shared/sif-cache
+  writable_tmpfs: true
+
+hpc:
+  submit: true
+  partition: batch
+  cpus_per_task: 1
+  mem: 4G
+  time: "00:45:00"
+  poll_interval_seconds: 300
+  task_output_grace_seconds: 300
+  missing_task_grace_seconds: 600
+  max_task_attempts: 3
+  remote_env_file: ~/.config/vibe-coding-planning/deepseek.env
+  python_module: lang/Python/3.11
+  container_module: tools/Apptainer
+  python_bin: python3
+  job_name_prefix: swe-verified-safe-pce-anchor-ablation4-v10-20260913
+  worker_config_path: configs/swe_verified_safe_pce_anchor_ablation4_v10_20260913.yaml
+
+evaluator:
+  slurm_timeout_outcome: unknown
+
+experiment_contract:
+  status: launch_authorized
+  selected_cases: 4
+  selection: frozen_outcome_exposed_strong_anchor_cases
+  repositories: 4
+  comparison_run: safe-pce-audit10-v9-claude-plan-20260913
+  comparison_scope: same_cases_images_model_code_prompt_runtime_except_four_planning_instructions
+  ablated_planning_instructions:
+    - coherent_and_repository_grounded_stopping
+    - smallest_implementation_path
+    - material_responsibility_transfer
+    - localized_vs_cross_cutting_adaptive_depth
+  held_constant_known_defects:
+    - direct_final_markdown_v3_provider_protocol_residue
+    - conservative_blacklist_v2_with_known_source_audit_gap
+  plan_prompt_text_sha256: dac5af971a23630878f3a223a15a55f308c020762603fd76db2f5599127af4e1
+  code_prompt_text_sha256: 853c3bef65df3c559d8a800689a8e8a42d4474e1b4f7710579175061d1fe1bdb
+  plan_authority: direct_model_terminal_response_after_FINAL_PLAN
+  plan_submission_protocol: direct_final_markdown_v3
+  plan_format: standalone_task_adaptive_markdown_without_required_nrpv_sections
+  plan_audience: human_developer_before_implementation
+  plan_search_strategy: four_instruction_anchor_ablation
+  local_git_history_policy: multilingual_timesafe_base_and_ancestors
+  repository_baseline_command_timeout: inherit_phase_1800_seconds
+  agent_source_policy: conservative_blacklist_v2_with_known_wrapper_gap
+  source_audit_disposition: no_training_authority_until_case_level_review
+  shell_command_parser: bashlex_ast
+  prompt_url_source: literal_http_urls_in_frozen_issue_description
+  non_prompt_http_policy: allow_but_review
+  agent_filesystem_policy: complete_testbed_with_host_cwd_disabled_and_package_cache_masked
+  evaluator_repository_policy: verify_fresh_immutable_sif_without_reset_or_clean
+  evaluator_source_policy: none
+  historical_run_inputs: none
+  budget:
+    cases: 4
+    planner_and_code_command_timeout_seconds: 1800
+    slurm_worker_walltime: "00:45:00"
+    agent_attempts: 3
+    supervisor_slices: 8
+  success_criteria:
+    - all four cases reach terminal or explicitly operationally incomplete outcomes
+    - Planner trajectory depth and Plan length can be paired with the same v9 cases
+    - scope and preservation framing is compared manually without treating resolved as Plan-quality ground truth
+    - provider residue and source-audit behavior remain observed but are not repaired inside this ablation
+  stopping: finish_all_four_cases_or_report_operational_incomplete
+  operational_incomplete_policy: transport_provider_timeout_or_infrastructure_failure_is_not_unresolved
+  launched: true

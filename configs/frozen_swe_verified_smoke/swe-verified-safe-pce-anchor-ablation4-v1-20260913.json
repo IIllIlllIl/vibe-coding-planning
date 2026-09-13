@@ -1,0 +1,46 @@
+{
+  "schema_version": 1,
+  "selection_id": "swe-verified-safe-pce-anchor-ablation4-v1-20260913",
+  "purpose": "development_only_same_case_planner_prompt_anchor_ablation",
+  "dataset": "SWE-bench/SWE-bench_Verified",
+  "dataset_revision": "91aa3ed51b709be6457e12d00300a6a596d4c6a3",
+  "source_manifest_sha256": "bec1150dbf55c29c0893226c20578bee031406d78db305cdfef7b2b80965143a",
+  "parent_selection_id": "swe-verified-safe-pce-audit10-v3-20260912",
+  "selected_instance_ids": [
+    "pallets__flask-5014",
+    "scikit-learn__scikit-learn-12973",
+    "matplotlib__matplotlib-20488",
+    "sympy__sympy-12419"
+  ],
+  "selected_rows": [
+    {
+      "instance_id": "pallets__flask-5014",
+      "row_sha256": "5cc7ccbd782cf546cdded80c0811a572ba428ecace70022e5982477ad6a47489",
+      "ablation_observation": "localized_plan_expanded_with_scope_justification"
+    },
+    {
+      "instance_id": "scikit-learn__scikit-learn-12973",
+      "row_sha256": "18dbca8ab1db9148194eef4a198264c0ff4e225f34f70ca68b828ef5a7bb803e",
+      "ablation_observation": "responsibility_prose_missed_material_dataflow"
+    },
+    {
+      "instance_id": "matplotlib__matplotlib-20488",
+      "row_sha256": "7e889c587a45f9977bda2a5b3f695f1660581b075ba18a46500f2b1b7e34abc7",
+      "ablation_observation": "coherent_hypothesis_and_scope_lock_in"
+    },
+    {
+      "instance_id": "sympy__sympy-12419",
+      "row_sha256": "cd161eac4c43f86ee7892058d5f272f857123e13039380bb51b1e31e514e97de",
+      "ablation_observation": "cross_component_scope_expansion"
+    }
+  ],
+  "selection_policy": {
+    "fixed_before_runtime": true,
+    "development_only": true,
+    "outcome_exposed": true,
+    "selection_basis": "strongest_observed_planning_anchor_signals_in_v9",
+    "historical_outcomes_used_as_runtime_inputs": false,
+    "repository_count": 4,
+    "quality_or_generalization_claim": false
+  }
+}

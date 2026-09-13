@@ -1,0 +1,23 @@
+schema_version: 1
+session: swe-verified-safe-pce-anchor-ablation4-v10-20260913
+log: .local/hpc-supervisor/swe-verified-safe-pce-anchor-ablation4-v10-20260913.log
+arguments:
+  - --poll-interval
+  - "300"
+  - --slice-time
+  - "00:10:00"
+  - --max-runs
+  - "8"
+  - --state-file
+  - .local/hpc-supervisor/swe-verified-safe-pce-anchor-ablation4-v10-20260913.json
+  - --reclaim-staging
+  - --require-clean-worktree
+  - --batch-script
+  - scripts/hpc_submit_swe_verified_pce.sh
+  - --config
+  - configs/swe_verified_safe_pce_anchor_ablation4_v10_20260913.yaml
+  - --ulhpc-config
+  - /Users/taoran.wang/.config/ulhpc-submit/config.yaml
+  - --job-name
+  - swe-verified-safe-pce-anchor-ablation4-v10-20260913
+  - --submit

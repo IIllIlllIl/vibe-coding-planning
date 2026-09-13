@@ -230,6 +230,17 @@ only. Submission syntax has one authority in the centrally appended action
 protocol rather than being duplicated in the method prompt. It does not alter
 the v8 prompt or artifacts.
 
+V9 was stopped during its second task attempt after eight cases had completed.
+Its trajectories showed that the compact stopping, smallest-path,
+material-responsibility, and task-adaptive-depth instructions could themselves
+anchor investigation and Plan structure. The frozen four-case v10 ablation
+removes only those instructions. It retains the v9 model, flexible Markdown
+contract, Code prompt, evaluator, SIFs, resource limits, provider-residue
+handling, and known source-audit gap so the comparison does not mix method and
+transport repairs. The four cases are development-only and outcome-exposed;
+the ablation supports paired prompt diagnosis, not a quality or generalization
+claim.
+
 ## Historical Evidence
 
 The complete former SWE-Verified PCE/PCCE workflow, including quick50 and

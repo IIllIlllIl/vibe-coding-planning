@@ -335,6 +335,66 @@ def test_safe_pce_audit10_v9_binds_revised_prompt_diagnostic() -> None:
     )
 
 
+def test_safe_pce_anchor_ablation4_v10_changes_only_planning_guidance() -> None:
+    config = load_swe_verified_pce_config(
+        "configs/swe_verified_safe_pce_anchor_ablation4_v10_20260913.yaml",
+        require_api_keys=False,
+    )
+    raw = yaml.safe_load(config.config_path.read_text(encoding="utf-8"))
+    contract = raw["experiment_contract"]
+    selection = json.loads(config.selection_manifest.read_text(encoding="utf-8"))
+    images = json.loads(config.image_manifest.read_text(encoding="utf-8"))
+
+    assert config.instance_ids == (
+        "pallets__flask-5014",
+        "scikit-learn__scikit-learn-12973",
+        "matplotlib__matplotlib-20488",
+        "sympy__sympy-12419",
+    )
+    assert config.run_dir.name == "safe-pce-anchor-ablation4-v10-20260913"
+    assert config.plan_submission_protocol == "direct_final_markdown_v3"
+    assert "state the uncertainty precisely" in config.plan_prompt
+    assert "smallest implementation path" not in config.plan_prompt
+    assert "Investigate only until" not in config.plan_prompt
+    assert "localized issues" not in config.plan_prompt
+    assert "cross-cutting issues" not in config.plan_prompt
+    assert "make that responsibility explicit" not in config.plan_prompt
+    assert hashlib.sha256(config.plan_prompt.encode()).hexdigest() == contract[
+        "plan_prompt_text_sha256"
+    ]
+    assert hashlib.sha256(config.code_prompt.encode()).hexdigest() == contract[
+        "code_prompt_text_sha256"
+    ]
+    assert images["selection_manifest_sha256"] == file_sha256(
+        config.selection_manifest
+    )
+    assert len(images["records"]) == 4
+    assert set(config.instance_ids) == {
+        record["instance_id"] for record in images["records"].values()
+    }
+    assert selection["selection_policy"]["outcome_exposed"] is True
+    assert contract["comparison_run"] == (
+        "safe-pce-audit10-v9-claude-plan-20260913"
+    )
+    assert contract["held_constant_known_defects"] == [
+        "direct_final_markdown_v3_provider_protocol_residue",
+        "conservative_blacklist_v2_with_known_source_audit_gap",
+    ]
+
+    supervisor = yaml.safe_load(
+        Path(
+            "configs/swe_verified_safe_pce_anchor_ablation4_v10_"
+            "supervisor_v1_20260913.yaml"
+        ).read_text(encoding="utf-8")
+    )
+    arguments = supervisor["arguments"]
+    assert "--require-clean-worktree" in arguments
+    assert "--reclaim-staging" in arguments
+    assert arguments[arguments.index("--config") + 1] == (
+        "configs/swe_verified_safe_pce_anchor_ablation4_v10_20260913.yaml"
+    )
+
+
 def test_safe_pce_boundary_smoke_freezes_case8_and_git_boundary_probe() -> None:
     config = load_swe_verified_pce_config(
         "configs/swe_verified_safe_pce_boundary_smoke_v2_20260911.yaml",

@@ -54,10 +54,15 @@ labels, image manifests, output roots, or baseline identities in a new run.
 | `swe_verified_safe_pce_audit10_v7_evaluator_repair_supervisor_v1_20260913.yaml` | Completed evaluator-only replay identity for the eight v7 cases with Plan and Code checkpoints. |
 | `prompts/swe_verified_safe_pce_planner_v4_20260913.yaml` | Claude-style Planner prompt with minimum-sufficient repository investigation, task-adaptive depth, developer-approval readiness, and flexible standalone Markdown output. |
 | `prompts/swe_verified_safe_pce_planner_v5_20260913.yaml` | Revised Claude-style method prompt with a compact stopping policy, material-responsibility transfer, and a single centrally appended positive terminal protocol. |
+| `prompts/swe_verified_safe_pce_planner_v6_anchor_ablation_20260913.yaml` | Four-instruction ablation of v5: removes coherent-grounded stopping, smallest-path, material-responsibility-transfer, and localized/cross-cutting depth guidance while retaining the same flexible Plan and transport contracts. |
 | `swe_verified_safe_pce_audit10_v8_claude_plan_20260913.yaml` | Stopped, unconsolidated same-case Claude-style Planner diagnostic; retained as v8 authority and not a relaunch or training-data identity. |
 | `swe_verified_safe_pce_audit10_v8_claude_plan_supervisor_v1_20260913.yaml` | Stopped v8 supervisor identity retained for operational provenance. |
-| `swe_verified_safe_pce_audit10_v9_claude_plan_20260913.yaml` | Launch-authorized same-case v5 Prompt diagnostic; no outcome has training authority until case-level source review. |
-| `swe_verified_safe_pce_audit10_v9_claude_plan_supervisor_v1_20260913.yaml` | Reviewed supervisor identity for the v9 Prompt diagnostic smoke. |
+| `swe_verified_safe_pce_audit10_v9_claude_plan_20260913.yaml` | Stopped same-case v5 Prompt diagnostic; retained as paired ablation evidence and not as training authority. |
+| `swe_verified_safe_pce_audit10_v9_claude_plan_supervisor_v1_20260913.yaml` | Stopped supervisor identity for the v9 Prompt diagnostic smoke. |
+| `frozen_swe_verified_smoke/swe-verified-safe-pce-anchor-ablation4-v1-20260913.json` | Outcome-exposed four-case development selection with the strongest observed v9 planning-anchor signals. |
+| `frozen_swe_verified_smoke/safe-pce-anchor-ablation4-v1-20260913-images.json` | Selection-bound four-SIF/base-commit authority for the planning-anchor ablation. |
+| `swe_verified_safe_pce_anchor_ablation4_v10_20260913.yaml` | Launch-authorized four-case v5→v6 planning-guidance ablation; provider-residue and source-audit defects are intentionally held constant. |
+| `swe_verified_safe_pce_anchor_ablation4_v10_supervisor_v1_20260913.yaml` | Reviewed shared-supervisor launch identity for the four-case ablation. |
 | `swe_verified_safe_pce_smoke_v1_20260911.yaml` | Prepared, launch-unauthorized two-case Safe PCE contract using direct `FINAL_PLAN` submission and the retained Verified Code/evaluator path. |
 | `frozen_swe_verified_playbook_gepa/20260909_clean444_25e5ce38271c/` | Eligibility-cleaned immutable Verified development snapshot with 444 cases and exhaustive exclusion/audit authorities. |
 | `gepa_verified_reject_playbook_smoke_v1_20260909.yaml` | Completed diagnostic 4-train/2-validation smoke; distributed execution worked, but Checker schema ambiguity and inline Reflection overflow prevented a proposal. |

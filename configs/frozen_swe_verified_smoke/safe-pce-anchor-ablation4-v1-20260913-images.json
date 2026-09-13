@@ -1,0 +1,58 @@
+{
+  "created_at": "2026-09-13T16:59:28+00:00",
+  "manifest_id": "4fbd412f32f96034353848da4011527743c124e7b4164a5a14a0df51ace8b071",
+  "purpose": "swe_verified_sif_snapshot",
+  "records": {
+    "swebench/sweb.eval.x86_64.matplotlib_1776_matplotlib-20488:latest": {
+      "base_commit_verification_output": "",
+      "base_commit_verified": true,
+      "expected_base_commit": "b7ce415c15eb39b026a097a2865da73fbcf15c9c",
+      "instance_id": "matplotlib__matplotlib-20488",
+      "oci_digest": null,
+      "provenance_strength": "retrospective",
+      "sif_bytes": 2130907136,
+      "sif_path": "/scratch/users/twang/vibe-coding-planning/shared/sif-cache/swebench_sweb.eval.x86_64.matplotlib_1776_matplotlib-20488_latest.sif",
+      "sif_sha256": "c6a6907b0c614b56307b970ec7e3f8a6d809699c2bf8f6033cfc056479db4dab",
+      "status": "audited"
+    },
+    "swebench/sweb.eval.x86_64.pallets_1776_flask-5014:latest": {
+      "base_commit_verification_output": "",
+      "base_commit_verified": true,
+      "expected_base_commit": "7ee9ceb71e868944a46e1ff00b506772a53a4f1d",
+      "instance_id": "pallets__flask-5014",
+      "oci_digest": null,
+      "provenance_strength": "retrospective",
+      "sif_bytes": 1056747520,
+      "sif_path": "/scratch/users/twang/vibe-coding-planning/shared/sif-cache/swebench_sweb.eval.x86_64.pallets_1776_flask-5014_latest.sif",
+      "sif_sha256": "9dd917171c746fa627c3727e3118d8f4ca60c3a49b808412a794beebd342990f",
+      "status": "audited"
+    },
+    "swebench/sweb.eval.x86_64.scikit-learn_1776_scikit-learn-12973:latest": {
+      "base_commit_verification_output": "",
+      "base_commit_verified": true,
+      "expected_base_commit": "a7b8b9e9e16d4e15fabda5ae615086c2e1c47d8a",
+      "instance_id": "scikit-learn__scikit-learn-12973",
+      "oci_digest": null,
+      "provenance_strength": "retrospective",
+      "sif_bytes": 1386442752,
+      "sif_path": "/scratch/users/twang/vibe-coding-planning/shared/sif-cache/swebench_sweb.eval.x86_64.scikit-learn_1776_scikit-learn-12973_latest.sif",
+      "sif_sha256": "4df1baa8a34b5ae356e577e4f212b3404d6f6a85c456c73512f2ed69582146bd",
+      "status": "audited"
+    },
+    "swebench/sweb.eval.x86_64.sympy_1776_sympy-12419:latest": {
+      "base_commit_verification_output": "",
+      "base_commit_verified": true,
+      "expected_base_commit": "479939f8c65c8c2908bbedc959549a257a7c0b0b",
+      "instance_id": "sympy__sympy-12419",
+      "oci_digest": null,
+      "provenance_strength": "retrospective",
+      "sif_bytes": 977907712,
+      "sif_path": "/scratch/users/twang/vibe-coding-planning/shared/sif-cache/swebench_sweb.eval.x86_64.sympy_1776_sympy-12419_latest.sif",
+      "sif_sha256": "8b3e9987b049bfbb210d928cc535af276f7b242af8c5f3345793ae3eb6f34cb5",
+      "status": "audited"
+    }
+  },
+  "schema_version": 1,
+  "selection_manifest_sha256": "68bc5281498e38f1b618c201dc67edcff3e5ed142da6c6a85fc082caa1c40013",
+  "source_manifest_sha256": "bec1150dbf55c29c0893226c20578bee031406d78db305cdfef7b2b80965143a"
+}
