@@ -198,6 +198,70 @@ def test_safe_pce_planner_v2_targets_human_review_and_exact_submission() -> None
     assert "exactly follows the demonstrated terminal-response structure" in prompt
 
 
+def test_safe_pce_planner_v4_uses_claude_style_search_and_no_nrpv() -> None:
+    prompt = yaml.safe_load(
+        Path(
+            "configs/prompts/swe_verified_safe_pce_planner_v4_20260913.yaml"
+        ).read_text(encoding="utf-8")
+    )["prompts"]["plan_system"]
+    normalized = " ".join(prompt.split())
+
+    assert "Investigate only far enough" in prompt
+    assert "smallest relevant implementation path" in normalized
+    assert "reproduction" not in prompt.lower()
+    assert "The Plan is ready when" in prompt
+    assert "coherent, repository-grounded approach" in normalized
+    assert "approve, question, or redirect" in normalized
+    assert "Include only details that are material to that decision" in normalized
+    assert "It should:" not in prompt
+    assert "Before another exploratory command" in normalized
+    assert "under `/opt/miniconda3/envs`" in normalized
+    assert "For a small, well-localized issue" in normalized
+    assert "For a cross-cutting issue" in normalized
+    assert "state the uncertainty precisely" in normalized
+    assert "Remote Git operations" not in prompt
+    assert "{{nrpv_block}}" not in prompt
+    assert "Navigation (N)" not in prompt
+    assert "Organize the Plan to" in prompt
+    assert "instead of following a fixed section template" in normalized
+
+
+def test_safe_pce_audit10_v8_binds_flexible_markdown_smoke() -> None:
+    config = load_swe_verified_pce_config(
+        "configs/swe_verified_safe_pce_audit10_v8_claude_plan_20260913.yaml",
+        require_api_keys=False,
+    )
+    raw = yaml.safe_load(config.config_path.read_text(encoding="utf-8"))
+    contract = raw["experiment_contract"]
+
+    assert len(config.instance_ids) == 10
+    assert config.run_dir.name == "safe-pce-audit10-v8-claude-plan-20260913"
+    assert config.plan_submission_protocol == "direct_final_markdown_v2"
+    assert "{{nrpv_block}}" not in config.plan_prompt
+    assert "Navigation (N)" not in config.plan_prompt
+    assert hashlib.sha256(config.plan_prompt.encode()).hexdigest() == contract[
+        "plan_prompt_text_sha256"
+    ]
+    assert hashlib.sha256(config.code_prompt.encode()).hexdigest() == contract[
+        "code_prompt_text_sha256"
+    ]
+    assert contract["comparison_run"] == "safe-pce-audit10-v7-20260913"
+    assert contract["launched"] is True
+
+    supervisor = yaml.safe_load(
+        Path(
+            "configs/swe_verified_safe_pce_audit10_v8_claude_plan_"
+            "supervisor_v1_20260913.yaml"
+        ).read_text(encoding="utf-8")
+    )
+    arguments = supervisor["arguments"]
+    assert "--require-clean-worktree" in arguments
+    assert "--reclaim-staging" in arguments
+    assert arguments[arguments.index("--config") + 1] == (
+        "configs/swe_verified_safe_pce_audit10_v8_claude_plan_20260913.yaml"
+    )
+
+
 def test_safe_pce_boundary_smoke_freezes_case8_and_git_boundary_probe() -> None:
     config = load_swe_verified_pce_config(
         "configs/swe_verified_safe_pce_boundary_smoke_v2_20260911.yaml",

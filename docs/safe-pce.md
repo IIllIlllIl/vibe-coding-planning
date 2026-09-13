@@ -189,6 +189,24 @@ PCE training evidence. See
 [`knowledge/safe-pce-audit10-data-quality.md`](knowledge/safe-pce-audit10-data-quality.md)
 for the case-level audit and required boundary repairs.
 
+### Claude-style Plan comparison
+
+The v8 development smoke reuses the exact audit10 case selection, SIFs, model,
+Code prompt, and repaired execution boundaries from v7. Its only intended
+method change is the initial Planner contract. The Planner searches for the
+minimum repository evidence sufficient for a developer to approve or redirect
+the approach and writes a task-adaptive standalone Markdown Plan rather than
+filling mandatory NRPV sections. It does not prescribe reproduction as a Plan
+stage or heading.
+
+The `direct_final_markdown_v2` submission protocol still requires a terminal
+`FINAL_PLAN` followed by exactly one `# Plan` heading and substantive Markdown.
+Protocol residue, empty content, or a malformed outer response is rejected and
+retried without Host rewriting. It deliberately does not require Navigation,
+Reproduction, Patch, or Validation headings. The comparison should examine
+exploration depth, timeout rate, Plan readability, and material evidence—not
+interpret independent Code outcomes as a direct measure of prompt quality.
+
 ## Historical Evidence
 
 The complete former SWE-Verified PCE/PCCE workflow, including quick50 and

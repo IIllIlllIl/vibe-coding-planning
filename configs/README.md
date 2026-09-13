@@ -50,7 +50,11 @@ labels, image manifests, output roots, or baseline identities in a new run.
 | `swe_verified_safe_pce_audit10_supervisor_v3_20260912.yaml` | Prepared supervisor identity for the v5 source-boundary smoke; presence does not authorize launch. |
 | `swe_verified_safe_pce_audit10_v6_20260912.yaml` | Stopped 8/10 successor smoke; retained as source-boundary and retry evidence, not a relaunch identity. |
 | `swe_verified_safe_pce_audit10_v7_20260913.yaml` | Authorized ten-case regression smoke for evaluator preservation, Bash-AST source auditing, package-cache masking, human-review Plans, and durable evidence references. |
-| `swe_verified_safe_pce_audit10_supervisor_v5_20260913.yaml` | Current reviewed supervisor identity for the v7 regression smoke. |
+| `swe_verified_safe_pce_audit10_supervisor_v5_20260913.yaml` | Completed supervisor identity for the v7 regression smoke. |
+| `swe_verified_safe_pce_audit10_v7_evaluator_repair_supervisor_v1_20260913.yaml` | Completed evaluator-only replay identity for the eight v7 cases with Plan and Code checkpoints. |
+| `prompts/swe_verified_safe_pce_planner_v4_20260913.yaml` | Claude-style Planner prompt with minimum-sufficient repository investigation, task-adaptive depth, developer-approval readiness, and flexible standalone Markdown output. |
+| `swe_verified_safe_pce_audit10_v8_claude_plan_20260913.yaml` | Same-case comparison smoke for the Claude-style Planner; removes required NRPV sections while retaining the repaired Safe PCE execution boundaries. |
+| `swe_verified_safe_pce_audit10_v8_claude_plan_supervisor_v1_20260913.yaml` | Current reviewed supervisor identity for the v8 Claude-style Plan comparison smoke. |
 | `swe_verified_safe_pce_smoke_v1_20260911.yaml` | Prepared, launch-unauthorized two-case Safe PCE contract using direct `FINAL_PLAN` submission and the retained Verified Code/evaluator path. |
 | `frozen_swe_verified_playbook_gepa/20260909_clean444_25e5ce38271c/` | Eligibility-cleaned immutable Verified development snapshot with 444 cases and exhaustive exclusion/audit authorities. |
 | `gepa_verified_reject_playbook_smoke_v1_20260909.yaml` | Completed diagnostic 4-train/2-validation smoke; distributed execution worked, but Checker schema ambiguity and inline Reflection overflow prevented a proposal. |

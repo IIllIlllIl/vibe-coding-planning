@@ -308,6 +308,11 @@ class SWEVerifiedPCERunner:
                     evidence_dir=self.attempt_dir / "repository_baselines" / "plan",
                     timeout=self.config.plan.timeout,
                 )
+                submission_protocol = getattr(
+                    self.config,
+                    "plan_submission_protocol",
+                    "legacy_stdout_v1",
+                )
                 plan, trajectory = plan_agent.run(
                     self._base_config(self.config.plan),
                     case.issue_description,
@@ -323,18 +328,13 @@ class SWEVerifiedPCERunner:
                     ),
                     failure_trajectory_path=self.attempt_dir / "plan_failure.json",
                     require_direct_submission=(
-                        getattr(
-                            self.config,
-                            "plan_submission_protocol",
-                            "legacy_stdout_v1",
-                        )
-                        == "direct_final_plan_v1"
+                        submission_protocol
+                        in {
+                            plan_agent.DIRECT_NRPV_PROTOCOL,
+                            plan_agent.DIRECT_MARKDOWN_PROTOCOL,
+                        }
                     ),
-                )
-                submission_protocol = getattr(
-                    self.config,
-                    "plan_submission_protocol",
-                    "legacy_stdout_v1",
+                    direct_submission_protocol=submission_protocol,
                 )
                 plan_checkpoint = {
                     "plan": plan,

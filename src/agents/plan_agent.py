@@ -37,6 +37,8 @@ _DIRECT_PLAN_HEADINGS = (
     "## Patch (P)",
     "## Validation (V)",
 )
+DIRECT_NRPV_PROTOCOL = "direct_final_plan_v1"
+DIRECT_MARKDOWN_PROTOCOL = "direct_final_markdown_v2"
 _PROTOCOL_RESIDUE = (
     "</parameter>",
     "<berkeleyos>",
@@ -80,6 +82,29 @@ artifact is saved. The Host intercepts a valid response before shell parsing
 and preserves the Plan text verbatim.
 """
 
+MARKDOWN_PLAN_ACTION_PROTOCOL = """\
+## Planner action and final-submission protocol
+
+During repository exploration, return exactly one executable bash block per
+response. The parser executes the shell body captured from that block. Wait for
+its real observation before choosing the next action.
+
+When the Plan is complete, do not execute another command and do not write the
+Plan to a file. The terminal response must begin with these exact two lines:
+
+FINAL_PLAN
+# Plan
+
+Continue after `# Plan` with the complete task-specific Markdown Plan. No fixed
+subsection headings are required.
+
+The terminal response must contain no text outside the Plan and no bash action
+block. `FINAL_PLAN` and `# Plan` must each occur exactly once. The Plan must
+contain substantive content after `# Plan`. A malformed terminal response is
+rejected and no Plan artifact is saved. The Host intercepts a valid response
+before shell parsing and preserves the Plan text verbatim.
+"""
+
 
 def _direct_plan_agent_class(default_agent: type, submitted: type) -> type:
     """Add a Plan-only terminal response without changing mini-swe-agent."""
@@ -113,7 +138,11 @@ def _extract_result(agent: Any, exception_name: str, exception_msg: str) -> str 
     return None
 
 
-def _direct_plan_markdown_error(plan: str) -> str | None:
+def _direct_plan_markdown_error(
+    plan: str,
+    *,
+    require_nrpv: bool = True,
+) -> str | None:
     """Return a format error without changing the submitted Plan."""
 
     if not plan or not plan.strip():
@@ -123,6 +152,14 @@ def _direct_plan_markdown_error(plan: str) -> str | None:
     for residue in _PROTOCOL_RESIDUE:
         if residue in plan:
             return f"the Plan contains tool-protocol residue {residue!r}"
+
+    plan_headings = list(re.finditer(r"(?m)^# Plan\s*$", plan))
+    if len(plan_headings) != 1:
+        return "the Plan must contain exactly one '# Plan' heading"
+    if not plan[plan_headings[0].end() :].strip():
+        return "the Plan contains no substantive content after '# Plan'"
+    if not require_nrpv:
+        return None
 
     positions: list[int] = []
     for heading in _DIRECT_PLAN_HEADINGS:
@@ -170,6 +207,7 @@ def run(
     model_wrapper: Callable[[Any], Any] | None = None,
     failure_trajectory_path: Path | None = None,
     require_direct_submission: bool = False,
+    direct_submission_protocol: str = DIRECT_NRPV_PROTOCOL,
 ) -> tuple[str, list[dict[str, Any]]]:
     """Run the plan generation agent.
 
@@ -223,7 +261,15 @@ def run(
 
     agent_kwargs: dict[str, Any] = {}
     if require_direct_submission:
-        agent_kwargs["action_protocol"] = PLAN_ACTION_PROTOCOL
+        if direct_submission_protocol == DIRECT_NRPV_PROTOCOL:
+            agent_kwargs["action_protocol"] = PLAN_ACTION_PROTOCOL
+        elif direct_submission_protocol == DIRECT_MARKDOWN_PROTOCOL:
+            agent_kwargs["action_protocol"] = MARKDOWN_PLAN_ACTION_PROTOCOL
+        else:
+            raise ValueError(
+                f"unsupported direct Plan submission protocol: "
+                f"{direct_submission_protocol}"
+            )
     agent = build_default_agent(
         PlanAgent,
         model=model,
@@ -265,7 +311,10 @@ def run(
         # Safe PCE authority: exact model terminal text, intercepted before
         # action parsing and therefore never reconstructed through /tmp.
         plan_text = submitted_text[len(_DIRECT_PLAN_PAYLOAD_PREFIX) :]
-        format_error = _direct_plan_markdown_error(plan_text)
+        format_error = _direct_plan_markdown_error(
+            plan_text,
+            require_nrpv=(direct_submission_protocol == DIRECT_NRPV_PROTOCOL),
+        )
         if format_error is not None:
             _write_failure_trajectory(
                 failure_trajectory_path,

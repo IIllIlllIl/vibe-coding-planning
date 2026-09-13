@@ -20,6 +20,13 @@ DIRECT_PLAN_TEXT = (
     "## Validation (V)\nRun the focused test."
 )
 
+DIRECT_MARKDOWN_TEXT = (
+    "# Plan\n\n"
+    "Update the parser's token handling in `src/parser.py` while preserving "
+    "the existing public behavior.\n\n"
+    "## Validation\nRun the focused parser regression test."
+)
+
 
 class MockLiteLLMModel:
     def __init__(self, *, model_name: str, model_kwargs: dict, cost_tracking: str = "ignore_errors"):
@@ -80,6 +87,15 @@ class MockDefaultAgentDirectTrailingWhitespace(MockDefaultAgent):
         plan = DIRECT_PLAN_TEXT + "\n\n"
         self.messages[-1]["content"] = "FINAL_PLAN\n" + plan
         return "Submitted", plan_agent._DIRECT_PLAN_PAYLOAD_PREFIX + plan
+
+
+class MockDefaultAgentDirectMarkdown(MockDefaultAgent):
+    def run(self, **kwargs):
+        self.messages[-1]["content"] = "FINAL_PLAN\n" + DIRECT_MARKDOWN_TEXT
+        return (
+            "Submitted",
+            plan_agent._DIRECT_PLAN_PAYLOAD_PREFIX + DIRECT_MARKDOWN_TEXT,
+        )
 
 
 class MockDefaultAgentLimitExceeded(MockDefaultAgent):
@@ -255,6 +271,29 @@ class TestRunSuccess:
         )
         assert plan == DIRECT_PLAN_TEXT + "\n\n"
 
+    @patch("src.agents.plan_agent.import_minisweagent")
+    def test_safe_pce_accepts_flexible_markdown_without_nrpv(
+        self, mock_import, config, mock_env
+    ):
+        mock_import.return_value = (
+            MockDefaultAgentDirectMarkdown,
+            MockLiteLLMModel,
+            object,
+        )
+        plan, _ = plan_agent.run(
+            config,
+            "Fix parser bug",
+            mock_env,
+            require_direct_submission=True,
+            direct_submission_protocol=plan_agent.DIRECT_MARKDOWN_PROTOCOL,
+        )
+
+        assert plan == DIRECT_MARKDOWN_TEXT
+        system = MockDefaultAgent.last_kwargs["system_template"]
+        assert "No fixed subsection headings are required" in " ".join(system.split())
+        assert "[The complete standalone Markdown Plan" not in system
+        assert "## Navigation (N)" not in system
+
 
 class TestRunValidation:
     @pytest.mark.parametrize(
@@ -290,6 +329,40 @@ class TestRunValidation:
                 mock_env,
                 require_direct_submission=True,
             )
+        assert caught.value.reason == "plan_invalid_markdown"
+        assert caught.value.trajectory[-1]["content"] == "FINAL_PLAN\n" + plan
+
+    @pytest.mark.parametrize(
+        ("plan", "message"),
+        [
+            ("# Plan\n", "no substantive content"),
+            ("# Plan\nUseful plan.\n# Plan\nDuplicate.", "exactly one"),
+            ("# Plan\nUseful plan.</parameter>", "protocol residue"),
+        ],
+    )
+    @patch("src.agents.plan_agent.import_minisweagent")
+    def test_flexible_markdown_rejects_only_outer_contract_failures(
+        self, mock_import, plan, message, config, mock_env
+    ):
+        class InvalidDirectMarkdown(MockDefaultAgent):
+            def run(self, **kwargs):
+                self.messages[-1]["content"] = "FINAL_PLAN\n" + plan
+                return "Submitted", plan_agent._DIRECT_PLAN_PAYLOAD_PREFIX + plan
+
+        mock_import.return_value = (
+            InvalidDirectMarkdown,
+            MockLiteLLMModel,
+            object,
+        )
+        with pytest.raises(AgentTaskError, match=message) as caught:
+            plan_agent.run(
+                config,
+                "Fix parser bug",
+                mock_env,
+                require_direct_submission=True,
+                direct_submission_protocol=plan_agent.DIRECT_MARKDOWN_PROTOCOL,
+            )
+
         assert caught.value.reason == "plan_invalid_markdown"
         assert caught.value.trajectory[-1]["content"] == "FINAL_PLAN\n" + plan
 
