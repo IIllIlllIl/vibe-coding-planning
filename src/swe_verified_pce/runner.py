@@ -17,6 +17,7 @@ from src.environment.repository_baseline import restore_repository_to_base
 from src.environment.source_access import (
     SOURCE_ACCESS_POLICY_VERSION,
     extract_http_urls,
+    summarize_source_access_log,
 )
 from src.exceptions import FatalError
 from src.optimization.audit import AuditedModel, JsonlLogger
@@ -333,6 +334,7 @@ class SWEVerifiedPCERunner:
                             plan_agent.DIRECT_NRPV_PROTOCOL,
                             plan_agent.DIRECT_MARKDOWN_PROTOCOL,
                             plan_agent.DIRECT_MARKDOWN_TEMPLATE_PROTOCOL,
+                            plan_agent.DIRECT_BOUNDED_MARKDOWN_PROTOCOL,
                         }
                     ),
                     direct_submission_protocol=submission_protocol,
@@ -343,6 +345,26 @@ class SWEVerifiedPCERunner:
                     "submission_protocol": submission_protocol,
                     "trajectory": list(trajectory),
                 }
+                if submission_protocol == plan_agent.DIRECT_BOUNDED_MARKDOWN_PROTOCOL:
+                    raw_submission = plan_agent.direct_plan_terminal_response(
+                        trajectory
+                    )
+                    if raw_submission is None:
+                        raise FatalError(
+                            "bounded Plan submission is absent from its trajectory"
+                        )
+                    plan_checkpoint.update(
+                        {
+                            "raw_plan_submission": raw_submission,
+                            "raw_plan_submission_sha256": hashlib.sha256(
+                                raw_submission.encode()
+                            ).hexdigest(),
+                            "plan_boundary": {
+                                "start_marker": plan_agent.DIRECT_PLAN_MARKER,
+                                "end_marker": plan_agent.DIRECT_PLAN_END_MARKER,
+                            },
+                        }
+                    )
                 self._save_checkpoint("plan", plan_checkpoint)
             finally:
                 self._best_effort_environment_cleanup(env, phase="plan")
@@ -490,6 +512,7 @@ class SWEVerifiedPCERunner:
                 self.source_access_path
             ),
             "log_sha256": file_sha256(self.source_access_path),
+            "summary": summarize_source_access_log(self.source_access_path),
         }
         return result
 
@@ -499,7 +522,7 @@ class SWEVerifiedPCERunner:
         code_checkpoint: dict[str, Any],
         evaluator_checkpoint: dict[str, Any],
     ) -> dict[str, Any]:
-        return {
+        result = {
             "pce_status": "completed",
             "terminal_phase": "evaluate",
             "terminal_reason": str(
@@ -525,6 +548,14 @@ class SWEVerifiedPCERunner:
             "evaluator_result": dict(evaluator_checkpoint["evaluator_result"]),
             "final_validation_label": None,
         }
+        for key in (
+            "raw_plan_submission",
+            "raw_plan_submission_sha256",
+            "plan_boundary",
+        ):
+            if key in plan_checkpoint:
+                result[key] = plan_checkpoint[key]
+        return result
 
 
 def checkpoint_identity(

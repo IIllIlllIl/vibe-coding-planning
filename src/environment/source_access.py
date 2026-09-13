@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from collections.abc import Iterable
 import hashlib
 import json
 from pathlib import Path
@@ -12,7 +13,8 @@ from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
 import bashlex
 
 
-SOURCE_ACCESS_POLICY_VERSION = "conservative_blacklist_v2"
+SOURCE_ACCESS_POLICY_VERSION = "conservative_blacklist_v3"
+SOURCE_ACCESS_SUMMARY_VERSION = 1
 
 _URL_RE = re.compile(r"https?://[^\s'\"<>]+", re.IGNORECASE)
 _PYTHON_HTTP_RE = re.compile(
@@ -99,6 +101,16 @@ def _invocation(segment: list[str]) -> list[str]:
         r"^[A-Za-z_][A-Za-z0-9_]*=", segment[cursor]
     ):
         cursor += 1
+    if cursor < len(segment) and Path(segment[cursor]).name == "timeout":
+        cursor += 1
+        while cursor < len(segment) and segment[cursor].startswith("-"):
+            option = segment[cursor]
+            cursor += 1
+            if option in {"-k", "--kill-after", "-s", "--signal"}:
+                cursor += 1
+        # GNU timeout requires one duration before the wrapped command.
+        if cursor < len(segment):
+            cursor += 1
     return segment[cursor:]
 
 
@@ -369,3 +381,80 @@ def append_source_access_event(
     record["command_sha256"] = hashlib.sha256(command.encode()).hexdigest()
     with path.open("a", encoding="utf-8") as handle:
         handle.write(json.dumps(record, ensure_ascii=False, sort_keys=True) + "\n")
+
+
+def summarize_source_access_logs(paths: Iterable[Path]) -> dict[str, Any]:
+    """Build a compact index over one or more retained source-access logs."""
+
+    counts: dict[str, dict[str, int]] = {
+        "decisions": {},
+        "reasons": {},
+        "clients": {},
+        "phases": {},
+        "execution_statuses": {},
+    }
+    event_count = 0
+    malformed_event_count = 0
+    prompt_url_match_count = 0
+    observed_url_count = 0
+    executed_event_count = 0
+
+    for path in paths:
+        if not path.is_file():
+            continue
+        for line in path.read_text(encoding="utf-8").splitlines():
+            if not line.strip():
+                continue
+            try:
+                event = json.loads(line)
+            except (json.JSONDecodeError, TypeError):
+                malformed_event_count += 1
+                continue
+            if not isinstance(event, dict):
+                malformed_event_count += 1
+                continue
+            event_count += 1
+            for source_key, summary_key in (
+                ("decision", "decisions"),
+                ("reason", "reasons"),
+                ("client", "clients"),
+                ("phase", "phases"),
+                ("execution_status", "execution_statuses"),
+            ):
+                value = event.get(source_key)
+                if isinstance(value, str) and value:
+                    bucket = counts[summary_key]
+                    bucket[value] = bucket.get(value, 0) + 1
+            matches = event.get("prompt_url_match", [])
+            if isinstance(matches, list):
+                prompt_url_match_count += sum(value is True for value in matches)
+            urls = event.get("urls", [])
+            if isinstance(urls, list):
+                observed_url_count += len(urls)
+            if event.get("executed") is True:
+                executed_event_count += 1
+
+    decisions = counts["decisions"]
+    return {
+        "schema_version": SOURCE_ACCESS_SUMMARY_VERSION,
+        "event_count": event_count,
+        "malformed_event_count": malformed_event_count,
+        **counts,
+        "observed_url_count": observed_url_count,
+        "prompt_url_match_count": prompt_url_match_count,
+        "executed_event_count": executed_event_count,
+        "not_executed_event_count": event_count - executed_event_count,
+        "blocked_event_count": decisions.get("block", 0),
+        "review_event_count": decisions.get("allow_but_review", 0),
+        "manual_review_recommended": bool(
+            malformed_event_count
+            or decisions.get("block", 0)
+            or decisions.get("allow_but_review", 0)
+        ),
+    }
+
+
+def summarize_source_access_log(path: Path) -> dict[str, Any]:
+    """Build a compact index over one retained source-access log."""
+
+    return summarize_source_access_logs([path])

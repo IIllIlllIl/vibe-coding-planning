@@ -27,6 +27,14 @@ DIRECT_MARKDOWN_TEXT = (
     "## Validation\nRun the focused parser regression test."
 )
 
+BOUNDED_MARKDOWN_PLAN = DIRECT_MARKDOWN_TEXT + "\n"
+BOUNDED_MARKDOWN_RAW = (
+    "FINAL_PLAN\n"
+    + BOUNDED_MARKDOWN_PLAN
+    + "END_PLAN\n"
+    + "Here is another explanation.</parameter>"
+)
+
 
 class MockLiteLLMModel:
     def __init__(self, *, model_name: str, model_kwargs: dict, cost_tracking: str = "ignore_errors"):
@@ -95,6 +103,16 @@ class MockDefaultAgentDirectMarkdown(MockDefaultAgent):
         return (
             "Submitted",
             plan_agent._DIRECT_PLAN_PAYLOAD_PREFIX + DIRECT_MARKDOWN_TEXT,
+        )
+
+
+class MockDefaultAgentDirectBoundedMarkdown(MockDefaultAgent):
+    def run(self, **kwargs):
+        self.messages[-1]["content"] = BOUNDED_MARKDOWN_RAW
+        return (
+            "Submitted",
+            plan_agent._DIRECT_PLAN_ENVELOPE_PAYLOAD_PREFIX
+            + BOUNDED_MARKDOWN_RAW,
         )
 
 
@@ -211,6 +229,27 @@ class TestRunSuccess:
             "received": "```bash\npwd\n```"
         }
 
+    def test_bounded_terminal_response_bypasses_shell_and_preserves_raw_text(self):
+        class SubmittedForTest(Exception):
+            pass
+
+        class BaseAgent:
+            def get_observation(self, _response):
+                raise AssertionError("shell parser must not receive FINAL_PLAN")
+
+        agent = plan_agent._direct_plan_agent_class(
+            BaseAgent,
+            SubmittedForTest,
+            bounded=True,
+        )()
+        with pytest.raises(SubmittedForTest) as raised:
+            agent.get_observation({"content": BOUNDED_MARKDOWN_RAW})
+
+        assert str(raised.value) == (
+            plan_agent._DIRECT_PLAN_ENVELOPE_PAYLOAD_PREFIX
+            + BOUNDED_MARKDOWN_RAW
+        )
+
     @patch("src.agents.plan_agent.import_minisweagent")
     def test_limit_exceeded_raises_task_error(self, mock_import, config, mock_env):
         """When DefaultAgent hits a limit without submitting, raise TaskError."""
@@ -322,8 +361,108 @@ class TestRunSuccess:
         assert "simulated observation" in normalized
         assert "## Navigation (N)" not in system
 
+    @patch("src.agents.plan_agent.import_minisweagent")
+    def test_bounded_markdown_uses_only_text_before_end_marker(
+        self, mock_import, config, mock_env
+    ):
+        mock_import.return_value = (
+            MockDefaultAgentDirectBoundedMarkdown,
+            MockLiteLLMModel,
+            object,
+        )
+
+        plan, messages = plan_agent.run(
+            config,
+            "Fix parser bug",
+            mock_env,
+            require_direct_submission=True,
+            direct_submission_protocol=(
+                plan_agent.DIRECT_BOUNDED_MARKDOWN_PROTOCOL
+            ),
+        )
+
+        assert plan == BOUNDED_MARKDOWN_PLAN
+        assert plan_agent.direct_plan_terminal_response(messages) == (
+            BOUNDED_MARKDOWN_RAW
+        )
+        assert "another explanation" not in plan
+        assert "</parameter>" not in plan
+        system = MockDefaultAgent.last_kwargs["system_template"]
+        assert (
+            "FINAL_PLAN\n# Plan\n\n[[TASK_SPECIFIC_MARKDOWN_PLAN]]\nEND_PLAN"
+            in system
+        )
+        assert "only the exact text between" in " ".join(system.split())
+
 
 class TestRunValidation:
+    @patch("src.agents.plan_agent.import_minisweagent")
+    def test_bounded_markdown_rejects_protocol_residue_inside_boundary(
+        self, mock_import, config, mock_env
+    ):
+        class ResidueBeforeEnd(MockDefaultAgent):
+            def run(self, **kwargs):
+                raw = (
+                    "FINAL_PLAN\n"
+                    + DIRECT_MARKDOWN_TEXT
+                    + "\n</parameter>\nEND_PLAN"
+                )
+                self.messages[-1]["content"] = raw
+                return (
+                    "Submitted",
+                    plan_agent._DIRECT_PLAN_ENVELOPE_PAYLOAD_PREFIX + raw,
+                )
+
+        mock_import.return_value = (
+            ResidueBeforeEnd,
+            MockLiteLLMModel,
+            object,
+        )
+        with pytest.raises(AgentTaskError, match="tool-protocol residue") as caught:
+            plan_agent.run(
+                config,
+                "Fix parser bug",
+                mock_env,
+                require_direct_submission=True,
+                direct_submission_protocol=(
+                    plan_agent.DIRECT_BOUNDED_MARKDOWN_PROTOCOL
+                ),
+            )
+
+        assert caught.value.reason == "plan_invalid_markdown"
+
+    @patch("src.agents.plan_agent.import_minisweagent")
+    def test_bounded_markdown_rejects_missing_end_marker(
+        self, mock_import, config, mock_env
+    ):
+        class MissingEndMarker(MockDefaultAgent):
+            def run(self, **kwargs):
+                raw = "FINAL_PLAN\n" + DIRECT_MARKDOWN_TEXT
+                self.messages[-1]["content"] = raw
+                return (
+                    "Submitted",
+                    plan_agent._DIRECT_PLAN_ENVELOPE_PAYLOAD_PREFIX + raw,
+                )
+
+        mock_import.return_value = (
+            MissingEndMarker,
+            MockLiteLLMModel,
+            object,
+        )
+        with pytest.raises(AgentTaskError, match="missing an exact 'END_PLAN'") as caught:
+            plan_agent.run(
+                config,
+                "Fix parser bug",
+                mock_env,
+                require_direct_submission=True,
+                direct_submission_protocol=(
+                    plan_agent.DIRECT_BOUNDED_MARKDOWN_PROTOCOL
+                ),
+            )
+
+        assert caught.value.reason == "plan_invalid_markdown"
+        assert caught.value.trajectory[-1]["content"].startswith("FINAL_PLAN\n")
+
     def test_description_text_is_not_blanket_rejected_as_protocol_residue(self):
         plan = "# Plan\n\nUpdate the literal `</description>` parsing behavior."
 

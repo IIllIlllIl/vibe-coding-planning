@@ -25,7 +25,7 @@ Each Slurm array element owns one case:
 
 ```text
 frozen task + verified base commit
-  -> isolated Planner workspace -> direct FINAL_PLAN submission
+  -> isolated Planner workspace -> bounded FINAL_PLAN ... END_PLAN submission
   -> atomic Plan checkpoint + SHA-256 verification
   -> fresh isolated Code workspace(issue + exact Plan text)
   -> atomic patch checkpoint
@@ -33,21 +33,31 @@ frozen task + verified base commit
   -> resolved | unresolved | unknown
 ```
 
-Planner completion consists of `FINAL_PLAN` on its own line followed directly
-by the standalone Markdown Plan. A project-local Agent adapter recognizes that
-terminal response before shell parsing. Code fences, backticks, `$()` syntax,
-quotes, and template fragments in the Plan therefore cannot be executed or
-reconstructed as shell. Legacy stdout/file submission is rejected and retried;
-no `/tmp` file can override the submitted Plan.
+The current `direct_final_markdown_v4` completion protocol is:
 
-For direct Safe PCE submissions, the Host validates but never repairs the Plan.
-The artifact must start with `# Plan`, contain exactly one nonempty Navigation,
-Reproduction, Patch, and Validation section in that order, and contain no known
-tool-protocol residue. An invalid submission raises an Agent contract failure
-before any Plan checkpoint is written, so the ordinary bounded Slurm retry
-starts a fresh Planner. The Host removes only the fixed `FINAL_PLAN` transport
-framing and preserves the remaining Plan text without trimming or normalizing
-it.
+```text
+FINAL_PLAN
+# Plan
+
+<task-specific Markdown Plan>
+END_PLAN
+```
+
+A project-local Agent adapter recognizes that terminal response before shell
+parsing. Code fences, backticks, `$()` syntax, quotes, and template fragments
+in the Plan therefore cannot be executed or reconstructed as shell. The Host
+selects the exact bytes between the two boundary markers as Plan authority. It
+does not repair, trim, or normalize those bytes. Provider text after
+`END_PLAN` is excluded from the Plan but retained, with its hash, as raw audit
+evidence. A missing or malformed boundary is rejected before checkpointing and
+the ordinary bounded Slurm retry starts a fresh Planner. Legacy stdout/file
+submission is rejected; no `/tmp` file can override the submitted Plan.
+
+For current direct Safe PCE submissions, the Host validates but never repairs
+the Plan. The artifact must start with `# Plan`, contain substantive
+task-specific Markdown, and contain no known tool-protocol residue. It does not
+require Navigation, Reproduction, Patch, or Validation headings. Those NRPV
+requirements belong only to the frozen `direct_final_plan_v1` protocol.
 
 The Host records the exact Plan text, hash, submission protocol, and raw
 trajectory atomically. It verifies the hash before Code starts. Code receives
@@ -123,14 +133,22 @@ point to a likely solution surface remain accessible but are marked for review.
 Every classified command produces a separate `source_access.jsonl` event. A
 blocked command returns status 126 to the Agent and is not executed. The Host
 does not rewrite the command, Plan, patch, or outcome. Query values and raw
-commands are omitted from this log; hashes retain stable audit identity. This
-is an accidental-leakage reduction and post-filtering aid, not a security
+commands are omitted from this log; hashes retain stable audit identity. Future
+consolidated rows also contain a compact summary over every attempt, including
+decision, reason, client, phase, execution-status, URL, malformed-event, block,
+and review counts, plus relative paths and hashes for the per-attempt logs.
+Review can therefore filter cases by the summary before opening trajectories,
+while the event logs remain the detailed authority.
+
+This is an accidental-leakage reduction and post-filtering aid, not a security
 sandbox. It applies to Plan and Code Agents, never the official evaluator. The
-version-2 command segmentation uses the `bashlex` AST to identify commands
+The command segmentation uses the `bashlex` AST to identify commands
 inside ordinary lists, unquoted-newline boundaries, compound statements,
 subshells, and command substitutions. This closes the observed
-`cd`-then-newline-then-`curl` miss. Runtime-generated commands remain an audit
-and post-filtering concern rather than a syntactic command-splitting claim.
+`cd`-then-newline-then-`curl` miss. Policy v3 also unwraps the observed GNU
+`timeout` prefix before classifying an inner Git, pip, curl, or wget command.
+Runtime-generated commands remain an audit and post-filtering concern rather
+than a syntactic command-splitting claim.
 
 ## Audit10 Development Smoke
 
@@ -240,6 +258,19 @@ handling, and known source-audit gap so the comparison does not mix method and
 transport repairs. The four cases are development-only and outcome-exposed;
 the ablation supports paired prompt diagnosis, not a quality or generalization
 claim.
+
+The completed v10 ablation reached official-test resolved on all four cases.
+Its paired Plans were about 19% shorter and used about 32% fewer Planner shell
+actions than v9. The sklearn pair contains a trace-consistent Plan-to-Code
+repair, but independent Code sampling and outcome-exposed case selection rule
+out a causal or held-out claim. SymPy remained deeply exploratory, so deleting
+the four instructions did not solve stopping behavior generally. See
+[`knowledge/safe-pce-v9-v10-anchor-ablation.md`](knowledge/safe-pce-v9-v10-anchor-ablation.md).
+
+The prepared terminal10 v11 smoke applies that selected v6 prompt to the full
+frozen audit10 coverage set. It is the first prepared run to select bounded
+`direct_final_markdown_v4`, source policy v3, and the all-attempt source audit
+index together. It is unlaunched and does not authorize a 500-case run.
 
 ## Historical Evidence
 

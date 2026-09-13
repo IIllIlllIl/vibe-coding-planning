@@ -8,6 +8,8 @@ from src.environment.source_access import (
     canonical_http_url,
     classify_source_access,
     extract_http_urls,
+    summarize_source_access_log,
+    summarize_source_access_logs,
 )
 
 
@@ -105,7 +107,40 @@ def test_non_prompt_solution_source_is_blocked() -> None:
     assert result is not None
     assert result["decision"] == "block"
     assert result["reason"] == "non_prompt_solution_surface"
-    assert result["policy_version"] == "conservative_blacklist_v2"
+    assert result["policy_version"] == "conservative_blacklist_v3"
+
+
+@pytest.mark.parametrize(
+    ("command", "reason"),
+    [
+        (
+            "timeout 20 curl https://github.com/org/repo/pull/123.diff",
+            "non_prompt_solution_surface",
+        ),
+        ("timeout --foreground 20 pip download project", "pip_remote"),
+        ("timeout -k 5 20 git fetch origin main", "git_remote"),
+    ],
+)
+def test_observed_timeout_wrapper_cannot_hide_source_acquisition(
+    command: str,
+    reason: str,
+) -> None:
+    result = classify_source_access(command, prompt_urls=frozenset())
+
+    assert result is not None
+    assert result["decision"] == "block"
+    assert result["reason"] == reason
+
+
+def test_timeout_wrapped_prompt_url_remains_allowed() -> None:
+    url = canonical_http_url("https://docs.example/page")
+    result = classify_source_access(
+        f"timeout 20 curl {url}", prompt_urls=frozenset({url})
+    )
+
+    assert result is not None
+    assert result["decision"] == "allow"
+    assert result["reason"] == "prompt_http"
 
 
 @pytest.mark.parametrize(
@@ -208,6 +243,84 @@ def test_audit_log_redacts_url_query_values(tmp_path) -> None:
     logged = path.read_text(encoding="utf-8")
     assert "secret" not in logged
     assert command not in logged
+
+
+def test_source_access_summary_supports_case_level_triage(tmp_path) -> None:
+    path = tmp_path / "source_access.jsonl"
+    prompt_url = canonical_http_url("https://docs.example/page")
+    allowed = classify_source_access(
+        f"curl {prompt_url}", prompt_urls=frozenset({prompt_url})
+    )
+    blocked = classify_source_access(
+        "git fetch origin main", prompt_urls=frozenset({prompt_url})
+    )
+    assert allowed is not None and blocked is not None
+    append_source_access_event(
+        path,
+        {
+            **allowed,
+            "phase": "plan",
+            "executed": True,
+            "execution_status": "completed",
+        },
+        command=f"curl {prompt_url}",
+    )
+    append_source_access_event(
+        path,
+        {
+            **blocked,
+            "phase": "code",
+            "executed": False,
+            "execution_status": "blocked",
+        },
+        command="git fetch origin main",
+    )
+    with path.open("a", encoding="utf-8") as handle:
+        handle.write("not-json\n")
+
+    summary = summarize_source_access_log(path)
+
+    assert summary == {
+        "schema_version": 1,
+        "event_count": 2,
+        "malformed_event_count": 1,
+        "decisions": {"allow": 1, "block": 1},
+        "reasons": {"prompt_http": 1, "git_remote": 1},
+        "clients": {"curl": 1, "fetch": 1},
+        "phases": {"plan": 1, "code": 1},
+        "execution_statuses": {"completed": 1, "blocked": 1},
+        "observed_url_count": 1,
+        "prompt_url_match_count": 1,
+        "executed_event_count": 1,
+        "not_executed_event_count": 1,
+        "blocked_event_count": 1,
+        "review_event_count": 0,
+        "manual_review_recommended": True,
+    }
+
+    second = tmp_path / "second.jsonl"
+    review = classify_source_access(
+        "wget https://reference.example/page", prompt_urls=frozenset()
+    )
+    assert review is not None
+    append_source_access_event(
+        second,
+        {
+            **review,
+            "phase": "code",
+            "executed": True,
+            "execution_status": "completed",
+        },
+        command="wget https://reference.example/page",
+    )
+    aggregate = summarize_source_access_logs([path, second])
+    assert aggregate["event_count"] == 3
+    assert aggregate["review_event_count"] == 1
+    assert aggregate["decisions"] == {
+        "allow": 1,
+        "block": 1,
+        "allow_but_review": 1,
+    }
 
 
 @pytest.mark.parametrize(

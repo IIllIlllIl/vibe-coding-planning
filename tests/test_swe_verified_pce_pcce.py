@@ -9,6 +9,7 @@ from types import SimpleNamespace
 import pytest
 import yaml
 
+from src.environment.source_access import SOURCE_ACCESS_POLICY_VERSION
 from src.optimization.hpc.task_batch import TaskFiles
 from src.optimization.checker import CheckerOutputContractError
 from src.exceptions import AgentTaskError, FatalError
@@ -261,6 +262,18 @@ def test_safe_pce_config_accepts_template_markdown_protocol(tmp_path: Path) -> N
     assert config.plan_submission_protocol == "direct_final_markdown_v3"
 
 
+def test_safe_pce_config_accepts_bounded_markdown_protocol(tmp_path: Path) -> None:
+    source = Path("configs/swe_verified_safe_pce_audit10_v8_claude_plan_20260913.yaml")
+    raw = yaml.safe_load(source.read_text(encoding="utf-8"))
+    raw["plan"]["submission_protocol"] = "direct_final_markdown_v4"
+    path = tmp_path / "bounded-template-protocol.yaml"
+    path.write_text(yaml.safe_dump(raw), encoding="utf-8")
+
+    config = load_swe_verified_pce_config(path, require_api_keys=False)
+
+    assert config.plan_submission_protocol == "direct_final_markdown_v4"
+
+
 def test_safe_pce_audit10_v8_binds_flexible_markdown_smoke() -> None:
     config = load_swe_verified_pce_config(
         "configs/swe_verified_safe_pce_audit10_v8_claude_plan_20260913.yaml",
@@ -392,6 +405,59 @@ def test_safe_pce_anchor_ablation4_v10_changes_only_planning_guidance() -> None:
     assert "--reclaim-staging" in arguments
     assert arguments[arguments.index("--config") + 1] == (
         "configs/swe_verified_safe_pce_anchor_ablation4_v10_20260913.yaml"
+    )
+
+
+def test_safe_pce_terminal10_v11_combines_selected_final_contracts() -> None:
+    config = load_swe_verified_pce_config(
+        "configs/swe_verified_safe_pce_terminal10_v11_20260913.yaml",
+        require_api_keys=False,
+    )
+    raw = yaml.safe_load(config.config_path.read_text(encoding="utf-8"))
+    contract = raw["experiment_contract"]
+
+    assert len(config.instance_ids) == 10
+    assert config.run_dir.name == "safe-pce-terminal10-v11-20260913"
+    assert config.plan_submission_protocol == "direct_final_markdown_v4"
+    assert "state the uncertainty precisely" in config.plan_prompt
+    assert "smallest implementation path" not in config.plan_prompt
+    assert "Investigate only until" not in config.plan_prompt
+    assert "localized issues" not in config.plan_prompt
+    assert "cross-cutting issues" not in config.plan_prompt
+    assert "make that responsibility explicit" not in config.plan_prompt
+    assert hashlib.sha256(config.plan_prompt.encode()).hexdigest() == contract[
+        "plan_prompt_text_sha256"
+    ]
+    assert hashlib.sha256(config.code_prompt.encode()).hexdigest() == contract[
+        "code_prompt_text_sha256"
+    ]
+    assert hashlib.sha256(config.code_instance_template.encode()).hexdigest() == (
+        contract["code_instance_prompt_text_sha256"]
+    )
+    combined_code_prompt = config.code_prompt + config.code_instance_template
+    assert "already provided in the SIF" in combined_code_prompt
+    assert "If a command isn't available, you can install it" not in (
+        combined_code_prompt
+    )
+    assert "pip install" not in combined_code_prompt
+    assert contract["agent_source_policy"] == SOURCE_ACCESS_POLICY_VERSION
+    assert contract["source_audit_index"] == (
+        "all_attempts_case_level_summary_plus_event_logs"
+    )
+    assert contract["launched"] is False
+
+    supervisor = yaml.safe_load(
+        Path(
+            "configs/swe_verified_safe_pce_terminal10_v11_"
+            "supervisor_v1_20260913.yaml"
+        ).read_text(encoding="utf-8")
+    )
+    arguments = supervisor["arguments"]
+    assert "--require-clean-worktree" in arguments
+    assert "--reclaim-staging" in arguments
+    assert arguments[arguments.index("--poll-interval") + 1] == "300"
+    assert arguments[arguments.index("--config") + 1] == (
+        "configs/swe_verified_safe_pce_terminal10_v11_20260913.yaml"
     )
 
 
@@ -612,6 +678,80 @@ def test_safe_pce_authority_paths_are_relative_to_run_root(tmp_path: Path):
     assert runner._authority_relative_path(retained) == ("hpc_tasks/pce/fp/plan.json")
     with pytest.raises(FatalError, match="outside the canonical run"):
         runner._authority_relative_path(tmp_path / "staging" / "plan.json")
+
+
+def test_safe_pce_completed_result_preserves_bounded_raw_plan_submission():
+    raw_submission = (
+        "FINAL_PLAN\n# Plan\n\nChange the parser.\nEND_PLAN\n"
+        "Provider trailer.</parameter>"
+    )
+    result = SWEVerifiedPCERunner._completed_result(
+        {
+            "plan": "# Plan\n\nChange the parser.\n",
+            "plan_sha256": "plan-hash",
+            "trajectory": [],
+            "raw_plan_submission": raw_submission,
+            "raw_plan_submission_sha256": "raw-hash",
+            "plan_boundary": {
+                "start_marker": "FINAL_PLAN",
+                "end_marker": "END_PLAN",
+            },
+        },
+        {
+            "patch": "patch",
+            "patch_submission": {"patch_sha256": "patch-hash"},
+            "workspace_evidence": {},
+            "trajectory": [],
+        },
+        {"evaluator_result": {"terminal_kind": "official_tests_resolved"}},
+    )
+
+    assert result["plan"] == "# Plan\n\nChange the parser.\n"
+    assert result["raw_plan_submission"] == raw_submission
+    assert result["raw_plan_submission_sha256"] == "raw-hash"
+    assert result["plan_boundary"] == {
+        "start_marker": "FINAL_PLAN",
+        "end_marker": "END_PLAN",
+    }
+
+
+def test_safe_pce_indexes_source_access_across_agent_attempts(tmp_path: Path):
+    run_dir = tmp_path / "run"
+    attempts_dir = run_dir / "attempts" / "task_0000"
+    first = attempts_dir / "attempt_01" / "source_access.jsonl"
+    second = attempts_dir / "attempt_02" / "source_access.jsonl"
+    first.parent.mkdir(parents=True)
+    second.parent.mkdir(parents=True)
+    first.write_text(
+        json.dumps(
+            {
+                "decision": "block",
+                "reason": "pip_remote",
+                "client": "install",
+                "phase": "plan",
+                "urls": [],
+                "prompt_url_match": [],
+            }
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+    second.write_text("", encoding="utf-8")
+    executor = object.__new__(SWEVerifiedPCEHPCExecutor)
+    executor.config = SimpleNamespace(run_dir=run_dir)
+    task = SimpleNamespace(index=0, attempts_dir=attempts_dir)
+
+    indexed = executor._attach_source_access_attempt_index(
+        [{"task_index": 0, "status": "completed"}], [task]
+    )
+
+    audit = indexed[0]["source_access"]
+    assert audit["all_attempts_summary"]["blocked_event_count"] == 1
+    assert audit["all_attempts_summary"]["manual_review_recommended"] is True
+    assert [item["attempt"] for item in audit["attempts"]] == [
+        "attempt_01",
+        "attempt_02",
+    ]
 
 
 def test_swe_verified_agent_environments_isolate_tmp(tmp_path, monkeypatch):

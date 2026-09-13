@@ -3,9 +3,11 @@
 Uses DefaultAgent's interactive step loop so the agent can explore the
 codebase (via cat, grep, ls, etc.) before producing the structured Plan.
 Safe-PCE prompts terminate with a direct ``FINAL_PLAN`` response intercepted
-before the shell action parser. Legacy prompts may still submit through the
-ordinary mini-swe stdout marker and retain their historical phase-local-file
-preference for frozen-run compatibility.
+before the shell action parser. The current bounded protocol delimits the Plan
+with ``END_PLAN`` so provider text after that marker is retained in the raw
+trajectory but is not part of Plan authority. Legacy prompts may still submit
+through the ordinary mini-swe stdout marker and retain their historical
+phase-local-file preference for frozen-run compatibility.
 """
 
 from __future__ import annotations
@@ -29,7 +31,9 @@ from src.exceptions import AgentTaskError, CommandTimeoutError
 logger = logging.getLogger(__name__)
 
 DIRECT_PLAN_MARKER = "FINAL_PLAN"
+DIRECT_PLAN_END_MARKER = "END_PLAN"
 _DIRECT_PLAN_PAYLOAD_PREFIX = "__VIBE_DIRECT_PLAN_V1__\n"
+_DIRECT_PLAN_ENVELOPE_PAYLOAD_PREFIX = "__VIBE_DIRECT_PLAN_V2__\n"
 _DIRECT_PLAN_HEADINGS = (
     "# Plan",
     "## Navigation (N)",
@@ -40,6 +44,7 @@ _DIRECT_PLAN_HEADINGS = (
 DIRECT_NRPV_PROTOCOL = "direct_final_plan_v1"
 DIRECT_MARKDOWN_PROTOCOL = "direct_final_markdown_v2"
 DIRECT_MARKDOWN_TEMPLATE_PROTOCOL = "direct_final_markdown_v3"
+DIRECT_BOUNDED_MARKDOWN_PROTOCOL = "direct_final_markdown_v4"
 DIRECT_MARKDOWN_PLAN_PLACEHOLDER = "[[TASK_SPECIFIC_MARKDOWN_PLAN]]"
 _PROTOCOL_RESIDUE = (
     "</parameter>",
@@ -139,8 +144,45 @@ but never edits the response. A valid Plan is intercepted before shell parsing
 and preserved verbatim.
 """
 
+BOUNDED_MARKDOWN_PLAN_ACTION_PROTOCOL = f"""\
+## Planner action and final-submission protocol
 
-def _direct_plan_agent_class(default_agent: type, submitted: type) -> type:
+During repository exploration, return exactly one executable bash block per
+response. The parser executes the shell body captured from that block. Wait for
+its real observation before choosing the next action.
+
+When the Plan is complete, do not execute another command and do not write the
+Plan to a file. Copy this terminal-response template exactly, replacing the
+placeholder with the complete task-specific Markdown Plan body:
+
+FINAL_PLAN
+# Plan
+
+{DIRECT_MARKDOWN_PLAN_PLACEHOLDER}
+END_PLAN
+
+Keep `FINAL_PLAN`, `# Plan`, and `END_PLAN` exactly as shown, with each marker on
+its own line. Remove the placeholder itself. The replacement may use
+task-appropriate Markdown headings; no fixed subsection headings are required.
+Finish the intended response at `END_PLAN`.
+
+Before submitting, inspect the complete response. Submit only when the text
+between `FINAL_PLAN` and `END_PLAN` starts with `# Plan`, contains substantive
+task-specific content, and contains no bash action block, tool-call wrapper,
+XML or DSML tag, simulated observation, or protocol text. A missing or malformed
+boundary is rejected and no Plan artifact is saved. Correct any problem before
+submitting; the Host validates but never edits the bounded Plan. The complete
+terminal response remains raw audit evidence, while only the exact text between
+the markers becomes Plan authority.
+"""
+
+
+def _direct_plan_agent_class(
+    default_agent: type,
+    submitted: type,
+    *,
+    bounded: bool = False,
+) -> type:
     """Add a Plan-only terminal response without changing mini-swe-agent."""
 
     class DirectPlanAgent(default_agent):
@@ -149,12 +191,43 @@ def _direct_plan_agent_class(default_agent: type, submitted: type) -> type:
             candidate = content.lstrip()
             marker = DIRECT_PLAN_MARKER + "\n"
             if candidate.startswith(marker):
+                if bounded:
+                    # Preserve the full provider response. The Host extracts
+                    # and validates the bounded Plan after shell interception.
+                    raise submitted(_DIRECT_PLAN_ENVELOPE_PAYLOAD_PREFIX + content)
                 plan = candidate[len(marker) :]
                 raise submitted(_DIRECT_PLAN_PAYLOAD_PREFIX + plan)
             return super().get_observation(response)
 
     DirectPlanAgent.__name__ = f"DirectPlan{default_agent.__name__}"
     return DirectPlanAgent
+
+
+def _extract_bounded_direct_plan(raw_submission: str) -> tuple[str, str | None]:
+    """Extract exact Plan bytes without rewriting the provider response."""
+
+    candidate = raw_submission.lstrip()
+    start_marker = DIRECT_PLAN_MARKER + "\n"
+    if not candidate.startswith(start_marker):
+        return "", "the terminal response must start with 'FINAL_PLAN'"
+    body = candidate[len(start_marker) :]
+    end_match = re.search(rf"(?m)^{re.escape(DIRECT_PLAN_END_MARKER)}$", body)
+    if end_match is None:
+        return "", "the terminal response is missing an exact 'END_PLAN' line"
+    return body[: end_match.start()], None
+
+
+def direct_plan_terminal_response(
+    messages: list[dict[str, Any]],
+) -> str | None:
+    """Return the exact final direct-submission response from a trajectory."""
+
+    marker = DIRECT_PLAN_MARKER + "\n"
+    for message in reversed(messages):
+        content = str(message.get("content", ""))
+        if message.get("role") == "assistant" and content.lstrip().startswith(marker):
+            return content
+    return None
 
 
 def _extract_result(agent: Any, exception_name: str, exception_msg: str) -> str | None:
@@ -276,8 +349,15 @@ def run(
     DefaultAgent, LitellmModel, _ = import_minisweagent()
     from minisweagent.agents.default import Submitted
 
+    bounded_direct_submission = (
+        direct_submission_protocol == DIRECT_BOUNDED_MARKDOWN_PROTOCOL
+    )
     PlanAgent = (
-        _direct_plan_agent_class(DefaultAgent, Submitted)
+        _direct_plan_agent_class(
+            DefaultAgent,
+            Submitted,
+            bounded=bounded_direct_submission,
+        )
         if require_direct_submission
         else DefaultAgent
     )
@@ -308,6 +388,8 @@ def run(
             agent_kwargs["action_protocol"] = MARKDOWN_PLAN_ACTION_PROTOCOL
         elif direct_submission_protocol == DIRECT_MARKDOWN_TEMPLATE_PROTOCOL:
             agent_kwargs["action_protocol"] = MARKDOWN_PLAN_TEMPLATE_ACTION_PROTOCOL
+        elif direct_submission_protocol == DIRECT_BOUNDED_MARKDOWN_PROTOCOL:
+            agent_kwargs["action_protocol"] = BOUNDED_MARKDOWN_PLAN_ACTION_PROTOCOL
         else:
             raise ValueError(
                 f"unsupported direct Plan submission protocol: "
@@ -348,18 +430,32 @@ def run(
     submitted_text = _extract_result(agent, exception_name, exception_msg)
     direct_submission = bool(
         submitted_text is not None
-        and submitted_text.startswith(_DIRECT_PLAN_PAYLOAD_PREFIX)
+        and (
+            submitted_text.startswith(_DIRECT_PLAN_PAYLOAD_PREFIX)
+            or submitted_text.startswith(_DIRECT_PLAN_ENVELOPE_PAYLOAD_PREFIX)
+        )
     )
     if direct_submission:
-        # Safe PCE authority: exact model terminal text, intercepted before
-        # action parsing and therefore never reconstructed through /tmp.
-        plan_text = submitted_text[len(_DIRECT_PLAN_PAYLOAD_PREFIX) :]
-        format_error = _direct_plan_markdown_error(
+        boundary_error: str | None = None
+        if submitted_text.startswith(_DIRECT_PLAN_ENVELOPE_PAYLOAD_PREFIX):
+            raw_submission = submitted_text[
+                len(_DIRECT_PLAN_ENVELOPE_PAYLOAD_PREFIX) :
+            ]
+            plan_text, boundary_error = _extract_bounded_direct_plan(raw_submission)
+        else:
+            # Historical direct authority: exact terminal text after the
+            # opening marker, intercepted before action parsing.
+            plan_text = submitted_text[len(_DIRECT_PLAN_PAYLOAD_PREFIX) :]
+        format_error = boundary_error or _direct_plan_markdown_error(
             plan_text,
             require_nrpv=(direct_submission_protocol == DIRECT_NRPV_PROTOCOL),
             forbidden_placeholder=(
                 DIRECT_MARKDOWN_PLAN_PLACEHOLDER
-                if direct_submission_protocol == DIRECT_MARKDOWN_TEMPLATE_PROTOCOL
+                if direct_submission_protocol
+                in {
+                    DIRECT_MARKDOWN_TEMPLATE_PROTOCOL,
+                    DIRECT_BOUNDED_MARKDOWN_PROTOCOL,
+                }
                 else None
             ),
         )

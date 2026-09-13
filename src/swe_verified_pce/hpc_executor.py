@@ -17,6 +17,7 @@ from src.optimization.hpc.task_batch import (
     TaskFiles,
     atomic_json,
 )
+from src.environment.source_access import summarize_source_access_logs
 from src.swe_verified_pce.config import SWEVerifiedPCEConfig
 from src.swe_verified_pce.dataset import file_sha256
 from src.swe_verified_pce.models import SWEVerifiedPCECase
@@ -330,7 +331,7 @@ class SWEVerifiedPCEHPCExecutor:
                 raise ValueError("PCE generation must not assign a validation label")
 
         try:
-            return self.runtime.run(
+            results = self.runtime.run(
                 batch_dir=batch_dir,
                 fingerprint=fingerprint,
                 tasks=tasks,
@@ -341,7 +342,45 @@ class SWEVerifiedPCEHPCExecutor:
                 validate_output=validate,
             )
         except TaskAttemptsExhausted:
-            return self._collect_exhausted(batch_dir, fingerprint, tasks)
+            results = self._collect_exhausted(batch_dir, fingerprint, tasks)
+        return self._attach_source_access_attempt_index(results, tasks)
+
+    def _attach_source_access_attempt_index(
+        self,
+        results: Sequence[dict[str, Any]],
+        tasks: Sequence[TaskFiles],
+    ) -> list[dict[str, Any]]:
+        """Index all attempt logs so review does not start from raw trajectories."""
+
+        tasks_by_index = {task.index: task for task in tasks}
+        indexed: list[dict[str, Any]] = []
+        for original in results:
+            result = dict(original)
+            task = tasks_by_index.get(int(result["task_index"]))
+            if task is None:
+                raise ValueError("PCE result has no matching task for source audit")
+            paths = sorted(task.attempts_dir.glob("attempt_*/source_access.jsonl"))
+            attempts = [
+                {
+                    "attempt": path.parent.name,
+                    "log_relative_path": path.relative_to(
+                        self.config.run_dir
+                    ).as_posix(),
+                    "log_sha256": file_sha256(path),
+                    "summary": summarize_source_access_logs([path]),
+                }
+                for path in paths
+            ]
+            source_access = dict(result.get("source_access", {}))
+            source_access.update(
+                {
+                    "all_attempts_summary": summarize_source_access_logs(paths),
+                    "attempts": attempts,
+                }
+            )
+            result["source_access"] = source_access
+            indexed.append(result)
+        return indexed
 
     def _prepare(
         self,

@@ -89,6 +89,7 @@ def load_swe_verified_pce_config(
         "direct_final_plan_v1",
         "direct_final_markdown_v2",
         "direct_final_markdown_v3",
+        "direct_final_markdown_v4",
     }:
         raise ValueError("unsupported SWE-Verified Plan submission protocol")
     code = _model(_mapping(raw.get("code"), "code"), temperature=0.0)
@@ -117,6 +118,20 @@ def load_swe_verified_pce_config(
             **prompts,
             "plan_system": str(plan_prompts["plan_system"]),
             "plan_instance": str(plan_prompts["plan_instance"]),
+        }
+    code_prompt_source = paths.get("code_prompt_source_config")
+    if code_prompt_source:
+        code_prompt_raw = (
+            yaml.safe_load(resolve(str(code_prompt_source)).read_text(encoding="utf-8"))
+            or {}
+        )
+        code_prompts = _mapping(
+            code_prompt_raw.get("prompts"), "code prompt source prompts"
+        )
+        prompts = {
+            **prompts,
+            "code_system": str(code_prompts["code_system"]),
+            "code_instance": str(code_prompts["code_instance"]),
         }
     container_raw = _mapping(raw.get("container"), "container")
     hpc_raw = _mapping(raw.get("hpc"), "hpc")
