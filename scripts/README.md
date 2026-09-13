@@ -77,6 +77,12 @@ authority is `docs/archive/mixed-design/swe-chat-data-cleaning.md`.
 - `tools/freeze_swe_verified_pce_source.py` freezes the fixed-revision complete
   SWE-Verified source rows; `tools/freeze_swe_verified_sif_manifest.py` audits
   selected existing SIF bytes and verifies each official base commit.
+- `tools/freeze_swe_verified_safe_pce_selection.py` independently derives the
+  formal482 membership from the fixed Verified500 source, the frozen
+  placeholder-exclusion ledger, and explicit operational exclusions.
+- `hpc_submit_swe_verified_safe_pce_sif_audit.sh` submits the selection-scoped,
+  non-Agent audit that freezes exact SHA-256 values and verifies all 482
+  declared base commits. It is dry-run by default.
 - `tools/freeze_swe_verified_pce_selection.py` deterministically freezes the
   repository-covering quick-validation membership without using Plan or
   execution outcomes.

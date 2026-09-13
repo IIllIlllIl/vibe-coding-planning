@@ -273,43 +273,55 @@ frozen audit10 coverage set. It is the first prepared run to select bounded
 `direct_final_markdown_v4`, source policy v3, and the all-attempt source audit
 index together. It is unlaunched and does not authorize a 500-case run.
 
-## Staged formal scope
+## Formal scope
 
 The complete Safe PCE source universe remains every row, in source order, from
-the fixed 500-row Verified snapshot. The first formal execution will instead
-freeze a separate 483-case membership by excluding the 17 historical cases
-whose old runs resolved with a placeholder or effectively absent Plan. This is
-an eligibility exclusion, not an outcome-balancing sample and not a reuse of
-old Plan text. If the 483-case evidence is suitable, the 17 excluded cases may
-later be regenerated as a separately identified extension.
+the fixed 500-row Verified snapshot. The first formal execution freezes an
+independent 482-case membership. It excludes the 17 historical cases whose old
+runs resolved with a placeholder or effectively absent Plan, plus
+`django__django-13513`, whose required SIF was absent at the final pre-launch
+census. The former is an eligibility policy and the latter is an operational
+availability decision; neither is outcome balancing. Old Plan, Code, and
+evaluator trajectories are not runtime inputs.
 
-The intended 483-case runtime uses the v6 task-adaptive Planner prompt, the v5
+The formal 482-case runtime uses the v6 task-adaptive Planner prompt, the v5
 symmetric human-review Plan boundary, the dedicated Code prompt, and one 1 CPU
 / 4G / 60-minute Slurm element per case. Plan and Code command timeouts remain
 1,800 seconds, each case has exactly three total attempts, evaluator exhaustion
 remains `unknown`, and Slurm—not an application concurrency cap—owns array
-scheduling.
+scheduling. The unlaunched runtime authority is
+`configs/swe_verified_safe_pce_formal482_v1_20260914.yaml`; its reviewed
+supervisor invocation is
+`configs/swe_verified_safe_pce_formal482_v1_supervisor_20260914.yaml`.
 
-The historical cleaned dataset contained 482 rather than 483 cases because it
-also removed `django__django-13513` after an old terminal Agent execution
-failure. Safe PCE regenerates the trajectory from scratch, so that operational
-failure is not a valid eligibility exclusion and the case remains in the new
-483-case target.
+The new selection happens to have the same membership and order as the old
+cleaned-482 dataset, but it is independently reconstructed from the current
+fixed 500-row source, the explicit 17-case placeholder ledger, and the one
+operational exclusion. It does not reuse the old dataset rows or trajectories.
+Its authority is
+`configs/frozen_swe_verified_safe_pce/verified482-formal-v1-20260914/selection.json`.
 
-The cache count and the intended membership must not be conflated. A read-only
-census found 483 of the 500 expected SIF names, but those are not exactly the
-desired 483 cases. Sixteen absent SIFs belong to the excluded placeholder set;
-the cache also contains the excluded `pydata__xarray-6744` SIF, while the
-included `django__django-13513` SIF is absent. Consequently the first formal
-run needs one additional SIF acquisition, followed by a new selection-scoped
-483-record SHA-256 and base-commit audit. It does not need all 17 deferred SIFs.
+The cache count and the intended membership are distinct. A read-only census
+found 483 cached SIF names. All 482 selected cases are present; the one extra
+cached image is the excluded `pydata__xarray-6744`, while
+`django__django-13513` is absent. The selected images therefore require no new
+download, but all 482 exact SIF byte hashes and declared base commits must be
+frozen into a selection-bound image manifest before launch. Slurm audit job
+`5984842` completed this gate in 44:56: all 482 records were audited, none was
+missing, and all 482 declared base commits were present. The frozen image
+authority is
+`configs/frozen_swe_verified_safe_pce/verified482-formal-v1-20260914/images.json`
+(SHA-256
+`f4c18c5dcf30fa48cb503241c5ba69ae8f6368e63726f8ce0875a868ae212e0a`).
+The companion `audit-run.json` records the submitted job, resources, tool hash,
+selection binding, and measured data volume.
 
 The already committed 500-case preparation remains a deferred full-universe
 identity rather than being rewritten in place. Its frozen authority is
 `configs/frozen_swe_verified_safe_pce/verified500-formal-v1-20260914/input-contract.json`;
-its runtime config and supervisor must not be used for the 483-case run.
+its runtime config and supervisor must not be used for the 482-case run.
 Neither the old two-record root manifest nor any smoke selection manifest may
-substitute for the future 483-case image authority.
+substitute for the formal 482-case image authority.
 
 The runtime output is raw evidence, not an automatically clean ACE dataset.
 Postprocessing must preserve it and create a separate cleaning ledger and

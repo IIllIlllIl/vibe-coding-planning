@@ -15,9 +15,11 @@ the shared supervisor supplies canonical storage paths.
 ## Experiment Inventory
 
 The committed 500-case Safe PCE identity is a deferred full-universe target,
-not the next launch identity. The next intended formal run will use a separate
-483-case selection that excludes the 17 historical resolved placeholder/no-Plan
-successes. That selection and its image authority must be frozen before launch.
+not the next launch identity. The first formal run uses an independent
+482-case selection: 17 historical resolved placeholder/no-Plan successes are
+scientific exclusions, and `django__django-13513` is an operational exclusion
+because its SIF is absent. Its selection and image authorities are separate
+from all historical run data.
 ACE formal v3, quick50, C2/C4/C5, safe67, and PolyBench configurations are
 historical provenance or failure-analysis inputs. Do not use their cases,
 labels, image manifests, output roots, or baseline identities in a new run.
@@ -71,8 +73,13 @@ labels, image manifests, output roots, or baseline identities in a new run.
 | `swe_verified_safe_pce_terminal10_v11_20260913.yaml` | Prepared, unlaunched final ten-case engineering smoke using the selected v6 Planner prompt, bounded Plan authority, timeout-wrapper source classification, and all-attempt source summaries. |
 | `swe_verified_safe_pce_terminal10_v11_supervisor_v1_20260913.yaml` | Prepared shared-supervisor identity for terminal10 v11; presence does not authorize launch. |
 | `swe_verified_safe_pce_human_boundary3_v12_20260913.yaml` | Three-case development rerun using the symmetric `START_PLAN ... END_PLAN` human-review boundary; retained as smoke evidence, not a formal input. |
-| `frozen_swe_verified_safe_pce/verified500-formal-v1-20260914/input-contract.json` | Deferred full 500-row input identity and pre-launch SIF census; it records the cache state without defining the first formal 483-case membership. |
-| `swe_verified_safe_pce_formal500_v1_20260914.yaml` | Prepared but deferred full-Verified Safe PCE raw-evidence contract with 1 CPU / 4G / 60-minute workers, three attempts, no selection subset, and mandatory post-run full-trajectory URL audit. It is not the 483-case launch config. |
+| `frozen_swe_verified_safe_pce/verified482-formal-v1-20260914/selection.json` | Independent source-ordered formal482 membership, with the 17 scientific placeholder exclusions and one missing-SIF operational exclusion recorded separately. |
+| `frozen_swe_verified_safe_pce/verified482-formal-v1-20260914/images.json` | Complete selection-bound formal482 image authority: exact SIF SHA-256 for all 482 cases, zero missing, and 482 declared base commits verified. |
+| `frozen_swe_verified_safe_pce/verified482-formal-v1-20260914/audit-run.json` | Compact provenance for the read-only Slurm audit that produced the formal482 image authority. |
+| `swe_verified_safe_pce_formal482_v1_20260914.yaml` | Launch-authorized but unlaunched formal482 Safe PCE contract using 1 CPU / 4G / 60-minute Slurm elements, three attempts, exact selection/image bindings, and mandatory post-run full-trajectory audit. |
+| `swe_verified_safe_pce_formal482_v1_supervisor_20260914.yaml` | Reviewed shared-supervisor invocation for formal482; its presence does not authorize execution without an explicit launch instruction. |
+| `frozen_swe_verified_safe_pce/verified500-formal-v1-20260914/input-contract.json` | Deferred full 500-row input identity and pre-launch SIF census; it records the cache state without defining the first formal 482-case membership. |
+| `swe_verified_safe_pce_formal500_v1_20260914.yaml` | Prepared but deferred full-Verified Safe PCE raw-evidence contract with 1 CPU / 4G / 60-minute workers, three attempts, no selection subset, and mandatory post-run full-trajectory URL audit. It is not the 482-case launch config. |
 | `swe_verified_safe_pce_formal500_v1_supervisor_20260914.yaml` | Deferred shared-supervisor invocation for the formal500 identity. It cannot pass submit preflight while the declared image authority is absent, and its presence does not authorize launch. |
 | `swe_verified_safe_pce_smoke_v1_20260911.yaml` | Prepared, launch-unauthorized two-case Safe PCE contract using direct `FINAL_PLAN` submission and the retained Verified Code/evaluator path. |
 | `frozen_swe_verified_playbook_gepa/20260909_clean444_25e5ce38271c/` | Eligibility-cleaned immutable Verified development snapshot with 444 cases and exhaustive exclusion/audit authorities. |

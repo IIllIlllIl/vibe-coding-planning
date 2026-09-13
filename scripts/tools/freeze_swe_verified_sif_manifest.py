@@ -10,14 +10,27 @@ import json
 from pathlib import Path
 import shlex
 import subprocess
-import sys
 
-REPO_ROOT = Path(__file__).resolve().parents[2]
-if str(REPO_ROOT) not in sys.path:
-    sys.path.insert(0, str(REPO_ROOT))
 
-from src.environment.apptainer_env import _image_to_sif_name  # noqa: E402
-from src.swe_verified_pce.dataset import canonical_image_ref, file_sha256  # noqa: E402
+def file_sha256(path: Path) -> str:
+    digest = hashlib.sha256()
+    with path.open("rb") as handle:
+        for chunk in iter(lambda: handle.read(8 * 1024 * 1024), b""):
+            digest.update(chunk)
+    return digest.hexdigest()
+
+
+def canonical_image_ref(instance_id: str) -> str:
+    key = f"swebench/sweb.eval.x86_64.{instance_id.lower()}:latest"
+    return key.replace("__", "_1776_")
+
+
+def image_to_sif_name(image: str) -> str:
+    safe = image.replace("/", "_").replace(":", "_")
+    safe = "".join(
+        character for character in safe if character.isalnum() or character in "._-"
+    )
+    return f"{safe}.sif"
 
 
 def main() -> int:
@@ -27,6 +40,7 @@ def main() -> int:
     parser.add_argument("--output", required=True, type=Path)
     parser.add_argument("--selection-manifest", type=Path)
     parser.add_argument("--verify-base-commits", action="store_true")
+    parser.add_argument("--require-complete", action="store_true")
     parser.add_argument("--apptainer-bin", default="apptainer")
     args = parser.parse_args()
 
@@ -56,7 +70,7 @@ def main() -> int:
         if selected_ids is not None and instance_id not in selected_ids:
             continue
         image_ref = canonical_image_ref(instance_id)
-        sif = args.sif_cache_dir / _image_to_sif_name(image_ref)
+        sif = args.sif_cache_dir / image_to_sif_name(image_ref)
         if sif.is_file():
             base_verified = False
             base_output = ""
@@ -102,7 +116,17 @@ def main() -> int:
         "created_at": datetime.now(timezone.utc).isoformat(),
         "source_manifest_sha256": file_sha256(source_manifest_path),
         "selection_manifest_sha256": selection_sha,
+        "audit_tool_sha256": file_sha256(Path(__file__)),
+        "verify_base_commits": args.verify_base_commits,
         "records": records,
+    }
+    payload["summary"] = {
+        "records": len(records),
+        "audited": sum(record["status"] == "audited" for record in records.values()),
+        "missing": sum(record["status"] == "missing" for record in records.values()),
+        "base_commit_verified": sum(
+            record["base_commit_verified"] for record in records.values()
+        ),
     }
     payload["manifest_id"] = hashlib.sha256(
         json.dumps(
@@ -115,7 +139,16 @@ def main() -> int:
         json.dumps(payload, indent=2, sort_keys=True) + "\n", encoding="utf-8"
     )
     temporary.replace(args.output)
-    print(json.dumps({"records": len(records), "manifest_id": payload["manifest_id"]}))
+    print(
+        json.dumps(
+            {"summary": payload["summary"], "manifest_id": payload["manifest_id"]}
+        )
+    )
+    if args.require_complete and (
+        payload["summary"]["missing"]
+        or payload["summary"]["base_commit_verified"] != len(records)
+    ):
+        return 1
     return 0
 
 

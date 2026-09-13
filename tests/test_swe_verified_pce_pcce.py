@@ -669,6 +669,89 @@ def test_safe_pce_formal500_v1_freezes_full_input_and_60_minute_budget(
     )
 
 
+def test_safe_pce_formal482_v1_binds_complete_selection_and_images(
+    tmp_path: Path,
+) -> None:
+    config = load_swe_verified_pce_config(
+        "configs/swe_verified_safe_pce_formal482_v1_20260914.yaml",
+        require_api_keys=False,
+    )
+    raw = yaml.safe_load(config.config_path.read_text(encoding="utf-8"))
+    contract = raw["experiment_contract"]
+    assert config.selection_manifest is not None
+    selection = json.loads(config.selection_manifest.read_text(encoding="utf-8"))
+    images = json.loads(config.image_manifest.read_text(encoding="utf-8"))
+    cases, _, _ = load_swe_verified_pce_cases(
+        config.dataset_snapshot,
+        config.image_manifest,
+    )
+
+    assert len(config.instance_ids) == len(cases) == 482
+    assert tuple(case.instance_id for case in cases) == config.instance_ids
+    assert list(config.instance_ids) == selection["selected_instance_ids"]
+    assert images["summary"] == {
+        "audited": 482,
+        "base_commit_verified": 482,
+        "missing": 0,
+        "records": 482,
+    }
+    assert images["selection_manifest_sha256"] == file_sha256(
+        config.selection_manifest
+    )
+    assert file_sha256(config.selection_manifest) == (
+        contract["selection_manifest_sha256"]
+    )
+    assert file_sha256(config.image_manifest) == contract["image_manifest_sha256"]
+    assert images["manifest_id"] == contract["image_manifest_id"]
+    assert hashlib.sha256(config.plan_prompt.encode()).hexdigest() == (
+        contract["plan_prompt_text_sha256"]
+    )
+    assert hashlib.sha256(config.plan_instance_template.encode()).hexdigest() == (
+        contract["plan_instance_prompt_text_sha256"]
+    )
+    assert hashlib.sha256(config.code_prompt.encode()).hexdigest() == (
+        contract["code_prompt_text_sha256"]
+    )
+    assert hashlib.sha256(config.code_instance_template.encode()).hexdigest() == (
+        contract["code_instance_prompt_text_sha256"]
+    )
+    assert config.hpc.cpus_per_task == 1
+    assert config.hpc.mem == "4G"
+    assert config.hpc.time == "01:00:00"
+    assert config.hpc.max_task_attempts == 3
+    assert config.plan.timeout == config.code.timeout == 1800
+    assert contract["selected_cases"] == contract["budget"]["cases"] == 482
+    assert contract["status"] == "launch_authorized"
+    assert contract["launched"] is False
+    assert all(contract["prelaunch_gate"].values())
+
+    array_script = build_pce_array_script(
+        config=config,
+        batch_dir=tmp_path / "formal482-array",
+        indices=[0, 481],
+        attempt=1,
+    )
+    assert "#SBATCH --array=0,481" in array_script
+    assert "#SBATCH --cpus-per-task=1" in array_script
+    assert "#SBATCH --mem=4G" in array_script
+    assert "#SBATCH --time=01:00:00" in array_script
+
+    supervisor = yaml.safe_load(
+        Path(
+            "configs/swe_verified_safe_pce_formal482_v1_"
+            "supervisor_20260914.yaml"
+        ).read_text(encoding="utf-8")
+    )
+    arguments = supervisor["arguments"]
+    assert "--require-clean-worktree" in arguments
+    assert "--reclaim-staging" in arguments
+    assert arguments[arguments.index("--poll-interval") + 1] == "300"
+    assert arguments[arguments.index("--max-runs") + 1] == "12"
+    assert arguments[arguments.index("--config") + 1] == (
+        "configs/swe_verified_safe_pce_formal482_v1_20260914.yaml"
+    )
+
+
 def test_safe_pce_rejects_unreviewed_worker_walltime(tmp_path: Path) -> None:
     raw = yaml.safe_load(
         Path("configs/swe_verified_safe_pce_formal500_v1_20260914.yaml").read_text(

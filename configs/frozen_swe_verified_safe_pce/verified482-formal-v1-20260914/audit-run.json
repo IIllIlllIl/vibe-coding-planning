@@ -1,0 +1,39 @@
+{
+  "schema_version": 1,
+  "purpose": "formal482_sif_and_base_commit_prelaunch_audit",
+  "slurm": {
+    "job_id": "5984842",
+    "job_name": "swe-verified482-sif-audit",
+    "state": "COMPLETED",
+    "exit_code": "0:0",
+    "elapsed": "00:44:56",
+    "alloc_cpus": 1,
+    "requested_memory": "4G",
+    "total_cpu": "35:49.007",
+    "batch_max_rss": "4193092K"
+  },
+  "selection": {
+    "path": "configs/frozen_swe_verified_safe_pce/verified482-formal-v1-20260914/selection.json",
+    "sha256": "9af8c374fb811abd36176500a69b731aaf63fa965b0317d451e0e797429bce74",
+    "selected_cases": 482
+  },
+  "image_manifest": {
+    "path": "configs/frozen_swe_verified_safe_pce/verified482-formal-v1-20260914/images.json",
+    "sha256": "f4c18c5dcf30fa48cb503241c5ba69ae8f6368e63726f8ce0875a868ae212e0a",
+    "manifest_id": "6ff40e56785ca75b40cd99c5f1b60b56832b4c35921f4c20a7290acbab26f097",
+    "summary": {
+      "records": 482,
+      "audited": 482,
+      "missing": 0,
+      "base_commit_verified": 482,
+      "sif_bytes": 598968623104
+    }
+  },
+  "audit_tool": {
+    "path": "scripts/tools/freeze_swe_verified_sif_manifest.py",
+    "sha256": "886beb37354641d0a96fb116410ef8d7d52ac0a93276daada56f0e02f99b0e0e"
+  },
+  "remote_sif_cache": "/scratch/users/twang/vibe-coding-planning/shared/sif-cache",
+  "remote_result": "/scratch/users/twang/vibe-coding-planning/operations/swe-verified482-sif-audit-v1-20260914/images.json",
+  "policy": "read_only_existing_sif_audit_no_download_no_agent"
+}
