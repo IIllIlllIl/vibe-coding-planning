@@ -71,6 +71,14 @@ fixtures remain outside the submitted patch, and the official evaluator applies
 the official test patch separately. Operational or infrastructure failure is
 never converted to `unresolved`.
 
+The Controller distinguishes case-local operational failures from run-level
+integrity failures. A case-local failure with a complete identity-bound worker
+record becomes an `incomplete` consolidated row and does not stop retries for
+other cases. Shared-runtime failures, malformed outputs, and fingerprint or
+instance mismatches still block the run. The original atomic worker failure is
+retained inside the incomplete record and in its attempt evidence; the Host
+does not repair it or assign a scientific outcome.
+
 An empty Code submission is an Agent contract failure, not an evaluator
 outcome. It is rejected before the Code checkpoint is written. The retained
 Plan checkpoint is then reused while the bounded Slurm retry starts a fresh
@@ -289,7 +297,7 @@ symmetric human-review Plan boundary, the dedicated Code prompt, and one 1 CPU
 / 4G / 60-minute Slurm element per case. Plan and Code command timeouts remain
 1,800 seconds, each case has exactly three total attempts, evaluator exhaustion
 remains `unknown`, and Slurm—not an application concurrency cap—owns array
-scheduling. The unlaunched runtime authority is
+scheduling. The runtime authority is
 `configs/swe_verified_safe_pce_formal482_v1_20260914.yaml`; its reviewed
 supervisor invocation is
 `configs/swe_verified_safe_pce_formal482_v1_supervisor_20260914.yaml`.

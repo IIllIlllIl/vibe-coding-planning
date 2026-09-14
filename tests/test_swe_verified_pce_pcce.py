@@ -79,6 +79,16 @@ def test_safe_pce_config_does_not_import_optional_gepa_runtime() -> None:
     assert result.returncode == 0, result.stderr
 
 
+def test_safe_pce_submit_preserves_scientific_run_git_identity() -> None:
+    script = Path("scripts/hpc_submit_swe_verified_pce.sh").read_text(
+        encoding="utf-8"
+    )
+    assert 'export VIBE_CONTROLLER_GIT_HEAD="$LOCAL_GIT_HEAD"' in script
+    assert 'RUN_MANIFEST="$RUN_REL/run_manifest.json"' in script
+    assert 'if [[ -f "\\$RUN_MANIFEST" ]]; then' in script
+    assert 'export VIBE_PROJECT_GIT_HEAD' in script
+
+
 def test_recovered_plan_executor_preloads_identity_bound_plan_checkpoint(
     tmp_path: Path, monkeypatch
 ) -> None:
@@ -749,6 +759,23 @@ def test_safe_pce_formal482_v1_binds_complete_selection_and_images(
     assert arguments[arguments.index("--max-runs") + 1] == "12"
     assert arguments[arguments.index("--config") + 1] == (
         "configs/swe_verified_safe_pce_formal482_v1_20260914.yaml"
+    )
+
+    recovery = yaml.safe_load(
+        Path(
+            "configs/swe_verified_safe_pce_formal482_v1_"
+            "resume1_supervisor_20260914.yaml"
+        ).read_text(encoding="utf-8")
+    )
+    recovery_arguments = recovery["arguments"]
+    assert recovery_arguments[
+        recovery_arguments.index("--recover-controller-error-type-once") + 1
+    ] == "TaskBatchBlocked"
+    assert recovery_arguments[recovery_arguments.index("--config") + 1] == (
+        "configs/swe_verified_safe_pce_formal482_v1_20260914.yaml"
+    )
+    assert recovery_arguments[recovery_arguments.index("--state-file") + 1].endswith(
+        "formal482-v1-resume1-20260914.json"
     )
 
 

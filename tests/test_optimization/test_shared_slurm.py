@@ -520,6 +520,143 @@ def test_shared_slurm_reopens_misclassified_checker_contract_block(tmp_path):
     assert records[0]["new_phase"] == "SUBMITTED"
 
 
+def test_shared_slurm_reports_case_local_failure_and_retries_siblings(tmp_path):
+    local_failure = TaskFiles(
+        index=0,
+        instance_id="sympy__sympy-21379",
+        manifest_path=tmp_path / "tasks" / "task_0000.json",
+        output_path=tmp_path / "outputs" / "task_0000.json",
+        attempts_dir=tmp_path / "attempts" / "task_0000",
+    )
+    retryable = TaskFiles(
+        index=1,
+        instance_id="other__case-1",
+        manifest_path=tmp_path / "tasks" / "task_0001.json",
+        output_path=tmp_path / "outputs" / "task_0001.json",
+        attempts_dir=tmp_path / "attempts" / "task_0001",
+    )
+    for task in (local_failure, retryable):
+        atomic_json(task.manifest_path, {"instance_id": task.instance_id})
+    atomic_json(
+        local_failure.output_path,
+        {
+            "status": "blocking_failed",
+            "mode": "swe_verified_pce",
+            "fingerprint": "fingerprint",
+            "task_index": 0,
+            "instance_id": local_failure.instance_id,
+            "error_type": "SWEVerifiedEvaluatorOperationalError",
+            "error": "prepared SIF has an unstaged tracked change",
+            "task_outcome": "unknown",
+            "outcome_reason": "evaluator_sif_preparation_mismatch",
+            "retry_disposition": "block_run",
+            "final_validation_label": None,
+        },
+    )
+    atomic_json(
+        retryable.output_path,
+        {
+            "status": "retryable_failed",
+            "mode": "swe_verified_pce",
+            "instance_id": retryable.instance_id,
+        },
+    )
+    atomic_json(
+        tmp_path / "task_state.json",
+        {
+            "schema_version": 1,
+            "fingerprint": "fingerprint",
+            "phase": "BLOCKED",
+            "active_attempt": 1,
+            "active_job_id": None,
+            "last_job_id": "123",
+            "terminal_failure": {
+                "failure_kind": "blocking_task_output",
+                "error": "blocking Slurm Agent task failure: sympy__sympy-21379",
+                "attempt": 1,
+                "details": [
+                    {
+                        "instance_id": local_failure.instance_id,
+                        "error_type": "SWEVerifiedEvaluatorOperationalError",
+                        "error": "prepared SIF has an unstaged tracked change",
+                    }
+                ],
+            },
+        },
+    )
+    submissions: list[Path] = []
+
+    def submit(script: Path) -> str:
+        submissions.append(script)
+        return "456"
+
+    def write_script(indices, attempt):
+        assert list(indices) == [1]
+        assert attempt == 2
+        path = tmp_path / "attempt_02.sbatch"
+        path.write_text("#!/bin/sh\n", encoding="utf-8")
+        return path
+
+    runtime = SlurmTaskBatch(
+        HPCConfig(submit=True, max_task_attempts=3),
+        submitter=submit,
+    )
+    with pytest.raises(ControllerYield) as yielded:
+        runtime.run(
+            batch_dir=tmp_path,
+            fingerprint="fingerprint",
+            tasks=[local_failure, retryable],
+            job_name=lambda attempt: f"job-{attempt}",
+            write_script=write_script,
+            validate_output=lambda files, output: None,
+        )
+
+    assert yielded.value.job_id == "456"
+    assert local_failure.output_path.is_file()
+    assert not retryable.output_path.exists()
+    archived = tmp_path / "failed_outputs/attempt_01/task_0001.json"
+    assert json.loads(archived.read_text())["status"] == "retryable_failed"
+    state = json.loads((tmp_path / "task_state.json").read_text())
+    assert state["phase"] == "SUBMITTED"
+    assert state["active_attempt"] == 2
+    record = json.loads(
+        (tmp_path / "operational_reclassifications.jsonl").read_text().splitlines()[0]
+    )
+    assert record["reason"] == "case_local_failure_deferred_for_final_report"
+
+
+def test_shared_slurm_still_blocks_run_scoped_evaluator_failure(tmp_path):
+    task = TaskFiles(
+        index=0,
+        instance_id="case",
+        manifest_path=tmp_path / "input.json",
+        output_path=tmp_path / "output.json",
+        attempts_dir=tmp_path / "attempts",
+    )
+    atomic_json(task.manifest_path, {"instance_id": task.instance_id})
+    atomic_json(
+        task.output_path,
+        {
+            "status": "blocking_failed",
+            "mode": "swe_verified_pce",
+            "instance_id": task.instance_id,
+            "error_type": "SWEVerifiedEvaluatorOperationalError",
+            "outcome_reason": "evaluator_package_unavailable",
+            "error": "swebench is unavailable",
+        },
+    )
+
+    with pytest.raises(TaskBatchBlocked, match="blocking Slurm Agent"):
+        SlurmTaskBatch(HPCConfig(submit=True)).run(
+            batch_dir=tmp_path,
+            fingerprint="fingerprint",
+            tasks=[task],
+            job_name=lambda attempt: f"job-{attempt}",
+            write_script=lambda indices, attempt: tmp_path / "unused.sbatch",
+            validate_output=lambda files, output: None,
+        )
+
+
 def test_stability_collection_preserves_completed_and_marks_slurm_timeout(
     tmp_path,
 ):
