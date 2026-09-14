@@ -260,13 +260,17 @@ Reflection evidence directory is written. The Curator likewise reads its 32
 final case reflections from a read-only file bundle rather than from one large
 inline prompt.
 
-The prepared one-proposal smoke uses a frozen outcome-balanced 32-train/8-
+The replacement one-proposal smoke uses a frozen outcome-balanced 32-train/8-
 validation selection, three sequential Reflection rounds, the explicit
 `1/0/-1/1` score table, a 64-token bullet cap, and the 2,048-token playbook cap.
 Its runtime and supervisor configs are
-`configs/gepa_verified_reject_playbook_safe_pce_smoke32_v1_20260915.yaml` and
-`configs/gepa_verified_reject_playbook_safe_pce_smoke32_v1_supervisor_20260915.yaml`.
-Their presence does not authorize launch.
+`configs/gepa_verified_reject_playbook_safe_pce_smoke32_v2_20260915.yaml` and
+`configs/gepa_verified_reject_playbook_safe_pce_smoke32_v2_supervisor_20260915.yaml`.
+The v1 authority is retained as a failed operational smoke: both Checker waves
+completed, but the Reflection cache path kept `${USER}` literal and all 32
+Reflector tasks exhausted before model execution. Runtime evidence paths now
+expand environment variables and user-home markers before constructing the
+isolated Apptainer environment.
 
 The formal development membership is frozen separately in
 `configs/frozen_swe_verified_playbook_gepa/20260915_safe_pce_clean411_v2/formal400-v1.json`.

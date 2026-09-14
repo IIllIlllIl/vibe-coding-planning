@@ -88,7 +88,9 @@ def _run_evidence_json_agent(
         str(model_config.get("api_base", "https://api.deepseek.com")),
         float(model_config.get("temperature", 0.0)),
     )
-    cache = Path(str(evidence_config["evidence_sif_cache_dir"]))
+    cache = Path(
+        os.path.expandvars(str(evidence_config["evidence_sif_cache_dir"]))
+    ).expanduser()
     capacity = DockerCapacityWindow(
         max_concurrent=1,
         max_cached_images=1,

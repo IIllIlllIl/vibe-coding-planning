@@ -990,6 +990,7 @@ def test_evidence_reflector_disables_implicit_cwd_mount(
             return "Submitted", '{"instance_id":"case"}WARNING'
 
     monkeypatch.setenv("TEST_API_KEY", "not-a-secret")
+    monkeypatch.setenv("PLAYBOOK_TEST_CACHE", str(tmp_path / "expanded-cache"))
     monkeypatch.setattr(
         playbook_runtime,
         "import_minisweagent",
@@ -1015,7 +1016,7 @@ def test_evidence_reflector_disables_implicit_cwd_mount(
     output, _ = playbook_runtime.run_evidence_reflector(
         model_config={"model": "fake", "api_key_env": "TEST_API_KEY"},
         reflection_config={
-            "evidence_sif_cache_dir": str(tmp_path / "cache"),
+            "evidence_sif_cache_dir": "${PLAYBOOK_TEST_CACHE}/sifs",
         },
         system="system",
         instance_template="instance",
@@ -1033,6 +1034,7 @@ def test_evidence_reflector_disables_implicit_cwd_mount(
         "--bind",
         f"{evidence.resolve()}:/evidence:ro",
     ]
+    assert captured["sif_cache_dir"] == tmp_path / "expanded-cache" / "sifs"
     assert captured["network_disabled"] is True
     assert captured["isolate_tmp"] is True
     assert captured["cwd"] == "/evidence"
@@ -1171,11 +1173,11 @@ def test_hpc_proposal_agents_use_file_backed_reflector_waves_and_singletons(
     ]
 
 
-def test_safe_pce_smoke32_contract_uses_v6_prompts_and_new_scores() -> None:
+def test_safe_pce_smoke32_v2_contract_uses_v6_prompts_and_new_scores() -> None:
     repo_root = Path(__file__).resolve().parents[2]
     config_path = (
         repo_root
-        / "configs/gepa_verified_reject_playbook_safe_pce_smoke32_v1_20260915.yaml"
+        / "configs/gepa_verified_reject_playbook_safe_pce_smoke32_v2_20260915.yaml"
     )
     raw = yaml.safe_load(config_path.read_text(encoding="utf-8"))
     _validate_frozen_inputs(config_path, raw)
@@ -1222,7 +1224,7 @@ def test_safe_pce_smoke32_contract_uses_v6_prompts_and_new_scores() -> None:
 
     supervisor = yaml.safe_load((
         repo_root
-        / "configs/gepa_verified_reject_playbook_safe_pce_smoke32_v1_supervisor_20260915.yaml"
+        / "configs/gepa_verified_reject_playbook_safe_pce_smoke32_v2_supervisor_20260915.yaml"
     ).read_text(encoding="utf-8"))
     arguments = supervisor["arguments"]
     assert arguments[arguments.index("--target-iterations") + 1] == "1"
