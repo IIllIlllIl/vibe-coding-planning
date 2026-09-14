@@ -64,17 +64,18 @@ class PromptModel:
             raise error from exc
 
 
-def run_evidence_reflector(
+def _run_evidence_json_agent(
     *,
     model_config: Mapping[str, Any],
-    reflection_config: Mapping[str, Any],
+    evidence_config: Mapping[str, Any],
     system: str,
     instance_template: str,
     evidence_dir: str,
-    internal_playbook: str,
-    retry_feedback: str = "",
+    task: str,
+    artifact_name: str,
+    prompt_values: Mapping[str, Any],
 ) -> tuple[dict[str, Any], list[dict[str, Any]]]:
-    """Run a tool-using Reflector over a read-only, repository-free bundle."""
+    """Run a tool-using JSON agent over a read-only, repository-free bundle."""
     DefaultAgent, LitellmModel, _ = import_minisweagent()
     key_env = str(model_config.get("api_key_env", "DEEPSEEK_API_KEY"))
     api_key = os.environ.get(key_env)
@@ -87,7 +88,7 @@ def run_evidence_reflector(
         str(model_config.get("api_base", "https://api.deepseek.com")),
         float(model_config.get("temperature", 0.0)),
     )
-    cache = Path(str(reflection_config["evidence_sif_cache_dir"]))
+    cache = Path(str(evidence_config["evidence_sif_cache_dir"]))
     capacity = DockerCapacityWindow(
         max_concurrent=1,
         max_cached_images=1,
@@ -96,7 +97,7 @@ def run_evidence_reflector(
         enable_docker_maintenance=False,
     )
     environment = ApptainerEnvironment(
-        image=str(reflection_config.get("evidence_image", "python:3.12-slim")),
+        image=str(evidence_config.get("evidence_image", "python:3.12-slim")),
         cwd="/evidence",
         sif_cache_dir=cache,
         capacity_window=capacity,
@@ -111,7 +112,7 @@ def run_evidence_reflector(
             "--bind",
             f"{Path(evidence_dir).resolve()}:/evidence:ro",
         ],
-        timeout=int(reflection_config.get("command_timeout_seconds", 1800)),
+        timeout=int(evidence_config.get("command_timeout_seconds", 1800)),
         writable_tmpfs=True,
         network_disabled=True,
         isolate_tmp=True,
@@ -129,15 +130,13 @@ def run_evidence_reflector(
             step_limit=0,
         )
         exit_status, submission = agent.run(
-            task="Attribute this case to every active rejection rule.",
-            evidence_path="/evidence",
-            internal_playbook=internal_playbook,
-            retry_feedback=retry_feedback,
+            task=task,
+            **dict(prompt_values),
         )
         raise_for_permanent_provider_error(exit_status, submission)
         if exit_status != "Submitted":
             error = RuntimeError(
-                "Reflector ended without a submitted artifact "
+                "Evidence agent ended without a submitted artifact "
                 f"(exit_status={exit_status})"
             )
             error.trajectory = list(agent.messages)  # type: ignore[attr-defined]
@@ -146,16 +145,16 @@ def run_evidence_reflector(
         # Treat the Agent-authored file as the data authority and read only its
         # stdout; stderr remains separate diagnostic evidence.
         artifact = environment.execute(
-            "cat /tmp/reflection.json",
+            f"cat /tmp/{artifact_name}",
             cwd="/evidence",
-            timeout=int(reflection_config.get("command_timeout_seconds", 1800)),
+            timeout=int(evidence_config.get("command_timeout_seconds", 1800)),
         )
         trajectory = [
             *list(agent.messages),
             {
                 "role": "host_artifact_read",
                 "content": {
-                    "path": "/tmp/reflection.json",
+                    "path": f"/tmp/{artifact_name}",
                     "returncode": artifact["returncode"],
                     "stderr": artifact.get("stderr", ""),
                     "terminal_submission": submission,
@@ -163,7 +162,7 @@ def run_evidence_reflector(
             },
         ]
         if artifact["returncode"] != 0:
-            error = RuntimeError("Reflector artifact could not be read")
+            error = RuntimeError("Evidence-agent artifact could not be read")
             error.trajectory = trajectory  # type: ignore[attr-defined]
             raise error
         try:
@@ -175,6 +174,62 @@ def run_evidence_reflector(
             raise error from exc
     finally:
         environment.cleanup()
+
+
+def run_evidence_reflector(
+    *,
+    model_config: Mapping[str, Any],
+    reflection_config: Mapping[str, Any],
+    system: str,
+    instance_template: str,
+    evidence_dir: str,
+    internal_playbook: str,
+    retry_feedback: str = "",
+) -> tuple[dict[str, Any], list[dict[str, Any]]]:
+    """Run a tool-using Reflector over a read-only, repository-free bundle."""
+    return _run_evidence_json_agent(
+        model_config=model_config,
+        evidence_config=reflection_config,
+        system=system,
+        instance_template=instance_template,
+        evidence_dir=evidence_dir,
+        task="Attribute this case to every active rejection rule.",
+        artifact_name="reflection.json",
+        prompt_values={
+            "evidence_path": "/evidence",
+            "internal_playbook": internal_playbook,
+            "retry_feedback": retry_feedback,
+        },
+    )
+
+
+def run_evidence_curator(
+    *,
+    model_config: Mapping[str, Any],
+    reflection_config: Mapping[str, Any],
+    system: str,
+    instance_template: str,
+    evidence_dir: str,
+    counted_internal_playbook: str,
+    case_count: int,
+    retry_feedback: str = "",
+) -> tuple[dict[str, Any], list[dict[str, Any]]]:
+    """Run the Curator over a file-backed cross-case reflection bundle."""
+    return _run_evidence_json_agent(
+        model_config=model_config,
+        evidence_config=reflection_config,
+        system=system,
+        instance_template=instance_template,
+        evidence_dir=evidence_dir,
+        task="Curate durable rejection concerns from the completed reflections.",
+        artifact_name="curator.json",
+        prompt_values={
+            "evidence_path": "/evidence",
+            "counted_internal_playbook": counted_internal_playbook,
+            "case_count": case_count,
+            "retry_feedback": retry_feedback,
+        },
+    )
 
 
 def _render(template: str, **values: Any) -> str:

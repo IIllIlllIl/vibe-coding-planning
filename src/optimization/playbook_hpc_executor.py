@@ -101,7 +101,7 @@ class PlaybookHPCExecutor:
                 'mkdir -p "$ATTEMPT_DIR"',
                 *(
                     [f"module load {shlex.quote(self.hpc.container_module)}"]
-                    if role == "reflector" else []
+                    if role in {"reflector", "curator"} else []
                 ),
                 f"{shlex.quote(self.hpc.python_bin)} -m src.optimization.playbook_worker "
                 f"--config {shlex.quote(str(self.config_path))} "

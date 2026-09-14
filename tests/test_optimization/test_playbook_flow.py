@@ -14,6 +14,7 @@ from src.optimization.playbook import (
     PlaybookBullet,
     RejectPlaybook,
     apply_curator_operations,
+    classification_cost,
     manage_playbook_length,
     validate_bullet_token_limit,
     validate_checker_result,
@@ -33,6 +34,7 @@ from src.optimization import playbook_worker
 from src.optimization import playbook_runtime
 from src.optimization.playbook_cli import (
     _optional_instance_ids,
+    _score_table,
     _token_counter,
     _validate_frozen_inputs,
 )
@@ -142,6 +144,63 @@ def test_playbook_config_rejects_frozen_input_fingerprint_drift(tmp_path) -> Non
         _validate_frozen_inputs(config, raw)
 
 
+def test_playbook_config_binds_selection_hash_and_membership(tmp_path) -> None:
+    seed = tmp_path / "seed.json"
+    prompt = tmp_path / "prompt.yaml"
+    selection = tmp_path / "selection.json"
+    seed.write_text("seed")
+    prompt.write_text("prompt")
+    selection.write_text(json.dumps({
+        "train_instance_ids": ["train-1"],
+        "validation_instance_ids": ["validation-1"],
+    }))
+    raw = {
+        "inputs": {
+            "initial_playbook": str(seed),
+            "initial_playbook_sha256": hashlib.sha256(seed.read_bytes()).hexdigest(),
+            "prompt_bundle": str(prompt),
+            "prompt_bundle_sha256": hashlib.sha256(prompt.read_bytes()).hexdigest(),
+            "selection": str(selection),
+            "selection_sha256": hashlib.sha256(selection.read_bytes()).hexdigest(),
+            "train_instance_ids": ["train-1"],
+            "validation_instance_ids": ["validation-1"],
+        }
+    }
+    _validate_frozen_inputs(tmp_path / "config.yaml", raw)
+    raw["inputs"]["train_instance_ids"] = ["different"]
+    with pytest.raises(ValueError, match="train_instance_ids"):
+        _validate_frozen_inputs(tmp_path / "config.yaml", raw)
+
+
+def test_playbook_config_verifies_frozen_dataset_artifacts(tmp_path) -> None:
+    seed = tmp_path / "seed.json"
+    prompt = tmp_path / "prompt.yaml"
+    snapshot = tmp_path / "snapshot"
+    snapshot.mkdir()
+    dataset = snapshot / "train.jsonl"
+    dataset.write_text("frozen\n")
+    manifest = snapshot / "manifest.json"
+    manifest.write_text(json.dumps({
+        "artifacts": {
+            "train.jsonl": hashlib.sha256(dataset.read_bytes()).hexdigest()
+        }
+    }))
+    seed.write_text("seed")
+    prompt.write_text("prompt")
+    raw = {"inputs": {
+        "dataset_snapshot": str(snapshot),
+        "dataset_manifest_sha256": hashlib.sha256(manifest.read_bytes()).hexdigest(),
+        "initial_playbook": str(seed),
+        "initial_playbook_sha256": hashlib.sha256(seed.read_bytes()).hexdigest(),
+        "prompt_bundle": str(prompt),
+        "prompt_bundle_sha256": hashlib.sha256(prompt.read_bytes()).hexdigest(),
+    }}
+    _validate_frozen_inputs(tmp_path / "config.yaml", raw)
+    dataset.write_text("drift\n")
+    with pytest.raises(ValueError, match="dataset artifact fingerprint mismatch"):
+        _validate_frozen_inputs(tmp_path / "config.yaml", raw)
+
+
 def test_playbook_length_uses_model_tokens_not_whitespace_words() -> None:
     count = _token_counter("deepseek-v4-flash")
     text = "Reject the plan when: The Plan is a placeholder."
@@ -184,6 +243,52 @@ def test_adapter_derives_cost_sensitive_scores_and_rejects_bad_checker_contract(
         PlaybookGEPAAdapter(invalid_checker, proposer=None).evaluate(
             [_case(resolved=False)], {"rules": playbook.serialize()}
         )
+
+
+def test_new_resolved_proxy_score_table_and_invalid_score_are_explicit() -> None:
+    table, invalid = _score_table({
+        "scoring": {
+            "accept_resolved": 1,
+            "accept_unresolved": 0,
+            "reject_resolved": -1,
+            "reject_unresolved": 1,
+            "invalid": -100,
+        }
+    })
+    assert invalid == -100.0
+    assert table is not None
+    assert [
+        classification_cost(resolved=resolved, rejected=rejected, score_table=table)
+        for resolved, rejected in (
+            (True, False), (False, False), (True, True), (False, True)
+        )
+    ] == [1.0, 0.0, -1.0, 1.0]
+
+    playbook = _playbook(PlaybookBullet("plan-00001", "one two three"))
+    result = PlaybookGEPAAdapter(
+        lambda _: (_raw(False), []),
+        proposer=None,
+        token_counter=lambda text: len(text.split()),
+        maximum_bullet_tokens=2,
+        score_table=table,
+        invalid_score=invalid,
+    ).evaluate([_case(resolved=True)], {"rules": playbook.serialize()})
+    assert result.scores == [-100.0]
+    assert result.outputs[0]["derived_decision"] == "INVALID"
+
+
+@pytest.mark.parametrize("value", [True, float("nan"), float("inf")])
+def test_score_table_rejects_nonfinite_or_boolean_values(value) -> None:
+    with pytest.raises(ValueError, match="finite numbers"):
+        _score_table({
+            "scoring": {
+                "accept_resolved": value,
+                "accept_unresolved": 0,
+                "reject_resolved": -1,
+                "reject_unresolved": 1,
+                "invalid": -100,
+            }
+        })
 
 
 def test_adapter_does_not_convert_operational_failure_to_invalid() -> None:
@@ -535,6 +640,57 @@ def test_runner_wires_negative_score_search_with_zero_perfect_score(
     assert RejectPlaybook.parse(captured["seed_candidate"]["rules"]) == playbook
     assert json.loads((tmp_path / "run/controller_status.json").read_text())["status"] == "completed"
     assert json.loads((tmp_path / "run/result.json").read_text())["run_status"] == "completed"
+
+
+def test_runner_accepts_one_as_the_configured_perfect_score(tmp_path) -> None:
+    playbook = _playbook(PlaybookBullet("plan-00001", "placeholder"))
+    playbook_path = tmp_path / "seed.json"
+    playbook_path.write_text(playbook.serialize(), encoding="utf-8")
+    snapshot = tmp_path / "dataset"
+    snapshot.mkdir()
+    case = _case(resolved=True)
+    row = {
+        "instance_id": case.instance_id,
+        "split": "train",
+        "resolved": True,
+        "checker_input": case.checker_payload(),
+        "asi": case.asi,
+    }
+    validation = {
+        **row,
+        "instance_id": "repo__repo-2",
+        "split": "validation",
+        "checker_input": {
+            **row["checker_input"],
+            "repository": {
+                **row["checker_input"]["repository"],
+                "instance_id": "repo__repo-2",
+            },
+        },
+    }
+    (snapshot / "manifest.json").write_text(json.dumps({
+        "complete": True,
+        "provisional": False,
+        "train_instances": 1,
+        "validation_instances": 1,
+    }))
+    (snapshot / "train.jsonl").write_text(json.dumps(row) + "\n")
+    (snapshot / "validation.jsonl").write_text(json.dumps(validation) + "\n")
+    captured = {}
+
+    run_playbook_search(
+        dataset_snapshot=snapshot,
+        initial_playbook_path=playbook_path,
+        run_dir=tmp_path / "run",
+        adapter=PlaybookGEPAAdapter(lambda _: (_raw(False), []), None),
+        max_metric_calls=3,
+        max_iterations=1,
+        seed=1,
+        perfect_score=1.0,
+        optimize_fn=lambda **kwargs: captured.update(kwargs),
+    )
+    assert captured["perfect_score"] == 1.0
+    assert captured["skip_perfect_score"] is True
 
 
 def test_curator_delta_operations_are_host_applied_with_new_ids() -> None:
@@ -890,6 +1046,68 @@ def test_evidence_reflector_disables_implicit_cwd_mount(
     assert captured["cleaned"] is True
 
 
+def test_evidence_curator_uses_the_same_isolated_file_transport(
+    tmp_path, monkeypatch
+) -> None:
+    evidence = tmp_path / "curator-evidence"
+    evidence.mkdir()
+    captured = {}
+
+    class FakeEnvironment:
+        def __init__(self, **kwargs):
+            captured.update(kwargs)
+
+        def execute(self, command, **kwargs):
+            captured["artifact_command"] = (command, kwargs)
+            return {
+                "stdout": '{"reasoning":"none","operations":[]}',
+                "stderr": "container warning",
+                "returncode": 0,
+            }
+
+        def cleanup(self):
+            captured["cleaned"] = True
+
+    class FakeAgent:
+        messages = []
+
+        def run(self, **kwargs):
+            captured["task"] = kwargs
+            return "Submitted", "terminal diagnostics"
+
+    monkeypatch.setenv("TEST_API_KEY", "not-a-secret")
+    monkeypatch.setattr(
+        playbook_runtime, "import_minisweagent", lambda: (object, object, None)
+    )
+    monkeypatch.setattr(playbook_runtime, "build_model", lambda *args: object())
+    monkeypatch.setattr(playbook_runtime, "ApptainerEnvironment", FakeEnvironment)
+    monkeypatch.setattr(
+        playbook_runtime, "build_default_agent", lambda *args, **kwargs: FakeAgent()
+    )
+    monkeypatch.setattr(
+        playbook_runtime, "raise_for_permanent_provider_error", lambda *args: None
+    )
+
+    output, _ = playbook_runtime.run_evidence_curator(
+        model_config={"model": "fake", "api_key_env": "TEST_API_KEY"},
+        reflection_config={"evidence_sif_cache_dir": str(tmp_path / "cache")},
+        system="system",
+        instance_template="instance",
+        evidence_dir=str(evidence),
+        counted_internal_playbook="playbook",
+        case_count=32,
+        retry_feedback="",
+    )
+
+    assert output == {"reasoning": "none", "operations": []}
+    assert captured["task"]["case_count"] == 32
+    assert captured["task"]["evidence_path"] == "/evidence"
+    assert captured["run_args"][-1] == f"{evidence.resolve()}:/evidence:ro"
+    assert captured["network_disabled"] is True
+    assert captured["artifact_command"][0] == "cat /tmp/curator.json"
+    assert captured["cleaned"] is True
+
+
 def test_hpc_proposal_agents_use_file_backed_reflector_waves_and_singletons(
     tmp_path,
 ) -> None:
@@ -929,10 +1147,107 @@ def test_hpc_proposal_agents_use_file_backed_reflector_waves_and_singletons(
         (Path(third_evidence) / "prior_reflection.json").read_text()
     )["round"] == 2
     assert agents.curate(playbook, reviews)["operations"] == []
+    curator_item = calls[-1][2][0]
+    assert "case_reflections" not in curator_item["prompt_values"]
+    assert curator_item["prompt_values"]["case_count"] == 3
+    curator_evidence = Path(curator_item["evidence_dir"])
+    assert json.loads(
+        (curator_evidence / "case_reflections.json").read_text()
+    ) == reviews
+    assert json.loads((curator_evidence / "manifest.json").read_text()) == {
+        "schema_version": 1,
+        "case_count": 3,
+        "files": [
+            "counted_playbook.json",
+            "reflection_index.json",
+            "case_reflections.json",
+        ],
+        "contains_repository": False,
+        "contains_direct_downstream_evidence": False,
+    }
     assert agents.refine(playbook) == playbook
     assert [call[:2] for call in calls[-2:]] == [
         ("curator", 1), ("refiner", 1)
     ]
+
+
+def test_safe_pce_smoke32_contract_uses_v6_prompts_and_new_scores() -> None:
+    repo_root = Path(__file__).resolve().parents[2]
+    config_path = (
+        repo_root
+        / "configs/gepa_verified_reject_playbook_safe_pce_smoke32_v1_20260915.yaml"
+    )
+    raw = yaml.safe_load(config_path.read_text(encoding="utf-8"))
+    _validate_frozen_inputs(config_path, raw)
+    prompts = yaml.safe_load(
+        (repo_root / raw["inputs"]["prompt_bundle"]).read_text(encoding="utf-8")
+    )
+
+    assert raw["scoring"] == {
+        "accept_resolved": 1,
+        "accept_unresolved": 0,
+        "reject_resolved": -1,
+        "reject_unresolved": 1,
+        "invalid": -100,
+    }
+    assert raw["search"]["perfect_score"] == 1.0
+    assert raw["search"]["reflection_minibatch_size"] == 32
+    assert len(raw["inputs"]["train_instance_ids"]) == 32
+    assert len(raw["inputs"]["validation_instance_ids"]) == 8
+    assert raw["reflection"]["rounds"] == 3
+    assert raw["length"] == {
+        "maximum_visible_tokens": 2048,
+        "maximum_bullet_tokens": 64,
+        "harmful_pruning_weight": 2,
+    }
+
+    checker = " ".join(prompts["checker_system"].split())
+    reflector = " ".join(prompts["reflector_system"].split())
+    curator = " ".join(prompts["curator_system"].split())
+    assert "using only the issue, the Plan, and the visible rule text" in checker
+    assert "by a material omission" in checker
+    assert "repository" not in prompts["checker_instance"].casefold()
+    assert "resolved outcome is the configured optimization proxy" in reflector
+    assert "could make it a reasonable developer concern" in reflector
+    assert "A case may support zero, one, or multiple" in reflector
+    assert "Do not mechanically map each case" in curator
+    assert "create at most one bullet" in curator
+    assert "The Plan\"" not in curator
+    assert "over 64 Checker-model tokens" in curator
+    assert "language-level duplicates" in curator
+    assert "{{ case_reflections" not in prompts["curator_instance"]
+    combined = "\n".join(str(value) for value in prompts.values())
+    assert "False rejection costs" not in combined
+    assert "five times" not in combined
+
+    supervisor = yaml.safe_load((
+        repo_root
+        / "configs/gepa_verified_reject_playbook_safe_pce_smoke32_v1_supervisor_20260915.yaml"
+    ).read_text(encoding="utf-8"))
+    arguments = supervisor["arguments"]
+    assert arguments[arguments.index("--target-iterations") + 1] == "1"
+    assert arguments[arguments.index("--gepa-config") + 1] == str(
+        config_path.relative_to(repo_root)
+    )
+    assert "--reclaim-staging" in arguments
+    assert "--require-clean-worktree" in arguments
+    assert "--remote-dir" not in arguments
+    assert "--remote-dataset-dir" not in arguments
+    assert "--remote-run-dir" not in arguments
+
+    snapshot = repo_root / raw["inputs"]["dataset_snapshot"]
+    formal = json.loads((snapshot / "formal400-v1.json").read_text())
+    assert formal["source_manifest_sha256"] == raw["inputs"][
+        "dataset_manifest_sha256"
+    ]
+    assert (formal["selected_count"], formal["selected_resolved"], formal["selected_unresolved"]) == (
+        400, 325, 75,
+    )
+    assert (formal["train_count"], formal["validation_count"]) == (320, 80)
+    assert not set(formal["train_instance_ids"]) & set(
+        formal["validation_instance_ids"]
+    )
+    assert len(formal["excluded_from_formal_selection"]) == 11
 
 
 def test_exhausted_curator_length_retries_return_invalid_candidate(tmp_path) -> None:

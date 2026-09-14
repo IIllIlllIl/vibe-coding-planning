@@ -362,7 +362,7 @@ PYTHON_MODULE="${ULHPC_PYTHON_MODULE:-${CONFIG_PYTHON_MODULE:-lang/Python/3.11}}
 CONTAINER_MODULE="${ULHPC_CONTAINER_MODULE:-${CONFIG_CONTAINER_MODULE:-tools/Apptainer}}"
 BEHAVIORAL_NO_CONTAINER=0
 if [[ "$TASK_SEMANTICS" == "behavioral_plan_acceptability_v1" || \
-      "$TASK_SEMANTICS" == "offline_reject_playbook_v1" ]]; then
+      "$TASK_SEMANTICS" == offline_reject_playbook_* ]]; then
   BEHAVIORAL_NO_CONTAINER=1
   if [[ "$CONTAINER_RUNTIME" != "none" ]]; then
     echo "ERROR: no-repository GEPA semantics require container.runtime=none" >&2

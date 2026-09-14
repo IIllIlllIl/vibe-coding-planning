@@ -80,6 +80,22 @@ authority is `docs/archive/mixed-design/swe-chat-data-cleaning.md`.
 - `tools/freeze_swe_verified_safe_pce_selection.py` independently derives the
   formal482 membership from the fixed Verified500 source, the frozen
   placeholder-exclusion ledger, and explicit operational exclusions.
+- `tools/clean_safe_pce_for_ace.py` scans every observed Safe PCE Planner/Code
+  trajectory and all source-access logs, then writes an immutable exhaustive
+  partition into retained ACE-training cases, reliability exclusions, and
+  unfinished deferred-evaluation cases. It never rewrites raw outcomes and
+  does not treat blocked access attempts as successful leakage.
+- `tools/build_safe_pce_playbook_snapshot.py` projects retained Safe PCE cases
+  into the compact ACE schema. Checker inputs remain issue/Plan-only at
+  runtime; retrospective artifacts stay as immutable path/hash/field
+  references and are materialized only for selected Reflector cases.
+- `tools/freeze_playbook_smoke_selection.py` freezes a repository-covering,
+  outcome-balanced 32-train/8-validation flow-and-prompt smoke selection. The
+  selection is outcome-exposed and is not method-evaluation evidence.
+- `tools/freeze_playbook_formal_selection.py` freezes an exact-size ACE
+  development membership within the existing train/validation split using
+  repository/outcome Hamilton quotas and deterministic hash ranking. It records
+  every clean case left outside the formal membership.
 - `hpc_submit_swe_verified_safe_pce_sif_audit.sh` submits the selection-scoped,
   non-Agent audit that freezes exact SHA-256 values and verifies all 482
   declared base commits. It is dry-run by default.

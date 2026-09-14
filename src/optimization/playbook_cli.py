@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import hashlib
+import math
 from pathlib import Path
 from typing import Any
 
@@ -34,6 +35,29 @@ def _validate_frozen_inputs(config_path: Path, raw: dict[str, Any]) -> None:
                 f"{path_key} fingerprint mismatch: expected={inputs[hash_key]} "
                 f"actual={actual}"
             )
+    if inputs.get("dataset_manifest_sha256"):
+        snapshot = _resolve_config_path(
+            config_path, str(inputs["dataset_snapshot"])
+        )
+        manifest_path = snapshot / "manifest.json"
+        actual = hashlib.sha256(manifest_path.read_bytes()).hexdigest()
+        if actual != str(inputs["dataset_manifest_sha256"]):
+            raise ValueError("dataset manifest fingerprint mismatch")
+        manifest = yaml.safe_load(manifest_path.read_text(encoding="utf-8")) or {}
+        for name, expected in (manifest.get("artifacts") or {}).items():
+            artifact = snapshot / str(name)
+            observed = hashlib.sha256(artifact.read_bytes()).hexdigest()
+            if observed != str(expected):
+                raise ValueError(f"dataset artifact fingerprint mismatch: {name}")
+    if inputs.get("selection"):
+        selection_path = _resolve_config_path(config_path, str(inputs["selection"]))
+        actual = hashlib.sha256(selection_path.read_bytes()).hexdigest()
+        if actual != str(inputs.get("selection_sha256", "")):
+            raise ValueError("selection fingerprint mismatch")
+        selection = yaml.safe_load(selection_path.read_text(encoding="utf-8")) or {}
+        for key in ("train_instance_ids", "validation_instance_ids"):
+            if list(inputs.get(key) or []) != list(selection.get(key) or []):
+                raise ValueError(f"{key} does not match the frozen selection")
 
 
 def _token_counter(model: str):
@@ -47,6 +71,28 @@ def _optional_instance_ids(inputs: dict[str, Any], key: str) -> list[str] | None
     return None if value is None else list(value)
 
 
+def _score_table(raw: dict[str, Any]) -> tuple[dict[str, float] | None, float]:
+    scoring = raw.get("scoring")
+    if scoring is None:
+        return None, -100.0
+    expected = {
+        "accept_resolved",
+        "accept_unresolved",
+        "reject_resolved",
+        "reject_unresolved",
+        "invalid",
+    }
+    if not isinstance(scoring, dict) or set(scoring) != expected:
+        raise ValueError("scoring must define the complete five-value table")
+    if any(isinstance(scoring[key], bool) for key in expected):
+        raise ValueError("scoring values must be finite numbers")
+    values = {key: float(scoring[key]) for key in expected}
+    if any(not math.isfinite(value) for value in values.values()):
+        raise ValueError("scoring values must be finite numbers")
+    invalid = values.pop("invalid")
+    return values, invalid
+
+
 def run_from_config(path: str | Path, *, agents: Any | None = None, optimize_fn=None):
     config_path = Path(path)
     raw = yaml.safe_load(config_path.read_text(encoding="utf-8")) or {}
@@ -56,6 +102,7 @@ def run_from_config(path: str | Path, *, agents: Any | None = None, optimize_fn=
     paths = raw["paths"]
     run_dir = Path(paths["run_dir"])
     count_tokens = _token_counter(str(raw["models"]["checker"]["model"]))
+    score_table, invalid_score = _score_table(raw)
     if agents is None and raw.get("execution", {}).get("backend") == "hpc_slurm":
         h = raw["hpc"]
         hpc = HPCConfig(
@@ -97,6 +144,7 @@ def run_from_config(path: str | Path, *, agents: Any | None = None, optimize_fn=
             token_counter=count_tokens,
             semantic_refiner=proposal_agents.refine,
             maximum_tokens=int(raw["length"]["maximum_visible_tokens"]),
+            harmful_weight=float(raw["length"].get("harmful_pruning_weight", 5.0)),
             global_counter_path=run_dir / "global_counter_ledger.json",
         )
         adapter = PlaybookGEPAAdapter(
@@ -105,6 +153,8 @@ def run_from_config(path: str | Path, *, agents: Any | None = None, optimize_fn=
             batch_checker=checker,
             token_counter=count_tokens,
             maximum_bullet_tokens=int(raw["length"]["maximum_bullet_tokens"]),
+            score_table=score_table,
+            invalid_score=invalid_score,
         )
     else:
         if agents is None:
@@ -116,6 +166,7 @@ def run_from_config(path: str | Path, *, agents: Any | None = None, optimize_fn=
             token_counter=count_tokens,
             semantic_refiner=runtime.refiner,
             maximum_tokens=int(raw["length"]["maximum_visible_tokens"]),
+            harmful_weight=float(raw["length"].get("harmful_pruning_weight", 5.0)),
             global_counter_path=run_dir / "global_counter_ledger.json",
         )
         adapter = PlaybookGEPAAdapter(
@@ -123,6 +174,8 @@ def run_from_config(path: str | Path, *, agents: Any | None = None, optimize_fn=
             proposer,
             token_counter=count_tokens,
             maximum_bullet_tokens=int(raw["length"]["maximum_bullet_tokens"]),
+            score_table=score_table,
+            invalid_score=invalid_score,
         )
     kwargs = {}
     if optimize_fn is not None:
@@ -136,6 +189,7 @@ def run_from_config(path: str | Path, *, agents: Any | None = None, optimize_fn=
         max_iterations=int(raw["search"]["max_iterations"]),
         seed=int(raw["search"]["seed"]),
         skip_perfect_score=bool(raw["search"]["skip_perfect_score"]),
+        perfect_score=float(raw["search"].get("perfect_score", 0.0)),
         train_instance_ids=_optional_instance_ids(raw["inputs"], "train_instance_ids"),
         validation_instance_ids=_optional_instance_ids(
             raw["inputs"], "validation_instance_ids"

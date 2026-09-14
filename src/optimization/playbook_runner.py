@@ -51,6 +51,7 @@ def _run_playbook_search_unlocked(
     max_iterations: int | None,
     seed: int,
     skip_perfect_score: bool = True,
+    perfect_score: float = 0.0,
     optimize_fn: Callable[..., Any] = gepa.optimize,
     train_instance_ids: list[str] | None = None,
     validation_instance_ids: list[str] | None = None,
@@ -108,7 +109,8 @@ def _run_playbook_search_unlocked(
         },
         "selection": {"train": train_instance_ids, "validation": validation_instance_ids},
         "search": {"seed": seed, "reflection_minibatch_size": reflection_minibatch_size,
-                   "skip_perfect_score": skip_perfect_score},
+                   "skip_perfect_score": skip_perfect_score,
+                   "perfect_score": perfect_score},
     }
     semantic_sha = hashlib.sha256(json.dumps(semantic, sort_keys=True).encode()).hexdigest()
     manifest_path = run_dir / "run_manifest.json"
@@ -162,7 +164,7 @@ def _run_playbook_search_unlocked(
             frontier_type="instance",
             batch_sampler=state.sampler,
             reflection_minibatch_size=None,
-            perfect_score=0.0,
+            perfect_score=perfect_score,
             skip_perfect_score=skip_perfect_score,
             max_metric_calls=max_metric_calls,
             stop_callbacks=stopper,

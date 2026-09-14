@@ -182,6 +182,7 @@ class TwoStagePlaybookProposer:
         token_counter: Callable[[str], int],
         semantic_refiner: Callable[[RejectPlaybook], RejectPlaybook] | None = None,
         maximum_tokens: int = MAX_VISIBLE_TOKENS,
+        harmful_weight: float = 5.0,
         batch_reflector: Callable[[Sequence[Mapping[str, Any]]], Sequence[Mapping[str, Any]]] | None = None,
         global_counter_path: Path | None = None,
     ) -> None:
@@ -190,6 +191,7 @@ class TwoStagePlaybookProposer:
         self.token_counter = token_counter
         self.semantic_refiner = semantic_refiner
         self.maximum_tokens = maximum_tokens
+        self.harmful_weight = harmful_weight
         self.batch_reflector = batch_reflector
         self.successful_proposals = 0
         self.failures: list[dict[str, str]] = []
@@ -233,6 +235,7 @@ class TwoStagePlaybookProposer:
                 token_counter=self.token_counter,
                 semantic_refiner=self.semantic_refiner,
                 maximum_tokens=self.maximum_tokens,
+                harmful_weight=self.harmful_weight,
             )
             self.last_length_report = report
         except Exception as exc:
@@ -259,12 +262,16 @@ class PlaybookGEPAAdapter:
         batch_checker: Any = None,
         token_counter: Callable[[str], int] | None = None,
         maximum_bullet_tokens: int | None = None,
+        score_table: Mapping[str, float] | None = None,
+        invalid_score: float = -100.0,
     ) -> None:
         self.checker = checker
         self.batch_checker = batch_checker
         self.propose_new_texts = proposer
         self.token_counter = token_counter
         self.maximum_bullet_tokens = maximum_bullet_tokens
+        self.score_table = dict(score_table) if score_table is not None else None
+        self.invalid_score = float(invalid_score)
 
     def evaluate(
         self,
@@ -298,13 +305,13 @@ class PlaybookGEPAAdapter:
                     "invalid_bullet_ids": invalid_bullets,
                 }
                 outputs.append(output)
-                scores.append(-100.0)
+                scores.append(self.invalid_score)
                 if capture_traces:
                     traces.append({
                         "instance_id": case.instance_id,
                         "ground_truth": "GOOD" if case.resolved else "BAD",
                         "resolved_proxy": case.resolved,
-                        "score": -100.0,
+                        "score": self.invalid_score,
                         "issue": case.issue_description,
                         "plan": case.plan,
                         "internal_playbook": playbook.serialize(),
@@ -332,7 +339,9 @@ class PlaybookGEPAAdapter:
                 raw, playbook, trajectory=trajectory
             )
             score = classification_cost(
-                resolved=case.resolved, rejected=checked.rejected
+                resolved=case.resolved,
+                rejected=checked.rejected,
+                score_table=self.score_table,
             )
             output = checked.to_dict()
             outputs.append({"instance_id": case.instance_id, **output})

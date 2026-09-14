@@ -184,11 +184,38 @@ def validate_checker_result(
     )
 
 
-def classification_cost(*, resolved: bool, rejected: bool) -> float:
-    """Return the frozen cost-sensitive score; higher is better."""
-    if rejected:
-        return -5.0 if resolved else 0.0
-    return 0.0 if resolved else -1.0
+def classification_cost(
+    *,
+    resolved: bool,
+    rejected: bool,
+    score_table: Mapping[str, float] | None = None,
+) -> float:
+    """Return the configured resolved-proxy classification score.
+
+    The default preserves completed historical runs.  New method identities
+    provide an explicit table in their runtime config.
+    """
+    table = score_table or {
+        "accept_resolved": 0.0,
+        "accept_unresolved": -1.0,
+        "reject_resolved": -5.0,
+        "reject_unresolved": 0.0,
+    }
+    key = (
+        f"{'reject' if rejected else 'accept'}_"
+        f"{'resolved' if resolved else 'unresolved'}"
+    )
+    if set(table) != {
+        "accept_resolved",
+        "accept_unresolved",
+        "reject_resolved",
+        "reject_unresolved",
+    }:
+        raise ValueError("classification score table has an invalid schema")
+    value = table[key]
+    if not isinstance(value, (int, float)) or isinstance(value, bool):
+        raise ValueError("classification scores must be numeric")
+    return float(value)
 
 
 def overlength_bullet_ids(
@@ -476,10 +503,13 @@ def manage_playbook_length(
     token_counter: TokenCounter,
     semantic_refiner: SemanticRefiner | None,
     maximum_tokens: int = MAX_VISIBLE_TOKENS,
+    harmful_weight: float = 5.0,
 ) -> tuple[RejectPlaybook, dict[str, Any]]:
     """Refine once, then deterministically prune whole bullets if required."""
     if maximum_tokens < 1:
         raise ValueError("maximum_tokens must be positive")
+    if harmful_weight <= 0:
+        raise ValueError("harmful_weight must be positive")
     before = token_counter(playbook.render_for_checker())
     refined = False
     current = playbook
@@ -496,12 +526,12 @@ def manage_playbook_length(
     while token_counter(current.render_for_checker()) > maximum_tokens:
         if not current.bullets:
             raise ValueError("playbook header alone exceeds the token limit")
-        # False rejection costs five times false acceptance. Lowest supported
-        # utility is removed first; ties are stable and favor shorter output.
+        # Lowest supported utility is removed first; ties are stable and favor
+        # shorter output. The weight is frozen by each run identity.
         victim = min(
             current.bullets,
             key=lambda item: (
-                item.helpful - 5 * item.harmful,
+                item.helpful - harmful_weight * item.harmful,
                 -item.harmful,
                 item.helpful,
                 -token_counter(item.text),
@@ -517,5 +547,6 @@ def manage_playbook_length(
         "tokens_before": before,
         "tokens_after": token_counter(current.render_for_checker()),
         "semantic_refiner_ran": refined,
+        "harmful_weight": harmful_weight,
         "deterministically_removed_ids": removed,
     }

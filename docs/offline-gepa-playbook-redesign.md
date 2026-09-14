@@ -100,14 +100,17 @@ The Plan-level score is cost-sensitive and maximized by GEPA:
 
 | Host decision | Good (`RESOLVED`) | Bad (`UNRESOLVED`) |
 |---|---:|---:|
-| ACCEPT | 0 | -1 |
-| REJECT | -5 | 0 |
+| ACCEPT | 1 | 0 |
+| REJECT | -1 | 1 |
 | structurally INVALID candidate | -100 | -100 |
 
-The fivefold false-rejection penalty encodes the deployment preference against
-unfriendly repeated rejection. Operationally incomplete or authority-uncertain
-cases must not be silently converted to `UNRESOLVED`; their eligibility and
-handling are fixed by the future cleaned dataset contract.
+Relative to the correct decision, an unsupported rejection loses two points
+and a missed rejection loses one. This encodes the deployment preference
+against unfriendly repeated rejection while preserving a positive reward for
+both correct cells. The scoring preference belongs to deterministic Host
+configuration; it is not stated to the Checker, Reflector, or Curator.
+Operationally incomplete or authority-uncertain cases must not be silently
+converted to `UNRESOLVED`.
 
 `INVALID` is reserved for a candidate playbook that violates the frozen
 playbook contract, including a bullet longer than 64 Checker-model tokens. It does not mean
@@ -126,8 +129,11 @@ The global 2,048-token trigger is counted with the configured Checker model's
 tokenizer, not whitespace-delimited words; the same count is supplied to the
 Refiner and used by deterministic pruning.
 
-Negative score support, a perfect score of zero, reporting, and any GEPA
-skip-perfect behavior require project-side contract tests. Accuracy, balanced
+The configured perfect score is one. `skip_perfect_score` skips a proposal only
+when every case in the sampled minibatch is already perfect; it does not remove
+individual perfect cases from a mixed Reflection minibatch. Score-table wiring,
+reporting, and GEPA skip-perfect behavior require project-side contract tests.
+Accuracy, balanced
 accuracy, the confusion matrix, and accept/reject rates remain reported
 descriptive metrics; the table above is the candidate-selection objective.
 
@@ -220,7 +226,8 @@ After Curator output:
    met. An LLM does not choose pruning targets and bullet text is never
    truncated.
 
-The implemented pruning utility is `helpful - 5 * harmful`; the lowest value
+The current pruning utility is `helpful - 2 * harmful`, matching the two-point
+loss from a false rejection relative to a correct acceptance. The lowest value
 is removed first. Ties remove higher-harmful, then lower-helpful, then longer,
 then lexicographically earlier IDs. New bullets start at zero. Retained IDs
 preserve their counters; merged bullets start at zero and record their source
@@ -228,11 +235,53 @@ IDs in lineage. The tokenizer and any protection period for new untested rules
 remain to be frozen with the formal configuration. Every refinement, merge,
 and deterministic removal must retain an audit record.
 
-## Dataset Direction And Cleaning
+## Current Safe PCE Learning Authority
 
-The next dataset is a new immutable derivative of the historical 482-case
-SWE-bench Verified snapshot, not an in-place edit. Cleaning is performed after
-the new flow is implemented and before prompts or a formal run are frozen.
+The current ACE input is derived from the new Safe PCE run rather than the old
+482-case PCE snapshot. The raw run is never rewritten. Its exhaustive observed-
+state cleaning ledger partitions the selected 482 cases into 411 reliable
+terminal training cases, 10 leakage/evaluator exclusions, and 61 unfinished
+cases deferred for later ACE evaluation. The deferred set is an operational-
+leftover set, not a random or prevalence-representative holdout.
+
+The compact learning snapshot is
+`configs/frozen_swe_verified_playbook_gepa/20260915_safe_pce_clean411_v2/`.
+It contains 411 cases (335 resolved, 76 unresolved) split deterministically into
+329 train cases (266/63) and 82 internal-validation cases (69/13), stratified by
+repository and outcome. These are development splits; the later 61-case set is
+kept outside the snapshot.
+
+Checker records retain repository identity only for dataset joins and audit.
+The runtime Checker projection contains only issue, Plan, and visible playbook
+text. Historical Plan/Code trajectories, patch, and evaluator result are stored
+as path/hash/field references to the immutable raw output. They are hash-
+verified and materialized only when a selected case's repository-free
+Reflection evidence directory is written. The Curator likewise reads its 32
+final case reflections from a read-only file bundle rather than from one large
+inline prompt.
+
+The prepared one-proposal smoke uses a frozen outcome-balanced 32-train/8-
+validation selection, three sequential Reflection rounds, the explicit
+`1/0/-1/1` score table, a 64-token bullet cap, and the 2,048-token playbook cap.
+Its runtime and supervisor configs are
+`configs/gepa_verified_reject_playbook_safe_pce_smoke32_v1_20260915.yaml` and
+`configs/gepa_verified_reject_playbook_safe_pce_smoke32_v1_supervisor_20260915.yaml`.
+Their presence does not authorize launch.
+
+The formal development membership is frozen separately in
+`configs/frozen_swe_verified_playbook_gepa/20260915_safe_pce_clean411_v2/formal400-v1.json`.
+It deterministically samples within the existing split and repository/outcome
+strata: 320 train cases (258 resolved, 62 unresolved) and 80 validation cases
+(67 resolved, 13 unresolved), for 400 total (325/75). Eleven clean411 cases are
+outside the formal membership; their identities and strata remain in the same
+selection authority. Outcome is used only to preserve development-set
+composition, so this is not held-out evaluation evidence.
+
+## Historical Pre-Safe-PCE Dataset Cleaning
+
+Before Safe PCE, development used immutable derivatives of the historical
+482-case SWE-bench Verified snapshot. The following material is retained only
+to explain those earlier run identities and exclusions.
 
 The audit has four declared axes:
 

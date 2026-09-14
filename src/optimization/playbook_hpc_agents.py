@@ -49,6 +49,43 @@ class HPCPlaybookProposalAgents:
         self.maximum_bullet_tokens = maximum_bullet_tokens
         self.token_counter = token_counter or (lambda text: len(text.split()))
 
+    @staticmethod
+    def _materialize_historical_evidence(
+        historical: Mapping[str, Any],
+    ) -> dict[str, Any]:
+        """Resolve immutable raw-output references only for Reflection."""
+        cache: dict[tuple[str, str], dict[str, Any]] = {}
+        materialized: dict[str, Any] = {}
+        for name, value in historical.items():
+            if not isinstance(value, dict) or set(value) != {
+                "artifact_path",
+                "artifact_sha256",
+                "json_field",
+            }:
+                materialized[name] = value
+                continue
+            path = Path(str(value["artifact_path"]))
+            expected = str(value["artifact_sha256"])
+            key = (str(path), expected)
+            if key not in cache:
+                payload = path.read_bytes()
+                actual = hashlib.sha256(payload).hexdigest()
+                if actual != expected:
+                    raise ValueError(
+                        f"historical evidence hash mismatch: {path}"
+                    )
+                parsed = json.loads(payload)
+                if not isinstance(parsed, dict):
+                    raise ValueError("historical evidence artifact must be an object")
+                cache[key] = parsed
+            field = str(value["json_field"])
+            if field not in cache[key]:
+                raise ValueError(
+                    f"historical evidence field {field!r} is absent from {path}"
+                )
+            materialized[name] = cache[key][field]
+        return materialized
+
     def _write_reflection_evidence(
         self,
         record: Mapping[str, Any],
@@ -65,7 +102,9 @@ class HPCPlaybookProposalAgents:
             ).encode("utf-8")
         ).hexdigest()
         root = self.executor.run_dir / "reflection_evidence" / identity
-        historical = dict(record.get("historical_evidence") or {})
+        historical = self._materialize_historical_evidence(
+            dict(record.get("historical_evidence") or {})
+        )
         atomic_json(root / "classification.json", {
             key: record.get(key)
             for key in (
@@ -115,10 +154,46 @@ class HPCPlaybookProposalAgents:
         return priors
 
     def curate(self, counted: RejectPlaybook, reviews: Sequence[Mapping[str, Any]]):
-        item = {"validation_playbook": counted.serialize(), "prompt_values": {
-            "counted_internal_playbook": counted.serialize(),
-            "case_reflections": json.dumps(list(reviews), ensure_ascii=False),
-        }}
+        identity = hashlib.sha256(
+            json.dumps(
+                {"playbook": counted.serialize(), "reviews": list(reviews)},
+                ensure_ascii=False,
+                sort_keys=True,
+                separators=(",", ":"),
+            ).encode("utf-8")
+        ).hexdigest()
+        evidence_dir = self.executor.run_dir / "curator_evidence" / identity
+        atomic_json(evidence_dir / "counted_playbook.json", json.loads(counted.serialize()))
+        atomic_json(evidence_dir / "case_reflections.json", list(reviews))
+        atomic_json(evidence_dir / "reflection_index.json", [
+            {
+                "instance_id": review.get("instance_id"),
+                "key_insight": review.get("key_insight"),
+                "uncertainty": review.get("uncertainty"),
+                "bullet_tags": review.get("bullet_tags", []),
+            }
+            for review in reviews
+        ])
+        atomic_json(evidence_dir / "manifest.json", {
+            "schema_version": 1,
+            "case_count": len(reviews),
+            "files": [
+                "counted_playbook.json",
+                "reflection_index.json",
+                "case_reflections.json",
+            ],
+            "contains_repository": False,
+            "contains_direct_downstream_evidence": False,
+        })
+        item = {
+            "validation_playbook": counted.serialize(),
+            "evidence_dir": str(evidence_dir),
+            "prompt_values": {
+                "counted_internal_playbook": counted.serialize(),
+                "case_count": len(reviews),
+                "evidence_path": "/evidence",
+            },
+        }
         try:
             return self.executor.run_wave("curator", [item])[0]["agent_output"]
         except TaskAttemptsExhausted:

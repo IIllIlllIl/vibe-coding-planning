@@ -1,0 +1,43 @@
+{
+  "artifacts": {
+    "audit_ledger.jsonl": "dd53a525ada24112a2742074ddd805e718e52de8ebdde0033f83c92e0230e740",
+    "deferred_test_instances.jsonl": "eb457f1ae9385577678218649fe43faa44e814138b5c7288364bdbe48750f946",
+    "excluded_instances.jsonl": "c3416413093b3f6a2e035810ad1517057d49f6cc73eda96270a756c1b7e23040",
+    "training_instances.jsonl": "06566557521f5010dfcf47b7d1aee3e1fc7a91a9711fb54367a897f11d9e19cb"
+  },
+  "cleaning_policy": "safe-pce-ace-reliability-v1",
+  "complete_for_observed_run_state": true,
+  "deferred_selection_caveat": "Operational leftovers, not a random or prevalence-representative holdout.",
+  "deferred_test_instances": 61,
+  "evaluator_policy": "Retain only official_tests_resolved or official_tests_unresolved under swe_verified_pce_outcomes_v1.",
+  "excluded_instances": 10,
+  "exclusion_reason_counts": {
+    "ALTERNATE_TARGET_SOURCE_EXPOSED": 4,
+    "EXECUTED_SOLUTION_OR_UNFROZEN_HTTP": 4,
+    "FUTURE_TARGET_PACKAGE_METADATA_EXPOSED": 1,
+    "NON_OFFICIAL_EVALUATOR_TERMINAL": 1
+  },
+  "immutable": true,
+  "local_source_policy": "Exclude successful exposure of future target-package metadata or target source content outside /testbed; unsuccessful probes and editable-install path discovery alone do not exclude.",
+  "network_policy": "Exclude successful non-benign HTTP outside frozen issue URLs and successful access to solution surfaces; blocked attempts do not exclude.",
+  "ordered_deferred_test_ids_sha256": "94e21a301d5190c1943ee8bbadb33d0184882a2b78d5400461709cd15fffce69",
+  "ordered_training_ids_sha256": "cd0df6b5ac6fcbe3cf1113b6a175fb9e798081e609d9fbfe44629d0ed5366479",
+  "raw_run_unchanged": true,
+  "retained_training_instances": 411,
+  "retained_training_outcomes": {
+    "resolved": 335,
+    "unresolved": 76
+  },
+  "schema_version": 1,
+  "selected_instances": 482,
+  "source_batch_fingerprint": "cc292dd7dc2baf3499e8a5ee6034eb3cfb8a48dd3738c0c956e950cd26f4c32a",
+  "source_run_manifest_sha256": "78d97da177ff6698d43e1195c186e95712aedaa44061ce33a5dca85f20cba8f2",
+  "source_run_root": "/mnt/scratch/users/twang/vibe-coding-planning/run_state/output/SWE-bench_Verified/swe-verified-pce-runs/formal/safe-pce-verified482-v1-20260914",
+  "source_selection": "/mnt/scratch/users/twang/vibe-coding-planning/run_state/input/safe-pce/verified482-formal-v1-20260914/selection.json",
+  "source_selection_sha256": "9af8c374fb811abd36176500a69b731aaf63fa965b0317d451e0e797429bce74",
+  "terminal_instances": 421,
+  "terminal_outcomes": {
+    "resolved": 344,
+    "unresolved": 77
+  }
+}

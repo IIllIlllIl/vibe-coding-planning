@@ -341,6 +341,32 @@ derived commit/files surfaces excludes the case from the clean derivative
 without rewriting its raw PCE outcome. Operationally incomplete and `unknown`
 cases are likewise never converted to `unresolved`.
 
+### Formal482 observed-state cleaning authority
+
+The first formal run stopped with 421 terminal cases and 61 unfinished cases.
+The unfinished membership is frozen, but its Safe PCE resume is deliberately
+deferred until after the next ACE development cycle. It is intended as a later
+ACE evaluation set; because it consists of operational leftovers rather than a
+random sample, it must not be described as prevalence-representative.
+
+The immutable observed-state derivative is
+`configs/frozen_swe_verified_safe_pce/verified482-terminal421-clean-v1-20260914/`.
+Its exhaustive ledger partitions all 482 selected cases into:
+
+- 411 retained ACE-training cases: 335 resolved and 76 unresolved;
+- 10 reliability exclusions: four successful reads of unfrozen/future HTTP
+  solution surfaces, four successful reads of another installed version of
+  the target `requests` package, one exposure of future target-package
+  metadata, and one non-official `code_patch_not_applied` terminal;
+- 61 deferred, unfinished cases with no outcome imputation.
+
+Blocked source requests, unsuccessful searches, benign behavior checks against
+example/httpbin hosts, and discovery of an editable-install path without
+reading alternate source are retained. The deterministic builder is
+`scripts/tools/clean_safe_pce_for_ace.py`; it refuses to overwrite an existing
+derivative and verifies every selected task identity before writing the
+ledger. The raw formal run remains unchanged.
+
 ## Historical Evidence
 
 The complete former SWE-Verified PCE/PCCE workflow, including quick50 and

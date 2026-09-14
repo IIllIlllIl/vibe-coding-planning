@@ -15,6 +15,7 @@ from src.optimization.playbook_runtime import (
     PlaybookAgentOutputContractError,
     PromptModel,
     _render,
+    run_evidence_curator,
     run_evidence_reflector,
 )
 from src.optimization.playbook import (
@@ -50,7 +51,7 @@ def run_task(
         if previous_output_path is not None and previous_output_path.is_file():
             previous = json.loads(previous_output_path.read_text(encoding="utf-8"))
             retry_feedback = str(previous.get("error", ""))
-        if role in {"checker", "reflector"}:
+        if role in {"checker", "reflector", "curator"}:
             values["retry_feedback"] = retry_feedback
         if role == "reflector":
             stage = "agent_execution"
@@ -61,6 +62,18 @@ def run_task(
                 instance_template=prompts[f"{role}_instance"],
                 evidence_dir=str(manifest["evidence_dir"]),
                 internal_playbook=str(values["internal_playbook"]),
+                retry_feedback=str(values["retry_feedback"]),
+            )
+        elif role == "curator" and "evidence_dir" in manifest:
+            stage = "agent_execution"
+            output, trajectory = run_evidence_curator(
+                model_config=config["models"][role],
+                reflection_config=config["reflection"],
+                system=prompts[f"{role}_system"],
+                instance_template=prompts[f"{role}_instance"],
+                evidence_dir=str(manifest["evidence_dir"]),
+                counted_internal_playbook=str(values["counted_internal_playbook"]),
+                case_count=int(values["case_count"]),
                 retry_feedback=str(values["retry_feedback"]),
             )
         else:
