@@ -1,0 +1,12 @@
+{
+  "externalized_from_git": true,
+  "files": {
+    "cases.jsonl": "51c7c6f666a1177539c1797e4540cde750b1385f6b7b7557c8cb5c78f909b73b",
+    "train.jsonl": "29ae72761d0c6f54316be7d05b94925d7649073f9043a43e57082742666ca81a",
+    "validation.jsonl": "12cc06f818c6616b5f060ff5784810cd3e7d5860e9c17dad26bd800093b0aa0f"
+  },
+  "remote_authority": "twang@access-iris.uni.lu:/scratch/users/twang/vibe-coding-planning/playbook-gepa-datasets/configs/frozen_swe_verified_playbook_gepa/20260909_clean444_25e5ce38271c",
+  "remote_authority_kind": "iris_scratch_operational_copy",
+  "schema_version": 1,
+  "verified_sha256_on": "2026-09-15"
+}

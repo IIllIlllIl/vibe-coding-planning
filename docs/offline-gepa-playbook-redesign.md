@@ -482,6 +482,25 @@ earlier exclusions, so this pass removes 61 additional clean436 rows. Seven
 retained cases still lack a recognized Validation heading; they remain useful
 potential Plan-deficiency evidence and are not removed by this policy.
 
+### Historical payload externalization
+
+The inline `cases.jsonl`, `train.jsonl`, and `validation.jsonl` payloads for the
+clean444, clean436, and clean375 snapshots were removed from the unpublished
+Git history on 2026-09-15. They duplicated large raw Planner, Coder, and
+evaluator trajectories and are not inputs to the current Safe-PCE-derived ACE
+method. Their original manifests, membership hashes, audit ledgers, exclusions,
+and cleaning rationale remain tracked unchanged. Each snapshot now includes an
+`external_payloads.json` authority with the exact payload SHA-256 values and the
+Iris operational-copy location verified on the externalization date.
+
+The Iris scratch copy is an operational reproduction source, not a claim of
+permanent archival storage. Recover a historical payload only for an explicit
+audit or rerun, verify it against both `external_payloads.json` and the original
+manifest, and do not recommit it. The historical run configurations that name
+these snapshots therefore require that explicit restore step. Compact frozen
+candidate pools and the current reference-based Safe PCE datasets remain in
+Git.
+
 The completed historical Offline GEPA minibatch-eight/eight-iteration run used
 716 logical metric calls and six full validation evaluations. Its authoritative
 audit interval was 2026-08-10 11:15:18 UTC through 23:50:08 UTC, approximately

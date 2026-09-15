@@ -23,6 +23,18 @@ opencode_logs/
 .env
 configs/ulhpc_submit.yaml
 
+# Historical inline GEPA payloads are external artifacts. Their immutable
+# manifests, cleaning ledgers, hashes, and remote locations remain tracked.
+/configs/frozen_swe_verified_playbook_gepa/20260909_clean444_25e5ce38271c/cases.jsonl
+/configs/frozen_swe_verified_playbook_gepa/20260909_clean444_25e5ce38271c/train.jsonl
+/configs/frozen_swe_verified_playbook_gepa/20260909_clean444_25e5ce38271c/validation.jsonl
+/configs/frozen_swe_verified_playbook_gepa/20260910_clean436_4c0e9c40440e/cases.jsonl
+/configs/frozen_swe_verified_playbook_gepa/20260910_clean436_4c0e9c40440e/train.jsonl
+/configs/frozen_swe_verified_playbook_gepa/20260910_clean436_4c0e9c40440e/validation.jsonl
+/configs/frozen_swe_verified_playbook_gepa/20260910_clean375_127b1627efee/cases.jsonl
+/configs/frozen_swe_verified_playbook_gepa/20260910_clean375_127b1627efee/train.jsonl
+/configs/frozen_swe_verified_playbook_gepa/20260910_clean375_127b1627efee/validation.jsonl
+
 # Python
 __pycache__/
 *.py[cod]
