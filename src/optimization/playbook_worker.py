@@ -83,6 +83,15 @@ def run_task(
                 retry_feedback=str(values["retry_feedback"]),
             )
         elif role == "repo_reflector":
+            source_access_issue = manifest.get("source_access_issue")
+            if (
+                not isinstance(source_access_issue, str)
+                or not source_access_issue.strip()
+            ):
+                raise ValueError(
+                    "Repo Reflector manifest requires a non-empty "
+                    "source_access_issue"
+                )
             stage = "agent_execution"
             output, trajectory = run_repository_reflector(
                 model_config=config["models"]["reflector"],
@@ -97,7 +106,7 @@ def run_task(
                 attempt_dir=attempt_dir,
                 evidence_dir=str(manifest["evidence_dir"]),
                 internal_playbook=str(values["internal_playbook"]),
-                source_access_issue=str(manifest["source_access_issue"]),
+                source_access_issue=source_access_issue,
                 retry_feedback=str(values["retry_feedback"]),
             )
         elif role == "reflector":

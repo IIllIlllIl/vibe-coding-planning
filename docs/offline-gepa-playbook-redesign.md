@@ -199,12 +199,29 @@ knowledge. Outcome, Code trajectory, evaluator result, stable bullet IDs, and
 counters are absent from the Repo Checker task manifest. Malformed output is a
 retryable Agent contract failure; it is not candidate `INVALID`.
 
-The prepared development smoke is an outcome-balanced 8-train/4-validation
-subset of already exposed Safe-PCE development cases. It attempts one proposal
-with one Reflection round and retains all 0/1/2 outputs for calibration review.
-Its config is
-`configs/gepa_verified_repo_concern_playbook_smoke8_v1_20260915.yaml`. It is
-prepared but not launched; execution still requires explicit authorization.
+The first development smoke used an outcome-balanced 8-train/4-validation
+subset of already exposed Safe-PCE development cases. Its twelve Seed Checker
+calls completed and returned ACCEPT, but every Repo Reflector attempt failed
+before model execution: the proposal layer supplied `source_access_issue`, while
+the Slurm manifest projection omitted it and the Worker raised `KeyError`.
+Consequently v1 produced no Reflection, Curator call, or candidate and is only
+operational failure provenance; it says nothing about the new prompts or Level
+calibration.
+
+The repaired successor is
+`configs/gepa_verified_repo_concern_playbook_smoke8_v2_20260915.yaml`. The
+executor now requires and preserves the source-policy input in the final Repo
+Reflector task manifest while keeping it outside `prompt_values`. A regression
+test inspects that final persisted manifest, rather than only the proposal
+layer's intermediate item. V2 retains the same cases, prompts, one-proposal
+budget, and one Reflection round for a controlled retry. It imports the twelve
+completed v1 Seed Checker outputs only after exact scientific-input matching,
+source run-manifest hash verification, source-output identity checks, and the
+current Host Checker validator. The original `agent_output` and trajectory are
+preserved; the v2 envelope records source task/output paths and hashes. Inputs
+for a learned candidate differ and therefore cannot match these Seed
+checkpoints. It is prepared but not launched; execution still requires explicit
+authorization.
 
 ## Two-Stage Reflection
 

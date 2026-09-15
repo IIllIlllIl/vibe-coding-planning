@@ -153,6 +153,25 @@ def run_from_config(path: str | Path, *, agents: Any | None = None, optimize_fn=
         image_records = {}
     paths = raw["paths"]
     run_dir = Path(paths["run_dir"])
+    checkpoint_import = raw.get("checkpoint_import")
+    if checkpoint_import is not None:
+        if not repo_mode or not isinstance(checkpoint_import, dict):
+            raise ValueError("checkpoint import is supported only in Repo mode")
+        if set(checkpoint_import) != {
+            "source_run_dir",
+            "source_run_manifest_sha256",
+            "roles",
+        }:
+            raise ValueError("checkpoint import contract is incomplete")
+        if checkpoint_import["roles"] != ["repo_checker"]:
+            raise ValueError("only exact Repo Checker checkpoint import is supported")
+        source_manifest_sha = str(
+            checkpoint_import["source_run_manifest_sha256"]
+        )
+        if len(source_manifest_sha) != 64 or any(
+            char not in "0123456789abcdef" for char in source_manifest_sha
+        ):
+            raise ValueError("checkpoint import run-manifest SHA-256 is invalid")
     count_tokens = _token_counter(str(raw["models"]["checker"]["model"]))
     score_table, invalid_score = _score_table(raw)
     if agents is None and raw.get("execution", {}).get("backend") == "hpc_slurm":
@@ -179,6 +198,16 @@ def run_from_config(path: str | Path, *, agents: Any | None = None, optimize_fn=
             hpc=hpc,
             token_counter=count_tokens,
             maximum_bullet_tokens=int(raw["length"]["maximum_bullet_tokens"]),
+            checkpoint_import_run_dir=(
+                run_dir.parent / str(checkpoint_import["source_run_dir"])
+                if checkpoint_import
+                else None
+            ),
+            checkpoint_import_manifest_sha256=(
+                str(checkpoint_import["source_run_manifest_sha256"])
+                if checkpoint_import
+                else None
+            ),
         )
         if repo_mode:
             checker = HPCRepoPlaybookChecker(

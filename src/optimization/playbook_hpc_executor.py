@@ -6,7 +6,7 @@ import hashlib
 import json
 from pathlib import Path
 import shlex
-from typing import Any, Mapping, Sequence
+from typing import Any, Callable, Mapping, Sequence
 
 from src.optimization.hpc.config import HPCConfig
 from src.optimization.hpc.task_batch import SlurmTaskBatch, TaskFiles, atomic_json
@@ -30,15 +30,142 @@ def _sha(value: Any) -> str:
                                      separators=(",", ":"), default=str).encode()).hexdigest()
 
 
+def _file_sha256(path: Path) -> str:
+    digest = hashlib.sha256()
+    with path.open("rb") as handle:
+        for chunk in iter(lambda: handle.read(1024 * 1024), b""):
+            digest.update(chunk)
+    return digest.hexdigest()
+
+
+def _task_input_identity(manifest: Mapping[str, Any]) -> dict[str, Any]:
+    """Return the scientific task input, excluding transport-local identity."""
+    return {
+        key: value
+        for key, value in manifest.items()
+        if key not in {"schema_version", "fingerprint", "task_index"}
+    }
+
+
 class PlaybookHPCExecutor:
     def __init__(self, *, config_path: Path, run_dir: Path, hpc: HPCConfig,
-                 token_counter=None, maximum_bullet_tokens: int | None = None) -> None:
+                 token_counter=None, maximum_bullet_tokens: int | None = None,
+                 checkpoint_import_run_dir: Path | None = None,
+                 checkpoint_import_manifest_sha256: str | None = None) -> None:
         self.config_path = config_path
         self.run_dir = run_dir
         self.hpc = hpc
         self.runtime = SlurmTaskBatch(hpc)
         self.token_counter = token_counter
         self.maximum_bullet_tokens = maximum_bullet_tokens
+        self.checkpoint_import_run_dir = checkpoint_import_run_dir
+        self.checkpoint_import_manifest_sha256 = (
+            checkpoint_import_manifest_sha256
+        )
+
+    def _import_completed_repo_checker_outputs(
+        self,
+        *,
+        batch_dir: Path,
+        tasks: Sequence[TaskFiles],
+        validate_output: Callable[[TaskFiles, dict[str, Any]], None],
+    ) -> None:
+        """Import only exact-input completed Checker outputs from a frozen run."""
+        source_run = self.checkpoint_import_run_dir
+        if source_run is None:
+            return
+        expected_manifest_sha = self.checkpoint_import_manifest_sha256
+        if not expected_manifest_sha:
+            raise ValueError("checkpoint import requires a run-manifest SHA-256")
+        source_run_manifest = source_run / "run_manifest.json"
+        if not source_run_manifest.is_file():
+            raise ValueError("checkpoint import source run manifest is missing")
+        observed_manifest_sha = _file_sha256(source_run_manifest)
+        if observed_manifest_sha != expected_manifest_sha:
+            raise ValueError("checkpoint import source run manifest hash mismatch")
+
+        sources: dict[str, tuple[Path, Path, dict[str, Any], dict[str, Any]]] = {}
+        pattern = "hpc_tasks/repo_checker/*/tasks/task_*.json"
+        for source_task_path in sorted(source_run.glob(pattern)):
+            source_task = json.loads(source_task_path.read_text(encoding="utf-8"))
+            identity = _sha(_task_input_identity(source_task))
+            source_output_path = (
+                source_task_path.parents[1] / "outputs" / source_task_path.name
+            )
+            if not source_output_path.is_file():
+                continue
+            source_output = json.loads(
+                source_output_path.read_text(encoding="utf-8")
+            )
+            if source_output.get("status") != "completed":
+                continue
+            if identity in sources:
+                raise ValueError("duplicate checkpoint import task identity")
+            sources[identity] = (
+                source_task_path,
+                source_output_path,
+                source_task,
+                source_output,
+            )
+
+        pending: list[tuple[TaskFiles, dict[str, Any], dict[str, Any]]] = []
+        audit_rows = []
+        for task in tasks:
+            if task.output_path.is_file():
+                continue
+            target_task = json.loads(task.manifest_path.read_text(encoding="utf-8"))
+            source = sources.get(_sha(_task_input_identity(target_task)))
+            if source is None:
+                continue
+            source_task_path, source_output_path, source_task, source_output = source
+            if (
+                source_output.get("fingerprint") != source_task.get("fingerprint")
+                or source_output.get("role") != "repo_checker"
+                or source_output.get("task_index") != source_task.get("task_index")
+                or source_output.get("instance_id") != source_task.get("instance_id")
+                or not isinstance(source_output.get("agent_output"), dict)
+                or not isinstance(source_output.get("trajectory"), list)
+            ):
+                raise ValueError("checkpoint import source output identity mismatch")
+            source_playbook = RejectPlaybook(tuple(
+                PlaybookBullet(f"host-{index:05d}", "Host validation rule")
+                for index in range(
+                    1, int(source_task["validation_rule_count"]) + 1
+                )
+            ))
+            validate_repo_checker_result(
+                source_output["agent_output"], source_playbook
+            )
+            imported = {
+                **source_output,
+                "fingerprint": target_task["fingerprint"],
+                "task_index": target_task["task_index"],
+                "instance_id": target_task.get("instance_id"),
+                "checkpoint_import": {
+                    "source_run_manifest_sha256": observed_manifest_sha,
+                    "source_task_manifest": str(source_task_path),
+                    "source_task_manifest_sha256": _file_sha256(source_task_path),
+                    "source_output": str(source_output_path),
+                    "source_output_sha256": _file_sha256(source_output_path),
+                },
+            }
+            validate_output(task, imported)
+            pending.append((task, imported, imported["checkpoint_import"]))
+            audit_rows.append({
+                "instance_id": task.instance_id,
+                **imported["checkpoint_import"],
+            })
+
+        for task, imported, _provenance in pending:
+            atomic_json(task.output_path, imported)
+        if audit_rows:
+            atomic_json(batch_dir / "checkpoint_import.json", {
+                "schema_version": 1,
+                "role": "repo_checker",
+                "source_run": str(source_run),
+                "source_run_manifest_sha256": observed_manifest_sha,
+                "imported": audit_rows,
+            })
 
     def batch_dir_for(self, role: str, items: Sequence[Mapping[str, Any]]) -> Path:
         semantic = {
@@ -74,6 +201,16 @@ class PlaybookHPCExecutor:
                 payload["repository"] = dict(item["repository"])
             if "image_authority" in item:
                 payload["image_authority"] = dict(item["image_authority"])
+            if role == "repo_reflector":
+                source_access_issue = item.get("source_access_issue")
+                if (
+                    not isinstance(source_access_issue, str)
+                    or not source_access_issue.strip()
+                ):
+                    raise ValueError(
+                        "repo_reflector requires a non-empty source_access_issue"
+                    )
+                payload["source_access_issue"] = source_access_issue
             if manifest.is_file() and json.loads(manifest.read_text()) != payload:
                 raise ValueError("playbook task manifest mismatch")
             if not manifest.exists():
@@ -171,6 +308,13 @@ class PlaybookHPCExecutor:
                     )
             elif role == "refiner":
                 apply_refiner_operations(playbook, agent_output)
+
+        if role == "repo_checker":
+            self._import_completed_repo_checker_outputs(
+                batch_dir=batch_dir,
+                tasks=tasks,
+                validate_output=validate,
+            )
 
         return self.runtime.run(
             batch_dir=batch_dir, fingerprint=fingerprint, tasks=tasks,

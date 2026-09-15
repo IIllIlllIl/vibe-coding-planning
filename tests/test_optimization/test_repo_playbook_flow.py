@@ -342,6 +342,98 @@ def test_repo_hpc_checker_manifest_has_repo_but_no_outcome_or_counters(
     assert "#SBATCH --array=0" in script
 
 
+def test_repo_checker_imports_only_exact_validated_completed_checkpoint(
+    tmp_path: Path,
+) -> None:
+    source_run = tmp_path / "source-run"
+    source_manifest = source_run / "run_manifest.json"
+    source_manifest.parent.mkdir(parents=True)
+    source_manifest.write_text('{"semantic_sha256":"source"}\n', encoding="utf-8")
+    source_manifest_sha = hashlib.sha256(source_manifest.read_bytes()).hexdigest()
+    source_batch = source_run / "hpc_tasks/repo_checker/source-batch"
+    source_task_path = source_batch / "tasks/task_0000.json"
+    source_output_path = source_batch / "outputs/task_0000.json"
+    source_task_path.parent.mkdir(parents=True)
+    source_output_path.parent.mkdir(parents=True)
+    item = {
+        "instance_id": "repo__repo-1",
+        "validation_rule_count": 2,
+        "repository": {
+            "repo": "repo/repo",
+            "base_commit": "abc123",
+            "instance_id": "repo__repo-1",
+        },
+        "image_authority": {
+            "requested_ref": "image",
+            "sif_path": "/cache/image.sif",
+            "sif_sha256": "a" * 64,
+            "sif_bytes": 123,
+        },
+        "prompt_values": {
+            "issue": "issue",
+            "plan": "plan",
+            "checker_visible_playbook": "playbook",
+            "retry_feedback": "",
+        },
+    }
+    source_task = {
+        "schema_version": 1,
+        "role": "repo_checker",
+        "fingerprint": "source-fingerprint",
+        "task_index": 0,
+        **item,
+    }
+    source_task_path.write_text(json.dumps(source_task), encoding="utf-8")
+    source_output = {
+        "schema_version": 1,
+        "status": "completed",
+        "role": "repo_checker",
+        "fingerprint": "source-fingerprint",
+        "task_index": 0,
+        "instance_id": "repo__repo-1",
+        "agent_output": _repo_output(None, None),
+        "trajectory": [{"role": "assistant", "content": "done"}],
+    }
+    source_output_path.write_text(json.dumps(source_output), encoding="utf-8")
+
+    config = tmp_path / "config.yaml"
+    config.write_text("mode: offline_repo_concern_playbook\n", encoding="utf-8")
+    hpc = HPCConfig(
+        submit=True,
+        worker_config_path=str(config),
+        max_running_array_tasks=0,
+    )
+    executor = PlaybookHPCExecutor(
+        config_path=config,
+        run_dir=tmp_path / "target-run",
+        hpc=hpc,
+        checkpoint_import_run_dir=source_run,
+        checkpoint_import_manifest_sha256=source_manifest_sha,
+    )
+    executor.runtime = SlurmTaskBatch(
+        hpc,
+        submitter=lambda _path: pytest.fail("imported checkpoint was resubmitted"),
+    )
+
+    outputs = executor.run_wave("repo_checker", [item])
+
+    assert outputs[0]["agent_output"] == source_output["agent_output"]
+    assert outputs[0]["trajectory"] == source_output["trajectory"]
+    provenance = outputs[0]["checkpoint_import"]
+    assert provenance["source_run_manifest_sha256"] == source_manifest_sha
+    assert provenance["source_output_sha256"] == hashlib.sha256(
+        source_output_path.read_bytes()
+    ).hexdigest()
+    audit_path = next(
+        (tmp_path / "target-run/hpc_tasks/repo_checker").glob(
+            "*/checkpoint_import.json"
+        )
+    )
+    audit = json.loads(audit_path.read_text(encoding="utf-8"))
+    assert [row["instance_id"] for row in audit["imported"]] == ["repo__repo-1"]
+    assert json.loads(source_output_path.read_text()) == source_output
+
+
 def test_repo_reflection_mounts_repo_and_retrospective_evidence_separately(
     tmp_path: Path,
 ) -> None:
@@ -395,6 +487,90 @@ def test_repo_reflection_mounts_repo_and_retrospective_evidence_separately(
     classification = json.loads((evidence / "classification.json").read_text())
     assert classification["resolved_proxy"] is False
     assert classification["repository"] == record["repository"]
+
+
+def test_repo_reflector_final_hpc_manifest_preserves_source_access_issue(
+    tmp_path: Path,
+) -> None:
+    config = tmp_path / "config.yaml"
+    config.write_text("mode: offline_repo_concern_playbook\n", encoding="utf-8")
+    hpc = HPCConfig(
+        submit=True,
+        worker_config_path=str(config),
+        max_running_array_tasks=0,
+        job_name_prefix="repo-playbook-smoke",
+    )
+    executor = PlaybookHPCExecutor(
+        config_path=config,
+        run_dir=tmp_path / "run",
+        hpc=hpc,
+    )
+    executor.runtime = SlurmTaskBatch(hpc, submitter=lambda path: "123")
+    agents = HPCRepoPlaybookProposalAgents(
+        executor,
+        image_records=_image_records(),
+        maximum_tokens=2048,
+    )
+    record = {
+        "instance_id": "repo__repo-1",
+        "issue": "Read https://example.com/issue for context.",
+        "plan": "plan",
+        "ground_truth": "BAD",
+        "resolved_proxy": False,
+        "score": 0,
+        "checker_output": _repo_output(1, 2),
+        "checker_visible_playbook": render_concern_playbook(_playbook()),
+        "internal_playbook": _playbook().serialize(),
+        "repository": {
+            "repo": "repo/repo",
+            "base_commit": "abc123",
+            "instance_id": "repo__repo-1",
+        },
+        "historical_evidence": {
+            "plan_trajectory": [{"role": "assistant", "content": "plan"}],
+            "code_trajectory": [{"role": "assistant", "content": "code"}],
+            "generated_patch": "diff",
+            "evaluator_result": {"resolved": False},
+        },
+    }
+
+    with pytest.raises(ControllerYield):
+        agents.reflect_batch([record], rounds=1)
+
+    manifest_path = next(
+        (tmp_path / "run/hpc_tasks/repo_reflector").glob("*/tasks/task_0000.json")
+    )
+    manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+    assert manifest["source_access_issue"] == record["issue"]
+    assert "source_access_issue" not in manifest["prompt_values"]
+    assert set(manifest["prompt_values"]) == {
+        "internal_playbook",
+        "evidence_path",
+    }
+
+
+def test_repo_reflector_hpc_manifest_requires_source_access_issue(
+    tmp_path: Path,
+) -> None:
+    config = tmp_path / "config.yaml"
+    config.write_text("mode: offline_repo_concern_playbook\n", encoding="utf-8")
+    hpc = HPCConfig(submit=True, worker_config_path=str(config))
+    executor = PlaybookHPCExecutor(
+        config_path=config,
+        run_dir=tmp_path / "run",
+        hpc=hpc,
+    )
+    with pytest.raises(ValueError, match="non-empty source_access_issue"):
+        executor.run_wave(
+            "repo_reflector",
+            [
+                {
+                    "instance_id": "repo__repo-1",
+                    "prompt_values": {},
+                    "validation_playbook": _playbook().serialize(),
+                }
+            ],
+        )
 
 
 def test_repo_worker_uses_separate_runtime_and_host_validation(
@@ -639,9 +815,10 @@ def test_repo_prompt_freezes_level_and_information_boundaries() -> None:
     assert "over 64 tokens" in curator_text
 
 
-def test_prepared_repo_smoke_binds_distinct_mode_and_frozen_inputs() -> None:
+@pytest.mark.parametrize("version", ["v1", "v2"])
+def test_repo_smoke_binds_distinct_mode_and_frozen_inputs(version: str) -> None:
     path = Path(
-        "configs/gepa_verified_repo_concern_playbook_smoke8_v1_20260915.yaml"
+        f"configs/gepa_verified_repo_concern_playbook_smoke8_{version}_20260915.yaml"
     )
     raw = yaml.safe_load(path.read_text(encoding="utf-8"))
     _validate_frozen_inputs(path, raw)
@@ -658,3 +835,32 @@ def test_prepared_repo_smoke_binds_distinct_mode_and_frozen_inputs() -> None:
     assert len(raw["inputs"]["train_instance_ids"]) == 8
     assert len(raw["inputs"]["validation_instance_ids"]) == 4
     assert len(records) == 482
+
+
+def test_repaired_repo_smoke_has_fresh_run_and_supervisor_identity() -> None:
+    config_path = Path(
+        "configs/gepa_verified_repo_concern_playbook_smoke8_v2_20260915.yaml"
+    )
+    supervisor_path = Path(
+        "configs/gepa_verified_repo_concern_playbook_smoke8_v2_supervisor_20260915.yaml"
+    )
+    config = yaml.safe_load(config_path.read_text(encoding="utf-8"))
+    supervisor = yaml.safe_load(supervisor_path.read_text(encoding="utf-8"))
+    assert config["status"] == "ready_not_launched"
+    assert config["readiness"] == {
+        "runnable": True,
+        "launched": False,
+        "missing": [],
+    }
+    assert config["run_id"].endswith("smoke8-v2-20260915")
+    assert config["paths"]["run_dir"].endswith("smoke8-v2-20260915")
+    assert config["checkpoint_import"] == {
+        "source_run_dir": "smoke8-v1-20260915",
+        "source_run_manifest_sha256": (
+            "e6995ef3602ebee0bedd0be0b3a56712c317f8966f7afdfa15bf115a2b85e2fd"
+        ),
+        "roles": ["repo_checker"],
+    }
+    arguments = supervisor["arguments"]
+    assert arguments[arguments.index("--gepa-config") + 1] == str(config_path)
+    assert supervisor["session"] == config["run_id"]
