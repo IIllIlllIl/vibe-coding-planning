@@ -258,6 +258,7 @@ def validate_bullet_token_limit(
 
 
 _REFLECTOR_TAGS = frozenset({"helpful", "neutral", "harmful"})
+_REFLECTOR_CONCERN_CONFIDENCE = frozenset({"low", "medium", "high"})
 
 
 def validate_reflector_review(
@@ -266,18 +267,50 @@ def validate_reflector_review(
     instance_id: str,
     playbook: RejectPlaybook,
 ) -> dict[str, Any]:
-    required = {
+    common = {
         "instance_id", "reasoning", "error_identification",
-        "root_cause_analysis", "correct_approach", "key_insight",
-        "bullet_tags", "uncertainty",
+        "root_cause_analysis", "correct_approach", "bullet_tags", "uncertainty",
     }
-    if not isinstance(value, dict) or set(value) != required:
+    if not isinstance(value, dict):
+        raise ValueError("Reflector review has an invalid schema")
+    keys = set(value)
+    legacy_schema = keys == common | {"key_insight"}
+    structured_schema = keys == common | {"reusable_concerns"}
+    if not legacy_schema and not structured_schema:
         raise ValueError("Reflector review has an invalid schema")
     if value["instance_id"] != instance_id:
         raise ValueError("Reflector instance ID mismatch")
-    for key in required - {"instance_id", "bullet_tags"}:
+    for key in common - {"instance_id", "bullet_tags"}:
         if not isinstance(value[key], str) or not value[key].strip():
             raise ValueError(f"Reflector {key} must be non-empty")
+    if legacy_schema:
+        if not isinstance(value["key_insight"], str) or not value["key_insight"].strip():
+            raise ValueError("Reflector key_insight must be non-empty")
+    else:
+        concerns = value["reusable_concerns"]
+        if not isinstance(concerns, list):
+            raise ValueError("Reflector reusable_concerns must be a list")
+        normalized_concerns = []
+        for concern in concerns:
+            if not isinstance(concern, dict) or set(concern) != {
+                "concern", "decision_time_support", "confidence"
+            }:
+                raise ValueError("Reflector reusable concern has an invalid schema")
+            if not isinstance(concern["concern"], str) or not concern["concern"].strip():
+                raise ValueError("Reflector reusable concern text must be non-empty")
+            if (
+                not isinstance(concern["decision_time_support"], str)
+                or not concern["decision_time_support"].strip()
+            ):
+                raise ValueError(
+                    "Reflector reusable concern decision_time_support must be non-empty"
+                )
+            if (
+                not isinstance(concern["confidence"], str)
+                or concern["confidence"] not in _REFLECTOR_CONCERN_CONFIDENCE
+            ):
+                raise ValueError("Reflector reusable concern confidence is invalid")
+            normalized_concerns.append(dict(concern))
     tags = value["bullet_tags"]
     if not isinstance(tags, list) or len(tags) != len(playbook.bullets):
         raise ValueError("Reflector must tag every active bullet")
@@ -297,6 +330,8 @@ def validate_reflector_review(
         normalized.append(dict(tag))
     result = dict(value)
     result["bullet_tags"] = normalized
+    if structured_schema:
+        result["reusable_concerns"] = normalized_concerns
     return result
 
 

@@ -1,0 +1,28 @@
+schema_version: 1
+session: verified-reject-playbook-safe-pce-formal-8it-v1-20260915
+log: .local/hpc-supervisor/verified-reject-playbook-safe-pce-formal-8it-v1-20260915.log
+arguments:
+  - --poll-interval
+  - "30"
+  - --slice-time
+  - "00:30:00"
+  - --target-iterations
+  - "8"
+  - --max-runs
+  - "150"
+  - --state-file
+  - .local/hpc-supervisor/verified-reject-playbook-safe-pce-formal-8it-v1-20260915.json
+  - --reclaim-staging
+  - --require-clean-worktree
+  - --gepa-rules
+  - --gepa-config
+  - configs/gepa_verified_reject_playbook_safe_pce_formal_8it_v1_20260915.yaml
+  - --ulhpc-config
+  - /Users/taoran.wang/.config/ulhpc-submit/config.yaml
+  - --job-name
+  - verified-reject-playbook-safe-pce-formal-8it-v1-20260915
+  - --cpus
+  - "1"
+  - --mem
+  - 4G
+  - --submit

@@ -18,6 +18,7 @@ from src.optimization.playbook import (
     manage_playbook_length,
     validate_bullet_token_limit,
     validate_checker_result,
+    validate_reflector_review,
 )
 from src.optimization.playbook_adapter import (
     ConfigurableRoundReflector,
@@ -373,6 +374,56 @@ def test_two_stage_proposer_attributes_then_counts_then_curates() -> None:
     assert result.bullets[0].helpful == 1
     assert seen == {"helpful": 1, "reviews": 1, "records": 1}
     assert proposer.successful_proposals == 1
+
+
+def test_reflector_review_accepts_atomic_reusable_concern_list() -> None:
+    playbook = _playbook(PlaybookBullet("plan-00001", "It is a placeholder."))
+    review = {
+        "instance_id": "repo__repo-1",
+        "reasoning": "The Plan leaves one material concern unresolved.",
+        "error_identification": "A required behavior is unsupported.",
+        "root_cause_analysis": "The Plan assumes the behavior without evidence.",
+        "correct_approach": "Resolve the concern before approval.",
+        "reusable_concerns": [{
+            "concern": "The Plan assumes a required behavior without support.",
+            "decision_time_support": "The issue requires it and the Plan only assumes it.",
+            "confidence": "medium",
+        }],
+        "bullet_tags": [{
+            "id": "plan-00001", "tag": "neutral",
+            "attribution": "The active rule is unrelated.", "confidence": "high",
+        }],
+        "uncertainty": "Repository facts remain unavailable to the Checker.",
+    }
+
+    assert validate_reflector_review(
+        review, instance_id="repo__repo-1", playbook=playbook
+    )["reusable_concerns"] == review["reusable_concerns"]
+
+
+def test_reflector_review_rejects_malformed_reusable_concern() -> None:
+    playbook = _playbook(PlaybookBullet("plan-00001", "It is a placeholder."))
+    review = {
+        "instance_id": "repo__repo-1",
+        "reasoning": "Attribution.",
+        "error_identification": "Error.",
+        "root_cause_analysis": "Cause.",
+        "correct_approach": "Approach.",
+        "reusable_concerns": [{
+            "concern": "Concern one and concern two.",
+            "confidence": "medium",
+        }],
+        "bullet_tags": [{
+            "id": "plan-00001", "tag": "neutral",
+            "attribution": "Unrelated.", "confidence": "high",
+        }],
+        "uncertainty": "Uncertain.",
+    }
+
+    with pytest.raises(ValueError, match="reusable concern has an invalid schema"):
+        validate_reflector_review(
+            review, instance_id="repo__repo-1", playbook=playbook
+        )
 
 
 def test_two_stage_proposer_counters_are_global_across_branches() -> None:
@@ -1121,8 +1172,13 @@ def test_hpc_proposal_agents_use_file_backed_reflector_waves_and_singletons(
         def run_wave(self, role, items):
             calls.append((role, len(items), items))
             if role == "reflector":
-                return [{"agent_output": {"round": len([c for c in calls if c[0] == "reflector"])}}
-                        for _ in items]
+                return [{"agent_output": {
+                    "round": len([c for c in calls if c[0] == "reflector"]),
+                    "instance_id": item["instance_id"],
+                    "reusable_concerns": [],
+                    "uncertainty": "none",
+                    "bullet_tags": [],
+                }} for item in items]
             if role == "curator":
                 return [{"agent_output": {"reasoning": "no change", "operations": []}}]
             return [{"agent_output": {"reasoning": "shorten", "operations": []}}]
@@ -1167,6 +1223,11 @@ def test_hpc_proposal_agents_use_file_backed_reflector_waves_and_singletons(
         "contains_repository": False,
         "contains_direct_downstream_evidence": False,
     }
+    reflection_index = json.loads(
+        (curator_evidence / "reflection_index.json").read_text()
+    )
+    assert all("reusable_concerns" in item for item in reflection_index)
+    assert all("key_insight" not in item for item in reflection_index)
     assert agents.refine(playbook) == playbook
     assert [call[:2] for call in calls[-2:]] == [
         ("curator", 1), ("refiner", 1)
@@ -1250,6 +1311,94 @@ def test_safe_pce_smoke32_v2_contract_uses_v6_prompts_and_new_scores() -> None:
         formal["validation_instance_ids"]
     )
     assert len(formal["excluded_from_formal_selection"]) == 11
+
+
+def test_safe_pce_smoke32_v3_uses_one_round_and_atomic_concerns() -> None:
+    repo_root = Path(__file__).resolve().parents[2]
+    config_path = (
+        repo_root
+        / "configs/gepa_verified_reject_playbook_safe_pce_smoke32_v3_20260915.yaml"
+    )
+    raw = yaml.safe_load(config_path.read_text(encoding="utf-8"))
+    _validate_frozen_inputs(config_path, raw)
+    prompts = yaml.safe_load(
+        (repo_root / raw["inputs"]["prompt_bundle"]).read_text(encoding="utf-8")
+    )
+
+    assert raw["reflection"]["rounds"] == 1
+    assert raw["budget"]["reflection_rounds_per_case"] == 1
+    assert len(raw["inputs"]["train_instance_ids"]) == 32
+    assert "pylint-dev__pylint-4604" not in raw["inputs"]["train_instance_ids"]
+    assert "sphinx-doc__sphinx-10614" in raw["inputs"]["train_instance_ids"]
+    reflector = " ".join(prompts["reflector_system"].split())
+    assert "each distinct concern in a separate reusable_concerns element" in reflector
+    assert "Use an empty reusable_concerns list" in reflector
+    assert "key_insight" not in prompts["reflector_instance"]
+    assert '"reusable_concerns": [' in prompts["reflector_instance"]
+    checker = " ".join(prompts["checker_system"].split())
+    assert "need not be a proven defect" in checker
+    assert "material enough that a developer would pause approval" in checker
+
+    supervisor = yaml.safe_load((
+        repo_root
+        / "configs/gepa_verified_reject_playbook_safe_pce_smoke32_v3_supervisor_20260915.yaml"
+    ).read_text(encoding="utf-8"))
+    arguments = supervisor["arguments"]
+    assert arguments[arguments.index("--gepa-config") + 1] == str(
+        config_path.relative_to(repo_root)
+    )
+    assert "--require-clean-worktree" in arguments
+
+
+def test_safe_pce_formal_8it_uses_reliable_400_and_one_reflection_round() -> None:
+    repo_root = Path(__file__).resolve().parents[2]
+    config_path = (
+        repo_root
+        / "configs/gepa_verified_reject_playbook_safe_pce_formal_8it_v1_20260915.yaml"
+    )
+    raw = yaml.safe_load(config_path.read_text(encoding="utf-8"))
+    _validate_frozen_inputs(config_path, raw)
+
+    selection = json.loads(
+        (repo_root / raw["inputs"]["selection"]).read_text(encoding="utf-8")
+    )
+    assert (selection["train_count"], selection["validation_count"]) == (320, 80)
+    assert (selection["selected_resolved"], selection["selected_unresolved"]) == (
+        325, 75,
+    )
+    assert "pylint-dev__pylint-4604" not in selection["train_instance_ids"]
+    assert "django__django-12273" in selection["train_instance_ids"]
+    assert raw["search"] == {
+        "max_iterations": 8,
+        "reflection_minibatch_size": 32,
+        "max_metric_calls": 1600,
+        "seed": 42,
+        "perfect_score": 1.0,
+        "skip_perfect_score": True,
+    }
+    assert raw["reflection"]["rounds"] == 1
+    assert raw["budget"]["candidate_proposals"] == 8
+    assert raw["budget"]["reflection_rounds_per_case"] == 1
+    assert raw["hpc"]["max_running_array_tasks"] == 0
+    assert raw["hpc"]["agent_time"] == "00:35:00"
+    assert raw["readiness"] == {
+        "runnable": True,
+        "launched": False,
+        "missing": [],
+    }
+
+    supervisor = yaml.safe_load((
+        repo_root
+        / "configs/gepa_verified_reject_playbook_safe_pce_formal_8it_v1_supervisor_20260915.yaml"
+    ).read_text(encoding="utf-8"))
+    arguments = supervisor["arguments"]
+    assert arguments[arguments.index("--target-iterations") + 1] == "8"
+    assert arguments[arguments.index("--gepa-config") + 1] == str(
+        config_path.relative_to(repo_root)
+    )
+    assert "--reclaim-staging" in arguments
+    assert "--require-clean-worktree" in arguments
+    assert "--remote-dir" not in arguments
 
 
 def test_exhausted_curator_length_retries_return_invalid_candidate(tmp_path) -> None:

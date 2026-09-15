@@ -1,0 +1,150 @@
+schema_version: 1
+mode: offline_reject_playbook
+status: ready_not_launched
+run_id: verified-reject-playbook-safe-pce-smoke32-v3-20260915
+purpose: test one-round atomic Reflection after the completed three-round Safe PCE smoke
+
+paths:
+  dataset_snapshot: configs/frozen_swe_verified_playbook_gepa/20260915_safe_pce_clean411_v2
+  initial_rules: configs/development_guidelines/offline_gepa_reject_playbook_seed_v2.json
+  run_dir: output/SWE-bench_Verified/gepa-reject-playbook-runs/safe-pce-smoke32-v3-20260915
+
+task:
+  semantics: offline_reject_playbook_v7
+container:
+  runtime: none
+  sif_cache_dir: /scratch/users/${USER}/vibe-coding-planning/shared/sif-cache
+execution:
+  backend: hpc_slurm
+
+inputs:
+  dataset_snapshot: configs/frozen_swe_verified_playbook_gepa/20260915_safe_pce_clean411_v2
+  dataset_manifest_sha256: d8c89e6fc57c46a4b3b62769c39e7303cb442dc79d9c474b2a406caa7e4e3fb4
+  initial_playbook: configs/development_guidelines/offline_gepa_reject_playbook_seed_v2.json
+  initial_playbook_sha256: 16e09571f484f355300dc29f7a828ba8d9b5ca691152ffb8b3b1f2d13d5f83e4
+  prompt_bundle: configs/prompts/offline_gepa_reject_playbook_v7_20260915.yaml
+  prompt_bundle_sha256: 70d826d8cc4c8b1bd790ecf4e49c95f9c0943fe07a1c3400d949bfc5c734a652
+  selection: configs/frozen_swe_verified_playbook_gepa/20260915_safe_pce_smoke32x8_v2/selection.json
+  selection_sha256: 2bf874422417fa404493e377d9e5b776d8e09a302f714c650a31ab39509c954b
+  train_instance_ids:
+    - astropy__astropy-13977
+    - django__django-14434
+    - matplotlib__matplotlib-24570
+    - mwaskom__seaborn-3069
+    - pallets__flask-5014
+    - psf__requests-2317
+    - pydata__xarray-2905
+    - pylint-dev__pylint-6386
+    - pytest-dev__pytest-7521
+    - scikit-learn__scikit-learn-14894
+    - sphinx-doc__sphinx-9367
+    - sympy__sympy-12481
+    - astropy__astropy-14365
+    - django__django-16145
+    - matplotlib__matplotlib-14623
+    - mwaskom__seaborn-3187
+    - astropy__astropy-13236
+    - django__django-13212
+    - matplotlib__matplotlib-21568
+    - pydata__xarray-3993
+    - pylint-dev__pylint-6528
+    - pytest-dev__pytest-5787
+    - scikit-learn__scikit-learn-25747
+    - sphinx-doc__sphinx-8056
+    - sympy__sympy-16597
+    - astropy__astropy-14598
+    - django__django-14155
+    - matplotlib__matplotlib-25479
+    - pydata__xarray-6992
+    - sphinx-doc__sphinx-10614
+    - pytest-dev__pytest-7205
+    - sphinx-doc__sphinx-7985
+  validation_instance_ids:
+    - astropy__astropy-14309
+    - django__django-15930
+    - matplotlib__matplotlib-25311
+    - psf__requests-1724
+    - astropy__astropy-13033
+    - django__django-11141
+    - matplotlib__matplotlib-23299
+    - pydata__xarray-7229
+
+models:
+  checker: {model: deepseek-v4-flash, temperature: 0.0}
+  reflector: {model: deepseek-v4-flash, temperature: 0.0}
+  curator: {model: deepseek-v4-flash, temperature: 0.0}
+  refiner: {model: deepseek-v4-flash, temperature: 0.0}
+
+scoring:
+  accept_resolved: 1
+  accept_unresolved: 0
+  reject_resolved: -1
+  reject_unresolved: 1
+  invalid: -100
+
+search:
+  max_iterations: 1
+  reflection_minibatch_size: 32
+  max_metric_calls: 120
+  seed: 42
+  perfect_score: 1.0
+  skip_perfect_score: true
+
+reflection:
+  rounds: 1
+  evidence_image: python:3.12-slim
+  evidence_sif_cache_dir: /scratch/users/${USER}/vibe-coding-planning/shared/sif-cache
+  command_timeout_seconds: 1800
+
+length:
+  maximum_visible_tokens: 2048
+  maximum_bullet_tokens: 64
+  harmful_pruning_weight: 2
+
+budget:
+  candidate_proposals: 1
+  reflection_cases_per_proposal: 32
+  reflection_rounds_per_case: 1
+  projected_metric_call_ceiling: 120
+
+stopping:
+  stop_after_candidate_proposals: 1
+  abort_on_operational_incomplete: true
+
+operational_incomplete_policy: >-
+  Model, transport, timeout, parsing, missing-artifact, or exhausted
+  Agent-output-contract failures remain operationally incomplete and are not
+  converted to unresolved, Bad, or INVALID. INVALID is reserved for a
+  structurally valid candidate containing a bullet over 64 Checker tokens.
+
+hpc:
+  submit: true
+  partition: batch
+  cpus_per_task: 1
+  mem: 4G
+  controller_slice_time: "00:30:00"
+  agent_time: "00:35:00"
+  poll_interval_seconds: 30
+  max_running_array_tasks: 0
+  max_task_attempts: 3
+  task_output_grace_seconds: 120
+  missing_task_grace_seconds: 300
+  remote_env_file: ~/.config/vibe-coding-planning/deepseek.env
+  python_module: lang/Python/3.11
+  container_module: tools/Apptainer
+  job_name_prefix: verified-reject-playbook-safe-pce-smoke32-v3-20260915
+
+success_criteria:
+  - Exactly one proposal uses a 32-case Reflection minibatch with one Reflection round per case.
+  - Reflector emits zero or more atomic reusable_concerns objects rather than a compound key_insight string.
+  - Checker sees only issue, Plan, and visible bullet text; IDs, counters, repository, outcomes, trajectories, and evaluator evidence remain hidden.
+  - Historical raw artifacts are hash-verified and materialized only into repository-free per-case Reflection bundles.
+  - Curator reads all 32 final reflections from a read-only file bundle rather than receiving them inline.
+  - Host scoring uses the explicit 1/0/-1/1 resolved-proxy table and reserves -100 only for overlength candidate bullets.
+  - Every visible bullet is at most 64 Checker tokens; the total visible playbook is at most 2048 tokens.
+  - All Agent completions, validation failures, retries, counters, checkpoints, scores, and candidate lineage remain durable.
+
+readiness:
+  runnable: true
+  launched: false
+  missing: []

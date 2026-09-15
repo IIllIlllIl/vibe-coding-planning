@@ -239,14 +239,16 @@ and deterministic removal must retain an audit record.
 
 The current ACE input is derived from the new Safe PCE run rather than the old
 482-case PCE snapshot. The raw run is never rewritten. Its exhaustive observed-
-state cleaning ledger partitions the selected 482 cases into 411 reliable
-terminal training cases, 10 leakage/evaluator exclusions, and 61 unfinished
-cases deferred for later ACE evaluation. The deferred set is an operational-
+state cleaning ledger initially partitioned the selected 482 cases into 411
+provisionally retained terminal training cases, 10 leakage/evaluator
+exclusions, and 61 unfinished cases deferred for later ACE evaluation. A later
+ACE trajectory audit identified one further evaluator-invalid retained case,
+as recorded below. The deferred set is an operational-
 leftover set, not a random or prevalence-representative holdout.
 
 The compact learning snapshot is
 `configs/frozen_swe_verified_playbook_gepa/20260915_safe_pce_clean411_v2/`.
-It contains 411 cases (335 resolved, 76 unresolved) split deterministically into
+It freezes 411 cases (335 resolved, 76 unresolved) split deterministically into
 329 train cases (266/63) and 82 internal-validation cases (69/13), stratified by
 repository and outcome. These are development splits; the later 61-case set is
 kept outside the snapshot.
@@ -271,6 +273,58 @@ completed, but the Reflection cache path kept `${USER}` literal and all 32
 Reflector tasks exhausted before model execution. Runtime evidence paths now
 expand environment variables and user-home markers before constructing the
 isolated Apptainer environment.
+
+That v2 smoke completed as a development diagnostic. Repeating the same
+Reflector prompt three times did not provide staged roles: each later round
+received only the prior reflection in addition to the same evidence and task.
+In the earlier bounded comparison, round 2 corrected a `harmful` attribution
+caused by an ambiguous neutral-tag instruction, while round 3 added confidence
+but no actionable distinction. The v6 prompt already encodes the corrected
+neutral-tag rule. In the completed 32-case v2 smoke, later rounds instead
+increased compound insights and cleanly separated resolved cases with no
+concern from unresolved cases with concerns, which is consistent with
+outcome-conditioned rationalization rather than additional decision-time
+information. The next development authority therefore uses one Reflection
+round; this is a method choice for the current repeated-prompt design, not a
+claim that multi-stage Reflection is never useful.
+
+The corresponding v7 Reflector replaces the scalar `key_insight` with an
+explicit `reusable_concerns` list. Each element contains one concern, its
+decision-time issue/Plan support, and a confidence value; an empty list means
+that no reusable concern is supported. Runtime validation accepts this schema
+while retaining the legacy scalar schema solely to read frozen historical
+artifacts. Curator evidence indexes preserve whichever frozen schema supplied
+the review.
+
+The v2 audit also found that `pylint-dev__pylint-4604` had been labeled
+unresolved after the official evaluator collected zero tests because the
+historical Pylint test suite failed during import. The frozen v2 selection and
+run remain unchanged. The new selection authority replaces that case with
+`sphinx-doc__sphinx-10614`, a same-label case with a completed evaluator and
+concrete FAIL_TO_PASS failures. Its v3 config is prepared but not launched.
+Because `formal400-v1.json` also contains `pylint-dev__pylint-4604`, it is not
+a launch authority until a separately frozen reliability-replacement formal
+selection supersedes it.
+
+That successor is
+`configs/frozen_swe_verified_playbook_gepa/20260915_safe_pce_formal400_v2/selection.json`.
+It replaces the invalid train/unresolved Pylint case with
+`django__django-12273`, the only previously unselected case in the same split
+and outcome stratum. Its official evaluator completed normally: both target
+tests failed, while 27 PASS_TO_PASS tests succeeded. The replacement therefore
+preserves 320 train and 80 validation cases and the overall 325 resolved/75
+unresolved composition without treating an evaluator collection failure as a
+Bad implementation.
+
+The prepared formal development run is
+`configs/gepa_verified_reject_playbook_safe_pce_formal_8it_v1_20260915.yaml`.
+It starts a fresh candidate tree from seed v2, uses prompt v7, eight candidate
+proposals, a 32-case Reflection minibatch, one Reflection round per selected
+case, the explicit `1/0/-1/1` resolved-proxy score, a 1,600 metric-call
+fail-safe, and the existing 64-token bullet/2,048-token playbook limits. Its
+Supervisor uses shared storage defaults, unconstrained Slurm array submission,
+35-minute Agent elements, three task attempts, durable checkpoints, and
+staging reclamation. Preparation and commit do not authorize launch.
 
 The formal development membership is frozen separately in
 `configs/frozen_swe_verified_playbook_gepa/20260915_safe_pce_clean411_v2/formal400-v1.json`.

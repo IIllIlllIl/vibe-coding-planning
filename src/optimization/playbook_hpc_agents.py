@@ -165,15 +165,19 @@ class HPCPlaybookProposalAgents:
         evidence_dir = self.executor.run_dir / "curator_evidence" / identity
         atomic_json(evidence_dir / "counted_playbook.json", json.loads(counted.serialize()))
         atomic_json(evidence_dir / "case_reflections.json", list(reviews))
-        atomic_json(evidence_dir / "reflection_index.json", [
-            {
+        reflection_index = []
+        for review in reviews:
+            summary = {
                 "instance_id": review.get("instance_id"),
-                "key_insight": review.get("key_insight"),
                 "uncertainty": review.get("uncertainty"),
                 "bullet_tags": review.get("bullet_tags", []),
             }
-            for review in reviews
-        ])
+            if "reusable_concerns" in review:
+                summary["reusable_concerns"] = review["reusable_concerns"]
+            else:
+                summary["key_insight"] = review.get("key_insight")
+            reflection_index.append(summary)
+        atomic_json(evidence_dir / "reflection_index.json", reflection_index)
         atomic_json(evidence_dir / "manifest.json", {
             "schema_version": 1,
             "case_count": len(reviews),
