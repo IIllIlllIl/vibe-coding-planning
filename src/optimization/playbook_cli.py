@@ -50,6 +50,13 @@ def _validate_frozen_inputs(config_path: Path, raw: dict[str, Any]) -> None:
                 f"{path_key} fingerprint mismatch: expected={inputs[hash_key]} "
                 f"actual={actual}"
             )
+    if inputs.get("repo_checker_contract"):
+        path = _resolve_config_path(
+            config_path, str(inputs["repo_checker_contract"])
+        )
+        actual = hashlib.sha256(path.read_bytes()).hexdigest()
+        if actual != str(inputs.get("repo_checker_contract_sha256", "")):
+            raise ValueError("Repo Checker contract fingerprint mismatch")
     if inputs.get("dataset_manifest_sha256"):
         snapshot = _resolve_config_path(
             config_path, str(inputs["dataset_snapshot"])
@@ -163,8 +170,15 @@ def run_from_config(path: str | Path, *, agents: Any | None = None, optimize_fn=
             "roles",
         }:
             raise ValueError("checkpoint import contract is incomplete")
-        if checkpoint_import["roles"] != ["repo_checker"]:
-            raise ValueError("only exact Repo Checker checkpoint import is supported")
+        roles = checkpoint_import["roles"]
+        allowed_import_roles = {"repo_checker", "repo_reflector", "curator"}
+        if (
+            not isinstance(roles, list)
+            or not roles
+            or len(set(roles)) != len(roles)
+            or set(roles) - allowed_import_roles
+        ):
+            raise ValueError("checkpoint import roles are invalid")
         source_manifest_sha = str(
             checkpoint_import["source_run_manifest_sha256"]
         )
@@ -207,6 +221,11 @@ def run_from_config(path: str | Path, *, agents: Any | None = None, optimize_fn=
                 str(checkpoint_import["source_run_manifest_sha256"])
                 if checkpoint_import
                 else None
+            ),
+            checkpoint_import_roles=(
+                list(checkpoint_import["roles"])
+                if checkpoint_import
+                else []
             ),
         )
         if repo_mode:

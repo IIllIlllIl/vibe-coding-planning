@@ -409,6 +409,7 @@ def test_repo_checker_imports_only_exact_validated_completed_checkpoint(
         hpc=hpc,
         checkpoint_import_run_dir=source_run,
         checkpoint_import_manifest_sha256=source_manifest_sha,
+        checkpoint_import_roles=["repo_checker"],
     )
     executor.runtime = SlurmTaskBatch(
         hpc,
@@ -432,6 +433,191 @@ def test_repo_checker_imports_only_exact_validated_completed_checkpoint(
     audit = json.loads(audit_path.read_text(encoding="utf-8"))
     assert [row["instance_id"] for row in audit["imported"]] == ["repo__repo-1"]
     assert json.loads(source_output_path.read_text()) == source_output
+
+
+def test_repo_reflector_import_matches_evidence_content_not_run_path(
+    tmp_path: Path,
+) -> None:
+    source_run = tmp_path / "source-run"
+    target_run = tmp_path / "target-run"
+    source_manifest = source_run / "run_manifest.json"
+    source_manifest.parent.mkdir(parents=True)
+    source_manifest.write_text('{"semantic_sha256":"source"}\n', encoding="utf-8")
+    source_manifest_sha = hashlib.sha256(source_manifest.read_bytes()).hexdigest()
+    source_evidence = source_run / "reflection_evidence/evidence-1"
+    target_evidence = target_run / "reflection_evidence/evidence-1"
+    for evidence in (source_evidence, target_evidence):
+        evidence.mkdir(parents=True)
+        (evidence / "manifest.json").write_text(
+            '{"schema_version":1}\n', encoding="utf-8"
+        )
+
+    review = {
+        "instance_id": "repo__repo-1",
+        "case_analysis": None,
+        "reusable_concerns": [],
+        "uncertainty": None,
+        "bullet_tags": [
+            {
+                "id": bullet.id,
+                "tag": "neutral",
+                "attribution": None,
+                "confidence": "low",
+                "observed_recovery": "unknown",
+                "level_calibration": "unknown",
+            }
+            for bullet in _playbook().bullets
+        ],
+    }
+    item = {
+        "instance_id": "repo__repo-1",
+        "validation_playbook": _playbook().serialize(),
+        "evidence_dir": str(target_evidence),
+        "repository": {
+            "repo": "repo/repo",
+            "base_commit": "abc123",
+            "instance_id": "repo__repo-1",
+        },
+        "image_authority": {
+            "requested_ref": "image",
+            "sif_path": "/cache/image.sif",
+            "sif_sha256": "a" * 64,
+            "sif_bytes": 123,
+        },
+        "source_access_issue": "issue",
+        "prompt_values": {
+            "internal_playbook": _playbook().serialize(),
+            "evidence_path": "/evidence",
+        },
+    }
+    source_task = {
+        "schema_version": 1,
+        "role": "repo_reflector",
+        "fingerprint": "source-fingerprint",
+        "task_index": 0,
+        **{**item, "evidence_dir": str(source_evidence)},
+    }
+    source_batch = source_run / "hpc_tasks/repo_reflector/source-batch"
+    source_task_path = source_batch / "tasks/task_0000.json"
+    source_output_path = source_batch / "outputs/task_0000.json"
+    source_task_path.parent.mkdir(parents=True)
+    source_output_path.parent.mkdir(parents=True)
+    source_task_path.write_text(json.dumps(source_task), encoding="utf-8")
+    source_output_path.write_text(
+        json.dumps(
+            {
+                "schema_version": 1,
+                "status": "completed",
+                "role": "repo_reflector",
+                "fingerprint": "source-fingerprint",
+                "task_index": 0,
+                "instance_id": "repo__repo-1",
+                "agent_output": review,
+                "trajectory": [{"role": "assistant", "content": "done"}],
+            }
+        ),
+        encoding="utf-8",
+    )
+    config = tmp_path / "config.yaml"
+    config.write_text("mode: offline_repo_concern_playbook\n", encoding="utf-8")
+    hpc = HPCConfig(submit=True, worker_config_path=str(config))
+    executor = PlaybookHPCExecutor(
+        config_path=config,
+        run_dir=target_run,
+        hpc=hpc,
+        checkpoint_import_run_dir=source_run,
+        checkpoint_import_manifest_sha256=source_manifest_sha,
+        checkpoint_import_roles=["repo_reflector"],
+    )
+    executor.runtime = SlurmTaskBatch(
+        hpc,
+        submitter=lambda _path: pytest.fail("imported checkpoint was resubmitted"),
+    )
+
+    outputs = executor.run_wave("repo_reflector", [item])
+
+    assert outputs[0]["agent_output"] == review
+    audit_path = next(
+        (target_run / "hpc_tasks/repo_reflector").glob(
+            "*/checkpoint_import.json"
+        )
+    )
+    assert json.loads(audit_path.read_text())["role"] == "repo_reflector"
+
+
+def test_curator_import_matches_evidence_content_not_run_path(tmp_path: Path) -> None:
+    source_run = tmp_path / "source-run"
+    target_run = tmp_path / "target-run"
+    source_manifest = source_run / "run_manifest.json"
+    source_manifest.parent.mkdir(parents=True)
+    source_manifest.write_text('{"semantic_sha256":"source"}\n', encoding="utf-8")
+    source_manifest_sha = hashlib.sha256(source_manifest.read_bytes()).hexdigest()
+    source_evidence = source_run / "curator_evidence/evidence-1"
+    target_evidence = target_run / "curator_evidence/evidence-1"
+    for evidence in (source_evidence, target_evidence):
+        evidence.mkdir(parents=True)
+        (evidence / "case_reflections.json").write_text("[]\n", encoding="utf-8")
+    item = {
+        "validation_playbook": _playbook().serialize(),
+        "evidence_dir": str(target_evidence),
+        "prompt_values": {
+            "counted_internal_playbook": _playbook().serialize(),
+            "case_count": 0,
+            "evidence_path": "/evidence",
+        },
+    }
+    source_task = {
+        "schema_version": 1,
+        "role": "curator",
+        "fingerprint": "source-fingerprint",
+        "task_index": 0,
+        "instance_id": None,
+        **{**item, "evidence_dir": str(source_evidence)},
+    }
+    source_batch = source_run / "hpc_tasks/curator/source-batch"
+    source_task_path = source_batch / "tasks/task_0000.json"
+    source_output_path = source_batch / "outputs/task_0000.json"
+    source_task_path.parent.mkdir(parents=True)
+    source_output_path.parent.mkdir(parents=True)
+    source_task_path.write_text(json.dumps(source_task), encoding="utf-8")
+    source_output_path.write_text(
+        json.dumps(
+            {
+                "schema_version": 1,
+                "status": "completed",
+                "role": "curator",
+                "fingerprint": "source-fingerprint",
+                "task_index": 0,
+                "instance_id": None,
+                "agent_output": {"reasoning": "No change.", "operations": []},
+                "trajectory": [{"role": "assistant", "content": "done"}],
+            }
+        ),
+        encoding="utf-8",
+    )
+    config = tmp_path / "config.yaml"
+    config.write_text("mode: offline_repo_concern_playbook\n", encoding="utf-8")
+    hpc = HPCConfig(submit=True, worker_config_path=str(config))
+    executor = PlaybookHPCExecutor(
+        config_path=config,
+        run_dir=target_run,
+        hpc=hpc,
+        checkpoint_import_run_dir=source_run,
+        checkpoint_import_manifest_sha256=source_manifest_sha,
+        checkpoint_import_roles=["curator"],
+    )
+    executor.runtime = SlurmTaskBatch(
+        hpc,
+        submitter=lambda _path: pytest.fail("imported checkpoint was resubmitted"),
+    )
+
+    outputs = executor.run_wave("curator", [item])
+
+    assert outputs[0]["agent_output"]["operations"] == []
+    audit_path = next(
+        (target_run / "hpc_tasks/curator").glob("*/checkpoint_import.json")
+    )
+    assert json.loads(audit_path.read_text())["role"] == "curator"
 
 
 def test_repo_reflection_mounts_repo_and_retrospective_evidence_separately(
@@ -581,11 +767,22 @@ def test_repo_worker_uses_separate_runtime_and_host_validation(
         "checker_system: system\nchecker_instance: instance\n",
         encoding="utf-8",
     )
+    contract = tmp_path / "contract.yaml"
+    contract.write_text(
+        yaml.safe_dump({"checker_contract_appendix": "exact evidence contract"}),
+        encoding="utf-8",
+    )
     config = tmp_path / "config.yaml"
     config.write_text(
         yaml.safe_dump(
             {
-                "inputs": {"prompt_bundle": str(prompts)},
+                "inputs": {
+                    "prompt_bundle": str(prompts),
+                    "repo_checker_contract": str(contract),
+                    "repo_checker_contract_sha256": hashlib.sha256(
+                        contract.read_bytes()
+                    ).hexdigest(),
+                },
                 "models": {"checker": {"model": "fake"}},
                 "container": {"sif_cache_dir": "/cache"},
                 "repo_checker": {"workdir": "/testbed"},
@@ -639,6 +836,7 @@ def test_repo_worker_uses_separate_runtime_and_host_validation(
     ) == 0
     assert seen["repository"]["base_commit"] == "abc123"
     assert seen["attempt_dir"] == attempt
+    assert seen["system"] == "system\n\nexact evidence contract\n"
     assert json.loads(output.read_text())["status"] == "completed"
     assert (attempt / "agent_completion.json").is_file()
 
@@ -815,7 +1013,7 @@ def test_repo_prompt_freezes_level_and_information_boundaries() -> None:
     assert "over 64 tokens" in curator_text
 
 
-@pytest.mark.parametrize("version", ["v1", "v2", "v3"])
+@pytest.mark.parametrize("version", ["v1", "v2", "v3", "v4"])
 def test_repo_smoke_binds_distinct_mode_and_frozen_inputs(version: str) -> None:
     path = Path(
         f"configs/gepa_verified_repo_concern_playbook_smoke8_{version}_20260915.yaml"
@@ -868,3 +1066,27 @@ def test_repaired_repo_smoke_has_canonical_import_and_fresh_identity() -> None:
     arguments = supervisor["arguments"]
     assert arguments[arguments.index("--gepa-config") + 1] == str(config_path)
     assert supervisor["session"] == config["run_id"]
+
+
+def test_v4_repo_smoke_resumes_successful_stages_with_explicit_contract() -> None:
+    config_path = Path(
+        "configs/gepa_verified_repo_concern_playbook_smoke8_v4_20260915.yaml"
+    )
+    config = yaml.safe_load(config_path.read_text(encoding="utf-8"))
+    assert config["checkpoint_import"]["roles"] == [
+        "repo_checker",
+        "repo_reflector",
+        "curator",
+    ]
+    assert config["checkpoint_import"]["source_run_dir"].endswith(
+        "smoke8-v3-20260915"
+    )
+    contract_path = Path(config["inputs"]["repo_checker_contract"])
+    assert hashlib.sha256(contract_path.read_bytes()).hexdigest() == config[
+        "inputs"
+    ]["repo_checker_contract_sha256"]
+    contract = yaml.safe_load(contract_path.read_text(encoding="utf-8"))[
+        "checker_contract_appendix"
+    ]
+    assert all(key in contract for key in ("`source`", "`location`", "`observation`"))
+    assert '"observation": "This shared path' in contract

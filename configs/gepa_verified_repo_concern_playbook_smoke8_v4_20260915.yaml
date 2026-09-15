@@ -1,0 +1,143 @@
+schema_version: 1
+mode: offline_repo_concern_playbook
+status: ready_not_launched
+run_id: verified-repo-concern-playbook-smoke8-v4-20260915
+purpose: resume the repository-aware smoke at Candidate Checker with an explicit exact evidence schema
+
+paths:
+  dataset_snapshot: configs/frozen_swe_verified_playbook_gepa/20260915_safe_pce_clean411_v2
+  initial_rules: configs/development_guidelines/offline_gepa_reject_playbook_seed_v2.json
+  run_dir: output/SWE-bench_Verified/gepa-repo-concern-playbook-runs/smoke8-v4-20260915
+
+task:
+  semantics: repo_concern_playbook_v1
+container:
+  runtime: apptainer
+  sif_cache_dir: /scratch/users/${USER}/vibe-coding-planning/shared/sif-cache
+execution:
+  backend: hpc_slurm
+
+checkpoint_import:
+  source_run_dir: /scratch/users/twang/vibe-coding-planning/run_state/output/SWE-bench_Verified/gepa-repo-concern-playbook-runs/smoke8-v3-20260915
+  source_run_manifest_sha256: 8d4ff607ae9170b71d7040ec3b3d99f1867eae809b751bcf2a6221c3db04eca0
+  roles:
+    - repo_checker
+    - repo_reflector
+    - curator
+
+inputs:
+  dataset_snapshot: configs/frozen_swe_verified_playbook_gepa/20260915_safe_pce_clean411_v2
+  dataset_manifest_sha256: d8c89e6fc57c46a4b3b62769c39e7303cb442dc79d9c474b2a406caa7e4e3fb4
+  initial_playbook: configs/development_guidelines/offline_gepa_reject_playbook_seed_v2.json
+  initial_playbook_sha256: 16e09571f484f355300dc29f7a828ba8d9b5ca691152ffb8b3b1f2d13d5f83e4
+  prompt_bundle: configs/prompts/offline_gepa_repo_concern_playbook_v1_20260915.yaml
+  prompt_bundle_sha256: 4780c80dc2a5d018645bbf9677a0e43344f2ccf11d3648a3ad9e4b1bee60a788
+  repo_checker_contract: configs/prompts/offline_gepa_repo_checker_contract_v2_20260915.yaml
+  repo_checker_contract_sha256: e0bc00bc89feabf394bf6d65fd0ded79a849a02abb9e3d679322d1cb63e160a5
+  repo_checker_image_manifest: configs/frozen_swe_verified_safe_pce/verified482-formal-v1-20260914/images.json
+  repo_checker_image_manifest_sha256: f4c18c5dcf30fa48cb503241c5ba69ae8f6368e63726f8ce0875a868ae212e0a
+  selection: configs/frozen_swe_verified_playbook_gepa/20260915_repo_concern_smoke8x4_v1/selection.json
+  selection_sha256: cc851c5dc07db18271af8d3102c285ad87f5c295d1e36e8a00841ce8cf9a8a9c
+  train_instance_ids:
+    - astropy__astropy-13977
+    - django__django-14434
+    - matplotlib__matplotlib-24570
+    - mwaskom__seaborn-3069
+    - astropy__astropy-13236
+    - django__django-13212
+    - matplotlib__matplotlib-21568
+    - pydata__xarray-3993
+  validation_instance_ids:
+    - astropy__astropy-14309
+    - django__django-15930
+    - astropy__astropy-13033
+    - django__django-11141
+
+models:
+  checker: {model: deepseek-v4-flash, temperature: 0.0}
+  reflector: {model: deepseek-v4-flash, temperature: 0.0}
+  curator: {model: deepseek-v4-flash, temperature: 0.0}
+  refiner: {model: deepseek-v4-flash, temperature: 0.0}
+
+repo_checker:
+  workdir: /testbed
+  command_timeout_seconds: 1800
+  source_access_policy: conservative_blacklist_v3
+  prune_future_history: true
+  masked_container_paths:
+    - /opt/miniconda3/pkgs
+
+scoring:
+  accept_resolved: 1
+  accept_unresolved: 0
+  reject_resolved: -1
+  reject_unresolved: 1
+  invalid: -100
+
+search:
+  max_iterations: 1
+  reflection_minibatch_size: 8
+  max_metric_calls: 48
+  seed: 42
+  perfect_score: 1.0
+  skip_perfect_score: true
+
+reflection:
+  rounds: 1
+  evidence_image: python:3.12-slim
+  evidence_sif_cache_dir: /scratch/users/${USER}/vibe-coding-planning/shared/sif-cache
+  command_timeout_seconds: 1800
+
+length:
+  maximum_visible_tokens: 2048
+  maximum_bullet_tokens: 64
+  harmful_pruning_weight: 2
+
+budget:
+  candidate_proposals: 1
+  reflection_cases_per_proposal: 8
+  reflection_rounds_per_case: 1
+  projected_metric_call_ceiling: 48
+
+stopping:
+  stop_after_candidate_proposals: 1
+  abort_on_operational_incomplete: true
+
+operational_incomplete_policy: >-
+  Model, transport, timeout, parsing, missing-artifact, repository-authority,
+  or exhausted Agent-output-contract failures remain operationally incomplete
+  and are not converted to unresolved, Bad, or INVALID. INVALID is reserved
+  for a structurally valid candidate containing a bullet over 64 Checker
+  tokens.
+
+hpc:
+  submit: true
+  partition: batch
+  cpus_per_task: 1
+  mem: 4G
+  controller_slice_time: "00:30:00"
+  agent_time: "00:35:00"
+  poll_interval_seconds: 30
+  max_running_array_tasks: 0
+  max_task_attempts: 3
+  task_output_grace_seconds: 120
+  missing_task_grace_seconds: 300
+  remote_env_file: ~/.config/vibe-coding-planning/deepseek.env
+  python_module: lang/Python/3.11
+  container_module: tools/Apptainer
+  job_name_prefix: verified-repo-concern-playbook-smoke8-v4-20260915
+
+success_criteria:
+  - Exact-input Seed Checker, Repo Reflector, and Curator outputs are imported from v3 with immutable provenance.
+  - The first new Agent wave is Candidate Repo Checker, not a repeated successful stage.
+  - Every triggered evidence item contains exactly source, location, and observation.
+  - The old no-repository Checker mode and its prompt/data boundary remain unchanged.
+  - The Repo Checker returns one 0/1/2 case finding per triggered concern and the Host rejects only for Level 2.
+  - Level 0 and Level 1 findings do not affect the candidate score; their observed quality is retained for smoke analysis.
+  - The Checker sees neither outcomes, Code/evaluator trajectories, stable IDs, nor counters.
+  - Exactly one candidate proposal is evaluated on the same frozen development cases.
+
+readiness:
+  runnable: true
+  launched: false
+  missing: []

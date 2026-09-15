@@ -1,0 +1,45 @@
+checker_contract_appendix: |
+  Output-contract requirements:
+
+  - The top-level object must contain exactly `rule_results`.
+  - Every rule result must contain exactly `rule_number`, `triggered`, `level`,
+    `finding`, `evidence`, and `reason`.
+  - Every evidence item must contain exactly `source`, `location`, and
+    `observation`.
+  - `source` must be `issue`, `plan`, or `repository`.
+  - `location` must be a nonempty string or null. For repository evidence, use
+    a path with an optional line or symbol. For issue or Plan evidence, name a
+    concise section or passage.
+  - `observation` must be a nonempty statement of what that source shows and
+    why it supports the finding. Do not put the observation into `location`.
+  - Do not add keys at any of these levels.
+
+  A triggered result has this exact shape:
+  {
+    "rule_number": 1,
+    "triggered": true,
+    "level": 1,
+    "finding": "The concrete concern in this Plan.",
+    "evidence": [
+      {
+        "source": "repository",
+        "location": "src/example.py:42",
+        "observation": "This shared path serves both affected consumers."
+      }
+    ],
+    "reason": "Why this evidence warrants the assigned Level."
+  }
+
+  An untriggered result has this exact shape:
+  {
+    "rule_number": 2,
+    "triggered": false,
+    "level": null,
+    "finding": null,
+    "evidence": [],
+    "reason": "Why the concern is not supported in this case."
+  }
+
+  Before submission, programmatically check every object for these exact keys,
+  confirm that every visible concern appears exactly once in ordinal order, and
+  then run the required JSON validation and submission command.

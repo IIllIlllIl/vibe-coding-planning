@@ -104,7 +104,10 @@ def validate_repo_checker_result(
     }
     for expected_number, row in enumerate(rows, start=1):
         if not isinstance(row, dict) or set(row) != expected_keys:
-            raise ValueError("Repo Checker rule result has an invalid schema")
+            raise ValueError(
+                "Repo Checker rule result must contain exactly: "
+                "rule_number, triggered, level, finding, evidence, reason"
+            )
         if row["rule_number"] != expected_number:
             raise ValueError("Repo Checker rule results must use every ordinal in order")
         triggered = row["triggered"]
@@ -120,7 +123,10 @@ def validate_repo_checker_result(
             if not isinstance(item, dict) or set(item) != {
                 "source", "location", "observation"
             }:
-                raise ValueError("Repo Checker evidence item has an invalid schema")
+                raise ValueError(
+                    "Repo Checker evidence item must contain exactly: "
+                    "source, location, observation"
+                )
             if item["source"] not in _EVIDENCE_SOURCES:
                 raise ValueError("Repo Checker evidence source is invalid")
             location = item["location"]

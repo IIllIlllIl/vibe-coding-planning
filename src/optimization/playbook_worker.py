@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import argparse
 from datetime import datetime, timezone
+import hashlib
 import json
 from pathlib import Path
 
@@ -65,6 +66,26 @@ def run_task(
         }:
             values["retry_feedback"] = retry_feedback
         if role == "repo_checker":
+            checker_system = str(prompts["checker_system"])
+            contract_value = config["inputs"].get("repo_checker_contract")
+            if contract_value:
+                contract_path = Path(str(contract_value))
+                if not contract_path.is_absolute():
+                    contract_path = config_path.resolve().parents[1] / contract_path
+                contract_bytes = contract_path.read_bytes()
+                expected_contract_sha = str(
+                    config["inputs"].get("repo_checker_contract_sha256", "")
+                )
+                if hashlib.sha256(contract_bytes).hexdigest() != expected_contract_sha:
+                    raise ValueError("Repo Checker contract fingerprint mismatch")
+                contract = yaml.safe_load(contract_bytes) or {}
+                if set(contract) != {"checker_contract_appendix"} or not isinstance(
+                    contract["checker_contract_appendix"], str
+                ):
+                    raise ValueError("Repo Checker contract file is invalid")
+                checker_system += (
+                    "\n\n" + contract["checker_contract_appendix"].strip() + "\n"
+                )
             stage = "agent_execution"
             output, trajectory = run_repository_checker(
                 model_config=config["models"]["checker"],
@@ -72,7 +93,7 @@ def run_task(
                     **config["repo_checker"],
                     "sif_cache_dir": config["container"]["sif_cache_dir"],
                 },
-                system=prompts["checker_system"],
+                system=checker_system,
                 instance_template=prompts["checker_instance"],
                 repository=manifest["repository"],
                 image_authority=manifest["image_authority"],

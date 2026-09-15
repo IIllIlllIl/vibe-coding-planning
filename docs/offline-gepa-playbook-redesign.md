@@ -226,6 +226,26 @@ the canonical run-state root. That authority remains unchanged. The v3
 successor binds the same source run through its absolute canonical scratch path
 and retains the same source manifest hash and all other method inputs.
 
+V3 successfully imported all twelve Seed Checker results, completed eight Repo
+Reflectors and one Curator, and produced a ten-concern candidate. Its Candidate
+Checker then exposed a Prompt/Host contract defect: the prompt showed only an
+empty evidence array, while Host validation required every evidence object to
+contain exactly `source`, `location`, and `observation`. Agent trajectories
+explicitly show the model guessing a two-field schema; the generic retry error
+did not reveal the missing field. All eight first attempts therefore failed
+output validation even though their substantive reviews were present. V3 was
+stopped and its remaining second-attempt array cancelled; these are operational
+failures, not method scores.
+
+The prepared v4 successor adds a positive, hash-bound exact-schema appendix
+with both triggered and untriggered examples. Host validation errors now name
+the exact required keys. V4 imports the completed v3 Seed Checker, Repo
+Reflector, and Curator outputs only when task inputs match; for file-backed
+roles, immutable evidence-tree hashes replace run-local paths in that match.
+Imported outputs are revalidated and retain source manifest/task/output hashes.
+The failed Candidate Checker outputs are not eligible for import, so the first
+new Agent wave is the corrected Candidate Checker evaluation.
+
 ## Two-Stage Reflection
 
 Reflection is separated into per-case attribution and cross-case curation.

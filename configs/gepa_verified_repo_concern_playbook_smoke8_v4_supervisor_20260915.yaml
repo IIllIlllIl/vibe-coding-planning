@@ -1,0 +1,28 @@
+schema_version: 1
+session: verified-repo-concern-playbook-smoke8-v4-20260915
+log: .local/hpc-supervisor/verified-repo-concern-playbook-smoke8-v4-20260915.log
+arguments:
+  - --poll-interval
+  - "30"
+  - --slice-time
+  - "00:30:00"
+  - --target-iterations
+  - "1"
+  - --max-runs
+  - "50"
+  - --state-file
+  - .local/hpc-supervisor/verified-repo-concern-playbook-smoke8-v4-20260915.json
+  - --reclaim-staging
+  - --require-clean-worktree
+  - --gepa-rules
+  - --gepa-config
+  - configs/gepa_verified_repo_concern_playbook_smoke8_v4_20260915.yaml
+  - --ulhpc-config
+  - /Users/taoran.wang/.config/ulhpc-submit/config.yaml
+  - --job-name
+  - verified-repo-concern-playbook-smoke8-v4-20260915
+  - --cpus
+  - "1"
+  - --mem
+  - 4G
+  - --submit

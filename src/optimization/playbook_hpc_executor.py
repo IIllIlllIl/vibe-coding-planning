@@ -38,20 +38,55 @@ def _file_sha256(path: Path) -> str:
     return digest.hexdigest()
 
 
-def _task_input_identity(manifest: Mapping[str, Any]) -> dict[str, Any]:
+def _directory_sha256(path: Path) -> str:
+    if not path.is_dir():
+        raise ValueError(f"checkpoint evidence directory is missing: {path}")
+    digest = hashlib.sha256()
+    for child in sorted(item for item in path.rglob("*") if item.is_file()):
+        digest.update(child.relative_to(path).as_posix().encode("utf-8"))
+        digest.update(b"\0")
+        digest.update(bytes.fromhex(_file_sha256(child)))
+    return digest.hexdigest()
+
+
+def _resolve_run_artifact(run_dir: Path, raw: str) -> Path:
+    path = Path(raw)
+    if path.is_absolute():
+        return path
+    parts = path.parts
+    if run_dir.name in parts:
+        index = len(parts) - 1 - tuple(reversed(parts)).index(run_dir.name)
+        return run_dir.joinpath(*parts[index + 1 :])
+    return path
+
+
+def _task_input_identity(
+    manifest: Mapping[str, Any],
+    *,
+    run_dir: Path | None = None,
+) -> dict[str, Any]:
     """Return the scientific task input, excluding transport-local identity."""
-    return {
+    identity = {
         key: value
         for key, value in manifest.items()
         if key not in {"schema_version", "fingerprint", "task_index"}
     }
+    if "evidence_dir" in identity:
+        if run_dir is None:
+            raise ValueError("task evidence identity requires its run directory")
+        evidence_dir = _resolve_run_artifact(run_dir, str(identity["evidence_dir"]))
+        identity["evidence_dir"] = {
+            "tree_sha256": _directory_sha256(evidence_dir),
+        }
+    return identity
 
 
 class PlaybookHPCExecutor:
     def __init__(self, *, config_path: Path, run_dir: Path, hpc: HPCConfig,
                  token_counter=None, maximum_bullet_tokens: int | None = None,
                  checkpoint_import_run_dir: Path | None = None,
-                 checkpoint_import_manifest_sha256: str | None = None) -> None:
+                 checkpoint_import_manifest_sha256: str | None = None,
+                 checkpoint_import_roles: Sequence[str] = ()) -> None:
         self.config_path = config_path
         self.run_dir = run_dir
         self.hpc = hpc
@@ -62,17 +97,19 @@ class PlaybookHPCExecutor:
         self.checkpoint_import_manifest_sha256 = (
             checkpoint_import_manifest_sha256
         )
+        self.checkpoint_import_roles = frozenset(checkpoint_import_roles)
 
-    def _import_completed_repo_checker_outputs(
+    def _import_completed_outputs(
         self,
         *,
+        role: str,
         batch_dir: Path,
         tasks: Sequence[TaskFiles],
         validate_output: Callable[[TaskFiles, dict[str, Any]], None],
     ) -> None:
-        """Import only exact-input completed Checker outputs from a frozen run."""
+        """Import exact-input completed Agent outputs from a frozen run."""
         source_run = self.checkpoint_import_run_dir
-        if source_run is None:
+        if source_run is None or role not in self.checkpoint_import_roles:
             return
         expected_manifest_sha = self.checkpoint_import_manifest_sha256
         if not expected_manifest_sha:
@@ -85,10 +122,12 @@ class PlaybookHPCExecutor:
             raise ValueError("checkpoint import source run manifest hash mismatch")
 
         sources: dict[str, tuple[Path, Path, dict[str, Any], dict[str, Any]]] = {}
-        pattern = "hpc_tasks/repo_checker/*/tasks/task_*.json"
+        pattern = f"hpc_tasks/{role}/*/tasks/task_*.json"
         for source_task_path in sorted(source_run.glob(pattern)):
             source_task = json.loads(source_task_path.read_text(encoding="utf-8"))
-            identity = _sha(_task_input_identity(source_task))
+            identity = _sha(
+                _task_input_identity(source_task, run_dir=source_run)
+            )
             source_output_path = (
                 source_task_path.parents[1] / "outputs" / source_task_path.name
             )
@@ -114,28 +153,21 @@ class PlaybookHPCExecutor:
             if task.output_path.is_file():
                 continue
             target_task = json.loads(task.manifest_path.read_text(encoding="utf-8"))
-            source = sources.get(_sha(_task_input_identity(target_task)))
+            source = sources.get(
+                _sha(_task_input_identity(target_task, run_dir=self.run_dir))
+            )
             if source is None:
                 continue
             source_task_path, source_output_path, source_task, source_output = source
             if (
                 source_output.get("fingerprint") != source_task.get("fingerprint")
-                or source_output.get("role") != "repo_checker"
+                or source_output.get("role") != role
                 or source_output.get("task_index") != source_task.get("task_index")
                 or source_output.get("instance_id") != source_task.get("instance_id")
                 or not isinstance(source_output.get("agent_output"), dict)
                 or not isinstance(source_output.get("trajectory"), list)
             ):
                 raise ValueError("checkpoint import source output identity mismatch")
-            source_playbook = RejectPlaybook(tuple(
-                PlaybookBullet(f"host-{index:05d}", "Host validation rule")
-                for index in range(
-                    1, int(source_task["validation_rule_count"]) + 1
-                )
-            ))
-            validate_repo_checker_result(
-                source_output["agent_output"], source_playbook
-            )
             imported = {
                 **source_output,
                 "fingerprint": target_task["fingerprint"],
@@ -161,7 +193,7 @@ class PlaybookHPCExecutor:
         if audit_rows:
             atomic_json(batch_dir / "checkpoint_import.json", {
                 "schema_version": 1,
-                "role": "repo_checker",
+                "role": role,
                 "source_run": str(source_run),
                 "source_run_manifest_sha256": observed_manifest_sha,
                 "imported": audit_rows,
@@ -309,13 +341,12 @@ class PlaybookHPCExecutor:
             elif role == "refiner":
                 apply_refiner_operations(playbook, agent_output)
 
-        if role == "repo_checker":
-            self._import_completed_repo_checker_outputs(
-                batch_dir=batch_dir,
-                tasks=tasks,
-                validate_output=validate,
-            )
-
+        self._import_completed_outputs(
+            role=role,
+            batch_dir=batch_dir,
+            tasks=tasks,
+            validate_output=validate,
+        )
         return self.runtime.run(
             batch_dir=batch_dir, fingerprint=fingerprint, tasks=tasks,
             job_name=lambda attempt: f"{self.hpc.job_name_prefix}-{role}-{fingerprint[:10]}-a{attempt}",
