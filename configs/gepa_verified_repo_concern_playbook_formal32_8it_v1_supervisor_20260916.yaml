@@ -1,0 +1,28 @@
+schema_version: 1
+session: verified-repo-concern-playbook-formal32-8it-v1-20260916
+log: .local/hpc-supervisor/verified-repo-concern-playbook-formal32-8it-v1-20260916.log
+arguments:
+  - --poll-interval
+  - "30"
+  - --slice-time
+  - "00:30:00"
+  - --target-iterations
+  - "8"
+  - --max-runs
+  - "150"
+  - --state-file
+  - .local/hpc-supervisor/verified-repo-concern-playbook-formal32-8it-v1-20260916.json
+  - --reclaim-staging
+  - --require-clean-worktree
+  - --gepa-rules
+  - --gepa-config
+  - configs/gepa_verified_repo_concern_playbook_formal32_8it_v1_20260916.yaml
+  - --ulhpc-config
+  - /Users/taoran.wang/.config/ulhpc-submit/config.yaml
+  - --job-name
+  - verified-repo-concern-playbook-formal32-8it-v1-20260916
+  - --cpus
+  - "1"
+  - --mem
+  - 4G
+  - --submit

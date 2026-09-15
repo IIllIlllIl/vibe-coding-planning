@@ -1090,3 +1090,54 @@ def test_v4_repo_smoke_resumes_successful_stages_with_explicit_contract() -> Non
     ]
     assert all(key in contract for key in ("`source`", "`location`", "`observation`"))
     assert '"observation": "This shared path' in contract
+
+
+def test_repo_formal32_eight_iteration_config_is_frozen_and_fresh() -> None:
+    config_path = Path(
+        "configs/gepa_verified_repo_concern_playbook_formal32_8it_v1_20260916.yaml"
+    )
+    supervisor_path = Path(
+        "configs/gepa_verified_repo_concern_playbook_formal32_8it_v1_"
+        "supervisor_20260916.yaml"
+    )
+    config = yaml.safe_load(config_path.read_text(encoding="utf-8"))
+    supervisor = yaml.safe_load(supervisor_path.read_text(encoding="utf-8"))
+    _validate_frozen_inputs(config_path, config)
+    records = _repo_image_records(config_path, config)
+    selection = json.loads(
+        Path(config["inputs"]["selection"]).read_text(encoding="utf-8")
+    )
+
+    assert config["mode"] == "offline_repo_concern_playbook"
+    assert config["task"]["semantics"] == "repo_concern_playbook_v1"
+    assert "checkpoint_import" not in config
+    assert len(config["inputs"]["train_instance_ids"]) == 320
+    assert len(config["inputs"]["validation_instance_ids"]) == 80
+    assert config["inputs"]["train_instance_ids"] == selection["train_instance_ids"]
+    assert config["inputs"]["validation_instance_ids"] == selection[
+        "validation_instance_ids"
+    ]
+    assert config["search"] == {
+        "max_iterations": 8,
+        "reflection_minibatch_size": 32,
+        "max_metric_calls": 1600,
+        "seed": 42,
+        "perfect_score": 1.0,
+        "skip_perfect_score": True,
+    }
+    assert config["reflection"]["rounds"] == 1
+    assert config["hpc"]["max_running_array_tasks"] == 0
+    assert config["hpc"]["agent_time"] == "00:35:00"
+    assert len(records) == 482
+    manifest_instance_ids = {
+        record["instance_id"] for record in records.values()
+    }
+    assert all(
+        instance_id in manifest_instance_ids
+        for split in ("train_instance_ids", "validation_instance_ids")
+        for instance_id in config["inputs"][split]
+    )
+    arguments = supervisor["arguments"]
+    assert arguments[arguments.index("--target-iterations") + 1] == "8"
+    assert arguments[arguments.index("--gepa-config") + 1] == str(config_path)
+    assert supervisor["session"] == config["run_id"]
