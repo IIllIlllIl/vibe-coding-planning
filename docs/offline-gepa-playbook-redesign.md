@@ -220,8 +220,11 @@ source run-manifest hash verification, source-output identity checks, and the
 current Host Checker validator. The original `agent_output` and trajectory are
 preserved; the v2 envelope records source task/output paths and hashes. Inputs
 for a learned candidate differ and therefore cannot match these Seed
-checkpoints. It is prepared but not launched; execution still requires explicit
-authorization.
+checkpoints. Its first v2 launch failed before any Agent call because the
+relative source-run path resolved within the submission worktree rather than
+the canonical run-state root. That authority remains unchanged. The v3
+successor binds the same source run through its absolute canonical scratch path
+and retains the same source manifest hash and all other method inputs.
 
 ## Two-Stage Reflection
 

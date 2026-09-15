@@ -815,7 +815,7 @@ def test_repo_prompt_freezes_level_and_information_boundaries() -> None:
     assert "over 64 tokens" in curator_text
 
 
-@pytest.mark.parametrize("version", ["v1", "v2"])
+@pytest.mark.parametrize("version", ["v1", "v2", "v3"])
 def test_repo_smoke_binds_distinct_mode_and_frozen_inputs(version: str) -> None:
     path = Path(
         f"configs/gepa_verified_repo_concern_playbook_smoke8_{version}_20260915.yaml"
@@ -837,12 +837,12 @@ def test_repo_smoke_binds_distinct_mode_and_frozen_inputs(version: str) -> None:
     assert len(records) == 482
 
 
-def test_repaired_repo_smoke_has_fresh_run_and_supervisor_identity() -> None:
+def test_repaired_repo_smoke_has_canonical_import_and_fresh_identity() -> None:
     config_path = Path(
-        "configs/gepa_verified_repo_concern_playbook_smoke8_v2_20260915.yaml"
+        "configs/gepa_verified_repo_concern_playbook_smoke8_v3_20260915.yaml"
     )
     supervisor_path = Path(
-        "configs/gepa_verified_repo_concern_playbook_smoke8_v2_supervisor_20260915.yaml"
+        "configs/gepa_verified_repo_concern_playbook_smoke8_v3_supervisor_20260915.yaml"
     )
     config = yaml.safe_load(config_path.read_text(encoding="utf-8"))
     supervisor = yaml.safe_load(supervisor_path.read_text(encoding="utf-8"))
@@ -852,10 +852,14 @@ def test_repaired_repo_smoke_has_fresh_run_and_supervisor_identity() -> None:
         "launched": False,
         "missing": [],
     }
-    assert config["run_id"].endswith("smoke8-v2-20260915")
-    assert config["paths"]["run_dir"].endswith("smoke8-v2-20260915")
+    assert config["run_id"].endswith("smoke8-v3-20260915")
+    assert config["paths"]["run_dir"].endswith("smoke8-v3-20260915")
     assert config["checkpoint_import"] == {
-        "source_run_dir": "smoke8-v1-20260915",
+        "source_run_dir": (
+            "/scratch/users/twang/vibe-coding-planning/run_state/output/"
+            "SWE-bench_Verified/gepa-repo-concern-playbook-runs/"
+            "smoke8-v1-20260915"
+        ),
         "source_run_manifest_sha256": (
             "e6995ef3602ebee0bedd0be0b3a56712c317f8966f7afdfa15bf115a2b85e2fd"
         ),
