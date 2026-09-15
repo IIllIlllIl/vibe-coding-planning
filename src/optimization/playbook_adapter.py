@@ -21,6 +21,10 @@ from src.optimization.playbook import (
     validate_curator_proposal,
     validate_reflector_review,
 )
+from src.optimization.repo_playbook import (
+    render_concern_playbook,
+    validate_repo_checker_result,
+)
 
 
 class PlaybookChecker(Protocol):
@@ -185,6 +189,8 @@ class TwoStagePlaybookProposer:
         harmful_weight: float = 5.0,
         batch_reflector: Callable[[Sequence[Mapping[str, Any]]], Sequence[Mapping[str, Any]]] | None = None,
         global_counter_path: Path | None = None,
+        review_validator: Callable[..., dict[str, Any]] = validate_reflector_review,
+        visible_renderer: Callable[[RejectPlaybook], str] | None = None,
     ) -> None:
         self.reflector = reflector
         self.curator = curator
@@ -197,6 +203,8 @@ class TwoStagePlaybookProposer:
         self.failures: list[dict[str, str]] = []
         self.last_length_report: dict[str, Any] | None = None
         self.global_counters = GlobalPlaybookCounters(global_counter_path)
+        self.review_validator = review_validator
+        self.visible_renderer = visible_renderer
 
     def __call__(
         self,
@@ -217,7 +225,7 @@ class TwoStagePlaybookProposer:
                 else [self.reflector(record) for record in records]
             )
             reviews = [
-                validate_reflector_review(
+                self.review_validator(
                     raw,
                     instance_id=str(record["instance_id"]),
                     playbook=parent,
@@ -236,6 +244,7 @@ class TwoStagePlaybookProposer:
                 semantic_refiner=self.semantic_refiner,
                 maximum_tokens=self.maximum_tokens,
                 harmful_weight=self.harmful_weight,
+                visible_renderer=self.visible_renderer,
             )
             self.last_length_report = report
         except Exception as exc:
@@ -377,4 +386,149 @@ class PlaybookGEPAAdapter:
             raise ValueError("playbook GEPA may update only rules")
         if eval_batch.trajectories is None:
             raise ValueError("playbook Reflection requires captured trajectories")
+        return {"rules": eval_batch.trajectories}
+
+
+class RepoPlaybookGEPAAdapter:
+    """Evaluate concern candidates through the separate repository Checker."""
+
+    def __init__(
+        self,
+        batch_checker: Any,
+        proposer: Any,
+        *,
+        token_counter: Callable[[str], int] | None = None,
+        maximum_bullet_tokens: int | None = None,
+        score_table: Mapping[str, float] | None = None,
+        invalid_score: float = -100.0,
+    ) -> None:
+        if batch_checker is None:
+            raise ValueError("Repo playbook execution requires a batch Checker")
+        self.batch_checker = batch_checker
+        self.propose_new_texts = proposer
+        self.token_counter = token_counter
+        self.maximum_bullet_tokens = maximum_bullet_tokens
+        self.score_table = dict(score_table) if score_table is not None else None
+        self.invalid_score = float(invalid_score)
+
+    def evaluate(
+        self,
+        batch: list[GEPACase],
+        candidate: dict[str, str],
+        capture_traces: bool = False,
+    ) -> EvaluationBatch:
+        if set(candidate) != {"rules"}:
+            raise ValueError("candidate must contain only rules")
+        playbook = RejectPlaybook.parse(candidate["rules"])
+        visible = render_concern_playbook(playbook)
+        outputs: list[dict[str, Any]] = []
+        scores: list[float] = []
+        traces: list[dict[str, Any]] = []
+        invalid_bullets: list[str] = []
+        if self.maximum_bullet_tokens is not None:
+            if self.token_counter is None:
+                raise ValueError("bullet token cap requires a token counter")
+            invalid_bullets = overlength_bullet_ids(
+                playbook,
+                token_counter=self.token_counter,
+                maximum_bullet_tokens=self.maximum_bullet_tokens,
+            )
+        if invalid_bullets:
+            for case in batch:
+                output = {
+                    "instance_id": case.instance_id,
+                    "derived_decision": "INVALID",
+                    "rule_results": [],
+                    "blocking_rule_numbers": [],
+                    "advisory_rule_numbers": [],
+                    "invalid_reason": "bullet_token_limit_exceeded",
+                    "invalid_bullet_ids": invalid_bullets,
+                }
+                outputs.append(output)
+                scores.append(self.invalid_score)
+                if capture_traces:
+                    traces.append(
+                        self._trace(
+                            case,
+                            playbook=playbook,
+                            visible=visible,
+                            output=output,
+                            score=self.invalid_score,
+                        )
+                    )
+            return EvaluationBatch(
+                outputs=outputs,
+                scores=scores,
+                trajectories=traces if capture_traces else None,
+            )
+
+        raw_results = self.batch_checker.evaluate_batch(batch, playbook)
+        for case, (raw, trajectory) in zip(batch, raw_results, strict=True):
+            checked = validate_repo_checker_result(
+                raw,
+                playbook,
+                trajectory=trajectory,
+            )
+            score = classification_cost(
+                resolved=case.resolved,
+                rejected=checked.rejected,
+                score_table=self.score_table,
+            )
+            output = checked.to_dict()
+            outputs.append({"instance_id": case.instance_id, **output})
+            scores.append(score)
+            if capture_traces:
+                traces.append(
+                    self._trace(
+                        case,
+                        playbook=playbook,
+                        visible=visible,
+                        output=output,
+                        score=score,
+                    )
+                )
+        return EvaluationBatch(
+            outputs=outputs,
+            scores=scores,
+            trajectories=traces if capture_traces else None,
+        )
+
+    @staticmethod
+    def _trace(
+        case: GEPACase,
+        *,
+        playbook: RejectPlaybook,
+        visible: str,
+        output: Mapping[str, Any],
+        score: float,
+    ) -> dict[str, Any]:
+        return {
+            "instance_id": case.instance_id,
+            "ground_truth": "GOOD" if case.resolved else "BAD",
+            "resolved_proxy": case.resolved,
+            "score": score,
+            "issue": case.issue_description,
+            "plan": case.plan,
+            "repository": {
+                "repo": case.repository.repo,
+                "base_commit": case.repository.base_commit,
+                "instance_id": case.repository.instance_id,
+            },
+            "internal_playbook": playbook.serialize(),
+            "checker_visible_playbook": visible,
+            "checker_output": dict(output),
+            "historical_evidence": case.asi,
+        }
+
+    def make_reflective_dataset(
+        self,
+        candidate: dict[str, str],
+        eval_batch: EvaluationBatch,
+        components_to_update: list[str],
+    ) -> Mapping[str, Sequence[Mapping[str, Any]]]:
+        del candidate
+        if components_to_update != ["rules"]:
+            raise ValueError("repo playbook GEPA may update only rules")
+        if eval_batch.trajectories is None:
+            raise ValueError("repo playbook Reflection requires captured trajectories")
         return {"rules": eval_batch.trajectories}

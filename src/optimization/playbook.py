@@ -530,6 +530,7 @@ def validate_refiner_proposal(
 
 TokenCounter = Callable[[str], int]
 SemanticRefiner = Callable[[RejectPlaybook], RejectPlaybook]
+PlaybookRenderer = Callable[[RejectPlaybook], str]
 
 
 def manage_playbook_length(
@@ -539,13 +540,15 @@ def manage_playbook_length(
     semantic_refiner: SemanticRefiner | None,
     maximum_tokens: int = MAX_VISIBLE_TOKENS,
     harmful_weight: float = 5.0,
+    visible_renderer: PlaybookRenderer | None = None,
 ) -> tuple[RejectPlaybook, dict[str, Any]]:
     """Refine once, then deterministically prune whole bullets if required."""
     if maximum_tokens < 1:
         raise ValueError("maximum_tokens must be positive")
     if harmful_weight <= 0:
         raise ValueError("harmful_weight must be positive")
-    before = token_counter(playbook.render_for_checker())
+    render = visible_renderer or (lambda value: value.render_for_checker())
+    before = token_counter(render(playbook))
     refined = False
     current = playbook
     if before > maximum_tokens:
@@ -558,7 +561,7 @@ def manage_playbook_length(
         current = validate_refiner_proposal(playbook, current)
         refined = True
     removed: list[str] = []
-    while token_counter(current.render_for_checker()) > maximum_tokens:
+    while token_counter(render(current)) > maximum_tokens:
         if not current.bullets:
             raise ValueError("playbook header alone exceeds the token limit")
         # Lowest supported utility is removed first; ties are stable and favor
@@ -580,7 +583,7 @@ def manage_playbook_length(
     return current, {
         "maximum_tokens": maximum_tokens,
         "tokens_before": before,
-        "tokens_after": token_counter(current.render_for_checker()),
+        "tokens_after": token_counter(render(current)),
         "semantic_refiner_ran": refined,
         "harmful_weight": harmful_weight,
         "deterministically_removed_ids": removed,

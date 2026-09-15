@@ -97,6 +97,9 @@ The current implementation surface is:
   infrastructure;
 - `src/swe_verified_pce/` for the active Safe PCE data-generation path;
 - `src/optimization/playbook_*.py` for the active ACE playbook search path;
+- `src/optimization/repo_playbook.py` and the additive
+  `offline_repo_concern_playbook` mode for repository-aware 0/1/2 concern
+  findings; the prior no-repository playbook mode remains available unchanged;
 - `src/polybench_pce/`, `src/polybench_pcce/`, and historical
   `src/swe_verified_pcce/` only where code is deliberately reused or audited;
 - `src/offline_check_only/` for additive fixed-guideline evaluation;

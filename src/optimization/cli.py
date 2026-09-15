@@ -26,7 +26,10 @@ def main() -> None:
     raw = yaml.safe_load(Path(args.config).read_text(encoding="utf-8")) or {}
     if raw.get("mode") == "offline_reject_playbook_curator_replay":
         run_curator_replay(args.config)
-    elif raw.get("mode") == "offline_reject_playbook":
+    elif raw.get("mode") in {
+        "offline_reject_playbook",
+        "offline_repo_concern_playbook",
+    }:
         run_playbook_from_config(args.config)
     elif raw.get("mode") == "online_planning":
         run_online_optimization(load_online_optimization_config(args.config))

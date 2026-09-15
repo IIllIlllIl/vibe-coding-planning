@@ -19,7 +19,7 @@ from gepa.utils import MaxCandidateProposalsStopper
 
 from src.optimization.dataset import GEPACaseLoader, load_snapshot
 from src.optimization.playbook import RejectPlaybook
-from src.optimization.playbook_adapter import PlaybookGEPAAdapter
+from src.optimization.playbook_adapter import PlaybookGEPAAdapter, RepoPlaybookGEPAAdapter
 from src.exceptions import ControllerYield
 from src.optimization.callbacks import ProgressCallback
 from src.optimization.resume import ReproducibleSearchState
@@ -46,7 +46,7 @@ def _run_playbook_search_unlocked(
     dataset_snapshot: Path,
     initial_playbook_path: Path,
     run_dir: Path,
-    adapter: PlaybookGEPAAdapter,
+    adapter: PlaybookGEPAAdapter | RepoPlaybookGEPAAdapter,
     max_metric_calls: int,
     max_iterations: int | None,
     seed: int,
@@ -100,6 +100,7 @@ def _run_playbook_search_unlocked(
             for path in (
                 Path(__file__),
                 Path(__file__).with_name("playbook.py"),
+                Path(__file__).with_name("repo_playbook.py"),
                 Path(__file__).with_name("playbook_adapter.py"),
                 Path(__file__).with_name("playbook_hpc_executor.py"),
                 Path(__file__).with_name("playbook_hpc_agents.py"),

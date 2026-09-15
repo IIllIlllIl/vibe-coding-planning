@@ -1,0 +1,32 @@
+{
+  "not_method_evaluation": true,
+  "purpose": "outcome_exposed_repo_concern_flow_and_level_calibration_smoke",
+  "schema_version": 1,
+  "seed": 42,
+  "selection_policy": "balanced_subset_of_exposed_safe_pce_smoke32x8_v2",
+  "source_manifest_sha256": "d8c89e6fc57c46a4b3b62769c39e7303cb442dc79d9c474b2a406caa7e4e3fb4",
+  "source_selection": "configs/frozen_swe_verified_playbook_gepa/20260915_safe_pce_smoke32x8_v2/selection.json",
+  "source_selection_sha256": "2bf874422417fa404493e377d9e5b776d8e09a302f714c650a31ab39509c954b",
+  "train_count": 8,
+  "train_instance_ids": [
+    "astropy__astropy-13977",
+    "django__django-14434",
+    "matplotlib__matplotlib-24570",
+    "mwaskom__seaborn-3069",
+    "astropy__astropy-13236",
+    "django__django-13212",
+    "matplotlib__matplotlib-21568",
+    "pydata__xarray-3993"
+  ],
+  "train_resolved": 4,
+  "train_unresolved": 4,
+  "validation_count": 4,
+  "validation_instance_ids": [
+    "astropy__astropy-14309",
+    "django__django-15930",
+    "astropy__astropy-13033",
+    "django__django-11141"
+  ],
+  "validation_resolved": 2,
+  "validation_unresolved": 2
+}

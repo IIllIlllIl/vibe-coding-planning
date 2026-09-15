@@ -14,8 +14,57 @@ from src.optimization.playbook import (
     apply_refiner_operations,
     overlength_bullet_ids,
 )
+from src.optimization.repo_playbook import render_concern_playbook
 from src.optimization.playbook_hpc_executor import PlaybookHPCExecutor
 from src.optimization.hpc.task_batch import TaskAttemptsExhausted, atomic_json
+from src.evaluator.swe_evaluator import derive_image_name
+
+
+def _image_authority(
+    case: GEPACase,
+    records: Mapping[str, Any],
+) -> dict[str, Any]:
+    repository = {
+        "repo": case.repository.repo,
+        "base_commit": case.repository.base_commit,
+        "instance_id": case.repository.instance_id,
+    }
+    return _image_authority_for_repository(case.instance_id, repository, records)
+
+
+def _image_authority_for_repository(
+    instance_id: str,
+    repository: Mapping[str, Any],
+    records: Mapping[str, Any],
+) -> dict[str, Any]:
+    if repository.get("instance_id") != instance_id:
+        raise ValueError(f"{instance_id}: repository identity mismatch")
+    image_ref = derive_image_name(repository)
+    raw = records.get(image_ref)
+    if not isinstance(raw, dict):
+        raise ValueError(f"{instance_id}: Repo Checker image authority is missing")
+    if raw.get("instance_id") != instance_id:
+        raise ValueError(f"{instance_id}: Repo Checker image identity mismatch")
+    if raw.get("status") not in {"cached", "pulled", "audited"}:
+        raise ValueError(f"{instance_id}: Repo Checker image is unavailable")
+    if raw.get("base_commit_verified") is not True:
+        raise ValueError(f"{instance_id}: Repo Checker base commit is unverified")
+    if raw.get("expected_base_commit") != repository.get("base_commit"):
+        raise ValueError(f"{instance_id}: Repo Checker base commit authority mismatch")
+    required = ("sif_path", "sif_sha256", "sif_bytes")
+    if any(raw.get(key) in {None, ""} for key in required):
+        raise ValueError(f"{instance_id}: Repo Checker SIF authority is incomplete")
+    sif_hash = str(raw["sif_sha256"])
+    if len(sif_hash) != 64 or any(value not in "0123456789abcdef" for value in sif_hash):
+        raise ValueError(f"{instance_id}: Repo Checker SIF hash is invalid")
+    if int(raw["sif_bytes"]) <= 0:
+        raise ValueError(f"{instance_id}: Repo Checker SIF size is invalid")
+    return {
+        "requested_ref": image_ref,
+        "sif_path": str(raw["sif_path"]),
+        "sif_sha256": sif_hash,
+        "sif_bytes": int(raw["sif_bytes"]),
+    }
 
 
 class HPCPlaybookChecker:
@@ -35,6 +84,45 @@ class HPCPlaybookChecker:
         return [(item["agent_output"], item["trajectory"]) for item in outputs]
 
 
+class HPCRepoPlaybookChecker:
+    """Repository-aware Checker using the same one-Agent Slurm transport."""
+
+    def __init__(
+        self,
+        executor: PlaybookHPCExecutor,
+        *,
+        image_records: Mapping[str, Any],
+    ) -> None:
+        self.executor = executor
+        self.image_records = image_records
+
+    def evaluate_batch(self, batch: Sequence[GEPACase], playbook: RejectPlaybook):
+        visible = render_concern_playbook(playbook)
+        items = []
+        for case in batch:
+            repository = {
+                "repo": case.repository.repo,
+                "base_commit": case.repository.base_commit,
+                "instance_id": case.repository.instance_id,
+            }
+            items.append(
+                {
+                    "instance_id": case.instance_id,
+                    "validation_rule_count": len(playbook.bullets),
+                    "repository": repository,
+                    "image_authority": _image_authority(case, self.image_records),
+                    "prompt_values": {
+                        "issue": case.issue_description,
+                        "plan": case.plan,
+                        "checker_visible_playbook": visible,
+                        "retry_feedback": "",
+                    },
+                }
+            )
+        outputs = self.executor.run_wave("repo_checker", items)
+        return [(item["agent_output"], item["trajectory"]) for item in outputs]
+
+
 class HPCPlaybookProposalAgents:
     def __init__(
         self,
@@ -43,11 +131,15 @@ class HPCPlaybookProposalAgents:
         maximum_tokens: int,
         maximum_bullet_tokens: int | None = None,
         token_counter: Callable[[str], int] | None = None,
+        visible_renderer: Callable[[RejectPlaybook], str] | None = None,
     ) -> None:
         self.executor = executor
         self.maximum_tokens = maximum_tokens
         self.maximum_bullet_tokens = maximum_bullet_tokens
         self.token_counter = token_counter or (lambda text: len(text.split()))
+        self.visible_renderer = visible_renderer or (
+            lambda value: value.render_for_checker()
+        )
 
     @staticmethod
     def _materialize_historical_evidence(
@@ -91,6 +183,7 @@ class HPCPlaybookProposalAgents:
         record: Mapping[str, Any],
         *,
         prior: Mapping[str, Any] | None,
+        include_repository_reference: bool = False,
     ) -> Path:
         identity = hashlib.sha256(
             json.dumps(
@@ -105,14 +198,17 @@ class HPCPlaybookProposalAgents:
         historical = self._materialize_historical_evidence(
             dict(record.get("historical_evidence") or {})
         )
-        atomic_json(root / "classification.json", {
-            key: record.get(key)
-            for key in (
+        classification_keys = [
                 "instance_id", "issue", "plan", "ground_truth",
                 "resolved_proxy", "score", "checker_output",
                 "checker_visible_playbook",
-            )
-        })
+        ]
+        if include_repository_reference:
+            classification_keys.append("repository")
+        atomic_json(
+            root / "classification.json",
+            {key: record.get(key) for key in classification_keys},
+        )
         atomic_json(root / "plan_trajectory.json", historical.get("plan_trajectory", []))
         atomic_json(root / "code_trajectory.json", historical.get("code_trajectory", []))
         atomic_json(root / "evaluator_result.json", historical.get("evaluator_result", {}))
@@ -121,7 +217,7 @@ class HPCPlaybookProposalAgents:
         )
         if prior is not None:
             atomic_json(root / "prior_reflection.json", dict(prior))
-        atomic_json(root / "manifest.json", {
+        manifest = {
             "schema_version": 1,
             "instance_id": record["instance_id"],
             "files": [
@@ -131,7 +227,10 @@ class HPCPlaybookProposalAgents:
                 *(["prior_reflection.json"] if prior is not None else []),
             ],
             "contains_repository": False,
-        })
+        }
+        if include_repository_reference:
+            manifest["contains_repository_reference"] = True
+        atomic_json(root / "manifest.json", manifest)
         return root
 
     def reflect_batch(self, records: Sequence[Mapping[str, Any]], rounds: int):
@@ -231,8 +330,68 @@ class HPCPlaybookProposalAgents:
     def refine(self, playbook: RejectPlaybook) -> RejectPlaybook:
         item = {"validation_playbook": playbook.serialize(), "prompt_values": {
             "internal_playbook": playbook.serialize(),
-            "current_tokens": self.token_counter(playbook.render_for_checker()),
+            "current_tokens": self.token_counter(self.visible_renderer(playbook)),
             "maximum_tokens": self.maximum_tokens,
         }}
         output = self.executor.run_wave("refiner", [item])[0]["agent_output"]
         return apply_refiner_operations(playbook, output)
+
+
+class HPCRepoPlaybookProposalAgents(HPCPlaybookProposalAgents):
+    """Repo-aware per-case Reflection with shared Curator and Refiner."""
+
+    def __init__(
+        self,
+        executor: PlaybookHPCExecutor,
+        *,
+        image_records: Mapping[str, Any],
+        maximum_tokens: int,
+        maximum_bullet_tokens: int | None = None,
+        token_counter: Callable[[str], int] | None = None,
+    ) -> None:
+        super().__init__(
+            executor,
+            maximum_tokens=maximum_tokens,
+            maximum_bullet_tokens=maximum_bullet_tokens,
+            token_counter=token_counter,
+            visible_renderer=render_concern_playbook,
+        )
+        self.image_records = image_records
+
+    def reflect_batch(self, records: Sequence[Mapping[str, Any]], rounds: int):
+        priors: list[Mapping[str, Any] | None] = [None] * len(records)
+        for _ in range(rounds):
+            items = []
+            for record, prior in zip(records, priors, strict=True):
+                internal = RejectPlaybook.parse(record["internal_playbook"])
+                repository = record.get("repository")
+                if not isinstance(repository, dict):
+                    raise ValueError("Repo Reflection record lacks repository identity")
+                evidence_dir = self._write_reflection_evidence(
+                    record,
+                    prior=prior,
+                    include_repository_reference=True,
+                )
+                items.append(
+                    {
+                        "instance_id": record["instance_id"],
+                        "validation_playbook": internal.serialize(),
+                        "repository": dict(repository),
+                        "source_access_issue": str(record["issue"]),
+                        "image_authority": _image_authority_for_repository(
+                            str(record["instance_id"]),
+                            repository,
+                            self.image_records,
+                        ),
+                        "evidence_dir": str(evidence_dir),
+                        "prompt_values": {
+                            "internal_playbook": internal.serialize(),
+                            "evidence_path": "/evidence",
+                        },
+                    }
+                )
+            priors = [
+                item["agent_output"]
+                for item in self.executor.run_wave("repo_reflector", items)
+            ]
+        return priors

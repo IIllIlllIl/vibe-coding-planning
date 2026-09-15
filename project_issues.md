@@ -37,22 +37,26 @@ state remains in runtime artifacts.
 
 - Keep the task as cost-sensitive classification; do not add Replan, Code, or
   Evaluate phases to candidate evaluation.
-- Optimize a human-readable `Reject the plan when:` playbook whose bullets
-  each express one Plan failure pattern.
-- Do not let the Checker inspect a repository. It sees only the issue, Plan,
-  temporary bullet numbers, and bullet text; stable IDs and helpful/harmful
-  counters remain Reflection-only metadata.
-- Have the Checker classify every bullet, then derive the Plan decision in the
-  host: any trigger means REJECT and no trigger means ACCEPT.
+- Preserve the existing no-repository `Reject the plan when:` path unchanged,
+  including its frozen candidates and evidence boundary.
+- Add a separate repository-aware `Review the Plan for these concerns:` path.
+  Its Checker sees issue, Plan, temporary bullet numbers/text, and a disposable
+  frozen base repository; stable IDs, counters, outcomes, and downstream
+  trajectories remain hidden.
+- In the repo-aware path, have the Checker assign case-level 0/1/2 findings.
+  The Host rejects only if any triggered concern is Level 2. Levels 0 and 1
+  remain nonblocking diagnostic/advisory output.
 - Use historical `RESOLVED` / `UNRESOLVED` as the explicitly scoped
   implementation-success proxy and score ACCEPT/REJECT on Good/Bad as
-  `0/-1/-5/0`; invalid output scores `-100`.
+  `1/0/-1/1`; an overlength candidate scores `-100`.
 - Replace single-stage Reflection with one structured per-case Reflector and
   one cross-case Curator. The Reflector assigns helpful, neutral, or harmful
   tags from trajectories and outcome evidence; the host updates counters and
-  the Curator proposes local playbook changes.
+  the Curator proposes local playbook changes. Level calibration is a separate
+  diagnostic and never changes those counters; an unsupported case analysis
+  may remain empty.
 - Trigger length management only when the Checker-visible projection exceeds
-  10,000 frozen-tokenizer tokens. An Agent may deduplicate, compress, and merge;
+  2,048 frozen-tokenizer tokens. An Agent may deduplicate, compress, and merge;
   any remaining counter-based whole-bullet pruning is deterministic and never
   delegated to an LLM.
 - The eligibility-cleaned Verified derivative, prompt bundle, and distributed
@@ -134,10 +138,10 @@ state remains in runtime artifacts.
    test set; retain an internal GEPA train/validation role only for search and
    selection. PolyBench is the planned external evaluation dataset. Any later
    eligibility-policy change requires a new frozen snapshot identity.
-3. Preserve the new deployment boundary: the Checker does not access a
-   repository and sees neither stable IDs nor counters. Historical labels,
-   trajectories, patches, evaluator evidence, and rule attribution are
-   Reflection-only.
+3. Preserve both deployment boundaries. The old Checker remains no-repository;
+   the additive Repo Checker may see only the frozen base repository in
+   addition to issue, Plan, and bullet text. Neither sees stable IDs, counters,
+   outcomes, patches, Code/evaluator trajectories, or Reflection attribution.
 4. Predeclare a new development/validation/held-out split. The Behavioral
    47-case validation, safe67, balanced20, repair3, 24pcce, and safe-U8 cases
    are already development-exposed and cannot become the principal held-out

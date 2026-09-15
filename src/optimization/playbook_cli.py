@@ -10,11 +10,26 @@ from typing import Any
 import litellm
 import yaml
 
-from src.optimization.playbook_adapter import ConfigurableRoundReflector, PlaybookGEPAAdapter, TwoStagePlaybookProposer
+from src.optimization.playbook_adapter import (
+    ConfigurableRoundReflector,
+    PlaybookGEPAAdapter,
+    RepoPlaybookGEPAAdapter,
+    TwoStagePlaybookProposer,
+)
 from src.optimization.playbook_runner import run_playbook_search
 from src.optimization.hpc.config import HPCConfig
-from src.optimization.playbook_hpc_agents import HPCPlaybookChecker, HPCPlaybookProposalAgents
+from src.optimization.playbook_hpc_agents import (
+    HPCPlaybookChecker,
+    HPCPlaybookProposalAgents,
+    HPCRepoPlaybookChecker,
+    HPCRepoPlaybookProposalAgents,
+)
 from src.optimization.playbook_hpc_executor import PlaybookHPCExecutor
+from src.optimization.playbook import validate_reflector_review
+from src.optimization.repo_playbook import (
+    render_concern_playbook,
+    validate_repo_reflector_review,
+)
 
 
 def _resolve_config_path(config_path: Path, raw: str) -> Path:
@@ -58,6 +73,25 @@ def _validate_frozen_inputs(config_path: Path, raw: dict[str, Any]) -> None:
         for key in ("train_instance_ids", "validation_instance_ids"):
             if list(inputs.get(key) or []) != list(selection.get(key) or []):
                 raise ValueError(f"{key} does not match the frozen selection")
+    if raw.get("mode") == "offline_repo_concern_playbook":
+        path = _resolve_config_path(
+            config_path, str(inputs["repo_checker_image_manifest"])
+        )
+        actual = hashlib.sha256(path.read_bytes()).hexdigest()
+        if actual != str(inputs["repo_checker_image_manifest_sha256"]):
+            raise ValueError("Repo Checker image manifest fingerprint mismatch")
+
+
+def _repo_image_records(config_path: Path, raw: dict[str, Any]) -> dict[str, Any]:
+    inputs = raw["inputs"]
+    manifest_path = _resolve_config_path(
+        config_path, str(inputs["repo_checker_image_manifest"])
+    )
+    manifest = yaml.safe_load(manifest_path.read_text(encoding="utf-8")) or {}
+    records = manifest.get("records")
+    if not isinstance(records, dict):
+        raise ValueError("Repo Checker image manifest has no records mapping")
+    return records
 
 
 def _token_counter(model: str):
@@ -96,9 +130,27 @@ def _score_table(raw: dict[str, Any]) -> tuple[dict[str, float] | None, float]:
 def run_from_config(path: str | Path, *, agents: Any | None = None, optimize_fn=None):
     config_path = Path(path)
     raw = yaml.safe_load(config_path.read_text(encoding="utf-8")) or {}
-    if raw.get("mode") != "offline_reject_playbook":
-        raise ValueError("not an offline_reject_playbook config")
+    mode = raw.get("mode")
+    if mode not in {"offline_reject_playbook", "offline_repo_concern_playbook"}:
+        raise ValueError("not a supported playbook config")
+    repo_mode = mode == "offline_repo_concern_playbook"
     _validate_frozen_inputs(config_path, raw)
+    if repo_mode:
+        if raw.get("container", {}).get("runtime") != "apptainer":
+            raise ValueError("Repo Checker mode requires container.runtime: apptainer")
+        repo_checker = raw.get("repo_checker")
+        if not isinstance(repo_checker, dict):
+            raise ValueError("Repo Checker mode requires repo_checker settings")
+        if str(repo_checker.get("workdir", "")) != "/testbed":
+            raise ValueError("Repo Checker workdir must be /testbed")
+        if repo_checker.get("source_access_policy") != "conservative_blacklist_v3":
+            raise ValueError(
+                "Repo Checker must use the Safe PCE conservative_blacklist_v3 "
+                "source boundary"
+            )
+        image_records = _repo_image_records(config_path, raw)
+    else:
+        image_records = {}
     paths = raw["paths"]
     run_dir = Path(paths["run_dir"])
     count_tokens = _token_counter(str(raw["models"]["checker"]["model"]))
@@ -128,13 +180,26 @@ def run_from_config(path: str | Path, *, agents: Any | None = None, optimize_fn=
             token_counter=count_tokens,
             maximum_bullet_tokens=int(raw["length"]["maximum_bullet_tokens"]),
         )
-        checker = HPCPlaybookChecker(executor)
-        proposal_agents = HPCPlaybookProposalAgents(
-            executor,
-            maximum_tokens=int(raw["length"]["maximum_visible_tokens"]),
-            maximum_bullet_tokens=int(raw["length"]["maximum_bullet_tokens"]),
-            token_counter=count_tokens,
-        )
+        if repo_mode:
+            checker = HPCRepoPlaybookChecker(
+                executor,
+                image_records=image_records,
+            )
+            proposal_agents = HPCRepoPlaybookProposalAgents(
+                executor,
+                image_records=image_records,
+                maximum_tokens=int(raw["length"]["maximum_visible_tokens"]),
+                maximum_bullet_tokens=int(raw["length"]["maximum_bullet_tokens"]),
+                token_counter=count_tokens,
+            )
+        else:
+            checker = HPCPlaybookChecker(executor)
+            proposal_agents = HPCPlaybookProposalAgents(
+                executor,
+                maximum_tokens=int(raw["length"]["maximum_visible_tokens"]),
+                maximum_bullet_tokens=int(raw["length"]["maximum_bullet_tokens"]),
+                token_counter=count_tokens,
+            )
         proposer = TwoStagePlaybookProposer(
             reflector=lambda _: {},
             batch_reflector=lambda records: proposal_agents.reflect_batch(
@@ -146,16 +211,32 @@ def run_from_config(path: str | Path, *, agents: Any | None = None, optimize_fn=
             maximum_tokens=int(raw["length"]["maximum_visible_tokens"]),
             harmful_weight=float(raw["length"].get("harmful_pruning_weight", 5.0)),
             global_counter_path=run_dir / "global_counter_ledger.json",
+            review_validator=(
+                validate_repo_reflector_review
+                if repo_mode
+                else validate_reflector_review
+            ),
+            visible_renderer=render_concern_playbook if repo_mode else None,
         )
-        adapter = PlaybookGEPAAdapter(
-            None,
-            proposer,
-            batch_checker=checker,
-            token_counter=count_tokens,
-            maximum_bullet_tokens=int(raw["length"]["maximum_bullet_tokens"]),
-            score_table=score_table,
-            invalid_score=invalid_score,
-        )
+        if repo_mode:
+            adapter = RepoPlaybookGEPAAdapter(
+                checker,
+                proposer,
+                token_counter=count_tokens,
+                maximum_bullet_tokens=int(raw["length"]["maximum_bullet_tokens"]),
+                score_table=score_table,
+                invalid_score=invalid_score,
+            )
+        else:
+            adapter = PlaybookGEPAAdapter(
+                None,
+                proposer,
+                batch_checker=checker,
+                token_counter=count_tokens,
+                maximum_bullet_tokens=int(raw["length"]["maximum_bullet_tokens"]),
+                score_table=score_table,
+                invalid_score=invalid_score,
+            )
     else:
         if agents is None:
             raise ValueError("local playbook execution requires injected test agents")
@@ -168,15 +249,31 @@ def run_from_config(path: str | Path, *, agents: Any | None = None, optimize_fn=
             maximum_tokens=int(raw["length"]["maximum_visible_tokens"]),
             harmful_weight=float(raw["length"].get("harmful_pruning_weight", 5.0)),
             global_counter_path=run_dir / "global_counter_ledger.json",
+            review_validator=(
+                validate_repo_reflector_review
+                if repo_mode
+                else validate_reflector_review
+            ),
+            visible_renderer=render_concern_playbook if repo_mode else None,
         )
-        adapter = PlaybookGEPAAdapter(
-            runtime.checker,
-            proposer,
-            token_counter=count_tokens,
-            maximum_bullet_tokens=int(raw["length"]["maximum_bullet_tokens"]),
-            score_table=score_table,
-            invalid_score=invalid_score,
-        )
+        if repo_mode:
+            adapter = RepoPlaybookGEPAAdapter(
+                runtime.batch_checker,
+                proposer,
+                token_counter=count_tokens,
+                maximum_bullet_tokens=int(raw["length"]["maximum_bullet_tokens"]),
+                score_table=score_table,
+                invalid_score=invalid_score,
+            )
+        else:
+            adapter = PlaybookGEPAAdapter(
+                runtime.checker,
+                proposer,
+                token_counter=count_tokens,
+                maximum_bullet_tokens=int(raw["length"]["maximum_bullet_tokens"]),
+                score_table=score_table,
+                invalid_score=invalid_score,
+            )
     kwargs = {}
     if optimize_fn is not None:
         kwargs["optimize_fn"] = optimize_fn

@@ -19,6 +19,10 @@ from src.optimization.playbook import (
     validate_checker_result,
     validate_reflector_review,
 )
+from src.optimization.repo_playbook import (
+    validate_repo_checker_result,
+    validate_repo_reflector_review,
+)
 
 
 def _sha(value: Any) -> str:
@@ -66,6 +70,10 @@ class PlaybookHPCExecutor:
                 payload["validation_rule_count"] = item["validation_rule_count"]
             if "evidence_dir" in item:
                 payload["evidence_dir"] = item["evidence_dir"]
+            if "repository" in item:
+                payload["repository"] = dict(item["repository"])
+            if "image_authority" in item:
+                payload["image_authority"] = dict(item["image_authority"])
             if manifest.is_file() and json.loads(manifest.read_text()) != payload:
                 raise ValueError("playbook task manifest mismatch")
             if not manifest.exists():
@@ -101,7 +109,9 @@ class PlaybookHPCExecutor:
                 'mkdir -p "$ATTEMPT_DIR"',
                 *(
                     [f"module load {shlex.quote(self.hpc.container_module)}"]
-                    if role in {"reflector", "curator"} else []
+                    if role in {
+                        "reflector", "curator", "repo_checker", "repo_reflector"
+                    } else []
                 ),
                 f"{shlex.quote(self.hpc.python_bin)} -m src.optimization.playbook_worker "
                 f"--config {shlex.quote(str(self.config_path))} "
@@ -126,16 +136,25 @@ class PlaybookHPCExecutor:
                 raise ValueError("playbook worker trajectory missing")
             task_manifest = json.loads(task.manifest_path.read_text(encoding="utf-8"))
             agent_output = value["agent_output"]
-            if role == "checker":
+            if role in {"checker", "repo_checker"}:
                 playbook = RejectPlaybook(tuple(
                     PlaybookBullet(f"host-{index:05d}", "Host validation rule")
                     for index in range(1, int(task_manifest["validation_rule_count"]) + 1)
                 ))
-                validate_checker_result(agent_output, playbook)
+                if role == "checker":
+                    validate_checker_result(agent_output, playbook)
+                else:
+                    validate_repo_checker_result(agent_output, playbook)
             else:
                 playbook = RejectPlaybook.parse(task_manifest["validation_playbook"])
             if role == "reflector":
                 validate_reflector_review(
+                    agent_output,
+                    instance_id=task.instance_id,
+                    playbook=playbook,
+                )
+            elif role == "repo_reflector":
+                validate_repo_reflector_review(
                     agent_output,
                     instance_id=task.instance_id,
                     playbook=playbook,

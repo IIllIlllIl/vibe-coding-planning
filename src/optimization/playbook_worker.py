@@ -17,10 +17,16 @@ from src.optimization.playbook_runtime import (
     _render,
     run_evidence_curator,
     run_evidence_reflector,
+    run_repository_checker,
+    run_repository_reflector,
 )
 from src.optimization.playbook import (
     PlaybookBullet, RejectPlaybook, apply_curator_operations, apply_refiner_operations,
     validate_bullet_token_limit, validate_checker_result, validate_reflector_review,
+)
+from src.optimization.repo_playbook import (
+    validate_repo_checker_result,
+    validate_repo_reflector_review,
 )
 
 
@@ -39,7 +45,10 @@ def run_task(
     try:
         manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
         role = str(manifest["role"])
-        if role not in {"checker", "reflector", "curator", "refiner"}:
+        if role not in {
+            "checker", "reflector", "curator", "refiner",
+            "repo_checker", "repo_reflector",
+        }:
             raise ValueError("unsupported playbook worker role")
         config = yaml.safe_load(config_path.read_text(encoding="utf-8")) or {}
         prompts_path = Path(config["inputs"]["prompt_bundle"])
@@ -51,9 +60,47 @@ def run_task(
         if previous_output_path is not None and previous_output_path.is_file():
             previous = json.loads(previous_output_path.read_text(encoding="utf-8"))
             retry_feedback = str(previous.get("error", ""))
-        if role in {"checker", "reflector", "curator"}:
+        if role in {
+            "checker", "reflector", "curator", "repo_checker", "repo_reflector"
+        }:
             values["retry_feedback"] = retry_feedback
-        if role == "reflector":
+        if role == "repo_checker":
+            stage = "agent_execution"
+            output, trajectory = run_repository_checker(
+                model_config=config["models"]["checker"],
+                repository_config={
+                    **config["repo_checker"],
+                    "sif_cache_dir": config["container"]["sif_cache_dir"],
+                },
+                system=prompts["checker_system"],
+                instance_template=prompts["checker_instance"],
+                repository=manifest["repository"],
+                image_authority=manifest["image_authority"],
+                attempt_dir=attempt_dir,
+                issue=str(values["issue"]),
+                plan=str(values["plan"]),
+                checker_visible_playbook=str(values["checker_visible_playbook"]),
+                retry_feedback=str(values["retry_feedback"]),
+            )
+        elif role == "repo_reflector":
+            stage = "agent_execution"
+            output, trajectory = run_repository_reflector(
+                model_config=config["models"]["reflector"],
+                repository_config={
+                    **config["repo_checker"],
+                    "sif_cache_dir": config["container"]["sif_cache_dir"],
+                },
+                system=prompts["reflector_system"],
+                instance_template=prompts["reflector_instance"],
+                repository=manifest["repository"],
+                image_authority=manifest["image_authority"],
+                attempt_dir=attempt_dir,
+                evidence_dir=str(manifest["evidence_dir"]),
+                internal_playbook=str(values["internal_playbook"]),
+                source_access_issue=str(manifest["source_access_issue"]),
+                retry_feedback=str(values["retry_feedback"]),
+            )
+        elif role == "reflector":
             stage = "agent_execution"
             output, trajectory = run_evidence_reflector(
                 model_config=config["models"][role],
@@ -104,16 +151,25 @@ def run_task(
         }
         atomic_json(attempt_dir / "agent_completion.json", raw_completion)
         stage = "agent_output_validation"
-        if role == "checker":
+        if role in {"checker", "repo_checker"}:
             playbook = RejectPlaybook(tuple(
                 PlaybookBullet(f"host-{index:05d}", "Host validation rule")
                 for index in range(1, int(manifest["validation_rule_count"]) + 1)
             ))
-            validate_checker_result(output, playbook)
+            if role == "checker":
+                validate_checker_result(output, playbook)
+            else:
+                validate_repo_checker_result(output, playbook)
         else:
             playbook = RejectPlaybook.parse(manifest["validation_playbook"])
         if role == "reflector":
             validate_reflector_review(
+                output,
+                instance_id=str(manifest["instance_id"]),
+                playbook=playbook,
+            )
+        elif role == "repo_reflector":
+            validate_repo_reflector_review(
                 output,
                 instance_id=str(manifest["instance_id"]),
                 playbook=playbook,

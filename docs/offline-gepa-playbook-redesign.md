@@ -8,10 +8,20 @@
 
 ## Objective And Boundary
 
-The next method remains a classification experiment. It does not add Plan
-revision, Code generation, or a new evaluator execution to candidate scoring.
-Its target artifact is a concise, human-readable list of observable Plan
-failure patterns:
+The method remains a classification experiment. It does not add Plan revision,
+Code generation, or a new evaluator execution to candidate scoring. It now has
+two explicitly separate Checker modes over the same internal playbook:
+
+- the retained no-repository mode, which sees only issue, Plan, and rule text;
+- the additive repository-aware concern mode, which also inspects a disposable
+  frozen base-commit checkout and assigns a case-level concern Level.
+
+The no-repository mode and all of its frozen prompts, configs, candidates, and
+results remain unchanged. The new mode is a separate experiment identity, not
+a silent semantic change to those runs.
+
+The target artifact remains a concise, human-readable list of Plan concerns.
+The retained projection is:
 
 ```text
 Reject the plan when:
@@ -19,14 +29,16 @@ Reject the plan when:
 - ...
 ```
 
-The intended user is a human or coding Agent reviewing a Plan without reading
-the repository. General software-engineering behavior remains an Agent
-capability; the optimized artifact contains only learned rejection rules.
+The repository-aware projection uses the heading
+`Review the Plan for these concerns:`. Bullets contain reusable concern
+knowledge but no stored severity. General software-engineering investigation
+remains a Checker capability.
 
-The Checker may see the issue, the proposed Plan, and the rendered rejection
-rules. It must not inspect a repository. Historical labels, implementation
-trajectories, patches, evaluator results, rule identities, counters, and
-Reflection analyses remain outside the Checker boundary.
+Both Checkers may see the issue, proposed Plan, and rendered bullet text. Only
+the additive Repo Checker may inspect the frozen base repository. Historical
+labels, implementation trajectories, patches, evaluator results, rule
+identities, counters, and Reflection analyses remain outside both Checker
+boundaries.
 
 Historical SWE-bench Verified `RESOLVED` / `UNRESOLVED` remains the explicitly
 accepted operational proxy for whether implementation from the Plan was good
@@ -137,6 +149,63 @@ Accuracy, balanced
 accuracy, the confusion matrix, and accept/reject rates remain reported
 descriptive metrics; the table above is the candidate-selection objective.
 
+## Additive Repository-Aware Concern Mode
+
+The Repo Checker evaluates every visible concern independently and returns a
+concrete finding, decision-time evidence, and a case-specific Level only when
+the concern is triggered:
+
+| Level | Operational meaning | Host gate |
+|---|---|---:|
+| 0 | The concern is likely recoverable through a small/direct implementation step. | no |
+| 1 | The concern merits attention and may require investigation or adjustment. | no |
+| 2 | The evidence supports a material risk that ordinary implementation is unlikely to recover from reliably. | **yes** |
+
+The Host derives `REJECT` only when at least one triggered concern is Level 2.
+Level 0 and Level 1 are retained as richer diagnostic output and later
+Replanner input, but do not directly affect current candidate selection. The
+Checker, rather than the Host, assigns Level; the Host only validates the
+schema and applies the deterministic Level-2 gate.
+
+Playbook bullets never store a default Level. The same concern may be Level 0,
+1, or 2 on different cases according to issue, Plan, and repository evidence.
+This first implementation therefore optimizes only whether learned concern
+knowledge produces useful Level-2 gates under the frozen resolved proxy. It
+does not claim to optimize Level-1 calibration.
+
+The Repo Reflector sees the same frozen base repository plus retrospective
+Plan/Code/evaluator evidence. For each bullet it records `c1`, `c2`, `c3`, or
+`unknown` observed recovery and, independently, whether the Checker's Level was
+too low, appropriate, too high, or unknown. Helpful/harmful tags update global
+playbook counters by comparing the concern with completed implementation
+evidence; Level calibration never changes those counters. These are
+concern-level retrospective attributions, not task labels. When no reusable
+concern or supported attribution exists, the Reflector may return null case
+analysis, an empty concern list, and neutral/unknown tags rather than inventing
+a failure narrative. The Curator receives structured reflections, learns
+high-level repository-checkable concern text, and never stores the case-level
+Level.
+
+Each repository Checker or Reflector is still one Slurm array element. It uses
+the frozen audited SIF, copies `/testbed` into a phase-local disposable
+worktree, restores the declared base commit with future history pruned,
+isolates home and `/tmp`, masks the image package cache, suppresses the host
+working-directory bind, and submits JSON through a separate artifact file. It
+also reuses the Safe PCE `conservative_blacklist_v3` source-access boundary:
+literal task URLs are extracted by the Host, relevant Git/pip/HTTP commands are
+classified before execution, and events are retained in a per-attempt audit
+log. This is enforced by the runtime rather than described as Checker review
+knowledge. Outcome, Code trajectory, evaluator result, stable bullet IDs, and
+counters are absent from the Repo Checker task manifest. Malformed output is a
+retryable Agent contract failure; it is not candidate `INVALID`.
+
+The prepared development smoke is an outcome-balanced 8-train/4-validation
+subset of already exposed Safe-PCE development cases. It attempts one proposal
+with one Reflection round and retains all 0/1/2 outputs for calibration review.
+Its config is
+`configs/gepa_verified_repo_concern_playbook_smoke8_v1_20260915.yaml`. It is
+prepared but not launched; execution still requires explicit authorization.
+
 ## Two-Stage Reflection
 
 Reflection is separated into per-case attribution and cross-case curation.
@@ -145,7 +214,9 @@ ordinary full-validation evaluation does not create Reflector calls.
 
 ### Stage 1: Per-Case Reflector
 
-One Reflector reads one case's repository-free evidence bundle:
+The retained no-repository Reflector reads one case's repository-free evidence
+bundle. The additive Repo Reflector receives the same bundle plus a separately
+isolated frozen base repository:
 
 - issue and Plan;
 - current internal playbook and Checker-visible projection;
@@ -155,11 +226,11 @@ One Reflector reads one case's repository-free evidence bundle:
 - historical Plan and Code trajectories, patch, evaluator result, and outcome
   authority metadata available in the cleaned Reflection bundle.
 
-The Reflector produces a structured case analysis with reasoning, error
-identification, root-cause analysis, correct classification approach, key
-insight, uncertainty, and one tag for every active bullet ID. The permitted
-tags are `helpful`, `neutral`, and `harmful`. Their exact evidence requirements
-belong in the future Reflector prompt and output contract.
+The retained Reflector produces its frozen structured case analysis. The Repo
+Reflector instead produces nullable `case_analysis` and `uncertainty`, zero or
+more atomic `reusable_concerns`, and one tag for every active bullet ID. The
+permitted tags are `helpful`, `neutral`, and `harmful`. Their exact evidence requirements
+are frozen in the selected mode's Reflector prompt and output contract.
 
 The Reflector uses the trajectory and result to make the attribution; it does
 not infer tags from the confusion cell alone. In particular, a trigger on an
@@ -171,10 +242,12 @@ The Reflector neither edits the playbook nor updates counters. Its structured
 output and full trajectory are immutable proposal evidence.
 
 Large trajectories are stored as separate files rather than interpolated into
-one model request. As in the earlier Offline GEPA, the bundle is mounted
-read-only into an isolated generic evidence environment and the Reflector reads
-manifest-listed files on demand. No SWE repository is mounted, and the Checker
-continues to receive neither this bundle nor any container/SIF information.
+one model request. The bundle is mounted read-only and the Reflector reads
+manifest-listed files on demand. The retained mode uses an isolated generic
+evidence environment with no SWE repository. The Repo mode uses an isolated
+case SIF and a separate read-only evidence mount. In both modes, the Checker
+receives neither the retrospective bundle nor any container/SIF information in
+its model input.
 
 ### Stage 2: Curator
 
