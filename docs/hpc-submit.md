@@ -131,3 +131,10 @@ supervisor derives an experiment-specific staging root from `job_name` and uses
 the canonical dataset and run-state roots from `scripts/hpc_runtime.py`. An
 explicit path remains supported only for audited historical reproduction or a
 documented storage exception.
+
+If a runtime config binds an `inputs.selection` file outside its staged
+`paths.dataset_snapshot`, the shared batch wrapper stages and links the
+selection's containing frozen directory separately. This is required because
+the fixed-worktree sync excludes the complete frozen dataset family to avoid
+colliding with dataset symlinks. Config, dataset, and selection fingerprints
+are still validated by the Controller before any Agent task is submitted.

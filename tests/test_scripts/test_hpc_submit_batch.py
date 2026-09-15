@@ -89,6 +89,8 @@ exit 0
     snapshot = local_root / "snapshot"
     snapshot.mkdir(parents=True, exist_ok=True)
     (snapshot / "manifest.json").write_text("{}", encoding="utf-8")
+    selection = snapshot / "selection.json"
+    selection.write_text("{}\n", encoding="utf-8")
     rules = local_root / "rules.md"
     rules.write_text("1. rule\n", encoding="utf-8")
     run_dir = local_root / "run"
@@ -99,6 +101,8 @@ paths:
   dataset_snapshot: {snapshot}
   initial_rules: {rules}
   run_dir: {run_dir}
+inputs:
+  selection: {selection}
 checker:
   model: deepseek-v4-flash
   api_base: https://api.deepseek.com
@@ -183,6 +187,8 @@ prompts:
     assert "remote-run-snapshot=~/hpc_run_state/test/" in result.stdout
     assert "--stage-data" in result.stdout
     assert "--link-as" in result.stdout
+    assert result.stdout.splitlines().count("--stage-data") == 1
+    assert result.stdout.splitlines().count("--link-as") == 1
     assert f"- {snapshot.name}" in result.stdout
     assert "--persistent-output" in result.stdout
     assert "~/hpc_run_state/test/" in result.stdout
@@ -237,10 +243,15 @@ def test_hpc_submit_batch_fixed_sync_excludes_persistent_and_staged_data(
     (snapshot / "manifest.json").write_text("{}", encoding="utf-8")
     rules = REPO_ROOT / ".tmp_hpc_smoke" / "fixed-rules.md"
     rules.write_text("1. rule\n", encoding="utf-8")
+    selection_dir = REPO_ROOT / ".tmp_hpc_smoke" / "frozen_selection"
+    selection_dir.mkdir(parents=True, exist_ok=True)
+    selection = selection_dir / "selection.json"
+    selection.write_text("{}\n", encoding="utf-8")
     config = REPO_ROOT / ".tmp_hpc_smoke" / "fixed-gepa.yaml"
     config.write_text(
         f"paths:\n  dataset_snapshot: {snapshot}\n  initial_rules: {rules}\n"
         f"  run_dir: {REPO_ROOT / '.tmp_hpc_smoke' / 'fixed-run'}\n"
+        f"inputs:\n  selection: {selection}\n"
         "task:\n  semantics: offline_reject_playbook_v1\n"
         "container:\n  runtime: none\n",
         encoding="utf-8",
@@ -272,6 +283,8 @@ def test_hpc_submit_batch_fixed_sync_excludes_persistent_and_staged_data(
     assert "/scratch/test/fixed-controller/" in logged
     assert "ulhpc-submit" in logged and "--no-sync" in logged
     assert "--persistent-output" in logged
+    assert f"--stage-data {selection_dir}:" in logged
+    assert f"--link-as {selection_dir.relative_to(REPO_ROOT)}" in logged
 
 
 def test_hpc_submit_batch_defaults_to_remote_user_from_config(tmp_path) -> None:

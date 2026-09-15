@@ -1350,11 +1350,11 @@ def test_safe_pce_smoke32_v3_uses_one_round_and_atomic_concerns() -> None:
     assert "--require-clean-worktree" in arguments
 
 
-def test_safe_pce_formal_8it_uses_reliable_400_and_one_reflection_round() -> None:
+def test_safe_pce_formal_8it_v2_uses_reliable_400_and_one_reflection_round() -> None:
     repo_root = Path(__file__).resolve().parents[2]
     config_path = (
         repo_root
-        / "configs/gepa_verified_reject_playbook_safe_pce_formal_8it_v1_20260915.yaml"
+        / "configs/gepa_verified_reject_playbook_safe_pce_formal_8it_v2_20260915.yaml"
     )
     raw = yaml.safe_load(config_path.read_text(encoding="utf-8"))
     _validate_frozen_inputs(config_path, raw)
@@ -1389,7 +1389,7 @@ def test_safe_pce_formal_8it_uses_reliable_400_and_one_reflection_round() -> Non
 
     supervisor = yaml.safe_load((
         repo_root
-        / "configs/gepa_verified_reject_playbook_safe_pce_formal_8it_v1_supervisor_20260915.yaml"
+        / "configs/gepa_verified_reject_playbook_safe_pce_formal_8it_v2_supervisor_20260915.yaml"
     ).read_text(encoding="utf-8"))
     arguments = supervisor["arguments"]
     assert arguments[arguments.index("--target-iterations") + 1] == "8"

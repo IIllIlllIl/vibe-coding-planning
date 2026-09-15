@@ -298,6 +298,7 @@ def resolve(raw: str) -> str:
 
 print(f"dataset_snapshot={resolve(paths.get('dataset_snapshot', ''))}")
 print(f"run_dir={resolve(paths.get('run_dir', ''))}")
+print(f"selection={resolve((cfg.get('inputs', {}) or {}).get('selection', ''))}")
 print(
     "initial_guideline="
     + resolve(paths.get("initial_guideline", paths.get("initial_rules", "")))
@@ -324,6 +325,7 @@ PY
 
 DATASET_SNAPSHOT=""
 RUN_DIR=""
+SELECTION_PATH=""
 INITIAL_RULES=""
 CONFIG_SIF_CACHE_DIR=""
 CONFIG_PYTHON_MODULE=""
@@ -335,6 +337,7 @@ while IFS='=' read -r KEY VALUE; do
   case "$KEY" in
     dataset_snapshot) DATASET_SNAPSHOT="$VALUE" ;;
     run_dir) RUN_DIR="$VALUE" ;;
+    selection) SELECTION_PATH="$VALUE" ;;
     initial_guideline) INITIAL_RULES="$VALUE" ;;
     sif_cache_dir) CONFIG_SIF_CACHE_DIR="$VALUE" ;;
     python_module) CONFIG_PYTHON_MODULE="$VALUE" ;;
@@ -351,6 +354,10 @@ if [[ -z "$DATASET_SNAPSHOT" || ! -d "$DATASET_SNAPSHOT" ]]; then
 fi
 if [[ -z "$RUN_DIR" ]]; then
   echo "ERROR: run_dir not found in GEPA config" >&2
+  exit 2
+fi
+if [[ -n "$SELECTION_PATH" && ! -f "$SELECTION_PATH" ]]; then
+  echo "ERROR: frozen selection file not found locally: $SELECTION_PATH" >&2
   exit 2
 fi
 if [[ -z "$INITIAL_RULES" || ! -f "$INITIAL_RULES" ]]; then
@@ -383,6 +390,9 @@ fi
 DATASET_REL="${DATASET_SNAPSHOT#$REPO_ROOT/}"
 RUN_DIR_REL="${RUN_DIR#$REPO_ROOT/}"
 GEPA_CONFIG_REL="${GEPA_CONFIG_ABS#$REPO_ROOT/}"
+SELECTION_REL=""
+SELECTION_STAGE_DIR=""
+SELECTION_STAGE_DIR_REL=""
 if [[ "$DATASET_REL" == "$DATASET_SNAPSHOT" ]]; then
   echo "ERROR: dataset_snapshot must be inside the repository for --link-as: $DATASET_SNAPSHOT" >&2
   exit 2
@@ -395,9 +405,24 @@ if [[ "$GEPA_CONFIG_REL" == "$GEPA_CONFIG_ABS" ]]; then
   echo "ERROR: GEPA config must be inside the repository: $GEPA_CONFIG_ABS" >&2
   exit 2
 fi
+if [[ -n "$SELECTION_PATH" ]]; then
+  SELECTION_REL="${SELECTION_PATH#$REPO_ROOT/}"
+  if [[ "$SELECTION_REL" == "$SELECTION_PATH" ]]; then
+    echo "ERROR: frozen selection must be inside the repository: $SELECTION_PATH" >&2
+    exit 2
+  fi
+  if [[ "$SELECTION_PATH" != "$DATASET_SNAPSHOT"/* ]]; then
+    SELECTION_STAGE_DIR="$(dirname "$SELECTION_PATH")"
+    SELECTION_STAGE_DIR_REL="${SELECTION_STAGE_DIR#$REPO_ROOT/}"
+  fi
+fi
 
 REMOTE_DATASET_SNAPSHOT="$REMOTE_DATASET_DIR/$DATASET_REL"
 REMOTE_RUN_SNAPSHOT="$REMOTE_RUN_DIR/$RUN_DIR_REL"
+REMOTE_SELECTION_STAGE=""
+if [[ -n "$SELECTION_STAGE_DIR_REL" ]]; then
+  REMOTE_SELECTION_STAGE="$REMOTE_DATASET_DIR/$SELECTION_STAGE_DIR_REL"
+fi
 DATASET_SYNC_EXCLUDE="$(basename "$DATASET_REL")"
 DATASET_FAMILY_SYNC_EXCLUDE=""
 if [[ "$(basename "$(dirname "$DATASET_REL")")" == frozen_* ]]; then
@@ -524,6 +549,13 @@ ULHPC_CMD=(
   --remote-ignore-extra
 )
 
+if [[ -n "$SELECTION_STAGE_DIR" ]]; then
+  ULHPC_CMD+=(
+    --stage-data "$SELECTION_STAGE_DIR:$REMOTE_SELECTION_STAGE"
+    --link-as "$SELECTION_STAGE_DIR_REL"
+  )
+fi
+
 if [[ $BEHAVIORAL_NO_CONTAINER -eq 0 ]]; then
   ULHPC_CMD+=(
     --module "$CONTAINER_MODULE"
@@ -555,6 +587,8 @@ echo "[hpc-submit] remote-apptainer-tmp-dir=$REMOTE_APPTAINER_TMP_DIR"
 echo "[hpc-submit] remote-apptainer-sif-cache-dir=$REMOTE_APPTAINER_SIF_CACHE_DIR"
 echo "[hpc-submit] remote-env-file=$REMOTE_ENV_FILE"
 echo "[hpc-submit] dataset_snapshot=$DATASET_SNAPSHOT"
+echo "[hpc-submit] selection=${SELECTION_PATH:-none}"
+echo "[hpc-submit] remote-selection-stage=${REMOTE_SELECTION_STAGE:-none}"
 echo "[hpc-submit] project-sync-exclude=$DATASET_SYNC_EXCLUDE"
 echo "[hpc-submit] run_dir=$RUN_DIR"
 echo "[hpc-submit] invoking ulhpc-submit..."

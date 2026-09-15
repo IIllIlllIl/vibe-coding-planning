@@ -326,6 +326,17 @@ Supervisor uses shared storage defaults, unconstrained Slurm array submission,
 35-minute Agent elements, three task attempts, durable checkpoints, and
 staging reclamation. Preparation and commit do not authorize launch.
 
+The first authorized launch of that configuration submitted Controller job
+`5990365`, which failed before any Agent or metric call. The fixed remote
+worktree intentionally excluded the complete frozen dataset family and staged
+the dataset snapshot separately, but the formal selection was a sibling frozen
+authority and was therefore absent when Controller fingerprint validation
+began. The shared submit wrapper now discovers `inputs.selection`: when it is
+outside the dataset snapshot, its containing frozen directory is independently
+staged and linked at the repository-relative path. A dry-run and contract test
+verify both staging/link pairs. The replacement run and Supervisor use the v2
+identity; v1 remains failure provenance and is not resumed.
+
 The formal development membership is frozen separately in
 `configs/frozen_swe_verified_playbook_gepa/20260915_safe_pce_clean411_v2/formal400-v1.json`.
 It deterministically samples within the existing split and repository/outcome
