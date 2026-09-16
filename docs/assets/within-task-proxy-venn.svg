@@ -1,0 +1,39 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1100" height="620" viewBox="0 0 1100 620" role="img" aria-labelledby="title desc">
+  <title id="title">Relationship between the old outcome proxy, the within-task contrast proxy, and the research target</title>
+  <desc id="desc">Plans observed unresolved in the old single-run proxy, Plans participating in new within-task mixed-outcome contrasts, and Plans with intervention-worthy concerns overlap but are not identical sets.</desc>
+  <rect width="1100" height="620" fill="#ffffff"/>
+
+  <ellipse cx="300" cy="325" rx="270" ry="225" fill="#ef4444" fill-opacity="0.18" stroke="#b91c1c" stroke-width="4"/>
+  <ellipse cx="550" cy="345" rx="300" ry="235" fill="#3b82f6" fill-opacity="0.20" stroke="#1d4ed8" stroke-width="4"/>
+  <ellipse cx="800" cy="325" rx="270" ry="225" fill="#22c55e" fill-opacity="0.18" stroke="#15803d" stroke-width="4"/>
+
+  <text x="55" y="92" font-family="Arial, sans-serif" font-size="23" font-weight="700" fill="#7f1d1d">OLD PROXY</text>
+  <text x="55" y="122" font-family="Arial, sans-serif" font-size="18" fill="#7f1d1d">Plans observed U in</text>
+  <text x="55" y="146" font-family="Arial, sans-serif" font-size="18" fill="#7f1d1d">a single PCE run</text>
+
+  <text x="425" y="92" font-family="Arial, sans-serif" font-size="23" font-weight="700" fill="#1e3a8a">NEW PROXY</text>
+  <text x="395" y="122" font-family="Arial, sans-serif" font-size="18" fill="#1e3a8a">Plans participating in a</text>
+  <text x="395" y="146" font-family="Arial, sans-serif" font-size="18" fill="#1e3a8a">same-task R/U contrast</text>
+
+  <text x="875" y="92" font-family="Arial, sans-serif" font-size="23" font-weight="700" fill="#14532d">TRUE TARGET</text>
+  <text x="875" y="122" font-family="Arial, sans-serif" font-size="18" fill="#14532d">Plans with an</text>
+  <text x="875" y="146" font-family="Arial, sans-serif" font-size="18" fill="#14532d">intervention-worthy concern</text>
+
+  <text x="70" y="325" font-family="Arial, sans-serif" font-size="17" fill="#7f1d1d">Hard tasks</text>
+  <text x="70" y="350" font-family="Arial, sans-serif" font-size="17" fill="#7f1d1d">Environment failures</text>
+  <text x="70" y="375" font-family="Arial, sans-serif" font-size="17" fill="#7f1d1d">Stable coder failures</text>
+
+  <text x="315" y="330" font-family="Arial, sans-serif" font-size="17" fill="#172554">U-side Plans from</text>
+  <text x="315" y="355" font-family="Arial, sans-serif" font-size="17" fill="#172554">mixed tasks</text>
+
+  <text x="535" y="280" font-family="Arial, sans-serif" font-size="18" font-weight="700" fill="#14532d">Cleaner candidate</text>
+  <text x="565" y="306" font-family="Arial, sans-serif" font-size="18" font-weight="700" fill="#14532d">evidence</text>
+
+  <text x="460" y="465" font-family="Arial, sans-serif" font-size="17" fill="#1e3a8a">R-side Plans and the</text>
+  <text x="460" y="490" font-family="Arial, sans-serif" font-size="17" fill="#1e3a8a">same-task relation</text>
+
+  <text x="875" y="360" font-family="Arial, sans-serif" font-size="17" fill="#14532d">Risky Plan still</text>
+  <text x="875" y="385" font-family="Arial, sans-serif" font-size="17" fill="#14532d">repaired by coder</text>
+
+  <text x="550" y="585" text-anchor="middle" font-family="Arial, sans-serif" font-size="19" fill="#374151">The new proxy is a relation between Plans; the blue set shows the participating Plan instances.</text>
+</svg>

@@ -60,6 +60,13 @@ source of current runtime behavior:
 - `polybench_pce_cleaning_20260821.md`
 - `polybench_dependency_preheat_scope_20260821.md`
 
+## Presentation Materials
+
+Presentation documents summarize authoritative sources for communication; they
+are not runtime or experimental authority.
+
+- [`plan-review-collaborator-talk-outline.md`](plan-review-collaborator-talk-outline.md)
+
 ## Archive
 
 `archive/` preserves superseded Online/PCT/PCC plans, mixed-design documents,
