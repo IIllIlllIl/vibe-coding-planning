@@ -36,6 +36,10 @@ HPC_RUNTIME_SCRIPT = REPO_ROOT / "scripts" / "hpc_runtime.py"
 # shared lifecycle modules use current Python syntax, so embedded module calls
 # must select the available modern interpreter explicitly.
 REMOTE_EMBEDDED_PYTHON = "python3.11"
+AION_REMOTE_EMBEDDED_PYTHON = (
+    "/opt/apps/easybuild/systems/aion/rhel810-20250803/2023b/epyc/"
+    "software/Python/3.11.5-GCCcore-13.2.0/bin/python3"
+)
 TERMINAL_JOB_STATES = {
     "BOOT_FAIL",
     "CANCELLED",
@@ -656,7 +660,9 @@ import sys
 print(json.dumps(reclaim_submission_workdirs(sys.argv[1]), sort_keys=True))
 """
     remote_command = (
-        f"printf VIBE_HPC_STAGING_RECLAIM >/dev/null; {REMOTE_EMBEDDED_PYTHON} -c "
+        "printf VIBE_HPC_STAGING_RECLAIM >/dev/null; "
+        + shlex.quote(_remote_embedded_python(config))
+        + " -c "
         + shlex.quote(source + invocation)
         + " "
         + shlex.quote(config.remote_staging_root)
@@ -666,6 +672,14 @@ print(json.dumps(reclaim_submission_workdirs(sys.argv[1]), sort_keys=True))
         error = result.stderr.strip() or result.stdout.strip()
         raise RuntimeError(f"remote staging reclamation failed: {error}")
     return json.loads(result.stdout.strip().splitlines()[-1])
+
+
+def _remote_embedded_python(config: SupervisorConfig) -> str:
+    """Select the modern login-node interpreter for the target cluster."""
+
+    if "@access-aion." in config.ssh_target:
+        return AION_REMOTE_EMBEDDED_PYTHON
+    return REMOTE_EMBEDDED_PYTHON
 
 
 def extend_completed_offline_target(
@@ -690,7 +704,9 @@ print(json.dumps(extend_iteration_target(
 ), sort_keys=True))
 """
     remote_command = (
-        f"printf VIBE_OFFLINE_TARGET_EXTENSION >/dev/null; {REMOTE_EMBEDDED_PYTHON} -c "
+        "printf VIBE_OFFLINE_TARGET_EXTENSION >/dev/null; "
+        + shlex.quote(_remote_embedded_python(config))
+        + " -c "
         + shlex.quote(source + invocation)
         + " "
         + shlex.quote(config.remote_run_snapshot)

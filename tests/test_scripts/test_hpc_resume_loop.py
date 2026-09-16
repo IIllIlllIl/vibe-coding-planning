@@ -8,7 +8,9 @@ import time
 from pathlib import Path
 
 from scripts.hpc_resume_loop import (
+    AION_REMOTE_EMBEDDED_PYTHON,
     REMOTE_EMBEDDED_PYTHON,
+    _remote_embedded_python,
     _remote_run_snapshot,
     _repo_relative,
     _with_default_remote_paths,
@@ -22,6 +24,21 @@ SERVICE_SCRIPT = REPO_ROOT / "scripts" / "hpc_supervisor_service.py"
 
 def test_embedded_remote_modules_use_modern_iris_python() -> None:
     assert REMOTE_EMBEDDED_PYTHON == "python3.11"
+
+
+def test_embedded_remote_modules_use_aion_login_python() -> None:
+    class Config:
+        ssh_target = "twang@access-aion.uni.lu"
+
+    assert _remote_embedded_python(Config()) == AION_REMOTE_EMBEDDED_PYTHON
+    assert AION_REMOTE_EMBEDDED_PYTHON.endswith("/bin/python3")
+
+
+def test_embedded_remote_modules_keep_iris_login_python() -> None:
+    class Config:
+        ssh_target = "twang@access-iris.uni.lu"
+
+    assert _remote_embedded_python(Config()) == REMOTE_EMBEDDED_PYTHON
 
 
 def test_repo_relative_preserves_worktree_local_symlink(tmp_path: Path) -> None:
