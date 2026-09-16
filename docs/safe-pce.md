@@ -48,6 +48,22 @@ ignored by Git; the tracked supervisors reference
 `configs/ulhpc_submit_aion.yaml`. Their tracked files alone do not authorize a
 future launch or relaunch.
 
+The follow-up expansion at
+`configs/frozen_swe_verified_safe_pce/fpta-mixed24-expansion-v1-20260916/`
+contains 24 new formal400 cases and excludes all mixed12 cases. It balances 12
+FPTA one-resolved/two-unresolved patterns against 12 two-resolved/one-unresolved
+patterns across nine repositories. The existing Safe PCE execution remains the
+first observation; two new repetitions use Planner temperature 1.0 and Coder
+temperature 0.0. Postprocessing retains only reliable tasks with both R and U,
+while all-R, all-U, and operationally incomplete tasks do not become training
+contrasts.
+
+Expansion workers request one Aion CPU and 1750M. The one-hour Slurm time is a
+hard ceiling: a worker exits and releases its allocation immediately after its
+case finishes. Before either Agent begins, the worker prepares or reuses the
+base-and-ancestor-only history bundle. OOM or any other operational failure is
+reported as incomplete and cannot become an unresolved scientific outcome.
+
 ## Phase And Artifact Boundary
 
 Each Slurm array element owns one case:

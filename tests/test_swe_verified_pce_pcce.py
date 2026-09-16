@@ -1984,6 +1984,40 @@ def test_tracked_smoke_configs_bind_two_case_selection_and_phase_policies() -> N
     assert "--submit" in arguments
 
 
+def test_fpta_mixed24_aion_pilot_has_explicit_low_memory_contract() -> None:
+    for repeat in (2, 3):
+        path = (
+            "configs/swe_verified_safe_pce_fpta_mixed24_expansion_"
+            f"repeat{repeat}_aion_v1_20260916.yaml"
+        )
+        config = load_swe_verified_pce_config(path, require_api_keys=False)
+        raw = yaml.safe_load(Path(path).read_text(encoding="utf-8"))
+
+        assert len(config.instance_ids) == 24
+        assert config.hpc.cpus_per_task == 1
+        assert config.hpc.mem == "1750M"
+        assert config.hpc.time == "01:00:00"
+        assert raw["experiment_contract"]["cluster"] == "aion"
+        assert raw["experiment_contract"]["budget"]["worker_memory"] == "1750M"
+
+
+def test_aion_low_memory_requires_matching_experiment_contract(
+    tmp_path: Path,
+) -> None:
+    source = Path("configs/swe_verified_pce_smoke_v1.yaml")
+    raw = yaml.safe_load(source.read_text(encoding="utf-8"))
+    raw["hpc"]["mem"] = "1750M"
+    raw["experiment_contract"] = {
+        "cluster": "aion",
+        "budget": {"worker_memory": "4G"},
+    }
+    path = tmp_path / "unreviewed-low-memory.yaml"
+    path.write_text(yaml.safe_dump(raw, sort_keys=False), encoding="utf-8")
+
+    with pytest.raises(ValueError, match="explicitly reviews 1750M"):
+        load_swe_verified_pce_config(path, require_api_keys=False)
+
+
 def test_quick_selection_is_deterministic_and_covers_repositories(
     tmp_path: Path,
 ) -> None:

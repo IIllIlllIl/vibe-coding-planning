@@ -176,8 +176,24 @@ def load_swe_verified_pce_config(
     )
     if hpc.max_task_attempts != 3:
         raise ValueError("SWE-Verified PCE requires exactly three total attempts")
-    if hpc.cpus_per_task != 1 or hpc.mem != "4G":
-        raise ValueError("SWE-Verified PCE workers must remain 1 CPU / 4G")
+    experiment_contract = raw.get("experiment_contract", {})
+    if not isinstance(experiment_contract, dict):
+        raise ValueError("experiment_contract must be a mapping")
+    budget = experiment_contract.get("budget", {})
+    if not isinstance(budget, dict):
+        raise ValueError("experiment_contract.budget must be a mapping")
+    reviewed_aion_low_memory_pilot = (
+        experiment_contract.get("cluster") == "aion"
+        and budget.get("worker_memory") == "1750M"
+        and hpc.mem == "1750M"
+    )
+    if hpc.cpus_per_task != 1 or (
+        hpc.mem != "4G" and not reviewed_aion_low_memory_pilot
+    ):
+        raise ValueError(
+            "SWE-Verified PCE workers must remain 1 CPU / 4G unless an Aion "
+            "experiment contract explicitly reviews 1750M"
+        )
     if hpc.time not in {"00:45:00", "01:00:00"}:
         raise ValueError(
             "SWE-Verified PCE workers require a reviewed 45- or 60-minute walltime"

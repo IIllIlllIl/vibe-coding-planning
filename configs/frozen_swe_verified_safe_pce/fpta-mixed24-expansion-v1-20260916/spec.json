@@ -1,0 +1,48 @@
+{
+  "purpose": "within_task_plan_contrast_expansion_two_additional_repeats",
+  "repeat_design": {
+    "additional_pce_runs_per_case": 2,
+    "comparison_unit": "within-task Plan plus downstream Code/Evaluate outcome",
+    "existing_safe_pce_runs_per_case": 1,
+    "new_coder_temperature": 0.0,
+    "new_planner_temperature": 1.0,
+    "target_total_pce_runs_per_case": 3
+  },
+  "selected_instance_ids": [
+    "astropy__astropy-13579",
+    "astropy__astropy-14995",
+    "django__django-11848",
+    "django__django-13279",
+    "django__django-13512",
+    "django__django-14559",
+    "django__django-16877",
+    "matplotlib__matplotlib-20488",
+    "matplotlib__matplotlib-23314",
+    "psf__requests-1724",
+    "psf__requests-5414",
+    "pydata__xarray-2905",
+    "pydata__xarray-7233",
+    "pytest-dev__pytest-5631",
+    "pytest-dev__pytest-7236",
+    "scikit-learn__scikit-learn-14087",
+    "scikit-learn__scikit-learn-25931",
+    "scikit-learn__scikit-learn-9288",
+    "sphinx-doc__sphinx-10673",
+    "sphinx-doc__sphinx-7889",
+    "sympy__sympy-14711",
+    "sympy__sympy-14976",
+    "sympy__sympy-15349",
+    "sympy__sympy-17655"
+  ],
+  "selection_id": "safe-pce-fpta-mixed24-expansion-v1-20260916",
+  "selection_policy": {
+    "candidate_source": "formal400 cases with mixed outcomes across three frozen FPTA DeepSeek-V3 standard-Plan reports",
+    "existing_safe_pce_outcomes": "retain all four available U and twenty repository-diverse R cases",
+    "fpta_outcome_balance": "twelve one-resolved/two-unresolved and twelve two-resolved/one-unresolved cases",
+    "historical_outcome_use": "development search enrichment only",
+    "prior_pilot_overlap": "exclude all twelve mixed12 pilot cases",
+    "repository_diversity": "nine repositories with no repository above five cases",
+    "untouched_holdout": false,
+    "uses_historical_outcome": true
+  }
+}

@@ -149,8 +149,11 @@ Use an Aion-specific local `ulhpc-submit` config with host
 not the experiment interpreter.
 
 A 1 CPU / 4G request was accounted by Aion as three allocated CPUs because of
-the cluster's memory-per-core policy. Keep the reviewed Safe PCE request at
+the cluster's memory-per-core policy. Keep the default Safe PCE request at
 1 CPU / 4G; interpret Aion `AllocCPUS` accordingly when reporting utilization.
+An Aion-only 1 CPU / 1750M pilot is allowed only when its frozen experiment
+contract repeats that exact memory value. This is a measured resource
+experiment, not a new default.
 
 Safe PCE must not run whole-repository aggressive Git garbage collection in
 each Agent phase. Agent-visible history is prepared once as a cache artifact
