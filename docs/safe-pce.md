@@ -3,7 +3,7 @@
 > Authority: current ACE-stage Plan-Code-Evaluate data, artifact, execution,
 > evaluator, and smoke contract
 >
-> Last reviewed: 2026-09-14
+> Last reviewed: 2026-09-16
 
 ## Purpose
 
@@ -19,6 +19,34 @@ manifest; the full run instead binds the complete source manifest directly. A
 usable image record binds the source manifest, requested image, exact SIF
 bytes, and a successful check that the official base commit exists in
 `/testbed`.
+
+## FPTA Mixed-Outcome Repeat Pilot
+
+The development-only repeat pilot is a feasibility study for replacing a
+cross-task resolved/unresolved proxy with within-task Plan comparison. It is
+not part of the main Safe PCE population and is not a held-out evaluation.
+
+The frozen selection at
+`configs/frozen_swe_verified_safe_pce/fpta-mixed12-repeat-pilot-v1-20260916/`
+contains twelve reliable Safe PCE cases selected because the independent
+From Plan to Action DeepSeek-V3 artifacts report mixed outcomes across three
+distinct Standard-Plan runs. The existing temperature-0 Safe PCE result is the
+first observation. Two temperature-1 PCE runs provide the second and
+third observations, yielding three Plan/Code/Evaluate outcomes per task.
+
+The temperatures are intentionally not exchangeable, so this pilot can locate
+tasks with meaningfully different Plans or implementation paths but cannot
+estimate per-task success probabilities. Postprocessing must first apply the
+ordinary reliability audit, then compare Plan, Code action, and evaluator
+outcome within each task. The selection is outcome-enriched and cannot support
+prevalence or generalization claims.
+
+Both added runs target Aion with distinct run identities. A non-Agent Slurm
+probe verified Python 3.11, Apptainer, shared scratch, the frozen SIF cache, and
+execution of one selected SWE-Verified SIF. The local Aion connection file is
+ignored by Git; the tracked supervisors reference
+`configs/ulhpc_submit_aion.yaml`. Their tracked files alone do not authorize a
+future launch or relaunch.
 
 ## Phase And Artifact Boundary
 

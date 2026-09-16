@@ -22,6 +22,7 @@ opencode_logs/
 # Environment variables
 .env
 configs/ulhpc_submit.yaml
+configs/ulhpc_submit_aion.yaml
 
 # Historical inline GEPA payloads are external artifacts. Their immutable
 # manifests, cleaning ledgers, hashes, and remote locations remain tracked.

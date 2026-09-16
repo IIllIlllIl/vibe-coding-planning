@@ -138,3 +138,16 @@ selection's containing frozen directory separately. This is required because
 the fixed-worktree sync excludes the complete frozen dataset family to avoid
 colliding with dataset symlinks. Config, dataset, and selection fingerprints
 are still validated by the Controller before any Agent task is submitted.
+
+## Aion Compatibility
+
+The Safe PCE shared scratch layout and frozen SIF cache are visible from Aion.
+Use an Aion-specific local `ulhpc-submit` config with host
+`access-aion.uni.lu`; do not change a host-wide network or module setting.
+`ulhpc-submit --no-conda` correctly loads Aion's `lang/Python/3.11` and
+`tools/Apptainer` modules on compute nodes. The bare login-node `python3` is
+not the experiment interpreter.
+
+A 1 CPU / 4G request was accounted by Aion as three allocated CPUs because of
+the cluster's memory-per-core policy. Keep the reviewed Safe PCE request at
+1 CPU / 4G; interpret Aion `AllocCPUS` accordingly when reporting utilization.

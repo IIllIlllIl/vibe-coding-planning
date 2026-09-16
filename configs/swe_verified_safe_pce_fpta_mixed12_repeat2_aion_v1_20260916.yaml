@@ -1,0 +1,110 @@
+mode: swe_verified_pce
+purpose: safe_pce_fpta_mixed12_within_task_repeat_2_of_3_feasibility_pilot
+
+paths:
+  dataset_snapshot: output/SWE-bench_Verified/swe-verified-pce-inputs/20260831_verified500_91aa3ed5
+  image_manifest: configs/frozen_swe_verified_safe_pce/fpta-mixed12-repeat-pilot-v1-20260916/images.json
+  selection_manifest: configs/frozen_swe_verified_safe_pce/fpta-mixed12-repeat-pilot-v1-20260916/selection.json
+  prompt_source_config: configs/polybench_pce_hpc_formal_clean_20260825.yaml
+  plan_prompt_source_config: configs/prompts/swe_verified_safe_pce_planner_v6_anchor_ablation_20260913.yaml
+  code_prompt_source_config: configs/prompts/swe_verified_safe_pce_code_v1_20260913.yaml
+  run_dir: output/SWE-bench_Verified/swe-verified-pce-runs/development/fpta-mixed12-repeat2-aion-v1-20260916
+
+plan:
+  model: deepseek-v4-flash
+  api_base: https://api.deepseek.com
+  api_key_env: DEEPSEEK_API_KEY
+  temperature: 1.0
+  max_steps: 0
+  cost_limit: 0.0
+  timeout: 1800
+  max_attempts: 3
+  submission_protocol: direct_human_markdown_v5
+
+code:
+  model: deepseek-v4-flash
+  api_base: https://api.deepseek.com
+  api_key_env: DEEPSEEK_API_KEY
+  temperature: 1.0
+  max_steps: 0
+  cost_limit: 0.0
+  timeout: 1800
+  max_attempts: 3
+
+docker:
+  workdir: /testbed
+  timeout: 1800
+  min_free_gb: 20
+  max_cached_images: 75
+
+container:
+  runtime: apptainer
+  module: tools/Apptainer
+  sif_cache_dir: /scratch/users/${USER}/vibe-coding-planning/shared/sif-cache
+  writable_tmpfs: true
+
+hpc:
+  submit: true
+  partition: batch
+  cpus_per_task: 1
+  mem: 4G
+  time: "01:00:00"
+  poll_interval_seconds: 300
+  task_output_grace_seconds: 300
+  missing_task_grace_seconds: 600
+  max_task_attempts: 3
+  remote_env_file: ~/.config/vibe-coding-planning/deepseek.env
+  python_module: lang/Python/3.11
+  container_module: tools/Apptainer
+  python_bin: python3
+  job_name_prefix: swe-verified-pce-fpta-mixed12-repeat2-aion-v1-20260916
+  worker_config_path: configs/swe_verified_safe_pce_fpta_mixed12_repeat2_aion_v1_20260916.yaml
+
+evaluator:
+  slurm_timeout_outcome: unknown
+
+experiment_contract:
+  status: launch_authorized
+  cluster: aion
+  input_universe: frozen_fpta_deepseek_v3_mixed_outcome_safe_pce_clean_subset
+  selected_cases: 12
+  additional_repeat_index: 2
+  target_total_pce_runs_per_case: 3
+  existing_safe_pce_temperature: 0.0
+  new_repeat_temperature: 1.0
+  probability_estimation_valid: false
+  intended_use: within_task_plan_proxy_feasibility_and_manual_trajectory_review
+  selection_manifest_sha256: 321325821068bdc4e75a6cb09a6bc0393d0a82f2eacb2734f72dffcc12c9114d
+  image_manifest_sha256: db7c1c722acddd2390dbda8094f8a8bbed54f9c1945227fe818868b285fd033c
+  image_manifest_id: c23c6fb6d732253d0938f53195519120014b46d679850ade969361267a6c18a4
+  required_image_records: 12
+  plan_prompt_config_sha256: 608ce37a9f98bce84899977a86826c200b3c78ca710046ce4c8a53e9e58807cf
+  code_prompt_config_sha256: ae57428cf71c9b2b39e04850146fbd2395302fc03a6960aed56ed3dd9d25055b
+  plan_authority: exact_model_text_between_START_PLAN_and_END_PLAN
+  plan_submission_protocol: direct_human_markdown_v5
+  plan_audience: human_developer_before_implementation
+  local_git_history_policy: multilingual_timesafe_base_and_ancestors
+  agent_source_policy: conservative_blacklist_v3
+  source_audit_index: all_attempts_case_level_summary_plus_event_logs
+  shell_command_parser: bashlex_ast_with_observed_timeout_wrapper
+  prompt_url_source: literal_http_urls_in_frozen_issue_description
+  non_prompt_http_policy: allow_but_review
+  agent_filesystem_policy: complete_testbed_with_host_cwd_disabled_and_package_cache_masked
+  evaluator_repository_policy: verify_fresh_immutable_sif_without_reset_or_clean
+  budget:
+    cases: 12
+    planner_and_code_command_timeout_seconds: 1800
+    slurm_worker_walltime: "01:00:00"
+    agent_attempts: 3
+    supervisor_slices: 8
+  stopping: finish_all_12_cases_or_report_each_operationally_incomplete_case
+  success_criteria:
+    - exactly_12_frozen_cases_enter_runtime_in_selection_order
+    - every_case_reaches_terminal_or_explicitly_operationally_incomplete_outcome
+    - raw_plans_patches_trajectories_source_audits_and_official_evaluator_outcomes_are_preserved
+    - no_operational_failure_is_relabelled_unresolved
+  operational_incomplete_policy: transport_provider_timeout_infrastructure_failure_or_exhausted_evaluator_is_not_unresolved
+  postprocessing:
+    combine_with_existing_safe_pce_only_after_reliability_audit: true
+    compare_plans_and_coder_actions_within_each_task: true
+    do_not_report_as_population_prevalence_or_held_out_evaluation: true

@@ -1,0 +1,147 @@
+{
+  "dataset": "SWE-bench/SWE-bench_Verified",
+  "dataset_revision": "91aa3ed51b709be6457e12d00300a6a596d4c6a3",
+  "purpose": "within_task_three_pce_proxy_feasibility_pilot_two_additional_repeats",
+  "repeat_design": {
+    "additional_pce_runs_per_case": 2,
+    "comparison_unit": "within-task task-specific Plan plus downstream Code/Evaluate outcome",
+    "existing_safe_pce_runs_per_case": 1,
+    "target_total_pce_runs_per_case": 3
+  },
+  "schema_version": 1,
+  "selected_cases": [
+    {
+      "existing_safe_pce_resolved": true,
+      "fpta_deepseek_v3_outcomes": "URR",
+      "instance_id": "django__django-10880",
+      "repo": "django/django",
+      "row_sha256": "79db9a48f428e06360ee30e38f6044ac7003c132dac18f68a59799786c0f9206"
+    },
+    {
+      "existing_safe_pce_resolved": true,
+      "fpta_deepseek_v3_outcomes": "RUR",
+      "instance_id": "django__django-10914",
+      "repo": "django/django",
+      "row_sha256": "6303ec214716057d4a50e417b958faa99073839474c29c2c0a73962afff797dc"
+    },
+    {
+      "existing_safe_pce_resolved": true,
+      "fpta_deepseek_v3_outcomes": "UUR",
+      "instance_id": "matplotlib__matplotlib-24149",
+      "repo": "matplotlib/matplotlib",
+      "row_sha256": "57a3af0560ae7f7254690716ca9d49a18657f0bd8f346ad78c06d62ec3f08772"
+    },
+    {
+      "existing_safe_pce_resolved": true,
+      "fpta_deepseek_v3_outcomes": "UUR",
+      "instance_id": "psf__requests-1921",
+      "repo": "psf/requests",
+      "row_sha256": "91eb99750870b81be5372e68a65befb72599fb2c6cc3d5ffd9dd608f10fce7fa"
+    },
+    {
+      "existing_safe_pce_resolved": true,
+      "fpta_deepseek_v3_outcomes": "RUU",
+      "instance_id": "pydata__xarray-6721",
+      "repo": "pydata/xarray",
+      "row_sha256": "0e5adf9a444800e51d5e625d533317c7be0a8cd62a68149fd5386ea8206749c4"
+    },
+    {
+      "existing_safe_pce_resolved": true,
+      "fpta_deepseek_v3_outcomes": "RRU",
+      "instance_id": "sphinx-doc__sphinx-8035",
+      "repo": "sphinx-doc/sphinx",
+      "row_sha256": "0a3404e28abf1bb52eaa854184acc945ba7e99ae516a8d8ea4879af8f1ed761d"
+    },
+    {
+      "existing_safe_pce_resolved": false,
+      "fpta_deepseek_v3_outcomes": "RRU",
+      "instance_id": "sympy__sympy-11618",
+      "repo": "sympy/sympy",
+      "row_sha256": "167c5d0164beeaf09b6774c9cb51a03ef0a5c6be23031fd6c3761e6a1e44c01f"
+    },
+    {
+      "existing_safe_pce_resolved": false,
+      "fpta_deepseek_v3_outcomes": "RUR",
+      "instance_id": "pytest-dev__pytest-7205",
+      "repo": "pytest-dev/pytest",
+      "row_sha256": "cd2ed87c230672720cfc2431b4fcd279356bd8a847b3e9e4713c8343d3cb5cd3"
+    },
+    {
+      "existing_safe_pce_resolved": true,
+      "fpta_deepseek_v3_outcomes": "URR",
+      "instance_id": "scikit-learn__scikit-learn-25102",
+      "repo": "scikit-learn/scikit-learn",
+      "row_sha256": "acd7f40a1d955998a227d05bb8e9bc8e9649b17b7b4b5425ad492dddb50b8d08"
+    },
+    {
+      "existing_safe_pce_resolved": true,
+      "fpta_deepseek_v3_outcomes": "RRU",
+      "instance_id": "astropy__astropy-7671",
+      "repo": "astropy/astropy",
+      "row_sha256": "997df4bfa3695a6d9cefbe46b37e0bbd03f4c54ac25cbdabbfe3ff34e9aa679e"
+    },
+    {
+      "existing_safe_pce_resolved": true,
+      "fpta_deepseek_v3_outcomes": "RUU",
+      "instance_id": "pylint-dev__pylint-6386",
+      "repo": "pylint-dev/pylint",
+      "row_sha256": "7d818af60f679bc96ba24a82d8c6879e87808e5204e473e583d620f3a2aef784"
+    },
+    {
+      "existing_safe_pce_resolved": false,
+      "fpta_deepseek_v3_outcomes": "RUR",
+      "instance_id": "sympy__sympy-18763",
+      "repo": "sympy/sympy",
+      "row_sha256": "ec8db1f865c3ee66bdbcf2cb0a370a71f358aefd7992c866f457486051aaade7"
+    }
+  ],
+  "selected_count": 12,
+  "selected_instance_ids": [
+    "django__django-10880",
+    "django__django-10914",
+    "matplotlib__matplotlib-24149",
+    "psf__requests-1921",
+    "pydata__xarray-6721",
+    "sphinx-doc__sphinx-8035",
+    "sympy__sympy-11618",
+    "pytest-dev__pytest-7205",
+    "scikit-learn__scikit-learn-25102",
+    "astropy__astropy-7671",
+    "pylint-dev__pylint-6386",
+    "sympy__sympy-18763"
+  ],
+  "selected_instance_ids_sha256": "6fc180befb749379dc9570c0cba25f90b42856ee87aedad84897bc97c184301c",
+  "selection_id": "safe-pce-fpta-mixed12-repeat-pilot-v1-20260916",
+  "selection_policy": {
+    "candidate_source": "FPTA DeepSeek-V3 tasks with mixed outcomes across three distinct standard-Plan runs",
+    "historical_outcome_use": "feasibility enrichment only; not prevalence sampling or held-out evaluation",
+    "repository_diversity": "one case from each available repository where practical; two Django and two SymPy cases retained for contrasting approaches",
+    "requires_existing_safe_pce_clean_authority": true,
+    "untouched_holdout": false,
+    "uses_historical_outcome": true
+  },
+  "source_authorities": {
+    "base_selection": "configs/frozen_swe_verified_safe_pce/verified482-formal-v1-20260914/selection.json",
+    "fpta_commit": "7e370a49e36d4894f796ae3d6a6f77b2691f7f4b",
+    "fpta_deepseek_v3_reports": [
+      {
+        "path": "artifacts/SWE-Bench-Verified/plan/deepseek_v3/report/deepseek-chat.json",
+        "sha256": "a9b7ffe618033b218d2885372f32ece838a59a58ad37f6d34f542b25ae2eed75"
+      },
+      {
+        "path": "artifacts/SWE-Bench-Verified/plan/deepseek_v3_repeat_1/report/rest/swe-bench_verified__test__dskv3-v1-plan.json",
+        "sha256": "6f307e36dd6891b08414f104cb0f1eb3039ddc008323c3ad24942894c715aace"
+      },
+      {
+        "path": "artifacts/SWE-Bench-Verified/plan/deepseek_v3_repeat_2/report/rest/swe-bench_verified__test__dskv3-v2-plan.json",
+        "sha256": "96e668b91b3be184bdb59ed152bd420cb39942be6f77f0ec42f1e5cd3eb51a26"
+      }
+    ],
+    "fpta_repository": "https://github.com/Intelligent-CAT-Lab/Planning-Analysis",
+    "safe_pce_clean_cases": "configs/frozen_swe_verified_playbook_gepa/20260915_safe_pce_clean411_v2/cases.jsonl",
+    "safe_pce_clean_manifest": "configs/frozen_swe_verified_playbook_gepa/20260915_safe_pce_clean411_v2/manifest.json"
+  },
+  "source_instance_count": 500,
+  "source_instances_sha256": "8d6f5c64fe448432264ced781ac9bc987fc38b668ade6de39592a23ad1a9ef1f",
+  "source_manifest_sha256": "bec1150dbf55c29c0893226c20578bee031406d78db305cdfef7b2b80965143a"
+}
