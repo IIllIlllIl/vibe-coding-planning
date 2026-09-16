@@ -130,14 +130,19 @@ available. This boundary is based on path provenance, not a semantic guess
 about which repository files are relevant: the complete current `/testbed`
 repository remains visible.
 
-Before either Agent starts, its disposable repository is reset to the dataset
-base commit using the SWE-bench Multilingual time-safe pattern: remotes and
-other branches are removed, tags
-newer than the base are deleted with a shell `for` loop, reflogs expire, and
-unreferenced objects are pruned. A final check rejects any remaining ref-visible
-commit newer than the base. Older history and tags remain available. The
-evaluator instead starts from a fresh immutable-SIF copy and performs no reset
-or clean. The official SWE-bench Python image builder may leave HEAD at the
+Before either Agent starts, Safe PCE prepares or verifies one reusable Git
+bundle keyed by the frozen SIF SHA-256, dataset base commit, and history-policy
+version. The bundle selects a single ref at the base commit, so it contains the
+base and its ancestor closure but no future branch, tag, reflog, or unreachable
+object. Creation uses one pack thread and bounded pack-window memory; it does
+not run whole-repository aggressive garbage collection. Each Plan and Code
+workspace still begins as a fresh SIF-derived `/testbed` copy, preserving
+image-provided ignored setup files, but its disposable `.git` metadata is
+replaced from the verified bundle before reset and cleanliness checks. Thus the
+two Agents remain isolated while history preparation is paid once and can be
+reused across retries and run identities. The evaluator instead starts from a
+fresh immutable-SIF copy and performs no reset or clean. The official
+SWE-bench Python image builder may leave HEAD at the
 dataset base or at one direct child whose subject is `SWE-bench`; the latter
 freezes tracked harness preparation performed during the image build. The Host
 verifies this exact lineage, the frozen SIF identity, and the absence of dirty

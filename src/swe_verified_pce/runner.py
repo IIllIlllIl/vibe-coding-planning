@@ -14,6 +14,10 @@ from src.config import AgentConfig, Config, EvaluatorConfig, PromptConfig, Syste
 from src.environment.apptainer_env import ApptainerEnvironment, ApptainerSifCache
 from src.environment.docker_env import DockerCapacityWindow
 from src.environment.repository_baseline import restore_repository_to_base
+from src.environment.repository_history import (
+    RepositoryHistoryCache,
+    install_repository_history_bundle,
+)
 from src.environment.source_access import (
     SOURCE_ACCESS_POLICY_VERSION,
     extract_http_urls,
@@ -181,16 +185,61 @@ class SWEVerifiedPCERunner:
         host_workdir: Path,
         evidence_dir: Path,
         timeout: int,
+        history_bundle: Path,
     ) -> None:
-        _ = host_workdir
+        install_evidence = install_repository_history_bundle(
+            repository_dir=host_workdir,
+            bundle=history_bundle,
+            base_commit=case.base_commit,
+        )
+        atomic_json(evidence_dir / "repository_history_install.json", install_evidence)
         restore_repository_to_base(
             env,
             case.base_commit,
             phase=phase,
             evidence_dir=evidence_dir,
             timeout=timeout,
-            prune_future_history=True,
+            prune_future_history=False,
         )
+
+    def _ensure_repository_history(
+        self,
+        case: SWEVerifiedPCECase,
+    ) -> tuple[Path, dict[str, Any]]:
+        cache = RepositoryHistoryCache(
+            self.config.container.sif_cache_dir.parent
+            / "repository-history-cache-v1"
+        )
+        existing = cache.validate(
+            sif_sha256=case.image.sif_sha256,
+            base_commit=case.base_commit,
+        )
+        if existing is not None:
+            return existing
+
+        workspace = self.attempt_dir / "workspaces" / "history_preclean"
+        self._cleanup(workspace)
+        env = self._environment(
+            case,
+            timeout=self.config.plan.timeout,
+            phase="history_preclean",
+            host_workdir=workspace,
+        )
+        try:
+            return cache.ensure(
+                env=env,
+                repository_dir=workspace,
+                sif_sha256=case.image.sif_sha256,
+                base_commit=case.base_commit,
+                instance_id=case.instance_id,
+                timeout=self.config.plan.timeout,
+            )
+        finally:
+            self._best_effort_environment_cleanup(env, phase="history_preclean")
+            self._best_effort_workspace_cleanup(
+                workspace,
+                phase="history_preclean",
+            )
 
     @staticmethod
     def _cleanup(path: Path) -> None:
@@ -291,7 +340,19 @@ class SWEVerifiedPCERunner:
     def run(self, case: SWEVerifiedPCECase) -> dict[str, Any]:
         self._verify_sif(case)
         plan_checkpoint = self._checkpoint("plan")
+        code_checkpoint = self._checkpoint("code")
+        history_bundle: Path | None = None
+        if plan_checkpoint is None or code_checkpoint is None:
+            history_bundle, history_manifest = self._ensure_repository_history(case)
+            atomic_json(
+                self.attempt_dir / "repository_history_artifact.json",
+                {
+                    **history_manifest,
+                    "bundle": str(history_bundle),
+                },
+            )
         if plan_checkpoint is None:
+            assert history_bundle is not None
             plan_workspace = self.attempt_dir / "workspaces" / "plan"
             self._cleanup(plan_workspace)
             env = self._environment(
@@ -308,6 +369,7 @@ class SWEVerifiedPCERunner:
                     host_workdir=plan_workspace,
                     evidence_dir=self.attempt_dir / "repository_baselines" / "plan",
                     timeout=self.config.plan.timeout,
+                    history_bundle=history_bundle,
                 )
                 submission_protocol = getattr(
                     self.config,
@@ -387,8 +449,8 @@ class SWEVerifiedPCERunner:
                 self._best_effort_environment_cleanup(env, phase="plan")
                 self._best_effort_workspace_cleanup(plan_workspace, phase="plan")
 
-        code_checkpoint = self._checkpoint("code")
         if code_checkpoint is None:
+            assert history_bundle is not None
             plan_text = str(plan_checkpoint["plan"])
             recorded_plan_sha256 = plan_checkpoint.get("plan_sha256")
             if recorded_plan_sha256 is not None and recorded_plan_sha256 != (
@@ -411,6 +473,7 @@ class SWEVerifiedPCERunner:
                     host_workdir=code_workspace,
                     evidence_dir=self.attempt_dir / "repository_baselines" / "code",
                     timeout=self.config.code.timeout,
+                    history_bundle=history_bundle,
                 )
                 base_code_config = self._base_config(self.config.code)
                 code_config = replace(

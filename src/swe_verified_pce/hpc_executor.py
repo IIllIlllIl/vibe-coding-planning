@@ -67,6 +67,7 @@ def pce_semantic_sha256(
         root / "src" / "agents" / "code_agent.py",
         root / "src" / "environment" / "apptainer_env.py",
         root / "src" / "environment" / "repository_baseline.py",
+        root / "src" / "environment" / "repository_history.py",
         root / "src" / "environment" / "source_access.py",
         *sorted((root / "src" / "swe_verified_pce").glob("*.py")),
         *additional_sources,

@@ -37,7 +37,7 @@ def _category(exc: BaseException) -> str:
     return "unexpected"
 
 
-def _retry_disposition(exc: BaseException) -> str:
+def _retry_disposition(exc: BaseException, *, stage: str = "") -> str:
     explicit = getattr(exc, "retry_disposition", None)
     if explicit:
         return str(explicit)
@@ -46,7 +46,14 @@ def _retry_disposition(exc: BaseException) -> str:
     # frozen input or task identity is invalid.
     if isinstance(exc, UnicodeError):
         return "retry_same_phase"
-    if isinstance(exc, (FatalError, ValueError)):
+    # Only malformed shared inputs/configuration block the whole run. A
+    # case-local runtime failure (including repository preparation) is retried
+    # and, after exhaustion, consolidated as operationally incomplete by the
+    # host. One difficult repository must not suppress the other array cases.
+    if isinstance(exc, (FatalError, ValueError)) and stage in {
+        "input_load",
+        "config_load",
+    }:
         return "block_run"
     if isinstance(exc, AgentTaskError):
         return "retry_fresh_agent"
@@ -118,7 +125,7 @@ def run_task(
     except Exception as exc:
         phase = getattr(exc, "phase", stage)
         reason = getattr(exc, "reason", type(exc).__name__)
-        retry_disposition = _retry_disposition(exc)
+        retry_disposition = _retry_disposition(exc, stage=stage)
         outcome_reason = str(getattr(exc, "outcome_reason", reason))
         failure = {
             "schema_version": 1,

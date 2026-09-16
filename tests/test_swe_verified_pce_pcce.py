@@ -50,6 +50,7 @@ from src.swe_verified_pce.models import FrozenImage, SWEVerifiedPCECase
 from src.swe_verified_pce.runner import checkpoint_identity
 from src.swe_verified_pce.plan_replay import _RecoveredPlanExecutor
 from src.swe_verified_pce.runner import SWEVerifiedPCERunner
+from src.swe_verified_pce.worker import _retry_disposition as pce_retry_disposition
 from src.swe_verified_pcce.runner import SWEVerifiedPCCERunner
 from scripts.tools.freeze_pcce_rejected_first_reviews import (
     freeze_rejected_first_reviews,
@@ -59,6 +60,12 @@ from scripts import resume_swe_verified_pce_evaluator as evaluator_resume_script
 
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
+
+
+def test_safe_pce_only_shared_input_failures_block_the_run() -> None:
+    error = FatalError("case-local repository preparation failed")
+    assert pce_retry_disposition(error, stage="pce_execution") == "retry_same_phase"
+    assert pce_retry_disposition(error, stage="config_load") == "block_run"
 
 
 def test_safe_pce_config_does_not_import_optional_gepa_runtime() -> None:

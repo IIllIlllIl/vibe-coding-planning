@@ -151,3 +151,10 @@ not the experiment interpreter.
 A 1 CPU / 4G request was accounted by Aion as three allocated CPUs because of
 the cluster's memory-per-core policy. Keep the reviewed Safe PCE request at
 1 CPU / 4G; interpret Aion `AllocCPUS` accordingly when reporting utilization.
+
+Safe PCE must not run whole-repository aggressive Git garbage collection in
+each Agent phase. Agent-visible history is prepared once as a cache artifact
+keyed by the frozen SIF SHA-256 and dataset base commit. The artifact contains
+only the base commit and its ancestor closure; Plan and Code receive separate
+SIF-derived worktrees whose Git metadata is replaced from that verified
+artifact. The evaluator continues to use the original immutable SIF.

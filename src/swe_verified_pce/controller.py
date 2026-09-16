@@ -176,7 +176,9 @@ def run_swe_verified_pce(config: SWEVerifiedPCEConfig) -> dict[str, Any] | None:
         "repository_baseline": {
             "declared_revision": "dataset_base_commit",
             "agent_restore": "git reset --hard <base_commit> && git clean -fd",
-            "agent_future_history": "multilingual_timesafe_prune",
+            "agent_future_history": "cached_base_and_ancestor_only_git_bundle",
+            "history_cache_key": "policy + frozen SIF SHA-256 + base_commit",
+            "history_preparation": "once before Agent; reused by Plan and Code",
             "evaluator": "verify immutable SIF HEAD and preserve harness preparation",
             "verified_phases": ["plan", "code", "evaluate"],
             "evidence": "attempt/repository_baselines/<phase>/repository_baseline.json",
