@@ -1154,6 +1154,35 @@ def test_safe_pce_authority_paths_are_relative_to_run_root(tmp_path: Path):
         runner._authority_relative_path(tmp_path / "staging" / "plan.json")
 
 
+def test_safe_pce_cleans_history_workspace_when_environment_init_fails(
+    tmp_path: Path,
+) -> None:
+    runner = object.__new__(SWEVerifiedPCERunner)
+    runner.attempt_dir = tmp_path / "attempt"
+    runner.config = SimpleNamespace(
+        container=SimpleNamespace(sif_cache_dir=tmp_path / "shared/sif-cache"),
+        plan=SimpleNamespace(timeout=10),
+    )
+    workspace = runner.attempt_dir / "workspaces/history_preclean"
+
+    def fail_environment(*_args, **_kwargs):
+        workspace.mkdir(parents=True)
+        (workspace / "partial.py").write_text("partial\n", encoding="utf-8")
+        raise FatalError("synthetic environment initialization failure")
+
+    runner._environment = fail_environment
+    case = SimpleNamespace(
+        image=SimpleNamespace(sif_sha256="a" * 64),
+        base_commit="b" * 40,
+        instance_id="owner__repo-1",
+    )
+
+    with pytest.raises(FatalError, match="synthetic environment"):
+        runner._ensure_repository_history(case)
+
+    assert not workspace.exists()
+
+
 def test_safe_pce_completed_result_preserves_bounded_raw_plan_submission():
     raw_submission = (
         "FINAL_PLAN\n# Plan\n\nChange the parser.\nEND_PLAN\n"
@@ -2428,6 +2457,70 @@ def test_fpta_disagreement_run_configs_are_launch_authorized() -> None:
         assert arguments[arguments.index("--ulhpc-config") + 1] == (
             "configs/ulhpc_submit_aion.yaml"
         )
+
+
+def test_fpta_clean_restart_campaign_preserves_four_run_authorities() -> None:
+    expected = {
+        "mixed58_remaining": ("mixed58-remaining", 58),
+        "disagreement22": ("disagreement22", 22),
+    }
+    runtime_paths: set[str] = set()
+    for config_stratum, (run_stratum, cases) in expected.items():
+        for repeat in (2, 3):
+            path = Path(
+                "configs/swe_verified_safe_pce_fpta_"
+                f"{config_stratum}_repeat{repeat}_aion_v2_20260918.yaml"
+            )
+            config = load_swe_verified_pce_config(path, require_api_keys=False)
+            raw = yaml.safe_load(path.read_text(encoding="utf-8"))
+
+            assert len(config.instance_ids) == cases
+            assert config.plan.temperature == 1.0
+            assert config.code.temperature == 0.0
+            assert config.hpc.cpus_per_task == 1
+            assert config.hpc.mem == "1750M"
+            assert config.hpc.time == "01:00:00"
+            assert raw["experiment_contract"]["status"] == "prepared_not_launched"
+            assert raw["experiment_contract"]["additional_repeat_index"] == repeat
+            assert raw["experiment_contract"]["clean_restart"] == {
+                "supersedes_failed_run": (
+                    f"fpta-{run_stratum}-repeat{repeat}-aion-v1-20260917"
+                ),
+                "reason": "phase_workspace_initialization_cleanup_defect",
+                "imports_prior_checkpoints": False,
+                "imports_prior_outcomes": False,
+            }
+            runtime_paths.add(str(path))
+
+    campaign_path = Path(
+        "configs/swe_verified_safe_pce_fpta_repeat_campaign_"
+        "aion_v2_20260918.yaml"
+    )
+    campaign = yaml.safe_load(campaign_path.read_text(encoding="utf-8"))
+    assert campaign["poll_interval_seconds"] == 300
+    assert len(campaign["members"]) == 4
+    observed_runtime_paths = set()
+    observed_states = set()
+    for member in campaign["members"]:
+        arguments = member["arguments"]
+        observed_runtime_paths.add(arguments[arguments.index("--config") + 1])
+        observed_states.add(arguments[arguments.index("--state-file") + 1])
+        assert "--submit" in arguments
+        assert "--require-clean-worktree" in arguments
+        assert "--reclaim-staging" in arguments
+        assert "--reclaim-workspaces" in arguments
+        assert "--once" not in arguments
+    assert observed_runtime_paths == runtime_paths
+    assert len(observed_states) == 4
+
+    supervisor = yaml.safe_load(
+        Path(
+            "configs/swe_verified_safe_pce_fpta_repeat_campaign_"
+            "aion_v2_supervisor_20260918.yaml"
+        ).read_text(encoding="utf-8")
+    )
+    assert supervisor["program"] == "campaign"
+    assert supervisor["arguments"] == ["--config", str(campaign_path)]
 
 
 def test_aion_low_memory_requires_matching_experiment_contract(

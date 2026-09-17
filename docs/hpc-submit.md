@@ -106,6 +106,15 @@ not worker-internal parallelism.
 - Shared path and conservative submission-copy lifecycle:
   `scripts/hpc_runtime.py`. New supervisors opt in with `--reclaim-staging`
   and derive an experiment-specific staging directory from `job_name`.
+  Workflows that materialize disposable repository copies may additionally opt
+  in with `--reclaim-workspaces`; it runs only after status confirms that no
+  Controller or worker is active and removes only exact per-attempt
+  `workspaces` directories. Checkpoints, trajectories, outputs, failure
+  records, Slurm logs, SIFs, and shared history bundles are retained.
+- A campaign with several independent run authorities may use
+  `scripts/hpc_campaign_supervisor.py`. It keeps one durable local Supervisor
+  while stepping each ordinary `hpc_resume_loop` member once per poll round;
+  the first round submits every member, rather than serializing experiments.
 - SWE-chat acquisition: `scripts/tools/login_swe_chat_preheat.py` and
   `scripts/swe_chat_preheat_service.py`.
 
@@ -154,6 +163,14 @@ the cluster's memory-per-core policy. Keep the default Safe PCE request at
 An Aion-only 1 CPU / 1750M pilot is allowed only when its frozen experiment
 contract repeats that exact memory value. This is a measured resource
 experiment, not a new default.
+
+Aion scratch has a per-user file-count quota independent of free bytes. A run
+that expands many SIF repositories concurrently can exhaust that quota even
+when `df` reports ample capacity. Before a large Safe PCE launch, inspect the
+user file quota as well as bytes. Phase workspaces are disposable; enable
+`--reclaim-workspaces` for resumable runs, but do not treat cleanup as a
+substitute for controlling the peak number of simultaneously materialized
+repositories.
 
 Safe PCE must not run whole-repository aggressive Git garbage collection in
 each Agent phase. Agent-visible history is prepared once as a cache artifact

@@ -52,11 +52,16 @@ authority is `docs/archive/mixed-design/swe-chat-data-cleaning.md`.
   smoke10 subset from that frozen balanced40 authority.
 - `hpc_submit_batch.sh`, `hpc_resume_loop.py`, and
   `hpc_supervisor_service.py` are shared controller/supervisor infrastructure.
+  `hpc_campaign_supervisor.py` is a thin multi-run scheduler over the same
+  resume loop: one durable local process invokes every independent member with
+  `--once` each poll round, so run authorities and Slurm arrays remain separate.
   `hpc_runtime.py` is their workflow-independent callable storage/lifecycle
   layer: it defines the canonical scratch layout and conservatively reclaims
-  only inactive ulhpc-submit code workdirs. New workflow Controllers retain
-  their phase DAG and checkpoints but must not duplicate supervisor polling or
-  staging cleanup.
+  inactive ulhpc-submit code workdirs. Its separate, opt-in phase-workspace
+  reclaimer removes only exact `attempt_*/workspaces` paths after no remote job
+  is active; scientific checkpoints and evidence remain outside that target.
+  New workflow Controllers retain their phase DAG and checkpoints but must not
+  duplicate supervisor polling or lifecycle cleanup.
 - `internal/run_gepa_rules.py` is the retained Offline GEPA controller entry.
 - `run_offline_check_only.py` is the additive fixed-guideline evaluation path.
 - `tools/freeze_swe_verified_pc_only_inputs.py` deterministically projects the

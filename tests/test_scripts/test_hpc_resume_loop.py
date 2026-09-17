@@ -6,7 +6,9 @@ import os
 import subprocess
 import time
 from pathlib import Path
+from types import SimpleNamespace
 
+import scripts.hpc_resume_loop as resume_loop
 from scripts.hpc_resume_loop import (
     AION_REMOTE_EMBEDDED_PYTHON,
     REMOTE_EMBEDDED_PYTHON,
@@ -14,6 +16,7 @@ from scripts.hpc_resume_loop import (
     _remote_run_snapshot,
     _repo_relative,
     _with_default_remote_paths,
+    reclaim_remote_workspaces,
 )
 
 
@@ -39,6 +42,48 @@ def test_embedded_remote_modules_keep_iris_login_python() -> None:
         ssh_target = "twang@access-iris.uni.lu"
 
     assert _remote_embedded_python(Config()) == REMOTE_EMBEDDED_PYTHON
+
+
+def test_remote_workspace_reclamation_is_opt_in_and_uses_exact_run_root(
+    monkeypatch,
+) -> None:
+    disabled = SimpleNamespace(reclaim_workspaces=False)
+    assert reclaim_remote_workspaces(disabled) == {"removed": 0, "disabled": True}
+
+    observed: list[list[str]] = []
+
+    def fake_run(command, *, check=False):
+        observed.append(command)
+        return subprocess.CompletedProcess(
+            command,
+            returncode=0,
+            stdout='{"removed": 3}\n',
+            stderr="",
+        )
+
+    monkeypatch.setattr(resume_loop, "run_command", fake_run)
+    run_root = "/scratch/users/tester/project/run_state/output/one-run"
+    enabled = SimpleNamespace(
+        reclaim_workspaces=True,
+        remote_run_snapshot=run_root,
+        ssh_port="8022",
+        ssh_key="",
+        ssh_target="tester@access-aion.uni.lu",
+    )
+
+    assert reclaim_remote_workspaces(enabled, dry_run=True) == {"removed": 3}
+    assert len(observed) == 1
+    assert observed[0][:4] == [
+        "ssh",
+        "-p",
+        "8022",
+        "tester@access-aion.uni.lu",
+    ]
+    remote_command = observed[0][-1]
+    assert "VIBE_HPC_WORKSPACE_RECLAIM" in remote_command
+    assert "reclaim_disposable_phase_workspaces" in remote_command
+    assert run_root in remote_command
+    assert "dry_run=True" in remote_command
 
 
 def test_repo_relative_preserves_worktree_local_symlink(tmp_path: Path) -> None:
@@ -313,6 +358,47 @@ def test_hpc_resume_loop_accepts_non_gepa_workflow_config(tmp_path: Path) -> Non
     assert f"--config\n{config}" in batch_text
     assert "--time\n00:10:00" in batch_text
     assert "--dry-run" in batch_text
+
+
+def test_new_run_skips_workspace_reclamation_until_manifest_exists(
+    tmp_path: Path,
+) -> None:
+    fake_bin = tmp_path / "bin"
+    fake_bin.mkdir()
+    local_root = REPO_ROOT / ".tmp_hpc_smoke" / "test_new_run_reclaim"
+    config = _write_workflow_config(local_root)
+    fake_batch = tmp_path / "hpc_submit_workflow.sh"
+    batch_log = tmp_path / "batch.log"
+    ssh_log = tmp_path / "ssh.log"
+    statuses = tmp_path / "statuses.txt"
+    statuses.write_text('{"state":"missing"}\n', encoding="utf-8")
+    _fake_batch_script(fake_batch, batch_log)
+    _fake_ssh(fake_bin / "ssh", statuses, ssh_log)
+
+    result = subprocess.run(
+        [
+            "python",
+            str(SCRIPT),
+            "--once",
+            "--state-file",
+            str(tmp_path / "state.json"),
+            "--batch-script",
+            str(fake_batch),
+            "--config",
+            str(config),
+            "--reclaim-workspaces",
+            "--submit",
+        ],
+        cwd=REPO_ROOT,
+        capture_output=True,
+        text=True,
+        check=False,
+        env=_env(fake_bin),
+    )
+
+    assert result.returncode == 0, result.stderr
+    assert "--submit" in batch_log.read_text(encoding="utf-8")
+    assert "VIBE_HPC_WORKSPACE_RECLAIM" not in ssh_log.read_text(encoding="utf-8")
 
 
 def test_hpc_resume_loop_treats_completed_with_incomplete_as_terminal(
@@ -834,6 +920,57 @@ arguments:
     assert "hpc_resume_loop.py --target-iterations 8" in invocation
     assert "configs/archive/online_gepa/gepa_online_planning_hpc.yaml --submit" in invocation
     assert "conda run --no-capture-output -n mini-swe" in invocation
+
+
+def test_hpc_supervisor_service_launches_campaign_program(tmp_path: Path) -> None:
+    fake_bin = tmp_path / "bin"
+    fake_bin.mkdir()
+    tmux_log = tmp_path / "tmux.log"
+    tmux = fake_bin / "tmux"
+    tmux.write_text(
+        "#!/usr/bin/env bash\n"
+        f"printf '%s\\n' \"$*\" >> {tmux_log}\n"
+        'if [[ "$1" == has-session ]]; then exit 1; fi\n'
+        "exit 0\n",
+        encoding="utf-8",
+    )
+    tmux.chmod(0o755)
+    launch_config = tmp_path / "campaign-launch.yaml"
+    launch_config.write_text(
+        f"""
+schema_version: 1
+program: campaign
+session: one-campaign
+log: {tmp_path / 'campaign.log'}
+arguments:
+  - --config
+  - configs/campaign.yaml
+""",
+        encoding="utf-8",
+    )
+    env = os.environ.copy()
+    env["PATH"] = f"{fake_bin}{os.pathsep}{env['PATH']}"
+
+    result = subprocess.run(
+        [
+            "python",
+            str(SERVICE_SCRIPT),
+            "start",
+            "--launch-config",
+            str(launch_config),
+        ],
+        cwd=REPO_ROOT,
+        capture_output=True,
+        text=True,
+        check=False,
+        env=env,
+    )
+
+    assert result.returncode == 0, result.stderr
+    invocation = tmux_log.read_text(encoding="utf-8")
+    assert "scripts/hpc_campaign_supervisor.py --config configs/campaign.yaml" in (
+        invocation
+    )
 
 
 def test_pcce_supervisor_launch_config_uses_shared_resume_loop(

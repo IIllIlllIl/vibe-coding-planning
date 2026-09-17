@@ -14,6 +14,7 @@ import yaml
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 RESUME_SCRIPT = REPO_ROOT / "scripts" / "hpc_resume_loop.py"
+CAMPAIGN_SCRIPT = REPO_ROOT / "scripts" / "hpc_campaign_supervisor.py"
 
 
 def _run(args: list[str]) -> subprocess.CompletedProcess[str]:
@@ -24,13 +25,14 @@ def _has_session(session: str) -> bool:
     return _run(["tmux", "has-session", "-t", session]).returncode == 0
 
 
-def _load_launch_config(path: Path) -> tuple[str, str, list[str]]:
+def _load_launch_config(path: Path) -> tuple[str, str, list[str], Path]:
     data = yaml.safe_load(path.read_text(encoding="utf-8")) or {}
     if data.get("schema_version") != 1:
         raise ValueError("supervisor launch config must use schema_version: 1")
     session = data.get("session")
     log = data.get("log")
     arguments = data.get("arguments")
+    program = data.get("program", "resume")
     if not isinstance(session, str) or not session:
         raise ValueError("supervisor launch config requires a non-empty session")
     if not isinstance(log, str) or not log:
@@ -39,7 +41,10 @@ def _load_launch_config(path: Path) -> tuple[str, str, list[str]]:
         isinstance(argument, str) for argument in arguments
     ):
         raise ValueError("supervisor launch config arguments must be strings")
-    return session, log, arguments
+    programs = {"resume": RESUME_SCRIPT, "campaign": CAMPAIGN_SCRIPT}
+    if program not in programs:
+        raise ValueError("supervisor launch config program must be resume or campaign")
+    return session, log, arguments, programs[program]
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -54,6 +59,7 @@ def main(argv: list[str] | None = None) -> int:
 
     session = known.session
     log = known.log
+    supervisor_script = RESUME_SCRIPT
     if known.launch_config is not None:
         if session is not None or log is not None or resume_args:
             parser.error(
@@ -66,7 +72,9 @@ def main(argv: list[str] | None = None) -> int:
             else REPO_ROOT / known.launch_config
         )
         try:
-            session, log, resume_args = _load_launch_config(launch_path)
+            session, log, resume_args, supervisor_script = _load_launch_config(
+                launch_path
+            )
         except (OSError, ValueError, yaml.YAMLError) as exc:
             parser.error(str(exc))
     if not session:
@@ -104,7 +112,7 @@ def main(argv: list[str] | None = None) -> int:
         "-n",
         "mini-swe",
         "python",
-        str(RESUME_SCRIPT),
+        str(supervisor_script),
         *resume_args,
     ]
     shell_command = (

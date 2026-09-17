@@ -92,6 +92,7 @@ class SupervisorConfig:
     offline_gepa: bool
     recover_controller_error_types_once: tuple[str, ...]
     reclaim_staging: bool
+    reclaim_workspaces: bool
     remote_staging_root: str | None
 
 
@@ -330,6 +331,15 @@ def parse_args(argv: list[str]) -> SupervisorConfig:
         ),
     )
     parser.add_argument(
+        "--reclaim-workspaces",
+        action="store_true",
+        help=(
+            "After remote status proves no Controller or worker is active, "
+            "remove only disposable per-attempt workspaces below the exact "
+            "persistent run root."
+        ),
+    )
+    parser.add_argument(
         "--batch-script",
         default=os.environ.get("VIBE_HPC_SUBMIT_BATCH", str(DEFAULT_BATCH_SCRIPT)),
     )
@@ -399,6 +409,7 @@ def parse_args(argv: list[str]) -> SupervisorConfig:
             sorted(set(known.recover_controller_error_type_once))
         ),
         reclaim_staging=known.reclaim_staging,
+        reclaim_workspaces=known.reclaim_workspaces,
         remote_staging_root=remote_staging_root,
     )
 
@@ -686,6 +697,45 @@ print(json.dumps(reclaim_submission_workdirs(sys.argv[1]), sort_keys=True))
     return json.loads(result.stdout.strip().splitlines()[-1])
 
 
+def reclaim_remote_workspaces(
+    config: SupervisorConfig,
+    *,
+    dry_run: bool = False,
+) -> dict[str, Any]:
+    """Reclaim disposable attempt workspaces after all remote jobs stop."""
+
+    if not config.reclaim_workspaces:
+        return {"removed": 0, "disabled": True}
+    source = HPC_RUNTIME_SCRIPT.read_text(encoding="utf-8")
+    invocation = """
+import json
+import sys
+print(json.dumps(reclaim_disposable_phase_workspaces(sys.argv[1]), sort_keys=True))
+"""
+    if dry_run:
+        invocation = """
+import json
+import sys
+print(json.dumps(reclaim_disposable_phase_workspaces(
+    sys.argv[1],
+    dry_run=True,
+), sort_keys=True))
+"""
+    remote_command = (
+        "printf VIBE_HPC_WORKSPACE_RECLAIM >/dev/null; "
+        + shlex.quote(_remote_embedded_python(config))
+        + " -c "
+        + shlex.quote(source + invocation)
+        + " "
+        + shlex.quote(config.remote_run_snapshot)
+    )
+    result = run_command(_ssh_command(config, remote_command))
+    if result.returncode != 0:
+        error = result.stderr.strip() or result.stdout.strip()
+        raise RuntimeError(f"remote workspace reclamation failed: {error}")
+    return json.loads(result.stdout.strip().splitlines()[-1])
+
+
 def _remote_embedded_python(config: SupervisorConfig) -> str:
     """Select the modern login-node interpreter for the target cluster."""
 
@@ -769,6 +819,7 @@ def _load_supervisor_state(config: SupervisorConfig) -> dict[str, Any]:
                 config.recover_controller_error_types_once
             ),
             "reclaim_staging": config.reclaim_staging,
+            "reclaim_workspaces": config.reclaim_workspaces,
             "remote_staging_root": config.remote_staging_root,
         }
     state = json.loads(config.state_file.read_text(encoding="utf-8"))
@@ -793,6 +844,7 @@ def _load_supervisor_state(config: SupervisorConfig) -> dict[str, Any]:
             config.recover_controller_error_types_once
         ),
         "reclaim_staging": config.reclaim_staging,
+        "reclaim_workspaces": config.reclaim_workspaces,
         "remote_staging_root": config.remote_staging_root,
     }
     for key, value in expected.items():
@@ -801,6 +853,9 @@ def _load_supervisor_state(config: SupervisorConfig) -> dict[str, Any]:
             actual = []
             state[key] = actual
         if key == "reclaim_staging" and actual is None:
+            actual = False
+            state[key] = actual
+        if key == "reclaim_workspaces" and actual is None:
             actual = False
             state[key] = actual
         if actual != value:
@@ -923,6 +978,27 @@ def run_loop(config: SupervisorConfig) -> int:
                 print(
                     "[hpc-resume] reclaimed inactive submission workdirs "
                     f"count={cleanup['removed']}"
+                )
+
+            workspace_cleanup: dict[str, Any] = {"removed": 0}
+            if status.get("state") != "missing":
+                try:
+                    workspace_cleanup = reclaim_remote_workspaces(config)
+                except Exception as exc:
+                    state["status"] = "blocked_workspace_reclamation"
+                    state["workspace_reclamation_error"] = str(exc)
+                    _save_supervisor_state(config, state)
+                    print(
+                        f"[hpc-resume] workspace reclamation failed: {exc}",
+                        file=sys.stderr,
+                    )
+                    return 1
+            if workspace_cleanup.get("removed"):
+                state["last_workspace_reclamation"] = workspace_cleanup
+                _save_supervisor_state(config, state)
+                print(
+                    "[hpc-resume] reclaimed disposable phase workspaces "
+                    f"count={workspace_cleanup['removed']}"
                 )
 
             recoverable_controller_error = (

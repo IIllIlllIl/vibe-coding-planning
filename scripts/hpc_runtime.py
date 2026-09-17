@@ -100,3 +100,70 @@ def reclaim_submission_workdirs(raw_root: str, *, dry_run: bool = False) -> dict
         "removed": 0 if dry_run else len(targets),
         "dry_run": dry_run,
     }
+
+
+def _validated_run_root(raw_root: str) -> Path:
+    root = Path(os.path.expanduser(raw_root))
+    if not root.is_absolute():
+        raise ValueError("run root must resolve to an absolute path")
+    root = root.resolve()
+    home = Path.home().resolve()
+    forbidden = {
+        Path("/").resolve(),
+        home,
+        Path("/scratch").resolve(),
+    }
+    if root in forbidden or len(root.parts) < 5:
+        raise ValueError(f"refusing broad run root: {root}")
+    if not (root / "run_manifest.json").is_file():
+        raise ValueError(f"run root has no run_manifest.json: {root}")
+    if not (root / "hpc_tasks").is_dir():
+        raise ValueError(f"run root has no hpc_tasks directory: {root}")
+    return root
+
+
+def reclaim_disposable_phase_workspaces(
+    raw_root: str,
+    *,
+    dry_run: bool = False,
+) -> dict:
+    """Remove only disposable per-attempt workspaces below one exact run.
+
+    Checkpoints, trajectories, failure records, task outputs, Slurm logs, and
+    cached repository-history bundles are outside the matched ``workspaces``
+    directories and are therefore retained. A symlink at the exact workspace
+    location is unlinked without following its target.
+    """
+
+    root = _validated_run_root(raw_root)
+    task_root = root / "hpc_tasks"
+    targets: list[Path] = []
+    for target in sorted(
+        task_root.glob("*/*/attempts/task_*/attempt_*/workspaces")
+    ):
+        relative = target.relative_to(task_root)
+        parts = relative.parts
+        if (
+            len(parts) < 6
+            or parts[-4] != "attempts"
+            or not parts[-3].startswith("task_")
+            or not parts[-2].startswith("attempt_")
+            or parts[-1] != "workspaces"
+        ):
+            raise ValueError(f"unexpected phase-workspace depth: {target}")
+        if not target.is_symlink() and not target.is_dir():
+            raise ValueError(f"unexpected phase-workspace type: {target}")
+        targets.append(target)
+    if not dry_run:
+        for target in targets:
+            if target.is_symlink():
+                target.unlink()
+            else:
+                shutil.rmtree(target)
+    return {
+        "run_root": str(root),
+        "targets": [str(path) for path in targets],
+        "matched": len(targets),
+        "removed": 0 if dry_run else len(targets),
+        "dry_run": dry_run,
+    }

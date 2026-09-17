@@ -1,0 +1,7 @@
+schema_version: 1
+program: campaign
+session: swe-verified-safe-pce-fpta-repeat-campaign-aion-v2-20260918
+log: .local/hpc-supervisor/swe-verified-safe-pce-fpta-repeat-campaign-aion-v2-20260918.log
+arguments:
+  - --config
+  - configs/swe_verified_safe_pce_fpta_repeat_campaign_aion_v2_20260918.yaml

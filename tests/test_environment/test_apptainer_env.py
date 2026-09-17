@@ -382,6 +382,52 @@ def test_environment_host_workdir_is_initialized_and_bound(tmp_path, monkeypatch
     assert f"{host_workdir}:/testbed" in binds
 
 
+def test_environment_removes_partial_host_workdir_when_initialization_fails(
+    tmp_path, monkeypatch
+):
+    cache_dir = tmp_path / "sifs"
+    cache_dir.mkdir()
+    (cache_dir / "python_3.12-slim.sif").write_text("sif", encoding="utf-8")
+    host_workdir = tmp_path / "phase-workdir"
+
+    class FakePopen:
+        def __init__(self, args, **kwargs):
+            self.stdout = io.BytesIO(b"partial-tar")
+            self.stderr = io.BytesIO(b"")
+
+        def wait(self):
+            return 0
+
+    def fake_run(args, **kwargs):
+        if args[0] == "tar":
+            host_workdir.mkdir(parents=True, exist_ok=True)
+            (host_workdir / "partial.py").write_text("partial\n", encoding="utf-8")
+            return subprocess.CompletedProcess(
+                args,
+                returncode=2,
+                stdout=b"",
+                stderr=b"Disk quota exceeded",
+            )
+        raise AssertionError(args)
+
+    monkeypatch.setattr(subprocess, "Popen", FakePopen)
+    monkeypatch.setattr(subprocess, "run", fake_run)
+    window = _TrackingCapacityWindow()
+
+    with pytest.raises(FatalError, match="Failed to initialize"):
+        ApptainerEnvironment(
+            image="python:3.12-slim",
+            cwd="/testbed",
+            sif_cache_dir=cache_dir,
+            capacity_window=window,
+            host_workdir=host_workdir,
+        )
+
+    assert not host_workdir.exists()
+    assert window.lease_obj.entered == 1
+    assert window.lease_obj.exited == 1
+
+
 def test_environment_uses_phase_local_home_and_removes_it_on_cleanup(
     tmp_path, monkeypatch
 ):

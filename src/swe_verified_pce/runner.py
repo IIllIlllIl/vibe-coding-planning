@@ -219,13 +219,14 @@ class SWEVerifiedPCERunner:
 
         workspace = self.attempt_dir / "workspaces" / "history_preclean"
         self._cleanup(workspace)
-        env = self._environment(
-            case,
-            timeout=self.config.plan.timeout,
-            phase="history_preclean",
-            host_workdir=workspace,
-        )
+        env: ApptainerEnvironment | None = None
         try:
+            env = self._environment(
+                case,
+                timeout=self.config.plan.timeout,
+                phase="history_preclean",
+                host_workdir=workspace,
+            )
             return cache.ensure(
                 env=env,
                 repository_dir=workspace,
@@ -235,7 +236,11 @@ class SWEVerifiedPCERunner:
                 timeout=self.config.plan.timeout,
             )
         finally:
-            self._best_effort_environment_cleanup(env, phase="history_preclean")
+            if env is not None:
+                self._best_effort_environment_cleanup(
+                    env,
+                    phase="history_preclean",
+                )
             self._best_effort_workspace_cleanup(
                 workspace,
                 phase="history_preclean",
@@ -355,13 +360,14 @@ class SWEVerifiedPCERunner:
             assert history_bundle is not None
             plan_workspace = self.attempt_dir / "workspaces" / "plan"
             self._cleanup(plan_workspace)
-            env = self._environment(
-                case,
-                timeout=self.config.plan.timeout,
-                phase="plan",
-                host_workdir=plan_workspace,
-            )
+            env: ApptainerEnvironment | None = None
             try:
+                env = self._environment(
+                    case,
+                    timeout=self.config.plan.timeout,
+                    phase="plan",
+                    host_workdir=plan_workspace,
+                )
                 self._restore_agent_repository(
                     env,
                     case,
@@ -446,7 +452,8 @@ class SWEVerifiedPCERunner:
                     )
                 self._save_checkpoint("plan", plan_checkpoint)
             finally:
-                self._best_effort_environment_cleanup(env, phase="plan")
+                if env is not None:
+                    self._best_effort_environment_cleanup(env, phase="plan")
                 self._best_effort_workspace_cleanup(plan_workspace, phase="plan")
 
         if code_checkpoint is None:
@@ -459,13 +466,14 @@ class SWEVerifiedPCERunner:
                 raise FatalError("PCE Plan checkpoint content hash mismatch")
             code_workspace = self.attempt_dir / "workspaces" / "code"
             self._cleanup(code_workspace)
-            env = self._environment(
-                case,
-                timeout=self.config.code.timeout,
-                phase="code",
-                host_workdir=code_workspace,
-            )
+            env: ApptainerEnvironment | None = None
             try:
+                env = self._environment(
+                    case,
+                    timeout=self.config.code.timeout,
+                    phase="code",
+                    host_workdir=code_workspace,
+                )
                 self._restore_agent_repository(
                     env,
                     case,
@@ -537,7 +545,8 @@ class SWEVerifiedPCERunner:
                         error=str(exc),
                     )
             finally:
-                self._best_effort_environment_cleanup(env, phase="code")
+                if env is not None:
+                    self._best_effort_environment_cleanup(env, phase="code")
                 self._best_effort_workspace_cleanup(code_workspace, phase="code")
 
         evaluator_checkpoint = self._checkpoint("evaluate")

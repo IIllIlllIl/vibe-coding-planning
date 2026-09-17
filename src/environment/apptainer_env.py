@@ -186,6 +186,7 @@ class ApptainerEnvironment:
         self._isolated_home: tempfile.TemporaryDirectory[str] | None = None
         self._host_workdir = Path(host_workdir) if host_workdir is not None else None
         self._initialize_host_workdir = initialize_host_workdir
+        self._remove_host_workdir_on_init_error = False
         self._isolate_tmp = isolate_tmp
         self._masked_container_paths = tuple(masked_container_paths or ())
         self._source_access_prompt_urls = frozenset(
@@ -217,6 +218,17 @@ class ApptainerEnvironment:
             self._prepare_masked_paths()
             self._ensure_git_config()
         except BaseException:
+            if (
+                self._remove_host_workdir_on_init_error
+                and self._host_workdir is not None
+                and self._host_workdir.exists()
+            ):
+                try:
+                    shutil.rmtree(self._host_workdir)
+                except OSError:
+                    # The caller also owns a phase-level cleanup boundary.
+                    # Preserve the initialization exception if both fail.
+                    pass
             if self._isolated_home is not None:
                 self._isolated_home.cleanup()
                 self._isolated_home = None
@@ -262,6 +274,7 @@ class ApptainerEnvironment:
         assert self._host_workdir is not None
         self._host_workdir.mkdir(parents=True, exist_ok=True)
         if self._initialize_host_workdir and not any(self._host_workdir.iterdir()):
+            self._remove_host_workdir_on_init_error = True
             self._copy_container_cwd_to_host_workdir()
         self._run_args.extend(
             [
