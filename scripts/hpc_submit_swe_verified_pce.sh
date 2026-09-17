@@ -277,4 +277,7 @@ echo "[$SUBMIT_LABEL] controller_resources=$CPUS CPU/$MEM/$TIME_LIMIT"
 if [[ -n "$EVALUATOR_REPAIR_ID" ]]; then
   echo "[$SUBMIT_LABEL] evaluator_repair=$EVALUATOR_REPAIR_ID instances=${#EVALUATOR_REPAIR_INSTANCES[@]}"
 fi
-"${CMD[@]}"
+conda run --no-capture-output -n mini-swe python \
+  "$REPO_ROOT/scripts/tools/run_with_file_lock.py" \
+  --lock "$REPO_ROOT/.local/hpc-supervisor/ulhpc-submit.lock" \
+  -- "${CMD[@]}"
