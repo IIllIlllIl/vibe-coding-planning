@@ -61,6 +61,7 @@ def _commit(repository: Path, date: str, message: str) -> str:
 
 def test_cached_bundle_exposes_base_ancestors_but_not_future_history(
     tmp_path: Path,
+    monkeypatch,
 ) -> None:
     source = tmp_path / "source"
     source.mkdir()
@@ -77,6 +78,10 @@ def test_cached_bundle_exposes_base_ancestors_but_not_future_history(
     future = _commit(source, "2000-01-03T00:00:00Z", "future")
     (source / "ignored.txt").write_text("image setup\n", encoding="utf-8")
 
+    # The production Aion worker starts outside a Git repository.  Keeping
+    # this cwd outside ``source`` catches accidental reliance on the host
+    # process being inside some unrelated repository.
+    monkeypatch.chdir(tmp_path)
     cache = RepositoryHistoryCache(tmp_path / "cache")
     bundle, manifest = cache.ensure(
         env=LocalEnvironment(source),
@@ -90,6 +95,8 @@ def test_cached_bundle_exposes_base_ancestors_but_not_future_history(
     assert manifest["policy"] == REPOSITORY_HISTORY_POLICY
     assert manifest["pack_limits"]["threads"] == 1
     assert cache.validate(sif_sha256="a" * 64, base_commit=base) is not None
+    assert _git(source, "rev-parse", "HEAD") == future
+    assert (source / "tracked.txt").read_text(encoding="utf-8") == "future\n"
 
     target = tmp_path / "target"
     shutil.copytree(source, target)

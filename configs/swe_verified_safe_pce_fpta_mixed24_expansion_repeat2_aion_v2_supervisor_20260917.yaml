@@ -1,0 +1,23 @@
+schema_version: 1
+session: swe-verified-pce-fpta-mixed24-expansion-repeat2-aion-v2-20260917
+log: .local/hpc-supervisor/swe-verified-pce-fpta-mixed24-expansion-repeat2-aion-v2-20260917.log
+arguments:
+  - --poll-interval
+  - "300"
+  - --slice-time
+  - "00:10:00"
+  - --max-runs
+  - "12"
+  - --state-file
+  - .local/hpc-supervisor/swe-verified-pce-fpta-mixed24-expansion-repeat2-aion-v2-20260917.json
+  - --reclaim-staging
+  - --require-clean-worktree
+  - --batch-script
+  - scripts/hpc_submit_swe_verified_pce.sh
+  - --config
+  - configs/swe_verified_safe_pce_fpta_mixed24_expansion_repeat2_aion_v2_20260917.yaml
+  - --ulhpc-config
+  - configs/ulhpc_submit_aion.yaml
+  - --job-name
+  - swe-verified-pce-fpta-mixed24-expansion-repeat2-aion-v2-20260917
+  - --submit

@@ -64,6 +64,21 @@ case finishes. Before either Agent begins, the worker prepares or reuses the
 base-and-ancestor-only history bundle. OOM or any other operational failure is
 reported as incomplete and cannot become an unresolved scientific outcome.
 
+History-bundle construction is read-only with respect to the SIF-derived
+source worktree: it selects the frozen base commit directly from the object
+database and does not reset or clean that worktree. The completed bundle is
+verified inside a new empty Git repository. This supplies the repository
+context required by ULHPC Git while also proving that the bundle has no hidden
+dependency on objects available only in the source repository.
+
+The first expansion repeat identities (`aion-v1-20260916`) are failed runtime
+authorities: all cases exhausted their attempts before Agent execution because
+bundle verification ran without Git repository context. Replacement
+`aion-v2-20260917` identities preserve the same frozen cases, prompts,
+temperatures, and resources while applying the non-mutating empty-repository
+verification repair. The failed identities must not be resumed or interpreted
+as PCE outcomes.
+
 ## Phase And Artifact Boundary
 
 Each Slurm array element owns one case:

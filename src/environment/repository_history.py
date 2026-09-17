@@ -11,6 +11,7 @@ from pathlib import Path
 import shlex
 import shutil
 import subprocess
+import tempfile
 from typing import Any, Iterator
 
 from src.exceptions import FatalError
@@ -163,15 +164,6 @@ class RepositoryHistoryCache:
             raise FatalError(
                 f"repository history source lacks base_commit {base_commit}"
             )
-        restore = env.execute(
-            f"git reset --hard {quoted_commit} && git clean -fd",
-            timeout=timeout,
-        )
-        if int(restore.get("returncode", 1)) != 0:
-            raise FatalError(
-                "repository history source restore failed: "
-                + str(restore.get("output", ""))[:500]
-            )
 
         relative_bundle = ".vibe_repository_history.bundle"
         build = env.execute(
@@ -196,17 +188,44 @@ class RepositoryHistoryCache:
         )
         try:
             shutil.move(str(source_bundle), bundle_tmp)
-            verify = subprocess.run(
-                ["git", "bundle", "verify", str(bundle_tmp)],
-                capture_output=True,
-                text=True,
-                check=False,
-            )
-            if verify.returncode != 0:
-                raise FatalError(
-                    "repository history bundle verification failed: "
-                    + (verify.stdout + verify.stderr)[:500]
+            # Git versions used on ULHPC require ``bundle verify`` to run in
+            # a repository.  Verify against a new empty repository rather
+            # than whichever repository happens to contain the host process.
+            # This also rejects a bundle that silently depends on objects from
+            # the full source repository.
+            with tempfile.TemporaryDirectory(
+                prefix="vibe-bundle-verify-",
+                dir=bundle.parent,
+            ) as verify_dir:
+                init = subprocess.run(
+                    ["git", "init", "--bare", "--quiet", verify_dir],
+                    capture_output=True,
+                    text=True,
+                    check=False,
                 )
+                verify = subprocess.run(
+                    [
+                        "git",
+                        "-C",
+                        verify_dir,
+                        "bundle",
+                        "verify",
+                        str(bundle_tmp),
+                    ],
+                    capture_output=True,
+                    text=True,
+                    check=False,
+                )
+                if init.returncode != 0 or verify.returncode != 0:
+                    raise FatalError(
+                        "repository history bundle verification failed: "
+                        + (
+                            init.stdout
+                            + init.stderr
+                            + verify.stdout
+                            + verify.stderr
+                        )[:500]
+                    )
             manifest = {
                 "schema_version": 1,
                 "policy": REPOSITORY_HISTORY_POLICY,

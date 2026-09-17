@@ -1985,10 +1985,16 @@ def test_tracked_smoke_configs_bind_two_case_selection_and_phase_policies() -> N
 
 
 def test_fpta_mixed24_aion_pilot_has_explicit_low_memory_contract() -> None:
-    for repeat in (2, 3):
+    identities = (
+        (2, "v1_20260916"),
+        (3, "v1_20260916"),
+        (2, "v2_20260917"),
+        (3, "v2_20260917"),
+    )
+    for repeat, version in identities:
         path = (
             "configs/swe_verified_safe_pce_fpta_mixed24_expansion_"
-            f"repeat{repeat}_aion_v1_20260916.yaml"
+            f"repeat{repeat}_aion_{version}.yaml"
         )
         config = load_swe_verified_pce_config(path, require_api_keys=False)
         raw = yaml.safe_load(Path(path).read_text(encoding="utf-8"))
@@ -1997,6 +2003,7 @@ def test_fpta_mixed24_aion_pilot_has_explicit_low_memory_contract() -> None:
         assert config.hpc.cpus_per_task == 1
         assert config.hpc.mem == "1750M"
         assert config.hpc.time == "01:00:00"
+        assert config.hpc.worker_config_path == path
         assert raw["experiment_contract"]["cluster"] == "aion"
         assert raw["experiment_contract"]["budget"]["worker_memory"] == "1750M"
 
