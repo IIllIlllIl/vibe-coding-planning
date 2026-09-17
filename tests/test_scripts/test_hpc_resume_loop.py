@@ -246,6 +246,24 @@ def test_supervisor_supplies_canonical_remote_paths() -> None:
     )
 
 
+def test_supervisor_follows_thin_submit_wrapper_for_remote_path_support() -> None:
+    args = _with_default_remote_paths(
+        ["--config", "configs/workflow.yaml"],
+        batch_script=REPO_ROOT
+        / "scripts/hpc_submit_swe_verified_plan_ce_replay.sh",
+        remote_user="tester",
+        job_name="recovered-plan-ce",
+    )
+
+    assert _take_arg(args, "--remote-dir") == "~/hpc_runs/recovered-plan-ce"
+    assert _take_arg(args, "--remote-dataset-dir") == (
+        "/scratch/users/tester/vibe-coding-planning/datasets"
+    )
+    assert _take_arg(args, "--remote-run-dir") == (
+        "/scratch/users/tester/vibe-coding-planning/run_state"
+    )
+
+
 def _take_arg(args: list[str], option: str) -> str:
     return args[args.index(option) + 1]
 

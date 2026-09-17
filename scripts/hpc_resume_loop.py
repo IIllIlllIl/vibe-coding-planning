@@ -147,9 +147,21 @@ def _remove_flags(args: list[str], flags: set[str]) -> list[str]:
 
 def _submit_wrapper_supports(path: Path, option: str) -> bool:
     try:
-        return option in path.read_text(encoding="utf-8")
+        source = path.read_text(encoding="utf-8")
     except OSError:
         return False
+    if option in source:
+        return True
+    for script_name in re.findall(r"hpc_submit_[A-Za-z0-9_.-]+\.sh", source):
+        delegate = path.parent / script_name
+        if delegate == path:
+            continue
+        try:
+            if option in delegate.read_text(encoding="utf-8"):
+                return True
+        except OSError:
+            continue
+    return False
 
 
 def _with_default_remote_paths(
