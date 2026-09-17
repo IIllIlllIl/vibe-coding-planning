@@ -602,6 +602,7 @@ class SWEVerifiedPCERunner:
         code_checkpoint: dict[str, Any],
         evaluator_checkpoint: dict[str, Any],
     ) -> dict[str, Any]:
+        plan = str(plan_checkpoint["plan"])
         result = {
             "pce_status": "completed",
             "terminal_phase": "evaluate",
@@ -610,8 +611,12 @@ class SWEVerifiedPCERunner:
                     "terminal_kind", "completed"
                 )
             ),
-            "plan": str(plan_checkpoint["plan"]),
-            "plan_sha256": str(plan_checkpoint["plan_sha256"]),
+            "plan": plan,
+            "plan_sha256": str(
+                plan_checkpoint.get(
+                    "plan_sha256", hashlib.sha256(plan.encode()).hexdigest()
+                )
+            ),
             "plan_trajectory": list(plan_checkpoint["trajectory"]),
             "raw_patch": str(
                 code_checkpoint.get("raw_patch", code_checkpoint["patch"])

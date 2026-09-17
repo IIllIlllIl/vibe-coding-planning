@@ -69,13 +69,17 @@ class _RecoveredPlanExecutor(SWEVerifiedPCEHPCExecutor):
                 "phase": "plan",
                 "payload": {
                     "plan": self.plans[case.instance_id],
+                    "plan_sha256": text_sha256(self.plans[case.instance_id]),
                     "trajectory": [],
                     "source": "frozen_recovered_plan",
                 },
             }
             path = checkpoint_dir / "plan.json"
             if path.is_file():
-                if json.loads(path.read_text(encoding="utf-8")) != payload:
+                existing = json.loads(path.read_text(encoding="utf-8"))
+                legacy_payload = json.loads(json.dumps(payload))
+                legacy_payload["payload"].pop("plan_sha256")
+                if existing not in (payload, legacy_payload):
                     raise ValueError(
                         f"recovered Plan checkpoint differs: {case.instance_id}"
                     )

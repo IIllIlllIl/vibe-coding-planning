@@ -308,10 +308,105 @@ def install_repository_history_bundle(
         if temporary.exists():
             shutil.rmtree(temporary)
 
+    results = []
+
+    # The SIF has already materialized the repository files.  A hard reset
+    # immediately after replacing an empty index makes Git rewrite every
+    # tracked file; on Aion's shared filesystem that produced reproducible
+    # late-checkout failures in large Django worktrees.  Populate the index
+    # without touching the worktree, then restore only paths whose bytes differ
+    # from the frozen base.  Ignored image-provided files remain available.
+    reset_command = [
+        "git",
+        "-C",
+        str(repository_dir),
+        "reset",
+        "--mixed",
+        base_commit,
+    ]
+    reset = subprocess.run(
+        reset_command,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    results.append(
+        {
+            "command": reset_command,
+            "returncode": reset.returncode,
+            "output": reset.stdout + reset.stderr,
+        }
+    )
+    if reset.returncode != 0:
+        raise FatalError(
+            "repository history install verification failed: "
+            + (reset.stdout + reset.stderr)[-2000:]
+        )
+
+    diff_command = [
+        "git",
+        "-C",
+        str(repository_dir),
+        "diff",
+        "--name-only",
+        "-z",
+        "--",
+    ]
+    changed = subprocess.run(
+        diff_command,
+        capture_output=True,
+        check=False,
+    )
+    changed_output = changed.stdout.decode("utf-8", errors="replace")
+    changed_error = changed.stderr.decode("utf-8", errors="replace")
+    results.append(
+        {
+            "command": diff_command,
+            "returncode": changed.returncode,
+            "output": changed_output + changed_error,
+        }
+    )
+    if changed.returncode != 0:
+        raise FatalError(
+            "repository history install verification failed: "
+            + (changed_output + changed_error)[-2000:]
+        )
+
+    if changed.stdout:
+        restore_command = [
+            "git",
+            "-C",
+            str(repository_dir),
+            "checkout-index",
+            "--force",
+            "-z",
+            "--stdin",
+        ]
+        restore = subprocess.run(
+            restore_command,
+            input=changed.stdout,
+            capture_output=True,
+            check=False,
+        )
+        restore_output = restore.stdout.decode("utf-8", errors="replace")
+        restore_error = restore.stderr.decode("utf-8", errors="replace")
+        results.append(
+            {
+                "command": restore_command,
+                "returncode": restore.returncode,
+                "output": restore_output + restore_error,
+            }
+        )
+        if restore.returncode != 0:
+            raise FatalError(
+                "repository history install verification failed: "
+                + (restore_output + restore_error)[-2000:]
+            )
+
     commands = [
-        ["git", "-C", str(repository_dir), "reset", "--hard", base_commit],
-        ["git", "-C", str(repository_dir), "checkout", "--detach", base_commit],
         ["git", "-C", str(repository_dir), "clean", "-fd"],
+        ["git", "-C", str(repository_dir), "checkout", "--detach", base_commit],
+        ["git", "-C", str(repository_dir), "diff", "--quiet", base_commit, "--"],
         [
             "git",
             "-C",
@@ -322,7 +417,6 @@ def install_repository_history_bundle(
             base_commit,
         ],
     ]
-    results = []
     for command in commands:
         result = subprocess.run(
             command,

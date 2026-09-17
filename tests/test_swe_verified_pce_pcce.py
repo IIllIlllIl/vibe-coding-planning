@@ -141,12 +141,73 @@ def test_recovered_plan_executor_preloads_identity_bound_plan_checkpoint(
     assert checkpoint["phase"] == "plan"
     assert checkpoint["payload"] == {
         "plan": "# Plan\nImplement the focused fix.",
+        "plan_sha256": text_sha256("# Plan\nImplement the focused fix."),
         "trajectory": [],
         "source": "frozen_recovered_plan",
     }
     assert checkpoint["checkpoint_identity"] == checkpoint_identity(
         case, execution_fingerprint="d" * 64
     )
+
+
+def test_recovered_plan_executor_accepts_legacy_checkpoint_without_hash(
+    tmp_path: Path, monkeypatch
+) -> None:
+    case = SWEVerifiedPCECase(
+        instance_id="owner__repo-1",
+        row_sha256="a" * 64,
+        issue_description="issue",
+        repo="owner/repo",
+        base_commit="b" * 40,
+        version="",
+        difficulty="",
+        environment_setup_commit="",
+        test_patch="tests",
+        fail_to_pass=("test_x",),
+        pass_to_pass=(),
+        gold_patch="gold",
+        image=FrozenImage(
+            requested_ref="image",
+            sif_path="/sif",
+            sif_sha256="c" * 64,
+            sif_bytes=1,
+            provenance_strength="retrospective",
+        ),
+        source_row={},
+    )
+    task = TaskFiles(
+        0,
+        case.instance_id,
+        tmp_path / "tasks" / "task_0000.json",
+        tmp_path / "outputs" / "task_0000.json",
+        tmp_path / "attempts" / "task_0000",
+    )
+    monkeypatch.setattr(
+        SWEVerifiedPCEHPCExecutor,
+        "_prepare",
+        lambda self, batch_dir, fingerprint, cases: [task],
+    )
+    checkpoint = {
+        "schema_version": 1,
+        "checkpoint_identity": checkpoint_identity(
+            case, execution_fingerprint="d" * 64
+        ),
+        "phase": "plan",
+        "payload": {
+            "plan": "# Plan\nImplement the focused fix.",
+            "trajectory": [],
+            "source": "frozen_recovered_plan",
+        },
+    }
+    checkpoint_path = tmp_path / "checkpoints/task_0000/plan.json"
+    checkpoint_path.parent.mkdir(parents=True)
+    checkpoint_path.write_text(json.dumps(checkpoint), encoding="utf-8")
+    executor = object.__new__(_RecoveredPlanExecutor)
+    executor.plans = {case.instance_id: "# Plan\nImplement the focused fix."}
+
+    executor._prepare(tmp_path, "d" * 64, [case])
+
+    assert json.loads(checkpoint_path.read_text(encoding="utf-8")) == checkpoint
 
 
 def test_recovered_plan_ce2_config_binds_two_plans_and_supervisor() -> None:
@@ -1126,6 +1187,22 @@ def test_safe_pce_completed_result_preserves_bounded_raw_plan_submission():
         "start_marker": "FINAL_PLAN",
         "end_marker": "END_PLAN",
     }
+
+
+def test_safe_pce_completed_result_derives_missing_legacy_plan_hash():
+    plan = "# Plan\n\nChange the parser.\n"
+    result = SWEVerifiedPCERunner._completed_result(
+        {"plan": plan, "trajectory": []},
+        {
+            "patch": "patch",
+            "patch_submission": {},
+            "workspace_evidence": {},
+            "trajectory": [],
+        },
+        {"evaluator_result": {"terminal_kind": "official_tests_resolved"}},
+    )
+
+    assert result["plan_sha256"] == hashlib.sha256(plan.encode()).hexdigest()
 
 
 def test_safe_pce_indexes_source_access_across_agent_attempts(tmp_path: Path):

@@ -110,6 +110,14 @@ def test_cached_bundle_exposes_base_ancestors_but_not_future_history(
     )
 
     assert evidence["policy"] == REPOSITORY_HISTORY_POLICY
+    assert evidence["checks"][0]["command"][-2:] == ["--mixed", base]
+    assert not any(
+        check["command"][-2:] == ["--hard", base]
+        for check in evidence["checks"]
+    )
+    assert any(
+        "checkout-index" in check["command"] for check in evidence["checks"]
+    )
     assert _git(target, "rev-parse", "HEAD") == base
     assert _git(target, "cat-file", "-t", ancestor) == "commit"
     missing = subprocess.run(
