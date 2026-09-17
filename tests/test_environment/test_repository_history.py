@@ -5,6 +5,9 @@ from pathlib import Path
 import shutil
 import subprocess
 
+import pytest
+
+from src.exceptions import FatalError
 from src.environment.repository_history import (
     REPOSITORY_HISTORY_POLICY,
     RepositoryHistoryCache,
@@ -134,3 +137,30 @@ def test_cache_key_binds_policy_sif_and_base() -> None:
         sif_sha256="a" * 64,
         base_commit="d" * 40,
     )
+
+
+def test_history_install_failure_keeps_diagnostic_tail(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    repository = tmp_path / "repository"
+    (repository / ".git").mkdir(parents=True)
+    (tmp_path / ".repository.history-install" / ".git").mkdir(parents=True)
+    bundle = tmp_path / "history.bundle"
+    bundle.write_text("bundle", encoding="utf-8")
+    outputs = iter(
+        [
+            subprocess.CompletedProcess([], 0, "", ""),
+            subprocess.CompletedProcess([], 0, "", ""),
+            subprocess.CompletedProcess([], 1, "progress\n" * 200 + "fatal: disk quota\n", ""),
+        ]
+    )
+    monkeypatch.setattr(subprocess, "run", lambda *_args, **_kwargs: next(outputs))
+    monkeypatch.setattr(shutil, "move", lambda *_args, **_kwargs: None)
+    monkeypatch.setattr(shutil, "rmtree", lambda *_args, **_kwargs: None)
+
+    with pytest.raises(FatalError, match="fatal: disk quota"):
+        install_repository_history_bundle(
+            repository_dir=repository,
+            bundle=bundle,
+            base_commit="a" * 40,
+        )

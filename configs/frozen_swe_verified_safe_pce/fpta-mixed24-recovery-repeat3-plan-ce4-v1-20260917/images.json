@@ -1,0 +1,68 @@
+{
+  "created_at": "2026-09-17T12:11:22.945506+00:00",
+  "manifest_id": "eb1bd18764ab22ce0a824ff9c3079152a09ae4098801bdeb0509115f1d54406b",
+  "parent_image_manifest": "configs/frozen_swe_verified_safe_pce/fpta-mixed24-expansion-v1-20260916/images.json",
+  "parent_image_manifest_sha256": "73f9b9ab39494cb1426372a6627d8aba178ae6be2292b76dc9c4a47cf6e97c1c",
+  "projection_policy": "exact selected records copied without changing frozen SIF identity",
+  "purpose": "swe_verified_sif_subset_projection_for_pce_recovery",
+  "records": {
+    "swebench/sweb.eval.x86_64.django_1776_django-13512:latest": {
+      "base_commit_verification_output": "",
+      "base_commit_verified": true,
+      "expected_base_commit": "b79088306513d5ed76d31ac40ab3c15f858946ea",
+      "instance_id": "django__django-13512",
+      "oci_digest": null,
+      "provenance_strength": "retrospective",
+      "sif_bytes": 1069711360,
+      "sif_path": "/scratch/users/twang/vibe-coding-planning/shared/sif-cache/swebench_sweb.eval.x86_64.django_1776_django-13512_latest.sif",
+      "sif_sha256": "d674a23e83fdd1b22013ffea614d0c558e7020bb730fefb095d79a0a61be9138",
+      "status": "audited"
+    },
+    "swebench/sweb.eval.x86_64.django_1776_django-16877:latest": {
+      "base_commit_verification_output": "",
+      "base_commit_verified": true,
+      "expected_base_commit": "98f6ada0e2058d67d91fb6c16482411ec2ca0967",
+      "instance_id": "django__django-16877",
+      "oci_digest": null,
+      "provenance_strength": "retrospective",
+      "sif_bytes": 1151909888,
+      "sif_path": "/scratch/users/twang/vibe-coding-planning/shared/sif-cache/swebench_sweb.eval.x86_64.django_1776_django-16877_latest.sif",
+      "sif_sha256": "afab9c40003fb07b8e0f4c58a0aef61cf0331b008a2201c33d880fd87b7455d4",
+      "status": "audited"
+    },
+    "swebench/sweb.eval.x86_64.matplotlib_1776_matplotlib-20488:latest": {
+      "base_commit_verification_output": "",
+      "base_commit_verified": true,
+      "expected_base_commit": "b7ce415c15eb39b026a097a2865da73fbcf15c9c",
+      "instance_id": "matplotlib__matplotlib-20488",
+      "oci_digest": null,
+      "provenance_strength": "retrospective",
+      "sif_bytes": 2130907136,
+      "sif_path": "/scratch/users/twang/vibe-coding-planning/shared/sif-cache/swebench_sweb.eval.x86_64.matplotlib_1776_matplotlib-20488_latest.sif",
+      "sif_sha256": "c6a6907b0c614b56307b970ec7e3f8a6d809699c2bf8f6033cfc056479db4dab",
+      "status": "audited"
+    },
+    "swebench/sweb.eval.x86_64.sympy_1776_sympy-17655:latest": {
+      "base_commit_verification_output": "",
+      "base_commit_verified": true,
+      "expected_base_commit": "f5e965947af2410ded92cfad987aaf45262ea434",
+      "instance_id": "sympy__sympy-17655",
+      "oci_digest": null,
+      "provenance_strength": "retrospective",
+      "sif_bytes": 996716544,
+      "sif_path": "/scratch/users/twang/vibe-coding-planning/shared/sif-cache/swebench_sweb.eval.x86_64.sympy_1776_sympy-17655_latest.sif",
+      "sif_sha256": "cee75a4415626f922d1d2e13fa010b75c3ead1ee6c8d790c96841a2853978100",
+      "status": "audited"
+    }
+  },
+  "schema_version": 1,
+  "selection_manifest_sha256": "2b30e3fda0276c74e31f977e33d785f7c4fa7e5097c6e161faf7bc9ec33cda4a",
+  "source_manifest_sha256": "bec1150dbf55c29c0893226c20578bee031406d78db305cdfef7b2b80965143a",
+  "summary": {
+    "audited": 4,
+    "base_commit_verified": 4,
+    "missing": 0,
+    "records": 4
+  },
+  "verify_base_commits": true
+}

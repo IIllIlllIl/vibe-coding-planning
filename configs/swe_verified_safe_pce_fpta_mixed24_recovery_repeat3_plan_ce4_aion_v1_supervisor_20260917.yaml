@@ -1,0 +1,23 @@
+schema_version: 1
+session: swe-verified-fpta-r3-plan-ce4-recovery-aion-v1-20260917
+log: .local/hpc-supervisor/swe-verified-fpta-r3-plan-ce4-recovery-aion-v1-20260917.log
+arguments:
+  - --poll-interval
+  - "300"
+  - --slice-time
+  - "00:10:00"
+  - --max-runs
+  - "84"
+  - --state-file
+  - .local/hpc-supervisor/swe-verified-fpta-r3-plan-ce4-recovery-aion-v1-20260917.json
+  - --reclaim-staging
+  - --require-clean-worktree
+  - --batch-script
+  - scripts/hpc_submit_swe_verified_plan_ce_replay.sh
+  - --config
+  - configs/swe_verified_safe_pce_fpta_mixed24_recovery_repeat3_plan_ce4_aion_v1_20260917.yaml
+  - --ulhpc-config
+  - configs/ulhpc_submit_aion.yaml
+  - --job-name
+  - swe-verified-fpta-r3-plan-ce4-recovery-aion-v1-20260917
+  - --submit

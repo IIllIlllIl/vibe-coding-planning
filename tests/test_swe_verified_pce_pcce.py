@@ -11,6 +11,7 @@ import yaml
 
 from src.agents import plan_agent
 from src.environment.source_access import SOURCE_ACCESS_POLICY_VERSION
+from src.optimization.audit import text_sha256
 from src.optimization.hpc.task_batch import TaskFiles
 from src.optimization.checker import CheckerOutputContractError
 from src.exceptions import AgentTaskError, FatalError
@@ -173,6 +174,77 @@ def test_recovered_plan_ce2_config_binds_two_plans_and_supervisor() -> None:
         "scripts/hpc_submit_swe_verified_plan_ce_replay.sh"
     )
     assert "--require-clean-worktree" in arguments
+
+
+def test_recovered_plan_run_manifest_preserves_controller_git_identity(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    snapshot, image_manifest, case = _snapshot(tmp_path)
+    selection = tmp_path / "selection.json"
+    selection.write_text(
+        json.dumps(
+            {
+                "schema_version": 1,
+                "source_manifest_sha256": file_sha256(snapshot / "manifest.json"),
+                "selected_instance_ids": [case.instance_id],
+            }
+        ),
+        encoding="utf-8",
+    )
+    replay = tmp_path / "replay.json"
+    plan = "# Plan\nImplement the focused fix."
+    replay.write_text(
+        json.dumps(
+            {
+                "schema_version": 1,
+                "purpose": "swe_verified_recovered_plan_ce_replay",
+                "source_manifest_sha256": file_sha256(snapshot / "manifest.json"),
+                "selection_manifest_sha256": file_sha256(selection),
+                "image_manifest_sha256": file_sha256(image_manifest),
+                "recovered_plans": [
+                    {
+                        "instance_id": case.instance_id,
+                        "plan": plan,
+                        "plan_sha256": text_sha256(plan),
+                    }
+                ],
+            }
+        ),
+        encoding="utf-8",
+    )
+    config = SimpleNamespace(
+        dataset_snapshot=snapshot,
+        image_manifest=image_manifest,
+        selection_manifest=selection,
+        instance_ids=(case.instance_id,),
+        run_dir=tmp_path / "run",
+        config_path=tmp_path / "config.yaml",
+        hpc=SimpleNamespace(),
+    )
+    config.config_path.write_text("mode: test\n", encoding="utf-8")
+    monkeypatch.setenv("VIBE_PROJECT_GIT_HEAD", "a" * 40)
+    monkeypatch.setattr(
+        _RecoveredPlanExecutor,
+        "execution_fingerprint",
+        lambda *_args: "f" * 64,
+    )
+    monkeypatch.setattr(
+        _RecoveredPlanExecutor,
+        "evaluate",
+        lambda *_args: [
+            {
+                "status": "completed",
+                "evaluator_result": {"task_outcome": "resolved"},
+            }
+        ],
+    )
+
+    from src.swe_verified_pce.plan_replay import run_recovered_plan_ce_replay
+
+    run_recovered_plan_ce_replay(config, replay)
+
+    manifest = json.loads((config.run_dir / "run_manifest.json").read_text())
+    assert manifest["project_git_head"] == "a" * 40
 
 
 def test_safe_pce_smoke_uses_direct_plan_prompt_and_retained_code_prompt() -> None:

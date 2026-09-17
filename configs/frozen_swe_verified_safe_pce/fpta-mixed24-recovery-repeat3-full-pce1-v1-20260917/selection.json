@@ -1,0 +1,49 @@
+{
+  "dataset": "SWE-bench/SWE-bench_Verified",
+  "dataset_revision": "91aa3ed51b709be6457e12d00300a6a596d4c6a3",
+  "purpose": "complete_repeat3_slot_without_a_valid_plan_checkpoint",
+  "recovery_contract": {
+    "historical_outcome_is_not_overwritten": true,
+    "missing_slot": "repeat_3_of_3",
+    "required_next_phases": [
+      "plan",
+      "code",
+      "evaluate"
+    ]
+  },
+  "repository_distribution": {
+    "django/django": 1
+  },
+  "schema_version": 1,
+  "selected_cases": [
+    {
+      "difficulty": "15 min - 1 hour",
+      "existing_safe_pce_resolved": true,
+      "fpta_deepseek_v3_outcomes": "RUR",
+      "instance_id": "django__django-13279",
+      "repo": "django/django",
+      "row_sha256": "af54bf841c66218626234b2f1f83e9fce101f3cc795831b9ccdb5d04ea9277ac",
+      "split": "train"
+    }
+  ],
+  "selected_count": 1,
+  "selected_instance_ids": [
+    "django__django-13279"
+  ],
+  "selected_instance_ids_sha256": "c70969171e97a8229d7334d6794f5162bd6a86165f57df82fbae3f879a2bfbc8",
+  "selection_id": "fpta-mixed24-recovery-repeat3-full-pce1-v1-20260917",
+  "selection_policy": {
+    "outcome_independent": false,
+    "selection_reason": "operationally_incomplete_repeat_slot_without_valid_plan_checkpoint",
+    "use": "within_task_proxy_recovery_only"
+  },
+  "source_authorities": {
+    "parent_images": "configs/frozen_swe_verified_safe_pce/fpta-mixed24-expansion-v1-20260916/images.json",
+    "parent_images_sha256": "73f9b9ab39494cb1426372a6627d8aba178ae6be2292b76dc9c4a47cf6e97c1c",
+    "parent_selection": "configs/frozen_swe_verified_safe_pce/fpta-mixed24-expansion-v1-20260916/selection.json",
+    "parent_selection_sha256": "d828f72f28576f09caeaf676ec5660f21f561d2207721d16ec41829426c774e9"
+  },
+  "source_instance_count": 500,
+  "source_instances_sha256": "8d6f5c64fe448432264ced781ac9bc987fc38b668ade6de39592a23ad1a9ef1f",
+  "source_manifest_sha256": "bec1150dbf55c29c0893226c20578bee031406d78db305cdfef7b2b80965143a"
+}

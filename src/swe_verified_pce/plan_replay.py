@@ -6,6 +6,7 @@ from collections import Counter
 from datetime import datetime, timezone
 import hashlib
 import json
+import os
 from pathlib import Path
 from typing import Any, Sequence
 
@@ -144,6 +145,7 @@ def run_recovered_plan_ce_replay(
     run_manifest = {
         "schema_version": 1,
         "mode": "swe_verified_recovered_plan_ce_replay",
+        "project_git_head": os.environ.get("VIBE_PROJECT_GIT_HEAD", ""),
         "contains_plan_agent": False,
         "contains_checker": False,
         "contains_code_agent": True,

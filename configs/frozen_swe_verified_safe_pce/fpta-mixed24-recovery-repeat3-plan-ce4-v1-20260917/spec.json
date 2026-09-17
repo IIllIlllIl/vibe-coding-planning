@@ -1,0 +1,52 @@
+{
+  "mode": "recovered_plan_ce",
+  "purpose": "complete_repeat3_slots_with_preserved_plans_and_missing_code_or_evaluation",
+  "recovery_contract": {
+    "historical_outcome_is_not_overwritten": true,
+    "missing_slot": "repeat_3_of_3",
+    "planner_is_not_rerun": true,
+    "required_next_phases": [
+      "code",
+      "evaluate"
+    ]
+  },
+  "recovery_id": "fpta-mixed24-recovery-repeat3-plan-ce4-v1-20260917",
+  "schema_version": 1,
+  "selected_instances": [
+    {
+      "instance_id": "django__django-13512",
+      "plan_checkpoint_sha256": "51fd4a9602fd528171c1bcc524009b652d09e4e4888725df38429e9e0fbf5f2c",
+      "plan_sha256": "72e01ce3a3598da637a3cac801b536c48e9081c77463c4959409acce0a722d47",
+      "source_task_index": 4
+    },
+    {
+      "instance_id": "django__django-16877",
+      "plan_checkpoint_sha256": "f43355aa12c9df231adf124073ef00a7e63933735168400d86c4e160379de7d9",
+      "plan_sha256": "3f17fc637ae1b7307b028e3a8735ba621d5bc02aeace8578d6ebfa440e5d8672",
+      "source_task_index": 6
+    },
+    {
+      "instance_id": "matplotlib__matplotlib-20488",
+      "plan_checkpoint_sha256": "f02303bd32e4e1cbbcba68dda642d99a1b4238f910ec1a0936d3751e51d8946b",
+      "plan_sha256": "acb2e1097e26af9c1bf882cdb0267823b70a81d0a2a2fdafa78f178f1d1f6b3d",
+      "source_task_index": 7
+    },
+    {
+      "instance_id": "sympy__sympy-17655",
+      "plan_checkpoint_sha256": "2afb9cc76e9aa8c3f4e4eaf7f8f85882d5943d58b150cfa1ba92e96ba2af20f4",
+      "plan_sha256": "e074d97dd8be51b25298deb7d7af4fd6d18a8ed8a27ab47f8fd383dd0390c0bd",
+      "source_task_index": 23
+    }
+  ],
+  "selection_policy": {
+    "outcome_independent": false,
+    "selection_reason": "operationally_incomplete_repeat_slot_with_valid_preserved_plan",
+    "use": "within_task_proxy_recovery_only"
+  },
+  "source_run": {
+    "execution_fingerprint": "7d5e29e56d703ce43b1097d857d04537191eaca31af2f17574aef823231ad196",
+    "remote_run_path": "/scratch/users/twang/vibe-coding-planning/run_state/output/SWE-bench_Verified/swe-verified-pce-runs/development/fpta-mixed24-expansion-repeat3-aion-v2-20260917",
+    "run_id": "fpta-mixed24-expansion-repeat3-aion-v2-20260917",
+    "run_manifest_sha256": "67c6bdd673aa931e1107ef21e637aa737ecd6fb2904e8ad516903ce9d5411eee"
+  }
+}

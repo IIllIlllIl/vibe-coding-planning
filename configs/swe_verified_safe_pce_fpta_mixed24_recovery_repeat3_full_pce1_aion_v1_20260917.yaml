@@ -1,0 +1,82 @@
+mode: swe_verified_pce
+purpose: fpta_mixed24_repeat3_full_pce_recovery_without_plan_checkpoint
+
+paths:
+  dataset_snapshot: output/SWE-bench_Verified/swe-verified-pce-inputs/20260831_verified500_91aa3ed5
+  image_manifest: configs/frozen_swe_verified_safe_pce/fpta-mixed24-recovery-repeat3-full-pce1-v1-20260917/images.json
+  selection_manifest: configs/frozen_swe_verified_safe_pce/fpta-mixed24-recovery-repeat3-full-pce1-v1-20260917/selection.json
+  prompt_source_config: configs/polybench_pce_hpc_formal_clean_20260825.yaml
+  plan_prompt_source_config: configs/prompts/swe_verified_safe_pce_planner_v6_anchor_ablation_20260913.yaml
+  code_prompt_source_config: configs/prompts/swe_verified_safe_pce_code_v1_20260913.yaml
+  run_dir: output/SWE-bench_Verified/swe-verified-pce-runs/development/fpta-mixed24-recovery-repeat3-full-pce1-aion-v1-20260917
+
+plan:
+  model: deepseek-v4-flash
+  api_base: https://api.deepseek.com
+  api_key_env: DEEPSEEK_API_KEY
+  temperature: 1.0
+  max_steps: 0
+  cost_limit: 0.0
+  timeout: 1800
+  max_attempts: 3
+  submission_protocol: direct_human_markdown_v5
+
+code:
+  model: deepseek-v4-flash
+  api_base: https://api.deepseek.com
+  api_key_env: DEEPSEEK_API_KEY
+  temperature: 0.0
+  max_steps: 0
+  cost_limit: 0.0
+  timeout: 1800
+  max_attempts: 3
+
+docker:
+  workdir: /testbed
+  timeout: 1800
+  min_free_gb: 20
+  max_cached_images: 75
+
+container:
+  runtime: apptainer
+  module: tools/Apptainer
+  sif_cache_dir: /scratch/users/${USER}/vibe-coding-planning/shared/sif-cache
+  writable_tmpfs: true
+
+hpc:
+  submit: true
+  partition: batch
+  cpus_per_task: 1
+  mem: 1750M
+  time: "02:00:00"
+  poll_interval_seconds: 300
+  task_output_grace_seconds: 300
+  missing_task_grace_seconds: 600
+  max_task_attempts: 3
+  remote_env_file: ~/.config/vibe-coding-planning/deepseek.env
+  python_module: lang/Python/3.11
+  container_module: tools/Apptainer
+  python_bin: python3
+  job_name_prefix: swe-verified-fpta-r3-full-pce1-recovery-aion-v1-20260917
+  worker_config_path: configs/swe_verified_safe_pce_fpta_mixed24_recovery_repeat3_full_pce1_aion_v1_20260917.yaml
+
+evaluator:
+  slurm_timeout_outcome: unknown
+
+experiment_contract:
+  status: launch_authorized
+  cluster: aion
+  recovery_run: true
+  budget:
+    cases: 1
+    worker_memory: 1750M
+    slurm_worker_walltime: "02:00:00"
+  cases: 1
+  source_repeat: 3
+  planner_temperature: 1.0
+  coder_temperature: 0.0
+  historical_outcome_is_not_overwritten: true
+  selection_manifest_sha256: 3e6709fcfff998669a91117f3b3782980f020e067c95e3913443b2105135a31b
+  image_manifest_sha256: d0ee12b47f7672c28175740e0f33bf5145534df38bc4d7efa1214a85710bb751
+  stopping: case_terminal_or_operational_attempts_exhausted
+  operational_incomplete_policy: never_relabel_as_unresolved

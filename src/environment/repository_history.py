@@ -340,7 +340,7 @@ def install_repository_history_bundle(
         if result.returncode != 0:
             raise FatalError(
                 "repository history install verification failed: "
-                + (result.stdout + result.stderr)[:500]
+                + (result.stdout + result.stderr)[-2000:]
             )
     if results[-1]["output"].strip():
         raise FatalError("repository history bundle exposes non-ancestor commits")

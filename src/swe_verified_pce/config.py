@@ -187,6 +187,11 @@ def load_swe_verified_pce_config(
         and budget.get("worker_memory") == "1750M"
         and hpc.mem == "1750M"
     )
+    reviewed_recovery_walltime = (
+        experiment_contract.get("recovery_run") is True
+        and budget.get("slurm_worker_walltime") == hpc.time
+        and hpc.time == "02:00:00"
+    )
     if hpc.cpus_per_task != 1 or (
         hpc.mem != "4G" and not reviewed_aion_low_memory_pilot
     ):
@@ -194,7 +199,7 @@ def load_swe_verified_pce_config(
             "SWE-Verified PCE workers must remain 1 CPU / 4G unless an Aion "
             "experiment contract explicitly reviews 1750M"
         )
-    if hpc.time not in {"00:45:00", "01:00:00"}:
+    if hpc.time not in {"00:45:00", "01:00:00"} and not reviewed_recovery_walltime:
         raise ValueError(
             "SWE-Verified PCE workers require a reviewed 45- or 60-minute walltime"
         )

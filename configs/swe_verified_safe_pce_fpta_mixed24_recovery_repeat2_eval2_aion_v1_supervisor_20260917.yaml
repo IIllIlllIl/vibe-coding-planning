@@ -1,0 +1,29 @@
+schema_version: 1
+session: swe-verified-fpta-r2-eval2-recovery-aion-v1-20260917
+log: .local/hpc-supervisor/swe-verified-fpta-r2-eval2-recovery-aion-v1-20260917.log
+arguments:
+  - --poll-interval
+  - "300"
+  - --slice-time
+  - "00:10:00"
+  - --max-runs
+  - "84"
+  - --state-file
+  - .local/hpc-supervisor/swe-verified-fpta-r2-eval2-recovery-aion-v1-20260917.json
+  - --reclaim-staging
+  - --require-clean-worktree
+  - --batch-script
+  - scripts/hpc_submit_swe_verified_pce.sh
+  - --config
+  - configs/swe_verified_safe_pce_fpta_mixed24_recovery_repeat2_eval2_aion_v1_20260917.yaml
+  - --evaluator-repair-id
+  - fpta-mixed24-r2-eval2-recovery-v1-20260917
+  - --evaluator-repair-instance
+  - django__django-14559
+  - --evaluator-repair-instance
+  - django__django-16877
+  - --ulhpc-config
+  - configs/ulhpc_submit_aion.yaml
+  - --job-name
+  - swe-verified-fpta-r2-eval2-recovery-aion-v1-20260917
+  - --submit

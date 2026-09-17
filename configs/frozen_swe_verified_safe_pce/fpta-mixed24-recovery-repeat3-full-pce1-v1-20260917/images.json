@@ -1,0 +1,32 @@
+{
+  "created_at": "2026-09-17T12:11:24.212762+00:00",
+  "manifest_id": "b87224b3de39b3c3ee12a7bc4b17fc70d0489ab3eb9e90db3bcdc6d8ca4fd9da",
+  "parent_image_manifest": "configs/frozen_swe_verified_safe_pce/fpta-mixed24-expansion-v1-20260916/images.json",
+  "parent_image_manifest_sha256": "73f9b9ab39494cb1426372a6627d8aba178ae6be2292b76dc9c4a47cf6e97c1c",
+  "projection_policy": "exact selected records copied without changing frozen SIF identity",
+  "purpose": "swe_verified_sif_subset_projection_for_pce_recovery",
+  "records": {
+    "swebench/sweb.eval.x86_64.django_1776_django-13279:latest": {
+      "base_commit_verification_output": "",
+      "base_commit_verified": true,
+      "expected_base_commit": "6e9c5ee88fc948e05b4a7d9f82a8861ed2b0343d",
+      "instance_id": "django__django-13279",
+      "oci_digest": null,
+      "provenance_strength": "retrospective",
+      "sif_bytes": 1069252608,
+      "sif_path": "/scratch/users/twang/vibe-coding-planning/shared/sif-cache/swebench_sweb.eval.x86_64.django_1776_django-13279_latest.sif",
+      "sif_sha256": "508937a34557f90c805e277e6f9c259f20cb1d5292507e9e5ea5f25eeea5beb6",
+      "status": "audited"
+    }
+  },
+  "schema_version": 1,
+  "selection_manifest_sha256": "3e6709fcfff998669a91117f3b3782980f020e067c95e3913443b2105135a31b",
+  "source_manifest_sha256": "bec1150dbf55c29c0893226c20578bee031406d78db305cdfef7b2b80965143a",
+  "summary": {
+    "audited": 1,
+    "base_commit_verified": 1,
+    "missing": 0,
+    "records": 1
+  },
+  "verify_base_commits": true
+}

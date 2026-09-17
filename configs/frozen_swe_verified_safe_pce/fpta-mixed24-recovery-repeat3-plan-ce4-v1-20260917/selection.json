@@ -1,0 +1,81 @@
+{
+  "dataset": "SWE-bench/SWE-bench_Verified",
+  "dataset_revision": "91aa3ed51b709be6457e12d00300a6a596d4c6a3",
+  "purpose": "complete_repeat3_slots_with_preserved_plans_and_missing_code_or_evaluation",
+  "recovery_contract": {
+    "historical_outcome_is_not_overwritten": true,
+    "missing_slot": "repeat_3_of_3",
+    "planner_is_not_rerun": true,
+    "required_next_phases": [
+      "code",
+      "evaluate"
+    ]
+  },
+  "repository_distribution": {
+    "django/django": 2,
+    "matplotlib/matplotlib": 1,
+    "sympy/sympy": 1
+  },
+  "schema_version": 1,
+  "selected_cases": [
+    {
+      "difficulty": "<15 min fix",
+      "existing_safe_pce_resolved": false,
+      "fpta_deepseek_v3_outcomes": "UUR",
+      "instance_id": "django__django-13512",
+      "repo": "django/django",
+      "row_sha256": "f7442a13b63c44ee30fb844f7c606ba4ea4cc3ee917c78fc52e97d6bce8fc3b7",
+      "split": "train"
+    },
+    {
+      "difficulty": "15 min - 1 hour",
+      "existing_safe_pce_resolved": false,
+      "fpta_deepseek_v3_outcomes": "URU",
+      "instance_id": "django__django-16877",
+      "repo": "django/django",
+      "row_sha256": "bcd239c1c3a1171529829bcff548c1a522b4ac64a13d32a6936f36055df7890c",
+      "split": "train"
+    },
+    {
+      "difficulty": "15 min - 1 hour",
+      "existing_safe_pce_resolved": true,
+      "fpta_deepseek_v3_outcomes": "URU",
+      "instance_id": "matplotlib__matplotlib-20488",
+      "repo": "matplotlib/matplotlib",
+      "row_sha256": "7e889c587a45f9977bda2a5b3f695f1660581b075ba18a46500f2b1b7e34abc7",
+      "split": "train"
+    },
+    {
+      "difficulty": "<15 min fix",
+      "existing_safe_pce_resolved": true,
+      "fpta_deepseek_v3_outcomes": "URR",
+      "instance_id": "sympy__sympy-17655",
+      "repo": "sympy/sympy",
+      "row_sha256": "c26a5dbebd19b8e86e0ff31594463ba1d3b40e8a4927f8983cdf8857b6722413",
+      "split": "train"
+    }
+  ],
+  "selected_count": 4,
+  "selected_instance_ids": [
+    "django__django-13512",
+    "django__django-16877",
+    "matplotlib__matplotlib-20488",
+    "sympy__sympy-17655"
+  ],
+  "selected_instance_ids_sha256": "04d4757b39cc27a4026e41d8f4cc5ad47542fc33367baa1f726302b71901f59f",
+  "selection_id": "fpta-mixed24-recovery-repeat3-plan-ce4-v1-20260917",
+  "selection_policy": {
+    "outcome_independent": false,
+    "selection_reason": "operationally_incomplete_repeat_slot_with_valid_preserved_plan",
+    "use": "within_task_proxy_recovery_only"
+  },
+  "source_authorities": {
+    "parent_images": "configs/frozen_swe_verified_safe_pce/fpta-mixed24-expansion-v1-20260916/images.json",
+    "parent_images_sha256": "73f9b9ab39494cb1426372a6627d8aba178ae6be2292b76dc9c4a47cf6e97c1c",
+    "parent_selection": "configs/frozen_swe_verified_safe_pce/fpta-mixed24-expansion-v1-20260916/selection.json",
+    "parent_selection_sha256": "d828f72f28576f09caeaf676ec5660f21f561d2207721d16ec41829426c774e9"
+  },
+  "source_instance_count": 500,
+  "source_instances_sha256": "8d6f5c64fe448432264ced781ac9bc987fc38b668ade6de39592a23ad1a9ef1f",
+  "source_manifest_sha256": "bec1150dbf55c29c0893226c20578bee031406d78db305cdfef7b2b80965143a"
+}
