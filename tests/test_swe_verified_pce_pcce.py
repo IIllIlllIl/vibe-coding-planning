@@ -2157,6 +2157,279 @@ def test_fpta_mixed24_aion_pilot_has_explicit_low_memory_contract() -> None:
         assert raw["experiment_contract"]["budget"]["worker_memory"] == "1750M"
 
 
+def test_within_task_mixed_pool_requires_three_terminal_mixed_outcomes() -> None:
+    manifest = json.loads(
+        Path(
+            "configs/frozen_swe_verified_safe_pce/"
+            "within-task-mixed-outcome-pool-v1-20260917/manifest.json"
+        ).read_text(encoding="utf-8")
+    )
+
+    assert manifest["case_count"] == 5
+    assert len(manifest["cases"]) == 5
+    assert manifest["inclusion_policy"]["operational_failures_are_outcomes"] is False
+    incomplete = manifest["operationally_incomplete_cases"]
+    assert [case["instance_id"] for case in incomplete] == ["django__django-13279"]
+    assert incomplete[0]["scientific_outcome_assigned_to_missing_slot"] is False
+    assert incomplete[0]["eligible_for_mixed_pool"] is False
+    for case in manifest["cases"]:
+        observations = case["observations"]
+        assert len(observations) == 3
+        states = {observation["outcome"] for observation in observations}
+        assert states == {"resolved", "unresolved"}
+        assert case["outcome_sequence"] == "".join(
+            "R" if observation["outcome"] == "resolved" else "U"
+            for observation in observations
+        )
+        assert all(observation["plan_sha256"] for observation in observations)
+        assert all(observation["artifact_sha256"] for observation in observations)
+
+
+def test_remaining_fpta_expansion_is_exhaustive_and_disjoint() -> None:
+    spec = json.loads(
+        Path(
+            "configs/frozen_swe_verified_safe_pce/"
+            "fpta-mixed58-remaining-v1-20260917/spec.json"
+        ).read_text(encoding="utf-8")
+    )
+    selected = spec["selected_instance_ids"]
+    outcomes = spec["reviewed_fpta_outcomes"]
+    prior_paths = (
+        Path(
+            "configs/frozen_swe_verified_safe_pce/"
+            "fpta-mixed12-repeat-pilot-v1-20260916/selection.json"
+        ),
+        Path(
+            "configs/frozen_swe_verified_safe_pce/"
+            "fpta-mixed24-expansion-v1-20260916/selection.json"
+        ),
+    )
+    prior = {
+        instance_id
+        for path in prior_paths
+        for instance_id in json.loads(path.read_text(encoding="utf-8"))[
+            "selected_instance_ids"
+        ]
+    }
+
+    assert spec["status"] == "prepared_not_launched"
+    assert len(selected) == len(set(selected)) == 58
+    assert set(selected) == set(outcomes)
+    assert not set(selected) & prior
+    assert sum(value.count("R") == 1 for value in outcomes.values()) == 32
+    assert sum(value.count("R") == 2 for value in outcomes.values()) == 26
+
+    formal = json.loads(
+        Path(spec["source_authorities"]["formal400_selection"]["path"]).read_text(
+            encoding="utf-8"
+        )
+    )
+    formal_ids = set(
+        formal["train_instance_ids"] + formal["validation_instance_ids"]
+    )
+    clean = {
+        row["instance_id"]: row
+        for row in (
+            json.loads(line)
+            for line in Path(
+                spec["source_authorities"]["clean_cases"]["path"]
+            ).read_text(encoding="utf-8").splitlines()
+            if line.strip()
+        )
+    }
+    assert set(selected) <= formal_ids
+    assert set(selected) <= set(clean)
+    assert all(clean[instance_id]["resolved"] for instance_id in selected)
+
+    selection = json.loads(
+        Path(
+            "configs/frozen_swe_verified_safe_pce/"
+            "fpta-mixed58-remaining-v1-20260917/selection.json"
+        ).read_text(encoding="utf-8")
+    )
+    images = json.loads(
+        Path(
+            "configs/frozen_swe_verified_safe_pce/"
+            "fpta-mixed58-remaining-v1-20260917/images.json"
+        ).read_text(encoding="utf-8")
+    )
+    assert selection["selected_instance_ids"] == selected
+    assert selection["source_authorities"]["fpta_reports"] == spec[
+        "source_authorities"
+    ]["fpta_reports"]
+    assert images["summary"] == {
+        "records": 58,
+        "audited": 58,
+        "missing": 0,
+        "base_commit_verified": 58,
+    }
+
+
+def test_remaining_fpta_expansion_run_configs_are_launch_authorized() -> None:
+    for repeat in (2, 3):
+        config_path = Path(
+            "configs/swe_verified_safe_pce_fpta_mixed58_remaining_"
+            f"repeat{repeat}_aion_v1_20260917.yaml"
+        )
+        config = load_swe_verified_pce_config(config_path, require_api_keys=False)
+        raw = yaml.safe_load(config_path.read_text(encoding="utf-8"))
+        supervisor_path = Path(
+            "configs/swe_verified_safe_pce_fpta_mixed58_remaining_"
+            f"repeat{repeat}_aion_v1_supervisor_20260917.yaml"
+        )
+        supervisor = yaml.safe_load(supervisor_path.read_text(encoding="utf-8"))
+
+        assert len(config.instance_ids) == 58
+        assert config.hpc.cpus_per_task == 1
+        assert config.hpc.mem == "1750M"
+        assert config.hpc.time == "01:00:00"
+        assert raw["experiment_contract"]["status"] == "launch_authorized"
+        assert raw["experiment_contract"]["additional_repeat_index"] == repeat
+        assert raw["experiment_contract"]["budget"]["workers_in_this_run"] == 58
+        assert (
+            raw["experiment_contract"]["budget"][
+                "combined_additional_pce_workers"
+            ]
+            == 116
+        )
+        assert raw["experiment_contract"]["budget"]["campaign_cases"] == 80
+        assert (
+            raw["experiment_contract"]["budget"][
+                "campaign_additional_pce_workers"
+            ]
+            == 160
+        )
+        assert raw["experiment_contract"]["budget"]["campaign_wall_clock_budget"] == (
+            "14:00:00"
+        )
+        assert raw["experiment_contract"]["selection_manifest_sha256"] == (
+            "c5d51aa396bd5e42a8878c6fde1346be1401fb22a835dfc4acf4b4b2d173b5cf"
+        )
+        arguments = supervisor["arguments"]
+        assert arguments[arguments.index("--config") + 1] == str(config_path)
+        assert arguments[arguments.index("--ulhpc-config") + 1] == (
+            "configs/ulhpc_submit_aion.yaml"
+        )
+
+
+def test_fpta_disagreement_expansion_is_opposite_and_disjoint() -> None:
+    spec = json.loads(
+        Path(
+            "configs/frozen_swe_verified_safe_pce/"
+            "fpta-disagreement22-v1-20260917/spec.json"
+        ).read_text(encoding="utf-8")
+    )
+    selected = spec["selected_instance_ids"]
+    outcomes = spec["reviewed_fpta_outcomes"]
+    prior_paths = (
+        Path(
+            "configs/frozen_swe_verified_safe_pce/"
+            "fpta-mixed12-repeat-pilot-v1-20260916/selection.json"
+        ),
+        Path(
+            "configs/frozen_swe_verified_safe_pce/"
+            "fpta-mixed24-expansion-v1-20260916/selection.json"
+        ),
+        Path(
+            "configs/frozen_swe_verified_safe_pce/"
+            "fpta-mixed58-remaining-v1-20260917/selection.json"
+        ),
+    )
+    prior = {
+        instance_id
+        for path in prior_paths
+        for instance_id in json.loads(path.read_text(encoding="utf-8"))[
+            "selected_instance_ids"
+        ]
+    }
+    clean = {
+        row["instance_id"]: row
+        for row in (
+            json.loads(line)
+            for line in Path(
+                spec["source_authorities"]["clean_cases"]["path"]
+            ).read_text(encoding="utf-8").splitlines()
+            if line.strip()
+        )
+    }
+
+    assert spec["fpta_outcome_requirement"] == "cross_authority_disagreement"
+    assert len(selected) == len(set(selected)) == 22
+    assert set(selected) == set(outcomes)
+    assert not set(selected) & prior
+    assert sum(value == "UUU" for value in outcomes.values()) == 19
+    assert sum(value == "RRR" for value in outcomes.values()) == 3
+    assert all(
+        (outcomes[instance_id] == "UUU" and clean[instance_id]["resolved"])
+        or (outcomes[instance_id] == "RRR" and not clean[instance_id]["resolved"])
+        for instance_id in selected
+    )
+
+    selection = json.loads(
+        Path(
+            "configs/frozen_swe_verified_safe_pce/"
+            "fpta-disagreement22-v1-20260917/selection.json"
+        ).read_text(encoding="utf-8")
+    )
+    images = json.loads(
+        Path(
+            "configs/frozen_swe_verified_safe_pce/"
+            "fpta-disagreement22-v1-20260917/images.json"
+        ).read_text(encoding="utf-8")
+    )
+    assert selection["selected_instance_ids"] == selected
+    assert selection["fpta_outcome_requirement"] == (
+        "cross_authority_disagreement"
+    )
+    assert len(selection["repository_distribution"]) == 11
+    assert images["summary"] == {
+        "records": 22,
+        "audited": 22,
+        "missing": 0,
+        "base_commit_verified": 22,
+    }
+
+
+def test_fpta_disagreement_run_configs_are_launch_authorized() -> None:
+    for repeat in (2, 3):
+        config_path = Path(
+            "configs/swe_verified_safe_pce_fpta_disagreement22_"
+            f"repeat{repeat}_aion_v1_20260917.yaml"
+        )
+        config = load_swe_verified_pce_config(config_path, require_api_keys=False)
+        raw = yaml.safe_load(config_path.read_text(encoding="utf-8"))
+        supervisor_path = Path(
+            "configs/swe_verified_safe_pce_fpta_disagreement22_"
+            f"repeat{repeat}_aion_v1_supervisor_20260917.yaml"
+        )
+        supervisor = yaml.safe_load(supervisor_path.read_text(encoding="utf-8"))
+
+        assert len(config.instance_ids) == 22
+        assert config.hpc.cpus_per_task == 1
+        assert config.hpc.mem == "1750M"
+        assert config.hpc.time == "01:00:00"
+        assert raw["experiment_contract"]["status"] == "launch_authorized"
+        assert raw["experiment_contract"]["additional_repeat_index"] == repeat
+        assert raw["experiment_contract"]["budget"]["workers_in_this_run"] == 22
+        assert (
+            raw["experiment_contract"]["budget"][
+                "campaign_additional_pce_workers"
+            ]
+            == 160
+        )
+        assert raw["experiment_contract"]["budget"]["campaign_wall_clock_budget"] == (
+            "14:00:00"
+        )
+        assert raw["experiment_contract"]["selection_manifest_sha256"] == (
+            "4ee36f698aabbe5139ee2d8f86d9da176dfdaa1590847a08e7e324f4a6f7da24"
+        )
+        arguments = supervisor["arguments"]
+        assert arguments[arguments.index("--config") + 1] == str(config_path)
+        assert arguments[arguments.index("--ulhpc-config") + 1] == (
+            "configs/ulhpc_submit_aion.yaml"
+        )
+
+
 def test_aion_low_memory_requires_matching_experiment_contract(
     tmp_path: Path,
 ) -> None:

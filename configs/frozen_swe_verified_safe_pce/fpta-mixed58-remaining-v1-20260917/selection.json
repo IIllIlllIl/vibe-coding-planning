@@ -1,0 +1,653 @@
+{
+  "dataset": "SWE-bench/SWE-bench_Verified",
+  "dataset_revision": "91aa3ed51b709be6457e12d00300a6a596d4c6a3",
+  "purpose": "exhaust_remaining_within_task_plan_contrast_candidates_with_two_additional_repeats",
+  "repeat_design": {
+    "additional_pce_runs_per_case": 2,
+    "comparison_unit": "within-task Plan plus downstream Code/Evaluate outcome",
+    "existing_safe_pce_runs_per_case": 1,
+    "new_coder_temperature": 0.0,
+    "new_planner_temperature": 1.0,
+    "target_total_pce_runs_per_case": 3
+  },
+  "repository_distribution": {
+    "django/django": 41,
+    "matplotlib/matplotlib": 1,
+    "pydata/xarray": 1,
+    "pytest-dev/pytest": 3,
+    "scikit-learn/scikit-learn": 5,
+    "sphinx-doc/sphinx": 3,
+    "sympy/sympy": 4
+  },
+  "schema_version": 1,
+  "selected_cases": [
+    {
+      "difficulty": "15 min - 1 hour",
+      "existing_safe_pce_resolved": true,
+      "fpta_deepseek_v3_outcomes": "URU",
+      "instance_id": "django__django-11206",
+      "repo": "django/django",
+      "row_sha256": "5cf13ebd878efa2ea847dfee9f0d65bb05f451c42bd21a2be5e86941c36b11af",
+      "split": "validation"
+    },
+    {
+      "difficulty": "<15 min fix",
+      "existing_safe_pce_resolved": true,
+      "fpta_deepseek_v3_outcomes": "UUR",
+      "instance_id": "django__django-11239",
+      "repo": "django/django",
+      "row_sha256": "8b920e9bb1571118d823b86673d053dff083cf3c39a1e07ca0a836a9fa419873",
+      "split": "validation"
+    },
+    {
+      "difficulty": "15 min - 1 hour",
+      "existing_safe_pce_resolved": true,
+      "fpta_deepseek_v3_outcomes": "RUR",
+      "instance_id": "django__django-11276",
+      "repo": "django/django",
+      "row_sha256": "8297e492fd6025337d1c1690e961d9f9c4ab6257bbba818f318f2e64744c7a7d",
+      "split": "train"
+    },
+    {
+      "difficulty": "15 min - 1 hour",
+      "existing_safe_pce_resolved": true,
+      "fpta_deepseek_v3_outcomes": "UUR",
+      "instance_id": "django__django-11551",
+      "repo": "django/django",
+      "row_sha256": "e14ffb0715726ef0d4c8d0fe7760fd80a16043b7a0c2dc9aa931f2a232f63227",
+      "split": "train"
+    },
+    {
+      "difficulty": "15 min - 1 hour",
+      "existing_safe_pce_resolved": true,
+      "fpta_deepseek_v3_outcomes": "RUR",
+      "instance_id": "django__django-11749",
+      "repo": "django/django",
+      "row_sha256": "3010856b49291af01f4a78cdb91d9f70f2e8e5c88940c087723be8b2d81c6a66",
+      "split": "train"
+    },
+    {
+      "difficulty": "<15 min fix",
+      "existing_safe_pce_resolved": true,
+      "fpta_deepseek_v3_outcomes": "RUR",
+      "instance_id": "django__django-11951",
+      "repo": "django/django",
+      "row_sha256": "df4343b33839a813b4feb22b21e916793fa7c0b1dccff4b6922942bf74375aec",
+      "split": "train"
+    },
+    {
+      "difficulty": "<15 min fix",
+      "existing_safe_pce_resolved": true,
+      "fpta_deepseek_v3_outcomes": "URU",
+      "instance_id": "django__django-11964",
+      "repo": "django/django",
+      "row_sha256": "9a1d30d5c3dcc5424cfbd034436bc36a804891f6890c3408208f4bc00ed6402a",
+      "split": "train"
+    },
+    {
+      "difficulty": "<15 min fix",
+      "existing_safe_pce_resolved": true,
+      "fpta_deepseek_v3_outcomes": "RRU",
+      "instance_id": "django__django-12209",
+      "repo": "django/django",
+      "row_sha256": "584d8c18b443f9ffce16b4f4d1f18fcc63c8be74c7eca19de34a5f905bf0dccd",
+      "split": "train"
+    },
+    {
+      "difficulty": "15 min - 1 hour",
+      "existing_safe_pce_resolved": true,
+      "fpta_deepseek_v3_outcomes": "URU",
+      "instance_id": "django__django-12262",
+      "repo": "django/django",
+      "row_sha256": "144160660b3e379ed645123e7ae4fff017e8cc3afee680eef9d58868b73c8fe5",
+      "split": "train"
+    },
+    {
+      "difficulty": "<15 min fix",
+      "existing_safe_pce_resolved": true,
+      "fpta_deepseek_v3_outcomes": "RUR",
+      "instance_id": "django__django-12276",
+      "repo": "django/django",
+      "row_sha256": "5669c5a794f840b3f27112175478cba3a69ca8bada391a902be30d9a0096860f",
+      "split": "train"
+    },
+    {
+      "difficulty": "1-4 hours",
+      "existing_safe_pce_resolved": true,
+      "fpta_deepseek_v3_outcomes": "RUR",
+      "instance_id": "django__django-12708",
+      "repo": "django/django",
+      "row_sha256": "0e5ad4f389585335a08d833747b1c45e65515a1bded6e9f53155ba54d510d93b",
+      "split": "train"
+    },
+    {
+      "difficulty": "15 min - 1 hour",
+      "existing_safe_pce_resolved": true,
+      "fpta_deepseek_v3_outcomes": "UUR",
+      "instance_id": "django__django-12858",
+      "repo": "django/django",
+      "row_sha256": "03b389ad92a9de9abf8094d37714c8049f7cf3ef861772407d60507e9c9eccbd",
+      "split": "train"
+    },
+    {
+      "difficulty": "15 min - 1 hour",
+      "existing_safe_pce_resolved": true,
+      "fpta_deepseek_v3_outcomes": "RRU",
+      "instance_id": "django__django-13012",
+      "repo": "django/django",
+      "row_sha256": "6c3e3807b06f4470434c24f0a3a5d611a18664910e7d7ab2667a906767aff967",
+      "split": "train"
+    },
+    {
+      "difficulty": "15 min - 1 hour",
+      "existing_safe_pce_resolved": true,
+      "fpta_deepseek_v3_outcomes": "URU",
+      "instance_id": "django__django-13028",
+      "repo": "django/django",
+      "row_sha256": "63a94d65eee49289cd4f2cb99b3e74333a259e55e18b84d0d4dc3a82d68e3a9e",
+      "split": "train"
+    },
+    {
+      "difficulty": "1-4 hours",
+      "existing_safe_pce_resolved": true,
+      "fpta_deepseek_v3_outcomes": "UUR",
+      "instance_id": "django__django-13449",
+      "repo": "django/django",
+      "row_sha256": "c783e6104d9e345d7c3b7e0209c3f221a88b9377729d6bb4e07eaac21638b08e",
+      "split": "train"
+    },
+    {
+      "difficulty": "15 min - 1 hour",
+      "existing_safe_pce_resolved": true,
+      "fpta_deepseek_v3_outcomes": "URU",
+      "instance_id": "django__django-13810",
+      "repo": "django/django",
+      "row_sha256": "eefa99abfb88d45d3b1960b97bb4433ebd1bc7eef2cf0656824bda0e2c4ea126",
+      "split": "train"
+    },
+    {
+      "difficulty": "15 min - 1 hour",
+      "existing_safe_pce_resolved": true,
+      "fpta_deepseek_v3_outcomes": "UUR",
+      "instance_id": "django__django-13925",
+      "repo": "django/django",
+      "row_sha256": "b9f49f8b15d0a74d1dd1f1dfd4bebf9f34b7acf6848a4488a74c6bfb6c2f5614",
+      "split": "train"
+    },
+    {
+      "difficulty": "<15 min fix",
+      "existing_safe_pce_resolved": true,
+      "fpta_deepseek_v3_outcomes": "URR",
+      "instance_id": "django__django-13933",
+      "repo": "django/django",
+      "row_sha256": "8cb83336f9aa54d6ead21f75568f0b3ef25712cee64fcf994883aa33ce905cca",
+      "split": "train"
+    },
+    {
+      "difficulty": "1-4 hours",
+      "existing_safe_pce_resolved": true,
+      "fpta_deepseek_v3_outcomes": "UUR",
+      "instance_id": "django__django-14007",
+      "repo": "django/django",
+      "row_sha256": "754317c09a6094e7f4e2245a3ebe8b6d5e3ec34d59b3e65eacc89c1a159815ff",
+      "split": "train"
+    },
+    {
+      "difficulty": "15 min - 1 hour",
+      "existing_safe_pce_resolved": true,
+      "fpta_deepseek_v3_outcomes": "RUU",
+      "instance_id": "django__django-14017",
+      "repo": "django/django",
+      "row_sha256": "4c603268617481d3ed374b1f5ff6129e69e74ae570e66faa4150a1073f8e14c2",
+      "split": "train"
+    },
+    {
+      "difficulty": "15 min - 1 hour",
+      "existing_safe_pce_resolved": true,
+      "fpta_deepseek_v3_outcomes": "RRU",
+      "instance_id": "django__django-14053",
+      "repo": "django/django",
+      "row_sha256": "611bff1772ef3ae1f8a72c6ea8539eb16b22bf7bc172e138e2072f0c764d5c78",
+      "split": "train"
+    },
+    {
+      "difficulty": "15 min - 1 hour",
+      "existing_safe_pce_resolved": true,
+      "fpta_deepseek_v3_outcomes": "URR",
+      "instance_id": "django__django-14238",
+      "repo": "django/django",
+      "row_sha256": "68a58c809ebe9fc1ce8c692e353029d25f4726e7b5ef63c8edfea5221bc25de4",
+      "split": "train"
+    },
+    {
+      "difficulty": "15 min - 1 hour",
+      "existing_safe_pce_resolved": true,
+      "fpta_deepseek_v3_outcomes": "RUR",
+      "instance_id": "django__django-14349",
+      "repo": "django/django",
+      "row_sha256": "1d8b76362c4824e97c596444d8ea468997860e75849c5fddede37938ca970c5b",
+      "split": "train"
+    },
+    {
+      "difficulty": "15 min - 1 hour",
+      "existing_safe_pce_resolved": true,
+      "fpta_deepseek_v3_outcomes": "URU",
+      "instance_id": "django__django-14434",
+      "repo": "django/django",
+      "row_sha256": "442a219dc05cb540007f8fcbc1c17402819b5797e1371c5863d01d11970a4c87",
+      "split": "train"
+    },
+    {
+      "difficulty": "<15 min fix",
+      "existing_safe_pce_resolved": true,
+      "fpta_deepseek_v3_outcomes": "URR",
+      "instance_id": "django__django-14493",
+      "repo": "django/django",
+      "row_sha256": "d973b5ece51912b61d89b97040ae4a8ef049ed2e9fa52eea582275c04c8a8fb0",
+      "split": "train"
+    },
+    {
+      "difficulty": "15 min - 1 hour",
+      "existing_safe_pce_resolved": true,
+      "fpta_deepseek_v3_outcomes": "URR",
+      "instance_id": "django__django-14500",
+      "repo": "django/django",
+      "row_sha256": "e91a304a6ff21df0831f6f451b087bd4c001bbe87c3afdcf1ecebbb7898d78cf",
+      "split": "train"
+    },
+    {
+      "difficulty": "<15 min fix",
+      "existing_safe_pce_resolved": true,
+      "fpta_deepseek_v3_outcomes": "UUR",
+      "instance_id": "django__django-14539",
+      "repo": "django/django",
+      "row_sha256": "b41d09ab53989925c79e58fd58520371759e446cc0c01f3beaaea593be1fed66",
+      "split": "train"
+    },
+    {
+      "difficulty": "<15 min fix",
+      "existing_safe_pce_resolved": true,
+      "fpta_deepseek_v3_outcomes": "RUU",
+      "instance_id": "django__django-14608",
+      "repo": "django/django",
+      "row_sha256": "49bf5ec7b2413f5640c316daabe6485af6c6e29501670bde3b07fa1fba3403c6",
+      "split": "train"
+    },
+    {
+      "difficulty": "<15 min fix",
+      "existing_safe_pce_resolved": true,
+      "fpta_deepseek_v3_outcomes": "RUR",
+      "instance_id": "django__django-14787",
+      "repo": "django/django",
+      "row_sha256": "0d31a95016a77e72f97bf95922603df4e4785df11424d0defae9c7624a523918",
+      "split": "train"
+    },
+    {
+      "difficulty": "<15 min fix",
+      "existing_safe_pce_resolved": true,
+      "fpta_deepseek_v3_outcomes": "RUU",
+      "instance_id": "django__django-14915",
+      "repo": "django/django",
+      "row_sha256": "63910afdf42df979a440f1351b9f0d76fbcd8808362f8d7aa658745d9fdbaa34",
+      "split": "train"
+    },
+    {
+      "difficulty": "15 min - 1 hour",
+      "existing_safe_pce_resolved": true,
+      "fpta_deepseek_v3_outcomes": "UUR",
+      "instance_id": "django__django-15278",
+      "repo": "django/django",
+      "row_sha256": "90c92c93dcbbe14e15f1c217fbb77f5a3dd36dfb9f1cbf71b0abd6a2c5ff517b",
+      "split": "train"
+    },
+    {
+      "difficulty": "<15 min fix",
+      "existing_safe_pce_resolved": true,
+      "fpta_deepseek_v3_outcomes": "RRU",
+      "instance_id": "django__django-15499",
+      "repo": "django/django",
+      "row_sha256": "9401c8eb21643ebbe523b8cc4489a533f9b1b43ed9be7220dd2e9e63e64b2822",
+      "split": "train"
+    },
+    {
+      "difficulty": "<15 min fix",
+      "existing_safe_pce_resolved": true,
+      "fpta_deepseek_v3_outcomes": "RUR",
+      "instance_id": "django__django-15741",
+      "repo": "django/django",
+      "row_sha256": "41ab4318312ff51dd9a378d9b22d8b6bd636bfc88b410883dbb8102ea776a80a",
+      "split": "train"
+    },
+    {
+      "difficulty": "15 min - 1 hour",
+      "existing_safe_pce_resolved": true,
+      "fpta_deepseek_v3_outcomes": "RUU",
+      "instance_id": "django__django-16032",
+      "repo": "django/django",
+      "row_sha256": "53989172c9f11ede64896a9b41e0ee5fc42abef5143c6f8856a02d6886308724",
+      "split": "validation"
+    },
+    {
+      "difficulty": "<15 min fix",
+      "existing_safe_pce_resolved": true,
+      "fpta_deepseek_v3_outcomes": "RRU",
+      "instance_id": "django__django-16116",
+      "repo": "django/django",
+      "row_sha256": "2275a757cbdd7072e4fef92f38c1654fbc0409cd3ef3a8a950fcf867f1baf761",
+      "split": "train"
+    },
+    {
+      "difficulty": "<15 min fix",
+      "existing_safe_pce_resolved": true,
+      "fpta_deepseek_v3_outcomes": "URR",
+      "instance_id": "django__django-16145",
+      "repo": "django/django",
+      "row_sha256": "162a4606e6ecefff0eda0ad39872a15b20a7b6135db0f4ab3f3439c9213ab1c3",
+      "split": "train"
+    },
+    {
+      "difficulty": "15 min - 1 hour",
+      "existing_safe_pce_resolved": true,
+      "fpta_deepseek_v3_outcomes": "UUR",
+      "instance_id": "django__django-16315",
+      "repo": "django/django",
+      "row_sha256": "516c4f80b3393b01b677042f5f0bc0465fc61f77d877c0ad8499c9bc7bd829fb",
+      "split": "train"
+    },
+    {
+      "difficulty": "15 min - 1 hour",
+      "existing_safe_pce_resolved": true,
+      "fpta_deepseek_v3_outcomes": "UUR",
+      "instance_id": "django__django-16661",
+      "repo": "django/django",
+      "row_sha256": "47b44eead856c6d958a5c51d9cc64e05c8a874f49276adfdd3c69ffd47d73319",
+      "split": "train"
+    },
+    {
+      "difficulty": "<15 min fix",
+      "existing_safe_pce_resolved": true,
+      "fpta_deepseek_v3_outcomes": "RRU",
+      "instance_id": "django__django-16899",
+      "repo": "django/django",
+      "row_sha256": "492ff69ca94e972aed7a2a48a093f757b13c835afe52ceb5f4ee5bf78dbdbe8c",
+      "split": "train"
+    },
+    {
+      "difficulty": "15 min - 1 hour",
+      "existing_safe_pce_resolved": true,
+      "fpta_deepseek_v3_outcomes": "URU",
+      "instance_id": "django__django-16901",
+      "repo": "django/django",
+      "row_sha256": "1509982eae002806697958a90ae287e242ede9bb0d7489ec4f21eb5651d36089",
+      "split": "train"
+    },
+    {
+      "difficulty": "<15 min fix",
+      "existing_safe_pce_resolved": true,
+      "fpta_deepseek_v3_outcomes": "URU",
+      "instance_id": "django__django-17087",
+      "repo": "django/django",
+      "row_sha256": "2488335e40d1ec8857b768a4f68babef2bc24397abf8d6d8900d346d4c1a579d",
+      "split": "train"
+    },
+    {
+      "difficulty": "15 min - 1 hour",
+      "existing_safe_pce_resolved": true,
+      "fpta_deepseek_v3_outcomes": "RUR",
+      "instance_id": "matplotlib__matplotlib-24637",
+      "repo": "matplotlib/matplotlib",
+      "row_sha256": "720455e4e2f58773c2935f9fe88397a5ce36fe885cc2d6a83ec8694162c5f324",
+      "split": "train"
+    },
+    {
+      "difficulty": "15 min - 1 hour",
+      "existing_safe_pce_resolved": true,
+      "fpta_deepseek_v3_outcomes": "RRU",
+      "instance_id": "pydata__xarray-3677",
+      "repo": "pydata/xarray",
+      "row_sha256": "ae4803cc14f8424474c67f3023718b50d5cd78242d94b1450cfe54464e8f360f",
+      "split": "train"
+    },
+    {
+      "difficulty": "<15 min fix",
+      "existing_safe_pce_resolved": true,
+      "fpta_deepseek_v3_outcomes": "RUR",
+      "instance_id": "pytest-dev__pytest-5809",
+      "repo": "pytest-dev/pytest",
+      "row_sha256": "3660745791b341e224b3199c9e4bf96a77174a078884de27bea538b8eb62f09e",
+      "split": "train"
+    },
+    {
+      "difficulty": "<15 min fix",
+      "existing_safe_pce_resolved": true,
+      "fpta_deepseek_v3_outcomes": "UUR",
+      "instance_id": "pytest-dev__pytest-7432",
+      "repo": "pytest-dev/pytest",
+      "row_sha256": "a9595ca531f635f2e516f46280cff348a6eca60927854b8db4bede611c7e7b1b",
+      "split": "validation"
+    },
+    {
+      "difficulty": "15 min - 1 hour",
+      "existing_safe_pce_resolved": true,
+      "fpta_deepseek_v3_outcomes": "URR",
+      "instance_id": "pytest-dev__pytest-7571",
+      "repo": "pytest-dev/pytest",
+      "row_sha256": "4b90fe9ca804f0acff889fe0bd28e828c692afbd1d9249cc3deabc6c69b6d17b",
+      "split": "train"
+    },
+    {
+      "difficulty": "<15 min fix",
+      "existing_safe_pce_resolved": true,
+      "fpta_deepseek_v3_outcomes": "UUR",
+      "instance_id": "scikit-learn__scikit-learn-13135",
+      "repo": "scikit-learn/scikit-learn",
+      "row_sha256": "a5bd87d89b080d68eff7abc25e8435fb318aaf8a8e04dd55e3055bd9427d06c2",
+      "split": "train"
+    },
+    {
+      "difficulty": "<15 min fix",
+      "existing_safe_pce_resolved": true,
+      "fpta_deepseek_v3_outcomes": "URU",
+      "instance_id": "scikit-learn__scikit-learn-13142",
+      "repo": "scikit-learn/scikit-learn",
+      "row_sha256": "baa29a22b92e9960d3f21c85762f7059a4c2f2eb15848e83acba2524464513f8",
+      "split": "train"
+    },
+    {
+      "difficulty": "<15 min fix",
+      "existing_safe_pce_resolved": true,
+      "fpta_deepseek_v3_outcomes": "URR",
+      "instance_id": "scikit-learn__scikit-learn-13328",
+      "repo": "scikit-learn/scikit-learn",
+      "row_sha256": "45193a88acbcb5541d39a26b6b17d7592c6e7a25fbd6b26ce2c3f2be888c68f0",
+      "split": "train"
+    },
+    {
+      "difficulty": "<15 min fix",
+      "existing_safe_pce_resolved": true,
+      "fpta_deepseek_v3_outcomes": "URR",
+      "instance_id": "scikit-learn__scikit-learn-25232",
+      "repo": "scikit-learn/scikit-learn",
+      "row_sha256": "727a19baf6bcba4d9669db5f9bccb7f8d7f55229843e2b63bedd8f5d6a581abf",
+      "split": "train"
+    },
+    {
+      "difficulty": "<15 min fix",
+      "existing_safe_pce_resolved": true,
+      "fpta_deepseek_v3_outcomes": "UUR",
+      "instance_id": "scikit-learn__scikit-learn-25973",
+      "repo": "scikit-learn/scikit-learn",
+      "row_sha256": "89e85b1af967dd95050e89839db5987002d63db9a8570fe3d1910a4a2cbbb0e0",
+      "split": "train"
+    },
+    {
+      "difficulty": "<15 min fix",
+      "existing_safe_pce_resolved": true,
+      "fpta_deepseek_v3_outcomes": "RUU",
+      "instance_id": "sphinx-doc__sphinx-10323",
+      "repo": "sphinx-doc/sphinx",
+      "row_sha256": "5c224a906daede2fcfd686fc9cb12e6cf223152e1d8dbf79991a26f8abbc611e",
+      "split": "train"
+    },
+    {
+      "difficulty": "<15 min fix",
+      "existing_safe_pce_resolved": true,
+      "fpta_deepseek_v3_outcomes": "URU",
+      "instance_id": "sphinx-doc__sphinx-8269",
+      "repo": "sphinx-doc/sphinx",
+      "row_sha256": "f7b9d62d331474eff1ca6e4298dd6946889cf20944984df5d4f03f7fd9427938",
+      "split": "train"
+    },
+    {
+      "difficulty": "15 min - 1 hour",
+      "existing_safe_pce_resolved": true,
+      "fpta_deepseek_v3_outcomes": "URU",
+      "instance_id": "sphinx-doc__sphinx-8593",
+      "repo": "sphinx-doc/sphinx",
+      "row_sha256": "3ddb69211dfde4ad3a6969267fe2bd45040d74b727af98da32dee7fc65da2469",
+      "split": "train"
+    },
+    {
+      "difficulty": "<15 min fix",
+      "existing_safe_pce_resolved": true,
+      "fpta_deepseek_v3_outcomes": "RUR",
+      "instance_id": "sympy__sympy-12096",
+      "repo": "sympy/sympy",
+      "row_sha256": "2235b112aebf4fb42129a3b870d44c054ead6e4be72361ca02606e713e063f98",
+      "split": "validation"
+    },
+    {
+      "difficulty": "15 min - 1 hour",
+      "existing_safe_pce_resolved": true,
+      "fpta_deepseek_v3_outcomes": "RUU",
+      "instance_id": "sympy__sympy-13877",
+      "repo": "sympy/sympy",
+      "row_sha256": "57af07b722c5bd81b082265e80f022587676b49bc100cac9a43da2fe93b7583b",
+      "split": "validation"
+    },
+    {
+      "difficulty": "<15 min fix",
+      "existing_safe_pce_resolved": true,
+      "fpta_deepseek_v3_outcomes": "UUR",
+      "instance_id": "sympy__sympy-18189",
+      "repo": "sympy/sympy",
+      "row_sha256": "2d38bffb046c82d3067c5a4c65b98a32eeafc3a4ce3c66264d2c3fe1e77eee2e",
+      "split": "train"
+    },
+    {
+      "difficulty": "15 min - 1 hour",
+      "existing_safe_pce_resolved": true,
+      "fpta_deepseek_v3_outcomes": "RUU",
+      "instance_id": "sympy__sympy-18211",
+      "repo": "sympy/sympy",
+      "row_sha256": "4b709039bb8b9ad8531903b24b2e386c7d85818a0d4aeccc78ddbba94f9b7da6",
+      "split": "train"
+    }
+  ],
+  "selected_count": 58,
+  "selected_instance_ids": [
+    "django__django-11206",
+    "django__django-11239",
+    "django__django-11276",
+    "django__django-11551",
+    "django__django-11749",
+    "django__django-11951",
+    "django__django-11964",
+    "django__django-12209",
+    "django__django-12262",
+    "django__django-12276",
+    "django__django-12708",
+    "django__django-12858",
+    "django__django-13012",
+    "django__django-13028",
+    "django__django-13449",
+    "django__django-13810",
+    "django__django-13925",
+    "django__django-13933",
+    "django__django-14007",
+    "django__django-14017",
+    "django__django-14053",
+    "django__django-14238",
+    "django__django-14349",
+    "django__django-14434",
+    "django__django-14493",
+    "django__django-14500",
+    "django__django-14539",
+    "django__django-14608",
+    "django__django-14787",
+    "django__django-14915",
+    "django__django-15278",
+    "django__django-15499",
+    "django__django-15741",
+    "django__django-16032",
+    "django__django-16116",
+    "django__django-16145",
+    "django__django-16315",
+    "django__django-16661",
+    "django__django-16899",
+    "django__django-16901",
+    "django__django-17087",
+    "matplotlib__matplotlib-24637",
+    "pydata__xarray-3677",
+    "pytest-dev__pytest-5809",
+    "pytest-dev__pytest-7432",
+    "pytest-dev__pytest-7571",
+    "scikit-learn__scikit-learn-13135",
+    "scikit-learn__scikit-learn-13142",
+    "scikit-learn__scikit-learn-13328",
+    "scikit-learn__scikit-learn-25232",
+    "scikit-learn__scikit-learn-25973",
+    "sphinx-doc__sphinx-10323",
+    "sphinx-doc__sphinx-8269",
+    "sphinx-doc__sphinx-8593",
+    "sympy__sympy-12096",
+    "sympy__sympy-13877",
+    "sympy__sympy-18189",
+    "sympy__sympy-18211"
+  ],
+  "selected_instance_ids_sha256": "cf144a12c1abc0b5093ad6bb0fab4d7400f7cac1fc154f0870f6040d6de46edc",
+  "selection_id": "safe-pce-fpta-mixed58-remaining-v1-20260917",
+  "selection_policy": {
+    "candidate_source": "all remaining formal400 cases with mixed outcomes across three frozen FPTA DeepSeek-V3 standard-Plan reports",
+    "existing_safe_pce_outcomes": "all selected cases have a resolved baseline Safe PCE observation",
+    "fpta_outcome_distribution": "thirty-two one-resolved/two-unresolved and twenty-six two-resolved/one-unresolved cases",
+    "historical_outcome_use": "development search enrichment only",
+    "prior_scan_overlap": "exclude every case in mixed12 and the first mixed24 expansion",
+    "repository_coverage": "exhaust all fifty-eight remaining candidates across seven repositories",
+    "untouched_holdout": false,
+    "uses_historical_outcome": true
+  },
+  "source_authorities": {
+    "candidate_subset": {
+      "path": "configs/frozen_swe_verified_playbook_gepa/20260915_safe_pce_formal400_v2/selection.json",
+      "sha256": "f93d2c3205ae376512bf31b661e9b0efafccacff41a1f76795ff3fc7bc9b015a"
+    },
+    "clean_cases": "configs/frozen_swe_verified_playbook_gepa/20260915_safe_pce_clean411_v2/cases.jsonl",
+    "clean_cases_sha256": "555b853d8db8f5283755759924b28ebb913faf1145f41895f80052d3c368d92c",
+    "excluded_selection": "configs/frozen_swe_verified_safe_pce/fpta-mixed24-expansion-v1-20260916/selection.json",
+    "excluded_selection_sha256": "d828f72f28576f09caeaf676ec5660f21f561d2207721d16ec41829426c774e9",
+    "formal_selection": "configs/frozen_swe_verified_safe_pce/verified482-formal-v1-20260914/selection.json",
+    "formal_selection_sha256": "9af8c374fb811abd36176500a69b731aaf63fa965b0317d451e0e797429bce74",
+    "fpta_commit": "7e370a49e36d4894f796ae3d6a6f77b2691f7f4b",
+    "fpta_reports": [
+      {
+        "path": "artifacts/SWE-Bench-Verified/plan/deepseek_v3/report/deepseek-chat.json",
+        "sha256": "a9b7ffe618033b218d2885372f32ece838a59a58ad37f6d34f542b25ae2eed75"
+      },
+      {
+        "path": "artifacts/SWE-Bench-Verified/plan/deepseek_v3_repeat_1/report/rest/swe-bench_verified__test__dskv3-v1-plan.json",
+        "sha256": "6f307e36dd6891b08414f104cb0f1eb3039ddc008323c3ad24942894c715aace"
+      },
+      {
+        "path": "artifacts/SWE-Bench-Verified/plan/deepseek_v3_repeat_2/report/rest/swe-bench_verified__test__dskv3-v2-plan.json",
+        "sha256": "96e668b91b3be184bdb59ed152bd420cb39942be6f77f0ec42f1e5cd3eb51a26"
+      }
+    ],
+    "fpta_repository": "https://github.com/Intelligent-CAT-Lab/Planning-Analysis",
+    "spec": "configs/frozen_swe_verified_safe_pce/fpta-mixed58-remaining-v1-20260917/spec.json",
+    "spec_sha256": "2f38ba79b2d2860d4962c4b666c80516b54ea815c01ec62014b3a3f63cc8151d"
+  },
+  "source_instance_count": 500,
+  "source_instances_sha256": "8d6f5c64fe448432264ced781ac9bc987fc38b668ade6de39592a23ad1a9ef1f",
+  "source_manifest_sha256": "bec1150dbf55c29c0893226c20578bee031406d78db305cdfef7b2b80965143a"
+}

@@ -1,0 +1,121 @@
+{
+  "schema_version": 1,
+  "selection_id": "safe-pce-fpta-disagreement22-v1-20260917",
+  "purpose": "cross_authority_disagreement_stratum_for_within_task_plan_contrast_search",
+  "status": "prepared_not_launched",
+  "fpta_outcome_requirement": "cross_authority_disagreement",
+  "repeat_design": {
+    "additional_pce_runs_per_case": 2,
+    "comparison_unit": "within-task Plan plus downstream Code/Evaluate outcome",
+    "existing_safe_pce_runs_per_case": 1,
+    "new_planner_temperature": 1.0,
+    "new_coder_temperature": 0.0,
+    "target_total_pce_runs_per_case": 3
+  },
+  "selected_instance_ids": [
+    "astropy__astropy-13977",
+    "astropy__astropy-14182",
+    "astropy__astropy-14365",
+    "django__django-13401",
+    "matplotlib__matplotlib-22871",
+    "matplotlib__matplotlib-26291",
+    "mwaskom__seaborn-3069",
+    "mwaskom__seaborn-3187",
+    "psf__requests-2317",
+    "pydata__xarray-3095",
+    "pydata__xarray-4695",
+    "pylint-dev__pylint-7080",
+    "pytest-dev__pytest-10051",
+    "pytest-dev__pytest-10081",
+    "scikit-learn__scikit-learn-10908",
+    "scikit-learn__scikit-learn-12973",
+    "sphinx-doc__sphinx-7757",
+    "sphinx-doc__sphinx-8595",
+    "sphinx-doc__sphinx-9658",
+    "sphinx-doc__sphinx-9711",
+    "sympy__sympy-12419",
+    "sympy__sympy-13091"
+  ],
+  "reviewed_fpta_outcomes": {
+    "astropy__astropy-13977": "UUU",
+    "astropy__astropy-14182": "UUU",
+    "astropy__astropy-14365": "UUU",
+    "django__django-13401": "RRR",
+    "matplotlib__matplotlib-22871": "UUU",
+    "matplotlib__matplotlib-26291": "UUU",
+    "mwaskom__seaborn-3069": "UUU",
+    "mwaskom__seaborn-3187": "UUU",
+    "psf__requests-2317": "UUU",
+    "pydata__xarray-3095": "UUU",
+    "pydata__xarray-4695": "UUU",
+    "pylint-dev__pylint-7080": "UUU",
+    "pytest-dev__pytest-10051": "UUU",
+    "pytest-dev__pytest-10081": "UUU",
+    "scikit-learn__scikit-learn-10908": "UUU",
+    "scikit-learn__scikit-learn-12973": "UUU",
+    "sphinx-doc__sphinx-7757": "UUU",
+    "sphinx-doc__sphinx-8595": "RRR",
+    "sphinx-doc__sphinx-9658": "UUU",
+    "sphinx-doc__sphinx-9711": "RRR",
+    "sympy__sympy-12419": "UUU",
+    "sympy__sympy-13091": "UUU"
+  },
+  "selection_policy": {
+    "candidate_source": "formal400 cases outside all prior scans whose three FPTA outcomes agree but oppose the clean Safe PCE baseline",
+    "cross_authority_distribution": "nineteen FPTA-UUU/Safe-PCE-R and all three available FPTA-RRR/Safe-PCE-U cases",
+    "repository_allocation": "retain all rare RRR/U cases; allocate the UUU/R cases across ten repositories with deterministic SHA-256 ranking under the frozen seed",
+    "selection_seed": "safe-pce-plan-sensitive80-expansion-v1-20260917",
+    "historical_outcome_use": "development search enrichment only",
+    "prior_scan_overlap": "exclude mixed12, the first mixed24 expansion, and mixed58",
+    "untouched_holdout": false,
+    "uses_historical_outcome": true
+  },
+  "source_authorities": {
+    "formal_selection": {
+      "path": "configs/frozen_swe_verified_safe_pce/verified482-formal-v1-20260914/selection.json",
+      "sha256": "9af8c374fb811abd36176500a69b731aaf63fa965b0317d451e0e797429bce74"
+    },
+    "formal400_selection": {
+      "path": "configs/frozen_swe_verified_playbook_gepa/20260915_safe_pce_formal400_v2/selection.json",
+      "sha256": "f93d2c3205ae376512bf31b661e9b0efafccacff41a1f76795ff3fc7bc9b015a"
+    },
+    "clean_cases": {
+      "path": "configs/frozen_swe_verified_playbook_gepa/20260915_safe_pce_clean411_v2/cases.jsonl",
+      "sha256": "555b853d8db8f5283755759924b28ebb913faf1145f41895f80052d3c368d92c"
+    },
+    "parent_images": {
+      "path": "configs/frozen_swe_verified_safe_pce/verified482-formal-v1-20260914/images.json",
+      "sha256": "f4c18c5dcf30fa48cb503241c5ba69ae8f6368e63726f8ce0875a868ae212e0a"
+    },
+    "fpta_repository": "https://github.com/Intelligent-CAT-Lab/Planning-Analysis",
+    "fpta_commit": "7e370a49e36d4894f796ae3d6a6f77b2691f7f4b",
+    "fpta_reports": [
+      {
+        "path": "artifacts/SWE-Bench-Verified/plan/deepseek_v3/report/deepseek-chat.json",
+        "sha256": "a9b7ffe618033b218d2885372f32ece838a59a58ad37f6d34f542b25ae2eed75"
+      },
+      {
+        "path": "artifacts/SWE-Bench-Verified/plan/deepseek_v3_repeat_1/report/rest/swe-bench_verified__test__dskv3-v1-plan.json",
+        "sha256": "6f307e36dd6891b08414f104cb0f1eb3039ddc008323c3ad24942894c715aace"
+      },
+      {
+        "path": "artifacts/SWE-Bench-Verified/plan/deepseek_v3_repeat_2/report/rest/swe-bench_verified__test__dskv3-v2-plan.json",
+        "sha256": "96e668b91b3be184bdb59ed152bd420cb39942be6f77f0ec42f1e5cd3eb51a26"
+      }
+    ],
+    "excluded_selections": [
+      {
+        "path": "configs/frozen_swe_verified_safe_pce/fpta-mixed12-repeat-pilot-v1-20260916/selection.json",
+        "sha256": "321325821068bdc4e75a6cb09a6bc0393d0a82f2eacb2734f72dffcc12c9114d"
+      },
+      {
+        "path": "configs/frozen_swe_verified_safe_pce/fpta-mixed24-expansion-v1-20260916/selection.json",
+        "sha256": "d828f72f28576f09caeaf676ec5660f21f561d2207721d16ec41829426c774e9"
+      },
+      {
+        "path": "configs/frozen_swe_verified_safe_pce/fpta-mixed58-remaining-v1-20260917/selection.json",
+        "sha256": "c5d51aa396bd5e42a8878c6fde1346be1401fb22a835dfc4acf4b4b2d173b5cf"
+      }
+    ]
+  }
+}

@@ -3,7 +3,7 @@
 > Authority: current ACE-stage Plan-Code-Evaluate data, artifact, execution,
 > evaluator, and smoke contract
 >
-> Last reviewed: 2026-09-16
+> Last reviewed: 2026-09-17
 
 ## Purpose
 
@@ -78,6 +78,57 @@ bundle verification ran without Git repository context. Replacement
 temperatures, and resources while applying the non-mutating empty-repository
 verification repair. The failed identities must not be resumed or interpreted
 as PCE outcomes.
+
+After bounded recovery, mixed12 and the first mixed24 expansion produced five
+reliable within-task contrasts. Their three-outcome sequences are `UUR` for
+`sympy__sympy-11618`, `RUR` for
+`scikit-learn__scikit-learn-25102`, `URR` for
+`django__django-16877`, `RRU` for
+`scikit-learn__scikit-learn-14087`, and `URU` for
+`sympy__sympy-14976`. The exact Plan hashes, task artifacts, and outcome
+authorities are frozen at
+`configs/frozen_swe_verified_safe_pce/within-task-mixed-outcome-pool-v1-20260917/manifest.json`.
+These five cases form a development pool, not a prevalence sample or holdout.
+
+The first mixed24 expansion therefore ends as 18 all-resolved tasks, two
+all-unresolved tasks, three mixed-outcome tasks, and one operationally
+incomplete task. `django__django-13279` has a resolved baseline and resolved
+repeat 2. Its repeat-3 fresh PCE attempt timed out after two hours, and the
+user stopped the second recovery attempt after about 65 minutes rather than
+spending more budget on the singleton. That missing observation is operational
+incompleteness, never an unresolved outcome, and is not eligible for the mixed
+pool.
+
+The next unlaunched campaign has two separate development strata. The first is
+frozen at
+`configs/frozen_swe_verified_safe_pce/fpta-mixed58-remaining-v1-20260917/spec.json`.
+It excludes all 36 previously scanned cases and exhausts the 58 remaining
+formal400 cases that are mixed across the three FPTA reports. The batch contains
+32 FPTA one-resolved/two-unresolved patterns and 26
+two-resolved/one-unresolved patterns across seven repositories. All 58 have a
+resolved Safe PCE baseline, so this batch can discover `R→U` variation but
+cannot add a baseline-`U` comparison.
+
+The second stratum is frozen at
+`configs/frozen_swe_verified_safe_pce/fpta-disagreement22-v1-20260917/spec.json`.
+It adds 22 cases whose three FPTA outcomes are homogeneous but disagree with
+the clean Safe PCE baseline: 19 are FPTA `UUU` with a resolved Safe PCE result,
+and all three available reverse cases are FPTA `RRR` with an unresolved Safe
+PCE result. The 19 `UUU/R` cases are deterministically distributed across ten
+repositories; together with the three rare reverse cases, the stratum covers
+11 repositories. Keeping this stratum separate permits a direct yield
+comparison with FPTA-internal mixedness.
+
+Across both strata, the campaign contains 80 tasks and two additional repeats,
+or 160 PCE workers. This size uses the declared fourteen-hour wall-clock budget:
+the preceding two 24-case repeats ran concurrently and their main three-attempt
+flows completed in about 3.5 hours, with negligible initial scheduler delay.
+The expanded campaign remains subject to Aion FairShare and may finish with
+explicit operationally incomplete cases rather than extending singleton retries
+beyond the budget. Both selections, their audited image projections, four run
+identities, and four supervisor templates are prepared. Every experiment
+contract is `launch_authorized`; runtime artifacts and supervisor state are the
+authority for whether a job has actually been submitted or completed.
 
 ## Phase And Artifact Boundary
 

@@ -1,0 +1,211 @@
+{
+  "schema_version": 1,
+  "pool_id": "safe-pce-within-task-mixed-outcome-pool-v1-20260917",
+  "purpose": "development pool of tasks with reliable resolved and unresolved Safe PCE outcomes under independently generated Plans",
+  "comparison_unit": "within-task Plan plus downstream Code/Evaluate outcome",
+  "inclusion_policy": {
+    "required_terminal_observations": 3,
+    "required_outcomes": [
+      "resolved",
+      "unresolved"
+    ],
+    "operational_failures_are_outcomes": false,
+    "prevalence_claim_allowed": false,
+    "held_out_claim_allowed": false
+  },
+  "source_authorities": {
+    "clean_safe_pce_cases": {
+      "path": "configs/frozen_swe_verified_playbook_gepa/20260915_safe_pce_clean411_v2/cases.jsonl",
+      "sha256": "555b853d8db8f5283755759924b28ebb913faf1145f41895f80052d3c368d92c"
+    },
+    "mixed12_selection": {
+      "path": "configs/frozen_swe_verified_safe_pce/fpta-mixed12-repeat-pilot-v1-20260916/selection.json",
+      "sha256": "321325821068bdc4e75a6cb09a6bc0393d0a82f2eacb2734f72dffcc12c9114d"
+    },
+    "mixed24_selection": {
+      "path": "configs/frozen_swe_verified_safe_pce/fpta-mixed24-expansion-v1-20260916/selection.json",
+      "sha256": "d828f72f28576f09caeaf676ec5660f21f561d2207721d16ec41829426c774e9"
+    }
+  },
+  "run_authorities": {
+    "baseline": "/scratch/users/twang/vibe-coding-planning/run_state/output/SWE-bench_Verified/swe-verified-pce-runs/formal/safe-pce-verified482-v1-20260914",
+    "mixed12_repeat2": "/scratch/users/twang/vibe-coding-planning/run_state/output/SWE-bench_Verified/swe-verified-pce-runs/development/fpta-mixed12-repeat2-aion-v1-20260916",
+    "mixed12_repeat3": "/scratch/users/twang/vibe-coding-planning/run_state/output/SWE-bench_Verified/swe-verified-pce-runs/development/fpta-mixed12-repeat3-aion-v1-20260916",
+    "mixed24_repeat2": "/scratch/users/twang/vibe-coding-planning/run_state/output/SWE-bench_Verified/swe-verified-pce-runs/development/fpta-mixed24-expansion-repeat2-aion-v2-20260917",
+    "mixed24_repeat3": "/scratch/users/twang/vibe-coding-planning/run_state/output/SWE-bench_Verified/swe-verified-pce-runs/development/fpta-mixed24-expansion-repeat3-aion-v2-20260917",
+    "mixed24_repeat2_recovery": "/scratch/users/twang/vibe-coding-planning/run_state/output/SWE-bench_Verified/swe-verified-pce-runs/development/fpta-mixed24-recovery-repeat2-plan-ce3-aion-v2-20260917",
+    "mixed24_repeat3_recovery": "/scratch/users/twang/vibe-coding-planning/run_state/output/SWE-bench_Verified/swe-verified-pce-runs/development/fpta-mixed24-recovery-repeat3-plan-ce4-aion-v2-20260917",
+    "mixed24_repeat3_full_pce_recovery": "/scratch/users/twang/vibe-coding-planning/run_state/output/SWE-bench_Verified/swe-verified-pce-runs/development/fpta-mixed24-recovery-repeat3-full-pce1-aion-v2-20260917"
+  },
+  "cases": [
+    {
+      "instance_id": "sympy__sympy-11618",
+      "repo": "sympy/sympy",
+      "row_sha256": "167c5d0164beeaf09b6774c9cb51a03ef0a5c6be23031fd6c3761e6a1e44c01f",
+      "outcome_sequence": "UUR",
+      "observations": [
+        {
+          "slot": "baseline",
+          "outcome": "unresolved",
+          "plan_sha256": "5bc1858cef11af394fa31119157340786ffab8a9463ddafa4a0e62259342dece",
+          "artifact": "hpc_tasks/pce/cc292dd7dc2baf3499e8a5ee6034eb3cfb8a48dd3738c0c956e950cd26f4c32a/outputs/task_0411.json",
+          "artifact_sha256": "718a2e2e512a118a02f6ea52d17fd7c0b403223a21b24176f5b540e941420c23"
+        },
+        {
+          "slot": "mixed12_repeat2",
+          "outcome": "unresolved",
+          "plan_sha256": "42e13f67296deb156674efcbff4552dd3373443a205d2a85216f2302012c65ef",
+          "artifact": "hpc_tasks/pce/01baec9e92659bf046bd1ec1460d2bb2ac84416708653eee6e5c44ec7ee3e54f/outputs/task_0006.json",
+          "artifact_sha256": "f6b8734ca94617c4159cea84d81ff4c97f0cc10116d0efe69220f5a26aa28df5"
+        },
+        {
+          "slot": "mixed12_repeat3",
+          "outcome": "resolved",
+          "plan_sha256": "a2c4f5ae25a3955fbc7aa133209b216273dde39f9574f7ecf35161e275aeed3f",
+          "artifact": "hpc_tasks/pce/01baec9e92659bf046bd1ec1460d2bb2ac84416708653eee6e5c44ec7ee3e54f/outputs/task_0006.json",
+          "artifact_sha256": "f859c2a2ebd99891a2958bece22c841ccc80401cecdf50f07f0a2d45c64dfa70"
+        }
+      ]
+    },
+    {
+      "instance_id": "scikit-learn__scikit-learn-25102",
+      "repo": "scikit-learn/scikit-learn",
+      "row_sha256": "acd7f40a1d955998a227d05bb8e9bc8e9649b17b7b4b5425ad492dddb50b8d08",
+      "outcome_sequence": "RUR",
+      "observations": [
+        {
+          "slot": "baseline",
+          "outcome": "resolved",
+          "plan_sha256": "ba6d260dae8f43c28d7b0b6133b539db6e106c6100d47be7e9bb4e7a4c675b37",
+          "artifact": "hpc_tasks/pce/cc292dd7dc2baf3499e8a5ee6034eb3cfb8a48dd3738c0c956e950cd26f4c32a/outputs/task_0360.json",
+          "artifact_sha256": "a8d3ca22a8889fb0db4be1188522d4c9c0338e6dc82a5757417cb98663519be9"
+        },
+        {
+          "slot": "mixed12_repeat2",
+          "outcome": "unresolved",
+          "plan_sha256": "14a230d5dff873fe9873aa98023d7d8407f70722a33de45334969e4c177e03d0",
+          "artifact": "hpc_tasks/pce/01baec9e92659bf046bd1ec1460d2bb2ac84416708653eee6e5c44ec7ee3e54f/outputs/task_0008.json",
+          "artifact_sha256": "52137eb250b84971591abdc2cced99e86541d60b2932093eb08a471a1a954ca9"
+        },
+        {
+          "slot": "mixed12_repeat3",
+          "outcome": "resolved",
+          "plan_sha256": "a119c1f12e652a566615c9a9ef2e1c66950bf459a80ba5148635958450bca0a3",
+          "artifact": "hpc_tasks/pce/01baec9e92659bf046bd1ec1460d2bb2ac84416708653eee6e5c44ec7ee3e54f/outputs/task_0008.json",
+          "artifact_sha256": "70cc3b3bd6c67e752035224ea2053ddbe0091c408b53bff939aad051ebcc2a34"
+        }
+      ]
+    },
+    {
+      "instance_id": "django__django-16877",
+      "repo": "django/django",
+      "row_sha256": "bcd239c1c3a1171529829bcff548c1a522b4ac64a13d32a6936f36055df7890c",
+      "outcome_sequence": "URR",
+      "observations": [
+        {
+          "slot": "baseline",
+          "outcome": "unresolved",
+          "plan_sha256": "82cab6548aa4dea6bc2a9a33034b61979d7c686d6b3f4c7dafebdf328525c128",
+          "artifact": "hpc_tasks/pce/cc292dd7dc2baf3499e8a5ee6034eb3cfb8a48dd3738c0c956e950cd26f4c32a/outputs/task_0236.json",
+          "artifact_sha256": "95c3580511cda29b5dab42296132d3054215a77c3ee96e3dec3374b39340f1ce"
+        },
+        {
+          "slot": "mixed24_repeat2_recovery",
+          "outcome": "resolved",
+          "plan_sha256": "f0e0a54f88bccf864eb1d1e5ab28c449c31d750a516b86eab76b64b1ce4b6b7b",
+          "artifact": "evaluator_repairs/fpta-mixed24-r2-eval2-recovery-v1-20260917/raw_evaluator_outcomes.jsonl#django__django-16877",
+          "artifact_sha256": "a60712607de8f7f267199208027e35fdabcfd368f0e2e90da03261957783b2f8"
+        },
+        {
+          "slot": "mixed24_repeat3_recovery",
+          "outcome": "resolved",
+          "plan_sha256": "3f17fc637ae1b7307b028e3a8735ba621d5bc02aeace8578d6ebfa440e5d8672",
+          "artifact": "ce_outcomes.jsonl#django__django-16877",
+          "artifact_sha256": "732c628b298f75c56b3d7191dbea23d26666349f52989975bd23449303a5dc5d"
+        }
+      ]
+    },
+    {
+      "instance_id": "scikit-learn__scikit-learn-14087",
+      "repo": "scikit-learn/scikit-learn",
+      "row_sha256": "6bee7e94dc24dc758d5ae58e10ff6b53d4f30e8e7abf1275e9b36bf66dda29d6",
+      "outcome_sequence": "RRU",
+      "observations": [
+        {
+          "slot": "baseline",
+          "outcome": "resolved",
+          "plan_sha256": "8e422ebe2ca3b47498efd17a846f32f12ff2abd5c6004edeba1f5c87a08af2b8",
+          "artifact": "hpc_tasks/pce/cc292dd7dc2baf3499e8a5ee6034eb3cfb8a48dd3738c0c956e950cd26f4c32a/outputs/task_0353.json",
+          "artifact_sha256": "daf51a7d2aca366f8918e1ccf98e363fa47f3400e6553f2fa6c392d06c2f378c"
+        },
+        {
+          "slot": "mixed24_repeat2",
+          "outcome": "resolved",
+          "plan_sha256": "537878a036f62e193584c362c7e5a110488001eca6b1a639bf198f77a88560f1",
+          "artifact": "hpc_tasks/pce/7d5e29e56d703ce43b1097d857d04537191eaca31af2f17574aef823231ad196/outputs/task_0015.json",
+          "artifact_sha256": "2c727e9785f5fa886d7e6582efb50e26035260611470eee8d426cb78ed69c5ae"
+        },
+        {
+          "slot": "mixed24_repeat3",
+          "outcome": "unresolved",
+          "plan_sha256": "87371f234e0ae73cca4f97bce6e1a433d2a370115d450dcca9aa5d2b00f6d9e0",
+          "artifact": "hpc_tasks/pce/7d5e29e56d703ce43b1097d857d04537191eaca31af2f17574aef823231ad196/outputs/task_0015.json",
+          "artifact_sha256": "d229feb5bcea53f1117e2014c290f9b5add4ec2a0ac30d0f57e3a134d7b0b4bb"
+        }
+      ]
+    },
+    {
+      "instance_id": "sympy__sympy-14976",
+      "repo": "sympy/sympy",
+      "row_sha256": "d08365c033369a9971cd3f252a9aa8ea08c5ce6ba8300a87d6ca670938a3db75",
+      "outcome_sequence": "URU",
+      "observations": [
+        {
+          "slot": "baseline",
+          "outcome": "unresolved",
+          "plan_sha256": "aa82b0d64d8019e9f8cba6eafadad675e6fb019ad120013a19456c52e57a3d74",
+          "artifact": "hpc_tasks/pce/cc292dd7dc2baf3499e8a5ee6034eb3cfb8a48dd3738c0c956e950cd26f4c32a/outputs/task_0430.json",
+          "artifact_sha256": "8b228c465c7a0929e12ac71523affadc18e48f7af98a1de01d594f476c090aa0"
+        },
+        {
+          "slot": "mixed24_repeat2",
+          "outcome": "resolved",
+          "plan_sha256": "544eb61f11c12989db8f4a9e48c222f46048567a39fc110e1cd98134af20be41",
+          "artifact": "hpc_tasks/pce/7d5e29e56d703ce43b1097d857d04537191eaca31af2f17574aef823231ad196/outputs/task_0021.json",
+          "artifact_sha256": "c78e47177d9254d7bce4b65204c9b1bb22c9283d1e42c76d119554bf5e8e5304"
+        },
+        {
+          "slot": "mixed24_repeat3",
+          "outcome": "unresolved",
+          "plan_sha256": "6b2225b3459bbbfc1f1f342db1753299d538243e97b8e98628280d689edfc61c",
+          "artifact": "hpc_tasks/pce/7d5e29e56d703ce43b1097d857d04537191eaca31af2f17574aef823231ad196/outputs/task_0021.json",
+          "artifact_sha256": "30e6f68986a4c346dcc9fc1bdbac93702fb2bb498cf21b9f2411b9a91424a753"
+        }
+      ]
+    }
+  ],
+  "case_count": 5,
+  "outcome_sequence_distribution": {
+    "RUR": 1,
+    "RRU": 1,
+    "URU": 1,
+    "URR": 1,
+    "UUR": 1
+  },
+  "operationally_incomplete_cases": [
+    {
+      "instance_id": "django__django-13279",
+      "repo": "django/django",
+      "row_sha256": "af54bf841c66218626234b2f1f83e9fce101f3cc795831b9ccdb5d04ea9277ac",
+      "observed_terminal_outcomes": [
+        "resolved",
+        "resolved"
+      ],
+      "missing_slot": "repeat3",
+      "missing_slot_status": "operationally_incomplete",
+      "reason": "fresh full-PCE recovery timed out after two hours; its second attempt was stopped by the user after about 65 minutes and will not be retried",
+      "scientific_outcome_assigned_to_missing_slot": false,
+      "eligible_for_mixed_pool": false
+    }
+  ]
+}

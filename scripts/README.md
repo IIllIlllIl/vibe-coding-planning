@@ -80,6 +80,10 @@ authority is `docs/archive/mixed-design/swe-chat-data-cleaning.md`.
 - `tools/freeze_swe_verified_safe_pce_selection.py` independently derives the
   formal482 membership from the fixed Verified500 source, the frozen
   placeholder-exclusion ledger, and explicit operational exclusions.
+- `tools/freeze_swe_verified_within_task_pilot.py` projects a reviewed
+  within-task repeat selection and its audited SIF records. It can either read
+  three local FPTA reports or consume an exact reviewed R/U map whose original
+  report paths and SHA-256 authorities are frozen in the selection spec.
 - `tools/clean_safe_pce_for_ace.py` scans every observed Safe PCE Planner/Code
   trajectory and all source-access logs, then writes an immutable exhaustive
   partition into retained ACE-training cases, reliability exclusions, and

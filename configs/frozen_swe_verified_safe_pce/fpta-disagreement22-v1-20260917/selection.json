@@ -1,0 +1,298 @@
+{
+  "dataset": "SWE-bench/SWE-bench_Verified",
+  "dataset_revision": "91aa3ed51b709be6457e12d00300a6a596d4c6a3",
+  "fpta_outcome_requirement": "cross_authority_disagreement",
+  "purpose": "cross_authority_disagreement_stratum_for_within_task_plan_contrast_search",
+  "repeat_design": {
+    "additional_pce_runs_per_case": 2,
+    "comparison_unit": "within-task Plan plus downstream Code/Evaluate outcome",
+    "existing_safe_pce_runs_per_case": 1,
+    "new_coder_temperature": 0.0,
+    "new_planner_temperature": 1.0,
+    "target_total_pce_runs_per_case": 3
+  },
+  "repository_distribution": {
+    "astropy/astropy": 3,
+    "django/django": 1,
+    "matplotlib/matplotlib": 2,
+    "mwaskom/seaborn": 2,
+    "psf/requests": 1,
+    "pydata/xarray": 2,
+    "pylint-dev/pylint": 1,
+    "pytest-dev/pytest": 2,
+    "scikit-learn/scikit-learn": 2,
+    "sphinx-doc/sphinx": 4,
+    "sympy/sympy": 2
+  },
+  "schema_version": 1,
+  "selected_cases": [
+    {
+      "difficulty": "15 min - 1 hour",
+      "existing_safe_pce_resolved": true,
+      "fpta_deepseek_v3_outcomes": "UUU",
+      "instance_id": "astropy__astropy-13977",
+      "repo": "astropy/astropy",
+      "row_sha256": "f5ff4281926082cee76f9cc656d7e28bfe3a0c99df63965932cf94701070d355",
+      "split": "train"
+    },
+    {
+      "difficulty": "15 min - 1 hour",
+      "existing_safe_pce_resolved": true,
+      "fpta_deepseek_v3_outcomes": "UUU",
+      "instance_id": "astropy__astropy-14182",
+      "repo": "astropy/astropy",
+      "row_sha256": "9dcacc272ac4712c0fa81524e85d78d0543c8e001a48cf32c1f8d723bec21cc0",
+      "split": "train"
+    },
+    {
+      "difficulty": "15 min - 1 hour",
+      "existing_safe_pce_resolved": true,
+      "fpta_deepseek_v3_outcomes": "UUU",
+      "instance_id": "astropy__astropy-14365",
+      "repo": "astropy/astropy",
+      "row_sha256": "800486ffa7bff291ca7bd2934604175a813004128f883bdb9e11dfc6a8a65d4e",
+      "split": "train"
+    },
+    {
+      "difficulty": "15 min - 1 hour",
+      "existing_safe_pce_resolved": false,
+      "fpta_deepseek_v3_outcomes": "RRR",
+      "instance_id": "django__django-13401",
+      "repo": "django/django",
+      "row_sha256": "284c453f55f3833c971b6648c23c815235dfd9002a3edf7a5597f956948e6fe8",
+      "split": "validation"
+    },
+    {
+      "difficulty": "15 min - 1 hour",
+      "existing_safe_pce_resolved": true,
+      "fpta_deepseek_v3_outcomes": "UUU",
+      "instance_id": "matplotlib__matplotlib-22871",
+      "repo": "matplotlib/matplotlib",
+      "row_sha256": "44318841c839b333781d03df1e2020e443fa888464e65bfd3708e3093941776e",
+      "split": "train"
+    },
+    {
+      "difficulty": "15 min - 1 hour",
+      "existing_safe_pce_resolved": true,
+      "fpta_deepseek_v3_outcomes": "UUU",
+      "instance_id": "matplotlib__matplotlib-26291",
+      "repo": "matplotlib/matplotlib",
+      "row_sha256": "0033659aee56c9ca35e41654aadbf427d5740905cc6da4e8db845b4b1f2eb9a8",
+      "split": "validation"
+    },
+    {
+      "difficulty": "15 min - 1 hour",
+      "existing_safe_pce_resolved": true,
+      "fpta_deepseek_v3_outcomes": "UUU",
+      "instance_id": "mwaskom__seaborn-3069",
+      "repo": "mwaskom/seaborn",
+      "row_sha256": "8437dbd612c23b18406d894ebf2b0412ee9087536161ecbda3a26e81be16aef2",
+      "split": "train"
+    },
+    {
+      "difficulty": "15 min - 1 hour",
+      "existing_safe_pce_resolved": true,
+      "fpta_deepseek_v3_outcomes": "UUU",
+      "instance_id": "mwaskom__seaborn-3187",
+      "repo": "mwaskom/seaborn",
+      "row_sha256": "80aa45876204fa0a13ba2c7916e5723b61713622784ca260ebd40f7786abd9d0",
+      "split": "train"
+    },
+    {
+      "difficulty": "<15 min fix",
+      "existing_safe_pce_resolved": true,
+      "fpta_deepseek_v3_outcomes": "UUU",
+      "instance_id": "psf__requests-2317",
+      "repo": "psf/requests",
+      "row_sha256": "2ac3f3ab67a178834b4a2b7ada6fba28b1515dcf9b2edfe773330ca1e4ca6005",
+      "split": "train"
+    },
+    {
+      "difficulty": "15 min - 1 hour",
+      "existing_safe_pce_resolved": true,
+      "fpta_deepseek_v3_outcomes": "UUU",
+      "instance_id": "pydata__xarray-3095",
+      "repo": "pydata/xarray",
+      "row_sha256": "9b7fa4f7243bdc754656a5041253aeb0c24a8c72805ab913a32b78cd1fc6c252",
+      "split": "train"
+    },
+    {
+      "difficulty": "15 min - 1 hour",
+      "existing_safe_pce_resolved": true,
+      "fpta_deepseek_v3_outcomes": "UUU",
+      "instance_id": "pydata__xarray-4695",
+      "repo": "pydata/xarray",
+      "row_sha256": "691b793131fdb0b47580aa4660bf950f1542017ac49f9fb1b9d72929eddf7a01",
+      "split": "train"
+    },
+    {
+      "difficulty": "15 min - 1 hour",
+      "existing_safe_pce_resolved": true,
+      "fpta_deepseek_v3_outcomes": "UUU",
+      "instance_id": "pylint-dev__pylint-7080",
+      "repo": "pylint-dev/pylint",
+      "row_sha256": "25624f1c827f50c9cf055262a27ebb1a485ed0bd0305469a849d549d0926c26e",
+      "split": "train"
+    },
+    {
+      "difficulty": "15 min - 1 hour",
+      "existing_safe_pce_resolved": true,
+      "fpta_deepseek_v3_outcomes": "UUU",
+      "instance_id": "pytest-dev__pytest-10051",
+      "repo": "pytest-dev/pytest",
+      "row_sha256": "846fada4df002172cf57a28f635b89eba5ee2c215c40c0a8252e81fc3e55bd8e",
+      "split": "train"
+    },
+    {
+      "difficulty": "<15 min fix",
+      "existing_safe_pce_resolved": true,
+      "fpta_deepseek_v3_outcomes": "UUU",
+      "instance_id": "pytest-dev__pytest-10081",
+      "repo": "pytest-dev/pytest",
+      "row_sha256": "36bcc37cf3fba51537bf3c2b5dedfcb3255cdffdca9cd797fe5fff4d14d41d8a",
+      "split": "train"
+    },
+    {
+      "difficulty": "15 min - 1 hour",
+      "existing_safe_pce_resolved": true,
+      "fpta_deepseek_v3_outcomes": "UUU",
+      "instance_id": "scikit-learn__scikit-learn-10908",
+      "repo": "scikit-learn/scikit-learn",
+      "row_sha256": "03eb98221811b7c08c580866811cde34551f1d262e9cfa6efee7b7e137028b3c",
+      "split": "train"
+    },
+    {
+      "difficulty": "15 min - 1 hour",
+      "existing_safe_pce_resolved": true,
+      "fpta_deepseek_v3_outcomes": "UUU",
+      "instance_id": "scikit-learn__scikit-learn-12973",
+      "repo": "scikit-learn/scikit-learn",
+      "row_sha256": "18dbca8ab1db9148194eef4a198264c0ff4e225f34f70ca68b828ef5a7bb803e",
+      "split": "validation"
+    },
+    {
+      "difficulty": "15 min - 1 hour",
+      "existing_safe_pce_resolved": true,
+      "fpta_deepseek_v3_outcomes": "UUU",
+      "instance_id": "sphinx-doc__sphinx-7757",
+      "repo": "sphinx-doc/sphinx",
+      "row_sha256": "bb2e43db5d5e58812bd9e36d4999cda5dbcc8034498f2210f39a66278beae4fa",
+      "split": "validation"
+    },
+    {
+      "difficulty": "<15 min fix",
+      "existing_safe_pce_resolved": false,
+      "fpta_deepseek_v3_outcomes": "RRR",
+      "instance_id": "sphinx-doc__sphinx-8595",
+      "repo": "sphinx-doc/sphinx",
+      "row_sha256": "cd28b10c5935b14ab5bdee3ec3eeb07eba54c28e738d40a47bdfe14a517a2a83",
+      "split": "train"
+    },
+    {
+      "difficulty": "15 min - 1 hour",
+      "existing_safe_pce_resolved": true,
+      "fpta_deepseek_v3_outcomes": "UUU",
+      "instance_id": "sphinx-doc__sphinx-9658",
+      "repo": "sphinx-doc/sphinx",
+      "row_sha256": "dda7a948e884237e278cf05f536b8dcae9839a01708987a5a9c81c7eda434c4d",
+      "split": "validation"
+    },
+    {
+      "difficulty": "<15 min fix",
+      "existing_safe_pce_resolved": false,
+      "fpta_deepseek_v3_outcomes": "RRR",
+      "instance_id": "sphinx-doc__sphinx-9711",
+      "repo": "sphinx-doc/sphinx",
+      "row_sha256": "8d6d83ed9bd0910687d1d8118bf72f3d4c1edc4c29bcd02f656af926e5823706",
+      "split": "train"
+    },
+    {
+      "difficulty": "15 min - 1 hour",
+      "existing_safe_pce_resolved": true,
+      "fpta_deepseek_v3_outcomes": "UUU",
+      "instance_id": "sympy__sympy-12419",
+      "repo": "sympy/sympy",
+      "row_sha256": "cd161eac4c43f86ee7892058d5f272f857123e13039380bb51b1e31e514e97de",
+      "split": "validation"
+    },
+    {
+      "difficulty": "15 min - 1 hour",
+      "existing_safe_pce_resolved": true,
+      "fpta_deepseek_v3_outcomes": "UUU",
+      "instance_id": "sympy__sympy-13091",
+      "repo": "sympy/sympy",
+      "row_sha256": "6caa716b9f98c7c2a228fbd6916e8d5c5310946ba6c07f2597e7111eae32f710",
+      "split": "train"
+    }
+  ],
+  "selected_count": 22,
+  "selected_instance_ids": [
+    "astropy__astropy-13977",
+    "astropy__astropy-14182",
+    "astropy__astropy-14365",
+    "django__django-13401",
+    "matplotlib__matplotlib-22871",
+    "matplotlib__matplotlib-26291",
+    "mwaskom__seaborn-3069",
+    "mwaskom__seaborn-3187",
+    "psf__requests-2317",
+    "pydata__xarray-3095",
+    "pydata__xarray-4695",
+    "pylint-dev__pylint-7080",
+    "pytest-dev__pytest-10051",
+    "pytest-dev__pytest-10081",
+    "scikit-learn__scikit-learn-10908",
+    "scikit-learn__scikit-learn-12973",
+    "sphinx-doc__sphinx-7757",
+    "sphinx-doc__sphinx-8595",
+    "sphinx-doc__sphinx-9658",
+    "sphinx-doc__sphinx-9711",
+    "sympy__sympy-12419",
+    "sympy__sympy-13091"
+  ],
+  "selected_instance_ids_sha256": "9b92d500ca417eab1122e633fe47c746403587347190fef216f170f65e80933e",
+  "selection_id": "safe-pce-fpta-disagreement22-v1-20260917",
+  "selection_policy": {
+    "candidate_source": "formal400 cases outside all prior scans whose three FPTA outcomes agree but oppose the clean Safe PCE baseline",
+    "cross_authority_distribution": "nineteen FPTA-UUU/Safe-PCE-R and all three available FPTA-RRR/Safe-PCE-U cases",
+    "historical_outcome_use": "development search enrichment only",
+    "prior_scan_overlap": "exclude mixed12, the first mixed24 expansion, and mixed58",
+    "repository_allocation": "retain all rare RRR/U cases; allocate the UUU/R cases across ten repositories with deterministic SHA-256 ranking under the frozen seed",
+    "selection_seed": "safe-pce-plan-sensitive80-expansion-v1-20260917",
+    "untouched_holdout": false,
+    "uses_historical_outcome": true
+  },
+  "source_authorities": {
+    "candidate_subset": {
+      "path": "configs/frozen_swe_verified_playbook_gepa/20260915_safe_pce_formal400_v2/selection.json",
+      "sha256": "f93d2c3205ae376512bf31b661e9b0efafccacff41a1f76795ff3fc7bc9b015a"
+    },
+    "clean_cases": "configs/frozen_swe_verified_playbook_gepa/20260915_safe_pce_clean411_v2/cases.jsonl",
+    "clean_cases_sha256": "555b853d8db8f5283755759924b28ebb913faf1145f41895f80052d3c368d92c",
+    "excluded_selection": "configs/frozen_swe_verified_safe_pce/fpta-mixed58-remaining-v1-20260917/selection.json",
+    "excluded_selection_sha256": "c5d51aa396bd5e42a8878c6fde1346be1401fb22a835dfc4acf4b4b2d173b5cf",
+    "formal_selection": "configs/frozen_swe_verified_safe_pce/verified482-formal-v1-20260914/selection.json",
+    "formal_selection_sha256": "9af8c374fb811abd36176500a69b731aaf63fa965b0317d451e0e797429bce74",
+    "fpta_commit": "7e370a49e36d4894f796ae3d6a6f77b2691f7f4b",
+    "fpta_reports": [
+      {
+        "path": "artifacts/SWE-Bench-Verified/plan/deepseek_v3/report/deepseek-chat.json",
+        "sha256": "a9b7ffe618033b218d2885372f32ece838a59a58ad37f6d34f542b25ae2eed75"
+      },
+      {
+        "path": "artifacts/SWE-Bench-Verified/plan/deepseek_v3_repeat_1/report/rest/swe-bench_verified__test__dskv3-v1-plan.json",
+        "sha256": "6f307e36dd6891b08414f104cb0f1eb3039ddc008323c3ad24942894c715aace"
+      },
+      {
+        "path": "artifacts/SWE-Bench-Verified/plan/deepseek_v3_repeat_2/report/rest/swe-bench_verified__test__dskv3-v2-plan.json",
+        "sha256": "96e668b91b3be184bdb59ed152bd420cb39942be6f77f0ec42f1e5cd3eb51a26"
+      }
+    ],
+    "fpta_repository": "https://github.com/Intelligent-CAT-Lab/Planning-Analysis",
+    "spec": "configs/frozen_swe_verified_safe_pce/fpta-disagreement22-v1-20260917/spec.json",
+    "spec_sha256": "7d27678a2e38bfb2c7f314e00fda3ec7705437496177d168897e950982192829"
+  },
+  "source_instance_count": 500,
+  "source_instances_sha256": "8d6f5c64fe448432264ced781ac9bc987fc38b668ade6de39592a23ad1a9ef1f",
+  "source_manifest_sha256": "bec1150dbf55c29c0893226c20578bee031406d78db305cdfef7b2b80965143a"
+}

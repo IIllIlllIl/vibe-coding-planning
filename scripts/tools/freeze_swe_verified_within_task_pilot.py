@@ -34,7 +34,7 @@ def main() -> int:
     parser.add_argument("--clean-cases", required=True, type=Path)
     parser.add_argument("--parent-images", required=True, type=Path)
     parser.add_argument("--exclude-selection", required=True, type=Path)
-    parser.add_argument("--fpta-report", action="append", required=True, type=Path)
+    parser.add_argument("--fpta-report", action="append", default=[], type=Path)
     parser.add_argument("--output-dir", required=True, type=Path)
     args = parser.parse_args()
 
@@ -66,23 +66,64 @@ def main() -> int:
     if missing := set(selected_ids) - set(clean):
         raise ValueError(f"pilot IDs missing from clean cases: {sorted(missing)}")
 
-    reports = [json.loads(path.read_text(encoding="utf-8")) for path in args.fpta_report]
-    if len(reports) != 3:
-        raise ValueError("exactly three FPTA reports are required")
+    reviewed_outcomes = spec.get("reviewed_fpta_outcomes")
+    outcome_requirement = spec.get("fpta_outcome_requirement", "mixed")
+    if outcome_requirement not in {"mixed", "cross_authority_disagreement"}:
+        raise ValueError(f"unsupported FPTA outcome requirement: {outcome_requirement}")
+    if reviewed_outcomes is not None:
+        if args.fpta_report:
+            raise ValueError(
+                "reviewed_fpta_outcomes cannot be combined with --fpta-report"
+            )
+        if set(reviewed_outcomes) != set(selected_ids):
+            raise ValueError("reviewed FPTA outcomes must cover exactly the selected IDs")
+        if any(
+            len(value) != 3 or not set(value) <= {"R", "U"}
+            for value in reviewed_outcomes.values()
+        ):
+            raise ValueError("each reviewed FPTA outcome must contain three R/U states")
+        fpta_authorities = spec["source_authorities"]["fpta_reports"]
+        if len(fpta_authorities) != 3 or any(
+            not authority.get("sha256") for authority in fpta_authorities
+        ):
+            raise ValueError("three hashed FPTA report authorities are required")
+    else:
+        reports = [
+            json.loads(path.read_text(encoding="utf-8"))
+            for path in args.fpta_report
+        ]
+        if len(reports) != 3:
+            raise ValueError("exactly three FPTA reports are required")
+        fpta_authorities = [
+            {"path": str(path), "sha256": _sha256(path)}
+            for path in args.fpta_report
+        ]
 
-    def state(report: dict[str, Any], instance_id: str) -> str:
-        if instance_id in report["resolved_ids"]:
-            return "R"
-        if instance_id in report["unresolved_ids"]:
-            return "U"
-        return "X"
+        def state(report: dict[str, Any], instance_id: str) -> str:
+            if instance_id in report["resolved_ids"]:
+                return "R"
+            if instance_id in report["unresolved_ids"]:
+                return "U"
+            return "X"
 
     selected_cases = []
     for instance_id in selected_ids:
-        outcomes = "".join(state(report, instance_id) for report in reports)
-        if set(outcomes) != {"R", "U"}:
-            raise ValueError(f"{instance_id} is not FPTA mixed: {outcomes}")
+        outcomes = (
+            str(reviewed_outcomes[instance_id])
+            if reviewed_outcomes is not None
+            else "".join(state(report, instance_id) for report in reports)
+        )
         clean_row = clean[instance_id]
+        safe_pce_state = "R" if clean_row["resolved"] else "U"
+        if outcome_requirement == "mixed" and set(outcomes) != {"R", "U"}:
+            raise ValueError(f"{instance_id} is not FPTA mixed: {outcomes}")
+        if outcome_requirement == "cross_authority_disagreement" and (
+            len(set(outcomes)) != 1 or outcomes[0] == safe_pce_state
+        ):
+            raise ValueError(
+                f"{instance_id} lacks cross-authority disagreement: "
+                f"FPTA={outcomes} SafePCE={safe_pce_state}"
+            )
         formal_row = formal_rows[instance_id]
         selected_cases.append(
             {
@@ -110,19 +151,24 @@ def main() -> int:
         "repository_distribution": dict(
             sorted(Counter(row["repo"] for row in selected_cases).items())
         ),
+        "fpta_outcome_requirement": outcome_requirement,
         "repeat_design": spec["repeat_design"],
         "selection_policy": spec["selection_policy"],
         "source_authorities": {
+            "spec": str(args.spec),
+            "spec_sha256": _sha256(args.spec),
             "formal_selection": str(args.formal_selection),
             "formal_selection_sha256": _sha256(args.formal_selection),
+            "candidate_subset": spec["source_authorities"].get(
+                "formal400_selection"
+            ),
             "clean_cases": str(args.clean_cases),
             "clean_cases_sha256": _sha256(args.clean_cases),
             "excluded_selection": str(args.exclude_selection),
             "excluded_selection_sha256": _sha256(args.exclude_selection),
-            "fpta_reports": [
-                {"path": str(path), "sha256": _sha256(path)}
-                for path in args.fpta_report
-            ],
+            "fpta_repository": spec["source_authorities"].get("fpta_repository"),
+            "fpta_commit": spec["source_authorities"].get("fpta_commit"),
+            "fpta_reports": fpta_authorities,
         },
     }
 
