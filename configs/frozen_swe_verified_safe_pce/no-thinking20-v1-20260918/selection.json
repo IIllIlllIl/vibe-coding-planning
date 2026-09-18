@@ -1,0 +1,267 @@
+{
+  "dataset": "SWE-bench/SWE-bench_Verified",
+  "dataset_revision": "91aa3ed51b709be6457e12d00300a6a596d4c6a3",
+  "purpose": "test whether non-thinking V4.1 Plans create useful within-task outcome variation on previously stable resolved tasks",
+  "recovery_contract": {
+    "baseline_authority": {
+      "path": "configs/frozen_swe_verified_playbook_gepa/20260915_safe_pce_clean411_v2/cases.jsonl",
+      "sha256": "555b853d8db8f5283755759924b28ebb913faf1145f41895f80052d3c368d92c"
+    },
+    "comparison_unit": "one new non-thinking Plan plus unchanged Code/Evaluate against three prior resolved Safe PCE observations",
+    "deficit_run_authority": {
+      "raw_pce_outcomes_sha256": "f00610594342455660f00e01c7b196c16ef2c3f1f39032a2f2f000e65bef2893",
+      "remote_run_root": "/scratch/users/twang/vibe-coding-planning/run_state/output/SWE-bench_Verified/swe-verified-pce-runs/development/fpta-deficit116-aion-v1-20260918",
+      "run_manifest_sha256": "7ed07b4568ed928ff0183bcf24b2e7b216f4189391c79758b1a923b936630269"
+    },
+    "existing_outcome_sequence": "RRR",
+    "historical_outcomes_are_selection_only": true,
+    "operational_failure_is_not_unresolved": true,
+    "planner_variable": {
+      "model": "deepseek-v4-flash",
+      "temperature": 1.0,
+      "thinking": "disabled"
+    },
+    "unchanged_components": [
+      "human-readable non-NRPV Planner prompt",
+      "Code Agent model and temperature",
+      "Safe PCE isolation and official evaluator"
+    ]
+  },
+  "repository_distribution": {
+    "astropy/astropy": 1,
+    "django/django": 3,
+    "matplotlib/matplotlib": 2,
+    "mwaskom/seaborn": 2,
+    "psf/requests": 1,
+    "pydata/xarray": 2,
+    "pylint-dev/pylint": 1,
+    "pytest-dev/pytest": 2,
+    "scikit-learn/scikit-learn": 2,
+    "sphinx-doc/sphinx": 2,
+    "sympy/sympy": 2
+  },
+  "schema_version": 1,
+  "selected_cases": [
+    {
+      "difficulty": "15 min - 1 hour",
+      "existing_safe_pce_resolved": true,
+      "fpta_deepseek_v3_outcomes": "UUU",
+      "instance_id": "astropy__astropy-13977",
+      "repo": "astropy/astropy",
+      "row_sha256": "f5ff4281926082cee76f9cc656d7e28bfe3a0c99df63965932cf94701070d355",
+      "split": "train"
+    },
+    {
+      "difficulty": "<15 min fix",
+      "existing_safe_pce_resolved": true,
+      "fpta_deepseek_v3_outcomes": "RUR",
+      "instance_id": "django__django-12276",
+      "repo": "django/django",
+      "row_sha256": "5669c5a794f840b3f27112175478cba3a69ca8bada391a902be30d9a0096860f",
+      "split": "train"
+    },
+    {
+      "difficulty": "<15 min fix",
+      "existing_safe_pce_resolved": true,
+      "fpta_deepseek_v3_outcomes": "URR",
+      "instance_id": "django__django-14493",
+      "repo": "django/django",
+      "row_sha256": "d973b5ece51912b61d89b97040ae4a8ef049ed2e9fa52eea582275c04c8a8fb0",
+      "split": "train"
+    },
+    {
+      "difficulty": "15 min - 1 hour",
+      "existing_safe_pce_resolved": true,
+      "fpta_deepseek_v3_outcomes": "URU",
+      "instance_id": "django__django-11206",
+      "repo": "django/django",
+      "row_sha256": "5cf13ebd878efa2ea847dfee9f0d65bb05f451c42bd21a2be5e86941c36b11af",
+      "split": "validation"
+    },
+    {
+      "difficulty": "15 min - 1 hour",
+      "existing_safe_pce_resolved": true,
+      "fpta_deepseek_v3_outcomes": "UUU",
+      "instance_id": "matplotlib__matplotlib-26291",
+      "repo": "matplotlib/matplotlib",
+      "row_sha256": "0033659aee56c9ca35e41654aadbf427d5740905cc6da4e8db845b4b1f2eb9a8",
+      "split": "validation"
+    },
+    {
+      "difficulty": "15 min - 1 hour",
+      "existing_safe_pce_resolved": true,
+      "fpta_deepseek_v3_outcomes": "UUU",
+      "instance_id": "matplotlib__matplotlib-22871",
+      "repo": "matplotlib/matplotlib",
+      "row_sha256": "44318841c839b333781d03df1e2020e443fa888464e65bfd3708e3093941776e",
+      "split": "train"
+    },
+    {
+      "difficulty": "15 min - 1 hour",
+      "existing_safe_pce_resolved": true,
+      "fpta_deepseek_v3_outcomes": "UUU",
+      "instance_id": "mwaskom__seaborn-3187",
+      "repo": "mwaskom/seaborn",
+      "row_sha256": "80aa45876204fa0a13ba2c7916e5723b61713622784ca260ebd40f7786abd9d0",
+      "split": "train"
+    },
+    {
+      "difficulty": "15 min - 1 hour",
+      "existing_safe_pce_resolved": true,
+      "fpta_deepseek_v3_outcomes": "UUU",
+      "instance_id": "mwaskom__seaborn-3069",
+      "repo": "mwaskom/seaborn",
+      "row_sha256": "8437dbd612c23b18406d894ebf2b0412ee9087536161ecbda3a26e81be16aef2",
+      "split": "train"
+    },
+    {
+      "difficulty": "<15 min fix",
+      "existing_safe_pce_resolved": true,
+      "fpta_deepseek_v3_outcomes": "UUU",
+      "instance_id": "psf__requests-2317",
+      "repo": "psf/requests",
+      "row_sha256": "2ac3f3ab67a178834b4a2b7ada6fba28b1515dcf9b2edfe773330ca1e4ca6005",
+      "split": "train"
+    },
+    {
+      "difficulty": "15 min - 1 hour",
+      "existing_safe_pce_resolved": true,
+      "fpta_deepseek_v3_outcomes": "UUU",
+      "instance_id": "scikit-learn__scikit-learn-12973",
+      "repo": "scikit-learn/scikit-learn",
+      "row_sha256": "18dbca8ab1db9148194eef4a198264c0ff4e225f34f70ca68b828ef5a7bb803e",
+      "split": "validation"
+    },
+    {
+      "difficulty": "<15 min fix",
+      "existing_safe_pce_resolved": true,
+      "fpta_deepseek_v3_outcomes": "URR",
+      "instance_id": "scikit-learn__scikit-learn-25232",
+      "repo": "scikit-learn/scikit-learn",
+      "row_sha256": "727a19baf6bcba4d9669db5f9bccb7f8d7f55229843e2b63bedd8f5d6a581abf",
+      "split": "train"
+    },
+    {
+      "difficulty": "15 min - 1 hour",
+      "existing_safe_pce_resolved": true,
+      "fpta_deepseek_v3_outcomes": "UUU",
+      "instance_id": "pydata__xarray-3095",
+      "repo": "pydata/xarray",
+      "row_sha256": "9b7fa4f7243bdc754656a5041253aeb0c24a8c72805ab913a32b78cd1fc6c252",
+      "split": "train"
+    },
+    {
+      "difficulty": "15 min - 1 hour",
+      "existing_safe_pce_resolved": true,
+      "fpta_deepseek_v3_outcomes": "RRU",
+      "instance_id": "pydata__xarray-3677",
+      "repo": "pydata/xarray",
+      "row_sha256": "ae4803cc14f8424474c67f3023718b50d5cd78242d94b1450cfe54464e8f360f",
+      "split": "train"
+    },
+    {
+      "difficulty": "15 min - 1 hour",
+      "existing_safe_pce_resolved": true,
+      "fpta_deepseek_v3_outcomes": "UUU",
+      "instance_id": "pylint-dev__pylint-7080",
+      "repo": "pylint-dev/pylint",
+      "row_sha256": "25624f1c827f50c9cf055262a27ebb1a485ed0bd0305469a849d549d0926c26e",
+      "split": "train"
+    },
+    {
+      "difficulty": "15 min - 1 hour",
+      "existing_safe_pce_resolved": true,
+      "fpta_deepseek_v3_outcomes": "UUU",
+      "instance_id": "pytest-dev__pytest-10051",
+      "repo": "pytest-dev/pytest",
+      "row_sha256": "846fada4df002172cf57a28f635b89eba5ee2c215c40c0a8252e81fc3e55bd8e",
+      "split": "train"
+    },
+    {
+      "difficulty": "<15 min fix",
+      "existing_safe_pce_resolved": true,
+      "fpta_deepseek_v3_outcomes": "UUR",
+      "instance_id": "pytest-dev__pytest-7432",
+      "repo": "pytest-dev/pytest",
+      "row_sha256": "a9595ca531f635f2e516f46280cff348a6eca60927854b8db4bede611c7e7b1b",
+      "split": "validation"
+    },
+    {
+      "difficulty": "<15 min fix",
+      "existing_safe_pce_resolved": true,
+      "fpta_deepseek_v3_outcomes": "RUU",
+      "instance_id": "sphinx-doc__sphinx-10323",
+      "repo": "sphinx-doc/sphinx",
+      "row_sha256": "5c224a906daede2fcfd686fc9cb12e6cf223152e1d8dbf79991a26f8abbc611e",
+      "split": "train"
+    },
+    {
+      "difficulty": "15 min - 1 hour",
+      "existing_safe_pce_resolved": true,
+      "fpta_deepseek_v3_outcomes": "UUU",
+      "instance_id": "sphinx-doc__sphinx-9658",
+      "repo": "sphinx-doc/sphinx",
+      "row_sha256": "dda7a948e884237e278cf05f536b8dcae9839a01708987a5a9c81c7eda434c4d",
+      "split": "validation"
+    },
+    {
+      "difficulty": "<15 min fix",
+      "existing_safe_pce_resolved": true,
+      "fpta_deepseek_v3_outcomes": "RUR",
+      "instance_id": "sympy__sympy-12096",
+      "repo": "sympy/sympy",
+      "row_sha256": "2235b112aebf4fb42129a3b870d44c054ead6e4be72361ca02606e713e063f98",
+      "split": "validation"
+    },
+    {
+      "difficulty": "<15 min fix",
+      "existing_safe_pce_resolved": true,
+      "fpta_deepseek_v3_outcomes": "UUR",
+      "instance_id": "sympy__sympy-18189",
+      "repo": "sympy/sympy",
+      "row_sha256": "2d38bffb046c82d3067c5a4c65b98a32eeafc3a4ce3c66264d2c3fe1e77eee2e",
+      "split": "train"
+    }
+  ],
+  "selected_count": 20,
+  "selected_instance_ids": [
+    "astropy__astropy-13977",
+    "django__django-12276",
+    "django__django-14493",
+    "django__django-11206",
+    "matplotlib__matplotlib-26291",
+    "matplotlib__matplotlib-22871",
+    "mwaskom__seaborn-3187",
+    "mwaskom__seaborn-3069",
+    "psf__requests-2317",
+    "scikit-learn__scikit-learn-12973",
+    "scikit-learn__scikit-learn-25232",
+    "pydata__xarray-3095",
+    "pydata__xarray-3677",
+    "pylint-dev__pylint-7080",
+    "pytest-dev__pytest-10051",
+    "pytest-dev__pytest-7432",
+    "sphinx-doc__sphinx-10323",
+    "sphinx-doc__sphinx-9658",
+    "sympy__sympy-12096",
+    "sympy__sympy-18189"
+  ],
+  "selected_instance_ids_sha256": "1d38b53471fd0bb48ba0b09b63ca2e74bae8463d1d739464b954c3d23e9caf83",
+  "selection_id": "safe-pce-no-thinking20-v1-20260918",
+  "selection_policy": {
+    "candidate_universe": "outcome-enriched FPTA pilot116",
+    "current_safe_pce_requirement": "three reliable resolved observations and no observed within-task R/U contrast",
+    "repository_balance": "retain all seven clean historical-V4-U versus Safe-V4.1-R stable-RRR cases, then add thirteen stable-RRR cases across underrepresented repositories",
+    "selection_is_development_only": true,
+    "untouched_holdout": false
+  },
+  "source_authorities": {
+    "parent_images": "configs/frozen_swe_verified_safe_pce/fpta-deficit116-v1-20260918/images.json",
+    "parent_images_sha256": "e45dd756c1f2b44d3542b276868eb5e1b7167210be00acedcf255cb426220f86",
+    "parent_selection": "configs/frozen_swe_verified_safe_pce/fpta-deficit116-v1-20260918/selection.json",
+    "parent_selection_sha256": "7b0ee1926d877e0045e5cb73a522a0494f785d703c7b3ca5c8df1c5a87979b65"
+  },
+  "source_instance_count": 500,
+  "source_instances_sha256": "8d6f5c64fe448432264ced781ac9bc987fc38b668ade6de39592a23ad1a9ef1f",
+  "source_manifest_sha256": "bec1150dbf55c29c0893226c20578bee031406d78db305cdfef7b2b80965143a"
+}

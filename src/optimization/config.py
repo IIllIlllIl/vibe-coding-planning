@@ -24,6 +24,7 @@ class ModelConfig:
     timeout: int
     max_attempts: int = 1
     agent_timeout_seconds: int = 0
+    thinking: str | None = None
 
 
 @dataclass(frozen=True)

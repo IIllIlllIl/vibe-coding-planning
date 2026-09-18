@@ -172,6 +172,7 @@ def build_model(
     api_key: str,
     api_base: str,
     temperature: float | None = None,
+    thinking: str | None = None,
 ) -> Any:
     """Build a LitellmModel with provider-prefixed model name.
 
@@ -196,6 +197,10 @@ def build_model(
     model_kwargs = {"api_key": api_key, "api_base": api_base}
     if temperature is not None:
         model_kwargs["temperature"] = temperature
+    if thinking is not None:
+        if thinking not in {"enabled", "disabled"}:
+            raise ValueError("thinking must be enabled, disabled, or omitted")
+        model_kwargs["extra_body"] = {"thinking": {"type": thinking}}
 
     return LitellmModel(
         model_name=prefixed,

@@ -123,6 +123,7 @@ class AgentConfig:
     cost_limit: float = 3.0
     timeout: int = 1800
     temperature: float | None = None
+    thinking: str | None = None
 
 
 @dataclass(frozen=True)
@@ -445,6 +446,9 @@ def _build_docker_config(data: dict[str, Any]) -> DockerConfig:
 def _build_agent_config(data: dict[str, Any]) -> AgentConfig:
     """Build AgentConfig from a dict."""
     temperature = data.get("temperature")
+    thinking = data.get("thinking")
+    if thinking not in {None, "enabled", "disabled"}:
+        raise ValueError("agent.thinking must be enabled, disabled, or omitted")
     return AgentConfig(
         max_steps=_validate_positive_int("agent.max_steps", _get_int(data, "max_steps", 30)),
         cost_limit=_validate_non_negative_float("agent.cost_limit", _get_float(data, "cost_limit", 3.0)),
@@ -457,6 +461,7 @@ def _build_agent_config(data: dict[str, Any]) -> AgentConfig:
                 _get_float(data, "temperature", 0.0),
             )
         ),
+        thinking=thinking,
     )
 
 

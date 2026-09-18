@@ -435,6 +435,7 @@ def run(
         api_key=config.api_key,
         api_base=config.system.api_base,
         temperature=config.agent.temperature,
+        thinking=config.agent.thinking,
     )
     if model_wrapper is not None:
         model = model_wrapper(model)

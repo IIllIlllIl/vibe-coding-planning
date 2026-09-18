@@ -1,0 +1,24 @@
+schema_version: 1
+session: safe-pce-no-thinking20-aion-v1-20260918
+log: .local/hpc-supervisor/safe-pce-no-thinking20-aion-v1-20260918.log
+arguments:
+  - --poll-interval
+  - "300"
+  - --slice-time
+  - "00:10:00"
+  - --max-runs
+  - "30"
+  - --state-file
+  - .local/hpc-supervisor/safe-pce-no-thinking20-aion-v1-20260918.json
+  - --reclaim-staging
+  - --reclaim-workspaces
+  - --require-clean-worktree
+  - --batch-script
+  - scripts/hpc_submit_swe_verified_pce.sh
+  - --config
+  - configs/swe_verified_safe_pce_no_thinking20_aion_v1_20260918.yaml
+  - --ulhpc-config
+  - configs/ulhpc_submit_aion.yaml
+  - --job-name
+  - safe-pce-no-thinking20-aion-v1-20260918
+  - --submit

@@ -74,6 +74,7 @@ class SWEVerifiedPCERunner:
             cost_limit=model.cost_limit,
             timeout=model.timeout,
             temperature=model.temperature,
+            thinking=model.thinking,
         )
 
     def _base_config(self, model: Any) -> Config:

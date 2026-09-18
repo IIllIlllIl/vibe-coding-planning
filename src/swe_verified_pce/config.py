@@ -48,6 +48,9 @@ def _mapping(value: Any, name: str) -> dict[str, Any]:
 
 
 def _model(value: dict[str, Any], *, temperature: float) -> ModelConfig:
+    thinking = value.get("thinking")
+    if thinking not in {None, "enabled", "disabled"}:
+        raise ValueError("model thinking must be enabled, disabled, or omitted")
     model = ModelConfig(
         model=str(value["model"]),
         api_base=str(value["api_base"]),
@@ -57,6 +60,7 @@ def _model(value: dict[str, Any], *, temperature: float) -> ModelConfig:
         cost_limit=float(value.get("cost_limit", 0.0)),
         timeout=int(value.get("timeout", 1800)),
         max_attempts=int(value.get("max_attempts", 3)),
+        thinking=thinking,
     )
     if model.max_steps != 0 or model.cost_limit != 0.0:
         raise ValueError("SWE-Verified Agent step and cost limits must be disabled")

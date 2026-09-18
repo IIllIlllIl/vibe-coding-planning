@@ -3,7 +3,7 @@
 > Authority: current ACE-stage Plan-Code-Evaluate data, artifact, execution,
 > evaluator, and smoke contract
 >
-> Last reviewed: 2026-09-17
+> Last reviewed: 2026-09-18
 
 ## Purpose
 
@@ -19,6 +19,30 @@ manifest; the full run instead binds the complete source manifest directly. A
 usable image record binds the source manifest, requested image, exact SIF
 bytes, and a successful check that the official base commit exists in
 `/testbed`.
+
+## Non-Thinking Planner Pilot
+
+The development-only no-thinking pilot tests whether weakening only the Plan
+generation step can produce additional trustworthy within-task contrasts. Its
+20 frozen tasks have three prior reliable Safe PCE outcomes, all resolved, and
+no observed within-task outcome disagreement. Seven also belong to the clean
+historical-V4-unresolved versus Safe-V4.1-resolved intersection; the remainder
+provide repository-balanced stable-resolved coverage from the same
+outcome-enriched pilot universe.
+
+The Planner uses the existing human-readable non-NRPV prompt and
+`deepseek-v4-flash`, but explicitly sends `thinking.type=disabled` and
+temperature 1.0. The Coder configuration is unchanged. This isolation is
+essential: a new unresolved outcome can then be audited as a possible Plan
+effect rather than a simultaneous Planner/Coder model change. Operational
+failures remain incomplete, and no new unresolved outcome enters the mixed
+pool without manual Plan and Code trajectory attribution.
+
+The frozen selection and exact SIF projection are under
+`configs/frozen_swe_verified_safe_pce/no-thinking20-v1-20260918/`; the runtime
+and single-Supervisor authorities are
+`configs/swe_verified_safe_pce_no_thinking20_aion_v1_20260918.yaml` and
+`configs/swe_verified_safe_pce_no_thinking20_aion_v1_supervisor_20260918.yaml`.
 
 ## FPTA Mixed-Outcome Repeat Pilot
 

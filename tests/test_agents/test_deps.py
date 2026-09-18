@@ -49,6 +49,31 @@ class TestBuildModel:
         assert m.model_kwargs["api_key"] == "sk-test"
         assert m.model_kwargs["api_base"] == "https://api.deepseek.com"
 
+    def test_passes_explicit_thinking_mode_in_provider_body(self):
+        m = build_model(
+            FakeLitellmModel,
+            model_name="deepseek-v4-flash",
+            api_key="sk-test",
+            api_base="https://api.deepseek.com",
+            temperature=1.0,
+            thinking="disabled",
+        )
+
+        assert m.model_kwargs["temperature"] == 1.0
+        assert m.model_kwargs["extra_body"] == {
+            "thinking": {"type": "disabled"}
+        }
+
+    def test_rejects_unknown_thinking_mode(self):
+        with pytest.raises(ValueError, match="thinking must be enabled"):
+            build_model(
+                FakeLitellmModel,
+                model_name="deepseek-v4-flash",
+                api_key="sk-test",
+                api_base="https://api.deepseek.com",
+                thinking="automatic",
+            )
+
     def test_auto_prefixes_deepseek(self):
         m = build_model(
             FakeLitellmModel,

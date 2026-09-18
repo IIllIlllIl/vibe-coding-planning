@@ -46,6 +46,7 @@ from src.swe_verified_pce.evaluator_resume import _prepare as prepare_evaluator_
 from src.swe_verified_pce.hpc_executor import (
     SWEVerifiedPCEHPCExecutor,
     build_array_script as build_pce_array_script,
+    pce_semantic_sha256,
     recover_exhausted_evaluator_timeout,
 )
 from src.swe_verified_pce.models import FrozenImage, SWEVerifiedPCECase
@@ -442,6 +443,30 @@ def test_safe_pce_config_accepts_human_bounded_markdown_protocol(
     config = load_swe_verified_pce_config(path, require_api_keys=False)
 
     assert config.plan_submission_protocol == "direct_human_markdown_v5"
+
+
+def test_safe_pce_config_accepts_explicit_thinking_mode(tmp_path: Path) -> None:
+    source = Path("configs/swe_verified_safe_pce_audit10_v8_claude_plan_20260913.yaml")
+    raw = yaml.safe_load(source.read_text(encoding="utf-8"))
+    raw["plan"]["thinking"] = "disabled"
+    path = tmp_path / "explicit-thinking.yaml"
+    path.write_text(yaml.safe_dump(raw), encoding="utf-8")
+
+    config = load_swe_verified_pce_config(path, require_api_keys=False)
+
+    assert config.plan.thinking == "disabled"
+    assert config.code.thinking is None
+
+
+def test_safe_pce_config_rejects_unknown_thinking_mode(tmp_path: Path) -> None:
+    source = Path("configs/swe_verified_safe_pce_audit10_v8_claude_plan_20260913.yaml")
+    raw = yaml.safe_load(source.read_text(encoding="utf-8"))
+    raw["plan"]["thinking"] = "automatic"
+    path = tmp_path / "unknown-thinking.yaml"
+    path.write_text(yaml.safe_dump(raw), encoding="utf-8")
+
+    with pytest.raises(ValueError, match="model thinking must be enabled"):
+        load_swe_verified_pce_config(path, require_api_keys=False)
 
 
 def test_safe_pce_audit10_v8_binds_flexible_markdown_smoke() -> None:
@@ -2557,6 +2582,52 @@ def test_fpta_pilot_uses_one_flat_deficit_only_runtime(
     assert "--reclaim-workspaces" in arguments
     assert "--submit" in arguments
 
+
+def test_no_thinking20_pilot_changes_only_planner_sampling() -> None:
+    config_path = Path(
+        "configs/swe_verified_safe_pce_no_thinking20_aion_v1_20260918.yaml"
+    )
+    config = load_swe_verified_pce_config(config_path, require_api_keys=False)
+    raw = yaml.safe_load(config_path.read_text(encoding="utf-8"))
+    contract = raw["experiment_contract"]
+    supervisor = yaml.safe_load(
+        Path(
+            "configs/swe_verified_safe_pce_no_thinking20_aion_v1_"
+            "supervisor_20260918.yaml"
+        ).read_text(encoding="utf-8")
+    )
+
+    assert len(config.instance_ids) == 20
+    assert len(set(config.instance_ids)) == 20
+    assert config.execution_instance_ids == ()
+    assert config.plan.temperature == 1.0
+    assert config.plan.thinking == "disabled"
+    assert SWEVerifiedPCERunner._agent_config(object(), config.plan).thinking == (
+        "disabled"
+    )
+    assert config.code.temperature == 0.0
+    assert config.code.thinking is None
+    assert config.hpc.cpus_per_task == 1
+    assert config.hpc.mem == "1750M"
+    assert config.hpc.time == "01:00:00"
+    assert config.hpc.max_running_array_tasks == 20
+    assert contract["prior_outcome_sequence_per_case"] == "RRR"
+    assert contract["coder_configuration_changed"] is False
+    assert contract["thinking_parameter_transport"] == (
+        "extra_body.thinking.type"
+    )
+    assert contract["pce_semantic_sha256"] == pce_semantic_sha256(config)
+    assert contract["selection_manifest_sha256"] == file_sha256(
+        config.selection_manifest
+    )
+    assert contract["image_manifest_sha256"] == file_sha256(
+        config.image_manifest
+    )
+    arguments = supervisor["arguments"]
+    assert arguments[arguments.index("--config") + 1] == str(config_path)
+    assert arguments[arguments.index("--ulhpc-config") + 1] == (
+        "configs/ulhpc_submit_aion.yaml"
+    )
 
 def test_aion_low_memory_requires_matching_experiment_contract(
     tmp_path: Path,
