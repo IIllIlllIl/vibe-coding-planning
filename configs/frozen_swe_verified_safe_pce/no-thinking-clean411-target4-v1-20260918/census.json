@@ -1,0 +1,66 @@
+{
+  "authorities": {
+    "clean_cases": {
+      "path": "configs/frozen_swe_verified_playbook_gepa/20260915_safe_pce_clean411_v2/cases.jsonl",
+      "sha256": "555b853d8db8f5283755759924b28ebb913faf1145f41895f80052d3c368d92c"
+    },
+    "completed_four_selection": {
+      "path": "configs/frozen_swe_verified_safe_pce/no-thinking20-v1-20260918/selection.json",
+      "sha256": "b872fe583164e2a44dfb367959691991586dc0363421cfb32f48deb4de4b2b7d"
+    },
+    "completed_three_selection": {
+      "path": "configs/frozen_swe_verified_safe_pce/fpta-deficit116-v1-20260918/selection.json",
+      "sha256": "7b0ee1926d877e0045e5cb73a522a0494f785d703c7b3ca5c8df1c5a87979b65"
+    },
+    "deficit116_completed_outcomes": {
+      "remote_path": "/scratch/users/twang/vibe-coding-planning/run_state/output/SWE-bench_Verified/swe-verified-pce-runs/development/fpta-deficit116-aion-v1-20260918/raw_pce_outcomes.jsonl",
+      "sha256": "f00610594342455660f00e01c7b196c16ef2c3f1f39032a2f2f000e65bef2893",
+      "terminal_rows": 168
+    },
+    "mixed_manifests": [
+      {
+        "path": "configs/frozen_swe_verified_safe_pce/within-task-mixed-outcome-pool-v1-20260917/manifest.json",
+        "sha256": "5620f23900b0d69733ea362b0f5cd93df61daf5ffe5c5fd71a2624fcb59110c6"
+      },
+      {
+        "path": "configs/frozen_swe_verified_safe_pce/no-thinking20-ru-audit-v1-20260918/manifest.json",
+        "sha256": "af6ff967d3a6933b6d168b3601ced353a25675f34d1db8660df05c405f11d1c0"
+      }
+    ],
+    "no_thinking20_completed_outcomes": {
+      "reliable_rows_counted": 17,
+      "remote_path": "/scratch/users/twang/vibe-coding-planning/run_state/output/SWE-bench_Verified/swe-verified-pce-runs/development/safe-pce-no-thinking20-aion-v1-20260918/raw_pce_outcomes.jsonl",
+      "sha256": "d05eb844396d03de9cfe4009712184f3ca5b0b4b5162f46199fca5cae7b53785",
+      "terminal_rows": 20
+    },
+    "spec": {
+      "path": "configs/frozen_swe_verified_safe_pce/no-thinking-clean411-target4-v1-20260918/spec.json",
+      "sha256": "2e0265ebf2159175e1c26df3868a3ed70d41ce612e2d58241e6704f335e3ba5f"
+    }
+  },
+  "census_id": "safe-pce-no-thinking-clean411-target4-census-v1-20260918",
+  "clean_task_count": 411,
+  "excluded_known_mixed_count": 7,
+  "excluded_known_mixed_instance_ids": [
+    "astropy__astropy-13977",
+    "django__django-16877",
+    "matplotlib__matplotlib-22871",
+    "scikit-learn__scikit-learn-14087",
+    "scikit-learn__scikit-learn-25102",
+    "sympy__sympy-11618",
+    "sympy__sympy-14976"
+  ],
+  "prior_reliable_pce_count_distribution": {
+    "1": 295,
+    "3": 92,
+    "4": 17
+  },
+  "purpose": "reliable task-level PCE count before target-four execution",
+  "schema_version": 1,
+  "selected_non_mixed_task_count": 404,
+  "target_reliable_pce_observations_per_instance": 4,
+  "unreliable_observation_instance_ids": [
+    "psf__requests-2317"
+  ],
+  "unreliable_observations_count_toward_target": false
+}

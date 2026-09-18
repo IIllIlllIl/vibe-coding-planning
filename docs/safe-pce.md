@@ -44,6 +44,39 @@ and single-Supervisor authorities are
 `configs/swe_verified_safe_pce_no_thinking20_aion_v1_20260918.yaml` and
 `configs/swe_verified_safe_pce_no_thinking20_aion_v1_supervisor_20260918.yaml`.
 
+The completed pilot produced 17 resolved and three unresolved official
+outcomes. Manual attribution retains `astropy__astropy-13977` as a direct Plan
+strategy contrast and `matplotlib__matplotlib-22871` with an explicit Code
+fidelity caveat. `psf__requests-2317` is excluded: its unresolved execution
+used exactly the same patch bytes as an earlier resolved execution and failed
+on external httpbin and unrelated environment behavior. The frozen audit is
+`configs/frozen_swe_verified_safe_pce/no-thinking20-ru-audit-v1-20260918/manifest.json`.
+
+An identical patch receiving both resolved and unresolved outcomes is now a
+deterministic evaluator-nondeterminism exclusion in within-task contrast
+postprocessing. Raw official evaluator records remain immutable; the audit
+changes only whether the task can identify a Plan effect.
+
+The prepared expansion now prioritizes task coverage across clean411 rather
+than repeatedly sampling only the 53 stable-`RRR` tasks. Seven tasks with an
+already audited reliable R/U contrast receive no further executions. For each
+of the remaining 404 tasks, a frozen census counts only reliable PCE evidence
+and requests the deficit needed to reach four observations. The resulting
+distribution is 295 tasks with one prior observation, 92 with three, and 17
+already at four. This produces 977 flat execution units; the prior
+evaluator-noise observation for `psf__requests-2317` does not count.
+
+The Planner remains no-thinking at temperature 1 and the Coder remains at
+temperature 0. One Supervisor and one Controller submit every unfinished unit
+in one Slurm array; `%20` only bounds peak disposable-workspace inode use. An
+18-hour Supervisor ceiling accommodates the estimated 10–14 hour run without
+treating wall time as a scientific budget. Authorities are
+`configs/frozen_swe_verified_safe_pce/no-thinking-clean411-target4-v1-20260918/`
+and
+`configs/swe_verified_safe_pce_no_thinking_clean411_target4_aion_v1_20260918.yaml`.
+The user authorized this frozen run after reviewing the target-four census and
+runtime estimate.
+
 ## FPTA Mixed-Outcome Repeat Pilot
 
 The development-only repeat pilot is a feasibility study for replacing a

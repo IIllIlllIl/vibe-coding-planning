@@ -11,6 +11,7 @@ import pytest
 import yaml
 
 from src.agents import plan_agent
+from src.agents._deps import build_model
 from src.environment.source_access import SOURCE_ACCESS_POLICY_VERSION
 from src.optimization.audit import text_sha256
 from src.optimization.hpc.task_batch import TaskFiles
@@ -37,6 +38,9 @@ from src.swe_verified_pce.dataset import (
     load_swe_verified_pce_cases,
 )
 from src.swe_verified_pce.config import load_swe_verified_pce_config
+from scripts.tools.audit_swe_verified_within_task_contrasts import (
+    audit_patch_outcome_consistency,
+)
 from src.swe_verified_pce.evaluator import (
     _apply_patch,
     _terminal,
@@ -1900,6 +1904,45 @@ def test_evaluator_terminal_keeps_unknown_separate(
     assert result["evaluator_resolved"] is resolved
 
 
+def test_within_task_audit_rejects_identical_patch_outcome_flip() -> None:
+    result = audit_patch_outcome_consistency(
+        [
+            {"outcome": "resolved", "patch_sha256": "a" * 64},
+            {"outcome": "unresolved", "patch_sha256": "a" * 64},
+            {"outcome": "resolved", "patch_sha256": "b" * 64},
+        ]
+    )
+
+    assert result == {
+        "schema_version": 1,
+        "terminal_observations": 3,
+        "evaluator_nondeterministic": True,
+        "conflicting_patch_sha256": ["a" * 64],
+        "eligible_for_plan_contrast": False,
+        "reason_codes": ["identical_patch_conflicting_outcomes"],
+    }
+
+
+def test_within_task_audit_keeps_distinct_patch_contrast() -> None:
+    result = audit_patch_outcome_consistency(
+        [
+            {"outcome": "resolved", "patch_sha256": "a" * 64},
+            {"outcome": "unresolved", "patch_sha256": "b" * 64},
+            {"outcome": "unknown", "patch_sha256": "a" * 64},
+        ]
+    )
+
+    assert result["terminal_observations"] == 2
+    assert result["evaluator_nondeterministic"] is False
+    assert result["eligible_for_plan_contrast"] is True
+    assert result["reason_codes"] == []
+
+
+def test_within_task_audit_requires_patch_identity() -> None:
+    with pytest.raises(ValueError, match="requires patch_sha256"):
+        audit_patch_outcome_consistency([{"outcome": "resolved"}])
+
+
 def test_evaluator_patch_commands_keep_only_the_loose_command_timeout() -> None:
     class Environment:
         def __init__(self) -> None:
@@ -2628,6 +2671,136 @@ def test_no_thinking20_pilot_changes_only_planner_sampling() -> None:
     assert arguments[arguments.index("--ulhpc-config") + 1] == (
         "configs/ulhpc_submit_aion.yaml"
     )
+
+
+def test_no_thinking_clean411_target4_freezes_one_flat_deficit_run(
+    tmp_path: Path,
+) -> None:
+    config_path = Path(
+        "configs/swe_verified_safe_pce_no_thinking_clean411_"
+        "target4_aion_v1_20260918.yaml"
+    )
+    config = load_swe_verified_pce_config(config_path, require_api_keys=False)
+    raw = yaml.safe_load(config_path.read_text(encoding="utf-8"))
+    contract = raw["experiment_contract"]
+    selection = json.loads(config.selection_manifest.read_text(encoding="utf-8"))
+    execution = json.loads(config.execution_manifest.read_text(encoding="utf-8"))
+    census = json.loads(
+        (
+            config.selection_manifest.parent / "census.json"
+        ).read_text(encoding="utf-8")
+    )
+
+    assert len(config.instance_ids) == 404
+    assert len(set(config.instance_ids)) == 404
+    assert len(config.execution_instance_ids) == 977
+    assert execution["target_pce_observations_per_instance"] == 4
+    assert execution["prior_usable_pce_count_distribution"] == {
+        "1": 295,
+        "3": 92,
+        "4": 17,
+    }
+    assert execution["instances_at_target_before_run"] == 17
+    assert execution["instances_requiring_execution"] == 387
+    known_mixed = set(census["excluded_known_mixed_instance_ids"])
+    assert len(known_mixed) == 7
+    assert known_mixed.isdisjoint(config.instance_ids)
+    assert known_mixed.isdisjoint(config.execution_instance_ids)
+    assert census["unreliable_observation_instance_ids"] == [
+        "psf__requests-2317"
+    ]
+    requested_counts = Counter(config.execution_instance_ids)
+    assert Counter(requested_counts.values()) == {1: 92, 3: 295}
+    assert selection["selection_policy"]["historical_groups_are_not_runtime_groups"]
+    assert config.plan.temperature == 1.0
+    assert config.plan.thinking == "disabled"
+    assert config.code.temperature == 0.0
+    assert config.code.thinking is None
+    assert config.hpc.max_running_array_tasks == 20
+    assert config.hpc.mem == "1750M"
+    assert config.hpc.time == "01:00:00"
+    assert contract["status"] == "launch_authorized"
+    assert contract["budget"]["supervisor_wall_clock_budget"] == "18:00:00"
+    assert contract["budget"]["supervisor_slices"] == 108
+    assert contract["pce_semantic_sha256"] == pce_semantic_sha256(config)
+    assert contract["selection_manifest_sha256"] == file_sha256(
+        config.selection_manifest
+    )
+    assert contract["image_manifest_sha256"] == file_sha256(config.image_manifest)
+    assert contract["execution_manifest_sha256"] == file_sha256(
+        config.execution_manifest
+    )
+
+    class FakeLitellmModel:
+        def __init__(self, **kwargs):
+            self.model_kwargs = kwargs["model_kwargs"]
+
+    model = build_model(
+        FakeLitellmModel,
+        model_name=config.plan.model,
+        api_key="not-a-real-key",
+        api_base=config.plan.api_base,
+        temperature=config.plan.temperature,
+        thinking=config.plan.thinking,
+    )
+    assert model.model_kwargs["temperature"] == 1.0
+    assert model.model_kwargs["extra_body"] == {
+        "thinking": {"type": "disabled"}
+    }
+
+    script = build_pce_array_script(
+        config=config,
+        batch_dir=tmp_path,
+        indices=list(range(977)),
+        attempt=1,
+    )
+    array_line = next(
+        line for line in script.splitlines() if line.startswith("#SBATCH --array=")
+    )
+    assert array_line.endswith("%20")
+    submitted = array_line.removeprefix("#SBATCH --array=").removesuffix("%20")
+    assert submitted.split(",") == [str(index) for index in range(977)]
+
+    supervisor = yaml.safe_load(
+        Path(
+            "configs/swe_verified_safe_pce_no_thinking_clean411_target4_aion_v1_"
+            "supervisor_20260918.yaml"
+        ).read_text(encoding="utf-8")
+    )
+    arguments = supervisor["arguments"]
+    assert arguments[arguments.index("--max-runs") + 1] == "108"
+    assert arguments[arguments.index("--config") + 1] == str(config_path)
+    assert "--reclaim-staging" in arguments
+    assert "--reclaim-workspaces" in arguments
+    assert "--submit" in arguments
+
+
+def test_no_thinking20_ru_audit_records_two_cases_and_excludes_noise() -> None:
+    manifest = json.loads(
+        Path(
+            "configs/frozen_swe_verified_safe_pce/"
+            "no-thinking20-ru-audit-v1-20260918/manifest.json"
+        ).read_text(encoding="utf-8")
+    )
+
+    assert manifest["case_count"] == 2
+    assert [case["instance_id"] for case in manifest["cases"]] == [
+        "astropy__astropy-13977",
+        "matplotlib__matplotlib-22871",
+    ]
+    assert all(case["outcome_sequence"] == "RRRU" for case in manifest["cases"])
+    excluded = manifest["excluded_cases"]
+    assert [case["instance_id"] for case in excluded] == ["psf__requests-2317"]
+    assert excluded[0]["eligible_for_plan_contrast"] is False
+    conflict = excluded[0]["conflicting_patch_sha256"]
+    result = audit_patch_outcome_consistency(
+        [
+            {"outcome": "resolved", "patch_sha256": conflict},
+            {"outcome": "unresolved", "patch_sha256": conflict},
+        ]
+    )
+    assert result["evaluator_nondeterministic"] is True
+    assert result["eligible_for_plan_contrast"] is False
 
 def test_aion_low_memory_requires_matching_experiment_contract(
     tmp_path: Path,

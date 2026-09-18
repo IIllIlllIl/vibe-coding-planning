@@ -1,0 +1,118 @@
+{
+  "schema_version": 1,
+  "pool_id": "safe-pce-no-thinking20-ru-audit-v1-20260918",
+  "purpose": "audited within-task RU cases from the no-thinking Planner pilot",
+  "comparison_unit": "three prior resolved PCE observations versus one no-thinking unresolved PCE observation for the same task",
+  "inclusion_policy": {
+    "prior_outcome_sequence": "RRR",
+    "new_outcome": "U",
+    "identical_patch_conflicting_outcomes_allowed": false,
+    "operational_failures_are_outcomes": false,
+    "manual_plan_and_code_attribution_required": true,
+    "prevalence_claim_allowed": false,
+    "held_out_claim_allowed": false
+  },
+  "source_authorities": {
+    "clean_safe_pce_cases": {
+      "path": "configs/frozen_swe_verified_playbook_gepa/20260915_safe_pce_clean411_v2/cases.jsonl",
+      "sha256": "555b853d8db8f5283755759924b28ebb913faf1145f41895f80052d3c368d92c"
+    },
+    "prior_repeat_outcomes": {
+      "remote_path": "/scratch/users/twang/vibe-coding-planning/run_state/output/SWE-bench_Verified/swe-verified-pce-runs/development/fpta-deficit116-aion-v1-20260918/raw_pce_outcomes.jsonl",
+      "sha256": "f00610594342455660f00e01c7b196c16ef2c3f1f39032a2f2f000e65bef2893"
+    },
+    "no_thinking_outcomes": {
+      "remote_path": "/scratch/users/twang/vibe-coding-planning/run_state/output/SWE-bench_Verified/swe-verified-pce-runs/development/safe-pce-no-thinking20-aion-v1-20260918/raw_pce_outcomes.jsonl",
+      "sha256": "d05eb844396d03de9cfe4009712184f3ca5b0b4b5162f46199fca5cae7b53785"
+    },
+    "no_thinking_run_manifest": {
+      "remote_path": "/scratch/users/twang/vibe-coding-planning/run_state/output/SWE-bench_Verified/swe-verified-pce-runs/development/safe-pce-no-thinking20-aion-v1-20260918/run_manifest.json",
+      "sha256": "eef3f84a77fb4f430f04a38996a52fef1f6d40b1391f154a0c0dc5ec0dea92e0"
+    }
+  },
+  "cases": [
+    {
+      "instance_id": "astropy__astropy-13977",
+      "outcome_sequence": "RRRU",
+      "attribution": "plan_strategy_difference",
+      "attribution_strength": "direct",
+      "review_summary": "The unresolved Plan used a broad TypeError/ValueError catch around converter application. Resolved Plans defer only for an external non-Quantity, non-ndarray operand that actually implements __array_ufunc__, preserving ordinary converter error semantics.",
+      "observations": [
+        {
+          "slot": "baseline",
+          "outcome": "resolved",
+          "plan_sha256": "8fee9f0d1a79f79d2c14fd846bf3b3b4ec3c4f8c963061b01f0900a6086e7f2a",
+          "patch_sha256": "98b0e21ca8e7d236043d463a0b3c1a7a5ae06c35849f3a306d446d5f787ca73b",
+          "artifact_sha256": "6d69686406cdb156b5b93f24f91a5c780b2c11ef456e46be3fb17073a9985f47"
+        },
+        {
+          "slot": "prior_repeat_1",
+          "outcome": "resolved",
+          "plan_sha256": "4b7f0a2a61bbdf92aadf690b02b33e2ab6c134cb2f854114f7c32fb252c6b4e6",
+          "patch_sha256": "0750f813860ec72238edd3829ea63cccbdd87801e9666eac821b4df199aae37a"
+        },
+        {
+          "slot": "prior_repeat_2",
+          "outcome": "resolved",
+          "plan_sha256": "edcb796d444355f1c603da75150d393b6c4e25ae64f9c34e3ec0861a8500ea4e",
+          "patch_sha256": "3a1196bde5aa13bc4198b5c5d69f481ac0519efe43fcdc87f683944af41b8d2d"
+        },
+        {
+          "slot": "no_thinking",
+          "outcome": "unresolved",
+          "plan_sha256": "c0140bd3a99562d2a9d5a08c9b1f94f554946d33f3cc5086e747692370bce983",
+          "patch_sha256": "c981f2fe44a50aacef31fbe0130f455d43acea02e365bfaebb2578b9a214f353"
+        }
+      ]
+    },
+    {
+      "instance_id": "matplotlib__matplotlib-22871",
+      "outcome_sequence": "RRRU",
+      "attribution": "plan_strategy_difference_with_code_fidelity_caveat",
+      "attribution_strength": "caveated",
+      "review_summary": "The unresolved Plan omitted the January-specific condition required to decide whether the year was already visible. The Coder then implemented level < 1 instead of the Plan's level > 1, so the case is useful RU evidence but does not provide a clean Plan-to-patch causal chain.",
+      "observations": [
+        {
+          "slot": "baseline",
+          "outcome": "resolved",
+          "plan_sha256": "ac6956ec498be0c3db37249bee82ce143cecd71a04cd28177a31c2a3fae2ccbc",
+          "patch_sha256": "2b86b2c447cf8531ac9df04936073c741fcb45e30b40d2215da768cce1f95ee1",
+          "artifact_sha256": "eb1170d28c84125683808192f305cfe968e79d278d8165b95ecab507d0baffa6"
+        },
+        {
+          "slot": "prior_repeat_1",
+          "outcome": "resolved",
+          "plan_sha256": "5161a0c662fa371a52fa1aeb67e0cf2bf5736c2498f529c782ff8fa15e894585",
+          "patch_sha256": "76558f461b54c05801bcaa8e58a393c5e8306d1c9283277cfde1e3d64fb9f154"
+        },
+        {
+          "slot": "prior_repeat_2",
+          "outcome": "resolved",
+          "plan_sha256": "1bb9c09fb6c5e798975fe27890d8ab4c69928c610b8d6095d8209a9a2241d84d",
+          "patch_sha256": "a2f8a3c3421478dedc72104d88cd3ee1143f8e711e49d106f27f1f067895b709"
+        },
+        {
+          "slot": "no_thinking",
+          "outcome": "unresolved",
+          "plan_sha256": "1789a724309b29dca1afef8c634b7643b6146b28738f7f638917b054a869ce16",
+          "patch_sha256": "a698e50e0ed0cec2452d91e148682781a3c91a79b2a38fa9a3303404a024e595"
+        }
+      ]
+    }
+  ],
+  "case_count": 2,
+  "excluded_cases": [
+    {
+      "instance_id": "psf__requests-2317",
+      "observed_outcome_sequence": "RRRU",
+      "reason_codes": [
+        "identical_patch_conflicting_outcomes",
+        "external_httpbin_502",
+        "unrelated_pytest_environment_failure"
+      ],
+      "conflicting_patch_sha256": "18128eeac71d7605c41f0176b2105e1e758820775fb02a9d2df9ed653690e705",
+      "classification": "evaluator_environment_nondeterminism",
+      "eligible_for_plan_contrast": false
+    }
+  ]
+}

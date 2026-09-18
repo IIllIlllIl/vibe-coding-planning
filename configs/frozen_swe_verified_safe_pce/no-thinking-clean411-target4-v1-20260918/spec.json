@@ -1,0 +1,21 @@
+{
+  "schema_version": 1,
+  "selection_id": "safe-pce-no-thinking-clean411-target4-v1-20260918",
+  "census_id": "safe-pce-no-thinking-clean411-target4-census-v1-20260918",
+  "purpose": "maximize clean411 task coverage by bringing every not-yet-mixed task to four reliable PCE observations",
+  "created_at": "2026-09-18",
+  "target_reliable_pce_observations_per_instance": 4,
+  "remote_outcome_authorities": {
+    "deficit116_completed_outcomes": {
+      "remote_path": "/scratch/users/twang/vibe-coding-planning/run_state/output/SWE-bench_Verified/swe-verified-pce-runs/development/fpta-deficit116-aion-v1-20260918/raw_pce_outcomes.jsonl",
+      "sha256": "f00610594342455660f00e01c7b196c16ef2c3f1f39032a2f2f000e65bef2893",
+      "terminal_rows": 168
+    },
+    "no_thinking20_completed_outcomes": {
+      "remote_path": "/scratch/users/twang/vibe-coding-planning/run_state/output/SWE-bench_Verified/swe-verified-pce-runs/development/safe-pce-no-thinking20-aion-v1-20260918/raw_pce_outcomes.jsonl",
+      "sha256": "d05eb844396d03de9cfe4009712184f3ca5b0b4b5162f46199fca5cae7b53785",
+      "terminal_rows": 20,
+      "reliable_rows_counted": 17
+    }
+  }
+}
