@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from collections import Counter
 import hashlib
 import json
 from pathlib import Path
@@ -2459,68 +2460,102 @@ def test_fpta_disagreement_run_configs_are_launch_authorized() -> None:
         )
 
 
-def test_fpta_clean_restart_campaign_preserves_four_run_authorities() -> None:
-    expected = {
-        "mixed58_remaining": ("mixed58-remaining", 58),
-        "disagreement22": ("disagreement22", 22),
-    }
-    runtime_paths: set[str] = set()
-    for config_stratum, (run_stratum, cases) in expected.items():
-        for repeat in (2, 3):
-            path = Path(
-                "configs/swe_verified_safe_pce_fpta_"
-                f"{config_stratum}_repeat{repeat}_aion_v2_20260918.yaml"
-            )
-            config = load_swe_verified_pce_config(path, require_api_keys=False)
-            raw = yaml.safe_load(path.read_text(encoding="utf-8"))
-
-            assert len(config.instance_ids) == cases
-            assert config.plan.temperature == 1.0
-            assert config.code.temperature == 0.0
-            assert config.hpc.cpus_per_task == 1
-            assert config.hpc.mem == "1750M"
-            assert config.hpc.time == "01:00:00"
-            assert raw["experiment_contract"]["status"] == "prepared_not_launched"
-            assert raw["experiment_contract"]["additional_repeat_index"] == repeat
-            assert raw["experiment_contract"]["clean_restart"] == {
-                "supersedes_failed_run": (
-                    f"fpta-{run_stratum}-repeat{repeat}-aion-v1-20260917"
-                ),
-                "reason": "phase_workspace_initialization_cleanup_defect",
-                "imports_prior_checkpoints": False,
-                "imports_prior_outcomes": False,
-            }
-            runtime_paths.add(str(path))
-
-    campaign_path = Path(
-        "configs/swe_verified_safe_pce_fpta_repeat_campaign_"
-        "aion_v2_20260918.yaml"
+def test_fpta_pilot_uses_one_flat_deficit_only_runtime(
+    tmp_path: Path,
+) -> None:
+    config_path = Path(
+        "configs/swe_verified_safe_pce_fpta_deficit116_aion_v1_20260918.yaml"
     )
-    campaign = yaml.safe_load(campaign_path.read_text(encoding="utf-8"))
-    assert campaign["poll_interval_seconds"] == 300
-    assert len(campaign["members"]) == 4
-    observed_runtime_paths = set()
-    observed_states = set()
-    for member in campaign["members"]:
-        arguments = member["arguments"]
-        observed_runtime_paths.add(arguments[arguments.index("--config") + 1])
-        observed_states.add(arguments[arguments.index("--state-file") + 1])
-        assert "--submit" in arguments
-        assert "--require-clean-worktree" in arguments
-        assert "--reclaim-staging" in arguments
-        assert "--reclaim-workspaces" in arguments
-        assert "--once" not in arguments
-    assert observed_runtime_paths == runtime_paths
-    assert len(observed_states) == 4
+    config = load_swe_verified_pce_config(config_path, require_api_keys=False)
+    raw = yaml.safe_load(config_path.read_text(encoding="utf-8"))
+    selection = json.loads(config.selection_manifest.read_text(encoding="utf-8"))
+    source_paths = [
+        "fpta-mixed12-repeat-pilot-v1-20260916",
+        "fpta-mixed24-expansion-v1-20260916",
+        "fpta-mixed58-remaining-v1-20260917",
+        "fpta-disagreement22-v1-20260917",
+    ]
+    source_selections = [
+        json.loads(
+            Path(
+                "configs/frozen_swe_verified_safe_pce",
+                source,
+                "selection.json",
+            ).read_text(encoding="utf-8")
+        )
+        for source in source_paths
+    ]
+
+    assert selection["selected_instance_ids"] == [
+        instance_id
+        for source in source_selections
+        for instance_id in source["selected_instance_ids"]
+    ]
+    assert len(config.instance_ids) == 116
+    assert len(set(config.instance_ids)) == 116
+    assert config.pce_runs_per_instance is None
+    assert config.execution_manifest is not None
+    assert len(config.execution_instance_ids) == 168
+    execution_counts = Counter(config.execution_instance_ids)
+    assert Counter(execution_counts.values()) == {1: 4, 2: 82}
+    assert config.plan.temperature == 1.0
+    assert config.code.temperature == 0.0
+    assert config.hpc.cpus_per_task == 1
+    assert config.hpc.mem == "1750M"
+    assert config.hpc.time == "01:00:00"
+    assert config.hpc.max_running_array_tasks == 20
+    assert raw["experiment_contract"]["status"] == "prepared_not_launched"
+    assert raw["experiment_contract"]["prior_usable_pce_observations"] == 180
+    assert raw["experiment_contract"]["cases_already_at_target"] == 30
+    assert raw["experiment_contract"]["execution_units"] == 168
+    assert raw["experiment_contract"]["process_control"] == {
+        "supervisors": 1,
+        "controllers": 1,
+        "slurm_arrays_per_attempt": 1,
+        "all_execution_units_submitted_in_one_array": True,
+        "max_simultaneously_running_array_elements": 20,
+        "throttle_reason": "bound_peak_disposable_workspace_inodes",
+        "source_strata_are_not_runtime_groups": True,
+    }
+
+    cases, _, _ = load_swe_verified_pce_cases(
+        config.dataset_snapshot, config.image_manifest
+    )
+    by_id = {case.instance_id: case for case in cases}
+    expanded = [by_id[instance_id] for instance_id in config.execution_instance_ids]
+    tasks = SWEVerifiedPCEHPCExecutor(config)._prepare(
+        tmp_path / "prepared", "d" * 64, expanded[:3]
+    )
+    prepared = [
+        json.loads(task.manifest_path.read_text(encoding="utf-8")) for task in tasks
+    ]
+    assert [item["instance_id"] for item in prepared] == [
+        "django__django-10914",
+        "matplotlib__matplotlib-24149",
+        "matplotlib__matplotlib-24149",
+    ]
+    assert [item["pce_run_index"] for item in prepared] == [1, 1, 2]
+    script = build_pce_array_script(
+        config=config,
+        batch_dir=tmp_path,
+        indices=list(range(168)),
+        attempt=1,
+    )
+    assert "#SBATCH --array=" in script
+    assert script.count("%20") == 1
 
     supervisor = yaml.safe_load(
         Path(
-            "configs/swe_verified_safe_pce_fpta_repeat_campaign_"
-            "aion_v2_supervisor_20260918.yaml"
+            "configs/swe_verified_safe_pce_fpta_deficit116_"
+            "aion_v1_supervisor_20260918.yaml"
         ).read_text(encoding="utf-8")
     )
-    assert supervisor["program"] == "campaign"
-    assert supervisor["arguments"] == ["--config", str(campaign_path)]
+    assert supervisor.get("program", "resume") == "resume"
+    arguments = supervisor["arguments"]
+    assert arguments[arguments.index("--config") + 1] == str(config_path)
+    assert "--reclaim-staging" in arguments
+    assert "--reclaim-workspaces" in arguments
+    assert "--submit" in arguments
 
 
 def test_aion_low_memory_requires_matching_experiment_contract(

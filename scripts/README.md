@@ -52,9 +52,6 @@ authority is `docs/archive/mixed-design/swe-chat-data-cleaning.md`.
   smoke10 subset from that frozen balanced40 authority.
 - `hpc_submit_batch.sh`, `hpc_resume_loop.py`, and
   `hpc_supervisor_service.py` are shared controller/supervisor infrastructure.
-  `hpc_campaign_supervisor.py` is a thin multi-run scheduler over the same
-  resume loop: one durable local process invokes every independent member with
-  `--once` each poll round, so run authorities and Slurm arrays remain separate.
   `hpc_runtime.py` is their workflow-independent callable storage/lifecycle
   layer: it defines the canonical scratch layout and conservatively reclaims
   inactive ulhpc-submit code workdirs. Its separate, opt-in phase-workspace
@@ -89,6 +86,10 @@ authority is `docs/archive/mixed-design/swe-chat-data-cleaning.md`.
   within-task repeat selection and its audited SIF records. It can either read
   three local FPTA reports or consume an exact reviewed R/U map whose original
   report paths and SHA-256 authorities are frozen in the selection spec.
+- `tools/freeze_swe_verified_pce_union.py` combines disjoint reviewed
+  selections into one flat PCE execution selection and projects their exact
+  audited SIF records. Source strata remain provenance for later analysis and
+  do not create runtime groups.
 - `tools/clean_safe_pce_for_ace.py` scans every observed Safe PCE Planner/Code
   trajectory and all source-access logs, then writes an immutable exhaustive
   partition into retained ACE-training cases, reliability exclusions, and

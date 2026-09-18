@@ -20,6 +20,7 @@ from src.swe_verified_pce.dataset import (
     file_sha256,
     load_swe_verified_pce_cases,
 )
+from src.swe_verified_pce.models import SWEVerifiedPCECase
 from src.swe_verified_pce.hpc_executor import (
     SWEVerifiedPCEHPCExecutor,
     execution_fingerprint,
@@ -66,6 +67,16 @@ def _run_manifest_compatible(
     } == {key: value for key, value in proposed.items() if key not in operational_paths}
 
 
+def expand_pce_runs(
+    cases: list[SWEVerifiedPCECase], runs_per_instance: int
+) -> list[SWEVerifiedPCECase]:
+    """Expand a flat case selection into independent PCE execution units."""
+
+    if runs_per_instance < 1:
+        raise ValueError("runs_per_instance must be positive")
+    return [case for case in cases for _ in range(runs_per_instance)]
+
+
 def run_swe_verified_pce(config: SWEVerifiedPCEConfig) -> dict[str, Any] | None:
     all_image_available_cases, dataset_manifest, image_manifest = (
         load_swe_verified_pce_cases(
@@ -104,6 +115,17 @@ def run_swe_verified_pce(config: SWEVerifiedPCEConfig) -> dict[str, Any] | None:
                 + ", ".join(missing)
             )
         cases = [by_id[instance_id] for instance_id in config.instance_ids]
+    selected_cases = cases
+    if config.execution_instance_ids:
+        selected_by_id = {case.instance_id: case for case in selected_cases}
+        cases = [
+            selected_by_id[instance_id]
+            for instance_id in config.execution_instance_ids
+        ]
+    else:
+        if config.pce_runs_per_instance is None:
+            raise ValueError("uniform PCE execution count is missing")
+        cases = expand_pce_runs(selected_cases, config.pce_runs_per_instance)
     config.run_dir.mkdir(parents=True, exist_ok=True)
     fingerprint = execution_fingerprint(config, cases)
     source_rows = [
@@ -156,8 +178,15 @@ def run_swe_verified_pce(config: SWEVerifiedPCEConfig) -> dict[str, Any] | None:
             if config.selection_manifest is not None
             else None
         ),
+        "execution_manifest_sha256": (
+            file_sha256(config.execution_manifest)
+            if config.execution_manifest is not None
+            else None
+        ),
         "source_instances": len(source_rows),
         "image_available_instances": len(all_image_available_cases),
+        "selected_instances": len(selected_cases),
+        "pce_runs_per_instance": config.pce_runs_per_instance,
         "execution_instances": len(cases),
         "image_unavailable_instances": unavailable,
         "image_unavailable_evidence": unavailable_evidence,
@@ -273,6 +302,14 @@ def run_swe_verified_pce(config: SWEVerifiedPCEConfig) -> dict[str, Any] | None:
         "completed_at": datetime.now(timezone.utc).isoformat(),
         "instances": len(outcomes),
         "source_instances": len(source_rows),
+        "selected_instances": len(selected_cases),
+        "pce_runs_per_instance": config.pce_runs_per_instance,
+        "execution_manifest_sha256": (
+            file_sha256(config.execution_manifest)
+            if config.execution_manifest is not None
+            else None
+        ),
+        "execution_units": len(outcomes),
         "image_unavailable_instances": len(unavailable),
         "completed_instances": completed,
         "incomplete_instances": incomplete,

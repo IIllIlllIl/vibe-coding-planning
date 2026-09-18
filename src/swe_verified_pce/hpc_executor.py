@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from collections import Counter
 from dataclasses import asdict
 import hashlib
 import importlib.metadata
@@ -87,6 +88,12 @@ def pce_semantic_sha256(
             },
             "slurm_evaluator_timeout_outcome": (config.slurm_evaluator_timeout_outcome),
             "plan_submission_protocol": config.plan_submission_protocol,
+            "pce_runs_per_instance": config.pce_runs_per_instance,
+            "execution_manifest_sha256": (
+                file_sha256(config.execution_manifest)
+                if config.execution_manifest is not None
+                else None
+            ),
             "prompts": {
                 "plan_system": config.plan_prompt,
                 "plan_instance": config.plan_instance_template,
@@ -222,6 +229,7 @@ def recover_exhausted_evaluator_timeout(
         "fingerprint": fingerprint,
         "task_index": task.index,
         "instance_id": task.instance_id,
+        "pce_run_index": manifest.get("pce_run_index", 1),
         "row_sha256": case.row_sha256,
         "attempt": max_attempts,
         **result,
@@ -244,6 +252,8 @@ def build_array_script(
     if not config_path:
         raise ValueError("hpc.worker_config_path is required")
     index_spec = ",".join(str(index) for index in indices)
+    if hpc.max_running_array_tasks:
+        index_spec = f"{index_spec}%{hpc.max_running_array_tasks}"
     log_dir = batch_dir / "slurm_logs" / f"attempt_{attempt:02d}"
     log_dir.mkdir(parents=True, exist_ok=True)
     job_name = f"{hpc.job_name_prefix}-{batch_dir.name[:12]}-a{attempt}"
@@ -324,8 +334,17 @@ class SWEVerifiedPCEHPCExecutor:
         def validate(task: TaskFiles, value: dict[str, Any]) -> None:
             if value.get("fingerprint") != fingerprint:
                 raise ValueError(f"{self.label} output fingerprint mismatch")
+            if value.get("task_index") != task.index:
+                raise ValueError(f"{self.label} output task index mismatch")
             if value.get("instance_id") != task.instance_id:
                 raise ValueError(f"{self.label} output instance mismatch")
+            task_manifest = json.loads(
+                task.manifest_path.read_text(encoding="utf-8")
+            )
+            if value.get("pce_run_index", 1) != task_manifest.get(
+                "pce_run_index", 1
+            ):
+                raise ValueError(f"{self.label} output PCE run index mismatch")
             if value.get("pce_status") != "completed":
                 raise ValueError("completed worker output lacks completed PCE evidence")
             if value.get("final_validation_label") is not None:
@@ -390,7 +409,9 @@ class SWEVerifiedPCEHPCExecutor:
         cases: Sequence[SWEVerifiedPCECase],
     ) -> list[TaskFiles]:
         tasks: list[TaskFiles] = []
+        run_indices: Counter[str] = Counter()
         for index, case in enumerate(cases):
+            run_indices[case.instance_id] += 1
             task_id = f"{index:04d}"
             manifest_path = batch_dir / "tasks" / f"task_{task_id}.json"
             output_path = batch_dir / "outputs" / f"task_{task_id}.json"
@@ -401,6 +422,7 @@ class SWEVerifiedPCEHPCExecutor:
                 "fingerprint": fingerprint,
                 "task_index": index,
                 "instance_id": case.instance_id,
+                "pce_run_index": run_indices[case.instance_id],
                 "case": case.to_dict(),
             }
             if manifest_path.is_file():
@@ -472,6 +494,9 @@ class SWEVerifiedPCEHPCExecutor:
                     "fingerprint": fingerprint,
                     "task_index": task.index,
                     "instance_id": task.instance_id,
+                    "pce_run_index": json.loads(
+                        task.manifest_path.read_text(encoding="utf-8")
+                    ).get("pce_run_index", 1),
                     "attempts_exhausted": max_attempts,
                     "last_worker_output": value or None,
                     "last_slurm_status": slurm,

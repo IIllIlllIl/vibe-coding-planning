@@ -922,57 +922,6 @@ arguments:
     assert "conda run --no-capture-output -n mini-swe" in invocation
 
 
-def test_hpc_supervisor_service_launches_campaign_program(tmp_path: Path) -> None:
-    fake_bin = tmp_path / "bin"
-    fake_bin.mkdir()
-    tmux_log = tmp_path / "tmux.log"
-    tmux = fake_bin / "tmux"
-    tmux.write_text(
-        "#!/usr/bin/env bash\n"
-        f"printf '%s\\n' \"$*\" >> {tmux_log}\n"
-        'if [[ "$1" == has-session ]]; then exit 1; fi\n'
-        "exit 0\n",
-        encoding="utf-8",
-    )
-    tmux.chmod(0o755)
-    launch_config = tmp_path / "campaign-launch.yaml"
-    launch_config.write_text(
-        f"""
-schema_version: 1
-program: campaign
-session: one-campaign
-log: {tmp_path / 'campaign.log'}
-arguments:
-  - --config
-  - configs/campaign.yaml
-""",
-        encoding="utf-8",
-    )
-    env = os.environ.copy()
-    env["PATH"] = f"{fake_bin}{os.pathsep}{env['PATH']}"
-
-    result = subprocess.run(
-        [
-            "python",
-            str(SERVICE_SCRIPT),
-            "start",
-            "--launch-config",
-            str(launch_config),
-        ],
-        cwd=REPO_ROOT,
-        capture_output=True,
-        text=True,
-        check=False,
-        env=env,
-    )
-
-    assert result.returncode == 0, result.stderr
-    invocation = tmux_log.read_text(encoding="utf-8")
-    assert "scripts/hpc_campaign_supervisor.py --config configs/campaign.yaml" in (
-        invocation
-    )
-
-
 def test_pcce_supervisor_launch_config_uses_shared_resume_loop(
     tmp_path: Path,
 ) -> None:

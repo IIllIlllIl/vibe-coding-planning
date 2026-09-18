@@ -99,8 +99,8 @@ spending more budget on the singleton. That missing observation is operational
 incompleteness, never an unresolved outcome, and is not eligible for the mixed
 pool.
 
-The next unlaunched campaign has two separate development strata. The first is
-frozen at
+The next pilot membership was selected from two development strata. The first
+source selection is frozen at
 `configs/frozen_swe_verified_safe_pce/fpta-mixed58-remaining-v1-20260917/spec.json`.
 It excludes all 36 previously scanned cases and exhausts the 58 remaining
 formal400 cases that are mixed across the three FPTA reports. The batch contains
@@ -109,26 +109,39 @@ two-resolved/one-unresolved patterns across seven repositories. All 58 have a
 resolved Safe PCE baseline, so this batch can discover `R→U` variation but
 cannot add a baseline-`U` comparison.
 
-The second stratum is frozen at
+The second source selection is frozen at
 `configs/frozen_swe_verified_safe_pce/fpta-disagreement22-v1-20260917/spec.json`.
 It adds 22 cases whose three FPTA outcomes are homogeneous but disagree with
 the clean Safe PCE baseline: 19 are FPTA `UUU` with a resolved Safe PCE result,
 and all three available reverse cases are FPTA `RRR` with an unresolved Safe
 PCE result. The 19 `UUU/R` cases are deterministically distributed across ten
 repositories; together with the three rare reverse cases, the stratum covers
-11 repositories. Keeping this stratum separate permits a direct yield
-comparison with FPTA-internal mixedness.
+11 repositories. Its origin permits a later yield comparison with
+FPTA-internal mixedness, but does not create a distinct runtime group.
 
-Across both strata, the campaign contains 80 tasks and two additional repeats,
-or 160 PCE workers. This size uses the declared fourteen-hour wall-clock budget:
-the preceding two 24-case repeats ran concurrently and their main three-attempt
-flows completed in about 3.5 hours, with negligible initial scheduler delay.
-The expanded campaign remains subject to Aion FairShare and may finish with
-explicit operationally incomplete cases rather than extending singleton retries
-beyond the budget. Both selections, their audited image projections, four run
-identities, and four supervisor templates are prepared. Every experiment
-contract is `launch_authorized`; runtime artifacts and supervisor state are the
-authority for whether a job has actually been submitted or completed.
+The initial four-run implementation attempted 160 PCE execution units during
+the ULHPC-announced Scratch degradation window of 17 September 20:00 through
+18 September 10:00. Its `Disk quota exceeded` failures therefore cannot be
+attributed solely to this workflow. Four outcomes were observed complete, but
+their run roots were explicitly removed before the service notice arrived; no
+durable Plan, Code, and evaluator artifacts remain, so they do not count as
+usable PCE observations. The four-way split also mixed analysis strata with
+process control and is not retained.
+
+The replacement census covers the complete non-overlapping pilot universe of
+116 tasks: the earlier 12 and 24 cases plus the new 58 and 22 cases. The target
+is three usable PCE observations per task, or 348 total. Before the replacement
+run, 30 tasks already have three observations, four have two, and 82 have one;
+there are 180 usable observations and a 168-observation deficit.
+
+One ordinary Supervisor drives one Controller, which submits those 168 missing
+units in one Slurm array. The execution manifest repeats each task only by its
+deficit: zero, one, or two times. `pce_run_index` distinguishes independent
+units within this new run; `attempt` remains an operational retry of the same
+unit. A conservative Slurm `%20` throttle bounds peak disposable-workspace
+inode use without dividing the experiment. Source-stratum comparisons happen
+only in postprocessing. The census, frozen execution manifest, config, and sole
+Supervisor are prepared but not launch-authorized.
 
 ## Phase And Artifact Boundary
 

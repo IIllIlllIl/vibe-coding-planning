@@ -111,10 +111,9 @@ not worker-internal parallelism.
   Controller or worker is active and removes only exact per-attempt
   `workspaces` directories. Checkpoints, trajectories, outputs, failure
   records, Slurm logs, SIFs, and shared history bundles are retained.
-- A campaign with several independent run authorities may use
-  `scripts/hpc_campaign_supervisor.py`. It keeps one durable local Supervisor
-  while stepping each ordinary `hpc_resume_loop` member once per poll round;
-  the first round submits every member, rather than serializing experiments.
+- Repeated executions of one frozen PCE selection remain one workflow: use one
+  Supervisor, one Controller, and one Slurm array. Scientific repetition is a
+  task-manifest field, not a reason to create more supervisors or run roots.
 - SWE-chat acquisition: `scripts/tools/login_swe_chat_preheat.py` and
   `scripts/swe_chat_preheat_service.py`.
 
@@ -171,6 +170,17 @@ user file quota as well as bytes. Phase workspaces are disposable; enable
 `--reclaim-workspaces` for resumable runs, but do not treat cleanup as a
 substitute for controlling the peak number of simultaneously materialized
 repositories.
+
+When measured inode usage requires a peak bound, set
+`hpc.max_running_array_tasks`. The Controller still submits every unfinished
+task in one Slurm array; Slurm's `%N` suffix limits only how many array elements
+may run simultaneously. This is an operational storage throttle, not an
+experimental split or worker-internal parallelism.
+
+Do not infer a quota defect solely from failures during the ULHPC-announced
+Scratch degradation window (17 September 20:00 through 18 September 10:00).
+Treat affected tasks as operationally incomplete and resubmit from durable
+scientific checkpoints or a separately frozen deficit manifest.
 
 Safe PCE must not run whole-repository aggressive Git garbage collection in
 each Agent phase. Agent-visible history is prepared once as a cache artifact

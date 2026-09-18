@@ -13,6 +13,7 @@ import yaml
 from src.config import DockerConfig
 from src.optimization.config import ContainerConfig, ModelConfig
 from src.optimization.hpc.config import HPCConfig
+from src.swe_verified_pce.dataset import file_sha256
 
 
 @dataclass(frozen=True)
@@ -22,6 +23,9 @@ class SWEVerifiedPCEConfig:
     image_manifest: Path
     selection_manifest: Path | None
     instance_ids: tuple[str, ...]
+    pce_runs_per_instance: int | None
+    execution_manifest: Path | None
+    execution_instance_ids: tuple[str, ...]
     run_dir: Path
     plan: ModelConfig
     code: ModelConfig
@@ -147,8 +151,10 @@ def load_swe_verified_pce_config(
     )
     if container.runtime != "apptainer":
         raise ValueError("SWE-Verified PCE supports only Apptainer")
-    if "max_running_array_tasks" in hpc_raw or "array_concurrency" in hpc_raw:
-        raise ValueError("SWE-Verified PCE leaves array concurrency to Slurm")
+    if "array_concurrency" in hpc_raw:
+        raise ValueError(
+            "use hpc.max_running_array_tasks for the Slurm array throttle"
+        )
     defaults = HPCConfig()
     hpc = HPCConfig(
         submit=bool(hpc_raw.get("submit", False)),
@@ -162,6 +168,7 @@ def load_swe_verified_pce_config(
         cpus_per_task=int(hpc_raw.get("cpus_per_task", 1)),
         mem=str(hpc_raw.get("mem", "4G")),
         time=str(hpc_raw.get("time", "00:45:00")),
+        max_running_array_tasks=int(hpc_raw.get("max_running_array_tasks", 0)),
         poll_interval_seconds=int(hpc_raw.get("poll_interval_seconds", 300)),
         task_output_grace_seconds=int(hpc_raw.get("task_output_grace_seconds", 300)),
         missing_task_grace_seconds=int(hpc_raw.get("missing_task_grace_seconds", 600)),
@@ -176,6 +183,8 @@ def load_swe_verified_pce_config(
     )
     if hpc.max_task_attempts != 3:
         raise ValueError("SWE-Verified PCE requires exactly three total attempts")
+    if hpc.max_running_array_tasks < 0:
+        raise ValueError("hpc.max_running_array_tasks must be nonnegative")
     experiment_contract = raw.get("experiment_contract", {})
     if not isinstance(experiment_contract, dict):
         raise ValueError("experiment_contract must be a mapping")
@@ -231,12 +240,61 @@ def load_swe_verified_pce_config(
         if len(set(instance_ids)) != len(instance_ids):
             raise ValueError("selected instance IDs must be unique")
 
+    execution_raw = _mapping(raw.get("execution", {}), "execution")
+    execution_manifest_raw = execution_raw.get("manifest")
+    if execution_manifest_raw is not None and "pce_runs_per_instance" in execution_raw:
+        raise ValueError(
+            "execution.manifest and execution.pce_runs_per_instance are mutually exclusive"
+        )
+    execution_manifest = (
+        resolve(str(execution_manifest_raw))
+        if execution_manifest_raw is not None
+        else None
+    )
+    execution_instance_ids: tuple[str, ...] = ()
+    pce_runs_per_instance: int | None = None
+    if execution_manifest is None:
+        pce_runs_per_instance = int(execution_raw.get("pce_runs_per_instance", 1))
+        if pce_runs_per_instance < 1:
+            raise ValueError("execution.pce_runs_per_instance must be positive")
+    else:
+        if selection_manifest is None:
+            raise ValueError("execution.manifest requires a frozen selection manifest")
+        execution = json.loads(execution_manifest.read_text(encoding="utf-8"))
+        units = execution.get("execution_units")
+        if execution.get("schema_version") != 1 or not isinstance(units, list) or not units:
+            raise ValueError(
+                "execution manifest requires schema_version 1 and execution_units"
+            )
+        if execution.get("execution_unit_count") != len(units) or not all(
+            isinstance(unit, dict) for unit in units
+        ):
+            raise ValueError("execution manifest unit count or rows are invalid")
+        if execution.get("selection_manifest_sha256") != file_sha256(
+            selection_manifest
+        ):
+            raise ValueError("execution manifest belongs to another selection")
+        expected_indices = list(range(len(units)))
+        observed_indices = [unit.get("execution_unit_index") for unit in units]
+        if observed_indices != expected_indices:
+            raise ValueError("execution manifest unit indices must be contiguous")
+        execution_instance_ids = tuple(str(unit["instance_id"]) for unit in units)
+        unknown = sorted(set(execution_instance_ids) - set(instance_ids))
+        if unknown:
+            raise ValueError(
+                "execution manifest contains instances outside selection: "
+                + ", ".join(unknown)
+            )
+
     return SWEVerifiedPCEConfig(
         config_path=config_path,
         dataset_snapshot=resolve(str(paths["dataset_snapshot"])),
         image_manifest=resolve(str(paths["image_manifest"])),
         selection_manifest=selection_manifest,
         instance_ids=instance_ids,
+        pce_runs_per_instance=pce_runs_per_instance,
+        execution_manifest=execution_manifest,
+        execution_instance_ids=execution_instance_ids,
         run_dir=resolve(str(paths["run_dir"])),
         plan=plan,
         code=code,

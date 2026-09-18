@@ -1,0 +1,152 @@
+{
+  "schema_version": 1,
+  "census_id": "safe-pce-fpta-pilot-completion-census-v1-20260918",
+  "purpose": "count durable completed PCE observations before a deficit-only pilot",
+  "target_pce_observations_per_instance": 3,
+  "baseline": {
+    "completed_observations_per_selected_instance": 1,
+    "authority_path": "configs/frozen_swe_verified_playbook_gepa/20260915_safe_pce_clean411_v2/cases.jsonl",
+    "authority_sha256": "555b853d8db8f5283755759924b28ebb913faf1145f41895f80052d3c368d92c"
+  },
+  "additional_completion_slots": [
+    {
+      "slot_id": "mixed12_additional_1",
+      "completed_instance_ids": [
+        "django__django-10880",
+        "psf__requests-1921",
+        "pydata__xarray-6721",
+        "sphinx-doc__sphinx-8035",
+        "sympy__sympy-11618",
+        "pytest-dev__pytest-7205",
+        "scikit-learn__scikit-learn-25102",
+        "astropy__astropy-7671",
+        "pylint-dev__pylint-6386",
+        "sympy__sympy-18763"
+      ],
+      "authorities": [
+        {
+          "run_id": "fpta-mixed12-repeat2-aion-v1-20260916",
+          "remote_run_root": "/scratch/users/twang/vibe-coding-planning/run_state/output/SWE-bench_Verified/swe-verified-pce-runs/development/fpta-mixed12-repeat2-aion-v1-20260916",
+          "run_manifest_sha256": "a2d5775b79e29f0db38f11e8dc5791d4d4d3dfb47284a0d94ddaac4c5f84c76e",
+          "output_tree_sha256": "9136f5ad53a2198fa300cb643a1496a046710a8822d3455103f274bff34309b5"
+        }
+      ]
+    },
+    {
+      "slot_id": "mixed12_additional_2",
+      "completed_instance_ids": [
+        "django__django-10880",
+        "django__django-10914",
+        "psf__requests-1921",
+        "pydata__xarray-6721",
+        "sphinx-doc__sphinx-8035",
+        "sympy__sympy-11618",
+        "scikit-learn__scikit-learn-25102",
+        "astropy__astropy-7671",
+        "pylint-dev__pylint-6386",
+        "sympy__sympy-18763"
+      ],
+      "authorities": [
+        {
+          "run_id": "fpta-mixed12-repeat3-aion-v1-20260916",
+          "remote_run_root": "/scratch/users/twang/vibe-coding-planning/run_state/output/SWE-bench_Verified/swe-verified-pce-runs/development/fpta-mixed12-repeat3-aion-v1-20260916",
+          "run_manifest_sha256": "20a8341be85c08f6496827a72f19cb385b28990cbc892154fcef3b6c50a42465",
+          "output_tree_sha256": "83fb6607bb7955754369c154c150eb9182716eaa4abd4db7680549e68f1bc9c2"
+        }
+      ]
+    },
+    {
+      "slot_id": "mixed24_additional_1",
+      "completed_instance_ids": [
+        "astropy__astropy-13579",
+        "astropy__astropy-14995",
+        "django__django-11848",
+        "django__django-13279",
+        "django__django-13512",
+        "matplotlib__matplotlib-20488",
+        "matplotlib__matplotlib-23314",
+        "psf__requests-1724",
+        "psf__requests-5414",
+        "pydata__xarray-2905",
+        "pydata__xarray-7233",
+        "pytest-dev__pytest-5631",
+        "pytest-dev__pytest-7236",
+        "scikit-learn__scikit-learn-14087",
+        "scikit-learn__scikit-learn-25931",
+        "scikit-learn__scikit-learn-9288",
+        "sphinx-doc__sphinx-10673",
+        "sphinx-doc__sphinx-7889",
+        "sympy__sympy-14711",
+        "sympy__sympy-14976",
+        "sympy__sympy-15349",
+        "sympy__sympy-17655"
+      ],
+      "authorities": [
+        {
+          "run_id": "fpta-mixed24-expansion-repeat2-aion-v2-20260917",
+          "remote_run_root": "/scratch/users/twang/vibe-coding-planning/run_state/output/SWE-bench_Verified/swe-verified-pce-runs/development/fpta-mixed24-expansion-repeat2-aion-v2-20260917",
+          "run_manifest_sha256": "4a8f9dd0cd9b453ac242e8f5d33c2caa8dbbda45822d23816ff60ffe2c8046e1",
+          "output_tree_sha256": "3bdcbed6af0d34cccf6e8ed99c386f9907b9e1aebe1af5eb4447c61dfb751ad5"
+        },
+        {
+          "run_id": "fpta-mixed24-recovery-repeat2-plan-ce3-aion-v2-20260917",
+          "remote_run_root": "/scratch/users/twang/vibe-coding-planning/run_state/output/SWE-bench_Verified/swe-verified-pce-runs/development/fpta-mixed24-recovery-repeat2-plan-ce3-aion-v2-20260917",
+          "run_manifest_sha256": "06e2eba4d8f72a14ade198eef8f1c55f8f1ffc714661b81f929beab59f3684e3",
+          "output_tree_sha256": "ae3a5483014fff52a7d165751dd50b56005c39bd19070c903ff222ad6c1a38ad"
+        }
+      ]
+    },
+    {
+      "slot_id": "mixed24_additional_2",
+      "completed_instance_ids": [
+        "astropy__astropy-13579",
+        "astropy__astropy-14995",
+        "django__django-11848",
+        "django__django-13512",
+        "django__django-16877",
+        "matplotlib__matplotlib-20488",
+        "matplotlib__matplotlib-23314",
+        "psf__requests-1724",
+        "psf__requests-5414",
+        "pydata__xarray-2905",
+        "pydata__xarray-7233",
+        "pytest-dev__pytest-5631",
+        "pytest-dev__pytest-7236",
+        "scikit-learn__scikit-learn-14087",
+        "scikit-learn__scikit-learn-25931",
+        "scikit-learn__scikit-learn-9288",
+        "sphinx-doc__sphinx-10673",
+        "sphinx-doc__sphinx-7889",
+        "sympy__sympy-14711",
+        "sympy__sympy-14976",
+        "sympy__sympy-15349",
+        "sympy__sympy-17655"
+      ],
+      "authorities": [
+        {
+          "run_id": "fpta-mixed24-expansion-repeat3-aion-v2-20260917",
+          "remote_run_root": "/scratch/users/twang/vibe-coding-planning/run_state/output/SWE-bench_Verified/swe-verified-pce-runs/development/fpta-mixed24-expansion-repeat3-aion-v2-20260917",
+          "run_manifest_sha256": "67c6bdd673aa931e1107ef21e637aa737ecd6fb2904e8ad516903ce9d5411eee",
+          "output_tree_sha256": "60b747fb85192ecb4798b44ad22f67ba410a3af081d58c10983c7d562114f0a9"
+        },
+        {
+          "run_id": "fpta-mixed24-recovery-repeat3-plan-ce4-aion-v2-20260917",
+          "remote_run_root": "/scratch/users/twang/vibe-coding-planning/run_state/output/SWE-bench_Verified/swe-verified-pce-runs/development/fpta-mixed24-recovery-repeat3-plan-ce4-aion-v2-20260917",
+          "run_manifest_sha256": "e1b1078e7dc9045364d926c7e483eb4874b512f85d6bf9a3381d8b86120ee156",
+          "output_tree_sha256": "e7fe749027afe375a347da0a85a244c13be18bd576bec425ccd41fda720f3acc"
+        }
+      ]
+    }
+  ],
+  "observed_but_not_usable": {
+    "count": 4,
+    "instance_ids": [
+      "psf__requests-2317",
+      "pytest-dev__pytest-10051",
+      "pydata__xarray-3677",
+      "pytest-dev__pytest-7432"
+    ],
+    "reason": "the completed outputs were observed before the failed campaign run roots were explicitly removed; no durable Plan, Code, and evaluator artifact remains",
+    "count_toward_target": false
+  }
+}

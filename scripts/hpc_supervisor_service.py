@@ -14,7 +14,6 @@ import yaml
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 RESUME_SCRIPT = REPO_ROOT / "scripts" / "hpc_resume_loop.py"
-CAMPAIGN_SCRIPT = REPO_ROOT / "scripts" / "hpc_campaign_supervisor.py"
 
 
 def _run(args: list[str]) -> subprocess.CompletedProcess[str]:
@@ -32,7 +31,6 @@ def _load_launch_config(path: Path) -> tuple[str, str, list[str], Path]:
     session = data.get("session")
     log = data.get("log")
     arguments = data.get("arguments")
-    program = data.get("program", "resume")
     if not isinstance(session, str) or not session:
         raise ValueError("supervisor launch config requires a non-empty session")
     if not isinstance(log, str) or not log:
@@ -41,10 +39,9 @@ def _load_launch_config(path: Path) -> tuple[str, str, list[str], Path]:
         isinstance(argument, str) for argument in arguments
     ):
         raise ValueError("supervisor launch config arguments must be strings")
-    programs = {"resume": RESUME_SCRIPT, "campaign": CAMPAIGN_SCRIPT}
-    if program not in programs:
-        raise ValueError("supervisor launch config program must be resume or campaign")
-    return session, log, arguments, programs[program]
+    if data.get("program", "resume") != "resume":
+        raise ValueError("supervisor launch config supports only the resume loop")
+    return session, log, arguments, RESUME_SCRIPT
 
 
 def main(argv: list[str] | None = None) -> int:

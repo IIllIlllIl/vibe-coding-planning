@@ -1,0 +1,1195 @@
+{
+  "completion_census": "configs/frozen_swe_verified_safe_pce/fpta-pilot-completion-census-v1-20260918/census.json",
+  "completion_census_sha256": "e4d4bcd5d59b3262e89d2c249d9580c797f925a024b5c9a4e2efc467249b7807",
+  "execution_unit_count": 168,
+  "execution_units": [
+    {
+      "execution_unit_index": 0,
+      "instance_id": "django__django-10914",
+      "prior_usable_pce_count": 2,
+      "requested_unit_ordinal": 1,
+      "target_pce_count": 3
+    },
+    {
+      "execution_unit_index": 1,
+      "instance_id": "matplotlib__matplotlib-24149",
+      "prior_usable_pce_count": 1,
+      "requested_unit_ordinal": 1,
+      "target_pce_count": 3
+    },
+    {
+      "execution_unit_index": 2,
+      "instance_id": "matplotlib__matplotlib-24149",
+      "prior_usable_pce_count": 1,
+      "requested_unit_ordinal": 2,
+      "target_pce_count": 3
+    },
+    {
+      "execution_unit_index": 3,
+      "instance_id": "pytest-dev__pytest-7205",
+      "prior_usable_pce_count": 2,
+      "requested_unit_ordinal": 1,
+      "target_pce_count": 3
+    },
+    {
+      "execution_unit_index": 4,
+      "instance_id": "django__django-13279",
+      "prior_usable_pce_count": 2,
+      "requested_unit_ordinal": 1,
+      "target_pce_count": 3
+    },
+    {
+      "execution_unit_index": 5,
+      "instance_id": "django__django-14559",
+      "prior_usable_pce_count": 1,
+      "requested_unit_ordinal": 1,
+      "target_pce_count": 3
+    },
+    {
+      "execution_unit_index": 6,
+      "instance_id": "django__django-14559",
+      "prior_usable_pce_count": 1,
+      "requested_unit_ordinal": 2,
+      "target_pce_count": 3
+    },
+    {
+      "execution_unit_index": 7,
+      "instance_id": "django__django-16877",
+      "prior_usable_pce_count": 2,
+      "requested_unit_ordinal": 1,
+      "target_pce_count": 3
+    },
+    {
+      "execution_unit_index": 8,
+      "instance_id": "django__django-11206",
+      "prior_usable_pce_count": 1,
+      "requested_unit_ordinal": 1,
+      "target_pce_count": 3
+    },
+    {
+      "execution_unit_index": 9,
+      "instance_id": "django__django-11206",
+      "prior_usable_pce_count": 1,
+      "requested_unit_ordinal": 2,
+      "target_pce_count": 3
+    },
+    {
+      "execution_unit_index": 10,
+      "instance_id": "django__django-11239",
+      "prior_usable_pce_count": 1,
+      "requested_unit_ordinal": 1,
+      "target_pce_count": 3
+    },
+    {
+      "execution_unit_index": 11,
+      "instance_id": "django__django-11239",
+      "prior_usable_pce_count": 1,
+      "requested_unit_ordinal": 2,
+      "target_pce_count": 3
+    },
+    {
+      "execution_unit_index": 12,
+      "instance_id": "django__django-11276",
+      "prior_usable_pce_count": 1,
+      "requested_unit_ordinal": 1,
+      "target_pce_count": 3
+    },
+    {
+      "execution_unit_index": 13,
+      "instance_id": "django__django-11276",
+      "prior_usable_pce_count": 1,
+      "requested_unit_ordinal": 2,
+      "target_pce_count": 3
+    },
+    {
+      "execution_unit_index": 14,
+      "instance_id": "django__django-11551",
+      "prior_usable_pce_count": 1,
+      "requested_unit_ordinal": 1,
+      "target_pce_count": 3
+    },
+    {
+      "execution_unit_index": 15,
+      "instance_id": "django__django-11551",
+      "prior_usable_pce_count": 1,
+      "requested_unit_ordinal": 2,
+      "target_pce_count": 3
+    },
+    {
+      "execution_unit_index": 16,
+      "instance_id": "django__django-11749",
+      "prior_usable_pce_count": 1,
+      "requested_unit_ordinal": 1,
+      "target_pce_count": 3
+    },
+    {
+      "execution_unit_index": 17,
+      "instance_id": "django__django-11749",
+      "prior_usable_pce_count": 1,
+      "requested_unit_ordinal": 2,
+      "target_pce_count": 3
+    },
+    {
+      "execution_unit_index": 18,
+      "instance_id": "django__django-11951",
+      "prior_usable_pce_count": 1,
+      "requested_unit_ordinal": 1,
+      "target_pce_count": 3
+    },
+    {
+      "execution_unit_index": 19,
+      "instance_id": "django__django-11951",
+      "prior_usable_pce_count": 1,
+      "requested_unit_ordinal": 2,
+      "target_pce_count": 3
+    },
+    {
+      "execution_unit_index": 20,
+      "instance_id": "django__django-11964",
+      "prior_usable_pce_count": 1,
+      "requested_unit_ordinal": 1,
+      "target_pce_count": 3
+    },
+    {
+      "execution_unit_index": 21,
+      "instance_id": "django__django-11964",
+      "prior_usable_pce_count": 1,
+      "requested_unit_ordinal": 2,
+      "target_pce_count": 3
+    },
+    {
+      "execution_unit_index": 22,
+      "instance_id": "django__django-12209",
+      "prior_usable_pce_count": 1,
+      "requested_unit_ordinal": 1,
+      "target_pce_count": 3
+    },
+    {
+      "execution_unit_index": 23,
+      "instance_id": "django__django-12209",
+      "prior_usable_pce_count": 1,
+      "requested_unit_ordinal": 2,
+      "target_pce_count": 3
+    },
+    {
+      "execution_unit_index": 24,
+      "instance_id": "django__django-12262",
+      "prior_usable_pce_count": 1,
+      "requested_unit_ordinal": 1,
+      "target_pce_count": 3
+    },
+    {
+      "execution_unit_index": 25,
+      "instance_id": "django__django-12262",
+      "prior_usable_pce_count": 1,
+      "requested_unit_ordinal": 2,
+      "target_pce_count": 3
+    },
+    {
+      "execution_unit_index": 26,
+      "instance_id": "django__django-12276",
+      "prior_usable_pce_count": 1,
+      "requested_unit_ordinal": 1,
+      "target_pce_count": 3
+    },
+    {
+      "execution_unit_index": 27,
+      "instance_id": "django__django-12276",
+      "prior_usable_pce_count": 1,
+      "requested_unit_ordinal": 2,
+      "target_pce_count": 3
+    },
+    {
+      "execution_unit_index": 28,
+      "instance_id": "django__django-12708",
+      "prior_usable_pce_count": 1,
+      "requested_unit_ordinal": 1,
+      "target_pce_count": 3
+    },
+    {
+      "execution_unit_index": 29,
+      "instance_id": "django__django-12708",
+      "prior_usable_pce_count": 1,
+      "requested_unit_ordinal": 2,
+      "target_pce_count": 3
+    },
+    {
+      "execution_unit_index": 30,
+      "instance_id": "django__django-12858",
+      "prior_usable_pce_count": 1,
+      "requested_unit_ordinal": 1,
+      "target_pce_count": 3
+    },
+    {
+      "execution_unit_index": 31,
+      "instance_id": "django__django-12858",
+      "prior_usable_pce_count": 1,
+      "requested_unit_ordinal": 2,
+      "target_pce_count": 3
+    },
+    {
+      "execution_unit_index": 32,
+      "instance_id": "django__django-13012",
+      "prior_usable_pce_count": 1,
+      "requested_unit_ordinal": 1,
+      "target_pce_count": 3
+    },
+    {
+      "execution_unit_index": 33,
+      "instance_id": "django__django-13012",
+      "prior_usable_pce_count": 1,
+      "requested_unit_ordinal": 2,
+      "target_pce_count": 3
+    },
+    {
+      "execution_unit_index": 34,
+      "instance_id": "django__django-13028",
+      "prior_usable_pce_count": 1,
+      "requested_unit_ordinal": 1,
+      "target_pce_count": 3
+    },
+    {
+      "execution_unit_index": 35,
+      "instance_id": "django__django-13028",
+      "prior_usable_pce_count": 1,
+      "requested_unit_ordinal": 2,
+      "target_pce_count": 3
+    },
+    {
+      "execution_unit_index": 36,
+      "instance_id": "django__django-13449",
+      "prior_usable_pce_count": 1,
+      "requested_unit_ordinal": 1,
+      "target_pce_count": 3
+    },
+    {
+      "execution_unit_index": 37,
+      "instance_id": "django__django-13449",
+      "prior_usable_pce_count": 1,
+      "requested_unit_ordinal": 2,
+      "target_pce_count": 3
+    },
+    {
+      "execution_unit_index": 38,
+      "instance_id": "django__django-13810",
+      "prior_usable_pce_count": 1,
+      "requested_unit_ordinal": 1,
+      "target_pce_count": 3
+    },
+    {
+      "execution_unit_index": 39,
+      "instance_id": "django__django-13810",
+      "prior_usable_pce_count": 1,
+      "requested_unit_ordinal": 2,
+      "target_pce_count": 3
+    },
+    {
+      "execution_unit_index": 40,
+      "instance_id": "django__django-13925",
+      "prior_usable_pce_count": 1,
+      "requested_unit_ordinal": 1,
+      "target_pce_count": 3
+    },
+    {
+      "execution_unit_index": 41,
+      "instance_id": "django__django-13925",
+      "prior_usable_pce_count": 1,
+      "requested_unit_ordinal": 2,
+      "target_pce_count": 3
+    },
+    {
+      "execution_unit_index": 42,
+      "instance_id": "django__django-13933",
+      "prior_usable_pce_count": 1,
+      "requested_unit_ordinal": 1,
+      "target_pce_count": 3
+    },
+    {
+      "execution_unit_index": 43,
+      "instance_id": "django__django-13933",
+      "prior_usable_pce_count": 1,
+      "requested_unit_ordinal": 2,
+      "target_pce_count": 3
+    },
+    {
+      "execution_unit_index": 44,
+      "instance_id": "django__django-14007",
+      "prior_usable_pce_count": 1,
+      "requested_unit_ordinal": 1,
+      "target_pce_count": 3
+    },
+    {
+      "execution_unit_index": 45,
+      "instance_id": "django__django-14007",
+      "prior_usable_pce_count": 1,
+      "requested_unit_ordinal": 2,
+      "target_pce_count": 3
+    },
+    {
+      "execution_unit_index": 46,
+      "instance_id": "django__django-14017",
+      "prior_usable_pce_count": 1,
+      "requested_unit_ordinal": 1,
+      "target_pce_count": 3
+    },
+    {
+      "execution_unit_index": 47,
+      "instance_id": "django__django-14017",
+      "prior_usable_pce_count": 1,
+      "requested_unit_ordinal": 2,
+      "target_pce_count": 3
+    },
+    {
+      "execution_unit_index": 48,
+      "instance_id": "django__django-14053",
+      "prior_usable_pce_count": 1,
+      "requested_unit_ordinal": 1,
+      "target_pce_count": 3
+    },
+    {
+      "execution_unit_index": 49,
+      "instance_id": "django__django-14053",
+      "prior_usable_pce_count": 1,
+      "requested_unit_ordinal": 2,
+      "target_pce_count": 3
+    },
+    {
+      "execution_unit_index": 50,
+      "instance_id": "django__django-14238",
+      "prior_usable_pce_count": 1,
+      "requested_unit_ordinal": 1,
+      "target_pce_count": 3
+    },
+    {
+      "execution_unit_index": 51,
+      "instance_id": "django__django-14238",
+      "prior_usable_pce_count": 1,
+      "requested_unit_ordinal": 2,
+      "target_pce_count": 3
+    },
+    {
+      "execution_unit_index": 52,
+      "instance_id": "django__django-14349",
+      "prior_usable_pce_count": 1,
+      "requested_unit_ordinal": 1,
+      "target_pce_count": 3
+    },
+    {
+      "execution_unit_index": 53,
+      "instance_id": "django__django-14349",
+      "prior_usable_pce_count": 1,
+      "requested_unit_ordinal": 2,
+      "target_pce_count": 3
+    },
+    {
+      "execution_unit_index": 54,
+      "instance_id": "django__django-14434",
+      "prior_usable_pce_count": 1,
+      "requested_unit_ordinal": 1,
+      "target_pce_count": 3
+    },
+    {
+      "execution_unit_index": 55,
+      "instance_id": "django__django-14434",
+      "prior_usable_pce_count": 1,
+      "requested_unit_ordinal": 2,
+      "target_pce_count": 3
+    },
+    {
+      "execution_unit_index": 56,
+      "instance_id": "django__django-14493",
+      "prior_usable_pce_count": 1,
+      "requested_unit_ordinal": 1,
+      "target_pce_count": 3
+    },
+    {
+      "execution_unit_index": 57,
+      "instance_id": "django__django-14493",
+      "prior_usable_pce_count": 1,
+      "requested_unit_ordinal": 2,
+      "target_pce_count": 3
+    },
+    {
+      "execution_unit_index": 58,
+      "instance_id": "django__django-14500",
+      "prior_usable_pce_count": 1,
+      "requested_unit_ordinal": 1,
+      "target_pce_count": 3
+    },
+    {
+      "execution_unit_index": 59,
+      "instance_id": "django__django-14500",
+      "prior_usable_pce_count": 1,
+      "requested_unit_ordinal": 2,
+      "target_pce_count": 3
+    },
+    {
+      "execution_unit_index": 60,
+      "instance_id": "django__django-14539",
+      "prior_usable_pce_count": 1,
+      "requested_unit_ordinal": 1,
+      "target_pce_count": 3
+    },
+    {
+      "execution_unit_index": 61,
+      "instance_id": "django__django-14539",
+      "prior_usable_pce_count": 1,
+      "requested_unit_ordinal": 2,
+      "target_pce_count": 3
+    },
+    {
+      "execution_unit_index": 62,
+      "instance_id": "django__django-14608",
+      "prior_usable_pce_count": 1,
+      "requested_unit_ordinal": 1,
+      "target_pce_count": 3
+    },
+    {
+      "execution_unit_index": 63,
+      "instance_id": "django__django-14608",
+      "prior_usable_pce_count": 1,
+      "requested_unit_ordinal": 2,
+      "target_pce_count": 3
+    },
+    {
+      "execution_unit_index": 64,
+      "instance_id": "django__django-14787",
+      "prior_usable_pce_count": 1,
+      "requested_unit_ordinal": 1,
+      "target_pce_count": 3
+    },
+    {
+      "execution_unit_index": 65,
+      "instance_id": "django__django-14787",
+      "prior_usable_pce_count": 1,
+      "requested_unit_ordinal": 2,
+      "target_pce_count": 3
+    },
+    {
+      "execution_unit_index": 66,
+      "instance_id": "django__django-14915",
+      "prior_usable_pce_count": 1,
+      "requested_unit_ordinal": 1,
+      "target_pce_count": 3
+    },
+    {
+      "execution_unit_index": 67,
+      "instance_id": "django__django-14915",
+      "prior_usable_pce_count": 1,
+      "requested_unit_ordinal": 2,
+      "target_pce_count": 3
+    },
+    {
+      "execution_unit_index": 68,
+      "instance_id": "django__django-15278",
+      "prior_usable_pce_count": 1,
+      "requested_unit_ordinal": 1,
+      "target_pce_count": 3
+    },
+    {
+      "execution_unit_index": 69,
+      "instance_id": "django__django-15278",
+      "prior_usable_pce_count": 1,
+      "requested_unit_ordinal": 2,
+      "target_pce_count": 3
+    },
+    {
+      "execution_unit_index": 70,
+      "instance_id": "django__django-15499",
+      "prior_usable_pce_count": 1,
+      "requested_unit_ordinal": 1,
+      "target_pce_count": 3
+    },
+    {
+      "execution_unit_index": 71,
+      "instance_id": "django__django-15499",
+      "prior_usable_pce_count": 1,
+      "requested_unit_ordinal": 2,
+      "target_pce_count": 3
+    },
+    {
+      "execution_unit_index": 72,
+      "instance_id": "django__django-15741",
+      "prior_usable_pce_count": 1,
+      "requested_unit_ordinal": 1,
+      "target_pce_count": 3
+    },
+    {
+      "execution_unit_index": 73,
+      "instance_id": "django__django-15741",
+      "prior_usable_pce_count": 1,
+      "requested_unit_ordinal": 2,
+      "target_pce_count": 3
+    },
+    {
+      "execution_unit_index": 74,
+      "instance_id": "django__django-16032",
+      "prior_usable_pce_count": 1,
+      "requested_unit_ordinal": 1,
+      "target_pce_count": 3
+    },
+    {
+      "execution_unit_index": 75,
+      "instance_id": "django__django-16032",
+      "prior_usable_pce_count": 1,
+      "requested_unit_ordinal": 2,
+      "target_pce_count": 3
+    },
+    {
+      "execution_unit_index": 76,
+      "instance_id": "django__django-16116",
+      "prior_usable_pce_count": 1,
+      "requested_unit_ordinal": 1,
+      "target_pce_count": 3
+    },
+    {
+      "execution_unit_index": 77,
+      "instance_id": "django__django-16116",
+      "prior_usable_pce_count": 1,
+      "requested_unit_ordinal": 2,
+      "target_pce_count": 3
+    },
+    {
+      "execution_unit_index": 78,
+      "instance_id": "django__django-16145",
+      "prior_usable_pce_count": 1,
+      "requested_unit_ordinal": 1,
+      "target_pce_count": 3
+    },
+    {
+      "execution_unit_index": 79,
+      "instance_id": "django__django-16145",
+      "prior_usable_pce_count": 1,
+      "requested_unit_ordinal": 2,
+      "target_pce_count": 3
+    },
+    {
+      "execution_unit_index": 80,
+      "instance_id": "django__django-16315",
+      "prior_usable_pce_count": 1,
+      "requested_unit_ordinal": 1,
+      "target_pce_count": 3
+    },
+    {
+      "execution_unit_index": 81,
+      "instance_id": "django__django-16315",
+      "prior_usable_pce_count": 1,
+      "requested_unit_ordinal": 2,
+      "target_pce_count": 3
+    },
+    {
+      "execution_unit_index": 82,
+      "instance_id": "django__django-16661",
+      "prior_usable_pce_count": 1,
+      "requested_unit_ordinal": 1,
+      "target_pce_count": 3
+    },
+    {
+      "execution_unit_index": 83,
+      "instance_id": "django__django-16661",
+      "prior_usable_pce_count": 1,
+      "requested_unit_ordinal": 2,
+      "target_pce_count": 3
+    },
+    {
+      "execution_unit_index": 84,
+      "instance_id": "django__django-16899",
+      "prior_usable_pce_count": 1,
+      "requested_unit_ordinal": 1,
+      "target_pce_count": 3
+    },
+    {
+      "execution_unit_index": 85,
+      "instance_id": "django__django-16899",
+      "prior_usable_pce_count": 1,
+      "requested_unit_ordinal": 2,
+      "target_pce_count": 3
+    },
+    {
+      "execution_unit_index": 86,
+      "instance_id": "django__django-16901",
+      "prior_usable_pce_count": 1,
+      "requested_unit_ordinal": 1,
+      "target_pce_count": 3
+    },
+    {
+      "execution_unit_index": 87,
+      "instance_id": "django__django-16901",
+      "prior_usable_pce_count": 1,
+      "requested_unit_ordinal": 2,
+      "target_pce_count": 3
+    },
+    {
+      "execution_unit_index": 88,
+      "instance_id": "django__django-17087",
+      "prior_usable_pce_count": 1,
+      "requested_unit_ordinal": 1,
+      "target_pce_count": 3
+    },
+    {
+      "execution_unit_index": 89,
+      "instance_id": "django__django-17087",
+      "prior_usable_pce_count": 1,
+      "requested_unit_ordinal": 2,
+      "target_pce_count": 3
+    },
+    {
+      "execution_unit_index": 90,
+      "instance_id": "matplotlib__matplotlib-24637",
+      "prior_usable_pce_count": 1,
+      "requested_unit_ordinal": 1,
+      "target_pce_count": 3
+    },
+    {
+      "execution_unit_index": 91,
+      "instance_id": "matplotlib__matplotlib-24637",
+      "prior_usable_pce_count": 1,
+      "requested_unit_ordinal": 2,
+      "target_pce_count": 3
+    },
+    {
+      "execution_unit_index": 92,
+      "instance_id": "pydata__xarray-3677",
+      "prior_usable_pce_count": 1,
+      "requested_unit_ordinal": 1,
+      "target_pce_count": 3
+    },
+    {
+      "execution_unit_index": 93,
+      "instance_id": "pydata__xarray-3677",
+      "prior_usable_pce_count": 1,
+      "requested_unit_ordinal": 2,
+      "target_pce_count": 3
+    },
+    {
+      "execution_unit_index": 94,
+      "instance_id": "pytest-dev__pytest-5809",
+      "prior_usable_pce_count": 1,
+      "requested_unit_ordinal": 1,
+      "target_pce_count": 3
+    },
+    {
+      "execution_unit_index": 95,
+      "instance_id": "pytest-dev__pytest-5809",
+      "prior_usable_pce_count": 1,
+      "requested_unit_ordinal": 2,
+      "target_pce_count": 3
+    },
+    {
+      "execution_unit_index": 96,
+      "instance_id": "pytest-dev__pytest-7432",
+      "prior_usable_pce_count": 1,
+      "requested_unit_ordinal": 1,
+      "target_pce_count": 3
+    },
+    {
+      "execution_unit_index": 97,
+      "instance_id": "pytest-dev__pytest-7432",
+      "prior_usable_pce_count": 1,
+      "requested_unit_ordinal": 2,
+      "target_pce_count": 3
+    },
+    {
+      "execution_unit_index": 98,
+      "instance_id": "pytest-dev__pytest-7571",
+      "prior_usable_pce_count": 1,
+      "requested_unit_ordinal": 1,
+      "target_pce_count": 3
+    },
+    {
+      "execution_unit_index": 99,
+      "instance_id": "pytest-dev__pytest-7571",
+      "prior_usable_pce_count": 1,
+      "requested_unit_ordinal": 2,
+      "target_pce_count": 3
+    },
+    {
+      "execution_unit_index": 100,
+      "instance_id": "scikit-learn__scikit-learn-13135",
+      "prior_usable_pce_count": 1,
+      "requested_unit_ordinal": 1,
+      "target_pce_count": 3
+    },
+    {
+      "execution_unit_index": 101,
+      "instance_id": "scikit-learn__scikit-learn-13135",
+      "prior_usable_pce_count": 1,
+      "requested_unit_ordinal": 2,
+      "target_pce_count": 3
+    },
+    {
+      "execution_unit_index": 102,
+      "instance_id": "scikit-learn__scikit-learn-13142",
+      "prior_usable_pce_count": 1,
+      "requested_unit_ordinal": 1,
+      "target_pce_count": 3
+    },
+    {
+      "execution_unit_index": 103,
+      "instance_id": "scikit-learn__scikit-learn-13142",
+      "prior_usable_pce_count": 1,
+      "requested_unit_ordinal": 2,
+      "target_pce_count": 3
+    },
+    {
+      "execution_unit_index": 104,
+      "instance_id": "scikit-learn__scikit-learn-13328",
+      "prior_usable_pce_count": 1,
+      "requested_unit_ordinal": 1,
+      "target_pce_count": 3
+    },
+    {
+      "execution_unit_index": 105,
+      "instance_id": "scikit-learn__scikit-learn-13328",
+      "prior_usable_pce_count": 1,
+      "requested_unit_ordinal": 2,
+      "target_pce_count": 3
+    },
+    {
+      "execution_unit_index": 106,
+      "instance_id": "scikit-learn__scikit-learn-25232",
+      "prior_usable_pce_count": 1,
+      "requested_unit_ordinal": 1,
+      "target_pce_count": 3
+    },
+    {
+      "execution_unit_index": 107,
+      "instance_id": "scikit-learn__scikit-learn-25232",
+      "prior_usable_pce_count": 1,
+      "requested_unit_ordinal": 2,
+      "target_pce_count": 3
+    },
+    {
+      "execution_unit_index": 108,
+      "instance_id": "scikit-learn__scikit-learn-25973",
+      "prior_usable_pce_count": 1,
+      "requested_unit_ordinal": 1,
+      "target_pce_count": 3
+    },
+    {
+      "execution_unit_index": 109,
+      "instance_id": "scikit-learn__scikit-learn-25973",
+      "prior_usable_pce_count": 1,
+      "requested_unit_ordinal": 2,
+      "target_pce_count": 3
+    },
+    {
+      "execution_unit_index": 110,
+      "instance_id": "sphinx-doc__sphinx-10323",
+      "prior_usable_pce_count": 1,
+      "requested_unit_ordinal": 1,
+      "target_pce_count": 3
+    },
+    {
+      "execution_unit_index": 111,
+      "instance_id": "sphinx-doc__sphinx-10323",
+      "prior_usable_pce_count": 1,
+      "requested_unit_ordinal": 2,
+      "target_pce_count": 3
+    },
+    {
+      "execution_unit_index": 112,
+      "instance_id": "sphinx-doc__sphinx-8269",
+      "prior_usable_pce_count": 1,
+      "requested_unit_ordinal": 1,
+      "target_pce_count": 3
+    },
+    {
+      "execution_unit_index": 113,
+      "instance_id": "sphinx-doc__sphinx-8269",
+      "prior_usable_pce_count": 1,
+      "requested_unit_ordinal": 2,
+      "target_pce_count": 3
+    },
+    {
+      "execution_unit_index": 114,
+      "instance_id": "sphinx-doc__sphinx-8593",
+      "prior_usable_pce_count": 1,
+      "requested_unit_ordinal": 1,
+      "target_pce_count": 3
+    },
+    {
+      "execution_unit_index": 115,
+      "instance_id": "sphinx-doc__sphinx-8593",
+      "prior_usable_pce_count": 1,
+      "requested_unit_ordinal": 2,
+      "target_pce_count": 3
+    },
+    {
+      "execution_unit_index": 116,
+      "instance_id": "sympy__sympy-12096",
+      "prior_usable_pce_count": 1,
+      "requested_unit_ordinal": 1,
+      "target_pce_count": 3
+    },
+    {
+      "execution_unit_index": 117,
+      "instance_id": "sympy__sympy-12096",
+      "prior_usable_pce_count": 1,
+      "requested_unit_ordinal": 2,
+      "target_pce_count": 3
+    },
+    {
+      "execution_unit_index": 118,
+      "instance_id": "sympy__sympy-13877",
+      "prior_usable_pce_count": 1,
+      "requested_unit_ordinal": 1,
+      "target_pce_count": 3
+    },
+    {
+      "execution_unit_index": 119,
+      "instance_id": "sympy__sympy-13877",
+      "prior_usable_pce_count": 1,
+      "requested_unit_ordinal": 2,
+      "target_pce_count": 3
+    },
+    {
+      "execution_unit_index": 120,
+      "instance_id": "sympy__sympy-18189",
+      "prior_usable_pce_count": 1,
+      "requested_unit_ordinal": 1,
+      "target_pce_count": 3
+    },
+    {
+      "execution_unit_index": 121,
+      "instance_id": "sympy__sympy-18189",
+      "prior_usable_pce_count": 1,
+      "requested_unit_ordinal": 2,
+      "target_pce_count": 3
+    },
+    {
+      "execution_unit_index": 122,
+      "instance_id": "sympy__sympy-18211",
+      "prior_usable_pce_count": 1,
+      "requested_unit_ordinal": 1,
+      "target_pce_count": 3
+    },
+    {
+      "execution_unit_index": 123,
+      "instance_id": "sympy__sympy-18211",
+      "prior_usable_pce_count": 1,
+      "requested_unit_ordinal": 2,
+      "target_pce_count": 3
+    },
+    {
+      "execution_unit_index": 124,
+      "instance_id": "astropy__astropy-13977",
+      "prior_usable_pce_count": 1,
+      "requested_unit_ordinal": 1,
+      "target_pce_count": 3
+    },
+    {
+      "execution_unit_index": 125,
+      "instance_id": "astropy__astropy-13977",
+      "prior_usable_pce_count": 1,
+      "requested_unit_ordinal": 2,
+      "target_pce_count": 3
+    },
+    {
+      "execution_unit_index": 126,
+      "instance_id": "astropy__astropy-14182",
+      "prior_usable_pce_count": 1,
+      "requested_unit_ordinal": 1,
+      "target_pce_count": 3
+    },
+    {
+      "execution_unit_index": 127,
+      "instance_id": "astropy__astropy-14182",
+      "prior_usable_pce_count": 1,
+      "requested_unit_ordinal": 2,
+      "target_pce_count": 3
+    },
+    {
+      "execution_unit_index": 128,
+      "instance_id": "astropy__astropy-14365",
+      "prior_usable_pce_count": 1,
+      "requested_unit_ordinal": 1,
+      "target_pce_count": 3
+    },
+    {
+      "execution_unit_index": 129,
+      "instance_id": "astropy__astropy-14365",
+      "prior_usable_pce_count": 1,
+      "requested_unit_ordinal": 2,
+      "target_pce_count": 3
+    },
+    {
+      "execution_unit_index": 130,
+      "instance_id": "django__django-13401",
+      "prior_usable_pce_count": 1,
+      "requested_unit_ordinal": 1,
+      "target_pce_count": 3
+    },
+    {
+      "execution_unit_index": 131,
+      "instance_id": "django__django-13401",
+      "prior_usable_pce_count": 1,
+      "requested_unit_ordinal": 2,
+      "target_pce_count": 3
+    },
+    {
+      "execution_unit_index": 132,
+      "instance_id": "matplotlib__matplotlib-22871",
+      "prior_usable_pce_count": 1,
+      "requested_unit_ordinal": 1,
+      "target_pce_count": 3
+    },
+    {
+      "execution_unit_index": 133,
+      "instance_id": "matplotlib__matplotlib-22871",
+      "prior_usable_pce_count": 1,
+      "requested_unit_ordinal": 2,
+      "target_pce_count": 3
+    },
+    {
+      "execution_unit_index": 134,
+      "instance_id": "matplotlib__matplotlib-26291",
+      "prior_usable_pce_count": 1,
+      "requested_unit_ordinal": 1,
+      "target_pce_count": 3
+    },
+    {
+      "execution_unit_index": 135,
+      "instance_id": "matplotlib__matplotlib-26291",
+      "prior_usable_pce_count": 1,
+      "requested_unit_ordinal": 2,
+      "target_pce_count": 3
+    },
+    {
+      "execution_unit_index": 136,
+      "instance_id": "mwaskom__seaborn-3069",
+      "prior_usable_pce_count": 1,
+      "requested_unit_ordinal": 1,
+      "target_pce_count": 3
+    },
+    {
+      "execution_unit_index": 137,
+      "instance_id": "mwaskom__seaborn-3069",
+      "prior_usable_pce_count": 1,
+      "requested_unit_ordinal": 2,
+      "target_pce_count": 3
+    },
+    {
+      "execution_unit_index": 138,
+      "instance_id": "mwaskom__seaborn-3187",
+      "prior_usable_pce_count": 1,
+      "requested_unit_ordinal": 1,
+      "target_pce_count": 3
+    },
+    {
+      "execution_unit_index": 139,
+      "instance_id": "mwaskom__seaborn-3187",
+      "prior_usable_pce_count": 1,
+      "requested_unit_ordinal": 2,
+      "target_pce_count": 3
+    },
+    {
+      "execution_unit_index": 140,
+      "instance_id": "psf__requests-2317",
+      "prior_usable_pce_count": 1,
+      "requested_unit_ordinal": 1,
+      "target_pce_count": 3
+    },
+    {
+      "execution_unit_index": 141,
+      "instance_id": "psf__requests-2317",
+      "prior_usable_pce_count": 1,
+      "requested_unit_ordinal": 2,
+      "target_pce_count": 3
+    },
+    {
+      "execution_unit_index": 142,
+      "instance_id": "pydata__xarray-3095",
+      "prior_usable_pce_count": 1,
+      "requested_unit_ordinal": 1,
+      "target_pce_count": 3
+    },
+    {
+      "execution_unit_index": 143,
+      "instance_id": "pydata__xarray-3095",
+      "prior_usable_pce_count": 1,
+      "requested_unit_ordinal": 2,
+      "target_pce_count": 3
+    },
+    {
+      "execution_unit_index": 144,
+      "instance_id": "pydata__xarray-4695",
+      "prior_usable_pce_count": 1,
+      "requested_unit_ordinal": 1,
+      "target_pce_count": 3
+    },
+    {
+      "execution_unit_index": 145,
+      "instance_id": "pydata__xarray-4695",
+      "prior_usable_pce_count": 1,
+      "requested_unit_ordinal": 2,
+      "target_pce_count": 3
+    },
+    {
+      "execution_unit_index": 146,
+      "instance_id": "pylint-dev__pylint-7080",
+      "prior_usable_pce_count": 1,
+      "requested_unit_ordinal": 1,
+      "target_pce_count": 3
+    },
+    {
+      "execution_unit_index": 147,
+      "instance_id": "pylint-dev__pylint-7080",
+      "prior_usable_pce_count": 1,
+      "requested_unit_ordinal": 2,
+      "target_pce_count": 3
+    },
+    {
+      "execution_unit_index": 148,
+      "instance_id": "pytest-dev__pytest-10051",
+      "prior_usable_pce_count": 1,
+      "requested_unit_ordinal": 1,
+      "target_pce_count": 3
+    },
+    {
+      "execution_unit_index": 149,
+      "instance_id": "pytest-dev__pytest-10051",
+      "prior_usable_pce_count": 1,
+      "requested_unit_ordinal": 2,
+      "target_pce_count": 3
+    },
+    {
+      "execution_unit_index": 150,
+      "instance_id": "pytest-dev__pytest-10081",
+      "prior_usable_pce_count": 1,
+      "requested_unit_ordinal": 1,
+      "target_pce_count": 3
+    },
+    {
+      "execution_unit_index": 151,
+      "instance_id": "pytest-dev__pytest-10081",
+      "prior_usable_pce_count": 1,
+      "requested_unit_ordinal": 2,
+      "target_pce_count": 3
+    },
+    {
+      "execution_unit_index": 152,
+      "instance_id": "scikit-learn__scikit-learn-10908",
+      "prior_usable_pce_count": 1,
+      "requested_unit_ordinal": 1,
+      "target_pce_count": 3
+    },
+    {
+      "execution_unit_index": 153,
+      "instance_id": "scikit-learn__scikit-learn-10908",
+      "prior_usable_pce_count": 1,
+      "requested_unit_ordinal": 2,
+      "target_pce_count": 3
+    },
+    {
+      "execution_unit_index": 154,
+      "instance_id": "scikit-learn__scikit-learn-12973",
+      "prior_usable_pce_count": 1,
+      "requested_unit_ordinal": 1,
+      "target_pce_count": 3
+    },
+    {
+      "execution_unit_index": 155,
+      "instance_id": "scikit-learn__scikit-learn-12973",
+      "prior_usable_pce_count": 1,
+      "requested_unit_ordinal": 2,
+      "target_pce_count": 3
+    },
+    {
+      "execution_unit_index": 156,
+      "instance_id": "sphinx-doc__sphinx-7757",
+      "prior_usable_pce_count": 1,
+      "requested_unit_ordinal": 1,
+      "target_pce_count": 3
+    },
+    {
+      "execution_unit_index": 157,
+      "instance_id": "sphinx-doc__sphinx-7757",
+      "prior_usable_pce_count": 1,
+      "requested_unit_ordinal": 2,
+      "target_pce_count": 3
+    },
+    {
+      "execution_unit_index": 158,
+      "instance_id": "sphinx-doc__sphinx-8595",
+      "prior_usable_pce_count": 1,
+      "requested_unit_ordinal": 1,
+      "target_pce_count": 3
+    },
+    {
+      "execution_unit_index": 159,
+      "instance_id": "sphinx-doc__sphinx-8595",
+      "prior_usable_pce_count": 1,
+      "requested_unit_ordinal": 2,
+      "target_pce_count": 3
+    },
+    {
+      "execution_unit_index": 160,
+      "instance_id": "sphinx-doc__sphinx-9658",
+      "prior_usable_pce_count": 1,
+      "requested_unit_ordinal": 1,
+      "target_pce_count": 3
+    },
+    {
+      "execution_unit_index": 161,
+      "instance_id": "sphinx-doc__sphinx-9658",
+      "prior_usable_pce_count": 1,
+      "requested_unit_ordinal": 2,
+      "target_pce_count": 3
+    },
+    {
+      "execution_unit_index": 162,
+      "instance_id": "sphinx-doc__sphinx-9711",
+      "prior_usable_pce_count": 1,
+      "requested_unit_ordinal": 1,
+      "target_pce_count": 3
+    },
+    {
+      "execution_unit_index": 163,
+      "instance_id": "sphinx-doc__sphinx-9711",
+      "prior_usable_pce_count": 1,
+      "requested_unit_ordinal": 2,
+      "target_pce_count": 3
+    },
+    {
+      "execution_unit_index": 164,
+      "instance_id": "sympy__sympy-12419",
+      "prior_usable_pce_count": 1,
+      "requested_unit_ordinal": 1,
+      "target_pce_count": 3
+    },
+    {
+      "execution_unit_index": 165,
+      "instance_id": "sympy__sympy-12419",
+      "prior_usable_pce_count": 1,
+      "requested_unit_ordinal": 2,
+      "target_pce_count": 3
+    },
+    {
+      "execution_unit_index": 166,
+      "instance_id": "sympy__sympy-13091",
+      "prior_usable_pce_count": 1,
+      "requested_unit_ordinal": 1,
+      "target_pce_count": 3
+    },
+    {
+      "execution_unit_index": 167,
+      "instance_id": "sympy__sympy-13091",
+      "prior_usable_pce_count": 1,
+      "requested_unit_ordinal": 2,
+      "target_pce_count": 3
+    }
+  ],
+  "instances_at_target_before_run": 30,
+  "instances_requiring_execution": 86,
+  "manifest_id": "b2bc66df35b141a5084d590720e0908b4687d17aec250c5c303913f9225ae39b",
+  "prior_usable_pce_count_distribution": {
+    "1": 82,
+    "2": 4,
+    "3": 30
+  },
+  "purpose": "deficit_only_flat_pce_execution",
+  "schema_version": 1,
+  "selection_manifest_sha256": "7b0ee1926d877e0045e5cb73a522a0494f785d703c7b3ca5c8df1c5a87979b65",
+  "target_pce_observations_per_instance": 3
+}

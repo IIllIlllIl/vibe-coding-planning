@@ -112,6 +112,7 @@ def run_task(
                 "fingerprint": manifest["fingerprint"],
                 "task_index": manifest["task_index"],
                 "instance_id": case.instance_id,
+                "pce_run_index": manifest.get("pce_run_index", 1),
                 "row_sha256": case.row_sha256,
                 "attempt": attempt,
                 "attempt_evidence_relative_path": attempt_relative_path,
@@ -141,6 +142,7 @@ def run_task(
             "fingerprint": manifest.get("fingerprint"),
             "task_index": manifest.get("task_index"),
             "instance_id": case.instance_id if case else manifest.get("instance_id"),
+            "pce_run_index": manifest.get("pce_run_index", 1),
             "attempt": attempt,
             "attempt_evidence_relative_path": (
                 attempt_dir.relative_to(config.run_dir).as_posix()
