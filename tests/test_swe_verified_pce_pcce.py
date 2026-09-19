@@ -2775,6 +2775,72 @@ def test_no_thinking_clean411_target4_freezes_one_flat_deficit_run(
     assert "--submit" in arguments
 
 
+def test_no_thinking_target4_recovery_contains_only_incomplete_units() -> None:
+    config_path = Path(
+        "configs/swe_verified_safe_pce_no_thinking_clean411_"
+        "target4_recovery379_aion_v1_20260919.yaml"
+    )
+    config = load_swe_verified_pce_config(config_path, require_api_keys=False)
+    raw = yaml.safe_load(config_path.read_text(encoding="utf-8"))
+    contract = raw["experiment_contract"]
+    audit = json.loads(
+        (config.selection_manifest.parent / "audit.json").read_text(encoding="utf-8")
+    )
+    execution = json.loads(config.execution_manifest.read_text(encoding="utf-8"))
+
+    assert len(config.instance_ids) == 163
+    assert len(config.execution_instance_ids) == 379
+    assert execution["execution_unit_count"] == 379
+    assert [unit["execution_unit_index"] for unit in execution["execution_units"]] == list(
+        range(379)
+    )
+    assert len({unit["source_execution_unit_index"] for unit in execution["execution_units"]}) == 379
+    assert audit["parent_execution_units"] == 977
+    assert audit["parent_completed_units"] == 598
+    assert audit["parent_incomplete_units"] == 379
+    assert audit["failure_class_counts"] == {
+        "attempts_exhausted_without_worker_output": 142,
+        "disk_quota_exceeded": 237,
+    }
+    assert audit["no_worker_output_slurm_state_counts"] == {
+        "FAILED": 140,
+        "TIMEOUT": 2,
+    }
+    assert audit["incomplete_units_per_task_distribution"] == {
+        "1": 50,
+        "2": 10,
+        "3": 103,
+    }
+    assert contract["completed_source_units_excluded"] == 598
+    assert contract["selection_manifest_sha256"] == file_sha256(
+        config.selection_manifest
+    )
+    assert contract["image_manifest_sha256"] == file_sha256(config.image_manifest)
+    assert contract["execution_manifest_sha256"] == file_sha256(
+        config.execution_manifest
+    )
+    assert contract["audit_manifest_sha256"] == file_sha256(
+        config.selection_manifest.parent / "audit.json"
+    )
+    assert contract["pce_semantic_sha256"] == pce_semantic_sha256(config)
+    assert config.plan.temperature == 1.0
+    assert config.plan.thinking == "disabled"
+    assert config.code.temperature == 0.0
+    assert config.hpc.mem == "1750M"
+    assert config.hpc.max_running_array_tasks == 20
+
+    supervisor = yaml.safe_load(
+        Path(
+            "configs/swe_verified_safe_pce_no_thinking_clean411_"
+            "target4_recovery379_aion_v1_supervisor_20260919.yaml"
+        ).read_text(encoding="utf-8")
+    )
+    arguments = supervisor["arguments"]
+    assert arguments[arguments.index("--config") + 1] == str(config_path)
+    assert "--reclaim-staging" in arguments
+    assert "--reclaim-workspaces" in arguments
+    assert "--require-clean-worktree" in arguments
+
 def test_no_thinking20_ru_audit_records_two_cases_and_excludes_noise() -> None:
     manifest = json.loads(
         Path(

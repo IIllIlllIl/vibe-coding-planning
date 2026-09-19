@@ -119,13 +119,12 @@ class SlurmTaskBatch:
     ) -> list[dict[str, Any]]:
         """Return validated outputs or yield after durable asynchronous work."""
         if finalize_case_failure is None:
-            finalize_case_failure = lambda task, value: (
-                self._finalize_known_case_failure(
+            def finalize_case_failure(task: TaskFiles, value: dict[str, Any]):
+                return self._finalize_known_case_failure(
                     task,
                     value,
                     fingerprint=fingerprint,
                 )
-            )
         state_path = batch_dir / "task_state.json"
         state = self._load_or_create_state(
             state_path,
@@ -169,6 +168,10 @@ class SlurmTaskBatch:
             validate_output,
             attempt=attempt,
             finalize_case_failure=finalize_case_failure,
+        )
+        self._reclaim_attempt_workspaces(
+            [task for task in tasks if task.output_path.is_file()],
+            attempt=attempt,
         )
         if blocking:
             instance_ids = ", ".join(
@@ -317,6 +320,7 @@ class SlurmTaskBatch:
             pending = terminal_missing
             attempt += 1
 
+        self._reclaim_attempt_workspaces(pending, attempt=attempt - 1)
         if attempt > self.hpc.max_task_attempts:
             instance_ids = ", ".join(task.instance_id for task in pending)
             error = (
@@ -408,8 +412,9 @@ class SlurmTaskBatch:
                 )
                 blocking.append((task, failure))
                 continue
-            if value.get("status") == "blocking_failed" and not (
-                value.get("error_type") in RETRYABLE_WORKER_ERROR_TYPES
+            if (
+                value.get("status") == "blocking_failed"
+                and value.get("error_type") not in RETRYABLE_WORKER_ERROR_TYPES
             ):
                 finalized = (
                     finalize_case_failure(task, value)
@@ -669,6 +674,29 @@ class SlurmTaskBatch:
                 continue
             archive.mkdir(parents=True, exist_ok=True)
             shutil.move(str(task.output_path), str(archive / task.output_path.name))
+
+    @staticmethod
+    def _reclaim_attempt_workspaces(
+        tasks: Sequence[TaskFiles],
+        *,
+        attempt: int,
+    ) -> None:
+        """Best-effort cleanup of exact disposable workspaces after a task stops."""
+
+        if attempt < 1:
+            return
+        for task in tasks:
+            path = task.attempts_dir / f"attempt_{attempt:02d}" / "workspaces"
+            try:
+                if path.is_symlink():
+                    path.unlink()
+                elif path.is_dir():
+                    shutil.rmtree(path)
+            except OSError:
+                # Cleanup is operational and may not replace scientific task
+                # output or retry state. The Supervisor repeats this exact,
+                # bounded reclamation once all remote jobs have stopped.
+                continue
 
     @staticmethod
     def _load_or_create_state(

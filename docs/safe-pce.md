@@ -3,7 +3,7 @@
 > Authority: current ACE-stage Plan-Code-Evaluate data, artifact, execution,
 > evaluator, and smoke contract
 >
-> Last reviewed: 2026-09-18
+> Last reviewed: 2026-09-19
 
 ## Purpose
 
@@ -76,6 +76,32 @@ and
 `configs/swe_verified_safe_pce_no_thinking_clean411_target4_aion_v1_20260918.yaml`.
 The user authorized this frozen run after reviewing the target-four census and
 runtime estimate.
+
+The parent run ended with 598 terminal units and 379 operationally incomplete
+units across 163 tasks. The terminal units comprise 455 resolved and 143
+unresolved outcomes; they are retained unchanged. Of the incomplete units, 237
+preserve a final worker error containing `Disk quota exceeded`, and 142
+exhausted attempts without a worker output: 140 ended in Slurm `FAILED` and two
+in `TIMEOUT`. The latter group is not assigned a more specific scientific
+cause. All 379 are operationally incomplete, not unresolved outcomes.
+
+The bounded cleanup removed 1,579 exact `attempt_*/workspaces` trees after all
+jobs stopped. It retained outcomes, checkpoints, trajectories, failure
+records, Slurm logs, SIFs, and repository-history bundles. The shared Slurm
+host now also reclaims an attempt's exact disposable workspace as soon as its
+atomic output is observed, and before a stopped task is retried; final
+Supervisor reclamation remains the fallback.
+
+The recovery authority is frozen at
+`configs/frozen_swe_verified_safe_pce/no-thinking-clean411-target4-recovery379-v1-20260919/`.
+Its audit binds the 320-MiB remote raw outcome authority by SHA-256 and maps
+each recovery unit to one incomplete parent execution unit. The recovery
+contains exactly 379 units; the 598 completed parent units cannot be selected.
+It preserves the original Planner/Coder sampling contract and has a distinct
+run identity. The launch-authorized runtime and Supervisor are
+`configs/swe_verified_safe_pce_no_thinking_clean411_target4_recovery379_aion_v1_20260919.yaml`
+and
+`configs/swe_verified_safe_pce_no_thinking_clean411_target4_recovery379_aion_v1_supervisor_20260919.yaml`.
 
 ## FPTA Mixed-Outcome Repeat Pilot
 

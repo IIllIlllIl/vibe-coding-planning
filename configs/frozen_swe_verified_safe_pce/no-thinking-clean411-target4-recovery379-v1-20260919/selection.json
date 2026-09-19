@@ -1,0 +1,1000 @@
+{
+  "dataset": "SWE-bench/SWE-bench_Verified",
+  "dataset_revision": "91aa3ed51b709be6457e12d00300a6a596d4c6a3",
+  "purpose": "retry only operationally incomplete target-four PCE units",
+  "schema_version": 1,
+  "selected_cases": [
+    {
+      "instance_id": "astropy__astropy-14182",
+      "repo": "astropy/astropy",
+      "row_sha256": "9dcacc272ac4712c0fa81524e85d78d0543c8e001a48cf32c1f8d723bec21cc0"
+    },
+    {
+      "instance_id": "astropy__astropy-7166",
+      "repo": "astropy/astropy",
+      "row_sha256": "ba1ba98c4ec623be61f8f5efbe700a6afac5390a057f6d6a6fdc4ef254433eb8"
+    },
+    {
+      "instance_id": "astropy__astropy-7606",
+      "repo": "astropy/astropy",
+      "row_sha256": "971f35a265a0f3e5ed64b67776398e2a3b89151271cdb4a791e93b25e65a9a8f"
+    },
+    {
+      "instance_id": "astropy__astropy-7671",
+      "repo": "astropy/astropy",
+      "row_sha256": "997df4bfa3695a6d9cefbe46b37e0bbd03f4c54ac25cbdabbfe3ff34e9aa679e"
+    },
+    {
+      "instance_id": "astropy__astropy-8707",
+      "repo": "astropy/astropy",
+      "row_sha256": "b557e14bd30a8c3d88be401c8f31a8a97c813cf12ae291cb90a97712c97c6ab1"
+    },
+    {
+      "instance_id": "astropy__astropy-8872",
+      "repo": "astropy/astropy",
+      "row_sha256": "7aa4a49daa2d8623f5a939a7d2e9425357918fc3ac5ea71aa1e9aadf566ba2bb"
+    },
+    {
+      "instance_id": "django__django-11211",
+      "repo": "django/django",
+      "row_sha256": "0c7faa827e6f57ffac9489954d8e49e0abf5ea0950f247b04e9ee9ce1b338553"
+    },
+    {
+      "instance_id": "django__django-11265",
+      "repo": "django/django",
+      "row_sha256": "a643d8283f7c58c2f1a0f42bdc9c75751e1a7ee6614d928046c0b14786c372ab"
+    },
+    {
+      "instance_id": "django__django-11276",
+      "repo": "django/django",
+      "row_sha256": "8297e492fd6025337d1c1690e961d9f9c4ab6257bbba818f318f2e64744c7a7d"
+    },
+    {
+      "instance_id": "django__django-11299",
+      "repo": "django/django",
+      "row_sha256": "413bf8c1c64d9be0aa66f24863654aa3c9c639bdb33e787ab1ebf57641e4cb83"
+    },
+    {
+      "instance_id": "django__django-11551",
+      "repo": "django/django",
+      "row_sha256": "e14ffb0715726ef0d4c8d0fe7760fd80a16043b7a0c2dc9aa931f2a232f63227"
+    },
+    {
+      "instance_id": "django__django-11555",
+      "repo": "django/django",
+      "row_sha256": "d7ad960fb648c3333478b10babe4f7f90bfea306a2fc301be5af0d459b5fa709"
+    },
+    {
+      "instance_id": "django__django-11885",
+      "repo": "django/django",
+      "row_sha256": "71a4041dd2e6452c7b3c4aad1f78aa929720f18e8e3e135dd5c1341bb5c7deb1"
+    },
+    {
+      "instance_id": "django__django-12143",
+      "repo": "django/django",
+      "row_sha256": "a75c44d3a8027e8892d03693d11030a77b2b6c2e817b942abbec0b667593c079"
+    },
+    {
+      "instance_id": "django__django-12209",
+      "repo": "django/django",
+      "row_sha256": "584d8c18b443f9ffce16b4f4d1f18fcc63c8be74c7eca19de34a5f905bf0dccd"
+    },
+    {
+      "instance_id": "django__django-12273",
+      "repo": "django/django",
+      "row_sha256": "72cde6c29fdda71f589560f5d930d6f9cc7dabd1d4827743601971f957a07264"
+    },
+    {
+      "instance_id": "django__django-12406",
+      "repo": "django/django",
+      "row_sha256": "aa2e4c4e1c03a052d380139f18d450d5a9017cbee8eb349240b7611e5e62bb9c"
+    },
+    {
+      "instance_id": "django__django-12663",
+      "repo": "django/django",
+      "row_sha256": "eab6cd865cbdc9057f6c374d41876e7e03dffa177707908281e5700e3d966850"
+    },
+    {
+      "instance_id": "django__django-13109",
+      "repo": "django/django",
+      "row_sha256": "70d9be6ee779bb83d91b9060215e4f72743938a7cc8b368afc7da16c43705541"
+    },
+    {
+      "instance_id": "django__django-13112",
+      "repo": "django/django",
+      "row_sha256": "54c5f58ab7213dec3b6fb1fe06136bc9a491ac81e843bf199871b49e692bf1ac"
+    },
+    {
+      "instance_id": "django__django-13121",
+      "repo": "django/django",
+      "row_sha256": "299f73197c832086df45997384b818335214a55873a3848a39d9c7295d0d1e38"
+    },
+    {
+      "instance_id": "django__django-13128",
+      "repo": "django/django",
+      "row_sha256": "f6cf9d885437084dd2ed7dcac042bf30efbe05f9ca9fae09f8f8e3c3e6d172e5"
+    },
+    {
+      "instance_id": "django__django-13158",
+      "repo": "django/django",
+      "row_sha256": "7a321b2f8dd10ef68c44ae13c85e15f299e2c289698de71dae88dc70f5739cf4"
+    },
+    {
+      "instance_id": "django__django-13212",
+      "repo": "django/django",
+      "row_sha256": "0c36360e517605c4e48b3265296379dd7f136a235d570dcfee8160b05a017cfc"
+    },
+    {
+      "instance_id": "django__django-13297",
+      "repo": "django/django",
+      "row_sha256": "68ad510447d6a308fbeb9de4a693b8c5adb716b8e7e3df8139beb7944e56a7c3"
+    },
+    {
+      "instance_id": "django__django-13315",
+      "repo": "django/django",
+      "row_sha256": "f6f686ee14a3a2b65e97cf84638c6c9293faa09e6a3e832d2a707346871ccf9d"
+    },
+    {
+      "instance_id": "django__django-13344",
+      "repo": "django/django",
+      "row_sha256": "a3f8913c740930fa9b5a6c439958d647cd203bad0e2b7d0457362c8d208efc7a"
+    },
+    {
+      "instance_id": "django__django-13346",
+      "repo": "django/django",
+      "row_sha256": "5a4eb7be25eb6b51f4219f603a8a54c0cab40a11ae9aec818e4eeb926329a53e"
+    },
+    {
+      "instance_id": "django__django-13363",
+      "repo": "django/django",
+      "row_sha256": "964b2891b2903913ee630c8236983bad9fc1e462f36ce59e25691f378a63a7e1"
+    },
+    {
+      "instance_id": "django__django-13401",
+      "repo": "django/django",
+      "row_sha256": "284c453f55f3833c971b6648c23c815235dfd9002a3edf7a5597f956948e6fe8"
+    },
+    {
+      "instance_id": "django__django-13406",
+      "repo": "django/django",
+      "row_sha256": "2b9b97763ec29e45f1759e562051a4e2666da3bcc817750e53e22c8ed87b8658"
+    },
+    {
+      "instance_id": "django__django-13410",
+      "repo": "django/django",
+      "row_sha256": "a26ce485833df4af464e8a5a57e3d6677e0b1656768530ef7e655f36b9aa38ba"
+    },
+    {
+      "instance_id": "django__django-13417",
+      "repo": "django/django",
+      "row_sha256": "8cba91b8bbd6eb838df9fa249001d2752e7153f404a6006a688f30a419eb7dbe"
+    },
+    {
+      "instance_id": "django__django-13449",
+      "repo": "django/django",
+      "row_sha256": "c783e6104d9e345d7c3b7e0209c3f221a88b9377729d6bb4e07eaac21638b08e"
+    },
+    {
+      "instance_id": "django__django-13512",
+      "repo": "django/django",
+      "row_sha256": "f7442a13b63c44ee30fb844f7c606ba4ea4cc3ee917c78fc52e97d6bce8fc3b7"
+    },
+    {
+      "instance_id": "django__django-13551",
+      "repo": "django/django",
+      "row_sha256": "3176481faeb3dd0943df44d3727faf055247bfcf72abb2d99cb819ff04ddbef1"
+    },
+    {
+      "instance_id": "django__django-13568",
+      "repo": "django/django",
+      "row_sha256": "c50df38e27688079d8d671b4c6900a42420dbd3330485cb502b32e85c0024f91"
+    },
+    {
+      "instance_id": "django__django-13569",
+      "repo": "django/django",
+      "row_sha256": "3acc35e2acb85199a31ed3d6a32d653f76b503982f7f1c9d96a59eb28869dd58"
+    },
+    {
+      "instance_id": "django__django-13590",
+      "repo": "django/django",
+      "row_sha256": "39900fb0d98f1f562925e43ddb0c644f583d0a201020fb487ba05549fc97df3f"
+    },
+    {
+      "instance_id": "django__django-13658",
+      "repo": "django/django",
+      "row_sha256": "0a27fd4f450c7fbef2cef41279df356a6b1381c3b0295e5b3d437e8b72ab91a8"
+    },
+    {
+      "instance_id": "django__django-13670",
+      "repo": "django/django",
+      "row_sha256": "b297e7b1009679d3b6dcdbafdd85db5e322223d9e68ba90f3360134a44bca378"
+    },
+    {
+      "instance_id": "django__django-13741",
+      "repo": "django/django",
+      "row_sha256": "9e983e414c2c86e534836c05e449f4d52fd7f8c2de30a8e1f6fa3413c34daf46"
+    },
+    {
+      "instance_id": "django__django-13786",
+      "repo": "django/django",
+      "row_sha256": "52364ba322bd93b988ddd85167813d90d4be210168f6bb8b8464737d95dc8ed9"
+    },
+    {
+      "instance_id": "django__django-13794",
+      "repo": "django/django",
+      "row_sha256": "59a4b97070b5a91f3f8dd8a4680ef5c0532c19a5f774830f05ebe83726d7d495"
+    },
+    {
+      "instance_id": "django__django-13807",
+      "repo": "django/django",
+      "row_sha256": "7d4d9c16770d693ac04aa15f1a063d80888aa7ba106ffa2441714326a2556758"
+    },
+    {
+      "instance_id": "django__django-13809",
+      "repo": "django/django",
+      "row_sha256": "73e380efa5a17e35ce4e2c11f96289f69b63414aa97cc65167eb555cfccdc764"
+    },
+    {
+      "instance_id": "django__django-13810",
+      "repo": "django/django",
+      "row_sha256": "eefa99abfb88d45d3b1960b97bb4433ebd1bc7eef2cf0656824bda0e2c4ea126"
+    },
+    {
+      "instance_id": "django__django-13820",
+      "repo": "django/django",
+      "row_sha256": "e7ce06c85bed71d28cb2c49167daf4b2babddbe396fb22f06a4c4a137efd9c9a"
+    },
+    {
+      "instance_id": "django__django-13821",
+      "repo": "django/django",
+      "row_sha256": "c8e5ec0424bae37a422515f68b37a10e3582ac2b826e5262ee952e1239b03a96"
+    },
+    {
+      "instance_id": "django__django-13837",
+      "repo": "django/django",
+      "row_sha256": "fb6bd829b66e1a5d4132419ba2e8345929701d648a01f3096d22d49c38dcefa0"
+    },
+    {
+      "instance_id": "django__django-13925",
+      "repo": "django/django",
+      "row_sha256": "b9f49f8b15d0a74d1dd1f1dfd4bebf9f34b7acf6848a4488a74c6bfb6c2f5614"
+    },
+    {
+      "instance_id": "django__django-13933",
+      "repo": "django/django",
+      "row_sha256": "8cb83336f9aa54d6ead21f75568f0b3ef25712cee64fcf994883aa33ce905cca"
+    },
+    {
+      "instance_id": "django__django-13964",
+      "repo": "django/django",
+      "row_sha256": "5f53516b6bcfaf04458898d571aeb77ece4b1c6eb89c987ce1a411b0339d777e"
+    },
+    {
+      "instance_id": "django__django-14007",
+      "repo": "django/django",
+      "row_sha256": "754317c09a6094e7f4e2245a3ebe8b6d5e3ec34d59b3e65eacc89c1a159815ff"
+    },
+    {
+      "instance_id": "django__django-14017",
+      "repo": "django/django",
+      "row_sha256": "4c603268617481d3ed374b1f5ff6129e69e74ae570e66faa4150a1073f8e14c2"
+    },
+    {
+      "instance_id": "django__django-14034",
+      "repo": "django/django",
+      "row_sha256": "aece4b120df2ad0da6d4729a568582ce3c036dcf101e212803a0db54d1f5cac0"
+    },
+    {
+      "instance_id": "django__django-14053",
+      "repo": "django/django",
+      "row_sha256": "611bff1772ef3ae1f8a72c6ea8539eb16b22bf7bc172e138e2072f0c764d5c78"
+    },
+    {
+      "instance_id": "django__django-14089",
+      "repo": "django/django",
+      "row_sha256": "5af90334d8849be8831975b60eab832310ff30c0b60843d89e066d274baac110"
+    },
+    {
+      "instance_id": "django__django-14122",
+      "repo": "django/django",
+      "row_sha256": "cc3aab4ebbcd23636dea551de68f27b940c57fd036045b80648ea875194ae0c9"
+    },
+    {
+      "instance_id": "django__django-14140",
+      "repo": "django/django",
+      "row_sha256": "9ee838c56ec1c082612bad7e54e6df3c582f4b79ef6a00296d1d75e47b825c5a"
+    },
+    {
+      "instance_id": "django__django-14155",
+      "repo": "django/django",
+      "row_sha256": "c60cfc1b207aecc1a731ec1b67e2afd7450876761c5c6c137c757665891b236a"
+    },
+    {
+      "instance_id": "django__django-14170",
+      "repo": "django/django",
+      "row_sha256": "b390898ef2896eb2d9a1d2d27001098eae7d80fc291b2bed8f9c90a83763b365"
+    },
+    {
+      "instance_id": "django__django-14238",
+      "repo": "django/django",
+      "row_sha256": "68a58c809ebe9fc1ce8c692e353029d25f4726e7b5ef63c8edfea5221bc25de4"
+    },
+    {
+      "instance_id": "django__django-14315",
+      "repo": "django/django",
+      "row_sha256": "2f24c6505d4059d61cdddea82121ed94903c9158ea947819bb1295e142480167"
+    },
+    {
+      "instance_id": "django__django-14349",
+      "repo": "django/django",
+      "row_sha256": "1d8b76362c4824e97c596444d8ea468997860e75849c5fddede37938ca970c5b"
+    },
+    {
+      "instance_id": "django__django-14351",
+      "repo": "django/django",
+      "row_sha256": "35b172ec50ba04df20b9e6dcc01ef4d6c95203857f9ac464657abb431d939db9"
+    },
+    {
+      "instance_id": "django__django-14373",
+      "repo": "django/django",
+      "row_sha256": "33146c50e4813f432537afbdb823cec100712ac842a8dc008669ffa8d7b6f232"
+    },
+    {
+      "instance_id": "django__django-14376",
+      "repo": "django/django",
+      "row_sha256": "13fd00282bd13e2616888fa833419248a0cdf5e5c2312c3a230e182e595f224e"
+    },
+    {
+      "instance_id": "django__django-14404",
+      "repo": "django/django",
+      "row_sha256": "b1f6cdcb009b342d7a8980a8a73360e6347e77a9dc3a90120cc688626ca006b3"
+    },
+    {
+      "instance_id": "django__django-14434",
+      "repo": "django/django",
+      "row_sha256": "442a219dc05cb540007f8fcbc1c17402819b5797e1371c5863d01d11970a4c87"
+    },
+    {
+      "instance_id": "django__django-14500",
+      "repo": "django/django",
+      "row_sha256": "e91a304a6ff21df0831f6f451b087bd4c001bbe87c3afdcf1ecebbb7898d78cf"
+    },
+    {
+      "instance_id": "django__django-14534",
+      "repo": "django/django",
+      "row_sha256": "d740892444d1d7d2e4c3c98317d7ceb8992cb14e3eb08515b612d9402bb18c71"
+    },
+    {
+      "instance_id": "django__django-14539",
+      "repo": "django/django",
+      "row_sha256": "b41d09ab53989925c79e58fd58520371759e446cc0c01f3beaaea593be1fed66"
+    },
+    {
+      "instance_id": "django__django-14559",
+      "repo": "django/django",
+      "row_sha256": "0513cc2550b39fc3873dfa59b46508f0b6b0dd6e7de817f0b1250c31a0946c92"
+    },
+    {
+      "instance_id": "django__django-14580",
+      "repo": "django/django",
+      "row_sha256": "7b2ee8082f33ffeaa3a4a548596c7daa99081c4fbfad8a0479c54147624685fa"
+    },
+    {
+      "instance_id": "django__django-14608",
+      "repo": "django/django",
+      "row_sha256": "49bf5ec7b2413f5640c316daabe6485af6c6e29501670bde3b07fa1fba3403c6"
+    },
+    {
+      "instance_id": "django__django-14672",
+      "repo": "django/django",
+      "row_sha256": "bab6cd53245f237cc6dab09a054574d8c72a48d7622e3bfede33598d2852ff04"
+    },
+    {
+      "instance_id": "django__django-14725",
+      "repo": "django/django",
+      "row_sha256": "79243448465cf4f662501241b6bbdda09ae18dedeadaad2760e10a915be7bc6b"
+    },
+    {
+      "instance_id": "django__django-14752",
+      "repo": "django/django",
+      "row_sha256": "5c07eb1d4d53f75096b8231c644a2acc81278ac6061e6e5c7c1874ad0ad03367"
+    },
+    {
+      "instance_id": "django__django-14765",
+      "repo": "django/django",
+      "row_sha256": "1d4ea4b2baa14e74d95b5c4b96bdf4a87edd4cffe19ccd0c64334989156b1451"
+    },
+    {
+      "instance_id": "django__django-14771",
+      "repo": "django/django",
+      "row_sha256": "9dc5fb80f885d28227c9cb057fd2b0779c8a4bcbbd8aa6bc40ac953ae9c770bb"
+    },
+    {
+      "instance_id": "django__django-14787",
+      "repo": "django/django",
+      "row_sha256": "0d31a95016a77e72f97bf95922603df4e4785df11424d0defae9c7624a523918"
+    },
+    {
+      "instance_id": "django__django-14855",
+      "repo": "django/django",
+      "row_sha256": "5d14842ce1dd51a2b8e5fe28cc9c2bdb63fa5197f3bfe35f27ebbcfedc6a6d58"
+    },
+    {
+      "instance_id": "django__django-14915",
+      "repo": "django/django",
+      "row_sha256": "63910afdf42df979a440f1351b9f0d76fbcd8808362f8d7aa658745d9fdbaa34"
+    },
+    {
+      "instance_id": "django__django-14999",
+      "repo": "django/django",
+      "row_sha256": "51e3e05328b74cc51b692b463e6bbd2a5706256a06ff398bed1e80badef922d6"
+    },
+    {
+      "instance_id": "django__django-15037",
+      "repo": "django/django",
+      "row_sha256": "7f3286363f9ffc7786fd9acbeb58b89a6153fc3b054214a2dd0b1bf587455b32"
+    },
+    {
+      "instance_id": "django__django-15098",
+      "repo": "django/django",
+      "row_sha256": "b9afcec80d94e383bdfd07ee0974387ccffe0e80ca9b2a0393cc453ca10fea77"
+    },
+    {
+      "instance_id": "django__django-15104",
+      "repo": "django/django",
+      "row_sha256": "d0ac3c9c37061e6abf0f0e1c56ea758b6c99861969ed0af71afdf630da5a1fdf"
+    },
+    {
+      "instance_id": "django__django-15127",
+      "repo": "django/django",
+      "row_sha256": "1138dc9110e3954f4b80cc0e46866ed064878f3771169417be3a60471ac2fbba"
+    },
+    {
+      "instance_id": "django__django-15128",
+      "repo": "django/django",
+      "row_sha256": "533f65a6ef7c66323914584b5b2fb2cb7f613c4adca9f59989f660982ea95d73"
+    },
+    {
+      "instance_id": "django__django-15161",
+      "repo": "django/django",
+      "row_sha256": "c51ff6c94e31722f4b77bf31ab5c63ae130fb54d83713dbf1aa4f97cd98a39ec"
+    },
+    {
+      "instance_id": "django__django-15252",
+      "repo": "django/django",
+      "row_sha256": "4fba73d9f8f598224081c41747235404593b4bf2f148ba68b02c368ea6fb2da6"
+    },
+    {
+      "instance_id": "django__django-15268",
+      "repo": "django/django",
+      "row_sha256": "ca8b6880f148bf519e8f9bcd62670529f026b75486d403aaf558ce4eb998cbb7"
+    },
+    {
+      "instance_id": "django__django-15277",
+      "repo": "django/django",
+      "row_sha256": "235724f9916901a5175f684087055e17daad274b85620ae61124c2a1a01d5126"
+    },
+    {
+      "instance_id": "django__django-15278",
+      "repo": "django/django",
+      "row_sha256": "90c92c93dcbbe14e15f1c217fbb77f5a3dd36dfb9f1cbf71b0abd6a2c5ff517b"
+    },
+    {
+      "instance_id": "django__django-15280",
+      "repo": "django/django",
+      "row_sha256": "b5a21b4e8a34dbc148831d24d6bef7c85490095ed03d1d2d48e26c39f702d76a"
+    },
+    {
+      "instance_id": "django__django-15368",
+      "repo": "django/django",
+      "row_sha256": "d8de3713228b7d959c699acc6960ab4f5bfbaba37f6dd0baee3800ac10c0729a"
+    },
+    {
+      "instance_id": "django__django-15382",
+      "repo": "django/django",
+      "row_sha256": "bddb57d51fdc972e9c9b18e0451a4ea99c6f992fb4771eb1e448a67acd9ca1b7"
+    },
+    {
+      "instance_id": "django__django-15467",
+      "repo": "django/django",
+      "row_sha256": "7426fdafd5f04993f5bbedfc07062dac75bc16fc91747880d83ce915e2c3660d"
+    },
+    {
+      "instance_id": "django__django-15499",
+      "repo": "django/django",
+      "row_sha256": "9401c8eb21643ebbe523b8cc4489a533f9b1b43ed9be7220dd2e9e63e64b2822"
+    },
+    {
+      "instance_id": "django__django-15503",
+      "repo": "django/django",
+      "row_sha256": "a363c5e670477b94670ee475f505124c26c2dbaa4b305b7329389e86a3bf9f6c"
+    },
+    {
+      "instance_id": "django__django-15525",
+      "repo": "django/django",
+      "row_sha256": "c4e832342dcc1c90928dd7a1f45fe571748bfb205c58b997c3b4e83bff20a0a4"
+    },
+    {
+      "instance_id": "django__django-15554",
+      "repo": "django/django",
+      "row_sha256": "8dfcebe6c7a959db247882ccae26c66f9918b60ba60dc5d79a17d3c67ab03b25"
+    },
+    {
+      "instance_id": "django__django-15561",
+      "repo": "django/django",
+      "row_sha256": "9a6154c064860dd52b316dbbbf8f87c9fe3c0d0dc9e18e7ac1985f7680c96881"
+    },
+    {
+      "instance_id": "django__django-15563",
+      "repo": "django/django",
+      "row_sha256": "2bdb2ae70756a04b2587d477d0434453364d5f5fa11a3dc90eb7527ccce04349"
+    },
+    {
+      "instance_id": "django__django-15569",
+      "repo": "django/django",
+      "row_sha256": "dfc94264e1596ec1e9cdd2811261da08bd4cbe7b887e5f9867aaf9c8950a4744"
+    },
+    {
+      "instance_id": "django__django-15572",
+      "repo": "django/django",
+      "row_sha256": "02e770553c422d16e63566b881aadcc5cf56308fa938f370ac49b779f00b6791"
+    },
+    {
+      "instance_id": "django__django-15629",
+      "repo": "django/django",
+      "row_sha256": "feb67ac0dadf8505b95050955c264b4f4d4c3ca9a49cf0cbcb2df8f09f50f438"
+    },
+    {
+      "instance_id": "django__django-15695",
+      "repo": "django/django",
+      "row_sha256": "c5646b32316347c21f4e72cc7ea9d2cc2cd308307cbd637faf782d3944d53787"
+    },
+    {
+      "instance_id": "django__django-15731",
+      "repo": "django/django",
+      "row_sha256": "9ed4891031a3edb9d84c0e5049b4e60603d092de485a6490c5040a410943b5b9"
+    },
+    {
+      "instance_id": "django__django-15732",
+      "repo": "django/django",
+      "row_sha256": "f32eeb3e535fcc1c488feab61df72191472df4676f4d563c83dda347254f627a"
+    },
+    {
+      "instance_id": "django__django-15741",
+      "repo": "django/django",
+      "row_sha256": "41ab4318312ff51dd9a378d9b22d8b6bd636bfc88b410883dbb8102ea776a80a"
+    },
+    {
+      "instance_id": "django__django-15814",
+      "repo": "django/django",
+      "row_sha256": "eddbd5da079d6a07185b341f59606cebf238c17c2b13909818e511c78eb785b8"
+    },
+    {
+      "instance_id": "django__django-15851",
+      "repo": "django/django",
+      "row_sha256": "da6209d27baf38bd48ff8c1eebfab4a76b5f60dec53991f55383a5b3348211c9"
+    },
+    {
+      "instance_id": "django__django-15863",
+      "repo": "django/django",
+      "row_sha256": "e95a6ead8f20a1f740e2d324a4f148b51575d886ff535a8c26adea490ed240c2"
+    },
+    {
+      "instance_id": "django__django-15916",
+      "repo": "django/django",
+      "row_sha256": "782a0879bf5cddc15d9a75fb11544ff186cebc79a7e65ccec55b658e382e0084"
+    },
+    {
+      "instance_id": "django__django-15930",
+      "repo": "django/django",
+      "row_sha256": "2b8aa0512ced6452f767b32daf9e8c700b7e3bbd659fa2faae0f3c46c0313ff3"
+    },
+    {
+      "instance_id": "django__django-15973",
+      "repo": "django/django",
+      "row_sha256": "f1dfb41c15eb4e9ce30f91136a20501abb031bf530c5d4f7a024170a4aa69770"
+    },
+    {
+      "instance_id": "django__django-16032",
+      "repo": "django/django",
+      "row_sha256": "53989172c9f11ede64896a9b41e0ee5fc42abef5143c6f8856a02d6886308724"
+    },
+    {
+      "instance_id": "django__django-16082",
+      "repo": "django/django",
+      "row_sha256": "1207fd22e6d2e30f20360e18c82e5f56bc56da0fa0e970cc2dfcbc10b0bcbe9d"
+    },
+    {
+      "instance_id": "django__django-16116",
+      "repo": "django/django",
+      "row_sha256": "2275a757cbdd7072e4fef92f38c1654fbc0409cd3ef3a8a950fcf867f1baf761"
+    },
+    {
+      "instance_id": "django__django-16136",
+      "repo": "django/django",
+      "row_sha256": "8d7a73d9a188c138eed82406b09d8835047f67f936ed16968a58814a813bf591"
+    },
+    {
+      "instance_id": "django__django-16139",
+      "repo": "django/django",
+      "row_sha256": "ad71df3badd7099f05db07d1a69925b72e9411fa18a662fbf36de7f5f7f7611e"
+    },
+    {
+      "instance_id": "django__django-16145",
+      "repo": "django/django",
+      "row_sha256": "162a4606e6ecefff0eda0ad39872a15b20a7b6135db0f4ab3f3439c9213ab1c3"
+    },
+    {
+      "instance_id": "django__django-16255",
+      "repo": "django/django",
+      "row_sha256": "389ab24a2bbe7703ab16e94dcfbbd419444ecb97edb9786da607515c71d5d27a"
+    },
+    {
+      "instance_id": "django__django-16256",
+      "repo": "django/django",
+      "row_sha256": "ccf38e0f54a15a2be48de5afc3f8a1a248964c05a33c8e1e88822f57e537e191"
+    },
+    {
+      "instance_id": "django__django-16315",
+      "repo": "django/django",
+      "row_sha256": "516c4f80b3393b01b677042f5f0bc0465fc61f77d877c0ad8499c9bc7bd829fb"
+    },
+    {
+      "instance_id": "django__django-16333",
+      "repo": "django/django",
+      "row_sha256": "2b227c462d190df5a0c3c2bca854391f75b076487d41ebc8542978221d60fb91"
+    },
+    {
+      "instance_id": "django__django-16429",
+      "repo": "django/django",
+      "row_sha256": "9908d619ea8a09c385d0cc4b635b2d7225d8ff489a137b4e6cbd2256bd081ec9"
+    },
+    {
+      "instance_id": "django__django-16454",
+      "repo": "django/django",
+      "row_sha256": "d77d8b924da83162e666821400f87b8e9858fd3d43f208b41beabe94a19f3b08"
+    },
+    {
+      "instance_id": "django__django-16485",
+      "repo": "django/django",
+      "row_sha256": "b6c75209f64dfcb68da6f34fc1bcf5048fcde6c71a19050ef65ed79ff6d2789e"
+    },
+    {
+      "instance_id": "django__django-16493",
+      "repo": "django/django",
+      "row_sha256": "19baa3aacf7305aa4b23202f963ee88f07c6ce2957e2540613a9f0771e29fa62"
+    },
+    {
+      "instance_id": "django__django-16502",
+      "repo": "django/django",
+      "row_sha256": "3a8115010818f36222639f509a28a241e57987c8ea8c5ec6a8feabc1eb4b8cbc"
+    },
+    {
+      "instance_id": "django__django-16527",
+      "repo": "django/django",
+      "row_sha256": "bddecf33b8a03e112cb110f92ef62a06acc3e2321ec82fa2067ae795e267065e"
+    },
+    {
+      "instance_id": "django__django-16560",
+      "repo": "django/django",
+      "row_sha256": "1cb4eeb1d7bf16850523cd641f70042122633547021635006b51106e5209081c"
+    },
+    {
+      "instance_id": "django__django-16569",
+      "repo": "django/django",
+      "row_sha256": "40c05204b167ca94d824f5abdaffa551041da850fb4ade46908ec9e0d5cb5cd4"
+    },
+    {
+      "instance_id": "django__django-16595",
+      "repo": "django/django",
+      "row_sha256": "a5b9f9bb336f5b36dde0ab2c19e4e91529e6f7fc8bfb9a69b2c44e22fb887e37"
+    },
+    {
+      "instance_id": "django__django-16612",
+      "repo": "django/django",
+      "row_sha256": "f01271ec6465e8e9558c284418b5fd77e2e6b00b56c81fb85fb19888ae8b3861"
+    },
+    {
+      "instance_id": "django__django-16631",
+      "repo": "django/django",
+      "row_sha256": "017e9804d5acae41dadc7b27d089df1ab1733e21f2ca60faa4d76fe74d4a91f6"
+    },
+    {
+      "instance_id": "django__django-16661",
+      "repo": "django/django",
+      "row_sha256": "47b44eead856c6d958a5c51d9cc64e05c8a874f49276adfdd3c69ffd47d73319"
+    },
+    {
+      "instance_id": "django__django-16662",
+      "repo": "django/django",
+      "row_sha256": "e92f8b9ecf605fedf9428dab6f9500f0bf1945e81c76ab40dcf86fc18d70bda4"
+    },
+    {
+      "instance_id": "django__django-16667",
+      "repo": "django/django",
+      "row_sha256": "df4b8343508574a66a833900a04b2712e20744e27e3b257fabe97614698f92cf"
+    },
+    {
+      "instance_id": "django__django-16819",
+      "repo": "django/django",
+      "row_sha256": "9709a84f0491045d01793d134f84d389588243d325ad1e02770b20761d9f6a54"
+    },
+    {
+      "instance_id": "django__django-16899",
+      "repo": "django/django",
+      "row_sha256": "492ff69ca94e972aed7a2a48a093f757b13c835afe52ceb5f4ee5bf78dbdbe8c"
+    },
+    {
+      "instance_id": "django__django-16901",
+      "repo": "django/django",
+      "row_sha256": "1509982eae002806697958a90ae287e242ede9bb0d7489ec4f21eb5651d36089"
+    },
+    {
+      "instance_id": "django__django-16938",
+      "repo": "django/django",
+      "row_sha256": "f58f56840421d35f0df517f66639ecd81d154273e088512de0e0c5c818c734f9"
+    },
+    {
+      "instance_id": "django__django-16950",
+      "repo": "django/django",
+      "row_sha256": "0522c862f9d30d9706072621d3d1ce099070f8e0cac18df7be55b509e1a75a75"
+    },
+    {
+      "instance_id": "django__django-17029",
+      "repo": "django/django",
+      "row_sha256": "38195bbd4e62245bad44db9054358bf47229ba79da1a610e5b7c42eb1a23f3f1"
+    },
+    {
+      "instance_id": "django__django-17084",
+      "repo": "django/django",
+      "row_sha256": "126493568ab2dcda79b08eb365a10a0c906717b19da90974ab87da785361865d"
+    },
+    {
+      "instance_id": "django__django-17087",
+      "repo": "django/django",
+      "row_sha256": "2488335e40d1ec8857b768a4f68babef2bc24397abf8d6d8900d346d4c1a579d"
+    },
+    {
+      "instance_id": "django__django-9296",
+      "repo": "django/django",
+      "row_sha256": "de94c3ea91f70714e1f40194fb2b9632dff195134efdab17415f27e5834e6f0e"
+    },
+    {
+      "instance_id": "matplotlib__matplotlib-13989",
+      "repo": "matplotlib/matplotlib",
+      "row_sha256": "2a7f44d50c66b098e20405536b17922a66b115ccc731941c300aec6d5e0da3e7"
+    },
+    {
+      "instance_id": "matplotlib__matplotlib-14623",
+      "repo": "matplotlib/matplotlib",
+      "row_sha256": "b128ee1f47acdd1e106b59ef707b4be9ceddde883df27c2debd272d0f555498e"
+    },
+    {
+      "instance_id": "matplotlib__matplotlib-25287",
+      "repo": "matplotlib/matplotlib",
+      "row_sha256": "b12837067251cb70ae564442328e30d10aa23ebf5d0ba30eaefae1b290106da9"
+    },
+    {
+      "instance_id": "matplotlib__matplotlib-25479",
+      "repo": "matplotlib/matplotlib",
+      "row_sha256": "7d88fb971fdea3c241f3f18928f203b701b70284866900d1c8a0c0cecb9892c6"
+    },
+    {
+      "instance_id": "matplotlib__matplotlib-25775",
+      "repo": "matplotlib/matplotlib",
+      "row_sha256": "5107e2f4f60f40b7bad1ea514a0ee7a911bda93742f6813a708e25a3734d78bf"
+    },
+    {
+      "instance_id": "matplotlib__matplotlib-26113",
+      "repo": "matplotlib/matplotlib",
+      "row_sha256": "9f504b90979b46c53fb1838bf2e74f50433892525d8ba1029ae92d5b7fe33e8b"
+    },
+    {
+      "instance_id": "matplotlib__matplotlib-26208",
+      "repo": "matplotlib/matplotlib",
+      "row_sha256": "979627b6b68cfd3d5c05dc62cd0a5d86ed9212cac3c76002991f11607a147805"
+    },
+    {
+      "instance_id": "matplotlib__matplotlib-26342",
+      "repo": "matplotlib/matplotlib",
+      "row_sha256": "74b46b2079aeb47b563accd1c561ffb3bbdc568583f0ea58b26712be8b0864ee"
+    },
+    {
+      "instance_id": "pydata__xarray-4687",
+      "repo": "pydata/xarray",
+      "row_sha256": "d70120cb26d2ca46b37e223b523fd29c6ba77bb1de4265b93e32786ecd550093"
+    },
+    {
+      "instance_id": "pylint-dev__pylint-6528",
+      "repo": "pylint-dev/pylint",
+      "row_sha256": "22bfa5d64566f5e9643b5ae93bf808a35e48326b57d65181533e794a5bc12116"
+    },
+    {
+      "instance_id": "sphinx-doc__sphinx-7440",
+      "repo": "sphinx-doc/sphinx",
+      "row_sha256": "937866d0c96064a1d92bd0bd18ca5e2d3de111facbc6eb944ff81b07dbf9c560"
+    },
+    {
+      "instance_id": "sympy__sympy-13615",
+      "repo": "sympy/sympy",
+      "row_sha256": "6672b33dae546b2507568d8749846ac54f2ae14a025cb2c7e438c25ac023ef75"
+    }
+  ],
+  "selected_count": 163,
+  "selected_instance_ids": [
+    "astropy__astropy-14182",
+    "astropy__astropy-7166",
+    "astropy__astropy-7606",
+    "astropy__astropy-7671",
+    "astropy__astropy-8707",
+    "astropy__astropy-8872",
+    "django__django-11211",
+    "django__django-11265",
+    "django__django-11276",
+    "django__django-11299",
+    "django__django-11551",
+    "django__django-11555",
+    "django__django-11885",
+    "django__django-12143",
+    "django__django-12209",
+    "django__django-12273",
+    "django__django-12406",
+    "django__django-12663",
+    "django__django-13109",
+    "django__django-13112",
+    "django__django-13121",
+    "django__django-13128",
+    "django__django-13158",
+    "django__django-13212",
+    "django__django-13297",
+    "django__django-13315",
+    "django__django-13344",
+    "django__django-13346",
+    "django__django-13363",
+    "django__django-13401",
+    "django__django-13406",
+    "django__django-13410",
+    "django__django-13417",
+    "django__django-13449",
+    "django__django-13512",
+    "django__django-13551",
+    "django__django-13568",
+    "django__django-13569",
+    "django__django-13590",
+    "django__django-13658",
+    "django__django-13670",
+    "django__django-13741",
+    "django__django-13786",
+    "django__django-13794",
+    "django__django-13807",
+    "django__django-13809",
+    "django__django-13810",
+    "django__django-13820",
+    "django__django-13821",
+    "django__django-13837",
+    "django__django-13925",
+    "django__django-13933",
+    "django__django-13964",
+    "django__django-14007",
+    "django__django-14017",
+    "django__django-14034",
+    "django__django-14053",
+    "django__django-14089",
+    "django__django-14122",
+    "django__django-14140",
+    "django__django-14155",
+    "django__django-14170",
+    "django__django-14238",
+    "django__django-14315",
+    "django__django-14349",
+    "django__django-14351",
+    "django__django-14373",
+    "django__django-14376",
+    "django__django-14404",
+    "django__django-14434",
+    "django__django-14500",
+    "django__django-14534",
+    "django__django-14539",
+    "django__django-14559",
+    "django__django-14580",
+    "django__django-14608",
+    "django__django-14672",
+    "django__django-14725",
+    "django__django-14752",
+    "django__django-14765",
+    "django__django-14771",
+    "django__django-14787",
+    "django__django-14855",
+    "django__django-14915",
+    "django__django-14999",
+    "django__django-15037",
+    "django__django-15098",
+    "django__django-15104",
+    "django__django-15127",
+    "django__django-15128",
+    "django__django-15161",
+    "django__django-15252",
+    "django__django-15268",
+    "django__django-15277",
+    "django__django-15278",
+    "django__django-15280",
+    "django__django-15368",
+    "django__django-15382",
+    "django__django-15467",
+    "django__django-15499",
+    "django__django-15503",
+    "django__django-15525",
+    "django__django-15554",
+    "django__django-15561",
+    "django__django-15563",
+    "django__django-15569",
+    "django__django-15572",
+    "django__django-15629",
+    "django__django-15695",
+    "django__django-15731",
+    "django__django-15732",
+    "django__django-15741",
+    "django__django-15814",
+    "django__django-15851",
+    "django__django-15863",
+    "django__django-15916",
+    "django__django-15930",
+    "django__django-15973",
+    "django__django-16032",
+    "django__django-16082",
+    "django__django-16116",
+    "django__django-16136",
+    "django__django-16139",
+    "django__django-16145",
+    "django__django-16255",
+    "django__django-16256",
+    "django__django-16315",
+    "django__django-16333",
+    "django__django-16429",
+    "django__django-16454",
+    "django__django-16485",
+    "django__django-16493",
+    "django__django-16502",
+    "django__django-16527",
+    "django__django-16560",
+    "django__django-16569",
+    "django__django-16595",
+    "django__django-16612",
+    "django__django-16631",
+    "django__django-16661",
+    "django__django-16662",
+    "django__django-16667",
+    "django__django-16819",
+    "django__django-16899",
+    "django__django-16901",
+    "django__django-16938",
+    "django__django-16950",
+    "django__django-17029",
+    "django__django-17084",
+    "django__django-17087",
+    "django__django-9296",
+    "matplotlib__matplotlib-13989",
+    "matplotlib__matplotlib-14623",
+    "matplotlib__matplotlib-25287",
+    "matplotlib__matplotlib-25479",
+    "matplotlib__matplotlib-25775",
+    "matplotlib__matplotlib-26113",
+    "matplotlib__matplotlib-26208",
+    "matplotlib__matplotlib-26342",
+    "pydata__xarray-4687",
+    "pylint-dev__pylint-6528",
+    "sphinx-doc__sphinx-7440",
+    "sympy__sympy-13615"
+  ],
+  "selected_instance_ids_sha256": "6e2e86aaf64884fa4b481c6c2b5aeafa590b22371000b4fb0addc2bedb01117c",
+  "selection_id": "no-thinking-clean411-target4-recovery379-v1-20260919",
+  "selection_policy": {
+    "completed_parent_units_excluded": true,
+    "operational_incomplete_is_not_unresolved": true,
+    "scientific_outcomes_do_not_select_recovery": true,
+    "source": "operationally incomplete units in frozen parent execution"
+  },
+  "source_instance_count": 500,
+  "source_instances_sha256": "8d6f5c64fe448432264ced781ac9bc987fc38b668ade6de39592a23ad1a9ef1f",
+  "source_manifest_sha256": "bec1150dbf55c29c0893226c20578bee031406d78db305cdfef7b2b80965143a"
+}

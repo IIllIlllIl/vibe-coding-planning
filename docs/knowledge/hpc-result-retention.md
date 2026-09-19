@@ -1,7 +1,7 @@
 # HPC Result Retention And Storage Layout
 
 > Knowledge status: retained historical evidence and current storage policy
-> Last reviewed: 2026-09-11
+> Last reviewed: 2026-09-19
 
 ## Storage Authorities
 
@@ -58,3 +58,19 @@ usage fell from approximately 1.08 million files to 88,499. The exact pre-clean
 inventory, cleanup script, manifest, log, and completion marker remain under
 `retained-history/admin/`; these small administrative records make the deletion
 boundary auditable without preserving regenerable workspaces.
+
+## 2026-09-19 Target-Four Recovery Cleanup
+
+The no-thinking clean411 target-four run accumulated disposable attempt
+workspaces and reached the Aion file quota. After every related Slurm job had
+stopped, the existing bounded reclaimer removed 1,579 exact
+`attempt_*/workspaces` trees. It did not remove task outputs, checkpoints,
+trajectories, failure records, Slurm logs, SIFs, or history bundles. The
+post-cleanup quota reading was 726,751 files out of 1,000,000 and
+1,829,090,024 KiB out of 10,737,418,240 KiB.
+
+The shared Slurm task host now performs the same exact-path cleanup when it
+observes an atomic worker output and immediately before retrying a stopped
+task. This bounds accumulation during a long array while preserving the
+Supervisor's end-of-run cleanup as a second layer. Cleanup failure never
+changes a scientific outcome or suppresses a retry.

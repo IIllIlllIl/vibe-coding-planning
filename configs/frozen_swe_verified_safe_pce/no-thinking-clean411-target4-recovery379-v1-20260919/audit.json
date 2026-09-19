@@ -1,0 +1,2705 @@
+{
+  "audit_id": "no-thinking-clean411-target4-recovery379-v1-20260919",
+  "failure_class_counts": {
+    "attempts_exhausted_without_worker_output": 142,
+    "disk_quota_exceeded": 237
+  },
+  "incomplete_units_per_task_distribution": {
+    "1": 50,
+    "2": 10,
+    "3": 103
+  },
+  "no_worker_output_slurm_state_counts": {
+    "FAILED": 140,
+    "TIMEOUT": 2
+  },
+  "parent_completed_units": 598,
+  "parent_execution_units": 977,
+  "parent_incomplete_units": 379,
+  "recovery_execution_units": 379,
+  "recovery_map": [
+    {
+      "failure_class": "disk_quota_exceeded",
+      "instance_id": "astropy__astropy-14182",
+      "recovery_execution_unit_index": 0,
+      "source_execution_unit_index": 16,
+      "source_pce_run_index": 1
+    },
+    {
+      "failure_class": "disk_quota_exceeded",
+      "instance_id": "astropy__astropy-7166",
+      "recovery_execution_unit_index": 1,
+      "source_execution_unit_index": 34,
+      "source_pce_run_index": 1
+    },
+    {
+      "failure_class": "disk_quota_exceeded",
+      "instance_id": "astropy__astropy-7166",
+      "recovery_execution_unit_index": 2,
+      "source_execution_unit_index": 35,
+      "source_pce_run_index": 2
+    },
+    {
+      "failure_class": "disk_quota_exceeded",
+      "instance_id": "astropy__astropy-7166",
+      "recovery_execution_unit_index": 3,
+      "source_execution_unit_index": 36,
+      "source_pce_run_index": 3
+    },
+    {
+      "failure_class": "disk_quota_exceeded",
+      "instance_id": "astropy__astropy-7606",
+      "recovery_execution_unit_index": 4,
+      "source_execution_unit_index": 37,
+      "source_pce_run_index": 1
+    },
+    {
+      "failure_class": "disk_quota_exceeded",
+      "instance_id": "astropy__astropy-7606",
+      "recovery_execution_unit_index": 5,
+      "source_execution_unit_index": 38,
+      "source_pce_run_index": 2
+    },
+    {
+      "failure_class": "disk_quota_exceeded",
+      "instance_id": "astropy__astropy-7606",
+      "recovery_execution_unit_index": 6,
+      "source_execution_unit_index": 39,
+      "source_pce_run_index": 3
+    },
+    {
+      "failure_class": "disk_quota_exceeded",
+      "instance_id": "astropy__astropy-7671",
+      "recovery_execution_unit_index": 7,
+      "source_execution_unit_index": 40,
+      "source_pce_run_index": 1
+    },
+    {
+      "failure_class": "disk_quota_exceeded",
+      "instance_id": "astropy__astropy-8707",
+      "recovery_execution_unit_index": 8,
+      "source_execution_unit_index": 41,
+      "source_pce_run_index": 1
+    },
+    {
+      "failure_class": "disk_quota_exceeded",
+      "instance_id": "astropy__astropy-8707",
+      "recovery_execution_unit_index": 9,
+      "source_execution_unit_index": 42,
+      "source_pce_run_index": 2
+    },
+    {
+      "failure_class": "disk_quota_exceeded",
+      "instance_id": "astropy__astropy-8707",
+      "recovery_execution_unit_index": 10,
+      "source_execution_unit_index": 43,
+      "source_pce_run_index": 3
+    },
+    {
+      "failure_class": "disk_quota_exceeded",
+      "instance_id": "astropy__astropy-8872",
+      "recovery_execution_unit_index": 11,
+      "source_execution_unit_index": 44,
+      "source_pce_run_index": 1
+    },
+    {
+      "failure_class": "disk_quota_exceeded",
+      "instance_id": "astropy__astropy-8872",
+      "recovery_execution_unit_index": 12,
+      "source_execution_unit_index": 45,
+      "source_pce_run_index": 2
+    },
+    {
+      "failure_class": "disk_quota_exceeded",
+      "instance_id": "astropy__astropy-8872",
+      "recovery_execution_unit_index": 13,
+      "source_execution_unit_index": 46,
+      "source_pce_run_index": 3
+    },
+    {
+      "failure_class": "disk_quota_exceeded",
+      "instance_id": "django__django-11211",
+      "recovery_execution_unit_index": 14,
+      "source_execution_unit_index": 78,
+      "source_pce_run_index": 3
+    },
+    {
+      "failure_class": "disk_quota_exceeded",
+      "instance_id": "django__django-11265",
+      "recovery_execution_unit_index": 15,
+      "source_execution_unit_index": 81,
+      "source_pce_run_index": 2
+    },
+    {
+      "failure_class": "disk_quota_exceeded",
+      "instance_id": "django__django-11265",
+      "recovery_execution_unit_index": 16,
+      "source_execution_unit_index": 82,
+      "source_pce_run_index": 3
+    },
+    {
+      "failure_class": "disk_quota_exceeded",
+      "instance_id": "django__django-11276",
+      "recovery_execution_unit_index": 17,
+      "source_execution_unit_index": 83,
+      "source_pce_run_index": 1
+    },
+    {
+      "failure_class": "disk_quota_exceeded",
+      "instance_id": "django__django-11299",
+      "recovery_execution_unit_index": 18,
+      "source_execution_unit_index": 85,
+      "source_pce_run_index": 2
+    },
+    {
+      "failure_class": "disk_quota_exceeded",
+      "instance_id": "django__django-11551",
+      "recovery_execution_unit_index": 19,
+      "source_execution_unit_index": 96,
+      "source_pce_run_index": 1
+    },
+    {
+      "failure_class": "disk_quota_exceeded",
+      "instance_id": "django__django-11555",
+      "recovery_execution_unit_index": 20,
+      "source_execution_unit_index": 99,
+      "source_pce_run_index": 3
+    },
+    {
+      "failure_class": "disk_quota_exceeded",
+      "instance_id": "django__django-11885",
+      "recovery_execution_unit_index": 21,
+      "source_execution_unit_index": 127,
+      "source_pce_run_index": 2
+    },
+    {
+      "failure_class": "disk_quota_exceeded",
+      "instance_id": "django__django-12143",
+      "recovery_execution_unit_index": 22,
+      "source_execution_unit_index": 141,
+      "source_pce_run_index": 2
+    },
+    {
+      "failure_class": "disk_quota_exceeded",
+      "instance_id": "django__django-12209",
+      "recovery_execution_unit_index": 23,
+      "source_execution_unit_index": 149,
+      "source_pce_run_index": 1
+    },
+    {
+      "failure_class": "disk_quota_exceeded",
+      "instance_id": "django__django-12273",
+      "recovery_execution_unit_index": 24,
+      "source_execution_unit_index": 151,
+      "source_pce_run_index": 1
+    },
+    {
+      "failure_class": "disk_quota_exceeded",
+      "instance_id": "django__django-12406",
+      "recovery_execution_unit_index": 25,
+      "source_execution_unit_index": 163,
+      "source_pce_run_index": 1
+    },
+    {
+      "failure_class": "disk_quota_exceeded",
+      "instance_id": "django__django-12406",
+      "recovery_execution_unit_index": 26,
+      "source_execution_unit_index": 164,
+      "source_pce_run_index": 2
+    },
+    {
+      "failure_class": "disk_quota_exceeded",
+      "instance_id": "django__django-12406",
+      "recovery_execution_unit_index": 27,
+      "source_execution_unit_index": 165,
+      "source_pce_run_index": 3
+    },
+    {
+      "failure_class": "disk_quota_exceeded",
+      "instance_id": "django__django-12663",
+      "recovery_execution_unit_index": 28,
+      "source_execution_unit_index": 169,
+      "source_pce_run_index": 1
+    },
+    {
+      "failure_class": "disk_quota_exceeded",
+      "instance_id": "django__django-12663",
+      "recovery_execution_unit_index": 29,
+      "source_execution_unit_index": 170,
+      "source_pce_run_index": 2
+    },
+    {
+      "failure_class": "disk_quota_exceeded",
+      "instance_id": "django__django-12663",
+      "recovery_execution_unit_index": 30,
+      "source_execution_unit_index": 171,
+      "source_pce_run_index": 3
+    },
+    {
+      "failure_class": "disk_quota_exceeded",
+      "instance_id": "django__django-13109",
+      "recovery_execution_unit_index": 31,
+      "source_execution_unit_index": 199,
+      "source_pce_run_index": 3
+    },
+    {
+      "failure_class": "disk_quota_exceeded",
+      "instance_id": "django__django-13112",
+      "recovery_execution_unit_index": 32,
+      "source_execution_unit_index": 201,
+      "source_pce_run_index": 2
+    },
+    {
+      "failure_class": "attempts_exhausted_without_worker_output",
+      "instance_id": "django__django-13112",
+      "recovery_execution_unit_index": 33,
+      "source_execution_unit_index": 202,
+      "source_pce_run_index": 3
+    },
+    {
+      "failure_class": "attempts_exhausted_without_worker_output",
+      "instance_id": "django__django-13121",
+      "recovery_execution_unit_index": 34,
+      "source_execution_unit_index": 205,
+      "source_pce_run_index": 3
+    },
+    {
+      "failure_class": "attempts_exhausted_without_worker_output",
+      "instance_id": "django__django-13128",
+      "recovery_execution_unit_index": 35,
+      "source_execution_unit_index": 206,
+      "source_pce_run_index": 1
+    },
+    {
+      "failure_class": "attempts_exhausted_without_worker_output",
+      "instance_id": "django__django-13128",
+      "recovery_execution_unit_index": 36,
+      "source_execution_unit_index": 208,
+      "source_pce_run_index": 3
+    },
+    {
+      "failure_class": "attempts_exhausted_without_worker_output",
+      "instance_id": "django__django-13158",
+      "recovery_execution_unit_index": 37,
+      "source_execution_unit_index": 209,
+      "source_pce_run_index": 1
+    },
+    {
+      "failure_class": "attempts_exhausted_without_worker_output",
+      "instance_id": "django__django-13158",
+      "recovery_execution_unit_index": 38,
+      "source_execution_unit_index": 210,
+      "source_pce_run_index": 2
+    },
+    {
+      "failure_class": "attempts_exhausted_without_worker_output",
+      "instance_id": "django__django-13212",
+      "recovery_execution_unit_index": 39,
+      "source_execution_unit_index": 212,
+      "source_pce_run_index": 1
+    },
+    {
+      "failure_class": "attempts_exhausted_without_worker_output",
+      "instance_id": "django__django-13212",
+      "recovery_execution_unit_index": 40,
+      "source_execution_unit_index": 213,
+      "source_pce_run_index": 2
+    },
+    {
+      "failure_class": "attempts_exhausted_without_worker_output",
+      "instance_id": "django__django-13212",
+      "recovery_execution_unit_index": 41,
+      "source_execution_unit_index": 214,
+      "source_pce_run_index": 3
+    },
+    {
+      "failure_class": "attempts_exhausted_without_worker_output",
+      "instance_id": "django__django-13297",
+      "recovery_execution_unit_index": 42,
+      "source_execution_unit_index": 216,
+      "source_pce_run_index": 1
+    },
+    {
+      "failure_class": "attempts_exhausted_without_worker_output",
+      "instance_id": "django__django-13297",
+      "recovery_execution_unit_index": 43,
+      "source_execution_unit_index": 217,
+      "source_pce_run_index": 2
+    },
+    {
+      "failure_class": "attempts_exhausted_without_worker_output",
+      "instance_id": "django__django-13297",
+      "recovery_execution_unit_index": 44,
+      "source_execution_unit_index": 218,
+      "source_pce_run_index": 3
+    },
+    {
+      "failure_class": "attempts_exhausted_without_worker_output",
+      "instance_id": "django__django-13315",
+      "recovery_execution_unit_index": 45,
+      "source_execution_unit_index": 219,
+      "source_pce_run_index": 1
+    },
+    {
+      "failure_class": "attempts_exhausted_without_worker_output",
+      "instance_id": "django__django-13315",
+      "recovery_execution_unit_index": 46,
+      "source_execution_unit_index": 221,
+      "source_pce_run_index": 3
+    },
+    {
+      "failure_class": "attempts_exhausted_without_worker_output",
+      "instance_id": "django__django-13344",
+      "recovery_execution_unit_index": 47,
+      "source_execution_unit_index": 222,
+      "source_pce_run_index": 1
+    },
+    {
+      "failure_class": "attempts_exhausted_without_worker_output",
+      "instance_id": "django__django-13344",
+      "recovery_execution_unit_index": 48,
+      "source_execution_unit_index": 223,
+      "source_pce_run_index": 2
+    },
+    {
+      "failure_class": "attempts_exhausted_without_worker_output",
+      "instance_id": "django__django-13346",
+      "recovery_execution_unit_index": 49,
+      "source_execution_unit_index": 225,
+      "source_pce_run_index": 1
+    },
+    {
+      "failure_class": "attempts_exhausted_without_worker_output",
+      "instance_id": "django__django-13346",
+      "recovery_execution_unit_index": 50,
+      "source_execution_unit_index": 226,
+      "source_pce_run_index": 2
+    },
+    {
+      "failure_class": "attempts_exhausted_without_worker_output",
+      "instance_id": "django__django-13346",
+      "recovery_execution_unit_index": 51,
+      "source_execution_unit_index": 227,
+      "source_pce_run_index": 3
+    },
+    {
+      "failure_class": "attempts_exhausted_without_worker_output",
+      "instance_id": "django__django-13363",
+      "recovery_execution_unit_index": 52,
+      "source_execution_unit_index": 228,
+      "source_pce_run_index": 1
+    },
+    {
+      "failure_class": "attempts_exhausted_without_worker_output",
+      "instance_id": "django__django-13363",
+      "recovery_execution_unit_index": 53,
+      "source_execution_unit_index": 229,
+      "source_pce_run_index": 2
+    },
+    {
+      "failure_class": "attempts_exhausted_without_worker_output",
+      "instance_id": "django__django-13363",
+      "recovery_execution_unit_index": 54,
+      "source_execution_unit_index": 230,
+      "source_pce_run_index": 3
+    },
+    {
+      "failure_class": "disk_quota_exceeded",
+      "instance_id": "django__django-13401",
+      "recovery_execution_unit_index": 55,
+      "source_execution_unit_index": 231,
+      "source_pce_run_index": 1
+    },
+    {
+      "failure_class": "disk_quota_exceeded",
+      "instance_id": "django__django-13406",
+      "recovery_execution_unit_index": 56,
+      "source_execution_unit_index": 232,
+      "source_pce_run_index": 1
+    },
+    {
+      "failure_class": "disk_quota_exceeded",
+      "instance_id": "django__django-13406",
+      "recovery_execution_unit_index": 57,
+      "source_execution_unit_index": 233,
+      "source_pce_run_index": 2
+    },
+    {
+      "failure_class": "disk_quota_exceeded",
+      "instance_id": "django__django-13406",
+      "recovery_execution_unit_index": 58,
+      "source_execution_unit_index": 234,
+      "source_pce_run_index": 3
+    },
+    {
+      "failure_class": "disk_quota_exceeded",
+      "instance_id": "django__django-13410",
+      "recovery_execution_unit_index": 59,
+      "source_execution_unit_index": 235,
+      "source_pce_run_index": 1
+    },
+    {
+      "failure_class": "disk_quota_exceeded",
+      "instance_id": "django__django-13410",
+      "recovery_execution_unit_index": 60,
+      "source_execution_unit_index": 236,
+      "source_pce_run_index": 2
+    },
+    {
+      "failure_class": "disk_quota_exceeded",
+      "instance_id": "django__django-13410",
+      "recovery_execution_unit_index": 61,
+      "source_execution_unit_index": 237,
+      "source_pce_run_index": 3
+    },
+    {
+      "failure_class": "disk_quota_exceeded",
+      "instance_id": "django__django-13417",
+      "recovery_execution_unit_index": 62,
+      "source_execution_unit_index": 238,
+      "source_pce_run_index": 1
+    },
+    {
+      "failure_class": "disk_quota_exceeded",
+      "instance_id": "django__django-13417",
+      "recovery_execution_unit_index": 63,
+      "source_execution_unit_index": 239,
+      "source_pce_run_index": 2
+    },
+    {
+      "failure_class": "disk_quota_exceeded",
+      "instance_id": "django__django-13417",
+      "recovery_execution_unit_index": 64,
+      "source_execution_unit_index": 240,
+      "source_pce_run_index": 3
+    },
+    {
+      "failure_class": "disk_quota_exceeded",
+      "instance_id": "django__django-13449",
+      "recovery_execution_unit_index": 65,
+      "source_execution_unit_index": 241,
+      "source_pce_run_index": 1
+    },
+    {
+      "failure_class": "disk_quota_exceeded",
+      "instance_id": "django__django-13512",
+      "recovery_execution_unit_index": 66,
+      "source_execution_unit_index": 242,
+      "source_pce_run_index": 1
+    },
+    {
+      "failure_class": "disk_quota_exceeded",
+      "instance_id": "django__django-13551",
+      "recovery_execution_unit_index": 67,
+      "source_execution_unit_index": 243,
+      "source_pce_run_index": 1
+    },
+    {
+      "failure_class": "disk_quota_exceeded",
+      "instance_id": "django__django-13551",
+      "recovery_execution_unit_index": 68,
+      "source_execution_unit_index": 244,
+      "source_pce_run_index": 2
+    },
+    {
+      "failure_class": "disk_quota_exceeded",
+      "instance_id": "django__django-13551",
+      "recovery_execution_unit_index": 69,
+      "source_execution_unit_index": 245,
+      "source_pce_run_index": 3
+    },
+    {
+      "failure_class": "disk_quota_exceeded",
+      "instance_id": "django__django-13568",
+      "recovery_execution_unit_index": 70,
+      "source_execution_unit_index": 246,
+      "source_pce_run_index": 1
+    },
+    {
+      "failure_class": "disk_quota_exceeded",
+      "instance_id": "django__django-13568",
+      "recovery_execution_unit_index": 71,
+      "source_execution_unit_index": 247,
+      "source_pce_run_index": 2
+    },
+    {
+      "failure_class": "disk_quota_exceeded",
+      "instance_id": "django__django-13568",
+      "recovery_execution_unit_index": 72,
+      "source_execution_unit_index": 248,
+      "source_pce_run_index": 3
+    },
+    {
+      "failure_class": "disk_quota_exceeded",
+      "instance_id": "django__django-13569",
+      "recovery_execution_unit_index": 73,
+      "source_execution_unit_index": 249,
+      "source_pce_run_index": 1
+    },
+    {
+      "failure_class": "disk_quota_exceeded",
+      "instance_id": "django__django-13569",
+      "recovery_execution_unit_index": 74,
+      "source_execution_unit_index": 250,
+      "source_pce_run_index": 2
+    },
+    {
+      "failure_class": "disk_quota_exceeded",
+      "instance_id": "django__django-13569",
+      "recovery_execution_unit_index": 75,
+      "source_execution_unit_index": 251,
+      "source_pce_run_index": 3
+    },
+    {
+      "failure_class": "disk_quota_exceeded",
+      "instance_id": "django__django-13590",
+      "recovery_execution_unit_index": 76,
+      "source_execution_unit_index": 252,
+      "source_pce_run_index": 1
+    },
+    {
+      "failure_class": "disk_quota_exceeded",
+      "instance_id": "django__django-13590",
+      "recovery_execution_unit_index": 77,
+      "source_execution_unit_index": 253,
+      "source_pce_run_index": 2
+    },
+    {
+      "failure_class": "disk_quota_exceeded",
+      "instance_id": "django__django-13590",
+      "recovery_execution_unit_index": 78,
+      "source_execution_unit_index": 254,
+      "source_pce_run_index": 3
+    },
+    {
+      "failure_class": "disk_quota_exceeded",
+      "instance_id": "django__django-13658",
+      "recovery_execution_unit_index": 79,
+      "source_execution_unit_index": 255,
+      "source_pce_run_index": 1
+    },
+    {
+      "failure_class": "disk_quota_exceeded",
+      "instance_id": "django__django-13658",
+      "recovery_execution_unit_index": 80,
+      "source_execution_unit_index": 256,
+      "source_pce_run_index": 2
+    },
+    {
+      "failure_class": "disk_quota_exceeded",
+      "instance_id": "django__django-13658",
+      "recovery_execution_unit_index": 81,
+      "source_execution_unit_index": 257,
+      "source_pce_run_index": 3
+    },
+    {
+      "failure_class": "disk_quota_exceeded",
+      "instance_id": "django__django-13670",
+      "recovery_execution_unit_index": 82,
+      "source_execution_unit_index": 258,
+      "source_pce_run_index": 1
+    },
+    {
+      "failure_class": "disk_quota_exceeded",
+      "instance_id": "django__django-13670",
+      "recovery_execution_unit_index": 83,
+      "source_execution_unit_index": 259,
+      "source_pce_run_index": 2
+    },
+    {
+      "failure_class": "disk_quota_exceeded",
+      "instance_id": "django__django-13670",
+      "recovery_execution_unit_index": 84,
+      "source_execution_unit_index": 260,
+      "source_pce_run_index": 3
+    },
+    {
+      "failure_class": "disk_quota_exceeded",
+      "instance_id": "django__django-13741",
+      "recovery_execution_unit_index": 85,
+      "source_execution_unit_index": 261,
+      "source_pce_run_index": 1
+    },
+    {
+      "failure_class": "disk_quota_exceeded",
+      "instance_id": "django__django-13741",
+      "recovery_execution_unit_index": 86,
+      "source_execution_unit_index": 262,
+      "source_pce_run_index": 2
+    },
+    {
+      "failure_class": "disk_quota_exceeded",
+      "instance_id": "django__django-13741",
+      "recovery_execution_unit_index": 87,
+      "source_execution_unit_index": 263,
+      "source_pce_run_index": 3
+    },
+    {
+      "failure_class": "disk_quota_exceeded",
+      "instance_id": "django__django-13786",
+      "recovery_execution_unit_index": 88,
+      "source_execution_unit_index": 264,
+      "source_pce_run_index": 1
+    },
+    {
+      "failure_class": "disk_quota_exceeded",
+      "instance_id": "django__django-13786",
+      "recovery_execution_unit_index": 89,
+      "source_execution_unit_index": 265,
+      "source_pce_run_index": 2
+    },
+    {
+      "failure_class": "disk_quota_exceeded",
+      "instance_id": "django__django-13786",
+      "recovery_execution_unit_index": 90,
+      "source_execution_unit_index": 266,
+      "source_pce_run_index": 3
+    },
+    {
+      "failure_class": "disk_quota_exceeded",
+      "instance_id": "django__django-13794",
+      "recovery_execution_unit_index": 91,
+      "source_execution_unit_index": 267,
+      "source_pce_run_index": 1
+    },
+    {
+      "failure_class": "disk_quota_exceeded",
+      "instance_id": "django__django-13794",
+      "recovery_execution_unit_index": 92,
+      "source_execution_unit_index": 268,
+      "source_pce_run_index": 2
+    },
+    {
+      "failure_class": "disk_quota_exceeded",
+      "instance_id": "django__django-13794",
+      "recovery_execution_unit_index": 93,
+      "source_execution_unit_index": 269,
+      "source_pce_run_index": 3
+    },
+    {
+      "failure_class": "disk_quota_exceeded",
+      "instance_id": "django__django-13807",
+      "recovery_execution_unit_index": 94,
+      "source_execution_unit_index": 270,
+      "source_pce_run_index": 1
+    },
+    {
+      "failure_class": "disk_quota_exceeded",
+      "instance_id": "django__django-13807",
+      "recovery_execution_unit_index": 95,
+      "source_execution_unit_index": 271,
+      "source_pce_run_index": 2
+    },
+    {
+      "failure_class": "disk_quota_exceeded",
+      "instance_id": "django__django-13807",
+      "recovery_execution_unit_index": 96,
+      "source_execution_unit_index": 272,
+      "source_pce_run_index": 3
+    },
+    {
+      "failure_class": "disk_quota_exceeded",
+      "instance_id": "django__django-13809",
+      "recovery_execution_unit_index": 97,
+      "source_execution_unit_index": 273,
+      "source_pce_run_index": 1
+    },
+    {
+      "failure_class": "disk_quota_exceeded",
+      "instance_id": "django__django-13809",
+      "recovery_execution_unit_index": 98,
+      "source_execution_unit_index": 274,
+      "source_pce_run_index": 2
+    },
+    {
+      "failure_class": "disk_quota_exceeded",
+      "instance_id": "django__django-13809",
+      "recovery_execution_unit_index": 99,
+      "source_execution_unit_index": 275,
+      "source_pce_run_index": 3
+    },
+    {
+      "failure_class": "disk_quota_exceeded",
+      "instance_id": "django__django-13810",
+      "recovery_execution_unit_index": 100,
+      "source_execution_unit_index": 276,
+      "source_pce_run_index": 1
+    },
+    {
+      "failure_class": "disk_quota_exceeded",
+      "instance_id": "django__django-13820",
+      "recovery_execution_unit_index": 101,
+      "source_execution_unit_index": 277,
+      "source_pce_run_index": 1
+    },
+    {
+      "failure_class": "disk_quota_exceeded",
+      "instance_id": "django__django-13820",
+      "recovery_execution_unit_index": 102,
+      "source_execution_unit_index": 278,
+      "source_pce_run_index": 2
+    },
+    {
+      "failure_class": "disk_quota_exceeded",
+      "instance_id": "django__django-13820",
+      "recovery_execution_unit_index": 103,
+      "source_execution_unit_index": 279,
+      "source_pce_run_index": 3
+    },
+    {
+      "failure_class": "disk_quota_exceeded",
+      "instance_id": "django__django-13821",
+      "recovery_execution_unit_index": 104,
+      "source_execution_unit_index": 280,
+      "source_pce_run_index": 1
+    },
+    {
+      "failure_class": "disk_quota_exceeded",
+      "instance_id": "django__django-13821",
+      "recovery_execution_unit_index": 105,
+      "source_execution_unit_index": 281,
+      "source_pce_run_index": 2
+    },
+    {
+      "failure_class": "disk_quota_exceeded",
+      "instance_id": "django__django-13821",
+      "recovery_execution_unit_index": 106,
+      "source_execution_unit_index": 282,
+      "source_pce_run_index": 3
+    },
+    {
+      "failure_class": "disk_quota_exceeded",
+      "instance_id": "django__django-13837",
+      "recovery_execution_unit_index": 107,
+      "source_execution_unit_index": 283,
+      "source_pce_run_index": 1
+    },
+    {
+      "failure_class": "disk_quota_exceeded",
+      "instance_id": "django__django-13837",
+      "recovery_execution_unit_index": 108,
+      "source_execution_unit_index": 284,
+      "source_pce_run_index": 2
+    },
+    {
+      "failure_class": "disk_quota_exceeded",
+      "instance_id": "django__django-13837",
+      "recovery_execution_unit_index": 109,
+      "source_execution_unit_index": 285,
+      "source_pce_run_index": 3
+    },
+    {
+      "failure_class": "disk_quota_exceeded",
+      "instance_id": "django__django-13925",
+      "recovery_execution_unit_index": 110,
+      "source_execution_unit_index": 286,
+      "source_pce_run_index": 1
+    },
+    {
+      "failure_class": "disk_quota_exceeded",
+      "instance_id": "django__django-13933",
+      "recovery_execution_unit_index": 111,
+      "source_execution_unit_index": 287,
+      "source_pce_run_index": 1
+    },
+    {
+      "failure_class": "disk_quota_exceeded",
+      "instance_id": "django__django-13964",
+      "recovery_execution_unit_index": 112,
+      "source_execution_unit_index": 288,
+      "source_pce_run_index": 1
+    },
+    {
+      "failure_class": "disk_quota_exceeded",
+      "instance_id": "django__django-13964",
+      "recovery_execution_unit_index": 113,
+      "source_execution_unit_index": 289,
+      "source_pce_run_index": 2
+    },
+    {
+      "failure_class": "disk_quota_exceeded",
+      "instance_id": "django__django-13964",
+      "recovery_execution_unit_index": 114,
+      "source_execution_unit_index": 290,
+      "source_pce_run_index": 3
+    },
+    {
+      "failure_class": "disk_quota_exceeded",
+      "instance_id": "django__django-14007",
+      "recovery_execution_unit_index": 115,
+      "source_execution_unit_index": 291,
+      "source_pce_run_index": 1
+    },
+    {
+      "failure_class": "disk_quota_exceeded",
+      "instance_id": "django__django-14017",
+      "recovery_execution_unit_index": 116,
+      "source_execution_unit_index": 292,
+      "source_pce_run_index": 1
+    },
+    {
+      "failure_class": "disk_quota_exceeded",
+      "instance_id": "django__django-14034",
+      "recovery_execution_unit_index": 117,
+      "source_execution_unit_index": 293,
+      "source_pce_run_index": 1
+    },
+    {
+      "failure_class": "disk_quota_exceeded",
+      "instance_id": "django__django-14034",
+      "recovery_execution_unit_index": 118,
+      "source_execution_unit_index": 294,
+      "source_pce_run_index": 2
+    },
+    {
+      "failure_class": "disk_quota_exceeded",
+      "instance_id": "django__django-14034",
+      "recovery_execution_unit_index": 119,
+      "source_execution_unit_index": 295,
+      "source_pce_run_index": 3
+    },
+    {
+      "failure_class": "disk_quota_exceeded",
+      "instance_id": "django__django-14053",
+      "recovery_execution_unit_index": 120,
+      "source_execution_unit_index": 296,
+      "source_pce_run_index": 1
+    },
+    {
+      "failure_class": "disk_quota_exceeded",
+      "instance_id": "django__django-14089",
+      "recovery_execution_unit_index": 121,
+      "source_execution_unit_index": 297,
+      "source_pce_run_index": 1
+    },
+    {
+      "failure_class": "disk_quota_exceeded",
+      "instance_id": "django__django-14089",
+      "recovery_execution_unit_index": 122,
+      "source_execution_unit_index": 298,
+      "source_pce_run_index": 2
+    },
+    {
+      "failure_class": "attempts_exhausted_without_worker_output",
+      "instance_id": "django__django-14089",
+      "recovery_execution_unit_index": 123,
+      "source_execution_unit_index": 299,
+      "source_pce_run_index": 3
+    },
+    {
+      "failure_class": "disk_quota_exceeded",
+      "instance_id": "django__django-14122",
+      "recovery_execution_unit_index": 124,
+      "source_execution_unit_index": 300,
+      "source_pce_run_index": 1
+    },
+    {
+      "failure_class": "disk_quota_exceeded",
+      "instance_id": "django__django-14122",
+      "recovery_execution_unit_index": 125,
+      "source_execution_unit_index": 301,
+      "source_pce_run_index": 2
+    },
+    {
+      "failure_class": "disk_quota_exceeded",
+      "instance_id": "django__django-14122",
+      "recovery_execution_unit_index": 126,
+      "source_execution_unit_index": 302,
+      "source_pce_run_index": 3
+    },
+    {
+      "failure_class": "disk_quota_exceeded",
+      "instance_id": "django__django-14140",
+      "recovery_execution_unit_index": 127,
+      "source_execution_unit_index": 303,
+      "source_pce_run_index": 1
+    },
+    {
+      "failure_class": "disk_quota_exceeded",
+      "instance_id": "django__django-14140",
+      "recovery_execution_unit_index": 128,
+      "source_execution_unit_index": 304,
+      "source_pce_run_index": 2
+    },
+    {
+      "failure_class": "disk_quota_exceeded",
+      "instance_id": "django__django-14140",
+      "recovery_execution_unit_index": 129,
+      "source_execution_unit_index": 305,
+      "source_pce_run_index": 3
+    },
+    {
+      "failure_class": "disk_quota_exceeded",
+      "instance_id": "django__django-14155",
+      "recovery_execution_unit_index": 130,
+      "source_execution_unit_index": 306,
+      "source_pce_run_index": 1
+    },
+    {
+      "failure_class": "disk_quota_exceeded",
+      "instance_id": "django__django-14155",
+      "recovery_execution_unit_index": 131,
+      "source_execution_unit_index": 307,
+      "source_pce_run_index": 2
+    },
+    {
+      "failure_class": "disk_quota_exceeded",
+      "instance_id": "django__django-14155",
+      "recovery_execution_unit_index": 132,
+      "source_execution_unit_index": 308,
+      "source_pce_run_index": 3
+    },
+    {
+      "failure_class": "disk_quota_exceeded",
+      "instance_id": "django__django-14170",
+      "recovery_execution_unit_index": 133,
+      "source_execution_unit_index": 309,
+      "source_pce_run_index": 1
+    },
+    {
+      "failure_class": "disk_quota_exceeded",
+      "instance_id": "django__django-14170",
+      "recovery_execution_unit_index": 134,
+      "source_execution_unit_index": 310,
+      "source_pce_run_index": 2
+    },
+    {
+      "failure_class": "disk_quota_exceeded",
+      "instance_id": "django__django-14170",
+      "recovery_execution_unit_index": 135,
+      "source_execution_unit_index": 311,
+      "source_pce_run_index": 3
+    },
+    {
+      "failure_class": "disk_quota_exceeded",
+      "instance_id": "django__django-14238",
+      "recovery_execution_unit_index": 136,
+      "source_execution_unit_index": 312,
+      "source_pce_run_index": 1
+    },
+    {
+      "failure_class": "disk_quota_exceeded",
+      "instance_id": "django__django-14315",
+      "recovery_execution_unit_index": 137,
+      "source_execution_unit_index": 313,
+      "source_pce_run_index": 1
+    },
+    {
+      "failure_class": "disk_quota_exceeded",
+      "instance_id": "django__django-14315",
+      "recovery_execution_unit_index": 138,
+      "source_execution_unit_index": 314,
+      "source_pce_run_index": 2
+    },
+    {
+      "failure_class": "disk_quota_exceeded",
+      "instance_id": "django__django-14315",
+      "recovery_execution_unit_index": 139,
+      "source_execution_unit_index": 315,
+      "source_pce_run_index": 3
+    },
+    {
+      "failure_class": "disk_quota_exceeded",
+      "instance_id": "django__django-14349",
+      "recovery_execution_unit_index": 140,
+      "source_execution_unit_index": 316,
+      "source_pce_run_index": 1
+    },
+    {
+      "failure_class": "disk_quota_exceeded",
+      "instance_id": "django__django-14351",
+      "recovery_execution_unit_index": 141,
+      "source_execution_unit_index": 317,
+      "source_pce_run_index": 1
+    },
+    {
+      "failure_class": "disk_quota_exceeded",
+      "instance_id": "django__django-14351",
+      "recovery_execution_unit_index": 142,
+      "source_execution_unit_index": 318,
+      "source_pce_run_index": 2
+    },
+    {
+      "failure_class": "disk_quota_exceeded",
+      "instance_id": "django__django-14351",
+      "recovery_execution_unit_index": 143,
+      "source_execution_unit_index": 319,
+      "source_pce_run_index": 3
+    },
+    {
+      "failure_class": "disk_quota_exceeded",
+      "instance_id": "django__django-14373",
+      "recovery_execution_unit_index": 144,
+      "source_execution_unit_index": 320,
+      "source_pce_run_index": 1
+    },
+    {
+      "failure_class": "disk_quota_exceeded",
+      "instance_id": "django__django-14373",
+      "recovery_execution_unit_index": 145,
+      "source_execution_unit_index": 321,
+      "source_pce_run_index": 2
+    },
+    {
+      "failure_class": "disk_quota_exceeded",
+      "instance_id": "django__django-14373",
+      "recovery_execution_unit_index": 146,
+      "source_execution_unit_index": 322,
+      "source_pce_run_index": 3
+    },
+    {
+      "failure_class": "disk_quota_exceeded",
+      "instance_id": "django__django-14376",
+      "recovery_execution_unit_index": 147,
+      "source_execution_unit_index": 323,
+      "source_pce_run_index": 1
+    },
+    {
+      "failure_class": "disk_quota_exceeded",
+      "instance_id": "django__django-14376",
+      "recovery_execution_unit_index": 148,
+      "source_execution_unit_index": 324,
+      "source_pce_run_index": 2
+    },
+    {
+      "failure_class": "disk_quota_exceeded",
+      "instance_id": "django__django-14376",
+      "recovery_execution_unit_index": 149,
+      "source_execution_unit_index": 325,
+      "source_pce_run_index": 3
+    },
+    {
+      "failure_class": "disk_quota_exceeded",
+      "instance_id": "django__django-14404",
+      "recovery_execution_unit_index": 150,
+      "source_execution_unit_index": 326,
+      "source_pce_run_index": 1
+    },
+    {
+      "failure_class": "disk_quota_exceeded",
+      "instance_id": "django__django-14404",
+      "recovery_execution_unit_index": 151,
+      "source_execution_unit_index": 327,
+      "source_pce_run_index": 2
+    },
+    {
+      "failure_class": "disk_quota_exceeded",
+      "instance_id": "django__django-14404",
+      "recovery_execution_unit_index": 152,
+      "source_execution_unit_index": 328,
+      "source_pce_run_index": 3
+    },
+    {
+      "failure_class": "disk_quota_exceeded",
+      "instance_id": "django__django-14434",
+      "recovery_execution_unit_index": 153,
+      "source_execution_unit_index": 329,
+      "source_pce_run_index": 1
+    },
+    {
+      "failure_class": "disk_quota_exceeded",
+      "instance_id": "django__django-14500",
+      "recovery_execution_unit_index": 154,
+      "source_execution_unit_index": 330,
+      "source_pce_run_index": 1
+    },
+    {
+      "failure_class": "disk_quota_exceeded",
+      "instance_id": "django__django-14534",
+      "recovery_execution_unit_index": 155,
+      "source_execution_unit_index": 331,
+      "source_pce_run_index": 1
+    },
+    {
+      "failure_class": "disk_quota_exceeded",
+      "instance_id": "django__django-14534",
+      "recovery_execution_unit_index": 156,
+      "source_execution_unit_index": 332,
+      "source_pce_run_index": 2
+    },
+    {
+      "failure_class": "disk_quota_exceeded",
+      "instance_id": "django__django-14534",
+      "recovery_execution_unit_index": 157,
+      "source_execution_unit_index": 333,
+      "source_pce_run_index": 3
+    },
+    {
+      "failure_class": "attempts_exhausted_without_worker_output",
+      "instance_id": "django__django-14539",
+      "recovery_execution_unit_index": 158,
+      "source_execution_unit_index": 334,
+      "source_pce_run_index": 1
+    },
+    {
+      "failure_class": "disk_quota_exceeded",
+      "instance_id": "django__django-14559",
+      "recovery_execution_unit_index": 159,
+      "source_execution_unit_index": 335,
+      "source_pce_run_index": 1
+    },
+    {
+      "failure_class": "attempts_exhausted_without_worker_output",
+      "instance_id": "django__django-14580",
+      "recovery_execution_unit_index": 160,
+      "source_execution_unit_index": 336,
+      "source_pce_run_index": 1
+    },
+    {
+      "failure_class": "attempts_exhausted_without_worker_output",
+      "instance_id": "django__django-14580",
+      "recovery_execution_unit_index": 161,
+      "source_execution_unit_index": 337,
+      "source_pce_run_index": 2
+    },
+    {
+      "failure_class": "attempts_exhausted_without_worker_output",
+      "instance_id": "django__django-14580",
+      "recovery_execution_unit_index": 162,
+      "source_execution_unit_index": 338,
+      "source_pce_run_index": 3
+    },
+    {
+      "failure_class": "attempts_exhausted_without_worker_output",
+      "instance_id": "django__django-14608",
+      "recovery_execution_unit_index": 163,
+      "source_execution_unit_index": 339,
+      "source_pce_run_index": 1
+    },
+    {
+      "failure_class": "attempts_exhausted_without_worker_output",
+      "instance_id": "django__django-14672",
+      "recovery_execution_unit_index": 164,
+      "source_execution_unit_index": 340,
+      "source_pce_run_index": 1
+    },
+    {
+      "failure_class": "attempts_exhausted_without_worker_output",
+      "instance_id": "django__django-14672",
+      "recovery_execution_unit_index": 165,
+      "source_execution_unit_index": 341,
+      "source_pce_run_index": 2
+    },
+    {
+      "failure_class": "attempts_exhausted_without_worker_output",
+      "instance_id": "django__django-14672",
+      "recovery_execution_unit_index": 166,
+      "source_execution_unit_index": 342,
+      "source_pce_run_index": 3
+    },
+    {
+      "failure_class": "disk_quota_exceeded",
+      "instance_id": "django__django-14725",
+      "recovery_execution_unit_index": 167,
+      "source_execution_unit_index": 343,
+      "source_pce_run_index": 1
+    },
+    {
+      "failure_class": "disk_quota_exceeded",
+      "instance_id": "django__django-14725",
+      "recovery_execution_unit_index": 168,
+      "source_execution_unit_index": 344,
+      "source_pce_run_index": 2
+    },
+    {
+      "failure_class": "disk_quota_exceeded",
+      "instance_id": "django__django-14725",
+      "recovery_execution_unit_index": 169,
+      "source_execution_unit_index": 345,
+      "source_pce_run_index": 3
+    },
+    {
+      "failure_class": "disk_quota_exceeded",
+      "instance_id": "django__django-14752",
+      "recovery_execution_unit_index": 170,
+      "source_execution_unit_index": 346,
+      "source_pce_run_index": 1
+    },
+    {
+      "failure_class": "disk_quota_exceeded",
+      "instance_id": "django__django-14752",
+      "recovery_execution_unit_index": 171,
+      "source_execution_unit_index": 347,
+      "source_pce_run_index": 2
+    },
+    {
+      "failure_class": "disk_quota_exceeded",
+      "instance_id": "django__django-14752",
+      "recovery_execution_unit_index": 172,
+      "source_execution_unit_index": 348,
+      "source_pce_run_index": 3
+    },
+    {
+      "failure_class": "disk_quota_exceeded",
+      "instance_id": "django__django-14765",
+      "recovery_execution_unit_index": 173,
+      "source_execution_unit_index": 349,
+      "source_pce_run_index": 1
+    },
+    {
+      "failure_class": "disk_quota_exceeded",
+      "instance_id": "django__django-14765",
+      "recovery_execution_unit_index": 174,
+      "source_execution_unit_index": 350,
+      "source_pce_run_index": 2
+    },
+    {
+      "failure_class": "disk_quota_exceeded",
+      "instance_id": "django__django-14765",
+      "recovery_execution_unit_index": 175,
+      "source_execution_unit_index": 351,
+      "source_pce_run_index": 3
+    },
+    {
+      "failure_class": "disk_quota_exceeded",
+      "instance_id": "django__django-14771",
+      "recovery_execution_unit_index": 176,
+      "source_execution_unit_index": 352,
+      "source_pce_run_index": 1
+    },
+    {
+      "failure_class": "disk_quota_exceeded",
+      "instance_id": "django__django-14771",
+      "recovery_execution_unit_index": 177,
+      "source_execution_unit_index": 353,
+      "source_pce_run_index": 2
+    },
+    {
+      "failure_class": "disk_quota_exceeded",
+      "instance_id": "django__django-14771",
+      "recovery_execution_unit_index": 178,
+      "source_execution_unit_index": 354,
+      "source_pce_run_index": 3
+    },
+    {
+      "failure_class": "disk_quota_exceeded",
+      "instance_id": "django__django-14787",
+      "recovery_execution_unit_index": 179,
+      "source_execution_unit_index": 355,
+      "source_pce_run_index": 1
+    },
+    {
+      "failure_class": "disk_quota_exceeded",
+      "instance_id": "django__django-14855",
+      "recovery_execution_unit_index": 180,
+      "source_execution_unit_index": 356,
+      "source_pce_run_index": 1
+    },
+    {
+      "failure_class": "disk_quota_exceeded",
+      "instance_id": "django__django-14855",
+      "recovery_execution_unit_index": 181,
+      "source_execution_unit_index": 357,
+      "source_pce_run_index": 2
+    },
+    {
+      "failure_class": "disk_quota_exceeded",
+      "instance_id": "django__django-14855",
+      "recovery_execution_unit_index": 182,
+      "source_execution_unit_index": 358,
+      "source_pce_run_index": 3
+    },
+    {
+      "failure_class": "disk_quota_exceeded",
+      "instance_id": "django__django-14915",
+      "recovery_execution_unit_index": 183,
+      "source_execution_unit_index": 359,
+      "source_pce_run_index": 1
+    },
+    {
+      "failure_class": "attempts_exhausted_without_worker_output",
+      "instance_id": "django__django-14999",
+      "recovery_execution_unit_index": 184,
+      "source_execution_unit_index": 360,
+      "source_pce_run_index": 1
+    },
+    {
+      "failure_class": "attempts_exhausted_without_worker_output",
+      "instance_id": "django__django-14999",
+      "recovery_execution_unit_index": 185,
+      "source_execution_unit_index": 361,
+      "source_pce_run_index": 2
+    },
+    {
+      "failure_class": "disk_quota_exceeded",
+      "instance_id": "django__django-14999",
+      "recovery_execution_unit_index": 186,
+      "source_execution_unit_index": 362,
+      "source_pce_run_index": 3
+    },
+    {
+      "failure_class": "disk_quota_exceeded",
+      "instance_id": "django__django-15037",
+      "recovery_execution_unit_index": 187,
+      "source_execution_unit_index": 363,
+      "source_pce_run_index": 1
+    },
+    {
+      "failure_class": "disk_quota_exceeded",
+      "instance_id": "django__django-15037",
+      "recovery_execution_unit_index": 188,
+      "source_execution_unit_index": 364,
+      "source_pce_run_index": 2
+    },
+    {
+      "failure_class": "disk_quota_exceeded",
+      "instance_id": "django__django-15037",
+      "recovery_execution_unit_index": 189,
+      "source_execution_unit_index": 365,
+      "source_pce_run_index": 3
+    },
+    {
+      "failure_class": "disk_quota_exceeded",
+      "instance_id": "django__django-15098",
+      "recovery_execution_unit_index": 190,
+      "source_execution_unit_index": 366,
+      "source_pce_run_index": 1
+    },
+    {
+      "failure_class": "disk_quota_exceeded",
+      "instance_id": "django__django-15098",
+      "recovery_execution_unit_index": 191,
+      "source_execution_unit_index": 367,
+      "source_pce_run_index": 2
+    },
+    {
+      "failure_class": "disk_quota_exceeded",
+      "instance_id": "django__django-15098",
+      "recovery_execution_unit_index": 192,
+      "source_execution_unit_index": 368,
+      "source_pce_run_index": 3
+    },
+    {
+      "failure_class": "disk_quota_exceeded",
+      "instance_id": "django__django-15104",
+      "recovery_execution_unit_index": 193,
+      "source_execution_unit_index": 369,
+      "source_pce_run_index": 1
+    },
+    {
+      "failure_class": "disk_quota_exceeded",
+      "instance_id": "django__django-15104",
+      "recovery_execution_unit_index": 194,
+      "source_execution_unit_index": 370,
+      "source_pce_run_index": 2
+    },
+    {
+      "failure_class": "disk_quota_exceeded",
+      "instance_id": "django__django-15104",
+      "recovery_execution_unit_index": 195,
+      "source_execution_unit_index": 371,
+      "source_pce_run_index": 3
+    },
+    {
+      "failure_class": "disk_quota_exceeded",
+      "instance_id": "django__django-15127",
+      "recovery_execution_unit_index": 196,
+      "source_execution_unit_index": 372,
+      "source_pce_run_index": 1
+    },
+    {
+      "failure_class": "disk_quota_exceeded",
+      "instance_id": "django__django-15127",
+      "recovery_execution_unit_index": 197,
+      "source_execution_unit_index": 373,
+      "source_pce_run_index": 2
+    },
+    {
+      "failure_class": "disk_quota_exceeded",
+      "instance_id": "django__django-15127",
+      "recovery_execution_unit_index": 198,
+      "source_execution_unit_index": 374,
+      "source_pce_run_index": 3
+    },
+    {
+      "failure_class": "disk_quota_exceeded",
+      "instance_id": "django__django-15128",
+      "recovery_execution_unit_index": 199,
+      "source_execution_unit_index": 375,
+      "source_pce_run_index": 1
+    },
+    {
+      "failure_class": "disk_quota_exceeded",
+      "instance_id": "django__django-15128",
+      "recovery_execution_unit_index": 200,
+      "source_execution_unit_index": 376,
+      "source_pce_run_index": 2
+    },
+    {
+      "failure_class": "disk_quota_exceeded",
+      "instance_id": "django__django-15128",
+      "recovery_execution_unit_index": 201,
+      "source_execution_unit_index": 377,
+      "source_pce_run_index": 3
+    },
+    {
+      "failure_class": "attempts_exhausted_without_worker_output",
+      "instance_id": "django__django-15161",
+      "recovery_execution_unit_index": 202,
+      "source_execution_unit_index": 378,
+      "source_pce_run_index": 1
+    },
+    {
+      "failure_class": "attempts_exhausted_without_worker_output",
+      "instance_id": "django__django-15161",
+      "recovery_execution_unit_index": 203,
+      "source_execution_unit_index": 379,
+      "source_pce_run_index": 2
+    },
+    {
+      "failure_class": "attempts_exhausted_without_worker_output",
+      "instance_id": "django__django-15161",
+      "recovery_execution_unit_index": 204,
+      "source_execution_unit_index": 380,
+      "source_pce_run_index": 3
+    },
+    {
+      "failure_class": "disk_quota_exceeded",
+      "instance_id": "django__django-15252",
+      "recovery_execution_unit_index": 205,
+      "source_execution_unit_index": 381,
+      "source_pce_run_index": 1
+    },
+    {
+      "failure_class": "attempts_exhausted_without_worker_output",
+      "instance_id": "django__django-15252",
+      "recovery_execution_unit_index": 206,
+      "source_execution_unit_index": 382,
+      "source_pce_run_index": 2
+    },
+    {
+      "failure_class": "disk_quota_exceeded",
+      "instance_id": "django__django-15252",
+      "recovery_execution_unit_index": 207,
+      "source_execution_unit_index": 383,
+      "source_pce_run_index": 3
+    },
+    {
+      "failure_class": "disk_quota_exceeded",
+      "instance_id": "django__django-15268",
+      "recovery_execution_unit_index": 208,
+      "source_execution_unit_index": 384,
+      "source_pce_run_index": 1
+    },
+    {
+      "failure_class": "disk_quota_exceeded",
+      "instance_id": "django__django-15268",
+      "recovery_execution_unit_index": 209,
+      "source_execution_unit_index": 385,
+      "source_pce_run_index": 2
+    },
+    {
+      "failure_class": "disk_quota_exceeded",
+      "instance_id": "django__django-15268",
+      "recovery_execution_unit_index": 210,
+      "source_execution_unit_index": 386,
+      "source_pce_run_index": 3
+    },
+    {
+      "failure_class": "disk_quota_exceeded",
+      "instance_id": "django__django-15277",
+      "recovery_execution_unit_index": 211,
+      "source_execution_unit_index": 387,
+      "source_pce_run_index": 1
+    },
+    {
+      "failure_class": "disk_quota_exceeded",
+      "instance_id": "django__django-15277",
+      "recovery_execution_unit_index": 212,
+      "source_execution_unit_index": 388,
+      "source_pce_run_index": 2
+    },
+    {
+      "failure_class": "disk_quota_exceeded",
+      "instance_id": "django__django-15277",
+      "recovery_execution_unit_index": 213,
+      "source_execution_unit_index": 389,
+      "source_pce_run_index": 3
+    },
+    {
+      "failure_class": "disk_quota_exceeded",
+      "instance_id": "django__django-15278",
+      "recovery_execution_unit_index": 214,
+      "source_execution_unit_index": 390,
+      "source_pce_run_index": 1
+    },
+    {
+      "failure_class": "disk_quota_exceeded",
+      "instance_id": "django__django-15280",
+      "recovery_execution_unit_index": 215,
+      "source_execution_unit_index": 391,
+      "source_pce_run_index": 1
+    },
+    {
+      "failure_class": "disk_quota_exceeded",
+      "instance_id": "django__django-15280",
+      "recovery_execution_unit_index": 216,
+      "source_execution_unit_index": 392,
+      "source_pce_run_index": 2
+    },
+    {
+      "failure_class": "disk_quota_exceeded",
+      "instance_id": "django__django-15280",
+      "recovery_execution_unit_index": 217,
+      "source_execution_unit_index": 393,
+      "source_pce_run_index": 3
+    },
+    {
+      "failure_class": "disk_quota_exceeded",
+      "instance_id": "django__django-15368",
+      "recovery_execution_unit_index": 218,
+      "source_execution_unit_index": 394,
+      "source_pce_run_index": 1
+    },
+    {
+      "failure_class": "disk_quota_exceeded",
+      "instance_id": "django__django-15368",
+      "recovery_execution_unit_index": 219,
+      "source_execution_unit_index": 395,
+      "source_pce_run_index": 2
+    },
+    {
+      "failure_class": "attempts_exhausted_without_worker_output",
+      "instance_id": "django__django-15368",
+      "recovery_execution_unit_index": 220,
+      "source_execution_unit_index": 396,
+      "source_pce_run_index": 3
+    },
+    {
+      "failure_class": "attempts_exhausted_without_worker_output",
+      "instance_id": "django__django-15382",
+      "recovery_execution_unit_index": 221,
+      "source_execution_unit_index": 397,
+      "source_pce_run_index": 1
+    },
+    {
+      "failure_class": "attempts_exhausted_without_worker_output",
+      "instance_id": "django__django-15382",
+      "recovery_execution_unit_index": 222,
+      "source_execution_unit_index": 398,
+      "source_pce_run_index": 2
+    },
+    {
+      "failure_class": "attempts_exhausted_without_worker_output",
+      "instance_id": "django__django-15382",
+      "recovery_execution_unit_index": 223,
+      "source_execution_unit_index": 399,
+      "source_pce_run_index": 3
+    },
+    {
+      "failure_class": "attempts_exhausted_without_worker_output",
+      "instance_id": "django__django-15467",
+      "recovery_execution_unit_index": 224,
+      "source_execution_unit_index": 400,
+      "source_pce_run_index": 1
+    },
+    {
+      "failure_class": "attempts_exhausted_without_worker_output",
+      "instance_id": "django__django-15467",
+      "recovery_execution_unit_index": 225,
+      "source_execution_unit_index": 401,
+      "source_pce_run_index": 2
+    },
+    {
+      "failure_class": "attempts_exhausted_without_worker_output",
+      "instance_id": "django__django-15467",
+      "recovery_execution_unit_index": 226,
+      "source_execution_unit_index": 402,
+      "source_pce_run_index": 3
+    },
+    {
+      "failure_class": "disk_quota_exceeded",
+      "instance_id": "django__django-15499",
+      "recovery_execution_unit_index": 227,
+      "source_execution_unit_index": 403,
+      "source_pce_run_index": 1
+    },
+    {
+      "failure_class": "disk_quota_exceeded",
+      "instance_id": "django__django-15503",
+      "recovery_execution_unit_index": 228,
+      "source_execution_unit_index": 404,
+      "source_pce_run_index": 1
+    },
+    {
+      "failure_class": "disk_quota_exceeded",
+      "instance_id": "django__django-15503",
+      "recovery_execution_unit_index": 229,
+      "source_execution_unit_index": 405,
+      "source_pce_run_index": 2
+    },
+    {
+      "failure_class": "disk_quota_exceeded",
+      "instance_id": "django__django-15503",
+      "recovery_execution_unit_index": 230,
+      "source_execution_unit_index": 406,
+      "source_pce_run_index": 3
+    },
+    {
+      "failure_class": "disk_quota_exceeded",
+      "instance_id": "django__django-15525",
+      "recovery_execution_unit_index": 231,
+      "source_execution_unit_index": 407,
+      "source_pce_run_index": 1
+    },
+    {
+      "failure_class": "disk_quota_exceeded",
+      "instance_id": "django__django-15525",
+      "recovery_execution_unit_index": 232,
+      "source_execution_unit_index": 408,
+      "source_pce_run_index": 2
+    },
+    {
+      "failure_class": "disk_quota_exceeded",
+      "instance_id": "django__django-15525",
+      "recovery_execution_unit_index": 233,
+      "source_execution_unit_index": 409,
+      "source_pce_run_index": 3
+    },
+    {
+      "failure_class": "disk_quota_exceeded",
+      "instance_id": "django__django-15554",
+      "recovery_execution_unit_index": 234,
+      "source_execution_unit_index": 410,
+      "source_pce_run_index": 1
+    },
+    {
+      "failure_class": "disk_quota_exceeded",
+      "instance_id": "django__django-15554",
+      "recovery_execution_unit_index": 235,
+      "source_execution_unit_index": 411,
+      "source_pce_run_index": 2
+    },
+    {
+      "failure_class": "disk_quota_exceeded",
+      "instance_id": "django__django-15554",
+      "recovery_execution_unit_index": 236,
+      "source_execution_unit_index": 412,
+      "source_pce_run_index": 3
+    },
+    {
+      "failure_class": "disk_quota_exceeded",
+      "instance_id": "django__django-15561",
+      "recovery_execution_unit_index": 237,
+      "source_execution_unit_index": 413,
+      "source_pce_run_index": 1
+    },
+    {
+      "failure_class": "disk_quota_exceeded",
+      "instance_id": "django__django-15561",
+      "recovery_execution_unit_index": 238,
+      "source_execution_unit_index": 414,
+      "source_pce_run_index": 2
+    },
+    {
+      "failure_class": "disk_quota_exceeded",
+      "instance_id": "django__django-15561",
+      "recovery_execution_unit_index": 239,
+      "source_execution_unit_index": 415,
+      "source_pce_run_index": 3
+    },
+    {
+      "failure_class": "disk_quota_exceeded",
+      "instance_id": "django__django-15563",
+      "recovery_execution_unit_index": 240,
+      "source_execution_unit_index": 416,
+      "source_pce_run_index": 1
+    },
+    {
+      "failure_class": "attempts_exhausted_without_worker_output",
+      "instance_id": "django__django-15563",
+      "recovery_execution_unit_index": 241,
+      "source_execution_unit_index": 417,
+      "source_pce_run_index": 2
+    },
+    {
+      "failure_class": "attempts_exhausted_without_worker_output",
+      "instance_id": "django__django-15563",
+      "recovery_execution_unit_index": 242,
+      "source_execution_unit_index": 418,
+      "source_pce_run_index": 3
+    },
+    {
+      "failure_class": "attempts_exhausted_without_worker_output",
+      "instance_id": "django__django-15569",
+      "recovery_execution_unit_index": 243,
+      "source_execution_unit_index": 419,
+      "source_pce_run_index": 1
+    },
+    {
+      "failure_class": "attempts_exhausted_without_worker_output",
+      "instance_id": "django__django-15569",
+      "recovery_execution_unit_index": 244,
+      "source_execution_unit_index": 420,
+      "source_pce_run_index": 2
+    },
+    {
+      "failure_class": "attempts_exhausted_without_worker_output",
+      "instance_id": "django__django-15569",
+      "recovery_execution_unit_index": 245,
+      "source_execution_unit_index": 421,
+      "source_pce_run_index": 3
+    },
+    {
+      "failure_class": "attempts_exhausted_without_worker_output",
+      "instance_id": "django__django-15572",
+      "recovery_execution_unit_index": 246,
+      "source_execution_unit_index": 422,
+      "source_pce_run_index": 1
+    },
+    {
+      "failure_class": "attempts_exhausted_without_worker_output",
+      "instance_id": "django__django-15572",
+      "recovery_execution_unit_index": 247,
+      "source_execution_unit_index": 423,
+      "source_pce_run_index": 2
+    },
+    {
+      "failure_class": "attempts_exhausted_without_worker_output",
+      "instance_id": "django__django-15572",
+      "recovery_execution_unit_index": 248,
+      "source_execution_unit_index": 424,
+      "source_pce_run_index": 3
+    },
+    {
+      "failure_class": "attempts_exhausted_without_worker_output",
+      "instance_id": "django__django-15629",
+      "recovery_execution_unit_index": 249,
+      "source_execution_unit_index": 425,
+      "source_pce_run_index": 1
+    },
+    {
+      "failure_class": "attempts_exhausted_without_worker_output",
+      "instance_id": "django__django-15629",
+      "recovery_execution_unit_index": 250,
+      "source_execution_unit_index": 426,
+      "source_pce_run_index": 2
+    },
+    {
+      "failure_class": "attempts_exhausted_without_worker_output",
+      "instance_id": "django__django-15629",
+      "recovery_execution_unit_index": 251,
+      "source_execution_unit_index": 427,
+      "source_pce_run_index": 3
+    },
+    {
+      "failure_class": "attempts_exhausted_without_worker_output",
+      "instance_id": "django__django-15695",
+      "recovery_execution_unit_index": 252,
+      "source_execution_unit_index": 428,
+      "source_pce_run_index": 1
+    },
+    {
+      "failure_class": "attempts_exhausted_without_worker_output",
+      "instance_id": "django__django-15695",
+      "recovery_execution_unit_index": 253,
+      "source_execution_unit_index": 429,
+      "source_pce_run_index": 2
+    },
+    {
+      "failure_class": "attempts_exhausted_without_worker_output",
+      "instance_id": "django__django-15695",
+      "recovery_execution_unit_index": 254,
+      "source_execution_unit_index": 430,
+      "source_pce_run_index": 3
+    },
+    {
+      "failure_class": "attempts_exhausted_without_worker_output",
+      "instance_id": "django__django-15731",
+      "recovery_execution_unit_index": 255,
+      "source_execution_unit_index": 431,
+      "source_pce_run_index": 1
+    },
+    {
+      "failure_class": "attempts_exhausted_without_worker_output",
+      "instance_id": "django__django-15731",
+      "recovery_execution_unit_index": 256,
+      "source_execution_unit_index": 432,
+      "source_pce_run_index": 2
+    },
+    {
+      "failure_class": "attempts_exhausted_without_worker_output",
+      "instance_id": "django__django-15731",
+      "recovery_execution_unit_index": 257,
+      "source_execution_unit_index": 433,
+      "source_pce_run_index": 3
+    },
+    {
+      "failure_class": "attempts_exhausted_without_worker_output",
+      "instance_id": "django__django-15732",
+      "recovery_execution_unit_index": 258,
+      "source_execution_unit_index": 434,
+      "source_pce_run_index": 1
+    },
+    {
+      "failure_class": "attempts_exhausted_without_worker_output",
+      "instance_id": "django__django-15732",
+      "recovery_execution_unit_index": 259,
+      "source_execution_unit_index": 435,
+      "source_pce_run_index": 2
+    },
+    {
+      "failure_class": "attempts_exhausted_without_worker_output",
+      "instance_id": "django__django-15732",
+      "recovery_execution_unit_index": 260,
+      "source_execution_unit_index": 436,
+      "source_pce_run_index": 3
+    },
+    {
+      "failure_class": "attempts_exhausted_without_worker_output",
+      "instance_id": "django__django-15741",
+      "recovery_execution_unit_index": 261,
+      "source_execution_unit_index": 437,
+      "source_pce_run_index": 1
+    },
+    {
+      "failure_class": "attempts_exhausted_without_worker_output",
+      "instance_id": "django__django-15814",
+      "recovery_execution_unit_index": 262,
+      "source_execution_unit_index": 438,
+      "source_pce_run_index": 1
+    },
+    {
+      "failure_class": "attempts_exhausted_without_worker_output",
+      "instance_id": "django__django-15814",
+      "recovery_execution_unit_index": 263,
+      "source_execution_unit_index": 439,
+      "source_pce_run_index": 2
+    },
+    {
+      "failure_class": "attempts_exhausted_without_worker_output",
+      "instance_id": "django__django-15814",
+      "recovery_execution_unit_index": 264,
+      "source_execution_unit_index": 440,
+      "source_pce_run_index": 3
+    },
+    {
+      "failure_class": "attempts_exhausted_without_worker_output",
+      "instance_id": "django__django-15851",
+      "recovery_execution_unit_index": 265,
+      "source_execution_unit_index": 441,
+      "source_pce_run_index": 1
+    },
+    {
+      "failure_class": "attempts_exhausted_without_worker_output",
+      "instance_id": "django__django-15851",
+      "recovery_execution_unit_index": 266,
+      "source_execution_unit_index": 442,
+      "source_pce_run_index": 2
+    },
+    {
+      "failure_class": "attempts_exhausted_without_worker_output",
+      "instance_id": "django__django-15851",
+      "recovery_execution_unit_index": 267,
+      "source_execution_unit_index": 443,
+      "source_pce_run_index": 3
+    },
+    {
+      "failure_class": "attempts_exhausted_without_worker_output",
+      "instance_id": "django__django-15863",
+      "recovery_execution_unit_index": 268,
+      "source_execution_unit_index": 444,
+      "source_pce_run_index": 1
+    },
+    {
+      "failure_class": "attempts_exhausted_without_worker_output",
+      "instance_id": "django__django-15863",
+      "recovery_execution_unit_index": 269,
+      "source_execution_unit_index": 445,
+      "source_pce_run_index": 2
+    },
+    {
+      "failure_class": "attempts_exhausted_without_worker_output",
+      "instance_id": "django__django-15863",
+      "recovery_execution_unit_index": 270,
+      "source_execution_unit_index": 446,
+      "source_pce_run_index": 3
+    },
+    {
+      "failure_class": "attempts_exhausted_without_worker_output",
+      "instance_id": "django__django-15916",
+      "recovery_execution_unit_index": 271,
+      "source_execution_unit_index": 447,
+      "source_pce_run_index": 1
+    },
+    {
+      "failure_class": "attempts_exhausted_without_worker_output",
+      "instance_id": "django__django-15916",
+      "recovery_execution_unit_index": 272,
+      "source_execution_unit_index": 448,
+      "source_pce_run_index": 2
+    },
+    {
+      "failure_class": "attempts_exhausted_without_worker_output",
+      "instance_id": "django__django-15916",
+      "recovery_execution_unit_index": 273,
+      "source_execution_unit_index": 449,
+      "source_pce_run_index": 3
+    },
+    {
+      "failure_class": "attempts_exhausted_without_worker_output",
+      "instance_id": "django__django-15930",
+      "recovery_execution_unit_index": 274,
+      "source_execution_unit_index": 450,
+      "source_pce_run_index": 1
+    },
+    {
+      "failure_class": "attempts_exhausted_without_worker_output",
+      "instance_id": "django__django-15930",
+      "recovery_execution_unit_index": 275,
+      "source_execution_unit_index": 451,
+      "source_pce_run_index": 2
+    },
+    {
+      "failure_class": "attempts_exhausted_without_worker_output",
+      "instance_id": "django__django-15930",
+      "recovery_execution_unit_index": 276,
+      "source_execution_unit_index": 452,
+      "source_pce_run_index": 3
+    },
+    {
+      "failure_class": "attempts_exhausted_without_worker_output",
+      "instance_id": "django__django-15973",
+      "recovery_execution_unit_index": 277,
+      "source_execution_unit_index": 453,
+      "source_pce_run_index": 1
+    },
+    {
+      "failure_class": "attempts_exhausted_without_worker_output",
+      "instance_id": "django__django-15973",
+      "recovery_execution_unit_index": 278,
+      "source_execution_unit_index": 454,
+      "source_pce_run_index": 2
+    },
+    {
+      "failure_class": "attempts_exhausted_without_worker_output",
+      "instance_id": "django__django-15973",
+      "recovery_execution_unit_index": 279,
+      "source_execution_unit_index": 455,
+      "source_pce_run_index": 3
+    },
+    {
+      "failure_class": "attempts_exhausted_without_worker_output",
+      "instance_id": "django__django-16032",
+      "recovery_execution_unit_index": 280,
+      "source_execution_unit_index": 456,
+      "source_pce_run_index": 1
+    },
+    {
+      "failure_class": "attempts_exhausted_without_worker_output",
+      "instance_id": "django__django-16082",
+      "recovery_execution_unit_index": 281,
+      "source_execution_unit_index": 457,
+      "source_pce_run_index": 1
+    },
+    {
+      "failure_class": "attempts_exhausted_without_worker_output",
+      "instance_id": "django__django-16082",
+      "recovery_execution_unit_index": 282,
+      "source_execution_unit_index": 458,
+      "source_pce_run_index": 2
+    },
+    {
+      "failure_class": "attempts_exhausted_without_worker_output",
+      "instance_id": "django__django-16082",
+      "recovery_execution_unit_index": 283,
+      "source_execution_unit_index": 459,
+      "source_pce_run_index": 3
+    },
+    {
+      "failure_class": "attempts_exhausted_without_worker_output",
+      "instance_id": "django__django-16116",
+      "recovery_execution_unit_index": 284,
+      "source_execution_unit_index": 460,
+      "source_pce_run_index": 1
+    },
+    {
+      "failure_class": "attempts_exhausted_without_worker_output",
+      "instance_id": "django__django-16136",
+      "recovery_execution_unit_index": 285,
+      "source_execution_unit_index": 461,
+      "source_pce_run_index": 1
+    },
+    {
+      "failure_class": "attempts_exhausted_without_worker_output",
+      "instance_id": "django__django-16136",
+      "recovery_execution_unit_index": 286,
+      "source_execution_unit_index": 462,
+      "source_pce_run_index": 2
+    },
+    {
+      "failure_class": "attempts_exhausted_without_worker_output",
+      "instance_id": "django__django-16136",
+      "recovery_execution_unit_index": 287,
+      "source_execution_unit_index": 463,
+      "source_pce_run_index": 3
+    },
+    {
+      "failure_class": "attempts_exhausted_without_worker_output",
+      "instance_id": "django__django-16139",
+      "recovery_execution_unit_index": 288,
+      "source_execution_unit_index": 464,
+      "source_pce_run_index": 1
+    },
+    {
+      "failure_class": "attempts_exhausted_without_worker_output",
+      "instance_id": "django__django-16139",
+      "recovery_execution_unit_index": 289,
+      "source_execution_unit_index": 465,
+      "source_pce_run_index": 2
+    },
+    {
+      "failure_class": "attempts_exhausted_without_worker_output",
+      "instance_id": "django__django-16139",
+      "recovery_execution_unit_index": 290,
+      "source_execution_unit_index": 466,
+      "source_pce_run_index": 3
+    },
+    {
+      "failure_class": "attempts_exhausted_without_worker_output",
+      "instance_id": "django__django-16145",
+      "recovery_execution_unit_index": 291,
+      "source_execution_unit_index": 467,
+      "source_pce_run_index": 1
+    },
+    {
+      "failure_class": "attempts_exhausted_without_worker_output",
+      "instance_id": "django__django-16255",
+      "recovery_execution_unit_index": 292,
+      "source_execution_unit_index": 468,
+      "source_pce_run_index": 1
+    },
+    {
+      "failure_class": "attempts_exhausted_without_worker_output",
+      "instance_id": "django__django-16255",
+      "recovery_execution_unit_index": 293,
+      "source_execution_unit_index": 469,
+      "source_pce_run_index": 2
+    },
+    {
+      "failure_class": "attempts_exhausted_without_worker_output",
+      "instance_id": "django__django-16255",
+      "recovery_execution_unit_index": 294,
+      "source_execution_unit_index": 470,
+      "source_pce_run_index": 3
+    },
+    {
+      "failure_class": "attempts_exhausted_without_worker_output",
+      "instance_id": "django__django-16256",
+      "recovery_execution_unit_index": 295,
+      "source_execution_unit_index": 471,
+      "source_pce_run_index": 1
+    },
+    {
+      "failure_class": "attempts_exhausted_without_worker_output",
+      "instance_id": "django__django-16256",
+      "recovery_execution_unit_index": 296,
+      "source_execution_unit_index": 472,
+      "source_pce_run_index": 2
+    },
+    {
+      "failure_class": "attempts_exhausted_without_worker_output",
+      "instance_id": "django__django-16256",
+      "recovery_execution_unit_index": 297,
+      "source_execution_unit_index": 473,
+      "source_pce_run_index": 3
+    },
+    {
+      "failure_class": "attempts_exhausted_without_worker_output",
+      "instance_id": "django__django-16315",
+      "recovery_execution_unit_index": 298,
+      "source_execution_unit_index": 474,
+      "source_pce_run_index": 1
+    },
+    {
+      "failure_class": "attempts_exhausted_without_worker_output",
+      "instance_id": "django__django-16333",
+      "recovery_execution_unit_index": 299,
+      "source_execution_unit_index": 475,
+      "source_pce_run_index": 1
+    },
+    {
+      "failure_class": "attempts_exhausted_without_worker_output",
+      "instance_id": "django__django-16333",
+      "recovery_execution_unit_index": 300,
+      "source_execution_unit_index": 476,
+      "source_pce_run_index": 2
+    },
+    {
+      "failure_class": "attempts_exhausted_without_worker_output",
+      "instance_id": "django__django-16333",
+      "recovery_execution_unit_index": 301,
+      "source_execution_unit_index": 477,
+      "source_pce_run_index": 3
+    },
+    {
+      "failure_class": "attempts_exhausted_without_worker_output",
+      "instance_id": "django__django-16429",
+      "recovery_execution_unit_index": 302,
+      "source_execution_unit_index": 478,
+      "source_pce_run_index": 1
+    },
+    {
+      "failure_class": "attempts_exhausted_without_worker_output",
+      "instance_id": "django__django-16429",
+      "recovery_execution_unit_index": 303,
+      "source_execution_unit_index": 479,
+      "source_pce_run_index": 2
+    },
+    {
+      "failure_class": "attempts_exhausted_without_worker_output",
+      "instance_id": "django__django-16429",
+      "recovery_execution_unit_index": 304,
+      "source_execution_unit_index": 480,
+      "source_pce_run_index": 3
+    },
+    {
+      "failure_class": "attempts_exhausted_without_worker_output",
+      "instance_id": "django__django-16454",
+      "recovery_execution_unit_index": 305,
+      "source_execution_unit_index": 481,
+      "source_pce_run_index": 1
+    },
+    {
+      "failure_class": "attempts_exhausted_without_worker_output",
+      "instance_id": "django__django-16454",
+      "recovery_execution_unit_index": 306,
+      "source_execution_unit_index": 482,
+      "source_pce_run_index": 2
+    },
+    {
+      "failure_class": "attempts_exhausted_without_worker_output",
+      "instance_id": "django__django-16454",
+      "recovery_execution_unit_index": 307,
+      "source_execution_unit_index": 483,
+      "source_pce_run_index": 3
+    },
+    {
+      "failure_class": "attempts_exhausted_without_worker_output",
+      "instance_id": "django__django-16485",
+      "recovery_execution_unit_index": 308,
+      "source_execution_unit_index": 484,
+      "source_pce_run_index": 1
+    },
+    {
+      "failure_class": "attempts_exhausted_without_worker_output",
+      "instance_id": "django__django-16485",
+      "recovery_execution_unit_index": 309,
+      "source_execution_unit_index": 485,
+      "source_pce_run_index": 2
+    },
+    {
+      "failure_class": "attempts_exhausted_without_worker_output",
+      "instance_id": "django__django-16485",
+      "recovery_execution_unit_index": 310,
+      "source_execution_unit_index": 486,
+      "source_pce_run_index": 3
+    },
+    {
+      "failure_class": "attempts_exhausted_without_worker_output",
+      "instance_id": "django__django-16493",
+      "recovery_execution_unit_index": 311,
+      "source_execution_unit_index": 487,
+      "source_pce_run_index": 1
+    },
+    {
+      "failure_class": "attempts_exhausted_without_worker_output",
+      "instance_id": "django__django-16493",
+      "recovery_execution_unit_index": 312,
+      "source_execution_unit_index": 488,
+      "source_pce_run_index": 2
+    },
+    {
+      "failure_class": "attempts_exhausted_without_worker_output",
+      "instance_id": "django__django-16493",
+      "recovery_execution_unit_index": 313,
+      "source_execution_unit_index": 489,
+      "source_pce_run_index": 3
+    },
+    {
+      "failure_class": "attempts_exhausted_without_worker_output",
+      "instance_id": "django__django-16502",
+      "recovery_execution_unit_index": 314,
+      "source_execution_unit_index": 490,
+      "source_pce_run_index": 1
+    },
+    {
+      "failure_class": "disk_quota_exceeded",
+      "instance_id": "django__django-16502",
+      "recovery_execution_unit_index": 315,
+      "source_execution_unit_index": 491,
+      "source_pce_run_index": 2
+    },
+    {
+      "failure_class": "attempts_exhausted_without_worker_output",
+      "instance_id": "django__django-16502",
+      "recovery_execution_unit_index": 316,
+      "source_execution_unit_index": 492,
+      "source_pce_run_index": 3
+    },
+    {
+      "failure_class": "attempts_exhausted_without_worker_output",
+      "instance_id": "django__django-16527",
+      "recovery_execution_unit_index": 317,
+      "source_execution_unit_index": 493,
+      "source_pce_run_index": 1
+    },
+    {
+      "failure_class": "attempts_exhausted_without_worker_output",
+      "instance_id": "django__django-16527",
+      "recovery_execution_unit_index": 318,
+      "source_execution_unit_index": 494,
+      "source_pce_run_index": 2
+    },
+    {
+      "failure_class": "attempts_exhausted_without_worker_output",
+      "instance_id": "django__django-16527",
+      "recovery_execution_unit_index": 319,
+      "source_execution_unit_index": 495,
+      "source_pce_run_index": 3
+    },
+    {
+      "failure_class": "disk_quota_exceeded",
+      "instance_id": "django__django-16560",
+      "recovery_execution_unit_index": 320,
+      "source_execution_unit_index": 496,
+      "source_pce_run_index": 1
+    },
+    {
+      "failure_class": "disk_quota_exceeded",
+      "instance_id": "django__django-16560",
+      "recovery_execution_unit_index": 321,
+      "source_execution_unit_index": 497,
+      "source_pce_run_index": 2
+    },
+    {
+      "failure_class": "disk_quota_exceeded",
+      "instance_id": "django__django-16560",
+      "recovery_execution_unit_index": 322,
+      "source_execution_unit_index": 498,
+      "source_pce_run_index": 3
+    },
+    {
+      "failure_class": "disk_quota_exceeded",
+      "instance_id": "django__django-16569",
+      "recovery_execution_unit_index": 323,
+      "source_execution_unit_index": 499,
+      "source_pce_run_index": 1
+    },
+    {
+      "failure_class": "disk_quota_exceeded",
+      "instance_id": "django__django-16569",
+      "recovery_execution_unit_index": 324,
+      "source_execution_unit_index": 500,
+      "source_pce_run_index": 2
+    },
+    {
+      "failure_class": "disk_quota_exceeded",
+      "instance_id": "django__django-16569",
+      "recovery_execution_unit_index": 325,
+      "source_execution_unit_index": 501,
+      "source_pce_run_index": 3
+    },
+    {
+      "failure_class": "disk_quota_exceeded",
+      "instance_id": "django__django-16595",
+      "recovery_execution_unit_index": 326,
+      "source_execution_unit_index": 502,
+      "source_pce_run_index": 1
+    },
+    {
+      "failure_class": "disk_quota_exceeded",
+      "instance_id": "django__django-16595",
+      "recovery_execution_unit_index": 327,
+      "source_execution_unit_index": 503,
+      "source_pce_run_index": 2
+    },
+    {
+      "failure_class": "disk_quota_exceeded",
+      "instance_id": "django__django-16595",
+      "recovery_execution_unit_index": 328,
+      "source_execution_unit_index": 504,
+      "source_pce_run_index": 3
+    },
+    {
+      "failure_class": "disk_quota_exceeded",
+      "instance_id": "django__django-16612",
+      "recovery_execution_unit_index": 329,
+      "source_execution_unit_index": 505,
+      "source_pce_run_index": 1
+    },
+    {
+      "failure_class": "disk_quota_exceeded",
+      "instance_id": "django__django-16612",
+      "recovery_execution_unit_index": 330,
+      "source_execution_unit_index": 506,
+      "source_pce_run_index": 2
+    },
+    {
+      "failure_class": "disk_quota_exceeded",
+      "instance_id": "django__django-16612",
+      "recovery_execution_unit_index": 331,
+      "source_execution_unit_index": 507,
+      "source_pce_run_index": 3
+    },
+    {
+      "failure_class": "disk_quota_exceeded",
+      "instance_id": "django__django-16631",
+      "recovery_execution_unit_index": 332,
+      "source_execution_unit_index": 508,
+      "source_pce_run_index": 1
+    },
+    {
+      "failure_class": "disk_quota_exceeded",
+      "instance_id": "django__django-16631",
+      "recovery_execution_unit_index": 333,
+      "source_execution_unit_index": 509,
+      "source_pce_run_index": 2
+    },
+    {
+      "failure_class": "disk_quota_exceeded",
+      "instance_id": "django__django-16631",
+      "recovery_execution_unit_index": 334,
+      "source_execution_unit_index": 510,
+      "source_pce_run_index": 3
+    },
+    {
+      "failure_class": "disk_quota_exceeded",
+      "instance_id": "django__django-16661",
+      "recovery_execution_unit_index": 335,
+      "source_execution_unit_index": 511,
+      "source_pce_run_index": 1
+    },
+    {
+      "failure_class": "disk_quota_exceeded",
+      "instance_id": "django__django-16662",
+      "recovery_execution_unit_index": 336,
+      "source_execution_unit_index": 512,
+      "source_pce_run_index": 1
+    },
+    {
+      "failure_class": "disk_quota_exceeded",
+      "instance_id": "django__django-16662",
+      "recovery_execution_unit_index": 337,
+      "source_execution_unit_index": 513,
+      "source_pce_run_index": 2
+    },
+    {
+      "failure_class": "disk_quota_exceeded",
+      "instance_id": "django__django-16662",
+      "recovery_execution_unit_index": 338,
+      "source_execution_unit_index": 514,
+      "source_pce_run_index": 3
+    },
+    {
+      "failure_class": "attempts_exhausted_without_worker_output",
+      "instance_id": "django__django-16667",
+      "recovery_execution_unit_index": 339,
+      "source_execution_unit_index": 515,
+      "source_pce_run_index": 1
+    },
+    {
+      "failure_class": "attempts_exhausted_without_worker_output",
+      "instance_id": "django__django-16667",
+      "recovery_execution_unit_index": 340,
+      "source_execution_unit_index": 516,
+      "source_pce_run_index": 2
+    },
+    {
+      "failure_class": "attempts_exhausted_without_worker_output",
+      "instance_id": "django__django-16667",
+      "recovery_execution_unit_index": 341,
+      "source_execution_unit_index": 517,
+      "source_pce_run_index": 3
+    },
+    {
+      "failure_class": "disk_quota_exceeded",
+      "instance_id": "django__django-16819",
+      "recovery_execution_unit_index": 342,
+      "source_execution_unit_index": 518,
+      "source_pce_run_index": 1
+    },
+    {
+      "failure_class": "disk_quota_exceeded",
+      "instance_id": "django__django-16819",
+      "recovery_execution_unit_index": 343,
+      "source_execution_unit_index": 519,
+      "source_pce_run_index": 2
+    },
+    {
+      "failure_class": "disk_quota_exceeded",
+      "instance_id": "django__django-16819",
+      "recovery_execution_unit_index": 344,
+      "source_execution_unit_index": 520,
+      "source_pce_run_index": 3
+    },
+    {
+      "failure_class": "attempts_exhausted_without_worker_output",
+      "instance_id": "django__django-16899",
+      "recovery_execution_unit_index": 345,
+      "source_execution_unit_index": 521,
+      "source_pce_run_index": 1
+    },
+    {
+      "failure_class": "attempts_exhausted_without_worker_output",
+      "instance_id": "django__django-16901",
+      "recovery_execution_unit_index": 346,
+      "source_execution_unit_index": 522,
+      "source_pce_run_index": 1
+    },
+    {
+      "failure_class": "attempts_exhausted_without_worker_output",
+      "instance_id": "django__django-16938",
+      "recovery_execution_unit_index": 347,
+      "source_execution_unit_index": 523,
+      "source_pce_run_index": 1
+    },
+    {
+      "failure_class": "attempts_exhausted_without_worker_output",
+      "instance_id": "django__django-16938",
+      "recovery_execution_unit_index": 348,
+      "source_execution_unit_index": 524,
+      "source_pce_run_index": 2
+    },
+    {
+      "failure_class": "disk_quota_exceeded",
+      "instance_id": "django__django-16938",
+      "recovery_execution_unit_index": 349,
+      "source_execution_unit_index": 525,
+      "source_pce_run_index": 3
+    },
+    {
+      "failure_class": "attempts_exhausted_without_worker_output",
+      "instance_id": "django__django-16950",
+      "recovery_execution_unit_index": 350,
+      "source_execution_unit_index": 526,
+      "source_pce_run_index": 1
+    },
+    {
+      "failure_class": "attempts_exhausted_without_worker_output",
+      "instance_id": "django__django-16950",
+      "recovery_execution_unit_index": 351,
+      "source_execution_unit_index": 527,
+      "source_pce_run_index": 2
+    },
+    {
+      "failure_class": "attempts_exhausted_without_worker_output",
+      "instance_id": "django__django-16950",
+      "recovery_execution_unit_index": 352,
+      "source_execution_unit_index": 528,
+      "source_pce_run_index": 3
+    },
+    {
+      "failure_class": "attempts_exhausted_without_worker_output",
+      "instance_id": "django__django-17029",
+      "recovery_execution_unit_index": 353,
+      "source_execution_unit_index": 529,
+      "source_pce_run_index": 1
+    },
+    {
+      "failure_class": "attempts_exhausted_without_worker_output",
+      "instance_id": "django__django-17029",
+      "recovery_execution_unit_index": 354,
+      "source_execution_unit_index": 530,
+      "source_pce_run_index": 2
+    },
+    {
+      "failure_class": "attempts_exhausted_without_worker_output",
+      "instance_id": "django__django-17029",
+      "recovery_execution_unit_index": 355,
+      "source_execution_unit_index": 531,
+      "source_pce_run_index": 3
+    },
+    {
+      "failure_class": "attempts_exhausted_without_worker_output",
+      "instance_id": "django__django-17084",
+      "recovery_execution_unit_index": 356,
+      "source_execution_unit_index": 532,
+      "source_pce_run_index": 1
+    },
+    {
+      "failure_class": "attempts_exhausted_without_worker_output",
+      "instance_id": "django__django-17084",
+      "recovery_execution_unit_index": 357,
+      "source_execution_unit_index": 533,
+      "source_pce_run_index": 2
+    },
+    {
+      "failure_class": "attempts_exhausted_without_worker_output",
+      "instance_id": "django__django-17084",
+      "recovery_execution_unit_index": 358,
+      "source_execution_unit_index": 534,
+      "source_pce_run_index": 3
+    },
+    {
+      "failure_class": "disk_quota_exceeded",
+      "instance_id": "django__django-17087",
+      "recovery_execution_unit_index": 359,
+      "source_execution_unit_index": 535,
+      "source_pce_run_index": 1
+    },
+    {
+      "failure_class": "disk_quota_exceeded",
+      "instance_id": "django__django-9296",
+      "recovery_execution_unit_index": 360,
+      "source_execution_unit_index": 536,
+      "source_pce_run_index": 1
+    },
+    {
+      "failure_class": "disk_quota_exceeded",
+      "instance_id": "django__django-9296",
+      "recovery_execution_unit_index": 361,
+      "source_execution_unit_index": 538,
+      "source_pce_run_index": 3
+    },
+    {
+      "failure_class": "disk_quota_exceeded",
+      "instance_id": "matplotlib__matplotlib-13989",
+      "recovery_execution_unit_index": 362,
+      "source_execution_unit_index": 539,
+      "source_pce_run_index": 1
+    },
+    {
+      "failure_class": "disk_quota_exceeded",
+      "instance_id": "matplotlib__matplotlib-13989",
+      "recovery_execution_unit_index": 363,
+      "source_execution_unit_index": 541,
+      "source_pce_run_index": 3
+    },
+    {
+      "failure_class": "disk_quota_exceeded",
+      "instance_id": "matplotlib__matplotlib-14623",
+      "recovery_execution_unit_index": 364,
+      "source_execution_unit_index": 542,
+      "source_pce_run_index": 1
+    },
+    {
+      "failure_class": "disk_quota_exceeded",
+      "instance_id": "matplotlib__matplotlib-14623",
+      "recovery_execution_unit_index": 365,
+      "source_execution_unit_index": 543,
+      "source_pce_run_index": 2
+    },
+    {
+      "failure_class": "disk_quota_exceeded",
+      "instance_id": "matplotlib__matplotlib-14623",
+      "recovery_execution_unit_index": 366,
+      "source_execution_unit_index": 544,
+      "source_pce_run_index": 3
+    },
+    {
+      "failure_class": "disk_quota_exceeded",
+      "instance_id": "matplotlib__matplotlib-25287",
+      "recovery_execution_unit_index": 367,
+      "source_execution_unit_index": 596,
+      "source_pce_run_index": 3
+    },
+    {
+      "failure_class": "disk_quota_exceeded",
+      "instance_id": "matplotlib__matplotlib-25479",
+      "recovery_execution_unit_index": 368,
+      "source_execution_unit_index": 605,
+      "source_pce_run_index": 3
+    },
+    {
+      "failure_class": "disk_quota_exceeded",
+      "instance_id": "matplotlib__matplotlib-25775",
+      "recovery_execution_unit_index": 369,
+      "source_execution_unit_index": 607,
+      "source_pce_run_index": 2
+    },
+    {
+      "failure_class": "disk_quota_exceeded",
+      "instance_id": "matplotlib__matplotlib-25775",
+      "recovery_execution_unit_index": 370,
+      "source_execution_unit_index": 608,
+      "source_pce_run_index": 3
+    },
+    {
+      "failure_class": "disk_quota_exceeded",
+      "instance_id": "matplotlib__matplotlib-26113",
+      "recovery_execution_unit_index": 371,
+      "source_execution_unit_index": 610,
+      "source_pce_run_index": 2
+    },
+    {
+      "failure_class": "disk_quota_exceeded",
+      "instance_id": "matplotlib__matplotlib-26208",
+      "recovery_execution_unit_index": 372,
+      "source_execution_unit_index": 613,
+      "source_pce_run_index": 2
+    },
+    {
+      "failure_class": "disk_quota_exceeded",
+      "instance_id": "matplotlib__matplotlib-26208",
+      "recovery_execution_unit_index": 373,
+      "source_execution_unit_index": 614,
+      "source_pce_run_index": 3
+    },
+    {
+      "failure_class": "disk_quota_exceeded",
+      "instance_id": "matplotlib__matplotlib-26342",
+      "recovery_execution_unit_index": 374,
+      "source_execution_unit_index": 617,
+      "source_pce_run_index": 3
+    },
+    {
+      "failure_class": "attempts_exhausted_without_worker_output",
+      "instance_id": "pydata__xarray-4687",
+      "recovery_execution_unit_index": 375,
+      "source_execution_unit_index": 649,
+      "source_pce_run_index": 3
+    },
+    {
+      "failure_class": "attempts_exhausted_without_worker_output",
+      "instance_id": "pylint-dev__pylint-6528",
+      "recovery_execution_unit_index": 376,
+      "source_execution_unit_index": 680,
+      "source_pce_run_index": 3
+    },
+    {
+      "failure_class": "attempts_exhausted_without_worker_output",
+      "instance_id": "sphinx-doc__sphinx-7440",
+      "recovery_execution_unit_index": 377,
+      "source_execution_unit_index": 800,
+      "source_pce_run_index": 1
+    },
+    {
+      "failure_class": "attempts_exhausted_without_worker_output",
+      "instance_id": "sympy__sympy-13615",
+      "recovery_execution_unit_index": 378,
+      "source_execution_unit_index": 899,
+      "source_pce_run_index": 1
+    }
+  ],
+  "recovery_task_count": 163,
+  "retention": {
+    "preserved": [
+      "outcomes",
+      "checkpoints",
+      "trajectories",
+      "failure records",
+      "Slurm logs",
+      "SIFs",
+      "repository-history bundles"
+    ],
+    "reclaimed": "only exact disposable attempt_*/workspaces trees"
+  },
+  "schema_version": 1,
+  "source_authorities": {
+    "controller_status": "/tmp/safe-pce-target4-controller-status-20260919.json",
+    "controller_status_sha256": "e0d6b39339a222e6125d5a795adf1c6d9e6ee16895de36e6d9f17447bdccc993",
+    "parent_execution": "configs/frozen_swe_verified_safe_pce/no-thinking-clean411-target4-v1-20260918/execution.json",
+    "parent_execution_sha256": "2b305c52979ec6e62ad448ae9ee5a8bbafcff803a18f01270529ce41988bcff4",
+    "parent_images": "configs/frozen_swe_verified_safe_pce/no-thinking-clean411-target4-v1-20260918/images.json",
+    "parent_images_sha256": "a46c3699bdb4ad4d46c3c9ed37f22496861b0aacd2a08cca1241fb265a304d82",
+    "parent_selection": "configs/frozen_swe_verified_safe_pce/no-thinking-clean411-target4-v1-20260918/selection.json",
+    "parent_selection_sha256": "1898f331518195090a4535c6b3fb45144e578888403ee7456a9205e726bf5c22",
+    "raw_outcomes": "/tmp/safe-pce-target4-raw-20260919.jsonl",
+    "raw_outcomes_sha256": "37d16d218107126a8c5d12d471c12cd5a224806597148be8b8a975e1e5c0db21",
+    "remote_cluster": "aion",
+    "remote_controller_status": "/scratch/users/twang/vibe-coding-planning/run_state/output/SWE-bench_Verified/swe-verified-pce-runs/development/safe-pce-no-thinking-clean411-target4-aion-v1-20260918/controller_status.json",
+    "remote_raw_outcomes": "/scratch/users/twang/vibe-coding-planning/run_state/output/SWE-bench_Verified/swe-verified-pce-runs/development/safe-pce-no-thinking-clean411-target4-aion-v1-20260918/raw_pce_outcomes.jsonl",
+    "remote_run_root": "/scratch/users/twang/vibe-coding-planning/run_state/output/SWE-bench_Verified/swe-verified-pce-runs/development/safe-pce-no-thinking-clean411-target4-aion-v1-20260918"
+  }
+}

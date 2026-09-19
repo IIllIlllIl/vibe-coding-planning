@@ -127,6 +127,11 @@ def test_shared_slurm_batch_reuses_only_atomic_completed_output(tmp_path):
             write_script=write_script,
             validate_output=validate,
         )
+    workspace_file = task.attempts_dir / "attempt_01/workspaces/plan/repository.py"
+    evidence_file = task.attempts_dir / "attempt_01/failure.json"
+    workspace_file.parent.mkdir(parents=True)
+    workspace_file.write_text("disposable", encoding="utf-8")
+    evidence_file.write_text("retained", encoding="utf-8")
     atomic_json(
         task.output_path,
         {"status": "completed", "instance_id": "case", "value": 7},
@@ -143,6 +148,8 @@ def test_shared_slurm_batch_reuses_only_atomic_completed_output(tmp_path):
     assert outputs[0]["value"] == 7
     assert len(submissions) == 1
     assert json.loads((tmp_path / "task_state.json").read_text())["phase"] == "COMPLETE"
+    assert not (task.attempts_dir / "attempt_01/workspaces").exists()
+    assert evidence_file.read_text(encoding="utf-8") == "retained"
 
 
 def test_controller_yield_is_not_an_agent_or_gepa_error():
@@ -229,6 +236,11 @@ def test_shared_slurm_records_terminal_status_and_exhaustion(
             task_output_grace_seconds=0,
         )
     )
+    workspace_file = task.attempts_dir / "attempt_01/workspaces/code/repository.py"
+    evidence_file = task.attempts_dir / "attempt_01/slurm-owned-evidence.json"
+    workspace_file.parent.mkdir(parents=True)
+    workspace_file.write_text("disposable", encoding="utf-8")
+    evidence_file.write_text("retained", encoding="utf-8")
 
     with pytest.raises(TaskAttemptsExhausted, match="1 attempt"):
         runtime.run(
@@ -245,6 +257,8 @@ def test_shared_slurm_records_terminal_status_and_exhaustion(
     assert state["active_job_id"] is None
     assert state["last_job_id"] == "123"
     assert state["terminal_failure"]["failure_kind"] == "task_attempts_exhausted"
+    assert not (task.attempts_dir / "attempt_01/workspaces").exists()
+    assert evidence_file.read_text(encoding="utf-8") == "retained"
     slurm_status = json.loads(
         (task.attempts_dir / "attempt_01" / "slurm_status.json").read_text()
     )
