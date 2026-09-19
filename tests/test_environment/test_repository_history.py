@@ -110,13 +110,19 @@ def test_cached_bundle_exposes_base_ancestors_but_not_future_history(
     )
 
     assert evidence["policy"] == REPOSITORY_HISTORY_POLICY
-    assert evidence["checks"][0]["command"][-2:] == ["--mixed", base]
+    assert evidence["checks"][0] == {
+        "operation": "detach_stale_submodule_gitfiles",
+        "detached": [],
+    }
+    assert evidence["checks"][1]["command"][-2:] == ["--mixed", base]
     assert not any(
         check["command"][-2:] == ["--hard", base]
         for check in evidence["checks"]
+        if "command" in check
     )
     assert any(
         "checkout-index" in check["command"] for check in evidence["checks"]
+        if "command" in check
     )
     assert _git(target, "rev-parse", "HEAD") == base
     assert _git(target, "cat-file", "-t", ancestor) == "commit"
@@ -145,6 +151,74 @@ def test_cache_key_binds_policy_sif_and_base() -> None:
         sif_sha256="a" * 64,
         base_commit="d" * 40,
     )
+
+
+def test_history_install_detaches_stale_submodule_gitfile(tmp_path: Path) -> None:
+    submodule = tmp_path / "submodule"
+    submodule.mkdir()
+    _git(submodule, "init", "-q")
+    _git(submodule, "config", "user.email", "test@example.invalid")
+    _git(submodule, "config", "user.name", "Test")
+    (submodule / "kept.txt").write_text("checked out source\n", encoding="utf-8")
+    _git(submodule, "add", "kept.txt")
+    submodule_commit = _commit(submodule, "2000-01-01T00:00:00Z", "submodule")
+
+    source = tmp_path / "source"
+    source.mkdir()
+    _git(source, "init", "-q")
+    _git(source, "config", "user.email", "test@example.invalid")
+    _git(source, "config", "user.name", "Test")
+    (source / "tracked.txt").write_text("base\n", encoding="utf-8")
+    _git(source, "add", "tracked.txt")
+    _git(
+        source,
+        "update-index",
+        "--add",
+        "--cacheinfo",
+        f"160000,{submodule_commit},vendor",
+    )
+    base = _commit(source, "2000-01-02T00:00:00Z", "base")
+    nested_source = source / "vendor"
+    nested_source.mkdir()
+    (nested_source / "kept.txt").write_text(
+        "checked out source\n", encoding="utf-8"
+    )
+    (nested_source / ".git").write_text(
+        "gitdir: ../.git/modules/vendor\n",
+        encoding="utf-8",
+    )
+
+    cache = RepositoryHistoryCache(tmp_path / "cache")
+    bundle, _ = cache.ensure(
+        env=LocalEnvironment(source),
+        repository_dir=source,
+        sif_sha256="a" * 64,
+        base_commit=base,
+        instance_id="repo__repo-1",
+        timeout=30,
+    )
+
+    target = tmp_path / "target"
+    shutil.copytree(source, target)
+    nested = target / "vendor"
+
+    evidence = install_repository_history_bundle(
+        repository_dir=target,
+        bundle=bundle,
+        base_commit=base,
+    )
+
+    assert evidence["checks"][0] == {
+        "operation": "detach_stale_submodule_gitfiles",
+        "detached": [
+            {
+                "marker": "vendor/.git",
+                "former_gitdir": "../.git/modules/vendor",
+            }
+        ],
+    }
+    assert not (nested / ".git").exists()
+    assert (nested / "kept.txt").read_text(encoding="utf-8") == "checked out source\n"
 
 
 def test_history_install_failure_keeps_diagnostic_tail(

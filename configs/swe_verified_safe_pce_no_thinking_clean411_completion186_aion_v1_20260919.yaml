@@ -1,0 +1,129 @@
+mode: swe_verified_pce
+purpose: safe_pce_no_thinking_clean411_target_four_completion
+
+paths:
+  dataset_snapshot: output/SWE-bench_Verified/swe-verified-pce-inputs/20260831_verified500_91aa3ed5
+  image_manifest: configs/frozen_swe_verified_safe_pce/no-thinking-clean411-completion186-v1-20260919/images.json
+  selection_manifest: configs/frozen_swe_verified_safe_pce/no-thinking-clean411-completion186-v1-20260919/selection.json
+  prompt_source_config: configs/polybench_pce_hpc_formal_clean_20260825.yaml
+  plan_prompt_source_config: configs/prompts/swe_verified_safe_pce_planner_v6_anchor_ablation_20260913.yaml
+  code_prompt_source_config: configs/prompts/swe_verified_safe_pce_code_v1_20260913.yaml
+  run_dir: output/SWE-bench_Verified/swe-verified-pce-runs/development/safe-pce-no-thinking-clean411-completion186-aion-v1-20260919
+
+execution:
+  manifest: configs/frozen_swe_verified_safe_pce/no-thinking-clean411-completion186-v1-20260919/execution.json
+
+plan:
+  model: deepseek-v4-flash
+  api_base: https://api.deepseek.com
+  api_key_env: DEEPSEEK_API_KEY
+  temperature: 1.0
+  thinking: disabled
+  max_steps: 0
+  cost_limit: 0.0
+  timeout: 1800
+  max_attempts: 3
+  submission_protocol: direct_human_markdown_v5
+
+code:
+  model: deepseek-v4-flash
+  api_base: https://api.deepseek.com
+  api_key_env: DEEPSEEK_API_KEY
+  temperature: 0.0
+  max_steps: 0
+  cost_limit: 0.0
+  timeout: 1800
+  max_attempts: 3
+
+docker:
+  workdir: /testbed
+  timeout: 1800
+  min_free_gb: 20
+  max_cached_images: 75
+
+container:
+  runtime: apptainer
+  module: tools/Apptainer
+  sif_cache_dir: /scratch/users/${USER}/vibe-coding-planning/shared/sif-cache
+  writable_tmpfs: true
+
+hpc:
+  submit: true
+  partition: batch
+  cpus_per_task: 1
+  mem: 1750M
+  time: "01:00:00"
+  max_running_array_tasks: 10
+  poll_interval_seconds: 300
+  task_output_grace_seconds: 300
+  missing_task_grace_seconds: 600
+  max_task_attempts: 3
+  remote_env_file: ~/.config/vibe-coding-planning/deepseek.env
+  python_module: lang/Python/3.11
+  container_module: tools/Apptainer
+  python_bin: python3
+  job_name_prefix: safe-pce-no-thinking-clean411-completion186-aion-v1-20260919
+  worker_config_path: configs/swe_verified_safe_pce_no_thinking_clean411_completion186_aion_v1_20260919.yaml
+
+evaluator:
+  slurm_timeout_outcome: unknown
+
+experiment_contract:
+  status: prepared_not_launched
+  cluster: aion
+  input_universe: frozen_clean411_current_target_four_deficits
+  selected_cases: 86
+  execution_units: 186
+  current_reliable_observations: 1458
+  target_reliable_observations: 1644
+  selection_policy: every_clean411_task_with_fewer_than_four_reliable_observations
+  planner_model: deepseek-v4-flash
+  planner_thinking: disabled
+  planner_temperature: 1.0
+  coder_model: deepseek-v4-flash
+  coder_temperature: 0.0
+  selection_manifest_sha256: 16ff143f976907f687fa3a7659d6098a8dad5269c6072c34f2cd11cc7a2e8462
+  image_manifest_sha256: ec9c10b30f2248a948784e1d12c1f91d496ed18d39c2a17d28684f9ce33b944b
+  execution_manifest_sha256: 5d10587246ab77ecc159a94dfd7c0c7aa1e7aa6a9538e7568d79402464b2aae4
+  audit_manifest_sha256: 8303d5e95b9fb27ea87b16142244852fbdd51a83901474a03c6db30b53acbb61
+  pce_semantic_sha256: bef8dff3a4be5e2617b5868d716ed4bdba2b68863f71bf8c7bf3df4a57f98090
+  plan_authority: exact_model_text_between_START_PLAN_and_END_PLAN
+  plan_submission_protocol: direct_human_markdown_v5
+  plan_audience: human_developer_before_implementation
+  local_git_history_policy: base_ancestor_bundle_v1_with_detached_stale_submodule_gitfiles
+  agent_source_policy: conservative_blacklist_v3
+  source_audit_index: all_attempts_case_level_summary_plus_event_logs
+  prompt_url_source: literal_http_urls_in_frozen_issue_description
+  non_prompt_http_policy: allow_but_review
+  agent_filesystem_policy: complete_testbed_with_host_cwd_disabled_and_package_cache_masked
+  evaluator_repository_policy: verify_fresh_immutable_sif_without_reset_or_clean
+  process_control:
+    supervisors: 1
+    controllers: 1
+    slurm_arrays_per_attempt: 1
+    all_execution_units_submitted_in_one_array: true
+    max_simultaneously_running_array_elements: 10
+    throttle_reason: bound_peak_disposable_workspace_inodes_after_observed_quota_failures
+  resource_policy:
+    aion_memory: 1750M
+    oom_is_operationally_incomplete: true
+    iris_recovery_scope: only_units_that_remain_incomplete_due_to_oom
+    iris_recovery_memory: 4G
+  budget:
+    pce_execution_units: 186
+    supervisor_wall_clock_budget: "12:00:00"
+    planner_and_code_command_timeout_seconds: 1800
+    slurm_worker_walltime: "01:00:00"
+    worker_memory: 1750M
+    agent_attempts: 3
+    supervisor_slices: 72
+  stopping: finish_all_186_units_or_stop_after_72_supervisor_slices_with_durable_checkpoints
+  operational_incomplete_policy: transport_provider_timeout_oom_infrastructure_failure_or_exhausted_evaluator_is_not_unresolved
+  success_criteria:
+    - every_requested_unit_maps_to_an_observed_clean411_coverage_deficit
+    - no_task_receives_more_than_four_reliable_observations
+    - operational_failure_does_not_become_unresolved
+    - every_attempt_reclaims_only_its_disposable_workspace_after_evidence_is_written
+    - only_post_run_oom_units_are_eligible_for_the_deferred_iris_recovery
+
+schema_version: 1

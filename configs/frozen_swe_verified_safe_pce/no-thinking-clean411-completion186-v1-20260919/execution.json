@@ -1,0 +1,1312 @@
+{
+  "execution_unit_count": 186,
+  "execution_units": [
+    {
+      "execution_unit_index": 0,
+      "instance_id": "astropy__astropy-7166",
+      "prior_usable_pce_count": 1,
+      "requested_unit_ordinal": 1,
+      "target_pce_count": 4
+    },
+    {
+      "execution_unit_index": 1,
+      "instance_id": "astropy__astropy-7166",
+      "prior_usable_pce_count": 1,
+      "requested_unit_ordinal": 2,
+      "target_pce_count": 4
+    },
+    {
+      "execution_unit_index": 2,
+      "instance_id": "astropy__astropy-7166",
+      "prior_usable_pce_count": 1,
+      "requested_unit_ordinal": 3,
+      "target_pce_count": 4
+    },
+    {
+      "execution_unit_index": 3,
+      "instance_id": "astropy__astropy-7606",
+      "prior_usable_pce_count": 1,
+      "requested_unit_ordinal": 1,
+      "target_pce_count": 4
+    },
+    {
+      "execution_unit_index": 4,
+      "instance_id": "astropy__astropy-7606",
+      "prior_usable_pce_count": 1,
+      "requested_unit_ordinal": 2,
+      "target_pce_count": 4
+    },
+    {
+      "execution_unit_index": 5,
+      "instance_id": "astropy__astropy-7606",
+      "prior_usable_pce_count": 1,
+      "requested_unit_ordinal": 3,
+      "target_pce_count": 4
+    },
+    {
+      "execution_unit_index": 6,
+      "instance_id": "astropy__astropy-7671",
+      "prior_usable_pce_count": 3,
+      "requested_unit_ordinal": 1,
+      "target_pce_count": 4
+    },
+    {
+      "execution_unit_index": 7,
+      "instance_id": "astropy__astropy-8707",
+      "prior_usable_pce_count": 1,
+      "requested_unit_ordinal": 1,
+      "target_pce_count": 4
+    },
+    {
+      "execution_unit_index": 8,
+      "instance_id": "astropy__astropy-8707",
+      "prior_usable_pce_count": 1,
+      "requested_unit_ordinal": 2,
+      "target_pce_count": 4
+    },
+    {
+      "execution_unit_index": 9,
+      "instance_id": "astropy__astropy-8707",
+      "prior_usable_pce_count": 1,
+      "requested_unit_ordinal": 3,
+      "target_pce_count": 4
+    },
+    {
+      "execution_unit_index": 10,
+      "instance_id": "astropy__astropy-8872",
+      "prior_usable_pce_count": 1,
+      "requested_unit_ordinal": 1,
+      "target_pce_count": 4
+    },
+    {
+      "execution_unit_index": 11,
+      "instance_id": "astropy__astropy-8872",
+      "prior_usable_pce_count": 1,
+      "requested_unit_ordinal": 2,
+      "target_pce_count": 4
+    },
+    {
+      "execution_unit_index": 12,
+      "instance_id": "astropy__astropy-8872",
+      "prior_usable_pce_count": 1,
+      "requested_unit_ordinal": 3,
+      "target_pce_count": 4
+    },
+    {
+      "execution_unit_index": 13,
+      "instance_id": "django__django-11276",
+      "prior_usable_pce_count": 3,
+      "requested_unit_ordinal": 1,
+      "target_pce_count": 4
+    },
+    {
+      "execution_unit_index": 14,
+      "instance_id": "django__django-12663",
+      "prior_usable_pce_count": 3,
+      "requested_unit_ordinal": 1,
+      "target_pce_count": 4
+    },
+    {
+      "execution_unit_index": 15,
+      "instance_id": "django__django-13128",
+      "prior_usable_pce_count": 3,
+      "requested_unit_ordinal": 1,
+      "target_pce_count": 4
+    },
+    {
+      "execution_unit_index": 16,
+      "instance_id": "django__django-13315",
+      "prior_usable_pce_count": 3,
+      "requested_unit_ordinal": 1,
+      "target_pce_count": 4
+    },
+    {
+      "execution_unit_index": 17,
+      "instance_id": "django__django-13417",
+      "prior_usable_pce_count": 3,
+      "requested_unit_ordinal": 1,
+      "target_pce_count": 4
+    },
+    {
+      "execution_unit_index": 18,
+      "instance_id": "django__django-13551",
+      "prior_usable_pce_count": 2,
+      "requested_unit_ordinal": 1,
+      "target_pce_count": 4
+    },
+    {
+      "execution_unit_index": 19,
+      "instance_id": "django__django-13551",
+      "prior_usable_pce_count": 2,
+      "requested_unit_ordinal": 2,
+      "target_pce_count": 4
+    },
+    {
+      "execution_unit_index": 20,
+      "instance_id": "django__django-13741",
+      "prior_usable_pce_count": 3,
+      "requested_unit_ordinal": 1,
+      "target_pce_count": 4
+    },
+    {
+      "execution_unit_index": 21,
+      "instance_id": "django__django-13809",
+      "prior_usable_pce_count": 3,
+      "requested_unit_ordinal": 1,
+      "target_pce_count": 4
+    },
+    {
+      "execution_unit_index": 22,
+      "instance_id": "django__django-13933",
+      "prior_usable_pce_count": 3,
+      "requested_unit_ordinal": 1,
+      "target_pce_count": 4
+    },
+    {
+      "execution_unit_index": 23,
+      "instance_id": "django__django-14007",
+      "prior_usable_pce_count": 3,
+      "requested_unit_ordinal": 1,
+      "target_pce_count": 4
+    },
+    {
+      "execution_unit_index": 24,
+      "instance_id": "django__django-14351",
+      "prior_usable_pce_count": 3,
+      "requested_unit_ordinal": 1,
+      "target_pce_count": 4
+    },
+    {
+      "execution_unit_index": 25,
+      "instance_id": "django__django-14404",
+      "prior_usable_pce_count": 3,
+      "requested_unit_ordinal": 1,
+      "target_pce_count": 4
+    },
+    {
+      "execution_unit_index": 26,
+      "instance_id": "django__django-14725",
+      "prior_usable_pce_count": 3,
+      "requested_unit_ordinal": 1,
+      "target_pce_count": 4
+    },
+    {
+      "execution_unit_index": 27,
+      "instance_id": "django__django-14855",
+      "prior_usable_pce_count": 1,
+      "requested_unit_ordinal": 1,
+      "target_pce_count": 4
+    },
+    {
+      "execution_unit_index": 28,
+      "instance_id": "django__django-14855",
+      "prior_usable_pce_count": 1,
+      "requested_unit_ordinal": 2,
+      "target_pce_count": 4
+    },
+    {
+      "execution_unit_index": 29,
+      "instance_id": "django__django-14855",
+      "prior_usable_pce_count": 1,
+      "requested_unit_ordinal": 3,
+      "target_pce_count": 4
+    },
+    {
+      "execution_unit_index": 30,
+      "instance_id": "django__django-15098",
+      "prior_usable_pce_count": 2,
+      "requested_unit_ordinal": 1,
+      "target_pce_count": 4
+    },
+    {
+      "execution_unit_index": 31,
+      "instance_id": "django__django-15098",
+      "prior_usable_pce_count": 2,
+      "requested_unit_ordinal": 2,
+      "target_pce_count": 4
+    },
+    {
+      "execution_unit_index": 32,
+      "instance_id": "django__django-15127",
+      "prior_usable_pce_count": 3,
+      "requested_unit_ordinal": 1,
+      "target_pce_count": 4
+    },
+    {
+      "execution_unit_index": 33,
+      "instance_id": "django__django-15128",
+      "prior_usable_pce_count": 1,
+      "requested_unit_ordinal": 1,
+      "target_pce_count": 4
+    },
+    {
+      "execution_unit_index": 34,
+      "instance_id": "django__django-15128",
+      "prior_usable_pce_count": 1,
+      "requested_unit_ordinal": 2,
+      "target_pce_count": 4
+    },
+    {
+      "execution_unit_index": 35,
+      "instance_id": "django__django-15128",
+      "prior_usable_pce_count": 1,
+      "requested_unit_ordinal": 3,
+      "target_pce_count": 4
+    },
+    {
+      "execution_unit_index": 36,
+      "instance_id": "django__django-15161",
+      "prior_usable_pce_count": 1,
+      "requested_unit_ordinal": 1,
+      "target_pce_count": 4
+    },
+    {
+      "execution_unit_index": 37,
+      "instance_id": "django__django-15161",
+      "prior_usable_pce_count": 1,
+      "requested_unit_ordinal": 2,
+      "target_pce_count": 4
+    },
+    {
+      "execution_unit_index": 38,
+      "instance_id": "django__django-15161",
+      "prior_usable_pce_count": 1,
+      "requested_unit_ordinal": 3,
+      "target_pce_count": 4
+    },
+    {
+      "execution_unit_index": 39,
+      "instance_id": "django__django-15252",
+      "prior_usable_pce_count": 1,
+      "requested_unit_ordinal": 1,
+      "target_pce_count": 4
+    },
+    {
+      "execution_unit_index": 40,
+      "instance_id": "django__django-15252",
+      "prior_usable_pce_count": 1,
+      "requested_unit_ordinal": 2,
+      "target_pce_count": 4
+    },
+    {
+      "execution_unit_index": 41,
+      "instance_id": "django__django-15252",
+      "prior_usable_pce_count": 1,
+      "requested_unit_ordinal": 3,
+      "target_pce_count": 4
+    },
+    {
+      "execution_unit_index": 42,
+      "instance_id": "django__django-15268",
+      "prior_usable_pce_count": 2,
+      "requested_unit_ordinal": 1,
+      "target_pce_count": 4
+    },
+    {
+      "execution_unit_index": 43,
+      "instance_id": "django__django-15268",
+      "prior_usable_pce_count": 2,
+      "requested_unit_ordinal": 2,
+      "target_pce_count": 4
+    },
+    {
+      "execution_unit_index": 44,
+      "instance_id": "django__django-15277",
+      "prior_usable_pce_count": 2,
+      "requested_unit_ordinal": 1,
+      "target_pce_count": 4
+    },
+    {
+      "execution_unit_index": 45,
+      "instance_id": "django__django-15277",
+      "prior_usable_pce_count": 2,
+      "requested_unit_ordinal": 2,
+      "target_pce_count": 4
+    },
+    {
+      "execution_unit_index": 46,
+      "instance_id": "django__django-15278",
+      "prior_usable_pce_count": 3,
+      "requested_unit_ordinal": 1,
+      "target_pce_count": 4
+    },
+    {
+      "execution_unit_index": 47,
+      "instance_id": "django__django-15280",
+      "prior_usable_pce_count": 2,
+      "requested_unit_ordinal": 1,
+      "target_pce_count": 4
+    },
+    {
+      "execution_unit_index": 48,
+      "instance_id": "django__django-15280",
+      "prior_usable_pce_count": 2,
+      "requested_unit_ordinal": 2,
+      "target_pce_count": 4
+    },
+    {
+      "execution_unit_index": 49,
+      "instance_id": "django__django-15368",
+      "prior_usable_pce_count": 1,
+      "requested_unit_ordinal": 1,
+      "target_pce_count": 4
+    },
+    {
+      "execution_unit_index": 50,
+      "instance_id": "django__django-15368",
+      "prior_usable_pce_count": 1,
+      "requested_unit_ordinal": 2,
+      "target_pce_count": 4
+    },
+    {
+      "execution_unit_index": 51,
+      "instance_id": "django__django-15368",
+      "prior_usable_pce_count": 1,
+      "requested_unit_ordinal": 3,
+      "target_pce_count": 4
+    },
+    {
+      "execution_unit_index": 52,
+      "instance_id": "django__django-15382",
+      "prior_usable_pce_count": 1,
+      "requested_unit_ordinal": 1,
+      "target_pce_count": 4
+    },
+    {
+      "execution_unit_index": 53,
+      "instance_id": "django__django-15382",
+      "prior_usable_pce_count": 1,
+      "requested_unit_ordinal": 2,
+      "target_pce_count": 4
+    },
+    {
+      "execution_unit_index": 54,
+      "instance_id": "django__django-15382",
+      "prior_usable_pce_count": 1,
+      "requested_unit_ordinal": 3,
+      "target_pce_count": 4
+    },
+    {
+      "execution_unit_index": 55,
+      "instance_id": "django__django-15467",
+      "prior_usable_pce_count": 2,
+      "requested_unit_ordinal": 1,
+      "target_pce_count": 4
+    },
+    {
+      "execution_unit_index": 56,
+      "instance_id": "django__django-15467",
+      "prior_usable_pce_count": 2,
+      "requested_unit_ordinal": 2,
+      "target_pce_count": 4
+    },
+    {
+      "execution_unit_index": 57,
+      "instance_id": "django__django-15499",
+      "prior_usable_pce_count": 3,
+      "requested_unit_ordinal": 1,
+      "target_pce_count": 4
+    },
+    {
+      "execution_unit_index": 58,
+      "instance_id": "django__django-15503",
+      "prior_usable_pce_count": 1,
+      "requested_unit_ordinal": 1,
+      "target_pce_count": 4
+    },
+    {
+      "execution_unit_index": 59,
+      "instance_id": "django__django-15503",
+      "prior_usable_pce_count": 1,
+      "requested_unit_ordinal": 2,
+      "target_pce_count": 4
+    },
+    {
+      "execution_unit_index": 60,
+      "instance_id": "django__django-15503",
+      "prior_usable_pce_count": 1,
+      "requested_unit_ordinal": 3,
+      "target_pce_count": 4
+    },
+    {
+      "execution_unit_index": 61,
+      "instance_id": "django__django-15525",
+      "prior_usable_pce_count": 1,
+      "requested_unit_ordinal": 1,
+      "target_pce_count": 4
+    },
+    {
+      "execution_unit_index": 62,
+      "instance_id": "django__django-15525",
+      "prior_usable_pce_count": 1,
+      "requested_unit_ordinal": 2,
+      "target_pce_count": 4
+    },
+    {
+      "execution_unit_index": 63,
+      "instance_id": "django__django-15525",
+      "prior_usable_pce_count": 1,
+      "requested_unit_ordinal": 3,
+      "target_pce_count": 4
+    },
+    {
+      "execution_unit_index": 64,
+      "instance_id": "django__django-15554",
+      "prior_usable_pce_count": 1,
+      "requested_unit_ordinal": 1,
+      "target_pce_count": 4
+    },
+    {
+      "execution_unit_index": 65,
+      "instance_id": "django__django-15554",
+      "prior_usable_pce_count": 1,
+      "requested_unit_ordinal": 2,
+      "target_pce_count": 4
+    },
+    {
+      "execution_unit_index": 66,
+      "instance_id": "django__django-15554",
+      "prior_usable_pce_count": 1,
+      "requested_unit_ordinal": 3,
+      "target_pce_count": 4
+    },
+    {
+      "execution_unit_index": 67,
+      "instance_id": "django__django-15561",
+      "prior_usable_pce_count": 2,
+      "requested_unit_ordinal": 1,
+      "target_pce_count": 4
+    },
+    {
+      "execution_unit_index": 68,
+      "instance_id": "django__django-15561",
+      "prior_usable_pce_count": 2,
+      "requested_unit_ordinal": 2,
+      "target_pce_count": 4
+    },
+    {
+      "execution_unit_index": 69,
+      "instance_id": "django__django-15563",
+      "prior_usable_pce_count": 1,
+      "requested_unit_ordinal": 1,
+      "target_pce_count": 4
+    },
+    {
+      "execution_unit_index": 70,
+      "instance_id": "django__django-15563",
+      "prior_usable_pce_count": 1,
+      "requested_unit_ordinal": 2,
+      "target_pce_count": 4
+    },
+    {
+      "execution_unit_index": 71,
+      "instance_id": "django__django-15563",
+      "prior_usable_pce_count": 1,
+      "requested_unit_ordinal": 3,
+      "target_pce_count": 4
+    },
+    {
+      "execution_unit_index": 72,
+      "instance_id": "django__django-15569",
+      "prior_usable_pce_count": 1,
+      "requested_unit_ordinal": 1,
+      "target_pce_count": 4
+    },
+    {
+      "execution_unit_index": 73,
+      "instance_id": "django__django-15569",
+      "prior_usable_pce_count": 1,
+      "requested_unit_ordinal": 2,
+      "target_pce_count": 4
+    },
+    {
+      "execution_unit_index": 74,
+      "instance_id": "django__django-15569",
+      "prior_usable_pce_count": 1,
+      "requested_unit_ordinal": 3,
+      "target_pce_count": 4
+    },
+    {
+      "execution_unit_index": 75,
+      "instance_id": "django__django-15572",
+      "prior_usable_pce_count": 1,
+      "requested_unit_ordinal": 1,
+      "target_pce_count": 4
+    },
+    {
+      "execution_unit_index": 76,
+      "instance_id": "django__django-15572",
+      "prior_usable_pce_count": 1,
+      "requested_unit_ordinal": 2,
+      "target_pce_count": 4
+    },
+    {
+      "execution_unit_index": 77,
+      "instance_id": "django__django-15572",
+      "prior_usable_pce_count": 1,
+      "requested_unit_ordinal": 3,
+      "target_pce_count": 4
+    },
+    {
+      "execution_unit_index": 78,
+      "instance_id": "django__django-15629",
+      "prior_usable_pce_count": 1,
+      "requested_unit_ordinal": 1,
+      "target_pce_count": 4
+    },
+    {
+      "execution_unit_index": 79,
+      "instance_id": "django__django-15629",
+      "prior_usable_pce_count": 1,
+      "requested_unit_ordinal": 2,
+      "target_pce_count": 4
+    },
+    {
+      "execution_unit_index": 80,
+      "instance_id": "django__django-15629",
+      "prior_usable_pce_count": 1,
+      "requested_unit_ordinal": 3,
+      "target_pce_count": 4
+    },
+    {
+      "execution_unit_index": 81,
+      "instance_id": "django__django-15695",
+      "prior_usable_pce_count": 1,
+      "requested_unit_ordinal": 1,
+      "target_pce_count": 4
+    },
+    {
+      "execution_unit_index": 82,
+      "instance_id": "django__django-15695",
+      "prior_usable_pce_count": 1,
+      "requested_unit_ordinal": 2,
+      "target_pce_count": 4
+    },
+    {
+      "execution_unit_index": 83,
+      "instance_id": "django__django-15695",
+      "prior_usable_pce_count": 1,
+      "requested_unit_ordinal": 3,
+      "target_pce_count": 4
+    },
+    {
+      "execution_unit_index": 84,
+      "instance_id": "django__django-15731",
+      "prior_usable_pce_count": 1,
+      "requested_unit_ordinal": 1,
+      "target_pce_count": 4
+    },
+    {
+      "execution_unit_index": 85,
+      "instance_id": "django__django-15731",
+      "prior_usable_pce_count": 1,
+      "requested_unit_ordinal": 2,
+      "target_pce_count": 4
+    },
+    {
+      "execution_unit_index": 86,
+      "instance_id": "django__django-15731",
+      "prior_usable_pce_count": 1,
+      "requested_unit_ordinal": 3,
+      "target_pce_count": 4
+    },
+    {
+      "execution_unit_index": 87,
+      "instance_id": "django__django-15732",
+      "prior_usable_pce_count": 2,
+      "requested_unit_ordinal": 1,
+      "target_pce_count": 4
+    },
+    {
+      "execution_unit_index": 88,
+      "instance_id": "django__django-15732",
+      "prior_usable_pce_count": 2,
+      "requested_unit_ordinal": 2,
+      "target_pce_count": 4
+    },
+    {
+      "execution_unit_index": 89,
+      "instance_id": "django__django-15741",
+      "prior_usable_pce_count": 3,
+      "requested_unit_ordinal": 1,
+      "target_pce_count": 4
+    },
+    {
+      "execution_unit_index": 90,
+      "instance_id": "django__django-15814",
+      "prior_usable_pce_count": 1,
+      "requested_unit_ordinal": 1,
+      "target_pce_count": 4
+    },
+    {
+      "execution_unit_index": 91,
+      "instance_id": "django__django-15814",
+      "prior_usable_pce_count": 1,
+      "requested_unit_ordinal": 2,
+      "target_pce_count": 4
+    },
+    {
+      "execution_unit_index": 92,
+      "instance_id": "django__django-15814",
+      "prior_usable_pce_count": 1,
+      "requested_unit_ordinal": 3,
+      "target_pce_count": 4
+    },
+    {
+      "execution_unit_index": 93,
+      "instance_id": "django__django-15851",
+      "prior_usable_pce_count": 1,
+      "requested_unit_ordinal": 1,
+      "target_pce_count": 4
+    },
+    {
+      "execution_unit_index": 94,
+      "instance_id": "django__django-15851",
+      "prior_usable_pce_count": 1,
+      "requested_unit_ordinal": 2,
+      "target_pce_count": 4
+    },
+    {
+      "execution_unit_index": 95,
+      "instance_id": "django__django-15851",
+      "prior_usable_pce_count": 1,
+      "requested_unit_ordinal": 3,
+      "target_pce_count": 4
+    },
+    {
+      "execution_unit_index": 96,
+      "instance_id": "django__django-15863",
+      "prior_usable_pce_count": 1,
+      "requested_unit_ordinal": 1,
+      "target_pce_count": 4
+    },
+    {
+      "execution_unit_index": 97,
+      "instance_id": "django__django-15863",
+      "prior_usable_pce_count": 1,
+      "requested_unit_ordinal": 2,
+      "target_pce_count": 4
+    },
+    {
+      "execution_unit_index": 98,
+      "instance_id": "django__django-15863",
+      "prior_usable_pce_count": 1,
+      "requested_unit_ordinal": 3,
+      "target_pce_count": 4
+    },
+    {
+      "execution_unit_index": 99,
+      "instance_id": "django__django-15916",
+      "prior_usable_pce_count": 1,
+      "requested_unit_ordinal": 1,
+      "target_pce_count": 4
+    },
+    {
+      "execution_unit_index": 100,
+      "instance_id": "django__django-15916",
+      "prior_usable_pce_count": 1,
+      "requested_unit_ordinal": 2,
+      "target_pce_count": 4
+    },
+    {
+      "execution_unit_index": 101,
+      "instance_id": "django__django-15916",
+      "prior_usable_pce_count": 1,
+      "requested_unit_ordinal": 3,
+      "target_pce_count": 4
+    },
+    {
+      "execution_unit_index": 102,
+      "instance_id": "django__django-15930",
+      "prior_usable_pce_count": 1,
+      "requested_unit_ordinal": 1,
+      "target_pce_count": 4
+    },
+    {
+      "execution_unit_index": 103,
+      "instance_id": "django__django-15930",
+      "prior_usable_pce_count": 1,
+      "requested_unit_ordinal": 2,
+      "target_pce_count": 4
+    },
+    {
+      "execution_unit_index": 104,
+      "instance_id": "django__django-15930",
+      "prior_usable_pce_count": 1,
+      "requested_unit_ordinal": 3,
+      "target_pce_count": 4
+    },
+    {
+      "execution_unit_index": 105,
+      "instance_id": "django__django-15973",
+      "prior_usable_pce_count": 1,
+      "requested_unit_ordinal": 1,
+      "target_pce_count": 4
+    },
+    {
+      "execution_unit_index": 106,
+      "instance_id": "django__django-15973",
+      "prior_usable_pce_count": 1,
+      "requested_unit_ordinal": 2,
+      "target_pce_count": 4
+    },
+    {
+      "execution_unit_index": 107,
+      "instance_id": "django__django-15973",
+      "prior_usable_pce_count": 1,
+      "requested_unit_ordinal": 3,
+      "target_pce_count": 4
+    },
+    {
+      "execution_unit_index": 108,
+      "instance_id": "django__django-16032",
+      "prior_usable_pce_count": 3,
+      "requested_unit_ordinal": 1,
+      "target_pce_count": 4
+    },
+    {
+      "execution_unit_index": 109,
+      "instance_id": "django__django-16082",
+      "prior_usable_pce_count": 1,
+      "requested_unit_ordinal": 1,
+      "target_pce_count": 4
+    },
+    {
+      "execution_unit_index": 110,
+      "instance_id": "django__django-16082",
+      "prior_usable_pce_count": 1,
+      "requested_unit_ordinal": 2,
+      "target_pce_count": 4
+    },
+    {
+      "execution_unit_index": 111,
+      "instance_id": "django__django-16082",
+      "prior_usable_pce_count": 1,
+      "requested_unit_ordinal": 3,
+      "target_pce_count": 4
+    },
+    {
+      "execution_unit_index": 112,
+      "instance_id": "django__django-16116",
+      "prior_usable_pce_count": 3,
+      "requested_unit_ordinal": 1,
+      "target_pce_count": 4
+    },
+    {
+      "execution_unit_index": 113,
+      "instance_id": "django__django-16136",
+      "prior_usable_pce_count": 1,
+      "requested_unit_ordinal": 1,
+      "target_pce_count": 4
+    },
+    {
+      "execution_unit_index": 114,
+      "instance_id": "django__django-16136",
+      "prior_usable_pce_count": 1,
+      "requested_unit_ordinal": 2,
+      "target_pce_count": 4
+    },
+    {
+      "execution_unit_index": 115,
+      "instance_id": "django__django-16136",
+      "prior_usable_pce_count": 1,
+      "requested_unit_ordinal": 3,
+      "target_pce_count": 4
+    },
+    {
+      "execution_unit_index": 116,
+      "instance_id": "django__django-16139",
+      "prior_usable_pce_count": 1,
+      "requested_unit_ordinal": 1,
+      "target_pce_count": 4
+    },
+    {
+      "execution_unit_index": 117,
+      "instance_id": "django__django-16139",
+      "prior_usable_pce_count": 1,
+      "requested_unit_ordinal": 2,
+      "target_pce_count": 4
+    },
+    {
+      "execution_unit_index": 118,
+      "instance_id": "django__django-16139",
+      "prior_usable_pce_count": 1,
+      "requested_unit_ordinal": 3,
+      "target_pce_count": 4
+    },
+    {
+      "execution_unit_index": 119,
+      "instance_id": "django__django-16145",
+      "prior_usable_pce_count": 3,
+      "requested_unit_ordinal": 1,
+      "target_pce_count": 4
+    },
+    {
+      "execution_unit_index": 120,
+      "instance_id": "django__django-16255",
+      "prior_usable_pce_count": 1,
+      "requested_unit_ordinal": 1,
+      "target_pce_count": 4
+    },
+    {
+      "execution_unit_index": 121,
+      "instance_id": "django__django-16255",
+      "prior_usable_pce_count": 1,
+      "requested_unit_ordinal": 2,
+      "target_pce_count": 4
+    },
+    {
+      "execution_unit_index": 122,
+      "instance_id": "django__django-16255",
+      "prior_usable_pce_count": 1,
+      "requested_unit_ordinal": 3,
+      "target_pce_count": 4
+    },
+    {
+      "execution_unit_index": 123,
+      "instance_id": "django__django-16256",
+      "prior_usable_pce_count": 1,
+      "requested_unit_ordinal": 1,
+      "target_pce_count": 4
+    },
+    {
+      "execution_unit_index": 124,
+      "instance_id": "django__django-16256",
+      "prior_usable_pce_count": 1,
+      "requested_unit_ordinal": 2,
+      "target_pce_count": 4
+    },
+    {
+      "execution_unit_index": 125,
+      "instance_id": "django__django-16256",
+      "prior_usable_pce_count": 1,
+      "requested_unit_ordinal": 3,
+      "target_pce_count": 4
+    },
+    {
+      "execution_unit_index": 126,
+      "instance_id": "django__django-16315",
+      "prior_usable_pce_count": 3,
+      "requested_unit_ordinal": 1,
+      "target_pce_count": 4
+    },
+    {
+      "execution_unit_index": 127,
+      "instance_id": "django__django-16333",
+      "prior_usable_pce_count": 1,
+      "requested_unit_ordinal": 1,
+      "target_pce_count": 4
+    },
+    {
+      "execution_unit_index": 128,
+      "instance_id": "django__django-16333",
+      "prior_usable_pce_count": 1,
+      "requested_unit_ordinal": 2,
+      "target_pce_count": 4
+    },
+    {
+      "execution_unit_index": 129,
+      "instance_id": "django__django-16333",
+      "prior_usable_pce_count": 1,
+      "requested_unit_ordinal": 3,
+      "target_pce_count": 4
+    },
+    {
+      "execution_unit_index": 130,
+      "instance_id": "django__django-16429",
+      "prior_usable_pce_count": 1,
+      "requested_unit_ordinal": 1,
+      "target_pce_count": 4
+    },
+    {
+      "execution_unit_index": 131,
+      "instance_id": "django__django-16429",
+      "prior_usable_pce_count": 1,
+      "requested_unit_ordinal": 2,
+      "target_pce_count": 4
+    },
+    {
+      "execution_unit_index": 132,
+      "instance_id": "django__django-16429",
+      "prior_usable_pce_count": 1,
+      "requested_unit_ordinal": 3,
+      "target_pce_count": 4
+    },
+    {
+      "execution_unit_index": 133,
+      "instance_id": "django__django-16454",
+      "prior_usable_pce_count": 1,
+      "requested_unit_ordinal": 1,
+      "target_pce_count": 4
+    },
+    {
+      "execution_unit_index": 134,
+      "instance_id": "django__django-16454",
+      "prior_usable_pce_count": 1,
+      "requested_unit_ordinal": 2,
+      "target_pce_count": 4
+    },
+    {
+      "execution_unit_index": 135,
+      "instance_id": "django__django-16454",
+      "prior_usable_pce_count": 1,
+      "requested_unit_ordinal": 3,
+      "target_pce_count": 4
+    },
+    {
+      "execution_unit_index": 136,
+      "instance_id": "django__django-16485",
+      "prior_usable_pce_count": 1,
+      "requested_unit_ordinal": 1,
+      "target_pce_count": 4
+    },
+    {
+      "execution_unit_index": 137,
+      "instance_id": "django__django-16485",
+      "prior_usable_pce_count": 1,
+      "requested_unit_ordinal": 2,
+      "target_pce_count": 4
+    },
+    {
+      "execution_unit_index": 138,
+      "instance_id": "django__django-16485",
+      "prior_usable_pce_count": 1,
+      "requested_unit_ordinal": 3,
+      "target_pce_count": 4
+    },
+    {
+      "execution_unit_index": 139,
+      "instance_id": "django__django-16493",
+      "prior_usable_pce_count": 1,
+      "requested_unit_ordinal": 1,
+      "target_pce_count": 4
+    },
+    {
+      "execution_unit_index": 140,
+      "instance_id": "django__django-16493",
+      "prior_usable_pce_count": 1,
+      "requested_unit_ordinal": 2,
+      "target_pce_count": 4
+    },
+    {
+      "execution_unit_index": 141,
+      "instance_id": "django__django-16493",
+      "prior_usable_pce_count": 1,
+      "requested_unit_ordinal": 3,
+      "target_pce_count": 4
+    },
+    {
+      "execution_unit_index": 142,
+      "instance_id": "django__django-16502",
+      "prior_usable_pce_count": 1,
+      "requested_unit_ordinal": 1,
+      "target_pce_count": 4
+    },
+    {
+      "execution_unit_index": 143,
+      "instance_id": "django__django-16502",
+      "prior_usable_pce_count": 1,
+      "requested_unit_ordinal": 2,
+      "target_pce_count": 4
+    },
+    {
+      "execution_unit_index": 144,
+      "instance_id": "django__django-16502",
+      "prior_usable_pce_count": 1,
+      "requested_unit_ordinal": 3,
+      "target_pce_count": 4
+    },
+    {
+      "execution_unit_index": 145,
+      "instance_id": "django__django-16527",
+      "prior_usable_pce_count": 1,
+      "requested_unit_ordinal": 1,
+      "target_pce_count": 4
+    },
+    {
+      "execution_unit_index": 146,
+      "instance_id": "django__django-16527",
+      "prior_usable_pce_count": 1,
+      "requested_unit_ordinal": 2,
+      "target_pce_count": 4
+    },
+    {
+      "execution_unit_index": 147,
+      "instance_id": "django__django-16527",
+      "prior_usable_pce_count": 1,
+      "requested_unit_ordinal": 3,
+      "target_pce_count": 4
+    },
+    {
+      "execution_unit_index": 148,
+      "instance_id": "django__django-16560",
+      "prior_usable_pce_count": 1,
+      "requested_unit_ordinal": 1,
+      "target_pce_count": 4
+    },
+    {
+      "execution_unit_index": 149,
+      "instance_id": "django__django-16560",
+      "prior_usable_pce_count": 1,
+      "requested_unit_ordinal": 2,
+      "target_pce_count": 4
+    },
+    {
+      "execution_unit_index": 150,
+      "instance_id": "django__django-16560",
+      "prior_usable_pce_count": 1,
+      "requested_unit_ordinal": 3,
+      "target_pce_count": 4
+    },
+    {
+      "execution_unit_index": 151,
+      "instance_id": "django__django-16569",
+      "prior_usable_pce_count": 1,
+      "requested_unit_ordinal": 1,
+      "target_pce_count": 4
+    },
+    {
+      "execution_unit_index": 152,
+      "instance_id": "django__django-16569",
+      "prior_usable_pce_count": 1,
+      "requested_unit_ordinal": 2,
+      "target_pce_count": 4
+    },
+    {
+      "execution_unit_index": 153,
+      "instance_id": "django__django-16569",
+      "prior_usable_pce_count": 1,
+      "requested_unit_ordinal": 3,
+      "target_pce_count": 4
+    },
+    {
+      "execution_unit_index": 154,
+      "instance_id": "django__django-16595",
+      "prior_usable_pce_count": 1,
+      "requested_unit_ordinal": 1,
+      "target_pce_count": 4
+    },
+    {
+      "execution_unit_index": 155,
+      "instance_id": "django__django-16595",
+      "prior_usable_pce_count": 1,
+      "requested_unit_ordinal": 2,
+      "target_pce_count": 4
+    },
+    {
+      "execution_unit_index": 156,
+      "instance_id": "django__django-16595",
+      "prior_usable_pce_count": 1,
+      "requested_unit_ordinal": 3,
+      "target_pce_count": 4
+    },
+    {
+      "execution_unit_index": 157,
+      "instance_id": "django__django-16612",
+      "prior_usable_pce_count": 1,
+      "requested_unit_ordinal": 1,
+      "target_pce_count": 4
+    },
+    {
+      "execution_unit_index": 158,
+      "instance_id": "django__django-16612",
+      "prior_usable_pce_count": 1,
+      "requested_unit_ordinal": 2,
+      "target_pce_count": 4
+    },
+    {
+      "execution_unit_index": 159,
+      "instance_id": "django__django-16612",
+      "prior_usable_pce_count": 1,
+      "requested_unit_ordinal": 3,
+      "target_pce_count": 4
+    },
+    {
+      "execution_unit_index": 160,
+      "instance_id": "django__django-16631",
+      "prior_usable_pce_count": 1,
+      "requested_unit_ordinal": 1,
+      "target_pce_count": 4
+    },
+    {
+      "execution_unit_index": 161,
+      "instance_id": "django__django-16631",
+      "prior_usable_pce_count": 1,
+      "requested_unit_ordinal": 2,
+      "target_pce_count": 4
+    },
+    {
+      "execution_unit_index": 162,
+      "instance_id": "django__django-16631",
+      "prior_usable_pce_count": 1,
+      "requested_unit_ordinal": 3,
+      "target_pce_count": 4
+    },
+    {
+      "execution_unit_index": 163,
+      "instance_id": "django__django-16661",
+      "prior_usable_pce_count": 3,
+      "requested_unit_ordinal": 1,
+      "target_pce_count": 4
+    },
+    {
+      "execution_unit_index": 164,
+      "instance_id": "django__django-16662",
+      "prior_usable_pce_count": 2,
+      "requested_unit_ordinal": 1,
+      "target_pce_count": 4
+    },
+    {
+      "execution_unit_index": 165,
+      "instance_id": "django__django-16662",
+      "prior_usable_pce_count": 2,
+      "requested_unit_ordinal": 2,
+      "target_pce_count": 4
+    },
+    {
+      "execution_unit_index": 166,
+      "instance_id": "django__django-16667",
+      "prior_usable_pce_count": 1,
+      "requested_unit_ordinal": 1,
+      "target_pce_count": 4
+    },
+    {
+      "execution_unit_index": 167,
+      "instance_id": "django__django-16667",
+      "prior_usable_pce_count": 1,
+      "requested_unit_ordinal": 2,
+      "target_pce_count": 4
+    },
+    {
+      "execution_unit_index": 168,
+      "instance_id": "django__django-16667",
+      "prior_usable_pce_count": 1,
+      "requested_unit_ordinal": 3,
+      "target_pce_count": 4
+    },
+    {
+      "execution_unit_index": 169,
+      "instance_id": "django__django-16819",
+      "prior_usable_pce_count": 1,
+      "requested_unit_ordinal": 1,
+      "target_pce_count": 4
+    },
+    {
+      "execution_unit_index": 170,
+      "instance_id": "django__django-16819",
+      "prior_usable_pce_count": 1,
+      "requested_unit_ordinal": 2,
+      "target_pce_count": 4
+    },
+    {
+      "execution_unit_index": 171,
+      "instance_id": "django__django-16819",
+      "prior_usable_pce_count": 1,
+      "requested_unit_ordinal": 3,
+      "target_pce_count": 4
+    },
+    {
+      "execution_unit_index": 172,
+      "instance_id": "django__django-16877",
+      "prior_usable_pce_count": 3,
+      "requested_unit_ordinal": 1,
+      "target_pce_count": 4
+    },
+    {
+      "execution_unit_index": 173,
+      "instance_id": "django__django-16899",
+      "prior_usable_pce_count": 3,
+      "requested_unit_ordinal": 1,
+      "target_pce_count": 4
+    },
+    {
+      "execution_unit_index": 174,
+      "instance_id": "django__django-16901",
+      "prior_usable_pce_count": 3,
+      "requested_unit_ordinal": 1,
+      "target_pce_count": 4
+    },
+    {
+      "execution_unit_index": 175,
+      "instance_id": "django__django-16938",
+      "prior_usable_pce_count": 2,
+      "requested_unit_ordinal": 1,
+      "target_pce_count": 4
+    },
+    {
+      "execution_unit_index": 176,
+      "instance_id": "django__django-16938",
+      "prior_usable_pce_count": 2,
+      "requested_unit_ordinal": 2,
+      "target_pce_count": 4
+    },
+    {
+      "execution_unit_index": 177,
+      "instance_id": "django__django-16950",
+      "prior_usable_pce_count": 1,
+      "requested_unit_ordinal": 1,
+      "target_pce_count": 4
+    },
+    {
+      "execution_unit_index": 178,
+      "instance_id": "django__django-16950",
+      "prior_usable_pce_count": 1,
+      "requested_unit_ordinal": 2,
+      "target_pce_count": 4
+    },
+    {
+      "execution_unit_index": 179,
+      "instance_id": "django__django-16950",
+      "prior_usable_pce_count": 1,
+      "requested_unit_ordinal": 3,
+      "target_pce_count": 4
+    },
+    {
+      "execution_unit_index": 180,
+      "instance_id": "django__django-17029",
+      "prior_usable_pce_count": 3,
+      "requested_unit_ordinal": 1,
+      "target_pce_count": 4
+    },
+    {
+      "execution_unit_index": 181,
+      "instance_id": "django__django-17084",
+      "prior_usable_pce_count": 3,
+      "requested_unit_ordinal": 1,
+      "target_pce_count": 4
+    },
+    {
+      "execution_unit_index": 182,
+      "instance_id": "scikit-learn__scikit-learn-14087",
+      "prior_usable_pce_count": 3,
+      "requested_unit_ordinal": 1,
+      "target_pce_count": 4
+    },
+    {
+      "execution_unit_index": 183,
+      "instance_id": "scikit-learn__scikit-learn-25102",
+      "prior_usable_pce_count": 3,
+      "requested_unit_ordinal": 1,
+      "target_pce_count": 4
+    },
+    {
+      "execution_unit_index": 184,
+      "instance_id": "sympy__sympy-11618",
+      "prior_usable_pce_count": 3,
+      "requested_unit_ordinal": 1,
+      "target_pce_count": 4
+    },
+    {
+      "execution_unit_index": 185,
+      "instance_id": "sympy__sympy-14976",
+      "prior_usable_pce_count": 3,
+      "requested_unit_ordinal": 1,
+      "target_pce_count": 4
+    }
+  ],
+  "manifest_id": "cbd5b8f4f8ace19e862ee11d18a13edd3bc57c7eb8258a0cc6e98ad37b7344b7",
+  "purpose": "complete clean411 tasks to four reliable PCE observations",
+  "schema_version": 1,
+  "selection_manifest_sha256": "16ff143f976907f687fa3a7659d6098a8dad5269c6072c34f2cd11cc7a2e8462",
+  "target_pce_observations_per_instance": 4
+}

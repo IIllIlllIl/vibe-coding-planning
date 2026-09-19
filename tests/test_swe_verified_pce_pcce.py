@@ -2659,7 +2659,9 @@ def test_no_thinking20_pilot_changes_only_planner_sampling() -> None:
     assert contract["thinking_parameter_transport"] == (
         "extra_body.thinking.type"
     )
-    assert contract["pce_semantic_sha256"] == pce_semantic_sha256(config)
+    assert contract["pce_semantic_sha256"] == (
+        "534e529630580a33d297bcf36d3d906501bd0ca9fe650894f2b99cdb60aba824"
+    )
     assert contract["selection_manifest_sha256"] == file_sha256(
         config.selection_manifest
     )
@@ -2722,7 +2724,9 @@ def test_no_thinking_clean411_target4_freezes_one_flat_deficit_run(
     assert contract["status"] == "launch_authorized"
     assert contract["budget"]["supervisor_wall_clock_budget"] == "18:00:00"
     assert contract["budget"]["supervisor_slices"] == 108
-    assert contract["pce_semantic_sha256"] == pce_semantic_sha256(config)
+    assert contract["pce_semantic_sha256"] == (
+        "f01a408679b654cdf7cb17d51d80d671e23c8de8e99893d923870ebbd1ef9e7c"
+    )
     assert contract["selection_manifest_sha256"] == file_sha256(
         config.selection_manifest
     )
@@ -2822,7 +2826,9 @@ def test_no_thinking_target4_recovery_contains_only_incomplete_units() -> None:
     assert contract["audit_manifest_sha256"] == file_sha256(
         config.selection_manifest.parent / "audit.json"
     )
-    assert contract["pce_semantic_sha256"] == pce_semantic_sha256(config)
+    assert contract["pce_semantic_sha256"] == (
+        "9bba2a9c653d861ec82d02c594b7aa0aa43d7922d24e65af40f69eb8c842d10e"
+    )
     assert config.plan.temperature == 1.0
     assert config.plan.thinking == "disabled"
     assert config.code.temperature == 0.0
@@ -2833,6 +2839,78 @@ def test_no_thinking_target4_recovery_contains_only_incomplete_units() -> None:
         Path(
             "configs/swe_verified_safe_pce_no_thinking_clean411_"
             "target4_recovery379_aion_v1_supervisor_20260919.yaml"
+        ).read_text(encoding="utf-8")
+    )
+    arguments = supervisor["arguments"]
+    assert arguments[arguments.index("--config") + 1] == str(config_path)
+    assert "--reclaim-staging" in arguments
+    assert "--reclaim-workspaces" in arguments
+    assert "--require-clean-worktree" in arguments
+
+
+def test_no_thinking_clean411_completion_freezes_exact_target_four_deficit() -> None:
+    config_path = Path(
+        "configs/swe_verified_safe_pce_no_thinking_clean411_"
+        "completion186_aion_v1_20260919.yaml"
+    )
+    config = load_swe_verified_pce_config(config_path, require_api_keys=False)
+    raw = yaml.safe_load(config_path.read_text(encoding="utf-8"))
+    contract = raw["experiment_contract"]
+    audit_path = config.selection_manifest.parent / "audit.json"
+    audit = json.loads(audit_path.read_text(encoding="utf-8"))
+    execution = json.loads(config.execution_manifest.read_text(encoding="utf-8"))
+
+    assert len(config.instance_ids) == 86
+    assert len(config.execution_instance_ids) == 186
+    assert execution["execution_unit_count"] == 186
+    assert [unit["execution_unit_index"] for unit in execution["execution_units"]] == list(
+        range(186)
+    )
+    assert audit["clean_task_count"] == 411
+    assert audit["current_reliable_observations"] == 1458
+    assert audit["coverage_distribution_before_completion"] == {
+        "1": 45,
+        "2": 10,
+        "3": 31,
+        "4": 325,
+    }
+    assert audit["completion_task_count"] == 86
+    assert audit["completion_execution_units"] == 186
+    assert audit["known_mixed_completion_units"] == 7
+    assert audit["non_mixed_completion_tasks"] == 80
+    assert audit["non_mixed_completion_units"] == 179
+    assert contract["selection_manifest_sha256"] == file_sha256(
+        config.selection_manifest
+    )
+    assert contract["image_manifest_sha256"] == file_sha256(config.image_manifest)
+    assert contract["execution_manifest_sha256"] == file_sha256(
+        config.execution_manifest
+    )
+    assert contract["audit_manifest_sha256"] == file_sha256(audit_path)
+    assert contract["pce_semantic_sha256"] == pce_semantic_sha256(config)
+    assert config.plan.temperature == 1.0
+    assert config.plan.thinking == "disabled"
+    assert config.code.temperature == 0.0
+    assert config.hpc.mem == "1750M"
+    assert config.hpc.max_running_array_tasks == 10
+
+    script = build_pce_array_script(
+        config=config,
+        batch_dir=Path("/tmp/completion186-batch"),
+        indices=list(range(186)),
+        attempt=1,
+    )
+    array_line = next(
+        line for line in script.splitlines() if line.startswith("#SBATCH --array=")
+    )
+    assert array_line.endswith("%10")
+    submitted = array_line.removeprefix("#SBATCH --array=").removesuffix("%10")
+    assert submitted.split(",") == [str(index) for index in range(186)]
+
+    supervisor = yaml.safe_load(
+        Path(
+            "configs/swe_verified_safe_pce_no_thinking_clean411_"
+            "completion186_aion_v1_supervisor_20260919.yaml"
         ).read_text(encoding="utf-8")
     )
     arguments = supervisor["arguments"]

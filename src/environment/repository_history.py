@@ -20,6 +20,51 @@ from src.exceptions import FatalError
 REPOSITORY_HISTORY_POLICY = "base_ancestor_bundle_v1"
 
 
+def _detach_nested_gitfiles(repository_dir: Path) -> list[dict[str, str]]:
+    """Remove stale submodule gitdir pointers from a disposable worktree.
+
+    SIF-derived repositories may contain an initialized submodule whose
+    ``.git`` file points into the original top-level ``.git/modules`` tree.
+    Replacing the top-level Git directory with bounded history intentionally
+    omits that private submodule history, so leaving the pointer behind makes
+    ordinary top-level commands such as ``git reset`` fail.  Keep the checked
+    out submodule files, but detach only pointers into the top-level modules
+    directory.  Independent nested repositories are left untouched.
+    """
+
+    repository_dir = Path(repository_dir)
+    modules_root = (repository_dir / ".git" / "modules").resolve()
+    detached: list[dict[str, str]] = []
+    for current_root, directories, files in os.walk(repository_dir):
+        current = Path(current_root)
+        if ".git" in directories:
+            directories.remove(".git")
+        if ".git" not in files:
+            continue
+        marker = current / ".git"
+        try:
+            text = marker.read_text(encoding="utf-8").strip()
+        except (OSError, UnicodeDecodeError):
+            continue
+        prefix = "gitdir:"
+        if not text.lower().startswith(prefix):
+            continue
+        target_text = text[len(prefix) :].strip()
+        target = (marker.parent / target_text).resolve()
+        try:
+            target.relative_to(modules_root)
+        except ValueError:
+            continue
+        marker.unlink()
+        detached.append(
+            {
+                "marker": str(marker.relative_to(repository_dir)),
+                "former_gitdir": target_text,
+            }
+        )
+    return detached
+
+
 def _sha256(path: Path) -> str:
     digest = hashlib.sha256()
     with path.open("rb") as handle:
@@ -302,13 +347,19 @@ def install_repository_history_bundle(
         git_dir = repository_dir / ".git"
         if not git_dir.exists():
             raise FatalError("SIF-derived Agent worktree has no .git directory")
+        detached_gitfiles = _detach_nested_gitfiles(repository_dir)
         shutil.rmtree(git_dir)
         shutil.move(str(temporary / ".git"), git_dir)
     finally:
         if temporary.exists():
             shutil.rmtree(temporary)
 
-    results = []
+    results = [
+        {
+            "operation": "detach_stale_submodule_gitfiles",
+            "detached": detached_gitfiles,
+        }
+    ]
 
     # The SIF has already materialized the repository files.  A hard reset
     # immediately after replacing an empty index makes Git rewrite every
@@ -403,8 +454,12 @@ def install_repository_history_bundle(
                 + (restore_output + restore_error)[-2000:]
             )
 
+    clean_command = ["git", "-C", str(repository_dir), "clean", "-fd"]
+    for item in detached_gitfiles:
+        submodule_path = Path(item["marker"]).parent.as_posix().rstrip("/") + "/"
+        clean_command.extend(["-e", submodule_path])
     commands = [
-        ["git", "-C", str(repository_dir), "clean", "-fd"],
+        clean_command,
         ["git", "-C", str(repository_dir), "checkout", "--detach", base_commit],
         ["git", "-C", str(repository_dir), "diff", "--quiet", base_commit, "--"],
         [

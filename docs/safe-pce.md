@@ -103,6 +103,25 @@ run identity. The launch-authorized runtime and Supervisor are
 and
 `configs/swe_verified_safe_pce_no_thinking_clean411_target4_recovery379_aion_v1_supervisor_20260919.yaml`.
 
+That recovery retained 198 additional terminal observations and left 181
+operationally incomplete units. Combined with the seven previously known mixed
+tasks, clean411 now has 1,458 reliable observations: 325 tasks have four, 31
+have three, 10 have two, and 45 have one. The exact remaining target-four
+deficit is 186 units across 86 tasks; six of those tasks already contain both
+resolved and unresolved outcomes and require seven units in total.
+
+The prepared completion authority is
+`configs/frozen_swe_verified_safe_pce/no-thinking-clean411-completion186-v1-20260919/`.
+It derives the deficit without rewriting parent outcomes and binds every unit
+to the formal482 SIF authority. Its Aion runtime uses the unchanged no-thinking
+temperature-1 Planner and temperature-0 Coder, 1750M workers, and a `%10`
+Slurm throttle after the observed file-quota failures. OOM remains operational
+incompleteness; only units that still end in OOM are eligible for a later Iris
+4G recovery. The runtime and Supervisor are prepared but not launched:
+`configs/swe_verified_safe_pce_no_thinking_clean411_completion186_aion_v1_20260919.yaml`
+and
+`configs/swe_verified_safe_pce_no_thinking_clean411_completion186_aion_v1_supervisor_20260919.yaml`.
+
 ## FPTA Mixed-Outcome Repeat Pilot
 
 The development-only repeat pilot is a feasibility study for replacing a
@@ -319,7 +338,11 @@ image-provided ignored setup files, but its disposable `.git` metadata is
 replaced from the verified bundle before reset and cleanliness checks. Thus the
 two Agents remain isolated while history preparation is paid once and can be
 reused across retries and run identities. The evaluator instead starts from a
-fresh immutable-SIF copy and performs no reset or clean. The official
+fresh immutable-SIF copy and performs no reset or clean. Bundle installation
+also detaches only stale nested `.git` files that point into the replaced
+top-level `.git/modules` directory. Checked-out submodule source remains
+visible, but unavailable submodule history cannot break top-level Git
+verification or expose extra history. The official
 SWE-bench Python image builder may leave HEAD at the
 dataset base or at one direct child whose subject is `SWE-bench`; the latter
 freezes tracked harness preparation performed during the image build. The Host

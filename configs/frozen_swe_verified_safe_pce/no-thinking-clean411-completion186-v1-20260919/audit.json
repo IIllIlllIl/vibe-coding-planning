@@ -1,0 +1,579 @@
+{
+  "audit_id": "safe-pce-no-thinking-clean411-completion186-v1-20260919",
+  "clean_task_count": 411,
+  "completion_execution_units": 186,
+  "completion_task_count": 86,
+  "coverage_distribution_before_completion": {
+    "1": 45,
+    "2": 10,
+    "3": 31,
+    "4": 325
+  },
+  "current_reliable_observations": 1458,
+  "deficit_units_per_task_distribution": {
+    "1": 31,
+    "2": 10,
+    "3": 45
+  },
+  "known_mixed_completion_tasks": [
+    "django__django-16877",
+    "django__django-16938",
+    "scikit-learn__scikit-learn-14087",
+    "scikit-learn__scikit-learn-25102",
+    "sympy__sympy-11618",
+    "sympy__sympy-14976"
+  ],
+  "known_mixed_completion_units": 7,
+  "non_mixed_completion_tasks": 80,
+  "non_mixed_completion_units": 179,
+  "schema_version": 1,
+  "source_authorities": {
+    "all_images": "configs/frozen_swe_verified_safe_pce/verified482-formal-v1-20260914/images.json",
+    "all_images_sha256": "f4c18c5dcf30fa48cb503241c5ba69ae8f6368e63726f8ce0875a868ae212e0a",
+    "all_selection": "configs/frozen_swe_verified_safe_pce/verified482-formal-v1-20260914/selection.json",
+    "all_selection_sha256": "9af8c374fb811abd36176500a69b731aaf63fa965b0317d451e0e797429bce74",
+    "clean_cases": "configs/frozen_swe_verified_playbook_gepa/20260915_safe_pce_clean411_v2/cases.jsonl",
+    "clean_cases_sha256": "555b853d8db8f5283755759924b28ebb913faf1145f41895f80052d3c368d92c",
+    "known_mixed_manifests": [
+      {
+        "path": "configs/frozen_swe_verified_safe_pce/within-task-mixed-outcome-pool-v1-20260917/manifest.json",
+        "sha256": "5620f23900b0d69733ea362b0f5cd93df61daf5ffe5c5fd71a2624fcb59110c6"
+      },
+      {
+        "path": "configs/frozen_swe_verified_safe_pce/no-thinking20-ru-audit-v1-20260918/manifest.json",
+        "sha256": "af6ff967d3a6933b6d168b3601ced353a25675f34d1db8660df05c405f11d1c0"
+      }
+    ],
+    "recovery_execution": "configs/frozen_swe_verified_safe_pce/no-thinking-clean411-target4-recovery379-v1-20260919/execution.json",
+    "recovery_execution_sha256": "bea5291c8d691ca384e285df0cfdeaadb4ea6ec5d1536b3a30b0eefab88a7507",
+    "recovery_outcomes": "/tmp/safe-pce-target4-recovery379-raw-20260919.jsonl",
+    "recovery_outcomes_sha256": "28ce0f3607f84995a47791c579ad4023b485f823a5be3173e04359b3b81ca0a6",
+    "recovery_run_root": "/mnt/scratch/users/twang/vibe-coding-planning/run_state/output/SWE-bench_Verified/swe-verified-pce-runs/development/safe-pce-no-thinking-clean411-target4-recovery379-aion-v1-20260919",
+    "target_execution": "configs/frozen_swe_verified_safe_pce/no-thinking-clean411-target4-v1-20260918/execution.json",
+    "target_execution_sha256": "2b305c52979ec6e62ad448ae9ee5a8bbafcff803a18f01270529ce41988bcff4",
+    "target_outcomes": "/tmp/safe-pce-target4-raw-20260919.jsonl",
+    "target_outcomes_sha256": "37d16d218107126a8c5d12d471c12cd5a224806597148be8b8a975e1e5c0db21",
+    "target_run_root": "/mnt/scratch/users/twang/vibe-coding-planning/run_state/output/SWE-bench_Verified/swe-verified-pce-runs/development/safe-pce-no-thinking-clean411-target4-aion-v1-20260918",
+    "target_selection": "configs/frozen_swe_verified_safe_pce/no-thinking-clean411-target4-v1-20260918/selection.json",
+    "target_selection_sha256": "1898f331518195090a4535c6b3fb45144e578888403ee7456a9205e726bf5c22"
+  },
+  "target_observations_per_task": 4,
+  "task_coverage": [
+    {
+      "instance_id": "astropy__astropy-7166",
+      "observed_sequence": "R",
+      "reliable_observations": 1,
+      "requested_units": 3
+    },
+    {
+      "instance_id": "astropy__astropy-7606",
+      "observed_sequence": "U",
+      "reliable_observations": 1,
+      "requested_units": 3
+    },
+    {
+      "instance_id": "astropy__astropy-7671",
+      "observed_sequence": "RRR",
+      "reliable_observations": 3,
+      "requested_units": 1
+    },
+    {
+      "instance_id": "astropy__astropy-8707",
+      "observed_sequence": "U",
+      "reliable_observations": 1,
+      "requested_units": 3
+    },
+    {
+      "instance_id": "astropy__astropy-8872",
+      "observed_sequence": "U",
+      "reliable_observations": 1,
+      "requested_units": 3
+    },
+    {
+      "instance_id": "django__django-11276",
+      "observed_sequence": "RRR",
+      "reliable_observations": 3,
+      "requested_units": 1
+    },
+    {
+      "instance_id": "django__django-12663",
+      "observed_sequence": "RRR",
+      "reliable_observations": 3,
+      "requested_units": 1
+    },
+    {
+      "instance_id": "django__django-13128",
+      "observed_sequence": "RRR",
+      "reliable_observations": 3,
+      "requested_units": 1
+    },
+    {
+      "instance_id": "django__django-13315",
+      "observed_sequence": "RRR",
+      "reliable_observations": 3,
+      "requested_units": 1
+    },
+    {
+      "instance_id": "django__django-13417",
+      "observed_sequence": "RRR",
+      "reliable_observations": 3,
+      "requested_units": 1
+    },
+    {
+      "instance_id": "django__django-13551",
+      "observed_sequence": "RR",
+      "reliable_observations": 2,
+      "requested_units": 2
+    },
+    {
+      "instance_id": "django__django-13741",
+      "observed_sequence": "RRR",
+      "reliable_observations": 3,
+      "requested_units": 1
+    },
+    {
+      "instance_id": "django__django-13809",
+      "observed_sequence": "RRR",
+      "reliable_observations": 3,
+      "requested_units": 1
+    },
+    {
+      "instance_id": "django__django-13933",
+      "observed_sequence": "RRR",
+      "reliable_observations": 3,
+      "requested_units": 1
+    },
+    {
+      "instance_id": "django__django-14007",
+      "observed_sequence": "RRR",
+      "reliable_observations": 3,
+      "requested_units": 1
+    },
+    {
+      "instance_id": "django__django-14351",
+      "observed_sequence": "RRR",
+      "reliable_observations": 3,
+      "requested_units": 1
+    },
+    {
+      "instance_id": "django__django-14404",
+      "observed_sequence": "RRR",
+      "reliable_observations": 3,
+      "requested_units": 1
+    },
+    {
+      "instance_id": "django__django-14725",
+      "observed_sequence": "RRR",
+      "reliable_observations": 3,
+      "requested_units": 1
+    },
+    {
+      "instance_id": "django__django-14855",
+      "observed_sequence": "R",
+      "reliable_observations": 1,
+      "requested_units": 3
+    },
+    {
+      "instance_id": "django__django-15098",
+      "observed_sequence": "RR",
+      "reliable_observations": 2,
+      "requested_units": 2
+    },
+    {
+      "instance_id": "django__django-15127",
+      "observed_sequence": "UUU",
+      "reliable_observations": 3,
+      "requested_units": 1
+    },
+    {
+      "instance_id": "django__django-15128",
+      "observed_sequence": "R",
+      "reliable_observations": 1,
+      "requested_units": 3
+    },
+    {
+      "instance_id": "django__django-15161",
+      "observed_sequence": "R",
+      "reliable_observations": 1,
+      "requested_units": 3
+    },
+    {
+      "instance_id": "django__django-15252",
+      "observed_sequence": "U",
+      "reliable_observations": 1,
+      "requested_units": 3
+    },
+    {
+      "instance_id": "django__django-15268",
+      "observed_sequence": "RR",
+      "reliable_observations": 2,
+      "requested_units": 2
+    },
+    {
+      "instance_id": "django__django-15277",
+      "observed_sequence": "RR",
+      "reliable_observations": 2,
+      "requested_units": 2
+    },
+    {
+      "instance_id": "django__django-15278",
+      "observed_sequence": "RRR",
+      "reliable_observations": 3,
+      "requested_units": 1
+    },
+    {
+      "instance_id": "django__django-15280",
+      "observed_sequence": "RR",
+      "reliable_observations": 2,
+      "requested_units": 2
+    },
+    {
+      "instance_id": "django__django-15368",
+      "observed_sequence": "R",
+      "reliable_observations": 1,
+      "requested_units": 3
+    },
+    {
+      "instance_id": "django__django-15382",
+      "observed_sequence": "R",
+      "reliable_observations": 1,
+      "requested_units": 3
+    },
+    {
+      "instance_id": "django__django-15467",
+      "observed_sequence": "RR",
+      "reliable_observations": 2,
+      "requested_units": 2
+    },
+    {
+      "instance_id": "django__django-15499",
+      "observed_sequence": "RRR",
+      "reliable_observations": 3,
+      "requested_units": 1
+    },
+    {
+      "instance_id": "django__django-15503",
+      "observed_sequence": "R",
+      "reliable_observations": 1,
+      "requested_units": 3
+    },
+    {
+      "instance_id": "django__django-15525",
+      "observed_sequence": "R",
+      "reliable_observations": 1,
+      "requested_units": 3
+    },
+    {
+      "instance_id": "django__django-15554",
+      "observed_sequence": "R",
+      "reliable_observations": 1,
+      "requested_units": 3
+    },
+    {
+      "instance_id": "django__django-15561",
+      "observed_sequence": "RR",
+      "reliable_observations": 2,
+      "requested_units": 2
+    },
+    {
+      "instance_id": "django__django-15563",
+      "observed_sequence": "R",
+      "reliable_observations": 1,
+      "requested_units": 3
+    },
+    {
+      "instance_id": "django__django-15569",
+      "observed_sequence": "R",
+      "reliable_observations": 1,
+      "requested_units": 3
+    },
+    {
+      "instance_id": "django__django-15572",
+      "observed_sequence": "R",
+      "reliable_observations": 1,
+      "requested_units": 3
+    },
+    {
+      "instance_id": "django__django-15629",
+      "observed_sequence": "U",
+      "reliable_observations": 1,
+      "requested_units": 3
+    },
+    {
+      "instance_id": "django__django-15695",
+      "observed_sequence": "U",
+      "reliable_observations": 1,
+      "requested_units": 3
+    },
+    {
+      "instance_id": "django__django-15731",
+      "observed_sequence": "R",
+      "reliable_observations": 1,
+      "requested_units": 3
+    },
+    {
+      "instance_id": "django__django-15732",
+      "observed_sequence": "UU",
+      "reliable_observations": 2,
+      "requested_units": 2
+    },
+    {
+      "instance_id": "django__django-15741",
+      "observed_sequence": "RRR",
+      "reliable_observations": 3,
+      "requested_units": 1
+    },
+    {
+      "instance_id": "django__django-15814",
+      "observed_sequence": "R",
+      "reliable_observations": 1,
+      "requested_units": 3
+    },
+    {
+      "instance_id": "django__django-15851",
+      "observed_sequence": "R",
+      "reliable_observations": 1,
+      "requested_units": 3
+    },
+    {
+      "instance_id": "django__django-15863",
+      "observed_sequence": "R",
+      "reliable_observations": 1,
+      "requested_units": 3
+    },
+    {
+      "instance_id": "django__django-15916",
+      "observed_sequence": "U",
+      "reliable_observations": 1,
+      "requested_units": 3
+    },
+    {
+      "instance_id": "django__django-15930",
+      "observed_sequence": "R",
+      "reliable_observations": 1,
+      "requested_units": 3
+    },
+    {
+      "instance_id": "django__django-15973",
+      "observed_sequence": "R",
+      "reliable_observations": 1,
+      "requested_units": 3
+    },
+    {
+      "instance_id": "django__django-16032",
+      "observed_sequence": "RRR",
+      "reliable_observations": 3,
+      "requested_units": 1
+    },
+    {
+      "instance_id": "django__django-16082",
+      "observed_sequence": "R",
+      "reliable_observations": 1,
+      "requested_units": 3
+    },
+    {
+      "instance_id": "django__django-16116",
+      "observed_sequence": "RRR",
+      "reliable_observations": 3,
+      "requested_units": 1
+    },
+    {
+      "instance_id": "django__django-16136",
+      "observed_sequence": "R",
+      "reliable_observations": 1,
+      "requested_units": 3
+    },
+    {
+      "instance_id": "django__django-16139",
+      "observed_sequence": "R",
+      "reliable_observations": 1,
+      "requested_units": 3
+    },
+    {
+      "instance_id": "django__django-16145",
+      "observed_sequence": "RRR",
+      "reliable_observations": 3,
+      "requested_units": 1
+    },
+    {
+      "instance_id": "django__django-16255",
+      "observed_sequence": "R",
+      "reliable_observations": 1,
+      "requested_units": 3
+    },
+    {
+      "instance_id": "django__django-16256",
+      "observed_sequence": "U",
+      "reliable_observations": 1,
+      "requested_units": 3
+    },
+    {
+      "instance_id": "django__django-16315",
+      "observed_sequence": "RRR",
+      "reliable_observations": 3,
+      "requested_units": 1
+    },
+    {
+      "instance_id": "django__django-16333",
+      "observed_sequence": "R",
+      "reliable_observations": 1,
+      "requested_units": 3
+    },
+    {
+      "instance_id": "django__django-16429",
+      "observed_sequence": "R",
+      "reliable_observations": 1,
+      "requested_units": 3
+    },
+    {
+      "instance_id": "django__django-16454",
+      "observed_sequence": "R",
+      "reliable_observations": 1,
+      "requested_units": 3
+    },
+    {
+      "instance_id": "django__django-16485",
+      "observed_sequence": "R",
+      "reliable_observations": 1,
+      "requested_units": 3
+    },
+    {
+      "instance_id": "django__django-16493",
+      "observed_sequence": "R",
+      "reliable_observations": 1,
+      "requested_units": 3
+    },
+    {
+      "instance_id": "django__django-16502",
+      "observed_sequence": "U",
+      "reliable_observations": 1,
+      "requested_units": 3
+    },
+    {
+      "instance_id": "django__django-16527",
+      "observed_sequence": "R",
+      "reliable_observations": 1,
+      "requested_units": 3
+    },
+    {
+      "instance_id": "django__django-16560",
+      "observed_sequence": "R",
+      "reliable_observations": 1,
+      "requested_units": 3
+    },
+    {
+      "instance_id": "django__django-16569",
+      "observed_sequence": "R",
+      "reliable_observations": 1,
+      "requested_units": 3
+    },
+    {
+      "instance_id": "django__django-16595",
+      "observed_sequence": "R",
+      "reliable_observations": 1,
+      "requested_units": 3
+    },
+    {
+      "instance_id": "django__django-16612",
+      "observed_sequence": "R",
+      "reliable_observations": 1,
+      "requested_units": 3
+    },
+    {
+      "instance_id": "django__django-16631",
+      "observed_sequence": "U",
+      "reliable_observations": 1,
+      "requested_units": 3
+    },
+    {
+      "instance_id": "django__django-16661",
+      "observed_sequence": "RRR",
+      "reliable_observations": 3,
+      "requested_units": 1
+    },
+    {
+      "instance_id": "django__django-16662",
+      "observed_sequence": "RR",
+      "reliable_observations": 2,
+      "requested_units": 2
+    },
+    {
+      "instance_id": "django__django-16667",
+      "observed_sequence": "U",
+      "reliable_observations": 1,
+      "requested_units": 3
+    },
+    {
+      "instance_id": "django__django-16819",
+      "observed_sequence": "R",
+      "reliable_observations": 1,
+      "requested_units": 3
+    },
+    {
+      "instance_id": "django__django-16877",
+      "observed_sequence": "URR",
+      "reliable_observations": 3,
+      "requested_units": 1
+    },
+    {
+      "instance_id": "django__django-16899",
+      "observed_sequence": "RRR",
+      "reliable_observations": 3,
+      "requested_units": 1
+    },
+    {
+      "instance_id": "django__django-16901",
+      "observed_sequence": "RRR",
+      "reliable_observations": 3,
+      "requested_units": 1
+    },
+    {
+      "instance_id": "django__django-16938",
+      "observed_sequence": "RU",
+      "reliable_observations": 2,
+      "requested_units": 2
+    },
+    {
+      "instance_id": "django__django-16950",
+      "observed_sequence": "U",
+      "reliable_observations": 1,
+      "requested_units": 3
+    },
+    {
+      "instance_id": "django__django-17029",
+      "observed_sequence": "RRR",
+      "reliable_observations": 3,
+      "requested_units": 1
+    },
+    {
+      "instance_id": "django__django-17084",
+      "observed_sequence": "RRR",
+      "reliable_observations": 3,
+      "requested_units": 1
+    },
+    {
+      "instance_id": "scikit-learn__scikit-learn-14087",
+      "observed_sequence": "RRU",
+      "reliable_observations": 3,
+      "requested_units": 1
+    },
+    {
+      "instance_id": "scikit-learn__scikit-learn-25102",
+      "observed_sequence": "RUR",
+      "reliable_observations": 3,
+      "requested_units": 1
+    },
+    {
+      "instance_id": "sympy__sympy-11618",
+      "observed_sequence": "UUR",
+      "reliable_observations": 3,
+      "requested_units": 1
+    },
+    {
+      "instance_id": "sympy__sympy-14976",
+      "observed_sequence": "URU",
+      "reliable_observations": 3,
+      "requested_units": 1
+    }
+  ]
+}
