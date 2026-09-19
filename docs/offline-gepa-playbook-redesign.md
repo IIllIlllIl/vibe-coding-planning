@@ -906,6 +906,11 @@ Repository Agent source auditing starts after Host base-repository preparation
 and history sanitization, before the Agent's first action. Host preparation has
 its own `repository_baseline` evidence; its compound Git commands must not be
 reported as Agent source-access attempts. The Agent network policy is unchanged.
+Repo Checker and Repo Reflector now install verified Safe PCE history bundles
+before restoration. The whole wave checks bundle availability and integrity
+before submission; missing artifacts require preflight preparation. Agent jobs
+never fall back to legacy aggressive Git garbage collection. See
+[`engineering-contracts.md`](engineering-contracts.md) for the shared contract.
 
 Paired Reflection retains file-backed evidence mounted read-only at `/evidence`.
 The initial prompt points to the bundle; reading complete trajectories can still

@@ -32,6 +32,14 @@ from src.optimization.repo_playbook import (
 )
 
 
+@pytest.fixture(autouse=True)
+def prepared_history_for_transport_tests(monkeypatch, tmp_path):
+    # These tests mock container/Slurm execution. Real artifact validation is
+    # covered separately in test_playbook_repository_history.py.
+    monkeypatch.setattr(playbook_runtime, "require_prepared_repository_history",
+                        lambda *_: (tmp_path / "repository.bundle", {}))
+
+
 def _playbook() -> RejectPlaybook:
     return RejectPlaybook(
         (
@@ -902,6 +910,7 @@ def test_repository_runtime_uses_disposable_base_repo_and_artifact_channel(
 
     def fake_restore(env, base_commit, **kwargs):
         assert "source_access_audit" not in captured
+        assert "history_install" in captured
         captured["restore"] = (env, base_commit, kwargs)
         return {"after": {"head": {"output": base_commit}}}
 
@@ -910,6 +919,11 @@ def test_repository_runtime_uses_disposable_base_repo_and_artifact_channel(
         "restore_repository_to_base",
         fake_restore,
     )
+    def fake_install(**kwargs):
+        captured["history_install"] = kwargs
+        return {"verified": True}
+
+    monkeypatch.setattr(playbook_runtime, "install_repository_history_bundle", fake_install)
     output, trajectory = playbook_runtime.run_repository_checker(
         model_config={"model": "fake", "api_key_env": "TEST_API_KEY"},
         repository_config={
@@ -962,7 +976,8 @@ def test_repository_runtime_uses_disposable_base_repo_and_artifact_channel(
         "phase": "repo_checker",
     }
     assert captured["restore"][1] == "abc123"
-    assert captured["restore"][2]["prune_future_history"] is True
+    assert captured["restore"][2]["prune_future_history"] is False
+    assert captured["history_install"]["base_commit"] == "abc123"
     assert captured["artifact"] == (
         "cat /tmp/repo_checker.json",
         {"cwd": "/testbed", "timeout": 1800},

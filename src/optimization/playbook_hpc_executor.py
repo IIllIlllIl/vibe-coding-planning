@@ -228,6 +228,22 @@ class PlaybookHPCExecutor:
     def run_wave(
         self, role: str, items: Sequence[Mapping[str, Any]]
     ) -> list[dict[str, Any]]:
+        # Check the whole wave before any submission; retries cannot repair a
+        # missing prebuilt history artifact. No-repository roles are unaffected.
+        if role in {"repo_checker", "paired_repo_checker", "repo_reflector", "paired_repo_reflector"}:
+            from src.optimization.playbook_runtime import require_prepared_repository_history
+
+            checked = set()
+            for item in items:
+                if role in {"repo_reflector", "paired_repo_reflector"}:
+                    issue = item.get("source_access_issue")
+                    if not isinstance(issue, str) or not issue.strip():
+                        raise ValueError("repo_reflector requires a non-empty source_access_issue")
+                authority, repository = item["image_authority"], item["repository"]
+                key = (authority["sif_sha256"], repository["base_commit"])
+                if key not in checked:
+                    require_prepared_repository_history(authority, repository)
+                    checked.add(key)
         semantic = {
             "schema": 1,
             "role": role,

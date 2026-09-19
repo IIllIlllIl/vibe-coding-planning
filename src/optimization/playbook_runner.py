@@ -129,6 +129,10 @@ def _run_playbook_search_unlocked(
                 Path(__file__).with_name("playbook_hpc_agents.py"),
                 Path(__file__).with_name("playbook_runtime.py"),
                 Path(__file__).with_name("playbook_worker.py"),
+                Path(__file__).parents[1] / "environment" / "repository_history.py",
+                Path(__file__).parents[1] / "environment" / "repository_baseline.py",
+                Path(__file__).parents[1] / "environment" / "apptainer_env.py",
+                Path(__file__).parents[1] / "environment" / "source_access.py",
             )
         },
         "selection": {

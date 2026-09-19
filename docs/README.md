@@ -17,6 +17,7 @@ Read in this order:
 | [`branch-scope.md`](branch-scope.md) | Active ACE + Safe PCE systems, retained failure-analysis evidence, and archive boundary |
 | [`../project_issues.md`](../project_issues.md) | Current research decisions and unresolved methodological risks; not a run-progress log |
 | [`offline-gepa-playbook-redesign.md`](offline-gepa-playbook-redesign.md) | Reject-playbook methods, including within-task paired concern learning, prompt provenance, distributed Slurm Agent waves, and resume contracts |
+| [`engineering-contracts.md`](engineering-contracts.md) | Shared execution requirements: cluster resource ratios, prepared Git history, isolation, artifact persistence, cleanup, and launch checks |
 | [`safe-pce.md`](safe-pce.md) | Current Safe PCE selection, execution reliability, and the frozen within-task Plan-pair derivative |
 | [`hpc-submit.md`](hpc-submit.md) | Behavioral-branch credential, preheat, retained Slurm, and FairShare safety |
 | [`../configs/README.md`](../configs/README.md) | Runtime-versus-launch configuration ownership and active config index |

@@ -7,6 +7,10 @@
 
 ## Scope
 
+Shared implementation requirements are maintained in
+[`engineering-contracts.md`](engineering-contracts.md). Read its cluster
+resource and prepared-history contracts when adapting an existing workflow.
+
 This branch has five operational classes:
 
 1. Safe PCE and later ACE-PCCE submit one Agent/evaluator per Slurm array

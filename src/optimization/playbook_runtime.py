@@ -20,6 +20,11 @@ from src.agents._deps import (
 from src.environment.apptainer_env import ApptainerEnvironment, ApptainerSifCache
 from src.environment.docker_env import DockerCapacityWindow
 from src.environment.repository_baseline import restore_repository_to_base
+from src.environment.repository_history import (
+    RepositoryHistoryCache,
+    install_repository_history_bundle,
+)
+from src.optimization.hpc.task_batch import atomic_json
 from src.environment.source_access import (
     SOURCE_ACCESS_POLICY_VERSION,
     extract_http_urls,
@@ -30,6 +35,27 @@ from src.evaluator.swe_evaluator import derive_image_name
 
 class PlaybookAgentOutputContractError(ValueError):
     """An Agent returned a final artifact that Host parsing cannot accept."""
+
+
+def require_prepared_repository_history(
+    image_authority: Mapping[str, Any], repository: Mapping[str, Any]
+) -> tuple[Path, dict[str, Any]]:
+    """Reuse the Safe PCE artifact; never repack inside a Repo Agent job."""
+    cache = RepositoryHistoryCache(
+        Path(str(image_authority["sif_path"])).parent.parent
+        / "repository-history-cache-v1"
+    )
+    existing = cache.validate(
+        sif_sha256=str(image_authority["sif_sha256"]),
+        base_commit=str(repository["base_commit"]),
+    )
+    if existing is None:
+        raise ValueError(
+            "Prepared repository history is missing or invalid for "
+            f"{repository['instance_id']}; prepare and verify the Safe PCE "
+            "history bundle before submitting Repo Agent tasks."
+        )
+    return existing
 
 
 def _json_object(text: str) -> dict[str, Any]:
@@ -323,6 +349,9 @@ def _run_repository_json_agent(
         raise ValueError("Repo Agent frozen SIF is missing")
     if declared_path.stat().st_size != int(image_authority["sif_bytes"]):
         raise ValueError("Repo Agent frozen SIF size differs from authority")
+    history_bundle, history_manifest = require_prepared_repository_history(
+        image_authority, repository
+    )
 
     workdir = str(repository_config.get("workdir", "/testbed"))
     timeout = int(repository_config.get("command_timeout_seconds", 1800))
@@ -355,15 +384,20 @@ def _run_repository_json_agent(
             run_args=run_args,
         )
         try:
+            install_evidence = install_repository_history_bundle(
+                repository_dir=host_workdir,
+                bundle=history_bundle,
+                base_commit=str(repository["base_commit"]),
+            )
+            atomic_json(baseline_dir / "repository_history_install.json", install_evidence)
+            atomic_json(baseline_dir / "repository_history_artifact.json", history_manifest)
             baseline = restore_repository_to_base(
                 environment,
                 str(repository["base_commit"]),
                 phase=str(repository_config.get("phase", "repo_checker")),
                 evidence_dir=baseline_dir,
                 timeout=timeout,
-                prune_future_history=bool(
-                    repository_config.get("prune_future_history", True)
-                ),
+                prune_future_history=False,
             )
             environment.enable_source_access_audit(
                 prompt_urls=list(extract_http_urls(source_access_issue)),
