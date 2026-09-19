@@ -1,0 +1,91 @@
+{
+  "manifest_id": "47d527ef9348a2910146af53013fc95d4b78b66d840986d0fe683dc90e30f3e8",
+  "parent_image_manifest": "configs/frozen_swe_verified_safe_pce/no-thinking-clean411-completion186-v1-20260919/images.json",
+  "parent_image_manifest_sha256": "ec9c10b30f2248a948784e1d12c1f91d496ed18d39c2a17d28684f9ce33b944b",
+  "projection_policy": "copy exact audited parent records",
+  "purpose": "exact SIF projection for the six priority mixed-outcome tasks",
+  "records": {
+    "swebench/sweb.eval.x86_64.django_1776_django-16877:latest": {
+      "base_commit_verification_output": "",
+      "base_commit_verified": true,
+      "expected_base_commit": "98f6ada0e2058d67d91fb6c16482411ec2ca0967",
+      "instance_id": "django__django-16877",
+      "oci_digest": null,
+      "provenance_strength": "retrospective",
+      "sif_bytes": 1151909888,
+      "sif_path": "/scratch/users/twang/vibe-coding-planning/shared/sif-cache/swebench_sweb.eval.x86_64.django_1776_django-16877_latest.sif",
+      "sif_sha256": "afab9c40003fb07b8e0f4c58a0aef61cf0331b008a2201c33d880fd87b7455d4",
+      "status": "audited"
+    },
+    "swebench/sweb.eval.x86_64.django_1776_django-16938:latest": {
+      "base_commit_verification_output": "",
+      "base_commit_verified": true,
+      "expected_base_commit": "1136aa5005f0ae70fea12796b7e37d6f027b9263",
+      "instance_id": "django__django-16938",
+      "oci_digest": null,
+      "provenance_strength": "retrospective",
+      "sif_bytes": 1151901696,
+      "sif_path": "/scratch/users/twang/vibe-coding-planning/shared/sif-cache/swebench_sweb.eval.x86_64.django_1776_django-16938_latest.sif",
+      "sif_sha256": "4c51d6e9f36e4599755d28f8356edfcaf7d809a899a61e0ed9c0f882051fe312",
+      "status": "audited"
+    },
+    "swebench/sweb.eval.x86_64.scikit-learn_1776_scikit-learn-14087:latest": {
+      "base_commit_verification_output": "",
+      "base_commit_verified": true,
+      "expected_base_commit": "a5743ed36fbd3fbc8e351bdab16561fbfca7dfa1",
+      "instance_id": "scikit-learn__scikit-learn-14087",
+      "oci_digest": null,
+      "provenance_strength": "retrospective",
+      "sif_bytes": 1403142144,
+      "sif_path": "/scratch/users/twang/vibe-coding-planning/shared/sif-cache/swebench_sweb.eval.x86_64.scikit-learn_1776_scikit-learn-14087_latest.sif",
+      "sif_sha256": "27cddbcdc80bb9b95e0a2e1bf905118d7cf472345c349f8b242844aea7ebeb42",
+      "status": "audited"
+    },
+    "swebench/sweb.eval.x86_64.scikit-learn_1776_scikit-learn-25102:latest": {
+      "base_commit_verification_output": "",
+      "base_commit_verified": true,
+      "expected_base_commit": "f9a1cf072da9d7375d6c2163f68a6038b13b310f",
+      "instance_id": "scikit-learn__scikit-learn-25102",
+      "oci_digest": null,
+      "provenance_strength": "retrospective",
+      "sif_bytes": 1753112576,
+      "sif_path": "/scratch/users/twang/vibe-coding-planning/shared/sif-cache/swebench_sweb.eval.x86_64.scikit-learn_1776_scikit-learn-25102_latest.sif",
+      "sif_sha256": "ff2fc232b3879dbc560490d98267e99633ac8765493881ad48b583a653dcbc25",
+      "status": "audited"
+    },
+    "swebench/sweb.eval.x86_64.sympy_1776_sympy-11618:latest": {
+      "base_commit_verification_output": "",
+      "base_commit_verified": true,
+      "expected_base_commit": "360290c4c401e386db60723ddb0109ed499c9f6e",
+      "instance_id": "sympy__sympy-11618",
+      "oci_digest": null,
+      "provenance_strength": "retrospective",
+      "sif_bytes": 977014784,
+      "sif_path": "/scratch/users/twang/vibe-coding-planning/shared/sif-cache/swebench_sweb.eval.x86_64.sympy_1776_sympy-11618_latest.sif",
+      "sif_sha256": "ae34fb8d4b8a5d962ff184d9ddaa68651e7023e34e6c80de944d13c3a6e2bf99",
+      "status": "audited"
+    },
+    "swebench/sweb.eval.x86_64.sympy_1776_sympy-14976:latest": {
+      "base_commit_verification_output": "",
+      "base_commit_verified": true,
+      "expected_base_commit": "9cbea134220b0b951587e11b63e2c832c7246cbc",
+      "instance_id": "sympy__sympy-14976",
+      "oci_digest": null,
+      "provenance_strength": "retrospective",
+      "sif_bytes": 986865664,
+      "sif_path": "/scratch/users/twang/vibe-coding-planning/shared/sif-cache/swebench_sweb.eval.x86_64.sympy_1776_sympy-14976_latest.sif",
+      "sif_sha256": "c966230955a39439cb07e5caf677678230b5aa98d1c3c6ad7da9984d47bb9def",
+      "status": "audited"
+    }
+  },
+  "schema_version": 1,
+  "selection_manifest_sha256": "f371d8d61db4cc004c3adf10408abd28edc0f0f7b9fe5af49d4a63c55b81d83a",
+  "source_manifest_sha256": "bec1150dbf55c29c0893226c20578bee031406d78db305cdfef7b2b80965143a",
+  "summary": {
+    "audited": 6,
+    "base_commit_verified": 6,
+    "missing": 0,
+    "records": 6
+  },
+  "verify_base_commits": true
+}

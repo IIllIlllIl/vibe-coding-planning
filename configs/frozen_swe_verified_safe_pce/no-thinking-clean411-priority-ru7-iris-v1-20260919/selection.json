@@ -1,0 +1,27 @@
+{
+  "dataset": "SWE-bench/SWE-bench_Verified",
+  "dataset_revision": "91aa3ed51b709be6457e12d00300a6a596d4c6a3",
+  "parent_selection_manifest": "configs/frozen_swe_verified_safe_pce/no-thinking-clean411-completion186-v1-20260919/selection.json",
+  "parent_selection_manifest_sha256": "16ff143f976907f687fa3a7659d6098a8dad5269c6072c34f2cd11cc7a2e8462",
+  "purpose": "priority completion of the six known mixed-outcome tasks",
+  "schema_version": 1,
+  "selected_count": 6,
+  "selected_instance_ids": [
+    "django__django-16877",
+    "django__django-16938",
+    "scikit-learn__scikit-learn-14087",
+    "scikit-learn__scikit-learn-25102",
+    "sympy__sympy-11618",
+    "sympy__sympy-14976"
+  ],
+  "selected_instance_ids_sha256": "bcecf5b2b6dc3cbfab28d5d212457de48d09c231167303b1e996584d084e47ee",
+  "selection_id": "safe-pce-no-thinking-clean411-priority-ru7-iris-v1-20260919",
+  "selection_policy": {
+    "exclude_from_parent_aion_array": true,
+    "only_known_mixed_tasks_below_four_reliable_observations": true,
+    "operational_incomplete_is_not_unresolved": true
+  },
+  "source_instance_count": 500,
+  "source_instances_sha256": "8d6f5c64fe448432264ced781ac9bc987fc38b668ade6de39592a23ad1a9ef1f",
+  "source_manifest_sha256": "bec1150dbf55c29c0893226c20578bee031406d78db305cdfef7b2b80965143a"
+}

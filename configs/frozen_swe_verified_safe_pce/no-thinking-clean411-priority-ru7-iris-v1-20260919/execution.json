@@ -1,0 +1,68 @@
+{
+  "execution_unit_count": 7,
+  "execution_units": [
+    {
+      "execution_unit_index": 0,
+      "instance_id": "django__django-16877",
+      "prior_usable_pce_count": 3,
+      "requested_unit_ordinal": 1,
+      "source_execution_unit_index": 172,
+      "target_pce_count": 4
+    },
+    {
+      "execution_unit_index": 1,
+      "instance_id": "django__django-16938",
+      "prior_usable_pce_count": 2,
+      "requested_unit_ordinal": 1,
+      "source_execution_unit_index": 175,
+      "target_pce_count": 4
+    },
+    {
+      "execution_unit_index": 2,
+      "instance_id": "django__django-16938",
+      "prior_usable_pce_count": 2,
+      "requested_unit_ordinal": 2,
+      "source_execution_unit_index": 176,
+      "target_pce_count": 4
+    },
+    {
+      "execution_unit_index": 3,
+      "instance_id": "scikit-learn__scikit-learn-14087",
+      "prior_usable_pce_count": 3,
+      "requested_unit_ordinal": 1,
+      "source_execution_unit_index": 182,
+      "target_pce_count": 4
+    },
+    {
+      "execution_unit_index": 4,
+      "instance_id": "scikit-learn__scikit-learn-25102",
+      "prior_usable_pce_count": 3,
+      "requested_unit_ordinal": 1,
+      "source_execution_unit_index": 183,
+      "target_pce_count": 4
+    },
+    {
+      "execution_unit_index": 5,
+      "instance_id": "sympy__sympy-11618",
+      "prior_usable_pce_count": 3,
+      "requested_unit_ordinal": 1,
+      "source_execution_unit_index": 184,
+      "target_pce_count": 4
+    },
+    {
+      "execution_unit_index": 6,
+      "instance_id": "sympy__sympy-14976",
+      "prior_usable_pce_count": 3,
+      "requested_unit_ordinal": 1,
+      "source_execution_unit_index": 185,
+      "target_pce_count": 4
+    }
+  ],
+  "manifest_id": "73081c67a5e2712f9b0bee27ebcd3182c40b1fe8793b751319f137624a42902d",
+  "parent_execution_manifest": "configs/frozen_swe_verified_safe_pce/no-thinking-clean411-completion186-v1-20260919/execution.json",
+  "parent_execution_manifest_sha256": "5d10587246ab77ecc159a94dfd7c0c7aa1e7aa6a9538e7568d79402464b2aae4",
+  "purpose": "priority completion of the six known mixed-outcome tasks",
+  "schema_version": 1,
+  "selection_manifest_sha256": "f371d8d61db4cc004c3adf10408abd28edc0f0f7b9fe5af49d4a63c55b81d83a",
+  "target_pce_observations_per_instance": 4
+}

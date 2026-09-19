@@ -2919,6 +2919,63 @@ def test_no_thinking_clean411_completion_freezes_exact_target_four_deficit() -> 
     assert "--reclaim-workspaces" in arguments
     assert "--require-clean-worktree" in arguments
 
+
+def test_clean411_priority_ru7_iris_freezes_only_known_mixed_deficits() -> None:
+    config_path = Path(
+        "configs/swe_verified_safe_pce_no_thinking_clean411_"
+        "priority_ru7_iris_v1_20260919.yaml"
+    )
+    config = load_swe_verified_pce_config(config_path, require_api_keys=False)
+    raw = yaml.safe_load(config_path.read_text(encoding="utf-8"))
+    contract = raw["experiment_contract"]
+    execution = json.loads(config.execution_manifest.read_text(encoding="utf-8"))
+
+    assert config.instance_ids == (
+        "django__django-16877",
+        "django__django-16938",
+        "scikit-learn__scikit-learn-14087",
+        "scikit-learn__scikit-learn-25102",
+        "sympy__sympy-11618",
+        "sympy__sympy-14976",
+    )
+    assert len(config.execution_instance_ids) == 7
+    assert execution["execution_unit_count"] == 7
+    assert [
+        unit["source_execution_unit_index"]
+        for unit in execution["execution_units"]
+    ] == [
+        172,
+        175,
+        176,
+        182,
+        183,
+        184,
+        185,
+    ]
+    assert contract["selection_manifest_sha256"] == file_sha256(
+        config.selection_manifest
+    )
+    assert contract["image_manifest_sha256"] == file_sha256(config.image_manifest)
+    assert contract["execution_manifest_sha256"] == file_sha256(
+        config.execution_manifest
+    )
+    assert config.hpc.mem == "4G"
+    assert config.hpc.max_running_array_tasks == 7
+
+    supervisor = yaml.safe_load(
+        Path(
+            "configs/swe_verified_safe_pce_no_thinking_clean411_"
+            "priority_ru7_iris_v1_supervisor_20260919.yaml"
+        ).read_text(encoding="utf-8")
+    )
+    arguments = supervisor["arguments"]
+    assert arguments[arguments.index("--config") + 1] == str(config_path)
+    assert arguments[arguments.index("--ulhpc-config") + 1].endswith(
+        "/.config/ulhpc-submit/config.yaml"
+    )
+    assert "--require-clean-worktree" in arguments
+
+
 def test_no_thinking20_ru_audit_records_two_cases_and_excludes_noise() -> None:
     manifest = json.loads(
         Path(

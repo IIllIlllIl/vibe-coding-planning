@@ -1,0 +1,131 @@
+mode: swe_verified_pce
+purpose: safe_pce_no_thinking_clean411_priority_known_mixed_completion
+
+paths:
+  dataset_snapshot: output/SWE-bench_Verified/swe-verified-pce-inputs/20260831_verified500_91aa3ed5
+  image_manifest: configs/frozen_swe_verified_safe_pce/no-thinking-clean411-priority-ru7-iris-v1-20260919/images.json
+  selection_manifest: configs/frozen_swe_verified_safe_pce/no-thinking-clean411-priority-ru7-iris-v1-20260919/selection.json
+  prompt_source_config: configs/polybench_pce_hpc_formal_clean_20260825.yaml
+  plan_prompt_source_config: configs/prompts/swe_verified_safe_pce_planner_v6_anchor_ablation_20260913.yaml
+  code_prompt_source_config: configs/prompts/swe_verified_safe_pce_code_v1_20260913.yaml
+  run_dir: output/SWE-bench_Verified/swe-verified-pce-runs/development/safe-pce-no-thinking-clean411-priority-ru7-iris-v1-20260919
+
+execution:
+  manifest: configs/frozen_swe_verified_safe_pce/no-thinking-clean411-priority-ru7-iris-v1-20260919/execution.json
+
+plan:
+  model: deepseek-v4-flash
+  api_base: https://api.deepseek.com
+  api_key_env: DEEPSEEK_API_KEY
+  temperature: 1.0
+  thinking: disabled
+  max_steps: 0
+  cost_limit: 0.0
+  timeout: 1800
+  max_attempts: 3
+  submission_protocol: direct_human_markdown_v5
+
+code:
+  model: deepseek-v4-flash
+  api_base: https://api.deepseek.com
+  api_key_env: DEEPSEEK_API_KEY
+  temperature: 0.0
+  max_steps: 0
+  cost_limit: 0.0
+  timeout: 1800
+  max_attempts: 3
+
+docker:
+  workdir: /testbed
+  timeout: 1800
+  min_free_gb: 20
+  max_cached_images: 75
+
+container:
+  runtime: apptainer
+  module: tools/Apptainer
+  sif_cache_dir: /scratch/users/${USER}/vibe-coding-planning/shared/sif-cache
+  writable_tmpfs: true
+
+hpc:
+  submit: true
+  partition: batch
+  cpus_per_task: 1
+  mem: 4G
+  time: "01:00:00"
+  max_running_array_tasks: 7
+  poll_interval_seconds: 300
+  task_output_grace_seconds: 300
+  missing_task_grace_seconds: 600
+  max_task_attempts: 3
+  remote_env_file: ~/.config/vibe-coding-planning/deepseek.env
+  python_module: lang/Python/3.11
+  container_module: tools/Apptainer
+  python_bin: python3
+  job_name_prefix: safe-pce-no-thinking-clean411-priority-ru7-iris-v1-20260919
+  worker_config_path: configs/swe_verified_safe_pce_no_thinking_clean411_priority_ru7_iris_v1_20260919.yaml
+
+evaluator:
+  slurm_timeout_outcome: unknown
+
+experiment_contract:
+  status: launch_authorized
+  cluster: iris
+  input_universe: six_known_mixed_clean411_tasks_below_four_observations
+  selected_cases: 6
+  execution_units: 7
+  target_reliable_observations_per_task: 4
+  source_aion_execution_unit_indices:
+    - 172
+    - 175
+    - 176
+    - 182
+    - 183
+    - 184
+    - 185
+  planner_model: deepseek-v4-flash
+  planner_thinking: disabled
+  planner_temperature: 1.0
+  coder_model: deepseek-v4-flash
+  coder_temperature: 0.0
+  selection_manifest_sha256: f371d8d61db4cc004c3adf10408abd28edc0f0f7b9fe5af49d4a63c55b81d83a
+  image_manifest_sha256: e0d1d0ae9b0dddef0c09feb7234bb206c0f6f9b9bd6831307ee1d23a6adcc287
+  execution_manifest_sha256: c4b6a4a756215abe63dab35e2d0ad37e0dc188905f49f5e9e3ff3d45b02d8d7d
+  parent_pce_semantic_sha256: bef8dff3a4be5e2617b5868d716ed4bdba2b68863f71bf8c7bf3df4a57f98090
+  plan_authority: exact_model_text_between_START_PLAN_and_END_PLAN
+  plan_submission_protocol: direct_human_markdown_v5
+  plan_audience: human_developer_before_implementation
+  local_git_history_policy: base_ancestor_bundle_v1_with_detached_stale_submodule_gitfiles
+  agent_source_policy: conservative_blacklist_v3
+  source_audit_index: all_attempts_case_level_summary_plus_event_logs
+  prompt_url_source: literal_http_urls_in_frozen_issue_description
+  non_prompt_http_policy: allow_but_review
+  agent_filesystem_policy: complete_testbed_with_host_cwd_disabled_and_package_cache_masked
+  evaluator_repository_policy: verify_fresh_immutable_sif_without_reset_or_clean
+  process_control:
+    supervisors: 1
+    controllers: 1
+    slurm_arrays_per_attempt: 1
+    all_execution_units_submitted_in_one_array: true
+    max_simultaneously_running_array_elements: 7
+    parent_aion_elements_must_be_cancelled_after_successful_iris_submission: true
+  resource_policy:
+    iris_memory: 4G
+    oom_is_operationally_incomplete: true
+  budget:
+    pce_execution_units: 7
+    supervisor_wall_clock_budget: "06:00:00"
+    planner_and_code_command_timeout_seconds: 1800
+    slurm_worker_walltime: "01:00:00"
+    worker_memory: 4G
+    agent_attempts: 3
+    supervisor_slices: 36
+  stopping: finish_all_7_units_or_stop_after_36_supervisor_slices_with_durable_checkpoints
+  operational_incomplete_policy: transport_provider_timeout_oom_infrastructure_failure_or_exhausted_evaluator_is_not_unresolved
+  success_criteria:
+    - all_seven_units_belong_to_known_mixed_tasks_below_four_observations
+    - no_priority_unit_is_executed_concurrently_in_the_parent_aion_array
+    - every_completed_unit_preserves_plan_code_evaluator_authority
+    - operational_failure_does_not_become_unresolved
+
+schema_version: 1
