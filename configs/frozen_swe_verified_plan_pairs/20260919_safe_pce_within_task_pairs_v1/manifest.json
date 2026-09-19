@@ -1,0 +1,33 @@
+{
+  "ambiguous_plan_policy": "exclude a Plan hash observed as both R and U",
+  "artifacts": {
+    "audit.json": "79e31bb36e55608d1f5ca9ecb549d8fd314f5b676876f2d230f7d0aedd606e20",
+    "observation_sources.json": "aa0d1fd49f6c03ffcd0db0f0bdfa16dc50f430b1c1fb5978ac5a075b96fe4ba6",
+    "train.jsonl": "8ea0a82c2b12b69bc673f5f7b29c146e346e40ad06da834359bd44239f0fe4c8",
+    "validation.jsonl": "50cd8ab817f843b5396301b9d1709a2a59663b923f2ccb37a5c956a65f76713a"
+  },
+  "complete": true,
+  "data_unit": "within_task_plan_pair",
+  "immutable": true,
+  "pair_policy": "all stable unique-plan R-by-U combinations",
+  "provisional": false,
+  "schema_version": 1,
+  "source_authorities": {
+    "base_cases": "configs/frozen_swe_verified_playbook_gepa/20260915_safe_pce_clean411_v2/cases.jsonl",
+    "base_cases_sha256": "555b853d8db8f5283755759924b28ebb913faf1145f41895f80052d3c368d92c",
+    "cleaning_record": "configs/frozen_swe_verified_plan_pairs/20260919_pair_cleaning_record_v1.md",
+    "cleaning_record_sha256": "87f6b9b35b14aa64a4eb21999a3cd1aa8d25428bda8a7675d30d39155d5d4d78",
+    "exclusions": "configs/frozen_swe_verified_plan_pairs/20260919_pair_reliability_exclusions_v1.json",
+    "exclusions_sha256": "1b9456ab7782f74c1668c85a3a20724424c9448b1be104a96e52ddbefcd5f260",
+    "observation_index": "/mnt/scratch/users/twang/vibe-coding-planning/run_state/authorities/safe-pce-pair-observations/20260919-v1/observations.jsonl",
+    "observation_index_sha256": "dd479a7c5b0d028b880440cbe9ee727f081b50d9c9646bd0c07e75ef0d016937",
+    "observation_source_manifest_sha256": "aa0d1fd49f6c03ffcd0db0f0bdfa16dc50f430b1c1fb5978ac5a075b96fe4ba6"
+  },
+  "split_policy": "task-grouped nearest-pair-count subset-sum",
+  "split_seed": 42,
+  "train_pairs": 144,
+  "train_tasks": 46,
+  "validation_fraction": 0.2,
+  "validation_pairs": 36,
+  "validation_tasks": 11
+}

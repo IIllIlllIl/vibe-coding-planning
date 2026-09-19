@@ -29,6 +29,7 @@ def main() -> None:
     elif raw.get("mode") in {
         "offline_reject_playbook",
         "offline_repo_concern_playbook",
+        "offline_paired_repo_concern_playbook",
     }:
         run_playbook_from_config(args.config)
     elif raw.get("mode") == "online_planning":

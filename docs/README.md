@@ -16,8 +16,8 @@ Read in this order:
 | [`documentation-authority.md`](documentation-authority.md) | Ownership and lifecycle rules for durable documentation and live runtime state |
 | [`branch-scope.md`](branch-scope.md) | Active ACE + Safe PCE systems, retained failure-analysis evidence, and archive boundary |
 | [`../project_issues.md`](../project_issues.md) | Current research decisions and unresolved methodological risks; not a run-progress log |
-| [`offline-gepa-playbook-redesign.md`](offline-gepa-playbook-redesign.md) | Reject-playbook method, cleaned development data, prompt provenance, distributed Slurm Agent waves, and resume contract |
-| [`safe-pce.md`](safe-pce.md) | Current Safe PCE selection, direct artifact transport, phase isolation, Agent environment, evaluator, and audit10 smoke contract |
+| [`offline-gepa-playbook-redesign.md`](offline-gepa-playbook-redesign.md) | Reject-playbook methods, including within-task paired concern learning, prompt provenance, distributed Slurm Agent waves, and resume contracts |
+| [`safe-pce.md`](safe-pce.md) | Current Safe PCE selection, execution reliability, and the frozen within-task Plan-pair derivative |
 | [`hpc-submit.md`](hpc-submit.md) | Behavioral-branch credential, preheat, retained Slurm, and FairShare safety |
 | [`../configs/README.md`](../configs/README.md) | Runtime-versus-launch configuration ownership and active config index |
 

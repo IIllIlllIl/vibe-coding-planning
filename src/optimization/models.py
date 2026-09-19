@@ -40,6 +40,29 @@ class GEPACase:
 
 
 @dataclass(frozen=True)
+class PairedPlanObservation:
+    """One immutable Plan/implementation observation inside a paired case."""
+
+    observation_id: str
+    plan: str
+    plan_sha256: str
+    historical_evidence: dict[str, Any]
+
+
+@dataclass(frozen=True)
+class PairedGEPACase:
+    """A within-task contrast between one resolved and one unresolved Plan."""
+
+    instance_id: str
+    task_id: str
+    split: str
+    issue_description: str
+    repository: RepositoryRef
+    resolved_observation: PairedPlanObservation
+    unresolved_observation: PairedPlanObservation
+
+
+@dataclass(frozen=True)
 class RepositoryEvidence:
     path: str
     symbol: str

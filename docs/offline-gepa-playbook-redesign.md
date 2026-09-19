@@ -859,3 +859,52 @@ A compact local authority is frozen at
 contains the semantically exact Seed and six playbooks, the exact run manifest,
 candidate lineage, and reconstructed validation metrics. The large raw GEPA
 result and Agent evidence remain under the run's Iris authority.
+
+## Within-task paired concern learning
+
+The current development method replaces cross-task resolved/unresolved
+classification with a within-task comparison. One data point contains two
+different Plans for the same issue and frozen base repository: one historical
+attempt resolved the official task and the other did not. All pairs from one
+task belong to exactly one split.
+
+For each pair, the runtime submits two independent repository-aware Checker
+Agents. Each sees only the issue, one Plan, the visible concern text, and the
+isolated base repository. The Checker sees neither the pair identity or side,
+nor either outcome, Code trajectory, patch, evaluator result, bullet ID, or
+counter. The Host derives a binary decision for each side and scores the pair:
+
+| Checker decisions | Pair score |
+|---|---:|
+| accept resolved Plan; reject unresolved Plan | +1 |
+| reject resolved Plan; accept unresolved Plan | -1 |
+| accept both or reject both | 0 |
+| structurally valid candidate with a bullet over 64 tokens | -100 |
+
+One repository-aware Reflector then receives both completed Checker results and
+both hash-bound historical trajectories. It must separate Plan differences
+from Code behavior, evaluator strictness, runtime incidents, and sampling
+noise. It may return zero reusable concerns. The Curator receives all paired
+reflections in the selected minibatch and may add, revise, delete, or
+duplicate-only merge atomic high-level developer concerns. This paired mode is
+additive: the previous no-repository and Level-based repository modes remain
+unchanged.
+
+The frozen development authority contains 1,112 additional terminal
+observations over the clean411 baseline. Reliability cleaning excludes
+successful non-Prompt solution-source HTTP access, two patch-authority
+mismatches, and the full `psf__requests-2317` task whose identical patch
+received conflicting official outcomes under observed environment noise.
+Blocked access attempts remain auditable but are not treated as leakage. The
+result is 180 distinct-Plan R-by-U pairs across 57 tasks: 144 pairs from 46
+train tasks and 36 pairs from 11 validation tasks. The compact observation
+index remains in durable Aion scratch and is bound by SHA-256; Git stores the
+pair snapshot, source manifest, exclusions, and audit rather than the raw
+trajectory payload.
+
+The first formal contract uses eight proposals and a 24-pair Reflection
+minibatch. It has no case-level Level field: each concern is either materially
+triggered or not, and candidate selection uses only pair ordering. A four-pair
+end-to-end smoke must complete and its prompt trajectories must be reviewed
+before the formal config becomes runnable. Merely tracking either config does
+not authorize submission.

@@ -1,0 +1,74 @@
+{
+  "instance_count": 386,
+  "observation_count": 1112,
+  "output_sha256": "dd479a7c5b0d028b880440cbe9ee727f081b50d9c9646bd0c07e75ef0d016937",
+  "schema_version": 1,
+  "sources": [
+    {
+      "completed_observations": 19,
+      "raw_path": "/mnt/scratch/users/twang/vibe-coding-planning/run_state/output/SWE-bench_Verified/swe-verified-pce-runs/development/fpta-mixed24-expansion-repeat2-aion-v2-20260917/raw_pce_outcomes.jsonl",
+      "raw_sha256": "10c9ebcf7d9532926f89c378e07107b58f3684471c7c342986d3d843062a2d2b",
+      "rows": 24,
+      "source_id": "mixed24-r2"
+    },
+    {
+      "completed_observations": 18,
+      "raw_path": "/mnt/scratch/users/twang/vibe-coding-planning/run_state/output/SWE-bench_Verified/swe-verified-pce-runs/development/fpta-mixed24-expansion-repeat3-aion-v2-20260917/raw_pce_outcomes.jsonl",
+      "raw_sha256": "c3d60a4c5e291f49cbf1de7c4f14459b1acd3cd28bc92b315018016f11f3edbc",
+      "rows": 24,
+      "source_id": "mixed24-r3"
+    },
+    {
+      "completed_observations": 164,
+      "raw_path": "/mnt/scratch/users/twang/vibe-coding-planning/run_state/output/SWE-bench_Verified/swe-verified-pce-runs/development/fpta-deficit116-aion-v1-20260918/raw_pce_outcomes.jsonl",
+      "raw_sha256": "f00610594342455660f00e01c7b196c16ef2c3f1f39032a2f2f000e65bef2893",
+      "rows": 168,
+      "source_id": "deficit116"
+    },
+    {
+      "completed_observations": 20,
+      "raw_path": "/mnt/scratch/users/twang/vibe-coding-planning/run_state/output/SWE-bench_Verified/swe-verified-pce-runs/development/safe-pce-no-thinking20-aion-v1-20260918/raw_pce_outcomes.jsonl",
+      "raw_sha256": "d05eb844396d03de9cfe4009712184f3ca5b0b4b5162f46199fca5cae7b53785",
+      "rows": 20,
+      "source_id": "no-thinking20"
+    },
+    {
+      "completed_observations": 598,
+      "raw_path": "/mnt/scratch/users/twang/vibe-coding-planning/run_state/output/SWE-bench_Verified/swe-verified-pce-runs/development/safe-pce-no-thinking-clean411-target4-aion-v1-20260918/raw_pce_outcomes.jsonl",
+      "raw_sha256": "37d16d218107126a8c5d12d471c12cd5a224806597148be8b8a975e1e5c0db21",
+      "rows": 977,
+      "source_id": "target4"
+    },
+    {
+      "completed_observations": 198,
+      "raw_path": "/mnt/scratch/users/twang/vibe-coding-planning/run_state/output/SWE-bench_Verified/swe-verified-pce-runs/development/safe-pce-no-thinking-clean411-target4-recovery379-aion-v1-20260919/raw_pce_outcomes.jsonl",
+      "raw_sha256": "28ce0f3607f84995a47791c579ad4023b485f823a5be3173e04359b3b81ca0a6",
+      "rows": 379,
+      "source_id": "recovery379"
+    },
+    {
+      "completed_observations": 10,
+      "output_artifacts": 12,
+      "run_root": "/mnt/scratch/users/twang/vibe-coding-planning/run_state/output/SWE-bench_Verified/swe-verified-pce-runs/development/fpta-mixed12-repeat2-aion-v1-20260916",
+      "source_id": "mixed12-r2"
+    },
+    {
+      "completed_observations": 10,
+      "output_artifacts": 11,
+      "run_root": "/mnt/scratch/users/twang/vibe-coding-planning/run_state/output/SWE-bench_Verified/swe-verified-pce-runs/development/fpta-mixed12-repeat3-aion-v1-20260916",
+      "source_id": "mixed12-r3"
+    },
+    {
+      "completed_observations": 69,
+      "output_artifacts": 149,
+      "run_root": "/mnt/scratch/users/twang/vibe-coding-planning/run_state/output/SWE-bench_Verified/swe-verified-pce-runs/development/safe-pce-no-thinking-clean411-completion186-aion-v1-20260919",
+      "source_id": "completion186"
+    },
+    {
+      "completed_observations": 6,
+      "output_artifacts": 6,
+      "run_root": "/mnt/scratch/users/twang/vibe-coding-planning/run_state/output/SWE-bench_Verified/swe-verified-pce-runs/development/safe-pce-no-thinking-clean411-priority-ru7-iris-v1-20260919",
+      "source_id": "priority-ru7-iris"
+    }
+  ]
+}

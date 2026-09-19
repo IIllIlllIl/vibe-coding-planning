@@ -1,0 +1,125 @@
+schema_version: 1
+mode: offline_paired_repo_concern_playbook
+status: ready_after_smoke
+run_id: verified-paired-repo-concern-playbook-formal24-8it-v1-20260919
+purpose: eight-proposal repository-aware ACE search using task-grouped within-task resolved/unresolved Plan contrasts
+
+paths:
+  dataset_snapshot: configs/frozen_swe_verified_plan_pairs/20260919_safe_pce_within_task_pairs_v1
+  initial_rules: configs/development_guidelines/offline_gepa_reject_playbook_seed_v2.json
+  run_dir: output/SWE-bench_Verified/gepa-paired-repo-concern-playbook-runs/formal24-8it-v1-20260919
+
+task:
+  semantics: paired_repo_concern_playbook_v1
+container:
+  runtime: apptainer
+  sif_cache_dir: /scratch/users/${USER}/vibe-coding-planning/shared/sif-cache
+execution:
+  backend: hpc_slurm
+
+inputs:
+  dataset_snapshot: configs/frozen_swe_verified_plan_pairs/20260919_safe_pce_within_task_pairs_v1
+  dataset_manifest_sha256: cc1c3488c20a90340d88f419212c2f28b0d60e9a53ab15b84c7e9809751cc736
+  initial_playbook: configs/development_guidelines/offline_gepa_reject_playbook_seed_v2.json
+  initial_playbook_sha256: 16e09571f484f355300dc29f7a828ba8d9b5ca691152ffb8b3b1f2d13d5f83e4
+  prompt_bundle: configs/prompts/offline_gepa_paired_repo_concern_playbook_v1_20260919.yaml
+  prompt_bundle_sha256: 6fdd55d92369df42a9be361a9ef834918397373d53276ec2decd144362e598e7
+  repo_checker_contract: configs/prompts/offline_gepa_paired_repo_checker_contract_v1_20260919.yaml
+  repo_checker_contract_sha256: da852f3c163903bb29622bc0caec397afb324c212494b6938aa7e54591e240a1
+  repo_checker_image_manifest: configs/frozen_swe_verified_safe_pce/verified482-formal-v1-20260914/images.json
+  repo_checker_image_manifest_sha256: f4c18c5dcf30fa48cb503241c5ba69ae8f6368e63726f8ce0875a868ae212e0a
+  train_instance_ids: null
+  validation_instance_ids: null
+
+models:
+  checker: {model: deepseek-v4-flash, temperature: 0.0}
+  reflector: {model: deepseek-v4-flash, temperature: 0.0}
+  curator: {model: deepseek-v4-flash, temperature: 0.0}
+  refiner: {model: deepseek-v4-flash, temperature: 0.0}
+
+repo_checker:
+  workdir: /testbed
+  command_timeout_seconds: 1800
+  source_access_policy: conservative_blacklist_v3
+  prune_future_history: true
+  masked_container_paths:
+    - /opt/miniconda3/pkgs
+
+scoring:
+  correct_order: 1
+  inverted: -1
+  tied: 0
+  invalid: -100
+
+search:
+  max_iterations: 8
+  reflection_minibatch_size: 24
+  max_metric_calls: 1200
+  seed: 42
+  perfect_score: 1.0
+  skip_perfect_score: true
+
+reflection:
+  rounds: 1
+  evidence_image: python:3.12-slim
+  evidence_sif_cache_dir: /scratch/users/${USER}/vibe-coding-planning/shared/sif-cache
+  command_timeout_seconds: 1800
+
+length:
+  maximum_visible_tokens: 2048
+  maximum_bullet_tokens: 64
+  harmful_pruning_weight: 2
+
+budget:
+  candidate_proposals: 8
+  reflection_pairs_per_proposal: 24
+  checker_agents_per_pair_evaluation: 2
+  reflection_rounds_per_pair: 1
+  projected_pair_metric_call_ceiling: 1200
+
+stopping:
+  stop_after_candidate_proposals: 8
+  abort_on_operational_incomplete: true
+
+operational_incomplete_policy: >-
+  Model, transport, timeout, parsing, missing-artifact, repository-authority,
+  or exhausted Agent-output-contract failures remain operationally incomplete.
+  They are not converted to resolved, unresolved, tied, inverted, or INVALID.
+  INVALID is reserved for a structurally valid candidate containing a bullet
+  over 64 Checker tokens.
+
+hpc:
+  submit: true
+  partition: batch
+  cpus_per_task: 1
+  mem: 4G
+  controller_slice_time: "00:30:00"
+  agent_time: "00:35:00"
+  poll_interval_seconds: 30
+  max_running_array_tasks: 0
+  max_task_attempts: 3
+  task_output_grace_seconds: 120
+  missing_task_grace_seconds: 300
+  remote_env_file: ~/.config/vibe-coding-planning/deepseek.env
+  python_module: lang/Python/3.11
+  container_module: tools/Apptainer
+  job_name_prefix: verified-paired-repo-concern-playbook-formal24-8it-v1-20260919
+
+success_criteria:
+  - Use the complete frozen task-grouped split of 144 train pairs and 36 validation pairs from 57 tasks.
+  - Keep every task wholly in train or validation; do not split pairs from one task across both.
+  - Attempt eight candidate proposals with 24 training pairs selected per proposal.
+  - Run two independent label-blind repository-aware Checker Agents for each evaluated pair.
+  - Score only pair ordering: accept R and reject U is +1, the inverse is -1, and both ties are 0.
+  - Run one paired repository-aware Reflection per selected pair and allow zero reusable concerns.
+  - Keep outcome, pair side, Code/evaluator evidence, IDs, and counters outside the Checker boundary.
+  - Curator receives paired Reflection summaries and manages binary high-level developer concerns without Level fields.
+  - Keep every visible bullet at most 64 Checker tokens and the full visible playbook at most 2048 tokens.
+  - Operational failures remain incomplete and never become scientific labels or INVALID candidates.
+  - Do not import prior candidates or checkpoints; begin from the one-rule placeholder Seed.
+
+readiness:
+  runnable: false
+  launched: false
+  missing:
+    - successful paired smoke and prompt-trajectory review

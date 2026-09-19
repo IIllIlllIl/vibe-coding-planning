@@ -1,0 +1,50 @@
+{
+  "ambiguous_plan_hashes": {},
+  "ambiguous_same_plan_outcome_flip_hashes": 0,
+  "ambiguous_same_plan_outcome_flip_tasks": 0,
+  "clean_task_universe": 411,
+  "duplicate_same_outcome_observations_collapsed": 0,
+  "explicitly_excluded": 19,
+  "identical_patch_conflicting_outcome_count_before_exclusions": 1,
+  "identical_patch_conflicting_outcomes_before_exclusions": [
+    {
+      "instance_id": "psf__requests-2317",
+      "patch_sha256": "18128eeac71d7605c41f0176b2105e1e758820775fb02a9d2df9ed653690e705"
+    }
+  ],
+  "ignored_outside_clean_universe": 0,
+  "material_reliability_flags_before_exclusions": [
+    {
+      "instance_id": "django__django-12754",
+      "observation_id": "1d44b28e6f4e77327196ab59288ec587feeb207042fa8371a70803d5054a9bd0",
+      "reasons": [
+        "patch_authority_mismatch",
+        "source_access_blocked_event"
+      ],
+      "source_id": "target4"
+    },
+    {
+      "instance_id": "pydata__xarray-4075",
+      "observation_id": "bdb610f16b340dadc27d7cabf3bb998276a02ba2916b34748d0f2aeb6685b7af",
+      "reasons": [
+        "patch_authority_mismatch",
+        "source_access_manual_review"
+      ],
+      "source_id": "target4"
+    }
+  ],
+  "mixed_tasks": 57,
+  "pairs": 180,
+  "reliability_flag_count_before_exclusions": 529,
+  "reliability_flag_counts_before_exclusions": {
+    "patch_authority_mismatch": 2,
+    "source_access_blocked_event": 175,
+    "source_access_manual_review": 476
+  },
+  "schema_version": 1,
+  "terminal_observations_after_artifact_deduplication": 1504,
+  "train_pairs": 144,
+  "train_tasks": 46,
+  "validation_pairs": 36,
+  "validation_tasks": 11
+}

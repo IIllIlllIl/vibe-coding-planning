@@ -9,7 +9,8 @@ from typing import Any, Callable, Mapping, Protocol, Sequence
 
 from gepa.core.adapter import EvaluationBatch
 
-from src.optimization.models import GEPACase
+from src.optimization.models import GEPACase, PairedGEPACase
+from src.optimization.paired_playbook import validate_paired_checker_result
 from src.optimization.playbook import (
     MAX_VISIBLE_TOKENS,
     RejectPlaybook,
@@ -34,7 +35,10 @@ class PlaybookChecker(Protocol):
 
 
 Reflector = Callable[[Mapping[str, Any]], Mapping[str, Any]]
-Curator = Callable[[RejectPlaybook, Sequence[Mapping[str, Any]], Sequence[Mapping[str, Any]]], Mapping[str, Any]]
+Curator = Callable[
+    [RejectPlaybook, Sequence[Mapping[str, Any]], Sequence[Mapping[str, Any]]],
+    Mapping[str, Any],
+]
 
 
 def _rule_identity(text: str) -> str:
@@ -101,16 +105,18 @@ class GlobalPlaybookCounters:
                     continue
                 pending.append((key, instance_id, label))
                 deltas[key][label] += 1
-        counted = RejectPlaybook(tuple(
-            replace(
-                bullet,
-                helpful=bullet.helpful
-                + deltas[_rule_identity(bullet.text)]["helpful"],
-                harmful=bullet.harmful
-                + deltas[_rule_identity(bullet.text)]["harmful"],
+        counted = RejectPlaybook(
+            tuple(
+                replace(
+                    bullet,
+                    helpful=bullet.helpful
+                    + deltas[_rule_identity(bullet.text)]["helpful"],
+                    harmful=bullet.harmful
+                    + deltas[_rule_identity(bullet.text)]["harmful"],
+                )
+                for bullet in playbook.bullets
             )
-            for bullet in playbook.bullets
-        ))
+        )
         return counted, pending
 
     def commit(
@@ -155,7 +161,9 @@ class ConfigurableRoundReflector:
 
     def __init__(
         self,
-        call: Callable[[Mapping[str, Any], Mapping[str, Any] | None], Mapping[str, Any]],
+        call: Callable[
+            [Mapping[str, Any], Mapping[str, Any] | None], Mapping[str, Any]
+        ],
         *,
         rounds: int,
     ) -> None:
@@ -187,7 +195,10 @@ class TwoStagePlaybookProposer:
         semantic_refiner: Callable[[RejectPlaybook], RejectPlaybook] | None = None,
         maximum_tokens: int = MAX_VISIBLE_TOKENS,
         harmful_weight: float = 5.0,
-        batch_reflector: Callable[[Sequence[Mapping[str, Any]]], Sequence[Mapping[str, Any]]] | None = None,
+        batch_reflector: Callable[
+            [Sequence[Mapping[str, Any]]], Sequence[Mapping[str, Any]]
+        ]
+        | None = None,
         global_counter_path: Path | None = None,
         review_validator: Callable[..., dict[str, Any]] = validate_reflector_review,
         visible_renderer: Callable[[RejectPlaybook], str] | None = None,
@@ -214,9 +225,7 @@ class TwoStagePlaybookProposer:
     ) -> dict[str, str]:
         if components_to_update != ["rules"]:
             raise ValueError("playbook GEPA may update only rules")
-        parent = self.global_counters.hydrate(
-            RejectPlaybook.parse(candidate["rules"])
-        )
+        parent = self.global_counters.hydrate(RejectPlaybook.parse(candidate["rules"]))
         records = list(reflective_dataset["rules"])
         try:
             raw_reviews = (
@@ -248,9 +257,7 @@ class TwoStagePlaybookProposer:
             )
             self.last_length_report = report
         except Exception as exc:
-            self.failures.append(
-                {"error_type": type(exc).__name__, "error": str(exc)}
-            )
+            self.failures.append({"error_type": type(exc).__name__, "error": str(exc)})
             raise
         # Only a fully valid proposal contributes global evidence. Failed Agent
         # attempts and invalid Curator/Refiner output cannot increment counters.
@@ -316,18 +323,20 @@ class PlaybookGEPAAdapter:
                 outputs.append(output)
                 scores.append(self.invalid_score)
                 if capture_traces:
-                    traces.append({
-                        "instance_id": case.instance_id,
-                        "ground_truth": "GOOD" if case.resolved else "BAD",
-                        "resolved_proxy": case.resolved,
-                        "score": self.invalid_score,
-                        "issue": case.issue_description,
-                        "plan": case.plan,
-                        "internal_playbook": playbook.serialize(),
-                        "checker_visible_playbook": visible,
-                        "checker_output": output,
-                        "historical_evidence": case.asi,
-                    })
+                    traces.append(
+                        {
+                            "instance_id": case.instance_id,
+                            "ground_truth": "GOOD" if case.resolved else "BAD",
+                            "resolved_proxy": case.resolved,
+                            "score": self.invalid_score,
+                            "issue": case.issue_description,
+                            "plan": case.plan,
+                            "internal_playbook": playbook.serialize(),
+                            "checker_visible_playbook": visible,
+                            "checker_output": output,
+                            "historical_evidence": case.asi,
+                        }
+                    )
             return EvaluationBatch(
                 outputs=outputs,
                 scores=scores,
@@ -338,15 +347,18 @@ class PlaybookGEPAAdapter:
         else:
             if self.checker is None:
                 raise ValueError("no Playbook Checker configured")
-            raw_results = [self.checker({
-                "issue": case.issue_description,
-                "plan": case.plan,
-                "checker_visible_playbook": visible,
-            }) for case in batch]
+            raw_results = [
+                self.checker(
+                    {
+                        "issue": case.issue_description,
+                        "plan": case.plan,
+                        "checker_visible_playbook": visible,
+                    }
+                )
+                for case in batch
+            ]
         for case, (raw, trajectory) in zip(batch, raw_results, strict=True):
-            checked = validate_checker_result(
-                raw, playbook, trajectory=trajectory
-            )
+            checked = validate_checker_result(raw, playbook, trajectory=trajectory)
             score = classification_cost(
                 resolved=case.resolved,
                 rejected=checked.rejected,
@@ -531,4 +543,169 @@ class RepoPlaybookGEPAAdapter:
             raise ValueError("repo playbook GEPA may update only rules")
         if eval_batch.trajectories is None:
             raise ValueError("repo playbook Reflection requires captured trajectories")
+        return {"rules": eval_batch.trajectories}
+
+
+class PairedRepoPlaybookGEPAAdapter:
+    """Rank a resolved and unresolved Plan from the same benchmark task."""
+
+    def __init__(
+        self,
+        batch_checker: Any,
+        proposer: Any,
+        *,
+        token_counter: Callable[[str], int] | None = None,
+        maximum_bullet_tokens: int | None = None,
+        invalid_score: float = -100.0,
+    ) -> None:
+        if batch_checker is None:
+            raise ValueError("paired Repo playbook execution requires a batch Checker")
+        self.batch_checker = batch_checker
+        self.propose_new_texts = proposer
+        self.token_counter = token_counter
+        self.maximum_bullet_tokens = maximum_bullet_tokens
+        self.invalid_score = float(invalid_score)
+
+    def evaluate(
+        self,
+        batch: list[PairedGEPACase],
+        candidate: dict[str, str],
+        capture_traces: bool = False,
+    ) -> EvaluationBatch:
+        if set(candidate) != {"rules"}:
+            raise ValueError("candidate must contain only rules")
+        playbook = RejectPlaybook.parse(candidate["rules"])
+        visible = render_concern_playbook(playbook)
+        invalid_bullets: list[str] = []
+        if self.maximum_bullet_tokens is not None:
+            if self.token_counter is None:
+                raise ValueError("bullet token cap requires a token counter")
+            invalid_bullets = overlength_bullet_ids(
+                playbook,
+                token_counter=self.token_counter,
+                maximum_bullet_tokens=self.maximum_bullet_tokens,
+            )
+        if invalid_bullets:
+            outputs = [
+                {
+                    "instance_id": case.instance_id,
+                    "pair_decision": "INVALID",
+                    "invalid_reason": "bullet_token_limit_exceeded",
+                    "invalid_bullet_ids": invalid_bullets,
+                }
+                for case in batch
+            ]
+            traces = [
+                self._trace(
+                    case,
+                    playbook=playbook,
+                    visible=visible,
+                    output=output,
+                    score=self.invalid_score,
+                )
+                for case, output in zip(batch, outputs, strict=True)
+            ]
+            return EvaluationBatch(
+                outputs=outputs,
+                scores=[self.invalid_score] * len(batch),
+                trajectories=traces if capture_traces else None,
+            )
+
+        raw_pairs = self.batch_checker.evaluate_batch(batch, playbook)
+        outputs: list[dict[str, Any]] = []
+        scores: list[float] = []
+        traces: list[dict[str, Any]] = []
+        for case, raw_pair in zip(batch, raw_pairs, strict=True):
+            if not isinstance(raw_pair, tuple) or len(raw_pair) != 2:
+                raise ValueError("paired Checker must return exactly two side results")
+            resolved_raw, unresolved_raw = raw_pair
+            resolved_checked = validate_paired_checker_result(
+                resolved_raw[0], playbook, trajectory=resolved_raw[1]
+            )
+            unresolved_checked = validate_paired_checker_result(
+                unresolved_raw[0], playbook, trajectory=unresolved_raw[1]
+            )
+            if not resolved_checked.rejected and unresolved_checked.rejected:
+                score = 1.0
+                pair_decision = "CORRECT_ORDER"
+            elif resolved_checked.rejected and not unresolved_checked.rejected:
+                score = -1.0
+                pair_decision = "INVERTED"
+            else:
+                score = 0.0
+                pair_decision = "TIED"
+            output = {
+                "instance_id": case.instance_id,
+                "task_id": case.task_id,
+                "pair_decision": pair_decision,
+                "resolved_side": resolved_checked.to_dict(),
+                "unresolved_side": unresolved_checked.to_dict(),
+            }
+            outputs.append(output)
+            scores.append(score)
+            if capture_traces:
+                traces.append(
+                    self._trace(
+                        case,
+                        playbook=playbook,
+                        visible=visible,
+                        output=output,
+                        score=score,
+                    )
+                )
+        return EvaluationBatch(
+            outputs=outputs,
+            scores=scores,
+            trajectories=traces if capture_traces else None,
+        )
+
+    @staticmethod
+    def _trace(
+        case: PairedGEPACase,
+        *,
+        playbook: RejectPlaybook,
+        visible: str,
+        output: Mapping[str, Any],
+        score: float,
+    ) -> dict[str, Any]:
+        return {
+            "instance_id": case.instance_id,
+            "task_id": case.task_id,
+            "score": score,
+            "issue": case.issue_description,
+            "repository": {
+                "repo": case.repository.repo,
+                "base_commit": case.repository.base_commit,
+                "instance_id": case.repository.instance_id,
+            },
+            "internal_playbook": playbook.serialize(),
+            "checker_visible_playbook": visible,
+            "pair_output": dict(output),
+            "resolved_side": {
+                "observation_id": case.resolved_observation.observation_id,
+                "plan": case.resolved_observation.plan,
+                "plan_sha256": case.resolved_observation.plan_sha256,
+                "checker_output": output.get("resolved_side"),
+                "historical_evidence": case.resolved_observation.historical_evidence,
+            },
+            "unresolved_side": {
+                "observation_id": case.unresolved_observation.observation_id,
+                "plan": case.unresolved_observation.plan,
+                "plan_sha256": case.unresolved_observation.plan_sha256,
+                "checker_output": output.get("unresolved_side"),
+                "historical_evidence": case.unresolved_observation.historical_evidence,
+            },
+        }
+
+    def make_reflective_dataset(
+        self,
+        candidate: dict[str, str],
+        eval_batch: EvaluationBatch,
+        components_to_update: list[str],
+    ) -> Mapping[str, Sequence[Mapping[str, Any]]]:
+        del candidate
+        if components_to_update != ["rules"]:
+            raise ValueError("paired repo playbook GEPA may update only rules")
+        if eval_batch.trajectories is None:
+            raise ValueError("paired repo Reflection requires captured trajectories")
         return {"rules": eval_batch.trajectories}

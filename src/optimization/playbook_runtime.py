@@ -58,10 +58,19 @@ class PromptModel:
             float(model_config.get("temperature", 0.0)),
         )
 
-    def __call__(self, system: str, user: str) -> tuple[dict[str, Any], list[dict[str, Any]]]:
-        messages = [{"role": "system", "content": system}, {"role": "user", "content": user}]
+    def __call__(
+        self, system: str, user: str
+    ) -> tuple[dict[str, Any], list[dict[str, Any]]]:
+        messages = [
+            {"role": "system", "content": system},
+            {"role": "user", "content": user},
+        ]
         response = self.model.query(messages)
-        assistant = {"role": "assistant", "content": response["content"], "extra": response.get("extra", {})}
+        assistant = {
+            "role": "assistant",
+            "content": response["content"],
+            "extra": response.get("extra", {}),
+        }
         trajectory = [*messages, assistant]
         try:
             return _json_object(response["content"]), trajectory
@@ -243,7 +252,11 @@ def run_evidence_curator(
 
 
 def _render(template: str, **values: Any) -> str:
-    return Environment(undefined=StrictUndefined, autoescape=False).from_string(template).render(**values)
+    return (
+        Environment(undefined=StrictUndefined, autoescape=False)
+        .from_string(template)
+        .render(**values)
+    )
 
 
 def _run_repository_json_agent(
@@ -264,8 +277,7 @@ def _run_repository_json_agent(
     """Run one tool-using Agent against a disposable frozen repository."""
     if repository_config.get("source_access_policy") != "conservative_blacklist_v3":
         raise ValueError(
-            "Repo Agent requires the Safe PCE conservative_blacklist_v3 "
-            "source boundary"
+            "Repo Agent requires the Safe PCE conservative_blacklist_v3 source boundary"
         )
     if set(repository) != {"repo", "base_commit", "instance_id"}:
         raise ValueError("Repo Agent repository identity has an invalid schema")
@@ -322,9 +334,7 @@ def _run_repository_json_agent(
         host_workdir = Path(temporary) / "repository"
         run_args = ["--containall", "--no-mount", "cwd"]
         if evidence_dir is not None:
-            run_args.extend(
-                ["--bind", f"{Path(evidence_dir).resolve()}:/evidence:ro"]
-            )
+            run_args.extend(["--bind", f"{Path(evidence_dir).resolve()}:/evidence:ro"])
         environment = ApptainerEnvironment(
             image=expected_ref,
             cwd=workdir,
@@ -338,7 +348,9 @@ def _run_repository_json_agent(
             initialize_host_workdir=True,
             isolate_tmp=True,
             masked_container_paths=list(
-                repository_config.get("masked_container_paths", ["/opt/miniconda3/pkgs"])
+                repository_config.get(
+                    "masked_container_paths", ["/opt/miniconda3/pkgs"]
+                )
             ),
             run_args=run_args,
             source_access_prompt_urls=list(extract_http_urls(source_access_issue)),
@@ -437,10 +449,11 @@ def run_repository_checker(
     plan: str,
     checker_visible_playbook: str,
     retry_feedback: str = "",
+    phase: str = "repo_checker",
 ) -> tuple[dict[str, Any], list[dict[str, Any]]]:
     return _run_repository_json_agent(
         model_config=model_config,
-        repository_config={**repository_config, "phase": "repo_checker"},
+        repository_config={**repository_config, "phase": phase},
         system=system,
         instance_template=instance_template,
         repository=repository,
@@ -471,17 +484,19 @@ def run_repository_reflector(
     internal_playbook: str,
     source_access_issue: str,
     retry_feedback: str = "",
+    task: str = "Attribute this completed case to every active concern.",
+    phase: str = "repo_reflector",
 ) -> tuple[dict[str, Any], list[dict[str, Any]]]:
     return _run_repository_json_agent(
         model_config=model_config,
-        repository_config={**repository_config, "phase": "repo_reflector"},
+        repository_config={**repository_config, "phase": phase},
         system=system,
         instance_template=instance_template,
         repository=repository,
         image_authority=image_authority,
         attempt_dir=attempt_dir,
         evidence_dir=evidence_dir,
-        task="Attribute this completed case to every active concern.",
+        task=task,
         artifact_name="reflection.json",
         prompt_values={
             "evidence_path": "/evidence",

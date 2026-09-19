@@ -1,0 +1,14 @@
+{
+  "schema_version": 1,
+  "data_unit": "within_task_plan_pair",
+  "train_instance_ids": [
+    "pair-6c2501887bccef6e11bc14ee",
+    "pair-8738412ddd171f1772a98f43"
+  ],
+  "validation_instance_ids": [
+    "pair-27786b755371198326783156",
+    "pair-05a1e7405702ab648b7f67ea"
+  ],
+  "selection_policy": "one Astropy and one Django pair from each frozen task-grouped split",
+  "immutable": true
+}

@@ -12,6 +12,7 @@ import yaml
 
 from src.optimization.playbook_adapter import (
     ConfigurableRoundReflector,
+    PairedRepoPlaybookGEPAAdapter,
     PlaybookGEPAAdapter,
     RepoPlaybookGEPAAdapter,
     TwoStagePlaybookProposer,
@@ -21,6 +22,8 @@ from src.optimization.hpc.config import HPCConfig
 from src.optimization.playbook_hpc_agents import (
     HPCPlaybookChecker,
     HPCPlaybookProposalAgents,
+    HPCPairedRepoPlaybookChecker,
+    HPCPairedRepoPlaybookProposalAgents,
     HPCRepoPlaybookChecker,
     HPCRepoPlaybookProposalAgents,
 )
@@ -30,6 +33,7 @@ from src.optimization.repo_playbook import (
     render_concern_playbook,
     validate_repo_reflector_review,
 )
+from src.optimization.paired_playbook import validate_paired_reflector_review
 
 
 def _resolve_config_path(config_path: Path, raw: str) -> Path:
@@ -51,16 +55,12 @@ def _validate_frozen_inputs(config_path: Path, raw: dict[str, Any]) -> None:
                 f"actual={actual}"
             )
     if inputs.get("repo_checker_contract"):
-        path = _resolve_config_path(
-            config_path, str(inputs["repo_checker_contract"])
-        )
+        path = _resolve_config_path(config_path, str(inputs["repo_checker_contract"]))
         actual = hashlib.sha256(path.read_bytes()).hexdigest()
         if actual != str(inputs.get("repo_checker_contract_sha256", "")):
             raise ValueError("Repo Checker contract fingerprint mismatch")
     if inputs.get("dataset_manifest_sha256"):
-        snapshot = _resolve_config_path(
-            config_path, str(inputs["dataset_snapshot"])
-        )
+        snapshot = _resolve_config_path(config_path, str(inputs["dataset_snapshot"]))
         manifest_path = snapshot / "manifest.json"
         actual = hashlib.sha256(manifest_path.read_bytes()).hexdigest()
         if actual != str(inputs["dataset_manifest_sha256"]):
@@ -80,7 +80,10 @@ def _validate_frozen_inputs(config_path: Path, raw: dict[str, Any]) -> None:
         for key in ("train_instance_ids", "validation_instance_ids"):
             if list(inputs.get(key) or []) != list(selection.get(key) or []):
                 raise ValueError(f"{key} does not match the frozen selection")
-    if raw.get("mode") == "offline_repo_concern_playbook":
+    if raw.get("mode") in {
+        "offline_repo_concern_playbook",
+        "offline_paired_repo_concern_playbook",
+    }:
         path = _resolve_config_path(
             config_path, str(inputs["repo_checker_image_manifest"])
         )
@@ -134,13 +137,32 @@ def _score_table(raw: dict[str, Any]) -> tuple[dict[str, float] | None, float]:
     return values, invalid
 
 
+def _paired_invalid_score(raw: dict[str, Any]) -> float:
+    scoring = raw.get("scoring")
+    expected = {"correct_order": 1, "inverted": -1, "tied": 0, "invalid": -100}
+    if scoring != expected:
+        raise ValueError(
+            "paired scoring must be exactly correct_order=1, inverted=-1, "
+            "tied=0, invalid=-100"
+        )
+    return -100.0
+
+
 def run_from_config(path: str | Path, *, agents: Any | None = None, optimize_fn=None):
     config_path = Path(path)
     raw = yaml.safe_load(config_path.read_text(encoding="utf-8")) or {}
     mode = raw.get("mode")
-    if mode not in {"offline_reject_playbook", "offline_repo_concern_playbook"}:
+    if mode not in {
+        "offline_reject_playbook",
+        "offline_repo_concern_playbook",
+        "offline_paired_repo_concern_playbook",
+    }:
         raise ValueError("not a supported playbook config")
-    repo_mode = mode == "offline_repo_concern_playbook"
+    paired_mode = mode == "offline_paired_repo_concern_playbook"
+    repo_mode = mode in {
+        "offline_repo_concern_playbook",
+        "offline_paired_repo_concern_playbook",
+    }
     _validate_frozen_inputs(config_path, raw)
     if repo_mode:
         if raw.get("container", {}).get("runtime") != "apptainer":
@@ -179,20 +201,24 @@ def run_from_config(path: str | Path, *, agents: Any | None = None, optimize_fn=
             or set(roles) - allowed_import_roles
         ):
             raise ValueError("checkpoint import roles are invalid")
-        source_manifest_sha = str(
-            checkpoint_import["source_run_manifest_sha256"]
-        )
+        source_manifest_sha = str(checkpoint_import["source_run_manifest_sha256"])
         if len(source_manifest_sha) != 64 or any(
             char not in "0123456789abcdef" for char in source_manifest_sha
         ):
             raise ValueError("checkpoint import run-manifest SHA-256 is invalid")
     count_tokens = _token_counter(str(raw["models"]["checker"]["model"]))
-    score_table, invalid_score = _score_table(raw)
+    if paired_mode:
+        score_table = None
+        invalid_score = _paired_invalid_score(raw)
+    else:
+        score_table, invalid_score = _score_table(raw)
     if agents is None and raw.get("execution", {}).get("backend") == "hpc_slurm":
         h = raw["hpc"]
         hpc = HPCConfig(
-            submit=bool(h["submit"]), partition=str(h["partition"]),
-            cpus_per_task=int(h["cpus_per_task"]), mem=str(h["mem"]),
+            submit=bool(h["submit"]),
+            partition=str(h["partition"]),
+            cpus_per_task=int(h["cpus_per_task"]),
+            mem=str(h["mem"]),
             time=str(h["agent_time"]),
             max_running_array_tasks=int(h["max_running_array_tasks"]),
             poll_interval_seconds=int(h["poll_interval_seconds"]),
@@ -223,12 +249,22 @@ def run_from_config(path: str | Path, *, agents: Any | None = None, optimize_fn=
                 else None
             ),
             checkpoint_import_roles=(
-                list(checkpoint_import["roles"])
-                if checkpoint_import
-                else []
+                list(checkpoint_import["roles"]) if checkpoint_import else []
             ),
         )
-        if repo_mode:
+        if paired_mode:
+            checker = HPCPairedRepoPlaybookChecker(
+                executor,
+                image_records=image_records,
+            )
+            proposal_agents = HPCPairedRepoPlaybookProposalAgents(
+                executor,
+                image_records=image_records,
+                maximum_tokens=int(raw["length"]["maximum_visible_tokens"]),
+                maximum_bullet_tokens=int(raw["length"]["maximum_bullet_tokens"]),
+                token_counter=count_tokens,
+            )
+        elif repo_mode:
             checker = HPCRepoPlaybookChecker(
                 executor,
                 image_records=image_records,
@@ -253,20 +289,34 @@ def run_from_config(path: str | Path, *, agents: Any | None = None, optimize_fn=
             batch_reflector=lambda records: proposal_agents.reflect_batch(
                 records, int(raw["reflection"]["rounds"])
             ),
-            curator=lambda counted, reviews, _records: proposal_agents.curate(counted, reviews),
+            curator=lambda counted, reviews, _records: proposal_agents.curate(
+                counted, reviews
+            ),
             token_counter=count_tokens,
             semantic_refiner=proposal_agents.refine,
             maximum_tokens=int(raw["length"]["maximum_visible_tokens"]),
             harmful_weight=float(raw["length"].get("harmful_pruning_weight", 5.0)),
             global_counter_path=run_dir / "global_counter_ledger.json",
             review_validator=(
-                validate_repo_reflector_review
-                if repo_mode
-                else validate_reflector_review
+                validate_paired_reflector_review
+                if paired_mode
+                else (
+                    validate_repo_reflector_review
+                    if repo_mode
+                    else validate_reflector_review
+                )
             ),
             visible_renderer=render_concern_playbook if repo_mode else None,
         )
-        if repo_mode:
+        if paired_mode:
+            adapter = PairedRepoPlaybookGEPAAdapter(
+                checker,
+                proposer,
+                token_counter=count_tokens,
+                maximum_bullet_tokens=int(raw["length"]["maximum_bullet_tokens"]),
+                invalid_score=invalid_score,
+            )
+        elif repo_mode:
             adapter = RepoPlaybookGEPAAdapter(
                 checker,
                 proposer,
@@ -289,22 +339,37 @@ def run_from_config(path: str | Path, *, agents: Any | None = None, optimize_fn=
         if agents is None:
             raise ValueError("local playbook execution requires injected test agents")
         runtime = agents
-        reflector = ConfigurableRoundReflector(runtime.reflector_call, rounds=int(raw["reflection"]["rounds"]))
+        reflector = ConfigurableRoundReflector(
+            runtime.reflector_call, rounds=int(raw["reflection"]["rounds"])
+        )
         proposer = TwoStagePlaybookProposer(
-            reflector=reflector, curator=runtime.curator,
+            reflector=reflector,
+            curator=runtime.curator,
             token_counter=count_tokens,
             semantic_refiner=runtime.refiner,
             maximum_tokens=int(raw["length"]["maximum_visible_tokens"]),
             harmful_weight=float(raw["length"].get("harmful_pruning_weight", 5.0)),
             global_counter_path=run_dir / "global_counter_ledger.json",
             review_validator=(
-                validate_repo_reflector_review
-                if repo_mode
-                else validate_reflector_review
+                validate_paired_reflector_review
+                if paired_mode
+                else (
+                    validate_repo_reflector_review
+                    if repo_mode
+                    else validate_reflector_review
+                )
             ),
             visible_renderer=render_concern_playbook if repo_mode else None,
         )
-        if repo_mode:
+        if paired_mode:
+            adapter = PairedRepoPlaybookGEPAAdapter(
+                runtime.batch_checker,
+                proposer,
+                token_counter=count_tokens,
+                maximum_bullet_tokens=int(raw["length"]["maximum_bullet_tokens"]),
+                invalid_score=invalid_score,
+            )
+        elif repo_mode:
             adapter = RepoPlaybookGEPAAdapter(
                 runtime.batch_checker,
                 proposer,
@@ -345,5 +410,6 @@ def run_from_config(path: str | Path, *, agents: Any | None = None, optimize_fn=
         ),
         runtime_config_path=config_path,
         prompt_bundle_path=Path(raw["inputs"]["prompt_bundle"]),
+        data_unit=("within_task_plan_pair" if paired_mode else "case"),
         **kwargs,
     )

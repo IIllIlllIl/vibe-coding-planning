@@ -22,12 +22,21 @@ from src.optimization.playbook_runtime import (
     run_repository_reflector,
 )
 from src.optimization.playbook import (
-    PlaybookBullet, RejectPlaybook, apply_curator_operations, apply_refiner_operations,
-    validate_bullet_token_limit, validate_checker_result, validate_reflector_review,
+    PlaybookBullet,
+    RejectPlaybook,
+    apply_curator_operations,
+    apply_refiner_operations,
+    validate_bullet_token_limit,
+    validate_checker_result,
+    validate_reflector_review,
 )
 from src.optimization.repo_playbook import (
     validate_repo_checker_result,
     validate_repo_reflector_review,
+)
+from src.optimization.paired_playbook import (
+    validate_paired_checker_result,
+    validate_paired_reflector_review,
 )
 
 
@@ -47,8 +56,14 @@ def run_task(
         manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
         role = str(manifest["role"])
         if role not in {
-            "checker", "reflector", "curator", "refiner",
-            "repo_checker", "repo_reflector",
+            "checker",
+            "reflector",
+            "curator",
+            "refiner",
+            "repo_checker",
+            "repo_reflector",
+            "paired_repo_checker",
+            "paired_repo_reflector",
         }:
             raise ValueError("unsupported playbook worker role")
         config = yaml.safe_load(config_path.read_text(encoding="utf-8")) or {}
@@ -62,10 +77,16 @@ def run_task(
             previous = json.loads(previous_output_path.read_text(encoding="utf-8"))
             retry_feedback = str(previous.get("error", ""))
         if role in {
-            "checker", "reflector", "curator", "repo_checker", "repo_reflector"
+            "checker",
+            "reflector",
+            "curator",
+            "repo_checker",
+            "repo_reflector",
+            "paired_repo_checker",
+            "paired_repo_reflector",
         }:
             values["retry_feedback"] = retry_feedback
-        if role == "repo_checker":
+        if role in {"repo_checker", "paired_repo_checker"}:
             checker_system = str(prompts["checker_system"])
             contract_value = config["inputs"].get("repo_checker_contract")
             if contract_value:
@@ -102,16 +123,16 @@ def run_task(
                 plan=str(values["plan"]),
                 checker_visible_playbook=str(values["checker_visible_playbook"]),
                 retry_feedback=str(values["retry_feedback"]),
+                phase=role,
             )
-        elif role == "repo_reflector":
+        elif role in {"repo_reflector", "paired_repo_reflector"}:
             source_access_issue = manifest.get("source_access_issue")
             if (
                 not isinstance(source_access_issue, str)
                 or not source_access_issue.strip()
             ):
                 raise ValueError(
-                    "Repo Reflector manifest requires a non-empty "
-                    "source_access_issue"
+                    "Repo Reflector manifest requires a non-empty source_access_issue"
                 )
             stage = "agent_execution"
             output, trajectory = run_repository_reflector(
@@ -129,6 +150,13 @@ def run_task(
                 internal_playbook=str(values["internal_playbook"]),
                 source_access_issue=source_access_issue,
                 retry_feedback=str(values["retry_feedback"]),
+                task=(
+                    "Compare both completed Plan attempts and attribute their "
+                    "within-task outcome difference to every active concern."
+                    if role == "paired_repo_reflector"
+                    else "Attribute this completed case to every active concern."
+                ),
+                phase=role,
             )
         elif role == "reflector":
             stage = "agent_execution"
@@ -181,15 +209,19 @@ def run_task(
         }
         atomic_json(attempt_dir / "agent_completion.json", raw_completion)
         stage = "agent_output_validation"
-        if role in {"checker", "repo_checker"}:
-            playbook = RejectPlaybook(tuple(
-                PlaybookBullet(f"host-{index:05d}", "Host validation rule")
-                for index in range(1, int(manifest["validation_rule_count"]) + 1)
-            ))
+        if role in {"checker", "repo_checker", "paired_repo_checker"}:
+            playbook = RejectPlaybook(
+                tuple(
+                    PlaybookBullet(f"host-{index:05d}", "Host validation rule")
+                    for index in range(1, int(manifest["validation_rule_count"]) + 1)
+                )
+            )
             if role == "checker":
                 validate_checker_result(output, playbook)
-            else:
+            elif role == "repo_checker":
                 validate_repo_checker_result(output, playbook)
+            else:
+                validate_paired_checker_result(output, playbook)
         else:
             playbook = RejectPlaybook.parse(manifest["validation_playbook"])
         if role == "reflector":
@@ -204,42 +236,59 @@ def run_task(
                 instance_id=str(manifest["instance_id"]),
                 playbook=playbook,
             )
+        elif role == "paired_repo_reflector":
+            validate_paired_reflector_review(
+                output,
+                instance_id=str(manifest["instance_id"]),
+                playbook=playbook,
+            )
         elif role == "curator":
             proposed = apply_curator_operations(playbook, output)
             validate_bullet_token_limit(
                 proposed,
-                token_counter=lambda text: int(litellm.token_counter(
-                    model=str(config["models"]["checker"]["model"]), text=text
-                )),
+                token_counter=lambda text: int(
+                    litellm.token_counter(
+                        model=str(config["models"]["checker"]["model"]), text=text
+                    )
+                ),
                 maximum_bullet_tokens=int(config["length"]["maximum_bullet_tokens"]),
             )
         elif role == "refiner":
             apply_refiner_operations(playbook, output)
         stage = "output_write"
-        atomic_json(output_path, {
-            "schema_version": 1, "status": "completed", "role": role,
-            "fingerprint": manifest["fingerprint"],
-            "task_index": manifest["task_index"],
-            "instance_id": manifest.get("instance_id"),
-            "started_at": started,
-            "finished_at": datetime.now(timezone.utc).isoformat(),
-            "agent_output": output, "trajectory": trajectory,
-        })
-        return 0
-    except Exception as exc:
-        if isinstance(exc, PlaybookAgentOutputContractError):
-            atomic_json(attempt_dir / "agent_completion.json", {
+        atomic_json(
+            output_path,
+            {
                 "schema_version": 1,
-                "status": "agent_completed",
-                "role": manifest.get("role"),
-                "fingerprint": manifest.get("fingerprint"),
-                "task_index": manifest.get("task_index"),
+                "status": "completed",
+                "role": role,
+                "fingerprint": manifest["fingerprint"],
+                "task_index": manifest["task_index"],
                 "instance_id": manifest.get("instance_id"),
                 "started_at": started,
                 "finished_at": datetime.now(timezone.utc).isoformat(),
-                "agent_output_raw": getattr(exc, "raw_response", ""),
-                "trajectory": getattr(exc, "trajectory", []),
-            })
+                "agent_output": output,
+                "trajectory": trajectory,
+            },
+        )
+        return 0
+    except Exception as exc:
+        if isinstance(exc, PlaybookAgentOutputContractError):
+            atomic_json(
+                attempt_dir / "agent_completion.json",
+                {
+                    "schema_version": 1,
+                    "status": "agent_completed",
+                    "role": manifest.get("role"),
+                    "fingerprint": manifest.get("fingerprint"),
+                    "task_index": manifest.get("task_index"),
+                    "instance_id": manifest.get("instance_id"),
+                    "started_at": started,
+                    "finished_at": datetime.now(timezone.utc).isoformat(),
+                    "agent_output_raw": getattr(exc, "raw_response", ""),
+                    "trajectory": getattr(exc, "trajectory", []),
+                },
+            )
         elif hasattr(exc, "trajectory"):
             atomic_json(
                 attempt_dir / "agent_trajectory.json",
@@ -250,11 +299,14 @@ def run_task(
                 },
             )
         failure = {
-            "schema_version": 1, "status": "agent_failed",
-            "role": manifest.get("role"), "fingerprint": manifest.get("fingerprint"),
+            "schema_version": 1,
+            "status": "agent_failed",
+            "role": manifest.get("role"),
+            "fingerprint": manifest.get("fingerprint"),
             "task_index": manifest.get("task_index"),
             "instance_id": manifest.get("instance_id"),
-            "started_at": started, "finished_at": datetime.now(timezone.utc).isoformat(),
+            "started_at": started,
+            "finished_at": datetime.now(timezone.utc).isoformat(),
             "failure_stage": stage,
             "failure_kind": (
                 "agent_output_contract"
@@ -262,7 +314,8 @@ def run_task(
                 or isinstance(exc, PlaybookAgentOutputContractError)
                 else "operational"
             ),
-            "error_type": type(exc).__name__, "error": str(exc),
+            "error_type": type(exc).__name__,
+            "error": str(exc),
         }
         atomic_json(attempt_dir / "failure.json", failure)
         atomic_json(output_path, failure)
@@ -277,9 +330,13 @@ def main() -> int:
     parser.add_argument("--attempt-dir", required=True, type=Path)
     parser.add_argument("--previous-output", type=Path)
     args = parser.parse_args()
-    return run_task(config_path=args.config, manifest_path=args.manifest,
-                    output_path=args.output, attempt_dir=args.attempt_dir,
-                    previous_output_path=args.previous_output)
+    return run_task(
+        config_path=args.config,
+        manifest_path=args.manifest,
+        output_path=args.output,
+        attempt_dir=args.attempt_dir,
+        previous_output_path=args.previous_output,
+    )
 
 
 if __name__ == "__main__":

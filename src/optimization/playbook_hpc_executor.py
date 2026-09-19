@@ -23,11 +23,22 @@ from src.optimization.repo_playbook import (
     validate_repo_checker_result,
     validate_repo_reflector_review,
 )
+from src.optimization.paired_playbook import (
+    validate_paired_checker_result,
+    validate_paired_reflector_review,
+)
 
 
 def _sha(value: Any) -> str:
-    return hashlib.sha256(json.dumps(value, ensure_ascii=False, sort_keys=True,
-                                     separators=(",", ":"), default=str).encode()).hexdigest()
+    return hashlib.sha256(
+        json.dumps(
+            value,
+            ensure_ascii=False,
+            sort_keys=True,
+            separators=(",", ":"),
+            default=str,
+        ).encode()
+    ).hexdigest()
 
 
 def _file_sha256(path: Path) -> str:
@@ -82,11 +93,18 @@ def _task_input_identity(
 
 
 class PlaybookHPCExecutor:
-    def __init__(self, *, config_path: Path, run_dir: Path, hpc: HPCConfig,
-                 token_counter=None, maximum_bullet_tokens: int | None = None,
-                 checkpoint_import_run_dir: Path | None = None,
-                 checkpoint_import_manifest_sha256: str | None = None,
-                 checkpoint_import_roles: Sequence[str] = ()) -> None:
+    def __init__(
+        self,
+        *,
+        config_path: Path,
+        run_dir: Path,
+        hpc: HPCConfig,
+        token_counter=None,
+        maximum_bullet_tokens: int | None = None,
+        checkpoint_import_run_dir: Path | None = None,
+        checkpoint_import_manifest_sha256: str | None = None,
+        checkpoint_import_roles: Sequence[str] = (),
+    ) -> None:
         self.config_path = config_path
         self.run_dir = run_dir
         self.hpc = hpc
@@ -94,9 +112,7 @@ class PlaybookHPCExecutor:
         self.token_counter = token_counter
         self.maximum_bullet_tokens = maximum_bullet_tokens
         self.checkpoint_import_run_dir = checkpoint_import_run_dir
-        self.checkpoint_import_manifest_sha256 = (
-            checkpoint_import_manifest_sha256
-        )
+        self.checkpoint_import_manifest_sha256 = checkpoint_import_manifest_sha256
         self.checkpoint_import_roles = frozenset(checkpoint_import_roles)
 
     def _import_completed_outputs(
@@ -125,17 +141,13 @@ class PlaybookHPCExecutor:
         pattern = f"hpc_tasks/{role}/*/tasks/task_*.json"
         for source_task_path in sorted(source_run.glob(pattern)):
             source_task = json.loads(source_task_path.read_text(encoding="utf-8"))
-            identity = _sha(
-                _task_input_identity(source_task, run_dir=source_run)
-            )
+            identity = _sha(_task_input_identity(source_task, run_dir=source_run))
             source_output_path = (
                 source_task_path.parents[1] / "outputs" / source_task_path.name
             )
             if not source_output_path.is_file():
                 continue
-            source_output = json.loads(
-                source_output_path.read_text(encoding="utf-8")
-            )
+            source_output = json.loads(source_output_path.read_text(encoding="utf-8"))
             if source_output.get("status") != "completed":
                 continue
             if identity in sources:
@@ -183,33 +195,42 @@ class PlaybookHPCExecutor:
             }
             validate_output(task, imported)
             pending.append((task, imported, imported["checkpoint_import"]))
-            audit_rows.append({
-                "instance_id": task.instance_id,
-                **imported["checkpoint_import"],
-            })
+            audit_rows.append(
+                {
+                    "instance_id": task.instance_id,
+                    **imported["checkpoint_import"],
+                }
+            )
 
         for task, imported, _provenance in pending:
             atomic_json(task.output_path, imported)
         if audit_rows:
-            atomic_json(batch_dir / "checkpoint_import.json", {
-                "schema_version": 1,
-                "role": role,
-                "source_run": str(source_run),
-                "source_run_manifest_sha256": observed_manifest_sha,
-                "imported": audit_rows,
-            })
+            atomic_json(
+                batch_dir / "checkpoint_import.json",
+                {
+                    "schema_version": 1,
+                    "role": role,
+                    "source_run": str(source_run),
+                    "source_run_manifest_sha256": observed_manifest_sha,
+                    "imported": audit_rows,
+                },
+            )
 
     def batch_dir_for(self, role: str, items: Sequence[Mapping[str, Any]]) -> Path:
         semantic = {
-            "schema": 1, "role": role,
+            "schema": 1,
+            "role": role,
             "config_sha256": hashlib.sha256(self.config_path.read_bytes()).hexdigest(),
             "items": list(items),
         }
         return self.run_dir / "hpc_tasks" / role / _sha(semantic)
 
-    def run_wave(self, role: str, items: Sequence[Mapping[str, Any]]) -> list[dict[str, Any]]:
+    def run_wave(
+        self, role: str, items: Sequence[Mapping[str, Any]]
+    ) -> list[dict[str, Any]]:
         semantic = {
-            "schema": 1, "role": role,
+            "schema": 1,
+            "role": role,
             "config_sha256": hashlib.sha256(self.config_path.read_bytes()).hexdigest(),
             "items": list(items),
         }
@@ -219,8 +240,11 @@ class PlaybookHPCExecutor:
         for index, item in enumerate(items):
             manifest = batch_dir / "tasks" / f"task_{index:04d}.json"
             payload = {
-                "schema_version": 1, "role": role, "fingerprint": fingerprint,
-                "task_index": index, "instance_id": item.get("instance_id"),
+                "schema_version": 1,
+                "role": role,
+                "fingerprint": fingerprint,
+                "task_index": index,
+                "instance_id": item.get("instance_id"),
                 "prompt_values": dict(item["prompt_values"]),
             }
             if "validation_playbook" in item:
@@ -233,7 +257,7 @@ class PlaybookHPCExecutor:
                 payload["repository"] = dict(item["repository"])
             if "image_authority" in item:
                 payload["image_authority"] = dict(item["image_authority"])
-            if role == "repo_reflector":
+            if role in {"repo_reflector", "paired_repo_reflector"}:
                 source_access_issue = item.get("source_access_issue")
                 if (
                     not isinstance(source_access_issue, str)
@@ -247,14 +271,25 @@ class PlaybookHPCExecutor:
                 raise ValueError("playbook task manifest mismatch")
             if not manifest.exists():
                 atomic_json(manifest, payload)
-            tasks.append(TaskFiles(index, str(item.get("instance_id", role)), manifest,
-                                   batch_dir / "outputs" / f"task_{index:04d}.json",
-                                   batch_dir / "attempts" / f"task_{index:04d}"))
-        atomic_json(batch_dir / "manifest.json", {
-            "schema_version": 1, "role": role, "fingerprint": fingerprint,
-            "task_count": len(tasks),
-            "instance_ids": [item.get("instance_id") for item in items],
-        })
+            tasks.append(
+                TaskFiles(
+                    index,
+                    str(item.get("instance_id", role)),
+                    manifest,
+                    batch_dir / "outputs" / f"task_{index:04d}.json",
+                    batch_dir / "attempts" / f"task_{index:04d}",
+                )
+            )
+        atomic_json(
+            batch_dir / "manifest.json",
+            {
+                "schema_version": 1,
+                "role": role,
+                "fingerprint": fingerprint,
+                "task_count": len(tasks),
+                "instance_ids": [item.get("instance_id") for item in items],
+            },
+        )
 
         def script(indices: Sequence[int], attempt: int) -> Path:
             path = batch_dir / f"{role}_array_attempt_{attempt:02d}.sbatch"
@@ -265,22 +300,39 @@ class PlaybookHPCExecutor:
             if cap > 0 and len(indices) > cap:
                 spec += f"%{cap}"
             lines = [
-                "#!/usr/bin/env bash", f"#SBATCH --job-name={self.hpc.job_name_prefix}-{role}-{fingerprint[:10]}-a{attempt}",
-                f"#SBATCH --partition={self.hpc.partition}", f"#SBATCH --cpus-per-task={self.hpc.cpus_per_task}",
-                f"#SBATCH --mem={self.hpc.mem}", f"#SBATCH --time={self.hpc.time}",
-                f"#SBATCH --array={spec}", f"#SBATCH --output={logs}/%x-%A_%a.out",
-                f"#SBATCH --error={logs}/%x-%A_%a.err", "set -euo pipefail", "set +x",
-                f"ENV_FILE={shlex.quote(self.hpc.remote_env_file)}", 'ENV_FILE="${ENV_FILE/#\\~/$HOME}"',
-                'source "$ENV_FILE"', 'test -n "${DEEPSEEK_API_KEY:-}" || exit 2',
-                f"BATCH_DIR={shlex.quote(str(batch_dir))}", 'TASK_ID="$(printf "%04d" "$SLURM_ARRAY_TASK_ID")"',
-                f"ATTEMPT={attempt}", 'ATTEMPT_ID="$(printf "%02d" "$ATTEMPT")"',
+                "#!/usr/bin/env bash",
+                f"#SBATCH --job-name={self.hpc.job_name_prefix}-{role}-{fingerprint[:10]}-a{attempt}",
+                f"#SBATCH --partition={self.hpc.partition}",
+                f"#SBATCH --cpus-per-task={self.hpc.cpus_per_task}",
+                f"#SBATCH --mem={self.hpc.mem}",
+                f"#SBATCH --time={self.hpc.time}",
+                f"#SBATCH --array={spec}",
+                f"#SBATCH --output={logs}/%x-%A_%a.out",
+                f"#SBATCH --error={logs}/%x-%A_%a.err",
+                "set -euo pipefail",
+                "set +x",
+                f"ENV_FILE={shlex.quote(self.hpc.remote_env_file)}",
+                'ENV_FILE="${ENV_FILE/#\\~/$HOME}"',
+                'source "$ENV_FILE"',
+                'test -n "${DEEPSEEK_API_KEY:-}" || exit 2',
+                f"BATCH_DIR={shlex.quote(str(batch_dir))}",
+                'TASK_ID="$(printf "%04d" "$SLURM_ARRAY_TASK_ID")"',
+                f"ATTEMPT={attempt}",
+                'ATTEMPT_ID="$(printf "%02d" "$ATTEMPT")"',
                 'ATTEMPT_DIR="$BATCH_DIR/attempts/task_${TASK_ID}/attempt_${ATTEMPT_ID}"',
                 'mkdir -p "$ATTEMPT_DIR"',
                 *(
                     [f"module load {shlex.quote(self.hpc.container_module)}"]
-                    if role in {
-                        "reflector", "curator", "repo_checker", "repo_reflector"
-                    } else []
+                    if role
+                    in {
+                        "reflector",
+                        "curator",
+                        "repo_checker",
+                        "repo_reflector",
+                        "paired_repo_checker",
+                        "paired_repo_reflector",
+                    }
+                    else []
                 ),
                 f"{shlex.quote(self.hpc.python_bin)} -m src.optimization.playbook_worker "
                 f"--config {shlex.quote(str(self.config_path))} "
@@ -290,7 +342,8 @@ class PlaybookHPCExecutor:
                 + (
                     '--previous-output "$BATCH_DIR/failed_outputs/'
                     f'attempt_{attempt - 1:02d}/task_${{TASK_ID}}.json"'
-                    if attempt > 1 else ""
+                    if attempt > 1
+                    else ""
                 ),
             ]
             path.write_text("\n".join(lines) + "\n", encoding="utf-8")
@@ -299,21 +352,29 @@ class PlaybookHPCExecutor:
         def validate(task: TaskFiles, value: dict[str, Any]) -> None:
             if value.get("fingerprint") != fingerprint or value.get("role") != role:
                 raise ValueError("playbook worker output identity mismatch")
-            if value.get("task_index") != task.index or not isinstance(value.get("agent_output"), dict):
+            if value.get("task_index") != task.index or not isinstance(
+                value.get("agent_output"), dict
+            ):
                 raise ValueError("playbook worker output schema mismatch")
             if not isinstance(value.get("trajectory"), list):
                 raise ValueError("playbook worker trajectory missing")
             task_manifest = json.loads(task.manifest_path.read_text(encoding="utf-8"))
             agent_output = value["agent_output"]
-            if role in {"checker", "repo_checker"}:
-                playbook = RejectPlaybook(tuple(
-                    PlaybookBullet(f"host-{index:05d}", "Host validation rule")
-                    for index in range(1, int(task_manifest["validation_rule_count"]) + 1)
-                ))
+            if role in {"checker", "repo_checker", "paired_repo_checker"}:
+                playbook = RejectPlaybook(
+                    tuple(
+                        PlaybookBullet(f"host-{index:05d}", "Host validation rule")
+                        for index in range(
+                            1, int(task_manifest["validation_rule_count"]) + 1
+                        )
+                    )
+                )
                 if role == "checker":
                     validate_checker_result(agent_output, playbook)
-                else:
+                elif role == "repo_checker":
                     validate_repo_checker_result(agent_output, playbook)
+                else:
+                    validate_paired_checker_result(agent_output, playbook)
             else:
                 playbook = RejectPlaybook.parse(task_manifest["validation_playbook"])
             if role == "reflector":
@@ -324,6 +385,12 @@ class PlaybookHPCExecutor:
                 )
             elif role == "repo_reflector":
                 validate_repo_reflector_review(
+                    agent_output,
+                    instance_id=task.instance_id,
+                    playbook=playbook,
+                )
+            elif role == "paired_repo_reflector":
+                validate_paired_reflector_review(
                     agent_output,
                     instance_id=task.instance_id,
                     playbook=playbook,
@@ -348,7 +415,12 @@ class PlaybookHPCExecutor:
             validate_output=validate,
         )
         return self.runtime.run(
-            batch_dir=batch_dir, fingerprint=fingerprint, tasks=tasks,
-            job_name=lambda attempt: f"{self.hpc.job_name_prefix}-{role}-{fingerprint[:10]}-a{attempt}",
-            write_script=script, validate_output=validate,
+            batch_dir=batch_dir,
+            fingerprint=fingerprint,
+            tasks=tasks,
+            job_name=lambda attempt: (
+                f"{self.hpc.job_name_prefix}-{role}-{fingerprint[:10]}-a{attempt}"
+            ),
+            write_script=script,
+            validate_output=validate,
         )

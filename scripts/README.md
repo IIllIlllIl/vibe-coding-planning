@@ -99,6 +99,14 @@ authority is `docs/archive/mixed-design/swe-chat-data-cleaning.md`.
   into the compact ACE schema. Checker inputs remain issue/Plan-only at
   runtime; retrospective artifacts stay as immutable path/hash/field
   references and are materialized only for selected Reflector cases.
+- `tools/export_swe_verified_pair_observations.py` verifies terminal Safe PCE
+  output authorities and exports a compact Plan/outcome index with hash-bound
+  retrospective evidence references. Unknown or operationally incomplete rows
+  are omitted rather than relabeled.
+- `tools/build_swe_verified_pair_snapshot.py` combines that index with the
+  clean411 baseline, applies an explicit reliability-exclusion ledger, forms
+  distinct-Plan resolved-by-unresolved pairs, and freezes a task-grouped
+  train/validation split.
 - `tools/freeze_playbook_smoke_selection.py` freezes a repository-covering,
   outcome-balanced 32-train/8-validation flow-and-prompt smoke selection. The
   selection is outcome-exposed and is not method-evaluation evidence.

@@ -1,0 +1,38 @@
+{
+  "instance_ids": [
+    "psf__requests-2317"
+  ],
+  "observation_ids": [
+    "0b9ff72668af3c431eef0e7c1b0ee2242d6ba19dffe8e58fb26627e61611eb23",
+    "12cad44941f40055faa1865cca209618abace193d5242b58a1fb3325fed25636",
+    "1d44b28e6f4e77327196ab59288ec587feeb207042fa8371a70803d5054a9bd0",
+    "1d5b93be6b5fa0f7c76f5b262c1af4cb440618b79a000c668fd5575d5a49d731",
+    "313148cb474546f1d43b302db16c10e629a62db137f0ba10910ad6522600ca80",
+    "90e9510ae1dfdec6b1aba28fa107c9a628a95530be26db00abba58e03f55989f",
+    "96ea6e858081d8f44923916e24485ee3b1152291fbb208d0a62b56a9b89bd75f",
+    "99880e4c6c1fa3744b2bd86fe8be7909a14a4acbd6028e4965e9a37db713fd70",
+    "9c33bfa6f4d424bf06e458da7cf4772e9d113e87c29c5f588d5133036eee1607",
+    "a95717a35e39a28752fc4ee9f6bc8e6079fe337e190974938093e86993faa866",
+    "b5271254736c3d34056171ecc75b597414ce435e5587b1e1a511d1fe61840c49",
+    "b86f21ca9488f747c6a3654c285ed47c9c46b9bd780ade7d564b54068fb17a40",
+    "bdb610f16b340dadc27d7cabf3bb998276a02ba2916b34748d0f2aeb6685b7af",
+    "9cc90b92373263ace3ce02ffd06c147919f539b4704885c28a1dc5f4cbf57941"
+  ],
+  "policy": {
+    "exclude_identical_patch_conflicting_outcomes": true,
+    "exclude_patch_authority_mismatch_observations": true,
+    "exclude_successfully_executed_non_prompt_http_observations": true,
+    "keep_blocked_source_access_attempts": true,
+    "keep_prompt_url_access": true,
+    "operationally_incomplete_is_not_an_outcome": true
+  },
+  "reasons": {
+    "psf__requests-2317": [
+      "identical_patch_conflicting_outcomes",
+      "external_httpbin_502",
+      "unrelated_pytest_environment_failure"
+    ],
+    "observation_policy": "The listed observations either have a Host/Agent patch-authority mismatch or successfully fetched a non-Prompt HTTP source. They are excluded conservatively; blocked attempts and frozen Prompt URLs remain eligible."
+  },
+  "schema_version": 1
+}

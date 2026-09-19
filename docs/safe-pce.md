@@ -601,6 +601,37 @@ reading alternate source are retained. The deterministic builder is
 derivative and verifies every selected task identity before writing the
 ledger. The raw formal run remains unchanged.
 
+### Within-task pair derivative
+
+Safe PCE repeats are projected into a separate, immutable within-task Plan-pair
+authority for paired ACE development. The exporter retains only terminal rows
+with a boolean official evaluator result, verifies each Plan and output
+artifact hash, and keeps hash-bound references to Plan/Code trajectories,
+patches, and evaluator evidence. Operationally incomplete, timeout, unknown,
+and unparsable rows never become unresolved.
+
+The observation index has 1,112 additional terminal observations over 386
+tasks and is stored at
+`/mnt/scratch/users/twang/vibe-coding-planning/run_state/authorities/safe-pce-pair-observations/20260919-v1/observations.jsonl`
+with SHA-256
+`dd479a7c5b0d028b880440cbe9ee727f081b50d9c9646bd0c07e75ef0d016937`.
+It includes the six completed Iris priority-RU observations; the seventh Iris
+case timed out and is absent.
+
+The frozen pair snapshot is
+`configs/frozen_swe_verified_plan_pairs/20260919_safe_pce_within_task_pairs_v1/`.
+Its human-readable cleaning authority is
+`configs/frozen_swe_verified_plan_pairs/20260919_pair_cleaning_record_v1.md`;
+the exact observation/task IDs remain in
+`20260919_pair_reliability_exclusions_v1.json`, and both records are hash-bound
+by the snapshot manifest. It excludes explicitly audited leakage and authority defects, collapses exact
+same-Plan/same-outcome repeats, excludes any Plan hash observed with both
+outcomes, forms all remaining distinct-Plan R-by-U combinations, and assigns
+whole tasks to one split. Its final counts are 180 pairs across 57 tasks: 144
+train pairs from 46 tasks and 36 validation pairs from 11 tasks. This is a
+development dataset enriched for within-task disagreement, not a prevalence
+sample or held-out effectiveness evaluation.
+
 ## Historical Evidence
 
 The complete former SWE-Verified PCE/PCCE workflow, including quick50 and
