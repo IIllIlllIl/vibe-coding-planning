@@ -246,6 +246,40 @@ def test_environment_blocks_and_records_remote_source_command(tmp_path, monkeypa
     assert "command_sha256" in event
 
 
+def test_environment_can_start_source_audit_after_host_setup(tmp_path, monkeypatch):
+    cache_dir = tmp_path / "sifs"
+    log_path = tmp_path / "source_access.jsonl"
+    calls = []
+    monkeypatch.setattr(
+        subprocess,
+        "run",
+        lambda args, **kwargs: (
+            calls.append(args)
+            or subprocess.CompletedProcess(args, returncode=0, stdout="", stderr="")
+        ),
+    )
+    env = _make_env(cache_dir)
+    calls.clear()
+
+    host_result = env.execute("git gc --prune=now")
+    assert host_result["returncode"] == 0
+    assert not log_path.exists()
+
+    env.enable_source_access_audit(
+        prompt_urls=[],
+        log_path=log_path,
+        context={"instance_id": "case", "phase": "checker"},
+    )
+    agent_result = env.execute("git fetch https://example.org/repo.git")
+
+    assert agent_result["returncode"] == 126
+    assert len(calls) == 1
+    event = json.loads(log_path.read_text(encoding="utf-8"))
+    assert event["decision"] == "block"
+    assert event["instance_id"] == "case"
+    assert event["phase"] == "checker"
+
+
 def test_environment_executes_and_records_prompt_url(tmp_path, monkeypatch):
     cache_dir = tmp_path / "sifs"
     log_path = tmp_path / "source_access.jsonl"

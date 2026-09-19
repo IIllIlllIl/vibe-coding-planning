@@ -353,12 +353,6 @@ def _run_repository_json_agent(
                 )
             ),
             run_args=run_args,
-            source_access_prompt_urls=list(extract_http_urls(source_access_issue)),
-            source_access_log_path=source_access_path,
-            source_access_context={
-                "instance_id": repository["instance_id"],
-                "phase": repository_config.get("phase", "repo_checker"),
-            },
         )
         try:
             baseline = restore_repository_to_base(
@@ -370,6 +364,14 @@ def _run_repository_json_agent(
                 prune_future_history=bool(
                     repository_config.get("prune_future_history", True)
                 ),
+            )
+            environment.enable_source_access_audit(
+                prompt_urls=list(extract_http_urls(source_access_issue)),
+                log_path=source_access_path,
+                context={
+                    "instance_id": repository["instance_id"],
+                    "phase": repository_config.get("phase", "repo_checker"),
+                },
             )
             agent = build_default_agent(
                 DefaultAgent,

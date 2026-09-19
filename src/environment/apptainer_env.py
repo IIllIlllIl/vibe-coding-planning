@@ -479,6 +479,27 @@ class ApptainerEnvironment:
             "returncode": result.returncode,
         }
 
+    def enable_source_access_audit(
+        self,
+        *,
+        prompt_urls: list[str],
+        log_path: Path,
+        context: dict[str, Any] | None = None,
+    ) -> None:
+        """Start auditing subsequent Agent commands.
+
+        Repository-backed phases prepare and sanitize their frozen worktree
+        with Host-owned commands before the Agent starts.  Enabling the audit
+        only after that boundary prevents Host setup from being attributed to
+        the Agent while preserving the same policy for every Agent command.
+        """
+        self._source_access_prompt_urls = frozenset(
+            canonical_http_url(value) for value in prompt_urls
+        )
+        self._source_access_log_path = Path(log_path)
+        self._source_access_context = dict(context or {})
+        self._source_access_event_index = 0
+
     def _record_source_event(
         self,
         event: dict[str, Any],

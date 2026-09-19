@@ -858,6 +858,10 @@ def test_repository_runtime_uses_disposable_base_repo_and_artifact_channel(
         def __init__(self, **kwargs):
             captured["environment"] = kwargs
 
+        def enable_source_access_audit(self, **kwargs):
+            assert "restore" in captured
+            captured["source_access_audit"] = kwargs
+
         def execute(self, command, **kwargs):
             captured["artifact"] = (command, kwargs)
             return {
@@ -873,6 +877,7 @@ def test_repository_runtime_uses_disposable_base_repo_and_artifact_channel(
         messages = [{"role": "assistant", "content": "submitted"}]
 
         def run(self, **kwargs):
+            assert "source_access_audit" in captured
             captured["agent_run"] = kwargs
             return "Submitted", "terminal diagnostics"
 
@@ -896,6 +901,7 @@ def test_repository_runtime_uses_disposable_base_repo_and_artifact_channel(
     )
 
     def fake_restore(env, base_commit, **kwargs):
+        assert "source_access_audit" not in captured
         captured["restore"] = (env, base_commit, kwargs)
         return {"after": {"head": {"output": base_commit}}}
 
@@ -942,13 +948,16 @@ def test_repository_runtime_uses_disposable_base_repo_and_artifact_channel(
     assert captured["environment"]["masked_container_paths"] == [
         "/opt/miniconda3/pkgs"
     ]
-    assert captured["environment"]["source_access_prompt_urls"] == [
+    assert "source_access_prompt_urls" not in captured["environment"]
+    assert "source_access_log_path" not in captured["environment"]
+    assert "source_access_context" not in captured["environment"]
+    assert captured["source_access_audit"]["prompt_urls"] == [
         "https://example.com/issue"
     ]
-    assert captured["environment"]["source_access_log_path"] == (
+    assert captured["source_access_audit"]["log_path"] == (
         tmp_path / "attempt/source_access.jsonl"
     )
-    assert captured["environment"]["source_access_context"] == {
+    assert captured["source_access_audit"]["context"] == {
         "instance_id": "repo__repo-1",
         "phase": "repo_checker",
     }

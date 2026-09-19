@@ -902,9 +902,23 @@ index remains in durable Aion scratch and is bound by SHA-256; Git stores the
 pair snapshot, source manifest, exclusions, and audit rather than the raw
 trajectory payload.
 
+Repository Agent source auditing starts after Host base-repository preparation
+and history sanitization, before the Agent's first action. Host preparation has
+its own `repository_baseline` evidence; its compound Git commands must not be
+reported as Agent source-access attempts. The Agent network policy is unchanged.
+
+Paired Reflection retains file-backed evidence mounted read-only at `/evidence`.
+The initial prompt points to the bundle; reading complete trajectories can still
+expand the Agent's conversation context. Only `reflection.rounds` configures
+paired Reflection; its repository environment and command timeout come from
+`repo_checker`. Historical launched configs may retain unused evidence-container
+fields and are preserved as frozen run authorities.
+
 The first formal contract uses eight proposals and a 24-pair Reflection
 minibatch. It has no case-level Level field: each concern is either materially
 triggered or not, and candidate selection uses only pair ordering. A four-pair
 end-to-end smoke must complete and its prompt trajectories must be reviewed
 before the formal config becomes runnable. Merely tracking either config does
 not authorize submission.
+The `readiness` block records human review status; it is not a runtime launch
+gate. Launch authorization and frozen input validation remain separate.

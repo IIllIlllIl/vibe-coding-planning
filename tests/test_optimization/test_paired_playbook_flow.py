@@ -299,6 +299,7 @@ def test_paired_smoke_and_formal_configs_bind_new_contract() -> None:
     formal = yaml.safe_load(formal_path.read_text())
     assert formal["search"]["reflection_minibatch_size"] == 24
     assert formal["search"]["max_iterations"] == 8
+    assert formal["reflection"] == {"rounds": 1}
 
 
 def test_paired_config_selects_paired_adapter_and_data_unit(monkeypatch) -> None:
