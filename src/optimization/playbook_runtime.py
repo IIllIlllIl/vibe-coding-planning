@@ -37,6 +37,24 @@ class PlaybookAgentOutputContractError(ValueError):
     """An Agent returned a final artifact that Host parsing cannot accept."""
 
 
+def evidence_agent_config(config: Mapping[str, Any]) -> dict[str, Any]:
+    """Resolve the repository-free evidence environment shared by Curator.
+
+    Older runs store explicit overrides under reflection. Repo Reflector no
+    longer uses that environment, but Curator still does. The shared container
+    cache is the default when those legacy overrides are absent.
+    """
+    legacy = config.get("reflection", {})
+    cache = legacy.get("evidence_sif_cache_dir") or config.get("container", {}).get("sif_cache_dir")
+    if not isinstance(cache, str) or not cache.strip():
+        raise ValueError("Evidence Agent requires container.sif_cache_dir or reflection.evidence_sif_cache_dir")
+    return {
+        "evidence_sif_cache_dir": cache,
+        "evidence_image": legacy.get("evidence_image", "python:3.12-slim"),
+        "command_timeout_seconds": int(legacy.get("command_timeout_seconds", 1800)),
+    }
+
+
 def require_prepared_repository_history(
     image_authority: Mapping[str, Any], repository: Mapping[str, Any]
 ) -> tuple[Path, dict[str, Any]]:

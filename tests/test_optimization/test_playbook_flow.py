@@ -1468,12 +1468,18 @@ def test_runner_marks_reflection_failure_as_operationally_incomplete(
         successful_proposals = 0
 
     adapter = PlaybookGEPAAdapter(lambda _: (_raw(False), []), Proposer())
+    def optimize_with_failed_proposal(**kwargs):
+        # GEPA catches proposal exceptions. Its next loop boundary must stop
+        # before sampling/evaluating another minibatch.
+        assert kwargs["stop_callbacks"](object()) is True
+        return object()
+
     with pytest.raises(RuntimeError, match="operationally incomplete"):
         run_playbook_search(
             dataset_snapshot=snapshot, initial_playbook_path=playbook_path,
             run_dir=tmp_path / "run", adapter=adapter, max_metric_calls=2,
             max_iterations=1, seed=1,
-            optimize_fn=lambda **_: object(),
+            optimize_fn=optimize_with_failed_proposal,
             abort_on_operational_incomplete=True,
         )
     status = json.loads((tmp_path / "run/controller_status.json").read_text())

@@ -34,6 +34,7 @@ from src.optimization.repo_playbook import (
     validate_repo_reflector_review,
 )
 from src.optimization.paired_playbook import validate_paired_reflector_review
+from src.optimization.playbook_runtime import evidence_agent_config
 
 
 def _resolve_config_path(config_path: Path, raw: str) -> Path:
@@ -193,7 +194,8 @@ def run_from_config(path: str | Path, *, agents: Any | None = None, optimize_fn=
         }:
             raise ValueError("checkpoint import contract is incomplete")
         roles = checkpoint_import["roles"]
-        allowed_import_roles = {"repo_checker", "repo_reflector", "curator"}
+        allowed_import_roles = {"repo_checker", "repo_reflector", "curator",
+                                "paired_repo_checker", "paired_repo_reflector"}
         if (
             not isinstance(roles, list)
             or not roles
@@ -213,6 +215,9 @@ def run_from_config(path: str | Path, *, agents: Any | None = None, optimize_fn=
     else:
         score_table, invalid_score = _score_table(raw)
     if agents is None and raw.get("execution", {}).get("backend") == "hpc_slurm":
+        # Curator remains repository-free even with repository-aware Reflectors.
+        # Validate its environment before launching expensive Checker waves.
+        evidence_agent_config(raw)
         h = raw["hpc"]
         hpc = HPCConfig(
             submit=bool(h["submit"]),

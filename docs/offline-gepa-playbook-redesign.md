@@ -916,8 +916,15 @@ Paired Reflection retains file-backed evidence mounted read-only at `/evidence`.
 The initial prompt points to the bundle; reading complete trajectories can still
 expand the Agent's conversation context. Only `reflection.rounds` configures
 paired Reflection; its repository environment and command timeout come from
-`repo_checker`. Historical launched configs may retain unused evidence-container
-fields and are preserved as frozen run authorities.
+`repo_checker`. Curator still uses a repository-free evidence container: its
+default cache comes from `container.sif_cache_dir`, its default image is
+`python:3.12-slim`, and its command timeout is 1800 seconds. Historical
+`reflection.evidence_*` and `reflection.command_timeout_seconds` fields remain
+supported overrides for evidence Agents; they were never universally unused.
+Validate this configuration before starting Checker waves. With
+`abort_on_operational_incomplete`, exhausted proposal failures stop search at
+the next loop boundary and surface as controller failures rather than consuming
+subsequent minibatches.
 
 The first formal contract uses eight proposals and a 24-pair Reflection
 minibatch. It has no case-level Level field: each concern is either materially

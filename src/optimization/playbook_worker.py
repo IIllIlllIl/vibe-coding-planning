@@ -16,6 +16,7 @@ from src.optimization.playbook_runtime import (
     PlaybookAgentOutputContractError,
     PromptModel,
     _render,
+    evidence_agent_config,
     run_evidence_curator,
     run_evidence_reflector,
     run_repository_checker,
@@ -162,7 +163,7 @@ def run_task(
             stage = "agent_execution"
             output, trajectory = run_evidence_reflector(
                 model_config=config["models"][role],
-                reflection_config=config["reflection"],
+                reflection_config=evidence_agent_config(config),
                 system=prompts[f"{role}_system"],
                 instance_template=prompts[f"{role}_instance"],
                 evidence_dir=str(manifest["evidence_dir"]),
@@ -173,7 +174,7 @@ def run_task(
             stage = "agent_execution"
             output, trajectory = run_evidence_curator(
                 model_config=config["models"][role],
-                reflection_config=config["reflection"],
+                reflection_config=evidence_agent_config(config),
                 system=prompts[f"{role}_system"],
                 instance_template=prompts[f"{role}_instance"],
                 evidence_dir=str(manifest["evidence_dir"]),

@@ -137,7 +137,7 @@ class PlaybookHPCExecutor:
         if observed_manifest_sha != expected_manifest_sha:
             raise ValueError("checkpoint import source run manifest hash mismatch")
 
-        sources: dict[str, tuple[Path, Path, dict[str, Any], dict[str, Any]]] = {}
+        sources: dict[str, list[tuple[Path, Path, dict[str, Any], dict[str, Any]]]] = {}
         pattern = f"hpc_tasks/{role}/*/tasks/task_*.json"
         for source_task_path in sorted(source_run.glob(pattern)):
             source_task = json.loads(source_task_path.read_text(encoding="utf-8"))
@@ -150,14 +150,14 @@ class PlaybookHPCExecutor:
             source_output = json.loads(source_output_path.read_text(encoding="utf-8"))
             if source_output.get("status") != "completed":
                 continue
-            if identity in sources:
+            if identity in sources and role not in {"paired_repo_checker", "paired_repo_reflector"}:
                 raise ValueError("duplicate checkpoint import task identity")
-            sources[identity] = (
+            sources.setdefault(identity, []).append((
                 source_task_path,
                 source_output_path,
                 source_task,
                 source_output,
-            )
+            ))
 
         pending: list[tuple[TaskFiles, dict[str, Any], dict[str, Any]]] = []
         audit_rows = []
@@ -165,11 +165,18 @@ class PlaybookHPCExecutor:
             if task.output_path.is_file():
                 continue
             target_task = json.loads(task.manifest_path.read_text(encoding="utf-8"))
-            source = sources.get(
+            matches = sources.get(
                 _sha(_task_input_identity(target_task, run_dir=self.run_dir))
             )
-            if source is None:
+            if not matches:
                 continue
+            # Pairs may repeat the same observation. Prefer the original slot,
+            # then earliest completion, without consulting verdicts or scores.
+            source = min(matches, key=lambda entry: (
+                entry[2].get("task_index") != target_task.get("task_index"),
+                str(entry[3].get("finished_at", "")),
+                str(entry[0]),
+            ))
             source_task_path, source_output_path, source_task, source_output = source
             if (
                 source_output.get("fingerprint") != source_task.get("fingerprint")

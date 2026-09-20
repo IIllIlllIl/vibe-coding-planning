@@ -47,8 +47,26 @@ Matplotlib preparation OOMs even with 4G, before model execution.
 - Keep operational failures separate from scientific labels and scores.
 - Preserve frozen run configs; fixes receive a new run identity. Import only
   fingerprint-verified compatible completions, never relabel old outputs.
+  Paired observations may repeat across pair slots. Import selection must be
+  outcome-blind: prefer the matching task slot, then earliest completion and
+  path order. Preserve raw output/trajectory and record source hashes. Restart
+  search from Seed when a failed proposal consumed an iteration; compatible
+  Agent completions may be reused, but failed search progress must not count
+  toward the new proposal budget.
 
 ## Lifecycle and cleanup
+
+Evidence-container configuration is shared: Repo Reflector uses the repository
+environment, but Curator still uses the repository-free evidence runtime.
+Do not remove a field after checking only its namesake Agent. Follow all worker
+call sites and test actual launch configs through worker dispatch to environment
+construction (mocking only containers and models). Evidence Agents default to
+the shared `container.sif_cache_dir`; old `reflection.evidence_*` settings are
+supported overrides. Validate required environment settings before Agent waves.
+
+Third-party GEPA catches proposal exceptions. When operational abort is enabled,
+check recorded proposal failures at the next stop callback as well as after
+optimization returns; otherwise a failed Curator can consume further iterations.
 
 Reuse `hpc_supervisor_service.py`, `hpc_resume_loop.py`, `hpc_runtime.py`, and
 `SlurmTaskBatch`; research sampling must not create another transport stack.

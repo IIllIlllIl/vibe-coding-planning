@@ -185,6 +185,14 @@ def _run_playbook_search_unlocked(
         if max_iterations is not None
         else None
     )
+    iteration_stopper = stopper
+    if abort_on_operational_incomplete:
+        def stop_after_failed_proposal(gepa_state):
+            if getattr(adapter.propose_new_texts, "failures", []):
+                return True
+            return bool(iteration_stopper and iteration_stopper(gepa_state))
+
+        stopper = stop_after_failed_proposal
     search = SimpleNamespace(
         seed=seed, reflection_minibatch_size=reflection_minibatch_size
     )
