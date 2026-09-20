@@ -482,7 +482,8 @@ if [[ -n "$RESUME_PREDECESSOR_CONFIG" ]]; then
     --new-config "$GEPA_CONFIG_REL"
 fi
 python3 -m pip install --quiet --user -e third_party/gepa || true
-python3 scripts/internal/run_gepa_rules.py --config "$GEPA_CONFIG_REL"
+VIBE_PLAYBOOK_AGENT_CPUS="$CPUS" VIBE_PLAYBOOK_AGENT_MEM="$MEM" \
+  python3 scripts/internal/run_gepa_rules.py --config "$GEPA_CONFIG_REL"
 EOF
 )
 else
@@ -519,7 +520,8 @@ if [[ -n "$RESUME_PREDECESSOR_CONFIG" ]]; then
     --new-config "$GEPA_CONFIG_REL"
 fi
 python3 -m pip install --quiet --user -e third_party/gepa || true
-python3 scripts/internal/run_gepa_rules.py --config "$GEPA_CONFIG_REL"
+VIBE_PLAYBOOK_AGENT_CPUS="$CPUS" VIBE_PLAYBOOK_AGENT_MEM="$MEM" \
+  python3 scripts/internal/run_gepa_rules.py --config "$GEPA_CONFIG_REL"
 GEPA_RC=\$?
 echo "[vibe-gepa] GEPA exited with rc=\$GEPA_RC at \$(date)"
 exit \$GEPA_RC

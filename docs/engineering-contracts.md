@@ -20,6 +20,21 @@ compute nodes; a successful upload there does not make a Slurm job runnable.
 
 ## Frozen repository history
 
+Playbook cluster migration can retain the exact scientific run and checkpoints.
+`hpc_submit_batch.sh` passes the explicit launch `--cpus`/`--mem` to Playbook
+Agent scheduling via `VIBE_PLAYBOOK_AGENT_CPUS`/`VIBE_PLAYBOOK_AGENT_MEM`.
+Only 1 CPU with 4G or 1750M is accepted by this deployment override. It changes
+neither frozen YAML nor model inputs, prompt hashes, candidate state, or task
+fingerprints. The controller logs effective resources; verify generated Agent
+SBATCH requests too. Use a new supervisor transport identity, never concurrent
+controllers for the shared run. Archive failed attempts and exhausted transport
+state before reopening; retain completed outputs and optimizer checkpoints.
+
+The v4 Iris launch config reuses the v4 scientific run with Iris 1 CPU / 4G
+for both Controller and Agents. Its Agent wall time remains 35 minutes and
+command timeout remains 1800 seconds. A memory migration does not cure a
+command timeout by itself.
+
 Use `src/environment/repository_history.py` across all repository-aware Agents.
 `RepositoryHistoryCache` stores bundles under the shared SIF cache's sibling
 `repository-history-cache-v1`. Identity is policy + SIF SHA-256 + base commit;

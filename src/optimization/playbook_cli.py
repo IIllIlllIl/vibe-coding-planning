@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import hashlib
 import math
+import os
 from pathlib import Path
 from typing import Any
 
@@ -35,6 +36,18 @@ from src.optimization.repo_playbook import (
 )
 from src.optimization.paired_playbook import validate_paired_reflector_review
 from src.optimization.playbook_runtime import evidence_agent_config
+
+
+def _deployment_resources(h: dict) -> tuple[int, str]:
+    """Transport-only resource override; frozen Agent inputs stay unchanged."""
+    cpus = os.environ.get("VIBE_PLAYBOOK_AGENT_CPUS")
+    mem = os.environ.get("VIBE_PLAYBOOK_AGENT_MEM")
+    if cpus is None and mem is None:
+        return int(h["cpus_per_task"]), str(h["mem"])
+    if cpus != "1" or mem not in {"4G", "1750M"}:
+        raise ValueError("Playbook deployment requires 1 CPU and 4G or 1750M")
+    print(f"[playbook-deployment] Agent resources: {cpus} CPU / {mem}", flush=True)
+    return int(cpus), mem
 
 
 def _resolve_config_path(config_path: Path, raw: str) -> Path:
@@ -219,11 +232,12 @@ def run_from_config(path: str | Path, *, agents: Any | None = None, optimize_fn=
         # Validate its environment before launching expensive Checker waves.
         evidence_agent_config(raw)
         h = raw["hpc"]
+        agent_cpus, agent_mem = _deployment_resources(h)
         hpc = HPCConfig(
             submit=bool(h["submit"]),
             partition=str(h["partition"]),
-            cpus_per_task=int(h["cpus_per_task"]),
-            mem=str(h["mem"]),
+            cpus_per_task=agent_cpus,
+            mem=agent_mem,
             time=str(h["agent_time"]),
             max_running_array_tasks=int(h["max_running_array_tasks"]),
             poll_interval_seconds=int(h["poll_interval_seconds"]),

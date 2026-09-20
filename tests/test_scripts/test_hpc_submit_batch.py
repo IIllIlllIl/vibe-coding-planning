@@ -175,6 +175,7 @@ prompts:
     lines = result.stdout.splitlines()
     assert lines[lines.index("--cpus") + 1] == "1"
     assert lines[lines.index("--mem") + 1] == "4G"
+    assert 'VIBE_PLAYBOOK_AGENT_CPUS="1" VIBE_PLAYBOOK_AGENT_MEM="4G"' in result.stdout
     assert "--module" in result.stdout
     assert "lang/Python/3.11" in result.stdout
     assert "tools/Apptainer" in result.stdout

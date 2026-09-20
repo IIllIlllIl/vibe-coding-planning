@@ -161,11 +161,10 @@ Use an Aion-specific local `ulhpc-submit` config with host
 not the experiment interpreter.
 
 A 1 CPU / 4G request was accounted by Aion as three allocated CPUs because of
-the cluster's memory-per-core policy. Keep the default Safe PCE request at
-1 CPU / 4G; interpret Aion `AllocCPUS` accordingly when reporting utilization.
-An Aion-only 1 CPU / 1750M pilot is allowed only when its frozen experiment
-contract repeats that exact memory value. This is a measured resource
-experiment, not a new default.
+the cluster's memory-per-core policy. Current requests are 1 CPU / 1750M on
+Aion and 1 CPU / 4G on Iris, as specified in `engineering-contracts.md`.
+After an Aion OOM, explicitly migrate to Iris rather than silently increasing
+Aion memory and therefore its allocated CPU count.
 
 Aion scratch has a per-user file-count quota independent of free bytes. A run
 that expands many SIF repositories concurrently can exhaust that quota even
