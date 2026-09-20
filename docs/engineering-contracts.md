@@ -56,6 +56,10 @@ Matplotlib preparation OOMs even with 4G, before model execution.
 
 ## Lifecycle and cleanup
 
+Cross-run checkpoint imports on HPC must use the absolute scratch authority
+path. A staged worktree may link only its current run, so a sibling path under
+its local `output/` tree does not imply the prior run is visible there.
+
 Evidence-container configuration is shared: Repo Reflector uses the repository
 environment, but Curator still uses the repository-free evidence runtime.
 Do not remove a field after checking only its namesake Agent. Follow all worker

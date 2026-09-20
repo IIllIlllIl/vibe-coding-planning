@@ -26,6 +26,7 @@ def test_legacy_evidence_overrides_are_preserved():
     "gepa_verified_paired_repo_concern_playbook_formal24_8it_v1_20260919.yaml",
     "gepa_verified_paired_repo_concern_playbook_formal24_8it_v2_20260920.yaml",
     "gepa_verified_paired_repo_concern_playbook_formal24_8it_v3_20260920.yaml",
+    "gepa_verified_paired_repo_concern_playbook_formal24_8it_v4_20260920.yaml",
 ])
 def test_formal_config_reaches_curator_environment_and_completion(name, tmp_path, monkeypatch):
     config_path = Path("configs") / name

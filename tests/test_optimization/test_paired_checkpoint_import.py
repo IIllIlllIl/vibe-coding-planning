@@ -1,10 +1,19 @@
 import hashlib
 import json
+import yaml
 from pathlib import Path
 
 from src.optimization.hpc.config import HPCConfig
 from src.optimization.hpc.task_batch import TaskFiles
 from src.optimization.playbook_hpc_executor import PlaybookHPCExecutor
+
+
+def test_formal_import_uses_absolute_scratch_authority():
+    config = yaml.safe_load(Path("configs/gepa_verified_paired_repo_concern_playbook_formal24_8it_v4_20260920.yaml").read_text())
+    source = Path(config["checkpoint_import"]["source_run_dir"])
+    assert source.is_absolute()
+    assert str(source).startswith("/scratch/users/twang/vibe-coding-planning/run_state/")
+    assert source.name == "formal24-8it-v2-20260920"
 
 
 def test_repeated_pair_observation_import_preserves_original_slot(tmp_path):
