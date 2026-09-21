@@ -14,12 +14,19 @@ the shared supervisor supplies canonical storage paths.
 
 ## Experiment Inventory
 
-Prepared lightweight paired smoke (launch requires explicit authorization):
+Prepared paired-Level formal 8it (not launched):
+`gepa_verified_paired_levels_categorized_formal24_8it_v1_20260921.yaml` and
+its matching supervisor YAML use the versioned `v2` prompt, 143 selected train
+pairs after excluding one evaluator-confounded Django pair, all 36 validation
+pairs, minibatch 24, no-thinking Checker, Level-2 gating, and Iris 1 CPU/4G.
+Remote preflight and explicit launch approval remain necessary.
+
+Completed lightweight paired smoke (historical authority):
 `gepa_verified_paired_levels_smoke8_v1_20260921.yaml` and its matching
 `gepa_verified_paired_levels_smoke8_v1_supervisor_20260921.yaml` freeze four
 train/four validation pairs, one proposal, no-thinking Checker, categorized
 seed, Level-2 gating, and Iris 1 CPU/4G. See the smoke contract in
-`docs/offline-gepa-playbook-redesign.md`; this is not formal 8it approval.
+`docs/offline-gepa-playbook-redesign.md`; do not relaunch it as formal 8it.
 
 Next paired development (not launch-ready):
 `gepa_verified_paired_levels_categorized_dev_v1_20260921.yaml` enables explicit

@@ -1,13 +1,13 @@
 schema_version: 1
 mode: offline_paired_repo_concern_playbook
-status: draft
-run_id: verified-paired-repo-concern-playbook-levels-categorized-dev-v1-20260921
-purpose: development-only categorized Level review configuration; behavior prompts and launch require review
+status: ready_not_launched
+run_id: verified-paired-repo-concern-playbook-levels-categorized-formal24-8it-v1-20260921
+purpose: formal eight-proposal paired Level review with categorized concerns, excluding one evaluator-confounded Django pair
 
 paths:
   dataset_snapshot: configs/frozen_swe_verified_plan_pairs/20260919_safe_pce_within_task_pairs_v1
   initial_rules: configs/development_guidelines/paired_concern_seed_v3_categorized.json
-  run_dir: output/SWE-bench_Verified/gepa-paired-repo-concern-playbook-runs/levels-categorized-dev-v1-20260921
+  run_dir: output/SWE-bench_Verified/gepa-paired-repo-concern-playbook-runs/levels-categorized-formal24-8it-v1-20260921
 
 task:
   semantics: paired_repo_concern_levels_categorized_v1
@@ -22,8 +22,8 @@ inputs:
   dataset_manifest_sha256: cc1c3488c20a90340d88f419212c2f28b0d60e9a53ab15b84c7e9809751cc736
   initial_playbook: configs/development_guidelines/paired_concern_seed_v3_categorized.json
   initial_playbook_sha256: 587c52c512080c2a54b597373be30394f448ac5a6e6f9f01b73821f99e7b3699
-  prompt_bundle: configs/prompts/offline_gepa_paired_levels_categorized_protocol_draft_20260921.yaml
-  prompt_bundle_sha256: 4d1fbfd55806b38706c8499fdd892a92fdf38790258a9d6057c0cddc06f06db9
+  prompt_bundle: configs/prompts/offline_gepa_paired_levels_categorized_protocol_v2_20260921.yaml
+  prompt_bundle_sha256: 4127645806807222749612d8799dc28cdda4eca1ae0e5fc494561993a903b974
   repo_checker_contract: configs/prompts/offline_gepa_paired_levels_contract_v1_20260921.yaml
   repo_checker_contract_sha256: f082449828dc7ddab04f1b721e639d2a2a5812c1e99acdac6c19979ab28eac68
   repo_checker_image_manifest: configs/frozen_swe_verified_safe_pce/verified482-formal-v1-20260914/images.json
@@ -231,7 +231,7 @@ operational_incomplete_policy: >-
   over 64 Checker tokens.
 
 hpc:
-  submit: false
+  submit: true
   partition: batch
   cpus_per_task: 1
   mem: 4G
@@ -245,7 +245,7 @@ hpc:
   remote_env_file: ~/.config/vibe-coding-planning/deepseek.env
   python_module: lang/Python/3.11
   container_module: tools/Apptainer
-  job_name_prefix: verified-paired-repo-concern-playbook-levels-categorized-dev-v1-20260921
+  job_name_prefix: verified-paired-repo-concern-playbook-levels-categorized-formal24-8it-v1-20260921
 
 success_criteria:
   - Use 143 selected train pairs after excluding the operationally confounded django__django-11749 pair; retain all 36 validation pairs.
@@ -261,7 +261,11 @@ success_criteria:
   - Begin from the categorized placeholder Seed; do not import historical binary Checker outputs.
 
 readiness:
-  runnable: false
-  missing:
-    - Behavior prompts and Reflector intermediate schema require user review.
-    - A separately approved smoke selection, budget, and launch configuration are not yet frozen.
+  launched: false
+  checked:
+    - Frozen train selection excludes pair-8738412ddd171f1772a98f43 after official test-patch collision audit.
+    - The validation split remains the frozen 36 pairs; task grouping is preserved.
+    - A completed four-pair smoke exercised the Level and category protocol.
+  prelaunch_checks:
+    - Verify remote SIF and prepared repository-history artifacts for all selected tasks.
+    - Verify clean worktree, scratch bytes and inodes, and no duplicate supervisor before launch.

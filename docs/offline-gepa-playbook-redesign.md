@@ -8,6 +8,28 @@
 
 ## Objective And Boundary
 
+### Paired Level formal 8-iteration preparation (2026-09-21)
+
+The new, not-yet-launched authority is
+`configs/gepa_verified_paired_levels_categorized_formal24_8it_v1_20260921.yaml`
+with its matching supervisor YAML and versioned `v2` prompt bundle. It starts
+from the categorized placeholder seed, uses 143 explicitly selected train
+pairs and the unchanged 36-pair validation split, 24 pairs per reflection
+minibatch, eight proposals, and a 1200 pair-metric-call ceiling. The one
+excluded Django pair is documented in
+`docs/knowledge/paired-gepa-django-11749-exclusion.md`; the frozen source
+snapshot and completed smoke are unchanged. The new Checker instruction
+forbids prototyping a proposed change in repository files, temporary copies,
+or memory, without prompting it to run probes. This is a prompt instruction,
+not a new tool-level command filter.
+
+The Iris transport request remains 1 CPU / 4G for both Controller and Agents,
+with 35-minute Agent limits and three attempts. Supervisor and Controller reuse
+the existing Slurm array, checkpoint, retry, and conservative cleanup paths.
+Before launch, verify remote SIF/history artifacts, scratch byte and inode
+capacity, clean worktree, and absence of a duplicate supervisor. Preparation
+and commit do not authorize launch.
+
 ### Lightweight paired smoke contract (2026-09-21)
 
 Runtime: `configs/gepa_verified_paired_levels_smoke8_v1_20260921.yaml`.

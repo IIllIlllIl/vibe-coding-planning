@@ -163,6 +163,46 @@ def test_lightweight_prompts_keep_calibration_separate_from_tags():
     assert "No operation type or number of additions is preferred" in curator
 
 
+def test_formal_paired_levels_inputs_and_review_boundary():
+    from src.optimization.paired_dataset import load_paired_snapshot
+
+    path = Path(
+        "configs/gepa_verified_paired_levels_categorized_formal24_8it_v1_20260921.yaml"
+    )
+    raw = yaml.safe_load(path.read_text())
+    _validate_frozen_inputs(path.resolve(), raw)
+    train, validation = load_paired_snapshot(raw["inputs"]["dataset_snapshot"])
+    selected_ids = raw["inputs"]["train_instance_ids"]
+    assert len(selected_ids) == len(set(selected_ids)) == 143
+    assert set(selected_ids) == {case.instance_id for case in train} - {
+        "pair-8738412ddd171f1772a98f43"
+    }
+    assert len(validation) == 36
+    assert {case.task_id for case in train if case.instance_id in selected_ids}.isdisjoint(
+        {case.task_id for case in validation}
+    )
+    assert raw["search"]["max_iterations"] == 8
+    assert raw["search"]["reflection_minibatch_size"] == 24
+    assert raw["models"]["checker"]["thinking"] == "disabled"
+    assert raw["repo_checker"]["review_only"] is True
+    assert (raw["hpc"]["cpus_per_task"], raw["hpc"]["mem"]) == (1, "4G")
+    prompt = yaml.safe_load(Path(raw["inputs"]["prompt_bundle"]).read_text())[
+        "checker_system"
+    ]
+    assert "Use repository\ninspection to understand existing code and tests" in prompt
+    assert "including in temporary\nfiles or memory" in prompt
+    assert "Small, read-only probes" not in prompt
+    launch = yaml.safe_load(Path(
+        "configs/gepa_verified_paired_levels_categorized_formal24_8it_v1_supervisor_20260921.yaml"
+    ).read_text())
+    args = launch["arguments"]
+    assert args[args.index("--gepa-config") + 1] == str(path)
+    assert args[args.index("--target-iterations") + 1] == "8"
+    assert args[args.index("--ulhpc-config") + 1] == "configs/ulhpc_submit.yaml"
+    for flag in ("--reclaim-staging", "--reclaim-workspaces", "--require-clean-worktree"):
+        assert flag in args
+
+
 def test_neutral_reflection_can_report_calibration_without_new_concerns():
     from src.optimization.paired_playbook import validate_paired_reflector_review
 
