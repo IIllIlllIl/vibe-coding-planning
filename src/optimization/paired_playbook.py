@@ -13,6 +13,13 @@ _TAGS = frozenset({"helpful", "neutral", "harmful"})
 _CONFIDENCE = frozenset({"low", "medium", "high"})
 
 
+def paired_checker_uses_levels(config: Mapping[str, Any]) -> bool:
+    contract = config.get("repo_checker", {}).get("output_contract", "binary_v1")
+    if contract not in {"binary_v1", "levels_v1"}:
+        raise ValueError("unknown paired Checker output contract")
+    return contract == "levels_v1"
+
+
 @dataclass(frozen=True)
 class PairedConcernResult:
     rule_number: int
@@ -20,11 +27,12 @@ class PairedConcernResult:
     finding: str | None
     evidence: tuple[RepoEvidence, ...]
     reason: str
+    level: int | None = None
 
     def to_dict(self) -> dict[str, Any]:
         return {
             "rule_number": self.rule_number,
-            "triggered": self.triggered,
+            **({"triggered": self.triggered} if self.level is None else {"level": self.level}),
             "finding": self.finding,
             "evidence": [item.to_dict() for item in self.evidence],
             "reason": self.reason,
@@ -38,13 +46,17 @@ class PairedCheckerOutput:
     trajectory: tuple[dict[str, Any], ...] = ()
 
     def to_dict(self) -> dict[str, Any]:
-        return {
+        result = {
             "rule_results": [item.to_dict() for item in self.rule_results],
             "derived_decision": "REJECT" if self.rejected else "ACCEPT",
             "triggered_rule_numbers": [
                 item.rule_number for item in self.rule_results if item.triggered
             ],
         }
+        if any(item.level is not None for item in self.rule_results):
+            result["blocking_rule_numbers"] = [i.rule_number for i in self.rule_results if i.level == 2]
+            result["warning_rule_numbers"] = [i.rule_number for i in self.rule_results if i.level == 1]
+        return result
 
 
 def validate_paired_checker_result(
@@ -52,19 +64,29 @@ def validate_paired_checker_result(
     playbook: RejectPlaybook,
     *,
     trajectory: Sequence[Mapping[str, Any]] = (),
+    levels: bool = False,
 ) -> PairedCheckerOutput:
     if not isinstance(value, dict) or set(value) != {"rule_results"}:
         raise ValueError("Paired Repo Checker output must contain only rule_results")
     rows = value["rule_results"]
     if not isinstance(rows, list) or len(rows) != len(playbook.bullets):
         raise ValueError("Paired Repo Checker must return one result per bullet")
-    expected_keys = {"rule_number", "triggered", "finding", "evidence", "reason"}
+    expected_keys = {"rule_number", "level" if levels else "triggered", "finding", "evidence", "reason"}
     parsed: list[PairedConcernResult] = []
     for number, row in enumerate(rows, start=1):
         if not isinstance(row, dict) or set(row) != expected_keys:
             raise ValueError("Paired Repo Checker rule result has an invalid schema")
-        if row["rule_number"] != number or not isinstance(row["triggered"], bool):
+        if type(row["rule_number"]) is not int or row["rule_number"] != number:
             raise ValueError("Paired Repo Checker rule identity/trigger is invalid")
+        level = row.get("level") if levels else None
+        if levels:
+            if type(level) is not int or level not in {0, 1, 2}:
+                raise ValueError("Paired Repo Checker level must be 0, 1, or 2")
+            triggered = level > 0
+        else:
+            if not isinstance(row["triggered"], bool):
+                raise ValueError("Paired Repo Checker trigger must be boolean")
+            triggered = row["triggered"]
         if not isinstance(row["reason"], str) or not row["reason"].strip():
             raise ValueError("Paired Repo Checker reason must be non-empty")
         raw_evidence = row["evidence"]
@@ -98,7 +120,7 @@ def validate_paired_checker_result(
                 )
             )
         finding = row["finding"]
-        if row["triggered"]:
+        if triggered:
             if not isinstance(finding, str) or not finding.strip() or not evidence:
                 raise ValueError(
                     "triggered paired concern requires finding and evidence"
@@ -113,15 +135,16 @@ def validate_paired_checker_result(
         parsed.append(
             PairedConcernResult(
                 rule_number=number,
-                triggered=row["triggered"],
+                triggered=triggered,
                 finding=normalized_finding,
                 evidence=tuple(evidence),
                 reason=row["reason"].strip(),
+                level=level,
             )
         )
     return PairedCheckerOutput(
         rule_results=tuple(parsed),
-        rejected=any(item.triggered for item in parsed),
+        rejected=any(item.level == 2 if levels else item.triggered for item in parsed),
         trajectory=tuple(dict(item) for item in trajectory),
     )
 

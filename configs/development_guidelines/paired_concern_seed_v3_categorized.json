@@ -1,0 +1,13 @@
+{
+  "schema_version": 1,
+  "bullets": [
+    {
+      "id": "plan-00001",
+      "text": "The Plan is a placeholder.",
+      "category": "Plan substance",
+      "helpful": 0,
+      "harmful": 0,
+      "lineage": []
+    }
+  ]
+}

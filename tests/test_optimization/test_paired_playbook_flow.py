@@ -118,7 +118,8 @@ def test_pair_invalid_candidate_scores_minus_100() -> None:
     assert result.outputs[0]["pair_decision"] == "INVALID"
 
 
-def test_pair_checker_calls_are_label_and_pair_blind() -> None:
+@pytest.mark.parametrize("levels", [False, True])
+def test_pair_checker_calls_are_label_and_pair_blind(levels) -> None:
     class Executor:
         def __init__(self) -> None:
             self.role = None
@@ -148,7 +149,7 @@ def test_pair_checker_calls_are_label_and_pair_blind() -> None:
         }
     }
     executor = Executor()
-    checker = HPCPairedRepoPlaybookChecker(executor, image_records=records)
+    checker = HPCPairedRepoPlaybookChecker(executor, image_records=records, levels=levels)
     playbook = RejectPlaybook((PlaybookBullet("plan-00001", "Concern"),))
     checker.evaluate_batch([case], playbook)
     assert executor.role == "paired_repo_checker"
@@ -158,11 +159,36 @@ def test_pair_checker_calls_are_label_and_pair_blind() -> None:
         "# Plan\nBad",
     ]
     for item in executor.items:
+        assert item.get("output_contract") == ("levels_v1" if levels else None)
         visible = json.dumps(item["prompt_values"], sort_keys=True)
         assert case.instance_id not in visible
         assert "resolved" not in visible.casefold()
         assert "unresolved" not in visible.casefold()
         assert "outcome" not in visible.casefold()
+
+
+@pytest.mark.parametrize("r,u,score", [(0, 2, 1), (1, 2, 1), (2, 1, -1),
+                                       (0, 1, 0), (1, 1, 0), (2, 2, 0)])
+def test_level_pair_score_and_reflection_trace(r, u, score):
+    def result(level):
+        value = _result(level > 0)
+        value["rule_results"][0].pop("triggered")
+        value["rule_results"][0]["level"] = level
+        return value
+
+    class Checker:
+        def evaluate_batch(self, batch, playbook):
+            return [((result(r), []), (result(u), [])) for _ in batch]
+
+    playbook = RejectPlaybook((PlaybookBullet("plan-00001", "Concern", category="Scope"),))
+    adapter = PairedRepoPlaybookGEPAAdapter(Checker(), proposer=object(), levels=True)
+    evaluated = adapter.evaluate([_case()], {"rules": playbook.serialize()}, capture_traces=True)
+    assert evaluated.scores == [score]
+    sides = evaluated.outputs[0]
+    assert sides["resolved_side"]["rule_results"][0]["level"] == r
+    assert sides["unresolved_side"]["rule_results"][0]["level"] == u
+    # The normal evidence trace retains warnings, even though they do not gate.
+    assert '"level": ' + str(r) in json.dumps(evaluated.trajectories[0])
 
 
 def _row(pair_id: str, task_id: str, split: str) -> dict:

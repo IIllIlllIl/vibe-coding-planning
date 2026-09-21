@@ -8,6 +8,101 @@
 
 ## Objective And Boundary
 
+### Lightweight paired smoke contract (2026-09-21)
+
+Runtime: `configs/gepa_verified_paired_levels_smoke8_v1_20260921.yaml`.
+Launcher: `configs/gepa_verified_paired_levels_smoke8_v1_supervisor_20260921.yaml`.
+Selection: `configs/frozen_swe_verified_plan_pairs/20260921_paired_levels_smoke8_v1/selection.json`.
+This separately authorized preparation does not launch jobs or authorize 8it.
+The prompt bundle retains its draft filename but its exact reviewed bytes are
+hash-bound by this smoke config; do not edit them after launch.
+
+| Item | Frozen smoke choice |
+|---|---|
+| Universe | Existing frozen 144/36 paired development split; no new split |
+| Sampling | First serialized pair per Astropy, Django, Matplotlib, SymPy in each split; 8 distinct tasks |
+| Train / validation | 4 / 4 pairs, task-disjoint; development diagnostic, not held-out evidence |
+| Search | One proposal, minibatch 4, one Reflector per pair, 32 pair metric-call ceiling |
+| Checker | Explicit thinking disabled; read-only repo; 0/1/2 results; only 2 gates |
+| Other models | Unchanged provider-default reasoning; no new explicit high setting |
+| Resources | Iris Controller and Agents 1 CPU / 4G; Agent limit 35min; 3 attempts |
+| Supervisor | Existing shared loop, 30s polls, 30min Controller slices, at most 6 submissions |
+| Storage | Canonical shared paths; reclaim inactive staging/workspaces; retain scientific evidence |
+
+Reuse prepared base-ancestor history bundles, Slurm arrays, raw-completion
+checkpoints, and Host validation/retries. No historical binary outputs are
+imported. Before launch check cluster capacity/quota, credentials, SIFs and
+history availability; preparation does not claim a current remote preflight.
+Six Controller submissions bound resumption, not elapsed wall time including
+queue waits. Agent jobs release resources when done rather than occupying the
+whole requested 35 minutes.
+
+Success means the Seed evaluation, paired Reflection, Curator proposal path,
+and any resulting candidate evaluation finish with valid artifacts. Empty
+operations or no accepted candidate are permitted; record branches that were
+not exercised. Check Level calibration, exploration depth, category readability,
+counter continuity and retry behavior. Separate queue time from actual Agent
+time when assessing speed. This small smoke does not validate minibatch-24
+context capacity or demonstrate learning gains. Operational failures remain
+incomplete, never R/U or candidate INVALID. Stop after the single proposal or
+the metric ceiling; exhausted operational failures stop and remain reportable.
+
+### Categorized paired-Level development (2026-09-21)
+
+The opt-in development config is
+`configs/gepa_verified_paired_levels_categorized_dev_v1_20260921.yaml`.
+It is deliberately `status: draft`, rejected by the execution entry point,
+and has no launch configuration. Existing no-repository, unpaired Repo-Level,
+and binary paired contracts remain supported; their frozen files are unchanged.
+
+Mechanisms implemented for the next design review:
+
+- `repo_checker.output_contract: levels_v1` replaces the paired Agent's
+  `triggered` field with integer `level`: 0 (no supported concern), 1 (warning),
+  2 (pause). Only Level 2 rejects. Levels 1/2 require finding and evidence.
+  The existing +1/-1/0 pair scoring and overlength INVALID=-100 are unchanged.
+- Both side findings and Levels remain in the Reflection evidence, including
+  Level 1 warnings. Level is not stored in permanent playbook bullets and is
+  not mapped automatically to helpful/harmful counters.
+- Checker explicitly passes `thinking: disabled` to the existing provider
+  adapter. Reflector/Curator/Refiner omit that field and retain the previous
+  provider-default behavior; this is not a claim that the old requests
+  explicitly selected high reasoning.
+- `repo_checker.review_only: true` makes only the prepared Checker repository
+  mount read-only after Host baseline restoration. Phase-local `/tmp` remains
+  writable for submission. Reflector and other tasks are unaffected. This
+  does not prohibit running tests or making scratch copies: investigation
+  purpose and depth still require the pending behavior-prompt review.
+- Optional per-bullet `category` is a single-line display heading. Renderers
+  preserve bullet order/ordinals, repeating a heading when needed rather than
+  silently regrouping bullets. Titles have no gate, result, or counters and
+  count toward the total visible-token budget. IDs/counters remain hidden.
+- Categorized Curator ADD/REVISE/MERGE operations include category. Refiner
+  preserves categories and cannot merge across them. Existing ID, lineage,
+  counter, and deterministic length-pruning semantics remain unchanged.
+- The new seed is `development_guidelines/paired_concern_seed_v3_categorized.json`:
+  category `Plan substance`, text `The Plan is a placeholder.`, initial ID
+  `plan-00001`, helpful=0, harmful=0. Older seeds remain frozen.
+  Categorized playbooks render with `Reject the plan when:` and `Rule 1.`
+  ordinals, not the historical Repo Checker's `Concern 1.` presentation.
+
+The new prompt bundle is a **behavior-review draft**, not launch-ready. Checker
+is asked for quick targeted review, not trial implementation or test execution.
+Reflector reports Level calibration and whether rule wording or Checker
+application explains a finding, using existing pair_analysis/attribution fields.
+Neutral tags may retain calibration evidence; empty concern lists may retain
+uncertainty. Curator synthesizes this evidence into scoped rules and categories,
+with no preferred operation type or quota. Templates no longer default to a
+negative Checker decision, neutral reflection, or ADD operation. These changes
+reduce identified prompt biases but their behavioral effect remains untested.
+The existing Reflection schema, counter mechanism, and evidence scope are
+unchanged; no cross-run supporting-task library is introduced. Review the prompts
+and freeze smoke inputs/budget before launching. Refiner's existing same-category
+merge constraint remains a separate design choice, not relaxed by prompt alone.
+
+The remainder documents retained execution variants. The old binary paired
+protocol is not the new `levels_v1` contract.
+
 The method remains a classification experiment. It does not add Plan revision,
 Code generation, or a new evaluator execution to candidate scoring. It now has
 two explicitly separate Checker modes over the same internal playbook:
@@ -65,8 +160,7 @@ For example, the Checker-visible projection is:
 ```text
 Reject the plan when:
 
-Rule 1. The Plan is only a placeholder and contains no implementation
-strategy.
+Rule 1. The Plan is a placeholder.
 
 Rule 2. The Plan leaves a central behavioral or implementation choice
 unresolved.

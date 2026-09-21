@@ -139,9 +139,11 @@ class HPCPairedRepoPlaybookChecker:
         executor: PlaybookHPCExecutor,
         *,
         image_records: Mapping[str, Any],
+        levels: bool = False,
     ) -> None:
         self.executor = executor
         self.image_records = image_records
+        self.levels = levels
 
     def evaluate_batch(
         self,
@@ -168,6 +170,7 @@ class HPCPairedRepoPlaybookChecker:
                         # This transport identity is never interpolated into the
                         # prompt. It contains neither the pair ID nor side label.
                         "instance_id": observation.observation_id,
+                        **({"output_contract": "levels_v1"} if self.levels else {}),
                         "validation_rule_count": len(playbook.bullets),
                         "repository": repository,
                         "image_authority": authority,

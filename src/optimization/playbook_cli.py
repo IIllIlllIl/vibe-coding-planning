@@ -34,7 +34,7 @@ from src.optimization.repo_playbook import (
     render_concern_playbook,
     validate_repo_reflector_review,
 )
-from src.optimization.paired_playbook import validate_paired_reflector_review
+from src.optimization.paired_playbook import validate_paired_reflector_review, paired_checker_uses_levels
 from src.optimization.playbook_runtime import evidence_agent_config
 
 
@@ -165,6 +165,8 @@ def _paired_invalid_score(raw: dict[str, Any]) -> float:
 def run_from_config(path: str | Path, *, agents: Any | None = None, optimize_fn=None):
     config_path = Path(path)
     raw = yaml.safe_load(config_path.read_text(encoding="utf-8")) or {}
+    if raw.get("status") == "draft":
+        raise ValueError("Draft playbook configuration requires review before execution")
     mode = raw.get("mode")
     if mode not in {
         "offline_reject_playbook",
@@ -275,6 +277,7 @@ def run_from_config(path: str | Path, *, agents: Any | None = None, optimize_fn=
             checker = HPCPairedRepoPlaybookChecker(
                 executor,
                 image_records=image_records,
+                levels=paired_checker_uses_levels(raw),
             )
             proposal_agents = HPCPairedRepoPlaybookProposalAgents(
                 executor,
@@ -331,6 +334,7 @@ def run_from_config(path: str | Path, *, agents: Any | None = None, optimize_fn=
             adapter = PairedRepoPlaybookGEPAAdapter(
                 checker,
                 proposer,
+                levels=paired_checker_uses_levels(raw),
                 token_counter=count_tokens,
                 maximum_bullet_tokens=int(raw["length"]["maximum_bullet_tokens"]),
                 invalid_score=invalid_score,
@@ -384,6 +388,7 @@ def run_from_config(path: str | Path, *, agents: Any | None = None, optimize_fn=
             adapter = PairedRepoPlaybookGEPAAdapter(
                 runtime.batch_checker,
                 proposer,
+                levels=paired_checker_uses_levels(raw),
                 token_counter=count_tokens,
                 maximum_bullet_tokens=int(raw["length"]["maximum_bullet_tokens"]),
                 invalid_score=invalid_score,

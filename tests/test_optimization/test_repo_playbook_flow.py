@@ -849,8 +849,9 @@ def test_repo_worker_uses_separate_runtime_and_host_validation(
     assert (attempt / "agent_completion.json").is_file()
 
 
+@pytest.mark.parametrize("review_only", [False, True])
 def test_repository_runtime_uses_disposable_base_repo_and_artifact_channel(
-    tmp_path: Path, monkeypatch
+    tmp_path: Path, monkeypatch, review_only
 ) -> None:
     cache = tmp_path / "cache"
     cache.mkdir()
@@ -868,7 +869,12 @@ def test_repository_runtime_uses_disposable_base_repo_and_artifact_channel(
 
         def enable_source_access_audit(self, **kwargs):
             assert "restore" in captured
+            assert captured.get("read_only", False) == review_only
             captured["source_access_audit"] = kwargs
+
+        def make_repository_read_only(self):
+            assert "restore" in captured
+            captured["read_only"] = True
 
         def execute(self, command, **kwargs):
             captured["artifact"] = (command, kwargs)
@@ -895,7 +901,11 @@ def test_repository_runtime_uses_disposable_base_repo_and_artifact_channel(
         "import_minisweagent",
         lambda: (object, object, None),
     )
-    monkeypatch.setattr(playbook_runtime, "build_model", lambda *args: object())
+    def fake_model(*args, **kwargs):
+        captured["model_kwargs"] = kwargs
+        return object()
+
+    monkeypatch.setattr(playbook_runtime, "build_model", fake_model)
     monkeypatch.setattr(playbook_runtime, "ApptainerEnvironment", FakeEnvironment)
     monkeypatch.setattr(
         playbook_runtime,
@@ -925,13 +935,15 @@ def test_repository_runtime_uses_disposable_base_repo_and_artifact_channel(
 
     monkeypatch.setattr(playbook_runtime, "install_repository_history_bundle", fake_install)
     output, trajectory = playbook_runtime.run_repository_checker(
-        model_config={"model": "fake", "api_key_env": "TEST_API_KEY"},
+        model_config={"model": "fake", "api_key_env": "TEST_API_KEY",
+                      **({"thinking": "disabled"} if review_only else {})},
         repository_config={
             "sif_cache_dir": str(cache),
             "workdir": "/testbed",
             "command_timeout_seconds": 1800,
             "source_access_policy": "conservative_blacklist_v3",
             "prune_future_history": True,
+            "review_only": review_only,
         },
         system="system",
         instance_template="instance",
@@ -952,6 +964,7 @@ def test_repository_runtime_uses_disposable_base_repo_and_artifact_channel(
         checker_visible_playbook="playbook",
     )
     assert output == _repo_output(1, 2)
+    assert captured["model_kwargs"] == ({"thinking": "disabled"} if review_only else {})
     assert captured["environment"]["network_disabled"] is False
     assert captured["environment"]["isolate_tmp"] is True
     assert captured["environment"]["run_args"] == [

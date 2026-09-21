@@ -274,6 +274,8 @@ class PlaybookHPCExecutor:
                 payload["validation_playbook"] = item["validation_playbook"]
             if "validation_rule_count" in item:
                 payload["validation_rule_count"] = item["validation_rule_count"]
+            if "output_contract" in item:
+                payload["output_contract"] = item["output_contract"]
             if "evidence_dir" in item:
                 payload["evidence_dir"] = item["evidence_dir"]
             if "repository" in item:
@@ -397,7 +399,10 @@ class PlaybookHPCExecutor:
                 elif role == "repo_checker":
                     validate_repo_checker_result(agent_output, playbook)
                 else:
-                    validate_paired_checker_result(agent_output, playbook)
+                    validate_paired_checker_result(
+                        agent_output, playbook,
+                        levels=task_manifest.get("output_contract") == "levels_v1",
+                    )
             else:
                 playbook = RejectPlaybook.parse(task_manifest["validation_playbook"])
             if role == "reflector":

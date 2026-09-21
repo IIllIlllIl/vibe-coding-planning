@@ -14,6 +14,21 @@ the shared supervisor supplies canonical storage paths.
 
 ## Experiment Inventory
 
+Prepared lightweight paired smoke (launch requires explicit authorization):
+`gepa_verified_paired_levels_smoke8_v1_20260921.yaml` and its matching
+`gepa_verified_paired_levels_smoke8_v1_supervisor_20260921.yaml` freeze four
+train/four validation pairs, one proposal, no-thinking Checker, categorized
+seed, Level-2 gating, and Iris 1 CPU/4G. See the smoke contract in
+`docs/offline-gepa-playbook-redesign.md`; this is not formal 8it approval.
+
+Next paired development (not launch-ready):
+`gepa_verified_paired_levels_categorized_dev_v1_20260921.yaml` enables explicit
+Checker no-thinking, a read-only review repository, Level-2 gating, and
+categorized bullets. Its lightweight-review prompt draft still requires behavioral
+review; `status: draft` blocks execution. Seed:
+`development_guidelines/paired_concern_seed_v3_categorized.json`.
+It does not replace or resume any frozen binary/no-repository run.
+
 The committed 500-case Safe PCE identity is a deferred full-universe target,
 not the next launch identity. The first formal run uses an independent
 482-case selection: 17 historical resolved placeholder/no-Plan successes are

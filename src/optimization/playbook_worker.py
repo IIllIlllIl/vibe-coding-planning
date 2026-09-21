@@ -222,7 +222,11 @@ def run_task(
             elif role == "repo_checker":
                 validate_repo_checker_result(output, playbook)
             else:
-                validate_paired_checker_result(output, playbook)
+                from src.optimization.paired_playbook import paired_checker_uses_levels
+                levels = paired_checker_uses_levels(config)
+                if levels != (manifest.get("output_contract") == "levels_v1"):
+                    raise ValueError("paired Checker task/config contract mismatch")
+                validate_paired_checker_result(output, playbook, levels=levels)
         else:
             playbook = RejectPlaybook.parse(manifest["validation_playbook"])
         if role == "reflector":

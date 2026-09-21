@@ -283,6 +283,16 @@ class ApptainerEnvironment:
             ]
         )
 
+    def make_repository_read_only(self) -> None:
+        """Freeze this phase's prepared repository bind, leaving /tmp writable."""
+        if self._host_workdir is None:
+            raise ValueError("read-only review requires an isolated repository bind")
+        bind = f"{self._host_workdir}:{self._cwd}"
+        if bind + ":ro" in self._run_args:
+            return
+        index = self._run_args.index(bind)
+        self._run_args[index] = bind + ":ro"
+
     def _prepare_masked_paths(self) -> None:
         """Hide image paths behind empty phase-local read-only directories."""
 

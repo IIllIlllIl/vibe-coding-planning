@@ -17,11 +17,17 @@ _CALIBRATION = frozenset({"too_low", "appropriate", "too_high", "unknown"})
 
 def render_concern_playbook(playbook: RejectPlaybook) -> str:
     """Render text and temporary ordinals, never internal IDs or counters."""
+    # Categorized playbooks retain the original reject/Rule presentation.
+    # Preserve the historical unclassified projection for existing runs.
+    if any(bullet.category is not None for bullet in playbook.bullets):
+        return playbook.render_for_checker()
     lines = ["Review the Plan for these concerns:"]
-    lines.extend(
-        f"Concern {index}. {bullet.text}"
-        for index, bullet in enumerate(playbook.bullets, start=1)
-    )
+    previous_category = None
+    for index, bullet in enumerate(playbook.bullets, start=1):
+        if bullet.category is not None and bullet.category != previous_category:
+            lines.append(f"## {bullet.category}")
+        lines.append(f"Concern {index}. {bullet.text}")
+        previous_category = bullet.category
     return "\n\n".join(lines)
 
 

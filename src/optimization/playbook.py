@@ -20,10 +20,11 @@ class PlaybookBullet:
     helpful: int = 0
     harmful: int = 0
     lineage: tuple[str, ...] = ()
+    category: str | None = None
 
     @classmethod
     def from_dict(cls, value: Any) -> "PlaybookBullet":
-        if not isinstance(value, dict) or set(value) != {
+        if not isinstance(value, dict) or set(value) - {"category"} != {
             "id", "text", "helpful", "harmful", "lineage"
         }:
             raise ValueError("playbook bullet has an invalid schema")
@@ -51,7 +52,14 @@ class PlaybookBullet:
             or len(lineage) != len(set(lineage))
         ):
             raise ValueError("playbook lineage must contain unique strings")
-        return cls(bullet_id, text.strip(), helpful, harmful, tuple(lineage))
+        category = value.get("category")
+        if "category" in value and (
+            not isinstance(category, str) or not category.strip()
+            or "\n" in category or "\r" in category
+        ):
+            raise ValueError("category must be a nonempty single-line title")
+        return cls(bullet_id, text.strip(), helpful, harmful, tuple(lineage),
+                   category.strip() if category else None)
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -60,6 +68,7 @@ class PlaybookBullet:
             "helpful": self.helpful,
             "harmful": self.harmful,
             "lineage": list(self.lineage),
+            **({"category": self.category} if self.category is not None else {}),
         }
 
 
@@ -99,10 +108,12 @@ class RejectPlaybook:
 
     def render_for_checker(self) -> str:
         lines = ["Reject the plan when:"]
-        lines.extend(
-            f"Rule {index}. {bullet.text}"
-            for index, bullet in enumerate(self.bullets, start=1)
-        )
+        previous_category = None
+        for index, bullet in enumerate(self.bullets, start=1):
+            if bullet.category is not None and bullet.category != previous_category:
+                lines.append(f"## {bullet.category}")
+            lines.append(f"Rule {index}. {bullet.text}")
+            previous_category = bullet.category
         return "\n\n".join(lines)
 
 
@@ -384,7 +395,7 @@ def apply_curator_operations(
         raise ValueError("Curator operations must be a list")
     original = {item.id: item for item in playbook.bullets}
     targeted: set[str] = set()
-    parsed: list[tuple[str, tuple[str, ...], str | None]] = []
+    parsed = []
     for operation in operations:
         if not isinstance(operation, dict) or "type" not in operation:
             raise ValueError("Curator operation has an invalid schema")
@@ -404,6 +415,8 @@ def apply_curator_operations(
             targets = tuple(raw_targets)
         else:
             raise ValueError(f"unsupported Curator operation: {kind!r}")
+        if kind != "DELETE" and "category" in operation:
+            expected.add("category")
         if set(operation) != expected:
             raise ValueError("Curator operation has unexpected or missing keys")
         supporting = operation["supporting_instance_ids"]
@@ -422,17 +435,26 @@ def apply_curator_operations(
         content = operation.get("content")
         if content is not None and (not isinstance(content, str) or not content.strip()):
             raise ValueError("Curator operation content must be non-empty")
-        parsed.append((kind, targets, content.strip() if content else None))
+        category = operation.get("category")
+        if kind != "DELETE" and any(b.category is not None for b in playbook.bullets):
+            if "category" not in operation:
+                raise ValueError("categorized Curator operations require category")
+        if "category" in operation:
+            PlaybookBullet.from_dict(PlaybookBullet("check-00001", "check", category=category).to_dict())
+            if category is None:
+                raise ValueError("category cannot be null")
+        parsed.append((kind, targets, content.strip() if content else None, category))
 
     retained = [item for item in playbook.bullets if item.id not in targeted]
     reserved = set(original)
-    for kind, targets, content in parsed:
+    for kind, targets, content, category in parsed:
         if kind in {"ADD", "REVISE", "MERGE"}:
             retained.append(
                 PlaybookBullet(
                     _next_bullet_id(playbook, reserved),
                     content or "",
                     lineage=targets,
+                    category=category,
                 )
             )
     return RejectPlaybook.parse(
@@ -465,6 +487,8 @@ def apply_refiner_operations(playbook: RejectPlaybook, value: Any) -> RejectPlay
         if any(target not in original or target in targeted for target in targets):
             raise ValueError("Refiner target is unknown or repeated")
         targeted.update(targets)
+        if kind == "MERGE" and len({original[t].category for t in targets}) != 1:
+            raise ValueError("Refiner cannot merge across categories")
         content = operation["content"]
         if not isinstance(content, str) or not content.strip():
             raise ValueError("Refiner content must be non-empty")
@@ -476,7 +500,8 @@ def apply_refiner_operations(playbook: RejectPlaybook, value: Any) -> RejectPlay
             old = original[targets[0]]
             retained.append(replace(old, text=content))
         else:
-            retained.append(PlaybookBullet(_next_bullet_id(playbook, reserved), content, lineage=targets))
+            retained.append(PlaybookBullet(_next_bullet_id(playbook, reserved), content,
+                                          lineage=targets, category=original[targets[0]].category))
     return RejectPlaybook.parse({"schema_version": 1, "bullets": [item.to_dict() for item in retained]})
 
 
@@ -514,6 +539,7 @@ def validate_refiner_proposal(
             bullet.helpful != previous.helpful
             or bullet.harmful != previous.harmful
             or bullet.lineage != previous.lineage
+            or bullet.category != previous.category
         ):
             raise ValueError("Refiner may not modify counters or lineage")
         if previous is None:
@@ -525,6 +551,8 @@ def validate_refiner_proposal(
                 raise ValueError(
                     "merged Refiner bullets require input-bullet lineage"
                 )
+            if any(existing[parent].category != bullet.category for parent in bullet.lineage):
+                raise ValueError("Refiner must preserve category")
     return refined
 
 

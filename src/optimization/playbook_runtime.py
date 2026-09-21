@@ -100,6 +100,7 @@ class PromptModel:
             api_key,
             str(model_config.get("api_base", "https://api.deepseek.com")),
             float(model_config.get("temperature", 0.0)),
+            **({"thinking": model_config["thinking"]} if "thinking" in model_config else {}),
         )
 
     def __call__(
@@ -148,6 +149,7 @@ def _run_evidence_json_agent(
         api_key,
         str(model_config.get("api_base", "https://api.deepseek.com")),
         float(model_config.get("temperature", 0.0)),
+        **({"thinking": model_config["thinking"]} if "thinking" in model_config else {}),
     )
     cache = Path(
         os.path.expandvars(str(evidence_config["evidence_sif_cache_dir"]))
@@ -348,6 +350,7 @@ def _run_repository_json_agent(
         api_key,
         str(model_config.get("api_base", "https://api.deepseek.com")),
         float(model_config.get("temperature", 0.0)),
+        **({"thinking": model_config["thinking"]} if "thinking" in model_config else {}),
     )
     cache = Path(
         os.path.expandvars(str(repository_config["sif_cache_dir"]))
@@ -417,6 +420,11 @@ def _run_repository_json_agent(
                 timeout=timeout,
                 prune_future_history=False,
             )
+            if (
+                repository_config.get("review_only", False)
+                and repository_config.get("phase") in {"repo_checker", "paired_repo_checker"}
+            ):
+                environment.make_repository_read_only()
             environment.enable_source_access_audit(
                 prompt_urls=list(extract_http_urls(source_access_issue)),
                 log_path=source_access_path,

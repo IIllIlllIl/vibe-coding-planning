@@ -1,0 +1,18 @@
+{
+  "schema_version": 1,
+  "data_unit": "within_task_plan_pair",
+  "train_instance_ids": [
+    "pair-6c2501887bccef6e11bc14ee",
+    "pair-8738412ddd171f1772a98f43",
+    "pair-a24098c7a05c6678eaf550dc",
+    "pair-1905d94cba11050f2d3392d8"
+  ],
+  "validation_instance_ids": [
+    "pair-27786b755371198326783156",
+    "pair-05a1e7405702ab648b7f67ea",
+    "pair-92f9af0cf56249cb5da68410",
+    "pair-8043b6b99e7285b2ddbf6688"
+  ],
+  "selection_policy": "First serialized pair for each of astropy/astropy, django/django, matplotlib/matplotlib, sympy/sympy in each existing frozen split. One pair per task; no re-splitting or outcome-quality selection. Development smoke, not held-out evaluation.",
+  "immutable": true
+}
