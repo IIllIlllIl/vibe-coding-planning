@@ -1,0 +1,26 @@
+{
+  "schema_version": 1,
+  "run_name": "levels-categorized-formal24-8it-v1-20260921",
+  "recovery_id": "v1-pending-iteration7-20260922",
+  "failed_iteration": 7,
+  "candidate_count": 5,
+  "error": "Curator lineage must reference an input bullet ID",
+  "curator_task": "hpc_tasks/curator/09ff1d487c43f4597e0181fca6ab24ef03c0c475c921cbc466c46242c8bd35db/tasks/task_0000.json",
+  "curator_result": "hpc_tasks/curator/09ff1d487c43f4597e0181fca6ab24ef03c0c475c921cbc466c46242c8bd35db/outputs/task_0000.json",
+  "reviews": "curator_evidence/845f7a440f476667720040fa1cd21af748babeed54210b4e7c652180b1f14ed0/case_reflections.json",
+  "files": {
+    "gepa_state.bin": "3d5dbb95e8cdf72f1f8c568bfb7d3278c76b09f21bd20950f457ad8b555c7ff5",
+    "gepa_resume_state.json": "7f684f01d595ae95a573bd216017ed2e24cef0a06799bf4c145e03a9815e866e",
+    "run_manifest.json": "9c7d600448db8d8f5a2f3ff3d31b689f9293029e820c94d401585bd54d121a45",
+    "global_counter_ledger.json": "c4f0b3ef08dd81224c6f7569a9ba4ee6328801f703a4b78543636f1919b67f34",
+    "candidates.json": "d4769e873d615a0ad66d70d883fbd0bb597de505dee2de3aa0ec0a0ef50df1c8",
+    "hpc_tasks/curator/09ff1d487c43f4597e0181fca6ab24ef03c0c475c921cbc466c46242c8bd35db/tasks/task_0000.json": "6909fff2c3fa3679335a671d1cf1dd5ec05b6a984ff137d2c8e1dace66c0977e",
+    "hpc_tasks/curator/09ff1d487c43f4597e0181fca6ab24ef03c0c475c921cbc466c46242c8bd35db/outputs/task_0000.json": "ef7d06d467a0984cf7aa698ef19da59321f3f66f36dad5d21c016fa5284cbe5b",
+    "curator_evidence/845f7a440f476667720040fa1cd21af748babeed54210b4e7c652180b1f14ed0/case_reflections.json": "8d7f6eb5d60ffa6a5303106c66fb808ad8f9c35a4c82a356acd95744df27a522"
+  },
+  "replacement_source_hashes": {
+    "playbook.py": "2c24cd920aad08371a3de3a2a7e70fac9570874c90eb1b8750bceac0a5beab92",
+    "playbook_runner.py": "63cec92ef2e67953d7b3cb0fef087b855cd1657192ce9dddea48b95321171913",
+    "pending_playbook_resume.py": "3dd1a1c18d05b171054ba8eb92d8d3b0ed76f7c3ec087983b1d342b5f21e8736"
+  }
+}

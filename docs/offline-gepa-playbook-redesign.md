@@ -23,13 +23,11 @@ forbids prototyping a proposed change in repository files, temporary copies,
 or memory, without prompting it to run probes. This is a prompt instruction,
 not a new tool-level command filter.
 
-The lineage-validation recovery is frozen in
-`configs/gepa_verified_paired_levels_categorized_formal24_8it_v2_20260922.yaml`.
-It retains all scientific settings and imports exact-compatible completed
-Checker, Reflector and Curator artifacts from the hash-pinned v1 authority.
-Search is rebuilt from Seed rather than importing the failed proposal count.
-The fix changes only Host acceptance of unchanged retained historical lineage;
-it does not rewrite Agent outputs, counters or the original run artifacts.
+The original-run lineage recovery is described in
+[`paired-levels-v1-resume.md`](paired-levels-v1-resume.md). It retains v1's
+candidate pool and first six iterations, replays the pending seventh draw and
+completed Agent evidence, then performs the normal eighth iteration. The v2
+Seed-based reconstruction is aborted provenance, not a continuation of v1.
 
 The Iris transport request remains 1 CPU / 4G for both Controller and Agents,
 with 35-minute Agent limits and three attempts. Supervisor and Controller reuse

@@ -72,10 +72,22 @@ blocked a valid later ADD-only proposal; regression coverage lives in
   fingerprint-verified compatible completions, never relabel old outputs.
   Paired observations may repeat across pair slots. Import selection must be
   outcome-blind: prefer the matching task slot, then earliest completion and
-  path order. Preserve raw output/trajectory and record source hashes. Restart
-  search from Seed when a failed proposal consumed an iteration; compatible
-  Agent completions may be reused, but failed search progress must not count
-  toward the new proposal budget.
+  path order. Preserve raw output/trajectory and record source hashes. Do not
+  interpret "resume" as restarting search from Seed: exact-input Agent imports
+  alone do not preserve optimizer lineage, RNG or counter history. If a failed
+  proposal consumed an iteration, explicitly recover that pending transaction
+  from a hash-pinned backup. Preserve the candidate pool and post-draw RNG; replay
+  the original draw without advancing it again. Never add replayed prefix
+  iterations to the original run's completed-iteration count.
+
+The authorized paired v1 iteration-7 recovery uses
+`scripts/internal/prepare_pending_playbook_resume.py` and
+`src/optimization/pending_playbook_resume.py`. This is a documented exception
+to requiring a new scientific run identity for a source fix: the original YAML
+is unchanged, source migration is allowlisted by exact hashes, and all replaced
+Host state files are backed up. Raw Agent outputs, candidates and the existing
+counter ledger are not rewritten by preparation. The normal proposer applies
+the pending counter events idempotently during resumed execution.
 
 ## Lifecycle and cleanup
 

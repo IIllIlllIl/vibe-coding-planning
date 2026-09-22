@@ -19,13 +19,16 @@ Paired-Level formal 8it original authority:
 its matching supervisor YAML use the versioned `v2` prompt, 143 selected train
 pairs after excluding one evaluator-confounded Django pair, all 36 validation
 pairs, minibatch 24, no-thinking Checker, Level-2 gating, and Iris 1 CPU/4G.
-Recovery authority: `gepa_verified_paired_levels_categorized_formal24_8it_v2_20260922.yaml`
-and its matching supervisor retain those scientific settings. The Host lineage
-fix accepts unchanged retained bullets with inactive historical ancestors. The
-recovery rebuilds search from Seed, imports exact-compatible completed Checker,
-Reflector and Curator outputs from the manifest-pinned v1 scratch authority, and
-does not import the failed search iteration or its counter ledger. Original
-artifacts remain unchanged; eight proposals are still the total target.
+Original-run resume entry:
+`gepa_verified_paired_levels_categorized_formal24_8it_v1_resume7_supervisor_20260922.yaml`.
+It uses the unchanged v1 scientific YAML and original run directory after the
+hash-pinned preparation described in `docs/paired-levels-v1-resume.md`.
+`recovery/paired_levels_v1_iteration7_20260922.json` pins the failed checkpoint,
+original Curator/Reflection evidence and approved source fixes.
+
+The v2 runtime/supervisor are retained aborted recovery provenance, **not the
+resume entry**. Their Seed-based reconstruction repeats the v1 prefix and must
+not be counted as additional iterations of v1.
 
 Completed lightweight paired smoke (historical authority):
 `gepa_verified_paired_levels_smoke8_v1_20260921.yaml` and its matching

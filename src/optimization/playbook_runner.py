@@ -31,6 +31,7 @@ from src.optimization.playbook_adapter import (
 from src.exceptions import ControllerYield
 from src.optimization.callbacks import ProgressCallback
 from src.optimization.resume import ReproducibleSearchState
+from src.optimization.pending_playbook_resume import MARKER, file_hash, replay_pending_proposal
 from types import SimpleNamespace
 
 
@@ -129,6 +130,7 @@ def _run_playbook_search_unlocked(
                 Path(__file__).with_name("playbook_hpc_agents.py"),
                 Path(__file__).with_name("playbook_runtime.py"),
                 Path(__file__).with_name("playbook_worker.py"),
+                Path(__file__).with_name("pending_playbook_resume.py"),
                 Path(__file__).parents[1] / "environment" / "repository_history.py",
                 Path(__file__).parents[1] / "environment" / "repository_baseline.py",
                 Path(__file__).parents[1] / "environment" / "apptainer_env.py",
@@ -146,6 +148,8 @@ def _run_playbook_search_unlocked(
             "perfect_score": perfect_score,
         },
     }
+    if (run_dir / MARKER).exists():
+        semantic["pending_proposal_recovery"] = file_hash(run_dir / MARKER)
     semantic_sha = hashlib.sha256(
         json.dumps(semantic, sort_keys=True).encode()
     ).hexdigest()
@@ -224,26 +228,27 @@ def _run_playbook_search_unlocked(
 
     write_status("running")
     try:
-        result = optimize_fn(
-            seed_candidate={"rules": initial.serialize()},
-            trainset=loader_type(train),
-            valset=loader_type(validation),
-            adapter=adapter,
-            reflection_lm=None,
-            candidate_selection_strategy=state.selector,
-            frontier_type="instance",
-            batch_sampler=state.sampler,
-            reflection_minibatch_size=None,
-            perfect_score=perfect_score,
-            skip_perfect_score=skip_perfect_score,
-            max_metric_calls=max_metric_calls,
-            stop_callbacks=stopper,
-            run_dir=str(run_dir),
-            cache_evaluation=True,
-            track_best_outputs=True,
-            callbacks=[callback],
-            seed=seed,
-        )
+        with replay_pending_proposal(run_dir, state, adapter) as (selector, sampler):
+            result = optimize_fn(
+                seed_candidate={"rules": initial.serialize()},
+                trainset=loader_type(train),
+                valset=loader_type(validation),
+                adapter=adapter,
+                reflection_lm=None,
+                candidate_selection_strategy=selector,
+                frontier_type="instance",
+                batch_sampler=sampler,
+                reflection_minibatch_size=None,
+                perfect_score=perfect_score,
+                skip_perfect_score=skip_perfect_score,
+                max_metric_calls=max_metric_calls,
+                stop_callbacks=stopper,
+                run_dir=str(run_dir),
+                cache_evaluation=True,
+                track_best_outputs=True,
+                callbacks=[callback],
+                seed=seed,
+            )
         proposal_failures = list(getattr(adapter.propose_new_texts, "failures", []))
         if abort_on_operational_incomplete and proposal_failures:
             raise RuntimeError(
