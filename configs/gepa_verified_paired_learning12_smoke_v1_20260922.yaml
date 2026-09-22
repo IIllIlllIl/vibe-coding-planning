@@ -136,10 +136,9 @@ success_criteria:
   - Preserve the frozen 64-token bullet cap, 2048-token visible playbook cap, and operational-incomplete policy.
 
 readiness:
-  runnable: false
+  runnable: true
   launched: false
-  missing:
-    - user review of the new prompt and smoke design
+  missing: []
 launch_checks:
   - Confirm no duplicate supervisor and a clean committed worktree.
   - Verify Iris byte and inode headroom, API availability, frozen SIF authority, and prepared history bundles before Agent submission.

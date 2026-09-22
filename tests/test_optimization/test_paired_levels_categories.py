@@ -355,14 +355,14 @@ def test_curator_coverage_requires_every_side_and_reusable_finding(tmp_path):
         )
 
 
-def test_learning12_smoke_is_frozen_and_not_launch_authorized():
+def test_learning12_smoke_is_frozen_and_launch_ready():
     path = Path("configs/gepa_verified_paired_learning12_smoke_v1_20260922.yaml")
     raw = yaml.safe_load(path.read_text())
     _validate_frozen_inputs(path.resolve(), raw)
     assert raw["readiness"] == {
-        "runnable": False,
+        "runnable": True,
         "launched": False,
-        "missing": ["user review of the new prompt and smoke design"],
+        "missing": [],
     }
     assert (raw["search"]["max_iterations"], raw["search"]["reflection_minibatch_size"]) == (1, 12)
     assert raw["reflection"]["structured_recovery"] is True
