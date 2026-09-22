@@ -262,6 +262,9 @@ def run_from_config(path: str | Path, *, agents: Any | None = None, optimize_fn=
             paired_reflector_structured_recovery=bool(
                 raw.get("reflection", {}).get("structured_recovery", False)
             ),
+            paired_reflector_structured_abstraction=bool(
+                raw.get("reflection", {}).get("structured_abstraction", False)
+            ),
             checkpoint_import_run_dir=(
                 run_dir.parent / str(checkpoint_import["source_run_dir"])
                 if checkpoint_import
@@ -327,6 +330,7 @@ def run_from_config(path: str | Path, *, agents: Any | None = None, optimize_fn=
                 (lambda output, *, instance_id, playbook: validate_paired_reflector_review(
                     output, instance_id=instance_id, playbook=playbook,
                     structured_recovery=bool(raw.get("reflection", {}).get("structured_recovery", False)),
+                    structured_abstraction=bool(raw.get("reflection", {}).get("structured_abstraction", False)),
                 ))
                 if paired_mode
                 else (
@@ -381,7 +385,17 @@ def run_from_config(path: str | Path, *, agents: Any | None = None, optimize_fn=
             harmful_weight=float(raw["length"].get("harmful_pruning_weight", 5.0)),
             global_counter_path=run_dir / "global_counter_ledger.json",
             review_validator=(
-                validate_paired_reflector_review
+                (lambda output, *, instance_id, playbook: validate_paired_reflector_review(
+                    output,
+                    instance_id=instance_id,
+                    playbook=playbook,
+                    structured_recovery=bool(
+                        raw.get("reflection", {}).get("structured_recovery", False)
+                    ),
+                    structured_abstraction=bool(
+                        raw.get("reflection", {}).get("structured_abstraction", False)
+                    ),
+                ))
                 if paired_mode
                 else (
                     validate_repo_reflector_review

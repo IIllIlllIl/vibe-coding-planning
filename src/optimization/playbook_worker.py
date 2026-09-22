@@ -248,6 +248,7 @@ def run_task(
                 instance_id=str(manifest["instance_id"]),
                 playbook=playbook,
                 structured_recovery=bool(config.get("reflection", {}).get("structured_recovery", False)),
+                structured_abstraction=bool(config.get("reflection", {}).get("structured_abstraction", False)),
             )
         elif role == "curator":
             if "validation_concern_ids" in manifest:

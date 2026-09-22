@@ -161,7 +161,10 @@ def validate_paired_reflector_review(
     instance_id: str,
     playbook: RejectPlaybook,
     structured_recovery: bool = False,
+    structured_abstraction: bool = False,
 ) -> dict[str, Any]:
+    if structured_abstraction and not structured_recovery:
+        raise ValueError("Paired Reflector abstraction requires structured recovery")
     expected = {
         "instance_id",
         "pair_analysis",
@@ -185,36 +188,45 @@ def validate_paired_reflector_review(
         raise ValueError("Paired Reflector reusable_concerns must be a list")
     normalized_concerns = []
     for concern in concerns:
-        allowed = {"concern", "pair_support"}
+        allowed = (
+            {"case_mechanism", "developer_concern", "pair_support"}
+            if structured_abstraction
+            else {"concern", "pair_support"}
+        )
         if structured_recovery:
             allowed.add("curation_assessment")
-        if not isinstance(concern, dict) or set(concern) not in (
-            allowed,
-            allowed | {"confidence"},
-        ):
+        accepted_concern_keys = (
+            (allowed,)
+            if structured_abstraction
+            else (allowed, allowed | {"confidence"})
+        )
+        if not isinstance(concern, dict) or set(concern) not in accepted_concern_keys:
             raise ValueError("Paired Reflector reusable concern is invalid")
-        if (
-            any(
-                not isinstance(concern[key], str) or not concern[key].strip()
-                for key in ("concern", "pair_support")
-            )
+        text_keys = (
+            ("case_mechanism", "developer_concern", "pair_support")
+            if structured_abstraction
+            else ("concern", "pair_support")
+        )
+        if any(
+            not isinstance(concern[key], str) or not concern[key].strip()
+            for key in text_keys
         ):
             raise ValueError("Paired Reflector reusable concern content is invalid")
         # Older frozen prompts emitted confidence; it is not a Level and has
         # no defined role in curation. Accept legacy output, but do not pass
         # the field to the Curator or persist it in normalized reviews.
-        normalized = {
-            key: concern[key].strip() for key in ("concern", "pair_support")
-        }
+        normalized = {key: concern[key].strip() for key in text_keys}
         if structured_recovery:
             assessment = concern["curation_assessment"]
             expected_assessment = {
                 "pair_relation",
                 "decision_time_status",
                 "coder_repairability",
-                "recommendation",
-                "reason",
             }
+            if structured_abstraction:
+                expected_assessment.add("evidence_role")
+            else:
+                expected_assessment.update({"recommendation", "reason"})
             if not isinstance(assessment, dict) or set(assessment) != expected_assessment:
                 raise ValueError("Paired Reflector curation assessment is invalid")
             if assessment["pair_relation"] not in {
@@ -223,11 +235,19 @@ def validate_paired_reflector_review(
                 "confounded",
             }:
                 raise ValueError("Paired Reflector pair relation is invalid")
-            if assessment["decision_time_status"] not in {
-                "supported",
-                "underdetermined",
-                "hindsight_only",
+            if structured_abstraction and assessment["evidence_role"] not in {
+                "outcome_explanatory",
+                "repairability_calibration",
+                "incidental",
+                "confounded",
             }:
+                raise ValueError("Paired Reflector evidence role is invalid")
+            allowed_decision_time_statuses = (
+                {"supported", "underdetermined"}
+                if structured_abstraction
+                else {"supported", "underdetermined", "hindsight_only"}
+            )
+            if assessment["decision_time_status"] not in allowed_decision_time_statuses:
                 raise ValueError("Paired Reflector decision-time status is invalid")
             if assessment["coder_repairability"] not in {
                 "readily_compensated",
@@ -236,21 +256,28 @@ def validate_paired_reflector_review(
                 "mixed_or_unclear",
             }:
                 raise ValueError("Paired Reflector Coder repairability is invalid")
-            if assessment["recommendation"] not in {"promote", "defer"}:
-                raise ValueError("Paired Reflector promotion recommendation is invalid")
-            if (
-                assessment["decision_time_status"] == "hindsight_only"
-                and assessment["recommendation"] != "defer"
-            ):
-                raise ValueError(
-                    "Paired Reflector hindsight-only concern must be deferred"
-                )
-            if not isinstance(assessment["reason"], str) or not assessment["reason"].strip():
-                raise ValueError("Paired Reflector curation reason is required")
-            normalized["curation_assessment"] = {
-                **assessment,
-                "reason": assessment["reason"].strip(),
-            }
+            if not structured_abstraction:
+                if assessment["recommendation"] not in {"promote", "defer"}:
+                    raise ValueError(
+                        "Paired Reflector promotion recommendation is invalid"
+                    )
+                if (
+                    assessment["decision_time_status"] == "hindsight_only"
+                    and assessment["recommendation"] != "defer"
+                ):
+                    raise ValueError(
+                        "Paired Reflector hindsight-only concern must be deferred"
+                    )
+                if (
+                    not isinstance(assessment["reason"], str)
+                    or not assessment["reason"].strip()
+                ):
+                    raise ValueError("Paired Reflector curation reason is required")
+                assessment = {
+                    **assessment,
+                    "reason": assessment["reason"].strip(),
+                }
+            normalized["curation_assessment"] = dict(assessment)
         normalized_concerns.append(normalized)
     normalized_sides = []
     if structured_recovery:
@@ -278,10 +305,15 @@ def validate_paired_reflector_review(
         raise ValueError("Paired Reflector must tag every active bullet")
     normalized_tags = []
     for bullet, tag in zip(playbook.bullets, tags, strict=True):
-        if not isinstance(tag, dict) or set(tag) not in (
-            {"id", "tag", "attribution"},
-            {"id", "tag", "attribution", "confidence"},
-        ):
+        accepted_tag_keys = (
+            ({"id", "tag", "attribution"},)
+            if structured_abstraction
+            else (
+                {"id", "tag", "attribution"},
+                {"id", "tag", "attribution", "confidence"},
+            )
+        )
+        if not isinstance(tag, dict) or set(tag) not in accepted_tag_keys:
             raise ValueError("Paired Reflector bullet tag is invalid")
         attribution = tag["attribution"]
         if (

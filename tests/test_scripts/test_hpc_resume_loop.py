@@ -23,6 +23,7 @@ from scripts.hpc_resume_loop import (
 REPO_ROOT = Path(__file__).resolve().parents[2]
 SCRIPT = REPO_ROOT / "scripts" / "hpc_resume_loop.py"
 SERVICE_SCRIPT = REPO_ROOT / "scripts" / "hpc_supervisor_service.py"
+SEQUENCE_SCRIPT = REPO_ROOT / "scripts" / "hpc_resume_sequence.py"
 
 
 def test_embedded_remote_modules_use_modern_iris_python() -> None:
@@ -920,6 +921,85 @@ arguments:
     assert "hpc_resume_loop.py --target-iterations 8" in invocation
     assert "configs/archive/online_gepa/gepa_online_planning_hpc.yaml --submit" in invocation
     assert "conda run --no-capture-output -n mini-swe" in invocation
+
+
+def test_hpc_supervisor_service_starts_persisted_resume_sequence(tmp_path: Path) -> None:
+    fake_bin = tmp_path / "bin"
+    fake_bin.mkdir()
+    tmux_log = tmp_path / "tmux.log"
+    tmux = fake_bin / "tmux"
+    tmux.write_text(
+        "#!/usr/bin/env bash\n"
+        f"printf '%s\\n' \"$*\" >> {tmux_log}\n"
+        'if [[ "$1" == has-session ]]; then exit 1; fi\n'
+        "exit 0\n",
+        encoding="utf-8",
+    )
+    tmux.chmod(0o755)
+    launch_config = tmp_path / "sequence.yaml"
+    launch_config.write_text(
+        """
+schema_version: 1
+program: resume_sequence
+session: paired-sequence
+log: .local/hpc-supervisor/paired-sequence.log
+runs:
+  - name: first
+    arguments: [--gepa-rules, --gepa-config, first.yaml]
+  - name: second
+    arguments: [--gepa-rules, --gepa-config, second.yaml]
+""",
+        encoding="utf-8",
+    )
+    env = os.environ.copy()
+    env["PATH"] = f"{fake_bin}{os.pathsep}{env['PATH']}"
+    result = subprocess.run(
+        ["python", str(SERVICE_SCRIPT), "start", "--launch-config", str(launch_config)],
+        cwd=REPO_ROOT,
+        capture_output=True,
+        text=True,
+        check=False,
+        env=env,
+    )
+    assert result.returncode == 0, result.stderr
+    invocation = tmux_log.read_text(encoding="utf-8")
+    assert "new-session -d -s paired-sequence" in invocation
+    assert "hpc_resume_sequence.py --launch-config" in invocation
+    assert str(launch_config.resolve()) in invocation
+
+
+def test_hpc_resume_sequence_dry_run_preserves_order(tmp_path: Path) -> None:
+    launch_config = tmp_path / "sequence.yaml"
+    launch_config.write_text(
+        """
+schema_version: 1
+program: resume_sequence
+runs:
+  - name: replay
+    arguments: [--gepa-rules, --gepa-config, replay.yaml]
+  - name: manual
+    arguments: [--gepa-rules, --gepa-config, manual.yaml]
+""",
+        encoding="utf-8",
+    )
+    result = subprocess.run(
+        [
+            "python",
+            str(SEQUENCE_SCRIPT),
+            "--launch-config",
+            str(launch_config),
+            "--dry-run",
+        ],
+        cwd=REPO_ROOT,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert result.returncode == 0, result.stderr
+    assert result.stdout.index("phase 1/2 start: replay") < result.stdout.index(
+        "phase 2/2 start: manual"
+    )
+    assert result.stdout.index("replay.yaml") < result.stdout.index("manual.yaml")
 
 
 def test_pcce_supervisor_launch_config_uses_shared_resume_loop(

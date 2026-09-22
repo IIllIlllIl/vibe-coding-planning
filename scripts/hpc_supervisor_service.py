@@ -14,6 +14,7 @@ import yaml
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 RESUME_SCRIPT = REPO_ROOT / "scripts" / "hpc_resume_loop.py"
+RESUME_SEQUENCE_SCRIPT = REPO_ROOT / "scripts" / "hpc_resume_sequence.py"
 
 
 def _run(args: list[str]) -> subprocess.CompletedProcess[str]:
@@ -30,17 +31,28 @@ def _load_launch_config(path: Path) -> tuple[str, str, list[str], Path]:
         raise ValueError("supervisor launch config must use schema_version: 1")
     session = data.get("session")
     log = data.get("log")
-    arguments = data.get("arguments")
     if not isinstance(session, str) or not session:
         raise ValueError("supervisor launch config requires a non-empty session")
     if not isinstance(log, str) or not log:
         raise ValueError("supervisor launch config requires a non-empty log")
+    program = data.get("program", "resume")
+    if program == "resume_sequence":
+        runs = data.get("runs")
+        if not isinstance(runs, list) or not runs:
+            raise ValueError("resume_sequence requires a non-empty runs list")
+        return (
+            session,
+            log,
+            ["--launch-config", str(path.resolve())],
+            RESUME_SEQUENCE_SCRIPT,
+        )
+    if program != "resume":
+        raise ValueError("unsupported supervisor launch program")
+    arguments = data.get("arguments")
     if not isinstance(arguments, list) or not all(
         isinstance(argument, str) for argument in arguments
     ):
         raise ValueError("supervisor launch config arguments must be strings")
-    if data.get("program", "resume") != "resume":
-        raise ValueError("supervisor launch config supports only the resume loop")
     return session, log, arguments, RESUME_SCRIPT
 
 

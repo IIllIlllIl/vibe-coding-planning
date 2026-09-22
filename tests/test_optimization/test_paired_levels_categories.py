@@ -336,6 +336,119 @@ def test_structured_pair_reflection_keeps_coder_compensation():
         )
 
 
+def test_structured_pair_reflection_requires_abstraction_and_evidence_role():
+    from src.optimization.paired_playbook import validate_paired_reflector_review
+
+    report = {
+        "instance_id": "pair-a",
+        "pair_analysis": "The Plan difference plausibly explains the outcome split.",
+        "side_findings": [
+            {"side": "resolved", "plan_concerns": []},
+            {"side": "unresolved", "plan_concerns": [{
+                "concern": "A related consumer is omitted.",
+                "decision_time_support": "The repository has two consumers.",
+                "coder_response": "followed",
+                "outcome_relation": "The omitted consumer remained unchanged.",
+            }]},
+        ],
+        "reusable_concerns": [{
+            "case_mechanism": "One helper has two repository-specific callers.",
+            "developer_concern": "The Plan changes shared behavior but covers only one affected consumer.",
+            "pair_support": "The unresolved Plan and patch both omit the second consumer.",
+            "curation_assessment": {
+                "pair_relation": "distinguishes",
+                "evidence_role": "outcome_explanatory",
+                "decision_time_status": "supported",
+                "coder_repairability": "not_repaired",
+            },
+        }],
+        "uncertainty": None,
+        "bullet_tags": [{"id": "plan-00001", "tag": "neutral", "attribution": None}],
+    }
+    assert validate_paired_reflector_review(
+        report,
+        instance_id="pair-a",
+        playbook=book(),
+        structured_recovery=True,
+        structured_abstraction=True,
+    ) == report
+
+    legacy = json.loads(json.dumps(report))
+    concern = legacy["reusable_concerns"][0]
+    concern["concern"] = concern.pop("developer_concern")
+    concern.pop("case_mechanism")
+    concern["curation_assessment"].pop("evidence_role")
+    with pytest.raises(ValueError, match="reusable concern is invalid"):
+        validate_paired_reflector_review(
+            legacy,
+            instance_id="pair-a",
+            playbook=book(),
+            structured_recovery=True,
+            structured_abstraction=True,
+        )
+
+    invalid_role = json.loads(json.dumps(report))
+    invalid_role["reusable_concerns"][0]["curation_assessment"]["evidence_role"] = "different"
+    with pytest.raises(ValueError, match="evidence role"):
+        validate_paired_reflector_review(
+            invalid_role,
+            instance_id="pair-a",
+            playbook=book(),
+            structured_recovery=True,
+            structured_abstraction=True,
+        )
+
+    hindsight = json.loads(json.dumps(report))
+    hindsight["reusable_concerns"][0]["curation_assessment"][
+        "decision_time_status"
+    ] = "hindsight_only"
+    with pytest.raises(ValueError, match="decision-time status"):
+        validate_paired_reflector_review(
+            hindsight,
+            instance_id="pair-a",
+            playbook=book(),
+            structured_recovery=True,
+            structured_abstraction=True,
+        )
+
+    confidence = json.loads(json.dumps(report))
+    confidence["reusable_concerns"][0]["confidence"] = "high"
+    with pytest.raises(ValueError, match="reusable concern is invalid"):
+        validate_paired_reflector_review(
+            confidence,
+            instance_id="pair-a",
+            playbook=book(),
+            structured_recovery=True,
+            structured_abstraction=True,
+        )
+
+
+def test_v5_prompt_separates_mechanism_concern_and_pair_evidence_role():
+    path = Path(
+        "configs/prompts/offline_gepa_paired_levels_curation_assessment_v5_20260923.yaml"
+    )
+    prompts = yaml.safe_load(path.read_text())
+    reflector = " ".join(prompts["reflector_system"].split())
+    curator = " ".join(prompts["curator_system"].split())
+    instance = prompts["reflector_instance"]
+
+    assert "case mechanism from the developer-facing concern" in reflector
+    assert "evidence_role separately says what this pair teaches" in reflector
+    assert "Runtime package availability" in reflector
+    assert "Apply a portability check" in reflector
+    assert "Do not perform an exhaustive generic Plan-quality review" in reflector
+    assert "automatically adds, removes, promotes, or defers" in reflector
+    assert '"case_mechanism"' in instance
+    assert '"developer_concern"' in instance
+    assert '"evidence_role"' in instance
+    assert "Use case_mechanism to understand the source evidence" in curator
+    assert "apply this portability check" in curator
+    assert "do not independently justify a new bullet" in curator
+    assert "no pair_relation, evidence_role" in curator
+    assert '"recommendation"' not in instance
+    assert "recommendation" not in reflector
+
+
 def test_curator_coverage_requires_every_side_and_reusable_finding(tmp_path):
     from src.optimization.playbook_hpc_agents import HPCPlaybookProposalAgents
 
@@ -386,6 +499,7 @@ def test_controller_revalidates_structured_paired_reflection(tmp_path, monkeypat
         run_dir=tmp_path / "run",
         hpc=HPCConfig(submit=False),
         paired_reflector_structured_recovery=True,
+        paired_reflector_structured_abstraction=True,
     )
     evidence = tmp_path / "evidence"
     evidence.mkdir()
@@ -413,12 +527,22 @@ def test_controller_revalidates_structured_paired_reflection(tmp_path, monkeypat
         "instance_id": "pair-a",
         "agent_output": {
             "instance_id": "pair-a",
-            "pair_analysis": None,
+            "pair_analysis": "A shared concern calibrates repairability.",
             "side_findings": [
                 {"side": "resolved", "plan_concerns": []},
                 {"side": "unresolved", "plan_concerns": []},
             ],
-            "reusable_concerns": [],
+            "reusable_concerns": [{
+                "case_mechanism": "Two consumers depend on one changed behavior.",
+                "developer_concern": "The Plan changes shared behavior without covering all affected consumers.",
+                "pair_support": "Only one implementation compensated for the shared omission.",
+                "curation_assessment": {
+                    "pair_relation": "shared",
+                    "evidence_role": "repairability_calibration",
+                    "decision_time_status": "supported",
+                    "coder_repairability": "mixed_or_unclear",
+                },
+            }],
             "uncertainty": None,
             "bullet_tags": [
                 {"id": "plan-00001", "tag": "neutral", "attribution": None}
@@ -507,6 +631,58 @@ def test_learning12_reflector_curator_replay_uses_v4_and_reuses_only_checkers():
     assert args[args.index("--max-runs") + 1] == "8"
     assert args[args.index("--cpus") + 1] == "1"
     assert args[args.index("--mem") + 1] == "4G"
+
+
+def test_learning12_v3_sequence_freezes_replay_then_manual_full_cycle():
+    replay_path = Path(
+        "configs/gepa_verified_paired_learning12_smoke_v3_ref_cur_20260923.yaml"
+    )
+    manual_path = Path(
+        "configs/gepa_verified_paired_learning12_smoke_v3_manual_full_20260923.yaml"
+    )
+    replay = yaml.safe_load(replay_path.read_text())
+    manual = yaml.safe_load(manual_path.read_text())
+    _validate_frozen_inputs(replay_path.resolve(), replay)
+    _validate_frozen_inputs(manual_path.resolve(), manual)
+
+    for raw in (replay, manual):
+        assert raw["inputs"]["prompt_bundle"].endswith(
+            "offline_gepa_paired_levels_curation_assessment_v5_20260923.yaml"
+        )
+        assert raw["reflection"] == {
+            "rounds": 1,
+            "structured_recovery": True,
+            "structured_abstraction": True,
+        }
+        assert raw["search"]["max_iterations"] == 1
+        assert raw["search"]["reflection_minibatch_size"] == 12
+        assert raw["models"]["checker"]["thinking"] == "disabled"
+        assert (raw["hpc"]["cpus_per_task"], raw["hpc"]["mem"]) == (1, "4G")
+
+    assert replay["checkpoint_import"]["roles"] == ["paired_repo_checker"]
+    assert "checkpoint_import" not in manual
+    manual_book = RejectPlaybook.parse(
+        Path(manual["inputs"]["initial_playbook"]).read_text()
+    )
+    assert len(manual_book.bullets) == 10
+    assert manual_book.bullets[0].text == "The Plan is a placeholder."
+    assert all(bullet.helpful == bullet.harmful == 0 for bullet in manual_book.bullets)
+
+    launch = yaml.safe_load(Path(
+        "configs/gepa_verified_paired_learning12_smoke_v3_sequence_supervisor_20260923.yaml"
+    ).read_text())
+    assert launch["program"] == "resume_sequence"
+    assert [run["name"] for run in launch["runs"]] == [
+        "audited-checker-reflector-curator-replay",
+        "manual-playbook-full-cycle",
+    ]
+    configs = []
+    for run in launch["runs"]:
+        args = run["arguments"]
+        configs.append(args[args.index("--gepa-config") + 1])
+        assert args[args.index("--cpus") + 1] == "1"
+        assert args[args.index("--mem") + 1] == "4G"
+    assert configs == [str(replay_path), str(manual_path)]
 
 
 def test_lightweight_smoke_selection_resources_and_launch_contract():

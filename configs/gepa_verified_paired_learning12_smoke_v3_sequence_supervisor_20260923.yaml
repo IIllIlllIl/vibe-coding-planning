@@ -1,0 +1,59 @@
+schema_version: 1
+program: resume_sequence
+session: verified-paired-learning12-smoke-v3-sequence-20260923
+log: .local/hpc-supervisor/verified-paired-learning12-smoke-v3-sequence-20260923.log
+runs:
+  - name: audited-checker-reflector-curator-replay
+    arguments:
+      - --poll-interval
+      - "30"
+      - --slice-time
+      - "00:30:00"
+      - --target-iterations
+      - "1"
+      - --max-runs
+      - "8"
+      - --state-file
+      - .local/hpc-supervisor/verified-paired-learning12-smoke-v3-ref-cur-20260923.json
+      - --reclaim-staging
+      - --reclaim-workspaces
+      - --require-clean-worktree
+      - --gepa-rules
+      - --gepa-config
+      - configs/gepa_verified_paired_learning12_smoke_v3_ref_cur_20260923.yaml
+      - --ulhpc-config
+      - configs/ulhpc_submit.yaml
+      - --job-name
+      - verified-paired-learning12-smoke-v3-ref-cur-20260923
+      - --cpus
+      - "1"
+      - --mem
+      - 4G
+      - --submit
+  - name: manual-playbook-full-cycle
+    arguments:
+      - --poll-interval
+      - "30"
+      - --slice-time
+      - "00:30:00"
+      - --target-iterations
+      - "1"
+      - --max-runs
+      - "8"
+      - --state-file
+      - .local/hpc-supervisor/verified-paired-learning12-smoke-v3-manual-full-20260923.json
+      - --reclaim-staging
+      - --reclaim-workspaces
+      - --require-clean-worktree
+      - --gepa-rules
+      - --gepa-config
+      - configs/gepa_verified_paired_learning12_smoke_v3_manual_full_20260923.yaml
+      - --ulhpc-config
+      - configs/ulhpc_submit.yaml
+      - --job-name
+      - verified-paired-learning12-smoke-v3-manual-full-20260923
+      - --cpus
+      - "1"
+      - --mem
+      - 4G
+      - --submit

@@ -1077,7 +1077,7 @@ evidence consumption. The Curator operation's historical `risk_analysis` field
 was required by Host but discarded rather than used in the rule or metric; it
 is no longer required by Host, with old outputs accepted only for replay.
 The frozen prompt still requests that field and must not be reused as a new
-method prompt. No revised Reflector/Curator prompt or formal run is yet frozen.
+method prompt.
 The eighth-round Curator explicitly printed only the first 3,000 characters
 of the detailed Reflection file. The seventh-round Curator read the complete
 summary index but not the detailed file. Neither behavior was caused by normal
@@ -1086,28 +1086,38 @@ and the observed trajectory shows the Agent's own limited-read commands.
 Merely strengthening a read-all instruction does not guarantee that every pair
 is considered.
 
-### Next paired-learning smoke (prepared, not launched)
+### Paired-learning prompt diagnosis and next smoke
 
-The 2026-09-22 v3 prompt and twelve-pair smoke replace the historical
-pair-discriminator-only Reflection with per-side Plan concerns and observed
-Coder responses. A concern may be shared by both Plans and still inform
-future Level calibration. The Curator's indexed input contains the complete
-normalized pair analysis and both side findings, not just a compressed list
-of reusable concerns. The Host assigns stable finding IDs and requires a
-USED or DEFERRED disposition for every one; USED entries cite operations that
-include the supporting pair ID. This is coverage and traceability validation,
-not an automated judgment that every finding deserves a rule. Curator rules
-remain Level-free, and the new prompt omits confidence and risk_analysis.
+The completed 2026-09-22 learning12 replays established that explicit
+per-finding coverage makes the Curator read all indexed evidence and that
+per-side findings recover Coder-compensated concerns. They also showed that a
+single field combining case mechanics with reusable knowledge encourages
+case-shaped rules, and that asking the Reflector to recommend promotion gives
+it an unintended knowledge-admission role.
 
-The smoke reuses twelve development pairs encountered in the completed
-eighth iteration, including Coder-compensated pairs and clear/weak Plan
-contrasts. It excludes the audited HTTP-502 and test-patch-collision pairs
-and uses four already-exposed validation pairs solely for operational checks.
-The exact membership is frozen at
-`configs/frozen_swe_verified_plan_pairs/20260922_paired_learning12_smoke_v1/selection.json`.
-Its runtime and supervisor configs are
-`configs/gepa_verified_paired_learning12_smoke_v1_20260922.yaml` and the
-matching `_supervisor_` file. It is not launch-authorized pending user prompt
-review. Historical paired configs and prompts are indexed under
+The v5 development prompt therefore treats the Agent roles as a learning path,
+not as a hand-written definition of important Plan defects. The Reflector
+records per-Plan findings, separates repository-specific `case_mechanism` from
+portable `developer_concern`, and describes `pair_relation`, `evidence_role`,
+decision-time support, and observed Coder repairability. Those fields describe
+what the pair establishes; none automatically determines ADD, DEFER, or a
+future Level. The Curator reads the complete record, proposes atomic portable
+rules, and dispositions every finding. Side findings may support, refine, or
+disqualify a reusable concern, but cannot bypass the same decision-time,
+abstraction, and attribution analysis. Visible rules remain Level-free.
+
+The next development smoke uses the same twelve audited train pairs and four
+exposed operational validation pairs in two sequential phases. Phase one
+imports only the frozen seed Checker outputs and replays Reflector plus Curator
+under v5. Phase two starts from the manually audited ten-rule development
+playbook and runs the complete Checker, Reflector, and Curator path, approximating
+a later learning state. The shared supervisor executes phase two only after
+phase one exits successfully. The two run configs and the sequence supervisor
+are `configs/gepa_verified_paired_learning12_smoke_v3_ref_cur_20260923.yaml`,
+`configs/gepa_verified_paired_learning12_smoke_v3_manual_full_20260923.yaml`,
+and `configs/gepa_verified_paired_learning12_smoke_v3_sequence_supervisor_20260923.yaml`.
+Preparation and commit do not authorize launch.
+
+Historical paired configs and prompts are indexed under
 `configs/archive/paired-levels-20260921/README.md` without moving their
 fingerprinted files.

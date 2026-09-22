@@ -1,0 +1,85 @@
+{
+  "schema_version": 1,
+  "bullets": [
+    {
+      "id": "plan-00001",
+      "text": "The Plan is a placeholder.",
+      "category": "Plan substance",
+      "helpful": 0,
+      "harmful": 0,
+      "lineage": []
+    },
+    {
+      "id": "plan-00002",
+      "text": "The Plan changes shared behavior but does not account for all consumers affected by that change.",
+      "category": "Change scope",
+      "helpful": 0,
+      "harmful": 0,
+      "lineage": []
+    },
+    {
+      "id": "plan-00003",
+      "text": "The Plan prevents a problematic value from reaching one operation while leaving it reachable by another operation with the same precondition.",
+      "category": "Fix coverage",
+      "helpful": 0,
+      "harmful": 0,
+      "lineage": []
+    },
+    {
+      "id": "plan-00004",
+      "text": "The Plan applies a required correctness rule to only some equivalent values or locations in the changed operation.",
+      "category": "Fix coverage",
+      "helpful": 0,
+      "harmful": 0,
+      "lineage": []
+    },
+    {
+      "id": "plan-00005",
+      "text": "The Plan changes one branch so that a documented output contract is no longer satisfied for every supported input.",
+      "category": "Data contracts",
+      "helpful": 0,
+      "harmful": 0,
+      "lineage": []
+    },
+    {
+      "id": "plan-00006",
+      "text": "The Plan introduces a new representation while retaining an older one without defining how both remain valid when read.",
+      "category": "Compatibility",
+      "helpful": 0,
+      "harmful": 0,
+      "lineage": []
+    },
+    {
+      "id": "plan-00007",
+      "text": "The Plan changes an accessor from reporting actual state to reporting remembered inputs without addressing possible divergence.",
+      "category": "State semantics",
+      "helpful": 0,
+      "harmful": 0,
+      "lineage": []
+    },
+    {
+      "id": "plan-00008",
+      "text": "The Plan changes internal state without accounting for existing outputs derived from that state.",
+      "category": "State semantics",
+      "helpful": 0,
+      "harmful": 0,
+      "lineage": []
+    },
+    {
+      "id": "plan-00009",
+      "text": "The Plan avoids evaluating an operation instead of producing the behavior required by the task.",
+      "category": "Behavioral effect",
+      "helpful": 0,
+      "harmful": 0,
+      "lineage": []
+    },
+    {
+      "id": "plan-00010",
+      "text": "The Plan's rationale depends on repository behavior that the referenced code does not have.",
+      "category": "Repository reasoning",
+      "helpful": 0,
+      "harmful": 0,
+      "lineage": []
+    }
+  ]
+}
