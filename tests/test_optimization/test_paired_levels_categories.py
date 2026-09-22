@@ -504,6 +504,7 @@ def test_learning12_reflector_curator_replay_uses_v4_and_reuses_only_checkers():
     args = launch["arguments"]
     assert args[args.index("--gepa-config") + 1] == str(path)
     assert args[args.index("--target-iterations") + 1] == "1"
+    assert args[args.index("--max-runs") + 1] == "8"
     assert args[args.index("--cpus") + 1] == "1"
     assert args[args.index("--mem") + 1] == "4G"
 
