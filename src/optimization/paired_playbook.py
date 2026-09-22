@@ -10,7 +10,6 @@ from src.optimization.repo_playbook import RepoEvidence
 
 _EVIDENCE_SOURCES = frozenset({"issue", "plan", "repository"})
 _TAGS = frozenset({"helpful", "neutral", "harmful"})
-_CONFIDENCE = frozenset({"low", "medium", "high"})
 
 
 def paired_checker_uses_levels(config: Mapping[str, Any]) -> bool:
@@ -127,11 +126,18 @@ def validate_paired_checker_result(
                 )
             normalized_finding: str | None = finding.strip()
         else:
-            if finding is not None or evidence:
-                raise ValueError(
-                    "untriggered paired concern requires null/empty fields"
-                )
-            normalized_finding = None
+            if levels and finding is not None:
+                # Level 0 may still record a minor, readily repairable Plan
+                # issue. It is neither a warning nor a blocking trigger.
+                if not isinstance(finding, str) or not finding.strip() or not evidence:
+                    raise ValueError("Level 0 finding requires nonempty evidence")
+                normalized_finding = finding.strip()
+            else:
+                if finding is not None or evidence:
+                    raise ValueError(
+                        "untriggered paired concern requires null/empty fields"
+                    )
+                normalized_finding = None
         parsed.append(
             PairedConcernResult(
                 rule_number=number,
@@ -154,6 +160,7 @@ def validate_paired_reflector_review(
     *,
     instance_id: str,
     playbook: RejectPlaybook,
+    structured_recovery: bool = False,
 ) -> dict[str, Any]:
     expected = {
         "instance_id",
@@ -162,6 +169,8 @@ def validate_paired_reflector_review(
         "uncertainty",
         "bullet_tags",
     }
+    if structured_recovery:
+        expected.add("side_findings")
     if not isinstance(value, dict) or set(value) != expected:
         raise ValueError("Paired Reflector review has an invalid schema")
     if value["instance_id"] != instance_id:
@@ -176,38 +185,59 @@ def validate_paired_reflector_review(
         raise ValueError("Paired Reflector reusable_concerns must be a list")
     normalized_concerns = []
     for concern in concerns:
-        if not isinstance(concern, dict) or set(concern) != {
-            "concern",
-            "pair_support",
-            "confidence",
-        }:
+        if not isinstance(concern, dict) or set(concern) not in (
+            {"concern", "pair_support"},
+            {"concern", "pair_support", "confidence"},
+        ):
             raise ValueError("Paired Reflector reusable concern is invalid")
         if (
             any(
                 not isinstance(concern[key], str) or not concern[key].strip()
                 for key in ("concern", "pair_support")
             )
-            or concern["confidence"] not in _CONFIDENCE
         ):
             raise ValueError("Paired Reflector reusable concern content is invalid")
-        normalized_concerns.append(dict(concern))
+        # Older frozen prompts emitted confidence; it is not a Level and has
+        # no defined role in curation. Accept legacy output, but do not pass
+        # the field to the Curator or persist it in normalized reviews.
+        normalized_concerns.append(
+            {key: concern[key].strip() for key in ("concern", "pair_support")}
+        )
+    normalized_sides = []
+    if structured_recovery:
+        sides = value["side_findings"]
+        if not isinstance(sides, list) or len(sides) != 2:
+            raise ValueError("Paired Reflector requires exactly two side findings")
+        for expected_side, side in zip(("resolved", "unresolved"), sides, strict=True):
+            if not isinstance(side, dict) or set(side) != {"side", "plan_concerns"}:
+                raise ValueError("Paired Reflector side finding is invalid")
+            if side["side"] != expected_side or not isinstance(side["plan_concerns"], list):
+                raise ValueError("Paired Reflector side order or concerns are invalid")
+            normalized_items = []
+            for item in side["plan_concerns"]:
+                keys = {"concern", "decision_time_support", "coder_response", "outcome_relation"}
+                if not isinstance(item, dict) or set(item) != keys:
+                    raise ValueError("Paired Reflector Plan concern is invalid")
+                if item["coder_response"] not in {"followed", "compensated", "departed", "unknown"}:
+                    raise ValueError("Paired Reflector Coder response is invalid")
+                if any(not isinstance(item[key], str) or not item[key].strip() for key in keys - {"coder_response"}):
+                    raise ValueError("Paired Reflector Plan concern lacks an explanation")
+                normalized_items.append({key: value.strip() for key, value in item.items()})
+            normalized_sides.append({"side": expected_side, "plan_concerns": normalized_items})
     tags = value["bullet_tags"]
     if not isinstance(tags, list) or len(tags) != len(playbook.bullets):
         raise ValueError("Paired Reflector must tag every active bullet")
     normalized_tags = []
     for bullet, tag in zip(playbook.bullets, tags, strict=True):
-        if not isinstance(tag, dict) or set(tag) != {
-            "id",
-            "tag",
-            "attribution",
-            "confidence",
-        }:
+        if not isinstance(tag, dict) or set(tag) not in (
+            {"id", "tag", "attribution"},
+            {"id", "tag", "attribution", "confidence"},
+        ):
             raise ValueError("Paired Reflector bullet tag is invalid")
         attribution = tag["attribution"]
         if (
             tag["id"] != bullet.id
             or tag["tag"] not in _TAGS
-            or tag["confidence"] not in _CONFIDENCE
             or (
                 attribution is not None
                 and (not isinstance(attribution, str) or not attribution.strip())
@@ -217,7 +247,8 @@ def validate_paired_reflector_review(
             raise ValueError("Paired Reflector bullet tag content is invalid")
         normalized_tags.append(
             {
-                **tag,
+                "id": tag["id"],
+                "tag": tag["tag"],
                 "attribution": attribution.strip()
                 if isinstance(attribution, str)
                 else None,
@@ -225,7 +256,7 @@ def validate_paired_reflector_review(
         )
     has_analysis = bool(normalized_concerns) or any(
         tag["tag"] != "neutral" for tag in normalized_tags
-    )
+    ) or any(side["plan_concerns"] for side in normalized_sides)
     if has_analysis and value["pair_analysis"] is None:
         raise ValueError("Paired Reflector pair_analysis is required for attribution")
     return {
@@ -242,4 +273,5 @@ def validate_paired_reflector_review(
         ),
         "reusable_concerns": normalized_concerns,
         "bullet_tags": normalized_tags,
+        **({"side_findings": normalized_sides} if structured_recovery else {}),
     }

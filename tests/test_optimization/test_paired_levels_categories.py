@@ -7,7 +7,7 @@ import yaml
 from src.environment.apptainer_env import ApptainerEnvironment
 from src.optimization.paired_playbook import validate_paired_checker_result, paired_checker_uses_levels
 from src.optimization.playbook import (PlaybookBullet, RejectPlaybook, apply_curator_operations,
-    apply_refiner_operations, manage_playbook_length)
+    apply_refiner_operations, manage_playbook_length, validate_curator_concern_coverage)
 from src.optimization.playbook_adapter import GlobalPlaybookCounters
 from src.optimization.playbook_cli import run_from_config, _validate_frozen_inputs
 from src.optimization.repo_playbook import render_concern_playbook
@@ -52,15 +52,38 @@ def test_output_protocols_do_not_mix():
         paired_checker_uses_levels({"repo_checker": {"output_contract": "typo"}})
 
 
-def test_warning_requires_evidence_and_zero_requires_no_finding():
+def test_warning_requires_evidence_and_zero_can_record_repairable_finding():
     warning = result(1)
     warning["rule_results"][0]["evidence"] = []
     with pytest.raises(ValueError):
         validate_paired_checker_result(warning, book(), levels=True)
     zero = result(0)
-    zero["rule_results"][0]["finding"] = "Unexpected"
+    zero["rule_results"][0]["finding"] = "Minor Plan concern"
+    zero["rule_results"][0]["evidence"] = [
+        {"source": "plan", "location": None, "observation": "The Plan misspells a path."}
+    ]
+    parsed = validate_paired_checker_result(zero, book(), levels=True)
+    assert not parsed.rejected
+    assert parsed.to_dict()["rule_results"][0]["finding"] == "Minor Plan concern"
+    zero["rule_results"][0]["evidence"] = []
     with pytest.raises(ValueError):
         validate_paired_checker_result(zero, book(), levels=True)
+
+
+def test_curator_risk_analysis_is_not_required_or_used():
+    operation_without_risk = {
+        "type": "ADD", "content": "Another concern", "category": "Scope",
+        "supporting_instance_ids": ["pair-a"],
+    }
+    without_risk = apply_curator_operations(book(), {
+        "reasoning": "Evidence supports this concern.",
+        "operations": [operation_without_risk],
+    })
+    with_risk = apply_curator_operations(book(), {
+        "reasoning": "Evidence supports this concern.",
+        "operations": [{**operation_without_risk, "risk_analysis": "Legacy audit note"}],
+    })
+    assert without_risk == with_risk
 
 
 def test_categories_preserve_order_and_hide_metadata():
@@ -217,9 +240,140 @@ def test_neutral_reflection_can_report_calibration_without_new_concerns():
             "confidence": "medium",
         }],
     }
-    assert validate_paired_reflector_review(
+    normalized = validate_paired_reflector_review(
         report, instance_id="pair-a", playbook=book()
+    )
+    assert normalized["bullet_tags"] == [{
+        "id": "plan-00001", "tag": "neutral",
+        "attribution": "The broad wording may encourage over-severe findings.",
+    }]
+    assert "confidence" not in normalized["bullet_tags"][0]
+
+
+def test_paired_reflection_concerns_need_no_confidence_and_strip_legacy_field():
+    from src.optimization.paired_playbook import validate_paired_reflector_review
+
+    report = {
+        "instance_id": "pair-a",
+        "pair_analysis": "The Code Agent repaired the missing state update.",
+        "reusable_concerns": [{
+            "concern": "A related state update is absent.",
+            "pair_support": "One Code Agent repaired it; the other did not.",
+        }],
+        "uncertainty": None,
+        "bullet_tags": [{
+            "id": "plan-00001", "tag": "neutral", "attribution": None,
+        }],
+    }
+    expected = validate_paired_reflector_review(
+        report, instance_id="pair-a", playbook=book()
+    )
+    assert expected == report
+    legacy = json.loads(json.dumps(report))
+    legacy["reusable_concerns"][0]["confidence"] = "low"
+    legacy["bullet_tags"][0]["confidence"] = "high"
+    assert validate_paired_reflector_review(
+        legacy, instance_id="pair-a", playbook=book()
+    ) == expected
+
+
+def test_structured_pair_reflection_keeps_coder_compensation():
+    from src.optimization.paired_playbook import validate_paired_reflector_review
+
+    report = {
+        "instance_id": "pair-a", "pair_analysis": "Both plans omit the state update.",
+        "side_findings": [
+            {"side": "resolved", "plan_concerns": [{
+                "concern": "Related state update is missing.",
+                "decision_time_support": "The plan changes one branch only.",
+                "coder_response": "compensated",
+                "outcome_relation": "Coder added the update and resolved.",
+            }]},
+            {"side": "unresolved", "plan_concerns": [{
+                "concern": "Related state update is missing.",
+                "decision_time_support": "The plan changes one branch only.",
+                "coder_response": "followed",
+                "outcome_relation": "Coder omitted it and did not resolve.",
+            }]},
+        ],
+        "reusable_concerns": [{
+            "concern": "A branch change leaves related state inconsistent.",
+            "pair_support": "The gap is shared, but only one Coder compensated.",
+        }],
+        "uncertainty": None,
+        "bullet_tags": [{"id": "plan-00001", "tag": "neutral", "attribution": None}],
+    }
+    assert validate_paired_reflector_review(
+        report, instance_id="pair-a", playbook=book(), structured_recovery=True
     ) == report
+    without_sides = {key: value for key, value in report.items() if key != "side_findings"}
+    with pytest.raises(ValueError):
+        validate_paired_reflector_review(
+            without_sides, instance_id="pair-a", playbook=book(), structured_recovery=True
+        )
+
+
+def test_curator_coverage_requires_every_side_and_reusable_finding(tmp_path):
+    from src.optimization.playbook_hpc_agents import HPCPlaybookProposalAgents
+
+    calls = []
+
+    class Executor:
+        run_dir = tmp_path
+
+        def run_wave(self, role, items):
+            calls.append((role, items))
+            return [{"agent_output": {"reasoning": "No durable change.", "operations": [],
+                "reviewed_concerns": [
+                    {"id": item, "disposition": "DEFERRED", "operation_numbers": [],
+                     "reason": "Shared gap is not yet a durable bullet."}
+                    for item in items[0]["validation_concern_ids"]
+                ]}}]
+
+    agents = HPCPlaybookProposalAgents(
+        Executor(), maximum_tokens=2048, require_concern_coverage=True
+    )
+    review = {
+        "instance_id": "pair-a", "pair_analysis": "Both sides have a gap.",
+        "reusable_concerns": [{"concern": "Shared gap", "pair_support": "One Coder repairs it."}],
+        "side_findings": [
+            {"side": "resolved", "plan_concerns": [{"concern": "Gap", "coder_response": "compensated"}]},
+            {"side": "unresolved", "plan_concerns": [{"concern": "Gap", "coder_response": "followed"}]},
+        ],
+        "uncertainty": None, "bullet_tags": [],
+    }
+    output = agents.curate(book(), [review])
+    ids = ["pair-a:c1", "pair-a:r1", "pair-a:u1"]
+    assert calls[0][1][0]["validation_concern_ids"] == ids
+    index = json.loads((Path(calls[0][1][0]["evidence_dir"]) / "reflection_index.json").read_text())
+    assert index[0]["pair_analysis"] == "Both sides have a gap."
+    assert index[0]["side_findings"][0]["plan_concerns"][0]["id"] == "pair-a:r1"
+    validate_curator_concern_coverage(output, ids)
+    with pytest.raises(ValueError, match="every reflected concern"):
+        validate_curator_concern_coverage(
+            {**output, "reviewed_concerns": output["reviewed_concerns"][:-1]}, ids
+        )
+
+
+def test_learning12_smoke_is_frozen_and_not_launch_authorized():
+    path = Path("configs/gepa_verified_paired_learning12_smoke_v1_20260922.yaml")
+    raw = yaml.safe_load(path.read_text())
+    _validate_frozen_inputs(path.resolve(), raw)
+    assert raw["readiness"] == {
+        "runnable": False,
+        "launched": False,
+        "missing": ["user review of the new prompt and smoke design"],
+    }
+    assert (raw["search"]["max_iterations"], raw["search"]["reflection_minibatch_size"]) == (1, 12)
+    assert raw["reflection"]["structured_recovery"] is True
+    assert raw["curation"]["require_concern_coverage"] is True
+    selection = json.loads(Path(raw["inputs"]["selection"]).read_text())
+    clean = json.loads(Path(
+        "configs/frozen_swe_verified_plan_pairs/20260922_operationally_clean138_v1/selection.json"
+    ).read_text())
+    assert set(selection["train_instance_ids"]).issubset(clean["train_instance_ids"])
+    assert raw["inputs"]["train_instance_ids"] == selection["train_instance_ids"]
+    assert raw["inputs"]["validation_instance_ids"] == selection["validation_instance_ids"]
 
 
 def test_lightweight_smoke_selection_resources_and_launch_contract():

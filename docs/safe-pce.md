@@ -632,6 +632,16 @@ train pairs from 46 tasks and 36 validation pairs from 11 tasks. This is a
 development dataset enriched for within-task disagreement, not a prevalence
 sample or held-out effectiveness evaluation.
 
+The pair snapshot remains immutable. The completed Level-based GEPA run first
+selected 143 of its train pairs; subsequent Reflection audit identified three
+additional pairs whose shared U observation had an external HTTP 502 and two
+whose shared U observation could not receive the official test patch. The
+superseding **138-train-pair selection** and exact reasons are recorded at
+`configs/frozen_swe_verified_plan_pairs/20260922_operationally_clean138_v1/`.
+Coder-sampling differences are retained as potential recovery evidence rather
+than automatically filtered. The original 36 validation pairs are unchanged
+and have not been certified by the new operational audit.
+
 ## Historical Evidence
 
 The complete former SWE-Verified PCE/PCCE workflow, including quick50 and

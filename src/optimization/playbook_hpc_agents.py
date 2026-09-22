@@ -13,6 +13,7 @@ from src.optimization.playbook import (
     apply_curator_operations,
     apply_refiner_operations,
     overlength_bullet_ids,
+    validate_curator_concern_coverage,
 )
 from src.optimization.repo_playbook import render_concern_playbook
 from src.optimization.playbook_hpc_executor import PlaybookHPCExecutor
@@ -198,6 +199,7 @@ class HPCPlaybookProposalAgents:
         maximum_bullet_tokens: int | None = None,
         token_counter: Callable[[str], int] | None = None,
         visible_renderer: Callable[[RejectPlaybook], str] | None = None,
+        require_concern_coverage: bool = False,
     ) -> None:
         self.executor = executor
         self.maximum_tokens = maximum_tokens
@@ -206,6 +208,7 @@ class HPCPlaybookProposalAgents:
         self.visible_renderer = visible_renderer or (
             lambda value: value.render_for_checker()
         )
+        self.require_concern_coverage = require_concern_coverage
 
     @staticmethod
     def _materialize_historical_evidence(
@@ -349,6 +352,7 @@ class HPCPlaybookProposalAgents:
         )
         atomic_json(evidence_dir / "case_reflections.json", list(reviews))
         reflection_index = []
+        concern_ids: list[str] = []
         for review in reviews:
             summary = {
                 "instance_id": review.get("instance_id"),
@@ -356,7 +360,24 @@ class HPCPlaybookProposalAgents:
                 "bullet_tags": review.get("bullet_tags", []),
             }
             if "reusable_concerns" in review:
-                summary["reusable_concerns"] = review["reusable_concerns"]
+                if self.require_concern_coverage:
+                    summary["reusable_concerns"] = []
+                    for index, concern in enumerate(review["reusable_concerns"], start=1):
+                        concern_id = f'{review["instance_id"]}:c{index}'
+                        concern_ids.append(concern_id)
+                        summary["reusable_concerns"].append({"id": concern_id, **concern})
+                    summary["pair_analysis"] = review.get("pair_analysis")
+                    summary["side_findings"] = []
+                    for side in review.get("side_findings", []):
+                        prefix = "r" if side["side"] == "resolved" else "u"
+                        numbered = []
+                        for index, finding in enumerate(side["plan_concerns"], start=1):
+                            finding_id = f'{review["instance_id"]}:{prefix}{index}'
+                            concern_ids.append(finding_id)
+                            numbered.append({"id": finding_id, **finding})
+                        summary["side_findings"].append({"side": side["side"], "plan_concerns": numbered})
+                else:
+                    summary["reusable_concerns"] = review["reusable_concerns"]
             else:
                 summary["key_insight"] = review.get("key_insight")
             reflection_index.append(summary)
@@ -373,6 +394,7 @@ class HPCPlaybookProposalAgents:
                 ],
                 "contains_repository": False,
                 "contains_direct_downstream_evidence": False,
+                **({"concern_ids": concern_ids} if self.require_concern_coverage else {}),
             },
         )
         item = {
@@ -383,6 +405,7 @@ class HPCPlaybookProposalAgents:
                 "case_count": len(reviews),
                 "evidence_path": "/evidence",
             },
+            **({"validation_concern_ids": concern_ids} if self.require_concern_coverage else {}),
         }
         try:
             return self.executor.run_wave("curator", [item])[0]["agent_output"]
@@ -404,6 +427,8 @@ class HPCPlaybookProposalAgents:
                 raise
             completion = json.loads(completions[-1].read_text(encoding="utf-8"))
             output = completion.get("agent_output")
+            if self.require_concern_coverage:
+                validate_curator_concern_coverage(output, concern_ids)
             proposed = apply_curator_operations(counted, output)
             invalid = overlength_bullet_ids(
                 proposed,
@@ -498,6 +523,7 @@ class HPCPairedRepoPlaybookProposalAgents(HPCPlaybookProposalAgents):
         maximum_tokens: int,
         maximum_bullet_tokens: int | None = None,
         token_counter: Callable[[str], int] | None = None,
+        require_concern_coverage: bool = False,
     ) -> None:
         super().__init__(
             executor,
@@ -505,6 +531,7 @@ class HPCPairedRepoPlaybookProposalAgents(HPCPlaybookProposalAgents):
             maximum_bullet_tokens=maximum_bullet_tokens,
             token_counter=token_counter,
             visible_renderer=render_concern_playbook,
+            require_concern_coverage=require_concern_coverage,
         )
         self.image_records = image_records
 

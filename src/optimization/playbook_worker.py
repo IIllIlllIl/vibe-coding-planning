@@ -27,6 +27,7 @@ from src.optimization.playbook import (
     RejectPlaybook,
     apply_curator_operations,
     apply_refiner_operations,
+    validate_curator_concern_coverage,
     validate_bullet_token_limit,
     validate_checker_result,
     validate_reflector_review,
@@ -246,8 +247,13 @@ def run_task(
                 output,
                 instance_id=str(manifest["instance_id"]),
                 playbook=playbook,
+                structured_recovery=bool(config.get("reflection", {}).get("structured_recovery", False)),
             )
         elif role == "curator":
+            if "validation_concern_ids" in manifest:
+                validate_curator_concern_coverage(
+                    output, manifest["validation_concern_ids"]
+                )
             proposed = apply_curator_operations(playbook, output)
             validate_bullet_token_limit(
                 proposed,

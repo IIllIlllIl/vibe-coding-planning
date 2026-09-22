@@ -381,12 +381,47 @@ def _next_bullet_id(playbook: RejectPlaybook, reserved: set[str]) -> str:
     return bullet_id
 
 
+def validate_curator_concern_coverage(value: Any, expected_ids: Sequence[str]) -> None:
+    """Require an explicit disposition for every reflected concern in a new run."""
+    if not isinstance(value, dict) or not isinstance(value.get("operations"), list):
+        raise ValueError("Curator coverage requires operations")
+    rows = value.get("reviewed_concerns")
+    if not isinstance(rows, list) or len(rows) != len(expected_ids):
+        raise ValueError("Curator must review every reflected concern")
+    if [row.get("id") if isinstance(row, dict) else None for row in rows] != list(expected_ids):
+        raise ValueError("Curator concern coverage IDs are missing or out of order")
+    for row in rows:
+        if set(row) != {"id", "disposition", "operation_numbers", "reason"}:
+            raise ValueError("Curator concern disposition has an invalid schema")
+        if row["disposition"] not in {"USED", "DEFERRED"}:
+            raise ValueError("Curator concern disposition is invalid")
+        if not isinstance(row["reason"], str) or not row["reason"].strip():
+            raise ValueError("Curator concern disposition requires a reason")
+        numbers = row["operation_numbers"]
+        if not isinstance(numbers, list) or any(type(number) is not int for number in numbers):
+            raise ValueError("Curator concern operation numbers are invalid")
+        if row["disposition"] == "DEFERRED" and numbers:
+            raise ValueError("Deferred concern cannot cite an operation")
+        if row["disposition"] == "USED" and not numbers:
+            raise ValueError("Used concern must cite an operation")
+        pair_id = row["id"].rsplit(":", 1)[0]
+        for number in numbers:
+            if number < 1 or number > len(value["operations"]):
+                raise ValueError("Curator concern cites a missing operation")
+            operation = value["operations"][number - 1]
+            if not isinstance(operation, dict) or pair_id not in operation.get("supporting_instance_ids", []):
+                raise ValueError("Curator operation does not cite the concern's pair")
+
+
 def apply_curator_operations(
     playbook: RejectPlaybook,
     value: Any,
 ) -> RejectPlaybook:
     """Validate and deterministically apply Curator delta operations."""
-    if not isinstance(value, dict) or set(value) != {"reasoning", "operations"}:
+    if not isinstance(value, dict) or set(value) not in (
+        {"reasoning", "operations"},
+        {"reasoning", "operations", "reviewed_concerns"},
+    ):
         raise ValueError("Curator output must contain reasoning and operations")
     if not isinstance(value["reasoning"], str) or not value["reasoning"].strip():
         raise ValueError("Curator reasoning must be non-empty")
@@ -400,7 +435,7 @@ def apply_curator_operations(
         if not isinstance(operation, dict) or "type" not in operation:
             raise ValueError("Curator operation has an invalid schema")
         kind = operation["type"]
-        common = {"type", "supporting_instance_ids", "risk_analysis"}
+        common = {"type", "supporting_instance_ids"}
         if kind == "ADD":
             expected = common | {"content"}
             targets: tuple[str, ...] = ()
@@ -417,15 +452,16 @@ def apply_curator_operations(
             raise ValueError(f"unsupported Curator operation: {kind!r}")
         if kind != "DELETE" and "category" in operation:
             expected.add("category")
-        if set(operation) != expected:
+        # Historical prompt bundles emitted risk_analysis. Accept that legacy
+        # field for replay, but do not require or use it in new operations.
+        actual_keys = set(operation) - {"risk_analysis"}
+        if actual_keys != expected:
             raise ValueError("Curator operation has unexpected or missing keys")
         supporting = operation["supporting_instance_ids"]
         if not isinstance(supporting, list) or not supporting or any(
             not isinstance(item, str) or not item for item in supporting
         ):
             raise ValueError("Curator operation requires supporting instances")
-        if not isinstance(operation["risk_analysis"], str) or not operation["risk_analysis"].strip():
-            raise ValueError("Curator operation requires risk analysis")
         for target in targets:
             if target not in original:
                 raise ValueError("Curator operation targets an unknown bullet")

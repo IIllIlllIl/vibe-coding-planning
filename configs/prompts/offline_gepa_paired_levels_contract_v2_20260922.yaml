@@ -1,0 +1,19 @@
+checker_contract_appendix: |
+  Return exactly one result per numbered bullet, in its original order.
+  Category headings do not get results. The top-level key is rule_results.
+  Each result has exactly rule_number, level, finding, evidence, and reason.
+  level is an integer: 0 (no material concern or readily repairable minor gap),
+  1 (non-pausing warning), or 2 (pause for clarification or revision).
+  Every Level requires a nonempty reason explaining the assessment.
+
+  If no finding is supported, use finding=null and evidence=[]. Any non-null
+  finding, including at Level 0, requires at least one evidence item. Evidence
+  items contain exactly source, location, and observation. source is issue,
+  plan, or repository; location is a nonempty string or null; observation is
+  a nonempty explanation of what the source shows. An evidence object has
+  this shape, with placeholders replaced:
+  {"source":"<issue, plan, or repository>","location":"<location string or null>","observation":"<what the cited source shows>"}
+
+  Before submission, check keys, level types, evidence, and bullet ordinals.
+  Repository files are read-only for this review. Write the requested JSON
+  artifact in /tmp; the submission protocol remains unchanged.

@@ -274,14 +274,15 @@ descriptive metrics; the table above is the candidate-selection objective.
 ## Additive Repository-Aware Concern Mode
 
 The Repo Checker evaluates every visible concern independently and returns a
-concrete finding, decision-time evidence, and a case-specific Level only when
-the concern is triggered:
+case-specific Level. The intended Level interpretation for the next paired
+protocol is about the likely need for intervention, not a permanent property
+of a playbook bullet:
 
 | Level | Operational meaning | Host gate |
 |---|---|---:|
-| 0 | The concern is likely recoverable through a small/direct implementation step. | no |
-| 1 | The concern merits attention and may require investigation or adjustment. | no |
-| 2 | The evidence supports a material risk that ordinary implementation is unlikely to recover from reliably. | **yes** |
+| 0 | No material concern, or a supported minor gap that ordinary implementation can readily repair. | no |
+| 1 | A supported concern whose repair may require investigation or re-planning; report it, but do not pause automatically. | no |
+| 2 | A supported concern unlikely to be repaired reliably without pre-implementation clarification or revision. | **yes** |
 
 The Host derives `REJECT` only when at least one triggered concern is Level 2.
 Level 0 and Level 1 are retained as richer diagnostic output and later
@@ -291,22 +292,30 @@ schema and applies the deterministic Level-2 gate.
 
 Playbook bullets never store a default Level. The same concern may be Level 0,
 1, or 2 on different cases according to issue, Plan, and repository evidence.
-This first implementation therefore optimizes only whether learned concern
-knowledge produces useful Level-2 gates under the frozen resolved proxy. It
-does not claim to optimize Level-1 calibration.
+The completed 2026-09-21 eight-iteration run used narrower prompt wording:
+Level 0 meant no finding, Level 1 a non-pausing warning, and Level 2 a pause.
+Its Checker behavior must be analyzed under that **historical** prompt, not
+retroactively relabeled with the intended repairability meanings above. Host
+validation now permits an evidenced Level-0 minor finding for the next prompt
+revision; the old prompt still asks for null/empty Level-0 fields. Candidate
+selection still measures Level-2 pair ordering, not Level-1 calibration.
 
-The Repo Reflector sees the same frozen base repository plus retrospective
-Plan/Code/evaluator evidence. For each bullet it records `c1`, `c2`, `c3`, or
-`unknown` observed recovery and, independently, whether the Checker's Level was
-too low, appropriate, too high, or unknown. Helpful/harmful tags update global
-playbook counters by comparing the concern with completed implementation
-evidence; Level calibration never changes those counters. These are
-concern-level retrospective attributions, not task labels. When no reusable
-concern or supported attribution exists, the Reflector may return null case
-analysis, an empty concern list, and neutral/unknown tags rather than inventing
-a failure narrative. The Curator receives structured reflections, learns
-high-level repository-checkable concern text, and never stores the case-level
-Level.
+The current paired Reflector sees the same frozen base repository plus
+retrospective Plan/Code/evaluator evidence. It emits free-text `pair_analysis`,
+zero or more `reusable_concerns`, `uncertainty`, and per-bullet helpful/neutral/
+harmful tags. It does **not** emit a structured Coder-recovery class or separate
+per-side concern inventory. Helpful/harmful tags update global counters; they
+are not Level labels. Consequently, a shared Plan gap repaired by only one
+Coder can be described in free text yet fail to reach Curator as a reusable
+concern. This is a known learning-information gap, not a reason to discard all
+Coder-divergent pairs. A future Reflector/Curator prompt and contract revision
+must explicitly resolve it before another learning run.
+The paired review validator no longer requires or forwards a separate
+`confidence` field. It accepts and strips that field from historical paired
+prompt outputs for replay compatibility. Confidence in older no-repository,
+repository-binary, and Behavioral protocols is separate historical authority,
+not a field in the next paired learning contract. The frozen 2026-09-21 paired
+prompt still requests confidence and must be superseded before a new run.
 
 Each repository Checker or Reflector is still one Slurm array element. It uses
 the frozen audited SIF, copies `/testbed` into a phase-local disposable
@@ -1048,11 +1057,57 @@ Validate this configuration before starting Checker waves. With
 the next loop boundary and surface as controller failures rather than consuming
 subsequent minibatches.
 
-The first formal contract uses eight proposals and a 24-pair Reflection
-minibatch. It has no case-level Level field: each concern is either materially
-triggered or not, and candidate selection uses only pair ordering. A four-pair
-end-to-end smoke must complete and its prompt trajectories must be reviewed
-before the formal config becomes runnable. Merely tracking either config does
-not authorize submission.
-The `readiness` block records human review status; it is not a runtime launch
-gate. Launch authorization and frozen input validation remain separate.
+The initial binary paired contract had no Level field. The completed
+2026-09-21 formal run instead used per-rule Levels, categories, eight proposals,
+and a 24-pair Reflection minibatch. Its historical train selection contained
+143 pairs after one Django test-patch-collision exclusion. A later audit found
+two more pairs using the same invalid Django U observation and three pairs using
+a Requests U observation whose target test hit an external HTTP 502. The
+superseding, unlaunched selection in
+`configs/frozen_swe_verified_plan_pairs/20260922_operationally_clean138_v1/`
+removes those five pairs while retaining the unchanged frozen snapshot and
+36-pair validation split. The latter has not received the same new audit.
+
+The completed run's Curator did not reliably read the full detailed Reflection
+file: one observed round read only the summary index; another printed only the
+first 3,000 characters of the detailed file. The index contains all concern
+summaries and tags but omits full `pair_analysis`, including Coder compensation
+and Level-attribution detail. Prompt instruction alone did not guarantee full
+evidence consumption. The Curator operation's historical `risk_analysis` field
+was required by Host but discarded rather than used in the rule or metric; it
+is no longer required by Host, with old outputs accepted only for replay.
+The frozen prompt still requests that field and must not be reused as a new
+method prompt. No revised Reflector/Curator prompt or formal run is yet frozen.
+The eighth-round Curator explicitly printed only the first 3,000 characters
+of the detailed Reflection file. The seventh-round Curator read the complete
+summary index but not the detailed file. Neither behavior was caused by normal
+shell-output truncation: the Apptainer command runner captures full stdout,
+and the observed trajectory shows the Agent's own limited-read commands.
+Merely strengthening a read-all instruction does not guarantee that every pair
+is considered.
+
+### Next paired-learning smoke (prepared, not launched)
+
+The 2026-09-22 v3 prompt and twelve-pair smoke replace the historical
+pair-discriminator-only Reflection with per-side Plan concerns and observed
+Coder responses. A concern may be shared by both Plans and still inform
+future Level calibration. The Curator's indexed input contains the complete
+normalized pair analysis and both side findings, not just a compressed list
+of reusable concerns. The Host assigns stable finding IDs and requires a
+USED or DEFERRED disposition for every one; USED entries cite operations that
+include the supporting pair ID. This is coverage and traceability validation,
+not an automated judgment that every finding deserves a rule. Curator rules
+remain Level-free, and the new prompt omits confidence and risk_analysis.
+
+The smoke reuses twelve development pairs encountered in the completed
+eighth iteration, including Coder-compensated pairs and clear/weak Plan
+contrasts. It excludes the audited HTTP-502 and test-patch-collision pairs
+and uses four already-exposed validation pairs solely for operational checks.
+The exact membership is frozen at
+`configs/frozen_swe_verified_plan_pairs/20260922_paired_learning12_smoke_v1/selection.json`.
+Its runtime and supervisor configs are
+`configs/gepa_verified_paired_learning12_smoke_v1_20260922.yaml` and the
+matching `_supervisor_` file. It is not launch-authorized pending user prompt
+review. Historical paired configs and prompts are indexed under
+`configs/archive/paired-levels-20260921/README.md` without moving their
+fingerprinted files.

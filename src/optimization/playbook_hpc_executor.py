@@ -276,6 +276,8 @@ class PlaybookHPCExecutor:
                 payload["validation_rule_count"] = item["validation_rule_count"]
             if "output_contract" in item:
                 payload["output_contract"] = item["output_contract"]
+            if "validation_concern_ids" in item:
+                payload["validation_concern_ids"] = list(item["validation_concern_ids"])
             if "evidence_dir" in item:
                 payload["evidence_dir"] = item["evidence_dir"]
             if "repository" in item:

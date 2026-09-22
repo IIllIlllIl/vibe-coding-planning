@@ -1,0 +1,26 @@
+{
+  "schema_version": 1,
+  "data_unit": "within_task_plan_pair",
+  "train_instance_ids": [
+    "pair-78109f69ff82bbd16ec960be",
+    "pair-62b15a8e6978206c8f08a33c",
+    "pair-da3a49e06b6b680bbe0b3b49",
+    "pair-367c066a53c8b7df76863f02",
+    "pair-6663594e928684ff4a25858b",
+    "pair-549f122669a991e427c73628",
+    "pair-89ccad0247ccfc67f8026dc1",
+    "pair-f238c71b0ce9c101b56e86b7",
+    "pair-b6288be04be53a84472c7d08",
+    "pair-cf7cec5b6b84c64723a597b2",
+    "pair-cebf943ee365480f46cd4418",
+    "pair-1eee6d23e01617403113ce7d"
+  ],
+  "validation_instance_ids": [
+    "pair-27786b755371198326783156",
+    "pair-05a1e7405702ab648b7f67ea",
+    "pair-92f9af0cf56249cb5da68410",
+    "pair-8043b6b99e7285b2ddbf6688"
+  ],
+  "selection_policy": "Development-only targeted replay of twelve operationally retained pairs observed in the completed eighth iteration, including two Coder-compensation examples, strong Plan contrasts, and weak/strict-evaluator contrasts. Excludes known HTTP-502 and official test-patch-collision pairs. Four previously exposed validation pairs are smoke checks, not held-out evaluation.",
+  "immutable": true
+}

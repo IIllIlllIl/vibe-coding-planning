@@ -285,6 +285,7 @@ def run_from_config(path: str | Path, *, agents: Any | None = None, optimize_fn=
                 maximum_tokens=int(raw["length"]["maximum_visible_tokens"]),
                 maximum_bullet_tokens=int(raw["length"]["maximum_bullet_tokens"]),
                 token_counter=count_tokens,
+                require_concern_coverage=bool(raw.get("curation", {}).get("require_concern_coverage", False)),
             )
         elif repo_mode:
             checker = HPCRepoPlaybookChecker(
@@ -320,7 +321,10 @@ def run_from_config(path: str | Path, *, agents: Any | None = None, optimize_fn=
             harmful_weight=float(raw["length"].get("harmful_pruning_weight", 5.0)),
             global_counter_path=run_dir / "global_counter_ledger.json",
             review_validator=(
-                validate_paired_reflector_review
+                (lambda output, *, instance_id, playbook: validate_paired_reflector_review(
+                    output, instance_id=instance_id, playbook=playbook,
+                    structured_recovery=bool(raw.get("reflection", {}).get("structured_recovery", False)),
+                ))
                 if paired_mode
                 else (
                     validate_repo_reflector_review
