@@ -259,6 +259,9 @@ def run_from_config(path: str | Path, *, agents: Any | None = None, optimize_fn=
             hpc=hpc,
             token_counter=count_tokens,
             maximum_bullet_tokens=int(raw["length"]["maximum_bullet_tokens"]),
+            paired_reflector_structured_recovery=bool(
+                raw.get("reflection", {}).get("structured_recovery", False)
+            ),
             checkpoint_import_run_dir=(
                 run_dir.parent / str(checkpoint_import["source_run_dir"])
                 if checkpoint_import

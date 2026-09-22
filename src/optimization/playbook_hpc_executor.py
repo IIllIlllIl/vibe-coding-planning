@@ -101,6 +101,7 @@ class PlaybookHPCExecutor:
         hpc: HPCConfig,
         token_counter=None,
         maximum_bullet_tokens: int | None = None,
+        paired_reflector_structured_recovery: bool = False,
         checkpoint_import_run_dir: Path | None = None,
         checkpoint_import_manifest_sha256: str | None = None,
         checkpoint_import_roles: Sequence[str] = (),
@@ -111,6 +112,9 @@ class PlaybookHPCExecutor:
         self.runtime = SlurmTaskBatch(hpc)
         self.token_counter = token_counter
         self.maximum_bullet_tokens = maximum_bullet_tokens
+        self.paired_reflector_structured_recovery = (
+            paired_reflector_structured_recovery
+        )
         self.checkpoint_import_run_dir = checkpoint_import_run_dir
         self.checkpoint_import_manifest_sha256 = checkpoint_import_manifest_sha256
         self.checkpoint_import_roles = frozenset(checkpoint_import_roles)
@@ -424,6 +428,7 @@ class PlaybookHPCExecutor:
                     agent_output,
                     instance_id=task.instance_id,
                     playbook=playbook,
+                    structured_recovery=self.paired_reflector_structured_recovery,
                 )
             elif role == "curator":
                 proposed = apply_curator_operations(playbook, agent_output)

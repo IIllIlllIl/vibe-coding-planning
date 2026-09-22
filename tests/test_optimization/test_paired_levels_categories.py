@@ -10,6 +10,8 @@ from src.optimization.playbook import (PlaybookBullet, RejectPlaybook, apply_cur
     apply_refiner_operations, manage_playbook_length, validate_curator_concern_coverage)
 from src.optimization.playbook_adapter import GlobalPlaybookCounters
 from src.optimization.playbook_cli import run_from_config, _validate_frozen_inputs
+from src.optimization.hpc.config import HPCConfig
+from src.optimization.playbook_hpc_executor import PlaybookHPCExecutor
 from src.optimization.repo_playbook import render_concern_playbook
 
 
@@ -355,6 +357,60 @@ def test_curator_coverage_requires_every_side_and_reusable_finding(tmp_path):
         )
 
 
+def test_controller_revalidates_structured_paired_reflection(tmp_path, monkeypatch):
+    config = tmp_path / "config.yaml"
+    config.write_text("mode: offline_paired_repo_concern_playbook\n", encoding="utf-8")
+    executor = PlaybookHPCExecutor(
+        config_path=config,
+        run_dir=tmp_path / "run",
+        hpc=HPCConfig(submit=False),
+        paired_reflector_structured_recovery=True,
+    )
+    evidence = tmp_path / "evidence"
+    evidence.mkdir()
+    item = {
+        "instance_id": "pair-a",
+        "prompt_values": {},
+        "validation_playbook": book().serialize(),
+        "evidence_dir": str(evidence),
+        "source_access_issue": "Issue",
+        "repository": {"instance_id": "pair-a", "repo": "org/repo", "base_commit": "abc"},
+        "image_authority": {"sif_sha256": "0" * 64},
+    }
+    monkeypatch.setattr(
+        "src.optimization.playbook_runtime.require_prepared_repository_history",
+        lambda *_args: None,
+    )
+    batch = executor.batch_dir_for("paired_repo_reflector", [item])
+    fingerprint = batch.name
+    output = {
+        "schema_version": 1,
+        "status": "completed",
+        "role": "paired_repo_reflector",
+        "fingerprint": fingerprint,
+        "task_index": 0,
+        "instance_id": "pair-a",
+        "agent_output": {
+            "instance_id": "pair-a",
+            "pair_analysis": None,
+            "side_findings": [
+                {"side": "resolved", "plan_concerns": []},
+                {"side": "unresolved", "plan_concerns": []},
+            ],
+            "reusable_concerns": [],
+            "uncertainty": None,
+            "bullet_tags": [
+                {"id": "plan-00001", "tag": "neutral", "attribution": None}
+            ],
+        },
+        "trajectory": [],
+    }
+    output_path = batch / "outputs/task_0000.json"
+    output_path.parent.mkdir(parents=True)
+    output_path.write_text(json.dumps(output), encoding="utf-8")
+    assert executor.run_wave("paired_repo_reflector", [item])[0]["status"] == "completed"
+
+
 def test_learning12_smoke_is_frozen_and_launch_ready():
     path = Path("configs/gepa_verified_paired_learning12_smoke_v1_20260922.yaml")
     raw = yaml.safe_load(path.read_text())
@@ -374,6 +430,29 @@ def test_learning12_smoke_is_frozen_and_launch_ready():
     assert set(selection["train_instance_ids"]).issubset(clean["train_instance_ids"])
     assert raw["inputs"]["train_instance_ids"] == selection["train_instance_ids"]
     assert raw["inputs"]["validation_instance_ids"] == selection["validation_instance_ids"]
+
+
+def test_learning12_curator_recovery_imports_only_completed_agent_evidence():
+    path = Path(
+        "configs/gepa_verified_paired_learning12_smoke_v1_curator_recovery_20260922.yaml"
+    )
+    raw = yaml.safe_load(path.read_text())
+    _validate_frozen_inputs(path.resolve(), raw)
+    assert raw["checkpoint_import"] == {
+        "source_run_dir": Path(
+            "/scratch/users/twang/vibe-coding-planning/run_state/output/"
+            "SWE-bench_Verified/gepa-paired-repo-concern-playbook-runs/"
+            "learning12-smoke-v1-20260922"
+        ).as_posix(),
+        "source_run_manifest_sha256": (
+            "4dc5cbc3ca18df2409fd1836c0b1624df08aec661c18eabd2e6cfed4b4220c19"
+        ),
+        "roles": ["paired_repo_checker", "paired_repo_reflector"],
+    }
+    assert "curator" not in raw["checkpoint_import"]["roles"]
+    assert raw["paths"]["run_dir"].endswith(
+        "learning12-smoke-v1-curator-recovery-20260922"
+    )
 
 
 def test_lightweight_smoke_selection_resources_and_launch_contract():

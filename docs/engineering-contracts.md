@@ -103,6 +103,13 @@ construction (mocking only containers and models). Evidence Agents default to
 the shared `container.sif_cache_dir`; old `reflection.evidence_*` settings are
 supported overrides. Validate required environment settings before Agent waves.
 
+An output schema option must reach both validation sites: the Slurm worker's
+atomic-completion validator and the Controller's completed-output revalidator.
+The structured paired-Reflection schema adds `side_findings`; omitting its
+option in either site makes valid durable Agent outputs appear invalid during
+resume. Regression tests must exercise Controller reuse of a completed output,
+not only the worker validator.
+
 Third-party GEPA catches proposal exceptions. When operational abort is enabled,
 check recorded proposal failures at the next stop callback as well as after
 optimization returns; otherwise a failed Curator can consume further iterations.
