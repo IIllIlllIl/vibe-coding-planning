@@ -301,6 +301,13 @@ def test_structured_pair_reflection_keeps_coder_compensation():
         "reusable_concerns": [{
             "concern": "A branch change leaves related state inconsistent.",
             "pair_support": "The gap is shared, but only one Coder compensated.",
+            "curation_assessment": {
+                "pair_relation": "shared",
+                "decision_time_status": "supported",
+                "coder_repairability": "mixed_or_unclear",
+                "recommendation": "promote",
+                "reason": "The repository exposes a reusable state-consistency concern.",
+            },
         }],
         "uncertainty": None,
         "bullet_tags": [{"id": "plan-00001", "tag": "neutral", "attribution": None}],
@@ -312,6 +319,20 @@ def test_structured_pair_reflection_keeps_coder_compensation():
     with pytest.raises(ValueError):
         validate_paired_reflector_review(
             without_sides, instance_id="pair-a", playbook=book(), structured_recovery=True
+        )
+    invalid = json.loads(json.dumps(report))
+    invalid["reusable_concerns"][0]["curation_assessment"]["pair_relation"] = "winner"
+    with pytest.raises(ValueError, match="pair relation"):
+        validate_paired_reflector_review(
+            invalid, instance_id="pair-a", playbook=book(), structured_recovery=True
+        )
+    hindsight = json.loads(json.dumps(report))
+    hindsight["reusable_concerns"][0]["curation_assessment"].update(
+        decision_time_status="hindsight_only", recommendation="promote"
+    )
+    with pytest.raises(ValueError, match="hindsight-only concern must be deferred"):
+        validate_paired_reflector_review(
+            hindsight, instance_id="pair-a", playbook=book(), structured_recovery=True
         )
 
 
@@ -453,6 +474,38 @@ def test_learning12_curator_recovery_imports_only_completed_agent_evidence():
     assert raw["paths"]["run_dir"].endswith(
         "learning12-smoke-v1-curator-recovery-20260922"
     )
+
+
+def test_learning12_reflector_curator_replay_uses_v4_and_reuses_only_checkers():
+    path = Path(
+        "configs/gepa_verified_paired_learning12_smoke_v2_ref_cur_20260922.yaml"
+    )
+    raw = yaml.safe_load(path.read_text())
+    _validate_frozen_inputs(path.resolve(), raw)
+    assert raw["inputs"]["prompt_bundle"].endswith(
+        "offline_gepa_paired_levels_curation_assessment_v4_20260922.yaml"
+    )
+    assert raw["inputs"]["prompt_bundle_sha256"] == (
+        "c727aa8d41cfa2549454b3ecb266c174c21b94e87b68f65a21fa6bc36b3afaec"
+    )
+    assert raw["checkpoint_import"]["roles"] == ["paired_repo_checker"]
+    assert raw["reflection"]["structured_recovery"] is True
+    assert raw["curation"]["require_concern_coverage"] is True
+    assert raw["readiness"] == {
+        "runnable": True,
+        "launched": False,
+        "missing": [],
+    }
+    launch = yaml.safe_load(
+        Path(
+            "configs/gepa_verified_paired_learning12_smoke_v2_ref_cur_supervisor_20260922.yaml"
+        ).read_text()
+    )
+    args = launch["arguments"]
+    assert args[args.index("--gepa-config") + 1] == str(path)
+    assert args[args.index("--target-iterations") + 1] == "1"
+    assert args[args.index("--cpus") + 1] == "1"
+    assert args[args.index("--mem") + 1] == "4G"
 
 
 def test_lightweight_smoke_selection_resources_and_launch_contract():
