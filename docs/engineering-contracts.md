@@ -54,6 +54,14 @@ Matplotlib preparation OOMs even with 4G, before model execution.
 
 ## Isolation, audit, and artifacts
 
+Curator lineage is historical provenance, not a list of currently active rules.
+An unchanged retained bullet must preserve its content, counters, category and
+lineage exactly, even when its ancestors were removed by earlier revisions.
+Only newly created bullets must reference input IDs from the current proposal
+and begin with zero counters. Revalidating retained ancestry against active IDs
+blocked a valid later ADD-only proposal; regression coverage lives in
+`tests/test_optimization/test_curator_lineage.py`.
+
 - Reuse Apptainer phase-local repository, HOME and /tmp isolation and masks.
 - Start Agent source auditing after Host baseline preparation and before the
   first Agent action. Preserve Host preparation evidence separately.

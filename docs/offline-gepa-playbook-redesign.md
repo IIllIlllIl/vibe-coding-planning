@@ -10,7 +10,7 @@
 
 ### Paired Level formal 8-iteration preparation (2026-09-21)
 
-The new, not-yet-launched authority is
+The original authority is
 `configs/gepa_verified_paired_levels_categorized_formal24_8it_v1_20260921.yaml`
 with its matching supervisor YAML and versioned `v2` prompt bundle. It starts
 from the categorized placeholder seed, uses 143 explicitly selected train
@@ -22,6 +22,14 @@ snapshot and completed smoke are unchanged. The new Checker instruction
 forbids prototyping a proposed change in repository files, temporary copies,
 or memory, without prompting it to run probes. This is a prompt instruction,
 not a new tool-level command filter.
+
+The lineage-validation recovery is frozen in
+`configs/gepa_verified_paired_levels_categorized_formal24_8it_v2_20260922.yaml`.
+It retains all scientific settings and imports exact-compatible completed
+Checker, Reflector and Curator artifacts from the hash-pinned v1 authority.
+Search is rebuilt from Seed rather than importing the failed proposal count.
+The fix changes only Host acceptance of unchanged retained historical lineage;
+it does not rewrite Agent outputs, counters or the original run artifacts.
 
 The Iris transport request remains 1 CPU / 4G for both Controller and Agents,
 with 35-minute Agent limits and three attempts. Supervisor and Controller reuse

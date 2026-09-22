@@ -518,9 +518,14 @@ def validate_curator_proposal(
     existing = {item.id: item for item in counted.bullets}
     for bullet in proposed.bullets:
         previous = existing.get(bullet.id)
-        if previous is not None and bullet != previous:
-            raise ValueError("Curator may not modify a retained bullet ID")
-        if previous is None and (bullet.helpful != 0 or bullet.harmful != 0):
+        if previous is not None:
+            if bullet != previous:
+                raise ValueError("Curator may not modify a retained bullet ID")
+            # Historical ancestors need not remain active after a revision.
+            # Retention preserves that provenance verbatim; only newly created
+            # bullets must cite IDs in this proposal's input.
+            continue
+        if bullet.helpful != 0 or bullet.harmful != 0:
             raise ValueError("new Curator bullets must start with zero counters")
         if any(parent not in existing for parent in bullet.lineage):
             raise ValueError("Curator lineage must reference an input bullet ID")

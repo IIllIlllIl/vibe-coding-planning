@@ -14,12 +14,18 @@ the shared supervisor supplies canonical storage paths.
 
 ## Experiment Inventory
 
-Prepared paired-Level formal 8it (not launched):
+Paired-Level formal 8it original authority:
 `gepa_verified_paired_levels_categorized_formal24_8it_v1_20260921.yaml` and
 its matching supervisor YAML use the versioned `v2` prompt, 143 selected train
 pairs after excluding one evaluator-confounded Django pair, all 36 validation
 pairs, minibatch 24, no-thinking Checker, Level-2 gating, and Iris 1 CPU/4G.
-Remote preflight and explicit launch approval remain necessary.
+Recovery authority: `gepa_verified_paired_levels_categorized_formal24_8it_v2_20260922.yaml`
+and its matching supervisor retain those scientific settings. The Host lineage
+fix accepts unchanged retained bullets with inactive historical ancestors. The
+recovery rebuilds search from Seed, imports exact-compatible completed Checker,
+Reflector and Curator outputs from the manifest-pinned v1 scratch authority, and
+does not import the failed search iteration or its counter ledger. Original
+artifacts remain unchanged; eight proposals are still the total target.
 
 Completed lightweight paired smoke (historical authority):
 `gepa_verified_paired_levels_smoke8_v1_20260921.yaml` and its matching
