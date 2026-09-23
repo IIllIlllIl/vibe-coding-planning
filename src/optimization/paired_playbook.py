@@ -163,6 +163,7 @@ def validate_paired_reflector_review(
     structured_recovery: bool = False,
     structured_abstraction: bool = False,
     distilled_curation: bool = False,
+    fact_links: bool = False,
 ) -> dict[str, Any]:
     if structured_abstraction and not structured_recovery:
         raise ValueError("Paired Reflector abstraction requires structured recovery")
@@ -170,6 +171,8 @@ def validate_paired_reflector_review(
         raise ValueError(
             "Distilled paired Reflection requires recovery and abstraction"
         )
+    if fact_links and not distilled_curation:
+        raise ValueError("Paired Reflector fact links require distilled curation")
     expected = {
         "instance_id",
         "pair_analysis",
@@ -199,6 +202,8 @@ def validate_paired_reflector_review(
                 "decision_time_basis",
                 "pair_evidence",
             }
+            if fact_links:
+                allowed.add("supporting_side_findings")
         else:
             allowed = (
                 {"case_mechanism", "developer_concern", "pair_support"}
@@ -232,6 +237,35 @@ def validate_paired_reflector_review(
         # no defined role in curation. Accept legacy output, but do not pass
         # the field to the Curator or persist it in normalized reviews.
         normalized = {key: concern[key].strip() for key in text_keys}
+        if fact_links:
+            links = concern["supporting_side_findings"]
+            if not isinstance(links, list) or not links:
+                raise ValueError(
+                    "Paired Reflector reusable concern requires fact links"
+                )
+            normalized_links = []
+            seen_links: set[tuple[str, int]] = set()
+            for link in links:
+                if not isinstance(link, dict) or set(link) != {
+                    "side",
+                    "finding_number",
+                }:
+                    raise ValueError("Paired Reflector fact link is invalid")
+                side = link["side"]
+                number = link["finding_number"]
+                identity = (side, number)
+                if (
+                    side not in {"resolved", "unresolved"}
+                    or type(number) is not int
+                    or number < 1
+                    or identity in seen_links
+                ):
+                    raise ValueError("Paired Reflector fact link content is invalid")
+                seen_links.add(identity)
+                normalized_links.append(
+                    {"side": side, "finding_number": number}
+                )
+            normalized["supporting_side_findings"] = normalized_links
         if structured_recovery and not distilled_curation:
             assessment = concern["curation_assessment"]
             expected_assessment = {
@@ -316,6 +350,17 @@ def validate_paired_reflector_review(
                     raise ValueError("Paired Reflector Plan concern lacks an explanation")
                 normalized_items.append({key: value.strip() for key, value in item.items()})
             normalized_sides.append({"side": expected_side, "plan_concerns": normalized_items})
+        if fact_links:
+            side_counts = {
+                side["side"]: len(side["plan_concerns"])
+                for side in normalized_sides
+            }
+            for concern in normalized_concerns:
+                for link in concern["supporting_side_findings"]:
+                    if link["finding_number"] > side_counts[link["side"]]:
+                        raise ValueError(
+                            "Paired Reflector fact link targets a missing side finding"
+                        )
     tags = value["bullet_tags"]
     if not isinstance(tags, list) or len(tags) != len(playbook.bullets):
         raise ValueError("Paired Reflector must tag every active bullet")

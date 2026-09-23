@@ -413,6 +413,57 @@ def validate_curator_concern_coverage(value: Any, expected_ids: Sequence[str]) -
                 raise ValueError("Curator operation does not cite the concern's pair")
 
 
+def validate_curator_self_check(value: Any, expected_ids: Sequence[str]) -> None:
+    """Validate a lightweight Curator self-check without rerunning the Checker."""
+    if not isinstance(value, dict) or not isinstance(value.get("operations"), list):
+        raise ValueError("Curator self-check requires operations")
+    self_check = value.get("self_check")
+    if not isinstance(self_check, dict) or set(self_check) != {
+        "required_files_read",
+        "operation_checks",
+    }:
+        raise ValueError("Curator self-check has an invalid schema")
+    if self_check["required_files_read"] is not True:
+        raise ValueError("Curator must confirm all required evidence was read")
+    checks = self_check["operation_checks"]
+    operations = value["operations"]
+    if not isinstance(checks, list) or len(checks) != len(operations):
+        raise ValueError("Curator must self-check every operation")
+    known = set(expected_ids)
+    required_booleans = {
+        "one_concern",
+        "condition_explicit",
+        "source_case_independent",
+        "decision_time_wording",
+        "plain_language",
+    }
+    for number, (check, operation) in enumerate(
+        zip(checks, operations, strict=True), start=1
+    ):
+        expected_keys = {
+            "operation_number",
+            "supporting_concern_ids",
+            *required_booleans,
+        }
+        if not isinstance(check, dict) or set(check) != expected_keys:
+            raise ValueError("Curator operation self-check has an invalid schema")
+        if check["operation_number"] != number:
+            raise ValueError("Curator self-check operation order is invalid")
+        if any(check[key] is not True for key in required_booleans):
+            raise ValueError("Curator operation failed its required self-check")
+        supporting = check["supporting_concern_ids"]
+        if not isinstance(supporting, list) or not supporting or any(
+            not isinstance(item, str) or item not in known for item in supporting
+        ):
+            raise ValueError("Curator self-check cites an unknown concern")
+        operation_pairs = set(operation.get("supporting_instance_ids", []))
+        concern_pairs = {item.rsplit(":", 1)[0] for item in supporting}
+        if concern_pairs != operation_pairs:
+            raise ValueError(
+                "Curator self-check concerns do not cover the operation's pairs"
+            )
+
+
 def apply_curator_operations(
     playbook: RejectPlaybook,
     value: Any,
@@ -421,6 +472,8 @@ def apply_curator_operations(
     if not isinstance(value, dict) or set(value) not in (
         {"reasoning", "operations"},
         {"reasoning", "operations", "reviewed_concerns"},
+        {"reasoning", "operations", "self_check"},
+        {"reasoning", "operations", "reviewed_concerns", "self_check"},
     ):
         raise ValueError("Curator output must contain reasoning and operations")
     if not isinstance(value["reasoning"], str) or not value["reasoning"].strip():

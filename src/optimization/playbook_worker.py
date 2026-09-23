@@ -28,6 +28,7 @@ from src.optimization.playbook import (
     apply_curator_operations,
     apply_refiner_operations,
     validate_curator_concern_coverage,
+    validate_curator_self_check,
     validate_bullet_token_limit,
     validate_checker_result,
     validate_reflector_review,
@@ -267,11 +268,16 @@ def run_task(
                 structured_recovery=bool(config.get("reflection", {}).get("structured_recovery", False)),
                 structured_abstraction=bool(config.get("reflection", {}).get("structured_abstraction", False)),
                 distilled_curation=bool(config.get("reflection", {}).get("distilled_curation", False)),
+                fact_links=bool(config.get("reflection", {}).get("fact_links", False)),
             )
         elif role == "curator":
             if "validation_concern_ids" in manifest:
                 validate_curator_concern_coverage(
                     output, manifest["validation_concern_ids"]
+                )
+            if "validation_self_check_concern_ids" in manifest:
+                validate_curator_self_check(
+                    output, manifest["validation_self_check_concern_ids"]
                 )
             proposed = apply_curator_operations(playbook, output)
             validate_bullet_token_limit(

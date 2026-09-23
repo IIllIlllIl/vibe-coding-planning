@@ -5,9 +5,14 @@ import pytest
 import yaml
 
 from src.environment.apptainer_env import ApptainerEnvironment
-from src.optimization.paired_playbook import validate_paired_checker_result, paired_checker_uses_levels
+from src.optimization.paired_playbook import (
+    paired_checker_uses_levels,
+    validate_paired_checker_result,
+    validate_paired_reflector_review,
+)
 from src.optimization.playbook import (PlaybookBullet, RejectPlaybook, apply_curator_operations,
-    apply_refiner_operations, manage_playbook_length, validate_curator_concern_coverage)
+    apply_refiner_operations, manage_playbook_length, validate_curator_concern_coverage,
+    validate_curator_self_check)
 from src.optimization.playbook_adapter import GlobalPlaybookCounters
 from src.optimization.playbook_cli import run_from_config, _validate_frozen_inputs
 from src.optimization.hpc.config import HPCConfig
@@ -516,6 +521,243 @@ def test_v6_prompt_restores_ace_role_skeleton_and_optional_side_channel():
     assert "reviewed_concerns" not in curator_instance
     assert "curation_assessment" not in prompts["reflector_instance"]
     assert "risk_analysis" not in path.read_text()
+
+
+def test_v7_curator_maintains_rules_and_self_checks_readability():
+    path = Path(
+        "configs/prompts/offline_gepa_paired_levels_ace_core_v7_20260923.yaml"
+    )
+    prompts = yaml.safe_load(path.read_text())
+    curator = " ".join(prompts["curator_system"].split())
+    curator_instance = " ".join(prompts["curator_instance"].split())
+
+    assert "ACE rule-utility evidence" in curator
+    assert "Prefer REVISE over adding an overlapping rule" in curator
+    assert "A bullet states one Plan-stage concern" in curator
+    assert "review procedure, repair instruction, test instruction" in curator
+    assert "understandable without knowing the source case" in curator
+    assert "enough information for a Checker to recognize that concern" in curator
+    assert "counter review, and operation self-check" in curator_instance
+    assert "supporting_side_findings" in prompts["reflector_instance"]
+    assert "supporting_concern_ids" in curator_instance
+    assert "numeric deletion thresholds" in curator
+    assert "risk_analysis" not in path.read_text()
+
+
+def test_distilled_fact_links_and_lightweight_curator_self_check(tmp_path):
+    from src.optimization.playbook_hpc_agents import HPCPlaybookProposalAgents
+
+    raw_review = {
+        "instance_id": "pair-a",
+        "pair_analysis": "Both Plans contain the concern; only one Coder compensates.",
+        "side_findings": [
+            {
+                "side": "resolved",
+                "plan_concerns": [{
+                    "concern": "The Plan omits a shared consumer.",
+                    "decision_time_support": "The repository exposes that consumer.",
+                    "coder_response": "compensated",
+                    "outcome_relation": "The Coder expanded the scope before succeeding.",
+                }],
+            },
+            {
+                "side": "unresolved",
+                "plan_concerns": [{
+                    "concern": "The Plan omits a shared consumer.",
+                    "decision_time_support": "The repository exposes that consumer.",
+                    "coder_response": "followed",
+                    "outcome_relation": "The implementation retained the omission.",
+                }],
+            },
+        ],
+        "reusable_concerns": [{
+            "developer_concern": "The Plan changes shared behavior without covering all affected consumers.",
+            "decision_time_basis": "The repository exposes consumers outside the Plan's scope.",
+            "pair_evidence": "The omission was compensated in one attempt and retained in the other.",
+            "supporting_side_findings": [
+                {"side": "resolved", "finding_number": 1},
+                {"side": "unresolved", "finding_number": 1},
+            ],
+        }],
+        "uncertainty": None,
+        "bullet_tags": [
+            {"id": "plan-00001", "tag": "neutral", "attribution": None}
+        ],
+    }
+    review = validate_paired_reflector_review(
+        raw_review,
+        instance_id="pair-a",
+        playbook=book(),
+        structured_recovery=True,
+        structured_abstraction=True,
+        distilled_curation=True,
+        fact_links=True,
+    )
+    calls = []
+
+    class Executor:
+        run_dir = tmp_path
+
+        def run_wave(self, role, items):
+            calls.append((role, items))
+            return [{"agent_output": {
+                "reasoning": "The linked evidence supports one portable rule.",
+                "operations": [{
+                    "type": "ADD",
+                    "content": "The Plan changes shared behavior without covering all affected consumers.",
+                    "category": "Scope",
+                    "supporting_instance_ids": ["pair-a"],
+                }],
+                "self_check": {
+                    "required_files_read": True,
+                    "operation_checks": [{
+                        "operation_number": 1,
+                        "supporting_concern_ids": ["pair-a:c1"],
+                        "one_concern": True,
+                        "condition_explicit": True,
+                        "source_case_independent": True,
+                        "decision_time_wording": True,
+                        "plain_language": True,
+                    }],
+                },
+            }}]
+
+    agents = HPCPlaybookProposalAgents(
+        Executor(),
+        maximum_tokens=2048,
+        evidence_contract="distilled_v1",
+        require_curator_self_check=True,
+    )
+    output = agents.curate(book(), [review])
+    validate_curator_self_check(output, ["pair-a:c1"])
+    item = calls[0][1][0]
+    assert item["validation_self_check_concern_ids"] == ["pair-a:c1"]
+    evidence = Path(item["evidence_dir"])
+    index = json.loads((evidence / "reflection_index.json").read_text())
+    assert index[0]["reusable_concerns"][0]["supporting_side_finding_ids"] == [
+        "pair-a:r1", "pair-a:u1"
+    ]
+    assert [row["id"] for row in index[0]["linked_side_findings"]] == [
+        "pair-a:r1", "pair-a:u1"
+    ]
+    manifest = json.loads((evidence / "manifest.json").read_text())
+    assert manifest["concern_ids"] == ["pair-a:c1"]
+
+
+def test_fact_links_and_curator_self_check_reject_invalid_references():
+    review = {
+        "instance_id": "pair-a",
+        "pair_analysis": "Analysis",
+        "side_findings": [
+            {"side": "resolved", "plan_concerns": []},
+            {"side": "unresolved", "plan_concerns": []},
+        ],
+        "reusable_concerns": [{
+            "developer_concern": "Concern",
+            "decision_time_basis": "Basis",
+            "pair_evidence": "Evidence",
+            "supporting_side_findings": [
+                {"side": "unresolved", "finding_number": 1}
+            ],
+        }],
+        "uncertainty": None,
+        "bullet_tags": [
+            {"id": "plan-00001", "tag": "neutral", "attribution": None}
+        ],
+    }
+    with pytest.raises(ValueError, match="missing side finding"):
+        validate_paired_reflector_review(
+            review,
+            instance_id="pair-a",
+            playbook=book(),
+            structured_recovery=True,
+            structured_abstraction=True,
+            distilled_curation=True,
+            fact_links=True,
+        )
+
+    output = {
+        "reasoning": "Reason",
+        "operations": [],
+        "self_check": {
+            "required_files_read": False,
+            "operation_checks": [],
+        },
+    }
+    with pytest.raises(ValueError, match="required evidence"):
+        validate_curator_self_check(output, [])
+
+
+def test_lightweight_self_check_config_requires_fact_links(tmp_path):
+    config = tmp_path / "config.yaml"
+    config.write_text(
+        yaml.safe_dump({
+            "mode": "offline_paired_repo_concern_playbook",
+            "reflection": {
+                "structured_recovery": True,
+                "structured_abstraction": True,
+                "distilled_curation": True,
+            },
+            "curation": {
+                "evidence_contract": "distilled_v1",
+                "self_check_contract": "lightweight_v1",
+            },
+        }),
+        encoding="utf-8",
+    )
+    with pytest.raises(ValueError, match="requires Reflection fact links"):
+        run_from_config(config)
+
+
+def test_v5_linked_two_phase_smoke_reuses_unchanged_parent_checkers():
+    prompt_v6 = yaml.safe_load(Path(
+        "configs/prompts/offline_gepa_paired_levels_ace_core_v6_20260923.yaml"
+    ).read_text())
+    prompt_v7 = yaml.safe_load(Path(
+        "configs/prompts/offline_gepa_paired_levels_ace_core_v7_20260923.yaml"
+    ).read_text())
+    assert prompt_v7["checker_system"] == prompt_v6["checker_system"]
+    assert prompt_v7["checker_instance"] == prompt_v6["checker_instance"]
+
+    paths = [
+        Path("configs/gepa_verified_paired_learning12_smoke_v5_linked_ref_cur_20260923.yaml"),
+        Path("configs/gepa_verified_paired_learning12_smoke_v5_linked_manual_20260923.yaml"),
+    ]
+    replay, manual = [yaml.safe_load(path.read_text()) for path in paths]
+    for path, raw in zip(paths, (replay, manual), strict=True):
+        _validate_frozen_inputs(path.resolve(), raw)
+        assert raw["readiness"] == {
+            "runnable": True, "launched": False, "missing": []
+        }
+        assert raw["reflection"]["fact_links"] is True
+        assert raw["curation"]["self_check_contract"] == "lightweight_v1"
+        assert raw["curation"]["require_concern_coverage"] is False
+        assert raw["checkpoint_import"]["roles"] == ["paired_repo_checker"]
+        assert raw["search"]["max_iterations"] == 1
+        assert raw["search"]["reflection_minibatch_size"] == 12
+        assert raw["models"]["checker"]["thinking"] == "disabled"
+        assert raw["hpc"]["mem"] == "4G"
+        assert raw["hpc"]["cpus_per_task"] == 1
+        assert raw["hpc"]["poll_interval_seconds"] == 60
+
+    assert replay["checkpoint_import"]["source_run_manifest_sha256"] == (
+        "4dc5cbc3ca18df2409fd1836c0b1624df08aec661c18eabd2e6cfed4b4220c19"
+    )
+    assert manual["checkpoint_import"]["source_run_manifest_sha256"] == (
+        "4b765c5d34d6a054fed455886ebb0c2c452d02a982626f75b1830207803c628a"
+    )
+    assert replay["inputs"]["initial_playbook"] != manual["inputs"]["initial_playbook"]
+    assert replay["inputs"]["train_instance_ids"] == manual["inputs"]["train_instance_ids"]
+    assert replay["inputs"]["validation_instance_ids"] == manual["inputs"]["validation_instance_ids"]
+
+    supervisor = yaml.safe_load(Path(
+        "configs/gepa_verified_paired_learning12_smoke_v5_linked_sequence_supervisor_20260923.yaml"
+    ).read_text())
+    assert [run["name"] for run in supervisor["runs"]] == [
+        "controlled-linked-reflector-curator-replay",
+        "manual-playbook-linked-full-cycle",
+    ]
+    assert all("--require-clean-worktree" in run["arguments"] for run in supervisor["runs"])
 
 
 def test_distilled_curator_index_excludes_side_findings_and_dispositions(tmp_path):

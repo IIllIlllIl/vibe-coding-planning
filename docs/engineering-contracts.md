@@ -111,13 +111,37 @@ resume. Regression tests must exercise Controller reuse of a completed output,
 not only the worker validator.
 
 For the distilled paired-Reflection contract, full reflection records remain
-immutable audit evidence in `case_reflections.json`, but only
+immutable audit evidence in `case_reflections.json`, while
 `reflection_index.json` and `counted_playbook.json` are mandatory Curator
-inputs. Side findings must not be converted into mandatory dispositions: audit
-coverage is not a learning objective. `reflection.distilled_curation` must be
-enabled at both worker and Controller validation sites, and
-`curation.evidence_contract: distilled_v1` is incompatible with
-`require_concern_coverage`.
+inputs. A linked distilled run sets `reflection.fact_links: true`: every
+reusable concern cites one or more per-side findings, and the required index
+stores those cited facts under canonical `<pair>:rN` / `<pair>:uN` IDs. Unlinked
+side findings remain only in the optional full audit file. Fact links preserve
+the basis of an abstraction; they do not require a disposition for every side
+finding and do not assign a permanent Level. `reflection.distilled_curation`
+must be enabled at both worker and Controller validation sites, and
+`curation.evidence_contract: distilled_v1` remains incompatible with
+`require_concern_coverage`. These files live under the run authority at
+`curator_evidence/<content-fingerprint>/`; they are input artifacts for one
+Curator proposal, not global mutable indexes.
+
+`curation.self_check_contract: lightweight_v1` requires linked Reflection
+facts. It adds no Agent and does not replay the Checker. The Curator confirms
+that it read required files and records, for each operation, its supporting
+reusable-concern IDs plus atomicity, explicit-condition, decision-time,
+source-case-independence, and plain-language checks. Host validation checks the
+schema, exact IDs, pair linkage, boolean confirmations, and the existing bullet
+token cap. Semantic quality remains an empirical smoke/audit question.
+
+Checker Level, Reflection evidence, and ACE counters are separate quantities.
+The Checker assigns Level for the current issue, repository, and Plan. Per-pair
+Reflectors record the observed concern, case-specific Level context, and Coder
+response. Helpful/harmful counters retain ACE rule-utility evidence; they are
+not Level counts or repairability labels. The current architecture runs one
+Reflector per pair. The Curator reads the linked facts from the whole minibatch
+and uses their empirical outcome/repairability pattern when maintaining rule
+conditions; that minibatch-wide tendency must not be attributed to a single
+per-pair Reflector or stored as a permanent rule Level.
 
 The Agent runner's top-level task string is part of the effective prompt even
 though it is not stored in the prompt bundle. Under the distilled contract it

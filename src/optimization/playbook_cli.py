@@ -184,6 +184,7 @@ def run_from_config(path: str | Path, *, agents: Any | None = None, optimize_fn=
         curation = raw.get("curation", {})
         distilled_reflection = bool(reflection.get("distilled_curation", False))
         distilled_index = curation.get("evidence_contract") == "distilled_v1"
+        fact_links = bool(reflection.get("fact_links", False))
         if distilled_reflection != distilled_index:
             raise ValueError(
                 "distilled paired Reflection and Curator evidence contracts "
@@ -199,6 +200,17 @@ def run_from_config(path: str | Path, *, agents: Any | None = None, optimize_fn=
         if distilled_index and curation.get("require_concern_coverage", False):
             raise ValueError(
                 "distilled Curator evidence cannot require finding dispositions"
+            )
+        if fact_links and not distilled_reflection:
+            raise ValueError(
+                "paired Reflection fact links require distilled curation"
+            )
+        self_check_contract = curation.get("self_check_contract")
+        if self_check_contract not in {None, "lightweight_v1"}:
+            raise ValueError("unknown Curator self-check contract")
+        if self_check_contract and not fact_links:
+            raise ValueError(
+                "Curator lightweight self-check requires Reflection fact links"
             )
     _validate_frozen_inputs(config_path, raw)
     if repo_mode:
@@ -289,6 +301,9 @@ def run_from_config(path: str | Path, *, agents: Any | None = None, optimize_fn=
             paired_reflector_distilled_curation=bool(
                 raw.get("reflection", {}).get("distilled_curation", False)
             ),
+            paired_reflector_fact_links=bool(
+                raw.get("reflection", {}).get("fact_links", False)
+            ),
             checkpoint_import_run_dir=(
                 run_dir.parent / str(checkpoint_import["source_run_dir"])
                 if checkpoint_import
@@ -317,6 +332,10 @@ def run_from_config(path: str | Path, *, agents: Any | None = None, optimize_fn=
                 token_counter=count_tokens,
                 require_concern_coverage=bool(raw.get("curation", {}).get("require_concern_coverage", False)),
                 evidence_contract=str(raw.get("curation", {}).get("evidence_contract", "legacy_v1")),
+                require_curator_self_check=(
+                    raw.get("curation", {}).get("self_check_contract")
+                    == "lightweight_v1"
+                ),
             )
         elif repo_mode:
             checker = HPCRepoPlaybookChecker(

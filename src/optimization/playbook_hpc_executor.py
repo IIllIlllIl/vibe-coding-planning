@@ -17,6 +17,7 @@ from src.optimization.playbook import (
     apply_refiner_operations,
     validate_bullet_token_limit,
     validate_checker_result,
+    validate_curator_self_check,
     validate_reflector_review,
 )
 from src.optimization.repo_playbook import (
@@ -104,6 +105,7 @@ class PlaybookHPCExecutor:
         paired_reflector_structured_recovery: bool = False,
         paired_reflector_structured_abstraction: bool = False,
         paired_reflector_distilled_curation: bool = False,
+        paired_reflector_fact_links: bool = False,
         checkpoint_import_run_dir: Path | None = None,
         checkpoint_import_manifest_sha256: str | None = None,
         checkpoint_import_roles: Sequence[str] = (),
@@ -123,6 +125,7 @@ class PlaybookHPCExecutor:
         self.paired_reflector_distilled_curation = (
             paired_reflector_distilled_curation
         )
+        self.paired_reflector_fact_links = paired_reflector_fact_links
         self.checkpoint_import_run_dir = checkpoint_import_run_dir
         self.checkpoint_import_manifest_sha256 = checkpoint_import_manifest_sha256
         self.checkpoint_import_roles = frozenset(checkpoint_import_roles)
@@ -290,6 +293,10 @@ class PlaybookHPCExecutor:
                 payload["output_contract"] = item["output_contract"]
             if "validation_concern_ids" in item:
                 payload["validation_concern_ids"] = list(item["validation_concern_ids"])
+            if "validation_self_check_concern_ids" in item:
+                payload["validation_self_check_concern_ids"] = list(
+                    item["validation_self_check_concern_ids"]
+                )
             if "evidence_dir" in item:
                 payload["evidence_dir"] = item["evidence_dir"]
             if "repository" in item:
@@ -439,8 +446,14 @@ class PlaybookHPCExecutor:
                     structured_recovery=self.paired_reflector_structured_recovery,
                     structured_abstraction=self.paired_reflector_structured_abstraction,
                     distilled_curation=self.paired_reflector_distilled_curation,
+                    fact_links=self.paired_reflector_fact_links,
                 )
             elif role == "curator":
+                if "validation_self_check_concern_ids" in task_manifest:
+                    validate_curator_self_check(
+                        agent_output,
+                        task_manifest["validation_self_check_concern_ids"],
+                    )
                 proposed = apply_curator_operations(playbook, agent_output)
                 if self.maximum_bullet_tokens is not None:
                     if self.token_counter is None:

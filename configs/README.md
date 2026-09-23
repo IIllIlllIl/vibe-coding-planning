@@ -14,20 +14,23 @@ the shared supervisor supplies canonical storage paths.
 
 ## Experiment Inventory
 
-Current paired-learning smoke, prepared but not launched:
-`prompts/offline_gepa_paired_levels_ace_core_v6_20260923.yaml` restores the
-ACE role skeleton while retaining the paired Level contract. Reflector routes
-full per-side analysis to an audit side channel and emits a smaller reusable
-concern record. Curator must read the distilled index; the full reflection file
-is optional supporting evidence and no per-finding disposition is requested.
-The v4 sequence first runs
+Current paired-learning two-phase smoke, prepared but not launched:
+`prompts/offline_gepa_paired_levels_ace_core_v7_20260923.yaml` adds explicit
+reusable-concern-to-side-finding links and a lightweight Curator self-check to
+the v6 ACE role skeleton. The v5 linked configs enable
+`reflection.fact_links: true` and
+`curation.self_check_contract: lightweight_v1`. Both phases import their exact
+historical parent Checker outputs because the v6 and v7 Checker prompts are
+identical; candidate evaluation remains fresh. The sequence does not replay a
+Checker as a Curator self-check and its presence does not authorize launch.
+The completed v4 sequence first ran
 `gepa_verified_paired_learning12_smoke_v4_ace_core_ref_cur_20260923.yaml`
-from frozen Seed Checker outputs, then runs
+from frozen Seed Checker outputs, then ran
 `gepa_verified_paired_learning12_smoke_v4_ace_core_20260923.yaml` as a complete
 proposal from the manually audited ten-rule playbook. Both use the same twelve
-development pairs and four exposed validation pairs as v5. The matching
-sequence supervisor is preparation only and does not authorize launch.
-Earlier learning12 configs are completed development provenance, not templates. See
+development pairs and four exposed validation pairs as v5. The v4 configs and
+matching sequence supervisor are completed development provenance, not v7
+templates. Earlier learning12 configs are likewise not templates. See
 `archive/paired-levels-20260921/README.md` before using older paired material.
 
 Paired-Level formal 8it original authority:
@@ -94,10 +97,14 @@ labels, image manifests, output roots, or baseline identities in a new run.
 | `prompts/offline_gepa_repo_checker_contract_v2_20260915.yaml` | Positive exact-schema appendix for the Repo Checker: triggered and untriggered examples, exact rule/evidence keys, and the required evidence observation field. It supplements rather than changes concern semantics. |
 | `prompts/offline_gepa_paired_repo_concern_playbook_v1_20260919.yaml` | Within-task paired prompt bundle: two label-blind binary Repo Checker calls, one two-sided repository-aware Reflection, and atomic high-level concern curation without Level fields. |
 | `prompts/offline_gepa_paired_repo_checker_contract_v1_20260919.yaml` | Exact binary Repo Checker output schema for paired learning; it deliberately omits the old 0/1/2 Level field. |
-| `prompts/offline_gepa_paired_levels_ace_core_v6_20260923.yaml` | Unlaunched paired-learning development prompt: lightweight Level Checker, ACE-style Reflector-to-Curator learning path, required distilled concern index, optional full audit side channel, and no forced per-finding disposition. |
-| `gepa_verified_paired_learning12_smoke_v4_ace_core_ref_cur_20260923.yaml` | Prepared, unlaunched controlled v6 replay: frozen Seed Checker outputs, 12 paired Reflectors, one Curator, and candidate evaluation. |
-| `gepa_verified_paired_learning12_smoke_v4_ace_core_20260923.yaml` | Prepared, unlaunched full-cycle v6 smoke: manual ten-rule input, 12 train pairs, 4 validation pairs, one proposal, distilled Curator evidence, and Iris 1 CPU/4G workers. |
-| `gepa_verified_paired_learning12_smoke_v4_ace_core_sequence_supervisor_20260923.yaml` | Two-phase shared-Supervisor identity for the controlled replay followed by the manual-playbook full cycle; presence does not authorize launch. |
+| `prompts/offline_gepa_paired_levels_ace_core_v6_20260923.yaml` | Completed v4-smoke prompt authority: lightweight Level Checker, ACE-style Reflector-to-Curator path, required distilled concern index, optional full audit side channel, and no forced per-finding disposition. Superseded by v7 for new development. |
+| `prompts/offline_gepa_paired_levels_ace_core_v7_20260923.yaml` | Post-smoke linked-evidence revision: each reusable concern cites its supporting side findings; Curator treats helpful/harmful as ACE rule-utility evidence, maintains existing rules, and returns a lightweight operation-level readability/evidence self-check. |
+| `gepa_verified_paired_learning12_smoke_v4_ace_core_ref_cur_20260923.yaml` | Completed controlled v6 replay: frozen Seed Checker outputs, 12 paired Reflectors, one Curator, and candidate evaluation. Historical development provenance. |
+| `gepa_verified_paired_learning12_smoke_v4_ace_core_20260923.yaml` | Completed full-cycle v6 smoke: manual ten-rule input, 12 train pairs, 4 validation pairs, one proposal, distilled Curator evidence, and Iris 1 CPU/4G workers. Historical development provenance. |
+| `gepa_verified_paired_learning12_smoke_v4_ace_core_sequence_supervisor_20260923.yaml` | Completed two-phase shared-Supervisor identity for the controlled replay followed by the manual-playbook full cycle; do not relaunch as v7. |
+| `gepa_verified_paired_learning12_smoke_v5_linked_ref_cur_20260923.yaml` | Prepared v7 controlled phase: imports exact frozen Seed parent Checker outputs, reruns 12 linked Reflectors and one self-checking Curator, then evaluates any new candidate. Not launched. |
+| `gepa_verified_paired_learning12_smoke_v5_linked_manual_20260923.yaml` | Prepared v7 manual-playbook phase: imports exact v4 manual parent Checker outputs to remove parent-review sampling noise, reruns linked Reflection and curation, then evaluates any new candidate. Not launched. |
+| `gepa_verified_paired_learning12_smoke_v5_linked_sequence_supervisor_20260923.yaml` | Prepared one-minute-poll Iris sequence for the two v7 phases; clean-worktree enforcement and conservative cleanup are enabled. Presence does not authorize launch. |
 | `frozen_swe_verified_plan_pairs/20260919_safe_pce_within_task_pairs_v1/` | Reliability-cleaned task-grouped authority with 144 train and 36 validation R-by-U Plan pairs across 57 tasks; raw evidence remains hash-bound in durable scratch. |
 | `frozen_swe_verified_plan_pairs/20260922_operationally_clean138_v1/` | Unlaunched, conservative superseding **train selection**: 138 of the 144 frozen train pairs after the historical one-pair exclusion and five additional pairs with external HTTP 502 or official test-patch collision. Original snapshot and 36 validation pairs are unchanged; the validation split is not newly certified. |
 | `frozen_swe_verified_plan_pairs/20260919_pair_cleaning_record_v1.md` | Human-readable cleaning rationale for the paired snapshot; the exact exclusion ledger and this record are both SHA-bound by the frozen manifest. |

@@ -1124,31 +1124,64 @@ and `configs/gepa_verified_paired_learning12_smoke_v3_sequence_supervisor_202609
 These configs are completed development provenance and are not relaunch
 templates.
 
-The superseding v6 prompt is
+The completed v6 smoke used
 `configs/prompts/offline_gepa_paired_levels_ace_core_v6_20260923.yaml`. It
-restores an ACE-style backbone: diagnose the paired attempts, distill reusable
+restored an ACE-style backbone: diagnose the paired attempts, distill reusable
 developer concerns, then let the Curator integrate only durable missing
-knowledge. Full `side_findings`, pair analysis, and tags remain persisted in
-`case_reflections.json` as an audit/diagnostic side channel. They are not copied
-into the Curator's required index. The required `reflection_index.json`
-contains only reusable concerns and material uncertainty; the Curator may read
-the complete record when a distilled item is unclear or conflicting. New v6
-runs use `reflection.distilled_curation: true` and
-`curation.evidence_contract: distilled_v1` with finding coverage disabled.
-The prepared, unlaunched v6 smoke is a two-phase sequence. Phase one,
+knowledge. Full `side_findings`, pair analysis, and tags were persisted in
+`case_reflections.json` as an audit/diagnostic side channel, while the required
+index contained only reusable concerns and material uncertainty. This exposed
+two interface defects: a reusable concern did not identify the side findings
+that supported it, and Curator readability/operation checks existed only as
+free-form reasoning.
+
+The superseding v7 development prompt is
+`configs/prompts/offline_gepa_paired_levels_ace_core_v7_20260923.yaml`. A new
+linked run uses `reflection.distilled_curation: true`,
+`reflection.fact_links: true`, `curation.evidence_contract: distilled_v1`, and
+`curation.self_check_contract: lightweight_v1`. Each reusable concern cites
+the relevant resolved/unresolved side-finding positions. The Host materializes
+canonical links and only their factual records in required
+`reflection_index.json`; the complete Reflection remains optional audit
+evidence. Curator output includes one lightweight self-check row per operation.
+This is an Agent self-check plus deterministic Host validation, not a Checker
+replay or a second review Agent.
+
+The current Level interpretation has two explicitly separate scopes. A
+playbook bullet stores a reusable concern without a fixed Level. The Checker
+assigns a case-specific Level from the current issue, repository, and Plan.
+Repeated occurrences and Coder responses can later show that a concern often
+behaves like a warning or blocker. Each per-pair Reflector supplies its own
+occurrence facts; the Curator reads the linked facts across the complete
+minibatch and uses that empirical pattern to maintain rule wording and
+boundaries. No single Reflector observes the whole minibatch, and the aggregate
+tendency is not stored as a permanent rule Level. Helpful/harmful counters
+remain the inherited ACE rule-utility ledger and must not be treated as Level
+or repairability statistics.
+
+The completed v6 smoke was a two-phase sequence. Phase one,
 `configs/gepa_verified_paired_learning12_smoke_v4_ace_core_ref_cur_20260923.yaml`,
 imports the frozen Seed Checker outputs and isolates the new Reflector/Curator
 behavior. Phase two,
 `configs/gepa_verified_paired_learning12_smoke_v4_ace_core_20260923.yaml`,
 starts from the manually audited ten-rule input and tests the complete Checker,
 Reflector, Curator, and candidate-evaluation path. Both use the same twelve
-development pairs and four exposed validation pairs as v5. The sequence uses a
-60-second Supervisor poll interval and a ten-minute Agent Slurm limit. In the
-completed v5 sequence, the slowest comparable Agent used 200 seconds, so this
-retains approximately three times the observed maximum. Each phase allows up
-to twelve short Controller continuations; this does not enlarge the one-proposal
-scientific budget. The v5 full-cycle phase needed nine continuations because
-each Agent wave yields Controller state. Preparation does not authorize launch.
+development pairs and four exposed validation pairs as v5. These completed
+configs are development provenance, not v7 launch templates.
+
+The prepared v7 two-phase smoke uses
+`configs/gepa_verified_paired_learning12_smoke_v5_linked_ref_cur_20260923.yaml`,
+`configs/gepa_verified_paired_learning12_smoke_v5_linked_manual_20260923.yaml`,
+and
+`configs/gepa_verified_paired_learning12_smoke_v5_linked_sequence_supervisor_20260923.yaml`.
+The v6 and v7 Checker prompt fields are identical. Phase one imports the exact
+frozen Seed parent Checker outputs; phase two imports the exact completed v4
+manual-playbook parent Checker outputs. This fixes the Reflection input when
+comparing v6 and v7. A proposed v7 candidate still receives fresh Checker
+evaluation because its playbook input is new. Both phases use linked facts and
+the lightweight Curator self-check; neither performs a Checker replay as a
+self-check. The files are preparation authority only and do not authorize
+launch.
 
 Historical paired configs and prompts are indexed under
 `configs/archive/paired-levels-20260921/README.md` without moving their

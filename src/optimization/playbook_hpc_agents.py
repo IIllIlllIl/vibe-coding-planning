@@ -14,6 +14,7 @@ from src.optimization.playbook import (
     apply_refiner_operations,
     overlength_bullet_ids,
     validate_curator_concern_coverage,
+    validate_curator_self_check,
 )
 from src.optimization.repo_playbook import render_concern_playbook
 from src.optimization.playbook_hpc_executor import PlaybookHPCExecutor
@@ -201,6 +202,7 @@ class HPCPlaybookProposalAgents:
         visible_renderer: Callable[[RejectPlaybook], str] | None = None,
         require_concern_coverage: bool = False,
         evidence_contract: str = "legacy_v1",
+        require_curator_self_check: bool = False,
     ) -> None:
         self.executor = executor
         self.maximum_tokens = maximum_tokens
@@ -217,6 +219,7 @@ class HPCPlaybookProposalAgents:
                 "distilled Curator evidence cannot require finding dispositions"
             )
         self.evidence_contract = evidence_contract
+        self.require_curator_self_check = require_curator_self_check
 
     @staticmethod
     def _materialize_historical_evidence(
@@ -364,19 +367,53 @@ class HPCPlaybookProposalAgents:
         for review in reviews:
             if self.evidence_contract == "distilled_v1":
                 numbered = []
+                linked_findings: dict[str, dict[str, Any]] = {}
                 for index, concern in enumerate(
                     review.get("reusable_concerns", []), start=1
                 ):
+                    concern_id = f'{review["instance_id"]}:c{index}'
+                    concern_ids.append(concern_id)
+                    normalized_concern = dict(concern)
+                    links = normalized_concern.pop("supporting_side_findings", [])
+                    supporting_ids = []
+                    for link in links:
+                        prefix = "r" if link["side"] == "resolved" else "u"
+                        finding_id = (
+                            f'{review["instance_id"]}:{prefix}'
+                            f'{link["finding_number"]}'
+                        )
+                        supporting_ids.append(finding_id)
+                        side = next(
+                            item
+                            for item in review["side_findings"]
+                            if item["side"] == link["side"]
+                        )
+                        finding = side["plan_concerns"][link["finding_number"] - 1]
+                        linked_findings[finding_id] = {
+                            "id": finding_id,
+                            "side": link["side"],
+                            **finding,
+                        }
                     numbered.append(
                         {
-                            "id": f'{review["instance_id"]}:c{index}',
-                            **concern,
+                            "id": concern_id,
+                            **normalized_concern,
+                            **(
+                                {"supporting_side_finding_ids": supporting_ids}
+                                if supporting_ids
+                                else {}
+                            ),
                         }
                     )
                 reflection_index.append(
                     {
                         "instance_id": review.get("instance_id"),
                         "reusable_concerns": numbered,
+                        **(
+                            {"linked_side_findings": list(linked_findings.values())}
+                            if linked_findings
+                            else {}
+                        ),
                         "uncertainty": review.get("uncertainty"),
                     }
                 )
@@ -432,7 +469,12 @@ class HPCPlaybookProposalAgents:
                     if self.evidence_contract == "distilled_v1"
                     else {}
                 ),
-                **({"concern_ids": concern_ids} if self.require_concern_coverage else {}),
+                **(
+                    {"concern_ids": concern_ids}
+                    if self.require_concern_coverage
+                    or self.require_curator_self_check
+                    else {}
+                ),
             },
         )
         item = {
@@ -444,6 +486,11 @@ class HPCPlaybookProposalAgents:
                 "evidence_path": "/evidence",
             },
             **({"validation_concern_ids": concern_ids} if self.require_concern_coverage else {}),
+            **(
+                {"validation_self_check_concern_ids": concern_ids}
+                if self.require_curator_self_check
+                else {}
+            ),
         }
         try:
             return self.executor.run_wave("curator", [item])[0]["agent_output"]
@@ -467,6 +514,8 @@ class HPCPlaybookProposalAgents:
             output = completion.get("agent_output")
             if self.require_concern_coverage:
                 validate_curator_concern_coverage(output, concern_ids)
+            if self.require_curator_self_check:
+                validate_curator_self_check(output, concern_ids)
             proposed = apply_curator_operations(counted, output)
             invalid = overlength_bullet_ids(
                 proposed,
@@ -563,6 +612,7 @@ class HPCPairedRepoPlaybookProposalAgents(HPCPlaybookProposalAgents):
         token_counter: Callable[[str], int] | None = None,
         require_concern_coverage: bool = False,
         evidence_contract: str = "legacy_v1",
+        require_curator_self_check: bool = False,
     ) -> None:
         super().__init__(
             executor,
@@ -572,6 +622,7 @@ class HPCPairedRepoPlaybookProposalAgents(HPCPlaybookProposalAgents):
             visible_renderer=render_concern_playbook,
             require_concern_coverage=require_concern_coverage,
             evidence_contract=evidence_contract,
+            require_curator_self_check=require_curator_self_check,
         )
         self.image_records = image_records
 
