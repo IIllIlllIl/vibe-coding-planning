@@ -1169,7 +1169,7 @@ Reflector, Curator, and candidate-evaluation path. Both use the same twelve
 development pairs and four exposed validation pairs as v5. These completed
 configs are development provenance, not v7 launch templates.
 
-The prepared v7 two-phase smoke uses
+The completed v7 two-phase smoke uses
 `configs/gepa_verified_paired_learning12_smoke_v5_linked_ref_cur_20260923.yaml`,
 `configs/gepa_verified_paired_learning12_smoke_v5_linked_manual_20260923.yaml`,
 and
@@ -1180,8 +1180,25 @@ manual-playbook parent Checker outputs. This fixes the Reflection input when
 comparing v6 and v7. A proposed v7 candidate still receives fresh Checker
 evaluation because its playbook input is new. Both phases use linked facts and
 the lightweight Curator self-check; neither performs a Checker replay as a
-self-check. The files are preparation authority only and do not authorize
-launch.
+self-check. Recovery completed both phases after the Controller fact-link
+validator was corrected. The Seed-derived proposal did not beat the Seed, and
+the manual-playbook proposal was rejected by the minibatch screen; these are
+development diagnostics rather than method results.
+
+The prepared no-Level ablation keeps the same frozen 12 train pairs, four
+validation pairs, Seed and manual playbooks, models, linked Reflection,
+Curator, score, and one-proposal budget. It changes the Checker contract from
+case-specific 0/1/2 Levels to one binary `triggered` decision per rule and
+removes Level-dependent instructions from Reflection and curation. Both phases
+run fresh Checker calls because Level outputs cannot be reused as binary
+authority. The configs are
+`configs/gepa_verified_paired_learning12_smoke_v6_binary_seed_20260924.yaml`,
+`configs/gepa_verified_paired_learning12_smoke_v6_binary_manual_20260924.yaml`,
+and
+`configs/gepa_verified_paired_learning12_smoke_v6_binary_sequence_supervisor_20260924.yaml`.
+The comparison target is not only aggregate score: audit binary versus Level-2
+pair ordering, linked concerns, Curator operations, resulting readability, and
+Checker context sensitivity.
 
 Historical paired configs and prompts are indexed under
 `configs/archive/paired-levels-20260921/README.md` without moving their

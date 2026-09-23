@@ -800,6 +800,59 @@ def test_v5_linked_two_phase_smoke_reuses_unchanged_parent_checkers():
     assert all("--require-clean-worktree" in run["arguments"] for run in supervisor["runs"])
 
 
+def test_v6_binary_ablation_matches_linked_smoke_except_for_levels():
+    prompt = Path(
+        "configs/prompts/offline_gepa_paired_binary_ace_core_v1_20260924.yaml"
+    )
+    prompts = yaml.safe_load(prompt.read_text())
+    for name in ("checker_system", "reflector_system", "curator_system"):
+        text = prompts[name].casefold()
+        assert '"level"' not in text
+        assert "level 0" not in text
+        assert "level 1" not in text
+        assert "level 2" not in text
+    assert '"triggered"' in prompts["checker_system"]
+    assert "supporting_side_findings" in prompts["reflector_instance"]
+    assert "supporting_concern_ids" in prompts["curator_instance"]
+
+    paths = [
+        Path("configs/gepa_verified_paired_learning12_smoke_v6_binary_seed_20260924.yaml"),
+        Path("configs/gepa_verified_paired_learning12_smoke_v6_binary_manual_20260924.yaml"),
+    ]
+    seed, manual = [yaml.safe_load(path.read_text()) for path in paths]
+    for path, raw in zip(paths, (seed, manual), strict=True):
+        _validate_frozen_inputs(path.resolve(), raw)
+        assert not paired_checker_uses_levels(raw)
+        assert raw["repo_checker"]["output_contract"] == "binary_v1"
+        assert raw["reflection"]["fact_links"] is True
+        assert raw["curation"]["self_check_contract"] == "lightweight_v1"
+        assert raw["search"]["max_iterations"] == 1
+        assert raw["search"]["reflection_minibatch_size"] == 12
+        assert raw["models"]["checker"]["thinking"] == "disabled"
+        assert raw["hpc"]["mem"] == "4G"
+        assert raw["hpc"]["cpus_per_task"] == 1
+        assert raw["hpc"]["poll_interval_seconds"] == 60
+        assert "checkpoint_import" not in raw
+
+    level = yaml.safe_load(Path(
+        "configs/gepa_verified_paired_learning12_smoke_v5_linked_manual_20260923.yaml"
+    ).read_text())
+    assert seed["inputs"]["train_instance_ids"] == level["inputs"]["train_instance_ids"]
+    assert seed["inputs"]["validation_instance_ids"] == level["inputs"]["validation_instance_ids"]
+    assert seed["inputs"]["train_instance_ids"] == manual["inputs"]["train_instance_ids"]
+    assert seed["inputs"]["validation_instance_ids"] == manual["inputs"]["validation_instance_ids"]
+    assert seed["inputs"]["initial_playbook"] != manual["inputs"]["initial_playbook"]
+
+    supervisor = yaml.safe_load(Path(
+        "configs/gepa_verified_paired_learning12_smoke_v6_binary_sequence_supervisor_20260924.yaml"
+    ).read_text())
+    assert [run["name"] for run in supervisor["runs"]] == [
+        "binary-seed-full-cycle",
+        "binary-manual-playbook-full-cycle",
+    ]
+    assert all("--require-clean-worktree" in run["arguments"] for run in supervisor["runs"])
+
+
 def test_distilled_curator_index_excludes_side_findings_and_dispositions(tmp_path):
     from src.optimization.playbook_hpc_agents import HPCPlaybookProposalAgents
 
