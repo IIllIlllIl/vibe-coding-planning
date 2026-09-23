@@ -162,9 +162,14 @@ def validate_paired_reflector_review(
     playbook: RejectPlaybook,
     structured_recovery: bool = False,
     structured_abstraction: bool = False,
+    distilled_curation: bool = False,
 ) -> dict[str, Any]:
     if structured_abstraction and not structured_recovery:
         raise ValueError("Paired Reflector abstraction requires structured recovery")
+    if distilled_curation and not (structured_recovery and structured_abstraction):
+        raise ValueError(
+            "Distilled paired Reflection requires recovery and abstraction"
+        )
     expected = {
         "instance_id",
         "pair_analysis",
@@ -188,12 +193,19 @@ def validate_paired_reflector_review(
         raise ValueError("Paired Reflector reusable_concerns must be a list")
     normalized_concerns = []
     for concern in concerns:
-        allowed = (
-            {"case_mechanism", "developer_concern", "pair_support"}
-            if structured_abstraction
-            else {"concern", "pair_support"}
-        )
-        if structured_recovery:
+        if distilled_curation:
+            allowed = {
+                "developer_concern",
+                "decision_time_basis",
+                "pair_evidence",
+            }
+        else:
+            allowed = (
+                {"case_mechanism", "developer_concern", "pair_support"}
+                if structured_abstraction
+                else {"concern", "pair_support"}
+            )
+        if structured_recovery and not distilled_curation:
             allowed.add("curation_assessment")
         accepted_concern_keys = (
             (allowed,)
@@ -203,9 +215,13 @@ def validate_paired_reflector_review(
         if not isinstance(concern, dict) or set(concern) not in accepted_concern_keys:
             raise ValueError("Paired Reflector reusable concern is invalid")
         text_keys = (
-            ("case_mechanism", "developer_concern", "pair_support")
-            if structured_abstraction
-            else ("concern", "pair_support")
+            ("developer_concern", "decision_time_basis", "pair_evidence")
+            if distilled_curation
+            else (
+                ("case_mechanism", "developer_concern", "pair_support")
+                if structured_abstraction
+                else ("concern", "pair_support")
+            )
         )
         if any(
             not isinstance(concern[key], str) or not concern[key].strip()
@@ -216,7 +232,7 @@ def validate_paired_reflector_review(
         # no defined role in curation. Accept legacy output, but do not pass
         # the field to the Curator or persist it in normalized reviews.
         normalized = {key: concern[key].strip() for key in text_keys}
-        if structured_recovery:
+        if structured_recovery and not distilled_curation:
             assessment = concern["curation_assessment"]
             expected_assessment = {
                 "pair_relation",

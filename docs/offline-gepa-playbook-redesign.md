@@ -1095,7 +1095,7 @@ single field combining case mechanics with reusable knowledge encourages
 case-shaped rules, and that asking the Reflector to recommend promotion gives
 it an unintended knowledge-admission role.
 
-The v5 development prompt therefore treats the Agent roles as a learning path,
+The v5 development prompt therefore treated the Agent roles as a learning path,
 not as a hand-written definition of important Plan defects. The Reflector
 records per-Plan findings, separates repository-specific `case_mechanism` from
 portable `developer_concern`, and describes `pair_relation`, `evidence_role`,
@@ -1104,10 +1104,15 @@ what the pair establishes; none automatically determines ADD, DEFER, or a
 future Level. The Curator reads the complete record, proposes atomic portable
 rules, and dispositions every finding. Side findings may support, refine, or
 disqualify a reusable concern, but cannot bypass the same decision-time,
-abstraction, and attribution analysis. Visible rules remain Level-free.
+abstraction, and attribution analysis. Visible rules remain Level-free. Its
+completed two-phase smoke exposed a new method effect: requiring a disposition
+for every reusable and side finding made both Curators mark every finding
+`USED` (35/35 and 41/41). The four `curation_assessment` enums did not prevent
+this behavior. The audit mechanism therefore changed the behavior it was
+intended to observe and is not part of the next prompt contract.
 
-The next development smoke uses the same twelve audited train pairs and four
-exposed operational validation pairs in two sequential phases. Phase one
+The completed v5 development smoke used the same twelve audited train pairs
+and four exposed operational validation pairs in two sequential phases. Phase one
 imports only the frozen seed Checker outputs and replays Reflector plus Curator
 under v5. Phase two starts from the manually audited ten-rule development
 playbook and runs the complete Checker, Reflector, and Curator path, approximating
@@ -1116,7 +1121,34 @@ phase one exits successfully. The two run configs and the sequence supervisor
 are `configs/gepa_verified_paired_learning12_smoke_v3_ref_cur_20260923.yaml`,
 `configs/gepa_verified_paired_learning12_smoke_v3_manual_full_20260923.yaml`,
 and `configs/gepa_verified_paired_learning12_smoke_v3_sequence_supervisor_20260923.yaml`.
-Preparation and commit do not authorize launch.
+These configs are completed development provenance and are not relaunch
+templates.
+
+The superseding v6 prompt is
+`configs/prompts/offline_gepa_paired_levels_ace_core_v6_20260923.yaml`. It
+restores an ACE-style backbone: diagnose the paired attempts, distill reusable
+developer concerns, then let the Curator integrate only durable missing
+knowledge. Full `side_findings`, pair analysis, and tags remain persisted in
+`case_reflections.json` as an audit/diagnostic side channel. They are not copied
+into the Curator's required index. The required `reflection_index.json`
+contains only reusable concerns and material uncertainty; the Curator may read
+the complete record when a distilled item is unclear or conflicting. New v6
+runs use `reflection.distilled_curation: true` and
+`curation.evidence_contract: distilled_v1` with finding coverage disabled.
+The prepared, unlaunched v6 smoke is a two-phase sequence. Phase one,
+`configs/gepa_verified_paired_learning12_smoke_v4_ace_core_ref_cur_20260923.yaml`,
+imports the frozen Seed Checker outputs and isolates the new Reflector/Curator
+behavior. Phase two,
+`configs/gepa_verified_paired_learning12_smoke_v4_ace_core_20260923.yaml`,
+starts from the manually audited ten-rule input and tests the complete Checker,
+Reflector, Curator, and candidate-evaluation path. Both use the same twelve
+development pairs and four exposed validation pairs as v5. The sequence uses a
+60-second Supervisor poll interval and a ten-minute Agent Slurm limit. In the
+completed v5 sequence, the slowest comparable Agent used 200 seconds, so this
+retains approximately three times the observed maximum. Each phase allows up
+to twelve short Controller continuations; this does not enlarge the one-proposal
+scientific budget. The v5 full-cycle phase needed nine continuations because
+each Agent wave yields Controller state. Preparation does not authorize launch.
 
 Historical paired configs and prompts are indexed under
 `configs/archive/paired-levels-20260921/README.md` without moving their

@@ -136,6 +136,20 @@ def run_task(
                 raise ValueError(
                     "Repo Reflector manifest requires a non-empty source_access_issue"
                 )
+            if role == "paired_repo_reflector":
+                reflector_task = (
+                    "Analyze both completed Plan attempts and distill reusable "
+                    "Plan-review concerns."
+                    if config.get("reflection", {}).get(
+                        "distilled_curation", False
+                    )
+                    else "Compare both completed Plan attempts and attribute "
+                    "their within-task outcome difference to every active concern."
+                )
+            else:
+                reflector_task = (
+                    "Attribute this completed case to every active concern."
+                )
             stage = "agent_execution"
             output, trajectory = run_repository_reflector(
                 model_config=config["models"]["reflector"],
@@ -152,12 +166,7 @@ def run_task(
                 internal_playbook=str(values["internal_playbook"]),
                 source_access_issue=source_access_issue,
                 retry_feedback=str(values["retry_feedback"]),
-                task=(
-                    "Compare both completed Plan attempts and attribute their "
-                    "within-task outcome difference to every active concern."
-                    if role == "paired_repo_reflector"
-                    else "Attribute this completed case to every active concern."
-                ),
+                task=reflector_task,
                 phase=role,
             )
         elif role == "reflector":
@@ -182,6 +191,14 @@ def run_task(
                 counted_internal_playbook=str(values["counted_internal_playbook"]),
                 case_count=int(values["case_count"]),
                 retry_feedback=str(values["retry_feedback"]),
+                task=(
+                    "Curate durable Plan-review concerns from the completed "
+                    "reflections."
+                    if config.get("curation", {}).get("evidence_contract")
+                    == "distilled_v1"
+                    else "Curate durable rejection concerns from the completed "
+                    "reflections."
+                ),
             )
         else:
             stage = "prompt_render"
@@ -249,6 +266,7 @@ def run_task(
                 playbook=playbook,
                 structured_recovery=bool(config.get("reflection", {}).get("structured_recovery", False)),
                 structured_abstraction=bool(config.get("reflection", {}).get("structured_abstraction", False)),
+                distilled_curation=bool(config.get("reflection", {}).get("distilled_curation", False)),
             )
         elif role == "curator":
             if "validation_concern_ids" in manifest:

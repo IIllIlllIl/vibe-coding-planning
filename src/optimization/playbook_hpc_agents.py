@@ -200,6 +200,7 @@ class HPCPlaybookProposalAgents:
         token_counter: Callable[[str], int] | None = None,
         visible_renderer: Callable[[RejectPlaybook], str] | None = None,
         require_concern_coverage: bool = False,
+        evidence_contract: str = "legacy_v1",
     ) -> None:
         self.executor = executor
         self.maximum_tokens = maximum_tokens
@@ -209,6 +210,13 @@ class HPCPlaybookProposalAgents:
             lambda value: value.render_for_checker()
         )
         self.require_concern_coverage = require_concern_coverage
+        if evidence_contract not in {"legacy_v1", "distilled_v1"}:
+            raise ValueError("unknown Curator evidence contract")
+        if evidence_contract == "distilled_v1" and require_concern_coverage:
+            raise ValueError(
+                "distilled Curator evidence cannot require finding dispositions"
+            )
+        self.evidence_contract = evidence_contract
 
     @staticmethod
     def _materialize_historical_evidence(
@@ -354,6 +362,25 @@ class HPCPlaybookProposalAgents:
         reflection_index = []
         concern_ids: list[str] = []
         for review in reviews:
+            if self.evidence_contract == "distilled_v1":
+                numbered = []
+                for index, concern in enumerate(
+                    review.get("reusable_concerns", []), start=1
+                ):
+                    numbered.append(
+                        {
+                            "id": f'{review["instance_id"]}:c{index}',
+                            **concern,
+                        }
+                    )
+                reflection_index.append(
+                    {
+                        "instance_id": review.get("instance_id"),
+                        "reusable_concerns": numbered,
+                        "uncertainty": review.get("uncertainty"),
+                    }
+                )
+                continue
             summary = {
                 "instance_id": review.get("instance_id"),
                 "uncertainty": review.get("uncertainty"),
@@ -394,6 +421,17 @@ class HPCPlaybookProposalAgents:
                 ],
                 "contains_repository": False,
                 "contains_direct_downstream_evidence": False,
+                **(
+                    {
+                        "required_files": [
+                            "counted_playbook.json",
+                            "reflection_index.json",
+                        ],
+                        "optional_files": ["case_reflections.json"],
+                    }
+                    if self.evidence_contract == "distilled_v1"
+                    else {}
+                ),
                 **({"concern_ids": concern_ids} if self.require_concern_coverage else {}),
             },
         )
@@ -524,6 +562,7 @@ class HPCPairedRepoPlaybookProposalAgents(HPCPlaybookProposalAgents):
         maximum_bullet_tokens: int | None = None,
         token_counter: Callable[[str], int] | None = None,
         require_concern_coverage: bool = False,
+        evidence_contract: str = "legacy_v1",
     ) -> None:
         super().__init__(
             executor,
@@ -532,6 +571,7 @@ class HPCPairedRepoPlaybookProposalAgents(HPCPlaybookProposalAgents):
             token_counter=token_counter,
             visible_renderer=render_concern_playbook,
             require_concern_coverage=require_concern_coverage,
+            evidence_contract=evidence_contract,
         )
         self.image_records = image_records
 

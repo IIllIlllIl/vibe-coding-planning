@@ -1,0 +1,136 @@
+schema_version: 1
+mode: offline_paired_repo_concern_playbook
+status: ready_not_launched
+run_id: verified-paired-learning12-smoke-v4-ace-core-ref-cur-20260923
+purpose: replay the audited seed scene from frozen Checker outputs using the distilled ACE-style Reflector and Curator
+
+paths:
+  dataset_snapshot: configs/frozen_swe_verified_plan_pairs/20260919_safe_pce_within_task_pairs_v1
+  initial_rules: configs/development_guidelines/paired_concern_seed_v3_categorized.json
+  run_dir: output/SWE-bench_Verified/gepa-paired-repo-concern-playbook-runs/learning12-smoke-v4-ace-core-ref-cur-20260923
+
+task: {semantics: paired_repo_concern_levels_distilled_v1}
+container:
+  runtime: apptainer
+  sif_cache_dir: /scratch/users/${USER}/vibe-coding-planning/shared/sif-cache
+execution: {backend: hpc_slurm}
+
+inputs:
+  dataset_snapshot: configs/frozen_swe_verified_plan_pairs/20260919_safe_pce_within_task_pairs_v1
+  dataset_manifest_sha256: cc1c3488c20a90340d88f419212c2f28b0d60e9a53ab15b84c7e9809751cc736
+  initial_playbook: configs/development_guidelines/paired_concern_seed_v3_categorized.json
+  initial_playbook_sha256: 587c52c512080c2a54b597373be30394f448ac5a6e6f9f01b73821f99e7b3699
+  prompt_bundle: configs/prompts/offline_gepa_paired_levels_ace_core_v6_20260923.yaml
+  prompt_bundle_sha256: f5fd68e09c68ce4cfd03a0116ad6950ea4ec96de120d27716218699eab7c0e00
+  repo_checker_contract: configs/prompts/offline_gepa_paired_levels_contract_v2_20260922.yaml
+  repo_checker_contract_sha256: 0adb8b2afc7c186d4e2bf973af7ebaa4e0c5e721c755da7f119bcaf4bf6bfd02
+  repo_checker_image_manifest: configs/frozen_swe_verified_safe_pce/verified482-formal-v1-20260914/images.json
+  repo_checker_image_manifest_sha256: f4c18c5dcf30fa48cb503241c5ba69ae8f6368e63726f8ce0875a868ae212e0a
+  selection: configs/frozen_swe_verified_plan_pairs/20260922_paired_learning12_smoke_v1/selection.json
+  selection_sha256: 9286a888ba1bbfc9b2ed80553f1fcd1a7a608ce0a2255c24d17a56b63d1030f0
+  train_instance_ids:
+    - pair-78109f69ff82bbd16ec960be
+    - pair-62b15a8e6978206c8f08a33c
+    - pair-da3a49e06b6b680bbe0b3b49
+    - pair-367c066a53c8b7df76863f02
+    - pair-6663594e928684ff4a25858b
+    - pair-549f122669a991e427c73628
+    - pair-89ccad0247ccfc67f8026dc1
+    - pair-f238c71b0ce9c101b56e86b7
+    - pair-b6288be04be53a84472c7d08
+    - pair-cf7cec5b6b84c64723a597b2
+    - pair-cebf943ee365480f46cd4418
+    - pair-1eee6d23e01617403113ce7d
+  validation_instance_ids:
+    - pair-27786b755371198326783156
+    - pair-05a1e7405702ab648b7f67ea
+    - pair-92f9af0cf56249cb5da68410
+    - pair-8043b6b99e7285b2ddbf6688
+
+models:
+  checker: {model: deepseek-v4-flash, temperature: 0.0, thinking: disabled}
+  reflector: {model: deepseek-v4-flash, temperature: 0.0}
+  curator: {model: deepseek-v4-flash, temperature: 0.0}
+  refiner: {model: deepseek-v4-flash, temperature: 0.0}
+
+repo_checker:
+  output_contract: levels_v1
+  review_only: true
+  workdir: /testbed
+  command_timeout_seconds: 1800
+  source_access_policy: conservative_blacklist_v3
+  history_policy: base_ancestor_bundle_v1
+  masked_container_paths: [/opt/miniconda3/pkgs]
+
+scoring: {correct_order: 1, inverted: -1, tied: 0, invalid: -100}
+search:
+  max_iterations: 1
+  reflection_minibatch_size: 12
+  max_metric_calls: 100
+  seed: 42
+  perfect_score: 1.0
+  skip_perfect_score: false
+reflection:
+  rounds: 1
+  structured_recovery: true
+  structured_abstraction: true
+  distilled_curation: true
+curation:
+  evidence_contract: distilled_v1
+  require_concern_coverage: false
+length:
+  maximum_visible_tokens: 2048
+  maximum_bullet_tokens: 64
+  harmful_pruning_weight: 2
+budget:
+  candidate_proposals: 1
+  reflection_pairs_per_proposal: 12
+  checker_agents_per_pair_evaluation: 2
+  reflection_rounds_per_pair: 1
+  projected_pair_metric_call_ceiling: 100
+stopping:
+  stop_after_candidate_proposals: 1
+  abort_on_operational_incomplete: true
+operational_incomplete_policy: >-
+  Model, transport, timeout, parsing, missing-artifact, repository-authority,
+  or exhausted Agent-output-contract failures remain operationally incomplete.
+  INVALID is reserved for a structurally valid candidate containing a bullet
+  over 64 Checker tokens.
+
+hpc:
+  submit: true
+  partition: batch
+  cpus_per_task: 1
+  mem: 4G
+  controller_slice_time: "00:30:00"
+  agent_time: "00:10:00"
+  poll_interval_seconds: 60
+  max_running_array_tasks: 0
+  max_task_attempts: 3
+  task_output_grace_seconds: 120
+  missing_task_grace_seconds: 300
+  remote_env_file: ~/.config/vibe-coding-planning/deepseek.env
+  python_module: lang/Python/3.11
+  container_module: tools/Apptainer
+  job_name_prefix: verified-paired-learning12-smoke-v4-ace-core-ref-cur-20260923
+
+success_criteria:
+  - Import only the frozen seed Checker outputs from the audited learning12 scene.
+  - Re-run all twelve Reflectors and the Curator using the distilled v6 contract.
+  - Preserve full side findings as optional audit evidence while requiring the distilled concern index.
+  - Produce portable, atomic, readable operations without mandatory per-finding dispositions.
+  - Complete candidate evaluation without operationally incomplete cases.
+
+checkpoint_import:
+  source_run_dir: /scratch/users/twang/vibe-coding-planning/run_state/output/SWE-bench_Verified/gepa-paired-repo-concern-playbook-runs/learning12-smoke-v1-20260922
+  source_run_manifest_sha256: 4dc5cbc3ca18df2409fd1836c0b1624df08aec661c18eabd2e6cfed4b4220c19
+  roles: [paired_repo_checker]
+
+readiness: {runnable: true, launched: false, missing: []}
+launch_checks:
+  - Confirm a clean committed worktree and no duplicate supervisor.
+  - Verify Iris storage, API availability, SIF authority, and prepared history bundles.
+audit_targets:
+  - Compare each v6 reflection and Curator operation with the v5 replay on identical Checker outputs.
+  - Verify that useful information reaches reusable_concerns without copying side-only details into rules.
+  - Inspect which distilled concerns the Curator uses, combines, or leaves unchanged without a forced disposition.

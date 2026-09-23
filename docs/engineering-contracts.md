@@ -110,6 +110,22 @@ option in either site makes valid durable Agent outputs appear invalid during
 resume. Regression tests must exercise Controller reuse of a completed output,
 not only the worker validator.
 
+For the distilled paired-Reflection contract, full reflection records remain
+immutable audit evidence in `case_reflections.json`, but only
+`reflection_index.json` and `counted_playbook.json` are mandatory Curator
+inputs. Side findings must not be converted into mandatory dispositions: audit
+coverage is not a learning objective. `reflection.distilled_curation` must be
+enabled at both worker and Controller validation sites, and
+`curation.evidence_contract: distilled_v1` is incompatible with
+`require_concern_coverage`.
+
+The Agent runner's top-level task string is part of the effective prompt even
+though it is not stored in the prompt bundle. Under the distilled contract it
+must describe paired Plan analysis and reusable Plan-review curation; it must
+not require every active rule to explain the outcome difference or describe
+all concerns as rejection concerns. Legacy contracts retain their historical
+task strings for replay.
+
 Third-party GEPA catches proposal exceptions. When operational abort is enabled,
 check recorded proposal failures at the next stop callback as well as after
 optimization returns; otherwise a failed Curator can consume further iterations.

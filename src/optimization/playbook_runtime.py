@@ -278,6 +278,7 @@ def run_evidence_curator(
     counted_internal_playbook: str,
     case_count: int,
     retry_feedback: str = "",
+    task: str = "Curate durable rejection concerns from the completed reflections.",
 ) -> tuple[dict[str, Any], list[dict[str, Any]]]:
     """Run the Curator over a file-backed cross-case reflection bundle."""
     return _run_evidence_json_agent(
@@ -286,7 +287,7 @@ def run_evidence_curator(
         system=system,
         instance_template=instance_template,
         evidence_dir=evidence_dir,
-        task="Curate durable rejection concerns from the completed reflections.",
+        task=task,
         artifact_name="curator.json",
         prompt_values={
             "evidence_path": "/evidence",

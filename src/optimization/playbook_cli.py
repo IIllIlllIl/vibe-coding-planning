@@ -179,6 +179,27 @@ def run_from_config(path: str | Path, *, agents: Any | None = None, optimize_fn=
         "offline_repo_concern_playbook",
         "offline_paired_repo_concern_playbook",
     }
+    if paired_mode:
+        reflection = raw.get("reflection", {})
+        curation = raw.get("curation", {})
+        distilled_reflection = bool(reflection.get("distilled_curation", False))
+        distilled_index = curation.get("evidence_contract") == "distilled_v1"
+        if distilled_reflection != distilled_index:
+            raise ValueError(
+                "distilled paired Reflection and Curator evidence contracts "
+                "must be enabled together"
+            )
+        if distilled_reflection and (
+            not reflection.get("structured_recovery")
+            or not reflection.get("structured_abstraction")
+        ):
+            raise ValueError(
+                "distilled paired Reflection requires recovery and abstraction"
+            )
+        if distilled_index and curation.get("require_concern_coverage", False):
+            raise ValueError(
+                "distilled Curator evidence cannot require finding dispositions"
+            )
     _validate_frozen_inputs(config_path, raw)
     if repo_mode:
         if raw.get("container", {}).get("runtime") != "apptainer":
@@ -265,6 +286,9 @@ def run_from_config(path: str | Path, *, agents: Any | None = None, optimize_fn=
             paired_reflector_structured_abstraction=bool(
                 raw.get("reflection", {}).get("structured_abstraction", False)
             ),
+            paired_reflector_distilled_curation=bool(
+                raw.get("reflection", {}).get("distilled_curation", False)
+            ),
             checkpoint_import_run_dir=(
                 run_dir.parent / str(checkpoint_import["source_run_dir"])
                 if checkpoint_import
@@ -292,6 +316,7 @@ def run_from_config(path: str | Path, *, agents: Any | None = None, optimize_fn=
                 maximum_bullet_tokens=int(raw["length"]["maximum_bullet_tokens"]),
                 token_counter=count_tokens,
                 require_concern_coverage=bool(raw.get("curation", {}).get("require_concern_coverage", False)),
+                evidence_contract=str(raw.get("curation", {}).get("evidence_contract", "legacy_v1")),
             )
         elif repo_mode:
             checker = HPCRepoPlaybookChecker(
@@ -331,6 +356,7 @@ def run_from_config(path: str | Path, *, agents: Any | None = None, optimize_fn=
                     output, instance_id=instance_id, playbook=playbook,
                     structured_recovery=bool(raw.get("reflection", {}).get("structured_recovery", False)),
                     structured_abstraction=bool(raw.get("reflection", {}).get("structured_abstraction", False)),
+                    distilled_curation=bool(raw.get("reflection", {}).get("distilled_curation", False)),
                 ))
                 if paired_mode
                 else (
@@ -394,6 +420,9 @@ def run_from_config(path: str | Path, *, agents: Any | None = None, optimize_fn=
                     ),
                     structured_abstraction=bool(
                         raw.get("reflection", {}).get("structured_abstraction", False)
+                    ),
+                    distilled_curation=bool(
+                        raw.get("reflection", {}).get("distilled_curation", False)
                     ),
                 ))
                 if paired_mode

@@ -103,6 +103,7 @@ class PlaybookHPCExecutor:
         maximum_bullet_tokens: int | None = None,
         paired_reflector_structured_recovery: bool = False,
         paired_reflector_structured_abstraction: bool = False,
+        paired_reflector_distilled_curation: bool = False,
         checkpoint_import_run_dir: Path | None = None,
         checkpoint_import_manifest_sha256: str | None = None,
         checkpoint_import_roles: Sequence[str] = (),
@@ -118,6 +119,9 @@ class PlaybookHPCExecutor:
         )
         self.paired_reflector_structured_abstraction = (
             paired_reflector_structured_abstraction
+        )
+        self.paired_reflector_distilled_curation = (
+            paired_reflector_distilled_curation
         )
         self.checkpoint_import_run_dir = checkpoint_import_run_dir
         self.checkpoint_import_manifest_sha256 = checkpoint_import_manifest_sha256
@@ -434,6 +438,7 @@ class PlaybookHPCExecutor:
                     playbook=playbook,
                     structured_recovery=self.paired_reflector_structured_recovery,
                     structured_abstraction=self.paired_reflector_structured_abstraction,
+                    distilled_curation=self.paired_reflector_distilled_curation,
                 )
             elif role == "curator":
                 proposed = apply_curator_operations(playbook, agent_output)
