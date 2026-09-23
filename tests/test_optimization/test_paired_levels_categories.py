@@ -688,6 +688,46 @@ def test_fact_links_and_curator_self_check_reject_invalid_references():
         validate_curator_self_check(output, [])
 
 
+def test_cli_binds_fact_links_to_controller_review_validator():
+    from src.optimization.playbook_cli import _paired_review_validator
+
+    validate = _paired_review_validator({
+        "reflection": {
+            "structured_recovery": True,
+            "structured_abstraction": True,
+            "distilled_curation": True,
+            "fact_links": True,
+        }
+    })
+    report = {
+        "instance_id": "pair-a",
+        "pair_analysis": "The unresolved Plan omits an affected consumer.",
+        "side_findings": [
+            {"side": "resolved", "plan_concerns": []},
+            {"side": "unresolved", "plan_concerns": [{
+                "concern": "An affected consumer is omitted.",
+                "decision_time_support": "The repository exposes two consumers.",
+                "coder_response": "followed",
+                "outcome_relation": "The implementation retained the omission.",
+            }]},
+        ],
+        "reusable_concerns": [{
+            "developer_concern": "The Plan changes shared behavior but omits an affected consumer.",
+            "decision_time_basis": "The repository exposes two consumers.",
+            "pair_evidence": "The unresolved implementation retained the omission.",
+            "supporting_side_findings": [
+                {"side": "unresolved", "finding_number": 1}
+            ],
+        }],
+        "uncertainty": None,
+        "bullet_tags": [
+            {"id": "plan-00001", "tag": "neutral", "attribution": None}
+        ],
+    }
+
+    assert validate(report, instance_id="pair-a", playbook=book()) == report
+
+
 def test_lightweight_self_check_config_requires_fact_links(tmp_path):
     config = tmp_path / "config.yaml"
     config.write_text(

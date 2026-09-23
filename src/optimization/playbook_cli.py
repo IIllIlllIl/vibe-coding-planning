@@ -50,6 +50,27 @@ def _deployment_resources(h: dict) -> tuple[int, str]:
     return int(cpus), mem
 
 
+def _paired_review_validator(raw: dict[str, Any]):
+    """Bind the configured paired-Reflection schema once for every backend."""
+
+    reflection = raw.get("reflection", {})
+
+    def validate(output, *, instance_id, playbook):
+        return validate_paired_reflector_review(
+            output,
+            instance_id=instance_id,
+            playbook=playbook,
+            structured_recovery=bool(reflection.get("structured_recovery", False)),
+            structured_abstraction=bool(
+                reflection.get("structured_abstraction", False)
+            ),
+            distilled_curation=bool(reflection.get("distilled_curation", False)),
+            fact_links=bool(reflection.get("fact_links", False)),
+        )
+
+    return validate
+
+
 def _resolve_config_path(config_path: Path, raw: str) -> Path:
     path = Path(raw)
     return path if path.is_absolute() else config_path.resolve().parents[1] / path
@@ -260,8 +281,10 @@ def run_from_config(path: str | Path, *, agents: Any | None = None, optimize_fn=
     if paired_mode:
         score_table = None
         invalid_score = _paired_invalid_score(raw)
+        paired_review_validator = _paired_review_validator(raw)
     else:
         score_table, invalid_score = _score_table(raw)
+        paired_review_validator = None
     if agents is None and raw.get("execution", {}).get("backend") == "hpc_slurm":
         # Curator remains repository-free even with repository-aware Reflectors.
         # Validate its environment before launching expensive Checker waves.
@@ -371,12 +394,7 @@ def run_from_config(path: str | Path, *, agents: Any | None = None, optimize_fn=
             harmful_weight=float(raw["length"].get("harmful_pruning_weight", 5.0)),
             global_counter_path=run_dir / "global_counter_ledger.json",
             review_validator=(
-                (lambda output, *, instance_id, playbook: validate_paired_reflector_review(
-                    output, instance_id=instance_id, playbook=playbook,
-                    structured_recovery=bool(raw.get("reflection", {}).get("structured_recovery", False)),
-                    structured_abstraction=bool(raw.get("reflection", {}).get("structured_abstraction", False)),
-                    distilled_curation=bool(raw.get("reflection", {}).get("distilled_curation", False)),
-                ))
+                paired_review_validator
                 if paired_mode
                 else (
                     validate_repo_reflector_review
@@ -430,20 +448,7 @@ def run_from_config(path: str | Path, *, agents: Any | None = None, optimize_fn=
             harmful_weight=float(raw["length"].get("harmful_pruning_weight", 5.0)),
             global_counter_path=run_dir / "global_counter_ledger.json",
             review_validator=(
-                (lambda output, *, instance_id, playbook: validate_paired_reflector_review(
-                    output,
-                    instance_id=instance_id,
-                    playbook=playbook,
-                    structured_recovery=bool(
-                        raw.get("reflection", {}).get("structured_recovery", False)
-                    ),
-                    structured_abstraction=bool(
-                        raw.get("reflection", {}).get("structured_abstraction", False)
-                    ),
-                    distilled_curation=bool(
-                        raw.get("reflection", {}).get("distilled_curation", False)
-                    ),
-                ))
+                paired_review_validator
                 if paired_mode
                 else (
                     validate_repo_reflector_review
