@@ -2,13 +2,16 @@
 
 from __future__ import annotations
 
+from contextlib import contextmanager
 import hashlib
 import json
 import os
 from pathlib import Path
 import re
+import shutil
 import subprocess
-from typing import Any, Mapping
+import tempfile
+from typing import Any, Iterator, Mapping
 
 from src.optimization.playbook_runtime import (
     PlaybookAgentOutputContractError,
@@ -33,8 +36,40 @@ def _codex_binary(model_config: Mapping[str, Any]) -> str:
     return str(Path(os.path.expandvars(raw)).expanduser())
 
 
+def _codex_auth_file(model_config: Mapping[str, Any]) -> Path:
+    raw = str(
+        model_config.get("codex_auth_file", "${HOME}/.codex/auth.json")
+    ).strip()
+    if not raw:
+        raise ValueError("Codex runtime requires a non-empty codex_auth_file")
+    path = Path(os.path.expandvars(raw)).expanduser()
+    if not path.is_file():
+        raise CodexCLIError("Codex authentication authority is missing")
+    return path
+
+
+@contextmanager
+def _isolated_codex_environment(
+    model_config: Mapping[str, Any],
+) -> Iterator[dict[str, str]]:
+    """Give one Agent private volatile Codex state and a transient auth copy."""
+    auth_source = _codex_auth_file(model_config)
+    with tempfile.TemporaryDirectory(prefix="vibe-codex-home-") as raw_home:
+        codex_home = Path(raw_home)
+        codex_home.chmod(0o700)
+        private_auth = codex_home / "auth.json"
+        shutil.copyfile(auth_source, private_auth)
+        private_auth.chmod(0o600)
+        environment = os.environ.copy()
+        environment["CODEX_HOME"] = str(codex_home)
+        yield environment
+
+
 def _runtime_preflight(
-    model_config: Mapping[str, Any], *, working_directory: Path
+    model_config: Mapping[str, Any],
+    *,
+    working_directory: Path,
+    environment: Mapping[str, str],
 ) -> list[dict[str, Any]]:
     """Fail before inference when the pinned CLI or its sandbox is unusable."""
     binary = _codex_binary(model_config)
@@ -44,6 +79,7 @@ def _runtime_preflight(
         text=True,
         capture_output=True,
         check=False,
+        env=dict(environment),
     )
     checks.append(
         {
@@ -81,6 +117,7 @@ def _runtime_preflight(
         text=True,
         capture_output=True,
         check=False,
+        env=dict(environment),
     )
     checks.append(
         {
@@ -181,21 +218,25 @@ def run_codex_json_agent(
         f"Task:\n{task.strip()}{receipt_instruction}\n\n"
         f"Input:\n{user.strip()}\n"
     )
-    preflight_checks = _runtime_preflight(
-        model_config, working_directory=working_directory
-    )
-    command = _codex_command(
-        model_config,
-        working_directory=working_directory,
-        output_path=output_path,
-    )
-    completed = subprocess.run(
-        command,
-        input=prompt,
-        text=True,
-        capture_output=True,
-        check=False,
-    )
+    with _isolated_codex_environment(model_config) as environment:
+        preflight_checks = _runtime_preflight(
+            model_config,
+            working_directory=working_directory,
+            environment=environment,
+        )
+        command = _codex_command(
+            model_config,
+            working_directory=working_directory,
+            output_path=output_path,
+        )
+        completed = subprocess.run(
+            command,
+            input=prompt,
+            text=True,
+            capture_output=True,
+            check=False,
+            env=environment,
+        )
     events: list[dict[str, Any]] = []
     malformed_events: list[str] = []
     for line in completed.stdout.splitlines():

@@ -1283,15 +1283,23 @@ Slurm's private `/tmp`. Consequently, all Reflectors and the Curator lacked
 usable evidence even though the run reached a terminal Controller state. Their
 empty outputs are operationally invalid and are not scientific results.
 
+The v4 recovery pinned Codex to the compute-node-tested 0.155.1 binary and
+successfully exposed a second transport defect. Twelve concurrent processes
+shared mutable `~/.codex/tmp` and `shell_snapshots`; one process could remove a
+sandbox launcher while another still needed it. The evidence-receipt contract
+correctly rejected the resulting evidence-free outputs. The run was stopped,
+and its Reflector/Curator artifacts are operationally invalid.
+
 The current prepared recovery is
-`configs/gepa_verified_paired_ace_codex_smoke12_v4_pinned_20260924.yaml`. It
-imports only the fingerprint-verified completed v1 Checker outputs and starts
-fresh at the Reflector boundary. Codex is pinned to the compute-node-tested
-0.155.1 binary. Every call checks the exact version and read-only sandbox before
-inference, and every evidence-backed Codex response must return the exact
-evidence-manifest SHA-256 for Host verification. Missing or mismatched receipts
-remain operational failures and retry; they cannot become empty scientific
-Reflections. The exposed 12/4 development sample, prompt, Seed, models, budget,
-Iris one CPU/4G resources, 35-minute Agent limit, one-minute polling, and
-twelve-task concurrency are otherwise unchanged. This is a flow, model-fit,
-and prompt diagnostic, not held-out evidence.
+`configs/gepa_verified_paired_ace_codex_smoke12_v5_isolated_20260924.yaml`. It
+again imports only the fingerprint-verified v1 Checker outputs and starts fresh
+at the Reflector boundary. Every native Codex call gets a distinct temporary
+`CODEX_HOME`, containing only a mode-0600 transient copy of the private auth
+authority. Preflight and inference share that isolated environment; cleanup
+removes it after the call. A 12-way Iris diagnostic produced 12/12 exact
+manifest SHA-256 values with no sandbox or missing-file errors. Exact version,
+sandbox, and evidence-receipt checks remain fail-closed. The exposed 12/4
+development sample, prompt, Seed, models, budget, Iris one CPU/4G resources,
+35-minute Agent limit, one-minute polling, and twelve-task concurrency are
+otherwise unchanged. This is a flow, model-fit, and prompt diagnostic, not
+held-out evidence.

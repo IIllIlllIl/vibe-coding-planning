@@ -24,8 +24,9 @@ proposal. The Curator maintains the playbook with `ADD`, `UPDATE`, `MERGE`, and
 category, fact-link, coverage-disposition, self-check, risk-analysis, and
 per-bullet length contracts. The paired score and frozen 12/4 development
 sample are unchanged. Its prepared smoke is the current next-run identity;
-it pins the compute-node-tested Codex CLI 0.155.1 and resumes from the frozen
-Checker boundary. Preparation does not authorize launch.
+it pins the compute-node-tested Codex CLI 0.155.1, gives every Agent isolated
+volatile Codex state, and resumes from the frozen Checker boundary. Preparation
+does not authorize launch.
 
 The prior linked-Level prompt authority,
 `prompts/offline_gepa_paired_levels_ace_core_v7_20260923.yaml`, and its
@@ -132,8 +133,10 @@ labels, image manifests, output roots, or baseline identities in a new run.
 | `gepa_verified_paired_ace_codex_smoke12_v2_idfix_supervisor_20260924.yaml` | Frozen Supervisor identity for the failed v2 recovery; do not relaunch. |
 | `gepa_verified_paired_ace_codex_smoke12_v3_terramax_solhigh_20260924.yaml` | Operationally invalid recovery provenance. Codex CLI 0.156.1 failed to build its read-only sandbox under Slurm's private `/tmp`; all Reflectors and the Curator lacked usable evidence. Do not treat its empty outputs as scientific results. |
 | `gepa_verified_paired_ace_codex_smoke12_v3_terramax_solhigh_supervisor_20260924.yaml` | Frozen Supervisor identity for the invalid v3 run; do not relaunch. |
-| `gepa_verified_paired_ace_codex_smoke12_v4_pinned_20260924.yaml` | Prepared Reflector-boundary recovery. It imports only fingerprint-verified v1 Checker outputs, pins Codex CLI 0.155.1, checks the sandbox before inference, and requires a Host-validated evidence-manifest receipt. |
-| `gepa_verified_paired_ace_codex_smoke12_v4_pinned_supervisor_20260924.yaml` | Prepared one-minute-poll Iris Supervisor identity for v4; presence does not authorize launch. |
+| `gepa_verified_paired_ace_codex_smoke12_v4_pinned_20260924.yaml` | Stopped operationally incomplete recovery. Pinning 0.155.1 fixed the Slurm mount incompatibility, but 12 concurrent processes shared mutable `~/.codex` state and raced while cleaning sandbox launchers. Retain as failure provenance; do not relaunch. |
+| `gepa_verified_paired_ace_codex_smoke12_v4_pinned_supervisor_20260924.yaml` | Frozen Supervisor identity for the stopped v4 run; do not relaunch. |
+| `gepa_verified_paired_ace_codex_smoke12_v5_isolated_20260924.yaml` | Prepared Reflector-boundary recovery. It imports only fingerprint-verified v1 Checker outputs, pins 0.155.1, isolates `CODEX_HOME` per Agent, checks the sandbox before inference, and requires a Host-validated evidence receipt. |
+| `gepa_verified_paired_ace_codex_smoke12_v5_isolated_supervisor_20260924.yaml` | Prepared one-minute-poll Iris Supervisor identity for v5; presence does not authorize launch. |
 | `gepa_verified_paired_learning12_smoke_v6_binary_seed_20260924.yaml` | Prepared fresh binary full cycle from the one-rule Seed on the same 12/4 development pairs as the Level smoke. |
 | `gepa_verified_paired_learning12_smoke_v6_binary_manual_20260924.yaml` | Prepared fresh binary full cycle from the audited ten-rule manual playbook on the same 12/4 pairs. |
 | `gepa_verified_paired_learning12_smoke_v6_binary_sequence_supervisor_20260924.yaml` | Prepared one-minute-poll Iris sequence for the Seed and manual-playbook no-Level ablation phases; presence alone does not authorize launch. |

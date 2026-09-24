@@ -118,16 +118,24 @@ limitation must be audited in smoke before formal use.
 Native Codex under Slurm must use an exact, compute-node-tested CLI version.
 Codex CLI 0.156.1 cannot build its bubblewrap sandbox when Slurm provides the
 private nested `/tmp/<job-id>` mount used on Iris; the current verified pin is
-0.155.1. Before inference, the worker checks the exact CLI version and runs a
-read-only sandbox probe in the Agent working directory. Evidence-backed Codex
-roles must also read their immutable evidence manifest and return its exact
-SHA-256 as a transport receipt. A failed preflight or missing/mismatched receipt
-is an operational failure eligible for Agent retry, never an empty scientific
-Reflection or Curator decision. Preserve the raw terminal response and receipt
-record, and do not disable the Codex sandbox or let the Host repair semantic
-Agent output. A recovery after this failure may import compatible completed
-Checker outputs, but must restart at the Reflector boundary and exclude the
-invalid Reflector and Curator artifacts.
+0.155.1. Concurrent native Codex processes must not share mutable
+`$CODEX_HOME/tmp` or `shell_snapshots`: 12-way Slurm execution exposed cleanup
+races that removed another process's sandbox launcher. Each Agent therefore
+receives a distinct temporary `CODEX_HOME`; only `auth.json` is copied into it
+with mode 0600, and the complete directory is deleted when the call ends. The
+private authentication authority remains outside configs, commands, logs, and
+retained experiment artifacts.
+
+Before inference, the worker checks the exact CLI version and runs a read-only
+sandbox probe using the same isolated environment as the real call.
+Evidence-backed Codex roles must also read their immutable evidence manifest
+and return its exact SHA-256 as a transport receipt. A failed preflight or
+missing/mismatched receipt is an operational failure eligible for Agent retry,
+never an empty scientific Reflection or Curator decision. Preserve the raw
+terminal response and receipt record, and do not disable the Codex sandbox or
+let the Host repair semantic Agent output. A recovery after this failure may
+import compatible completed Checker outputs, but must restart at the Reflector
+boundary and exclude the invalid Reflector and Curator artifacts.
 
 For ACE-style playbook maintenance, semantic edits belong to the Curator. The
 Host may apply tags, allocate IDs, validate schemas, execute operations, record

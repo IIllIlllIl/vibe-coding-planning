@@ -1,8 +1,10 @@
 from __future__ import annotations
 
+from concurrent.futures import ThreadPoolExecutor
 import hashlib
 import json
 from pathlib import Path
+import threading
 from types import SimpleNamespace
 
 import pytest
@@ -24,12 +26,21 @@ from src.optimization.paired_playbook import (
 )
 
 
-def _model() -> dict:
-    return {
+def _model(auth_file: Path | None = None) -> dict:
+    model = {
         "executor": "codex_cli",
         "model": "gpt-5.6-sol",
         "reasoning_effort": "high",
     }
+    if auth_file is not None:
+        model["codex_auth_file"] = str(auth_file)
+    return model
+
+
+def _model_with_auth(tmp_path: Path) -> dict:
+    auth_file = tmp_path / "auth.json"
+    auth_file.write_text('{"auth":"test-only"}\n', encoding="utf-8")
+    return _model(auth_file)
 
 
 def test_codex_cli_uses_ephemeral_read_only_stdin_and_parses_final_json(
@@ -54,7 +65,7 @@ def test_codex_cli_uses_ephemeral_read_only_stdin_and_parses_final_json(
 
     monkeypatch.setattr(codex_cli_runtime.subprocess, "run", fake_run)
     result, trajectory = codex_cli_runtime.run_codex_json_agent(
-        model_config=_model(),
+        model_config=_model_with_auth(tmp_path),
         working_directory=tmp_path,
         attempt_dir=tmp_path / "attempt",
         system="System instructions",
@@ -72,6 +83,8 @@ def test_codex_cli_uses_ephemeral_read_only_stdin_and_parses_final_json(
     assert "Evidence at /private/evidence" in captured["input"]
     assert captured["check"] is False
     assert "timeout" not in captured
+    assert captured["env"]["CODEX_HOME"]
+    assert not Path(captured["env"]["CODEX_HOME"]).exists()
     assert trajectory[3]["content"]["events"][0]["thread_id"] == "thread-1"
 
 
@@ -95,7 +108,7 @@ def test_codex_cli_preserves_failed_event_trajectory(
     )
     with pytest.raises(codex_cli_runtime.CodexCLIError) as caught:
         codex_cli_runtime.run_codex_json_agent(
-            model_config=_model(),
+            model_config=_model_with_auth(tmp_path),
             working_directory=tmp_path,
             attempt_dir=tmp_path / "attempt",
             system="system",
@@ -117,7 +130,10 @@ def test_codex_cli_rejects_version_mismatch_before_inference(
     monkeypatch.setattr(codex_cli_runtime.subprocess, "run", fake_run)
     with pytest.raises(codex_cli_runtime.CodexCLIError, match="expected Codex CLI"):
         codex_cli_runtime.run_codex_json_agent(
-            model_config={**_model(), "codex_version": "0.155.1"},
+            model_config={
+                **_model_with_auth(tmp_path),
+                "codex_version": "0.155.1",
+            },
             working_directory=tmp_path,
             attempt_dir=tmp_path / "attempt",
             system="system",
@@ -155,7 +171,10 @@ def test_codex_cli_requires_exact_evidence_receipt(
 
     monkeypatch.setattr(codex_cli_runtime.subprocess, "run", fake_run)
     output, trajectory = codex_cli_runtime.run_codex_json_agent(
-        model_config={**_model(), "codex_version": "0.155.1"},
+        model_config={
+            **_model_with_auth(tmp_path),
+            "codex_version": "0.155.1",
+        },
         working_directory=tmp_path,
         attempt_dir=tmp_path / "attempt",
         system="system",
@@ -186,7 +205,7 @@ def test_codex_cli_treats_missing_evidence_receipt_as_operational_failure(
     monkeypatch.setattr(codex_cli_runtime.subprocess, "run", fake_run)
     with pytest.raises(codex_cli_runtime.CodexEvidenceAccessError):
         codex_cli_runtime.run_codex_json_agent(
-            model_config=_model(),
+            model_config=_model_with_auth(tmp_path),
             working_directory=tmp_path,
             attempt_dir=tmp_path / "attempt",
             system="system",
@@ -194,6 +213,53 @@ def test_codex_cli_treats_missing_evidence_receipt_as_operational_failure(
             task="task",
             evidence_manifest_path=manifest,
         )
+
+
+def test_parallel_codex_calls_use_distinct_transient_homes(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    auth_file = tmp_path / "source-auth.json"
+    auth_file.write_text('{"auth":"test-only"}\n', encoding="utf-8")
+    barrier = threading.Barrier(2)
+    exec_homes: list[Path] = []
+
+    def fake_run(command, **kwargs):
+        home = Path(kwargs["env"]["CODEX_HOME"])
+        assert (home / "auth.json").read_bytes() == auth_file.read_bytes()
+        assert (home / "auth.json").stat().st_mode & 0o777 == 0o600
+        if command[1:] == ["--version"]:
+            return SimpleNamespace(returncode=0, stdout="codex-cli 0.155.1\n", stderr="")
+        if command[1] == "sandbox":
+            return SimpleNamespace(returncode=0, stdout="", stderr="")
+        exec_homes.append(home)
+        barrier.wait(timeout=5)
+        output = Path(command[command.index("--output-last-message") + 1])
+        output.write_text('{"reasoning":"ok","operations":[]}', encoding="utf-8")
+        return SimpleNamespace(returncode=0, stdout="", stderr="")
+
+    monkeypatch.setattr(codex_cli_runtime.subprocess, "run", fake_run)
+
+    def invoke(index: int):
+        work = tmp_path / f"work-{index}"
+        work.mkdir()
+        return codex_cli_runtime.run_codex_json_agent(
+            model_config=_model(auth_file),
+            working_directory=work,
+            attempt_dir=tmp_path / f"attempt-{index}",
+            system="system",
+            user="user",
+            task="task",
+        )[0]
+
+    with ThreadPoolExecutor(max_workers=2) as pool:
+        results = list(pool.map(invoke, range(2)))
+
+    assert results == [
+        {"reasoning": "ok", "operations": []},
+        {"reasoning": "ok", "operations": []},
+    ]
+    assert len(set(exec_homes)) == 2
+    assert all(not home.exists() for home in exec_homes)
 
 
 def test_codex_model_contract_keeps_checker_on_miniswe() -> None:
@@ -612,12 +678,12 @@ def test_ace_codex_terramax_solhigh_resume_is_frozen_and_imports_only_checkers()
     assert "--require-clean-worktree" in arguments
 
 
-def test_ace_codex_pinned_resume_restarts_at_reflector_boundary() -> None:
+def test_ace_codex_isolated_resume_restarts_at_reflector_boundary() -> None:
     config_path = Path(
-        "configs/gepa_verified_paired_ace_codex_smoke12_v4_pinned_20260924.yaml"
+        "configs/gepa_verified_paired_ace_codex_smoke12_v5_isolated_20260924.yaml"
     )
     supervisor_path = Path(
-        "configs/gepa_verified_paired_ace_codex_smoke12_v4_pinned_supervisor_20260924.yaml"
+        "configs/gepa_verified_paired_ace_codex_smoke12_v5_isolated_supervisor_20260924.yaml"
     )
     raw = yaml.safe_load(config_path.read_text(encoding="utf-8"))
     supervisor = yaml.safe_load(supervisor_path.read_text(encoding="utf-8"))
@@ -627,10 +693,11 @@ def test_ace_codex_pinned_resume_restarts_at_reflector_boundary() -> None:
     pinned = "${HOME}/.local/lib/vibe-codex/0.155.1/bin/codex"
     for role in ("reflector", "curator"):
         assert raw["models"][role]["codex_binary"] == pinned
+        assert raw["models"][role]["codex_auth_file"] == "${HOME}/.codex/auth.json"
         assert raw["models"][role]["codex_version"] == "0.155.1"
     assert raw["checkpoint_import"]["roles"] == ["paired_repo_checker"]
     assert "paired_repo_reflector" not in raw["checkpoint_import"]["roles"]
-    assert raw["run_id"] == "verified-paired-ace-codex-smoke12-v4-pinned-20260924"
+    assert raw["run_id"] == "verified-paired-ace-codex-smoke12-v5-isolated-20260924"
     assert raw["readiness"] == {"runnable": True, "launched": False, "missing": []}
     arguments = supervisor["arguments"]
     assert arguments[arguments.index("--gepa-config") + 1] == str(config_path)

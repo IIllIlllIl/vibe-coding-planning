@@ -189,6 +189,10 @@ def _validate_agent_executors(raw: dict[str, Any]) -> None:
                 raise ValueError(f"models.{role}.reasoning_effort is unsupported")
             if "codex_binary" in model and not str(model["codex_binary"]).strip():
                 raise ValueError(f"models.{role}.codex_binary must be non-empty")
+            if "codex_auth_file" in model and not str(
+                model["codex_auth_file"]
+            ).strip():
+                raise ValueError(f"models.{role}.codex_auth_file must be non-empty")
             if "codex_version" in model and not re.fullmatch(
                 r"\d+\.\d+\.\d+(?:[-+][A-Za-z0-9.-]+)?",
                 str(model["codex_version"]),
