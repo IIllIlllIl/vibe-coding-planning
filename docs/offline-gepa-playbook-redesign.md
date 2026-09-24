@@ -1290,7 +1290,7 @@ sandbox launcher while another still needed it. The evidence-receipt contract
 correctly rejected the resulting evidence-free outputs. The run was stopped,
 and its Reflector/Curator artifacts are operationally invalid.
 
-The current prepared recovery is
+The completed recovery is
 `configs/gepa_verified_paired_ace_codex_smoke12_v5_isolated_20260924.yaml`. It
 again imports only the fingerprint-verified v1 Checker outputs and starts fresh
 at the Reflector boundary. Every native Codex call gets a distinct temporary
@@ -1303,3 +1303,20 @@ development sample, prompt, Seed, models, budget, Iris one CPU/4G resources,
 35-minute Agent limit, one-minute polling, and twelve-task concurrency are
 otherwise unchanged. This is a flow, model-fit, and prompt diagnostic, not
 held-out evidence.
+
+The prepared Curator-boundary replay is
+`configs/gepa_verified_paired_ace_codex_smoke12_v6_curator_readability_20260924.yaml`.
+It hash-binds the completed v5 run manifest and imports exact matching
+`paired_repo_checker` and `paired_repo_reflector` outputs. It therefore does
+not resample the pair analysis. Only the Curator is rerun before any proposed
+candidate receives a fresh Checker evaluation.
+
+The v3 prompt used by this replay leaves the Checker, Reflector, schemas, and
+Curator instance contract byte-for-byte unchanged from v2. Its only scientific
+prompt change asks the Curator for one short, self-contained rejection
+condition per bullet, plain English, case-independent wording, a preference
+for at most 32 tokens, and separation of distinct concerns. The runtime also
+restores the existing mechanical `maximum_bullet_tokens: 64` validation; an
+overlong Curator artifact is rejected and retried rather than silently
+rewritten. This replay tests readability correction on frozen reflections and
+remains development evidence rather than a generalization result.

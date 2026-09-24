@@ -707,3 +707,77 @@ def test_ace_codex_isolated_resume_restarts_at_reflector_boundary() -> None:
         arguments[arguments.index("--cpus") + 1],
         arguments[arguments.index("--mem") + 1],
     ) == ("1", "4G")
+
+
+def test_ace_codex_readability_resume_restarts_at_curator_boundary() -> None:
+    config_path = Path(
+        "configs/gepa_verified_paired_ace_codex_smoke12_v6_curator_readability_20260924.yaml"
+    )
+    supervisor_path = Path(
+        "configs/gepa_verified_paired_ace_codex_smoke12_v6_curator_readability_supervisor_20260924.yaml"
+    )
+    prompt_path = Path(
+        "configs/prompts/offline_gepa_paired_binary_ace_codex_v3_readable_20260924.yaml"
+    )
+    previous_prompt_path = Path(
+        "configs/prompts/offline_gepa_paired_binary_ace_codex_v2_20260924.yaml"
+    )
+    raw = yaml.safe_load(config_path.read_text(encoding="utf-8"))
+    supervisor = yaml.safe_load(supervisor_path.read_text(encoding="utf-8"))
+    prompts = yaml.safe_load(prompt_path.read_text(encoding="utf-8"))
+    previous_prompts = yaml.safe_load(
+        previous_prompt_path.read_text(encoding="utf-8")
+    )
+
+    _validate_frozen_inputs(config_path.resolve(), raw)
+    _validate_agent_executors(raw)
+    assert raw["run_id"] == (
+        "verified-paired-ace-codex-smoke12-v6-curator-readability-20260924"
+    )
+    assert raw["checkpoint_import"] == {
+        "source_run_dir": (
+            "/scratch/users/twang/vibe-coding-planning/run_state/output/"
+            "SWE-bench_Verified/gepa-paired-repo-concern-playbook-runs/"
+            "ace-codex-smoke12-v5-isolated-20260924"
+        ),
+        "source_run_manifest_sha256": (
+            "0602ec8f80af6206a88b96f7cb75a984c22724c6be4aa57256882d9cdb0d920b"
+        ),
+        "roles": ["paired_repo_checker", "paired_repo_reflector"],
+    }
+    assert raw["length"]["maximum_bullet_tokens"] == 64
+    assert raw["refiner"] == {"enabled": False}
+    assert raw["readiness"] == {
+        "runnable": True,
+        "launched": False,
+        "missing": [],
+    }
+
+    assert prompts["checker_system"] == previous_prompts["checker_system"]
+    assert prompts["checker_instance"] == previous_prompts["checker_instance"]
+    assert prompts["reflector_codex_system"] == previous_prompts[
+        "reflector_codex_system"
+    ]
+    assert prompts["reflector_codex_instance"] == previous_prompts[
+        "reflector_codex_instance"
+    ]
+    assert prompts["curator_codex_instance"] == previous_prompts[
+        "curator_codex_instance"
+    ]
+    curator = " ".join(prompts["curator_codex_system"].split())
+    assert "one short, self-contained rejection condition" in curator
+    assert "one concern that a developer can check as one question" in curator
+    assert "plain English and common software terms" in curator
+    assert "Prefer 32 tokens or fewer" in curator
+    assert "longer than 64 tokens is invalid" in curator
+
+    arguments = supervisor["arguments"]
+    assert supervisor["session"] == raw["run_id"]
+    assert arguments[arguments.index("--gepa-config") + 1] == str(config_path)
+    assert arguments[arguments.index("--target-iterations") + 1] == "1"
+    assert arguments[arguments.index("--poll-interval") + 1] == "60"
+    assert (
+        arguments[arguments.index("--cpus") + 1],
+        arguments[arguments.index("--mem") + 1],
+    ) == ("1", "4G")
+    assert "--require-clean-worktree" in arguments
