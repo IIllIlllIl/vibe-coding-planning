@@ -347,6 +347,7 @@ def test_repo_hpc_checker_manifest_has_repo_but_no_outcome_or_counters(
     assert "helpful" not in serialized
     script = submitted[0].read_text(encoding="utf-8")
     assert "module load tools/Apptainer" in script
+    assert 'export PATH="$HOME/.local/bin:$PATH"' in script
     assert "#SBATCH --array=0" in script
 
 

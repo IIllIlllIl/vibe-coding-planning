@@ -212,7 +212,7 @@ class HPCPlaybookProposalAgents:
             lambda value: value.render_for_checker()
         )
         self.require_concern_coverage = require_concern_coverage
-        if evidence_contract not in {"legacy_v1", "distilled_v1"}:
+        if evidence_contract not in {"legacy_v1", "distilled_v1", "ace_v1"}:
             raise ValueError("unknown Curator evidence contract")
         if evidence_contract == "distilled_v1" and require_concern_coverage:
             raise ValueError(
@@ -365,6 +365,26 @@ class HPCPlaybookProposalAgents:
         reflection_index = []
         concern_ids: list[str] = []
         for review in reviews:
+            if self.evidence_contract == "ace_v1":
+                numbered = []
+                for index, insight in enumerate(
+                    review.get("key_insights", []), start=1
+                ):
+                    concern_id = f'{review["instance_id"]}:c{index}'
+                    concern_ids.append(concern_id)
+                    numbered.append({"id": concern_id, **dict(insight)})
+                reflection_index.append(
+                    {
+                        "instance_id": review.get("instance_id"),
+                        "reasoning": review.get("reasoning"),
+                        "error_identification": review.get("error_identification"),
+                        "root_cause_analysis": review.get("root_cause_analysis"),
+                        "correct_approach": review.get("correct_approach"),
+                        "key_insights": numbered,
+                        "bullet_tags": review.get("bullet_tags", []),
+                    }
+                )
+                continue
             if self.evidence_contract == "distilled_v1":
                 numbered = []
                 linked_findings: dict[str, dict[str, Any]] = {}
@@ -466,7 +486,7 @@ class HPCPlaybookProposalAgents:
                         ],
                         "optional_files": ["case_reflections.json"],
                     }
-                    if self.evidence_contract == "distilled_v1"
+                    if self.evidence_contract in {"distilled_v1", "ace_v1"}
                     else {}
                 ),
                 **(

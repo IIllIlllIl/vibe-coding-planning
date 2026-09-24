@@ -14,24 +14,31 @@ the shared supervisor supplies canonical storage paths.
 
 ## Experiment Inventory
 
-Current paired-learning prompt authority:
-`prompts/offline_gepa_paired_levels_ace_core_v7_20260923.yaml` adds explicit
-reusable-concern-to-side-finding links and a lightweight Curator self-check to
-the v6 ACE role skeleton. The completed v5 linked configs enable
-`reflection.fact_links: true` and
-`curation.self_check_contract: lightweight_v1`. Both phases import their exact
-historical parent Checker outputs because the v6 and v7 Checker prompts are
-identical; candidate evaluation remains fresh. The sequence did not replay a
-Checker as a Curator self-check.
+Current paired-learning development prompt authority:
+`prompts/offline_gepa_paired_binary_ace_codex_v1_20260924.yaml` is an
+ACE-near, no-Level baseline. The repository-aware binary Checker remains a
+no-thinking DeepSeek mini-swe-agent. One Codex GPT-5.6 high-reasoning
+Reflector analyzes each pair, and one Codex Curator maintains the playbook with
+`ADD`, `UPDATE`, `MERGE`, and `REMOVE`. The prompt deliberately omits the prior
+category, fact-link, coverage-disposition, self-check, risk-analysis, and
+per-bullet length contracts. The paired score and frozen 12/4 development
+sample are unchanged. Its prepared smoke is the current next-run identity;
+preparation does not authorize launch.
 
-The current prepared formal identity is
+The prior linked-Level prompt authority,
+`prompts/offline_gepa_paired_levels_ace_core_v7_20260923.yaml`, and its
+completed smoke/formal runs are retained as development provenance. They are
+not templates for the ACE-near Codex baseline.
+
+The completed linked-Level formal identity is
 `gepa_verified_paired_levels_linked_manual138_formal24_8it_v1_20260924.yaml`.
 It starts a fresh candidate tree from the audited ten-rule manual playbook,
 uses the conservative clean138 train selection and original 36-pair
 development validation split, and applies the v7 linked Level workflow for
 eight proposals with 24-pair Reflection minibatches. Its supervisor targets
 Iris at one CPU/4G per task, submits all unfinished Agent elements to Slurm,
-and requires a clean worktree. Preparation does not authorize launch.
+and requires a clean worktree. This run is historical development evidence,
+not the current prompt or launch template.
 The completed v4 sequence first ran
 `gepa_verified_paired_learning12_smoke_v4_ace_core_ref_cur_20260923.yaml`
 from frozen Seed Checker outputs, then ran
@@ -115,6 +122,9 @@ labels, image manifests, output roots, or baseline identities in a new run.
 | `gepa_verified_paired_learning12_smoke_v5_linked_manual_20260923.yaml` | Completed v7 manual-playbook full cycle: 19 linked concerns produced three additions, which the minibatch screen rejected. Historical development provenance. |
 | `gepa_verified_paired_learning12_smoke_v5_linked_sequence_supervisor_20260923.yaml` | Historical initial v7 sequence identity; recovery completed both phases. Do not relaunch. |
 | `prompts/offline_gepa_paired_binary_ace_core_v1_20260924.yaml` | No-Level ablation of the v7 linked ACE core: binary per-rule Checker decisions with the same linked Reflection, Curator maintenance, and self-check contracts. |
+| `prompts/offline_gepa_paired_binary_ace_codex_v1_20260924.yaml` | Current ACE-near baseline prompt: binary repository-aware Checker, plural ACE-style pair Reflection, and sectionless `ADD`/`UPDATE`/`MERGE`/`REMOVE` curation with no Level or legacy self-check contract. |
+| `gepa_verified_paired_ace_codex_smoke12_v1_20260924.yaml` | Prepared one-proposal smoke from the atomic one-rule Seed on the exposed 12/4 development pairs; DeepSeek no-thinking Checker plus Codex GPT-5.6 high Reflector/Curator, Refiner disabled, Iris 1 CPU/4G, and an explicit twelve-Agent subscription-stability cap. |
+| `gepa_verified_paired_ace_codex_smoke12_v1_supervisor_20260924.yaml` | Prepared one-minute-poll shared-Supervisor identity for the ACE-near Codex smoke; presence does not authorize launch. |
 | `gepa_verified_paired_learning12_smoke_v6_binary_seed_20260924.yaml` | Prepared fresh binary full cycle from the one-rule Seed on the same 12/4 development pairs as the Level smoke. |
 | `gepa_verified_paired_learning12_smoke_v6_binary_manual_20260924.yaml` | Prepared fresh binary full cycle from the audited ten-rule manual playbook on the same 12/4 pairs. |
 | `gepa_verified_paired_learning12_smoke_v6_binary_sequence_supervisor_20260924.yaml` | Prepared one-minute-poll Iris sequence for the Seed and manual-playbook no-Level ablation phases; presence alone does not authorize launch. |

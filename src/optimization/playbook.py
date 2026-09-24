@@ -468,7 +468,12 @@ def apply_curator_operations(
     playbook: RejectPlaybook,
     value: Any,
 ) -> RejectPlaybook:
-    """Validate and deterministically apply Curator delta operations."""
+    """Validate and deterministically apply Curator delta operations.
+
+    New prompts use ACE-style ``UPDATE`` and ``REMOVE`` names. Historical
+    frozen prompts used ``REVISE`` and ``DELETE``; keep those as replay-only
+    aliases with identical semantics.
+    """
     if not isinstance(value, dict) or set(value) not in (
         {"reasoning", "operations"},
         {"reasoning", "operations", "reviewed_concerns"},
@@ -487,13 +492,16 @@ def apply_curator_operations(
     for operation in operations:
         if not isinstance(operation, dict) or "type" not in operation:
             raise ValueError("Curator operation has an invalid schema")
-        kind = operation["type"]
+        raw_kind = operation["type"]
+        kind = {"REVISE": "UPDATE", "DELETE": "REMOVE"}.get(
+            raw_kind, raw_kind
+        )
         common = {"type", "supporting_instance_ids"}
         if kind == "ADD":
             expected = common | {"content"}
             targets: tuple[str, ...] = ()
-        elif kind in {"REVISE", "DELETE"}:
-            expected = common | {"target_id"} | ({"content"} if kind == "REVISE" else set())
+        elif kind in {"UPDATE", "REMOVE"}:
+            expected = common | {"target_id"} | ({"content"} if kind == "UPDATE" else set())
             targets = (operation.get("target_id"),)
         elif kind == "MERGE":
             expected = common | {"target_ids", "content"}
@@ -503,7 +511,7 @@ def apply_curator_operations(
             targets = tuple(raw_targets)
         else:
             raise ValueError(f"unsupported Curator operation: {kind!r}")
-        if kind != "DELETE" and "category" in operation:
+        if kind != "REMOVE" and "category" in operation:
             expected.add("category")
         # Historical prompt bundles emitted risk_analysis. Accept that legacy
         # field for replay, but do not require or use it in new operations.
@@ -525,7 +533,7 @@ def apply_curator_operations(
         if content is not None and (not isinstance(content, str) or not content.strip()):
             raise ValueError("Curator operation content must be non-empty")
         category = operation.get("category")
-        if kind != "DELETE" and any(b.category is not None for b in playbook.bullets):
+        if kind != "REMOVE" and any(b.category is not None for b in playbook.bullets):
             if "category" not in operation:
                 raise ValueError("categorized Curator operations require category")
         if "category" in operation:
@@ -537,7 +545,7 @@ def apply_curator_operations(
     retained = [item for item in playbook.bullets if item.id not in targeted]
     reserved = set(original)
     for kind, targets, content, category in parsed:
-        if kind in {"ADD", "REVISE", "MERGE"}:
+        if kind in {"ADD", "UPDATE", "MERGE"}:
             retained.append(
                 PlaybookBullet(
                     _next_bullet_id(playbook, reserved),
@@ -600,9 +608,9 @@ def validate_curator_proposal(
 ) -> RejectPlaybook:
     """Keep counter arithmetic host-owned across semantic curation.
 
-    Retaining an ID means retaining that bullet verbatim.  Revised and merged
-    rules therefore receive a new ID and start with zero counters; their
-    ancestry belongs in ``lineage``.
+    Retaining an ID means retaining that bullet verbatim. Updated and merged
+    rules are new evidence units: they receive a new ID, start with zero
+    counters, and record their ancestry in ``lineage``.
     """
     existing = {item.id: item for item in counted.bullets}
     for bullet in proposed.bullets:
@@ -674,14 +682,13 @@ def manage_playbook_length(
     refined = False
     current = playbook
     if before > maximum_tokens:
-        if semantic_refiner is None:
-            raise ValueError("overlength playbook requires a semantic refiner")
-        current = semantic_refiner(playbook)
-        if not isinstance(current, RejectPlaybook):
-            raise ValueError("semantic refiner must return a RejectPlaybook")
-        current = RejectPlaybook.parse(current.serialize())
-        current = validate_refiner_proposal(playbook, current)
-        refined = True
+        if semantic_refiner is not None:
+            current = semantic_refiner(playbook)
+            if not isinstance(current, RejectPlaybook):
+                raise ValueError("semantic refiner must return a RejectPlaybook")
+            current = RejectPlaybook.parse(current.serialize())
+            current = validate_refiner_proposal(playbook, current)
+            refined = True
     removed: list[str] = []
     while token_counter(render(current)) > maximum_tokens:
         if not current.bullets:

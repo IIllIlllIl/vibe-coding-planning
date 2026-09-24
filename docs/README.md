@@ -50,6 +50,7 @@ offline GEPA, and production failures:
 | [`knowledge/safe-pce-audit10-data-quality.md`](knowledge/safe-pce-audit10-data-quality.md) | Audit10 structural integrity, post-decision leakage, protocol-residue, outcome-authority, and evidence-retention findings |
 | [`knowledge/safe-pce-audit10-v8-claude-plan-diagnostic.md`](knowledge/safe-pce-audit10-v8-claude-plan-diagnostic.md) | Stopped v8 same-case comparison of NRPV and Claude-style Plans, terminal-format failures, exploration depth, and remaining source-boundary defects |
 | [`knowledge/safe-pce-v9-v10-anchor-ablation.md`](knowledge/safe-pce-v9-v10-anchor-ablation.md) | Four-case v9/v10 Planner-anchor ablation, trace-level outcome interpretation, and source-audit observations |
+| [`knowledge/paired-gepa-three-failure-modes.md`](knowledge/paired-gepa-three-failure-modes.md) | Three concrete examples of checklist-context sensitivity, Checker rule-application misses, and over-specific learned rules |
 
 ## Reference
 

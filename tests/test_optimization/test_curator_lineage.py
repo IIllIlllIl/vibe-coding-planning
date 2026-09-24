@@ -10,11 +10,11 @@ from src.optimization.playbook import (
 )
 
 
-def test_retained_revision_keeps_inactive_ancestry_across_later_proposals():
+def test_retained_update_keeps_inactive_ancestry_across_later_proposals():
     original = RejectPlaybook((PlaybookBullet("plan-00001", "old rule"),))
     revised = apply_curator_operations(original, {
         "reasoning": "Clarify rule", "operations": [{
-            "type": "REVISE", "target_id": "plan-00001", "content": "new rule",
+            "type": "UPDATE", "target_id": "plan-00001", "content": "new rule",
             "supporting_instance_ids": ["case"], "risk_analysis": "same scope",
         }],
     })
@@ -29,6 +29,42 @@ def test_retained_revision_keeps_inactive_ancestry_across_later_proposals():
         }],
     })
     assert validate_curator_proposal(revised, added) == added
+
+
+def test_historical_revise_and_delete_names_remain_replay_compatible():
+    source = RejectPlaybook((
+        PlaybookBullet("plan-00001", "old rule", helpful=2),
+        PlaybookBullet("plan-00002", "remove me", harmful=1),
+    ))
+    result = apply_curator_operations(source, {
+        "reasoning": "Replay a frozen operation vocabulary.",
+        "operations": [
+            {
+                "type": "REVISE", "target_id": "plan-00001",
+                "content": "new rule", "supporting_instance_ids": ["case"],
+            },
+            {
+                "type": "DELETE", "target_id": "plan-00002",
+                "supporting_instance_ids": ["case"],
+            },
+        ],
+    })
+    assert [(item.text, item.helpful, item.harmful, item.lineage)
+            for item in result.bullets] == [
+        ("new rule", 0, 0, ("plan-00001",)),
+    ]
+
+
+def test_remove_uses_the_new_curator_operation_name():
+    source = RejectPlaybook((PlaybookBullet("plan-00001", "remove me"),))
+    result = apply_curator_operations(source, {
+        "reasoning": "The accumulated evidence no longer supports the rule.",
+        "operations": [{
+            "type": "REMOVE", "target_id": "plan-00001",
+            "supporting_instance_ids": ["case"],
+        }],
+    })
+    assert result.bullets == ()
 
 
 @pytest.mark.parametrize("changes", [

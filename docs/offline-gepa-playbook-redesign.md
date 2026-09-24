@@ -1200,9 +1200,9 @@ The comparison target is not only aggregate score: audit binary versus Level-2
 pair ordering, linked concerns, Curator operations, resulting readability, and
 Checker context sensitivity.
 
-### Prepared linked-Level eight-proposal run
+### Completed linked-Level eight-proposal run
 
-The next formal development identity is
+The completed formal development identity is
 `configs/gepa_verified_paired_levels_linked_manual138_formal24_8it_v1_20260924.yaml`.
 It is a fresh candidate tree, not a continuation of the earlier categorized
 Seed run. It begins from the audited ten-rule manual playbook so that eight
@@ -1218,9 +1218,10 @@ validation and is not newly certified as held out. Each of eight proposals
 uses a 24-pair Reflection minibatch. The Curator receives required linked facts
 through the distilled index and returns the lightweight operation self-check.
 No historical Checker, Reflector, Curator, candidate, or search checkpoint is
-imported. The run is prepared but not launched.
+imported. The run is retained as development evidence and is not the current
+prompt or launch template.
 
-After completion, compare its candidate trajectory, Level distribution,
+Its audit compares candidate trajectory, Level distribution,
 helpful/harmful counters, readability, and pair-order score with both the
 earlier categorized-Seed formal run and the one-proposal Level/no-Level
 development smokes. A stricter frozen-Checker-output Level ablation remains a
@@ -1229,3 +1230,43 @@ possible follow-up rather than a prerequisite for this run.
 Historical paired configs and prompts are indexed under
 `configs/archive/paired-levels-20260921/README.md` without moving their
 fingerprinted files.
+
+### ACE-near Codex baseline and prepared smoke
+
+The next development baseline intentionally restarts from the atomic one-rule
+Seed rather than extending the accumulated Level prompt. It keeps the frozen
+within-task pair score: `+1` for accepting the resolved Plan while rejecting
+the unresolved Plan, `-1` for the inverse ordering, and `0` for a tie. The
+Checker remains a binary, repository-aware, no-thinking DeepSeek Agent. The
+Reflector and Curator use native Codex CLI with GPT-5.6 at high reasoning.
+
+The effective prompt was audited in three layers:
+
+| Layer | Retained content |
+|---|---|
+| Scientific task | Per-rule Plan review; paired evidence analysis; helpful/harmful/neutral attribution; localized playbook maintenance. |
+| Deployment boundary | Checker sees issue, Plan, playbook text, and frozen base repository; it reviews rather than patches, tests, reproduces, or prototypes. Reusable insights must be recognizable before implementation. |
+| Runtime contract | Exact JSON schemas, evidence paths, retry feedback, rule ordering, and submission protocol. |
+
+The prompt does not carry forward Level, categories/sections, forced finding
+coverage, Curator self-check rows, `risk_analysis`, fixed per-bullet token
+limits, or case-shaped examples. `correct_approach`, `error_identification`,
+and `root_cause_analysis` remain nullable ACE-style Reflection fields. The
+smoke must inspect whether they nevertheless create an error-seeking bias.
+
+The Reflector may produce zero or multiple distinct `key_insights`. The
+Curator sees the complete indexed batch and may issue `ADD`, `UPDATE`, `MERGE`,
+or `REMOVE`. Reflector tags update the existing helpful/harmful ledger before
+curation. The Host performs only mechanical application: changed rules receive
+new IDs, zero counters, and lineage pointing to replaced rules. The semantic
+Refiner is disabled. If the complete playbook exceeds 10,000 Checker tokens,
+the existing deterministic whole-bullet pruning policy applies.
+
+The prepared smoke authority is
+`configs/gepa_verified_paired_ace_codex_smoke12_v1_20260924.yaml`, with
+`configs/gepa_verified_paired_ace_codex_smoke12_v1_supervisor_20260924.yaml` as
+its launch identity. It uses the already exposed twelve-pair training and
+four-pair validation development sample, one proposal, Iris one CPU/4G Agent
+tasks, a 35-minute Agent limit, one-minute polling, and an explicit concurrency
+cap of twelve for subscription stability. This is a flow and prompt diagnostic,
+not held-out evidence. It is prepared but not launched.

@@ -34,7 +34,11 @@ from src.optimization.repo_playbook import (
     render_concern_playbook,
     validate_repo_reflector_review,
 )
-from src.optimization.paired_playbook import validate_paired_reflector_review, paired_checker_uses_levels
+from src.optimization.paired_playbook import (
+    paired_checker_uses_levels,
+    validate_ace_paired_reflector_review,
+    validate_paired_reflector_review,
+)
 from src.optimization.playbook_runtime import evidence_agent_config
 
 
@@ -54,6 +58,13 @@ def _paired_review_validator(raw: dict[str, Any]):
     """Bind the configured paired-Reflection schema once for every backend."""
 
     reflection = raw.get("reflection", {})
+    if reflection.get("output_contract") == "ace_v1":
+        def validate(output, *, instance_id, playbook):
+            return validate_ace_paired_reflector_review(
+                output, instance_id=instance_id, playbook=playbook
+            )
+
+        return validate
 
     def validate(output, *, instance_id, playbook):
         return validate_paired_reflector_review(
@@ -144,6 +155,39 @@ def _token_counter(model: str):
     return lambda text: int(litellm.token_counter(model=model, text=text))
 
 
+def _maximum_bullet_tokens(raw: dict[str, Any]) -> int | None:
+    value = raw["length"].get("maximum_bullet_tokens")
+    return None if value is None else int(value)
+
+
+def _refiner_enabled(raw: dict[str, Any]) -> bool:
+    value = raw.get("refiner", {}).get("enabled", True)
+    if not isinstance(value, bool):
+        raise ValueError("refiner.enabled must be boolean")
+    return value
+
+
+def _validate_agent_executors(raw: dict[str, Any]) -> None:
+    models = raw.get("models")
+    if not isinstance(models, dict):
+        raise ValueError("models must be a mapping")
+    for role in ("checker", "reflector", "curator"):
+        model = models.get(role)
+        if not isinstance(model, dict):
+            raise ValueError(f"models.{role} must be a mapping")
+        executor = model.get("executor", "mini_swe")
+        if executor not in {"mini_swe", "codex_cli"}:
+            raise ValueError(f"models.{role}.executor is unsupported")
+        if role == "checker" and executor != "mini_swe":
+            raise ValueError("Checker must use the mini_swe executor")
+        if executor == "codex_cli":
+            if not str(model.get("model", "")).strip():
+                raise ValueError(f"models.{role}.model is required")
+            effort = model.get("reasoning_effort", "high")
+            if effort not in {"low", "medium", "high", "xhigh", "max", "ultra"}:
+                raise ValueError(f"models.{role}.reasoning_effort is unsupported")
+
+
 def _optional_instance_ids(inputs: dict[str, Any], key: str) -> list[str] | None:
     """Use the frozen snapshot's complete split when a formal config says null."""
     value = inputs.get(key)
@@ -203,8 +247,14 @@ def run_from_config(path: str | Path, *, agents: Any | None = None, optimize_fn=
     if paired_mode:
         reflection = raw.get("reflection", {})
         curation = raw.get("curation", {})
+        reflection_contract = reflection.get("output_contract", "legacy_v1")
+        if reflection_contract not in {"legacy_v1", "ace_v1"}:
+            raise ValueError("unknown paired Reflection output contract")
         distilled_reflection = bool(reflection.get("distilled_curation", False))
-        distilled_index = curation.get("evidence_contract") == "distilled_v1"
+        curator_contract = curation.get("evidence_contract", "legacy_v1")
+        if curator_contract not in {"legacy_v1", "distilled_v1", "ace_v1"}:
+            raise ValueError("unknown Curator evidence contract")
+        distilled_index = curator_contract == "distilled_v1"
         fact_links = bool(reflection.get("fact_links", False))
         if distilled_reflection != distilled_index:
             raise ValueError(
@@ -233,6 +283,22 @@ def run_from_config(path: str | Path, *, agents: Any | None = None, optimize_fn=
             raise ValueError(
                 "Curator lightweight self-check requires Reflection fact links"
             )
+        if reflection_contract == "ace_v1":
+            if curator_contract != "ace_v1":
+                raise ValueError("ACE Reflection requires ACE Curator evidence")
+            if any(
+                reflection.get(key, False)
+                for key in (
+                    "structured_recovery",
+                    "structured_abstraction",
+                    "distilled_curation",
+                    "fact_links",
+                )
+            ):
+                raise ValueError("ACE Reflection cannot enable legacy structure flags")
+            if curation.get("require_concern_coverage", False) or self_check_contract:
+                raise ValueError("ACE curation does not use legacy coverage contracts")
+    _validate_agent_executors(raw)
     _validate_frozen_inputs(config_path, raw)
     if repo_mode:
         if raw.get("container", {}).get("runtime") != "apptainer":
@@ -314,7 +380,7 @@ def run_from_config(path: str | Path, *, agents: Any | None = None, optimize_fn=
             run_dir=run_dir,
             hpc=hpc,
             token_counter=count_tokens,
-            maximum_bullet_tokens=int(raw["length"]["maximum_bullet_tokens"]),
+            maximum_bullet_tokens=_maximum_bullet_tokens(raw),
             paired_reflector_structured_recovery=bool(
                 raw.get("reflection", {}).get("structured_recovery", False)
             ),
@@ -326,6 +392,9 @@ def run_from_config(path: str | Path, *, agents: Any | None = None, optimize_fn=
             ),
             paired_reflector_fact_links=bool(
                 raw.get("reflection", {}).get("fact_links", False)
+            ),
+            paired_reflector_output_contract=str(
+                raw.get("reflection", {}).get("output_contract", "legacy_v1")
             ),
             checkpoint_import_run_dir=(
                 run_dir.parent / str(checkpoint_import["source_run_dir"])
@@ -351,7 +420,7 @@ def run_from_config(path: str | Path, *, agents: Any | None = None, optimize_fn=
                 executor,
                 image_records=image_records,
                 maximum_tokens=int(raw["length"]["maximum_visible_tokens"]),
-                maximum_bullet_tokens=int(raw["length"]["maximum_bullet_tokens"]),
+                maximum_bullet_tokens=_maximum_bullet_tokens(raw),
                 token_counter=count_tokens,
                 require_concern_coverage=bool(raw.get("curation", {}).get("require_concern_coverage", False)),
                 evidence_contract=str(raw.get("curation", {}).get("evidence_contract", "legacy_v1")),
@@ -369,7 +438,7 @@ def run_from_config(path: str | Path, *, agents: Any | None = None, optimize_fn=
                 executor,
                 image_records=image_records,
                 maximum_tokens=int(raw["length"]["maximum_visible_tokens"]),
-                maximum_bullet_tokens=int(raw["length"]["maximum_bullet_tokens"]),
+                maximum_bullet_tokens=_maximum_bullet_tokens(raw),
                 token_counter=count_tokens,
             )
         else:
@@ -377,7 +446,7 @@ def run_from_config(path: str | Path, *, agents: Any | None = None, optimize_fn=
             proposal_agents = HPCPlaybookProposalAgents(
                 executor,
                 maximum_tokens=int(raw["length"]["maximum_visible_tokens"]),
-                maximum_bullet_tokens=int(raw["length"]["maximum_bullet_tokens"]),
+                maximum_bullet_tokens=_maximum_bullet_tokens(raw),
                 token_counter=count_tokens,
             )
         proposer = TwoStagePlaybookProposer(
@@ -389,7 +458,7 @@ def run_from_config(path: str | Path, *, agents: Any | None = None, optimize_fn=
                 counted, reviews
             ),
             token_counter=count_tokens,
-            semantic_refiner=proposal_agents.refine,
+            semantic_refiner=(proposal_agents.refine if _refiner_enabled(raw) else None),
             maximum_tokens=int(raw["length"]["maximum_visible_tokens"]),
             harmful_weight=float(raw["length"].get("harmful_pruning_weight", 5.0)),
             global_counter_path=run_dir / "global_counter_ledger.json",
@@ -410,7 +479,7 @@ def run_from_config(path: str | Path, *, agents: Any | None = None, optimize_fn=
                 proposer,
                 levels=paired_checker_uses_levels(raw),
                 token_counter=count_tokens,
-                maximum_bullet_tokens=int(raw["length"]["maximum_bullet_tokens"]),
+                maximum_bullet_tokens=_maximum_bullet_tokens(raw),
                 invalid_score=invalid_score,
             )
         elif repo_mode:
@@ -418,7 +487,7 @@ def run_from_config(path: str | Path, *, agents: Any | None = None, optimize_fn=
                 checker,
                 proposer,
                 token_counter=count_tokens,
-                maximum_bullet_tokens=int(raw["length"]["maximum_bullet_tokens"]),
+                maximum_bullet_tokens=_maximum_bullet_tokens(raw),
                 score_table=score_table,
                 invalid_score=invalid_score,
             )
@@ -428,7 +497,7 @@ def run_from_config(path: str | Path, *, agents: Any | None = None, optimize_fn=
                 proposer,
                 batch_checker=checker,
                 token_counter=count_tokens,
-                maximum_bullet_tokens=int(raw["length"]["maximum_bullet_tokens"]),
+                maximum_bullet_tokens=_maximum_bullet_tokens(raw),
                 score_table=score_table,
                 invalid_score=invalid_score,
             )
@@ -443,7 +512,7 @@ def run_from_config(path: str | Path, *, agents: Any | None = None, optimize_fn=
             reflector=reflector,
             curator=runtime.curator,
             token_counter=count_tokens,
-            semantic_refiner=runtime.refiner,
+            semantic_refiner=(runtime.refiner if _refiner_enabled(raw) else None),
             maximum_tokens=int(raw["length"]["maximum_visible_tokens"]),
             harmful_weight=float(raw["length"].get("harmful_pruning_weight", 5.0)),
             global_counter_path=run_dir / "global_counter_ledger.json",
@@ -464,7 +533,7 @@ def run_from_config(path: str | Path, *, agents: Any | None = None, optimize_fn=
                 proposer,
                 levels=paired_checker_uses_levels(raw),
                 token_counter=count_tokens,
-                maximum_bullet_tokens=int(raw["length"]["maximum_bullet_tokens"]),
+                maximum_bullet_tokens=_maximum_bullet_tokens(raw),
                 invalid_score=invalid_score,
             )
         elif repo_mode:
@@ -472,7 +541,7 @@ def run_from_config(path: str | Path, *, agents: Any | None = None, optimize_fn=
                 runtime.batch_checker,
                 proposer,
                 token_counter=count_tokens,
-                maximum_bullet_tokens=int(raw["length"]["maximum_bullet_tokens"]),
+                maximum_bullet_tokens=_maximum_bullet_tokens(raw),
                 score_table=score_table,
                 invalid_score=invalid_score,
             )
@@ -481,7 +550,7 @@ def run_from_config(path: str | Path, *, agents: Any | None = None, optimize_fn=
                 runtime.checker,
                 proposer,
                 token_counter=count_tokens,
-                maximum_bullet_tokens=int(raw["length"]["maximum_bullet_tokens"]),
+                maximum_bullet_tokens=_maximum_bullet_tokens(raw),
                 score_table=score_table,
                 invalid_score=invalid_score,
             )

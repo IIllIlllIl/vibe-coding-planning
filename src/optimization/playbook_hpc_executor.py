@@ -25,6 +25,7 @@ from src.optimization.repo_playbook import (
     validate_repo_reflector_review,
 )
 from src.optimization.paired_playbook import (
+    validate_ace_paired_reflector_review,
     validate_paired_checker_result,
     validate_paired_reflector_review,
 )
@@ -106,6 +107,7 @@ class PlaybookHPCExecutor:
         paired_reflector_structured_abstraction: bool = False,
         paired_reflector_distilled_curation: bool = False,
         paired_reflector_fact_links: bool = False,
+        paired_reflector_output_contract: str = "legacy_v1",
         checkpoint_import_run_dir: Path | None = None,
         checkpoint_import_manifest_sha256: str | None = None,
         checkpoint_import_roles: Sequence[str] = (),
@@ -126,6 +128,9 @@ class PlaybookHPCExecutor:
             paired_reflector_distilled_curation
         )
         self.paired_reflector_fact_links = paired_reflector_fact_links
+        if paired_reflector_output_contract not in {"legacy_v1", "ace_v1"}:
+            raise ValueError("unknown paired Reflector output contract")
+        self.paired_reflector_output_contract = paired_reflector_output_contract
         self.checkpoint_import_run_dir = checkpoint_import_run_dir
         self.checkpoint_import_manifest_sha256 = checkpoint_import_manifest_sha256
         self.checkpoint_import_roles = frozenset(checkpoint_import_roles)
@@ -357,6 +362,7 @@ class PlaybookHPCExecutor:
                 f"#SBATCH --error={logs}/%x-%A_%a.err",
                 "set -euo pipefail",
                 "set +x",
+                'export PATH="$HOME/.local/bin:$PATH"',
                 f"ENV_FILE={shlex.quote(self.hpc.remote_env_file)}",
                 'ENV_FILE="${ENV_FILE/#\\~/$HOME}"',
                 'source "$ENV_FILE"',
@@ -439,15 +445,22 @@ class PlaybookHPCExecutor:
                     playbook=playbook,
                 )
             elif role == "paired_repo_reflector":
-                validate_paired_reflector_review(
-                    agent_output,
-                    instance_id=task.instance_id,
-                    playbook=playbook,
-                    structured_recovery=self.paired_reflector_structured_recovery,
-                    structured_abstraction=self.paired_reflector_structured_abstraction,
-                    distilled_curation=self.paired_reflector_distilled_curation,
-                    fact_links=self.paired_reflector_fact_links,
-                )
+                if self.paired_reflector_output_contract == "ace_v1":
+                    validate_ace_paired_reflector_review(
+                        agent_output,
+                        instance_id=task.instance_id,
+                        playbook=playbook,
+                    )
+                else:
+                    validate_paired_reflector_review(
+                        agent_output,
+                        instance_id=task.instance_id,
+                        playbook=playbook,
+                        structured_recovery=self.paired_reflector_structured_recovery,
+                        structured_abstraction=self.paired_reflector_structured_abstraction,
+                        distilled_curation=self.paired_reflector_distilled_curation,
+                        fact_links=self.paired_reflector_fact_links,
+                    )
             elif role == "curator":
                 if "validation_self_check_concern_ids" in task_manifest:
                     validate_curator_self_check(

@@ -103,6 +103,26 @@ construction (mocking only containers and models). Evidence Agents default to
 the shared `container.sif_cache_dir`; old `reflection.evidence_*` settings are
 supported overrides. Validate required environment settings before Agent waves.
 
+An Agent role may select the native `codex_cli` executor instead of the
+mini-swe/Apptainer model runtime. Native Codex runs are ephemeral and
+read-only, receive prompts over stdin, ignore user configuration and repository
+instructions, disable project-document injection, and persist both JSONL
+events and the terminal message before Host validation. Slurm owns the process
+wall-time; do not add a second Host timeout. Subscription authentication stays
+in the user's private remote Codex state. A repository-aware native Codex Agent
+uses the same disposable frozen-base worktree and prepared history bundle as
+the mini-swe Agent. Its current source-audit record covers commands routed
+through the Apptainer environment, not every native Codex command; this
+limitation must be audited in smoke before formal use.
+
+For ACE-style playbook maintenance, semantic edits belong to the Curator. The
+Host may apply tags, allocate IDs, validate schemas, execute operations, record
+lineage, and enforce deterministic whole-bullet length pruning; it must not
+rewrite rule meaning. `UPDATE` and `MERGE` create new evidence units with new
+IDs and zero helpful/harmful counters because their text has changed. The
+replaced IDs remain in lineage. `ADD`, `UPDATE`, `MERGE`, and `REMOVE` are the
+current names; historical `REVISE` and `DELETE` are replay-only aliases.
+
 An output schema option must reach both validation sites: the Slurm worker's
 atomic-completion validator and the Controller's completed-output revalidator.
 The structured paired-Reflection schema adds `side_findings`; omitting its

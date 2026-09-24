@@ -87,6 +87,13 @@ def _json_object(text: str) -> dict[str, Any]:
     return value
 
 
+def _uses_codex_cli(model_config: Mapping[str, Any]) -> bool:
+    executor = str(model_config.get("executor", "mini_swe"))
+    if executor not in {"mini_swe", "codex_cli"}:
+        raise ValueError(f"unsupported playbook Agent executor: {executor}")
+    return executor == "codex_cli"
+
+
 class PromptModel:
     def __init__(self, model_config: Mapping[str, Any]) -> None:
         _, LitellmModel, _ = import_minisweagent()
@@ -250,8 +257,29 @@ def run_evidence_reflector(
     evidence_dir: str,
     internal_playbook: str,
     retry_feedback: str = "",
+    attempt_dir: Path | None = None,
 ) -> tuple[dict[str, Any], list[dict[str, Any]]]:
     """Run a tool-using Reflector over a read-only, repository-free bundle."""
+    if _uses_codex_cli(model_config):
+        from src.optimization.codex_cli_runtime import run_codex_json_agent
+
+        user = _render(
+            instance_template,
+            evidence_path=str(Path(evidence_dir).resolve()),
+            internal_playbook=internal_playbook,
+            retry_feedback=retry_feedback,
+        )
+        return run_codex_json_agent(
+            model_config=model_config,
+            working_directory=Path(evidence_dir),
+            attempt_dir=(
+                attempt_dir
+                or Path(evidence_dir).parent / ".codex_reflector_attempt"
+            ),
+            system=system,
+            user=user,
+            task="Attribute this case to every active rejection rule.",
+        )
     return _run_evidence_json_agent(
         model_config=model_config,
         evidence_config=reflection_config,
@@ -279,8 +307,30 @@ def run_evidence_curator(
     case_count: int,
     retry_feedback: str = "",
     task: str = "Curate durable rejection concerns from the completed reflections.",
+    attempt_dir: Path | None = None,
 ) -> tuple[dict[str, Any], list[dict[str, Any]]]:
     """Run the Curator over a file-backed cross-case reflection bundle."""
+    if _uses_codex_cli(model_config):
+        from src.optimization.codex_cli_runtime import run_codex_json_agent
+
+        user = _render(
+            instance_template,
+            evidence_path=str(Path(evidence_dir).resolve()),
+            counted_internal_playbook=counted_internal_playbook,
+            case_count=case_count,
+            retry_feedback=retry_feedback,
+        )
+        return run_codex_json_agent(
+            model_config=model_config,
+            working_directory=Path(evidence_dir),
+            attempt_dir=(
+                attempt_dir
+                or Path(evidence_dir).parent / ".codex_curator_attempt"
+            ),
+            system=system,
+            user=user,
+            task=task,
+        )
     return _run_evidence_json_agent(
         model_config=model_config,
         evidence_config=reflection_config,
@@ -340,19 +390,21 @@ def _run_repository_json_agent(
     if image_authority["requested_ref"] != expected_ref:
         raise ValueError("Repo Agent image authority does not match the case")
 
-    DefaultAgent, LitellmModel, _ = import_minisweagent()
-    key_env = str(model_config.get("api_key_env", "DEEPSEEK_API_KEY"))
-    api_key = os.environ.get(key_env)
-    if not api_key:
-        raise ValueError(f"environment variable {key_env} is not set")
-    model = build_model(
-        LitellmModel,
-        str(model_config["model"]),
-        api_key,
-        str(model_config.get("api_base", "https://api.deepseek.com")),
-        float(model_config.get("temperature", 0.0)),
-        **({"thinking": model_config["thinking"]} if "thinking" in model_config else {}),
-    )
+    codex_cli = _uses_codex_cli(model_config)
+    if not codex_cli:
+        DefaultAgent, LitellmModel, _ = import_minisweagent()
+        key_env = str(model_config.get("api_key_env", "DEEPSEEK_API_KEY"))
+        api_key = os.environ.get(key_env)
+        if not api_key:
+            raise ValueError(f"environment variable {key_env} is not set")
+        model = build_model(
+            LitellmModel,
+            str(model_config["model"]),
+            api_key,
+            str(model_config.get("api_base", "https://api.deepseek.com")),
+            float(model_config.get("temperature", 0.0)),
+            **({"thinking": model_config["thinking"]} if "thinking" in model_config else {}),
+        )
     cache = Path(
         os.path.expandvars(str(repository_config["sif_cache_dir"]))
     ).expanduser()
@@ -434,6 +486,45 @@ def _run_repository_json_agent(
                     "phase": repository_config.get("phase", "repo_checker"),
                 },
             )
+            if codex_cli:
+                from src.optimization.codex_cli_runtime import run_codex_json_agent
+
+                codex_values = dict(prompt_values)
+                if evidence_dir is not None:
+                    codex_values["evidence_path"] = str(
+                        Path(evidence_dir).resolve()
+                    )
+                user = _render(instance_template, **codex_values)
+                output, trajectory = run_codex_json_agent(
+                    model_config=model_config,
+                    working_directory=host_workdir,
+                    attempt_dir=attempt_dir,
+                    system=system,
+                    user=user,
+                    task=task,
+                )
+                trajectory.extend(
+                    [
+                        {
+                            "role": "host_repository_baseline",
+                            "content": {
+                                "declared_base_commit": repository["base_commit"],
+                                "observed_head": baseline["after"]["head"]["output"].strip(),
+                                "sif_sha256_authority": image_authority["sif_sha256"],
+                            },
+                        },
+                        {
+                            "role": "host_source_access_audit",
+                            "content": {
+                                "policy_version": SOURCE_ACCESS_POLICY_VERSION,
+                                "path": str(source_access_path),
+                                "summary": summarize_source_access_log(source_access_path),
+                                "coverage": "apptainer_environment_only",
+                            },
+                        },
+                    ]
+                )
+                return output, trajectory
             agent = build_default_agent(
                 DefaultAgent,
                 model,

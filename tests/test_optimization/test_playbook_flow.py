@@ -753,7 +753,7 @@ def test_curator_delta_operations_are_host_applied_with_new_ids() -> None:
         "reasoning": "Revise and add.",
         "operations": [
             {
-                "type": "REVISE", "target_id": "plan-00001",
+                "type": "UPDATE", "target_id": "plan-00001",
                 "content": "revised one", "supporting_instance_ids": ["case-1"],
                 "risk_analysis": "narrower",
             },

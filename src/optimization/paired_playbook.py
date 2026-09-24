@@ -417,3 +417,84 @@ def validate_paired_reflector_review(
         "bullet_tags": normalized_tags,
         **({"side_findings": normalized_sides} if structured_recovery else {}),
     }
+
+
+def validate_ace_paired_reflector_review(
+    value: Any,
+    *,
+    instance_id: str,
+    playbook: RejectPlaybook,
+) -> dict[str, Any]:
+    """Validate the compact ACE-near paired Reflection contract."""
+    expected = {
+        "instance_id",
+        "reasoning",
+        "error_identification",
+        "root_cause_analysis",
+        "correct_approach",
+        "key_insights",
+        "bullet_tags",
+    }
+    if not isinstance(value, dict) or set(value) != expected:
+        raise ValueError("ACE paired Reflector review has an invalid schema")
+    if value["instance_id"] != instance_id:
+        raise ValueError("ACE paired Reflector instance ID mismatch")
+    if not isinstance(value["reasoning"], str) or not value["reasoning"].strip():
+        raise ValueError("ACE paired Reflector reasoning must be non-empty")
+    normalized: dict[str, Any] = {
+        "instance_id": instance_id,
+        "reasoning": value["reasoning"].strip(),
+    }
+    for key in ("error_identification", "root_cause_analysis", "correct_approach"):
+        item = value[key]
+        if item is not None and (
+            not isinstance(item, str) or not item.strip()
+        ):
+            raise ValueError(f"ACE paired Reflector {key} must be null or non-empty")
+        normalized[key] = item.strip() if isinstance(item, str) else None
+    insights = value["key_insights"]
+    if not isinstance(insights, list):
+        raise ValueError("ACE paired Reflector key_insights must be a list")
+    normalized_insights = []
+    for insight in insights:
+        if not isinstance(insight, dict) or set(insight) != {"concern", "basis"}:
+            raise ValueError("ACE paired Reflector key insight is invalid")
+        if any(
+            not isinstance(insight[key], str) or not insight[key].strip()
+            for key in ("concern", "basis")
+        ):
+            raise ValueError("ACE paired Reflector key insight is empty")
+        normalized_insights.append({
+            "concern": insight["concern"].strip(),
+            "basis": insight["basis"].strip(),
+        })
+    normalized_tags = []
+    tags = value["bullet_tags"]
+    if not isinstance(tags, list) or len(tags) != len(playbook.bullets):
+        raise ValueError("ACE paired Reflector must tag every active bullet")
+    for bullet, tag in zip(playbook.bullets, tags, strict=True):
+        if not isinstance(tag, dict) or set(tag) != {"id", "tag", "attribution"}:
+            raise ValueError("ACE paired Reflector bullet tag is invalid")
+        attribution = tag["attribution"]
+        if (
+            tag["id"] != bullet.id
+            or tag["tag"] not in _TAGS
+            or (
+                attribution is not None
+                and (not isinstance(attribution, str) or not attribution.strip())
+            )
+            or (tag["tag"] != "neutral" and attribution is None)
+        ):
+            raise ValueError("ACE paired Reflector bullet tag content is invalid")
+        normalized_tags.append(
+            {
+                "id": tag["id"],
+                "tag": tag["tag"],
+                "attribution": attribution.strip()
+                if isinstance(attribution, str)
+                else None,
+            }
+        )
+    normalized["key_insights"] = normalized_insights
+    normalized["bullet_tags"] = normalized_tags
+    return normalized

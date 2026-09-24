@@ -38,9 +38,25 @@ from src.optimization.repo_playbook import (
     validate_repo_reflector_review,
 )
 from src.optimization.paired_playbook import (
+    validate_ace_paired_reflector_review,
     validate_paired_checker_result,
     validate_paired_reflector_review,
 )
+
+
+def _role_prompts(
+    prompts: dict,
+    role: str,
+    model_config: dict,
+) -> tuple[str, str]:
+    suffix = "_codex" if model_config.get("executor") == "codex_cli" else ""
+    system_key = f"{role}{suffix}_system"
+    instance_key = f"{role}{suffix}_instance"
+    if system_key not in prompts or instance_key not in prompts:
+        raise ValueError(
+            f"prompt bundle lacks {system_key} or {instance_key}"
+        )
+    return str(prompts[system_key]), str(prompts[instance_key])
 
 
 def run_task(
@@ -151,6 +167,9 @@ def run_task(
                 reflector_task = (
                     "Attribute this completed case to every active concern."
                 )
+            reflector_system, reflector_instance = _role_prompts(
+                prompts, "reflector", config["models"]["reflector"]
+            )
             stage = "agent_execution"
             output, trajectory = run_repository_reflector(
                 model_config=config["models"]["reflector"],
@@ -158,8 +177,8 @@ def run_task(
                     **config["repo_checker"],
                     "sif_cache_dir": config["container"]["sif_cache_dir"],
                 },
-                system=prompts["reflector_system"],
-                instance_template=prompts["reflector_instance"],
+                system=reflector_system,
+                instance_template=reflector_instance,
                 repository=manifest["repository"],
                 image_authority=manifest["image_authority"],
                 attempt_dir=attempt_dir,
@@ -171,23 +190,30 @@ def run_task(
                 phase=role,
             )
         elif role == "reflector":
+            reflector_system, reflector_instance = _role_prompts(
+                prompts, "reflector", config["models"][role]
+            )
             stage = "agent_execution"
             output, trajectory = run_evidence_reflector(
                 model_config=config["models"][role],
                 reflection_config=evidence_agent_config(config),
-                system=prompts[f"{role}_system"],
-                instance_template=prompts[f"{role}_instance"],
+                system=reflector_system,
+                instance_template=reflector_instance,
                 evidence_dir=str(manifest["evidence_dir"]),
                 internal_playbook=str(values["internal_playbook"]),
                 retry_feedback=str(values["retry_feedback"]),
+                attempt_dir=attempt_dir,
             )
         elif role == "curator" and "evidence_dir" in manifest:
+            curator_system, curator_instance = _role_prompts(
+                prompts, "curator", config["models"][role]
+            )
             stage = "agent_execution"
             output, trajectory = run_evidence_curator(
                 model_config=config["models"][role],
                 reflection_config=evidence_agent_config(config),
-                system=prompts[f"{role}_system"],
-                instance_template=prompts[f"{role}_instance"],
+                system=curator_system,
+                instance_template=curator_instance,
                 evidence_dir=str(manifest["evidence_dir"]),
                 counted_internal_playbook=str(values["counted_internal_playbook"]),
                 case_count=int(values["case_count"]),
@@ -200,6 +226,7 @@ def run_task(
                     else "Curate durable rejection concerns from the completed "
                     "reflections."
                 ),
+                attempt_dir=attempt_dir,
             )
         else:
             stage = "prompt_render"
@@ -261,15 +288,22 @@ def run_task(
                 playbook=playbook,
             )
         elif role == "paired_repo_reflector":
-            validate_paired_reflector_review(
-                output,
-                instance_id=str(manifest["instance_id"]),
-                playbook=playbook,
-                structured_recovery=bool(config.get("reflection", {}).get("structured_recovery", False)),
-                structured_abstraction=bool(config.get("reflection", {}).get("structured_abstraction", False)),
-                distilled_curation=bool(config.get("reflection", {}).get("distilled_curation", False)),
-                fact_links=bool(config.get("reflection", {}).get("fact_links", False)),
-            )
+            if config.get("reflection", {}).get("output_contract") == "ace_v1":
+                validate_ace_paired_reflector_review(
+                    output,
+                    instance_id=str(manifest["instance_id"]),
+                    playbook=playbook,
+                )
+            else:
+                validate_paired_reflector_review(
+                    output,
+                    instance_id=str(manifest["instance_id"]),
+                    playbook=playbook,
+                    structured_recovery=bool(config.get("reflection", {}).get("structured_recovery", False)),
+                    structured_abstraction=bool(config.get("reflection", {}).get("structured_abstraction", False)),
+                    distilled_curation=bool(config.get("reflection", {}).get("distilled_curation", False)),
+                    fact_links=bool(config.get("reflection", {}).get("fact_links", False)),
+                )
         elif role == "curator":
             if "validation_concern_ids" in manifest:
                 validate_curator_concern_coverage(
@@ -280,15 +314,17 @@ def run_task(
                     output, manifest["validation_self_check_concern_ids"]
                 )
             proposed = apply_curator_operations(playbook, output)
-            validate_bullet_token_limit(
-                proposed,
-                token_counter=lambda text: int(
-                    litellm.token_counter(
-                        model=str(config["models"]["checker"]["model"]), text=text
-                    )
-                ),
-                maximum_bullet_tokens=int(config["length"]["maximum_bullet_tokens"]),
-            )
+            bullet_limit = config["length"].get("maximum_bullet_tokens")
+            if bullet_limit is not None:
+                validate_bullet_token_limit(
+                    proposed,
+                    token_counter=lambda text: int(
+                        litellm.token_counter(
+                            model=str(config["models"]["checker"]["model"]), text=text
+                        )
+                    ),
+                    maximum_bullet_tokens=int(bullet_limit),
+                )
         elif role == "refiner":
             apply_refiner_operations(playbook, output)
         stage = "output_write"
