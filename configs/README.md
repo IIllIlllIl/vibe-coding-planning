@@ -14,15 +14,24 @@ the shared supervisor supplies canonical storage paths.
 
 ## Experiment Inventory
 
-Current paired-learning two-phase smoke, prepared but not launched:
+Current paired-learning prompt authority:
 `prompts/offline_gepa_paired_levels_ace_core_v7_20260923.yaml` adds explicit
 reusable-concern-to-side-finding links and a lightweight Curator self-check to
-the v6 ACE role skeleton. The v5 linked configs enable
+the v6 ACE role skeleton. The completed v5 linked configs enable
 `reflection.fact_links: true` and
 `curation.self_check_contract: lightweight_v1`. Both phases import their exact
 historical parent Checker outputs because the v6 and v7 Checker prompts are
-identical; candidate evaluation remains fresh. The sequence does not replay a
-Checker as a Curator self-check and its presence does not authorize launch.
+identical; candidate evaluation remains fresh. The sequence did not replay a
+Checker as a Curator self-check.
+
+The current prepared formal identity is
+`gepa_verified_paired_levels_linked_manual138_formal24_8it_v1_20260924.yaml`.
+It starts a fresh candidate tree from the audited ten-rule manual playbook,
+uses the conservative clean138 train selection and original 36-pair
+development validation split, and applies the v7 linked Level workflow for
+eight proposals with 24-pair Reflection minibatches. Its supervisor targets
+Iris at one CPU/4G per task, submits all unfinished Agent elements to Slurm,
+and requires a clean worktree. Preparation does not authorize launch.
 The completed v4 sequence first ran
 `gepa_verified_paired_learning12_smoke_v4_ace_core_ref_cur_20260923.yaml`
 from frozen Seed Checker outputs, then ran
@@ -109,6 +118,8 @@ labels, image manifests, output roots, or baseline identities in a new run.
 | `gepa_verified_paired_learning12_smoke_v6_binary_seed_20260924.yaml` | Prepared fresh binary full cycle from the one-rule Seed on the same 12/4 development pairs as the Level smoke. |
 | `gepa_verified_paired_learning12_smoke_v6_binary_manual_20260924.yaml` | Prepared fresh binary full cycle from the audited ten-rule manual playbook on the same 12/4 pairs. |
 | `gepa_verified_paired_learning12_smoke_v6_binary_sequence_supervisor_20260924.yaml` | Prepared one-minute-poll Iris sequence for the Seed and manual-playbook no-Level ablation phases; presence alone does not authorize launch. |
+| `gepa_verified_paired_levels_linked_manual138_formal24_8it_v1_20260924.yaml` | Prepared fresh eight-proposal Level run from the audited ten-rule playbook: clean138 train pairs, the original 36 development-validation pairs, minibatch 24, v7 linked evidence, and Level-2-only gating. |
+| `gepa_verified_paired_levels_linked_manual138_formal24_8it_v1_supervisor_20260924.yaml` | Iris Supervisor identity for the prepared linked-Level formal run: one CPU/4G, 35-minute Agent tasks, one-minute polling, staging/workspace reclamation, and no project-side array concurrency cap. |
 | `frozen_swe_verified_plan_pairs/20260919_safe_pce_within_task_pairs_v1/` | Reliability-cleaned task-grouped authority with 144 train and 36 validation R-by-U Plan pairs across 57 tasks; raw evidence remains hash-bound in durable scratch. |
 | `frozen_swe_verified_plan_pairs/20260922_operationally_clean138_v1/` | Unlaunched, conservative superseding **train selection**: 138 of the 144 frozen train pairs after the historical one-pair exclusion and five additional pairs with external HTTP 502 or official test-patch collision. Original snapshot and 36 validation pairs are unchanged; the validation split is not newly certified. |
 | `frozen_swe_verified_plan_pairs/20260919_pair_cleaning_record_v1.md` | Human-readable cleaning rationale for the paired snapshot; the exact exclusion ledger and this record are both SHA-bound by the frozen manifest. |

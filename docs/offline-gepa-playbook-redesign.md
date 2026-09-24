@@ -1200,6 +1200,32 @@ The comparison target is not only aggregate score: audit binary versus Level-2
 pair ordering, linked concerns, Curator operations, resulting readability, and
 Checker context sensitivity.
 
+### Prepared linked-Level eight-proposal run
+
+The next formal development identity is
+`configs/gepa_verified_paired_levels_linked_manual138_formal24_8it_v1_20260924.yaml`.
+It is a fresh candidate tree, not a continuation of the earlier categorized
+Seed run. It begins from the audited ten-rule manual playbook so that eight
+iterations can test rule maintenance and refinement after a plausible learned
+state. It uses the v7 linked-evidence Level prompt and v2 Level output
+contract, gates only case-specific Level 2 findings, and preserves Level 1
+findings for Reflection.
+
+The frozen input is the conservative 138-pair train selection in
+`configs/frozen_swe_verified_plan_pairs/20260922_operationally_clean138_v1/`;
+the original task-disjoint 36-pair validation split is retained as development
+validation and is not newly certified as held out. Each of eight proposals
+uses a 24-pair Reflection minibatch. The Curator receives required linked facts
+through the distilled index and returns the lightweight operation self-check.
+No historical Checker, Reflector, Curator, candidate, or search checkpoint is
+imported. The run is prepared but not launched.
+
+After completion, compare its candidate trajectory, Level distribution,
+helpful/harmful counters, readability, and pair-order score with both the
+earlier categorized-Seed formal run and the one-proposal Level/no-Level
+development smokes. A stricter frozen-Checker-output Level ablation remains a
+possible follow-up rather than a prerequisite for this run.
+
 Historical paired configs and prompts are indexed under
 `configs/archive/paired-levels-20260921/README.md` without moving their
 fingerprinted files.

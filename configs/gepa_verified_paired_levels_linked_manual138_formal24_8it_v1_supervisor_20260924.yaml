@@ -1,0 +1,29 @@
+schema_version: 1
+session: verified-paired-levels-linked-manual138-formal24-8it-v1-20260924
+log: .local/hpc-supervisor/verified-paired-levels-linked-manual138-formal24-8it-v1-20260924.log
+arguments:
+  - --poll-interval
+  - "60"
+  - --slice-time
+  - "00:30:00"
+  - --target-iterations
+  - "8"
+  - --max-runs
+  - "100"
+  - --state-file
+  - .local/hpc-supervisor/verified-paired-levels-linked-manual138-formal24-8it-v1-20260924.json
+  - --reclaim-staging
+  - --reclaim-workspaces
+  - --require-clean-worktree
+  - --gepa-rules
+  - --gepa-config
+  - configs/gepa_verified_paired_levels_linked_manual138_formal24_8it_v1_20260924.yaml
+  - --ulhpc-config
+  - configs/ulhpc_submit.yaml
+  - --job-name
+  - verified-paired-levels-linked-manual138-formal24-8it-v1-20260924
+  - --cpus
+  - "1"
+  - --mem
+  - 4G
+  - --submit

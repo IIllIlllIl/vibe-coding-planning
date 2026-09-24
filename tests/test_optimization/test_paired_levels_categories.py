@@ -853,6 +853,76 @@ def test_v6_binary_ablation_matches_linked_smoke_except_for_levels():
     assert all("--require-clean-worktree" in run["arguments"] for run in supervisor["runs"])
 
 
+def test_linked_level_manual138_formal_run_is_fresh_and_frozen():
+    path = Path(
+        "configs/gepa_verified_paired_levels_linked_manual138_formal24_8it_v1_"
+        "20260924.yaml"
+    )
+    supervisor_path = Path(
+        "configs/gepa_verified_paired_levels_linked_manual138_formal24_8it_v1_"
+        "supervisor_20260924.yaml"
+    )
+    raw = yaml.safe_load(path.read_text())
+    supervisor = yaml.safe_load(supervisor_path.read_text())
+    selection = json.loads(Path(raw["inputs"]["selection"]).read_text())
+
+    _validate_frozen_inputs(path.resolve(), raw)
+    assert raw["status"] == "ready_not_launched"
+    assert raw["readiness"]["launched"] is False
+    assert "checkpoint_import" not in raw
+    assert paired_checker_uses_levels(raw)
+    assert raw["inputs"]["train_instance_ids"] == selection["train_instance_ids"]
+    assert raw["inputs"]["validation_instance_ids"] is None
+    assert selection["validation_instance_ids"] is None
+    assert len(raw["inputs"]["train_instance_ids"]) == 138
+    assert raw["inputs"]["initial_playbook"].endswith(
+        "paired_concern_manual_audit_v1_20260923.json"
+    )
+    assert raw["inputs"]["prompt_bundle"].endswith(
+        "offline_gepa_paired_levels_ace_core_v7_20260923.yaml"
+    )
+    assert raw["reflection"] == {
+        "rounds": 1,
+        "structured_recovery": True,
+        "structured_abstraction": True,
+        "distilled_curation": True,
+        "fact_links": True,
+    }
+    assert raw["curation"] == {
+        "evidence_contract": "distilled_v1",
+        "require_concern_coverage": False,
+        "self_check_contract": "lightweight_v1",
+    }
+    assert raw["search"] == {
+        "max_iterations": 8,
+        "reflection_minibatch_size": 24,
+        "max_metric_calls": 1200,
+        "seed": 42,
+        "perfect_score": 1.0,
+        "skip_perfect_score": True,
+    }
+    assert (raw["hpc"]["cpus_per_task"], raw["hpc"]["mem"]) == (1, "4G")
+    assert raw["hpc"]["agent_time"] == "00:35:00"
+    assert raw["hpc"]["max_running_array_tasks"] == 0
+
+    arguments = supervisor["arguments"]
+    assert supervisor["session"] == raw["run_id"]
+    assert arguments[arguments.index("--gepa-config") + 1] == str(path)
+    assert arguments[arguments.index("--target-iterations") + 1] == "8"
+    assert arguments[arguments.index("--poll-interval") + 1] == "60"
+    assert arguments[arguments.index("--cpus") + 1] == "1"
+    assert arguments[arguments.index("--mem") + 1] == "4G"
+    assert arguments[arguments.index("--ulhpc-config") + 1] == (
+        "configs/ulhpc_submit.yaml"
+    )
+    for flag in (
+        "--reclaim-staging",
+        "--reclaim-workspaces",
+        "--require-clean-worktree",
+    ):
+        assert flag in arguments
+
+
 def test_distilled_curator_index_excludes_side_findings_and_dispositions(tmp_path):
     from src.optimization.playbook_hpc_agents import HPCPlaybookProposalAgents
 
