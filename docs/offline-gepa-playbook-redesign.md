@@ -1262,11 +1262,20 @@ new IDs, zero counters, and lineage pointing to replaced rules. The semantic
 Refiner is disabled. If the complete playbook exceeds 10,000 Checker tokens,
 the existing deterministic whole-bullet pruning policy applies.
 
-The prepared smoke authority is
-`configs/gepa_verified_paired_ace_codex_smoke12_v1_20260924.yaml`, with
-`configs/gepa_verified_paired_ace_codex_smoke12_v1_supervisor_20260924.yaml` as
-its launch identity. It uses the already exposed twelve-pair training and
-four-pair validation development sample, one proposal, Iris one CPU/4G Agent
-tasks, a 35-minute Agent limit, one-minute polling, and an explicit concurrency
-cap of twelve for subscription stability. This is a flow and prompt diagnostic,
-not held-out evidence. It is prepared but not launched.
+The initial smoke authority was
+`configs/gepa_verified_paired_ace_codex_smoke12_v1_20260924.yaml`. Its Checker
+waves completed, but all Codex Reflectors returned the repository task ID where
+the output contract required the pair ID. The Host rejected those artifacts
+without rewriting them and exhausted three attempts, so no Curator or candidate
+ran. The failure is operational, not a scientific zero-score result.
+
+Recovery uses
+`configs/gepa_verified_paired_ace_codex_smoke12_v2_idfix_20260924.yaml` and its
+matching Supervisor config. The v2 prompt supplies the authoritative pair ID
+directly, and Host retry feedback reports both expected and observed IDs. The
+new run imports only fingerprint-verified completed v1 Checker outputs; invalid
+v1 Reflector outputs and the failed GEPA iteration are not imported. It keeps
+the same exposed twelve-pair training and four-pair validation development
+sample, one proposal, Iris one CPU/4G Agent tasks, a 35-minute Agent limit,
+one-minute polling, and a concurrency cap of twelve. This remains a flow and
+prompt diagnostic, not held-out evidence.

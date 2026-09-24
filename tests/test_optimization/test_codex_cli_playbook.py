@@ -13,6 +13,9 @@ from src.optimization.playbook_cli import (
     _validate_agent_executors,
     _validate_frozen_inputs,
 )
+from src.optimization.playbook_hpc_agents import (
+    HPCPairedRepoPlaybookProposalAgents,
+)
 from src.optimization.paired_playbook import (
     paired_checker_uses_levels,
     validate_ace_paired_reflector_review,
@@ -185,10 +188,19 @@ def test_ace_reflection_accepts_zero_or_many_insights_and_exact_bullet_tags() ->
     assert normalized["key_insights"][0]["concern"].startswith("The Plan")
     assert normalized["bullet_tags"][0]["tag"] == "helpful"
 
+    mismatched = {**value, "instance_id": "repository-task-id"}
+    with pytest.raises(
+        ValueError,
+        match=r"expected 'pair-1', got 'repository-task-id'",
+    ):
+        validate_ace_paired_reflector_review(
+            mismatched, instance_id="pair-1", playbook=playbook
+        )
+
 
 def test_ace_codex_prompt_bundle_is_sectionless_and_uses_current_operations() -> None:
     prompts = yaml.safe_load(Path(
-        "configs/prompts/offline_gepa_paired_binary_ace_codex_v1_20260924.yaml"
+        "configs/prompts/offline_gepa_paired_binary_ace_codex_v2_20260924.yaml"
     ).read_text(encoding="utf-8"))
     curator = prompts["curator_codex_system"] + prompts["curator_codex_instance"]
     reflector = prompts["reflector_codex_system"]
@@ -197,11 +209,70 @@ def test_ace_codex_prompt_bundle_is_sectionless_and_uses_current_operations() ->
     assert "section" not in curator.casefold()
     assert "zero or more reusable insights" in reflector
     assert "Analyze each Plan on its own" in reflector
+    assert "<pair_instance_id>{{ pair_instance_id }}</pair_instance_id>" in (
+        prompts["reflector_codex_instance"]
+    )
+    assert '"instance_id": "{{ pair_instance_id }}"' in (
+        prompts["reflector_codex_instance"]
+    )
+
+
+def test_paired_reflector_prompt_receives_authoritative_pair_id(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    captured = {}
+
+    class Executor:
+        run_dir = tmp_path
+        paired_reflector_output_contract = "ace_v1"
+
+        @staticmethod
+        def run_wave(role, items):
+            captured["role"] = role
+            captured["items"] = items
+            return [{"agent_output": {"instance_id": items[0]["instance_id"]}}]
+
+    agents = HPCPairedRepoPlaybookProposalAgents(
+        Executor(),  # type: ignore[arg-type]
+        image_records={},
+        maximum_tokens=10000,
+        evidence_contract="ace_v1",
+    )
+    monkeypatch.setattr(
+        agents,
+        "_write_pair_evidence",
+        lambda _record, *, prior: tmp_path / "evidence",
+    )
+    monkeypatch.setattr(
+        "src.optimization.playbook_hpc_agents._image_authority_for_repository",
+        lambda *_args, **_kwargs: {"sif_path": "/image.sif"},
+    )
+    seed = RejectPlaybook((PlaybookBullet("plan-00001", "Placeholder"),))
+    pair_id = "pair-authoritative-id"
+    output = agents.reflect_batch(
+        [
+            {
+                "instance_id": pair_id,
+                "task_id": "repo__task-1",
+                "issue": "issue",
+                "repository": {
+                    "repo": "repo/repo",
+                    "base_commit": "base",
+                    "instance_id": "repo__task-1",
+                },
+                "internal_playbook": seed.serialize(),
+            }
+        ],
+        rounds=1,
+    )
+    assert output == [{"instance_id": pair_id}]
+    assert captured["role"] == "paired_repo_reflector"
+    assert captured["items"][0]["prompt_values"]["pair_instance_id"] == pair_id
 
 
 def test_ace_codex_prompt_omits_legacy_learning_constraints() -> None:
     prompts = yaml.safe_load(Path(
-        "configs/prompts/offline_gepa_paired_binary_ace_codex_v1_20260924.yaml"
+        "configs/prompts/offline_gepa_paired_binary_ace_codex_v2_20260924.yaml"
     ).read_text(encoding="utf-8"))
     learning_text = "\n".join(
         str(prompts[key])
@@ -227,12 +298,12 @@ def test_ace_codex_prompt_omits_legacy_learning_constraints() -> None:
         assert legacy not in learning_text
 
 
-def test_ace_codex_smoke_is_frozen_and_matches_train_wave_concurrency() -> None:
+def test_ace_codex_idfix_resume_is_frozen_and_imports_only_checkers() -> None:
     config_path = Path(
-        "configs/gepa_verified_paired_ace_codex_smoke12_v1_20260924.yaml"
+        "configs/gepa_verified_paired_ace_codex_smoke12_v2_idfix_20260924.yaml"
     )
     supervisor_path = Path(
-        "configs/gepa_verified_paired_ace_codex_smoke12_v1_supervisor_20260924.yaml"
+        "configs/gepa_verified_paired_ace_codex_smoke12_v2_idfix_supervisor_20260924.yaml"
     )
     raw = yaml.safe_load(config_path.read_text(encoding="utf-8"))
     supervisor = yaml.safe_load(supervisor_path.read_text(encoding="utf-8"))
@@ -252,6 +323,10 @@ def test_ace_codex_smoke_is_frozen_and_matches_train_wave_concurrency() -> None:
     assert raw["hpc"]["agent_time"] == "00:35:00"
     assert (raw["hpc"]["cpus_per_task"], raw["hpc"]["mem"]) == (1, "4G")
     assert "repo_checker_contract" not in raw["inputs"]
+    assert raw["checkpoint_import"]["roles"] == ["paired_repo_checker"]
+    assert raw["checkpoint_import"]["source_run_manifest_sha256"] == (
+        "d1effbd613c5f90affafd3f92f1f56414f638d4bb270b118b2d01adcd75f21ce"
+    )
 
     arguments = supervisor["arguments"]
     assert supervisor["session"] == raw["run_id"]

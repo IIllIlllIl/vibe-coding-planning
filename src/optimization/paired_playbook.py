@@ -438,7 +438,10 @@ def validate_ace_paired_reflector_review(
     if not isinstance(value, dict) or set(value) != expected:
         raise ValueError("ACE paired Reflector review has an invalid schema")
     if value["instance_id"] != instance_id:
-        raise ValueError("ACE paired Reflector instance ID mismatch")
+        raise ValueError(
+            "ACE paired Reflector instance ID mismatch: "
+            f"expected {instance_id!r}, got {value['instance_id']!r}"
+        )
     if not isinstance(value["reasoning"], str) or not value["reasoning"].strip():
         raise ValueError("ACE paired Reflector reasoning must be non-empty")
     normalized: dict[str, Any] = {

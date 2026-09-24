@@ -750,6 +750,12 @@ class HPCPairedRepoPlaybookProposalAgents(HPCPlaybookProposalAgents):
                 if not isinstance(repository, dict) or not task_id:
                     raise ValueError("paired Reflection lacks repository identity")
                 evidence_dir = self._write_pair_evidence(record, prior=prior)
+                prompt_values = {
+                    "internal_playbook": internal.serialize(),
+                    "evidence_path": "/evidence",
+                }
+                if self.executor.paired_reflector_output_contract == "ace_v1":
+                    prompt_values["pair_instance_id"] = record["instance_id"]
                 items.append(
                     {
                         "instance_id": record["instance_id"],
@@ -760,10 +766,7 @@ class HPCPairedRepoPlaybookProposalAgents(HPCPlaybookProposalAgents):
                             task_id, repository, self.image_records
                         ),
                         "evidence_dir": str(evidence_dir),
-                        "prompt_values": {
-                            "internal_playbook": internal.serialize(),
-                            "evidence_path": "/evidence",
-                        },
+                        "prompt_values": prompt_values,
                     }
                 )
             priors = [
