@@ -781,3 +781,91 @@ def test_ace_codex_readability_resume_restarts_at_curator_boundary() -> None:
         arguments[arguments.index("--mem") + 1],
     ) == ("1", "4G")
     assert "--require-clean-worktree" in arguments
+
+
+def test_ace_codex_formal15_is_fresh_clean138_and_launch_bounded() -> None:
+    config_path = Path(
+        "configs/gepa_verified_paired_ace_codex_formal24_15it_v1_20260925.yaml"
+    )
+    supervisor_path = Path(
+        "configs/gepa_verified_paired_ace_codex_formal24_15it_v1_supervisor_20260925.yaml"
+    )
+    selection_path = Path(
+        "configs/frozen_swe_verified_plan_pairs/"
+        "20260922_operationally_clean138_v1/selection.json"
+    )
+    raw = yaml.safe_load(config_path.read_text(encoding="utf-8"))
+    supervisor = yaml.safe_load(supervisor_path.read_text(encoding="utf-8"))
+    selection = json.loads(selection_path.read_text(encoding="utf-8"))
+
+    _validate_frozen_inputs(config_path.resolve(), raw)
+    _validate_agent_executors(raw)
+    assert raw["status"] == "ready_not_launched"
+    assert "checkpoint_import" not in raw
+    assert raw["task"] == {"semantics": "paired_repo_concern_binary_ace_v1"}
+    assert raw["inputs"]["train_instance_ids"] == selection["train_instance_ids"]
+    assert len(raw["inputs"]["train_instance_ids"]) == 138
+    assert raw["inputs"]["validation_instance_ids"] is None
+    assert selection["validation_instance_ids"] is None
+    assert raw["inputs"]["initial_playbook"].endswith(
+        "offline_gepa_reject_playbook_seed_v2.json"
+    )
+    assert raw["inputs"]["prompt_bundle"].endswith(
+        "offline_gepa_paired_binary_ace_codex_v3_readable_20260924.yaml"
+    )
+
+    assert raw["models"]["checker"]["thinking"] == "disabled"
+    assert raw["models"]["reflector"] == {
+        "executor": "codex_cli",
+        "codex_binary": "${HOME}/.local/lib/vibe-codex/0.155.1/bin/codex",
+        "codex_auth_file": "${HOME}/.codex/auth.json",
+        "codex_version": "0.155.1",
+        "model": "gpt-5.6-terra",
+        "reasoning_effort": "max",
+    }
+    assert raw["models"]["curator"] == {
+        "executor": "codex_cli",
+        "codex_binary": "${HOME}/.local/lib/vibe-codex/0.155.1/bin/codex",
+        "codex_auth_file": "${HOME}/.codex/auth.json",
+        "codex_version": "0.155.1",
+        "model": "gpt-5.6-sol",
+        "reasoning_effort": "high",
+    }
+    assert raw["reflection"] == {"rounds": 1, "output_contract": "ace_v1"}
+    assert raw["curation"] == {"evidence_contract": "ace_v1"}
+    assert raw["refiner"] == {"enabled": False}
+    assert raw["length"] == {
+        "maximum_visible_tokens": 10000,
+        "maximum_bullet_tokens": 64,
+        "harmful_pruning_weight": 2,
+    }
+    assert raw["search"] == {
+        "max_iterations": 15,
+        "reflection_minibatch_size": 24,
+        "max_metric_calls": 2400,
+        "seed": 42,
+        "perfect_score": 1.0,
+        "skip_perfect_score": False,
+    }
+    assert raw["budget"] == {
+        "candidate_proposals": 15,
+        "reflection_pairs_per_proposal": 24,
+        "checker_agents_per_pair_evaluation": 2,
+        "reflection_rounds_per_pair": 1,
+        "projected_pair_metric_call_ceiling": 2400,
+    }
+
+    assert raw["hpc"]["max_running_array_tasks"] == 0
+    assert raw["hpc"]["agent_time"] == "00:35:00"
+    assert raw["hpc"]["poll_interval_seconds"] == 60
+    assert (raw["hpc"]["cpus_per_task"], raw["hpc"]["mem"]) == (1, "4G")
+    arguments = supervisor["arguments"]
+    assert supervisor["session"] == raw["run_id"]
+    assert arguments[arguments.index("--gepa-config") + 1] == str(config_path)
+    assert arguments[arguments.index("--target-iterations") + 1] == "15"
+    assert arguments[arguments.index("--poll-interval") + 1] == "60"
+    assert arguments[arguments.index("--cpus") + 1] == "1"
+    assert arguments[arguments.index("--mem") + 1] == "4G"
+    assert "--reclaim-staging" in arguments
+    assert "--reclaim-workspaces" in arguments
+    assert "--require-clean-worktree" in arguments

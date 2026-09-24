@@ -1250,10 +1250,11 @@ The effective prompt was audited in three layers:
 | Runtime contract | Exact JSON schemas, evidence paths, retry feedback, rule ordering, and submission protocol. |
 
 The prompt does not carry forward Level, categories/sections, forced finding
-coverage, Curator self-check rows, `risk_analysis`, fixed per-bullet token
-limits, or case-shaped examples. `correct_approach`, `error_identification`,
-and `root_cause_analysis` remain nullable ACE-style Reflection fields. The
-smoke must inspect whether they nevertheless create an error-seeking bias.
+coverage, Curator self-check rows, `risk_analysis`, or case-shaped examples.
+`correct_approach`, `error_identification`, and `root_cause_analysis` remain
+nullable ACE-style Reflection fields. The v3 readability adaptation adds only
+an atomic, plain-English Curator target, a 32-token preference, and a
+Host-enforced 64-token ceiling.
 
 The Reflector may produce zero or multiple distinct `key_insights`. The
 Curator sees the complete indexed batch and may issue `ADD`, `UPDATE`, `MERGE`,
@@ -1304,7 +1305,7 @@ development sample, prompt, Seed, models, budget, Iris one CPU/4G resources,
 otherwise unchanged. This is a flow, model-fit, and prompt diagnostic, not
 held-out evidence.
 
-The prepared Curator-boundary replay is
+The completed Curator-boundary replay is
 `configs/gepa_verified_paired_ace_codex_smoke12_v6_curator_readability_20260924.yaml`.
 It hash-binds the completed v5 run manifest and imports exact matching
 `paired_repo_checker` and `paired_repo_reflector` outputs. It therefore does
@@ -1320,3 +1321,24 @@ restores the existing mechanical `maximum_bullet_tokens: 64` validation; an
 overlong Curator artifact is rejected and retried rather than silently
 rewritten. This replay tests readability correction on frozen reflections and
 remains development evidence rather than a generalization result.
+
+The replay completed one proposal without operational failure. Twelve
+reflections contained 30 reusable insights; the Curator emitted 19 ADD
+operations, including five additions supported by more than one pair. This
+shows that it consolidated some repeated findings, but its semantic notion of
+the same concern remained narrower than a shared high-level theme. The Host
+rejects only exact normalized-text duplicates; semantic overlap remains a
+Curator responsibility. The proposed candidate entered the pool but did not
+replace the Seed as the best validation candidate.
+
+The prepared fresh formal identity is
+`configs/gepa_verified_paired_ace_codex_formal24_15it_v1_20260925.yaml`.
+It imports no smoke output or candidate. It starts from the atomic Seed on the
+operationally clean 138-pair train selection and original frozen 36-pair
+development-validation split. Fifteen proposals each use a 24-pair Reflection
+minibatch. The paired score remains `+1` for the correct Plan ordering, `-1`
+for the inverse, and `0` for a tie. Checker, Reflector, Curator, prompt, Refiner
+state, and length contracts match the completed readability smoke. Its audit
+must track playbook growth and operation types across iterations so that
+continued ADD-only growth is distinguishable from actual UPDATE/MERGE/REMOVE
+maintenance. This is still development validation, not a new held-out claim.

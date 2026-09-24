@@ -15,18 +15,18 @@ the shared supervisor supplies canonical storage paths.
 ## Experiment Inventory
 
 Current paired-learning development prompt authority:
-`prompts/offline_gepa_paired_binary_ace_codex_v2_20260924.yaml` is an
-ACE-near, no-Level baseline. The repository-aware binary Checker remains a
-no-thinking DeepSeek mini-swe-agent. The prepared recovery uses one Codex
-GPT-5.6 Terra/max Reflector per pair and one Codex GPT-5.6 Sol/high Curator per
-proposal. The Curator maintains the playbook with `ADD`, `UPDATE`, `MERGE`, and
-`REMOVE`. The prompt deliberately omits the prior
-category, fact-link, coverage-disposition, self-check, risk-analysis, and
-per-bullet length contracts. The paired score and frozen 12/4 development
-sample are unchanged. Its prepared smoke is the current next-run identity;
-it pins the compute-node-tested Codex CLI 0.155.1, gives every Agent isolated
-volatile Codex state, and resumes from the frozen Checker boundary. Preparation
-does not authorize launch.
+`prompts/offline_gepa_paired_binary_ace_codex_v3_readable_20260924.yaml` is an
+ACE-near, no-Level baseline with the accepted minimal Curator readability
+contract. The repository-aware binary Checker remains a no-thinking DeepSeek
+mini-swe-agent. One Codex GPT-5.6 Terra/max Reflector handles each pair and one
+Codex GPT-5.6 Sol/high Curator handles each proposal. The Curator maintains the
+playbook with `ADD`, `UPDATE`, `MERGE`, and `REMOVE`; the Host enforces only the
+mechanical 64-token bullet ceiling and exact normalized-text uniqueness. The
+prompt deliberately omits the prior category, fact-link,
+coverage-disposition, self-check, and risk-analysis contracts. The completed
+12/4 smoke is development evidence. The prepared formal identity starts a
+fresh candidate tree from the one-rule Seed on clean138 train and the original
+36-pair development-validation split. Preparation does not authorize launch.
 
 The prior linked-Level prompt authority,
 `prompts/offline_gepa_paired_levels_ace_core_v7_20260923.yaml`, and its
@@ -138,8 +138,10 @@ labels, image manifests, output roots, or baseline identities in a new run.
 | `gepa_verified_paired_ace_codex_smoke12_v4_pinned_supervisor_20260924.yaml` | Frozen Supervisor identity for the stopped v4 run; do not relaunch. |
 | `gepa_verified_paired_ace_codex_smoke12_v5_isolated_20260924.yaml` | Completed Reflector-boundary recovery. It imported fingerprint-verified v1 Checker outputs, pinned 0.155.1, isolated `CODEX_HOME` per Agent, and completed one Curator proposal and candidate evaluation. |
 | `gepa_verified_paired_ace_codex_smoke12_v5_isolated_supervisor_20260924.yaml` | Frozen one-minute-poll Iris Supervisor identity for completed v5; do not relaunch. |
-| `gepa_verified_paired_ace_codex_smoke12_v6_curator_readability_20260924.yaml` | Prepared Curator-boundary replay. It imports exact v5 Checker and Reflector outputs, applies only the v3 Curator readability prompt, restores the Host-enforced 64-token bullet ceiling, and evaluates any new candidate normally. |
-| `gepa_verified_paired_ace_codex_smoke12_v6_curator_readability_supervisor_20260924.yaml` | Prepared one-minute-poll Iris Supervisor identity for v6; presence does not authorize launch. |
+| `gepa_verified_paired_ace_codex_smoke12_v6_curator_readability_20260924.yaml` | Completed Curator-boundary replay. It imported exact v5 Checker and Reflector outputs, applied only the v3 Curator readability prompt, restored the Host-enforced 64-token bullet ceiling, and completed fresh candidate evaluation. |
+| `gepa_verified_paired_ace_codex_smoke12_v6_curator_readability_supervisor_20260924.yaml` | Completed one-minute-poll Iris Supervisor identity for v6; do not relaunch. |
+| `gepa_verified_paired_ace_codex_formal24_15it_v1_20260925.yaml` | Prepared fresh ACE-near formal baseline: atomic Seed, clean138 train, original 36-pair development validation, 24-pair minibatches, fifteen proposals, binary no-thinking Checker, Terra/max Reflectors, Sol/high Curator, disabled Refiner, and 64-token bullet ceiling. |
+| `gepa_verified_paired_ace_codex_formal24_15it_v1_supervisor_20260925.yaml` | Prepared Iris Supervisor identity for the formal baseline: one CPU/4G, 35-minute Agents, one-minute polling, no project-side Slurm array cap, and conservative staging/workspace reclamation. Presence does not authorize launch. |
 | `gepa_verified_paired_learning12_smoke_v6_binary_seed_20260924.yaml` | Prepared fresh binary full cycle from the one-rule Seed on the same 12/4 development pairs as the Level smoke. |
 | `gepa_verified_paired_learning12_smoke_v6_binary_manual_20260924.yaml` | Prepared fresh binary full cycle from the audited ten-rule manual playbook on the same 12/4 pairs. |
 | `gepa_verified_paired_learning12_smoke_v6_binary_sequence_supervisor_20260924.yaml` | Prepared one-minute-poll Iris sequence for the Seed and manual-playbook no-Level ablation phases; presence alone does not authorize launch. |

@@ -1,0 +1,280 @@
+schema_version: 1
+mode: offline_paired_repo_concern_playbook
+status: ready_not_launched
+run_id: verified-paired-ace-codex-formal24-15it-v1-20260925
+purpose: >-
+  Run a fresh fifteen-proposal ACE-near paired Plan-classification baseline
+  from the atomic one-rule Seed. Use the operationally clean 138-pair training
+  selection, the original frozen 36-pair development-validation split, 24-pair
+  Reflection minibatches, the audited readability prompt, and native Codex
+  Reflector/Curator roles.
+
+paths:
+  dataset_snapshot: configs/frozen_swe_verified_plan_pairs/20260919_safe_pce_within_task_pairs_v1
+  initial_rules: configs/development_guidelines/offline_gepa_reject_playbook_seed_v2.json
+  run_dir: output/SWE-bench_Verified/gepa-paired-repo-concern-playbook-runs/ace-codex-formal24-15it-v1-20260925
+
+task: {semantics: paired_repo_concern_binary_ace_v1}
+container:
+  runtime: apptainer
+  sif_cache_dir: /scratch/users/${USER}/vibe-coding-planning/shared/sif-cache
+execution: {backend: hpc_slurm}
+
+inputs:
+  dataset_snapshot: configs/frozen_swe_verified_plan_pairs/20260919_safe_pce_within_task_pairs_v1
+  dataset_manifest_sha256: cc1c3488c20a90340d88f419212c2f28b0d60e9a53ab15b84c7e9809751cc736
+  selection: configs/frozen_swe_verified_plan_pairs/20260922_operationally_clean138_v1/selection.json
+  selection_sha256: 2c005a8e20246acbef4aa226860e0c7d054859612d69eeaad7e4dab11316358b
+  initial_playbook: configs/development_guidelines/offline_gepa_reject_playbook_seed_v2.json
+  initial_playbook_sha256: 16e09571f484f355300dc29f7a828ba8d9b5ca691152ffb8b3b1f2d13d5f83e4
+  prompt_bundle: configs/prompts/offline_gepa_paired_binary_ace_codex_v3_readable_20260924.yaml
+  prompt_bundle_sha256: df6f9d1553eeab0ea05974bcd3bde29cdec3c8f8ad6c4d5ee84abe7412d6c4a3
+  repo_checker_image_manifest: configs/frozen_swe_verified_safe_pce/verified482-formal-v1-20260914/images.json
+  repo_checker_image_manifest_sha256: f4c18c5dcf30fa48cb503241c5ba69ae8f6368e63726f8ce0875a868ae212e0a
+  train_instance_ids:
+    - pair-6c2501887bccef6e11bc14ee
+    - pair-3308d9fa0ee29cf70781af31
+    - pair-99a0953c5fb9f7b586d42280
+    - pair-eeb527cce8bb7653c0902b8d
+    - pair-49434d02a9c6631fd2f1a021
+    - pair-b118ea836f8410c0ef5af06c
+    - pair-5b22036961b041004e81d129
+    - pair-34ba7552e31684aef8e95cd8
+    - pair-85a90cad7c4d8b477351d8f1
+    - pair-357a13e86af0fd7948182f42
+    - pair-83e8aadc6b814c9971562404
+    - pair-2b53796a2a8f57bbaee59781
+    - pair-055fa38f6bdde96a974f2ac9
+    - pair-dbee586cdb16cd34cdb2d575
+    - pair-69facf985c6730b21d8eb2ee
+    - pair-0120d77f27934d13dd7c8101
+    - pair-3482b250b1d54e93ac86c0ad
+    - pair-d78611c7777c70d86258f924
+    - pair-842bf5d7153c7575af080028
+    - pair-17859399a025838f80e39e14
+    - pair-6663594e928684ff4a25858b
+    - pair-279b44110a73119e5b1c9b1c
+    - pair-99c1d359245daf6056246a75
+    - pair-172c6905e6cd0cc4181b9991
+    - pair-7746301e8f5ed8e11f3c4115
+    - pair-c6a9db12bf5e5dd628f64d68
+    - pair-7d107c3a8a06b812c82bfd99
+    - pair-6a1fdf1391588154ed6b48ad
+    - pair-c73515dc5d36781e251a2306
+    - pair-625b7dbb05e1629d180fee4f
+    - pair-e35dfe3c74a4733287e311c7
+    - pair-ef3c8e3bcc6b4ec8434f9764
+    - pair-76cf8812228ddbb4a1de5a38
+    - pair-a0dcbe5e3bf51656ac722340
+    - pair-e756964df4c45a4dbd0f77a3
+    - pair-b33b24acc839c112f7840356
+    - pair-da38cbbd2e90a3a9777f3ded
+    - pair-144668ba5e385f0d9e2b2fd1
+    - pair-1eee6d23e01617403113ce7d
+    - pair-6b7fec637a37763a9a032df1
+    - pair-0ebf864961624a083fcbb9d4
+    - pair-b8fbfab3b9bc16aa51d17fa0
+    - pair-6c5bc90b2e4b67bf2a985fa7
+    - pair-77d37bd5c891612490c9e3bf
+    - pair-caa29e5bab9ffb8e18bd8ef5
+    - pair-8244f5e2d6fb7c28aa631fbe
+    - pair-cebf943ee365480f46cd4418
+    - pair-8e3df66e392935c236b7fa69
+    - pair-38637837252cb2f4bb2c2dbc
+    - pair-f521754e60d32587bc73e721
+    - pair-2a43220a37aeac4891685403
+    - pair-89ccad0247ccfc67f8026dc1
+    - pair-ad539762af04a96fabcc1bd1
+    - pair-a9e0bf3ec9ea79796e4bb187
+    - pair-c8a02f40ae79ebb5be7714cc
+    - pair-05a74483c4c4ebd653a92d9e
+    - pair-354033e21832e50cacf63e37
+    - pair-9c0e4a9a8d2c3aedf64559c6
+    - pair-a456a468f8eac7b10beb1a26
+    - pair-a24098c7a05c6678eaf550dc
+    - pair-a8e77ab9911abc9c46744751
+    - pair-cf7cec5b6b84c64723a597b2
+    - pair-d4543525ae49a0a841c315d9
+    - pair-ff877da34c25d4e5274f1ada
+    - pair-c7ecfd6d036e87b19f80084c
+    - pair-28afb7d0593fa48feb283d44
+    - pair-91546609b4eab7468287e813
+    - pair-102de7b86d22811c9e7e565d
+    - pair-74c81b7c538dbeb6d8e6c4dd
+    - pair-9a80094ad7c495896b9871bb
+    - pair-af9e530f30798b24922280f8
+    - pair-b6288be04be53a84472c7d08
+    - pair-3a72303e622793549220efbb
+    - pair-f6b1485b7373d712af71f9ee
+    - pair-26f3198ed44b6f1f68fd05f7
+    - pair-e7c206d74981621a4417a384
+    - pair-c53949e9056b00630742f81e
+    - pair-3944a56edf234d839eeb5e7b
+    - pair-6f4e940e3dd3fcbeb30194f0
+    - pair-89b7184937aceb9fe0bf65e1
+    - pair-22862126cddcca82bdc175d7
+    - pair-f8f15f720051423eb28c5c0d
+    - pair-8d40917f12de237b7f541462
+    - pair-d83f42328cec075323cb1631
+    - pair-7246f2522fca8f23da0ca37a
+    - pair-a634d27cd12d4ba785b79ac2
+    - pair-c965e4310e091064ebfb47c0
+    - pair-b2552c913bf33a5aeeb3cc49
+    - pair-3e122a340955e123b250944b
+    - pair-549f122669a991e427c73628
+    - pair-c676ea008b078000a44f765c
+    - pair-51d343fb5df22120d8dc9e53
+    - pair-57e2b2d1c2081887993373c8
+    - pair-8451b62c43f1aa247a1bbe1f
+    - pair-da3a49e06b6b680bbe0b3b49
+    - pair-62b15a8e6978206c8f08a33c
+    - pair-2f9ca0d3d82abbbb69ddbb5f
+    - pair-031dda4a022490eec6a35e69
+    - pair-d740ba1df9ed7003d6073ece
+    - pair-31eb80dae354761e5dc9798f
+    - pair-836ba9a84af45c6d783bcc7c
+    - pair-78109f69ff82bbd16ec960be
+    - pair-a530fcf6dd7a13f491783696
+    - pair-f30f9ac4abc0eaafe8653fc8
+    - pair-97e09b363fd06193d97b9bb8
+    - pair-28527b33658023ff7d9ccbab
+    - pair-118b7a02586ec4be520079f0
+    - pair-e21a00e40d30fbbc635c81c1
+    - pair-10151f49220369f6047d7b60
+    - pair-2284228ae88e5da87be22c18
+    - pair-2361747ea9ef5953b609a016
+    - pair-f7185b9e8621913d4ccaa79e
+    - pair-1905d94cba11050f2d3392d8
+    - pair-7def2b8d94f2e8c44484328f
+    - pair-8a61b639fdfe07ac60bfc127
+    - pair-4128168f704916209361ce4d
+    - pair-5c44006c7f3fdedafccb1fda
+    - pair-367c066a53c8b7df76863f02
+    - pair-7cb2ae95ff71c9ec6c7eec87
+    - pair-a504e7ef2cd69e56f77785ae
+    - pair-f6b6da1e1190c4398320a5a1
+    - pair-7d975adcbf39e7c0dc8723f1
+    - pair-2f3b5cacb649e850b090e5e6
+    - pair-d18ddc4ae2e4950ea162e293
+    - pair-d7209ad585d189b61d6ed340
+    - pair-0eae6e0add22485705dc6144
+    - pair-4509f0b702935214b67c5b2a
+    - pair-38d07b8ab2d23f5348193d15
+    - pair-a5b70a19aa50a4cc2f7d8721
+    - pair-162c7542aaad5c3992e3ada9
+    - pair-fc43ab68a786066b9b62713a
+    - pair-5f5846f67f6452270f343fbe
+    - pair-7b2a40f2ecb29b5ab8be6152
+    - pair-a8de7c503394aaeb48cea8c0
+    - pair-f238c71b0ce9c101b56e86b7
+    - pair-ffafcc3dd72e709200dfd53a
+    - pair-7ee25a9f68458b48a36f683d
+    - pair-8bfe9add6a6607c14210123f
+  validation_instance_ids: null
+
+models:
+  checker:
+    executor: mini_swe
+    model: deepseek-v4-flash
+    temperature: 0.0
+    thinking: disabled
+  reflector:
+    executor: codex_cli
+    codex_binary: ${HOME}/.local/lib/vibe-codex/0.155.1/bin/codex
+    codex_auth_file: ${HOME}/.codex/auth.json
+    codex_version: 0.155.1
+    model: gpt-5.6-terra
+    reasoning_effort: max
+  curator:
+    executor: codex_cli
+    codex_binary: ${HOME}/.local/lib/vibe-codex/0.155.1/bin/codex
+    codex_auth_file: ${HOME}/.codex/auth.json
+    codex_version: 0.155.1
+    model: gpt-5.6-sol
+    reasoning_effort: high
+
+repo_checker:
+  output_contract: binary_v1
+  review_only: true
+  workdir: /testbed
+  command_timeout_seconds: 1800
+  source_access_policy: conservative_blacklist_v3
+  history_policy: base_ancestor_bundle_v1
+  masked_container_paths: [/opt/miniconda3/pkgs]
+
+scoring: {correct_order: 1, inverted: -1, tied: 0, invalid: -100}
+search:
+  max_iterations: 15
+  reflection_minibatch_size: 24
+  max_metric_calls: 2400
+  seed: 42
+  perfect_score: 1.0
+  skip_perfect_score: false
+reflection:
+  rounds: 1
+  output_contract: ace_v1
+curation:
+  evidence_contract: ace_v1
+refiner:
+  enabled: false
+length:
+  maximum_visible_tokens: 10000
+  maximum_bullet_tokens: 64
+  harmful_pruning_weight: 2
+budget:
+  candidate_proposals: 15
+  reflection_pairs_per_proposal: 24
+  checker_agents_per_pair_evaluation: 2
+  reflection_rounds_per_pair: 1
+  projected_pair_metric_call_ceiling: 2400
+stopping:
+  stop_after_candidate_proposals: 15
+  abort_on_operational_incomplete: true
+operational_incomplete_policy: >-
+  Model, subscription, transport, timeout, parsing, missing-artifact,
+  evidence-receipt, repository-authority, or exhausted Agent-output-contract
+  failures remain operationally incomplete. Host validation retries invalid
+  Agent artifacts; it does not rewrite them into scientific outcomes. A
+  subscription-usage interruption pauses this run for checkpointed resume; it
+  is not a scientific score or a reason to resample completed Agents.
+
+hpc:
+  submit: true
+  partition: batch
+  cpus_per_task: 1
+  mem: 4G
+  controller_slice_time: "00:30:00"
+  agent_time: "00:35:00"
+  poll_interval_seconds: 60
+  max_running_array_tasks: 0
+  max_task_attempts: 3
+  task_output_grace_seconds: 120
+  missing_task_grace_seconds: 300
+  remote_env_file: ~/.config/vibe-coding-planning/deepseek.env
+  python_module: lang/Python/3.11
+  container_module: tools/Apptainer
+  job_name_prefix: verified-paired-ace-codex-formal24-15it-v1-20260925
+
+success_criteria:
+  - Use exactly the frozen operationally clean 138 train pairs and original frozen 36 development-validation pairs without resplitting tasks.
+  - Start a fresh candidate tree from the atomic one-rule Seed and import no historical Agent outputs, candidates, or checkpoints.
+  - Complete fifteen candidate proposals with 24 paired Reflection examples per proposal unless the frozen metric ceiling or an operational interruption stops the run.
+  - Keep the paired +1/-1/0 ordering score and binary repository-aware Checker unchanged from the completed smoke.
+  - Require each proposed bullet to remain at or below 64 tokens and preserve the 10,000-token whole-playbook boundary.
+  - Give every Codex Agent a distinct transient CODEX_HOME with no persisted credentials.
+  - Verify Codex CLI 0.155.1 and its read-only sandbox before every inference call.
+  - Require every Codex Reflector and Curator output to return the exact SHA-256 receipt for its evidence manifest.
+  - Preserve raw Codex events, receipts, Host retries, candidates, counters, pair-order scores, and resumable checkpoints.
+
+readiness: {runnable: true, launched: false, missing: []}
+launch_checks:
+  - Confirm a clean committed worktree and no duplicate supervisor.
+  - Verify the pinned Codex binary, version, isolated state, sandbox preflight, and current ChatGPT subscription login.
+  - Verify the frozen dataset, clean138 selection, Seed, prompt, image manifest, SIF cache, and prepared history bundles.
+  - Verify Iris storage and file-count headroom before launch.
+  - Verify generated Controller and Agent SBATCH requests remain one CPU and 4G.
+audit_targets:
+  - Track ADD, UPDATE, MERGE, and REMOVE counts per proposal and total playbook growth.
+  - Audit exact and semantic overlap, helpful/harmful counters, bullet lengths, plain-English readability, and source-case independence.
+  - Compare train and development-validation pair-order scores without treating the exposed validation split as held out.
+  - Audit any Checker instability, candidate reversals, operationally incomplete task, or subscription interruption before interpretation.
