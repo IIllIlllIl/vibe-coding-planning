@@ -15,11 +15,12 @@ the shared supervisor supplies canonical storage paths.
 ## Experiment Inventory
 
 Current paired-learning development prompt authority:
-`prompts/offline_gepa_paired_binary_ace_codex_v1_20260924.yaml` is an
+`prompts/offline_gepa_paired_binary_ace_codex_v2_20260924.yaml` is an
 ACE-near, no-Level baseline. The repository-aware binary Checker remains a
-no-thinking DeepSeek mini-swe-agent. One Codex GPT-5.6 high-reasoning
-Reflector analyzes each pair, and one Codex Curator maintains the playbook with
-`ADD`, `UPDATE`, `MERGE`, and `REMOVE`. The prompt deliberately omits the prior
+no-thinking DeepSeek mini-swe-agent. The prepared recovery uses one Codex
+GPT-5.6 Terra/max Reflector per pair and one Codex GPT-5.6 Sol/high Curator per
+proposal. The Curator maintains the playbook with `ADD`, `UPDATE`, `MERGE`, and
+`REMOVE`. The prompt deliberately omits the prior
 category, fact-link, coverage-disposition, self-check, risk-analysis, and
 per-bullet length contracts. The paired score and frozen 12/4 development
 sample are unchanged. Its prepared smoke is the current next-run identity;
@@ -126,8 +127,10 @@ labels, image manifests, output roots, or baseline identities in a new run.
 | `prompts/offline_gepa_paired_binary_ace_codex_v2_20260924.yaml` | Pair-ID repair of the ACE-near prompt: it supplies the authoritative pair ID directly while leaving the Checker and scientific Reflection/Curator instructions unchanged. |
 | `gepa_verified_paired_ace_codex_smoke12_v1_20260924.yaml` | Failed initial one-proposal smoke. Checker work completed, but all Reflectors returned repository task IDs instead of pair IDs and exhausted three Host-validation attempts; no candidate was produced. |
 | `gepa_verified_paired_ace_codex_smoke12_v1_supervisor_20260924.yaml` | Frozen Supervisor identity for the failed v1 smoke; do not relaunch. |
-| `gepa_verified_paired_ace_codex_smoke12_v2_idfix_20260924.yaml` | Prepared recovery under a new run identity. It imports only fingerprint-verified completed v1 Checker outputs and reruns Reflector/Curator with the explicit pair-ID prompt. |
-| `gepa_verified_paired_ace_codex_smoke12_v2_idfix_supervisor_20260924.yaml` | Prepared one-minute-poll Iris Supervisor identity for the v2 recovery; presence does not authorize launch. |
+| `gepa_verified_paired_ace_codex_smoke12_v2_idfix_20260924.yaml` | Failed recovery provenance. The prompt contained the explicit pair ID, but the Worker did not forward it into the repository-agent renderer, so all Reflectors failed before Codex execution. |
+| `gepa_verified_paired_ace_codex_smoke12_v2_idfix_supervisor_20260924.yaml` | Frozen Supervisor identity for the failed v2 recovery; do not relaunch. |
+| `gepa_verified_paired_ace_codex_smoke12_v3_terramax_solhigh_20260924.yaml` | Prepared recovery after fixing the Worker-to-runtime pair-ID path. It imports only fingerprint-verified v1 Checker outputs, uses Terra/max Reflectors and a Sol/high Curator, and keeps the Refiner disabled. |
+| `gepa_verified_paired_ace_codex_smoke12_v3_terramax_solhigh_supervisor_20260924.yaml` | Prepared one-minute-poll Iris Supervisor identity for the v3 recovery; presence does not authorize launch. |
 | `gepa_verified_paired_learning12_smoke_v6_binary_seed_20260924.yaml` | Prepared fresh binary full cycle from the one-rule Seed on the same 12/4 development pairs as the Level smoke. |
 | `gepa_verified_paired_learning12_smoke_v6_binary_manual_20260924.yaml` | Prepared fresh binary full cycle from the audited ten-rule manual playbook on the same 12/4 pairs. |
 | `gepa_verified_paired_learning12_smoke_v6_binary_sequence_supervisor_20260924.yaml` | Prepared one-minute-poll Iris sequence for the Seed and manual-playbook no-Level ablation phases; presence alone does not authorize launch. |

@@ -1,0 +1,148 @@
+schema_version: 1
+mode: offline_paired_repo_concern_playbook
+status: ready_not_launched
+run_id: verified-paired-ace-codex-smoke12-v3-terramax-solhigh-20260924
+purpose: >-
+  Resume the ACE-near Codex smoke from fingerprint-verified v1 Checker outputs
+  after threading the authoritative pair ID through the complete Reflector
+  runtime, using Terra max for Reflectors and Sol high for the Curator
+
+paths:
+  dataset_snapshot: configs/frozen_swe_verified_plan_pairs/20260919_safe_pce_within_task_pairs_v1
+  initial_rules: configs/development_guidelines/offline_gepa_reject_playbook_seed_v2.json
+  run_dir: output/SWE-bench_Verified/gepa-paired-repo-concern-playbook-runs/ace-codex-smoke12-v3-terramax-solhigh-20260924
+
+task: {semantics: paired_repo_concern_binary_ace_v1}
+container:
+  runtime: apptainer
+  sif_cache_dir: /scratch/users/${USER}/vibe-coding-planning/shared/sif-cache
+execution: {backend: hpc_slurm}
+
+inputs:
+  dataset_snapshot: configs/frozen_swe_verified_plan_pairs/20260919_safe_pce_within_task_pairs_v1
+  dataset_manifest_sha256: cc1c3488c20a90340d88f419212c2f28b0d60e9a53ab15b84c7e9809751cc736
+  initial_playbook: configs/development_guidelines/offline_gepa_reject_playbook_seed_v2.json
+  initial_playbook_sha256: 16e09571f484f355300dc29f7a828ba8d9b5ca691152ffb8b3b1f2d13d5f83e4
+  prompt_bundle: configs/prompts/offline_gepa_paired_binary_ace_codex_v2_20260924.yaml
+  prompt_bundle_sha256: be34fab1cff0bc454dceec8cd99498d5fc434270e9e924a6a06f74d65f3bce2e
+  repo_checker_image_manifest: configs/frozen_swe_verified_safe_pce/verified482-formal-v1-20260914/images.json
+  repo_checker_image_manifest_sha256: f4c18c5dcf30fa48cb503241c5ba69ae8f6368e63726f8ce0875a868ae212e0a
+  selection: configs/frozen_swe_verified_plan_pairs/20260922_paired_learning12_smoke_v1/selection.json
+  selection_sha256: 9286a888ba1bbfc9b2ed80553f1fcd1a7a608ce0a2255c24d17a56b63d1030f0
+  train_instance_ids:
+    - pair-78109f69ff82bbd16ec960be
+    - pair-62b15a8e6978206c8f08a33c
+    - pair-da3a49e06b6b680bbe0b3b49
+    - pair-367c066a53c8b7df76863f02
+    - pair-6663594e928684ff4a25858b
+    - pair-549f122669a991e427c73628
+    - pair-89ccad0247ccfc67f8026dc1
+    - pair-f238c71b0ce9c101b56e86b7
+    - pair-b6288be04be53a84472c7d08
+    - pair-cf7cec5b6b84c64723a597b2
+    - pair-cebf943ee365480f46cd4418
+    - pair-1eee6d23e01617403113ce7d
+  validation_instance_ids:
+    - pair-27786b755371198326783156
+    - pair-05a1e7405702ab648b7f67ea
+    - pair-92f9af0cf56249cb5da68410
+    - pair-8043b6b99e7285b2ddbf6688
+
+models:
+  checker:
+    executor: mini_swe
+    model: deepseek-v4-flash
+    temperature: 0.0
+    thinking: disabled
+  reflector:
+    executor: codex_cli
+    model: gpt-5.6-terra
+    reasoning_effort: max
+  curator:
+    executor: codex_cli
+    model: gpt-5.6-sol
+    reasoning_effort: high
+
+repo_checker:
+  output_contract: binary_v1
+  review_only: true
+  workdir: /testbed
+  command_timeout_seconds: 1800
+  source_access_policy: conservative_blacklist_v3
+  history_policy: base_ancestor_bundle_v1
+  masked_container_paths: [/opt/miniconda3/pkgs]
+
+scoring: {correct_order: 1, inverted: -1, tied: 0, invalid: -100}
+search:
+  max_iterations: 1
+  reflection_minibatch_size: 12
+  max_metric_calls: 100
+  seed: 42
+  perfect_score: 1.0
+  skip_perfect_score: false
+reflection:
+  rounds: 1
+  output_contract: ace_v1
+curation:
+  evidence_contract: ace_v1
+refiner:
+  enabled: false
+length:
+  maximum_visible_tokens: 10000
+  maximum_bullet_tokens: null
+  harmful_pruning_weight: 2
+budget:
+  candidate_proposals: 1
+  reflection_pairs_per_proposal: 12
+  checker_agents_per_pair_evaluation: 2
+  reflection_rounds_per_pair: 1
+  projected_pair_metric_call_ceiling: 100
+stopping:
+  stop_after_candidate_proposals: 1
+  abort_on_operational_incomplete: true
+operational_incomplete_policy: >-
+  Model, subscription, transport, timeout, parsing, missing-artifact,
+  repository-authority, or exhausted Agent-output-contract failures remain
+  operationally incomplete. Host validation retries invalid Agent artifacts;
+  it does not rewrite them into scientific outcomes.
+
+hpc:
+  submit: true
+  partition: batch
+  cpus_per_task: 1
+  mem: 4G
+  controller_slice_time: "00:30:00"
+  agent_time: "00:35:00"
+  poll_interval_seconds: 60
+  max_running_array_tasks: 12
+  max_task_attempts: 3
+  task_output_grace_seconds: 120
+  missing_task_grace_seconds: 300
+  remote_env_file: ~/.config/vibe-coding-planning/deepseek.env
+  python_module: lang/Python/3.11
+  container_module: tools/Apptainer
+  job_name_prefix: verified-paired-ace-codex-smoke12-v3-terramax-solhigh-20260924
+
+success_criteria:
+  - Import the exact completed paired Checker outputs from v1; do not resample them.
+  - Every Reflector receives and returns the authoritative pair instance ID.
+  - Complete one fresh Reflector and Curator proposal from the same Seed and frozen minibatch.
+  - Complete fresh evaluation of any proposed candidate without operationally incomplete cases.
+  - Preserve raw Codex events, final messages, Host retries, candidates, counters, and pair-order scores.
+
+checkpoint_import:
+  source_run_dir: /scratch/users/twang/vibe-coding-planning/run_state/output/SWE-bench_Verified/gepa-paired-repo-concern-playbook-runs/ace-codex-smoke12-v1-20260924
+  source_run_manifest_sha256: d1effbd613c5f90affafd3f92f1f56414f638d4bb270b118b2d01adcd75f21ce
+  roles:
+    - paired_repo_checker
+
+readiness: {runnable: true, launched: false, missing: []}
+launch_checks:
+  - Confirm a clean committed worktree and no duplicate supervisor.
+  - Verify the frozen v1 run manifest and compatible completed Checker outputs.
+  - Verify Iris storage, subscription login, SIF authority, and prepared history bundles.
+  - Verify generated Agent SBATCH requests remain one CPU and 4G.
+audit_targets:
+  - Confirm every imported Checker output has frozen source hashes and unchanged Agent evidence.
+  - Inspect Reflector contract compliance without Host rewriting Agent output.
+  - Audit error-seeking bias, Curator operations, rule readability, and candidate scoring.

@@ -1,12 +1,13 @@
 from __future__ import annotations
 
+import json
 from pathlib import Path
 from types import SimpleNamespace
 
 import pytest
 import yaml
 
-from src.optimization import codex_cli_runtime, playbook_runtime
+from src.optimization import codex_cli_runtime, playbook_runtime, playbook_worker
 from src.optimization.playbook import PlaybookBullet, RejectPlaybook, manage_playbook_length
 from src.optimization.playbook_cli import (
     _refiner_enabled,
@@ -270,6 +271,91 @@ def test_paired_reflector_prompt_receives_authoritative_pair_id(
     assert captured["items"][0]["prompt_values"]["pair_instance_id"] == pair_id
 
 
+def test_ace_paired_reflector_worker_forwards_pair_id_to_runtime(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    config_path = Path(
+        "configs/gepa_verified_paired_ace_codex_smoke12_v3_terramax_solhigh_20260924.yaml"
+    ).resolve()
+    captured = {}
+
+    def fake_repository_agent(**kwargs):
+        captured.update(kwargs)
+        rendered = playbook_runtime._render(
+            kwargs["instance_template"],
+            **kwargs["prompt_values"],
+        )
+        captured["rendered"] = rendered
+        return {
+            "instance_id": kwargs["prompt_values"]["pair_instance_id"],
+            "reasoning": "No durable concern.",
+            "error_identification": None,
+            "root_cause_analysis": None,
+            "correct_approach": None,
+            "key_insights": [],
+            "bullet_tags": [
+                {
+                    "id": "plan-00001",
+                    "tag": "neutral",
+                    "attribution": None,
+                }
+            ],
+        }, []
+
+    monkeypatch.setattr(
+        playbook_runtime, "_run_repository_json_agent", fake_repository_agent
+    )
+    playbook = RejectPlaybook(
+        (PlaybookBullet("plan-00001", "The Plan is a placeholder."),)
+    )
+    pair_id = "pair-authoritative-id"
+    evidence_dir = tmp_path / "evidence"
+    evidence_dir.mkdir()
+    manifest_path = tmp_path / "manifest.json"
+    manifest_path.write_text(
+        json.dumps(
+            {
+                "role": "paired_repo_reflector",
+                "fingerprint": "test-reflector",
+                "task_index": 0,
+                "instance_id": pair_id,
+                "validation_playbook": playbook.serialize(),
+                "repository": {
+                    "repo": "org/repo",
+                    "base_commit": "base",
+                    "instance_id": "org__repo-1",
+                },
+                "image_authority": {
+                    "requested_ref": "image",
+                    "sif_path": "/cache/image.sif",
+                    "sif_sha256": "0" * 64,
+                    "sif_bytes": 1,
+                },
+                "evidence_dir": str(evidence_dir),
+                "source_access_issue": "Issue",
+                "prompt_values": {
+                    "internal_playbook": playbook.serialize(),
+                    "pair_instance_id": pair_id,
+                },
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    assert (
+        playbook_worker.run_task(
+            config_path=config_path,
+            manifest_path=manifest_path,
+            output_path=tmp_path / "output.json",
+            attempt_dir=tmp_path / "attempt",
+        )
+        == 0
+    )
+    assert captured["prompt_values"]["pair_instance_id"] == pair_id
+    assert f"<pair_instance_id>{pair_id}</pair_instance_id>" in captured["rendered"]
+    assert f'"instance_id": "{pair_id}"' in captured["rendered"]
+
+
 def test_ace_codex_prompt_omits_legacy_learning_constraints() -> None:
     prompts = yaml.safe_load(Path(
         "configs/prompts/offline_gepa_paired_binary_ace_codex_v2_20260924.yaml"
@@ -298,12 +384,12 @@ def test_ace_codex_prompt_omits_legacy_learning_constraints() -> None:
         assert legacy not in learning_text
 
 
-def test_ace_codex_idfix_resume_is_frozen_and_imports_only_checkers() -> None:
+def test_ace_codex_terramax_solhigh_resume_is_frozen_and_imports_only_checkers() -> None:
     config_path = Path(
-        "configs/gepa_verified_paired_ace_codex_smoke12_v2_idfix_20260924.yaml"
+        "configs/gepa_verified_paired_ace_codex_smoke12_v3_terramax_solhigh_20260924.yaml"
     )
     supervisor_path = Path(
-        "configs/gepa_verified_paired_ace_codex_smoke12_v2_idfix_supervisor_20260924.yaml"
+        "configs/gepa_verified_paired_ace_codex_smoke12_v3_terramax_solhigh_supervisor_20260924.yaml"
     )
     raw = yaml.safe_load(config_path.read_text(encoding="utf-8"))
     supervisor = yaml.safe_load(supervisor_path.read_text(encoding="utf-8"))
@@ -317,8 +403,14 @@ def test_ace_codex_idfix_resume_is_frozen_and_imports_only_checkers() -> None:
     assert raw["length"]["maximum_visible_tokens"] == 10000
     assert raw["length"]["maximum_bullet_tokens"] is None
     assert raw["models"]["checker"]["thinking"] == "disabled"
-    assert raw["models"]["reflector"]["model"] == "gpt-5.6-sol"
+    assert raw["models"]["reflector"] == {
+        "executor": "codex_cli",
+        "model": "gpt-5.6-terra",
+        "reasoning_effort": "max",
+    }
+    assert raw["models"]["curator"]["model"] == "gpt-5.6-sol"
     assert raw["models"]["curator"]["reasoning_effort"] == "high"
+    assert raw["refiner"]["enabled"] is False
     assert raw["hpc"]["max_running_array_tasks"] == 12
     assert raw["hpc"]["agent_time"] == "00:35:00"
     assert (raw["hpc"]["cpus_per_task"], raw["hpc"]["mem"]) == (1, "4G")

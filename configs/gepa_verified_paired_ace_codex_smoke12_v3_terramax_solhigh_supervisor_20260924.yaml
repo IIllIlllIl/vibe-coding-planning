@@ -1,0 +1,29 @@
+schema_version: 1
+session: verified-paired-ace-codex-smoke12-v3-terramax-solhigh-20260924
+log: .local/hpc-supervisor/verified-paired-ace-codex-smoke12-v3-terramax-solhigh-20260924.log
+arguments:
+  - --poll-interval
+  - "60"
+  - --slice-time
+  - "00:30:00"
+  - --target-iterations
+  - "1"
+  - --max-runs
+  - "12"
+  - --state-file
+  - .local/hpc-supervisor/verified-paired-ace-codex-smoke12-v3-terramax-solhigh-20260924.json
+  - --reclaim-staging
+  - --reclaim-workspaces
+  - --require-clean-worktree
+  - --gepa-rules
+  - --gepa-config
+  - configs/gepa_verified_paired_ace_codex_smoke12_v3_terramax_solhigh_20260924.yaml
+  - --ulhpc-config
+  - configs/ulhpc_submit.yaml
+  - --job-name
+  - verified-paired-ace-codex-smoke12-v3-terramax-solhigh-20260924
+  - --cpus
+  - "1"
+  - --mem
+  - 4G
+  - --submit

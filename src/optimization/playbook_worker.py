@@ -185,6 +185,12 @@ def run_task(
                 evidence_dir=str(manifest["evidence_dir"]),
                 internal_playbook=str(values["internal_playbook"]),
                 source_access_issue=source_access_issue,
+                pair_instance_id=(
+                    str(values["pair_instance_id"])
+                    if role == "paired_repo_reflector"
+                    and config.get("reflection", {}).get("output_contract") == "ace_v1"
+                    else None
+                ),
                 retry_feedback=str(values["retry_feedback"]),
                 task=reflector_task,
                 phase=role,

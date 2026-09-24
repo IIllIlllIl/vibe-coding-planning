@@ -1238,7 +1238,8 @@ Seed rather than extending the accumulated Level prompt. It keeps the frozen
 within-task pair score: `+1` for accepting the resolved Plan while rejecting
 the unresolved Plan, `-1` for the inverse ordering, and `0` for a tie. The
 Checker remains a binary, repository-aware, no-thinking DeepSeek Agent. The
-Reflector and Curator use native Codex CLI with GPT-5.6 at high reasoning.
+current recovery configuration uses native Codex CLI with GPT-5.6 Terra/max for
+each pair Reflector and GPT-5.6 Sol/high for the single cross-pair Curator.
 
 The effective prompt was audited in three layers:
 
@@ -1271,11 +1272,18 @@ ran. The failure is operational, not a scientific zero-score result.
 
 Recovery uses
 `configs/gepa_verified_paired_ace_codex_smoke12_v2_idfix_20260924.yaml` and its
-matching Supervisor config. The v2 prompt supplies the authoritative pair ID
-directly, and Host retry feedback reports both expected and observed IDs. The
-new run imports only fingerprint-verified completed v1 Checker outputs; invalid
-v1 Reflector outputs and the failed GEPA iteration are not imported. It keeps
-the same exposed twelve-pair training and four-pair validation development
-sample, one proposal, Iris one CPU/4G Agent tasks, a 35-minute Agent limit,
-one-minute polling, and a concurrency cap of twelve. This remains a flow and
-prompt diagnostic, not held-out evidence.
+matching Supervisor config was also operationally incomplete: the prompt
+declared the authoritative pair ID, but the Worker did not forward that value
+through the repository-agent runtime, so rendering failed before any v2 Codex
+call.
+
+The prepared replacement is
+`configs/gepa_verified_paired_ace_codex_smoke12_v3_terramax_solhigh_20260924.yaml`.
+It fixes the complete Worker-to-runtime pair-ID path and imports only
+fingerprint-verified completed v1 Checker outputs; invalid v1 Reflector outputs
+and both failed GEPA iterations are not imported. It keeps the same exposed
+twelve-pair training and four-pair validation development sample, one proposal,
+Iris one CPU/4G Agent tasks, a 35-minute Agent limit, one-minute polling, and a
+concurrency cap of twelve. Reflectors use Terra/max, the single Curator uses
+Sol/high, and the semantic Refiner remains disabled. This is a flow, model-fit,
+and prompt diagnostic, not held-out evidence.

@@ -637,10 +637,18 @@ def run_repository_reflector(
     evidence_dir: str,
     internal_playbook: str,
     source_access_issue: str,
+    pair_instance_id: str | None = None,
     retry_feedback: str = "",
     task: str = "Attribute this completed case to every active concern.",
     phase: str = "repo_reflector",
 ) -> tuple[dict[str, Any], list[dict[str, Any]]]:
+    prompt_values = {
+        "evidence_path": "/evidence",
+        "internal_playbook": internal_playbook,
+        "retry_feedback": retry_feedback,
+    }
+    if pair_instance_id is not None:
+        prompt_values["pair_instance_id"] = pair_instance_id
     return _run_repository_json_agent(
         model_config=model_config,
         repository_config={**repository_config, "phase": phase},
@@ -652,10 +660,6 @@ def run_repository_reflector(
         evidence_dir=evidence_dir,
         task=task,
         artifact_name="reflection.json",
-        prompt_values={
-            "evidence_path": "/evidence",
-            "internal_playbook": internal_playbook,
-            "retry_feedback": retry_feedback,
-        },
+        prompt_values=prompt_values,
         source_access_issue=source_access_issue,
     )
