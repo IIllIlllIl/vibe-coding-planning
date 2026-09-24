@@ -24,7 +24,8 @@ proposal. The Curator maintains the playbook with `ADD`, `UPDATE`, `MERGE`, and
 category, fact-link, coverage-disposition, self-check, risk-analysis, and
 per-bullet length contracts. The paired score and frozen 12/4 development
 sample are unchanged. Its prepared smoke is the current next-run identity;
-preparation does not authorize launch.
+it pins the compute-node-tested Codex CLI 0.155.1 and resumes from the frozen
+Checker boundary. Preparation does not authorize launch.
 
 The prior linked-Level prompt authority,
 `prompts/offline_gepa_paired_levels_ace_core_v7_20260923.yaml`, and its
@@ -129,8 +130,10 @@ labels, image manifests, output roots, or baseline identities in a new run.
 | `gepa_verified_paired_ace_codex_smoke12_v1_supervisor_20260924.yaml` | Frozen Supervisor identity for the failed v1 smoke; do not relaunch. |
 | `gepa_verified_paired_ace_codex_smoke12_v2_idfix_20260924.yaml` | Failed recovery provenance. The prompt contained the explicit pair ID, but the Worker did not forward it into the repository-agent renderer, so all Reflectors failed before Codex execution. |
 | `gepa_verified_paired_ace_codex_smoke12_v2_idfix_supervisor_20260924.yaml` | Frozen Supervisor identity for the failed v2 recovery; do not relaunch. |
-| `gepa_verified_paired_ace_codex_smoke12_v3_terramax_solhigh_20260924.yaml` | Prepared recovery after fixing the Worker-to-runtime pair-ID path. It imports only fingerprint-verified v1 Checker outputs, uses Terra/max Reflectors and a Sol/high Curator, and keeps the Refiner disabled. |
-| `gepa_verified_paired_ace_codex_smoke12_v3_terramax_solhigh_supervisor_20260924.yaml` | Prepared one-minute-poll Iris Supervisor identity for the v3 recovery; presence does not authorize launch. |
+| `gepa_verified_paired_ace_codex_smoke12_v3_terramax_solhigh_20260924.yaml` | Operationally invalid recovery provenance. Codex CLI 0.156.1 failed to build its read-only sandbox under Slurm's private `/tmp`; all Reflectors and the Curator lacked usable evidence. Do not treat its empty outputs as scientific results. |
+| `gepa_verified_paired_ace_codex_smoke12_v3_terramax_solhigh_supervisor_20260924.yaml` | Frozen Supervisor identity for the invalid v3 run; do not relaunch. |
+| `gepa_verified_paired_ace_codex_smoke12_v4_pinned_20260924.yaml` | Prepared Reflector-boundary recovery. It imports only fingerprint-verified v1 Checker outputs, pins Codex CLI 0.155.1, checks the sandbox before inference, and requires a Host-validated evidence-manifest receipt. |
+| `gepa_verified_paired_ace_codex_smoke12_v4_pinned_supervisor_20260924.yaml` | Prepared one-minute-poll Iris Supervisor identity for v4; presence does not authorize launch. |
 | `gepa_verified_paired_learning12_smoke_v6_binary_seed_20260924.yaml` | Prepared fresh binary full cycle from the one-rule Seed on the same 12/4 development pairs as the Level smoke. |
 | `gepa_verified_paired_learning12_smoke_v6_binary_manual_20260924.yaml` | Prepared fresh binary full cycle from the audited ten-rule manual playbook on the same 12/4 pairs. |
 | `gepa_verified_paired_learning12_smoke_v6_binary_sequence_supervisor_20260924.yaml` | Prepared one-minute-poll Iris sequence for the Seed and manual-playbook no-Level ablation phases; presence alone does not authorize launch. |

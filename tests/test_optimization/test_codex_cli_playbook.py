@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import hashlib
 import json
 from pathlib import Path
 from types import SimpleNamespace
@@ -37,6 +38,10 @@ def test_codex_cli_uses_ephemeral_read_only_stdin_and_parses_final_json(
     captured = {}
 
     def fake_run(command, **kwargs):
+        if command[1:] == ["--version"]:
+            return SimpleNamespace(returncode=0, stdout="codex-cli 0.155.1\n", stderr="")
+        if command[1] == "sandbox":
+            return SimpleNamespace(returncode=0, stdout="", stderr="")
         captured["command"] = command
         captured.update(kwargs)
         output = Path(command[command.index("--output-last-message") + 1])
@@ -67,7 +72,7 @@ def test_codex_cli_uses_ephemeral_read_only_stdin_and_parses_final_json(
     assert "Evidence at /private/evidence" in captured["input"]
     assert captured["check"] is False
     assert "timeout" not in captured
-    assert trajectory[2]["content"]["events"][0]["thread_id"] == "thread-1"
+    assert trajectory[3]["content"]["events"][0]["thread_id"] == "thread-1"
 
 
 def test_codex_cli_preserves_failed_event_trajectory(
@@ -76,10 +81,16 @@ def test_codex_cli_preserves_failed_event_trajectory(
     monkeypatch.setattr(
         codex_cli_runtime.subprocess,
         "run",
-        lambda *_a, **_k: SimpleNamespace(
-            returncode=7,
-            stdout='{"type":"error","message":"quota"}\n',
-            stderr="failed",
+        lambda command, **_k: (
+            SimpleNamespace(returncode=0, stdout="codex-cli 0.155.1\n", stderr="")
+            if command[1:] == ["--version"]
+            else SimpleNamespace(returncode=0, stdout="", stderr="")
+            if command[1] == "sandbox"
+            else SimpleNamespace(
+                returncode=7,
+                stdout='{"type":"error","message":"quota"}\n',
+                stderr="failed",
+            )
         ),
     )
     with pytest.raises(codex_cli_runtime.CodexCLIError) as caught:
@@ -91,7 +102,98 @@ def test_codex_cli_preserves_failed_event_trajectory(
             user="user",
             task="task",
         )
-    assert caught.value.trajectory[2]["content"]["events"][0]["message"] == "quota"
+    assert caught.value.trajectory[3]["content"]["events"][0]["message"] == "quota"
+
+
+def test_codex_cli_rejects_version_mismatch_before_inference(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    calls = []
+
+    def fake_run(command, **_kwargs):
+        calls.append(command)
+        return SimpleNamespace(returncode=0, stdout="codex-cli 0.156.1\n", stderr="")
+
+    monkeypatch.setattr(codex_cli_runtime.subprocess, "run", fake_run)
+    with pytest.raises(codex_cli_runtime.CodexCLIError, match="expected Codex CLI"):
+        codex_cli_runtime.run_codex_json_agent(
+            model_config={**_model(), "codex_version": "0.155.1"},
+            working_directory=tmp_path,
+            attempt_dir=tmp_path / "attempt",
+            system="system",
+            user="user",
+            task="task",
+        )
+    assert calls == [["codex", "--version"]]
+
+
+def test_codex_cli_requires_exact_evidence_receipt(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    manifest = tmp_path / "manifest.json"
+    manifest.write_text('{"files":["pair.json"]}\n', encoding="utf-8")
+    receipt = hashlib.sha256(manifest.read_bytes()).hexdigest()
+
+    def fake_run(command, **kwargs):
+        if command[1:] == ["--version"]:
+            return SimpleNamespace(returncode=0, stdout="codex-cli 0.155.1\n", stderr="")
+        if command[1] == "sandbox":
+            return SimpleNamespace(returncode=0, stdout="", stderr="")
+        output = Path(command[command.index("--output-last-message") + 1])
+        output.write_text(
+            json.dumps(
+                {
+                    "reasoning": "no change",
+                    "operations": [],
+                    "evidence_receipt_sha256": receipt,
+                }
+            ),
+            encoding="utf-8",
+        )
+        assert "evidence_receipt_sha256" in kwargs["input"]
+        return SimpleNamespace(returncode=0, stdout="", stderr="")
+
+    monkeypatch.setattr(codex_cli_runtime.subprocess, "run", fake_run)
+    output, trajectory = codex_cli_runtime.run_codex_json_agent(
+        model_config={**_model(), "codex_version": "0.155.1"},
+        working_directory=tmp_path,
+        attempt_dir=tmp_path / "attempt",
+        system="system",
+        user="user",
+        task="task",
+        evidence_manifest_path=manifest,
+    )
+    assert output == {"reasoning": "no change", "operations": []}
+    assert trajectory[-1]["role"] == "host_evidence_receipt"
+    assert trajectory[-1]["content"]["matched"] is True
+
+
+def test_codex_cli_treats_missing_evidence_receipt_as_operational_failure(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    manifest = tmp_path / "manifest.json"
+    manifest.write_text("{}\n", encoding="utf-8")
+
+    def fake_run(command, **_kwargs):
+        if command[1:] == ["--version"]:
+            return SimpleNamespace(returncode=0, stdout="codex-cli 0.155.1\n", stderr="")
+        if command[1] == "sandbox":
+            return SimpleNamespace(returncode=0, stdout="", stderr="")
+        output = Path(command[command.index("--output-last-message") + 1])
+        output.write_text('{"reasoning":"none","operations":[]}', encoding="utf-8")
+        return SimpleNamespace(returncode=0, stdout="", stderr="")
+
+    monkeypatch.setattr(codex_cli_runtime.subprocess, "run", fake_run)
+    with pytest.raises(codex_cli_runtime.CodexEvidenceAccessError):
+        codex_cli_runtime.run_codex_json_agent(
+            model_config=_model(),
+            working_directory=tmp_path,
+            attempt_dir=tmp_path / "attempt",
+            system="system",
+            user="user",
+            task="task",
+            evidence_manifest_path=manifest,
+        )
 
 
 def test_codex_model_contract_keeps_checker_on_miniswe() -> None:
@@ -140,6 +242,7 @@ def test_evidence_curator_dispatches_to_codex_without_apptainer(
     assert captured["working_directory"] == tmp_path
     assert str(tmp_path.resolve()) in captured["user"]
     assert captured["attempt_dir"] == tmp_path / "attempt"
+    assert captured["evidence_manifest_path"] == tmp_path / "manifest.json"
 
 
 def test_disabled_refiner_uses_deterministic_whole_bullet_pruning() -> None:
@@ -356,6 +459,85 @@ def test_ace_paired_reflector_worker_forwards_pair_id_to_runtime(
     assert f'"instance_id": "{pair_id}"' in captured["rendered"]
 
 
+def test_worker_records_missing_codex_evidence_receipt_as_operational(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    config_path = Path(
+        "configs/gepa_verified_paired_ace_codex_smoke12_v4_pinned_20260924.yaml"
+    ).resolve()
+    playbook = RejectPlaybook(
+        (PlaybookBullet("plan-00001", "The Plan is a placeholder."),)
+    )
+    pair_id = "pair-missing-evidence-receipt"
+    evidence_dir = tmp_path / "evidence"
+    evidence_dir.mkdir()
+    manifest_path = tmp_path / "manifest.json"
+    manifest_path.write_text(
+        json.dumps(
+            {
+                "role": "paired_repo_reflector",
+                "fingerprint": "test-reflector-receipt",
+                "task_index": 0,
+                "instance_id": pair_id,
+                "validation_playbook": playbook.serialize(),
+                "repository": {
+                    "repo": "org/repo",
+                    "base_commit": "base",
+                    "instance_id": "org__repo-1",
+                },
+                "image_authority": {
+                    "requested_ref": "image",
+                    "sif_path": "/cache/image.sif",
+                    "sif_sha256": "0" * 64,
+                    "sif_bytes": 1,
+                },
+                "evidence_dir": str(evidence_dir),
+                "source_access_issue": "Issue",
+                "prompt_values": {
+                    "internal_playbook": playbook.serialize(),
+                    "pair_instance_id": pair_id,
+                },
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    def fail_evidence_receipt(**_kwargs):
+        error = codex_cli_runtime.CodexEvidenceAccessError(
+            "Codex did not return the exact mandatory evidence receipt"
+        )
+        error.trajectory = [
+            {
+                "role": "host_evidence_receipt",
+                "content": {"matched": False},
+            }
+        ]
+        raise error
+
+    monkeypatch.setattr(
+        playbook_worker, "run_repository_reflector", fail_evidence_receipt
+    )
+    output_path = tmp_path / "output.json"
+    attempt_dir = tmp_path / "attempt"
+    assert (
+        playbook_worker.run_task(
+            config_path=config_path,
+            manifest_path=manifest_path,
+            output_path=output_path,
+            attempt_dir=attempt_dir,
+        )
+        == 1
+    )
+    failure = json.loads(output_path.read_text(encoding="utf-8"))
+    assert failure["failure_stage"] == "agent_execution"
+    assert failure["failure_kind"] == "operational"
+    assert failure["error_type"] == "CodexEvidenceAccessError"
+    trajectory = json.loads(
+        (attempt_dir / "agent_trajectory.json").read_text(encoding="utf-8")
+    )
+    assert trajectory["messages"][0]["content"]["matched"] is False
+
+
 def test_ace_codex_prompt_omits_legacy_learning_constraints() -> None:
     prompts = yaml.safe_load(Path(
         "configs/prompts/offline_gepa_paired_binary_ace_codex_v2_20260924.yaml"
@@ -428,3 +610,33 @@ def test_ace_codex_terramax_solhigh_resume_is_frozen_and_imports_only_checkers()
     assert arguments[arguments.index("--cpus") + 1] == "1"
     assert arguments[arguments.index("--mem") + 1] == "4G"
     assert "--require-clean-worktree" in arguments
+
+
+def test_ace_codex_pinned_resume_restarts_at_reflector_boundary() -> None:
+    config_path = Path(
+        "configs/gepa_verified_paired_ace_codex_smoke12_v4_pinned_20260924.yaml"
+    )
+    supervisor_path = Path(
+        "configs/gepa_verified_paired_ace_codex_smoke12_v4_pinned_supervisor_20260924.yaml"
+    )
+    raw = yaml.safe_load(config_path.read_text(encoding="utf-8"))
+    supervisor = yaml.safe_load(supervisor_path.read_text(encoding="utf-8"))
+
+    _validate_frozen_inputs(config_path.resolve(), raw)
+    _validate_agent_executors(raw)
+    pinned = "${HOME}/.local/lib/vibe-codex/0.155.1/bin/codex"
+    for role in ("reflector", "curator"):
+        assert raw["models"][role]["codex_binary"] == pinned
+        assert raw["models"][role]["codex_version"] == "0.155.1"
+    assert raw["checkpoint_import"]["roles"] == ["paired_repo_checker"]
+    assert "paired_repo_reflector" not in raw["checkpoint_import"]["roles"]
+    assert raw["run_id"] == "verified-paired-ace-codex-smoke12-v4-pinned-20260924"
+    assert raw["readiness"] == {"runnable": True, "launched": False, "missing": []}
+    arguments = supervisor["arguments"]
+    assert arguments[arguments.index("--gepa-config") + 1] == str(config_path)
+    assert arguments[arguments.index("--target-iterations") + 1] == "1"
+    assert arguments[arguments.index("--poll-interval") + 1] == "60"
+    assert (
+        arguments[arguments.index("--cpus") + 1],
+        arguments[arguments.index("--mem") + 1],
+    ) == ("1", "4G")

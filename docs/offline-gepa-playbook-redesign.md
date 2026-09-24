@@ -1277,13 +1277,21 @@ declared the authoritative pair ID, but the Worker did not forward that value
 through the repository-agent runtime, so rendering failed before any v2 Codex
 call.
 
-The prepared replacement is
-`configs/gepa_verified_paired_ace_codex_smoke12_v3_terramax_solhigh_20260924.yaml`.
-It fixes the complete Worker-to-runtime pair-ID path and imports only
-fingerprint-verified completed v1 Checker outputs; invalid v1 Reflector outputs
-and both failed GEPA iterations are not imported. It keeps the same exposed
-twelve-pair training and four-pair validation development sample, one proposal,
-Iris one CPU/4G Agent tasks, a 35-minute Agent limit, one-minute polling, and a
-concurrency cap of twelve. Reflectors use Terra/max, the single Curator uses
-Sol/high, and the semantic Refiner remains disabled. This is a flow, model-fit,
+The v3 replacement fixed the complete Worker-to-runtime pair-ID path, but its
+native Codex CLI 0.156.1 could not build the read-only bubblewrap sandbox under
+Slurm's private `/tmp`. Consequently, all Reflectors and the Curator lacked
+usable evidence even though the run reached a terminal Controller state. Their
+empty outputs are operationally invalid and are not scientific results.
+
+The current prepared recovery is
+`configs/gepa_verified_paired_ace_codex_smoke12_v4_pinned_20260924.yaml`. It
+imports only the fingerprint-verified completed v1 Checker outputs and starts
+fresh at the Reflector boundary. Codex is pinned to the compute-node-tested
+0.155.1 binary. Every call checks the exact version and read-only sandbox before
+inference, and every evidence-backed Codex response must return the exact
+evidence-manifest SHA-256 for Host verification. Missing or mismatched receipts
+remain operational failures and retry; they cannot become empty scientific
+Reflections. The exposed 12/4 development sample, prompt, Seed, models, budget,
+Iris one CPU/4G resources, 35-minute Agent limit, one-minute polling, and
+twelve-task concurrency are otherwise unchanged. This is a flow, model-fit,
 and prompt diagnostic, not held-out evidence.

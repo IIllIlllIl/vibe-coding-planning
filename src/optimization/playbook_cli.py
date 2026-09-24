@@ -6,6 +6,7 @@ import hashlib
 import math
 import os
 from pathlib import Path
+import re
 from typing import Any
 
 import litellm
@@ -186,6 +187,13 @@ def _validate_agent_executors(raw: dict[str, Any]) -> None:
             effort = model.get("reasoning_effort", "high")
             if effort not in {"low", "medium", "high", "xhigh", "max", "ultra"}:
                 raise ValueError(f"models.{role}.reasoning_effort is unsupported")
+            if "codex_binary" in model and not str(model["codex_binary"]).strip():
+                raise ValueError(f"models.{role}.codex_binary must be non-empty")
+            if "codex_version" in model and not re.fullmatch(
+                r"\d+\.\d+\.\d+(?:[-+][A-Za-z0-9.-]+)?",
+                str(model["codex_version"]),
+            ):
+                raise ValueError(f"models.{role}.codex_version is invalid")
 
 
 def _optional_instance_ids(inputs: dict[str, Any], key: str) -> list[str] | None:

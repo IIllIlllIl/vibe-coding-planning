@@ -279,6 +279,7 @@ def run_evidence_reflector(
             system=system,
             user=user,
             task="Attribute this case to every active rejection rule.",
+            evidence_manifest_path=Path(evidence_dir) / "manifest.json",
         )
     return _run_evidence_json_agent(
         model_config=model_config,
@@ -330,6 +331,7 @@ def run_evidence_curator(
             system=system,
             user=user,
             task=task,
+            evidence_manifest_path=Path(evidence_dir) / "manifest.json",
         )
     return _run_evidence_json_agent(
         model_config=model_config,
@@ -502,6 +504,11 @@ def _run_repository_json_agent(
                     system=system,
                     user=user,
                     task=task,
+                    evidence_manifest_path=(
+                        Path(evidence_dir) / "manifest.json"
+                        if evidence_dir is not None
+                        else None
+                    ),
                 )
                 trajectory.extend(
                     [

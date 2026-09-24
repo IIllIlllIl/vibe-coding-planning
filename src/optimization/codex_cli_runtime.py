@@ -2,8 +2,11 @@
 
 from __future__ import annotations
 
+import hashlib
 import json
+import os
 from pathlib import Path
+import re
 import subprocess
 from typing import Any, Mapping
 
@@ -15,6 +18,88 @@ from src.optimization.playbook_runtime import (
 
 class CodexCLIError(RuntimeError):
     """Codex CLI ended without a usable final response."""
+
+
+class CodexEvidenceAccessError(CodexCLIError):
+    """Codex completed without proving access to mandatory local evidence."""
+
+
+def _codex_binary(model_config: Mapping[str, Any]) -> str:
+    raw = str(model_config.get("codex_binary", "codex")).strip()
+    if not raw:
+        raise ValueError("Codex runtime requires a non-empty codex_binary")
+    if "/" not in raw:
+        return raw
+    return str(Path(os.path.expandvars(raw)).expanduser())
+
+
+def _runtime_preflight(
+    model_config: Mapping[str, Any], *, working_directory: Path
+) -> list[dict[str, Any]]:
+    """Fail before inference when the pinned CLI or its sandbox is unusable."""
+    binary = _codex_binary(model_config)
+    checks: list[dict[str, Any]] = []
+    version = subprocess.run(
+        [binary, "--version"],
+        text=True,
+        capture_output=True,
+        check=False,
+    )
+    checks.append(
+        {
+            "check": "version",
+            "returncode": version.returncode,
+            "stdout": version.stdout,
+            "stderr": version.stderr,
+        }
+    )
+    expected = str(model_config.get("codex_version", "")).strip()
+    observed_match = re.search(r"\bcodex-cli\s+(\S+)", version.stdout)
+    observed = observed_match.group(1) if observed_match else ""
+    if version.returncode != 0 or (expected and observed != expected):
+        detail = (
+            f"expected Codex CLI {expected}, observed {observed or 'unknown'}"
+            if expected
+            else f"Codex CLI version probe exited with status {version.returncode}"
+        )
+        error = CodexCLIError(detail)
+        error.trajectory = [  # type: ignore[attr-defined]
+            {"role": "host_codex_preflight", "content": {"checks": checks}}
+        ]
+        raise error
+
+    sandbox = subprocess.run(
+        [
+            binary,
+            "sandbox",
+            "--permission-profile",
+            ":read-only",
+            "--cd",
+            str(working_directory.resolve()),
+            "/bin/true",
+        ],
+        text=True,
+        capture_output=True,
+        check=False,
+    )
+    checks.append(
+        {
+            "check": "read_only_sandbox",
+            "returncode": sandbox.returncode,
+            "stdout": sandbox.stdout,
+            "stderr": sandbox.stderr,
+        }
+    )
+    if sandbox.returncode != 0:
+        error = CodexCLIError(
+            "Codex read-only sandbox preflight failed: "
+            f"{sandbox.stderr.strip() or sandbox.stdout.strip()}"
+        )
+        error.trajectory = [  # type: ignore[attr-defined]
+            {"role": "host_codex_preflight", "content": {"checks": checks}}
+        ]
+        raise error
+    return checks
 
 
 def _codex_command(
@@ -31,9 +116,7 @@ def _codex_command(
     effort = str(model_config.get("reasoning_effort", "high")).strip()
     if effort not in {"low", "medium", "high", "xhigh", "max", "ultra"}:
         raise ValueError("unsupported Codex reasoning_effort")
-    binary = str(model_config.get("codex_binary", "codex")).strip()
-    if not binary:
-        raise ValueError("Codex runtime requires a non-empty codex_binary")
+    binary = _codex_binary(model_config)
     return [
         binary,
         "exec",
@@ -68,6 +151,7 @@ def run_codex_json_agent(
     system: str,
     user: str,
     task: str,
+    evidence_manifest_path: Path | None = None,
 ) -> tuple[dict[str, Any], list[dict[str, Any]]]:
     """Run one ephemeral read-only Codex session and parse its final JSON.
 
@@ -77,12 +161,28 @@ def run_codex_json_agent(
     """
     if not working_directory.is_dir():
         raise ValueError("Codex working directory is missing")
+    expected_receipt: str | None = None
+    receipt_instruction = ""
+    if evidence_manifest_path is not None:
+        if not evidence_manifest_path.is_file():
+            raise ValueError("Codex evidence manifest is missing")
+        expected_receipt = hashlib.sha256(evidence_manifest_path.read_bytes()).hexdigest()
+        receipt_instruction = (
+            "\n\nOperational evidence receipt:\n"
+            f"Before analysis, read {evidence_manifest_path.resolve()}. Compute the "
+            "lowercase SHA-256 of the exact file bytes and include it in the top-level "
+            'JSON field "evidence_receipt_sha256". This field proves local evidence '
+            "access and is removed by the Host before scientific validation."
+        )
     attempt_dir.mkdir(parents=True, exist_ok=True)
     output_path = attempt_dir / "codex_final_response.json"
     prompt = (
         f"{system.strip()}\n\n"
-        f"Task:\n{task.strip()}\n\n"
+        f"Task:\n{task.strip()}{receipt_instruction}\n\n"
         f"Input:\n{user.strip()}\n"
+    )
+    preflight_checks = _runtime_preflight(
+        model_config, working_directory=working_directory
     )
     command = _codex_command(
         model_config,
@@ -110,6 +210,10 @@ def run_codex_json_agent(
     trajectory = [
         {"role": "system", "content": system},
         {"role": "user", "content": user},
+        {
+            "role": "host_codex_preflight",
+            "content": {"checks": preflight_checks},
+        },
         {
             "role": "codex_cli",
             "content": {
@@ -142,4 +246,21 @@ def run_codex_json_agent(
         error.trajectory = trajectory  # type: ignore[attr-defined]
         raise error from exc
     trajectory.append({"role": "assistant", "content": raw})
+    if expected_receipt is not None:
+        observed_receipt = output.pop("evidence_receipt_sha256", None)
+        receipt_record = {
+            "manifest": str(evidence_manifest_path.resolve()),
+            "expected_sha256": expected_receipt,
+            "observed_sha256": observed_receipt,
+            "matched": observed_receipt == expected_receipt,
+        }
+        trajectory.append(
+            {"role": "host_evidence_receipt", "content": receipt_record}
+        )
+        if observed_receipt != expected_receipt:
+            error = CodexEvidenceAccessError(
+                "Codex did not return the exact mandatory evidence receipt"
+            )
+            error.trajectory = trajectory  # type: ignore[attr-defined]
+            raise error
     return output, trajectory
