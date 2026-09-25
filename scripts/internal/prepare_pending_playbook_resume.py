@@ -143,6 +143,14 @@ def _update_semantic_authority(manifest, authority, marker_bytes, repo):
         if file_hash(path) != replacement_runtime["replacement_sha256"]:
             raise ValueError("replacement runtime config differs from recovery authority")
         semantic["runtime_config"] = replacement_runtime["replacement_sha256"]
+    replacement_prompt = authority.get("replacement_prompt_bundle")
+    if replacement_prompt is not None:
+        if semantic["prompt_bundle"] != replacement_prompt["previous_sha256"]:
+            raise ValueError("original prompt bundle differs from recovery authority")
+        path = repo / replacement_prompt["path"]
+        if file_hash(path) != replacement_prompt["replacement_sha256"]:
+            raise ValueError("replacement prompt bundle differs from recovery authority")
+        semantic["prompt_bundle"] = replacement_prompt["replacement_sha256"]
     for name, new_sha in authority["replacement_source_hashes"].items():
         path = repo / "src/optimization" / name
         if file_hash(path) != new_sha:

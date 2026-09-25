@@ -2,7 +2,7 @@
   "schema_version": 2,
   "recovery_kind": "candidate_evaluation_before_checkpoint_v1",
   "run_name": "ace-codex-formal24-15it-v1-20260925",
-  "recovery_id": "iteration1-no-reason-candidate-screen-20260925",
+  "recovery_id": "iteration1-no-reason-candidate-screen-v2-20260925",
   "saved_state_i": -1,
   "saved_metric_calls": 36,
   "candidate_count": 1,
@@ -67,10 +67,10 @@
   "files": {
     "gepa_state.bin": "b60d1853deaa5280eb7f173fbe86672a28049f16ba2d0f9a5c005f4b39c824d6",
     "gepa_resume_state.json": "0f4edbcdc45b7de7a546ab6d61c20024bbb4e04944c96f228b4f40cc6a0b19e9",
-    "run_manifest.json": "2cff524177175bf0605020751fab0d9cac25ccd77e3fef0af4ece207bc055bed",
+    "run_manifest.json": "b84f1039a3a97c809f7fc34fe4fa09fe69e447ad28c5683208542f75a6ecb00a",
     "global_counter_ledger.json": "e2c95117899f5befe22cca2943226ee32a637e72e5e547b697a6de990827cba6",
     "candidates.json": "e3d9ba62e7d147876afeae76a246dee251d8c4fffa3a9dd02b542bd4c5b7d625",
-    "controller_status.json": "43d40706024fcdac24830e6ce5174d9125a9170a3b443fe3b391dc577771b4d3",
+    "controller_status.json": "d952c2c48cf456ab5785de3f08fb0a56d156bc825271b3e45e20cdc0dd6a45a2",
     "errors.jsonl": "12145412efc7d4f37a98bebd2007f9ab28f78e55a6c77ae0c6aa0630d61620d1",
     "curator_evidence/f3dba0db8318f3f5dd6af9def69978ce98df7a62fd49c106f35934605c6b06be/case_reflections.json": "4d4507bae77ebd17a5e540b96da41d8608454ceeb21be7c0f10259f2aecd9c32",
     "curator_evidence/f3dba0db8318f3f5dd6af9def69978ce98df7a62fd49c106f35934605c6b06be/counted_playbook.json": "16e09571f484f355300dc29f7a828ba8d9b5ca691152ffb8b3b1f2d13d5f83e4",
@@ -103,7 +103,7 @@
   },
   "replacement_runtime_config": {
     "path": "configs/gepa_verified_paired_ace_codex_formal24_15it_v1_20260925.yaml",
-    "previous_sha256": "02d09ca984698cf9658b3577ea01a1fb1b32fe8339c4a5aa74aadd2e342429f4",
+    "previous_sha256": "07552910f37677d1deb616701499b01c23f116324accfbe711abd6f4f3e71ed5",
     "replacement_sha256": "07552910f37677d1deb616701499b01c23f116324accfbe711abd6f4f3e71ed5"
   },
   "replacement_source_hashes": {
@@ -113,5 +113,10 @@
     "playbook_hpc_executor.py": "b0578aadd14de451dcb393f3055336c790e33ea79902e11e0fab390b8b573c07",
     "playbook_worker.py": "8c8d287faabba327f52b3585cb04319fb634cb0cb4f2914fd88912887ed55c8f"
   },
-  "replaces_recovery_id": "iteration1-complete-candidate-screen-20260925"
+  "replaces_recovery_id": "iteration1-no-reason-candidate-screen-20260925",
+  "replacement_prompt_bundle": {
+    "path": "configs/prompts/offline_gepa_paired_binary_ace_codex_v4_no_reason_20260925.yaml",
+    "previous_sha256": "df6f9d1553eeab0ea05974bcd3bde29cdec3c8f8ad6c4d5ee84abe7412d6c4a3",
+    "replacement_sha256": "2e0d30dc5ff0a6b953f7f51ac87b6e20788f383b46260869d4f4de1163e86055"
+  }
 }

@@ -233,6 +233,10 @@ def test_precheckpoint_recovery_can_be_explicitly_replaced(tmp_path):
     runtime_v1.write_text("version: 1\n")
     runtime_v2 = repo / "configs/runtime-v2.yaml"
     runtime_v2.write_text("version: 2\n")
+    prompt_v1 = repo / "configs/prompt-v1.yaml"
+    prompt_v1.write_text("prompt: 1\n")
+    prompt_v2 = repo / "configs/prompt-v2.yaml"
+    prompt_v2.write_text("prompt: 2\n")
     parent = {
         "rules": RejectPlaybook(
             (PlaybookBullet("plan-00001", "The Plan is a placeholder."),)
@@ -251,7 +255,13 @@ def test_precheckpoint_recovery_can_be_explicitly_replaced(tmp_path):
             {"gepa_state_i": -1, "reflection_failures": []}
         ),
         "run_manifest.json": encoded(
-            {"semantic_config": {"source": {}, "runtime_config": "original"}}
+            {
+                "semantic_config": {
+                    "source": {},
+                    "runtime_config": "original",
+                    "prompt_bundle": file_hash(prompt_v1),
+                }
+            }
         ),
         "task.json": encoded(
             {
@@ -306,6 +316,11 @@ def test_precheckpoint_recovery_can_be_explicitly_replaced(tmp_path):
         "candidate-screen-v2", runtime_v2, file_hash(runtime_v1)
     )
     second["replaces_recovery_id"] = "candidate-screen-v1"
+    second["replacement_prompt_bundle"] = {
+        "path": str(prompt_v2.relative_to(repo)),
+        "previous_sha256": file_hash(prompt_v1),
+        "replacement_sha256": file_hash(prompt_v2),
+    }
     second["files"] = {name: file_hash(root / name) for name in files}
     prepare(root, second, apply=True, repo=repo)
 
@@ -315,6 +330,7 @@ def test_precheckpoint_recovery_can_be_explicitly_replaced(tmp_path):
     assert (root / "recovery_backups/candidate-screen-v2").is_dir()
     manifest = json.loads((root / "run_manifest.json").read_text())
     assert manifest["semantic_config"]["runtime_config"] == file_hash(runtime_v2)
+    assert manifest["semantic_config"]["prompt_bundle"] == file_hash(prompt_v2)
 
 
 def test_replay_uses_frozen_agents_and_deduplicates_counter_after_yield(checkpoint):
