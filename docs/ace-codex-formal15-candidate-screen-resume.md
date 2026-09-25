@@ -18,8 +18,11 @@ beats its parent on this complete screen, GEPA then evaluates the candidate on
 the separately frozen 36-pair validation set, which requires 72 Checker tasks.
 
 The original screen completed 47/48 tasks. One Checker exhausted three attempts
-because each JSON row omitted the required nonempty `reason`. That incomplete
-screen has no scientific score and none of its 47 results are reused.
+because each JSON row omitted the then-required nonempty `reason`. The first
+complete-screen recovery finished all 48 tasks after three first-attempt
+failures retried successfully, then began candidate validation. It was stopped
+before validation completed so the audit-only `reason` field could be removed
+without mixing Checker contracts.
 
 ## Frozen and fresh work
 
@@ -29,7 +32,7 @@ screen has no scientific score and none of its 47 results are reused.
 | Seed Checker outputs for those pairs | Frozen and reused |
 | 24 Reflector outputs | Frozen and reused |
 | Curator output producing the 30-rule candidate | Frozen and reused |
-| Candidate Checker screen | Rerun all 48 side-level tasks under the explicit output contract |
+| Candidate Checker screen | Rerun all 48 side-level tasks under one explicit output contract |
 | Candidate validation | Run normally only if the complete screen beats Seed |
 | Later iterations | Continue ordinary GEPA search |
 
@@ -38,13 +41,17 @@ the original selector and epoch sampler consume their normal draw and verifies
 that they reproduce the frozen parent and ordered 24 pairs. This preserves the
 random sequence for later iterations. The Host never edits an Agent response.
 
-The only authorized semantic-manifest migration is the fingerprinted mechanical
-Checker output appendix and its strict validation diagnostics. The scientific
-prompt bundle remains unchanged.
+The second recovery uses `binary_v2`: each row contains exactly
+`rule_number`, `triggered`, `finding`, and `evidence`. `reason` was audit-only;
+it did not affect gating, pair scoring, or candidate selection. Removing it
+eliminates a non-scientific retry condition while preserving the triggered and
+evidence invariants. The Checker decision instructions and all
+Reflector/Curator instructions remain unchanged.
 
-Checker batch identity includes the complete runtime-config hash. Adding the
-contract therefore creates a new batch fingerprint: the 47 old completions
-cannot be discovered or reused by the resumed 48-task wave.
+Checker batch identity includes the complete runtime-config hash. Each contract
+revision therefore creates a new batch fingerprint: neither the original 47
+completions nor the first recovery's 48 completions can be reused by the new
+48-task wave.
 
 ## Preparation boundary
 
@@ -68,3 +75,10 @@ After a successful applied preparation, the separate local supervisor identity
 is
 `configs/gepa_verified_paired_ace_codex_formal24_15it_v1_resume1_supervisor_20260925.yaml`.
 It intentionally retains the original runtime run directory and job name.
+
+The no-`reason` replacement recovery is separately pinned by
+`configs/recovery/ace_codex_formal24_iteration1_no_reason_candidate_screen_20260925.json`.
+It explicitly replaces the first recovery marker, reuses the same frozen draw,
+parent outputs, Reflections, and Curator result, and requires another complete
+48-task Candidate Checker screen. Its Supervisor identity is
+`configs/gepa_verified_paired_ace_codex_formal24_15it_v1_resume2_supervisor_20260925.yaml`.

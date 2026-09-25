@@ -36,6 +36,7 @@ from src.optimization.repo_playbook import (
     validate_repo_reflector_review,
 )
 from src.optimization.paired_playbook import (
+    paired_checker_requires_reason,
     paired_checker_uses_levels,
     validate_ace_paired_reflector_review,
     validate_paired_reflector_review,
@@ -427,6 +428,9 @@ def run_from_config(path: str | Path, *, agents: Any | None = None, optimize_fn=
                 executor,
                 image_records=image_records,
                 levels=paired_checker_uses_levels(raw),
+                output_contract=raw.get("repo_checker", {}).get(
+                    "output_contract", "binary_v1"
+                ),
             )
             proposal_agents = HPCPairedRepoPlaybookProposalAgents(
                 executor,
@@ -490,6 +494,7 @@ def run_from_config(path: str | Path, *, agents: Any | None = None, optimize_fn=
                 checker,
                 proposer,
                 levels=paired_checker_uses_levels(raw),
+                checker_requires_reason=paired_checker_requires_reason(raw),
                 token_counter=count_tokens,
                 maximum_bullet_tokens=_maximum_bullet_tokens(raw),
                 invalid_score=invalid_score,
@@ -544,6 +549,7 @@ def run_from_config(path: str | Path, *, agents: Any | None = None, optimize_fn=
                 runtime.batch_checker,
                 proposer,
                 levels=paired_checker_uses_levels(raw),
+                checker_requires_reason=paired_checker_requires_reason(raw),
                 token_counter=count_tokens,
                 maximum_bullet_tokens=_maximum_bullet_tokens(raw),
                 invalid_score=invalid_score,

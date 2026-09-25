@@ -811,26 +811,28 @@ def test_ace_codex_formal15_is_fresh_clean138_and_launch_bounded() -> None:
         "offline_gepa_reject_playbook_seed_v2.json"
     )
     assert raw["inputs"]["prompt_bundle"].endswith(
-        "offline_gepa_paired_binary_ace_codex_v3_readable_20260924.yaml"
+        "offline_gepa_paired_binary_ace_codex_v4_no_reason_20260925.yaml"
     )
     assert raw["inputs"]["repo_checker_contract"].endswith(
-        "offline_gepa_paired_binary_contract_v1_20260925.yaml"
+        "offline_gepa_paired_binary_contract_v2_20260925.yaml"
     )
     assert raw["inputs"]["repo_checker_contract_sha256"] == (
-        "92fc1aa9b884a40ed1f84cf2d3cd542ce856cbef995b8084e38a45e206d941ce"
+        "62fcf9e3dbbf8c76b0676f4730ca385167e5488b418a7c58d471397882550299"
     )
     contract = yaml.safe_load(
         Path(raw["inputs"]["repo_checker_contract"]).read_text(encoding="utf-8")
     )["checker_contract_appendix"]
     normalized_contract = " ".join(contract.split())
-    assert "exactly these five fields" in normalized_contract
-    assert "reason is a nonempty string for every rule" in normalized_contract
+    assert "exactly these four fields" in normalized_contract
+    assert "rule_number, triggered, finding, and evidence" in normalized_contract
+    assert "reason" not in normalized_contract
     assert (
         "A JSON syntax check alone does not validate this contract"
         in normalized_contract
     )
 
     assert raw["models"]["checker"]["thinking"] == "disabled"
+    assert raw["repo_checker"]["output_contract"] == "binary_v2"
     assert raw["models"]["reflector"] == {
         "executor": "codex_cli",
         "codex_binary": "${HOME}/.local/lib/vibe-codex/0.155.1/bin/codex",

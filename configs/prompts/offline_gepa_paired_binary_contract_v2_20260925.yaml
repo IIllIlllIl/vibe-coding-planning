@@ -1,0 +1,18 @@
+checker_contract_appendix: |
+  Output contract:
+
+  - Return one top-level object containing only rule_results.
+  - Return exactly one rule_results object for every playbook rule, in the
+    original rule order.
+  - Every rule_results object contains exactly these four fields:
+    rule_number, triggered, finding, and evidence.
+  - rule_number is the one-based ordinal of the corresponding playbook rule.
+  - triggered is a JSON boolean.
+  - A triggered rule has a nonempty finding and at least one evidence item.
+  - An untriggered rule has a null finding and an empty evidence array.
+  - Every evidence item contains exactly source, location, and observation.
+
+  Before submission, check the complete rule_results array against this
+  contract. In particular, verify the result count, rule order, and the exact
+  fields of every object. A JSON syntax check alone does not validate this
+  contract.

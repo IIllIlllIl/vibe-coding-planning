@@ -558,6 +558,7 @@ class PairedRepoPlaybookGEPAAdapter:
         maximum_bullet_tokens: int | None = None,
         invalid_score: float = -100.0,
         levels: bool = False,
+        checker_requires_reason: bool = True,
     ) -> None:
         if batch_checker is None:
             raise ValueError("paired Repo playbook execution requires a batch Checker")
@@ -567,6 +568,7 @@ class PairedRepoPlaybookGEPAAdapter:
         self.maximum_bullet_tokens = maximum_bullet_tokens
         self.invalid_score = float(invalid_score)
         self.levels = levels
+        self.checker_requires_reason = checker_requires_reason
 
     def evaluate(
         self,
@@ -622,10 +624,14 @@ class PairedRepoPlaybookGEPAAdapter:
                 raise ValueError("paired Checker must return exactly two side results")
             resolved_raw, unresolved_raw = raw_pair
             resolved_checked = validate_paired_checker_result(
-                resolved_raw[0], playbook, trajectory=resolved_raw[1], levels=self.levels
+                resolved_raw[0], playbook, trajectory=resolved_raw[1],
+                levels=self.levels,
+                require_reason=self.checker_requires_reason,
             )
             unresolved_checked = validate_paired_checker_result(
-                unresolved_raw[0], playbook, trajectory=unresolved_raw[1], levels=self.levels
+                unresolved_raw[0], playbook, trajectory=unresolved_raw[1],
+                levels=self.levels,
+                require_reason=self.checker_requires_reason,
             )
             if not resolved_checked.rejected and unresolved_checked.rejected:
                 score = 1.0

@@ -6,6 +6,7 @@ import yaml
 
 from src.environment.apptainer_env import ApptainerEnvironment
 from src.optimization.paired_playbook import (
+    paired_checker_requires_reason,
     paired_checker_uses_levels,
     validate_paired_checker_result,
     validate_paired_reflector_review,
@@ -55,6 +56,10 @@ def test_output_protocols_do_not_mix():
         validate_paired_checker_result(old, book(), levels=True)
     assert validate_paired_checker_result(old, book()).rejected
     assert not paired_checker_uses_levels({})
+    assert paired_checker_requires_reason({})
+    assert not paired_checker_requires_reason(
+        {"repo_checker": {"output_contract": "binary_v2"}}
+    )
     with pytest.raises(ValueError):
         paired_checker_uses_levels({"repo_checker": {"output_contract": "typo"}})
 

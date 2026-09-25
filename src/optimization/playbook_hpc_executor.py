@@ -426,9 +426,13 @@ class PlaybookHPCExecutor:
                 elif role == "repo_checker":
                     validate_repo_checker_result(agent_output, playbook)
                 else:
+                    output_contract = task_manifest.get(
+                        "output_contract", "binary_v1"
+                    )
                     validate_paired_checker_result(
                         agent_output, playbook,
-                        levels=task_manifest.get("output_contract") == "levels_v1",
+                        levels=output_contract == "levels_v1",
+                        require_reason=output_contract != "binary_v2",
                     )
             else:
                 playbook = RejectPlaybook.parse(task_manifest["validation_playbook"])

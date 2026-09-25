@@ -92,6 +92,36 @@ def test_pair_checker_schema_error_identifies_row_and_fields(
     assert value == original_agent_artifact
 
 
+def test_binary_v2_checker_omits_audit_only_reason() -> None:
+    value = _result(True)
+    value["rule_results"][0].pop("reason")
+    playbook = RejectPlaybook((PlaybookBullet("plan-00001", "Concern"),))
+
+    parsed = validate_paired_checker_result(
+        value, playbook, require_reason=False
+    )
+
+    assert parsed.rejected
+    assert parsed.rule_results[0].reason is None
+    assert set(parsed.to_dict()["rule_results"][0]) == {
+        "rule_number",
+        "triggered",
+        "finding",
+        "evidence",
+    }
+
+
+def test_binary_v2_rejects_unexpected_reason_without_modifying_artifact() -> None:
+    value = _result(False)
+    original_agent_artifact = json.loads(json.dumps(value))
+    playbook = RejectPlaybook((PlaybookBullet("plan-00001", "Concern"),))
+
+    with pytest.raises(ValueError, match="unexpected fields: reason"):
+        validate_paired_checker_result(value, playbook, require_reason=False)
+
+    assert value == original_agent_artifact
+
+
 class _Checker:
     def __init__(self, resolved_reject: bool, unresolved_reject: bool) -> None:
         self.values = (resolved_reject, unresolved_reject)
@@ -180,7 +210,12 @@ def test_pair_checker_calls_are_label_and_pair_blind(levels) -> None:
         }
     }
     executor = Executor()
-    checker = HPCPairedRepoPlaybookChecker(executor, image_records=records, levels=levels)
+    checker = HPCPairedRepoPlaybookChecker(
+        executor,
+        image_records=records,
+        levels=levels,
+        output_contract="levels_v1" if levels else "binary_v1",
+    )
     playbook = RejectPlaybook((PlaybookBullet("plan-00001", "Concern"),))
     checker.evaluate_batch([case], playbook)
     assert executor.role == "paired_repo_checker"

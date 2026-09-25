@@ -14,9 +14,21 @@ _TAGS = frozenset({"helpful", "neutral", "harmful"})
 
 def paired_checker_uses_levels(config: Mapping[str, Any]) -> bool:
     contract = config.get("repo_checker", {}).get("output_contract", "binary_v1")
-    if contract not in {"binary_v1", "levels_v1"}:
+    if contract not in {"binary_v1", "binary_v2", "levels_v1"}:
         raise ValueError("unknown paired Checker output contract")
     return contract == "levels_v1"
+
+
+def paired_checker_requires_reason(config: Mapping[str, Any]) -> bool:
+    """Keep the historical binary/level contracts while making reason optional by design.
+
+    ``binary_v2`` removes the audit-only per-rule reason.  It retains the
+    finding and structured evidence required for a triggered rule.
+    """
+    contract = config.get("repo_checker", {}).get("output_contract", "binary_v1")
+    if contract not in {"binary_v1", "binary_v2", "levels_v1"}:
+        raise ValueError("unknown paired Checker output contract")
+    return contract != "binary_v2"
 
 
 @dataclass(frozen=True)
@@ -25,17 +37,19 @@ class PairedConcernResult:
     triggered: bool
     finding: str | None
     evidence: tuple[RepoEvidence, ...]
-    reason: str
+    reason: str | None
     level: int | None = None
 
     def to_dict(self) -> dict[str, Any]:
-        return {
+        result = {
             "rule_number": self.rule_number,
             **({"triggered": self.triggered} if self.level is None else {"level": self.level}),
             "finding": self.finding,
             "evidence": [item.to_dict() for item in self.evidence],
-            "reason": self.reason,
         }
+        if self.reason is not None:
+            result["reason"] = self.reason
+        return result
 
 
 @dataclass(frozen=True)
@@ -64,13 +78,21 @@ def validate_paired_checker_result(
     *,
     trajectory: Sequence[Mapping[str, Any]] = (),
     levels: bool = False,
+    require_reason: bool = True,
 ) -> PairedCheckerOutput:
     if not isinstance(value, dict) or set(value) != {"rule_results"}:
         raise ValueError("Paired Repo Checker output must contain only rule_results")
     rows = value["rule_results"]
     if not isinstance(rows, list) or len(rows) != len(playbook.bullets):
         raise ValueError("Paired Repo Checker must return one result per bullet")
-    expected_keys = {"rule_number", "level" if levels else "triggered", "finding", "evidence", "reason"}
+    expected_keys = {
+        "rule_number",
+        "level" if levels else "triggered",
+        "finding",
+        "evidence",
+    }
+    if require_reason:
+        expected_keys.add("reason")
     parsed: list[PairedConcernResult] = []
     for number, row in enumerate(rows, start=1):
         row_location = f"rule_results[{number - 1}] (rule {number})"
@@ -104,7 +126,9 @@ def validate_paired_checker_result(
             if not isinstance(row["triggered"], bool):
                 raise ValueError("Paired Repo Checker trigger must be boolean")
             triggered = row["triggered"]
-        if not isinstance(row["reason"], str) or not row["reason"].strip():
+        if require_reason and (
+            not isinstance(row["reason"], str) or not row["reason"].strip()
+        ):
             raise ValueError("Paired Repo Checker reason must be non-empty")
         raw_evidence = row["evidence"]
         if not isinstance(raw_evidence, list):
@@ -162,7 +186,7 @@ def validate_paired_checker_result(
                 triggered=triggered,
                 finding=normalized_finding,
                 evidence=tuple(evidence),
-                reason=row["reason"].strip(),
+                reason=row["reason"].strip() if require_reason else None,
                 level=level,
             )
         )

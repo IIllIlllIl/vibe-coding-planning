@@ -274,11 +274,24 @@ def run_task(
             elif role == "repo_checker":
                 validate_repo_checker_result(output, playbook)
             else:
-                from src.optimization.paired_playbook import paired_checker_uses_levels
+                from src.optimization.paired_playbook import (
+                    paired_checker_requires_reason,
+                    paired_checker_uses_levels,
+                )
                 levels = paired_checker_uses_levels(config)
-                if levels != (manifest.get("output_contract") == "levels_v1"):
+                output_contract = manifest.get("output_contract", "binary_v1")
+                if levels != (output_contract == "levels_v1"):
                     raise ValueError("paired Checker task/config contract mismatch")
-                validate_paired_checker_result(output, playbook, levels=levels)
+                if paired_checker_requires_reason(config) != (
+                    output_contract != "binary_v2"
+                ):
+                    raise ValueError("paired Checker reason contract mismatch")
+                validate_paired_checker_result(
+                    output,
+                    playbook,
+                    levels=levels,
+                    require_reason=paired_checker_requires_reason(config),
+                )
         else:
             playbook = RejectPlaybook.parse(manifest["validation_playbook"])
         if role == "reflector":

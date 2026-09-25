@@ -142,10 +142,14 @@ class HPCPairedRepoPlaybookChecker:
         *,
         image_records: Mapping[str, Any],
         levels: bool = False,
+        output_contract: str = "binary_v1",
     ) -> None:
         self.executor = executor
         self.image_records = image_records
         self.levels = levels
+        self.output_contract = output_contract
+        if levels != (output_contract == "levels_v1"):
+            raise ValueError("paired Checker level/contract mismatch")
 
     def evaluate_batch(
         self,
@@ -172,7 +176,11 @@ class HPCPairedRepoPlaybookChecker:
                         # This transport identity is never interpolated into the
                         # prompt. It contains neither the pair ID nor side label.
                         "instance_id": observation.observation_id,
-                        **({"output_contract": "levels_v1"} if self.levels else {}),
+                        **(
+                            {"output_contract": self.output_contract}
+                            if self.output_contract != "binary_v1"
+                            else {}
+                        ),
                         "validation_rule_count": len(playbook.bullets),
                         "repository": repository,
                         "image_authority": authority,

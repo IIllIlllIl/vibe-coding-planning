@@ -37,9 +37,13 @@ def prepare(root: Path, authority: dict, *, apply=False, repo=REPO):
 def _prepare(root, authority, *, apply, repo):
     manifest = json.loads((root / "run_manifest.json").read_text())
     if (root / MARKER).exists() and manifest["semantic_config"].get("pending_proposal_recovery") == file_hash(root / MARKER):
-        if json.loads((root / MARKER).read_text())["authority"] != authority:
+        existing_authority = json.loads((root / MARKER).read_text())["authority"]
+        if existing_authority == authority:
+            return {"status": "already_prepared", "run_dir": str(root)}
+        if authority.get("replaces_recovery_id") != existing_authority.get(
+            "recovery_id"
+        ):
             raise ValueError("existing recovery has another authority")
-        return {"status": "already_prepared", "run_dir": str(root)}
     for name, sha in authority["files"].items():
         if Path(name).is_absolute() or ".." in Path(name).parts or file_hash(root / name) != sha:
             raise ValueError(f"recovery authority mismatch: {name}")

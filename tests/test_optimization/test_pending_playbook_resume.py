@@ -224,6 +224,99 @@ def test_prepare_precheckpoint_candidate_reruns_whole_screen(tmp_path):
     assert manifest["semantic_config"]["runtime_config"] == file_hash(runtime)
 
 
+def test_precheckpoint_recovery_can_be_explicitly_replaced(tmp_path):
+    root = tmp_path / "precheckpoint"
+    root.mkdir()
+    repo = tmp_path / "repo"
+    (repo / "configs").mkdir(parents=True)
+    runtime_v1 = repo / "configs/runtime-v1.yaml"
+    runtime_v1.write_text("version: 1\n")
+    runtime_v2 = repo / "configs/runtime-v2.yaml"
+    runtime_v2.write_text("version: 2\n")
+    parent = {
+        "rules": RejectPlaybook(
+            (PlaybookBullet("plan-00001", "The Plan is a placeholder."),)
+        ).serialize()
+    }
+    state = {
+        "i": -1,
+        "program_candidates": [parent],
+        "evaluation_cache": EvaluationCache(),
+        "total_num_evals": 1,
+        "full_program_trace": [],
+    }
+    files = {
+        "gepa_state.bin": pickle.dumps(state),
+        "gepa_resume_state.json": encoded(
+            {"gepa_state_i": -1, "reflection_failures": []}
+        ),
+        "run_manifest.json": encoded(
+            {"semantic_config": {"source": {}, "runtime_config": "original"}}
+        ),
+        "task.json": encoded(
+            {
+                "fingerprint": "exact",
+                "prompt_values": {"counted_internal_playbook": parent["rules"]},
+            }
+        ),
+        "output.json": encoded(
+            {
+                "status": "completed",
+                "fingerprint": "exact",
+                "agent_output": {"reasoning": "keep", "operations": []},
+            }
+        ),
+        "reviews.json": encoded([{"instance_id": "pair-a"}]),
+        "pair.json": encoded(
+            {"instance_id": "pair-a", "pair_output": {}, "score": 0}
+        ),
+    }
+    for name, content in files.items():
+        (root / name).write_bytes(content)
+
+    def authority(recovery_id, runtime, previous):
+        return {
+            "schema_version": 2,
+            "recovery_kind": "candidate_evaluation_before_checkpoint_v1",
+            "run_name": root.name,
+            "recovery_id": recovery_id,
+            "saved_state_i": -1,
+            "saved_metric_calls": 1,
+            "candidate_count": 1,
+            "selected_program_candidate": 0,
+            "subsample_ids": ["pair-a"],
+            "validation_pair_count": 1,
+            "proposed_rule_count": 1,
+            "curator_task": "task.json",
+            "curator_result": "output.json",
+            "reviews": "reviews.json",
+            "parent_evidence": ["pair.json"],
+            "files": {name: file_hash(root / name) for name in files},
+            "replacement_runtime_config": {
+                "path": str(runtime.relative_to(repo)),
+                "previous_sha256": previous,
+                "replacement_sha256": file_hash(runtime),
+            },
+            "replacement_source_hashes": {},
+        }
+
+    first = authority("candidate-screen-v1", runtime_v1, "original")
+    prepare(root, first, apply=True, repo=repo)
+    second = authority(
+        "candidate-screen-v2", runtime_v2, file_hash(runtime_v1)
+    )
+    second["replaces_recovery_id"] = "candidate-screen-v1"
+    second["files"] = {name: file_hash(root / name) for name in files}
+    prepare(root, second, apply=True, repo=repo)
+
+    marker = json.loads((root / MARKER).read_text())
+    assert marker["authority"]["recovery_id"] == "candidate-screen-v2"
+    assert (root / "recovery_backups/candidate-screen-v1").is_dir()
+    assert (root / "recovery_backups/candidate-screen-v2").is_dir()
+    manifest = json.loads((root / "run_manifest.json").read_text())
+    assert manifest["semantic_config"]["runtime_config"] == file_hash(runtime_v2)
+
+
 def test_replay_uses_frozen_agents_and_deduplicates_counter_after_yield(checkpoint):
     root, authority, original, _ = checkpoint
     prepare(root, authority, apply=True)
@@ -292,8 +385,9 @@ def test_codex_resume_supervisor_targets_original_formal15_run():
     assert option("--cpus") == "1" and option("--mem") == "4G"
     runtime = yaml.safe_load(Path(runtime_path).read_text())
     assert runtime["inputs"]["repo_checker_contract"].endswith(
-        "offline_gepa_paired_binary_contract_v1_20260925.yaml"
+        "offline_gepa_paired_binary_contract_v2_20260925.yaml"
     )
+    assert runtime["repo_checker"]["output_contract"] == "binary_v2"
     assert runtime["paths"]["run_dir"].endswith(
         "ace-codex-formal24-15it-v1-20260925"
     )
