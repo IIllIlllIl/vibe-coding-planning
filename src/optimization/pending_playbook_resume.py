@@ -1,7 +1,8 @@
 """Explicit recovery of a paired proposal that failed after Agent completion.
 
-The saved RNG/sampler are already *after* the failed draw. Replay that draw
-without consuming randomness, then return to GEPA's ordinary search. Nothing
+Two checkpoint positions are supported. A post-draw checkpoint replays the
+frozen draw without consuming randomness. A pre-draw checkpoint delegates the
+draw to the original selector/sampler and verifies the frozen result. Nothing
 in this module changes an Agent response or a candidate score.
 """
 from __future__ import annotations
@@ -30,11 +31,19 @@ class PendingDraw:
         self.pending = pending
         self.active = False
 
+    @property
+    def replay_underlying_draw(self):
+        return self.pending.get("draw_policy") == "replay_underlying_and_verify"
+
     def select_candidate_idx(self, state):
         self.active = state.i == self.pending["trace"]["i"]
         if not self.active:
             return self.selector.select_candidate_idx(state)
         index = self.pending["trace"]["selected_program_candidate"]
+        if self.replay_underlying_draw:
+            actual = self.selector.select_candidate_idx(state)
+            if actual != index:
+                raise ValueError("pending proposal candidate draw differs from frozen draw")
         if state.program_candidates[index] != self.pending["parent"]:
             raise ValueError("pending proposal parent differs from frozen parent")
         return index
@@ -45,6 +54,10 @@ class PendingDraw:
         ids = self.pending["trace"]["subsample_ids"]
         if not self.active or set(ids) - set(loader.all_ids()):
             raise ValueError("pending proposal minibatch is unavailable")
+        if self.replay_underlying_draw:
+            actual = self.sampler.next_minibatch_ids(loader, state)
+            if actual != ids:
+                raise ValueError("pending proposal minibatch draw differs from frozen draw")
         return list(ids)
 
 

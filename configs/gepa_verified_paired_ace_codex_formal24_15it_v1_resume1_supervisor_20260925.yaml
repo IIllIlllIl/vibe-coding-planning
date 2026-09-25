@@ -1,0 +1,29 @@
+schema_version: 1
+session: verified-paired-ace-codex-formal24-15it-v1-resume1-20260925
+log: .local/hpc-supervisor/verified-paired-ace-codex-formal24-15it-v1-resume1-20260925.log
+arguments:
+  - --poll-interval
+  - "60"
+  - --slice-time
+  - "00:30:00"
+  - --target-iterations
+  - "15"
+  - --max-runs
+  - "180"
+  - --state-file
+  - .local/hpc-supervisor/verified-paired-ace-codex-formal24-15it-v1-resume1-20260925.json
+  - --reclaim-staging
+  - --reclaim-workspaces
+  - --require-clean-worktree
+  - --gepa-rules
+  - --gepa-config
+  - configs/gepa_verified_paired_ace_codex_formal24_15it_v1_20260925.yaml
+  - --ulhpc-config
+  - configs/ulhpc_submit.yaml
+  - --job-name
+  - verified-paired-ace-codex-formal24-15it-v1-20260925
+  - --cpus
+  - "1"
+  - --mem
+  - 4G
+  - --submit

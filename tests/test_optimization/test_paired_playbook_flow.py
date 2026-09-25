@@ -15,7 +15,10 @@ from src.optimization.models import (
     RepositoryRef,
 )
 from src.optimization.paired_dataset import load_paired_snapshot
-from src.optimization.paired_playbook import validate_paired_reflector_review
+from src.optimization.paired_playbook import (
+    validate_paired_checker_result,
+    validate_paired_reflector_review,
+)
 from src.optimization.playbook import PlaybookBullet, RejectPlaybook
 from src.optimization.playbook_adapter import PairedRepoPlaybookGEPAAdapter
 from src.optimization.playbook_cli import _validate_frozen_inputs
@@ -59,6 +62,34 @@ def _result(triggered: bool) -> dict:
             }
         ]
     }
+
+
+@pytest.mark.parametrize(
+    ("mutation", "message"),
+    [
+        (
+            lambda row: row.pop("reason"),
+            r"rule_results\[0\] \(rule 1\).*missing fields: reason",
+        ),
+        (
+            lambda row: row.__setitem__("extra", "not allowed"),
+            r"rule_results\[0\] \(rule 1\).*unexpected fields: extra",
+        ),
+    ],
+)
+def test_pair_checker_schema_error_identifies_row_and_fields(
+    mutation, message: str
+) -> None:
+    value = _result(False)
+    mutation(value["rule_results"][0])
+    original_agent_artifact = json.loads(json.dumps(value))
+    playbook = RejectPlaybook((PlaybookBullet("plan-00001", "Concern"),))
+
+    with pytest.raises(ValueError, match=message):
+        validate_paired_checker_result(value, playbook)
+
+    # Host validation rejects the Agent artifact without repairing it.
+    assert value == original_agent_artifact
 
 
 class _Checker:

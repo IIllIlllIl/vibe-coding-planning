@@ -18,6 +18,7 @@ Read in this order:
 | [`../project_issues.md`](../project_issues.md) | Current research decisions and unresolved methodological risks; not a run-progress log |
 | [`offline-gepa-playbook-redesign.md`](offline-gepa-playbook-redesign.md) | Reject-playbook methods, including within-task paired concern learning, prompt provenance, distributed Slurm Agent waves, and resume contracts |
 | [`paired-levels-v1-resume.md`](paired-levels-v1-resume.md) | Hash-pinned in-place recovery of v1's pending seventh proposal; preserves the first six iterations rather than restarting from Seed |
+| [`ace-codex-formal15-candidate-screen-resume.md`](ace-codex-formal15-candidate-screen-resume.md) | Hash-pinned first-proposal recovery that reuses frozen Seed/Reflection/Curator evidence and reruns the complete 48-task Candidate Checker screen |
 | [`engineering-contracts.md`](engineering-contracts.md) | Shared execution requirements: cluster resource ratios, prepared Git history, isolation, artifact persistence, cleanup, and launch checks |
 | [`safe-pce.md`](safe-pce.md) | Current Safe PCE selection, execution reliability, and the frozen within-task Plan-pair derivative |
 | [`hpc-submit.md`](hpc-submit.md) | Behavioral-branch credential, preheat, retained Slurm, and FairShare safety |

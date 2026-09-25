@@ -105,6 +105,125 @@ def test_pending_draw_does_not_advance_rng_and_round_eight_delegates(checkpoint)
     assert saved != rng.getstate()
 
 
+def test_precheckpoint_pending_draw_consumes_and_verifies_original_draw(checkpoint):
+    _, _, original, _ = checkpoint
+    pending = {
+        "draw_policy": "replay_underlying_and_verify",
+        "trace": {"i": 0, "selected_program_candidate": 0, "subsample_ids": ["pair-a"]},
+        "parent": original["program_candidates"][0],
+    }
+    calls = []
+    selector = SimpleNamespace(
+        select_candidate_idx=lambda state: calls.append("selector") or 0
+    )
+    sampler = SimpleNamespace(
+        next_minibatch_ids=lambda loader, state: calls.append("sampler") or ["pair-a"]
+    )
+    draw = PendingDraw(selector, sampler, pending)
+    state = SimpleNamespace(i=0, program_candidates=original["program_candidates"])
+    loader = SimpleNamespace(all_ids=lambda: ["pair-a"])
+    assert draw.select_candidate_idx(state) == 0
+    assert draw.next_minibatch_ids(loader, state) == ["pair-a"]
+    assert calls == ["selector", "sampler"]
+
+
+def test_prepare_precheckpoint_candidate_reruns_whole_screen(tmp_path):
+    root = tmp_path / "precheckpoint"
+    root.mkdir()
+    repo = tmp_path / "repo"
+    (repo / "configs").mkdir(parents=True)
+    runtime = repo / "configs/runtime.yaml"
+    runtime.write_text("schema_version: 1\n")
+    parent = {
+        "rules": RejectPlaybook(
+            (PlaybookBullet("plan-00001", "The Plan is a placeholder."),)
+        ).serialize()
+    }
+    state = {
+        "i": -1,
+        "program_candidates": [parent],
+        "evaluation_cache": EvaluationCache(),
+        "total_num_evals": 36,
+        "full_program_trace": [],
+    }
+    resume = {
+        "gepa_state_i": -1,
+        "random_state": "pre-draw",
+        "sampler": {"epoch": -1},
+        "reflection_failures": [],
+    }
+    reviews = [{"instance_id": "pair-a", "key_insight": "none"}]
+    curator_output = {"reasoning": "keep seed", "operations": []}
+    files = {
+        "gepa_state.bin": pickle.dumps(state),
+        "gepa_resume_state.json": encoded(resume),
+        "global_counter_ledger.json": b"{}",
+        "candidates.json": encoded([parent]),
+        "run_manifest.json": encoded(
+            {"semantic_config": {"source": {}, "runtime_config": "unchanged"}}
+        ),
+        "task.json": encoded(
+            {
+                "fingerprint": "exact",
+                "prompt_values": {"counted_internal_playbook": parent["rules"]},
+            }
+        ),
+        "output.json": encoded(
+            {
+                "status": "completed",
+                "fingerprint": "exact",
+                "agent_output": curator_output,
+            }
+        ),
+        "reviews.json": encoded(reviews),
+        "pair.json": encoded(
+            {
+                "instance_id": "pair-a",
+                "pair_output": {"resolved": {}, "unresolved": {}},
+                "score": 0,
+            }
+        ),
+    }
+    for name, content in files.items():
+        (root / name).write_bytes(content)
+    authority = {
+        "schema_version": 2,
+        "recovery_kind": "candidate_evaluation_before_checkpoint_v1",
+        "run_name": root.name,
+        "recovery_id": "candidate-screen",
+        "saved_state_i": -1,
+        "saved_metric_calls": 36,
+        "candidate_count": 1,
+        "selected_program_candidate": 0,
+        "subsample_ids": ["pair-a"],
+        "validation_pair_count": 36,
+        "proposed_rule_count": 1,
+        "curator_task": "task.json",
+        "curator_result": "output.json",
+        "reviews": "reviews.json",
+        "parent_evidence": ["pair.json"],
+        "files": {name: file_hash(root / name) for name in files},
+        "replacement_runtime_config": {
+            "path": "configs/runtime.yaml",
+            "previous_sha256": "unchanged",
+            "replacement_sha256": file_hash(runtime),
+        },
+        "replacement_source_hashes": {},
+    }
+    before_state = (root / "gepa_state.bin").read_bytes()
+    summary = prepare(root, authority, apply=True, repo=repo)
+    assert summary["candidate_checker_tasks_to_rerun"] == 2
+    assert summary["validation_pairs_after_screen"] == 36
+    assert (root / "gepa_state.bin").read_bytes() == before_state
+    assert json.loads((root / "gepa_resume_state.json").read_text()) == resume
+    marker = json.loads((root / MARKER).read_text())
+    assert marker["draw_policy"] == "replay_underlying_and_verify"
+    assert marker["trace"]["subsample_ids"] == ["pair-a"]
+    assert marker["parent_outputs"] == [{"resolved": {}, "unresolved": {}}]
+    manifest = json.loads((root / "run_manifest.json").read_text())
+    assert manifest["semantic_config"]["runtime_config"] == file_hash(runtime)
+
+
 def test_replay_uses_frozen_agents_and_deduplicates_counter_after_yield(checkpoint):
     root, authority, original, _ = checkpoint
     prepare(root, authority, apply=True)
@@ -155,6 +274,29 @@ def test_resume_supervisor_targets_original_scientific_run():
     runtime = yaml.safe_load(Path(option("--gepa-config")).read_text())
     assert "checkpoint_import" not in runtime
     assert runtime["paths"]["run_dir"].endswith("formal24-8it-v1-20260921")
+
+
+def test_codex_resume_supervisor_targets_original_formal15_run():
+    import yaml
+
+    path = Path(
+        "configs/gepa_verified_paired_ace_codex_formal24_15it_v1_resume1_supervisor_20260925.yaml"
+    )
+    launch = yaml.safe_load(path.read_text())
+    args = launch["arguments"]
+    option = lambda key: args[args.index(key) + 1]
+    runtime_path = "configs/gepa_verified_paired_ace_codex_formal24_15it_v1_20260925.yaml"
+    assert option("--gepa-config") == runtime_path
+    assert option("--job-name") == "verified-paired-ace-codex-formal24-15it-v1-20260925"
+    assert option("--target-iterations") == "15"
+    assert option("--cpus") == "1" and option("--mem") == "4G"
+    runtime = yaml.safe_load(Path(runtime_path).read_text())
+    assert runtime["inputs"]["repo_checker_contract"].endswith(
+        "offline_gepa_paired_binary_contract_v1_20260925.yaml"
+    )
+    assert runtime["paths"]["run_dir"].endswith(
+        "ace-codex-formal24-15it-v1-20260925"
+    )
 
 
 @pytest.mark.skipif(not os.environ.get("VIBE_V1_RECOVERY_FIXTURE"), reason="optional frozen v1 evidence")

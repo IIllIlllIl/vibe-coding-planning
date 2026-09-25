@@ -73,8 +73,26 @@ def validate_paired_checker_result(
     expected_keys = {"rule_number", "level" if levels else "triggered", "finding", "evidence", "reason"}
     parsed: list[PairedConcernResult] = []
     for number, row in enumerate(rows, start=1):
-        if not isinstance(row, dict) or set(row) != expected_keys:
-            raise ValueError("Paired Repo Checker rule result has an invalid schema")
+        row_location = f"rule_results[{number - 1}] (rule {number})"
+        if not isinstance(row, dict):
+            raise ValueError(
+                f"Paired Repo Checker {row_location} must be an object with "
+                f"exactly these fields: {', '.join(sorted(expected_keys))}"
+            )
+        actual_keys = set(row)
+        if actual_keys != expected_keys:
+            missing = sorted(expected_keys - actual_keys)
+            unexpected = sorted(actual_keys - expected_keys)
+            details = []
+            if missing:
+                details.append(f"missing fields: {', '.join(missing)}")
+            if unexpected:
+                details.append(f"unexpected fields: {', '.join(unexpected)}")
+            raise ValueError(
+                f"Paired Repo Checker {row_location} has invalid fields "
+                f"({'; '.join(details)}); expected exactly: "
+                f"{', '.join(sorted(expected_keys))}"
+            )
         if type(row["rule_number"]) is not int or row["rule_number"] != number:
             raise ValueError("Paired Repo Checker rule identity/trigger is invalid")
         level = row.get("level") if levels else None

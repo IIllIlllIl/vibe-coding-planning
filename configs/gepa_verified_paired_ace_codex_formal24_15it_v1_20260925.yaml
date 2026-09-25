@@ -29,6 +29,8 @@ inputs:
   initial_playbook_sha256: 16e09571f484f355300dc29f7a828ba8d9b5ca691152ffb8b3b1f2d13d5f83e4
   prompt_bundle: configs/prompts/offline_gepa_paired_binary_ace_codex_v3_readable_20260924.yaml
   prompt_bundle_sha256: df6f9d1553eeab0ea05974bcd3bde29cdec3c8f8ad6c4d5ee84abe7412d6c4a3
+  repo_checker_contract: configs/prompts/offline_gepa_paired_binary_contract_v1_20260925.yaml
+  repo_checker_contract_sha256: 92fc1aa9b884a40ed1f84cf2d3cd542ce856cbef995b8084e38a45e206d941ce
   repo_checker_image_manifest: configs/frozen_swe_verified_safe_pce/verified482-formal-v1-20260914/images.json
   repo_checker_image_manifest_sha256: f4c18c5dcf30fa48cb503241c5ba69ae8f6368e63726f8ce0875a868ae212e0a
   train_instance_ids:

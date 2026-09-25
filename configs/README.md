@@ -24,9 +24,12 @@ playbook with `ADD`, `UPDATE`, `MERGE`, and `REMOVE`; the Host enforces only the
 mechanical 64-token bullet ceiling and exact normalized-text uniqueness. The
 prompt deliberately omits the prior category, fact-link,
 coverage-disposition, self-check, and risk-analysis contracts. The completed
-12/4 smoke is development evidence. The prepared formal identity starts a
-fresh candidate tree from the one-rule Seed on clean138 train and the original
-36-pair development-validation split. Preparation does not authorize launch.
+12/4 smoke is development evidence. The formal identity starts a fresh
+candidate tree from the one-rule Seed on clean138 train and the original
+36-pair development-validation split. Its fingerprinted binary Checker
+contract specifies only the mechanical per-rule JSON schema and pre-submission
+schema check; it does not change classification semantics. A tracked launch
+identity never authorizes execution by itself.
 
 The prior linked-Level prompt authority,
 `prompts/offline_gepa_paired_levels_ace_core_v7_20260923.yaml`, and its
@@ -128,6 +131,7 @@ labels, image manifests, output roots, or baseline identities in a new run.
 | `prompts/offline_gepa_paired_binary_ace_codex_v1_20260924.yaml` | Frozen initial ACE-near baseline prompt. Its first smoke exposed an ambiguous pair-ID output contract; retain unchanged as failure provenance. |
 | `prompts/offline_gepa_paired_binary_ace_codex_v2_20260924.yaml` | Pair-ID repair of the ACE-near prompt: it supplies the authoritative pair ID directly while leaving the Checker and scientific Reflection/Curator instructions unchanged. |
 | `prompts/offline_gepa_paired_binary_ace_codex_v3_readable_20260924.yaml` | Curator-readability adaptation of v2. Checker, Reflector, schemas, and Curator instance contract are unchanged; only the Curator receives the accepted atomicity, plain-English, 32-token preference, and 64-token ceiling instructions. |
+| `prompts/offline_gepa_paired_binary_contract_v1_20260925.yaml` | Fingerprinted mechanical output appendix for the binary paired Checker. It requires every ordered rule result to contain exactly `rule_number`, `triggered`, `finding`, `evidence`, and a nonempty `reason`, plus the existing triggered/untriggered field invariants. |
 | `gepa_verified_paired_ace_codex_smoke12_v1_20260924.yaml` | Failed initial one-proposal smoke. Checker work completed, but all Reflectors returned repository task IDs instead of pair IDs and exhausted three Host-validation attempts; no candidate was produced. |
 | `gepa_verified_paired_ace_codex_smoke12_v1_supervisor_20260924.yaml` | Frozen Supervisor identity for the failed v1 smoke; do not relaunch. |
 | `gepa_verified_paired_ace_codex_smoke12_v2_idfix_20260924.yaml` | Failed recovery provenance. The prompt contained the explicit pair ID, but the Worker did not forward it into the repository-agent renderer, so all Reflectors failed before Codex execution. |
@@ -140,8 +144,10 @@ labels, image manifests, output roots, or baseline identities in a new run.
 | `gepa_verified_paired_ace_codex_smoke12_v5_isolated_supervisor_20260924.yaml` | Frozen one-minute-poll Iris Supervisor identity for completed v5; do not relaunch. |
 | `gepa_verified_paired_ace_codex_smoke12_v6_curator_readability_20260924.yaml` | Completed Curator-boundary replay. It imported exact v5 Checker and Reflector outputs, applied only the v3 Curator readability prompt, restored the Host-enforced 64-token bullet ceiling, and completed fresh candidate evaluation. |
 | `gepa_verified_paired_ace_codex_smoke12_v6_curator_readability_supervisor_20260924.yaml` | Completed one-minute-poll Iris Supervisor identity for v6; do not relaunch. |
-| `gepa_verified_paired_ace_codex_formal24_15it_v1_20260925.yaml` | Prepared fresh ACE-near formal baseline: atomic Seed, clean138 train, original 36-pair development validation, 24-pair minibatches, fifteen proposals, binary no-thinking Checker, Terra/max Reflectors, Sol/high Curator, disabled Refiner, and 64-token bullet ceiling. |
-| `gepa_verified_paired_ace_codex_formal24_15it_v1_supervisor_20260925.yaml` | Prepared Iris Supervisor identity for the formal baseline: one CPU/4G, 35-minute Agents, one-minute polling, no project-side Slurm array cap, and conservative staging/workspace reclamation. Presence does not authorize launch. |
+| `gepa_verified_paired_ace_codex_formal24_15it_v1_20260925.yaml` | ACE-near formal baseline authority: atomic Seed, clean138 train, original 36-pair development validation, 24-pair minibatches, fifteen proposals, binary no-thinking Checker with the fingerprinted mechanical output contract, Terra/max Reflectors, Sol/high Curator, disabled Refiner, and 64-token bullet ceiling. |
+| `gepa_verified_paired_ace_codex_formal24_15it_v1_supervisor_20260925.yaml` | Iris Supervisor identity for the formal baseline: one CPU/4G, 35-minute Agents, one-minute polling, no project-side Slurm array cap, and conservative staging/workspace reclamation. Presence does not authorize launch. |
+| `recovery/ace_codex_formal24_iteration1_candidate_screen_20260925.json` | Hash-pinned recovery authority for the failed first candidate screen. It freezes the ordered 24-pair draw, Seed outputs, 24 Reflections, and Curator result, while requiring a fresh complete 48-task Candidate Checker screen. |
+| `gepa_verified_paired_ace_codex_formal24_15it_v1_resume1_supervisor_20260925.yaml` | Prepared separate Supervisor session for the authorized complete-screen recovery; it targets the original formal run identity and does not itself authorize launch. |
 | `gepa_verified_paired_learning12_smoke_v6_binary_seed_20260924.yaml` | Prepared fresh binary full cycle from the one-rule Seed on the same 12/4 development pairs as the Level smoke. |
 | `gepa_verified_paired_learning12_smoke_v6_binary_manual_20260924.yaml` | Prepared fresh binary full cycle from the audited ten-rule manual playbook on the same 12/4 pairs. |
 | `gepa_verified_paired_learning12_smoke_v6_binary_sequence_supervisor_20260924.yaml` | Prepared one-minute-poll Iris sequence for the Seed and manual-playbook no-Level ablation phases; presence alone does not authorize launch. |

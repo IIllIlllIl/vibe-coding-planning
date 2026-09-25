@@ -813,6 +813,22 @@ def test_ace_codex_formal15_is_fresh_clean138_and_launch_bounded() -> None:
     assert raw["inputs"]["prompt_bundle"].endswith(
         "offline_gepa_paired_binary_ace_codex_v3_readable_20260924.yaml"
     )
+    assert raw["inputs"]["repo_checker_contract"].endswith(
+        "offline_gepa_paired_binary_contract_v1_20260925.yaml"
+    )
+    assert raw["inputs"]["repo_checker_contract_sha256"] == (
+        "92fc1aa9b884a40ed1f84cf2d3cd542ce856cbef995b8084e38a45e206d941ce"
+    )
+    contract = yaml.safe_load(
+        Path(raw["inputs"]["repo_checker_contract"]).read_text(encoding="utf-8")
+    )["checker_contract_appendix"]
+    normalized_contract = " ".join(contract.split())
+    assert "exactly these five fields" in normalized_contract
+    assert "reason is a nonempty string for every rule" in normalized_contract
+    assert (
+        "A JSON syntax check alone does not validate this contract"
+        in normalized_contract
+    )
 
     assert raw["models"]["checker"]["thinking"] == "disabled"
     assert raw["models"]["reflector"] == {
