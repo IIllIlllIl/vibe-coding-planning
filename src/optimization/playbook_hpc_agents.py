@@ -662,7 +662,11 @@ class HPCPairedRepoPlaybookProposalAgents(HPCPlaybookProposalAgents):
     ) -> Path:
         identity = hashlib.sha256(
             json.dumps(
-                {"record": record, "prior": prior},
+                {
+                    "evidence_contract": "paired_checker_trajectories_v1",
+                    "record": record,
+                    "prior": prior,
+                },
                 ensure_ascii=False,
                 sort_keys=True,
                 separators=(",", ":"),
@@ -685,6 +689,8 @@ class HPCPairedRepoPlaybookProposalAgents(HPCPlaybookProposalAgents):
                 )
             },
         )
+        checker_trajectory_files: list[str] = []
+        checker_trajectory_status: dict[str, str] = {}
         for side_name in ("resolved_side", "unresolved_side"):
             side = record.get(side_name)
             if not isinstance(side, dict):
@@ -693,6 +699,19 @@ class HPCPairedRepoPlaybookProposalAgents(HPCPlaybookProposalAgents):
                 dict(side.get("historical_evidence") or {})
             )
             side_root = root / side_name
+            if "checker_trajectory" in side:
+                trajectory = side["checker_trajectory"]
+                if not isinstance(trajectory, list):
+                    raise ValueError(f"{side_name} Checker trajectory must be a list")
+                atomic_json(side_root / "checker_trajectory.json", trajectory)
+                checker_trajectory_files.append(f"{side_name}/checker_trajectory.json")
+                checker_trajectory_status[side_name] = (
+                    "available" if trajectory else "recorded_empty"
+                )
+            else:
+                # Old checkpoints contain findings, not the original review trace.
+                # Do not fabricate a trace or rewrite frozen evidence in place.
+                checker_trajectory_status[side_name] = "unavailable_in_source_record"
             atomic_json(
                 side_root / "review_input.json",
                 {
@@ -725,7 +744,9 @@ class HPCPairedRepoPlaybookProposalAgents(HPCPlaybookProposalAgents):
         atomic_json(
             root / "manifest.json",
             {
-                "schema_version": 1,
+                "schema_version": 2,
+                "evidence_contract": "paired_checker_trajectories_v1",
+                "checker_trajectory_status": checker_trajectory_status,
                 "instance_id": record["instance_id"],
                 "task_id": record["task_id"],
                 "files": [
@@ -740,6 +761,7 @@ class HPCPairedRepoPlaybookProposalAgents(HPCPlaybookProposalAgents):
                     "unresolved_side/code_trajectory.json",
                     "unresolved_side/evaluator_result.json",
                     "unresolved_side/generated.patch",
+                    *checker_trajectory_files,
                     *(["prior_reflection.json"] if prior is not None else []),
                 ],
                 "contains_repository_reference": True,

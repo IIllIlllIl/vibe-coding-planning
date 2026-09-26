@@ -1,0 +1,167 @@
+[
+  {
+    "pair_id": "pair-26f3198ed44b6f1f68fd05f7",
+    "task_id": "matplotlib__matplotlib-25287",
+    "split": "train",
+    "reason_code": "EVAL_DISK_QUOTA",
+    "reason": "The shared U evaluator log contains OSError [Errno 122] Disk quota exceeded and 788 parsed failures. This is not a reliable ordinary implementation outcome.",
+    "decisive_observation_id": "e58f0d4dce3e9330af2092c08c0499ec5cf8be474c15375cf261f44f134538c6",
+    "artifact": {
+      "artifact_path": "/mnt/scratch/users/twang/vibe-coding-planning/run_state/output/SWE-bench_Verified/swe-verified-pce-runs/development/safe-pce-no-thinking-clean411-target4-aion-v1-20260918/hpc_tasks/pce/1218ed997a895bcd1ce11037802dbce70208ad70ac88472942cd7497c0b211e2/outputs/task_0595.json",
+      "artifact_sha256": "3e85d5ddd2872e6301c959c68e9ad61a538d41e19b69ef75a01b4504ae4a2bb5",
+      "json_field": "evaluator_result"
+    },
+    "plan_sha_verified": true,
+    "evaluator_log_sha256": "d6368346c6ef7d803f39be59234b660c1ed4ea0996b81fb24be0c8e490fb7e9b"
+  },
+  {
+    "pair_id": "pair-e7c206d74981621a4417a384",
+    "task_id": "matplotlib__matplotlib-25287",
+    "split": "train",
+    "reason_code": "EVAL_DISK_QUOTA",
+    "reason": "The shared U evaluator log contains OSError [Errno 122] Disk quota exceeded and 788 parsed failures. This is not a reliable ordinary implementation outcome.",
+    "decisive_observation_id": "e58f0d4dce3e9330af2092c08c0499ec5cf8be474c15375cf261f44f134538c6",
+    "artifact": {
+      "artifact_path": "/mnt/scratch/users/twang/vibe-coding-planning/run_state/output/SWE-bench_Verified/swe-verified-pce-runs/development/safe-pce-no-thinking-clean411-target4-aion-v1-20260918/hpc_tasks/pce/1218ed997a895bcd1ce11037802dbce70208ad70ac88472942cd7497c0b211e2/outputs/task_0595.json",
+      "artifact_sha256": "3e85d5ddd2872e6301c959c68e9ad61a538d41e19b69ef75a01b4504ae4a2bb5",
+      "json_field": "evaluator_result"
+    },
+    "plan_sha_verified": true,
+    "evaluator_log_sha256": "d6368346c6ef7d803f39be59234b660c1ed4ea0996b81fb24be0c8e490fb7e9b"
+  },
+  {
+    "pair_id": "pair-c53949e9056b00630742f81e",
+    "task_id": "matplotlib__matplotlib-25287",
+    "split": "train",
+    "reason_code": "EVAL_DISK_QUOTA",
+    "reason": "The shared U evaluator log contains OSError [Errno 122] Disk quota exceeded and 788 parsed failures. This is not a reliable ordinary implementation outcome.",
+    "decisive_observation_id": "e58f0d4dce3e9330af2092c08c0499ec5cf8be474c15375cf261f44f134538c6",
+    "artifact": {
+      "artifact_path": "/mnt/scratch/users/twang/vibe-coding-planning/run_state/output/SWE-bench_Verified/swe-verified-pce-runs/development/safe-pce-no-thinking-clean411-target4-aion-v1-20260918/hpc_tasks/pce/1218ed997a895bcd1ce11037802dbce70208ad70ac88472942cd7497c0b211e2/outputs/task_0595.json",
+      "artifact_sha256": "3e85d5ddd2872e6301c959c68e9ad61a538d41e19b69ef75a01b4504ae4a2bb5",
+      "json_field": "evaluator_result"
+    },
+    "plan_sha_verified": true,
+    "evaluator_log_sha256": "d6368346c6ef7d803f39be59234b660c1ed4ea0996b81fb24be0c8e490fb7e9b"
+  },
+  {
+    "pair_id": "pair-b8fbfab3b9bc16aa51d17fa0",
+    "task_id": "django__django-14140",
+    "split": "train",
+    "reason_code": "R_STRATEGY_REPLACED",
+    "reason": "Both Plans retain the guarded single-tuple kwargs special case. R Code abandons that strategy and always emits positional args; U Code retains it.",
+    "decisive_observation_id": "9f0d6549bd9a5b2610999511d4703792cdb25ccf8a2bf663b2b2fabf6826944b",
+    "artifact": {
+      "artifact_path": "/mnt/scratch/users/twang/vibe-coding-planning/run_state/output/SWE-bench_Verified/swe-verified-pce-runs/development/safe-pce-no-thinking-clean411-target4-recovery379-aion-v1-20260919/hpc_tasks/pce/6480e0a50350ffb8b6d7fba2061fd584fbd6750ef94a1ef88f3f4f78f538e0dd/outputs/task_0128.json",
+      "artifact_sha256": "ef0cd733cf9bdc35fa25f408fa7de45c8f1a1cbb682b395b01a8166317af08f8",
+      "json_field": "evaluator_result"
+    },
+    "plan_sha_verified": true,
+    "evaluator_log_sha256": "3c18b5125d1d21130de516e276340d6a8bdfd37110a67bca8f04d2a9b9d195ac"
+  },
+  {
+    "pair_id": "pair-78109f69ff82bbd16ec960be",
+    "task_id": "scikit-learn__scikit-learn-26194",
+    "split": "train",
+    "reason_code": "R_DECISIVE_FIX_NOT_PLANNED",
+    "reason": "The R Plan prescribes a conditional numeric ROC sentinel. R Code replaces it with np.inf; the contrasting R observation that explicitly plans np.inf is retained.",
+    "decisive_observation_id": "64846198ceb6ae88088af5af8c19b23833f4ef0044dbd82a024c8d4ab0745887",
+    "artifact": {
+      "artifact_path": "/mnt/scratch/users/twang/vibe-coding-planning/run_state/output/SWE-bench_Verified/swe-verified-pce-runs/development/safe-pce-no-thinking-clean411-target4-aion-v1-20260918/hpc_tasks/pce/1218ed997a895bcd1ce11037802dbce70208ad70ac88472942cd7497c0b211e2/outputs/task_0776.json",
+      "artifact_sha256": "bec77a335eed0ddbdf651676a9dc2a5b92338062e7e0a423b0267aa391ed06a7",
+      "json_field": "evaluator_result"
+    },
+    "plan_sha_verified": true,
+    "evaluator_log_sha256": "ab48864995d008fae3d51c15b170d8229b1fd71bbf4e6af3325bcdd95740cb66"
+  },
+  {
+    "pair_id": "pair-a530fcf6dd7a13f491783696",
+    "task_id": "scikit-learn__scikit-learn-26194",
+    "split": "train",
+    "reason_code": "R_DECISIVE_FIX_NOT_PLANNED",
+    "reason": "The R Plan prescribes a conditional numeric ROC sentinel. R Code replaces it with np.inf; the contrasting R observation that explicitly plans np.inf is retained.",
+    "decisive_observation_id": "64846198ceb6ae88088af5af8c19b23833f4ef0044dbd82a024c8d4ab0745887",
+    "artifact": {
+      "artifact_path": "/mnt/scratch/users/twang/vibe-coding-planning/run_state/output/SWE-bench_Verified/swe-verified-pce-runs/development/safe-pce-no-thinking-clean411-target4-aion-v1-20260918/hpc_tasks/pce/1218ed997a895bcd1ce11037802dbce70208ad70ac88472942cd7497c0b211e2/outputs/task_0776.json",
+      "artifact_sha256": "bec77a335eed0ddbdf651676a9dc2a5b92338062e7e0a423b0267aa391ed06a7",
+      "json_field": "evaluator_result"
+    },
+    "plan_sha_verified": true,
+    "evaluator_log_sha256": "ab48864995d008fae3d51c15b170d8229b1fd71bbf4e6af3325bcdd95740cb66"
+  },
+  {
+    "pair_id": "pair-172c6905e6cd0cc4181b9991",
+    "task_id": "django__django-12308",
+    "split": "train",
+    "reason_code": "R_DECISIVE_FIX_NOT_PLANNED",
+    "reason": "Neither side specifies the decisive TypeError fallback for non-JSON-serializable values. R Code switches from formfield.prepare_value to json.dumps with a fallback. Pairs whose R Plan explicitly specifies the fallback are retained.",
+    "decisive_observation_id": "6802a46c1606255a5c4ec3b31a3c9c9399671bee4e987745c7761c24d6ff6364",
+    "artifact": {
+      "artifact_path": "/mnt/scratch/users/twang/vibe-coding-planning/run_state/output/SWE-bench_Verified/swe-verified-pce-runs/development/safe-pce-no-thinking-clean411-target4-aion-v1-20260918/hpc_tasks/pce/1218ed997a895bcd1ce11037802dbce70208ad70ac88472942cd7497c0b211e2/outputs/task_0158.json",
+      "artifact_sha256": "b8befd5ac529dd6a8c1682dc68175509646d52c5e445e5f5c32f82abd2260246",
+      "json_field": "evaluator_result"
+    },
+    "plan_sha_verified": true,
+    "evaluator_log_sha256": "d74ab3128130681c3515427ad4b17cc19a9af142c55ec9b5c36e775bdcd4ffaf"
+  },
+  {
+    "pair_id": "pair-7746301e8f5ed8e11f3c4115",
+    "task_id": "django__django-12308",
+    "split": "train",
+    "reason_code": "R_DECISIVE_FIX_NOT_PLANNED",
+    "reason": "Neither side specifies the decisive TypeError fallback for non-JSON-serializable values. R Code switches from formfield.prepare_value to json.dumps with a fallback. Pairs whose R Plan explicitly specifies the fallback are retained.",
+    "decisive_observation_id": "6802a46c1606255a5c4ec3b31a3c9c9399671bee4e987745c7761c24d6ff6364",
+    "artifact": {
+      "artifact_path": "/mnt/scratch/users/twang/vibe-coding-planning/run_state/output/SWE-bench_Verified/swe-verified-pce-runs/development/safe-pce-no-thinking-clean411-target4-aion-v1-20260918/hpc_tasks/pce/1218ed997a895bcd1ce11037802dbce70208ad70ac88472942cd7497c0b211e2/outputs/task_0158.json",
+      "artifact_sha256": "b8befd5ac529dd6a8c1682dc68175509646d52c5e445e5f5c32f82abd2260246",
+      "json_field": "evaluator_result"
+    },
+    "plan_sha_verified": true,
+    "evaluator_log_sha256": "d74ab3128130681c3515427ad4b17cc19a9af142c55ec9b5c36e775bdcd4ffaf"
+  },
+  {
+    "pair_id": "pair-b33b24acc839c112f7840356",
+    "task_id": "django__django-13794",
+    "split": "train",
+    "reason_code": "R_STRATEGY_REPLACED",
+    "reason": "The R Plan prescribes an add-filter str(value)+str(arg) fallback. R Code rejects that strategy and instead adds __add__/__radd__ to the shared lazy proxy. Pairs with an R Plan explicitly proposing the shared-proxy change remain.",
+    "decisive_observation_id": "584142895449d8a8f1fa4d7ca8ddb5e16b408a2f33827e4825e040ced9c9d638",
+    "artifact": {
+      "artifact_path": "/mnt/scratch/users/twang/vibe-coding-planning/run_state/output/SWE-bench_Verified/swe-verified-pce-runs/development/safe-pce-no-thinking-clean411-target4-recovery379-aion-v1-20260919/hpc_tasks/pce/6480e0a50350ffb8b6d7fba2061fd584fbd6750ef94a1ef88f3f4f78f538e0dd/outputs/task_0091.json",
+      "artifact_sha256": "430f072b3baef50e224ef15f5872dfdf6fb7eed4622f846f27e13e7c0f7a9a7d",
+      "json_field": "evaluator_result"
+    },
+    "plan_sha_verified": true,
+    "evaluator_log_sha256": "681010dbac2adffce3a168e6cca891ff0265d1f3d68453caf54817700949a8dd"
+  },
+  {
+    "pair_id": "pair-da38cbbd2e90a3a9777f3ded",
+    "task_id": "django__django-13794",
+    "split": "train",
+    "reason_code": "R_STRATEGY_REPLACED",
+    "reason": "The R Plan prescribes an add-filter str(value)+str(arg) fallback. R Code rejects that strategy and instead adds __add__/__radd__ to the shared lazy proxy. Pairs with an R Plan explicitly proposing the shared-proxy change remain.",
+    "decisive_observation_id": "584142895449d8a8f1fa4d7ca8ddb5e16b408a2f33827e4825e040ced9c9d638",
+    "artifact": {
+      "artifact_path": "/mnt/scratch/users/twang/vibe-coding-planning/run_state/output/SWE-bench_Verified/swe-verified-pce-runs/development/safe-pce-no-thinking-clean411-target4-recovery379-aion-v1-20260919/hpc_tasks/pce/6480e0a50350ffb8b6d7fba2061fd584fbd6750ef94a1ef88f3f4f78f538e0dd/outputs/task_0091.json",
+      "artifact_sha256": "430f072b3baef50e224ef15f5872dfdf6fb7eed4622f846f27e13e7c0f7a9a7d",
+      "json_field": "evaluator_result"
+    },
+    "plan_sha_verified": true,
+    "evaluator_log_sha256": "681010dbac2adffce3a168e6cca891ff0265d1f3d68453caf54817700949a8dd"
+  },
+  {
+    "pair_id": "pair-2361747ea9ef5953b609a016",
+    "task_id": "sphinx-doc__sphinx-8548",
+    "split": "train",
+    "reason_code": "U_OMITS_EXPLICIT_PLAN_STEP",
+    "reason": "The U Plan explicitly includes MRO-aware importer.get_class_members work. U Code changes only autodoc/__init__.py, omitting that producer step. Other U Plans with a genuine producer-scope omission are retained.",
+    "decisive_observation_id": "0a777d078861529970827fe86bfb6b2bf34b7f54f79d27792dd28d43e60c18f1",
+    "artifact": {
+      "artifact_path": "/mnt/scratch/users/twang/vibe-coding-planning/run_state/output/SWE-bench_Verified/swe-verified-pce-runs/development/safe-pce-no-thinking-clean411-target4-aion-v1-20260918/hpc_tasks/pce/1218ed997a895bcd1ce11037802dbce70208ad70ac88472942cd7497c0b211e2/outputs/task_0841.json",
+      "artifact_sha256": "ec081a778bd18591161410cbe454c84d87b58580436987f9b161bf9b3463ca6d",
+      "json_field": "evaluator_result"
+    },
+    "plan_sha_verified": true,
+    "evaluator_log_sha256": "9729b5d74aa6011c5dedbc759b4e8c0320fc6a15a86c34cec2165a36e3c53401"
+  }
+]

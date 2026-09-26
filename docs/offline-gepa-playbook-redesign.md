@@ -6,6 +6,16 @@
 > Scope: the Offline GEPA method replacing the prior single-decision
 > guideline proposal while retaining third-party GEPA search where practical
 
+## Current versus historical authority
+
+The current binary paired blocking-signal contract is
+[`paired-blocking-signal-learning.md`](paired-blocking-signal-learning.md).
+Use that document and its linked frozen config for new work. The dated sections
+below preserve development provenance, including superseded Level, scoring,
+Reflection schemas and model choices. Their statements about "current" or "next"
+refer to those historical versions, not the current experiment. Do not combine
+requirements from different versions into a new launch.
+
 ## Objective And Boundary
 
 ### Paired Level formal 8-iteration preparation (2026-09-21)
@@ -1232,6 +1242,11 @@ Historical paired configs and prompts are indexed under
 fingerprinted files.
 
 ### ACE-near Codex baseline and prepared smoke
+
+The following records the historical ACE-near baseline and its runs. The
+prepared 2026-09-26 target/data/prompt update is specified separately in
+[Paired blocking-signal learning](paired-blocking-signal-learning.md). Existing
+run authorities below are not retroactively changed.
 
 The next development baseline intentionally restarts from the atomic one-rule
 Seed rather than extending the accumulated Level prompt. It keeps the frozen

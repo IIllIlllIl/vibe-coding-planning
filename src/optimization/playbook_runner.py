@@ -11,6 +11,7 @@ import fcntl
 import hashlib
 import json
 import os
+from collections import Counter
 from typing import Any, Callable
 
 import gepa
@@ -71,6 +72,7 @@ def _run_playbook_search_unlocked(
     prompt_bundle_path: Path | None = None,
     abort_on_operational_incomplete: bool = False,
     data_unit: str = "case",
+    frozen_minibatch_ids: list[str] | None = None,
 ) -> Any:
     """Run the new flow without selecting or constructing any LLM agent."""
     if max_metric_calls < 1:
@@ -96,6 +98,16 @@ def _run_playbook_search_unlocked(
         if set(validation_instance_ids) - set(by_id):
             raise ValueError("smoke validation IDs are absent from validation split")
         validation = [by_id[item] for item in validation_instance_ids]
+    if frozen_minibatch_ids is not None:
+        if (
+            max_iterations != 1
+            or len(frozen_minibatch_ids) != reflection_minibatch_size
+            or len(set(frozen_minibatch_ids)) != len(frozen_minibatch_ids)
+            or set(frozen_minibatch_ids) != {c.instance_id for c in train}
+        ):
+            raise ValueError(
+                "frozen minibatch requires one proposal and exactly the selected train pairs"
+            )
     run_dir.mkdir(parents=True, exist_ok=True)
     semantic = {
         "schema_version": 1,
@@ -148,6 +160,8 @@ def _run_playbook_search_unlocked(
             "perfect_score": perfect_score,
         },
     }
+    if frozen_minibatch_ids is not None:
+        semantic["search"]["frozen_minibatch_ids"] = list(frozen_minibatch_ids)
     if (run_dir / MARKER).exists():
         semantic["pending_proposal_recovery"] = file_hash(run_dir / MARKER)
     semantic_sha = hashlib.sha256(
@@ -203,6 +217,13 @@ def _run_playbook_search_unlocked(
     state_config = SimpleNamespace(run_dir=run_dir, search=search)
     resuming = (run_dir / "gepa_state.bin").is_file()
     state = ReproducibleSearchState(state_config, resuming=resuming)
+    if frozen_minibatch_ids is not None and not resuming:
+        # Keep the established GEPA sampler/checkpoint format. This one-proposal
+        # diagnostic pins its initial draw, including slots shared by pairs.
+        state.sampler.shuffled_ids = list(frozen_minibatch_ids)
+        state.sampler.epoch = 0
+        state.sampler.id_freqs = Counter(frozen_minibatch_ids)
+        state.sampler.last_trainset_size = len(train)
     callback = ProgressCallback(
         run_dir,
         checkpoint=state,

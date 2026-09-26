@@ -1,16 +1,22 @@
 # Isolation And Artifact Boundaries
 
 > Knowledge status: current cross-method security and validity principle
-> Last reviewed: 2026-07-15
+> Last reviewed: 2026-09-26
 
 ## Visibility Matrix
 
-Candidate rules are visible only to the Plan Agent. Code receives the resulting
-plan, not the rules. Evaluator receives the patch, not Agent reasoning. Reflection
-is the only stage allowed to inspect the full current rollout evidence.
+For paired playbook learning, Checker receives one issue, one Plan, the visible
+rule text, and the frozen base repository. It receives no R/U label, paired
+Plan, historical Code/evaluator evidence, bullet IDs, or counters. Reflector
+receives the pair and its full recorded Checker/Planner/Code/evaluator evidence;
+Curator receives the complete batch of reflections and counted playbook.
+See [the paired evidence contract](../paired-blocking-signal-learning.md).
 
-Historical labels, plans, patches, ASI, and archived outputs never enter a
-current rollout.
+For PCE/PCCE, Code receives the approved Plan, not the learned playbook or
+historical outcome. Evaluator receives the patch, not Agent reasoning.
+Historical supervision belongs in learning/Reflection, not current Agent
+implementation inputs. The older "rules visible only to Plan Agent" rule
+described the superseded online workflow, not current Checker deployment.
 
 ## Filesystem Semantics
 

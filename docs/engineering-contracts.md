@@ -30,11 +30,6 @@ SBATCH requests too. Use a new supervisor transport identity, never concurrent
 controllers for the shared run. Archive failed attempts and exhausted transport
 state before reopening; retain completed outputs and optimizer checkpoints.
 
-The v4 Iris launch config reuses the v4 scientific run with Iris 1 CPU / 4G
-for both Controller and Agents. Its Agent wall time remains 35 minutes and
-command timeout remains 1800 seconds. A memory migration does not cure a
-command timeout by itself.
-
 Use `src/environment/repository_history.py` across all repository-aware Agents.
 `RepositoryHistoryCache` stores bundles under the shared SIF cache's sibling
 `repository-history-cache-v1`. Identity is policy + SIF SHA-256 + base commit;
@@ -91,9 +86,11 @@ the pending counter events idempotently during resumed execution.
 
 ## Lifecycle and cleanup
 
-Cross-run checkpoint imports on HPC must use the absolute scratch authority
-path. A staged worktree may link only its current run, so a sibling path under
-its local `output/` tree does not imply the prior run is visible there.
+Cross-run checkpoint imports must name a verified authority. Use an absolute
+scratch path for remote run authorities. A project-relative path is permitted
+for an explicitly staged, hash-pinned frozen checkpoint snapshot and resolves
+against the project root. A sibling path under a staged worktree's `output/`
+does not imply that the prior remote run is visible there.
 
 Evidence-container configuration is shared: Repo Reflector uses the repository
 environment, but Curator still uses the repository-free evidence runtime.
@@ -147,50 +144,44 @@ current names; historical `REVISE` and `DELETE` are replay-only aliases.
 
 An output schema option must reach both validation sites: the Slurm worker's
 atomic-completion validator and the Controller's completed-output revalidator.
-The structured paired-Reflection schema adds `side_findings`; omitting its
-option in either site makes valid durable Agent outputs appear invalid during
-resume. Regression tests must exercise Controller reuse of a completed output,
-not only the worker validator.
+Regression tests must exercise reuse of durable outputs, not only worker checks.
+Persist the raw completion before Host validation; reject/retry malformed
+content without silently repairing it.
 
-For the distilled paired-Reflection contract, full reflection records remain
-immutable audit evidence in `case_reflections.json`, while
-`reflection_index.json` and `counted_playbook.json` are mandatory Curator
-inputs. A linked distilled run sets `reflection.fact_links: true`: every
-reusable concern cites one or more per-side findings, and the required index
-stores those cited facts under canonical `<pair>:rN` / `<pair>:uN` IDs. Unlinked
-side findings remain only in the optional full audit file. Fact links preserve
-the basis of an abstraction; they do not require a disposition for every side
-finding and do not assign a permanent Level. `reflection.distilled_curation`
-must be enabled at both worker and Controller validation sites, and
-`curation.evidence_contract: distilled_v1` remains incompatible with
-`require_concern_coverage`. These files live under the run authority at
-`curator_evidence/<content-fingerprint>/`; they are input artifacts for one
-Curator proposal, not global mutable indexes.
+### Current paired evidence contract
 
-`curation.self_check_contract: lightweight_v1` requires linked Reflection
-facts. It adds no Agent and does not replay the Checker. The Curator confirms
-that it read required files and records, for each operation, its supporting
-reusable-concern IDs plus atomicity, explicit-condition, decision-time,
-source-case-independence, and plain-language checks. Host validation checks the
-schema, exact IDs, pair linkage, boolean confirmations, and the existing bullet
-token cap. Semantic quality remains an empirical smoke/audit question.
+The current binary ACE-style Reflection uses key insights, their basis and
+bullet tags. Full recorded Checker messages/tool results are separate immutable
+per-side `checker_trajectory.json` inputs. The evidence manifest distinguishes
+available, recorded-empty and unavailable source traces; absent investigation
+must never be fabricated. Metric outputs do not expose these traces to Checker.
 
-Checker Level, Reflection evidence, and ACE counters are separate quantities.
-The Checker assigns Level for the current issue, repository, and Plan. Per-pair
-Reflectors record the observed concern, case-specific Level context, and Coder
-response. Helpful/harmful counters retain ACE rule-utility evidence; they are
-not Level counts or repairability labels. The current architecture runs one
-Reflector per pair. The Curator reads the linked facts from the whole minibatch
-and uses their empirical outcome/repairability pattern when maintaining rule
-conditions; that minibatch-wide tendency must not be attributed to a single
-per-pair Reflector or stored as a permanent rule Level.
+Curator evidence lives under `curator_evidence/<content-fingerprint>/`.
+`counted_playbook.json` and `reflection_index.json` are required inputs; the
+current ACE index includes all key insights, basis and tags. Full records remain
+in `case_reflections.json` as audit evidence. These are proposal-local inputs,
+not a global mutable knowledge index. The selected prompt contract, not a
+historical field name, determines required reading and output fields.
 
-The Agent runner's top-level task string is part of the effective prompt even
-though it is not stored in the prompt bundle. Under the distilled contract it
-must describe paired Plan analysis and reusable Plan-review curation; it must
-not require every active rule to explain the outcome difference or describe
-all concerns as rejection concerns. Legacy contracts retain their historical
-task strings for replay.
+A frozen one-proposal diagnostic can pin the original ordered minibatch IDs and
+hash-verified Checker checkpoint. It initializes the existing GEPA sampler;
+it does not replace sampling or imply recovery of the original optimizer state.
+A genuine search resume must preserve lineage, RNG and counters as described above.
+
+### Historical linked/Level contracts
+
+Earlier configs explicitly enabled `reflection.fact_links`,
+`reflection.distilled_curation`, `curation.evidence_contract: distilled_v1`
+and `curation.self_check_contract: lightweight_v1`. They required linked side
+findings, per-operation checks and case-specific Level evidence. These remain
+versioned replay contracts, not current binary ACE requirements. Level and ACE
+utility counters were distinct even in those runs; counters never represented
+permanent rule severity. See the dated contracts in
+[offline-gepa-playbook-redesign.md](offline-gepa-playbook-redesign.md).
+
+The runner's top-level task string is part of the effective prompt. Check it
+alongside the selected prompt bundle; legacy task strings must not silently
+override a new learning target.
 
 Third-party GEPA catches proposal exceptions. When operational abort is enabled,
 check recorded proposal failures at the next stop callback as well as after

@@ -16,7 +16,8 @@ Read in this order:
 | [`documentation-authority.md`](documentation-authority.md) | Ownership and lifecycle rules for durable documentation and live runtime state |
 | [`branch-scope.md`](branch-scope.md) | Active ACE + Safe PCE systems, retained failure-analysis evidence, and archive boundary |
 | [`../project_issues.md`](../project_issues.md) | Current research decisions and unresolved methodological risks; not a run-progress log |
-| [`offline-gepa-playbook-redesign.md`](offline-gepa-playbook-redesign.md) | Reject-playbook methods, including within-task paired concern learning, prompt provenance, distributed Slurm Agent waves, and resume contracts |
+| [`offline-gepa-playbook-redesign.md`](offline-gepa-playbook-redesign.md) | Historical reject-playbook development and version-specific execution contracts; not the current prompt template |
+| [`paired-blocking-signal-learning.md`](paired-blocking-signal-learning.md) | Current binary paired blocking-signal target, clean127 derivative, full Checker-to-Reflector evidence, v5 Ref/Cur prompt and frozen iteration-9 diagnostic |
 | [`paired-levels-v1-resume.md`](paired-levels-v1-resume.md) | Hash-pinned in-place recovery of v1's pending seventh proposal; preserves the first six iterations rather than restarting from Seed |
 | [`ace-codex-formal15-candidate-screen-resume.md`](ace-codex-formal15-candidate-screen-resume.md) | Hash-pinned first-proposal recovery that reuses frozen Seed/Reflection/Curator evidence and reruns the complete 48-task Candidate Checker screen |
 | [`engineering-contracts.md`](engineering-contracts.md) | Shared execution requirements: cluster resource ratios, prepared Git history, isolation, artifact persistence, cleanup, and launch checks |
@@ -52,6 +53,9 @@ offline GEPA, and production failures:
 | [`knowledge/safe-pce-audit10-v8-claude-plan-diagnostic.md`](knowledge/safe-pce-audit10-v8-claude-plan-diagnostic.md) | Stopped v8 same-case comparison of NRPV and Claude-style Plans, terminal-format failures, exploration depth, and remaining source-boundary defects |
 | [`knowledge/safe-pce-v9-v10-anchor-ablation.md`](knowledge/safe-pce-v9-v10-anchor-ablation.md) | Four-case v9/v10 Planner-anchor ablation, trace-level outcome interpretation, and source-audit observations |
 | [`knowledge/paired-gepa-three-failure-modes.md`](knowledge/paired-gepa-three-failure-modes.md) | Three concrete examples of checklist-context sensitivity, Checker rule-application misses, and over-specific learned rules |
+| [`knowledge/ace-codex-formal24-15it-bullet-trigger-audit.md`](knowledge/ace-codex-formal24-15it-bullet-trigger-audit.md) | Formal-15 exact bullet-version exposure, trigger inventory, and Mini × Validation tendency heatmap |
+| [`knowledge/ace-codex-formal15-blocking-signal-audit.md`](knowledge/ace-codex-formal15-blocking-signal-audit.md) | Historical audit of 19 harmful/reversing rule versions; motivates the separately documented blocking-signal contract |
+| [`knowledge/paired-blocking-signal-cleaning-20260926.md`](knowledge/paired-blocking-signal-cleaning-20260926.md) | New reference-only selection, operational and attribution exclusions, retained split, audit hashes, and residual-noise limits |
 
 ## Reference
 

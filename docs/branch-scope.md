@@ -19,9 +19,11 @@ pruned material remains readable from `main` and the baseline commit.
 
 The active implementation and evidence surface is limited to:
 
-1. ACE reject-playbook optimization: repository-free per-bullet Checker,
-   structured Reflector, Curator, global counters, deterministic validity and
-   length gates, and GEPA candidate/checkpoint machinery.
+1. Paired blocking-signal optimization: independent repository-aware binary
+   Checkers, one Reflector per pair with full Checker evidence, cross-pair
+   Curator, counters, and GEPA candidate/checkpoint machinery. The earlier
+   no-repository path remains available unchanged. Current scientific authority
+   is `docs/paired-blocking-signal-learning.md`, not the historical Level path.
 2. Safe PCE on SWE-bench Verified: direct Plan submission, phase isolation,
    exact Plan-to-Code handoff, conservative Agent acquisition boundary, and the
    official evaluator.
@@ -38,7 +40,7 @@ reproduction and failure-analysis authorities, not new experiment inputs or
 baselines. New work must use a new dataset identity,
 config, run directory, prompt identity, and acceptance contract.
 
-## Behavioral information boundary
+## Historical Behavioral v1 information boundary
 
 A Plan Decision Episode has a strict decision boundary:
 
@@ -50,7 +52,7 @@ post-boundary: developer reaction + revisions + later trajectory
 Only pre-boundary fields may enter Checker-visible input. Post-boundary evidence
 may determine a high-confidence `ACCEPT` or `DO_NOT_ACCEPT` label and may be
 available to GEPA Reflection. Ambiguous episodes remain auditable but are
-excluded from v1 optimization. The first implementation must use hard labels
+excluded from v1 optimization. That historical implementation uses hard labels
 and per-example 0/1 candidate scores; soft labels and confidence weighting are
 out of scope.
 
@@ -66,7 +68,8 @@ present. Mixed shared entrypoints also remain when moving them would require
 code-level dependency decisions. These paths are not active research authority
 and should not appear in ordinary Agent searches or new design citations.
 
-Broad pruning begins only after all of the following exist:
+The historical Behavioral implementation used the following pruning prerequisites
+(not readiness criteria for current paired learning):
 
 - a minimal Behavioral case model and deterministic loader;
 - an executable first-clean-episode rule;

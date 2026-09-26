@@ -659,6 +659,8 @@ class PairedRepoPlaybookGEPAAdapter:
                         visible=visible,
                         output=output,
                         score=score,
+                        resolved_checker_trajectory=resolved_checked.trajectory,
+                        unresolved_checker_trajectory=unresolved_checked.trajectory,
                     )
                 )
         return EvaluationBatch(
@@ -675,6 +677,8 @@ class PairedRepoPlaybookGEPAAdapter:
         visible: str,
         output: Mapping[str, Any],
         score: float,
+        resolved_checker_trajectory: Sequence[Mapping[str, Any]] | None = None,
+        unresolved_checker_trajectory: Sequence[Mapping[str, Any]] | None = None,
     ) -> dict[str, Any]:
         return {
             "instance_id": case.instance_id,
@@ -694,6 +698,10 @@ class PairedRepoPlaybookGEPAAdapter:
                 "plan": case.resolved_observation.plan,
                 "plan_sha256": case.resolved_observation.plan_sha256,
                 "checker_output": output.get("resolved_side"),
+                **(
+                    {"checker_trajectory": list(resolved_checker_trajectory)}
+                    if resolved_checker_trajectory is not None else {}
+                ),
                 "historical_evidence": case.resolved_observation.historical_evidence,
             },
             "unresolved_side": {
@@ -701,6 +709,10 @@ class PairedRepoPlaybookGEPAAdapter:
                 "plan": case.unresolved_observation.plan,
                 "plan_sha256": case.unresolved_observation.plan_sha256,
                 "checker_output": output.get("unresolved_side"),
+                **(
+                    {"checker_trajectory": list(unresolved_checker_trajectory)}
+                    if unresolved_checker_trajectory is not None else {}
+                ),
                 "historical_evidence": case.unresolved_observation.historical_evidence,
             },
         }

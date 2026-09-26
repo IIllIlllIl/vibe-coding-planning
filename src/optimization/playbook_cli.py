@@ -125,6 +125,12 @@ def _validate_frozen_inputs(config_path: Path, raw: dict[str, Any]) -> None:
         if actual != str(inputs.get("selection_sha256", "")):
             raise ValueError("selection fingerprint mismatch")
         selection = yaml.safe_load(selection_path.read_text(encoding="utf-8")) or {}
+        for name, expected in (selection.get("artifacts") or {}).items():
+            artifact = (selection_path.parent / name).resolve()
+            if not artifact.is_relative_to(selection_path.parent.resolve()):
+                raise ValueError("selection artifact escapes its frozen directory")
+            if hashlib.sha256(artifact.read_bytes()).hexdigest() != expected:
+                raise ValueError(f"selection artifact fingerprint mismatch: {name}")
         for key in ("train_instance_ids", "validation_instance_ids"):
             if list(inputs.get(key) or []) != list(selection.get(key) or []):
                 raise ValueError(f"{key} does not match the frozen selection")
@@ -410,7 +416,7 @@ def run_from_config(path: str | Path, *, agents: Any | None = None, optimize_fn=
                 raw.get("reflection", {}).get("output_contract", "legacy_v1")
             ),
             checkpoint_import_run_dir=(
-                run_dir.parent / str(checkpoint_import["source_run_dir"])
+                _resolve_config_path(config_path, str(checkpoint_import["source_run_dir"]))
                 if checkpoint_import
                 else None
             ),
@@ -590,6 +596,7 @@ def run_from_config(path: str | Path, *, agents: Any | None = None, optimize_fn=
             raw["inputs"], "validation_instance_ids"
         ),
         reflection_minibatch_size=int(raw["search"]["reflection_minibatch_size"]),
+        frozen_minibatch_ids=raw["search"].get("frozen_minibatch_ids"),
         abort_on_operational_incomplete=bool(
             raw.get("stopping", {}).get("abort_on_operational_incomplete", False)
         ),

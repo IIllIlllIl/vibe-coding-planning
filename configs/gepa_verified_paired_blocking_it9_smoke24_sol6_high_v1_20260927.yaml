@@ -1,0 +1,173 @@
+schema_version: 1
+mode: offline_paired_repo_concern_playbook
+status: ready_not_launched
+run_id: verified-paired-blocking-it9-smoke24-sol6-high-v1-20260927
+purpose: 'One-proposal replay of historical iteration 9: reuse exact C2 parent and 48 Checker slots, regenerate
+  Ref/Cur, evaluate the proposed candidate. Not a continuation of the historical tree or held-out evaluation.'
+paths:
+  dataset_snapshot: configs/frozen_swe_verified_plan_pairs/20260919_safe_pce_within_task_pairs_v1
+  initial_rules: configs/frozen_swe_verified_plan_pairs/20260927_iteration9_blocking_signal_smoke_v1/parent_playbook.json
+  run_dir: output/SWE-bench_Verified/gepa-paired-repo-concern-playbook-runs/blocking-it9-smoke24-sol6-high-v1-20260927
+task:
+  semantics: paired_repo_concern_binary_ace_v1
+container:
+  runtime: apptainer
+  sif_cache_dir: /scratch/users/${USER}/vibe-coding-planning/shared/sif-cache
+execution:
+  backend: hpc_slurm
+inputs:
+  dataset_snapshot: configs/frozen_swe_verified_plan_pairs/20260919_safe_pce_within_task_pairs_v1
+  dataset_manifest_sha256: cc1c3488c20a90340d88f419212c2f28b0d60e9a53ab15b84c7e9809751cc736
+  selection: configs/frozen_swe_verified_plan_pairs/20260927_iteration9_blocking_signal_smoke_v1/selection.json
+  selection_sha256: 63b43797c3b440c115016513c380e88b2381dbd86dbc087bb890d6f8116e011e
+  initial_playbook: configs/frozen_swe_verified_plan_pairs/20260927_iteration9_blocking_signal_smoke_v1/parent_playbook.json
+  initial_playbook_sha256: 8eae2443c89f1529f203c49b834840ecdcc5ddef2c478cc0f732114f75682558
+  prompt_bundle: configs/prompts/offline_gepa_paired_binary_ace_codex_v5_blocking_signals_20260926.yaml
+  prompt_bundle_sha256: 45b1bfcb4b95b7dd6fd37528e2934cd2d389cf4fd3a1b97572d87c508cde863a
+  repo_checker_contract: configs/prompts/offline_gepa_paired_binary_contract_v2_20260925.yaml
+  repo_checker_contract_sha256: 62fcf9e3dbbf8c76b0676f4730ca385167e5488b418a7c58d471397882550299
+  repo_checker_image_manifest: configs/frozen_swe_verified_safe_pce/verified482-formal-v1-20260914/images.json
+  repo_checker_image_manifest_sha256: f4c18c5dcf30fa48cb503241c5ba69ae8f6368e63726f8ce0875a868ae212e0a
+  train_instance_ids: &id001
+  - pair-c965e4310e091064ebfb47c0
+  - pair-6c5bc90b2e4b67bf2a985fa7
+  - pair-d78611c7777c70d86258f924
+  - pair-b6288be04be53a84472c7d08
+  - pair-76cf8812228ddbb4a1de5a38
+  - pair-7def2b8d94f2e8c44484328f
+  - pair-a634d27cd12d4ba785b79ac2
+  - pair-05a74483c4c4ebd653a92d9e
+  - pair-f6b1485b7373d712af71f9ee
+  - pair-da3a49e06b6b680bbe0b3b49
+  - pair-f30f9ac4abc0eaafe8653fc8
+  - pair-eeb527cce8bb7653c0902b8d
+  - pair-5f5846f67f6452270f343fbe
+  - pair-38d07b8ab2d23f5348193d15
+  - pair-49434d02a9c6631fd2f1a021
+  - pair-10151f49220369f6047d7b60
+  - pair-89b7184937aceb9fe0bf65e1
+  - pair-8bfe9add6a6607c14210123f
+  - pair-97e09b363fd06193d97b9bb8
+  - pair-77d37bd5c891612490c9e3bf
+  - pair-57e2b2d1c2081887993373c8
+  - pair-f238c71b0ce9c101b56e86b7
+  - pair-ef3c8e3bcc6b4ec8434f9764
+  - pair-0120d77f27934d13dd7c8101
+  validation_instance_ids:
+  - pair-27786b755371198326783156
+  - pair-7903df3c96f1bb2220b28bd9
+  - pair-92227f7597485bdd68c2709c
+  - pair-05a1e7405702ab648b7f67ea
+models:
+  checker:
+    executor: mini_swe
+    model: deepseek-v4-flash
+    temperature: 0.0
+    thinking: disabled
+  reflector:
+    executor: codex_cli
+    codex_binary: ${HOME}/.local/lib/vibe-codex/0.155.1/bin/codex
+    codex_auth_file: ${HOME}/.codex/auth.json
+    codex_version: 0.155.1
+    model: gpt-6-sol
+    reasoning_effort: high
+  curator:
+    executor: codex_cli
+    codex_binary: ${HOME}/.local/lib/vibe-codex/0.155.1/bin/codex
+    codex_auth_file: ${HOME}/.codex/auth.json
+    codex_version: 0.155.1
+    model: gpt-6-sol
+    reasoning_effort: high
+repo_checker:
+  output_contract: binary_v2
+  review_only: true
+  workdir: /testbed
+  command_timeout_seconds: 1800
+  source_access_policy: conservative_blacklist_v3
+  history_policy: base_ancestor_bundle_v1
+  masked_container_paths:
+  - /opt/miniconda3/pkgs
+scoring:
+  correct_order: 1
+  inverted: -1
+  tied: 0
+  invalid: -100
+search:
+  max_iterations: 1
+  reflection_minibatch_size: 24
+  max_metric_calls: 100
+  seed: 42
+  perfect_score: 1.0
+  skip_perfect_score: false
+  frozen_minibatch_ids: *id001
+reflection:
+  rounds: 1
+  output_contract: ace_v1
+curation:
+  evidence_contract: ace_v1
+refiner:
+  enabled: false
+length:
+  maximum_visible_tokens: 10000
+  maximum_bullet_tokens: 64
+  harmful_pruning_weight: 2
+budget:
+  candidate_proposals: 1
+  reflection_pairs_per_proposal: 24
+  checker_agents_per_pair_evaluation: 2
+  reflection_rounds_per_pair: 1
+  projected_pair_metric_call_ceiling: 100
+stopping:
+  stop_after_candidate_proposals: 1
+  abort_on_operational_incomplete: true
+operational_incomplete_policy: Model, subscription, transport, timeout, parsing, missing-artifact, evidence-receipt,
+  repository-authority, or exhausted Agent-output-contract failures remain operationally incomplete. Host
+  validation retries invalid Agent artifacts; it does not rewrite them into scientific outcomes. A subscription-usage
+  interruption pauses this run for checkpointed resume; it is not a scientific score or a reason to resample
+  completed Agents.
+hpc:
+  submit: true
+  partition: batch
+  cpus_per_task: 1
+  mem: 4G
+  controller_slice_time: 00:30:00
+  agent_time: 00:35:00
+  poll_interval_seconds: 60
+  max_running_array_tasks: 12
+  max_task_attempts: 3
+  task_output_grace_seconds: 120
+  missing_task_grace_seconds: 300
+  remote_env_file: ~/.config/vibe-coding-planning/deepseek.env
+  python_module: lang/Python/3.11
+  container_module: tools/Apptainer
+  job_name_prefix: verified-paired-blocking-it9-smoke24-sol6-high-v1-20260927
+success_criteria:
+- Import exactly the 48 parent Checker slots from the sole frozen source batch, retaining raw results
+  and full trajectories.
+- Preserve original 24-pair Reflection order; no resampling or duplicate padding.
+- Run 24 fresh Reflectors and one fresh Curator with gpt-6-sol/high; import no old Ref/Cur or final historical
+  counter ledger.
+- Run four development-validation pairs and evaluate any new candidate with unchanged binary Checker and
+  paired +1/-1/0 scoring.
+- Audit simple correction versus substantial changes/replanning; require no fixed insight count.
+- Preserve Codex isolated state, pinned binary, sandbox preflight, evidence receipts, raw events and retry
+  provenance.
+readiness:
+  runnable: true
+  launched: false
+  missing: []
+launch_checks:
+- Commit a clean worktree and receive launch authorization.
+- Verify checkpoint hashes, prepared history/SIF authority and Iris storage.
+- Verify account access to gpt-6-sol/high with pinned Codex before expensive waves.
+- Keep Iris Agent resources at 1 CPU / 4G.
+audit_targets:
+- Verify all 48 original Checker slots imported, including shared observations with distinct slot trajectories.
+- Inspect Checker->Ref->Cur information preservation, routine-correction filtering, rule applicability
+  and readability.
+- Treat as exposed development diagnosis, not generalization evidence.
+checkpoint_import:
+  source_run_dir: configs/frozen_swe_verified_plan_pairs/20260927_iteration9_blocking_signal_smoke_v1/checker_checkpoint
+  source_run_manifest_sha256: 9893ca946e05daa8a1d661e66afb406d03b2115f2538d5412e7942f4b595f62c
+  roles:
+  - paired_repo_checker

@@ -638,9 +638,22 @@ additional pairs whose shared U observation had an external HTTP 502 and two
 whose shared U observation could not receive the official test patch. The
 superseding **138-train-pair selection** and exact reasons are recorded at
 `configs/frozen_swe_verified_plan_pairs/20260922_operationally_clean138_v1/`.
-Coder-sampling differences are retained as potential recovery evidence rather
-than automatically filtered. The original 36 validation pairs are unchanged
-and have not been certified by the new operational audit.
+That historical selection retained Coder-sampling differences as potential
+recovery evidence. The later blocking-signal selection is
+`configs/frozen_swe_verified_plan_pairs/20260926_blocking_signal_clean127_v1/`:
+127 train pairs and the unchanged 36 development-validation pairs. It excludes
+three disk-quota-contaminated pairs and eight contrasts dominated by
+implementation behavior without a usable Plan distinction. Simple corrections
+are not automatically blockers; substantial implementation changes still
+require attribution analysis. See
+[`knowledge/paired-blocking-signal-cleaning-20260926.md`](knowledge/paired-blocking-signal-cleaning-20260926.md)
+for exact evidence and exclusion reasons.
+
+A raw evaluator `resolved: false` does not certify an ordinary implementation
+failure: HTTP, quota, test-patch and environment errors require artifact/trace
+audit. This known authority gap is not repaired by changing the pair selection.
+The retained validation pairs are development selection data, not a certified
+noise-free or untouched holdout.
 
 ## Historical Evidence
 

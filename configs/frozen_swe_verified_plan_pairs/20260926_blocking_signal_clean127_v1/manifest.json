@@ -1,0 +1,24 @@
+{
+  "schema_version": 1,
+  "data_unit": "within_task_plan_pair_selection",
+  "selection_id": "20260926_blocking_signal_clean127_v1",
+  "created_on": "2026-09-26",
+  "source_snapshot": "configs/frozen_swe_verified_plan_pairs/20260919_safe_pce_within_task_pairs_v1",
+  "source_manifest_sha256": "cc1c3488c20a90340d88f419212c2f28b0d60e9a53ab15b84c7e9809751cc736",
+  "previous_selection": "configs/frozen_swe_verified_plan_pairs/20260922_operationally_clean138_v1/selection.json",
+  "previous_selection_sha256": "2c005a8e20246acbef4aa226860e0c7d054859612d69eeaad7e4dab11316358b",
+  "train_pairs": 127,
+  "validation_pairs": 36,
+  "train_tasks": 43,
+  "validation_tasks": 11,
+  "new_excluded_pairs": 11,
+  "unique_observations_mechanically_audited": 213,
+  "artifacts": {
+    "selection.json": "506a041ca04dae13dbfc9ba9fec16432a7c57345a15ef40c30396e83e7bc2e42",
+    "exclusions.json": "ae2fa4e201b0c4279eb80d645c2633ae29958a241bf40bca2ad76e21ef122585",
+    "observation_audit.json": "443d567275dca833330ff4733f23dbb2a171072eab194c20c72962c61a2c2144"
+  },
+  "audit_scope": "Exhaustive artifact/hash/terminal-field screening, all Plan text structural screening, and targeted manual Plan/Code/evaluator review of prior flagged pairs and new operational anomalies. Not exhaustive manual causal verification or proof of zero leakage.",
+  "validation_status": "Existing exposed development-validation split; not a new holdout. Validation evidence is not added to training reflections.",
+  "immutable": true
+}
