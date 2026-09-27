@@ -38,6 +38,7 @@ from src.optimization.repo_playbook import (
     validate_repo_reflector_review,
 )
 from src.optimization.paired_playbook import (
+    ACE_PAIRED_REFLECTION_CONTRACTS,
     validate_ace_paired_reflector_review,
     validate_paired_checker_result,
     validate_paired_reflector_review,
@@ -155,6 +156,10 @@ def run_task(
                 )
             if role == "paired_repo_reflector":
                 reflector_task = (
+                    "Analyze the recorded Plans, Code and Checker behavior to "
+                    "identify reusable failure patterns for within-task pair classification."
+                    if config.get("reflection", {}).get("output_contract") == "ace_v2"
+                    else
                     "Analyze each Plan and the recorded implementation and Checker "
                     "behavior, compare the attempts, and extract supported reusable "
                     "blocking signals with bullet feedback."
@@ -193,7 +198,7 @@ def run_task(
                 pair_instance_id=(
                     str(values["pair_instance_id"])
                     if role == "paired_repo_reflector"
-                    and config.get("reflection", {}).get("output_contract") == "ace_v1"
+                    and config.get("reflection", {}).get("output_contract") in ACE_PAIRED_REFLECTION_CONTRACTS
                     else None
                 ),
                 retry_feedback=str(values["retry_feedback"]),
@@ -230,6 +235,10 @@ def run_task(
                 case_count=int(values["case_count"]),
                 retry_feedback=str(values["retry_feedback"]),
                 task=(
+                    "Use the complete reflection batch to maintain rejection "
+                    "conditions for accurate within-task pair classification."
+                    if config.get("curation", {}).get("evidence_contract") == "ace_v2"
+                    else
                     "Maintain the playbook through localized changes supported by "
                     "the complete reflection batch and its recorded implementation evidence."
                     if config.get("curation", {}).get("evidence_contract") == "ace_v1"
@@ -316,11 +325,12 @@ def run_task(
                 playbook=playbook,
             )
         elif role == "paired_repo_reflector":
-            if config.get("reflection", {}).get("output_contract") == "ace_v1":
+            if config.get("reflection", {}).get("output_contract") in ACE_PAIRED_REFLECTION_CONTRACTS:
                 validate_ace_paired_reflector_review(
                     output,
                     instance_id=str(manifest["instance_id"]),
                     playbook=playbook,
+                    output_contract=config["reflection"]["output_contract"],
                 )
             else:
                 validate_paired_reflector_review(

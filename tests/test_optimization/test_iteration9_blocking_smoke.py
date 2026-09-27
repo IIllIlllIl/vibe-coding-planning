@@ -124,8 +124,10 @@ def test_frozen_authorities_models_and_clean_task_split():
     assert hashlib.sha256(parent.serialize().encode()).hexdigest() == selection['parent_candidate_sha256']
 
 
-def test_exact_checker_slots_and_full_trajectories_import_without_inference(tmp_path):
+@pytest.mark.parametrize('config', [CONFIG, Path('configs/gepa_verified_paired_blocking_it9_smoke24_sol6_high_v4_20260927.yaml')])
+def test_exact_checker_slots_and_full_trajectories_import_without_inference(tmp_path, config):
     raw, cases, _ = _inputs()
+    raw = yaml.safe_load(config.read_text())
     parent = RejectPlaybook.parse((ROOT / 'parent_playbook.json').read_text())
     source = ROOT / 'checker_checkpoint'
     original_batch = source / 'hpc_tasks/paired_repo_checker' / BATCH
@@ -137,9 +139,9 @@ def test_exact_checker_slots_and_full_trajectories_import_without_inference(tmp_
         captured.extend(items)
         return outputs
 
-    checker = HPCPairedRepoPlaybookChecker(SimpleNamespace(run_wave=capture), image_records=_repo_image_records(CONFIG, raw), output_contract='binary_v2')
+    checker = HPCPairedRepoPlaybookChecker(SimpleNamespace(run_wave=capture), image_records=_repo_image_records(config, raw), output_contract='binary_v2')
     checker.evaluate_batch(cases, parent)
-    executor = PlaybookHPCExecutor(config_path=CONFIG, run_dir=tmp_path, hpc=HPCConfig(),
+    executor = PlaybookHPCExecutor(config_path=config, run_dir=tmp_path, hpc=HPCConfig(),
         checkpoint_import_run_dir=source, checkpoint_import_manifest_sha256=raw['checkpoint_import']['source_run_manifest_sha256'], checkpoint_import_roles=['paired_repo_checker'])
     tasks = []
     for index, item in enumerate(captured):
@@ -162,6 +164,38 @@ def test_exact_checker_slots_and_full_trajectories_import_without_inference(tmp_
         assert imported['trajectory'] == original['trajectory']
         assert imported['trajectory']
         assert imported['checkpoint_import']['source_output'].endswith(f'task_{task.index:04d}.json')
+
+
+def test_v4_smoke_binds_review_and_failure_pattern_prompts_without_changing_draw():
+    path = Path('configs/gepa_verified_paired_blocking_it9_smoke24_sol6_high_v4_20260927.yaml')
+    current = yaml.safe_load(path.read_text())
+    previous = yaml.safe_load(Path('configs/gepa_verified_paired_blocking_it9_smoke24_sol6_high_v3_20260927.yaml').read_text())
+    _validate_frozen_inputs(path, current)
+    for key in ('selection', 'selection_sha256', 'initial_playbook', 'initial_playbook_sha256',
+                'train_instance_ids', 'validation_instance_ids', 'repo_checker_contract_sha256',
+                'repo_checker_image_manifest_sha256'):
+        assert current['inputs'][key] == previous['inputs'][key]
+    for section in ('models', 'scoring', 'search', 'length', 'checkpoint_import', 'repo_checker', 'hpc'):
+        if section == 'hpc':
+            assert {k: v for k, v in current[section].items() if k != 'job_name_prefix'} == {k: v for k, v in previous[section].items() if k != 'job_name_prefix'}
+        else:
+            assert current[section] == previous[section]
+    assert current['reflection']['output_contract'] == current['curation']['evidence_contract'] == 'ace_v2'
+    assert 'v9_pair_prediction' in current['inputs']['prompt_bundle']
+    prompts = yaml.safe_load(Path(current['inputs']['prompt_bundle']).read_text())
+    assert 'supporting and ruling out' in prompts['checker_system']
+    assert '"failure_pattern"' in prompts['reflector_codex_instance']
+    assert 'restate the condition' in prompts['curator_codex_system']
+    assert current['run_id'] != previous['run_id']
+    assert current['paths']['run_dir'] != previous['paths']['run_dir']
+    assert 'not a matched-Checker comparison' in current['purpose']
+    assert current['readiness']['launched'] is False
+    supervisor = yaml.safe_load(Path('configs/gepa_verified_paired_blocking_it9_smoke24_sol6_high_v4_supervisor_20260927.yaml').read_text())
+    assert str(path) in supervisor['arguments']
+    assert supervisor['session'] == current['run_id']
+    assert '--require-clean-worktree' in supervisor['arguments']
+    assert '--reclaim-staging' in supervisor['arguments']
+    assert '--reclaim-workspaces' in supervisor['arguments']
 
 
 def test_smoke_sampler_keeps_original_order_and_checkpoint_format(tmp_path):

@@ -6,10 +6,10 @@ own launch and progress state.
 
 ## Target and unchanged mechanics
 
-Learn readable conditions that justify pausing a Plan because they threaten
-implementation success, rather than requirements for uniformly excellent or
-complete Plans. Which conditions matter must be learned from task/Plan/repository
-facts and implementation evidence. R/U remains an imperfect success proxy.
+Learn readable rejection conditions that improve within-task pair classification:
+accepting R Plans and rejecting U Plans. Establish which Plan conditions affect
+implementation through task/Plan/repository facts and recorded Code behavior,
+including corrections and approach changes. R/U remains an imperfect success proxy.
 
 The new data selection is
 `configs/frozen_swe_verified_plan_pairs/20260926_blocking_signal_clean127_v1/selection.json`:
@@ -19,11 +19,21 @@ This is a reference selection over the original snapshot, not a standalone
 snapshot with rewritten payloads. A future config must pin both the original
 snapshot and new selection hashes, and enumerate the selected IDs.
 
-New prompt:
-`configs/prompts/offline_gepa_paired_binary_ace_codex_v7_consolidated_goal_20260927.yaml`.
-Checker text and schema are byte-equivalent YAML values to v4. Ref/Cur change
-the learning target and evidence-reading instructions. The wire field `concern`
-is retained for compatibility, but means a reusable blocking signal.
+Prepared prompt:
+`configs/prompts/offline_gepa_paired_binary_ace_codex_v9_pair_prediction_20260927.yaml`.
+Checker text and schema are unchanged from v8. Ref/Cur state the pair-classification
+objective and learning procedure directly. This bundle requires
+`reflection.output_contract: ace_v2` and `curation.evidence_contract: ace_v2`.
+Each insight contains `failure_pattern` and `basis`; historical `ace_v1` keeps
+its original `concern` field. The Host rejects a mismatched contract rather than
+converting old Agent outputs. Frozen runs retain their pinned prompts.
+
+`basis` is a project-specific extension to ACE's insight output, not an ACE
+required field or a scoring/filtering mechanism. It records the facts supporting
+and weakening that insight: its presence in each Plan, actual Code handling,
+consequences, and limits. Both it and the complete pair analysis are passed to
+Curator in `reflection_index.json`. Clarifying its prompt description adds no
+new report fields and does not move evidence out of the complete batch.
 
 Pair score (+1 correct ordering / -1 inverse / 0 tie), binary ANY-trigger gate,
 no-Level output, bullet IDs, helpful/harmful counters, ADD/UPDATE/MERGE/REMOVE,
@@ -86,6 +96,12 @@ outputs; this change does not retroactively reconstruct old checkpoints.
   mentally checks applicability/readability on supporting Plans. Misapplication
   can indicate wording that needs correction; it is not automatic exemption
   from rule maintenance.
+  The intended reader understands common software concepts but has not seen
+  the source cases. Each rule states what is wrong and when it applies, using
+  familiar words and explicit relationships rather than dense technical phrases.
+  Case-specific mechanisms remain in supporting evidence unless needed to
+  distinguish the condition. This is a writing requirement, not a new Host gate
+  or a prescribed repository-investigation procedure.
 - Host verifies and applies Agent outputs mechanically. It does not repair Plan,
   patch, findings, or rules, determine semantic importance, or impose an ideal
   software-engineering checklist.
@@ -93,11 +109,18 @@ outputs; this change does not retroactively reconstruct old checkpoints.
 Historical formal15 configs/prompts remain immutable result authority. They
 must not be reported as runs of this new selection or prompt. The controlled
 iteration-9 diagnostic is specified in
-`configs/gepa_verified_paired_blocking_it9_smoke24_sol6_high_v2_20260927.yaml`.
+`configs/gepa_verified_paired_blocking_it9_smoke24_sol6_high_v4_20260927.yaml`.
 Its frozen selection/checkpoint directory records the parent, original Checker
 slots and hashes. It regenerates Ref/Cur with GPT-6 Sol/high in a fresh one-proposal
 diagnostic; it does not resume the historical search tree. Execution requires
 separate user authorization.
+
+The prepared v4 diagnostic binds the v9 pair-prediction/readability prompts
+and `ace_v2` Ref/Cur contracts. Its 48 imported parent Checker outputs retain
+their original prompt and trajectory provenance; only fresh evaluations use
+the new Checker. This mixed-prompt diagnostic tests the complete learning path,
+not an isolated Ref/Cur improvement against a matched-Checker baseline. Parent,
+ordered draw, development-validation membership and scoring remain unchanged.
 
 The v2 diagnostic reuses the same parent, frozen 48 Checker slots, 24-pair order
 and four development-validation pairs, but reruns all Ref/Cur in a distinct run

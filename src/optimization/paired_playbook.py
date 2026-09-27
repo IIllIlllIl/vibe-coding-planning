@@ -461,13 +461,20 @@ def validate_paired_reflector_review(
     }
 
 
+ACE_PAIRED_REFLECTION_CONTRACTS = frozenset({"ace_v1", "ace_v2"})
+
+
 def validate_ace_paired_reflector_review(
     value: Any,
     *,
     instance_id: str,
     playbook: RejectPlaybook,
+    output_contract: str = "ace_v1",
 ) -> dict[str, Any]:
     """Validate the compact ACE-near paired Reflection contract."""
+    if output_contract not in ACE_PAIRED_REFLECTION_CONTRACTS:
+        raise ValueError("unknown ACE paired Reflector output contract")
+    pattern_key = "failure_pattern" if output_contract == "ace_v2" else "concern"
     expected = {
         "instance_id",
         "reasoning",
@@ -502,15 +509,18 @@ def validate_ace_paired_reflector_review(
         raise ValueError("ACE paired Reflector key_insights must be a list")
     normalized_insights = []
     for insight in insights:
-        if not isinstance(insight, dict) or set(insight) != {"concern", "basis"}:
-            raise ValueError("ACE paired Reflector key insight is invalid")
+        if not isinstance(insight, dict) or set(insight) != {pattern_key, "basis"}:
+            raise ValueError(
+                "ACE paired Reflector key insight is invalid: "
+                f"{output_contract} requires exactly {pattern_key!r} and 'basis'"
+            )
         if any(
             not isinstance(insight[key], str) or not insight[key].strip()
-            for key in ("concern", "basis")
+            for key in (pattern_key, "basis")
         ):
             raise ValueError("ACE paired Reflector key insight is empty")
         normalized_insights.append({
-            "concern": insight["concern"].strip(),
+            pattern_key: insight[pattern_key].strip(),
             "basis": insight["basis"].strip(),
         })
     normalized_tags = []

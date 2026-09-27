@@ -25,6 +25,7 @@ from src.optimization.repo_playbook import (
     validate_repo_reflector_review,
 )
 from src.optimization.paired_playbook import (
+    ACE_PAIRED_REFLECTION_CONTRACTS,
     validate_ace_paired_reflector_review,
     validate_paired_checker_result,
     validate_paired_reflector_review,
@@ -128,7 +129,7 @@ class PlaybookHPCExecutor:
             paired_reflector_distilled_curation
         )
         self.paired_reflector_fact_links = paired_reflector_fact_links
-        if paired_reflector_output_contract not in {"legacy_v1", "ace_v1"}:
+        if paired_reflector_output_contract not in {"legacy_v1", *ACE_PAIRED_REFLECTION_CONTRACTS}:
             raise ValueError("unknown paired Reflector output contract")
         self.paired_reflector_output_contract = paired_reflector_output_contract
         self.checkpoint_import_run_dir = checkpoint_import_run_dir
@@ -449,11 +450,12 @@ class PlaybookHPCExecutor:
                     playbook=playbook,
                 )
             elif role == "paired_repo_reflector":
-                if self.paired_reflector_output_contract == "ace_v1":
+                if self.paired_reflector_output_contract in ACE_PAIRED_REFLECTION_CONTRACTS:
                     validate_ace_paired_reflector_review(
                         agent_output,
                         instance_id=task.instance_id,
                         playbook=playbook,
+                        output_contract=self.paired_reflector_output_contract,
                     )
                 else:
                     validate_paired_reflector_review(

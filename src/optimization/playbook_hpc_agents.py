@@ -17,6 +17,7 @@ from src.optimization.playbook import (
     validate_curator_self_check,
 )
 from src.optimization.repo_playbook import render_concern_playbook
+from src.optimization.paired_playbook import ACE_PAIRED_REFLECTION_CONTRACTS
 from src.optimization.playbook_hpc_executor import PlaybookHPCExecutor
 from src.optimization.hpc.task_batch import TaskAttemptsExhausted, atomic_json
 from src.evaluator.swe_evaluator import derive_image_name
@@ -220,7 +221,7 @@ class HPCPlaybookProposalAgents:
             lambda value: value.render_for_checker()
         )
         self.require_concern_coverage = require_concern_coverage
-        if evidence_contract not in {"legacy_v1", "distilled_v1", "ace_v1"}:
+        if evidence_contract not in {"legacy_v1", "distilled_v1", *ACE_PAIRED_REFLECTION_CONTRACTS}:
             raise ValueError("unknown Curator evidence contract")
         if evidence_contract == "distilled_v1" and require_concern_coverage:
             raise ValueError(
@@ -373,14 +374,15 @@ class HPCPlaybookProposalAgents:
         reflection_index = []
         concern_ids: list[str] = []
         for review in reviews:
-            if self.evidence_contract == "ace_v1":
+            if self.evidence_contract in ACE_PAIRED_REFLECTION_CONTRACTS:
                 numbered = []
                 for index, insight in enumerate(
                     review.get("key_insights", []), start=1
                 ):
-                    concern_id = f'{review["instance_id"]}:c{index}'
-                    concern_ids.append(concern_id)
-                    numbered.append({"id": concern_id, **dict(insight)})
+                    prefix = "i" if self.evidence_contract == "ace_v2" else "c"
+                    insight_id = f'{review["instance_id"]}:{prefix}{index}'
+                    concern_ids.append(insight_id)
+                    numbered.append({"id": insight_id, **dict(insight)})
                 reflection_index.append(
                     {
                         "instance_id": review.get("instance_id"),
@@ -494,7 +496,7 @@ class HPCPlaybookProposalAgents:
                         ],
                         "optional_files": ["case_reflections.json"],
                     }
-                    if self.evidence_contract in {"distilled_v1", "ace_v1"}
+                    if self.evidence_contract in {"distilled_v1", *ACE_PAIRED_REFLECTION_CONTRACTS}
                     else {}
                 ),
                 **(
@@ -784,7 +786,7 @@ class HPCPairedRepoPlaybookProposalAgents(HPCPlaybookProposalAgents):
                     "internal_playbook": internal.serialize(),
                     "evidence_path": "/evidence",
                 }
-                if self.executor.paired_reflector_output_contract == "ace_v1":
+                if self.executor.paired_reflector_output_contract in ACE_PAIRED_REFLECTION_CONTRACTS:
                     prompt_values["pair_instance_id"] = record["instance_id"]
                 items.append(
                     {

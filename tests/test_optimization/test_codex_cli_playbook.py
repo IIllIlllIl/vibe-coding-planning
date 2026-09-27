@@ -379,14 +379,15 @@ def test_ace_codex_prompt_bundle_is_sectionless_and_uses_current_operations() ->
     )
 
 
+@pytest.mark.parametrize("contract", ["ace_v1", "ace_v2"])
 def test_paired_reflector_prompt_receives_authoritative_pair_id(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, contract: str
 ) -> None:
     captured = {}
 
     class Executor:
         run_dir = tmp_path
-        paired_reflector_output_contract = "ace_v1"
+        paired_reflector_output_contract = contract
 
         @staticmethod
         def run_wave(role, items):
@@ -398,7 +399,7 @@ def test_paired_reflector_prompt_receives_authoritative_pair_id(
         Executor(),  # type: ignore[arg-type]
         image_records={},
         maximum_tokens=10000,
-        evidence_contract="ace_v1",
+        evidence_contract=contract,
     )
     monkeypatch.setattr(
         agents,
@@ -432,12 +433,17 @@ def test_paired_reflector_prompt_receives_authoritative_pair_id(
     assert captured["items"][0]["prompt_values"]["pair_instance_id"] == pair_id
 
 
+@pytest.mark.parametrize("contract", ["ace_v1", "ace_v2"])
 def test_ace_paired_reflector_worker_forwards_pair_id_to_runtime(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, contract: str
 ) -> None:
     config_path = Path(
         "configs/gepa_verified_paired_ace_codex_smoke12_v3_terramax_solhigh_20260924.yaml"
     ).resolve()
+    if contract == "ace_v2":
+        config_path = Path(
+            "configs/gepa_verified_paired_blocking_it9_smoke24_sol6_high_v4_20260927.yaml"
+        ).resolve()
     captured = {}
 
     def fake_repository_agent(**kwargs):
@@ -515,12 +521,19 @@ def test_ace_paired_reflector_worker_forwards_pair_id_to_runtime(
     assert captured["prompt_values"]["pair_instance_id"] == pair_id
     assert f"<pair_instance_id>{pair_id}</pair_instance_id>" in captured["rendered"]
     assert f'"instance_id": "{pair_id}"' in captured["rendered"]
-    assert "recorded implementation and Checker behavior" in captured["task"]
+    if contract == "ace_v2":
+        assert "within-task pair classification" in captured["task"]
+        assert '"failure_pattern"' in captured["rendered"]
+    else:
+        assert "recorded implementation and Checker behavior" in captured["task"]
     assert "every active concern" not in captured["task"]
 
 
-def test_ace_curator_worker_task_matches_complete_evidence_learning(tmp_path, monkeypatch):
+@pytest.mark.parametrize("contract", ["ace_v1", "ace_v2"])
+def test_ace_curator_worker_task_matches_complete_evidence_learning(tmp_path, monkeypatch, contract):
     config = Path('configs/gepa_verified_paired_blocking_it9_smoke24_sol6_high_v2_20260927.yaml').resolve()
+    if contract == "ace_v2":
+        config = Path('configs/gepa_verified_paired_blocking_it9_smoke24_sol6_high_v4_20260927.yaml').resolve()
     playbook = RejectPlaybook((PlaybookBullet('plan-00001', 'The Plan is a placeholder.'),))
     captured = {}
     response = {'reasoning': 'No supported change.', 'operations': []}
@@ -542,7 +555,10 @@ def test_ace_curator_worker_task_matches_complete_evidence_learning(tmp_path, mo
         attempt_dir=tmp_path / 'attempt',
     ) == 0
     assert 'complete reflection batch' in captured['task']
-    assert 'recorded implementation evidence' in captured['task']
+    if contract == "ace_v2":
+        assert 'within-task pair classification' in captured['task']
+    else:
+        assert 'recorded implementation evidence' in captured['task']
     assert json.loads((tmp_path / 'output.json').read_text())['agent_output'] == response
 
 

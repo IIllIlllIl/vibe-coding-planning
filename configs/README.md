@@ -14,7 +14,32 @@ the shared supervisor supplies canonical storage paths.
 
 ## Experiment Inventory
 
-Current paired blocking-signal learning authority:
+Prepared Checker prompt update:
+`prompts/offline_gepa_paired_binary_ace_codex_v8_evidence_review_20260927.yaml`
+uses task/Plan understanding, evidence-grounded rule verification, and
+supporting/counterevidence checks. Only the Checker system prompt changes;
+the v7 output contract and Ref/Cur prompts are unchanged. No frozen launch
+configuration is rebound to v8, and its behavior has not yet been tested by
+an LLM run. The completed iteration-9 smoke remains bound to v7.
+
+Prepared Ref/Cur update:
+`prompts/offline_gepa_paired_binary_ace_codex_v9_pair_prediction_20260927.yaml`
+states the within-task pair-classification objective and retains the v8 Checker.
+It requires `reflection.output_contract: ace_v2` and
+`curation.evidence_contract: ace_v2`: insight entries use `failure_pattern` and
+the existing `basis` evidence explanation. No historical configuration is rebound;
+old `ace_v1` outputs are not silently converted. Agent behavior awaits a smoke.
+
+Prepared iteration-9 v4 diagnostic:
+`gepa_verified_paired_blocking_it9_smoke24_sol6_high_v4_20260927.yaml`
+and its matching supervisor bind v9 with `ace_v2`, reuse the exact frozen
+48 historical parent Checker slots, and regenerate 24 Reflections plus one
+Curator. Fresh candidate and four-pair development validation use the new
+Checker prompt. Imported judgments remain old-prompt evidence; this is not
+a matched-Checker effect comparison. No old Ref/Cur or counter ledger is
+imported, and the historical optimizer tree is not resumed. Not launched.
+
+Completed iteration-9 paired blocking-signal learning authority:
 `prompts/offline_gepa_paired_binary_ace_codex_v7_consolidated_goal_20260927.yaml`
 and `frozen_swe_verified_plan_pairs/20260926_blocking_signal_clean127_v1/selection.json`.
 The new Ref/Cur target is an implementation-threatening failure condition, not

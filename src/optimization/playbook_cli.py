@@ -36,6 +36,7 @@ from src.optimization.repo_playbook import (
     validate_repo_reflector_review,
 )
 from src.optimization.paired_playbook import (
+    ACE_PAIRED_REFLECTION_CONTRACTS,
     paired_checker_requires_reason,
     paired_checker_uses_levels,
     validate_ace_paired_reflector_review,
@@ -60,10 +61,11 @@ def _paired_review_validator(raw: dict[str, Any]):
     """Bind the configured paired-Reflection schema once for every backend."""
 
     reflection = raw.get("reflection", {})
-    if reflection.get("output_contract") == "ace_v1":
+    if reflection.get("output_contract") in ACE_PAIRED_REFLECTION_CONTRACTS:
         def validate(output, *, instance_id, playbook):
             return validate_ace_paired_reflector_review(
-                output, instance_id=instance_id, playbook=playbook
+                output, instance_id=instance_id, playbook=playbook,
+                output_contract=reflection["output_contract"],
             )
 
         return validate
@@ -267,11 +269,11 @@ def run_from_config(path: str | Path, *, agents: Any | None = None, optimize_fn=
         reflection = raw.get("reflection", {})
         curation = raw.get("curation", {})
         reflection_contract = reflection.get("output_contract", "legacy_v1")
-        if reflection_contract not in {"legacy_v1", "ace_v1"}:
+        if reflection_contract not in {"legacy_v1", *ACE_PAIRED_REFLECTION_CONTRACTS}:
             raise ValueError("unknown paired Reflection output contract")
         distilled_reflection = bool(reflection.get("distilled_curation", False))
         curator_contract = curation.get("evidence_contract", "legacy_v1")
-        if curator_contract not in {"legacy_v1", "distilled_v1", "ace_v1"}:
+        if curator_contract not in {"legacy_v1", "distilled_v1", *ACE_PAIRED_REFLECTION_CONTRACTS}:
             raise ValueError("unknown Curator evidence contract")
         distilled_index = curator_contract == "distilled_v1"
         fact_links = bool(reflection.get("fact_links", False))
@@ -302,9 +304,12 @@ def run_from_config(path: str | Path, *, agents: Any | None = None, optimize_fn=
             raise ValueError(
                 "Curator lightweight self-check requires Reflection fact links"
             )
-        if reflection_contract == "ace_v1":
-            if curator_contract != "ace_v1":
-                raise ValueError("ACE Reflection requires ACE Curator evidence")
+        if (
+            reflection_contract in ACE_PAIRED_REFLECTION_CONTRACTS
+            or curator_contract in ACE_PAIRED_REFLECTION_CONTRACTS
+        ) and curator_contract != reflection_contract:
+            raise ValueError("ACE Reflection and Curator evidence versions must match")
+        if reflection_contract in ACE_PAIRED_REFLECTION_CONTRACTS:
             if any(
                 reflection.get(key, False)
                 for key in (
