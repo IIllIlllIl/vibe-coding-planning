@@ -18,6 +18,11 @@ def _inputs(tmp_path):
     binary = tmp_path / "bin" / "codex"
     binary.parent.mkdir()
     binary.write_bytes(b"fake-binary")
+    resources = tmp_path / "codex-resources"
+    resources.mkdir()
+    bwrap = resources / "bwrap"
+    bwrap.write_bytes(b"fake-bwrap")
+    bwrap.chmod(0o700)
     auth = tmp_path / "auth.json"
     auth.write_text('{"auth":"test-only"}')
     model = {
@@ -46,15 +51,19 @@ def test_every_codex_process_is_inside_task_scoped_sif(tmp_path, monkeypatch, wi
         commands.append(command)
         assert command[:2] == ["apptainer", "exec"]
         assert "--cleanenv" in command and "--containall" in command
+        assert command[command.index("--home") + 1].endswith(":/agent-home")
+        assert not any(value.startswith("HOME=") for value in command[command.index("--env") + 1].split(","))
         assert command[command.index("--no-mount") + 1] == "hostfs,bind-paths,cwd"
         assert not any(key.startswith(("APPTAINER", "SINGULARITY")) for key in kwargs["env"])
         assert "timeout" not in kwargs
         mounts = [command[i + 1] for i, value in enumerate(command) if value == "--bind"]
         assert f"{evidence}:/evidence:ro" in mounts
+        assert f"{tmp_path / 'codex-resources'}:/opt/vibe-codex/codex-resources:ro" in mounts
         assert f"{repository}:/testbed:ro" in mounts if with_repository else all(":/testbed:" not in mount for mount in mounts)
         assert all(not mount.startswith(str(tmp_path) + ":") for mount in mounts)
         private = {mount.split(":")[1]: Path(mount.split(":")[0]) for mount in mounts}
         transient_paths.extend(private[target] for target in ("/tmp", "/codex-state", "/agent-output"))
+        transient_paths.append(Path(command[command.index("--home") + 1].split(":")[0]))
         assert (private["/codex-state"] / "auth.json").is_file()
         assert not (private["/codex-state"] / "sessions").exists()
         assert command[command.index("--pwd") + 1] == str(boundary.cwd)
@@ -62,6 +71,8 @@ def test_every_codex_process_is_inside_task_scoped_sif(tmp_path, monkeypatch, wi
             return SimpleNamespace(returncode=0, stdout="codex-cli 0.155.1\n", stderr="")
         if "sandbox" in command:
             assert command[-1] == "/bin/true"
+            assert command[command.index("--permission-profile") + 1] == ":read-only"
+            assert "use_legacy_landlock" not in command
             return SimpleNamespace(returncode=0, stdout="", stderr="")
         if "sif-isolation-probe" in command:
             assert str(evidence) in command and str(evidence.parent) in command
@@ -69,6 +80,9 @@ def test_every_codex_process_is_inside_task_scoped_sif(tmp_path, monkeypatch, wi
             return SimpleNamespace(returncode=0, stdout="SIF inputs visible; host paths hidden\n", stderr="")
         assert command[command.index("--output-last-message") + 1] == "/agent-output/codex_final_response.json"
         assert "--ephemeral" in command and "read-only" in command
+        assert command[command.index("--sandbox") + 1] == "read-only"
+        assert "danger-full-access" not in command
+        assert "--dangerously-bypass-approvals-and-sandbox" not in command
         (private["/agent-output"] / "codex_final_response.json").write_text(raw)
         return SimpleNamespace(returncode=0, stdout='{"type":"thread.started"}\n', stderr="")
 
@@ -84,6 +98,23 @@ def test_every_codex_process_is_inside_task_scoped_sif(tmp_path, monkeypatch, wi
     assert all(not path.exists() for path in transient_paths)
     assert trajectory[3]["content"]["execution_boundary"] == "task_scoped_sif"
     assert trajectory[2]["content"]["checks"][-1]["check"] == "task_scoped_sif_visibility"
+
+
+@pytest.mark.parametrize("missing", [True, False])
+def test_missing_or_nonexecutable_bundled_bwrap_fails_before_launch(tmp_path, monkeypatch, missing):
+    sif, evidence, _, model = _inputs(tmp_path)
+    bwrap = tmp_path / "codex-resources" / "bwrap"
+    if missing:
+        bwrap.unlink()
+    else:
+        bwrap.chmod(0o600)
+    monkeypatch.setattr(runtime.subprocess, "run", lambda *a, **kw: pytest.fail("must not launch"))
+    with pytest.raises(runtime.CodexCLIError, match="codex-resources/bwrap"):
+        runtime.run_codex_json_agent(
+            container=runtime.CodexSIFExecution(sif, evidence), model_config=model,
+            working_directory=evidence, attempt_dir=tmp_path / "attempt",
+            system="System", user="Input", task="Analyze",
+        )
 
 
 def test_sif_sandbox_failure_never_falls_back_to_host(tmp_path, monkeypatch):

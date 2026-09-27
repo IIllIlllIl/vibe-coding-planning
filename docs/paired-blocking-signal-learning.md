@@ -110,10 +110,13 @@ prompt and results remain immutable historical authority.
 Ref/Cur execution now uses task-scoped SIF mounts rather than Host Codex.
 Reflector can access its own pair bundle and prepared base repository; Curator
 can access only the current reflection bundle and playbook. Neither receives
-other run directories or persistent Codex session history. The prepared v2
-configuration is prepared but unlaunched. Worker preflight checks the pinned
-CLI, nested read-only sandbox and actual SIF visibility before inference;
-their results are part of the smoke audit, not previously verified HPC claims.
+other run directories or persistent Codex session history by mount design.
+The v2 launch failed at Codex sandbox preflight before Ref/Cur inference;
+it is not evidence of prompt effectiveness or verified tool access. The
+compute-node compatibility blocker and required standalone startup checks
+are recorded in [engineering-contracts.md](engineering-contracts.md).
+Frozen runtime configs preserve their preparation-time fields; they are not
+the authority for subsequent launch success.
 The v7 prompt consolidates each role's learning goal, retains complete
 evidence reading and observed Code attribution, and removes repeated quality
 warnings and named audit/test/detail examples. Scientific output schemas,

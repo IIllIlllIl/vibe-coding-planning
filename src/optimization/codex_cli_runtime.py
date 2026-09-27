@@ -45,6 +45,13 @@ class CodexSIFExecution:
         evidence = self.evidence_dir.resolve(strict=True)
         if not sif.is_file() or not binary.is_file() or not evidence.is_dir():
             raise CodexCLIError("Codex SIF, executable, or evidence is missing")
+        # The pinned standalone release keeps bwrap beside bin/, not in it.
+        # Preserve that layout inside the SIF without exposing the install's
+        # mutable state, user configuration, or unrelated release directories.
+        resources = binary.parent.parent / "codex-resources"
+        bwrap = resources / "bwrap"
+        if not bwrap.is_file() or not os.access(bwrap, os.X_OK):
+            raise CodexCLIError("Codex standalone release is missing executable codex-resources/bwrap")
         # Evidence bundles are generated regular files. Never mount a symlink
         # that can resolve to unrelated input under another visible mount.
         if any(path.is_symlink() for path in evidence.rglob("*")):
@@ -54,15 +61,16 @@ class CodexSIFExecution:
             for name in ("tmp", "home", "output", "mask"):
                 (root / name).mkdir(mode=0o700)
             prefix = [
-                "apptainer", "exec", "--cleanenv", "--containall", "--no-home",
+                "apptainer", "exec", "--cleanenv", "--containall",
+                "--home", f"{root / 'home'}:/agent-home",
                 "--no-mount", "hostfs,bind-paths,cwd", "--pwd", str(self.cwd),
-                "--env", "HOME=/agent-home,CODEX_HOME=/codex-state,TMPDIR=/tmp",
+                "--env", "CODEX_HOME=/codex-state,TMPDIR=/tmp",
             ]
             mounts = [
                 (binary.parent, "/opt/vibe-codex/bin", "ro"),
+                (resources, "/opt/vibe-codex/codex-resources", "ro"),
                 (evidence, "/evidence", "ro"),
                 (Path(environment["CODEX_HOME"]), "/codex-state", "rw"),
-                (root / "home", "/agent-home", "rw"),
                 (root / "tmp", "/tmp", "rw"),
                 (root / "tmp", "/var/tmp", "rw"),
                 (root / "output", "/agent-output", "rw"),

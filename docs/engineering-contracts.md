@@ -122,15 +122,48 @@ inference all run inside the same SIF boundary. A no-model visibility check
 also confirms that `/evidence/manifest.json` is readable while the original
 Host evidence directory, its parent and the attempt directory are hidden.
 Record the checks in the preflight trajectory; failure aborts before inference.
-Keep the Codex read-only
-sandbox enabled; SIF isolation is not a reason to bypass it.
+The currently selected transport keeps both SIF isolation and the Codex
+read-only tool sandbox enabled. They are distinct boundaries: SIF controls
+which host paths are visible; the inner sandbox constrains tool commands.
+Changing to a container-only boundary requires explicit approval and separate
+permission tests. It is not an automatic failure fallback, nor an upstream
+requirement to always nest two sandboxes.
+
+The pinned standalone Codex release requires both `bin/` and its sibling
+`codex-resources/` inside the SIF. Bind only these two release directories
+read-only, preserving their relative layout; binding only `bin/` loses the
+bundled `bwrap` sandbox launcher. Require an executable bundled `bwrap` before
+launch. Select the private HOME with Apptainer `--home source:/agent-home`,
+not `--env HOME=...` (Apptainer refuses that override).
+
+Before resuming a migrated smoke, run
+`scripts/tools/verify_codex_sif_startup.py` on a compute node with the prepared
+case and evidence SIFs. Both no-model preflights must succeed before either
+minimal model call. Verify real shell-tool reads and final JSON, retain the
+report and native trajectories in a separate run-state operation directory,
+and never overwrite a previous verification directory. This transport check
+uses synthetic input, not a scientific pair or a GEPA iteration.
+
+Compute-node checks on 2026-09-27 found an additional blocker on Iris kernel
+`4.18.0-553.146.1.el8_10.x86_64`: both the case SIF and evidence SIF fail
+Codex's nested bubblewrap root bind with `Invalid argument`. Explicit user
+namespaces, temporary overlays, and the system bubblewrap 0.4.0 did not fix
+it; the optional legacy Landlock backend failed to apply restrictions too.
+These tests reached no model calls. CLI version success and prior Host-only
+sandbox success do not establish SIF compatibility. Keep the migrated smoke
+blocked until the exact SIF transport passes compute-node preflight and real
+shell-tool inference. Do not silently disable the inner sandbox or fall back
+to Host. Retained diagnostic reports are under the canonical run-state
+`operations/codex-sif-{startup-verification,mount-diagnosis,landlock-diagnosis,system-bwrap-diagnosis}-20260927-v1/`
+directories.
 
 Codex JSONL tool events remain the native command audit. The existing
 `source_access.jsonl` only covers commands routed through repository preparation,
 not native Codex tool commands; SIF file isolation does not add an HTTP filter
 or turn those partial logs into a complete source-access audit. Verify actual
 mount isolation and nested Codex sandbox compatibility on a compute node
-in the migrated smoke before inference. Local mocked tests are not that proof.
+with the startup verification tool before a migrated smoke. Local mocked tests
+are not that proof.
 
 Native Codex under Slurm must use an exact, compute-node-tested CLI version.
 Codex CLI 0.156.1 cannot build its bubblewrap sandbox when Slurm provides the

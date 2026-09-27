@@ -76,6 +76,11 @@ authority is `docs/archive/mixed-design/swe-chat-data-cleaning.md`.
   emits classification reports without Planner, Code, or Evaluate phases.
 - `hpc_run_status.py` is the read-only status entry for retained persistent
   workflows.
+- `tools/verify_codex_sif_startup.py` is a separately authorized compute-node
+  transport check, not a GEPA run. It tests prepared case/evidence SIFs using
+  the production Codex transport; both no-model checks must pass before up to
+  two minimal model calls. `--preflight-only` makes no model calls. It retains
+  a report, requires a new output directory and does not edit experiment state.
 - `tools/freeze_swe_verified_pce_source.py` freezes the fixed-revision complete
   SWE-Verified source rows; `tools/freeze_swe_verified_sif_manifest.py` audits
   selected existing SIF bytes and verifies each official base commit.
