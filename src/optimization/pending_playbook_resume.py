@@ -77,6 +77,7 @@ def replay_pending_proposal(run_dir, search, adapter):
         raise ValueError("unsupported pending proposal recovery")
     proposer = adapter.propose_new_texts
     evaluate, reflect, curate = adapter.evaluate, proposer.batch_reflector, proposer.curator
+    curate_with_history = proposer.curator_with_history
     draw = PendingDraw(search.selector, search.sampler, pending)
 
     def cached_parent(batch, candidate, capture_traces=False):
@@ -107,8 +108,16 @@ def replay_pending_proposal(run_dir, search, adapter):
             raise ValueError("pending Curator input differs from frozen input")
         return pending["curator_output"]
 
+    def frozen_operations_with_history(counted, reviews, records, history):
+        if draw.active:
+            return frozen_operations(counted, reviews, records)
+        return curate_with_history(counted, reviews, records, history)
+
     adapter.evaluate, proposer.batch_reflector, proposer.curator = cached_parent, frozen_reviews, frozen_operations
+    if curate_with_history is not None:
+        proposer.curator_with_history = frozen_operations_with_history
     try:
         yield draw, draw
     finally:
         adapter.evaluate, proposer.batch_reflector, proposer.curator = evaluate, reflect, curate
+        proposer.curator_with_history = curate_with_history

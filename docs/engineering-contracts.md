@@ -71,6 +71,9 @@ blocked a valid later ADD-only proposal; regression coverage lives in
   this protocol. Shared parser feedback reports the rejected block count and
   non-execution; it is recovery feedback, not a second normal-input protocol.
   Native Codex roles do not receive the mini-swe protocol.
+  Recovery feedback instructs the Agent to resend the current rejected step in
+  one Bash block to obtain real observations. Earlier successful observations
+  remain valid. The Host never invents results for rejected actions.
 - In DeepSeek thinking mode, explicitly pin the requested effort rather than
   inferring it from temperature (which the provider ignores). The mini-swe
   adapter sends `thinking` and `reasoning_effort` in `extra_body`: older
@@ -124,6 +127,40 @@ fresh candidate Checker batch. This is explicit re-evaluation with changed
 Checker execution, not a new learning iteration or a matched-Checker comparison.
 
 ## Lifecycle and cleanup
+
+### Global training feedback
+
+`global_counter_ledger.json` schema 2 retains helpful, harmful and neutral
+counts plus validated training Reflector explanations. Schema-1 ledgers load
+without changing their old counts or inventing missing historical explanations.
+For compatibility, helpful/harmful still count the first non-neutral attribution
+per normalized rule text and training pair; neutral counts once per pair
+separately. Distinct contextual observations are retained even if those counts
+do not change. An exact replay does not duplicate observations or counts.
+
+The normal proposer commits feedback after a structurally valid proposal,
+before GEPA selects or rejects that proposal. A rejected candidate therefore
+still contributes training feedback. An invalid Agent proposal does not commit
+pending feedback. Validation/test evaluations never update this ledger.
+Curator conclusions are not inserted into Reflector history.
+
+Each historical event links its Reflector report and Checker checklist context
+by SHA-256, and records the training-input hash. Reports and checklist contexts
+are stored once in the ledger. The input hash identifies existing evidence;
+it does not replace the original Checker/Code/evaluator artifacts, which must
+remain retained. Curator must read `rule_feedback_history_index.json`, which
+maps current bullets to counts and historical observation counts. Complete
+explanations and contexts remain in `rule_feedback_history.json`, available for
+targeted reading rather than requiring the entire growing history in context.
+Events for unrelated rules are not exported. Historical
+assessments can disagree and are not permanent facts. Changed rule text starts
+with zero counters, as before. No counters or history are exposed to Checker.
+
+Frozen recovery still verifies and reuses pinned Ref/Cur outputs; the history
+callback must not accidentally bypass that reuse. If frozen counted inputs no
+longer match a new counting policy, stop rather than rewrite experimental data.
+
+### Artifact lifecycle
 
 Cross-run checkpoint imports must name a verified authority. Use an absolute
 scratch path for remote run authorities. A project-relative path is permitted

@@ -14,6 +14,17 @@ the shared supervisor supplies canonical storage paths.
 
 ## Experiment Inventory
 
+Current prepared diagnostic (2026-09-28):
+`gepa_verified_paired_blocking_light_history_smoke4x2_v1_20260928.yaml`
+and its matching supervisor use four training pairs from distinct tasks,
+one disjoint validation pair, two iterations with minibatch two, a fresh
+31-rule parent, DeepSeek Checker no-thinking, and GPT-6 Sol/high Ref/Cur.
+It exercises parser recovery and helpful/harmful/neutral feedback history.
+The frozen inputs live under
+`frozen_swe_verified_plan_pairs/20260928_light_history_smoke4x2_v1/`.
+This is a prepared, unlaunched transport smoke; the dated entries below are
+earlier development authorities, not alternative launch instructions.
+
 Prepared Checker prompt update:
 `prompts/offline_gepa_paired_binary_ace_codex_v8_evidence_review_20260927.yaml`
 uses task/Plan understanding, evidence-grounded rule verification, and

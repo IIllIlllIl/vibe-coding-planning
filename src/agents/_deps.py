@@ -69,6 +69,11 @@ DEFAULT_FORMAT_ERROR_TEMPLATE = """\
 Your previous response was rejected before execution. None of its text or
 commands ran.
 
+To obtain the results of a rejected command, resend the commands needed for
+the current step in one correctly formatted bash block. There are no results
+to retrieve from the rejected response. Observations from earlier successful
+steps remain available; they do not need to be repeated.
+
 The parser received your entire previous assistant response as one string. It
 recognized {{actions|length}} executable bash code blocks. One complete bash
 code block counts as one action, even if it contains multiple shell commands.
@@ -101,6 +106,11 @@ true
 
 If the task is complete, put the task-specific submission action inside that
 single block.
+
+Before sending the corrected response, check the entire response: it contains
+exactly one bash block, with both fences on their own lines. Submit that step
+and wait for the environment result. Base subsequent conclusions on actual
+observations, not on what the rejected commands would have returned.
 """
 
 _PERMANENT_PROVIDER_ERROR_MARKERS = (

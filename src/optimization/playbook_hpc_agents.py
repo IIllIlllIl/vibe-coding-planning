@@ -357,10 +357,11 @@ class HPCPlaybookProposalAgents:
             ]
         return priors
 
-    def curate(self, counted: RejectPlaybook, reviews: Sequence[Mapping[str, Any]]):
+    def curate(self, counted: RejectPlaybook, reviews: Sequence[Mapping[str, Any]], *, feedback_history: Mapping[str, Any] | None = None):
         identity = hashlib.sha256(
             json.dumps(
-                {"playbook": counted.serialize(), "reviews": list(reviews)},
+                {"playbook": counted.serialize(), "reviews": list(reviews),
+                 **({"feedback_history": feedback_history} if feedback_history is not None else {})},
                 ensure_ascii=False,
                 sort_keys=True,
                 separators=(",", ":"),
@@ -371,6 +372,29 @@ class HPCPlaybookProposalAgents:
             evidence_dir / "counted_playbook.json", json.loads(counted.serialize())
         )
         atomic_json(evidence_dir / "case_reflections.json", list(reviews))
+        history_files = ["rule_feedback_history_index.json", "rule_feedback_history.json"] if feedback_history is not None else []
+        if feedback_history is not None:
+            atomic_json(evidence_dir / "rule_feedback_history.json", feedback_history)
+            index = []
+            for bullet in counted.bullets:
+                rule_identity = " ".join(bullet.text.casefold().split())
+                tags = [event["tag"] for event in feedback_history["events"].values()
+                        if event["rule_identity"] == rule_identity]
+                index.append({
+                    "bullet_id": bullet.id,
+                    "rule_identity": rule_identity,
+                    "counts": {"helpful": bullet.helpful, "harmful": bullet.harmful, "neutral": bullet.neutral},
+                    "history_observations": {label: tags.count(label) for label in ("helpful", "harmful", "neutral")},
+                })
+            atomic_json(evidence_dir / "rule_feedback_history_index.json", {
+                "schema_version": 1,
+                "source": feedback_history["source"],
+                "interpretation": feedback_history["interpretation"],
+                "counting_policy": feedback_history["counting_policy"],
+                "details_file": "rule_feedback_history.json",
+                "lookup": "Select events by rule_identity. Each event links its full Reflector report and Checker context by SHA-256. Consult the explanations relevant to the rules being maintained; earlier assessments may disagree.",
+                "bullets": index,
+            })
         reflection_index = []
         concern_ids: list[str] = []
         for review in reviews:
@@ -485,6 +509,7 @@ class HPCPlaybookProposalAgents:
                     "counted_playbook.json",
                     "reflection_index.json",
                     "case_reflections.json",
+                    *history_files,
                 ],
                 "contains_repository": False,
                 "contains_direct_downstream_evidence": False,
@@ -493,8 +518,9 @@ class HPCPlaybookProposalAgents:
                         "required_files": [
                             "counted_playbook.json",
                             "reflection_index.json",
+                            *history_files[:1],
                         ],
-                        "optional_files": ["case_reflections.json"],
+                        "optional_files": ["case_reflections.json", *history_files[1:]],
                     }
                     if self.evidence_contract in {"distilled_v1", *ACE_PAIRED_REFLECTION_CONTRACTS}
                     else {}

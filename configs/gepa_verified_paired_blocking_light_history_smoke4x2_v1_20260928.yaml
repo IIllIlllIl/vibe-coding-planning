@@ -1,0 +1,150 @@
+schema_version: 1
+mode: offline_paired_repo_concern_playbook
+status: prepared_not_launched
+run_id: paired-blocking-light-history-smoke4x2-v1-20260928
+purpose: Fresh two-iteration no-thinking Checker smoke with four train pairs, one disjoint validation pair,
+  and a 31-rule parent. Check protocol recovery, complete Ref/Cur outputs, neutral/helpful/harmful feedback
+  history and iteration-two Curator access. This is not a learning-quality comparison or a continuation of
+  earlier optimizer state.
+paths:
+  dataset_snapshot: configs/frozen_swe_verified_plan_pairs/20260919_safe_pce_within_task_pairs_v1
+  initial_rules: configs/frozen_swe_verified_plan_pairs/20260928_light_history_smoke4x2_v1/parent_playbook.json
+  run_dir: output/SWE-bench_Verified/gepa-paired-repo-concern-playbook-runs/paired-blocking-light-history-smoke4x2-v1-20260928
+task:
+  semantics: paired_repo_failure_pattern_binary_ace_v2
+container:
+  runtime: apptainer
+  sif_cache_dir: /scratch/users/${USER}/vibe-coding-planning/shared/sif-cache
+execution:
+  backend: hpc_slurm
+inputs:
+  dataset_snapshot: configs/frozen_swe_verified_plan_pairs/20260919_safe_pce_within_task_pairs_v1
+  dataset_manifest_sha256: cc1c3488c20a90340d88f419212c2f28b0d60e9a53ab15b84c7e9809751cc736
+  selection: configs/frozen_swe_verified_plan_pairs/20260928_light_history_smoke4x2_v1/selection.json
+  selection_sha256: fc9e4e20c569025884bf6e6cc6f889e060d5c991e3607b95754ea70ac66533dc
+  initial_playbook: configs/frozen_swe_verified_plan_pairs/20260928_light_history_smoke4x2_v1/parent_playbook.json
+  initial_playbook_sha256: 8eae2443c89f1529f203c49b834840ecdcc5ddef2c478cc0f732114f75682558
+  prompt_bundle: configs/prompts/offline_gepa_paired_binary_ace_codex_v10_interactive_review_20260927.yaml
+  prompt_bundle_sha256: aaf7cacd4b4fdb9421519dd8e28c951781d345372cd92aac8477e786a1f8e1d1
+  repo_checker_contract: configs/prompts/offline_gepa_paired_binary_contract_v2_20260925.yaml
+  repo_checker_contract_sha256: 62fcf9e3dbbf8c76b0676f4730ca385167e5488b418a7c58d471397882550299
+  repo_checker_image_manifest: configs/frozen_swe_verified_safe_pce/verified482-formal-v1-20260914/images.json
+  repo_checker_image_manifest_sha256: f4c18c5dcf30fa48cb503241c5ba69ae8f6368e63726f8ce0875a868ae212e0a
+  train_instance_ids:
+  - pair-eeb527cce8bb7653c0902b8d
+  - pair-49434d02a9c6631fd2f1a021
+  - pair-f238c71b0ce9c101b56e86b7
+  - pair-d78611c7777c70d86258f924
+  validation_instance_ids:
+  - pair-05a1e7405702ab648b7f67ea
+models:
+  checker:
+    executor: mini_swe
+    model: deepseek-flash
+    temperature: 0.0
+    thinking: disabled
+  reflector:
+    executor: codex_cli
+    codex_binary: ${HOME}/.local/lib/vibe-codex/0.155.1/bin/codex
+    codex_auth_file: ${HOME}/.codex/auth.json
+    codex_version: 0.155.1
+    model: gpt-6-sol
+    reasoning_effort: high
+  curator:
+    executor: codex_cli
+    codex_binary: ${HOME}/.local/lib/vibe-codex/0.155.1/bin/codex
+    codex_auth_file: ${HOME}/.codex/auth.json
+    codex_version: 0.155.1
+    model: gpt-6-sol
+    reasoning_effort: high
+repo_checker:
+  output_contract: binary_v2
+  review_only: true
+  workdir: /testbed
+  command_timeout_seconds: 1800
+  source_access_policy: conservative_blacklist_v3
+  history_policy: base_ancestor_bundle_v1
+  masked_container_paths:
+  - /opt/miniconda3/pkgs
+  observation_contract: executed_tools_v1
+scoring:
+  correct_order: 1
+  inverted: -1
+  tied: 0
+  invalid: -100
+search:
+  max_iterations: 2
+  reflection_minibatch_size: 2
+  max_metric_calls: 16
+  seed: 42
+  perfect_score: 1
+  skip_perfect_score: false
+reflection:
+  rounds: 1
+  output_contract: ace_v2
+curation:
+  evidence_contract: ace_v2
+refiner:
+  enabled: false
+length:
+  maximum_visible_tokens: 10000
+  maximum_bullet_tokens: 64
+  harmful_pruning_weight: 2
+budget:
+  candidate_proposals: 2
+  reflection_pairs_per_proposal: 2
+  checker_agents_per_pair_evaluation: 2
+  reflection_rounds_per_pair: 1
+  projected_pair_metric_call_ceiling: 16
+stopping:
+  stop_after_candidate_proposals: 2
+  abort_on_operational_incomplete: true
+operational_incomplete_policy: Model, subscription, transport, timeout, parsing, missing-artifact, repository-authority,
+  or exhausted Agent-output-contract failures remain operationally incomplete. Host validation retries invalid
+  Agent artifacts; it does not rewrite them into scientific outcomes. A subscription-usage interruption pauses
+  this run for checkpointed resume; it is not a scientific score or a reason to resample completed Agents.
+hpc:
+  submit: true
+  partition: batch
+  cpus_per_task: 1
+  mem: 4G
+  controller_slice_time: 00:30:00
+  agent_time: 00:15:00
+  poll_interval_seconds: 30
+  max_running_array_tasks: 0
+  max_task_attempts: 2
+  task_output_grace_seconds: 120
+  missing_task_grace_seconds: 300
+  remote_env_file: ~/.config/vibe-coding-planning/deepseek.env
+  python_module: lang/Python/3.11
+  container_module: tools/Apptainer
+  job_name_prefix: blocking-light-history4x2-v1-20260928
+success_criteria:
+- Run two complete proposals from a fresh state; do not import earlier Checker, Ref/Cur, or candidate results.
+- Check all 31 parent bullets for every Plan and retain raw trajectory and rejected outputs.
+- Verify rejected multi-block actions execute nothing and retry feedback instructs re-execution; do not silently
+  repair Agent outputs.
+- After valid training Reflection, verify global helpful/harmful/neutral counters and history; iteration-two
+  Curator receives the index and can read earlier explanations.
+- Confirm validation data never updates training history. Candidate validation is conditional on a strict minibatch
+  improvement.
+- Use no-thinking DeepSeek Checker, unchanged GPT-6 Sol/high Ref/Cur prompts, refiner disabled, Iris 1 CPU
+  / 4G, 15-minute Agent tasks and no array concurrency cap.
+readiness:
+  runnable: true
+  launched: false
+  missing: []
+  validation_scope: Local frozen inputs pass validation. Iris read-only preflight found five SIF files with the
+    frozen byte sizes, their prepared base-history bundle paths, an evidence SIF, and no existing target run
+    directory. Worker validation still checks hashes. No LLM, Slurm, Apptainer or supervisor run is authorized
+    by this preparation.
+launch_checks:
+- Commit a clean worktree before launch.
+- Verify frozen input SHA-256 and task-disjoint train/validation selection.
+- Verify all selected image/history and Codex evidence SIF artifacts are present on Iris.
+- Confirm no active supervisor owns this run directory; then submit the new supervisor only on explicit request.
+audit_targets:
+- Observe actual tool-action execution and recovery, not just JSON schema completion.
+- Check that repository citations have real received observations and that failed actions are not treated as observations.
+- Verify two fresh Reflector/Curator waves and that the second Curator can inspect first-round history.
+- Verify neutral feedback, idempotent counter updates, and absence of validation evidence in the global ledger.

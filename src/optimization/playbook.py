@@ -21,10 +21,11 @@ class PlaybookBullet:
     harmful: int = 0
     lineage: tuple[str, ...] = ()
     category: str | None = None
+    neutral: int = 0
 
     @classmethod
     def from_dict(cls, value: Any) -> "PlaybookBullet":
-        if not isinstance(value, dict) or set(value) - {"category"} != {
+        if not isinstance(value, dict) or set(value) - {"category", "neutral"} != {
             "id", "text", "helpful", "harmful", "lineage"
         }:
             raise ValueError("playbook bullet has an invalid schema")
@@ -32,6 +33,7 @@ class PlaybookBullet:
         text = value["text"]
         helpful = value["helpful"]
         harmful = value["harmful"]
+        neutral = value.get("neutral", 0)
         lineage = value["lineage"]
         if not isinstance(bullet_id, str) or not _BULLET_ID.fullmatch(bullet_id):
             raise ValueError("playbook bullet ID is invalid")
@@ -44,6 +46,9 @@ class PlaybookBullet:
             or not isinstance(harmful, int)
             or isinstance(harmful, bool)
             or harmful < 0
+            or not isinstance(neutral, int)
+            or isinstance(neutral, bool)
+            or neutral < 0
         ):
             raise ValueError("playbook counters must be non-negative integers")
         if (
@@ -59,7 +64,7 @@ class PlaybookBullet:
         ):
             raise ValueError("category must be a nonempty single-line title")
         return cls(bullet_id, text.strip(), helpful, harmful, tuple(lineage),
-                   category.strip() if category else None)
+                   category.strip() if category else None, neutral)
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -69,6 +74,7 @@ class PlaybookBullet:
             "harmful": self.harmful,
             "lineage": list(self.lineage),
             **({"category": self.category} if self.category is not None else {}),
+            **({"neutral": self.neutral} if self.neutral else {}),
         }
 
 
@@ -350,10 +356,10 @@ def apply_reflector_counters(
     playbook: RejectPlaybook,
     reviews: Iterable[Mapping[str, Any]],
 ) -> RejectPlaybook:
-    deltas = {item.id: {"helpful": 0, "harmful": 0} for item in playbook.bullets}
+    deltas = {item.id: {"helpful": 0, "harmful": 0, "neutral": 0} for item in playbook.bullets}
     for review in reviews:
         for tag in review["bullet_tags"]:
-            if tag["tag"] in {"helpful", "harmful"}:
+            if tag["tag"] in {"helpful", "harmful", "neutral"}:
                 deltas[tag["id"]][tag["tag"]] += 1
     return RejectPlaybook(
         tuple(
@@ -361,6 +367,7 @@ def apply_reflector_counters(
                 item,
                 helpful=item.helpful + deltas[item.id]["helpful"],
                 harmful=item.harmful + deltas[item.id]["harmful"],
+                neutral=item.neutral + deltas[item.id]["neutral"],
             )
             for item in playbook.bullets
         )
@@ -622,7 +629,7 @@ def validate_curator_proposal(
             # Retention preserves that provenance verbatim; only newly created
             # bullets must cite IDs in this proposal's input.
             continue
-        if bullet.helpful != 0 or bullet.harmful != 0:
+        if bullet.helpful != 0 or bullet.harmful != 0 or bullet.neutral != 0:
             raise ValueError("new Curator bullets must start with zero counters")
         if any(parent not in existing for parent in bullet.lineage):
             raise ValueError("Curator lineage must reference an input bullet ID")
@@ -640,12 +647,13 @@ def validate_refiner_proposal(
         if previous is not None and (
             bullet.helpful != previous.helpful
             or bullet.harmful != previous.harmful
+            or bullet.neutral != previous.neutral
             or bullet.lineage != previous.lineage
             or bullet.category != previous.category
         ):
             raise ValueError("Refiner may not modify counters or lineage")
         if previous is None:
-            if bullet.helpful != 0 or bullet.harmful != 0:
+            if bullet.helpful != 0 or bullet.harmful != 0 or bullet.neutral != 0:
                 raise ValueError("new Refiner bullets must start with zero counters")
             if not bullet.lineage or any(
                 parent not in existing for parent in bullet.lineage

@@ -259,6 +259,11 @@ class TestBuildDefaultAgent:
         assert "Do not include additional\nbash blocks for later steps" in rendered
         assert "wait for its actual observation" in rendered
         assert "```bash\ntrue\n```" in rendered
+        assert "resend the commands needed for" in rendered
+        assert "There are no results\nto retrieve from the rejected response" in rendered
+        assert "Observations from earlier successful" in rendered
+        assert "Before sending the corrected response" in rendered
+        assert "not on what the rejected commands would have returned" in rendered
 
     def test_omits_cost_limit_when_none(self):
         agent = build_default_agent(

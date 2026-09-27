@@ -1,0 +1,21 @@
+{
+  "schema_version": 1,
+  "data_unit": "within_task_plan_pair",
+  "purpose": "Two-iteration transport and feedback-history smoke, not a learning-quality estimate. Distinct train tasks and validation task.",
+  "source_snapshot": "configs/frozen_swe_verified_plan_pairs/20260919_safe_pce_within_task_pairs_v1",
+  "source_manifest_sha256": "cc1c3488c20a90340d88f419212c2f28b0d60e9a53ab15b84c7e9809751cc736",
+  "train_instance_ids": [
+    "pair-eeb527cce8bb7653c0902b8d",
+    "pair-49434d02a9c6631fd2f1a021",
+    "pair-f238c71b0ce9c101b56e86b7",
+    "pair-d78611c7777c70d86258f924"
+  ],
+  "validation_instance_ids": [
+    "pair-05a1e7405702ab648b7f67ea"
+  ],
+  "clean_selection": "configs/frozen_swe_verified_plan_pairs/20260926_blocking_signal_clean127_v1/selection.json",
+  "clean_selection_sha256": "506a041ca04dae13dbfc9ba9fec16432a7c57345a15ef40c30396e83e7bc2e42",
+  "artifacts": {
+    "parent_playbook.json": "8eae2443c89f1529f203c49b834840ecdcc5ddef2c478cc0f732114f75682558"
+  }
+}

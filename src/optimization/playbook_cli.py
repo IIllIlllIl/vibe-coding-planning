@@ -487,6 +487,9 @@ def run_from_config(path: str | Path, *, agents: Any | None = None, optimize_fn=
             curator=lambda counted, reviews, _records: proposal_agents.curate(
                 counted, reviews
             ),
+            curator_with_history=lambda counted, reviews, _records, history: proposal_agents.curate(
+                counted, reviews, feedback_history=history
+            ),
             token_counter=count_tokens,
             semantic_refiner=(proposal_agents.refine if _refiner_enabled(raw) else None),
             maximum_tokens=int(raw["length"]["maximum_visible_tokens"]),
@@ -542,6 +545,7 @@ def run_from_config(path: str | Path, *, agents: Any | None = None, optimize_fn=
         proposer = TwoStagePlaybookProposer(
             reflector=reflector,
             curator=runtime.curator,
+            curator_with_history=getattr(runtime, "curator_with_history", None),
             token_counter=count_tokens,
             semantic_refiner=(runtime.refiner if _refiner_enabled(raw) else None),
             maximum_tokens=int(raw["length"]["maximum_visible_tokens"]),

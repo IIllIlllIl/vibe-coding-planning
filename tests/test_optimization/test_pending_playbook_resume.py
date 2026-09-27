@@ -343,6 +343,7 @@ def test_replay_uses_frozen_agents_and_deduplicates_counter_after_yield(checkpoi
     def make_proposer():
         return TwoStagePlaybookProposer(reflector=fail, curator=fail, batch_reflector=fail,
             token_counter=len, maximum_tokens=1000, global_counter_path=ledger,
+            curator_with_history=fail,
             review_validator=lambda raw, **kw: raw)
     outputs = []
     for _ in range(2):  # Simulate a controller yielding after proposal completion.
@@ -358,6 +359,7 @@ def test_replay_uses_frozen_agents_and_deduplicates_counter_after_yield(checkpoi
             with pytest.raises(AssertionError):  # New candidate evaluation is ordinary work.
                 adapter.evaluate(cases, outputs[-1], capture_traces=False)
         assert adapter.evaluate is fail and proposer.curator is fail
+        assert proposer.curator_with_history is fail
     assert outputs[0] == outputs[1]
     assert RejectPlaybook.parse(outputs[0]["rules"]).bullets[0].helpful == 1
 

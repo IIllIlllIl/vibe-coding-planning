@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import replace
+import hashlib
 import json
 from pathlib import Path
 from typing import Any, Callable, Mapping, Protocol, Sequence
@@ -51,19 +52,29 @@ class GlobalPlaybookCounters:
 
     def __init__(self, path: Path | None = None) -> None:
         self.path = path
-        self._counts: dict[str, tuple[int, int]] = {}
+        self._counts: dict[str, tuple[int, int, int]] = {}
         self._observations: dict[str, dict[str, str]] = {}
+        self._neutral_observations: dict[str, set[str]] = {}
+        self._history: dict[str, dict[str, Any]] = {}
+        self._reports: dict[str, dict[str, Any]] = {}
+        self._contexts: dict[str, list[dict[str, Any]]] = {}
         if path is not None and path.is_file():
             raw = json.loads(path.read_text(encoding="utf-8"))
-            if raw.get("schema_version") != 1:
+            if raw.get("schema_version") not in {1, 2}:
                 raise ValueError("unsupported global counter ledger schema")
             self._counts = {
-                key: (int(value["helpful"]), int(value["harmful"]))
+                key: (int(value["helpful"]), int(value["harmful"]), int(value.get("neutral", 0)))
                 for key, value in raw["counts"].items()
             }
             self._observations = {
                 key: dict(value) for key, value in raw["observations"].items()
             }
+            self._neutral_observations = {
+                key: set(value) for key, value in raw.get("neutral_observations", {}).items()
+            }
+            self._history = raw.get("history", {})
+            self._reports = raw.get("reports", {})
+            self._contexts = raw.get("contexts", {})
 
     def hydrate(self, playbook: RejectPlaybook) -> RejectPlaybook:
         bullets = []
@@ -71,14 +82,15 @@ class GlobalPlaybookCounters:
             key = _rule_identity(bullet.text)
             known = self._counts.get(key)
             if known is None:
-                known = (bullet.helpful, bullet.harmful)
+                known = (bullet.helpful, bullet.harmful, bullet.neutral)
             else:
                 known = (
                     max(known[0], bullet.helpful),
                     max(known[1], bullet.harmful),
+                    max(known[2], bullet.neutral),
                 )
             self._counts[key] = known
-            bullets.append(replace(bullet, helpful=known[0], harmful=known[1]))
+            bullets.append(replace(bullet, helpful=known[0], harmful=known[1], neutral=known[2]))
         return RejectPlaybook(tuple(bullets))
 
     def apply_reviews(
@@ -87,8 +99,10 @@ class GlobalPlaybookCounters:
         reviews: Sequence[Mapping[str, Any]],
     ) -> tuple[RejectPlaybook, list[tuple[str, str, str]]]:
         pending: list[tuple[str, str, str]] = []
+        seen: set[tuple[str, str]] = set()
+        neutral_seen: set[tuple[str, str]] = set()
         deltas = {
-            _rule_identity(bullet.text): {"helpful": 0, "harmful": 0}
+            _rule_identity(bullet.text): {"helpful": 0, "harmful": 0, "neutral": 0}
             for bullet in playbook.bullets
         }
         identities = {
@@ -98,11 +112,17 @@ class GlobalPlaybookCounters:
             instance_id = str(review["instance_id"])
             for tag in review["bullet_tags"]:
                 label = str(tag["tag"])
-                if label not in {"helpful", "harmful"}:
+                if label not in {"helpful", "harmful", "neutral"}:
                     continue
                 key = identities[str(tag["id"])]
-                if instance_id in self._observations.get(key, {}):
-                    continue
+                if label == "neutral":
+                    if instance_id in self._neutral_observations.get(key, set()) or (key, instance_id) in neutral_seen:
+                        continue
+                    neutral_seen.add((key, instance_id))
+                else:
+                    if instance_id in self._observations.get(key, {}) or (key, instance_id) in seen:
+                        continue
+                    seen.add((key, instance_id))
                 pending.append((key, instance_id, label))
                 deltas[key][label] += 1
         counted = RejectPlaybook(
@@ -113,6 +133,8 @@ class GlobalPlaybookCounters:
                     + deltas[_rule_identity(bullet.text)]["helpful"],
                     harmful=bullet.harmful
                     + deltas[_rule_identity(bullet.text)]["harmful"],
+                    neutral=bullet.neutral
+                    + deltas[_rule_identity(bullet.text)]["neutral"],
                 )
                 for bullet in playbook.bullets
             )
@@ -123,24 +145,95 @@ class GlobalPlaybookCounters:
         self,
         counted: RejectPlaybook,
         pending: Sequence[tuple[str, str, str]],
+        *,
+        feedback: Mapping[str, Any] | None = None,
     ) -> None:
         for key, instance_id, label in pending:
-            self._observations.setdefault(key, {})[instance_id] = label
+            if label == "neutral":
+                self._neutral_observations.setdefault(key, set()).add(instance_id)
+            else:
+                self._observations.setdefault(key, {})[instance_id] = label
         for bullet in counted.bullets:
             self._counts[_rule_identity(bullet.text)] = (
                 bullet.helpful,
                 bullet.harmful,
+                bullet.neutral,
             )
+        if feedback is not None:
+            self._history.update(feedback["events"])
+            self._reports.update(feedback["reports"])
+            self._contexts.update(feedback["contexts"])
         self._persist()
+
+    def feedback_for(
+        self,
+        playbook: RejectPlaybook,
+        reviews: Sequence[Mapping[str, Any]] = (),
+        records: Sequence[Mapping[str, Any]] = (),
+    ) -> dict[str, Any]:
+        """Training Ref facts only; preserve context changes independently of counts.
+
+        The proposer calls this only on validated minibatch reviews. Validation
+        evaluation never calls it. Full reports are stored once, not per tag.
+        """
+        def digest(value: Any) -> str:
+            encoded = json.dumps(value, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
+            return hashlib.sha256(encoded.encode("utf-8")).hexdigest()
+
+        identities = {bullet.id: _rule_identity(bullet.text) for bullet in playbook.bullets}
+        events = dict(self._history)
+        reports = dict(self._reports)
+        contexts = dict(self._contexts)
+        # Counts are invisible to Checker and must not turn an exact replay
+        # into a new contextual observation merely because hydration ran.
+        visible_context = [
+            {"id": bullet.id, "text": bullet.text, "category": bullet.category}
+            for bullet in playbook.bullets
+        ]
+        context = digest(visible_context)
+        contexts[context] = visible_context
+        for review, record in zip(reviews, records, strict=True):
+            report_id = digest(review)
+            record_id = digest(record)
+            reports[report_id] = dict(review)
+            for tag in review["bullet_tags"]:
+                event = {
+                    "rule_identity": identities[tag["id"]],
+                    "bullet_id": tag["id"],
+                    "instance_id": review["instance_id"],
+                    "tag": tag["tag"],
+                    "attribution": tag.get("attribution"),
+                    "reflection_sha256": report_id,
+                    "checker_context_sha256": context,
+                    "training_record_sha256": record_id,
+                }
+                events[digest(event)] = event
+        active = set(identities.values())
+        events = {key: value for key, value in events.items() if value["rule_identity"] in active}
+        used_reports = {event["reflection_sha256"] for event in events.values()}
+        used_contexts = {event["checker_context_sha256"] for event in events.values()}
+        return {
+            "schema_version": 1,
+            "source": "validated_training_reflector_feedback",
+            "interpretation": "Earlier Reflector assessments with their context and explanations, not fixed conclusions. Repeated observations may disagree. Legacy counters may predate recorded explanations.",
+            "counting_policy": "Preserve the first helpful/harmful attribution per rule text and training pair; count neutral once per pair separately. History retains distinct observations without recounting them.",
+            "events": events,
+            "reports": {key: reports[key] for key in sorted(used_reports)},
+            "contexts": {key: contexts[key] for key in sorted(used_contexts)},
+        }
 
     def _persist(self) -> None:
         if self.path is None:
             return
         self.path.parent.mkdir(parents=True, exist_ok=True)
         payload = {
-            "schema_version": 1,
+            "schema_version": 2,
             "counts": self.snapshot(),
             "observations": self._observations,
+            "neutral_observations": {key: sorted(value) for key, value in self._neutral_observations.items()},
+            "history": self._history,
+            "reports": self._reports,
+            "contexts": self._contexts,
         }
         temporary = self.path.with_suffix(self.path.suffix + ".tmp")
         temporary.write_text(
@@ -151,7 +244,7 @@ class GlobalPlaybookCounters:
 
     def snapshot(self) -> dict[str, dict[str, int]]:
         return {
-            key: {"helpful": value[0], "harmful": value[1]}
+            key: {"helpful": value[0], "harmful": value[1], "neutral": value[2]}
             for key, value in sorted(self._counts.items())
         }
 
@@ -202,9 +295,11 @@ class TwoStagePlaybookProposer:
         global_counter_path: Path | None = None,
         review_validator: Callable[..., dict[str, Any]] = validate_reflector_review,
         visible_renderer: Callable[[RejectPlaybook], str] | None = None,
+        curator_with_history: Callable[..., Mapping[str, Any]] | None = None,
     ) -> None:
         self.reflector = reflector
         self.curator = curator
+        self.curator_with_history = curator_with_history
         self.token_counter = token_counter
         self.semantic_refiner = semantic_refiner
         self.maximum_tokens = maximum_tokens
@@ -244,7 +339,12 @@ class TwoStagePlaybookProposer:
             counted, pending_counter_events = self.global_counters.apply_reviews(
                 parent, reviews
             )
-            operations = self.curator(counted, reviews, records)
+            feedback = self.global_counters.feedback_for(parent, reviews, records)
+            operations = (
+                self.curator_with_history(counted, reviews, records, feedback)
+                if self.curator_with_history is not None
+                else self.curator(counted, reviews, records)
+            )
             proposed = apply_curator_operations(counted, operations)
             proposed = validate_curator_proposal(counted, proposed)
             proposed, report = manage_playbook_length(
@@ -261,7 +361,7 @@ class TwoStagePlaybookProposer:
             raise
         # Only a fully valid proposal contributes global evidence. Failed Agent
         # attempts and invalid Curator/Refiner output cannot increment counters.
-        self.global_counters.commit(counted, pending_counter_events)
+        self.global_counters.commit(counted, pending_counter_events, feedback=feedback)
         proposed = self.global_counters.hydrate(proposed)
         self.successful_proposals += 1
         return {"rules": proposed.serialize()}

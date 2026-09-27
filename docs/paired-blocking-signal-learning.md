@@ -38,12 +38,22 @@ new report fields and does not move evidence out of the complete batch.
 Pair score (+1 correct ordering / -1 inverse / 0 tie), binary ANY-trigger gate,
 no-Level output, bullet IDs, helpful/harmful counters, ADD/UPDATE/MERGE/REMOVE,
 32-token preference and 64-token ceiling remain unchanged. No confidence gate,
-risk-analysis field, forced insight count, historical-memory ledger, or extra
+risk-analysis field, forced insight count, or extra
 Agent stage has been added. Curator self-check is a prompt-level reasoning step,
 not a new Host validator or another Checker execution. Existing no-repository
 and unpaired scientific contracts are unchanged. All Codex-backed role
 dispatchers now require task-scoped SIF execution, including repository-free
 roles; mini-swe execution is unchanged.
+
+Training feedback now additionally counts neutral tags and retains Reflector
+explanations and checklist contexts globally, including valid proposals rejected
+by GEPA. Curator receives a required history index and can read the complete
+historical feedback relevant to a rule. Checker does not receive it. Validation
+results and Curator conclusions do not enter this history. See
+[`engineering-contracts.md`](engineering-contracts.md#global-training-feedback)
+for deduplication and backward-compatible counting semantics. Frozen earlier
+runs retain their original authority; this change requires a newly prepared
+execution/recovery configuration, not an unannounced mutation of old inputs.
 
 ## Evidence path
 

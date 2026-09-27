@@ -473,7 +473,7 @@ def test_two_stage_proposer_counters_are_global_across_branches() -> None:
     assert (final.helpful, final.harmful) == (1, 1)
     assert seen == [(1, 0), (1, 1)]
     assert proposer.global_counters.snapshot() == {
-        "it is a placeholder.": {"helpful": 1, "harmful": 1}
+        "it is a placeholder.": {"helpful": 1, "harmful": 1, "neutral": 0}
     }
 
 
@@ -514,7 +514,7 @@ def test_failed_proposal_does_not_commit_global_counters() -> None:
             ["rules"],
         )
     assert proposer.global_counters.snapshot() == {
-        "it is a placeholder.": {"helpful": 0, "harmful": 0}
+        "it is a placeholder.": {"helpful": 0, "harmful": 0, "neutral": 0}
     }
 
 

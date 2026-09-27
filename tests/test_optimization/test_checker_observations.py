@@ -209,6 +209,15 @@ def test_checker_replay_config_reuses_completed_proposal_without_new_learning():
     assert authority["replacement_runtime_config"]["replacement_sha256"] == file_hash(config_path)
     assert authority["replacement_prompt_bundle"]["replacement_sha256"] == file_hash(Path(new["inputs"]["prompt_bundle"]))
     for name, sha in authority["execution_support_hashes"].items():
-        assert file_hash(Path(name)) == sha
+        # This stopped replay is a historical authority, not the current
+        # execution configuration. Check its frozen source revision rather
+        # than requiring future protocol fixes to have the old file hashes.
+        import hashlib
+        import subprocess
+        original = subprocess.run(
+            ["git", "show", f"b8eba8f51a67d38e5a1f221fe638cfd420e3b8cf:{name}"],
+            check=True, capture_output=True,
+        ).stdout
+        assert hashlib.sha256(original).hexdigest() == sha
     assert new["hpc"]["cpus_per_task"] == 1 and new["hpc"]["mem"] == "4G"
     assert new["hpc"]["max_running_array_tasks"] == 12
