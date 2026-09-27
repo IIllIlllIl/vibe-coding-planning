@@ -64,7 +64,7 @@ def test_codex_cli_uses_ephemeral_read_only_stdin_and_parses_final_json(
         )
 
     monkeypatch.setattr(codex_cli_runtime.subprocess, "run", fake_run)
-    result, trajectory = codex_cli_runtime.run_codex_json_agent(
+    result, trajectory = codex_cli_runtime._run_codex_json_agent(
         model_config=_model_with_auth(tmp_path),
         working_directory=tmp_path,
         attempt_dir=tmp_path / "attempt",
@@ -107,7 +107,7 @@ def test_codex_cli_preserves_failed_event_trajectory(
         ),
     )
     with pytest.raises(codex_cli_runtime.CodexCLIError) as caught:
-        codex_cli_runtime.run_codex_json_agent(
+        codex_cli_runtime._run_codex_json_agent(
             model_config=_model_with_auth(tmp_path),
             working_directory=tmp_path,
             attempt_dir=tmp_path / "attempt",
@@ -129,7 +129,7 @@ def test_codex_cli_rejects_version_mismatch_before_inference(
 
     monkeypatch.setattr(codex_cli_runtime.subprocess, "run", fake_run)
     with pytest.raises(codex_cli_runtime.CodexCLIError, match="expected Codex CLI"):
-        codex_cli_runtime.run_codex_json_agent(
+        codex_cli_runtime._run_codex_json_agent(
             model_config={
                 **_model_with_auth(tmp_path),
                 "codex_version": "0.155.1",
@@ -143,12 +143,21 @@ def test_codex_cli_rejects_version_mismatch_before_inference(
     assert calls == [["codex", "--version"]]
 
 
-def test_codex_cli_requires_exact_evidence_receipt(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+@pytest.mark.parametrize("agent_field", [None, "truncated-model-hash"])
+def test_codex_cli_records_host_hash_without_agent_transcription_or_output_repair(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, agent_field: str | None
 ) -> None:
     manifest = tmp_path / "manifest.json"
     manifest.write_text('{"files":["pair.json"]}\n', encoding="utf-8")
-    receipt = hashlib.sha256(manifest.read_bytes()).hexdigest()
+    original_bytes = manifest.read_bytes()
+    response = {"reasoning": "no change", "operations": []}
+    if agent_field is not None:
+        response["evidence_receipt_sha256"] = agent_field
+    raw_response = json.dumps(response)
+    event = {"type": "item.completed", "item": {
+        "type": "command_execution", "command": "cat manifest.json",
+        "exit_code": 0, "aggregated_output": original_bytes.decode(),
+    }}
 
     def fake_run(command, **kwargs):
         if command[1:] == ["--version"]:
@@ -156,62 +165,41 @@ def test_codex_cli_requires_exact_evidence_receipt(
         if command[1] == "sandbox":
             return SimpleNamespace(returncode=0, stdout="", stderr="")
         output = Path(command[command.index("--output-last-message") + 1])
-        output.write_text(
-            json.dumps(
-                {
-                    "reasoning": "no change",
-                    "operations": [],
-                    "evidence_receipt_sha256": receipt,
-                }
-            ),
-            encoding="utf-8",
-        )
-        assert "evidence_receipt_sha256" in kwargs["input"]
-        return SimpleNamespace(returncode=0, stdout="", stderr="")
+        output.write_text(raw_response, encoding="utf-8")
+        assert "evidence_receipt_sha256" not in kwargs["input"]
+        assert "Operational evidence receipt" not in kwargs["input"]
+        return SimpleNamespace(returncode=0, stdout=json.dumps(event) + "\n", stderr="")
 
     monkeypatch.setattr(codex_cli_runtime.subprocess, "run", fake_run)
-    output, trajectory = codex_cli_runtime.run_codex_json_agent(
-        model_config={
-            **_model_with_auth(tmp_path),
-            "codex_version": "0.155.1",
-        },
-        working_directory=tmp_path,
-        attempt_dir=tmp_path / "attempt",
-        system="system",
-        user="user",
-        task="task",
+    output, trajectory = codex_cli_runtime._run_codex_json_agent(
+        model_config=_model_with_auth(tmp_path),
+        working_directory=tmp_path, attempt_dir=tmp_path / "attempt",
+        system="system", user="user", task="task",
         evidence_manifest_path=manifest,
     )
-    assert output == {"reasoning": "no change", "operations": []}
-    assert trajectory[-1]["role"] == "host_evidence_receipt"
-    assert trajectory[-1]["content"]["matched"] is True
+    assert output == response  # Even unexpected fields are not silently removed.
+    assert (tmp_path / "attempt/codex_final_response.json").read_text() == raw_response
+    assert manifest.read_bytes() == original_bytes
+    metadata = next(x["content"] for x in trajectory if x["role"] == "host_evidence_manifest")
+    assert metadata == {
+        "manifest": str(manifest.resolve()),
+        "sha256": hashlib.sha256(original_bytes).hexdigest(),
+        "computed_by": "host", "proves_agent_read": False,
+    }
+    assert trajectory[3]["content"]["events"] == [event]
+    assert trajectory[3]["content"]["effective_prompt"] == "system\n\nTask:\ntask\n\nInput:\nuser\n"
+    assert trajectory[-1]["content"] == raw_response
 
 
-def test_codex_cli_treats_missing_evidence_receipt_as_operational_failure(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    manifest = tmp_path / "manifest.json"
-    manifest.write_text("{}\n", encoding="utf-8")
-
-    def fake_run(command, **_kwargs):
-        if command[1:] == ["--version"]:
-            return SimpleNamespace(returncode=0, stdout="codex-cli 0.155.1\n", stderr="")
-        if command[1] == "sandbox":
-            return SimpleNamespace(returncode=0, stdout="", stderr="")
-        output = Path(command[command.index("--output-last-message") + 1])
-        output.write_text('{"reasoning":"none","operations":[]}', encoding="utf-8")
-        return SimpleNamespace(returncode=0, stdout="", stderr="")
-
-    monkeypatch.setattr(codex_cli_runtime.subprocess, "run", fake_run)
-    with pytest.raises(codex_cli_runtime.CodexEvidenceAccessError):
-        codex_cli_runtime.run_codex_json_agent(
-            model_config=_model_with_auth(tmp_path),
-            working_directory=tmp_path,
-            attempt_dir=tmp_path / "attempt",
-            system="system",
-            user="user",
-            task="task",
-            evidence_manifest_path=manifest,
+def test_codex_cli_missing_manifest_fails_before_inference(tmp_path, monkeypatch):
+    def unexpected_run(*args, **kwargs):
+        pytest.fail("Missing evidence must fail before invoking Codex")
+    monkeypatch.setattr(codex_cli_runtime.subprocess, "run", unexpected_run)
+    with pytest.raises(ValueError, match="Codex evidence manifest is missing"):
+        codex_cli_runtime._run_codex_json_agent(
+            model_config=_model(), working_directory=tmp_path,
+            attempt_dir=tmp_path / "attempt", system="system", user="user",
+            task="task", evidence_manifest_path=tmp_path / "missing.json",
         )
 
 
@@ -242,7 +230,7 @@ def test_parallel_codex_calls_use_distinct_transient_homes(
     def invoke(index: int):
         work = tmp_path / f"work-{index}"
         work.mkdir()
-        return codex_cli_runtime.run_codex_json_agent(
+        return codex_cli_runtime._run_codex_json_agent(
             model_config=_model(auth_file),
             working_directory=work,
             attempt_dir=tmp_path / f"attempt-{index}",
@@ -284,7 +272,7 @@ def test_codex_model_contract_keeps_checker_on_miniswe() -> None:
         )
 
 
-def test_evidence_curator_dispatches_to_codex_without_apptainer(
+def test_evidence_curator_dispatches_to_task_scoped_codex_sif(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     captured = {}
@@ -294,6 +282,7 @@ def test_evidence_curator_dispatches_to_codex_without_apptainer(
         return {"reasoning": "none", "operations": []}, []
 
     monkeypatch.setattr(codex_cli_runtime, "run_codex_json_agent", fake_codex)
+    monkeypatch.setattr(playbook_runtime, "_codex_evidence_sif", lambda _config: tmp_path / "evidence.sif")
     result, _ = playbook_runtime.run_evidence_curator(
         model_config=_model(),
         reflection_config={},
@@ -306,7 +295,10 @@ def test_evidence_curator_dispatches_to_codex_without_apptainer(
     )
     assert result["operations"] == []
     assert captured["working_directory"] == tmp_path
-    assert str(tmp_path.resolve()) in captured["user"]
+    assert "Evidence: /evidence" in captured["user"]
+    assert str(tmp_path.resolve()) not in captured["user"]
+    assert captured["container"].evidence_dir == tmp_path
+    assert captured["container"].repository_dir is None
     assert captured["attempt_dir"] == tmp_path / "attempt"
     assert captured["evidence_manifest_path"] == tmp_path / "manifest.json"
 
@@ -523,9 +515,38 @@ def test_ace_paired_reflector_worker_forwards_pair_id_to_runtime(
     assert captured["prompt_values"]["pair_instance_id"] == pair_id
     assert f"<pair_instance_id>{pair_id}</pair_instance_id>" in captured["rendered"]
     assert f'"instance_id": "{pair_id}"' in captured["rendered"]
+    assert "recorded implementation and Checker behavior" in captured["task"]
+    assert "every active concern" not in captured["task"]
 
 
-def test_worker_records_missing_codex_evidence_receipt_as_operational(
+def test_ace_curator_worker_task_matches_complete_evidence_learning(tmp_path, monkeypatch):
+    config = Path('configs/gepa_verified_paired_blocking_it9_smoke24_sol6_high_v2_20260927.yaml').resolve()
+    playbook = RejectPlaybook((PlaybookBullet('plan-00001', 'The Plan is a placeholder.'),))
+    captured = {}
+    response = {'reasoning': 'No supported change.', 'operations': []}
+
+    def fake_curator(**kwargs):
+        captured.update(kwargs)
+        return response, [{'role': 'assistant', 'content': json.dumps(response)}]
+
+    monkeypatch.setattr(playbook_worker, 'run_evidence_curator', fake_curator)
+    monkeypatch.setattr(playbook_worker.litellm, 'token_counter', lambda **kwargs: 6)
+    manifest = tmp_path / 'task.json'
+    manifest.write_text(json.dumps({
+        'role': 'curator', 'fingerprint': 'curator-test', 'task_index': 0,
+        'validation_playbook': playbook.serialize(), 'evidence_dir': str(tmp_path),
+        'prompt_values': {'counted_internal_playbook': playbook.serialize(), 'case_count': 24},
+    }))
+    assert playbook_worker.run_task(
+        config_path=config, manifest_path=manifest, output_path=tmp_path / 'output.json',
+        attempt_dir=tmp_path / 'attempt',
+    ) == 0
+    assert 'complete reflection batch' in captured['task']
+    assert 'recorded implementation evidence' in captured['task']
+    assert json.loads((tmp_path / 'output.json').read_text())['agent_output'] == response
+
+
+def test_worker_records_codex_execution_failure_as_operational(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     config_path = Path(
@@ -534,7 +555,7 @@ def test_worker_records_missing_codex_evidence_receipt_as_operational(
     playbook = RejectPlaybook(
         (PlaybookBullet("plan-00001", "The Plan is a placeholder."),)
     )
-    pair_id = "pair-missing-evidence-receipt"
+    pair_id = "pair-execution-failure"
     evidence_dir = tmp_path / "evidence"
     evidence_dir.mkdir()
     manifest_path = tmp_path / "manifest.json"
@@ -542,7 +563,7 @@ def test_worker_records_missing_codex_evidence_receipt_as_operational(
         json.dumps(
             {
                 "role": "paired_repo_reflector",
-                "fingerprint": "test-reflector-receipt",
+                "fingerprint": "test-reflector-execution-failure",
                 "task_index": 0,
                 "instance_id": pair_id,
                 "validation_playbook": playbook.serialize(),
@@ -568,20 +589,18 @@ def test_worker_records_missing_codex_evidence_receipt_as_operational(
         encoding="utf-8",
     )
 
-    def fail_evidence_receipt(**_kwargs):
-        error = codex_cli_runtime.CodexEvidenceAccessError(
-            "Codex did not return the exact mandatory evidence receipt"
-        )
+    def fail_execution(**_kwargs):
+        error = codex_cli_runtime.CodexCLIError("Codex CLI exited with status 7")
         error.trajectory = [
             {
-                "role": "host_evidence_receipt",
-                "content": {"matched": False},
+                "role": "codex_cli",
+                "content": {"returncode": 7},
             }
         ]
         raise error
 
     monkeypatch.setattr(
-        playbook_worker, "run_repository_reflector", fail_evidence_receipt
+        playbook_worker, "run_repository_reflector", fail_execution
     )
     output_path = tmp_path / "output.json"
     attempt_dir = tmp_path / "attempt"
@@ -597,11 +616,11 @@ def test_worker_records_missing_codex_evidence_receipt_as_operational(
     failure = json.loads(output_path.read_text(encoding="utf-8"))
     assert failure["failure_stage"] == "agent_execution"
     assert failure["failure_kind"] == "operational"
-    assert failure["error_type"] == "CodexEvidenceAccessError"
+    assert failure["error_type"] == "CodexCLIError"
     trajectory = json.loads(
         (attempt_dir / "agent_trajectory.json").read_text(encoding="utf-8")
     )
-    assert trajectory["messages"][0]["content"]["matched"] is False
+    assert trajectory["messages"][0]["content"]["returncode"] == 7
 
 
 def test_ace_codex_prompt_omits_legacy_learning_constraints() -> None:

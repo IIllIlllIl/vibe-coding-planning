@@ -100,22 +100,43 @@ construction (mocking only containers and models). Evidence Agents default to
 the shared `container.sif_cache_dir`; old `reflection.evidence_*` settings are
 supported overrides. Validate required environment settings before Agent waves.
 
-An Agent role may select the native `codex_cli` executor instead of the
-mini-swe/Apptainer model runtime. Native Codex runs are ephemeral and
+An Agent role may select the `codex_cli` executor instead of mini-swe. The
+production Codex role entry point requires task-scoped SIF execution; it must
+never fall back to Host execution. Codex runs are ephemeral and
 read-only, receive prompts over stdin, ignore user configuration and repository
 instructions, disable project-document injection, and persist both JSONL
 events and the terminal message before Host validation. Slurm owns the process
 wall-time; do not add a second Host timeout. Subscription authentication stays
-in the user's private remote Codex state. A repository-aware native Codex Agent
-uses the same disposable frozen-base worktree and prepared history bundle as
-the mini-swe Agent. Its current source-audit record covers commands routed
-through the Apptainer environment, not every native Codex command; this
-limitation must be audited in smoke before formal use.
+in the user's private remote Codex state. Reflector uses the case SIF and the
+same disposable frozen-base worktree/prepared history bundle as mini-swe;
+the repository and its own pair evidence are read-only mounts at `/testbed`
+and `/evidence`. Repository-free roles use the prepared evidence SIF with only
+their own evidence bundle at `/evidence`; a missing SIF fails without pulling.
+Disable automatic home/cwd/hostfs/site bind paths and remove inherited
+Apptainer/Singularity mount/environment overrides. Never bind an entire run
+root, scratch, home, staging tree, or attempt directory. Reject symlinks in
+evidence bundles. Each call owns temporary HOME, Codex state, tmp and output
+mounts; only the raw final response is copied back, byte-for-byte, before
+cleanup. Raw output symlinks are rejected. Version, sandbox preflight and
+inference all run inside the same SIF boundary. A no-model visibility check
+also confirms that `/evidence/manifest.json` is readable while the original
+Host evidence directory, its parent and the attempt directory are hidden.
+Record the checks in the preflight trajectory; failure aborts before inference.
+Keep the Codex read-only
+sandbox enabled; SIF isolation is not a reason to bypass it.
+
+Codex JSONL tool events remain the native command audit. The existing
+`source_access.jsonl` only covers commands routed through repository preparation,
+not native Codex tool commands; SIF file isolation does not add an HTTP filter
+or turn those partial logs into a complete source-access audit. Verify actual
+mount isolation and nested Codex sandbox compatibility on a compute node
+in the migrated smoke before inference. Local mocked tests are not that proof.
 
 Native Codex under Slurm must use an exact, compute-node-tested CLI version.
 Codex CLI 0.156.1 cannot build its bubblewrap sandbox when Slurm provides the
 private nested `/tmp/<job-id>` mount used on Iris; the current verified pin is
-0.155.1. Concurrent native Codex processes must not share mutable
+0.155.1 for the previous Host runtime. The SIF runtime must pass its own
+compute-node preflight with that pin. Concurrent Codex processes must not share mutable
 `$CODEX_HOME/tmp` or `shell_snapshots`: 12-way Slurm execution exposed cleanup
 races that removed another process's sandbox launcher. Each Agent therefore
 receives a distinct temporary `CODEX_HOME`; only `auth.json` is copied into it
@@ -125,12 +146,15 @@ retained experiment artifacts.
 
 Before inference, the worker checks the exact CLI version and runs a read-only
 sandbox probe using the same isolated environment as the real call.
-Evidence-backed Codex roles must also read their immutable evidence manifest
-and return its exact SHA-256 as a transport receipt. A failed preflight or
-missing/mismatched receipt is an operational failure eligible for Agent retry,
-never an empty scientific Reflection or Curator decision. Preserve the raw
-terminal response and receipt record, and do not disable the Codex sandbox or
-let the Host repair semantic Agent output. A recovery after this failure may
+Evidence-backed Codex roles must read their immutable evidence manifest and
+required evidence files. The Host computes the manifest SHA-256 directly and
+records it separately from Agent output as `host_evidence_manifest`; this proves
+file identity, not Agent reading or comprehension. Preserve the effective prompt,
+raw tool events, and terminal response for evidence-access audit. Do not require
+the model to transcribe a hash or silently remove fields from its scientific
+output. A failed preflight or invalid Agent output remains an operational failure
+eligible for retry, never an empty scientific decision. Do not disable the Codex
+sandbox or let the Host repair semantic Agent output. A recovery after failure may
 import compatible completed Checker outputs, but must restart at the Reflector
 boundary and exclude the invalid Reflector and Curator artifacts.
 

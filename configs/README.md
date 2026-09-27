@@ -15,14 +15,14 @@ the shared supervisor supplies canonical storage paths.
 ## Experiment Inventory
 
 Current paired blocking-signal learning authority:
-`prompts/offline_gepa_paired_binary_ace_codex_v5_blocking_signals_20260926.yaml`
+`prompts/offline_gepa_paired_binary_ace_codex_v7_consolidated_goal_20260927.yaml`
 and `frozen_swe_verified_plan_pairs/20260926_blocking_signal_clean127_v1/selection.json`.
 The new Ref/Cur target is an implementation-threatening failure condition, not
 general Plan completeness. Checker is unchanged from v4; full recorded Checker
 trajectories now reach Reflector evidence. See
 [`../docs/paired-blocking-signal-learning.md`](../docs/paired-blocking-signal-learning.md)
 for exact input and legacy-checkpoint boundaries. The one-proposal diagnostic
-uses `gepa_verified_paired_blocking_it9_smoke24_sol6_high_v1_20260927.yaml`
+uses `gepa_verified_paired_blocking_it9_smoke24_sol6_high_v2_20260927.yaml`
 and its matching supervisor YAML. Its frozen iteration-9 parent and complete
 Checker outputs are under
 `frozen_swe_verified_plan_pairs/20260927_iteration9_blocking_signal_smoke_v1/`.
@@ -396,8 +396,13 @@ raw-evidence policy, and user authorization. Completed configs are provenance,
 not authorization to resume, extend, or relaunch them.
 
 Current blocking-signal diagnostic (prepared, not launched):
-`gepa_verified_paired_blocking_it9_smoke24_sol6_high_v1_20260927.yaml`, with
+`gepa_verified_paired_blocking_it9_smoke24_sol6_high_v2_20260927.yaml`, with
 the matching supervisor YAML and
 `frozen_swe_verified_plan_pairs/20260927_iteration9_blocking_signal_smoke_v1/`.
 This imports only the original iteration-9 C2 minibatch Checker slots, runs new
 Ref/Cur with GPT-6 Sol/high, and uses four exposed development-validation pairs.
+It restarts all Ref/Cur with v7 consolidated-goal prompts, task-scoped SIF
+execution and Host-only manifest hash metadata. Every Codex worker validates
+its SIF visibility and nested sandbox before inference; compute-node success
+has not yet been observed. The v1 frozen config, prompt and artifacts remain
+unchanged. The v6 prompt draft is superseded and is not a launched authority.

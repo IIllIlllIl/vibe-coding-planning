@@ -2,7 +2,8 @@
 
 from __future__ import annotations
 
-from contextlib import contextmanager
+from contextlib import contextmanager, nullcontext
+from dataclasses import dataclass
 import hashlib
 import json
 import os
@@ -23,8 +24,77 @@ class CodexCLIError(RuntimeError):
     """Codex CLI ended without a usable final response."""
 
 
-class CodexEvidenceAccessError(CodexCLIError):
-    """Codex completed without proving access to mandatory local evidence."""
+@dataclass(frozen=True)
+class CodexSIFExecution:
+    """Only the current role's inputs are mounted into its SIF session."""
+
+    sif_path: Path
+    evidence_dir: Path
+    repository_dir: Path | None = None
+    masked_paths: tuple[str, ...] = ("/opt/miniconda3/pkgs",)
+
+    @property
+    def cwd(self) -> Path:
+        return Path("/testbed" if self.repository_dir is not None else "/evidence")
+
+    @contextmanager
+    def launch(self, model_config, environment, output_dir):
+        sif = self.sif_path.resolve(strict=True)
+        binary_raw = _codex_binary(model_config)
+        binary = Path(shutil.which(binary_raw) or binary_raw).resolve(strict=True)
+        evidence = self.evidence_dir.resolve(strict=True)
+        if not sif.is_file() or not binary.is_file() or not evidence.is_dir():
+            raise CodexCLIError("Codex SIF, executable, or evidence is missing")
+        # Evidence bundles are generated regular files. Never mount a symlink
+        # that can resolve to unrelated input under another visible mount.
+        if any(path.is_symlink() for path in evidence.rglob("*")):
+            raise CodexCLIError("Codex evidence bundle contains a symbolic link")
+        with tempfile.TemporaryDirectory(prefix="vibe-codex-sif-") as temporary:
+            root = Path(temporary)
+            for name in ("tmp", "home", "output", "mask"):
+                (root / name).mkdir(mode=0o700)
+            prefix = [
+                "apptainer", "exec", "--cleanenv", "--containall", "--no-home",
+                "--no-mount", "hostfs,bind-paths,cwd", "--pwd", str(self.cwd),
+                "--env", "HOME=/agent-home,CODEX_HOME=/codex-state,TMPDIR=/tmp",
+            ]
+            mounts = [
+                (binary.parent, "/opt/vibe-codex/bin", "ro"),
+                (evidence, "/evidence", "ro"),
+                (Path(environment["CODEX_HOME"]), "/codex-state", "rw"),
+                (root / "home", "/agent-home", "rw"),
+                (root / "tmp", "/tmp", "rw"),
+                (root / "tmp", "/var/tmp", "rw"),
+                (root / "output", "/agent-output", "rw"),
+            ]
+            if self.repository_dir is not None:
+                mounts.append((self.repository_dir.resolve(strict=True), "/testbed", "ro"))
+            for target in self.masked_paths:
+                if not target.startswith("/opt/") or ".." in Path(target).parts:
+                    raise ValueError("Codex masked paths must be under /opt")
+                mounts.append((root / "mask", target, "ro"))
+            for source, target, mode in mounts:
+                if any(char in str(source) for char in (",", ":", "\n")):
+                    raise ValueError("Codex mount source contains an unsupported delimiter")
+                prefix.extend(["--bind", f"{source}:{target}:{mode}"])
+            prefix.append(str(sif))
+            # --cleanenv does not neutralize launcher control variables. Do
+            # not inherit extra host binds or environment injection overrides.
+            launch_env = {
+                key: value for key, value in environment.items()
+                if not key.startswith(("APPTAINER", "SINGULARITY"))
+            }
+            container_model = dict(model_config)
+            container_model["codex_binary"] = "/opt/vibe-codex/bin/" + binary.name
+            try:
+                yield prefix, launch_env, container_model, root / "output"
+            finally:
+                raw_output = root / "output" / "codex_final_response.json"
+                if raw_output.is_symlink():
+                    raise CodexCLIError("Codex final response must be a regular file, not a symlink")
+                if raw_output.is_file():
+                    # Copy bytes verbatim, never repair scientific output.
+                    shutil.copyfile(raw_output, output_dir / raw_output.name)
 
 
 def _codex_binary(model_config: Mapping[str, Any]) -> str:
@@ -70,12 +140,14 @@ def _runtime_preflight(
     *,
     working_directory: Path,
     environment: Mapping[str, str],
+    command_prefix: list[str] | None = None,
+    hidden_host_paths: tuple[Path, ...] = (),
 ) -> list[dict[str, Any]]:
     """Fail before inference when the pinned CLI or its sandbox is unusable."""
     binary = _codex_binary(model_config)
     checks: list[dict[str, Any]] = []
     version = subprocess.run(
-        [binary, "--version"],
+        [*(command_prefix or []), binary, "--version"],
         text=True,
         capture_output=True,
         check=False,
@@ -106,6 +178,7 @@ def _runtime_preflight(
 
     sandbox = subprocess.run(
         [
+            *(command_prefix or []),
             binary,
             "sandbox",
             "--permission-profile",
@@ -136,6 +209,32 @@ def _runtime_preflight(
             {"role": "host_codex_preflight", "content": {"checks": checks}}
         ]
         raise error
+    if hidden_host_paths:
+        # Test actual visibility inside the same container, without a model
+        # call or writes to scientific inputs. Paths are argv, not shell text.
+        isolation = subprocess.run(
+            [
+                *(command_prefix or []), "/bin/sh", "-c",
+                'test -r /evidence/manifest.json || exit 10; '
+                'for candidate in "$@"; do '
+                'if test -e "$candidate"; then '
+                'printf "Unexpected host path visible: %s\\n" "$candidate"; exit 11; '
+                'fi; done; printf "SIF inputs visible; host paths hidden\\n"',
+                "sif-isolation-probe",
+                *(str(path.resolve()) for path in hidden_host_paths),
+            ],
+            text=True, capture_output=True, check=False, env=dict(environment),
+        )
+        checks.append({
+            "check": "task_scoped_sif_visibility", "returncode": isolation.returncode,
+            "stdout": isolation.stdout, "stderr": isolation.stderr,
+        })
+        if isolation.returncode != 0:
+            error = CodexCLIError("Codex task-scoped SIF visibility preflight failed")
+            error.trajectory = [  # type: ignore[attr-defined]
+                {"role": "host_codex_preflight", "content": {"checks": checks}}
+            ]
+            raise error
     return checks
 
 
@@ -180,7 +279,14 @@ def _codex_command(
     ]
 
 
-def run_codex_json_agent(
+def run_codex_json_agent(*, container: CodexSIFExecution, **kwargs):
+    """Production role entry point: a SIF boundary is mandatory, never fallback."""
+    if not isinstance(container, CodexSIFExecution):
+        raise ValueError("Codex playbook Agents require task-scoped SIF execution")
+    return _run_codex_json_agent(container=container, **kwargs)
+
+
+def _run_codex_json_agent(
     *,
     model_config: Mapping[str, Any],
     working_directory: Path,
@@ -189,6 +295,7 @@ def run_codex_json_agent(
     user: str,
     task: str,
     evidence_manifest_path: Path | None = None,
+    container: CodexSIFExecution | None = None,
 ) -> tuple[dict[str, Any], list[dict[str, Any]]]:
     """Run one ephemeral read-only Codex session and parse its final JSON.
 
@@ -198,45 +305,53 @@ def run_codex_json_agent(
     """
     if not working_directory.is_dir():
         raise ValueError("Codex working directory is missing")
-    expected_receipt: str | None = None
-    receipt_instruction = ""
+    manifest_record: dict[str, Any] | None = None
     if evidence_manifest_path is not None:
         if not evidence_manifest_path.is_file():
             raise ValueError("Codex evidence manifest is missing")
-        expected_receipt = hashlib.sha256(evidence_manifest_path.read_bytes()).hexdigest()
-        receipt_instruction = (
-            "\n\nOperational evidence receipt:\n"
-            f"Before analysis, read {evidence_manifest_path.resolve()}. Compute the "
-            "lowercase SHA-256 of the exact file bytes and include it in the top-level "
-            'JSON field "evidence_receipt_sha256". This field proves local evidence '
-            "access and is removed by the Host before scientific validation."
-        )
+        manifest_record = {
+            "manifest": str(evidence_manifest_path.resolve()),
+            "sha256": hashlib.sha256(evidence_manifest_path.read_bytes()).hexdigest(),
+            "computed_by": "host",
+            "proves_agent_read": False,
+        }
     attempt_dir.mkdir(parents=True, exist_ok=True)
     output_path = attempt_dir / "codex_final_response.json"
     prompt = (
         f"{system.strip()}\n\n"
-        f"Task:\n{task.strip()}{receipt_instruction}\n\n"
+        f"Task:\n{task.strip()}\n\n"
         f"Input:\n{user.strip()}\n"
     )
     with _isolated_codex_environment(model_config) as environment:
-        preflight_checks = _runtime_preflight(
-            model_config,
-            working_directory=working_directory,
-            environment=environment,
+        # Bare transport remains available for isolated CLI unit tests. All
+        # playbook role dispatchers must supply the SIF execution boundary.
+        transport = (
+            container.launch(model_config, environment, attempt_dir)
+            if container is not None
+            else nullcontext(([], environment, model_config, attempt_dir))
         )
-        command = _codex_command(
-            model_config,
-            working_directory=working_directory,
-            output_path=output_path,
-        )
-        completed = subprocess.run(
-            command,
-            input=prompt,
-            text=True,
-            capture_output=True,
-            check=False,
-            env=environment,
-        )
+        with transport as (prefix, launch_env, effective_model, _output_dir):
+            effective_cwd = container.cwd if container is not None else working_directory
+            effective_output = (
+                Path("/agent-output/codex_final_response.json")
+                if container is not None else output_path
+            )
+            preflight_checks = _runtime_preflight(
+                effective_model, working_directory=effective_cwd,
+                environment=launch_env, command_prefix=prefix,
+                hidden_host_paths=(
+                    (container.evidence_dir, container.evidence_dir.parent, attempt_dir)
+                    if container is not None else ()
+                ),
+            )
+            command = [*prefix, *_codex_command(
+                effective_model, working_directory=effective_cwd,
+                output_path=effective_output,
+            )]
+            completed = subprocess.run(
+                command, input=prompt, text=True, capture_output=True,
+                check=False, env=launch_env,
+            )
     events: list[dict[str, Any]] = []
     malformed_events: list[str] = []
     for line in completed.stdout.splitlines():
@@ -264,9 +379,13 @@ def run_codex_json_agent(
                 "stderr": completed.stderr,
                 "ephemeral": True,
                 "sandbox": "read-only",
+                "effective_prompt": prompt,
+                "execution_boundary": "task_scoped_sif" if container else "direct_cli",
             },
         },
     ]
+    if manifest_record is not None:
+        trajectory.append({"role": "host_evidence_manifest", "content": manifest_record})
     if completed.returncode != 0:
         error = CodexCLIError(
             f"Codex CLI exited with status {completed.returncode}: "
@@ -287,21 +406,4 @@ def run_codex_json_agent(
         error.trajectory = trajectory  # type: ignore[attr-defined]
         raise error from exc
     trajectory.append({"role": "assistant", "content": raw})
-    if expected_receipt is not None:
-        observed_receipt = output.pop("evidence_receipt_sha256", None)
-        receipt_record = {
-            "manifest": str(evidence_manifest_path.resolve()),
-            "expected_sha256": expected_receipt,
-            "observed_sha256": observed_receipt,
-            "matched": observed_receipt == expected_receipt,
-        }
-        trajectory.append(
-            {"role": "host_evidence_receipt", "content": receipt_record}
-        )
-        if observed_receipt != expected_receipt:
-            error = CodexEvidenceAccessError(
-                "Codex did not return the exact mandatory evidence receipt"
-            )
-            error.trajectory = trajectory  # type: ignore[attr-defined]
-            raise error
     return output, trajectory

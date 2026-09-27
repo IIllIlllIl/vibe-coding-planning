@@ -155,6 +155,11 @@ def run_task(
                 )
             if role == "paired_repo_reflector":
                 reflector_task = (
+                    "Analyze each Plan and the recorded implementation and Checker "
+                    "behavior, compare the attempts, and extract supported reusable "
+                    "blocking signals with bullet feedback."
+                    if config.get("reflection", {}).get("output_contract") == "ace_v1"
+                    else
                     "Analyze both completed Plan attempts and distill reusable "
                     "Plan-review concerns."
                     if config.get("reflection", {}).get(
@@ -225,6 +230,10 @@ def run_task(
                 case_count=int(values["case_count"]),
                 retry_feedback=str(values["retry_feedback"]),
                 task=(
+                    "Maintain the playbook through localized changes supported by "
+                    "the complete reflection batch and its recorded implementation evidence."
+                    if config.get("curation", {}).get("evidence_contract") == "ace_v1"
+                    else
                     "Curate durable Plan-review concerns from the completed "
                     "reflections."
                     if config.get("curation", {}).get("evidence_contract")

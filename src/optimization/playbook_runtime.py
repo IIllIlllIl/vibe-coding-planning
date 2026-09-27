@@ -261,11 +261,11 @@ def run_evidence_reflector(
 ) -> tuple[dict[str, Any], list[dict[str, Any]]]:
     """Run a tool-using Reflector over a read-only, repository-free bundle."""
     if _uses_codex_cli(model_config):
-        from src.optimization.codex_cli_runtime import run_codex_json_agent
+        from src.optimization.codex_cli_runtime import CodexSIFExecution, run_codex_json_agent
 
         user = _render(
             instance_template,
-            evidence_path=str(Path(evidence_dir).resolve()),
+            evidence_path="/evidence",
             internal_playbook=internal_playbook,
             retry_feedback=retry_feedback,
         )
@@ -280,6 +280,10 @@ def run_evidence_reflector(
             user=user,
             task="Attribute this case to every active rejection rule.",
             evidence_manifest_path=Path(evidence_dir) / "manifest.json",
+            container=CodexSIFExecution(
+                sif_path=_codex_evidence_sif(reflection_config),
+                evidence_dir=Path(evidence_dir),
+            ),
         )
     return _run_evidence_json_agent(
         model_config=model_config,
@@ -312,11 +316,11 @@ def run_evidence_curator(
 ) -> tuple[dict[str, Any], list[dict[str, Any]]]:
     """Run the Curator over a file-backed cross-case reflection bundle."""
     if _uses_codex_cli(model_config):
-        from src.optimization.codex_cli_runtime import run_codex_json_agent
+        from src.optimization.codex_cli_runtime import CodexSIFExecution, run_codex_json_agent
 
         user = _render(
             instance_template,
-            evidence_path=str(Path(evidence_dir).resolve()),
+            evidence_path="/evidence",
             counted_internal_playbook=counted_internal_playbook,
             case_count=case_count,
             retry_feedback=retry_feedback,
@@ -332,6 +336,10 @@ def run_evidence_curator(
             user=user,
             task=task,
             evidence_manifest_path=Path(evidence_dir) / "manifest.json",
+            container=CodexSIFExecution(
+                sif_path=_codex_evidence_sif(reflection_config),
+                evidence_dir=Path(evidence_dir),
+            ),
         )
     return _run_evidence_json_agent(
         model_config=model_config,
@@ -348,6 +356,21 @@ def run_evidence_curator(
             "retry_feedback": retry_feedback,
         },
     )
+
+
+def _codex_evidence_sif(config: Mapping[str, Any]) -> Path:
+    """Use the prepared evidence SIF; never download inside a Codex worker."""
+    cache = Path(os.path.expandvars(str(config["evidence_sif_cache_dir"]))).expanduser()
+    capacity = DockerCapacityWindow(
+        max_concurrent=1, max_cached_images=1, min_free_gb=1,
+        disk_path=cache, enable_docker_maintenance=False,
+    )
+    path = ApptainerSifCache(cache, capacity).sif_path(
+        str(config.get("evidence_image", "python:3.12-slim"))
+    )
+    if not path.is_file():
+        raise ValueError("Codex evidence SIF must be prepared before Agent submission")
+    return path
 
 
 def _render(template: str, **values: Any) -> str:
@@ -489,13 +512,13 @@ def _run_repository_json_agent(
                 },
             )
             if codex_cli:
-                from src.optimization.codex_cli_runtime import run_codex_json_agent
+                from src.optimization.codex_cli_runtime import CodexSIFExecution, run_codex_json_agent
 
                 codex_values = dict(prompt_values)
                 if evidence_dir is not None:
-                    codex_values["evidence_path"] = str(
-                        Path(evidence_dir).resolve()
-                    )
+                    codex_values["evidence_path"] = "/evidence"
+                if evidence_dir is None:
+                    raise ValueError("Codex Repo Agent requires a task-scoped evidence bundle")
                 user = _render(instance_template, **codex_values)
                 output, trajectory = run_codex_json_agent(
                     model_config=model_config,
@@ -508,6 +531,14 @@ def _run_repository_json_agent(
                         Path(evidence_dir) / "manifest.json"
                         if evidence_dir is not None
                         else None
+                    ),
+                    container=CodexSIFExecution(
+                        sif_path=declared_path,
+                        evidence_dir=Path(evidence_dir),
+                        repository_dir=host_workdir,
+                        masked_paths=tuple(repository_config.get(
+                            "masked_container_paths", ["/opt/miniconda3/pkgs"]
+                        )),
                     ),
                 )
                 trajectory.extend(

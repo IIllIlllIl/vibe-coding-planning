@@ -20,7 +20,7 @@ snapshot with rewritten payloads. A future config must pin both the original
 snapshot and new selection hashes, and enumerate the selected IDs.
 
 New prompt:
-`configs/prompts/offline_gepa_paired_binary_ace_codex_v5_blocking_signals_20260926.yaml`.
+`configs/prompts/offline_gepa_paired_binary_ace_codex_v7_consolidated_goal_20260927.yaml`.
 Checker text and schema are byte-equivalent YAML values to v4. Ref/Cur change
 the learning target and evidence-reading instructions. The wire field `concern`
 is retained for compatibility, but means a reusable blocking signal.
@@ -31,7 +31,9 @@ no-Level output, bullet IDs, helpful/harmful counters, ADD/UPDATE/MERGE/REMOVE,
 risk-analysis field, forced insight count, historical-memory ledger, or extra
 Agent stage has been added. Curator self-check is a prompt-level reasoning step,
 not a new Host validator or another Checker execution. Existing no-repository
-and unpaired execution paths are unchanged.
+and unpaired scientific contracts are unchanged. All Codex-backed role
+dispatchers now require task-scoped SIF execution, including repository-free
+roles; mini-swe execution is unchanged.
 
 ## Evidence path
 
@@ -74,10 +76,11 @@ outputs; this change does not retroactively reconstruct old checkpoints.
   attribution and the full Checker investigation. Discovery may use downstream
   evidence; the reusable condition must be verified and stated from task, Plan
   and frozen-repository facts. Its basis preserves the consequence and limits.
-  It distinguishes simple correction that retains the substantive approach
-  from substantial changes or replanning. A problem adequately resolved by
-  simple correction is not extracted as a blocking signal; replanning alone
-  is not proof that a Plan should have been blocked.
+  It distinguishes what Code actually corrected, retained, or changed from a
+  correction proposed after the attempt. Observed compensation retaining the
+  Plan approach is evidence against blocking in that attempt; apparent repair
+  size or difficulty is not evidence that compensation occurred. A retained
+  problem requires outcome attribution; replanning alone is not proof of blocking.
 - Curator reads the complete batch, maintains existing rules as well as adding
   new ones, preserves the supported failure predicate when abstracting, and
   mentally checks applicability/readability on supporting Plans. Misapplication
@@ -90,8 +93,29 @@ outputs; this change does not retroactively reconstruct old checkpoints.
 Historical formal15 configs/prompts remain immutable result authority. They
 must not be reported as runs of this new selection or prompt. The controlled
 iteration-9 diagnostic is specified in
-`configs/gepa_verified_paired_blocking_it9_smoke24_sol6_high_v1_20260927.yaml`.
+`configs/gepa_verified_paired_blocking_it9_smoke24_sol6_high_v2_20260927.yaml`.
 Its frozen selection/checkpoint directory records the parent, original Checker
 slots and hashes. It regenerates Ref/Cur with GPT-6 Sol/high in a fresh one-proposal
 diagnostic; it does not resume the historical search tree. Execution requires
 separate user authorization.
+
+The v2 diagnostic reuses the same parent, frozen 48 Checker slots, 24-pair order
+and four development-validation pairs, but reruns all Ref/Cur in a distinct run
+directory with v7 consolidated-goal prompts. It imports no v1 Ref/Cur outputs. Host-only manifest
+SHA-256 metadata replaces the model-transcribed transport receipt. Full native
+Codex events and effective prompts remain available for reading-behavior audit;
+a Host hash is not a claim that the Agent read every evidence file. The v1 config,
+prompt and results remain immutable historical authority.
+
+Ref/Cur execution now uses task-scoped SIF mounts rather than Host Codex.
+Reflector can access its own pair bundle and prepared base repository; Curator
+can access only the current reflection bundle and playbook. Neither receives
+other run directories or persistent Codex session history. The prepared v2
+configuration is prepared but unlaunched. Worker preflight checks the pinned
+CLI, nested read-only sandbox and actual SIF visibility before inference;
+their results are part of the smoke audit, not previously verified HPC claims.
+The v7 prompt consolidates each role's learning goal, retains complete
+evidence reading and observed Code attribution, and removes repeated quality
+warnings and named audit/test/detail examples. Scientific output schemas,
+Checker inputs, counters and search mechanics are unchanged. The v6 draft is
+superseded, not a launched result authority.
