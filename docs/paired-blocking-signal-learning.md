@@ -117,6 +117,16 @@ compute-node compatibility blocker and required standalone startup checks
 are recorded in [engineering-contracts.md](engineering-contracts.md).
 Frozen runtime configs preserve their preparation-time fields; they are not
 the authority for subsequent launch success.
+
+The v3 transport restart uses
+`configs/gepa_verified_paired_blocking_it9_smoke24_sol6_high_v3_20260927.yaml`
+and its matching supervisor config. It preserves the v2 scientific inputs,
+prompts, original parent and 48 frozen Checker slots, but uses a distinct run
+directory because v2 exhausted startup attempts and recorded a failed proposal.
+It imports no v2 Reflector/Curator outputs or failed search state. Production
+uses repaired nested read-only Codex sandboxing; Iris verification job 6047235
+passed real tool reads and final JSON in both prepared images. This remains
+one development proposal replay, not a continuation of the historical tree.
 The v7 prompt consolidates each role's learning goal, retains complete
 evidence reading and observed Code attribution, and removes repeated quality
 warnings and named audit/test/detail examples. Scientific output schemas,

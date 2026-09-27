@@ -49,8 +49,7 @@ class CodexSIFExecution:
         # Preserve that layout inside the SIF without exposing the install's
         # mutable state, user configuration, or unrelated release directories.
         resources = binary.parent.parent / "codex-resources"
-        bwrap = resources / "bwrap"
-        if not bwrap.is_file() or not os.access(bwrap, os.X_OK):
+        if not resources.is_dir() or not os.access(resources / "bwrap", os.X_OK):
             raise CodexCLIError("Codex standalone release is missing executable codex-resources/bwrap")
         # Evidence bundles are generated regular files. Never mount a symlink
         # that can resolve to unrelated input under another visible mount.
@@ -67,6 +66,9 @@ class CodexSIFExecution:
                 "--env", "CODEX_HOME=/codex-state,TMPDIR=/tmp",
             ]
             mounts = [
+                (Path("/dev/full"), "/dev/full", "ro"),
+                (Path(__file__).with_name("codex_private_mount.py"),
+                 "/opt/vibe-codex/private_mount.py", "ro"),
                 (binary.parent, "/opt/vibe-codex/bin", "ro"),
                 (resources, "/opt/vibe-codex/codex-resources", "ro"),
                 (evidence, "/evidence", "ro"),
@@ -86,6 +88,9 @@ class CodexSIFExecution:
                     raise ValueError("Codex mount source contains an unsupported delimiter")
                 prefix.extend(["--bind", f"{source}:{target}:{mode}"])
             prefix.append(str(sif))
+            interpreter = ("/opt/miniconda3/envs/testbed/bin/python"
+                           if self.repository_dir is not None else "/usr/local/bin/python3")
+            prefix.extend([interpreter, "/opt/vibe-codex/private_mount.py"])
             # --cleanenv does not neutralize launcher control variables. Do
             # not inherit extra host binds or environment injection overrides.
             launch_env = {
@@ -150,8 +155,10 @@ def _runtime_preflight(
     environment: Mapping[str, str],
     command_prefix: list[str] | None = None,
     hidden_host_paths: tuple[Path, ...] = (),
+    sif_isolation: bool = False,
+    repository: bool = False,
 ) -> list[dict[str, Any]]:
-    """Fail before inference when the pinned CLI or its sandbox is unusable."""
+    """Fail before inference when the pinned CLI or selected boundary fails."""
     binary = _codex_binary(model_config)
     checks: list[dict[str, Any]] = []
     version = subprocess.run(
@@ -183,6 +190,10 @@ def _runtime_preflight(
             {"role": "host_codex_preflight", "content": {"checks": checks}}
         ]
         raise error
+
+    if sif_isolation:
+        checks.append(_sif_isolation_preflight(command_prefix, environment, hidden_host_paths,
+                                               repository=repository))
 
     sandbox = subprocess.run(
         [
@@ -217,7 +228,7 @@ def _runtime_preflight(
             {"role": "host_codex_preflight", "content": {"checks": checks}}
         ]
         raise error
-    if hidden_host_paths:
+    if hidden_host_paths and not sif_isolation:
         # Test actual visibility inside the same container, without a model
         # call or writes to scientific inputs. Paths are argv, not shell text.
         isolation = subprocess.run(
@@ -246,11 +257,76 @@ def _runtime_preflight(
     return checks
 
 
+def _sif_isolation_preflight(command_prefix, environment, hidden_host_paths=(), *, repository=False):
+    """Verify the outer boundary directly, without Codex or an inner sandbox.
+
+    Probe only our disposable paths. Never read credentials or modify actual
+    evidence: attempted creations use a unique filename and must be denied.
+    """
+    if not command_prefix or command_prefix[:2] != ["apptainer", "exec"]:
+        raise ValueError("Outer isolation check requires an Apptainer command prefix")
+    script = r'''
+set -eu
+test "$HOME" = /agent-home
+test "$(id -u)" -ne 0
+test "$(sed -n 's/^CapEff:[[:space:]]*//p' /proc/self/status)" = 0000000000000000
+test -z "${VIBE_OUTER_HOST_SENTINEL+x}"
+test -r /evidence/manifest.json
+test -d /codex-state
+test -d /agent-output
+test -d /tmp
+test -d /var/tmp
+repository="$1"
+shift
+for candidate in "$@"; do
+    if test -e "$candidate" || test -L "$candidate"; then
+        printf 'Unexpected host path visible: %s\n' "$candidate"; exit 11
+    fi
+    for process in /proc/[0-9]*; do
+        if test -e "$process/root$candidate"; then
+            printf 'Host path visible through proc root\n'; exit 12
+        fi
+    done
+done
+for target in /evidence /opt/vibe-codex/bin /etc; do
+    if touch "$target/.vibe-isolation-probe-$$" 2>/dev/null; then
+        rm "$target/.vibe-isolation-probe-$$"
+        printf 'Unexpected writable input/image mount: %s\n' "$target"; exit 13
+    fi
+done
+if test "$repository" = 1; then
+    test -d /testbed
+    if touch /testbed/.vibe-isolation-probe-$$ 2>/dev/null; then
+        rm /testbed/.vibe-isolation-probe-$$; exit 14
+    fi
+fi
+for target in /agent-home /codex-state /agent-output /tmp /var/tmp; do
+    touch "$target/.vibe-isolation-probe-$$"
+    rm "$target/.vibe-isolation-probe-$$"
+done
+printf 'Host/proc paths hidden; inputs and image read-only; private scratch writable\n'
+'''
+    command = [*command_prefix, "/bin/sh", "-c", script, "sif-outer-isolation-probe",
+               str(int(repository)),
+               *(str(path.resolve()) for path in hidden_host_paths)]
+    probe_environment = dict(environment)
+    probe_environment["VIBE_OUTER_HOST_SENTINEL"] = "synthetic-not-a-credential"
+    completed = subprocess.run(command, text=True, capture_output=True, check=False, env=probe_environment)
+    record = {"check": "sif_outer_isolation", "returncode": completed.returncode,
+              "stdout": completed.stdout, "stderr": completed.stderr}
+    if completed.returncode:
+        error = CodexCLIError("Codex outer SIF isolation preflight failed")
+        error.trajectory = [{"role": "host_codex_preflight", "content": {"checks": [record]}}]
+        raise error
+    return record
+
+
 def _codex_command(
     model_config: Mapping[str, Any],
     *,
     working_directory: Path,
     output_path: Path,
+    sif_isolation: bool = False,
 ) -> list[str]:
     if model_config.get("executor") != "codex_cli":
         raise ValueError("Codex runtime requires executor: codex_cli")
@@ -305,7 +381,10 @@ def _run_codex_json_agent(
     evidence_manifest_path: Path | None = None,
     container: CodexSIFExecution | None = None,
 ) -> tuple[dict[str, Any], list[dict[str, Any]]]:
-    """Run one ephemeral read-only Codex session and parse its final JSON.
+    """Run one ephemeral Codex session and parse its final JSON.
+
+    Production sessions use the verified SIF boundary plus Codex's inner
+    read-only sandbox. Neither silently falls back to Host execution.
 
     The prompt is passed on stdin so task contents never enter the process
     command line. Slurm owns the complete session deadline; this function does
@@ -348,13 +427,17 @@ def _run_codex_json_agent(
                 effective_model, working_directory=effective_cwd,
                 environment=launch_env, command_prefix=prefix,
                 hidden_host_paths=(
-                    (container.evidence_dir, container.evidence_dir.parent, attempt_dir)
+                    (container.evidence_dir, container.evidence_dir.parent, attempt_dir,
+                     Path.home(), Path.cwd())
                     if container is not None else ()
                 ),
+                sif_isolation=container is not None,
+                repository=container is not None and container.repository_dir is not None,
             )
             command = [*prefix, *_codex_command(
                 effective_model, working_directory=effective_cwd,
                 output_path=effective_output,
+                sif_isolation=container is not None,
             )]
             completed = subprocess.run(
                 command, input=prompt, text=True, capture_output=True,
@@ -387,6 +470,7 @@ def _run_codex_json_agent(
                 "stderr": completed.stderr,
                 "ephemeral": True,
                 "sandbox": "read-only",
+                "inner_sandbox": True,
                 "effective_prompt": prompt,
                 "execution_boundary": "task_scoped_sif" if container else "direct_cli",
             },

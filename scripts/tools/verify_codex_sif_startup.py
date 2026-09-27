@@ -21,7 +21,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
 from src.optimization.codex_cli_runtime import (  # noqa: E402
     CodexSIFExecution, _isolated_codex_environment, _runtime_preflight,
-    _codex_binary, run_codex_json_agent,
+    _codex_binary, _sif_isolation_preflight, run_codex_json_agent,
 )
 
 
@@ -37,25 +37,34 @@ def verify(role, boundary, model, attempt, *, infer):
                     effective, working_directory=boundary.cwd, environment=env,
                     command_prefix=prefix,
                     hidden_host_paths=(boundary.evidence_dir, boundary.evidence_dir.parent, attempt),
+                    sif_isolation=True, repository=boundary.repository_dir is not None,
                 )
+                # Parse the exact production CLI mode without making a model call.
+                cli = subprocess.run([*prefix, _codex_binary(effective), "exec", "--sandbox",
+                                      "read-only", "--help"], env=env,
+                                     capture_output=True, text=True, check=False)
+                checks.append({"check": "read_only_cli_arguments", "returncode": cli.returncode,
+                               "stderr": cli.stderr})
+                if cli.returncode:
+                    raise RuntimeError(f"{role} read-only CLI arguments were rejected")
                 command = [*prefix, _codex_binary(effective), "sandbox",
                            "--permission-profile", ":read-only", "--cd", str(boundary.cwd),
                            "/bin/sh", "-c",
                            'test "$HOME" = /agent-home || exit 20; '
                            'test -r /evidence/manifest.json || exit 21; '
-                           'test -x /opt/vibe-codex/codex-resources/bwrap || exit 22; '
                            'if touch /evidence/unexpected-write 2>/dev/null; then exit 23; fi; '
+                           'if touch /tmp/unexpected-inner-write 2>/dev/null; then exit 26; fi; '
                            'test -x "$1" || exit 24; '
                            '"$1" --version || exit 25; printf "Read-only tool execution verified\\n"',
                            "startup-verification",
                            "/opt/miniconda3/envs/testbed/bin/python" if role == "reflector" else "/usr/local/bin/python3"]
                 completed = subprocess.run(command, env=env, capture_output=True, text=True, check=False)
-                checks.append({"check": "sandbox_tools_home_environment_readonly",
+                checks.append({"check": "sif_tools_home_environment_readonly",
                                "returncode": completed.returncode,
                                "stdout": completed.stdout, "stderr": completed.stderr})
                 write_json(attempt / "preflight.json", checks)
                 if completed.returncode:
-                    raise RuntimeError(f"{role} substantive sandbox check failed: {completed.stderr}")
+                    raise RuntimeError(f"{role} substantive SIF check failed: {completed.stderr}")
                 return checks
     interpreter = "/opt/miniconda3/envs/testbed/bin/python" if role == "reflector" else "/usr/local/bin/python3"
     result, trajectory = run_codex_json_agent(
@@ -89,6 +98,8 @@ def main():
     parser.add_argument("--model", default="gpt-6-sol")
     parser.add_argument("--reasoning-effort", default="high")
     parser.add_argument("--preflight-only", action="store_true")
+    parser.add_argument("--outer-isolation-only", action="store_true",
+                        help="Test Apptainer isolation directly; never run Codex inference or its sandbox")
     args = parser.parse_args()
     args.output_dir.mkdir(parents=True, exist_ok=False)
     model = {"executor": "codex_cli", "codex_binary": args.codex_binary,
@@ -97,8 +108,11 @@ def main():
     report = {"status": "running", "job_id": os.environ.get("SLURM_JOB_ID"),
               "model": args.model, "reasoning_effort": args.reasoning_effort,
               "preflight_only": args.preflight_only, "codex_sessions_attempted": 0,
+              "outer_isolation_only": args.outer_isolation_only,
               "runtime_sha256": hashlib.sha256((Path(__file__).resolve().parents[2] /
                   "src/optimization/codex_cli_runtime.py").read_bytes()).hexdigest(), "roles": {}}
+    report["namespace_launcher_sha256"] = hashlib.sha256((Path(__file__).resolve().parents[2] /
+        "src/optimization/codex_private_mount.py").read_bytes()).hexdigest()
     try:
         with tempfile.TemporaryDirectory(prefix="vibe-codex-startup-") as temporary:
             root = Path(temporary)
@@ -116,10 +130,22 @@ def main():
                 attempt = args.output_dir / role
                 attempt.mkdir()
                 boundaries[role] = (boundary, attempt)
-                report["roles"][role] = {"sif_path": str(sif), "preflight":
-                    verify(role, boundary, model, attempt, infer=False)}
+                if args.outer_isolation_only:
+                    # An unrelated role/run sentinel must remain invisible too.
+                    sibling = root / "unrelated-run"
+                    sibling.mkdir(exist_ok=True)
+                    (sibling / "sentinel.txt").write_text("Synthetic other-run input.\n")
+                    with _isolated_codex_environment(model) as env:
+                        with boundary.launch(model, env, attempt) as (prefix, launch_env, _, _):
+                            checks = [_sif_isolation_preflight(prefix, launch_env,
+                                (evidence, evidence.parent, sibling, attempt,
+                                 Path.home(), Path.cwd()), repository=repository is not None)]
+                    report["roles"][role] = {"sif_path": str(sif), "preflight": checks}
+                else:
+                    report["roles"][role] = {"sif_path": str(sif), "preflight":
+                        verify(role, boundary, model, attempt, infer=False)}
                 write_json(args.output_dir / "report.json", report)
-            if not args.preflight_only:
+            if not args.preflight_only and not args.outer_isolation_only:
                 for role, (boundary, attempt) in boundaries.items():
                     report["codex_sessions_attempted"] += 1
                     write_json(args.output_dir / "report.json", report)

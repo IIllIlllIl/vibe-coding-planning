@@ -81,6 +81,10 @@ authority is `docs/archive/mixed-design/swe-chat-data-cleaning.md`.
   the production Codex transport; both no-model checks must pass before up to
   two minimal model calls. `--preflight-only` makes no model calls. It retains
   a report, requires a new output directory and does not edit experiment state.
+  `--outer-isolation-only` tests only Apptainer filesystem isolation, without
+  launching a Codex session. Production verifies both Apptainer and nested
+  Codex read-only sandboxing, using task-private mount preparation and a narrow
+  read-only `/dev/full` bind; there is no fallback to bare Host execution.
 - `tools/freeze_swe_verified_pce_source.py` freezes the fixed-revision complete
   SWE-Verified source rows; `tools/freeze_swe_verified_sif_manifest.py` audits
   selected existing SIF bytes and verifies each official base commit.

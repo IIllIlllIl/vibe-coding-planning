@@ -102,8 +102,8 @@ supported overrides. Validate required environment settings before Agent waves.
 
 An Agent role may select the `codex_cli` executor instead of mini-swe. The
 production Codex role entry point requires task-scoped SIF execution; it must
-never fall back to Host execution. Codex runs are ephemeral and
-read-only, receive prompts over stdin, ignore user configuration and repository
+never fall back to Host execution. Codex runs are ephemeral, with read-only
+scientific input mounts, receive prompts over stdin, ignore user configuration and repository
 instructions, disable project-document injection, and persist both JSONL
 events and the terminal message before Host validation. Slurm owns the process
 wall-time; do not add a second Host timeout. Subscription authentication stays
@@ -117,23 +117,44 @@ Apptainer/Singularity mount/environment overrides. Never bind an entire run
 root, scratch, home, staging tree, or attempt directory. Reject symlinks in
 evidence bundles. Each call owns temporary HOME, Codex state, tmp and output
 mounts; only the raw final response is copied back, byte-for-byte, before
-cleanup. Raw output symlinks are rejected. Version, sandbox preflight and
-inference all run inside the same SIF boundary. A no-model visibility check
-also confirms that `/evidence/manifest.json` is readable while the original
-Host evidence directory, its parent and the attempt directory are hidden.
-Record the checks in the preflight trajectory; failure aborts before inference.
-The currently selected transport keeps both SIF isolation and the Codex
-read-only tool sandbox enabled. They are distinct boundaries: SIF controls
-which host paths are visible; the inner sandbox constrains tool commands.
-Changing to a container-only boundary requires explicit approval and separate
-permission tests. It is not an automatic failure fallback, nor an upstream
-requirement to always nest two sandboxes.
+cleanup. Raw output symlinks are rejected. Version, outer isolation preflight,
+inner sandbox preflight and inference run inside the same SIF boundary.
+Production uses Apptainer plus `codex exec --sandbox read-only`, never
+`danger-full-access` or a fallback to Host execution. The private bare CLI
+transport is for unit tests only. Do not enable host root, host-wide
+capabilities, or privileged mounts.
+
+Before executing Codex, `codex_private_mount.py` creates a new unprivileged
+user namespace mapping the same nonzero numeric UID/GID, then a new mount
+namespace, and makes its mounts recursively private. This clears Apptainer's
+unbindable root attribute only inside this disposable namespace; exec drops
+its namespace capabilities. Bind only `/dev/full:/dev/full:ro`, not Host
+`/dev`: contained Apptainer's minimal device tree otherwise omits a device
+required by bubblewrap. Both conditions are necessary on the tested Iris
+runtime. Use the case interpreter for repository-backed roles and the evidence
+image interpreter for repository-free roles. Any preparation/preflight failure
+aborts before inference; do not silently disable the inner sandbox.
+
+Before each production call, a no-model probe confirms the current evidence is
+readable, Host evidence/parent/attempt/home/cwd paths are hidden (including
+through visible `/proc/*/root` paths), inputs and image paths reject writes,
+and the per-call HOME/state/output/tmp mounts permit writes. It also checks
+non-root execution, zero effective capabilities, and host environment removal.
+Checks are recorded in the preflight trajectory; failure aborts before inference.
+These checks establish task-local filesystem isolation on the tested runtime,
+not protection against arbitrary kernel exploits or hostile images.
+
+There is no new project URL firewall. Native Codex tool commands are not covered by
+the mini-swe command interceptor. The transient login copy in `/codex-state`
+must be available to Codex, and tools in the same container can read it; never
+describe SIF as credential isolation or an exfiltration-proof boundary. Its
+source authority and other runs' authentication/session state remain unmounted.
 
 The pinned standalone Codex release requires both `bin/` and its sibling
 `codex-resources/` inside the SIF. Bind only these two release directories
 read-only, preserving their relative layout; binding only `bin/` loses the
-bundled `bwrap` sandbox launcher. Require an executable bundled `bwrap` before
-launch. Select the private HOME with Apptainer `--home source:/agent-home`,
+bundled `bwrap` sandbox launcher. Require that launcher to be executable. Select the private
+HOME with Apptainer `--home source:/agent-home`,
 not `--env HOME=...` (Apptainer refuses that override).
 
 Before resuming a migrated smoke, run
@@ -143,25 +164,51 @@ minimal model call. Verify real shell-tool reads and final JSON, retain the
 report and native trajectories in a separate run-state operation directory,
 and never overwrite a previous verification directory. This transport check
 uses synthetic input, not a scientific pair or a GEPA iteration.
+`--outer-isolation-only` checks only the outer filesystem boundary;
+`--preflight-only` additionally verifies the pinned CLI, inner read-only sandbox,
+production CLI flags, SIF interpreter and inner write denial without calling
+a model. Both modes spend no model quota.
 
 Compute-node checks on 2026-09-27 found an additional blocker on Iris kernel
 `4.18.0-553.146.1.el8_10.x86_64`: both the case SIF and evidence SIF fail
 Codex's nested bubblewrap root bind with `Invalid argument`. Explicit user
 namespaces, temporary overlays, and the system bubblewrap 0.4.0 did not fix
 it; the optional legacy Landlock backend failed to apply restrictions too.
-These tests reached no model calls. CLI version success and prior Host-only
-sandbox success do not establish SIF compatibility. Keep the migrated smoke
-blocked until the exact SIF transport passes compute-node preflight and real
-shell-tool inference. Do not silently disable the inner sandbox or fall back
-to Host. Retained diagnostic reports are under the canonical run-state
+These initial tests reached no model calls and did not fix the actual two-part
+mount/device cause. The later namespace-plus-device matrix verified both SIFs
+with inner read-only tools in job 6047182. The stronger boundary check in job
+6047192 passed eight checks (8 seconds, MaxRSS 89212K, no inference).
+Reports are retained in `operations/codex-bwrap-rootbind-20260927-v3/` and
+`operations/codex-bwrap-fixed-verification-20260927-v1/`. The former outer-only
+transport was diagnostic/interim, not the production default. A no-model check
+still does not prove real shell-tool inference. Initial diagnostic reports
+are under the canonical run-state
 `operations/codex-sif-{startup-verification,mount-diagnosis,landlock-diagnosis,system-bwrap-diagnosis}-20260927-v1/`
 directories.
+The first outer-only check (job 6047129) passed for the case and evidence SIFs
+in 4 seconds, with MaxRSS 45044K and zero Codex/model sessions. Reports are in
+`operations/codex-sif-outer-verification-20260927-v1/`. This is a representative
+mount test, not an audit of every scientific case or future image.
+The revised production preflight passed for both images in job 6047132
+(6 seconds, MaxRSS 53836K): pinned CLI 0.155.1, outer isolation, outer-only
+CLI argument parsing, and the case/evidence Python interpreters. It also made
+zero model calls; its report is in `operations/codex-sif-outer-verification-20260927-v2/`.
+
+Production nested transport verification passed in Iris job 6047235
+(59 seconds, 1 CPU / 4G, MaxRSS 325696K). Both case and evidence images passed
+outer isolation, inner sandbox startup and write-denial checks. Each then
+completed one fresh GPT-6 Sol/high session with a successful shell-tool read
+of a synthetic nonce and matching raw final JSON. No GEPA search was resumed.
+Report and native trajectories are retained at
+`operations/codex-sif-nested-startup-verification-20260927-v1/`; the report
+records SHA-256 for the runtime and namespace launcher. This proves the tested
+two-image transport, not every scientific image or credential isolation.
 
 Codex JSONL tool events remain the native command audit. The existing
 `source_access.jsonl` only covers commands routed through repository preparation,
 not native Codex tool commands; SIF file isolation does not add an HTTP filter
 or turn those partial logs into a complete source-access audit. Verify actual
-mount isolation and nested Codex sandbox compatibility on a compute node
+mount isolation and the selected Codex transport on a compute node
 with the startup verification tool before a migrated smoke. Local mocked tests
 are not that proof.
 
@@ -177,8 +224,8 @@ with mode 0600, and the complete directory is deleted when the call ends. The
 private authentication authority remains outside configs, commands, logs, and
 retained experiment artifacts.
 
-Before inference, the worker checks the exact CLI version and runs a read-only
-sandbox probe using the same isolated environment as the real call.
+Before inference, the worker checks the exact CLI version and verifies both
+isolation boundaries using the same isolated environment as the real call.
 Evidence-backed Codex roles must read their immutable evidence manifest and
 required evidence files. The Host computes the manifest SHA-256 directly and
 records it separately from Agent output as `host_evidence_manifest`; this proves
@@ -186,8 +233,8 @@ file identity, not Agent reading or comprehension. Preserve the effective prompt
 raw tool events, and terminal response for evidence-access audit. Do not require
 the model to transcribe a hash or silently remove fields from its scientific
 output. A failed preflight or invalid Agent output remains an operational failure
-eligible for retry, never an empty scientific decision. Do not disable the Codex
-sandbox or let the Host repair semantic Agent output. A recovery after failure may
+eligible for retry, never an empty scientific decision. Never bypass the SIF
+preflight or let the Host repair semantic Agent output. A recovery after failure may
 import compatible completed Checker outputs, but must restart at the Reflector
 boundary and exclude the invalid Reflector and Curator artifacts.
 

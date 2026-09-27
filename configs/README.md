@@ -22,7 +22,7 @@ general Plan completeness. Checker is unchanged from v4; full recorded Checker
 trajectories now reach Reflector evidence. See
 [`../docs/paired-blocking-signal-learning.md`](../docs/paired-blocking-signal-learning.md)
 for exact input and legacy-checkpoint boundaries. The one-proposal diagnostic
-uses `gepa_verified_paired_blocking_it9_smoke24_sol6_high_v2_20260927.yaml`
+uses `gepa_verified_paired_blocking_it9_smoke24_sol6_high_v3_20260927.yaml`
 and its matching supervisor YAML. Its frozen iteration-9 parent and complete
 Checker outputs are under
 `frozen_swe_verified_plan_pairs/20260927_iteration9_blocking_signal_smoke_v1/`.
@@ -31,6 +31,10 @@ The frozen v2 launch failed at the SIF/Codex sandbox boundary before Ref/Cur
 inference. Its preparation-time readiness fields do not establish current HPC
 compatibility. See `../docs/engineering-contracts.md` for the retained startup
 diagnosis and verification requirements; do not relaunch it as-is.
+The v3 config uses a fresh transport/run identity with the same frozen Checker
+checkpoint, parent, pair order and v7 prompts. Both SIF roles passed actual
+Codex shell reads and final JSON under repaired inner read-only sandboxing in
+Iris job 6047235. No failed v2 Ref/Cur outputs or search state are imported.
 
 Historical ACE-near baseline prompt provenance:
 `prompts/offline_gepa_paired_binary_ace_codex_v3_readable_20260924.yaml` is an

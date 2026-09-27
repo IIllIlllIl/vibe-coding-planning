@@ -1,5 +1,6 @@
 import json
 import sys
+from contextlib import nullcontext
 
 import pytest
 
@@ -71,3 +72,21 @@ def test_verification_never_overwrites_prior_results(tmp_path, monkeypatch):
     with pytest.raises(FileExistsError):
         probe.main()
     assert (output / "report.json").read_text() == "retained"
+
+
+def test_outer_only_never_runs_inner_sandbox_or_model(tmp_path, monkeypatch):
+    output = arguments(tmp_path, monkeypatch)
+    sys.argv.append("--outer-isolation-only")
+    monkeypatch.setattr(probe, "verify", lambda *a, **kw: pytest.fail("must not run Codex"))
+    monkeypatch.setattr(probe, "_isolated_codex_environment", lambda *_: nullcontext({}))
+    monkeypatch.setattr(probe.CodexSIFExecution, "launch", lambda *a: nullcontext(([], {}, {}, None)))
+    inspected = []
+    def inspect(prefix, env, hidden, *, repository):
+        inspected.append(repository)
+        assert any(path.name == "unrelated-run" for path in hidden)
+        return {"check": "sif_outer_isolation", "returncode": 0}
+    monkeypatch.setattr(probe, "_sif_isolation_preflight", inspect)
+    probe.main()
+    assert inspected == [True, False]
+    report = json.loads((output / "report.json").read_text())
+    assert report["status"] == "passed" and report["codex_sessions_attempted"] == 0

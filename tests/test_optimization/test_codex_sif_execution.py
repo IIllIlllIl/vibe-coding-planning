@@ -59,6 +59,9 @@ def test_every_codex_process_is_inside_task_scoped_sif(tmp_path, monkeypatch, wi
         mounts = [command[i + 1] for i, value in enumerate(command) if value == "--bind"]
         assert f"{evidence}:/evidence:ro" in mounts
         assert f"{tmp_path / 'codex-resources'}:/opt/vibe-codex/codex-resources:ro" in mounts
+        assert "/dev/full:/dev/full:ro" in mounts
+        assert not any(mount.startswith("/dev:/") for mount in mounts)
+        assert "/opt/vibe-codex/private_mount.py" in command
         assert f"{repository}:/testbed:ro" in mounts if with_repository else all(":/testbed:" not in mount for mount in mounts)
         assert all(not mount.startswith(str(tmp_path) + ":") for mount in mounts)
         private = {mount.split(":")[1]: Path(mount.split(":")[0]) for mount in mounts}
@@ -69,19 +72,16 @@ def test_every_codex_process_is_inside_task_scoped_sif(tmp_path, monkeypatch, wi
         assert command[command.index("--pwd") + 1] == str(boundary.cwd)
         if command[-1] == "--version":
             return SimpleNamespace(returncode=0, stdout="codex-cli 0.155.1\n", stderr="")
-        if "sandbox" in command:
-            assert command[-1] == "/bin/true"
-            assert command[command.index("--permission-profile") + 1] == ":read-only"
-            assert "use_legacy_landlock" not in command
-            return SimpleNamespace(returncode=0, stdout="", stderr="")
-        if "sif-isolation-probe" in command:
+        if "sif-outer-isolation-probe" in command:
             assert str(evidence) in command and str(evidence.parent) in command
             assert str(tmp_path / "attempt") in command
             return SimpleNamespace(returncode=0, stdout="SIF inputs visible; host paths hidden\n", stderr="")
+        if "sandbox" in command:
+            assert ":read-only" in command and command[-1] == "/bin/true"
+            return SimpleNamespace(returncode=0, stdout="", stderr="")
         assert command[command.index("--output-last-message") + 1] == "/agent-output/codex_final_response.json"
-        assert "--ephemeral" in command and "read-only" in command
+        assert "--ephemeral" in command
         assert command[command.index("--sandbox") + 1] == "read-only"
-        assert "danger-full-access" not in command
         assert "--dangerously-bypass-approvals-and-sandbox" not in command
         (private["/agent-output"] / "codex_final_response.json").write_text(raw)
         return SimpleNamespace(returncode=0, stdout='{"type":"thread.started"}\n', stderr="")
@@ -97,19 +97,17 @@ def test_every_codex_process_is_inside_task_scoped_sif(tmp_path, monkeypatch, wi
     assert (tmp_path / "attempt/codex_final_response.json").read_text() == raw
     assert all(not path.exists() for path in transient_paths)
     assert trajectory[3]["content"]["execution_boundary"] == "task_scoped_sif"
-    assert trajectory[2]["content"]["checks"][-1]["check"] == "task_scoped_sif_visibility"
+    assert trajectory[2]["content"]["checks"][-1]["check"] == "read_only_sandbox"
+    assert trajectory[3]["content"]["inner_sandbox"] is True
 
 
-@pytest.mark.parametrize("missing", [True, False])
-def test_missing_or_nonexecutable_bundled_bwrap_fails_before_launch(tmp_path, monkeypatch, missing):
+def test_missing_release_resources_fails_before_launch(tmp_path, monkeypatch):
     sif, evidence, _, model = _inputs(tmp_path)
     bwrap = tmp_path / "codex-resources" / "bwrap"
-    if missing:
-        bwrap.unlink()
-    else:
-        bwrap.chmod(0o600)
+    bwrap.unlink()
+    bwrap.parent.rmdir()
     monkeypatch.setattr(runtime.subprocess, "run", lambda *a, **kw: pytest.fail("must not launch"))
-    with pytest.raises(runtime.CodexCLIError, match="codex-resources/bwrap"):
+    with pytest.raises(runtime.CodexCLIError, match="codex-resources"):
         runtime.run_codex_json_agent(
             container=runtime.CodexSIFExecution(sif, evidence), model_config=model,
             working_directory=evidence, attempt_dir=tmp_path / "attempt",
@@ -117,7 +115,29 @@ def test_missing_or_nonexecutable_bundled_bwrap_fails_before_launch(tmp_path, mo
         )
 
 
-def test_sif_sandbox_failure_never_falls_back_to_host(tmp_path, monkeypatch):
+def test_inner_sandbox_failure_never_infers_or_disables_sandbox(tmp_path, monkeypatch):
+    sif, evidence, _, model = _inputs(tmp_path)
+    calls = []
+    def fake_run(command, **kwargs):
+        calls.append(command)
+        if command[-1] == "--version":
+            return SimpleNamespace(returncode=0, stdout="codex-cli 0.155.1\n", stderr="")
+        if "sif-outer-isolation-probe" in command:
+            return SimpleNamespace(returncode=0, stdout="", stderr="")
+        assert "sandbox" in command
+        return SimpleNamespace(returncode=1, stdout="", stderr="sandbox failed")
+    monkeypatch.setattr(runtime.subprocess, "run", fake_run)
+    with pytest.raises(runtime.CodexCLIError, match="read-only sandbox preflight failed"):
+        runtime.run_codex_json_agent(
+            container=runtime.CodexSIFExecution(sif, evidence), model_config=model,
+            working_directory=evidence, attempt_dir=tmp_path / "attempt",
+            system="System", user="Input", task="Analyze",
+        )
+    assert len(calls) == 3
+    assert not any("danger-full-access" in command for command in calls)
+
+
+def test_sif_outer_failure_never_falls_back_to_host(tmp_path, monkeypatch):
     sif, evidence, repository, model = _inputs(tmp_path)
     calls = []
     def fake_run(command, **kwargs):
@@ -128,7 +148,7 @@ def test_sif_sandbox_failure_never_falls_back_to_host(tmp_path, monkeypatch):
             stderr="" if command[-1] == "--version" else "sandbox unavailable",
         )
     monkeypatch.setattr(runtime.subprocess, "run", fake_run)
-    with pytest.raises(runtime.CodexCLIError, match="sandbox preflight failed"):
+    with pytest.raises(runtime.CodexCLIError, match="outer SIF isolation preflight failed"):
         runtime.run_codex_json_agent(
             container=runtime.CodexSIFExecution(sif, evidence, repository),
             model_config=model, working_directory=repository, attempt_dir=tmp_path / "attempt",
@@ -156,24 +176,41 @@ def test_visible_host_path_fails_before_inference(tmp_path, monkeypatch):
         calls.append(command)
         if command[-1] == "--version":
             return SimpleNamespace(returncode=0, stdout="codex-cli 0.155.1\n", stderr="")
-        if "sandbox" in command:
-            return SimpleNamespace(returncode=0, stdout="", stderr="")
-        assert "sif-isolation-probe" in command
+        assert "sif-outer-isolation-probe" in command
         return SimpleNamespace(returncode=11, stdout="Unexpected host path visible", stderr="")
     monkeypatch.setattr(runtime.subprocess, "run", fake_run)
-    with pytest.raises(runtime.CodexCLIError, match="visibility preflight failed") as caught:
+    with pytest.raises(runtime.CodexCLIError, match="outer SIF isolation preflight failed") as caught:
         runtime.run_codex_json_agent(
             container=runtime.CodexSIFExecution(sif, evidence), model_config=model,
             working_directory=evidence, attempt_dir=tmp_path / "attempt",
             system="System", user="Input", task="Analyze",
         )
-    assert len(calls) == 3 and all(command[0] == "apptainer" for command in calls)
+    assert len(calls) == 2 and all(command[0] == "apptainer" for command in calls)
     assert caught.value.trajectory[0]["content"]["checks"][-1]["returncode"] == 11
 
 
 def test_production_entry_requires_sif():
     with pytest.raises(ValueError, match="task-scoped SIF"):
         runtime.run_codex_json_agent(container=None)
+
+
+def test_outer_check_cannot_be_used_on_host():
+    with pytest.raises(ValueError, match="Apptainer"):
+        runtime._sif_isolation_preflight([], {})
+
+
+def test_outer_check_records_failure_without_inference(tmp_path, monkeypatch):
+    calls = []
+    def fail(command, **kwargs):
+        calls.append(command)
+        assert "sif-outer-isolation-probe" in command
+        assert "timeout" not in kwargs
+        return SimpleNamespace(returncode=13, stdout="Unexpected writable input", stderr="")
+    monkeypatch.setattr(runtime.subprocess, "run", fail)
+    with pytest.raises(runtime.CodexCLIError, match="outer SIF") as caught:
+        runtime._sif_isolation_preflight(["apptainer", "exec", "case.sif"], {}, (tmp_path,))
+    assert len(calls) == 1
+    assert caught.value.trajectory[0]["content"]["checks"][0]["returncode"] == 13
 
 
 def test_missing_curator_sif_does_not_download_or_infer(tmp_path, monkeypatch):
