@@ -1,0 +1,201 @@
+schema_version: 1
+mode: offline_paired_repo_concern_playbook
+status: prepared_not_launched
+run_id: verified-paired-blocking-it9-smoke24-sol6-high-v4-20260927
+purpose: Checkpointed replay of the completed v4 proposal's exact 24-pair candidate minibatch after the
+  Checker interaction/provenance repair. Retain the original parent, parent validation, all 24 Reflections,
+  the Curator completion, 38-bullet proposal, RNG/sampler and counter ledger. No new learning or historical-tree
+  continuation. Old parent judgments remain historical; only all 48 candidate Checker slots are fresh.
+paths:
+  dataset_snapshot: configs/frozen_swe_verified_plan_pairs/20260919_safe_pce_within_task_pairs_v1
+  initial_rules: configs/frozen_swe_verified_plan_pairs/20260927_iteration9_blocking_signal_smoke_v1/parent_playbook.json
+  run_dir: output/SWE-bench_Verified/gepa-paired-repo-concern-playbook-runs/blocking-it9-smoke24-sol6-high-v4-20260927
+task:
+  semantics: paired_repo_failure_pattern_binary_ace_v2
+container:
+  runtime: apptainer
+  sif_cache_dir: /scratch/users/${USER}/vibe-coding-planning/shared/sif-cache
+execution:
+  backend: hpc_slurm
+inputs:
+  dataset_snapshot: configs/frozen_swe_verified_plan_pairs/20260919_safe_pce_within_task_pairs_v1
+  dataset_manifest_sha256: cc1c3488c20a90340d88f419212c2f28b0d60e9a53ab15b84c7e9809751cc736
+  selection: configs/frozen_swe_verified_plan_pairs/20260927_iteration9_blocking_signal_smoke_v1/selection.json
+  selection_sha256: 63b43797c3b440c115016513c380e88b2381dbd86dbc087bb890d6f8116e011e
+  initial_playbook: configs/frozen_swe_verified_plan_pairs/20260927_iteration9_blocking_signal_smoke_v1/parent_playbook.json
+  initial_playbook_sha256: 8eae2443c89f1529f203c49b834840ecdcc5ddef2c478cc0f732114f75682558
+  prompt_bundle: configs/prompts/offline_gepa_paired_binary_ace_codex_v10_interactive_review_20260927.yaml
+  prompt_bundle_sha256: aaf7cacd4b4fdb9421519dd8e28c951781d345372cd92aac8477e786a1f8e1d1
+  repo_checker_contract: configs/prompts/offline_gepa_paired_binary_contract_v2_20260925.yaml
+  repo_checker_contract_sha256: 62fcf9e3dbbf8c76b0676f4730ca385167e5488b418a7c58d471397882550299
+  repo_checker_image_manifest: configs/frozen_swe_verified_safe_pce/verified482-formal-v1-20260914/images.json
+  repo_checker_image_manifest_sha256: f4c18c5dcf30fa48cb503241c5ba69ae8f6368e63726f8ce0875a868ae212e0a
+  train_instance_ids:
+  - pair-c965e4310e091064ebfb47c0
+  - pair-6c5bc90b2e4b67bf2a985fa7
+  - pair-d78611c7777c70d86258f924
+  - pair-b6288be04be53a84472c7d08
+  - pair-76cf8812228ddbb4a1de5a38
+  - pair-7def2b8d94f2e8c44484328f
+  - pair-a634d27cd12d4ba785b79ac2
+  - pair-05a74483c4c4ebd653a92d9e
+  - pair-f6b1485b7373d712af71f9ee
+  - pair-da3a49e06b6b680bbe0b3b49
+  - pair-f30f9ac4abc0eaafe8653fc8
+  - pair-eeb527cce8bb7653c0902b8d
+  - pair-5f5846f67f6452270f343fbe
+  - pair-38d07b8ab2d23f5348193d15
+  - pair-49434d02a9c6631fd2f1a021
+  - pair-10151f49220369f6047d7b60
+  - pair-89b7184937aceb9fe0bf65e1
+  - pair-8bfe9add6a6607c14210123f
+  - pair-97e09b363fd06193d97b9bb8
+  - pair-77d37bd5c891612490c9e3bf
+  - pair-57e2b2d1c2081887993373c8
+  - pair-f238c71b0ce9c101b56e86b7
+  - pair-ef3c8e3bcc6b4ec8434f9764
+  - pair-0120d77f27934d13dd7c8101
+  validation_instance_ids:
+  - pair-27786b755371198326783156
+  - pair-7903df3c96f1bb2220b28bd9
+  - pair-92227f7597485bdd68c2709c
+  - pair-05a1e7405702ab648b7f67ea
+models:
+  checker:
+    executor: mini_swe
+    model: deepseek-flash
+    thinking: enabled
+    reasoning_effort: high
+  reflector:
+    executor: codex_cli
+    codex_binary: ${HOME}/.local/lib/vibe-codex/0.155.1/bin/codex
+    codex_auth_file: ${HOME}/.codex/auth.json
+    codex_version: 0.155.1
+    model: gpt-6-sol
+    reasoning_effort: high
+  curator:
+    executor: codex_cli
+    codex_binary: ${HOME}/.local/lib/vibe-codex/0.155.1/bin/codex
+    codex_auth_file: ${HOME}/.codex/auth.json
+    codex_version: 0.155.1
+    model: gpt-6-sol
+    reasoning_effort: high
+repo_checker:
+  output_contract: binary_v2
+  review_only: true
+  workdir: /testbed
+  command_timeout_seconds: 1800
+  source_access_policy: conservative_blacklist_v3
+  history_policy: base_ancestor_bundle_v1
+  masked_container_paths:
+  - /opt/miniconda3/pkgs
+  observation_contract: executed_tools_v1
+scoring:
+  correct_order: 1
+  inverted: -1
+  tied: 0
+  invalid: -100
+search:
+  max_iterations: 1
+  reflection_minibatch_size: 24
+  max_metric_calls: 100
+  seed: 42
+  perfect_score: 1
+  skip_perfect_score: false
+  frozen_minibatch_ids:
+  - pair-c965e4310e091064ebfb47c0
+  - pair-6c5bc90b2e4b67bf2a985fa7
+  - pair-d78611c7777c70d86258f924
+  - pair-b6288be04be53a84472c7d08
+  - pair-76cf8812228ddbb4a1de5a38
+  - pair-7def2b8d94f2e8c44484328f
+  - pair-a634d27cd12d4ba785b79ac2
+  - pair-05a74483c4c4ebd653a92d9e
+  - pair-f6b1485b7373d712af71f9ee
+  - pair-da3a49e06b6b680bbe0b3b49
+  - pair-f30f9ac4abc0eaafe8653fc8
+  - pair-eeb527cce8bb7653c0902b8d
+  - pair-5f5846f67f6452270f343fbe
+  - pair-38d07b8ab2d23f5348193d15
+  - pair-49434d02a9c6631fd2f1a021
+  - pair-10151f49220369f6047d7b60
+  - pair-89b7184937aceb9fe0bf65e1
+  - pair-8bfe9add6a6607c14210123f
+  - pair-97e09b363fd06193d97b9bb8
+  - pair-77d37bd5c891612490c9e3bf
+  - pair-57e2b2d1c2081887993373c8
+  - pair-f238c71b0ce9c101b56e86b7
+  - pair-ef3c8e3bcc6b4ec8434f9764
+  - pair-0120d77f27934d13dd7c8101
+reflection:
+  rounds: 1
+  output_contract: ace_v2
+curation:
+  evidence_contract: ace_v2
+refiner:
+  enabled: false
+length:
+  maximum_visible_tokens: 10000
+  maximum_bullet_tokens: 64
+  harmful_pruning_weight: 2
+budget:
+  candidate_proposals: 1
+  reflection_pairs_per_proposal: 24
+  checker_agents_per_pair_evaluation: 2
+  reflection_rounds_per_pair: 1
+  projected_pair_metric_call_ceiling: 100
+stopping:
+  stop_after_candidate_proposals: 1
+  abort_on_operational_incomplete: true
+operational_incomplete_policy: Model, subscription, transport, timeout, parsing, missing-artifact, repository-authority,
+  or exhausted Agent-output-contract failures remain operationally incomplete. Host validation retries
+  invalid Agent artifacts; it does not rewrite them into scientific outcomes. A subscription-usage interruption
+  pauses this run for checkpointed resume; it is not a scientific score or a reason to resample completed
+  Agents.
+hpc:
+  submit: true
+  partition: batch
+  cpus_per_task: 1
+  mem: 4G
+  controller_slice_time: 00:30:00
+  agent_time: 00:35:00
+  poll_interval_seconds: 60
+  max_running_array_tasks: 12
+  max_task_attempts: 3
+  task_output_grace_seconds: 120
+  missing_task_grace_seconds: 300
+  remote_env_file: ~/.config/vibe-coding-planning/deepseek.env
+  python_module: lang/Python/3.11
+  container_module: tools/Apptainer
+  job_name_prefix: blocking-it9-v4-checker-replay1-20260927
+success_criteria:
+- Reuse the original 24-pair draw, historical parent results, 24 completed Reflections and exact Curator
+  output; run no new Ref/Cur inference.
+- Recreate the exact 38-bullet candidate, including counters and IDs; do not edit any rule.
+- Rerun every one of the 48 candidate Checker slots with v10 interactive-review prompt and executed_tools_v1
+  provenance validation.
+- Save raw completion before Host validation; preserve rejected artifacts and retry rather than repairing
+  them.
+- Archive the original completed result and active cache before reopening the first rejected proposal;
+  do not overwrite raw original Checker outputs.
+- Preserve global counter ledger, post-draw RNG, sampler and validation frontier; do not duplicate reflection
+  counter updates.
+- Only if the candidate beats the historical parent on this minibatch, evaluate the existing four validation
+  pairs with fresh Checkers.
+- Use Iris 1 CPU / 4G, 35-minute Agent tasks, Slurm array concurrency 12 and polling 60 seconds.
+readiness:
+  runnable: true
+  launched: false
+  missing: []
+  validation_scope: Resume authority must pass dry-run and be applied to the inactive v4 root before launch.
+    No model calls are authorized by preparation.
+launch_checks:
+- Commit a clean worktree before launch.
+- Apply the hash-pinned completed-screen resume authority while the original root is inactive.
+- Verify controller checkpoint has a pending proposal, no active completed result, and original candidate
+  cache is archived.
+- Launch one supervisor against the existing v4 run directory; never start a second writer.
+audit_targets:
+- Observe actual tool-action execution and recovery, not just JSON schema completion.
+- Check that repository citations have real received observations and that no Ref/Cur tasks are rerun.
+- Keep the historical-parent / fresh-candidate provenance distinction explicit.

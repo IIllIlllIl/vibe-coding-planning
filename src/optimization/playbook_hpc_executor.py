@@ -112,6 +112,7 @@ class PlaybookHPCExecutor:
         checkpoint_import_run_dir: Path | None = None,
         checkpoint_import_manifest_sha256: str | None = None,
         checkpoint_import_roles: Sequence[str] = (),
+        checker_observation_contract: str | None = None,
     ) -> None:
         self.config_path = config_path
         self.run_dir = run_dir
@@ -135,6 +136,9 @@ class PlaybookHPCExecutor:
         self.checkpoint_import_run_dir = checkpoint_import_run_dir
         self.checkpoint_import_manifest_sha256 = checkpoint_import_manifest_sha256
         self.checkpoint_import_roles = frozenset(checkpoint_import_roles)
+        if checker_observation_contract not in {None, "executed_tools_v1"}:
+            raise ValueError("unknown Checker observation contract")
+        self.checker_observation_contract = checker_observation_contract
 
     def _import_completed_outputs(
         self,
@@ -435,6 +439,9 @@ class PlaybookHPCExecutor:
                         levels=output_contract == "levels_v1",
                         require_reason=output_contract != "binary_v2",
                     )
+                if role != "checker" and self.checker_observation_contract:
+                    from src.optimization.playbook_runtime import validate_checker_observations
+                    validate_checker_observations(agent_output, value["trajectory"])
             else:
                 playbook = RejectPlaybook.parse(task_manifest["validation_playbook"])
             if role == "reflector":

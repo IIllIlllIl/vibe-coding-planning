@@ -37,6 +37,66 @@ class PlaybookAgentOutputContractError(ValueError):
     """An Agent returned a final artifact that Host parsing cannot accept."""
 
 
+class CheckerActionRecorder:
+    """Record only Agent tool calls, excluding Host setup and artifact reads.
+
+    Delegate the environment unchanged. The journal establishes that an
+    observation was available, not that a citation is semantically correct.
+    """
+
+    def __init__(self, environment: Any) -> None:
+        self.environment = environment
+        self.actions: list[dict[str, Any]] = []
+
+    def __getattr__(self, name: str) -> Any:
+        return getattr(self.environment, name)
+
+    def execute(self, command: str, **kwargs: Any) -> dict[str, Any]:
+        output = self.environment.execute(command, **kwargs)
+        lines = str(output.get("output", "")).lstrip().splitlines()
+        terminal = bool(lines and lines[0].strip() in {
+            "MINI_SWE_AGENT_FINAL_OUTPUT", "COMPLETE_TASK_AND_SUBMIT_FINAL_OUTPUT"
+        } and output.get("returncode", 0) == 0)
+        self.actions.append({
+            "command": command,
+            "returncode": output.get("returncode", 0),
+            "has_output": bool(str(output.get("output", "")).strip()),
+            "terminal_submission": terminal,
+        })
+        return output
+
+
+def validate_checker_observations(
+    output: Mapping[str, Any], trajectory: list[dict[str, Any]],
+) -> None:
+    """Reject repository citations with no actual pre-submission observation.
+
+    This intentionally does not require investigation for issue/Plan-only
+    judgments or attempt to verify citations using an LLM or shell heuristics.
+    """
+    journal = [entry.get("content") for entry in trajectory
+               if entry.get("role") == "host_checker_action_observations"]
+    if len(journal) != 1 or not isinstance(journal[0], list):
+        raise PlaybookAgentOutputContractError("Checker executed-action journal missing")
+    observed = any(
+        item.get("returncode") == 0 and item.get("has_output") is True
+        and item.get("terminal_submission") is False
+        for item in journal[0]
+    )
+    if observed:
+        return
+    for index, row in enumerate(output.get("rule_results", [])):
+        for item in row.get("evidence", []):
+            if item.get("source") == "repository":
+                raise PlaybookAgentOutputContractError(
+                    f"rule_results[{index}] (rule {row.get('rule_number')}) cites "
+                    "repository evidence, but no successful tool observation was "
+                    "received before submission. Rejected actions and Host setup "
+                    "are not Agent observations. Inspect the needed material and "
+                    "resubmit using actual observations; Host did not change the artifact."
+                )
+
+
 def evidence_agent_config(config: Mapping[str, Any]) -> dict[str, Any]:
     """Resolve the repository-free evidence environment shared by Curator.
 
@@ -108,6 +168,7 @@ class PromptModel:
             str(model_config.get("api_base", "https://api.deepseek.com")),
             float(model_config.get("temperature", 0.0)),
             **({"thinking": model_config["thinking"]} if "thinking" in model_config else {}),
+            **({"reasoning_effort": model_config["reasoning_effort"]} if "reasoning_effort" in model_config else {}),
         )
 
     def __call__(
@@ -157,6 +218,7 @@ def _run_evidence_json_agent(
         str(model_config.get("api_base", "https://api.deepseek.com")),
         float(model_config.get("temperature", 0.0)),
         **({"thinking": model_config["thinking"]} if "thinking" in model_config else {}),
+        **({"reasoning_effort": model_config["reasoning_effort"]} if "reasoning_effort" in model_config else {}),
     )
     cache = Path(
         os.path.expandvars(str(evidence_config["evidence_sif_cache_dir"]))
@@ -429,6 +491,7 @@ def _run_repository_json_agent(
             str(model_config.get("api_base", "https://api.deepseek.com")),
             float(model_config.get("temperature", 0.0)),
             **({"thinking": model_config["thinking"]} if "thinking" in model_config else {}),
+            **({"reasoning_effort": model_config["reasoning_effort"]} if "reasoning_effort" in model_config else {}),
         )
     cache = Path(
         os.path.expandvars(str(repository_config["sif_cache_dir"]))
@@ -563,10 +626,20 @@ def _run_repository_json_agent(
                     ]
                 )
                 return output, trajectory
+            is_checker = repository_config.get("phase") in {
+                "repo_checker", "paired_repo_checker"
+            }
+            observation_contract = repository_config.get("observation_contract")
+            if observation_contract not in {None, "executed_tools_v1"}:
+                raise ValueError("unknown Checker observation contract")
+            recorder = (
+                CheckerActionRecorder(environment)
+                if is_checker and observation_contract else None
+            )
             agent = build_default_agent(
                 DefaultAgent,
                 model,
-                environment,
+                recorder if recorder is not None else environment,
                 system_template=system,
                 instance_template=instance_template,
                 step_limit=0,
@@ -587,6 +660,8 @@ def _run_repository_json_agent(
             )
             trajectory = [
                 *list(agent.messages),
+                *([{"role": "host_checker_action_observations", "content": recorder.actions}]
+                  if recorder is not None else []),
                 {
                     "role": "host_repository_baseline",
                     "content": {

@@ -403,6 +403,9 @@ def run_from_config(path: str | Path, *, agents: Any | None = None, optimize_fn=
             config_path=config_path,
             run_dir=run_dir,
             hpc=hpc,
+            checker_observation_contract=raw.get("repo_checker", {}).get(
+                "observation_contract"
+            ),
             token_counter=count_tokens,
             maximum_bullet_tokens=_maximum_bullet_tokens(raw),
             paired_reflector_structured_recovery=bool(

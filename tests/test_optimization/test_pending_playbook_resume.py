@@ -369,6 +369,119 @@ def test_no_marker_leaves_existing_workflow_untouched(tmp_path):
         assert pair == (selector, sampler)
 
 
+@pytest.fixture
+def completed_screen(tmp_path):
+    from src.optimization.playbook import apply_curator_operations
+
+    root = tmp_path / "completed-screen"
+    root.mkdir()
+    parent = {"rules": RejectPlaybook((PlaybookBullet("plan-00001", "The Plan is a placeholder."),)).serialize()}
+    curator_output = {"reasoning": "Add a supported condition", "operations": [
+        {"type": "ADD", "content": "The Plan contradicts the required result.", "supporting_instance_ids": ["pair-a"]}
+    ]}
+    candidate = {"rules": apply_curator_operations(RejectPlaybook.parse(parent["rules"]), curator_output).serialize()}
+    cache = EvaluationCache()
+    cache.put(parent, "pair-a", {"original": "parent"}, 1)
+    cache.put(candidate, "pair-a", {"original": "old candidate"}, 0)
+    state = {"i": 0, "program_candidates": [parent], "evaluation_cache": cache,
+             "total_num_evals": 3, "preserved_frontier": {"validation": [0]},
+             "full_program_trace": [{"i": 0, "selected_program_candidate": 0,
+                                     "subsample_ids": ["pair-a"], "subsample_scores": [1],
+                                     "new_subsample_scores": [0]}]}
+    resume = {"gepa_state_i": 0, "successful_proposals": 1, "accepted_candidates": 0,
+              "random_state": "post-draw", "sampler": {"epoch": 0}, "reflection_failures": []}
+    files = {
+        "gepa_state.bin": pickle.dumps(state), "gepa_resume_state.json": encoded(resume),
+        "global_counter_ledger.json": b"{}", "result.json": b'{"completed":true}',
+        "run_manifest.json": encoded({"semantic_config": {"source": {}}}),
+        "task.json": encoded({"fingerprint": "exact", "prompt_values": {"counted_internal_playbook": parent["rules"]}}),
+        "output.json": encoded({"status": "completed", "fingerprint": "exact", "agent_output": curator_output}),
+        "reviews.json": encoded([{"instance_id": "pair-a"}]),
+        "pair.json": encoded({"instance_id": "pair-a", "pair_output": {"original": "parent"}, "score": 1}),
+    }
+    for name, data in files.items():
+        (root / name).write_bytes(data)
+    authority = {
+        "recovery_kind": "completed_rejected_candidate_screen_v1", "run_name": root.name,
+        "recovery_id": "checker-replay", "saved_state_i": 0, "saved_metric_calls": 3,
+        "candidate_count": 1, "selected_program_candidate": 0, "validation_pair_count": 1,
+        "proposed_rule_count": 2, "subsample_ids": ["pair-a"],
+        "curator_task": "task.json", "curator_result": "output.json", "reviews": "reviews.json",
+        "parent_evidence": ["pair.json"], "replacement_source_hashes": {},
+        "files": {name: file_hash(root / name) for name in files},
+    }
+    return root, authority, state, resume, candidate
+
+
+def test_completed_rejected_screen_reopens_only_candidate_checks(completed_screen):
+    root, authority, original, old_resume, candidate = completed_screen
+    before = {name: (root / name).read_bytes() for name in authority["files"]}
+    assert prepare(root, authority)["candidate_checker_tasks_to_rerun"] == 2
+    assert before == {name: (root / name).read_bytes() for name in before}
+    summary = prepare(root, authority, apply=True)
+    assert summary["completed_iterations"] == 0 and summary["pending_iteration"] == 1
+    state = pickle.loads((root / "gepa_state.bin").read_bytes())
+    assert state["i"] == -1 and state["total_num_evals"] == 1
+    assert state["full_program_trace"] == []
+    assert state["program_candidates"] == original["program_candidates"]
+    assert state["preserved_frontier"] == original["preserved_frontier"]
+    assert state["evaluation_cache"].get(candidate, "pair-a") is None
+    assert state["evaluation_cache"].get(original["program_candidates"][0], "pair-a").score == 1
+    resume = json.loads((root / "gepa_resume_state.json").read_text())
+    assert resume["successful_proposals"] == 0 and resume["gepa_state_i"] == -1
+    assert resume["random_state"] == old_resume["random_state"]
+    assert resume["sampler"] == old_resume["sampler"]
+    marker = json.loads((root / MARKER).read_text())
+    assert marker["draw_policy"] == "frozen_completed_draw" and marker["trace"]["i"] == 0
+    assert not (root / "result.json").exists()
+    for name, data in before.items():
+        assert (root / "recovery_backups/checker-replay" / name).read_bytes() == data
+    for name in ("global_counter_ledger.json", "task.json", "output.json", "reviews.json", "pair.json"):
+        assert (root / name).read_bytes() == before[name]
+    assert prepare(root, authority, apply=True)["status"] == "already_prepared"
+
+
+def test_completed_screen_rejects_accepted_or_incompatible_cache_without_writes(completed_screen):
+    root, authority, state, _, _ = completed_screen
+    state["full_program_trace"][0]["new_subsample_scores"] = [2]
+    (root / "gepa_state.bin").write_bytes(pickle.dumps(state))
+    authority["files"]["gepa_state.bin"] = file_hash(root / "gepa_state.bin")
+    before = {name: (root / name).read_bytes() for name in authority["files"]}
+    with pytest.raises(ValueError, match="not the pinned completed rejected"):
+        prepare(root, authority, apply=True)
+    assert before == {name: (root / name).read_bytes() for name in before}
+    assert not (root / "recovery_backups").exists()
+
+
+def test_unlaunched_preparation_can_be_reapplied_from_exact_backup(completed_screen):
+    root, authority, original, _, candidate = completed_screen
+    original_bytes = {name: (root / name).read_bytes() for name in authority["files"]}
+    prepare(root, authority, apply=True)
+    prepared_state = (root / "gepa_state.bin").read_bytes()
+    old_backup = root / "recovery_backups" / authority["recovery_id"]
+    # Preserve the unlaunched preparation, then restore only byte-identical
+    # checkpoint metadata/result from its verified original backup.
+    unlaunched_backup = root / "recovery_backups" / "unlaunched-preparation"
+    unlaunched_backup.mkdir()
+    for name in ("gepa_state.bin", "gepa_resume_state.json", "run_manifest.json", MARKER):
+        (unlaunched_backup / name).write_bytes((root / name).read_bytes())
+    for name in ("gepa_state.bin", "gepa_resume_state.json", "run_manifest.json", "result.json"):
+        assert file_hash(old_backup / name) == authority["files"][name]
+        (root / name).write_bytes((old_backup / name).read_bytes())
+    new_authority = deepcopy(authority)
+    new_authority["recovery_id"] = "checker-replay-new-config"
+    assert prepare(root, new_authority, apply=True)["candidate_checker_tasks_to_rerun"] == 2
+    state = pickle.loads((root / "gepa_state.bin").read_bytes())
+    assert state["i"] == -1 and state["total_num_evals"] == 1
+    assert state["program_candidates"] == original["program_candidates"]
+    assert state["evaluation_cache"].get(candidate, "pair-a") is None
+    assert (unlaunched_backup / "gepa_state.bin").read_bytes() == prepared_state
+    for name in ("global_counter_ledger.json", "task.json", "output.json", "reviews.json", "pair.json"):
+        assert (root / name).read_bytes() == original_bytes[name]
+    for name, data in original_bytes.items():
+        assert (old_backup / name).read_bytes() == data
+
+
 def test_resume_supervisor_targets_original_scientific_run():
     import yaml
     path = Path("configs/gepa_verified_paired_levels_categorized_formal24_8it_v1_resume7_supervisor_20260922.yaml")

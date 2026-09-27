@@ -47,6 +47,14 @@ ls -la
 
 Do not include more than one fenced bash block in a response. Do not write or
 simulate bash blocks for later steps before receiving the actual observation.
+After sending the block for the current step, wait for the environment's
+observation before choosing the next step. Tool-derived facts must come from
+actual environment observations. Proposed or rejected commands provide no
+observations; statements in your own response are not tool results.
+Before sending, check that your entire reply contains exactly one executable
+bash block for the current step, and that no claimed tool result depends on
+a command whose observation has not returned. Perform this check without
+adding another executable block or a separate self-check report.
 When finished, put the task-specific submission command inside the single
 block.
 """
@@ -173,6 +181,7 @@ def build_model(
     api_base: str,
     temperature: float | None = None,
     thinking: str | None = None,
+    reasoning_effort: str | None = None,
 ) -> Any:
     """Build a LitellmModel with provider-prefixed model name.
 
@@ -187,6 +196,8 @@ def build_model(
             prefix is inferred from ``api_base``.
         api_key: API key for the LLM provider.
         api_base: Provider base URL.
+        reasoning_effort: Explicit DeepSeek thinking effort. Sent in the
+            provider body to avoid older LiteLLM mappings dropping the level.
 
     Returns:
         A ``LitellmModel`` instance.
@@ -195,12 +206,20 @@ def build_model(
     logger.info("Building LitellmModel: resolved_name=%s", prefixed)
 
     model_kwargs = {"api_key": api_key, "api_base": api_base}
-    if temperature is not None:
+    if temperature is not None and thinking != "enabled":
         model_kwargs["temperature"] = temperature
     if thinking is not None:
         if thinking not in {"enabled", "disabled"}:
             raise ValueError("thinking must be enabled, disabled, or omitted")
         model_kwargs["extra_body"] = {"thinking": {"type": thinking}}
+    if reasoning_effort is not None:
+        if reasoning_effort not in {"low", "high", "max"}:
+            raise ValueError("reasoning_effort must be low, high, max, or omitted")
+        if thinking != "enabled":
+            raise ValueError("explicit reasoning_effort requires thinking enabled")
+        if not prefixed.startswith("deepseek/"):
+            raise ValueError("this reasoning_effort adapter is for DeepSeek only")
+        model_kwargs["extra_body"]["reasoning_effort"] = reasoning_effort
 
     return LitellmModel(
         model_name=prefixed,

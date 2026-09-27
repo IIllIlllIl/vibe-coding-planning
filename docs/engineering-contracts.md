@@ -63,6 +63,34 @@ blocked a valid later ADD-only proposal; regression coverage lives in
 - Persist raw Agent completion before Host output validation. Invalid Agent
   outputs use attempt retries; never silently rewrite experimental artifacts.
 - Keep operational failures separate from scientific labels and scores.
+- A mini-swe Checker is an interactive session: one executable Bash block,
+  then an actual environment observation. Rejected replies execute nothing;
+  their claimed findings are not tool evidence. Define the interaction and
+  tool-observation semantics once in the shared `DEFAULT_ACTION_PROTOCOL`,
+  appended to mini-swe's system message. Checker task prompts do not repeat
+  this protocol. Shared parser feedback reports the rejected block count and
+  non-execution; it is recovery feedback, not a second normal-input protocol.
+  Native Codex roles do not receive the mini-swe protocol.
+- In DeepSeek thinking mode, explicitly pin the requested effort rather than
+  inferring it from temperature (which the provider ignores). The mini-swe
+  adapter sends `thinking` and `reasoning_effort` in `extra_body`: older
+  LiteLLM DeepSeek mappings can turn an effort into enabled thinking while
+  dropping the effort itself. Verify the serialized request with mocked HTTP.
+  Our mini-swe path uses text Bash actions, not API `tools`; DeepSeek's
+  requirement to round-trip reasoning for native tool calls is not applicable
+  to this transport. Keep submission in `content`, separate from provider
+  reasoning. Sending-time self-check lives only in the shared action protocol.
+- `repo_checker.observation_contract: executed_tools_v1` enables a Host-owned
+  journal of Agent tool calls. After raw completion is saved, Worker and
+  Controller reject repository citations if no successful nonempty tool
+  observation preceded submission. Host setup, terminal submission and Host
+  artifact reads do not count. Issue/Plan-only judgments need no tool call.
+  This is a minimal provenance check, not semantic verification of citations;
+  a successful tool call does not prove that every cited fact was inspected.
+  The contract is opt-in for new mini-swe Checker evaluations; historical
+  outputs without this journal are not relabeled as satisfying it. Host
+  retries invalid artifacts and never repairs the JSON or overwrites the
+  saved completion during post-completion validation.
 - Preserve frozen run configs; fixes receive a new run identity. Import only
   fingerprint-verified compatible completions, never relabel old outputs.
   Paired observations may repeat across pair slots. Import selection must be
@@ -83,6 +111,17 @@ is unchanged, source migration is allowlisted by exact hashes, and all replaced
 Host state files are backed up. Raw Agent outputs, candidates and the existing
 counter ledger are not rewritten by preparation. The normal proposer applies
 the pending counter events idempotently during resumed execution.
+
+The same preparation tool supports `completed_rejected_candidate_screen_v1`
+for a one-proposal diagnostic that completed with a rejected candidate. It
+hash-verifies the original parent, draw, proposal and both cached screens,
+archives the completed result and state, then reopens that exact proposal.
+Only the candidate screen cache is invalidated. Original raw Agent outputs,
+parent validation/frontier, post-draw RNG/sampler and counter ledger are
+preserved. Pending replay reuses Ref/Cur without inference and must produce
+the same rule IDs, text and counters. Its new config fingerprint creates a
+fresh candidate Checker batch. This is explicit re-evaluation with changed
+Checker execution, not a new learning iteration or a matched-Checker comparison.
 
 ## Lifecycle and cleanup
 

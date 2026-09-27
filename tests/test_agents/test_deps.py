@@ -74,6 +74,63 @@ class TestBuildModel:
                 thinking="automatic",
             )
 
+    def test_explicit_deepseek_effort_and_ignored_temperature(self):
+        m = build_model(FakeLitellmModel, "deepseek-flash", "sk-test",
+                        "https://api.deepseek.com", temperature=0.0,
+                        thinking="enabled", reasoning_effort="high")
+        assert m.model_kwargs["extra_body"] == {
+            "thinking": {"type": "enabled"}, "reasoning_effort": "high",
+        }
+        assert "temperature" not in m.model_kwargs
+
+    @pytest.mark.parametrize("thinking,effort", [
+        ("disabled", "high"), (None, "high"), ("enabled", "medium"),
+    ])
+    def test_rejects_inconsistent_or_unsupported_effort(self, thinking, effort):
+        with pytest.raises(ValueError, match="reasoning_effort"):
+            build_model(FakeLitellmModel, "deepseek-flash", "sk-test",
+                        "https://api.deepseek.com", thinking=thinking,
+                        reasoning_effort=effort)
+
+    def test_thinking_controls_reach_serialized_request_without_native_tools(self):
+        import json
+        import httpx
+        from litellm.llms.custom_httpx.http_handler import HTTPHandler
+        from minisweagent.models.litellm_model import LitellmModel
+
+        requests = []
+
+        def respond(request):
+            requests.append(json.loads(request.content))
+            return httpx.Response(200, json={
+                "id": "mock-completion", "object": "chat.completion",
+                "created": 1, "model": "deepseek-flash",
+                "choices": [{"index": 0, "finish_reason": "stop", "message": {
+                    "role": "assistant", "content": "```bash\npwd\n```",
+                    "reasoning_content": "Private provider reasoning",
+                }}],
+                "usage": {"prompt_tokens": 10, "completion_tokens": 5, "total_tokens": 15},
+            })
+
+        model = build_model(LitellmModel, "deepseek-flash", "sk-test",
+                            "https://api.deepseek.com", temperature=0.0,
+                            thinking="enabled", reasoning_effort="high")
+        with httpx.Client(transport=httpx.MockTransport(respond)) as client:
+            transport = HTTPHandler(client=client)
+            messages = [{"role": "user", "content": "Inspect the working directory"}]
+            output = model.query(messages, client=transport)
+            model.query([*messages, {"role": "assistant", "content": output["content"]},
+                         {"role": "user", "content": "/testbed"}], client=transport)
+        assert output["content"] == "```bash\npwd\n```"
+        assert output["extra"]["response"]["choices"][0]["message"]["reasoning_content"]
+        assert len(requests) == 2
+        for payload in requests:
+            assert payload["thinking"] == {"type": "enabled"}
+            assert payload["reasoning_effort"] == "high"
+            assert "extra_body" not in payload
+            assert "temperature" not in payload
+            assert "tools" not in payload
+
     def test_auto_prefixes_deepseek(self):
         m = build_model(
             FakeLitellmModel,

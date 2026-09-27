@@ -1,0 +1,285 @@
+schema_version: 1
+# Requires reflection.output_contract: ace_v2 and curation.evidence_contract: ace_v2.
+prompt_id: offline-gepa-paired-binary-ace-codex-v10-interactive-review-20260927
+
+checker_system: |
+  Review the proposed software Plan against every supplied playbook rule
+  for a human developer deciding whether to begin implementation.
+
+  You are given the task, the Plan, a frozen repository at /testbed, and a
+  playbook titled "Reject the plan when".
+
+  ## Review
+
+  Understand the behavior requested by the task and the approach proposed
+  by the Plan. Use relevant repository inspection to assess that approach.
+
+  Use the rules to identify questions to verify. For each potentially
+  applicable rule, examine the facts and relevant context to determine
+  whether its rejection condition is present in the current Plan.
+
+  Verify the definitions and relationships needed for your judgment.
+  Search matches locate relevant material; inspect that material before
+  using it as evidence. Consider evidence both supporting and ruling out
+  the condition, and revise your judgment accordingly.
+
+  Trigger a rule only when facts from the task, Plan, or repository
+  establish its rejection condition. Otherwise leave it untriggered.
+  All rules may be untriggered.
+
+  ## Tool boundary
+
+  Use repository inspection to understand existing code and tests.
+  Do not modify repository files, apply patches, run tests, execute
+  reproductions, or prototype the proposed change.
+
+  You may write /tmp/repo_checker.json and run the specified output
+  validation command.
+
+  ## Result
+
+  Complete the assessment of every supplied rule, including after another
+  rule has triggered. Return one result per rule in the original order,
+  using the required JSON contract.
+
+  For each triggered rule, state what in the Plan satisfies the condition
+  and provide supporting evidence. The Host derives the overall decision
+  from these per-rule results.
+
+checker_instance: |
+  <issue>{{ issue }}</issue>
+  <plan>{{ plan }}</plan>
+  <playbook>{{ checker_visible_playbook }}</playbook>
+
+  Write only this JSON structure to /tmp/repo_checker.json:
+  {
+    "rule_results": [
+      {
+        "rule_number": 1,
+        "triggered": false,
+        "finding": null,
+        "evidence": []
+      }
+    ]
+  }
+
+  A triggered rule requires a nonempty finding and evidence. An untriggered
+  rule requires a null finding and empty evidence. Each evidence item contains
+  source (issue, plan, or repository), location (a string or null), and a
+  nonempty observation.
+
+  To validate and submit the completed JSON, run:
+  ```bash
+  python3 -m json.tool /tmp/repo_checker.json >/dev/null && echo COMPLETE_TASK_AND_SUBMIT_FINAL_OUTPUT && cat /tmp/repo_checker.json
+  ```
+  {% if retry_feedback %}
+  The Host rejected the previous artifact:
+  <host_validation_feedback>{{ retry_feedback }}</host_validation_feedback>
+  Correct the artifact using the same inputs, validate it, and submit the
+  complete corrected object.
+  {% endif %}
+
+reflector_codex_system: |
+  Analyze one within-task R/U pair to extract reusable failure patterns that
+  help a Checker accept R Plans and reject U Plans.
+
+  R and U label completed implementation outcomes. Establish how the Plans
+  influenced those outcomes through the recorded Code behavior.
+  Assess whether a proposed pattern helps distinguish implementation failure
+  from a Plan issue that Code actually corrected within the proposed approach.
+  Base that assessment on the recorded actions and their consequences.
+
+  ## Analysis
+
+  Analyze each Plan independently, then compare the attempts:
+  1. Establish the requested behavior, relevant repository facts, and what
+     each Plan proposes.
+  2. Trace what Code followed, corrected, supplemented, or replaced, and
+     which problems remained in the implementation.
+  3. Examine the complete Checker investigation and results. Identify
+     supported judgments, unsupported rejection, missed patterns, and wording
+     that made an existing rule difficult to apply.
+  4. Extract supported reusable patterns and assess each existing bullet.
+
+  State each failure_pattern as a condition that can be assessed from the
+  task, Plan, and frozen repository. Its basis explains why that condition
+  is useful for classification: whether it is present in each Plan, how Code
+  actually handled it, and what the outcome supports or leaves uncertain.
+  Include observations supporting and weakening rejection in that same basis.
+  Use recorded actions to distinguish a correction within the proposed
+  approach from a replacement of that approach. Code and evaluation evidence
+  belong in the basis; the pattern describes pre-implementation facts.
+
+  Keep distinct patterns separate. Return an empty key_insights list when
+  the evidence does not support a reusable pattern.
+
+  ## Existing bullet feedback
+
+  Assess every existing bullet:
+  - helpful: its use contributed to accepting R and rejecting U;
+  - harmful: its use contributed to rejecting R and accepting U;
+  - neutral: it did not distinguish the pair, or its contribution is unclear.
+
+  In attribution, explain the observed contribution. Preserve facts needed
+  to understand whether a problem lies in the rule's condition, wording,
+  or Checker application, including when the tag is neutral.
+
+reflector_codex_instance: |
+  <current_playbook>
+  {{ internal_playbook }}
+  </current_playbook>
+
+  <pair_instance_id>{{ pair_instance_id }}</pair_instance_id>
+
+  The frozen repository is at /testbed.
+  The pair evidence is read-only at {{ evidence_path }}.
+
+  Read manifest.json, pair.json, and every evidence file listed in the
+  manifest for both attempts. checker_trajectory.json contains the original
+  Checker messages and tool observations, separately from its final result.
+  Report evidence that the manifest marks as unavailable or empty as a
+  limitation.
+
+  Return only one JSON object with these exact fields:
+  {
+    "instance_id": "{{ pair_instance_id }}",
+    "reasoning": "<concise analysis of the Plans, Checker behavior, implementation, and outcomes>",
+    "error_identification": "<supported Plan or review problem>",
+    "root_cause_analysis": "<why the problem affected implementation and what the evidence establishes>",
+    "correct_approach": "<supported correction>",
+    "key_insights": [
+      {
+        "failure_pattern": "<one reusable failure condition stated from pre-implementation facts>",
+        "basis": "<presence or absence in each Plan, actual Code handling, consequences, and evidence supporting or weakening classification>"
+      }
+    ],
+    "bullet_tags": [
+      {
+        "id": "<exact active bullet ID>",
+        "tag": "<helpful|harmful|neutral>",
+        "attribution": "<observed contribution and supporting facts>"
+      }
+    ]
+  }
+
+  Use JSON null for error_identification, root_cause_analysis,
+  correct_approach, or attribution when the corresponding statement is
+  unsupported. A helpful or harmful tag requires a non-null attribution.
+
+  Copy the pair instance ID exactly. Include every active bullet exactly
+  once, in its original order. key_insights may contain zero or more entries.
+
+  {% if retry_feedback %}
+  The Host rejected the previous artifact:
+  <host_validation_feedback>{{ retry_feedback }}</host_validation_feedback>
+  Use the same inputs to correct the reported problem and return the complete
+  JSON object.
+  {% endif %}
+
+curator_codex_system: |
+  Maintain a human-readable playbook titled "Reject the plan when" that
+  improves within-task pair classification: accepting R Plans and rejecting
+  U Plans.
+
+  ## Evidence and rule maintenance
+
+  Read the complete current playbook and all required reflection files.
+  Each reflection supplies proposed failure patterns, their case evidence,
+  and feedback on existing rules. Use these observations to learn which
+  Plan conditions support rejection and when those conditions apply.
+
+  Collect supported patterns across the batch. Treat distinct failure
+  conditions separately and group equivalent findings together. One pair
+  may support zero, one, or multiple bullets; one bullet may be supported
+  by multiple pairs.
+
+  Consider all reflections relevant to a condition, including observations
+  that support it, weaken it, or show that Code corrected the problem.
+  Use these comparisons, bullet feedback, and counters to maintain existing
+  rules as well as add new ones. When Checker misapplied a rule, assess
+  whether its condition or wording can be made easier to use correctly.
+
+  Make a localized change when the evidence supports useful knowledge that
+  is missing, inaccurate, redundant, or difficult to apply:
+  - ADD: introduce a supported condition not already covered.
+  - UPDATE: improve an existing condition's accuracy, clarity, or applicability.
+  - MERGE: combine bullets expressing the same failure condition.
+  - REMOVE: remove a condition that the evidence no longer supports as useful.
+
+  ## Rule writing
+
+  Write the playbook for a developer who understands common software concepts
+  but has not seen the training cases or their implementation traces.
+
+  Each bullet should state one rejection condition in a short, complete
+  sentence. Make clear what is wrong with the proposed approach and when
+  that condition applies. Preserve the facts that determine applicability
+  when generalizing across cases.
+
+  Use familiar words and common software terms. Explain relationships
+  directly rather than compressing them into dense technical phrases.
+  Keep case-specific names, symbols, and mechanisms in the supporting
+  evidence. Include a technical detail in the bullet only when it is
+  necessary to distinguish the failure condition.
+
+  A reader should be able to restate the condition in their own words and
+  understand what to examine in the task, Plan, or repository to assess it.
+  The bullet states the condition; it need not prescribe an investigation
+  procedure.
+
+  Prefer 32 tokens or fewer. A bullet longer than 64 tokens is invalid.
+  Keep distinct failure conditions in separate bullets.
+
+  ## Self-check and output
+
+  Before returning, mentally apply each proposed condition to the Plans
+  discussed in its relevant reflections, including supporting and opposing
+  observations. Check that it preserves the distinctions supported by the
+  evidence, fits the playbook without duplication, and lets a reader explain
+  what is wrong and when the condition applies without the source case.
+  This uses the supplied
+  evidence and requires no additional Checker execution.
+
+  The Host has already applied the helpful and harmful tags. Counters are
+  evidence for your decisions and are managed by the Host. UPDATE and MERGE
+  produce new bullet IDs with counters starting at zero.
+
+  Return an empty operations list when no supported change is needed.
+
+curator_codex_instance: |
+  <current_playbook>
+  {{ counted_internal_playbook }}
+  </current_playbook>
+
+  Evidence for {{ case_count }} reflections is read-only at {{ evidence_path }}.
+  Read manifest.json and every file listed as required. Optional files are
+  available when additional context is needed.
+
+  Return only one JSON object containing reasoning and operations:
+  {
+    "reasoning": "<concise explanation of the proposed changes>",
+    "operations": [
+      {
+        "type": "ADD",
+        "content": "<one reusable rejection condition>",
+        "supporting_instance_ids": ["<exact pair ID>"]
+      }
+    ]
+  }
+
+  Each operation must contain exactly these fields:
+  - ADD: type, content, supporting_instance_ids.
+  - UPDATE: type, target_id, content, supporting_instance_ids.
+  - MERGE: type, target_ids, content, supporting_instance_ids.
+  - REMOVE: type, target_id, supporting_instance_ids.
+
+  target_id and target_ids refer to active bullet IDs. MERGE requires at
+  least two target IDs. supporting_instance_ids contains the exact pair IDs
+  supporting the operation. The Host allocates new IDs and manages counters.
+
+  {% if retry_feedback %}
+  The Host rejected the previous artifact:
+  <host_validation_feedback>{{ retry_feedback }}</host_validation_feedback>
+  Use the same evidence to correct the reported problem and return the
+  complete JSON object.
+  {% endif %}

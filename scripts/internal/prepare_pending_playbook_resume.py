@@ -1,4 +1,4 @@
-"""Prepare an explicitly hash-pinned failed paired proposal for in-place resume.
+"""Prepare a hash-pinned paired proposal for failed-work or Checker-only replay.
 
 Dry-run by default. No Slurm submission and no model calls. The run must be
 inactive; the controller lock is acquired and all original files are backed up.
@@ -47,7 +47,13 @@ def _prepare(root, authority, *, apply, repo):
     for name, sha in authority["files"].items():
         if Path(name).is_absolute() or ".." in Path(name).parts or file_hash(root / name) != sha:
             raise ValueError(f"recovery authority mismatch: {name}")
-    if authority.get("recovery_kind") == "candidate_evaluation_before_checkpoint_v1":
+    for name, sha in authority.get("execution_support_hashes", {}).items():
+        if Path(name).is_absolute() or ".." in Path(name).parts or file_hash(repo / name) != sha:
+            raise ValueError(f"execution support authority mismatch: {name}")
+    if authority.get("recovery_kind") in {
+        "candidate_evaluation_before_checkpoint_v1",
+        "completed_rejected_candidate_screen_v1",
+    }:
         return _prepare_precheckpoint_candidate(root, authority, manifest, apply=apply, repo=repo)
     state = pickle.loads((root / "gepa_state.bin").read_bytes())
     resume = json.loads((root / "gepa_resume_state.json").read_text())
@@ -178,16 +184,24 @@ def _prepare_precheckpoint_candidate(root, authority, manifest, *, apply, repo):
     state = pickle.loads((root / "gepa_state.bin").read_bytes())
     resume = json.loads((root / "gepa_resume_state.json").read_text())
     expected_i = authority["saved_state_i"]
+    completed_screen = authority["recovery_kind"] == "completed_rejected_candidate_screen_v1"
     if (
         state["i"] != expected_i
         or resume["gepa_state_i"] != expected_i
-        or state["full_program_trace"]
+        or (not completed_screen and state["full_program_trace"])
         or resume["reflection_failures"]
         or state["total_num_evals"] != authority["saved_metric_calls"]
     ):
         raise ValueError("not the pinned pre-draw candidate-evaluation failure")
     if len(state["program_candidates"]) != authority["candidate_count"]:
         raise ValueError("candidate pool changed")
+    if completed_screen and (
+        expected_i != 0 or authority["candidate_count"] != 1
+        or len(state["full_program_trace"]) != 1
+        or resume.get("successful_proposals") != 1
+        or resume.get("accepted_candidates") != 0
+    ):
+        raise ValueError("completed-screen replay requires one rejected first proposal")
 
     task = json.loads((root / authority["curator_task"]).read_text())
     result = json.loads((root / authority["curator_result"]).read_text())
@@ -217,12 +231,46 @@ def _prepare_precheckpoint_candidate(root, authority, manifest, *, apply, repo):
 
     parent_index = authority["selected_program_candidate"]
     parent = state["program_candidates"][parent_index]
+    if completed_screen:
+        from gepa.core.state import EvaluationCache
+
+        trace = state["full_program_trace"][0]
+        candidate = {"rules": proposed}
+        old_scores = trace.get("new_subsample_scores")
+        if (
+            set(trace) != {"i", "selected_program_candidate", "subsample_ids",
+                           "subsample_scores", "new_subsample_scores"}
+            or trace["i"] != expected_i or trace["selected_program_candidate"] != parent_index
+            or trace["subsample_ids"] != ids or trace["subsample_scores"] != scores
+            or not isinstance(old_scores, list) or len(old_scores) != len(ids)
+            or sum(old_scores) > sum(scores)
+            or len(state["evaluation_cache"]._cache) != 2 * len(ids)
+        ):
+            raise ValueError("not the pinned completed rejected candidate screen")
+        cache = EvaluationCache()
+        for instance_id, output, score, old_score in zip(ids, outputs, scores, old_scores, strict=True):
+            entry = state["evaluation_cache"].get(parent, instance_id)
+            rejected_entry = state["evaluation_cache"].get(candidate, instance_id)
+            if (entry is None or entry.output != output or entry.score != score
+                    or rejected_entry is None or rejected_entry.score != old_score):
+                raise ValueError("completed-screen cache differs from frozen evidence")
+            cache.put(parent, instance_id, entry.output, entry.score, entry.objective_scores)
+        # The old candidate evaluations remain in the immutable backup and raw
+        # outputs. Only their active cache is invalidated; labels are not edited.
+        state["evaluation_cache"] = cache
+        state["i"] -= 1
+        state["full_program_trace"] = []
+        state["total_num_evals"] -= 2 * len(ids)
+        if state["total_num_evals"] != authority["validation_pair_count"]:
+            raise ValueError("completed-screen metric accounting is not the first-proposal layout")
+        resume["gepa_state_i"] = state["i"]
+        resume["successful_proposals"] = 0
     pending = {
         "schema_version": 1,
         "authority": authority,
-        "draw_policy": "replay_underlying_and_verify",
+        "draw_policy": "frozen_completed_draw" if completed_screen else "replay_underlying_and_verify",
         "trace": {
-            "i": expected_i + 1,
+            "i": state["i"] + 1,
             "selected_program_candidate": parent_index,
             "subsample_ids": ids,
             "subsample_scores": scores,
@@ -248,25 +296,28 @@ def _prepare_precheckpoint_candidate(root, authority, manifest, *, apply, repo):
             {
                 "schema_version": 1,
                 "first_observed_completed_iterations": 0,
-                "completed_iterations": expected_i + 1,
+                "completed_iterations": state["i"] + 1,
                 "last_event": "complete_candidate_checker_replay_prepared",
             }
         ),
         "progress.json": encoded(
             {
                 "status": "resumable",
-                "iteration": expected_i + 1,
+                "iteration": state["i"] + 1,
                 "accepted_candidates": len(state["program_candidates"]) - 1,
                 "metric_calls_used": state["total_num_evals"],
             }
         ),
         "run_manifest.json": encoded(manifest),
     }
+    if completed_screen:
+        writes["gepa_state.bin"] = pickle.dumps(state)
+        writes["gepa_resume_state.json"] = encoded(resume)
     summary = {
         "status": "prepared" if apply else "dry_run",
         "run_dir": str(root),
-        "completed_iterations": expected_i + 1,
-        "pending_iteration": expected_i + 2,
+        "completed_iterations": state["i"] + 1,
+        "pending_iteration": state["i"] + 2,
         "parent_candidate": parent_index,
         "pairs": len(ids),
         "candidate_checker_tasks_to_rerun": 2 * len(ids),
@@ -289,6 +340,10 @@ def _prepare_precheckpoint_candidate(root, authority, manifest, *, apply, repo):
                 target.write_bytes(source.read_bytes())
         (backup / "authority.json").write_bytes(encoded(authority))
         (backup / "preparation.json").write_bytes(encoded(summary))
+        if completed_screen and (root / "result.json").exists():
+            # A completed result would cause the supervisor to stop without
+            # submitting the reopened screen. Archive it instead of deleting it.
+            (root / "result.json").replace(backup / "result.json")
         for name, data in writes.items():
             temporary = root / (name + ".recovery.tmp")
             temporary.parent.mkdir(parents=True, exist_ok=True)

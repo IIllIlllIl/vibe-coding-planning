@@ -21,6 +21,7 @@ from src.optimization.playbook_runtime import (
     run_evidence_reflector,
     run_repository_checker,
     run_repository_reflector,
+    validate_checker_observations,
 )
 from src.optimization.playbook import (
     PlaybookBullet,
@@ -310,6 +311,12 @@ def run_task(
                     levels=levels,
                     require_reason=paired_checker_requires_reason(config),
                 )
+            if (
+                role != "checker"
+                and config.get("repo_checker", {}).get("observation_contract")
+                == "executed_tools_v1"
+            ):
+                validate_checker_observations(output, trajectory)
         else:
             playbook = RejectPlaybook.parse(manifest["validation_playbook"])
         if role == "reflector":
@@ -383,7 +390,12 @@ def run_task(
         )
         return 0
     except Exception as exc:
-        if isinstance(exc, PlaybookAgentOutputContractError):
+        # Parsing can fail before a structured completion exists. Host
+        # validation happens after that checkpoint and must never overwrite it.
+        if (
+            isinstance(exc, PlaybookAgentOutputContractError)
+            and stage != "agent_output_validation"
+        ):
             atomic_json(
                 attempt_dir / "agent_completion.json",
                 {
