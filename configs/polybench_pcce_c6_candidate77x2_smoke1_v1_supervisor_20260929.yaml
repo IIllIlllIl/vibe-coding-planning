@@ -8,6 +8,8 @@ arguments:
   - "00:15:00"
   - --max-runs
   - "0"
+  - --state-file
+  - .local/hpc-supervisor/polybench-pcce-c6-candidate77x2-smoke1-scratch-state.json
   - --reclaim-staging
   - --reclaim-workspaces
   - --batch-script
