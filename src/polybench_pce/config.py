@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 import hashlib
+import json
 import os
 from pathlib import Path
 from typing import Any
@@ -50,6 +51,12 @@ class PolyBenchPCEConfig:
     nrpv_block: str
     evaluator_timeout: int
     dependency_cache: DependencyCacheConfig | None = None
+    selection_manifest: Path | None = None
+    instance_ids: tuple[str, ...] = ()
+    repetitions: int = 1
+    plan_submission_protocol: str = "legacy_stdout_v1"
+    agent_network_disabled: bool = False
+    evaluator_network_disabled: bool = False
 
 
 def _mapping(value: Any, name: str) -> dict[str, Any]:
@@ -59,6 +66,9 @@ def _mapping(value: Any, name: str) -> dict[str, Any]:
 
 
 def _model(value: dict[str, Any], *, temperature: float) -> ModelConfig:
+    thinking = value.get("thinking")
+    if thinking not in {None, "enabled", "disabled"}:
+        raise ValueError("model thinking must be enabled, disabled, or omitted")
     return ModelConfig(
         model=str(value["model"]),
         api_base=str(value["api_base"]),
@@ -68,6 +78,7 @@ def _model(value: dict[str, Any], *, temperature: float) -> ModelConfig:
         cost_limit=float(value.get("cost_limit", 0.0)),
         timeout=int(value.get("timeout", 1800)),
         max_attempts=1,
+        thinking=thinking,
     )
 
 
@@ -98,16 +109,74 @@ def load_polybench_pce_config(
         return candidate if candidate.is_absolute() else root / candidate
 
     paths = _mapping(raw.get("paths"), "paths")
-    plan = _model(_mapping(raw.get("plan"), "plan"), temperature=0.0)
+    plan_raw = _mapping(raw.get("plan"), "plan")
+    plan = _model(plan_raw, temperature=0.0)
+    plan_submission_protocol = str(
+        plan_raw.get("submission_protocol", "legacy_stdout_v1")
+    )
+    if plan_submission_protocol not in {
+        "legacy_stdout_v1",
+        "direct_human_markdown_v5",
+    }:
+        raise ValueError("unsupported PolyBench Plan submission protocol")
     code = _model(_mapping(raw.get("code"), "code"), temperature=0.0)
     for model in (plan, code):
         if require_api_keys and not os.environ.get(model.api_key_env):
             raise ValueError(f"environment variable {model.api_key_env} is not set")
-    prompts = _mapping(raw.get("prompts"), "prompts")
+    prompt_source = paths.get("prompt_source_config")
+    if prompt_source:
+        prompt_raw = (
+            yaml.safe_load(resolve(str(prompt_source)).read_text(encoding="utf-8"))
+            or {}
+        )
+        prompts = _mapping(prompt_raw.get("prompts"), "prompt source prompts")
+    else:
+        prompts = _mapping(raw.get("prompts"), "prompts")
+    plan_prompt_source = paths.get("plan_prompt_source_config")
+    if plan_prompt_source:
+        plan_prompt_raw = (
+            yaml.safe_load(resolve(str(plan_prompt_source)).read_text(encoding="utf-8"))
+            or {}
+        )
+        plan_prompts = _mapping(
+            plan_prompt_raw.get("prompts"), "plan prompt source prompts"
+        )
+        prompts = {
+            **prompts,
+            "plan_system": plan_prompts["plan_system"],
+            "plan_instance": plan_prompts["plan_instance"],
+        }
+    selection_manifest = (
+        resolve(str(paths["selection_manifest"]))
+        if paths.get("selection_manifest")
+        else None
+    )
+    instance_ids: tuple[str, ...] = ()
+    if selection_manifest is not None:
+        selection = json.loads(selection_manifest.read_text(encoding="utf-8"))
+        selected = selection.get("selected_instance_ids")
+        if (
+            selection.get("schema_version") != 1
+            or not isinstance(selected, list)
+            or not selected
+            or any(not isinstance(value, str) or not value for value in selected)
+        ):
+            raise ValueError(
+                "selection manifest requires schema_version 1 and nonempty IDs"
+            )
+        instance_ids = tuple(selected)
+        if len(set(instance_ids)) != len(instance_ids):
+            raise ValueError("selected instance IDs must be unique")
+        source_manifest = resolve(str(paths["dataset_snapshot"])) / "manifest.json"
+        if selection.get("source_manifest_sha256") != _file_sha256(source_manifest):
+            raise ValueError("selection source manifest SHA-256 mismatch")
     container_raw = _mapping(raw.get("container"), "container")
     execution_raw = _mapping(raw.get("execution", {}), "execution")
     hpc_raw = _mapping(raw.get("hpc"), "hpc")
     evaluator_raw = _mapping(raw.get("evaluator"), "evaluator")
+    repetitions = int(_mapping(raw.get("pce", {}), "pce").get("repetitions", 1))
+    if repetitions < 1 or repetitions > 16:
+        raise ValueError("pce.repetitions must be between 1 and 16")
     docker_raw = _mapping(raw.get("docker", {}), "docker")
 
     container = ContainerConfig(
@@ -155,8 +224,11 @@ def load_polybench_pce_config(
         raise ValueError(
             "PolyBench PCE currently requires exactly three total attempts"
         )
-    if hpc.cpus_per_task != 1 or hpc.mem != "4G":
-        raise ValueError("PolyBench PCE worker resources must remain 1 CPU / 4G")
+    if hpc.cpus_per_task != 1 or hpc.mem not in {"4G", "1750M"}:
+        raise ValueError(
+            "PolyBench PCE worker resources must be 1 CPU / 4G on Iris "
+            "or 1 CPU / 1750M on Aion"
+        )
     execution = PCEExecutionConfig(
         code_phase_timeout_seconds=int(
             execution_raw.get("code_phase_timeout_seconds", 2400)
@@ -227,4 +299,10 @@ def load_polybench_pce_config(
         nrpv_block=str(prompts.get("nrpv_block", "")),
         evaluator_timeout=evaluator_timeout,
         dependency_cache=dependency_cache,
+        selection_manifest=selection_manifest,
+        instance_ids=instance_ids,
+        repetitions=repetitions,
+        plan_submission_protocol=plan_submission_protocol,
+        agent_network_disabled=bool(container_raw.get("network_disabled", False)),
+        evaluator_network_disabled=bool(evaluator_raw.get("network_disabled", False)),
     )

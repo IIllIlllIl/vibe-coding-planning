@@ -1,0 +1,94 @@
+{
+  "bullets": [
+    {
+      "harmful": 0,
+      "helpful": 1,
+      "id": "plan-00008",
+      "lineage": [],
+      "neutral": 106,
+      "text": "Reject a Plan that moves setup into a base lifecycle method called by subclasses with different reset semantics without preserving their initialization behavior or limiting the new call."
+    },
+    {
+      "harmful": 0,
+      "helpful": 5,
+      "id": "plan-00009",
+      "lineage": [],
+      "neutral": 103,
+      "text": "Reject a Plan that applies one fallback to mixed cases when repository logic can identify cases already resolved, causing those cases to remain wrong or be handled twice."
+    },
+    {
+      "harmful": 0,
+      "helpful": 0,
+      "id": "plan-00016",
+      "lineage": [
+        "plan-00006",
+        "plan-00013"
+      ],
+      "neutral": 24,
+      "text": "Reject a Plan that fabricates, forwards, or changes a representation while an applicable reader, validator, or destination still expects a different identifier, field granularity, or layout, and the Plan does not reconcile that boundary."
+    },
+    {
+      "harmful": 0,
+      "helpful": 0,
+      "id": "plan-00020",
+      "lineage": [
+        "plan-00004"
+      ],
+      "text": "Reject a Plan for a staged migration or public API rename that breaks compatibility earlier than the task and repository's release or deprecation conventions allow, or keeps transitional behavior after its specified removal stage."
+    },
+    {
+      "harmful": 0,
+      "helpful": 0,
+      "id": "plan-00021",
+      "lineage": [
+        "plan-00007"
+      ],
+      "text": "Reject a Plan that combines inherited, layered, or positional values in an order that lets a lower-priority or unrelated source win a first-match lookup or first-source attribute merge over the intended value."
+    },
+    {
+      "harmful": 0,
+      "helpful": 0,
+      "id": "plan-00022",
+      "lineage": [
+        "plan-00014"
+      ],
+      "text": "Reject a Plan that preserves a rejection or output the task identifies as defective for an in-scope input, including by importing another operation's restriction or relying on an obsolete test assertion."
+    },
+    {
+      "harmful": 0,
+      "helpful": 0,
+      "id": "plan-00023",
+      "lineage": [
+        "plan-00015",
+        "plan-00019"
+      ],
+      "text": "Reject a Plan that changes which inputs or outputs enter validation, conversion, or protocol fallback while a reachable step still rejects supported cases, leaks a known error from the required recovery path, or changes required errors for unsupported cases."
+    },
+    {
+      "harmful": 0,
+      "helpful": 0,
+      "id": "plan-00024",
+      "lineage": [
+        "plan-00017"
+      ],
+      "text": "Reject a Plan that fixes one caller or later stage while a task-required case still encounters the same defect in a shared producer or operation."
+    },
+    {
+      "harmful": 0,
+      "helpful": 0,
+      "id": "plan-00025",
+      "lineage": [
+        "plan-00018"
+      ],
+      "text": "Reject a Plan that fixes one case by dropping another behavior required for an affected supported case by the task or applicable repository tests, when that requirement is consistent with the requested change and can be preserved."
+    },
+    {
+      "harmful": 0,
+      "helpful": 0,
+      "id": "plan-00026",
+      "lineage": [],
+      "text": "Reject a Plan that implements a sequence or wrapper version of a public operation through a lower-level helper whose handling of supported values differs from the public operation, without restoring that behavior."
+    }
+  ],
+  "schema_version": 1
+}

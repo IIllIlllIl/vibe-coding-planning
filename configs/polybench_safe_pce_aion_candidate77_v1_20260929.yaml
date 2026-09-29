@@ -1,0 +1,68 @@
+mode: polybench_pce
+purpose: safe_boundary_aion_candidate77_pending_smoke_gate
+
+paths:
+  dataset_snapshot: output/SWE-PolyBench/polybench-pce-inputs/20260814_python113_v11_8c7d9485d1d0
+  image_manifest: output/SWE-PolyBench/polybench-pce-inputs/20260814_python113_v11_8c7d9485d1d0/images.json
+  selection_manifest: configs/frozen_polybench_pce_development/20260929_nonnetwork_candidate77_v1/selection.json
+  prompt_source_config: configs/polybench_pce_hpc_formal_clean_20260825.yaml
+  plan_prompt_source_config: configs/prompts/polybench_safe_pce_planner_v1_20260929.yaml
+  run_dir: output/SWE-PolyBench/polybench-pce-runs/formal/safe-aion-candidate77-v1-20260929
+
+plan:
+  model: deepseek-v4-flash
+  api_base: https://api.deepseek.com
+  api_key_env: DEEPSEEK_API_KEY
+  temperature: 1.0
+  thinking: disabled
+  max_steps: 0
+  cost_limit: 0.0
+  timeout: 1800
+  submission_protocol: direct_human_markdown_v5
+
+code:
+  model: deepseek-v4-flash
+  api_base: https://api.deepseek.com
+  api_key_env: DEEPSEEK_API_KEY
+  temperature: 0.0
+  max_steps: 0
+  cost_limit: 0.0
+  timeout: 1800
+
+docker:
+  workdir: /testbed
+  timeout: 1800
+  min_free_gb: 20
+  max_cached_images: 75
+
+container:
+  runtime: apptainer
+  module: tools/Apptainer
+  sif_cache_dir: /scratch/users/${USER}/vibe-coding-planning/shared/sif-cache
+  writable_tmpfs: true
+  network_disabled: true
+
+execution:
+  code_phase_timeout_seconds: 2400
+  repository_command_timeout_seconds: 120
+
+hpc:
+  submit: true
+  partition: batch
+  cpus_per_task: 1
+  mem: 1750M
+  time: "02:05:00"
+  poll_interval_seconds: 300
+  task_output_grace_seconds: 300
+  missing_task_grace_seconds: 600
+  max_task_attempts: 3
+  remote_env_file: ~/.config/vibe-coding-planning/deepseek.env
+  python_module: lang/Python/3.11
+  container_module: tools/Apptainer
+  python_bin: python3
+  job_name_prefix: polybench-safe-pce-candidate77-aion-v1
+  worker_config_path: configs/polybench_safe_pce_aion_candidate77_v1_20260929.yaml
+
+evaluator:
+  timeout: 1800
+  network_disabled: true

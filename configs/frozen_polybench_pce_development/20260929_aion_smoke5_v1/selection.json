@@ -1,0 +1,14 @@
+{
+  "schema_version": 1,
+  "selection_id": "polybench-aion-safe-pce-smoke5-v1-20260929",
+  "purpose": "Aion 1750M safe-boundary and resource smoke across all five PolyBench repositories, selected without historical R/U labels",
+  "source_manifest_sha256": "10ea60215fcbf2b7af32fa1a0dc284a3f55022f0cfba0c24c12e24f24e5612f2",
+  "parent_selection": "polybench-nonnetwork-candidate77-v1-20260929",
+  "selected_instance_ids": [
+    "Significant-Gravitas__AutoGPT-4652",
+    "huggingface__transformers-15843",
+    "langchain-ai__langchain-5609",
+    "yt-dlp__yt-dlp-9862",
+    "keras-team__keras-19924"
+  ]
+}

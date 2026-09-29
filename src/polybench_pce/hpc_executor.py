@@ -34,6 +34,12 @@ def _stable_hash(value: Any) -> str:
     ).hexdigest()
 
 
+def pce_unit_id(instance_id: str, repetition: int, repetitions: int) -> str:
+    if not 1 <= repetition <= repetitions:
+        raise ValueError("PCE repetition is outside the configured range")
+    return instance_id if repetitions == 1 else f"{instance_id}::rep-{repetition:02d}"
+
+
 def _package_identity(import_name: str, distribution_name: str) -> dict[str, str]:
     spec = importlib.util.find_spec(import_name)
     if spec is None or not spec.submodule_search_locations:
@@ -68,6 +74,9 @@ def pce_semantic_sha256(config: PolyBenchPCEConfig) -> str:
                 str(path.relative_to(root)): file_sha256(path) for path in sources
             },
             "plan": asdict(config.plan),
+            "plan_submission_protocol": config.plan_submission_protocol,
+            "agent_network_disabled": config.agent_network_disabled,
+            "evaluator_network_disabled": config.evaluator_network_disabled,
             "code": asdict(config.code),
             "docker": asdict(config.docker),
             "container": {
@@ -92,6 +101,7 @@ def pce_semantic_sha256(config: PolyBenchPCEConfig) -> str:
                 "nrpv": config.nrpv_block,
             },
             "attempts": config.hpc.max_task_attempts,
+            "repetitions": config.repetitions,
             "third_party": {
                 "mini_swe_agent": _package_identity("minisweagent", "mini-swe-agent"),
                 "poly_bench_evaluation": _package_identity(
@@ -123,6 +133,7 @@ def execution_fingerprint(
                 }
                 for case in cases
             ],
+            "repetitions": config.repetitions,
         }
     )
 
@@ -208,10 +219,15 @@ class PolyBenchPCEHPCExecutor:
             return path
 
         def validate(task: TaskFiles, value: dict[str, Any]) -> None:
+            task_manifest = json.loads(task.manifest_path.read_text(encoding="utf-8"))
             if value.get("fingerprint") != fingerprint:
                 raise ValueError("PolyBench PCE output fingerprint mismatch")
             if value.get("instance_id") != task.instance_id:
                 raise ValueError("PolyBench PCE output instance mismatch")
+            if value.get("source_instance_id") != task_manifest["source_instance_id"]:
+                raise ValueError("PolyBench PCE source identity mismatch")
+            if value.get("repetition") != task_manifest["repetition"]:
+                raise ValueError("PolyBench PCE repetition mismatch")
             if value.get("pce_status") != "completed":
                 raise ValueError("completed worker output lacks completed PCE evidence")
             if value.get("final_validation_label") is not None:
@@ -231,14 +247,19 @@ class PolyBenchPCEHPCExecutor:
         except TaskAttemptsExhausted:
             return self._collect_exhausted(batch_dir, fingerprint, tasks)
 
-    @staticmethod
     def _prepare(
+        self,
         batch_dir: Path,
         fingerprint: str,
         cases: Sequence[PolyBenchPCECase],
     ) -> list[TaskFiles]:
         tasks: list[TaskFiles] = []
-        for index, case in enumerate(cases):
+        for index, (case, repetition) in enumerate(
+            (case, repetition)
+            for case in cases
+            for repetition in range(1, self.config.repetitions + 1)
+        ):
+            unit_id = pce_unit_id(case.instance_id, repetition, self.config.repetitions)
             task_id = f"{index:04d}"
             manifest_path = batch_dir / "tasks" / f"task_{task_id}.json"
             output_path = batch_dir / "outputs" / f"task_{task_id}.json"
@@ -248,7 +269,9 @@ class PolyBenchPCEHPCExecutor:
                 "mode": "polybench_pce",
                 "fingerprint": fingerprint,
                 "task_index": index,
-                "instance_id": case.instance_id,
+                "instance_id": unit_id,
+                "source_instance_id": case.instance_id,
+                "repetition": repetition,
                 "case": case.to_dict(),
             }
             if manifest_path.is_file():
@@ -260,7 +283,7 @@ class PolyBenchPCEHPCExecutor:
                 atomic_json(manifest_path, payload)
             tasks.append(
                 TaskFiles(
-                    index, case.instance_id, manifest_path, output_path, attempts_dir
+                    index, unit_id, manifest_path, output_path, attempts_dir
                 )
             )
         atomic_json(
@@ -270,7 +293,9 @@ class PolyBenchPCEHPCExecutor:
                 "mode": "polybench_pce",
                 "fingerprint": fingerprint,
                 "task_count": len(tasks),
-                "instance_ids": [case.instance_id for case in cases],
+                "instance_ids": [task.instance_id for task in tasks],
+                "source_instance_ids": [case.instance_id for case in cases],
+                "repetitions": self.config.repetitions,
             },
         )
         return tasks
@@ -284,6 +309,7 @@ class PolyBenchPCEHPCExecutor:
         results: list[dict[str, Any]] = []
         max_attempts = self.config.hpc.max_task_attempts
         for task in tasks:
+            task_manifest = json.loads(task.manifest_path.read_text(encoding="utf-8"))
             value: dict[str, Any] = {}
             if task.output_path.is_file():
                 loaded = json.loads(task.output_path.read_text(encoding="utf-8"))
@@ -309,6 +335,8 @@ class PolyBenchPCEHPCExecutor:
                     "fingerprint": fingerprint,
                     "task_index": task.index,
                     "instance_id": task.instance_id,
+                    "source_instance_id": task_manifest["source_instance_id"],
+                    "repetition": task_manifest["repetition"],
                     "attempts_exhausted": max_attempts,
                     "last_worker_output": value or None,
                     "last_slurm_status": slurm,

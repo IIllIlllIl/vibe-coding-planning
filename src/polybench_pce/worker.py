@@ -13,6 +13,7 @@ from src.exceptions import AgentTaskError, FatalError
 from src.optimization.hpc.task_batch import atomic_json
 from src.polybench_pce.config import load_polybench_pce_config
 from src.polybench_pce.evaluator import PolyBenchEvaluatorOperationalError
+from src.polybench_pce.hpc_executor import pce_unit_id
 from src.polybench_pce.models import PolyBenchPCECase
 from src.polybench_pce.runner import PolyBenchPCERunner, checkpoint_identity
 
@@ -72,6 +73,13 @@ def run_task(
         case = PolyBenchPCECase.from_dict(dict(manifest["case"]))
         stage = "config_load"
         config = load_polybench_pce_config(config_path)
+        repetition = int(manifest.get("repetition", 1))
+        unit_id = pce_unit_id(case.instance_id, repetition, config.repetitions)
+        if (
+            manifest.get("instance_id") != unit_id
+            or manifest.get("source_instance_id", case.instance_id) != case.instance_id
+        ):
+            raise ValueError("PCE task/source/repetition identity mismatch")
         stage = "runtime_setup"
         capacity = configure_docker_capacity(
             config.docker,
@@ -86,6 +94,7 @@ def run_task(
             checkpoint_identity=checkpoint_identity(
                 case,
                 execution_fingerprint=str(manifest["fingerprint"]),
+                repetition=repetition,
             ),
             attempt_dir=attempt_dir,
         ).run(case)
@@ -98,7 +107,9 @@ def run_task(
                 "mode": "polybench_pce",
                 "fingerprint": manifest["fingerprint"],
                 "task_index": manifest["task_index"],
-                "instance_id": case.instance_id,
+                "instance_id": unit_id,
+                "source_instance_id": case.instance_id,
+                "repetition": repetition,
                 "row_sha256": case.row_sha256,
                 "attempt": attempt,
                 "attempt_evidence_dir": str(attempt_dir),
@@ -127,7 +138,9 @@ def run_task(
             "mode": "polybench_pce",
             "fingerprint": manifest.get("fingerprint"),
             "task_index": manifest.get("task_index"),
-            "instance_id": case.instance_id if case else manifest.get("instance_id"),
+            "instance_id": manifest.get("instance_id"),
+            "source_instance_id": case.instance_id if case else manifest.get("source_instance_id"),
+            "repetition": manifest.get("repetition", 1),
             "attempt": attempt,
             "attempt_evidence_dir": str(attempt_dir),
             "checkpoint_dir": str(checkpoint_dir),

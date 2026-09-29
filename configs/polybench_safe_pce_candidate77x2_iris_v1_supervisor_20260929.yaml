@@ -1,0 +1,26 @@
+schema_version: 1
+session: polybench-safe-pce-candidate77x2-iris-v1-20260929
+log: .local/hpc-supervisor/polybench-safe-pce-candidate77x2-iris-v1-20260929.log
+arguments:
+  - --poll-interval
+  - "300"
+  - --slice-time
+  - "00:15:00"
+  - --max-runs
+  - "0"
+  - --reclaim-staging
+  - --reclaim-workspaces
+  - --batch-script
+  - scripts/hpc_submit_polybench_pce.sh
+  - --config
+  - configs/polybench_safe_pce_candidate77x2_v1_20260929.yaml
+  - --job-name
+  - polybench-safe-pce-candidate77x2-iris-v1-20260929
+  - --mem
+  - 4G
+  - --remote-dir
+  - /scratch/users/twang/vibe-coding-planning/staging/polybench-safe-pce-candidate77x2-iris-v1-20260929
+  - --ulhpc-config
+  - configs/ulhpc_submit.yaml
+  - --fixed-worktree
+  - --submit

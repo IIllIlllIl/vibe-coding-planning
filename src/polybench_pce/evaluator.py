@@ -178,6 +178,7 @@ def evaluate_polybench_apptainer(
     cleanup_error_callback: Callable[[BaseException], None] | None = None,
     dependency_cache: DependencyCacheConfig | None = None,
     repository_baseline_dir: Path | None = None,
+    network_disabled_override: bool = False,
 ) -> dict[str, Any]:
     """Return raw official evidence without deciding validation inclusion."""
 
@@ -188,6 +189,8 @@ def evaluate_polybench_apptainer(
                 "network_disabled": dependency_cache.network_disabled,
                 "container_path": "/dependency-cache",
             }
+        if network_disabled_override:
+            result["container_network_disabled"] = True
         if result_callback is not None:
             result_callback(result)
         return result
@@ -212,11 +215,12 @@ def evaluate_polybench_apptainer(
     env: ApptainerEnvironment | None = None
     try:
         run_args: list[str] = []
-        network_disabled = False
+        network_disabled = network_disabled_override
         if dependency_cache is not None:
-            run_args, network_disabled = _dependency_cache_runtime(
+            run_args, dependency_network_disabled = _dependency_cache_runtime(
                 case, dependency_cache
             )
+            network_disabled = network_disabled or dependency_network_disabled
         # The directory must be empty when ApptainerEnvironment is created:
         # that constructor materializes the image's /testbed into it.  Only
         # then do we add evaluator-owned inputs to the bound workspace.

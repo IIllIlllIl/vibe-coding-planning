@@ -1,0 +1,29 @@
+schema_version: 1
+session: polybench-safe-pce-smoke5-aion-v1-20260929
+log: .local/hpc-supervisor/polybench-safe-pce-smoke5-aion-v1-20260929.log
+arguments:
+  - --poll-interval
+  - "120"
+  - --slice-time
+  - "00:15:00"
+  - --max-runs
+  - "0"
+  - --reclaim-workspaces
+  - --batch-script
+  - scripts/hpc_submit_polybench_pce.sh
+  - --config
+  - configs/polybench_safe_pce_aion_smoke5_v1_20260929.yaml
+  - --job-name
+  - polybench-safe-pce-smoke5-aion-20260929
+  - --mem
+  - 1750M
+  - --remote-dir
+  - /scratch/users/twang/vibe-coding-planning/staging/polybench-safe-pce-smoke5-aion-20260929
+  - --remote-dataset-dir
+  - /scratch/users/twang/vibe-coding-planning/datasets
+  - --remote-run-dir
+  - /scratch/users/twang/vibe-coding-planning/run_state
+  - --ulhpc-config
+  - configs/ulhpc_submit_aion.yaml
+  - --fixed-worktree
+  - --submit

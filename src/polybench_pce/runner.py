@@ -14,6 +14,11 @@ from src.config import AgentConfig, Config, EvaluatorConfig, PromptConfig, Syste
 from src.environment.apptainer_env import ApptainerEnvironment, ApptainerSifCache
 from src.environment.docker_env import DockerCapacityWindow
 from src.environment.repository_baseline import restore_repository_to_base
+from src.environment.repository_history import (
+    RepositoryHistoryCache,
+    install_repository_history_bundle,
+)
+from src.environment.source_access import extract_http_urls
 from src.exceptions import FatalError
 from src.optimization.audit import AuditedModel, JsonlLogger
 from src.optimization.hpc.task_batch import atomic_json
@@ -45,6 +50,7 @@ class PolyBenchPCERunner:
         self.evaluator = evaluator
         self.audit = JsonlLogger(attempt_dir / "audit_events.jsonl")
         self.usage = JsonlLogger(attempt_dir / "usage.jsonl")
+        self.source_access_path = attempt_dir / "source_access.jsonl"
 
     def _agent_config(self, model: Any) -> AgentConfig:
         return AgentConfig(
@@ -52,6 +58,7 @@ class PolyBenchPCERunner:
             cost_limit=model.cost_limit,
             timeout=model.timeout,
             temperature=model.temperature,
+            thinking=model.thinking,
         )
 
     def _base_config(self, model: Any) -> Config:
@@ -126,8 +133,13 @@ class PolyBenchPCERunner:
         case: PolyBenchPCECase,
         *,
         timeout: int,
+        phase: str = "legacy",
         host_workdir: Path | None = None,
     ) -> ApptainerEnvironment:
+        safe_boundary = (
+            getattr(self.config, "plan_submission_protocol", "legacy_stdout_v1")
+            == "direct_human_markdown_v5"
+        )
         return ApptainerEnvironment(
             image=case.image.requested_ref,
             cwd=self.config.docker.workdir,
@@ -135,11 +147,79 @@ class PolyBenchPCERunner:
             capacity_window=self.capacity_window,
             timeout=timeout,
             writable_tmpfs=self.config.container.writable_tmpfs,
-            run_args=["--containall"],
+            run_args=(
+                ["--containall", "--no-mount", "cwd"]
+                if safe_boundary
+                else ["--containall"]
+            ),
             git_safe_directories=[self.config.docker.workdir],
             host_workdir=host_workdir,
             initialize_host_workdir=host_workdir is not None,
             isolate_tmp=True,
+            network_disabled=getattr(self.config, "agent_network_disabled", False),
+            masked_container_paths=(
+                ["/opt/miniconda3/pkgs"] if safe_boundary else None
+            ),
+            source_access_prompt_urls=(
+                list(extract_http_urls(case.issue_description))
+                if safe_boundary
+                else None
+            ),
+            source_access_log_path=(
+                self.source_access_path if safe_boundary else None
+            ),
+            source_access_context=(
+                {"instance_id": case.instance_id, "phase": phase}
+                if safe_boundary
+                else None
+            ),
+        )
+
+    def _prepared_history(self, case: PolyBenchPCECase) -> Path:
+        cache = RepositoryHistoryCache(
+            self.config.container.sif_cache_dir.parent
+            / "repository-history-cache-v1"
+        )
+        existing = cache.validate(
+            sif_sha256=case.image.sif_sha256,
+            base_commit=case.base_commit,
+        )
+        if existing is None:
+            raise FatalError(
+                f"prepared base-ancestor Git history is missing for {case.instance_id}"
+            )
+        bundle, manifest = existing
+        atomic_json(
+            self.attempt_dir / "repository_history_artifact.json",
+            {**manifest, "bundle": str(bundle)},
+        )
+        return bundle
+
+    def _restore_agent_repository(
+        self,
+        env: ApptainerEnvironment,
+        case: PolyBenchPCECase,
+        *,
+        phase: str,
+        host_workdir: Path,
+        history_bundle: Path | None,
+    ) -> None:
+        evidence_dir = self.attempt_dir / "repository_baselines" / phase
+        if history_bundle is not None:
+            evidence_dir.mkdir(parents=True, exist_ok=True)
+            evidence = install_repository_history_bundle(
+                repository_dir=host_workdir,
+                bundle=history_bundle,
+                base_commit=case.base_commit,
+            )
+            atomic_json(evidence_dir / "repository_history_install.json", evidence)
+        restore_repository_to_base(
+            env,
+            case.base_commit,
+            phase=phase,
+            evidence_dir=evidence_dir,
+            timeout=self.config.execution.repository_command_timeout_seconds,
+            prune_future_history=False,
         )
 
     @staticmethod
@@ -232,7 +312,9 @@ class PolyBenchPCERunner:
                     unstaged_patch.encode()
                 ).hexdigest(),
                 "unstaged_patch_chars": len(unstaged_patch),
-                "untracked_paths": observations["untracked_paths"]["output"].splitlines(),
+                "untracked_paths": observations["untracked_paths"][
+                    "output"
+                ].splitlines(),
             },
             "repository_status": observations["status"],
         }
@@ -242,21 +324,34 @@ class PolyBenchPCERunner:
     def run(self, case: PolyBenchPCECase) -> dict[str, Any]:
         self._verify_sif(case)
         plan_checkpoint = self._checkpoint("plan")
+        code_checkpoint = self._checkpoint("code")
+        safe_boundary = self.config.plan_submission_protocol == "direct_human_markdown_v5"
+        history_bundle = (
+            self._prepared_history(case)
+            if safe_boundary and (plan_checkpoint is None or code_checkpoint is None)
+            else None
+        )
         if plan_checkpoint is None:
             plan_workspace = self.attempt_dir / "workspaces" / "plan"
             self._cleanup(plan_workspace)
             env = self._environment(
                 case,
                 timeout=self.config.plan.timeout,
+                phase="plan",
                 host_workdir=plan_workspace,
             )
             try:
-                restore_repository_to_base(
+                self._restore_agent_repository(
                     env,
-                    case.base_commit,
+                    case,
                     phase="plan",
-                    evidence_dir=self.attempt_dir / "repository_baselines" / "plan",
-                    timeout=self.config.execution.repository_command_timeout_seconds,
+                    host_workdir=plan_workspace,
+                    history_bundle=history_bundle,
+                )
+                submission_protocol = self.config.plan_submission_protocol
+                direct_submission = (
+                    submission_protocol
+                    == plan_agent.DIRECT_HUMAN_BOUNDED_MARKDOWN_PROTOCOL
                 )
                 plan, trajectory = plan_agent.run(
                     self._base_config(self.config.plan),
@@ -272,29 +367,79 @@ class PolyBenchPCERunner:
                         },
                     ),
                     failure_trajectory_path=self.attempt_dir / "plan_failure.json",
+                    **(
+                        {
+                            "require_direct_submission": True,
+                            "direct_submission_protocol": submission_protocol,
+                        }
+                        if direct_submission
+                        else {}
+                    ),
                 )
                 plan_checkpoint = {"plan": plan, "trajectory": list(trajectory)}
+                if direct_submission:
+                    raw_submission = plan_agent.direct_plan_terminal_response(
+                        trajectory,
+                        start_marker=plan_agent.DIRECT_HUMAN_PLAN_MARKER,
+                    )
+                    if raw_submission is None:
+                        raise FatalError(
+                            "bounded Plan submission is absent from its trajectory"
+                        )
+                    plan_checkpoint.update(
+                        {
+                            "plan_sha256": hashlib.sha256(plan.encode()).hexdigest(),
+                            "submission_protocol": submission_protocol,
+                            "raw_plan_submission": raw_submission,
+                            "raw_plan_submission_sha256": hashlib.sha256(
+                                raw_submission.encode()
+                            ).hexdigest(),
+                            "plan_boundary": {
+                                "start_marker": plan_agent.DIRECT_HUMAN_PLAN_MARKER,
+                                "end_marker": plan_agent.DIRECT_HUMAN_PLAN_END_MARKER,
+                            },
+                        }
+                    )
                 self._save_checkpoint("plan", plan_checkpoint)
             finally:
                 self._best_effort_environment_cleanup(env, phase="plan")
                 self._best_effort_workspace_cleanup(plan_workspace, phase="plan")
 
-        code_checkpoint = self._checkpoint("code")
+        if self.config.plan_submission_protocol == "direct_human_markdown_v5":
+            if (
+                plan_checkpoint.get("submission_protocol")
+                != self.config.plan_submission_protocol
+            ):
+                raise FatalError("PCE Plan checkpoint submission protocol mismatch")
+            if (
+                plan_checkpoint.get("plan_sha256")
+                != hashlib.sha256(str(plan_checkpoint["plan"]).encode()).hexdigest()
+            ):
+                raise FatalError("PCE Plan checkpoint hash mismatch")
+            raw_submission = plan_checkpoint.get("raw_plan_submission")
+            if (
+                not isinstance(raw_submission, str)
+                or plan_checkpoint.get("raw_plan_submission_sha256")
+                != hashlib.sha256(raw_submission.encode()).hexdigest()
+            ):
+                raise FatalError("PCE raw Plan submission checkpoint hash mismatch")
+
         if code_checkpoint is None:
             code_workspace = self.attempt_dir / "workspaces" / "code"
             self._cleanup(code_workspace)
             env = self._environment(
                 case,
                 timeout=self.config.code.timeout,
+                phase="code",
                 host_workdir=code_workspace,
             )
             try:
-                restore_repository_to_base(
+                self._restore_agent_repository(
                     env,
-                    case.base_commit,
+                    case,
                     phase="code",
-                    evidence_dir=self.attempt_dir / "repository_baselines" / "code",
-                    timeout=self.config.execution.repository_command_timeout_seconds,
+                    host_workdir=code_workspace,
+                    history_bundle=history_bundle,
                 )
                 base_code_config = self._base_config(self.config.code)
                 code_config = replace(
@@ -380,6 +525,8 @@ class PolyBenchPCERunner:
                 }
                 if self.config.dependency_cache is not None:
                     evaluator_options["dependency_cache"] = self.config.dependency_cache
+                if self.config.evaluator_network_disabled:
+                    evaluator_options["network_disabled_override"] = True
                 evaluator_result = self.evaluator(
                     str(code_checkpoint["patch"]), case, **evaluator_options
                 )
@@ -419,7 +566,10 @@ def checkpoint_identity(
     case: PolyBenchPCECase,
     *,
     execution_fingerprint: str,
+    repetition: int = 1,
 ) -> str:
+    if repetition < 1:
+        raise ValueError("repetition must be positive")
     value = {
         "schema": 1,
         "execution_fingerprint": execution_fingerprint,
@@ -429,6 +579,8 @@ def checkpoint_identity(
         "oci_digest": case.image.oci_digest,
         "sif_sha256": case.image.sif_sha256,
     }
+    if repetition != 1:
+        value["repetition"] = repetition
     return hashlib.sha256(
         json.dumps(value, sort_keys=True, separators=(",", ":")).encode("utf-8")
     ).hexdigest()

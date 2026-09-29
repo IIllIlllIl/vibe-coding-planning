@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 import hashlib
 import json
 import os
@@ -209,6 +209,175 @@ def test_controller_manifest_ignores_only_transient_staged_paths() -> None:
 
     assert _run_manifest_compatible(existing, relocated)
     assert not _run_manifest_compatible(existing, changed_data)
+
+
+def test_safe_pce_config_binds_selection_and_direct_plan_protocol(
+    tmp_path: Path,
+) -> None:
+    snapshot, images, _ = _frozen_inputs(tmp_path)
+    config_path = _config(tmp_path, snapshot, images)
+    raw = yaml.safe_load(config_path.read_text())
+    selection_path = tmp_path / "selection.json"
+    selection_path.write_text(
+        json.dumps(
+            {
+                "schema_version": 1,
+                "source_manifest_sha256": _sha(snapshot / "manifest.json"),
+                "selected_instance_ids": ["Org__Repo-1"],
+            }
+        )
+    )
+    prompt_path = tmp_path / "plan-prompts.yaml"
+    prompt_path.write_text(
+        yaml.safe_dump(
+            {
+                "prompts": {
+                    "plan_system": "new plan system",
+                    "plan_instance": "<issue>{{task}}</issue>",
+                }
+            }
+        )
+    )
+    raw["paths"]["selection_manifest"] = str(selection_path)
+    raw["paths"]["plan_prompt_source_config"] = str(prompt_path)
+    raw["plan"].update(
+        {
+            "temperature": 1.0,
+            "thinking": "disabled",
+            "submission_protocol": "direct_human_markdown_v5",
+        }
+    )
+    raw["container"]["network_disabled"] = True
+    raw["evaluator"]["network_disabled"] = True
+    config_path.write_text(yaml.safe_dump(raw))
+    config = load_polybench_pce_config(config_path, require_api_keys=False)
+    assert config.instance_ids == ("Org__Repo-1",)
+    assert config.plan.temperature == 1.0
+    assert config.plan.thinking == "disabled"
+    assert config.plan_submission_protocol == "direct_human_markdown_v5"
+    assert config.agent_network_disabled is True
+    assert config.evaluator_network_disabled is True
+    assert config.plan_prompt == "new plan system"
+    assert config.code_prompt == "code {{plan}}"
+
+    selection = json.loads(selection_path.read_text())
+    selection["source_manifest_sha256"] = "0" * 64
+    selection_path.write_text(json.dumps(selection))
+    with pytest.raises(ValueError, match="source manifest SHA-256 mismatch"):
+        load_polybench_pce_config(config_path, require_api_keys=False)
+
+
+def test_two_repetitions_have_independent_transport_and_checkpoints(
+    tmp_path: Path,
+) -> None:
+    snapshot, images, _ = _frozen_inputs(tmp_path)
+    config_path = _config(tmp_path, snapshot, images)
+    raw = yaml.safe_load(config_path.read_text())
+    raw["pce"] = {"repetitions": 2}
+    config_path.write_text(yaml.safe_dump(raw))
+    config = load_polybench_pce_config(config_path, require_api_keys=False)
+    cases, _, _ = load_polybench_pce_cases(snapshot, images)
+    tasks = PolyBenchPCEHPCExecutor(config)._prepare(
+        tmp_path / "batch", "repeat-fingerprint", cases
+    )
+    assert [task.instance_id for task in tasks] == [
+        "Org__Repo-1::rep-01",
+        "Org__Repo-1::rep-02",
+    ]
+    manifests = [json.loads(task.manifest_path.read_text()) for task in tasks]
+    assert [item["repetition"] for item in manifests] == [1, 2]
+    assert all(item["source_instance_id"] == "Org__Repo-1" for item in manifests)
+    assert checkpoint_identity(
+        cases[0], execution_fingerprint="repeat-fingerprint", repetition=1
+    ) != checkpoint_identity(
+        cases[0], execution_fingerprint="repeat-fingerprint", repetition=2
+    )
+
+
+def test_pce_selection_rejects_unknown_case_before_submission(
+    tmp_path: Path,
+) -> None:
+    snapshot, images, _ = _frozen_inputs(tmp_path)
+    config_path = _config(tmp_path, snapshot, images)
+    raw = yaml.safe_load(config_path.read_text())
+    selection_path = tmp_path / "selection.json"
+    selection_path.write_text(
+        json.dumps(
+            {
+                "schema_version": 1,
+                "source_manifest_sha256": _sha(snapshot / "manifest.json"),
+                "selected_instance_ids": ["Org__Unknown-1"],
+            }
+        )
+    )
+    raw["paths"]["selection_manifest"] = str(selection_path)
+    config_path.write_text(yaml.safe_dump(raw))
+    config = load_polybench_pce_config(config_path, require_api_keys=False)
+    with pytest.raises(ValueError, match="unavailable cases"):
+        run_polybench_pce(config)
+    assert not config.run_dir.exists()
+
+
+def test_pce_selection_submits_only_frozen_cases(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    snapshot, images, _ = _frozen_inputs(tmp_path)
+    config_path = _config(tmp_path, snapshot, images)
+    raw = yaml.safe_load(config_path.read_text())
+    selection_path = tmp_path / "selection.json"
+    selection_path.write_text(
+        json.dumps(
+            {
+                "schema_version": 1,
+                "source_manifest_sha256": _sha(snapshot / "manifest.json"),
+                "selected_instance_ids": ["Org__Repo-2"],
+            }
+        )
+    )
+    raw["paths"]["selection_manifest"] = str(selection_path)
+    config_path.write_text(yaml.safe_dump(raw))
+    config = load_polybench_pce_config(config_path, require_api_keys=False)
+    first = load_polybench_pce_cases(snapshot, images)[0][0]
+    second = replace(first, instance_id="Org__Repo-2")
+    monkeypatch.setattr(
+        "src.polybench_pce.controller.load_polybench_pce_cases",
+        lambda *args: ([first, second], {"instances_file": "instances.jsonl"}, {}),
+    )
+    monkeypatch.setattr(
+        "src.polybench_pce.controller.execution_fingerprint",
+        lambda *args: "test-fingerprint",
+    )
+    monkeypatch.setattr(
+        "src.polybench_pce.controller.pce_semantic_sha256",
+        lambda *args: "test-semantic",
+    )
+    captured: list[str] = []
+
+    def evaluate(self, cases):
+        captured.extend(case.instance_id for case in cases)
+        return []
+
+    monkeypatch.setattr(PolyBenchPCEHPCExecutor, "evaluate", evaluate)
+    run_polybench_pce(config)
+    manifest = json.loads((config.run_dir / "run_manifest.json").read_text())
+    assert captured == ["Org__Repo-2"]
+    assert manifest["instance_ids"] == ["Org__Repo-2"]
+    assert manifest["selected_instances"] == 1
+    assert manifest["source_image_available_instances"] == 2
+
+
+def test_direct_pce_requires_preheated_history_before_submission(
+    tmp_path: Path,
+) -> None:
+    snapshot, images, _ = _frozen_inputs(tmp_path)
+    config_path = _config(tmp_path, snapshot, images)
+    raw = yaml.safe_load(config_path.read_text())
+    raw["plan"]["submission_protocol"] = "direct_human_markdown_v5"
+    config_path.write_text(yaml.safe_dump(raw))
+    config = load_polybench_pce_config(config_path, require_api_keys=False)
+    with pytest.raises(ValueError, match="prepared base-ancestor Git history"):
+        run_polybench_pce(config)
+    assert not config.run_dir.exists()
 
 
 def test_dataset_rejects_malformed_test_lists_instead_of_scoring_empty(
@@ -468,6 +637,7 @@ def test_evaluator_materializes_repo_before_writing_inputs(
 
     class FakeEnv:
         def __init__(self, **kwargs: object) -> None:
+            assert kwargs["network_disabled"] is True
             workspace = Path(str(kwargs["host_workdir"]))
             assert not workspace.exists() or not any(workspace.iterdir())
             workspace.mkdir(parents=True, exist_ok=True)
@@ -534,11 +704,13 @@ def test_evaluator_materializes_repo_before_writing_inputs(
         workdir="/testbed",
         phase_workdir=tmp_path / "eval",
         timeout=30,
+        network_disabled_override=True,
         result_callback=lambda result: events.append(
             f"checkpoint:{result['terminal_kind']}"
         ),
     )
     assert result["terminal_kind"] == "tests_parsed"
+    assert result["container_network_disabled"] is True
     assert events == [
         "environment",
         "baseline",
@@ -745,12 +917,17 @@ def test_exhausted_attempts_are_raw_incomplete_not_labels(tmp_path: Path) -> Non
     (attempts / "attempt_03" / "slurm_status.json").write_text(
         json.dumps({"state": "TIMEOUT"})
     )
+    (tmp_path / "manifest").write_text(
+        json.dumps({"source_instance_id": "Org__Repo-1", "repetition": 1})
+    )
     task = TaskFiles(0, "Org__Repo-1", tmp_path / "manifest", output, attempts)
     result = executor._collect_exhausted(tmp_path / "batch", "fingerprint", [task])
     assert result[0]["status"] == "incomplete"
     assert result[0]["attempts_exhausted"] == 3
     assert result[0]["last_slurm_status"]["state"] == "TIMEOUT"
     assert result[0]["final_validation_label"] is None
+    assert result[0]["source_instance_id"] == "Org__Repo-1"
+    assert result[0]["repetition"] == 1
 
 
 def test_controller_persists_raw_pce_without_final_label(
@@ -796,9 +973,7 @@ def test_repository_boundary_smoke_freezes_agent_owned_submission_prompt() -> No
     )["prompts"]
 
     assert "git add -A" not in smoke["code_instance"]
-    assert (
-        "git diff --cached --binary --full-index" in smoke["code_instance"]
-    )
+    assert "git diff --cached --binary --full-index" in smoke["code_instance"]
     normalized = " ".join(smoke["code_instance"].split())
     assert "do not stage test files, test fixtures" in normalized
     assert "Git staging area is the implementation-submission boundary" in normalized
@@ -854,13 +1029,9 @@ def test_runner_freezes_staged_and_unstaged_code_workspace_evidence(
         submitted_patch=submitted,
     )
 
-    assert evidence["implementation_submission"]["staged_paths"] == [
-        "src/module.py"
-    ]
+    assert evidence["implementation_submission"]["staged_paths"] == ["src/module.py"]
     assert evidence["implementation_submission"]["matches_agent_submission"] is True
-    assert evidence["diagnostic_changes"]["untracked_paths"] == [
-        "tests/new_test.py"
-    ]
+    assert evidence["diagnostic_changes"]["untracked_paths"] == ["tests/new_test.py"]
     assert (tmp_path / "attempt" / "unstaged_diagnostic_changes.patch").read_text(
         encoding="utf-8"
     ) == _diff("tests/test_module.py")
@@ -927,7 +1098,9 @@ def test_runner_reuses_only_completed_phase_checkpoints(
     assert first["final_validation_label"] is None
     assert calls.count("plan") == calls.count("code") == calls.count("evaluate") == 1
     assert calls.count("baseline:plan") == calls.count("baseline:code") == 1
-    assert [Path(str(kwargs["host_workdir"])).name for kwargs in environment_kwargs] == [
+    assert [
+        Path(str(kwargs["host_workdir"])).name for kwargs in environment_kwargs
+    ] == [
         "plan",
         "code",
     ]
@@ -946,6 +1119,104 @@ def test_runner_reuses_only_completed_phase_checkpoints(
     assert calls.count("baseline:plan") == calls.count("baseline:code") == 1
 
 
+def test_runner_preserves_direct_plan_and_disabled_thinking(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    snapshot, images, _ = _frozen_inputs(tmp_path)
+    case = load_polybench_pce_cases(snapshot, images)[0][0]
+    config_path = _config(tmp_path, snapshot, images)
+    raw = yaml.safe_load(config_path.read_text())
+    raw["plan"].update(
+        {
+            "temperature": 1.0,
+            "thinking": "disabled",
+            "submission_protocol": "direct_human_markdown_v5",
+        }
+    )
+    config_path.write_text(yaml.safe_dump(raw))
+    config = load_polybench_pce_config(config_path, require_api_keys=False)
+    monkeypatch.setenv("DEEPSEEK_API_KEY", "test-only")
+    monkeypatch.setattr(PolyBenchPCERunner, "_verify_sif", lambda self, case: None)
+    monkeypatch.setattr(
+        PolyBenchPCERunner,
+        "_prepared_history",
+        lambda self, case: tmp_path / "prepared.bundle",
+    )
+    monkeypatch.setattr(
+        "src.polybench_pce.runner.install_repository_history_bundle",
+        lambda **kwargs: {"installed": True},
+    )
+    monkeypatch.setattr(
+        "src.polybench_pce.runner.restore_repository_to_base",
+        lambda *args, **kwargs: None,
+    )
+    monkeypatch.setattr(
+        PolyBenchPCERunner,
+        "_environment",
+        lambda self, case, **kwargs: SimpleNamespace(cleanup=lambda: None),
+    )
+    _stub_workspace_evidence(monkeypatch)
+    plan = "# Plan\n\nInspect the relevant code."
+    raw_submission = f"START_PLAN\n{plan}\nEND_PLAN"
+    captured: dict[str, object] = {}
+
+    def plan_run(agent_config, issue, env, **kwargs):
+        captured["thinking"] = agent_config.agent.thinking
+        captured["direct"] = kwargs["require_direct_submission"]
+        captured["protocol"] = kwargs["direct_submission_protocol"]
+        return plan, [{"role": "assistant", "content": raw_submission}]
+
+    monkeypatch.setattr("src.polybench_pce.runner.plan_agent.run", plan_run)
+    monkeypatch.setattr(
+        "src.polybench_pce.runner.plan_agent.direct_plan_terminal_response",
+        lambda trajectory, **kwargs: raw_submission,
+    )
+    monkeypatch.setattr(
+        "src.polybench_pce.runner.code_agent.run",
+        lambda *args, **kwargs: (_diff("src/module.py"), [{"role": "assistant"}]),
+    )
+    checkpoint_dir = tmp_path / "checkpoints"
+    result = PolyBenchPCERunner(
+        config,
+        SimpleNamespace(),
+        checkpoint_dir=checkpoint_dir,
+        checkpoint_identity="direct-plan",
+        attempt_dir=tmp_path / "attempt",
+        evaluator=lambda *args, **kwargs: {
+            "status": "completed",
+            "terminal_kind": "tests_parsed",
+        },
+    ).run(case)
+    saved = json.loads((checkpoint_dir / "plan.json").read_text())["payload"]
+    assert result["plan"] == plan
+    assert captured == {
+        "thinking": "disabled",
+        "direct": True,
+        "protocol": "direct_human_markdown_v5",
+    }
+    assert saved["plan_sha256"] == hashlib.sha256(plan.encode()).hexdigest()
+    assert saved["raw_plan_submission"] == raw_submission
+    assert saved["raw_plan_submission_sha256"] == hashlib.sha256(
+        raw_submission.encode()
+    ).hexdigest()
+    assert saved["plan_boundary"] == {
+        "start_marker": "START_PLAN",
+        "end_marker": "END_PLAN",
+    }
+    checkpoint = json.loads((checkpoint_dir / "plan.json").read_text())
+    checkpoint["payload"]["raw_plan_submission"] += "tampered"
+    (checkpoint_dir / "plan.json").write_text(json.dumps(checkpoint))
+    with pytest.raises(FatalError, match="raw Plan submission checkpoint hash"):
+        PolyBenchPCERunner(
+            config,
+            SimpleNamespace(),
+            checkpoint_dir=checkpoint_dir,
+            checkpoint_identity="direct-plan",
+            attempt_dir=tmp_path / "retry",
+            evaluator=lambda *args, **kwargs: pytest.fail("must not evaluate"),
+        ).run(case)
+
+
 def test_polybench_agent_environment_isolates_tmp(tmp_path, monkeypatch):
     observed = {}
 
@@ -953,7 +1224,9 @@ def test_polybench_agent_environment_isolates_tmp(tmp_path, monkeypatch):
         def __init__(self, **kwargs):
             observed.update(kwargs)
 
-    monkeypatch.setattr("src.polybench_pce.runner.ApptainerEnvironment", FakeEnvironment)
+    monkeypatch.setattr(
+        "src.polybench_pce.runner.ApptainerEnvironment", FakeEnvironment
+    )
     runner = object.__new__(PolyBenchPCERunner)
     runner.config = SimpleNamespace(
         docker=SimpleNamespace(workdir="/testbed"),
@@ -1104,9 +1377,12 @@ def test_runner_preserves_agent_staged_patch_without_host_filtering(
     }
     assert (attempt_dir / "raw_code_submission.patch").read_text() == raw_patch
     assert not (attempt_dir / "filtered_code_submission.patch").exists()
-    assert json.loads((attempt_dir / "patch_submission.json").read_text())[
-        "host_patch_transformation"
-    ] is False
+    assert (
+        json.loads((attempt_dir / "patch_submission.json").read_text())[
+            "host_patch_transformation"
+        ]
+        is False
+    )
 
 
 def test_runner_sends_empty_agent_submission_to_evaluator(
@@ -1125,7 +1401,9 @@ def test_runner_sends_empty_agent_submission_to_evaluator(
             pass
 
     monkeypatch.setattr(PolyBenchPCERunner, "_verify_sif", lambda *args: None)
-    monkeypatch.setattr(PolyBenchPCERunner, "_environment", lambda *args, **kwargs: Env())
+    monkeypatch.setattr(
+        PolyBenchPCERunner, "_environment", lambda *args, **kwargs: Env()
+    )
     monkeypatch.setattr(
         "src.polybench_pce.runner.restore_repository_to_base",
         lambda *args, **kwargs: None,
@@ -1283,7 +1561,9 @@ def test_evaluator_resume_rejects_unknown_instance_filter(tmp_path: Path) -> Non
         )
 
 
-def test_evaluator_repair_subset_is_bound_to_dependency_manifest(tmp_path: Path) -> None:
+def test_evaluator_repair_subset_is_bound_to_dependency_manifest(
+    tmp_path: Path,
+) -> None:
     subset = tmp_path / "subset.json"
     subset.write_text(
         json.dumps(
@@ -1381,13 +1661,10 @@ def test_clean_dependency_repair_changes_only_evaluator_runtime() -> None:
 
 def test_clean_dependency_repair_subset_is_the_paired_membership_intersection() -> None:
     root = (
-        ROOT
-        / "configs/frozen_dependency_caches/"
+        ROOT / "configs/frozen_dependency_caches/"
         "polybench_evaluator_dependencies_formal_v2_20260823"
     )
-    original = set(
-        load_evaluator_repair_subset(root / "evaluator_repair_subset.json")
-    )
+    original = set(load_evaluator_repair_subset(root / "evaluator_repair_subset.json"))
     clean = load_evaluator_repair_subset(
         root / "clean_pce_repair_subset_20260826.json",
         expected_dependency_manifest_sha256=(
@@ -1397,10 +1674,11 @@ def test_clean_dependency_repair_subset_is_the_paired_membership_intersection() 
     validation = [
         json.loads(line)
         for line in (
-            ROOT
-            / "output/SWE-PolyBench/polybench-guideline-validation-datasets/"
+            ROOT / "output/SWE-PolyBench/polybench-guideline-validation-datasets/"
             "20260825_python100_cleanpce_testparsed_887d4ec9df49/validation.jsonl"
-        ).read_text(encoding="utf-8").splitlines()
+        )
+        .read_text(encoding="utf-8")
+        .splitlines()
         if line.strip()
     ]
     validation_ids = {str(row["instance_id"]) for row in validation}

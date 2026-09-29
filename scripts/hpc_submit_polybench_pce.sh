@@ -23,6 +23,8 @@ EVALUATOR_REPAIR_ID=""
 EVALUATOR_REPAIR_INSTANCES=()
 EVALUATOR_REPAIR_INSTANCE_COUNT=0
 EVALUATOR_REPAIR_INSTANCES_FILE=""
+PREHEAT_HISTORY=0
+FIXED_WORKTREE=0
 
 usage() {
   cat <<'USAGE'
@@ -35,6 +37,7 @@ Required:
 Options:
   --job-name NAME           controller job name
   --time HH:MM:SS           controller slice walltime (default: 00:10:00)
+  --mem SIZE                controller memory: 4G on Iris or 1750M on Aion
   --remote-dir DIR          remote synced project directory
   --require-clean-worktree  reject an uncommitted source/config identity
   --resume-evaluator ID     reuse validated Plan/Code checkpoints and rerun only Evaluate
@@ -42,6 +45,10 @@ Options:
                             restrict repair to this instance; repeat as needed
   --resume-evaluator-instances-file PATH
                             frozen JSON subset shared by PCE and PCCE
+  --preheat-history         prepare selected base-ancestor Git bundles only;
+                            no Agent, PCE, or private API environment
+  --fixed-worktree          reuse an exact scratch staging tree via rsync;
+                            requires --remote-dir under project staging
   --submit                  submit; default is ulhpc-submit dry-run
   --dry-run                 explicitly retain dry-run mode
 
@@ -57,6 +64,7 @@ while [[ $# -gt 0 ]]; do
     --job-name) JOB_NAME="$2"; shift 2 ;;
     --partition) PARTITION="$2"; shift 2 ;;
     --time) TIME_LIMIT="$2"; shift 2 ;;
+    --mem) MEM="$2"; shift 2 ;;
     --remote-dir) REMOTE_DIR="$2"; shift 2 ;;
     --remote-dataset-dir) REMOTE_DATASET_DIR="$2"; shift 2 ;;
     --remote-run-dir) REMOTE_RUN_DIR="$2"; shift 2 ;;
@@ -76,12 +84,23 @@ while [[ $# -gt 0 ]]; do
       EVALUATOR_REPAIR_INSTANCES_FILE="$2"
       shift 2
       ;;
+    --preheat-history) PREHEAT_HISTORY=1; shift ;;
+    --fixed-worktree) FIXED_WORKTREE=1; shift ;;
     --submit) SUBMIT=1; shift ;;
     --dry-run) SUBMIT=0; shift ;;
     -h|--help) usage; exit 0 ;;
     *) echo "ERROR: unknown option: $1" >&2; usage >&2; exit 2 ;;
   esac
 done
+
+if [[ "$MEM" != "4G" && "$MEM" != "1750M" ]]; then
+  echo "ERROR: --mem must be 4G or 1750M" >&2
+  exit 2
+fi
+if [[ $PREHEAT_HISTORY -eq 1 ]] && [[ -n "$EVALUATOR_REPAIR_ID" || $EVALUATOR_REPAIR_INSTANCE_COUNT -gt 0 || -n "$EVALUATOR_REPAIR_INSTANCES_FILE" ]]; then
+  echo "ERROR: --preheat-history cannot be combined with evaluator repair" >&2
+  exit 2
+fi
 
 REPO_ROOT="$(
   conda run --no-capture-output -n mini-swe python - "${BASH_SOURCE[0]}" <<'PY'
@@ -240,6 +259,12 @@ if [[ -z "$REMOTE_USER" ]]; then
 fi
 export ULHPC_USER="${ULHPC_USER:-$REMOTE_USER}"
 HPC_ROOT="/scratch/users/${REMOTE_USER}/vibe-coding-planning"
+if [[ $FIXED_WORKTREE -eq 1 ]]; then
+  case "$REMOTE_DIR" in "$HPC_ROOT"/staging/*) ;; *)
+    echo "ERROR: --fixed-worktree requires an exact path under $HPC_ROOT/staging" >&2
+    exit 2
+  ;; esac
+fi
 CONFIG_SIF_CACHE_DIR="${CONFIG_SIF_CACHE_DIR//\$\{USER\}/$REMOTE_USER}"
 REMOTE_APPTAINER_CACHE_DIR="${REMOTE_APPTAINER_CACHE_DIR:-$HPC_ROOT/shared/apptainer-cache}"
 REMOTE_APPTAINER_TMP_DIR="${REMOTE_APPTAINER_TMP_DIR:-$HPC_ROOT/shared/apptainer-tmp}"
@@ -260,6 +285,17 @@ if [[ -n "$EVALUATOR_REPAIR_INSTANCES_FILE_REL" ]]; then
   EVALUATOR_INSTANCE_ARGS=" --instance-ids-file $EVALUATOR_REPAIR_INSTANCES_FILE_REL"
 fi
 
+if [[ $PREHEAT_HISTORY -eq 1 ]]; then
+REMOTE_SCRIPT=$(cat <<EOF
+set -euo pipefail
+export APPTAINER_CACHEDIR="$REMOTE_APPTAINER_CACHE_DIR"
+export APPTAINER_TMPDIR="$REMOTE_APPTAINER_TMP_DIR"
+export ULHPC_APPTAINER_SIF_CACHE_DIR="$REMOTE_APPTAINER_SIF_CACHE_DIR"
+mkdir -p "\$APPTAINER_CACHEDIR" "\$APPTAINER_TMPDIR"
+python3 -m scripts.tools.preheat_polybench_repository_history --config "$CONFIG_REL"
+EOF
+)
+else
 REMOTE_SCRIPT=$(cat <<EOF
 set -euo pipefail
 export APPTAINER_CACHEDIR="$REMOTE_APPTAINER_CACHE_DIR"
@@ -282,10 +318,24 @@ else
 fi
 EOF
 )
+fi
 
+SUBMIT_LOCAL_DIR="$REPO_ROOT"
+if [[ $FIXED_WORKTREE -eq 1 ]]; then
+  # ulhpc-submit inspects --local-dir for requirements.txt even with --no-sync.
+  # Use an empty metadata root so each controller slice cannot mutate the
+  # shared user Python installation through automatic pip install --user.
+  SUBMIT_LOCAL_DIR="$(mktemp -d "${TMPDIR:-/tmp}/polybench-submit-empty.XXXXXX")"
+  cleanup_submit_local() {
+    if [[ "$(basename "$SUBMIT_LOCAL_DIR")" == polybench-submit-empty.* ]]; then
+      rm -rf -- "$SUBMIT_LOCAL_DIR"
+    fi
+  }
+  trap cleanup_submit_local EXIT
+fi
 CMD=(
   "$ULHPC_SUBMIT_BIN" --submit-only --json
-  --local-dir "$REPO_ROOT" --remote-dir "$REMOTE_DIR"
+  --local-dir "$SUBMIT_LOCAL_DIR" --remote-dir "$REMOTE_DIR"
   --job-name "$JOB_NAME" --partition "$PARTITION"
   --cpus "$CPUS" --mem "$MEM" --time "$TIME_LIMIT" --gpus 0
   --module lang/Python/3.11 --module tools/Apptainer --python python3 --no-conda
@@ -296,6 +346,42 @@ CMD=(
   --apptainer-sif-cache-dir "$REMOTE_APPTAINER_SIF_CACHE_DIR"
   --remote-ignore-extra --config "$ULHPC_CONFIG"
 )
+if [[ $FIXED_WORKTREE -eq 1 ]]; then
+  CMD+=(--no-sync)
+  REMOTE_CONNECTION="$(conda run --no-capture-output -n mini-swe python - "$ULHPC_CONFIG" <<'PY'
+import sys
+from pathlib import Path
+import yaml
+value = yaml.safe_load(Path(sys.argv[1]).read_text(encoding="utf-8")) or {}
+print(str(value.get("host", "access-iris.uni.lu")))
+print(str(value.get("port", 8022)))
+print(str(value.get("ssh_key", "")))
+for item in value.get("sync_excludes") or []:
+    print("exclude=" + str(item))
+PY
+)"
+  REMOTE_HOST="$(printf '%s\n' "$REMOTE_CONNECTION" | sed -n '1p')"
+  REMOTE_PORT="$(printf '%s\n' "$REMOTE_CONNECTION" | sed -n '2p')"
+  REMOTE_KEY="$(printf '%s\n' "$REMOTE_CONNECTION" | sed -n '3p')"
+  REMOTE_KEY="${REMOTE_KEY/#\~/$HOME}"
+  RSYNC_SSH="ssh -p $REMOTE_PORT"
+  SSH_ARGS=(-p "$REMOTE_PORT")
+  if [[ -n "$REMOTE_KEY" ]]; then
+    RSYNC_SSH+=" -i $REMOTE_KEY"
+    SSH_ARGS+=(-i "$REMOTE_KEY")
+  fi
+  SYNC_EXCLUDES=(--exclude configs/ulhpc_submit.yaml --exclude configs/ulhpc_submit_aion.yaml)
+  while IFS= read -r pattern; do
+    [[ -n "$pattern" ]] && SYNC_EXCLUDES+=(--exclude "$pattern")
+  done < <(printf '%s\n' "$REMOTE_CONNECTION" | sed -n 's/^exclude=//p')
+  if [[ $SUBMIT -eq 0 ]]; then
+    echo "[polybench-pce-submit] dry-run fixed-worktree sync: $REMOTE_DIR"
+  else
+    ssh "${SSH_ARGS[@]}" "$REMOTE_USER@$REMOTE_HOST" "mkdir -p $(printf '%q' "$REMOTE_DIR")"
+    rsync -az --delete -e "$RSYNC_SSH" "${SYNC_EXCLUDES[@]}" \
+      "$REPO_ROOT/" "$REMOTE_USER@$REMOTE_HOST:$REMOTE_DIR/"
+  fi
+fi
 [[ $SUBMIT -eq 0 ]] && CMD+=(--dry-run)
 CMD+=(-- bash -c "$REMOTE_SCRIPT")
 
@@ -304,6 +390,7 @@ echo "[polybench-pce-submit] config=$CONFIG_REL"
 echo "[polybench-pce-submit] dataset=$DATASET_REL"
 echo "[polybench-pce-submit] run=$RUN_REL"
 echo "[polybench-pce-submit] evaluator_repair=${EVALUATOR_REPAIR_ID:-none}"
+echo "[polybench-pce-submit] preheat_history=$PREHEAT_HISTORY"
 echo "[polybench-pce-submit] evaluator_instances=${EVALUATOR_REPAIR_INSTANCES[*]:-all}"
 echo "[polybench-pce-submit] evaluator_instances_file=${EVALUATOR_REPAIR_INSTANCES_FILE_REL:-none}"
 echo "[polybench-pce-submit] controller_resources=$CPUS CPU/$MEM/$TIME_LIMIT"

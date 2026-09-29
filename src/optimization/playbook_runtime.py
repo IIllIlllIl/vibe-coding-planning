@@ -463,7 +463,8 @@ def _run_repository_json_agent(
         raise ValueError(
             "Repo Agent requires the Safe PCE conservative_blacklist_v3 source boundary"
         )
-    if set(repository) != {"repo", "base_commit", "instance_id"}:
+    required_repository = {"repo", "base_commit", "instance_id"}
+    if set(repository) not in (required_repository, required_repository | {"image_name"}):
         raise ValueError("Repo Agent repository identity has an invalid schema")
     if any(
         not isinstance(repository[key], str) or not str(repository[key]).strip()

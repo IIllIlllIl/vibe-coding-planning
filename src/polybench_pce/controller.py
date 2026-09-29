@@ -12,6 +12,7 @@ import subprocess
 from typing import Any
 
 from src.exceptions import ControllerYield
+from src.environment.repository_history import RepositoryHistoryCache
 from src.optimization.hpc.task_batch import atomic_json
 from src.polybench_pce.config import PolyBenchPCEConfig
 from src.polybench_pce.dataset import (
@@ -62,19 +63,45 @@ def _run_manifest_compatible(
     operational_paths = {"dataset_snapshot", "image_manifest"}
     return {
         key: value for key, value in existing.items() if key not in operational_paths
-    } == {
-        key: value for key, value in proposed.items() if key not in operational_paths
-    }
+    } == {key: value for key, value in proposed.items() if key not in operational_paths}
 
 
 def run_polybench_pce(config: PolyBenchPCEConfig) -> dict[str, Any] | None:
-    cases, dataset_manifest, image_manifest = load_polybench_pce_cases(
+    all_cases, dataset_manifest, image_manifest = load_polybench_pce_cases(
         config.dataset_snapshot,
         config.image_manifest,
     )
+    cases = all_cases
+    if config.selection_manifest is not None:
+        by_id = {case.instance_id: case for case in all_cases}
+        unknown = sorted(set(config.instance_ids) - set(by_id))
+        if unknown:
+            raise ValueError(
+                "PolyBench PCE selection includes unavailable cases: "
+                + ", ".join(unknown)
+            )
+        cases = [by_id[instance_id] for instance_id in config.instance_ids]
+    if config.plan_submission_protocol == "direct_human_markdown_v5":
+        cache = RepositoryHistoryCache(
+            config.container.sif_cache_dir.parent / "repository-history-cache-v1"
+        )
+        missing_history = [
+            case.instance_id
+            for case in cases
+            if cache.validate(
+                sif_sha256=case.image.sif_sha256,
+                base_commit=case.base_commit,
+            )
+            is None
+        ]
+        if missing_history:
+            raise ValueError(
+                "prepared base-ancestor Git history is missing for: "
+                + ", ".join(missing_history)
+            )
     config.run_dir.mkdir(parents=True, exist_ok=True)
     fingerprint = execution_fingerprint(config, cases)
-    available_ids = {case.instance_id for case in cases}
+    available_ids = {case.instance_id for case in all_cases}
     source_rows = [
         json.loads(line)
         for line in (
@@ -121,10 +148,16 @@ def run_polybench_pce(config: PolyBenchPCEConfig) -> dict[str, Any] | None:
         "image_manifest_sha256": file_sha256(config.image_manifest),
         "image_manifest_identity": image_manifest.get("manifest_id"),
         "source_instances": len(source_rows),
-        "image_available_instances": len(cases),
+        "image_available_instances": len(all_cases),
         "image_unavailable_instances": unavailable,
         "image_unavailable_evidence": unavailable_evidence,
         "instance_ids": [case.instance_id for case in cases],
+        "repetitions": config.repetitions,
+        "execution_units": [
+            {"source_instance_id": case.instance_id, "repetition": repetition}
+            for case in cases
+            for repetition in range(1, config.repetitions + 1)
+        ],
         "attempt_policy": {
             "total_attempts": config.hpc.max_task_attempts,
             "fresh_agent_from_first_incomplete_phase": True,
@@ -143,11 +176,15 @@ def run_polybench_pce(config: PolyBenchPCEConfig) -> dict[str, Any] | None:
             "evidence": "attempt/repository_baselines/<phase>/repository_baseline.json",
         },
     }
+    if config.selection_manifest is not None:
+        manifest["source_image_available_instances"] = len(all_cases)
+        manifest["selection_manifest"] = str(config.selection_manifest)
+        manifest["selection_manifest_sha256"] = file_sha256(config.selection_manifest)
+        manifest["selected_instances"] = len(cases)
+        manifest["plan_submission_protocol"] = config.plan_submission_protocol
     manifest_path = config.run_dir / "run_manifest.json"
     if manifest_path.is_file():
-        existing_manifest = json.loads(
-            manifest_path.read_text(encoding="utf-8")
-        )
+        existing_manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
         if not _run_manifest_compatible(existing_manifest, manifest):
             raise ValueError("PolyBench PCE run manifest differs from existing run")
     else:
@@ -161,7 +198,7 @@ def run_polybench_pce(config: PolyBenchPCEConfig) -> dict[str, Any] | None:
             "mode": "polybench_pce",
             "status": "running",
             "execution_fingerprint": fingerprint,
-            "tasks": len(cases),
+            "tasks": len(cases) * config.repetitions,
         },
     )
     try:
@@ -217,6 +254,8 @@ def run_polybench_pce(config: PolyBenchPCEConfig) -> dict[str, Any] | None:
         "status": "completed" if incomplete == 0 else "completed_with_incomplete",
         "completed_at": datetime.now(timezone.utc).isoformat(),
         "instances": len(outcomes),
+        "selected_source_instances": len(cases),
+        "repetitions": config.repetitions,
         "source_instances": len(source_rows),
         "image_unavailable_instances": len(unavailable),
         "completed_instances": completed,
