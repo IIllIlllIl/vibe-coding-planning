@@ -6,6 +6,7 @@ SUBMIT=0
 CONFIG=""
 JOB_NAME="polybench-paired-gate-controller"
 REMOTE_DIR=""
+REMOTE_RUN_DIR=""
 ULHPC_CONFIG="configs/ulhpc_submit.yaml"
 MEM="4G"
 TIME_LIMIT="00:15:00"
@@ -15,6 +16,7 @@ while [[ $# -gt 0 ]]; do
     --config) CONFIG="$2"; shift 2 ;;
     --job-name) JOB_NAME="$2"; shift 2 ;;
     --remote-dir) REMOTE_DIR="$2"; shift 2 ;;
+    --remote-run-dir) REMOTE_RUN_DIR="$2"; shift 2 ;;
     --ulhpc-config) ULHPC_CONFIG="$2"; shift 2 ;;
     --mem) MEM="$2"; shift 2 ;;
     --time) TIME_LIMIT="$2"; shift 2 ;;
@@ -88,10 +90,12 @@ REMOTE_KEY="$(printf '%s\n' "$REMOTE_CONNECTION" | sed -n '4p')"
 [[ -n "$REMOTE_USER" && -n "$REMOTE_HOST" && -n "$REMOTE_PORT" ]] || { echo "ERROR: incomplete ULHPC connection" >&2; exit 2; }
 REMOTE_KEY="${REMOTE_KEY/#\~/$HOME}"
 HPC_ROOT="/scratch/users/$REMOTE_USER/vibe-coding-planning"
+REMOTE_RUN_DIR="${REMOTE_RUN_DIR:-$HPC_ROOT/run_state}"
+[[ "$REMOTE_RUN_DIR" == "$HPC_ROOT/run_state" ]] || { echo "ERROR: paired-gate run state must use $HPC_ROOT/run_state" >&2; exit 2; }
 case "$REMOTE_DIR" in "$HPC_ROOT"/staging/*) ;; *) echo "ERROR: staging path must be under $HPC_ROOT/staging" >&2; exit 2;; esac
 REMOTE_DATASET="$HPC_ROOT/datasets/$SOURCE_REL"
-REMOTE_PCE_RUN="$HPC_ROOT/run_state/$(dirname "$PCE_MANIFEST_REL")"
-REMOTE_RUN="$HPC_ROOT/run_state/$RUN_REL"
+REMOTE_PCE_RUN="$REMOTE_RUN_DIR/$(dirname "$PCE_MANIFEST_REL")"
+REMOTE_RUN="$REMOTE_RUN_DIR/$RUN_REL"
 CONFIG_REL="${CONFIG_ABS#$REPO_ROOT/}"
 LOCAL_GIT_HEAD="$(git -C "$REPO_ROOT" rev-parse HEAD)"
 PCE_REL_DIR="$(dirname "$PCE_MANIFEST_REL")"

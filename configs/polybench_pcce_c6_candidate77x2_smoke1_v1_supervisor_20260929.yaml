@@ -20,6 +20,8 @@ arguments:
   - 4G
   - --remote-dir
   - /scratch/users/twang/vibe-coding-planning/staging/polybench-pcce-c6-candidate77x2-smoke1-v1-20260929
+  - --remote-run-dir
+  - /scratch/users/twang/vibe-coding-planning/run_state
   - --ulhpc-config
   - configs/ulhpc_submit.yaml
   - --fixed-worktree
