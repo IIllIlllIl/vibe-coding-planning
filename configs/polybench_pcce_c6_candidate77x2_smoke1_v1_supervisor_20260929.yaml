@@ -1,0 +1,26 @@
+schema_version: 1
+session: polybench-pcce-c6-candidate77x2-smoke1-v1-20260929
+log: .local/hpc-supervisor/polybench-pcce-c6-candidate77x2-smoke1-v1-20260929.log
+arguments:
+  - --poll-interval
+  - "300"
+  - --slice-time
+  - "00:15:00"
+  - --max-runs
+  - "0"
+  - --reclaim-staging
+  - --reclaim-workspaces
+  - --batch-script
+  - scripts/hpc_submit_polybench_paired_gate.sh
+  - --config
+  - configs/polybench_pcce_c6_candidate77x2_smoke1_v1_20260929.yaml
+  - --job-name
+  - polybench-pcce-c6-candidate77x2-smoke1-v1-20260929
+  - --mem
+  - 4G
+  - --remote-dir
+  - /scratch/users/twang/vibe-coding-planning/staging/polybench-pcce-c6-candidate77x2-smoke1-v1-20260929
+  - --ulhpc-config
+  - configs/ulhpc_submit.yaml
+  - --fixed-worktree
+  - --submit

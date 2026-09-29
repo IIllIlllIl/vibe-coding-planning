@@ -1,0 +1,69 @@
+# Prepared only; launching this Checker run requires separate approval.
+# This gate runs no Planner, Code, or Evaluate Agent; accepted units reuse their
+# own PCE outcome and rejected units are blocked before Code.
+mode: polybench_pcce_paired_gate
+purpose: c6_first_review_gate_on_cleaned_polybench_candidate77x2
+
+gate:
+  expected_source_cases: 77
+  repetitions: 2
+  selected_source_cases: 40
+
+paths:
+  source_snapshot: output/SWE-PolyBench/polybench-pce-inputs/20260814_python113_v11_8c7d9485d1d0
+  image_manifest: output/SWE-PolyBench/polybench-pce-inputs/20260814_python113_v11_8c7d9485d1d0/images.json
+  source_selection_manifest: configs/frozen_polybench_pce_development/20260929_nonnetwork_candidate77_v1/selection.json
+  pce_run_manifest: output/SWE-PolyBench/polybench-pce-runs/formal/safe-candidate77x2-v1-20260929/run_manifest.json
+  pce_outcomes: output/SWE-PolyBench/polybench-pce-runs/formal/safe-candidate77x2-v1-20260929/raw_pce_outcomes.jsonl
+  eligibility_manifest: configs/frozen_polybench_pcce_development/20260929_candidate77x2_clean_units_v1/eligibility.json
+  gate_selection_manifest: configs/frozen_polybench_pcce_development/20260929_candidate77x2_clean_units_v1/formal40_selection.json
+  guideline: configs/frozen_guidelines/20260929_verified_cap10_c6_playbook.json
+  run_dir: output/SWE-PolyBench/polybench-pcce-runs/formal/c6-candidate77x2-gate-stratified40-v1-20260929
+
+inputs:
+  pce_runtime_config: configs/polybench_safe_pce_candidate77x2_v1_20260929.yaml
+  pce_runtime_config_sha256: 6882b34cf4680dd0d939883be682a6ce385233017712e4f460fefbd7e73966a7
+  prompt_bundle: configs/prompts/polybench_pcce_c6_checker_v1_20260929.yaml
+  prompt_bundle_sha256: 431a29ad1570a0089545614db39cff50ebaf14b5fccec0371cbcc2c3e3b30c94
+  repo_checker_contract: configs/prompts/offline_gepa_paired_binary_contract_v2_20260925.yaml
+  repo_checker_contract_sha256: 62fcf9e3dbbf8c76b0676f4730ca385167e5488b418a7c58d471397882550299
+  guideline_sha256: 67e4201775878c102dfce95325e8c352a91d8552d893f4ce51b933a9cd412572
+
+models:
+  checker:
+    executor: mini_swe
+    model: deepseek-flash
+    temperature: 0.0
+    thinking: disabled
+
+container:
+  runtime: apptainer
+  sif_cache_dir: /scratch/users/${USER}/vibe-coding-planning/shared/sif-cache
+
+repo_checker:
+  output_contract: binary_v2
+  review_only: true
+  workdir: /testbed
+  command_timeout_seconds: 1800
+  source_access_policy: conservative_blacklist_v3
+  history_policy: base_ancestor_bundle_v1
+  masked_container_paths:
+    - /opt/miniconda3/pkgs
+  observation_contract: executed_tools_v1
+
+hpc:
+  submit: true
+  partition: batch
+  cpus_per_task: 1
+  mem: 4G  # Iris; launch remains gated on frozen PCE eligibility.
+  time: "01:00:00"
+  poll_interval_seconds: 300
+  task_output_grace_seconds: 300
+  missing_task_grace_seconds: 600
+  max_task_attempts: 3
+  max_running_array_tasks: 12  # Checker/API concurrency cap.
+  remote_env_file: ~/.config/vibe-coding-planning/deepseek.env
+  python_module: lang/Python/3.11
+  container_module: tools/Apptainer
+  python_bin: python3
+  job_name_prefix: polybench-pcce-c6-formal40-v1

@@ -1,0 +1,55 @@
+{
+  "schema_version": 1,
+  "source_eligibility_manifest_sha256": "bf69bac45ed9edad7fe13e516ab53e18f10a64d5a587a36006905eda39fe25ca",
+  "source_pce_outcomes_sha256": "1bfe90e104010c42b416288cb1715dedcc4807f74edff105d00b1a805d3403b3",
+  "purpose": "conditional 40-source C6 PCCE evaluation after smoke acceptance",
+  "selection_policy": "include all 11 clean R/U sources and all 14 clean U/U sources; choose 15 of 45 R/R sources by cycling repository prefixes in lexical order and taking the lexical-first remaining source; no C6 trigger or Checker outcome used",
+  "source_groups": {
+    "RR": [
+      "huggingface__transformers-13865",
+      "keras-team__keras-18975",
+      "langchain-ai__langchain-4009",
+      "yt-dlp__yt-dlp-10390",
+      "huggingface__transformers-15795",
+      "keras-team__keras-19190",
+      "langchain-ai__langchain-4103",
+      "yt-dlp__yt-dlp-9862",
+      "huggingface__transformers-16198",
+      "keras-team__keras-19201",
+      "langchain-ai__langchain-4420",
+      "huggingface__transformers-18851",
+      "keras-team__keras-19484",
+      "langchain-ai__langchain-4579",
+      "huggingface__transformers-21345"
+    ],
+    "UU": [
+      "huggingface__transformers-22920",
+      "keras-team__keras-19826",
+      "langchain-ai__langchain-3367",
+      "yt-dlp__yt-dlp-5195",
+      "huggingface__transformers-23223",
+      "keras-team__keras-19863",
+      "langchain-ai__langchain-5625",
+      "yt-dlp__yt-dlp-5933",
+      "huggingface__transformers-27663",
+      "keras-team__keras-20002",
+      "huggingface__transformers-28115",
+      "huggingface__transformers-28398",
+      "huggingface__transformers-31217",
+      "huggingface__transformers-4759"
+    ],
+    "RU": [
+      "Significant-Gravitas__AutoGPT-4652",
+      "huggingface__transformers-22158",
+      "keras-team__keras-18553",
+      "langchain-ai__langchain-19331",
+      "yt-dlp__yt-dlp-4841",
+      "huggingface__transformers-22458",
+      "keras-team__keras-19973",
+      "langchain-ai__langchain-20064",
+      "huggingface__transformers-27463",
+      "huggingface__transformers-30602",
+      "huggingface__transformers-8435"
+    ]
+  }
+}

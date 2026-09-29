@@ -1,0 +1,14 @@
+{
+  "schema_version": 1,
+  "source_eligibility_manifest_sha256": "bf69bac45ed9edad7fe13e516ab53e18f10a64d5a587a36006905eda39fe25ca",
+  "source_pce_outcomes_sha256": "1bfe90e104010c42b416288cb1715dedcc4807f74edff105d00b1a805d3403b3",
+  "purpose": "two-unit transport smoke with one clean R/U source",
+  "selection_policy": "preselected small yt-dlp R/U source; no C6 trigger or Checker outcome used",
+  "source_groups": {
+    "RR": [],
+    "UU": [],
+    "RU": [
+      "yt-dlp__yt-dlp-4841"
+    ]
+  }
+}

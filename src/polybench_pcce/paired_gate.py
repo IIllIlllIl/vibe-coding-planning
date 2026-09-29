@@ -42,6 +42,8 @@ class PairedGateConfig:
     expected_source_cases: int
     repetitions: int
     hpc: HPCConfig
+    gate_selection_manifest: Path | None = None
+    expected_selected_source_cases: int | None = None
 
 
 def load_paired_gate_config(path: str | Path) -> PairedGateConfig:
@@ -62,6 +64,12 @@ def load_paired_gate_config(path: str | Path) -> PairedGateConfig:
     repetitions = int(gate["repetitions"])
     if expected_source_cases < 1 or repetitions < 1:
         raise ValueError("paired gate case and repetition counts must be positive")
+    selection_path = paths.get("gate_selection_manifest")
+    selected_count = gate.get("selected_source_cases")
+    if (selection_path is None) != (selected_count is None):
+        raise ValueError("paired gate selection path and selected case count must be provided together")
+    if selected_count is not None and int(selected_count) < 1:
+        raise ValueError("paired gate selected case count must be positive")
     for key in ("prompt_bundle", "repo_checker_contract", "pce_runtime_config"):
         artifact = resolve(str(inputs[key]))
         if file_sha256(artifact) != inputs[f"{key}_sha256"]:
@@ -128,6 +136,8 @@ def load_paired_gate_config(path: str | Path) -> PairedGateConfig:
         expected_source_cases=expected_source_cases,
         repetitions=repetitions,
         hpc=hpc,
+        gate_selection_manifest=resolve(str(selection_path)) if selection_path else None,
+        expected_selected_source_cases=int(selected_count) if selected_count is not None else None,
     )
 
 
@@ -198,11 +208,52 @@ def load_gate_units(config: PairedGateConfig) -> tuple[list[tuple[Any, dict[str,
         raise ValueError("eligibility must account for every PCE execution unit")
     if any(not isinstance(reason, str) or not reason.strip() for reason in excluded.values()):
         raise ValueError("every excluded unit requires a reviewable reason")
+    chosen_sources: list[str] | None = None
+    selection_hash: str | None = None
+    if config.gate_selection_manifest is not None:
+        if config.repetitions != 2:
+            raise ValueError("paired gate source strata require exactly two repetitions")
+        selection_hash = file_sha256(config.gate_selection_manifest)
+        gate_selection = json.loads(config.gate_selection_manifest.read_text(encoding="utf-8"))
+        groups = gate_selection.get("source_groups")
+        if (
+            gate_selection.get("schema_version") != 1
+            or gate_selection.get("source_eligibility_manifest_sha256") != file_sha256(config.eligibility_manifest)
+            or gate_selection.get("source_pce_outcomes_sha256") != file_sha256(config.pce_outcomes)
+            or not isinstance(groups, dict)
+            or set(groups) != {"RR", "UU", "RU"}
+            or any(not isinstance(value, list) for value in groups.values())
+        ):
+            raise ValueError("paired gate selection differs from frozen PCE eligibility")
+        chosen_sources = [source for group in ("RR", "UU", "RU") for source in groups[group]]
+        if (
+            not chosen_sources
+            or len(chosen_sources) != config.expected_selected_source_cases
+            or len(set(chosen_sources)) != len(chosen_sources)
+            or any(not isinstance(source, str) or not source for source in chosen_sources)
+        ):
+            raise ValueError("paired gate selected source count or identity is invalid")
+        selected_set = set(selected)
+        for group, sources in groups.items():
+            for source in sources:
+                if source not in source_ids:
+                    raise ValueError(f"paired gate selected source is outside PCE: {source}")
+                source_units = [pce_unit_id(source, rep, config.repetitions) for rep in range(1, config.repetitions + 1)]
+                if any(unit not in selected_set for unit in source_units):
+                    raise ValueError(f"paired gate selected source lacks eligible repetitions: {source}")
+                labels = [by_unit[unit]["evaluator_result"]["evaluator_resolved"] for unit in source_units]
+                if any(type(label) is not bool for label in labels):
+                    raise ValueError(f"paired gate source lacks binary PCE outcomes: {source}")
+                actual = "RR" if labels == [True, True] else "UU" if labels == [False, False] else "RU"
+                if actual != group:
+                    raise ValueError(f"paired gate source stratum differs from PCE outcomes: {source}")
     units = []
     for unit_id in selected:
         outcome = by_unit[unit_id]
         source_id = outcome.get("source_instance_id")
         repetition = outcome.get("repetition")
+        if chosen_sources is not None and source_id not in chosen_sources:
+            continue
         case = by_source[source_id]
         evaluator = outcome.get("evaluator_result")
         if (
@@ -216,7 +267,7 @@ def load_gate_units(config: PairedGateConfig) -> tuple[list[tuple[Any, dict[str,
         ):
             raise ValueError(f"selected PCE unit lacks complete auditable evidence: {unit_id}")
         units.append((case, outcome))
-    return units, {
+    hashes = {
         "pce_run_manifest_sha256": file_sha256(config.pce_run_manifest),
         "pce_outcomes_sha256": file_sha256(config.pce_outcomes),
         "eligibility_sha256": file_sha256(config.eligibility_manifest),
@@ -225,6 +276,9 @@ def load_gate_units(config: PairedGateConfig) -> tuple[list[tuple[Any, dict[str,
         "source_selection_manifest_sha256": file_sha256(config.source_selection_manifest),
         "pce_runtime_config_sha256": file_sha256(config.pce_runtime_config),
     }
+    if selection_hash is not None:
+        hashes["gate_selection_sha256"] = selection_hash
+    return units, hashes
 
 
 def _write_jsonl(path: Path, rows: list[dict[str, Any]]) -> None:

@@ -74,6 +74,10 @@ authority is `docs/archive/mixed-design/swe-chat-data-cleaning.md`.
   completed PCE/PCCE platform. The PCCE entry points also support the additive
   config-declared `checker_only` mode, which schedules exactly one PC wave and
   emits classification reports without Planner, Code, or Evaluate phases.
+- `hpc_submit_polybench_paired_gate.sh` stages the frozen PolyBench source and
+  links the existing remote 77×2 PCE authority for a Checker-only C6 gate. It
+  requires a clean worktree on submission and reuses the shared Supervisor,
+  fixed-worktree staging, prepared SIFs, and prepared base-history bundles.
 - `hpc_run_status.py` is the read-only status entry for retained persistent
   workflows.
 - `tools/verify_codex_sif_startup.py` is a separately authorized compute-node

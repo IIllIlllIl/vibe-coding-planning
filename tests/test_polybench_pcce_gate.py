@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+from dataclasses import replace
 from pathlib import Path
 
 import pytest
@@ -114,6 +115,43 @@ def test_paired_gate_rejects_changed_pce_config(tmp_path: Path) -> None:
     config.pce_runtime_config.write_text("mode: different_pce\n", encoding="utf-8")
     with pytest.raises(ValueError, match="authority differs"):
         load_gate_units(config)
+
+
+def test_paired_gate_frozen_source_subset_keeps_both_eligible_repetitions(tmp_path: Path) -> None:
+    config, outcomes = _gate_fixture(tmp_path)
+    source = outcomes[0]["source_instance_id"]
+    selection_path = tmp_path / "gate_selection.json"
+    selection = {
+        "schema_version": 1,
+        "source_eligibility_manifest_sha256": file_sha256(config.eligibility_manifest),
+        "source_pce_outcomes_sha256": file_sha256(config.pce_outcomes),
+        "source_groups": {"RR": [], "UU": [], "RU": [source]},
+    }
+    selection_path.write_text(json.dumps(selection), encoding="utf-8")
+    subset = replace(config, gate_selection_manifest=selection_path, expected_selected_source_cases=1)
+    units, hashes = load_gate_units(subset)
+    assert [row["instance_id"] for _, row in units] == [row["instance_id"] for row in outcomes]
+    assert hashes["gate_selection_sha256"] == file_sha256(selection_path)
+
+    selection["source_groups"] = {"RR": [source], "UU": [], "RU": []}
+    selection_path.write_text(json.dumps(selection), encoding="utf-8")
+    with pytest.raises(ValueError, match="stratum differs"):
+        load_gate_units(subset)
+
+    selection["source_groups"] = {"RR": [], "UU": [], "RU": [source]}
+    selection["source_eligibility_manifest_sha256"] = "wrong"
+    selection_path.write_text(json.dumps(selection), encoding="utf-8")
+    with pytest.raises(ValueError, match="differs from frozen"):
+        load_gate_units(subset)
+
+    eligibility = json.loads(config.eligibility_manifest.read_text(encoding="utf-8"))
+    eligibility["selected_unit_ids"] = [outcomes[0]["instance_id"]]
+    eligibility["excluded_unit_reasons"] = {outcomes[1]["instance_id"]: "operational failure"}
+    config.eligibility_manifest.write_text(json.dumps(eligibility), encoding="utf-8")
+    selection["source_eligibility_manifest_sha256"] = file_sha256(config.eligibility_manifest)
+    selection_path.write_text(json.dumps(selection), encoding="utf-8")
+    with pytest.raises(ValueError, match="lacks eligible repetitions"):
+        load_gate_units(subset)
 
 
 def test_paired_gate_never_passes_pce_outcome_to_checker(
