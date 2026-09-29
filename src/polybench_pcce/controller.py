@@ -224,11 +224,16 @@ def run_polybench_pcce(config: PolyBenchPCCEConfig) -> dict[str, Any] | None:
         "max_review_rejections": config.max_review_rejections,
         "workflow_task_attempts": config.hpc.max_task_attempts,
         "workflow_attempts_consume_review_budget": False,
-        "historical_pce_code_evaluate_reused": False,
+        "historical_pce_code_evaluate_reused": config.execution_mode == "sampled_pcce",
         "first_review_accept_reuses_paired_pce_outcome": (
-            config.execution_mode == "ace_pcce"
+            config.execution_mode in {"ace_pcce", "sampled_pcce"}
         ),
-        "planner_code_evaluate_enabled": config.execution_mode == "full_pcce",
+        "planner_code_evaluate_enabled": config.execution_mode in {"full_pcce", "sampled_pcce"},
+        "paired_gate_config_sha256": (
+            file_sha256(config.gate_config_path)
+            if config.gate_config_path is not None else None
+        ),
+        "paired_gate_source_hashes": identities.get("paired_gate_source_hashes"),
         "repository_baseline": {
             "declared_revision": "dataset_base_commit",
             "restore": "git reset --hard <base_commit> && git clean -fd",
@@ -240,7 +245,7 @@ def run_polybench_pcce(config: PolyBenchPCCEConfig) -> dict[str, Any] | None:
                 else ["checker", "plan_revision", "code"]
             ),
             "evaluate_verified_by_pce_runner": (
-                config.execution_mode == "full_pcce"
+                config.execution_mode in {"full_pcce", "sampled_pcce"}
             ),
         },
     }
@@ -318,7 +323,7 @@ def run_polybench_pcce(config: PolyBenchPCCEConfig) -> dict[str, Any] | None:
             for case in cases
             if case.instance_id in accepted
             and not (
-                config.execution_mode == "ace_pcce"
+                config.execution_mode in {"ace_pcce", "sampled_pcce"}
                 and accepted[case.instance_id][0] == 1
             )
         ]
@@ -370,7 +375,7 @@ def run_polybench_pcce(config: PolyBenchPCCEConfig) -> dict[str, Any] | None:
         instance_id = case.instance_id
         if instance_id in accepted:
             review_index, review = accepted[instance_id]
-            if config.execution_mode == "ace_pcce" and review_index == 1:
+            if config.execution_mode in {"ace_pcce", "sampled_pcce"} and review_index == 1:
                 resolved = case.baseline_resolved
                 counts["resolved" if resolved else "unresolved"] += 1
                 final_rows.append(

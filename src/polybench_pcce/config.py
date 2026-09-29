@@ -24,7 +24,7 @@ class PolyBenchPCCEConfig:
     config_path: Path
     source_snapshot: Path
     image_manifest: Path
-    validation_snapshot: Path
+    validation_snapshot: Path | None
     validation_file: str
     pce_outcomes: Path
     selection_manifest: Path | None
@@ -39,8 +39,9 @@ class PolyBenchPCCEConfig:
     max_review_rejections: int
     instance_ids: tuple[str, ...]
     pce: PolyBenchPCEConfig
-    checker: OptimizationConfig
+    checker: OptimizationConfig | None
     hpc: HPCConfig
+    gate_config_path: Path | None = None
     dialogue_checker_prompt: str = ""
     dialogue_checker_instance_template: str = ""
 
@@ -70,10 +71,30 @@ def load_polybench_pcce_config(
 
     paths = _mapping(raw.get("paths"), "paths")
     method = _mapping(raw.get("pcce"), "pcce")
+    execution_mode = str(method.get("execution_mode", "full_pcce"))
+    if execution_mode not in {"full_pcce", "checker_only", "ace_pcce", "sampled_pcce"}:
+        raise ValueError("unsupported pcce.execution_mode")
     hpc_raw = _mapping(raw.get("hpc"), "hpc")
     runtime_raw = _mapping(raw.get("runtime", {}), "runtime")
-    prompt_source = paths.get("prompt_source_config")
-    if prompt_source:
+    gate_config_path: Path | None = None
+    gate = None
+    if execution_mode == "sampled_pcce":
+        from src.polybench_pcce.paired_gate import load_paired_gate_config
+
+        gate_config_path = resolve(str(paths["gate_config"])).resolve()
+        gate = load_paired_gate_config(gate_config_path)
+        gate_raw = yaml.safe_load(gate_config_path.read_text(encoding="utf-8"))
+        prompt_raw = yaml.safe_load(
+            resolve(str(gate_raw["inputs"]["prompt_bundle"])).read_text(encoding="utf-8")
+        )
+        prompts = _mapping(prompt_raw, "paired gate Checker prompts")
+        if set(prompts) != {"checker_system", "checker_instance"}:
+            raise ValueError("sampled PCCE requires the frozen paired gate Checker prompts")
+        if "prompt_source_config" in paths or "checker_runtime_config" in paths:
+            raise ValueError("sampled PCCE takes Checker authority only from gate_config")
+        pce_config_path = gate.pce_runtime_config
+    elif paths.get("prompt_source_config"):
+        prompt_source = paths["prompt_source_config"]
         prompt_raw = (
             yaml.safe_load(resolve(str(prompt_source)).read_text(encoding="utf-8"))
             or {}
@@ -81,15 +102,17 @@ def load_polybench_pcce_config(
         prompts = _mapping(prompt_raw.get("prompts"), "prompt source prompts")
     else:
         prompts = _mapping(raw.get("prompts"), "prompts")
-    pce_config_path = resolve(str(paths["pce_runtime_config"]))
-    checker_config_path = resolve(str(paths["checker_runtime_config"]))
+    if gate is None:
+        pce_config_path = resolve(str(paths["pce_runtime_config"]))
     pce = load_polybench_pce_config(
         pce_config_path,
         require_api_keys=require_api_keys,
     )
-    checker = load_optimization_config(
-        checker_config_path,
-        require_api_keys=require_api_keys,
+    checker = (
+        None if gate is not None else load_optimization_config(
+            resolve(str(paths["checker_runtime_config"])),
+            require_api_keys=require_api_keys,
+        )
     )
     if runtime_raw:
         pce = replace(
@@ -109,35 +132,36 @@ def load_polybench_pcce_config(
                 ),
             ),
         )
-        checker = replace(
-            checker,
-            checker=replace(
-                checker.checker,
-                max_steps=int(
-                    runtime_raw.get("checker_max_steps", checker.checker.max_steps)
+        if checker is not None:
+            checker = replace(
+                checker,
+                checker=replace(
+                    checker.checker,
+                    max_steps=int(runtime_raw.get("checker_max_steps", checker.checker.max_steps)),
+                    cost_limit=float(runtime_raw.get("checker_cost_limit", checker.checker.cost_limit)),
                 ),
-                cost_limit=float(
-                    runtime_raw.get("checker_cost_limit", checker.checker.cost_limit)
-                ),
-            ),
-        )
+            )
     if pce.execution.code_phase_timeout_seconds < 0:
         raise ValueError("runtime.code_phase_timeout_seconds must be non-negative")
     if pce.execution.repository_command_timeout_seconds < 1:
         raise ValueError(
             "runtime.repository_command_timeout_seconds must be positive"
         )
-    if checker.checker.max_steps < 0 or checker.checker.cost_limit < 0:
+    if checker is not None and (checker.checker.max_steps < 0 or checker.checker.cost_limit < 0):
         raise ValueError("runtime Checker limits must be non-negative")
-    if pce.container.runtime != "apptainer" or checker.container.runtime != "apptainer":
+    if pce.container.runtime != "apptainer" or (checker is not None and checker.container.runtime != "apptainer"):
         raise ValueError("PolyBench PCCE requires Apptainer PCE and Checker runtimes")
-    if pce.container.sif_cache_dir != checker.container.sif_cache_dir:
+    if checker is not None and pce.container.sif_cache_dir != checker.container.sif_cache_dir:
         raise ValueError("PCE and Checker must use the same frozen SIF cache")
-    if checker.execution.backend != "hpc_slurm":
+    if checker is not None and checker.execution.backend != "hpc_slurm":
         raise ValueError("PolyBench PCCE requires an hpc_slurm Checker runtime")
+    if gate is not None and pce.container.sif_cache_dir != Path(
+        os.path.expandvars(str(gate_raw["container"]["sif_cache_dir"]))
+    ).expanduser():
+        raise ValueError("PCE and paired gate must use the same SIF cache")
 
     defaults = HPCConfig()
-    if "max_running_array_tasks" in hpc_raw or "array_concurrency" in hpc_raw:
+    if ("max_running_array_tasks" in hpc_raw or "array_concurrency" in hpc_raw) and gate is None:
         raise ValueError("PCCE leaves task concurrency entirely to Slurm")
     hpc = HPCConfig(
         submit=bool(hpc_raw.get("submit", False)),
@@ -155,6 +179,7 @@ def load_polybench_pcce_config(
         task_output_grace_seconds=int(hpc_raw.get("task_output_grace_seconds", 300)),
         missing_task_grace_seconds=int(hpc_raw.get("missing_task_grace_seconds", 600)),
         max_task_attempts=int(hpc_raw.get("max_task_attempts", 3)),
+        max_running_array_tasks=int(hpc_raw.get("max_running_array_tasks", 0)),
         python_module=str(hpc_raw.get("python_module", defaults.python_module)),
         container_module=str(
             hpc_raw.get("container_module", defaults.container_module)
@@ -167,12 +192,6 @@ def load_polybench_pcce_config(
         raise ValueError("PolyBench PCCE workers must remain 1 CPU / 4G")
     if hpc.max_task_attempts < 1:
         raise ValueError("hpc.max_task_attempts must be positive")
-    execution_mode = str(method.get("execution_mode", "full_pcce"))
-    if execution_mode not in {"full_pcce", "checker_only", "ace_pcce"}:
-        raise ValueError(
-            "pcce.execution_mode must be 'full_pcce', 'checker_only', or "
-            "'ace_pcce'"
-        )
     max_rejections = int(method.get("max_review_rejections", 3))
     expected_rejections = 1 if execution_mode == "checker_only" else 3
     if max_rejections != expected_rejections:
@@ -184,7 +203,7 @@ def load_polybench_pcce_config(
         raise ValueError("pcce.validation_file must be a file name")
     selection_manifest = (
         resolve(str(paths["selection_manifest"]))
-        if paths.get("selection_manifest")
+        if paths.get("selection_manifest") and gate is None
         else None
     )
     selected_raw = method.get("instance_ids", [])
@@ -206,8 +225,8 @@ def load_polybench_pcce_config(
         raise ValueError("pcce.instance_ids must be unique")
 
     run_dir = resolve(str(paths["run_dir"]))
-    source_snapshot = resolve(str(paths["source_snapshot"]))
-    image_manifest = resolve(str(paths["image_manifest"]))
+    source_snapshot = gate.source_snapshot if gate is not None else resolve(str(paths["source_snapshot"]))
+    image_manifest = gate.image_manifest if gate is not None else resolve(str(paths["image_manifest"]))
     pce = replace(
         pce,
         dataset_snapshot=source_snapshot,
@@ -215,9 +234,10 @@ def load_polybench_pcce_config(
         run_dir=run_dir,
         hpc=hpc,
     )
-    checker = replace(checker, run_dir=run_dir, hpc=hpc)
-    plan_revision_prompt = str(prompts.get("plan_revision_system", ""))
-    plan_revision_instance = str(prompts.get("plan_revision_instance", ""))
+    if checker is not None:
+        checker = replace(checker, run_dir=run_dir, hpc=hpc)
+    plan_revision_prompt = pce.plan_prompt if gate is not None else str(prompts.get("plan_revision_system", ""))
+    plan_revision_instance = pce.plan_instance_template if gate is not None else str(prompts.get("plan_revision_instance", ""))
     dialogue_checker_prompt = str(prompts.get("dialogue_checker_system", ""))
     dialogue_checker_instance = str(prompts.get("dialogue_checker_instance", ""))
     if execution_mode in {"full_pcce", "ace_pcce"} and (
@@ -228,15 +248,21 @@ def load_polybench_pcce_config(
         not dialogue_checker_prompt or not dialogue_checker_instance
     ):
         raise ValueError("ace_pcce requires both dialogue-Checker prompts")
+    if gate is not None and (
+        pce.plan_submission_protocol != "direct_human_markdown_v5"
+        or pce.plan.temperature != 1.0
+        or pce.plan.thinking != "disabled"
+    ):
+        raise ValueError("sampled PCCE requires the frozen PCE Planner settings")
     return PolyBenchPCCEConfig(
         config_path=config_path,
         source_snapshot=source_snapshot,
         image_manifest=image_manifest,
-        validation_snapshot=resolve(str(paths["validation_snapshot"])),
+        validation_snapshot=(resolve(str(paths["validation_snapshot"])) if gate is None else None),
         validation_file=validation_file,
-        pce_outcomes=resolve(str(paths["pce_outcomes"])),
+        pce_outcomes=(resolve(str(paths["pce_outcomes"])) if gate is None else gate.pce_outcomes),
         selection_manifest=selection_manifest,
-        guideline_path=resolve(str(paths["guideline"])),
+        guideline_path=(resolve(str(paths["guideline"])) if gate is None else gate.guideline),
         guideline_label=str(method["guideline_label"]),
         checker_prompt=str(prompts["checker_system"]),
         checker_instance_template=str(prompts["checker_instance"]),
@@ -251,4 +277,5 @@ def load_polybench_pcce_config(
         pce=pce,
         checker=checker,
         hpc=hpc,
+        gate_config_path=gate_config_path,
     )

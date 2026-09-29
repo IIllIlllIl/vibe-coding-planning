@@ -7,6 +7,7 @@ from pathlib import Path
 import os
 import subprocess
 from types import SimpleNamespace
+from typing import Any
 
 import pytest
 import yaml
@@ -15,12 +16,14 @@ from src.optimization.models import CheckerOutput, RepositoryEvidence
 from src.optimization.audit import text_sha256
 from src.optimization.checker import CheckerOutputContractError
 from src.optimization.hpc.task_batch import atomic_json
+from src.optimization.playbook import RejectPlaybook
 from src.polybench_pcce.config import load_polybench_pcce_config
 from src.polybench_pcce.ce_replay import prepare_ce_replay
 from src.polybench_pcce.controller import _review_assignments, run_polybench_pcce
 from src.polybench_pcce.dataset import load_pcce_cases
 from src.polybench_pcce.evaluator_resume import _prepare as prepare_evaluator_resume
 from src.polybench_pcce.models import PCCECase, PCReviewAssignment
+from src.polybench_pcce.models import CEAssignment
 from src.polybench_pcce.runner import (
     PolyBenchPCCERunner,
     validate_dialogue_checker_output,
@@ -29,6 +32,7 @@ from src.polybench_pcce.runner import (
 from src.polybench_pcce.worker import _retry_disposition, run_task
 from src.polybench_pcce.hpc_executor import _case_dict, build_array_script
 from src.polybench_pce.models import FrozenImage, PolyBenchPCECase
+from src.polybench_pce.config import load_polybench_pce_config
 from src.polybench_pce.evaluator_resume import load_evaluator_repair_subset
 from src.polybench_pce.runner import checkpoint_identity
 
@@ -308,6 +312,280 @@ def _config(tmp_path: Path):
         pce=replace(config.pce, run_dir=tmp_path / "run"),
         checker=replace(config.checker, run_dir=tmp_path / "run"),
     )
+
+
+def test_sampled_pcce_uses_frozen_pce_planner_and_separate_retry_budgets(
+    tmp_path: Path,
+) -> None:
+    config = load_polybench_pcce_config(
+        ROOT / "configs/polybench_pcce_c6_candidate77x2_sampled40_v1_20260929.yaml",
+        require_api_keys=False,
+    )
+    pce = load_polybench_pce_config(
+        ROOT / "configs/polybench_safe_pce_candidate77x2_v1_20260929.yaml",
+        require_api_keys=False,
+    )
+
+    assert config.execution_mode == "sampled_pcce"
+    assert config.max_review_rejections == 3
+    assert config.hpc.max_task_attempts == 3
+    assert config.pce.plan_prompt == pce.plan_prompt
+    assert config.pce.plan_instance_template == pce.plan_instance_template
+    assert config.pce.plan == pce.plan
+    assert config.pce.code == pce.code
+    assert config.pce.code_prompt == pce.code_prompt
+    assert config.pce.plan_submission_protocol == pce.plan_submission_protocol
+    assert config.pce.plan.temperature == 1.0
+    assert config.pce.plan.thinking == "disabled"
+    assert config.pce.code.thinking is None
+    script = build_array_script(
+        config=config,
+        batch_dir=tmp_path / "pc",
+        indices=[0, 1],
+        attempt=1,
+        phase="pc",
+    )
+    assert "#SBATCH --array=0,1%12" in script
+
+
+def test_sampled_pcce_keeps_repeated_plan_units_distinct(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    config = load_polybench_pcce_config(
+        ROOT / "configs/polybench_pcce_c6_candidate77x2_sampled40_v1_20260929.yaml",
+        require_api_keys=False,
+    )
+    source = _source("case")
+    units = [
+        (source, {
+            "instance_id": f"case::rep-{number:02d}",
+            "plan": f"Plan {number}",
+            "evaluator_result": {"evaluator_resolved": number == 1},
+        })
+        for number in (1, 2)
+    ]
+    monkeypatch.setattr(
+        "src.polybench_pcce.paired_gate.load_gate_units",
+        lambda *_: (units, {"pce_outcomes_sha256": "frozen"}),
+    )
+
+    cases, identities = load_pcce_cases(config)
+
+    assert [case.instance_id for case in cases] == ["case::rep-01", "case::rep-02"]
+    assert [case.source.instance_id for case in cases] == ["case", "case"]
+    assert [case.baseline_resolved for case in cases] == [True, False]
+    assert identities["pce_outcomes_sha256"] == "frozen"
+
+
+def test_sampled_pcce_replans_without_previous_plan_or_checker_feedback(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    config = load_polybench_pcce_config(
+        ROOT / "configs/polybench_pcce_c6_candidate77x2_sampled40_v1_20260929.yaml",
+        require_api_keys=False,
+    )
+    config = replace(config, run_dir=tmp_path / "run")
+    case = replace(_case("case"), unit_id="case--repeat-1")
+    assignment = PCReviewAssignment(
+        case=case,
+        review_index=2,
+        rejection_count=1,
+        input_plan="OLD PLAN MUST NOT REACH PLANNER",
+        previous_feedback="OLD FEEDBACK MUST NOT REACH PLANNER",
+    )
+    observed: dict[str, Any] = {}
+
+    def fake_run_plan(self, source):
+        observed["planner_source"] = source
+        observed["planner_prompt"] = self.config.plan_prompt
+        observed["planner_model"] = self.config.plan
+        return {"plan": "fresh plan", "trajectory": []}
+
+    def fake_checker(**kwargs):
+        observed["checker"] = kwargs
+        count = len(RejectPlaybook.parse(config.guideline_path.read_text()).bullets)
+        return ({"rule_results": [
+            {"rule_number": number, "triggered": False, "finding": None, "evidence": []}
+            for number in range(1, count + 1)
+        ]}, [])
+
+    monkeypatch.setattr("src.polybench_pcce.runner.PolyBenchPCERunner.run_plan", fake_run_plan)
+    monkeypatch.setattr("src.polybench_pcce.runner.run_repository_checker", fake_checker)
+    monkeypatch.setattr("src.polybench_pcce.runner.validate_checker_observations", lambda *_: None)
+    runner = PolyBenchPCCERunner(
+        config,
+        SimpleNamespace(),
+        checkpoint_dir=tmp_path / "checkpoints",
+        attempt_dir=tmp_path / "attempt",
+    )
+
+    result = runner.run_pc(
+        assignment,
+        fingerprint="fingerprint",
+        guideline=config.guideline_path.read_text(),
+    )
+
+    assert observed["planner_source"] == case.source
+    assert observed["planner_prompt"] == config.pce.plan_prompt
+    assert observed["planner_model"] == config.pce.plan
+    assert observed["checker"]["plan"] == "fresh plan"
+    assert observed["checker"]["retry_feedback"] == ""
+    assert result["checker_output"]["revision_feedback"] == ""
+    assert result["plan_source"] == "fresh_pce_sample"
+    assert result["rejection_count_before_review"] == 1
+    assert result["rejection_count_after_review"] == 1
+
+
+def test_sampled_pcce_invalid_checker_retries_without_losing_plan(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    config = load_polybench_pcce_config(
+        ROOT / "configs/polybench_pcce_c6_candidate77x2_sampled40_v1_20260929.yaml",
+        require_api_keys=False,
+    )
+    assignment = PCReviewAssignment(_case("case"), 2, 1, "old plan", "old feedback")
+    monkeypatch.setattr(
+        "src.polybench_pcce.runner.PolyBenchPCERunner.run_plan",
+        lambda *_: {"plan": "new plan", "trajectory": []},
+    )
+    monkeypatch.setattr(
+        "src.polybench_pcce.runner.run_repository_checker",
+        lambda **_: ({"rule_results": []}, []),
+    )
+    checkpoint_dir = tmp_path / "checkpoints"
+    runner = PolyBenchPCCERunner(
+        config,
+        SimpleNamespace(),
+        checkpoint_dir=checkpoint_dir,
+        attempt_dir=tmp_path / "attempt",
+    )
+
+    with pytest.raises(CheckerOutputContractError) as error:
+        runner.run_pc(
+            assignment,
+            fingerprint="fingerprint",
+            guideline=config.guideline_path.read_text(),
+        )
+
+    assert _retry_disposition(error.value) == "retry_fresh_agent"
+    assert json.loads((checkpoint_dir / "plan.json").read_text())["payload"]["plan"] == "new plan"
+    assert not (checkpoint_dir / "checker.json").exists()
+
+
+def test_sampled_pcce_ce_uses_accepted_direct_plan_artifact(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    config = load_polybench_pcce_config(
+        ROOT / "configs/polybench_pcce_c6_candidate77x2_sampled40_v1_20260929.yaml",
+        require_api_keys=False,
+    )
+    config = replace(config, run_dir=tmp_path / "run")
+    case = replace(_case("case"), unit_id="case--repeat-2")
+    plan = "# Plan\nFresh independent plan"
+    review_path = tmp_path / "run" / "reviews" / "review_02" / "case--repeat-2.json"
+    atomic_json(review_path, {
+        "plan_artifact": {
+            "plan": plan,
+            "trajectory": [],
+            "source": "fresh_pce_sample",
+            "plan_sha256": hashlib.sha256(plan.encode()).hexdigest(),
+            "submission_protocol": "direct_human_markdown_v5",
+            "raw_plan_submission": "raw submitted Plan",
+            "raw_plan_submission_sha256": hashlib.sha256(b"raw submitted Plan").hexdigest(),
+        }
+    })
+    observed = {}
+
+    def fake_run(self, source):
+        observed["source"] = source
+        observed["plan_checkpoint"] = self._checkpoint("plan")
+        return {"instance_id": source.instance_id, "pce_status": "completed"}
+
+    monkeypatch.setattr("src.polybench_pcce.runner._verify_sif", lambda *_: None)
+    monkeypatch.setattr("src.polybench_pcce.runner.PolyBenchPCERunner.run", fake_run)
+    runner = PolyBenchPCCERunner(
+        config,
+        SimpleNamespace(),
+        checkpoint_dir=tmp_path / "checkpoints",
+        attempt_dir=tmp_path / "attempt",
+    )
+
+    result = runner.run_ce(
+        CEAssignment(case, review_path, plan), fingerprint="fingerprint"
+    )
+
+    assert observed["source"] == case.source
+    assert observed["plan_checkpoint"]["plan"] == plan
+    assert observed["plan_checkpoint"]["submission_protocol"] == "direct_human_markdown_v5"
+    assert result["instance_id"] == case.instance_id
+    assert result["source_instance_id"] == case.source.instance_id
+
+
+def test_sampled_pcce_retains_controller_review_and_ce_routing(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    config = replace(
+        _config(tmp_path),
+        execution_mode="sampled_pcce",
+        gate_config_path=ROOT / "configs/polybench_pcce_c6_candidate77x2_stratified40_v1_20260929.yaml",
+    )
+    cases = [_case("direct", True), _case("resampled", False)]
+    identities = {
+        "validation_manifest_sha256": None,
+        "validation_file_sha256": None,
+        "pce_outcomes_sha256": "pce-outcomes",
+    }
+    monkeypatch.setattr("src.polybench_pcce.controller.load_pcce_cases", lambda _: (cases, identities))
+    monkeypatch.setattr("src.polybench_pcce.controller.pcce_semantic_sha256", lambda _: "semantic")
+    monkeypatch.setattr("src.polybench_pcce.controller._git_head", lambda: "a" * 40)
+    monkeypatch.setattr("src.polybench_pcce.controller.file_sha256", lambda path: hashlib.sha256(str(path).encode()).hexdigest())
+
+    class FakeExecutor:
+        pc_reviews: list[list[int]] = []
+        ce_ids: list[str] = []
+
+        def __init__(self, _):
+            pass
+
+        def run_pc(self, assignments):
+            FakeExecutor.pc_reviews.append([item.review_index for item in assignments])
+            return [
+                {
+                    "status": "completed",
+                    "instance_id": item.case.instance_id,
+                    "plan": item.input_plan if item.review_index == 1 else "fresh plan",
+                    "rejection_count_before_review": item.rejection_count,
+                    "rejection_count_after_review": item.rejection_count + int(
+                        item.case.instance_id == "resampled" and item.review_index == 1
+                    ),
+                    "checker_output": {
+                        "should_proceed": item.case.instance_id == "direct" or item.review_index == 2,
+                        "revision_feedback": "",
+                    },
+                }
+                for item in assignments
+            ]
+
+        def run_ce(self, assignments):
+            FakeExecutor.ce_ids = [item.case.instance_id for item in assignments]
+            return [{
+                "status": "completed",
+                "instance_id": item.case.instance_id,
+                "evaluator_result": {"evaluator_resolved": True},
+            } for item in assignments]
+
+    monkeypatch.setattr("src.polybench_pcce.controller.PolyBenchPCCEHPCExecutor", FakeExecutor)
+    result = run_polybench_pcce(config)
+
+    assert result is not None
+    assert FakeExecutor.pc_reviews == [[1, 1], [2]]
+    assert FakeExecutor.ce_ids == ["resampled"]
+    rows = {
+        row["instance_id"]: row
+        for row in (json.loads(line) for line in (config.run_dir / "pcce_outcomes.jsonl").read_text().splitlines())
+    }
+    assert rows["direct"]["outcome_source"] == "paired_historical_pce_reused"
+    assert rows["resampled"]["accepted_review_index"] == 2
 
 
 def test_polybench_pc_environment_isolates_tmp(tmp_path: Path, monkeypatch):

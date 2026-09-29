@@ -23,6 +23,32 @@ def _jsonl(path: Path) -> list[dict[str, Any]]:
 def load_pcce_cases(
     config: PolyBenchPCCEConfig,
 ) -> tuple[list[PCCECase], dict[str, Any]]:
+    if config.execution_mode == "sampled_pcce":
+        from src.polybench_pcce.paired_gate import load_gate_units, load_paired_gate_config
+
+        if config.gate_config_path is None:
+            raise ValueError("sampled PCCE requires a paired gate config")
+        units, hashes = load_gate_units(load_paired_gate_config(config.gate_config_path))
+        cases = []
+        for source, outcome in units:
+            cases.append(PCCECase(
+                source=source,
+                baseline_plan=outcome["plan"],
+                baseline_resolved=outcome["evaluator_result"]["evaluator_resolved"],
+                baseline_outcome_sha256=hashlib.sha256(
+                    json.dumps(outcome, ensure_ascii=False, sort_keys=True, separators=(",", ":")).encode()
+                ).hexdigest(),
+                unit_id=outcome["instance_id"],
+            ))
+        return cases, {
+            "validation_manifest_sha256": None,
+            "validation_file_sha256": None,
+            "pce_outcomes_sha256": hashes["pce_outcomes_sha256"],
+            "selection_manifest_sha256": hashes.get("gate_selection_sha256"),
+            "paired_gate_source_hashes": hashes,
+        }
+    if config.validation_snapshot is None:
+        raise ValueError("historical PCCE requires a validation snapshot")
     source_cases, source_manifest, _ = load_polybench_pce_cases(
         config.source_snapshot,
         config.image_manifest,

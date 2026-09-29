@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Submit one resumable PolyBench C6 paired-gate Controller slice.
+# Submit one resumable PolyBench C6 gate or feedback-free PCCE Controller slice.
 set -euo pipefail
 
 SUBMIT=0
@@ -45,19 +45,32 @@ from pathlib import Path
 import yaml
 path = Path(sys.argv[1])
 raw = yaml.safe_load(path.read_text(encoding="utf-8"))
-if raw.get("mode") != "polybench_pcce_paired_gate":
-    raise SystemExit("paired-gate config mode required")
 root = path.parents[1]
+mode = raw.get("mode")
+if mode == "polybench_pcce_paired_gate":
+    source_paths = raw["paths"]
+    controller = "gate"
+elif mode == "polybench_pcce" and raw.get("pcce", {}).get("execution_mode") == "sampled_pcce":
+    gate_path = root / raw["paths"]["gate_config"]
+    gate = yaml.safe_load(gate_path.read_text(encoding="utf-8"))
+    if gate.get("mode") != "polybench_pcce_paired_gate":
+        raise SystemExit("sampled PCCE requires a paired-gate authority")
+    source_paths = {**gate["paths"], "run_dir": raw["paths"]["run_dir"]}
+    controller = "sampled_pcce"
+else:
+    raise SystemExit("paired-gate or sampled PCCE config mode required")
+print(f"controller={controller}")
 for key in ("source_snapshot", "image_manifest", "pce_run_manifest", "pce_outcomes", "run_dir"):
-    value = Path(raw["paths"][key])
+    value = Path(source_paths[key])
     if value.is_absolute():
         raise SystemExit(f"{key} must be project-relative")
     print(f"{key}={value}")
 PY
 )"
-SOURCE_REL=""; IMAGE_REL=""; PCE_MANIFEST_REL=""; PCE_OUTCOMES_REL=""; RUN_REL=""
+SOURCE_REL=""; IMAGE_REL=""; PCE_MANIFEST_REL=""; PCE_OUTCOMES_REL=""; RUN_REL=""; CONTROLLER=""
 while IFS='=' read -r key value; do
   case "$key" in
+    controller) CONTROLLER="$value" ;;
     source_snapshot) SOURCE_REL="$value" ;;
     image_manifest) IMAGE_REL="$value" ;;
     pce_run_manifest) PCE_MANIFEST_REL="$value" ;;
@@ -125,7 +138,11 @@ test -f "$PCE_MANIFEST_REL" && test -f "$PCE_OUTCOMES_REL"
 set +x
 source "\$HOME/.config/vibe-coding-planning/deepseek.env"
 test -n "\${DEEPSEEK_API_KEY:-}" || exit 2
-python3 -m src.polybench_pcce.paired_gate --config "$CONFIG_REL"
+if [[ "$CONTROLLER" == "sampled_pcce" ]]; then
+  python3 scripts/run_polybench_pcce_hpc.py --config "$CONFIG_REL"
+else
+  python3 -m src.polybench_pcce.paired_gate --config "$CONFIG_REL"
+fi
 EOF
 )
 

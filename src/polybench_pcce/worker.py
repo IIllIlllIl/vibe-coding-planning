@@ -43,6 +43,7 @@ def _case(value: dict[str, Any]) -> PCCECase:
         # outcome fields. Full PCCE and CE manifests retain them unchanged.
         baseline_resolved=bool(value.get("baseline_resolved", False)),
         baseline_outcome_sha256=str(value.get("baseline_outcome_sha256", "")),
+        unit_id=value.get("unit_id"),
     )
 
 

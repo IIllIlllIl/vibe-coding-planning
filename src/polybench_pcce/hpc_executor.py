@@ -44,7 +44,14 @@ def pcce_semantic_sha256(config: PolyBenchPCCEConfig) -> str:
                 str(path.relative_to(root)): file_sha256(path) for path in sources
             },
             "pce_semantic_sha256": pce_semantic_sha256(config.pce),
-            "checker_semantic_sha256": offline_checker_semantic_sha256(config.checker),
+            "checker_semantic_sha256": (
+                offline_checker_semantic_sha256(config.checker)
+                if config.checker is not None else None
+            ),
+            "paired_gate_config_sha256": (
+                file_sha256(config.gate_config_path)
+                if config.gate_config_path is not None else None
+            ),
             "prompts": {
                 "checker_system": config.checker_prompt,
                 "checker_instance": config.checker_instance_template,
@@ -70,6 +77,7 @@ def _case_dict(case: PCCECase, *, include_outcome: bool = True) -> dict[str, Any
     value = {
         "source": source,
         "baseline_plan": case.baseline_plan,
+        "unit_id": case.unit_id,
     }
     if include_outcome:
         value.update(
@@ -93,6 +101,8 @@ def build_array_script(
     logs = batch_dir / "slurm_logs" / f"attempt_{attempt:02d}"
     logs.mkdir(parents=True, exist_ok=True)
     index_spec = ",".join(str(index) for index in indices)
+    if config.execution_mode == "sampled_pcce" and hpc.max_running_array_tasks > 0:
+        index_spec += f"%{hpc.max_running_array_tasks}"
     job_name = f"{hpc.job_name_prefix}-{phase}-{batch_dir.name[:10]}-a{attempt}"
     return (
         "\n".join(

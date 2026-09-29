@@ -10,6 +10,8 @@ from pathlib import Path
 import shutil
 from typing import Any
 
+import yaml
+
 from src.agents import plan_agent
 from src.config import AgentConfig, Config, EvaluatorConfig, PromptConfig, SystemConfig
 from src.environment.apptainer_env import ApptainerEnvironment, ApptainerSifCache
@@ -25,8 +27,13 @@ from src.optimization.playbook_runtime import (
     PlaybookAgentOutputContractError,
     PromptModel,
     _render,
+    run_repository_checker,
+    validate_checker_observations,
 )
+from src.optimization.paired_playbook import validate_paired_checker_result
+from src.optimization.repo_playbook import render_concern_playbook
 from src.polybench_pcce.config import PolyBenchPCCEConfig
+from src.polybench_pcce.paired_gate import load_paired_gate_config
 from src.polybench_pcce.models import CEAssignment, PCCECheckerCase, PCReviewAssignment
 from src.polybench_pce.dataset import file_sha256
 from src.polybench_pce.runner import PolyBenchPCERunner, checkpoint_identity
@@ -284,6 +291,8 @@ class PolyBenchPCCERunner:
             )
 
     def _prompt_model_config(self) -> dict[str, Any]:
+        if self.config.checker is None:
+            raise ValueError("legacy prompt Checker requires its runtime config")
         model = self.config.checker.checker
         return {
             "model": model.model,
@@ -508,6 +517,112 @@ class PolyBenchPCCERunner:
             "checker_output": checker_payload,
         }
 
+    def _run_sampled_pc(
+        self,
+        assignment: PCReviewAssignment,
+        *,
+        fingerprint: str,
+        guideline: str,
+    ) -> dict[str, Any]:
+        """Use the PCE Planner afresh after rejection, then the frozen C6 Checker."""
+        if self.config.gate_config_path is None:
+            raise ValueError("sampled PCCE lacks a paired gate config")
+        identity = _review_identity(assignment, fingerprint, guideline)
+        self.checkpoint_dir.mkdir(parents=True, exist_ok=True)
+        plan_path = self.checkpoint_dir / "plan.json"
+        plan_payload = _checkpoint(plan_path, identity, "plan")
+        if plan_payload is None:
+            if assignment.review_index == 1:
+                plan_payload = {
+                    "plan": assignment.input_plan,
+                    "trajectory": [],
+                    "source": "frozen_historical_pce",
+                }
+                _save_checkpoint(plan_path, identity, "plan", plan_payload)
+            else:
+                # No previous Plan, Checker finding, or feedback enters this call.
+                plan_payload = PolyBenchPCERunner(
+                    self.config.pce,
+                    self.capacity,
+                    checkpoint_dir=self.checkpoint_dir,
+                    checkpoint_identity=identity,
+                    attempt_dir=self.attempt_dir / "planner",
+                ).run_plan(assignment.case.source)
+                plan_payload = {**plan_payload, "source": "fresh_pce_sample"}
+                _save_checkpoint(plan_path, identity, "plan", plan_payload)
+
+        checker_path = self.checkpoint_dir / "checker.json"
+        checker_payload = _checkpoint(checker_path, identity, "checker")
+        if checker_payload is None:
+            gate = load_paired_gate_config(self.config.gate_config_path)
+            gate_raw = yaml.safe_load(gate.config_path.read_text(encoding="utf-8"))
+            bundle_path = gate.config_path.parents[1] / gate_raw["inputs"]["prompt_bundle"]
+            contract_path = gate.config_path.parents[1] / gate_raw["inputs"]["repo_checker_contract"]
+            prompts = yaml.safe_load(bundle_path.read_text(encoding="utf-8"))
+            contract = yaml.safe_load(contract_path.read_text(encoding="utf-8"))
+            playbook = RejectPlaybook.parse(guideline)
+            case = assignment.case.source
+            try:
+                output, trajectory = run_repository_checker(
+                    model_config=gate_raw["models"]["checker"],
+                    repository_config={
+                        **gate_raw["repo_checker"],
+                        "sif_cache_dir": gate_raw["container"]["sif_cache_dir"],
+                    },
+                    system=prompts["checker_system"] + "\n\n" + contract["checker_contract_appendix"].strip() + "\n",
+                    instance_template=prompts["checker_instance"],
+                    repository={
+                        "repo": case.repo,
+                        "base_commit": case.base_commit,
+                        "instance_id": case.instance_id,
+                        "image_name": case.image.requested_ref,
+                    },
+                    image_authority={
+                        "requested_ref": case.image.requested_ref,
+                        "sif_path": case.image.sif_path,
+                        "sif_sha256": case.image.sif_sha256,
+                        "sif_bytes": case.image.sif_bytes,
+                    },
+                    attempt_dir=self.attempt_dir / "checker",
+                    issue=case.issue_description,
+                    plan=str(plan_payload["plan"]),
+                    checker_visible_playbook=render_concern_playbook(playbook),
+                    retry_feedback=assignment.retry_feedback,
+                    phase="paired_repo_checker",
+                )
+            except PlaybookAgentOutputContractError as exc:
+                error = CheckerOutputContractError(str(exc))
+                error.trajectory = getattr(exc, "trajectory", None)
+                error.raw_response = getattr(exc, "raw_response", None)
+                raise error from exc
+            try:
+                decision = validate_paired_checker_result(
+                    output, playbook, levels=False, require_reason=False
+                )
+                validate_checker_observations(output, trajectory)
+            except ValueError as exc:
+                raise CheckerOutputContractError(str(exc)) from exc
+            checker_payload = {
+                "should_proceed": not decision.rejected,
+                "revision_feedback": "",
+                "rule_results": [item.to_dict() for item in decision.rule_results],
+                "trajectory": trajectory,
+            }
+            _save_checkpoint(checker_path, identity, "checker", checker_payload)
+
+        return {
+            "pc_status": "completed",
+            "review_index": assignment.review_index,
+            "rejection_count_before_review": assignment.rejection_count,
+            "rejection_count_after_review": assignment.rejection_count
+            + (not checker_payload["should_proceed"]),
+            "plan": str(plan_payload["plan"]),
+            "plan_source": plan_payload["source"],
+            "plan_trajectory": list(plan_payload["trajectory"]),
+            "plan_artifact": plan_payload,
+            "checker_output": checker_payload,
+        }
+
     def run_pc(
         self,
         assignment: PCReviewAssignment,
@@ -515,6 +630,10 @@ class PolyBenchPCCERunner:
         fingerprint: str,
         guideline: str,
     ) -> dict[str, Any]:
+        if self.config.execution_mode == "sampled_pcce":
+            return self._run_sampled_pc(
+                assignment, fingerprint=fingerprint, guideline=guideline
+            )
         if self.config.execution_mode == "ace_pcce":
             return self._run_ace_pc(
                 assignment, fingerprint=fingerprint, guideline=guideline
@@ -680,7 +799,13 @@ class PolyBenchPCCERunner:
         self.checkpoint_dir.mkdir(parents=True, exist_ok=True)
         plan_path = self.checkpoint_dir / "plan.json"
         existing = _checkpoint(plan_path, identity, "plan")
-        plan_payload = {"plan": assignment.accepted_plan, "trajectory": []}
+        if self.config.execution_mode == "sampled_pcce":
+            review = json.loads(assignment.accepted_review_path.read_text(encoding="utf-8"))
+            plan_payload = dict(review["plan_artifact"])
+        else:
+            plan_payload = {"plan": assignment.accepted_plan, "trajectory": []}
+        if plan_payload.get("plan") != assignment.accepted_plan:
+            raise FatalError("PCCE CE review Plan differs from accepted Plan")
         if existing is None:
             _save_checkpoint(plan_path, identity, "plan", plan_payload)
         elif existing.get("plan") != assignment.accepted_plan:
@@ -693,6 +818,9 @@ class PolyBenchPCCERunner:
             attempt_dir=self.attempt_dir,
         ).run(assignment.case.source)
         result["pcce_status"] = "completed"
+        if assignment.case.unit_id is not None:
+            result["source_instance_id"] = assignment.case.source.instance_id
+            result["instance_id"] = assignment.case.unit_id
         result["accepted_review_relpath"] = str(
             assignment.accepted_review_path.relative_to(self.config.run_dir)
         )

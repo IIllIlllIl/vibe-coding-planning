@@ -1,0 +1,31 @@
+# Prepared only. This exercises the full feedback-free PCCE path on the
+# existing two-unit RU smoke selection; do not launch without approval.
+mode: polybench_pcce
+purpose: c6_pcce_feedback_free_resampling_smoke1
+
+paths:
+  gate_config: configs/polybench_pcce_c6_candidate77x2_smoke1_v1_20260929.yaml
+  run_dir: output/SWE-PolyBench/polybench-pcce-runs/smoke/c6-candidate77x2-sampled-smoke1-v1-20260929
+
+pcce:
+  execution_mode: sampled_pcce
+  guideline_label: verified_cap10_c6
+  max_review_rejections: 3
+
+hpc:
+  submit: true
+  partition: batch
+  cpus_per_task: 1
+  mem: 4G
+  time: "02:05:00"
+  poll_interval_seconds: 300
+  task_output_grace_seconds: 300
+  missing_task_grace_seconds: 600
+  max_task_attempts: 3
+  max_running_array_tasks: 2
+  remote_env_file: ~/.config/vibe-coding-planning/deepseek.env
+  python_module: lang/Python/3.11
+  container_module: tools/Apptainer
+  python_bin: python3
+  job_name_prefix: polybench-pcce-c6-sampled-smoke1-v1
+  worker_config_path: configs/polybench_pcce_c6_candidate77x2_sampled_smoke1_v1_20260929.yaml

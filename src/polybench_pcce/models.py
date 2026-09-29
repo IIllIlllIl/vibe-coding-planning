@@ -15,10 +15,11 @@ class PCCECase:
     baseline_plan: str
     baseline_resolved: bool
     baseline_outcome_sha256: str
+    unit_id: str | None = None
 
     @property
     def instance_id(self) -> str:
-        return self.source.instance_id
+        return self.unit_id or self.source.instance_id
 
 
 @dataclass(frozen=True)

@@ -321,16 +321,21 @@ class PolyBenchPCERunner:
         atomic_json(self.attempt_dir / "code_workspace_evidence.json", evidence)
         return evidence
 
-    def run(self, case: PolyBenchPCECase) -> dict[str, Any]:
-        self._verify_sif(case)
+    def run_plan(
+        self,
+        case: PolyBenchPCECase,
+        *,
+        _sif_verified: bool = False,
+        _prepared_history_bundle: Path | None = None,
+    ) -> dict[str, Any]:
+        """Produce or resume the exact PCE Planner artifact without running CE."""
+        if not _sif_verified:
+            self._verify_sif(case)
         plan_checkpoint = self._checkpoint("plan")
-        code_checkpoint = self._checkpoint("code")
         safe_boundary = self.config.plan_submission_protocol == "direct_human_markdown_v5"
-        history_bundle = (
-            self._prepared_history(case)
-            if safe_boundary and (plan_checkpoint is None or code_checkpoint is None)
-            else None
-        )
+        history_bundle = _prepared_history_bundle
+        if safe_boundary and plan_checkpoint is None and history_bundle is None:
+            history_bundle = self._prepared_history(case)
         if plan_checkpoint is None:
             plan_workspace = self.attempt_dir / "workspaces" / "plan"
             self._cleanup(plan_workspace)
@@ -423,6 +428,24 @@ class PolyBenchPCERunner:
                 != hashlib.sha256(raw_submission.encode()).hexdigest()
             ):
                 raise FatalError("PCE raw Plan submission checkpoint hash mismatch")
+
+        return plan_checkpoint
+
+    def run(self, case: PolyBenchPCECase) -> dict[str, Any]:
+        self._verify_sif(case)
+        prior_plan = self._checkpoint("plan")
+        code_checkpoint = self._checkpoint("code")
+        history_bundle = (
+            self._prepared_history(case)
+            if self.config.plan_submission_protocol == "direct_human_markdown_v5"
+            and (prior_plan is None or code_checkpoint is None)
+            else None
+        )
+        plan_checkpoint = self.run_plan(
+            case,
+            _sif_verified=True,
+            _prepared_history_bundle=history_bundle,
+        )
 
         if code_checkpoint is None:
             code_workspace = self.attempt_dir / "workspaces" / "code"

@@ -1,4 +1,4 @@
-# PolyBench candidate77×2 PCE and C6 PCCE gate (prepared, not launched)
+# PolyBench candidate77×2 PCE and C6 PCCE evaluation
 
 ## Authority and execution units
 
@@ -12,7 +12,7 @@ manifest, and phase checkpoints. This is not replaying one Plan twice.
 
 Planner: DeepSeek Flash, no thinking, temperature 1, direct human Markdown
 Plan submission. Code prompt and official evaluator retain their established
-PCE behavior. The proposed formal run does not disable container network:
+PCE behavior. The formal run did not disable container network:
 the Aion smoke revealed a latent `tiktoken` download failure when network was
 disabled. Raw network or evaluator failures must remain visible and be
 quarantined after the run; they must not become silent U labels. Iris was
@@ -22,21 +22,21 @@ near-limit memory use. Both worker and controller request 1 CPU / 4G; the
 uses a dedicated Iris fixed worktree, 15-minute controller slices, and the
 shared resume/cleanup path. The explicit scratch staging path is required by
 the existing `--fixed-worktree` wrapper; its generic Supervisor default is a
-home-based path and would fail that wrapper's scope check. It is prepared but
-not started.
+home-based path and would fail that wrapper's scope check.
 
 The separate Iris history preheat, Slurm `6062791`, completed in 54:59 with
 exit code 0. Its retained summary records all 77 selected cases: 72 bundles
 prepared and five validated cached bundles. The selection SHA-256 is
 `88aea8ac0a5c8260c0cd8094be9311d66c41bb6e0fd3528a3d6e7f6613de1bc7`,
 matching the frozen selection. Peak recorded memory was 4,193,096K against
-4G, nearly the limit but without OOM. The new formal PCE does not rebuild
-bundles. No formal PCE or PCCE run has been submitted.
+4G, nearly the limit but without OOM. The formal PCE does not rebuild bundles.
+Its frozen run contains 154 execution-unit outcomes; the eligibility review
+and formal-40 selection bind to its manifest and raw outcomes by SHA-256.
 
 ## Frozen eligibility before PCCE
 
-After PCE completes, inspect *all 154* outcomes and raw trajectories. Freeze
-one eligibility manifest at
+The audit of all 154 PCE outcomes and raw trajectories produced the frozen
+eligibility manifest at
 `configs/frozen_polybench_pcce_development/20260929_candidate77x2_clean_units_v1/eligibility.json`
 with this schema:
 
@@ -58,7 +58,6 @@ timeouts, network/cache/download failures, and other operationally ambiguous
 outcomes. Do not alter raw PCE artifacts. The gate checks PCE config, source
 selection, source, image, repetition, outcome, and eligibility hashes before
 submitting any Checker.
-This manifest cannot be created honestly before PCE evidence exists.
 
 ## First-review PCCE gate
 
@@ -85,21 +84,46 @@ The output records the four classification cells separately (R accepted, U
 rejected, U accepted, R rejected), alongside method outcomes. PCE
 resolved/unresolved is an observed baseline, not infallible Plan truth.
 
-## Remaining release gates
+## Feedback-free sampled PCCE extension
 
-1. The preheat summary and selection hash agree. Preserve its immutable cache
-   and manifests; the PCE Controller will revalidate every bundle before
-   Agent submission.
-2. Before launch, recheck current Iris queue and quota. At this audit, the
-   user quota showed 1,859,731,220 / 10,737,418,240 KB and 366,081 /
-   1,000,000 files. The Iris submission wrapper's dry-run passed with the
-   intended scratch staging, persistent output, 1 CPU / 4G, and 15-minute
-   Controller slices. No resource increase is implied by this config.
-3. Authorize and launch the formal 77×2 PCE separately. The existing
-   [PCE wrapper](../../scripts/hpc_submit_polybench_pce.sh) and Supervisor
-   path handle staging/resume; no new transport or preheat format is needed.
-4. Audit PCE, freeze eligibility, then authorize/stage the C6 gate and its
-   inputs. Its controller entry point is
-   `python3 -m src.polybench_pcce.paired_gate --config <config>` inside the
-   staged worktree. The PCCE remote launch/supervisor specification is not yet
-   finalized because eligibility remains pending.
+The prepared [sampled PCCE config](../../configs/polybench_pcce_c6_candidate77x2_sampled40_v1_20260929.yaml)
+uses the same frozen 40-task selection and C6 Checker authority, but runs
+through the existing PolyBench PCCE Controller rather than stopping at the
+first-review gate. The [two-unit end-to-end smoke config](../../configs/polybench_pcce_c6_candidate77x2_sampled_smoke1_v1_20260929.yaml)
+is separate and is not a prerequisite for the formal-40 run. The first review
+checks each frozen PCE Plan. After a rejection, the next PC review calls the
+**same PCE Planner** on
+the original issue and frozen repository with the PCE prompt, direct Markdown
+submission protocol, DeepSeek Flash no-thinking and temperature 1. The previous
+Plan and Checker findings remain auditable Controller inputs, but neither is
+given to that Planner. This is independent Plan resampling, not feedback-driven
+revision.
+
+The formal-40 [Checker prompt](../../configs/prompts/polybench_pcce_c6_gepa_exact_checker_v1_20260929.yaml)
+copies the GEPA v11 `checker_system` and `checker_instance` text exactly. It
+uses the same common binary-v2 contract, model settings, repository policy,
+and Checker runner. The earlier first-review smoke prompt remains frozen with
+its separate wording and hash; its prior result is not relabeled.
+
+Each review uses the C6 paired repository Checker and mechanically derives the
+Controller's pass/reject decision from triggered rules. The existing three-
+rejection review budget, separate per-task Slurm retry budget, checkpoints and
+PC/CE waves are retained. An accepted first-review Plan reuses its own PCE
+Code/Evaluate outcome. A later accepted Plan enters the existing PCE Code and
+Evaluator via the PCCE CE phase, carrying the exact accepted direct-submission
+artifact. The Coder inherits the PCE config without a thinking override; no
+PCCE-specific Coder prompt or model setting is added. Operationally incomplete
+workers remain incomplete rather than consuming review rejections.
+
+## Formal-40 launch contract
+
+The [frozen selection](../../configs/frozen_polybench_pcce_development/20260929_candidate77x2_clean_units_v1/formal40_selection.json)
+contains 15 R/R, 14 U/U, and all 11 R/U sources: 40 source tasks and 80 PCE
+Plan units. It uses no C6 trigger or Checker outcome. The
+[formal sampled-PCCE Supervisor](../../configs/polybench_pcce_c6_candidate77x2_sampled40_v1_supervisor_20260929.yaml)
+uses the established PCCE controller, 15-minute slices, Iris 1 CPU / 4G, a
+maximum of 12 simultaneous Agent tasks, and the shared resume/cleanup path.
+Its explicit scratch staging path is required by the existing fixed-worktree
+wrapper. The run root is distinct from the first-review gate and smoke runs.
+Launch requires a clean worktree, a current queue/quota check, and separate
+user authorization; preparation does not submit a job.
