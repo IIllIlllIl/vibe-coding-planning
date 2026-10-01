@@ -1,0 +1,30 @@
+schema_version: 1
+session: checker-rule-style-ae-3rep-v1-20261001
+log: .local/hpc-supervisor/checker-rule-style-ae-3rep-v1-20261001.log
+arguments:
+  - --poll-interval
+  - "300"
+  - --slice-time
+  - "00:15:00"
+  - --max-runs
+  - "0"
+  - --state-file
+  - .local/hpc-supervisor/checker-rule-style-ae-3rep-v1-20261001-state.json
+  - --reclaim-staging
+  - --reclaim-workspaces
+  - --batch-script
+  - scripts/hpc_submit_polybench_paired_gate.sh
+  - --config
+  - configs/checker_rule_style_probe_a_to_e_3rep_v1_20261001.yaml
+  - --job-name
+  - checker-rule-style-ae-controller-v1
+  - --mem
+  - 4G
+  - --remote-dir
+  - /scratch/users/twang/vibe-coding-planning/staging/checker-rule-style-ae-v1-20261001
+  - --remote-run-dir
+  - /scratch/users/twang/vibe-coding-planning/run_state
+  - --ulhpc-config
+  - configs/ulhpc_submit.yaml
+  - --fixed-worktree
+  - --submit
