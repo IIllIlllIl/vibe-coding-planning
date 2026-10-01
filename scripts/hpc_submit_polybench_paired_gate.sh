@@ -50,6 +50,13 @@ mode = raw.get("mode")
 if mode == "polybench_pcce_paired_gate":
     source_paths = raw["paths"]
     controller = "gate"
+elif mode == "checker_rule_style_probe":
+    gate_path = root / raw["paths"]["polybench_gate_config"]
+    gate = yaml.safe_load(gate_path.read_text(encoding="utf-8"))
+    if gate.get("mode") != "polybench_pcce_paired_gate":
+        raise SystemExit("Checker probe requires a paired-gate source authority")
+    source_paths = {**gate["paths"], "run_dir": raw["paths"]["run_dir"]}
+    controller = "checker_rule_style_probe"
 elif mode == "polybench_pcce" and raw.get("pcce", {}).get("execution_mode") == "sampled_pcce":
     gate_path = root / raw["paths"]["gate_config"]
     gate = yaml.safe_load(gate_path.read_text(encoding="utf-8"))
@@ -58,7 +65,7 @@ elif mode == "polybench_pcce" and raw.get("pcce", {}).get("execution_mode") == "
     source_paths = {**gate["paths"], "run_dir": raw["paths"]["run_dir"]}
     controller = "sampled_pcce"
 else:
-    raise SystemExit("paired-gate or sampled PCCE config mode required")
+    raise SystemExit("paired-gate, Checker probe, or sampled PCCE config mode required")
 print(f"controller={controller}")
 for key in ("source_snapshot", "image_manifest", "pce_run_manifest", "pce_outcomes", "run_dir"):
     value = Path(source_paths[key])
@@ -140,6 +147,8 @@ source "\$HOME/.config/vibe-coding-planning/deepseek.env"
 test -n "\${DEEPSEEK_API_KEY:-}" || exit 2
 if [[ "$CONTROLLER" == "sampled_pcce" ]]; then
   python3 scripts/run_polybench_pcce_hpc.py --config "$CONFIG_REL"
+elif [[ "$CONTROLLER" == "checker_rule_style_probe" ]]; then
+  python3 -m scripts.tools.run_checker_rule_style_probe --config "$CONFIG_REL"
 else
   python3 -m src.polybench_pcce.paired_gate --config "$CONFIG_REL"
 fi

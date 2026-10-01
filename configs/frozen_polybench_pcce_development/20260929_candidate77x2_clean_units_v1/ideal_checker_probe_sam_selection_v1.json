@@ -1,0 +1,12 @@
+{
+  "schema_version": 1,
+  "source_eligibility_manifest_sha256": "bf69bac45ed9edad7fe13e516ab53e18f10a64d5a587a36006905eda39fe25ca",
+  "source_pce_outcomes_sha256": "1bfe90e104010c42b416288cb1715dedcc4807f74edff105d00b1a805d3403b3",
+  "purpose": "checker-only stability probe on a plan-causal R/U source",
+  "selection_policy": "post-hoc diagnostic chosen for a clear Plan-causal contrast and a prior C6 miss; not an unbiased evaluation sample",
+  "source_groups": {
+    "RR": [],
+    "UU": [],
+    "RU": ["huggingface__transformers-27463"]
+  }
+}

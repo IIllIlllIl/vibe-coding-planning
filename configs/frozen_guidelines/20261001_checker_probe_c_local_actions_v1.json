@@ -1,0 +1,8 @@
+{
+  "schema_version": 1,
+  "bullets": [
+    {"id": "probe-00001", "text": "Task completeness: Identify the task's required result and trace how the Plan's proposed output will be used. Reject if a material stated requirement remains unmet.", "helpful": 0, "harmful": 0, "neutral": 0, "lineage": []},
+    {"id": "probe-00002", "text": "Factual grounding: Identify repository facts essential to the Plan's approach; inspect the relevant files and tracked artifacts. Reject if a material premise is false.", "helpful": 0, "harmful": 0, "neutral": 0, "lineage": []},
+    {"id": "probe-00003", "text": "Behavior preservation: Compare the Plan's proposed change with existing accepted and rejected cases in the code or tests. Reject if it materially breaks an established boundary.", "helpful": 0, "harmful": 0, "neutral": 0, "lineage": []}
+  ]
+}

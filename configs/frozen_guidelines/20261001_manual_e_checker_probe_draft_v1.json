@@ -1,0 +1,29 @@
+{
+  "schema_version": 1,
+  "bullets": [
+    {
+      "id": "probe-00001",
+      "text": "Reject a Plan that does not satisfy a material constraint explicitly stated in the task.",
+      "helpful": 0,
+      "harmful": 0,
+      "neutral": 0,
+      "lineage": []
+    },
+    {
+      "id": "probe-00002",
+      "text": "Reject a Plan that changes a source definition but incorrectly rules out updating a generated artifact used or shipped by the repository.",
+      "helpful": 0,
+      "harmful": 0,
+      "neutral": 0,
+      "lineage": []
+    },
+    {
+      "id": "probe-00003",
+      "text": "Reject a Plan that satisfies the new requirement while breaking an important existing behavior boundary.",
+      "helpful": 0,
+      "harmful": 0,
+      "neutral": 0,
+      "lineage": []
+    }
+  ]
+}

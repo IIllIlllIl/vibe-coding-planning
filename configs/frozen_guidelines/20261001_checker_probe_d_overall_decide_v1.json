@@ -1,0 +1,6 @@
+{
+  "schema_version": 1,
+  "bullets": [
+    {"id": "probe-00001", "text": "Review the Plan as a whole before implementation. Identify the task's material requirements and the Plan's claims. Inspect the frozen repository to verify premises essential to the proposed fix. Trace the proposed change through its intended use and affected behavior, including existing accepted and rejected cases. Decide whether a material defect would make the Plan unsafe to implement: trigger this decision if so; otherwise leave it untriggered. Base the decision on established evidence, not a demand for a perfect Plan.", "helpful": 0, "harmful": 0, "neutral": 0, "lineage": []}
+  ]
+}

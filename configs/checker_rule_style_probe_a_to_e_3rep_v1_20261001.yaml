@@ -1,0 +1,21 @@
+# Prepared only. Explicit approval is required before remote submission.
+mode: checker_rule_style_probe
+purpose: checker_rule_abstraction_and_investigation_stability
+repetitions: 3
+verified_pair_id: pair-27786b755371198326783156
+job_name_prefix: checker-rule-style-ae-v1
+
+paths:
+  polybench_gate_config: configs/polybench_pcce_manual_e_checker_probe_sam_draft_r01_v1_20261001.yaml
+  polybench_checker_prompt: configs/prompts/polybench_pcce_c6_gepa_exact_checker_v1_20260929.yaml
+  verified_pairs: configs/frozen_swe_verified_plan_pairs/20260919_safe_pce_within_task_pairs_v1/validation.jsonl
+  verified_images: configs/frozen_swe_verified_safe_pce/verified482-formal-v1-20260914/images.json
+  checker_runtime_config: configs/gepa_verified_paired_blocking_history_formal24_10it_v1_20260928.yaml
+  run_dir: output/checker-rule-style-probe/a-to-e-3rep-v1-20261001
+
+styles:
+  A: configs/frozen_guidelines/20261001_checker_probe_a_conditions_v1.json
+  B: configs/frozen_guidelines/20261001_checker_probe_b_abstract_v1.json
+  C: configs/frozen_guidelines/20261001_checker_probe_c_local_actions_v1.json
+  D: configs/frozen_guidelines/20261001_checker_probe_d_overall_decide_v1.json
+  E: configs/frozen_guidelines/20261001_manual_e_checker_probe_draft_v1.json

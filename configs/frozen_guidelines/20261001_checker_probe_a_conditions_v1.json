@@ -1,0 +1,8 @@
+{
+  "schema_version": 1,
+  "bullets": [
+    {"id": "probe-00001", "text": "Reject a Plan that leaves a task-required output incompatible with how the task says it will be used.", "helpful": 0, "harmful": 0, "neutral": 0, "lineage": []},
+    {"id": "probe-00002", "text": "Reject a Plan whose proposed fix relies on a repository fact contradicted by the frozen code or tracked files.", "helpful": 0, "harmful": 0, "neutral": 0, "lineage": []},
+    {"id": "probe-00003", "text": "Reject a Plan whose proposed change accepts inputs that the existing behavior deliberately rejects.", "helpful": 0, "harmful": 0, "neutral": 0, "lineage": []}
+  ]
+}

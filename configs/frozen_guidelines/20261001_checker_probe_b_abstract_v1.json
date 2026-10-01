@@ -1,0 +1,8 @@
+{
+  "schema_version": 1,
+  "bullets": [
+    {"id": "probe-00001", "text": "Task completeness: Reject a Plan that materially misses a requirement stated by the task.", "helpful": 0, "harmful": 0, "neutral": 0, "lineage": []},
+    {"id": "probe-00002", "text": "Factual grounding: Reject a Plan whose material approach depends on an incorrect claim about the repository.", "helpful": 0, "harmful": 0, "neutral": 0, "lineage": []},
+    {"id": "probe-00003", "text": "Behavior preservation: Reject a Plan that meets the new requirement by materially breaking an existing behavior boundary.", "helpful": 0, "harmful": 0, "neutral": 0, "lineage": []}
+  ]
+}
