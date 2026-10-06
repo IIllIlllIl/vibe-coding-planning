@@ -931,6 +931,16 @@ def _iteration_target_reached(
     return int(completed) >= config.target_iterations
 
 
+def _fresh_run_has_no_staging_to_reclaim(
+    status: dict[str, Any], state: dict[str, Any]
+) -> bool:
+    return (
+        status.get("state") == "missing"
+        and int(state.get("submissions", 0)) == 0
+        and not state.get("last_submission_error")
+    )
+
+
 def run_loop(config: SupervisorConfig) -> int:
     if not config.submit:
         return run_dry_run(config)
@@ -991,14 +1001,17 @@ def run_loop(config: SupervisorConfig) -> int:
                     time.sleep(config.poll_interval_seconds)
                 continue
 
-            try:
-                cleanup = reclaim_remote_staging(config)
-            except Exception as exc:
-                state["status"] = "blocked_staging_reclamation"
-                state["staging_reclamation_error"] = str(exc)
-                _save_supervisor_state(config, state)
-                print(f"[hpc-resume] staging reclamation failed: {exc}", file=sys.stderr)
-                return 1
+            if _fresh_run_has_no_staging_to_reclaim(status, state):
+                cleanup = {"removed": 0, "skipped": "fresh_run_without_submissions"}
+            else:
+                try:
+                    cleanup = reclaim_remote_staging(config)
+                except Exception as exc:
+                    state["status"] = "blocked_staging_reclamation"
+                    state["staging_reclamation_error"] = str(exc)
+                    _save_supervisor_state(config, state)
+                    print(f"[hpc-resume] staging reclamation failed: {exc}", file=sys.stderr)
+                    return 1
             if cleanup.get("removed"):
                 state["last_staging_reclamation"] = cleanup
                 _save_supervisor_state(config, state)

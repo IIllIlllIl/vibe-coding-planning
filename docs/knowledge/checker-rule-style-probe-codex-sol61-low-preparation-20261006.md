@@ -93,6 +93,11 @@ supervisors; explicit historical remote paths remain unchanged. That attempt
 also submitted no Slurm job, and its local supervisor state was preserved
 before retrying with the corrected staging identity.
 
+The next attempt reached the shared pre-submit cleanup, which needlessly
+queried the still-absent staging root. The Supervisor now skips staging
+reclamation only for a missing run with zero prior submissions and no
+submission error. Existing-run and recovery cleanup remain unchanged.
+
 After completion, compare all 60 raw verdicts and trajectories, not only
 aggregate accuracy: SAM E1 versus A1; CDS E2 versus E3; D's CDS R rejection;
 per-rule stability; unsupported citations, tool failures, and operational

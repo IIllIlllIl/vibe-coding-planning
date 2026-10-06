@@ -109,6 +109,17 @@ def test_remote_status_timeout_is_retryable_without_submitting(monkeypatch) -> N
     }
 
 
+def test_first_missing_run_skips_only_unneeded_staging_reclamation() -> None:
+    should_skip = resume_loop._fresh_run_has_no_staging_to_reclaim
+    assert should_skip({"state": "missing"}, {"submissions": 0})
+    assert not should_skip({"state": "missing"}, {"submissions": 1})
+    assert not should_skip(
+        {"state": "missing"},
+        {"submissions": 0, "last_submission_error": {"error": "staging failed"}},
+    )
+    assert not should_skip({"state": "resumable"}, {"submissions": 0})
+
+
 def test_remote_workspace_reclamation_is_opt_in_and_uses_exact_run_root(
     monkeypatch,
 ) -> None:
@@ -455,6 +466,7 @@ def test_new_run_skips_workspace_reclamation_until_manifest_exists(
             str(fake_batch),
             "--config",
             str(config),
+            "--reclaim-staging",
             "--reclaim-workspaces",
             "--submit",
         ],
@@ -467,6 +479,7 @@ def test_new_run_skips_workspace_reclamation_until_manifest_exists(
 
     assert result.returncode == 0, result.stderr
     assert "--submit" in batch_log.read_text(encoding="utf-8")
+    assert "VIBE_HPC_STAGING_RECLAIM" not in ssh_log.read_text(encoding="utf-8")
     assert "VIBE_HPC_WORKSPACE_RECLAIM" not in ssh_log.read_text(encoding="utf-8")
 
 
