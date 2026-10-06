@@ -3,7 +3,9 @@ from __future__ import annotations
 import hashlib
 import json
 import os
+import shlex
 import subprocess
+import sys
 import time
 from pathlib import Path
 from types import SimpleNamespace
@@ -43,6 +45,68 @@ def test_embedded_remote_modules_keep_iris_login_python() -> None:
         ssh_target = "twang@access-iris.uni.lu"
 
     assert _remote_embedded_python(Config()) == REMOTE_EMBEDDED_PYTHON
+
+
+def test_remote_status_short_circuits_a_missing_run_without_child_probes(
+    monkeypatch, tmp_path: Path,
+) -> None:
+    fake_bin = tmp_path / "bin"
+    fake_bin.mkdir()
+    squeue = fake_bin / "squeue"
+    squeue.write_text("#!/bin/sh\nprintf '123|RUNNING\\n'\n", encoding="utf-8")
+    squeue.chmod(0o755)
+    config = SimpleNamespace(
+        remote_run_snapshot=str(tmp_path / "not-created"),
+        job_name="checker-smoke",
+        ssh_port="8022",
+        ssh_key="",
+        ssh_target="tester@example.invalid",
+    )
+
+    def execute_embedded_script(command, *, check=False, timeout_seconds=None):
+        assert timeout_seconds == 60
+        arguments = shlex.split(command[-1].split("; python3 -c ", 1)[1])
+        environment = {**os.environ, "PATH": f"{fake_bin}{os.pathsep}{os.environ['PATH']}"}
+        result = subprocess.run(
+            [sys.executable, "-c", *arguments],
+            capture_output=True,
+            text=True,
+            env=environment,
+            check=False,
+        )
+        return subprocess.CompletedProcess(
+            command, result.returncode, result.stdout, result.stderr
+        )
+
+    monkeypatch.setattr(resume_loop, "run_command", execute_embedded_script)
+    assert resume_loop.remote_run_status(config) == {
+        "state": "missing",
+        "run_dir": config.remote_run_snapshot,
+        "active_controllers": ["123|RUNNING"],
+        "worker_states": {},
+        "active_workers": [],
+    }
+
+
+def test_remote_status_timeout_is_retryable_without_submitting(monkeypatch) -> None:
+    config = SimpleNamespace(
+        remote_run_snapshot="/scratch/test/missing-run",
+        job_name="checker-smoke",
+        ssh_port="8022",
+        ssh_key="",
+        ssh_target="tester@example.invalid",
+    )
+
+    def timed_out(command, *, check=False, timeout_seconds=None):
+        assert timeout_seconds == 60
+        raise subprocess.TimeoutExpired(command, timeout_seconds)
+
+    monkeypatch.setattr(resume_loop, "run_command", timed_out)
+    assert resume_loop.remote_run_status(config) == {
+        "state": "status_check_failed",
+        "error_type": "remote_status_timeout",
+        "stderr": "read-only remote status check exceeded 60 seconds",
+    }
 
 
 def test_remote_workspace_reclamation_is_opt_in_and_uses_exact_run_root(

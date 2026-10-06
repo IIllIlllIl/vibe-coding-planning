@@ -423,9 +423,12 @@ def _ssh_command(config: SupervisorConfig, remote_command: str) -> list[str]:
 
 
 def run_command(
-    command: list[str], *, check: bool = False
+    command: list[str], *, check: bool = False, timeout_seconds: int | None = None
 ) -> subprocess.CompletedProcess[str]:
-    return subprocess.run(command, capture_output=True, text=True, check=check)
+    return subprocess.run(
+        command, capture_output=True, text=True, check=check,
+        timeout=timeout_seconds,
+    )
 
 
 def _batch_command(config: SupervisorConfig, *, submit: bool) -> list[str]:
@@ -551,6 +554,30 @@ from pathlib import Path
 
 run_dir = Path(os.path.expanduser(sys.argv[1]))
 controller_job_name = sys.argv[2]
+
+def active_controller_rows():
+    controllers = subprocess.run(
+        ["squeue", "-h", "-n", controller_job_name, "-o", "%A|%T"],
+        stdout=subprocess.PIPE, stderr=subprocess.PIPE, universal_newlines=True,
+    )
+    if controllers.returncode != 0:
+        return []
+    return [
+        line for line in controllers.stdout.splitlines()
+        if line.strip() and line.rsplit("|", 1)[-1].strip().upper()
+        not in {"COMPLETED", "FAILED", "CANCELLED", "TIMEOUT"}
+    ]
+
+# A fresh run has no result or task tree. On a slow metadata server, probing
+# every missing child can delay first submission by minutes.
+if not run_dir.is_dir():
+    print(json.dumps({
+        "state": "missing", "run_dir": str(run_dir),
+        "active_controllers": active_controller_rows(),
+        "worker_states": {}, "active_workers": [],
+    }, sort_keys=True))
+    sys.exit(0)
+
 result_path = run_dir / "result.json"
 state_path = run_dir / "gepa_state.bin"
 manifest_path = run_dir / "run_manifest.json"
@@ -614,16 +641,7 @@ def slurm_state(job_id):
         return accounted.stdout.strip().splitlines()[0].split("|", 1)[0].split()[0].upper()
     return "UNKNOWN"
 
-controllers = subprocess.run(
-    ["squeue", "-h", "-n", controller_job_name, "-o", "%A|%T"],
-    stdout=subprocess.PIPE, stderr=subprocess.PIPE, universal_newlines=True,
-)
-payload["active_controllers"] = []
-if controllers.returncode == 0:
-    payload["active_controllers"] = [
-        line for line in controllers.stdout.splitlines()
-        if line.strip() and line.rsplit("|", 1)[-1].strip().upper() not in {"COMPLETED", "FAILED", "CANCELLED", "TIMEOUT"}
-    ]
+payload["active_controllers"] = active_controller_rows()
 
 worker_ids = set()
 for path in (run_dir / "hpc_rollout_batches").glob("batch_*/batch_state.json"):
@@ -659,7 +677,16 @@ print(json.dumps(payload, sort_keys=True))
         + " "
         + shlex.quote(config.job_name)
     )
-    result = run_command(_ssh_command(config, remote_command))
+    try:
+        result = run_command(
+            _ssh_command(config, remote_command), timeout_seconds=60
+        )
+    except subprocess.TimeoutExpired:
+        return {
+            "state": "status_check_failed",
+            "error_type": "remote_status_timeout",
+            "stderr": "read-only remote status check exceeded 60 seconds",
+        }
     if result.returncode != 0:
         return {
             "state": "status_check_failed",

@@ -67,6 +67,24 @@ and Codex command-event provenance. Neither check has been launched as part
 of this preparation. Keep the 1 CPU / 4G Iris request from the original arm
 until measured `sacct` usage justifies a change.
 
+### First-launch transport repair
+
+The first launch attempt on 2026-10-06 submitted no Slurm job. A clean local
+worktree needed its ignored private ULHPC connection config linked locally;
+that file remains excluded from remote synchronization. After that, the shared
+Supervisor waited in its read-only status probe for a new run directory.
+On Iris scratch, negative metadata lookups for the not-yet-created run path
+were slow, and the old probe repeated them for each result and task child.
+
+The shared `hpc_resume_loop.py` now tests the run directory once and, when it
+is absent, checks only the same-name Slurm Controller before returning
+`missing`. Its read-only SSH status call is bounded at 60 seconds; a timeout
+records `status_check_failed` and retries later without submitting. The
+existing paired-gate submit wrapper passed its network-enabled dry-run with
+the frozen source staging, PCE run link, canonical result path, and 1 CPU / 4G
+Slurm request. This repair changes transport status checks only, not prompts,
+rules, selected tasks, or scientific outputs.
+
 After completion, compare all 60 raw verdicts and trajectories, not only
 aggregate accuracy: SAM E1 versus A1; CDS E2 versus E3; D's CDS R rejection;
 per-rule stability; unsupported citations, tool failures, and operational
