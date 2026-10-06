@@ -347,7 +347,9 @@ def test_supervisor_supplies_canonical_remote_paths() -> None:
         remote_user="tester",
         job_name="safe-smoke-v3",
     )
-    assert _take_arg(args, "--remote-dir") == "~/hpc_runs/safe-smoke-v3"
+    assert _take_arg(args, "--remote-dir") == (
+        "/scratch/users/tester/vibe-coding-planning/staging/safe-smoke-v3"
+    )
     assert _take_arg(args, "--remote-dataset-dir") == (
         "/scratch/users/tester/vibe-coding-planning/datasets"
     )
@@ -365,7 +367,9 @@ def test_supervisor_follows_thin_submit_wrapper_for_remote_path_support() -> Non
         job_name="recovered-plan-ce",
     )
 
-    assert _take_arg(args, "--remote-dir") == "~/hpc_runs/recovered-plan-ce"
+    assert _take_arg(args, "--remote-dir") == (
+        "/scratch/users/tester/vibe-coding-planning/staging/recovered-plan-ce"
+    )
     assert _take_arg(args, "--remote-dataset-dir") == (
         "/scratch/users/tester/vibe-coding-planning/datasets"
     )

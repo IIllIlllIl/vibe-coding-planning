@@ -37,6 +37,10 @@ class HpcLayout:
     def sif_cache(self) -> Path:
         return self.project_root / "shared" / "sif-cache"
 
+    @property
+    def staging(self) -> Path:
+        return self.project_root / "staging"
+
     def supervisor_paths(self, job_name: str) -> dict[str, str]:
         safe_name = job_name.strip()
         if (
@@ -53,7 +57,7 @@ class HpcLayout:
         ):
             raise ValueError("job name must match [A-Za-z0-9_.-]+")
         return {
-            "--remote-dir": f"~/hpc_runs/{safe_name}",
+            "--remote-dir": str(self.staging / safe_name),
             "--remote-dataset-dir": str(self.datasets),
             "--remote-run-dir": str(self.run_state),
         }

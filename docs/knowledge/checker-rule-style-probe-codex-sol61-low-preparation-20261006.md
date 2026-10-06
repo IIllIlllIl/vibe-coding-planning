@@ -85,6 +85,14 @@ the frozen source staging, PCE run link, canonical result path, and 1 CPU / 4G
 Slurm request. This repair changes transport status checks only, not prompts,
 rules, selected tasks, or scientific outputs.
 
+The next startup reached the submit wrapper, which rejected the shared
+Supervisor's legacy `~/hpc_runs/` default: this wrapper requires the canonical
+scratch staging root. `HpcLayout.supervisor_paths` now derives
+`/scratch/users/<user>/vibe-coding-planning/staging/<job_name>` for new
+supervisors; explicit historical remote paths remain unchanged. That attempt
+also submitted no Slurm job, and its local supervisor state was preserved
+before retrying with the corrected staging identity.
+
 After completion, compare all 60 raw verdicts and trajectories, not only
 aggregate accuracy: SAM E1 versus A1; CDS E2 versus E3; D's CDS R rejection;
 per-rule stability; unsupported citations, tool failures, and operational
