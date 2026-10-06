@@ -1,0 +1,27 @@
+# Prepared only. Do not start without explicit launch authorization.
+schema_version: 1
+session: checker-rule-style-ae-codex-sol61-low-3rep-v1-20261006
+log: .local/hpc-supervisor/checker-rule-style-ae-codex-sol61-low-3rep-v1-20261006.log
+arguments:
+  - --poll-interval
+  - "300"
+  - --slice-time
+  - "00:15:00"
+  - --max-runs
+  - "0"
+  - --state-file
+  - .local/hpc-supervisor/checker-rule-style-ae-codex-sol61-low-3rep-v1-20261006-state.json
+  - --reclaim-staging
+  - --reclaim-workspaces
+  - --batch-script
+  - scripts/hpc_submit_polybench_paired_gate.sh
+  - --config
+  - configs/checker_rule_style_probe_a_to_e_codex_sol61_low_3rep_v1_20261006.yaml
+  - --job-name
+  - checker-rule-style-ae-codex-sol61-low-controller-v1
+  - --mem
+  - 4G
+  - --ulhpc-config
+  - configs/ulhpc_submit.yaml
+  - --fixed-worktree
+  - --submit

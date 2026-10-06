@@ -57,16 +57,35 @@ def prepare(config_path: Path):
         raise ValueError("Verified image base commit differs from pair")
     runtime_path = _resolve(root, paths["checker_runtime_config"])
     runtime = yaml.safe_load(runtime_path.read_text(encoding="utf-8"))
+    reference_path = _resolve(root, paths.get(
+        "reference_checker_runtime_config", paths["checker_runtime_config"]
+    ))
+    reference_runtime = yaml.safe_load(reference_path.read_text(encoding="utf-8"))
     poly_prompt = yaml.safe_load(_resolve(root, paths["polybench_checker_prompt"]).read_text(encoding="utf-8"))
-    gepa_prompt = yaml.safe_load(_resolve(root, runtime["inputs"]["prompt_bundle"]).read_text(encoding="utf-8"))
+    gepa_prompt = yaml.safe_load(_resolve(root, reference_runtime["inputs"]["prompt_bundle"]).read_text(encoding="utf-8"))
     for key in ("checker_system", "checker_instance"):
         if poly_prompt[key] != gepa_prompt[key]:
             raise ValueError(f"Checker prompt differs across benchmarks: {key}")
-    if runtime["models"]["checker"] != {
+    if reference_runtime["models"]["checker"] != {
         "executor": "mini_swe", "model": "deepseek-flash",
         "temperature": 0.0, "thinking": "disabled",
     }:
-        raise ValueError("Checker model differs from PolyBench probe")
+        raise ValueError("reference Checker model differs from PolyBench probe")
+    codex_probe = reference_path != runtime_path
+    if codex_probe:
+        model = runtime["models"]["checker"]
+        if (model.get("executor"), model.get("model"), model.get("reasoning_effort")) != (
+            "codex_cli", "gpt-6.1-sol", "low"
+        ):
+            raise ValueError("Codex probe requires gpt-6.1-sol with low reasoning")
+        codex_prompt = yaml.safe_load(_resolve(root, runtime["inputs"]["prompt_bundle"]).read_text(encoding="utf-8"))
+        if set(codex_prompt) != {"checker_codex_system", "checker_codex_instance"}:
+            raise ValueError("Codex Checker prompt has an unexpected schema")
+        if (codex_prompt["checker_codex_system"].split("## Tool boundary")[0]
+                != gepa_prompt["checker_system"].split("## Tool boundary")[0]):
+            raise ValueError("Codex Checker review instructions differ from reference")
+    elif runtime["models"]["checker"] != reference_runtime["models"]["checker"]:
+        raise ValueError("Checker model differs from reference")
 
     cases = []
     for case, outcome in poly_units:
@@ -111,12 +130,26 @@ def prepare(config_path: Path):
                     "prompt_values": {"issue": case["issue"], "plan": case["plan"],
                                       "checker_visible_playbook": visible, "retry_feedback": ""},
                 })
+    selected_ids = config.get("selected_instance_ids")
+    if selected_ids is not None:
+        if not isinstance(selected_ids, list) or not selected_ids or len(selected_ids) != len(set(selected_ids)):
+            raise ValueError("selected_instance_ids must be a nonempty unique list")
+        available = {item["instance_id"] for item in items}
+        if not set(selected_ids) <= available:
+            raise ValueError("selected_instance_ids contains an unknown Checker task")
+        selected = set(selected_ids)
+        items = [item for item in items if item["instance_id"] in selected]
     hashes = {"probe_config_sha256": file_sha256(config_path),
               "polybench_gate_config_sha256": file_sha256(poly_config.config_path),
               "verified_pairs_sha256": file_sha256(pair_path),
               "verified_images_sha256": file_sha256(images_path),
               "checker_runtime_config_sha256": file_sha256(runtime_path),
               **{f"style_{style}_sha256": file_sha256(_resolve(root, path)) for style, path in styles.items()}}
+    if codex_probe:
+        hashes["reference_checker_runtime_config_sha256"] = file_sha256(reference_path)
+        hashes["codex_checker_prompt_sha256"] = file_sha256(
+            _resolve(root, runtime["inputs"]["prompt_bundle"])
+        )
     return config, poly_config, runtime_path, cases, books, items, hashes
 
 
@@ -129,6 +162,11 @@ def run(config_path: Path) -> dict | None:
                 "source_hashes": hashes, "repetitions": 3,
                 "unit_ids": [item["instance_id"] for item in items],
                 "checker_input_boundary": "task, Plan, frozen base repository, style text only; no outcome"}
+    if "reference_checker_runtime_config" in config["paths"]:
+        manifest["comparison_boundary"] = (
+            "same task, Plan, repository, rule text and review instructions; "
+            "Codex model, executor, tool transport and final-JSON protocol differ"
+        )
     manifest_path = run_dir / "run_manifest.json"
     if manifest_path.exists():
         if json.loads(manifest_path.read_text(encoding="utf-8")) != manifest:

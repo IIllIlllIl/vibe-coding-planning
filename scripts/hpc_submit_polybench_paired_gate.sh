@@ -57,6 +57,9 @@ elif mode == "checker_rule_style_probe":
         raise SystemExit("Checker probe requires a paired-gate source authority")
     source_paths = {**gate["paths"], "run_dir": raw["paths"]["run_dir"]}
     controller = "checker_rule_style_probe"
+    checker_config_path = root / raw["paths"]["checker_runtime_config"]
+    checker_config = yaml.safe_load(checker_config_path.read_text(encoding="utf-8"))
+    print("checker_executor=" + str(checker_config["models"]["checker"]["executor"]))
 elif mode == "polybench_pcce" and raw.get("pcce", {}).get("execution_mode") == "sampled_pcce":
     gate_path = root / raw["paths"]["gate_config"]
     gate = yaml.safe_load(gate_path.read_text(encoding="utf-8"))
@@ -74,10 +77,11 @@ for key in ("source_snapshot", "image_manifest", "pce_run_manifest", "pce_outcom
     print(f"{key}={value}")
 PY
 )"
-SOURCE_REL=""; IMAGE_REL=""; PCE_MANIFEST_REL=""; PCE_OUTCOMES_REL=""; RUN_REL=""; CONTROLLER=""
+SOURCE_REL=""; IMAGE_REL=""; PCE_MANIFEST_REL=""; PCE_OUTCOMES_REL=""; RUN_REL=""; CONTROLLER=""; CHECKER_EXECUTOR=""
 while IFS='=' read -r key value; do
   case "$key" in
     controller) CONTROLLER="$value" ;;
+    checker_executor) CHECKER_EXECUTOR="$value" ;;
     source_snapshot) SOURCE_REL="$value" ;;
     image_manifest) IMAGE_REL="$value" ;;
     pce_run_manifest) PCE_MANIFEST_REL="$value" ;;
@@ -143,8 +147,10 @@ fi
 test "\$(readlink "$PCE_REL_DIR")" = "$REMOTE_PCE_RUN"
 test -f "$PCE_MANIFEST_REL" && test -f "$PCE_OUTCOMES_REL"
 set +x
-source "\$HOME/.config/vibe-coding-planning/deepseek.env"
-test -n "\${DEEPSEEK_API_KEY:-}" || exit 2
+if [[ "$CHECKER_EXECUTOR" != "codex_cli" ]]; then
+  source "\$HOME/.config/vibe-coding-planning/deepseek.env"
+  test -n "\${DEEPSEEK_API_KEY:-}" || exit 2
+fi
 if [[ "$CONTROLLER" == "sampled_pcce" ]]; then
   python3 scripts/run_polybench_pcce_hpc.py --config "$CONFIG_REL"
 elif [[ "$CONTROLLER" == "checker_rule_style_probe" ]]; then

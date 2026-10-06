@@ -8,6 +8,8 @@ from pathlib import Path
 import shlex
 from typing import Any, Callable, Mapping, Sequence
 
+import yaml
+
 from src.optimization.hpc.config import HPCConfig
 from src.optimization.hpc.task_batch import SlurmTaskBatch, TaskFiles, atomic_json
 from src.optimization.playbook import (
@@ -355,6 +357,9 @@ class PlaybookHPCExecutor:
             cap = self.hpc.max_running_array_tasks
             if cap > 0 and len(indices) > cap:
                 spec += f"%{cap}"
+            checker_role = role in {"checker", "repo_checker", "paired_repo_checker"}
+            models = (yaml.safe_load(self.config_path.read_text(encoding="utf-8")) or {}).get("models", {})
+            codex_checker = checker_role and models.get("checker", {}).get("executor") == "codex_cli"
             lines = [
                 "#!/usr/bin/env bash",
                 f"#SBATCH --job-name={self.hpc.job_name_prefix}-{role}-{fingerprint[:10]}-a{attempt}",
@@ -368,10 +373,12 @@ class PlaybookHPCExecutor:
                 "set -euo pipefail",
                 "set +x",
                 'export PATH="$HOME/.local/bin:$PATH"',
-                f"ENV_FILE={shlex.quote(self.hpc.remote_env_file)}",
-                'ENV_FILE="${ENV_FILE/#\\~/$HOME}"',
-                'source "$ENV_FILE"',
-                'test -n "${DEEPSEEK_API_KEY:-}" || exit 2',
+                *([] if codex_checker else [
+                    f"ENV_FILE={shlex.quote(self.hpc.remote_env_file)}",
+                    'ENV_FILE="${ENV_FILE/#\\~/$HOME}"',
+                    'source "$ENV_FILE"',
+                    'test -n "${DEEPSEEK_API_KEY:-}" || exit 2',
+                ]),
                 f"BATCH_DIR={shlex.quote(str(batch_dir))}",
                 'TASK_ID="$(printf "%04d" "$SLURM_ARRAY_TASK_ID")"',
                 f"ATTEMPT={attempt}",

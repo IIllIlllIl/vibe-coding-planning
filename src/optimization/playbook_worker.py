@@ -108,7 +108,9 @@ def run_task(
         }:
             values["retry_feedback"] = retry_feedback
         if role in {"repo_checker", "paired_repo_checker"}:
-            checker_system = str(prompts["checker_system"])
+            checker_system, checker_instance = _role_prompts(
+                prompts, "checker", config["models"]["checker"]
+            )
             contract_value = config["inputs"].get("repo_checker_contract")
             if contract_value:
                 contract_path = Path(str(contract_value))
@@ -136,7 +138,7 @@ def run_task(
                     "sif_cache_dir": config["container"]["sif_cache_dir"],
                 },
                 system=checker_system,
-                instance_template=prompts["checker_instance"],
+                instance_template=checker_instance,
                 repository=manifest["repository"],
                 image_authority=manifest["image_authority"],
                 attempt_dir=attempt_dir,

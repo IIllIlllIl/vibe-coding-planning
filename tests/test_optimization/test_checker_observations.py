@@ -8,12 +8,17 @@ from pathlib import Path
 import pytest
 import yaml
 
+from src.exceptions import ControllerYield
 from src.agents._deps import DEFAULT_ACTION_PROTOCOL, DEFAULT_FORMAT_ERROR_TEMPLATE, build_default_agent
 from src.optimization import playbook_worker
+from src.optimization.hpc.config import HPCConfig
+from src.optimization.hpc.task_batch import SlurmTaskBatch
+from src.optimization.playbook_hpc_executor import PlaybookHPCExecutor
 from src.optimization.playbook_runtime import (
     CheckerActionRecorder,
     PlaybookAgentOutputContractError,
     validate_checker_observations,
+    run_repository_checker,
 )
 
 
@@ -106,6 +111,116 @@ def test_host_setup_and_assistant_claims_are_not_agent_observations():
     ]
     with pytest.raises(PlaybookAgentOutputContractError):
         validate_checker_observations(result(), trace)
+
+
+@pytest.mark.parametrize("exit_code,output,accepted", [
+    (0, "file contents", True), (1, "error", False), (0, "", False),
+])
+def test_codex_checker_requires_successful_tool_observation(exit_code, output, accepted):
+    trace = [{"role": "codex_cli", "content": {"events": [{
+        "type": "item.completed", "item": {
+            "type": "command_execution", "exit_code": exit_code,
+            "aggregated_output": output,
+        },
+    }]}}]
+    if accepted:
+        validate_checker_observations(result(), trace)
+    else:
+        with pytest.raises(PlaybookAgentOutputContractError, match="no successful tool observation"):
+            validate_checker_observations(result(), trace)
+
+
+def test_codex_checker_gets_task_scoped_manifest_without_outcome(tmp_path, monkeypatch):
+    captured = {}
+
+    def fake_run(**kwargs):
+        captured.update(kwargs)
+        return {}, []
+
+    monkeypatch.setattr("src.optimization.playbook_runtime._run_repository_json_agent", fake_run)
+    run_repository_checker(
+        model_config={"executor": "codex_cli", "model": "gpt-6.1-sol"},
+        repository_config={}, system="review", instance_template="task",
+        repository={}, image_authority={}, attempt_dir=tmp_path,
+        issue="Issue", plan="Plan", checker_visible_playbook="Rules",
+    )
+    evidence = Path(captured["evidence_dir"])
+    manifest = json.loads((evidence / "manifest.json").read_text())
+    assert manifest["input_boundary"] == "prompt_and_frozen_repository"
+    assert "outcome" not in json.dumps(manifest).lower()
+    assert captured["prompt_values"]["plan"] == "Plan"
+
+
+def test_worker_selects_codex_checker_prompt_without_mini_swe_protocol():
+    root = Path(__file__).resolve().parents[2]
+    prompts = yaml.safe_load((root / "configs/prompts/checker_rule_style_codex_v1_20261006.yaml").read_text())
+    reference = yaml.safe_load((root / "configs/prompts/polybench_pcce_c6_gepa_exact_checker_v1_20260929.yaml").read_text())
+    system, instance = playbook_worker._role_prompts(
+        prompts, "checker", {"executor": "codex_cli"}
+    )
+    assert "Use the rules to identify questions to verify" in system
+    assert system.split("## Tool boundary")[0] == reference["checker_system"].split("## Tool boundary")[0]
+    assert system.split("## Result")[1] == reference["checker_system"].split("## Result")[1]
+    assert "Write only this JSON structure to /tmp" not in instance
+    assert "<playbook>{{ checker_visible_playbook }}</playbook>" in instance
+
+
+def test_codex_checker_array_does_not_source_deepseek_credentials(tmp_path, monkeypatch):
+    root = Path(__file__).resolve().parents[2]
+    config = root / "configs/checker_rule_style_codex_runtime_v1_20261006.yaml"
+    monkeypatch.setattr(
+        "src.optimization.playbook_runtime.require_prepared_repository_history",
+        lambda *_: (Path("/prepared/bundle"), {}),
+    )
+    hpc = HPCConfig(submit=True, worker_config_path=str(config), job_name_prefix="codex-probe")
+    executor = PlaybookHPCExecutor(config_path=config, run_dir=tmp_path / "run", hpc=hpc,
+                                   checker_observation_contract="executed_tools_v1")
+    submitted = []
+    executor.runtime = SlurmTaskBatch(hpc, submitter=lambda path: submitted.append(path) or "123")
+    item = {
+        "instance_id": "probe::E::sam::U::rep-01", "validation_rule_count": 1,
+        "output_contract": "binary_v2", "repository": {"base_commit": "a" * 40},
+        "image_authority": {"sif_sha256": "b" * 64},
+        "prompt_values": {"issue": "Issue", "plan": "Plan", "checker_visible_playbook": "Rule"},
+    }
+    with pytest.raises(ControllerYield):
+        executor.run_wave("paired_repo_checker", [item])
+    assert len(submitted) == 1
+    script = submitted[0].read_text()
+    assert "DEEPSEEK_API_KEY" not in script
+    assert "source \"$ENV_FILE\"" not in script
+    assert "#SBATCH --mem=4G" in script
+
+
+def test_worker_dispatches_codex_checker_with_shared_binary_contract(tmp_path, monkeypatch):
+    root = Path(__file__).resolve().parents[2]
+    config = root / "configs/checker_rule_style_codex_runtime_v1_20261006.yaml"
+    manifest = tmp_path / "task.json"
+    manifest.write_text(json.dumps({
+        "role": "paired_repo_checker", "fingerprint": "fixed", "task_index": 0,
+        "instance_id": "probe::E::sam::U::rep-01", "output_contract": "binary_v2",
+        "validation_rule_count": 1, "repository": {}, "image_authority": {},
+        "prompt_values": {"issue": "Issue", "plan": "Plan", "checker_visible_playbook": "Rule"},
+    }))
+    captured = {}
+
+    def fake_checker(**kwargs):
+        captured.update(kwargs)
+        return {"rule_results": [{"rule_number": 1, "triggered": False,
+                                  "finding": None, "evidence": []}]}, [
+            {"role": "codex_cli", "content": {"events": []}},
+        ]
+
+    monkeypatch.setattr(playbook_worker, "run_repository_checker", fake_checker)
+    output_path = tmp_path / "output.json"
+    assert playbook_worker.run_task(
+        config_path=config, manifest_path=manifest, output_path=output_path,
+        attempt_dir=tmp_path / "attempt",
+    ) == 0
+    assert json.loads(output_path.read_text())["status"] == "completed"
+    assert "Return one top-level object containing only rule_results" in captured["system"]
+    assert "Return only one JSON object" in captured["instance_template"]
+    assert "Write only this JSON structure to /tmp" not in captured["instance_template"]
 
 
 def test_worker_checkpoints_raw_completion_before_rejection_and_retries(tmp_path, monkeypatch):

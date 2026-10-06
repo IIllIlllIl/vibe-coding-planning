@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import hashlib
 import os
 from pathlib import Path
 import re
@@ -76,13 +77,28 @@ def validate_checker_observations(
     """
     journal = [entry.get("content") for entry in trajectory
                if entry.get("role") == "host_checker_action_observations"]
-    if len(journal) != 1 or not isinstance(journal[0], list):
-        raise PlaybookAgentOutputContractError("Checker executed-action journal missing")
-    observed = any(
-        item.get("returncode") == 0 and item.get("has_output") is True
-        and item.get("terminal_submission") is False
-        for item in journal[0]
-    )
+    if len(journal) == 1 and isinstance(journal[0], list):
+        observed = any(
+            item.get("returncode") == 0 and item.get("has_output") is True
+            and item.get("terminal_submission") is False
+            for item in journal[0]
+        )
+    elif not journal:
+        codex = [entry.get("content") for entry in trajectory
+                 if entry.get("role") == "codex_cli"]
+        if len(codex) != 1 or not isinstance(codex[0], dict):
+            raise PlaybookAgentOutputContractError("Checker executed-action journal missing")
+        observed = any(
+            event.get("type") == "item.completed"
+            and isinstance(event.get("item"), dict)
+            and event["item"].get("type") == "command_execution"
+            and event["item"].get("exit_code") == 0
+            and bool(str(event["item"].get("aggregated_output", "")).strip())
+            for event in codex[0].get("events", [])
+            if isinstance(event, dict)
+        )
+    else:
+        raise PlaybookAgentOutputContractError("Checker executed-action journal invalid")
     if observed:
         return
     for index, row in enumerate(output.get("rule_results", [])):
@@ -719,6 +735,21 @@ def run_repository_checker(
     retry_feedback: str = "",
     phase: str = "repo_checker",
 ) -> tuple[dict[str, Any], list[dict[str, Any]]]:
+    evidence_dir = None
+    if _uses_codex_cli(model_config):
+        # The Codex SIF preflight requires a task-scoped manifest. Scientific
+        # inputs remain in the prompt and frozen repository, not this bundle.
+        evidence_path = attempt_dir / "checker_evidence"
+        evidence_path.mkdir(parents=True, exist_ok=True)
+        atomic_json(evidence_path / "manifest.json", {
+            "schema_version": 1,
+            "role": "repo_checker",
+            "input_boundary": "prompt_and_frozen_repository",
+            "issue_sha256": hashlib.sha256(issue.encode()).hexdigest(),
+            "plan_sha256": hashlib.sha256(plan.encode()).hexdigest(),
+            "playbook_sha256": hashlib.sha256(checker_visible_playbook.encode()).hexdigest(),
+        })
+        evidence_dir = str(evidence_path)
     return _run_repository_json_agent(
         model_config=model_config,
         repository_config={**repository_config, "phase": phase},
@@ -736,6 +767,7 @@ def run_repository_checker(
             "retry_feedback": retry_feedback,
         },
         source_access_issue=issue,
+        evidence_dir=evidence_dir,
     )
 
 
