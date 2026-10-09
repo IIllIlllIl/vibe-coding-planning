@@ -59,6 +59,10 @@ def behavioral_checker_semantic_sha256(config: OptimizationConfig) -> str:
             "repository_backend": asdict(config.behavioral_repository),
             "checker_prompt": config.checker_prompt,
             "checker_instance_template": config.checker_instance_template,
+            **({"hybrid": asdict(config.hybrid),
+                "hybrid_validator_sha256": hashlib.sha256(
+                    (root / "src/optimization/behavioral_hybrid.py").read_bytes()
+                ).hexdigest()} if config.hybrid.enabled else {}),
         }
     )
 
@@ -106,6 +110,7 @@ def build_behavioral_checker_array_script(
     if not config_path:
         raise ValueError("hpc.worker_config_path is required")
     job_name = f"{hpc.job_name_prefix}-checker-{batch_dir.name[:12]}-a{attempt}"
+    native = config.hybrid.enabled and config.hybrid.checker_model.get("executor") == "codex_cli"
     return (
         "\n".join(
             [
@@ -121,10 +126,12 @@ def build_behavioral_checker_array_script(
                 f"#SBATCH --error={log_dir}/%x-%A_%a.err",
                 "set -euo pipefail",
                 "set +x",
+                *([f"module load {shlex.quote(hpc.python_module)}",
+                   f"module load {shlex.quote(hpc.container_module)}"] if native else []),
                 f"ENV_FILE={shlex.quote(hpc.remote_env_file)}",
                 'ENV_FILE="${ENV_FILE/#\\~/$HOME}"',
                 'source "${ENV_FILE}"',
-                'test -n "${DEEPSEEK_API_KEY:-}" || exit 2',
+                *([] if native else ['test -n "${DEEPSEEK_API_KEY:-}" || exit 2']),
                 f"BATCH_DIR={shlex.quote(str(batch_dir))}",
                 'TASK_ID="$(printf "%04d" "${SLURM_ARRAY_TASK_ID}")"',
                 f"ATTEMPT={attempt}",
@@ -161,6 +168,9 @@ class HPCSlurmBehavioralCheckerExecutor:
         rules: str,
         capture_traces: bool,
     ) -> list[BehavioralCheckerOutput]:
+        if self.config.hybrid.enabled and self.config.hybrid.checker_model.get("executor") == "codex_cli":
+            from src.optimization.behavioral_hybrid_runtime import require_evidence_sif
+            require_evidence_sif(self.config)
         fingerprint = behavioral_evaluation_fingerprint(
             self.config,
             batch=batch,
@@ -210,6 +220,11 @@ class HPCSlurmBehavioralCheckerExecutor:
             )
             if not isinstance(raw.get("trajectory"), list):
                 raise ValueError("Behavioral Checker trajectory is missing")
+            if self.config.hybrid.enabled:
+                from src.optimization.behavioral_hybrid import parse_hybrid_checker_output
+                parsed = parse_hybrid_checker_output({"rule_results": raw.get("rule_results")}, json.loads(rules))
+                if raw["predicted_accept"] != parsed.predicted_accept:
+                    raise ValueError("hybrid decision differs from checklist triggers")
 
         outputs = self.runtime.run(
             batch_dir=batch_dir,
@@ -246,6 +261,7 @@ class HPCSlurmBehavioralCheckerExecutor:
                     decision_reason=parsed.decision_reason,
                     repository_evidence=parsed.repository_evidence,
                     trajectory=tuple(raw.get("trajectory", [])),
+                    rule_results=tuple(raw.get("rule_results", [])),
                 )
             )
         return results

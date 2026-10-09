@@ -474,6 +474,8 @@ def validate_curator_self_check(value: Any, expected_ids: Sequence[str]) -> None
 def apply_curator_operations(
     playbook: RejectPlaybook,
     value: Any,
+    *,
+    allow_history_only_remove: bool = False,
 ) -> RejectPlaybook:
     """Validate and deterministically apply Curator delta operations.
 
@@ -526,7 +528,9 @@ def apply_curator_operations(
         if actual_keys != expected:
             raise ValueError("Curator operation has unexpected or missing keys")
         supporting = operation["supporting_instance_ids"]
-        if not isinstance(supporting, list) or not supporting or any(
+        if not isinstance(supporting, list) or (not supporting and not (
+            allow_history_only_remove and kind == "REMOVE"
+        )) or any(
             not isinstance(item, str) or not item for item in supporting
         ):
             raise ValueError("Curator operation requires supporting instances")

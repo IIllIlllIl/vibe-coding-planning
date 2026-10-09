@@ -57,7 +57,7 @@ def verify(role, boundary, model, attempt, *, infer):
                            'test -x "$1" || exit 24; '
                            '"$1" --version || exit 25; printf "Read-only tool execution verified\\n"',
                            "startup-verification",
-                           "/opt/miniconda3/envs/testbed/bin/python" if role == "reflector" else "/usr/local/bin/python3"]
+                           boundary.interpreter or ("/opt/miniconda3/envs/testbed/bin/python" if role == "reflector" else "/usr/local/bin/python3")]
                 completed = subprocess.run(command, env=env, capture_output=True, text=True, check=False)
                 checks.append({"check": "sif_tools_home_environment_readonly",
                                "returncode": completed.returncode,
@@ -66,7 +66,7 @@ def verify(role, boundary, model, attempt, *, infer):
                 if completed.returncode:
                     raise RuntimeError(f"{role} substantive SIF check failed: {completed.stderr}")
                 return checks
-    interpreter = "/opt/miniconda3/envs/testbed/bin/python" if role == "reflector" else "/usr/local/bin/python3"
+    interpreter = boundary.interpreter or ("/opt/miniconda3/envs/testbed/bin/python" if role == "reflector" else "/usr/local/bin/python3")
     result, trajectory = run_codex_json_agent(
         container=boundary, model_config=model, working_directory=boundary.evidence_dir,
         attempt_dir=attempt, system="You are verifying a fresh Codex session inside a task-scoped SIF.",
@@ -94,6 +94,8 @@ def main():
     parser.add_argument("--evidence-sif", type=Path, required=True)
     parser.add_argument("--output-dir", type=Path, required=True)
     parser.add_argument("--codex-binary", required=True)
+    parser.add_argument("--codex-version", default="0.155.1")
+    parser.add_argument("--generic-isolation-image", action="store_true")
     parser.add_argument("--codex-auth-file", default="${HOME}/.codex/auth.json")
     parser.add_argument("--model", default="gpt-6-sol")
     parser.add_argument("--reasoning-effort", default="high")
@@ -103,7 +105,7 @@ def main():
     args = parser.parse_args()
     args.output_dir.mkdir(parents=True, exist_ok=False)
     model = {"executor": "codex_cli", "codex_binary": args.codex_binary,
-             "codex_auth_file": args.codex_auth_file, "codex_version": "0.155.1",
+             "codex_auth_file": args.codex_auth_file, "codex_version": args.codex_version,
              "model": args.model, "reasoning_effort": args.reasoning_effort}
     report = {"status": "running", "job_id": os.environ.get("SLURM_JOB_ID"),
               "model": args.model, "reasoning_effort": args.reasoning_effort,
@@ -126,7 +128,8 @@ def main():
                     repository = root / role / "repository"
                     repository.mkdir()
                     (repository / "README.md").write_text("Synthetic transport probe only.\n")
-                boundary = CodexSIFExecution(sif, evidence, repository)
+                boundary = CodexSIFExecution(sif, evidence, repository,
+                    interpreter="/usr/local/bin/python3" if args.generic_isolation_image else None)
                 attempt = args.output_dir / role
                 attempt.mkdir()
                 boundaries[role] = (boundary, attempt)

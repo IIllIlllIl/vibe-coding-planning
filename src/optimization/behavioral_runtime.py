@@ -174,9 +174,44 @@ class BehavioralLocalChecker:
         self.audit = JsonlLogger(config.run_dir / "audit_events.jsonl")
         self.usage = JsonlLogger(config.run_dir / "usage.jsonl")
 
+    def _hybrid_codex(self, case, guideline):
+        import tempfile
+        from src.optimization.behavioral_hybrid_runtime import require_evidence_sif
+        from src.optimization.behavioral_hybrid import parse_hybrid_checker_output
+        from src.optimization.codex_cli_runtime import CodexSIFExecution, run_codex_json_agent
+        from src.optimization.hpc.task_batch import atomic_json
+        sif = require_evidence_sif(self.config)
+        mirror = self.config.behavioral_repository.repositories_root / case.audit_provenance["mirror_relpath"]
+        attempts = self.config.run_dir / "hybrid_checker_attempts"
+        attempts.mkdir(parents=True, exist_ok=True)
+        attempt = Path(tempfile.mkdtemp(prefix="checker-", dir=attempts))
+        evidence = attempt / "inputs"
+        # Only the decision-time projection crosses the container boundary.
+        atomic_json(evidence / "input.json", {"case": case.checker_payload(),
+                                              "checking_artifact": json.loads(guideline)})
+        atomic_json(evidence / "manifest.json", {"files": ["input.json"]})
+        with materialize_repository_proxy(mirror_path=mirror, proxy_commit=case.repository.proxy_commit,
+                workspace_root=self.config.behavioral_repository.workspace_root, ancestor_only=True) as checkout:
+            output, trajectory = run_codex_json_agent(
+                model_config=self.config.hybrid.checker_model, working_directory=checkout,
+                attempt_dir=attempt, system=self.config.checker_prompt,
+                user="Read /evidence/input.json. Inspect the repository at /testbed as needed. Return the required JSON.",
+                task="Review the proposed Plan at its decision boundary.",
+                evidence_manifest_path=evidence / "manifest.json",
+                container=CodexSIFExecution(sif, evidence, repository_dir=checkout,
+                                           masked_paths=(), interpreter="/usr/local/bin/python3"))
+        atomic_json(attempt / "completion.json", {"agent_output": output, "trajectory": trajectory})
+        return parse_hybrid_checker_output(output, json.loads(guideline), trajectory=trajectory)
+
     def __call__(
         self, case: BehavioralGEPACase, guideline: str
     ) -> BehavioralCheckerOutput:
+        if self.config.hybrid.enabled:
+            from src.optimization.behavioral_hybrid import validate_candidate
+            from src.optimization.behavioral_hybrid_runtime import hybrid_limits
+            validate_candidate(guideline, hybrid_limits(self.config))
+            if self.config.hybrid.checker_model.get("executor") == "codex_cli":
+                return self._hybrid_codex(case, guideline)
         DefaultAgent, LitellmModel, _ = import_minisweagent()
         from minisweagent.environments.local import LocalEnvironment
 
@@ -266,7 +301,11 @@ class BehavioralLocalChecker:
                 raw = json.loads(submission)
                 if not isinstance(raw, dict):
                     raise ValueError("Checker submission must be a JSON object")
-                parsed = validate_behavioral_checker_output(raw)
+                if self.config.hybrid.enabled:
+                    from src.optimization.behavioral_hybrid import parse_hybrid_checker_output
+                    parsed = parse_hybrid_checker_output(raw, json.loads(guideline))
+                else:
+                    parsed = validate_behavioral_checker_output(raw)
             except (json.JSONDecodeError, ValueError) as exc:
                 _write_json(
                     self.config.run_dir
@@ -316,6 +355,7 @@ class BehavioralLocalChecker:
                 decision_reason=parsed.decision_reason,
                 repository_evidence=parsed.repository_evidence,
                 trajectory=tuple(agent.messages),
+                rule_results=parsed.rule_results,
             )
 
 

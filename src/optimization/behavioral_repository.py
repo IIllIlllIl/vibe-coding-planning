@@ -35,6 +35,7 @@ def materialize_repository_proxy(
     mirror_path: str | Path,
     proxy_commit: str,
     workspace_root: str | Path,
+    ancestor_only: bool = False,
 ) -> Iterator[Path]:
     """Yield an isolated clean checkout without mutating shared mirror state."""
     mirror = Path(mirror_path).resolve()
@@ -47,7 +48,11 @@ def materialize_repository_proxy(
     temporary = Path(tempfile.mkdtemp(prefix="behavioral-checker-", dir=root))
     checkout = temporary / "repo"
     try:
-        _git("clone", "--shared", "--no-checkout", str(mirror), str(checkout))
+        if ancestor_only:
+            _git("init", str(checkout))
+            _git("fetch", "--no-tags", str(mirror), proxy_commit, cwd=checkout)
+        else:
+            _git("clone", "--shared", "--no-checkout", str(mirror), str(checkout))
         resolved = _git("rev-parse", f"{proxy_commit}^{{commit}}", cwd=checkout)
         if resolved != proxy_commit:
             raise RepositoryMaterializationError(

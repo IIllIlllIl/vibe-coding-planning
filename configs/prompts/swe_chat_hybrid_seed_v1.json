@@ -1,0 +1,11 @@
+{
+  "schema_version": 1,
+  "shared_guide": "Reject if any checklist item is violated.",
+  "checklist": [
+    {
+      "id": "plan-00001",
+      "condition": "The Plan is a placeholder.",
+      "guide": "Inspect the Plan's content. Reject if it is empty."
+    }
+  ]
+}

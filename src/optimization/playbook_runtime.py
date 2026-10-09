@@ -388,6 +388,7 @@ def run_evidence_curator(
     evidence_dir: str,
     counted_internal_playbook: str,
     case_count: int,
+    maximum_rules: int | None = None,
     retry_feedback: str = "",
     task: str = "Curate durable rejection concerns from the completed reflections.",
     attempt_dir: Path | None = None,
@@ -401,6 +402,7 @@ def run_evidence_curator(
             evidence_path="/evidence",
             counted_internal_playbook=counted_internal_playbook,
             case_count=case_count,
+            maximum_rules=maximum_rules,
             retry_feedback=retry_feedback,
         )
         return run_codex_json_agent(
@@ -431,6 +433,7 @@ def run_evidence_curator(
             "evidence_path": "/evidence",
             "counted_internal_playbook": counted_internal_playbook,
             "case_count": case_count,
+            "maximum_rules": maximum_rules,
             "retry_feedback": retry_feedback,
         },
     )

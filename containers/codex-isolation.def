@@ -1,0 +1,16 @@
+Bootstrap: docker
+From: python:3.12-slim-bookworm
+
+%post
+    apt-get update
+    apt-get install -y --no-install-recommends git ripgrep ca-certificates procps util-linux
+    apt-get clean
+    mkdir -p /testbed /evidence /agent-home /codex-state /agent-output /opt/vibe-codex
+
+%labels
+    Purpose "Repository inspection and Codex isolation; no project dependencies"
+
+%test
+    /usr/local/bin/python3 --version
+    git --version
+    rg --version

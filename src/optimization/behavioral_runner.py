@@ -88,11 +88,15 @@ def run_behavioral_optimization(
     checker: Callable[..., Any] | None = None,
     proposer: Callable[..., Any] | None = None,
     optimize_fn: Callable[..., Any] = gepa.optimize,
+    adapter_factory: Callable[..., Any] = BehavioralGEPAAdapter,
 ) -> Any:
+    if config.hybrid.enabled and adapter_factory is BehavioralGEPAAdapter:
+        raise ValueError("hybrid runs require run_hybrid_optimization; do not use the legacy proposer/adapter")
     config.run_dir.mkdir(parents=True, exist_ok=True)
     with _controller_lock(config):
         return _run_locked(
-            config, checker=checker, proposer=proposer, optimize_fn=optimize_fn
+            config, checker=checker, proposer=proposer, optimize_fn=optimize_fn,
+            adapter_factory=adapter_factory,
         )
 
 
@@ -102,6 +106,7 @@ def _run_locked(
     checker: Callable[..., Any] | None,
     proposer: Callable[..., Any] | None,
     optimize_fn: Callable[..., Any],
+    adapter_factory: Callable[..., Any] = BehavioralGEPAAdapter,
 ) -> Any:
     train, validation = load_behavioral_snapshot(config.dataset_snapshot)
     train_loader = BehavioralCaseLoader(train)
@@ -157,7 +162,7 @@ def _run_locked(
     replay = (
         _seed_validation_replay(config, validation, initial_rules) if resuming else None
     )
-    adapter = BehavioralGEPAAdapter(
+    adapter = adapter_factory(
         checker_runner,
         proposer=proposer_runner,
         run_dir=config.run_dir,
@@ -237,7 +242,7 @@ def _run_locked(
         result,
         validation,
         config.run_dir,
-        primary_metric=config.search.primary_metric,
+        primary_metric=("human_decision_utility" if config.hybrid.enabled else config.search.primary_metric),
     )
     successful = int(getattr(proposer_runner, "successful_proposals", 0))
     failures = list(getattr(proposer_runner, "failures", []))

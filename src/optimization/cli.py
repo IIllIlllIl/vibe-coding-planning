@@ -43,7 +43,10 @@ def main() -> None:
         )
     else:
         config = load_optimization_config(args.config)
-        if config.task.semantics == "behavioral_plan_acceptability_v1":
+        if config.hybrid.enabled:
+            from src.optimization.behavioral_hybrid_runtime import run_hybrid_optimization
+            run_hybrid_optimization(config)
+        elif config.task.semantics == "behavioral_plan_acceptability_v1":
             run_behavioral_optimization(config)
         else:
             run_optimization(config)

@@ -345,6 +345,9 @@ class HPCOfflineReflectionProposer:
         attempt: int,
         *,
         phase: str = "reflection",
+        worker_module_override: str | None = None,
+        load_container_modules: bool = False,
+        credential_env: str | None = "DEEPSEEK_API_KEY",
     ) -> str:
         hpc = self.config.hpc
         config_path = hpc.worker_config_path
@@ -359,7 +362,7 @@ class HPCOfflineReflectionProposer:
             f"attempt_{attempt:02d}"
         )
         behavioral = self.config.task.semantics == "behavioral_plan_acceptability_v1"
-        module_lines = [] if behavioral else [
+        module_lines = [] if behavioral and not load_container_modules else [
             f"module load {shlex.quote(hpc.python_module)}",
             f"module load {shlex.quote(hpc.container_module)}",
         ]
@@ -368,6 +371,8 @@ class HPCOfflineReflectionProposer:
             if behavioral
             else "src.optimization.offline_reflection_worker"
         )
+        if worker_module_override is not None:
+            worker_module = worker_module_override
         lines = [
             "#!/usr/bin/env bash",
             f"#SBATCH --job-name={job_name}",
@@ -384,7 +389,7 @@ class HPCOfflineReflectionProposer:
             f"ENV_FILE={shlex.quote(hpc.remote_env_file)}",
             'ENV_FILE="${ENV_FILE/#\\~/$HOME}"',
             'source "${ENV_FILE}"',
-            'test -n "${DEEPSEEK_API_KEY:-}" || exit 2',
+            *([f'test -n "${{{credential_env}:-}}" || exit 2'] if credential_env else []),
             f"mkdir -p {shlex.quote(str(attempt_dir))}",
             f"{shlex.quote(hpc.python_bin)} "
             f"-m {worker_module} "

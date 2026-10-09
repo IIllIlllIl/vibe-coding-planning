@@ -1,0 +1,130 @@
+# Preparation only: freeze the SIF hash and local snapshot before launch.
+smoke_contract:
+  identity: swe-chat-hybrid-smoke-v1-20261009
+  status: preparation_blocked_on_sif_and_snapshot
+  launch_authorized: false
+  purpose: one_hybrid_ace_gepa_proposal_end_to_end
+  metric_improvement_required: false
+  development_only: true
+  total_cases: 8
+  train_cases: 4
+  validation_cases: 4
+  acceptance:
+    - isolated_checker_completions_and_raw_trajectories
+    - four_independent_reflector_reviews
+    - one_valid_curator_proposal_and_training_counter_commit
+    - candidate_minibatch_and_validation_results
+    - optimizer_checkpoint_and_final_report
+  refiner_note: conditional; test separately if Curator remains within limits
+
+paths:
+  dataset_snapshot: output/SWE-chat/behavioral-gepa-smoke-v1-20260830/stage-c-development-snapshot-v1
+  initial_guideline: configs/prompts/swe_chat_hybrid_seed_v1.json
+  run_dir: output/SWE-chat/hybrid-smoke-v1-20261009
+task:
+  semantics: behavioral_plan_acceptability_v1
+behavioral_repository:
+  backend: temporal_git_proxy
+  repositories_root: /scratch/users/${USER}/vibe-coding-planning/operations/swe-chat-f66cca95-preheat-v1-20260829/repositories
+  workspace_root: /scratch/users/${USER}/vibe-coding-planning/run_state/workspaces/swe-chat-hybrid-smoke-v1-20261009
+checker:
+  model: deepseek-v4-flash
+  api_base: https://api.deepseek.com
+  api_key_env: DEEPSEEK_API_KEY
+  temperature: 0.0
+  max_steps: 100
+  cost_limit: 3.0
+  timeout: 1800
+  agent_timeout_seconds: 0
+  max_attempts: 2
+reflection:
+  model: deepseek-v4-flash
+  api_base: https://api.deepseek.com
+  api_key_env: DEEPSEEK_API_KEY
+  temperature: 0.0
+  max_steps: 100
+  cost_limit: 3.0
+  timeout: 1800
+hybrid:
+  enabled: true
+  max_items: 10
+  shared_guide_words: 200
+  condition_words: 40
+  item_guide_words: 80
+  prompt_bundle: configs/prompts/swe_chat_hybrid_ace_v1.yaml
+  evidence_sif_cache_dir: /scratch/users/${USER}/vibe-coding-planning/shared/sif-cache
+  evidence_image: vibe-codex-isolation:v1-20261009
+  evidence_sif_sha256: ""
+  checker_model:
+    executor: codex_cli
+    codex_binary: ${HOME}/.local/lib/vibe-codex/0.160.1/bin/codex
+    codex_auth_file: ${HOME}/.codex/auth.json
+    codex_version: 0.160.1
+    model: gpt-6-sol
+    reasoning_effort: low
+  reflector_model:
+    executor: codex_cli
+    codex_binary: ${HOME}/.local/lib/vibe-codex/0.160.1/bin/codex
+    codex_auth_file: ${HOME}/.codex/auth.json
+    codex_version: 0.160.1
+    model: gpt-6-sol
+    reasoning_effort: low
+  curator_model:
+    executor: codex_cli
+    codex_binary: ${HOME}/.local/lib/vibe-codex/0.160.1/bin/codex
+    codex_auth_file: ${HOME}/.codex/auth.json
+    codex_version: 0.160.1
+    model: gpt-6-sol
+    reasoning_effort: low
+  refiner_enabled: true
+  refiner_model:
+    executor: codex_cli
+    codex_binary: ${HOME}/.local/lib/vibe-codex/0.160.1/bin/codex
+    codex_auth_file: ${HOME}/.codex/auth.json
+    codex_version: 0.160.1
+    model: gpt-6-sol
+    reasoning_effort: low
+search:
+  max_iterations: 1
+  max_metric_calls: 20
+  projection_metric_calls: 16
+  reflection_minibatch_size: 4
+  train_case_repetitions: 1
+  primary_metric: accuracy
+  parallel: 1
+  seed: 42
+  skip_perfect_score: false
+  min_proposals: 1
+docker:
+  workdir: /testbed
+  timeout: 30
+  min_free_gb: 20
+  max_cached_images: 75
+container:
+  runtime: none
+execution:
+  backend: hpc_slurm
+hpc:
+  submit: true
+  remote_project_dir: /scratch/users/${USER}/vibe-coding-planning/staging/swe-chat-hybrid-smoke-v1-20261009
+  remote_task_dir: /scratch/users/${USER}/vibe-coding-planning/run_state/hpc_tasks/swe-chat-hybrid-smoke-v1-20261009
+  remote_env_file: ~/.config/vibe-coding-planning/deepseek.env
+  ulhpc_config: configs/ulhpc_submit.yaml
+  partition: batch
+  cpus_per_task: 1
+  mem: 4G
+  time: 00:30:00
+  poll_interval_seconds: 120
+  task_output_grace_seconds: 300
+  missing_task_grace_seconds: 600
+  max_task_attempts: 2
+  python_module: lang/Python/3.11
+  container_module: tools/Apptainer
+  python_bin: python3
+  job_name_prefix: swe-chat-hybrid-smoke-v1-20261009
+  worker_config_path: configs/gepa_swe_chat_hybrid_smoke_v1_20261009.yaml
+prompts:
+  checker_system: replaced_by_hybrid_prompt_bundle
+  checker_instance: replaced_by_hybrid_prompt_bundle
+  reflection_system: unused_by_hybrid_phase_executor
+  reflection_instance: unused_by_hybrid_phase_executor

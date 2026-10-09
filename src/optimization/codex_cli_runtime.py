@@ -32,6 +32,7 @@ class CodexSIFExecution:
     evidence_dir: Path
     repository_dir: Path | None = None
     masked_paths: tuple[str, ...] = ("/opt/miniconda3/pkgs",)
+    interpreter: str | None = None
 
     @property
     def cwd(self) -> Path:
@@ -88,7 +89,7 @@ class CodexSIFExecution:
                     raise ValueError("Codex mount source contains an unsupported delimiter")
                 prefix.extend(["--bind", f"{source}:{target}:{mode}"])
             prefix.append(str(sif))
-            interpreter = ("/opt/miniconda3/envs/testbed/bin/python"
+            interpreter = self.interpreter or ("/opt/miniconda3/envs/testbed/bin/python"
                            if self.repository_dir is not None else "/usr/local/bin/python3")
             prefix.extend([interpreter, "/opt/vibe-codex/private_mount.py"])
             # --cleanenv does not neutralize launcher control variables. Do

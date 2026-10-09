@@ -104,6 +104,7 @@ def _semantic_config(
         "container": container,
         "execution": asdict(config.execution),
         "task": asdict(config.task),
+        **({"hybrid": asdict(config.hybrid)} if config.hybrid.enabled else {}),
         "repository_backend": {
             "backend": config.behavioral_repository.backend,
         },

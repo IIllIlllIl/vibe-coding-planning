@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import os
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from pathlib import Path
 from typing import Any
 
@@ -75,6 +75,25 @@ class BehavioralRepositoryConfig:
 
 
 @dataclass(frozen=True)
+class BehavioralHybridConfig:
+    enabled: bool = False
+    max_items: int = 10
+    shared_guide_words: int = 200
+    condition_words: int = 40
+    item_guide_words: int = 80
+    prompt_bundle: str = ""
+    prompt_bundle_sha256: str = ""
+    evidence_sif_cache_dir: str = ""
+    evidence_image: str = "python:3.12-slim"
+    evidence_sif_sha256: str = ""
+    reflector_model: dict[str, Any] = field(default_factory=dict)
+    curator_model: dict[str, Any] = field(default_factory=dict)
+    refiner_enabled: bool = False
+    refiner_model: dict[str, Any] = field(default_factory=dict)
+    checker_model: dict[str, Any] = field(default_factory=dict)
+
+
+@dataclass(frozen=True)
 class OptimizationConfig:
     dataset_snapshot: Path
     initial_rules_path: Path
@@ -96,6 +115,7 @@ class OptimizationConfig:
     behavioral_repository: BehavioralRepositoryConfig = field(
         default_factory=BehavioralRepositoryConfig
     )
+    hybrid: BehavioralHybridConfig = field(default_factory=BehavioralHybridConfig)
 
 
 def _mapping(value: Any, name: str) -> dict[str, Any]:
@@ -148,12 +168,43 @@ def load_optimization_config(
     repository_data = _mapping(
         raw.get("behavioral_repository", {}), "behavioral_repository"
     )
+    hybrid_data = _mapping(raw.get("hybrid", {}), "hybrid")
+    unknown = set(hybrid_data) - set(BehavioralHybridConfig.__dataclass_fields__)
+    if unknown:
+        raise ValueError(f"unknown hybrid fields: {sorted(unknown)}")
+    hybrid = BehavioralHybridConfig(**hybrid_data)
+    if type(hybrid.enabled) is not bool:
+        raise ValueError("hybrid.enabled must be a boolean")
+    if hybrid.enabled:
+        from src.optimization.behavioral_hybrid import HybridLimits
+        HybridLimits(hybrid.max_items, hybrid.shared_guide_words,
+                     hybrid.condition_words, hybrid.item_guide_words)
+        if not hybrid.prompt_bundle or not hybrid.evidence_sif_cache_dir:
+            raise ValueError("hybrid requires prompt_bundle and evidence_sif_cache_dir")
+        if type(hybrid.refiner_enabled) is not bool:
+            raise ValueError("hybrid.refiner_enabled must be boolean")
+        for role_model in (hybrid.reflector_model, hybrid.curator_model, hybrid.refiner_model, hybrid.checker_model):
+            if not isinstance(role_model, dict):
+                raise ValueError("hybrid role models must be mappings")
+            if set(role_model) & {"api_key", "token", "password"}:
+                raise ValueError("hybrid models must reference private credentials, not include their values")
     hpc_data = _mapping(raw.get("hpc", {}), "hpc")
     prompts = _mapping(raw.get("prompts"), "prompts")
     paths = _mapping(raw.get("paths"), "paths")
 
     if require_api_keys:
-        for model_config in (checker, reflection):
+        key_models = [checker, reflection]
+        if hybrid.enabled:
+            key_models = []
+            if hybrid.checker_model.get("executor") != "codex_cli":
+                key_models.append(checker)
+            for role in ("reflector", "curator", "refiner"):
+                if role == "refiner" and not hybrid.refiner_enabled:
+                    continue
+                override = getattr(hybrid, f"{role}_model")
+                if override.get("executor") != "codex_cli":
+                    key_models.append(replace(reflection, api_key_env=override.get("api_key_env", reflection.api_key_env)))
+        for model_config in key_models:
             if not os.environ.get(model_config.api_key_env):
                 raise ValueError(
                     f"environment variable {model_config.api_key_env} is not set"
@@ -262,6 +313,21 @@ def load_optimization_config(
     )
     if behavioral_repository.backend != "temporal_git_proxy":
         raise ValueError("behavioral_repository.backend must be 'temporal_git_proxy'")
+    if hybrid.enabled:
+        import hashlib
+        if task.semantics != "behavioral_plan_acceptability_v1":
+            raise ValueError("hybrid requires Behavioral acceptability semantics")
+        bundle_path = resolve(hybrid.prompt_bundle)
+        bundle_bytes = bundle_path.read_bytes()
+        hybrid = replace(hybrid, prompt_bundle=str(bundle_path),
+                         prompt_bundle_sha256=hashlib.sha256(bundle_bytes).hexdigest(),
+                         evidence_sif_cache_dir=str(resolve(hybrid.evidence_sif_cache_dir)))
+        hybrid_prompts = _mapping(yaml.safe_load(bundle_bytes), "hybrid prompts")
+        for key in ("checker_task", "checker_instance", "reflector_task", "curator_task"):
+            if not isinstance(hybrid_prompts.get(key), str) or not hybrid_prompts[key].strip():
+                raise ValueError(f"hybrid prompt {key} must be nonempty")
+        prompts = dict(prompts, checker_system=hybrid_prompts["checker_task"],
+                       checker_instance=hybrid_prompts["checker_instance"])
     hpc_defaults = HPCConfig()
     try:
         default_worker_config_path = str(config_path.relative_to(root))
@@ -395,4 +461,5 @@ def load_optimization_config(
         hpc=hpc,
         task=task,
         behavioral_repository=behavioral_repository,
+        hybrid=hybrid,
     )

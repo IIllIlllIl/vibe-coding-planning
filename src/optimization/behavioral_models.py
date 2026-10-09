@@ -99,6 +99,7 @@ class BehavioralCheckerOutput:
     decision_reason: str
     repository_evidence: tuple[dict[str, str], ...]
     trajectory: tuple[dict[str, Any], ...] = ()
+    rule_results: tuple[dict[str, Any], ...] = ()
 
     def to_dict(self, *, include_trajectory: bool = False) -> dict[str, Any]:
         value: dict[str, Any] = {
@@ -108,4 +109,6 @@ class BehavioralCheckerOutput:
         }
         if include_trajectory:
             value["trajectory"] = list(self.trajectory)
+        if self.rule_results:
+            value["rule_results"] = list(self.rule_results)
         return value

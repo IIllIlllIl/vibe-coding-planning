@@ -170,6 +170,8 @@ class GlobalPlaybookCounters:
         playbook: RejectPlaybook,
         reviews: Sequence[Mapping[str, Any]] = (),
         records: Sequence[Mapping[str, Any]] = (),
+        *,
+        include_inactive: bool = False,
     ) -> dict[str, Any]:
         """Training Ref facts only; preserve context changes independently of counts.
 
@@ -209,7 +211,8 @@ class GlobalPlaybookCounters:
                 }
                 events[digest(event)] = event
         active = set(identities.values())
-        events = {key: value for key, value in events.items() if value["rule_identity"] in active}
+        if not include_inactive:
+            events = {key: value for key, value in events.items() if value["rule_identity"] in active}
         used_reports = {event["reflection_sha256"] for event in events.values()}
         used_contexts = {event["checker_context_sha256"] for event in events.values()}
         return {
