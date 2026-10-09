@@ -204,6 +204,7 @@ import hashlib
 import json
 import os
 import shutil
+import signal
 import subprocess
 import sys
 import time
@@ -306,6 +307,9 @@ def inspect_sif(apptainer, sif):
         stdout=subprocess.PIPE,
         stderr=subprocess.PIPE,
         universal_newlines=True,
+        encoding="utf-8",
+        errors="replace",
+        timeout=120,
         check=False,
     )
     if result.returncode != 0:
@@ -318,13 +322,39 @@ def inspect_sif(apptainer, sif):
     return labels.get("org.label-schema.usage.singularity.deffile.from"), None
 
 
+def run_pull(command, timeout):
+    # Own a dedicated process group so timeout also stops conversion children.
+    process = subprocess.Popen(command, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+                               universal_newlines=True, encoding="utf-8", errors="replace",
+                               start_new_session=True)
+    try:
+        stdout, stderr = process.communicate(timeout=timeout)
+    except subprocess.TimeoutExpired as exc:
+        try:
+            os.killpg(process.pid, signal.SIGKILL)
+        except ProcessLookupError:
+            pass
+        try:
+            stdout, stderr = process.communicate(timeout=10)
+        except subprocess.TimeoutExpired:
+            print(json.dumps({"event": "unsafe_orphan_stop", "pid": process.pid}), flush=True)
+            raise RuntimeError("Timed-out pull did not terminate; refusing concurrent writers")
+        exc.output, exc.stderr = stdout, stderr
+        raise
+    return subprocess.CompletedProcess(command, process.returncode, stdout, stderr)
+
+
 def atomic_json(path, value):
-    path.parent.mkdir(parents=True, exist_ok=True)
-    temporary = path.with_name(f"{path.name}.tmp.{os.getpid()}")
-    temporary.write_text(
-        json.dumps(value, indent=2, sort_keys=True) + "\n", encoding="utf-8"
-    )
-    temporary.replace(path)
+    try:
+        path.parent.mkdir(parents=True, exist_ok=True)
+        temporary = path.with_name(f"{path.name}.tmp.{os.getpid()}")
+        temporary.write_text(json.dumps(value, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+        temporary.replace(path)
+    except OSError as exc:
+        # SSH stdout is retained by the local launcher; never lose the snapshot.
+        print(json.dumps({"event": "provenance_write_failed", "path": str(path),
+                          "error": str(exc), "errno": exc.errno,
+                          "recovery_snapshot": value}, sort_keys=True), flush=True)
 
 
 def failure_category(error):
@@ -339,6 +369,8 @@ def failure_category(error):
         return "pull_timeout"
     if "no space left" in lowered:
         return "disk_full"
+    if "stale file handle" in lowered:
+        return "filesystem_stale_handle"
     if "temporary failure" in lowered or "connection reset" in lowered or "tls" in lowered:
         return "network_failure"
     return "unexpected_pull_failure"
@@ -383,8 +415,10 @@ lock_handle.flush()
 if provenance_output.exists():
     try:
         provenance = json.loads(provenance_output.read_text(encoding="utf-8"))
-    except (OSError, json.JSONDecodeError):
-        provenance = {}
+    except (OSError, json.JSONDecodeError) as exc:
+        print(json.dumps({"event": "provenance_read_failed", "path": str(provenance_output),
+                          "error": str(exc), "action": "stop without overwriting existing evidence"}), flush=True)
+        raise SystemExit(2)
 else:
     provenance = {}
 if provenance.get("schema_version") not in {1, 2}:
@@ -450,224 +484,259 @@ cached = 0
 pulled = 0
 failures = []
 for image in images:
-    sif = sif_cache_dir / image_to_sif_name(image)
-    previous = records.get(image) if isinstance(records.get(image), dict) else None
-    digest_before, digest_before_error = registry_digest(image)
-    if sif.exists():
-        cached += 1
-        source_ref, inspect_error = inspect_sif(apptainer_bin, sif)
-        if previous and previous.get("status") in {"cached", "pulled"}:
-            records[image] = {
-                **previous,
-                "last_verified_at": utc_now(),
-                "last_verified_source_ref": source_ref,
-                "last_verified_source_ref_error": inspect_error,
-                "last_verified_oci_digest": digest_before,
-                "last_verified_oci_digest_error": digest_before_error,
-                "sif_bytes": sif.stat().st_size,
-                "sif_mtime_ns": sif.stat().st_mtime_ns,
-                "sif_sha256": sha256_file(sif, previous),
-            }
-        else:
-            records[image] = {
-                "status": "cached",
-                "requested_ref": image,
-                "source_ref": source_ref,
-                "source_ref_error": inspect_error,
-                "oci_digest": digest_before,
-                "oci_digest_error": digest_before_error,
-                "digest_observation": "observed_at_audit_time",
-                "provenance_strength": "retrospective",
-                "sif_path": str(sif),
-                "sif_bytes": sif.stat().st_size,
-                "sif_mtime_ns": sif.stat().st_mtime_ns,
-                "sif_sha256": sha256_file(sif, previous),
-                "recorded_at": utc_now(),
-            }
-        provenance["updated_at"] = utc_now()
-        atomic_json(provenance_output, provenance)
-        print(
-            json.dumps(
-                {
-                    "event": "cached",
-                    "image": image,
-                    "sif": sif.name,
-                    "oci_digest": digest_before,
-                    "provenance_strength": "retrospective",
-                },
-                sort_keys=True,
-            ),
-            flush=True,
-        )
-        continue
-
-    last_error = ""
-    ok = False
-    attempt_evidence = []
-    for attempt in range(1, max_attempts + 1):
-        temporary = sif.with_name(f"{sif.name}.tmp.login.{os.getpid()}")
-        if temporary.exists():
-            temporary.unlink()
-        print(
-            json.dumps(
-                {
-                    "event": "pulling",
-                    "attempt": attempt,
-                    "max_attempts": max_attempts,
-                    "image": image,
-                    "sif": sif.name,
-                },
-                sort_keys=True,
-            ),
-            flush=True,
-        )
-        try:
-            result = subprocess.run(
-                [
-                    apptainer_bin,
-                    "pull",
-                    "--force",
-                    str(temporary),
-                    f"docker://{image}",
-                ],
-                stdout=subprocess.PIPE,
-                stderr=subprocess.PIPE,
-                universal_newlines=True,
-                timeout=timeout,
-                check=False,
-            )
-        except subprocess.TimeoutExpired as exc:
-            last_error = f"timed out after {exc.timeout}s"
-        except FileNotFoundError as exc:
-            last_error = f"Apptainer not found: {exc}"
-        else:
-            if result.returncode == 0 and temporary.exists():
-                temporary.replace(sif)
-                pulled += 1
-                ok = True
-                size = sif.stat().st_size
-                digest_after, digest_after_error = registry_digest(image)
-                source_ref, inspect_error = inspect_sif(apptainer_bin, sif)
-                digest_matches = bool(
-                    digest_before
-                    and digest_after
-                    and digest_before == digest_after
-                )
+    try:
+        sif = sif_cache_dir / image_to_sif_name(image)
+        previous = records.get(image) if isinstance(records.get(image), dict) else None
+        digest_before, digest_before_error = registry_digest(image)
+        if sif.exists():
+            cached += 1
+            source_ref, inspect_error = inspect_sif(apptainer_bin, sif)
+            if previous and previous.get("status") in {"cached", "pulled"}:
                 records[image] = {
-                    "status": "pulled",
+                    **previous,
+                    "last_verified_at": utc_now(),
+                    "last_verified_source_ref": source_ref,
+                    "last_verified_source_ref_error": inspect_error,
+                    "last_verified_oci_digest": digest_before,
+                    "last_verified_oci_digest_error": digest_before_error,
+                    "sif_bytes": sif.stat().st_size,
+                    "sif_mtime_ns": sif.stat().st_mtime_ns,
+                    "sif_sha256": sha256_file(sif, previous),
+                }
+            else:
+                records[image] = {
+                    "status": "cached",
                     "requested_ref": image,
                     "source_ref": source_ref,
                     "source_ref_error": inspect_error,
-                    "oci_digest": digest_after or digest_before,
-                    "oci_digest_before": digest_before,
-                    "oci_digest_before_error": digest_before_error,
-                    "oci_digest_after": digest_after,
-                    "oci_digest_after_error": digest_after_error,
-                    "digest_observation": (
-                        "before_and_after_pull_match"
-                        if digest_matches
-                        else "pull_digest_unverified"
-                    ),
-                    "provenance_strength": (
-                        "pull_attested" if digest_matches else "sif_only"
-                    ),
+                    "oci_digest": digest_before,
+                    "oci_digest_error": digest_before_error,
+                    "digest_observation": "observed_at_audit_time",
+                    "provenance_strength": "retrospective",
                     "sif_path": str(sif),
-                    "sif_bytes": size,
+                    "sif_bytes": sif.stat().st_size,
                     "sif_mtime_ns": sif.stat().st_mtime_ns,
-                    "sif_sha256": sha256_file(sif),
+                    "sif_sha256": sha256_file(sif, previous),
                     "recorded_at": utc_now(),
                 }
-                provenance["updated_at"] = utc_now()
-                atomic_json(provenance_output, provenance)
-                print(
-                    json.dumps(
-                        {
-                            "event": "ok",
-                            "image": image,
-                            "sif": sif.name,
-                            "bytes": size,
-                            "oci_digest": digest_after or digest_before,
-                            "provenance_strength": records[image]["provenance_strength"],
-                        },
-                        sort_keys=True,
-                    ),
-                    flush=True,
-                )
-                break
-            last_error = (result.stderr or result.stdout or "unknown pull failure").strip()[-2000:]
-        finally:
+            provenance["updated_at"] = utc_now()
+            atomic_json(provenance_output, provenance)
+            print(
+                json.dumps(
+                    {
+                        "event": "cached",
+                        "image": image,
+                        "sif": sif.name,
+                        "oci_digest": digest_before,
+                        "provenance_strength": "retrospective",
+                    },
+                    sort_keys=True,
+                ),
+                flush=True,
+            )
+            continue
+
+        last_error = ""
+        ok = False
+        attempt_evidence = []
+        for attempt in range(1, max_attempts + 1):
+            attempt_returncode = None
+            full_error = ""
+            error_errno = None
+            temporary = sif.with_name(f"{sif.name}.tmp.login.{os.getpid()}")
             if temporary.exists():
                 temporary.unlink()
+            print(
+                json.dumps(
+                    {
+                        "event": "pulling",
+                        "attempt": attempt,
+                        "max_attempts": max_attempts,
+                        "image": image,
+                        "sif": sif.name,
+                    },
+                    sort_keys=True,
+                ),
+                flush=True,
+            )
+            try:
+                result = run_pull(
+                    [
+                        apptainer_bin,
+                        "pull",
+                        "--force",
+                        str(temporary),
+                        f"docker://{image}",
+                    ],
+                    timeout=timeout,
+                )
+            except subprocess.TimeoutExpired as exc:
+                last_error = f"timed out after {exc.timeout}s"
+                full_error = str(exc) + "\n" + str(exc.stderr or "")
+            except FileNotFoundError as exc:
+                last_error = f"Apptainer not found: {exc}"
+                full_error = str(exc)
+                error_errno = exc.errno
+            except OSError as exc:
+                last_error = f"Apptainer launch failed: {exc}"
+                full_error = str(exc)
+                error_errno = exc.errno
+            else:
+                attempt_returncode = result.returncode
+                if result.returncode == 0 and temporary.exists():
+                    temporary.replace(sif)
+                    pulled += 1
+                    ok = True
+                    size = sif.stat().st_size
+                    digest_after, digest_after_error = registry_digest(image)
+                    source_ref, inspect_error = inspect_sif(apptainer_bin, sif)
+                    digest_matches = bool(
+                        digest_before
+                        and digest_after
+                        and digest_before == digest_after
+                    )
+                    records[image] = {
+                        "status": "pulled",
+                        "requested_ref": image,
+                        "source_ref": source_ref,
+                        "source_ref_error": inspect_error,
+                        "oci_digest": digest_after or digest_before,
+                        "oci_digest_before": digest_before,
+                        "oci_digest_before_error": digest_before_error,
+                        "oci_digest_after": digest_after,
+                        "oci_digest_after_error": digest_after_error,
+                        "digest_observation": (
+                            "before_and_after_pull_match"
+                            if digest_matches
+                            else "pull_digest_unverified"
+                        ),
+                        "provenance_strength": (
+                            "pull_attested" if digest_matches else "sif_only"
+                        ),
+                        "sif_path": str(sif),
+                        "sif_bytes": size,
+                        "sif_mtime_ns": sif.stat().st_mtime_ns,
+                        "sif_sha256": sha256_file(sif),
+                        "recorded_at": utc_now(),
+                    }
+                    provenance["updated_at"] = utc_now()
+                    atomic_json(provenance_output, provenance)
+                    print(
+                        json.dumps(
+                            {
+                                "event": "ok",
+                                "image": image,
+                                "sif": sif.name,
+                                "bytes": size,
+                                "oci_digest": digest_after or digest_before,
+                                "provenance_strength": records[image]["provenance_strength"],
+                            },
+                            sort_keys=True,
+                        ),
+                        flush=True,
+                    )
+                    break
+                last_error = (result.stderr or result.stdout or "unknown pull failure").strip()[-2000:]
+                full_error = (result.stderr or "") + "\n" + (result.stdout or "")
+            finally:
+                try:
+                    if temporary.exists():
+                        temporary.unlink()
+                except OSError as exc:
+                    print(json.dumps({"event": "temporary_cleanup_failed", "image": image,
+                                      "path": str(temporary), "error": str(exc), "errno": exc.errno}), flush=True)
 
-        attempt_evidence.append(
-            {
-                "attempt": attempt,
-                "error": last_error,
-                "failure_category": failure_category(last_error),
-                "recorded_at": utc_now(),
-            }
-        )
-
-        print(
-            json.dumps(
+            attempt_evidence.append(
                 {
-                    "event": "retryable_failure",
                     "attempt": attempt,
-                    "max_attempts": max_attempts,
-                    "image": image,
                     "error": last_error,
-                },
-                sort_keys=True,
-            ),
-            flush=True,
-        )
-        if attempt < max_attempts and retry_backoff > 0:
-            time.sleep(retry_backoff)
-
-    if not ok:
-        failures.append((image, last_error))
-        failed_record = {
-            "status": "failed",
-            "requested_ref": image,
-            "oci_digest": digest_before,
-            "oci_digest_error": digest_before_error,
-            "failure_category": failure_category(last_error),
-            "error": last_error,
-            "attempts": attempt_evidence,
-            "recorded_at": utc_now(),
-        }
-        if previous:
-            prior_records = list(previous.get("prior_records", []))
-            prior_records.append(
-                {
-                    key: value
-                    for key, value in previous.items()
-                    if key != "prior_records"
+                    "full_error": full_error,
+                    "returncode": attempt_returncode,
+                    "errno": error_errno,
+                    "failure_category": failure_category(last_error),
+                    "recorded_at": utc_now(),
                 }
             )
-            failed_record["prior_records"] = prior_records
-            original_category = previous.get(
-                "original_failure_category", previous.get("failure_category")
+
+            print(
+                json.dumps(
+                    {
+                        "event": "retryable_failure",
+                        "attempt": attempt,
+                        "max_attempts": max_attempts,
+                        "image": image,
+                        "error": last_error,
+                    },
+                    sort_keys=True,
+                ),
+                flush=True,
             )
-            if original_category:
-                failed_record["original_failure_category"] = original_category
+            if attempt < max_attempts and retry_backoff > 0:
+                time.sleep(retry_backoff)
+
+        if not ok:
+            failures.append((image, last_error))
+            failed_record = {
+                "status": "failed",
+                "requested_ref": image,
+                "oci_digest": digest_before,
+                "oci_digest_error": digest_before_error,
+                "failure_category": failure_category(last_error),
+                "error": last_error,
+                "attempts": attempt_evidence,
+                "recorded_at": utc_now(),
+            }
+            if previous:
+                prior_records = list(previous.get("prior_records", []))
+                prior_records.append(
+                    {
+                        key: value
+                        for key, value in previous.items()
+                        if key != "prior_records"
+                    }
+                )
+                failed_record["prior_records"] = prior_records
+                original_category = previous.get(
+                    "original_failure_category", previous.get("failure_category")
+                )
+                if original_category:
+                    failed_record["original_failure_category"] = original_category
+            records[image] = failed_record
+            provenance["updated_at"] = utc_now()
+            atomic_json(provenance_output, provenance)
+            print(
+                json.dumps({"event": "failed", "image": image, "error": last_error}, sort_keys=True),
+                flush=True,
+            )
+
+    except (OSError, subprocess.TimeoutExpired, UnicodeError) as exc:
+        error = f"Image preparation filesystem/process error: {exc}"
+        failures.append((image, error))
+        prior = records.get(image)
+        failed_record = {
+            "status": "failed", "requested_ref": image,
+            "error": error, "failure_category": failure_category(error),
+            "errno": getattr(exc, "errno", None), "recorded_at": utc_now(),
+        }
+        if prior:
+            failed_record["prior_records"] = [prior]
         records[image] = failed_record
         provenance["updated_at"] = utc_now()
+        print(json.dumps({"event": "failed", "image": image, **failed_record}, sort_keys=True), flush=True)
         atomic_json(provenance_output, provenance)
-        print(
-            json.dumps({"event": "failed", "image": image, "error": last_error}, sort_keys=True),
-            flush=True,
-        )
+        continue
 
-if failures:
-    failed_output.parent.mkdir(parents=True, exist_ok=True)
-    failed_output.write_text(
-        "".join(f"{image}\t{error}\n" for image, error in failures),
-        encoding="utf-8",
-    )
-elif failed_output.exists():
-    failed_output.unlink()
+try:
+    if failures:
+        failed_output.parent.mkdir(parents=True, exist_ok=True)
+        failed_output.write_text("".join(f"{image}\t{error}\n" for image, error in failures), encoding="utf-8")
+    elif failed_output.exists():
+        failed_output.unlink()
+except OSError as exc:
+    print(json.dumps({"event": "failure_list_write_failed", "error": str(exc), "failures": failures}), flush=True)
 
+pulled = sum(records[image].get("status") == "pulled" for image in images)
+cached = sum(records[image].get("status") == "cached" for image in images)
 summary = {
     "event": "summary",
     "cached": cached,
@@ -707,16 +776,20 @@ for label, directory, enabled in (
         continue
     removed = 0
     errors = []
-    if directory.exists():
-        for child in directory.iterdir():
-            try:
-                if child.is_dir() and not child.is_symlink():
-                    shutil.rmtree(child)
-                else:
-                    child.unlink()
-                removed += 1
-            except Exception as exc:
-                errors.append(f"{child}: {type(exc).__name__}: {exc}")
+    try:
+        children = list(directory.iterdir()) if directory.exists() else []
+    except OSError as exc:
+        children = []
+        errors.append(str(exc))
+    for child in children:
+        try:
+            if child.is_dir() and not child.is_symlink():
+                shutil.rmtree(child)
+            else:
+                child.unlink()
+            removed += 1
+        except Exception as exc:
+            errors.append(f"{child}: {type(exc).__name__}: {exc}")
     print(
         json.dumps(
             {

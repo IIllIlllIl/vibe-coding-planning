@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 import subprocess
 import sys
+import pytest
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -348,3 +349,78 @@ def test_login_preheat_normalizes_only_oci_repository_case() -> None:
         login_apptainer_sif_preheat._normalize_image_ref("python:3.12-slim")
         == "python:3.12-slim"
     )
+
+
+@pytest.mark.parametrize('fault', ['launch', 'stat', 'provenance_write'])
+def test_remote_batch_continues_after_estale_and_preserves_error(tmp_path, monkeypatch, capsys, fault):
+    import ast
+    import errno
+    import io
+
+    tree = ast.parse(login_apptainer_sif_preheat._remote_script())
+    stub = ast.parse('def registry_digest(image):\n    return "sha256:test", None\n').body[0]
+    tree.body = [stub if isinstance(n, ast.FunctionDef) and n.name == 'registry_digest' else n for n in tree.body]
+    pull_stub = ast.parse('def run_pull(command, timeout):\n    return subprocess.run(command, timeout=timeout)\n').body[0]
+    tree.body = [pull_stub if isinstance(n, ast.FunctionDef) and n.name == 'run_pull' else n for n in tree.body]
+    payload = {'apptainer_bin':'test-apptainer','sif_cache_dir':str(tmp_path/'sifs'),'lock_file':str(tmp_path/'lock'),
+               'failed_output':str(tmp_path/'failures.tsv'),'provenance_output':str(tmp_path/'provenance.json'),
+               'apptainer_cache_dir':str(tmp_path/'cache'),'apptainer_tmp_dir':str(tmp_path/'temp'),
+               'timeout':60,'max_attempts':1,'retry_backoff':0,'images':['repo/first:tag','repo/second:tag'],
+               'cleanup_tmp':False,'cleanup_apptainer_cache':False}
+    calls = []
+
+    def run(command, **kwargs):
+        calls.append(command[-1])
+        if command[-1] == 'docker://repo/first:tag':
+            raise OSError(errno.ESTALE, 'Stale file handle')
+        return subprocess.CompletedProcess(command, 7, '', 'original cause\n'+'warning '*400)
+
+    monkeypatch.setattr(sys, 'stdin', io.StringIO(json.dumps(payload)))
+    monkeypatch.setattr(subprocess, 'run', run)
+    monkeypatch.setenv('APPTAINER_CACHEDIR', '')
+    monkeypatch.setenv('APPTAINER_TMPDIR', '')
+    if fault == 'stat':
+        exists = Path.exists
+        def faulty_exists(path):
+            if path.name == 'repo_first_tag.sif':
+                raise OSError(errno.ESTALE, 'Stale file handle')
+            return exists(path)
+        monkeypatch.setattr(Path, 'exists', faulty_exists)
+    if fault == 'provenance_write':
+        replace = Path.replace
+        def faulty_replace(path, target):
+            if str(target) == str(tmp_path/'provenance.json'):
+                raise OSError(errno.ESTALE, 'Stale file handle')
+            return replace(path, target)
+        monkeypatch.setattr(Path, 'replace', faulty_replace)
+    try:
+        exec(compile(tree, '<remote-preheat-test>', 'exec'), {})
+    except SystemExit as exc:
+        assert exc.code == 1
+    assert calls == (['docker://repo/second:tag'] if fault == 'stat' else ['docker://repo/first:tag','docker://repo/second:tag'])
+    if fault == 'provenance_write':
+        snapshots = [json.loads(line)['recovery_snapshot'] for line in capsys.readouterr().out.splitlines() if '"event": "provenance_write_failed"' in line]
+        result = snapshots[-1]
+    else:
+        result = json.loads((tmp_path/'provenance.json').read_text())
+    assert result['complete'] and result['runs'][0]['status'] == 'completed'
+    first_record = result['records']['repo/first:tag']
+    first = first_record if fault == 'stat' else first_record['attempts'][0]
+    assert first['errno'] == errno.ESTALE
+    assert first['failure_category'] == 'filesystem_stale_handle'
+    second = result['records']['repo/second:tag']['attempts'][0]
+    assert second['returncode'] == 7
+    assert second['full_error'].startswith('original cause')
+
+
+def test_pull_timeout_terminates_owned_process_group():
+    import ast
+    import os
+    import signal
+    tree = ast.parse(login_apptainer_sif_preheat._remote_script())
+    function = next(n for n in tree.body if isinstance(n, ast.FunctionDef) and n.name == 'run_pull')
+    namespace = {'subprocess':subprocess, 'os':os, 'signal':signal, 'json':json}
+    exec(compile(ast.Module(body=[function], type_ignores=[]), '<run-pull>', 'exec'), namespace)
+    with pytest.raises(subprocess.TimeoutExpired) as error:
+        namespace['run_pull'](['/bin/sh','-c','sleep 30 & echo child=$!; wait'], timeout=0.1)
+    assert 'child=' in error.value.output
