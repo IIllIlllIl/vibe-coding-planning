@@ -11,6 +11,7 @@ from pathlib import Path
 import re
 import shlex
 import subprocess
+import tempfile
 
 
 def file_sha256(path: Path) -> str:
@@ -23,11 +24,16 @@ def file_sha256(path: Path) -> str:
 
 def main() -> int:
     parser = argparse.ArgumentParser(allow_abbrev=False)
-    parser.add_argument("--source-snapshot", required=True, type=Path)
+    inputs = parser.add_mutually_exclusive_group(required=True)
+    inputs.add_argument("--source-snapshot", type=Path)
+    inputs.add_argument("--request-manifest", type=Path)
+    parser.add_argument("--repository", help="Restrict acquisition requests to one repository")
     parser.add_argument("--sif-cache-dir", required=True, type=Path)
     parser.add_argument("--output", required=True, type=Path)
     parser.add_argument("--apptainer-bin", default="apptainer")
     args = parser.parse_args()
+    if args.request_manifest:
+        return audit_requests(args)
     manifest_path = args.source_snapshot / "manifest.json"
     manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
     rows = [json.loads(line)["source_row"] for line in (args.source_snapshot / manifest["instances_file"]).read_text().splitlines() if line]
@@ -120,6 +126,64 @@ def main() -> int:
     args.output.write_text(json.dumps(payload, indent=2, sort_keys=True) + "\n", encoding="utf-8")
     print(json.dumps({"records": len(records), "base_verified": sum(r["base_commit_verified"] for r in records.values())}))
     return 0
+
+
+def audit_requests(args) -> int:
+    """Audit acquisition metadata only, without importing solution/test fields."""
+    request = json.loads(args.request_manifest.read_text())
+    rows = [r for r in request["requests"] if not args.repository or r["repo"] == args.repository]
+    if not rows:
+        raise ValueError("Empty audit selection")
+    records = {}
+    for row in rows:
+        image = row["image_ref"]
+        sif = args.sif_cache_dir / row["sif_filename"]
+        verified = False
+        location = None
+        output = ""
+        if sif.is_file():
+            # Search only common container repository roots, at bounded depth.
+            probe = subprocess.run(
+                [args.apptainer_bin, "exec", str(sif), "sh", "-lc",
+                 "find /app /testbed /workspace /workspaces /root /opt -maxdepth 3 -name .git -type d 2>/dev/null || true"],
+                capture_output=True, text=True, timeout=120, check=False,
+            )
+            locations = sorted(set(line[:-5] for line in probe.stdout.splitlines() if line.endswith('/.git')))
+            matches = []
+            for candidate in locations:
+                with tempfile.TemporaryDirectory(prefix="vibe-sif-audit-home-") as home:
+                    (Path(home) / '.gitconfig').write_text('[safe]\n\tdirectory = ' + json.dumps(candidate) + '\n')
+                    check = subprocess.run(
+                        [args.apptainer_bin, "exec", "--bind", home + ":/tmp/vibe-sif-audit-home:ro", str(sif),
+                         "env", "HOME=/tmp/vibe-sif-audit-home", "GIT_CONFIG_GLOBAL=/tmp/vibe-sif-audit-home/.gitconfig",
+                         "git", "-C", candidate, "cat-file", "-e", str(row["base_commit"]) + "^{commit}"],
+                        capture_output=True, text=True, timeout=120, check=False,
+                    )
+                if check.returncode == 0:
+                    matches.append(candidate)
+                else:
+                    output = (check.stdout + check.stderr)[-2000:]
+            verified = len(matches) == 1
+            location = matches[0] if verified else None
+            if not verified:
+                output = f"Expected exactly one repository containing base commit; matches={matches}; candidates={locations}; {output}"
+        records[image] = {
+            "instance_id": row["instance_id"], "status": "audited" if sif.is_file() and verified else "invalid",
+            "sif_path": str(sif), "sif_bytes": sif.stat().st_size if sif.is_file() else None,
+            "sif_sha256": file_sha256(sif) if sif.is_file() else None,
+            "expected_base_commit": row["base_commit"], "base_commit_verified": verified,
+            "repository_path": location, "base_commit_verification_output": output,
+            "provenance_strength": "retrospective", "oci_digest": None,
+        }
+    payload = {"schema_version":1, "purpose":"swe_bench_pro_v2_sif_snapshot", "created_at":datetime.now(timezone.utc).isoformat(),
+               "source_request_manifest_sha256":file_sha256(args.request_manifest), "records":records,
+               "agent_history_policy":None, "agent_history_audit":"not performed; separate prepared history required before Agent execution"}
+    payload["manifest_id"] = hashlib.sha256(json.dumps(payload, sort_keys=True, separators=(",", ":")).encode()).hexdigest()
+    args.output.parent.mkdir(parents=True, exist_ok=True)
+    args.output.write_text(json.dumps(payload, indent=2, sort_keys=True)+'\n')
+    valid = sum(r["base_commit_verified"] for r in records.values())
+    print(json.dumps({"records":len(rows), "base_verified":valid}), flush=True)
+    return 0 if valid == len(rows) else 1
 
 
 if __name__ == "__main__":

@@ -1,0 +1,15 @@
+{
+  "audit_job": "6108198",
+  "base_commit_verified": 82,
+  "hash_size_match_download_provenance": 82,
+  "history_preheat": "not audited or prepared by this operation",
+  "image_manifest": "configs/frozen_swe_bench_pro/v2-ansible82-audited-v1-20261009/images.json",
+  "image_manifest_sha256": "d91c61dd1b548c3684281fcbf8dedfdae02709564f5776bcf7e7b01535325acd",
+  "invalid": 0,
+  "missing": 0,
+  "purpose": "pro_v2_ansible82_sif_acceptance",
+  "retrospective_registry_evidence": "configs/frozen_swe_bench_pro/v2-ansible82-audited-v1-20261009/retrospective-registry-evidence.json",
+  "retrospective_registry_evidence_sha256": "37ede1838cd31015dc8a3d28353a093dc1fc7059c9dce1d3a53b972799805edf",
+  "schema_version": 1,
+  "valid": 82
+}

@@ -81,6 +81,7 @@ def freeze(
     expected_parquet_sha256: str | None = None,
     legacy_python_ids: Path | None = None,
     legacy_ansible_ids: Path | None = None,
+    dataset_version: str = "v1",
 ) -> dict[str, Any]:
     parquet = parquet.resolve()
     parquet_sha256 = _file_hash(parquet)
@@ -106,7 +107,8 @@ def freeze(
         base_commit = str(row["base_commit"]).strip()
         if not tag or not base_commit:
             raise ValueError(f"Missing image tag or base commit: {row['instance_id']}")
-        image_ref = f"jefzda/sweap-images:{tag}"
+        image_ref = (f"ghcr.io/scaleapi/swe-bench_pro-v2:{row['instance_id']}"
+                     if dataset_version == "v2" else f"jefzda/sweap-images:{tag}")
         requests.append(
             {
                 "ordinal": ordinal,
@@ -160,7 +162,8 @@ def freeze(
         "purpose": "swe_bench_pro_source_identity",
         "dataset": DATASET,
         "revision": revision,
-        "source_file": "data/test-00000-of-00001.parquet",
+        "source_file": ("data/default/test-00000-of-00001.parquet"
+                        if dataset_version == "v2" else "data/test-00000-of-00001.parquet"),
         "source_parquet_sha256": parquet_sha256,
         "source_parquet_bytes": parquet.stat().st_size,
         "rows": len(rows),
@@ -187,6 +190,9 @@ def freeze(
         "contains_solution_or_test_evidence": False,
         "requests": requests,
     }
+    if dataset_version == "v2":
+        source_manifest["dataset_version"] = dataset_version
+        request_manifest["dataset_version"] = dataset_version
     _write_frozen(output_dir / "dataset-source-manifest.json", source_manifest)
     _write_frozen(output_dir / "python-image-request-manifest.json", request_manifest)
     _write_frozen(output_dir / "python-instance-ids.json", python_ids)
@@ -201,6 +207,7 @@ def main() -> int:
     parser.add_argument("--expected-parquet-sha256")
     parser.add_argument("--legacy-python-ids", type=Path)
     parser.add_argument("--legacy-ansible-ids", type=Path)
+    parser.add_argument("--dataset-version", choices=("v1", "v2"), default="v1")
     args = parser.parse_args()
     result = freeze(
         parquet=args.parquet,
@@ -209,6 +216,7 @@ def main() -> int:
         expected_parquet_sha256=args.expected_parquet_sha256,
         legacy_python_ids=args.legacy_python_ids,
         legacy_ansible_ids=args.legacy_ansible_ids,
+        dataset_version=args.dataset_version,
     )
     print(json.dumps({"rows": result["source"]["rows"], "requests": result["requests"]["request_count"]}, sort_keys=True))
     return 0

@@ -284,6 +284,8 @@ def registry_digest(image):
             headers={
                 "Authorization": "Bearer " + token,
                 "Accept": (
+                    "application/vnd.oci.image.index.v1+json, "
+                    "application/vnd.docker.distribution.manifest.list.v2+json, "
                     "application/vnd.oci.image.manifest.v1+json, "
                     "application/vnd.docker.distribution.manifest.v2+json"
                 ),

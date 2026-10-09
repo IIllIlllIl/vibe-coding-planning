@@ -1,0 +1,44 @@
+{
+  "columns": [
+    "repo",
+    "instance_id",
+    "base_commit",
+    "patch",
+    "test_patch",
+    "problem_statement",
+    "requirements",
+    "interface",
+    "repo_language",
+    "fail_to_pass",
+    "pass_to_pass",
+    "issue_specificity",
+    "issue_categories",
+    "before_repo_set_cmd",
+    "selected_test_files_to_run",
+    "dockerhub_tag",
+    "docker_image",
+    "hard",
+    "version"
+  ],
+  "dataset": "ScaleAI/SWE-bench_Pro",
+  "dataset_version": "v2",
+  "instance_ids_sha256": "d80145db938d9e14dd83aef515d45c83d4b99795c80d3bebea7526cad55017af",
+  "legacy_consistency": {},
+  "purpose": "swe_bench_pro_source_identity",
+  "python_selection": {
+    "count": 237,
+    "instance_ids_sha256": "9c78be141795d024878b5a552d9c8a3e0732da1f359b3924df48762599c70e7a",
+    "predicate": "casefold(trim(repo_language)) == 'python'",
+    "repositories": {
+      "ansible/ansible": 82,
+      "internetarchive/openlibrary": 82,
+      "qutebrowser/qutebrowser": 73
+    }
+  },
+  "revision": "2d52cb3df914a3fcf80c7f66738b3a88ae37fc50",
+  "rows": 642,
+  "schema_version": 1,
+  "source_file": "data/default/test-00000-of-00001.parquet",
+  "source_parquet_bytes": 6511689,
+  "source_parquet_sha256": "1067f72c1f43bbc578276888625db3b836cebb535546c9eaf824c5d5dd104a7f"
+}

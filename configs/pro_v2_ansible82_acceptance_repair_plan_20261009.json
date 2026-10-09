@@ -1,0 +1,24 @@
+{
+  "schema_version": 1,
+  "purpose": "repair Pro V2 Ansible82 acceptance gaps before remaining155 acquisition",
+  "review": "output/SWE-bench_Pro/preheat-audit/v2-ansible82-20261009/review.json",
+  "steps": [
+    "Extend existing registry digest Accept headers to OCI image index and Docker manifest list; retain current single-image types and add a regression test.",
+    "Read current registry digests for all82 into separate retrospective evidence. Never relabel these observations as download-time attestation or overwrite original provenance.",
+    "Adapt existing Pro SIF audit to consume frozen V2 acquisition refs/base commits and validate repository location before using it; avoid solution and test authority in Agent preparation.",
+    "Perform full SIF hash readback and base commit verification for82 using existing compute-node audit wrapper, with bounded resource settings justified by recent sacct.",
+    "Freeze new82 image authority if every SIF hash/size matches and every expected base commit is present. Re-download only exact failed identities after explicit bounded recovery authorization.",
+    "After acceptance passes, acquire remaining155 (OpenLibrary82, Qutebrowser73) using existing login serial preheater, shared exclusive lock, one attempt per image, 3600-second pull timeout, durable provenance/failures and no automatic restart."
+  ],
+  "remaining155_launch_status": "Ansible82 accepted after audit6108198; remaining155 launch authorized and initiated",
+  "acceptance_authority": "configs/frozen_swe_bench_pro/v2-ansible82-audited-v1-20261009/acceptance.json",
+  "remaining155_entrypoint": "bash scripts/tools/login_pro_v2_remaining155_20261009.sh --dry-run or --run",
+  "remaining155_request_manifest": "configs/preheat_swe_bench_pro_v2_remaining155_20261009.json",
+  "remaining155_log": "output/SWE-bench_Pro/preheat-logs/v2-remaining155-v1-20261009.log",
+  "remaining155_remote_operation": "/scratch/users/twang/vibe-coding-planning/operations/swe-bench-pro-v2-remaining155-preheat-v1-20261009",
+  "remaining155_session": "pro-v2-remaining155-login-preheat-20261009",
+  "restart_policy": "Do not start another writer while the current session/process is active. Explicit recovery approval is required after the bounded pass; shared lock provides final exclusion.",
+  "history_preheat": "separate; not started",
+  "estimated_audit": "unmeasured for V2; recent Verified500 hash/base audit took44m18 with1CPU/4G; inspect sacct before choosing budget",
+  "estimated_remaining_download_hours": "17 if Ansible82 mean6.6min generalizes; repository-dependent and not measured"
+}

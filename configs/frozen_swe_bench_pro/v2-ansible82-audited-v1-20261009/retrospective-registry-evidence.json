@@ -1,0 +1,497 @@
+{
+  "purpose": "pro_v2_ansible82_retrospective_registry_evidence",
+  "records": {
+    "ghcr.io/scaleapi/swe-bench_pro-v2:instance_ansible__ansible-0ea40e09d1b35bcb69ff4d9cecf3d0defa4b36e8-v30a923fb5c164d6cd18280c02422f75e611e8fb2": {
+      "content_type": "application/vnd.oci.image.index.v1+json",
+      "observation": "retrospective; not pull-time attestation",
+      "observed_at": "2026-10-09T11:40:28.134835+00:00",
+      "oci_digest": "sha256:af7d28fe6608951bf88e39b6a24d5574dcd1b5b82a6c983147666289f8014f18"
+    },
+    "ghcr.io/scaleapi/swe-bench_pro-v2:instance_ansible__ansible-0fd88717c953b92ed8a50495d55e630eb5d59166-vba6da65a0f3baefda7a058ebbd0a8dcafb8512f5": {
+      "content_type": "application/vnd.oci.image.index.v1+json",
+      "observation": "retrospective; not pull-time attestation",
+      "observed_at": "2026-10-09T11:40:28.110016+00:00",
+      "oci_digest": "sha256:04caf8ea7152f33805e490fb3ea832b13dd2f60a361a017b0e03b3895e67670c"
+    },
+    "ghcr.io/scaleapi/swe-bench_pro-v2:instance_ansible__ansible-106909db8b730480615f4a33de0eb5b710944e78-v0f01c69f1e2528b935359cfe578530722bca2c59": {
+      "content_type": "application/vnd.oci.image.index.v1+json",
+      "observation": "retrospective; not pull-time attestation",
+      "observed_at": "2026-10-09T11:40:28.131839+00:00",
+      "oci_digest": "sha256:6e58623b89a033a54bfab1fa911b34068a3c38ee742f41e0b3be3ad8da7e4d8f"
+    },
+    "ghcr.io/scaleapi/swe-bench_pro-v2:instance_ansible__ansible-11c1777d56664b1acb56b387a1ad6aeadef1391d-v0f01c69f1e2528b935359cfe578530722bca2c59": {
+      "content_type": "application/vnd.oci.image.index.v1+json",
+      "observation": "retrospective; not pull-time attestation",
+      "observed_at": "2026-10-09T11:40:28.150077+00:00",
+      "oci_digest": "sha256:368726d714603e06710a301c25cecc0cc35abd2c2ca33afa16851715e9defa67"
+    },
+    "ghcr.io/scaleapi/swe-bench_pro-v2:instance_ansible__ansible-12734fa21c08a0ce8c84e533abdc560db2eb1955-v7eee2454f617569fd6889f2211f75bc02a35f9f8": {
+      "content_type": "application/vnd.oci.image.index.v1+json",
+      "observation": "retrospective; not pull-time attestation",
+      "observed_at": "2026-10-09T11:40:28.435872+00:00",
+      "oci_digest": "sha256:dbcace12df34d7d635682b7c598c0579109c52ced4818c3942a4ad3a5da79b04"
+    },
+    "ghcr.io/scaleapi/swe-bench_pro-v2:instance_ansible__ansible-164881d871964aa64e0f911d03ae270acbad253c-v390e508d27db7a51eece36bb6d9698b63a5b638a": {
+      "content_type": "application/vnd.oci.image.manifest.v1+json",
+      "observation": "retrospective; not pull-time attestation",
+      "observed_at": "2026-10-09T11:40:28.451408+00:00",
+      "oci_digest": "sha256:c7c175f8ff9889d60f48259bb85ff46817d1f0fd9cd2a83c6249567c829993e0"
+    },
+    "ghcr.io/scaleapi/swe-bench_pro-v2:instance_ansible__ansible-185d41031660a676c43fbb781cd1335902024bfe-vba6da65a0f3baefda7a058ebbd0a8dcafb8512f5": {
+      "content_type": "application/vnd.oci.image.index.v1+json",
+      "observation": "retrospective; not pull-time attestation",
+      "observed_at": "2026-10-09T11:40:28.486389+00:00",
+      "oci_digest": "sha256:d827bde0c992072daf2e2eab357008c827e7175166c0ab76424c18cb2793fa8f"
+    },
+    "ghcr.io/scaleapi/swe-bench_pro-v2:instance_ansible__ansible-189fcb37f973f0b1d52b555728208eeb9a6fce83-v906c969b551b346ef54a2c0b41e04f632b7b73c2": {
+      "content_type": "application/vnd.oci.image.manifest.v1+json",
+      "observation": "retrospective; not pull-time attestation",
+      "observed_at": "2026-10-09T11:40:28.484399+00:00",
+      "oci_digest": "sha256:1882ea60ac2d2a9359c5d31c53035796c5a7403da584be0797f54c84585d2a20"
+    },
+    "ghcr.io/scaleapi/swe-bench_pro-v2:instance_ansible__ansible-1bd7dcf339dd8b6c50bc16670be2448a206f4fdb-vba6da65a0f3baefda7a058ebbd0a8dcafb8512f5": {
+      "content_type": "application/vnd.oci.image.index.v1+json",
+      "observation": "retrospective; not pull-time attestation",
+      "observed_at": "2026-10-09T11:40:28.741032+00:00",
+      "oci_digest": "sha256:684fa58d4a9f3af30cf8cc9b4701b24a9afe07af3be13b2b1929e2d53d81947b"
+    },
+    "ghcr.io/scaleapi/swe-bench_pro-v2:instance_ansible__ansible-1c06c46cc14324df35ac4f39a45fb3ccd602195d-v0f01c69f1e2528b935359cfe578530722bca2c59": {
+      "content_type": "application/vnd.oci.image.manifest.v1+json",
+      "observation": "retrospective; not pull-time attestation",
+      "observed_at": "2026-10-09T11:40:28.773715+00:00",
+      "oci_digest": "sha256:2ee62346a660d4329f1b4126ecadd02291a0ffca97939c478fbe2b4683dc3e5e"
+    },
+    "ghcr.io/scaleapi/swe-bench_pro-v2:instance_ansible__ansible-1ee70fc272aff6bf3415357c6e13c5de5b928d9b-v1055803c3a812189a1133297f7f5468579283f86": {
+      "content_type": "application/vnd.oci.image.index.v1+json",
+      "observation": "retrospective; not pull-time attestation",
+      "observed_at": "2026-10-09T11:40:28.783587+00:00",
+      "oci_digest": "sha256:be388aad06d011e9ed280af382b48b7ec633b357afb6e239e8ac8db9524ad606"
+    },
+    "ghcr.io/scaleapi/swe-bench_pro-v2:instance_ansible__ansible-29aea9ff3466e4cd2ed00524b9e56738d568ce8b-vba6da65a0f3baefda7a058ebbd0a8dcafb8512f5": {
+      "content_type": "application/vnd.oci.image.manifest.v1+json",
+      "observation": "retrospective; not pull-time attestation",
+      "observed_at": "2026-10-09T11:40:28.841728+00:00",
+      "oci_digest": "sha256:93f182c49099d27c955ea144e29cae6aaa128e8ddbe144c3d77d0d44c596ab90"
+    },
+    "ghcr.io/scaleapi/swe-bench_pro-v2:instance_ansible__ansible-34db57a47f875d11c4068567b9ec7ace174ec4cf-v1055803c3a812189a1133297f7f5468579283f86": {
+      "content_type": "application/vnd.oci.image.index.v1+json",
+      "observation": "retrospective; not pull-time attestation",
+      "observed_at": "2026-10-09T11:40:29.058267+00:00",
+      "oci_digest": "sha256:4105eaaf0d03d1dfd98bb81e8e703c09c73e8f5928e05316d80f8dba59884597"
+    },
+    "ghcr.io/scaleapi/swe-bench_pro-v2:instance_ansible__ansible-379058e10f3dbc0fdcaf80394bd09b18927e7d33-v1055803c3a812189a1133297f7f5468579283f86": {
+      "content_type": "application/vnd.oci.image.index.v1+json",
+      "observation": "retrospective; not pull-time attestation",
+      "observed_at": "2026-10-09T11:40:29.095177+00:00",
+      "oci_digest": "sha256:bd702d3bb54aedee5bbc6f8d12b4695889e493989a037dc6f322ace8e2a8d635"
+    },
+    "ghcr.io/scaleapi/swe-bench_pro-v2:instance_ansible__ansible-3889ddeb4b780ab4bac9ca2e75f8c1991bcabe83-v0f01c69f1e2528b935359cfe578530722bca2c59": {
+      "content_type": "application/vnd.oci.image.manifest.v1+json",
+      "observation": "retrospective; not pull-time attestation",
+      "observed_at": "2026-10-09T11:40:29.087420+00:00",
+      "oci_digest": "sha256:5c8bdf5e74e55a3826319d098749112a5698f935617ec95c3d614031f6e5bee0"
+    },
+    "ghcr.io/scaleapi/swe-bench_pro-v2:instance_ansible__ansible-395e5e20fab9cad517243372fa3c3c5d9e09ab2a-v7eee2454f617569fd6889f2211f75bc02a35f9f8": {
+      "content_type": "application/vnd.oci.image.index.v1+json",
+      "observation": "retrospective; not pull-time attestation",
+      "observed_at": "2026-10-09T11:40:29.147128+00:00",
+      "oci_digest": "sha256:b431b3207e1399420ccf6fe4ad343951a4194dab14fa33bd1a0931e1dad83d87"
+    },
+    "ghcr.io/scaleapi/swe-bench_pro-v2:instance_ansible__ansible-39bd8b99ec8c6624207bf3556ac7f9626dad9173-v1055803c3a812189a1133297f7f5468579283f86": {
+      "content_type": "application/vnd.oci.image.index.v1+json",
+      "observation": "retrospective; not pull-time attestation",
+      "observed_at": "2026-10-09T11:40:29.388132+00:00",
+      "oci_digest": "sha256:147e021c437e5762b249409a5995c92b8b156d0b6c00fd10078962a47536f202"
+    },
+    "ghcr.io/scaleapi/swe-bench_pro-v2:instance_ansible__ansible-3b823d908e8a5d17674f8c26d337d3114b7493b1-v0f01c69f1e2528b935359cfe578530722bca2c59": {
+      "content_type": "application/vnd.oci.image.index.v1+json",
+      "observation": "retrospective; not pull-time attestation",
+      "observed_at": "2026-10-09T11:40:29.384753+00:00",
+      "oci_digest": "sha256:2deb0d4b4217fb1b23aa504fb8a32c2a91f50a123f1bb43e7fe4dad9fb069713"
+    },
+    "ghcr.io/scaleapi/swe-bench_pro-v2:instance_ansible__ansible-3db08adbb1cc6aa9941be5e0fc810132c6e1fa4b-vba6da65a0f3baefda7a058ebbd0a8dcafb8512f5": {
+      "content_type": "application/vnd.oci.image.index.v1+json",
+      "observation": "retrospective; not pull-time attestation",
+      "observed_at": "2026-10-09T11:40:29.407252+00:00",
+      "oci_digest": "sha256:11acf7d842405d664149e7fb74fd1176578dd022620cef20a64ddefcfaff1506"
+    },
+    "ghcr.io/scaleapi/swe-bench_pro-v2:instance_ansible__ansible-40ade1f84b8bb10a63576b0ac320c13f57c87d34-v6382ea168a93d80a64aab1fbd8c4f02dc5ada5bf": {
+      "content_type": "application/vnd.oci.image.index.v1+json",
+      "observation": "retrospective; not pull-time attestation",
+      "observed_at": "2026-10-09T11:40:29.487379+00:00",
+      "oci_digest": "sha256:e0647aadaaeede17b1740922affcbe3dc4932f346a7aa4337b3ab248c2fe777a"
+    },
+    "ghcr.io/scaleapi/swe-bench_pro-v2:instance_ansible__ansible-415e08c2970757472314e515cb63a51ad825c45e-v7eee2454f617569fd6889f2211f75bc02a35f9f8": {
+      "content_type": "application/vnd.oci.image.index.v1+json",
+      "observation": "retrospective; not pull-time attestation",
+      "observed_at": "2026-10-09T11:40:29.700282+00:00",
+      "oci_digest": "sha256:2f6e3082077b4f3fca8c9a4614f3e7b4328237abbfd931ea57aa86a498524586"
+    },
+    "ghcr.io/scaleapi/swe-bench_pro-v2:instance_ansible__ansible-42355d181a11b51ebfc56f6f4b3d9c74e01cb13b-v1055803c3a812189a1133297f7f5468579283f86": {
+      "content_type": "application/vnd.oci.image.manifest.v1+json",
+      "observation": "retrospective; not pull-time attestation",
+      "observed_at": "2026-10-09T11:40:29.700928+00:00",
+      "oci_digest": "sha256:319085b694b5f14a372801d9ede2c80e999bc36ef3ef74a9a0cbda2f5d2d8310"
+    },
+    "ghcr.io/scaleapi/swe-bench_pro-v2:instance_ansible__ansible-489156378c8e97374a75a544c7c9c2c0dd8146d1-v390e508d27db7a51eece36bb6d9698b63a5b638a": {
+      "content_type": "application/vnd.oci.image.manifest.v1+json",
+      "observation": "retrospective; not pull-time attestation",
+      "observed_at": "2026-10-09T11:40:29.725208+00:00",
+      "oci_digest": "sha256:e6d84822a1eb5f649789b2a33c040fdf034e8dc2a26a8bf8aba38522487b32e2"
+    },
+    "ghcr.io/scaleapi/swe-bench_pro-v2:instance_ansible__ansible-5260527c4a71bfed99d803e687dd19619423b134-vba6da65a0f3baefda7a058ebbd0a8dcafb8512f5": {
+      "content_type": "application/vnd.oci.image.manifest.v1+json",
+      "observation": "retrospective; not pull-time attestation",
+      "observed_at": "2026-10-09T11:40:29.798107+00:00",
+      "oci_digest": "sha256:8b54435a3a2f88f306d40aa75af9e3331b7a056108e20f9afce6aad691b1c80a"
+    },
+    "ghcr.io/scaleapi/swe-bench_pro-v2:instance_ansible__ansible-5640093f1ca63fd6af231cc8a7fb7d40e1907b8c-vba6da65a0f3baefda7a058ebbd0a8dcafb8512f5": {
+      "content_type": "application/vnd.oci.image.manifest.v1+json",
+      "observation": "retrospective; not pull-time attestation",
+      "observed_at": "2026-10-09T11:40:30.050348+00:00",
+      "oci_digest": "sha256:bd0ba0742ece02925c7b53103aaa815ea8c3e1b49851fb4eecb1f09097aaf548"
+    },
+    "ghcr.io/scaleapi/swe-bench_pro-v2:instance_ansible__ansible-5c225dc0f5bfa677addeac100a8018df3f3a9db1-v173091e2e36d38c978002990795f66cfc0af30ad": {
+      "content_type": "application/vnd.oci.image.index.v1+json",
+      "observation": "retrospective; not pull-time attestation",
+      "observed_at": "2026-10-09T11:40:30.042472+00:00",
+      "oci_digest": "sha256:00ddbeecd8d351882ea3c2868f4194c51afffc48ff1386f4387f904f28a815b9"
+    },
+    "ghcr.io/scaleapi/swe-bench_pro-v2:instance_ansible__ansible-5d253a13807e884b7ce0b6b57a963a45e2f0322c-v1055803c3a812189a1133297f7f5468579283f86": {
+      "content_type": "application/vnd.oci.image.manifest.v1+json",
+      "observation": "retrospective; not pull-time attestation",
+      "observed_at": "2026-10-09T11:40:30.041259+00:00",
+      "oci_digest": "sha256:9184744713284669d316e16f4d3ffed0b44b6810b555825d92a3a709cf0d5132"
+    },
+    "ghcr.io/scaleapi/swe-bench_pro-v2:instance_ansible__ansible-5e369604e1930b1a2e071fecd7ec5276ebd12cb1-v0f01c69f1e2528b935359cfe578530722bca2c59": {
+      "content_type": "application/vnd.oci.image.index.v1+json",
+      "observation": "retrospective; not pull-time attestation",
+      "observed_at": "2026-10-09T11:40:30.120256+00:00",
+      "oci_digest": "sha256:4bbb2890557d722e440af44e54eb23e1b3c5dad20e91827e32f04bdb4107433f"
+    },
+    "ghcr.io/scaleapi/swe-bench_pro-v2:instance_ansible__ansible-5e88cd9972f10b66dd97e1ee684c910c6a2dd25e-v906c969b551b346ef54a2c0b41e04f632b7b73c2": {
+      "content_type": "application/vnd.oci.image.manifest.v1+json",
+      "observation": "retrospective; not pull-time attestation",
+      "observed_at": "2026-10-09T11:40:30.404532+00:00",
+      "oci_digest": "sha256:4c2d44a85a5823c596c70b3c5a07c0bac77aefb514cd231a0b520237e321dfad"
+    },
+    "ghcr.io/scaleapi/swe-bench_pro-v2:instance_ansible__ansible-5f4e332e3762999d94af27746db29ff1729252c1-v0f01c69f1e2528b935359cfe578530722bca2c59": {
+      "content_type": "application/vnd.oci.image.index.v1+json",
+      "observation": "retrospective; not pull-time attestation",
+      "observed_at": "2026-10-09T11:40:30.368035+00:00",
+      "oci_digest": "sha256:a3c7da749b4333ae103ffc49aabbe4e0175a1ffc55ccd944490c944cae634db0"
+    },
+    "ghcr.io/scaleapi/swe-bench_pro-v2:instance_ansible__ansible-622a493ae03bd5e5cf517d336fc426e9d12208c7-v906c969b551b346ef54a2c0b41e04f632b7b73c2": {
+      "content_type": "application/vnd.oci.image.manifest.v1+json",
+      "observation": "retrospective; not pull-time attestation",
+      "observed_at": "2026-10-09T11:40:30.346117+00:00",
+      "oci_digest": "sha256:61bf681d7f54aa26e123292b1cf9885822ab71e501ccf61cd6ea7b477875cb1b"
+    },
+    "ghcr.io/scaleapi/swe-bench_pro-v2:instance_ansible__ansible-6cc97447aac5816745278f3735af128afb255c81-v0f01c69f1e2528b935359cfe578530722bca2c59": {
+      "content_type": "application/vnd.oci.image.manifest.v1+json",
+      "observation": "retrospective; not pull-time attestation",
+      "observed_at": "2026-10-09T11:40:30.436588+00:00",
+      "oci_digest": "sha256:ddddc0e862e50855047766e747582baa6a39dafc8f8fac4da8b83c3085c1f35f"
+    },
+    "ghcr.io/scaleapi/swe-bench_pro-v2:instance_ansible__ansible-709484969c8a4ffd74b839a673431a8c5caa6457-vba6da65a0f3baefda7a058ebbd0a8dcafb8512f5": {
+      "content_type": "application/vnd.oci.image.manifest.v1+json",
+      "observation": "retrospective; not pull-time attestation",
+      "observed_at": "2026-10-09T11:40:30.673323+00:00",
+      "oci_digest": "sha256:f5b3ec0c9c5cc314a0a24db946589620855819780119cf9bcdb983d62e364d7c"
+    },
+    "ghcr.io/scaleapi/swe-bench_pro-v2:instance_ansible__ansible-748f534312f2073a25a87871f5bd05882891b8c4-v0f01c69f1e2528b935359cfe578530722bca2c59": {
+      "content_type": "application/vnd.oci.image.index.v1+json",
+      "observation": "retrospective; not pull-time attestation",
+      "observed_at": "2026-10-09T11:40:30.699097+00:00",
+      "oci_digest": "sha256:b6a829e38ea3793690e26a3834d4c0329ff166295debc2bb0e675a4b891851a9"
+    },
+    "ghcr.io/scaleapi/swe-bench_pro-v2:instance_ansible__ansible-77658704217d5f166404fc67997203c25381cb6e-v390e508d27db7a51eece36bb6d9698b63a5b638a": {
+      "content_type": "application/vnd.oci.image.manifest.v1+json",
+      "observation": "retrospective; not pull-time attestation",
+      "observed_at": "2026-10-09T11:40:30.724882+00:00",
+      "oci_digest": "sha256:d542e1fb5572898d1eb29f112192207b4f6e5d7671efa1d7683be94530ede901"
+    },
+    "ghcr.io/scaleapi/swe-bench_pro-v2:instance_ansible__ansible-7e1a347695c7987ae56ef1b6919156d9254010ad-v390e508d27db7a51eece36bb6d9698b63a5b638a": {
+      "content_type": "application/vnd.oci.image.manifest.v1+json",
+      "observation": "retrospective; not pull-time attestation",
+      "observed_at": "2026-10-09T11:40:30.749337+00:00",
+      "oci_digest": "sha256:0a5360eb6e59a37ea947ff041fdbe95bdb7a35e6e0999d7fd3c65de3d339505e"
+    },
+    "ghcr.io/scaleapi/swe-bench_pro-v2:instance_ansible__ansible-8127abbc298cabf04aaa89a478fc5e5e3432a6fc-v30a923fb5c164d6cd18280c02422f75e611e8fb2": {
+      "content_type": "application/vnd.oci.image.manifest.v1+json",
+      "observation": "retrospective; not pull-time attestation",
+      "observed_at": "2026-10-09T11:40:31.002326+00:00",
+      "oci_digest": "sha256:9708868211028c503f13f509dd78a82ab158f570fc7d78b3e1be71699c7cf542"
+    },
+    "ghcr.io/scaleapi/swe-bench_pro-v2:instance_ansible__ansible-83fb24b923064d3576d473747ebbe62e4535c9e3-vba6da65a0f3baefda7a058ebbd0a8dcafb8512f5": {
+      "content_type": "application/vnd.oci.image.manifest.v1+json",
+      "observation": "retrospective; not pull-time attestation",
+      "observed_at": "2026-10-09T11:40:30.997058+00:00",
+      "oci_digest": "sha256:e82fbe5d87fa3ce9c8bd90767dc83925eda835261e188e3419b1d5c068d96095"
+    },
+    "ghcr.io/scaleapi/swe-bench_pro-v2:instance_ansible__ansible-9142be2f6cabbe6597c9254c5bb9186d17036d55-v0f01c69f1e2528b935359cfe578530722bca2c59": {
+      "content_type": "application/vnd.oci.image.manifest.v1+json",
+      "observation": "retrospective; not pull-time attestation",
+      "observed_at": "2026-10-09T11:40:31.037680+00:00",
+      "oci_digest": "sha256:6ed0439f62733402f8a7b39c7d2177027afb722a3d0406703aaa95625a4067d1"
+    },
+    "ghcr.io/scaleapi/swe-bench_pro-v2:instance_ansible__ansible-935528e22e5283ee3f63a8772830d3d01f55ed8c-vba6da65a0f3baefda7a058ebbd0a8dcafb8512f5": {
+      "content_type": "application/vnd.oci.image.manifest.v1+json",
+      "observation": "retrospective; not pull-time attestation",
+      "observed_at": "2026-10-09T11:40:31.074328+00:00",
+      "oci_digest": "sha256:66c7e3ad421e165696392e8e6d4491a822b97b3c431cc71a0bf7fbaafbb60118"
+    },
+    "ghcr.io/scaleapi/swe-bench_pro-v2:instance_ansible__ansible-942424e10b2095a173dbd78e7128f52f7995849b-v30a923fb5c164d6cd18280c02422f75e611e8fb2": {
+      "content_type": "application/vnd.oci.image.manifest.v1+json",
+      "observation": "retrospective; not pull-time attestation",
+      "observed_at": "2026-10-09T11:40:31.298679+00:00",
+      "oci_digest": "sha256:5d18a47d2dc86965a145c525aa23cc8419f2002b71666d2e61204a04149227d7"
+    },
+    "ghcr.io/scaleapi/swe-bench_pro-v2:instance_ansible__ansible-949c503f2ef4b2c5d668af0492a5c0db1ab86140-v0f01c69f1e2528b935359cfe578530722bca2c59": {
+      "content_type": "application/vnd.oci.image.manifest.v1+json",
+      "observation": "retrospective; not pull-time attestation",
+      "observed_at": "2026-10-09T11:40:31.304779+00:00",
+      "oci_digest": "sha256:9a68267f4ca0c9b7978feab149035ba8f293104a8924c6cd1edcebea57cb87cd"
+    },
+    "ghcr.io/scaleapi/swe-bench_pro-v2:instance_ansible__ansible-9759e0ca494de1fd5fc2df2c5d11c57adbe6007c-v1055803c3a812189a1133297f7f5468579283f86": {
+      "content_type": "application/vnd.oci.image.index.v1+json",
+      "observation": "retrospective; not pull-time attestation",
+      "observed_at": "2026-10-09T11:40:31.368135+00:00",
+      "oci_digest": "sha256:e24a6d8b5ea7609785f866fe1c66896f939ff48def7f4194cc4ee92e4137080e"
+    },
+    "ghcr.io/scaleapi/swe-bench_pro-v2:instance_ansible__ansible-984216f52e76b904e5b0fa0fb956ab4f1e0a7751-v1055803c3a812189a1133297f7f5468579283f86": {
+      "content_type": "application/vnd.oci.image.index.v1+json",
+      "observation": "retrospective; not pull-time attestation",
+      "observed_at": "2026-10-09T11:40:31.376053+00:00",
+      "oci_digest": "sha256:8773fabfe52b7a7126d020b5d692e5c1b1c4282645e9ac32e1dfe5a8c6529203"
+    },
+    "ghcr.io/scaleapi/swe-bench_pro-v2:instance_ansible__ansible-9a21e247786ebd294dafafca1105fcd770ff46c6-v67cdaa49f89b34e42b69d5b7830b3c3ad3d8803f": {
+      "content_type": "application/vnd.oci.image.index.v1+json",
+      "observation": "retrospective; not pull-time attestation",
+      "observed_at": "2026-10-09T11:40:31.623920+00:00",
+      "oci_digest": "sha256:c482e8ca2315835a0822e4401aabe962ae0cf375c0662e455ecd41ebc9ad680e"
+    },
+    "ghcr.io/scaleapi/swe-bench_pro-v2:instance_ansible__ansible-a02e22e902a69aeb465f16bf03f7f5a91b2cb828-vba6da65a0f3baefda7a058ebbd0a8dcafb8512f5": {
+      "content_type": "application/vnd.oci.image.manifest.v1+json",
+      "observation": "retrospective; not pull-time attestation",
+      "observed_at": "2026-10-09T11:40:31.642737+00:00",
+      "oci_digest": "sha256:4579c917dd583fa52282aa528e2d2f1bca8e5864285dd3ed02e370d122d0b34b"
+    },
+    "ghcr.io/scaleapi/swe-bench_pro-v2:instance_ansible__ansible-a1569ea4ca6af5480cf0b7b3135f5e12add28a44-v0f01c69f1e2528b935359cfe578530722bca2c59": {
+      "content_type": "application/vnd.oci.image.manifest.v1+json",
+      "observation": "retrospective; not pull-time attestation",
+      "observed_at": "2026-10-09T11:40:31.682232+00:00",
+      "oci_digest": "sha256:79543e01b2d1230c0acce6a58166b25e73ac0fffcde4c559ef7a4c834584f6e3"
+    },
+    "ghcr.io/scaleapi/swe-bench_pro-v2:instance_ansible__ansible-a20a52701402a12f91396549df04ac55809f68e9-v1055803c3a812189a1133297f7f5468579283f86": {
+      "content_type": "application/vnd.oci.image.manifest.v1+json",
+      "observation": "retrospective; not pull-time attestation",
+      "observed_at": "2026-10-09T11:40:31.690721+00:00",
+      "oci_digest": "sha256:def3f762805c27b2b2df593411725e7c71b74c8ff67663cd6d69b51756afeabf"
+    },
+    "ghcr.io/scaleapi/swe-bench_pro-v2:instance_ansible__ansible-a6e671db25381ed111bbad0ab3e7d97366395d05-v0f01c69f1e2528b935359cfe578530722bca2c59": {
+      "content_type": "application/vnd.oci.image.manifest.v1+json",
+      "observation": "retrospective; not pull-time attestation",
+      "observed_at": "2026-10-09T11:40:31.936998+00:00",
+      "oci_digest": "sha256:90b789a96fe48843b61b77087d1512b3d6142a22758c15516a350cf6b37ae44e"
+    },
+    "ghcr.io/scaleapi/swe-bench_pro-v2:instance_ansible__ansible-a7d2a4e03209cff1e97e59fd54bb2b05fdbdbec6-v0f01c69f1e2528b935359cfe578530722bca2c59": {
+      "content_type": "application/vnd.oci.image.index.v1+json",
+      "observation": "retrospective; not pull-time attestation",
+      "observed_at": "2026-10-09T11:40:31.959332+00:00",
+      "oci_digest": "sha256:96077c37912e819adf23dd80d42f9bba7fada9262537736e5c4af07261960641"
+    },
+    "ghcr.io/scaleapi/swe-bench_pro-v2:instance_ansible__ansible-b2a289dcbb702003377221e25f62c8a3608f0e89-v173091e2e36d38c978002990795f66cfc0af30ad": {
+      "content_type": "application/vnd.oci.image.index.v1+json",
+      "observation": "retrospective; not pull-time attestation",
+      "observed_at": "2026-10-09T11:40:32.013205+00:00",
+      "oci_digest": "sha256:e2b6bbd688fdcaabc4e14adc0fabd992d0d9e8f4e96aa274e114f4ad2c67949b"
+    },
+    "ghcr.io/scaleapi/swe-bench_pro-v2:instance_ansible__ansible-b748edea457a4576847a10275678127895d2f02f-v1055803c3a812189a1133297f7f5468579283f86": {
+      "content_type": "application/vnd.oci.image.manifest.v1+json",
+      "observation": "retrospective; not pull-time attestation",
+      "observed_at": "2026-10-09T11:40:32.017495+00:00",
+      "oci_digest": "sha256:f543293f942bf3593e4674dd8f720df8ecf2884ec4833e501225953267da98b3"
+    },
+    "ghcr.io/scaleapi/swe-bench_pro-v2:instance_ansible__ansible-be2c376ab87e3e872ca21697508f12c6909cf85a-vba6da65a0f3baefda7a058ebbd0a8dcafb8512f5": {
+      "content_type": "application/vnd.oci.image.index.v1+json",
+      "observation": "retrospective; not pull-time attestation",
+      "observed_at": "2026-10-09T11:40:32.237818+00:00",
+      "oci_digest": "sha256:0d27bbdf3e80220896aeec1dcac2a59fa768dccc2c9f90117a12d144b4e556f0"
+    },
+    "ghcr.io/scaleapi/swe-bench_pro-v2:instance_ansible__ansible-be59caa59bf47ca78a4760eb7ff38568372a8260-v1055803c3a812189a1133297f7f5468579283f86": {
+      "content_type": "application/vnd.oci.image.index.v1+json",
+      "observation": "retrospective; not pull-time attestation",
+      "observed_at": "2026-10-09T11:40:32.283254+00:00",
+      "oci_digest": "sha256:bac450c12f673c8d6881c76bb1b58916fc424b6df145c4d83341a4f7b83c4ef2"
+    },
+    "ghcr.io/scaleapi/swe-bench_pro-v2:instance_ansible__ansible-bec27fb4c0a40c5f8bbcf26a475704227d65ee73-v30a923fb5c164d6cd18280c02422f75e611e8fb2": {
+      "content_type": "application/vnd.oci.image.index.v1+json",
+      "observation": "retrospective; not pull-time attestation",
+      "observed_at": "2026-10-09T11:40:32.347645+00:00",
+      "oci_digest": "sha256:7a9a8fd8d8a648dfa7e4e9b91fc7c6a86160df259aae7f1a7a0231344d227487"
+    },
+    "ghcr.io/scaleapi/swe-bench_pro-v2:instance_ansible__ansible-bf98f031f3f5af31a2d78dc2f0a58fe92ebae0bb-v1055803c3a812189a1133297f7f5468579283f86": {
+      "content_type": "application/vnd.oci.image.index.v1+json",
+      "observation": "retrospective; not pull-time attestation",
+      "observed_at": "2026-10-09T11:40:32.327878+00:00",
+      "oci_digest": "sha256:0d2923fd7845796f47d8d1012bb0e258f64e9cf00d69eefc6ef4ef1614ac65af"
+    },
+    "ghcr.io/scaleapi/swe-bench_pro-v2:instance_ansible__ansible-c1f2df47538b884a43320f53e787197793b105e8-v906c969b551b346ef54a2c0b41e04f632b7b73c2": {
+      "content_type": "application/vnd.oci.image.manifest.v1+json",
+      "observation": "retrospective; not pull-time attestation",
+      "observed_at": "2026-10-09T11:40:32.553180+00:00",
+      "oci_digest": "sha256:a5aca5b8129b78dd72d652f77b5b83a1d07c49882e65471ba7d2fff739a99e9f"
+    },
+    "ghcr.io/scaleapi/swe-bench_pro-v2:instance_ansible__ansible-c616e54a6e23fa5616a1d56d243f69576164ef9b-v1055803c3a812189a1133297f7f5468579283f86": {
+      "content_type": "application/vnd.oci.image.manifest.v1+json",
+      "observation": "retrospective; not pull-time attestation",
+      "observed_at": "2026-10-09T11:40:32.593818+00:00",
+      "oci_digest": "sha256:5dcfd958ed7d0de1c6c8b5d8e226d11288c2228bf2e3bf1db807ad5db6a02a7f"
+    },
+    "ghcr.io/scaleapi/swe-bench_pro-v2:instance_ansible__ansible-cd473dfb2fdbc97acf3293c134b21cbbcfa89ec3-vba6da65a0f3baefda7a058ebbd0a8dcafb8512f5": {
+      "content_type": "application/vnd.oci.image.manifest.v1+json",
+      "observation": "retrospective; not pull-time attestation",
+      "observed_at": "2026-10-09T11:40:32.732930+00:00",
+      "oci_digest": "sha256:9b98928353e3e1038cde6b4af2c07caa554b2aebc28084fd160a89ebe3b797ee"
+    },
+    "ghcr.io/scaleapi/swe-bench_pro-v2:instance_ansible__ansible-cd9c4eb5a6b2bfaf4a6709f001ce3d0c92c1eed2-v0f01c69f1e2528b935359cfe578530722bca2c59": {
+      "content_type": "application/vnd.oci.image.index.v1+json",
+      "observation": "retrospective; not pull-time attestation",
+      "observed_at": "2026-10-09T11:40:32.733319+00:00",
+      "oci_digest": "sha256:6e71e4b880d2f766862df2dc5ef1edd5fc751054c4e2937e008c6bbc061f4378"
+    },
+    "ghcr.io/scaleapi/swe-bench_pro-v2:instance_ansible__ansible-d2f80991180337e2be23d6883064a67dcbaeb662-vba6da65a0f3baefda7a058ebbd0a8dcafb8512f5": {
+      "content_type": "application/vnd.oci.image.manifest.v1+json",
+      "observation": "retrospective; not pull-time attestation",
+      "observed_at": "2026-10-09T11:40:32.912271+00:00",
+      "oci_digest": "sha256:6aaa4ce3c9de4b0cd5d11d12b96cafda34e32b67958c8ae8a89ce6133662bc0f"
+    },
+    "ghcr.io/scaleapi/swe-bench_pro-v2:instance_ansible__ansible-d30fc6c0b359f631130b0e979d9a78a7b3747d48-v1055803c3a812189a1133297f7f5468579283f86": {
+      "content_type": "application/vnd.oci.image.manifest.v1+json",
+      "observation": "retrospective; not pull-time attestation",
+      "observed_at": "2026-10-09T11:40:32.919033+00:00",
+      "oci_digest": "sha256:c91314d51a8edf1606db2975ddfa1ef6f79e4a3a4abd0ef0bf747d09a755ab88"
+    },
+    "ghcr.io/scaleapi/swe-bench_pro-v2:instance_ansible__ansible-d33bedc48fdd933b5abd65a77c081876298e2f07-v0f01c69f1e2528b935359cfe578530722bca2c59": {
+      "content_type": "application/vnd.oci.image.manifest.v1+json",
+      "observation": "retrospective; not pull-time attestation",
+      "observed_at": "2026-10-09T11:40:33.062645+00:00",
+      "oci_digest": "sha256:4cf51f69dad7c8cb966fa2af791058ba72e3b4124461d7418239bda01b5a6a9f"
+    },
+    "ghcr.io/scaleapi/swe-bench_pro-v2:instance_ansible__ansible-d58e69c82d7edd0583dd8e78d76b075c33c3151e-v173091e2e36d38c978002990795f66cfc0af30ad": {
+      "content_type": "application/vnd.oci.image.manifest.v1+json",
+      "observation": "retrospective; not pull-time attestation",
+      "observed_at": "2026-10-09T11:40:33.052082+00:00",
+      "oci_digest": "sha256:a5bdafefecbf0ac06b2a5565849ad5da5cb15e50afb9f59d153f5edc779fbc35"
+    },
+    "ghcr.io/scaleapi/swe-bench_pro-v2:instance_ansible__ansible-d62496fe416623e88b90139dc7917080cb04ce70-v0f01c69f1e2528b935359cfe578530722bca2c59": {
+      "content_type": "application/vnd.oci.image.index.v1+json",
+      "observation": "retrospective; not pull-time attestation",
+      "observed_at": "2026-10-09T11:40:33.250210+00:00",
+      "oci_digest": "sha256:2c6d53c235a04be7c6f188bf7004a9bc3b94a1f7ad058ae43b786259dbe0123f"
+    },
+    "ghcr.io/scaleapi/swe-bench_pro-v2:instance_ansible__ansible-d6d2251929c84c3aa883bad7db0f19cc9ff0339e-v30a923fb5c164d6cd18280c02422f75e611e8fb2": {
+      "content_type": "application/vnd.oci.image.index.v1+json",
+      "observation": "retrospective; not pull-time attestation",
+      "observed_at": "2026-10-09T11:40:33.240499+00:00",
+      "oci_digest": "sha256:e166b276e68be4ef541ea2c2ff817d75ef46c589c3f1d204703755384ced07fd"
+    },
+    "ghcr.io/scaleapi/swe-bench_pro-v2:instance_ansible__ansible-d72025be751c894673ba85caa063d835a0ad3a8c-v390e508d27db7a51eece36bb6d9698b63a5b638a": {
+      "content_type": "application/vnd.oci.image.manifest.v1+json",
+      "observation": "retrospective; not pull-time attestation",
+      "observed_at": "2026-10-09T11:40:33.382515+00:00",
+      "oci_digest": "sha256:422becdc2bbc8f7b6d5ff1cc7b83fcebeb66591c2f3dd92e68ba12fde979fc73"
+    },
+    "ghcr.io/scaleapi/swe-bench_pro-v2:instance_ansible__ansible-d9f1866249756efc264b00ff7497e92c11a9885f-v0f01c69f1e2528b935359cfe578530722bca2c59": {
+      "content_type": "application/vnd.oci.image.index.v1+json",
+      "observation": "retrospective; not pull-time attestation",
+      "observed_at": "2026-10-09T11:40:33.383358+00:00",
+      "oci_digest": "sha256:ffa31b529eb050cc04c9dce65113f3b98904a615838bdbee7362b8181452d06c"
+    },
+    "ghcr.io/scaleapi/swe-bench_pro-v2:instance_ansible__ansible-de01db08d00c8d2438e1ba5989c313ba16a145b0-vba6da65a0f3baefda7a058ebbd0a8dcafb8512f5": {
+      "content_type": "application/vnd.oci.image.index.v1+json",
+      "observation": "retrospective; not pull-time attestation",
+      "observed_at": "2026-10-09T11:40:33.547367+00:00",
+      "oci_digest": "sha256:8fc310e538030df9d9a0c45278146ac8620a6a439a7e248aa184383364e84462"
+    },
+    "ghcr.io/scaleapi/swe-bench_pro-v2:instance_ansible__ansible-de5858f48dc9e1ce9117034e0d7e76806f420ca8-v1055803c3a812189a1133297f7f5468579283f86": {
+      "content_type": "application/vnd.oci.image.manifest.v1+json",
+      "observation": "retrospective; not pull-time attestation",
+      "observed_at": "2026-10-09T11:40:33.554448+00:00",
+      "oci_digest": "sha256:31ebe11c8cb1c5e3f74b15e0345fce7f9adc7eb406209131828f8b49bf4b7f61"
+    },
+    "ghcr.io/scaleapi/swe-bench_pro-v2:instance_ansible__ansible-e0c91af45fa9af575d10fd3e724ebc59d2b2d6ac-v30a923fb5c164d6cd18280c02422f75e611e8fb2": {
+      "content_type": "application/vnd.oci.image.index.v1+json",
+      "observation": "retrospective; not pull-time attestation",
+      "observed_at": "2026-10-09T11:40:33.698939+00:00",
+      "oci_digest": "sha256:2418504bcebc6ab2603215b5929eb7567c3965e589bb08d1f4343a214592e44a"
+    },
+    "ghcr.io/scaleapi/swe-bench_pro-v2:instance_ansible__ansible-e22e103cdf8edc56ff7d9b848a58f94f1471a263-v1055803c3a812189a1133297f7f5468579283f86": {
+      "content_type": "application/vnd.oci.image.index.v1+json",
+      "observation": "retrospective; not pull-time attestation",
+      "observed_at": "2026-10-09T11:40:33.730301+00:00",
+      "oci_digest": "sha256:a641182b5ee252b8250b2ef85f62510f5d87dbeb4bb45db90e57cd7e7bd83995"
+    },
+    "ghcr.io/scaleapi/swe-bench_pro-v2:instance_ansible__ansible-e64c6c1ca50d7d26a8e7747d8eb87642e767cd74-v0f01c69f1e2528b935359cfe578530722bca2c59": {
+      "content_type": "application/vnd.oci.image.manifest.v1+json",
+      "observation": "retrospective; not pull-time attestation",
+      "observed_at": "2026-10-09T11:40:33.840611+00:00",
+      "oci_digest": "sha256:fdf992955806b982e0cff01e0867c99ddaa2113995cd98113ac8f99df1d1f4ef"
+    },
+    "ghcr.io/scaleapi/swe-bench_pro-v2:instance_ansible__ansible-e9e6001263f51103e96e58ad382660df0f3d0e39-v30a923fb5c164d6cd18280c02422f75e611e8fb2": {
+      "content_type": "application/vnd.oci.image.index.v1+json",
+      "observation": "retrospective; not pull-time attestation",
+      "observed_at": "2026-10-09T11:40:33.876871+00:00",
+      "oci_digest": "sha256:92f0dd38d06484c811b6ce83db04e012e0e2a6456c48dc8b67099d740d3244c7"
+    },
+    "ghcr.io/scaleapi/swe-bench_pro-v2:instance_ansible__ansible-ea04e0048dbb3b63f876aad7020e1de8eee9f362-v1055803c3a812189a1133297f7f5468579283f86": {
+      "content_type": "application/vnd.oci.image.manifest.v1+json",
+      "observation": "retrospective; not pull-time attestation",
+      "observed_at": "2026-10-09T11:40:34.004688+00:00",
+      "oci_digest": "sha256:83319e1a9d8f84e1e45e1c13d0cf347f9dcfe4838c22f04268d285296f3a09d5"
+    },
+    "ghcr.io/scaleapi/swe-bench_pro-v2:instance_ansible__ansible-ecea15c508f0e081525be036cf76bbb56dbcdd9d-vba6da65a0f3baefda7a058ebbd0a8dcafb8512f5": {
+      "content_type": "application/vnd.oci.image.manifest.v1+json",
+      "observation": "retrospective; not pull-time attestation",
+      "observed_at": "2026-10-09T11:40:34.063106+00:00",
+      "oci_digest": "sha256:3a5b99ebb51c15e3d7960e905a8512fe2ec6d27c38ec363d4eeaa9c342172b75"
+    },
+    "ghcr.io/scaleapi/swe-bench_pro-v2:instance_ansible__ansible-ed6581e4db2f1bec5a772213c3e186081adc162d-v0f01c69f1e2528b935359cfe578530722bca2c59": {
+      "content_type": "application/vnd.oci.image.index.v1+json",
+      "observation": "retrospective; not pull-time attestation",
+      "observed_at": "2026-10-09T11:40:34.176807+00:00",
+      "oci_digest": "sha256:c8040cd2988dd40c74a19536bba4a88627810267a5d3330486c6dde567bc3cd4"
+    },
+    "ghcr.io/scaleapi/swe-bench_pro-v2:instance_ansible__ansible-eea46a0d1b99a6dadedbb6a3502d599235fa7ec3-v390e508d27db7a51eece36bb6d9698b63a5b638a": {
+      "content_type": "application/vnd.oci.image.manifest.v1+json",
+      "observation": "retrospective; not pull-time attestation",
+      "observed_at": "2026-10-09T11:40:34.201427+00:00",
+      "oci_digest": "sha256:78903169e7aa72072916e735180adc3665ea80161faa01948c63913f8ea2d475"
+    },
+    "ghcr.io/scaleapi/swe-bench_pro-v2:instance_ansible__ansible-f327e65d11bb905ed9f15996024f857a95592629-vba6da65a0f3baefda7a058ebbd0a8dcafb8512f5": {
+      "content_type": "application/vnd.oci.image.manifest.v1+json",
+      "observation": "retrospective; not pull-time attestation",
+      "observed_at": "2026-10-09T11:40:34.307339+00:00",
+      "oci_digest": "sha256:4c1e0d3cc3d7353729fe7297fc781e576867f63e3698cead69aeb8db63078a12"
+    },
+    "ghcr.io/scaleapi/swe-bench_pro-v2:instance_ansible__ansible-f86c58e2d235d8b96029d102c71ee2dfafd57997-v0f01c69f1e2528b935359cfe578530722bca2c59": {
+      "content_type": "application/vnd.oci.image.index.v1+json",
+      "observation": "retrospective; not pull-time attestation",
+      "observed_at": "2026-10-09T11:40:34.381692+00:00",
+      "oci_digest": "sha256:81c63eebecd1e55fa11c8ffe577342eea044233e1812031e1fe51b38718af8a3"
+    },
+    "ghcr.io/scaleapi/swe-bench_pro-v2:instance_ansible__ansible-f8ef34672b961a95ec7282643679492862c688ec-vba6da65a0f3baefda7a058ebbd0a8dcafb8512f5": {
+      "content_type": "application/vnd.oci.image.index.v1+json",
+      "observation": "retrospective; not pull-time attestation",
+      "observed_at": "2026-10-09T11:40:34.490492+00:00",
+      "oci_digest": "sha256:9755333ae2ba94eb31c2775d13ae39cad07fffabec3f28374cc69c70bcb421af"
+    },
+    "ghcr.io/scaleapi/swe-bench_pro-v2:instance_ansible__ansible-fb144c44144f8bd3542e71f5db62b6d322c7bd85-vba6da65a0f3baefda7a058ebbd0a8dcafb8512f5": {
+      "content_type": "application/vnd.oci.image.manifest.v1+json",
+      "observation": "retrospective; not pull-time attestation",
+      "observed_at": "2026-10-09T11:40:34.519775+00:00",
+      "oci_digest": "sha256:1277a6191442f0e1e9d71e2da318b23135523dfb8e9c3d73da5dd6e4f91435f5"
+    }
+  }
+}

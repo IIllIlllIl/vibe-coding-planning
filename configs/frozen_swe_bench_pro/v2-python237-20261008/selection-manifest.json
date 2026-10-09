@@ -1,0 +1,20 @@
+{
+  "dataset": "ScaleAI/SWE-bench_Pro",
+  "image_registry_authority": "https://github.com/scaleapi/SWE-bench_Pro-os/blob/main/v2/README.md",
+  "instance_ids_sha256": "9c78be141795d024878b5a552d9c8a3e0732da1f359b3924df48762599c70e7a",
+  "legacy_sif_reuse": "not_authorized_by_shared_instance_id; V2 image bytes require independent acquisition and audit",
+  "old_v1_overlap": 237,
+  "old_v1_removed": 29,
+  "outcome_dependent_selection": false,
+  "policy": "all_python_rows_sorted_by_instance_id",
+  "purpose": "swe_bench_pro_v2_python_selection",
+  "repositories": {
+    "ansible/ansible": 82,
+    "internetarchive/openlibrary": 82,
+    "qutebrowser/qutebrowser": 73
+  },
+  "revision": "2d52cb3df914a3fcf80c7f66738b3a88ae37fc50",
+  "schema_version": 1,
+  "selected_count": 237,
+  "source_parquet_sha256": "1067f72c1f43bbc578276888625db3b836cebb535546c9eaf824c5d5dd104a7f"
+}

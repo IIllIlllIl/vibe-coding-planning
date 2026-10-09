@@ -313,6 +313,30 @@ def test_remote_preheat_script_records_digest_and_sif_provenance() -> None:
     assert 'failed_record["prior_records"]' in script
 
 
+def test_registry_digest_accepts_oci_image_index(monkeypatch) -> None:
+    import ast
+    import io
+    import urllib.request
+
+    tree = ast.parse(login_apptainer_sif_preheat._remote_script())
+    function = next(n for n in tree.body if isinstance(n, ast.FunctionDef) and n.name == "registry_digest")
+    namespace = {"urllib": __import__("urllib"), "json": json}
+    exec(compile(ast.Module(body=[function], type_ignores=[]), "<registry-digest>", "exec"), namespace)
+
+    def response(request, **kwargs):
+        if isinstance(request, str):
+            return io.StringIO('{"token":"test-only-token"}')
+        accept = request.get_header("Accept")
+        assert "application/vnd.oci.image.index.v1+json" in accept
+        assert "application/vnd.docker.distribution.manifest.list.v2+json" in accept
+        result = io.StringIO("")
+        result.headers = {"Docker-Content-Digest": "sha256:test-index"}
+        return result
+
+    monkeypatch.setattr(urllib.request, "urlopen", response)
+    assert namespace["registry_digest"]("ghcr.io/scaleapi/swe-bench_pro-v2:test") == ("sha256:test-index", None)
+
+
 def test_login_preheat_normalizes_only_oci_repository_case() -> None:
     assert (
         login_apptainer_sif_preheat._normalize_image_ref(
