@@ -7,7 +7,8 @@
 - **上游仓库**: `https://github.com/gepa-ai/gepa`
 - **文档站点**: `https://gepa-ai.github.io/gepa/`
 - **引入方式**: Git 子模块（`third_party/gepa`）
-- **当前固定版本**: `v0.1.1`
+- **固定版本 authority**: 父仓库 `third_party/gepa` gitlink；使用
+  `git ls-tree HEAD third_party/gepa` 核对，不以旧 tag 描述代替实际 revision。
 - **许可证**: MIT（原文件保留在 `third_party/gepa/LICENSE`）
 
 ## 2. 为什么引入
@@ -40,15 +41,23 @@ third_party/
 
 ```bash
 cd /Users/taoran.wang/Documents/projects/vibe-trust/vibe-coding-planning
-git submodule update --init --recursive
+git submodule update --init -- third_party/gepa
 ```
+
+新建 `git worktree` 后同样需要执行这一步；主仓库 clean 不代表子模块
+已初始化。`git archive` 也不会包含子模块源码。不要依赖共享 Python 环境
+中的旧 GEPA 包来替代冻结源码。仅初始化所需的 GEPA 路径，避免其他历史
+第三方 gitlink 的缺失配置阻断无关准备。
+
+HPC 提交与 Supervisor 复用 `scripts/internal/gepa_source_preflight.py`：
+检查必要源码文件、父仓库固定 revision、子模块实际 revision 和 tracked
+修改；检查失败只报告并停止，不自动下载、切换版本或提交 Slurm。
 
 ### 4.2 安装 GEPA 及其依赖
 
 ```bash
-conda activate mini-swe
-pip install -r requirements.txt
-pip install -e third_party/gepa
+conda run -n mini-swe pip install -r requirements.txt
+conda run -n mini-swe pip install -e third_party/gepa
 ```
 
 `pip install -e third_party/gepa` 会以可编辑模式安装 GEPA，源码仍保留在 `third_party/gepa/src/` 下。
@@ -56,8 +65,7 @@ pip install -e third_party/gepa
 ## 5. 验证
 
 ```bash
-conda activate mini-swe
-python scripts/tools/gepa_import_check.py
+conda run -n mini-swe python scripts/tools/gepa_import_check.py
 ```
 
 预期输出包含：
@@ -104,7 +112,7 @@ sampler、reflective mutation、Pareto selection、evaluation cache、callbacks�
 
 - 确认已激活 `mini-swe` conda 环境。
 - 确认已执行 `pip install -e third_party/gepa`。
-- 确认子模块已初始化：`git submodule update --init --recursive`。
+- 确认子模块已初始化：`git submodule update --init -- third_party/gepa`。
 
 ### 依赖冲突
 

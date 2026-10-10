@@ -196,6 +196,10 @@ if [[ ! -f "$GEPA_CONFIG_ABS" ]]; then
   exit 2
 fi
 
+# A clean parent worktree can still contain an uninitialized Git submodule.
+# Check the vendored files before SSH/sync/Slurm, not after Controller startup.
+python "$REPO_ROOT/scripts/internal/gepa_source_preflight.py" "$REPO_ROOT"
+
 if [[ -z "$ULHPC_CONFIG" && -f "$REPO_ROOT/configs/ulhpc_submit.yaml" ]]; then
   ULHPC_CONFIG="$REPO_ROOT/configs/ulhpc_submit.yaml"
 fi

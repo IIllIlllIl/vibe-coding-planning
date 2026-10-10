@@ -52,16 +52,39 @@ Operation: `/scratch/users/twang/vibe-coding-planning/run_state/operations/swe-c
 Source: commit `2d723aa` export plus the two revised preparation modules and
 the frozen image config; no unrelated dirty-worktree edits were staged.
 
-LLM smoke remains preparation-only, not submitted or authorized to launch.
+These preparation operations made no model calls; subsequent smoke launch
+and its terminal startup failure are described below.
 
 Runtime: `configs/gepa_swe_chat_hybrid_smoke_v1_20261009.yaml`.
 Supervisor: `configs/swe_chat_hybrid_smoke_supervisor_v1_20261009.yaml`.
 Both reuse the existing Behavioral controller, SlurmTaskBatch and shared
 Supervisor. No second transport stack is introduced.
 
-Preparation gates are now passed for this eight-case smoke. Local preparation
-regression checks: 19 passed; diff whitespace check passed. Pending user review,
-commit and independent authorization to launch the LLM smoke; no smoke was launched.
+Preparation regression checks passed; the first subsequent launch exposed the
+separate missing-submodule regression below.
+
+## Smoke launch failure and repair — 2026-10-10
+
+Smoke was subsequently authorized and launched from clean detached worktree
+`/private/tmp/swe-chat-hybrid-smoke-1ad31d3`, commit `1ad31d3`.
+Controllers failed before manifest creation / Checker execution because the
+fresh worktree had not initialized the pinned `third_party/gepa` submodule.
+An empty submodule can pass ordinary parent-worktree cleanliness checks.
+The same startup failure was automatically resubmitted; transport state records
+19 submissions, last Controller 6109239. Supervisor has now been stopped;
+failed logs and transport state are preserved. No learning checkpoint exists.
+
+The smoke worktree now has GEPA commit
+`b4dbb55b7601dac448cdb836d5a401ca7d9eb920`, initialized from the existing local
+checkout without changing the frozen dependency revision. Source fingerprint
+construction now succeeds for all five required GEPA files. The submission
+wrapper now checks required vendored files before SSH/sync/Slurm; its six tests
+pass, including the missing-submodule regression. The user authorized commit
+and restart after the Supervisor repair. The reviewed restart transport is
+`configs/swe_chat_hybrid_smoke_supervisor_repair_v2_20261010.yaml`; it preserves
+the old 19-attempt state and logs, uses a separate session/state and the same
+scientific inputs, run root, resource limits and 20-slice maximum. This is not
+a reset of experimental counters or an increase of the metric-call budget.
 
 Scope: one proposal, four training cases and four development validation cases,
 one repetition. At most 20 Checker metric calls; ordinarily 16:

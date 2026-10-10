@@ -10,6 +10,26 @@ REPO_ROOT = Path(__file__).resolve().parents[2]
 SCRIPT = REPO_ROOT / "scripts" / "hpc_submit_batch.sh"
 
 
+def test_hpc_submit_batch_rejects_uninitialized_gepa_before_submission(tmp_path) -> None:
+    root = tmp_path / "worktree"
+    (root / "scripts").mkdir(parents=True)
+    script = root / "scripts" / "hpc_submit_batch.sh"
+    script.write_bytes(SCRIPT.read_bytes())
+    (root / "scripts/internal").mkdir()
+    (root / "scripts/internal/gepa_source_preflight.py").write_bytes(
+        (REPO_ROOT / "scripts/internal/gepa_source_preflight.py").read_bytes())
+    (root / "configs").mkdir()
+    (root / "configs" / "smoke.yaml").write_text("{}\n", encoding="utf-8")
+    result = subprocess.run(
+        ["bash", str(script), "--gepa-rules", "--gepa-config", "configs/smoke.yaml", "--submit"],
+        cwd=root, capture_output=True, text=True, check=False,
+    )
+    assert result.returncode == 2
+    assert "vendored GEPA is incomplete" in result.stderr
+    assert "git submodule update --init -- third_party/gepa" in result.stderr
+    assert "invoking ulhpc-submit" not in result.stdout
+
+
 def test_hpc_submit_batch_help_succeeds() -> None:
     result = subprocess.run(
         ["bash", str(SCRIPT), "--help"],

@@ -51,6 +51,23 @@ Matplotlib preparation OOMs even with 4G, before model execution.
 
 ## Isolation, audit, and artifacts
 
+GEPA source preparation must validate the initialized submodule in each new
+worktree, not only the parent Git status. `git worktree add` and `git archive`
+do not materialize submodule sources. Initialize only `third_party/gepa` at
+the parent's pinned gitlink. The shared GEPA source preflight is used by both
+Supervisor and submit wrapper; missing, wrong-revision or tracked-modified
+sources fail locally without fetch, Slurm submission or automatic retries.
+Exports require the vendored files and preserve their source fingerprints.
+
+A missing runtime manifest after Controller submission is not a fresh run.
+Supervisor must inspect the recorded Controller job before cleanup or another
+submission. FAILED, OOM, CANCELLED, and successful exit without runtime authority
+block with the job identity, diagnostic log paths and a repair action. Pending,
+running or unavailable accounting waits without submission. Before initialization,
+NODE_FAIL/BOOT_FAIL/PREEMPTED/TIMEOUT permit only one bounded recovery, counted
+in preserved transport state and the existing total submission budget. Once
+runtime authority exists, retain the ordinary checkpoint/slice recovery policy.
+
 Curator lineage is historical provenance, not a list of currently active rules.
 An unchanged retained bullet must preserve its content, counters, category and
 lineage exactly, even when its ancestors were removed by earlier revisions.

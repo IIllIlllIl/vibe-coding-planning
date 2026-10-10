@@ -25,6 +25,11 @@ try:
 except ModuleNotFoundError:  # Direct ``python scripts/hpc_resume_loop.py``.
     from hpc_runtime import HpcLayout
 
+try:
+    from scripts.internal.gepa_source_preflight import validate_gepa_source
+except ModuleNotFoundError:
+    from internal.gepa_source_preflight import validate_gepa_source
+
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 DEFAULT_BATCH_SCRIPT = REPO_ROOT / "scripts" / "hpc_submit_batch.sh"
@@ -480,6 +485,10 @@ def submit_slice(config: SupervisorConfig) -> str:
 
 
 def _submission_identity_error(config: SupervisorConfig) -> str | None:
+    if config.batch_script.resolve() == DEFAULT_BATCH_SCRIPT.resolve():
+        source_error = validate_gepa_source(REPO_ROOT)
+        if source_error:
+            return source_error
     current_config_sha256 = _sha256(config.runtime_config)
     if current_config_sha256 != config.runtime_config_sha256:
         return f"runtime config changed after supervisor start: {config.runtime_config}"
@@ -519,17 +528,53 @@ def _state_base(raw: str) -> str:
 
 def get_job_state(config: SupervisorConfig, job_id: str) -> str:
     squeue = "squeue -h -j " + shlex.quote(job_id) + " -o %T | head -n 1"
-    result = run_command(_ssh_command(config, squeue))
+    result = run_command(_ssh_command(config, squeue), timeout_seconds=60)
     if result.returncode == 0 and result.stdout.strip():
         return _state_base(result.stdout)
 
     sacct = (
         "sacct -n -P -j " + shlex.quote(job_id) + " --format=State,ExitCode | head -n 1"
     )
-    result = run_command(_ssh_command(config, sacct))
+    result = run_command(_ssh_command(config, sacct), timeout_seconds=60)
     if result.returncode == 0 and result.stdout.strip():
         return _state_base(result.stdout)
     return "UNKNOWN"
+
+
+def startup_controller_status(config: SupervisorConfig, state: dict[str, Any]) -> dict[str, Any]:
+    """A previously submitted job without runtime authority is not a fresh run."""
+    job_id = state.get("last_controller_job_id")
+    if not job_id:
+        return {"state": "startup_failed", "error_type": "MissingControllerJobIdentity",
+                "action": "Inspect preserved submission state; do not submit an unidentified duplicate."}
+    try:
+        job_state = get_job_state(config, str(job_id))
+    except Exception as exc:
+        return {"state": "startup_waiting", "job_id": job_id, "slurm_state": "UNKNOWN",
+                "error_type": type(exc).__name__, "action": "Retry read-only status checking, not submission."}
+    payload = {"job_id": job_id, "slurm_state": job_state,
+               "error_type": f"StartupSlurm{job_state}"}
+    root = config.remote_staging_root
+    if root:
+        payload["stderr_path"] = f"{root}/.ulhpc_submit/logs/job_{job_id}.err"
+        payload["stdout_path"] = f"{root}/.ulhpc_submit/logs/job_{job_id}.out"
+    if job_state not in TERMINAL_JOB_STATES:
+        payload.update(state="startup_waiting",
+                       action="Wait for Controller/accounting visibility; do not submit a duplicate.")
+    elif (job_state in {"NODE_FAIL", "BOOT_FAIL", "PREEMPTED", "TIMEOUT"}
+          and int(state.get("startup_failure_recoveries", 0)) < 1):
+        payload.update(state="startup_retryable",
+                       action="Allow one bounded infrastructure/slice recovery before runtime initialization.")
+    else:
+        payload.update(state="startup_failed",
+                       action="Inspect Controller logs and fix startup; preserve state before an explicitly approved restart.")
+        payload["diagnosis"] = {
+            "FAILED": "Controller exited before initializing runtime authority; inspect dependency/config/entrypoint errors.",
+            "OUT_OF_MEMORY": "Controller was killed for memory; inspect sacct usage before changing resources.",
+            "COMPLETED": "Controller exited successfully but produced no runtime authority; inspect command and output paths.",
+            "CANCELLED": "Controller was cancelled; do not undo cancellation through automatic resubmission.",
+        }.get(job_state, "Startup recovery exhausted or terminal Slurm failure; inspect the recorded job.")
+    return payload
 
 
 def wait_for_job(config: SupervisorConfig, job_id: str) -> str:
@@ -587,6 +632,7 @@ if not progress_path.is_file():
     progress_path = run_dir / "online_iteration_progress.json"
 controller_status_path = run_dir / "controller_status.json"
 payload = {"state": "missing", "run_dir": str(run_dir)}
+payload["runtime_initialized"] = manifest_path.is_file() or online_manifest_path.is_file()
 if result_path.is_file():
     try:
         result = json.loads(result_path.read_text(encoding="utf-8"))
@@ -1001,6 +1047,27 @@ def run_loop(config: SupervisorConfig) -> int:
                     time.sleep(config.poll_interval_seconds)
                 continue
 
+            startup_recovery = False
+            if (status.get("state") == "missing" and not status.get("runtime_initialized")
+                    and int(state.get("submissions", 0)) > 0):
+                startup = startup_controller_status(config, state)
+                state["last_startup_controller_check"] = startup
+                print(f"[hpc-resume] startup check={json.dumps(startup, sort_keys=True)}", flush=True)
+                if startup["state"] == "startup_waiting":
+                    state["status"] = "waiting_controller_initialization"
+                    _save_supervisor_state(config, state)
+                    if config.once:
+                        return 0
+                    if config.poll_interval_seconds > 0:
+                        time.sleep(config.poll_interval_seconds)
+                    continue
+                if startup["state"] == "startup_failed":
+                    state["status"] = "blocked_controller_startup"
+                    _save_supervisor_state(config, state)
+                    print(f"[hpc-resume] Controller startup blocked: {startup['action']}", file=sys.stderr)
+                    return 1
+                startup_recovery = True
+
             if _fresh_run_has_no_staging_to_reclaim(status, state):
                 cleanup = {"removed": 0, "skipped": "fresh_run_without_submissions"}
             else:
@@ -1170,6 +1237,8 @@ def run_loop(config: SupervisorConfig) -> int:
                     time.sleep(config.poll_interval_seconds)
                 continue
             state["submissions"] = submissions + 1
+            if startup_recovery:
+                state["startup_failure_recoveries"] = int(state.get("startup_failure_recoveries", 0)) + 1
             state["last_controller_job_id"] = job_id
             state["status"] = "controller_submitted"
             if recoverable_controller_error:

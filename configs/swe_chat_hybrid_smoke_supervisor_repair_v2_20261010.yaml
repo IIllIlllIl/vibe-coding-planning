@@ -1,0 +1,26 @@
+schema_version: 1
+session: swe-chat-hybrid-smoke-repair-v2-20261010
+log: .local/hpc-supervisor/swe-chat-hybrid-smoke-repair-v2-20261010.log
+arguments:
+  - --poll-interval
+  - "120"
+  - --slice-time
+  - "00:08:00"
+  - --max-runs
+  - "20"
+  - --state-file
+  - .local/hpc-supervisor/swe-chat-hybrid-smoke-repair-v2-20261010.json
+  - --require-clean-worktree
+  - --gepa-rules
+  - --gepa-config
+  - configs/gepa_swe_chat_hybrid_smoke_v1_20261009.yaml
+  - --ulhpc-config
+  - /Users/taoran.wang/.config/ulhpc-submit/config.yaml
+  - --job-name
+  - swe-chat-hybrid-smoke-v1-20261009
+  - --cpus
+  - "1"
+  - --mem
+  - 4G
+  - --reclaim-staging
+  - --submit
