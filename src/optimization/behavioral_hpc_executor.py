@@ -126,8 +126,10 @@ def build_behavioral_checker_array_script(
                 f"#SBATCH --error={log_dir}/%x-%A_%a.err",
                 "set -euo pipefail",
                 "set +x",
+                # Both hybrid executors inspect repositories through the SIF.
+                # Model transport selects credentials, not tool prerequisites.
                 *([f"module load {shlex.quote(hpc.python_module)}",
-                   f"module load {shlex.quote(hpc.container_module)}"] if native else []),
+                   f"module load {shlex.quote(hpc.container_module)}"] if config.hybrid.enabled else []),
                 f"ENV_FILE={shlex.quote(hpc.remote_env_file)}",
                 'ENV_FILE="${ENV_FILE/#\\~/$HOME}"',
                 'source "${ENV_FILE}"',
@@ -168,7 +170,7 @@ class HPCSlurmBehavioralCheckerExecutor:
         rules: str,
         capture_traces: bool,
     ) -> list[BehavioralCheckerOutput]:
-        if self.config.hybrid.enabled and self.config.hybrid.checker_model.get("executor") == "codex_cli":
+        if self.config.hybrid.enabled:
             from src.optimization.behavioral_hybrid_runtime import require_evidence_sif, require_history_bundle
             require_evidence_sif(self.config)
             for case in batch:

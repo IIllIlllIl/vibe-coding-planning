@@ -1,4 +1,5 @@
 import json
+import subprocess
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -52,6 +53,63 @@ def test_smoke_config_and_native_checker_script(tmp_path, monkeypatch):
                                                    task_indices=[0], attempt=1)
     assert "module load tools/Apptainer" in script
     assert 'test -n "${DEEPSEEK_API_KEY:-}"' not in script
+
+
+def test_deepseek_formal_worker_loads_sif_modules_before_execution(tmp_path):
+    from dataclasses import replace
+    from src.optimization.config import load_optimization_config
+    from src.optimization.behavioral_hpc_executor import build_behavioral_checker_array_script
+    config = load_optimization_config(
+        "configs/gepa_swe_chat_hybrid_formal3_v2_20261010.yaml", require_api_keys=False)
+    assert not config.hybrid.checker_model.get("executor")
+    env_file = tmp_path / "private.env"
+    env_file.write_text("export DEEPSEEK_API_KEY=test-only-not-a-credential\n")
+    config = replace(config, hpc=replace(config.hpc, remote_env_file=str(env_file)))
+    script = build_behavioral_checker_array_script(
+        config=config, batch_dir=tmp_path / "batch", task_indices=[0], attempt=1)
+    assert "module load tools/Apptainer" in script
+    assert "module load lang/Python/3.11" in script
+    assert 'test -n "${DEEPSEEK_API_KEY:-}"' in script
+    assert script.index("module load tools/Apptainer") < script.index("source")
+    # Execute the actual generated script with shell doubles: the Worker must
+    # observe both loaded modules, independently of exported Controller PATH.
+    harness = '''
+module() {
+  test "$1" = load || return 20
+  case "$2" in
+    lang/Python/3.11) export PROBE_PYTHON=loaded ;;
+    tools/Apptainer) export PROBE_APPTAINER=loaded ;;
+    *) return 21 ;;
+  esac
+}
+python3() {
+  test "${PROBE_PYTHON:-}" = loaded &&
+  test "${PROBE_APPTAINER:-}" = loaded &&
+  test "$1" = -m &&
+  test "$2" = src.optimization.behavioral_checker_worker
+}
+export SLURM_ARRAY_TASK_ID=0
+'''
+    result = subprocess.run(["bash", "-c", harness + script], capture_output=True, text=True)
+    assert result.returncode == 0, result.stderr
+
+
+def test_hybrid_deepseek_checks_prepared_authority_before_submission(tmp_path, monkeypatch):
+    from dataclasses import replace
+    import pytest
+    from src.optimization.config import load_optimization_config
+    from src.optimization.behavioral_hpc_executor import HPCSlurmBehavioralCheckerExecutor
+    from src.optimization import behavioral_hybrid_runtime as runtime
+    config = replace(load_optimization_config(
+        "configs/gepa_swe_chat_hybrid_formal3_v2_20261010.yaml", require_api_keys=False),
+        run_dir=tmp_path)
+    executor = HPCSlurmBehavioralCheckerExecutor(config)
+    def missing(_config):
+        raise ValueError("missing evidence SIF")
+    monkeypatch.setattr(runtime, "require_evidence_sif", missing)
+    monkeypatch.setattr(executor.runtime, "run", lambda **kwargs: pytest.fail("submitted before preflight"))
+    with pytest.raises(ValueError, match="missing evidence SIF"):
+        executor.evaluate([], "{}", False)
 
 
 def test_prepared_history_hides_future_commit(tmp_path):

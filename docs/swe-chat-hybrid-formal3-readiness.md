@@ -1,7 +1,9 @@
 # SWE-chat hybrid formal3 readiness
 
 Config: `configs/gepa_swe_chat_hybrid_formal3_v2_20261010.yaml`.
-Preparation verified; commit and model-backed launch remain unauthorized.
+Preparation was verified and launch was authorized; commit `4b0bfe0` launched
+the formal run. It subsequently failed before producing any valid score; see
+the failure audit below. Repair changes are not yet committed or deployed.
 
 ## Frozen split
 
@@ -47,3 +49,28 @@ Local regressions cover split, attribution, isolation and synthetic three-propos
 GEPA control flow. No new model-backed end-to-end test was run. Large compact-input
 diagnostics reach approximately 193k train, 125k validation and 397k test tokens;
 these are not provider counts. Do not silently truncate or filter inputs.
+
+## Formal Worker failure and repair
+
+The first seed-validation batch contained 23 cases. All 46 attempts (two per
+case) failed with `Apptainer CLI not found`; no valid score or iteration was
+completed. Supervisor stopped on `TaskAttemptsExhausted` rather than resubmitting.
+
+Root cause: `build_behavioral_checker_array_script` loaded Python/Apptainer only
+for a Native Codex Checker. Hybrid DeepSeek now uses the same mandatory SIF
+tool isolation, but inherited the historical non-container Behavioral launch
+condition. Preparation explicitly loaded both modules and did not exercise this
+generated Worker script. This was a launch-prerequisite regression, not a model
+or scientific-output failure.
+
+Repair loads both modules for every hybrid Checker, while retaining Native-only
+credential selection and legacy non-hybrid behavior. SIF/history preflight now
+also runs before DeepSeek hybrid submission. Regression executes the generated
+formal DeepSeek script with shell doubles, checks its module ordering/credentials,
+and verifies a missing SIF blocks before submission. Forty relevant local tests
+passed. The previous compute tool/isolation probe passed, but the repaired script
+has not yet been validated on a compute node or used for inference.
+
+Preserve failed attempts and operational error records. Repair changes affect
+the Checker semantic fingerprint; do not silently overwrite the frozen runtime
+or reuse failed task identities when preparing a reviewed recovery/new run.

@@ -1,0 +1,123 @@
+experiment_contract:
+  identity: swe-chat-hybrid-formal3-v3-20261011
+  status: preparation_verified_launch_authorized
+  launch_authorized: true
+  target_split_ratios: [0.64, 0.18, 0.18]
+  split_boundary: repository_and_duplicate_component
+  split_manifest: configs/frozen_swe_chat_behavioral_formal/swe-chat-hybrid-threeway-v1-20261010.json
+  split_counts: {train: 84, validation: 23, test: 24}
+  untouched_test_claim: false
+  checker: mini_swe_deepseek
+  learning_agents: native_codex_gpt6_sol_low
+
+paths:
+  dataset_snapshot: output/SWE-chat/hybrid-threeway-v1-20261010/gepa-snapshot
+  initial_guideline: configs/prompts/swe_chat_hybrid_seed_v1.json
+  run_dir: output/SWE-chat/hybrid-formal3-v3-20261011
+task:
+  semantics: behavioral_plan_acceptability_v1
+behavioral_repository:
+  backend: temporal_git_proxy
+  repositories_root: /scratch/users/${USER}/vibe-coding-planning/operations/swe-chat-f66cca95-preheat-v1-20260829/repositories
+  workspace_root: /scratch/users/${USER}/vibe-coding-planning/run_state/workspaces/swe-chat-hybrid-formal3-v3-20261011
+checker:
+  model: deepseek-v4-flash
+  api_base: https://api.deepseek.com
+  api_key_env: DEEPSEEK_API_KEY
+  temperature: 0.0
+  thinking: disabled
+  max_steps: 100
+  cost_limit: 3.0
+  timeout: 1800
+  agent_timeout_seconds: 0
+  max_attempts: 2
+reflection:
+  model: deepseek-v4-flash
+  api_base: https://api.deepseek.com
+  api_key_env: DEEPSEEK_API_KEY
+  temperature: 0.0
+  max_steps: 100
+  cost_limit: 3.0
+  timeout: 1800
+hybrid:
+  enabled: true
+  max_items: 10
+  shared_guide_words: 200
+  condition_words: 40
+  item_guide_words: 80
+  prompt_bundle: configs/prompts/swe_chat_hybrid_ace_v2.yaml
+  evidence_sif_cache_dir: /scratch/users/${USER}/vibe-coding-planning/shared/sif-cache
+  evidence_image: codex-inspection:python312-rg14-v1
+  evidence_sif_sha256: b383e57e939505cdd158205066e495f6e3ca7e9932000f1a1d3fe3e26a1f0277
+  repository_history_cache_dir: /scratch/users/${USER}/vibe-coding-planning/shared/repository-history-cache-v1
+  dataset_file_sha256:
+    manifest.json: 9f0ee4ec80bac1ca12fc920ca1f0c7cb2f93a9a0121b6e4fd4d492a5e9dc033c
+    train.jsonl: 53ab1e67085c1782187f818f9043ce34ffbd34af209ab45955584b846011ecd7
+    validation.jsonl: 966bea1e6bb72b89e15cf4df6e5f780e19100a33670842673bcda99825b25793
+  checker_model: {} # mini-SWE / DeepSeek; never inherit Native Codex Checker.
+  reflector_model:
+    executor: codex_cli
+    codex_binary: ${HOME}/.local/lib/vibe-codex/0.160.1/bin/codex
+    codex_auth_file: ${HOME}/.codex/auth.json
+    codex_version: 0.160.1
+    model: gpt-6-sol
+    reasoning_effort: low
+  curator_model:
+    executor: codex_cli
+    codex_binary: ${HOME}/.local/lib/vibe-codex/0.160.1/bin/codex
+    codex_auth_file: ${HOME}/.codex/auth.json
+    codex_version: 0.160.1
+    model: gpt-6-sol
+    reasoning_effort: low
+  refiner_enabled: true
+  refiner_model:
+    executor: codex_cli
+    codex_binary: ${HOME}/.local/lib/vibe-codex/0.160.1/bin/codex
+    codex_auth_file: ${HOME}/.codex/auth.json
+    codex_version: 0.160.1
+    model: gpt-6-sol
+    reasoning_effort: low
+search:
+  max_iterations: 3
+  max_metric_calls: 300
+  projection_metric_calls: 236
+  reflection_minibatch_size: 24
+  train_case_repetitions: 1
+  primary_metric: accuracy
+  parallel: 1
+  seed: 42
+  skip_perfect_score: false
+  min_proposals: 3
+docker:
+  workdir: /testbed
+  timeout: 30
+  min_free_gb: 20
+  max_cached_images: 75
+container:
+  runtime: none
+execution:
+  backend: hpc_slurm
+hpc:
+  submit: true
+  remote_project_dir: /scratch/users/${USER}/vibe-coding-planning/staging/swe-chat-hybrid-formal3-v3-20261011
+  remote_task_dir: /scratch/users/${USER}/vibe-coding-planning/run_state/hpc_tasks/swe-chat-hybrid-formal3-v3-20261011
+  remote_env_file: ~/.config/vibe-coding-planning/deepseek.env
+  ulhpc_config: configs/ulhpc_submit.yaml
+  partition: batch
+  cpus_per_task: 1
+  mem: 4G
+  time: 00:30:00
+  poll_interval_seconds: 120
+  task_output_grace_seconds: 300
+  missing_task_grace_seconds: 600
+  max_task_attempts: 2
+  python_module: lang/Python/3.11
+  container_module: tools/Apptainer
+  python_bin: python3
+  job_name_prefix: swe-chat-hybrid-formal3-v3-20261011
+  worker_config_path: configs/gepa_swe_chat_hybrid_formal3_v3_20261011.yaml
+prompts:
+  checker_system: replaced_by_hybrid_prompt_bundle
+  checker_instance: replaced_by_hybrid_prompt_bundle
+  reflection_system: unused_by_hybrid_phase_executor
+  reflection_instance: unused_by_hybrid_phase_executor
