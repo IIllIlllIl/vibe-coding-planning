@@ -1,7 +1,7 @@
 # Preparation only: freeze the SIF hash and local snapshot before launch.
 smoke_contract:
   identity: swe-chat-hybrid-smoke-v1-20261009
-  status: preparation_blocked_on_sif_and_snapshot
+  status: preparation_blocked_on_sif_preflight
   launch_authorized: false
   purpose: one_hybrid_ace_gepa_proposal_end_to_end
   metric_improvement_required: false
@@ -55,6 +55,11 @@ hybrid:
   evidence_sif_cache_dir: /scratch/users/${USER}/vibe-coding-planning/shared/sif-cache
   evidence_image: vibe-codex-isolation:v1-20261009
   evidence_sif_sha256: ""
+  repository_history_cache_dir: /scratch/users/${USER}/vibe-coding-planning/shared/repository-history-cache-v1
+  dataset_file_sha256:
+    manifest.json: 81458ee88ff3fddab74da54dfcac48c54b81205fd53f873062572ce5de17c91f
+    train.jsonl: 95da4d7c4dc55b58f798eddb52e2fa970375d5318528bfe9357062c812dc0452
+    validation.jsonl: 69dd461612a6e1c3af43e9d0af7ee46c1f7b116f210228636e87e4d15bdf4f4b
   checker_model:
     executor: codex_cli
     codex_binary: ${HOME}/.local/lib/vibe-codex/0.160.1/bin/codex

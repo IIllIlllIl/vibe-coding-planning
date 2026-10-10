@@ -29,8 +29,8 @@ This path imports only decision-time evidence and fetches the proxy commit into
 a fresh repository without mirror alternates or future refs. It does not provide
 a project runtime or authorize tests. No-model compute-node preflight and a smoke
 are still required before formal use. Repository preparation currently fetches
-the local commit closure per invocation; reusable SWE-chat prepared bundle/cache
-integration remains outstanding and must be completed before large waves.
+prepared bundle using the shared installer. History cache integration is implemented;
+the eight real bundles still need an authorized compute-node preparation run.
 
 Reflector explicitly reviews the shared guide in its analysis. Dedicated
 versioned shared-guide feedback counters remain outstanding; existing item credit

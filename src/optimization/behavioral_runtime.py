@@ -176,11 +176,12 @@ class BehavioralLocalChecker:
 
     def _hybrid_codex(self, case, guideline):
         import tempfile
-        from src.optimization.behavioral_hybrid_runtime import require_evidence_sif
+        from src.optimization.behavioral_hybrid_runtime import require_evidence_sif, require_history_bundle
         from src.optimization.behavioral_hybrid import parse_hybrid_checker_output
         from src.optimization.codex_cli_runtime import CodexSIFExecution, run_codex_json_agent
         from src.optimization.hpc.task_batch import atomic_json
         sif = require_evidence_sif(self.config)
+        history_bundle, history_manifest = require_history_bundle(self.config, case)
         mirror = self.config.behavioral_repository.repositories_root / case.audit_provenance["mirror_relpath"]
         attempts = self.config.run_dir / "hybrid_checker_attempts"
         attempts.mkdir(parents=True, exist_ok=True)
@@ -191,7 +192,9 @@ class BehavioralLocalChecker:
                                               "checking_artifact": json.loads(guideline)})
         atomic_json(evidence / "manifest.json", {"files": ["input.json"]})
         with materialize_repository_proxy(mirror_path=mirror, proxy_commit=case.repository.proxy_commit,
-                workspace_root=self.config.behavioral_repository.workspace_root, ancestor_only=True) as checkout:
+                workspace_root=self.config.behavioral_repository.workspace_root,
+                history_bundle=history_bundle) as checkout:
+            atomic_json(attempt / "repository_preparation.json", history_manifest)
             output, trajectory = run_codex_json_agent(
                 model_config=self.config.hybrid.checker_model, working_directory=checkout,
                 attempt_dir=attempt, system=self.config.checker_prompt,

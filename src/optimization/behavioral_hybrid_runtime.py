@@ -47,6 +47,30 @@ def require_evidence_sif(config):
     return path
 
 
+def require_history_bundle(config, case):
+    """Require the prepared, hash-verified authority; never build in Agents."""
+    import os
+    from src.environment.repository_history import RepositoryHistoryCache
+    directory = config.hybrid.repository_history_cache_dir
+    if not directory:
+        raise ValueError("hybrid Codex Checker requires repository_history_cache_dir")
+    cache = RepositoryHistoryCache(Path(os.path.expandvars(directory)).expanduser())
+    result = cache.validate(sif_sha256=config.hybrid.evidence_sif_sha256,
+                            base_commit=case.repository.proxy_commit)
+    if result is None:
+        raise ValueError(f"missing or invalid prepared repository history: {case.instance_id}")
+    return result
+
+
+def verify_hybrid_snapshot(config):
+    expected = config.hybrid.dataset_file_sha256
+    if set(expected) != {"manifest.json", "train.jsonl", "validation.jsonl"}:
+        raise ValueError("hybrid smoke requires three frozen snapshot file hashes")
+    for name, digest in expected.items():
+        if _file_sha256(config.dataset_snapshot / name) != digest:
+            raise ValueError(f"hybrid snapshot hash mismatch: {name}")
+
+
 def validate_phase(role, payload, output, config):
     if role == "reflector":
         validate_ace_paired_reflector_review(output, instance_id=payload["record"]["instance_id"],
@@ -141,6 +165,8 @@ def run_hybrid_optimization(config, *, phase_executor=None, checker=None, optimi
         raise ValueError("hybrid.enabled must be true")
     limits = hybrid_limits(config)
     validate_candidate(config.initial_rules_path.read_text(), limits)
+    if phase_executor is None:
+        verify_hybrid_snapshot(config)
     executor = phase_executor or HybridPhaseExecutor(config)
     proposer = IncrementalHybridACEProposer(
         lambda parent, record: executor.call("reflector", {"parent": parent, "record": record}),

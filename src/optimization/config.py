@@ -91,6 +91,8 @@ class BehavioralHybridConfig:
     refiner_enabled: bool = False
     refiner_model: dict[str, Any] = field(default_factory=dict)
     checker_model: dict[str, Any] = field(default_factory=dict)
+    repository_history_cache_dir: str = ""
+    dataset_file_sha256: dict[str, str] = field(default_factory=dict)
 
 
 @dataclass(frozen=True)

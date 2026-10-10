@@ -36,11 +36,12 @@ def materialize_repository_proxy(
     proxy_commit: str,
     workspace_root: str | Path,
     ancestor_only: bool = False,
+    history_bundle: Path | None = None,
 ) -> Iterator[Path]:
     """Yield an isolated clean checkout without mutating shared mirror state."""
     mirror = Path(mirror_path).resolve()
     root = Path(workspace_root).resolve()
-    if not mirror.exists():
+    if history_bundle is None and not mirror.exists():
         raise RepositoryMaterializationError(
             f"repository mirror does not exist: {mirror}"
         )
@@ -48,7 +49,12 @@ def materialize_repository_proxy(
     temporary = Path(tempfile.mkdtemp(prefix="behavioral-checker-", dir=root))
     checkout = temporary / "repo"
     try:
-        if ancestor_only:
+        if history_bundle is not None:
+            from src.environment.repository_history import install_repository_history_bundle
+            _git("init", str(checkout))
+            install_repository_history_bundle(repository_dir=checkout, bundle=history_bundle,
+                                              base_commit=proxy_commit)
+        elif ancestor_only:
             _git("init", str(checkout))
             _git("fetch", "--no-tags", str(mirror), proxy_commit, cwd=checkout)
         else:

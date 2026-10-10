@@ -169,8 +169,10 @@ class HPCSlurmBehavioralCheckerExecutor:
         capture_traces: bool,
     ) -> list[BehavioralCheckerOutput]:
         if self.config.hybrid.enabled and self.config.hybrid.checker_model.get("executor") == "codex_cli":
-            from src.optimization.behavioral_hybrid_runtime import require_evidence_sif
+            from src.optimization.behavioral_hybrid_runtime import require_evidence_sif, require_history_bundle
             require_evidence_sif(self.config)
+            for case in batch:
+                require_history_bundle(self.config, case)
         fingerprint = behavioral_evaluation_fingerprint(
             self.config,
             batch=batch,
