@@ -16,10 +16,12 @@ Curator and before candidate evaluation. The raw draft and refinement are retain
 the Host never truncates text. Refiner uses `hybrid.refiner_model`, overlaid on
 the reflection defaults. There is no aggregate token threshold.
 
-`containers/codex-isolation.def` specifies a generic inspection image without
-project dependencies. Build/download and compute-node validation have NOT run.
-Pin the resulting image SHA-256 and prepared evidence image/cache identity before
-execution. Use the existing HPC submission and Codex startup verification paths.
+The definition build failed on HPC due to missing fakeroot UID/GID mappings.
+The smoke instead freezes prebuilt `python:3.12-bookworm`, acquired with the
+existing login preheater. Its hash and eight history bundles are verified;
+compute-node preflight job 6109207 passed without model calls. See
+`swe-chat-hybrid-smoke-readiness.md` for exact identities and tool limitations.
+Use the existing HPC submission and Codex startup verification paths.
 The standalone Codex release and resources are mounted by the existing runtime,
 not downloaded by Agents.
 
@@ -27,10 +29,10 @@ not downloaded by Agents.
 transport with this generic SIF. The historical DeepSeek path remains unchanged.
 This path imports only decision-time evidence and fetches the proxy commit into
 a fresh repository without mirror alternates or future refs. It does not provide
-a project runtime or authorize tests. No-model compute-node preflight and a smoke
-are still required before formal use. Repository preparation currently fetches
-prepared bundle using the shared installer. History cache integration is implemented;
-the eight real bundles still need an authorized compute-node preparation run.
+a project runtime or authorize tests. The LLM smoke remains unlaunched and is
+required before formal use. Repository preparation installs the verified bundle
+using the shared installer. History cache integration and the eight real smoke
+bundles are prepared; no worker may create missing history as a fallback.
 
 Reflector explicitly reviews the shared guide in its analysis. Dedicated
 versioned shared-guide feedback counters remain outstanding; existing item credit

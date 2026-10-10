@@ -1,6 +1,7 @@
 """Prepare SWE-chat proxy ancestor bundles with the shared ACE history cache.
 
-Run on a compute node before Agent waves. Never mutate shared mirrors.
+Run before Agent waves. Bounded eight-case smoke preparation may run on login;
+large history packing belongs on compute nodes. Never mutate shared mirrors.
 """
 import argparse
 from pathlib import Path
@@ -19,6 +20,8 @@ def prepare(config, *, check_only=False):
     require_evidence_sif(config)
     cache = RepositoryHistoryCache(Path(os.path.expandvars(config.hybrid.repository_history_cache_dir)))
     train, validation = load_behavioral_snapshot(config.dataset_snapshot)
+    if not check_only and not os.environ.get("SLURM_JOB_ID") and len(train) + len(validation) > 8:
+        raise ValueError("login history preparation is limited to eight smoke cases; use compute for larger sets")
     records = []
     for case in train + validation:
         existing = cache.validate(sif_sha256=config.hybrid.evidence_sif_sha256,

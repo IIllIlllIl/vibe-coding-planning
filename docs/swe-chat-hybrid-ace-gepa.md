@@ -105,8 +105,9 @@ the common Agent protocol rather than being copied into task prompts.
 
 **Isolation readiness:** the retained DeepSeek path uses LocalEnvironment and
 shared-mirror checkout. The opt-in Codex hybrid path uses a generic isolation SIF
-and ancestor-only checkout. Its image/preflights remain unverified and prepared
-history cache integration is pending. Neither local mocks nor the historical
+and ancestor-only checkout. The eight-case smoke now has a hash-frozen generic
+image, verified prepared history and a passed no-model compute-node preflight
+(job 6109207). LLM smoke remains unlaunched. Neither local mocks nor the historical
 path establish the newer frozen isolation contract. See the smoke readiness doc.
 
 ## Prompts and remaining launch preparation

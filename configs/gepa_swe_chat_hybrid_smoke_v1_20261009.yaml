@@ -1,7 +1,7 @@
 # Preparation only: freeze the SIF hash and local snapshot before launch.
 smoke_contract:
   identity: swe-chat-hybrid-smoke-v1-20261009
-  status: preparation_blocked_on_sif_preflight
+  status: preparation_passed_pending_commit_and_launch_authorization
   launch_authorized: false
   purpose: one_hybrid_ace_gepa_proposal_end_to_end
   metric_improvement_required: false
@@ -53,8 +53,8 @@ hybrid:
   item_guide_words: 80
   prompt_bundle: configs/prompts/swe_chat_hybrid_ace_v1.yaml
   evidence_sif_cache_dir: /scratch/users/${USER}/vibe-coding-planning/shared/sif-cache
-  evidence_image: vibe-codex-isolation:v1-20261009
-  evidence_sif_sha256: ""
+  evidence_image: python:3.12-bookworm
+  evidence_sif_sha256: 4977b9bbc50118d671a98023f0c6e6dc90c3125308b5c3e9ee6ad0ed57a86345
   repository_history_cache_dir: /scratch/users/${USER}/vibe-coding-planning/shared/repository-history-cache-v1
   dataset_file_sha256:
     manifest.json: 81458ee88ff3fddab74da54dfcac48c54b81205fd53f873062572ce5de17c91f

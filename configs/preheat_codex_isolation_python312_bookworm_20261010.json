@@ -1,0 +1,4 @@
+{
+  "images": ["python:3.12-bookworm"],
+  "purpose": "Repository-free inspection image for SWE-chat hybrid smoke; verify tools and isolation before use"
+}

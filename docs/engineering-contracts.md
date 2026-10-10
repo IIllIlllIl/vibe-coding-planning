@@ -36,7 +36,9 @@ Use `src/environment/repository_history.py` across all repository-aware Agents.
 validation checks the manifest and bundle hash.
 
 Prepare missing bundles before submitting Agent waves, using the existing
-cache builder on a compute node. It packs the base ancestor closure with one
+cache builder on a compute node for substantial packing. Explicitly approved,
+bounded smoke preparation (eight cases, serial) may run on login; no aggressive
+GC, concurrent packing or Agent execution is allowed there. It packs the base ancestor closure with one
 thread and a 64m pack window. Reuse existing verified artifacts. Repo Checker
 and Repo Reflector require prepared bundles and fail before wave submission
 if one is missing or invalid; they must not build or repack as a fallback.
