@@ -127,6 +127,9 @@ def _mapping(value: Any, name: str) -> dict[str, Any]:
 
 
 def _model(data: dict[str, Any], *, checker: bool) -> ModelConfig:
+    thinking = data.get("thinking")
+    if thinking not in (None, "enabled", "disabled"):
+        raise ValueError("model thinking must be enabled, disabled, or omitted")
     temperature = float(data.get("temperature", 0.0 if checker else 0.7))
     if checker and temperature != 0.0:
         raise ValueError("checker.temperature must be exactly 0.0")
@@ -146,6 +149,7 @@ def _model(data: dict[str, Any], *, checker: bool) -> ModelConfig:
         timeout=int(data.get("timeout", 1800)),
         max_attempts=max_attempts,
         agent_timeout_seconds=agent_timeout_seconds,
+        thinking=thinking,
     )
 
 

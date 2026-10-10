@@ -51,6 +51,36 @@ def test_real_gepa_iteration_without_inference(tmp_path):
     assert (config.run_dir / "global_counter_ledger.json").exists()
     traces = list((config.run_dir / "hybrid_proposals").glob("*.json"))
     assert json.loads(traces[0].read_text())["status"] == "completed"
+    assert not (config.run_dir / "cost_report.json").exists()
+
+
+def test_three_gepa_proposals_without_model_calls(tmp_path):
+    config = load_optimization_config("configs/gepa_swe_chat_hybrid_formal3_v2_20261010.yaml", require_api_keys=False)
+    seed = tmp_path / "seed.json"
+    seed.write_text(json.dumps(PARENT))
+    config = replace(config, dataset_snapshot=_balanced_snapshot(tmp_path / "snapshot"),
+        initial_rules_path=seed, run_dir=tmp_path / "run",
+        execution=replace(config.execution, backend="local"),
+        search=replace(config.search, reflection_minibatch_size=4, max_metric_calls=100),
+        hybrid=replace(config.hybrid, dataset_file_sha256={}))
+    class Phases:
+        curators = 0
+        def call(self, role, payload):
+            if role == "reflector":
+                assert payload["record"]["split"] == "train"
+                return review(payload["parent"], payload["record"]), []
+            self.curators += 1
+            return {"reasoning": "Synthetic evidence-based revision", "operations": [],
+                    "shared_guide": f"Inspect independent evidence; revision {self.curators}."}, []
+    phases = Phases()
+    def checker(case, raw):
+        return BehavioralCheckerOutput(case.accepted, "Synthetic", (),
+            ({"role": "assistant", "content": "Synthetic investigation"},))
+    result = run_hybrid_optimization(config, checker=checker, phase_executor=phases)
+    assert phases.curators == 3
+    assert len(list((config.run_dir / "hybrid_proposals").glob("*.json"))) == 3
+    assert result is not None
+    assert not (config.run_dir / "cost_report.json").exists()
 
 
 def test_limits_operations_and_guide_identity():

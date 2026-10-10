@@ -1,9 +1,11 @@
 # SWE-chat hybrid ACE/GEPA implementation preparation
 
-Status: 2026-10-09. Opt-in CLI/controller, independent evidence workers and
-incremental ACE maintenance are implemented. A real GEPA iteration has passed
-locally using synthetic Agent callbacks; no model inference or HPC launch has
-occurred. Formal launch inputs and isolation readiness are not yet approved.
+Opt-in CLI/controller, independent evidence workers and incremental ACE
+maintenance reuse the existing Behavioral GEPA transport. The completed
+`hybrid-smoke-v1-20261009` exercised one real proposal; synthetic regression
+also exercises three proposals without inference. Neither establishes learning
+improvement or generalization. Runtime artifacts, not this document, determine
+the execution state of a new run.
 
 ## Data authority and evaluation roles
 
@@ -22,8 +24,16 @@ selection, and a separate downstream test set. Group repository/session and
 near-duplicate cases before assignment. Preserve previous exposure metadata:
 historically inspected cases cannot be called untouched merely by repartitioning.
 The user selected the 131 repository-ready cases as the partition universe.
-Ratios, seed and final assignments remain unapproved.
-The old two-way formal split is not a substitute for this three-way partition.
+The approved three-way partition retains repository/duplicate components as
+atomic groups: 84 train, 23 validation and 24 downstream PC-only test cases,
+approximately 64/18/18. Assignments use existing frozen duplicate components
+and seed-42 hashes without looking at labels. All development-exposed components
+enter train. Authority:
+`configs/frozen_swe_chat_behavioral_formal/swe-chat-hybrid-threeway-v1-20261010.json`.
+The test snapshot is in a separate directory and is not staged with GEPA inputs.
+All 47 cases outside train participated in the earlier completed Behavioral
+eight-iteration validation. Thus the new test is held out from this hybrid run,
+not historically untouched. Preserve this limitation in downstream reporting.
 
 ## Artifact and reuse
 
@@ -73,6 +83,12 @@ history as well, so changing a guide or removing an item does not hide its prior
 knowledge. History-only REMOVE may use an empty supporting ID list when supplied
 history exists; ADD/UPDATE/MERGE still require current-case supporting IDs.
 
+v2 Reflector tags measure demonstrated effects of the condition and its guides.
+Correct non-trigger is not automatically helpful; missing ruleset coverage is
+reported as new knowledge, not harm assigned to unrelated items. Separate item
+defects from Checker execution errors. Host still only validates and counts
+Agent tags; historical ledgers are never retroactively relabeled.
+
 ## Runtime reuse and audit
 
 `behavioral_hybrid_runtime.py` connects `run_hybrid_optimization` to the existing
@@ -103,23 +119,29 @@ making invalid deltas fail without counter commits, and adding explicit artifact
 paths required by the existing evidence Agent transport. Protocol text stays in
 the common Agent protocol rather than being copied into task prompts.
 
-**Isolation readiness:** the retained DeepSeek path uses LocalEnvironment and
-shared-mirror checkout. The opt-in Codex hybrid path uses a generic isolation SIF
-and ancestor-only checkout. The eight-case smoke now has a hash-frozen generic
-image, verified prepared history and a passed no-model compute-node preflight
-(job 6109207). LLM smoke remains unlaunched. Neither local mocks nor the historical
-path establish the newer frozen isolation contract. See the smoke readiness doc.
+**Isolation contract:** both hybrid Checker executors use the hash-frozen generic
+SIF and shared prepared base-ancestor history. mini-SWE reuses ApptainerEnvironment
+with a read-only repository, private temporary space and no tool network. Native
+Codex retains outer SIF and inner read-only sandbox checks. The legacy non-hybrid
+DeepSeek path remains LocalEnvironment; it is not a safe substitute for hybrid
+execution. Every new image requires a no-model compute-node startup check of
+the actual role paths. Local mocks do not establish HPC readiness.
+
+Hybrid runs do not generate cost_report.json or cost projections; billing is
+monitored in provider consoles. Metric calls, Agent trajectories and runtime
+audit remain available. Native Codex usage is not treated as zero-cost inference.
 
 ## Prompts and remaining launch preparation
 
-The English task drafts are in `configs/prompts/swe_chat_hybrid_ace_v1.yaml`.
+The current English tasks are in `configs/prompts/swe_chat_hybrid_ace_v2.yaml`;
+v1 remains the frozen smoke prompt.
 They are task descriptions, not replacements for the common shell Agent protocol.
 Old SWE-chat and rule-only prompt/config files are unchanged.
 
-Before a real run: approve prompts and model/executor choices, freeze the reviewed
-three-way split and seed, bind the prepared evidence SIF hash and Native Codex
-prerequisites when applicable, resolve Checker isolation, and perform an explicitly
-authorized end-to-end smoke. Historical run authorization is not inherited.
+The formal3 split and no-model isolation preparation are verified; see
+`docs/swe-chat-hybrid-formal3-readiness.md` for evidence and remaining boundaries.
+Model-backed execution still requires explicit authorization. Historical run
+authorization is not inherited.
 
 Enable on a new Behavioral runtime config with this opt-in section (paths and hash
 are preparation placeholders, not a launch config):
@@ -131,7 +153,7 @@ hybrid:
   shared_guide_words: 200
   condition_words: 40
   item_guide_words: 80
-  prompt_bundle: configs/prompts/swe_chat_hybrid_ace_v1.yaml
+  prompt_bundle: configs/prompts/swe_chat_hybrid_ace_v2.yaml
   evidence_sif_cache_dir: <prepared-cache>
   evidence_image: <prepared-image>
   evidence_sif_sha256: <frozen-sha256>

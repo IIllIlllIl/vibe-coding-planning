@@ -1,0 +1,109 @@
+checker_instance: |
+  <decision_time_context>{{ pre_p1_context }}</decision_time_context>
+  <proposed_plan>{{ proposed_plan_p1 }}</proposed_plan>
+  <repository_proxy>{{ repository_repo }} @ {{ repository_proxy_commit }}</repository_proxy>
+  <checking_artifact>{{ candidate_guideline }}</checking_artifact>
+  {{ retry_feedback }}
+checker_task: |
+  Decide whether the proposed Plan is worth stopping before implementation.
+  Each checklist condition identifies what to check. Its item guide explains
+  how to investigate and judge that concern. Apply them together, using the
+  shared guide for investigation and judgment across items.
+  Interpret the user's requirements independently of the Plan's claims.
+  Use relevant decision-time conversation and repository evidence to resolve
+  material uncertainties. An approximate repository proxy is not the exact
+  session state: recorded pre-Plan observations take precedence in a conflict.
+  Ordinary implementation investigation and minor corrections are not by
+  themselves reasons to block. Explain the decision and supporting evidence.
+  Assess every checklist item in order. Return exactly rule_results, an array
+  with one result per item. Each result has exactly rule_number (integer ordinal
+  starting at 1), triggered (boolean), finding, and evidence. Triggered items need
+  a nonempty finding and supporting evidence; otherwise use null and an empty
+  array. Each evidence object has exactly source (issue, plan, or repository),
+  location (nonempty string or null), and observation (nonempty string).
+  Here issue denotes the user's requirements and pre-Plan conversation evidence.
+  Host derives rejection if any item triggers. Follow the shared Agent protocol.
+reflector_task: |
+  Explain what this training evidence teaches about pre-implementation Plan
+  checking. Labels reflect human acceptance at the first Plan boundary, not
+  proof that coding would succeed or fail. Separate Plan defects, mismatched
+  user intent, uncertain labels, and Checker investigation or judgment defects.
+  Identify knowledge useful across tasks and cases, and whether it belongs in
+  a rejection condition, shared investigation guidance, or item-specific guidance.
+  Use complete Checker investigations and the supplied training evidence.
+  Review the shared guide explicitly: explain how it supported, misdirected,
+  or failed to support the observed investigation and judgment. Include this
+  assessment in root_cause_analysis and reusable improvements in key_insights.
+  Express proposed checking knowledge using evidence available at decision time.
+  Return exactly instance_id, reasoning, error_identification, root_cause_analysis,
+  correct_approach, key_insights, and bullet_tags. instance_id equals the supplied
+  case ID; reasoning is nonempty. error_identification, root_cause_analysis and
+  correct_approach are nonempty strings or null when unsupported. key_insights
+  is an array of objects with exactly failure_pattern and basis, both nonempty
+  strings; use an empty array when no reusable knowledge is supported.
+  Tag every active item once in its supplied order. Each tag has exactly id,
+  tag (helpful, harmful, or neutral), and attribution (nonempty string, or null
+  only for neutral). Assess the condition together with its guides.
+  Tag each existing item by the demonstrated effect of its condition and guides,
+  not by the overall prediction alone.
+  Helpful means the item supported a justified blocking finding or an
+  evidence-based dismissal of a plausible blocking concern.
+  Harmful means the item's content or guidance demonstrably misled the
+  investigation or judgment.
+  Neutral means no specific helpful or harmful effect is established.
+  A correct non-trigger is not automatically helpful. A wrong overall decision
+  does not make every existing item harmful. Describe missing checklist coverage
+  in key_insights rather than assigning its harm to an unrelated item.
+  Distinguish defects in the item or guidance from Checker execution errors.
+  Ground non-neutral tags in the recorded investigation and decision-time evidence.
+  Follow the shared protocol.
+curator_task: |
+  Maintain a generalized, human-readable Plan checking artifact: a concise
+  shared investigation guide and a checklist of high-level rejection conditions,
+  each accompanied by a short investigation guide. Write brief checking questions
+  or principles about software concerns that recur across tasks, such as meeting
+  explicit requirements or preserving important existing behavior. A condition
+  identifies what to check; its guide explains evidence gathering and judgment.
+  Keep detailed decision criteria in the guide when needed for reliable use.
+  Generalize across cases rather than producing a condition for every case.
+  Use the parent artifact, training evidence, and Reflector analysis to preserve
+  valuable knowledge, combining related conditions at a genuinely higher level
+  rather than packing unrelated details together. Remove knowledge cautiously.
+  Respect the supplied item and word limits. Word counts use whitespace splitting.
+  Read supplied counters and historical attributions together with current evidence.
+  Checker execution framework:
+  The Checker receives the decision-time conversation, proposed Plan, repository
+  proxy, and this checking artifact; it does not receive human acceptance labels
+  or Reflector feedback. It applies each condition together with its item guide
+  and the shared guide, returning one triggered boolean per checklist item.
+  Host rejects the Plan if any item triggers, and accepts it if none triggers.
+  Triggered items require a finding and supporting issue, Plan, or repository
+  evidence. Untriggered items must return finding null and evidence []; their
+  investigation may still be visible in the recorded tool trajectory.
+  Optimize the artifact within this fixed framework. Guides can improve search
+  and judgment, but cannot add a separate acceptance test or change the output
+  contract. Request final citations for triggered findings; guidance for resolving
+  an untriggered concern should not require citations in its final result.
+  Return exactly reasoning (nonempty string), shared_guide (complete nonempty
+  shared guide), and operations (array). Empty operations preserves existing items.
+  ADD has type, content, supporting_instance_ids. UPDATE adds target_id to these
+  fields. MERGE has type, target_ids (at least two existing IDs), content, and
+  supporting_instance_ids. REMOVE has type, target_id, supporting_instance_ids.
+  content has exactly condition and guide, both nonempty strings. ADD, UPDATE and
+  MERGE need nonempty supporting_instance_ids drawn from supplied training cases.
+  REMOVE may use [] when based on supplied accumulated history; explain that
+  basis in reasoning. Otherwise supply current supporting case IDs.
+  Target each existing item at most once. Final conditions must be unique and
+  at least one item must remain. Host assigns IDs and applies changes mechanically.
+  Follow the shared Agent submission protocol.
+refiner_task: |
+  Refine the supplied checking artifact to satisfy the supplied hard limits:
+  checklist item count, shared-guide words, condition words, and item-guide words.
+  Preserve useful knowledge and human-readable high-level concerns. Combine
+  genuinely related concerns at a higher level rather than packing unrelated
+  details together. Keep investigation and detailed judgment in item guides.
+  Word counts use whitespace splitting. Limits are ceilings, not length targets.
+  Return exactly schema_version (1), shared_guide (nonempty string), and checklist.
+  Every item has exactly id, condition, guide, all nonempty strings. IDs and
+  conditions must be unique. Preserve retained IDs; use existing IDs for merged
+  items. At least one item must remain. Follow the shared Agent protocol.

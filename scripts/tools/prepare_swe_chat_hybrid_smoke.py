@@ -40,13 +40,31 @@ def main():
             status.update(status="history_prepared", sif_sha256=config.hybrid.evidence_sif_sha256,
                           cases=len(records), startup_verified=False)
             return
-        model = config.hybrid.checker_model
+        model = (config.hybrid.checker_model if config.hybrid.checker_model.get("executor") == "codex_cli"
+                 else config.hybrid.curator_model)
         subprocess.run([sys.executable, "scripts/tools/verify_codex_sif_startup.py",
             "--case-sif", str(sif), "--evidence-sif", str(sif),
             "--output-dir", str(args.operation / "startup"),
             "--codex-binary", model["codex_binary"], "--codex-auth-file", model["codex_auth_file"],
             "--model", model["model"], "--reasoning-effort", model["reasoning_effort"],
             "--codex-version", model["codex_version"], "--generic-isolation-image", "--preflight-only"], check=True)
+        if config.hybrid.checker_model.get("executor") != "codex_cli":
+            from src.optimization.behavioral_dataset import load_behavioral_snapshot
+            from src.optimization.behavioral_runtime import BehavioralLocalChecker
+            cases, _ = load_behavioral_snapshot(config.dataset_snapshot)
+            checker = BehavioralLocalChecker(config)
+            # Same prepared repository and production mini-SWE tool environment;
+            # no model is constructed or queried.
+            with checker._repository_environment(cases[0]) as (_, environment):
+                result = environment.execute(
+                    "set -e; rg --version && git rev-parse HEAD && "
+                    "test ! -e .git/objects/info/alternates && "
+                    "if touch /testbed/.vibe-probe-write 2>/dev/null; then exit 23; fi; "
+                    "test ! -e /scratch/users && test ! -e /evidence/input.json",
+                    timeout=60)
+                atomic_json(args.operation / "miniswe_startup.json", result)
+                if result["returncode"] != 0:
+                    raise ValueError("mini-SWE SIF tool isolation verification failed")
         status.update(status="completed", sif_sha256=config.hybrid.evidence_sif_sha256, cases=len(records))
     except Exception as exc:
         status.update(status="failed", error_type=type(exc).__name__, error=str(exc))

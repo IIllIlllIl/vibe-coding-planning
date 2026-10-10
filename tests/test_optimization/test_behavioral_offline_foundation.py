@@ -194,7 +194,8 @@ def test_behavioral_checker_output_contract_is_exact() -> None:
 
 def test_behavioral_shell_commands_use_the_short_environment_timeout() -> None:
     config = load_optimization_config(
-        Path("configs/gepa_behavioral_acceptability_smoke_v2_20260830.yaml")
+        Path("configs/gepa_behavioral_acceptability_smoke_v2_20260830.yaml"),
+        require_api_keys=False,
     )
 
     assert config.checker.timeout == 1800

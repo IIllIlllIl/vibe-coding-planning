@@ -4,12 +4,14 @@ from __future__ import annotations
 
 import json
 import os
+from contextlib import contextmanager
 from pathlib import Path
 from typing import Any, Mapping, Sequence
 
 from src.agents._deps import (
     _infer_litellm_prefix,
     build_default_agent,
+    build_model,
     import_minisweagent,
 )
 from src.optimization.audit import (
@@ -174,6 +176,41 @@ class BehavioralLocalChecker:
         self.audit = JsonlLogger(config.run_dir / "audit_events.jsonl")
         self.usage = JsonlLogger(config.run_dir / "usage.jsonl")
 
+    @contextmanager
+    def _repository_environment(self, case):
+        """Hybrid mini-SWE uses the same frozen history/SIF as Native Codex."""
+        from minisweagent.environments.local import LocalEnvironment
+        history = None
+        if self.config.hybrid.enabled:
+            from src.optimization.behavioral_hybrid_runtime import require_evidence_sif, require_history_bundle
+            require_evidence_sif(self.config)
+            history, _ = require_history_bundle(self.config, case)
+        mirror = self.config.behavioral_repository.repositories_root / case.audit_provenance["mirror_relpath"]
+        with materialize_repository_proxy(mirror_path=mirror,
+                proxy_commit=case.repository.proxy_commit,
+                workspace_root=self.config.behavioral_repository.workspace_root,
+                history_bundle=history) as checkout:
+            if not self.config.hybrid.enabled:
+                yield checkout, LocalEnvironment(cwd=str(checkout),
+                    timeout=behavioral_shell_command_timeout(self.config))
+                return
+            from src.environment.apptainer_env import ApptainerEnvironment
+            from src.environment.docker_env import DockerCapacityWindow
+            cache = Path(os.path.expandvars(self.config.hybrid.evidence_sif_cache_dir)).expanduser()
+            capacity = DockerCapacityWindow(max_concurrent=1, max_cached_images=1,
+                min_free_gb=1, disk_path=cache, enable_docker_maintenance=False)
+            environment = ApptainerEnvironment(
+                image=self.config.hybrid.evidence_image, cwd="/testbed",
+                sif_cache_dir=cache, capacity_window=capacity,
+                run_args=["--containall", "--no-mount", "home,cwd,hostfs,bind-paths",
+                          "--pwd", "/testbed", "--bind", f"{checkout}:/testbed:ro"],
+                timeout=behavioral_shell_command_timeout(self.config),
+                writable_tmpfs=True, network_disabled=True, isolate_tmp=True)
+            try:
+                yield checkout, environment
+            finally:
+                environment.cleanup()
+
     def _hybrid_codex(self, case, guideline):
         import tempfile
         from src.optimization.behavioral_hybrid_runtime import require_evidence_sif, require_history_bundle
@@ -218,17 +255,9 @@ class BehavioralLocalChecker:
         DefaultAgent, LitellmModel, _ = import_minisweagent()
         from minisweagent.environments.local import LocalEnvironment
 
-        base_model = LitellmModel(
-            model_name=_infer_litellm_prefix(
-                self.config.checker.model, self.config.checker.api_base
-            ),
-            model_kwargs={
-                "api_key": os.environ[self.config.checker.api_key_env],
-                "api_base": self.config.checker.api_base,
-                "temperature": self.config.checker.temperature,
-            },
-            cost_tracking="ignore_errors",
-        )
+        base_model = build_model(LitellmModel, self.config.checker.model,
+            os.environ[self.config.checker.api_key_env], self.config.checker.api_base,
+            self.config.checker.temperature, thinking=self.config.checker.thinking)
         candidate_sha256 = text_sha256(guideline)
         model = AuditedModel(
             base_model,
@@ -256,15 +285,7 @@ class BehavioralLocalChecker:
             observed_decision_available=False,
             post_boundary_evidence_available=False,
         )
-        with materialize_repository_proxy(
-            mirror_path=mirror,
-            proxy_commit=case.repository.proxy_commit,
-            workspace_root=self.config.behavioral_repository.workspace_root,
-        ) as checkout:
-            environment = LocalEnvironment(
-                cwd=str(checkout),
-                timeout=behavioral_shell_command_timeout(self.config),
-            )
+        with self._repository_environment(case) as (checkout, environment):
             agent = build_default_agent(
                 DefaultAgent,
                 model,

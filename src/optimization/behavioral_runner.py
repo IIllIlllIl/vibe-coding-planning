@@ -248,16 +248,19 @@ def _run_locked(
     failures = list(getattr(proposer_runner, "failures", []))
     if successful < config.search.min_proposals:
         raise RuntimeError("Behavioral Reflection proposal threshold was not met")
-    write_cost_report(
-        config.run_dir,
-        observed_metric_calls=int(result.total_metric_calls or 0),
-        projection_metric_calls=config.search.projection_metric_calls,
-        parallel=config.search.parallel,
-        run_status="completed_with_warnings" if failures else "completed",
-        successful_proposals=successful,
-        required_proposals=config.search.min_proposals,
-        reflection_failures=len(failures),
-    )
+    if not config.hybrid.enabled:
+        write_cost_report(
+            config.run_dir,
+            observed_metric_calls=int(result.total_metric_calls or 0),
+            projection_metric_calls=config.search.projection_metric_calls,
+            parallel=config.search.parallel,
+            run_status="completed_with_warnings" if failures else "completed",
+            successful_proposals=successful,
+            required_proposals=config.search.min_proposals,
+            reflection_failures=len(failures),
+        )
+    else:
+        audit.write("cost_report_disabled", reason="billing_monitored_in_provider_console")
     audit.write(
         "behavioral_run_completed",
         total_metric_calls=result.total_metric_calls,
