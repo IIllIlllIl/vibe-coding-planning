@@ -152,7 +152,9 @@ class HybridPhaseExecutor(HPCOfflineReflectionProposer):
             credential_env = None if role_model.get("executor") == "codex_cli" else role_model.get("api_key_env", self.config.reflection.api_key_env)
             script.write_text(self._script(task_dir, attempt, phase=f"hybrid-{role}",
                 worker_module_override="src.optimization.behavioral_hybrid_worker", load_container_modules=True,
-                credential_env=credential_env))
+                credential_env=credential_env,
+                previous_output_path=(task_dir / "failed_outputs" / f"attempt_{attempt - 1:02d}" / "result.json"
+                                      if attempt > 1 else None)))
             return script
         outputs = self.runtime.run(batch_dir=task_dir, fingerprint=fingerprint, tasks=[task],
             job_name=lambda attempt: f"{self.config.hpc.job_name_prefix}-hybrid-{role}-a{attempt}",

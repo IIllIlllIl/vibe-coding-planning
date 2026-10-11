@@ -210,6 +210,13 @@ class PromptModel:
             raise error from exc
 
 
+def read_agent_json_artifact(environment, artifact_name: str, *, cwd: str, timeout: int):
+    """Read the Agent-authored artifact, keeping stdout and diagnostics separate."""
+    if not artifact_name or Path(artifact_name).name != artifact_name:
+        raise ValueError("artifact_name must be a basename")
+    return environment.execute(f"cat /tmp/{artifact_name}", cwd=cwd, timeout=timeout)
+
+
 def _run_evidence_json_agent(
     *,
     model_config: Mapping[str, Any],
@@ -294,8 +301,8 @@ def _run_evidence_json_agent(
         # The submitted terminal observation may contain container diagnostics.
         # Treat the Agent-authored file as the data authority and read only its
         # stdout; stderr remains separate diagnostic evidence.
-        artifact = environment.execute(
-            f"cat /tmp/{artifact_name}",
+        artifact = read_agent_json_artifact(
+            environment, artifact_name,
             cwd="/evidence",
             timeout=int(evidence_config.get("command_timeout_seconds", 1800)),
         )
@@ -673,8 +680,8 @@ def _run_repository_json_agent(
                 )
                 error.trajectory = list(agent.messages)  # type: ignore[attr-defined]
                 raise error
-            artifact = environment.execute(
-                f"cat /tmp/{artifact_name}",
+            artifact = read_agent_json_artifact(
+                environment, artifact_name,
                 cwd=workdir,
                 timeout=timeout,
             )

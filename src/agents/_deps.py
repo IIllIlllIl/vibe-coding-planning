@@ -8,7 +8,7 @@ from __future__ import annotations
 
 import logging
 import urllib.parse
-from typing import Any
+from typing import Any, Callable
 
 from src.exceptions import FatalError
 
@@ -62,6 +62,10 @@ printing a payload without it is another tool observation, not a submission.
 For example, after writing the required payload to /tmp/final_output, execute
 `printf '%s\\n' COMPLETE_TASK_AND_SUBMIT_FINAL_OUTPUT && cat /tmp/final_output`
 inside your single bash block.
+Prepare the payload first, then emit the marker and read the completed file to
+stdout. A command such as `cat > /tmp/final_output` writes a file; it does not
+emit the payload. Do not put file creation after the marker. For JSON, validate
+the completed file before the marker, for example using `python3 -m json.tool`.
 
 Emit no commentary or other output before the marker. Ensure payload preparation
 succeeded before emitting it. For a JSON task, the payload must be one valid JSON
@@ -257,6 +261,7 @@ def build_default_agent(
     cost_limit: float | None = None,
     instance_template: str | None = None,
     action_protocol: str = DEFAULT_ACTION_PROTOCOL,
+    submission_validator: Callable[[str], Any] | None = None,
 ) -> Any:
     """Build a DefaultAgent with explicit config kwargs.
 
@@ -316,6 +321,32 @@ def build_default_agent(
     if instance_template is not None:
         kwargs["instance_template"] = instance_template
 
+    if submission_validator is not None:
+        from minisweagent.agents.default import FormatError
+
+        class ValidatedSubmissionAgent(DefaultAgent):
+            def has_finished(self, output):
+                lines = output.get("output", "").lstrip().splitlines(keepends=True)
+                if (lines and lines[0].strip() in {
+                    "MINI_SWE_AGENT_FINAL_OUTPUT", "COMPLETE_TASK_AND_SUBMIT_FINAL_OUTPUT"
+                } and output.get("returncode", 0) == 0):
+                    payload = "".join(lines[1:])
+                    # Preserve exact observed output before Host validation.
+                    self.add_message("user", "Host observed submission stdout:\n" + output.get("output", ""))
+                    try:
+                        submission_validator(payload)
+                    except ValueError as exc:
+                        raise FormatError(
+                            f"Host rejected the submission: {exc}\n"
+                            "The command executed, but the task is not complete. "
+                            "Review the task output contract and submit a complete corrected payload "
+                            "using one bash block. Prepare the payload before printing the completion "
+                            "marker, then emit its contents after the marker. "
+                            "Earlier observations remain available; the Host has not changed your output."
+                        ) from exc
+                return super().has_finished(output)
+
+        DefaultAgent = ValidatedSubmissionAgent
     return DefaultAgent(model, environment, **kwargs)
 
 

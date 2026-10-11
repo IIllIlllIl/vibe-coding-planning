@@ -227,7 +227,7 @@ class BehavioralLocalChecker:
             finally:
                 environment.cleanup()
 
-    def _hybrid_codex(self, case, guideline):
+    def _hybrid_codex(self, case, guideline, *, retry_feedback=""):
         import tempfile
         from src.optimization.behavioral_hybrid_runtime import require_evidence_sif, require_history_bundle
         from src.optimization.behavioral_hybrid import parse_hybrid_checker_output
@@ -251,7 +251,8 @@ class BehavioralLocalChecker:
             output, trajectory = run_codex_json_agent(
                 model_config=self.config.hybrid.checker_model, working_directory=checkout,
                 attempt_dir=attempt, system=self.config.checker_prompt,
-                user="Read /evidence/input.json. Inspect the repository at /testbed as needed. Return the required JSON.",
+                user="Read /evidence/input.json. Inspect the repository at /testbed as needed. Return the required JSON."
+                     + ("\nThe Host rejected the previous artifact:\n" + retry_feedback if retry_feedback else ""),
                 task="Review the proposed Plan at its decision boundary.",
                 evidence_manifest_path=evidence / "manifest.json",
                 container=CodexSIFExecution(sif, evidence, repository_dir=checkout,
@@ -260,14 +261,14 @@ class BehavioralLocalChecker:
         return parse_hybrid_checker_output(output, json.loads(guideline), trajectory=trajectory)
 
     def __call__(
-        self, case: BehavioralGEPACase, guideline: str
+        self, case: BehavioralGEPACase, guideline: str, *, retry_feedback: str = ""
     ) -> BehavioralCheckerOutput:
         if self.config.hybrid.enabled:
             from src.optimization.behavioral_hybrid import validate_candidate
             from src.optimization.behavioral_hybrid_runtime import hybrid_limits
             validate_candidate(guideline, hybrid_limits(self.config))
             if self.config.hybrid.checker_model.get("executor") == "codex_cli":
-                return self._hybrid_codex(case, guideline)
+                return self._hybrid_codex(case, guideline, retry_feedback=retry_feedback)
         DefaultAgent, LitellmModel, _ = import_minisweagent()
         from minisweagent.environments.local import LocalEnvironment
 
@@ -302,6 +303,45 @@ class BehavioralLocalChecker:
             post_boundary_evidence_available=False,
         )
         with self._repository_environment(case) as (checkout, environment):
+            submission_count = 0
+            file_submission = (self.config.hybrid.enabled
+                               and "/tmp/repo_checker.json" in self.config.checker_instance_template)
+
+            def read_submission(submission):
+                if not file_submission:
+                    return submission
+                from src.optimization.playbook_runtime import read_agent_json_artifact
+                artifact = read_agent_json_artifact(environment, "repo_checker.json",
+                                                    cwd="/testbed", timeout=60)
+                agent.messages.append({"role": "user", "content":
+                    "Host artifact read (raw): " + json.dumps({
+                        "path": "/tmp/repo_checker.json", **artifact,
+                        "terminal_submission": submission}, ensure_ascii=False)})
+                if artifact["returncode"] != 0:
+                    raise ValueError("Cannot read /tmp/repo_checker.json; write the complete JSON object before submitting")
+                return str(artifact.get("stdout", ""))
+
+            def validate_submission(submission):
+                nonlocal submission_count
+                submission_count += 1
+                _write_json(self.config.run_dir / "checker_submissions" / case.instance_id
+                            / f"submission_{submission_count:03d}.json", {"submission": submission})
+                raw = _checker_submission_object("Submitted", read_submission(submission))
+                if self.config.hybrid.enabled:
+                    from src.optimization.behavioral_hybrid import parse_hybrid_checker_output
+                    try:
+                        parse_hybrid_checker_output(raw, json.loads(guideline))
+                    except ValueError as exc:
+                        raise ValueError(
+                            f"{exc}. Expected exactly the top-level field rule_results, "
+                            "one ordered result per checklist item; each result has rule_number, "
+                            "triggered, finding, evidence. When triggered=false, finding must be "
+                            "null and evidence must be []. When true, provide a nonempty finding "
+                            "and evidence objects with source, location, observation."
+                        ) from exc
+                else:
+                    validate_behavioral_checker_output(raw)
+
             agent = build_default_agent(
                 DefaultAgent,
                 model,
@@ -310,6 +350,7 @@ class BehavioralLocalChecker:
                 instance_template=self.config.checker_instance_template,
                 step_limit=self.config.checker.max_steps,
                 cost_limit=self.config.checker.cost_limit,
+                submission_validator=validate_submission if self.config.hybrid.enabled else None,
             )
             try:
                 exit_status, submission = agent.run(
@@ -319,7 +360,7 @@ class BehavioralLocalChecker:
                     repository_repo=case.repository.repo,
                     repository_proxy_commit=case.repository.proxy_commit,
                     candidate_guideline=guideline,
-                    retry_feedback="",
+                    retry_feedback=retry_feedback,
                 )
             except Exception as exc:
                 _write_json(
@@ -338,7 +379,9 @@ class BehavioralLocalChecker:
                 )
                 raise
             try:
-                raw = _checker_submission_object(exit_status, submission)
+                if exit_status != "Submitted":
+                    _checker_submission_object(exit_status, submission)
+                raw = _checker_submission_object(exit_status, read_submission(submission))
                 if self.config.hybrid.enabled:
                     from src.optimization.behavioral_hybrid import parse_hybrid_checker_output
                     parsed = parse_hybrid_checker_output(raw, json.loads(guideline))

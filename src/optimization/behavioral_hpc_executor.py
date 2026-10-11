@@ -147,7 +147,9 @@ def build_behavioral_checker_array_script(
                 f"--config {shlex.quote(config_path)} "
                 '--task-manifest "${TASK_MANIFEST}" '
                 '--output "${OUTPUT_JSON}" '
-                '--attempt-dir "${ATTEMPT_DIR}"',
+                '--attempt-dir "${ATTEMPT_DIR}"'
+                + (f' --previous-output "${{BATCH_DIR}}/failed_outputs/attempt_{attempt - 1:02d}/task_${{TASK_ID}}.json"'
+                   if attempt > 1 else ''),
             ]
         )
         + "\n"

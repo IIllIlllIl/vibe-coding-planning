@@ -348,6 +348,7 @@ class HPCOfflineReflectionProposer:
         worker_module_override: str | None = None,
         load_container_modules: bool = False,
         credential_env: str | None = "DEEPSEEK_API_KEY",
+        previous_output_path: Path | None = None,
     ) -> str:
         hpc = self.config.hpc
         config_path = hpc.worker_config_path
@@ -396,6 +397,8 @@ class HPCOfflineReflectionProposer:
             f"--config {shlex.quote(config_path)} "
             f"--manifest {shlex.quote(str(task_dir / 'input.json'))} "
             f"--output {shlex.quote(str(task_dir / 'result.json'))} "
-            f"--attempt-dir {shlex.quote(str(attempt_dir))}",
+            f"--attempt-dir {shlex.quote(str(attempt_dir))}"
+            + (f" --previous-output {shlex.quote(str(previous_output_path))}"
+               if previous_output_path is not None else ""),
         ]
         return "\n".join(lines) + "\n"

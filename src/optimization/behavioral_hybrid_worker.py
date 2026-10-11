@@ -10,7 +10,7 @@ from src.optimization.config import load_optimization_config
 from src.optimization.hpc.task_batch import atomic_json
 
 
-def run_task(*, config_path, manifest_path, output_path, attempt_dir):
+def run_task(*, config_path, manifest_path, output_path, attempt_dir, previous_output_path=None):
     manifest = {}
     started_at = datetime.now(timezone.utc).isoformat()
     try:
@@ -31,8 +31,8 @@ def run_task(*, config_path, manifest_path, output_path, attempt_dir):
         if not records or any(record.get("split") != "train" for record in records):
             raise ValueError("hybrid workers accept only training evidence")
         feedback = ""
-        if output_path.exists():
-            previous = json.loads(output_path.read_text())
+        if previous_output_path is not None and previous_output_path.exists():
+            previous = json.loads(previous_output_path.read_text())
             feedback = str(previous.get("error", ""))
         output, trajectory = run_local_phase(config, manifest["role"], manifest["payload"], attempt_dir,
                                               retry_feedback=feedback)
@@ -54,9 +54,11 @@ def main():
     parser = argparse.ArgumentParser(allow_abbrev=False)
     for name in ("config", "manifest", "output", "attempt-dir"):
         parser.add_argument(f"--{name}", type=Path, required=True)
+    parser.add_argument("--previous-output", type=Path)
     args = parser.parse_args()
     return run_task(config_path=args.config, manifest_path=args.manifest,
-                    output_path=args.output, attempt_dir=args.attempt_dir)
+                    output_path=args.output, attempt_dir=args.attempt_dir,
+                    previous_output_path=args.previous_output)
 
 
 if __name__ == "__main__":

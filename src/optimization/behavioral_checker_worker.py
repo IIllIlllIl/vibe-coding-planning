@@ -29,6 +29,7 @@ def run_task(
     task_manifest_path: Path,
     output_path: Path,
     attempt_dir: Path,
+    previous_output_path: Path | None = None,
 ) -> int:
     started_at = datetime.now(timezone.utc).isoformat()
     attempt_dir.mkdir(parents=True, exist_ok=True)
@@ -97,7 +98,11 @@ def run_task(
             checker=replace(config.checker, max_attempts=1),
         )
         failure_stage = "checker_execution"
-        output = BehavioralLocalChecker(config)(case, rules)
+        feedback = ""
+        if previous_output_path is not None and previous_output_path.exists():
+            previous = json.loads(previous_output_path.read_text(encoding="utf-8"))
+            feedback = str(previous.get("error", ""))
+        output = BehavioralLocalChecker(config)(case, rules, retry_feedback=feedback)
         failure_stage = "output_write"
         completed = {
             "status": "completed",
@@ -141,12 +146,14 @@ def main() -> int:
     parser.add_argument("--task-manifest", required=True, type=Path)
     parser.add_argument("--output", required=True, type=Path)
     parser.add_argument("--attempt-dir", required=True, type=Path)
+    parser.add_argument("--previous-output", type=Path)
     args = parser.parse_args()
     return run_task(
         config_path=args.config,
         task_manifest_path=args.task_manifest,
         output_path=args.output,
         attempt_dir=args.attempt_dir,
+        previous_output_path=args.previous_output,
     )
 
 

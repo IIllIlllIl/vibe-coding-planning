@@ -98,3 +98,35 @@ Real mini-SWE DefaultAgent plus local shell tests reproduce the unmarked-output
 failure and verify marked JSON submission and hybrid parsing without API calls.
 New model-backed/compute submission validation remains unrun; formal execution
 must not be assumed fixed solely from these deterministic tests.
+
+## DeepSeek smoke v2 schema and recovery failure
+
+The mixed-agent smoke completed only one of four seed-validation cases. Six
+invalid attempts comprised three bare arrays, two empty submissions, and one
+object with non-null finding/evidence for an untriggered item. Inspected shell
+commands explain the empty payload: they printed the completion marker and then
+redirected payload output into a file rather than stdout. The prompt's phrase
+`Return exactly rule_results, an array` was ambiguous about the JSON root.
+
+Host validation occurred only after DefaultAgent had terminated. Outer Slurm
+attempts started fresh with empty retry_feedback, so validation errors did not
+reach the model. More independent attempts therefore did not constitute a
+schema-repair loop.
+
+Repair adds an opt-in submission validator to the shared DefaultAgent builder.
+Behavioral Checker uses it to persist each exact raw payload before validation,
+reject invalid completion using the existing non-terminating FormatError path,
+and deliver the concrete error plus submission instructions in the same session.
+Successful investigations remain available; step/cost budgets are not reset.
+Host still validates the final artifact and never synthesizes scientific output.
+Other Agents do not opt in and retain their previous completion behavior.
+
+The shared transport protocol explicitly orders file preparation before marker
+and stdout emission. New prompt bundle `swe_chat_hybrid_ace_v3.yaml` clarifies the
+top-level JSON object and gives an untriggered-item example; v1/v2 stay frozen.
+Existing experiment configs remain frozen and do not select v3 automatically.
+A future reviewed smoke config must explicitly bind v3.
+
+Real mini-SWE parser plus local shell regressions cover all three observed
+invalid-payload categories, model-authored correction, and budget exhaustion.
+No additional model call or HPC job was launched for this repair.

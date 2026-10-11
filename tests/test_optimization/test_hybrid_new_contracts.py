@@ -7,6 +7,110 @@ from src.optimization.behavioral_hybrid import HybridBehavioralAdapter, HybridLi
 from src.optimization.behavioral_hybrid_ace import IncrementalHybridACEProposer
 
 
+def test_prepared_v3_smoke_reuses_mixed_agent_baseline_and_frozen_inputs(tmp_path):
+    import yaml
+    from src.optimization.config import load_optimization_config
+    from src.optimization.behavioral_hybrid_runtime import verify_hybrid_snapshot, hybrid_limits
+    from src.optimization.behavioral_dataset import load_behavioral_snapshot
+    from src.optimization.behavioral_hpc_executor import build_behavioral_checker_array_script
+    path = Path("configs/gepa_swe_chat_hybrid_deepseek_smoke_v3_20261011.yaml")
+    raw = yaml.safe_load(path.read_text())
+    previous = yaml.safe_load(Path(raw["smoke_contract"]["baseline_config"]).read_text())
+    config = load_optimization_config(path, require_api_keys=False)
+    verify_hybrid_snapshot(config)
+    train, val = load_behavioral_snapshot(config.dataset_snapshot)
+    assert (len(train), len(val)) == (4, 4)
+    assert raw["smoke_contract"]["launch_authorized"] is True
+    assert raw["smoke_contract"]["prompt_bundle_sha256"] == config.hybrid.prompt_bundle_sha256
+    assert raw["checker"] == previous["checker"]
+    assert raw["search"] == previous["search"]
+    for field in ("checker_model", "reflector_model", "curator_model", "refiner_model",
+                  "evidence_image", "evidence_sif_sha256", "dataset_file_sha256"):
+        assert raw["hybrid"][field] == previous["hybrid"][field]
+    assert (config.hpc.cpus_per_task, config.hpc.mem) == (1, "4G")
+    assert config.run_dir != load_optimization_config(raw["smoke_contract"]["baseline_config"], require_api_keys=False).run_dir
+    assert config.hpc.worker_config_path == str(path)
+    validate_candidate(config.initial_rules_path.read_text(), hybrid_limits(config))
+    prompt = yaml.safe_load(Path(config.hybrid.prompt_bundle).read_text())
+    assert "Repository evidence must be grounded" in prompt["checker_task"]
+    assert "an investigation or judgment strategy" in prompt["reflector_task"]
+    assert "return the existing text unchanged" in prompt["curator_task"]
+    assert "do not broaden them" in prompt["refiner_task"]
+    assert "reward" not in prompt["curator_task"].lower()
+    script = build_behavioral_checker_array_script(config=config, batch_dir=tmp_path, task_indices=[0, 1], attempt=2)
+    assert "--previous-output" in script
+    subprocess.run(["bash", "-n"], input=script, text=True, check=True)
+    launch = yaml.safe_load(Path("configs/swe_chat_hybrid_deepseek_smoke_supervisor_v3_20261011.yaml").read_text())
+    assert str(path) in launch["arguments"]
+    assert "--require-clean-worktree" in launch["arguments"]
+
+
+def test_checker_retry_script_uses_existing_failed_output_archive(tmp_path):
+    from src.optimization.config import load_optimization_config
+    from src.optimization.behavioral_hpc_executor import build_behavioral_checker_array_script
+    config = load_optimization_config("configs/gepa_swe_chat_hybrid_formal3_v3_20261011.yaml", require_api_keys=False)
+    script = build_behavioral_checker_array_script(config=config, batch_dir=tmp_path, task_indices=[0], attempt=2)
+    assert '--previous-output "${BATCH_DIR}/failed_outputs/attempt_01/task_${TASK_ID}.json"' in script
+    subprocess.run(["bash", "-n"], input=script, text=True, check=True)
+    script = build_behavioral_checker_array_script(config=config, batch_dir=tmp_path, task_indices=[0], attempt=1)
+    assert "--previous-output" not in script
+
+
+def test_shared_artifact_reader_keeps_diagnostics_out_of_payload():
+    from src.optimization.playbook_runtime import read_agent_json_artifact
+    calls = []
+    class Environment:
+        def execute(self, command, **kwargs):
+            calls.append((command, kwargs))
+            return {"returncode": 0, "stdout": '{"rule_results":[]}', "stderr": "container warning"}
+    raw = read_agent_json_artifact(Environment(), "repo_checker.json", cwd="/testbed", timeout=60)
+    assert calls == [("cat /tmp/repo_checker.json", {"cwd": "/testbed", "timeout": 60})]
+    assert json.loads(raw["stdout"]) == {"rule_results": []}
+    assert raw["stderr"] == "container warning"
+
+
+def test_hybrid_checker_reads_authored_file_not_empty_terminal_payload(tmp_path, monkeypatch):
+    from contextlib import contextmanager
+    from dataclasses import replace
+    import src.optimization.behavioral_runtime as runtime
+    from src.optimization.config import load_optimization_config
+    config = load_optimization_config("configs/gepa_swe_chat_hybrid_formal3_v3_20261011.yaml", require_api_keys=False)
+    config = replace(config, run_dir=tmp_path,
+                     checker_instance_template="Write /tmp/repo_checker.json. {{ retry_feedback }}")
+    candidate = Path("configs/prompts/swe_chat_hybrid_seed_v1.json").read_text()
+    raw = '{"rule_results":[{"rule_number":1,"triggered":false,"finding":null,"evidence":[]}]}'
+    observations = []
+    class Environment:
+        def execute(self, command, **kwargs):
+            observations.append((command, kwargs))
+            return {"returncode": 0, "stdout": raw, "stderr": "diagnostic only"}
+    @contextmanager
+    def repository(self, case):
+        yield tmp_path, Environment()
+    def build_agent(*args, submission_validator, **kwargs):
+        class Agent:
+            messages = []
+            def run(self, **values):
+                assert values["retry_feedback"] == "Missing rule_results"
+                submission_validator("")
+                return "Submitted", ""
+        return Agent()
+    monkeypatch.setenv(config.checker.api_key_env, "test-only")
+    monkeypatch.setattr(runtime, "import_minisweagent", lambda: (object, object, object))
+    monkeypatch.setattr(runtime, "build_model", lambda *args, **kwargs: object())
+    monkeypatch.setattr(runtime, "build_default_agent", build_agent)
+    monkeypatch.setattr(runtime.BehavioralLocalChecker, "_repository_environment", repository)
+    monkeypatch.setattr(runtime, "_post_boundary_leakage", lambda *args: [])
+    case = SimpleNamespace(instance_id="case", pre_p1_context=[], proposed_plan_p1="Plan",
+        repository=SimpleNamespace(repo="repo", proxy_commit="base"),
+        audit_provenance={"mirror_relpath": "repo"}, checker_payload=lambda: {})
+    output = runtime.BehavioralLocalChecker(config)(case, candidate, retry_feedback="Missing rule_results")
+    assert output.predicted_accept
+    assert all(command == "cat /tmp/repo_checker.json" and kwargs["cwd"] == "/testbed"
+               for command, kwargs in observations)
+    assert any(raw in row["content"].replace('\\"', '"') for row in output.trajectory)
+
+
 def test_seed_scores_and_invalid_gate():
     limits = HybridLimits(10, 200, 40, 80)
     seed = Path("configs/prompts/swe_chat_hybrid_seed_v1.json").read_text()
@@ -18,6 +122,40 @@ def test_seed_scores_and_invalid_gate():
     assert adapter._score(SimpleNamespace(accepted=False), False) == 1
     assert adapter.primary_metric == "human_decision_utility"
     assert adapter.evaluate([SimpleNamespace()], {"rules": "{}"}).scores == [-100]
+
+
+def test_v3_curator_restores_sections_with_self_contained_context():
+    import yaml
+    before = yaml.safe_load(Path("configs/prompts/swe_chat_hybrid_ace_v2.yaml").read_text())
+    after = yaml.safe_load(Path("configs/prompts/swe_chat_hybrid_ace_v3.yaml").read_text())
+    curator = after["curator_task"]
+    headings = ["Checker framework and learning context", "Evidence and artifact maintenance",
+                "Condition and guide writing", "Budget and output contract"]
+    assert [curator.index("## " + h) for h in headings] == sorted(curator.index("## " + h) for h in headings)
+    for key in ("parent", "reviews", "records", "history", "limits"):
+        assert key in curator
+    assert "Host rejects if any item triggers" in curator
+    assert "Empty operations preserves existing checklist" in curator
+    assert "shared_guide still replaces" in curator
+    assert "supplied human-written examples" not in curator
+    assert "R/U" not in curator
+    assert "counting_policy" in curator
+    assert "rule_identity" in curator
+    assert "not overall classification accuracy" in curator
+    assert "tool-use guidance" in curator
+    assert "human_decision_utility" not in curator
+    assert "Do not modify" not in after["checker_task"]
+    assert "run tests" not in after["checker_task"]
+    assert "Ordinary implementation investigation" not in after["checker_task"]
+    reflector_addition = ("In key_insights, failure_pattern may describe a reusable checking concern or\n"
+        "an investigation or judgment strategy for the shared guide or an item guide.\n"
+        "Use basis to explain its evidence and intended role in the checking artifact.\n")
+    refiner_addition = ("Refine existing knowledge rather than inventing new concerns or strategies.\n"
+        "Preserve the applicability and decision boundaries of retained knowledge;\n"
+        "do not broaden them beyond what the supplied artifact supports.\n")
+    assert after["reflector_task"].replace(reflector_addition, "") == before["reflector_task"]
+    assert after["refiner_task"].replace(refiner_addition, "") == before["refiner_task"]
+    assert "one top-level key, rule_results" in after["checker_task"]
 
 
 def test_refiner_after_curator_only_for_size():

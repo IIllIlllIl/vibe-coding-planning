@@ -108,6 +108,11 @@ def test_hybrid_script_reuses_shared_submit_contract(tmp_path):
     assert "#SBATCH --array=0" in script
     assert "#SBATCH --cpus-per-task=1" in script
     assert "module load tools/Apptainer" in script
+    retry_path = tmp_path / "task/failed_outputs/attempt_01/result.json"
+    retry_script = executor._script(tmp_path / "task", 2, phase="hybrid-curator",
+        worker_module_override="src.optimization.behavioral_hybrid_worker",
+        load_container_modules=True, previous_output_path=retry_path)
+    assert f"--previous-output {retry_path}" in retry_script
 
 
 @pytest.mark.parametrize("component,cap", [("shared_guide", 200), ("condition", 40), ("guide", 80)])
@@ -173,6 +178,33 @@ def test_worker_boundary_and_completed_output(tmp_path, monkeypatch):
     path.write_text(json.dumps(manifest))
     assert worker.run_task(**args) == 1
     assert "only training" in json.loads(output.read_text())["error"]
+
+
+def test_worker_receives_archived_failure_after_output_is_moved(tmp_path, monkeypatch):
+    import src.optimization.behavioral_hybrid_worker as worker
+    from src.optimization.behavioral_hybrid_runtime import phase_identity
+    from src.optimization.hpc.task_batch import SlurmTaskBatch
+    from types import SimpleNamespace
+    config = load_optimization_config("configs/gepa_behavioral_acceptability_smoke_v2_20260830.yaml", require_api_keys=False)
+    config = replace(config, hybrid=BehavioralHybridConfig(enabled=True))
+    payload = {"parent": PARENT, "record": {"instance_id": "case", "split": "train"}}
+    manifest = {"mode": "behavioral_hybrid_phase", "role": "reflector", "payload": payload,
+                "fingerprint": phase_identity(config, "reflector", payload)}
+    path, output = tmp_path / "input.json", tmp_path / "result.json"
+    path.write_text(json.dumps(manifest))
+    output.write_text(json.dumps({"error": "Missing field reasoning"}))
+    SlurmTaskBatch._archive_failed_outputs(tmp_path, [SimpleNamespace(output_path=output)], 1)
+    assert not output.exists()
+    feedback = []
+    def phase(*args, **kwargs):
+        feedback.append(kwargs["retry_feedback"])
+        return review(PARENT, payload["record"]), []
+    monkeypatch.setattr(worker, "load_optimization_config", lambda path: config)
+    monkeypatch.setattr(worker, "run_local_phase", phase)
+    assert worker.run_task(config_path=Path("unused"), manifest_path=path,
+                           output_path=output, attempt_dir=tmp_path / "attempt",
+                           previous_output_path=tmp_path / "failed_outputs/attempt_01/result.json") == 0
+    assert feedback == ["Missing field reasoning"]
 
 
 def test_hybrid_config_limits_and_prompt_hash(tmp_path):
