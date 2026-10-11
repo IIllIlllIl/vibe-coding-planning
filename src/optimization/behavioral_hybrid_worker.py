@@ -1,5 +1,4 @@
 """Independent hybrid Reflector/Curator worker; transport owned by SlurmTaskBatch."""
-import argparse
 from pathlib import Path
 import json
 from datetime import datetime, timezone
@@ -8,11 +7,15 @@ from src.optimization.audit import redact_sensitive
 from src.optimization.behavioral_hybrid_runtime import run_local_phase, phase_identity
 from src.optimization.config import load_optimization_config
 from src.optimization.hpc.task_batch import atomic_json
+from src.optimization.hpc.worker_contract import worker_arguments, retry_feedback, worker_envelope, worker_failure
+from src.optimization.playbook_runtime import PlaybookAgentOutputContractError
 
 
 def run_task(*, config_path, manifest_path, output_path, attempt_dir, previous_output_path=None):
     manifest = {}
     started_at = datetime.now(timezone.utc).isoformat()
+    attempt_dir.mkdir(parents=True, exist_ok=True)
+    stage = "input_load"
     try:
         manifest = json.loads(manifest_path.read_text())
         if manifest["mode"] != "behavioral_hybrid_phase":
@@ -30,32 +33,25 @@ def run_task(*, config_path, manifest_path, output_path, attempt_dir, previous_o
             records = [{"split": "train"}]
         if not records or any(record.get("split") != "train" for record in records):
             raise ValueError("hybrid workers accept only training evidence")
-        feedback = ""
-        if previous_output_path is not None and previous_output_path.exists():
-            previous = json.loads(previous_output_path.read_text())
-            feedback = str(previous.get("error", ""))
+        feedback = retry_feedback(previous_output_path)
+        stage = "agent_execution"
         output, trajectory = run_local_phase(config, manifest["role"], manifest["payload"], attempt_dir,
                                               retry_feedback=feedback)
-        atomic_json(output_path, redact_sensitive(dict(status="completed", fingerprint=manifest["fingerprint"],
-                    role=manifest["role"], started_at=started_at,
-                    finished_at=datetime.now(timezone.utc).isoformat(), agent_output=output, trajectory=trajectory)))
+        stage = "output_write"
+        atomic_json(output_path, redact_sensitive(worker_envelope(
+            manifest, started_at, "completed", agent_output=output, trajectory=trajectory)))
         return 0
     except Exception as exc:
-        value = redact_sensitive(dict(status="agent_failed", fingerprint=manifest.get("fingerprint"),
-                     role=manifest.get("role"), started_at=started_at,
-                     finished_at=datetime.now(timezone.utc).isoformat(),
-                     error_type=type(exc).__name__, error=str(exc), failure_kind="operational"))
+        stage = getattr(exc, "worker_failure_stage", stage)
+        value = redact_sensitive(worker_failure(manifest, started_at, stage, exc,
+            contract_error=stage == "agent_output_validation" or isinstance(exc, PlaybookAgentOutputContractError)))
         atomic_json(attempt_dir / "failure.json", value)
         atomic_json(output_path, value)
         return 1
 
 
 def main():
-    parser = argparse.ArgumentParser(allow_abbrev=False)
-    for name in ("config", "manifest", "output", "attempt-dir"):
-        parser.add_argument(f"--{name}", type=Path, required=True)
-    parser.add_argument("--previous-output", type=Path)
-    args = parser.parse_args()
+    args = worker_arguments()
     return run_task(config_path=args.config, manifest_path=args.manifest,
                     output_path=args.output, attempt_dir=args.attempt_dir,
                     previous_output_path=args.previous_output)

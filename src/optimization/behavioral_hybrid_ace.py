@@ -11,7 +11,8 @@ from src.optimization.paired_playbook import validate_ace_paired_reflector_revie
 from src.optimization.playbook_adapter import GlobalPlaybookCounters
 from src.optimization.hpc.task_batch import atomic_json
 from src.optimization.audit import redact_sensitive
-from src.exceptions import ControllerYield
+from src.exceptions import ControllerYield, OfflineReflectionBlocked
+from src.optimization.ace_transaction import run_ace_transaction
 
 
 def _content(condition, guide, shared):
@@ -78,13 +79,16 @@ class IncrementalHybridACEProposer:
     Only accepted, fully validated proposals commit attribution to the ledger.
     """
     def __init__(self, reflector, curator, limits, *, ledger_path: Path | None = None,
-                 trace_dir: Path | None = None, refiner=None):
+                 trace_dir: Path | None = None, refiner=None, batch_reflector=None,
+                 abort_on_failure=False):
         self.reflector, self.curator, self.limits = reflector, curator, limits
         self.ledger = GlobalPlaybookCounters(ledger_path)
         self.successful_proposals = self.proposal_failures = 0
         self.last_trace = None
         self.trace_dir = trace_dir
         self.refiner = refiner
+        self.batch_reflector = batch_reflector
+        self.abort_on_failure = abort_on_failure
         self.failures = []
 
     def __call__(self, candidate, reflective_dataset, components_to_update):
@@ -105,22 +109,25 @@ class IncrementalHybridACEProposer:
         def persist(status):
             if trace_path is not None:
                 atomic_json(trace_path, redact_sensitive(dict(self.last_trace, status=status)))
-        try:
-            reviews = []
-            for record in records:
-                review, trajectory = self.reflector(parent, record)
-                self.last_trace["reflector"].append({"review": review, "trajectory": trajectory})
-                persist("reflecting")
-                reviews.append(validate_ace_paired_reflector_review(review, instance_id=record["instance_id"],
-                                                                  playbook=book, output_contract="ace_v2"))
-            counted, pending = self.ledger.apply_reviews(book, reviews)
-            history = self.ledger.feedback_for(book, reviews, records, include_inactive=True)
+        def reflect(rows):
+            return (list(self.batch_reflector(parent, rows))
+                          if self.batch_reflector is not None
+                          else [self.reflector(parent, record) for record in rows])
+        def validate_review(raw, record):
+            review, trajectory = raw
+            self.last_trace["reflector"].append({"review": review, "trajectory": trajectory})
+            persist("reflecting")
+            return validate_ace_paired_reflector_review(review, instance_id=record["instance_id"],
+                                                      playbook=book, output_contract="ace_v2")
+        def curate(counted, reviews, rows, history):
             curator_parent = dict(parent, counters=[
                 {"id": b.id, "helpful": b.helpful, "harmful": b.harmful, "neutral": b.neutral}
                 for b in counted.bullets])
-            delta, trajectory = self.curator(curator_parent, reviews, records, history, vars(self.limits))
+            delta, trajectory = self.curator(curator_parent, reviews, rows, history, vars(self.limits))
             self.last_trace.update(curator_delta=delta, curator_trajectory=trajectory, history=history)
             persist("validating")
+            return delta
+        def finalize(counted, delta, history):
             if self.refiner is not None:
                 # Curator must submit a structurally valid proposal first. Only
                 # size violations authorize a separate Agent-authored refinement.
@@ -139,6 +146,11 @@ class IncrementalHybridACEProposer:
                     proposed = draft
             else:
                 proposed = apply_hybrid_delta(parent, delta, records, self.limits, counted=counted, history=history)
+            return proposed
+        try:
+            proposed = run_ace_transaction(ledger=self.ledger, parent=book, records=records,
+                reflect=reflect, validate_review=validate_review, curate=curate,
+                finalize=finalize, include_inactive=True)
         except ControllerYield:
             persist("yielded")
             raise
@@ -147,8 +159,11 @@ class IncrementalHybridACEProposer:
             self.last_trace["error"] = str(exc)
             persist("failed")
             self.proposal_failures += 1
+            if self.abort_on_failure:
+                # Reuse the established control-flow exception: GEPA catches
+                # ordinary Exception and otherwise consumes a failed proposal.
+                raise OfflineReflectionBlocked(exc) from exc
             raise
-        self.ledger.commit(counted, pending, feedback=history)
         self.successful_proposals += 1
         self.last_trace["candidate"] = proposed
         persist("completed")

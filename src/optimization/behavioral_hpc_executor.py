@@ -6,7 +6,6 @@ from dataclasses import asdict
 import hashlib
 import json
 from pathlib import Path
-import shlex
 from typing import Any, Sequence
 
 from src.optimization.audit import JsonlLogger, text_sha256
@@ -16,10 +15,10 @@ from src.optimization.behavioral_models import (
 )
 from src.optimization.behavioral_runtime import validate_behavioral_checker_output
 from src.optimization.config import OptimizationConfig
+from src.optimization.hpc.phase_wave import prepare_phase_wave
 from src.optimization.hpc.task_batch import (
     SlurmTaskBatch,
     TaskFiles,
-    atomic_json,
 )
 
 
@@ -44,6 +43,7 @@ def behavioral_checker_semantic_sha256(config: OptimizationConfig) -> str:
         root / "src/optimization/behavioral_runtime.py",
         root / "src/optimization/behavioral_checker_worker.py",
         root / "src/optimization/behavioral_hpc_executor.py",
+        root / "src/optimization/hpc/phase_wave.py",
     ]
     return _stable_sha256(
         {
@@ -96,64 +96,18 @@ def behavioral_evaluation_fingerprint(
 
 
 def build_behavioral_checker_array_script(
-    *,
-    config: OptimizationConfig,
-    batch_dir: Path,
-    task_indices: Sequence[int],
-    attempt: int,
+    *, config: OptimizationConfig, batch_dir: Path,
+    task_indices: Sequence[int], attempt: int,
 ) -> str:
+    from src.optimization.hpc.phase_wave import build_phase_array_script
     hpc = config.hpc
-    index_spec = ",".join(str(index) for index in task_indices)
-    log_dir = batch_dir / "slurm_logs" / f"attempt_{attempt:02d}"
-    log_dir.mkdir(parents=True, exist_ok=True)
-    config_path = hpc.worker_config_path
-    if not config_path:
-        raise ValueError("hpc.worker_config_path is required")
-    job_name = f"{hpc.job_name_prefix}-checker-{batch_dir.name[:12]}-a{attempt}"
     native = config.hybrid.enabled and config.hybrid.checker_model.get("executor") == "codex_cli"
-    return (
-        "\n".join(
-            [
-                "#!/usr/bin/env bash",
-                f"#SBATCH --job-name={job_name}",
-                f"#SBATCH --partition={hpc.partition}",
-                f"#SBATCH --cpus-per-task={hpc.cpus_per_task}",
-                f"#SBATCH --mem={hpc.mem}",
-                f"#SBATCH --time={hpc.time}",
-                f"#SBATCH --array={index_spec}",
-                "#SBATCH --export=ALL",
-                f"#SBATCH --output={log_dir}/%x-%A_%a.out",
-                f"#SBATCH --error={log_dir}/%x-%A_%a.err",
-                "set -euo pipefail",
-                "set +x",
-                # Both hybrid executors inspect repositories through the SIF.
-                # Model transport selects credentials, not tool prerequisites.
-                *([f"module load {shlex.quote(hpc.python_module)}",
-                   f"module load {shlex.quote(hpc.container_module)}"] if config.hybrid.enabled else []),
-                f"ENV_FILE={shlex.quote(hpc.remote_env_file)}",
-                'ENV_FILE="${ENV_FILE/#\\~/$HOME}"',
-                'source "${ENV_FILE}"',
-                *([] if native else ['test -n "${DEEPSEEK_API_KEY:-}" || exit 2']),
-                f"BATCH_DIR={shlex.quote(str(batch_dir))}",
-                'TASK_ID="$(printf "%04d" "${SLURM_ARRAY_TASK_ID}")"',
-                f"ATTEMPT={attempt}",
-                'ATTEMPT_ID="$(printf "%02d" "${ATTEMPT}")"',
-                'TASK_MANIFEST="${BATCH_DIR}/tasks/task_${TASK_ID}.json"',
-                'OUTPUT_JSON="${BATCH_DIR}/outputs/task_${TASK_ID}.json"',
-                'ATTEMPT_DIR="${BATCH_DIR}/attempts/task_${TASK_ID}/attempt_${ATTEMPT_ID}"',
-                'mkdir -p "${ATTEMPT_DIR}"',
-                f"{shlex.quote(hpc.python_bin)} "
-                "-m src.optimization.behavioral_checker_worker "
-                f"--config {shlex.quote(config_path)} "
-                '--task-manifest "${TASK_MANIFEST}" '
-                '--output "${OUTPUT_JSON}" '
-                '--attempt-dir "${ATTEMPT_DIR}"'
-                + (f' --previous-output "${{BATCH_DIR}}/failed_outputs/attempt_{attempt - 1:02d}/task_${{TASK_ID}}.json"'
-                   if attempt > 1 else ''),
-            ]
-        )
-        + "\n"
-    )
+    return build_phase_array_script(hpc=hpc, batch_dir=batch_dir, indices=task_indices,
+        attempt=attempt, job_name=f"{hpc.job_name_prefix}-checker-{batch_dir.name[:12]}-a{attempt}",
+        config_path=hpc.worker_config_path, worker_module="src.optimization.behavioral_checker_worker",
+        modules=(hpc.python_module, hpc.container_module) if config.hybrid.enabled else (),
+        credential_env=None if native else "DEEPSEEK_API_KEY",
+        manifest_option="--task-manifest", export_all=True)
 
 
 class HPCSlurmBehavioralCheckerExecutor:
@@ -281,20 +235,14 @@ class HPCSlurmBehavioralCheckerExecutor:
         rules: str,
         capture_traces: bool,
     ) -> list[TaskFiles]:
-        tasks_dir = batch_dir / "tasks"
-        outputs_dir = batch_dir / "outputs"
-        attempts_dir = batch_dir / "attempts"
-        tasks_dir.mkdir(parents=True, exist_ok=True)
-        outputs_dir.mkdir(exist_ok=True)
-        attempts_dir.mkdir(exist_ok=True)
+        batch_dir.mkdir(parents=True, exist_ok=True)
         rules_path = batch_dir / "candidate_rules.txt"
         if rules_path.exists() and rules_path.read_text(encoding="utf-8") != rules:
             raise ValueError("Behavioral Checker candidate rules mismatch")
         if not rules_path.exists():
             rules_path.write_text(rules, encoding="utf-8")
-        tasks = []
+        manifests = []
         for index, case in enumerate(batch):
-            manifest_path = tasks_dir / f"task_{index:04d}.json"
             payload = {
                 "schema_version": 1,
                 "mode": "behavioral_checker",
@@ -311,22 +259,10 @@ class HPCSlurmBehavioralCheckerExecutor:
             }
             if case.repetition_index is not None:
                 payload["repetition_index"] = case.repetition_index
-            if manifest_path.exists():
-                if json.loads(manifest_path.read_text(encoding="utf-8")) != payload:
-                    raise ValueError("Behavioral Checker task manifest mismatch")
-            else:
-                atomic_json(manifest_path, payload)
-            tasks.append(
-                TaskFiles(
-                    index=index,
-                    instance_id=case.instance_id,
-                    manifest_path=manifest_path,
-                    output_path=outputs_dir / f"task_{index:04d}.json",
-                    attempts_dir=attempts_dir / f"task_{index:04d}",
-                )
-            )
-        atomic_json(
-            batch_dir / "manifest.json",
+            manifests.append(payload)
+        return prepare_phase_wave(batch_dir=batch_dir, role="checker", fingerprint=fingerprint,
+            manifests=manifests, instance_ids=[case.instance_id for case in batch],
+            mismatch_error="Behavioral Checker task manifest mismatch", batch_manifest=
             {
                 "schema_version": 1,
                 "mode": "behavioral_checker_batch",
@@ -338,4 +274,3 @@ class HPCSlurmBehavioralCheckerExecutor:
                 "contains_post_boundary_evidence": False,
             },
         )
-        return tasks

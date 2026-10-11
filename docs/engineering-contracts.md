@@ -3,6 +3,70 @@
 Authority: reusable engineering requirements for ACE and Safe PCE. Research
 design, experiment outcomes, and changing run progress belong in other documents.
 
+## Adaptation baseline and phase-graph checks
+
+Identify the closest completed formal run before adapting a workflow. Compare
+its actual Agent phase graph, configuration, worker dispatch and regression
+tests; reusing low-level submission functions alone does not establish reuse
+of the proven execution behavior. Change only the representations and evidence
+semantics required by the new experiment.
+
+Independent Agents in the same phase form one batch: prepare all manifests,
+submit all unfinished indices through `SlurmTaskBatch`, then yield. Use Slurm's
+array concurrency cap for resource limits, not a serial submit/yield loop.
+Curator follows the complete validated reflection wave; conditional Refiner
+follows Curator and precedes candidate evaluation. Each element remains an
+independent fresh Agent.
+
+Before launch, no-model tests must exercise the real entry-point wiring,
+generated scripts and each role's actual Worker payload, including conditional
+branches. Mock only external model/container/scheduler boundaries. Assert
+whole-wave submission, ordered results, validation on reuse, failure feedback,
+retry of failed indices only, preservation of successful output bytes, and no
+counter commit on incomplete or invalid proposals. Passing callback-only
+algorithm tests or a smoke that skips a branch does not verify that branch.
+
+Preserve the baseline's operational-abort boundary. GEPA catches ordinary
+proposal exceptions; exhausted Worker retries or integrity failures must use
+the existing `OfflineReflectionBlocked` control-flow exception (or the
+established abort callback), not become silently consumed learning iterations.
+
+See `tests/test_optimization/test_hybrid_phase_waves.py` and the established
+`test_hpc_proposal_agents_use_file_backed_reflector_waves_and_singletons` in
+`tests/test_optimization/test_playbook_flow.py`.
+
+Agent-wave task layout and array scripts are owned by
+`src/optimization/hpc/phase_wave.py`, extracted from the formal playbook executor.
+Playbook, Behavioral Checker and hybrid roles use this same implementation;
+singleton roles are one-element waves. Callers supply scientific manifests,
+role validation, modules and credential requirements. Submission/retry/resume
+state remains exclusively in `SlurmTaskBatch`. Do not subclass an unrelated
+learning proposer merely to borrow its script generator. Shared module changes
+must enter each caller's source fingerprint and run its existing regression tests.
+
+Playbook and hybrid Workers share CLI parsing, archived retry feedback, output
+envelopes and failure classification in `hpc/worker_contract.py`. Role dispatch,
+input authority and scientific validation remain role-owned. Preserve raw Agent
+completion before validation; distinguish output-contract failure from execution
+failure, and retain the failure stage. Neither path may repair Agent output.
+
+`ace_transaction.py` owns the common ACE order: collect and validate the complete
+review batch, calculate pending attribution/history, curate, finalize/refine, then
+commit the existing ledger. Playbook and hybrid supply artifact-specific callbacks.
+Yield or failure before finalization must not commit evidence. No new retry,
+checkpoint or ledger implementation belongs in this transaction helper.
+
+After shared phase/Worker/ACE refactoring, use the closest terminal mixed-agent
+smoke with a new identity and fresh output/task/workspace directories. Keep its
+frozen development cases, prompts, seed, models and limits unchanged. Verify the
+actual array manifest/script and journal: every independent Reflector must be
+submitted before yield; Curator must wait for every validated review. Check raw
+completions, failure stages, training-only counter commit, candidate evaluation
+and final checkpoint/report. A non-improving candidate is a valid engineering
+outcome. Conditional candidate validation or Refiner may remain unexercised;
+report those coverage limits rather than changing selection or caps to force them.
+Local tests establish contracts, not model-backed compute-node readiness.
+
 ## Cluster resources
 
 | Cluster | One-CPU task request |

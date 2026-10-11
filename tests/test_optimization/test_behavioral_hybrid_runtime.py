@@ -102,17 +102,13 @@ def test_hybrid_script_reuses_shared_submit_contract(tmp_path):
     config = load_optimization_config("configs/gepa_behavioral_acceptability_smoke_v2_20260830.yaml", require_api_keys=False)
     config = replace(config, run_dir=tmp_path / "run")
     executor = HybridPhaseExecutor(config)
-    script = executor._script(tmp_path / "task", 1, phase="hybrid-curator",
-        worker_module_override="src.optimization.behavioral_hybrid_worker", load_container_modules=True)
+    script = executor.script_for_wave(tmp_path / "task", "curator", [0], 1)
     assert "src.optimization.behavioral_hybrid_worker" in script
     assert "#SBATCH --array=0" in script
     assert "#SBATCH --cpus-per-task=1" in script
     assert "module load tools/Apptainer" in script
-    retry_path = tmp_path / "task/failed_outputs/attempt_01/result.json"
-    retry_script = executor._script(tmp_path / "task", 2, phase="hybrid-curator",
-        worker_module_override="src.optimization.behavioral_hybrid_worker",
-        load_container_modules=True, previous_output_path=retry_path)
-    assert f"--previous-output {retry_path}" in retry_script
+    retry_script = executor.script_for_wave(tmp_path / "task", "curator", [0], 2)
+    assert "failed_outputs/attempt_01/task_${TASK_ID}.json" in retry_script
 
 
 @pytest.mark.parametrize("component,cap", [("shared_guide", 200), ("condition", 40), ("guide", 80)])

@@ -5,13 +5,13 @@ from __future__ import annotations
 import hashlib
 import json
 from pathlib import Path
-import shlex
 from typing import Any, Callable, Mapping, Sequence
 
 import yaml
 
 from src.optimization.hpc.config import HPCConfig
 from src.optimization.hpc.task_batch import SlurmTaskBatch, TaskFiles, atomic_json
+from src.optimization.hpc.phase_wave import prepare_phase_wave, build_phase_array_script
 from src.optimization.playbook import (
     PlaybookBullet,
     RejectPlaybook,
@@ -286,9 +286,8 @@ class PlaybookHPCExecutor:
         }
         fingerprint = _sha(semantic)
         batch_dir = self.batch_dir_for(role, items)
-        tasks = []
+        manifests = []
         for index, item in enumerate(items):
-            manifest = batch_dir / "tasks" / f"task_{index:04d}.json"
             payload = {
                 "schema_version": 1,
                 "role": role,
@@ -325,92 +324,26 @@ class PlaybookHPCExecutor:
                         "repo_reflector requires a non-empty source_access_issue"
                     )
                 payload["source_access_issue"] = source_access_issue
-            if manifest.is_file() and json.loads(manifest.read_text()) != payload:
-                raise ValueError("playbook task manifest mismatch")
-            if not manifest.exists():
-                atomic_json(manifest, payload)
-            tasks.append(
-                TaskFiles(
-                    index,
-                    str(item.get("instance_id", role)),
-                    manifest,
-                    batch_dir / "outputs" / f"task_{index:04d}.json",
-                    batch_dir / "attempts" / f"task_{index:04d}",
-                )
-            )
-        atomic_json(
-            batch_dir / "manifest.json",
-            {
-                "schema_version": 1,
-                "role": role,
-                "fingerprint": fingerprint,
-                "task_count": len(tasks),
-                "instance_ids": [item.get("instance_id") for item in items],
-            },
-        )
+            manifests.append(payload)
+        tasks = prepare_phase_wave(batch_dir=batch_dir, role=role, fingerprint=fingerprint,
+            manifests=manifests, instance_ids=[item.get("instance_id") for item in items],
+            mismatch_error="playbook task manifest mismatch")
 
         def script(indices: Sequence[int], attempt: int) -> Path:
             path = batch_dir / f"{role}_array_attempt_{attempt:02d}.sbatch"
-            logs = batch_dir / "slurm_logs" / f"attempt_{attempt:02d}"
-            logs.mkdir(parents=True, exist_ok=True)
-            spec = ",".join(map(str, indices))
-            cap = self.hpc.max_running_array_tasks
-            if cap > 0 and len(indices) > cap:
-                spec += f"%{cap}"
             checker_role = role in {"checker", "repo_checker", "paired_repo_checker"}
             models = (yaml.safe_load(self.config_path.read_text(encoding="utf-8")) or {}).get("models", {})
             codex_checker = checker_role and models.get("checker", {}).get("executor") == "codex_cli"
-            lines = [
-                "#!/usr/bin/env bash",
-                f"#SBATCH --job-name={self.hpc.job_name_prefix}-{role}-{fingerprint[:10]}-a{attempt}",
-                f"#SBATCH --partition={self.hpc.partition}",
-                f"#SBATCH --cpus-per-task={self.hpc.cpus_per_task}",
-                f"#SBATCH --mem={self.hpc.mem}",
-                f"#SBATCH --time={self.hpc.time}",
-                f"#SBATCH --array={spec}",
-                f"#SBATCH --output={logs}/%x-%A_%a.out",
-                f"#SBATCH --error={logs}/%x-%A_%a.err",
-                "set -euo pipefail",
-                "set +x",
-                'export PATH="$HOME/.local/bin:$PATH"',
-                *([] if codex_checker else [
-                    f"ENV_FILE={shlex.quote(self.hpc.remote_env_file)}",
-                    'ENV_FILE="${ENV_FILE/#\\~/$HOME}"',
-                    'source "$ENV_FILE"',
-                    'test -n "${DEEPSEEK_API_KEY:-}" || exit 2',
-                ]),
-                f"BATCH_DIR={shlex.quote(str(batch_dir))}",
-                'TASK_ID="$(printf "%04d" "$SLURM_ARRAY_TASK_ID")"',
-                f"ATTEMPT={attempt}",
-                'ATTEMPT_ID="$(printf "%02d" "$ATTEMPT")"',
-                'ATTEMPT_DIR="$BATCH_DIR/attempts/task_${TASK_ID}/attempt_${ATTEMPT_ID}"',
-                'mkdir -p "$ATTEMPT_DIR"',
-                *(
-                    [f"module load {shlex.quote(self.hpc.container_module)}"]
-                    if role
-                    in {
-                        "reflector",
-                        "curator",
-                        "repo_checker",
-                        "repo_reflector",
-                        "paired_repo_checker",
-                        "paired_repo_reflector",
-                    }
-                    else []
-                ),
-                f"{shlex.quote(self.hpc.python_bin)} -m src.optimization.playbook_worker "
-                f"--config {shlex.quote(str(self.config_path))} "
-                '--manifest "$BATCH_DIR/tasks/task_${TASK_ID}.json" '
-                '--output "$BATCH_DIR/outputs/task_${TASK_ID}.json" '
-                '--attempt-dir "$ATTEMPT_DIR" '
-                + (
-                    '--previous-output "$BATCH_DIR/failed_outputs/'
-                    f'attempt_{attempt - 1:02d}/task_${{TASK_ID}}.json"'
-                    if attempt > 1
-                    else ""
-                ),
-            ]
-            path.write_text("\n".join(lines) + "\n", encoding="utf-8")
+            modules = ((self.hpc.container_module,) if role in {
+                "reflector", "curator", "repo_checker", "repo_reflector",
+                "paired_repo_checker", "paired_repo_reflector"} else ())
+            path.write_text(build_phase_array_script(hpc=self.hpc, batch_dir=batch_dir,
+                indices=indices, attempt=attempt,
+                job_name=f"{self.hpc.job_name_prefix}-{role}-{fingerprint[:10]}-a{attempt}",
+                config_path=self.config_path, worker_module="src.optimization.playbook_worker",
+                modules=modules, source_env=not codex_checker,
+                credential_env=None if codex_checker else "DEEPSEEK_API_KEY", add_user_bin=True),
+                encoding="utf-8")
             return path
 
         def validate(task: TaskFiles, value: dict[str, Any]) -> None:

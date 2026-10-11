@@ -11,6 +11,7 @@ from typing import Any, Callable, Mapping, Protocol, Sequence
 from gepa.core.adapter import EvaluationBatch
 
 from src.optimization.models import GEPACase, PairedGEPACase
+from src.optimization.ace_transaction import run_ace_transaction
 from src.optimization.paired_playbook import validate_paired_checker_result
 from src.optimization.playbook import (
     MAX_VISIBLE_TOKENS,
@@ -325,29 +326,19 @@ class TwoStagePlaybookProposer:
             raise ValueError("playbook GEPA may update only rules")
         parent = self.global_counters.hydrate(RejectPlaybook.parse(candidate["rules"]))
         records = list(reflective_dataset["rules"])
-        try:
-            raw_reviews = (
-                list(self.batch_reflector(records))
+        def reflect(rows):
+            return (
+                list(self.batch_reflector(rows))
                 if self.batch_reflector is not None
-                else [self.reflector(record) for record in records]
+                else [self.reflector(record) for record in rows]
             )
-            reviews = [
-                self.review_validator(
-                    raw,
-                    instance_id=str(record["instance_id"]),
-                    playbook=parent,
-                )
-                for record, raw in zip(records, raw_reviews, strict=True)
-            ]
-            counted, pending_counter_events = self.global_counters.apply_reviews(
-                parent, reviews
-            )
-            feedback = self.global_counters.feedback_for(parent, reviews, records)
-            operations = (
-                self.curator_with_history(counted, reviews, records, feedback)
+        def curate(counted, reviews, rows, feedback):
+            return (
+                self.curator_with_history(counted, reviews, rows, feedback)
                 if self.curator_with_history is not None
-                else self.curator(counted, reviews, records)
+                else self.curator(counted, reviews, rows)
             )
+        def finalize(counted, operations, feedback):
             proposed = apply_curator_operations(counted, operations)
             proposed = validate_curator_proposal(counted, proposed)
             proposed, report = manage_playbook_length(
@@ -359,12 +350,18 @@ class TwoStagePlaybookProposer:
                 visible_renderer=self.visible_renderer,
             )
             self.last_length_report = report
+            return proposed
+        try:
+            proposed = run_ace_transaction(ledger=self.global_counters, parent=parent,
+                records=records, reflect=reflect,
+                validate_review=lambda raw, row: self.review_validator(raw,
+                    instance_id=str(row["instance_id"]), playbook=parent),
+                curate=curate, finalize=finalize)
         except Exception as exc:
             self.failures.append({"error_type": type(exc).__name__, "error": str(exc)})
             raise
         # Only a fully valid proposal contributes global evidence. Failed Agent
         # attempts and invalid Curator/Refiner output cannot increment counters.
-        self.global_counters.commit(counted, pending_counter_events, feedback=feedback)
         proposed = self.global_counters.hydrate(proposed)
         self.successful_proposals += 1
         return {"rules": proposed.serialize()}

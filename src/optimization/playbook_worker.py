@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import argparse
 from datetime import datetime, timezone
 import hashlib
 import json
@@ -12,6 +11,7 @@ import yaml
 import litellm
 
 from src.optimization.hpc.task_batch import atomic_json
+from src.optimization.hpc.worker_contract import worker_arguments, retry_feedback as load_retry_feedback, worker_envelope, worker_failure
 from src.optimization.playbook_runtime import (
     PlaybookAgentOutputContractError,
     PromptModel,
@@ -93,10 +93,7 @@ def run_task(
             prompts_path = config_path.resolve().parents[1] / prompts_path
         prompts = yaml.safe_load(prompts_path.read_text(encoding="utf-8"))
         values = dict(manifest["prompt_values"])
-        retry_feedback = ""
-        if previous_output_path is not None and previous_output_path.is_file():
-            previous = json.loads(previous_output_path.read_text(encoding="utf-8"))
-            retry_feedback = str(previous.get("error", ""))
+        retry_feedback = load_retry_feedback(previous_output_path)
         if role in {
             "checker",
             "reflector",
@@ -377,18 +374,7 @@ def run_task(
         stage = "output_write"
         atomic_json(
             output_path,
-            {
-                "schema_version": 1,
-                "status": "completed",
-                "role": role,
-                "fingerprint": manifest["fingerprint"],
-                "task_index": manifest["task_index"],
-                "instance_id": manifest.get("instance_id"),
-                "started_at": started,
-                "finished_at": datetime.now(timezone.utc).isoformat(),
-                "agent_output": output,
-                "trajectory": trajectory,
-            },
+            worker_envelope(manifest, started, "completed", agent_output=output, trajectory=trajectory),
         )
         return 0
     except Exception as exc:
@@ -422,38 +408,15 @@ def run_task(
                     "messages": getattr(exc, "trajectory"),
                 },
             )
-        failure = {
-            "schema_version": 1,
-            "status": "agent_failed",
-            "role": manifest.get("role"),
-            "fingerprint": manifest.get("fingerprint"),
-            "task_index": manifest.get("task_index"),
-            "instance_id": manifest.get("instance_id"),
-            "started_at": started,
-            "finished_at": datetime.now(timezone.utc).isoformat(),
-            "failure_stage": stage,
-            "failure_kind": (
-                "agent_output_contract"
-                if stage == "agent_output_validation"
-                or isinstance(exc, PlaybookAgentOutputContractError)
-                else "operational"
-            ),
-            "error_type": type(exc).__name__,
-            "error": str(exc),
-        }
+        failure = worker_failure(manifest, started, stage, exc,
+            contract_error=stage == "agent_output_validation" or isinstance(exc, PlaybookAgentOutputContractError))
         atomic_json(attempt_dir / "failure.json", failure)
         atomic_json(output_path, failure)
         return 1
 
 
 def main() -> int:
-    parser = argparse.ArgumentParser(allow_abbrev=False)
-    parser.add_argument("--config", required=True, type=Path)
-    parser.add_argument("--manifest", required=True, type=Path)
-    parser.add_argument("--output", required=True, type=Path)
-    parser.add_argument("--attempt-dir", required=True, type=Path)
-    parser.add_argument("--previous-output", type=Path)
-    args = parser.parse_args()
+    args = worker_arguments()
     return run_task(
         config_path=args.config,
         manifest_path=args.manifest,
