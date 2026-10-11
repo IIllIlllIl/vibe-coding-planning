@@ -55,3 +55,22 @@ Verification uses new `test_hybrid_phase_waves.py`, existing hybrid tests,
 playbook/paired/repository flow, lineage/history and Supervisor/lifecycle tests.
 No new model call or HPC experiment is part of this repair. Local tests do not
 establish repaired compute-node/model-backed behavior.
+
+## Subsequent model-backed verification
+
+The separate `swe-chat-hybrid-shared-runtime-smoke-v1-20261011` at source
+`a37886f4aabea9e2882a520a0c877a7c39f5d4b5` completed one proposal. Authority:
+`/scratch/users/twang/vibe-coding-planning/run_state/output/SWE-chat/hybrid-shared-runtime-smoke-v1-20261011`.
+Controller/iteration authority records completion, 12 Checker calls and a final
+report/checkpoint. Four Reflectors completed in array 6110562; Curator 6110567
+and conditional Refiner 6110569 completed on their first attempts. No failure.json
+was found in the result tree. Learning-role MaxRSS was approximately 300–315 MB
+under Iris 1 CPU/4G requests. Supervisor terminal state records completion.
+
+Seed validation, seed minibatch and proposal minibatch each scored utility
+2/4 (mean 0.50). The proposal did not strictly improve the minibatch score and
+was not selected or validated. This verifies the shared production phase graph
+including Refiner, not learning improvement or candidate-validation coverage.
+Repeated Controller slices are resumptions of one proposal, not independent
+training repetitions. New learning evaluations use a fresh seed and ledger;
+do not import this development smoke's outputs as training history.

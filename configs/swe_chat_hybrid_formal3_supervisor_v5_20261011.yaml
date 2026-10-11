@@ -1,0 +1,26 @@
+schema_version: 1
+session: swe-chat-hybrid-formal3-v5-20261011
+log: .local/hpc-supervisor/swe-chat-hybrid-formal3-v5-20261011.log
+arguments:
+  - --poll-interval
+  - "120"
+  - --slice-time
+  - "00:08:00"
+  - --max-runs
+  - "60"
+  - --state-file
+  - .local/hpc-supervisor/swe-chat-hybrid-formal3-v5-20261011.json
+  - --require-clean-worktree
+  - --gepa-rules
+  - --gepa-config
+  - configs/gepa_swe_chat_hybrid_formal3_v5_20261011.yaml
+  - --ulhpc-config
+  - /Users/taoran.wang/.config/ulhpc-submit/config.yaml
+  - --job-name
+  - swe-chat-hybrid-formal3-v5-20261011
+  - --cpus
+  - "1"
+  - --mem
+  - 4G
+  - --reclaim-staging
+  - --submit
