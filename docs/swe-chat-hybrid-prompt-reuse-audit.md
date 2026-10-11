@@ -1,7 +1,7 @@
 # Hybrid prompt reuse audit
 
 Updated: 2026-10-11. These are reuse recommendations, not claims that wording alone
-caused historical score differences. The English hybrid bundle remains a draft.
+caused historical score differences. The v3 English bundle was exercised by the completed mixed-agent smoke.
 
 ## Source anchors
 
@@ -52,8 +52,8 @@ was checked read-only: eight completed iterations, `optimization_completed`.
 | Refiner | Preserve strongest distinct knowledge within limits | Enforce item count and all three word caps; operate on the complete hybrid artifact |
 
 Neither v14 nor v3 teaches Curator a reward formula. Scoring remains a Host
-evaluation mechanism, not an added optimization instruction. The v3 bundle is
-an unbound review draft; historical experiment configs and prompts are unchanged.
+evaluation mechanism, not an added optimization instruction. The v3 bundle is explicitly bound by versioned configs; historical prompt bytes
+remain unchanged.
 
 Transport repairs restore the established failed-output archive/previous-output
 feedback path for Checker and hybrid phase workers. Fixed Agent-authored JSON
@@ -68,14 +68,13 @@ behavioral foundation, playbook flow and rule-cap smoke tests (`--no-cov`), foll
 by a passing additional Checker runtime test: an empty terminal payload with a
 valid Agent-authored file is accepted, container diagnostics remain separate,
 and prior Host feedback reaches the Agent. No API calls or HPC execution were
-used. The changed transport still requires an explicitly authorized HPC smoke.
+used. The production transport was exercised by the
+[completed mixed-agent smoke](knowledge/swe-chat-hybrid-mixed-agent-smoke-20261011.md).
 The initial targeted run passed its tests but failed the repository-wide coverage
 threshold; targeted reruns disabled coverage rather than claiming full coverage.
 
 Prompt review follows the official [prompt-generation guidance](https://developers.openai.com/api/docs/guides/prompt-generation):
 preserve established prompt structure and make clear, necessary modifications.
-
-### Open questions
 
 ### Appendix comparison corrections
 
@@ -89,7 +88,7 @@ Refiner preserves existing applicability and decision boundaries and does not
 invent new concerns or strategies.
 
 Regression configuration:
-`configs/gepa_swe_chat_hybrid_deepseek_smoke_v3_20261011.yaml`, with its matching
+`configs/archive/behavioral_gepa/gepa_swe_chat_hybrid_deepseek_smoke_v3_20261011.yaml`, with its matching
 supervisor YAML. It reuses the eight development cases, mixed Agent settings,
 minimal seed, SIF/hash, prepared histories, resources and proposal budget from
 the v2 smoke. Only prompt binding, transport repairs and independent run paths
@@ -104,5 +103,5 @@ forced merely to satisfy smoke coverage; local tests cover the Refiner branch.
 - Should guide-dependent credit coexist with separate condition-only credit?
   Current implementation attributes the combined effective item and guides.
 - Which initial conditions/guides and model/executor profile are appropriate?
-- Plan a rules-only/shared-only/item-only/both diagnostic after basic execution;
-  a better full-candidate score alone does not establish independently better rules.
+- A full-candidate score does not isolate condition-only, shared-guide or item-guide
+  effects; causal attribution requires separate diagnostics.

@@ -31,7 +31,7 @@ class RecordedModel:
 
 def test_actual_deepseek_style_agent_submits_exact_json(tmp_path):
     config = load_optimization_config(
-        "configs/gepa_swe_chat_hybrid_formal3_v3_20261011.yaml", require_api_keys=False)
+        "configs/archive/behavioral_gepa/gepa_swe_chat_hybrid_formal3_v3_20261011.yaml", require_api_keys=False)
     candidate = json.loads(Path("configs/prompts/swe_chat_hybrid_seed_v1.json").read_text())
     payload = {"rule_results": [{"rule_number": 1, "triggered": False,
                                 "finding": None, "evidence": []}]}

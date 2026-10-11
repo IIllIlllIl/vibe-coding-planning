@@ -1,4 +1,4 @@
-# SWE-chat hybrid ACE/GEPA implementation preparation
+# SWE-chat hybrid ACE/GEPA method and execution contracts
 
 Opt-in CLI/controller, independent evidence workers and incremental ACE
 maintenance reuse the existing Behavioral GEPA transport. The completed
@@ -131,15 +131,16 @@ Hybrid runs do not generate cost_report.json or cost projections; billing is
 monitored in provider consoles. Metric calls, Agent trajectories and runtime
 audit remain available. Native Codex usage is not treated as zero-cost inference.
 
-## Prompts and remaining launch preparation
+## Prompts and reproducibility
 
-The current English tasks are in `configs/prompts/swe_chat_hybrid_ace_v2.yaml`;
-v1 remains the frozen smoke prompt.
+The current English tasks are in `configs/prompts/swe_chat_hybrid_ace_v3.yaml`;
+v1/v2 remain frozen historical prompts.
 They are task descriptions, not replacements for the common shell Agent protocol.
 Old SWE-chat and rule-only prompt/config files are unchanged.
 
-The formal3 split and no-model isolation preparation are verified; see
-`docs/swe-chat-hybrid-formal3-readiness.md` for evidence and remaining boundaries.
+Preparation and terminal failure evidence are recorded in
+`docs/swe-chat-hybrid-formal3-readiness.md`; mixed-agent end-to-end evidence is in
+`docs/knowledge/swe-chat-hybrid-mixed-agent-smoke-20261011.md`.
 Model-backed execution still requires explicit authorization. Historical run
 authorization is not inherited.
 
@@ -153,7 +154,7 @@ hybrid:
   shared_guide_words: 200
   condition_words: 40
   item_guide_words: 80
-  prompt_bundle: configs/prompts/swe_chat_hybrid_ace_v2.yaml
+  prompt_bundle: configs/prompts/swe_chat_hybrid_ace_v3.yaml
   evidence_sif_cache_dir: <prepared-cache>
   evidence_image: <prepared-image>
   evidence_sif_sha256: <frozen-sha256>

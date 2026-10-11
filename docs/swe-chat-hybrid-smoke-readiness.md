@@ -1,4 +1,4 @@
-# SWE-chat hybrid HPC smoke readiness
+# SWE-chat hybrid isolation preparation and startup audit
 
 ## Authorized preparation submission — 2026-10-10
 
@@ -34,11 +34,11 @@ OCI digest: `sha256:5560e9ab8709f459489e5b8aa696eda8a07ef821e14bb122be62d91234bf
 Size: 352215040 bytes. Python 3.12.15 and Git 2.39.5 are available;
 rg is absent, grep is available. Do not assume rg exists or install packages
 as an Agent fallback. No preinstalled task repository was found at /testbed.
-Runtime freezes the verified image and hash; compute startup is still a gate.
+Runtime freezes image identity and hash; compute startup requires separate verification.
 Existing `python:3.12-slim` starts on login but lacks git and rg.
 All eight histories were prepared serially on login using the shared builder,
 with zero model calls. Status and records are under the login operation's
-`history/status.json` and `history/history.json`; startup_verified remains false.
+`history/status.json` and `history/history.json`; the login preparation alone did not establish compute startup.
 The separate compute-node preflight was submitted through `ulhpc-submit` as
 job **6109207**, Iris 1 CPU / 4G / five-minute limit, preflight-only. It validates
 both case/evidence roles in the same generic SIF; no model calls are enabled.
@@ -55,8 +55,8 @@ the frozen image config; no unrelated dirty-worktree edits were staged.
 These preparation operations made no model calls; subsequent smoke launch
 and its terminal startup failure are described below.
 
-Runtime: `configs/gepa_swe_chat_hybrid_smoke_v1_20261009.yaml`.
-Supervisor: `configs/swe_chat_hybrid_smoke_supervisor_v1_20261009.yaml`.
+Runtime: `configs/archive/behavioral_gepa/gepa_swe_chat_hybrid_smoke_v1_20261009.yaml`.
+Supervisor: `configs/archive/supervisor_launches/swe_chat_hybrid_smoke_supervisor_v1_20261009.yaml`.
 Both reuse the existing Behavioral controller, SlurmTaskBatch and shared
 Supervisor. No second transport stack is introduced.
 
@@ -71,17 +71,17 @@ Controllers failed before manifest creation / Checker execution because the
 fresh worktree had not initialized the pinned `third_party/gepa` submodule.
 An empty submodule can pass ordinary parent-worktree cleanliness checks.
 The same startup failure was automatically resubmitted; transport state records
-19 submissions, last Controller 6109239. Supervisor has now been stopped;
+19 submissions, last Controller 6109239. Supervisor was stopped;
 failed logs and transport state are preserved. No learning checkpoint exists.
 
-The smoke worktree now has GEPA commit
+The repaired smoke worktree used GEPA commit
 `b4dbb55b7601dac448cdb836d5a401ca7d9eb920`, initialized from the existing local
 checkout without changing the frozen dependency revision. Source fingerprint
 construction now succeeds for all five required GEPA files. The submission
 wrapper now checks required vendored files before SSH/sync/Slurm; its six tests
 pass, including the missing-submodule regression. The user authorized commit
 and restart after the Supervisor repair. The reviewed restart transport is
-`configs/swe_chat_hybrid_smoke_supervisor_repair_v2_20261010.yaml`; it preserves
+`configs/archive/supervisor_launches/swe_chat_hybrid_smoke_supervisor_repair_v2_20261010.yaml`; it preserves
 the old 19-attempt state and logs, uses a separate session/state and the same
 scientific inputs, run root, resource limits and 20-slice maximum. This is not
 a reset of experimental counters or an increase of the metric-call budget.
@@ -94,7 +94,7 @@ A valid transaction, counter history, checkpoint, raw trajectories and final
 report are required; score improvement is not required. This does not test
 generalization. Smoke cases cannot enter untouched downstream test sets.
 
-Proposed smoke roles use Native Codex / gpt-6-sol / low, pinned CLI 0.160.1,
+The frozen smoke roles use Native Codex / gpt-6-sol / low, pinned CLI 0.160.1,
 to exercise generic isolation. This does not replace the scientific DeepSeek
 Checker in later experiments. Iris Controller and Agents request 1 CPU / 4G.
 
@@ -103,24 +103,6 @@ Checked read-only on Aion on 2026-10-09:
   `/scratch/users/twang/vibe-coding-planning/behavioral-gepa-datasets/output/SWE-chat/behavioral-gepa-smoke-v1-20260830/stage-c-development-snapshot-v1`;
 - standalone release directories 0.155.1 and 0.160.1 exist (startup not tested);
 - the shared SIF cache exists.
-
-Remaining gates:
-1. Completed 2026-10-10: snapshot restored locally; all three hashes match remote,
-   strict loader reports 4 train / 4 validation. Runtime freezes/checks these hashes.
-2. Pull the prebuilt generic image through the existing login preheater; freeze
-   its SHA-256 and cache identity. Completed for the generic image above.
-   No worker may pull or build an image as fallback.
-3. Prepared-history integration is implemented and regression-tested. Run
-   `python -m scripts.tools.prepare_swe_chat_hybrid_history --config ... --report ...`
-   after freezing the SIF hash. This eight-case smoke permits bounded serial
-   login preparation; larger history packing remains compute-node work. It uses the existing
-   `RepositoryHistoryCache` builder, locks and manifests. Agents require validated
-   bundles before wave submission and install them with the shared installer.
-   No Agent builds or fetches history from a mirror.
-4. Run existing `verify_codex_sif_startup.py` on a compute node, using the generic
-   image for both roles, `--generic-isolation-image --codex-version 0.160.1
-   --preflight-only`. No inference occurs in this mode. Local mocks are insufficient.
-5. Review/freeze configs and prompts, commit when requested, then authorize smoke.
 
 Checker scripts now load Python/Apptainer for Codex. All-Codex configs no longer
 require a DeepSeek key; legacy credential checks are unchanged. The shared script

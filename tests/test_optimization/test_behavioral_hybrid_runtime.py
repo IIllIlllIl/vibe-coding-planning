@@ -55,7 +55,7 @@ def test_real_gepa_iteration_without_inference(tmp_path):
 
 
 def test_three_gepa_proposals_without_model_calls(tmp_path):
-    config = load_optimization_config("configs/gepa_swe_chat_hybrid_formal3_v2_20261010.yaml", require_api_keys=False)
+    config = load_optimization_config("configs/archive/behavioral_gepa/gepa_swe_chat_hybrid_formal3_v2_20261010.yaml", require_api_keys=False)
     seed = tmp_path / "seed.json"
     seed.write_text(json.dumps(PARENT))
     config = replace(config, dataset_snapshot=_balanced_snapshot(tmp_path / "snapshot"),

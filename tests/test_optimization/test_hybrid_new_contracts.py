@@ -7,15 +7,50 @@ from src.optimization.behavioral_hybrid import HybridBehavioralAdapter, HybridLi
 from src.optimization.behavioral_hybrid_ace import IncrementalHybridACEProposer
 
 
+def test_formal_v4_contract_reuses_completed_mixed_agent_path(tmp_path):
+    import yaml
+    from src.optimization.config import load_optimization_config
+    from src.optimization.behavioral_dataset import load_behavioral_snapshot
+    from src.optimization.behavioral_hybrid_runtime import verify_hybrid_snapshot, hybrid_limits
+    from src.optimization.behavioral_hpc_executor import build_behavioral_checker_array_script
+    path = Path("configs/gepa_swe_chat_hybrid_formal3_v4_20261011.yaml")
+    raw = yaml.safe_load(path.read_text())
+    baseline = yaml.safe_load(Path("configs/archive/behavioral_gepa/gepa_swe_chat_hybrid_deepseek_smoke_v3_20261011.yaml").read_text())
+    config = load_optimization_config(path, require_api_keys=False)
+    verify_hybrid_snapshot(config)
+    train, val = load_behavioral_snapshot(config.dataset_snapshot)
+    assert (len(train), len(val)) == (84, 23)
+    assert raw["experiment_contract"]["split_counts"] == {"train": 84, "validation": 23, "test": 24}
+    assert raw["experiment_contract"]["launch_authorized"] is True
+    assert raw["experiment_contract"]["prompt_bundle_sha256"] == config.hybrid.prompt_bundle_sha256
+    assert raw["checker"] == baseline["checker"]
+    for field in ("checker_model", "reflector_model", "curator_model", "refiner_model",
+                  "prompt_bundle", "evidence_image", "evidence_sif_sha256"):
+        assert raw["hybrid"][field] == baseline["hybrid"][field]
+    assert raw["paths"]["initial_guideline"] == baseline["paths"]["initial_guideline"]
+    assert (raw["search"]["max_iterations"], raw["search"]["reflection_minibatch_size"],
+            raw["search"]["max_metric_calls"]) == (3, 24, 300)
+    assert raw["search"]["projection_metric_calls"] == 23 + 3 * (24 + 24 + 23)
+    assert (config.hpc.cpus_per_task, config.hpc.mem) == (1, "4G")
+    assert config.hpc.worker_config_path == str(path)
+    validate_candidate(config.initial_rules_path.read_text(), hybrid_limits(config))
+    script = build_behavioral_checker_array_script(config=config, batch_dir=tmp_path, task_indices=[0], attempt=2)
+    subprocess.run(["bash", "-n"], input=script, text=True, check=True)
+    launch = yaml.safe_load(Path("configs/swe_chat_hybrid_formal3_supervisor_v4_20261011.yaml").read_text())
+    assert str(path) in launch["arguments"]
+    assert "--require-clean-worktree" in launch["arguments"]
+    assert "--reclaim-staging" in launch["arguments"]
+
+
 def test_prepared_v3_smoke_reuses_mixed_agent_baseline_and_frozen_inputs(tmp_path):
     import yaml
     from src.optimization.config import load_optimization_config
     from src.optimization.behavioral_hybrid_runtime import verify_hybrid_snapshot, hybrid_limits
     from src.optimization.behavioral_dataset import load_behavioral_snapshot
     from src.optimization.behavioral_hpc_executor import build_behavioral_checker_array_script
-    path = Path("configs/gepa_swe_chat_hybrid_deepseek_smoke_v3_20261011.yaml")
+    path = Path("configs/archive/behavioral_gepa/gepa_swe_chat_hybrid_deepseek_smoke_v3_20261011.yaml")
     raw = yaml.safe_load(path.read_text())
-    previous = yaml.safe_load(Path(raw["smoke_contract"]["baseline_config"]).read_text())
+    previous = yaml.safe_load((Path("configs/archive/behavioral_gepa") / Path(raw["smoke_contract"]["baseline_config"]).name).read_text())
     config = load_optimization_config(path, require_api_keys=False)
     verify_hybrid_snapshot(config)
     train, val = load_behavioral_snapshot(config.dataset_snapshot)
@@ -28,8 +63,8 @@ def test_prepared_v3_smoke_reuses_mixed_agent_baseline_and_frozen_inputs(tmp_pat
                   "evidence_image", "evidence_sif_sha256", "dataset_file_sha256"):
         assert raw["hybrid"][field] == previous["hybrid"][field]
     assert (config.hpc.cpus_per_task, config.hpc.mem) == (1, "4G")
-    assert config.run_dir != load_optimization_config(raw["smoke_contract"]["baseline_config"], require_api_keys=False).run_dir
-    assert config.hpc.worker_config_path == str(path)
+    assert config.run_dir != load_optimization_config(Path("configs/archive/behavioral_gepa") / Path(raw["smoke_contract"]["baseline_config"]).name, require_api_keys=False).run_dir
+    assert Path(config.hpc.worker_config_path).name == path.name
     validate_candidate(config.initial_rules_path.read_text(), hybrid_limits(config))
     prompt = yaml.safe_load(Path(config.hybrid.prompt_bundle).read_text())
     assert "Repository evidence must be grounded" in prompt["checker_task"]
@@ -40,15 +75,15 @@ def test_prepared_v3_smoke_reuses_mixed_agent_baseline_and_frozen_inputs(tmp_pat
     script = build_behavioral_checker_array_script(config=config, batch_dir=tmp_path, task_indices=[0, 1], attempt=2)
     assert "--previous-output" in script
     subprocess.run(["bash", "-n"], input=script, text=True, check=True)
-    launch = yaml.safe_load(Path("configs/swe_chat_hybrid_deepseek_smoke_supervisor_v3_20261011.yaml").read_text())
-    assert str(path) in launch["arguments"]
+    launch = yaml.safe_load(Path("configs/archive/supervisor_launches/swe_chat_hybrid_deepseek_smoke_supervisor_v3_20261011.yaml").read_text())
+    assert "configs/" + path.name in launch["arguments"]
     assert "--require-clean-worktree" in launch["arguments"]
 
 
 def test_checker_retry_script_uses_existing_failed_output_archive(tmp_path):
     from src.optimization.config import load_optimization_config
     from src.optimization.behavioral_hpc_executor import build_behavioral_checker_array_script
-    config = load_optimization_config("configs/gepa_swe_chat_hybrid_formal3_v3_20261011.yaml", require_api_keys=False)
+    config = load_optimization_config("configs/archive/behavioral_gepa/gepa_swe_chat_hybrid_formal3_v3_20261011.yaml", require_api_keys=False)
     script = build_behavioral_checker_array_script(config=config, batch_dir=tmp_path, task_indices=[0], attempt=2)
     assert '--previous-output "${BATCH_DIR}/failed_outputs/attempt_01/task_${TASK_ID}.json"' in script
     subprocess.run(["bash", "-n"], input=script, text=True, check=True)
@@ -74,7 +109,7 @@ def test_hybrid_checker_reads_authored_file_not_empty_terminal_payload(tmp_path,
     from dataclasses import replace
     import src.optimization.behavioral_runtime as runtime
     from src.optimization.config import load_optimization_config
-    config = load_optimization_config("configs/gepa_swe_chat_hybrid_formal3_v3_20261011.yaml", require_api_keys=False)
+    config = load_optimization_config("configs/archive/behavioral_gepa/gepa_swe_chat_hybrid_formal3_v3_20261011.yaml", require_api_keys=False)
     config = replace(config, run_dir=tmp_path,
                      checker_instance_template="Write /tmp/repo_checker.json. {{ retry_feedback }}")
     candidate = Path("configs/prompts/swe_chat_hybrid_seed_v1.json").read_text()
@@ -183,7 +218,7 @@ def test_smoke_config_and_native_checker_script(tmp_path, monkeypatch):
     from src.optimization.config import load_optimization_config
     from src.optimization.behavioral_hpc_executor import build_behavioral_checker_array_script
     monkeypatch.delenv("DEEPSEEK_API_KEY", raising=False)
-    config = load_optimization_config("configs/gepa_swe_chat_hybrid_smoke_v1_20261009.yaml")
+    config = load_optimization_config("configs/archive/behavioral_gepa/gepa_swe_chat_hybrid_smoke_v1_20261009.yaml")
     assert config.hybrid.checker_model["executor"] == "codex_cli"
     assert config.search.max_iterations == 1
     assert config.hybrid.refiner_enabled
@@ -198,7 +233,7 @@ def test_deepseek_formal_worker_loads_sif_modules_before_execution(tmp_path):
     from src.optimization.config import load_optimization_config
     from src.optimization.behavioral_hpc_executor import build_behavioral_checker_array_script
     config = load_optimization_config(
-        "configs/gepa_swe_chat_hybrid_formal3_v2_20261010.yaml", require_api_keys=False)
+        "configs/archive/behavioral_gepa/gepa_swe_chat_hybrid_formal3_v2_20261010.yaml", require_api_keys=False)
     assert not config.hybrid.checker_model.get("executor")
     env_file = tmp_path / "private.env"
     env_file.write_text("export DEEPSEEK_API_KEY=test-only-not-a-credential\n")
@@ -239,7 +274,7 @@ def test_hybrid_deepseek_checks_prepared_authority_before_submission(tmp_path, m
     from src.optimization.behavioral_hpc_executor import HPCSlurmBehavioralCheckerExecutor
     from src.optimization import behavioral_hybrid_runtime as runtime
     config = replace(load_optimization_config(
-        "configs/gepa_swe_chat_hybrid_formal3_v2_20261010.yaml", require_api_keys=False),
+        "configs/archive/behavioral_gepa/gepa_swe_chat_hybrid_formal3_v2_20261010.yaml", require_api_keys=False),
         run_dir=tmp_path)
     executor = HPCSlurmBehavioralCheckerExecutor(config)
     def missing(_config):

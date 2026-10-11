@@ -1,9 +1,8 @@
-# SWE-chat hybrid formal3 readiness
+# SWE-chat hybrid preparation and terminal failure audit
 
-Config: `configs/gepa_swe_chat_hybrid_formal3_v2_20261010.yaml`.
-Preparation was verified and launch was authorized; commit `4b0bfe0` launched
-the formal run. It subsequently failed before producing any valid score; see
-the failure audit below. Repair changes are not yet committed or deployed.
+Config: `configs/archive/behavioral_gepa/gepa_swe_chat_hybrid_formal3_v2_20261010.yaml`.
+Commit `4b0bfe0` launched this frozen run, which failed before producing any
+valid score. The terminal failures below explain required regression coverage.
 
 ## Frozen split
 
@@ -46,7 +45,7 @@ paths. Tool network is disabled; Host model requests are not disabled.
 These checks did not call DeepSeek or validate model behavior.
 
 Local regressions cover split, attribution, isolation and synthetic three-proposal
-GEPA control flow. No new model-backed end-to-end test was run. Large compact-input
+GEPA control flow. The preparation checks themselves did not exercise model-backed completion. Large compact-input
 diagnostics reach approximately 193k train, 125k validation and 397k test tokens;
 these are not provider counts. Do not silently truncate or filter inputs.
 
@@ -68,8 +67,8 @@ credential selection and legacy non-hybrid behavior. SIF/history preflight now
 also runs before DeepSeek hybrid submission. Regression executes the generated
 formal DeepSeek script with shell doubles, checks its module ordering/credentials,
 and verifies a missing SIF blocks before submission. Forty relevant local tests
-passed. The previous compute tool/isolation probe passed, but the repaired script
-has not yet been validated on a compute node or used for inference.
+passed. The later mixed-agent smoke exercises the repaired production script; see
+[terminal smoke evidence](knowledge/swe-chat-hybrid-mixed-agent-smoke-20261011.md).
 
 Preserve failed attempts and operational error records. Repair changes affect
 the Checker semantic fingerprint; do not silently overwrite the frozen runtime
@@ -96,8 +95,7 @@ non-Submitted exit status and empty payload explicitly before JSON parsing; it
 does not reconstruct answers from observations or modify generated payloads.
 Real mini-SWE DefaultAgent plus local shell tests reproduce the unmarked-output
 failure and verify marked JSON submission and hybrid parsing without API calls.
-New model-backed/compute submission validation remains unrun; formal execution
-must not be assumed fixed solely from these deterministic tests.
+Deterministic tests alone do not establish model-backed submission behavior.
 
 ## DeepSeek smoke v2 schema and recovery failure
 
@@ -125,8 +123,8 @@ The shared transport protocol explicitly orders file preparation before marker
 and stdout emission. New prompt bundle `swe_chat_hybrid_ace_v3.yaml` clarifies the
 top-level JSON object and gives an untriggered-item example; v1/v2 stay frozen.
 Existing experiment configs remain frozen and do not select v3 automatically.
-A future reviewed smoke config must explicitly bind v3.
+Prompt selection is explicit and fingerprinted.
 
 Real mini-SWE parser plus local shell regressions cover all three observed
 invalid-payload categories, model-authored correction, and budget exhaustion.
-No additional model call or HPC job was launched for this repair.
+The completed v3 smoke verifies this repair on the production mixed-agent path.

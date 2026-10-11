@@ -27,6 +27,10 @@ Read in this order:
 
 ## Reusable Knowledge
 
+SWE-chat hybrid method: [representation, learning and data boundaries](swe-chat-hybrid-ace-gepa.md).
+See also the [prompt reuse audit](swe-chat-hybrid-prompt-reuse-audit.md).
+Terminal execution evidence: [mixed-agent smoke audit](knowledge/swe-chat-hybrid-mixed-agent-smoke-20261011.md).
+
 These documents contain method-independent lessons extracted from PCT, PCC,
 offline GEPA, and production failures:
 

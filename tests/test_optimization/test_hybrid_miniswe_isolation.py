@@ -53,7 +53,7 @@ def test_hybrid_miniswe_reuses_frozen_sif_history_and_cleans_up(tmp_path, monkey
 def test_formal_checker_thinking_reaches_existing_model_builder():
     from src.optimization.config import load_optimization_config
     from src.agents._deps import build_model
-    config = load_optimization_config("configs/gepa_swe_chat_hybrid_formal3_v2_20261010.yaml",
+    config = load_optimization_config("configs/archive/behavioral_gepa/gepa_swe_chat_hybrid_formal3_v2_20261010.yaml",
                                       require_api_keys=False)
     assert config.checker.thinking == "disabled"
     model = build_model(lambda **kwargs: kwargs, config.checker.model, "test-only",

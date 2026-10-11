@@ -14,6 +14,16 @@ the shared supervisor supplies canonical storage paths.
 
 ## Experiment Inventory
 
+SWE-chat hybrid lightweight formal contract:
+`gepa_swe_chat_hybrid_formal3_v4_20261011.yaml` and
+`swe_chat_hybrid_formal3_supervisor_v4_20261011.yaml` bind the v3 prompt,
+84/23/24 frozen grouped split, minimal seed and three-proposal budget.
+Superseded hybrid runtime configs are in `archive/behavioral_gepa/`; their
+supervisor identities are in `archive/supervisor_launches/`. Archived bytes
+retain original paths: reproduce with their original source commit, not by
+launching an archived YAML as a new experiment. Frozen prompts remain in place.
+A config's presence does not authorize execution.
+
 Current prepared diagnostic (2026-09-28):
 `gepa_verified_paired_blocking_light_history_smoke4x2_v1_20260928.yaml`
 and its matching supervisor use four training pairs from distinct tasks,
