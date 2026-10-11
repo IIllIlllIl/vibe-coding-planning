@@ -20,7 +20,7 @@ smoke_contract:
 paths:
   dataset_snapshot: output/SWE-chat/behavioral-gepa-smoke-v1-20260830/stage-c-development-snapshot-v1
   initial_guideline: configs/prompts/swe_chat_hybrid_seed_v1.json
-  run_dir: output/SWE-chat/hybrid-smoke-v1-20261009
+  run_dir: output/SWE-chat/hybrid-deepseek-smoke-v2-20261011
 task:
   semantics: behavioral_plan_acceptability_v1
 behavioral_repository:
