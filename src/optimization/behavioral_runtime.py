@@ -36,6 +36,22 @@ from src.optimization.reflection import (
 )
 
 
+def _checker_submission_object(exit_status: str, submission: str) -> dict[str, Any]:
+    """Validate transport completion without synthesizing Agent output."""
+    if exit_status != "Submitted":
+        raise ValueError(
+            f"Checker ended without a final submission: exit_status={exit_status}; "
+            "successful submission requires COMPLETE_TASK_AND_SUBMIT_FINAL_OUTPUT "
+            "followed by the task JSON object in tool stdout"
+        )
+    if not submission.strip():
+        raise ValueError("Checker submitted an empty payload; expected the task JSON object")
+    raw = json.loads(submission)
+    if not isinstance(raw, dict):
+        raise ValueError("Checker submission must be a JSON object")
+    return raw
+
+
 def render_pre_p1_context(events: Sequence[Mapping[str, Any]]) -> str:
     """Render every projected event once, in its frozen source order."""
     return json.dumps(list(events), ensure_ascii=False, indent=2)
@@ -322,9 +338,7 @@ class BehavioralLocalChecker:
                 )
                 raise
             try:
-                raw = json.loads(submission)
-                if not isinstance(raw, dict):
-                    raise ValueError("Checker submission must be a JSON object")
+                raw = _checker_submission_object(exit_status, submission)
                 if self.config.hybrid.enabled:
                     from src.optimization.behavioral_hybrid import parse_hybrid_checker_output
                     parsed = parse_hybrid_checker_output(raw, json.loads(guideline))

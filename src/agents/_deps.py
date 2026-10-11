@@ -55,8 +55,17 @@ Before sending, check that your entire reply contains exactly one executable
 bash block for the current step, and that no claimed tool result depends on
 a command whose observation has not returned. Perform this check without
 adding another executable block or a separate self-check report.
-When finished, put the task-specific submission command inside the single
-block.
+To finish, execute one bash block whose successful stdout starts with the exact
+line COMPLETE_TASK_AND_SUBMIT_FINAL_OUTPUT, followed by the complete payload
+required by the task's output contract. This marker ends the session; merely
+printing a payload without it is another tool observation, not a submission.
+For example, after writing the required payload to /tmp/final_output, execute
+`printf '%s\\n' COMPLETE_TASK_AND_SUBMIT_FINAL_OUTPUT && cat /tmp/final_output`
+inside your single bash block.
+
+Emit no commentary or other output before the marker. Ensure payload preparation
+succeeded before emitting it. For a JSON task, the payload must be one valid JSON
+object with the task's exact fields, not YAML, a bare array or a code fence.
 """
 
 # Keep the execution protocol identical across every project agent built on

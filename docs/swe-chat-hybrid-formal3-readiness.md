@@ -74,3 +74,27 @@ has not yet been validated on a compute node or used for inference.
 Preserve failed attempts and operational error records. Repair changes affect
 the Checker semantic fingerprint; do not silently overwrite the frozen runtime
 or reuse failed task identities when preparing a reviewed recovery/new run.
+
+## v3 final-submission failure
+
+Recovery commit `507a25d` used an independent v3 run and loaded Apptainer correctly.
+All 23 seed-validation tasks still failed after two attempts, with zero valid
+scores. All 46 failure files recorded JSONDecodeError. The inspected task_0000
+trajectory shows actual model/tool execution, repeated payload printing without
+the completion marker, and `LimitsExceeded` with an empty submission.
+
+The shared mini-SWE protocol mentioned a task-specific submission action without
+defining its command. Hybrid Checker prompts deferred to that incomplete protocol.
+Historical DeepSeek prompts explicitly supplied the completion command; the
+hybrid model-backed smoke used Native Codex JSON transport and therefore never
+exercised mini-SWE termination. The later compute preparation checked tools and
+isolation only, while synthetic learning tests replaced Agent completion.
+
+Repair defines `COMPLETE_TASK_AND_SUBMIT_FINAL_OUTPUT` and payload emission in
+the single shared mini-SWE protocol, not in every task prompt. Host now reports
+non-Submitted exit status and empty payload explicitly before JSON parsing; it
+does not reconstruct answers from observations or modify generated payloads.
+Real mini-SWE DefaultAgent plus local shell tests reproduce the unmarked-output
+failure and verify marked JSON submission and hybrid parsing without API calls.
+New model-backed/compute submission validation remains unrun; formal execution
+must not be assumed fixed solely from these deterministic tests.
