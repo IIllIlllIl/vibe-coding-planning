@@ -1,0 +1,220 @@
+checker_instance: |
+  <decision_time_context>{{ pre_p1_context }}</decision_time_context>
+  <proposed_plan>{{ proposed_plan_p1 }}</proposed_plan>
+  <repository_proxy>{{ repository_repo }} @ {{ repository_proxy_commit }}</repository_proxy>
+  <checking_artifact>{{ candidate_guideline }}</checking_artifact>
+  Write the complete JSON object to /tmp/repo_checker.json, then validate and
+  submit it using:
+  ```bash
+  python3 -m json.tool /tmp/repo_checker.json >/dev/null && echo COMPLETE_TASK_AND_SUBMIT_FINAL_OUTPUT && cat /tmp/repo_checker.json
+  ```
+  {% if retry_feedback %}
+  The Host rejected the previous artifact:
+  <host_validation_feedback>{{ retry_feedback }}</host_validation_feedback>
+  Use the same inputs to correct the reported problem and submit the complete
+  corrected object.
+  {% endif %}
+checker_task: |
+  Assess the proposed Plan using the supplied checking artifact.
+  Each checklist condition identifies what to check. Its item guide explains
+  how to investigate and judge that concern. Apply them together, using the
+  shared guide for investigation and judgment across items.
+  The conversation and repository proxy provide decision-time context. The
+  proxy is not the exact session state: recorded pre-Plan observations take
+  precedence when they conflict with it.
+  Assess every checklist item in order. Submit one JSON object with exactly
+  one top-level key, rule_results, whose value is an array with one result per
+  item. For a single untriggered item the complete object is
+  {"rule_results":[{"rule_number":1,"triggered":false,"finding":null,"evidence":[]}]}.
+  Do not submit the array alone. Each result has exactly rule_number (integer ordinal
+  starting at 1), triggered (boolean), finding, and evidence. Triggered items need
+  a nonempty finding and supporting evidence; otherwise use null and an empty
+  array. Each evidence object has exactly source (issue, plan, or repository),
+  location (nonempty string or null), and observation (nonempty string).
+  Here issue denotes the user's requirements and pre-Plan conversation evidence.
+  Repository evidence must be grounded in successful inspection tool observations.
+  Host derives rejection if any item triggers. Follow the shared Agent protocol.
+reflector_task: |
+  Identity fields use local references: case-01 identifies the supplied case,
+  and item-01, item-02, etc. identify the supplied checklist items. Copy these
+  references in instance_id and bullet_tags[].id; Host restores canonical IDs.
+  Explain what this training evidence teaches about pre-implementation Plan
+  checking. Labels reflect human acceptance at the first Plan boundary, not
+  proof that coding would succeed or fail. Separate Plan defects, mismatched
+  user intent, uncertain labels, and Checker investigation or judgment defects.
+  Identify knowledge useful across tasks and cases, and whether it belongs in
+  a rejection condition, shared investigation guidance, or item-specific guidance.
+  Use complete Checker investigations and the supplied training evidence.
+  Review the shared guide explicitly: explain how it supported, misdirected,
+  or failed to support the observed investigation and judgment. Include this
+  assessment in root_cause_analysis and reusable improvements in key_insights.
+  Express proposed checking knowledge using evidence available at decision time.
+  Return exactly instance_id, reasoning, error_identification, root_cause_analysis,
+  correct_approach, key_insights, and bullet_tags. instance_id equals the supplied
+  case ID; reasoning is nonempty. error_identification, root_cause_analysis and
+  correct_approach are nonempty strings or null when unsupported. key_insights
+  is an array of objects with exactly failure_pattern and basis, both nonempty
+  strings; use an empty array when no reusable knowledge is supported.
+  In key_insights, failure_pattern may describe a reusable checking concern or
+  an investigation or judgment strategy for the shared guide or an item guide.
+  Use basis to explain its evidence and intended role in the checking artifact.
+  Tag every active item once in its supplied order. Each tag has exactly id,
+  tag (helpful, harmful, or neutral), and attribution (nonempty string, or null
+  only for neutral). Assess the condition together with its guides.
+  Tag each existing item by the demonstrated effect of its condition and guides,
+  not by the overall prediction alone.
+  Helpful means the item supported a justified blocking finding or an
+  evidence-based dismissal of a plausible blocking concern.
+  Harmful means the item's content or guidance demonstrably misled the
+  investigation or judgment.
+  Neutral means no specific helpful or harmful effect is established.
+  A correct non-trigger is not automatically helpful. A wrong overall decision
+  does not make every existing item harmful. Describe missing checklist coverage
+  in key_insights rather than assigning its harm to an unrelated item.
+  Distinguish defects in the item or guidance from Checker execution errors.
+  Ground non-neutral tags in the recorded investigation and decision-time evidence.
+  Follow the shared protocol.
+curator_task: |
+  Checklist targets use local item-01, item-02, etc. references. Use these exact
+  references in target_id or target_ids; Host restores canonical item IDs.
+  Maintain a generalized, human-readable Plan checking artifact that helps
+  developers decide whether a proposed Plan is worth stopping before coding.
+  The artifact consists of a shared guide and a checklist: each item has a
+  high-level condition and its own short investigation guide. Improve the
+  artifact across tasks while preserving useful knowledge.
+
+  Ordinary imperfections that coding can readily correct need not become rules.
+
+  ## Checker framework and learning context
+
+  The Checker receives decision-time conversation, the proposed Plan, an
+  approximate repository proxy, and the artifact. It does not receive human
+  acceptance labels or Reflector feedback. It investigates each condition with
+  its item guide and the shared guide, then returns one triggered boolean per
+  item. Host rejects if any item triggers and accepts if none triggers.
+
+  A triggered item requires a finding and supporting issue, Plan, or repository
+  evidence. An untriggered item returns finding null and evidence []; its
+  investigation remains in the trajectory. Guides improve investigation and
+  judgment within this framework; they do not change the submission schema or
+  introduce a separate final acceptance decision. Put final supporting evidence
+  in triggered results; use the trajectory to examine how concerns were resolved.
+
+  Training labels record human acceptance or non-acceptance at the first Plan
+  boundary, not implementation success or failure. Recorded pre-Plan observations
+  take precedence when they conflict with the approximate repository proxy.
+  Learn from supplied evidence without treating every human rejection as proof
+  of a technical defect.
+
+  ## Evidence and artifact maintenance
+
+  Read the complete staged input.json, including every entry in these sections:
+
+  - parent: the current shared_guide and checklist, plus counters for active
+    items. Each checklist item contains id, condition, and guide. Counters
+    summarize Reflector attributions for the condition and its guides in their
+    recorded context, not overall classification accuracy. Helpful records a
+    demonstrated useful contribution; harmful records demonstrated misleading
+    guidance; neutral records no established specific contribution.
+  - reviews: all current Reflector analyses, including diagnosis, reusable
+    insights and per-item attributions. These distinguish item and shared-guide
+    defects from Checker execution errors and missing checklist coverage.
+  - records: the current training cases, their observed human decisions,
+    decision-time Checker inputs, complete recorded Checker output and trajectory,
+    and supplied reflection evidence and repository-proxy provenance.
+  - history: accumulated training attributions with explanations, full reports
+    and recorded artifact contexts, including inactive items. Consult the supplied
+    interpretation and counting_policy. Use rule_identity and recorded content
+    to distinguish versions; an item ID alone does not identify the same knowledge
+    across branches. Historical assessments may disagree with newer evidence.
+  - limits: max_items, shared_guide_words, condition_words, and item_guide_words.
+    These are the hard bounds for the complete resulting artifact.
+
+  Use supporting and opposing reviews, records, counters and history together
+  to maintain existing knowledge as well as learn missing concerns.
+
+  Collect related findings across the batch. One checklist item should express
+  a concern reusable across tasks, not a restatement of one source case. When
+  Checker misapplies an item, distinguish its wording or guidance from an
+  execution error. Review shared-guide behavior as well as individual items.
+
+  Maintain each condition and its guide together through localized operations:
+  ADD introduces missing knowledge; UPDATE improves an existing item; MERGE
+  combines genuinely related concerns at a higher level; REMOVE discards
+  knowledge that is no longer useful or is already covered. Preserve valuable
+  distinctions and remove knowledge cautiously. A rule being silent in this
+  batch alone is not a reason to remove it. Making no change is acceptable.
+  Combine related knowledge
+  rather than packing unrelated case details into one item.
+
+  Manage the supplied item budget during curation. Prefer concerns that apply
+  across tasks, and preserve separate items when their applicability differs.
+  Favor problems worth stopping before implementation over minor corrections
+  that ordinary implementation investigation can address. Rewrite the shared
+  guide as a complete text, preserving its useful guidance when making changes.
+  When no shared-guide change is supported, return the existing text unchanged.
+
+  ## Condition and guide writing
+
+  Write for a developer who understands common software concepts but has not
+  seen the training cases. Conditions should be brief checking questions or
+  principles, such as whether a Plan satisfies explicit requirements or preserves
+  important existing behavior. A condition identifies the concern; its item
+  guide explains how to investigate and judge it, including detailed decision
+  criteria when necessary. Shared guidance applies across checklist items.
+  Use the shared guide for general investigation strategy and tool-use guidance;
+  use item guides for concern-specific investigation and judgment.
+
+  Use plain English and familiar software terms. Keep source-case names, symbols
+  and incidental mechanisms in supporting evidence. Generalize the concern
+  without erasing the distinctions needed to apply it. An item guide should
+  clarify its condition rather than introduce an unrelated concern.
+
+  ## Budget and output contract
+
+  Respect the supplied item and word limits. Word counts use whitespace
+  splitting; limits are ceilings, not length targets.
+
+  Return one JSON object with exactly reasoning, shared_guide, and operations.
+  reasoning is a nonempty string; shared_guide is the complete nonempty shared
+  guide; operations is an array. Empty operations preserves existing checklist
+  items, but shared_guide still replaces the parent shared guide.
+
+  Each operation has exactly these fields:
+  ADD: type, content, supporting_instance_ids.
+  UPDATE: type, target_id, content, supporting_instance_ids.
+  MERGE: type, target_ids, content, supporting_instance_ids.
+  REMOVE: type, target_id, supporting_instance_ids.
+
+  content has exactly condition and guide, both nonempty strings. target_id
+  names an existing parent item; target_ids contains at least two distinct
+  existing parent IDs. ADD, UPDATE and MERGE require nonempty
+  supporting_instance_ids drawn from the supplied current training records.
+  Copy the local case references (case-01, case-02, etc.) from records[].instance_id;
+  Host maps these references to the original dataset IDs. These references are
+  local to this input, not identifiers for historical cases. Do not reconstruct
+  dataset UUIDs from prose or history.
+  REMOVE may use [] only when justified by supplied accumulated history;
+  explain that basis in reasoning. Otherwise supply current supporting case IDs.
+
+  Target each existing item at most once. Final conditions must be unique and
+  at least one item must remain. Host assigns new IDs, maintains counters and
+  applies changes mechanically; you supply the semantic changes.
+  Follow the shared Agent submission protocol.
+refiner_task: |
+  Checklist IDs use local item-01, item-02, etc. references. Preserve the supplied
+  references for retained or merged items; Host restores canonical item IDs.
+  Refine the supplied checking artifact to satisfy the supplied hard limits:
+  checklist item count, shared-guide words, condition words, and item-guide words.
+  Preserve useful knowledge and human-readable high-level concerns. Combine
+  genuinely related concerns at a higher level rather than packing unrelated
+  details together. Keep investigation and detailed judgment in item guides.
+  Refine existing knowledge rather than inventing new concerns or strategies.
+  Preserve the applicability and decision boundaries of retained knowledge;
+  do not broaden them beyond what the supplied artifact supports.
+  Word counts use whitespace splitting. Limits are ceilings, not length targets.
+  Return exactly schema_version (1), shared_guide (nonempty string), and checklist.
+  Every item has exactly id, condition, guide, all nonempty strings. IDs and
+  conditions must be unique. Preserve retained IDs; use existing IDs for merged
+  items. At least one item must remain. Follow the shared Agent protocol.
+

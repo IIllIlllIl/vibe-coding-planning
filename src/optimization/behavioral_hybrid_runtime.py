@@ -33,7 +33,7 @@ def phase_identity(config, role, payload):
                                        "behavioral_hybrid_ace.py", "behavioral_hybrid.py", "playbook.py",
                                        "playbook_runtime.py", "codex_cli_runtime.py",
                                        "hpc/phase_wave.py", "hpc/worker_contract.py",
-                                       "ace_transaction.py")}
+                                       "ace_transaction.py", "agent_references.py")}
     identity["source"]["agent_protocol"] = hashlib.sha256(
         (root.parent / "agents" / "_deps.py").read_bytes()).hexdigest()
     return hashlib.sha256(json.dumps(identity, sort_keys=True).encode()).hexdigest()
@@ -95,7 +95,11 @@ def run_local_phase(config, role, payload, attempt_dir, *, retry_feedback=""):
     prompts = yaml.safe_load(bundle_bytes)
     require_evidence_sif(config)
     evidence = attempt_dir / "inputs"
-    atomic_json(evidence / "input.json", payload)
+    from .agent_references import phase_references, decode_phase_output
+    agent_payload, case_refs, item_refs = phase_references(role, payload)
+    atomic_json(attempt_dir / "reference_map.json", {
+        "cases": case_refs.decode_map, "items": item_refs.decode_map})
+    atomic_json(evidence / "input.json", agent_payload)
     atomic_json(evidence / "manifest.json", {"schema_version": 1, "role": role, "files": ["input.json"]})
     model = dict(asdict(config.reflection), **getattr(config.hybrid, f"{role}_model"))
     env_config = {"evidence_sif_cache_dir": config.hybrid.evidence_sif_cache_dir,
@@ -111,13 +115,13 @@ def run_local_phase(config, role, payload, attempt_dir, *, retry_feedback=""):
                   evidence_dir=str(evidence), retry_feedback=retry_feedback, attempt_dir=attempt_dir)
     try:
         if role == "reflector":
-            output, trajectory = run_evidence_reflector(**common, internal_playbook=json.dumps(payload["parent"]))
+            output, trajectory = run_evidence_reflector(**common, internal_playbook=json.dumps(agent_payload["parent"]))
         elif role == "curator":
-            output, trajectory = run_evidence_curator(**common, counted_internal_playbook=json.dumps(payload["parent"]),
+            output, trajectory = run_evidence_curator(**common, counted_internal_playbook=json.dumps(agent_payload["parent"]),
                                                       case_count=len(payload.get("records", [])), maximum_rules=config.hybrid.max_items,
                                                       task="Maintain the generalized checklist and investigation guides.")
         elif role == "refiner":
-            output, trajectory = run_evidence_curator(**common, counted_internal_playbook=json.dumps(payload["draft"]),
+            output, trajectory = run_evidence_curator(**common, counted_internal_playbook=json.dumps(agent_payload["draft"]),
                                                       case_count=0, maximum_rules=config.hybrid.max_items,
                                                       task="Refine the supplied checklist and guides within the given limits.")
         else:
@@ -130,6 +134,8 @@ def run_local_phase(config, role, payload, attempt_dir, *, retry_feedback=""):
     # Preserve the raw completion BEFORE validating it. Never repair it here.
     atomic_json(attempt_dir / "completion.json", redact_sensitive({"agent_output": output, "trajectory": trajectory}))
     try:
+        output = decode_phase_output(role, output, case_refs, item_refs)
+        atomic_json(attempt_dir / "resolved_completion.json", {"agent_output": output})
         validate_phase(role, payload, output, config)
     except Exception as exc:
         exc.worker_failure_stage = "agent_output_validation"

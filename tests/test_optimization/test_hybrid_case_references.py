@@ -1,0 +1,71 @@
+import copy
+
+import pytest
+from src.optimization.agent_references import phase_references, decode_phase_output
+
+from src.optimization.behavioral_hybrid_ace import (
+    curator_case_projection, resolve_curator_case_references,
+)
+
+
+def test_case_projection_preserves_authority_and_scientific_text():
+    payload = {"records": [{"instance_id": "long-uuid#first-plan", "plan": "long-uuid#first-plan"}],
+               "reviews": [{"instance_id": "long-uuid#first-plan"}],
+               "history": {"events": [{"instance_id": "old-case"}]}}
+    before = copy.deepcopy(payload)
+    projected, mapping = curator_case_projection(payload)
+    assert payload == before
+    assert projected["records"][0]["instance_id"] == "case-01"
+    assert projected["records"][0]["plan"] == "long-uuid#first-plan"
+    assert projected["reviews"][0]["instance_id"] == "case-01"
+    assert projected["history"]["events"][0]["instance_id"] == "old-case"
+    delta = {"operations": [{"type": "UPDATE", "supporting_instance_ids": ["case-01"],
+                              "content": {"condition": "case-01", "guide": "unchanged"}}]}
+    decoded = resolve_curator_case_references(delta, mapping)
+    assert delta["operations"][0]["supporting_instance_ids"] == ["case-01"]
+    assert decoded["operations"][0]["supporting_instance_ids"] == ["long-uuid#first-plan"]
+    assert decoded["operations"][0]["content"] == delta["operations"][0]["content"]
+
+
+def test_unknown_reference_is_rejected_with_specific_feedback():
+    with pytest.raises(ValueError, match="operation 1: unknown reference.*allowed references"):
+        resolve_curator_case_references({"operations": [{"supporting_instance_ids": ["case-99"]}]},
+                                        {"case-01": "original"})
+    assert resolve_curator_case_references({"operations": [{"supporting_instance_ids": []}]}, {})
+
+
+@pytest.mark.parametrize("role", ["reflector", "curator", "refiner"])
+def test_shared_projection_and_exact_role_decode(role):
+    artifact = {"checklist": [{"id": "plan-00006", "condition": "keep plan-00006", "guide": "guide"},
+                               {"id": "plan-00009", "condition": "second", "guide": "guide"}]}
+    payload = ({"draft": artifact} if role == "refiner" else
+               {"parent": artifact, **({"record": {"instance_id": "uuid"}} if role == "reflector"
+                                       else {"records": [{"instance_id": "uuid"}],
+                                             "parent_counter": {"id": "plan-00006"}})})
+    original = copy.deepcopy(payload)
+    projected, cases, items = phase_references(role, payload)
+    assert payload == original
+    view = projected.get("parent", projected.get("draft"))
+    assert view["checklist"][0]["id"] == "item-01"
+    assert view["checklist"][0]["condition"] == "keep plan-00006"
+    if role == "reflector":
+        output = {"instance_id": "case-01", "bullet_tags": [{"id": "item-02", "tag": "helpful"}]}
+        decoded = decode_phase_output(role, output, cases, items)
+        assert decoded["instance_id"] == "uuid"
+        assert decoded["bullet_tags"][0]["id"] == "plan-00009"
+    elif role == "curator":
+        output = {"operations": [{"type": "MERGE", "target_ids": ["item-01", "item-02"],
+                                   "supporting_instance_ids": ["case-01"]}]}
+        decoded = decode_phase_output(role, output, cases, items)
+        assert decoded["operations"][0]["target_ids"] == ["plan-00006", "plan-00009"]
+        assert decoded["operations"][0]["supporting_instance_ids"] == ["uuid"]
+    else:
+        output = projected["draft"]
+        assert decode_phase_output(role, output, cases, items) == artifact
+    assert output != decoded if role != "refiner" else True
+
+
+def test_unknown_item_is_not_repaired():
+    _, cases, items = phase_references("refiner", {"draft": {"checklist": [{"id": "plan-00009"}]}})
+    with pytest.raises(ValueError, match="checklist.*unknown reference"):
+        decode_phase_output("refiner", {"checklist": [{"id": "item-09"}]}, cases, items)

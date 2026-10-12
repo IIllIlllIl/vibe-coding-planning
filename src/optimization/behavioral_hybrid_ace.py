@@ -15,6 +15,21 @@ from src.exceptions import ControllerYield, OfflineReflectionBlocked
 from src.optimization.ace_transaction import run_ace_transaction
 
 
+def curator_case_projection(payload):
+    """Project identity fields only; never rewrite scientific prose or authority."""
+    from .agent_references import ReferenceMap, project_identities
+    cases = ReferenceMap((row["instance_id"] for row in payload["records"]), "case")
+    return project_identities(payload, cases, ReferenceMap([], "item")), cases.decode_map
+
+
+def resolve_curator_case_references(delta, mapping):
+    """Decode declared local references, without guessing or repairing unknown IDs."""
+    from .agent_references import ReferenceMap, decode_phase_output
+    cases = ReferenceMap([], "case")
+    cases.decode_map = dict(mapping)
+    return decode_phase_output("curator", delta, cases, ReferenceMap([], "item"))
+
+
 def _content(condition, guide, shared):
     # Complete effective meaning, not branch-local IDs, identifies attribution.
     content = {"condition": condition, "guide": guide, "shared_guide": shared}

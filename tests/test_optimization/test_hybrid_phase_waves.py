@@ -85,9 +85,12 @@ def test_actual_worker_role_payload_and_validation(tmp_path, monkeypatch, role):
         payload = {"draft": PARENT, "limits": vars(LIMITS), "split": "train"}
         expected = PARENT
     calls = []
+    from src.optimization.agent_references import phase_references, project_identities
+    projected, case_refs, item_refs = phase_references(role, payload)
+    agent_expected = project_identities(expected, case_refs, item_refs)
     def agent(**kwargs):
         calls.append(kwargs)
-        return expected, [{"role": "assistant", "content": "mock model boundary"}]
+        return agent_expected, [{"role": "assistant", "content": "mock model boundary"}]
     monkeypatch.setattr(runtime, "run_evidence_reflector", agent)
     monkeypatch.setattr(runtime, "run_evidence_curator", agent)
     manifest = tmp_path / "input.json"
@@ -99,9 +102,13 @@ def test_actual_worker_role_payload_and_validation(tmp_path, monkeypatch, role):
     assert json.loads(output.read_text())["agent_output"] == expected
     assert len(calls) == 1
     if role == "refiner":
-        assert json.loads(calls[0]["counted_internal_playbook"]) == payload["draft"]
+        assert json.loads(calls[0]["counted_internal_playbook"]) == projected["draft"]
         assert "refine" in calls[0]["task"].lower()
     assert (tmp_path / "attempt/completion.json").exists()
+    assert json.loads((tmp_path / "attempt/completion.json").read_text())["agent_output"] == agent_expected
+    assert json.loads((tmp_path / "attempt/resolved_completion.json").read_text())["agent_output"] == expected
+    assert json.loads((tmp_path / "attempt/inputs/input.json").read_text()) == projected
+    assert (tmp_path / "attempt/reference_map.json").exists()
 
 
 def test_batch_proposer_uses_wave_and_rejects_incomplete_reviews(tmp_path):
