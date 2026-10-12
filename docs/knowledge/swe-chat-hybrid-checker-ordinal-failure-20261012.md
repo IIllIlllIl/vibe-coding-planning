@@ -2,7 +2,9 @@
 
 Frozen run: `swe-chat-hybrid-formal3-v5-20261011`, source
 `008f1bbc588c299c6cd24ebf94e96098c53d9eaf`.
-Authority: `/scratch/users/twang/vibe-coding-planning/run_state/output/SWE-chat/hybrid-formal3-v5-20261011`.
+Archived authority: `/scratch/users/twang/vibe-coding-planning/run_state/archive/SWE-chat/hybrid-formal3-v5-20261011`.
+Original execution path was the corresponding `run_state/output/SWE-chat/` path;
+absolute paths embedded in frozen manifests and trajectories remain unchanged.
 Candidate minibatch fingerprint:
 `018348ade7ccdf13ee0c12045b73d73a87da0aa991f2c7d38b7d16a581c65d19`.
 Affected task: `task_0011`, case `a680cc5e-06bc-4b55-b4b6-38f7b2fa7e61#first-plan`.
@@ -49,3 +51,16 @@ feedback behavior, not model-backed recovery. Changed Checker source fingerprint
 prevent silent reuse; do not overwrite this frozen run or treat rejected payloads
 as recovered results. Any repaired run or controlled replay requires explicit
 authorization and an audited identity/provenance policy.
+
+## Retention and cleanup
+
+On 2026-10-12, after confirming no active job owned this run, the complete
+approximately 143 MB result tree was moved to the archive authority above.
+Candidates, ledger, checkpoints, manifests, raw completions, investigations and
+failed attempts were retained without rewriting. Before deleting the approximately
+89 MB reproducible staging tree, its `.ulhpc_submit` records and Slurm launch
+script were copied into `operational_archive/` inside the retained result tree.
+The empty run-specific external workspace directory was removed. Frozen data,
+generic SIF, history cache and other runs were not cleanup targets.
+The archival move is not a resumable relocation; old embedded execution paths
+are provenance. A fresh identity must not import this run's scientific outputs.

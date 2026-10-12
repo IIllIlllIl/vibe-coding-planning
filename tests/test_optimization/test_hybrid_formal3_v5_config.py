@@ -3,6 +3,7 @@ import subprocess
 from pathlib import Path
 
 import yaml
+import pytest
 
 from src.optimization.behavioral_dataset import load_behavioral_snapshot
 from src.optimization.behavioral_hpc_executor import build_behavioral_checker_array_script
@@ -11,8 +12,9 @@ from src.optimization.behavioral_hybrid_runtime import hybrid_limits, verify_hyb
 from src.optimization.config import load_optimization_config
 
 
-def test_formal_v5_preserves_science_and_verified_mixed_agent_path(tmp_path):
-    path = Path("configs/gepa_swe_chat_hybrid_formal3_v5_20261011.yaml")
+@pytest.mark.parametrize("version,date", [(5, "20261011"), (6, "20261012")])
+def test_formal_preserves_science_and_verified_mixed_agent_path(tmp_path, version, date):
+    path = Path(f"configs/gepa_swe_chat_hybrid_formal3_v{version}_{date}.yaml")
     raw = yaml.safe_load(path.read_text())
     previous = yaml.safe_load(Path("configs/gepa_swe_chat_hybrid_formal3_v4_20261011.yaml").read_text())
     smoke = yaml.safe_load(Path("configs/gepa_swe_chat_hybrid_shared_runtime_smoke_v1_20261011.yaml").read_text())
@@ -44,8 +46,12 @@ def test_formal_v5_preserves_science_and_verified_mixed_agent_path(tmp_path):
             config.search.max_metric_calls) == (3, 24, 300)
     assert raw["search"]["projection_metric_calls"] == 23 + 3 * (24 + 24 + 23)
     validate_candidate(config.initial_rules_path.read_text(), hybrid_limits(config))
-    assert config.run_dir != load_optimization_config(
-        "configs/gepa_swe_chat_hybrid_formal3_v4_20261011.yaml", require_api_keys=False).run_dir
+    for old_version in range(4, version):
+        assert config.run_dir != load_optimization_config(
+            f"configs/gepa_swe_chat_hybrid_formal3_v{old_version}_20261011.yaml", require_api_keys=False).run_dir
+    if version == 6:
+        assert contract["checker_repair_commit"] == "4d46f9f"
+        assert contract["checker_projection"] == "explicit_consecutive_ordinals_no_learning_ids"
     assert config.hpc.worker_config_path == str(path)
     assert (config.hpc.cpus_per_task, config.hpc.mem) == (1, "4G")
     script = build_behavioral_checker_array_script(config=config, batch_dir=tmp_path,
@@ -53,7 +59,7 @@ def test_formal_v5_preserves_science_and_verified_mixed_agent_path(tmp_path):
     assert "module load tools/Apptainer" in script
     assert "failed_outputs/attempt_01" in script
     subprocess.run(["bash", "-n"], input=script, text=True, check=True)
-    launch = yaml.safe_load(Path("configs/swe_chat_hybrid_formal3_supervisor_v5_20261011.yaml").read_text())
+    launch = yaml.safe_load(Path(f"configs/swe_chat_hybrid_formal3_supervisor_v{version}_{date}.yaml").read_text())
     args = launch["arguments"]
     assert args[args.index("--gepa-config") + 1] == str(path)
     assert "--require-clean-worktree" in args
