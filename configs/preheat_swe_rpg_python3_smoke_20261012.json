@@ -1,0 +1,72 @@
+{
+  "acceptance_criteria": [
+    "three SIF records pull_attested with frozen OCI digest",
+    "full SIF SHA256 and bytes recorded",
+    "separate small acceptance verifies base commit at frozen working_directory; requires authorized Apptainer exec"
+  ],
+  "compressed_layer_bytes_sum": 1483119670,
+  "compressed_layer_bytes_unique": 773845298,
+  "downloader_sha256": "4999b8ea5ac4e03ea7f50c4577cb6f72f46a13ddf1072ca9324de09fbd98b2fa",
+  "images": [
+    "xinzhou1997/swe_rpg_unified@sha256:b09e4ae30cb07f2a75045278b66e6cd48a75bec14afc9d1ff0bc2a8e639e5d10",
+    "xinzhou1997/swe_rpg_unified@sha256:e2a1f3c47ce278768c63af9200e458ecc9b173ac6397fe1df8707640e271281d",
+    "xinzhou1997/swe_rpg_unified@sha256:f3135a89ace5d7133778c38ea2be2ac1c61debd7c36c1571b87bd2da374a1109"
+  ],
+  "launch_status": "prepared_not_started",
+  "operational_plan": {
+    "budget_note": "pull timeouts only; metadata/hash overhead additional",
+    "cluster": "Iris login",
+    "concurrent_pulls": 1,
+    "failure_policy": "record_and_continue",
+    "history_preheat": false,
+    "max_attempts": 1,
+    "model_calls": 0,
+    "pinned_validation": "before_pull; temporary SIF inspect/hash/digest before promotion",
+    "pull_timeout_budget_seconds": 10800,
+    "resume": "validate pinned cache attestation/full hash/source under writer lock; rebuild unverified cache atomically",
+    "stop_condition": "one pass; no automatic restart; writer-lock or unsafe-orphan gate stops the batch",
+    "timeout_seconds": 3600
+  },
+  "purpose": "swe_rpg_python3_sif_small_batch",
+  "registry_audit": "output/SWE-RPG/registry-audit/python78-v1-20261012/registry-audit.json",
+  "registry_audit_sha256": "2d5d525189f7c49fc70a55c57b55ac4cee62e87d796079449b8962cfe099e61b",
+  "requests": [
+    {
+      "base_commit": "a54317c7f8ec51a7fec8ce83df6b9f4852113253",
+      "image_ref": "xinzhou1997/swe_rpg_unified@sha256:b09e4ae30cb07f2a75045278b66e6cd48a75bec14afc9d1ff0bc2a8e639e5d10",
+      "instance_id": "falconry__falcon-2540",
+      "oci_digest": "sha256:b09e4ae30cb07f2a75045278b66e6cd48a75bec14afc9d1ff0bc2a8e639e5d10",
+      "ordinal": 4,
+      "repo": "falconry/falcon",
+      "repo_language": "Python",
+      "sif_filename": "xinzhou1997_swe_rpg_unifiedsha256_b09e4ae30cb07f2a75045278b66e6cd48a75bec14afc9d1ff0bc2a8e639e5d10.sif",
+      "working_directory": "/testbed"
+    },
+    {
+      "base_commit": "99e9ec4bd3d9303cac431bede2077bcfd042f3a1",
+      "image_ref": "xinzhou1997/swe_rpg_unified@sha256:e2a1f3c47ce278768c63af9200e458ecc9b173ac6397fe1df8707640e271281d",
+      "instance_id": "pylint-dev__pylint-10797",
+      "oci_digest": "sha256:e2a1f3c47ce278768c63af9200e458ecc9b173ac6397fe1df8707640e271281d",
+      "ordinal": 52,
+      "repo": "pylint-dev/pylint",
+      "repo_language": "Python",
+      "sif_filename": "xinzhou1997_swe_rpg_unifiedsha256_e2a1f3c47ce278768c63af9200e458ecc9b173ac6397fe1df8707640e271281d.sif",
+      "working_directory": "/testbed"
+    },
+    {
+      "base_commit": "064e25b01b5c82c08aea66ff898ff27adbb013d8",
+      "image_ref": "xinzhou1997/swe_rpg_unified@sha256:f3135a89ace5d7133778c38ea2be2ac1c61debd7c36c1571b87bd2da374a1109",
+      "instance_id": "openai__openai-agents-python-454",
+      "oci_digest": "sha256:f3135a89ace5d7133778c38ea2be2ac1c61debd7c36c1571b87bd2da374a1109",
+      "ordinal": 27,
+      "repo": "openai/openai-agents-python",
+      "repo_language": "Python",
+      "sif_filename": "xinzhou1997_swe_rpg_unifiedsha256_f3135a89ace5d7133778c38ea2be2ac1c61debd7c36c1571b87bd2da374a1109.sif",
+      "working_directory": "/testbed2"
+    }
+  ],
+  "schema_version": 1,
+  "selection_rationale": "Three distinct repositories; low compressed size; cover /testbed and /testbed2. Acquisition-only subset, full Python78 selection unchanged.",
+  "source_request_manifest": "configs/frozen_swe_rpg/python78-v1-20261012/python-image-request-manifest.json",
+  "source_request_manifest_sha256": "6dff1833d335ed32eda118eeff6df5f820d3aef2735d47e8b0658f24567f8089"
+}

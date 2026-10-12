@@ -338,6 +338,53 @@ def test_registry_digest_accepts_oci_image_index(monkeypatch) -> None:
     assert namespace["registry_digest"]("ghcr.io/scaleapi/swe-bench_pro-v2:test") == ("sha256:test-index", None)
 
 
+@pytest.mark.parametrize("repository", ["xinzhou1997/swe_rpg_unified", "ghcr.io/example/image"])
+@pytest.mark.parametrize("header", ["match", "different", "missing"])
+def test_registry_digest_checks_pinned_reference(monkeypatch, repository, header):
+    import ast
+    import io
+    import urllib.request
+
+    tree = ast.parse(login_apptainer_sif_preheat._remote_script(), feature_version=(3, 6))
+    function = next(n for n in tree.body if isinstance(n, ast.FunctionDef) and n.name == "registry_digest")
+    namespace = {"urllib": __import__("urllib"), "json": json}
+    exec(compile(ast.Module(body=[function], type_ignores=[]), "<registry-digest>", "exec"), namespace)
+    digest = "sha256:" + "a" * 64
+
+    def response(request, **kwargs):
+        if isinstance(request, str):
+            return io.StringIO('{"token":"test-only-token"}')
+        assert request.full_url.endswith("/manifests/" + digest)
+        assert "@" not in request.full_url
+        assert request.get_method() == "HEAD"
+        result = io.StringIO("")
+        result.headers = ({"Docker-Content-Digest": digest if header == "match" else "sha256:" + "b" * 64}
+                          if header != "missing" else {})
+        return result
+
+    monkeypatch.setattr(urllib.request, "urlopen", response)
+    actual, error = namespace["registry_digest"](repository + "@" + digest)
+    if header == "match":
+        assert actual == digest and error is None
+    else:
+        assert actual is None and error
+
+
+def test_digest_normalization_preserves_selector_and_filename():
+    import ast
+    digest = "sha256:" + "a" * 64
+    ref = "ghcr.io/Example/IMAGE@" + digest
+    expected = "ghcr.io/example/image@" + digest
+    tree = ast.parse(login_apptainer_sif_preheat._remote_script())
+    functions = [n for n in tree.body if isinstance(n, ast.FunctionDef)
+                 and n.name in {"normalize_image_ref", "image_to_sif_name"}]
+    namespace = {}
+    exec(compile(ast.Module(body=functions, type_ignores=[]), "<ref>", "exec"), namespace)
+    assert login_apptainer_sif_preheat._normalize_image_ref(ref) == expected
+    assert namespace["normalize_image_ref"](ref) == expected
+    assert namespace["image_to_sif_name"](expected) == login_apptainer_sif_preheat._image_to_sif_name(expected)
+
+
 def test_login_preheat_normalizes_only_oci_repository_case() -> None:
     assert (
         login_apptainer_sif_preheat._normalize_image_ref(
@@ -424,3 +471,82 @@ def test_pull_timeout_terminates_owned_process_group():
     with pytest.raises(subprocess.TimeoutExpired) as error:
         namespace['run_pull'](['/bin/sh','-c','sleep 30 & echo child=$!; wait'], timeout=0.1)
     assert 'child=' in error.value.output
+
+
+@pytest.mark.parametrize('fault', ['before', 'after', 'source', 'cache_failed', 'cache_corrupt', 'cache_valid'])
+def test_pinned_batch_validates_before_promotion_and_resume(tmp_path, monkeypatch, fault):
+    import ast
+    import hashlib
+    import io
+
+    first = 'xinzhou1997/swe_rpg_unified@sha256:'+'a'*64
+    second = 'xinzhou1997/swe_rpg_unified@sha256:'+'b'*64
+    root = tmp_path/'sifs'
+    root.mkdir()
+    old_file = root/login_apptainer_sif_preheat._image_to_sif_name(first)
+    old_bytes = b'previous cached file'
+    records = {}
+    if fault.startswith('cache_') or fault == 'source':
+        old_file.write_bytes(old_bytes)
+        if fault.startswith('cache_'):
+            records[first] = {'status':'failed' if fault == 'cache_failed' else 'pulled',
+                              'oci_digest':first.split('@')[1], 'provenance_strength':'pull_attested',
+                              'sif_bytes':len(old_bytes),
+                              'sif_sha256':hashlib.sha256(old_bytes if fault != 'cache_corrupt' else b'corrupt').hexdigest()}
+    provenance = tmp_path/'provenance.json'
+    provenance.write_text(json.dumps({'schema_version':2,'records':records}))
+    payload = {'images':[first,second],'sif_cache_dir':str(root),'lock_file':str(tmp_path/'lock'),
+               'failed_output':str(tmp_path/'failures.tsv'),'provenance_output':str(provenance),
+               'apptainer_bin':'mock','apptainer_cache_dir':str(tmp_path/'cache'),'apptainer_tmp_dir':str(tmp_path/'temp'),
+               'timeout':60,'max_attempts':1,'retry_backoff':0,'cleanup_tmp':False,'cleanup_apptainer_cache':False}
+    queries = {}
+    pulls = []
+    def registry(image):
+        queries[image] = queries.get(image,0)+1
+        if image == first and ((fault == 'before' and queries[image] == 1) or (fault == 'after' and queries[image] == 2)):
+            return None,'response digest differs from pinned digest'
+        return image.split('@')[1],None
+    def pull(command,timeout):
+        pulls.append(command[-1])
+        Path(command[-2]).write_bytes(b'new validated SIF')
+        return subprocess.CompletedProcess(command,0,'','')
+    def inspect(path):
+        ref = first if path.name.startswith(old_file.name) else second
+        return ('incorrect-source' if fault == 'source' and ref == first else 'docker://'+ref),None
+    tree = ast.parse(login_apptainer_sif_preheat._remote_script(),feature_version=(3,6))
+    stubs = ast.parse('def registry_digest(image):\n    return _registry(image)\ndef run_pull(command,timeout):\n    return _pull(command,timeout)\ndef inspect_sif(apptainer,sif):\n    return _inspect(sif)\n').body
+    replacements = {n.name:n for n in stubs}
+    tree.body = [replacements.get(n.name,n) if isinstance(n,ast.FunctionDef) else n for n in tree.body]
+    monkeypatch.setattr(sys,'stdin',io.StringIO(json.dumps(payload)))
+    with pytest.raises(SystemExit) as exit_info:
+        exec(compile(tree,'<pinned-batch>','exec'),{'_registry':registry,'_pull':pull,'_inspect':inspect})
+    report = json.loads(provenance.read_text())
+    if fault in {'before','after','source'}:
+        assert exit_info.value.code == 1
+        assert report['records'][first]['status'] == 'failed'
+        assert report['records'][first]['failure_category'] == 'pinned_image_validation_failed'
+        assert report['summary']['available'] == 1
+        assert not old_file.exists() if fault != 'source' else old_file.read_bytes() == old_bytes
+    else:
+        assert exit_info.value.code == 0
+        assert report['records'][first]['provenance_strength'] == 'pull_attested'
+        assert old_file.read_bytes() == (old_bytes if fault == 'cache_valid' else b'new validated SIF')
+    assert report['records'][second]['status'] == 'pulled'
+    assert 'docker://'+second in pulls
+    assert ('docker://'+first in pulls) == (fault not in {'before','cache_valid'})
+
+
+def test_missing_only_keeps_pinned_refs_for_validation(tmp_path, monkeypatch, capsys):
+    first = 'xinzhou1997/swe_rpg_unified@sha256:'+'a'*64
+    images = tmp_path/'images.json'
+    images.write_text(json.dumps([first,'repo/tag:latest']))
+    ulhpc = tmp_path/'ulhpc.yaml'
+    ulhpc.write_text('user: tester\nhost: example.invalid\nport: 2222\n')
+    monkeypatch.setattr(login_apptainer_sif_preheat,'_remote_existing_sifs',
+                        lambda *args:{login_apptainer_sif_preheat._image_to_sif_name(first),'repo_tag_latest.sif'})
+    monkeypatch.setattr(sys,'argv',['preheat','--images-json',str(images),'--sif-cache-dir','/scratch/test/sifs',
+                                  '--ulhpc-config',str(ulhpc),'--missing-only','--dry-run'])
+    assert login_apptainer_sif_preheat.main() == 0
+    events = [json.loads(line) for line in capsys.readouterr().out.splitlines() if line.startswith('{')]
+    assert events[0]['image_count'] == 1
+    assert events[1]['image'] == first

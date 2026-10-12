@@ -1,0 +1,32 @@
+{
+  "actual_layer_pull_verified": false,
+  "apptainer_conversion_verified": false,
+  "available_manifest_and_config_linux_amd64": 78,
+  "baseline": {
+    "acceptance_manifest": "configs/frozen_swe_bench_pro/v2-python237-audited-v1-20261011/acceptance.json",
+    "pro_v2_python237_audit_job": "6110259"
+  },
+  "download_runtime": "existing login_apptainer_sif_preheat; digest lookup adapted; existing writer-lock, atomic promotion, exception continuation and resume retained",
+  "downloader_sha256": "4cf03534d46caa9e007d8ec8b8ae501c33312f3b3cf70848296fef2548c9913d",
+  "expected_images": 78,
+  "live_downloader_digest_HEAD_check": {
+    "digest": "sha256:7ff6cde471bd367037d63e7c039950a45395327402ffec63c681f890474f0ae5",
+    "instance_id": "aws-cloudformation__cfn-lint-3377",
+    "matched": true
+  },
+  "next_step": "separately authorized small SIF acquisition and validation; no model jobs or history preheat",
+  "purpose": "swe_rpg_python78_steps123_completion",
+  "registry_audit": "output/SWE-RPG/registry-audit/python78-v1-20261012/registry-audit.json",
+  "registry_audit_sha256": "2d5d525189f7c49fc70a55c57b55ac4cee62e87d796079449b8962cfe099e61b",
+  "request_manifest": "configs/frozen_swe_rpg/python78-v1-20261012/python-image-request-manifest.json",
+  "request_manifest_sha256": "6dff1833d335ed32eda118eeff6df5f820d3aef2735d47e8b0658f24567f8089",
+  "revision": "688ed7918cbcabe6c9d9b9f393fad1053b286dd9",
+  "schema_version": 1,
+  "sif_downloaded_by_this_preparation": 0,
+  "source_manifest": "configs/frozen_swe_rpg/python78-v1-20261012/dataset-source-manifest.json",
+  "source_manifest_sha256": "a65c1187f03e507451046bf09f9b722d2fecc9c63dca872929067217829236f8",
+  "targeted_tests": {
+    "coverage": "--no-cov for script-focused regression; initial global src coverage gate excluded",
+    "passed": 28
+  }
+}

@@ -1,0 +1,23 @@
+{
+  "apptainer_started": false,
+  "config": "configs/preheat_swe_rpg_python3_smoke_20261012.json",
+  "config_sha256": "8a97ba6302ec51273525e6990d02291f5d29055cf612be3696c3c676844463ae",
+  "downloader_sha256": "4999b8ea5ac4e03ea7f50c4577cb6f72f46a13ddf1072ca9324de09fbd98b2fa",
+  "dry_run_passed": true,
+  "fixes": [
+    "Pinned registry digest validated before pull and temporary SIF source/hash/digest validated before promotion",
+    "Pinned --missing-only references retained for remote validation under writer lock",
+    "Cached SIF requires pull attestation, pinned digest, full SHA256, bytes and source match; invalid cache rebuilt before atomic replacement",
+    "Per-image validation failures recorded with phase and evidence, then continue; tagged reference baseline unchanged"
+  ],
+  "frozen_python78_selection_changed": false,
+  "prepared_images": 3,
+  "purpose": "swe_rpg_pinned_validation_review_fixes_and_small_batch_readiness",
+  "runtime_base_commit_acceptance": "pending authorized small batch",
+  "schema_version": 1,
+  "sif_downloads_started": false,
+  "supersedes_code_fingerprint_only": "configs/frozen_swe_rpg/python78-v1-20261012/preparation-status.json",
+  "targeted_tests_passed": 35,
+  "wrapper": "scripts/tools/login_rpg_python3_smoke_20261012.sh",
+  "wrapper_sha256": "b8c8939110c0c30380b74a1f1198bee9d881c58def5c5cafda6a9a28d3008bd0"
+}

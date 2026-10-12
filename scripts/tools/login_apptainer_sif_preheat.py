@@ -45,10 +45,13 @@ DEFAULT_ULHPC_CONFIG = REPO_ROOT / "configs" / "ulhpc_submit.yaml"
 
 
 def _normalize_image_ref(image: str) -> str:
-    """Normalize the OCI repository component without changing its tag."""
+    """Normalize the OCI repository component without changing its selector."""
     if not image.startswith("ghcr.io/"):
         return image
     name_and_tag = image[len("ghcr.io/") :]
+    if "@" in name_and_tag:
+        repository, digest = name_and_tag.rsplit("@", 1)
+        return f"ghcr.io/{repository.lower()}@{digest}"
     if ":" not in name_and_tag:
         return "ghcr.io/" + name_and_tag.lower()
     repository, tag = name_and_tag.rsplit(":", 1)
@@ -142,7 +145,7 @@ def _parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--missing-only",
         action="store_true",
-        help="Filter the image list locally by checking remote SIF existence first",
+        help="Skip existing tagged SIFs; pinned refs are validated under the remote writer lock",
     )
     parser.add_argument(
         "--existing-only",
@@ -225,6 +228,9 @@ def normalize_image_ref(image: str) -> str:
     if not image.startswith("ghcr.io/"):
         return image
     name_and_tag = image[len("ghcr.io/"):]
+    if "@" in name_and_tag:
+        repository, digest = name_and_tag.rsplit("@", 1)
+        return "ghcr.io/" + repository.lower() + "@" + digest
     if ":" not in name_and_tag:
         return "ghcr.io/" + name_and_tag.lower()
     repository, tag = name_and_tag.rsplit(":", 1)
@@ -252,8 +258,6 @@ def sha256_file(path, previous=None):
 
 
 def registry_digest(image):
-    if "@" in image:
-        return None, "digest lookup requires a tagged image reference"
     if image.startswith("ghcr.io/"):
         registry = "ghcr.io"
         service = "ghcr.io"
@@ -268,9 +272,20 @@ def registry_digest(image):
         name_and_tag = image
         if "/" not in name_and_tag:
             name_and_tag = "library/" + name_and_tag
-    if ":" not in name_and_tag:
-        return None, f"{registry} image reference has no explicit tag"
-    repository, tag = name_and_tag.rsplit(":", 1)
+    expected_digest = None
+    if "@" in name_and_tag:
+        repository, tag = name_and_tag.rsplit("@", 1)
+        if (not tag.startswith("sha256:") or len(tag) != 71
+                or any(c not in "0123456789abcdef" for c in tag[7:])):
+            return None, "invalid pinned SHA-256 image reference"
+        expected_digest = tag
+    else:
+        if ":" not in name_and_tag:
+            return None, f"{registry} image reference has no explicit tag"
+        repository, tag = name_and_tag.rsplit(":", 1)
+    # Docker permits name:tag@digest; the digest remains authoritative.
+    if expected_digest and ":" in repository:
+        repository = repository.rsplit(":", 1)[0]
     try:
         query = urllib.parse.urlencode(
             {"service": service, "scope": f"repository:{repository}:pull"}
@@ -296,6 +311,8 @@ def registry_digest(image):
             digest = response.headers.get("Docker-Content-Digest")
         if not digest:
             return None, f"{registry} response omitted Docker-Content-Digest"
+        if expected_digest and digest != expected_digest:
+            return None, f"{registry} response digest differs from pinned digest"
         return digest, None
     except (OSError, KeyError, ValueError, urllib.error.URLError) as exc:
         return None, f"{type(exc).__name__}: {exc}"
@@ -320,6 +337,24 @@ def inspect_sif(apptainer, sif):
     except (KeyError, TypeError, json.JSONDecodeError) as exc:
         return None, f"invalid Apptainer inspect JSON: {exc}"
     return labels.get("org.label-schema.usage.singularity.deffile.from"), None
+
+
+class PinnedImageValidationError(Exception):
+    def __init__(self, message, evidence=None):
+        super().__init__(message)
+        self.evidence = evidence or {}
+
+
+def pinned_source_matches(image, source_ref):
+    source = str(source_ref or "").strip()
+    if source.startswith("docker://"):
+        source = source[len("docker://"):]
+    if not image.startswith("ghcr.io/"):
+        for prefix in ("docker.io/", "index.docker.io/", "registry-1.docker.io/"):
+            if source.startswith(prefix):
+                source = source[len(prefix):]
+                break
+    return normalize_image_ref(source) == image
 
 
 def run_pull(command, timeout):
@@ -359,6 +394,8 @@ def atomic_json(path, value):
 
 def failure_category(error):
     lowered = error.lower()
+    if "pinned image validation" in lowered:
+        return "pinned_image_validation_failed"
     if "manifest unknown" in lowered:
         return "registry_manifest_not_found"
     if "403" in lowered or "forbidden" in lowered or "unauthorized" in lowered:
@@ -488,7 +525,32 @@ for image in images:
         sif = sif_cache_dir / image_to_sif_name(image)
         previous = records.get(image) if isinstance(records.get(image), dict) else None
         digest_before, digest_before_error = registry_digest(image)
-        if sif.exists():
+        pinned_digest = image.rsplit("@", 1)[1] if "@" in image else None
+        if pinned_digest and (digest_before_error or digest_before != pinned_digest):
+            raise PinnedImageValidationError(
+                "Pinned image validation before pull: " + str(digest_before_error or "digest mismatch"),
+                {"stage":"before_pull", "expected_digest":pinned_digest,
+                 "observed_digest":digest_before, "registry_error":digest_before_error}
+            )
+        pinned_cache_valid = False
+        pinned_cache_sha = None
+        if pinned_digest and sif.exists():
+            cached_source, cached_inspect_error = inspect_sif(apptainer_bin, sif)
+            pinned_cache_sha = sha256_file(sif)
+            pinned_cache_valid = bool(
+                previous and previous.get("status") in {"cached", "pulled"}
+                and previous.get("provenance_strength") == "pull_attested"
+                and previous.get("oci_digest") == pinned_digest
+                and previous.get("sif_bytes") == sif.stat().st_size
+                and previous.get("sif_sha256") == pinned_cache_sha
+                and not cached_inspect_error and pinned_source_matches(image, cached_source)
+            )
+            if not pinned_cache_valid:
+                print(json.dumps({"event":"pinned_cache_requires_rebuild", "image":image,
+                                  "action":"retain current file until replacement is validated"}), flush=True)
+                if payload.get("existing_only", False):
+                    raise PinnedImageValidationError("Pinned image validation: cached SIF lacks matching attestation/hash/source")
+        if sif.exists() and (not pinned_digest or pinned_cache_valid):
             cached += 1
             source_ref, inspect_error = inspect_sif(apptainer_bin, sif)
             if previous and previous.get("status") in {"cached", "pulled"}:
@@ -501,7 +563,7 @@ for image in images:
                     "last_verified_oci_digest_error": digest_before_error,
                     "sif_bytes": sif.stat().st_size,
                     "sif_mtime_ns": sif.stat().st_mtime_ns,
-                    "sif_sha256": sha256_file(sif, previous),
+                    "sif_sha256": pinned_cache_sha if pinned_digest else sha256_file(sif, previous),
                 }
             else:
                 records[image] = {
@@ -584,12 +646,27 @@ for image in images:
             else:
                 attempt_returncode = result.returncode
                 if result.returncode == 0 and temporary.exists():
+                    validated_sha = None
+                    if pinned_digest:
+                        digest_after, digest_after_error = registry_digest(image)
+                        source_ref, inspect_error = inspect_sif(apptainer_bin, temporary)
+                        if (digest_after_error or digest_after != pinned_digest or inspect_error
+                                or not pinned_source_matches(image, source_ref)):
+                            raise PinnedImageValidationError(
+                                "Pinned image validation before promotion: "
+                                + str(digest_after_error or inspect_error or "digest/source mismatch"),
+                                {"stage":"before_promotion", "expected_digest":pinned_digest,
+                                 "observed_digest":digest_after, "registry_error":digest_after_error,
+                                 "source_ref":source_ref, "inspect_error":inspect_error}
+                            )
+                        validated_sha = sha256_file(temporary)
                     temporary.replace(sif)
                     pulled += 1
                     ok = True
                     size = sif.stat().st_size
-                    digest_after, digest_after_error = registry_digest(image)
-                    source_ref, inspect_error = inspect_sif(apptainer_bin, sif)
+                    if not pinned_digest:
+                        digest_after, digest_after_error = registry_digest(image)
+                        source_ref, inspect_error = inspect_sif(apptainer_bin, sif)
                     digest_matches = bool(
                         digest_before
                         and digest_after
@@ -616,7 +693,7 @@ for image in images:
                         "sif_path": str(sif),
                         "sif_bytes": size,
                         "sif_mtime_ns": sif.stat().st_mtime_ns,
-                        "sif_sha256": sha256_file(sif),
+                        "sif_sha256": validated_sha if pinned_digest else sha256_file(sif),
                         "recorded_at": utc_now(),
                     }
                     provenance["updated_at"] = utc_now()
@@ -709,8 +786,8 @@ for image in images:
                 flush=True,
             )
 
-    except (OSError, subprocess.TimeoutExpired, UnicodeError) as exc:
-        error = f"Image preparation filesystem/process error: {exc}"
+    except (OSError, subprocess.TimeoutExpired, UnicodeError, PinnedImageValidationError) as exc:
+        error = str(exc) if isinstance(exc, PinnedImageValidationError) else f"Image preparation filesystem/process error: {exc}"
         failures.append((image, error))
         prior = records.get(image)
         failed_record = {
@@ -718,6 +795,8 @@ for image in images:
             "error": error, "failure_category": failure_category(error),
             "errno": getattr(exc, "errno", None), "recorded_at": utc_now(),
         }
+        if isinstance(exc, PinnedImageValidationError):
+            failed_record["validation_evidence"] = exc.evidence
         if prior:
             failed_record["prior_records"] = [prior]
         records[image] = failed_record
@@ -950,7 +1029,7 @@ def main() -> int:
         existing = _remote_existing_sifs(ssh_target, ssh_port, ssh_key, sif_cache_dir)
         if args.missing_only:
             images = [
-                image for image in images if _image_to_sif_name(image) not in existing
+                image for image in images if "@" in image or _image_to_sif_name(image) not in existing
             ]
         else:
             images = [
@@ -1014,6 +1093,7 @@ def main() -> int:
         "lock_file": lock_file,
         "cleanup_tmp": args.cleanup_tmp,
         "cleanup_apptainer_cache": args.cleanup_apptainer_cache,
+        "existing_only": args.existing_only,
         "downloader_source_sha256": metadata["downloader_source_sha256"],
     }
     command = "python3 -c " + shlex.quote(_remote_script())

@@ -1,0 +1,2008 @@
+{
+  "dataset": "Xin-Zhou-smu/SWE-RPG-Bench",
+  "files": [
+    {
+      "bytes": 3901,
+      "git_blob_sha1": "2645efcb69c892729ca33b632bbccc1a6898f4df",
+      "path": "INSTALLATION.md",
+      "sha256": "251b96ada12f5aaafaedfa137ca8ece48c6027c1bceb81bf56d61018ccc2f62c"
+    },
+    {
+      "bytes": 1383,
+      "git_blob_sha1": "50023d52fa8446dacdef88c9324a9177df4dd31e",
+      "path": "README.md",
+      "sha256": "62e63aedc7d71b3325ea254e3d56947d5141a40cde92fe9e461615c2c9722b50"
+    },
+    {
+      "bytes": 33756617,
+      "git_blob_sha1": "a7989d8e56b8e127be1fb6a525faac85825e687d",
+      "path": "data/benchmark.jsonl",
+      "sha256": "90c3f55fe74a111daad93d017d38a834136411678f0f9b03e0193cd076ef35a2"
+    },
+    {
+      "bytes": 44390,
+      "git_blob_sha1": "8ac3cfbab729590d475a7178619222b369787c82",
+      "path": "data/images.json",
+      "sha256": "8b6602609e3faafd6f64ea60b04812e9008e2a25e75d7dc2774133cf905c2937"
+    },
+    {
+      "bytes": 24917,
+      "git_blob_sha1": "70af2d06db3fbe90b12790f08d96ec8f1353a4fc",
+      "path": "data/mid-groundtruths/planning/Java/AntennaPod__AntennaPod-7537_imple_logic_en.yaml",
+      "sha256": "fd47c7922a1d803d6edb531072568b69efbb4db5b3b88f0cffaefa51ae7b76a4"
+    },
+    {
+      "bytes": 11902,
+      "git_blob_sha1": "9f5417b369f3fbd44b727cc0ab32a42cc8b0a2e3",
+      "path": "data/mid-groundtruths/planning/Java/AntennaPod__AntennaPod-7581_imple_logic_en.yaml",
+      "sha256": "567943ff7cd200ac844cd9037949869132400f97a73b74eeacdb8e7970f9c470"
+    },
+    {
+      "bytes": 17630,
+      "git_blob_sha1": "def29476de0234b26fa9ba9a259a5cb92cf08373",
+      "path": "data/mid-groundtruths/planning/Java/AntennaPod__AntennaPod-7755_imple_logic_en.yaml",
+      "sha256": "33675981582aeb0e9c2a80e3e1ad0ef7dc24bc1c1cf22be21a98df4e91647ae7"
+    },
+    {
+      "bytes": 4906,
+      "git_blob_sha1": "2a285468030c20a4fd9d9ab15a013f2333780363",
+      "path": "data/mid-groundtruths/planning/Java/GoogleContainerTools__jib-4345_imple_logic_en.yaml",
+      "sha256": "3980019ae85561dc7634c6dd6d9ddf06b2dab3e58c054cdc1e0f791cdc5c261c"
+    },
+    {
+      "bytes": 2799,
+      "git_blob_sha1": "505380c7d824470df892c28265152dc139ad9399",
+      "path": "data/mid-groundtruths/planning/Java/OpenAPITools__openapi-generator-17495_imple_logic_en.yaml",
+      "sha256": "0e89e6cb898467dfbf1a71c1d77e136d08f4d359d4938e146cc6cced19cf93ef"
+    },
+    {
+      "bytes": 3501,
+      "git_blob_sha1": "78db3e314f07bf83ec0f2c65e5864ff9bf7fddc5",
+      "path": "data/mid-groundtruths/planning/Java/OpenAPITools__openapi-generator-18504_imple_logic_en.yaml",
+      "sha256": "e25894ab416d4751be6a86511404ad9689f0cbc74135a228651313f42c0ba8e3"
+    },
+    {
+      "bytes": 4477,
+      "git_blob_sha1": "004403714a3e8f214277891760954ee471a1070f",
+      "path": "data/mid-groundtruths/planning/Java/OpenAPITools__openapi-generator-18835_imple_logic_en.yaml",
+      "sha256": "503fe852b6cdc32cfb87c60bea94d312113dca5f8d3f3777ca7277b81fecc8a7"
+    },
+    {
+      "bytes": 4706,
+      "git_blob_sha1": "8b4d0bd26dbf608fc82f3270560fbe8630738d19",
+      "path": "data/mid-groundtruths/planning/Java/OpenAPITools__openapi-generator-19401_imple_logic_en.yaml",
+      "sha256": "a33d14a0772219fd80633ea404f11a604b6b575843f3c38440f73a61c32a9aee"
+    },
+    {
+      "bytes": 9056,
+      "git_blob_sha1": "2df0b1cbbca6b37d04245667869401ea6445117a",
+      "path": "data/mid-groundtruths/planning/Java/OpenAPITools__openapi-generator-19992_imple_logic_en.yaml",
+      "sha256": "fa4e85b55893cbb76645c73eef373102a06f1b98c3c47722a223eb22da7162f8"
+    },
+    {
+      "bytes": 4943,
+      "git_blob_sha1": "4c3400be5bc03ef2a46764ca5ed49a61cff1b291",
+      "path": "data/mid-groundtruths/planning/Java/OpenAPITools__openapi-generator-20083_imple_logic_en.yaml",
+      "sha256": "2d3fa550f9cea279caf1bca10c35183cbe5740be541e49fc1d4a610a9c8261ae"
+    },
+    {
+      "bytes": 6225,
+      "git_blob_sha1": "8126f8286276349ed58e92425e54239102e92805",
+      "path": "data/mid-groundtruths/planning/Java/OpenAPITools__openapi-generator-20793_imple_logic_en.yaml",
+      "sha256": "a3ee4ebb0c06bbcdf95a929de364d9a2579ee25604d162128f11d0deb9ffb15b"
+    },
+    {
+      "bytes": 2321,
+      "git_blob_sha1": "d47f2974439de444572d0ac4104872bd86aae408",
+      "path": "data/mid-groundtruths/planning/Java/OpenAPITools__openapi-generator-21480_imple_logic_en.yaml",
+      "sha256": "3a245697242a0a1511dce96a61b545fdd25bf055ce47b0801133790a40caba61"
+    },
+    {
+      "bytes": 5801,
+      "git_blob_sha1": "26f9f483f54754f3d27b03f9c780e1acd6c544a9",
+      "path": "data/mid-groundtruths/planning/Java/OpenAPITools__openapi-generator-21536_imple_logic_en.yaml",
+      "sha256": "e01c6b9e872ef01939dffb2848631a9e9b85f33a806d921a67613001b7474a26"
+    },
+    {
+      "bytes": 2357,
+      "git_blob_sha1": "9c0bdda20fbaa1f06be99597bd4112a49c12ac4c",
+      "path": "data/mid-groundtruths/planning/Java/OpenRefine__OpenRefine-6609_imple_logic_en.yaml",
+      "sha256": "b96c72c6eb2cccc939c7b265c837b98a4dc8353dcce8d938f402de25d011d9ef"
+    },
+    {
+      "bytes": 3064,
+      "git_blob_sha1": "6e962d773aab3283275de261b568c76292359840",
+      "path": "data/mid-groundtruths/planning/Java/OpenRefine__OpenRefine-6708_imple_logic_en.yaml",
+      "sha256": "bb89f4f3e1fd6bae137805968d5a1b51214297ba39e987acf15652cb7def89c2"
+    },
+    {
+      "bytes": 14761,
+      "git_blob_sha1": "b8a86cc3ef8ece23380bf4491dccccc0be941ef9",
+      "path": "data/mid-groundtruths/planning/Java/OpenRefine__OpenRefine-7061_imple_logic_en.yaml",
+      "sha256": "b551aac5c9b0ec1c6d52a0a6f33f7d4fd8359fa9981a4c0f013adf939bcb7708"
+    },
+    {
+      "bytes": 2825,
+      "git_blob_sha1": "cdfbc05459a57c899a925f83565ba13d33840046",
+      "path": "data/mid-groundtruths/planning/Java/OpenRefine__OpenRefine-7079_imple_logic_en.yaml",
+      "sha256": "c954b8a25a2c34e20eddf5f1eac593b07aa94c2a2213b38861e1072a0982f942"
+    },
+    {
+      "bytes": 9194,
+      "git_blob_sha1": "06741995dc8b0eb6c434941961a26965537dbdfa",
+      "path": "data/mid-groundtruths/planning/Java/OpenRefine__OpenRefine-7127_imple_logic_en.yaml",
+      "sha256": "37563754be4ab1bb8c55fba19bb2b77bf5f5ec3dc2f1337e9ca9ecf6a105c9df"
+    },
+    {
+      "bytes": 13966,
+      "git_blob_sha1": "737e28a273efedd78a4b146392e07cb9cda41f10",
+      "path": "data/mid-groundtruths/planning/Java/OpenRefine__OpenRefine-7173_imple_logic_en.yaml",
+      "sha256": "bc438f1c5a070aea8ce613978125a84e0e2177ed31c2d2aa6e0d801291c58d3c"
+    },
+    {
+      "bytes": 3154,
+      "git_blob_sha1": "626dd65ab6bc9f2223247a484c9f2fa4cf32c849",
+      "path": "data/mid-groundtruths/planning/Java/OpenRefine__OpenRefine-7211_imple_logic_en.yaml",
+      "sha256": "968882741179bbebd211fab15f7481d2df437919d5bc251c068ae0db188dc11b"
+    },
+    {
+      "bytes": 15040,
+      "git_blob_sha1": "79c8103275ca100fe8626acf1e237ebd31207014",
+      "path": "data/mid-groundtruths/planning/Java/OpenRefine__OpenRefine-7236_imple_logic_en.yaml",
+      "sha256": "ab75cd71d759e0966c3522095ec1eb8a30bf43d3e71a76e0045c479ea0e5326c"
+    },
+    {
+      "bytes": 28920,
+      "git_blob_sha1": "bede1e073c94eef4ed003fda62a14b7838293e0f",
+      "path": "data/mid-groundtruths/planning/Java/OpenRefine__OpenRefine-7243_imple_logic_en.yaml",
+      "sha256": "b3d1709fd4eab2fedb87d0a568e317d12b8fc0d0d53ff2b070e9c2dbc103ffab"
+    },
+    {
+      "bytes": 11487,
+      "git_blob_sha1": "37593b3b7d0e956ba073237e4822faee7ac7d53f",
+      "path": "data/mid-groundtruths/planning/Java/OpenRefine__OpenRefine-7247_imple_logic_en.yaml",
+      "sha256": "0aca74ae13f02e5df53402f842a624271b57d01ad15c33b3b610243e87e09ab7"
+    },
+    {
+      "bytes": 6514,
+      "git_blob_sha1": "48d45c768b10bcce5f6dcf49ca70a0320692bf6c",
+      "path": "data/mid-groundtruths/planning/Java/OpenRefine__OpenRefine-7353_imple_logic_en.yaml",
+      "sha256": "f017debfa2deb9c4ba3792aacabca0b80fab3d6e21bb7246026e076f35ba4abf"
+    },
+    {
+      "bytes": 15462,
+      "git_blob_sha1": "8be2e3ad4cc5a1a31a19d67708ed142d0e3c9a54",
+      "path": "data/mid-groundtruths/planning/Java/OpenRefine__OpenRefine-7459_imple_logic_en.yaml",
+      "sha256": "ab6df3651becab3c26476dba600315a739be34052609665a7f5a028f0594384a"
+    },
+    {
+      "bytes": 14817,
+      "git_blob_sha1": "02778bb994f783cb775279d37aad2580fa7ce00f",
+      "path": "data/mid-groundtruths/planning/Java/OpenRefine__OpenRefine-7507_imple_logic_en.yaml",
+      "sha256": "e5c70f01efb0407fc97b14921159ca040b2675d451c678413ee2cc21dc18de2a"
+    },
+    {
+      "bytes": 2133,
+      "git_blob_sha1": "bd2aee912e574f2f94ab6ade0de9b437e27b1d49",
+      "path": "data/mid-groundtruths/planning/Java/OpenRefine__OpenRefine-7553_imple_logic_en.yaml",
+      "sha256": "7f8b0e90d5c58eed0011d153497b3b5c082b2be769f601067dd77c940faa0b80"
+    },
+    {
+      "bytes": 3987,
+      "git_blob_sha1": "584e8816c49798e92150515f7c6936fea8af9201",
+      "path": "data/mid-groundtruths/planning/Java/ReactiveX__RxJava-7855_imple_logic_en.yaml",
+      "sha256": "06975920f36c18cbe3dde56a2a9c4afb721904d1711e230b4fa607e0a1f7fa8f"
+    },
+    {
+      "bytes": 5851,
+      "git_blob_sha1": "714b6ff5fd0a106b941a2b21c4ec52538104bc9e",
+      "path": "data/mid-groundtruths/planning/Java/ReactiveX__RxJava-7879_imple_logic_en.yaml",
+      "sha256": "8366c75e509fddd7de77617a281c04dd682df6e02b73c78780b2c47c362251b6"
+    },
+    {
+      "bytes": 4243,
+      "git_blob_sha1": "1ab28742cd3258a20e751325a7399dfe4c6cb535",
+      "path": "data/mid-groundtruths/planning/Java/TheAlgorithms__Java-5462_imple_logic_en.yaml",
+      "sha256": "82508d05fc8d702c448fd3655d4ee37ec33b86c061d990d9ecab733512d7bfb1"
+    },
+    {
+      "bytes": 2909,
+      "git_blob_sha1": "c8dc1c8f86fd21b16bea68b2b1ab8a0221c6c6d6",
+      "path": "data/mid-groundtruths/planning/Java/TheAlgorithms__Java-6333_imple_logic_en.yaml",
+      "sha256": "d659a982a332b81f432e8662482b516d8febb09c8fd2531993eb29f3c6015136"
+    },
+    {
+      "bytes": 2830,
+      "git_blob_sha1": "50a37a2a91f5350607d1574989e194344b20ba32",
+      "path": "data/mid-groundtruths/planning/Java/TheAlgorithms__Java-6566_imple_logic_en.yaml",
+      "sha256": "4d96fa305b7100e1c3b116e8fa547188c16f3acb23afc6b3760fdb4622bc530a"
+    },
+    {
+      "bytes": 3222,
+      "git_blob_sha1": "b618c1f5965fe8eef4c9145e09183cffc7260275",
+      "path": "data/mid-groundtruths/planning/Java/TheAlgorithms__Java-6756_imple_logic_en.yaml",
+      "sha256": "2098dc164d3f70fdceeb5b7bf28b35affdbcb83a9fd178a739a1b5b133f3d36f"
+    },
+    {
+      "bytes": 2896,
+      "git_blob_sha1": "23d810cf723897e6d97a1924491cd10a2a6d76ae",
+      "path": "data/mid-groundtruths/planning/Java/TheAlgorithms__Java-6762_imple_logic_en.yaml",
+      "sha256": "21174745fd53de08b5510f73f112893b1b18525a337391f755a0ad16a487540d"
+    },
+    {
+      "bytes": 4731,
+      "git_blob_sha1": "47706071e9029b23987f55963f8ea4302f09097f",
+      "path": "data/mid-groundtruths/planning/Java/TheAlgorithms__Java-6779_imple_logic_en.yaml",
+      "sha256": "4041baa166d84fa749ac26d48b20e2ff708fb08d881af3f1c39f23678ebe9732"
+    },
+    {
+      "bytes": 2934,
+      "git_blob_sha1": "ac0f36bfcbc6699d222bf108e4843c1e36c75710",
+      "path": "data/mid-groundtruths/planning/Java/TheAlgorithms__Java-6793_imple_logic_en.yaml",
+      "sha256": "b3e23496a9bd701ad592b68236cc76635a196b25c9ea236a69662f15895b2303"
+    },
+    {
+      "bytes": 16258,
+      "git_blob_sha1": "3242d13aa6a3a64c18906ad0b6f2c0c7f9fc3afc",
+      "path": "data/mid-groundtruths/planning/Java/TheAlgorithms__Java-6799_imple_logic_en.yaml",
+      "sha256": "dc698b414022aab70912ea524ff4807da2719622fe7aad8ae4e4293d254ebb42"
+    },
+    {
+      "bytes": 4135,
+      "git_blob_sha1": "99170f167b0595fc311b5d5cade66f32467cdd56",
+      "path": "data/mid-groundtruths/planning/Java/TheAlgorithms__Java-6818_imple_logic_en.yaml",
+      "sha256": "3eecabd4953a88b4cde32d7f435a8391df80374244fae1d2d51edd0b3af05adb"
+    },
+    {
+      "bytes": 16143,
+      "git_blob_sha1": "713501cc67d18b793d2985c71d18d5a5dfc6bc84",
+      "path": "data/mid-groundtruths/planning/Java/TheAlgorithms__Java-6871_imple_logic_en.yaml",
+      "sha256": "2ca2f17331e17eb7e23eb4fefbab013b2615e06c1549783dee559eede6b3cedb"
+    },
+    {
+      "bytes": 12850,
+      "git_blob_sha1": "16a964c618810e0f7563dd8bfaa546a39ab2f94e",
+      "path": "data/mid-groundtruths/planning/Java/TheAlgorithms__Java-6926_imple_logic_en.yaml",
+      "sha256": "650b6ec66f942d898844ac130640bbf348152107ce3aaf0821675423fe40b7c3"
+    },
+    {
+      "bytes": 5762,
+      "git_blob_sha1": "079f742fa8831684fbcacf2cf2abd5826118c0e8",
+      "path": "data/mid-groundtruths/planning/Java/TheAlgorithms__Java-6990_imple_logic_en.yaml",
+      "sha256": "21ebccda0ed3ec5ee5eeb238d95ded8aa51e993b6ed367dd4b3cfa7019026104"
+    },
+    {
+      "bytes": 2754,
+      "git_blob_sha1": "ec97250876e2122bd4e181223621ae6638952cc7",
+      "path": "data/mid-groundtruths/planning/Java/TheAlgorithms__Java-7011_imple_logic_en.yaml",
+      "sha256": "605244f55145f0734d9287b7d03652d5dde826e0cd2705f513069e8f1184ed73"
+    },
+    {
+      "bytes": 2414,
+      "git_blob_sha1": "ec63948a938c116d4f642bff18f7c5cc5e0181ee",
+      "path": "data/mid-groundtruths/planning/Java/TheAlgorithms__Java-7065_imple_logic_en.yaml",
+      "sha256": "9a653fc2258f8c542702d3bf7858c02cbd42782ffe624250098e8d5ec6645445"
+    },
+    {
+      "bytes": 7487,
+      "git_blob_sha1": "d6931bc10252dc4f31604c525839a47a1311200e",
+      "path": "data/mid-groundtruths/planning/Java/TheAlgorithms__Java-7066_imple_logic_en.yaml",
+      "sha256": "ef3f4eba8364f6f5dfe695277cd3bcddf5974641e32fa04ad4ebb347069740ca"
+    },
+    {
+      "bytes": 7656,
+      "git_blob_sha1": "03542c4b73bfde457d5a65e5f7b197b36e143ed7",
+      "path": "data/mid-groundtruths/planning/Java/TheAlgorithms__Java-7071_imple_logic_en.yaml",
+      "sha256": "2ff7263e8e5c60ffc5e92e6b736e4f998eee9e63871b87311840fc1668ef54fd"
+    },
+    {
+      "bytes": 3643,
+      "git_blob_sha1": "d272d0950ca29c3bce7bf86d46f315c628108f4e",
+      "path": "data/mid-groundtruths/planning/Java/TheAlgorithms__Java-7072_imple_logic_en.yaml",
+      "sha256": "3f3748497c4277cab3401bf01eccf32502d2068adc225fd1eb79c77f194efead"
+    },
+    {
+      "bytes": 3208,
+      "git_blob_sha1": "d415d903a0a3efb9f36bfeea44d9fb6911792d68",
+      "path": "data/mid-groundtruths/planning/Java/TheAlgorithms__Java-7117_imple_logic_en.yaml",
+      "sha256": "9d789ce0906a2de9e1be82c7e1b7973bb01aa5565b778f5cc6b8ac395d74699e"
+    },
+    {
+      "bytes": 5027,
+      "git_blob_sha1": "3342016fcd3f13f9a132de6581ca6e6b7a1ba32d",
+      "path": "data/mid-groundtruths/planning/Java/alibaba__nacos-12343_imple_logic_en.yaml",
+      "sha256": "7292afc55cbb868b3b09579e8246049ae61be1c8282c9cbe62d50a6939745ac3"
+    },
+    {
+      "bytes": 3581,
+      "git_blob_sha1": "63c786ff7d7ee1e5d5db88af1b84ac13985bbcee",
+      "path": "data/mid-groundtruths/planning/Java/alibaba__nacos-12582_imple_logic_en.yaml",
+      "sha256": "dd0a917911eaa790d4313d1a0f9e951c7854b010e2b604fd501232ff7ae09007"
+    },
+    {
+      "bytes": 5030,
+      "git_blob_sha1": "fe0eca7000079aa70c861f298679c0db39aacd4b",
+      "path": "data/mid-groundtruths/planning/Java/apache__rocketmq-8404_imple_logic_en.yaml",
+      "sha256": "c4677101931cfbe16d7265db499ddb084b76f9166a25007f47986a1ff9eb6935"
+    },
+    {
+      "bytes": 11694,
+      "git_blob_sha1": "b47df77b26969f76934695a18452c3ab3569cfe6",
+      "path": "data/mid-groundtruths/planning/Java/apache__rocketmq-8807_imple_logic_en.yaml",
+      "sha256": "fdaebe1d837dc00c7f0625113045bc827a21efe94ed67c8797fb2a2b9bf711df"
+    },
+    {
+      "bytes": 4451,
+      "git_blob_sha1": "e8f456acd5bd9686fa94b04804e1b018026557d8",
+      "path": "data/mid-groundtruths/planning/Java/apache__rocketmq-8986_imple_logic_en.yaml",
+      "sha256": "2742ad2cc7f63b2534e2a6843fe87771ad28b81c9e1f9ace89a1c762513ed226"
+    },
+    {
+      "bytes": 3088,
+      "git_blob_sha1": "d93f3ea1760073cc73225ff0d396818afa50f46a",
+      "path": "data/mid-groundtruths/planning/Java/apache__rocketmq-9107_imple_logic_en.yaml",
+      "sha256": "97dc82bb8d2c9c6bfdec340ba2880727a9de38b36bf810bacd30f21b6454e21a"
+    },
+    {
+      "bytes": 3460,
+      "git_blob_sha1": "f1fc5d8aba3de41c749f3993a74b81d86d90c0d2",
+      "path": "data/mid-groundtruths/planning/Java/apache__rocketmq-9718_imple_logic_en.yaml",
+      "sha256": "e7f8248d956f7ed9fc1d4228e71509def2772d73019c0ad87e3d0d208b37eb6a"
+    },
+    {
+      "bytes": 2918,
+      "git_blob_sha1": "55372edeaa3f0668a9bc5d65a563559accd5ea8a",
+      "path": "data/mid-groundtruths/planning/Java/apache__rocketmq-9759_imple_logic_en.yaml",
+      "sha256": "b73d93573970c71804d775774137dd80ad01f028bf8bfd8bc9866e6ccf768b43"
+    },
+    {
+      "bytes": 15722,
+      "git_blob_sha1": "9335ba1b88e5316ed8789f20694e61a18e5599b4",
+      "path": "data/mid-groundtruths/planning/Java/grpc__grpc-java-11933_imple_logic_en.yaml",
+      "sha256": "d203fbe851f4bb578c6e83d452e96f8c975e7421bd7e6486d58c197ee9017370"
+    },
+    {
+      "bytes": 2928,
+      "git_blob_sha1": "8e2ef668860ac8a4fbc9e6e177c6233d36808541",
+      "path": "data/mid-groundtruths/planning/Java/grpc__grpc-java-12353_imple_logic_en.yaml",
+      "sha256": "9ecd0583bd51b098c75e1d498a6f78aff7a3fcfea026aa52879878ef2c52288c"
+    },
+    {
+      "bytes": 4208,
+      "git_blob_sha1": "b135d02ba08c61b31cf976546e14c271be9a49d2",
+      "path": "data/mid-groundtruths/planning/Java/grpc__grpc-java-12441_imple_logic_en.yaml",
+      "sha256": "8700faa3948cf2642b8cfa2c407ddd839385b408f4fda14987f5af9822a2f437"
+    },
+    {
+      "bytes": 2878,
+      "git_blob_sha1": "75e228b23207c3c6ba546ab5949b0e8192016e63",
+      "path": "data/mid-groundtruths/planning/Java/grpc__grpc-java-12466_imple_logic_en.yaml",
+      "sha256": "c200082706c169dda85a102ba3e24862e397928a1e51b4af407194e1e2be727b"
+    },
+    {
+      "bytes": 5940,
+      "git_blob_sha1": "62472a8f06c3846dabfa48f20e2ef6403a2811ca",
+      "path": "data/mid-groundtruths/planning/Java/junit-team__junit-framework-4474_imple_logic_en.yaml",
+      "sha256": "b89f1b444cdb70bb2dee93bb75eb902a80b8e276927be6eb6b8e37f292ab493f"
+    },
+    {
+      "bytes": 3320,
+      "git_blob_sha1": "51b00c72e235e7710cb730b721b9ef4d097df46a",
+      "path": "data/mid-groundtruths/planning/Java/junit-team__junit-framework-4629_imple_logic_en.yaml",
+      "sha256": "82eabe5bbbaf0e0312f6f0edc8337629e3c7deb6fde8a3e2d46a43ec04d3ca80"
+    },
+    {
+      "bytes": 13419,
+      "git_blob_sha1": "1242707662ecb2b246e57ca395a21d2cd4204349",
+      "path": "data/mid-groundtruths/planning/Java/keycloak__keycloak-39361_imple_logic_en.yaml",
+      "sha256": "a1e653d51fa4eb18a61e430926e0791844f55e9fa8677959d5b8fd343fa0ab27"
+    },
+    {
+      "bytes": 15716,
+      "git_blob_sha1": "cc7aedbd49cba807c4e91fd365e0e147d2367e7f",
+      "path": "data/mid-groundtruths/planning/Java/keycloak__keycloak-41440_imple_logic_en.yaml",
+      "sha256": "7ff381a3f7012ef3a605ede116a9eb4459cca18d3fb9e8ae8ce4119ebe6c2801"
+    },
+    {
+      "bytes": 4076,
+      "git_blob_sha1": "12fc66c341a18ced76ddc2615e60c3a69eb36d0a",
+      "path": "data/mid-groundtruths/planning/Java/langchain4j__langchain4j-2192_imple_logic_en.yaml",
+      "sha256": "d626b016087f9cc385715a7ee207af4d47bccb73c11fb6c12b5d087189fbd56d"
+    },
+    {
+      "bytes": 11120,
+      "git_blob_sha1": "88b71510bd59546fb29e122f6b4bdd9943028e7b",
+      "path": "data/mid-groundtruths/planning/Java/mapstruct__mapstruct-3492_imple_logic_en.yaml",
+      "sha256": "703225a53c3ccdf8317ce24aa92a8c1447f2757480c4c126d8bbc409e8e5db3a"
+    },
+    {
+      "bytes": 6394,
+      "git_blob_sha1": "13cf514a1e7f47c58ed9eb05ff24899b710f1179",
+      "path": "data/mid-groundtruths/planning/Java/mapstruct__mapstruct-3908_imple_logic_en.yaml",
+      "sha256": "c6a5c82621964c88f8607059719c4045eceb66a6c5ec9ff50ff1211af699ce28"
+    },
+    {
+      "bytes": 2912,
+      "git_blob_sha1": "75d79c28154059114c2eae2bcfb48862e8cf0c92",
+      "path": "data/mid-groundtruths/planning/Java/mockito__mockito-3335_imple_logic_en.yaml",
+      "sha256": "a0467821b42413863c1c6c36ecd0ad2f2bcd1e9dc324195ecf3f3db41cdee72d"
+    },
+    {
+      "bytes": 4259,
+      "git_blob_sha1": "c034eb2437de007f915d092cd4b34f36b9db3737",
+      "path": "data/mid-groundtruths/planning/Java/mockito__mockito-3349_imple_logic_en.yaml",
+      "sha256": "69a0a1d833f92cf8ee6225224086e27677e4975adab7d8255b17ccb0ab956eac"
+    },
+    {
+      "bytes": 4031,
+      "git_blob_sha1": "6f5eb0d6b9585f138f417114d58ade9aac117ecb",
+      "path": "data/mid-groundtruths/planning/Java/mockito__mockito-3499_imple_logic_en.yaml",
+      "sha256": "f8ab68b247531efc6873d5df4b29c50e8835daf15d4a2bf8455ccf7157e42ed6"
+    },
+    {
+      "bytes": 16673,
+      "git_blob_sha1": "a7ba91823ae4680099010a13dc0b7a7ad3eb2b68",
+      "path": "data/mid-groundtruths/planning/Java/quarkusio__quarkus-49703_imple_logic_en.yaml",
+      "sha256": "040df4f543cf0a6a9a06e4cd9f44ea851174292e8bc1e719763688bcad36adfa"
+    },
+    {
+      "bytes": 8567,
+      "git_blob_sha1": "b8c866f8e842af5cbd5fa9a2c7d7e991fb185a2e",
+      "path": "data/mid-groundtruths/planning/Java/spotbugs__spotbugs-2844_imple_logic_en.yaml",
+      "sha256": "63a03095939abc6dacd6fdbb39e731a41cce27820835b5e0dfa9f388a5e42118"
+    },
+    {
+      "bytes": 13265,
+      "git_blob_sha1": "9489bd55b92d16162f56b81f8cd1e169e9ee88bc",
+      "path": "data/mid-groundtruths/planning/Java/spotbugs__spotbugs-3048_imple_logic_en.yaml",
+      "sha256": "c30edc729dbfab2c36f7d11f61278ab4c93d1be0bcbd9c15272d4548dd511a11"
+    },
+    {
+      "bytes": 6088,
+      "git_blob_sha1": "a8489582eb41db4c60a0729a85119be08a20a3a0",
+      "path": "data/mid-groundtruths/planning/Java/spotbugs__spotbugs-3160_imple_logic_en.yaml",
+      "sha256": "788ed7688180797b0382a020f1904f25135369c9b90666f2cee840457745b2b7"
+    },
+    {
+      "bytes": 8026,
+      "git_blob_sha1": "8caa8447c98d7f6cf28385f4c5dfd6fd702003f0",
+      "path": "data/mid-groundtruths/planning/Java/spotbugs__spotbugs-3424_imple_logic_en.yaml",
+      "sha256": "f7f602ad4aa39b72e940cbc1f608b3422e7d9f4a8d26eb90b779f0fccd473cd8"
+    },
+    {
+      "bytes": 7514,
+      "git_blob_sha1": "cc9c3f28c2da4f31961d9c676fc77330318a79a4",
+      "path": "data/mid-groundtruths/planning/Java/spotbugs__spotbugs-3431_imple_logic_en.yaml",
+      "sha256": "1f76b5ea285bb866762763941e76ac2acd2282b5558243d8113c1e2c4429d518"
+    },
+    {
+      "bytes": 7272,
+      "git_blob_sha1": "3be9ff4907c521254540f80274ac626ff63c2966",
+      "path": "data/mid-groundtruths/planning/Java/spotbugs__spotbugs-3486_imple_logic_en.yaml",
+      "sha256": "4a00da1c2ab9fe800770ff1e30578344924b84ec4bb696cc45cf06ed9618dbea"
+    },
+    {
+      "bytes": 7170,
+      "git_blob_sha1": "16f7e29a15c87b93a9ff643052cca1c4b5857479",
+      "path": "data/mid-groundtruths/planning/Java/spotbugs__spotbugs-3536_imple_logic_en.yaml",
+      "sha256": "d50fbe1129ec37bdb3c7cbf16897a4a5cd8c2483649004c2dc61e144e7db35e7"
+    },
+    {
+      "bytes": 6653,
+      "git_blob_sha1": "c68baf571851bf447d1dbd193410d7767ef61ddf",
+      "path": "data/mid-groundtruths/planning/Java/spotbugs__spotbugs-3547_imple_logic_en.yaml",
+      "sha256": "dea04ea656b292117e6fa9514767c8549ae99d4379fedda98fccb869259b2839"
+    },
+    {
+      "bytes": 5752,
+      "git_blob_sha1": "5230d9cb12ccc4d69aac16378f0732196a15f7f5",
+      "path": "data/mid-groundtruths/planning/Java/spotbugs__spotbugs-3552_imple_logic_en.yaml",
+      "sha256": "60f5063ce106c9d65aaa261c6fdab4cdc61d72624f7db570d967ca616133afe0"
+    },
+    {
+      "bytes": 5781,
+      "git_blob_sha1": "99b39144cb4006d9fadfdcbc1dc1c650066943e9",
+      "path": "data/mid-groundtruths/planning/Java/spotbugs__spotbugs-3557_imple_logic_en.yaml",
+      "sha256": "d52a7a55ec276ef5b65242d0f685956caac79880da6ea31a73acab03c7cdce74"
+    },
+    {
+      "bytes": 13660,
+      "git_blob_sha1": "30a5331053fde0c47b3ebc9bfef74481c70a4bc9",
+      "path": "data/mid-groundtruths/planning/Java/spotbugs__spotbugs-3624_imple_logic_en.yaml",
+      "sha256": "2f651e758b5cd12f52d4bb93d2f2eef932346182d9922b2532201239c8a40d24"
+    },
+    {
+      "bytes": 5776,
+      "git_blob_sha1": "3d66e37e181914ec1691ef884ab402eb12a97fa2",
+      "path": "data/mid-groundtruths/planning/Java/spotbugs__spotbugs-3632_imple_logic_en.yaml",
+      "sha256": "f799fcd68f2f98a752205eda511add3cc5c87bcffe37b76f709d55063e0dfa8b"
+    },
+    {
+      "bytes": 5282,
+      "git_blob_sha1": "0b5a501edfc88366f50771f6e7065ccbf953c492",
+      "path": "data/mid-groundtruths/planning/Java/spotbugs__spotbugs-3646_imple_logic_en.yaml",
+      "sha256": "d2b8f3bc9a19c3e0de44b370d01bd70c4b376df6e8bff6c15d7993e6eef35bdf"
+    },
+    {
+      "bytes": 10078,
+      "git_blob_sha1": "974de5c27955594da38895c116a03403791aafcf",
+      "path": "data/mid-groundtruths/planning/Java/trinodb__trino-20281_imple_logic_en.yaml",
+      "sha256": "04fbaa9c8decdde5ae0619f30d86fd2a7078b4aa50c1643324cfeac7c74d989c"
+    },
+    {
+      "bytes": 2285,
+      "git_blob_sha1": "d97af19e2e846b31d231ce32d7dc6e85c4da10c2",
+      "path": "data/mid-groundtruths/planning/Java/trinodb__trino-21023_imple_logic_en.yaml",
+      "sha256": "2136dd7eb8d1005de971013224b0a5c75f228bb8bc7229d23afb30745ad65ddb"
+    },
+    {
+      "bytes": 3540,
+      "git_blob_sha1": "4783001c64e2c0dca7b5c02d679927501029ee2e",
+      "path": "data/mid-groundtruths/planning/Python/aws-cloudformation__cfn-lint-3377_imple_logic_en.yaml",
+      "sha256": "c46249a737962ca55597666dd0c270a1bbc33669394158d5e3ae65a9875c7483"
+    },
+    {
+      "bytes": 5709,
+      "git_blob_sha1": "8221e809e761585353509d24f9e771c6892f53a8",
+      "path": "data/mid-groundtruths/planning/Python/aws-cloudformation__cfn-lint-3470_imple_logic_en.yaml",
+      "sha256": "1ed859333c6e4e3eaa0221b3c0d71ef30b19fab3b1259421d842dd21bb68f40a"
+    },
+    {
+      "bytes": 3865,
+      "git_blob_sha1": "081c3d349e96bd1e02a81cc93b2367912818b2c2",
+      "path": "data/mid-groundtruths/planning/Python/aws-cloudformation__cfn-lint-3561_imple_logic_en.yaml",
+      "sha256": "1f6a3f7ddf85dc4b8560f5d4f7aa6ee6e67d71ad912a2a7462bcb20b4c5c3de5"
+    },
+    {
+      "bytes": 4288,
+      "git_blob_sha1": "6218fbcb5e8b8b9bf556e98842233970073731e9",
+      "path": "data/mid-groundtruths/planning/Python/aws-cloudformation__cfn-lint-3994_imple_logic_en.yaml",
+      "sha256": "da91aa3d9917e40686a462f537a8eda8df4081ceff74ab9d6c4df29171bf530e"
+    },
+    {
+      "bytes": 4851,
+      "git_blob_sha1": "cce696b9030a6cd6f04fbaa2acc3acbda6aa6f6f",
+      "path": "data/mid-groundtruths/planning/Python/falconry__falcon-2540_imple_logic_en.yaml",
+      "sha256": "e9d1431da7506db82807dda0b11967c396ce10f76d2a81ee911f3412f3e7213c"
+    },
+    {
+      "bytes": 2700,
+      "git_blob_sha1": "f72328a3d6172b5a5f254638f7eafaa2b5b4b2e0",
+      "path": "data/mid-groundtruths/planning/Python/joke2k__faker-2279_imple_logic_en.yaml",
+      "sha256": "d8bd592141b55458f4ef8a90b34bb3206aca6cc4894c9357a034556c473ef293"
+    },
+    {
+      "bytes": 2953,
+      "git_blob_sha1": "b17c3f19743d0f19a3fb6728752e38c1fe6f8baa",
+      "path": "data/mid-groundtruths/planning/Python/joke2k__faker-2309_imple_logic_en.yaml",
+      "sha256": "8d4ecd69358219ee95d9150f2d4d11ffcd7f30ed2ce340cd406e91182065ebbb"
+    },
+    {
+      "bytes": 9458,
+      "git_blob_sha1": "41b9db00789fe82585b0c0092756114f8e6388a6",
+      "path": "data/mid-groundtruths/planning/Python/keras-team__keras-20410_imple_logic_en.yaml",
+      "sha256": "626b0eeb667bcb25d2d9b200876f5d8203bc496d51e70fce1a6aa26243b82454"
+    },
+    {
+      "bytes": 4010,
+      "git_blob_sha1": "2152184b9fda68d26564c42677ebff9833cd29a9",
+      "path": "data/mid-groundtruths/planning/Python/matplotlib__matplotlib-28831_imple_logic_en.yaml",
+      "sha256": "5667e26a278c9f6fc81ce27ea72fd2cd7fc97840655d215e6cb1291967f593f7"
+    },
+    {
+      "bytes": 1914,
+      "git_blob_sha1": "e27eee6019eb04d739c9fd8281573f4c4f9bde38",
+      "path": "data/mid-groundtruths/planning/Python/matplotlib__matplotlib-30019_imple_logic_en.yaml",
+      "sha256": "18de4537d1eb8e24cb6136899234a618cc18aef933211df9d0331df9f7960532"
+    },
+    {
+      "bytes": 3341,
+      "git_blob_sha1": "972c26b33d57ea25567f1b4b84ac3ebf360e13c6",
+      "path": "data/mid-groundtruths/planning/Python/matplotlib__matplotlib-30636_imple_logic_en.yaml",
+      "sha256": "1db41cf42b99c9dc987f0060af7d85f863ec25be55d12d74b7d1647cd8255b76"
+    },
+    {
+      "bytes": 2924,
+      "git_blob_sha1": "5360d9019d2bf63a9a1e1a3e5b33a76c7dc3e9da",
+      "path": "data/mid-groundtruths/planning/Python/matplotlib__matplotlib-30696_imple_logic_en.yaml",
+      "sha256": "43c2654a4170313ea731a3aeefb5c13d5c340ecd6d3f5c4854beb899893eb0d0"
+    },
+    {
+      "bytes": 1895,
+      "git_blob_sha1": "fab0d0a7c13a0d4a1c939d614caf11cf532796b2",
+      "path": "data/mid-groundtruths/planning/Python/matplotlib__matplotlib-30756_imple_logic_en.yaml",
+      "sha256": "d4e6647d83e881f54562f66c6dc1870fc45d9eaae1e8871cbaf40248f6cf8f2d"
+    },
+    {
+      "bytes": 2651,
+      "git_blob_sha1": "540460eaadca342118929234a0a936f009f40bfe",
+      "path": "data/mid-groundtruths/planning/Python/matplotlib__matplotlib-30760_imple_logic_en.yaml",
+      "sha256": "ac6ccd456bc4aa253e90344f55fa846c9d253e2311457f75c5c10a4655af7081"
+    },
+    {
+      "bytes": 2399,
+      "git_blob_sha1": "ed6e94b10e96e9d4cc7bc97aa243fa81f0476425",
+      "path": "data/mid-groundtruths/planning/Python/matplotlib__matplotlib-30867_imple_logic_en.yaml",
+      "sha256": "1654dbceae8131429f6dd9abf390c7b10d13648c7df84475373ecd44685e1ff0"
+    },
+    {
+      "bytes": 2667,
+      "git_blob_sha1": "c30214f5376f7b75371ea3814bd8ea552345a812",
+      "path": "data/mid-groundtruths/planning/Python/openai__openai-agents-python-1124_imple_logic_en.yaml",
+      "sha256": "b290ad14dff2158b9cbdd9f9f673138668c0ab2679185190a7857fae405f3578"
+    },
+    {
+      "bytes": 2756,
+      "git_blob_sha1": "add6d5209528931096c231d3c606b2734cdb5d0e",
+      "path": "data/mid-groundtruths/planning/Python/openai__openai-agents-python-112_imple_logic_en.yaml",
+      "sha256": "681d85f59f1d7b717b8c8039ae293de47324b5ddafa0077672fa23356a2f45b0"
+    },
+    {
+      "bytes": 3102,
+      "git_blob_sha1": "0d7703542370762729464de94928279129575cb7",
+      "path": "data/mid-groundtruths/planning/Python/openai__openai-agents-python-1192_imple_logic_en.yaml",
+      "sha256": "ab5f14cf9cf4ea8fbaebf07303f0096fbb42538631679b90b4426d6fd440ffc6"
+    },
+    {
+      "bytes": 4212,
+      "git_blob_sha1": "9c8d2726845a6680946d32d953b18be227d5d754",
+      "path": "data/mid-groundtruths/planning/Python/openai__openai-agents-python-1636_imple_logic_en.yaml",
+      "sha256": "0b798d85a02a15f6d57c5789376adbf6aeb1ba39f1ad71506c39545c5f06f9cb"
+    },
+    {
+      "bytes": 3430,
+      "git_blob_sha1": "643ff75206c8c039d0421c3b6968af8ed7cf7ea6",
+      "path": "data/mid-groundtruths/planning/Python/openai__openai-agents-python-1684_imple_logic_en.yaml",
+      "sha256": "2f7a83ba82c17b92b870e4347551034d264fce016bfdfd4e88ae459cbe8d4027"
+    },
+    {
+      "bytes": 2719,
+      "git_blob_sha1": "2cfa9e8a63468a8d010f17bfffa3f11bfe0ef80d",
+      "path": "data/mid-groundtruths/planning/Python/openai__openai-agents-python-1689_imple_logic_en.yaml",
+      "sha256": "3a7bc531bb77c18e244e1c265c0bff86479c3f24540b466194c1318296c9274e"
+    },
+    {
+      "bytes": 11318,
+      "git_blob_sha1": "bc734b2e3456558cd7c51b28e0fd7a47e5bc704c",
+      "path": "data/mid-groundtruths/planning/Python/openai__openai-agents-python-1749_imple_logic_en.yaml",
+      "sha256": "9edfcebe0db6aa6cc3fd37ba7da30ed9df59caa14ceecb5bfb42aafc80be84a0"
+    },
+    {
+      "bytes": 2421,
+      "git_blob_sha1": "014708658d14be6c1e03ca686ba70b748f6783f0",
+      "path": "data/mid-groundtruths/planning/Python/openai__openai-agents-python-1861_imple_logic_en.yaml",
+      "sha256": "1ffb25d376234750f360be8f48a10f6e1ea5f84fada92b1e00e22f209f638254"
+    },
+    {
+      "bytes": 2498,
+      "git_blob_sha1": "0c7c5b2ba3966194d95e82a6a786e3c4611cc0ee",
+      "path": "data/mid-groundtruths/planning/Python/openai__openai-agents-python-1884_imple_logic_en.yaml",
+      "sha256": "751c905ace2f8ea7c4a58a695ebd24ac66658fd4cffbfcc69b26f18142633cc3"
+    },
+    {
+      "bytes": 4910,
+      "git_blob_sha1": "914b41c32356b6656711da43f9d47762050e48a8",
+      "path": "data/mid-groundtruths/planning/Python/openai__openai-agents-python-2105_imple_logic_en.yaml",
+      "sha256": "5455596fe62dc10c947894225b401affe204b93d3f005a80f550f3b3310d1d9d"
+    },
+    {
+      "bytes": 2781,
+      "git_blob_sha1": "3057d18d637963c34e8d5f9f755149bbc7271c57",
+      "path": "data/mid-groundtruths/planning/Python/openai__openai-agents-python-2112_imple_logic_en.yaml",
+      "sha256": "6a01b7809c4a755d62d152fe132575d303ab83f8d33443c5367e0f83b7da7146"
+    },
+    {
+      "bytes": 2987,
+      "git_blob_sha1": "d0e32dab7649c1acd72036322a0bc01aec283292",
+      "path": "data/mid-groundtruths/planning/Python/openai__openai-agents-python-2290_imple_logic_en.yaml",
+      "sha256": "abb7cc94d953f4815e9d029322ae6dc2990752bbf7bc776f23e9240c92af7441"
+    },
+    {
+      "bytes": 2789,
+      "git_blob_sha1": "836e09a60f90ec8f5cb2792b51a69dd131517370",
+      "path": "data/mid-groundtruths/planning/Python/openai__openai-agents-python-454_imple_logic_en.yaml",
+      "sha256": "2249d9030139ac38bba152c6f4e6022c978e3da9dd8fa619b8196cda78fd5fbf"
+    },
+    {
+      "bytes": 13935,
+      "git_blob_sha1": "c7810ff76662101a4a45e26f76fe9e9c4c93b371",
+      "path": "data/mid-groundtruths/planning/Python/openai__openai-agents-python-540_imple_logic_en.yaml",
+      "sha256": "22299ff452de9ef41fae3016528801e5774049938abeb8e53c15cfe923e8c50d"
+    },
+    {
+      "bytes": 4775,
+      "git_blob_sha1": "6d8d236581c33c064067e2ac6a8d12131ba433a7",
+      "path": "data/mid-groundtruths/planning/Python/pdm-project__pdm-2655_imple_logic_en.yaml",
+      "sha256": "dccf6b76d66c651894f84f5cf32e70db14dd415b8abb6abfd369cacd4f6e01d0"
+    },
+    {
+      "bytes": 6472,
+      "git_blob_sha1": "5a3eb7b533afe45bffa6e6312376930ea0617e35",
+      "path": "data/mid-groundtruths/planning/Python/pdm-project__pdm-2795_imple_logic_en.yaml",
+      "sha256": "1daa05cff4e828d3b9096a6da6b14108d9164ab5c5342545c57d25cb729f22e0"
+    },
+    {
+      "bytes": 5390,
+      "git_blob_sha1": "a4a995bac360e0186581c5a550b373c14205b311",
+      "path": "data/mid-groundtruths/planning/Python/pdm-project__pdm-3546_imple_logic_en.yaml",
+      "sha256": "625a37042e83cd631e403a28365dd44dbfc94aa94cb4d47f9c984cb8aa4ba48c"
+    },
+    {
+      "bytes": 3400,
+      "git_blob_sha1": "05b1547177d935f2ce4e7dd07239a79d69ff1180",
+      "path": "data/mid-groundtruths/planning/Python/pdm-project__pdm-3655_imple_logic_en.yaml",
+      "sha256": "e2cd4d33bcc88d0c93dc372aef6c37be861a9c1557b26d058af8034f737ec9b0"
+    },
+    {
+      "bytes": 8486,
+      "git_blob_sha1": "ed0bb7926614373ebcfb33414946e30724baead5",
+      "path": "data/mid-groundtruths/planning/Python/pvlib__pvlib-python-1962_imple_logic_en.yaml",
+      "sha256": "82cb211d6288378660d5300146fa2d1cbd47eddb51e6bdbef9b180aad585ecfa"
+    },
+    {
+      "bytes": 9526,
+      "git_blob_sha1": "2763d1b8dc22527ade0372b58e6f2285de138f55",
+      "path": "data/mid-groundtruths/planning/Python/pvlib__pvlib-python-2433_imple_logic_en.yaml",
+      "sha256": "559415ba694f1576c2a9d248b4392f6c45ba2c0334cd7b01d3e8d87e3f2010a1"
+    },
+    {
+      "bytes": 5399,
+      "git_blob_sha1": "1894197fbda3acd253adae4cac204753aba918a6",
+      "path": "data/mid-groundtruths/planning/Python/pvlib__pvlib-python-2521_imple_logic_en.yaml",
+      "sha256": "d901564e17b88306ad6be604b4341472f13dd2c69f83fb5baf1063373500c499"
+    },
+    {
+      "bytes": 3939,
+      "git_blob_sha1": "f5b1924aa6105b5286d313b8a82eee8c20b3924e",
+      "path": "data/mid-groundtruths/planning/Python/pvlib__pvlib-python-2550_imple_logic_en.yaml",
+      "sha256": "d247c9a1f74f01bda00bcffff07f065fea4dea44176a4feff92e1fe60c067311"
+    },
+    {
+      "bytes": 3982,
+      "git_blob_sha1": "6073b61ff843327f4f0497d61f88e1295a686c23",
+      "path": "data/mid-groundtruths/planning/Python/pylint-dev__pylint-10135_imple_logic_en.yaml",
+      "sha256": "40cc11c162b89e9be77cd43eb5bbfec67f0a2c9914f2e310e601b2bae991d06e"
+    },
+    {
+      "bytes": 3121,
+      "git_blob_sha1": "91d5d6dc598f665deb0786f6d563a52cea1f5121",
+      "path": "data/mid-groundtruths/planning/Python/pylint-dev__pylint-10393_imple_logic_en.yaml",
+      "sha256": "5f585afa5f4ffccaeb8ec1054b70b24cbe67ae8628d66461ed0a551d18c679fc"
+    },
+    {
+      "bytes": 7090,
+      "git_blob_sha1": "68af27135579aa06d8717c5711519afe0c465a64",
+      "path": "data/mid-groundtruths/planning/Python/pylint-dev__pylint-10424_imple_logic_en.yaml",
+      "sha256": "6d3ae5a690783ed647874f71da1ba676b6a5f959ef55bd9c23bc69b3403c51e7"
+    },
+    {
+      "bytes": 3396,
+      "git_blob_sha1": "63e84bb9280028cb76339e9dd9252f5bef51916d",
+      "path": "data/mid-groundtruths/planning/Python/pylint-dev__pylint-10436_imple_logic_en.yaml",
+      "sha256": "cef40096530152032d78f4ca095d4c29a7ca8e25abe9d755841c254e9b19058b"
+    },
+    {
+      "bytes": 2588,
+      "git_blob_sha1": "045f7f797b2e510ff94f2de3a119d5230f2fc521",
+      "path": "data/mid-groundtruths/planning/Python/pylint-dev__pylint-10437_imple_logic_en.yaml",
+      "sha256": "741521272561ad235e7545a96d0bf029f18bb5bea60c0adb22f880845ac136a7"
+    },
+    {
+      "bytes": 2540,
+      "git_blob_sha1": "25aacf5212382b2623d6f81c05ad38f00f8d709a",
+      "path": "data/mid-groundtruths/planning/Python/pylint-dev__pylint-10569_imple_logic_en.yaml",
+      "sha256": "2f341ac5896ebed067babb5cc0d240614bcdca56458522147104469bc9003ec5"
+    },
+    {
+      "bytes": 2231,
+      "git_blob_sha1": "1aa998025d29b594ac087461c24698c2e95582a9",
+      "path": "data/mid-groundtruths/planning/Python/pylint-dev__pylint-10572_imple_logic_en.yaml",
+      "sha256": "46d99bfdac3a181954308bfd4c8d53ed69ab84aaaf1d99b12987d8527dbf68aa"
+    },
+    {
+      "bytes": 2302,
+      "git_blob_sha1": "8a4682f1e929d743c74350b9b127f7fe188ad024",
+      "path": "data/mid-groundtruths/planning/Python/pylint-dev__pylint-10628_imple_logic_en.yaml",
+      "sha256": "1c54888e53e6e470b15a8823a91f65c4f07020dc15d3d6bef34c526ed614fb37"
+    },
+    {
+      "bytes": 2299,
+      "git_blob_sha1": "59251b4174b59b104b83a904046e912bf62ad995",
+      "path": "data/mid-groundtruths/planning/Python/pylint-dev__pylint-10643_imple_logic_en.yaml",
+      "sha256": "99599296ad9699ee0adc5487608764520644fd94f83267fb5ac48fb8df648dac"
+    },
+    {
+      "bytes": 2158,
+      "git_blob_sha1": "baf7536cc69a31b4b54a6e7dcdfdf9b90fe5ad35",
+      "path": "data/mid-groundtruths/planning/Python/pylint-dev__pylint-10648_imple_logic_en.yaml",
+      "sha256": "f4915442dc2f6157a6b3ccebfb31ebca4bb4c3873f2db03f80869b1ff5fe980c"
+    },
+    {
+      "bytes": 2961,
+      "git_blob_sha1": "6bf7b076626c760981914a0b213056d12456e91a",
+      "path": "data/mid-groundtruths/planning/Python/pylint-dev__pylint-10677_imple_logic_en.yaml",
+      "sha256": "8d5d8caf8a6673d171584792491528877bc257cf0bfb6aaf48af1b108cb8506b"
+    },
+    {
+      "bytes": 2740,
+      "git_blob_sha1": "659d4adaae79b75a5733d77826e74a1b1d91affa",
+      "path": "data/mid-groundtruths/planning/Python/pylint-dev__pylint-10712_imple_logic_en.yaml",
+      "sha256": "f48b796457b4275a8e9522954c7f1feeb34b2539216763f1bcfa2181fb35782b"
+    },
+    {
+      "bytes": 2523,
+      "git_blob_sha1": "5bc4d97b0854625c727e756e4cac09da054d34de",
+      "path": "data/mid-groundtruths/planning/Python/pylint-dev__pylint-10724_imple_logic_en.yaml",
+      "sha256": "2c7af142e02adcdd9ec3c98c4469b190d42f02b06c16f390243eba24f90cdc29"
+    },
+    {
+      "bytes": 4035,
+      "git_blob_sha1": "906837f1fe2a1dc9497d74eaf6b26c5743411d35",
+      "path": "data/mid-groundtruths/planning/Python/pylint-dev__pylint-10758_imple_logic_en.yaml",
+      "sha256": "11c86492276a3be8fc8b6ba6ea129318ab93f4e3a425911a548b36179b8081e5"
+    },
+    {
+      "bytes": 4979,
+      "git_blob_sha1": "6d7a6ce1ab339de9a25d5c1801afc33aa6f2395f",
+      "path": "data/mid-groundtruths/planning/Python/pylint-dev__pylint-10770_imple_logic_en.yaml",
+      "sha256": "ec27cc3398628b0420bdc01c917a6da99009aba9345b886fc54fa2e8972b7d7c"
+    },
+    {
+      "bytes": 6924,
+      "git_blob_sha1": "fc921bd25c03c9e2e985525edd4664e229c99df7",
+      "path": "data/mid-groundtruths/planning/Python/pylint-dev__pylint-10797_imple_logic_en.yaml",
+      "sha256": "5e1dd821b1358b86e1d113013d70327fea50f9fbdcc1762a9ead9af16f2c2e63"
+    },
+    {
+      "bytes": 4663,
+      "git_blob_sha1": "bfb7116e06985918f2d172bdfa0c9426571f0695",
+      "path": "data/mid-groundtruths/planning/Python/pylint-dev__pylint-10802_imple_logic_en.yaml",
+      "sha256": "b54911ebf6f62c6d7f8ce8d687b064e4a517f05c4ec3d441a8c13946bc028234"
+    },
+    {
+      "bytes": 15291,
+      "git_blob_sha1": "acc178ae03b5f07b600313ddf095e09e144aa5c2",
+      "path": "data/mid-groundtruths/planning/Python/pylint-dev__pylint-10814_imple_logic_en.yaml",
+      "sha256": "678a8729572239ded325af37685bbf9cd10de5fa36a684eedde876d06c31476b"
+    },
+    {
+      "bytes": 3912,
+      "git_blob_sha1": "147251979c74022aa3f3a1f961903d33e8b79ba3",
+      "path": "data/mid-groundtruths/planning/Python/pylint-dev__pylint-9308_imple_logic_en.yaml",
+      "sha256": "104897a234a20fa1a48bc09718342c03fdd7d6f626d33985ce6445ec3667533e"
+    },
+    {
+      "bytes": 2993,
+      "git_blob_sha1": "5292206bd6bd5403152e9e3b88a462358dc7fd05",
+      "path": "data/mid-groundtruths/planning/Python/pylint-dev__pylint-9630_imple_logic_en.yaml",
+      "sha256": "7503e8277844b1e2a462c9814ddf17fdc351c7091577c4f50ab9fc967783ae66"
+    },
+    {
+      "bytes": 2956,
+      "git_blob_sha1": "739f1ca43b02fcc7d907d288d8eadcd29f5eb952",
+      "path": "data/mid-groundtruths/planning/Python/pylint-dev__pylint-9712_imple_logic_en.yaml",
+      "sha256": "6b8ae90b6568ee8fecf7653a2d29af8029551368c5f0b54b7cbbb3a21a0a11dd"
+    },
+    {
+      "bytes": 4345,
+      "git_blob_sha1": "8838defacce90662646f37be77049254bbebadcc",
+      "path": "data/mid-groundtruths/planning/Python/pylint-dev__pylint-9728_imple_logic_en.yaml",
+      "sha256": "2e02c6aef8a5370f81ba8f9c4a2c4ab0f27e30d7b0a01ca4d62d079d0bcac0d3"
+    },
+    {
+      "bytes": 4659,
+      "git_blob_sha1": "fd18b060eb50c34f7c8a6f03ae7a688af5ae99d4",
+      "path": "data/mid-groundtruths/planning/Python/pypa__pip-12799_imple_logic_en.yaml",
+      "sha256": "ac2f2fe2896f04878e50eb3b1150e885fef0a04dc98bb54fac0b49df2cab209a"
+    },
+    {
+      "bytes": 5336,
+      "git_blob_sha1": "7d7b8772bd2a6b47806955baa9a29388e4b82c2a",
+      "path": "data/mid-groundtruths/planning/Python/pypa__pip-12877_imple_logic_en.yaml",
+      "sha256": "5fcf3dfef82c7825905b64c2008e25658ef8f3ff07ebd483761ac27d6eaced23"
+    },
+    {
+      "bytes": 4227,
+      "git_blob_sha1": "455eb3f713611f4941c4b5991af2ee41d5795fae",
+      "path": "data/mid-groundtruths/planning/Python/pypa__pip-13064_imple_logic_en.yaml",
+      "sha256": "e1d1c3db67d86cb0cc9e31f1603b654c00f881d3dfe2c31dfbd4686ea36820e4"
+    },
+    {
+      "bytes": 4962,
+      "git_blob_sha1": "79f81a3542b3405bc710a99f7f0a3311abae6a1d",
+      "path": "data/mid-groundtruths/planning/Python/pypa__pip-13070_imple_logic_en.yaml",
+      "sha256": "81814022f7450eb25b85789dd57d74c27e4b5f78557364bda43470d6fdb06ff7"
+    },
+    {
+      "bytes": 11837,
+      "git_blob_sha1": "a9f71811b2c88718b23207bb34cc57d16cd1570b",
+      "path": "data/mid-groundtruths/planning/Python/pypa__pip-13124_imple_logic_en.yaml",
+      "sha256": "649d590295aed10cbf3e48dc5f220fd51587d31b40354fedf43b2fae3c1fc181"
+    },
+    {
+      "bytes": 3755,
+      "git_blob_sha1": "246275b23ccf520617a0e22a4a48d9ea024c70bd",
+      "path": "data/mid-groundtruths/planning/Python/reflex-dev__reflex-2242_imple_logic_en.yaml",
+      "sha256": "7407b193ed4a123f23503213512aa8f8d084d4ead4fc99d30e8e15561243915d"
+    },
+    {
+      "bytes": 3687,
+      "git_blob_sha1": "1d6a21bee5240e9ad63b7a7aea24c5bf8dd49995",
+      "path": "data/mid-groundtruths/planning/Python/reflex-dev__reflex-4239_imple_logic_en.yaml",
+      "sha256": "db2a32eb77098f5a052feeb1ad93224ca4dffa457c7558549a3b3b4fdf88aa53"
+    },
+    {
+      "bytes": 4090,
+      "git_blob_sha1": "08c835a1fa82bbe4ffdf682f93d061e87c92af90",
+      "path": "data/mid-groundtruths/planning/Python/scikit-learn__scikit-learn-28612_imple_logic_en.yaml",
+      "sha256": "8c6af97a869f11eccecfd01b7b8c3411ac9486e6dd75623268ccb08977ae5c2a"
+    },
+    {
+      "bytes": 4133,
+      "git_blob_sha1": "7f6b32c25f78f9f4899b62ef609ccdc14d6b04f6",
+      "path": "data/mid-groundtruths/planning/Python/scikit-learn__scikit-learn-28651_imple_logic_en.yaml",
+      "sha256": "a3902a66579592b0fc492975c7167585c07ccc4f8318cfd448b39026b7a29f11"
+    },
+    {
+      "bytes": 4261,
+      "git_blob_sha1": "fa4de37681d6d7bcd0216c7c6910be3da787a25a",
+      "path": "data/mid-groundtruths/planning/Python/scikit-learn__scikit-learn-31094_imple_logic_en.yaml",
+      "sha256": "d8226cc9b96bef97021d7926cf420a943c739e7aca460fd5b0e581442d98e896"
+    },
+    {
+      "bytes": 2833,
+      "git_blob_sha1": "f02562a1237c2ab1883f7d7345ec506a6dffe1c3",
+      "path": "data/mid-groundtruths/planning/Python/scikit-learn__scikit-learn-32932_imple_logic_en.yaml",
+      "sha256": "1ab8c9ebbb6b88acd58c6577c52d5296a2a70f073ba4f5c336e251c19c6727c1"
+    },
+    {
+      "bytes": 2590,
+      "git_blob_sha1": "fc445d07de8daa1a0207374ba56b11504a5d7a5a",
+      "path": "data/mid-groundtruths/planning/Python/sphinx-doc__sphinx-14127_imple_logic_en.yaml",
+      "sha256": "1c852a61c90f6eaeaf2578e786f6f386dc118696e1190d35d673721dd854e74f"
+    },
+    {
+      "bytes": 2360,
+      "git_blob_sha1": "2e02e91bbf9f5fb3c90babd3dd9547045a9ab1b2",
+      "path": "data/mid-groundtruths/planning/Python/sympy__sympy-26546_imple_logic_en.yaml",
+      "sha256": "7c90f033b6ac6bbbb8d5930e5deb8f9b9a06853b540fe23f88d3ead30f20e01c"
+    },
+    {
+      "bytes": 2111,
+      "git_blob_sha1": "cdcf49482688a877ca0ed5f21204cb0d1529852b",
+      "path": "data/mid-groundtruths/planning/Python/sympy__sympy-26557_imple_logic_en.yaml",
+      "sha256": "85c4e515e0017636618e064fe2b40b282d4366eea7448e700a0d2213a27468fa"
+    },
+    {
+      "bytes": 2402,
+      "git_blob_sha1": "574c975907740c90f4ceb84fab8f54e7d812c49b",
+      "path": "data/mid-groundtruths/planning/Python/sympy__sympy-26558_imple_logic_en.yaml",
+      "sha256": "8d61932f5bd090e71973de90bd15ae5e113662e192976916b78dcdb727819d66"
+    },
+    {
+      "bytes": 3886,
+      "git_blob_sha1": "72456fe062823a4ef3459a433efbce75d9c1fe7d",
+      "path": "data/mid-groundtruths/planning/Python/sympy__sympy-26733_imple_logic_en.yaml",
+      "sha256": "b420b67115a1a777deebe6af19d6ae02323b12c30696da624e61fd9167a9ad7f"
+    },
+    {
+      "bytes": 3282,
+      "git_blob_sha1": "cdd424f79a366f7c137528f685c3bd42bc130cad",
+      "path": "data/mid-groundtruths/planning/Python/sympy__sympy-26822_imple_logic_en.yaml",
+      "sha256": "6e5a1bd182e0ecad415419bb647980b53d2111257bd345cad17a30e8f73bdaab"
+    },
+    {
+      "bytes": 3196,
+      "git_blob_sha1": "5c6adcd987f5a8c043c9adf42879cc9c068c066b",
+      "path": "data/mid-groundtruths/planning/Python/sympy__sympy-26919_imple_logic_en.yaml",
+      "sha256": "ac04ceed85314ee29fb92ce19c618453254460d523e7d6d9628853b2c930e629"
+    },
+    {
+      "bytes": 4571,
+      "git_blob_sha1": "769f54b4e2dfd3ebd09a10bf43abfb9e5797600f",
+      "path": "data/mid-groundtruths/planning/Python/sympy__sympy-26954_imple_logic_en.yaml",
+      "sha256": "aa30e1f91d696e24cbfd39722697065849f51a743943bb1c91e97a2bafeae025"
+    },
+    {
+      "bytes": 4314,
+      "git_blob_sha1": "e88eaf498ff201e335937e83bb76de82144a2e24",
+      "path": "data/mid-groundtruths/req_clarification/Java/AntennaPod__AntennaPod-7537_req_clarification_en.yaml",
+      "sha256": "f1d8bb21480829fd2bb1def728f17b1d94781c7fa29a488fb9efcef87d37d516"
+    },
+    {
+      "bytes": 3372,
+      "git_blob_sha1": "d9d3dff5dd7e0fb3e20d78d72a7e80c23032145e",
+      "path": "data/mid-groundtruths/req_clarification/Java/AntennaPod__AntennaPod-7581_req_clarification_en.yaml",
+      "sha256": "71463959f4138ef98bbf1411be11a220c700ef8feedc0a2ab0422bd04e968a0d"
+    },
+    {
+      "bytes": 4915,
+      "git_blob_sha1": "b9ce911a2252065eaf2f7df763665bb3006cd5e2",
+      "path": "data/mid-groundtruths/req_clarification/Java/AntennaPod__AntennaPod-7755_req_clarification_en.yaml",
+      "sha256": "c2aa28ae91c44338dc2b230a10538082ec66b48f30f336be24e3243096eb572f"
+    },
+    {
+      "bytes": 3340,
+      "git_blob_sha1": "4dd5233c70ac14719e1457569c9bb81ae0eafda2",
+      "path": "data/mid-groundtruths/req_clarification/Java/GoogleContainerTools__jib-4345_req_clarification_en.yaml",
+      "sha256": "dc9e0abf85241741c86b3e2ebe3f7e6432a917fd0468beae35acfd476490f53d"
+    },
+    {
+      "bytes": 2791,
+      "git_blob_sha1": "1b9310d9349f303d6ebaaf12b4f24763bd46670b",
+      "path": "data/mid-groundtruths/req_clarification/Java/OpenAPITools__openapi-generator-17495_req_clarification_en.yaml",
+      "sha256": "2c6b5039625dc255e79aae94aef681a3a4883859501de0c91c504e2b8d078136"
+    },
+    {
+      "bytes": 3747,
+      "git_blob_sha1": "7a3a1707ec59d3972b6e415b51eabd849b3f69e5",
+      "path": "data/mid-groundtruths/req_clarification/Java/OpenAPITools__openapi-generator-18504_req_clarification_en.yaml",
+      "sha256": "2eed4175fa0838f7152d64b66cc12e069a1fe7f1cbe78b27a2435e0d10e92379"
+    },
+    {
+      "bytes": 5272,
+      "git_blob_sha1": "878676b52b41b50c644131ebfefad817ab90110c",
+      "path": "data/mid-groundtruths/req_clarification/Java/OpenAPITools__openapi-generator-18835_req_clarification_en.yaml",
+      "sha256": "cb5b2e26f1aa8f63131dad178a2878971665796fcf607bb5af0d097886228a74"
+    },
+    {
+      "bytes": 3297,
+      "git_blob_sha1": "68ef89b4dc5d67a55915097c6eadffe7d1693ed7",
+      "path": "data/mid-groundtruths/req_clarification/Java/OpenAPITools__openapi-generator-19401_req_clarification_en.yaml",
+      "sha256": "859c98469f81e57fd7bcea52670adf799545d36acb24afa078efc518136ac4f2"
+    },
+    {
+      "bytes": 3951,
+      "git_blob_sha1": "4dff68dd4b9ff9f455085588a572294a211edbd5",
+      "path": "data/mid-groundtruths/req_clarification/Java/OpenAPITools__openapi-generator-19992_req_clarification_en.yaml",
+      "sha256": "9540094e5c223b260a9fc5ea409d4d0282843217afa59ad17cd76440f483fe4e"
+    },
+    {
+      "bytes": 4223,
+      "git_blob_sha1": "8a8b3cd3682022a6c1823f42538bdfe5b49d6afb",
+      "path": "data/mid-groundtruths/req_clarification/Java/OpenAPITools__openapi-generator-20083_req_clarification_en.yaml",
+      "sha256": "061b62548f0d62a4e8b05083c991081c74b691f0ecf879af048914fc447e9074"
+    },
+    {
+      "bytes": 3228,
+      "git_blob_sha1": "1a1b25b823617999c2f484f36cf7140bd388ec44",
+      "path": "data/mid-groundtruths/req_clarification/Java/OpenAPITools__openapi-generator-20793_req_clarification_en.yaml",
+      "sha256": "62ce8735cbb8ba4aeffd1f77ef415b6cbd8486e61a148dde6065c19b2390edf1"
+    },
+    {
+      "bytes": 2532,
+      "git_blob_sha1": "b99b7e76203b748c5d82ff1a05ada0fac2e9c5ef",
+      "path": "data/mid-groundtruths/req_clarification/Java/OpenAPITools__openapi-generator-21480_req_clarification_en.yaml",
+      "sha256": "35b61d70bf49091ed84be265960aa0ec9047812a1462b8df88c0e6188476d9b5"
+    },
+    {
+      "bytes": 3804,
+      "git_blob_sha1": "6df7d11b9277b1c878a53692bcb89890b33a872d",
+      "path": "data/mid-groundtruths/req_clarification/Java/OpenAPITools__openapi-generator-21536_req_clarification_en.yaml",
+      "sha256": "1b3939e128a94ad3868e2eb146fb524412400ba15ff48300e2ced324680289a0"
+    },
+    {
+      "bytes": 3273,
+      "git_blob_sha1": "f5f0d6d5efa09f8e5fd8ef9981f7dedc85cc6ae4",
+      "path": "data/mid-groundtruths/req_clarification/Java/OpenRefine__OpenRefine-6609_req_clarification_en.yaml",
+      "sha256": "b2f9939e56344d6ae1ba3661e2146f45369a6e3bfbb6aca9a1abb93e141c0ee0"
+    },
+    {
+      "bytes": 3182,
+      "git_blob_sha1": "323eb314b58268b1cbea7d919cd18c4ad3b54379",
+      "path": "data/mid-groundtruths/req_clarification/Java/OpenRefine__OpenRefine-6708_req_clarification_en.yaml",
+      "sha256": "5fb07cd649c929d039c9faaf70ca788213fe7a1e5456809bc897a29b9b369ecd"
+    },
+    {
+      "bytes": 3880,
+      "git_blob_sha1": "87e7d391df901c59800e3a271e764ca69577b045",
+      "path": "data/mid-groundtruths/req_clarification/Java/OpenRefine__OpenRefine-7061_req_clarification_en.yaml",
+      "sha256": "b38a11942e40beb054d842d1bab244adf9ad89b442b279942e6a4ea41d00d341"
+    },
+    {
+      "bytes": 2951,
+      "git_blob_sha1": "4eaf66b6ed848376a672f1858e3c4566fd5f26b4",
+      "path": "data/mid-groundtruths/req_clarification/Java/OpenRefine__OpenRefine-7079_req_clarification_en.yaml",
+      "sha256": "4b9f938bc065e98805b389a9242d6827e3d9d4338e60693da851a5c419ed8afd"
+    },
+    {
+      "bytes": 3923,
+      "git_blob_sha1": "a9c71e03e2d65b1a463b3e29b5c87945836cf8c2",
+      "path": "data/mid-groundtruths/req_clarification/Java/OpenRefine__OpenRefine-7127_req_clarification_en.yaml",
+      "sha256": "28775c84337c1bf2095e6953f9ae357236ca754d4c28f92c146a068201db2d26"
+    },
+    {
+      "bytes": 3976,
+      "git_blob_sha1": "255fc8a88f0def77de6d50d44b6b6d67507bcafc",
+      "path": "data/mid-groundtruths/req_clarification/Java/OpenRefine__OpenRefine-7173_req_clarification_en.yaml",
+      "sha256": "5f094313844b54b43e29f62e5d11cdba9b551edad2a5785b0e8557aaaa8c0d57"
+    },
+    {
+      "bytes": 3207,
+      "git_blob_sha1": "9d0cc0b5bb7a0fbfd1775eb5289007103e9ca38c",
+      "path": "data/mid-groundtruths/req_clarification/Java/OpenRefine__OpenRefine-7211_req_clarification_en.yaml",
+      "sha256": "8d5eb364df549d9b9f59d950fc932d74564984d574c5e12f8447fd6255786361"
+    },
+    {
+      "bytes": 3966,
+      "git_blob_sha1": "7383c9de6634972eb03936419d5d7a9bba519d87",
+      "path": "data/mid-groundtruths/req_clarification/Java/OpenRefine__OpenRefine-7236_req_clarification_en.yaml",
+      "sha256": "b1df2dd9752e72e9c48ef709dbedd22ec1e6db50bdc8c610f6909821e4ab3969"
+    },
+    {
+      "bytes": 3320,
+      "git_blob_sha1": "126a0c6e597105eb705c9b007af0461a0c41713c",
+      "path": "data/mid-groundtruths/req_clarification/Java/OpenRefine__OpenRefine-7243_req_clarification_en.yaml",
+      "sha256": "908745e33b870495cf36cb0b41842b5d89800d6969b5868d14fab90ed6da45cc"
+    },
+    {
+      "bytes": 2909,
+      "git_blob_sha1": "af64a43afd3714e6be0e5f2cc51d401867874d86",
+      "path": "data/mid-groundtruths/req_clarification/Java/OpenRefine__OpenRefine-7247_req_clarification_en.yaml",
+      "sha256": "15b4dba31ac2696a53c4ccea4bad8be40b04c247f2518b3ed6ff2bf9405071f6"
+    },
+    {
+      "bytes": 3316,
+      "git_blob_sha1": "1963119c7a7b5246637e4f82f9448aa44e2d18db",
+      "path": "data/mid-groundtruths/req_clarification/Java/OpenRefine__OpenRefine-7353_req_clarification_en.yaml",
+      "sha256": "9fdfce504f7baf27dc4be13b35aa1c634c2fcc5b7e2c4aefcb72f24bc87d007b"
+    },
+    {
+      "bytes": 3427,
+      "git_blob_sha1": "322f3b34c39095ab3711df6acdb7707701885983",
+      "path": "data/mid-groundtruths/req_clarification/Java/OpenRefine__OpenRefine-7459_req_clarification_en.yaml",
+      "sha256": "1930337251c4de07f64871799bf8c1839cf15a0ea8f83f8e465dd9cc0c2f5cad"
+    },
+    {
+      "bytes": 3548,
+      "git_blob_sha1": "d4297c00678b5c21cc5ca7d9a205b1fe51414407",
+      "path": "data/mid-groundtruths/req_clarification/Java/OpenRefine__OpenRefine-7507_req_clarification_en.yaml",
+      "sha256": "6d91476cfad4266b0cfaf587ebaa8b3163d138a4efecfdcdea1b4b3e6b9b746e"
+    },
+    {
+      "bytes": 3949,
+      "git_blob_sha1": "c6df327ef3788687a78ad1850c0b8c0e2a2737dc",
+      "path": "data/mid-groundtruths/req_clarification/Java/OpenRefine__OpenRefine-7553_req_clarification_en.yaml",
+      "sha256": "c87c884d850d68c10586f48174e2802789717fda9724a5fbddbdfd89c4483601"
+    },
+    {
+      "bytes": 2872,
+      "git_blob_sha1": "339956a4798f4568663ea18b8fb128c7e4e6d7bc",
+      "path": "data/mid-groundtruths/req_clarification/Java/ReactiveX__RxJava-7855_req_clarification_en.yaml",
+      "sha256": "8c705e98fee6b739a98de8345053574d57864bb26822694becd380634e371616"
+    },
+    {
+      "bytes": 3013,
+      "git_blob_sha1": "171ba3b0abdcc3a924058c5c5913953fe0f43ca2",
+      "path": "data/mid-groundtruths/req_clarification/Java/ReactiveX__RxJava-7879_req_clarification_en.yaml",
+      "sha256": "81f60445768a182e298c6c21981cdef0f33de7859968b001e5e76dbab6de04da"
+    },
+    {
+      "bytes": 3536,
+      "git_blob_sha1": "d9fc693d7fd3e0dce99b57fdac0bd7e8d38124aa",
+      "path": "data/mid-groundtruths/req_clarification/Java/TheAlgorithms__Java-5462_req_clarification_en.yaml",
+      "sha256": "31f989b582ddeedd2135435332b10f5ca5586fc3388894e93c735316f4115dcc"
+    },
+    {
+      "bytes": 3148,
+      "git_blob_sha1": "4c63f74feb0ee968d87a91ead87d1ceb5dde8609",
+      "path": "data/mid-groundtruths/req_clarification/Java/TheAlgorithms__Java-6333_req_clarification_en.yaml",
+      "sha256": "2f750a59b28bd7a2b0f7d24c3d465de6b90d152b5c56cacc11ea504f6cbd5aa9"
+    },
+    {
+      "bytes": 2825,
+      "git_blob_sha1": "f29168c2f72f6bcde212c88e0ce177e025bcc848",
+      "path": "data/mid-groundtruths/req_clarification/Java/TheAlgorithms__Java-6566_req_clarification_en.yaml",
+      "sha256": "018f34b627a1cd863fef7ccbe875ba2d595ec5490cd5ae951da4be634f8b4460"
+    },
+    {
+      "bytes": 4586,
+      "git_blob_sha1": "05f2df39db5619569819f5e01a667d03a521b247",
+      "path": "data/mid-groundtruths/req_clarification/Java/TheAlgorithms__Java-6756_req_clarification_en.yaml",
+      "sha256": "61a7998884b34d6323b1a82b245f05cb565b6ae2ca5c8a438e754fe9186ad40c"
+    },
+    {
+      "bytes": 2835,
+      "git_blob_sha1": "7a2c6988e71d54b267051788e1e61e0bcf52008b",
+      "path": "data/mid-groundtruths/req_clarification/Java/TheAlgorithms__Java-6762_req_clarification_en.yaml",
+      "sha256": "458aef93dcf83cd086689a8f14d2be13a19a1bb1c9f8a057eeb401bf639a05e2"
+    },
+    {
+      "bytes": 3421,
+      "git_blob_sha1": "0e24674e636db4abf6d95747fffbafbc68daad9b",
+      "path": "data/mid-groundtruths/req_clarification/Java/TheAlgorithms__Java-6779_req_clarification_en.yaml",
+      "sha256": "7bcd0d8774121f5bcabbd7b19ad9da0020a5a5262574e947e01356c6278b359e"
+    },
+    {
+      "bytes": 2929,
+      "git_blob_sha1": "caad6899380eac98cecab06647a9a9a1061e1c9a",
+      "path": "data/mid-groundtruths/req_clarification/Java/TheAlgorithms__Java-6793_req_clarification_en.yaml",
+      "sha256": "f8d78e450a796a791db7328168ce1a5f9cb005b4ccd80593183ef3a2bc053418"
+    },
+    {
+      "bytes": 4623,
+      "git_blob_sha1": "040851c3cd8b30594c590cf8f1c2fa9927400626",
+      "path": "data/mid-groundtruths/req_clarification/Java/TheAlgorithms__Java-6799_req_clarification_en.yaml",
+      "sha256": "b673bce014e9d2f744d24b0cad5025183d3845ad9a40d228ab1ef0579bc1a994"
+    },
+    {
+      "bytes": 5226,
+      "git_blob_sha1": "035ee547e4bbb3970d95f1d4717e7568d09f1f5a",
+      "path": "data/mid-groundtruths/req_clarification/Java/TheAlgorithms__Java-6818_req_clarification_en.yaml",
+      "sha256": "efa59ef39aa0e2c6e32378f8ca3d97dac46bdba6a219c67cb61169e5cbfc640c"
+    },
+    {
+      "bytes": 4219,
+      "git_blob_sha1": "e90b02e79ee5cf050e6fb6d82d3e506d06916b43",
+      "path": "data/mid-groundtruths/req_clarification/Java/TheAlgorithms__Java-6871_req_clarification_en.yaml",
+      "sha256": "a9b141e20c5b5a851544271b09d0e0d9383a6f6850a36658b92224e7990f435f"
+    },
+    {
+      "bytes": 4121,
+      "git_blob_sha1": "59b2da2677748af4b6eecdc187acdfb037f583ec",
+      "path": "data/mid-groundtruths/req_clarification/Java/TheAlgorithms__Java-6926_req_clarification_en.yaml",
+      "sha256": "ed38a6e305d1151f24fd2caf694c04a2d688d031508d8c502c4193226e3ba3e5"
+    },
+    {
+      "bytes": 2870,
+      "git_blob_sha1": "ceab1979b9eed3810bbfa5d4fb8e42382e4f89dd",
+      "path": "data/mid-groundtruths/req_clarification/Java/TheAlgorithms__Java-6990_req_clarification_en.yaml",
+      "sha256": "b150cf245ee427aa03b4026445edef8d6b415d7e6756a2adeaaedd8b52b638e6"
+    },
+    {
+      "bytes": 3142,
+      "git_blob_sha1": "48baa4f8019c63059d90ff490932e9471535b53d",
+      "path": "data/mid-groundtruths/req_clarification/Java/TheAlgorithms__Java-7011_req_clarification_en.yaml",
+      "sha256": "d6f9fee9d19aca5c55380de535ae4884d13496a88c4178d8c36d0fef4d5dcfb5"
+    },
+    {
+      "bytes": 3151,
+      "git_blob_sha1": "66261450e3b4d863b8667847850ed03cf5e9b5ff",
+      "path": "data/mid-groundtruths/req_clarification/Java/TheAlgorithms__Java-7065_req_clarification_en.yaml",
+      "sha256": "9f84ddd1a32091273ee1bd27366b2685818e5e4cff2ce1759a90627070478730"
+    },
+    {
+      "bytes": 3067,
+      "git_blob_sha1": "401f6b6030ec2ff02f3182a8a185325bd7e97330",
+      "path": "data/mid-groundtruths/req_clarification/Java/TheAlgorithms__Java-7066_req_clarification_en.yaml",
+      "sha256": "61ee1a0aa3a2713baeb2861410b0d16a32b88979326a335222de088dab73cdc5"
+    },
+    {
+      "bytes": 3511,
+      "git_blob_sha1": "591f5e558e2d0dccbb48dd68f7e5a9bd64263426",
+      "path": "data/mid-groundtruths/req_clarification/Java/TheAlgorithms__Java-7071_req_clarification_en.yaml",
+      "sha256": "dd63fe469989f91e7b712c7eedf7d31bab724ec88b82d5a4a31a68634b29d09a"
+    },
+    {
+      "bytes": 3770,
+      "git_blob_sha1": "31a5feac321019d2ab35c165e95d03e8806404b5",
+      "path": "data/mid-groundtruths/req_clarification/Java/TheAlgorithms__Java-7072_req_clarification_en.yaml",
+      "sha256": "58d76df534bf43160bfd02d1841e76a4dc5aa2e47dc4201230ffc1408fd887fd"
+    },
+    {
+      "bytes": 2735,
+      "git_blob_sha1": "c2eacaea79ae441a895dd94fd56c4932efeaa566",
+      "path": "data/mid-groundtruths/req_clarification/Java/TheAlgorithms__Java-7117_req_clarification_en.yaml",
+      "sha256": "6bfd6d553fb279968b58a7131ccb21af9b85ac73f8675434b9375286c20f5586"
+    },
+    {
+      "bytes": 3135,
+      "git_blob_sha1": "346e97c49986bf057d59e01e0be52bd51749979a",
+      "path": "data/mid-groundtruths/req_clarification/Java/alibaba__nacos-12343_req_clarification_en.yaml",
+      "sha256": "951b94a1ab5f17da7af9a71dcd6419e4e802673762f5e12a648dea8513413ea3"
+    },
+    {
+      "bytes": 4543,
+      "git_blob_sha1": "7b214dd35c3e4008a0096124a615602d265a89a7",
+      "path": "data/mid-groundtruths/req_clarification/Java/alibaba__nacos-12582_req_clarification_en.yaml",
+      "sha256": "408d7b8e038298d0aa24f0fdd5002d01d643855c3e8f5789ccb82c6da3444fb6"
+    },
+    {
+      "bytes": 3015,
+      "git_blob_sha1": "ce32ed2d8ec084d3fbdfd12224aac01ab8e1957e",
+      "path": "data/mid-groundtruths/req_clarification/Java/apache__rocketmq-8404_req_clarification_en.yaml",
+      "sha256": "5d7592c6ce918dfe6247f2e14c088dda3f6f734aba62eca9cfa5811a4591a335"
+    },
+    {
+      "bytes": 4198,
+      "git_blob_sha1": "84b41b3482acd3aead02370c7ace4a588922e126",
+      "path": "data/mid-groundtruths/req_clarification/Java/apache__rocketmq-8807_req_clarification_en.yaml",
+      "sha256": "75c6f296b353aad6c4395682b9ff757548eb82fe0d47127674c8c8f59627761a"
+    },
+    {
+      "bytes": 2787,
+      "git_blob_sha1": "a9afeb6b8980591c2c2b8c9ac420d82ec0602b36",
+      "path": "data/mid-groundtruths/req_clarification/Java/apache__rocketmq-8986_req_clarification_en.yaml",
+      "sha256": "f0ffae023cee1fd015a4f8988db66d03db34bfac89c5303c604d7c81803d3466"
+    },
+    {
+      "bytes": 3186,
+      "git_blob_sha1": "ea2f6828ae811657e571588363c4cd3f5f4f9281",
+      "path": "data/mid-groundtruths/req_clarification/Java/apache__rocketmq-9107_req_clarification_en.yaml",
+      "sha256": "bf99137ab13c71144386dded8df7d6c34c542a8196b487cf397cdcae382f12c7"
+    },
+    {
+      "bytes": 6134,
+      "git_blob_sha1": "6809add9319c8fad947a6f21de9a6aa5cd937488",
+      "path": "data/mid-groundtruths/req_clarification/Java/apache__rocketmq-9718_req_clarification_en.yaml",
+      "sha256": "cf685fa988c69e7a619f7e3bf5e5b055f5c3517432fcea012434ddd58a8e325f"
+    },
+    {
+      "bytes": 2926,
+      "git_blob_sha1": "1e0a9609abdf53b3cdaab846b1296fb07f1a60b6",
+      "path": "data/mid-groundtruths/req_clarification/Java/apache__rocketmq-9759_req_clarification_en.yaml",
+      "sha256": "645406b34595f55367133497d149b6522eb98e68ee58611dbd9e09c338f10efa"
+    },
+    {
+      "bytes": 3582,
+      "git_blob_sha1": "bc025bc444d4941d34992fa44a1e03546d228cf9",
+      "path": "data/mid-groundtruths/req_clarification/Java/grpc__grpc-java-11933_req_clarification_en.yaml",
+      "sha256": "1556b286791932cc3369431020bf844c66676b14182be19ea0bb903d42f66e7b"
+    },
+    {
+      "bytes": 2860,
+      "git_blob_sha1": "3ba742a36c33ab1f771e0d7b039b515b214cb50d",
+      "path": "data/mid-groundtruths/req_clarification/Java/grpc__grpc-java-12353_req_clarification_en.yaml",
+      "sha256": "52515d907462230365c6ecf2a138efcdc0dafaabb3659c2119d7ee38bd6600e1"
+    },
+    {
+      "bytes": 2565,
+      "git_blob_sha1": "390e54175f7d090a23b44a4be52be6676f0b63dd",
+      "path": "data/mid-groundtruths/req_clarification/Java/grpc__grpc-java-12441_req_clarification_en.yaml",
+      "sha256": "6ad6d3333bb3ecbcccfc02c566d9674e31a152ab70753fe9bf9b0a571636fe9e"
+    },
+    {
+      "bytes": 3080,
+      "git_blob_sha1": "4da7b04efbf0db677278690bb6bd279b0c3eaf8e",
+      "path": "data/mid-groundtruths/req_clarification/Java/grpc__grpc-java-12466_req_clarification_en.yaml",
+      "sha256": "e47a7eebabacdb5bc7e7696538da87c8c9849dd6a256627fb21139f759bb63e5"
+    },
+    {
+      "bytes": 3340,
+      "git_blob_sha1": "6ed0fa5316c0978467bb636e8ad46ff04aadd261",
+      "path": "data/mid-groundtruths/req_clarification/Java/junit-team__junit-framework-4474_req_clarification_en.yaml",
+      "sha256": "8a583790ad4e827bfeeb7c233be447f5d23c0a22decafddc28df1f8caf38d673"
+    },
+    {
+      "bytes": 2485,
+      "git_blob_sha1": "91dc250d810662ad07b7682f7a3ffbf34a51b552",
+      "path": "data/mid-groundtruths/req_clarification/Java/junit-team__junit-framework-4629_req_clarification_en.yaml",
+      "sha256": "2eb74d5299e5d1e0d7a053d92f4b012532e5470e5d5668037baf23b7a403a559"
+    },
+    {
+      "bytes": 4002,
+      "git_blob_sha1": "b432bbb39c63961b71686878964312ce1606ea93",
+      "path": "data/mid-groundtruths/req_clarification/Java/keycloak__keycloak-39361_req_clarification_en.yaml",
+      "sha256": "8a33601fc34fb90f0becbcb51f200abce070571a1cd229a84c5e8fece2e7227f"
+    },
+    {
+      "bytes": 4484,
+      "git_blob_sha1": "ebdc6eeb4ef0ef589b2890db7245cf29bcc4e0c9",
+      "path": "data/mid-groundtruths/req_clarification/Java/keycloak__keycloak-41440_req_clarification_en.yaml",
+      "sha256": "5c77b992c0deb8c956801a0d6f3e56c5ddab5d143709d35805ec6aca12f0f239"
+    },
+    {
+      "bytes": 3723,
+      "git_blob_sha1": "f01799728c5d0de4e8a6e07ef93373f574064fa1",
+      "path": "data/mid-groundtruths/req_clarification/Java/langchain4j__langchain4j-2192_req_clarification_en.yaml",
+      "sha256": "201618cdb5c46f53f550a2da82dfe0ebf54dbf44c9cd6864e2571d8791eadf0d"
+    },
+    {
+      "bytes": 3416,
+      "git_blob_sha1": "acc16caacc15e8c2ca11640177e8704fe2a75b38",
+      "path": "data/mid-groundtruths/req_clarification/Java/mapstruct__mapstruct-3492_req_clarification_en.yaml",
+      "sha256": "d2bc983c8d4ea46893f699ca53a95955c6628556dc60c8a62a50ec5f09016b34"
+    },
+    {
+      "bytes": 3014,
+      "git_blob_sha1": "c5418afaacfa196c43132c7d5656410459b2941c",
+      "path": "data/mid-groundtruths/req_clarification/Java/mapstruct__mapstruct-3908_req_clarification_en.yaml",
+      "sha256": "b9918048be83aaf0caf0cab6e2279e0e3653969715057afbfd83a78c15c973e5"
+    },
+    {
+      "bytes": 3253,
+      "git_blob_sha1": "e995762c03d9cd5a5175e59b080f5120b60327d4",
+      "path": "data/mid-groundtruths/req_clarification/Java/mockito__mockito-3335_req_clarification_en.yaml",
+      "sha256": "4d225b210ae0435ae50e8f7713d422a94f51f39fa59db37951fe51d1aa55e14c"
+    },
+    {
+      "bytes": 2824,
+      "git_blob_sha1": "4eb03d9bde13028bc5750142b88ec238e8e26399",
+      "path": "data/mid-groundtruths/req_clarification/Java/mockito__mockito-3349_req_clarification_en.yaml",
+      "sha256": "8293d93ad442987027f9796e3e673847ee65de2fdc0737a1d6e794aebd15922b"
+    },
+    {
+      "bytes": 2878,
+      "git_blob_sha1": "157459efc7373b7695c857f52dd9eca5add730fd",
+      "path": "data/mid-groundtruths/req_clarification/Java/mockito__mockito-3499_req_clarification_en.yaml",
+      "sha256": "4e92457d95f512b43a25020149760c984e9557252a6c5a09ac789dddcce620ae"
+    },
+    {
+      "bytes": 3482,
+      "git_blob_sha1": "48e6d2e746dbc6e589c938b903eb120ada43fdb6",
+      "path": "data/mid-groundtruths/req_clarification/Java/quarkusio__quarkus-49703_req_clarification_en.yaml",
+      "sha256": "94bdb8d57e420b0b195974caae0d7c39557c1958b4db372330fcb26c9b463b5b"
+    },
+    {
+      "bytes": 3123,
+      "git_blob_sha1": "bcc1c1108787c4ed7dcd7f5ceab36c39b8c3c136",
+      "path": "data/mid-groundtruths/req_clarification/Java/spotbugs__spotbugs-2844_req_clarification_en.yaml",
+      "sha256": "5bc2234b2243f6c96c30e7ddb2a871fe4255ff3f3f1aa471eb91c8d2e46b7fce"
+    },
+    {
+      "bytes": 2812,
+      "git_blob_sha1": "abae5362458c8ac220c523a536fc57e8ecb5e9b0",
+      "path": "data/mid-groundtruths/req_clarification/Java/spotbugs__spotbugs-3048_req_clarification_en.yaml",
+      "sha256": "5dabf86ac873ab1fa0b5ae65d601f98825a5e9aac5bd2262731307eca899847a"
+    },
+    {
+      "bytes": 2894,
+      "git_blob_sha1": "c530e59e40f6e0ad3ea399d6921fd6d2276ec0a2",
+      "path": "data/mid-groundtruths/req_clarification/Java/spotbugs__spotbugs-3160_req_clarification_en.yaml",
+      "sha256": "c9d1777a7527ec58f39032d859efa5ccc89ba952c3cd8a9e90d4a43360dcfb9a"
+    },
+    {
+      "bytes": 3399,
+      "git_blob_sha1": "dae4c5adfcfa88bc15003f447ca4ee763007dcee",
+      "path": "data/mid-groundtruths/req_clarification/Java/spotbugs__spotbugs-3424_req_clarification_en.yaml",
+      "sha256": "3b9b9ed7c1e5b32e9f61fffc755e967acca49516f1cf797cfe9f47d2710c8100"
+    },
+    {
+      "bytes": 2996,
+      "git_blob_sha1": "6b423a540773c9dbfdffce9bbcf87bc7d2075fb4",
+      "path": "data/mid-groundtruths/req_clarification/Java/spotbugs__spotbugs-3431_req_clarification_en.yaml",
+      "sha256": "9f654292391869207c222a20accaf5b68d2e195d57d99ff4aba0eb9d5656b910"
+    },
+    {
+      "bytes": 3816,
+      "git_blob_sha1": "7e719d07206920408e7488e36aec1974bc659e9f",
+      "path": "data/mid-groundtruths/req_clarification/Java/spotbugs__spotbugs-3486_req_clarification_en.yaml",
+      "sha256": "008a50aa4ee2c81b38336f131c84214548d83f5a4eabb712124fc6f3e2842a67"
+    },
+    {
+      "bytes": 2859,
+      "git_blob_sha1": "096fc8d1ce3beb4758b6b764acb5cc03d9e9690a",
+      "path": "data/mid-groundtruths/req_clarification/Java/spotbugs__spotbugs-3536_req_clarification_en.yaml",
+      "sha256": "f6003186ebb2b8a1a2ad299595ebfdbd71429a3e73e39e8a7d6743371ffaec59"
+    },
+    {
+      "bytes": 3004,
+      "git_blob_sha1": "cdbaae12bd16e4e41667c5c419d5ab4ded01c2d0",
+      "path": "data/mid-groundtruths/req_clarification/Java/spotbugs__spotbugs-3547_req_clarification_en.yaml",
+      "sha256": "d7e8d3bb8654ddc1a5c59c8f5911a212108284889210596019f140ec0abc96bf"
+    },
+    {
+      "bytes": 2690,
+      "git_blob_sha1": "a0233271b02ff2d7a3a3692244e1a3c7f91f8a38",
+      "path": "data/mid-groundtruths/req_clarification/Java/spotbugs__spotbugs-3552_req_clarification_en.yaml",
+      "sha256": "69b28c67c279b0c59e6bee377165a10b0d24793452afc0af08e98ebd6b2a22a8"
+    },
+    {
+      "bytes": 3405,
+      "git_blob_sha1": "db336a57e613c0d119ef6d05cce13a59051eb7f4",
+      "path": "data/mid-groundtruths/req_clarification/Java/spotbugs__spotbugs-3557_req_clarification_en.yaml",
+      "sha256": "9fea213ecb51ac393b8dbf0786b369f91aea06cd5d2e58687009ddeef55ce8c7"
+    },
+    {
+      "bytes": 3050,
+      "git_blob_sha1": "c4467c7eb2e9074f894028a455934bee1567ee55",
+      "path": "data/mid-groundtruths/req_clarification/Java/spotbugs__spotbugs-3624_req_clarification_en.yaml",
+      "sha256": "9b1e0d8c777de34882c7c63cef878d12ff8dc1855ab1acc090e6d1f873e74300"
+    },
+    {
+      "bytes": 2734,
+      "git_blob_sha1": "76bb7d02ab8c573b12013d4c95292d54d65b3d72",
+      "path": "data/mid-groundtruths/req_clarification/Java/spotbugs__spotbugs-3632_req_clarification_en.yaml",
+      "sha256": "fac5b02397fc4346db8abe3fcf5859157734061aeb0b7686ae54dd59f26d4426"
+    },
+    {
+      "bytes": 3135,
+      "git_blob_sha1": "a4fbd5f3b7286ea1cab8742906d97075ae2fdf6a",
+      "path": "data/mid-groundtruths/req_clarification/Java/spotbugs__spotbugs-3646_req_clarification_en.yaml",
+      "sha256": "e9a8e55cd9d7696df2f7b84b552de730541044092f476389e09499e2f14c49b5"
+    },
+    {
+      "bytes": 3330,
+      "git_blob_sha1": "b9457243cbf8037af0c08b11c1ff4875e4e4e523",
+      "path": "data/mid-groundtruths/req_clarification/Java/trinodb__trino-20281_req_clarification_en.yaml",
+      "sha256": "48aa5d95be2ef168bd544aa42fb50aebcdd663aba558ef16135c0554c9ee482d"
+    },
+    {
+      "bytes": 4517,
+      "git_blob_sha1": "f28b01b3808e9b1780ef930a28a23b0f937058dd",
+      "path": "data/mid-groundtruths/req_clarification/Java/trinodb__trino-21023_req_clarification_en.yaml",
+      "sha256": "4ec92b7cde3b1b2a3766ffdc32a6f4495f1382a3aa4bfe2c96f99c0a8ac808b8"
+    },
+    {
+      "bytes": 2751,
+      "git_blob_sha1": "5b57f8f1e470ca77d3a5fd39a0546b1a1b7fa22e",
+      "path": "data/mid-groundtruths/req_clarification/Python/aws-cloudformation__cfn-lint-3377_req_clarification_en.yaml",
+      "sha256": "ea7b9c0aa880208486529ce1f5f61fa099da47227e950ccf7cf7a7ae4464a812"
+    },
+    {
+      "bytes": 3753,
+      "git_blob_sha1": "f8341303bd1e5923798f91eee56bc38ac1d2c478",
+      "path": "data/mid-groundtruths/req_clarification/Python/aws-cloudformation__cfn-lint-3470_req_clarification_en.yaml",
+      "sha256": "b29a890eaeb9a1b3d2eb46e90b44b0c7e505c0e767e7ff71c32f4f39357e720f"
+    },
+    {
+      "bytes": 2973,
+      "git_blob_sha1": "ccfc7387207050ae6f463b08e9a87344198613de",
+      "path": "data/mid-groundtruths/req_clarification/Python/aws-cloudformation__cfn-lint-3561_req_clarification_en.yaml",
+      "sha256": "d29d58c0cf88173aa837189011f3f12800484d6ec7cfbc4331a4536edf9817db"
+    },
+    {
+      "bytes": 2831,
+      "git_blob_sha1": "3726de9801a90b11ea0621e8e09f44da3cf96f03",
+      "path": "data/mid-groundtruths/req_clarification/Python/aws-cloudformation__cfn-lint-3994_req_clarification_en.yaml",
+      "sha256": "fbca9b00445e8b431f7c754f3b2e261c687fd63eb9fbd67014696f55deae4ba7"
+    },
+    {
+      "bytes": 4525,
+      "git_blob_sha1": "a78517f4141a77644327ee8031fd01fffa02e27f",
+      "path": "data/mid-groundtruths/req_clarification/Python/falconry__falcon-2540_req_clarification_en.yaml",
+      "sha256": "77f3f7be56bb6872764620023cf59e80500e9cd15698a9ca7c40af172bf41d07"
+    },
+    {
+      "bytes": 3381,
+      "git_blob_sha1": "85b18eb51d7388faf73fd44fcd2d0b33d6af1957",
+      "path": "data/mid-groundtruths/req_clarification/Python/joke2k__faker-2279_req_clarification_en.yaml",
+      "sha256": "3f109e35be7439ac03b535fa8bcd2745a81bcf6af4faace8b133086b804f8984"
+    },
+    {
+      "bytes": 2944,
+      "git_blob_sha1": "ea88e32c267718d7d500b412b720d5450e51912f",
+      "path": "data/mid-groundtruths/req_clarification/Python/joke2k__faker-2309_req_clarification_en.yaml",
+      "sha256": "9bb59010355fb451f37c8b4136165e3c068ecc892d33ed8ed02621a877fb0929"
+    },
+    {
+      "bytes": 2977,
+      "git_blob_sha1": "f8a7469495c77a687638c831e497fa36e8d5a1a4",
+      "path": "data/mid-groundtruths/req_clarification/Python/keras-team__keras-20410_req_clarification_en.yaml",
+      "sha256": "9ad8903733beca002730da8043ba81bbb6d63c438c24e663ff8ac51686bf0dc6"
+    },
+    {
+      "bytes": 3059,
+      "git_blob_sha1": "870a3e8be8153957bcf4f5c1109e84b1e27fd613",
+      "path": "data/mid-groundtruths/req_clarification/Python/matplotlib__matplotlib-28831_req_clarification_en.yaml",
+      "sha256": "258df20c2120ac79900c2f7eb136013c19befbed205ea299cba93fc2185be69f"
+    },
+    {
+      "bytes": 2705,
+      "git_blob_sha1": "b0f9b03ed2809302b1188b14b502b755b417a8c9",
+      "path": "data/mid-groundtruths/req_clarification/Python/matplotlib__matplotlib-30019_req_clarification_en.yaml",
+      "sha256": "1791b38f00e839278270964478c2b70469add92750f36adccb9d7f48572a8224"
+    },
+    {
+      "bytes": 4178,
+      "git_blob_sha1": "53d34f2dcf471301f37d971bf2d910bc91e873cf",
+      "path": "data/mid-groundtruths/req_clarification/Python/matplotlib__matplotlib-30636_req_clarification_en.yaml",
+      "sha256": "f68f6ff4594272402cf3999e4e18ed399197a6e2d46ad25eb7b9bb2eace8b78d"
+    },
+    {
+      "bytes": 2863,
+      "git_blob_sha1": "e8ada9554ab5c43653cdbb5d34a99f302d9d10b2",
+      "path": "data/mid-groundtruths/req_clarification/Python/matplotlib__matplotlib-30696_req_clarification_en.yaml",
+      "sha256": "bddb096bca2f295ed92fbe41e8d9a179b797038d04b9c265357d01fb43d9b80c"
+    },
+    {
+      "bytes": 3411,
+      "git_blob_sha1": "ee70a4b869e27886ac1ffca95d960f69475477c1",
+      "path": "data/mid-groundtruths/req_clarification/Python/matplotlib__matplotlib-30756_req_clarification_en.yaml",
+      "sha256": "395ae45194bb5c2127427e50404a3c833ed52a5062170a76a102207238c5857b"
+    },
+    {
+      "bytes": 3526,
+      "git_blob_sha1": "f9cb6e70b824f4038d4e6adbf9bab521fe83c6f6",
+      "path": "data/mid-groundtruths/req_clarification/Python/matplotlib__matplotlib-30760_req_clarification_en.yaml",
+      "sha256": "0736a41c1654d2e68b17c9e449e19c44e6331868d2e7a5abb57e906edc48e3ed"
+    },
+    {
+      "bytes": 2526,
+      "git_blob_sha1": "8c6a6a5ad4d13d9a33ef5205051043a73040dc46",
+      "path": "data/mid-groundtruths/req_clarification/Python/matplotlib__matplotlib-30867_req_clarification_en.yaml",
+      "sha256": "4129eaddcdc278e22e8e7ec3e26fff8c9eb273ee84c05f41126764d278a978e1"
+    },
+    {
+      "bytes": 2695,
+      "git_blob_sha1": "610d5120e9328cbba48756cde50ad74fafcf496f",
+      "path": "data/mid-groundtruths/req_clarification/Python/openai__openai-agents-python-1124_req_clarification_en.yaml",
+      "sha256": "873780105f6e215e2824b4d454ec4e692f12422ea1d953902635b6b8cf7176db"
+    },
+    {
+      "bytes": 3027,
+      "git_blob_sha1": "9b105550695b952b328647de5a2de70fbb8b1413",
+      "path": "data/mid-groundtruths/req_clarification/Python/openai__openai-agents-python-112_req_clarification_en.yaml",
+      "sha256": "688e4ae53e589150bae7a6ba89bb7aa62bf3d7196e42252abf80dd18b96334ba"
+    },
+    {
+      "bytes": 3646,
+      "git_blob_sha1": "9f0002918464c3d08f2b0787aab4c5a06ecef63e",
+      "path": "data/mid-groundtruths/req_clarification/Python/openai__openai-agents-python-1192_req_clarification_en.yaml",
+      "sha256": "7bc29d6826a8397d5a730bd18c3fc69892f5bcb4758428d1448ee9eddfa55e6b"
+    },
+    {
+      "bytes": 3465,
+      "git_blob_sha1": "e792fcc52ba2288d6413c4b2905a332969319272",
+      "path": "data/mid-groundtruths/req_clarification/Python/openai__openai-agents-python-1636_req_clarification_en.yaml",
+      "sha256": "c993794a3f8f9451a3770cec5ba2aa42a54cc1cb0df4bf3b22083fa71686e9e3"
+    },
+    {
+      "bytes": 3034,
+      "git_blob_sha1": "da007c0f438fae5514f372a00bf14988f8134948",
+      "path": "data/mid-groundtruths/req_clarification/Python/openai__openai-agents-python-1684_req_clarification_en.yaml",
+      "sha256": "fa8ccbe160cfdab6d0758acdc21677e4bb1da4b3042a9244e1a56ff41f1d7b70"
+    },
+    {
+      "bytes": 3958,
+      "git_blob_sha1": "668c0519adeb68b7d62d33f11b7146a748a8ba28",
+      "path": "data/mid-groundtruths/req_clarification/Python/openai__openai-agents-python-1689_req_clarification_en.yaml",
+      "sha256": "da1132978a1c8cd04ff138e9ca3f419a35d19a9f973e5f929676453ab314d9b8"
+    },
+    {
+      "bytes": 3122,
+      "git_blob_sha1": "c49263eb6e9af1d3f2c533fd08e442980db6b5fc",
+      "path": "data/mid-groundtruths/req_clarification/Python/openai__openai-agents-python-1749_req_clarification_en.yaml",
+      "sha256": "d7e759254462d76776dffe430e3dda94a91a1931512947cc75697604cc8a6b3e"
+    },
+    {
+      "bytes": 2265,
+      "git_blob_sha1": "87a93ecd1fc72c26b20916a70b3d6959513eedd3",
+      "path": "data/mid-groundtruths/req_clarification/Python/openai__openai-agents-python-1861_req_clarification_en.yaml",
+      "sha256": "848e1ee64f9c353643280913f3e78855dfd022f573a0624a75b265e0bec54cbb"
+    },
+    {
+      "bytes": 2966,
+      "git_blob_sha1": "557676043ae853c6e3dee9ec86b5ec02a3c096c2",
+      "path": "data/mid-groundtruths/req_clarification/Python/openai__openai-agents-python-1884_req_clarification_en.yaml",
+      "sha256": "679d07d9d9d993b779717d3aa99f4e5a58751e3247428034ff291c5aa66f4c9c"
+    },
+    {
+      "bytes": 4358,
+      "git_blob_sha1": "28e71d0dde646edec7987df5604fe00ae51224e0",
+      "path": "data/mid-groundtruths/req_clarification/Python/openai__openai-agents-python-2105_req_clarification_en.yaml",
+      "sha256": "2fc42d1c270e0f4e9058ccc3fdf777405a75bb2092617e1d588e57628de32b9c"
+    },
+    {
+      "bytes": 3991,
+      "git_blob_sha1": "c41977d8f31c01f82857a138d1fc2f4cd83212c9",
+      "path": "data/mid-groundtruths/req_clarification/Python/openai__openai-agents-python-2112_req_clarification_en.yaml",
+      "sha256": "5041ec5bbf6e677925db00d90a9fa71722717619d8dd5d58db6ca8ee701c0c0f"
+    },
+    {
+      "bytes": 2897,
+      "git_blob_sha1": "4599bf4bb90888debac38199cc0a9a0f7ee2604c",
+      "path": "data/mid-groundtruths/req_clarification/Python/openai__openai-agents-python-2290_req_clarification_en.yaml",
+      "sha256": "d396debeb4eeda983003c0ab138f1cbc192335d4861898ab4bd03eaa9e92985d"
+    },
+    {
+      "bytes": 3402,
+      "git_blob_sha1": "113396cb1e255d14f9ecfe4115056a3f554fdf23",
+      "path": "data/mid-groundtruths/req_clarification/Python/openai__openai-agents-python-454_req_clarification_en.yaml",
+      "sha256": "32d0d6b4fbc0c274d0bc838e3c141ac97168414eaf5dac0e34e58a6e3cf83b72"
+    },
+    {
+      "bytes": 3809,
+      "git_blob_sha1": "60763b9e04a45c9a95d7ec9d607aaea1cd64f1fe",
+      "path": "data/mid-groundtruths/req_clarification/Python/openai__openai-agents-python-540_req_clarification_en.yaml",
+      "sha256": "a20b8749811465ee4b6e91a81444038c0488d84748f8ce2fd563abd620033ba6"
+    },
+    {
+      "bytes": 2589,
+      "git_blob_sha1": "5e044303a02a39f38307ea480051011e8ef2a8e3",
+      "path": "data/mid-groundtruths/req_clarification/Python/pdm-project__pdm-2655_req_clarification_en.yaml",
+      "sha256": "954eca4bb4422af533d62a58f8cef2239b52d98542362ecf8f913fcb9850763d"
+    },
+    {
+      "bytes": 3303,
+      "git_blob_sha1": "06f78e4ae45479b6f98ed34d5207cfd21b24e737",
+      "path": "data/mid-groundtruths/req_clarification/Python/pdm-project__pdm-2795_req_clarification_en.yaml",
+      "sha256": "8c0223bc58c48fa521ddac7ebc380cefdbb5eda4a14ac5a65befa8ea0d530213"
+    },
+    {
+      "bytes": 3397,
+      "git_blob_sha1": "d0f6893d638a5990635c965206adcb34a304992f",
+      "path": "data/mid-groundtruths/req_clarification/Python/pdm-project__pdm-3546_req_clarification_en.yaml",
+      "sha256": "f7919d8d5c6a79a0695391936f3d5f1a2cf26c6d46fb5c9eba69ffa73dcefdb3"
+    },
+    {
+      "bytes": 2798,
+      "git_blob_sha1": "50abfabcc609a4d3f02d798543ca7023e92e3938",
+      "path": "data/mid-groundtruths/req_clarification/Python/pdm-project__pdm-3655_req_clarification_en.yaml",
+      "sha256": "4b4d843d7f1961c16b3138a811c5b9e2c0fffdbdb0c55cacb5472b840430b96c"
+    },
+    {
+      "bytes": 3451,
+      "git_blob_sha1": "09b0f791e443eb8946822e91d3c35c133b125c38",
+      "path": "data/mid-groundtruths/req_clarification/Python/pvlib__pvlib-python-1962_req_clarification_en.yaml",
+      "sha256": "ad18c78b972acdf61ef8ee0d0da8cc734e8876869d7fd275ae435c43410be6fc"
+    },
+    {
+      "bytes": 3488,
+      "git_blob_sha1": "3ebd02dcc18bdebd633ecdab7a1aa73a363afa02",
+      "path": "data/mid-groundtruths/req_clarification/Python/pvlib__pvlib-python-2433_req_clarification_en.yaml",
+      "sha256": "240a6789570ec37651b8dee6e46e566c286a7468e9cb14be3d6cb3306f3b5cdd"
+    },
+    {
+      "bytes": 3292,
+      "git_blob_sha1": "6274fd79fb878c0c968d7641801278e66fb8f399",
+      "path": "data/mid-groundtruths/req_clarification/Python/pvlib__pvlib-python-2521_req_clarification_en.yaml",
+      "sha256": "c78b251f28bd5bed76cbafe8e8a0c302add172993b0cddd07f97839046bde66a"
+    },
+    {
+      "bytes": 2964,
+      "git_blob_sha1": "29d8b11988fafe145233f386aa8c4bcb1dade3a6",
+      "path": "data/mid-groundtruths/req_clarification/Python/pvlib__pvlib-python-2550_req_clarification_en.yaml",
+      "sha256": "fa68029bec07780bc4abc6b9b720fdbe2fb7c7a1b7f7a99eabfb9f4b2c59faf8"
+    },
+    {
+      "bytes": 2993,
+      "git_blob_sha1": "90d89e23a6993bbfe642c9f47a6c4d2c105208ff",
+      "path": "data/mid-groundtruths/req_clarification/Python/pylint-dev__pylint-10135_req_clarification_en.yaml",
+      "sha256": "d67cdc497673238020d6d8b8cd6b8fa323900857b25433222774c23cda13c893"
+    },
+    {
+      "bytes": 2821,
+      "git_blob_sha1": "e579873c96a2d986084c6ce4ed531a3a7abcb2a2",
+      "path": "data/mid-groundtruths/req_clarification/Python/pylint-dev__pylint-10393_req_clarification_en.yaml",
+      "sha256": "a681161b866f349bb161abc4dce09f43ac7576d555fe436820c4bdf6cfc759f1"
+    },
+    {
+      "bytes": 3274,
+      "git_blob_sha1": "ea08d1886aec7b271f9fd107c0c968265c75ab2d",
+      "path": "data/mid-groundtruths/req_clarification/Python/pylint-dev__pylint-10424_req_clarification_en.yaml",
+      "sha256": "2440486658c957c9bce2e4aa11e92a9b8681d0039c9be7c798452c7910ad3d93"
+    },
+    {
+      "bytes": 2325,
+      "git_blob_sha1": "0efb7d20a7082651e423d54de5b26be2c199f454",
+      "path": "data/mid-groundtruths/req_clarification/Python/pylint-dev__pylint-10436_req_clarification_en.yaml",
+      "sha256": "8061c9b0c88b614dc7a7b14952cc6404221daaad3b23f96e029a857dea11e389"
+    },
+    {
+      "bytes": 3397,
+      "git_blob_sha1": "2f3529d7968f1ed31813de30ffd6826b2a1b6d8f",
+      "path": "data/mid-groundtruths/req_clarification/Python/pylint-dev__pylint-10437_req_clarification_en.yaml",
+      "sha256": "780e763b425ef63c4b2a4868da25b06b93c6030c99857499a7e0c44f9dfeb7b3"
+    },
+    {
+      "bytes": 3396,
+      "git_blob_sha1": "ff0383c708ea7b188065d00d99a36e8a8bc86f16",
+      "path": "data/mid-groundtruths/req_clarification/Python/pylint-dev__pylint-10569_req_clarification_en.yaml",
+      "sha256": "8cfdc649e76d0c4067b40db63e0f63136a977effae2e830d07694292bbf32066"
+    },
+    {
+      "bytes": 2848,
+      "git_blob_sha1": "594a563d4a6c230cf3cc38149ee43dd3b18538bd",
+      "path": "data/mid-groundtruths/req_clarification/Python/pylint-dev__pylint-10572_req_clarification_en.yaml",
+      "sha256": "6da270253f10626bc5b7cec41f8acc1220456ee1b219be8cd33cb2d8fb51c198"
+    },
+    {
+      "bytes": 3569,
+      "git_blob_sha1": "1ffb9a4d82d1da00ee98f60ca4ac1ac7b245d651",
+      "path": "data/mid-groundtruths/req_clarification/Python/pylint-dev__pylint-10628_req_clarification_en.yaml",
+      "sha256": "f69584d6da9dd8399c2bb710539c75edfa9fcda51ec45860ca5bc6a8e2b583c5"
+    },
+    {
+      "bytes": 2331,
+      "git_blob_sha1": "85b015d27992a063bd6b4cb8039578e81fee5a1c",
+      "path": "data/mid-groundtruths/req_clarification/Python/pylint-dev__pylint-10643_req_clarification_en.yaml",
+      "sha256": "d3fe898f942d606c227eef9087cf2ffbcba786b2bd198fcfb904c5cebd38a281"
+    },
+    {
+      "bytes": 2891,
+      "git_blob_sha1": "1698c8f8321aa14d9da2da9dc5607aa6d139ff2e",
+      "path": "data/mid-groundtruths/req_clarification/Python/pylint-dev__pylint-10648_req_clarification_en.yaml",
+      "sha256": "457ae43afd92d5e81a3d1542c425dd7a2a67208a88a27fa5c5394a0db5a12742"
+    },
+    {
+      "bytes": 3635,
+      "git_blob_sha1": "9f03aff767914aa2cb92a608fa13f033222f40d1",
+      "path": "data/mid-groundtruths/req_clarification/Python/pylint-dev__pylint-10677_req_clarification_en.yaml",
+      "sha256": "61d71aad0431d0fd5fa652f01741ce9ece1214e6deddbc25853e01b24508f963"
+    },
+    {
+      "bytes": 2835,
+      "git_blob_sha1": "d982d935bdbf10e953a04ec9667fa3258cd7a819",
+      "path": "data/mid-groundtruths/req_clarification/Python/pylint-dev__pylint-10712_req_clarification_en.yaml",
+      "sha256": "06901cf8d4e9396a6c86ea039011fd993e50e470528c25bd87c6ac0a797f22dd"
+    },
+    {
+      "bytes": 2775,
+      "git_blob_sha1": "fa3c76e1f5b9c6c349e24d354c7bffb8caf8e04e",
+      "path": "data/mid-groundtruths/req_clarification/Python/pylint-dev__pylint-10724_req_clarification_en.yaml",
+      "sha256": "f1f7cb4bb248b7dbbbdc5e41f8e13e9ef030862a29a13a3632a531a539d5c056"
+    },
+    {
+      "bytes": 2793,
+      "git_blob_sha1": "3e6722aa9f331ed011da19b51555052cbb5da866",
+      "path": "data/mid-groundtruths/req_clarification/Python/pylint-dev__pylint-10758_req_clarification_en.yaml",
+      "sha256": "454f92c88c6b3c3af1b0663b850f08eb34080e1f8e93ca1fa4fbfacda5044118"
+    },
+    {
+      "bytes": 3338,
+      "git_blob_sha1": "849848da2b2d87e302207cb45c12d5d62e6eb9a5",
+      "path": "data/mid-groundtruths/req_clarification/Python/pylint-dev__pylint-10770_req_clarification_en.yaml",
+      "sha256": "2e04b1f44fa22c4b5262dfb52b4a2c66889c374741141919c693a5e806527ca3"
+    },
+    {
+      "bytes": 3212,
+      "git_blob_sha1": "4fad2d454e63053ab3dbf6d51d9b370754e84e03",
+      "path": "data/mid-groundtruths/req_clarification/Python/pylint-dev__pylint-10797_req_clarification_en.yaml",
+      "sha256": "1f0fe5a50ff7271f167520e789d57e54b6d1fb469c0313669f8db67c574cad2f"
+    },
+    {
+      "bytes": 2976,
+      "git_blob_sha1": "48a7aa1d24224f7003cb641744e3b8d36d2d7870",
+      "path": "data/mid-groundtruths/req_clarification/Python/pylint-dev__pylint-10802_req_clarification_en.yaml",
+      "sha256": "9bf3052d1b46001b6679e9844f6b5e88498d92bf7c209a68f1c866e54748945c"
+    },
+    {
+      "bytes": 3451,
+      "git_blob_sha1": "985be4d1988bbd4f6201f2a76b6469be289236e9",
+      "path": "data/mid-groundtruths/req_clarification/Python/pylint-dev__pylint-10814_req_clarification_en.yaml",
+      "sha256": "91ad09fb9102db9caa17a6ce3e90ffc5800c68d1f33b68b52c5326a4fc68a3d5"
+    },
+    {
+      "bytes": 3152,
+      "git_blob_sha1": "41480812a37dc9248a4e0b999db141ffd1b20ac6",
+      "path": "data/mid-groundtruths/req_clarification/Python/pylint-dev__pylint-9308_req_clarification_en.yaml",
+      "sha256": "2a2036763a5ce6213b164fedf4feec57cab299198bd60a633e2d1896c4acda24"
+    },
+    {
+      "bytes": 2418,
+      "git_blob_sha1": "383427cc9f2fd1b083edce404e8b32c30e290244",
+      "path": "data/mid-groundtruths/req_clarification/Python/pylint-dev__pylint-9630_req_clarification_en.yaml",
+      "sha256": "01d7f8eae7e4d3852710edf27950a95a71b2c45130347cfb3da389dba7e336d3"
+    },
+    {
+      "bytes": 3397,
+      "git_blob_sha1": "164d94e512fd76c2d50d2ee1167bb5cf102cdfbb",
+      "path": "data/mid-groundtruths/req_clarification/Python/pylint-dev__pylint-9712_req_clarification_en.yaml",
+      "sha256": "7f4674a21f8f55498ddf5a7ee4ea3c18cdcd0462bccadfdb068fa2275e8947fa"
+    },
+    {
+      "bytes": 2736,
+      "git_blob_sha1": "e318fee6553d9c460cbfffcf11a3ea5cf0954c6c",
+      "path": "data/mid-groundtruths/req_clarification/Python/pylint-dev__pylint-9728_req_clarification_en.yaml",
+      "sha256": "7a5d5fd29423a6484010d419bd0d3eff1c0b72ba27e9ac940371479a26b0c25a"
+    },
+    {
+      "bytes": 3552,
+      "git_blob_sha1": "fa5ca5bd6ed5e97bbaf34e4846cbeb79d6d829f3",
+      "path": "data/mid-groundtruths/req_clarification/Python/pypa__pip-12799_req_clarification_en.yaml",
+      "sha256": "0543e18eee1a349c82ffcc0d38a08265ea482ff42554c753af6f8cf4450389db"
+    },
+    {
+      "bytes": 2881,
+      "git_blob_sha1": "31dbed203ef0e6894eadbf19b4ce5b51c472862d",
+      "path": "data/mid-groundtruths/req_clarification/Python/pypa__pip-12877_req_clarification_en.yaml",
+      "sha256": "21134fd88cd8ceb53cd335b7698d98d7779a7a4b52423ffc3c3193cd4cc2b1f2"
+    },
+    {
+      "bytes": 3327,
+      "git_blob_sha1": "35518edc8de163d357a6df6852aad94bf4eb1ae2",
+      "path": "data/mid-groundtruths/req_clarification/Python/pypa__pip-13064_req_clarification_en.yaml",
+      "sha256": "f622cb9d72b80f2425738c7c050ce678b6850c99083a0062a2533176c06abce9"
+    },
+    {
+      "bytes": 2650,
+      "git_blob_sha1": "69a0babec09ae03a9295007eafebd486c4773b1c",
+      "path": "data/mid-groundtruths/req_clarification/Python/pypa__pip-13070_req_clarification_en.yaml",
+      "sha256": "48de877d48dda8d53f0523eed7d1b6cb3734df29d00dbeac5fb681bfc51ab3c6"
+    },
+    {
+      "bytes": 2890,
+      "git_blob_sha1": "f04b24b3b93a600dcd8cb7d9246728a14f7a8ffc",
+      "path": "data/mid-groundtruths/req_clarification/Python/pypa__pip-13124_req_clarification_en.yaml",
+      "sha256": "75affe4a08987fc5380b4ef3121472a0a6667e200913e65c1b5134da8bc6ea23"
+    },
+    {
+      "bytes": 3633,
+      "git_blob_sha1": "7e5917f4d257b6ffdd2c31791aa00d5e721f5080",
+      "path": "data/mid-groundtruths/req_clarification/Python/reflex-dev__reflex-2242_req_clarification_en.yaml",
+      "sha256": "1322829e252b6bca1ef360a7aa0ef929ab1d0247b18a48cb08b1bfc2cea05a65"
+    },
+    {
+      "bytes": 2783,
+      "git_blob_sha1": "acaf1f62690f99f82e664da6cbb86e84bb5ce019",
+      "path": "data/mid-groundtruths/req_clarification/Python/reflex-dev__reflex-4239_req_clarification_en.yaml",
+      "sha256": "2b7d38ebe06019b57070d4073c6dd220ef8273e9a02f2aa145050f2fe853ab0c"
+    },
+    {
+      "bytes": 3488,
+      "git_blob_sha1": "97e299830382440cdab8ac7d58ea7f66d153b49e",
+      "path": "data/mid-groundtruths/req_clarification/Python/scikit-learn__scikit-learn-28612_req_clarification_en.yaml",
+      "sha256": "2bf0fb9480ece14305c10ee3e803b1d4ca23d737b91fd2d9ee60451a41511d6d"
+    },
+    {
+      "bytes": 2956,
+      "git_blob_sha1": "a0f9f08b02a0603ad6024c0f52ef4b3f6dac62e4",
+      "path": "data/mid-groundtruths/req_clarification/Python/scikit-learn__scikit-learn-28651_req_clarification_en.yaml",
+      "sha256": "cabbe16be4653f3c8c9af5b7fbc445524ddf361bbf2cc721adede50624bb19cf"
+    },
+    {
+      "bytes": 3243,
+      "git_blob_sha1": "1b6c0ca217f05067e4d219fb70c921e6312dde52",
+      "path": "data/mid-groundtruths/req_clarification/Python/scikit-learn__scikit-learn-31094_req_clarification_en.yaml",
+      "sha256": "fa93415f619fbb0b90e874950e1bdc0d1b1cbf4836642bbb6ac8713b62caf009"
+    },
+    {
+      "bytes": 2960,
+      "git_blob_sha1": "dbed4bfefca51aa2934f01122b905d215d1ed179",
+      "path": "data/mid-groundtruths/req_clarification/Python/scikit-learn__scikit-learn-32932_req_clarification_en.yaml",
+      "sha256": "8fae4c688a0f485abc15a7347aa007d01a5cdfa8dee2347f6a48c44028968553"
+    },
+    {
+      "bytes": 3117,
+      "git_blob_sha1": "20ec3b3d9ebe9c45875f0a7e8fdfc2906547cb83",
+      "path": "data/mid-groundtruths/req_clarification/Python/sphinx-doc__sphinx-14127_req_clarification_en.yaml",
+      "sha256": "2527dc18e026337f2f80dbb17a23b1b0aa3156e1028b9732fffd4a1295302a88"
+    },
+    {
+      "bytes": 3685,
+      "git_blob_sha1": "b1bbec635b96f275b3b0262a5ff7463c04df272c",
+      "path": "data/mid-groundtruths/req_clarification/Python/sympy__sympy-26546_req_clarification_en.yaml",
+      "sha256": "8dc80487589440e86e752250ee4d9801c95f82895404a11f8e42c5e3ee24a1ef"
+    },
+    {
+      "bytes": 3144,
+      "git_blob_sha1": "e7c8bceb905cebe7a8b302657a877764a9e44a90",
+      "path": "data/mid-groundtruths/req_clarification/Python/sympy__sympy-26557_req_clarification_en.yaml",
+      "sha256": "7f9346d478b8ddd1c618a7a47226103fc42c5c348661d255623f5ab879d8c3bc"
+    },
+    {
+      "bytes": 2966,
+      "git_blob_sha1": "ec1a8a23f5fdc2f476a536b947412fe3233cba15",
+      "path": "data/mid-groundtruths/req_clarification/Python/sympy__sympy-26558_req_clarification_en.yaml",
+      "sha256": "44a0086b40ddbea94391cde68f7e0a6988a1f72a29cfe268af62d3fe9fa6e0df"
+    },
+    {
+      "bytes": 3260,
+      "git_blob_sha1": "55330f0b7025ab854f5a96f7d864eb01ca4cf741",
+      "path": "data/mid-groundtruths/req_clarification/Python/sympy__sympy-26733_req_clarification_en.yaml",
+      "sha256": "bf50d5beb1df6510032560db315966db21e7629ee7b10eb41f7f376e37ad0de0"
+    },
+    {
+      "bytes": 3797,
+      "git_blob_sha1": "13905ac6a23cab9fb18643d0bc59a0a050bdc08a",
+      "path": "data/mid-groundtruths/req_clarification/Python/sympy__sympy-26822_req_clarification_en.yaml",
+      "sha256": "f948eb82086d74378570953bdeb71c5c6917e66098299d7e6f323b27403c8c95"
+    },
+    {
+      "bytes": 3358,
+      "git_blob_sha1": "6ae63bcd9ce6defab6912560c39dcd91bbc7599d",
+      "path": "data/mid-groundtruths/req_clarification/Python/sympy__sympy-26919_req_clarification_en.yaml",
+      "sha256": "191a251ceee1b482d2997a3d3e1b3eba4470e3ffb15a00311f922cd4920124cd"
+    },
+    {
+      "bytes": 3551,
+      "git_blob_sha1": "09236f9e8a719e6740fdca537208e886a09ef577",
+      "path": "data/mid-groundtruths/req_clarification/Python/sympy__sympy-26954_req_clarification_en.yaml",
+      "sha256": "9b86253354b2369816c287f03e171f3f6a6bb99d571ad3d2d9939a0452a91df3"
+    },
+    {
+      "bytes": 38476,
+      "git_blob_sha1": "1b88311c739dfccd4c41e6b9de144707dbe6aef6",
+      "path": "evaluation/evaluate_docker.py",
+      "sha256": "2eba96d68ce9166160d492331f311803b9f72f5c52677f09f65efef224d63f72"
+    },
+    {
+      "bytes": 13480,
+      "git_blob_sha1": "e851fc53019d400d17da5dfb3e707c7f4c81f94a",
+      "path": "evaluation/evaluate_modal.py",
+      "sha256": "6b2de7be904b9152fe733758629d72f576256d5f5a83e6fcd024f9b27196f350"
+    }
+  ],
+  "languages": {
+    "java": 85,
+    "python": 78
+  },
+  "purpose": "swe_rpg_source_identity",
+  "raw_authority_contains_solution_and_test_evidence": true,
+  "revision": "688ed7918cbcabe6c9d9b9f393fad1053b286dd9",
+  "schema_version": 1,
+  "source_benchmark_sha256": "90c3f55fe74a111daad93d017d38a834136411678f0f9b03e0193cd076ef35a2",
+  "source_root": "output/SWE-RPG/source-snapshot/688ed7918cbcabe6c9d9b9f393fad1053b286dd9/source",
+  "tasks": 163
+}
