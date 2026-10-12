@@ -83,8 +83,17 @@ def validate_paired_checker_result(
     if not isinstance(value, dict) or set(value) != {"rule_results"}:
         raise ValueError("Paired Repo Checker output must contain only rule_results")
     rows = value["rule_results"]
-    if not isinstance(rows, list) or len(rows) != len(playbook.bullets):
-        raise ValueError("Paired Repo Checker must return one result per bullet")
+    if not isinstance(rows, list):
+        raise ValueError("Paired Repo Checker rule_results must be an array")
+    if len(rows) != len(playbook.bullets):
+        raise ValueError(
+            "Paired Repo Checker must return one result per bullet: "
+            f"expected {len(playbook.bullets)} results, received {len(rows)}. "
+            f"Use ordered rule_number values {list(range(1, len(playbook.bullets) + 1))}; "
+            "rule_number is the 1-based position in the supplied list, not the numeric "
+            "suffix of an internal rule ID. Correct the correspondence yourself; "
+            "the Host has not renumbered, added, or removed results."
+        )
     expected_keys = {
         "rule_number",
         "level" if levels else "triggered",
@@ -116,7 +125,11 @@ def validate_paired_checker_result(
                 f"{', '.join(sorted(expected_keys))}"
             )
         if type(row["rule_number"]) is not int or row["rule_number"] != number:
-            raise ValueError("Paired Repo Checker rule identity/trigger is invalid")
+            raise ValueError(
+                f"Paired Repo Checker result[{number - 1}].rule_number: expected {number}, "
+                f"received {row['rule_number']!r}. Use the supplied list's 1-based position, "
+                "not an internal rule ID suffix."
+            )
         level = row.get("level") if levels else None
         if levels:
             if type(level) is not int or level not in {0, 1, 2}:

@@ -67,6 +67,14 @@ outcome. Conditional candidate validation or Refiner may remain unexercised;
 report those coverage limits rather than changing selection or caps to force them.
 Local tests establish contracts, not model-backed compute-node readiness.
 
+Checker result ordinals are positions in the current visible list, not persistent
+learning IDs. Project hybrid items to explicit consecutive rule_number values
+while preserving conditions/guides and keeping internal IDs in learning artifacts.
+Count/identity rejection feedback must report expected and received values and
+the exact offending position. Test noncontiguous IDs and the real submission
+correction loop; a single placeholder item cannot exercise this boundary. Host
+must not silently remove extra results, renumber them or infer a final answer.
+
 ## Cluster resources
 
 | Cluster | One-CPU task request |

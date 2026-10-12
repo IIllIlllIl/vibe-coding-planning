@@ -45,6 +45,9 @@ def behavioral_checker_semantic_sha256(config: OptimizationConfig) -> str:
         root / "src/optimization/behavioral_hpc_executor.py",
         root / "src/optimization/hpc/phase_wave.py",
     ]
+    if config.hybrid.enabled:
+        paths.extend(root / "src/optimization" / name for name in (
+            "behavioral_hybrid.py", "paired_playbook.py", "playbook.py"))
     return _stable_sha256(
         {
             "schema": 1,

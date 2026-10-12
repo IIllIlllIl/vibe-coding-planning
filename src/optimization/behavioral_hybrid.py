@@ -67,11 +67,24 @@ def validate_candidate(raw: str, limits: HybridLimits) -> dict[str, Any]:
     return value
 
 
+def checker_projection(artifact):
+    """Mechanical Checker view: output ordinals, not branch-local learning IDs.
+
+    Conditions and guides are unchanged; the original artifact remains the
+    authority for attribution and validation.
+    """
+    return {"schema_version": artifact["schema_version"],
+            "shared_guide": artifact["shared_guide"],
+            "checklist": [{"rule_number": number, "condition": item["condition"],
+                           "guide": item["guide"]}
+                          for number, item in enumerate(artifact["checklist"], 1)]}
+
+
 def checker_bridge(agent: Callable, limits: HybridLimits):
     """Only decision-time inputs cross into Checker; preserve its raw trace."""
     def check(case, raw):
         artifact = validate_candidate(raw, limits)
-        submission, trajectory = agent(case.checker_payload(), artifact)
+        submission, trajectory = agent(case.checker_payload(), checker_projection(artifact))
         return parse_hybrid_checker_output(submission, artifact, trajectory=trajectory)
     return check
 

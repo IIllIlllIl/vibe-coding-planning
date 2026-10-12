@@ -241,8 +241,9 @@ class BehavioralLocalChecker:
         attempt = Path(tempfile.mkdtemp(prefix="checker-", dir=attempts))
         evidence = attempt / "inputs"
         # Only the decision-time projection crosses the container boundary.
+        from src.optimization.behavioral_hybrid import checker_projection
         atomic_json(evidence / "input.json", {"case": case.checker_payload(),
-                                              "checking_artifact": json.loads(guideline)})
+                                              "checking_artifact": checker_projection(json.loads(guideline))})
         atomic_json(evidence / "manifest.json", {"files": ["input.json"]})
         with materialize_repository_proxy(mirror_path=mirror, proxy_commit=case.repository.proxy_commit,
                 workspace_root=self.config.behavioral_repository.workspace_root,
@@ -264,11 +265,13 @@ class BehavioralLocalChecker:
         self, case: BehavioralGEPACase, guideline: str, *, retry_feedback: str = ""
     ) -> BehavioralCheckerOutput:
         if self.config.hybrid.enabled:
-            from src.optimization.behavioral_hybrid import validate_candidate
+            from src.optimization.behavioral_hybrid import validate_candidate, checker_projection
             from src.optimization.behavioral_hybrid_runtime import hybrid_limits
             validate_candidate(guideline, hybrid_limits(self.config))
             if self.config.hybrid.checker_model.get("executor") == "codex_cli":
                 return self._hybrid_codex(case, guideline, retry_feedback=retry_feedback)
+        checker_visible_guideline = (json.dumps(checker_projection(json.loads(guideline)), ensure_ascii=False)
+                                     if self.config.hybrid.enabled else guideline)
         DefaultAgent, LitellmModel, _ = import_minisweagent()
         from minisweagent.environments.local import LocalEnvironment
 
@@ -359,7 +362,7 @@ class BehavioralLocalChecker:
                     proposed_plan_p1=case.proposed_plan_p1,
                     repository_repo=case.repository.repo,
                     repository_proxy_commit=case.repository.proxy_commit,
-                    candidate_guideline=guideline,
+                    candidate_guideline=checker_visible_guideline,
                     retry_feedback=retry_feedback,
                 )
             except Exception as exc:
