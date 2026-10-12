@@ -21,7 +21,8 @@ from src.optimization.audit import redact_sensitive
 
 def hybrid_limits(config):
     h = config.hybrid
-    return HybridLimits(h.max_items, h.shared_guide_words, h.condition_words, h.item_guide_words)
+    return HybridLimits(h.max_items, h.shared_guide_words, h.condition_words, h.item_guide_words,
+                        h.shared_guide_tokens, h.condition_tokens, h.item_guide_tokens)
 
 
 def phase_identity(config, role, payload):

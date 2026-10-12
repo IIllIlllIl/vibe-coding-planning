@@ -19,16 +19,27 @@ class HybridLimits:
     shared_guide_words: int
     condition_words: int
     item_guide_words: int
+    shared_guide_tokens: int | None = None
+    condition_tokens: int | None = None
+    item_guide_tokens: int | None = None
 
     def __post_init__(self):
-        if any(type(value) is not int or value < 1 for value in vars(self).values()):
+        if any(type(value) is not int or value < 1 for value in
+               (self.max_items, self.shared_guide_words, self.condition_words, self.item_guide_words)):
+            raise ValueError("hybrid limits must be positive integers")
+        if any(value is not None and (type(value) is not int or value < 1) for value in vars(self).values()):
             raise ValueError("hybrid limits must be positive integers")
 
 
-def _text(value: Any, limit: int, field: str) -> None:
+def _text(value: Any, limit: int, field: str, tokens: int | None = None) -> None:
     if not isinstance(value, str) or not value.strip():
         raise ValueError(f"{field} must be a nonempty string")
-    if len(value.split()) > limit:
+    if tokens is not None:
+        import litellm
+        count = int(litellm.token_counter(model="deepseek/deepseek-chat", text=value))
+        if count > tokens:
+            raise ValueError(f"{field} exceeds {tokens} tokens (received {count})")
+    elif len(value.split()) > limit:
         raise ValueError(f"{field} exceeds {limit} whitespace-delimited words")
 
 
@@ -46,7 +57,7 @@ def validate_candidate(raw: str, limits: HybridLimits) -> dict[str, Any]:
         raise ValueError("candidate fields: schema_version, shared_guide, checklist")
     if type(value["schema_version"]) is not int or value["schema_version"] != 1:
         raise ValueError("schema_version must be 1")
-    _text(value["shared_guide"], limits.shared_guide_words, "shared_guide")
+    _text(value["shared_guide"], limits.shared_guide_words, "shared_guide", limits.shared_guide_tokens)
     items = value["checklist"]
     if not isinstance(items, list) or not 1 <= len(items) <= limits.max_items:
         raise ValueError(f"checklist must contain 1..{limits.max_items} items")
@@ -57,8 +68,8 @@ def validate_candidate(raw: str, limits: HybridLimits) -> dict[str, Any]:
         _text(item["id"], 1, "id")
         from src.optimization.playbook import PlaybookBullet
         PlaybookBullet.from_dict(PlaybookBullet(item["id"], item["condition"]).to_dict())
-        _text(item["condition"], limits.condition_words, "condition")
-        _text(item["guide"], limits.item_guide_words, "guide")
+        _text(item["condition"], limits.condition_words, "condition", limits.condition_tokens)
+        _text(item["guide"], limits.item_guide_words, "guide", limits.item_guide_tokens)
         condition_identity = " ".join(item["condition"].casefold().split())
         if item["id"] in ids or condition_identity in conditions:
             raise ValueError("duplicate checklist id or condition")

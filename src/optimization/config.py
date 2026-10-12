@@ -81,6 +81,9 @@ class BehavioralHybridConfig:
     shared_guide_words: int = 200
     condition_words: int = 40
     item_guide_words: int = 80
+    shared_guide_tokens: int | None = None
+    condition_tokens: int | None = None
+    item_guide_tokens: int | None = None
     prompt_bundle: str = ""
     prompt_bundle_sha256: str = ""
     evidence_sif_cache_dir: str = ""
@@ -184,7 +187,8 @@ def load_optimization_config(
     if hybrid.enabled:
         from src.optimization.behavioral_hybrid import HybridLimits
         HybridLimits(hybrid.max_items, hybrid.shared_guide_words,
-                     hybrid.condition_words, hybrid.item_guide_words)
+                     hybrid.condition_words, hybrid.item_guide_words,
+                     hybrid.shared_guide_tokens, hybrid.condition_tokens, hybrid.item_guide_tokens)
         if not hybrid.prompt_bundle or not hybrid.evidence_sif_cache_dir:
             raise ValueError("hybrid requires prompt_bundle and evidence_sif_cache_dir")
         if type(hybrid.refiner_enabled) is not bool:

@@ -63,10 +63,10 @@ reflector_task: |
   only for neutral). Assess the condition together with its guides.
   Tag each existing item by the demonstrated effect of its condition and guides,
   not by the overall prediction alone.
-  Helpful means the item supported a justified blocking finding or an
-  evidence-based dismissal of a plausible blocking concern.
-  Harmful means the item's content or guidance demonstrably misled the
-  investigation or judgment.
+  Helpful means the condition or its guides demonstrably contributed to a
+  Checker decision matching the supplied human acceptance label.
+  Harmful means the condition or its guides demonstrably contributed to a
+  false rejection or false acceptance relative to that label.
   Neutral means no specific helpful or harmful effect is established.
   A correct non-trigger is not automatically helpful. A wrong overall decision
   does not make every existing item harmful. Describe missing checklist coverage
@@ -82,6 +82,8 @@ curator_task: |
   The artifact consists of a shared guide and a checklist: each item has a
   high-level condition and its own short investigation guide. Improve the
   artifact across tasks while preserving useful knowledge.
+  The shared guide is the learnable common Checker workflow: how to understand
+  the inputs, what sources to consult, in what order, and how to weigh evidence.
 
   Ordinary imperfections that coding can readily correct need not become rules.
 
@@ -97,8 +99,7 @@ curator_task: |
   evidence. An untriggered item returns finding null and evidence []; its
   investigation remains in the trajectory. Guides improve investigation and
   judgment within this framework; they do not change the submission schema or
-  introduce a separate final acceptance decision. Put final supporting evidence
-  in triggered results; use the trajectory to examine how concerns were resolved.
+  introduce a separate final acceptance decision.
 
   Training labels record human acceptance or non-acceptance at the first Plan
   boundary, not implementation success or failure. Recorded pre-Plan observations
@@ -114,8 +115,10 @@ curator_task: |
     items. Each checklist item contains id, condition, and guide. Counters
     summarize Reflector attributions for the condition and its guides in their
     recorded context, not overall classification accuracy. Helpful records a
-    demonstrated useful contribution; harmful records demonstrated misleading
-    guidance; neutral records no established specific contribution.
+    demonstrated contribution to a label-matching decision; harmful records a
+    demonstrated contribution to a false acceptance or rejection; neutral
+    records no established specific contribution. Earlier reports retain the
+    attribution definitions used when they were produced.
   - reviews: all current Reflector analyses, including diagnosis, reusable
     insights and per-item attributions. These distinguish item and shared-guide
     defects from Checker execution errors and missing checklist coverage.
@@ -127,8 +130,8 @@ curator_task: |
     interpretation and counting_policy. Use rule_identity and recorded content
     to distinguish versions; an item ID alone does not identify the same knowledge
     across branches. Historical assessments may disagree with newer evidence.
-  - limits: max_items, shared_guide_words, condition_words, and item_guide_words.
-    These are the hard bounds for the complete resulting artifact.
+  - limits: max_items and the supplied shared_guide_tokens, condition_tokens,
+    and item_guide_tokens. These bound the complete resulting artifact.
 
   Use supporting and opposing reviews, records, counters and history together
   to maintain existing knowledge as well as learn missing concerns.
@@ -149,9 +152,8 @@ curator_task: |
 
   Manage the supplied item budget during curation. Prefer concerns that apply
   across tasks, and preserve separate items when their applicability differs.
-  Favor problems worth stopping before implementation over minor corrections
-  that ordinary implementation investigation can address. Rewrite the shared
-  guide as a complete text, preserving its useful guidance when making changes.
+  Rewrite the shared guide as a complete text, preserving its useful guidance
+  when making changes.
   When no shared-guide change is supported, return the existing text unchanged.
 
   ## Condition and guide writing
@@ -164,6 +166,10 @@ curator_task: |
   criteria when necessary. Shared guidance applies across checklist items.
   Use the shared guide for general investigation strategy and tool-use guidance;
   use item guides for concern-specific investigation and judgment.
+  Each item guide should provide a concrete, reusable way to investigate and
+  decide its concern, without source-case details. Keep fixed output schemas,
+  submission instructions, and training-label explanations out of generated
+  guides; the framework already supplies the Checker protocol.
 
   Use plain English and familiar software terms. Keep source-case names, symbols
   and incidental mechanisms in supporting evidence. Generalize the concern
@@ -172,8 +178,8 @@ curator_task: |
 
   ## Budget and output contract
 
-  Respect the supplied item and word limits. Word counts use whitespace
-  splitting; limits are ceilings, not length targets.
+  Respect the supplied item and token limits. Host counts tokens using
+  LiteLLM's deepseek/deepseek-chat counter; limits are ceilings, not length targets.
 
   Return one JSON object with exactly reasoning, shared_guide, and operations.
   reasoning is a nonempty string; shared_guide is the complete nonempty shared
@@ -192,8 +198,7 @@ curator_task: |
   supporting_instance_ids drawn from the supplied current training records.
   Copy the local case references (case-01, case-02, etc.) from records[].instance_id;
   Host maps these references to the original dataset IDs. These references are
-  local to this input, not identifiers for historical cases. Do not reconstruct
-  dataset UUIDs from prose or history.
+  local to this input, not identifiers for historical cases.
   REMOVE may use [] only when justified by supplied accumulated history;
   explain that basis in reasoning. Otherwise supply current supporting case IDs.
 
@@ -205,14 +210,15 @@ refiner_task: |
   Checklist IDs use local item-01, item-02, etc. references. Preserve the supplied
   references for retained or merged items; Host restores canonical item IDs.
   Refine the supplied checking artifact to satisfy the supplied hard limits:
-  checklist item count, shared-guide words, condition words, and item-guide words.
+  checklist item count, shared-guide tokens, condition tokens, and item-guide tokens.
   Preserve useful knowledge and human-readable high-level concerns. Combine
   genuinely related concerns at a higher level rather than packing unrelated
   details together. Keep investigation and detailed judgment in item guides.
   Refine existing knowledge rather than inventing new concerns or strategies.
-  Preserve the applicability and decision boundaries of retained knowledge;
-  do not broaden them beyond what the supplied artifact supports.
-  Word counts use whitespace splitting. Limits are ceilings, not length targets.
+  Preserve evidence-supported distinctions that matter to applicability and
+  judgment when combining or shortening the supplied knowledge.
+  Host counts tokens with the experiment tokenizer. The supplied limits are
+  ceilings, not length targets.
   Return exactly schema_version (1), shared_guide (nonempty string), and checklist.
   Every item has exactly id, condition, guide, all nonempty strings. IDs and
   conditions must be unique. Preserve retained IDs; use existing IDs for merged
