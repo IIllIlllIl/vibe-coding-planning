@@ -31,7 +31,7 @@ experiment_contract:
 paths:
   dataset_snapshot: output/SWE-chat/hybrid-threeway-v1-20261010/gepa-snapshot
   initial_guideline: configs/prompts/swe_chat_hybrid_seed_v1.json
-  run_dir: output/SWE-chat/hybrid-formal3-v6-20261012
+  run_dir: output/SWE-chat/hybrid-formal3-v7-20261013
 task:
   semantics: behavioral_plan_acceptability_v1
 behavioral_repository:

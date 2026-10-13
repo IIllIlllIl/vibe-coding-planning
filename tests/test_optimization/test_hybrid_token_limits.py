@@ -44,5 +44,9 @@ def test_new_launch_caps_prompt_and_baseline(path, mini, iterations, projection)
     assert config.hybrid.refiner_enabled
     raw = yaml.safe_load(Path(path).read_text())
     contract = raw.get("experiment_contract", raw.get("smoke_contract"))
+    assert config.run_dir.name == contract["identity"].removeprefix("swe-chat-")
+    assert raw["hpc"]["worker_config_path"] == path
+    assert raw["hpc"]["remote_task_dir"].endswith(contract["identity"])
+    assert raw["behavioral_repository"]["workspace_root"].endswith(contract["identity"])
     assert contract["prompt_bundle_sha256"] == hashlib.sha256(Path(config.hybrid.prompt_bundle).read_bytes()).hexdigest()
     assert str(config.hybrid.prompt_bundle).endswith("swe_chat_hybrid_ace_v4.yaml")
