@@ -15,7 +15,13 @@ def worker_arguments():
 
 def retry_feedback(path):
     if path is not None and path.is_file():
-        return str(json.loads(path.read_text(encoding="utf-8")).get("error", ""))
+        previous = json.loads(path.read_text(encoding="utf-8"))
+        feedback = str(previous.get("error", ""))
+        if "raw_agent_output" in previous:
+            feedback += ("\nPrevious raw Agent output (rejected, not a valid artifact):\n"
+                         + json.dumps(previous["raw_agent_output"], ensure_ascii=False)
+                         + "\nCorrect the reported problems and return the complete required JSON object.")
+        return feedback
     return ""
 
 

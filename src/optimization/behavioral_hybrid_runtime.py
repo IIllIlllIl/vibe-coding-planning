@@ -7,7 +7,7 @@ from pathlib import Path
 
 import yaml
 
-from src.optimization.behavioral_hybrid import HybridBehavioralAdapter, HybridLimits, validate_candidate
+from src.optimization.behavioral_hybrid import HybridBehavioralAdapter, HybridLimits, HybridSizeLimitError, validate_candidate
 from src.optimization.behavioral_hybrid_ace import IncrementalHybridACEProposer, _playbook, apply_hybrid_delta
 from src.optimization.behavioral_runner import run_behavioral_optimization
 from src.optimization.hpc.task_batch import atomic_json
@@ -98,6 +98,13 @@ def run_local_phase(config, role, payload, attempt_dir, *, retry_feedback=""):
     evidence = attempt_dir / "inputs"
     from .agent_references import phase_references, decode_phase_output
     agent_payload, case_refs, item_refs = phase_references(role, payload)
+    if "limits" in agent_payload:
+        agent_payload["limits"] = hybrid_limits(config).agent_view()
+    if role == "refiner":
+        try:
+            validate_candidate(json.dumps(payload["draft"]), hybrid_limits(config))
+        except HybridSizeLimitError as exc:
+            agent_payload["size_violations"] = exc.violations
     atomic_json(attempt_dir / "reference_map.json", {
         "cases": case_refs.decode_map, "items": item_refs.decode_map})
     atomic_json(evidence / "input.json", agent_payload)

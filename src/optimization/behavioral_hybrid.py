@@ -30,17 +30,43 @@ class HybridLimits:
         if any(value is not None and (type(value) is not int or value < 1) for value in vars(self).values()):
             raise ValueError("hybrid limits must be positive integers")
 
+    def agent_view(self):
+        """Expose only effective length limits; retain word mode for old runs."""
+        result = {"max_items": self.max_items}
+        for component in ("shared_guide", "condition", "item_guide"):
+            tokens = getattr(self, component + "_tokens")
+            unit = "tokens" if tokens is not None else "words"
+            result[component + "_" + unit] = tokens if tokens is not None else getattr(self, component + "_words")
+        if any(value is not None for value in
+               (self.shared_guide_tokens, self.condition_tokens, self.item_guide_tokens)):
+            result["token_counter_model"] = "deepseek/deepseek-chat"
+        return result
 
-def _text(value: Any, limit: int, field: str, tokens: int | None = None) -> None:
+
+class HybridSizeLimitError(ValueError):
+    """All size violations in a structurally valid artifact, without repair."""
+    def __init__(self, violations):
+        self.violations = violations
+        super().__init__("; ".join(
+            f"{row['path']} exceeds {row['limit']} {row['unit']} (received {row['actual']})"
+            for row in violations))
+
+
+def _text(value: Any, limit: int, field: str, tokens: int | None = None,
+          violations: list | None = None) -> None:
     if not isinstance(value, str) or not value.strip():
         raise ValueError(f"{field} must be a nonempty string")
     if tokens is not None:
         import litellm
         count = int(litellm.token_counter(model="deepseek/deepseek-chat", text=value))
-        if count > tokens:
-            raise ValueError(f"{field} exceeds {tokens} tokens (received {count})")
-    elif len(value.split()) > limit:
-        raise ValueError(f"{field} exceeds {limit} whitespace-delimited words")
+        maximum, unit = tokens, "tokens"
+    else:
+        count, maximum, unit = len(value.split()), limit, "whitespace-delimited words"
+    if count > maximum:
+        row = {"path": field, "limit": maximum, "actual": count, "unit": unit}
+        if violations is None:
+            raise HybridSizeLimitError([row])
+        violations.append(row)
 
 
 def validate_candidate(raw: str, limits: HybridLimits) -> dict[str, Any]:
@@ -57,24 +83,30 @@ def validate_candidate(raw: str, limits: HybridLimits) -> dict[str, Any]:
         raise ValueError("candidate fields: schema_version, shared_guide, checklist")
     if type(value["schema_version"]) is not int or value["schema_version"] != 1:
         raise ValueError("schema_version must be 1")
-    _text(value["shared_guide"], limits.shared_guide_words, "shared_guide", limits.shared_guide_tokens)
+    violations = []
+    _text(value["shared_guide"], limits.shared_guide_words, "shared_guide", limits.shared_guide_tokens, violations)
     items = value["checklist"]
-    if not isinstance(items, list) or not 1 <= len(items) <= limits.max_items:
+    if not isinstance(items, list) or not items:
         raise ValueError(f"checklist must contain 1..{limits.max_items} items")
+    if len(items) > limits.max_items:
+        violations.append({"path": "checklist", "limit": limits.max_items,
+                           "actual": len(items), "unit": "items"})
     ids, conditions = set(), set()
-    for item in items:
+    for index, item in enumerate(items):
         if not isinstance(item, dict) or set(item) != {"id", "condition", "guide"}:
             raise ValueError("checklist item fields: id, condition, guide")
         _text(item["id"], 1, "id")
         from src.optimization.playbook import PlaybookBullet
         PlaybookBullet.from_dict(PlaybookBullet(item["id"], item["condition"]).to_dict())
-        _text(item["condition"], limits.condition_words, "condition", limits.condition_tokens)
-        _text(item["guide"], limits.item_guide_words, "guide", limits.item_guide_tokens)
+        _text(item["condition"], limits.condition_words, f"checklist[{index}].condition", limits.condition_tokens, violations)
+        _text(item["guide"], limits.item_guide_words, f"checklist[{index}].guide", limits.item_guide_tokens, violations)
         condition_identity = " ".join(item["condition"].casefold().split())
         if item["id"] in ids or condition_identity in conditions:
             raise ValueError("duplicate checklist id or condition")
         ids.add(item["id"])
         conditions.add(condition_identity)
+    if violations:
+        raise HybridSizeLimitError(violations)
     return value
 
 

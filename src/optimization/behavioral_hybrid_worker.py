@@ -45,6 +45,13 @@ def run_task(*, config_path, manifest_path, output_path, attempt_dir, previous_o
         stage = getattr(exc, "worker_failure_stage", stage)
         value = redact_sensitive(worker_failure(manifest, started_at, stage, exc,
             contract_error=stage == "agent_output_validation" or isinstance(exc, PlaybookAgentOutputContractError)))
+        if stage == "agent_output_validation":
+            completion = attempt_dir / "completion.json"
+            if completion.is_file():
+                value["raw_agent_output"] = json.loads(completion.read_text())["agent_output"]
+            if hasattr(exc, "violations"):
+                value["validation_violations"] = exc.violations
+            value = redact_sensitive(value)
         atomic_json(attempt_dir / "failure.json", value)
         atomic_json(output_path, value)
         return 1

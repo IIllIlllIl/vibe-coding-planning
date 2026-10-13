@@ -87,6 +87,8 @@ def test_actual_worker_role_payload_and_validation(tmp_path, monkeypatch, role):
     calls = []
     from src.optimization.agent_references import phase_references, project_identities
     projected, case_refs, item_refs = phase_references(role, payload)
+    if "limits" in projected:
+        projected["limits"] = runtime.hybrid_limits(cfg).agent_view()
     agent_expected = project_identities(expected, case_refs, item_refs)
     def agent(**kwargs):
         calls.append(kwargs)
@@ -162,7 +164,9 @@ def test_curator_bad_reference_feedback_reaches_corrected_worker_retry(tmp_path,
     output = tmp_path / "completed.json"
     assert worker.run_task(config_path=Path("unused"), manifest_path=manifest, output_path=output,
                            attempt_dir=tmp_path / "attempt_02", previous_output_path=failed) == 0
-    assert calls[1]["retry_feedback"] == failure["error"]
+    assert calls[1]["retry_feedback"].startswith(failure["error"])
+    assert "Previous raw Agent output" in calls[1]["retry_feedback"]
+    assert "case-99" in calls[1]["retry_feedback"]
     result = json.loads(output.read_text())["agent_output"]
     assert result["operations"][0]["supporting_instance_ids"] == ["long-canonical-id"]
     assert result["operations"][0]["target_id"] == "plan-00001"
@@ -200,6 +204,51 @@ def test_refiner_worker_rejects_invalid_full_artifact(tmp_path, monkeypatch):
     assert failure["schema_version"] == 1
     assert (tmp_path / "attempt/completion.json").exists()
     assert (tmp_path / "attempt/failure.json").exists()
+
+
+def test_refiner_size_retry_receives_raw_previous_output_and_all_counts(tmp_path, monkeypatch):
+    import litellm
+    monkeypatch.setattr(litellm, "token_counter", lambda **kw: len(kw["text"]))
+    cfg = load_optimization_config("configs/gepa_swe_chat_hybrid_reference_token_smoke_v2_20261013.yaml",
+                                   require_api_keys=False)
+    monkeypatch.setattr(worker, "load_optimization_config", lambda *_: cfg)
+    monkeypatch.setattr(runtime, "require_evidence_sif", lambda *_: None)
+    draft = {"schema_version": 1, "shared_guide": "Inspect the task", "checklist": [
+        {"id": "plan-00006", "condition": "Check requirements", "guide": "a" * 140},
+        {"id": "plan-00009", "condition": "Check compatibility", "guide": "b" * 150}]}
+    payload = {"draft": draft, "limits": vars(runtime.hybrid_limits(cfg)), "split": "train"}
+    manifest = tmp_path / "input.json"
+    manifest.write_text(json.dumps({"mode": "behavioral_hybrid_phase", "role": "refiner",
+        "fingerprint": runtime.phase_identity(cfg, "refiner", payload), "payload": payload}))
+    calls = []
+    def agent(**kwargs):
+        calls.append(kwargs)
+        return {"schema_version": 1, "shared_guide": "Inspect the task", "checklist": [
+            {"id": "item-01", "condition": "Check requirements", "guide": "a" * (97 if len(calls) == 1 else 90)},
+            {"id": "item-02", "condition": "Check compatibility", "guide": "b" * (98 if len(calls) == 1 else 90)}]}, []
+    monkeypatch.setattr(runtime, "run_evidence_curator", agent)
+    failed = tmp_path / "failed.json"
+    assert worker.run_task(config_path=Path("unused"), manifest_path=manifest, output_path=failed,
+                           attempt_dir=tmp_path / "attempt_01") == 1
+    failure = json.loads(failed.read_text())
+    assert failure["failure_kind"] == "agent_output_contract"
+    assert [v["actual"] for v in failure["validation_violations"]] == [97, 98]
+    assert [v["path"] for v in failure["validation_violations"]] == ["checklist[0].guide", "checklist[1].guide"]
+    raw = (tmp_path / "attempt_01/completion.json").read_bytes()
+    assert failure["raw_agent_output"] == json.loads(raw)["agent_output"]
+    staged = json.loads((tmp_path / "attempt_01/inputs/input.json").read_text())
+    assert staged["limits"] == runtime.hybrid_limits(cfg).agent_view()
+    assert not any("words" in key for key in staged["limits"])
+    assert [v["actual"] for v in staged["size_violations"]] == [140, 150]
+    completed = tmp_path / "completed.json"
+    assert worker.run_task(config_path=Path("unused"), manifest_path=manifest, output_path=completed,
+                           attempt_dir=tmp_path / "attempt_02", previous_output_path=failed) == 0
+    feedback = calls[1]["retry_feedback"]
+    assert "checklist[1].guide exceeds 96 tokens (received 98)" in feedback
+    previous_json = feedback.split("Previous raw Agent output (rejected, not a valid artifact):\n")[1].split("\nCorrect")[0]
+    assert json.loads(previous_json) == failure["raw_agent_output"]
+    assert json.loads(completed.read_text())["agent_output"]["checklist"][0]["id"] == "plan-00006"
+    assert (tmp_path / "attempt_01/completion.json").read_bytes() == raw
 
 
 def test_generated_array_script_dispatches_exact_index_and_retry_paths(tmp_path):

@@ -1,0 +1,134 @@
+# One-proposal mixed-agent validation of short references and reviewed token budgets.
+smoke_contract:
+  identity: swe-chat-hybrid-reference-token-smoke-v2-20261013
+  status: prepared
+  launch_authorized: true
+  purpose: one_hybrid_ace_gepa_proposal_end_to_end
+  metric_improvement_required: false
+  development_only: true
+  baseline_config: configs/gepa_swe_chat_hybrid_shared_runtime_smoke_v1_20261011.yaml
+  engineering_baseline_commit: a37886f4aabea9e2882a520a0c877a7c39f5d4b5
+  prompt_bundle_sha256: 0f0627c89fc86ba98222d223b8e044cadf05a6d871b2f5155d0c86a60960b11d
+  total_cases: 8
+  train_cases: 4
+  validation_cases: 4
+  acceptance:
+    - isolated_checker_completions_and_raw_trajectories
+    - four_independent_reflector_reviews_in_one_array_wave
+    - one_valid_curator_proposal_and_training_counter_commit
+    - candidate_minibatch_results_and_validation_when_selected
+    - optimizer_checkpoint_and_final_report
+  refiner_note: conditional; test separately if Curator remains within limits
+  validation_note: GEPA validates the proposal only after strict minibatch improvement; retain a rejected proposal as a valid workflow outcome
+
+paths:
+  dataset_snapshot: output/SWE-chat/behavioral-gepa-smoke-v1-20260830/stage-c-development-snapshot-v1
+  initial_guideline: configs/prompts/swe_chat_hybrid_seed_v1.json
+  run_dir: output/SWE-chat/hybrid-reference-token-smoke-v2-20261013
+task:
+  semantics: behavioral_plan_acceptability_v1
+behavioral_repository:
+  backend: temporal_git_proxy
+  repositories_root: /scratch/users/${USER}/vibe-coding-planning/operations/swe-chat-f66cca95-preheat-v1-20260829/repositories
+  workspace_root: /scratch/users/${USER}/vibe-coding-planning/run_state/workspaces/swe-chat-hybrid-reference-token-smoke-v2-20261013
+checker:
+  model: deepseek-v4-flash
+  api_base: https://api.deepseek.com
+  api_key_env: DEEPSEEK_API_KEY
+  temperature: 0.0
+  thinking: disabled
+  max_steps: 100
+  cost_limit: 3.0
+  timeout: 1800
+  agent_timeout_seconds: 0
+  max_attempts: 2
+reflection:
+  model: deepseek-v4-flash
+  api_base: https://api.deepseek.com
+  api_key_env: DEEPSEEK_API_KEY
+  temperature: 0.0
+  max_steps: 100
+  cost_limit: 3.0
+  timeout: 1800
+hybrid:
+  enabled: true
+  max_items: 10
+  shared_guide_tokens: 512
+  condition_tokens: 48
+  item_guide_tokens: 96
+  prompt_bundle: configs/prompts/swe_chat_hybrid_ace_v5.yaml
+  evidence_sif_cache_dir: /scratch/users/${USER}/vibe-coding-planning/shared/sif-cache
+  evidence_image: codex-inspection:python312-rg14-v1
+  evidence_sif_sha256: b383e57e939505cdd158205066e495f6e3ca7e9932000f1a1d3fe3e26a1f0277
+  repository_history_cache_dir: /scratch/users/${USER}/vibe-coding-planning/shared/repository-history-cache-v1
+  dataset_file_sha256:
+    manifest.json: 81458ee88ff3fddab74da54dfcac48c54b81205fd53f873062572ce5de17c91f
+    train.jsonl: 95da4d7c4dc55b58f798eddb52e2fa970375d5318528bfe9357062c812dc0452
+    validation.jsonl: 69dd461612a6e1c3af43e9d0af7ee46c1f7b116f210228636e87e4d15bdf4f4b
+  checker_model: {} # mini-SWE DeepSeek, not Native Codex.
+  reflector_model:
+    executor: codex_cli
+    codex_binary: ${HOME}/.local/lib/vibe-codex/0.160.1/bin/codex
+    codex_auth_file: ${HOME}/.codex/auth.json
+    codex_version: 0.160.1
+    model: gpt-6-sol
+    reasoning_effort: low
+  curator_model:
+    executor: codex_cli
+    codex_binary: ${HOME}/.local/lib/vibe-codex/0.160.1/bin/codex
+    codex_auth_file: ${HOME}/.codex/auth.json
+    codex_version: 0.160.1
+    model: gpt-6-sol
+    reasoning_effort: low
+  refiner_enabled: true
+  refiner_model:
+    executor: codex_cli
+    codex_binary: ${HOME}/.local/lib/vibe-codex/0.160.1/bin/codex
+    codex_auth_file: ${HOME}/.codex/auth.json
+    codex_version: 0.160.1
+    model: gpt-6-sol
+    reasoning_effort: low
+search:
+  max_iterations: 1
+  max_metric_calls: 20
+  projection_metric_calls: 16
+  reflection_minibatch_size: 4
+  train_case_repetitions: 1
+  primary_metric: accuracy
+  parallel: 1
+  seed: 42
+  skip_perfect_score: false
+  min_proposals: 1
+docker:
+  workdir: /testbed
+  timeout: 30
+  min_free_gb: 20
+  max_cached_images: 75
+container:
+  runtime: none
+execution:
+  backend: hpc_slurm
+hpc:
+  submit: true
+  remote_project_dir: /scratch/users/${USER}/vibe-coding-planning/staging/swe-chat-hybrid-reference-token-smoke-v2-20261013
+  remote_task_dir: /scratch/users/${USER}/vibe-coding-planning/run_state/hpc_tasks/swe-chat-hybrid-reference-token-smoke-v2-20261013
+  remote_env_file: ~/.config/vibe-coding-planning/deepseek.env
+  ulhpc_config: configs/ulhpc_submit.yaml
+  partition: batch
+  cpus_per_task: 1
+  mem: 4G
+  time: 00:30:00
+  poll_interval_seconds: 120
+  task_output_grace_seconds: 300
+  missing_task_grace_seconds: 600
+  max_task_attempts: 2
+  python_module: lang/Python/3.11
+  container_module: tools/Apptainer
+  python_bin: python3
+  job_name_prefix: swe-chat-hybrid-reference-token-smoke-v2-20261013
+  worker_config_path: configs/gepa_swe_chat_hybrid_reference_token_smoke_v2_20261013.yaml
+prompts:
+  checker_system: replaced_by_hybrid_prompt_bundle
+  checker_instance: replaced_by_hybrid_prompt_bundle
+  reflection_system: unused_by_hybrid_phase_executor
+  reflection_instance: unused_by_hybrid_phase_executor
