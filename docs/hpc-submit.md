@@ -97,6 +97,18 @@ resource request. Preserve the existing rule that one Slurm array element owns
 exactly one Agent or benchmark task; array concurrency is a scheduler limit,
 not worker-internal parallelism.
 
+## Memory Accounting
+
+Memory-per-core policy and terminal-run measurements are recorded in
+[`knowledge/hpc-memory-accounting-20261013.md`](knowledge/hpc-memory-accounting-20261013.md).
+Separate lightweight learning roles from repository/search and benchmark-test
+tails. Remote LLM inference does not load model weights on compute nodes;
+Controller JSON aggregation, Git operations and test subprocesses can dominate
+local memory. An OOM-capped MaxRSS is not proof that the workload fits that limit.
+Recheck partition defaults and actual AllocTRES; switching to bigmem while
+retaining an explicit 4G request does not request its larger default allocation.
+No partition or memory increase is authorized by these measurements alone.
+
 ## Retained Entry Points
 
 - Offline: `scripts/hpc_submit_batch.sh`, `scripts/hpc_resume_loop.py`, and

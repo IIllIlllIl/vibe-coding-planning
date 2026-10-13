@@ -134,6 +134,41 @@ def test_batch_proposer_uses_wave_and_rejects_incomplete_reviews(tmp_path):
     assert (tmp_path / "ledger.json").read_bytes() == before
 
 
+def test_curator_bad_reference_feedback_reaches_corrected_worker_retry(tmp_path, monkeypatch):
+    cfg = config(tmp_path)
+    monkeypatch.setattr(worker, "load_optimization_config", lambda *_: cfg)
+    monkeypatch.setattr(runtime, "require_evidence_sif", lambda *_: None)
+    payload = {"parent": PARENT, "records": [{"instance_id": "long-canonical-id", "split": "train"}],
+               "history": {}}
+    manifest = tmp_path / "input.json"
+    manifest.write_text(json.dumps({"mode": "behavioral_hybrid_phase", "role": "curator",
+        "fingerprint": runtime.phase_identity(cfg, "curator", payload), "payload": payload}))
+    calls = []
+    def agent(**kwargs):
+        calls.append(kwargs)
+        return {"reasoning": "Revise grounded condition", "shared_guide": PARENT["shared_guide"],
+                "operations": [{"type": "UPDATE", "target_id": "item-01",
+                    "content": {"condition": "The Plan contradicts a material explicit requirement",
+                                "guide": "Compare the proposed behavior against the task"},
+                    "supporting_instance_ids": ["case-99" if len(calls) == 1 else "case-01"]}]}, []
+    monkeypatch.setattr(runtime, "run_evidence_curator", agent)
+    failed = tmp_path / "failed.json"
+    assert worker.run_task(config_path=Path("unused"), manifest_path=manifest, output_path=failed,
+                           attempt_dir=tmp_path / "attempt_01") == 1
+    failure = json.loads(failed.read_text())
+    assert failure["failure_stage"] == "agent_output_validation"
+    assert "case-99" in failure["error"] and "case-01" in failure["error"]
+    raw = (tmp_path / "attempt_01/completion.json").read_bytes()
+    output = tmp_path / "completed.json"
+    assert worker.run_task(config_path=Path("unused"), manifest_path=manifest, output_path=output,
+                           attempt_dir=tmp_path / "attempt_02", previous_output_path=failed) == 0
+    assert calls[1]["retry_feedback"] == failure["error"]
+    result = json.loads(output.read_text())["agent_output"]
+    assert result["operations"][0]["supporting_instance_ids"] == ["long-canonical-id"]
+    assert result["operations"][0]["target_id"] == "plan-00001"
+    assert (tmp_path / "attempt_01/completion.json").read_bytes() == raw
+
+
 def test_production_entrypoint_wires_batch_callback(tmp_path, monkeypatch):
     cfg = config(tmp_path)
     monkeypatch.setattr(runtime, "verify_hybrid_snapshot", lambda *_: None)

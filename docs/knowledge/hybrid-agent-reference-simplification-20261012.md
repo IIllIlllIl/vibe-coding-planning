@@ -8,10 +8,11 @@ the offending operation or reference. This was a provenance-contract failure,
 not evidence that the proposed rule text was invalid.
 
 Curator inputs now project current `instance_id` fields to deterministic local
-references `case-01` through `case-N`. Matching identity fields in reviews and
-history use the same projection. Scientific prose is not rewritten. Historical
-cases outside the current batch remain historical and cannot support an operation
-requiring current evidence.
+references `case-01` through `case-N`. Matching identity fields in current reviews
+use the same projection. Scientific prose is not rewritten. History remains
+canonical: a historical branch-local item ID can refer to a different semantic
+version and must not become a current operation target merely by matching its ID.
+Historical records are context, not the current supporting-reference namespace.
 
 The shared `agent_references.py` module now serves Reflector, Curator and Refiner.
 Current case identities become `case-NN`; checklist target identities become

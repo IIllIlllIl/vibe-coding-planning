@@ -69,3 +69,36 @@ def test_unknown_item_is_not_repaired():
     _, cases, items = phase_references("refiner", {"draft": {"checklist": [{"id": "plan-00009"}]}})
     with pytest.raises(ValueError, match="checklist.*unknown reference"):
         decode_phase_output("refiner", {"checklist": [{"id": "item-09"}]}, cases, items)
+
+
+def test_branch_local_history_is_not_current_target_authority():
+    history = {"contexts": [{"checklist": [{"id": "plan-00006", "condition": "old meaning"}]}],
+               "events": [{"bullet_id": "plan-00006", "instance_id": "uuid", "rule_identity": "old"}]}
+    payload = {"parent": {"checklist": [{"id": "plan-00006", "condition": "new meaning"}]},
+               "records": [{"instance_id": "uuid"}], "history": history}
+    projected, _, items = phase_references("curator", payload)
+    assert projected["history"] == history
+    assert projected["parent"]["checklist"][0]["id"] == "item-01"
+    assert items.decode("item-01", "target") == "plan-00006"
+    projected["history"]["events"][0]["rule_identity"] = "changed"
+    assert payload["history"] == history
+
+
+@pytest.mark.parametrize("operation", [
+    {"type": "ADD", "content": {"condition": "new", "guide": "inspect"}, "supporting_instance_ids": ["case-01"]},
+    {"type": "UPDATE", "target_id": "item-01", "supporting_instance_ids": ["case-01"]},
+    {"type": "MERGE", "target_ids": ["item-01", "item-02"], "supporting_instance_ids": ["case-01"]},
+    {"type": "REMOVE", "target_id": "item-01", "supporting_instance_ids": []},
+])
+def test_all_operation_reference_transports(operation):
+    _, cases, items = phase_references("curator", {"records": [{"instance_id": "uuid"}],
+        "parent": {"checklist": [{"id": "plan-00006"}, {"id": "plan-00009"}]}})
+    delta = {"operations": [operation]}
+    before = copy.deepcopy(delta)
+    decoded = decode_phase_output("curator", delta, cases, items)["operations"][0]
+    assert delta == before
+    assert decoded["supporting_instance_ids"] == (["uuid"] if operation["supporting_instance_ids"] else [])
+    if "target_id" in operation:
+        assert decoded["target_id"] == "plan-00006"
+    if "target_ids" in operation:
+        assert decoded["target_ids"] == ["plan-00006", "plan-00009"]

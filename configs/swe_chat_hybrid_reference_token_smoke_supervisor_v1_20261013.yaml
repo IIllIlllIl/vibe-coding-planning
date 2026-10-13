@@ -1,0 +1,26 @@
+schema_version: 1
+session: swe-chat-hybrid-reference-token-smoke-v1-20261013
+log: .local/hpc-supervisor/swe-chat-hybrid-reference-token-smoke-v1-20261013.log
+arguments:
+  - --poll-interval
+  - "120"
+  - --slice-time
+  - "00:08:00"
+  - --max-runs
+  - "20"
+  - --state-file
+  - .local/hpc-supervisor/swe-chat-hybrid-reference-token-smoke-v1-20261013.json
+  - --require-clean-worktree
+  - --gepa-rules
+  - --gepa-config
+  - configs/gepa_swe_chat_hybrid_reference_token_smoke_v1_20261013.yaml
+  - --ulhpc-config
+  - /Users/taoran.wang/.config/ulhpc-submit/config.yaml
+  - --job-name
+  - swe-chat-hybrid-reference-token-smoke-v1-20261013
+  - --cpus
+  - "1"
+  - --mem
+  - 4G
+  - --reclaim-staging
+  - --submit

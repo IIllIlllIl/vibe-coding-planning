@@ -36,7 +36,13 @@ def phase_references(role, payload):
     artifact = payload.get("parent", payload.get("draft", {}))
     cases = ReferenceMap((record["instance_id"] for record in records), "case")
     items = ReferenceMap((item["id"] for item in artifact.get("checklist", [])), "item")
-    return project_identities(payload, cases, items), cases, items
+    projected = project_identities({key: value for key, value in payload.items()
+                                    if key != "history"}, cases, items)
+    if "history" in payload:
+        # Historical branch-local IDs can name different semantic versions.
+        # Do not present them as targets in the current operation namespace.
+        projected["history"] = copy.deepcopy(payload["history"])
+    return projected, cases, items
 
 
 def decode_phase_output(role, output, cases, items):
