@@ -142,13 +142,20 @@ def audit_requests(args) -> int:
         location = None
         output = ""
         if sif.is_file():
-            # Search only common container repository roots, at bounded depth.
-            probe = subprocess.run(
-                [args.apptainer_bin, "exec", str(sif), "sh", "-lc",
-                 "find /app /testbed /workspace /workspaces /root /opt -maxdepth 3 -name .git -type d 2>/dev/null || true"],
-                capture_output=True, text=True, timeout=120, check=False,
-            )
-            locations = sorted(set(line[:-5] for line in probe.stdout.splitlines() if line.endswith('/.git')))
+            declared_location = row.get("working_directory")
+            if declared_location:
+                if not isinstance(declared_location, str) or not declared_location.startswith("/"):
+                    raise ValueError("working_directory must be an absolute container path")
+                # A frozen location is authoritative; do not accept another repository.
+                locations = [declared_location]
+            else:
+                # Retain the Pro discovery path for inputs without a frozen location.
+                probe = subprocess.run(
+                    [args.apptainer_bin, "exec", str(sif), "sh", "-lc",
+                     "find /app /testbed /workspace /workspaces /root /opt -maxdepth 3 -name .git -type d 2>/dev/null || true"],
+                    capture_output=True, text=True, timeout=120, check=False,
+                )
+                locations = sorted(set(line[:-5] for line in probe.stdout.splitlines() if line.endswith('/.git')))
             matches = []
             for candidate in locations:
                 with tempfile.TemporaryDirectory(prefix="vibe-sif-audit-home-") as home:

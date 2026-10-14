@@ -1,0 +1,56 @@
+{
+  "acceptance_criteria": [
+    "one SIF record pull_attested with frozen OCI digest",
+    "full SIF SHA256 and bytes recorded",
+    "separate compute-node acceptance verifies full hash/bytes, source, frozen working_directory and base commit before readiness"
+  ],
+  "dataset": "Xin-Zhou-smu/SWE-RPG-Bench",
+  "downloader_sha256": "4999b8ea5ac4e03ea7f50c4577cb6f72f46a13ddf1072ca9324de09fbd98b2fa",
+  "images": [
+    "xinzhou1997/swe_rpg_unified@sha256:50c877899c7e8ead33a99c11c3812f1a2abfbe35c677781d9bd7eb8b65cc058d"
+  ],
+  "launch_status": "prepared_not_started",
+  "operational_plan": {
+    "apptainer_cache_reuse": "operations/swe-rpg-python3-smoke-v1-20261012/apptainer-cache",
+    "budget_note": "One image, one attempt, two-hour pull timeout; metadata/hash overhead additional. Estimated 1-1.5h.",
+    "cluster": "Iris login",
+    "concurrent_pulls": 1,
+    "failure_policy": "record in independent retry operation; retain original batch evidence untouched",
+    "history_preheat": false,
+    "max_attempts": 1,
+    "maximum_cumulative_pull_timeouts_seconds": 7200,
+    "model_calls": 0,
+    "pinned_validation": "before_pull; temporary SIF inspect/hash/digest before promotion",
+    "resume": "validate pinned cache attestation/full hash/source under writer lock; rebuild unverified cache atomically",
+    "retry_backoff": 0,
+    "stop_condition": "one pass, one attempt; no automatic restart; writer-lock and unsafe-orphan gates retained",
+    "timeout_seconds": 7200
+  },
+  "original_config": "configs/preheat_swe_rpg_python75_remaining_20261012.json",
+  "original_config_sha256": "4c76f300845f7e0404585cf014843369b3d4a38e89e47f913412a204b8b482a9",
+  "original_failure_category": "pull_timeout",
+  "original_provenance_remote": "/scratch/users/twang/vibe-coding-planning/operations/swe-rpg-python75-remaining-v1-20261012/provenance.json",
+  "original_provenance_sha256": "9b7e8609861c5f68f0634b81343eaceb2129015d5fdacc01c76befdab45f69e8",
+  "original_provenance_snapshot": "output/SWE-RPG/preheat-logs/rpg-pdm2795-retry-20261014.original-provenance.json",
+  "purpose": "swe_rpg_pdm2795_single_sif_retry",
+  "registry_audit": "output/SWE-RPG/registry-audit/python78-v1-20261012/registry-audit.json",
+  "registry_audit_sha256": "2d5d525189f7c49fc70a55c57b55ac4cee62e87d796079449b8962cfe099e61b",
+  "requests": [
+    {
+      "base_commit": "577f88319f3f17f4ef5b699a08bc3d6e5ae92152",
+      "image_ref": "xinzhou1997/swe_rpg_unified@sha256:50c877899c7e8ead33a99c11c3812f1a2abfbe35c677781d9bd7eb8b65cc058d",
+      "instance_id": "pdm-project__pdm-2795",
+      "oci_digest": "sha256:50c877899c7e8ead33a99c11c3812f1a2abfbe35c677781d9bd7eb8b65cc058d",
+      "ordinal": 30,
+      "repo": "pdm-project/pdm",
+      "repo_language": "Python",
+      "sif_filename": "xinzhou1997_swe_rpg_unifiedsha256_50c877899c7e8ead33a99c11c3812f1a2abfbe35c677781d9bd7eb8b65cc058d.sif",
+      "working_directory": "/testbed"
+    }
+  ],
+  "revision": "688ed7918cbcabe6c9d9b9f393fad1053b286dd9",
+  "schema_version": 1,
+  "selection_rationale": "Exactly the single failed frozen Python78 ref; preserve the other 77 acquired SIFs and full selection.",
+  "source_request_manifest": "configs/frozen_swe_rpg/python78-v1-20261012/python-image-request-manifest.json",
+  "source_request_manifest_sha256": "6dff1833d335ed32eda118eeff6df5f820d3aef2735d47e8b0658f24567f8089"
+}

@@ -1,0 +1,45 @@
+{
+  "acceptance_report": "output/SWE-RPG/image-audit/python78-v1-20261014/acceptance.json",
+  "acceptance_report_sha256": "d6761aabab2213be1c308772dab1e4d1e518965a5c21e3e14f7f893300a5e8ec",
+  "dataset": "Xin-Zhou-smu/SWE-RPG-Bench",
+  "download_provenance_sources": [
+    {
+      "path": "/scratch/users/twang/vibe-coding-planning/operations/swe-rpg-python3-smoke-v1-20261012/provenance.json",
+      "sha256": "493e9cc5c349901af0b121d3d1584fbcee49a8441ccb044009a1c6a05c2ee6c4"
+    },
+    {
+      "path": "/scratch/users/twang/vibe-coding-planning/operations/swe-rpg-python75-remaining-v1-20261012/provenance.json",
+      "sha256": "9b7e8609861c5f68f0634b81343eaceb2129015d5fdacc01c76befdab45f69e8"
+    },
+    {
+      "path": "/scratch/users/twang/vibe-coding-planning/operations/swe-rpg-pdm2795-retry-v1-20261014/provenance.json",
+      "sha256": "378aa1f03e37514ce8ed5809180bdb14f3fcd6235ad8f581389f2f971b261122"
+    }
+  ],
+  "download_provenance_unchanged": true,
+  "historical_failure_reconciliation": [
+    {
+      "current_accepted": true,
+      "image_ref": "xinzhou1997/swe_rpg_unified@sha256:50c877899c7e8ead33a99c11c3812f1a2abfbe35c677781d9bd7eb8b65cc058d",
+      "original_failure_category": "pull_timeout",
+      "original_status": "failed",
+      "retry_status": "pulled"
+    }
+  ],
+  "history_preheat_included": false,
+  "images_sha256": "f3c805af1d8f72a76d05eec013c6ad0190fa7846b8726b9943872bdc0a52dcbe",
+  "model_calls": 0,
+  "purpose": "swe_rpg_python78_sif_acceptance_checkpoint",
+  "revision": "688ed7918cbcabe6c9d9b9f393fad1053b286dd9",
+  "sacct": "JobID|State|Elapsed|AllocCPUS|TotalCPU|ReqMem|MaxRSS\n6119197|COMPLETED|00:04:40|1|03:18.908|4G|\n6119197.batch|COMPLETED|00:04:40|1|03:18.908||4193108K\n6119197.extern|COMPLETED|00:04:40|1|00:00:00||\n",
+  "schema_version": 1,
+  "slurm_job_id": "6119197",
+  "source_request_manifest_sha256": "6dff1833d335ed32eda118eeff6df5f820d3aef2735d47e8b0658f24567f8089",
+  "summary": {
+    "accepted": 78,
+    "expected": 78,
+    "failed_record_with_file": 0,
+    "success_record_invalid": 0
+  },
+  "temporary_residuals": []
+}
