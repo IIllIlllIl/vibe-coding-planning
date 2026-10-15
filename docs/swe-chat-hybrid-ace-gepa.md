@@ -112,6 +112,19 @@ Missing or hash-mismatched prepared evidence SIF fails before submission/inferen
 Raw completions and available error trajectories are retained before Host validation.
 Workers recheck source/config/input identity and the training-only boundary.
 
+Curator uses the formal ACE evidence builder in `ace_evidence.py`, shared with
+`HPCPlaybookProposalAgents`. Required inputs are `counted_playbook.json`, the
+complete current diagnoses/insights/bases/tags in `reflection_index.json`,
+`rule_feedback_history_index.json` when history exists, `records.json` and
+`limits.json`. Record field files and full historical reports are lossless
+optional lookups; they are not concatenated into one large Agent input.
+Reflector reads its full case evidence through separate indexed files, including
+the complete Checker investigation. Refiner receives draft, limits and size
+violations separately. The Worker task manifest remains a transport artifact,
+not a replacement Agent reading file. Output schemas and the phase graph do not
+change. Local tests include multi-MB 16/24-case bundles and runtime dispatch;
+only model-backed trajectories can establish actual reading and comprehension.
+
 Audit fixes included removing the rewrite proposer, using the newer ACE-v2
 Reflector schema without confidence/uncertainty scaffolding, restoring task/Plan context
 to Reflector evidence, retaining physical investigations across repetitions,
@@ -133,8 +146,11 @@ audit remain available. Native Codex usage is not treated as zero-cost inference
 
 ## Prompts and reproducibility
 
-The current English tasks are in `configs/prompts/swe_chat_hybrid_ace_v3.yaml`;
-v1/v2 remain frozen historical prompts.
+The layered-input English tasks are in `configs/prompts/swe_chat_hybrid_ace_v6.yaml`;
+v1–v5 remain frozen historical prompts. v6 changes the Curator reading contract
+and case-reference lookup path, not the condition/guide learning objectives or
+the Checker, Reflector and Refiner task descriptions. Frozen single-file configs
+must use their original source; new layered-input runs must bind the v6 bundle.
 They are task descriptions, not replacements for the common shell Agent protocol.
 Old SWE-chat and rule-only prompt/config files are unchanged.
 
@@ -151,10 +167,10 @@ are preparation placeholders, not a launch config):
 hybrid:
   enabled: true
   max_items: 10
-  shared_guide_words: 200
-  condition_words: 40
-  item_guide_words: 80
-  prompt_bundle: configs/prompts/swe_chat_hybrid_ace_v3.yaml
+  shared_guide_tokens: 512
+  condition_tokens: 48
+  item_guide_tokens: 96
+  prompt_bundle: configs/prompts/swe_chat_hybrid_ace_v6.yaml
   evidence_sif_cache_dir: <prepared-cache>
   evidence_image: <prepared-image>
   evidence_sif_sha256: <frozen-sha256>
@@ -163,9 +179,10 @@ hybrid:
 ```
 
 Old config fields remain supported. The optional independent Refiner handles
-structurally valid proposals exceeding item/word limits before candidate evaluation.
+structurally valid proposals exceeding item/text limits before candidate evaluation.
 Host never truncates text. Other invalid outputs retry through the existing
-task-attempt mechanism. Conditions and guides do not inherit old token caps.
+task-attempt mechanism. Conditions and guides use the caps in the frozen hybrid
+configuration, not historical rule-only caps.
 
 Local verification: `conda run -n mini-swe pytest --no-cov -q
 tests/test_optimization/test_behavioral_hybrid.py`. Tests exercise Checker,

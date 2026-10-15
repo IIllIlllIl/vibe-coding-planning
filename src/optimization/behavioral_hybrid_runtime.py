@@ -34,7 +34,8 @@ def phase_identity(config, role, payload):
                                        "behavioral_hybrid_ace.py", "behavioral_hybrid.py", "playbook.py",
                                        "playbook_runtime.py", "codex_cli_runtime.py",
                                        "hpc/phase_wave.py", "hpc/worker_contract.py",
-                                       "ace_transaction.py", "agent_references.py")}
+                                       "ace_transaction.py", "agent_references.py",
+                                       "ace_evidence.py", "behavioral_hybrid_evidence.py")}
     identity["source"]["agent_protocol"] = hashlib.sha256(
         (root.parent / "agents" / "_deps.py").read_bytes()).hexdigest()
     return hashlib.sha256(json.dumps(identity, sort_keys=True).encode()).hexdigest()
@@ -97,8 +98,9 @@ def run_local_phase(config, role, payload, attempt_dir, *, retry_feedback=""):
     require_evidence_sif(config)
     evidence = attempt_dir / "inputs"
     from .agent_references import phase_references, decode_phase_output
+    from .behavioral_hybrid_evidence import write_hybrid_evidence
     agent_payload, case_refs, item_refs = phase_references(role, payload)
-    if "limits" in agent_payload:
+    if role in {"curator", "refiner"}:
         agent_payload["limits"] = hybrid_limits(config).agent_view()
     if role == "refiner":
         try:
@@ -107,15 +109,21 @@ def run_local_phase(config, role, payload, attempt_dir, *, retry_feedback=""):
             agent_payload["size_violations"] = exc.violations
     atomic_json(attempt_dir / "reference_map.json", {
         "cases": case_refs.decode_map, "items": item_refs.decode_map})
-    atomic_json(evidence / "input.json", agent_payload)
-    atomic_json(evidence / "manifest.json", {"schema_version": 1, "role": role, "files": ["input.json"]})
+    write_hybrid_evidence(evidence, role, agent_payload,
+                          canonical_parent=payload.get("parent"))
     model = dict(asdict(config.reflection), **getattr(config.hybrid, f"{role}_model"))
     env_config = {"evidence_sif_cache_dir": config.hybrid.evidence_sif_cache_dir,
                   "evidence_image": config.hybrid.evidence_image,
                   "command_timeout_seconds": config.docker.timeout}
     common = dict(model_config=model, reflection_config=env_config,
                   system=prompts[f"{role}_task"],
-                  instance_template=("Read {{ evidence_path }}/input.json completely.\n"
+                  instance_template=("Read {{ evidence_path }}/manifest.json first, then read every "
+                      "required_files entry completely. Each path is relative to {{ evidence_path }}. "
+                      "Read required evidence in manageable sections so tool output is not truncated; "
+                      "continue until all entries are read. Use optional_files for supporting and "
+                      "opposing details as needed. counted_playbook.json is the parent artifact; "
+                      "record.json or records.json indexes case fields by file path. "
+                      "For Refiner, draft.json is the artifact to refine.\n"
                       + ("" if model.get("executor") == "codex_cli" else
                          f"Write the required JSON to /tmp/{'reflection' if role == 'reflector' else 'curator'}.json "
                          "and submit its contents using the shared Agent protocol.\n")

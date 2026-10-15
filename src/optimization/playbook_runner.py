@@ -142,6 +142,7 @@ def _run_playbook_search_unlocked(
                 Path(__file__).with_name("hpc") / "phase_wave.py",
                 Path(__file__).with_name("hpc") / "worker_contract.py",
                 Path(__file__).with_name("ace_transaction.py"),
+                Path(__file__).with_name("ace_evidence.py"),
                 Path(__file__).with_name("playbook_hpc_agents.py"),
                 Path(__file__).with_name("playbook_runtime.py"),
                 Path(__file__).with_name("playbook_worker.py"),

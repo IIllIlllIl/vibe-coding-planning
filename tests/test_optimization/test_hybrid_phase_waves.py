@@ -109,7 +109,19 @@ def test_actual_worker_role_payload_and_validation(tmp_path, monkeypatch, role):
     assert (tmp_path / "attempt/completion.json").exists()
     assert json.loads((tmp_path / "attempt/completion.json").read_text())["agent_output"] == agent_expected
     assert json.loads((tmp_path / "attempt/resolved_completion.json").read_text())["agent_output"] == expected
-    assert json.loads((tmp_path / "attempt/inputs/input.json").read_text()) == projected
+    evidence = tmp_path / "attempt/inputs"
+    staged = json.loads((evidence / "manifest.json").read_text())
+    assert not (evidence / "input.json").exists()
+    assert "manifest.json" in calls[0]["instance_template"]
+    assert all((evidence / path).is_file() for path in staged["files"])
+    if role == "refiner":
+        assert json.loads((evidence / "draft.json").read_text()) == projected["draft"]
+    else:
+        assert json.loads((evidence / "counted_playbook.json").read_text()) == projected["parent"]
+        index = json.loads((evidence / ("record.json" if role == "reflector" else "records.json")).read_text())
+        entry = index if role == "reflector" else index[0]
+        restored = {key: json.loads((evidence / path).read_text()) for key, path in entry["fields"].items()}
+        assert restored == (projected["record"] if role == "reflector" else projected["records"][0])
     assert (tmp_path / "attempt/reference_map.json").exists()
 
 
@@ -236,10 +248,11 @@ def test_refiner_size_retry_receives_raw_previous_output_and_all_counts(tmp_path
     assert [v["path"] for v in failure["validation_violations"]] == ["checklist[0].guide", "checklist[1].guide"]
     raw = (tmp_path / "attempt_01/completion.json").read_bytes()
     assert failure["raw_agent_output"] == json.loads(raw)["agent_output"]
-    staged = json.loads((tmp_path / "attempt_01/inputs/input.json").read_text())
-    assert staged["limits"] == runtime.hybrid_limits(cfg).agent_view()
-    assert not any("words" in key for key in staged["limits"])
-    assert [v["actual"] for v in staged["size_violations"]] == [140, 150]
+    evidence = tmp_path / "attempt_01/inputs"
+    limits = json.loads((evidence / "limits.json").read_text())
+    assert limits == runtime.hybrid_limits(cfg).agent_view()
+    assert not any("words" in key for key in limits)
+    assert [v["actual"] for v in json.loads((evidence / "size_violations.json").read_text())] == [140, 150]
     completed = tmp_path / "completed.json"
     assert worker.run_task(config_path=Path("unused"), manifest_path=manifest, output_path=completed,
                            attempt_dir=tmp_path / "attempt_02", previous_output_path=failed) == 0

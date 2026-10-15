@@ -434,6 +434,21 @@ in `case_reflections.json` as audit evidence. These are proposal-local inputs,
 not a global mutable knowledge index. The selected prompt contract, not a
 historical field name, determines required reading and output fields.
 
+`ace_evidence.py` owns this Curator layout for both formal playbook and hybrid
+callers. Experiment adapters supply artifact content, reviews and ledger
+identities; they must not replace the required/optional structure with a single
+large Agent input. Keep complete current diagnoses, insight bases and attribution
+explanations in the required core. Raw records and growing historical reports
+remain losslessly indexed for targeted lookup. Preserve local-reference mapping
+and semantic-version history joins. A Worker transport manifest is not an Agent
+reading bundle and does not need a new control-flow implementation.
+
+Input-layout regression tests must include 16/24-case minibatches with multi-MB
+raw investigations, compare the shared ACE core, recover every Ref field and raw
+record, and exercise real Worker/runtime wiring with only external boundaries
+mocked. Passing these tests proves evidence availability, not model comprehension;
+inspect required-file access and truncation recovery in model-backed trajectories.
+
 A frozen one-proposal diagnostic can pin the original ordered minibatch IDs and
 hash-verified Checker checkpoint. It initializes the existing GEPA sampler;
 it does not replace sampling or imply recovery of the original optimizer state.
