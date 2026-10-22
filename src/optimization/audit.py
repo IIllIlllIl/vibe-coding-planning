@@ -61,6 +61,18 @@ def redact_sensitive(value: Any) -> Any:
     return redact(value)
 
 
+def redact_agent_record(value: dict[str, Any]) -> dict[str, Any]:
+    """Redact diagnostic metadata, rejecting changes to scientific output.
+
+    Credential filtering is a logging policy, not permission to rewrite a
+    candidate or reflection that a later learning phase would consume.
+    """
+    redacted = redact_sensitive(value)
+    if "agent_output" in value and redacted["agent_output"] != value["agent_output"]:
+        raise ValueError("Credential filtering would change scientific agent_output; refusing to save or consume an altered completion")
+    return redacted
+
+
 class JsonlLogger:
     """Thread-safe append-only JSONL logger."""
 

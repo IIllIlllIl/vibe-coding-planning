@@ -1,0 +1,2 @@
+# Unified-diff review artifacts legitimately contain space-only context lines.
+docs/reference/*.diff whitespace=-blank-at-eol

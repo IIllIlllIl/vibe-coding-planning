@@ -39,6 +39,7 @@ class SWEVerifiedPCEConfig:
     nrpv_block: str
     slurm_evaluator_timeout_outcome: str
     plan_submission_protocol: str
+    planning_rules: str = ""
 
 
 def _mapping(value: Any, name: str) -> dict[str, Any]:
@@ -292,6 +293,7 @@ def load_swe_verified_pce_config(
 
     return SWEVerifiedPCEConfig(
         config_path=config_path,
+        planning_rules=str(raw.get("planning_rules", "")),
         dataset_snapshot=resolve(str(paths["dataset_snapshot"])),
         image_manifest=resolve(str(paths["image_manifest"])),
         selection_manifest=selection_manifest,

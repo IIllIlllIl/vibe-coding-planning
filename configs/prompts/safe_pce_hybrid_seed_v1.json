@@ -1,0 +1,10 @@
+{
+  "schema_version": 1,
+  "checklist": [
+    {
+      "id": "plan-00001",
+      "condition": "Does the Plan address the task's explicit requirements?",
+      "guide": "Compare the proposed approach with the task's stated requirements and identify material gaps."
+    }
+  ]
+}

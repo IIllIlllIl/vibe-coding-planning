@@ -62,6 +62,7 @@ def pce_semantic_sha256(config: PolyBenchPCEConfig) -> str:
     sources = [
         root / "src" / "agents" / "_deps.py",
         root / "src" / "agents" / "plan_agent.py",
+        root / "src" / "agents" / "planning_artifact.py",
         root / "src" / "agents" / "code_agent.py",
         root / "src" / "environment" / "apptainer_env.py",
         root / "src" / "environment" / "repository_baseline.py",
@@ -74,6 +75,7 @@ def pce_semantic_sha256(config: PolyBenchPCEConfig) -> str:
                 str(path.relative_to(root)): file_sha256(path) for path in sources
             },
             "plan": asdict(config.plan),
+            **({"planning_rules": config.planning_rules} if getattr(config, "planning_rules", "") else {}),
             "plan_submission_protocol": config.plan_submission_protocol,
             "agent_network_disabled": config.agent_network_disabled,
             "evaluator_network_disabled": config.evaluator_network_disabled,

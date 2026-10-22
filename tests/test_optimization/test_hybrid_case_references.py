@@ -84,6 +84,37 @@ def test_branch_local_history_is_not_current_target_authority():
     assert payload["history"] == history
 
 
+@pytest.mark.parametrize("role", ["reflector", "curator"])
+def test_raw_scientific_objects_are_opaque_to_identity_projection(role):
+    raw = {"id": "plan-00006", "instance_id": "uuid", "nested": [{"bullet_id": "plan-00006"}]}
+    record = {"instance_id": "uuid", "pce_runs": [{"pce_output": raw}],
+              "checker_input": raw, "checker_output": raw, "reflection_evidence": raw,
+              "plan_trajectory": [raw], "code_trajectory": [raw]}
+    artifact = {"checklist": [{"id": "plan-00006", "condition": "Keep uuid", "guide": "Keep plan-00006"}],
+                "counters": [{"id": "plan-00006", "helpful": 1}]}
+    payload = {"parent": artifact, **({"record": record} if role == "reflector" else {"records": [record]})}
+    original = copy.deepcopy(payload)
+    projected, _, _ = phase_references(role, payload)
+    actual = projected["record"] if role == "reflector" else projected["records"][0]
+    assert payload == original and actual["instance_id"] == "case-01"
+    assert {key: value for key, value in actual.items() if key != "instance_id"} == {
+        key: value for key, value in record.items() if key != "instance_id"}
+    assert projected["parent"]["checklist"][0]["id"] == "item-01"
+    assert projected["parent"]["counters"][0]["id"] == "item-01"
+
+
+def test_credential_logging_cannot_silently_rewrite_learning_outputs(monkeypatch):
+    from src.optimization.audit import redact_agent_record
+    monkeypatch.setenv("TEST_ONLY_API_TOKEN", "synthetic-credential-never-real")
+    original = {"agent_output": {"reasoning": "Keep the exact Plan", "operations": []},
+                "metadata": {"api_key": "synthetic-credential-never-real"}}
+    result = redact_agent_record(original)
+    assert result["agent_output"] == original["agent_output"]
+    assert result["metadata"]["api_key"] == "[REDACTED]"
+    with pytest.raises(ValueError, match="refusing.*altered completion"):
+        redact_agent_record({"agent_output": {"reasoning": "synthetic-credential-never-real"}})
+
+
 @pytest.mark.parametrize("operation", [
     {"type": "ADD", "content": {"condition": "new", "guide": "inspect"}, "supporting_instance_ids": ["case-01"]},
     {"type": "UPDATE", "target_id": "item-01", "supporting_instance_ids": ["case-01"]},

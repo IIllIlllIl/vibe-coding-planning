@@ -77,6 +77,15 @@ must not silently remove extra results, renumber them or infer a final answer.
 
 ## Cluster resources
 
+Safe PCE may serve as a learner's evaluation backend without replacing its
+ACE/controller lifecycle. Keep scientific task adapters separate from transport:
+dispatch existing PCE executors/Workers, retain the top-level
+`run_dir/hpc_tasks/<phase>/<fingerprint>` layout, and submit all independent
+cases/repetitions in one array. A nested task root can hide active workers from
+the shared supervisor and cleanup checks even when individual tasks run correctly.
+Test that path/whole-wave contract through the real executor entry point.
+See [`safe-pce-ace-gepa.md`](safe-pce-ace-gepa.md) for the task-specific boundary.
+
 | Cluster | One-CPU task request |
 |---|---|
 | Iris | 1 CPU / 4G |
@@ -130,6 +139,10 @@ the parent's pinned gitlink. The shared GEPA source preflight is used by both
 Supervisor and submit wrapper; missing, wrong-revision or tracked-modified
 sources fail locally without fetch, Slurm submission or automatic retries.
 Exports require the vendored files and preserve their source fingerprints.
+Compare the checkout directory's filesystem identity with Git's top-level
+directory, not just path spelling: case-insensitive macOS aliases can otherwise
+falsely report an initialized submodule as missing. This must not weaken the
+pinned revision, tracked-modification or incomplete-source checks.
 
 A missing runtime manifest after Controller submission is not a fresh run.
 Supervisor must inspect the recorded Controller job before cleanup or another

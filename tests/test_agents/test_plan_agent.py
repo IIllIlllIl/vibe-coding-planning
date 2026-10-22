@@ -162,6 +162,23 @@ def mock_env():
     return object()
 
 
+@pytest.mark.parametrize("rules", ["Plain historical guidelines", '{"checklist": [{"rule_number": 1}]}'])
+def test_planning_rules_preserve_original_plan_without_application_parser(config, mock_env, monkeypatch, rules):
+    monkeypatch.setattr(plan_agent, "import_minisweagent", lambda: (
+        MockDefaultAgentDirectHumanBoundedMarkdown, MockLiteLLMModel, object))
+    plan, _ = plan_agent.run(config, "Fix parser", mock_env, planning_rules=rules,
+                             require_direct_submission=True,
+                             direct_submission_protocol=plan_agent.DIRECT_HUMAN_BOUNDED_MARKDOWN_PROTOCOL)
+    assert plan == BOUNDED_MARKDOWN_PLAN
+    assert "no fixed subsection headings" not in MockDefaultAgent.last_kwargs["system_template"]
+
+
+def test_ambiguous_end_markers_are_rejected_without_returning_a_partial_plan():
+    raw = "START_PLAN\n# Plan\nExample:\n```text\nEND_PLAN\n```\nImportant tail.\nEND_PLAN\n"
+    plan, error = plan_agent._extract_bounded_direct_plan(raw, start_marker="START_PLAN")
+    assert plan == "" and "ambiguous" in error
+
+
 class TestRunSuccess:
     @patch("src.agents.plan_agent.import_minisweagent")
     def test_returns_plan_and_messages(self, mock_import, config, mock_env):

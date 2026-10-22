@@ -89,6 +89,7 @@ def run_behavioral_optimization(
     proposer: Callable[..., Any] | None = None,
     optimize_fn: Callable[..., Any] = gepa.optimize,
     adapter_factory: Callable[..., Any] = BehavioralGEPAAdapter,
+    evaluation_backend: Any = None,
 ) -> Any:
     if config.hybrid.enabled and adapter_factory is BehavioralGEPAAdapter:
         raise ValueError("hybrid runs require run_hybrid_optimization; do not use the legacy proposer/adapter")
@@ -97,6 +98,7 @@ def run_behavioral_optimization(
         return _run_locked(
             config, checker=checker, proposer=proposer, optimize_fn=optimize_fn,
             adapter_factory=adapter_factory,
+            evaluation_backend=evaluation_backend,
         )
 
 
@@ -107,8 +109,10 @@ def _run_locked(
     proposer: Callable[..., Any] | None,
     optimize_fn: Callable[..., Any],
     adapter_factory: Callable[..., Any] = BehavioralGEPAAdapter,
+    evaluation_backend: Any = None,
 ) -> Any:
-    train, validation = load_behavioral_snapshot(config.dataset_snapshot)
+    train, validation = (evaluation_backend.load_snapshot() if evaluation_backend is not None
+                         else load_behavioral_snapshot(config.dataset_snapshot))
     train_loader = BehavioralCaseLoader(train)
     validation_loader = BehavioralCaseLoader(validation)
     initial_rules = config.initial_rules_path.read_text(encoding="utf-8").strip()
@@ -119,7 +123,7 @@ def _run_locked(
         config.run_dir / "controller_status.json",
         {"schema_version": 1, "status": "running", "pid": os.getpid()},
     )
-    class_counts = {
+    class_counts = {} if evaluation_backend is not None else {
         split: {
             True: sum(case.accepted for case in cases),
             False: sum(not case.accepted for case in cases),
@@ -138,10 +142,11 @@ def _run_locked(
         class_counts_by_split=class_counts,
         resuming_from_state=resuming,
     )
-    checker_runner = checker or BehavioralLocalChecker(config)
+    checker_runner = (evaluation_backend.evaluate if evaluation_backend is not None
+                      else checker or BehavioralLocalChecker(config))
     batch_executor = (
         HPCSlurmBehavioralCheckerExecutor(config)
-        if checker is None and config.execution.backend == "hpc_slurm"
+        if evaluation_backend is None and checker is None and config.execution.backend == "hpc_slurm"
         else None
     )
     if proposer is not None:
@@ -160,7 +165,9 @@ def _run_locked(
         proposer_runner.successful_proposals = state.successful_proposals
         proposer_runner.failures = list(state.reflection_failures)
     replay = (
-        _seed_validation_replay(config, validation, initial_rules) if resuming else None
+        (evaluation_backend.seed_replay(validation, initial_rules)
+         if evaluation_backend is not None else _seed_validation_replay(config, validation, initial_rules))
+        if resuming else None
     )
     adapter = adapter_factory(
         checker_runner,
@@ -206,6 +213,16 @@ def _run_locked(
             callbacks=[callback],
             seed=config.search.seed,
         )
+        successful = int(getattr(proposer_runner, "successful_proposals", 0))
+        if successful < config.search.min_proposals:
+            raise RuntimeError("Reflection proposal threshold was not met")
+        if evaluation_backend is not None:
+            evaluation_backend.write_report(result, validation)
+        else:
+            write_behavioral_report(
+                result, validation, config.run_dir,
+                primary_metric=("human_decision_utility" if config.hybrid.enabled else config.search.primary_metric),
+            )
     except ControllerYield as exc:
         _atomic_status(
             config.run_dir / "controller_status.json",
@@ -238,16 +255,8 @@ def _run_locked(
             },
         )
         raise
-    write_behavioral_report(
-        result,
-        validation,
-        config.run_dir,
-        primary_metric=("human_decision_utility" if config.hybrid.enabled else config.search.primary_metric),
-    )
     successful = int(getattr(proposer_runner, "successful_proposals", 0))
     failures = list(getattr(proposer_runner, "failures", []))
-    if successful < config.search.min_proposals:
-        raise RuntimeError("Behavioral Reflection proposal threshold was not met")
     if not config.hybrid.enabled:
         write_cost_report(
             config.run_dir,

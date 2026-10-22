@@ -54,6 +54,7 @@ class PolyBenchPCEConfig:
     selection_manifest: Path | None = None
     instance_ids: tuple[str, ...] = ()
     repetitions: int = 1
+    planning_rules: str = ""
     plan_submission_protocol: str = "legacy_stdout_v1"
     agent_network_disabled: bool = False
     evaluator_network_disabled: bool = False
@@ -302,6 +303,7 @@ def load_polybench_pce_config(
         selection_manifest=selection_manifest,
         instance_ids=instance_ids,
         repetitions=repetitions,
+        planning_rules=str(raw.get("planning_rules", "")),
         plan_submission_protocol=plan_submission_protocol,
         agent_network_disabled=bool(container_raw.get("network_disabled", False)),
         evaluator_network_disabled=bool(evaluator_raw.get("network_disabled", False)),

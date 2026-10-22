@@ -6,7 +6,7 @@ engineering choice rather than silently falling back to an unisolated runtime.
 from __future__ import annotations
 
 import json
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from typing import Any, Callable
 
 from src.optimization.behavioral_adapter import BehavioralGEPAAdapter
@@ -22,23 +22,34 @@ class HybridLimits:
     shared_guide_tokens: int | None = None
     condition_tokens: int | None = None
     item_guide_tokens: int | None = None
+    shared_guide_enabled: bool = True
 
     def __post_init__(self):
+        if type(self.shared_guide_enabled) is not bool:
+            raise ValueError("shared_guide_enabled must be boolean")
         if any(type(value) is not int or value < 1 for value in
                (self.max_items, self.shared_guide_words, self.condition_words, self.item_guide_words)):
             raise ValueError("hybrid limits must be positive integers")
-        if any(value is not None and (type(value) is not int or value < 1) for value in vars(self).values()):
+        if any(value is not None and (type(value) is not int or value < 1)
+               for key, value in vars(self).items() if key != "shared_guide_enabled"):
             raise ValueError("hybrid limits must be positive integers")
+
+    def relaxed(self):
+        """Relax size only, preserving the selected candidate schema."""
+        return replace(self, max_items=1000000, shared_guide_words=1000000,
+                       condition_words=1000000, item_guide_words=1000000,
+                       shared_guide_tokens=None, condition_tokens=None, item_guide_tokens=None)
 
     def agent_view(self):
         """Expose only effective length limits; retain word mode for old runs."""
         result = {"max_items": self.max_items}
         for component in ("shared_guide", "condition", "item_guide"):
+            if component == "shared_guide" and not self.shared_guide_enabled:
+                continue
             tokens = getattr(self, component + "_tokens")
             unit = "tokens" if tokens is not None else "words"
             result[component + "_" + unit] = tokens if tokens is not None else getattr(self, component + "_words")
-        if any(value is not None for value in
-               (self.shared_guide_tokens, self.condition_tokens, self.item_guide_tokens)):
+        if any(key.endswith("_tokens") for key in result):
             result["token_counter_model"] = "deepseek/deepseek-chat"
         return result
 
@@ -79,12 +90,14 @@ def validate_candidate(raw: str, limits: HybridLimits) -> dict[str, Any]:
             result[key] = value
         return result
     value = json.loads(raw, object_pairs_hook=unique)
-    if not isinstance(value, dict) or set(value) != {"schema_version", "shared_guide", "checklist"}:
-        raise ValueError("candidate fields: schema_version, shared_guide, checklist")
+    fields = {"schema_version", "checklist"} | ({"shared_guide"} if limits.shared_guide_enabled else set())
+    if not isinstance(value, dict) or set(value) != fields:
+        raise ValueError("candidate fields: " + ", ".join(sorted(fields)))
     if type(value["schema_version"]) is not int or value["schema_version"] != 1:
         raise ValueError("schema_version must be 1")
     violations = []
-    _text(value["shared_guide"], limits.shared_guide_words, "shared_guide", limits.shared_guide_tokens, violations)
+    if limits.shared_guide_enabled:
+        _text(value["shared_guide"], limits.shared_guide_words, "shared_guide", limits.shared_guide_tokens, violations)
     items = value["checklist"]
     if not isinstance(items, list) or not items:
         raise ValueError(f"checklist must contain 1..{limits.max_items} items")
@@ -117,7 +130,7 @@ def checker_projection(artifact):
     authority for attribution and validation.
     """
     return {"schema_version": artifact["schema_version"],
-            "shared_guide": artifact["shared_guide"],
+            **({"shared_guide": artifact["shared_guide"]} if "shared_guide" in artifact else {}),
             "checklist": [{"rule_number": number, "condition": item["condition"],
                            "guide": item["guide"]}
                           for number, item in enumerate(artifact["checklist"], 1)]}

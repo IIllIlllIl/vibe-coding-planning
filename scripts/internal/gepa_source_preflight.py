@@ -29,7 +29,11 @@ def validate_gepa_source(root: Path) -> str | None:
         entry = git(root, "ls-tree", "HEAD", "--", "third_party/gepa").split()
         if len(entry) < 3 or entry[0] != "160000":
             return "parent commit does not pin third_party/gepa as a submodule"
-        if Path(git(source, "rev-parse", "--show-toplevel")).resolve() != source:
+        # Git and the invoking shell can spell the same case-insensitive
+        # filesystem path differently (e.g. Documents/documents on macOS).
+        # Compare directory identity, not spelling; a parent checkout still
+        # has a different inode and must be rejected.
+        if not source.samefile(Path(git(source, "rev-parse", "--show-toplevel"))):
             return "vendored GEPA files exist but the submodule is not initialized"
         actual = git(source, "rev-parse", "HEAD")
         if actual != entry[2]:

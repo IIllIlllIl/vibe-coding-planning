@@ -256,10 +256,12 @@ def _extract_bounded_direct_plan(
     if not candidate.startswith(start_line):
         return "", f"the terminal response must start with {start_marker!r}"
     body = candidate[len(start_line) :]
-    end_match = re.search(rf"(?m)^{re.escape(end_marker)}$", body)
-    if end_match is None:
+    end_matches = list(re.finditer(rf"(?m)^{re.escape(end_marker)}$", body))
+    if not end_matches:
         return "", f"the terminal response is missing an exact {end_marker!r} line"
-    return body[: end_match.start()], None
+    if len(end_matches) != 1:
+        return "", f"the terminal response has multiple exact {end_marker!r} lines; the Plan boundary is ambiguous"
+    return body[: end_matches[0].start()], None
 
 
 def direct_plan_terminal_response(
@@ -380,7 +382,7 @@ def run(
             first user message.
         env: Docker environment wrapper (passed to DefaultAgent for tool
             execution).
-        planning_rules: Optional candidate planning rules for online GEPA
+        planning_rules: Optional candidate planning rules for GEPA
             experiments. Existing PCT configs do not reference this variable,
             so the default preserves the historical prompt exactly.
         model_wrapper: Optional hook for callers that need to instrument model
@@ -452,6 +454,9 @@ def run(
             agent_kwargs["action_protocol"] = BOUNDED_MARKDOWN_PLAN_ACTION_PROTOCOL
         elif direct_submission_protocol == DIRECT_HUMAN_BOUNDED_MARKDOWN_PROTOCOL:
             agent_kwargs["action_protocol"] = HUMAN_BOUNDED_MARKDOWN_PLAN_ACTION_PROTOCOL
+            if planning_rules:
+                from src.agents.planning_artifact import rules_plan_action_protocol
+                agent_kwargs["action_protocol"] = rules_plan_action_protocol(agent_kwargs["action_protocol"])
         else:
             raise ValueError(
                 f"unsupported direct Plan submission protocol: "

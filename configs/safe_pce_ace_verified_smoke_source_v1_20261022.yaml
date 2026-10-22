@@ -1,0 +1,68 @@
+schema_version: 1
+mode: swe_verified_pce
+purpose: development_only_safe_pce_ace_dataflow_smoke
+paths:
+  dataset_snapshot: output/SWE-bench_Verified/swe-verified-pce-inputs/20260831_verified500_91aa3ed5
+  image_manifest: configs/frozen_swe_verified_safe_pce/verified500-completion-v1-20261008/images.json
+  selection_manifest: configs/frozen_safe_pce_ace/verified_smoke_v1_20261022/pce-selection.json
+  prompt_source_config: configs/polybench_pce_hpc_formal_clean_20260825.yaml
+  plan_prompt_source_config: configs/prompts/swe_verified_safe_pce_planner_v6_anchor_ablation_20260913.yaml
+  code_prompt_source_config: configs/prompts/swe_verified_safe_pce_code_v1_20260913.yaml
+  run_dir: output/SWE-bench_Verified/safe-pce-ace-smoke-v1-20261022/pce_evaluations
+plan:
+  model: deepseek-v4-flash
+  api_base: https://api.deepseek.com
+  api_key_env: DEEPSEEK_API_KEY
+  temperature: 1.0
+  thinking: disabled
+  max_steps: 0
+  cost_limit: 0.0
+  timeout: 1800
+  max_attempts: 3
+  submission_protocol: direct_human_markdown_v5
+code:
+  model: deepseek-v4-flash
+  api_base: https://api.deepseek.com
+  api_key_env: DEEPSEEK_API_KEY
+  temperature: 0.0
+  max_steps: 0
+  cost_limit: 0.0
+  timeout: 1800
+  max_attempts: 3
+docker:
+  workdir: /testbed
+  timeout: 1800
+  min_free_gb: 20
+  max_cached_images: 75
+container:
+  runtime: apptainer
+  module: tools/Apptainer
+  sif_cache_dir: /scratch/users/${USER}/vibe-coding-planning/shared/sif-cache
+  writable_tmpfs: true
+hpc:
+  submit: true
+  partition: batch
+  cpus_per_task: 1
+  mem: 4G
+  time: "01:00:00"
+  max_running_array_tasks: 3
+  poll_interval_seconds: 120
+  task_output_grace_seconds: 300
+  missing_task_grace_seconds: 600
+  max_task_attempts: 3
+  remote_env_file: ~/.config/vibe-coding-planning/deepseek.env
+  python_module: lang/Python/3.11
+  container_module: tools/Apptainer
+  python_bin: python3
+  job_name_prefix: safe-pce-ace-verified-smoke-v1-20261022-pce
+  worker_config_path: configs/safe_pce_ace_verified_smoke_source_v1_20261022.yaml
+evaluator:
+  slurm_timeout_outcome: unknown
+experiment_contract:
+  launch_authorized: false
+  development_only: true
+  baseline: configs/swe_verified_safe_pce_no_thinking_clean411_priority_ru7_iris_v1_20260919.yaml
+  selection_basis: existing_audit10_development_cases_with_prepared_history_and_distinct_repositories
+  historical_outcomes_used_for_selection: false
+  untouched_holdout_claim: false
+  resource_evidence: docs/knowledge/hpc-memory-accounting-20261013.md

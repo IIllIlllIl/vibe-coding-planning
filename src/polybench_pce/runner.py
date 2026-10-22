@@ -362,6 +362,8 @@ class PolyBenchPCERunner:
                     self._base_config(self.config.plan),
                     case.issue_description,
                     env,
+                    **({"planning_rules": self.config.planning_rules}
+                       if getattr(self.config, "planning_rules", "") else {}),
                     model_wrapper=lambda model: AuditedModel(
                         model,
                         self.usage,

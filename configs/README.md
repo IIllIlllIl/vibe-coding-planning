@@ -14,6 +14,20 @@ the shared supervisor supplies canonical storage paths.
 
 ## Experiment Inventory
 
+Safe PCE / hybrid ACE preparation is documented in
+[`../docs/safe-pce-ace-gepa.md`](../docs/safe-pce-ace-gepa.md). Its
+`prompts/safe_pce_hybrid_ace_v1.yaml`, `prompts/safe_pce_hybrid_seed_v1.json`,
+and `prompts/safe_pce_rules_planner_v1.yaml` define the rules-plus-item-guide
+adaptation, without a shared guide or changes to frozen Checker configs.
+`paths.safe_pce_config` reuses a reviewed PCE execution config; explicit task
+splits and a new launch identity must be prepared before an approved run.
+The concrete development smoke is `gepa_safe_pce_verified_smoke_v1_20261022.yaml`,
+with `safe_pce_ace_verified_smoke_source_v1_20261022.yaml` and explicit frozen
+IDs under `frozen_safe_pce_ace/verified_smoke_v1_20261022/`. Its standard
+supervisor identity is `safe_pce_ace_verified_smoke_supervisor_v1_20261022.yaml`.
+Verified validates engineering; RPG is the selected downstream formal dataset
+and requires its own adapter/acceptance before configuration and launch.
+
 SWE-chat hybrid lightweight formal contract:
 `gepa_swe_chat_hybrid_formal3_v4_20261011.yaml` and
 `swe_chat_hybrid_formal3_supervisor_v4_20261011.yaml` bind the v3 prompt,

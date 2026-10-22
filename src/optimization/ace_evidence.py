@@ -45,7 +45,7 @@ def write_curator_evidence(
             "interpretation": feedback_history["interpretation"],
             "counting_policy": feedback_history["counting_policy"],
             "details_file": "rule_feedback_history.json",
-            "lookup": "Select events by rule_identity. Each event links its full Reflector report and Checker context by SHA-256. Consult the explanations relevant to the rules being maintained; earlier assessments may disagree.",
+            "lookup": "Select events by rule_identity. Each event links its full Reflector report and supplied artifact context by SHA-256. Consult the explanations relevant to the rules being maintained; earlier assessments may disagree.",
             "bullets": index,
         })
     reflection_index = []

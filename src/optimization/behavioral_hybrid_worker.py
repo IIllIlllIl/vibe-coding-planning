@@ -3,7 +3,7 @@ from pathlib import Path
 import json
 from datetime import datetime, timezone
 
-from src.optimization.audit import redact_sensitive
+from src.optimization.audit import redact_sensitive, redact_agent_record
 from src.optimization.behavioral_hybrid_runtime import run_local_phase, phase_identity
 from src.optimization.config import load_optimization_config
 from src.optimization.hpc.task_batch import atomic_json
@@ -38,7 +38,7 @@ def run_task(*, config_path, manifest_path, output_path, attempt_dir, previous_o
         output, trajectory = run_local_phase(config, manifest["role"], manifest["payload"], attempt_dir,
                                               retry_feedback=feedback)
         stage = "output_write"
-        atomic_json(output_path, redact_sensitive(worker_envelope(
+        atomic_json(output_path, redact_agent_record(worker_envelope(
             manifest, started_at, "completed", agent_output=output, trajectory=trajectory)))
         return 0
     except Exception as exc:

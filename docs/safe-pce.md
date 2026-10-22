@@ -7,6 +7,11 @@
 
 ## Purpose
 
+The separate opt-in use of existing PCE execution as a hybrid ACE/GEPA
+evaluation backend is documented in
+[`safe-pce-ace-gepa.md`](safe-pce-ace-gepa.md). It does not rebind the frozen
+data-generation experiments described here.
+
 Safe PCE generates new trustworthy Plan-Code-Evaluate evidence for ACE. It does
 not reuse historical Round-1, quick50, C2/C4/C5, safe67, or PolyBench Plans,
 outcomes, image manifests, candidate identities, or comparison baselines. Those

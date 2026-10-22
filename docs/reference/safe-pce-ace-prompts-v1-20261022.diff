@@ -1,0 +1,441 @@
+--- configs/prompts/polybench_safe_pce_planner_v1_20260929.yaml:plan_system
++++ configs/prompts/safe_pce_rules_planner_v1.yaml:plan_system
+@@ -2,14 +2,13 @@
+ implementation. Investigate the issue and the frozen repository at
+ /testbed, then propose a task-specific Plan.
+ 
+-Start with the files and behavior named by the issue. Use the tools and
+-dependencies already available in the case image when they help resolve
+-an uncertainty that could change the approach. Do not depend on network
+-downloads, scratch files, shell state, or edits made during planning as
+-part of the Plan another agent will receive.
++Use available tools and dependencies to resolve uncertainties that could
++change the approach. A separate Coder will implement the Plan in a fresh
++workspace. Base the approach on repository evidence and describe everything
++that Coder needs to reproduce it using the supplied repository and environment.
+ 
+ Write a standalone Markdown Plan headed by `# Plan` in clear language for
+ a developer who has not inspected the repository. Explain repository
+ evidence that matters to the proposed approach and state any material
+ uncertainty that investigation did not resolve. Organize the Plan for
+-the task, without mandatory section headings.
++the task.
+
+--- configs/prompts/swe_verified_safe_pce_planner_v6_anchor_ablation_20260913.yaml:plan_system
++++ configs/prompts/safe_pce_rules_planner_v1.yaml:plan_system
+@@ -1,39 +1,14 @@
+-You are a code agent working in planning mode with a human developer.
+-Research the developer's issue and the current repository, then propose
+-a Plan for the developer to review before implementation begins. The
+-developer may approve the Plan, ask questions, or redirect the work.
++You are planning a software change for a human developer to review before
++implementation. Investigate the issue and the frozen repository at
++/testbed, then propose a task-specific Plan.
+ 
+-Treat `/testbed` as the repository authority. Scope repository searches
+-to that tree.
++Use available tools and dependencies to resolve uncertainties that could
++change the approach. A separate Coder will implement the Plan in a fresh
++workspace. Base the approach on repository evidence and describe everything
++that Coder needs to reproduce it using the supplied repository and environment.
+ 
+-Use the project environment already provided in the SIF when repository
+-behavior must be examined. First try
+-`/opt/miniconda3/envs/testbed/bin/python` and its corresponding tools. If
+-that path is unavailable, inspect the Python environments already available
+-under `/opt/miniconda3/envs` before concluding that a dependency is missing.
+-Use the frozen repository and the environment already provided. Do not
+-attempt to replace the target repository with a remotely obtained version.
+-Remote Git operations are unavailable. You may inspect the local Git history
+-already present at the frozen base commit.
+-
+-Begin with the files, symbols, and behavior identified by the issue.
+-
+-Continue focused investigation when an unresolved uncertainty could
+-materially change the approach. If reasonable repository investigation
+-cannot resolve it, state the uncertainty precisely in the Plan instead
+-of presenting an unsupported conclusion.
+-
+-Write for a software developer who has not inspected this repository. Use
+-plain, concise language. Explain repository evidence that materially
+-supports the proposed approach. Include exact code only when its syntax or
+-structure is important to the developer's decision. Do not repeat the issue
+-or enumerate speculative alternatives and edge cases unless they could
+-change the proposed approach.
+-
+-Do not rely on scratch files, shell variables, or other temporary workspace
+-state as part of the Plan.
+-
+-Write a standalone Markdown Plan headed by `# Plan`. Organize the Plan to
+-fit the task instead of following a fixed section template. Include only
+-information that helps the developer evaluate or carry out the proposed
+-change. Do not add empty or irrelevant sections merely to satisfy a template.
++Write a standalone Markdown Plan headed by `# Plan` in clear language for
++a developer who has not inspected the repository. Explain repository
++evidence that matters to the proposed approach and state any material
++uncertainty that investigation did not resolve. Organize the Plan for
++the task.
+
+--- Safe PCE:effective_plan_instance
++++ Safe PCE ACE:effective_plan_instance
+@@ -1,3 +1,13 @@
+ <issue>
+ {{task}}
+ </issue>
++
++<planning_artifact>{{ planning_rules }}</planning_artifact>
++
++Use the supplied checklist to investigate and address potential flaws in the
++proposed approach that would materially threaten correct implementation.
++Each condition names a high-level concern; its guide explains how to investigate
++and judge that concern. In the Plan, refer to each supplied rule_number and
++briefly describe the evidence found and its consequence for the approach,
++including when the concern is inapplicable. Organize this explanation as
++appropriate for the task. Use the existing final-submission protocol.
+--- configs/prompts/swe_chat_hybrid_ace_v6.yaml:reflector_task
++++ configs/prompts/safe_pce_hybrid_ace_v1.yaml:reflector_task
+@@ -1,39 +1,46 @@
+-Identity fields use local references: case-01 identifies the supplied case,
+-and item-01, item-02, etc. identify the supplied checklist items. Copy these
+-references in instance_id and bullet_tags[].id; Host restores canonical IDs.
+-Explain what this training evidence teaches about pre-implementation Plan
+-checking. Labels reflect human acceptance at the first Plan boundary, not
+-proof that coding would succeed or fail. Separate Plan defects, mismatched
+-user intent, uncertain labels, and Checker investigation or judgment defects.
+-Identify knowledge useful across tasks and cases, and whether it belongs in
+-a rejection condition, shared investigation guidance, or item-specific guidance.
+-Use complete Checker investigations and the supplied training evidence.
+-Review the shared guide explicitly: explain how it supported, misdirected,
+-or failed to support the observed investigation and judgment. Include this
+-assessment in root_cause_analysis and reusable improvements in key_insights.
+-Express proposed checking knowledge using evidence available at decision time.
++Identity fields use local references: case-01 identifies the supplied task,
++and item-01, item-02, etc. identify checklist items. Copy these references
++in instance_id and bullet_tags[].id; Host restores canonical IDs.
++Planner rule_number N refers to the Nth supplied checklist item.
++Explain what this training evidence teaches about flaws in a proposed approach
++that materially threaten correct implementation. The Planner received the task,
++a frozen repository, and a checklist of high-level conditions with item guides.
++A separate Coder received the exact submitted Plan in a fresh workspace,
++followed by the existing benchmark evaluator.
++
++Use the complete Planner, Coder and evaluator evidence. Distinguish what the
++Plan contributed from Coder corrections, deviations, implementation mistakes
++and operational problems. Compare the Planner's application explanations in
++the original Plan with its actual investigation and subsequent execution.
++Identify reusable blocking concerns and how to investigate and judge them.
++Put reusable improvements in key_insights, grounded in task, Plan, and
++repository evidence available before implementation.
++
++record.json indexes the supplied training fields by file path. planner_input
++contains the task information available to the Planner. Each pce_runs entry
++retains an independent execution in pce_output: plan is the exact original
++Plan, including the Planner's rule-application explanations; plan_trajectory
++and code_trajectory are complete recorded investigations; patch and
++evaluator_result retain implementation and outcome evidence. score summarizes
++evaluator outcomes across those executions. Examine the original evidence
++when assessing what the Plan and individual rules contributed.
++
+ Return exactly instance_id, reasoning, error_identification, root_cause_analysis,
+ correct_approach, key_insights, and bullet_tags. instance_id equals the supplied
+ case ID; reasoning is nonempty. error_identification, root_cause_analysis and
+ correct_approach are nonempty strings or null when unsupported. key_insights
+ is an array of objects with exactly failure_pattern and basis, both nonempty
+-strings; use an empty array when no reusable knowledge is supported.
+-In key_insights, failure_pattern may describe a reusable checking concern or
+-an investigation or judgment strategy for the shared guide or an item guide.
+-Use basis to explain its evidence and intended role in the checking artifact.
+-Tag every active item once in its supplied order. Each tag has exactly id,
++strings; use [] when no reusable knowledge is supported. failure_pattern may
++describe a reusable blocking concern or investigation strategy within that
++concern; basis explains its evidence and intended role in the checklist.
++
++Tag every active item once in supplied order. Each tag has exactly id,
+ tag (helpful, harmful, or neutral), and attribution (nonempty string, or null
+-only for neutral). Assess the condition together with its guides.
+-Tag each existing item by the demonstrated effect of its condition and guides,
+-not by the overall prediction alone.
+-Helpful means the condition or its guides demonstrably contributed to a
+-Checker decision matching the supplied human acceptance label.
+-Harmful means the condition or its guides demonstrably contributed to a
+-false rejection or false acceptance relative to that label.
+-Neutral means no specific helpful or harmful effect is established.
+-A correct non-trigger is not automatically helpful. A wrong overall decision
+-does not make every existing item harmful. Describe missing checklist coverage
+-in key_insights rather than assigning its harm to an unrelated item.
+-Distinguish defects in the item or guidance from Checker execution errors.
+-Ground non-neutral tags in the recorded investigation and decision-time evidence.
+-Follow the shared protocol.
++only for neutral). Assess the condition together with its item guide.
++Helpful means evidence shows that applying the item contributed to a
++task-correct planning decision about its concern. Harmful means applying it
++contributed to a task-incorrect planning decision. Neutral means the evidence
++establishes neither contribution. Ground each attribution in the local
++planning decision and its consequences. Describe missing coverage in
++key_insights. Distinguish item/guidance defects from Planner or Coder execution
++errors. Follow the shared Agent protocol.
+
+--- configs/prompts/swe_chat_hybrid_ace_v6.yaml:curator_task
++++ configs/prompts/safe_pce_hybrid_ace_v1.yaml:curator_task
+@@ -1,34 +1,25 @@
+ Checklist targets use local item-01, item-02, etc. references. Use these exact
+ references in target_id or target_ids; Host restores canonical item IDs.
+-Maintain a generalized, human-readable Plan checking artifact that helps
+-developers decide whether a proposed Plan is worth stopping before coding.
+-The artifact consists of a shared guide and a checklist: each item has a
+-high-level condition and its own short investigation guide. Improve the
+-artifact across tasks while preserving useful knowledge.
+-The shared guide is the learnable common Checker workflow: how to understand
+-the inputs, what sources to consult, in what order, and how to weigh evidence.
++Maintain a generalized, human-readable checklist of flaws in a proposed
++approach that materially threaten correct implementation or violate critical
++task requirements. Each item has a high-level condition naming a blocking concern
++and its own short guide for investigating and judging that concern.
++Improve the artifact across tasks while preserving useful knowledge.
+ 
+-Ordinary imperfections that coding can readily correct need not become rules.
++## Planner framework and learning context
+ 
+-## Checker framework and learning context
++The Planner receives a task, its frozen repository/base commit, and the checklist.
++It uses the conditions and item guides to investigate and address potential
++blocking concerns while developing a standalone Markdown Plan. In the Plan
++it records an application explanation for each
++checklist item: relevant observations and planning consequences, or why the
++concern is not applicable. A fresh Coder receives the exact Plan as its planning
++input. The existing evaluator assesses the implementation. The Planner's
++evidence boundary is the task and frozen repository before implementation.
+ 
+-The Checker receives decision-time conversation, the proposed Plan, an
+-approximate repository proxy, and the artifact. It does not receive human
+-acceptance labels or Reflector feedback. It investigates each condition with
+-its item guide and the shared guide, then returns one triggered boolean per
+-item. Host rejects if any item triggers and accepts if none triggers.
+-
+-A triggered item requires a finding and supporting issue, Plan, or repository
+-evidence. An untriggered item returns finding null and evidence []; its
+-investigation remains in the trajectory. Guides improve investigation and
+-judgment within this framework; they do not change the submission schema or
+-introduce a separate final acceptance decision.
+-
+-Training labels record human acceptance or non-acceptance at the first Plan
+-boundary, not implementation success or failure. Recorded pre-Plan observations
+-take precedence when they conflict with the approximate repository proxy.
+-Learn from supplied evidence without treating every human rejection as proof
+-of a technical defect.
++Learn from complete P/C/E evidence, including successful execution, Coder
++corrections or deviations, and unsuccessful execution. An evaluator outcome
++is not by itself proof that the Plan or every checklist item caused it.
+ 
+ ## Evidence and artifact maintenance
+ 
+@@ -36,107 +27,86 @@
+ every Reflector analysis in reflection_index.json. Read in manageable sections
+ and continue if a tool response is truncated. The staged files are:
+ 
+-- counted_playbook.json: the current shared_guide and checklist, plus counters for active
+-  items. Each checklist item contains id, condition, and guide. Counters
+-  summarize Reflector attributions for the condition and its guides in their
+-  recorded context, not overall classification accuracy. Helpful records a
+-  demonstrated contribution to a label-matching decision; harmful records a
+-  demonstrated contribution to a false acceptance or rejection; neutral
+-  records no established specific contribution. Earlier reports retain the
++- counted_playbook.json: the current checklist, plus counters
++  for active items. Each item contains id, condition, and guide. Counters
++  summarize Reflector attributions to an item and its guide in their recorded
++  context: helpful means applying it contributed to a task-correct planning
++  decision about its concern; harmful means a task-incorrect decision;
++  neutral means neither contribution is established. Earlier reports retain the
+   attribution definitions used when they were produced.
+-- reflection_index.json: all current Reflector analyses, including diagnosis, reusable
+-  insights and per-item attributions. These distinguish item and shared-guide
+-  defects from Checker execution errors and missing checklist coverage.
+-- records.json: local case references and observed human decisions, with field
+-  paths to losslessly staged training records. Consult those files as needed
+-  for decision-time Checker inputs, complete Checker output and trajectory,
+-  reflection evidence and repository-snapshot provenance.
++- reflection_index.json: all current Reflector diagnoses, reusable insights,
++  evidence bases and per-item attributions.
++- records.json: local case references and paths to losslessly staged training
++  fields. planner_input contains decision-time task information; each pce_runs
++  entry preserves its original pce_output, including the exact Plan and its
++  rule-application explanations, complete Planner/Coder trajectories, patch,
++  and evaluator evidence. score summarizes the recorded evaluator outcomes.
++  Consult these fields for supporting or opposing details as needed.
+ - rule_feedback_history_index.json (when supplied): current-item counts,
+-  history observation counts, interpretation, counting_policy and lookup paths.
++  observation counts, interpretation, counting_policy and lookup paths.
+   rule_feedback_history.json preserves full training attributions, reports and
+-  recorded artifact contexts, including inactive items, for consultation.
+-  Use rule_identity and recorded content
+-  to distinguish versions; an item ID alone does not identify the same knowledge
++  recorded contexts, including inactive items. Use rule_identity and content
++  to distinguish versions; an ID alone does not identify the same knowledge
+   across branches. Historical assessments may disagree with newer evidence.
+-- limits.json: max_items and the supplied shared_guide_tokens, condition_tokens,
++- limits.json: max_items, condition_tokens,
+   and item_guide_tokens. These bound the complete resulting artifact.
+ 
+-case_reflections.json preserves the original full current reports. Required
+-reflection_index.json includes their complete diagnoses, insight bases and
++case_reflections.json preserves original full current reports. Required
++reflection_index.json contains their complete diagnoses, insight bases and
+ attributions, not just titles. Other optional_files are available for lookup.
+ 
+ Use supporting and opposing reviews, records, counters and history together
+-to maintain existing knowledge as well as learn missing concerns.
++to maintain existing knowledge as well as learn missing concerns. Collect
++related findings across the batch. One item should express a blocking concern
++reusable across tasks. Distinguish weaknesses in the checklist from
++Planner/Coder execution errors.
+ 
+-Collect related findings across the batch. One checklist item should express
+-a concern reusable across tasks, not a restatement of one source case. When
+-Checker misapplies an item, distinguish its wording or guidance from an
+-execution error. Review shared-guide behavior as well as individual items.
+-
+-Maintain each condition and its guide together through localized operations:
++Maintain each condition and guide together through localized operations:
+ ADD introduces missing knowledge; UPDATE improves an existing item; MERGE
+ combines genuinely related concerns at a higher level; REMOVE discards
+-knowledge that is no longer useful or is already covered. Preserve valuable
+-distinctions and remove knowledge cautiously. A rule being silent in this
+-batch alone is not a reason to remove it. Making no change is acceptable.
+-Combine related knowledge
+-rather than packing unrelated case details into one item.
++knowledge no longer useful or already covered. Preserve valuable distinctions
++and remove knowledge cautiously using accumulated evidence. Making no change
++is acceptable. Combine items that share a reusable blocking concern while
++preserving distinct concerns as separate items.
+ 
+ Manage the supplied item budget during curation. Prefer concerns that apply
+-across tasks, and preserve separate items when their applicability differs.
+-Rewrite the shared guide as a complete text, preserving its useful guidance
+-when making changes.
+-When no shared-guide change is supported, return the existing text unchanged.
++across tasks and preserve separate items when applicability differs.
+ 
+ ## Condition and guide writing
+ 
+ Write for a developer who understands common software concepts but has not
+ seen the training cases. Conditions should be brief checking questions or
+-principles, such as whether a Plan satisfies explicit requirements or preserves
+-important existing behavior. A condition identifies the concern; its item
+-guide explains how to investigate and judge it, including detailed decision
+-criteria when necessary. Shared guidance applies across checklist items.
+-Use the shared guide for general investigation strategy and tool-use guidance;
+-use item guides for concern-specific investigation and judgment.
+-Each item guide should provide a concrete, reusable way to investigate and
+-decide its concern, without source-case details. Keep fixed output schemas,
+-submission instructions, and training-label explanations out of generated
+-guides; the framework already supplies the Checker protocol.
+-
++principles, such as whether an approach satisfies explicit requirements or
++preserves important existing behavior. An item guide gives a concrete, reusable
++way to investigate and judge its concern, including detailed judgment when
++useful. Keep each guide within the scope of its condition; a distinct blocking
++concern belongs in its own checklist item.
+ Use plain English and familiar software terms. Keep source-case names, symbols
+-and incidental mechanisms in supporting evidence. Generalize the concern
+-without erasing the distinctions needed to apply it. An item guide should
+-clarify its condition rather than introduce an unrelated concern.
++and incidental mechanisms in supporting evidence. Keep fixed output schemas
++and submission instructions out of learned guides; the framework supplies them.
+ 
+ ## Budget and output contract
+ 
+-Respect the supplied item and token limits. Each *_tokens limit is a hard
+-ceiling in tokenizer tokens, not words, for the complete corresponding text
+-field. Host uses LiteLLM's counter with limits.token_counter_model. Limits
+-are ceilings, not length targets.
++Respect supplied item and token limits. Each *_tokens limit is a hard ceiling
++in tokenizer tokens, not words, for the complete corresponding text field.
++Host uses LiteLLM's counter with limits.token_counter_model. Limits are ceilings,
++not length targets.
+ 
+-Return one JSON object with exactly reasoning, shared_guide, and operations.
+-reasoning is a nonempty string; shared_guide is the complete nonempty shared
+-guide; operations is an array. Empty operations preserves existing checklist
+-items, but shared_guide still replaces the parent shared guide.
+-
++Return exactly reasoning and operations. reasoning is a nonempty string;
++operations is an array. Empty operations preserves existing checklist items.
+ Each operation has exactly these fields:
+ ADD: type, content, supporting_instance_ids.
+ UPDATE: type, target_id, content, supporting_instance_ids.
+ MERGE: type, target_ids, content, supporting_instance_ids.
+ REMOVE: type, target_id, supporting_instance_ids.
+-
+ content has exactly condition and guide, both nonempty strings. target_id
+-names an existing parent item; target_ids contains at least two distinct
+-existing parent IDs. ADD, UPDATE and MERGE require nonempty
+-supporting_instance_ids drawn from the supplied current training records.
+-Copy the local case references (case-01, case-02, etc.) from records.json entries' instance_id;
+-Host maps these references to the original dataset IDs. These references are
+-local to this input, not identifiers for historical cases.
+-REMOVE may use [] only when justified by supplied accumulated history;
+-explain that basis in reasoning. Otherwise supply current supporting case IDs.
+-
++names an existing parent item; target_ids names at least two distinct parent
++items. ADD/UPDATE/MERGE require nonempty supporting_instance_ids drawn from
++the current training records. Copy local case-01, case-02, etc. references
++from records.json; Host restores dataset IDs. REMOVE may use [] only when
++justified by supplied accumulated history; explain that basis in reasoning.
++Otherwise supply current supporting case references.
+ Target each existing item at most once. Final conditions must be unique and
+ at least one item must remain. Host assigns new IDs, maintains counters and
+-applies changes mechanically; you supply the semantic changes.
+-Follow the shared Agent submission protocol.
++applies changes mechanically; you supply semantic changes. Follow the shared
++Agent submission protocol.
+
+--- configs/prompts/swe_chat_hybrid_ace_v6.yaml:refiner_task
++++ configs/prompts/safe_pce_hybrid_ace_v1.yaml:refiner_task
+@@ -1,20 +1,17 @@
+-Checklist IDs use local item-01, item-02, etc. references. Preserve the supplied
+-references for retained or merged items; Host restores canonical item IDs.
+-Refine the supplied checking artifact to satisfy the supplied hard limits:
+-checklist item count, shared-guide tokens, condition tokens, and item-guide tokens.
+-Preserve useful knowledge and human-readable high-level concerns. Combine
+-genuinely related concerns at a higher level rather than packing unrelated
+-details together. Keep investigation and detailed judgment in item guides.
+-Refine existing knowledge rather than inventing new concerns or strategies.
+-Preserve evidence-supported distinctions that matter to applicability and
+-judgment when combining or shortening the supplied knowledge.
+-Each *_tokens limit is a hard ceiling in tokenizer tokens, not words, for
+-the complete corresponding text field. Host uses LiteLLM's counter with
+-limits.token_counter_model. The supplied limits are ceilings, not length targets.
+-size_violations, when supplied, lists overlength fields with zero-based paths,
+-actual counts, units, and limits. On retry, the input message includes the
+-rejected raw output and validation feedback.
+-Return exactly schema_version (1), shared_guide (nonempty string), and checklist.
+-Every item has exactly id, condition, guide, all nonempty strings. IDs and
++Checklist IDs use local item-01, item-02, etc. references. Preserve supplied
++references for retained or merged items; Host restores canonical IDs.
++Refine the supplied checklist to meet the hard item-count and token
++limits while preserving useful blocking knowledge and human-readable conditions.
++Combine genuinely related concerns at a higher level, retaining applicability
++distinctions. Keep each item's investigation and judgment within the scope
++of its condition. Consolidate the supplied knowledge while preserving useful
++distinctions between concerns.
++Each *_tokens limit is a hard ceiling in tokenizer tokens, not words, for the
++complete text field. Host uses LiteLLM's counter with limits.token_counter_model.
++Limits are ceilings, not length targets. size_violations, when supplied, lists
++overlength fields with zero-based paths, actual counts, units and limits.
++Retry input includes rejected raw output and validation feedback.
++Return exactly schema_version (1) and checklist.
++Each item has exactly id, condition, guide, all nonempty strings. IDs and
+ conditions must be unique. Preserve retained IDs; use existing IDs for merged
+ items. At least one item must remain. Follow the shared Agent protocol.
+
+--- ACE:effective_reflector_task
++++ Safe PCE ACE:effective_reflector_task
+@@ -1 +1 @@
+-Attribute this case to every active rejection rule.
++Analyze the planning rules using the complete Planner, Coder, and evaluator evidence.
+--- Safe PCE v5:rules-path protocol wording
++++ Safe PCE ACE v5:rules-path protocol wording
+@@ -1,2 +1 @@
+-The replacement may use
+-task-appropriate Markdown headings; no fixed subsection headings are required.
++Organize the replacement for the task.

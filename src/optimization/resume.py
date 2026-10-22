@@ -95,9 +95,10 @@ def _semantic_config(
     }
     return {
         "dataset": _dataset_fingerprint(config.dataset_snapshot),
+        **({"safe_pce": _safe_pce_identity(config.safe_pce_config)} if config.safe_pce_config else {}),
         "source": _source_fingerprint(),
         "initial_guideline_sha256": text_sha256(initial_rules),
-        "checker": asdict(config.checker),
+        **({"checker": asdict(config.checker)} if not config.safe_pce_config else {}),
         "reflection": asdict(config.reflection),
         "search": search,
         "docker": asdict(config.docker),
@@ -105,9 +106,9 @@ def _semantic_config(
         "execution": asdict(config.execution),
         "task": asdict(config.task),
         **({"hybrid": asdict(config.hybrid)} if config.hybrid.enabled else {}),
-        "repository_backend": {
+        **({"repository_backend": {
             "backend": config.behavioral_repository.backend,
-        },
+        }} if not config.safe_pce_config else {}),
         "hpc_semantics": hpc_semantics,
         "prompts": {
             "checker_system_sha256": text_sha256(config.checker_prompt),
@@ -122,7 +123,7 @@ def _semantic_config(
         "gepa": {
             "candidate_selection_strategy": "pareto",
             "frontier_type": "instance",
-            "batch_sampler": "epoch_shuffled",
+            "batch_sampler": ("distinct_epoch_shuffled" if config.safe_pce_config else "epoch_shuffled"),
             "data_id": "instance_id",
             "cache_evaluation": True,
             "track_best_outputs": True,
@@ -205,6 +206,30 @@ def _decode_random_state(value: str) -> object:
     return pickle.loads(base64.b64decode(value.encode("ascii")))  # noqa: S301
 
 
+def _safe_pce_identity(path: Path) -> dict:
+    from .safe_pce_execution import pce_identity
+    return pce_identity(path)
+
+
+class DistinctEpochShuffledBatchSampler(EpochShuffledBatchSampler):
+    """Retain GEPA's queue/RNG/state, fixing only duplicate epoch-tail padding.
+
+    Opt-in for the new task-only backend; historical run sampling is unchanged.
+    """
+    def _update_shuffled(self, loader):
+        if len(loader) < self.minibatch_size:
+            raise ValueError("minibatch requires at least that many distinct training tasks")
+        super()._update_shuffled(loader)
+        remainder = len(loader) % self.minibatch_size
+        if remainder:
+            start = len(loader) - remainder
+            tail = self.shuffled_ids[start:len(loader)]
+            choices = [identifier for identifier in self.shuffled_ids[:len(loader)] if identifier not in tail]
+            padding = self.rng.sample(choices, self.minibatch_size - remainder)
+            self.shuffled_ids[start:] = tail + padding
+            self.id_freqs = Counter(self.shuffled_ids)
+
+
 class ReproducibleSearchState:
     """Own the shared GEPA RNG, sampler state, and cumulative run counters."""
 
@@ -217,7 +242,11 @@ class ReproducibleSearchState:
         self.run_dir = config.run_dir
         self.path = config.run_dir / "gepa_resume_state.json"
         self.rng = random.Random(config.search.seed)
-        self.sampler = EpochShuffledBatchSampler(
+        # Formal playbook also reuses this state holder through a lightweight
+        # config namespace; absence of a new backend field means legacy mode.
+        sampler_type = (DistinctEpochShuffledBatchSampler if getattr(config, "safe_pce_config", None)
+                        else EpochShuffledBatchSampler)
+        self.sampler = sampler_type(
             minibatch_size=config.search.reflection_minibatch_size,
             rng=self.rng,
         )

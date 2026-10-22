@@ -1,0 +1,7 @@
+{
+  "schema_version": 1,
+  "source_manifest_sha256": "bec1150dbf55c29c0893226c20578bee031406d78db305cdfef7b2b80965143a",
+  "selected_instance_ids": ["astropy__astropy-13033", "pallets__flask-5014", "pytest-dev__pytest-10051"],
+  "development_only": true,
+  "quality_or_generalization_claim": false
+}

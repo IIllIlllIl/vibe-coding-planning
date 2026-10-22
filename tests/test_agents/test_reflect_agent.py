@@ -237,16 +237,31 @@ class TestRunSuccess:
         assert MockDefaultAgent.last_env is mock_env
 
     @patch("src.agents.reflect_agent.import_minisweagent")
-    def test_extracts_fenced_plan(self, mock_import, config, mock_env):
-        """LLM output inside ``` blocks is extracted by parse_output."""
+    def test_preserves_fenced_submission(self, mock_import, config, mock_env):
+        """Host keeps the entire submitted Plan, including Markdown fences."""
         mock_import.return_value = (MockDefaultAgentFenced, MockLiteLLMModel, object)
         plan, _ = reflect_agent.run(
             config, "previous plan", "intro", "body", "issue", mock_env
         )
 
-        # parse_output should strip the ``` fences
-        assert "```" not in plan
-        assert "## Improved Plan" in plan
+        assert plan == ("```markdown\n## Improved Plan\n\n1. Analyze the bug\n"
+                        "2. Fix the parser\n```")
+
+    @pytest.mark.parametrize("from_file", [False, True])
+    @patch("src.agents.reflect_agent.import_minisweagent")
+    def test_complete_plan_survives_both_authorities(self, mock_import, from_file, config):
+        original = (" \n# Plan\nInvestigate the actual contract.\n```python\nx = 1\n```\n"
+                    + "Repository evidence.\n" * 5000 + "Final validation.\n\n")
+        class Agent(MockDefaultAgent):
+            def run(self, **kwargs):
+                return "Submitted", original
+        class Environment:
+            def execute(self, command):
+                return ({"returncode": 0, "stdout": original, "output": "CONTAINER DIAGNOSTIC\n" + original}
+                        if from_file else {"returncode": 1, "output": "missing"})
+        mock_import.return_value = Agent, MockLiteLLMModel, object
+        plan, _ = reflect_agent.run(config, "previous", "intro", "body", "issue", Environment())
+        assert plan == original
 
     @patch("src.agents.reflect_agent.import_minisweagent")
     def test_limit_exceeded_raises_task_error(self, mock_import, config, mock_env):

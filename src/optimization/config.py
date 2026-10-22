@@ -96,6 +96,7 @@ class BehavioralHybridConfig:
     checker_model: dict[str, Any] = field(default_factory=dict)
     repository_history_cache_dir: str = ""
     dataset_file_sha256: dict[str, str] = field(default_factory=dict)
+    shared_guide_enabled: bool = True
 
 
 @dataclass(frozen=True)
@@ -121,6 +122,9 @@ class OptimizationConfig:
         default_factory=BehavioralRepositoryConfig
     )
     hybrid: BehavioralHybridConfig = field(default_factory=BehavioralHybridConfig)
+    # Safe PCE owns its Planner, Coder, evaluator and worker resource settings.
+    # A reference avoids duplicating those settings in the learning controller.
+    safe_pce_config: Path | None = None
 
 
 def _mapping(value: Any, name: str) -> dict[str, Any]:
@@ -164,7 +168,13 @@ def load_optimization_config(
     config_path = Path(path).resolve()
     raw = yaml.safe_load(config_path.read_text(encoding="utf-8")) or {}
     root = config_path.parents[1] if config_path.parent.name == "configs" else Path.cwd()
-    checker = _model(_mapping(raw.get("checker"), "checker"), checker=True)
+    pce_learning = raw.get("task", {}).get("semantics") == "safe_pce_resolution_v1"
+    if pce_learning and "checker" in raw:
+        raise ValueError("Safe PCE does not use checker settings; Planner/Coder settings belong in paths.safe_pce_config")
+    # Retain the shared dataclass's legacy field, but never instantiate a
+    # Checker in PCE mode. Its configuration is neither required nor consumed.
+    checker_data = raw.get("checker", raw.get("reflection") if pce_learning else None)
+    checker = _model(_mapping(checker_data, "checker"), checker=not pce_learning)
     reflection = _model(
         _mapping(raw.get("reflection"), "reflection"),
         checker=False,
@@ -188,7 +198,8 @@ def load_optimization_config(
         from src.optimization.behavioral_hybrid import HybridLimits
         HybridLimits(hybrid.max_items, hybrid.shared_guide_words,
                      hybrid.condition_words, hybrid.item_guide_words,
-                     hybrid.shared_guide_tokens, hybrid.condition_tokens, hybrid.item_guide_tokens)
+                     hybrid.shared_guide_tokens, hybrid.condition_tokens, hybrid.item_guide_tokens,
+                     shared_guide_enabled=hybrid.shared_guide_enabled)
         if not hybrid.prompt_bundle or not hybrid.evidence_sif_cache_dir:
             raise ValueError("hybrid requires prompt_bundle and evidence_sif_cache_dir")
         if type(hybrid.refiner_enabled) is not bool:
@@ -199,14 +210,14 @@ def load_optimization_config(
             if set(role_model) & {"api_key", "token", "password"}:
                 raise ValueError("hybrid models must reference private credentials, not include their values")
     hpc_data = _mapping(raw.get("hpc", {}), "hpc")
-    prompts = _mapping(raw.get("prompts"), "prompts")
+    prompts = _mapping(raw.get("prompts", {} if pce_learning else None), "prompts")
     paths = _mapping(raw.get("paths"), "paths")
 
     if require_api_keys:
         key_models = [checker, reflection]
         if hybrid.enabled:
             key_models = []
-            if hybrid.checker_model.get("executor") != "codex_cli":
+            if not pce_learning and hybrid.checker_model.get("executor") != "codex_cli":
                 key_models.append(checker)
             for role in ("reflector", "curator", "refiner"):
                 if role == "refiner" and not hybrid.refiner_enabled:
@@ -240,7 +251,7 @@ def load_optimization_config(
             if search_data.get("max_iterations") is not None
             else None
         ),
-        primary_metric=str(search_data.get("primary_metric", "accuracy")),
+        primary_metric=str(search_data.get("primary_metric", "resolved_rate" if pce_learning else "accuracy")),
         train_case_repetitions=int(
             search_data.get("train_case_repetitions", 1)
         ),
@@ -257,9 +268,9 @@ def load_optimization_config(
         raise ValueError("search.min_proposals must be non-negative")
     if search.max_iterations is not None and search.max_iterations < 1:
         raise ValueError("search.max_iterations must be positive when set")
-    if search.primary_metric not in ("accuracy", "balanced_accuracy"):
+    if search.primary_metric not in (("resolved_rate",) if pce_learning else ("accuracy", "balanced_accuracy")):
         raise ValueError(
-            "search.primary_metric must be 'accuracy' or 'balanced_accuracy'"
+            "search.primary_metric must be resolved_rate for Safe PCE, otherwise accuracy or balanced_accuracy"
         )
     if search.primary_metric == "balanced_accuracy" and search.skip_perfect_score:
         raise ValueError(
@@ -308,6 +319,7 @@ def load_optimization_config(
     if task.semantics not in (
         "historical_resolution",
         "behavioral_plan_acceptability_v1",
+        "safe_pce_resolution_v1",
     ):
         raise ValueError(f"unsupported task.semantics: {task.semantics!r}")
     behavioral_repository = BehavioralRepositoryConfig(
@@ -325,19 +337,25 @@ def load_optimization_config(
         raise ValueError("behavioral_repository.backend must be 'temporal_git_proxy'")
     if hybrid.enabled:
         import hashlib
-        if task.semantics != "behavioral_plan_acceptability_v1":
-            raise ValueError("hybrid requires Behavioral acceptability semantics")
+        if task.semantics not in {"behavioral_plan_acceptability_v1", "safe_pce_resolution_v1"}:
+            raise ValueError("hybrid requires Behavioral acceptability or Safe PCE semantics")
         bundle_path = resolve(hybrid.prompt_bundle)
         bundle_bytes = bundle_path.read_bytes()
         hybrid = replace(hybrid, prompt_bundle=str(bundle_path),
                          prompt_bundle_sha256=hashlib.sha256(bundle_bytes).hexdigest(),
                          evidence_sif_cache_dir=str(resolve(hybrid.evidence_sif_cache_dir)))
         hybrid_prompts = _mapping(yaml.safe_load(bundle_bytes), "hybrid prompts")
-        for key in ("checker_task", "checker_instance", "reflector_task", "curator_task"):
+        for key in (("reflector_task", "curator_task", "refiner_task") if pce_learning else
+                    ("checker_task", "checker_instance", "reflector_task", "curator_task")):
             if not isinstance(hybrid_prompts.get(key), str) or not hybrid_prompts[key].strip():
                 raise ValueError(f"hybrid prompt {key} must be nonempty")
-        prompts = dict(prompts, checker_system=hybrid_prompts["checker_task"],
-                       checker_instance=hybrid_prompts["checker_instance"])
+        if not pce_learning:
+            prompts = dict(prompts, checker_system=hybrid_prompts["checker_task"],
+                           checker_instance=hybrid_prompts["checker_instance"])
+    if pce_learning and (not hybrid.enabled or not paths.get("safe_pce_config")):
+        raise ValueError("Safe PCE learning requires hybrid.enabled and paths.safe_pce_config")
+    if pce_learning and hybrid.shared_guide_enabled:
+        raise ValueError("Safe PCE rules learning requires hybrid.shared_guide_enabled: false")
     hpc_defaults = HPCConfig()
     try:
         default_worker_config_path = str(config_path.relative_to(root))
@@ -442,10 +460,10 @@ def load_optimization_config(
             "Offline HPC Slurm execution requires container.runtime: apptainer"
         )
     if (
-        task.semantics == "behavioral_plan_acceptability_v1"
+        task.semantics in {"behavioral_plan_acceptability_v1", "safe_pce_resolution_v1"}
         and container.runtime != "none"
     ):
-        raise ValueError("Behavioral v1 requires container.runtime: none")
+        raise ValueError("the learning controller requires container.runtime: none; Agent isolation is role-owned")
 
     initial_guideline = paths.get("initial_guideline", paths.get("initial_rules"))
     if initial_guideline is None:
@@ -463,13 +481,14 @@ def load_optimization_config(
         search=search,
         docker=docker,
         container=container,
-        checker_prompt=str(prompts["checker_system"]),
-        checker_instance_template=str(prompts["checker_instance"]),
-        reflection_prompt=str(prompts["reflection_system"]),
-        reflection_instance_template=str(prompts["reflection_instance"]),
+        checker_prompt="" if pce_learning else str(prompts["checker_system"]),
+        checker_instance_template="" if pce_learning else str(prompts["checker_instance"]),
+        reflection_prompt="" if pce_learning else str(prompts["reflection_system"]),
+        reflection_instance_template="" if pce_learning else str(prompts["reflection_instance"]),
         execution=execution,
         hpc=hpc,
         task=task,
         behavioral_repository=behavioral_repository,
         hybrid=hybrid,
+        safe_pce_config=resolve(str(paths["safe_pce_config"])) if pce_learning else None,
     )

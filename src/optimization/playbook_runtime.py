@@ -341,6 +341,7 @@ def run_evidence_reflector(
     instance_template: str,
     evidence_dir: str,
     internal_playbook: str,
+    task: str = "Attribute this case to every active rejection rule.",
     retry_feedback: str = "",
     attempt_dir: Path | None = None,
 ) -> tuple[dict[str, Any], list[dict[str, Any]]]:
@@ -363,7 +364,7 @@ def run_evidence_reflector(
             ),
             system=system,
             user=user,
-            task="Attribute this case to every active rejection rule.",
+            task=task,
             evidence_manifest_path=Path(evidence_dir) / "manifest.json",
             container=CodexSIFExecution(
                 sif_path=_codex_evidence_sif(reflection_config),
@@ -376,7 +377,7 @@ def run_evidence_reflector(
         system=system,
         instance_template=instance_template,
         evidence_dir=evidence_dir,
-        task="Attribute this case to every active rejection rule.",
+        task=task,
         artifact_name="reflection.json",
         prompt_values={
             "evidence_path": "/evidence",

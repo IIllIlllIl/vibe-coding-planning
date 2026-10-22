@@ -4,6 +4,7 @@ import hashlib
 import json
 from pathlib import Path
 from types import SimpleNamespace
+from dataclasses import replace
 
 import yaml
 
@@ -39,7 +40,7 @@ def _result(triggered: bool) -> dict:
     }]}
 
 
-def _evaluate(capture_traces: bool = True):
+def _evaluate(capture_traces: bool = True, case=None):
     r_trace = [{"role": "assistant", "content": "Inspect the existing contract"},
                {"role": "tool", "content": "full R observation\n" * 10000}]
     u_trace = [{"role": "assistant", "content": "Inspect the proposed branch"},
@@ -51,7 +52,7 @@ def _evaluate(capture_traces: bool = True):
 
     seed = RejectPlaybook((PlaybookBullet("plan-00001", "The Plan is a placeholder."),))
     adapter = PairedRepoPlaybookGEPAAdapter(Checker(), object(), checker_requires_reason=False)
-    result = adapter.evaluate([_case()], {"rules": seed.serialize()}, capture_traces=capture_traces)
+    result = adapter.evaluate([case or _case()], {"rules": seed.serialize()}, capture_traces=capture_traces)
     return result, r_trace, u_trace
 
 
@@ -79,6 +80,25 @@ def test_complete_checker_trajectories_reach_reflector_files(tmp_path: Path) -> 
     record["resolved_side"]["checker_trajectory"].append({"role": "tool", "content": "new fact"})
     assert agents._write_pair_evidence(record, prior=None) != root
     assert json.loads((root / "resolved_side/checker_trajectory.json").read_text()) == original_record["resolved_side"]["checker_trajectory"]
+
+
+def test_old_paired_ace_preserves_long_plans_through_reflection_evidence(tmp_path: Path) -> None:
+    case = _case()
+    def long_observation(observation):
+        plan = (" \n# Plan\nDetailed investigation before the example.\n"
+                "```python\nvalue = '{{ data }}'\n```\n"
+                + "Required repository evidence.\n" * 5000
+                + f"Final validation for {observation.observation_id}.\n\n")
+        return replace(observation, plan=plan, plan_sha256=hashlib.sha256(plan.encode()).hexdigest())
+    case = replace(case, resolved_observation=long_observation(case.resolved_observation),
+                   unresolved_observation=long_observation(case.unresolved_observation))
+    result, _, _ = _evaluate(case=case)
+    agents = HPCPairedRepoPlaybookProposalAgents(SimpleNamespace(run_dir=tmp_path), image_records={}, maximum_tokens=10000)
+    root = agents._write_pair_evidence(result.trajectories[0], prior=None)
+    for side, source in (("resolved_side", case.resolved_observation), ("unresolved_side", case.unresolved_observation)):
+        saved = json.loads((root / side / "review_input.json").read_text())
+        assert saved["plan"] == source.plan
+        assert saved["plan_sha256"] == hashlib.sha256(saved["plan"].encode()).hexdigest()
 
 
 def test_metric_only_evaluation_does_not_expose_review_trajectories() -> None:

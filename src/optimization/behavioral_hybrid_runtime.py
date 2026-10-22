@@ -16,17 +16,19 @@ from src.optimization.hpc.phase_wave import prepare_phase_wave, build_phase_arra
 from src.optimization.paired_playbook import validate_ace_paired_reflector_review
 from src.optimization.playbook_runtime import run_evidence_reflector, run_evidence_curator, _codex_evidence_sif
 from src.optimization.playbook_hpc_executor import _file_sha256
-from src.optimization.audit import redact_sensitive
+from src.optimization.audit import redact_sensitive, redact_agent_record
 
 
 def hybrid_limits(config):
     h = config.hybrid
     return HybridLimits(h.max_items, h.shared_guide_words, h.condition_words, h.item_guide_words,
-                        h.shared_guide_tokens, h.condition_tokens, h.item_guide_tokens)
+                        h.shared_guide_tokens, h.condition_tokens, h.item_guide_tokens,
+                        shared_guide_enabled=h.shared_guide_enabled)
 
 
 def phase_identity(config, role, payload):
     identity = {"role": role, "payload": payload, "hybrid": asdict(config.hybrid),
+                "task": asdict(config.task),
                 "reflection": asdict(config.reflection), "command_timeout": config.docker.timeout}
     root = Path(__file__).parent
     identity["source"] = {name: hashlib.sha256((root / name).read_bytes()).hexdigest()
@@ -35,7 +37,7 @@ def phase_identity(config, role, payload):
                                        "playbook_runtime.py", "codex_cli_runtime.py",
                                        "hpc/phase_wave.py", "hpc/worker_contract.py",
                                        "ace_transaction.py", "agent_references.py",
-                                       "ace_evidence.py", "behavioral_hybrid_evidence.py")}
+                                       "ace_evidence.py", "behavioral_hybrid_evidence.py", "audit.py")}
     identity["source"]["agent_protocol"] = hashlib.sha256(
         (root.parent / "agents" / "_deps.py").read_bytes()).hexdigest()
     return hashlib.sha256(json.dumps(identity, sort_keys=True).encode()).hexdigest()
@@ -81,7 +83,9 @@ def validate_phase(role, payload, output, config):
         validate_ace_paired_reflector_review(output, instance_id=payload["record"]["instance_id"],
                                   playbook=_playbook(payload["parent"]), output_contract="ace_v2")
     elif role == "curator":
-        limits = HybridLimits(1000000, 1000000, 1000000, 1000000) if config.hybrid.refiner_enabled else hybrid_limits(config)
+        limits = hybrid_limits(config)
+        if config.hybrid.refiner_enabled:
+            limits = limits.relaxed()
         apply_hybrid_delta(payload["parent"], output, payload["records"], limits, history=payload.get("history"))
     elif role == "refiner":
         validate_candidate(json.dumps(output), hybrid_limits(config))
@@ -131,7 +135,9 @@ def run_local_phase(config, role, payload, attempt_dir, *, retry_feedback=""):
                   evidence_dir=str(evidence), retry_feedback=retry_feedback, attempt_dir=attempt_dir)
     try:
         if role == "reflector":
-            output, trajectory = run_evidence_reflector(**common, internal_playbook=json.dumps(agent_payload["parent"]))
+            task = ({"task": "Analyze the planning rules using the complete Planner, Coder, and evaluator evidence."}
+                    if config.task.semantics == "safe_pce_resolution_v1" else {})
+            output, trajectory = run_evidence_reflector(**common, internal_playbook=json.dumps(agent_payload["parent"]), **task)
         elif role == "curator":
             output, trajectory = run_evidence_curator(**common, counted_internal_playbook=json.dumps(agent_payload["parent"]),
                                                       case_count=len(payload.get("records", [])), maximum_rules=config.hybrid.max_items,
@@ -148,8 +154,8 @@ def run_local_phase(config, role, payload, attempt_dir, *, retry_feedback=""):
             "trajectory": getattr(exc, "trajectory", [])}))
         raise
     # Preserve the raw completion BEFORE validating it. Never repair it here.
-    atomic_json(attempt_dir / "completion.json", redact_sensitive({"agent_output": output, "trajectory": trajectory}))
     try:
+        atomic_json(attempt_dir / "completion.json", redact_agent_record({"agent_output": output, "trajectory": trajectory}))
         output = decode_phase_output(role, output, case_refs, item_refs)
         atomic_json(attempt_dir / "resolved_completion.json", {"agent_output": output})
         validate_phase(role, payload, output, config)
@@ -220,7 +226,8 @@ class HybridPhaseExecutor:
         return self.run_wave(role, [payload])[0]
 
 
-def run_hybrid_optimization(config, *, phase_executor=None, checker=None, optimize_fn=None):
+def run_hybrid_optimization(config, *, phase_executor=None, checker=None, optimize_fn=None,
+                            evaluation_backend=None):
     if not config.hybrid.enabled:
         raise ValueError("hybrid.enabled must be true")
     limits = hybrid_limits(config)
@@ -241,6 +248,15 @@ def run_hybrid_optimization(config, *, phase_executor=None, checker=None, optimi
                 if config.hybrid.refiner_enabled else None)
     kwargs = dict(checker=checker, proposer=proposer,
                   adapter_factory=partial(HybridBehavioralAdapter, limits=limits))
+    if config.task.semantics == "safe_pce_resolution_v1":
+        if checker is not None:
+            raise ValueError("Safe PCE learning does not use a Checker")
+        from .safe_pce_learning import SafePCEBackend, SafePCEGEPAAdapter
+        backend = evaluation_backend or SafePCEBackend(config)
+        kwargs.update(evaluation_backend=backend,
+                      adapter_factory=partial(SafePCEGEPAAdapter, limits=limits))
+    elif evaluation_backend is not None:
+        raise ValueError("evaluation_backend is reserved for Safe PCE semantics")
     if optimize_fn is not None:
         kwargs["optimize_fn"] = optimize_fn
     return run_behavioral_optimization(config, **kwargs)

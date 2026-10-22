@@ -220,7 +220,7 @@ class GlobalPlaybookCounters:
             "schema_version": 1,
             "source": "validated_training_reflector_feedback",
             "interpretation": "Earlier Reflector assessments with their context and explanations, not fixed conclusions. Repeated observations may disagree. Legacy counters may predate recorded explanations.",
-            "counting_policy": "Preserve the first helpful/harmful attribution per rule text and training pair; count neutral once per pair separately. History retains distinct observations without recounting them.",
+            "counting_policy": "Preserve the first helpful/harmful attribution per rule text and training instance ID; count neutral once per instance separately. History retains distinct observations without recounting them.",
             "events": events,
             "reports": {key: reports[key] for key in sorted(used_reports)},
             "contexts": {key: contexts[key] for key in sorted(used_contexts)},

@@ -17,17 +17,37 @@ class ReferenceMap:
 
 
 def project_identities(value, cases, items):
-    """Only explicit identity fields are projected; unknown historical IDs remain."""
-    if isinstance(value, list):
-        return [project_identities(item, cases, items) for item in value]
-    if not isinstance(value, dict):
-        return value
-    result = {}
-    for key, item in value.items():
-        mapping = cases if key == "instance_id" else items if key in {"id", "bullet_id"} else None
-        result[key] = (mapping.encode_map.get(item, item)
-                       if mapping is not None and isinstance(item, str)
-                       else project_identities(item, cases, items))
+    """Map declared learning-envelope references; raw scientific fields are opaque.
+
+    A tool event, repository JSON or evaluator report may contain its own `id`
+    or `instance_id`. Matching a key name anywhere in that evidence does not
+    authorize rewriting it. History also retains its original namespace.
+    """
+    result = copy.deepcopy(value)
+    if not isinstance(result, dict):
+        return result
+
+    def mapped(row, field, references):
+        if isinstance(row, dict) and isinstance(row.get(field), str):
+            row[field] = references.encode_map.get(row[field], row[field])
+
+    records = result.get("records", [result["record"]] if "record" in result else [])
+    for record in records:
+        mapped(record, "instance_id", cases)
+    reviews = list(result.get("reviews", []))
+    if "bullet_tags" in result:
+        reviews.append(result)  # A standalone validated Reflector review.
+    for review in reviews:
+        mapped(review, "instance_id", cases)
+        for tag in review.get("bullet_tags", []):
+            mapped(tag, "id", items)
+    artifacts = [result[name] for name in ("parent", "draft") if name in result]
+    if "checklist" in result:
+        artifacts.append(result)  # A standalone checklist artifact.
+    for artifact in artifacts:
+        for item in [*artifact.get("checklist", []), *artifact.get("counters", [])]:
+            mapped(item, "id", items)
+    mapped(result.get("parent_counter"), "id", items)
     return result
 
 

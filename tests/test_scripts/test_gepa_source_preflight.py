@@ -58,6 +58,20 @@ def test_tracked_dependency_changes_fail(pinned_worktree):
     assert "tracked modifications" in validate_gepa_source(root)
 
 
+def test_case_insensitive_path_alias_is_the_same_initialized_submodule(pinned_worktree):
+    root, _ = pinned_worktree
+    alias = root.with_name(root.name.upper())
+    if not alias.exists() or not alias.samefile(root):
+        pytest.skip("filesystem does not provide case-insensitive path aliases")
+    assert validate_gepa_source(alias) is None
+
+
+def test_populated_files_without_own_git_metadata_remain_invalid(pinned_worktree):
+    root, _ = pinned_worktree
+    (root / "third_party/gepa/.git").unlink()
+    assert "not initialized" in validate_gepa_source(root)
+
+
 def test_export_requires_each_fingerprinted_file(tmp_path):
     for name in REQUIRED_FILES:
         path = tmp_path / "third_party/gepa" / name

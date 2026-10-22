@@ -16,7 +16,7 @@ content contains Jinja-looking fragments like ``{{var}}`` or
 
 The reflection template lives in its own module
 (:mod:`src.prompts.gepa_reflection`) only because it ships a
-``parse_output`` helper for extracting fenced plan content; the
+``parse_output`` compatibility helper for preserving submitted Plan content; the
 rendering path is identical to the plan and code agents.
 """
 

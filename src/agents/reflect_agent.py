@@ -42,25 +42,9 @@ from src.agents._deps import (
 from src.config import Config
 from src.exceptions import TaskError
 from src.prompts import gepa_reflection
+from src.agents.plan_agent import _read_plan_from_file
 
 logger = logging.getLogger(__name__)
-
-
-def _read_plan_from_file(env: Any) -> str | None:
-    """Try to read /tmp/plan.md from the Docker container.
-
-    Returns:
-        The file content if successfully read and non-empty, otherwise None.
-    """
-    try:
-        result = env.execute("cat /tmp/plan.md")
-        if result.get("returncode") == 0:
-            content = result.get("output", "").strip()
-            if content:
-                return content
-    except Exception:
-        pass
-    return None
 
 
 def run(
@@ -143,12 +127,7 @@ def run(
     plan_text = _read_plan_from_file(env)
     if plan_text is None:
         if exception_name == "Submitted":
-            plan_text = exception_msg.strip()
-            # Extract the plan from ```-fenced block (template instructs the
-            # LLM to output inside fences) only when reading from messages;
-            # file content is already plain text
-            if plan_text:
-                plan_text = gepa_reflection.parse_output(plan_text)
+            plan_text = gepa_reflection.parse_output(exception_msg)
         else:
             raise TaskError(
                 f"Reflect agent terminated without a submission (exit_status={exception_name}). "
@@ -161,7 +140,6 @@ def run(
             "Reflect agent submitted but /tmp/plan.md was empty and no plan text was returned."
         )
 
-    plan_text = plan_text.strip()
     if len(plan_text) < 50:
         raise TaskError(
             f"Reflect agent output too short ({len(plan_text)} chars). "

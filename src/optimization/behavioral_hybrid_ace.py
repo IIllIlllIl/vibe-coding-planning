@@ -30,9 +30,11 @@ def resolve_curator_case_references(delta, mapping):
     return decode_phase_output("curator", delta, cases, ReferenceMap([], "item"))
 
 
-def _content(condition, guide, shared):
+def _content(condition, guide, shared=None):
     # Complete effective meaning, not branch-local IDs, identifies attribution.
-    content = {"condition": condition, "guide": guide, "shared_guide": shared}
+    content = {"condition": condition, "guide": guide}
+    if shared is not None:
+        content["shared_guide"] = shared
     identity = hashlib.sha256(json.dumps(content, ensure_ascii=False, sort_keys=True).encode()).hexdigest()
     return json.dumps(dict(content, identity_sha256=identity), ensure_ascii=False, sort_keys=True)
 
@@ -40,14 +42,16 @@ def _content(condition, guide, shared):
 def _playbook(artifact):
     return RejectPlaybook.parse({"schema_version": 1, "bullets": [
         PlaybookBullet(item["id"], _content(item["condition"], item["guide"],
-                                           artifact["shared_guide"])).to_dict()
+                                           artifact.get("shared_guide"))).to_dict()
         for item in artifact["checklist"]]})
 
 
 def apply_hybrid_delta(parent, delta, records, limits, *, counted=None, history=None):
     """Validate and mechanically apply one Agent-authored hybrid transaction."""
-    if not isinstance(delta, dict) or set(delta) != {"reasoning", "operations", "shared_guide"}:
-        raise ValueError("Curator fields: reasoning, operations, shared_guide")
+    fields = {"reasoning", "operations"} | ({"shared_guide"} if limits.shared_guide_enabled else set())
+    if not isinstance(delta, dict) or set(delta) != fields:
+        raise ValueError("Curator fields: " + ", ".join(sorted(fields)))
+    shared = {"shared_guide": delta["shared_guide"]} if limits.shared_guide_enabled else {}
     if not isinstance(delta["operations"], list):
         raise ValueError("Curator operations must be an array")
     operations = []
@@ -63,9 +67,9 @@ def apply_hybrid_delta(parent, delta, records, limits, *, counted=None, history=
                 raise ValueError("content fields: condition, guide")
             # Type/word validation before encoding prevents JSON strings hiding
             # non-string Agent fields until after the mechanical operation.
-            validate_candidate(json.dumps({"schema_version": 1, "shared_guide": delta["shared_guide"],
+            validate_candidate(json.dumps({"schema_version": 1, **shared,
                 "checklist": [{"id": "plan-00001", **content}]}), limits)
-            op["content"] = _content(content["condition"], content["guide"], parent["shared_guide"])
+            op["content"] = _content(content["condition"], content["guide"], parent.get("shared_guide"))
         ids = op.get("supporting_instance_ids")
         historical_remove = op["type"] == "REMOVE" and bool(history and history.get("events"))
         if not isinstance(ids, list) or (not ids and not historical_remove) or any(
@@ -81,7 +85,7 @@ def apply_hybrid_delta(parent, delta, records, limits, *, counted=None, history=
     for bullet in updated.bullets:
         content = json.loads(bullet.text)
         items.append({"id": bullet.id, "condition": content["condition"], "guide": content["guide"]})
-    proposed = json.dumps({"schema_version": 1, "shared_guide": delta["shared_guide"], "checklist": items}, ensure_ascii=False)
+    proposed = json.dumps({"schema_version": 1, **shared, "checklist": items}, ensure_ascii=False)
     validate_candidate(proposed, limits)
     return proposed
 
@@ -146,8 +150,7 @@ class IncrementalHybridACEProposer:
             if self.refiner is not None:
                 # Curator must submit a structurally valid proposal first. Only
                 # size violations authorize a separate Agent-authored refinement.
-                from .behavioral_hybrid import HybridLimits
-                relaxed = HybridLimits(1000000, 1000000, 1000000, 1000000)
+                relaxed = self.limits.relaxed()
                 draft = apply_hybrid_delta(parent, delta, records, relaxed, counted=counted, history=history)
                 try:
                     validate_candidate(draft, self.limits)

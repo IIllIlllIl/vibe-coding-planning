@@ -22,6 +22,7 @@ Read in this order:
 | [`ace-codex-formal15-candidate-screen-resume.md`](ace-codex-formal15-candidate-screen-resume.md) | Hash-pinned first-proposal recovery that reuses frozen Seed/Reflection/Curator evidence and reruns the complete 48-task Candidate Checker screen |
 | [`engineering-contracts.md`](engineering-contracts.md) | Shared execution requirements: cluster resource ratios, prepared Git history, isolation, artifact persistence, cleanup, and launch checks |
 | [`safe-pce.md`](safe-pce.md) | Current Safe PCE selection, execution reliability, and the frozen within-task Plan-pair derivative |
+| [`safe-pce-ace-gepa.md`](safe-pce-ace-gepa.md) | Opt-in task-only Safe PCE evaluation for the retained hybrid ACE/GEPA learner; Planner-owned application notes |
 | [`hpc-submit.md`](hpc-submit.md) | Behavioral-branch credential, preheat, retained Slurm, and FairShare safety |
 | [`../configs/README.md`](../configs/README.md) | Runtime-versus-launch configuration ownership and active config index |
 
@@ -39,6 +40,7 @@ offline GEPA, and production failures:
 | [`knowledge/agent-budgeting.md`](knowledge/agent-budgeting.md) | Changing steps, command timeouts, phase deadlines, or Slurm limits |
 | [`knowledge/checkpoint-and-retry.md`](knowledge/checkpoint-and-retry.md) | Changing resume, retries, or batch takeover |
 | [`knowledge/isolation-and-artifacts.md`](knowledge/isolation-and-artifacts.md) | Changing Agent visibility, workspaces, or evidence flow |
+| [`knowledge/learning-evidence-fidelity-audit-20261022.md`](knowledge/learning-evidence-fidelity-audit-20261022.md) | Auditing Plan preservation, raw-evidence identity projection, partial learning evidence, and legacy fallback truncation |
 | [`knowledge/cleanup-lifecycle.md`](knowledge/cleanup-lifecycle.md) | Changing repository/SIF/workspace cleanup |
 | [`knowledge/hpc-result-retention.md`](knowledge/hpc-result-retention.md) | Choosing current result/staging/dataset/SIF roots or locating retained historical evidence |
 | [`knowledge/methodology-lessons.md`](knowledge/methodology-lessons.md) | Comparing Online GEPA with PCT, PCC, or offline GEPA |
