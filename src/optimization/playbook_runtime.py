@@ -6,8 +6,8 @@ import json
 import hashlib
 import os
 from pathlib import Path
-import re
 import tempfile
+from functools import partial
 from typing import Any, Mapping
 
 from jinja2 import Environment, StrictUndefined
@@ -18,6 +18,11 @@ from src.agents._deps import (
     import_minisweagent,
     raise_for_permanent_provider_error,
 )
+from src.agents.output_contract import (
+    AgentOutputContractError as PlaybookAgentOutputContractError,
+    json_object as _json_object,
+)
+from src.agents.runtime import executor_name, run_agent
 from src.environment.apptainer_env import ApptainerEnvironment, ApptainerSifCache
 from src.environment.docker_env import DockerCapacityWindow
 from src.environment.repository_baseline import restore_repository_to_base
@@ -32,10 +37,6 @@ from src.environment.source_access import (
     summarize_source_access_log,
 )
 from src.evaluator.swe_evaluator import derive_image_name
-
-
-class PlaybookAgentOutputContractError(ValueError):
-    """An Agent returned a final artifact that Host parsing cannot accept."""
 
 
 class CheckerActionRecorder:
@@ -152,22 +153,8 @@ def require_prepared_repository_history(
     return existing
 
 
-def _json_object(text: str) -> dict[str, Any]:
-    stripped = text.strip()
-    match = re.fullmatch(r"```(?:json)?\s*(.*?)\s*```", stripped, re.DOTALL)
-    if match:
-        stripped = match.group(1)
-    value = json.loads(stripped)
-    if not isinstance(value, dict):
-        raise ValueError("model output must be a JSON object")
-    return value
-
-
 def _uses_codex_cli(model_config: Mapping[str, Any]) -> bool:
-    executor = str(model_config.get("executor", "mini_swe"))
-    if executor not in {"mini_swe", "codex_cli"}:
-        raise ValueError(f"unsupported playbook Agent executor: {executor}")
-    return executor == "codex_cli"
+    return executor_name(model_config) == "codex_cli"
 
 
 class PromptModel:
@@ -346,40 +333,11 @@ def run_evidence_reflector(
     attempt_dir: Path | None = None,
 ) -> tuple[dict[str, Any], list[dict[str, Any]]]:
     """Run a tool-using Reflector over a read-only, repository-free bundle."""
-    if _uses_codex_cli(model_config):
-        from src.optimization.codex_cli_runtime import CodexSIFExecution, run_codex_json_agent
-
-        user = _render(
-            instance_template,
-            evidence_path="/evidence",
-            internal_playbook=internal_playbook,
-            retry_feedback=retry_feedback,
-        )
-        return run_codex_json_agent(
-            model_config=model_config,
-            working_directory=Path(evidence_dir),
-            attempt_dir=(
-                attempt_dir
-                or Path(evidence_dir).parent / ".codex_reflector_attempt"
-            ),
-            system=system,
-            user=user,
-            task=task,
-            evidence_manifest_path=Path(evidence_dir) / "manifest.json",
-            container=CodexSIFExecution(
-                sif_path=_codex_evidence_sif(reflection_config),
-                evidence_dir=Path(evidence_dir),
-            ),
-        )
-    return _run_evidence_json_agent(
-        model_config=model_config,
-        evidence_config=reflection_config,
-        system=system,
-        instance_template=instance_template,
-        evidence_dir=evidence_dir,
-        task=task,
-        artifact_name="reflection.json",
-        prompt_values={
+    return _run_evidence_agent(
+        model_config=model_config, evidence_config=reflection_config, system=system,
+        instance_template=instance_template, evidence_dir=evidence_dir, task=task,
+        artifact_name="reflection.json", attempt_dir=attempt_dir,
+        default_attempt=".codex_reflector_attempt", prompt_values={
             "evidence_path": "/evidence",
             "internal_playbook": internal_playbook,
             "retry_feedback": retry_feedback,
@@ -402,42 +360,11 @@ def run_evidence_curator(
     attempt_dir: Path | None = None,
 ) -> tuple[dict[str, Any], list[dict[str, Any]]]:
     """Run the Curator over a file-backed cross-case reflection bundle."""
-    if _uses_codex_cli(model_config):
-        from src.optimization.codex_cli_runtime import CodexSIFExecution, run_codex_json_agent
-
-        user = _render(
-            instance_template,
-            evidence_path="/evidence",
-            counted_internal_playbook=counted_internal_playbook,
-            case_count=case_count,
-            maximum_rules=maximum_rules,
-            retry_feedback=retry_feedback,
-        )
-        return run_codex_json_agent(
-            model_config=model_config,
-            working_directory=Path(evidence_dir),
-            attempt_dir=(
-                attempt_dir
-                or Path(evidence_dir).parent / ".codex_curator_attempt"
-            ),
-            system=system,
-            user=user,
-            task=task,
-            evidence_manifest_path=Path(evidence_dir) / "manifest.json",
-            container=CodexSIFExecution(
-                sif_path=_codex_evidence_sif(reflection_config),
-                evidence_dir=Path(evidence_dir),
-            ),
-        )
-    return _run_evidence_json_agent(
-        model_config=model_config,
-        evidence_config=reflection_config,
-        system=system,
-        instance_template=instance_template,
-        evidence_dir=evidence_dir,
-        task=task,
-        artifact_name="curator.json",
-        prompt_values={
+    return _run_evidence_agent(
+        model_config=model_config, evidence_config=reflection_config, system=system,
+        instance_template=instance_template, evidence_dir=evidence_dir, task=task,
+        artifact_name="curator.json", attempt_dir=attempt_dir,
+        default_attempt=".codex_curator_attempt", prompt_values={
             "evidence_path": "/evidence",
             "counted_internal_playbook": counted_internal_playbook,
             "case_count": case_count,
@@ -445,6 +372,25 @@ def run_evidence_curator(
             "retry_feedback": retry_feedback,
         },
     )
+
+
+def _run_evidence_agent(*, model_config, evidence_config, system, instance_template,
+                        evidence_dir, task, artifact_name, prompt_values,
+                        attempt_dir, default_attempt):
+    def native():
+        from src.optimization.codex_cli_runtime import CodexSIFExecution, run_codex_json_agent
+        return run_codex_json_agent(
+            model_config=model_config, working_directory=Path(evidence_dir),
+            attempt_dir=attempt_dir or Path(evidence_dir).parent / default_attempt,
+            system=system, user=_render(instance_template, **prompt_values), task=task,
+            evidence_manifest_path=Path(evidence_dir) / "manifest.json",
+            container=CodexSIFExecution(sif_path=_codex_evidence_sif(evidence_config),
+                                        evidence_dir=Path(evidence_dir)))
+    return run_agent(model_config, codex_cli=native,
+        mini_swe=partial(_run_evidence_json_agent, model_config=model_config,
+            evidence_config=evidence_config, system=system, instance_template=instance_template,
+            evidence_dir=evidence_dir, task=task, artifact_name=artifact_name,
+            prompt_values=prompt_values))
 
 
 def _codex_evidence_sif(config: Mapping[str, Any]) -> Path:
@@ -602,7 +548,7 @@ def _run_repository_json_agent(
                     "phase": repository_config.get("phase", "repo_checker"),
                 },
             )
-            if codex_cli:
+            def native():
                 from src.optimization.codex_cli_runtime import CodexSIFExecution, run_codex_json_agent
 
                 codex_values = dict(prompt_values)
@@ -654,79 +600,82 @@ def _run_repository_json_agent(
                     ]
                 )
                 return output, trajectory
-            is_checker = repository_config.get("phase") in {
-                "repo_checker", "paired_repo_checker"
-            }
-            observation_contract = repository_config.get("observation_contract")
-            if observation_contract not in {None, "executed_tools_v1"}:
-                raise ValueError("unknown Checker observation contract")
-            recorder = (
-                CheckerActionRecorder(environment)
-                if is_checker and observation_contract else None
-            )
-            agent = build_default_agent(
-                DefaultAgent,
-                model,
-                recorder if recorder is not None else environment,
-                system_template=system,
-                instance_template=instance_template,
-                step_limit=0,
-            )
-            exit_status, submission = agent.run(task=task, **dict(prompt_values))
-            raise_for_permanent_provider_error(exit_status, submission)
-            if exit_status != "Submitted":
-                error = RuntimeError(
-                    "Repo Agent ended without a submitted artifact "
-                    f"(exit_status={exit_status})"
+            def mini():
+                is_checker = repository_config.get("phase") in {
+                    "repo_checker", "paired_repo_checker"
+                }
+                observation_contract = repository_config.get("observation_contract")
+                if observation_contract not in {None, "executed_tools_v1"}:
+                    raise ValueError("unknown Checker observation contract")
+                recorder = (
+                    CheckerActionRecorder(environment)
+                    if is_checker and observation_contract else None
                 )
-                error.trajectory = list(agent.messages)  # type: ignore[attr-defined]
-                raise error
-            artifact = read_agent_json_artifact(
-                environment, artifact_name,
-                cwd=workdir,
-                timeout=timeout,
-            )
-            trajectory = [
-                *list(agent.messages),
-                *([{"role": "host_checker_action_observations", "content": recorder.actions}]
-                  if recorder is not None else []),
-                {
-                    "role": "host_repository_baseline",
-                    "content": {
-                        "declared_base_commit": repository["base_commit"],
-                        "observed_head": baseline["after"]["head"]["output"].strip(),
-                        "sif_sha256_authority": image_authority["sif_sha256"],
+                agent = build_default_agent(
+                    DefaultAgent,
+                    model,
+                    recorder if recorder is not None else environment,
+                    system_template=system,
+                    instance_template=instance_template,
+                    step_limit=0,
+                )
+                exit_status, submission = agent.run(task=task, **dict(prompt_values))
+                raise_for_permanent_provider_error(exit_status, submission)
+                if exit_status != "Submitted":
+                    error = RuntimeError(
+                        "Repo Agent ended without a submitted artifact "
+                        f"(exit_status={exit_status})"
+                    )
+                    error.trajectory = list(agent.messages)  # type: ignore[attr-defined]
+                    raise error
+                artifact = read_agent_json_artifact(
+                    environment, artifact_name,
+                    cwd=workdir,
+                    timeout=timeout,
+                )
+                trajectory = [
+                    *list(agent.messages),
+                    *([{"role": "host_checker_action_observations", "content": recorder.actions}]
+                      if recorder is not None else []),
+                    {
+                        "role": "host_repository_baseline",
+                        "content": {
+                            "declared_base_commit": repository["base_commit"],
+                            "observed_head": baseline["after"]["head"]["output"].strip(),
+                            "sif_sha256_authority": image_authority["sif_sha256"],
+                        },
                     },
-                },
-                {
-                    "role": "host_artifact_read",
-                    "content": {
-                        "path": f"/tmp/{artifact_name}",
-                        "returncode": artifact["returncode"],
-                        "stderr": artifact.get("stderr", ""),
-                        "terminal_submission": submission,
+                    {
+                        "role": "host_artifact_read",
+                        "content": {
+                            "path": f"/tmp/{artifact_name}",
+                            "returncode": artifact["returncode"],
+                            "stderr": artifact.get("stderr", ""),
+                            "terminal_submission": submission,
+                        },
                     },
-                },
-                {
-                    "role": "host_source_access_audit",
-                    "content": {
-                        "policy_version": SOURCE_ACCESS_POLICY_VERSION,
-                        "path": str(source_access_path),
-                        "summary": summarize_source_access_log(source_access_path),
+                    {
+                        "role": "host_source_access_audit",
+                        "content": {
+                            "policy_version": SOURCE_ACCESS_POLICY_VERSION,
+                            "path": str(source_access_path),
+                            "summary": summarize_source_access_log(source_access_path),
+                        },
                     },
-                },
-            ]
-            if artifact["returncode"] != 0:
-                error = RuntimeError("Repo Agent artifact could not be read")
-                error.trajectory = trajectory  # type: ignore[attr-defined]
-                raise error
-            try:
-                return _json_object(str(artifact.get("stdout", ""))), trajectory
-            except (ValueError, json.JSONDecodeError) as exc:
-                error = PlaybookAgentOutputContractError(str(exc))
-                error.raw_response = artifact.get("stdout", "")  # type: ignore[attr-defined]
-                error.trajectory = trajectory  # type: ignore[attr-defined]
-                raise error from exc
+                ]
+                if artifact["returncode"] != 0:
+                    error = RuntimeError("Repo Agent artifact could not be read")
+                    error.trajectory = trajectory  # type: ignore[attr-defined]
+                    raise error
+                try:
+                    return _json_object(str(artifact.get("stdout", ""))), trajectory
+                except (ValueError, json.JSONDecodeError) as exc:
+                    error = PlaybookAgentOutputContractError(str(exc))
+                    error.raw_response = artifact.get("stdout", "")  # type: ignore[attr-defined]
+                    error.trajectory = trajectory  # type: ignore[attr-defined]
+                    raise error from exc
+
+            return run_agent(model_config, mini_swe=mini, codex_cli=native)
         finally:
             environment.cleanup()
 

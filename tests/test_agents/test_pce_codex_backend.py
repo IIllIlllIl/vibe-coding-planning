@@ -63,10 +63,16 @@ def _completion(monkeypatch, *, final=None, patch=PATCH, events=None):
     return calls
 
 
-def test_default_agent_is_returned_unchanged_without_native_dependencies():
-    original = object()
-    assert backend.agent_runner(original, role="plan", config=SimpleNamespace(), case=None,
-        workspace=None, attempt_dir=None, source_access_path=None, usage=None) is original
+def test_default_agent_is_invoked_unchanged_without_native_dependencies():
+    expected = object()
+    received = []
+    def original(*args, **kwargs):
+        received.append((args, kwargs))
+        return expected
+    invoke = backend.agent_runner(original, role="plan", config=SimpleNamespace(), case=None,
+        workspace=None, attempt_dir=None, source_access_path=None, usage=None)
+    assert invoke("task", extra="unchanged") is expected
+    assert received == [(("task",), {"extra": "unchanged"})]
 
 
 def test_backends_default_mixed_and_explicit_pin():
@@ -184,10 +190,11 @@ def test_native_workspace_transport_reuses_outer_boundary(tmp_path, monkeypatch)
         if command[-1] == "--version":
             return SimpleNamespace(returncode=0, stdout="codex-cli 0.160.1\n", stderr="")
         if "sandbox" in command:
-            assert ":workspace-write" in command
-            assert any('/testbed/.git' in word for word in command)
+            assert command[command.index("--permission-profile")+1] == "vibe-workspace"
+            assert any('".git"="write"' in word for word in command)
         if "exec" in command and command[-1] == "-":
-            assert command[command.index("--sandbox")+1] == "workspace-write"
+            assert "--sandbox" not in command
+            assert 'default_permissions="vibe-workspace"' in command
             output = next(Path(m.split(":")[0]) for m in mounts if ":/agent-output:" in m)
             (output / "codex_final_response.txt").write_bytes(b"COMPLETE_TASK_AND_SUBMIT_FINAL_OUTPUT\n")
             (output / "submission.patch").write_bytes(PATCH.encode())
@@ -285,6 +292,40 @@ def test_smoke_comparison_changes_only_agent_axis_and_new_identity():
         assert getattr(old.hybrid, field) == getattr(new.hybrid, field)
     assert old.run_dir != new.run_dir
     assert SafePCEBackend(new).pce.agent_backends == native.agent_backends
+
+
+def test_shared_job_credentials_match_native_and_mixed_agent_selection(tmp_path):
+    from src.swe_verified_pce.config import load_swe_verified_pce_config
+    from src.swe_verified_pce.hpc_executor import build_array_script
+    native = load_swe_verified_pce_config(
+        "configs/safe_pce_ace_verified_codex_smoke_source_v2_20261023.yaml", require_api_keys=False)
+    ds = load_swe_verified_pce_config(
+        "configs/safe_pce_ace_verified_smoke_source_v1_20261022.yaml", require_api_keys=False)
+    def script(config):
+        return build_array_script(config=config, batch_dir=tmp_path, indices=[0], attempt=1)
+    assert "DEEPSEEK_API_KEY" not in script(native)
+    mixed = replace(native, code=ds.code, agent_backends={"plan": native.agent_backends["plan"]})
+    assert 'test -n "${DEEPSEEK_API_KEY:-}"' in script(mixed)
+
+
+def test_v2_smoke_preserves_science_and_uses_new_frozen_inputs():
+    from src.optimization.config import load_optimization_config
+    from src.optimization.behavioral_hybrid_runtime import verify_hybrid_snapshot
+    from src.optimization.safe_pce_learning import SafePCEBackend
+    old = load_optimization_config("configs/gepa_safe_pce_verified_codex_smoke_v1_20261023.yaml", require_api_keys=False)
+    new = load_optimization_config("configs/gepa_safe_pce_verified_codex_smoke_v2_20261023.yaml", require_api_keys=False)
+    verify_hybrid_snapshot(new)
+    assert old.search == new.search
+    assert old.run_dir != new.run_dir and old.dataset_snapshot != new.dataset_snapshot
+    for name in ("train.jsonl", "validation.jsonl"):
+        assert (old.dataset_snapshot / name).read_bytes() == (new.dataset_snapshot / name).read_bytes()
+    for name in ("reflector_model", "curator_model", "refiner_model", "prompt_bundle",
+                 "condition_tokens", "item_guide_tokens", "max_items"):
+        assert getattr(old.hybrid, name) == getattr(new.hybrid, name)
+    left, right = SafePCEBackend(old).pce, SafePCEBackend(new).pce
+    for name in ("plan", "code", "plan_prompt", "plan_instance_template", "code_prompt",
+                 "code_instance_template", "agent_backends", "docker", "container"):
+        assert getattr(left, name) == getattr(right, name)
 
 
 def test_native_traces_survive_shared_learning_reference_projection():

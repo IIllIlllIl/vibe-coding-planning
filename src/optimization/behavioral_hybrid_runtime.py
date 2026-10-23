@@ -17,6 +17,7 @@ from src.optimization.paired_playbook import validate_ace_paired_reflector_revie
 from src.optimization.playbook_runtime import run_evidence_reflector, run_evidence_curator, _codex_evidence_sif
 from src.optimization.playbook_hpc_executor import _file_sha256
 from src.optimization.audit import redact_sensitive, redact_agent_record
+from src.agents.runtime import credential_envs
 
 
 def hybrid_limits(config):
@@ -40,6 +41,9 @@ def phase_identity(config, role, payload):
                                        "ace_evidence.py", "behavioral_hybrid_evidence.py", "audit.py")}
     identity["source"]["agent_protocol"] = hashlib.sha256(
         (root.parent / "agents" / "_deps.py").read_bytes()).hexdigest()
+    for name in ("runtime.py", "output_contract.py"):
+        identity["source"]["agents/" + name] = hashlib.sha256(
+            (root.parent / "agents" / name).read_bytes()).hexdigest()
     return hashlib.sha256(json.dumps(identity, sort_keys=True).encode()).hexdigest()
 
 
@@ -176,7 +180,8 @@ class HybridPhaseExecutor:
 
     def script_for_wave(self, batch_dir, role, indices, attempt):
         model = getattr(self.config.hybrid, f"{role}_model")
-        credential = None if model.get("executor") == "codex_cli" else model.get("api_key_env", self.config.reflection.api_key_env)
+        credentials = credential_envs([{"api_key_env": self.config.reflection.api_key_env, **model}])
+        credential = credentials[0] if credentials else None
         return build_phase_array_script(hpc=self.config.hpc, batch_dir=batch_dir,
             indices=indices, attempt=attempt,
             job_name=self._job_name(role, batch_dir.name, attempt),

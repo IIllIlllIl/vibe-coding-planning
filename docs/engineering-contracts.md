@@ -75,6 +75,50 @@ the exact offending position. Test noncontiguous IDs and the real submission
 correction loop; a single placeholder item cannot exercise this boundary. Host
 must not silently remove extra results, renumber them or infer a final answer.
 
+## Shared Agent backend entry
+
+Use `src.agents.runtime.run_agent` for backend dispatch. Workflow code supplies
+lazy role adapters over the established mini-SWE and Native Codex components;
+only the selected adapter initializes its model, credentials and tools. Omitted
+`executor` keeps mini-SWE. An unsupported or missing adapter fails explicitly;
+there is no fallback or internal retry in this entry.
+
+```python
+from src.agents.runtime import run_agent
+
+result = run_agent(
+    model_config,
+    mini_swe=lambda: existing_mini_swe_role(...),
+    codex_cli=lambda: existing_native_codex_role(...),
+)
+```
+
+| Component | Owns | Reuse boundary |
+|---|---|---|
+| `src/agents/runtime.py` | Backend selection, pinned Codex options, provider credential requirements | Reuse `run_agent`, `executor_name`, `codex_options`, and `credential_envs`; do not add per-workflow selectors or key guards |
+| Role adapters | Task inputs, prompt rendering and submission validation | Reuse `pce_backend.py` for existing P/C contracts and `playbook_runtime.py` evidence/repository adapters for existing JSON contracts |
+| `src/agents/_deps.py` | Existing mini-SWE model/Agent construction and action protocol | Preserve its tool loop and one-pass template handling |
+| `src/optimization/codex_cli_runtime.py` | Existing Native CLI, SIF launch, private state, permission probes and raw artifacts | Keep this compatibility path; reuse its implementation rather than copying mounts, authentication or CLI arguments |
+| `src/agents/output_contract.py` | Mechanical JSON-object parsing and contract errors | Preserve original completion evidence before validation |
+| Workflow/Worker components | Phase order, retry/resume, checkpoints, sampling, scoring, evaluation and Slurm | Backend switching does not replace these components |
+
+Return the selected adapter's original result and exception. Keep Plan, patch,
+JSON and native trajectories intact; a common entry does not require translating
+one backend's trace into another's format. Output format and repository access
+are independent concerns; read-only learning/review requirements belong to their
+role contracts. Tool interception and native event auditing remain inside the
+existing execution adapters. Common dispatch does not imply identical tool
+enforcement or silently change a caller's experimental policy.
+
+Before adding another workflow, check the existing role adapters first. A new
+submission contract may need a thin adapter, but not another Agent loop,
+credential loader, sandbox implementation or workflow controller. Shared module
+bytes must enter every affected execution fingerprint. Test selected-backend
+laziness, mixed-role credentials, unchanged raw results and failures, and real
+Worker dispatch across existing callers. A new permission capability additionally
+requires a no-model probe under the same pinned CLI and compute-node boundary
+as inference; mocked command assertions alone are insufficient.
+
 ## Cluster resources
 
 Safe PCE may serve as a learner's evaluation backend without replacing its
@@ -280,6 +324,9 @@ construction (mocking only containers and models). Evidence Agents default to
 the shared `container.sif_cache_dir`; old `reflection.evidence_*` settings are
 supported overrides. Validate required environment settings before Agent waves.
 
+Backend adaptation follows the [shared Agent entry](#shared-agent-backend-entry)
+contract above. The details below specify the existing Native execution boundary.
+
 An Agent role may select the `codex_cli` executor instead of mini-swe. Learning
 and review roles use the read-only JSON contract below. The opt-in Safe PCE
 Planner/Coder extension uses the same runtime with a phase-local writable
@@ -309,6 +356,19 @@ Production uses Apptainer plus `codex exec --sandbox read-only`, never
 `danger-full-access` or a fallback to Host execution. The private bare CLI
 transport is for unit tests only. Do not enable host root, host-wide
 capabilities, or privileged mounts.
+
+Writable calls use a named `vibe-workspace` permission profile, extending
+`:workspace` with phase-local Git-index and output writes. The sandbox probe
+and inference receive the same generated profile configuration; do not combine
+it with legacy `sandbox_workspace_write` options or invent a `:workspace-write`
+built-in profile. Read-only production arguments remain unchanged. A private
+temporary Git index exercises actual staging without changing the Agent's
+index. The existing startup verifier also accepts `--workspace-write
+--preflight-only`; it never calls a model in this mode. CLI configuration
+errors use the existing Worker `retry_disposition` hook to block rather than
+repeat an identical unsupported configuration. See the
+[shared-entry acceptance](knowledge/agent-runtime-entry-acceptance-20261023.md)
+for the regression scope and remaining compute-node verification boundary.
 
 Before executing Codex, `codex_private_mount.py` creates a new unprivileged
 user namespace mapping the same nonzero numeric UID/GID, then a new mount

@@ -27,6 +27,12 @@ IDs under `frozen_safe_pce_ace/verified_smoke_v1_20261022/`. Its standard
 supervisor identity is `safe_pce_ace_verified_smoke_supervisor_v1_20261022.yaml`.
 Verified validates engineering; RPG is the selected downstream formal dataset
 and requires its own adapter/acceptance before configuration and launch.
+The opt-in Native Codex development configuration is
+`gepa_safe_pce_verified_codex_smoke_v2_20261023.yaml`, with matching
+`safe_pce_ace_verified_codex_smoke_source_v2_20261023.yaml` and
+`safe_pce_ace_verified_codex_smoke_supervisor_v2_20261023.yaml`. Its
+[shared Agent entry acceptance](../docs/knowledge/agent-runtime-entry-acceptance-20261023.md)
+records the v1 preflight failure, repair, tests and unverified compute boundary.
 
 SWE-chat hybrid lightweight formal contract:
 `gepa_swe_chat_hybrid_formal3_v4_20261011.yaml` and

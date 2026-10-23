@@ -45,7 +45,7 @@ DS result/checkpoint is imported into a Codex run.
   cache masks remain read-only; Host home/run/staging paths remain unmounted.
   The existing transient auth caveat still applies: this is not a credential
   exfiltration-proof sandbox.
-- Codex uses `workspace-write`, never `danger-full-access` or Host fallback.
+- Codex uses the named `vibe-workspace` profile, never `danger-full-access` or Host fallback.
   The same no-model preflight verifies repository, Git-index and output writes
   and evidence write denial before inference. A failed probe stops that
   attempt. JSON learning/review entry points still reject writable boundaries.
@@ -82,7 +82,7 @@ firewall, or proof that dynamically generated network access is observable.
 
 - PCE source: `configs/safe_pce_ace_verified_codex_smoke_source_v1_20261023.yaml`.
 - Learning: `configs/gepa_safe_pce_verified_codex_smoke_v1_20261023.yaml`.
-- Supervisor: `configs/safe_pce_ace_verified_codex_smoke_supervisor_v1_20261023.yaml`.
+- Supervisor: `configs/archive/supervisor_launches/safe_pce_ace_verified_codex_smoke_supervisor_v1_20261023.yaml` (terminal launch provenance).
 - New input snapshot:
   `output/SWE-bench_Verified/safe-pce-ace-verified-codex-smoke-inputs-v1-20261023`.
 - Same frozen train cases Astropy-13033 / Flask-5014; validation Pytest-10051.
@@ -136,6 +136,15 @@ compliance. The first HPC PCE calls must pass the new write probes. Existing
 readonly-Codex HPC success is not evidence that Git staging is writable in the
 new mode. A startup problem must be diagnosed from those probes, not bypassed
 by weakening the sandbox or changing Slurm control.
+
+The v1 HPC attempt subsequently failed before inference: all three Planner
+attempts rejected the invented built-in permission profile `:workspace-write`.
+The outer SIF boundary and pinned CLI version probes passed. No valid Plan,
+patch, evaluator result or learned candidate was produced. The workspace unit
+test had mocked the CLI and asserted the invalid name, so its success did not
+establish CLI compatibility. The subsequent
+[shared-entry repair and v2 configuration](agent-runtime-entry-acceptance-20261023.md)
+retain this failed run as evidence and extend the existing startup verifier.
 
 The two historical assertions already documented in
 `safe-pce-ace-backend-acceptance-20261022.md` remain excluded from the targeted

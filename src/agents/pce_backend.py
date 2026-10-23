@@ -13,6 +13,7 @@ import shlex
 from jinja2 import StrictUndefined, Template
 
 from src.agents import plan_agent
+from src.agents.runtime import codex_options, executor_name, run_agent
 from src.environment.source_access import (
     append_source_access_event, classify_source_access, extract_http_urls,
 )
@@ -42,35 +43,28 @@ def load_agent_backends(raw: dict, *, plan_protocol: str) -> dict:
     result = {}
     for role in ("plan", "code"):
         value = raw[role]
-        executor = value.get("executor", "mini_swe")
-        if executor not in {"mini_swe", "codex_cli"}:
-            raise ValueError(f"unsupported PCE {role} executor: {executor}")
+        executor = executor_name(value)
         if executor == "mini_swe":
             continue
         if plan_protocol != "direct_human_markdown_v5":
             raise ValueError("Codex PCE requires the Safe PCE direct_human_markdown_v5 boundary")
-        if set(value) & {"api_key", "token", "password"}:
-            raise ValueError("PCE credentials must remain in private remote state")
-        fields = ("model", "reasoning_effort", "codex_binary", "codex_auth_file", "codex_version")
-        if any(not isinstance(value.get(key), str) or not value[key].strip() for key in fields):
-            raise ValueError(f"Codex PCE {role} requires explicit {', '.join(fields)}")
-        if value["reasoning_effort"] not in {"low", "medium", "high", "xhigh", "max", "ultra"}:
-            raise ValueError("unsupported Codex reasoning_effort")
-        result[role] = {"executor": executor, **{key: value[key] for key in fields}}
+        result[role] = codex_options(value)
     return result
 
 
 def agent_runner(default, *, role, config, case, workspace, attempt_dir,
                  source_access_path, usage):
     """Select only the Agent. Callers retain their original phase lifecycle."""
-    backend = getattr(config, "agent_backends", {}).get(role)
-    if not backend:
-        return default
-    context = dict(backend=backend, sif_path=Path(case.image.sif_path),
-                   workspace=workspace, attempt_dir=attempt_dir / f"codex_{role}",
-                   workdir=config.docker.workdir, source_access_path=source_access_path,
-                   usage=usage, instance_id=case.instance_id)
-    return partial(_run_plan if role == "plan" else _run_code, **context)
+    backend = getattr(config, "agent_backends", {}).get(role, {})
+    def invoke(*args, **kwargs):
+        def native():
+            context = dict(backend=backend, sif_path=Path(case.image.sif_path),
+                           workspace=workspace, attempt_dir=attempt_dir / f"codex_{role}",
+                           workdir=config.docker.workdir, source_access_path=source_access_path,
+                           usage=usage, instance_id=case.instance_id)
+            return (_run_plan if role == "plan" else _run_code)(*args, **kwargs, **context)
+        return run_agent(backend, mini_swe=partial(default, *args, **kwargs), codex_cli=native)
+    return invoke
 
 
 def _audit_sources(trajectory, *, issue, path, phase, instance_id):

@@ -38,6 +38,8 @@ def behavioral_checker_semantic_sha256(config: OptimizationConfig) -> str:
     root = Path(__file__).resolve().parents[2]
     paths = [
         root / "src/agents/_deps.py",
+        root / "src/agents/runtime.py",
+        root / "src/agents/output_contract.py",
         root / "src/optimization/behavioral_models.py",
         root / "src/optimization/behavioral_repository.py",
         root / "src/optimization/behavioral_runtime.py",
@@ -47,7 +49,8 @@ def behavioral_checker_semantic_sha256(config: OptimizationConfig) -> str:
     ]
     if config.hybrid.enabled:
         paths.extend(root / "src/optimization" / name for name in (
-            "behavioral_hybrid.py", "paired_playbook.py", "playbook.py"))
+            "behavioral_hybrid.py", "paired_playbook.py", "playbook.py",
+            "codex_cli_runtime.py", "codex_private_mount.py"))
     return _stable_sha256(
         {
             "schema": 1,

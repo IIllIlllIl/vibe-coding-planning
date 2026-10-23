@@ -264,12 +264,18 @@ class BehavioralLocalChecker:
     def __call__(
         self, case: BehavioralGEPACase, guideline: str, *, retry_feedback: str = ""
     ) -> BehavioralCheckerOutput:
+        from src.agents.runtime import run_agent
         if self.config.hybrid.enabled:
-            from src.optimization.behavioral_hybrid import validate_candidate, checker_projection
+            from src.optimization.behavioral_hybrid import validate_candidate
             from src.optimization.behavioral_hybrid_runtime import hybrid_limits
             validate_candidate(guideline, hybrid_limits(self.config))
-            if self.config.hybrid.checker_model.get("executor") == "codex_cli":
-                return self._hybrid_codex(case, guideline, retry_feedback=retry_feedback)
+        model = self.config.hybrid.checker_model if self.config.hybrid.enabled else {}
+        return run_agent(model,
+            mini_swe=lambda: self._mini_swe(case, guideline, retry_feedback=retry_feedback),
+            codex_cli=lambda: self._hybrid_codex(case, guideline, retry_feedback=retry_feedback))
+
+    def _mini_swe(self, case, guideline, *, retry_feedback=""):
+        from src.optimization.behavioral_hybrid import checker_projection
         checker_visible_guideline = (json.dumps(checker_projection(json.loads(guideline)), ensure_ascii=False)
                                      if self.config.hybrid.enabled else guideline)
         DefaultAgent, LitellmModel, _ = import_minisweagent()

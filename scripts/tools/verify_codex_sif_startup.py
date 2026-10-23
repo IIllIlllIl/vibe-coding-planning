@@ -22,6 +22,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 from src.optimization.codex_cli_runtime import (  # noqa: E402
     CodexSIFExecution, _isolated_codex_environment, _runtime_preflight,
     _codex_binary, _sif_isolation_preflight, run_codex_json_agent,
+    _codex_command, _workspace_options, _permission_profile,
 )
 
 
@@ -38,28 +39,34 @@ def verify(role, boundary, model, attempt, *, infer):
                     command_prefix=prefix,
                     hidden_host_paths=(boundary.evidence_dir, boundary.evidence_dir.parent, attempt),
                     sif_isolation=True, repository=boundary.repository_dir is not None,
+                    repository_writable=boundary.repository_writable,
                 )
                 # Parse the exact production CLI mode without making a model call.
-                cli = subprocess.run([*prefix, _codex_binary(effective), "exec", "--sandbox",
-                                      "read-only", "--help"], env=env,
+                cli_command = _codex_command(effective, working_directory=boundary.cwd,
+                    output_path=Path("/agent-output/codex_final_response.json"),
+                    repository_writable=boundary.repository_writable)
+                cli = subprocess.run([*prefix, *cli_command[:-1], "--help"], env=env,
                                      capture_output=True, text=True, check=False)
-                checks.append({"check": "read_only_cli_arguments", "returncode": cli.returncode,
+                checks.append({"check": "production_cli_arguments", "returncode": cli.returncode,
                                "stderr": cli.stderr})
                 if cli.returncode:
-                    raise RuntimeError(f"{role} read-only CLI arguments were rejected")
+                    raise RuntimeError(f"{role} CLI arguments were rejected")
                 command = [*prefix, _codex_binary(effective), "sandbox",
-                           "--permission-profile", ":read-only", "--cd", str(boundary.cwd),
+                           *(_workspace_options(boundary.cwd) if boundary.repository_writable else []),
+                           "--permission-profile", _permission_profile(boundary.repository_writable),
+                           "--cd", str(boundary.cwd),
                            "/bin/sh", "-c",
                            'test "$HOME" = /agent-home || exit 20; '
                            'test -r /evidence/manifest.json || exit 21; '
                            'if touch /evidence/unexpected-write 2>/dev/null; then exit 23; fi; '
-                           'if touch /tmp/unexpected-inner-write 2>/dev/null; then exit 26; fi; '
-                           'test -x "$1" || exit 24; '
-                           '"$1" --version || exit 25; printf "Read-only tool execution verified\\n"',
+                           + ('' if boundary.repository_writable else
+                              'if touch /tmp/unexpected-inner-write 2>/dev/null; then exit 26; fi; ')
+                           + 'test -x "$1" || exit 24; '
+                           '"$1" --version || exit 25; printf "Tool execution verified\\n"',
                            "startup-verification",
                            boundary.interpreter or ("/opt/miniconda3/envs/testbed/bin/python" if role == "reflector" else "/usr/local/bin/python3")]
                 completed = subprocess.run(command, env=env, capture_output=True, text=True, check=False)
-                checks.append({"check": "sif_tools_home_environment_readonly",
+                checks.append({"check": "sif_tools_home_environment",
                                "returncode": completed.returncode,
                                "stdout": completed.stdout, "stderr": completed.stderr})
                 write_json(attempt / "preflight.json", checks)
@@ -100,9 +107,13 @@ def main():
     parser.add_argument("--model", default="gpt-6-sol")
     parser.add_argument("--reasoning-effort", default="high")
     parser.add_argument("--preflight-only", action="store_true")
+    parser.add_argument("--workspace-write", action="store_true",
+                        help="Also verify writable repository/Git-index policy without model calls")
     parser.add_argument("--outer-isolation-only", action="store_true",
                         help="Test Apptainer isolation directly; never run Codex inference or its sandbox")
     args = parser.parse_args()
+    if args.workspace_write and (not args.preflight_only or args.outer_isolation_only):
+        parser.error("--workspace-write requires --preflight-only and the inner sandbox")
     args.output_dir.mkdir(parents=True, exist_ok=False)
     model = {"executor": "codex_cli", "codex_binary": args.codex_binary,
              "codex_auth_file": args.codex_auth_file, "codex_version": args.codex_version,
@@ -128,8 +139,15 @@ def main():
                     repository = root / role / "repository"
                     repository.mkdir()
                     (repository / "README.md").write_text("Synthetic transport probe only.\n")
+                    if args.workspace_write:
+                        subprocess.run(["git", "init", str(repository)], check=True, capture_output=True)
+                        subprocess.run(["git", "-C", str(repository), "add", "README.md"], check=True)
+                        subprocess.run(["git", "-C", str(repository), "-c", "user.name=Probe",
+                            "-c", "user.email=probe@example.invalid", "commit", "-m", "Synthetic probe"],
+                            check=True, capture_output=True)
                 boundary = CodexSIFExecution(sif, evidence, repository,
-                    interpreter="/usr/local/bin/python3" if args.generic_isolation_image else None)
+                    interpreter="/usr/local/bin/python3" if args.generic_isolation_image else None,
+                    repository_writable=args.workspace_write and repository is not None)
                 attempt = args.output_dir / role
                 attempt.mkdir()
                 boundaries[role] = (boundary, attempt)

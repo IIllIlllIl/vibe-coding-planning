@@ -14,14 +14,16 @@ import subprocess
 import tempfile
 from typing import Any, Iterator, Mapping
 
-from src.optimization.playbook_runtime import (
-    PlaybookAgentOutputContractError,
-    _json_object,
-)
+from src.agents.output_contract import AgentOutputContractError, json_object
+from src.agents.runtime import AgentConfigurationError, REASONING_EFFORTS
 
 
 class CodexCLIError(RuntimeError):
     """Codex CLI ended without a usable final response."""
+
+
+class CodexConfigurationError(CodexCLIError, AgentConfigurationError):
+    """A pinned CLI/configuration mismatch; preserve the existing retry hook."""
 
 
 @dataclass(frozen=True)
@@ -198,7 +200,7 @@ def _runtime_preflight(
             if expected
             else f"Codex CLI version probe exited with status {version.returncode}"
         )
-        error = CodexCLIError(detail)
+        error = CodexConfigurationError(detail)
         error.trajectory = [  # type: ignore[attr-defined]
             {"role": "host_codex_preflight", "content": {"checks": checks}}
         ]
@@ -217,12 +219,16 @@ def _runtime_preflight(
             "sandbox",
             *(_workspace_options(working_directory) if repository_writable else []),
             "--permission-profile",
-            ":workspace-write" if repository_writable else ":read-only",
+            _permission_profile(repository_writable),
             "--cd",
             str(working_directory.resolve()),
-            *(["/bin/sh", "-c", 'set -eu; probe="$PWD/.vibe-codex-probe-$$"; '
-               'touch "$probe"; rm "$probe"; '
-               'touch ".git/.vibe-codex-probe-$$"; rm ".git/.vibe-codex-probe-$$"; '
+            *(["/bin/sh", "-c", 'set -eu; probe=".vibe-codex-probe-$$"; '
+               'index="$PWD/.git/$probe.index"; '
+               'trap \'rm -f "$probe" "$index" "$index.lock"\' EXIT; '
+               'touch "$probe"; '
+               'GIT_INDEX_FILE="$index" git -c safe.directory="$PWD" read-tree HEAD; '
+               'GIT_INDEX_FILE="$index" git -c safe.directory="$PWD" add --force -- "$probe"; '
+               'test -n "$(GIT_INDEX_FILE="$index" git -c safe.directory="$PWD" diff --cached --name-only -- "$probe")"; '
                'touch /agent-output/.vibe-codex-probe-$$; rm /agent-output/.vibe-codex-probe-$$; '
                'if touch /evidence/.vibe-codex-probe-$$ 2>/dev/null; then exit 20; fi']
               if repository_writable else ["/bin/true"]),
@@ -241,7 +247,10 @@ def _runtime_preflight(
         }
     )
     if sandbox.returncode != 0:
-        error = CodexCLIError(
+        error_class = (CodexConfigurationError if any(fragment in sandbox.stderr.lower()
+                       for fragment in ("unknown built-in profile", "unknown permission", "error parsing", "invalid configuration"))
+                       else CodexCLIError)
+        error = error_class(
             f"Codex {'workspace-write' if repository_writable else 'read-only'} sandbox preflight failed: "
             f"{sandbox.stderr.strip() or sandbox.stdout.strip()}"
         )
@@ -349,12 +358,19 @@ printf 'Host/proc paths hidden; evidence and image read-only; repository writabl
 
 
 def _workspace_options(working_directory: Path) -> list[str]:
-    # PCE's existing submission contract uses Git's staging area. Explicitly
-    # grant only this disposable repository's .git and output directory, not
-    # another repository or the Host authentication/configuration authority.
-    roots = [str(working_directory / ".git"), "/agent-output"]
-    return ["--config", f"sandbox_workspace_write.writable_roots={json.dumps(roots)}",
-            "--config", "sandbox_workspace_write.network_access=true"]
+    # Both sandbox preflight and inference select this exact named policy.
+    # Workspace staging is required by the existing submission contract; only
+    # this disposable repository's Git metadata receives the extra permission.
+    cwd = json.dumps(str(working_directory.resolve()))
+    profile = ('{extends=":workspace", workspace_roots={' + cwd + '=true}, '
+               'filesystem={":workspace_roots"={"."="write", ".git"="write"}, '
+               '"/agent-output"="write"}, network={enabled=true}}')
+    return ["--config", 'default_permissions="vibe-workspace"',
+            "--config", f"permissions.vibe-workspace={profile}"]
+
+
+def _permission_profile(repository_writable: bool) -> str:
+    return "vibe-workspace" if repository_writable else ":read-only"
 
 
 def _codex_command(
@@ -371,7 +387,7 @@ def _codex_command(
     if not model:
         raise ValueError("Codex runtime requires a model")
     effort = str(model_config.get("reasoning_effort", "high")).strip()
-    if effort not in {"low", "medium", "high", "xhigh", "max", "ultra"}:
+    if effort not in REASONING_EFFORTS:
         raise ValueError("unsupported Codex reasoning_effort")
     binary = _codex_binary(model_config)
     return [
@@ -380,8 +396,8 @@ def _codex_command(
         "--ephemeral",
         "--ignore-user-config",
         "--ignore-rules",
-        "--sandbox",
-        "workspace-write" if repository_writable else "read-only",
+        *(_workspace_options(working_directory) if repository_writable
+          else ["--sandbox", "read-only"]),
         "--skip-git-repo-check",
         "--json",
         "--color",
@@ -392,7 +408,6 @@ def _codex_command(
         f"model_reasoning_effort={json.dumps(effort)}",
         "--config",
         "project_doc_max_bytes=0",
-        *(_workspace_options(working_directory) if repository_writable else []),
         *(["--config", 'web_search="disabled"'] if repository_writable else []),
         "--cd",
         str(working_directory.resolve()),
@@ -416,9 +431,9 @@ def _run_codex_json_agent(
 ) -> tuple[dict[str, Any], list[dict[str, Any]]]:
     raw, trajectory = _run_codex_text_agent(**kwargs)
     try:
-        output = _json_object(raw)
+        output = json_object(raw)
     except (ValueError, json.JSONDecodeError) as exc:
-        error = PlaybookAgentOutputContractError(str(exc))
+        error = AgentOutputContractError(str(exc))
         error.raw_response = raw
         error.trajectory = trajectory
         raise error from exc
@@ -426,12 +441,17 @@ def _run_codex_json_agent(
 
 
 def run_codex_text_agent(*, container: CodexSIFExecution, **kwargs):
-    """PCE transport; the existing JSON roles retain their read-only contract."""
+    """Compatibility adapter for the raw text submission contract."""
+    return run_codex_agent(container=container, output_filename="codex_final_response.txt", **kwargs)
+
+
+def run_codex_agent(*, container: CodexSIFExecution, output_filename: str, **kwargs):
+    """Raw Native transport; output format and repository access are independent."""
     if not isinstance(container, CodexSIFExecution):
-        raise ValueError("Codex PCE Agents require task-scoped SIF execution")
-    if "codex_final_response.txt" not in container.output_files:
-        raise ValueError("Codex text transport requires its raw final-response artifact")
-    return _run_codex_text_agent(container=container, output_filename="codex_final_response.txt", **kwargs)
+        raise ValueError("Codex Agents require task-scoped SIF execution")
+    if output_filename not in container.output_files:
+        raise ValueError("Codex transport requires its raw final-response artifact")
+    return _run_codex_text_agent(container=container, output_filename=output_filename, **kwargs)
 
 
 def _run_codex_text_agent(

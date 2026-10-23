@@ -24,6 +24,12 @@ from src.swe_verified_pce.dataset import file_sha256
 from src.swe_verified_pce.models import SWEVerifiedPCECase
 from src.swe_verified_pce.evaluator import _terminal
 from src.swe_verified_pce.runner import SWEVerifiedPCERunner, checkpoint_identity
+from src.agents.runtime import credential_envs
+
+
+def _credential_envs(config):
+    return credential_envs(getattr(config, "agent_backends", {}).get(role, asdict(getattr(config, role)))
+                           for role in ("plan", "code"))
 
 
 def _stable_hash(value: Any) -> str:
@@ -68,6 +74,8 @@ def pce_semantic_sha256(
         root / "src" / "agents" / "planning_artifact.py",
         root / "src" / "agents" / "code_agent.py",
         root / "src" / "agents" / "pce_backend.py",
+        root / "src" / "agents" / "runtime.py",
+        root / "src" / "agents" / "output_contract.py",
         *([root / "src" / "optimization" / name for name in
            ("codex_cli_runtime.py", "codex_private_mount.py")]
           if getattr(config, "agent_backends", {}) else []),
@@ -281,7 +289,7 @@ def build_array_script(
         f"ENV_FILE={shlex.quote(hpc.remote_env_file)}",
         'ENV_FILE="${ENV_FILE/#\\~/$HOME}"',
         'source "${ENV_FILE}"',
-        'test -n "${DEEPSEEK_API_KEY:-}" || exit 2',
+        *[f'test -n "${{{name}:-}}" || exit 2' for name in _credential_envs(config)],
         f"BATCH_DIR={shlex.quote(str(batch_dir))}",
         'TASK_ID="$(printf "%04d" "${SLURM_ARRAY_TASK_ID}")"',
         f"ATTEMPT={attempt}",

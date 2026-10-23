@@ -173,6 +173,9 @@ budgets and learning-phase resources. P/C defaults remain the existing
 DeepSeek/mini-SWE path. The opt-in Native Codex Agent backend is described in
 [the transport acceptance note](knowledge/safe-pce-codex-agent-acceptance-20261023.md).
 It changes Agent transport, not PCE/ACE control or the evaluator.
+PCE and GEPA role adapters share `src.agents.runtime.run_agent`; configuration,
+permission-probe repair and acceptance boundaries are documented in the
+[shared Agent entry note](knowledge/agent-runtime-entry-acceptance-20261023.md).
 
 Preparation is exposed by:
 
