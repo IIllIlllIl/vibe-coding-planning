@@ -1,0 +1,72 @@
+schema_version: 1
+mode: swe_verified_pce
+purpose: development_only_codex_agent_transport_comparison
+paths:
+  dataset_snapshot: output/SWE-bench_Verified/swe-verified-pce-inputs/20260831_verified500_91aa3ed5
+  image_manifest: configs/frozen_swe_verified_safe_pce/verified500-completion-v1-20261008/images.json
+  selection_manifest: configs/frozen_safe_pce_ace/verified_smoke_v1_20261022/pce-selection.json
+  prompt_source_config: configs/polybench_pce_hpc_formal_clean_20260825.yaml
+  plan_prompt_source_config: configs/prompts/swe_verified_safe_pce_planner_v6_anchor_ablation_20260913.yaml
+  code_prompt_source_config: configs/prompts/safe_pce_native_codex_code_v1.yaml
+  run_dir: output/SWE-bench_Verified/safe-pce-ace-verified-codex-smoke-v1-20261023/pce_evaluations
+plan:
+  executor: codex_cli
+  model: gpt-6-sol
+  reasoning_effort: high
+  codex_binary: ${HOME}/.local/lib/vibe-codex/0.160.1/bin/codex
+  codex_auth_file: ${HOME}/.codex/auth.json
+  codex_version: 0.160.1
+  max_steps: 0
+  cost_limit: 0.0
+  timeout: 1800
+  max_attempts: 3
+  submission_protocol: direct_human_markdown_v5
+code:
+  executor: codex_cli
+  model: gpt-6-sol
+  reasoning_effort: high
+  codex_binary: ${HOME}/.local/lib/vibe-codex/0.160.1/bin/codex
+  codex_auth_file: ${HOME}/.codex/auth.json
+  codex_version: 0.160.1
+  max_steps: 0
+  cost_limit: 0.0
+  timeout: 1800
+  max_attempts: 3
+docker:
+  workdir: /testbed
+  timeout: 1800
+  min_free_gb: 20
+  max_cached_images: 75
+container:
+  runtime: apptainer
+  module: tools/Apptainer
+  sif_cache_dir: /scratch/users/${USER}/vibe-coding-planning/shared/sif-cache
+  writable_tmpfs: true
+hpc:
+  submit: true
+  partition: batch
+  cpus_per_task: 1
+  mem: 4G
+  time: "01:00:00"
+  max_running_array_tasks: 3
+  poll_interval_seconds: 120
+  task_output_grace_seconds: 300
+  missing_task_grace_seconds: 600
+  max_task_attempts: 3
+  remote_env_file: ~/.config/vibe-coding-planning/deepseek.env
+  python_module: lang/Python/3.11
+  container_module: tools/Apptainer
+  python_bin: python3
+  job_name_prefix: safe-pce-ace-verified-codex-smoke-v1-20261023-pce
+  worker_config_path: configs/safe_pce_ace_verified_codex_smoke_source_v1_20261023.yaml
+evaluator:
+  slurm_timeout_outcome: unknown
+experiment_contract:
+  launch_authorized: false
+  development_only: true
+  baseline: configs/safe_pce_ace_verified_smoke_source_v1_20261022.yaml
+  baseline_completed_at: "2026-10-22T15:45:29Z"
+  changed_axis: planner_and_coder_agent_backend_only
+  model_and_harness_comparison_not_ds_quality_estimate: true
+  source_audit: native_events_post_execution_reject_disallowed_completions
+  resource_evidence: baseline_PCE_maxRSS_2104580K_on_Iris_1CPU_4G

@@ -280,7 +280,13 @@ construction (mocking only containers and models). Evidence Agents default to
 the shared `container.sif_cache_dir`; old `reflection.evidence_*` settings are
 supported overrides. Validate required environment settings before Agent waves.
 
-An Agent role may select the `codex_cli` executor instead of mini-swe. The
+An Agent role may select the `codex_cli` executor instead of mini-swe. Learning
+and review roles use the read-only JSON contract below. The opt-in Safe PCE
+Planner/Coder extension uses the same runtime with a phase-local writable
+repository and text/artifact submissions; its exact exception is documented in
+[`knowledge/safe-pce-codex-agent-acceptance-20261023.md`](knowledge/safe-pce-codex-agent-acceptance-20261023.md).
+It does not make learning or review repositories writable.
+The
 production Codex role entry point requires task-scoped SIF execution; it must
 never fall back to Host execution. Codex runs are ephemeral, with read-only
 scientific input mounts, receive prompts over stdin, ignore user configuration and repository

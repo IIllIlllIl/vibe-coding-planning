@@ -169,8 +169,10 @@ existing failed-status path instead of leaving stale `running` authority.
 `paths.safe_pce_config` references an existing Safe PCE config. It owns Planner
 and Coder models/prompts, network policy, SIF/cache authority, evaluator and
 PCE worker resources. The learning config owns ACE roles, candidate caps, search
-budgets and learning-phase resources. No additional Coder backend is introduced:
-P/C execution remains the existing mini-SWE path, intended for DeepSeek.
+budgets and learning-phase resources. P/C defaults remain the existing
+DeepSeek/mini-SWE path. The opt-in Native Codex Agent backend is described in
+[the transport acceptance note](knowledge/safe-pce-codex-agent-acceptance-20261023.md).
+It changes Agent transport, not PCE/ACE control or the evaluator.
 
 Preparation is exposed by:
 

@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 import hashlib
 import json
 import os
@@ -14,6 +14,7 @@ import yaml
 from src.config import DockerConfig
 from src.optimization.config import ContainerConfig, ModelConfig
 from src.optimization.hpc.config import HPCConfig
+from src.agents.pce_backend import load_agent_backends
 
 
 @dataclass(frozen=True)
@@ -58,6 +59,7 @@ class PolyBenchPCEConfig:
     plan_submission_protocol: str = "legacy_stdout_v1"
     agent_network_disabled: bool = False
     evaluator_network_disabled: bool = False
+    agent_backends: dict[str, dict[str, str]] = field(default_factory=dict)
 
 
 def _mapping(value: Any, name: str) -> dict[str, Any]:
@@ -72,8 +74,8 @@ def _model(value: dict[str, Any], *, temperature: float) -> ModelConfig:
         raise ValueError("model thinking must be enabled, disabled, or omitted")
     return ModelConfig(
         model=str(value["model"]),
-        api_base=str(value["api_base"]),
-        api_key_env=str(value.get("api_key_env", "DEEPSEEK_API_KEY")),
+        api_base="" if value.get("executor") == "codex_cli" else str(value["api_base"]),
+        api_key_env="" if value.get("executor") == "codex_cli" else str(value.get("api_key_env", "DEEPSEEK_API_KEY")),
         temperature=float(value.get("temperature", temperature)),
         max_steps=int(value.get("max_steps", 0)),
         cost_limit=float(value.get("cost_limit", 0.0)),
@@ -121,8 +123,9 @@ def load_polybench_pce_config(
     }:
         raise ValueError("unsupported PolyBench Plan submission protocol")
     code = _model(_mapping(raw.get("code"), "code"), temperature=0.0)
-    for model in (plan, code):
-        if require_api_keys and not os.environ.get(model.api_key_env):
+    agent_backends = load_agent_backends(raw, plan_protocol=plan_submission_protocol)
+    for role, model in (("plan", plan), ("code", code)):
+        if role not in agent_backends and require_api_keys and not os.environ.get(model.api_key_env):
             raise ValueError(f"environment variable {model.api_key_env} is not set")
     prompt_source = paths.get("prompt_source_config")
     if prompt_source:
@@ -276,6 +279,7 @@ def load_polybench_pce_config(
         )
 
     return PolyBenchPCEConfig(
+        agent_backends=agent_backends,
         config_path=config_path,
         dataset_snapshot=resolve(str(paths["dataset_snapshot"])),
         image_manifest=resolve(str(paths["image_manifest"])),

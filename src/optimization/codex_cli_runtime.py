@@ -1,4 +1,4 @@
-"""Native Codex CLI runtime for playbook Reflector and Curator workers."""
+"""Shared Native Codex transport: read-only JSON roles and opt-in PCE Agents."""
 
 from __future__ import annotations
 
@@ -33,13 +33,22 @@ class CodexSIFExecution:
     repository_dir: Path | None = None
     masked_paths: tuple[str, ...] = ("/opt/miniconda3/pkgs",)
     interpreter: str | None = None
+    repository_writable: bool = False
+    repository_cwd: str = "/testbed"
+    output_files: tuple[str, ...] = ("codex_final_response.json",)
 
     @property
     def cwd(self) -> Path:
-        return Path("/testbed" if self.repository_dir is not None else "/evidence")
+        return Path(self.repository_cwd if self.repository_dir is not None else "/evidence")
 
     @contextmanager
     def launch(self, model_config, environment, output_dir):
+        if not re.fullmatch(r"/testbed[0-9]*", self.repository_cwd):
+            raise ValueError("Codex repository cwd must be a task-local /testbed directory")
+        if self.repository_writable and self.repository_dir is None:
+            raise ValueError("Writable Codex execution requires a phase-local repository")
+        if any(Path(name).name != name or name in {"", ".", ".."} for name in self.output_files):
+            raise ValueError("Codex output filenames must be simple names")
         sif = self.sif_path.resolve(strict=True)
         binary_raw = _codex_binary(model_config)
         binary = Path(shutil.which(binary_raw) or binary_raw).resolve(strict=True)
@@ -79,7 +88,8 @@ class CodexSIFExecution:
                 (root / "output", "/agent-output", "rw"),
             ]
             if self.repository_dir is not None:
-                mounts.append((self.repository_dir.resolve(strict=True), "/testbed", "ro"))
+                mounts.append((self.repository_dir.resolve(strict=True), str(self.cwd),
+                               "rw" if self.repository_writable else "ro"))
             for target in self.masked_paths:
                 if not target.startswith("/opt/") or ".." in Path(target).parts:
                     raise ValueError("Codex masked paths must be under /opt")
@@ -103,12 +113,13 @@ class CodexSIFExecution:
             try:
                 yield prefix, launch_env, container_model, root / "output"
             finally:
-                raw_output = root / "output" / "codex_final_response.json"
-                if raw_output.is_symlink():
-                    raise CodexCLIError("Codex final response must be a regular file, not a symlink")
-                if raw_output.is_file():
-                    # Copy bytes verbatim, never repair scientific output.
-                    shutil.copyfile(raw_output, output_dir / raw_output.name)
+                for name in self.output_files:
+                    raw_output = root / "output" / name
+                    if raw_output.is_symlink():
+                        raise CodexCLIError("Codex final response must be a regular file, not a symlink")
+                    if raw_output.is_file():
+                        # Copy bytes verbatim, never repair scientific output.
+                        shutil.copyfile(raw_output, output_dir / raw_output.name)
 
 
 def _codex_binary(model_config: Mapping[str, Any]) -> str:
@@ -158,6 +169,7 @@ def _runtime_preflight(
     hidden_host_paths: tuple[Path, ...] = (),
     sif_isolation: bool = False,
     repository: bool = False,
+    repository_writable: bool = False,
 ) -> list[dict[str, Any]]:
     """Fail before inference when the pinned CLI or selected boundary fails."""
     binary = _codex_binary(model_config)
@@ -194,18 +206,26 @@ def _runtime_preflight(
 
     if sif_isolation:
         checks.append(_sif_isolation_preflight(command_prefix, environment, hidden_host_paths,
-                                               repository=repository))
+                                               repository=repository,
+                                               repository_writable=repository_writable,
+                                               repository_cwd=str(working_directory)))
 
     sandbox = subprocess.run(
         [
             *(command_prefix or []),
             binary,
             "sandbox",
+            *(_workspace_options(working_directory) if repository_writable else []),
             "--permission-profile",
-            ":read-only",
+            ":workspace-write" if repository_writable else ":read-only",
             "--cd",
             str(working_directory.resolve()),
-            "/bin/true",
+            *(["/bin/sh", "-c", 'set -eu; probe="$PWD/.vibe-codex-probe-$$"; '
+               'touch "$probe"; rm "$probe"; '
+               'touch ".git/.vibe-codex-probe-$$"; rm ".git/.vibe-codex-probe-$$"; '
+               'touch /agent-output/.vibe-codex-probe-$$; rm /agent-output/.vibe-codex-probe-$$; '
+               'if touch /evidence/.vibe-codex-probe-$$ 2>/dev/null; then exit 20; fi']
+              if repository_writable else ["/bin/true"]),
         ],
         text=True,
         capture_output=True,
@@ -214,7 +234,7 @@ def _runtime_preflight(
     )
     checks.append(
         {
-            "check": "read_only_sandbox",
+            "check": "workspace_write_sandbox" if repository_writable else "read_only_sandbox",
             "returncode": sandbox.returncode,
             "stdout": sandbox.stdout,
             "stderr": sandbox.stderr,
@@ -222,7 +242,7 @@ def _runtime_preflight(
     )
     if sandbox.returncode != 0:
         error = CodexCLIError(
-            "Codex read-only sandbox preflight failed: "
+            f"Codex {'workspace-write' if repository_writable else 'read-only'} sandbox preflight failed: "
             f"{sandbox.stderr.strip() or sandbox.stdout.strip()}"
         )
         error.trajectory = [  # type: ignore[attr-defined]
@@ -258,7 +278,8 @@ def _runtime_preflight(
     return checks
 
 
-def _sif_isolation_preflight(command_prefix, environment, hidden_host_paths=(), *, repository=False):
+def _sif_isolation_preflight(command_prefix, environment, hidden_host_paths=(), *,
+                             repository=False, repository_writable=False, repository_cwd="/testbed"):
     """Verify the outer boundary directly, without Codex or an inner sandbox.
 
     Probe only our disposable paths. Never read credentials or modify actual
@@ -278,7 +299,9 @@ test -d /agent-output
 test -d /tmp
 test -d /var/tmp
 repository="$1"
-shift
+writable="$2"
+repository_cwd="$3"
+shift 3
 for candidate in "$@"; do
     if test -e "$candidate" || test -L "$candidate"; then
         printf 'Unexpected host path visible: %s\n' "$candidate"; exit 11
@@ -296,19 +319,22 @@ for target in /evidence /opt/vibe-codex/bin /etc; do
     fi
 done
 if test "$repository" = 1; then
-    test -d /testbed
-    if touch /testbed/.vibe-isolation-probe-$$ 2>/dev/null; then
-        rm /testbed/.vibe-isolation-probe-$$; exit 14
+    test -d "$repository_cwd"
+    if test "$writable" = 1; then
+        touch "$repository_cwd/.vibe-isolation-probe-$$"
+        rm "$repository_cwd/.vibe-isolation-probe-$$"
+    elif touch "$repository_cwd/.vibe-isolation-probe-$$" 2>/dev/null; then
+        rm "$repository_cwd/.vibe-isolation-probe-$$"; exit 14
     fi
 fi
 for target in /agent-home /codex-state /agent-output /tmp /var/tmp; do
     touch "$target/.vibe-isolation-probe-$$"
     rm "$target/.vibe-isolation-probe-$$"
 done
-printf 'Host/proc paths hidden; inputs and image read-only; private scratch writable\n'
+printf 'Host/proc paths hidden; evidence and image read-only; repository writable=%s; private scratch writable\n' "$writable"
 '''
     command = [*command_prefix, "/bin/sh", "-c", script, "sif-outer-isolation-probe",
-               str(int(repository)),
+               str(int(repository)), str(int(repository_writable)), repository_cwd,
                *(str(path.resolve()) for path in hidden_host_paths)]
     probe_environment = dict(environment)
     probe_environment["VIBE_OUTER_HOST_SENTINEL"] = "synthetic-not-a-credential"
@@ -322,12 +348,22 @@ printf 'Host/proc paths hidden; inputs and image read-only; private scratch writ
     return record
 
 
+def _workspace_options(working_directory: Path) -> list[str]:
+    # PCE's existing submission contract uses Git's staging area. Explicitly
+    # grant only this disposable repository's .git and output directory, not
+    # another repository or the Host authentication/configuration authority.
+    roots = [str(working_directory / ".git"), "/agent-output"]
+    return ["--config", f"sandbox_workspace_write.writable_roots={json.dumps(roots)}",
+            "--config", "sandbox_workspace_write.network_access=true"]
+
+
 def _codex_command(
     model_config: Mapping[str, Any],
     *,
     working_directory: Path,
     output_path: Path,
     sif_isolation: bool = False,
+    repository_writable: bool = False,
 ) -> list[str]:
     if model_config.get("executor") != "codex_cli":
         raise ValueError("Codex runtime requires executor: codex_cli")
@@ -345,7 +381,7 @@ def _codex_command(
         "--ignore-user-config",
         "--ignore-rules",
         "--sandbox",
-        "read-only",
+        "workspace-write" if repository_writable else "read-only",
         "--skip-git-repo-check",
         "--json",
         "--color",
@@ -356,6 +392,8 @@ def _codex_command(
         f"model_reasoning_effort={json.dumps(effort)}",
         "--config",
         "project_doc_max_bytes=0",
+        *(_workspace_options(working_directory) if repository_writable else []),
+        *(["--config", 'web_search="disabled"'] if repository_writable else []),
         "--cd",
         str(working_directory.resolve()),
         "--output-last-message",
@@ -368,10 +406,35 @@ def run_codex_json_agent(*, container: CodexSIFExecution, **kwargs):
     """Production role entry point: a SIF boundary is mandatory, never fallback."""
     if not isinstance(container, CodexSIFExecution):
         raise ValueError("Codex playbook Agents require task-scoped SIF execution")
+    if container.repository_writable:
+        raise ValueError("Codex learning/review JSON roles must remain read-only")
     return _run_codex_json_agent(container=container, **kwargs)
 
 
 def _run_codex_json_agent(
+    **kwargs,
+) -> tuple[dict[str, Any], list[dict[str, Any]]]:
+    raw, trajectory = _run_codex_text_agent(**kwargs)
+    try:
+        output = _json_object(raw)
+    except (ValueError, json.JSONDecodeError) as exc:
+        error = PlaybookAgentOutputContractError(str(exc))
+        error.raw_response = raw
+        error.trajectory = trajectory
+        raise error from exc
+    return output, trajectory
+
+
+def run_codex_text_agent(*, container: CodexSIFExecution, **kwargs):
+    """PCE transport; the existing JSON roles retain their read-only contract."""
+    if not isinstance(container, CodexSIFExecution):
+        raise ValueError("Codex PCE Agents require task-scoped SIF execution")
+    if "codex_final_response.txt" not in container.output_files:
+        raise ValueError("Codex text transport requires its raw final-response artifact")
+    return _run_codex_text_agent(container=container, output_filename="codex_final_response.txt", **kwargs)
+
+
+def _run_codex_text_agent(
     *,
     model_config: Mapping[str, Any],
     working_directory: Path,
@@ -381,11 +444,12 @@ def _run_codex_json_agent(
     task: str,
     evidence_manifest_path: Path | None = None,
     container: CodexSIFExecution | None = None,
-) -> tuple[dict[str, Any], list[dict[str, Any]]]:
-    """Run one ephemeral Codex session and parse its final JSON.
+    output_filename: str = "codex_final_response.json",
+) -> tuple[str, list[dict[str, Any]]]:
+    """Run one ephemeral Codex session and retain its exact final text.
 
     Production sessions use the verified SIF boundary plus Codex's inner
-    read-only sandbox. Neither silently falls back to Host execution.
+    role-scoped sandbox. Neither silently falls back to Host execution.
 
     The prompt is passed on stdin so task contents never enter the process
     command line. Slurm owns the complete session deadline; this function does
@@ -404,7 +468,7 @@ def _run_codex_json_agent(
             "proves_agent_read": False,
         }
     attempt_dir.mkdir(parents=True, exist_ok=True)
-    output_path = attempt_dir / "codex_final_response.json"
+    output_path = attempt_dir / output_filename
     prompt = (
         f"{system.strip()}\n\n"
         f"Task:\n{task.strip()}\n\n"
@@ -421,7 +485,7 @@ def _run_codex_json_agent(
         with transport as (prefix, launch_env, effective_model, _output_dir):
             effective_cwd = container.cwd if container is not None else working_directory
             effective_output = (
-                Path("/agent-output/codex_final_response.json")
+                Path("/agent-output") / output_filename
                 if container is not None else output_path
             )
             preflight_checks = _runtime_preflight(
@@ -434,11 +498,13 @@ def _run_codex_json_agent(
                 ),
                 sif_isolation=container is not None,
                 repository=container is not None and container.repository_dir is not None,
+                repository_writable=container is not None and container.repository_writable,
             )
             command = [*prefix, *_codex_command(
                 effective_model, working_directory=effective_cwd,
                 output_path=effective_output,
                 sif_isolation=container is not None,
+                repository_writable=container is not None and container.repository_writable,
             )]
             completed = subprocess.run(
                 command, input=prompt, text=True, capture_output=True,
@@ -470,9 +536,10 @@ def _run_codex_json_agent(
                 "malformed_event_lines": malformed_events,
                 "stderr": completed.stderr,
                 "ephemeral": True,
-                "sandbox": "read-only",
+                "sandbox": "workspace-write" if container and container.repository_writable else "read-only",
                 "inner_sandbox": True,
                 "effective_prompt": prompt,
+                **({"raw_stdout": completed.stdout} if output_filename == "codex_final_response.txt" else {}),
                 "execution_boundary": "task_scoped_sif" if container else "direct_cli",
             },
         },
@@ -490,13 +557,6 @@ def _run_codex_json_agent(
         error = CodexCLIError("Codex CLI did not write its final response")
         error.trajectory = trajectory  # type: ignore[attr-defined]
         raise error
-    raw = output_path.read_text(encoding="utf-8")
-    try:
-        output = _json_object(raw)
-    except (ValueError, json.JSONDecodeError) as exc:
-        error = PlaybookAgentOutputContractError(str(exc))
-        error.raw_response = raw  # type: ignore[attr-defined]
-        error.trajectory = trajectory  # type: ignore[attr-defined]
-        raise error from exc
+    raw = output_path.read_bytes().decode("utf-8")
     trajectory.append({"role": "assistant", "content": raw})
-    return output, trajectory
+    return raw, trajectory

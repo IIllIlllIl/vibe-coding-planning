@@ -64,6 +64,10 @@ def pce_semantic_sha256(config: PolyBenchPCEConfig) -> str:
         root / "src" / "agents" / "plan_agent.py",
         root / "src" / "agents" / "planning_artifact.py",
         root / "src" / "agents" / "code_agent.py",
+        root / "src" / "agents" / "pce_backend.py",
+        *([root / "src" / "optimization" / name for name in
+           ("codex_cli_runtime.py", "codex_private_mount.py")]
+          if getattr(config, "agent_backends", {}) else []),
         root / "src" / "environment" / "apptainer_env.py",
         root / "src" / "environment" / "repository_baseline.py",
         *sorted((root / "src" / "polybench_pce").glob("*.py")),
@@ -80,6 +84,7 @@ def pce_semantic_sha256(config: PolyBenchPCEConfig) -> str:
             "agent_network_disabled": config.agent_network_disabled,
             "evaluator_network_disabled": config.evaluator_network_disabled,
             "code": asdict(config.code),
+            **({"agent_backends": config.agent_backends} if getattr(config, "agent_backends", {}) else {}),
             "docker": asdict(config.docker),
             "container": {
                 **asdict(config.container),

@@ -1,0 +1,119 @@
+experiment_contract:
+  identity: gepa_safe_pce_verified_codex_smoke_v1_20261023
+  launch_authorized: false
+  engineering_baseline_config: configs/gepa_safe_pce_verified_smoke_v1_20261022.yaml
+  safe_pce_source_config: configs/safe_pce_ace_verified_codex_smoke_source_v1_20261023.yaml
+  objective: resolved_rate
+  planner_records_application: true
+  development_only: true
+  untouched_holdout_claim: false
+  baseline_completed_at: '2026-10-22T15:45:29Z'
+  changed_axis: planner_and_coder_native_codex_transport
+  metric_improvement_required: false
+  conditional_coverage: proposal_validation_requires_strict_minibatch_improvement; refiner_only_on_size_violation
+  acceptance:
+    - phase_local_writable_repository_git_index_and_output_preflight_before_inference
+    - no_reference_or_hidden_test_authority_in_planner_or_coder_inputs
+    - exact_plan_handoff_and_agent_authored_patch_verified_without_host_replacement
+    - full_native_events_and_original_final_outputs_reach_training_evidence
+    - one_completed_proposal_and_final_checkpoint_with_existing_resume_flow
+    - structural_dataflow_audit_and_manual_source_noise_and_agent_behavior_review
+  budget:
+    pce_evaluation_slots_without_cache: {minimum: 5, maximum: 6}
+    reflector_calls: 2
+    curator_calls: 1
+    refiner_calls: conditional
+    controller_submission_limit: 24
+  source_boundary: same_classifier_post_execution_rejection_not_equivalent_pre_execution_interception
+  downstream_dataset: RPG_adapter_not_in_this_smoke
+paths:
+  dataset_snapshot: output/SWE-bench_Verified/safe-pce-ace-verified-codex-smoke-inputs-v1-20261023
+  safe_pce_config: output/SWE-bench_Verified/safe-pce-ace-verified-codex-smoke-inputs-v1-20261023/pce_source/base_pce.yaml
+  initial_guideline: configs/prompts/safe_pce_hybrid_seed_v1.json
+  run_dir: output/SWE-bench_Verified/safe-pce-ace-verified-codex-smoke-v1-20261023
+task:
+  semantics: safe_pce_resolution_v1
+reflection:
+  model: deepseek-v4-flash
+  api_base: https://api.deepseek.com
+  api_key_env: DEEPSEEK_API_KEY
+  temperature: 0.0
+  max_steps: 100
+  cost_limit: 3.0
+  timeout: 1800
+hybrid:
+  enabled: true
+  max_items: 10
+  condition_tokens: 48
+  item_guide_tokens: 96
+  prompt_bundle: configs/prompts/safe_pce_hybrid_ace_v1.yaml
+  evidence_sif_cache_dir: /scratch/users/${USER}/vibe-coding-planning/shared/sif-cache
+  evidence_image: codex-inspection:python312-rg14-v1
+  evidence_sif_sha256: b383e57e939505cdd158205066e495f6e3ca7e9932000f1a1d3fe3e26a1f0277
+  dataset_file_sha256:
+    manifest.json: e6456a0437e56391ffb32a12a959d7393126f142936b65c250c807d624c554d7
+    train.jsonl: 1086c66fe0838844a3d8c76b7927a0cc568b39fe244ba8482cfd3f26d863256c
+    validation.jsonl: e573ebd33fe97d1135e5c048d1b99f0b66f475a2ba26dfa944ba676c5baf7054
+  reflector_model:
+    executor: codex_cli
+    codex_binary: ${HOME}/.local/lib/vibe-codex/0.160.1/bin/codex
+    codex_auth_file: ${HOME}/.codex/auth.json
+    codex_version: 0.160.1
+    model: gpt-6-sol
+    reasoning_effort: high
+  curator_model:
+    executor: codex_cli
+    codex_binary: ${HOME}/.local/lib/vibe-codex/0.160.1/bin/codex
+    codex_auth_file: ${HOME}/.codex/auth.json
+    codex_version: 0.160.1
+    model: gpt-6-sol
+    reasoning_effort: high
+  refiner_enabled: true
+  refiner_model:
+    executor: codex_cli
+    codex_binary: ${HOME}/.local/lib/vibe-codex/0.160.1/bin/codex
+    codex_auth_file: ${HOME}/.codex/auth.json
+    codex_version: 0.160.1
+    model: gpt-6-sol
+    reasoning_effort: high
+  shared_guide_enabled: false
+search:
+  max_iterations: 1
+  max_metric_calls: 6
+  projection_metric_calls: 6
+  reflection_minibatch_size: 2
+  train_case_repetitions: 1
+  primary_metric: resolved_rate
+  parallel: 1
+  seed: 42
+  skip_perfect_score: false
+  min_proposals: 1
+docker:
+  workdir: /testbed
+  timeout: 30
+  min_free_gb: 20
+  max_cached_images: 75
+container:
+  runtime: none
+execution:
+  backend: hpc_slurm
+hpc:
+  submit: true
+  remote_project_dir: /scratch/users/${USER}/vibe-coding-planning/staging/gepa_safe_pce_verified_codex_smoke_v1_20261023
+  remote_task_dir: /scratch/users/${USER}/vibe-coding-planning/run_state/hpc_tasks/gepa_safe_pce_verified_codex_smoke_v1_20261023
+  remote_env_file: ~/.config/vibe-coding-planning/deepseek.env
+  ulhpc_config: configs/ulhpc_submit.yaml
+  partition: batch
+  cpus_per_task: 1
+  mem: 4G
+  time: 00:30:00
+  poll_interval_seconds: 120
+  task_output_grace_seconds: 300
+  missing_task_grace_seconds: 600
+  max_task_attempts: 2
+  python_module: lang/Python/3.11
+  container_module: tools/Apptainer
+  python_bin: python3
+  job_name_prefix: gepa_safe_pce_verified_codex_smoke_v1_20261023
+  worker_config_path: configs/gepa_safe_pce_verified_codex_smoke_v1_20261023.yaml
+mode: safe_pce_hybrid_ace

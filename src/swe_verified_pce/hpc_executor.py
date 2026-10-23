@@ -67,6 +67,10 @@ def pce_semantic_sha256(
         root / "src" / "agents" / "plan_agent.py",
         root / "src" / "agents" / "planning_artifact.py",
         root / "src" / "agents" / "code_agent.py",
+        root / "src" / "agents" / "pce_backend.py",
+        *([root / "src" / "optimization" / name for name in
+           ("codex_cli_runtime.py", "codex_private_mount.py")]
+          if getattr(config, "agent_backends", {}) else []),
         root / "src" / "environment" / "apptainer_env.py",
         root / "src" / "environment" / "repository_baseline.py",
         root / "src" / "environment" / "repository_history.py",
@@ -83,6 +87,7 @@ def pce_semantic_sha256(
             "plan": asdict(config.plan),
             **({"planning_rules": config.planning_rules} if getattr(config, "planning_rules", "") else {}),
             "code": asdict(config.code),
+            **({"agent_backends": config.agent_backends} if getattr(config, "agent_backends", {}) else {}),
             "docker": asdict(config.docker),
             "container": {
                 **asdict(config.container),

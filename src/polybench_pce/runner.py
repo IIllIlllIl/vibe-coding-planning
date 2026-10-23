@@ -10,6 +10,7 @@ import shutil
 from typing import Any, Callable
 
 from src.agents import code_agent, plan_agent
+from src.agents.pce_backend import agent_runner
 from src.config import AgentConfig, Config, EvaluatorConfig, PromptConfig, SystemConfig
 from src.environment.apptainer_env import ApptainerEnvironment, ApptainerSifCache
 from src.environment.docker_env import DockerCapacityWindow
@@ -86,7 +87,7 @@ class PolyBenchPCERunner:
             docker=self.config.docker,
             agent=self._agent_config(model),
             evaluator=EvaluatorConfig(timeout=self.config.evaluator_timeout),
-            api_key=__import__("os").environ[model.api_key_env],
+            api_key=__import__("os").environ[model.api_key_env] if model.api_key_env else "",
         )
 
     def _checkpoint(self, phase: str) -> dict[str, Any] | None:
@@ -358,7 +359,9 @@ class PolyBenchPCERunner:
                     submission_protocol
                     == plan_agent.DIRECT_HUMAN_BOUNDED_MARKDOWN_PROTOCOL
                 )
-                plan, trajectory = plan_agent.run(
+                plan, trajectory = agent_runner(plan_agent.run, role="plan", config=self.config,
+                    case=case, workspace=plan_workspace, attempt_dir=self.attempt_dir,
+                    source_access_path=self.source_access_path, usage=self.usage)(
                     self._base_config(self.config.plan),
                     case.issue_description,
                     env,
@@ -475,7 +478,9 @@ class PolyBenchPCERunner:
                         plan_instance_template="",
                     ),
                 )
-                raw_patch, trajectory = code_agent.run(
+                raw_patch, trajectory = agent_runner(code_agent.run, role="code", config=self.config,
+                    case=case, workspace=code_workspace, attempt_dir=self.attempt_dir,
+                    source_access_path=self.source_access_path, usage=self.usage)(
                     code_config,
                     str(plan_checkpoint["plan"]),
                     case.issue_description,
