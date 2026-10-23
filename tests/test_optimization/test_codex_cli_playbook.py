@@ -230,8 +230,12 @@ def test_parallel_codex_calls_use_distinct_transient_homes(
     def invoke(index: int):
         work = tmp_path / f"work-{index}"
         work.mkdir()
+        # Concurrent calls use independent authenticated streams. One stream
+        # is exclusively leased so its refresh token cannot race.
+        stream = tmp_path / f"auth-stream-{index}.json"
+        stream.write_bytes(auth_file.read_bytes())
         return codex_cli_runtime._run_codex_json_agent(
-            model_config=_model(auth_file),
+            model_config=_model(stream),
             working_directory=work,
             attempt_dir=tmp_path / f"attempt-{index}",
             system="system",

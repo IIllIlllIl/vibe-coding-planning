@@ -33,6 +33,9 @@ def worker_envelope(manifest, started, status, **fields):
 
 
 def worker_failure(manifest, started, stage, exc, *, contract_error=False):
-    return worker_envelope(manifest, started, "agent_failed", failure_stage=stage,
+    disposition = getattr(exc, "retry_disposition", None)
+    return worker_envelope(manifest, started,
+                           "blocking_failed" if disposition == "block_run" else "agent_failed", failure_stage=stage,
                            failure_kind="agent_output_contract" if contract_error else "operational",
-                           error_type=type(exc).__name__, error=str(exc))
+                           error_type=type(exc).__name__, error=str(exc),
+                           **({"retry_disposition": disposition} if disposition else {}))

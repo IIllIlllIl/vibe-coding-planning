@@ -17,6 +17,12 @@ class TaskError(Exception):
     """
 
 
+class PermanentProviderError(FatalError):
+    """Authentication, billing or hard quota failure requiring external repair."""
+
+    retry_disposition = "block_run"
+
+
 class AgentTaskError(TaskError):
     """A structured failure attributable to an agent under its run contract."""
 

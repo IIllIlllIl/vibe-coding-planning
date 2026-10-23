@@ -82,7 +82,7 @@ repair/acceptance task.
 
 - Learning: `configs/gepa_safe_pce_verified_codex_smoke_v2_20261023.yaml`.
 - PCE source: `configs/safe_pce_ace_verified_codex_smoke_source_v2_20261023.yaml`.
-- Supervisor: `configs/safe_pce_ace_verified_codex_smoke_supervisor_v2_20261023.yaml`.
+- Supervisor: `configs/archive/supervisor_launches/safe_pce_ace_verified_codex_smoke_supervisor_v2_20261023.yaml`.
 - Input snapshot: `output/SWE-bench_Verified/safe-pce-ace-verified-codex-smoke-inputs-v2-20261023`.
 
 The existing preparation module generated a fresh snapshot. Train remains
@@ -102,3 +102,43 @@ remaining per-attempt `workspaces`, zero submission `workdir` targets. No
 deletion was needed. Failure records, trajectories, task outputs, manifests,
 Slurm logs, SIFs and prepared history caches were retained. This inspection does
 not claim to scan or reclaim unrelated experiments or node-local files.
+
+## Terminal v2 evidence and recovery acceptance
+
+The v2 run passed CLI-version, outer-isolation and writable Git-index/output
+preflights on both PCE attempts. Inference then failed with `token_expired` and
+`refresh_token_reused`; neither attempt produced a valid Plan, patch or scored
+PCE result. The remote auth source still had its October 6 refresh timestamp.
+This establishes unusable authentication, without identifying which earlier
+process first rotated its token. A copied per-call auth file without refreshed
+state persistence was an inherited backend defect, not a PCE-specific design.
+
+The second array was accepted as `6151254` despite an `sbatch` socket timeout
+that lost its receipt. The old task state stayed `SUBMITTING`, and the local
+Supervisor blocked. Native version/permission preflights were therefore no
+longer the failure boundary. The v2 evidence and frozen runtime/source configs
+remain retained; its terminal supervisor launch identity is archived.
+
+The existing Native backend now leases one private auth stream through a call,
+persists CLI-authored refresh bytes atomically and recovers interrupted leases.
+Calls using the same source serialize; independent private homes still prevent
+temporary-state races. Permanent provider failures block existing Workers
+without scientific scoring. Shared Slurm submission now preserves accepted
+receipts and reconciles uncertain outcomes through existing task-batch state;
+unavailable accounting never becomes permission to submit a duplicate array.
+See `../engineering-contracts.md` for the reusable contracts.
+
+Local acceptance passed **656 tests, with two historical assertions deselected**
+as already documented in `safe-pce-ace-backend-acceptance-20261022.md`.
+Coverage includes real local multiprocess auth exclusion, refresh handoff,
+abrupt-process recovery, original-output preservation, actual Worker failure
+disposition, and accepted-submission/lost-receipt recovery. Compilation and
+`git diff --check` passed. Live remote authentication and cross-node lease
+behavior remain HPC acceptance requirements.
+
+The separate v3 learning/source/supervisor configs preserve the v2 tasks,
+prompts, models, proposal budget and Iris 1 CPU/4G limits. They name a fresh
+snapshot and run, import no failed v2 output, and document the auth/recovery
+repair as the changed axis. One configured auth source serializes Native calls;
+the three-element Slurm array concurrency limit is unchanged. The config alone
+does not authorize launch.

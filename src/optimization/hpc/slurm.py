@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from pathlib import Path
+import re
 import subprocess
 from typing import Any
 
@@ -13,6 +14,18 @@ class SlurmTaskStatus:
     state: str
     elapsed_seconds: int | None = None
     raw: str = ""
+
+
+class SlurmSubmissionUnknown(RuntimeError):
+    """The scheduler may have accepted the job, but its receipt was lost."""
+
+
+class SlurmSubmissionRejected(RuntimeError):
+    """The scheduler explicitly rejected the job specification or permission."""
+
+
+class SlurmLookupUnavailable(RuntimeError):
+    """Absence of a matching job could not be established from scheduler state."""
 
 
 def _run_optional_command(args: list[str]) -> dict[str, Any]:
@@ -114,19 +127,29 @@ def query_slurm_array_job_id(job_name: str) -> str | None:
     squeue = _run_optional_command(
         ["squeue", "-h", "-n", job_name, "-o", "%A"]
     )
-    if squeue["returncode"] == 0:
-        for line in str(squeue["stdout"]).splitlines():
-            value = line.strip()
-            if value.isdigit():
-                return value
+    def job_ids(stdout):
+        return {line.strip().split("_", 1)[0] for line in str(stdout).splitlines()
+                if line.strip().split("_", 1)[0].isdigit()}
+
+    queued = job_ids(squeue["stdout"]) if squeue["returncode"] == 0 else set()
+    if len(queued) > 1:
+        raise SlurmLookupUnavailable("Multiple Slurm jobs match the submission identity")
+    if queued:
+        return next(iter(queued))
     sacct = _run_optional_command(
         ["sacct", "-X", "-n", "--name", job_name, "--format=JobID"]
     )
-    if sacct["returncode"] == 0:
-        for line in reversed(str(sacct["stdout"]).splitlines()):
-            value = line.strip().split("_", 1)[0]
-            if value.isdigit():
-                return value
+    accounted = job_ids(sacct["stdout"]) if sacct["returncode"] == 0 else set()
+    if len(accounted) > 1:
+        raise SlurmLookupUnavailable("Multiple accounted Slurm jobs match the submission identity")
+    if accounted:
+        return next(iter(accounted))
+    if squeue["returncode"] != 0 or sacct["returncode"] != 0:
+        raise SlurmLookupUnavailable(
+            "Slurm submission lookup unavailable: "
+            f"squeue={squeue['returncode']} {squeue['stderr']}; "
+            f"sacct={sacct['returncode']} {sacct['stderr']}"
+        )
     return None
 
 
@@ -152,16 +175,26 @@ def collect_slurm_resource_snapshot(job_id: str | None = None) -> dict[str, Any]
 
 
 def submit_slurm_array(script_path: Path) -> str | None:
-    result = subprocess.run(
-        ["sbatch", str(script_path)],
-        capture_output=True,
-        text=True,
-        check=False,
-    )
-    if result.returncode != 0:
-        raise RuntimeError(
-            "sbatch failed: " + (result.stderr or result.stdout).strip()[:1000]
+    try:
+        result = subprocess.run(
+            ["sbatch", str(script_path)], capture_output=True,
+            text=True, check=False, timeout=60,
         )
+    except subprocess.TimeoutExpired as exc:
+        raise SlurmSubmissionUnknown("sbatch receipt timed out; acceptance is unknown") from exc
+    receipt = re.search(r"\bSubmitted batch job\s+(\d+)\b", result.stdout or "")
+    if receipt:
+        return receipt.group(1)
+    if result.returncode != 0:
+        detail = (result.stderr or result.stdout).strip()[:1000]
+        rejected = any(marker in detail.lower() for marker in (
+            "invalid partition", "invalid account", "invalid qos", "invalid job array",
+            "access denied", "permission denied", "invalid generic resource",
+            "memory specification can not be satisfied", "requested node configuration is not available",
+        ))
+        # An unrecognized client/transport failure is not proof of rejection.
+        error = SlurmSubmissionRejected if rejected else SlurmSubmissionUnknown
+        raise error("sbatch failed: " + detail)
     output = (result.stdout or "").strip()
     parts = output.split()
     return parts[-1] if parts and parts[-1].isdigit() else None

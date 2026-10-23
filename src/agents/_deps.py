@@ -10,7 +10,7 @@ import logging
 import urllib.parse
 from typing import Any, Callable
 
-from src.exceptions import FatalError
+from src.exceptions import FatalError, PermanentProviderError
 
 logger = logging.getLogger(__name__)
 _MINI_SWE_AGENT_VERSION = "1.17.5"
@@ -136,6 +136,8 @@ _PERMANENT_PROVIDER_ERROR_MARKERS = (
     "invalid api key",
     "invalid_api_key",
     "quota exceeded",
+    "refresh_token_reused",
+    "token_expired",
     "unauthorized",
 )
 
@@ -369,7 +371,7 @@ def raise_for_permanent_provider_error(
         return
     normalized = f"{exception_name}: {exception_message}".lower()
     if any(marker in normalized for marker in _PERMANENT_PROVIDER_ERROR_MARKERS):
-        raise FatalError(
+        raise PermanentProviderError(
             "Permanent model-provider failure; refusing to score this as an "
             f"agent outcome (exit_status={exception_name})."
         )

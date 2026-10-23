@@ -16,6 +16,7 @@ from src.optimization.behavioral_models import (
 from src.optimization.behavioral_runtime import BehavioralLocalChecker
 from src.optimization.config import OfflineExecutionConfig, load_optimization_config
 from src.optimization.hpc.task_batch import atomic_json
+from src.optimization.hpc.worker_contract import worker_failure
 
 
 def _manifest_path(manifest_path: Path, value: object) -> Path:
@@ -121,18 +122,14 @@ def run_task(
         return 0
     except Exception as exc:
         failure = {
-            "status": "agent_failed",
-            "started_at": started_at,
-            "finished_at": datetime.now(timezone.utc).isoformat(),
+            **worker_failure(manifest, started_at, failure_stage, exc),
             "mode": "behavioral_checker",
             "fingerprint": manifest.get("fingerprint"),
             "instance_id": manifest.get("instance_id"),
             "candidate_sha256": text_sha256(rules),
-            "error_type": type(exc).__name__,
-            "error": str(exc),
-            "failure_stage": failure_stage,
-            "failure_kind": "operational",
         }
+        if hasattr(exc, "trajectory"):
+            failure["failure_trajectory"] = exc.trajectory
         if manifest.get("repetition_index") is not None:
             failure["repetition_index"] = manifest["repetition_index"]
         atomic_json(attempt_dir / "failure.json", failure)

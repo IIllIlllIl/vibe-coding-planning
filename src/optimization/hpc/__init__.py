@@ -2,6 +2,9 @@
 
 from src.optimization.hpc.config import HPCConfig
 from src.optimization.hpc.slurm import (
+    SlurmLookupUnavailable,
+    SlurmSubmissionRejected,
+    SlurmSubmissionUnknown,
     SlurmTaskStatus,
     collect_slurm_resource_snapshot,
     normalize_slurm_state,
@@ -15,6 +18,9 @@ from src.optimization.hpc.slurm import (
 __all__ = [
     "HPCConfig",
     "SlurmTaskStatus",
+    "SlurmLookupUnavailable",
+    "SlurmSubmissionRejected",
+    "SlurmSubmissionUnknown",
     "collect_slurm_resource_snapshot",
     "normalize_slurm_state",
     "parse_slurm_duration",

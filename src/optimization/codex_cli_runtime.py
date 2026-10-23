@@ -4,18 +4,22 @@ from __future__ import annotations
 
 from contextlib import contextmanager, nullcontext
 from dataclasses import dataclass
+import fcntl
 import hashlib
 import json
 import os
 from pathlib import Path
 import re
 import shutil
+import stat
 import subprocess
 import tempfile
 from typing import Any, Iterator, Mapping
 
 from src.agents.output_contract import AgentOutputContractError, json_object
 from src.agents.runtime import AgentConfigurationError, REASONING_EFFORTS
+from src.agents._deps import raise_for_permanent_provider_error
+from src.exceptions import PermanentProviderError
 
 
 class CodexCLIError(RuntimeError):
@@ -141,7 +145,7 @@ def _codex_auth_file(model_config: Mapping[str, Any]) -> Path:
         raise ValueError("Codex runtime requires a non-empty codex_auth_file")
     path = Path(os.path.expandvars(raw)).expanduser()
     if not path.is_file():
-        raise CodexCLIError("Codex authentication authority is missing")
+        raise CodexConfigurationError("Codex authentication authority is missing")
     return path
 
 
@@ -149,17 +153,108 @@ def _codex_auth_file(model_config: Mapping[str, Any]) -> Path:
 def _isolated_codex_environment(
     model_config: Mapping[str, Any],
 ) -> Iterator[dict[str, str]]:
-    """Give one Agent private volatile Codex state and a transient auth copy."""
-    auth_source = _codex_auth_file(model_config)
-    with tempfile.TemporaryDirectory(prefix="vibe-codex-home-") as raw_home:
+    """Lease one auth stream while keeping every call's other state independent.
+
+    Only the CLI-produced auth bytes survive the call. A private recovery lease
+    retains refreshed credentials across a killed worker, outside run artifacts.
+    Independent concurrent streams need separately authenticated source files.
+    """
+    auth_source = _codex_auth_file(model_config).resolve()
+    state = auth_source.with_name(f".{auth_source.name}.vibe-state")
+    state.mkdir(mode=0o700, exist_ok=True)
+    if state.is_symlink() or not state.is_dir() or state.stat().st_mode & 0o077:
+        raise CodexConfigurationError("Codex authentication state must be a private directory")
+    descriptor = os.open(state / "lock", os.O_CREAT | os.O_RDWR | os.O_NOFOLLOW, 0o600)
+    with os.fdopen(descriptor, "rb") as lock:
+        if not stat.S_ISREG(os.fstat(lock.fileno()).st_mode):
+            raise CodexConfigurationError("Codex authentication lock must be a regular file")
+        fcntl.flock(lock, fcntl.LOCK_EX)
+        lease_path = state / "lease.json"
+        if lease_path.exists():
+            _recover_auth_lease(auth_source, state, lease_path)
+        seed = _auth_bytes(auth_source)
+        raw_home = tempfile.mkdtemp(prefix="session-", dir=state)
         codex_home = Path(raw_home)
-        codex_home.chmod(0o700)
         private_auth = codex_home / "auth.json"
-        shutil.copyfile(auth_source, private_auth)
-        private_auth.chmod(0o600)
+        lease = {"home": codex_home.name, "source_sha256": hashlib.sha256(seed).hexdigest()}
+        try:
+            _atomic_private_bytes(private_auth, seed)
+            _atomic_private_bytes(lease_path, json.dumps(lease).encode())
+        except BaseException:
+            # No CLI has run, so this copy cannot contain a refreshed token.
+            shutil.rmtree(codex_home)
+            lease_path.unlink(missing_ok=True)
+            raise
         environment = os.environ.copy()
         environment["CODEX_HOME"] = str(codex_home)
-        yield environment
+        try:
+            yield environment
+        finally:
+            # Do this before deleting private state, even when inference or its
+            # caller fails. Preserve the lease for recovery if persistence fails.
+            try:
+                _persist_auth(auth_source, private_auth, lease["source_sha256"])
+            except OSError as exc:
+                raise CodexConfigurationError(
+                    "Codex authentication update could not be saved; private recovery lease retained"
+                ) from exc
+            shutil.rmtree(codex_home)
+            lease_path.unlink()
+
+
+def _auth_bytes(path: Path) -> bytes:
+    if path.is_symlink() or not path.is_file():
+        raise CodexConfigurationError("Codex authentication cache must be a regular file")
+    raw = path.read_bytes()
+    try:
+        valid = isinstance(json.loads(raw), dict)
+    except (ValueError, UnicodeError):
+        valid = False
+    if not valid:
+        raise CodexConfigurationError("Codex authentication cache must contain a JSON object")
+    return raw
+
+
+def _atomic_private_bytes(path: Path, raw: bytes) -> None:
+    with tempfile.NamedTemporaryFile(dir=path.parent, prefix=f".{path.name}-", delete=False) as file:
+        temporary = Path(file.name)
+        try:
+            file.write(raw)
+            file.flush()
+            os.fsync(file.fileno())
+            os.replace(temporary, path)
+        finally:
+            temporary.unlink(missing_ok=True)
+
+
+def _persist_auth(source: Path, private: Path, source_digest: str) -> None:
+    # An external login/logout must win over an older in-flight copy. No auth
+    # content, including its digest, is exposed in logs or scientific artifacts.
+    if not source.exists() or not private.exists():
+        return
+    current = _auth_bytes(source)
+    if hashlib.sha256(current).hexdigest() != source_digest:
+        return
+    refreshed = _auth_bytes(private)
+    if refreshed != current:
+        _atomic_private_bytes(source, refreshed)
+
+
+def _recover_auth_lease(source: Path, state: Path, lease_path: Path) -> None:
+    lease = json.loads(_auth_bytes(lease_path))
+    home = lease.get("home", "")
+    digest = lease.get("source_sha256", "")
+    if not isinstance(home, str) or not re.fullmatch(r"session-[a-zA-Z0-9_-]+", home):
+        raise CodexConfigurationError("Invalid private Codex authentication recovery lease")
+    if not isinstance(digest, str) or not re.fullmatch(r"[0-9a-f]{64}", digest):
+        raise CodexConfigurationError("Invalid private Codex authentication recovery lease")
+    directory = state / home
+    if directory.is_symlink():
+        raise CodexConfigurationError("Codex authentication recovery directory must not be a symlink")
+    if directory.exists():
+        _persist_auth(source, directory / "auth.json", digest)
+        shutil.rmtree(directory)
+    lease_path.unlink()
 
 
 def _runtime_preflight(
@@ -494,42 +589,49 @@ def _run_codex_text_agent(
         f"Task:\n{task.strip()}\n\n"
         f"Input:\n{user.strip()}\n"
     )
-    with _isolated_codex_environment(model_config) as environment:
-        # Bare transport remains available for isolated CLI unit tests. All
-        # playbook role dispatchers must supply the SIF execution boundary.
-        transport = (
-            container.launch(model_config, environment, attempt_dir)
-            if container is not None
-            else nullcontext(([], environment, model_config, attempt_dir))
-        )
-        with transport as (prefix, launch_env, effective_model, _output_dir):
-            effective_cwd = container.cwd if container is not None else working_directory
-            effective_output = (
-                Path("/agent-output") / output_filename
-                if container is not None else output_path
+    completed = None
+    teardown_error = None
+    try:
+        with _isolated_codex_environment(model_config) as environment:
+            # Bare transport remains available for isolated CLI unit tests. All
+            # playbook role dispatchers must supply the SIF execution boundary.
+            transport = (
+                container.launch(model_config, environment, attempt_dir)
+                if container is not None
+                else nullcontext(([], environment, model_config, attempt_dir))
             )
-            preflight_checks = _runtime_preflight(
-                effective_model, working_directory=effective_cwd,
-                environment=launch_env, command_prefix=prefix,
-                hidden_host_paths=(
-                    (container.evidence_dir, container.evidence_dir.parent, attempt_dir,
-                     Path.home(), Path.cwd())
-                    if container is not None else ()
-                ),
-                sif_isolation=container is not None,
-                repository=container is not None and container.repository_dir is not None,
-                repository_writable=container is not None and container.repository_writable,
-            )
-            command = [*prefix, *_codex_command(
-                effective_model, working_directory=effective_cwd,
-                output_path=effective_output,
-                sif_isolation=container is not None,
-                repository_writable=container is not None and container.repository_writable,
-            )]
-            completed = subprocess.run(
-                command, input=prompt, text=True, capture_output=True,
-                check=False, env=launch_env,
-            )
+            with transport as (prefix, launch_env, effective_model, _output_dir):
+                effective_cwd = container.cwd if container is not None else working_directory
+                effective_output = (
+                    Path("/agent-output") / output_filename
+                    if container is not None else output_path
+                )
+                preflight_checks = _runtime_preflight(
+                    effective_model, working_directory=effective_cwd,
+                    environment=launch_env, command_prefix=prefix,
+                    hidden_host_paths=(
+                        (container.evidence_dir, container.evidence_dir.parent, attempt_dir,
+                         Path.home(), Path.cwd())
+                        if container is not None else ()
+                    ),
+                    sif_isolation=container is not None,
+                    repository=container is not None and container.repository_dir is not None,
+                    repository_writable=container is not None and container.repository_writable,
+                )
+                command = [*prefix, *_codex_command(
+                    effective_model, working_directory=effective_cwd,
+                    output_path=effective_output,
+                    sif_isolation=container is not None,
+                    repository_writable=container is not None and container.repository_writable,
+                )]
+                completed = subprocess.run(
+                    command, input=prompt, text=True, capture_output=True,
+                    check=False, env=launch_env,
+                )
+    except Exception as exc:
+        if completed is None:
+            raise
+        teardown_error = exc
     events: list[dict[str, Any]] = []
     malformed_events: list[str] = []
     for line in completed.stdout.splitlines():
@@ -566,6 +668,19 @@ def _run_codex_text_agent(
     ]
     if manifest_record is not None:
         trajectory.append({"role": "host_evidence_manifest", "content": manifest_record})
+    if teardown_error is not None:
+        if output_path.is_file() and not output_path.is_symlink():
+            trajectory.append({"role": "assistant", "content": output_path.read_bytes().decode("utf-8")})
+        teardown_error.trajectory = trajectory
+        raise teardown_error
+    native_errors = [event for event in events if event.get("type") in {"error", "turn.failed"}]
+    if completed.returncode != 0 or native_errors:
+        provider_error = completed.stderr + "\n" + json.dumps(native_errors)
+        try:
+            raise_for_permanent_provider_error("CodexCLIError", provider_error)
+        except PermanentProviderError as error:
+            error.trajectory = trajectory
+            raise
     if completed.returncode != 0:
         error = CodexCLIError(
             f"Codex CLI exited with status {completed.returncode}: "

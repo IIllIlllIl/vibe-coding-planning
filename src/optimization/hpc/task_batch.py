@@ -18,6 +18,9 @@ from typing import Any, Callable, Sequence
 from src.exceptions import ControllerYield
 from src.optimization.hpc.config import HPCConfig
 from src.optimization.hpc.slurm import (
+    SlurmLookupUnavailable,
+    SlurmSubmissionUnknown,
+    SlurmSubmissionRejected,
     normalize_slurm_state,
     query_slurm_array_job_id,
     query_slurm_task_status,
@@ -207,7 +210,11 @@ class SlurmTaskBatch:
 
         job_id = state.get("active_job_id")
         if phase == "SUBMITTING" and not job_id:
-            job_id = query_slurm_array_job_id(job_name(attempt))
+            try:
+                job_id = query_slurm_array_job_id(job_name(attempt))
+            except SlurmLookupUnavailable as exc:
+                state["submission_lookup_error"] = str(exc)
+                job_id = None
             if job_id is None:
                 submitting_since = float(
                     state.setdefault("submitting_since", time.time())
@@ -224,7 +231,8 @@ class SlurmTaskBatch:
                 ):
                     raise RuntimeError(
                         "Slurm submission outcome stayed ambiguous beyond "
-                        "the configured grace window"
+                        "the configured grace window; no replacement job was submitted. "
+                        + state.get("submission_lookup_error", state.get("submission_error", ""))
                     )
                 raise ControllerYield(
                     batch_dir=str(batch_dir),
@@ -232,6 +240,7 @@ class SlurmTaskBatch:
                     reason="waiting_for_submission_reconciliation",
                 )
             state.pop("submitting_since", None)
+            state.pop("submission_lookup_error", None)
             self._save_state(
                 state_path,
                 state,
@@ -351,6 +360,10 @@ class SlurmTaskBatch:
 
         self._archive_failed_outputs(batch_dir, pending, attempt - 1)
         script_path = write_script([task.index for task in pending], attempt)
+        if "submission_error" in state:
+            state["last_submission_error"] = state.pop("submission_error")
+        state.pop("submission_lookup_error", None)
+        state["submitting_since"] = time.time()
         self._save_state(
             state_path,
             state,
@@ -358,7 +371,20 @@ class SlurmTaskBatch:
             active_attempt=attempt,
             active_job_id=None,
         )
-        new_job_id = self.submitter(script_path)
+        try:
+            new_job_id = self.submitter(script_path)
+        except SlurmSubmissionUnknown as exc:
+            state["submission_error"] = str(exc)
+            self._save_state(state_path, state, phase="SUBMITTING",
+                             active_attempt=attempt, active_job_id=None)
+            raise ControllerYield(batch_dir=str(batch_dir), job_id=None,
+                                  reason="waiting_for_submission_reconciliation") from exc
+        except SlurmSubmissionRejected as exc:
+            self._save_terminal_state(state_path, state, phase="BLOCKED", error=str(exc),
+                failure_kind="submission_rejected", attempt=attempt, job_id=None, details=[])
+            raise TaskBatchBlocked(str(exc)) from exc
+        if new_job_id:
+            state.pop("submitting_since", None)
         self._save_state(
             state_path,
             state,

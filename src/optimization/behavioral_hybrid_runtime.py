@@ -36,7 +36,8 @@ def phase_identity(config, role, payload):
                           for name in ("behavioral_hybrid_runtime.py", "behavioral_hybrid_worker.py",
                                        "behavioral_hybrid_ace.py", "behavioral_hybrid.py", "playbook.py",
                                        "playbook_runtime.py", "codex_cli_runtime.py",
-                                       "hpc/phase_wave.py", "hpc/worker_contract.py",
+                                       "hpc/phase_wave.py", "hpc/worker_contract.py", "hpc/slurm.py", "hpc/task_batch.py",
+                                       "../exceptions.py",
                                        "ace_transaction.py", "agent_references.py",
                                        "ace_evidence.py", "behavioral_hybrid_evidence.py", "audit.py")}
     identity["source"]["agent_protocol"] = hashlib.sha256(

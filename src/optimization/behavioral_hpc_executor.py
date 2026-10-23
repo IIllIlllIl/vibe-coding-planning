@@ -40,6 +40,8 @@ def behavioral_checker_semantic_sha256(config: OptimizationConfig) -> str:
         root / "src/agents/_deps.py",
         root / "src/agents/runtime.py",
         root / "src/agents/output_contract.py",
+        root / "src/exceptions.py",
+        root / "src/optimization/hpc/worker_contract.py",
         root / "src/optimization/behavioral_models.py",
         root / "src/optimization/behavioral_repository.py",
         root / "src/optimization/behavioral_runtime.py",

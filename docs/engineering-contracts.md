@@ -67,6 +67,17 @@ outcome. Conditional candidate validation or Refiner may remain unexercised;
 report those coverage limits rather than changing selection or caps to force them.
 Local tests establish contracts, not model-backed compute-node readiness.
 
+Slurm client communication failure is not proof that a submission was rejected.
+`hpc/slurm.py` distinguishes an unknown receipt from a definite scheduler error.
+`SlurmTaskBatch` persists `SUBMITTING` before `sbatch`; an RPC timeout yields to
+the existing submission-reconciliation path without advancing the attempt or
+submitting a replacement. Reconcile by the same unique job identity using
+`squeue`/`sacct`. An unavailable query is not an absent job; wait within the
+configured grace window, then block with the diagnostic if still unresolved.
+Validated atomic completed outputs remain reusable even when accounting is
+unavailable. Illegal partitions and other definite errors still fail directly.
+Do not hide a scheduler-database outage by changing experiment logic or resources.
+
 Checker result ordinals are positions in the current visible list, not persistent
 learning IDs. Project hybrid items to explicit consecutive rule_number values
 while preserving conditions/guides and keeping internal IDs in learning artifacts.
@@ -458,17 +469,47 @@ mount isolation and the selected Codex transport on a compute node
 with the startup verification tool before a migrated smoke. Local mocked tests
 are not that proof.
 
-Native Codex under Slurm must use an exact, compute-node-tested CLI version.
-Codex CLI 0.156.1 cannot build its bubblewrap sandbox when Slurm provides the
-private nested `/tmp/<job-id>` mount used on Iris; the current verified pin is
-0.155.1 for the previous Host runtime. The SIF runtime must pass its own
-compute-node preflight with that pin. Concurrent Codex processes must not share mutable
+Native Codex under Slurm must use the exact CLI pin in its reviewed config and
+matching compute-node evidence. Historical CLI 0.156.1 failed to build its
+bubblewrap sandbox under Iris's nested private `/tmp/<job-id>`; the old Host
+runtime therefore pinned 0.155.1. A larger version number or a login-node CLI
+check does not establish SIF compatibility. Concurrent Codex processes must not share mutable
 `$CODEX_HOME/tmp` or `shell_snapshots`: 12-way Slurm execution exposed cleanup
 races that removed another process's sandbox launcher. Each Agent therefore
-receives a distinct temporary `CODEX_HOME`; only `auth.json` is copied into it
-with mode 0600, and the complete directory is deleted when the call ends. The
-private authentication authority remains outside configs, commands, logs, and
-retained experiment artifacts.
+receives a distinct private `CODEX_HOME`; task history, tmp and snapshots are
+never shared between calls.
+
+Authentication lifecycle is owned by the existing Codex backend, not PCE or
+GEPA. One configured authentication source is one exclusive stream: hold its
+private filesystem lock through the entire call because Codex may refresh at
+any time. Preserve the CLI-authored refreshed bytes atomically with mode 0600,
+including on failure. Never overwrite a newer external login or undo a logout.
+Manual login/logout must use the same lock or run while the stream is inactive;
+writers that bypass the lease cannot be synchronized by this backend.
+Parallel streams require separately authenticated sources, not copies of one
+OAuth session; one source deliberately serializes its Codex calls while the
+ordinary Slurm array/wave submission remains unchanged.
+
+The source's mode-0700 private sidecar holds the active call and a recovery lease
+outside experiment storage. A subsequent lock owner recovers an interrupted
+call's auth update before deleting its old non-auth state and creating a fresh
+home. Normal completion removes the temporary home and lease; retain private
+recovery state when persistence fails. No credentials or credential digests may
+enter commands, configs, logs, staged evidence or retained experiment artifacts.
+If final auth persistence fails, preserve the original final artifact and native
+trajectory and block further work; never repair or regenerate the Agent output.
+Cross-node filesystem locking and live authentication still require HPC
+verification; synthetic local tests are not proof of those properties.
+
+Reuse `raise_for_permanent_provider_error` for mini-SWE and Native Codex. A
+permanent auth/billing/quota failure exposes `retry_disposition=block_run`; the
+shared Worker failure contract and existing PCE Workers propagate a blocking
+operational output. It cannot become a scored unresolved Plan or a partial
+learning update. Classify Native CLI diagnostics/error events, not successful
+Agent prose or repository tool output that happens to mention authentication.
+An expired/reused refresh token requires a fresh private login; retries cannot
+repair it. This follows the
+[official managed-auth persistence guidance](https://learn.chatgpt.com/docs/auth/ci-cd-auth).
 
 Before inference, the worker checks the exact CLI version and verifies both
 isolation boundaries using the same isolated environment as the real call.
