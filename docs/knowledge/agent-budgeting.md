@@ -5,6 +5,14 @@
 
 ## Budget Layers
 
+Current Safe PCE (`direct_human_markdown_v5`) disables the first four Host
+Agent limits below on both mini-SWE and Native Codex. The common PCE adapter
+records `agent_execution_policy` and leaves the enclosing Worker/Slurm deadline
+in force. Repository preparation, evaluator and startup/validation operations
+retain their own bounds; they are not Agent exploration budgets. Existing
+configuration fields remain readable for historical analysis. Legacy workflows
+below retain their versioned behavior; this policy does not rewrite them.
+
 | Layer | Controls | Trustworthy terminal meaning |
 |---|---|---|
 | Step limit | Number of Agent reasoning/tool cycles | Agent did not converge within interaction budget |

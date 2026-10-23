@@ -39,6 +39,9 @@ def behavioral_checker_semantic_sha256(config: OptimizationConfig) -> str:
     paths = [
         root / "src/agents/_deps.py",
         root / "src/agents/runtime.py",
+        root / "src/agents/codex_hooks.py",
+        root / "src/agents/plan_submission.py",
+        root / "src/environment/source_access.py",
         root / "src/agents/output_contract.py",
         root / "src/exceptions.py",
         root / "src/optimization/hpc/worker_contract.py",

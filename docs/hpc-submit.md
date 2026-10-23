@@ -109,6 +109,14 @@ Recheck partition defaults and actual AllocTRES; switching to bigmem while
 retaining an explicit 4G request does not request its larger default allocation.
 No partition or memory increase is authorized by these measurements alone.
 
+For Native jobs with Agent networking disabled, retain CLI provider networking
+and disable only the tool permission profile. Use the same generated policy
+for startup checks and inference; `verify_codex_sif_startup.py` accepts
+`--tool-network-disabled` with the existing preflight modes. The production
+runtime checks actual socket permission denial before model use. Do not use
+a whole-container `--network none` flag for the Native CLI or modify Host
+firewall/DNS state to implement this policy.
+
 ## Retained Entry Points
 
 - Offline: `scripts/hpc_submit_batch.sh`, `scripts/hpc_resume_loop.py`, and

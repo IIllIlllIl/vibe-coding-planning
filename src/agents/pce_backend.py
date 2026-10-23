@@ -5,18 +5,15 @@ SIF runtime and returns the same exact Plan/patch and trajectory interfaces.
 """
 from __future__ import annotations
 
-from functools import partial
+from dataclasses import replace
 import hashlib
 from pathlib import Path
-import shlex
 
 from jinja2 import StrictUndefined, Template
 
-from src.agents import plan_agent
 from src.agents.runtime import codex_options, executor_name, run_agent
-from src.environment.source_access import (
-    append_source_access_event, classify_source_access, extract_http_urls,
-)
+from src.agents.plan_submission import validate_human_plan, validate_code_submission
+from src.environment.source_access import extract_http_urls
 from src.exceptions import AgentTaskError
 from src.optimization.hpc.task_batch import atomic_json
 
@@ -57,61 +54,52 @@ def agent_runner(default, *, role, config, case, workspace, attempt_dir,
     """Select only the Agent. Callers retain their original phase lifecycle."""
     backend = getattr(config, "agent_backends", {}).get(role, {})
     def invoke(*args, **kwargs):
+        safe = getattr(config, "plan_submission_protocol", "") == "direct_human_markdown_v5"
+        if safe:
+            # Legacy fields remain loadable for historical analysis. Current
+            # Safe PCE Agents use the enclosing Worker deadline on both backends.
+            agent_config = replace(args[0], agent=replace(args[0].agent,
+                max_steps=0, cost_limit=0.0, timeout=0))
+            args = (agent_config, *args[1:])
+            if role == "code":
+                kwargs = dict(kwargs, phase_timeout_seconds=None)
+            usage.write("agent_execution_policy", phase=role, executor=executor_name(backend),
+                        step_limit=0, cost_limit=0, command_timeout=None, phase_timeout=None,
+                        deadline_owner="worker")
         def native():
             context = dict(backend=backend, sif_path=Path(case.image.sif_path),
                            workspace=workspace, attempt_dir=attempt_dir / f"codex_{role}",
                            workdir=config.docker.workdir, source_access_path=source_access_path,
                            usage=usage, instance_id=case.instance_id)
+            context["tool_network_disabled"] = getattr(config, "agent_network_disabled", False)
             return (_run_plan if role == "plan" else _run_code)(*args, **kwargs, **context)
-        return run_agent(backend, mini_swe=partial(default, *args, **kwargs), codex_cli=native)
+        def mini():
+            if not safe:
+                return default(*args, **kwargs)
+            index = 2 if role == "plan" else 3
+            mini_args = list(args)
+            mini_args[index] = _AgentEnvironment(args[index])
+            mini_kwargs = dict(kwargs, **({"validate_submission_in_loop": True} if role == "code" else {}))
+            return default(*mini_args, **mini_kwargs)
+        return run_agent(backend, mini_swe=mini, codex_cli=native)
     return invoke
 
 
-def _audit_sources(trajectory, *, issue, path, phase, instance_id):
-    """Post-execution audit, not the mini-SWE pre-execution interceptor.
+class _AgentEnvironment:
+    """Only the Agent command view is unbounded; Host preparation is unchanged."""
+    def __init__(self, environment):
+        self.environment = environment
 
-Commands with disallowed acquisition invalidate the completion before its
-scientific checkpoint. Native events remain the raw authority, including on
-failure. This does not claim prevention or complete network surveillance.
-"""
-    commands = {}
-    unsupported = False
-    for message in trajectory:
-        if message.get("role") != "codex_cli":
-            continue
-        content = message["content"]
-        if content.get("malformed_event_lines"):
-            unsupported = True
-        for event in content.get("events", []):
-            item = event.get("item", {})
-            if item.get("type") == "web_search":
-                unsupported = True
-            if item.get("type") == "command_execution":
-                command = item.get("command")
-                if not isinstance(command, str):
-                    unsupported = True
-                    continue
-                commands[item.get("id", command)] = command
-    blocked = False
-    for command in commands.values():
-        inspected = command
-        try:
-            words = shlex.split(command)
-            if len(words) == 3 and Path(words[0]).name in {"bash", "sh", "zsh"} and words[1] in {"-c", "-lc"}:
-                inspected = words[2]
-        except ValueError:
-            pass
-        decision = classify_source_access(inspected, prompt_urls=frozenset(extract_http_urls(issue)))
-        if decision is not None:
-            append_source_access_event(path, {**decision, "phase": phase,
-                "instance_id": instance_id, "executor": "codex_cli", "executed": True,
-                "execution_status": "native_post_execution_audit"}, command=command)
-            blocked |= decision["decision"] == "block"
-    return blocked or unsupported
+    def __getattr__(self, name):
+        return getattr(self.environment, name)
+
+    def execute(self, command, *args, **kwargs):
+        return self.environment.execute(command, *args, **dict(kwargs, timeout=0))
 
 
 def _execute(config, issue, env, *, phase, variables, backend, sif_path, workspace,
-             attempt_dir, workdir, source_access_path, usage, instance_id):
+             attempt_dir, workdir, source_access_path, usage, instance_id, allow_empty_submission=False,
+             tool_network_disabled=False):
     from src.optimization.codex_cli_runtime import CodexSIFExecution, run_codex_text_agent
     system_template = (config.prompts.plan_generation_prompt if phase == "plan"
                        else config.prompts.code_generation_prompt)
@@ -130,6 +118,12 @@ def _execute(config, issue, env, *, phase, variables, backend, sif_path, workspa
     atomic_json(evidence / "task.json", dict(task=issue, **variables))
     boundary = CodexSIFExecution(sif_path=sif_path, evidence_dir=evidence,
         repository_dir=workspace, repository_writable=True, repository_cwd=workdir,
+        tool_network_disabled=tool_network_disabled,
+        source_policy={"prompt_urls": list(extract_http_urls(issue)),
+                       "submission_contract": {"phase": phase, "allow_empty": allow_empty_submission,
+                                               "workdir": workdir},
+                       "context": {"phase": phase, "instance_id": instance_id}},
+        source_access_log=source_access_path,
         output_files=("codex_final_response.txt", "submission.patch") if phase == "code"
                      else ("codex_final_response.txt",))
     try:
@@ -139,18 +133,12 @@ def _execute(config, issue, env, *, phase, variables, backend, sif_path, workspa
             evidence_manifest_path=evidence / "manifest.json")
     except Exception as exc:
         trajectory = getattr(exc, "trajectory", [])
-        _audit_sources(trajectory, issue=issue, path=source_access_path,
-                       phase=phase, instance_id=instance_id)
         atomic_json(attempt_dir / "failure.json", {"error_type": type(exc).__name__,
                     "error": str(exc), "trajectory": trajectory})
         raise
     atomic_json(attempt_dir / "trajectory.json", trajectory)
     usage.write("codex_agent_completed", phase=phase, executor="codex_cli", model=backend["model"],
                 reasoning_effort=backend["reasoning_effort"])
-    if _audit_sources(trajectory, issue=issue, path=source_access_path,
-                      phase=phase, instance_id=instance_id):
-        raise AgentTaskError("Native Codex completion failed source-access/trace validation",
-                             phase=phase, reason="codex_source_or_trace_rejected", trajectory=trajectory)
     if any(event.get("type") in {"turn.failed", "error"}
            for message in trajectory if message.get("role") == "codex_cli"
            for event in message["content"].get("events", [])):
@@ -167,10 +155,10 @@ def _run_plan(config, issue, env, *, planning_rules="", model_wrapper=None,
         raise ValueError("Native PCE Planner requires the Safe PCE direct boundary")
     raw, trajectory = _execute(config, issue, env, phase="plan",
                               variables={"planning_rules": planning_rules}, **context)
-    plan, error = plan_agent._extract_bounded_direct_plan(raw, start_marker="START_PLAN", end_marker="END_PLAN")
-    error = error or plan_agent._direct_plan_markdown_error(plan, require_nrpv=False)
-    if error:
-        raise AgentTaskError(str(error), phase="plan", reason="plan_invalid_markdown", trajectory=trajectory)
+    try:
+        plan = validate_human_plan(raw)
+    except ValueError as exc:
+        raise AgentTaskError(str(exc), phase="plan", reason="plan_invalid_markdown", trajectory=trajectory) from exc
     return plan, trajectory
 
 
@@ -178,24 +166,26 @@ def _run_code(config, plan, issue, env, *, model_wrapper=None, failure_trajector
               phase_timeout_seconds=None, allow_empty_submission=False, **context):
     del model_wrapper, failure_trajectory_path
     # Native CLI is owned by the same Worker/Slurm deadline; no nested retry loop.
-    # PolyBench's existing optional phase timer is shared rather than reimplemented.
-    from src.agents.code_agent import _phase_timer
-    with _phase_timer(phase_timeout_seconds):
-        raw, trajectory = _execute(config, issue, env, phase="code", variables={"plan": plan}, **context)
+    del phase_timeout_seconds
+    raw, trajectory = _execute(config, issue, env, phase="code", variables={"plan": plan},
+        allow_empty_submission=allow_empty_submission, **context)
     patch_path = context["attempt_dir"] / "submission.patch"
-    if raw.strip() != "COMPLETE_TASK_AND_SUBMIT_FINAL_OUTPUT" or not patch_path.is_file() or patch_path.is_symlink():
-        raise AgentTaskError("Codex Coder did not submit its raw patch artifact", phase="code",
-                             reason="code_not_submitted", trajectory=trajectory)
-    patch = patch_path.read_bytes().decode("utf-8")
-    if not patch.strip() and not allow_empty_submission:
-        raise AgentTaskError("Codex Coder submitted an empty patch", phase="code",
-                             reason="code_empty_patch", trajectory=trajectory)
+    patch_bytes = patch_path.read_bytes() if patch_path.is_file() and not patch_path.is_symlink() else None
+    try:
+        validate_code_submission(raw, patch_bytes, allow_empty=allow_empty_submission)
+    except ValueError as exc:
+        reason = "code_empty_patch" if patch_bytes is not None and not patch_bytes.strip() else "code_not_submitted"
+        raise AgentTaskError(str(exc), phase="code", reason=reason, trajectory=trajectory) from exc
     # A mismatch is rejected, never replaced with a Host-derived diff.
     diff = env.execute("set -o pipefail; git diff --cached --binary --full-index | sha256sum")
     digest = str(diff.get("stdout", diff.get("output", ""))).split()
-    if diff.get("returncode") != 0 or not digest or digest[0] != hashlib.sha256(patch.encode()).hexdigest():
+    if diff.get("returncode") != 0 or not digest:
         raise AgentTaskError("Codex patch differs from its staged submission", phase="code",
                              reason="code_submission_mismatch", trajectory=trajectory)
+    try:
+        validate_code_submission(raw, patch_bytes, allow_empty=allow_empty_submission, staged_sha256=digest[0])
+    except ValueError as exc:
+        raise AgentTaskError(str(exc), phase="code", reason="code_submission_mismatch", trajectory=trajectory) from exc
     atomic_json(context["attempt_dir"] / "submission.json", {
-        "patch_sha256": hashlib.sha256(patch.encode()).hexdigest(), "host_patch_transformation": False})
-    return patch, trajectory
+        "patch_sha256": hashlib.sha256(patch_bytes).hexdigest(), "host_patch_transformation": False})
+    return patch_bytes.decode("utf-8"), trajectory

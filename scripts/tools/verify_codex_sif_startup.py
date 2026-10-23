@@ -22,7 +22,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 from src.optimization.codex_cli_runtime import (  # noqa: E402
     CodexSIFExecution, _isolated_codex_environment, _runtime_preflight,
     _codex_binary, _sif_isolation_preflight, run_codex_json_agent,
-    _codex_command, _workspace_options, _permission_profile,
+    _codex_command, _permission_options, _permission_profile,
 )
 
 
@@ -40,11 +40,13 @@ def verify(role, boundary, model, attempt, *, infer):
                     hidden_host_paths=(boundary.evidence_dir, boundary.evidence_dir.parent, attempt),
                     sif_isolation=True, repository=boundary.repository_dir is not None,
                     repository_writable=boundary.repository_writable,
+                    tool_network_disabled=boundary.tool_network_disabled,
                 )
                 # Parse the exact production CLI mode without making a model call.
                 cli_command = _codex_command(effective, working_directory=boundary.cwd,
                     output_path=Path("/agent-output/codex_final_response.json"),
-                    repository_writable=boundary.repository_writable)
+                    repository_writable=boundary.repository_writable,
+                    tool_network_disabled=boundary.tool_network_disabled)
                 cli = subprocess.run([*prefix, *cli_command[:-1], "--help"], env=env,
                                      capture_output=True, text=True, check=False)
                 checks.append({"check": "production_cli_arguments", "returncode": cli.returncode,
@@ -52,8 +54,8 @@ def verify(role, boundary, model, attempt, *, infer):
                 if cli.returncode:
                     raise RuntimeError(f"{role} CLI arguments were rejected")
                 command = [*prefix, _codex_binary(effective), "sandbox",
-                           *(_workspace_options(boundary.cwd) if boundary.repository_writable else []),
-                           "--permission-profile", _permission_profile(boundary.repository_writable),
+                           *_permission_options(boundary.cwd, boundary.repository_writable, boundary.tool_network_disabled),
+                           "--permission-profile", _permission_profile(boundary.repository_writable, boundary.tool_network_disabled),
                            "--cd", str(boundary.cwd),
                            "/bin/sh", "-c",
                            'test "$HOME" = /agent-home || exit 20; '
@@ -107,6 +109,8 @@ def main():
     parser.add_argument("--model", default="gpt-6-sol")
     parser.add_argument("--reasoning-effort", default="high")
     parser.add_argument("--preflight-only", action="store_true")
+    parser.add_argument("--tool-network-disabled", action="store_true", default=None,
+                        help="Disable only Native tool networking; retain CLI service networking")
     parser.add_argument("--workspace-write", action="store_true",
                         help="Also verify writable repository/Git-index policy without model calls")
     parser.add_argument("--outer-isolation-only", action="store_true",
@@ -147,6 +151,7 @@ def main():
                             check=True, capture_output=True)
                 boundary = CodexSIFExecution(sif, evidence, repository,
                     interpreter="/usr/local/bin/python3" if args.generic_isolation_image else None,
+                    tool_network_disabled=args.tool_network_disabled,
                     repository_writable=args.workspace_write and repository is not None)
                 attempt = args.output_dir / role
                 attempt.mkdir()

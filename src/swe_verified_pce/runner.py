@@ -160,6 +160,7 @@ class SWEVerifiedPCERunner:
             capacity_window=self.capacity_window,
             timeout=timeout,
             writable_tmpfs=self.config.container.writable_tmpfs,
+            network_disabled=getattr(self.config, "agent_network_disabled", False),
             run_args=self._agent_container_run_args(),
             git_safe_directories=[self.config.docker.workdir],
             host_workdir=host_workdir,

@@ -7,6 +7,12 @@ prompts:
     implementation. Investigate the issue and the frozen repository at
     /testbed, then propose a task-specific Plan.
 
+    Use the project environment already provided in the SIF when repository
+    behavior must be examined. First try
+    `/opt/miniconda3/envs/testbed/bin/python` and its corresponding tools. If
+    that path is unavailable, inspect the Python environments already available
+    under `/opt/miniconda3/envs` before concluding that a dependency is missing.
+
     Use available tools and dependencies to resolve uncertainties that could
     change the approach. A separate Coder will implement the Plan in a fresh
     workspace. Base the approach on repository evidence and describe everything

@@ -264,6 +264,7 @@ def build_default_agent(
     instance_template: str | None = None,
     action_protocol: str = DEFAULT_ACTION_PROTOCOL,
     submission_validator: Callable[[str], Any] | None = None,
+    submission_error_feedback: Callable[[str], str] | None = None,
 ) -> Any:
     """Build a DefaultAgent with explicit config kwargs.
 
@@ -338,6 +339,8 @@ def build_default_agent(
                     try:
                         submission_validator(payload)
                     except ValueError as exc:
+                        if submission_error_feedback is not None:
+                            raise FormatError(submission_error_feedback(str(exc))) from exc
                         raise FormatError(
                             f"Host rejected the submission: {exc}\n"
                             "The command executed, but the task is not complete. "

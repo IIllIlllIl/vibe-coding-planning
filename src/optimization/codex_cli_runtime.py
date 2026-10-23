@@ -13,6 +13,7 @@ import re
 import shutil
 import stat
 import subprocess
+import sys
 import tempfile
 from typing import Any, Iterator, Mapping
 
@@ -42,6 +43,9 @@ class CodexSIFExecution:
     repository_writable: bool = False
     repository_cwd: str = "/testbed"
     output_files: tuple[str, ...] = ("codex_final_response.json",)
+    source_policy: dict[str, Any] | None = None
+    source_access_log: Path | None = None
+    tool_network_disabled: bool | None = None
 
     @property
     def cwd(self) -> Path:
@@ -49,6 +53,8 @@ class CodexSIFExecution:
 
     @contextmanager
     def launch(self, model_config, environment, output_dir):
+        if self.source_policy is not None and self.source_access_log is None:
+            raise CodexConfigurationError("Native source policy requires its Host audit path")
         if not re.fullmatch(r"/testbed[0-9]*", self.repository_cwd):
             raise ValueError("Codex repository cwd must be a task-local /testbed directory")
         if self.repository_writable and self.repository_dir is None:
@@ -93,6 +99,15 @@ class CodexSIFExecution:
                 (root / "tmp", "/var/tmp", "rw"),
                 (root / "output", "/agent-output", "rw"),
             ]
+            if self.source_policy is not None:
+                from src.agents.codex_hooks import write_bundle, POLICY_DIR, AUDIT_DIR, AUDIT_FILE, SUBMISSION_AUDIT_FILE
+                write_bundle(root / "policy", self.source_policy)
+                (root / "policy-audit").mkdir(mode=0o700)
+                (root / "policy-audit" / AUDIT_FILE).touch(mode=0o600)
+                if self.source_policy.get("submission_contract"):
+                    (root / "policy-audit" / SUBMISSION_AUDIT_FILE).touch(mode=0o600)
+                mounts.extend([(root / "policy", POLICY_DIR, "ro"),
+                               (root / "policy-audit", AUDIT_DIR, "rw")])
             if self.repository_dir is not None:
                 mounts.append((self.repository_dir.resolve(strict=True), str(self.cwd),
                                "rw" if self.repository_writable else "ro"))
@@ -126,6 +141,15 @@ class CodexSIFExecution:
                     if raw_output.is_file():
                         # Copy bytes verbatim, never repair scientific output.
                         shutil.copyfile(raw_output, output_dir / raw_output.name)
+                if self.source_policy is not None:
+                    names = [AUDIT_FILE]
+                    if self.source_policy.get("submission_contract"):
+                        names.append(SUBMISSION_AUDIT_FILE)
+                    for name in names:
+                        audit = root / "policy-audit" / name
+                        if audit.is_symlink() or not audit.is_file():
+                            raise CodexConfigurationError("Native policy audit is not a regular file")
+                        shutil.copyfile(audit, output_dir / name)
 
 
 def _codex_binary(model_config: Mapping[str, Any]) -> str:
@@ -267,6 +291,7 @@ def _runtime_preflight(
     sif_isolation: bool = False,
     repository: bool = False,
     repository_writable: bool = False,
+    tool_network_disabled: bool | None = None,
 ) -> list[dict[str, Any]]:
     """Fail before inference when the pinned CLI or selected boundary fails."""
     binary = _codex_binary(model_config)
@@ -312,9 +337,9 @@ def _runtime_preflight(
             *(command_prefix or []),
             binary,
             "sandbox",
-            *(_workspace_options(working_directory) if repository_writable else []),
+            *_permission_options(working_directory, repository_writable, tool_network_disabled),
             "--permission-profile",
-            _permission_profile(repository_writable),
+            _permission_profile(repository_writable, tool_network_disabled),
             "--cd",
             str(working_directory.resolve()),
             *(["/bin/sh", "-c", 'set -eu; probe=".vibe-codex-probe-$$"; '
@@ -353,6 +378,29 @@ def _runtime_preflight(
             {"role": "host_codex_preflight", "content": {"checks": checks}}
         ]
         raise error
+    if tool_network_disabled:
+        # A closed local port is not evidence of isolation: require the sandbox
+        # to reject connect itself, not an ordinary connection-refused/timeout.
+        interpreter = command_prefix[-2] if command_prefix else sys.executable
+        script = ("import errno,socket,sys\n"
+                  "try:\n"
+                  " with socket.socket() as s:\n"
+                  "  s.settimeout(3); s.connect(('127.0.0.1',9))\n"
+                  "except OSError as e:\n"
+                  " if e.errno not in (errno.EPERM,errno.EACCES): raise\n"
+                  " print('TOOL_NETWORK_DENIED')\n"
+                  "else: sys.exit('Tool network isolation was not enforced')\n")
+        network = subprocess.run([*(command_prefix or []), binary, "sandbox",
+            *_permission_options(working_directory, repository_writable, tool_network_disabled),
+            "--permission-profile", _permission_profile(repository_writable, tool_network_disabled),
+            "--cd", str(working_directory.resolve()), interpreter, "-c", script],
+            text=True, capture_output=True, check=False, env=dict(environment), timeout=30)
+        checks.append({"check": "tool_network_disabled", "returncode": network.returncode,
+                       "stdout": network.stdout, "stderr": network.stderr})
+        if network.returncode or "TOOL_NETWORK_DENIED" not in network.stdout:
+            error = CodexConfigurationError("Codex tool network isolation preflight failed")
+            error.trajectory = [{"role": "host_codex_preflight", "content": {"checks": checks}}]
+            raise error
     if hidden_host_paths and not sif_isolation:
         # Test actual visibility inside the same container, without a model
         # call or writes to scientific inputs. Paths are argv, not shell text.
@@ -452,20 +500,35 @@ printf 'Host/proc paths hidden; evidence and image read-only; repository writabl
     return record
 
 
-def _workspace_options(working_directory: Path) -> list[str]:
+def _workspace_options(working_directory: Path, *, tool_network_disabled: bool | None = None) -> list[str]:
     # Both sandbox preflight and inference select this exact named policy.
     # Workspace staging is required by the existing submission contract; only
     # this disposable repository's Git metadata receives the extra permission.
     cwd = json.dumps(str(working_directory.resolve()))
     profile = ('{extends=":workspace", workspace_roots={' + cwd + '=true}, '
                'filesystem={":workspace_roots"={"."="write", ".git"="write"}, '
-               '"/agent-output"="write"}, network={enabled=true}}')
+               '"/agent-output"="write"}, network={enabled=' + str(not tool_network_disabled).lower() + '}}')
     return ["--config", 'default_permissions="vibe-workspace"',
             "--config", f"permissions.vibe-workspace={profile}"]
 
 
-def _permission_profile(repository_writable: bool) -> str:
-    return "vibe-workspace" if repository_writable else ":read-only"
+def _permission_profile(repository_writable: bool, tool_network_disabled: bool | None = None) -> str:
+    return "vibe-workspace" if repository_writable else (
+        ":read-only" if tool_network_disabled is None else "vibe-read-only")
+
+
+def _permission_options(working_directory: Path, repository_writable: bool,
+                        tool_network_disabled: bool | None = None) -> list[str]:
+    """One policy for sandbox probes and inference; no legacy/profile mixing."""
+    if tool_network_disabled is not None and type(tool_network_disabled) is not bool:
+        raise CodexConfigurationError("tool_network_disabled must be boolean or omitted")
+    if repository_writable:
+        return _workspace_options(working_directory, tool_network_disabled=tool_network_disabled)
+    if tool_network_disabled is None:
+        return []
+    profile = '{extends=":read-only",network={enabled=' + str(not tool_network_disabled).lower() + '}}'
+    return ["--config", 'default_permissions="vibe-read-only"',
+            "--config", "permissions.vibe-read-only=" + profile]
 
 
 def _codex_command(
@@ -475,6 +538,8 @@ def _codex_command(
     output_path: Path,
     sif_isolation: bool = False,
     repository_writable: bool = False,
+    command_hook_options: tuple[str, ...] = (),
+    tool_network_disabled: bool | None = None,
 ) -> list[str]:
     if model_config.get("executor") != "codex_cli":
         raise ValueError("Codex runtime requires executor: codex_cli")
@@ -491,8 +556,9 @@ def _codex_command(
         "--ephemeral",
         "--ignore-user-config",
         "--ignore-rules",
-        *(_workspace_options(working_directory) if repository_writable
-          else ["--sandbox", "read-only"]),
+        *command_hook_options,
+        *(_permission_options(working_directory, repository_writable, tool_network_disabled)
+          if repository_writable or tool_network_disabled is not None else ["--sandbox", "read-only"]),
         "--skip-git-repo-check",
         "--json",
         "--color",
@@ -503,7 +569,7 @@ def _codex_command(
         f"model_reasoning_effort={json.dumps(effort)}",
         "--config",
         "project_doc_max_bytes=0",
-        *(["--config", 'web_search="disabled"'] if repository_writable else []),
+        *(["--config", 'web_search="disabled"'] if repository_writable or command_hook_options or tool_network_disabled else []),
         "--cd",
         str(working_directory.resolve()),
         "--output-last-message",
@@ -617,12 +683,35 @@ def _run_codex_text_agent(
                     sif_isolation=container is not None,
                     repository=container is not None and container.repository_dir is not None,
                     repository_writable=container is not None and container.repository_writable,
+                    tool_network_disabled=container.tool_network_disabled if container is not None else None,
                 )
+                command_hooks = ()
+                if container is not None and container.source_policy is not None:
+                    from src.agents.codex_hooks import hook_options, POLICY_DIR
+                    interpreter = prefix[-2]
+                    command_hooks = tuple(hook_options(interpreter,
+                        submission=bool(container.source_policy.get("submission_contract"))))
+                    probe = subprocess.run([*prefix, interpreter, POLICY_DIR + "/policy.pyz", "--self-test"],
+                        text=True, capture_output=True, check=False, env=launch_env, timeout=30)
+                    preflight_checks.append({"check": "source_policy_bundle", "returncode": probe.returncode,
+                                             "stdout": probe.stdout, "stderr": probe.stderr})
+                    if probe.returncode != 0 or '"policy_probe": "passed"' not in probe.stdout:
+                        raise CodexConfigurationError("Native source-policy bundle preflight failed")
+                    # Parse the actual hook TOML with the pinned CLI, without inference.
+                    features = subprocess.run([*prefix, _codex_binary(effective_model),
+                        *command_hooks[:-1], "features", "list"],
+                        text=True, capture_output=True, check=False, env=launch_env, timeout=30)
+                    preflight_checks.append({"check": "source_policy_hook_config", "returncode": features.returncode,
+                                             "stdout": features.stdout, "stderr": features.stderr})
+                    if features.returncode or not re.search(r"(?m)^hooks\s+.*\btrue\s*$", features.stdout):
+                        raise CodexConfigurationError("Pinned Codex did not enable source-policy hooks")
                 command = [*prefix, *_codex_command(
                     effective_model, working_directory=effective_cwd,
                     output_path=effective_output,
                     sif_isolation=container is not None,
                     repository_writable=container is not None and container.repository_writable,
+                    command_hook_options=command_hooks,
+                    tool_network_disabled=container.tool_network_disabled if container is not None else None,
                 )]
                 completed = subprocess.run(
                     command, input=prompt, text=True, capture_output=True,
@@ -663,11 +752,22 @@ def _run_codex_text_agent(
                 "effective_prompt": prompt,
                 **({"raw_stdout": completed.stdout} if output_filename == "codex_final_response.txt" else {}),
                 "execution_boundary": "task_scoped_sif" if container else "direct_cli",
+                "tool_network_disabled": container.tool_network_disabled if container else None,
             },
         },
     ]
     if manifest_record is not None:
         trajectory.append({"role": "host_evidence_manifest", "content": manifest_record})
+    policy_error = None
+    if container is not None and container.source_policy is not None:
+        from src.agents.codex_hooks import validate_native_commands, AUDIT_FILE
+        try:
+            records = validate_native_commands(trajectory, attempt_dir / AUDIT_FILE,
+                context=container.source_policy, source_log=container.source_access_log)
+            trajectory.append({"role": "host_command_policy", "content": {"records": records}})
+        except (OSError, ValueError, KeyError, TypeError) as exc:
+            policy_error = CodexConfigurationError("Native command-policy validation failed: " + str(exc))
+            trajectory.append({"role": "host_command_policy", "content": {"error": str(exc)}})
     if teardown_error is not None:
         if output_path.is_file() and not output_path.is_symlink():
             trajectory.append({"role": "assistant", "content": output_path.read_bytes().decode("utf-8")})
@@ -693,5 +793,17 @@ def _run_codex_text_agent(
         error.trajectory = trajectory  # type: ignore[attr-defined]
         raise error
     raw = output_path.read_bytes().decode("utf-8")
+    if container is not None and container.source_policy is not None and container.source_policy.get("submission_contract"):
+        from src.agents.codex_hooks import validate_native_submission, SUBMISSION_AUDIT_FILE
+        try:
+            records = validate_native_submission(raw, attempt_dir / SUBMISSION_AUDIT_FILE,
+                contract=container.source_policy["submission_contract"], output_dir=attempt_dir)
+            trajectory.append({"role": "host_submission_policy", "content": {"records": records}})
+        except (OSError, ValueError, KeyError, TypeError) as exc:
+            policy_error = CodexConfigurationError("Native submission-policy validation failed: " + str(exc))
+            trajectory.append({"role": "host_submission_policy", "content": {"error": str(exc)}})
     trajectory.append({"role": "assistant", "content": raw})
+    if policy_error is not None:
+        policy_error.trajectory = trajectory
+        raise policy_error
     return raw, trajectory

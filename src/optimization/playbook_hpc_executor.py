@@ -256,8 +256,17 @@ class PlaybookHPCExecutor:
             "role": role,
             "config_sha256": hashlib.sha256(self.config_path.read_bytes()).hexdigest(),
             "items": list(items),
+            "command_policy_source": self._command_policy_source(),
         }
         return self.run_dir / "hpc_tasks" / role / _sha(semantic)
+
+    @staticmethod
+    def _command_policy_source():
+        root = Path(__file__).resolve().parents[2]
+        return {name: hashlib.sha256((root / name).read_bytes()).hexdigest() for name in (
+            "src/agents/codex_hooks.py", "src/agents/plan_submission.py", "src/environment/source_access.py",
+            "src/environment/apptainer_env.py", "src/optimization/codex_cli_runtime.py",
+            "src/optimization/playbook_runtime.py")}
 
     def run_wave(
         self, role: str, items: Sequence[Mapping[str, Any]]
@@ -283,6 +292,7 @@ class PlaybookHPCExecutor:
             "role": role,
             "config_sha256": hashlib.sha256(self.config_path.read_bytes()).hexdigest(),
             "items": list(items),
+            "command_policy_source": self._command_policy_source(),
         }
         fingerprint = _sha(semantic)
         batch_dir = self.batch_dir_for(role, items)

@@ -71,9 +71,11 @@ def pce_semantic_sha256(
     sources = [
         root / "src" / "agents" / "_deps.py",
         root / "src" / "agents" / "plan_agent.py",
+        root / "src" / "agents" / "plan_submission.py",
         root / "src" / "agents" / "planning_artifact.py",
         root / "src" / "agents" / "code_agent.py",
         root / "src" / "agents" / "pce_backend.py",
+        root / "src" / "agents" / "codex_hooks.py",
         root / "src" / "agents" / "runtime.py",
         root / "src" / "agents" / "output_contract.py",
         root / "src" / "exceptions.py",
@@ -96,6 +98,7 @@ def pce_semantic_sha256(
                 str(path.relative_to(root)): file_sha256(path) for path in sources
             },
             "plan": asdict(config.plan),
+            **({"agent_network_disabled": True} if getattr(config, "agent_network_disabled", False) else {}),
             **({"planning_rules": config.planning_rules} if getattr(config, "planning_rules", "") else {}),
             "code": asdict(config.code),
             **({"agent_backends": config.agent_backends} if getattr(config, "agent_backends", {}) else {}),

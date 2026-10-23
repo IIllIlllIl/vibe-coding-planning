@@ -14,7 +14,6 @@ from __future__ import annotations
 
 import logging
 import json
-import re
 from collections.abc import Callable
 from pathlib import Path
 from typing import Any
@@ -27,6 +26,13 @@ from src.agents._deps import (
 )
 from src.config import Config
 from src.exceptions import AgentTaskError, CommandTimeoutError
+from src.agents.plan_submission import (
+    DIRECT_MARKDOWN_PLAN_PLACEHOLDER,
+    direct_plan_markdown_error as _direct_plan_markdown_error,
+    extract_bounded_direct_plan as _extract_bounded_direct_plan,
+    submission_feedback,
+    validate_human_plan,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -36,29 +42,11 @@ DIRECT_HUMAN_PLAN_MARKER = "START_PLAN"
 DIRECT_HUMAN_PLAN_END_MARKER = "END_PLAN"
 _DIRECT_PLAN_PAYLOAD_PREFIX = "__VIBE_DIRECT_PLAN_V1__\n"
 _DIRECT_PLAN_ENVELOPE_PAYLOAD_PREFIX = "__VIBE_DIRECT_PLAN_V2__\n"
-_DIRECT_PLAN_HEADINGS = (
-    "# Plan",
-    "## Navigation (N)",
-    "## Reproduction (R)",
-    "## Patch (P)",
-    "## Validation (V)",
-)
 DIRECT_NRPV_PROTOCOL = "direct_final_plan_v1"
 DIRECT_MARKDOWN_PROTOCOL = "direct_final_markdown_v2"
 DIRECT_MARKDOWN_TEMPLATE_PROTOCOL = "direct_final_markdown_v3"
 DIRECT_BOUNDED_MARKDOWN_PROTOCOL = "direct_final_markdown_v4"
 DIRECT_HUMAN_BOUNDED_MARKDOWN_PROTOCOL = "direct_human_markdown_v5"
-DIRECT_MARKDOWN_PLAN_PLACEHOLDER = "[[TASK_SPECIFIC_MARKDOWN_PLAN]]"
-_PROTOCOL_RESIDUE = (
-    "</parameter>",
-    "<berkeleyos>",
-    "</berkeleyos>",
-    "<result>",
-    "</result>",
-    "<｜｜DSML｜｜",
-    "</｜｜DSML｜｜",
-)
-_PROTOCOL_RESIDUE_LINES = ("</description>",)
 
 PLAN_ACTION_PROTOCOL = """\
 ## Planner action and final-submission protocol
@@ -222,15 +210,34 @@ def _direct_plan_agent_class(
     *,
     bounded: bool = False,
     start_marker: str = DIRECT_PLAN_MARKER,
+    submission_validator: Callable[[str], Any] | None = None,
 ) -> type:
     """Add a Plan-only terminal response without changing mini-swe-agent."""
 
     class DirectPlanAgent(default_agent):
+        def has_finished(self, output):
+            if submission_validator is not None and output.get("returncode", 0) == 0:
+                raw = output.get("output", "")
+                lines = raw.lstrip().splitlines()
+                if lines and lines[0].strip() in {"MINI_SWE_AGENT_FINAL_OUTPUT", "COMPLETE_TASK_AND_SUBMIT_FINAL_OUTPUT"}:
+                    from minisweagent.agents.default import FormatError
+                    self.add_message("user", "Host observed submission stdout:\n" + raw)
+                    raise FormatError(submission_feedback(
+                        "the Planner requires a direct START_PLAN terminal response, not a shell stdout submission",
+                        phase="plan"))
+            return super().has_finished(output)
+
         def get_observation(self, response: dict[str, Any]) -> dict[str, Any]:
             content = str(response.get("content", ""))
             candidate = content.lstrip()
             marker = start_marker + "\n"
             if candidate.startswith(marker):
+                if submission_validator is not None:
+                    from minisweagent.agents.default import FormatError
+                    try:
+                        submission_validator(content)
+                    except ValueError as exc:
+                        raise FormatError(submission_feedback(str(exc), phase="plan")) from exc
                 if bounded:
                     # Preserve the full provider response. The Host extracts
                     # and validates the bounded Plan after shell interception.
@@ -241,27 +248,6 @@ def _direct_plan_agent_class(
 
     DirectPlanAgent.__name__ = f"DirectPlan{default_agent.__name__}"
     return DirectPlanAgent
-
-
-def _extract_bounded_direct_plan(
-    raw_submission: str,
-    *,
-    start_marker: str = DIRECT_PLAN_MARKER,
-    end_marker: str = DIRECT_PLAN_END_MARKER,
-) -> tuple[str, str | None]:
-    """Extract exact Plan bytes without rewriting the provider response."""
-
-    candidate = raw_submission.lstrip()
-    start_line = start_marker + "\n"
-    if not candidate.startswith(start_line):
-        return "", f"the terminal response must start with {start_marker!r}"
-    body = candidate[len(start_line) :]
-    end_matches = list(re.finditer(rf"(?m)^{re.escape(end_marker)}$", body))
-    if not end_matches:
-        return "", f"the terminal response is missing an exact {end_marker!r} line"
-    if len(end_matches) != 1:
-        return "", f"the terminal response has multiple exact {end_marker!r} lines; the Plan boundary is ambiguous"
-    return body[: end_matches[0].start()], None
 
 
 def direct_plan_terminal_response(
@@ -291,53 +277,6 @@ def _extract_result(agent: Any, exception_name: str, exception_msg: str) -> str 
     """
     if exception_name == "Submitted":
         return exception_msg
-    return None
-
-
-def _direct_plan_markdown_error(
-    plan: str,
-    *,
-    require_nrpv: bool = True,
-    forbidden_placeholder: str | None = None,
-) -> str | None:
-    """Return a format error without changing the submitted Plan."""
-
-    if not plan or not plan.strip():
-        return "the submitted Plan is empty"
-    if not plan.startswith("# Plan\n"):
-        return "the Plan must start exactly with '# Plan' followed by a newline"
-    for residue in _PROTOCOL_RESIDUE:
-        if residue in plan:
-            return f"the Plan contains tool-protocol residue {residue!r}"
-    plan_lines = {line.strip() for line in plan.splitlines()}
-    for residue in _PROTOCOL_RESIDUE_LINES:
-        if residue in plan_lines:
-            return f"the Plan contains tool-protocol residue {residue!r}"
-    if forbidden_placeholder is not None and forbidden_placeholder in plan:
-        return "the Plan still contains the unexpanded template placeholder"
-
-    plan_headings = list(re.finditer(r"(?m)^# Plan\s*$", plan))
-    if len(plan_headings) != 1:
-        return "the Plan must contain exactly one '# Plan' heading"
-    if not plan[plan_headings[0].end() :].strip():
-        return "the Plan contains no substantive content after '# Plan'"
-    if not require_nrpv:
-        return None
-
-    positions: list[int] = []
-    for heading in _DIRECT_PLAN_HEADINGS:
-        matches = list(re.finditer(rf"(?m)^{re.escape(heading)}\s*$", plan))
-        if len(matches) != 1:
-            return f"the Plan must contain exactly one {heading!r} heading"
-        positions.append(matches[0].start())
-    if positions != sorted(positions):
-        return "the Plan headings are not in N/R/P/V order"
-
-    for index, heading in enumerate(_DIRECT_PLAN_HEADINGS[1:], start=1):
-        start = positions[index] + len(heading)
-        end = positions[index + 1] if index + 1 < len(positions) else len(plan)
-        if not plan[start:end].strip():
-            return f"the {heading!r} section is empty"
     return None
 
 
@@ -418,6 +357,8 @@ def run(
             Submitted,
             bounded=bounded_direct_submission,
             start_marker=direct_start_marker,
+            submission_validator=(validate_human_plan if direct_submission_protocol
+                                  == DIRECT_HUMAN_BOUNDED_MARKDOWN_PROTOCOL else None),
         )
         if require_direct_submission
         else DefaultAgent

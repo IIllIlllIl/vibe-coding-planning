@@ -23,7 +23,8 @@ from src.environment.docker_env import DockerCapacityWindow
 from src.environment.source_access import (
     append_source_access_event,
     canonical_http_url,
-    classify_source_access,
+    command_source_decision,
+    source_denial_result,
 )
 from src.exceptions import CommandTimeoutError, FatalError
 
@@ -409,7 +410,7 @@ class ApptainerEnvironment:
         """Execute a shell command inside the Apptainer container."""
         source_event = None
         if self._source_access_log_path is not None:
-            source_event = classify_source_access(
+            source_event = command_source_decision(
                 command,
                 prompt_urls=self._source_access_prompt_urls,
             )
@@ -421,21 +422,11 @@ class ApptainerEnvironment:
                 execution_status="blocked",
                 returncode=126,
             )
-            message = (
-                "Command blocked by the experiment source boundary "
-                f"({source_event['reason']}). Inspect the repository and its "
-                "available history, use the supplied SIF environment, or read "
-                "an exact URL included in the task with a read-only HTTP "
-                "request.\n"
-            )
-            return {
-                "output": message,
-                "stdout": "",
-                "stderr": message,
-                "returncode": 126,
-            }
+            return source_denial_result(source_event["reason"])
         actual_cwd = cwd or self._cwd
         effective_timeout = timeout if timeout is not None else self._timeout
+        if effective_timeout is not None and effective_timeout <= 0:
+            effective_timeout = None
         args = self._build_args(actual_cwd, command, effective_timeout)
         try:
             result = subprocess.run(

@@ -257,7 +257,8 @@ class BehavioralLocalChecker:
                 task="Review the proposed Plan at its decision boundary.",
                 evidence_manifest_path=evidence / "manifest.json",
                 container=CodexSIFExecution(sif, evidence, repository_dir=checkout,
-                                           masked_paths=(), interpreter="/usr/local/bin/python3"))
+                                           masked_paths=(), interpreter="/usr/local/bin/python3",
+                                           tool_network_disabled=True))
         atomic_json(attempt / "completion.json", {"agent_output": output, "trajectory": trajectory})
         return parse_hybrid_checker_output(output, json.loads(guideline), trajectory=trajectory)
 

@@ -37,12 +37,12 @@ def phase_identity(config, role, payload):
                                        "behavioral_hybrid_ace.py", "behavioral_hybrid.py", "playbook.py",
                                        "playbook_runtime.py", "codex_cli_runtime.py",
                                        "hpc/phase_wave.py", "hpc/worker_contract.py", "hpc/slurm.py", "hpc/task_batch.py",
-                                       "../exceptions.py",
+                                       "../exceptions.py", "../environment/source_access.py",
                                        "ace_transaction.py", "agent_references.py",
                                        "ace_evidence.py", "behavioral_hybrid_evidence.py", "audit.py")}
     identity["source"]["agent_protocol"] = hashlib.sha256(
         (root.parent / "agents" / "_deps.py").read_bytes()).hexdigest()
-    for name in ("runtime.py", "output_contract.py"):
+    for name in ("runtime.py", "output_contract.py", "codex_hooks.py", "plan_submission.py"):
         identity["source"]["agents/" + name] = hashlib.sha256(
             (root.parent / "agents" / name).read_bytes()).hexdigest()
     return hashlib.sha256(json.dumps(identity, sort_keys=True).encode()).hexdigest()

@@ -7,6 +7,7 @@ import hashlib
 import json
 from pathlib import Path
 import re
+import shlex
 from typing import Any
 from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
 
@@ -339,6 +340,35 @@ def classify_source_access(
     )
     decision = "allow_but_review" if reason == "prompt_solution_surface" else "allow"
     return _decision(decision, reason, client, urls, prompt_urls)
+
+
+def source_command(command: str) -> str:
+    """Remove a backend's outer shell envelope before common classification."""
+    try:
+        words = shlex.split(command)
+        if len(words) == 3 and Path(words[0]).name in {"bash", "sh", "zsh"} and words[1] in {"-c", "-lc"}:
+            return words[2]
+    except ValueError:
+        pass
+    return command
+
+
+def command_source_decision(command: str, *, prompt_urls: frozenset[str]):
+    return classify_source_access(source_command(command), prompt_urls=prompt_urls)
+
+
+def source_denial_result(reason: str) -> dict[str, Any]:
+    """One Host-generated refusal observation for both Agent backends.
+
+    126 is the policy result; no rejected process was started. Native Codex
+    transports this observation in its supported hook-denial reason.
+    """
+    message = (
+        f"Command blocked by the experiment source boundary ({reason}); returncode=126. "
+        "Inspect the repository and its available history, use the supplied SIF "
+        "environment, or read an exact URL included in the task with a read-only HTTP request.\n"
+    )
+    return {"output": message, "stdout": "", "stderr": message, "returncode": 126}
 
 
 def _decision(

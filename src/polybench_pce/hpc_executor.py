@@ -62,9 +62,12 @@ def pce_semantic_sha256(config: PolyBenchPCEConfig) -> str:
     sources = [
         root / "src" / "agents" / "_deps.py",
         root / "src" / "agents" / "plan_agent.py",
+        root / "src" / "agents" / "plan_submission.py",
         root / "src" / "agents" / "planning_artifact.py",
         root / "src" / "agents" / "code_agent.py",
         root / "src" / "agents" / "pce_backend.py",
+        root / "src" / "agents" / "codex_hooks.py",
+        root / "src" / "environment" / "source_access.py",
         root / "src" / "agents" / "runtime.py",
         root / "src" / "agents" / "output_contract.py",
         root / "src" / "exceptions.py",

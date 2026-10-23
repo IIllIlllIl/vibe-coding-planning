@@ -42,6 +42,7 @@ class SWEVerifiedPCEConfig:
     plan_submission_protocol: str
     planning_rules: str = ""
     agent_backends: dict[str, dict[str, str]] = field(default_factory=dict)
+    agent_network_disabled: bool = False
 
 
 def _mapping(value: Any, name: str) -> dict[str, Any]:
@@ -295,6 +296,7 @@ def load_swe_verified_pce_config(
             )
 
     return SWEVerifiedPCEConfig(
+        agent_network_disabled=bool(container_raw.get("network_disabled", False)),
         agent_backends=agent_backends,
         config_path=config_path,
         planning_rules=str(raw.get("planning_rules", "")),

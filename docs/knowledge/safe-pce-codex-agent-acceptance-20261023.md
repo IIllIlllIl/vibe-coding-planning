@@ -66,6 +66,11 @@ Codex parameters.
 
 ## Source-access difference
 
+This section records the original backend's post-execution boundary. The later
+[command-policy parity repair](agent-command-policy-parity-audit-20261023.md)
+adds shared pre-execution denial and in-session feedback; it does not change
+the behavior or validity of the historical attempts below.
+
 Native tools do not call `ApptainerEnvironment.execute`, so mini-SWE's
 pre-execution interceptor cannot be claimed for them. The adapter classifies
 native command events using the existing `classify_source_access` policy and

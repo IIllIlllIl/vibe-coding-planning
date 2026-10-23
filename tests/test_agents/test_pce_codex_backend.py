@@ -151,23 +151,20 @@ def test_polybench_explicit_empty_submission_policy_retained(tmp_path, monkeypat
 
 @pytest.mark.parametrize("command", ["git fetch origin", "pip install upstream-package",
     '/bin/bash -lc \'curl https://github.com/org/repo/pull/123.patch\''])
-def test_native_source_audit_rejects_before_plan_checkpoint(tmp_path, monkeypatch, command):
+def test_native_source_audit_rejects_uncovered_commands(tmp_path, monkeypatch, command):
+    from src.agents.codex_hooks import validate_native_commands
     events = [{"type": "item.started", "item": {"id": "1", "type": "command_execution", "command": command}},
               {"type": "item.completed", "item": {"id": "1", "type": "command_execution", "command": command}}]
-    _completion(monkeypatch, events=events)
-    context = _context(tmp_path)
-    with pytest.raises(AgentTaskError, match="source-access"):
-        backend._run_plan(_config(), "Issue", None, **context)
-    rows = context["source_access_path"].read_text().splitlines()
-    assert len(rows) == 1
-    event = json.loads(rows[0])
-    assert event["executed"] and event["decision"] == "block"
-    assert event["execution_status"] == "native_post_execution_audit"
-    assert "command" not in event
+    audit = tmp_path / "hook.jsonl"
+    audit.write_text("")
+    trajectory = [{"role": "codex_cli", "content": {"events": events}}]
+    original = deepcopy(trajectory)
+    with pytest.raises(ValueError, match="no matching execution-policy receipt"):
+        validate_native_commands(trajectory, audit, context={"prompt_urls": []}, source_log=tmp_path / "sources.jsonl")
+    assert trajectory == original
 
 
-@pytest.mark.parametrize("event", [{"type": "turn.failed"}, {"type": "error"},
-    {"type": "item.completed", "item": {"type": "web_search"}}])
+@pytest.mark.parametrize("event", [{"type": "turn.failed"}, {"type": "error"}])
 def test_failure_events_cannot_be_hidden_by_a_final_message(tmp_path, monkeypatch, event):
     _completion(monkeypatch, events=[event])
     with pytest.raises(AgentTaskError):

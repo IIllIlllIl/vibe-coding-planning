@@ -29,6 +29,7 @@ from src.agents._deps import (
 )
 from src.config import Config
 from src.exceptions import AgentTaskError, CommandTimeoutError
+from src.agents.plan_submission import empty_patch_error, submission_feedback
 
 logger = logging.getLogger(__name__)
 
@@ -105,6 +106,7 @@ def run(
     failure_trajectory_path: Path | None = None,
     phase_timeout_seconds: float | None = None,
     allow_empty_submission: bool = False,
+    validate_submission_in_loop: bool = False,
 ) -> tuple[str, list[dict[str, Any]]]:
     """Run the code generation agent.
 
@@ -149,6 +151,11 @@ def run(
     if model_wrapper is not None:
         model = model_wrapper(model)
 
+    def validate_patch(payload):
+        error = empty_patch_error(payload, allow_empty=allow_empty_submission)
+        if error:
+            raise ValueError(error)
+
     agent = build_default_agent(
         DefaultAgent,
         model=model,
@@ -157,6 +164,9 @@ def run(
         step_limit=config.agent.max_steps,
         cost_limit=config.agent.cost_limit,
         instance_template=instance_template,
+        **({"submission_validator": validate_patch,
+            "submission_error_feedback": lambda error: submission_feedback(error, phase="code")}
+           if validate_submission_in_loop else {}),
     )
 
     logger.info(

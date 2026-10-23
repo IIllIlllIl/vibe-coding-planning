@@ -385,7 +385,7 @@ def _run_evidence_agent(*, model_config, evidence_config, system, instance_templ
             system=system, user=_render(instance_template, **prompt_values), task=task,
             evidence_manifest_path=Path(evidence_dir) / "manifest.json",
             container=CodexSIFExecution(sif_path=_codex_evidence_sif(evidence_config),
-                                        evidence_dir=Path(evidence_dir)))
+                                        evidence_dir=Path(evidence_dir), tool_network_disabled=True))
     return run_agent(model_config, codex_cli=native,
         mini_swe=partial(_run_evidence_json_agent, model_config=model_config,
             evidence_config=evidence_config, system=system, instance_template=instance_template,
@@ -573,6 +573,11 @@ def _run_repository_json_agent(
                         sif_path=declared_path,
                         evidence_dir=Path(evidence_dir),
                         repository_dir=host_workdir,
+                        tool_network_disabled=False,
+                        source_policy={"prompt_urls": list(extract_http_urls(source_access_issue)),
+                                       "context": {"instance_id": repository["instance_id"],
+                                                   "phase": repository_config.get("phase", "repo_checker")}},
+                        source_access_log=source_access_path,
                         masked_paths=tuple(repository_config.get(
                             "masked_container_paths", ["/opt/miniconda3/pkgs"]
                         )),
@@ -594,7 +599,7 @@ def _run_repository_json_agent(
                                 "policy_version": SOURCE_ACCESS_POLICY_VERSION,
                                 "path": str(source_access_path),
                                 "summary": summarize_source_access_log(source_access_path),
-                                "coverage": "apptainer_environment_only",
+                                "coverage": "native_pre_tool_use_and_event_audit",
                             },
                         },
                     ]

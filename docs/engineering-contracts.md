@@ -109,6 +109,8 @@ result = run_agent(
 | `src/agents/runtime.py` | Backend selection, pinned Codex options, provider credential requirements | Reuse `run_agent`, `executor_name`, `codex_options`, and `credential_envs`; do not add per-workflow selectors or key guards |
 | Role adapters | Task inputs, prompt rendering and submission validation | Reuse `pce_backend.py` for existing P/C contracts and `playbook_runtime.py` evidence/repository adapters for existing JSON contracts |
 | `src/agents/_deps.py` | Existing mini-SWE model/Agent construction and action protocol | Preserve its tool loop and one-pass template handling |
+| `src/agents/plan_submission.py` | Existing pure Plan checks, PCE submission checks and corrective feedback | Reuse in mini-SWE, Native hooks and final Host verification; never repair a rejected payload |
+| `src/environment/source_access.py` / `src/agents/codex_hooks.py` | Shared source-command decision/refusal and thin Native hook transport | Reuse the classifier and denial observation; do not create backend-specific source policies |
 | `src/optimization/codex_cli_runtime.py` | Existing Native CLI, SIF launch, private state, permission probes and raw artifacts | Keep this compatibility path; reuse its implementation rather than copying mounts, authentication or CLI arguments |
 | `src/agents/output_contract.py` | Mechanical JSON-object parsing and contract errors | Preserve original completion evidence before validation |
 | Workflow/Worker components | Phase order, retry/resume, checkpoints, sampling, scoring, evaluation and Slurm | Backend switching does not replace these components |
@@ -120,6 +122,76 @@ are independent concerns; read-only learning/review requirements belong to their
 role contracts. Tool interception and native event auditing remain inside the
 existing execution adapters. Common dispatch does not imply identical tool
 enforcement or silently change a caller's experimental policy.
+
+When a caller enables the source-acquisition policy, both backends check the
+same normalized command before execution. mini-SWE returns its existing tool
+observation with `returncode=126`. Native Codex uses the supported `PreToolUse`
+deny response with the same reason and policy code, allowing correction in the
+same session. A hook process must not exit 126 to simulate a shell result:
+Native denial is not an executed process or a rewritten native exit code.
+Keep allowed tool inputs and all scientific output unchanged.
+
+Native hooks load a read-only, Host-generated bundle containing the existing
+classifier and its frozen parser dependency; they do not install dependencies
+in a case SIF. Hook receipts live outside the Agent-writable repository/output
+roots. Preflight the bundle and pinned CLI hook configuration before inference;
+validate receipts against raw native command events before checkpointing.
+Record blocked attempts as `executed=false`, not completed acquisition. A
+receipt/trace failure blocks completion without discarding the raw output or
+silently repairing it. Hook exceptions explicitly deny, while missing hook
+coverage remains an operational failure. This is partial source-command
+enforcement, not a general network firewall: dynamic execution and input to
+already running shell sessions are not equivalent to a newly checked command.
+See the [official hook contract](https://learn.chatgpt.com/docs/hooks) and
+[parity acceptance audit](knowledge/agent-command-policy-parity-audit-20261023.md).
+
+Safe PCE final-submission errors are recoverable inside each backend's existing
+loop: mini-SWE raises its non-terminating format error, while Native uses a
+synchronous `Stop` hook to return the same diagnosis and correction
+instructions. Original invalid submissions remain in the trajectory/receipt
+audit. Native completion additionally needs a matching accepted Stop receipt
+for its exact final response and, for Coder, unchanged staged patch bytes.
+Missing hook coverage is operational failure, not a scored unresolved task.
+No new backend retry loop or extra PCE attempt is introduced for correction.
+
+Current Safe PCE (`direct_human_markdown_v5`) disables Host Agent step/cost,
+command and whole-phase limits for both backends at the common PCE role
+adapter. Record the effective policy in usage evidence. Retain the Worker/Slurm
+deadline, task attempts and bounded repository preparation, evaluator and
+runtime-validation operations. Older config fields remain loadable for
+historical analysis; their Agent limits are not silently re-enabled in the
+current path. Do not remove historical timers from unrelated legacy workflows
+or reinterpret existing results. Provider/native tool limits remain backend
+properties, not simulated equivalent limits.
+
+### Tool-network policy across backends
+
+PCE uses `container.network_disabled` for Agent tool networking on both
+backends (default false). Verified and PolyBench retain their own evaluator
+network policies; the Agent switch must not change evaluator behavior.
+mini-SWE uses its existing Apptainer network setting. Native passes the value
+as `CodexSIFExecution.tool_network_disabled` to the inner tool permission
+profile, not to the entire container: CLI model/authentication traffic remains
+outside the tool sandbox. Never replace this with Host firewall changes or a
+whole-container network flag that cuts off the Native provider connection.
+
+`_permission_options` in the existing Native runtime owns the generated
+profile for both preflight and inference. Named profiles must not be mixed
+with legacy `--sandbox` settings. Explicit read-only and writable policies
+share network handling without broadening filesystem permissions. Evidence
+roles and hybrid SWE-chat repository inspection disable tool networking;
+repository JSON roles retain their mini-SWE counterpart's enabled-network
+policy plus the existing source guard. An omitted Native value preserves its
+legacy role default rather than inheriting another experiment's policy.
+
+For an explicitly disabled policy, preflight the real tool sandbox before
+inference. A loopback socket must fail with permission denial; connection
+refused, timeout, or a missing success marker is not proof of isolation. A
+failed probe blocks the attempt before model use and retains its diagnostics.
+Record the configured tool policy in raw execution metadata. Reuse
+`verify_codex_sif_startup.py --tool-network-disabled` for the same production
+boundary; a login-node permission probe is not compute-node/SIF acceptance.
+See the [official permissions contract](https://learn.chatgpt.com/docs/permissions).
 
 Before adding another workflow, check the existing role adapters first. A new
 submission contract may need a thin adapter, but not another Agent loop,
@@ -401,8 +473,10 @@ Checks are recorded in the preflight trajectory; failure aborts before inference
 These checks establish task-local filesystem isolation on the tested runtime,
 not protection against arbitrary kernel exploits or hostile images.
 
-There is no new project URL firewall. Native Codex tool commands are not covered by
-the mini-swe command interceptor. The transient login copy in `/codex-state`
+There is no new project URL firewall. Guarded Native tool calls use the shared
+source classifier through `PreToolUse`, not `ApptainerEnvironment.execute`.
+Enabling that guard does not impose another caller's network-isolation policy.
+The transient login copy in `/codex-state`
 must be available to Codex, and tools in the same container can read it; never
 describe SIF as credential isolation or an exfiltration-proof boundary. Its
 source authority and other runs' authentication/session state remain unmounted.
@@ -461,10 +535,11 @@ Report and native trajectories are retained at
 records SHA-256 for the runtime and namespace launcher. This proves the tested
 two-image transport, not every scientific image or credential isolation.
 
-Codex JSONL tool events remain the native command audit. The existing
-`source_access.jsonl` only covers commands routed through repository preparation,
-not native Codex tool commands; SIF file isolation does not add an HTTP filter
-or turn those partial logs into a complete source-access audit. Verify actual
+Codex JSONL tool events remain the native command authority. For guarded calls,
+`source_access.jsonl` additionally records decisions from validated Native hook
+receipts; preparation-only or historical logs must not be represented as that
+coverage. SIF file isolation does not add an HTTP filter or turn these partial
+logs into a complete source-access audit. Verify actual
 mount isolation and the selected Codex transport on a compute node
 with the startup verification tool before a migrated smoke. Local mocked tests
 are not that proof.
