@@ -182,7 +182,11 @@ def test_native_workspace_transport_reuses_outer_boundary(tmp_path, monkeypatch)
         seen.append(command)
         mounts = [command[i+1] for i,v in enumerate(command) if v == "--bind"]
         assert f"{repository}:/testbed:rw" in mounts and f"{evidence}:/evidence:ro" in mounts
-        assert "--containall" in command and "timeout" not in kwargs
+        assert "--containall" in command
+        if "sif-python-probe" in command:
+            assert kwargs["timeout"] == 30
+            return SimpleNamespace(returncode=0, stdout=command[-2] + "\n", stderr="")
+        assert "timeout" not in kwargs
         assert "--dangerously-bypass-approvals-and-sandbox" not in command
         if command[-1] == "--version":
             return SimpleNamespace(returncode=0, stdout="codex-cli 0.160.1\n", stderr="")
@@ -200,7 +204,7 @@ def test_native_workspace_transport_reuses_outer_boundary(tmp_path, monkeypatch)
     attempt = tmp_path / "attempt"
     raw, trace = runtime.run_codex_text_agent(container=boundary, model_config=model,
         working_directory=repository, attempt_dir=attempt, system="System", user="Input", task="Code")
-    assert len(seen) == 4
+    assert len(seen) == 5
     assert raw == "COMPLETE_TASK_AND_SUBMIT_FINAL_OUTPUT\n"
     assert (attempt / "submission.patch").read_bytes() == PATCH.encode()
     assert trace[3]["content"]["sandbox"] == "workspace-write"

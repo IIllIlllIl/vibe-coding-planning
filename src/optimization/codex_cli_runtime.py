@@ -49,6 +49,35 @@ class CodexSIFExecution:
     def cwd(self) -> Path:
         return Path(self.repository_cwd if self.repository_dir is not None else "/evidence")
 
+    def _image_interpreter(self, prefix, environment, output_dir):
+        """Resolve only inside the frozen image, with the production mounts.
+
+        Preserve the historical interpreter when present. Other images may
+        expose Python through their own PATH; never resolve it on the Host or
+        install a replacement. Explicit caller overrides do not fall back.
+        """
+        preferred = self.interpreter or ("/opt/miniconda3/envs/testbed/bin/python"
+                     if self.repository_dir is not None else "/usr/local/bin/python3")
+        command = [*prefix, "/bin/sh", "-c",
+                   'if [ -x "$1" ] || [ "$2" = explicit ]; then selected="$1"; '
+                   'else selected=python3; fi; '
+                   'exec "$selected" -c "import ctypes, sys; print(sys.executable)"',
+                   "sif-python-probe", preferred, "explicit" if self.interpreter else "default"]
+        result = subprocess.run(command, env=environment, capture_output=True,
+                                text=True, check=False, timeout=30)
+        observed = result.stdout.strip()
+        record = {"check": "sif_interpreter", "preferred": preferred,
+                  "returncode": result.returncode, "stdout": result.stdout,
+                  "stderr": result.stderr}
+        (output_dir / "codex_sif_interpreter.json").write_text(json.dumps(record, indent=2) + "\n")
+        if result.returncode or not observed.startswith("/") or any(c in observed for c in "\n\r\x00"):
+            error = CodexConfigurationError(
+                f"SIF Python interpreter probe failed (exit {result.returncode}): "
+                f"{result.stderr.strip() or repr(observed)}")
+            error.trajectory = [{"role": "host_codex_preflight", "content": {"checks": [record]}}]
+            raise error
+        return observed
+
     @contextmanager
     def launch(self, model_config, environment, output_dir):
         if self.source_policy is not None and self.source_access_log is None:
@@ -118,15 +147,14 @@ class CodexSIFExecution:
                     raise ValueError("Codex mount source contains an unsupported delimiter")
                 prefix.extend(["--bind", f"{source}:{target}:{mode}"])
             prefix.append(str(sif))
-            interpreter = self.interpreter or ("/opt/miniconda3/envs/testbed/bin/python"
-                           if self.repository_dir is not None else "/usr/local/bin/python3")
-            prefix.extend([interpreter, "/opt/vibe-codex/private_mount.py"])
             # --cleanenv does not neutralize launcher control variables. Do
             # not inherit extra host binds or environment injection overrides.
             launch_env = {
                 key: value for key, value in environment.items()
                 if not key.startswith(("APPTAINER", "SINGULARITY"))
             }
+            interpreter = self._image_interpreter(prefix, launch_env, output_dir)
+            prefix.extend([interpreter, "/opt/vibe-codex/private_mount.py"])
             container_model = dict(model_config)
             container_model["codex_binary"] = "/opt/vibe-codex/bin/" + binary.name
             try:
@@ -243,9 +271,9 @@ def _runtime_preflight(
     observed = observed_match.group(1) if observed_match else ""
     if version.returncode != 0 or (expected and observed != expected):
         detail = (
+            f"Codex CLI version probe exited with status {version.returncode}: {version.stderr.strip()}"
+            if version.returncode != 0 else
             f"expected Codex CLI {expected}, observed {observed or 'unknown'}"
-            if expected
-            else f"Codex CLI version probe exited with status {version.returncode}"
         )
         error = CodexConfigurationError(detail)
         error.trajectory = [  # type: ignore[attr-defined]

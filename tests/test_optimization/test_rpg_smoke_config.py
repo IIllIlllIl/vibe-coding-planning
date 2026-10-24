@@ -14,7 +14,7 @@ from src.optimization.safe_pce_execution import load_pce_config, pce_cases
 BASELINE = Path("configs/gepa_safe_pce_verified_codex_smoke_v5_20261024.yaml")
 LEARNING = Path("configs/gepa_safe_pce_rpg_codex_smoke_v1_20261024.yaml")
 PCE = Path("configs/safe_pce_ace_rpg_codex_smoke_source_v1_20261024.yaml")
-SUPERVISOR = Path("configs/safe_pce_ace_rpg_codex_smoke_supervisor_v1_20261024.yaml")
+SUPERVISOR = Path("configs/archive/supervisor_launches/safe_pce_ace_rpg_codex_smoke_supervisor_v1_20261024.yaml")
 FROZEN = Path("configs/frozen_safe_pce_ace/rpg_smoke_v1_20261024")
 
 
@@ -86,3 +86,34 @@ def test_rpg_smoke_reuses_two_reflector_wave_and_standard_supervisor(tmp_path):
     raw = yaml.safe_load(LEARNING.read_text())
     assert raw["experiment_contract"]["previous_output_import"] is False
     assert raw["experiment_contract"]["budget"]["pce_evaluation_slots_without_cache"] == {"minimum": 5, "maximum": 6}
+
+
+def test_rpg_python_recovery_keeps_science_and_uses_fresh_runtime(tmp_path):
+    from scripts.hpc_supervisor_service import _load_launch_config
+    from src.optimization.safe_pce_execution import materialize_pce_config
+    recovery_path = Path("configs/gepa_safe_pce_rpg_codex_smoke_v2_20261025.yaml")
+    old = load_optimization_config(LEARNING, require_api_keys=False)
+    new = load_optimization_config(recovery_path, require_api_keys=False)
+    assert old.search == new.search and old.reflection == new.reflection
+    assert new.hybrid == replace(old.hybrid, dataset_file_sha256=new.hybrid.dataset_file_sha256)
+    assert old.run_dir != new.run_dir and old.dataset_snapshot != new.dataset_snapshot
+    verify_hybrid_snapshot(new)
+    for name in ("train.jsonl", "validation.jsonl", "pce_source/instances.jsonl", "pce_source/images.json"):
+        assert (old.dataset_snapshot / name).read_bytes() == (new.dataset_snapshot / name).read_bytes()
+    mode, current = load_pce_config(new.safe_pce_config)
+    _, previous = load_pce_config(old.safe_pce_config)
+    for field in ("plan", "code", "agent_backends", "plan_prompt", "plan_instance_template",
+                  "code_prompt", "code_instance_template", "container", "docker", "agent_network_disabled"):
+        assert getattr(previous, field) == getattr(current, field)
+    assert mode == "swe_rpg_pce" and current.run_dir == new.run_dir / "pce_evaluations"
+    for field in ("partition", "cpus_per_task", "mem", "time", "max_task_attempts", "max_running_array_tasks"):
+        assert getattr(current.hpc, field) == getattr(previous.hpc, field)
+    raw = yaml.safe_load(recovery_path.read_text())
+    assert raw["experiment_contract"]["previous_output_import"] is False
+    assert raw["experiment_contract"]["budget"]["pce_evaluation_slots_without_cache"] == {"minimum": 5, "maximum": 6}
+    session, _, args, _ = _load_launch_config(Path("configs/safe_pce_ace_rpg_codex_smoke_supervisor_v2_20261025.yaml"))
+    assert session == new.run_dir.name
+    assert args[args.index("--gepa-config") + 1] == str(recovery_path)
+    artifact = json.loads(Path("configs/prompts/safe_pce_hybrid_seed_v1.json").read_text())
+    effective = materialize_pce_config(current, artifact, tmp_path, run_dir=new.run_dir)
+    assert effective.run_dir == new.run_dir

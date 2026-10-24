@@ -82,6 +82,8 @@ def test_network_preflight_gates_real_transport_wiring(tmp_path, monkeypatch, de
     def run(command, **kwargs):
         calls.append(command)
         assert "--net" not in command and "--network" not in command  # CLI networking survives.
+        if "sif-python-probe" in command:
+            return SimpleNamespace(returncode=0, stdout=command[-2] + "\n", stderr="")
         if command[-1] == "--version":
             return SimpleNamespace(returncode=0, stdout="codex-cli 0.160.1\n", stderr="")
         if "TOOL_NETWORK_DENIED" in command[-1]:

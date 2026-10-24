@@ -1,0 +1,77 @@
+schema_version: 1
+mode: swe_rpg_pce
+purpose: development_only_rpg_end_to_end_acceptance
+paths:
+  dataset_snapshot: output/SWE-RPG/pce-inputs/python78-v1-20261024
+  image_manifest: configs/frozen_swe_rpg/python78-sif-audited-v1-20261014/images.json
+  selection_manifest: configs/frozen_safe_pce_ace/rpg_smoke_v1_20261024/pce-selection.json
+  prompt_source_config: configs/polybench_pce_hpc_formal_clean_20260825.yaml
+  plan_prompt_source_config: configs/prompts/swe_verified_safe_pce_planner_v6_anchor_ablation_20260913.yaml
+  code_prompt_source_config: configs/prompts/safe_pce_native_codex_code_v1.yaml
+  run_dir: output/SWE-RPG/safe-pce-ace-rpg-codex-smoke-v2-20261025/pce_evaluations
+plan:
+  executor: codex_cli
+  model: gpt-6-sol
+  reasoning_effort: high
+  codex_binary: ${HOME}/.local/lib/vibe-codex/0.160.1/bin/codex
+  codex_auth_file: ${HOME}/.codex/auth.json
+  codex_version: 0.160.1
+  max_steps: 0
+  cost_limit: 0.0
+  timeout: 1800
+  max_attempts: 3
+  submission_protocol: direct_human_markdown_v5
+code:
+  executor: codex_cli
+  model: gpt-6-sol
+  reasoning_effort: high
+  codex_binary: ${HOME}/.local/lib/vibe-codex/0.160.1/bin/codex
+  codex_auth_file: ${HOME}/.codex/auth.json
+  codex_version: 0.160.1
+  max_steps: 0
+  cost_limit: 0.0
+  timeout: 1800
+  max_attempts: 3
+docker:
+  workdir: /testbed
+  timeout: 1800
+  min_free_gb: 20
+  max_cached_images: 75
+container:
+  runtime: apptainer
+  module: tools/Apptainer
+  sif_cache_dir: /scratch/users/${USER}/vibe-coding-planning/shared/sif-cache
+  writable_tmpfs: true
+  network_disabled: true
+hpc:
+  submit: true
+  partition: batch
+  cpus_per_task: 1
+  mem: 4G
+  time: "01:00:00"
+  max_running_array_tasks: 3
+  poll_interval_seconds: 120
+  task_output_grace_seconds: 300
+  missing_task_grace_seconds: 600
+  max_task_attempts: 3
+  remote_env_file: ~/.config/vibe-coding-planning/deepseek.env
+  python_module: lang/Python/3.11
+  container_module: tools/Apptainer
+  python_bin: python3
+  job_name_prefix: safe-pce-ace-rpg-codex-smoke-v2-20261025-pce
+  worker_config_path: configs/safe_pce_ace_rpg_codex_smoke_source_v2_20261025.yaml
+evaluator:
+  slurm_timeout_outcome: unknown
+experiment_contract:
+  launch_authorized: false
+  development_only: true
+  engineering_baseline: configs/safe_pce_ace_verified_codex_smoke_source_v5_20261024.yaml
+  changed_axes:
+    - frozen_rpg_task_image_and_workdir_bindings
+    - original_official_rpg_evaluator
+  source_audit: native_pre_tool_use_and_stop_receipts_with_raw_events
+  official_scoring_unchanged: true
+  reference_artifacts_in_agent_inputs: false
+  no_previous_attempt_or_checkpoint_import: true
+  model_and_harness_comparison_not_ds_quality_estimate: true
+  resource_evidence: RPG_calibration_jobs_6159279_6159280_6159281_MaxRSS_up_to_1789_76MiB_at_1CPU_4G

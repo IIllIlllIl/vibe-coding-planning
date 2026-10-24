@@ -66,7 +66,7 @@ def verify(role, boundary, model, attempt, *, infer):
                            + 'test -x "$1" || exit 24; '
                            '"$1" --version || exit 25; printf "Tool execution verified\\n"',
                            "startup-verification",
-                           boundary.interpreter or ("/opt/miniconda3/envs/testbed/bin/python" if role == "reflector" else "/usr/local/bin/python3")]
+                           prefix[-2]]
                 completed = subprocess.run(command, env=env, capture_output=True, text=True, check=False)
                 checks.append({"check": "sif_tools_home_environment",
                                "returncode": completed.returncode,
@@ -75,12 +75,11 @@ def verify(role, boundary, model, attempt, *, infer):
                 if completed.returncode:
                     raise RuntimeError(f"{role} substantive SIF check failed: {completed.stderr}")
                 return checks
-    interpreter = boundary.interpreter or ("/opt/miniconda3/envs/testbed/bin/python" if role == "reflector" else "/usr/local/bin/python3")
     result, trajectory = run_codex_json_agent(
         container=boundary, model_config=model, working_directory=boundary.evidence_dir,
         attempt_dir=attempt, system="You are verifying a fresh Codex session inside a task-scoped SIF.",
         task="Read the probe file with a shell tool and return the observed values as JSON.",
-        user=(f"Use {interpreter} to read /evidence/manifest.json and print its contents. "
+        user=("Use a shell tool to read /evidence/manifest.json and print its contents. "
               "Return ONLY a JSON object with the nonce and role values read from that file. "
               "Do not inspect credentials or other files."),
         evidence_manifest_path=boundary.evidence_dir / "manifest.json",
@@ -113,6 +112,8 @@ def main():
                         help="Disable only Native tool networking; retain CLI service networking")
     parser.add_argument("--workspace-write", action="store_true",
                         help="Also verify writable repository/Git-index policy without model calls")
+    parser.add_argument("--repository-cwd", default="/testbed",
+                        help="Frozen case repository path, e.g. /testbed2")
     parser.add_argument("--outer-isolation-only", action="store_true",
                         help="Test Apptainer isolation directly; never run Codex inference or its sandbox")
     args = parser.parse_args()
@@ -150,6 +151,7 @@ def main():
                             "-c", "user.email=probe@example.invalid", "commit", "-m", "Synthetic probe"],
                             check=True, capture_output=True)
                 boundary = CodexSIFExecution(sif, evidence, repository,
+                    repository_cwd=args.repository_cwd,
                     interpreter="/usr/local/bin/python3" if args.generic_isolation_image else None,
                     tool_network_disabled=args.tool_network_disabled,
                     repository_writable=args.workspace_write and repository is not None)

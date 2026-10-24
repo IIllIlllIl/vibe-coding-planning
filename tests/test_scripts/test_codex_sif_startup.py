@@ -114,7 +114,7 @@ def test_writable_preflight_forwards_policy_and_exact_production_arguments(tmp_p
     model = {"executor": "codex_cli", "model": "test"}
     monkeypatch.setattr(probe, "_isolated_codex_environment", lambda *_: nullcontext({}))
     monkeypatch.setattr(probe.CodexSIFExecution, "launch",
-                        lambda *a: nullcontext(([], {}, model, None)))
+                        lambda *a: nullcontext((["/image/python3", "/private_mount.py"], {}, model, None)))
     def preflight(*args, **kwargs):
         assert kwargs["repository_writable"] is True
         return []
@@ -131,4 +131,18 @@ def test_writable_preflight_forwards_policy_and_exact_production_arguments(tmp_p
     monkeypatch.setattr(probe.subprocess, "run", run)
     probe.verify("reflector", boundary, model, tmp_path, infer=False)
     assert len(commands) == 2
-    assert commands[0][-1] == "--help" and commands[1][1] == "sandbox"
+    assert commands[0][-1] == "--help" and "sandbox" in commands[1]
+    assert commands[1][-1] == "/image/python3"
+
+
+def test_startup_probe_uses_frozen_alternative_repository_path(tmp_path, monkeypatch):
+    output = arguments(tmp_path, monkeypatch)
+    sys.argv.extend(["--repository-cwd", "/testbed2", "--workspace-write", "--preflight-only"])
+    def verify(role, boundary, model, attempt, *, infer):
+        assert boundary.repository_cwd == "/testbed2"
+        assert str(boundary.cwd) == ("/testbed2" if role == "reflector" else "/evidence")
+        assert infer is False
+        return []
+    monkeypatch.setattr(probe, "verify", verify)
+    probe.main()
+    assert json.loads((output / "report.json").read_text())["status"] == "passed"

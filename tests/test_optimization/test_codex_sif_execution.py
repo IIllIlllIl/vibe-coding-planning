@@ -55,6 +55,9 @@ def test_every_codex_process_is_inside_task_scoped_sif(tmp_path, monkeypatch, wi
         assert not any(value.startswith("HOME=") for value in command[command.index("--env") + 1].split(","))
         assert command[command.index("--no-mount") + 1] == "hostfs,bind-paths,cwd"
         assert not any(key.startswith(("APPTAINER", "SINGULARITY")) for key in kwargs["env"])
+        if "sif-python-probe" in command:
+            assert kwargs["timeout"] == 30
+            return SimpleNamespace(returncode=0, stdout=command[-2] + "\n", stderr="")
         assert "timeout" not in kwargs
         mounts = [command[i + 1] for i, value in enumerate(command) if value == "--bind"]
         assert f"{evidence}:/evidence:ro" in mounts
@@ -93,7 +96,7 @@ def test_every_codex_process_is_inside_task_scoped_sif(tmp_path, monkeypatch, wi
         task="Analyze", evidence_manifest_path=evidence / "manifest.json",
     )
     assert result == {"reasoning": "unchanged", "operations": []}
-    assert len(commands) == 4
+    assert len(commands) == 5
     assert (tmp_path / "attempt/codex_final_response.json").read_text() == raw
     assert all(not path.exists() for path in transient_paths)
     assert trajectory[3]["content"]["execution_boundary"] == "task_scoped_sif"
@@ -120,6 +123,8 @@ def test_inner_sandbox_failure_never_infers_or_disables_sandbox(tmp_path, monkey
     calls = []
     def fake_run(command, **kwargs):
         calls.append(command)
+        if "sif-python-probe" in command:
+            return SimpleNamespace(returncode=0, stdout=command[-2] + "\n", stderr="")
         if command[-1] == "--version":
             return SimpleNamespace(returncode=0, stdout="codex-cli 0.155.1\n", stderr="")
         if "sif-outer-isolation-probe" in command:
@@ -133,7 +138,7 @@ def test_inner_sandbox_failure_never_infers_or_disables_sandbox(tmp_path, monkey
             working_directory=evidence, attempt_dir=tmp_path / "attempt",
             system="System", user="Input", task="Analyze",
         )
-    assert len(calls) == 3
+    assert len(calls) == 4
     assert not any("danger-full-access" in command for command in calls)
 
 
@@ -142,6 +147,8 @@ def test_sif_outer_failure_never_falls_back_to_host(tmp_path, monkeypatch):
     calls = []
     def fake_run(command, **kwargs):
         calls.append(command)
+        if "sif-python-probe" in command:
+            return SimpleNamespace(returncode=0, stdout=command[-2] + "\n", stderr="")
         return SimpleNamespace(
             returncode=0 if command[-1] == "--version" else 1,
             stdout="codex-cli 0.155.1\n" if command[-1] == "--version" else "",
@@ -154,7 +161,7 @@ def test_sif_outer_failure_never_falls_back_to_host(tmp_path, monkeypatch):
             model_config=model, working_directory=repository, attempt_dir=tmp_path / "attempt",
             system="System", user="Input", task="Analyze",
         )
-    assert len(calls) == 2 and all(command[0] == "apptainer" for command in calls)
+    assert len(calls) == 3 and all(command[0] == "apptainer" for command in calls)
 
 
 def test_evidence_symlink_is_rejected_before_launch(tmp_path, monkeypatch):
@@ -174,6 +181,8 @@ def test_visible_host_path_fails_before_inference(tmp_path, monkeypatch):
     calls = []
     def fake_run(command, **kwargs):
         calls.append(command)
+        if "sif-python-probe" in command:
+            return SimpleNamespace(returncode=0, stdout=command[-2] + "\n", stderr="")
         if command[-1] == "--version":
             return SimpleNamespace(returncode=0, stdout="codex-cli 0.155.1\n", stderr="")
         assert "sif-outer-isolation-probe" in command
@@ -185,7 +194,7 @@ def test_visible_host_path_fails_before_inference(tmp_path, monkeypatch):
             working_directory=evidence, attempt_dir=tmp_path / "attempt",
             system="System", user="Input", task="Analyze",
         )
-    assert len(calls) == 2 and all(command[0] == "apptainer" for command in calls)
+    assert len(calls) == 3 and all(command[0] == "apptainer" for command in calls)
     assert caught.value.trajectory[0]["content"]["checks"][-1]["returncode"] == 11
 
 
@@ -266,11 +275,13 @@ def test_repository_reflector_dispatches_case_sif_and_cleans_worktree(tmp_path, 
     assert not captured["container"].repository_dir.exists()
 
 
-def test_sif_transport_cleans_on_failure_and_preserves_raw_response(tmp_path):
+def test_sif_transport_cleans_on_failure_and_preserves_raw_response(tmp_path, monkeypatch):
     sif, evidence, _, model = _inputs(tmp_path)
     output = tmp_path / "attempt"
     output.mkdir()
     paths = []
+    monkeypatch.setattr(runtime.subprocess, "run", lambda command, **kwargs:
+        SimpleNamespace(returncode=0, stdout=command[-2] + "\n", stderr=""))
     with pytest.raises(RuntimeError, match="simulated failure"):
         with runtime._isolated_codex_environment(model) as environment:
             paths.append(Path(environment["CODEX_HOME"]))
@@ -280,3 +291,62 @@ def test_sif_transport_cleans_on_failure_and_preserves_raw_response(tmp_path):
                 raise RuntimeError("simulated failure")
     assert (output / "codex_final_response.json").read_text() == '{"unchanged":true}\n'
     assert all(not path.exists() for path in paths)
+
+
+@pytest.mark.parametrize("repository_cwd", ["/testbed", "/testbed2"])
+@pytest.mark.parametrize("interpreter", [None, "/custom/python3"])
+def test_image_interpreter_reaches_every_native_process(tmp_path, monkeypatch, repository_cwd, interpreter):
+    sif, evidence, repository, model = _inputs(tmp_path)
+    boundary = runtime.CodexSIFExecution(sif, evidence, repository,
+        repository_cwd=repository_cwd, interpreter=interpreter)
+    attempt = tmp_path / "attempt"
+    attempt.mkdir()
+    def probe(command, **kwargs):
+        assert command[:2] == ["apptainer", "exec"]
+        assert "sif-python-probe" in command
+        assert command[command.index("--pwd") + 1] == repository_cwd
+        assert command[-1] == ("explicit" if interpreter else "default")
+        assert command[-2] == (interpreter or "/opt/miniconda3/envs/testbed/bin/python")
+        # RPG has no Verified testbed interpreter; use its frozen image Python.
+        return SimpleNamespace(returncode=0, stdout="/usr/local/bin/python3\n", stderr="")
+    monkeypatch.setattr(runtime.subprocess, "run", probe)
+    with runtime._isolated_codex_environment(model) as environment:
+        with boundary.launch(model, environment, attempt) as (prefix, _, _, _):
+            assert prefix[-2:] == ["/usr/local/bin/python3", "/opt/vibe-codex/private_mount.py"]
+    assert (attempt / "codex_sif_interpreter.json").is_file()
+
+
+@pytest.mark.parametrize("returncode,stdout,stderr", [(127, "", "python3: not found"),
+    (0, "python3\n", ""), (0, "/usr/bin/python3\nextra\n", "")])
+def test_image_interpreter_failure_never_launches_codex(tmp_path, monkeypatch, returncode, stdout, stderr):
+    sif, evidence, repository, model = _inputs(tmp_path)
+    commands = []
+    def probe(command, **kwargs):
+        commands.append(command)
+        return SimpleNamespace(returncode=returncode, stdout=stdout, stderr=stderr)
+    monkeypatch.setattr(runtime.subprocess, "run", probe)
+    with pytest.raises(runtime.CodexConfigurationError, match="SIF Python interpreter probe failed"):
+        runtime.run_codex_json_agent(container=runtime.CodexSIFExecution(sif, evidence, repository),
+            model_config=model, working_directory=repository, attempt_dir=tmp_path / "attempt",
+            system="System", user="Input", task="Analyze")
+    assert len(commands) == 1 and "sif-python-probe" in commands[0]
+
+
+def test_interpreter_selection_shell_preserves_legacy_and_explicit_failure(tmp_path, monkeypatch):
+    import os
+    import sys
+    image_bin = tmp_path / "image-bin"
+    image_bin.mkdir()
+    (image_bin / "python3").symlink_to(sys.executable)
+    environment = dict(os.environ, PATH=str(image_bin))
+    boundary = runtime.CodexSIFExecution(tmp_path / "unused.sif", tmp_path)
+    # Run the real shell selection with a synthetic image PATH, not a mocked probe.
+    assert boundary._image_interpreter([], environment, tmp_path) == str(image_bin / "python3")
+    preferred = image_bin / "preferred"
+    preferred.symlink_to(sys.executable)
+    explicit = runtime.CodexSIFExecution(tmp_path / "unused.sif", tmp_path, interpreter=str(preferred))
+    assert explicit._image_interpreter([], environment, tmp_path) == str(preferred)
+    missing = runtime.CodexSIFExecution(tmp_path / "unused.sif", tmp_path,
+                                      interpreter=str(image_bin / "missing"))
+    with pytest.raises(runtime.CodexConfigurationError, match="SIF Python interpreter probe failed"):
+        missing._image_interpreter([], environment, tmp_path)

@@ -486,8 +486,14 @@ unbindable root attribute only inside this disposable namespace; exec drops
 its namespace capabilities. Bind only `/dev/full:/dev/full:ro`, not Host
 `/dev`: contained Apptainer's minimal device tree otherwise omits a device
 required by bubblewrap. Both conditions are necessary on the tested Iris
-runtime. Use the case interpreter for repository-backed roles and the evidence
-image interpreter for repository-free roles. Any preparation/preflight failure
+runtime. Resolve the Python interpreter inside the frozen SIF using the same
+production mounts and clean environment. Prefer the historical case/evidence
+path when executable; otherwise use the image's own `python3` and record its
+absolute executable in `codex_sif_interpreter.json`. An explicit interpreter
+override must fail rather than fall back. Never resolve image executables with
+Host PATH, install a missing runtime, or bypass a failed preflight. The existing
+startup verifier uses this same resolved interpreter and accepts the case's
+frozen repository cwd, including `/testbed2`. Any preparation/preflight failure
 aborts before inference; do not silently disable the inner sandbox.
 
 Before each production call, a no-model probe confirms the current evidence is
