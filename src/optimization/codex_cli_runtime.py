@@ -4,14 +4,12 @@ from __future__ import annotations
 
 from contextlib import contextmanager, nullcontext
 from dataclasses import dataclass
-import fcntl
 import hashlib
 import json
 import os
 from pathlib import Path
 import re
 import shutil
-import stat
 import subprocess
 import sys
 import tempfile
@@ -177,53 +175,24 @@ def _codex_auth_file(model_config: Mapping[str, Any]) -> Path:
 def _isolated_codex_environment(
     model_config: Mapping[str, Any],
 ) -> Iterator[dict[str, str]]:
-    """Lease one auth stream while keeping every call's other state independent.
+    """Give each call private volatile state and a transient auth snapshot.
 
-    Only the CLI-produced auth bytes survive the call. A private recovery lease
-    retains refreshed credentials across a killed worker, outside run artifacts.
-    Independent concurrent streams need separately authenticated source files.
+    Restore the successful formal-run design: no shared lock, lease or auth
+    write-back. This permits parallel calls but deliberately does not preserve
+    CLI refreshes or make copied OAuth sessions refresh-independent. See the
+    accepted temporary policy in docs/knowledge/codex-parallel-auth-20261024.md.
     """
-    auth_source = _codex_auth_file(model_config).resolve()
-    state = auth_source.with_name(f".{auth_source.name}.vibe-state")
-    state.mkdir(mode=0o700, exist_ok=True)
-    if state.is_symlink() or not state.is_dir() or state.stat().st_mode & 0o077:
-        raise CodexConfigurationError("Codex authentication state must be a private directory")
-    descriptor = os.open(state / "lock", os.O_CREAT | os.O_RDWR | os.O_NOFOLLOW, 0o600)
-    with os.fdopen(descriptor, "rb") as lock:
-        if not stat.S_ISREG(os.fstat(lock.fileno()).st_mode):
-            raise CodexConfigurationError("Codex authentication lock must be a regular file")
-        fcntl.flock(lock, fcntl.LOCK_EX)
-        lease_path = state / "lease.json"
-        if lease_path.exists():
-            _recover_auth_lease(auth_source, state, lease_path)
-        seed = _auth_bytes(auth_source)
-        raw_home = tempfile.mkdtemp(prefix="session-", dir=state)
+    seed = _auth_bytes(_codex_auth_file(model_config))
+    with tempfile.TemporaryDirectory(prefix="vibe-codex-home-") as raw_home:
         codex_home = Path(raw_home)
+        codex_home.chmod(0o700)
         private_auth = codex_home / "auth.json"
-        lease = {"home": codex_home.name, "source_sha256": hashlib.sha256(seed).hexdigest()}
-        try:
-            _atomic_private_bytes(private_auth, seed)
-            _atomic_private_bytes(lease_path, json.dumps(lease).encode())
-        except BaseException:
-            # No CLI has run, so this copy cannot contain a refreshed token.
-            shutil.rmtree(codex_home)
-            lease_path.unlink(missing_ok=True)
-            raise
+        descriptor = os.open(private_auth, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
+        with os.fdopen(descriptor, "wb") as file:
+            file.write(seed)
         environment = os.environ.copy()
         environment["CODEX_HOME"] = str(codex_home)
-        try:
-            yield environment
-        finally:
-            # Do this before deleting private state, even when inference or its
-            # caller fails. Preserve the lease for recovery if persistence fails.
-            try:
-                _persist_auth(auth_source, private_auth, lease["source_sha256"])
-            except OSError as exc:
-                raise CodexConfigurationError(
-                    "Codex authentication update could not be saved; private recovery lease retained"
-                ) from exc
-            shutil.rmtree(codex_home)
-            lease_path.unlink()
+        yield environment
 
 
 def _auth_bytes(path: Path) -> bytes:
@@ -237,48 +206,6 @@ def _auth_bytes(path: Path) -> bytes:
     if not valid:
         raise CodexConfigurationError("Codex authentication cache must contain a JSON object")
     return raw
-
-
-def _atomic_private_bytes(path: Path, raw: bytes) -> None:
-    with tempfile.NamedTemporaryFile(dir=path.parent, prefix=f".{path.name}-", delete=False) as file:
-        temporary = Path(file.name)
-        try:
-            file.write(raw)
-            file.flush()
-            os.fsync(file.fileno())
-            os.replace(temporary, path)
-        finally:
-            temporary.unlink(missing_ok=True)
-
-
-def _persist_auth(source: Path, private: Path, source_digest: str) -> None:
-    # An external login/logout must win over an older in-flight copy. No auth
-    # content, including its digest, is exposed in logs or scientific artifacts.
-    if not source.exists() or not private.exists():
-        return
-    current = _auth_bytes(source)
-    if hashlib.sha256(current).hexdigest() != source_digest:
-        return
-    refreshed = _auth_bytes(private)
-    if refreshed != current:
-        _atomic_private_bytes(source, refreshed)
-
-
-def _recover_auth_lease(source: Path, state: Path, lease_path: Path) -> None:
-    lease = json.loads(_auth_bytes(lease_path))
-    home = lease.get("home", "")
-    digest = lease.get("source_sha256", "")
-    if not isinstance(home, str) or not re.fullmatch(r"session-[a-zA-Z0-9_-]+", home):
-        raise CodexConfigurationError("Invalid private Codex authentication recovery lease")
-    if not isinstance(digest, str) or not re.fullmatch(r"[0-9a-f]{64}", digest):
-        raise CodexConfigurationError("Invalid private Codex authentication recovery lease")
-    directory = state / home
-    if directory.is_symlink():
-        raise CodexConfigurationError("Codex authentication recovery directory must not be a symlink")
-    if directory.exists():
-        _persist_auth(source, directory / "auth.json", digest)
-        shutil.rmtree(directory)
-    lease_path.unlink()
 
 
 def _runtime_preflight(

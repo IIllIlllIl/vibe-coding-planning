@@ -1,8 +1,11 @@
-"""Synthetic auth only: no real credentials, CLI, models or containers."""
+"""Accepted parallel auth policy; synthetic credentials and no model calls."""
+from concurrent.futures import ThreadPoolExecutor
 import json
 import multiprocessing
-import os
 from pathlib import Path
+import shutil
+import tempfile
+import threading
 from types import SimpleNamespace
 
 import pytest
@@ -16,11 +19,8 @@ from src.swe_verified_pce.worker import _retry_disposition
 def _seed(tmp_path):
     source = tmp_path / "auth.json"
     source.write_text('{"synthetic_generation":0}\n')
+    source.chmod(0o600)
     return source
-
-
-def _generation(path):
-    return json.loads(path.read_bytes())["synthetic_generation"]
 
 
 def _state(source):
@@ -34,35 +34,55 @@ def test_missing_auth_blocks_before_creating_a_session(tmp_path):
     assert _retry_disposition(caught.value, stage="pce_execution") == "block_run"
 
 
-@pytest.mark.parametrize("fail", [False, True])
-def test_cli_refresh_is_preserved_on_success_and_exception(tmp_path, fail):
+@pytest.mark.parametrize("raw", [b"not-json", b"[]"])
+def test_invalid_source_cache_blocks_before_creating_a_session(tmp_path, monkeypatch, raw):
     source = _seed(tmp_path)
+    source.write_bytes(raw)
+    def unexpected(*_args, **_kwargs):
+        pytest.fail("invalid auth must fail before creating private state")
+    monkeypatch.setattr(runtime.tempfile, "TemporaryDirectory", unexpected)
+    with pytest.raises(runtime.CodexConfigurationError):
+        with runtime._isolated_codex_environment({"codex_auth_file": str(source)}):
+            pytest.fail("invalid auth must not start an Agent")
+
+
+def test_symlink_source_cache_is_rejected(tmp_path):
+    source = _seed(tmp_path)
+    linked = tmp_path / "linked.json"
+    linked.symlink_to(source)
+    with pytest.raises(runtime.CodexConfigurationError, match="regular file"):
+        with runtime._isolated_codex_environment({"codex_auth_file": str(linked)}):
+            pytest.fail("source validation must remain enabled")
+
+
+@pytest.mark.parametrize("fail", [False, True])
+def test_private_refresh_is_discarded_without_source_writeback_on_success_or_failure(tmp_path, fail):
+    source = _seed(tmp_path)
+    original = source.read_bytes()
     original_error = ValueError("original Agent validation failure")
     try:
         with runtime._isolated_codex_environment({"codex_auth_file": str(source)}) as env:
             home = Path(env["CODEX_HOME"])
-            refreshed = b'{"synthetic_generation": 1}\n\n'
-            (home / "auth.json").write_bytes(refreshed)
+            (home / "auth.json").write_text('{"synthetic_generation":1}')
             (home / "history.jsonl").write_text("previous case must remain private")
             if fail:
                 raise original_error
     except ValueError as error:
         assert fail and error is original_error
-    assert source.read_bytes() == refreshed
-    assert source.stat().st_mode & 0o777 == 0o600
-    assert not home.exists() and not (_state(source) / "lease.json").exists()
+    assert source.read_bytes() == original and not home.exists()
+    assert not _state(source).exists()
     with runtime._isolated_codex_environment({"codex_auth_file": str(source)}) as env:
         next_home = Path(env["CODEX_HOME"])
         assert next_home != home and not (next_home / "history.jsonl").exists()
-        assert (next_home / "auth.json").read_bytes() == refreshed
+        assert (next_home / "auth.json").read_bytes() == original
 
 
-def test_external_login_wins_over_stale_inflight_auth(tmp_path):
+def test_external_login_is_not_overwritten(tmp_path):
     source = _seed(tmp_path)
     with runtime._isolated_codex_environment({"codex_auth_file": str(source)}) as env:
         (Path(env["CODEX_HOME"]) / "auth.json").write_text('{"synthetic_generation":1}')
         source.write_text('{"synthetic_generation":99}')
-    assert _generation(source) == 99
+    assert json.loads(source.read_bytes())["synthetic_generation"] == 99
 
 
 def test_external_logout_is_not_undone(tmp_path):
@@ -72,119 +92,132 @@ def test_external_logout_is_not_undone(tmp_path):
     assert not source.exists()
 
 
-def test_setup_failure_removes_unused_auth_copy(tmp_path, monkeypatch):
+def test_setup_failure_cleans_only_its_private_directory(tmp_path, monkeypatch):
     source = _seed(tmp_path)
-    atomic = runtime._atomic_private_bytes
-    def fail(path, raw):
-        if path.name == "lease.json":
-            raise OSError("synthetic setup failure")
-        atomic(path, raw)
-    monkeypatch.setattr(runtime, "_atomic_private_bytes", fail)
-    with pytest.raises(OSError, match="setup failure"):
+    opened = []
+    original_open = runtime.os.open
+    def fail(path, *args, **kwargs):
+        if Path(path).name == "auth.json":
+            opened.append(Path(path))
+            raise OSError("synthetic copy failure")
+        return original_open(path, *args, **kwargs)
+    monkeypatch.setattr(runtime.os, "open", fail)
+    with pytest.raises(OSError, match="copy failure"):
         with runtime._isolated_codex_environment({"codex_auth_file": str(source)}):
-            pytest.fail("Agent must not start after setup failure")
-    assert not list(_state(source).glob("session-*"))
-    assert not (_state(source) / "lease.json").exists() and _generation(source) == 0
+            pytest.fail("Agent must not start after copy failure")
+    assert len(opened) == 1 and not opened[0].parent.exists()
+    assert source.is_file() and not _state(source).exists()
 
 
-def test_failed_writeback_retains_private_recovery_lease(tmp_path, monkeypatch):
+def test_missing_private_directory_does_not_mask_original_agent_error(tmp_path):
     source = _seed(tmp_path)
-    atomic = runtime._atomic_private_bytes
-    def fail(path, raw):
-        if path == source:
-            raise OSError("synthetic private-store outage")
-        atomic(path, raw)
-    with monkeypatch.context() as patch:
-        patch.setattr(runtime, "_atomic_private_bytes", fail)
-        with pytest.raises(runtime.CodexConfigurationError, match="recovery lease retained"):
-            with runtime._isolated_codex_environment({"codex_auth_file": str(source)}) as env:
-                home = Path(env["CODEX_HOME"])
-                (home / "auth.json").write_text('{"synthetic_generation":1}')
-    assert home.exists() and (_state(source) / "lease.json").is_file()
+    original_error = ValueError("original Agent failure")
+    with pytest.raises(ValueError) as caught:
+        with runtime._isolated_codex_environment({"codex_auth_file": str(source)}) as env:
+            home = Path(env["CODEX_HOME"])
+            assert home.name.startswith("vibe-codex-home-") and home != tmp_path
+            shutil.rmtree(home)
+            raise original_error
+    assert caught.value is original_error and source.is_file()
+
+
+@pytest.mark.parametrize("raw", [b"not-json", b"[]"])
+def test_corrupt_private_cache_cannot_change_source_or_break_cleanup(tmp_path, raw):
+    source = _seed(tmp_path)
+    initial = source.read_bytes()
     with runtime._isolated_codex_environment({"codex_auth_file": str(source)}) as env:
-        assert _generation(Path(env["CODEX_HOME"]) / "auth.json") == 1
-    assert not home.exists() and _generation(source) == 1
+        home = Path(env["CODEX_HOME"])
+        (home / "auth.json").write_bytes(raw)
+    assert source.read_bytes() == initial and not home.exists()
 
 
-def _increment_stream(source, acquired, release, result):
+def test_existing_legacy_lease_is_neither_recovered_nor_deleted(tmp_path):
+    source = _seed(tmp_path)
+    state = _state(source)
+    state.mkdir(mode=0o700)
+    old_home = state / "session-existing"
+    old_home.mkdir(mode=0o700)
+    (old_home / "auth.json").write_text('{"synthetic_generation":99}')
+    lease = state / "lease.json"
+    lease.write_text('{"home":"session-existing","synthetic_only":true}')
+    original_lease = lease.read_bytes()
+    with runtime._isolated_codex_environment({"codex_auth_file": str(source)}) as env:
+        assert Path(env["CODEX_HOME"]) != old_home
+        assert json.loads((Path(env["CODEX_HOME"]) / "auth.json").read_bytes())["synthetic_generation"] == 0
+    assert lease.read_bytes() == original_lease and old_home.is_dir()
+
+
+def test_fifty_same_source_threads_overlap_with_private_permissions_and_independent_cleanup(tmp_path):
+    source = _seed(tmp_path)
+    initial = source.read_bytes()
+    barrier = threading.Barrier(50)
+    def call(index):
+        with runtime._isolated_codex_environment({"codex_auth_file": str(source)}) as env:
+            home = Path(env["CODEX_HOME"])
+            private = home / "auth.json"
+            assert home.stat().st_mode & 0o777 == 0o700
+            assert private.stat().st_mode & 0o777 == 0o600
+            assert private.read_bytes() == initial
+            private.write_text(json.dumps({"synthetic_generation": index + 1}))
+            (home / "case.json").write_text(str(index))
+            barrier.wait(timeout=10)
+            assert (home / "case.json").read_text() == str(index)
+            return home
+    with ThreadPoolExecutor(max_workers=50) as executor:
+        homes = list(executor.map(call, range(50)))
+    assert len(set(homes)) == 50 and all(not home.exists() for home in homes)
+    assert source.read_bytes() == initial and not _state(source).exists()
+
+
+def _process(source, directory, channel):
+    tempfile.tempdir = directory
     with runtime._isolated_codex_environment({"codex_auth_file": source}) as env:
-        path = Path(env["CODEX_HOME"]) / "auth.json"
-        generation = _generation(path)
-        acquired.set()
-        if release is not None and not release.wait(10):
-            raise RuntimeError("test synchronization timed out")
-        path.write_text(json.dumps({"synthetic_generation": generation + 1}))
-        result.put(generation)
+        home = Path(env["CODEX_HOME"])
+        channel.send(str(home))
+        if not channel.poll(10):
+            raise RuntimeError("synthetic process synchronization timeout")
+        channel.recv()
+        assert home.is_dir() and (home / "auth.json").is_file()
 
 
-def _crash_after_refresh(source):
-    with runtime._isolated_codex_environment({"codex_auth_file": source}) as env:
-        path = Path(env["CODEX_HOME"])
-        (path / "auth.json").write_text('{"synthetic_generation":1}')
-        (path / "history.jsonl").write_text("old case")
-        os._exit(0)
-
-
-def test_same_stream_is_exclusive_across_processes_and_hands_off_new_auth(tmp_path):
+def test_same_source_processes_overlap_and_termination_cannot_delete_peer_state(tmp_path):
     source = _seed(tmp_path)
     context = multiprocessing.get_context("spawn")
-    first, second, release = (context.Event() for _ in range(3))
-    result = context.Queue()
-    processes = [context.Process(target=_increment_stream, args=(str(source), first, release, result)),
-                 context.Process(target=_increment_stream, args=(str(source), second, None, result))]
+    channels = [context.Pipe() for _ in range(2)]
+    processes = [context.Process(target=_process, args=(str(source), str(tmp_path), pair[1])) for pair in channels]
+    homes = []
     try:
-        processes[0].start()
-        assert first.wait(10)
-        processes[1].start()
-        assert not second.wait(0.3)
-        release.set()
-        for process in processes:
-            process.join(10)
-            assert process.exitcode == 0
-        assert sorted([result.get(timeout=2), result.get(timeout=2)]) == [0, 1]
-        assert _generation(source) == 2
+        for process, pair in zip(processes, channels):
+            process.start()
+            assert pair[0].poll(8), "same-source process must not wait for another call's auth lock"
+            homes.append(Path(pair[0].recv()))
+        assert homes[0] != homes[1] and all(home.is_dir() for home in homes)
+        processes[0].kill()
+        processes[0].join(5)
+        assert homes[1].is_dir()
+        channels[1][0].send("release")
+        processes[1].join(8)
+        assert processes[1].exitcode == 0 and not homes[1].exists()
+        # SIGKILL bypasses Python cleanup; no other call reclaims this orphan.
+        assert homes[0].is_dir() and not _state(source).exists()
     finally:
-        release.set()
         for process in processes:
             if process.pid is not None and process.is_alive():
                 process.kill()
                 process.join(5)
-
-
-def test_process_exit_recovers_auth_without_exposing_old_case_state(tmp_path):
-    source = _seed(tmp_path)
-    process = multiprocessing.get_context("spawn").Process(target=_crash_after_refresh, args=(str(source),))
-    process.start()
-    process.join(10)
-    assert process.exitcode == 0
-    assert _generation(source) == 0
-    lease = json.loads((_state(source) / "lease.json").read_bytes())
-    old_home = _state(source) / lease["home"]
-    with runtime._isolated_codex_environment({"codex_auth_file": str(source)}) as env:
-        home = Path(env["CODEX_HOME"])
-        assert _generation(home / "auth.json") == 1
-        assert home != old_home and not old_home.exists()
-        assert not (home / "history.jsonl").exists()
-    assert _generation(source) == 1
-
-
-@pytest.mark.parametrize("corruption", [b"not-json", b"[]"])
-def test_corrupt_private_auth_never_replaces_source(tmp_path, corruption):
-    source = _seed(tmp_path)
-    with pytest.raises(runtime.CodexConfigurationError):
-        with runtime._isolated_codex_environment({"codex_auth_file": str(source)}) as env:
-            (Path(env["CODEX_HOME"]) / "auth.json").write_bytes(corruption)
-    assert _generation(source) == 0
-    # A fresh external login supersedes the rejected recovery generation.
-    source.write_text('{"synthetic_generation":99}')
-    with runtime._isolated_codex_environment({"codex_auth_file": str(source)}) as env:
-        assert _generation(Path(env["CODEX_HOME"]) / "auth.json") == 99
+        for pair in channels:
+            for channel in pair:
+                channel.close()
+        for home in homes:
+            if home.exists():
+                assert home.parent == tmp_path and home.name.startswith("vibe-codex-home-")
+                shutil.rmtree(home)
 
 
 @pytest.mark.parametrize("channel", ["stderr", "error_event"])
-def test_native_auth_failure_blocks_workers_and_retains_full_trace(tmp_path, monkeypatch, channel):
+@pytest.mark.parametrize("code", ["refresh_token_reused", "token_expired"])
+def test_native_auth_failure_still_blocks_workers_and_retains_full_trace(tmp_path, monkeypatch, channel, code):
     source = _seed(tmp_path)
-    code = "refresh_token_reused"
     def run(command, **kwargs):
         if command[-1] == "--version":
             return SimpleNamespace(returncode=0, stdout="codex-cli 0.160.1", stderr="")
@@ -221,28 +254,23 @@ def test_successful_agent_and_tool_text_about_auth_does_not_block(tmp_path, monk
     assert raw == "Handle token_expired in the application."
 
 
-def test_auth_writeback_failure_retains_completed_agent_artifact_and_trace(tmp_path, monkeypatch):
+def test_private_auth_change_does_not_alter_completed_agent_output_or_trace(tmp_path, monkeypatch):
     source = _seed(tmp_path)
-    atomic = runtime._atomic_private_bytes
-    def persist(path, raw):
-        if path == source:
-            raise OSError("synthetic store outage")
-        atomic(path, raw)
-    monkeypatch.setattr(runtime, "_atomic_private_bytes", persist)
+    initial = source.read_bytes()
+    original = "Original final output.\n\n"
     def run(command, **kwargs):
         if command[-1] == "--version":
             return SimpleNamespace(returncode=0, stdout="codex-cli 0.160.1", stderr="")
         if "sandbox" in command:
             return SimpleNamespace(returncode=0, stdout="", stderr="")
         (Path(kwargs["env"]["CODEX_HOME"]) / "auth.json").write_text('{"synthetic_generation":1}')
-        Path(command[command.index("--output-last-message") + 1]).write_bytes(b"Original final output.\n\n")
+        Path(command[command.index("--output-last-message") + 1]).write_bytes(original.encode())
         return SimpleNamespace(returncode=0, stdout='{"type":"turn.completed"}\n', stderr="")
     monkeypatch.setattr(runtime.subprocess, "run", run)
-    with pytest.raises(runtime.CodexConfigurationError) as caught:
-        runtime._run_codex_text_agent(model_config={"executor": "codex_cli", "model": "fake",
-            "codex_auth_file": str(source)}, working_directory=tmp_path, attempt_dir=tmp_path / "attempt",
-            system="Task", user="Input", task="Do task")
-    assert caught.value.retry_disposition == "block_run"
-    assert (tmp_path / "attempt/codex_final_response.json").read_bytes() == b"Original final output.\n\n"
-    assert caught.value.trajectory[-1] == {"role": "assistant", "content": "Original final output.\n\n"}
-    assert caught.value.trajectory[3]["content"]["events"] == [{"type": "turn.completed"}]
+    raw, trajectory = runtime._run_codex_text_agent(model_config={"executor": "codex_cli", "model": "fake",
+        "codex_auth_file": str(source)}, working_directory=tmp_path, attempt_dir=tmp_path / "attempt",
+        system="Task", user="Input", task="Do task")
+    assert raw == original and source.read_bytes() == initial
+    assert (tmp_path / "attempt/codex_final_response.json").read_bytes() == original.encode()
+    assert trajectory[-1] == {"role": "assistant", "content": original}
+    assert trajectory[3]["content"]["events"] == [{"type": "turn.completed"}]

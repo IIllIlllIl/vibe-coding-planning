@@ -125,7 +125,7 @@ unchanged in those events. No production SIF or model inference was used.
 | Tools and command lifetime | Existing single-bash action protocol and environment execution | Native tools, structured calls, streaming/async execution | Intentional harness difference. Input to an already running Native shell session is not another checked new command |
 | Host Agent limits / accounting | Step/cost, command and phase limits disabled for current Safe PCE; existing usage records remain | No added Host Agent limits; original Native usage events retained | Same no-Host-budget policy; usage formats are not forced into artificial equivalence |
 | Sampling/model controls | DS temperature and thinking settings | Codex model and reasoning effort | Intentional provider difference; not a quality-equivalent substitution |
-| Authentication/concurrency | Private provider-key environment | Existing exclusive authentication lease and private per-call CLI state | Intentional provider lifecycle; one auth source serializes Native calls despite parallel Slurm waves |
+| Authentication/concurrency | Private provider-key environment | Private per-call CLI state and read-only auth snapshots; no whole-call lock under the 2026-10-24 temporary policy | Calls may overlap; refresh persistence/rotation risks are explicitly accepted, not solved. See [decision and evidence](codex-parallel-auth-20261024.md) |
 | Scientific/control interfaces | Existing Runner, exact Plan, staged implementation, fresh evaluator, checkpoints and retries | Same Runner/interfaces; different native submission transport and raw trajectory shape | Shared workflow unchanged; no transcript conversion or Host-generated Plan/patch |
 
 The source guard is deliberately partial on both backends. It recognizes the

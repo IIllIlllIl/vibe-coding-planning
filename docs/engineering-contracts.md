@@ -555,26 +555,29 @@ receives a distinct private `CODEX_HOME`; task history, tmp and snapshots are
 never shared between calls.
 
 Authentication lifecycle is owned by the existing Codex backend, not PCE or
-GEPA. One configured authentication source is one exclusive stream: hold its
-private filesystem lock through the entire call because Codex may refresh at
-any time. Preserve the CLI-authored refreshed bytes atomically with mode 0600,
-including on failure. Never overwrite a newer external login or undo a logout.
-Manual login/logout must use the same lock or run while the stream is inactive;
-writers that bypass the lease cannot be synchronized by this backend.
-Parallel streams require separately authenticated sources, not copies of one
-OAuth session; one source deliberately serializes its Codex calls while the
-ordinary Slurm array/wave submission remains unchanged.
+GEPA. The user-selected temporary policy of 2026-10-24 restores the successful
+formal-run design: read the configured private auth source, create a separate
+mode-0700 `CODEX_HOME` for each call, and put a mode-0600 auth snapshot inside.
+Calls sharing a source may overlap. There is no whole-call auth lock, shared
+lease, source write-back, or change to ordinary Slurm array/wave submission.
+Keep existing source-cache validation, SIF boundaries and exact raw artifacts.
+Normal/exceptional exits remove only the current call's temporary state.
 
-The source's mode-0700 private sidecar holds the active call and a recovery lease
-outside experiment storage. A subsequent lock owner recovers an interrupted
-call's auth update before deleting its old non-auth state and creating a fresh
-home. Normal completion removes the temporary home and lease; retain private
-recovery state when persistence fails. No credentials or credential digests may
-enter commands, configs, logs, staged evidence or retained experiment artifacts.
-If final auth persistence fails, preserve the original final artifact and native
-trajectory and block further work; never repair or regenerate the Agent output.
-Cross-node filesystem locking and live authentication still require HPC
-verification; synthetic local tests are not proof of those properties.
+This explicitly accepts a temporary authentication risk, not a durable refresh
+solution: CLI refreshes in a private copy are discarded, and copies of one OAuth
+session are not refresh-independent. Do not claim that short-call success proves
+long-running or high-concurrency safety. Keep the remote source login fresh and
+perform manual login/logout only with calls inactive. mini-SWE/API remains the
+standard backend; no Codex API-key branch is introduced. See the
+[parallel-auth decision and evidence](knowledge/codex-parallel-auth-20261024.md).
+
+The backend neither reads nor removes sidecars left by the superseded lease
+implementation. Do not automatically promote their credentials or delete them
+as experiment cleanup. Inspect privately, with the exact owner inactive, before
+any separately authorized recovery/cleanup. SIGKILL can also leave a call's own
+temporary directory; another call must never reclaim it as a shared lease.
+No credentials or credential digests may enter commands, configs, logs, staged
+evidence or retained experiment artifacts.
 
 Reuse `raise_for_permanent_provider_error` for mini-SWE and Native Codex. A
 permanent auth/billing/quota failure exposes `retry_disposition=block_run`; the
@@ -583,8 +586,10 @@ operational output. It cannot become a scored unresolved Plan or a partial
 learning update. Classify Native CLI diagnostics/error events, not successful
 Agent prose or repository tool output that happens to mention authentication.
 An expired/reused refresh token requires a fresh private login; retries cannot
-repair it. This follows the
-[official managed-auth persistence guidance](https://learn.chatgpt.com/docs/auth/ci-cd-auth).
+repair it. The
+[official managed-auth guidance](https://learn.chatgpt.com/docs/auth/ci-cd-auth)
+recommends persistence and serialized use; the current temporary policy knowingly
+does not provide those guarantees.
 
 Before inference, the worker checks the exact CLI version and verifies both
 isolation boundaries using the same isolated environment as the real call.

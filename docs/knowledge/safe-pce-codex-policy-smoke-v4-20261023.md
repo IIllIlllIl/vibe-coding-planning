@@ -1,5 +1,10 @@
 # Native Safe PCE policy smoke v4: configuration and acceptance protocol
 
+This records the v4 configuration and its original acceptance protocol. Its
+authentication lease/serialization was superseded on 2026-10-24 by the
+user-selected [parallel per-call policy](codex-parallel-auth-20261024.md);
+historical runtime artifacts are unchanged.
+
 ## Authority and reuse
 
 The completed control baseline is `safe-pce-ace-smoke-v1-20261022` with
@@ -33,7 +38,7 @@ No model, dataset, reward, candidate schema or learning prompt is redesigned.
 | Learning calls | 2 Reflectors, 1 Curator; Refiner conditional |
 | Iris resources | 1 CPU / 4G; PCE 60-minute Slurm limit, learning roles 30 minutes |
 | Controller | Existing 8-minute slices, bounded 24-slice supervisor |
-| Array | Existing PCE cap 3; a single Native auth authority serializes its calls |
+| Array | Existing PCE cap 3; the auth implementation used for this run serialized one source |
 | Agent networking | `container.network_disabled: true`; Native tools disabled, CLI model/auth networking retained |
 
 The unused DS reflection fields remain compatibility metadata; actual learning

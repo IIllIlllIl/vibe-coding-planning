@@ -1,5 +1,10 @@
 # Shared Agent entry and Native Codex writable-policy repair
 
+The auth lease described in the historical v2/v3 sections below was superseded
+by the user-selected [parallel per-call policy](codex-parallel-auth-20261024.md)
+on 2026-10-24. Its old test counts and runtime records remain historical
+evidence, not the current authentication contract.
+
 ## Baseline and module boundary
 
 The successful control baseline remains `safe-pce-ace-smoke-v1-20261022`
@@ -119,14 +124,14 @@ Supervisor blocked. Native version/permission preflights were therefore no
 longer the failure boundary. The v2 evidence and frozen runtime/source configs
 remain retained; its terminal supervisor launch identity is archived.
 
-The existing Native backend now leases one private auth stream through a call,
-persists CLI-authored refresh bytes atomically and recovers interrupted leases.
-Calls using the same source serialize; independent private homes still prevent
+The v3 repair leased a private auth stream through a call,
+persisted CLI-authored refresh bytes atomically and recovered interrupted leases.
+Calls using the same source serialized; independent private homes still prevented
 temporary-state races. Permanent provider failures block existing Workers
 without scientific scoring. Shared Slurm submission now preserves accepted
 receipts and reconciles uncertain outcomes through existing task-batch state;
 unavailable accounting never becomes permission to submit a duplicate array.
-See `../engineering-contracts.md` for the reusable contracts.
+See `../engineering-contracts.md` for the current reusable contracts.
 
 Local acceptance passed **656 tests, with two historical assertions deselected**
 as already documented in `safe-pce-ace-backend-acceptance-20261022.md`.
@@ -139,6 +144,6 @@ behavior remain HPC acceptance requirements.
 The separate v3 learning/source/supervisor configs preserve the v2 tasks,
 prompts, models, proposal budget and Iris 1 CPU/4G limits. They name a fresh
 snapshot and run, import no failed v2 output, and document the auth/recovery
-repair as the changed axis. One configured auth source serializes Native calls;
+repair as the changed axis. For that runtime, one auth source serialized Native calls;
 the three-element Slurm array concurrency limit is unchanged. The config alone
 does not authorize launch.
