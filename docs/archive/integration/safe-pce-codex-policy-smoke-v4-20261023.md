@@ -1,8 +1,10 @@
 # Native Safe PCE policy smoke v4: configuration and acceptance protocol
 
+Historical protocol, not a current launch or authentication authority.
+
 This records the v4 configuration and its original acceptance protocol. Its
 authentication lease/serialization was superseded on 2026-10-24 by the
-user-selected [parallel per-call policy](codex-parallel-auth-20261024.md);
+user-selected [parallel per-call policy](../../knowledge/codex-parallel-auth-20261024.md);
 historical runtime artifacts are unchanged.
 
 ## Authority and reuse
@@ -26,7 +28,7 @@ No model, dataset, reward, candidate schema or learning prompt is redesigned.
 |---|---|
 | Learning config | `configs/gepa_safe_pce_verified_codex_smoke_v4_20261023.yaml` |
 | PCE source | `configs/safe_pce_ace_verified_codex_smoke_source_v4_20261023.yaml` |
-| Supervisor | `configs/safe_pce_ace_verified_codex_smoke_supervisor_v4_20261023.yaml` |
+| Supervisor | `configs/archive/supervisor_launches/safe_pce_ace_verified_codex_smoke_supervisor_v4_20261023.yaml` |
 | Input snapshot | `output/SWE-bench_Verified/safe-pce-ace-verified-codex-smoke-inputs-v4-20261023` |
 | Run | `output/SWE-bench_Verified/safe-pce-ace-verified-codex-smoke-v4-20261023` |
 | Train | Astropy-13033, Flask-5014 |
@@ -89,7 +91,7 @@ user's actual scratch paths. This is not a replacement for the production
 Controller's complete preparation check and does not modify the launch YAML.
 
 The pinned CLI's login-node network and same-session feedback probes are in
-the [policy parity audit](agent-command-policy-parity-audit-20261023.md).
+the [policy parity audit](../../knowledge/agent-command-policy-parity-audit-20261023.md).
 They do not prove new hooks/network profiles inside the production SIF.
 No model, Slurm or Apptainer run was started by preparing this configuration.
 

@@ -176,6 +176,6 @@ The hybrid SWE-chat Native path's missing **outer** network flag alone does
 not establish a leak: its inner read-only sandbox also has network controls.
 The former PCE gap was its network-enabled writable profile ignoring
 `agent_network_disabled`; that mapping is now implemented. The prepared
-[v4 smoke protocol](safe-pce-codex-policy-smoke-v4-20261023.md) verifies denied
+[archived v4 smoke protocol](../archive/integration/safe-pce-codex-policy-smoke-v4-20261023.md) verifies denied
 tool connections and working CLI transport together inside the existing SIF.
 No compute-node or model run has been performed by this implementation task.

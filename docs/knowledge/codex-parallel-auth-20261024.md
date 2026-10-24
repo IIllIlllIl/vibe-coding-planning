@@ -113,3 +113,50 @@ Local tests and diagnostics do not authorize a new experiment or a resume of
 old results. The runtime-source change must enter the existing execution
 fingerprints; frozen historical checkpoints and launch configurations are not
 rewritten to pretend they used the restored policy.
+
+## End-to-end regression configuration
+
+The v5 configuration reuses completed v4's full Safe PCE/ACE graph, not the
+two-call auth diagnostic:
+
+- Learning: [`gepa_safe_pce_verified_codex_smoke_v5_20261024.yaml`](../../configs/gepa_safe_pce_verified_codex_smoke_v5_20261024.yaml).
+- PCE source: [`safe_pce_ace_verified_codex_smoke_source_v5_20261024.yaml`](../../configs/safe_pce_ace_verified_codex_smoke_source_v5_20261024.yaml).
+- Supervisor: [`safe_pce_ace_verified_codex_smoke_supervisor_v5_20261024.yaml`](../../configs/safe_pce_ace_verified_codex_smoke_supervisor_v5_20261024.yaml).
+
+Train is still Astropy-13033 and Flask-5014; validation is Pytest-10051. Search
+uses one proposal, mini 2, repetition 1, seed 42, and at most six PCE evaluations
+(five unless strict improvement reaches proposal validation). P/C and learning
+roles retain GPT-6 Sol/high, CLI 0.160.1, unchanged prompts and seed, and caps
+of 10 items / 48 condition tokens / 96 guide tokens with no shared guide.
+Refiner remains conditional after Curator and before evaluation.
+
+Iris resources remain 1 CPU / 4G per Controller/Worker; PCE wall time is 60
+minutes, learning roles 30 minutes, and Controller slices 8 minutes with the
+same 24-slice bound. Selected completed v4 Worker accounting showed MaxRSS up
+to 1499024K; the prior DS PCE reference was 2104580K. No CPU/RAM increase is
+introduced for parallelism: each independent Agent remains its own array
+element. PCE retains the cap of 3 running elements, and the two Reflectors form
+one two-element array. `search.parallel=1` is unchanged; it is not an auth lock
+or a replacement for these distributed phase waves.
+
+The existing preparation module freezes a new
+`safe-pce-ace-verified-codex-smoke-inputs-v5-20261024` snapshot. Train/validation
+JSONL, source rows, source manifest and images are byte-identical to v4;
+provenance and resolved output/config identities are new. No old candidate,
+checkpoint, ledger, failed attempt or scored result is imported. The acceptance
+target is a correct complete workflow, not a required score improvement.
+
+Post-run checks reuse `scripts.tools.audit_safe_pce_ace_dataflow`, whole-wave
+manifests/scripts, Slurm accounting, Worker timestamps, raw completions and the
+ACE ledger. Check that independent Workers overlap and Curator waits for all
+validated reflections; do not equate array/Worker overlap with measured model
+request overlap or refresh safety. Report unexercised conditional branches.
+
+`tests/test_optimization/test_codex_parallel_smoke_config.py` compares the
+configs and frozen snapshot with v4 and checks the real phase-script builder
+and Supervisor bindings without launching anything. The Supervisor retains
+`--require-clean-worktree`; unrelated tracked or untracked changes must be
+resolved through an explicit launch-tree decision rather than silently ignored,
+committed, deleted or staged. Require separate commit/launch approval and a
+fresh private login/cache check before any HPC submission. Config preparation
+does not run a model, container, Supervisor or Slurm job.

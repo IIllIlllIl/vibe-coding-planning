@@ -161,7 +161,7 @@ def test_smoke_supervisor_and_generated_worker_scripts_match_reviewed_config(tmp
     from src.optimization.behavioral_hybrid_runtime import HybridPhaseExecutor
     from src.swe_verified_pce.config import load_swe_verified_pce_config
     from src.swe_verified_pce.hpc_executor import build_array_script
-    launch = Path("configs/safe_pce_ace_verified_smoke_supervisor_v1_20261022.yaml")
+    launch = Path("configs/archive/supervisor_launches/safe_pce_ace_verified_smoke_supervisor_v1_20261022.yaml")
     _, _, arguments, _ = _load_launch_config(launch)
     supervisor = parse_args(arguments)  # Parsing only: no submit or remote probe.
     config = load_optimization_config(supervisor.runtime_config, require_api_keys=False)

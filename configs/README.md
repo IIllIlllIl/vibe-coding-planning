@@ -24,17 +24,19 @@ splits and a new launch identity must be prepared before an approved run.
 The concrete development smoke is `gepa_safe_pce_verified_smoke_v1_20261022.yaml`,
 with `safe_pce_ace_verified_smoke_source_v1_20261022.yaml` and explicit frozen
 IDs under `frozen_safe_pce_ace/verified_smoke_v1_20261022/`. Its standard
-supervisor identity is `safe_pce_ace_verified_smoke_supervisor_v1_20261022.yaml`.
+supervisor identity is `archive/supervisor_launches/safe_pce_ace_verified_smoke_supervisor_v1_20261022.yaml`.
 Verified validates engineering; RPG is the selected downstream formal dataset
 and requires its own adapter/acceptance before configuration and launch.
-The opt-in Native Codex development configuration is
-`gepa_safe_pce_verified_codex_smoke_v3_20261023.yaml`, with matching
-`safe_pce_ace_verified_codex_smoke_source_v3_20261023.yaml` and
-`safe_pce_ace_verified_codex_smoke_supervisor_v3_20261023.yaml`. Its
-[shared Agent entry acceptance](../docs/knowledge/agent-runtime-entry-acceptance-20261023.md)
-records the terminal v1/v2 failures, repairs, tests and remaining compute
-acceptance. Its one private Codex authentication source deliberately serializes
-Native calls; ordinary array submission remains unchanged.
+The opt-in Native Codex parallel regression configuration is
+`gepa_safe_pce_verified_codex_smoke_v5_20261024.yaml`, with matching
+`safe_pce_ace_verified_codex_smoke_source_v5_20261024.yaml` and
+`safe_pce_ace_verified_codex_smoke_supervisor_v5_20261024.yaml`. The
+[parallel-auth contract and regression checks](../docs/knowledge/codex-parallel-auth-20261024.md)
+record its accepted authentication trade-off and unchanged PCE/ACE graph.
+Terminal v1–v4 launch identities are archived under `archive/supervisor_launches/`;
+their learning/source configs remain frozen reproduction baselines, not launch
+defaults. The superseded v4 protocol is in
+[`docs/archive/integration/`](../docs/archive/integration/safe-pce-codex-policy-smoke-v4-20261023.md).
 
 SWE-chat hybrid lightweight formal contract:
 `gepa_swe_chat_hybrid_formal3_v4_20261011.yaml` and

@@ -190,7 +190,7 @@ def test_v4_smoke_preserves_budget_models_resources_and_uses_fresh_identity():
     assert current.agent_network_disabled is True and previous.agent_network_disabled is False
     for field in ("partition", "cpus_per_task", "mem", "time", "max_task_attempts", "max_running_array_tasks"):
         assert getattr(previous.hpc, field) == getattr(current.hpc, field)
-    supervisor = yaml.safe_load(Path("configs/safe_pce_ace_verified_codex_smoke_supervisor_v4_20261023.yaml").read_text())
+    supervisor = yaml.safe_load(Path("configs/archive/supervisor_launches/safe_pce_ace_verified_codex_smoke_supervisor_v4_20261023.yaml").read_text())
     args = supervisor["arguments"]
     assert args[args.index("--gepa-config") + 1] == str(new_path)
     assert "--require-clean-worktree" in args

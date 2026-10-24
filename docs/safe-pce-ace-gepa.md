@@ -251,7 +251,7 @@ for executed checks and the two separately investigated legacy assertions.
 
 The concrete identity is `configs/gepa_safe_pce_verified_smoke_v1_20261022.yaml`;
 its launch description is
-`configs/safe_pce_ace_verified_smoke_supervisor_v1_20261022.yaml`.
+`configs/archive/supervisor_launches/safe_pce_ace_verified_smoke_supervisor_v1_20261022.yaml`.
 The source PCE config is `configs/safe_pce_ace_verified_smoke_source_v1_20261022.yaml`.
 Frozen selection and split IDs live in
 `configs/frozen_safe_pce_ace/verified_smoke_v1_20261022/`.
