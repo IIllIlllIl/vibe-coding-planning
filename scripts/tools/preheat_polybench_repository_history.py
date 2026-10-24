@@ -1,4 +1,4 @@
-"""Prepare frozen PolyBench base-ancestor Git bundles before PCE Agents run."""
+"""Prepare frozen Safe PCE base-ancestor bundles (historical CLI name retained)."""
 
 from __future__ import annotations
 
@@ -7,6 +7,7 @@ from datetime import datetime, timezone
 import json
 from pathlib import Path
 import tempfile
+import yaml
 
 from src.environment.apptainer_env import ApptainerEnvironment, ApptainerSifCache
 from src.environment.docker_env import configure_docker_capacity
@@ -23,12 +24,20 @@ def main() -> int:
     parser.add_argument("--max-cases", type=int, default=0)
     parser.add_argument("--check-only", action="store_true")
     args = parser.parse_args()
-    config = load_polybench_pce_config(args.config, require_api_keys=False)
+    mode = yaml.safe_load(args.config.read_text())["mode"]
+    if mode == "polybench_pce":
+        config = load_polybench_pce_config(args.config, require_api_keys=False)
+        load_cases = load_polybench_pce_cases
+    else:
+        from src.pce_dataset import repository_pce_dataset
+        dataset = repository_pce_dataset(mode)
+        config = dataset.load_config(args.config, require_api_keys=False)
+        load_cases = dataset.load_cases
     if config.plan_submission_protocol != "direct_human_markdown_v5":
         raise ValueError("history preheat requires the safe direct Plan protocol")
     if config.selection_manifest is None:
         raise ValueError("history preheat requires a frozen selection")
-    cases, _, _ = load_polybench_pce_cases(
+    cases, _, _ = load_cases(
         config.dataset_snapshot, config.image_manifest
     )
     by_id = {case.instance_id: case for case in cases}
@@ -79,13 +88,13 @@ def main() -> int:
             workspace = Path(temporary) / "repository"
             env = ApptainerEnvironment(
                 image=case.image.requested_ref,
-                cwd=config.docker.workdir,
+                cwd=getattr(case, "working_directory", config.docker.workdir),
                 sif_cache_dir=config.container.sif_cache_dir,
                 capacity_window=capacity,
                 timeout=config.plan.timeout,
                 writable_tmpfs=config.container.writable_tmpfs,
                 run_args=["--containall", "--no-mount", "cwd"],
-                git_safe_directories=[config.docker.workdir],
+                git_safe_directories=[getattr(case, "working_directory", config.docker.workdir)],
                 host_workdir=workspace,
                 initialize_host_workdir=True,
                 isolate_tmp=True,
@@ -107,7 +116,7 @@ def main() -> int:
         print(json.dumps(records[-1], sort_keys=True), flush=True)
     summary = {
         "schema_version": 1,
-        "mode": "polybench_repository_history_preheat",
+        "mode": "polybench_repository_history_preheat" if mode == "polybench_pce" else mode + "_repository_history_preheat",
         "config": str(config.config_path),
         "selection_sha256": file_sha256(config.selection_manifest),
         "checked_at": datetime.now(timezone.utc).isoformat(),

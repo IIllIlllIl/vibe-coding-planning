@@ -68,6 +68,7 @@ def run_task(
     attempt_dir: Path,
     checkpoint_dir: Path,
     attempt: int,
+    dataset=None,
 ) -> int:
     started_at = datetime.now(timezone.utc).isoformat()
     attempt_dir.mkdir(parents=True, exist_ok=True)
@@ -75,11 +76,21 @@ def run_task(
     case: SWEVerifiedPCECase | None = None
     config = None
     stage = "input_load"
+    mode = "swe_verified_pce"
     try:
         manifest = json.loads(task_manifest_path.read_text(encoding="utf-8"))
-        case = SWEVerifiedPCECase.from_dict(dict(manifest["case"]))
+        mode = manifest.get("mode", mode)
+        if dataset is None and mode != "swe_verified_pce":
+            from src.pce_dataset import repository_pce_dataset
+            dataset = repository_pce_dataset(mode)
+        if dataset is not None and dataset.mode != mode:
+            raise ValueError("PCE Worker dataset identity mismatch")
+        case_loader = dataset.case_from_dict if dataset else SWEVerifiedPCECase.from_dict
+        config_loader = dataset.load_config if dataset else load_swe_verified_pce_config
+        runner_class = dataset.runner_class if dataset else SWEVerifiedPCERunner
+        case = case_loader(dict(manifest["case"]))
         stage = "config_load"
-        config = load_swe_verified_pce_config(config_path)
+        config = config_loader(config_path)
         stage = "runtime_setup"
         capacity = configure_docker_capacity(
             config.docker,
@@ -87,7 +98,7 @@ def run_task(
             enable_docker_maintenance=False,
         )
         stage = "pce_execution"
-        runner = SWEVerifiedPCERunner(
+        runner = runner_class(
             config,
             capacity,
             checkpoint_dir=checkpoint_dir,
@@ -108,7 +119,7 @@ def run_task(
             {
                 "schema_version": 1,
                 "status": "completed",
-                "mode": "swe_verified_pce",
+                "mode": mode,
                 "fingerprint": manifest["fingerprint"],
                 "task_index": manifest["task_index"],
                 "instance_id": case.instance_id,
@@ -138,7 +149,7 @@ def run_task(
                 if retry_disposition == "block_run"
                 else "retryable_failed"
             ),
-            "mode": "swe_verified_pce",
+            "mode": mode,
             "fingerprint": manifest.get("fingerprint"),
             "task_index": manifest.get("task_index"),
             "instance_id": case.instance_id if case else manifest.get("instance_id"),

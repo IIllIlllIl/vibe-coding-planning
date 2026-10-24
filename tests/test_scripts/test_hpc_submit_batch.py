@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import os
+import shlex
 import subprocess
 from pathlib import Path
 import sys
@@ -57,6 +58,20 @@ def test_hpc_submit_batch_finds_ulhpc_submit_next_to_conda_exe(tmp_path) -> None
         encoding="utf-8",
     )
     fake_ulhpc.chmod(0o755)
+    # Binary lookup must not depend on ignored historical datasets or a real
+    # user's private configs/ulhpc_submit.yaml in the checkout.
+    local = REPO_ROOT / ".tmp_hpc_smoke" / "find_adjacent_submit"
+    snapshot = local / "snapshot"
+    snapshot.mkdir(parents=True, exist_ok=True)
+    (snapshot / "manifest.json").write_text("{}\n")
+    rules = local / "rules.md"
+    rules.write_text("1. rule\n")
+    config = local / "config.yaml"
+    config.write_text(f"paths:\n  dataset_snapshot: {snapshot}\n  initial_rules: {rules}\n"
+                      f"  run_dir: {local / 'run'}\n"
+                      "task:\n  semantics: offline_reject_playbook_v1\ncontainer:\n  runtime: none\n")
+    submit_config = tmp_path / "ulhpc.yaml"
+    submit_config.write_text("host: example.invalid\nuser: tester\nsync_excludes:\n- .git\n")
     env = os.environ.copy()
     env["PATH"] = f"{Path(sys.executable).parent}{os.pathsep}/usr/bin:/bin"
     env["CONDA_EXE"] = str(conda_bin / "conda")
@@ -68,7 +83,9 @@ def test_hpc_submit_batch_finds_ulhpc_submit_next_to_conda_exe(tmp_path) -> None
             str(SCRIPT),
             "--gepa-rules",
             "--gepa-config",
-            "configs/gepa_verified_rules.yaml",
+            str(config),
+            "--ulhpc-config",
+            str(submit_config),
             "--remote-dir",
             "~/hpc_runs/conda-fallback-test",
         ],
@@ -299,13 +316,33 @@ def test_hpc_submit_batch_fixed_sync_excludes_persistent_and_staged_data(
     assert result.returncode == 0, result.stderr
     logged = command_log.read_text(encoding="utf-8")
     assert "rsync -az --delete" in logged
-    assert "--exclude output" in logged
+    assert "--exclude /output" in logged
+    assert "--exclude output" not in logged
     assert "--exclude frozen_family" in logged
     assert "/scratch/test/fixed-controller/" in logged
     assert "ulhpc-submit" in logged and "--no-sync" in logged
     assert "--persistent-output" in logged
     assert f"--stage-data {selection_dir}:" in logged
     assert f"--link-as {selection_dir.relative_to(REPO_ROOT)}" in logged
+
+    # Exercise the actual generated filters with real rsync, not only a string
+    # assertion: root artifacts must disappear while Python packages survive.
+    source, destination = tmp_path / "source", tmp_path / "destination"
+    (source / "src/output").mkdir(parents=True)
+    (source / "output").mkdir()
+    destination.mkdir()
+    (source / "src/output/keep.py").write_text("source\n")
+    (source / "output/artifact.bin").write_text("regenerable output\n")
+    generated = shlex.split(next(line for line in logged.splitlines() if line.startswith("rsync ")))
+    filters = []
+    for index, value in enumerate(generated):
+        if value == "--exclude":
+            filters.extend([value, generated[index + 1]])
+    check = subprocess.run(["rsync", "-rni", *filters, str(source) + "/", str(destination) + "/"],
+                           capture_output=True, text=True, check=True)
+    assert "src/output/keep.py" in check.stdout
+    assert "output/artifact.bin" not in check.stdout
+    assert "- output\n" in submit_config.read_text()  # Global input unchanged.
 
 
 def test_hpc_submit_batch_defaults_to_remote_user_from_config(tmp_path) -> None:

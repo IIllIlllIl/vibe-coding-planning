@@ -1,0 +1,11 @@
+{
+  "schema_version": 1,
+  "purpose": "base_ancestor_history_preparation_only",
+  "selection_source": "configs/preheat_swe_rpg_python3_smoke_20261012.json",
+  "selection_rationale": "Reuse the existing three-repository SIF preparation subset; cover /testbed and /testbed2 without outcome screening.",
+  "selected_instance_ids": [
+    "falconry__falcon-2540",
+    "pylint-dev__pylint-10797",
+    "openai__openai-agents-python-454"
+  ]
+}

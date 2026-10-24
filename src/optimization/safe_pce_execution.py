@@ -26,10 +26,8 @@ def load_pce_config(path: Path, *, require_api_keys=False):
     if mode == "polybench_pce":
         from src.polybench_pce.config import load_polybench_pce_config
         return mode, load_polybench_pce_config(path, require_api_keys=require_api_keys)
-    if mode == "swe_verified_pce":
-        from src.swe_verified_pce.config import load_swe_verified_pce_config
-        return mode, load_swe_verified_pce_config(path, require_api_keys=require_api_keys)
-    raise ValueError("safe_pce_config must reference polybench_pce or swe_verified_pce")
+    from src.pce_dataset import repository_pce_dataset
+    return mode, repository_pce_dataset(mode).load_config(path, require_api_keys=require_api_keys)
 
 
 def pce_cases(mode, config):
@@ -37,8 +35,8 @@ def pce_cases(mode, config):
         from src.polybench_pce.dataset import load_polybench_pce_cases
         cases, _, _ = load_polybench_pce_cases(config.dataset_snapshot, config.image_manifest)
     else:
-        from src.swe_verified_pce.dataset import load_swe_verified_pce_cases
-        cases, _, _ = load_swe_verified_pce_cases(config.dataset_snapshot, config.image_manifest)
+        from src.pce_dataset import repository_pce_dataset
+        cases, _, _ = repository_pce_dataset(mode).load_cases(config.dataset_snapshot, config.image_manifest)
     by_id = {case.instance_id: case for case in cases}
     if len(by_id) != len(cases):
         raise ValueError("Safe PCE source contains duplicate task IDs")
@@ -63,7 +61,7 @@ def pce_identity(path: Path) -> dict:
     if mode == "polybench_pce":
         from src.polybench_pce.hpc_executor import pce_semantic_sha256
     else:
-        from src.swe_verified_pce.hpc_executor import pce_semantic_sha256
+        from src.swe_verified_pce.hpc_executor import repository_pce_semantic_sha256 as pce_semantic_sha256
     return {"mode": mode, "config_sha256": sha256(path),
             "semantic_sha256": pce_semantic_sha256(config),
             "source_manifest_sha256": sha256(config.dataset_snapshot / "manifest.json"),
@@ -135,9 +133,11 @@ def execute_pce(config, mode: str, cases: list, *, backend: str) -> list[dict]:
         executor = PolyBenchPCEHPCExecutor(config)
         fingerprint = lambda: execution_fingerprint(config, cases)
     else:
+        from src.pce_dataset import repository_pce_dataset
         from src.swe_verified_pce.hpc_executor import SWEVerifiedPCEHPCExecutor
         from src.swe_verified_pce.worker import run_task
-        executor = SWEVerifiedPCEHPCExecutor(config)
+        dataset = repository_pce_dataset(mode) if mode != "swe_verified_pce" else None
+        executor = SWEVerifiedPCEHPCExecutor(config, dataset=dataset)
         fingerprint = lambda: executor.execution_fingerprint(cases)
     if backend == "hpc_slurm":
         return executor.evaluate(cases)

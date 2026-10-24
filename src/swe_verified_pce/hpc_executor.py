@@ -66,6 +66,7 @@ def pce_semantic_sha256(
     *,
     additional_sources: Sequence[Path] = (),
     third_party_identity: dict[str, Any] | None = None,
+    include_swebench: bool = True,
 ) -> str:
     root = Path(__file__).resolve().parents[2]
     sources = [
@@ -79,6 +80,7 @@ def pce_semantic_sha256(
         root / "src" / "agents" / "runtime.py",
         root / "src" / "agents" / "output_contract.py",
         root / "src" / "exceptions.py",
+        root / "src" / "pce_dataset.py",
         root / "src" / "optimization" / "hpc" / "slurm.py",
         root / "src" / "optimization" / "hpc" / "task_batch.py",
         *([root / "src" / "optimization" / name for name in
@@ -125,7 +127,7 @@ def pce_semantic_sha256(
             "attempts": config.hpc.max_task_attempts,
             "third_party": {
                 "mini_swe_agent": _package_identity("minisweagent", "mini-swe-agent"),
-                "swebench": _package_identity("swebench", "swebench"),
+                **({"swebench": _package_identity("swebench", "swebench")} if include_swebench else {}),
                 **(third_party_identity or {}),
             },
         }
@@ -318,6 +320,17 @@ def build_array_script(
     return "\n".join(lines) + "\n"
 
 
+def repository_pce_semantic_sha256(config):
+    """Dataset source identity on the same fingerprint boundary as Verified."""
+    if getattr(config, "mode", "swe_verified_pce") == "swe_rpg_pce":
+        root = Path(__file__).resolve().parents[2]
+        manifest = json.loads((config.dataset_snapshot / "manifest.json").read_text())
+        return pce_semantic_sha256(config,
+            additional_sources=tuple(sorted((root / "src/swe_rpg_pce").glob("*.py"))),
+            third_party_identity={"swe_rpg": manifest["evaluator_files"]}, include_swebench=False)
+    return pce_semantic_sha256(config)
+
+
 class SWEVerifiedPCEHPCExecutor:
     mode = "swe_verified_pce"
     worker_module = "src.swe_verified_pce.worker"
@@ -325,11 +338,19 @@ class SWEVerifiedPCEHPCExecutor:
     case_from_dict = staticmethod(SWEVerifiedPCECase.from_dict)
     runner_class = SWEVerifiedPCERunner
 
-    def __init__(self, config: SWEVerifiedPCEConfig) -> None:
+    def __init__(self, config: SWEVerifiedPCEConfig, *, dataset=None) -> None:
         self.config = config
         self.runtime = SlurmTaskBatch(config.hpc)
+        self.dataset = dataset
+        if dataset is not None:
+            self.mode = dataset.mode
+            self.label = dataset.mode
+            self.case_from_dict = dataset.case_from_dict
+            self.runner_class = dataset.runner_class
 
     def execution_fingerprint(self, cases: Sequence[SWEVerifiedPCECase]) -> str:
+        if self.dataset is not None and self.dataset.mode == "swe_rpg_pce":
+            return execution_fingerprint(self.config, cases, semantic_sha256=repository_pce_semantic_sha256(self.config))
         return execution_fingerprint(self.config, cases)
 
     def evaluate(self, cases: list[SWEVerifiedPCECase]) -> list[dict[str, Any]]:

@@ -15,7 +15,6 @@ import yaml
 from src.optimization.safe_pce_execution import (
     load_pce_config, pce_cases, resolved_pce_payload, sha256, validate_learning_source,
 )
-from src.optimization.safe_pce_learning import TASK_SEMANTICS
 
 ROOT = Path(__file__).resolve().parents[2]
 
@@ -41,6 +40,7 @@ def prepare(*, learning_config: Path, pce_config: Path, selection: dict,
             max_iterations: int | None = None, minibatch_size: int | None = None,
             max_metric_calls: int | None = None):
     """User supplies task IDs; this function neither samples nor selects by R/U."""
+    from src.optimization.safe_pce_learning import TASK_SEMANTICS
     if set(selection) != {"train", "validation"}:
         raise ValueError("split selection must contain exactly train and validation ID arrays")
     if any(not isinstance(ids, list) or not ids or any(not isinstance(item, str) or not item for item in ids)
@@ -83,6 +83,10 @@ def prepare(*, learning_config: Path, pce_config: Path, selection: dict,
                            (base.dataset_snapshot / instances, source_dir / instances),
                            (base.image_manifest, source_dir / "images.json")):
         _write_once(target, source.read_bytes())
+    for relative, digest in manifest.get("evaluator_files", {}).items():
+        from src.pce_dataset import frozen_source_file
+        source = frozen_source_file(base.dataset_snapshot, relative, digest)
+        _write_once(source_dir / relative, source.read_bytes())
     bundled = resolved_pce_payload(base)
     planner_prompt = ROOT / "configs/prompts/safe_pce_rules_planner_v1.yaml"
     bundled["prompts"]["plan_system"] = yaml.safe_load(planner_prompt.read_text())["prompts"]["plan_system"]
@@ -95,7 +99,7 @@ def prepare(*, learning_config: Path, pce_config: Path, selection: dict,
             target = source_dir / f"{key}{source.suffix}"
             _write_once(target, source.read_bytes())
             bundled["paths"][key] = _path(target)
-    if mode == "swe_verified_pce":
+    if mode != "polybench_pce":
         bundled.setdefault("execution", {}).pop("manifest", None)
         bundled["execution"]["pce_runs_per_instance"] = 1
     else:

@@ -36,7 +36,10 @@ class IncompletePCEEvaluation(RuntimeError):
 
 def outcome_score(output: dict, *, mode: str, instance_id: str) -> float:
     evaluator = output.get("evaluator_result", {})
+    if mode not in {"polybench_pce", "swe_verified_pce", "swe_rpg_pce"}:
+        raise ValueError(f"unsupported Safe PCE scoring mode: {mode}")
     allowed = ({"tests_parsed"} if mode == "polybench_pce" else
+               {"rpg_tests_resolved", "rpg_tests_unresolved"} if mode == "swe_rpg_pce" else
                {"official_tests_resolved", "official_tests_unresolved"})
     resolved = evaluator.get("evaluator_resolved")
     if (output.get("status") != "completed"
@@ -50,6 +53,15 @@ def outcome_score(output: dict, *, mode: str, instance_id: str) -> float:
     if mode == "polybench_pce":
         if not evaluator.get("parsed_test_result") or not evaluator.get("code_patch_applied") or not evaluator.get("test_patch_applied"):
             raise IncompletePCEEvaluation(f"{instance_id}: missing parsed tests or patch-application evidence")
+    elif mode == "swe_rpg_pce":
+        report = evaluator.get("rpg_report", {})
+        codes = evaluator.get("stage_exit_codes", {})
+        if (report.get("instance_id") != instance_id or report.get("resolved") is not resolved
+                or not evaluator.get("rpg_parser", {}).get("ok") or not evaluator.get("test_status")
+                or evaluator.get("code_patch_applied") is not True or evaluator.get("test_patch_applied") is not True
+                or any(codes.get(k) != 0 for k in ("setup", "test_patch", "code_patch", "parser"))
+                or any(k not in codes or codes[k] in {126, 127} for k in ("rebuild", "test", "print"))):
+            raise IncompletePCEEvaluation(f"{instance_id}: missing RPG official grading/stage evidence")
     else:
         report = evaluator.get("official_report", {}).get(instance_id, {})
         if not isinstance(report, dict) or report.get("resolved") is not resolved or not report.get("tests_status"):

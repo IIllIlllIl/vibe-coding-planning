@@ -78,10 +78,18 @@ def load_swe_verified_pce_config(
     *,
     require_api_keys: bool = True,
 ) -> SWEVerifiedPCEConfig:
+    return load_repository_pce_config(path, require_api_keys=require_api_keys)
+
+
+def load_repository_pce_config(
+    path: str | Path, *, require_api_keys: bool = True,
+    expected_mode: str = "swe_verified_pce", config_type=SWEVerifiedPCEConfig,
+) -> SWEVerifiedPCEConfig:
+    """Shared proven parser; dataset adapters supply identity, not a second config."""
     config_path = Path(path).resolve()
     raw = yaml.safe_load(config_path.read_text(encoding="utf-8")) or {}
-    if raw.get("mode") != "swe_verified_pce":
-        raise ValueError("SWE-Verified PCE config requires mode: swe_verified_pce")
+    if raw.get("mode") != expected_mode:
+        raise ValueError(f"PCE config requires mode: {expected_mode}")
     root = (
         config_path.parents[1] if config_path.parent.name == "configs" else Path.cwd()
     )
@@ -295,7 +303,7 @@ def load_swe_verified_pce_config(
                 + ", ".join(unknown)
             )
 
-    return SWEVerifiedPCEConfig(
+    return config_type(
         agent_network_disabled=bool(container_raw.get("network_disabled", False)),
         agent_backends=agent_backends,
         config_path=config_path,

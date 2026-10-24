@@ -105,18 +105,18 @@ and comparison/learning is withheld.
 
 ## Dataset compatibility
 
-The registered backends are PolyBench and SWE-Verified. Dataset acquisition,
+The registered backends are PolyBench, SWE-Verified and Python SWE-RPG. Dataset acquisition,
 SIF validation and a working evaluation adapter are independent authorities.
 The selected engineering validation dataset is Verified; the subsequent formal
-dataset is RPG, chosen for diagnostic intermediate references. RPG adapter and
-formal configuration work follow successful acceptance of the Verified smoke.
+dataset is RPG, chosen for diagnostic intermediate references. RPG formal
+configuration requires separate source, history and evaluator acceptance.
 This choice does not make reference answers Agent inputs or change the 1/0 score.
 
 | Frozen source | Inventory | Compatibility boundary |
 |---|---|---|
 | Verified500, revision `91aa3ed5` | 500 tasks, 12 Python repositories; completed SIF authority under `configs/frozen_swe_verified_safe_pce/verified500-completion-v1-20261008/` | Existing Safe PCE and official evaluator are connected to this learner; selected history bundles and launch checks remain separate |
 | Pro v2, revision `2d52cb3d` | 642 source tasks; frozen Python selection is 237 tasks from 3 repositories; SIF audit under `configs/frozen_swe_bench_pro/v2-python237-audited-v1-20261011/` | Existing Pro PCE uses the legacy official scripts and Docker Hub images; it is not the new v2 Harbor verifier/image path and is not registered with this learner |
-| RPG, revision `688ed791` | 163 source tasks; frozen Python selection is 78 tasks from 14 repositories; SIF audit under `configs/frozen_swe_rpg/python78-sif-audited-v1-20261014/` | Source and SIFs are frozen, but an RPG Safe PCE task/evaluator adapter and compute-node execution validation are not implemented |
+| RPG, revision `688ed791` | 163 source tasks; frozen Python selection is 78 tasks from 14 repositories; SIF audit under `configs/frozen_swe_rpg/python78-sif-audited-v1-20261014/` | Repository PCE data/evaluator bindings reuse the Verified Worker/Runner/executor and existing ACE loop; local contract acceptance does not replace prepared history, Base/Gold evaluator calibration or compute-node smoke |
 
 Official [Pro v2 documentation](https://github.com/scaleapi/SWE-bench_Pro-os/blob/main/v2/README.md)
 specifies Harbor task bundles, GHCR v2 images, a network-restricted Agent phase
@@ -130,6 +130,82 @@ can aid retrospective diagnosis; enabling them as training inputs or changing
 the 1/0 outcome objective would be separate experimental decisions. Verified
 and Pro also have reference patches and tests; RPG's additional value is its
 intermediate references, not the exclusive existence of ground truth.
+
+### RPG adapter boundary
+
+`src/pce_dataset.py` binds a config loader, case loader/deserializer and Runner.
+RPG has no separate Worker, Slurm controller, retry loop or checkpoint format.
+Its config extends the existing Safe PCE parser; its Case extends the existing
+repository envelope; its Runner binds only the per-case directory and evaluator.
+The actual P/C/E lifecycle and array transport remain in `src/swe_verified_pce/`.
+PolyBench retains its established, different execution-unit interface.
+
+Agent input copies the original issue title/body only. PR descriptions,
+post-resolution discussions, gold/test patches, test commands, parser and
+mid-groundtruth files do not enter P/C input. Native and mini-SWE use the same
+existing Agent entry and submission boundary. The fixed `/testbed` prompt path
+is mechanically bound to `/testbed2` when required; task, candidate, Plan and
+patch bytes are not rewritten. RPG intermediate references remain a separate
+retrospective authority, not an implicit learning input.
+
+The evaluator consumes the frozen `rebuild_cmds`, `test_cmds`, `print_cmds` and
+original `run_parser` / `status_to_report` from the pinned official source.
+Those functions execute inside the evaluator SIF, not the Host. Harness and
+parser inputs are mounted read-only outside the submitted repository. Evaluation
+uses a fresh workspace, never the Coder's workspace. The unchanged Agent patch
+replaces no raw source row; gold is not a fallback. Base calibration passes no
+implementation patch; Gold calibration explicitly passes the reference patch
+outside learning. Both calibration and the model-backed smoke require approval.
+`scripts.tools.verify_swe_rpg_evaluator` is a one-case Base/Gold diagnostic over
+the same evaluator; it has no Agent, retry loop or scheduler. Give it a reviewed
+source config, one selected instance ID and a fresh output directory, and use
+the existing HPC submit tool for its authorized compute-node invocation.
+
+Keep the official resolved rule, including its treatment of missing/skipped
+tests. Stage exit codes, all stage logs, parsed statuses and the native report
+are retained independently. Missing command/parser/test evidence, failed patch
+application and interrupted execution are operationally incomplete, not scored U.
+A parsed outcome can still contain environment or Coder noise and needs audit.
+No official-score correction or automatic post-run cleaning is introduced.
+
+The [three-case calibration audit](knowledge/rpg-evaluator-calibration-20261024.md)
+records the frozen Base/Gold evidence, resource measurements, retained skips and
+its interpretation boundary. The opt-in RPG engineering smoke uses the same
+Verified v5 Native models, prompts, seed, caps and shared Supervisor/Worker graph;
+only task/image/workdir and official evaluator bindings differ. Its 2/1
+development split under `configs/frozen_safe_pce_ace/rpg_smoke_v1_20261024/` is
+not a formal train/validation/test split. Keep DS/mini-SWE as the standard source
+example; Native Codex remains a separate per-role backend selection.
+
+Package the already acquired source (no network, model or container) with:
+
+```bash
+conda run -n mini-swe python -m scripts.tools.prepare_swe_rpg_pce \
+  --source-root output/SWE-RPG/source-snapshot/688ed7918cbcabe6c9d9b9f393fad1053b286dd9/source \
+  --source-manifest configs/frozen_swe_rpg/python78-v1-20261012/dataset-source-manifest.json \
+  --image-manifest configs/frozen_swe_rpg/python78-sif-audited-v1-20261014/images.json \
+  --destination output/SWE-RPG/pce-inputs/python78-v1-20261024
+```
+
+The package preserves original JSONL and official evaluator bytes, binds their
+hashes and writes an all-Python selection without outcome screening. It omits
+mid-groundtruth files. `configs/swe_rpg_safe_pce.example.yaml` reuses standard
+DS no-thinking/temp-1 Planner and default Coder prompts/models. It is not a
+reviewed launch identity or train/validation/test split. Feed a reviewed RPG
+source config and explicit IDs to the existing ACE preparation command below.
+
+The historical `scripts.tools.preheat_polybench_repository_history` CLI also
+accepts these repository dataset bindings; it reuses `RepositoryHistoryCache`
+and each frozen workdir rather than introducing a second history builder.
+RPG Agents require prebuilt bundles and never build them as a fallback. SIF
+presence/base acceptance alone does not prove source-leakage safety, dependency
+availability, official test execution or parser equivalence under Apptainer.
+
+Local tests reuse the same full PCE/ACE Worker-and-evidence audit for Verified
+and RPG, with only external model/container/scheduler boundaries substituted.
+HPC acceptance must cover both `/testbed` and `/testbed2`, prepared ancestor
+history, Base/Gold separation and original official scoring, then complete
+P/C/E/Ref/Cur evidence. No HPC approval is implied by these local tests.
 
 ## Learning and selection
 

@@ -1,4 +1,4 @@
-"""Read-only structural audit of a terminal Verified Safe-PCE/ACE smoke.
+"""Read-only structural audit of a terminal repository Safe-PCE/ACE smoke.
 
 This checks persisted evidence, not model comprehension or leakage semantics.
 It calls no model, container, scheduler, or artifact writer. JSON goes to stdout.
@@ -42,8 +42,8 @@ def audit(config_path):
     config = load_optimization_config(config_path, require_api_keys=False)
     verify_hybrid_snapshot(config)
     backend = SafePCEBackend(config)
-    if backend.mode != "swe_verified_pce":
-        raise ValueError("this checkpoint audit currently supports Verified only")
+    if backend.mode not in {"swe_verified_pce", "swe_rpg_pce"}:
+        raise ValueError("this checkpoint audit supports repository PCE datasets only")
     root = config.run_dir
     _equal(_json(root / "controller_status.json")["status"], "completed", "terminal controller")
     train = {row["instance_id"] for row in _rows(config.dataset_snapshot / "train.jsonl")}

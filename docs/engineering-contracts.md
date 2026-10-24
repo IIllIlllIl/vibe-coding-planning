@@ -86,6 +86,22 @@ the exact offending position. Test noncontiguous IDs and the real submission
 correction loop; a single placeholder item cannot exercise this boundary. Host
 must not silently remove extra results, renumber them or infer a final answer.
 
+## Repository PCE dataset bindings
+
+Repository Safe PCE datasets bind loading/serialization and the Runner's
+evaluator through `src/pce_dataset.py`. Reuse the Verified config parser,
+Worker, Runner phases, array generator, `SlurmTaskBatch`, checkpoints and
+cleanup. RPG must not add another Worker/controller or backend selector.
+Keep source/frozen image identities and per-case working directories explicit;
+Agent task projection excludes evaluator/reference-only authority. Include
+adapter and official evaluator source identities in execution fingerprints.
+An old config or checkpoint is not reclassified as having used a new adapter.
+
+The registered data adapter is not a readiness certificate: image acceptance,
+prepared ancestor history, fresh evaluator calibration and compute-node
+end-to-end validation remain separate. Tests must invoke the real shared Worker
+and both the existing and new dataset paths, not merely a fake dataset callback.
+
 ## Shared Agent backend entry
 
 Use `src.agents.runtime.run_agent` for backend dispatch. Workflow code supplies
@@ -392,6 +408,16 @@ callback must not accidentally bypass that reuse. If frozen counted inputs no
 longer match a new counting policy, stop rather than rewrite experimental data.
 
 ### Artifact lifecycle
+
+Submission filters must distinguish root-level artifacts from source packages:
+an unanchored rsync exclusion `output` also removes `src/output/`. The shared
+batch wrapper normalizes that root-artifact filter to `/output` in its
+launch-local effective config; a real-rsync regression test checks both paths.
+Reuse fixed-worktree staging and the existing `ulhpc-submit --no-sync` path.
+For bounded diagnostic source exports, verify the staged source hash inventory and a
+lightweight entry-point import before compute submission; do not install
+dependencies or change the user's global sync configuration to mask missing
+source files.
 
 Cross-run checkpoint imports must name a verified authority. Use an absolute
 scratch path for remote run authorities. A project-relative path is permitted

@@ -1,0 +1,12 @@
+{
+  "schema_version": 1,
+  "purpose": "development_only_rpg_end_to_end_acceptance",
+  "selected_instance_ids": [
+    "falconry__falcon-2540",
+    "openai__openai-agents-python-454",
+    "pylint-dev__pylint-10797"
+  ],
+  "selection_source": "configs/preheat_swe_rpg_python3_smoke_20261012.json",
+  "selection_rationale": "Reuse the original three-repository preparation subset, covering both frozen workdirs, without selecting cases by model outcome.",
+  "formal_split": false
+}

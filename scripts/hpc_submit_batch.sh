@@ -453,7 +453,10 @@ target = Path(sys.argv[2])
 dataset_exclude = sys.argv[3]
 dataset_family_exclude = sys.argv[4]
 config = yaml.safe_load(source.read_text(encoding="utf-8")) or {}
-excludes = list(config.get("sync_excludes") or [])
+# Output artifacts live at the project root; preserve the src/output package.
+# Normalize only this launch-local copy, never the user's global config.
+excludes = ["/output" if pattern == "output" else pattern
+            for pattern in config.get("sync_excludes") or []]
 if dataset_exclude not in excludes:
     excludes.append(dataset_exclude)
 if dataset_family_exclude and dataset_family_exclude not in excludes:

@@ -45,13 +45,23 @@ def _prepared_verified(tmp_path):
     return path
 
 
-def test_verified_end_to_end_and_audit_detects_lost_evidence(tmp_path, monkeypatch):
+@pytest.mark.parametrize("dataset_mode", ["swe_verified_pce", "swe_rpg_pce"])
+def test_verified_end_to_end_and_audit_detects_lost_evidence(tmp_path, monkeypatch, dataset_mode):
     from src.optimization import behavioral_hybrid_runtime as runtime
     from src.optimization.hpc.task_batch import SlurmTaskBatch
     from src.optimization.behavioral_hybrid_worker import run_task as phase_worker
     from src.swe_verified_pce.worker import run_task as pce_worker
     from src.swe_verified_pce.runner import SWEVerifiedPCERunner
-    path = _prepared_verified(tmp_path)
+    if dataset_mode == "swe_verified_pce":
+        path = _prepared_verified(tmp_path)
+    else:
+        from tests.test_swe_rpg_pce import rpg_pce_config
+        pce_path = rpg_pce_config(tmp_path)
+        path = tmp_path / "learning.yaml"
+        prepare(learning_config=Path("configs/gepa_swe_chat_hybrid_formal8_high_v1_20261016.yaml"),
+            pce_config=pce_path, selection={"train": ["owner__repo-1", "owner__repo-2"], "validation": ["owner__repo-3"]},
+            snapshot=tmp_path / "learning-snapshot", run_dir=tmp_path / "run", output_config=path,
+            max_iterations=1, minibatch_size=2, max_metric_calls=6)
     config = load_optimization_config(path, require_api_keys=False)
     monkeypatch.setenv("DEEPSEEK_API_KEY", "test-only")
     monkeypatch.setattr(runtime, "require_evidence_sif", lambda config: None)
@@ -76,10 +86,14 @@ def test_verified_end_to_end_and_audit_detects_lost_evidence(tmp_path, monkeypat
     original = SWEVerifiedPCERunner.run
     def run(self, case):
         resolved = "revision" in self.config.planning_rules
-        self.evaluator = lambda *a, **kw: {"status": "completed",
-            "terminal_kind": "official_tests_resolved" if resolved else "official_tests_unresolved",
-            "evaluator_resolved": resolved, "task_outcome": "resolved" if resolved else "unresolved",
-            "official_report": {case.instance_id: {"resolved": resolved, "tests_status": {"FAIL_TO_PASS": {"success": ["x"]}}}}}
+        if dataset_mode == "swe_rpg_pce":
+            from tests.test_swe_rpg_pce import rpg_result
+            self.evaluator = lambda *a, **kw: rpg_result(case.instance_id, resolved)
+        else:
+            self.evaluator = lambda *a, **kw: {"status": "completed",
+                "terminal_kind": "official_tests_resolved" if resolved else "official_tests_unresolved",
+                "evaluator_resolved": resolved, "task_outcome": "resolved" if resolved else "unresolved",
+                "official_report": {case.instance_id: {"resolved": resolved, "tests_status": {"FAIL_TO_PASS": {"success": ["x"]}}}}}
         return original(self, case)
     monkeypatch.setattr(SWEVerifiedPCERunner, "run", run)
     def agent(**kw):
@@ -107,7 +121,7 @@ def test_verified_end_to_end_and_audit_detects_lost_evidence(tmp_path, monkeypat
             manifest = json.loads(task.manifest_path.read_text())
             arguments = dict(config_path=path, manifest_path=task.manifest_path, output_path=task.output_path,
                              attempt_dir=task.attempts_dir / "attempt_01")
-            if manifest["mode"] == "swe_verified_pce":
+            if manifest["mode"] in {"swe_verified_pce", "swe_rpg_pce"}:
                 arguments.pop("manifest_path")
                 arguments.update(config_path=self.hpc.worker_config_path,
                     task_manifest_path=task.manifest_path, checkpoint_dir=kw["batch_dir"] / "checkpoints" / task.manifest_path.stem,
