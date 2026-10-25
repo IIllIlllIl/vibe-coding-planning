@@ -1,0 +1,21 @@
+{
+  "schema_version": 1,
+  "selected_instance_ids": [
+    "aws-cloudformation__cfn-lint-3377",
+    "aws-cloudformation__cfn-lint-3470",
+    "aws-cloudformation__cfn-lint-3561",
+    "aws-cloudformation__cfn-lint-3994",
+    "scikit-learn__scikit-learn-28612",
+    "scikit-learn__scikit-learn-28651",
+    "scikit-learn__scikit-learn-31094",
+    "scikit-learn__scikit-learn-32932",
+    "sphinx-doc__sphinx-14127",
+    "sympy__sympy-26546",
+    "sympy__sympy-26557",
+    "sympy__sympy-26558",
+    "sympy__sympy-26733",
+    "sympy__sympy-26822",
+    "sympy__sympy-26919",
+    "sympy__sympy-26954"
+  ]
+}

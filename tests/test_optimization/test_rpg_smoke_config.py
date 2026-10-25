@@ -111,7 +111,7 @@ def test_rpg_python_recovery_keeps_science_and_uses_fresh_runtime(tmp_path):
     raw = yaml.safe_load(recovery_path.read_text())
     assert raw["experiment_contract"]["previous_output_import"] is False
     assert raw["experiment_contract"]["budget"]["pce_evaluation_slots_without_cache"] == {"minimum": 5, "maximum": 6}
-    session, _, args, _ = _load_launch_config(Path("configs/safe_pce_ace_rpg_codex_smoke_supervisor_v2_20261025.yaml"))
+    session, _, args, _ = _load_launch_config(Path("configs/archive/supervisor_launches/safe_pce_ace_rpg_codex_smoke_supervisor_v2_20261025.yaml"))
     assert session == new.run_dir.name
     assert args[args.index("--gepa-config") + 1] == str(recovery_path)
     artifact = json.loads(Path("configs/prompts/safe_pce_hybrid_seed_v1.json").read_text())

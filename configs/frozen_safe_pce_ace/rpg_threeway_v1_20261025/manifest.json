@@ -1,0 +1,708 @@
+{
+  "actual_ratios": {
+    "test": 0.20512820512820512,
+    "train": 0.6025641025641025,
+    "validation": 0.19230769230769232
+  },
+  "assignments": [
+    {
+      "case_id": "aws-cloudformation__cfn-lint-3377",
+      "dedup_group": "repository-component:8d3eee7de36466c9",
+      "normalized_issue_sha256": "33a1bb8f1789da95a3aae2842be90ebe2811d596ab9851386f1e54238bb647d7",
+      "repo": "aws-cloudformation/cfn-lint",
+      "row_sha256": "9896374555fbf427d030eaf7e7819d0c9d3a790ba9fd67bbf4db690e104ea74f",
+      "split": "test"
+    },
+    {
+      "case_id": "aws-cloudformation__cfn-lint-3470",
+      "dedup_group": "repository-component:8d3eee7de36466c9",
+      "normalized_issue_sha256": "d0b5ecb08f7cea78b271e386387d99f514f11a05734eb0f3017844879bd23b47",
+      "repo": "aws-cloudformation/cfn-lint",
+      "row_sha256": "e01735f209d9b2153be1ab90c889f84f92f9196b0bb2a90552e51451d9033114",
+      "split": "test"
+    },
+    {
+      "case_id": "aws-cloudformation__cfn-lint-3561",
+      "dedup_group": "repository-component:8d3eee7de36466c9",
+      "normalized_issue_sha256": "f94dd662d8a65bcb886321a6e125776dd1268045ccb0f755be12445a3456080d",
+      "repo": "aws-cloudformation/cfn-lint",
+      "row_sha256": "7254d670a0e6a724305acc6af5bcc4bfcf23f2441bc516826466573b0c7cbed0",
+      "split": "test"
+    },
+    {
+      "case_id": "aws-cloudformation__cfn-lint-3994",
+      "dedup_group": "repository-component:8d3eee7de36466c9",
+      "normalized_issue_sha256": "14d57379ebc8804c5a209bbcc4d2ee218112a90bdf9e90808d5e04029921276c",
+      "repo": "aws-cloudformation/cfn-lint",
+      "row_sha256": "93ae1aa5a7cad6687715a909587aaac7c360ed01f08747a91bdb59752d7ebf6b",
+      "split": "test"
+    },
+    {
+      "case_id": "falconry__falcon-2540",
+      "dedup_group": "repository-component:2ae9497e808aa042",
+      "normalized_issue_sha256": "5d6283e6904668a842f9b14ab36c834515720eebfa62cfb13657f978a84eac02",
+      "repo": "falconry/falcon",
+      "row_sha256": "55317115aa038720ef2b686c02b21b99aeaf6321eaa3357e3f035df104502bce",
+      "split": "train"
+    },
+    {
+      "case_id": "joke2k__faker-2279",
+      "dedup_group": "repository-component:580d68a6b1c83966",
+      "normalized_issue_sha256": "ab31ab9691dabbe3132b7b3757fdc86a0a355d566f1cda4bd4c058166756aa71",
+      "repo": "joke2k/faker",
+      "row_sha256": "51ac52fe431e2393c7208c298a466c88dc9c77c8871d36129249865bf6fec049",
+      "split": "train"
+    },
+    {
+      "case_id": "joke2k__faker-2309",
+      "dedup_group": "repository-component:580d68a6b1c83966",
+      "normalized_issue_sha256": "169efd98a3601ecbd98c3721e9a7f3e7bdcc0b7ac7542aa423fef9ede159c091",
+      "repo": "joke2k/faker",
+      "row_sha256": "fddeb80f867bad1a199d3f5aa8cff7b7a6adc52be2fc771ae7fbeee579973cff",
+      "split": "train"
+    },
+    {
+      "case_id": "keras-team__keras-20410",
+      "dedup_group": "repository-component:3118b1f783c8ac26",
+      "normalized_issue_sha256": "1e06ad6b9f9e8493ebfe675a50635be4013d3576690c38251ae7f766c67ff27c",
+      "repo": "keras-team/keras",
+      "row_sha256": "7fe5d1fa85b0effd41ce874d85fca459e4f8a890b4e7fae5378155194a3142b7",
+      "split": "train"
+    },
+    {
+      "case_id": "matplotlib__matplotlib-28831",
+      "dedup_group": "repository-component:709ca952a0a0f550",
+      "normalized_issue_sha256": "30d0c0200c10aeb67c54a9f314e1460d54627f423cec2b7ed702e7bf0b0f04ca",
+      "repo": "matplotlib/matplotlib",
+      "row_sha256": "9afbd3c8ad4e6b849179184e3a67e9d0e932bd7a6f038970de7ca5e2fff8b0ef",
+      "split": "train"
+    },
+    {
+      "case_id": "matplotlib__matplotlib-30019",
+      "dedup_group": "repository-component:709ca952a0a0f550",
+      "normalized_issue_sha256": "6108e7687f495a0008869e7b10f9a402c1234e704c7e0e454ed93be9efe7af84",
+      "repo": "matplotlib/matplotlib",
+      "row_sha256": "c68a9168cb9c1b67455fb73c19a3d3f04d71052dc2199a76c1a65d6c1eac719c",
+      "split": "train"
+    },
+    {
+      "case_id": "matplotlib__matplotlib-30636",
+      "dedup_group": "repository-component:709ca952a0a0f550",
+      "normalized_issue_sha256": "ae5f6ae2287764c1fa6dd19819107344fba68bef6529d52c9c17da63b76ee63a",
+      "repo": "matplotlib/matplotlib",
+      "row_sha256": "1cfd7319db06ed4e0be0e26ff21862cdae3e115b87fdbbad8aaf03d6a37c51a7",
+      "split": "train"
+    },
+    {
+      "case_id": "matplotlib__matplotlib-30696",
+      "dedup_group": "repository-component:709ca952a0a0f550",
+      "normalized_issue_sha256": "aeeba4d70b3914341c518f159dee62569cf62fbc15c7acf4e1a7b0c2c91ae4df",
+      "repo": "matplotlib/matplotlib",
+      "row_sha256": "60094d77b494119603ed0ae488e448c0f450e705300587c482518ffead6cedbd",
+      "split": "train"
+    },
+    {
+      "case_id": "matplotlib__matplotlib-30756",
+      "dedup_group": "repository-component:709ca952a0a0f550",
+      "normalized_issue_sha256": "5b573e33ed310fd31292055292d4a87b943a76521ceb14277db35df9fa23f191",
+      "repo": "matplotlib/matplotlib",
+      "row_sha256": "e72041e1366e607162cc1614a8c357f3f521f505b279c5741131fad6a72d1297",
+      "split": "train"
+    },
+    {
+      "case_id": "matplotlib__matplotlib-30760",
+      "dedup_group": "repository-component:709ca952a0a0f550",
+      "normalized_issue_sha256": "d2207dfa2e50d951754262c3fc49dd14f166b06f0639f7047083ec411b300a60",
+      "repo": "matplotlib/matplotlib",
+      "row_sha256": "b1889159d7254663b4e4ec6e28289fc01e2e72a1cb23de3b1315b2962ac4713b",
+      "split": "train"
+    },
+    {
+      "case_id": "matplotlib__matplotlib-30867",
+      "dedup_group": "repository-component:709ca952a0a0f550",
+      "normalized_issue_sha256": "f0480cdc95708d57ff906f8c098376e3709100d5731adc22f24b4b65fafb1a82",
+      "repo": "matplotlib/matplotlib",
+      "row_sha256": "b62dc33436d09d63eecd4ceafa96608de5a08e5444319d0289760ba56f2c4667",
+      "split": "train"
+    },
+    {
+      "case_id": "openai__openai-agents-python-112",
+      "dedup_group": "repository-component:606182a5a42cfe23",
+      "normalized_issue_sha256": "1103de1ade2278a0b63bf6166658c5f657099c775090bc3b626e353686863309",
+      "repo": "openai/openai-agents-python",
+      "row_sha256": "1fd1b646fb2a6e7571538c7f79d84ba17875f0181c5188956c6eff84029f0544",
+      "split": "train"
+    },
+    {
+      "case_id": "openai__openai-agents-python-1124",
+      "dedup_group": "repository-component:606182a5a42cfe23",
+      "normalized_issue_sha256": "4507938beac4528e9fb37c0cfae6aaff1a73789d0805a22f62fb4caecf8d4740",
+      "repo": "openai/openai-agents-python",
+      "row_sha256": "8b0cae928d131fa67b8e7012c6d0cb64b4637d8d16a94b777422d2200cee97d8",
+      "split": "train"
+    },
+    {
+      "case_id": "openai__openai-agents-python-1192",
+      "dedup_group": "repository-component:606182a5a42cfe23",
+      "normalized_issue_sha256": "8aec956caa059add2f20916a6905c7e28c440eea839e88409dab309604093fd0",
+      "repo": "openai/openai-agents-python",
+      "row_sha256": "90fdbfd86906393980e95abc7175d2de0c6fe493ed5ec2eedae8991983e06b20",
+      "split": "train"
+    },
+    {
+      "case_id": "openai__openai-agents-python-1636",
+      "dedup_group": "repository-component:606182a5a42cfe23",
+      "normalized_issue_sha256": "f91b23212f495e5242fc0ae600bd76817e259bf2f0d35e2d4ae4cfe9a32e7446",
+      "repo": "openai/openai-agents-python",
+      "row_sha256": "2ab0f7c57f40c41377b79e87b15e346404377c68e5d1da4ea4b5d9beaa495431",
+      "split": "train"
+    },
+    {
+      "case_id": "openai__openai-agents-python-1684",
+      "dedup_group": "repository-component:606182a5a42cfe23",
+      "normalized_issue_sha256": "13dc207d1c55e81ebdd81239d08fa33c044f527477946db0e18909a23e096b24",
+      "repo": "openai/openai-agents-python",
+      "row_sha256": "4b17ddc1e131a67ef7930a2db6adacf9f74ff5d3602ac4afa52cd205f48b6511",
+      "split": "train"
+    },
+    {
+      "case_id": "openai__openai-agents-python-1689",
+      "dedup_group": "repository-component:606182a5a42cfe23",
+      "normalized_issue_sha256": "9ced7d9c50d5a5ee9e207d96a9b075fb53d39188e25e48f3243236152a2fb806",
+      "repo": "openai/openai-agents-python",
+      "row_sha256": "16b770c9244f7c7f50bff167434e625a89dbc789f954e1935cc1602035aa0a81",
+      "split": "train"
+    },
+    {
+      "case_id": "openai__openai-agents-python-1749",
+      "dedup_group": "repository-component:606182a5a42cfe23",
+      "normalized_issue_sha256": "9273ceb144e2130b7b173dd01f0025b352da15cded7d842c04d00accce09d003",
+      "repo": "openai/openai-agents-python",
+      "row_sha256": "aa3b9ecf91c48e858c1e30b3c2f3baac9e331aa7a345bfc9ea2157676032defd",
+      "split": "train"
+    },
+    {
+      "case_id": "openai__openai-agents-python-1861",
+      "dedup_group": "repository-component:606182a5a42cfe23",
+      "normalized_issue_sha256": "60de53f61c4ade7d3d41766ac74ceb3a1b98add0079e78cee527474584c520eb",
+      "repo": "openai/openai-agents-python",
+      "row_sha256": "62fcf6501ad6a05db6ff15982650e0bc3a84bdb3346f4515e0eb751ed06d05cb",
+      "split": "train"
+    },
+    {
+      "case_id": "openai__openai-agents-python-1884",
+      "dedup_group": "repository-component:606182a5a42cfe23",
+      "normalized_issue_sha256": "417a1f4dfaf352f094e46787bca872c6fd734c0ad2f50d63f3c6cd56dcb9ccd4",
+      "repo": "openai/openai-agents-python",
+      "row_sha256": "7dcb079f159805b76671a932ce8f551ccc5ea2348025d4c922f034834c1a6c93",
+      "split": "train"
+    },
+    {
+      "case_id": "openai__openai-agents-python-2105",
+      "dedup_group": "repository-component:606182a5a42cfe23",
+      "normalized_issue_sha256": "41fe4498bcf63dfa2813aae81aa182694c059b2b6ced77fefdd08ba85e9cbe9a",
+      "repo": "openai/openai-agents-python",
+      "row_sha256": "18528558b6a24c02844fd9c01a3ece1bdf3e45f21b7497532c71e45937db3bc0",
+      "split": "train"
+    },
+    {
+      "case_id": "openai__openai-agents-python-2112",
+      "dedup_group": "repository-component:606182a5a42cfe23",
+      "normalized_issue_sha256": "a78da4686ce45a5fa4a9dc83d47844c0d1847f00eeacc4f537abd6ec73778dd4",
+      "repo": "openai/openai-agents-python",
+      "row_sha256": "967823649a8e7ea01bde41baecbc1f9f1462db84ab2583c50ff589cd66c77102",
+      "split": "train"
+    },
+    {
+      "case_id": "openai__openai-agents-python-2290",
+      "dedup_group": "repository-component:606182a5a42cfe23",
+      "normalized_issue_sha256": "44c9603304ffe9ef9312b7ea58d38238aff254728a7074e9c49a71263963dd23",
+      "repo": "openai/openai-agents-python",
+      "row_sha256": "5746cfcd6cf39a288b7a621d403b319e27f781c0f55f612f90587c2adcc93d9b",
+      "split": "train"
+    },
+    {
+      "case_id": "openai__openai-agents-python-454",
+      "dedup_group": "repository-component:606182a5a42cfe23",
+      "normalized_issue_sha256": "6b111dd724f6b08cda287760c0dc72b7495dd48abd57737185efa4028a65656c",
+      "repo": "openai/openai-agents-python",
+      "row_sha256": "049ecd718605bbc09544433c7baec749ce015ec5ed65d54f2a14af921e41e084",
+      "split": "train"
+    },
+    {
+      "case_id": "openai__openai-agents-python-540",
+      "dedup_group": "repository-component:606182a5a42cfe23",
+      "normalized_issue_sha256": "a655608b6b9064a44ad4dcf0a378d1996f6431b8965eb0c7e9b68861766943a9",
+      "repo": "openai/openai-agents-python",
+      "row_sha256": "4b09594a72c6eeeb6f23ae43b842bb363431af4b658d4dfb8033d87037079548",
+      "split": "train"
+    },
+    {
+      "case_id": "pdm-project__pdm-2655",
+      "dedup_group": "repository-component:7bec9f2423fd823e",
+      "normalized_issue_sha256": "dcf5877c6a785c0c88fd9e1fa72e81aabe95c59f3f390a43048ac336c907fe6a",
+      "repo": "pdm-project/pdm",
+      "row_sha256": "16bc3b86c142b1994833d9cfb0669cd538571f5f9964ceeaea6771c6567f57b2",
+      "split": "validation"
+    },
+    {
+      "case_id": "pdm-project__pdm-2795",
+      "dedup_group": "repository-component:7bec9f2423fd823e",
+      "normalized_issue_sha256": "c695ea38064c0855da806c1ca7701a6cf24f6a121ace00dec3499a6f04ea862c",
+      "repo": "pdm-project/pdm",
+      "row_sha256": "4e959d4c60b9d316bb0278b9f2ff2925e3695d640a2431d3b8eea98fa2aa2a08",
+      "split": "validation"
+    },
+    {
+      "case_id": "pdm-project__pdm-3546",
+      "dedup_group": "repository-component:7bec9f2423fd823e",
+      "normalized_issue_sha256": "ec910bbef4356daa4eba48b3e90ff25fd5e6dd9c5caaa769189da88d4ba80824",
+      "repo": "pdm-project/pdm",
+      "row_sha256": "e454d2b591358f4affff3dc7c2caf636622acf73817ef3986ef8e7ac529a6c81",
+      "split": "validation"
+    },
+    {
+      "case_id": "pdm-project__pdm-3655",
+      "dedup_group": "repository-component:7bec9f2423fd823e",
+      "normalized_issue_sha256": "99b527ae8872ee2bf5312647901900afa8d605dea36a40b7dc75991fd5df992c",
+      "repo": "pdm-project/pdm",
+      "row_sha256": "847a508f38d07dfa370ec0b335544ed3250469573a16861c6a9c7cf522ec8eb5",
+      "split": "validation"
+    },
+    {
+      "case_id": "pvlib__pvlib-python-1962",
+      "dedup_group": "repository-component:226803a500cdfff3",
+      "normalized_issue_sha256": "f791b62a112cacc568188619e6c6903e35410d52ef6357e57ec6328e2dd47f4b",
+      "repo": "pvlib/pvlib-python",
+      "row_sha256": "b844d8b47417cd58e15d779289476123078855d31ab3610c94687521be97857f",
+      "split": "validation"
+    },
+    {
+      "case_id": "pvlib__pvlib-python-2433",
+      "dedup_group": "repository-component:226803a500cdfff3",
+      "normalized_issue_sha256": "5ef2bd10450ec980997b1cc307c57bd0b99ed43d5a9048b5b4dfc5e2185732b7",
+      "repo": "pvlib/pvlib-python",
+      "row_sha256": "4c1b76965ec9d4b655e58c74128fe3c75f5dcf096f93596ef12290bd2cd3626e",
+      "split": "validation"
+    },
+    {
+      "case_id": "pvlib__pvlib-python-2521",
+      "dedup_group": "repository-component:226803a500cdfff3",
+      "normalized_issue_sha256": "d2613f76df4ebfe37085061a5785d9300946be2cb1b544d8172ec4e9c06a6aa1",
+      "repo": "pvlib/pvlib-python",
+      "row_sha256": "ded2069c1303f86c7471429efded0f209db4d6b97b1920625f24eb32b79b1848",
+      "split": "validation"
+    },
+    {
+      "case_id": "pvlib__pvlib-python-2550",
+      "dedup_group": "repository-component:226803a500cdfff3",
+      "normalized_issue_sha256": "7f832b3c7b0cd4cad462f0d4f259984248cb11d918fdb2d75ce5b9e311448d1a",
+      "repo": "pvlib/pvlib-python",
+      "row_sha256": "8fd7b839d7706ab26895cc8ef23218e08822e628920ce00616f08d590ec74767",
+      "split": "validation"
+    },
+    {
+      "case_id": "pylint-dev__pylint-10135",
+      "dedup_group": "repository-component:f87b47a7f02a42ad",
+      "normalized_issue_sha256": "a4b81b0996017d39053056c1048490a43f1a9715b36103ccbda92c3125fd40a6",
+      "repo": "pylint-dev/pylint",
+      "row_sha256": "ac8202f2dea8be9c24660a45f639d90414c64e129794b47641a37549cb81af85",
+      "split": "train"
+    },
+    {
+      "case_id": "pylint-dev__pylint-10393",
+      "dedup_group": "repository-component:f87b47a7f02a42ad",
+      "normalized_issue_sha256": "a0b4d864ae4584a861e54647bbb33a443c035e5686b291ae1df61cbdd4a10094",
+      "repo": "pylint-dev/pylint",
+      "row_sha256": "c541bf3ee464713c4283b56fdfaedd7f6fd88b1aaebb305e0262209e3392d952",
+      "split": "train"
+    },
+    {
+      "case_id": "pylint-dev__pylint-10424",
+      "dedup_group": "repository-component:f87b47a7f02a42ad",
+      "normalized_issue_sha256": "cd6868b9d5fb4507c926a56e9ecf5a85f4bee8528c9cbfb71c6a1e0d2c56c154",
+      "repo": "pylint-dev/pylint",
+      "row_sha256": "0684a857aca8b62a65b0978bc5a4e11eb8590693a2f3532c71b3e1c886f33bff",
+      "split": "train"
+    },
+    {
+      "case_id": "pylint-dev__pylint-10436",
+      "dedup_group": "repository-component:f87b47a7f02a42ad",
+      "normalized_issue_sha256": "a8316116f6370cba3701a6eb3b8130537619d549dce6a128b54976784ed862c4",
+      "repo": "pylint-dev/pylint",
+      "row_sha256": "dfc728d9e3f1e15dfbdfc61d185e9e0e0bfdbf473757d82bb1b599f957214232",
+      "split": "train"
+    },
+    {
+      "case_id": "pylint-dev__pylint-10437",
+      "dedup_group": "repository-component:f87b47a7f02a42ad",
+      "normalized_issue_sha256": "d276f32bbbae78916900a329213af44c57f2094e790748b7d4e0c3ef7b83471c",
+      "repo": "pylint-dev/pylint",
+      "row_sha256": "6ed0859b82442e13ac7f4bb32516b67d556c56e6e5e63d150dd5ec981df95ae0",
+      "split": "train"
+    },
+    {
+      "case_id": "pylint-dev__pylint-10569",
+      "dedup_group": "repository-component:f87b47a7f02a42ad",
+      "normalized_issue_sha256": "15ed7950c1dd9a98979d60fef5084a3a01eab83fcc1a93c195c7af7771096e52",
+      "repo": "pylint-dev/pylint",
+      "row_sha256": "31731eaa8f54037250d326eb8e30d4134b9c57d831bbdc2b8f5fa22391374978",
+      "split": "train"
+    },
+    {
+      "case_id": "pylint-dev__pylint-10572",
+      "dedup_group": "repository-component:f87b47a7f02a42ad",
+      "normalized_issue_sha256": "e2a097d0c6c720a4d43ec9b65a024e194092ce55c15e4df4486cbd11005c2513",
+      "repo": "pylint-dev/pylint",
+      "row_sha256": "44a2adc1a586bb514c63423bc6f03f415d0c2a4ced6b64a6b7c01478aff295e3",
+      "split": "train"
+    },
+    {
+      "case_id": "pylint-dev__pylint-10628",
+      "dedup_group": "repository-component:f87b47a7f02a42ad",
+      "normalized_issue_sha256": "09f314991d19bd71fe31c05df810f3a955c8c77c286eb2767941a7afe96d55d3",
+      "repo": "pylint-dev/pylint",
+      "row_sha256": "c5b264ec404c69d7cbdf09b4c0a791693df7a59cb16d8f037670bfeba289da54",
+      "split": "train"
+    },
+    {
+      "case_id": "pylint-dev__pylint-10643",
+      "dedup_group": "repository-component:f87b47a7f02a42ad",
+      "normalized_issue_sha256": "093ff9c498f5e165872fced0f94087d5a299711d3d762659b86015e43db5a260",
+      "repo": "pylint-dev/pylint",
+      "row_sha256": "f7fe31fe2ddf70f8c8e35c7d948b8d14156f461d99a6d3eb3d05867d59931de3",
+      "split": "train"
+    },
+    {
+      "case_id": "pylint-dev__pylint-10648",
+      "dedup_group": "repository-component:f87b47a7f02a42ad",
+      "normalized_issue_sha256": "05aeb2f4785a8cc23739b513bf911cdc6d6340b2ff1d9df3360db070c6b758ae",
+      "repo": "pylint-dev/pylint",
+      "row_sha256": "50e1022a2905ac81fac384ccdbd5f98ebda33ed935c3ab6acd9c097cae64d859",
+      "split": "train"
+    },
+    {
+      "case_id": "pylint-dev__pylint-10677",
+      "dedup_group": "repository-component:f87b47a7f02a42ad",
+      "normalized_issue_sha256": "cef038e9f3276e358055490cd494ab2113ad78d3bc019db730cada9b61ec56cc",
+      "repo": "pylint-dev/pylint",
+      "row_sha256": "5c2875b8f46935d5d82f56d407ac84caa1d268d0946335e1a32db12ce2ff3205",
+      "split": "train"
+    },
+    {
+      "case_id": "pylint-dev__pylint-10712",
+      "dedup_group": "repository-component:f87b47a7f02a42ad",
+      "normalized_issue_sha256": "efdbc1d83b18c06903395576276e9b67d00da065f8541bc1e97a260ae42b5f48",
+      "repo": "pylint-dev/pylint",
+      "row_sha256": "3a752f72c4f255d9dbc9a98a8fc53c58ed3357503cacfb8325e8d9ea07988008",
+      "split": "train"
+    },
+    {
+      "case_id": "pylint-dev__pylint-10724",
+      "dedup_group": "repository-component:f87b47a7f02a42ad",
+      "normalized_issue_sha256": "35449e53d80c90928ac2addf958a61aeb3b7548be30b143c295e71486a6c614e",
+      "repo": "pylint-dev/pylint",
+      "row_sha256": "c64864c5bb6f2718c4d78c841b7628bd833ade75d72364a273bc4383c9fa9f1f",
+      "split": "train"
+    },
+    {
+      "case_id": "pylint-dev__pylint-10758",
+      "dedup_group": "repository-component:f87b47a7f02a42ad",
+      "normalized_issue_sha256": "447312ddd1aa9daa39086b13097811c7bd572d6f7db0826b591ee24c92a9bc08",
+      "repo": "pylint-dev/pylint",
+      "row_sha256": "97bdd17f70f5fe83da1ff9c856c434b25fc6b4df0ed6acfd4ef7e66cc4c78fbe",
+      "split": "train"
+    },
+    {
+      "case_id": "pylint-dev__pylint-10770",
+      "dedup_group": "repository-component:f87b47a7f02a42ad",
+      "normalized_issue_sha256": "dc7d4c39e1d87ca1a22b44fcbb7ea4f6b8ad215558732abbef921a95c9f4a6a5",
+      "repo": "pylint-dev/pylint",
+      "row_sha256": "2359d77fa3f2569fc63ae1f1a0e50216f4243796696f2d208d6ca678ee61dcc5",
+      "split": "train"
+    },
+    {
+      "case_id": "pylint-dev__pylint-10797",
+      "dedup_group": "repository-component:f87b47a7f02a42ad",
+      "normalized_issue_sha256": "50ee6828bac80eed50c51d98f9e2ef48639e6650a5a05762a00b666ee869f51d",
+      "repo": "pylint-dev/pylint",
+      "row_sha256": "8acc51f5af10aace321f4a314cf4f3a5724e5b260e749b7e15d2d9aebb923356",
+      "split": "train"
+    },
+    {
+      "case_id": "pylint-dev__pylint-10802",
+      "dedup_group": "repository-component:f87b47a7f02a42ad",
+      "normalized_issue_sha256": "5f89a7a3b2d197771696434a7d4a904df8476bf1c050a18bc304a18dee0226c6",
+      "repo": "pylint-dev/pylint",
+      "row_sha256": "36f75a1da50b5b02e0730fd4f0a772b5d026e3faef6452c9e12cc5d9b776741c",
+      "split": "train"
+    },
+    {
+      "case_id": "pylint-dev__pylint-10814",
+      "dedup_group": "repository-component:f87b47a7f02a42ad",
+      "normalized_issue_sha256": "5266bc3d50bfd5a77938bd011f238eb0867dd6b176591469459399a090e30ec6",
+      "repo": "pylint-dev/pylint",
+      "row_sha256": "8bda49dd83fdc1241e11ba74945541677b68bfb80c806315a148f11ba221df31",
+      "split": "train"
+    },
+    {
+      "case_id": "pylint-dev__pylint-9308",
+      "dedup_group": "repository-component:f87b47a7f02a42ad",
+      "normalized_issue_sha256": "faf4d07d2647d22e0279599f6b2ccbb36d448e93371162f0013a0ca90d4fa08c",
+      "repo": "pylint-dev/pylint",
+      "row_sha256": "a2192ebfd578a0080dc82ba2d1ce196ceac5bbefa8f24877043c5ef59f713221",
+      "split": "train"
+    },
+    {
+      "case_id": "pylint-dev__pylint-9630",
+      "dedup_group": "repository-component:f87b47a7f02a42ad",
+      "normalized_issue_sha256": "3ae8899cc58ac5a6aa52f91c49f907f0e9d4258b21ea6b9d26804d44fb885ec5",
+      "repo": "pylint-dev/pylint",
+      "row_sha256": "9266770f7e973a6f7efcf225ddd8d6796820dfb6d20ba3354fef51c3e4e43162",
+      "split": "train"
+    },
+    {
+      "case_id": "pylint-dev__pylint-9712",
+      "dedup_group": "repository-component:f87b47a7f02a42ad",
+      "normalized_issue_sha256": "e217c677a04ea66965bf39f83f04d9583c4c9d73f6f8479bbbe7ab349afcf32e",
+      "repo": "pylint-dev/pylint",
+      "row_sha256": "444511b0b3a463f01884fbe8758a1c73fccca94dc5cc58f9c88ac3fa0d692e00",
+      "split": "train"
+    },
+    {
+      "case_id": "pylint-dev__pylint-9728",
+      "dedup_group": "repository-component:f87b47a7f02a42ad",
+      "normalized_issue_sha256": "ee7ff778f7aafed211cce23b9a0e46cf56c73f2a9a3ac54dc52a40f5056f7873",
+      "repo": "pylint-dev/pylint",
+      "row_sha256": "d79934f67a7c1875881d28a7afb22baeea3d032be0cca1085b5a4645f08e2ecc",
+      "split": "train"
+    },
+    {
+      "case_id": "pypa__pip-12799",
+      "dedup_group": "repository-component:17ae4663750ab4d6",
+      "normalized_issue_sha256": "6d2e057777f2b360acf34a7dd9ae6b381fdff4c56a9dc33850cca3f53d711cae",
+      "repo": "pypa/pip",
+      "row_sha256": "bf617c70f8e1f3234407e50ff25296fc66332aa174d46f13b9012a8e2b982b52",
+      "split": "validation"
+    },
+    {
+      "case_id": "pypa__pip-12877",
+      "dedup_group": "repository-component:17ae4663750ab4d6",
+      "normalized_issue_sha256": "de5a5c965891c6d44be4f2f2bdfbc0c705e3a587713b4ee95c7791e52fc5e768",
+      "repo": "pypa/pip",
+      "row_sha256": "7c1851e9ac1973459444f19d2c9be778cf40ad090bac1f683af0cf2ea2c2d28f",
+      "split": "validation"
+    },
+    {
+      "case_id": "pypa__pip-13064",
+      "dedup_group": "repository-component:17ae4663750ab4d6",
+      "normalized_issue_sha256": "7c7ad782ab6fc0b283fb462587e59c0e6aaf5f138acce1920bfe4c590db5e881",
+      "repo": "pypa/pip",
+      "row_sha256": "50fefcf1d72ab3899dca3236bb712a1e67a83dac62dd84cf7bcb4037a8994b8c",
+      "split": "validation"
+    },
+    {
+      "case_id": "pypa__pip-13070",
+      "dedup_group": "repository-component:17ae4663750ab4d6",
+      "normalized_issue_sha256": "5cd452064ce1c76cfc29f4de778866b9de099205a1c5bc03f911ed732602c41e",
+      "repo": "pypa/pip",
+      "row_sha256": "d433b0e4878ccd99852ee15553cee71e78bb3bf8dfdd7c573dadb4fd8b3a8f75",
+      "split": "validation"
+    },
+    {
+      "case_id": "pypa__pip-13124",
+      "dedup_group": "repository-component:17ae4663750ab4d6",
+      "normalized_issue_sha256": "d0dc416233d0c307aa6b0b45c8afecdbe3dc3def32f0d178726ac206455cc3f1",
+      "repo": "pypa/pip",
+      "row_sha256": "ced72cadfa9e34ab266e8ac6b4e4989b6b7d1a35dd78ecc5549e494d8be3a045",
+      "split": "validation"
+    },
+    {
+      "case_id": "reflex-dev__reflex-2242",
+      "dedup_group": "repository-component:01a7b046ef97eeee",
+      "normalized_issue_sha256": "f4720911439737c0feaeda0cfdc354aed3ed9a68a445eab40155accea378fe7c",
+      "repo": "reflex-dev/reflex",
+      "row_sha256": "24384aceaeafbc0d132c665f7e46297760d52ae4776d41cf1cb57f70495643ff",
+      "split": "validation"
+    },
+    {
+      "case_id": "reflex-dev__reflex-4239",
+      "dedup_group": "repository-component:01a7b046ef97eeee",
+      "normalized_issue_sha256": "3f43b324658ecdf2040cc1ed3eb46e5cdf4455517851c54b60ebf1b8828d564f",
+      "repo": "reflex-dev/reflex",
+      "row_sha256": "3b602f07e4282be926dd51c75eadba4faf978d7f9c6abc8b0964adefd8f55561",
+      "split": "validation"
+    },
+    {
+      "case_id": "scikit-learn__scikit-learn-28612",
+      "dedup_group": "repository-component:cdd7c31f6372fedc",
+      "normalized_issue_sha256": "79ed8cc69e549029b87ccbf512dca8617906f749f16c8360dc83770553e569d5",
+      "repo": "scikit-learn/scikit-learn",
+      "row_sha256": "a444f4ef6bd4200519b0db68d8bc2ab9600f14e31cbaf56beef6858cf1cbfebe",
+      "split": "test"
+    },
+    {
+      "case_id": "scikit-learn__scikit-learn-28651",
+      "dedup_group": "repository-component:cdd7c31f6372fedc",
+      "normalized_issue_sha256": "91bd37ce9129b88e0965ca2edaa8e49edd9c8361e691192f7e7888292a2522fc",
+      "repo": "scikit-learn/scikit-learn",
+      "row_sha256": "cb095fd6a5871434161e9b856316ae711e4f641ca36c73b9905c6f1b7852b85d",
+      "split": "test"
+    },
+    {
+      "case_id": "scikit-learn__scikit-learn-31094",
+      "dedup_group": "repository-component:cdd7c31f6372fedc",
+      "normalized_issue_sha256": "5fcbb1ff68f28e7844bf763801451ce141b3a578664f492fe64e5bb5645eb7fc",
+      "repo": "scikit-learn/scikit-learn",
+      "row_sha256": "32fe2db67de4c376c358d3801768c7481d2a085bfe02528a2b57745669efeb4f",
+      "split": "test"
+    },
+    {
+      "case_id": "scikit-learn__scikit-learn-32932",
+      "dedup_group": "repository-component:cdd7c31f6372fedc",
+      "normalized_issue_sha256": "b512d1b55aa92bc7e9c723d5d68186427b8fb8dea24da7a2046daeb4b1d647fe",
+      "repo": "scikit-learn/scikit-learn",
+      "row_sha256": "d8cf8aea3f51f517b5e7fb7c45718662eb8268251d1354e9321f2884e9288e70",
+      "split": "test"
+    },
+    {
+      "case_id": "sphinx-doc__sphinx-14127",
+      "dedup_group": "repository-component:dc31a25d824acb79",
+      "normalized_issue_sha256": "4d10008826fe21872d8a002f2b9b3ed9360fb3b9f9f219186125ed03780d9e19",
+      "repo": "sphinx-doc/sphinx",
+      "row_sha256": "d9ca6268548c788fa0905cc2559a85a81206cceca4ae20bbcdcf5a01efe45a81",
+      "split": "test"
+    },
+    {
+      "case_id": "sympy__sympy-26546",
+      "dedup_group": "repository-component:707234ccd53a41c5",
+      "normalized_issue_sha256": "3ded7d7060219c88e2262341040904bd3891fd181db03f4a3f9fc7424f6b0e87",
+      "repo": "sympy/sympy",
+      "row_sha256": "f9d3491071b9c7a16ae4680a25758eadf6863bcae0cf7b6b17d323b921b4e08f",
+      "split": "test"
+    },
+    {
+      "case_id": "sympy__sympy-26557",
+      "dedup_group": "repository-component:707234ccd53a41c5",
+      "normalized_issue_sha256": "d7076cafd9d16663f395a2590fdf37b869f94886ea9e5f08d34aa8de1ab35f04",
+      "repo": "sympy/sympy",
+      "row_sha256": "7ef4af917b84f2b633747cd1ae719b1e085ab13cbd9e4c02b1de035c34638920",
+      "split": "test"
+    },
+    {
+      "case_id": "sympy__sympy-26558",
+      "dedup_group": "repository-component:707234ccd53a41c5",
+      "normalized_issue_sha256": "9bc8247246ed951f030049ac33b3dd00cf6f0fab2b0bda25da79ab12fbea320b",
+      "repo": "sympy/sympy",
+      "row_sha256": "15dcae6d41c3698ee34bb8296f3a7b742b93941babee3d881342c86ef6cf2226",
+      "split": "test"
+    },
+    {
+      "case_id": "sympy__sympy-26733",
+      "dedup_group": "repository-component:707234ccd53a41c5",
+      "normalized_issue_sha256": "87e558cf7ef14f3a898560816b5f0622402cb6c1cb61e1623b080f8f2abb03b2",
+      "repo": "sympy/sympy",
+      "row_sha256": "018c7e698b261ebc054238bf5cdd48e5622f7aabfff0108761fd69e4e8bea873",
+      "split": "test"
+    },
+    {
+      "case_id": "sympy__sympy-26822",
+      "dedup_group": "repository-component:707234ccd53a41c5",
+      "normalized_issue_sha256": "d066d38eee14973bd13b41a3c0c68cc40892acec9d7636dcce32da9549ded248",
+      "repo": "sympy/sympy",
+      "row_sha256": "5474dc53b532566ca88b6720ed0c416b7b414c41ab30d3eaa0c43815880af5ba",
+      "split": "test"
+    },
+    {
+      "case_id": "sympy__sympy-26919",
+      "dedup_group": "repository-component:707234ccd53a41c5",
+      "normalized_issue_sha256": "253feb62f3cce874c6ce24b3efafa1b6bec39e7b2f9642ef62bea51a43bd4b88",
+      "repo": "sympy/sympy",
+      "row_sha256": "5f09eb6ba2fd1624f28f880afcd35207c5861cd1f402d8b8c224fe219cbba059",
+      "split": "test"
+    },
+    {
+      "case_id": "sympy__sympy-26954",
+      "dedup_group": "repository-component:707234ccd53a41c5",
+      "normalized_issue_sha256": "17a37eb3c523a32ffa822464daaa2a9dba5d720830e8182e61c4b6276cca09ba",
+      "repo": "sympy/sympy",
+      "row_sha256": "0ca7c45c0bb46a92af4dc5f61a08066c1b2cd9d5b01d440fd336e62913f1e4d9",
+      "split": "test"
+    }
+  ],
+  "complete": true,
+  "content_sha256": "d5f85c4dbecdb00177e8eff8d41108980c1f16cb85fb2b09d8c2ea065ecf58a2",
+  "counts": {
+    "test": {
+      "cases": 16,
+      "repositories": [
+        "aws-cloudformation/cfn-lint",
+        "scikit-learn/scikit-learn",
+        "sphinx-doc/sphinx",
+        "sympy/sympy"
+      ]
+    },
+    "train": {
+      "cases": 47,
+      "repositories": [
+        "falconry/falcon",
+        "joke2k/faker",
+        "keras-team/keras",
+        "matplotlib/matplotlib",
+        "openai/openai-agents-python",
+        "pylint-dev/pylint"
+      ]
+    },
+    "validation": {
+      "cases": 15,
+      "repositories": [
+        "pdm-project/pdm",
+        "pvlib/pvlib-python",
+        "pypa/pip",
+        "reflex-dev/reflex"
+      ]
+    }
+  },
+  "cross_repository_duplicate_links": [],
+  "dataset": "Xin-Zhou-smu/SWE-RPG-Bench",
+  "development_exposed_case_ids": [
+    "falconry__falcon-2540",
+    "openai__openai-agents-python-454",
+    "pylint-dev__pylint-10797"
+  ],
+  "exposure_selection_sha256": "e4e68e3dfa93a576fd0b66c669c03708af9b8de861d4090ee312b9397a460509",
+  "image_manifest_sha256": "f3c805af1d8f72a76d05eec013c6ad0190fa7846b8726b9943872bdc0a52dcbe",
+  "policy": {
+    "all_frozen_python_cases_retained": true,
+    "assignment_outcome_independent": true,
+    "development_components_train_only": true,
+    "downstream_rows_and_images_not_in_gepa_package": true,
+    "intermediate_reference_files_excluded": true,
+    "no_claim_of_absence_from_model_pretraining": true,
+    "repository_and_duplicate_components_atomic": true
+  },
+  "provisional": false,
+  "revision": "688ed7918cbcabe6c9d9b9f393fad1053b286dd9",
+  "schema_version": 1,
+  "seed": 42,
+  "source_instances_sha256": "90c3f55fe74a111daad93d017d38a834136411678f0f9b03e0193cd076ef35a2",
+  "source_manifest_sha256": "c5bb3ab4eff0e4246f0ffdcfdf0b4e4b75ed70bea60ad9e8f4ffff98c7ed5bc6",
+  "source_subset_file_sha256": {
+    "downstream-test-source/evaluation/evaluate_docker.py": "2eba96d68ce9166160d492331f311803b9f72f5c52677f09f65efef224d63f72",
+    "downstream-test-source/images.json": "1985a4ab5cec7a96a512c9c3bb3b5d31358556b93fcc7bb9af90d0c269ee093b",
+    "downstream-test-source/instances.jsonl": "e75c5ade5461d80c5c6a47700af11ceab84fbf5f37d33d8485cdfe2c2c5ba75d",
+    "downstream-test-source/manifest.json": "515a7375b2d4bf8b7d9c111ae59a159575a05b4c95aa8b8702f93da32e63ca93",
+    "downstream-test-source/selection.json": "96f816d6940b0fdd55a96883d859ca84ba9ff85639de013ee51c5dae93dc95f7",
+    "gepa-source/evaluation/evaluate_docker.py": "2eba96d68ce9166160d492331f311803b9f72f5c52677f09f65efef224d63f72",
+    "gepa-source/images.json": "58d363bd88e1d2e3ddf4c3b485b14d501ac261f7bc6acbe8a2e78dc901b5afa3",
+    "gepa-source/instances.jsonl": "f17d4daf37a6dc0cde2e5f57da9a97ef1803a388d1440bd1f18669f82b580b61",
+    "gepa-source/manifest.json": "543ad88a29b9078d3242ac13b9429825132fb5c2460e6ef7cd12d1f393faf5e7",
+    "gepa-source/selection.json": "dfc5006fe1094c16386c488bbb8a626cfafe8e3abbf441b53611eb138e1b7cad"
+  },
+  "split_id": "rpg_threeway_v1_20261025",
+  "target_ratios": [
+    0.6,
+    0.2,
+    0.2
+  ]
+}

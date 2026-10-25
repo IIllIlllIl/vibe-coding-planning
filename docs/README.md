@@ -23,6 +23,7 @@ Read in this order:
 | [`engineering-contracts.md`](engineering-contracts.md) | Shared execution requirements: cluster resource ratios, prepared Git history, isolation, artifact persistence, cleanup, and launch checks |
 | [`safe-pce.md`](safe-pce.md) | Current Safe PCE selection, execution reliability, and the frozen within-task Plan-pair derivative |
 | [`safe-pce-ace-gepa.md`](safe-pce-ace-gepa.md) | Opt-in task-only Safe PCE evaluation for the retained hybrid ACE/GEPA learner; Planner-owned application notes |
+| [`swe-rpg-learning-data.md`](swe-rpg-learning-data.md) | Frozen RPG repository-disjoint train/validation/downstream holdouts, source-byte preservation, formal learning contract and comparison with Verified |
 | [`hpc-submit.md`](hpc-submit.md) | Behavioral-branch credential, preheat, retained Slurm, and FairShare safety |
 | [`../configs/README.md`](../configs/README.md) | Runtime-versus-launch configuration ownership and active config index |
 

@@ -131,3 +131,45 @@ def prepare_snapshot(*, source_root, source_manifest, image_manifest, destinatio
         _write_once(path, content)
     load_swe_rpg_pce_cases(destination, Path(image_manifest))
     return manifest
+
+
+def prepare_subset(*, snapshot, image_manifest, instance_ids, destination):
+    """Freeze exact selected source lines; keep downstream rows out of GEPA.
+
+    This is declared dataset selection, not Plan/patch/Agent-output repair.
+    The original whole-source authority is retained through provenance hashes.
+    """
+    snapshot, image_manifest, destination = map(Path, (snapshot, image_manifest, destination))
+    if destination.resolve().is_relative_to(snapshot.resolve()):
+        raise ValueError("subset destination must be outside the frozen source")
+    cases, original, images = load_swe_rpg_pce_cases(snapshot, image_manifest)
+    selected = set(instance_ids)
+    if not selected or len(selected) != len(instance_ids) or not selected <= {c.instance_id for c in cases}:
+        raise ValueError("subset IDs must be nonempty, unique, frozen Python cases")
+    raw = (snapshot / original["instances_file"]).read_bytes()
+    lines = [line for line in raw.splitlines(keepends=True)
+             if line.strip() and json.loads(line)["instance_id"] in selected]
+    subset_rows = b"".join(lines)
+    subset_images = {"schema_version": 1, "dataset": images["dataset"], "revision": images["revision"],
+        "purpose": "frozen_task_subset", "source_image_manifest_sha256": file_sha256(image_manifest),
+        "records": {ref: record for ref, record in images["records"].items()
+                    if record["instance_id"] in selected}}
+    image_bytes = (json.dumps(subset_images, sort_keys=True, indent=2) + "\n").encode()
+    manifest = dict(original, instances_file="instances.jsonl", instances=len(selected), python_instances=len(selected),
+        instances_sha256=hashlib.sha256(subset_rows).hexdigest(),
+        image_manifest_sha256=hashlib.sha256(image_bytes).hexdigest(),
+        subset_provenance={"source_manifest_sha256": file_sha256(snapshot / "manifest.json"),
+            "source_instances_sha256": original["instances_sha256"],
+            "source_image_manifest_sha256": file_sha256(image_manifest),
+            "selection": sorted(selected), "source_row_bytes_preserved": True})
+    contents = {"instances.jsonl": subset_rows, "images.json": image_bytes,
+        "manifest.json": (json.dumps(manifest, sort_keys=True, indent=2) + "\n").encode(),
+        "selection.json": (json.dumps({"schema_version": 1, "selected_instance_ids": sorted(selected)},
+                                      sort_keys=True, indent=2) + "\n").encode()}
+    for name, digest in original["evaluator_files"].items():
+        contents[name] = source_file(snapshot, name, digest).read_bytes()
+    from src.optimization.safe_pce_preparation import _write_once
+    for name, content in contents.items():
+        _write_once(destination / name, content)
+    load_swe_rpg_pce_cases(destination, destination / "images.json")
+    return manifest

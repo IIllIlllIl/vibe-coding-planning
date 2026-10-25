@@ -110,6 +110,10 @@ SIF validation and a working evaluation adapter are independent authorities.
 The selected engineering validation dataset is Verified; the subsequent formal
 dataset is RPG, chosen for diagnostic intermediate references. RPG formal
 configuration requires separate source, history and evaluator acceptance.
+The RPG [three-way data contract](swe-rpg-learning-data.md) freezes 47 train,
+15 validation and 16 downstream-test tasks with repository-disjoint groups;
+its reviewed three-proposal config retains the completed RPG smoke's execution
+and prompt contracts. The held-out test source is outside the GEPA package.
 This choice does not make reference answers Agent inputs or change the 1/0 score.
 
 | Frozen source | Inventory | Compatibility boundary |

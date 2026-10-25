@@ -25,8 +25,15 @@ The concrete development smoke is `gepa_safe_pce_verified_smoke_v1_20261022.yaml
 with `safe_pce_ace_verified_smoke_source_v1_20261022.yaml` and explicit frozen
 IDs under `frozen_safe_pce_ace/verified_smoke_v1_20261022/`. Its standard
 supervisor identity is `archive/supervisor_launches/safe_pce_ace_verified_smoke_supervisor_v1_20261022.yaml`.
-Verified validates engineering; RPG is the selected downstream formal dataset
-and requires its own adapter/acceptance before configuration and launch.
+Verified and the completed RPG v2 smoke provide engineering baselines; image,
+history and evaluator acceptance remain scoped to their documented cases.
+The RPG repository-holdout contract is
+[`../docs/swe-rpg-learning-data.md`](../docs/swe-rpg-learning-data.md):
+`gepa_safe_pce_rpg_codex_formal3_v1_20261025.yaml`, its matching PCE source and
+Supervisor bind 47/15/16 task splits, mini 16 and three proposals. The separate
+test source is never included in the GEPA package. Prior RPG smoke Supervisor
+identities are archived under `archive/supervisor_launches/`; runtime configs
+remain reproduction authorities. No config authorizes preheat or training.
 The opt-in Native Codex parallel regression configuration is
 `gepa_safe_pce_verified_codex_smoke_v5_20261024.yaml`, with matching
 `safe_pce_ace_verified_codex_smoke_source_v5_20261024.yaml` and

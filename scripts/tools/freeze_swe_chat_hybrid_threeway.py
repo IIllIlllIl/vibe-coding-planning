@@ -12,36 +12,7 @@ from pathlib import Path
 
 from scripts.tools.freeze_swe_chat_behavioral_formal_split import _content_sha256
 from src.optimization.hpc.task_batch import atomic_json
-
-
-def partition(assignments, exposed_ids, *, seed=42, test_target=24):
-    by_id = {a["case_id"]: a for a in assignments}
-    if len(by_id) != len(assignments) or not set(exposed_ids) <= set(by_id):
-        raise ValueError("Invalid assignment IDs or exposure IDs")
-    groups = {}
-    for assignment in assignments:
-        group = assignment.get("dedup_group")
-        if not group:
-            raise ValueError("Missing frozen repository component")
-        groups.setdefault(group, []).append(assignment["case_id"])
-    protected = {by_id[i]["dedup_group"] for i in exposed_ids}
-    remaining = sorted(set(groups) - protected,
-                       key=lambda g: hashlib.sha256(f"{seed}:{g}".encode()).hexdigest())
-    # Subset-sum over component sizes, not labels or Plan outcomes. First seeded
-    # solution wins ties. This keeps whole components and avoids large-group bias.
-    choices = {0: ()}
-    for group in remaining:
-        for size, subset in list(choices.items()):
-            choices.setdefault(size + len(groups[group]), (*subset, group))
-    total_remaining = sum(len(groups[g]) for g in remaining)
-    candidates = [n for n in choices if 0 < n < total_remaining]
-    if not candidates:
-        raise ValueError("Insufficient components for nonempty validation and test")
-    selected_size = min(candidates, key=lambda n: (abs(n - test_target), n))
-    test_groups = set(choices[selected_size])
-    return [dict(a, split=("train" if a["dedup_group"] in protected else
-                          "test" if a["dedup_group"] in test_groups else "validation"))
-            for a in sorted(assignments, key=lambda a: a["case_id"])]
+from src.data.grouped_partition import partition
 
 
 def freeze(*, source_dir, source_authority, source_split, output_dir,

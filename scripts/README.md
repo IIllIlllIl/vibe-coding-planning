@@ -5,7 +5,11 @@
 - `tools/prepare_safe_pce_ace_gepa.py` prepares explicit task-only splits and a
   new hybrid learning config around an existing Safe PCE config. It calls no
   model or scheduler; see [`../docs/safe-pce-ace-gepa.md`](../docs/safe-pce-ace-gepa.md).
-- `tools/audit_safe_pce_ace_dataflow.py` reads a terminal Verified smoke and
+- `tools/freeze_swe_rpg_threeway.py` freezes whole-repository/duplicate task
+  groups with development exposure protection, reusing the shared historical
+  partition and original RPG loaders/writers. It keeps downstream source rows
+  and images outside GEPA; see [`../docs/swe-rpg-learning-data.md`](../docs/swe-rpg-learning-data.md).
+- `tools/audit_safe_pce_ace_dataflow.py` reads a terminal Verified or RPG run and
   compares persisted inputs, exact Plans, P/C/E evidence and complete learning
   inputs. It writes JSON to stdout and calls no model/container/scheduler;
   native evidence reading and leakage/noise clearance remain manual review.
