@@ -1,0 +1,16 @@
+{
+  "schema_version": 1,
+  "purpose": "Infrastructure revalidation of eight failed or timed-out calibrations; not a scientific dataset exclusion or resampling",
+  "source_manifest_sha256": "e9f692354fcb5d7318a6da04c86524d17ef654fc0ff0145ee05d36a7cfd5faa0",
+  "previous_job": "6168386",
+  "selected_instance_ids": [
+    "pdm-project__pdm-2655",
+    "pdm-project__pdm-2795",
+    "pdm-project__pdm-3546",
+    "pdm-project__pdm-3655",
+    "matplotlib__matplotlib-28831",
+    "matplotlib__matplotlib-30019",
+    "matplotlib__matplotlib-30696",
+    "matplotlib__matplotlib-30867"
+  ]
+}

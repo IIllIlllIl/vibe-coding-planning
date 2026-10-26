@@ -174,6 +174,11 @@ uses a fresh workspace, never the Coder's workspace. The unchanged Agent patch
 replaces no raw source row; gold is not a fallback. Base calibration passes no
 implementation patch; Gold calibration explicitly passes the reference patch
 outside learning. Both calibration and the model-backed smoke require approval.
+RPG evaluation enables the existing `ApptainerEnvironment(isolate_tmp=True)`
+mechanism, giving each evaluation its own Host-backed `/tmp`, separate from
+Planner, Coder and other evaluations. It does not change official test commands
+or scores. Verify the Host temporary directory's filesystem capacity on compute
+nodes; a bind does not itself allocate more disk or memory.
 `scripts.tools.verify_swe_rpg_evaluator` is a one-case Base/Gold diagnostic over
 the same evaluator; it has no Agent, retry loop or scheduler. Give it a reviewed
 source config, one selected instance ID and a fresh output directory, and use

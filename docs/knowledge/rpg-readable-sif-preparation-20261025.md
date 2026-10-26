@@ -133,16 +133,51 @@ accepted explanation or permission to alter the official score.
 
 For PDM, failing writes include
 `/tmp/pytest-of-twang/pytest-0/popen-gw0/test_use_python_write_file0/.pdm-home/config.toml`.
-The RPG evaluator requests `--containall` and a writable overlay but does not
-enable the existing `ApptainerEnvironment(isolate_tmp=True)` phase-local disk
-bind. This leaves test temporary storage in the container session rather than
-the established phase-local directory. A read-only post-run Scratch check
+In the evaluated revision, the RPG evaluator requested `--containall` and a
+writable overlay without enabling the existing
+`ApptainerEnvironment(isolate_tmp=True)` phase-local bind. This left test
+temporary storage in the container session rather than the established
+phase-local directory. A read-only post-run Scratch check
 found user usage below byte and inode quota (about 2.45 TB and 761,209 files;
 soft limits about 10 TB and 1,000,000 files), so no Scratch-quota exhaustion
-was established. A future repair should reuse the shared temporary-directory
-mechanism and verify capacity on a compute node before recalibration. These
-observations do not authorize dataset exclusions, score rewriting, increased
-resources or an unreviewed formal launch.
+was established. The adapter repair enables that existing flag without changing
+the shared environment implementation, SIFs, official commands or scoring.
+Local regression checks the flag and cleanup on success and failure; the shared
+environment test covers persistent mounting and cleanup. This is not a new
+compute-node capacity or Base/Gold acceptance result. These observations do not
+authorize dataset exclusions, score rewriting, increased resources or an
+unreviewed formal launch.
+
+### Compute-node temporary-storage and WebAgg probe
+
+No-model Iris job `6241165` completed in 38 seconds at 1 CPU / 4G, MaxRSS
+2,286,864K. It used the existing `ApptainerEnvironment`, with the shared
+environment source SHA-256 unchanged at
+`1f1310802aa87361525e27e3f48c152c5a5943e077861af34c167bbc3da33614`.
+Authority is operation `rpg-eval-environment-probe-v1-20261026/results-v1/report.json`.
+
+With the PDM 3546 image, `isolate_tmp=False` exposed a 64 MiB tmpfs at `/tmp`.
+The existing `isolate_tmp=True` mechanism exposed the node-local ext4 disk,
+with about 67 GiB available, and successfully wrote/flushed a 96 MiB temporary
+file. The Host temporary directory was `/tmp`; no Scratch quota change or SIF
+rebuild was needed. This confirms the capacity mismatch, not full PDM evaluator
+acceptance.
+
+In the Matplotlib 30019 image, Python reported its normal SIGINT handler and
+the default WebAgg port was available. The unmodified WebAgg test passed
+three consecutive standalone invocations. The earlier full-suite failure
+occurred after HTTP connection, while waiting for the child to exit following
+SIGINT; a subsequent unraisable warning concerned that child. No signal or
+test workaround is justified by this standalone probe. Full-suite Base/Gold
+acceptance remains separate.
+
+For the two timeout cases, Base completed and Gold had started. Matplotlib
+30696's official rebuild command itself runs an additional complete test suite.
+An eight-case recovery diagnostic reuses the shared preparation entry and
+its existing reviewed two-hour recovery contract, retaining 1 CPU / 4G and
+concurrency three. This is an upper bound for history verification plus both
+Base/Gold evaluations, not a change to the formal one-hour PCE Worker limit,
+test commands, scoring or scientific split. Passed cases are not resampled.
 
 ## Build temporary storage
 

@@ -1,0 +1,81 @@
+schema_version: 1
+mode: swe_rpg_pce
+paths:
+  dataset_snapshot: output/SWE-RPG/threeway-readable-clean61-v1-20261026/gepa-source
+  image_manifest: output/SWE-RPG/threeway-readable-clean61-v1-20261026/gepa-source/images.json
+  selection_manifest: configs/frozen_swe_rpg/runtime_reaccept8_v3_20261026/selection.json
+  prompt_source_config: configs/polybench_pce_hpc_formal_clean_20260825.yaml
+  plan_prompt_source_config: configs/prompts/swe_verified_safe_pce_planner_v6_anchor_ablation_20260913.yaml
+  code_prompt_source_config: configs/prompts/swe_verified_safe_pce_code_v1_20260913.yaml
+  run_dir: /scratch/users/twang/vibe-coding-planning/run_state/operations/swe-rpg-runtime-reaccept8-v3-20261026
+plan:
+  model: deepseek-v4-flash
+  api_base: https://api.deepseek.com
+  api_key_env: DEEPSEEK_API_KEY
+  temperature: 1.0
+  thinking: disabled
+  max_steps: 0
+  cost_limit: 0.0
+  timeout: 900
+  max_attempts: 3
+  submission_protocol: direct_human_markdown_v5
+code:
+  model: deepseek-v4-flash
+  api_base: https://api.deepseek.com
+  api_key_env: DEEPSEEK_API_KEY
+  temperature: 0.0
+  max_steps: 0
+  cost_limit: 0.0
+  timeout: 900
+  max_attempts: 3
+docker:
+  workdir: /testbed
+  timeout: 900
+  min_free_gb: 20
+  max_cached_images: 75
+container:
+  runtime: apptainer
+  module: tools/Apptainer
+  sif_cache_dir: /scratch/users/${USER}/vibe-coding-planning/shared/sif-cache
+  writable_tmpfs: true
+hpc:
+  submit: false
+  partition: batch
+  cpus_per_task: 1
+  mem: 4G
+  time: "02:00:00"
+  max_running_array_tasks: 3
+  max_task_attempts: 3
+  python_module: lang/Python/3.11
+  container_module: tools/Apptainer
+  python_bin: python3
+  worker_config_path: configs/swe_rpg_runtime_reaccept8_v3_20261026.yaml
+  job_name_prefix: rpg-reaccept8-v3-20261026
+evaluator:
+  slurm_timeout_outcome: unknown
+experiment_contract:
+  purpose: permission_derivative_history_and_official_base_gold_reacceptance_only
+  diagnostic_launch_authorized: true
+  model_calls: 0
+  cases: 8
+  evaluator_calls: 16
+  cpus_per_case: 1
+  memory_per_case: 4G
+  walltime_per_case: "02:00:00"
+  recovery_run: true
+  budget:
+    slurm_worker_walltime: "02:00:00"
+  concurrency: 3
+  entry_point: scripts.tools.prepare_swe_rpg_runtime
+  engineering_baseline_config: configs/swe_rpg_runtime_gepa62_v1_20261025.yaml
+  original_preparation_job: '6168386'
+  measured_environment_probe_job: '6241165'
+  evaluator_change: enable_existing_phase_local_tmp_bind
+  walltime_reason: two_complete_official_evaluations_plus_cached_history_verification
+  memory_and_cpu_unchanged: true
+  reuse_unchanged_successful_cases: 53
+  eligibility_manifest: configs/frozen_safe_pce_ace/rpg_clean61_v1_20261026/manifest.json
+  official_scoring_unchanged: true
+  split_and_outcomes_not_reselected: true
+  failed_checks_retained_without_scoring_or_silent_filtering: true
+  formal_training_launch_authorized: false

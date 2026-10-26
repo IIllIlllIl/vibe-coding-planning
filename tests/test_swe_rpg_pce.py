@@ -236,6 +236,7 @@ def test_rpg_evaluator_preserves_patch_and_uses_shared_environment(tmp_path, mon
         assert result["evaluator_resolved"] is False and results == [result]
         assert result["raw_test_output"] == "original log"
     assert observed["cwd"] == "/testbed2" and observed["cleaned"]
+    assert observed["isolate_tmp"] is True
     assert ":/rpg-eval-input:ro" in " ".join(observed["run_args"])
 
 

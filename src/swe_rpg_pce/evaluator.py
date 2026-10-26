@@ -78,6 +78,7 @@ def evaluate_swe_rpg_apptainer(patch, case, *, snapshot, container, capacity_win
             sif_cache_dir=container.sif_cache_dir, capacity_window=capacity_window,
             timeout=None, writable_tmpfs=container.writable_tmpfs,
             git_safe_directories=[workdir], host_workdir=phase_workdir, initialize_host_workdir=True,
+            isolate_tmp=True,
             run_args=["--containall", "--no-mount", "cwd", "--bind", f"{inputs}:/rpg-eval-input:ro",
                       "--bind", f"{outputs}:/rpg-eval-output"])
         verify_swebench_evaluator_repository(env, case.base_commit, phase="evaluate",

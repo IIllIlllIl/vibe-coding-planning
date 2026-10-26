@@ -17,6 +17,7 @@ CONFIG = Path("configs/swe_rpg_runtime_gepa62_v1_20261025.yaml")
 @pytest.mark.parametrize(("path", "task_count"), [
     (CONFIG, 62),
     (Path("configs/swe_rpg_runtime_reaccept11_v2_20261026.yaml"), 11),
+    (Path("configs/swe_rpg_runtime_reaccept8_v3_20261026.yaml"), 8),
 ])
 def test_no_model_config_and_whole_wave_use_existing_transport(tmp_path, monkeypatch, path, task_count):
     config = load_swe_rpg_pce_config(path, require_api_keys=False)
@@ -29,6 +30,7 @@ def test_no_model_config_and_whole_wave_use_existing_transport(tmp_path, monkeyp
     assert result["tasks"] == task_count and result["model_calls"] == 0
     assert "#SBATCH --array=" + ",".join(map(str, range(task_count))) + "%3\n" in script
     assert "#SBATCH --mem=4G" in script and "#SBATCH --cpus-per-task=1" in script
+    assert f"#SBATCH --time={config.hpc.time}" in script
     assert "source \"${ENV_FILE}\"" not in script
     assert "scripts.tools.prepare_swe_rpg_runtime" in script
     def run(self, **kwargs):
