@@ -124,15 +124,28 @@ def run_local_phase(config, role, payload, attempt_dir, *, retry_feedback=""):
     env_config = {"evidence_sif_cache_dir": config.hybrid.evidence_sif_cache_dir,
                   "evidence_image": config.hybrid.evidence_image,
                   "command_timeout_seconds": config.docker.timeout}
+    role_inputs = {
+        "reflector": (
+            "counted_playbook.json is the current artifact; record.json indexes "
+            "the supplied case fields by file path. "
+        ),
+        "curator": (
+            "counted_playbook.json is the current artifact with counters; "
+            "reflection_index.json contains the complete current reviews; "
+            "records.json indexes raw case fields; limits.json supplies the hard limits. "
+        ),
+        "refiner": (
+            "draft.json is the artifact to refine; limits.json supplies the hard limits. "
+            "size_violations.json, when listed in the manifest, records measured violations. "
+        ),
+    }
     common = dict(model_config=model, reflection_config=env_config,
                   system=prompts[f"{role}_task"],
                   instance_template=("Read {{ evidence_path }}/manifest.json first, then read every "
                       "required_files entry completely. Each path is relative to {{ evidence_path }}. "
                       "Read required evidence in manageable sections so tool output is not truncated; "
                       "continue until all entries are read. Use optional_files for supporting and "
-                      "opposing details as needed. counted_playbook.json is the parent artifact; "
-                      "record.json or records.json indexes case fields by file path. "
-                      "For Refiner, draft.json is the artifact to refine.\n"
+                      "opposing details as needed. " + role_inputs[role] + "\n"
                       + ("" if model.get("executor") == "codex_cli" else
                          f"Write the required JSON to /tmp/{'reflection' if role == 'reflector' else 'curator'}.json "
                          "and submit its contents using the shared Agent protocol.\n")

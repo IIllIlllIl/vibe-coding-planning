@@ -1,0 +1,28 @@
+{
+  "schema_version": 1,
+  "policy": "permission_only_readability_v1",
+  "purpose": "Two-family node-local temporary-storage timing probe; no model calls or formal training",
+  "parent_repair_plan_sha256": "79d3f2f8319a45475f30221f440121caf70aca3ae90bbeb6c7d327a4f71614bb",
+  "operation": "/scratch/users/twang/vibe-coding-planning/run_state/operations/swe-rpg-readable-sif-local-disk-probe-v1-20261026",
+  "cache": "/scratch/users/twang/vibe-coding-planning/run_state/operations/swe-rpg-readable-sif-local-disk-probe-v1-20261026/probe-cache",
+  "source_image_manifest_sha256": "f3c805af1d8f72a76d05eec013c6ad0190fa7846b8726b9943872bdc0a52dcbe",
+  "records": [
+    {
+      "instance_id": "matplotlib__matplotlib-28831",
+      "base_sif": "/scratch/users/twang/vibe-coding-planning/shared/sif-cache/xinzhou1997_swe_rpg_unifiedsha256_85ac3c40b88a8366e75589525e509e23e65900ee96850d9bdbaa8098de5aab60.sif",
+      "base_sha256": "0985a71effa93d335cb685814fd697e3e2ec5cf130a56b26b35b22952568aee8",
+      "derived_ref": "vibe-local/rpg-readable:matplotlib__matplotlib-28831-v1",
+      "permission_paths": [
+        "testbed/subprojects/packagecache/freetype-2.6.1.tar.gz",
+        "testbed/subprojects/packagecache/qhull-8.0.2.tgz"
+      ]
+    },
+    {
+      "instance_id": "pdm-project__pdm-2655",
+      "base_sif": "/scratch/users/twang/vibe-coding-planning/shared/sif-cache/xinzhou1997_swe_rpg_unifiedsha256_6815461d775be0db8923f75d7f023c6d621aef5700e76a6bea2f2efc9b80a060.sif",
+      "base_sha256": "a9384cde71b87e3ea1d051d8a36adb1f2045b3cb275ac203262f76f836e64873",
+      "derived_ref": "vibe-local/rpg-readable:pdm-project__pdm-2655-v1",
+      "permission_paths": ["testbed/.pdm-build"]
+    }
+  ]
+}

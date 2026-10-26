@@ -38,11 +38,15 @@ def _write_once(path, content):
 def prepare(*, learning_config: Path, pce_config: Path, selection: dict,
             snapshot: Path, run_dir: Path, output_config: Path,
             max_iterations: int | None = None, minibatch_size: int | None = None,
-            max_metric_calls: int | None = None):
+            max_metric_calls: int | None = None,
+            diagnostic_source_root: Path | None = None, diagnostic_source_manifest: Path | None = None,
+            planner_prompt: Path | None = None, initial_guideline: Path | None = None):
     """User supplies task IDs; this function neither samples nor selects by R/U."""
     from src.optimization.safe_pce_learning import TASK_SEMANTICS
     if set(selection) != {"train", "validation"}:
         raise ValueError("split selection must contain exactly train and validation ID arrays")
+    if (diagnostic_source_root is None) != (diagnostic_source_manifest is None):
+        raise ValueError("diagnostics require both source root and source manifest")
     if any(not isinstance(ids, list) or not ids or any(not isinstance(item, str) or not item for item in ids)
            for ids in selection.values()):
         raise ValueError("both splits require nonempty task ID arrays")
@@ -73,8 +77,19 @@ def prepare(*, learning_config: Path, pce_config: Path, selection: dict,
         + len(selection["validation"]))
     if len(selection["train"]) < int(raw["search"]["reflection_minibatch_size"]):
         raise ValueError("minibatch exceeds distinct training tasks")
+    planner_prompt_path = Path(planner_prompt) if planner_prompt is not None else (
+        ROOT / "configs/prompts/safe_pce_rules_planner_v1.yaml")
+    initial_guideline_path = Path(initial_guideline) if initial_guideline is not None else (
+        ROOT / "configs/prompts/safe_pce_hybrid_seed_v1.json")
+    planner_text = yaml.safe_load(planner_prompt_path.read_text())["prompts"]["plan_system"]
+    if not isinstance(planner_text, str) or not planner_text.strip():
+        raise ValueError("Planner prompt must provide a nonempty prompts.plan_system")
+    if not initial_guideline_path.is_file():
+        raise ValueError("Initial guideline must identify an existing versioned file")
     source_manifest = base.dataset_snapshot / "manifest.json"
     manifest = json.loads(source_manifest.read_text())
+    if diagnostic_source_root is not None and mode != "swe_rpg_pce":
+        raise ValueError("original learning diagnostics are currently supported only for RPG")
     instances = Path(manifest.get("instances_file", "instances.jsonl"))
     if instances.is_absolute() or ".." in instances.parts:
         raise ValueError("PCE instances_file must be a safe source-relative path")
@@ -88,8 +103,7 @@ def prepare(*, learning_config: Path, pce_config: Path, selection: dict,
         source = frozen_source_file(base.dataset_snapshot, relative, digest)
         _write_once(source_dir / relative, source.read_bytes())
     bundled = resolved_pce_payload(base)
-    planner_prompt = ROOT / "configs/prompts/safe_pce_rules_planner_v1.yaml"
-    bundled["prompts"]["plan_system"] = yaml.safe_load(planner_prompt.read_text())["prompts"]["plan_system"]
+    bundled["prompts"]["plan_system"] = planner_text
     # The same source bytes keep existing source/row/image hash verification.
     bundled["paths"]["dataset_snapshot"] = _path(source_dir)
     bundled["paths"]["image_manifest"] = _path(source_dir / "images.json")
@@ -114,6 +128,17 @@ def prepare(*, learning_config: Path, pce_config: Path, selection: dict,
                       "image_manifest_sha256": sha256(base.image_manifest),
                       "source_pce_config_sha256": sha256(pce_config),
                       "engineering_baseline_config_sha256": sha256(learning_config)}
+    if planner_prompt is not None:
+        split_manifest["planner_prompt_source"] = {
+            "path": _path(planner_prompt_path), "sha256": sha256(planner_prompt_path)}
+    if initial_guideline is not None:
+        split_manifest["initial_guideline_source"] = {
+            "path": _path(initial_guideline_path), "sha256": sha256(initial_guideline_path)}
+    if diagnostic_source_root is not None:
+        from .learning_diagnostics import prepare_rpg_diagnostics
+        split_manifest["learning_diagnostics"] = prepare_rpg_diagnostics(
+            source_root=diagnostic_source_root, source_manifest=diagnostic_source_manifest,
+            train_ids=selection["train"], snapshot=snapshot, source_revision=manifest["revision"])
     for split, ids in selection.items():
         path = snapshot / f"{split}.jsonl"
         _write_once(path, "".join(json.dumps({"instance_id": identifier, "split": split}) + "\n" for identifier in ids).encode())
@@ -128,7 +153,7 @@ def prepare(*, learning_config: Path, pce_config: Path, selection: dict,
     raw.pop("behavioral_repository", None)
     raw.pop("prompts", None)
     raw["paths"] = {"dataset_snapshot": _path(snapshot), "safe_pce_config": _path(bundled_path),
-                    "initial_guideline": "configs/prompts/safe_pce_hybrid_seed_v1.json", "run_dir": _path(run_dir)}
+                    "initial_guideline": _path(initial_guideline_path), "run_dir": _path(run_dir)}
     raw["search"]["primary_metric"] = "resolved_rate"
     raw["hybrid"]["prompt_bundle"] = "configs/prompts/safe_pce_hybrid_ace_v1.yaml"
     raw["hybrid"]["shared_guide_enabled"] = False

@@ -63,10 +63,18 @@ was removed rather than tightened into another Agent formatting contract.
 
 Candidate JSON is passed through mini-SWE's existing `planning_rules` template
 variable, not interpolated into Jinja template source. Repository snippets
-containing `{{ ... }}` therefore remain data. The reviewed task prompt is
-`configs/prompts/safe_pce_rules_planner_v1.yaml`; preparation freezes it into
-the resolved PCE config. Historical prompt files and Coder/evaluator prompts
-are unchanged. New learning roles receive their own P/C/E task and evidence,
+containing `{{ ... }}` therefore remain data. Preparation freezes the selected
+Planner task prompt into the resolved PCE config. Optional `--planner-prompt`
+and `--initial-guideline` select versioned Planner/seed files and record their
+source hashes; omission preserves the historical v1 defaults. The Coder prompt
+continues to come from the existing PCE source configuration.
+`safe_pce_rules_planner_v2.yaml` and `safe_pce_native_codex_code_v2.yaml`
+describe environment discovery without a dataset-specific interpreter path;
+the Coder refers to a supplied rather than approved Plan. The v2 seed starts
+with one placeholder item and retains the historical empty-Plan guide, rather
+than supplying a substantive task-requirements rule.
+Version changes require fresh input packages; never edit frozen bundled prompts
+in place. New learning roles receive their own P/C/E task and evidence,
 without descriptions of separate acceptance-classification experiments.
 
 Other retained projections are mechanical and separately testable: local
@@ -111,10 +119,16 @@ The selected engineering validation dataset is Verified; the subsequent formal
 dataset is RPG, chosen for diagnostic intermediate references. RPG formal
 configuration requires separate source, history and evaluator acceptance.
 The RPG [three-way data contract](swe-rpg-learning-data.md) freezes 47 train,
-15 validation and 16 downstream-test tasks with repository-disjoint groups;
-its reviewed three-proposal config retains the completed RPG smoke's execution
+15 validation and 16 downstream-test tasks with repository-disjoint groups.
+An explicit test-contract eligibility exclusion reduces the two diagnostic
+ablation arms to 46 train, leaving validation and downstream test unchanged;
+their three-proposal configs retain the completed RPG smoke's execution
 and prompt contracts. The held-out test source is outside the GEPA package.
-This choice does not make reference answers Agent inputs or change the 1/0 score.
+This choice alone does not make reference answers Agent inputs or change the 1/0 score.
+An explicit RPG ablation may supply original training-only intermediate
+references to Ref/Cur after PCE execution; the Planner, Coder and validation/test
+inputs remain unchanged. See the data contract for the two isolated identities
+and exact evidence boundary. The default package continues to omit references.
 
 | Frozen source | Inventory | Compatibility boundary |
 |---|---|---|

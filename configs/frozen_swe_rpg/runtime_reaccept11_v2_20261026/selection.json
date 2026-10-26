@@ -1,0 +1,18 @@
+{
+  "schema_version": 1,
+  "purpose": "Reaccept the eleven permission-only runtime derivatives; not a scientific dataset selection",
+  "source_manifest_sha256": "e9f692354fcb5d7318a6da04c86524d17ef654fc0ff0145ee05d36a7cfd5faa0",
+  "selected_instance_ids": [
+    "matplotlib__matplotlib-28831",
+    "matplotlib__matplotlib-30019",
+    "matplotlib__matplotlib-30636",
+    "matplotlib__matplotlib-30696",
+    "matplotlib__matplotlib-30756",
+    "matplotlib__matplotlib-30760",
+    "matplotlib__matplotlib-30867",
+    "pdm-project__pdm-2655",
+    "pdm-project__pdm-2795",
+    "pdm-project__pdm-3546",
+    "pdm-project__pdm-3655"
+  ]
+}

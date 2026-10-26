@@ -13,6 +13,43 @@ DATASET = "Xin-Zhou-smu/SWE-RPG-Bench"
 EVALUATOR_FILE = "evaluation/evaluate_docker.py"
 
 
+def runtime_image_ref(image, source_ref):
+    """Keep original OCI/task authority separate from an audited local derivative.
+
+    Only the cache lookup changes. Ordinary execution, history isolation and
+    official evaluation use the same shared implementations and non-root UID.
+    """
+    runtime = image.get("runtime_ref", source_ref)
+    derivative = image.get("permission_derivative")
+    if runtime == source_ref and derivative is None:
+        return source_ref
+    if (not isinstance(derivative, dict) or derivative.get("policy") != "permission_only_readability_v1"
+            or derivative.get("source_ref") != source_ref
+            or runtime != f"vibe-local/rpg-readable:{image['instance_id'].lower()}-v1"
+            or not re.fullmatch(r"[0-9a-f]{64}", derivative.get("source_sif_sha256", ""))
+            or derivative.get("source_sif_sha256") == image.get("sif_sha256")
+            or not re.fullmatch(r"[0-9a-f]{64}", derivative.get("build_report_sha256", ""))):
+        raise ValueError("RPG derivative lacks its permission-only source/build identity")
+    audit = derivative.get("permission_audit", {})
+    if (audit.get("passed") is not True or audit.get("source_sif_sha256") != derivative["source_sif_sha256"]
+            or not all(re.fullmatch(r"[0-9a-f]{64}", audit.get(k, "")) for k in
+                       ("contents_sha256", "original_metadata_sha256", "derived_metadata_sha256"))
+            or not audit.get("changes")):
+        raise ValueError("RPG derivative permission audit is incomplete")
+    from src.environment.sif_permissions import validate_roots, allowed
+    roots = audit.get("allowlisted_paths", [])
+    validate_roots(roots)
+    for change in audit["changes"]:
+        before, after = int(change["before"], 8), int(change["after"], 8)
+        if (not allowed(change["path"], roots) or before == after or before & ~after
+                or (before ^ after) & ~0o555):
+            raise ValueError("RPG derivative changes more than allowlisted readability")
+    from src.environment.apptainer_env import _image_to_sif_name
+    if Path(image["sif_path"]).name != _image_to_sif_name(runtime):
+        raise ValueError("RPG derivative cache path differs from runtime identity")
+    return runtime
+
+
 def issue_text(row):
     """Copy issue title/body only; PR/discussion and reference artifacts stay private."""
     issues = row.get("issues")
@@ -84,7 +121,7 @@ def _cases(rows, manifest, images):
             version="", difficulty="", environment_setup_commit="", test_patch=row["test_patch"],
             fail_to_pass=tuple(row["FAIL_TO_PASS"]), pass_to_pass=tuple(row["PASS_TO_PASS"]),
             gold_patch=row["patch"], source_row=row,
-            image=FrozenImage(requested_ref=row["docker_image"], sif_path=image["sif_path"],
+            image=FrozenImage(requested_ref=runtime_image_ref(image, row["docker_image"]), sif_path=image["sif_path"],
                 sif_sha256=image["sif_sha256"], sif_bytes=int(image["sif_bytes"]),
                 provenance_strength=image["provenance_strength"], oci_digest=image["oci_digest"])))
     if len(cases) != manifest["python_instances"]:
@@ -133,7 +170,7 @@ def prepare_snapshot(*, source_root, source_manifest, image_manifest, destinatio
     return manifest
 
 
-def prepare_subset(*, snapshot, image_manifest, instance_ids, destination):
+def prepare_subset(*, snapshot, image_manifest, instance_ids, destination, runtime_image_manifest=None):
     """Freeze exact selected source lines; keep downstream rows out of GEPA.
 
     This is declared dataset selection, not Plan/patch/Agent-output repair.
@@ -143,6 +180,24 @@ def prepare_subset(*, snapshot, image_manifest, instance_ids, destination):
     if destination.resolve().is_relative_to(snapshot.resolve()):
         raise ValueError("subset destination must be outside the frozen source")
     cases, original, images = load_swe_rpg_pce_cases(snapshot, image_manifest)
+    if runtime_image_manifest is not None:
+        replacement = json.loads(Path(runtime_image_manifest).read_text())
+        if (replacement.get('dataset') != images['dataset'] or replacement.get('revision') != images['revision']
+                or set(replacement.get('records', {})) != set(images['records'])):
+            raise ValueError('runtime image authority changes the frozen dataset or image membership')
+        for ref, old in images['records'].items():
+            newer = replacement['records'][ref]
+            if newer == old:
+                continue
+            runtime_image_ref(newer, ref)
+            if newer.get('permission_derivative', {}).get('source_sif_sha256') != old['sif_sha256']:
+                raise ValueError('runtime image derivative has a different frozen parent SIF')
+            comparable = {k: v for k, v in newer.items() if k not in {'runtime_ref', 'permission_derivative'}}
+            for key in ('sif_path', 'sif_sha256', 'sif_bytes'):
+                comparable[key] = old[key]
+            if comparable != old:
+                raise ValueError('runtime image derivative changes original base/OCI authority')
+        images = replacement
     selected = set(instance_ids)
     if not selected or len(selected) != len(instance_ids) or not selected <= {c.instance_id for c in cases}:
         raise ValueError("subset IDs must be nonempty, unique, frozen Python cases")
@@ -154,6 +209,8 @@ def prepare_subset(*, snapshot, image_manifest, instance_ids, destination):
         "purpose": "frozen_task_subset", "source_image_manifest_sha256": file_sha256(image_manifest),
         "records": {ref: record for ref, record in images["records"].items()
                     if record["instance_id"] in selected}}
+    if runtime_image_manifest is not None:
+        subset_images['runtime_image_manifest_sha256'] = file_sha256(Path(runtime_image_manifest))
     image_bytes = (json.dumps(subset_images, sort_keys=True, indent=2) + "\n").encode()
     manifest = dict(original, instances_file="instances.jsonl", instances=len(selected), python_instances=len(selected),
         instances_sha256=hashlib.sha256(subset_rows).hexdigest(),

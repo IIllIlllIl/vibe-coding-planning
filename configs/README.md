@@ -21,6 +21,11 @@ and `prompts/safe_pce_rules_planner_v1.yaml` define the rules-plus-item-guide
 adaptation, without a shared guide or changes to frozen Checker configs.
 `paths.safe_pce_config` reuses a reviewed PCE execution config; explicit task
 splits and a new launch identity must be prepared before an approved run.
+Versioned v2 Planner/Coder prompts use the image's existing project environment
+without assuming a Verified interpreter layout. `prompts/safe_pce_hybrid_seed_v2.json`
+starts with one placeholder item and the historical empty-Plan guide. Preparation can
+select these with `--planner-prompt`, `--initial-guideline` and the existing PCE
+Coder-prompt source field. Historical defaults and frozen inputs are unchanged.
 The concrete development smoke is `gepa_safe_pce_verified_smoke_v1_20261022.yaml`,
 with `safe_pce_ace_verified_smoke_source_v1_20261022.yaml` and explicit frozen
 IDs under `frozen_safe_pce_ace/verified_smoke_v1_20261022/`. Its standard
@@ -34,6 +39,25 @@ Supervisor bind 47/15/16 task splits, mini 16 and three proposals. The separate
 test source is never included in the GEPA package. Prior RPG smoke Supervisor
 identities are archived under `archive/supervisor_launches/`; runtime configs
 remain reproduction authorities. No config authorizes preheat or training.
+The `diag3`/`nodiag3` RPG config pair isolates original intermediate references
+for training Ref/Cur only. Both retain the formal3 baseline; the separate
+`swe_rpg_runtime_gepa62_v1_20261025.yaml` owns the no-model history/calibration
+budget and cannot launch training. See the same RPG data contract.
+`frozen_swe_rpg/readable_sif_repair_v1_20261025/plan.json` freezes permission-only
+runtime derivatives of the 11 unreadable original images. Original manifests
+and splits are retained; both ablation arms require the same newly accepted
+runtime bindings before launch. See the [repair audit](../docs/knowledge/rpg-readable-sif-preparation-20261025.md).
+The `gepa_safe_pce_rpg_codex_{nodiag,diag}3_v3_20261026.yaml` pair and matching
+PCE source/Supervisors bind the explicit
+`frozen_safe_pce_ace/rpg_clean61_v1_20261026/` eligibility overlay: 46 train,
+15 validation, unchanged 16-task downstream holdout. Pylint 9728 is excluded
+from both arms because its test patch requires an unspecified private-helper
+rename. The diagnostic arm contains 92 training-only reference files. Earlier
+47-task drafts remain reproduction/provenance artifacts, not these inputs.
+The v4 pair preserves that eligibility overlay and execution budget while
+freezing the reviewed v2 Planner/Coder prompts and placeholder seed. NoDiag
+contains no intermediate-reference files; Diag adds only the 92 training
+references. Its preparation manifest binds the selected prompt and seed hashes.
 The opt-in Native Codex parallel regression configuration is
 `gepa_safe_pce_verified_codex_smoke_v5_20261024.yaml`, with matching
 `safe_pce_ace_verified_codex_smoke_source_v5_20261024.yaml` and

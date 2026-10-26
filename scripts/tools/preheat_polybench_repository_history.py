@@ -23,6 +23,7 @@ def main() -> int:
     parser.add_argument("--instance-id", action="append", default=[])
     parser.add_argument("--max-cases", type=int, default=0)
     parser.add_argument("--check-only", action="store_true")
+    parser.add_argument("--output-dir", type=Path, help="Separate diagnostic output/workspace root; cache identity is unchanged")
     args = parser.parse_args()
     mode = yaml.safe_load(args.config.read_text())["mode"]
     if mode == "polybench_pce":
@@ -59,7 +60,8 @@ def main() -> int:
     capacity = configure_docker_capacity(
         config.docker, max_concurrent=1, enable_docker_maintenance=False
     )
-    workspace_root = config.run_dir / "history_preheat_workspaces"
+    output_dir = args.output_dir or config.run_dir
+    workspace_root = output_dir / "history_preheat_workspaces"
     if not args.check_only:
         workspace_root.mkdir(parents=True, exist_ok=True)
     records: list[dict[str, str]] = []
@@ -124,7 +126,7 @@ def main() -> int:
         "records": records,
     }
     if not args.check_only:
-        atomic_json(config.run_dir / "history_preheat_summary.json", summary)
+        atomic_json(output_dir / "history_preheat_summary.json", summary)
     print(json.dumps(summary, sort_keys=True), flush=True)
     return 0
 

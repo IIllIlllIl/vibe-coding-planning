@@ -1,0 +1,666 @@
+{
+  "records": {
+    "falconry__falcon-2540": [
+      {
+        "kind": "req_clarification",
+        "path": "learning_diagnostics/req_clarification/falconry__falcon-2540.yaml",
+        "sha256": "77f3f7be56bb6872764620023cf59e80500e9cd15698a9ca7c40af172bf41d07",
+        "source_path": "data/mid-groundtruths/req_clarification/Python/falconry__falcon-2540_req_clarification_en.yaml"
+      },
+      {
+        "kind": "planning",
+        "path": "learning_diagnostics/planning/falconry__falcon-2540.yaml",
+        "sha256": "e9d1431da7506db82807dda0b11967c396ce10f76d2a81ee911f3412f3e7213c",
+        "source_path": "data/mid-groundtruths/planning/Python/falconry__falcon-2540_imple_logic_en.yaml"
+      }
+    ],
+    "joke2k__faker-2279": [
+      {
+        "kind": "req_clarification",
+        "path": "learning_diagnostics/req_clarification/joke2k__faker-2279.yaml",
+        "sha256": "3f109e35be7439ac03b535fa8bcd2745a81bcf6af4faace8b133086b804f8984",
+        "source_path": "data/mid-groundtruths/req_clarification/Python/joke2k__faker-2279_req_clarification_en.yaml"
+      },
+      {
+        "kind": "planning",
+        "path": "learning_diagnostics/planning/joke2k__faker-2279.yaml",
+        "sha256": "d8bd592141b55458f4ef8a90b34bb3206aca6cc4894c9357a034556c473ef293",
+        "source_path": "data/mid-groundtruths/planning/Python/joke2k__faker-2279_imple_logic_en.yaml"
+      }
+    ],
+    "joke2k__faker-2309": [
+      {
+        "kind": "req_clarification",
+        "path": "learning_diagnostics/req_clarification/joke2k__faker-2309.yaml",
+        "sha256": "9bb59010355fb451f37c8b4136165e3c068ecc892d33ed8ed02621a877fb0929",
+        "source_path": "data/mid-groundtruths/req_clarification/Python/joke2k__faker-2309_req_clarification_en.yaml"
+      },
+      {
+        "kind": "planning",
+        "path": "learning_diagnostics/planning/joke2k__faker-2309.yaml",
+        "sha256": "8d4ecd69358219ee95d9150f2d4d11ffcd7f30ed2ce340cd406e91182065ebbb",
+        "source_path": "data/mid-groundtruths/planning/Python/joke2k__faker-2309_imple_logic_en.yaml"
+      }
+    ],
+    "keras-team__keras-20410": [
+      {
+        "kind": "req_clarification",
+        "path": "learning_diagnostics/req_clarification/keras-team__keras-20410.yaml",
+        "sha256": "9ad8903733beca002730da8043ba81bbb6d63c438c24e663ff8ac51686bf0dc6",
+        "source_path": "data/mid-groundtruths/req_clarification/Python/keras-team__keras-20410_req_clarification_en.yaml"
+      },
+      {
+        "kind": "planning",
+        "path": "learning_diagnostics/planning/keras-team__keras-20410.yaml",
+        "sha256": "626b0eeb667bcb25d2d9b200876f5d8203bc496d51e70fce1a6aa26243b82454",
+        "source_path": "data/mid-groundtruths/planning/Python/keras-team__keras-20410_imple_logic_en.yaml"
+      }
+    ],
+    "matplotlib__matplotlib-28831": [
+      {
+        "kind": "req_clarification",
+        "path": "learning_diagnostics/req_clarification/matplotlib__matplotlib-28831.yaml",
+        "sha256": "258df20c2120ac79900c2f7eb136013c19befbed205ea299cba93fc2185be69f",
+        "source_path": "data/mid-groundtruths/req_clarification/Python/matplotlib__matplotlib-28831_req_clarification_en.yaml"
+      },
+      {
+        "kind": "planning",
+        "path": "learning_diagnostics/planning/matplotlib__matplotlib-28831.yaml",
+        "sha256": "5667e26a278c9f6fc81ce27ea72fd2cd7fc97840655d215e6cb1291967f593f7",
+        "source_path": "data/mid-groundtruths/planning/Python/matplotlib__matplotlib-28831_imple_logic_en.yaml"
+      }
+    ],
+    "matplotlib__matplotlib-30019": [
+      {
+        "kind": "req_clarification",
+        "path": "learning_diagnostics/req_clarification/matplotlib__matplotlib-30019.yaml",
+        "sha256": "1791b38f00e839278270964478c2b70469add92750f36adccb9d7f48572a8224",
+        "source_path": "data/mid-groundtruths/req_clarification/Python/matplotlib__matplotlib-30019_req_clarification_en.yaml"
+      },
+      {
+        "kind": "planning",
+        "path": "learning_diagnostics/planning/matplotlib__matplotlib-30019.yaml",
+        "sha256": "18de4537d1eb8e24cb6136899234a618cc18aef933211df9d0331df9f7960532",
+        "source_path": "data/mid-groundtruths/planning/Python/matplotlib__matplotlib-30019_imple_logic_en.yaml"
+      }
+    ],
+    "matplotlib__matplotlib-30636": [
+      {
+        "kind": "req_clarification",
+        "path": "learning_diagnostics/req_clarification/matplotlib__matplotlib-30636.yaml",
+        "sha256": "f68f6ff4594272402cf3999e4e18ed399197a6e2d46ad25eb7b9bb2eace8b78d",
+        "source_path": "data/mid-groundtruths/req_clarification/Python/matplotlib__matplotlib-30636_req_clarification_en.yaml"
+      },
+      {
+        "kind": "planning",
+        "path": "learning_diagnostics/planning/matplotlib__matplotlib-30636.yaml",
+        "sha256": "1db41cf42b99c9dc987f0060af7d85f863ec25be55d12d74b7d1647cd8255b76",
+        "source_path": "data/mid-groundtruths/planning/Python/matplotlib__matplotlib-30636_imple_logic_en.yaml"
+      }
+    ],
+    "matplotlib__matplotlib-30696": [
+      {
+        "kind": "req_clarification",
+        "path": "learning_diagnostics/req_clarification/matplotlib__matplotlib-30696.yaml",
+        "sha256": "bddb096bca2f295ed92fbe41e8d9a179b797038d04b9c265357d01fb43d9b80c",
+        "source_path": "data/mid-groundtruths/req_clarification/Python/matplotlib__matplotlib-30696_req_clarification_en.yaml"
+      },
+      {
+        "kind": "planning",
+        "path": "learning_diagnostics/planning/matplotlib__matplotlib-30696.yaml",
+        "sha256": "43c2654a4170313ea731a3aeefb5c13d5c340ecd6d3f5c4854beb899893eb0d0",
+        "source_path": "data/mid-groundtruths/planning/Python/matplotlib__matplotlib-30696_imple_logic_en.yaml"
+      }
+    ],
+    "matplotlib__matplotlib-30756": [
+      {
+        "kind": "req_clarification",
+        "path": "learning_diagnostics/req_clarification/matplotlib__matplotlib-30756.yaml",
+        "sha256": "395ae45194bb5c2127427e50404a3c833ed52a5062170a76a102207238c5857b",
+        "source_path": "data/mid-groundtruths/req_clarification/Python/matplotlib__matplotlib-30756_req_clarification_en.yaml"
+      },
+      {
+        "kind": "planning",
+        "path": "learning_diagnostics/planning/matplotlib__matplotlib-30756.yaml",
+        "sha256": "d4e6647d83e881f54562f66c6dc1870fc45d9eaae1e8871cbaf40248f6cf8f2d",
+        "source_path": "data/mid-groundtruths/planning/Python/matplotlib__matplotlib-30756_imple_logic_en.yaml"
+      }
+    ],
+    "matplotlib__matplotlib-30760": [
+      {
+        "kind": "req_clarification",
+        "path": "learning_diagnostics/req_clarification/matplotlib__matplotlib-30760.yaml",
+        "sha256": "0736a41c1654d2e68b17c9e449e19c44e6331868d2e7a5abb57e906edc48e3ed",
+        "source_path": "data/mid-groundtruths/req_clarification/Python/matplotlib__matplotlib-30760_req_clarification_en.yaml"
+      },
+      {
+        "kind": "planning",
+        "path": "learning_diagnostics/planning/matplotlib__matplotlib-30760.yaml",
+        "sha256": "ac6ccd456bc4aa253e90344f55fa846c9d253e2311457f75c5c10a4655af7081",
+        "source_path": "data/mid-groundtruths/planning/Python/matplotlib__matplotlib-30760_imple_logic_en.yaml"
+      }
+    ],
+    "matplotlib__matplotlib-30867": [
+      {
+        "kind": "req_clarification",
+        "path": "learning_diagnostics/req_clarification/matplotlib__matplotlib-30867.yaml",
+        "sha256": "4129eaddcdc278e22e8e7ec3e26fff8c9eb273ee84c05f41126764d278a978e1",
+        "source_path": "data/mid-groundtruths/req_clarification/Python/matplotlib__matplotlib-30867_req_clarification_en.yaml"
+      },
+      {
+        "kind": "planning",
+        "path": "learning_diagnostics/planning/matplotlib__matplotlib-30867.yaml",
+        "sha256": "1654dbceae8131429f6dd9abf390c7b10d13648c7df84475373ecd44685e1ff0",
+        "source_path": "data/mid-groundtruths/planning/Python/matplotlib__matplotlib-30867_imple_logic_en.yaml"
+      }
+    ],
+    "openai__openai-agents-python-112": [
+      {
+        "kind": "req_clarification",
+        "path": "learning_diagnostics/req_clarification/openai__openai-agents-python-112.yaml",
+        "sha256": "688e4ae53e589150bae7a6ba89bb7aa62bf3d7196e42252abf80dd18b96334ba",
+        "source_path": "data/mid-groundtruths/req_clarification/Python/openai__openai-agents-python-112_req_clarification_en.yaml"
+      },
+      {
+        "kind": "planning",
+        "path": "learning_diagnostics/planning/openai__openai-agents-python-112.yaml",
+        "sha256": "681d85f59f1d7b717b8c8039ae293de47324b5ddafa0077672fa23356a2f45b0",
+        "source_path": "data/mid-groundtruths/planning/Python/openai__openai-agents-python-112_imple_logic_en.yaml"
+      }
+    ],
+    "openai__openai-agents-python-1124": [
+      {
+        "kind": "req_clarification",
+        "path": "learning_diagnostics/req_clarification/openai__openai-agents-python-1124.yaml",
+        "sha256": "873780105f6e215e2824b4d454ec4e692f12422ea1d953902635b6b8cf7176db",
+        "source_path": "data/mid-groundtruths/req_clarification/Python/openai__openai-agents-python-1124_req_clarification_en.yaml"
+      },
+      {
+        "kind": "planning",
+        "path": "learning_diagnostics/planning/openai__openai-agents-python-1124.yaml",
+        "sha256": "b290ad14dff2158b9cbdd9f9f673138668c0ab2679185190a7857fae405f3578",
+        "source_path": "data/mid-groundtruths/planning/Python/openai__openai-agents-python-1124_imple_logic_en.yaml"
+      }
+    ],
+    "openai__openai-agents-python-1192": [
+      {
+        "kind": "req_clarification",
+        "path": "learning_diagnostics/req_clarification/openai__openai-agents-python-1192.yaml",
+        "sha256": "7bc29d6826a8397d5a730bd18c3fc69892f5bcb4758428d1448ee9eddfa55e6b",
+        "source_path": "data/mid-groundtruths/req_clarification/Python/openai__openai-agents-python-1192_req_clarification_en.yaml"
+      },
+      {
+        "kind": "planning",
+        "path": "learning_diagnostics/planning/openai__openai-agents-python-1192.yaml",
+        "sha256": "ab5f14cf9cf4ea8fbaebf07303f0096fbb42538631679b90b4426d6fd440ffc6",
+        "source_path": "data/mid-groundtruths/planning/Python/openai__openai-agents-python-1192_imple_logic_en.yaml"
+      }
+    ],
+    "openai__openai-agents-python-1636": [
+      {
+        "kind": "req_clarification",
+        "path": "learning_diagnostics/req_clarification/openai__openai-agents-python-1636.yaml",
+        "sha256": "c993794a3f8f9451a3770cec5ba2aa42a54cc1cb0df4bf3b22083fa71686e9e3",
+        "source_path": "data/mid-groundtruths/req_clarification/Python/openai__openai-agents-python-1636_req_clarification_en.yaml"
+      },
+      {
+        "kind": "planning",
+        "path": "learning_diagnostics/planning/openai__openai-agents-python-1636.yaml",
+        "sha256": "0b798d85a02a15f6d57c5789376adbf6aeb1ba39f1ad71506c39545c5f06f9cb",
+        "source_path": "data/mid-groundtruths/planning/Python/openai__openai-agents-python-1636_imple_logic_en.yaml"
+      }
+    ],
+    "openai__openai-agents-python-1684": [
+      {
+        "kind": "req_clarification",
+        "path": "learning_diagnostics/req_clarification/openai__openai-agents-python-1684.yaml",
+        "sha256": "fa8ccbe160cfdab6d0758acdc21677e4bb1da4b3042a9244e1a56ff41f1d7b70",
+        "source_path": "data/mid-groundtruths/req_clarification/Python/openai__openai-agents-python-1684_req_clarification_en.yaml"
+      },
+      {
+        "kind": "planning",
+        "path": "learning_diagnostics/planning/openai__openai-agents-python-1684.yaml",
+        "sha256": "2f7a83ba82c17b92b870e4347551034d264fce016bfdfd4e88ae459cbe8d4027",
+        "source_path": "data/mid-groundtruths/planning/Python/openai__openai-agents-python-1684_imple_logic_en.yaml"
+      }
+    ],
+    "openai__openai-agents-python-1689": [
+      {
+        "kind": "req_clarification",
+        "path": "learning_diagnostics/req_clarification/openai__openai-agents-python-1689.yaml",
+        "sha256": "da1132978a1c8cd04ff138e9ca3f419a35d19a9f973e5f929676453ab314d9b8",
+        "source_path": "data/mid-groundtruths/req_clarification/Python/openai__openai-agents-python-1689_req_clarification_en.yaml"
+      },
+      {
+        "kind": "planning",
+        "path": "learning_diagnostics/planning/openai__openai-agents-python-1689.yaml",
+        "sha256": "3a7bc531bb77c18e244e1c265c0bff86479c3f24540b466194c1318296c9274e",
+        "source_path": "data/mid-groundtruths/planning/Python/openai__openai-agents-python-1689_imple_logic_en.yaml"
+      }
+    ],
+    "openai__openai-agents-python-1749": [
+      {
+        "kind": "req_clarification",
+        "path": "learning_diagnostics/req_clarification/openai__openai-agents-python-1749.yaml",
+        "sha256": "d7e759254462d76776dffe430e3dda94a91a1931512947cc75697604cc8a6b3e",
+        "source_path": "data/mid-groundtruths/req_clarification/Python/openai__openai-agents-python-1749_req_clarification_en.yaml"
+      },
+      {
+        "kind": "planning",
+        "path": "learning_diagnostics/planning/openai__openai-agents-python-1749.yaml",
+        "sha256": "9edfcebe0db6aa6cc3fd37ba7da30ed9df59caa14ceecb5bfb42aafc80be84a0",
+        "source_path": "data/mid-groundtruths/planning/Python/openai__openai-agents-python-1749_imple_logic_en.yaml"
+      }
+    ],
+    "openai__openai-agents-python-1861": [
+      {
+        "kind": "req_clarification",
+        "path": "learning_diagnostics/req_clarification/openai__openai-agents-python-1861.yaml",
+        "sha256": "848e1ee64f9c353643280913f3e78855dfd022f573a0624a75b265e0bec54cbb",
+        "source_path": "data/mid-groundtruths/req_clarification/Python/openai__openai-agents-python-1861_req_clarification_en.yaml"
+      },
+      {
+        "kind": "planning",
+        "path": "learning_diagnostics/planning/openai__openai-agents-python-1861.yaml",
+        "sha256": "1ffb25d376234750f360be8f48a10f6e1ea5f84fada92b1e00e22f209f638254",
+        "source_path": "data/mid-groundtruths/planning/Python/openai__openai-agents-python-1861_imple_logic_en.yaml"
+      }
+    ],
+    "openai__openai-agents-python-1884": [
+      {
+        "kind": "req_clarification",
+        "path": "learning_diagnostics/req_clarification/openai__openai-agents-python-1884.yaml",
+        "sha256": "679d07d9d9d993b779717d3aa99f4e5a58751e3247428034ff291c5aa66f4c9c",
+        "source_path": "data/mid-groundtruths/req_clarification/Python/openai__openai-agents-python-1884_req_clarification_en.yaml"
+      },
+      {
+        "kind": "planning",
+        "path": "learning_diagnostics/planning/openai__openai-agents-python-1884.yaml",
+        "sha256": "751c905ace2f8ea7c4a58a695ebd24ac66658fd4cffbfcc69b26f18142633cc3",
+        "source_path": "data/mid-groundtruths/planning/Python/openai__openai-agents-python-1884_imple_logic_en.yaml"
+      }
+    ],
+    "openai__openai-agents-python-2105": [
+      {
+        "kind": "req_clarification",
+        "path": "learning_diagnostics/req_clarification/openai__openai-agents-python-2105.yaml",
+        "sha256": "2fc42d1c270e0f4e9058ccc3fdf777405a75bb2092617e1d588e57628de32b9c",
+        "source_path": "data/mid-groundtruths/req_clarification/Python/openai__openai-agents-python-2105_req_clarification_en.yaml"
+      },
+      {
+        "kind": "planning",
+        "path": "learning_diagnostics/planning/openai__openai-agents-python-2105.yaml",
+        "sha256": "5455596fe62dc10c947894225b401affe204b93d3f005a80f550f3b3310d1d9d",
+        "source_path": "data/mid-groundtruths/planning/Python/openai__openai-agents-python-2105_imple_logic_en.yaml"
+      }
+    ],
+    "openai__openai-agents-python-2112": [
+      {
+        "kind": "req_clarification",
+        "path": "learning_diagnostics/req_clarification/openai__openai-agents-python-2112.yaml",
+        "sha256": "5041ec5bbf6e677925db00d90a9fa71722717619d8dd5d58db6ca8ee701c0c0f",
+        "source_path": "data/mid-groundtruths/req_clarification/Python/openai__openai-agents-python-2112_req_clarification_en.yaml"
+      },
+      {
+        "kind": "planning",
+        "path": "learning_diagnostics/planning/openai__openai-agents-python-2112.yaml",
+        "sha256": "6a01b7809c4a755d62d152fe132575d303ab83f8d33443c5367e0f83b7da7146",
+        "source_path": "data/mid-groundtruths/planning/Python/openai__openai-agents-python-2112_imple_logic_en.yaml"
+      }
+    ],
+    "openai__openai-agents-python-2290": [
+      {
+        "kind": "req_clarification",
+        "path": "learning_diagnostics/req_clarification/openai__openai-agents-python-2290.yaml",
+        "sha256": "d396debeb4eeda983003c0ab138f1cbc192335d4861898ab4bd03eaa9e92985d",
+        "source_path": "data/mid-groundtruths/req_clarification/Python/openai__openai-agents-python-2290_req_clarification_en.yaml"
+      },
+      {
+        "kind": "planning",
+        "path": "learning_diagnostics/planning/openai__openai-agents-python-2290.yaml",
+        "sha256": "abb7cc94d953f4815e9d029322ae6dc2990752bbf7bc776f23e9240c92af7441",
+        "source_path": "data/mid-groundtruths/planning/Python/openai__openai-agents-python-2290_imple_logic_en.yaml"
+      }
+    ],
+    "openai__openai-agents-python-454": [
+      {
+        "kind": "req_clarification",
+        "path": "learning_diagnostics/req_clarification/openai__openai-agents-python-454.yaml",
+        "sha256": "32d0d6b4fbc0c274d0bc838e3c141ac97168414eaf5dac0e34e58a6e3cf83b72",
+        "source_path": "data/mid-groundtruths/req_clarification/Python/openai__openai-agents-python-454_req_clarification_en.yaml"
+      },
+      {
+        "kind": "planning",
+        "path": "learning_diagnostics/planning/openai__openai-agents-python-454.yaml",
+        "sha256": "2249d9030139ac38bba152c6f4e6022c978e3da9dd8fa619b8196cda78fd5fbf",
+        "source_path": "data/mid-groundtruths/planning/Python/openai__openai-agents-python-454_imple_logic_en.yaml"
+      }
+    ],
+    "openai__openai-agents-python-540": [
+      {
+        "kind": "req_clarification",
+        "path": "learning_diagnostics/req_clarification/openai__openai-agents-python-540.yaml",
+        "sha256": "a20b8749811465ee4b6e91a81444038c0488d84748f8ce2fd563abd620033ba6",
+        "source_path": "data/mid-groundtruths/req_clarification/Python/openai__openai-agents-python-540_req_clarification_en.yaml"
+      },
+      {
+        "kind": "planning",
+        "path": "learning_diagnostics/planning/openai__openai-agents-python-540.yaml",
+        "sha256": "22299ff452de9ef41fae3016528801e5774049938abeb8e53c15cfe923e8c50d",
+        "source_path": "data/mid-groundtruths/planning/Python/openai__openai-agents-python-540_imple_logic_en.yaml"
+      }
+    ],
+    "pylint-dev__pylint-10135": [
+      {
+        "kind": "req_clarification",
+        "path": "learning_diagnostics/req_clarification/pylint-dev__pylint-10135.yaml",
+        "sha256": "d67cdc497673238020d6d8b8cd6b8fa323900857b25433222774c23cda13c893",
+        "source_path": "data/mid-groundtruths/req_clarification/Python/pylint-dev__pylint-10135_req_clarification_en.yaml"
+      },
+      {
+        "kind": "planning",
+        "path": "learning_diagnostics/planning/pylint-dev__pylint-10135.yaml",
+        "sha256": "40cc11c162b89e9be77cd43eb5bbfec67f0a2c9914f2e310e601b2bae991d06e",
+        "source_path": "data/mid-groundtruths/planning/Python/pylint-dev__pylint-10135_imple_logic_en.yaml"
+      }
+    ],
+    "pylint-dev__pylint-10393": [
+      {
+        "kind": "req_clarification",
+        "path": "learning_diagnostics/req_clarification/pylint-dev__pylint-10393.yaml",
+        "sha256": "a681161b866f349bb161abc4dce09f43ac7576d555fe436820c4bdf6cfc759f1",
+        "source_path": "data/mid-groundtruths/req_clarification/Python/pylint-dev__pylint-10393_req_clarification_en.yaml"
+      },
+      {
+        "kind": "planning",
+        "path": "learning_diagnostics/planning/pylint-dev__pylint-10393.yaml",
+        "sha256": "5f585afa5f4ffccaeb8ec1054b70b24cbe67ae8628d66461ed0a551d18c679fc",
+        "source_path": "data/mid-groundtruths/planning/Python/pylint-dev__pylint-10393_imple_logic_en.yaml"
+      }
+    ],
+    "pylint-dev__pylint-10424": [
+      {
+        "kind": "req_clarification",
+        "path": "learning_diagnostics/req_clarification/pylint-dev__pylint-10424.yaml",
+        "sha256": "2440486658c957c9bce2e4aa11e92a9b8681d0039c9be7c798452c7910ad3d93",
+        "source_path": "data/mid-groundtruths/req_clarification/Python/pylint-dev__pylint-10424_req_clarification_en.yaml"
+      },
+      {
+        "kind": "planning",
+        "path": "learning_diagnostics/planning/pylint-dev__pylint-10424.yaml",
+        "sha256": "6d3ae5a690783ed647874f71da1ba676b6a5f959ef55bd9c23bc69b3403c51e7",
+        "source_path": "data/mid-groundtruths/planning/Python/pylint-dev__pylint-10424_imple_logic_en.yaml"
+      }
+    ],
+    "pylint-dev__pylint-10436": [
+      {
+        "kind": "req_clarification",
+        "path": "learning_diagnostics/req_clarification/pylint-dev__pylint-10436.yaml",
+        "sha256": "8061c9b0c88b614dc7a7b14952cc6404221daaad3b23f96e029a857dea11e389",
+        "source_path": "data/mid-groundtruths/req_clarification/Python/pylint-dev__pylint-10436_req_clarification_en.yaml"
+      },
+      {
+        "kind": "planning",
+        "path": "learning_diagnostics/planning/pylint-dev__pylint-10436.yaml",
+        "sha256": "cef40096530152032d78f4ca095d4c29a7ca8e25abe9d755841c254e9b19058b",
+        "source_path": "data/mid-groundtruths/planning/Python/pylint-dev__pylint-10436_imple_logic_en.yaml"
+      }
+    ],
+    "pylint-dev__pylint-10437": [
+      {
+        "kind": "req_clarification",
+        "path": "learning_diagnostics/req_clarification/pylint-dev__pylint-10437.yaml",
+        "sha256": "780e763b425ef63c4b2a4868da25b06b93c6030c99857499a7e0c44f9dfeb7b3",
+        "source_path": "data/mid-groundtruths/req_clarification/Python/pylint-dev__pylint-10437_req_clarification_en.yaml"
+      },
+      {
+        "kind": "planning",
+        "path": "learning_diagnostics/planning/pylint-dev__pylint-10437.yaml",
+        "sha256": "741521272561ad235e7545a96d0bf029f18bb5bea60c0adb22f880845ac136a7",
+        "source_path": "data/mid-groundtruths/planning/Python/pylint-dev__pylint-10437_imple_logic_en.yaml"
+      }
+    ],
+    "pylint-dev__pylint-10569": [
+      {
+        "kind": "req_clarification",
+        "path": "learning_diagnostics/req_clarification/pylint-dev__pylint-10569.yaml",
+        "sha256": "8cfdc649e76d0c4067b40db63e0f63136a977effae2e830d07694292bbf32066",
+        "source_path": "data/mid-groundtruths/req_clarification/Python/pylint-dev__pylint-10569_req_clarification_en.yaml"
+      },
+      {
+        "kind": "planning",
+        "path": "learning_diagnostics/planning/pylint-dev__pylint-10569.yaml",
+        "sha256": "2f341ac5896ebed067babb5cc0d240614bcdca56458522147104469bc9003ec5",
+        "source_path": "data/mid-groundtruths/planning/Python/pylint-dev__pylint-10569_imple_logic_en.yaml"
+      }
+    ],
+    "pylint-dev__pylint-10572": [
+      {
+        "kind": "req_clarification",
+        "path": "learning_diagnostics/req_clarification/pylint-dev__pylint-10572.yaml",
+        "sha256": "6da270253f10626bc5b7cec41f8acc1220456ee1b219be8cd33cb2d8fb51c198",
+        "source_path": "data/mid-groundtruths/req_clarification/Python/pylint-dev__pylint-10572_req_clarification_en.yaml"
+      },
+      {
+        "kind": "planning",
+        "path": "learning_diagnostics/planning/pylint-dev__pylint-10572.yaml",
+        "sha256": "46d99bfdac3a181954308bfd4c8d53ed69ab84aaaf1d99b12987d8527dbf68aa",
+        "source_path": "data/mid-groundtruths/planning/Python/pylint-dev__pylint-10572_imple_logic_en.yaml"
+      }
+    ],
+    "pylint-dev__pylint-10628": [
+      {
+        "kind": "req_clarification",
+        "path": "learning_diagnostics/req_clarification/pylint-dev__pylint-10628.yaml",
+        "sha256": "f69584d6da9dd8399c2bb710539c75edfa9fcda51ec45860ca5bc6a8e2b583c5",
+        "source_path": "data/mid-groundtruths/req_clarification/Python/pylint-dev__pylint-10628_req_clarification_en.yaml"
+      },
+      {
+        "kind": "planning",
+        "path": "learning_diagnostics/planning/pylint-dev__pylint-10628.yaml",
+        "sha256": "1c54888e53e6e470b15a8823a91f65c4f07020dc15d3d6bef34c526ed614fb37",
+        "source_path": "data/mid-groundtruths/planning/Python/pylint-dev__pylint-10628_imple_logic_en.yaml"
+      }
+    ],
+    "pylint-dev__pylint-10643": [
+      {
+        "kind": "req_clarification",
+        "path": "learning_diagnostics/req_clarification/pylint-dev__pylint-10643.yaml",
+        "sha256": "d3fe898f942d606c227eef9087cf2ffbcba786b2bd198fcfb904c5cebd38a281",
+        "source_path": "data/mid-groundtruths/req_clarification/Python/pylint-dev__pylint-10643_req_clarification_en.yaml"
+      },
+      {
+        "kind": "planning",
+        "path": "learning_diagnostics/planning/pylint-dev__pylint-10643.yaml",
+        "sha256": "99599296ad9699ee0adc5487608764520644fd94f83267fb5ac48fb8df648dac",
+        "source_path": "data/mid-groundtruths/planning/Python/pylint-dev__pylint-10643_imple_logic_en.yaml"
+      }
+    ],
+    "pylint-dev__pylint-10648": [
+      {
+        "kind": "req_clarification",
+        "path": "learning_diagnostics/req_clarification/pylint-dev__pylint-10648.yaml",
+        "sha256": "457ae43afd92d5e81a3d1542c425dd7a2a67208a88a27fa5c5394a0db5a12742",
+        "source_path": "data/mid-groundtruths/req_clarification/Python/pylint-dev__pylint-10648_req_clarification_en.yaml"
+      },
+      {
+        "kind": "planning",
+        "path": "learning_diagnostics/planning/pylint-dev__pylint-10648.yaml",
+        "sha256": "f4915442dc2f6157a6b3ccebfb31ebca4bb4c3873f2db03f80869b1ff5fe980c",
+        "source_path": "data/mid-groundtruths/planning/Python/pylint-dev__pylint-10648_imple_logic_en.yaml"
+      }
+    ],
+    "pylint-dev__pylint-10677": [
+      {
+        "kind": "req_clarification",
+        "path": "learning_diagnostics/req_clarification/pylint-dev__pylint-10677.yaml",
+        "sha256": "61d71aad0431d0fd5fa652f01741ce9ece1214e6deddbc25853e01b24508f963",
+        "source_path": "data/mid-groundtruths/req_clarification/Python/pylint-dev__pylint-10677_req_clarification_en.yaml"
+      },
+      {
+        "kind": "planning",
+        "path": "learning_diagnostics/planning/pylint-dev__pylint-10677.yaml",
+        "sha256": "8d5d8caf8a6673d171584792491528877bc257cf0bfb6aaf48af1b108cb8506b",
+        "source_path": "data/mid-groundtruths/planning/Python/pylint-dev__pylint-10677_imple_logic_en.yaml"
+      }
+    ],
+    "pylint-dev__pylint-10712": [
+      {
+        "kind": "req_clarification",
+        "path": "learning_diagnostics/req_clarification/pylint-dev__pylint-10712.yaml",
+        "sha256": "06901cf8d4e9396a6c86ea039011fd993e50e470528c25bd87c6ac0a797f22dd",
+        "source_path": "data/mid-groundtruths/req_clarification/Python/pylint-dev__pylint-10712_req_clarification_en.yaml"
+      },
+      {
+        "kind": "planning",
+        "path": "learning_diagnostics/planning/pylint-dev__pylint-10712.yaml",
+        "sha256": "f48b796457b4275a8e9522954c7f1feeb34b2539216763f1bcfa2181fb35782b",
+        "source_path": "data/mid-groundtruths/planning/Python/pylint-dev__pylint-10712_imple_logic_en.yaml"
+      }
+    ],
+    "pylint-dev__pylint-10724": [
+      {
+        "kind": "req_clarification",
+        "path": "learning_diagnostics/req_clarification/pylint-dev__pylint-10724.yaml",
+        "sha256": "f1f7cb4bb248b7dbbbdc5e41f8e13e9ef030862a29a13a3632a531a539d5c056",
+        "source_path": "data/mid-groundtruths/req_clarification/Python/pylint-dev__pylint-10724_req_clarification_en.yaml"
+      },
+      {
+        "kind": "planning",
+        "path": "learning_diagnostics/planning/pylint-dev__pylint-10724.yaml",
+        "sha256": "2c7af142e02adcdd9ec3c98c4469b190d42f02b06c16f390243eba24f90cdc29",
+        "source_path": "data/mid-groundtruths/planning/Python/pylint-dev__pylint-10724_imple_logic_en.yaml"
+      }
+    ],
+    "pylint-dev__pylint-10758": [
+      {
+        "kind": "req_clarification",
+        "path": "learning_diagnostics/req_clarification/pylint-dev__pylint-10758.yaml",
+        "sha256": "454f92c88c6b3c3af1b0663b850f08eb34080e1f8e93ca1fa4fbfacda5044118",
+        "source_path": "data/mid-groundtruths/req_clarification/Python/pylint-dev__pylint-10758_req_clarification_en.yaml"
+      },
+      {
+        "kind": "planning",
+        "path": "learning_diagnostics/planning/pylint-dev__pylint-10758.yaml",
+        "sha256": "11c86492276a3be8fc8b6ba6ea129318ab93f4e3a425911a548b36179b8081e5",
+        "source_path": "data/mid-groundtruths/planning/Python/pylint-dev__pylint-10758_imple_logic_en.yaml"
+      }
+    ],
+    "pylint-dev__pylint-10770": [
+      {
+        "kind": "req_clarification",
+        "path": "learning_diagnostics/req_clarification/pylint-dev__pylint-10770.yaml",
+        "sha256": "2e04b1f44fa22c4b5262dfb52b4a2c66889c374741141919c693a5e806527ca3",
+        "source_path": "data/mid-groundtruths/req_clarification/Python/pylint-dev__pylint-10770_req_clarification_en.yaml"
+      },
+      {
+        "kind": "planning",
+        "path": "learning_diagnostics/planning/pylint-dev__pylint-10770.yaml",
+        "sha256": "ec27cc3398628b0420bdc01c917a6da99009aba9345b886fc54fa2e8972b7d7c",
+        "source_path": "data/mid-groundtruths/planning/Python/pylint-dev__pylint-10770_imple_logic_en.yaml"
+      }
+    ],
+    "pylint-dev__pylint-10797": [
+      {
+        "kind": "req_clarification",
+        "path": "learning_diagnostics/req_clarification/pylint-dev__pylint-10797.yaml",
+        "sha256": "1f0fe5a50ff7271f167520e789d57e54b6d1fb469c0313669f8db67c574cad2f",
+        "source_path": "data/mid-groundtruths/req_clarification/Python/pylint-dev__pylint-10797_req_clarification_en.yaml"
+      },
+      {
+        "kind": "planning",
+        "path": "learning_diagnostics/planning/pylint-dev__pylint-10797.yaml",
+        "sha256": "5e1dd821b1358b86e1d113013d70327fea50f9fbdcc1762a9ead9af16f2c2e63",
+        "source_path": "data/mid-groundtruths/planning/Python/pylint-dev__pylint-10797_imple_logic_en.yaml"
+      }
+    ],
+    "pylint-dev__pylint-10802": [
+      {
+        "kind": "req_clarification",
+        "path": "learning_diagnostics/req_clarification/pylint-dev__pylint-10802.yaml",
+        "sha256": "9bf3052d1b46001b6679e9844f6b5e88498d92bf7c209a68f1c866e54748945c",
+        "source_path": "data/mid-groundtruths/req_clarification/Python/pylint-dev__pylint-10802_req_clarification_en.yaml"
+      },
+      {
+        "kind": "planning",
+        "path": "learning_diagnostics/planning/pylint-dev__pylint-10802.yaml",
+        "sha256": "b54911ebf6f62c6d7f8ce8d687b064e4a517f05c4ec3d441a8c13946bc028234",
+        "source_path": "data/mid-groundtruths/planning/Python/pylint-dev__pylint-10802_imple_logic_en.yaml"
+      }
+    ],
+    "pylint-dev__pylint-10814": [
+      {
+        "kind": "req_clarification",
+        "path": "learning_diagnostics/req_clarification/pylint-dev__pylint-10814.yaml",
+        "sha256": "91ad09fb9102db9caa17a6ce3e90ffc5800c68d1f33b68b52c5326a4fc68a3d5",
+        "source_path": "data/mid-groundtruths/req_clarification/Python/pylint-dev__pylint-10814_req_clarification_en.yaml"
+      },
+      {
+        "kind": "planning",
+        "path": "learning_diagnostics/planning/pylint-dev__pylint-10814.yaml",
+        "sha256": "678a8729572239ded325af37685bbf9cd10de5fa36a684eedde876d06c31476b",
+        "source_path": "data/mid-groundtruths/planning/Python/pylint-dev__pylint-10814_imple_logic_en.yaml"
+      }
+    ],
+    "pylint-dev__pylint-9308": [
+      {
+        "kind": "req_clarification",
+        "path": "learning_diagnostics/req_clarification/pylint-dev__pylint-9308.yaml",
+        "sha256": "2a2036763a5ce6213b164fedf4feec57cab299198bd60a633e2d1896c4acda24",
+        "source_path": "data/mid-groundtruths/req_clarification/Python/pylint-dev__pylint-9308_req_clarification_en.yaml"
+      },
+      {
+        "kind": "planning",
+        "path": "learning_diagnostics/planning/pylint-dev__pylint-9308.yaml",
+        "sha256": "104897a234a20fa1a48bc09718342c03fdd7d6f626d33985ce6445ec3667533e",
+        "source_path": "data/mid-groundtruths/planning/Python/pylint-dev__pylint-9308_imple_logic_en.yaml"
+      }
+    ],
+    "pylint-dev__pylint-9630": [
+      {
+        "kind": "req_clarification",
+        "path": "learning_diagnostics/req_clarification/pylint-dev__pylint-9630.yaml",
+        "sha256": "01d7f8eae7e4d3852710edf27950a95a71b2c45130347cfb3da389dba7e336d3",
+        "source_path": "data/mid-groundtruths/req_clarification/Python/pylint-dev__pylint-9630_req_clarification_en.yaml"
+      },
+      {
+        "kind": "planning",
+        "path": "learning_diagnostics/planning/pylint-dev__pylint-9630.yaml",
+        "sha256": "7503e8277844b1e2a462c9814ddf17fdc351c7091577c4f50ab9fc967783ae66",
+        "source_path": "data/mid-groundtruths/planning/Python/pylint-dev__pylint-9630_imple_logic_en.yaml"
+      }
+    ],
+    "pylint-dev__pylint-9712": [
+      {
+        "kind": "req_clarification",
+        "path": "learning_diagnostics/req_clarification/pylint-dev__pylint-9712.yaml",
+        "sha256": "7f4674a21f8f55498ddf5a7ee4ea3c18cdcd0462bccadfdb068fa2275e8947fa",
+        "source_path": "data/mid-groundtruths/req_clarification/Python/pylint-dev__pylint-9712_req_clarification_en.yaml"
+      },
+      {
+        "kind": "planning",
+        "path": "learning_diagnostics/planning/pylint-dev__pylint-9712.yaml",
+        "sha256": "6b8ae90b6568ee8fecf7653a2d29af8029551368c5f0b54b7cbbb3a21a0a11dd",
+        "source_path": "data/mid-groundtruths/planning/Python/pylint-dev__pylint-9712_imple_logic_en.yaml"
+      }
+    ],
+    "pylint-dev__pylint-9728": [
+      {
+        "kind": "req_clarification",
+        "path": "learning_diagnostics/req_clarification/pylint-dev__pylint-9728.yaml",
+        "sha256": "7a5d5fd29423a6484010d419bd0d3eff1c0b72ba27e9ac940371479a26b0c25a",
+        "source_path": "data/mid-groundtruths/req_clarification/Python/pylint-dev__pylint-9728_req_clarification_en.yaml"
+      },
+      {
+        "kind": "planning",
+        "path": "learning_diagnostics/planning/pylint-dev__pylint-9728.yaml",
+        "sha256": "2e02c6aef8a5370f81ba8f9c4a2c4ab0f27e30d7b0a01ca4d62d079d0bcac0d3",
+        "source_path": "data/mid-groundtruths/planning/Python/pylint-dev__pylint-9728_imple_logic_en.yaml"
+      }
+    ]
+  },
+  "schema_version": 1,
+  "source_manifest_sha256": "a65c1187f03e507451046bf09f9b722d2fecc9c63dca872929067217829236f8",
+  "source_revision": "688ed7918cbcabe6c9d9b9f393fad1053b286dd9",
+  "visibility": "training_reflector_and_curator_only"
+}

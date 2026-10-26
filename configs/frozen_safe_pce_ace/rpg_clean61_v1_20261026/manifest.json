@@ -1,0 +1,36 @@
+{
+  "schema_version": 1,
+  "purpose": "Common eligibility exclusion for the two RPG three-iteration diagnostic-availability arms",
+  "parent_split_manifest": "configs/frozen_safe_pce_ace/rpg_threeway_v1_20261025/manifest.json",
+  "parent_split_content_sha256": "d5f85c4dbecdb00177e8eff8d41108980c1f16cb85fb2b09d8c2ea065ecf58a2",
+  "split_selection_sha256": "7e8ecd1e01bbde2bdb58f7205822353ed76121abf31400be9cfc74b34afab713",
+  "runtime_source_snapshot": "output/SWE-RPG/threeway-readable-clean61-v1-20261026/gepa-source",
+  "runtime_source_manifest_sha256": "e9f692354fcb5d7318a6da04c86524d17ef654fc0ff0145ee05d36a7cfd5faa0",
+  "split_policy": "Preserve original repository assignments and order; exclude one training case only",
+  "counts": {
+    "train": 46,
+    "validation": 15,
+    "downstream_test": 16,
+    "excluded_train": 1
+  },
+  "excluded": [
+    {
+      "instance_id": "pylint-dev__pylint-9728",
+      "split": "train",
+      "reason": "The official test patch imports a Gold-specific renamed private helper not required by the decision-time issue; a functionality-correct alternative implementation may fail test collection.",
+      "old_helper": "_cfg_has_config",
+      "test_required_helper": "_cfg_or_ini_has_config",
+      "source_row_with_line_ending_sha256": "8178fe9768b718a967ccf13fe1b9fb8088f4310ed1e873aa1706ae26e813f8fa",
+      "decision_time_issue_sha256": "cf314af1afb46747c2a64c22914b746341b47f44f496023e49e01f189afa1d38",
+      "gold_patch_sha256": "e3c316cbb4d90dee3a01641b74fe6afb10419fbb450741969b0da26ef86378c2",
+      "test_patch_sha256": "ef25453072b2af27f4c7df989cedff23044a4195970e6d7ef7707df0bb367349",
+      "calibration_report": "/scratch/users/twang/vibe-coding-planning/run_state/operations/swe-rpg-gepa62-preparation-v1-20261025/hpc_tasks/preparation/8ccdc8f6762da809eaaee117f53011d408409f25488fd712d9a85b6be65424c4/attempts/task_0054/attempt_01/calibration/report.json",
+      "original_calibration_report_sha256": "443e06f3d46f4db798b219a5558de20e29aef3f9b44ed0f71aca83a8301e3697",
+      "policy": "Exclude from both arms before learning; retain original task, split, SIF, official scorer and raw evidence unchanged."
+    }
+  ],
+  "downstream_test_selection": "configs/frozen_safe_pce_ace/rpg_threeway_v1_20261025/downstream-test-selection.json",
+  "official_scoring_unchanged": true,
+  "host_incomplete_guard_unchanged": true,
+  "launch_authorized": false
+}

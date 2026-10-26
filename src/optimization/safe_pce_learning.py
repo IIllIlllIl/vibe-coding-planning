@@ -131,6 +131,10 @@ class SafePCEBackend:
             raise ValueError("Safe PCE tasks duplicate or overlap train/validation")
         if len(splits[0]) < self.config.search.reflection_minibatch_size:
             raise ValueError("Safe PCE minibatch exceeds distinct training tasks")
+        from .learning_diagnostics import load_learning_diagnostics
+        source_manifest = json.loads((self.pce.dataset_snapshot / "manifest.json").read_text())
+        self.learning_diagnostics = load_learning_diagnostics(root, manifest,
+            [case.instance_id for case in splits[0]], source_revision=source_manifest.get("revision"))
         if self.config.execution.backend == "hpc_slurm":
             from src.environment.repository_history import RepositoryHistoryCache
             cache = RepositoryHistoryCache(self.pce.container.sif_cache_dir.parent / "repository-history-cache-v1")
@@ -138,6 +142,9 @@ class SafePCEBackend:
                 if cache.validate(sif_sha256=case.image.sif_sha256, base_commit=case.base_commit) is None:
                     raise ValueError(f"missing prepared base-ancestor history: {case.instance_id}")
         return tuple(splits)
+
+    def learning_diagnostics_for(self, identifier):
+        return getattr(self, "learning_diagnostics", {}).get(identifier)
 
     def evaluate(self, cases, artifact, repetitions):
         identity = hashlib.sha256(json.dumps({"artifact": artifact, "repetitions": repetitions}, sort_keys=True).encode()).hexdigest()
@@ -296,4 +303,14 @@ class SafePCEGEPAAdapter:
             raise ValueError("Safe PCE reflection requires training trajectories for rules")
         if any(row.get("split") != "train" for row in eval_batch.trajectories):
             raise ValueError("Safe PCE reflection accepts training evidence only")
-        return {"rules": eval_batch.trajectories}
+        # Add retrospective references only after training execution. Raw PCE
+        # outputs/logs and the caller's original trajectories remain untouched.
+        import copy
+        from_backend = getattr(self.evaluator.__self__, "learning_diagnostics_for", None)
+        records = [dict(record) for record in eval_batch.trajectories]
+        if from_backend is not None:
+            for record in records:
+                diagnostics = from_backend(record["instance_id"])
+                if diagnostics is not None:
+                    record["retrospective_diagnostics"] = copy.deepcopy(diagnostics)
+        return {"rules": records}

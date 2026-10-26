@@ -13,6 +13,7 @@ opencode_logs/
 .tmp_hpc_smoke/
 .local/hpc-supervisor/
 .local/recovery-review/
+.local/operations/
 .ulhpc_submit/
 
 # Worktree-local agent instruction files. Project authority belongs in the

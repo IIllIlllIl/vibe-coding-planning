@@ -9,6 +9,16 @@
   groups with development exposure protection, reusing the shared historical
   partition and original RPG loaders/writers. It keeps downstream source rows
   and images outside GEPA; see [`../docs/swe-rpg-learning-data.md`](../docs/swe-rpg-learning-data.md).
+- `tools/prepare_swe_rpg_runtime.py` binds no-model history/Base-Gold checks to
+  the existing phase-array/SlurmTaskBatch modules; it adds no learning controller.
+  Login handles lightweight preparation; substantial packing/evaluation runs on
+  compute nodes. Failed checks remain explicit and never become learning scores.
+- `tools/repair_sif_permissions.py` uses the existing SIF builder's locked,
+  audited permission-only mode; `tools/verify_sif_permission_roundtrip.py`
+  checks the real tools on a small file tree before full-image preparation.
+  `tools/freeze_swe_rpg_runtime_images.py` binds successful reports through the
+  existing immutable subset writer, preserving original rows and selections.
+  See [the acceptance contract](../docs/knowledge/rpg-readable-sif-preparation-20261025.md).
 - `tools/audit_safe_pce_ace_dataflow.py` reads a terminal Verified or RPG run and
   compares persisted inputs, exact Plans, P/C/E evidence and complete learning
   inputs. It writes JSON to stdout and calls no model/container/scheduler;

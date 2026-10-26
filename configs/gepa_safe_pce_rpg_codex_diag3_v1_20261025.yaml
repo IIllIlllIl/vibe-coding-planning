@@ -1,0 +1,117 @@
+experiment_contract:
+  identity: gepa_safe_pce_rpg_codex_diag3_v1_20261025
+  launch_authorized: false
+  engineering_baseline_config: configs/gepa_safe_pce_rpg_codex_formal3_v1_20261025.yaml
+  safe_pce_source_config: configs/safe_pce_ace_rpg_codex_formal3_source_v1_20261025.yaml
+  objective: resolved_rate
+  planner_records_application: true
+  ablation_group: rpg_training_diagnostics_v1_20261025
+  arm: original_training_diagnostics
+  changed_scientific_axis: original_training_requirement_and_planning_references_available_to_learning
+  split_manifest: configs/frozen_safe_pce_ace/rpg_threeway_v1_20261025/manifest.json
+  diagnostic_manifest: configs/frozen_safe_pce_ace/rpg_diagnostics_train47_v1_20261025/manifest.json
+  diagnostics_visibility: training_reflector_required_curator_optional_originals
+  split_counts: {train: 47, validation: 15, test: 16}
+  comparison_config: configs/gepa_safe_pce_rpg_codex_nodiag3_v1_20261025.yaml
+  start_policy: fresh_seed_no_output_checkpoint_candidate_or_counter_import
+  pce_slots_without_cache_upper_bound: 156
+  prelaunch_requires:
+    - verified_selected_sifs_and_base_ancestor_history
+    - review_all_62_base_gold_calibrations_and_unresolved_operational_checks
+    - fresh_private_codex_login_with_no_conflicting_controller
+    - separate_explicit_formal_launch_authorization
+  preparation_config: configs/swe_rpg_runtime_gepa62_v1_20261025.yaml
+  planner_coder_validation_and_test_receive_diagnostics: false
+  outcome_selection_or_score_changes: false
+  interpretation: same_seed_and_split_do_not_remove_model_stochasticity_single_run_per_arm
+paths:
+  dataset_snapshot: output/SWE-RPG/safe-pce-ace-rpg-codex-diag3-v1-20261025-inputs
+  safe_pce_config: output/SWE-RPG/safe-pce-ace-rpg-codex-diag3-v1-20261025-inputs/pce_source/base_pce.yaml
+  initial_guideline: configs/prompts/safe_pce_hybrid_seed_v1.json
+  run_dir: output/SWE-RPG/safe-pce-ace-rpg-codex-diag3-v1-20261025
+task:
+  semantics: safe_pce_resolution_v1
+reflection:
+  model: deepseek-v4-flash
+  api_base: https://api.deepseek.com
+  api_key_env: DEEPSEEK_API_KEY
+  temperature: 0.0
+  max_steps: 100
+  cost_limit: 3.0
+  timeout: 1800
+hybrid:
+  enabled: true
+  max_items: 10
+  condition_tokens: 48
+  item_guide_tokens: 96
+  prompt_bundle: configs/prompts/safe_pce_hybrid_ace_v1.yaml
+  evidence_sif_cache_dir: /scratch/users/${USER}/vibe-coding-planning/shared/sif-cache
+  evidence_image: codex-inspection:python312-rg14-v1
+  evidence_sif_sha256: b383e57e939505cdd158205066e495f6e3ca7e9932000f1a1d3fe3e26a1f0277
+  dataset_file_sha256:
+    manifest.json: e56c64b5e828d9d6dc50f7d7a793536e40bce5f091dfb7e466b17e5612150aee
+    train.jsonl: 724dcce4e34ad964159657b0f7f5705dfbbde4174faa072007710299f5cc607d
+    validation.jsonl: 0d9febea4f4299a22e3339b2c7a8ef62e1ad74b619d555e7bc52c4038aca8fb9
+  reflector_model:
+    executor: codex_cli
+    codex_binary: ${HOME}/.local/lib/vibe-codex/0.160.1/bin/codex
+    codex_auth_file: ${HOME}/.codex/auth.json
+    codex_version: 0.160.1
+    model: gpt-6-sol
+    reasoning_effort: high
+  curator_model:
+    executor: codex_cli
+    codex_binary: ${HOME}/.local/lib/vibe-codex/0.160.1/bin/codex
+    codex_auth_file: ${HOME}/.codex/auth.json
+    codex_version: 0.160.1
+    model: gpt-6-sol
+    reasoning_effort: high
+  refiner_enabled: true
+  refiner_model:
+    executor: codex_cli
+    codex_binary: ${HOME}/.local/lib/vibe-codex/0.160.1/bin/codex
+    codex_auth_file: ${HOME}/.codex/auth.json
+    codex_version: 0.160.1
+    model: gpt-6-sol
+    reasoning_effort: high
+  shared_guide_enabled: false
+search:
+  max_iterations: 3
+  max_metric_calls: 156
+  projection_metric_calls: 156
+  reflection_minibatch_size: 16
+  train_case_repetitions: 1
+  primary_metric: resolved_rate
+  parallel: 1
+  seed: 42
+  skip_perfect_score: false
+  min_proposals: 3
+docker:
+  workdir: /testbed
+  timeout: 30
+  min_free_gb: 20
+  max_cached_images: 75
+container:
+  runtime: none
+execution:
+  backend: hpc_slurm
+hpc:
+  submit: true
+  remote_project_dir: /scratch/users/${USER}/vibe-coding-planning/staging/gepa_safe_pce_rpg_codex_diag3_v1_20261025
+  remote_task_dir: /scratch/users/${USER}/vibe-coding-planning/run_state/hpc_tasks/gepa_safe_pce_rpg_codex_diag3_v1_20261025
+  remote_env_file: ~/.config/vibe-coding-planning/deepseek.env
+  ulhpc_config: configs/ulhpc_submit.yaml
+  partition: batch
+  cpus_per_task: 1
+  mem: 4G
+  time: 00:30:00
+  poll_interval_seconds: 120
+  task_output_grace_seconds: 300
+  missing_task_grace_seconds: 600
+  max_task_attempts: 2
+  python_module: lang/Python/3.11
+  container_module: tools/Apptainer
+  python_bin: python3
+  job_name_prefix: gepa_safe_pce_rpg_codex_diag3_v1_20261025
+  worker_config_path: configs/gepa_safe_pce_rpg_codex_diag3_v1_20261025.yaml
+mode: safe_pce_hybrid_ace

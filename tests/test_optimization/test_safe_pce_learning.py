@@ -585,6 +585,19 @@ def test_existing_learning_worker_accepts_pce_evidence(tmp_path, monkeypatch, ro
         assert manifest["required_files"]
         for relative in manifest["files"]:
             assert (inputs / relative).is_file()
+        instructions = kwargs["instance_template"]
+        role_files = {
+            "reflector": ("counted_playbook.json", "record.json"),
+            "curator": ("counted_playbook.json", "reflection_index.json", "records.json", "limits.json"),
+            "refiner": ("draft.json", "limits.json"),
+        }
+        for relative in role_files[role]:
+            assert relative in instructions and (inputs / relative).is_file()
+        if role == "refiner":
+            assert "counted_playbook.json" not in instructions
+            assert "record.json" not in instructions and "records.json" not in instructions
+        else:
+            assert "draft.json" not in instructions
         if role == "reflector":
             index = json.loads((inputs / "record.json").read_text())
             runs = json.loads((inputs / index["fields"]["pce_runs"]).read_text())

@@ -102,6 +102,23 @@ prepared ancestor history, fresh evaluator calibration and compute-node
 end-to-end validation remain separate. Tests must invoke the real shared Worker
 and both the existing and new dataset paths, not merely a fake dataset callback.
 
+Image digest/base checks also do not prove non-root repository materialization.
+Exercise the real copy path: downloaded archives and generated build trees can
+be root-only even when source and Git HEAD are readable. Retain exact failed-read
+paths and do not ignore tar errors or silently omit files. A permission-repaired
+image requires an explicit derivative identity, unchanged content verification
+and renewed baseline/evaluator acceptance; never overwrite a frozen SIF.
+Reuse the permission-only mode of `scripts/tools/build_codex_isolation_sif.py`
+and its real-tool roundtrip verifier, rather than adding fakeroot or relaxed
+copy rules to Agent/evaluator execution. Its explicit runtime-image binding
+belongs to the dataset adapter; phase control and scoring stay unchanged.
+For small-file-intensive image preparation, the same builder can use an
+explicit node-local `--work-root`; do not assume `TMPDIR` overrides a builder's
+explicit paths. Keep audits durable, verify the local parent copy, and publish
+through a verified temporary file in the destination cache followed by an
+in-cache atomic rename. Preserve the shared writer lock and all acceptance
+checks. This is Host build storage, not an Agent isolation-policy change.
+
 ## Shared Agent backend entry
 
 Use `src.agents.runtime.run_agent` for backend dispatch. Workflow code supplies
@@ -241,6 +258,9 @@ allocated 3 CPUs. Do not increase memory as an implicit OOM workaround.
 Compute-node probes must initialize the module environment (login shell) and
 read their scripts from a shared path. Login-node `/tmp` is not shared with
 compute nodes; a successful upload there does not make a Slurm job runnable.
+Lightweight login coordinators reuse the shared lifecycle's explicit modern
+interpreter (`python3.11` on Iris). Do not assume that login `python3` or
+the `module` shell function matches the compute-node environment.
 
 ## Frozen repository history
 

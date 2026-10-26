@@ -6,10 +6,11 @@ The authority is `Xin-Zhou-smu/SWE-RPG-Bench` revision
 `688ed7918cbcabe6c9d9b9f393fad1053b286dd9`: 163 source tasks, 85 Java and
 78 Python. The current repository adapter supports the 78 Python tasks from
 14 repositories, not the Java portion. It is not an outcome-screened Plan-pair
-selection. All 78 Python tasks are retained in the three-way split.
+selection. All 78 Python tasks are retained in the original three-way split;
+the explicit eligibility overlay below excludes one training task from learning.
 
 [`rpg_threeway_v1_20261025/manifest.json`](../configs/frozen_safe_pce_ace/rpg_threeway_v1_20261025/manifest.json)
-owns membership, source/row/issue hashes, duplicate links and preparation
+owns original membership, source/row/issue hashes, duplicate links and preparation
 hashes. The target is 60/20/20, with seed 42:
 
 | Split | Tasks | Repositories | Role |
@@ -39,9 +40,29 @@ subset-sum fills the train target and selects test components. This reuses
 tests reproduce every historical SWE-chat assignment unchanged. SWE-chat's
 84/23/24 counts and approximate 64/18/18 ratio are not RPG parameters.
 
+### Explicit eligibility exclusion
+
+[`rpg_clean61_v1_20261026/manifest.json`](../configs/frozen_safe_pce_ace/rpg_clean61_v1_20261026/manifest.json)
+and its hashed `split-selection.json` exclude
+`pylint-dev__pylint-9728` from both diagnostic-ablation arms. The issue does not
+require the private-helper rename hard-coded by the official test patch; the
+[calibration audit](knowledge/rpg-readable-sif-preparation-20261025.md) records
+the failure and interpretation. The original split remains immutable. Effective
+counts are **46 train / 15 validation / 16 downstream test**, with all remaining
+assignments and order unchanged; no resampling or replacement occurs.
+
+The existing subset/preparation modules freeze only the 61 eligible GEPA rows
+into `output/SWE-RPG/threeway-readable-clean61-v1-20261026/gepa-source` and the
+two `safe-pce-ace-rpg-codex-{nodiag,diag}3-v3-20261026-inputs` packages.
+Source row/evaluator bytes and scoring remain unchanged. The diagnostic arm
+contains 92 original files for the 46 eligible training tasks; neither the
+excluded task nor its reference files occur in either learning package.
+The original 47/15/16 and 94-reference artifacts below are retained provenance,
+not this overlay's launch inputs.
+
 Repository holdouts measure cross-repository transfer as well as task transfer;
 they intentionally introduce a domain shift. Pylint and OpenAI Agents account
-for 36/47 training tasks. Do not describe this split as balanced by failure type
+for 36/47 original training tasks (35/46 after the exclusion). Do not describe this split as balanced by failure type
 or difficulty. Held-out means excluded from this RPG learner and development
 cases, not absent from model pretraining or all previous project research.
 With only 15 validation and 16 test tasks, resolution rates move in 6.67- and
@@ -62,7 +83,9 @@ partition, then `prepare_subset` writes two independent source authorities:
 Each selected JSONL line and official evaluator file is copied byte-for-byte.
 New subset manifests bind the original whole-source hashes, selected IDs and
 new subset/image hashes. They do not pretend to be the original 163-row file.
-Intermediate requirement/planning references are not packaged. PR/gold/test
+The default learning package excludes intermediate requirement/planning
+references; the explicit diagnostic ablation below adds training-only references
+outside `pce_source`. PR/gold/test
 fields retained for Host/evaluator loading are never Agent-visible inputs.
 The existing task projection and fresh P/C/E isolation remain unchanged.
 
@@ -144,11 +167,13 @@ up to 60 submissions, matching the earlier three-proposal operational bound.
 Every selected task needs a verified base-ancestor history bundle before launch.
 `configs/swe_rpg_history_gepa62_v1_20261025.yaml` binds only those 62 tasks to
 the existing preheater and a separate operations directory. It starts nothing
-by itself. Full image/base acceptance covers 78 tasks, but Base/Gold calibration
-and real Native startup/PCE acceptance cover only the documented three cases.
-Other cases may still expose environment, dependency or scoring noise. Review
-these limits and obtain separate approval before history packing, calibration
-or training. Freezing a split does not certify every evaluator or authorize jobs.
+by itself. Full original image/base acceptance covers 78 tasks. Expanded
+62-task preparation and its distinct permission/collection failures are recorded
+in [the readable-SIF audit](knowledge/rpg-readable-sif-preparation-20261025.md).
+Real Native startup/PCE acceptance still covers only the documented development
+cases. A source/base hash is not a readability or evaluator certificate. Review
+these limits and obtain separate approval before preparation or training;
+freezing a split does not certify every evaluator or authorize jobs.
 
 The downstream source reserves data for later PCE/PCCE configuration; it does
 not claim that a separate RPG PCCE integration or test launch has been accepted.
@@ -163,6 +188,61 @@ Rebuilding the split in fresh targets reproduced all four compact authority
 files and every source-subset hash exactly. Python compilation, diff whitespace
 checks and the shared HPC wrapper's local dry-run passed. These checks invoke
 no model or container and do not certify full-dataset runtime acceptance.
+
+## Training-diagnostic ablation
+
+Two fresh three-proposal identities compare original retrospective diagnostic
+availability, not Planner access to reference answers:
+
+| Arm | Learning config | Original intermediate references |
+|---|---|---|
+| No diagnostics | `gepa_safe_pce_rpg_codex_nodiag3_v3_20261026.yaml` | Absent from the learning snapshot and evidence |
+| Training diagnostics | `gepa_safe_pce_rpg_codex_diag3_v3_20261026.yaml` | Two original files per eligible training task: requirement clarification and planning |
+
+Both retain the same eligible split/order, seed, minimal initial artifact, prompts,
+models, limits, selection, metric budget and P/C/E policies from the formal3
+baseline. Each has a separate snapshot, run root, optimizer and counter history;
+neither imports the other's outputs. The upper bound is 156 PCE slots per arm,
+312 across both, before retries. Both matching Supervisor configs use the
+existing resume service. Their existence does not authorize formal launch.
+
+The original diagnostic authority is
+[`rpg_diagnostics_train47_v1_20261025/manifest.json`](../configs/frozen_safe_pce_ace/rpg_diagnostics_train47_v1_20261025/manifest.json):
+94 unmodified UTF-8 YAML files, 340943 bytes, verified against the acquired source
+manifest. Only the 47 training IDs occur. Validation/test references and gold
+patches are not added by this option. Files live under `learning_diagnostics/`,
+not the independently mounted PCE source. The learning snapshot manifest binds
+their paths, hashes and source revision. A missing, modified or split-mismatched
+reference blocks loading instead of falling back to the other arm.
+
+The existing preparation entry accepts `--diagnostic-source-root` and
+`--diagnostic-source-manifest` together. Omit both for the no-diagnostic arm.
+It copies original bytes using the existing immutable writer, without inference
+or summaries. Runtime adds them only in `make_reflective_dataset`, after a
+completed training execution. PCE input projections, original Plans, patches,
+trajectories, evaluation outputs and scoring are unchanged. The shared evidence
+layout makes the per-case `retrospective_diagnostics` field mandatory for Ref
+and losslessly available for Cur's targeted lookup; complete Ref diagnoses
+remain mandatory in Cur's required index. The same prompt is used by both arms.
+Refiner sees the proposed artifact, not raw reference files.
+
+`swe_rpg_runtime_gepa62_v1_20261025.yaml` uses the existing history and Base/Gold
+diagnostics through the shared phase-array and `SlurmTaskBatch` transport.
+The login coordinator performs only loading, hashing and submission. Each
+compute element uses 1 CPU/4G, a 60-minute ceiling and concurrency 3, with no
+credentials or model calls. Existing verified histories are reused. Base and
+Gold use fresh workspaces and unchanged official commands/scoring; reports,
+stage logs, failure details and scheduler accounting remain the authority.
+Checks continue independently across tasks. A completed preparation element can
+record a failed check; this is neither runtime acceptance nor a scored U.
+Failed checks gate training and must not silently change split membership.
+
+This is privileged training supervision, not extra information at inference.
+One run per arm cannot isolate model stochasticity. Shared seeded sampling fixes
+the initial draw/queue, but candidate branches and later RNG consumption may
+differ. Compare actual draw IDs and execution noise in the reports rather than
+claiming an exactly matched multi-iteration trajectory or a definitive causal
+effect from a single three-proposal comparison.
 
 ## RPG versus SWE-bench Verified
 
