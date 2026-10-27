@@ -159,9 +159,11 @@ The no-cache PCE evaluation-slot upper bound is
 three conditional Refiner calls, before existing retries. Caching and skipped
 validation can reduce actual calls. Each completed PCE contains Planner and
 Coder calls; 156 is not a total LLM-call budget. Iris remains 1 CPU / 4G per
-Controller/Worker, PCE array concurrency 3, 60-minute PCE and 30-minute learning
-Worker limits. Each Reflector wave submits all 16 indices and retains the
-inherited 12-running-element cap. The shared Supervisor uses eight-minute Controller slices and
+Controller/Worker, 60-minute PCE and 30-minute learning Worker limits.
+Historical v1 source configs explicitly capped PCE arrays at three; the
+inherited twelve-element learning cap was later found to contradict the
+configuration loader's no-throttle policy. Current NoDiag v5 below has neither
+cap and leaves ready arrays to Slurm. The shared Supervisor uses eight-minute Controller slices and
 up to 60 submissions, matching the earlier three-proposal operational bound.
 
 Every selected task needs a verified base-ancestor history bundle before launch.
@@ -177,6 +179,36 @@ freezing a split does not certify every evaluator or authorize jobs.
 
 The downstream source reserves data for later PCE/PCCE configuration; it does
 not claim that a separate RPG PCCE integration or test launch has been accepted.
+
+### Audited NoDiag v5 execution binding
+
+`gepa_safe_pce_rpg_codex_nodiag3_v5_20261027.yaml`, matching
+`safe_pce_ace_rpg_codex_nodiag3_source_v5_20261027.yaml` and Supervisor reuse
+completed smoke v3 (`ddb4203`) and the existing clean-61 eligibility overlay.
+The split is 46 train / 15 validation / 16 downstream test. Models, reviewed
+v2 P/C task prompts, placeholder seed, limits, sampler, official metric and the
+156-slot upper bound are unchanged from NoDiag v4. PCE and learning arrays
+have no project-level concurrency suffix. The run has a fresh snapshot,
+output root and history; it imports no smoke candidates or counters and adds
+no original intermediate references. The separate downstream payload remains
+outside learning inputs. This binding does not launch either diagnostic arm.
+
+The learning bundle `safe_pce_hybrid_ace_v2.yaml` changes only Reflector's
+evidence-reading paragraph from v1; Curator/Refiner tasks and Ref's learning
+objective/output contract are unchanged. Required per-run views retain exact
+Plans/patches, all model messages and command/file-change events, outcomes and
+non-passing tests. Long output bodies and duplicate records are referenced in
+the unchanged optional original archive. The layout is mechanical, not a Host
+summary. Both original smoke Ref payloads passed local no-model replay;
+new-layout model-backed reading is not yet verified. See the
+[Ref input acceptance](knowledge/rpg-native-python-startup-20261025.md#ref-requiredoptional-input-acceptance).
+
+The [v3 audit](knowledge/rpg-native-python-startup-20261025.md#completed-v3-transport-and-visibility-audit)
+distinguishes lossless persisted handoffs and complete Curator core reads from
+Ref's selective reading and a real oversized tool-output omission. Carry this
+reading-risk boundary into analysis rather than calling smoke completion proof
+of full evidence comprehension. Base/Gold acceptance for the eligible runtime
+is recorded in the [eight-case recovery audit](knowledge/rpg-readable-sif-preparation-20261025.md#recovered-eight-case-acceptance).
 
 ## Preparation verification
 

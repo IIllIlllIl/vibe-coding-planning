@@ -66,6 +66,13 @@ diagnostics and imports no prior outputs. This smoke verifies the full PCE/ACE
 graph after the shared temporary-directory repair, not formal learning quality.
 Its PCE and learning Agent arrays have no project-level concurrency throttle;
 all ready elements are submitted together for Slurm to schedule.
+The NoDiag three-proposal v5 binding (`20261027`) reuses that completed smoke,
+the clean 46/15/16 split, reviewed prompts/seed and mini-16 / 156-slot budget.
+Its matching PCE source and Supervisor have fresh paths and no project-level
+concurrency cap; no original training references or smoke outputs are imported.
+See the [RPG data contract](../docs/swe-rpg-learning-data.md#audited-nodiag-v5-execution-binding)
+and its linked transport/tool-view audit. Configuration existence is not launch
+authorization.
 The opt-in Native Codex parallel regression configuration is
 `gepa_safe_pce_verified_codex_smoke_v5_20261024.yaml`, with matching
 `safe_pce_ace_verified_codex_smoke_source_v5_20261024.yaml` and

@@ -16,6 +16,7 @@ from src.optimization.safe_pce_execution import pce_cases
 from src.optimization.safe_pce_execution import load_pce_config
 from src.optimization.behavioral_hybrid import checker_projection
 from src.optimization.safe_pce_learning import SafePCEBackend, outcome_score, _validate_learning_evidence
+from src.optimization.pce_reflector_evidence import verify_pce_reflector_views
 
 
 def _json(path):
@@ -146,6 +147,8 @@ def audit(config_path):
                 for index, record in zip(indexes, records, strict=True):
                     restored = {key: _json(_within(evidence, file)) for key, file in index["fields"].items()}
                     _equal(restored, record, "lossless staged record")
+                    if role == "reflector":
+                        verify_pce_reflector_views(evidence, record, index)
                 canonical = [payload["record"]] if role == "reflector" else payload["records"]
                 for record in canonical:
                     if record["instance_id"] not in train or record["split"] != "train":

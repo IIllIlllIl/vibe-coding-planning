@@ -39,7 +39,8 @@ def phase_identity(config, role, payload):
                                        "hpc/phase_wave.py", "hpc/worker_contract.py", "hpc/slurm.py", "hpc/task_batch.py",
                                        "../exceptions.py", "../environment/source_access.py",
                                        "ace_transaction.py", "agent_references.py",
-                                       "ace_evidence.py", "behavioral_hybrid_evidence.py", "audit.py")}
+                                       "ace_evidence.py", "behavioral_hybrid_evidence.py",
+                                       "pce_reflector_evidence.py", "audit.py")}
     identity["source"]["agent_protocol"] = hashlib.sha256(
         (root.parent / "agents" / "_deps.py").read_bytes()).hexdigest()
     for name in ("runtime.py", "output_contract.py", "codex_hooks.py", "plan_submission.py"):
@@ -127,7 +128,9 @@ def run_local_phase(config, role, payload, attempt_dir, *, retry_feedback=""):
     role_inputs = {
         "reflector": (
             "counted_playbook.json is the current artifact; record.json indexes "
-            "the supplied case fields by file path. "
+            "the supplied case fields by file path. When present, its pce_evidence "
+            "indexes required per-run Plans, patches, behavioral indices and outcomes; "
+            "evidence_ref links their supporting raw bodies in the optional archive. "
         ),
         "curator": (
             "counted_playbook.json is the current artifact with counters; "

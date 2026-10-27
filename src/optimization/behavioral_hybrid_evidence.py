@@ -6,6 +6,7 @@ from pathlib import Path
 from src.optimization.ace_evidence import write_curator_evidence
 from src.optimization.behavioral_hybrid_ace import _playbook
 from src.optimization.hpc.task_batch import atomic_json
+from src.optimization.pce_reflector_evidence import pce_reflector_views
 
 
 def _record_files(root, record, prefix):
@@ -50,11 +51,21 @@ def write_hybrid_evidence(root: Path, role, payload, *, canonical_parent=None):
     elif role == "reflector":
         atomic_json(root / "counted_playbook.json", payload["parent"])
         record = _record_files(root, payload["record"], "record")
-        atomic_json(root / "record.json", record)
-        # Full investigations remain mandatory for Reflector, not just a verdict.
         files = ["counted_playbook.json", "record.json", *record["fields"].values()]
+        optional = []
+        if payload["record"].get("task_semantics") == "safe_pce_resolution_v1":
+            archive = record["fields"]["pce_runs"]
+            views, record["pce_evidence"] = pce_reflector_views(payload["record"], archive)
+            for path, value in views.items():
+                atomic_json(root / path, value)
+            files.extend(views)
+            optional.append(archive)
+        atomic_json(root / "record.json", record)
+        # Full model/action indices, Plans, patches and outcomes are required;
+        # raw log bodies are referenced, never dropped or Host-summarized.
         manifest = {"schema_version": 1, "files": files,
-                    "required_files": files, "optional_files": []}
+                    "required_files": [path for path in files if path not in optional],
+                    "optional_files": optional}
     elif role == "refiner":
         files = []
         for key, value in payload.items():

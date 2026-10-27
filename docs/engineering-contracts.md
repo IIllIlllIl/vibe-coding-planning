@@ -47,6 +47,19 @@ state remains exclusively in `SlurmTaskBatch`. Do not subclass an unrelated
 learning proposer merely to borrow its script generator. Shared module changes
 must enter each caller's source fingerprint and run its existing regression tests.
 
+Safe PCE Reflector inputs use the same `manifest.json` required/optional contract,
+not a second transport or a monolithic mandatory `pce_runs` field. Require the
+current artifact, task, exact full Plans and submitted patches, scores/execution
+states, every recorded model message and command/file-change event in order,
+and all non-passing test entries. Index long tool bodies, full test reports,
+pass lists and duplicate native/audit records into the unchanged original
+archive with JSON pointers and value hashes. Unknown formats stay inline;
+never replace behavioral evidence with a Host diagnosis or outcome-only summary.
+Keep Curator's shared ACE core unchanged. Test both backends, repetitions,
+unknown formats, required-file classification and altered/missing views through
+the real Worker boundary. No-model replay proves fidelity, not complete model
+reading; examine selective reads and truncation recovery separately at runtime.
+
 Playbook and hybrid Workers share CLI parsing, archived retry feedback, output
 envelopes and failure classification in `hpc/worker_contract.py`. Role dispatch,
 input authority and scientific validation remain role-owned. Preserve raw Agent

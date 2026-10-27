@@ -602,7 +602,14 @@ def test_existing_learning_worker_accepts_pce_evidence(tmp_path, monkeypatch, ro
             index = json.loads((inputs / "record.json").read_text())
             runs = json.loads((inputs / index["fields"]["pce_runs"]).read_text())
             assert runs[0]["pce_output"]["plan"] == PLAN
-            assert index["fields"]["pce_runs"] in manifest["required_files"]
+            assert index["fields"]["pce_runs"] in manifest["optional_files"]
+            paths = index["pce_evidence"]["runs"][0]
+            assert json.loads((inputs / paths["plan"]).read_text()) == PLAN
+            assert {path for key, path in paths.items() if key != "run_number"} <= set(manifest["required_files"])
+            from src.optimization.pce_reflector_evidence import verify_pce_reflector_views
+            from src.optimization.agent_references import phase_references
+            projected = phase_references(role, payload)[0]
+            verify_pce_reflector_views(inputs, projected["record"], index)
         return output, [{"role": "assistant", "content": "Synthetic completion"}]
     monkeypatch.setattr(runtime, "run_evidence_reflector", agent)
     monkeypatch.setattr(runtime, "run_evidence_curator", agent)
