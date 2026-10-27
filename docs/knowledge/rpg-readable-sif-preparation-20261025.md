@@ -179,6 +179,28 @@ concurrency three. This is an upper bound for history verification plus both
 Base/Gold evaluations, not a change to the formal one-hour PCE Worker limit,
 test commands, scoring or scientific split. Passed cases are not resampled.
 
+### Recovered eight-case acceptance
+
+Recovery array `6241182` completed all eight history and Base/Gold checks.
+All Base outcomes are unresolved; all Gold outcomes are resolved, with zero
+failed, missing or skipped expected target and PASS_TO_PASS tests in Gold.
+The four PDM logs contain no remaining ENOSPC message. No element timed out
+or was recorded as OOM. Per-case elapsed times were about 5-7 minutes for
+PDM and 23, 33, 57 and 70 minutes for Matplotlib. The last atomic output was
+saved at `2026-10-26T21:40:08.758719Z` (22:40 CET), approximately 87 minutes
+after the wave started.
+
+Authority is operation `swe-rpg-runtime-reaccept8-v3-20261026`, batch
+`e98b155c6359bc4181ee4ae2e311a8f2fb7be5b2d3ed6d7872f0328ea67394d0`.
+Together with the 53 previously accepted unchanged cases, these results
+cover all 61 eligible train/validation tasks. The scientific split, original
+images and failed reports remain unchanged. PDM's capacity defect is directly
+confirmed by the probe and recovered full evaluations. Matplotlib recovery
+does not prove the absence of future flaky subprocess tests or isolate the
+effect of temporary storage from timing changes. The 70-minute calibration
+includes history and two complete evaluations; it is not a measured
+70-minute single PCE Agent/evaluator phase.
+
 ## Build temporary storage
 
 Whole-image extraction, inventory hashing, packing and the independent

@@ -117,3 +117,63 @@ def test_rpg_python_recovery_keeps_science_and_uses_fresh_runtime(tmp_path):
     artifact = json.loads(Path("configs/prompts/safe_pce_hybrid_seed_v1.json").read_text())
     effective = materialize_pce_config(current, artifact, tmp_path, run_dir=new.run_dir)
     assert effective.run_dir == new.run_dir
+
+
+def test_rpg_smoke_v3_reuses_completed_graph_with_reviewed_prompts_and_placeholder(tmp_path):
+    from scripts.hpc_supervisor_service import _load_launch_config, RESUME_SCRIPT
+    from src.optimization.safe_pce_learning import SafePCEBackend
+    from src.optimization.safe_pce_execution import sha256
+
+    path = Path("configs/gepa_safe_pce_rpg_codex_smoke_v3_20261027.yaml")
+    old = load_optimization_config("configs/gepa_safe_pce_rpg_codex_smoke_v2_20261025.yaml", require_api_keys=False)
+    new = load_optimization_config(path, require_api_keys=False)
+    assert new.search == old.search and new.reflection == old.reflection
+    assert new.hybrid == replace(old.hybrid, dataset_file_sha256=new.hybrid.dataset_file_sha256)
+    assert new.initial_rules_path == Path("configs/prompts/safe_pce_hybrid_seed_v2.json").resolve()
+    assert new.run_dir != old.run_dir and new.dataset_snapshot != old.dataset_snapshot
+    backend = SafePCEBackend(replace(new, execution=replace(new.execution, backend="local")))
+    train, validation = backend.load_snapshot()
+    split = json.loads((FROZEN / "split-selection.json").read_text())
+    assert [case.instance_id for case in train] == split["train"]
+    assert [case.instance_id for case in validation] == split["validation"]
+    expected = set(split["train"] + split["validation"])
+    formal = json.loads(Path("configs/frozen_safe_pce_ace/rpg_clean61_v1_20261026/split-selection.json").read_text())
+    assert expected <= set(formal["train"])
+    rows = (backend.pce.dataset_snapshot / "instances.jsonl").read_bytes().splitlines(keepends=True)
+    assert len(rows) == 3 and {json.loads(row)["instance_id"] for row in rows} == expected
+    source = {json.loads(row)["instance_id"]: row for row in Path(
+        "output/SWE-RPG/pce-inputs/python78-v1-20261024/instances.jsonl").read_bytes().splitlines(keepends=True)}
+    assert all(row == source[json.loads(row)["instance_id"]] for row in rows)
+    assert backend.learning_diagnostics == {}
+    assert not (new.dataset_snapshot / "learning_diagnostics").exists()
+    planner = Path("configs/prompts/safe_pce_rules_planner_v2.yaml")
+    coder = Path("configs/prompts/safe_pce_native_codex_code_v2.yaml")
+    assert backend.pce.plan_prompt == yaml.safe_load(planner.read_text())["prompts"]["plan_system"]
+    assert backend.pce.code_prompt == yaml.safe_load(coder.read_text())["prompts"]["code_system"]
+    mode, previous = load_pce_config(old.safe_pce_config)
+    for field in ("plan", "code", "agent_backends", "container", "docker", "agent_network_disabled"):
+        assert getattr(backend.pce, field) == getattr(previous, field)
+    for field in ("cpus_per_task", "mem", "time", "max_task_attempts"):
+        assert getattr(backend.pce.hpc, field) == getattr(previous.hpc, field)
+    assert backend.pce.hpc.max_running_array_tasks == 0
+    assert new.hpc.max_running_array_tasks == 0
+    from src.swe_verified_pce.hpc_executor import build_array_script
+    pce_script = build_array_script(config=backend.pce, batch_dir=tmp_path / "pce",
+                                    indices=[0, 1, 2, 3], attempt=1)
+    assert "#SBATCH --array=0,1,2,3\n" in pce_script
+    assert "max_running_array_tasks" not in yaml.safe_load(Path(
+        "configs/safe_pce_ace_rpg_codex_smoke_source_v3_20261027.yaml").read_text())["hpc"]
+    manifest = json.loads((new.dataset_snapshot / "manifest.json").read_text())
+    assert manifest["source_pce_config_sha256"] == sha256(Path(
+        "configs/safe_pce_ace_rpg_codex_smoke_source_v3_20261027.yaml"))
+    assert manifest["planner_prompt_source"]["sha256"] == sha256(planner)
+    assert manifest["initial_guideline_source"]["sha256"] == sha256(new.initial_rules_path)
+    launch = Path("configs/safe_pce_ace_rpg_codex_smoke_supervisor_v3_20261027.yaml")
+    session, log, args, program = _load_launch_config(launch)
+    assert program == RESUME_SCRIPT and session == new.run_dir.name and session in log
+    assert args[args.index("--gepa-config") + 1] == str(path)
+    assert {"--require-clean-worktree", "--reclaim-staging", "--reclaim-workspaces"} <= set(args)
+    contract = yaml.safe_load(path.read_text())["experiment_contract"]
+    assert contract["launch_authorized"] is False
+    assert contract["previous_output_import"] is False
+    assert contract["budget"]["pce_evaluation_slots_without_cache"] == {"minimum": 5, "maximum": 6}

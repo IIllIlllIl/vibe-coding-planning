@@ -406,6 +406,9 @@ def load_optimization_config(
         ),
         mem=str(hpc_data.get("mem", hpc_defaults.mem)),
         time=str(hpc_data.get("time", hpc_defaults.time)),
+        # This loader forbids project-level concurrency limits above. Do not
+        # inherit the shared legacy default and silently throttle Agent waves.
+        max_running_array_tasks=0,
         poll_interval_seconds=int(
             hpc_data.get(
                 "poll_interval_seconds",

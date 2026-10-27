@@ -20,6 +20,15 @@ def config(tmp_path):
     return replace(value, run_dir=tmp_path / "run", hpc=replace(value.hpc, max_running_array_tasks=2))
 
 
+def test_loaded_learning_config_leaves_large_agent_waves_to_slurm(tmp_path):
+    cfg = load_optimization_config("configs/gepa_swe_chat_hybrid_formal3_v9_20261015.yaml",
+                                   require_api_keys=False)
+    assert cfg.hpc.max_running_array_tasks == 0
+    indices = list(range(24))  # Exceeds the shared legacy default of twelve.
+    script = runtime.HybridPhaseExecutor(cfg).script_for_wave(tmp_path, "reflector", indices, 1)
+    assert f"#SBATCH --array={','.join(map(str, indices))}\n" in script
+
+
 def test_full_wave_yield_resume_and_retry_only_invalid_index(tmp_path, monkeypatch):
     cfg = config(tmp_path)
     monkeypatch.setattr(runtime, "require_evidence_sif", lambda *_: None)

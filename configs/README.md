@@ -58,6 +58,14 @@ The v4 pair preserves that eligibility overlay and execution budget while
 freezing the reviewed v2 Planner/Coder prompts and placeholder seed. NoDiag
 contains no intermediate-reference files; Diag adds only the 92 training
 references. Its preparation manifest binds the selected prompt and seed hashes.
+The RPG smoke v3 (`20261027`) binds the completed smoke v2's same three
+development cases and 1it/mini-2 budget to the reviewed v2 Planner/Coder prompts
+and placeholder seed. Its frozen source contains only those three cases;
+all belong to the formal training partition. It uses no training reference
+diagnostics and imports no prior outputs. This smoke verifies the full PCE/ACE
+graph after the shared temporary-directory repair, not formal learning quality.
+Its PCE and learning Agent arrays have no project-level concurrency throttle;
+all ready elements are submitted together for Slurm to schedule.
 The opt-in Native Codex parallel regression configuration is
 `gepa_safe_pce_verified_codex_smoke_v5_20261024.yaml`, with matching
 `safe_pce_ace_verified_codex_smoke_source_v5_20261024.yaml` and

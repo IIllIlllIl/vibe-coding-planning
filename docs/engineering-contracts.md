@@ -12,8 +12,11 @@ of the proven execution behavior. Change only the representations and evidence
 semantics required by the new experiment.
 
 Independent Agents in the same phase form one batch: prepare all manifests,
-submit all unfinished indices through `SlurmTaskBatch`, then yield. Use Slurm's
-array concurrency cap for resource limits, not a serial submit/yield loop.
+submit all unfinished indices through `SlurmTaskBatch`, then yield. Current
+learning runs leave concurrency to Slurm without a project-level `%N` array
+throttle; the configuration loader must not inherit a legacy numeric cap.
+An explicitly approved operational storage throttle belongs in the existing
+array mechanism, not a serial submit/yield loop.
 Curator follows the complete validated reflection wave; conditional Refiner
 follows Curator and precedes candidate evaluation. Each element remains an
 independent fresh Agent.
