@@ -774,6 +774,7 @@ def reclaim_remote_workspaces(
     config: SupervisorConfig,
     *,
     dry_run: bool = False,
+    include_prepared: bool = False,
 ) -> dict[str, Any]:
     """Reclaim disposable attempt workspaces after all remote jobs stop."""
 
@@ -794,6 +795,8 @@ print(json.dumps(reclaim_disposable_phase_workspaces(
     dry_run=True,
 ), sort_keys=True))
 """
+    if include_prepared:
+        invocation = invocation.replace("sys.argv[1]", "sys.argv[1], include_prepared=True")
     remote_command = (
         "printf VIBE_HPC_WORKSPACE_RECLAIM >/dev/null; "
         + shlex.quote(_remote_embedded_python(config))
@@ -1088,9 +1091,16 @@ def run_loop(config: SupervisorConfig) -> int:
                 )
 
             workspace_cleanup: dict[str, Any] = {"removed": 0}
+            recoverable_controller_error = (
+                status.get("error_type") in config.recover_controller_error_types_once
+                and int(state.get("controller_failure_recoveries", 0)) < 1
+            )
             if status.get("state") != "missing":
                 try:
-                    workspace_cleanup = reclaim_remote_workspaces(config)
+                    terminal_cleanup = is_completed(status) or (
+                        is_failed(status) and not recoverable_controller_error)
+                    workspace_cleanup = reclaim_remote_workspaces(config, **(
+                        {"include_prepared": True} if terminal_cleanup else {}))
                 except Exception as exc:
                     state["status"] = "blocked_workspace_reclamation"
                     state["workspace_reclamation_error"] = str(exc)
@@ -1108,11 +1118,6 @@ def run_loop(config: SupervisorConfig) -> int:
                     f"count={workspace_cleanup['removed']}"
                 )
 
-            recoverable_controller_error = (
-                status.get("error_type")
-                in config.recover_controller_error_types_once
-                and int(state.get("controller_failure_recoveries", 0)) < 1
-            )
             if is_failed(status) and not recoverable_controller_error:
                 state["status"] = "blocked"
                 _save_supervisor_state(config, state)

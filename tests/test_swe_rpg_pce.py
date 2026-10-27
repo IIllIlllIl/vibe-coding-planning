@@ -193,7 +193,8 @@ def test_generated_rpg_shell_records_real_tsv(tmp_path, patch):
 
 
 @pytest.mark.parametrize("bad_stage", [None, "test_patch", "rebuild", "parser", "missing_tests"])
-def test_rpg_evaluator_preserves_patch_and_uses_shared_environment(tmp_path, monkeypatch, bad_stage):
+@pytest.mark.parametrize("repository_prepared", [False, True])
+def test_rpg_evaluator_preserves_patch_and_uses_shared_environment(tmp_path, monkeypatch, bad_stage, repository_prepared):
     snapshot, images, _, _ = rpg_source(tmp_path)
     case = load_swe_rpg_pce_cases(snapshot, images)[0][1]
     observed = {}
@@ -226,7 +227,7 @@ def test_rpg_evaluator_preserves_patch_and_uses_shared_environment(tmp_path, mon
     monkeypatch.setattr("src.swe_rpg_pce.evaluator.verify_swebench_evaluator_repository", lambda *a, **k: {})
     kwargs = dict(snapshot=snapshot, container=SimpleNamespace(sif_cache_dir=tmp_path, writable_tmpfs=True),
         capacity_window=SimpleNamespace(), workdir=case.working_directory,
-        phase_workdir=tmp_path / "workspace", command_timeout=30)
+        phase_workdir=tmp_path / "workspace", command_timeout=30, repository_prepared=repository_prepared)
     if bad_stage:
         with pytest.raises(SWERPGEvaluatorOperationalError):
             evaluate_swe_rpg_apptainer("Agent patch\n\n", case, **kwargs)
@@ -237,6 +238,7 @@ def test_rpg_evaluator_preserves_patch_and_uses_shared_environment(tmp_path, mon
         assert result["raw_test_output"] == "original log"
     assert observed["cwd"] == "/testbed2" and observed["cleaned"]
     assert observed["isolate_tmp"] is True
+    assert observed["initialize_host_workdir"] is (not repository_prepared)
     assert ":/rpg-eval-input:ro" in " ".join(observed["run_args"])
 
 

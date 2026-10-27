@@ -10,6 +10,7 @@ import hashlib
 import json
 import os
 from pathlib import Path
+import re
 import shlex
 import sys
 import subprocess
@@ -53,7 +54,8 @@ def hook_options(interpreter: str, *, directory=POLICY_DIR, audit_directory=AUDI
                           audit_directory + "/" + AUDIT_FILE])
     handler = '{type="command", command=' + json.dumps(command) + ', timeout=15}'
     groups = '[{matcher="^Bash$", hooks=[' + handler + ']}]'
-    options = ["--config", "features.hooks=true", "--config", "hooks.PreToolUse=" + groups]
+    options = ["--config", "features.hooks=true", "--config", "hooks.PreToolUse=" + groups,
+               "--config", "hooks.PostToolUse=" + groups]
     if submission:
         stop_command = shlex.join([interpreter, directory + "/policy.pyz", directory + "/context.json",
                                   audit_directory + "/" + SUBMISSION_AUDIT_FILE])
@@ -71,13 +73,27 @@ def hook_result(event, context, audit_path: Path):
         raise ValueError("invalid source-policy tool arguments")
     decision = command_source_decision(command, prompt_urls=frozenset(context["prompt_urls"]))
     denied = decision is not None and decision["decision"] == "block"
-    record = {"schema_version": 1, "tool_use_id": event["tool_use_id"],
+    record = {"schema_version": 2, "hook_event_name": "PreToolUse",
+              "tool_use_id": event["tool_use_id"], "command": command,
               "command_sha256": command_digest(command), "decision": decision,
               "blocked": denied, "returncode": 126 if denied else None}
     _append_audit(audit_path, record)
     if denied:
         return {"hookSpecificOutput": {"hookEventName": "PreToolUse", "permissionDecision": "deny",
                 "permissionDecisionReason": source_denial_result(decision["reason"])["output"]}}
+    return {}
+
+
+def post_hook_result(event, context, audit_path: Path):
+    """Record the original call identity after execution, without tool feedback."""
+    del context
+    command = event["tool_input"]["command"]
+    if (event.get("hook_event_name") != "PostToolUse" or event.get("tool_name") != "Bash"
+            or not isinstance(command, str) or not isinstance(event.get("tool_use_id"), str)):
+        raise ValueError("unexpected source-policy post hook event")
+    _append_audit(audit_path, {"schema_version": 2, "hook_event_name": "PostToolUse",
+        "tool_use_id": event["tool_use_id"], "command": command,
+        "command_sha256": command_digest(command)})
     return {}
 
 
@@ -147,7 +163,9 @@ def main():
         context = json.loads(Path(sys.argv[1]).read_text())
         event = json.load(sys.stdin)
         is_stop = event.get("hook_event_name") == "Stop"
-        result = (stop_result if is_stop else hook_result)(event, context, Path(sys.argv[2]))
+        handler = (stop_result if is_stop else post_hook_result
+                   if event.get("hook_event_name") == "PostToolUse" else hook_result)
+        result = handler(event, context, Path(sys.argv[2]))
     except Exception:
         # Native hook errors can otherwise fail open. Explicitly deny instead;
         # the missing/error audit additionally invalidates the Host completion.
@@ -164,6 +182,40 @@ def main():
     print(json.dumps(result))
 
 
+def _match_redacted_exports(items, originals, allowed, denied):
+    """Require a complete one-to-one cover, even when exports look identical."""
+    patterns = [re.compile(".*?".join(re.escape(part) for part in
+                source_command(item["command"]).split("[REDACTED_SECRET]")), re.DOTALL)
+                for item in items]
+    slots = [(digest, True) for digest, count in allowed.items() for _ in range(count)]
+    slots += [(digest, False) for digest, count in denied.items() for _ in range(count)]
+    matches = {}
+
+    def assign(slot, visited):
+        digest, permitted = slots[slot]
+        for index, item in enumerate(items):
+            if (index in visited or not patterns[index].fullmatch(originals[digest])
+                    or (not permitted and not (item.get("status") in {"declined", "failed"}
+                        and item.get("exit_code") in {None, 126}))):
+                continue
+            visited.add(index)
+            if index not in matches or assign(matches[index], visited):
+                matches[index] = slot
+                return True
+        return False
+
+    # All executed receipts are mandatory; denied calls may have no public item.
+    for slot, (_, permitted) in enumerate(slots):
+        found = assign(slot, set())
+        if permitted and not found:
+            raise ValueError("Native redacted exports lack complete original execution receipts")
+    if len(matches) != len(items):
+        raise ValueError("Native redacted command has no matching execution-policy receipt")
+    for slot in matches.values():
+        digest, permitted = slots[slot]
+        (allowed if permitted else denied)[digest] -= 1
+
+
 def validate_native_commands(trajectory, audit_path: Path, *, context: dict, source_log: Path):
     """Require hook coverage; retain raw events and distinguish denied attempts.
 
@@ -175,9 +227,24 @@ def validate_native_commands(trajectory, audit_path: Path, *, context: dict, sou
         raise ValueError("Malformed Native execution-policy receipt")
     if any(record.get("policy_error") for record in records):
         raise ValueError("Native command policy failed")
+    modern = any(record.get("schema_version") == 2 for record in records)
+    before, after = [], {}
     for record in records:
+        if modern:
+            if (record.get("schema_version") != 2
+                    or not isinstance(record.get("command"), str)
+                    or record.get("command_sha256") != command_digest(record["command"])):
+                raise ValueError("Malformed Native original-command receipt")
+            if record.get("hook_event_name") == "PostToolUse":
+                identity = record.get("tool_use_id")
+                if not isinstance(identity, str) or not identity or identity in after:
+                    raise ValueError("Duplicate or malformed Native post-execution receipt")
+                after[identity] = record
+                continue
+            if record.get("hook_event_name") != "PreToolUse":
+                raise ValueError("Malformed Native hook event")
         decision = record.get("decision")
-        if (record.get("schema_version") != 1
+        if (record.get("schema_version") != (2 if modern else 1)
                 or not isinstance(record.get("tool_use_id"), str) or not record["tool_use_id"]
                 or not isinstance(record.get("command_sha256"), str)
                 or len(record["command_sha256"]) != 64
@@ -186,8 +253,20 @@ def validate_native_commands(trajectory, audit_path: Path, *, context: dict, sou
                 or record.get("returncode") != (126 if record["blocked"] else None)
                 or record["blocked"] != (decision is not None and decision.get("decision") == "block")):
             raise ValueError("Malformed Native execution-policy receipt")
-    if len({record["tool_use_id"] for record in records}) != len(records):
+        before.append(record)
+    if len({record["tool_use_id"] for record in before}) != len(before):
         raise ValueError("Duplicate Native execution-policy receipts")
+    if modern:
+        expected = {record["tool_use_id"]: record for record in before if not record["blocked"]}
+        if set(after) != set(expected):
+            raise ValueError("Native pre/post execution-policy receipt coverage differs")
+        for identity, record in expected.items():
+            if (after[identity]["command_sha256"] != record["command_sha256"]
+                    or after[identity]["command"] != record["command"]):
+                raise ValueError("Native command changed between pre/post execution checks")
+            if command_source_decision(record["command"],
+                    prompt_urls=frozenset(context["prompt_urls"])) != record["decision"]:
+                raise ValueError("Native original command differs from its source-policy decision")
     commands = {}
     for message in trajectory:
         if message.get("role") != "codex_cli":
@@ -209,12 +288,22 @@ def validate_native_commands(trajectory, audit_path: Path, *, context: dict, sou
                 if identity in commands and commands[identity]["command"] != command:
                     raise ValueError("Native command identity changed command text")
                 commands[identity] = item
-    allowed = Counter(record["command_sha256"] for record in records if not record["blocked"])
-    denied = Counter(record["command_sha256"] for record in records if record["blocked"])
+    allowed = Counter(record["command_sha256"] for record in before if not record["blocked"])
+    denied = Counter(record["command_sha256"] for record in before if record["blocked"])
+    originals = {record["command_sha256"]: source_command(record["command"])
+                 for record in before} if modern else {}
+    # Match exact exports first. A vendor-redacted export is only a view of
+    # an original command already checked and paired by its pre/post call ID.
+    # Never substitute guessed text into the trajectory or accept by count alone.
+    redacted = []
     for item in commands.values():
         digest = command_digest(item["command"])
+        if modern and "[REDACTED_SECRET]" in item["command"]:
+            redacted.append(item)
+            continue
         if allowed[digest]:
-            decision = command_source_decision(item["command"], prompt_urls=frozenset(context["prompt_urls"]))
+            decision = command_source_decision(originals.get(digest, item["command"]),
+                                               prompt_urls=frozenset(context["prompt_urls"]))
             if decision is not None and decision["decision"] == "block":
                 raise ValueError("Native command executed despite a disallowed source decision")
             allowed[digest] -= 1
@@ -222,12 +311,14 @@ def validate_native_commands(trajectory, audit_path: Path, *, context: dict, sou
             denied[digest] -= 1
         else:
             raise ValueError("Native command has no matching execution-policy receipt")
+    if redacted:
+        _match_redacted_exports(redacted, originals, allowed, denied)
     if commands and not records:
         raise ValueError("Native execution-policy receipts missing")
     if any(allowed.values()):
         raise ValueError("Native execution-policy receipt lacks a raw command event")
     source_log.parent.mkdir(parents=True, exist_ok=True)
-    for record in records:
+    for record in before:
         decision = record["decision"]
         if decision is not None:
             event = {**decision, **context.get("context", {}), "executor": "codex_cli",
@@ -235,7 +326,8 @@ def validate_native_commands(trajectory, audit_path: Path, *, context: dict, sou
                      "executed": False if record["blocked"] else None,
                      "execution_status": "blocked" if record["blocked"] else "permitted",
                      "returncode": record["returncode"]}
-            # The original native command remains exclusively in raw events.
+            # Original tool input is retained in protected hook receipts;
+            # the public CLI event may independently contain vendor redaction.
             with source_log.open("a") as output:
                 output.write(json.dumps(event, sort_keys=True) + "\n")
     return records

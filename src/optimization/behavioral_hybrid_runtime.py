@@ -16,7 +16,7 @@ from src.optimization.hpc.phase_wave import prepare_phase_wave, build_phase_arra
 from src.optimization.paired_playbook import validate_ace_paired_reflector_review
 from src.optimization.playbook_runtime import run_evidence_reflector, run_evidence_curator, _codex_evidence_sif
 from src.optimization.playbook_hpc_executor import _file_sha256
-from src.optimization.audit import redact_sensitive, redact_agent_record
+from src.optimization.audit import audit_record
 from src.agents.runtime import credential_envs
 
 
@@ -37,7 +37,7 @@ def phase_identity(config, role, payload):
                                        "behavioral_hybrid_ace.py", "behavioral_hybrid.py", "playbook.py",
                                        "playbook_runtime.py", "codex_cli_runtime.py",
                                        "hpc/phase_wave.py", "hpc/worker_contract.py", "hpc/slurm.py", "hpc/task_batch.py",
-                                       "../exceptions.py", "../environment/source_access.py",
+                                       "../exceptions.py", "../artifact_policy.py", "../environment/source_access.py",
                                        "ace_transaction.py", "agent_references.py",
                                        "ace_evidence.py", "behavioral_hybrid_evidence.py",
                                        "pce_reflector_evidence.py", "audit.py")}
@@ -170,13 +170,13 @@ def run_local_phase(config, role, payload, attempt_dir, *, retry_feedback=""):
         else:
             raise ValueError("unsupported hybrid phase")
     except Exception as exc:
-        atomic_json(attempt_dir / "completion_error.json", redact_sensitive({
+        atomic_json(attempt_dir / "completion_error.json", audit_record({
             "error": str(exc), "raw_response": getattr(exc, "raw_response", None),
             "trajectory": getattr(exc, "trajectory", [])}))
         raise
     # Preserve the raw completion BEFORE validating it. Never repair it here.
     try:
-        atomic_json(attempt_dir / "completion.json", redact_agent_record({"agent_output": output, "trajectory": trajectory}))
+        atomic_json(attempt_dir / "completion.json", audit_record({"agent_output": output, "trajectory": trajectory}))
         output = decode_phase_output(role, output, case_refs, item_refs)
         atomic_json(attempt_dir / "resolved_completion.json", {"agent_output": output})
         validate_phase(role, payload, output, config)

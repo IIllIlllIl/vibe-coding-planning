@@ -8,6 +8,11 @@
 trajectories/
 patches/
 logs/
+# Backstop for diagnostic logs accidentally written outside the standard roots.
+*.log
+*.log.*
+# Directory metadata inherited by all private workflow artifacts.
+.vibe-private-artifacts
 # Local Codex/OpenCode handoff reports and mechanical-task evidence.
 opencode_logs/
 .tmp_hpc_smoke/

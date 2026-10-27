@@ -43,6 +43,7 @@ class SWEVerifiedPCEConfig:
     planning_rules: str = ""
     agent_backends: dict[str, dict[str, str]] = field(default_factory=dict)
     agent_network_disabled: bool = False
+    workspace_preparation: str = "inline"
 
 
 def _mapping(value: Any, name: str) -> dict[str, Any]:
@@ -258,6 +259,9 @@ def load_repository_pce_config(
             raise ValueError("selected instance IDs must be unique")
 
     execution_raw = _mapping(raw.get("execution", {}), "execution")
+    workspace_preparation = execution_raw.get("workspace_preparation", "inline")
+    if workspace_preparation not in {"inline", "separate_slurm_v1"}:
+        raise ValueError("execution.workspace_preparation must be inline or separate_slurm_v1")
     execution_manifest_raw = execution_raw.get("manifest")
     if execution_manifest_raw is not None and "pce_runs_per_instance" in execution_raw:
         raise ValueError(
@@ -304,6 +308,7 @@ def load_repository_pce_config(
             )
 
     return config_type(
+        workspace_preparation=workspace_preparation,
         agent_network_disabled=bool(container_raw.get("network_disabled", False)),
         agent_backends=agent_backends,
         config_path=config_path,

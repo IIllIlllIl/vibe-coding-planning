@@ -46,6 +46,14 @@ The token must not enter configs, SSH arguments, stdin payloads, logs,
 manifests, generated job files, or Git history. Keep the remote directory mode
 at `700` and the env file mode at `600`.
 
+Existing private local/HPC auth files are required provider state, not result
+logs. Retain them outside experiment inputs and Git. Results stay in the
+standard ignored roots and are reviewed after execution without automatic
+text substitution; see the [private-results and review contract](engineering-contracts.md#private-results-and-post-run-credential-review).
+That review is independent of Slurm/learning and cannot block a run based on a
+credential-shaped keyword. Known auth failures and source-policy integrity
+errors retain their established operational failure handling.
+
 Sandbox DNS, timeout, or SSH failures are not evidence of a real ULHPC problem.
 Repeat an important read-only check with approved network access before
 diagnosing Iris, VPN, SSH, or credentials.
@@ -135,6 +143,12 @@ firewall/DNS state to implement this policy.
   Controller or worker is active and removes only exact per-attempt
   `workspaces` directories. Checkpoints, trajectories, outputs, failure
   records, Slurm logs, SIFs, and shared history bundles are retained.
+  With separate repository-PCE preparation, complete `prepared_repository`
+  handoffs survive routine idle cleanup until consumed. Terminal cleanup may
+  additionally reclaim them through `include_prepared=True`, only after all
+  jobs stop. The preparation array is a visible top-level `pce_prepare` phase;
+  it runs no model and does not source the private provider env file. Capacity
+  checks must account for up to three prepared trees per ready PCE case.
 - Repeated executions of one frozen PCE selection remain one workflow: use one
   Supervisor, one Controller, and one Slurm array. Scientific repetition is a
   task-manifest field, not a reason to create more supervisors or run roots.

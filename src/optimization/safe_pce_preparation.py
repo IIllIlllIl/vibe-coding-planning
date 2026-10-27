@@ -12,6 +12,8 @@ from pathlib import Path
 
 import yaml
 
+from src.artifact_policy import mark_private_artifact_dir
+
 from src.optimization.safe_pce_execution import (
     load_pce_config, pce_cases, resolved_pce_payload, sha256, validate_learning_source,
 )
@@ -58,6 +60,7 @@ def prepare(*, learning_config: Path, pce_config: Path, selection: dict,
     available = {case.instance_id for case in pce_cases(mode, base)}
     if set(identifiers) - available:
         raise ValueError("split selection includes unavailable or unselected PCE tasks")
+    mark_private_artifact_dir(snapshot)
     raw = deepcopy(yaml.safe_load(learning_config.read_text()))
     if not raw.get("hybrid", {}).get("enabled"):
         raise ValueError("learning baseline must use the established hybrid ACE flow")

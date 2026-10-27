@@ -113,6 +113,54 @@ Agent task projection excludes evaluator/reference-only authority. Include
 adapter and official evaluator source identities in execution fingerprints.
 An old config or checkpoint is not reclassified as having used a new adapter.
 
+Repository PCE may explicitly select
+`execution.workspace_preparation: separate_slurm_v1`; omission retains the
+historical inline path. Use the same PCE Worker, array generator, phase layout
+and `SlurmTaskBatch`, not a second P/C/E controller or an Slurm dependency
+wrapper. Submit independent Plan/Code/evaluator preparation elements together,
+without model initialization or private provider environment loading. Each
+element uses the established SIF copy/base checks; P/C additionally install
+the accepted ancestor-only Git bundle. Evaluator preparation retains the
+original SIF repository and runs no tests, reference patch or candidate patch.
+
+Only a complete prepared tree is atomically published as
+`hpc_tasks/pce_prepare/<fingerprint>/attempts/task_*/attempt_*/prepared_repository`.
+Partial copies remain under disposable `workspaces`. A validated handoff binds
+the frozen case/image/base, parent PCE checkpoint identity and exact target
+attempt. After all required preparations complete, the original PCE Worker
+claims separate trees by same-filesystem rename and disables initialization
+copying. It keeps existing P/C/E order, Agent inputs, source guards, evaluator
+patch order, scoring and atomic scientific checkpoints. Missing or mismatched
+handoffs fail explicitly; never fall back to copying in an Agent allocation.
+The fresh phase environment still performs ordinary mounts/HOME/tmp setup;
+the PCE Worker still verifies the SIF, and the evaluator rechecks its base.
+
+Preparation yield must preserve the previous failed PCE output until a retry
+script is ready. A successful phase checkpoint skips that phase's repository
+preparation on retry, without rerunning the Agent or rewriting its checkpoint.
+Preparation retries have their own existing task-batch attempts and do not
+consume a PCE attempt or a model call. A case whose preparation exhausts is
+operationally incomplete/NoScore, while prepared cases continue. Preserve all
+failure and timing evidence. Routine idle cleanup retains unconsumed handoffs;
+after terminal failure/completion and no active jobs, explicitly include them
+in the same exact-path reclamation helper. Source arrays remain visible in the
+top-level phase journal for Supervisor active-job detection.
+Handoff/timing receipts stay in the private Host audit files; do not append
+them as a new required Reflector/Curator input. Existing PCE scientific output
+fields and raw Plan/patch/trajectory values remain unchanged. As before, GEPA
+withholds batch scores and learning updates if any observation is incomplete;
+do not drop the failed case or impute a zero to keep learning running.
+
+Preparing three trees ahead of a PCE wave can increase peak bytes/inodes versus
+sequential inline materialization. Check capacity for the complete ready wave;
+do not silently add a concurrency cap or increase CPU/RAM. A new execution
+wave waits for its preparation results before PCE submission; this separates
+budgets and does not guarantee shorter total wall time. A new execution
+identity and compute-node acceptance are required; old inline results are not
+evidence that the new handoff ran successfully. No-model tests cover the real
+executor/Worker path, idle cleanup, raw-output fidelity, checkpoint reuse,
+failed-index retry and case-local preparation exhaustion.
+
 The registered data adapter is not a readiness certificate: image acceptance,
 prepared ancestor history, fresh evaluator calibration and compute-node
 end-to-end validation remain separate. Tests must invoke the real shared Worker
@@ -184,7 +232,13 @@ Native hooks load a read-only, Host-generated bundle containing the existing
 classifier and its frozen parser dependency; they do not install dependencies
 in a case SIF. Hook receipts live outside the Agent-writable repository/output
 roots. Preflight the bundle and pinned CLI hook configuration before inference;
-validate receipts against raw native command events before checkpointing.
+validate original-command PreToolUse/PostToolUse receipts and native event
+coverage before checkpointing. The two hook receipts share the tool-call ID;
+the public JSONL item ID is a different namespace. CLI exports may redact
+command text. Match exact exports first; remaining exports must have a complete
+one-to-one cover by original receipts with paired execution evidence, never a
+guessed replacement or a command-count-only waiver. Identical redacted views
+do not imply identical original inputs. Preserve exports and hook inputs unchanged.
 Record blocked attempts as `executed=false`, not completed acquisition. A
 receipt/trace failure blocks completion without discarding the raw output or
 silently repairing it. Hook exceptions explicitly deny, while missing hook
@@ -603,7 +657,10 @@ Report and native trajectories are retained at
 records SHA-256 for the runtime and namespace launcher. This proves the tested
 two-image transport, not every scientific image or credential isolation.
 
-Codex JSONL tool events remain the native command authority. For guarded calls,
+Codex JSONL tool events remain the vendor-exported trajectory, not a guarantee
+of byte-identical execution inputs. Guarded calls retain original commands in
+mode-0600 hook receipts, pairing PreToolUse/PostToolUse by tool-call identity.
+For guarded calls,
 `source_access.jsonl` additionally records decisions from validated Native hook
 receipts; preparation-only or historical logs must not be represented as that
 coverage. SIF file isolation does not add an HTTP filter or turn these partial
@@ -646,6 +703,69 @@ any separately authorized recovery/cleanup. SIGKILL can also leave a call's own
 temporary directory; another call must never reclaim it as a shared lease.
 No credentials or credential digests may enter commands, configs, logs, staged
 evidence or retained experiment artifacts.
+
+### Private results and post-run credential review
+
+The preceding prohibition is an input/operating requirement, not permission
+for the Host to rewrite evidence. Provider credentials remain in private local
+or HPC environment/auth files; those files are legitimate authentication
+authorities, not experiment outputs. Do not move, scan, stage or delete them
+as result cleanup. Preserve the existing per-call auth lifecycle and the
+documented `/codex-state` visibility limitation above; SIF isolation is not a
+claim that shell tools cannot read their own call's auth snapshot.
+
+Host audit persistence uses `audit_record`: scientific outputs, raw exports,
+errors, counters and token statistics are copied without credential-shaped
+keyword/value substitutions or content-based completion rejection. Old
+`redact_sensitive`/`redact_agent_record` imports are compatibility aliases with
+the same preservation semantics. CLI vendor redaction is not undone. Neither
+this policy nor private log retention certifies absence of credential exposure.
+
+Keep results under `output/<dataset>/<run>/` (remote authority:
+`/scratch/users/$USER/vibe-coding-planning/run_state/output/`). Per-task
+trajectories, patches and Slurm logs stay inside that run; standalone local
+diagnostics use `logs/`, `trajectories/`, `patches/`, or an ignored output
+subdirectory. Supervisor state/logs use `.local/hpc-supervisor/`; operational
+reports may use the existing remote `run_state/operations/` authority. These
+are output conventions, not a machine-wide path whitelist: private auth state,
+temporary phase workspaces and explicit historical/configured report paths
+still exist. `.gitignore` excludes these local result roots and has a `*.log`
+backstop. Ignore rules do not untrack files or prevent forced additions; inspect
+staged paths before commit. Only reviewed summaries/manifests/hashes belong in Git.
+
+The shared artifact policy adds `.vibe-private-artifacts` directory metadata.
+All descendants inherit private status; retain this marker when copying result
+directories. The marker and a local ignore file are separate from scientific
+payloads: no Plan, patch, JSON or trajectory bytes are annotated or rewritten.
+Shared task-batch creation, PCE attempt/checkpoint roots, audit/JSON writers at
+conventional output paths, learning run creation, Safe PCE input preparation
+and Supervisor log creation use this module. Custom
+result writers must call `mark_private_artifact_dir` on their exact output
+directory. Existing historical directories are not retroactively certified.
+
+Before every commit, inspect the staged diff and run
+`conda run -n mini-swe python scripts/tools/check_commit_safety.py` in that
+checkout. It checks actual index bytes, inherited markers on disk or in the
+index, conventional private paths and likely credentials; forced additions are
+not exempt. `--worktree` additionally checks pending nonignored changes before
+staging. Reports contain paths/detector names, never secret matches. The
+credential detectors are shared with post-run review, but Git protection is a
+commit-time gate, not an experiment failure or an evidence filter. This is a
+required review command, not an installed Git server/hook or protection against
+deliberately bypassing review/removing metadata. A copied unmarked payload
+outside known private roots cannot be identified reliably from its content.
+Reviewed public summaries should be written separately, not force-added from
+private result directories. Review cannot certify the full Git history.
+
+After execution, run `python -m scripts.tools.review_credential_exposure
+--run-dir <one-result-root>` through the required Python environment. It
+writes `credential_review/report.json` inside that root, reporting candidate
+locations/detectors without matched values, snippets or credential digests.
+It does not load private auth files or follow symlinks; excluded directories,
+unreadable files and heuristic limitations are explicit. Findings do not alter
+evidence, scores, retry decisions or experiment status. Review confirmed
+exposure privately and rotate affected credentials as appropriate before
+publishing material. A zero-finding report is not a leak-free certificate.
 
 Reuse `raise_for_permanent_provider_error` for mini-SWE and Native Codex. A
 permanent auth/billing/quota failure exposes `retry_disposition=block_run`; the

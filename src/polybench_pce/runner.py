@@ -11,6 +11,7 @@ from typing import Any, Callable
 
 from src.agents import code_agent, plan_agent
 from src.agents.pce_backend import agent_runner
+from src.artifact_policy import mark_private_artifact_dir
 from src.config import AgentConfig, Config, EvaluatorConfig, PromptConfig, SystemConfig
 from src.environment.apptainer_env import ApptainerEnvironment, ApptainerSifCache
 from src.environment.docker_env import DockerCapacityWindow
@@ -49,6 +50,8 @@ class PolyBenchPCERunner:
         self.checkpoint_identity = checkpoint_identity
         self.attempt_dir = attempt_dir
         self.evaluator = evaluator
+        mark_private_artifact_dir(attempt_dir)
+        mark_private_artifact_dir(checkpoint_dir)
         self.audit = JsonlLogger(attempt_dir / "audit_events.jsonl")
         self.usage = JsonlLogger(attempt_dir / "usage.jsonl")
         self.source_access_path = attempt_dir / "source_access.jsonl"

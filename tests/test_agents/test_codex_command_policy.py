@@ -8,7 +8,7 @@ import sys
 import pytest
 
 from src.agents.codex_hooks import (
-    AUDIT_FILE, command_digest, hook_options, hook_result, validate_native_commands, write_bundle,
+    AUDIT_FILE, command_digest, hook_options, hook_result, post_hook_result, validate_native_commands, write_bundle,
     SUBMISSION_AUDIT_FILE, stop_result,
 )
 from src.environment.source_access import command_source_decision, source_denial_result
@@ -26,6 +26,12 @@ def native_items(*items):
     return [{"role": "codex_cli", "content": {"events": [
         {"type": "item.completed", "item": dict(type="command_execution", id=str(i), **item)}
         for i, item in enumerate(items)]}}]
+
+
+def executed(command, audit, identity="call-1"):
+    value = event(command, identity)
+    value["hook_event_name"] = "PostToolUse"
+    return post_hook_result(value, CONTEXT, audit)
 
 
 @pytest.mark.parametrize("command", [
@@ -58,7 +64,7 @@ def test_allowed_commands_are_not_rewritten(tmp_path, command):
     assert hook_result(event(command), CONTEXT, tmp_path / AUDIT_FILE) == {}
     record = json.loads((tmp_path / AUDIT_FILE).read_text())
     assert record["blocked"] is False and record["command_sha256"] == command_digest(command)
-    assert "command" not in record
+    assert record["command"] == command
 
 
 def test_portable_hook_uses_frozen_parser_and_returns_real_deny(tmp_path):
@@ -98,13 +104,77 @@ def test_denial_then_correction_can_complete_without_mutating_raw_trace(tmp_path
     audit = tmp_path / AUDIT_FILE
     hook_result(event("pip install Werkzeug==2.2.3"), CONTEXT, audit)
     hook_result(event("python -m pytest tests/test_blueprints.py", "call-2"), CONTEXT, audit)
+    executed("python -m pytest tests/test_blueprints.py", audit, "call-2")
     trace = native_items(dict(command="/bin/bash -lc 'pip install Werkzeug==2.2.3'", status="failed", exit_code=None),
                          dict(command="/bin/bash -lc 'python -m pytest tests/test_blueprints.py'", status="completed", exit_code=0))
     original = deepcopy(trace)
     rows = validate_native_commands(trace, audit, context=CONTEXT, source_log=tmp_path / "sources.jsonl")
-    assert trace == original and len(rows) == 2
+    assert trace == original and len(rows) == 3
     rejection = json.loads((tmp_path / "sources.jsonl").read_text())
     assert rejection["executed"] is False and rejection["returncode"] == 126
+
+
+@pytest.mark.parametrize("command,export", [
+    ("token=synthetic-fixture-value; printf ok", "token=[REDACTED_SECRET] printf ok"),
+    ("python -c \"AsyncOpenAI(api_key='sk-test-offline')\"",
+     "python -c \"AsyncOpenAI(api_key='[REDACTED_SECRET]')\""),
+    ("python - <<'PY'\ntoken = data.get('name')\nprint(token)\nPY",
+     "python - <<'PY'\ntoken = [REDACTED_SECRET]\nprint(token)\nPY"),
+])
+def test_vendor_redaction_is_matched_to_original_pre_post_receipts_without_rewriting(tmp_path, command, export):
+    audit = tmp_path / AUDIT_FILE
+    hook_result(event(command), CONTEXT, audit)
+    executed(command, audit)
+    trace = native_items(dict(command=export, status="completed", exit_code=0))
+    original = deepcopy(trace)
+    rows = validate_native_commands(trace, audit, context=CONTEXT, source_log=tmp_path / "sources.jsonl")
+    assert trace == original and rows[0]["command"] == command
+    assert rows[0]["tool_use_id"] == rows[1]["tool_use_id"]
+
+
+@pytest.mark.parametrize("problem", ["missing_post", "orphan_post", "changed_post", "blocked_post", "wrong_export"])
+def test_redacted_export_does_not_bypass_execution_receipt_integrity(tmp_path, problem):
+    command = "token=synthetic-fixture-value; printf ok"
+    audit = tmp_path / AUDIT_FILE
+    hook_result(event(command), CONTEXT, audit)
+    if problem != "missing_post":
+        executed(command if problem != "changed_post" else command + " changed", audit,
+                 "unknown-call" if problem == "orphan_post" else "call-1")
+    if problem == "blocked_post":
+        hook_result(event("pip install synthetic-package", "blocked"), CONTEXT, audit)
+        executed("pip install synthetic-package", audit, "blocked")
+    export = "token=[REDACTED_SECRET] " + ("git fetch origin" if problem == "wrong_export" else "printf ok")
+    trace = native_items(dict(command=export, status="completed", exit_code=0))
+    with pytest.raises(ValueError):
+        validate_native_commands(trace, audit, context=CONTEXT, source_log=tmp_path / "sources.jsonl")
+
+
+def test_legacy_receipts_still_require_exact_exports(tmp_path):
+    command = "token=synthetic-fixture-value; printf ok"
+    record = {"schema_version": 1, "tool_use_id": "call-1", "command_sha256": command_digest(command),
+              "decision": None, "blocked": False, "returncode": None}
+    audit = tmp_path / AUDIT_FILE
+    audit.write_text(json.dumps(record) + "\n")
+    exact = native_items(dict(command=command, status="completed", exit_code=0))
+    validate_native_commands(exact, audit, context=CONTEXT, source_log=tmp_path / "sources.jsonl")
+    changed = native_items(dict(command="token=[REDACTED_SECRET] printf ok", status="completed", exit_code=0))
+    with pytest.raises(ValueError, match="no matching execution-policy receipt"):
+        validate_native_commands(changed, audit, context=CONTEXT, source_log=tmp_path / "sources.jsonl")
+
+
+def test_distinct_original_commands_with_identical_redacted_exports_keep_full_coverage(tmp_path):
+    audit = tmp_path / AUDIT_FILE
+    for index, value in enumerate(("first-fixture", "second-fixture")):
+        command = f"token={value}; printf ok"
+        hook_result(event(command, f"call-{index}"), CONTEXT, audit)
+        executed(command, audit, f"call-{index}")
+    item = dict(command="token=[REDACTED_SECRET] printf ok", status="completed", exit_code=0)
+    trace = native_items(item, item)
+    original = deepcopy(trace)
+    validate_native_commands(trace, audit, context=CONTEXT, source_log=tmp_path / "sources.jsonl")
+    assert trace == original
+    with pytest.raises(ValueError, match="complete original execution receipts"):
+        validate_native_commands(native_items(item), audit, context=CONTEXT, source_log=tmp_path / "sources.jsonl")
 
 
 @pytest.mark.parametrize("problem", ["missing", "actually_executed", "duplicate", "wrong_command", "web_search", "malformed", "permitted_without_trace"])
@@ -131,6 +201,7 @@ def test_native_hook_cli_options_keep_sandbox_and_user_config_separate(tmp_path)
         working_directory=tmp_path, output_path=tmp_path/"out", repository_writable=True,
         command_hook_options=tuple(options))
     assert "--ignore-user-config" in cmd and "hooks.PreToolUse=" in " ".join(cmd)
+    assert "hooks.PostToolUse=" in " ".join(cmd)
     assert "--dangerously-bypass-approvals-and-sandbox" not in cmd
     assert 'web_search="disabled"' in cmd
 
@@ -139,13 +210,14 @@ def test_native_hook_cli_options_keep_sandbox_and_user_config_separate(tmp_path)
 def test_malformed_audit_is_explicit_validation_failure(tmp_path, problem):
     audit = tmp_path / AUDIT_FILE
     hook_result(event("git status"), CONTEXT, audit)
+    executed("git status", audit)
     trace = native_items(dict(command="git status", status="completed", exit_code=0))
     if problem == "nonobject_receipt":
         audit.write_text("[]\n")
     if problem == "inconsistent_receipt":
-        receipt = json.loads(audit.read_text())
-        receipt["blocked"] = True
-        audit.write_text(json.dumps(receipt) + "\n")
+        receipts = [json.loads(line) for line in audit.read_text().splitlines()]
+        receipts[0]["blocked"] = True
+        audit.write_text("".join(json.dumps(receipt) + "\n" for receipt in receipts))
     if problem == "nonobject_item":
         trace[0]["content"]["events"][0]["item"] = None
     if problem == "missing_identity":
@@ -180,6 +252,8 @@ def test_production_transport_wires_policy_mounts_preflights_and_original_output
                   for i,v in enumerate(command) if v=="--bind"}
         assert str(mounts["/opt/vibe-agent-policy"])+":/opt/vibe-agent-policy:ro" in command
         assert "/agent-policy-audit" in mounts
+        if "sif-python-probe" in command:
+            return SimpleNamespace(returncode=0, stdout="/opt/miniconda3/envs/testbed/bin/python\n", stderr="")
         if command[-1]=="--version":
             return SimpleNamespace(returncode=0, stdout="codex-cli 0.160.1\n", stderr="")
         if "--self-test" in command:
@@ -197,6 +271,7 @@ def test_production_transport_wires_policy_mounts_preflights_and_original_output
             if failure!="missing_receipt":
                 hook_result(event("pip install Werkzeug"), CONTEXT, audit)
                 hook_result(event("git status", "call-2"), CONTEXT, audit)
+                executed("git status", audit, "call-2")
             (mounts["/agent-output"]/"codex_final_response.txt").write_bytes(final)
             if submission and failure != "missing_stop_receipt":
                 stop_audit = mounts["/agent-policy-audit"] / SUBMISSION_AUDIT_FILE

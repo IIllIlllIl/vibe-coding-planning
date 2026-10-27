@@ -3,6 +3,20 @@
 This branch treats configuration files as three different classes. A file being
 tracked does not authorize its execution.
 
+The RPG `nodiag3_v7_20261027` learning/source/supervisor configs retain the v6
+scientific design, prompts and paired Native command receipts, while selecting
+the shared no-model workspace preparation boundary with a fresh private input
+snapshot. The v6 inputs remain immutable inline-preparation provenance. Launch
+prerequisites are explicit; configuration preparation is not execution authority.
+
+RPG smoke v4 (`20261027`) is the small acceptance binding for that shared
+preparation boundary and paired Native receipt policy. It retains completed
+smoke v3's three development cases, all-Codex high and 1it/mini-2 budget, with
+the reviewed learning-evidence v2 and Coder v3 prompts. Its fresh private inputs
+import no old outputs. At most six PCE evaluations and eighteen no-model
+preparation elements precede retries; Refiner and candidate validation remain
+conditional. This binding does not authorize the separate formal 3it.
+
 New supervisor identities should start from `hpc_supervisor.example.yaml`.
 Completed and superseded launch identities should move under
 `archive/supervisor_launches/`; they are separated from runtime configs because

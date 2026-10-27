@@ -3,7 +3,7 @@ from pathlib import Path
 import json
 from datetime import datetime, timezone
 
-from src.optimization.audit import redact_sensitive, redact_agent_record
+from src.optimization.audit import audit_record
 from src.optimization.behavioral_hybrid_runtime import run_local_phase, phase_identity
 from src.optimization.config import load_optimization_config
 from src.optimization.hpc.task_batch import atomic_json
@@ -38,12 +38,12 @@ def run_task(*, config_path, manifest_path, output_path, attempt_dir, previous_o
         output, trajectory = run_local_phase(config, manifest["role"], manifest["payload"], attempt_dir,
                                               retry_feedback=feedback)
         stage = "output_write"
-        atomic_json(output_path, redact_agent_record(worker_envelope(
+        atomic_json(output_path, audit_record(worker_envelope(
             manifest, started_at, "completed", agent_output=output, trajectory=trajectory)))
         return 0
     except Exception as exc:
         stage = getattr(exc, "worker_failure_stage", stage)
-        value = redact_sensitive(worker_failure(manifest, started_at, stage, exc,
+        value = audit_record(worker_failure(manifest, started_at, stage, exc,
             contract_error=stage == "agent_output_validation" or isinstance(exc, PlaybookAgentOutputContractError)))
         if stage == "agent_output_validation":
             completion = attempt_dir / "completion.json"
@@ -51,7 +51,7 @@ def run_task(*, config_path, manifest_path, output_path, attempt_dir, previous_o
                 value["raw_agent_output"] = json.loads(completion.read_text())["agent_output"]
             if hasattr(exc, "violations"):
                 value["validation_violations"] = exc.violations
-            value = redact_sensitive(value)
+            value = audit_record(value)
         atomic_json(attempt_dir / "failure.json", value)
         atomic_json(output_path, value)
         return 1

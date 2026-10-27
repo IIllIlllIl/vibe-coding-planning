@@ -14,6 +14,7 @@ from gepa.core.state import GEPAState
 from gepa.utils import MaxCandidateProposalsStopper
 
 from src.exceptions import ControllerYield, OfflineReflectionBlocked
+from src.artifact_policy import mark_private_artifact_dir
 from src.optimization.audit import JsonlLogger, text_sha256
 from src.optimization.behavioral_adapter import BehavioralGEPAAdapter
 from src.optimization.behavioral_dataset import (
@@ -93,7 +94,7 @@ def run_behavioral_optimization(
 ) -> Any:
     if config.hybrid.enabled and adapter_factory is BehavioralGEPAAdapter:
         raise ValueError("hybrid runs require run_hybrid_optimization; do not use the legacy proposer/adapter")
-    config.run_dir.mkdir(parents=True, exist_ok=True)
+    mark_private_artifact_dir(config.run_dir)
     with _controller_lock(config):
         return _run_locked(
             config, checker=checker, proposer=proposer, optimize_fn=optimize_fn,

@@ -130,6 +130,7 @@ def reclaim_disposable_phase_workspaces(
     raw_root: str,
     *,
     dry_run: bool = False,
+    include_prepared: bool = False,
 ) -> dict:
     """Remove only disposable per-attempt workspaces below one exact run.
 
@@ -142,9 +143,12 @@ def reclaim_disposable_phase_workspaces(
     root = _validated_run_root(raw_root)
     task_root = root / "hpc_tasks"
     targets: list[Path] = []
-    for target in sorted(
-        task_root.glob("*/*/attempts/task_*/attempt_*/workspaces")
-    ):
+    candidates = list(task_root.glob("*/*/attempts/task_*/attempt_*/workspaces"))
+    if include_prepared:
+        # Complete, unconsumed handoffs survive normal yield/resume cleanup.
+        # Reclaim them only after a terminal run decision and no active jobs.
+        candidates.extend(task_root.glob("pce_prepare/*/attempts/task_*/attempt_*/prepared_repository"))
+    for target in sorted(candidates):
         relative = target.relative_to(task_root)
         parts = relative.parts
         if (
@@ -152,7 +156,7 @@ def reclaim_disposable_phase_workspaces(
             or parts[-4] != "attempts"
             or not parts[-3].startswith("task_")
             or not parts[-2].startswith("attempt_")
-            or parts[-1] != "workspaces"
+            or parts[-1] not in {"workspaces", "prepared_repository"}
         ):
             raise ValueError(f"unexpected phase-workspace depth: {target}")
         if not target.is_symlink() and not target.is_dir():

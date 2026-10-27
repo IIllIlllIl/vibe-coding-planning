@@ -5,6 +5,11 @@ working tree based on `63a799f`. This is a code/data-contract audit, not evidenc
 of learning quality or approval to launch. Existing scientific outputs and
 frozen configurations were not rewritten.
 
+The credential-redaction behavior in finding 5 is historical. The current
+[private-results contract](../engineering-contracts.md#private-results-and-post-run-credential-review)
+removes Host substitutions/rejection in favor of preserved private evidence
+and separate post-run review. Existing audit results below are not rewritten.
+
 ## Reproduced defects and boundaries
 
 1. **Legacy Plan-refinement fallback selected the first code block.**

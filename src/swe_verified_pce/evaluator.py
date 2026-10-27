@@ -98,6 +98,7 @@ def evaluate_swe_verified_apptainer(
     result_callback: Callable[[dict[str, Any]], None] | None = None,
     cleanup_error_callback: Callable[[BaseException], None] | None = None,
     repository_baseline_dir: Path | None = None,
+    repository_prepared: bool = False,
 ) -> dict[str, Any]:
     """Run official SWE-bench grading while preserving outcome uncertainty."""
 
@@ -128,7 +129,7 @@ def evaluate_swe_verified_apptainer(
             writable_tmpfs=container.writable_tmpfs,
             git_safe_directories=[workdir],
             host_workdir=phase_workdir,
-            initialize_host_workdir=True,
+            initialize_host_workdir=not repository_prepared,
         )
         try:
             verify_swebench_evaluator_repository(

@@ -79,6 +79,9 @@ def run_task(
     mode = "swe_verified_pce"
     try:
         manifest = json.loads(task_manifest_path.read_text(encoding="utf-8"))
+        operation = manifest.get("operation", "pce")
+        if operation not in {"pce", "prepare_workspace"}:
+            raise ValueError("unsupported repository PCE Worker operation")
         mode = manifest.get("mode", mode)
         if dataset is None and mode != "swe_verified_pce":
             from src.pce_dataset import repository_pce_dataset
@@ -90,7 +93,8 @@ def run_task(
         runner_class = dataset.runner_class if dataset else SWEVerifiedPCERunner
         case = case_loader(dict(manifest["case"]))
         stage = "config_load"
-        config = config_loader(config_path)
+        config = config_loader(config_path, **({"require_api_keys": False}
+                                               if operation == "prepare_workspace" else {}))
         stage = "runtime_setup"
         capacity = configure_docker_capacity(
             config.docker,
@@ -98,6 +102,28 @@ def run_task(
             enable_docker_maintenance=False,
         )
         stage = "pce_execution"
+        if operation == "prepare_workspace":
+            stage = "input_load"
+            if config.workspace_preparation != "separate_slurm_v1":
+                raise ValueError("workspace preparation Worker requires explicit configuration")
+            parent = config.run_dir / "hpc_tasks" / "pce" / manifest["pce_fingerprint"]
+            parent_manifest = json.loads((parent / "tasks" / f"task_{manifest['pce_task_index']:04d}.json").read_text())
+            if parent_manifest["case"] != manifest["case"]:
+                raise ValueError("workspace preparation case differs from its PCE authority")
+            checkpoint_dir = parent / "checkpoints" / f"task_{manifest['pce_task_index']:04d}"
+            stage = "workspace_preparation"
+            runner = runner_class(config, capacity, checkpoint_dir=checkpoint_dir,
+                checkpoint_identity=checkpoint_identity(case, execution_fingerprint=manifest["pce_fingerprint"]),
+                attempt_dir=attempt_dir)
+            result = runner.prepare_workspace(case, manifest["prepared_phase"])
+            atomic_json(output_path, {
+                "schema_version": 1, "status": "completed", "mode": mode,
+                **{name: manifest[name] for name in ("fingerprint", "task_index", "instance_id",
+                     "pce_fingerprint", "pce_task_index", "pce_attempt", "prepared_phase")},
+                "attempt": attempt, "started_at": started_at,
+                "finished_at": datetime.now(timezone.utc).isoformat(), **result,
+            })
+            return 0
         runner = runner_class(
             config,
             capacity,

@@ -13,7 +13,7 @@ import uuid
 
 from gepa.core.adapter import EvaluationBatch
 
-from src.optimization.audit import JsonlLogger, redact_sensitive, text_sha256
+from src.optimization.audit import JsonlLogger, audit_record, text_sha256
 from src.optimization.checker import (
     CheckerAgentTimeout,
     CheckerOutputContractError,
@@ -223,7 +223,7 @@ class CheckerGEPAAdapter:
         temporary = path.with_suffix(".json.tmp")
         temporary.write_text(
             json.dumps(
-                redact_sensitive(payload),
+                audit_record(payload),
                 indent=2,
                 ensure_ascii=False,
                 sort_keys=True,

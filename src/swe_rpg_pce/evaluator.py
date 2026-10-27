@@ -51,7 +51,8 @@ rc=$?; record code_patch "$rc"; [ "$rc" -eq 0 ] || exit "$rc"
 
 def evaluate_swe_rpg_apptainer(patch, case, *, snapshot, container, capacity_window,
         workdir, phase_workdir, command_timeout, evaluation_started_callback=None,
-        result_callback=None, cleanup_error_callback=None, repository_baseline_dir=None):
+        result_callback=None, cleanup_error_callback=None, repository_baseline_dir=None,
+        repository_prepared=False):
     """Agent patch evaluation; patch=None is a no-Agent Base calibration only.
 
     Gold calibration passes the explicit reference patch separately. It is not
@@ -77,7 +78,8 @@ def evaluate_swe_rpg_apptainer(patch, case, *, snapshot, container, capacity_win
         env = ApptainerEnvironment(image=case.image.requested_ref, cwd=workdir,
             sif_cache_dir=container.sif_cache_dir, capacity_window=capacity_window,
             timeout=None, writable_tmpfs=container.writable_tmpfs,
-            git_safe_directories=[workdir], host_workdir=phase_workdir, initialize_host_workdir=True,
+            git_safe_directories=[workdir], host_workdir=phase_workdir,
+            initialize_host_workdir=not repository_prepared,
             isolate_tmp=True,
             run_args=["--containall", "--no-mount", "cwd", "--bind", f"{inputs}:/rpg-eval-input:ro",
                       "--bind", f"{outputs}:/rpg-eval-output"])

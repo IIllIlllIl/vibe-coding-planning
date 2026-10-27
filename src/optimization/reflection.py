@@ -19,7 +19,7 @@ from src.environment.docker_env import DockerCapacityWindow
 from src.optimization.audit import (
     AuditedModel,
     JsonlLogger,
-    redact_sensitive,
+    audit_record,
     text_sha256,
 )
 from src.optimization.config import OptimizationConfig
@@ -78,7 +78,7 @@ def _capture_optional_reflection_analysis(
         analysis = json.loads(raw)
     except json.JSONDecodeError as exc:
         (bundle / "reflection_analysis_invalid.txt").write_text(
-            str(redact_sensitive(raw)),
+            str(audit_record(raw)),
             encoding="utf-8",
         )
         audit.write(
@@ -90,7 +90,7 @@ def _capture_optional_reflection_analysis(
         return
     _write_json(
         bundle / "reflection_analysis.json",
-        redact_sensitive(analysis),
+        audit_record(analysis),
     )
     audit.write(
         "reflection_analysis_captured",
@@ -128,7 +128,7 @@ def save_reflection_trajectory(
     if error is not None:
         payload["error_type"] = type(error).__name__
         payload["error"] = str(error)
-    _write_json(path, redact_sensitive(payload))
+    _write_json(path, audit_record(payload))
     return path
 
 

@@ -29,7 +29,7 @@ from src.evaluator.swe_evaluator import derive_image_name
 from src.optimization.audit import (
     AuditedModel,
     JsonlLogger,
-    redact_sensitive,
+    audit_record,
     text_sha256,
 )
 from src.optimization.config import OptimizationConfig
@@ -103,7 +103,7 @@ def _install_trajectory_journal(agent: Any, path: Path) -> None:
 
     def add_message(role: str, content: str, **kwargs: Any) -> None:
         original_add_message(role, content, **kwargs)
-        record = redact_sensitive(agent.messages[-1])
+        record = audit_record(agent.messages[-1])
         with path.open("a", encoding="utf-8") as handle:
             handle.write(
                 json.dumps(

@@ -13,6 +13,10 @@ import yaml
 
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
+if str(REPO_ROOT) not in sys.path:
+    sys.path.insert(0, str(REPO_ROOT))
+
+from src.artifact_policy import mark_private_artifact_dir
 RESUME_SCRIPT = REPO_ROOT / "scripts" / "hpc_resume_loop.py"
 RESUME_SEQUENCE_SCRIPT = REPO_ROOT / "scripts" / "hpc_resume_sequence.py"
 
@@ -109,6 +113,7 @@ def main(argv: list[str] | None = None) -> int:
     if not log_path.is_absolute():
         log_path = REPO_ROOT / log_path
     log_path = log_path.resolve()
+    mark_private_artifact_dir(log_path.parent)
     log_path.parent.mkdir(parents=True, exist_ok=True)
     command = [
         "exec",

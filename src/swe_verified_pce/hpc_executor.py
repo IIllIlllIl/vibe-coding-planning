@@ -70,6 +70,7 @@ def pce_semantic_sha256(
 ) -> str:
     root = Path(__file__).resolve().parents[2]
     sources = [
+        root / "src" / "artifact_policy.py",
         root / "src" / "agents" / "_deps.py",
         root / "src" / "agents" / "plan_agent.py",
         root / "src" / "agents" / "plan_submission.py",
@@ -96,6 +97,8 @@ def pce_semantic_sha256(
     return _stable_hash(
         {
             "schema": 2,
+            **({"workspace_preparation": config.workspace_preparation}
+               if config.workspace_preparation != "inline" else {}),
             "source": {
                 str(path.relative_to(root)): file_sha256(path) for path in sources
             },
@@ -267,6 +270,7 @@ def build_array_script(
     attempt: int,
     worker_module: str = "src.swe_verified_pce.worker",
     label: str = "SWE-Verified PCE",
+    preparation_only: bool = False,
 ) -> str:
     if not indices:
         raise ValueError(f"{label} array requires at least one task")
@@ -294,10 +298,12 @@ def build_array_script(
         "set +x",
         f"module load {shlex.quote(hpc.python_module)}",
         f"module load {shlex.quote(hpc.container_module)}",
-        f"ENV_FILE={shlex.quote(hpc.remote_env_file)}",
-        'ENV_FILE="${ENV_FILE/#\\~/$HOME}"',
-        'source "${ENV_FILE}"',
-        *[f'test -n "${{{name}:-}}" || exit 2' for name in _credential_envs(config)],
+        *([] if preparation_only else [
+            f"ENV_FILE={shlex.quote(hpc.remote_env_file)}",
+            'ENV_FILE="${ENV_FILE/#\\~/$HOME}"',
+            'source "${ENV_FILE}"',
+            *[f'test -n "${{{name}:-}}" || exit 2' for name in _credential_envs(config)],
+        ]),
         f"BATCH_DIR={shlex.quote(str(batch_dir))}",
         'TASK_ID="$(printf "%04d" "${SLURM_ARRAY_TASK_ID}")"',
         f"ATTEMPT={attempt}",
@@ -359,6 +365,9 @@ class SWEVerifiedPCEHPCExecutor:
         tasks = self._prepare(batch_dir, fingerprint, cases)
 
         def write_script(indices: Sequence[int], attempt: int) -> Path:
+            if self.config.workspace_preparation == "separate_slurm_v1":
+                from src.swe_verified_pce.workspace_preparation import prepare_before_pce
+                prepare_before_pce(self, batch_dir, fingerprint, tasks, indices, attempt)
             path = batch_dir / f"pce_array_attempt_{attempt:02d}.sbatch"
             path.write_text(
                 build_array_script(
@@ -402,10 +411,17 @@ class SWEVerifiedPCEHPCExecutor:
                 ),
                 write_script=write_script,
                 validate_output=validate,
+                **({"finalize_case_failure": self._finalize_preparation_failure}
+                   if self.config.workspace_preparation == "separate_slurm_v1" else {}),
             )
         except TaskAttemptsExhausted:
             results = self._collect_exhausted(batch_dir, fingerprint, tasks)
         return self._attach_source_access_attempt_index(results, tasks)
+
+    @staticmethod
+    def _finalize_preparation_failure(task, value):
+        from src.swe_verified_pce.workspace_preparation import finalize_preparation_failure
+        return finalize_preparation_failure(task, value)
 
     def _attach_source_access_attempt_index(
         self,

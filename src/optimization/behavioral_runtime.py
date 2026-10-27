@@ -17,7 +17,7 @@ from src.agents._deps import (
 from src.optimization.audit import (
     AuditedModel,
     JsonlLogger,
-    redact_sensitive,
+    audit_record,
     text_sha256,
 )
 from src.optimization.behavioral_models import (
@@ -91,7 +91,7 @@ def _write_json(path: Path, value: Any) -> None:
     temporary = path.with_suffix(path.suffix + ".tmp")
     temporary.write_text(
         json.dumps(
-            redact_sensitive(value),
+            audit_record(value),
             indent=2,
             ensure_ascii=False,
             sort_keys=True,

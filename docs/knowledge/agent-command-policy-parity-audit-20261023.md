@@ -2,6 +2,14 @@
 
 ## Scope and engineering baseline
 
+The acceptance counts and reports below describe the original PreToolUse
+implementation. The current [shared contract](../engineering-contracts.md#shared-agent-backend-entry)
+adds paired PostToolUse receipts because vendor JSONL exports can redact
+ordinary command text. Original command inputs and public exports are both
+retained; no scientific output is reconstructed from a redacted export. Old
+schema-1 audits retain their strict historical comparison. New source identities
+must not retroactively validate or resume historical failed attempts.
+
 This repair unifies source-command decisions and immediate refusal feedback,
 not the complete Agent harness or experimental network policy. The baseline is
 the existing Safe PCE Runner and its shared Native SIF transport, documented in
@@ -54,6 +62,21 @@ validation prevents accepting such an uncovered completion, not retroactively
 preventing a command. This is not a complete network or dynamic-code firewall.
 
 ## Acceptance evidence
+
+The 2026-10-27 receipt-preservation follow-up passed 360 targeted regression
+tests, compilation and `git diff --check`. The existing no-model verifier,
+extended with `--redaction`, passed on local CLI 0.164.0 and pinned CLI 0.160.1
+on Iris login: four loopback requests, forbidden marker absent, corrected marker
+present, source refusal and invalid-Plan correction returned to the same turn,
+and no receipt-audit error. The diagnostic alone disables plugins/connectors
+to avoid background marketplace initialization racing temporary-HOME cleanup;
+production Agent options are unchanged. Neither test used real auth or a model.
+The pinned report is `run_state/operations/credential-policy-no-model-20261027-v2/accepted-report.json`;
+its final `output/credential-policy-acceptance-20261027/policy-final/policy.pyz`
+package SHA-256 is
+`ade5dcde4276db333ec6e630a714d6d4f96d45e264bec8eddab1b32743a7cede`.
+These are login/transport checks, not compute-node SIF acceptance or a resumed
+scientific run. The remaining counts below describe the earlier implementation.
 
 `tests/test_agents/test_codex_command_policy.py` contributes 33 tests, covering
 common reasons/126, blocked commands never reaching mini-SWE subprocess

@@ -10,7 +10,7 @@ from src.optimization.playbook import (
 from src.optimization.paired_playbook import validate_ace_paired_reflector_review
 from src.optimization.playbook_adapter import GlobalPlaybookCounters
 from src.optimization.hpc.task_batch import atomic_json
-from src.optimization.audit import redact_sensitive
+from src.optimization.audit import audit_record
 from src.exceptions import ControllerYield, OfflineReflectionBlocked
 from src.optimization.ace_transaction import run_ace_transaction
 
@@ -127,7 +127,7 @@ class IncrementalHybridACEProposer:
             trace_path = self.trace_dir / f"{identity}.json"
         def persist(status):
             if trace_path is not None:
-                atomic_json(trace_path, redact_sensitive(dict(self.last_trace, status=status)))
+                atomic_json(trace_path, audit_record(dict(self.last_trace, status=status)))
         def reflect(rows):
             return (list(self.batch_reflector(parent, rows))
                           if self.batch_reflector is not None

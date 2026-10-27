@@ -7,10 +7,12 @@ import hashlib
 import json
 from pathlib import Path
 import shutil
+import time
 from typing import Any, Callable
 
 from src.agents import code_agent, plan_agent
 from src.agents.pce_backend import agent_runner
+from src.artifact_policy import mark_private_artifact_dir
 from src.config import AgentConfig, Config, EvaluatorConfig, PromptConfig, SystemConfig
 from src.environment.apptainer_env import ApptainerEnvironment, ApptainerSifCache
 from src.environment.docker_env import DockerCapacityWindow
@@ -31,6 +33,7 @@ from src.swe_verified_pce.config import SWEVerifiedPCEConfig
 from src.swe_verified_pce.dataset import file_sha256
 from src.swe_verified_pce.evaluator import evaluate_swe_verified_apptainer
 from src.swe_verified_pce.models import SWEVerifiedPCECase
+from src.swe_verified_pce.workspace_preparation import PHASES, claim_workspace
 
 
 Evaluator = Callable[..., dict[str, Any]]
@@ -53,6 +56,8 @@ class SWEVerifiedPCERunner:
         self.checkpoint_identity = checkpoint_identity
         self.attempt_dir = attempt_dir
         self.evaluator = evaluator
+        mark_private_artifact_dir(attempt_dir)
+        mark_private_artifact_dir(checkpoint_dir)
         self.audit = JsonlLogger(attempt_dir / "audit_events.jsonl")
         self.usage = JsonlLogger(attempt_dir / "usage.jsonl")
         self.source_access_path = attempt_dir / "source_access.jsonl"
@@ -152,6 +157,7 @@ class SWEVerifiedPCERunner:
         timeout: int,
         phase: str,
         host_workdir: Path | None = None,
+        initialize_host_workdir: bool = True,
     ) -> ApptainerEnvironment:
         return ApptainerEnvironment(
             image=case.image.requested_ref,
@@ -164,7 +170,7 @@ class SWEVerifiedPCERunner:
             run_args=self._agent_container_run_args(),
             git_safe_directories=[self.config.docker.workdir],
             host_workdir=host_workdir,
-            initialize_host_workdir=host_workdir is not None,
+            initialize_host_workdir=host_workdir is not None and initialize_host_workdir,
             isolate_tmp=True,
             masked_container_paths=["/opt/miniconda3/pkgs"],
             source_access_prompt_urls=list(extract_http_urls(case.issue_description)),
@@ -345,12 +351,58 @@ class SWEVerifiedPCERunner:
         atomic_json(self.attempt_dir / "code_workspace_evidence.json", evidence)
         return evidence
 
+    def prepare_workspace(self, case: SWEVerifiedPCECase, phase: str) -> dict[str, Any]:
+        """Run existing SIF/history/base preparation only, without an Agent/eval."""
+        if phase not in PHASES:
+            raise ValueError("unsupported PCE workspace preparation phase")
+        if self._checkpoint(phase) is not None:
+            return {"workspace_status": "checkpoint_reused", "prepared_repository_relative_path": None}
+        started = time.monotonic()
+        self._verify_sif(case)
+        verified = time.monotonic()
+        workspace = self.attempt_dir / "workspaces" / phase
+        self._cleanup(workspace)
+        target = self.attempt_dir / "prepared_repository"
+        if target.exists():
+            raise FatalError("completed preparation handoff already exists in this attempt")
+        env = None
+        try:
+            env = self._environment(case, timeout=self.config.plan.timeout,
+                                    phase="prepare_" + phase, host_workdir=workspace)
+            initialized = time.monotonic()
+            if phase != "evaluate":
+                bundle, manifest = self._ensure_repository_history(case)
+                atomic_json(self.attempt_dir / "repository_history_artifact.json",
+                            {**manifest, "bundle": str(bundle)})
+                self._restore_agent_repository(env, case, phase=phase, host_workdir=workspace,
+                    evidence_dir=self.attempt_dir / "repository_baselines" / phase,
+                    timeout=self.config.plan.timeout, history_bundle=bundle)
+            else:
+                from src.environment.repository_baseline import verify_swebench_evaluator_repository
+                verify_swebench_evaluator_repository(env, case.base_commit, phase="evaluate",
+                    evidence_dir=self.attempt_dir / "repository_baselines" / phase,
+                    timeout=self.config.plan.timeout)
+            restored = time.monotonic()
+        finally:
+            if env is not None:
+                self._best_effort_environment_cleanup(env, phase="prepare_" + phase)
+        workspace.rename(target)
+        result = {"workspace_status": "ready",
+                  "prepared_repository_relative_path": target.relative_to(self.config.run_dir).as_posix(),
+                  "timing_seconds": {"sif_verification": verified - started,
+                     "environment_initialization": initialized - verified,
+                     "repository_preparation": restored - initialized,
+                     "total": time.monotonic() - started}}
+        atomic_json(self.attempt_dir / "preparation_result.json", result)
+        return result
+
     def run(self, case: SWEVerifiedPCECase) -> dict[str, Any]:
+        prepared = getattr(self.config, "workspace_preparation", "inline") == "separate_slurm_v1"
         self._verify_sif(case)
         plan_checkpoint = self._checkpoint("plan")
         code_checkpoint = self._checkpoint("code")
         history_bundle: Path | None = None
-        if plan_checkpoint is None or code_checkpoint is None:
+        if not prepared and (plan_checkpoint is None or code_checkpoint is None):
             history_bundle, history_manifest = self._ensure_repository_history(case)
             atomic_json(
                 self.attempt_dir / "repository_history_artifact.json",
@@ -360,9 +412,12 @@ class SWEVerifiedPCERunner:
                 },
             )
         if plan_checkpoint is None:
-            assert history_bundle is not None
+            assert prepared or history_bundle is not None
             plan_workspace = self.attempt_dir / "workspaces" / "plan"
-            self._cleanup(plan_workspace)
+            if prepared:
+                claim_workspace(self, case, "plan", plan_workspace)
+            else:
+                self._cleanup(plan_workspace)
             env: ApptainerEnvironment | None = None
             try:
                 env = self._environment(
@@ -370,16 +425,18 @@ class SWEVerifiedPCERunner:
                     timeout=self.config.plan.timeout,
                     phase="plan",
                     host_workdir=plan_workspace,
+                    **({"initialize_host_workdir": False} if prepared else {}),
                 )
-                self._restore_agent_repository(
-                    env,
-                    case,
-                    phase="plan",
-                    host_workdir=plan_workspace,
-                    evidence_dir=self.attempt_dir / "repository_baselines" / "plan",
-                    timeout=self.config.plan.timeout,
-                    history_bundle=history_bundle,
-                )
+                if not prepared:
+                    self._restore_agent_repository(
+                        env,
+                        case,
+                        phase="plan",
+                        host_workdir=plan_workspace,
+                        evidence_dir=self.attempt_dir / "repository_baselines" / "plan",
+                        timeout=self.config.plan.timeout,
+                        history_bundle=history_bundle,
+                    )
                 submission_protocol = getattr(
                     self.config,
                     "plan_submission_protocol",
@@ -464,7 +521,7 @@ class SWEVerifiedPCERunner:
                 self._best_effort_workspace_cleanup(plan_workspace, phase="plan")
 
         if code_checkpoint is None:
-            assert history_bundle is not None
+            assert prepared or history_bundle is not None
             plan_text = str(plan_checkpoint["plan"])
             recorded_plan_sha256 = plan_checkpoint.get("plan_sha256")
             if recorded_plan_sha256 is not None and recorded_plan_sha256 != (
@@ -472,7 +529,10 @@ class SWEVerifiedPCERunner:
             ):
                 raise FatalError("PCE Plan checkpoint content hash mismatch")
             code_workspace = self.attempt_dir / "workspaces" / "code"
-            self._cleanup(code_workspace)
+            if prepared:
+                claim_workspace(self, case, "code", code_workspace)
+            else:
+                self._cleanup(code_workspace)
             env: ApptainerEnvironment | None = None
             try:
                 env = self._environment(
@@ -480,16 +540,18 @@ class SWEVerifiedPCERunner:
                     timeout=self.config.code.timeout,
                     phase="code",
                     host_workdir=code_workspace,
+                    **({"initialize_host_workdir": False} if prepared else {}),
                 )
-                self._restore_agent_repository(
-                    env,
-                    case,
-                    phase="code",
-                    host_workdir=code_workspace,
-                    evidence_dir=self.attempt_dir / "repository_baselines" / "code",
-                    timeout=self.config.code.timeout,
-                    history_bundle=history_bundle,
-                )
+                if not prepared:
+                    self._restore_agent_repository(
+                        env,
+                        case,
+                        phase="code",
+                        host_workdir=code_workspace,
+                        evidence_dir=self.attempt_dir / "repository_baselines" / "code",
+                        timeout=self.config.code.timeout,
+                        history_bundle=history_bundle,
+                    )
                 base_code_config = self._base_config(self.config.code)
                 code_config = replace(
                     base_code_config,
@@ -561,9 +623,13 @@ class SWEVerifiedPCERunner:
         evaluator_checkpoint = self._checkpoint("evaluate")
         if evaluator_checkpoint is None:
             eval_workspace = self.attempt_dir / "workspaces" / "evaluate"
-            self._cleanup(eval_workspace)
+            if prepared:
+                claim_workspace(self, case, "evaluate", eval_workspace)
+            else:
+                self._cleanup(eval_workspace)
             try:
                 evaluator_options: dict[str, Any] = {
+                    **({"repository_prepared": True} if prepared else {}),
                     "container": self.config.container,
                     "capacity_window": self.capacity_window,
                     "workdir": self.config.docker.workdir,

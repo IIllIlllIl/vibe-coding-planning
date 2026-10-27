@@ -16,6 +16,7 @@ import time
 from typing import Any, Callable, Sequence
 
 from src.exceptions import ControllerYield
+from src.artifact_policy import mark_artifact_path, mark_private_artifact_dir
 from src.optimization.hpc.config import HPCConfig
 from src.optimization.hpc.slurm import (
     SlurmLookupUnavailable,
@@ -86,6 +87,7 @@ class TaskAttemptsExhausted(TaskBatchBlocked):
 
 
 def atomic_json(path: Path, value: Any) -> None:
+    mark_artifact_path(path)
     path.parent.mkdir(parents=True, exist_ok=True)
     temporary = path.with_suffix(path.suffix + ".tmp")
     temporary.write_text(
@@ -121,6 +123,7 @@ class SlurmTaskBatch:
         ) = None,
     ) -> list[dict[str, Any]]:
         """Return validated outputs or yield after durable asynchronous work."""
+        mark_private_artifact_dir(batch_dir)
         if finalize_case_failure is None:
             def finalize_case_failure(task: TaskFiles, value: dict[str, Any]):
                 return self._finalize_known_case_failure(
@@ -358,8 +361,11 @@ class SlurmTaskBatch:
                 f"Slurm task batch prepared at {batch_dir}; set hpc.submit=true"
             )
 
-        self._archive_failed_outputs(batch_dir, pending, attempt - 1)
         script_path = write_script([task.index for task in pending], attempt)
+        # A dependent preparation wave may yield here. Preserve the failed
+        # output until dependencies are ready so resume still recognizes this
+        # as a failed task, not an inexplicably missing output from the old job.
+        self._archive_failed_outputs(batch_dir, pending, attempt - 1)
         if "submission_error" in state:
             state["last_submission_error"] = state.pop("submission_error")
         state.pop("submission_lookup_error", None)

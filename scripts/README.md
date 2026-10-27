@@ -2,6 +2,18 @@
 
 ## Safe PCE / ACE Learning Preparation
 
+- `tools/check_commit_safety.py` is the required pre-commit index review; it
+  rejects marked/private artifacts and likely credentials, including forced
+  additions. `--worktree` also reviews pending nonignored changes. It does not
+  modify files, stage content, scan private auth authorities, or upload data.
+  Marker metadata is managed by `src/artifact_policy.py`; see the
+  [private-results contract](../docs/engineering-contracts.md#private-results-and-post-run-credential-review).
+- `tools/review_credential_exposure.py --run-dir <one-result-root>` performs
+  offline, read-only credential-exposure review. It writes only a location-only
+  report inside that result root, loads no private auth files, follows no links,
+  calls no model/container/scheduler, and does not gate or modify learning.
+  Findings are candidates for human review, not proof of leakage or its absence;
+  see the [private-results contract](../docs/engineering-contracts.md#private-results-and-post-run-credential-review).
 - `tools/prepare_safe_pce_ace_gepa.py` prepares explicit task-only splits and a
   new hybrid learning config around an existing Safe PCE config. It calls no
   model or scheduler; see [`../docs/safe-pce-ace-gepa.md`](../docs/safe-pce-ace-gepa.md).

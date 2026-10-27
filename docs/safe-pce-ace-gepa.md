@@ -77,6 +77,32 @@ Version changes require fresh input packages; never edit frozen bundled prompts
 in place. New learning roles receive their own P/C/E task and evidence,
 without descriptions of separate acceptance-classification experiments.
 
+`safe_pce_native_codex_code_v3.yaml` changes only the Coder's diagnostic-change
+paragraph: test-support helpers/configuration remain unstaged even inside
+package directories; classify by their role, rather than their directory name.
+This addresses the `pylint-dev__pylint-10814` submission ambiguity, where the
+Coder excluded ordinary tests but staged a configuration helper needed by
+those tests, overlapping the official test patch. It does not expose official
+test-patch contents to the Coder, strip its patch, or change evaluator order.
+Its effect on actual Agent behavior requires a new execution, not a text-only
+claim of success. The `nodiag3_v6_20261027` configs bind this prompt with the
+unchanged v2 Planner/seed and v2 required/optional learning evidence contract.
+They retain the frozen 46/15/16 split, all-Codex high, 16-case minibatches and
+156-slot budget. That v6 configuration retains inline workspace preparation;
+configuration preparation alone did not remove its timing problem.
+
+The fresh `nodiag3_v7_20261027` input package selects the shared repository-PCE
+`separate_slurm_v1` preparation boundary. Its learning prompts, Coder v3,
+Planner/seed v2, split, models and model-call budget are unchanged from v6.
+At most three no-model preparation elements precede each uncached PCE slot
+(468 for 156 slots, before retries); complete scientific checkpoints skip the
+corresponding work. Prep arrays use the existing 1 CPU/4G and PCE time request,
+without a project concurrency cap. These are setup jobs, not extra Planner,
+Coder or learning calls. See the
+[shared handoff contract](engineering-contracts.md#repository-pce-dataset-bindings).
+Compute-node verification is a separate prerequisite, not a claim made by
+local tests or configuration generation, and does not authorize formal training.
+
 Other retained projections are mechanical and separately testable: local
 references map declared learning-envelope fields only, leaving raw P/C/E
 objects and tool traces opaque; evidence files preserve every
@@ -86,6 +112,15 @@ executions. These are not Host-authored replacements for raw scientific text.
 See the [evidence-fidelity audit](knowledge/learning-evidence-fidelity-audit-20261022.md)
 for reproduced defects, fixes and the distinction between data availability
 and model reading.
+
+Host persistence preserves P/C/E and learning records without credential
+substitution or keyword-based rejection. Private credential isolation,
+ignored result roots and a separate post-run review replace scattered log
+filtering; see the [shared contract](engineering-contracts.md#private-results-and-post-run-credential-review).
+Vendor-redacted Native exports remain unchanged and are not execution-input
+hash authorities. Original paired hook receipts supply that evidence. These
+source changes require a fresh execution identity; historical outputs and
+checkpoints are not rewritten or re-certified by the new policy.
 
 ## Scores, evidence and selection
 

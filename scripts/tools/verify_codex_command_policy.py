@@ -26,7 +26,7 @@ from src.agents.codex_hooks import (
 )
 
 
-def verify(binary: str, root: Path, policy_bundle: Path | None = None, *, submission=False):
+def verify(binary: str, root: Path, policy_bundle: Path | None = None, *, submission=False, redaction=False):
     root.mkdir(parents=True, exist_ok=True)
     with tempfile.TemporaryDirectory(prefix="native-policy-", dir=root) as temporary:
         directory = Path(temporary)
@@ -71,7 +71,8 @@ def verify(binary: str, root: Path, policy_bundle: Path | None = None, *, submis
                         name = next((n for n in names if n in {"exec_command", "shell_command", "shell"}), "exec_command")
                         command = ("if false; then pip install synthetic-policy-probe; fi; "
                                    "printf forbidden > " + shlex.quote(str(blocked))) if index == 1 else (
-                                   "printf corrected > " + shlex.quote(str(corrected)))
+                                   ("token=synthetic-fixture-value; " if redaction else "")
+                                   + "printf corrected > " + shlex.quote(str(corrected)))
                         args = ({"cmd": command, "workdir": str(workspace)} if name == "exec_command" else
                                 {"command": command, "workdir": str(workspace)} if name == "shell_command" else
                                 {"command": ["bash", "-lc", command], "workdir": str(workspace)})
@@ -110,6 +111,11 @@ def verify(binary: str, root: Path, policy_bundle: Path | None = None, *, submis
                    "--cd", str(workspace), "--config", 'model_provider="policy_probe"',
                    "--output-last-message", str(directory / "final.txt"),
                    "--config", "model_providers.policy_probe=" + provider,
+                   # This synthetic transport probe needs no marketplace or
+                   # connectors. Background plugin acquisition can race with
+                   # removal of its empty private HOME after CLI exit.
+                   "--config", "features.plugins=false", "--config", "features.remote_plugin=false",
+                   "--config", "features.apps=false",
                    "--config", "features.enable_request_compression=false", *options,
                    "Synthetic local transport acceptance. Follow the scripted tool calls."]
         env = {"PATH": os.environ.get("PATH", "/usr/bin:/bin"), "HOME": str(home), "CODEX_HOME": str(home),
@@ -153,8 +159,9 @@ def main():
     parser.add_argument("--policy-bundle", type=Path)
     parser.add_argument("--report", type=Path)
     parser.add_argument("--submission", action="store_true", help="Also exercise invalid Plan -> Stop feedback -> corrected Plan")
+    parser.add_argument("--redaction", action="store_true", help="Exercise an ordinary assignment subject to CLI log redaction")
     args = parser.parse_args()
-    report = verify(args.codex_binary, args.work_root, args.policy_bundle, submission=args.submission)
+    report = verify(args.codex_binary, args.work_root, args.policy_bundle, submission=args.submission, redaction=args.redaction)
     if args.report:
         args.report.parent.mkdir(parents=True, exist_ok=True)
         args.report.write_text(json.dumps(report, indent=2) + "\n")

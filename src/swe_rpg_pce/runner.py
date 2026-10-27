@@ -1,6 +1,7 @@
 """Bind RPG workdir/evaluator while reusing every established P/C/E phase."""
 from dataclasses import replace
 from functools import partial
+from contextlib import contextmanager
 import re
 
 from src.environment.repository_history import RepositoryHistoryCache
@@ -21,7 +22,8 @@ class SWERPGPCERunner(SWEVerifiedPCERunner):
             raise FatalError(f"missing prepared base-ancestor history: {case.instance_id}")
         return prepared
 
-    def run(self, case):
+    @contextmanager
+    def _case_configuration(self, case):
         original = self.config
         workdir = case.working_directory
         # Only the fixed repository-path literal is bound per case. No Plan,
@@ -30,6 +32,14 @@ class SWERPGPCERunner(SWEVerifiedPCERunner):
             **{field: re.sub(r"/testbed(?=/|\b)", workdir, getattr(original, field))
                for field in ("plan_prompt", "plan_instance_template", "code_prompt", "code_instance_template")})
         try:
-            return super().run(case)
+            yield
         finally:
             self.config = original
+
+    def run(self, case):
+        with self._case_configuration(case):
+            return super().run(case)
+
+    def prepare_workspace(self, case, phase):
+        with self._case_configuration(case):
+            return super().prepare_workspace(case, phase)

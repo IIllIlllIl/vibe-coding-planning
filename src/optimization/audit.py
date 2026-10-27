@@ -4,73 +4,49 @@ from __future__ import annotations
 
 import hashlib
 import json
-import os
 import threading
 import time
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
+from src.artifact_policy import mark_artifact_path
+
 _PATH_LOCKS: dict[Path, threading.Lock] = {}
 _PATH_LOCKS_GUARD = threading.Lock()
-_SENSITIVE_KEY_PARTS = ("api_key", "authorization", "password", "secret", "token")
 
 
 def text_sha256(text: str) -> str:
     return hashlib.sha256(text.encode("utf-8")).hexdigest()
 
 
-def redact_sensitive(value: Any) -> Any:
-    """Return a JSON-safe copy with credential-shaped values removed."""
-    secrets = tuple(
-        sorted(
-            {
-                item
-                for name, item in os.environ.items()
-                if item
-                and any(part in name.lower() for part in _SENSITIVE_KEY_PARTS)
-            },
-            key=len,
-            reverse=True,
-        )
-    )
+def audit_record(value: Any) -> Any:
+    """Make a JSON-safe copy without filtering scientific or diagnostic text.
 
-    def redact(item: Any) -> Any:
+    Credentials belong in private provider state, outside Agent inputs. Review
+    private result logs after execution; never silently rewrite evidence or
+    reject a completion because its text resembles a credential.
+    """
+    def preserve(item: Any) -> Any:
         if isinstance(item, dict):
-            result = {}
-            for key, child in item.items():
-                key_text = str(key)
-                if any(
-                    part in key_text.lower() for part in _SENSITIVE_KEY_PARTS
-                ):
-                    result[key_text] = "[REDACTED]"
-                else:
-                    result[key_text] = redact(child)
-            return result
+            return {str(key): preserve(child) for key, child in item.items()}
         if isinstance(item, (list, tuple)):
-            return [redact(child) for child in item]
-        if isinstance(item, str):
-            result = item
-            for secret in secrets:
-                result = result.replace(secret, "[REDACTED]")
-            return result
-        if item is None or isinstance(item, (bool, int, float)):
+            return [preserve(child) for child in item]
+        if item is None or isinstance(item, (str, bool, int, float)):
             return item
         return str(item)
 
-    return redact(value)
+    return preserve(value)
 
 
 def redact_agent_record(value: dict[str, Any]) -> dict[str, Any]:
-    """Redact diagnostic metadata, rejecting changes to scientific output.
+    """Compatibility name; records are preserved, never redacted or rejected."""
+    return audit_record(value)
 
-    Credential filtering is a logging policy, not permission to rewrite a
-    candidate or reflection that a later learning phase would consume.
-    """
-    redacted = redact_sensitive(value)
-    if "agent_output" in value and redacted["agent_output"] != value["agent_output"]:
-        raise ValueError("Credential filtering would change scientific agent_output; refusing to save or consume an altered completion")
-    return redacted
+
+def redact_sensitive(value: Any) -> Any:
+    """Compatibility name for old callers; no credential substitution occurs."""
+    return audit_record(value)
 
 
 class JsonlLogger:
@@ -78,6 +54,7 @@ class JsonlLogger:
 
     def __init__(self, path: Path) -> None:
         self.path = path
+        mark_artifact_path(path)
         self.path.parent.mkdir(parents=True, exist_ok=True)
         resolved = path.resolve()
         with _PATH_LOCKS_GUARD:
