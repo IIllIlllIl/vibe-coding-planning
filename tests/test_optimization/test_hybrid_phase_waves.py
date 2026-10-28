@@ -29,7 +29,8 @@ def test_loaded_learning_config_leaves_large_agent_waves_to_slurm(tmp_path):
     assert f"#SBATCH --array={','.join(map(str, indices))}\n" in script
 
 
-def test_full_wave_yield_resume_and_retry_only_invalid_index(tmp_path, monkeypatch):
+@pytest.mark.parametrize("failed_status", ["agent_failed", "completed"])
+def test_full_wave_yield_resume_and_retry_only_invalid_index(tmp_path, monkeypatch, failed_status):
     cfg = config(tmp_path)
     monkeypatch.setattr(runtime, "require_evidence_sif", lambda *_: None)
     executor = runtime.HybridPhaseExecutor(cfg)
@@ -55,7 +56,7 @@ def test_full_wave_yield_resume_and_retry_only_invalid_index(tmp_path, monkeypat
                  "agent_output": review(PARENT, records[index]), "trajectory": [{"index": index}]}
         if index == 1:
             value["agent_output"] = {}
-            value.update(status="agent_failed", error="Invalid Reflector output", error_type="ValueError")
+            value.update(status=failed_status, error="Invalid Reflector output", error_type="ValueError")
         output.write_text(json.dumps(value))
         outputs.append(output)
     retained = {index: outputs[index].read_bytes() for index in (0, 2)}

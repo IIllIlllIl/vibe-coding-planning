@@ -197,6 +197,51 @@ def test_shared_slurm_blocks_and_records_host_validation_failure(tmp_path):
     assert failure["instance_id"] == "case"
 
 
+@pytest.mark.parametrize("problem", ["json", "non_object", "encoding", "agent_contract"])
+@pytest.mark.parametrize("job_id", ["123", None])
+def test_shared_slurm_retries_unusable_output_preserves_original_and_feedback(tmp_path, problem, job_id):
+    from src.agents.output_contract import AgentOutputContractError
+    from src.optimization.hpc.worker_contract import retry_feedback
+    tasks = [TaskFiles(i, f"case-{i}", tmp_path / "tasks" / f"task_{i:04d}.json",
+                       tmp_path / "outputs" / f"task_{i:04d}.json",
+                       tmp_path / "attempts" / f"task_{i:04d}") for i in range(2)]
+    for task in tasks:
+        atomic_json(task.manifest_path, {"instance_id": task.instance_id})
+        atomic_json(task.output_path, {"status": "completed", "value": task.index})
+    broken = {"json": b'{"unfinished":', "non_object": b'[]', "encoding": b'\xff',
+              "agent_contract": b'{"status":"completed","agent_output":{}}'}[problem]
+    tasks[0].output_path.write_bytes(broken)
+    retained = tasks[1].output_path.read_bytes()
+    atomic_json(tmp_path / "task_state.json", {"schema_version": 1,
+        "fingerprint": "fingerprint", "phase": "SUBMITTED" if job_id else "PREPARED",
+        "active_attempt": 1, "active_job_id": job_id})
+    scripts = []
+    def write_script(indices, attempt):
+        assert list(indices) == [0] and attempt == 2
+        path = tmp_path / "retry.sbatch"
+        path.write_text("#!/bin/sh\n")
+        return path
+    def validate(task, value):
+        if "value" not in value:
+            raise AgentOutputContractError("Agent output is missing required value")
+    runtime = SlurmTaskBatch(HPCConfig(submit=True, max_task_attempts=3),
+                             submitter=lambda path: scripts.append(path) or "124")
+    arguments = dict(batch_dir=tmp_path, fingerprint="fingerprint", tasks=tasks,
+                     job_name=lambda attempt: f"job-{attempt}", write_script=write_script,
+                     validate_output=validate)
+    with pytest.raises(ControllerYield):
+        runtime.run(**arguments)
+    archived = tmp_path / "failed_outputs/attempt_01/task_0000.json"
+    assert archived.read_bytes() == broken
+    assert tasks[1].output_path.read_bytes() == retained and len(scripts) == 1
+    diagnostic = json.loads(archived.with_suffix(".host_validation.json").read_text())
+    feedback = retry_feedback(archived)
+    assert diagnostic["error"] in feedback and feedback
+    atomic_json(tasks[0].output_path, {"status": "completed", "value": 0})
+    assert [row["value"] for row in runtime.run(**arguments)] == [0, 1]
+    assert tasks[1].output_path.read_bytes() == retained and archived.read_bytes() == broken
+
+
 def test_shared_slurm_records_terminal_status_and_exhaustion(
     tmp_path,
     monkeypatch,

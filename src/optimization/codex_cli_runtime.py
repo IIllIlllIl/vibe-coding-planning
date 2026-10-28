@@ -173,6 +173,16 @@ class CodexSIFExecution:
                         names.append(SUBMISSION_AUDIT_FILE)
                     for name in names:
                         audit = root / "policy-audit" / name
+                        if name == SUBMISSION_AUDIT_FILE:
+                            # Stop is an in-session correction hook, not the
+                            # Plan/patch authority. Its diagnostic copy cannot
+                            # invalidate an independently checked submission.
+                            try:
+                                if audit.is_file() and not audit.is_symlink():
+                                    shutil.copyfile(audit, output_dir / name)
+                            except OSError:
+                                pass
+                            continue
                         if audit.is_symlink() or not audit.is_file():
                             raise CodexConfigurationError("Native policy audit is not a regular file")
                         shutil.copyfile(audit, output_dir / name)
@@ -755,8 +765,11 @@ def _run_codex_text_agent(
                 contract=container.source_policy["submission_contract"], output_dir=attempt_dir)
             trajectory.append({"role": "host_submission_policy", "content": {"records": records}})
         except (OSError, ValueError, KeyError, TypeError) as exc:
-            policy_error = CodexConfigurationError("Native submission-policy validation failed: " + str(exc))
-            trajectory.append({"role": "host_submission_policy", "content": {"error": str(exc)}})
+            # The PCE role independently checks the original Plan or patch,
+            # including the staged-diff hash. A missing/old Stop receipt is
+            # auxiliary, not a shared configuration failure or a format fix.
+            trajectory.append({"role": "host_submission_policy", "content": {
+                "diagnostic_error": str(exc), "acceptance_authority": "role_submission_validation"}})
     trajectory.append({"role": "assistant", "content": raw})
     if policy_error is not None:
         policy_error.trajectory = trajectory

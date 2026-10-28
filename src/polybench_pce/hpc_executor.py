@@ -73,6 +73,7 @@ def pce_semantic_sha256(config: PolyBenchPCEConfig) -> str:
         root / "src" / "exceptions.py",
         root / "src" / "optimization" / "hpc" / "slurm.py",
         root / "src" / "optimization" / "hpc" / "task_batch.py",
+        root / "src" / "optimization" / "audit.py",
         *([root / "src" / "optimization" / name for name in
            ("codex_cli_runtime.py", "codex_private_mount.py")]
           if getattr(config, "agent_backends", {}) else []),

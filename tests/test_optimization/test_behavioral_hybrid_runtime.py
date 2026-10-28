@@ -179,8 +179,7 @@ def test_worker_boundary_and_completed_output(tmp_path, monkeypatch):
 def test_worker_receives_archived_failure_after_output_is_moved(tmp_path, monkeypatch):
     import src.optimization.behavioral_hybrid_worker as worker
     from src.optimization.behavioral_hybrid_runtime import phase_identity
-    from src.optimization.hpc.task_batch import SlurmTaskBatch
-    from types import SimpleNamespace
+    from src.optimization.hpc.task_batch import SlurmTaskBatch, TaskFiles
     config = load_optimization_config("configs/gepa_behavioral_acceptability_smoke_v2_20260830.yaml", require_api_keys=False)
     config = replace(config, hybrid=BehavioralHybridConfig(enabled=True))
     payload = {"parent": PARENT, "record": {"instance_id": "case", "split": "train"}}
@@ -189,7 +188,8 @@ def test_worker_receives_archived_failure_after_output_is_moved(tmp_path, monkey
     path, output = tmp_path / "input.json", tmp_path / "result.json"
     path.write_text(json.dumps(manifest))
     output.write_text(json.dumps({"error": "Missing field reasoning"}))
-    SlurmTaskBatch._archive_failed_outputs(tmp_path, [SimpleNamespace(output_path=output)], 1)
+    task = TaskFiles(0, "case", path, output, tmp_path / "attempts/task_0000")
+    SlurmTaskBatch._archive_failed_outputs(tmp_path, [task], 1)
     assert not output.exists()
     feedback = []
     def phase(*args, **kwargs):

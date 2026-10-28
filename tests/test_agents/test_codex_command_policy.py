@@ -8,7 +8,7 @@ import sys
 import pytest
 
 from src.agents.codex_hooks import (
-    AUDIT_FILE, command_digest, hook_options, hook_result, post_hook_result, validate_native_commands, write_bundle,
+    AUDIT_FILE, command_digest, hook_options, hook_result, validate_native_commands, write_bundle,
     SUBMISSION_AUDIT_FILE, stop_result,
 )
 from src.environment.source_access import command_source_decision, source_denial_result
@@ -29,9 +29,11 @@ def native_items(*items):
 
 
 def executed(command, audit, identity="call-1"):
-    value = event(command, identity)
-    value["hook_event_name"] = "PostToolUse"
-    return post_hook_result(value, CONTEXT, audit)
+    """Historical audit fixture; new calls no longer collect PostToolUse."""
+    value = {"schema_version": 2, "hook_event_name": "PostToolUse",
+             "tool_use_id": identity, "command": command, "command_sha256": command_digest(command)}
+    with audit.open("a") as output:
+        output.write(json.dumps(value) + "\n")
 
 
 @pytest.mark.parametrize("command", [
@@ -121,31 +123,65 @@ def test_denial_then_correction_can_complete_without_mutating_raw_trace(tmp_path
     ("python - <<'PY'\ntoken = data.get('name')\nprint(token)\nPY",
      "python - <<'PY'\ntoken = [REDACTED_SECRET]\nprint(token)\nPY"),
 ])
-def test_vendor_redaction_is_matched_to_original_pre_post_receipts_without_rewriting(tmp_path, command, export):
+def test_vendor_redaction_is_matched_to_original_pre_receipts_without_rewriting(tmp_path, command, export):
     audit = tmp_path / AUDIT_FILE
     hook_result(event(command), CONTEXT, audit)
-    executed(command, audit)
     trace = native_items(dict(command=export, status="completed", exit_code=0))
     original = deepcopy(trace)
     rows = validate_native_commands(trace, audit, context=CONTEXT, source_log=tmp_path / "sources.jsonl")
-    assert trace == original and rows[0]["command"] == command
-    assert rows[0]["tool_use_id"] == rows[1]["tool_use_id"]
+    assert trace == original and len(rows) == 1 and rows[0]["command"] == command
 
 
-@pytest.mark.parametrize("problem", ["missing_post", "orphan_post", "changed_post", "blocked_post", "wrong_export"])
-def test_redacted_export_does_not_bypass_execution_receipt_integrity(tmp_path, problem):
+@pytest.mark.parametrize("post", ["missing", "matching", "orphan", "changed", "duplicate", "error"])
+def test_legacy_post_receipts_are_not_completion_requirements(tmp_path, post):
     command = "token=synthetic-fixture-value; printf ok"
     audit = tmp_path / AUDIT_FILE
     hook_result(event(command), CONTEXT, audit)
-    if problem != "missing_post":
-        executed(command if problem != "changed_post" else command + " changed", audit,
-                 "unknown-call" if problem == "orphan_post" else "call-1")
-    if problem == "blocked_post":
-        hook_result(event("pip install synthetic-package", "blocked"), CONTEXT, audit)
-        executed("pip install synthetic-package", audit, "blocked")
-    export = "token=[REDACTED_SECRET] " + ("git fetch origin" if problem == "wrong_export" else "printf ok")
-    trace = native_items(dict(command=export, status="completed", exit_code=0))
+    if post not in {"missing", "error"}:
+        executed(command if post != "changed" else command + " changed", audit,
+                 "unknown-call" if post == "orphan" else "call-1")
+    if post == "duplicate":
+        executed(command, audit)
+    if post == "error":
+        with audit.open("a") as output:
+            output.write(json.dumps({"hook_event_name": "PostToolUse", "policy_error": True}) + "\n")
+    trace = native_items(dict(command="token=[REDACTED_SECRET] printf ok", status="completed", exit_code=0))
+    original, raw = deepcopy(trace), audit.read_bytes()
+    validate_native_commands(trace, audit, context=CONTEXT, source_log=tmp_path / "sources.jsonl")
+    assert trace == original and audit.read_bytes() == raw
+
+
+def test_redacted_export_cannot_substitute_a_different_executed_command(tmp_path):
+    audit = tmp_path / AUDIT_FILE
+    hook_result(event("token=synthetic-fixture-value; printf ok"), CONTEXT, audit)
+    trace = native_items(dict(command="token=[REDACTED_SECRET] git fetch origin", status="completed", exit_code=0))
     with pytest.raises(ValueError):
+        validate_native_commands(trace, audit, context=CONTEXT, source_log=tmp_path / "sources.jsonl")
+
+
+@pytest.mark.parametrize("post_count", [0, 37, 39])
+def test_39_permitted_commands_complete_with_any_post_coverage(tmp_path, post_count):
+    """Regression for the v5 failure shape; no model or Slurm invocation."""
+    audit = tmp_path / AUDIT_FILE
+    commands = [f"grep -n 'fixture-{index}' repository.py" for index in range(39)]
+    for index, command in enumerate(commands):
+        hook_result(event(command, f"call-{index}"), CONTEXT, audit)
+        if index < post_count:
+            executed(command, audit, f"call-{index}")
+    trace = native_items(*(dict(command=command, status="completed", exit_code=0) for command in commands))
+    # Native item IDs are not hook IDs, and concurrent completions may be reordered.
+    trace[0]["content"]["events"].reverse()
+    original, raw = deepcopy(trace), audit.read_bytes()
+    rows = validate_native_commands(trace, audit, context=CONTEXT, source_log=tmp_path / "sources.jsonl")
+    assert len(rows) == 39 + post_count
+    assert trace == original and audit.read_bytes() == raw
+
+
+def test_post_receipt_cannot_replace_a_missing_pre_decision(tmp_path):
+    audit = tmp_path / AUDIT_FILE
+    executed("git status", audit)
+    trace = native_items(dict(command="git status", status="completed", exit_code=0))
+    with pytest.raises(ValueError, match="no matching execution-policy receipt"):
         validate_native_commands(trace, audit, context=CONTEXT, source_log=tmp_path / "sources.jsonl")
 
 
@@ -167,7 +203,6 @@ def test_distinct_original_commands_with_identical_redacted_exports_keep_full_co
     for index, value in enumerate(("first-fixture", "second-fixture")):
         command = f"token={value}; printf ok"
         hook_result(event(command, f"call-{index}"), CONTEXT, audit)
-        executed(command, audit, f"call-{index}")
     item = dict(command="token=[REDACTED_SECRET] printf ok", status="completed", exit_code=0)
     trace = native_items(item, item)
     original = deepcopy(trace)
@@ -201,7 +236,7 @@ def test_native_hook_cli_options_keep_sandbox_and_user_config_separate(tmp_path)
         working_directory=tmp_path, output_path=tmp_path/"out", repository_writable=True,
         command_hook_options=tuple(options))
     assert "--ignore-user-config" in cmd and "hooks.PreToolUse=" in " ".join(cmd)
-    assert "hooks.PostToolUse=" in " ".join(cmd)
+    assert "hooks.PostToolUse=" not in " ".join(cmd)
     assert "--dangerously-bypass-approvals-and-sandbox" not in cmd
     assert 'web_search="disabled"' in cmd
 
@@ -271,7 +306,6 @@ def test_production_transport_wires_policy_mounts_preflights_and_original_output
             if failure!="missing_receipt":
                 hook_result(event("pip install Werkzeug"), CONTEXT, audit)
                 hook_result(event("git status", "call-2"), CONTEXT, audit)
-                executed("git status", audit, "call-2")
             (mounts["/agent-output"]/"codex_final_response.txt").write_bytes(final)
             if submission and failure != "missing_stop_receipt":
                 stop_audit = mounts["/agent-policy-audit"] / SUBMISSION_AUDIT_FILE
@@ -284,7 +318,7 @@ def test_production_transport_wires_policy_mounts_preflights_and_original_output
     monkeypatch.setattr(runtime.subprocess,"run",run)
     args=dict(container=boundary,model_config=model,working_directory=repo,attempt_dir=tmp_path/"attempt",
               system="Plan",user="Input",task="Plan")
-    if failure:
+    if failure and failure not in {"missing_stop_receipt", "invalid_stop_receipt"}:
         with pytest.raises(runtime.CodexConfigurationError) as caught:
             runtime.run_codex_text_agent(**args)
         assert bool(inference)==(failure not in {"bundle_probe", "feature_config"})
@@ -297,3 +331,6 @@ def test_production_transport_wires_policy_mounts_preflights_and_original_output
         assert trajectory[-1]["content"].encode()==final
         assert json.loads(log.read_text())["executed"] is False
         assert json.loads((tmp_path/"attempt"/AUDIT_FILE).read_text().splitlines()[0])["blocked"]
+        if failure in {"missing_stop_receipt", "invalid_stop_receipt"}:
+            assert any(row.get("role") == "host_submission_policy"
+                       and row["content"].get("diagnostic_error") for row in trajectory)

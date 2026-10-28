@@ -26,7 +26,8 @@ from src.agents.codex_hooks import (
 )
 
 
-def verify(binary: str, root: Path, policy_bundle: Path | None = None, *, submission=False, redaction=False):
+def verify(binary: str, root: Path, policy_bundle: Path | None = None, *, submission=False, redaction=False,
+           async_command=False):
     root.mkdir(parents=True, exist_ok=True)
     with tempfile.TemporaryDirectory(prefix="native-policy-", dir=root) as temporary:
         directory = Path(temporary)
@@ -76,6 +77,12 @@ def verify(binary: str, root: Path, policy_bundle: Path | None = None, *, submis
                         args = ({"cmd": command, "workdir": str(workspace)} if name == "exec_command" else
                                 {"command": command, "workdir": str(workspace)} if name == "shell_command" else
                                 {"command": ["bash", "-lc", command], "workdir": str(workspace)})
+                        if async_command and index == 2:
+                            if name != "exec_command":
+                                raise ValueError("async acceptance requires the unified-exec tool")
+                            # Write the harmless marker before yielding; no filesystem
+                            # work remains after the temporary CLI state is removed.
+                            args.update(cmd=command + "; sleep 2", yield_time_ms=1)
                         item = {"id": f"fc_{index}", "type": "function_call", "call_id": f"call_{index}",
                                 "name": name, "arguments": json.dumps(args)}
                     else:
@@ -136,6 +143,10 @@ def verify(binary: str, root: Path, policy_bundle: Path | None = None, *, submis
             records = validate_native_commands([{"role":"codex_cli","content":{"events":events}}],
                 directory / AUDIT_FILE, context=context, source_log=directory / "sources.jsonl")
             report["policy_receipts"] = records
+            report["post_receipts"] = sum(r.get("hook_event_name") == "PostToolUse" for r in records)
+            if async_command:
+                observations = json.dumps(requests[2].get("input", [])) if len(requests) > 2 else ""
+                report["async_session_yielded"] = "Process running with session ID" in observations
             if submission:
                 report["submission_receipts"] = validate_native_submission((directory / "final.txt").read_text(),
                     directory / SUBMISSION_AUDIT_FILE, contract=context["submission_contract"], output_dir=directory)
@@ -145,6 +156,8 @@ def verify(binary: str, root: Path, policy_bundle: Path | None = None, *, submis
         if not (result.returncode == 0 and not report["native_error_events"]
                 and len(requests) == (4 if submission else 3) and not errors and not blocked.exists()
                 and corrected.is_file() and report["denial_returned_to_native_loop"] and "audit_error" not in report
+                and report.get("post_receipts") == 0
+                and (not async_command or report.get("async_session_yielded"))
                 and (not submission or report.get("submission_feedback_returned"))):
             report["events"] = events
             report["model_tool_observations"] = [r.get("input", [])[-3:] for r in requests[1:]]
@@ -160,8 +173,10 @@ def main():
     parser.add_argument("--report", type=Path)
     parser.add_argument("--submission", action="store_true", help="Also exercise invalid Plan -> Stop feedback -> corrected Plan")
     parser.add_argument("--redaction", action="store_true", help="Exercise an ordinary assignment subject to CLI log redaction")
+    parser.add_argument("--async-command", action="store_true", help="Exercise unified-exec yield without requiring a Post callback")
     args = parser.parse_args()
-    report = verify(args.codex_binary, args.work_root, args.policy_bundle, submission=args.submission, redaction=args.redaction)
+    report = verify(args.codex_binary, args.work_root, args.policy_bundle, submission=args.submission,
+                    redaction=args.redaction, async_command=args.async_command)
     if args.report:
         args.report.parent.mkdir(parents=True, exist_ok=True)
         args.report.write_text(json.dumps(report, indent=2) + "\n")

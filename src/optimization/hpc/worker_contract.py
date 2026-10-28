@@ -15,8 +15,21 @@ def worker_arguments():
 
 def retry_feedback(path):
     if path is not None and path.is_file():
-        previous = json.loads(path.read_text(encoding="utf-8"))
-        feedback = str(previous.get("error", ""))
+        raw = path.read_text(encoding="utf-8", errors="backslashreplace")
+        diagnostic = path.with_suffix(".host_validation.json")
+        feedback = ""
+        if diagnostic.is_file():
+            try:
+                feedback = str(json.loads(diagnostic.read_text())["error"])
+            except (OSError, ValueError, KeyError, TypeError):
+                pass
+        try:
+            previous = json.loads(raw)
+            if not isinstance(previous, dict):
+                raise ValueError("atomic worker output must be a JSON object")
+        except ValueError as exc:
+            return (feedback or str(exc)) + "\nPrevious unreadable Worker output (retained unchanged):\n" + raw
+        feedback = feedback or str(previous.get("error", ""))
         if "raw_agent_output" in previous:
             feedback += ("\nPrevious raw Agent output (rejected, not a valid artifact):\n"
                          + json.dumps(previous["raw_agent_output"], ensure_ascii=False)

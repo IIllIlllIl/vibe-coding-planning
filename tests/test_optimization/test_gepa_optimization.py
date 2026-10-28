@@ -5092,6 +5092,33 @@ def test_audited_model_records_real_response_usage(tmp_path):
     assert record["duration_seconds"] >= 0
 
 
+@pytest.mark.parametrize("provider_fails", [False, True])
+def test_optional_usage_io_never_discards_model_response_or_masks_provider_error(tmp_path, monkeypatch, provider_fails):
+    response = {"content": "Original response {{ data }}", "extra": {"response": {"usage": {}}}}
+    error = RuntimeError("original provider failure")
+    class Model:
+        cost = 0.0
+        config = SimpleNamespace(model_name="synthetic")
+        def query(self, messages):
+            if provider_fails:
+                raise error
+            return response
+    logger = JsonlLogger(tmp_path / "usage.jsonl")
+    def failed_write(*args, **kwargs):
+        raise PermissionError("synthetic telemetry-only write failure")
+    monkeypatch.setattr(logger, "write", failed_write)
+    model = AuditedModel(Model(), logger, phase="plan", context={})
+    if provider_fails:
+        with pytest.raises(RuntimeError) as caught:
+            model.query([])
+        assert caught.value is error
+    else:
+        assert model.query([]) is response
+    # Required scientific persistence retains its normal failure behavior.
+    with pytest.raises(PermissionError):
+        logger.write("required_output")
+
+
 def test_cost_report_records_called_models(tmp_path):
     usage_path = tmp_path / "usage.jsonl"
     records = [

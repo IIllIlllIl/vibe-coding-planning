@@ -3,6 +3,40 @@
 Authority: reusable engineering requirements for ACE and Safe PCE. Research
 design, experiment outcomes, and changing run progress belong in other documents.
 
+## Research-prototype acceptance boundary
+
+Preserve the smallest authoritative path from original Agent outputs to official
+evaluation and learning. Reject missing, misbound or contaminated scientific
+inputs; do not repair them, impute outcomes, or commit partial learning history.
+Do not promote duplicate diagnostics, telemetry or cleanup into scientific
+acceptance conditions. A low-level helper exception alone does not establish
+that the workflow stops: follow its caller and test the actual Worker path.
+
+Supervisor staging/workspace cleanup is best effort after the established
+active-job checks. Record errors without changing a completed run or preventing
+an otherwise valid resume. Required result/checkpoint writes still fail normally.
+`JsonlLogger.write_optional` is only for usage and optional cleanup diagnostics;
+it must not be used for Agent completions, Plans, patches, scores or history.
+Keep auxiliary publication metadata outside Agent inputs. Current exceptions
+and the evidence-transform inventory are recorded in the
+[blocking-policy/module audit](knowledge/blocking-policy-acceptance-20261028.md).
+
+Use bounded recovery before stopping on unusable output. Return concrete format
+errors to the Agent, retain the rejected original, and retry only the affected
+task through the existing attempt mechanism. Missing Stop delivery or diagnostic
+receipts alone cannot invalidate a Plan/patch that passes the independent role
+checks. Keep Stop's same-session correction and the original Plan, patch-file
+and staged-diff-hash validation; never turn retry into Host repair.
+
+Classify errors only as far as needed to choose safe recovery. A hard-stop
+decision needs a specific reliability reason, such as wrong frozen identity,
+unverifiable isolation/source access, unusable required persistence, or exhausted
+recovery without complete scientific evidence. Do not add a detailed taxonomy
+for harmless warnings. Auxiliary issues may be skipped with a record; failed
+scientific observations remain NoScore. Finish independent work, but do not drop
+failed cases from a fixed comparison, impute zero, or commit incomplete learning
+history. Retry budgets are operational limits, not scientific outcomes.
+
 ## Adaptation baseline and phase-graph checks
 
 Identify the closest completed formal run before adapting a workflow. Compare
@@ -59,6 +93,16 @@ Keep Curator's shared ACE core unchanged. Test both backends, repetitions,
 unknown formats, required-file classification and altered/missing views through
 the real Worker boundary. No-model replay proves fidelity, not complete model
 reading; examine selective reads and truncation recovery separately at runtime.
+
+Required/optional is a context-management strategy, not a claim that the present
+partition maximizes learning. Keep original evidence accessible and refine the
+partition through learning/trajectory analysis under a newly frozen input
+contract. Required reads must continue in bounded sections after tool-output
+truncation; an omitted tail is information loss, not a completed read. Inspect
+actual tool observations and follow-up reads during smoke and learning audits.
+File existence, hashes and a submitted answer do not prove complete reading.
+Do not solve truncation by Host summarization, deleting evidence, or adding a
+mandatory read-receipt subsystem.
 
 Playbook and hybrid Workers share CLI parsing, archived retry feedback, output
 envelopes and failure classification in `hpc/worker_contract.py`. Role dispatch,
@@ -232,18 +276,22 @@ Native hooks load a read-only, Host-generated bundle containing the existing
 classifier and its frozen parser dependency; they do not install dependencies
 in a case SIF. Hook receipts live outside the Agent-writable repository/output
 roots. Preflight the bundle and pinned CLI hook configuration before inference;
-validate original-command PreToolUse/PostToolUse receipts and native event
-coverage before checkpointing. The two hook receipts share the tool-call ID;
-the public JSONL item ID is a different namespace. CLI exports may redact
-command text. Match exact exports first; remaining exports must have a complete
-one-to-one cover by original receipts with paired execution evidence, never a
-guessed replacement or a command-count-only waiver. Identical redacted views
-do not imply identical original inputs. Preserve exports and hook inputs unchanged.
+validate original-command PreToolUse decisions against native execution events
+before checkpointing. Do not collect PostToolUse callbacks or require Pre/Post
+pairing: callback completion is not an experimental output. Historical Post
+records remain unchanged and are ignored for acceptance, including partial or
+duplicate coverage. Hook tool-call IDs and public JSONL item IDs are different
+namespaces. CLI exports may redact command text. Match exact exports first;
+remaining exports need a complete one-to-one cover by the original checked
+commands, never a guessed replacement or a command-count-only waiver. Identical
+redacted views do not imply identical original inputs. Preserve exports and hook
+inputs unchanged.
 Record blocked attempts as `executed=false`, not completed acquisition. A
 receipt/trace failure blocks completion without discarding the raw output or
-silently repairing it. Hook exceptions explicitly deny, while missing hook
-coverage remains an operational failure. This is partial source-command
-enforcement, not a general network firewall: dynamic execution and input to
+silently repairing it. Pre-execution hook exceptions explicitly deny; missing
+source decisions for executed commands remain an operational failure. Missing
+Post callbacks do not invalidate a Plan, patch or scientific checkpoint. This
+is partial source-command enforcement, not a general network firewall: dynamic execution and input to
 already running shell sessions are not equivalent to a newly checked command.
 See the [official hook contract](https://learn.chatgpt.com/docs/hooks) and
 [parity acceptance audit](knowledge/agent-command-policy-parity-audit-20261023.md).
@@ -252,9 +300,10 @@ Safe PCE final-submission errors are recoverable inside each backend's existing
 loop: mini-SWE raises its non-terminating format error, while Native uses a
 synchronous `Stop` hook to return the same diagnosis and correction
 instructions. Original invalid submissions remain in the trajectory/receipt
-audit. Native completion additionally needs a matching accepted Stop receipt
-for its exact final response and, for Coder, unchanged staged patch bytes.
-Missing hook coverage is operational failure, not a scored unresolved task.
+audit. Independent role checks validate the exact final Plan or Coder patch
+against staged bytes. Stop receipts are optional diagnostics, not an additional
+completion condition. Missing source-command decisions remain an integrity
+failure; missing Stop delivery does not invalidate otherwise valid content.
 No new backend retry loop or extra PCE attempt is introduced for correction.
 
 Current Safe PCE (`direct_human_markdown_v5`) disables Host Agent step/cost,
@@ -659,7 +708,8 @@ two-image transport, not every scientific image or credential isolation.
 
 Codex JSONL tool events remain the vendor-exported trajectory, not a guarantee
 of byte-identical execution inputs. Guarded calls retain original commands in
-mode-0600 hook receipts, pairing PreToolUse/PostToolUse by tool-call identity.
+mode-0600 PreToolUse records and compare them with the native execution events;
+they do not collect or require execution-after callbacks.
 For guarded calls,
 `source_access.jsonl` additionally records decisions from validated Native hook
 receipts; preparation-only or historical logs must not be represented as that

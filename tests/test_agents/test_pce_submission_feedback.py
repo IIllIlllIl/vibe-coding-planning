@@ -95,6 +95,31 @@ def test_native_plan_stop_retains_bad_submission_and_requires_accepted_final(tmp
         validate_native_submission(PLAN + "changed", audit, contract=context["submission_contract"], output_dir=tmp_path)
 
 
+@pytest.mark.parametrize("raw", [PLAN, BAD])
+def test_stop_audit_io_does_not_change_submission_check_or_feedback(tmp_path, monkeypatch, raw):
+    from src.agents import codex_hooks
+    def fail(*args, **kwargs):
+        raise PermissionError("synthetic diagnostic-only failure")
+    monkeypatch.setattr(codex_hooks, "_append_audit", fail)
+    result = stop_result({"hook_event_name": "Stop", "last_assistant_message": raw},
+                         {"submission_contract": {"phase": "plan"}}, tmp_path / "stop.jsonl")
+    if raw == PLAN:
+        assert result == {}
+    else:
+        assert result["decision"] == "block"
+        assert "no substantive content" in result["reason"]
+
+
+def test_unreadable_archived_worker_output_returns_feedback_without_rewriting(tmp_path):
+    from src.optimization.hpc.worker_contract import retry_feedback
+    path = tmp_path / "task_0000.json"
+    raw = b'{"incomplete":'
+    path.write_bytes(raw)
+    feedback = retry_feedback(path)
+    assert "Previous unreadable Worker output" in feedback
+    assert raw.decode() in feedback and path.read_bytes() == raw
+
+
 def test_native_coder_stop_checks_real_staging_and_never_repairs_patch(tmp_path):
     repo = tmp_path / "repo"
     repo.mkdir()

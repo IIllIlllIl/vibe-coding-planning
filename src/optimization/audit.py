@@ -77,6 +77,13 @@ class JsonlLogger:
                 + "\n"
             )
 
+    def write_optional(self, event: str, **fields: Any) -> None:
+        """Telemetry/cleanup only; required scientific persistence uses write."""
+        try:
+            self.write(event, **fields)
+        except OSError:
+            pass
+
 
 def _usage_value(usage: dict[str, Any], *names: str) -> int:
     for name in names:
@@ -111,7 +118,7 @@ class AuditedModel:
         try:
             response = self._model.query(messages, **kwargs)
         except Exception as exc:
-            self._logger.write(
+            self._logger.write_optional(
                 "model_call",
                 phase=self._phase,
                 duration_seconds=time.monotonic() - started,
@@ -136,7 +143,7 @@ class AuditedModel:
         total_tokens = _usage_value(usage, "total_tokens")
         if not total_tokens:
             total_tokens = prompt_tokens + completion_tokens
-        self._logger.write(
+        self._logger.write_optional(
             "model_call",
             phase=self._phase,
             model=str(getattr(self._model.config, "model_name", "")),

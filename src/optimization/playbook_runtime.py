@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import hashlib
+import logging
 import os
 from pathlib import Path
 import tempfile
@@ -317,7 +318,10 @@ def _run_evidence_json_agent(
             error.trajectory = trajectory  # type: ignore[attr-defined]
             raise error from exc
     finally:
-        environment.cleanup()
+        try:
+            environment.cleanup()
+        except Exception as exc:
+            logging.getLogger(__name__).warning("Evidence environment cleanup failed: %s", type(exc).__name__)
 
 
 def run_evidence_reflector(
@@ -682,7 +686,10 @@ def _run_repository_json_agent(
 
             return run_agent(model_config, mini_swe=mini, codex_cli=native)
         finally:
-            environment.cleanup()
+            try:
+                environment.cleanup()
+            except Exception as exc:
+                logging.getLogger(__name__).warning("Repository environment cleanup failed: %s", type(exc).__name__)
 
 
 def run_repository_checker(

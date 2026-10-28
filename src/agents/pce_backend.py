@@ -63,7 +63,7 @@ def agent_runner(default, *, role, config, case, workspace, attempt_dir,
             args = (agent_config, *args[1:])
             if role == "code":
                 kwargs = dict(kwargs, phase_timeout_seconds=None)
-            usage.write("agent_execution_policy", phase=role, executor=executor_name(backend),
+            usage.write_optional("agent_execution_policy", phase=role, executor=executor_name(backend),
                         step_limit=0, cost_limit=0, command_timeout=None, phase_timeout=None,
                         deadline_owner="worker")
         def native():
@@ -137,7 +137,7 @@ def _execute(config, issue, env, *, phase, variables, backend, sif_path, workspa
                     "error": str(exc), "trajectory": trajectory})
         raise
     atomic_json(attempt_dir / "trajectory.json", trajectory)
-    usage.write("codex_agent_completed", phase=phase, executor="codex_cli", model=backend["model"],
+    usage.write_optional("codex_agent_completed", phase=phase, executor="codex_cli", model=backend["model"],
                 reasoning_effort=backend["reasoning_effort"])
     if any(event.get("type") in {"turn.failed", "error"}
            for message in trajectory if message.get("role") == "codex_cli"

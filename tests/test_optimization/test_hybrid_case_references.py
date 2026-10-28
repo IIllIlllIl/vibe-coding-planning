@@ -3,17 +3,12 @@ import copy
 import pytest
 from src.optimization.agent_references import phase_references, decode_phase_output
 
-from src.optimization.behavioral_hybrid_ace import (
-    curator_case_projection, resolve_curator_case_references,
-)
-
-
 def test_case_projection_preserves_authority_and_scientific_text():
     payload = {"records": [{"instance_id": "long-uuid#first-plan", "plan": "long-uuid#first-plan"}],
                "reviews": [{"instance_id": "long-uuid#first-plan"}],
                "history": {"events": [{"instance_id": "old-case"}]}}
     before = copy.deepcopy(payload)
-    projected, mapping = curator_case_projection(payload)
+    projected, cases, items = phase_references("curator", payload)
     assert payload == before
     assert projected["records"][0]["instance_id"] == "case-01"
     assert projected["records"][0]["plan"] == "long-uuid#first-plan"
@@ -21,17 +16,17 @@ def test_case_projection_preserves_authority_and_scientific_text():
     assert projected["history"]["events"][0]["instance_id"] == "old-case"
     delta = {"operations": [{"type": "UPDATE", "supporting_instance_ids": ["case-01"],
                               "content": {"condition": "case-01", "guide": "unchanged"}}]}
-    decoded = resolve_curator_case_references(delta, mapping)
+    decoded = decode_phase_output("curator", delta, cases, items)
     assert delta["operations"][0]["supporting_instance_ids"] == ["case-01"]
     assert decoded["operations"][0]["supporting_instance_ids"] == ["long-uuid#first-plan"]
     assert decoded["operations"][0]["content"] == delta["operations"][0]["content"]
 
 
 def test_unknown_reference_is_rejected_with_specific_feedback():
+    _, cases, items = phase_references("curator", {"records": [{"instance_id": "original"}]})
     with pytest.raises(ValueError, match="operation 1: unknown reference.*allowed references"):
-        resolve_curator_case_references({"operations": [{"supporting_instance_ids": ["case-99"]}]},
-                                        {"case-01": "original"})
-    assert resolve_curator_case_references({"operations": [{"supporting_instance_ids": []}]}, {})
+        decode_phase_output("curator", {"operations": [{"supporting_instance_ids": ["case-99"]}]}, cases, items)
+    assert decode_phase_output("curator", {"operations": [{"supporting_instance_ids": []}]}, cases, items)
 
 
 @pytest.mark.parametrize("role", ["reflector", "curator", "refiner"])

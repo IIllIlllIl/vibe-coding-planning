@@ -266,7 +266,7 @@ class SWEVerifiedPCERunner:
         try:
             env.cleanup()
         except Exception as exc:
-            self.audit.write(
+            self.audit.write_optional(
                 "swe_verified_pce_environment_cleanup_failed",
                 phase=phase,
                 error_type=type(exc).__name__,
@@ -277,7 +277,7 @@ class SWEVerifiedPCERunner:
         try:
             self._cleanup(path)
         except Exception as exc:
-            self.audit.write(
+            self.audit.write_optional(
                 "swe_verified_pce_workspace_cleanup_failed",
                 phase=phase,
                 path=str(path),
@@ -610,7 +610,7 @@ class SWEVerifiedPCERunner:
                     code_checkpoint["workspace_evidence"] = workspace_evidence
                     self._save_checkpoint("code", code_checkpoint)
                 except Exception as exc:
-                    self.audit.write(
+                    self.audit.write_optional(
                         "swe_verified_pce_workspace_evidence_incomplete",
                         error_type=type(exc).__name__,
                         error=str(exc),
@@ -649,7 +649,7 @@ class SWEVerifiedPCERunner:
                     "result_callback": lambda result: self._save_checkpoint(
                         "evaluate", {"evaluator_result": result}
                     ),
-                    "cleanup_error_callback": lambda exc: self.audit.write(
+                    "cleanup_error_callback": lambda exc: self.audit.write_optional(
                         "swe_verified_pce_environment_cleanup_failed",
                         phase="evaluate",
                         error_type=type(exc).__name__,

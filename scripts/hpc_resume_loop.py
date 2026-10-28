@@ -1077,11 +1077,10 @@ def run_loop(config: SupervisorConfig) -> int:
                 try:
                     cleanup = reclaim_remote_staging(config)
                 except Exception as exc:
-                    state["status"] = "blocked_staging_reclamation"
+                    cleanup = {"removed": 0, "skipped": "cleanup_failed"}
                     state["staging_reclamation_error"] = str(exc)
                     _save_supervisor_state(config, state)
-                    print(f"[hpc-resume] staging reclamation failed: {exc}", file=sys.stderr)
-                    return 1
+                    print(f"[hpc-resume] staging reclamation skipped after failure: {exc}", file=sys.stderr)
             if cleanup.get("removed"):
                 state["last_staging_reclamation"] = cleanup
                 _save_supervisor_state(config, state)
@@ -1102,14 +1101,12 @@ def run_loop(config: SupervisorConfig) -> int:
                     workspace_cleanup = reclaim_remote_workspaces(config, **(
                         {"include_prepared": True} if terminal_cleanup else {}))
                 except Exception as exc:
-                    state["status"] = "blocked_workspace_reclamation"
                     state["workspace_reclamation_error"] = str(exc)
                     _save_supervisor_state(config, state)
                     print(
-                        f"[hpc-resume] workspace reclamation failed: {exc}",
+                        f"[hpc-resume] workspace reclamation skipped after failure: {exc}",
                         file=sys.stderr,
                     )
-                    return 1
             if workspace_cleanup.get("removed"):
                 state["last_workspace_reclamation"] = workspace_cleanup
                 _save_supervisor_state(config, state)

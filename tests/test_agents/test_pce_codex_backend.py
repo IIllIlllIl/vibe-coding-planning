@@ -81,6 +81,24 @@ def test_backends_default_mixed_and_explicit_pin():
         plan_protocol="direct_human_markdown_v5") == {"plan": NATIVE}
 
 
+@pytest.mark.parametrize("role", ["plan", "code"])
+def test_optional_native_usage_failure_does_not_discard_submission(tmp_path, monkeypatch, role):
+    _completion(monkeypatch)
+    context = _context(tmp_path)
+    def fail(*args, **kwargs):
+        raise PermissionError("synthetic usage-only failure")
+    monkeypatch.setattr(context["usage"], "write", fail)
+    if role == "plan":
+        result, trace = backend._run_plan(_config(), "Issue", None, **context)
+        assert result == PLAN
+    else:
+        env = SimpleNamespace(execute=lambda command: _diff_result(PATCH))
+        result, trace = backend._run_code(_config(), PLAN, "Issue", env, **context)
+        assert result == PATCH
+    assert trace[-1]["role"] == "assistant"
+    assert (context["attempt_dir"] / "trajectory.json").is_file()
+
+
 @pytest.mark.parametrize("change", [{"executor": "typo"}, {"codex_version": ""},
     {"codex_binary": ""}, {"reasoning_effort": "typo"}, {"api_key": "must-not-stage"}])
 def test_invalid_backend_fails_before_inference(change):
@@ -224,6 +242,26 @@ def test_backend_options_enter_fingerprint_and_ds_stays_default(tmp_path, monkey
     assert pce_semantic_sha256(pce) != pce_semantic_sha256(native)
     other = replace(native, agent_backends={"plan": dict(NATIVE, reasoning_effort="low"), "code": NATIVE})
     assert pce_semantic_sha256(other) != pce_semantic_sha256(native)
+
+
+@pytest.mark.parametrize("mode", ["polybench_pce", "swe_verified_pce"])
+def test_shared_logging_source_is_part_of_pce_execution_identity(tmp_path, monkeypatch, mode):
+    if mode == "polybench_pce":
+        from tests.test_optimization.test_safe_pce_learning import _prepared
+        from src.optimization.safe_pce_learning import SafePCEBackend
+        from src.polybench_pce import hpc_executor as executor
+        config = SafePCEBackend(_prepared(tmp_path)).pce
+    else:
+        from src.swe_verified_pce import hpc_executor as executor
+        from src.swe_verified_pce.config import load_swe_verified_pce_config
+        config = load_swe_verified_pce_config(
+            "configs/safe_pce_ace_verified_smoke_source_v1_20261022.yaml", require_api_keys=False)
+    before = executor.pce_semantic_sha256(config)
+    original = executor.file_sha256
+    def changed(path):
+        return "0" * 64 if Path(path).as_posix().endswith("/optimization/audit.py") else original(path)
+    monkeypatch.setattr(executor, "file_sha256", changed)
+    assert executor.pce_semantic_sha256(config) != before
 
 
 def test_real_verified_worker_and_runner_native_handoff_and_resume(tmp_path, monkeypatch):

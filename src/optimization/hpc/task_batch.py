@@ -16,6 +16,7 @@ import time
 from typing import Any, Callable, Sequence
 
 from src.exceptions import ControllerYield
+from src.agents.output_contract import AgentOutputContractError
 from src.artifact_policy import mark_artifact_path, mark_private_artifact_dir
 from src.optimization.hpc.config import HPCConfig
 from src.optimization.hpc.slurm import (
@@ -260,6 +261,11 @@ class SlurmTaskBatch:
             task for task in tasks
             if task.index not in outputs
         ]
+        if failed and not job_id:
+            # A rejected cached output still belongs to an earlier attempt,
+            # even when its scheduler receipt is absent. Archive it before
+            # another Worker may write this task's output path.
+            attempt += 1
         if job_id:
             terminal_missing: list[TaskFiles] = []
             active: list[TaskFiles] = []
@@ -426,23 +432,23 @@ class SlurmTaskBatch:
                 continue
             try:
                 value = json.loads(task.output_path.read_text(encoding="utf-8"))
-            except Exception as exc:
-                failure = SlurmTaskBatch._save_host_validation_failure(
+            except (OSError, ValueError) as exc:
+                SlurmTaskBatch._save_host_validation_failure(
                     task,
                     attempt=attempt,
                     stage="host_output_read",
                     exc=exc,
                 )
-                blocking.append((task, failure))
+                failed.append(task)
                 continue
             if not isinstance(value, dict):
-                failure = SlurmTaskBatch._save_host_validation_failure(
+                SlurmTaskBatch._save_host_validation_failure(
                     task,
                     attempt=attempt,
                     stage="host_output_read",
                     exc=ValueError("atomic worker output must be a JSON object"),
                 )
-                blocking.append((task, failure))
+                failed.append(task)
                 continue
             if (
                 value.get("status") == "blocking_failed"
@@ -484,7 +490,12 @@ class SlurmTaskBatch:
                     stage="host_output_validation",
                     exc=exc,
                 )
-                blocking.append((task, failure))
+                if isinstance(exc, AgentOutputContractError):
+                    failed.append(task)
+                else:
+                    # Callers keep input identity/integrity failures distinct
+                    # from explicitly retryable Agent output contracts.
+                    blocking.append((task, failure))
                 continue
             outputs[task.index] = value
         return outputs, failed, blocking
@@ -705,7 +716,16 @@ class SlurmTaskBatch:
             if not task.output_path.exists():
                 continue
             archive.mkdir(parents=True, exist_ok=True)
-            shutil.move(str(task.output_path), str(archive / task.output_path.name))
+            archived = archive / task.output_path.name
+            shutil.move(str(task.output_path), str(archived))
+            diagnostic = task.attempts_dir / f"attempt_{previous_attempt:02d}" / "host_validation_failure.json"
+            if diagnostic.is_file():
+                # Preserve the rejected output verbatim. A separate copy of
+                # the existing diagnostic supplies exact feedback on retry.
+                try:
+                    shutil.copyfile(diagnostic, archived.with_suffix(".host_validation.json"))
+                except OSError:
+                    pass
 
     @staticmethod
     def _reclaim_attempt_workspaces(

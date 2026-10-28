@@ -2,13 +2,19 @@
 
 ## Scope and engineering baseline
 
-The acceptance counts and reports below describe the original PreToolUse
-implementation. The current [shared contract](../engineering-contracts.md#shared-agent-backend-entry)
-adds paired PostToolUse receipts because vendor JSONL exports can redact
-ordinary command text. Original command inputs and public exports are both
-retained; no scientific output is reconstructed from a redacted export. Old
-schema-1 audits retain their strict historical comparison. New source identities
-must not retroactively validate or resume historical failed attempts.
+The acceptance counts and reports below describe their recorded implementation
+versions. A 2026-10-27 follow-up added mandatory paired PostToolUse receipts to
+handle vendor-redacted command exports. That extra completion condition was
+removed on 2026-10-28: the v5 smoke had 39 matching permitted commands but only
+37 Post callbacks, although the two commands and final Plan completed normally.
+The current [shared contract](../engineering-contracts.md#shared-agent-backend-entry)
+retains original PreToolUse decisions and their one-to-one execution-event
+comparison, including redacted exports, without collecting or requiring Post
+callbacks. Historical Post records remain unchanged and cannot invalidate an
+otherwise covered completion. See the
+[blocking-policy acceptance](blocking-policy-acceptance-20261028.md).
+Old schema-1 audits retain their strict historical comparison. Historical failed
+attempts are not rewritten, resumed or re-certified by this repair.
 
 This repair unifies source-command decisions and immediate refusal feedback,
 not the complete Agent harness or experimental network policy. The baseline is
@@ -124,8 +130,10 @@ The pure existing Plan validators were extracted into
 `src/agents/plan_submission.py`, with old imports preserved for compatibility.
 mini-SWE uses its existing non-terminating format-error loop. Native uses the
 official synchronous `Stop` continuation, with no extra Host Agent loop. A
-missing/invalid final Stop receipt is operationally rejected; original invalid
-Plan text, final text and patch bytes remain unmodified.
+missing/invalid final Stop receipt is now diagnostic-only under the
+[recovery policy](blocking-policy-acceptance-20261028.md). Independent Plan and
+patch/staged-hash checks still reject unusable content for correction/retry;
+original invalid Plan text, final text and patch bytes remain unmodified.
 
 Ten additional tests in `test_pce_submission_feedback.py` exercise real
 mini-SWE Plan/Coder correction (including a legacy stdout submission), identical Plan error observations, Native Stop
@@ -144,7 +152,7 @@ unchanged in those events. No production SIF or model inference was used.
 |---|---|---|---|
 | Source-command refusal | Shared classifier; tool observation with returncode 126 | Same classifier/reason; supported hook deny, Host policy code 126 | Unified policy and in-session feedback; native envelopes intentionally differ |
 | Experimental network isolation | Existing PCE Agent network flag controls Apptainer; hybrid/evidence roles disable networking | Same caller policy reaches the inner tool profile through `tool_network_disabled`; model/auth traffic remains outside it | Implemented, with matching preflight/inference options and a permission-denial probe before inference. Compute-node/SIF acceptance is separate |
-| PCE terminal-format feedback | Common Plan checks and existing format-error loop; empty patch correction uses the established submission validator | Same contract/feedback through Stop; accepted exact final response/patch receipt required | Aligned for current PCE; backend-specific submission transport remains |
+| PCE terminal-format feedback | Common Plan checks and existing format-error loop; empty patch correction uses the established submission validator | Same contract/feedback through Stop; independent role checks remain authoritative and Stop receipts are optional diagnostics | Aligned for current PCE; backend-specific submission transport remains |
 | Tools and command lifetime | Existing single-bash action protocol and environment execution | Native tools, structured calls, streaming/async execution | Intentional harness difference. Input to an already running Native shell session is not another checked new command |
 | Host Agent limits / accounting | Step/cost, command and phase limits disabled for current Safe PCE; existing usage records remain | No added Host Agent limits; original Native usage events retained | Same no-Host-budget policy; usage formats are not forced into artificial equivalence |
 | Sampling/model controls | DS temperature and thinking settings | Codex model and reasoning effort | Intentional provider difference; not a quality-equivalent substitution |

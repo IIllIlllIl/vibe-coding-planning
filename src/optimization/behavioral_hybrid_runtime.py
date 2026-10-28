@@ -18,6 +18,7 @@ from src.optimization.playbook_runtime import run_evidence_reflector, run_eviden
 from src.optimization.playbook_hpc_executor import _file_sha256
 from src.optimization.audit import audit_record
 from src.agents.runtime import credential_envs
+from src.agents.output_contract import AgentOutputContractError
 
 
 def hybrid_limits(config):
@@ -223,8 +224,11 @@ class HybridPhaseExecutor:
             if value.get("fingerprint") != identities[task.index] or value.get("role") != role:
                 raise ValueError("hybrid result identity mismatch")
             if not isinstance(value.get("agent_output"), dict) or not isinstance(value.get("trajectory"), list):
-                raise ValueError("hybrid worker output schema mismatch")
-            validate_phase(role, payloads[task.index], value["agent_output"], self.config)
+                raise AgentOutputContractError("hybrid worker output schema mismatch")
+            try:
+                validate_phase(role, payloads[task.index], value["agent_output"], self.config)
+            except (ValueError, KeyError, TypeError) as exc:
+                raise AgentOutputContractError(str(exc)) from exc
         if self.config.execution.backend == "local":
             return [run_local_phase(self.config, role, payload, task.attempts_dir / "attempt_01")
                     for task, payload in zip(tasks, payloads, strict=True)]

@@ -48,8 +48,9 @@ def _prepared_verified(tmp_path):
 @pytest.mark.parametrize("dataset_mode", ["swe_verified_pce", "swe_rpg_pce"])
 @pytest.mark.parametrize("persistent_output_link", [False, True])
 @pytest.mark.parametrize("metadata_failure", [False, True])
+@pytest.mark.parametrize("workspace_inventory_failure", [False, True])
 def test_verified_end_to_end_and_audit_detects_lost_evidence(
-        tmp_path, monkeypatch, dataset_mode, persistent_output_link, metadata_failure):
+        tmp_path, monkeypatch, dataset_mode, persistent_output_link, metadata_failure, workspace_inventory_failure):
     from src.optimization import behavioral_hybrid_runtime as runtime
     from src.optimization.hpc.task_batch import SlurmTaskBatch
     from src.optimization.behavioral_hybrid_worker import run_task as phase_worker
@@ -92,14 +93,23 @@ def test_verified_end_to_end_and_audit_detects_lost_evidence(
     monkeypatch.setattr(SWEVerifiedPCERunner, "_verify_sif", lambda *a: None)
     monkeypatch.setattr(SWEVerifiedPCERunner, "_ensure_repository_history", lambda *a: (tmp_path / "bundle", {}))
     monkeypatch.setattr(SWEVerifiedPCERunner, "_restore_agent_repository", lambda *a, **kw: None)
-    monkeypatch.setattr(SWEVerifiedPCERunner, "_environment", lambda *a, **kw: SimpleNamespace(cleanup=lambda: None))
-    monkeypatch.setattr(SWEVerifiedPCERunner, "_capture_code_workspace_evidence", lambda *a, **kw: {})
+    def execute(command, **kwargs):
+        if command == "git ls-files --others --exclude-standard" and workspace_inventory_failure:
+            return {"returncode": 1, "output": "synthetic optional inventory failure"}
+        if command == "git diff --cached --binary --full-index":
+            return {"returncode": 0, "output": _diff("src/module.py")}
+        return {"returncode": 0, "output": ""}
+    monkeypatch.setattr(SWEVerifiedPCERunner, "_environment", lambda *a, **kw:
+        SimpleNamespace(cleanup=lambda: None, execute=execute))
+    agent_calls = {"plan": 0, "code": 0}
     plan = " \n# Plan\n\n```python\nx = 1\n```\n" + ("Evidence.\n" * 4000) + "Rule 1: inspect requirements.\nDecisive tail.\n\n"
     def planner(agent_config, issue, env, **kw):
+        agent_calls["plan"] += 1
         assert "plan-00001" not in kw["planning_rules"]
         return plan, [{"role": "user", "content": issue + "\n" + kw["planning_rules"]},
                       {"role": "assistant", "content": "START_PLAN\n" + plan + "END_PLAN"}]
     def coder(agent_config, received, issue, env, **kw):
+        agent_calls["code"] += 1
         assert received == plan
         assert "planning_rules" not in kw
         return _diff("src/module.py"), [{"role": "user", "content": "Issue\n" + received}]
@@ -174,6 +184,7 @@ def test_verified_end_to_end_and_audit_detects_lost_evidence(
     result = audit(path)
     assert result["structural_fidelity"] == "passed"
     assert result["physical_records"] == 6
+    assert agent_calls == {"plan": 6, "code": 6}
     assert result["phases"] == {"reflector": 2, "curator": 1, "refiner": 0}
     assert result["manual_review_required"] and 2 in waves
     curator = next((config.run_dir / "hpc_tasks/hybrid_curator").glob("*/attempts/task_0000/attempt_01/inputs/reflection_index.json"))

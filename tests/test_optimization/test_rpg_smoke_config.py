@@ -18,6 +18,77 @@ SUPERVISOR = Path("configs/archive/supervisor_launches/safe_pce_ace_rpg_codex_sm
 FROZEN = Path("configs/frozen_safe_pce_ace/rpg_smoke_v1_20261024")
 
 
+def test_rpg_smoke_v6_preserves_effective_science_and_freezes_fresh_inputs():
+    from src.optimization.safe_pce_learning import SafePCEBackend
+    from src.optimization.safe_pce_execution import sha256
+    path = Path("configs/gepa_safe_pce_rpg_codex_smoke_v6_20261028.yaml")
+    old = load_optimization_config("configs/gepa_safe_pce_rpg_codex_smoke_v5_20261028.yaml",
+                                   require_api_keys=False)
+    new = load_optimization_config(path, require_api_keys=False)
+    assert new.search == old.search and new.reflection == old.reflection
+    assert new.hybrid == replace(old.hybrid, dataset_file_sha256=new.hybrid.dataset_file_sha256)
+    assert new.initial_rules_path == old.initial_rules_path
+    assert new.run_dir != old.run_dir and new.dataset_snapshot != old.dataset_snapshot
+    assert new.safe_pce_config != old.safe_pce_config
+    assert new.hybrid.max_items == 10 and new.hybrid.refiner_enabled
+    verify_hybrid_snapshot(new)
+    for name in ("train.jsonl", "validation.jsonl", "pce_source/instances.jsonl", "pce_source/images.json"):
+        assert (new.dataset_snapshot / name).read_bytes() == (old.dataset_snapshot / name).read_bytes()
+    # Local input fidelity does not assert that remote history caches exist.
+    # The actual launch retains hpc_slurm and its compute-side cache checks.
+    new_backend = SafePCEBackend(replace(new, execution=replace(new.execution, backend="local")))
+    old_backend = SafePCEBackend(replace(old, execution=replace(old.execution, backend="local")))
+    train, validation = new_backend.load_snapshot()
+    assert len(train) == 2 and len(validation) == 1
+    assert {case.split for case in train} == {"train"}
+    assert {case.split for case in validation} == {"validation"}
+    assert new_backend.pce.run_dir == new.run_dir / "pce_evaluations"
+    assert new_backend.pce.config_path == new.safe_pce_config
+    assert new_backend.pce.hpc.worker_config_path == str(new.safe_pce_config.relative_to(Path.cwd()))
+    for field in ("plan", "code", "agent_backends", "plan_prompt", "plan_instance_template",
+                  "code_prompt", "code_instance_template", "container", "docker", "agent_network_disabled",
+                  "workspace_preparation"):
+        assert getattr(new_backend.pce, field) == getattr(old_backend.pce, field)
+    for field in ("partition", "cpus_per_task", "mem", "time", "max_task_attempts", "max_running_array_tasks"):
+        assert getattr(new_backend.pce.hpc, field) == getattr(old_backend.pce.hpc, field)
+        assert getattr(new.hpc, field) == getattr(old.hpc, field)
+    manifest = json.loads((new.dataset_snapshot / "manifest.json").read_text())
+    assert manifest["source_pce_config_sha256"] == sha256(Path(
+        "configs/safe_pce_ace_rpg_codex_smoke_source_v6_20261028.yaml"))
+    assert "learning_diagnostics" not in manifest
+    raw = yaml.safe_load(path.read_text())["experiment_contract"]
+    assert raw["launch_authorized"] is True and raw["previous_output_import"] is False
+    assert raw["budget"]["pce_evaluation_slots_without_cache"] == {"minimum": 5, "maximum": 6}
+
+
+def test_rpg_smoke_v6_reuses_shared_supervisor_and_unthrottled_phase_arrays(tmp_path):
+    from scripts.hpc_supervisor_service import _load_launch_config, RESUME_SCRIPT
+    from scripts.hpc_resume_loop import parse_args
+    from src.swe_verified_pce.hpc_executor import build_array_script
+    path = Path("configs/gepa_safe_pce_rpg_codex_smoke_v6_20261028.yaml")
+    cfg = load_optimization_config(path, require_api_keys=False)
+    session, log, args, program = _load_launch_config(Path(
+        "configs/safe_pce_ace_rpg_codex_smoke_supervisor_v6_20261028.yaml"))
+    supervisor = parse_args(args)
+    assert program == RESUME_SCRIPT and session == cfg.run_dir.name and session in log
+    assert supervisor.ssh_target == "twang@access-iris.uni.lu"
+    assert supervisor.slice_time == "00:08:00" and supervisor.max_runs == 60
+    assert supervisor.require_clean_worktree and supervisor.reclaim_workspaces
+    assert args[args.index("--gepa-config") + 1] == str(path)
+    assert supervisor.remote_staging_root.endswith("/staging/" + session)
+    assert supervisor.remote_run_snapshot.endswith(str(cfg.run_dir.relative_to(Path.cwd())))
+    phases = HybridPhaseExecutor(cfg)
+    for role, indices in (("reflector", [0, 1]), ("curator", [0]), ("refiner", [0])):
+        script = phases.script_for_wave(tmp_path / role, role, indices, 1)
+        assert "#SBATCH --array=" + ",".join(map(str, indices)) + "\n" in script
+        assert "#SBATCH --time=00:30:00" in script and "#SBATCH --mem=4G" in script
+        assert "src.optimization.behavioral_hybrid_worker" in script
+    _, pce = load_pce_config(cfg.safe_pce_config)
+    script = build_array_script(config=pce, batch_dir=tmp_path / "pce", indices=[0, 1], attempt=1)
+    assert "#SBATCH --array=0,1\n" in script and "#SBATCH --time=01:00:00" in script
+    assert "#SBATCH --cpus-per-task=1" in script and "#SBATCH --mem=4G" in script
+
+
 def test_rpg_smoke_preserves_verified_learning_and_agent_policies():
     old = load_optimization_config(BASELINE, require_api_keys=False)
     new = load_optimization_config(LEARNING, require_api_keys=False)

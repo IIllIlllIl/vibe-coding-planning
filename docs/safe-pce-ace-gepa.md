@@ -46,6 +46,13 @@ their shared-guide schema by default. Planner-visible items have consecutive `ru
 ordinals rather than internal learning IDs. There are no `predicted_accept`,
 human-label, or artificial Checker-result fields in the PCE adapter.
 
+The retained checklist budget is **at most 10 items**, configured through
+`hybrid.max_items`, not hard-coded into the learning algorithm. Curator manages
+that budget; conditional Refiner follows Curator and precedes candidate
+evaluation when size limits are exceeded. The current per-item ceilings remain
+48 condition tokens and 96 guide tokens. Changing these limits is a reviewed
+experimental change, not an automatic recovery action.
+
 ## Planner application records
 
 The existing `START_PLAN` / `END_PLAN` submission boundary is unchanged. Inside
@@ -113,12 +120,23 @@ See the [evidence-fidelity audit](knowledge/learning-evidence-fidelity-audit-202
 for reproduced defects, fixes and the distinction between data availability
 and model reading.
 
+Required/optional files manage context pressure while retaining the original
+archive. Their partition is an optimization question for learning, not a frozen
+assertion that tool bodies are unimportant. Required evidence must be read in
+bounded sections, continuing past any truncated tool response; optional bodies
+are consulted for supporting and opposing detail. Audit real reads rather than
+inferring completeness from hashes or output validity. Changes to the partition
+need a new frozen evidence contract and fidelity tests, not silent truncation or
+Host-authored summaries. The shared runtime already instructs all learning
+roles to read required files completely and recover from tool-output truncation.
+
 Host persistence preserves P/C/E and learning records without credential
 substitution or keyword-based rejection. Private credential isolation,
 ignored result roots and a separate post-run review replace scattered log
 filtering; see the [shared contract](engineering-contracts.md#private-results-and-post-run-credential-review).
 Vendor-redacted Native exports remain unchanged and are not execution-input
-hash authorities. Original paired hook receipts supply that evidence. These
+hash authorities. Original PreToolUse command records supply that evidence;
+PostToolUse callbacks are neither collected nor required for completion. These
 source changes require a fresh execution identity; historical outputs and
 checkpoints are not rewritten or re-certified by the new policy.
 

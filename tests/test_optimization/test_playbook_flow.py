@@ -1010,8 +1010,9 @@ def test_curator_worker_retries_overlength_completion_with_host_feedback(
     assert "Return a complete corrected Curator JSON object" in users[1]
 
 
+@pytest.mark.parametrize("cleanup_fails", [False, True])
 def test_evidence_reflector_disables_implicit_cwd_mount(
-    tmp_path, monkeypatch
+    tmp_path, monkeypatch, cleanup_fails
 ) -> None:
     evidence = tmp_path / "evidence"
     evidence.mkdir()
@@ -1032,6 +1033,8 @@ def test_evidence_reflector_disables_implicit_cwd_mount(
 
         def cleanup(self):
             captured["cleaned"] = True
+            if cleanup_fails:
+                raise OSError("synthetic optional cleanup failure")
 
     class FakeAgent:
         messages = [{"role": "assistant", "content": "submitted"}]
@@ -1099,8 +1102,9 @@ def test_evidence_reflector_disables_implicit_cwd_mount(
     assert captured["cleaned"] is True
 
 
+@pytest.mark.parametrize("cleanup_fails", [False, True])
 def test_evidence_curator_uses_the_same_isolated_file_transport(
-    tmp_path, monkeypatch
+    tmp_path, monkeypatch, cleanup_fails
 ) -> None:
     evidence = tmp_path / "curator-evidence"
     evidence.mkdir()
@@ -1120,6 +1124,8 @@ def test_evidence_curator_uses_the_same_isolated_file_transport(
 
         def cleanup(self):
             captured["cleaned"] = True
+            if cleanup_fails:
+                raise OSError("synthetic optional cleanup failure")
 
     class FakeAgent:
         messages = []

@@ -13,8 +13,11 @@ resource and prepared-history contracts when adapting an existing workflow.
 
 This branch has five operational classes:
 
-1. Safe PCE and later ACE-PCCE submit one Agent/evaluator per Slurm array
-   element and use the shared supervisor/runtime storage defaults.
+1. Repository Safe PCE submits one complete case execution per Slurm array
+   element: Planner, fresh Coder and fresh evaluator run sequentially inside it.
+   Its optional preparation wave uses separate no-model elements. Learning
+   roles use independent Agent elements; PCCE has its own declared PC/CE units.
+   These paths use the shared supervisor/runtime storage defaults.
 2. ACE playbook optimization uses its distributed Checker, Reflector, and
    Curator workers with the same shared supervisor lifecycle.
 3. SWE-chat frozen source acquisition is historical and runs directly on the Iris login node. It

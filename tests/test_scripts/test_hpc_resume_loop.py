@@ -7,8 +7,11 @@ import shlex
 import subprocess
 import sys
 import time
+from contextlib import nullcontext
 from pathlib import Path
 from types import SimpleNamespace
+
+import pytest
 
 import scripts.hpc_resume_loop as resume_loop
 from scripts.hpc_resume_loop import (
@@ -26,6 +29,39 @@ REPO_ROOT = Path(__file__).resolve().parents[2]
 SCRIPT = REPO_ROOT / "scripts" / "hpc_resume_loop.py"
 SERVICE_SCRIPT = REPO_ROOT / "scripts" / "hpc_supervisor_service.py"
 SEQUENCE_SCRIPT = REPO_ROOT / "scripts" / "hpc_resume_sequence.py"
+
+
+@pytest.mark.parametrize("cleanup", ["staging", "workspace"])
+@pytest.mark.parametrize("completed", [True, False])
+def test_optional_cleanup_failure_preserves_completed_run(monkeypatch, cleanup, completed):
+    """Policy acceptance, not an assertion that today's hard stop is correct."""
+    state = {"submissions": 1}
+    config = SimpleNamespace(submit=True, slice_time="00:08:00", poll_interval_seconds=0,
+        target_iterations=0, max_runs=60, remote_run_snapshot="synthetic-private-run",
+        recover_controller_error_types_once=(), once=True)
+    monkeypatch.setattr(resume_loop, "_supervisor_lock", lambda config: nullcontext())
+    monkeypatch.setattr(resume_loop, "_load_supervisor_state", lambda config: state)
+    monkeypatch.setattr(resume_loop, "_save_supervisor_state", lambda *args: None)
+    monkeypatch.setattr(resume_loop, "_submission_identity_error", lambda config: None)
+    remote_status = {"state": "result" if completed else "resumable",
+                     "status": "completed" if completed else "running",
+                     "active_controllers": [], "active_workers": []}
+    monkeypatch.setattr(resume_loop, "remote_run_status", lambda config: remote_status)
+    def reclaim(name):
+        def call(*args, **kwargs):
+            if cleanup == name:
+                raise OSError("synthetic cleanup-only failure")
+            return {"removed": 0}
+        return call
+    monkeypatch.setattr(resume_loop, "reclaim_remote_staging", reclaim("staging"))
+    monkeypatch.setattr(resume_loop, "reclaim_remote_workspaces", reclaim("workspace"))
+    submissions = []
+    monkeypatch.setattr(resume_loop, "submit_slice", lambda config: submissions.append(config) or "synthetic-job")
+    result = resume_loop.run_loop(config)
+    assert result == 0
+    assert state["status"] == ("completed" if completed else "controller_submitted")
+    assert len(submissions) == (0 if completed else 1)
+    assert state[f"{cleanup}_reclamation_error"] == "synthetic cleanup-only failure"
 
 
 def test_embedded_remote_modules_use_modern_iris_python() -> None:
