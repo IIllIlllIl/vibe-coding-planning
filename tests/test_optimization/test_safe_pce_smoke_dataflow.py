@@ -46,7 +46,10 @@ def _prepared_verified(tmp_path):
 
 
 @pytest.mark.parametrize("dataset_mode", ["swe_verified_pce", "swe_rpg_pce"])
-def test_verified_end_to_end_and_audit_detects_lost_evidence(tmp_path, monkeypatch, dataset_mode):
+@pytest.mark.parametrize("persistent_output_link", [False, True])
+@pytest.mark.parametrize("metadata_failure", [False, True])
+def test_verified_end_to_end_and_audit_detects_lost_evidence(
+        tmp_path, monkeypatch, dataset_mode, persistent_output_link, metadata_failure):
     from src.optimization import behavioral_hybrid_runtime as runtime
     from src.optimization.hpc.task_batch import SlurmTaskBatch
     from src.optimization.behavioral_hybrid_worker import run_task as phase_worker
@@ -62,7 +65,26 @@ def test_verified_end_to_end_and_audit_detects_lost_evidence(tmp_path, monkeypat
             pce_config=pce_path, selection={"train": ["owner__repo-1", "owner__repo-2"], "validation": ["owner__repo-3"]},
             snapshot=tmp_path / "learning-snapshot", run_dir=tmp_path / "run", output_config=path,
             max_iterations=1, minibatch_size=2, max_metric_calls=6)
+    if persistent_output_link:
+        persistent = tmp_path / "run_state" / "output" / "dataset" / "smoke"
+        persistent.mkdir(parents=True)
+        staged = tmp_path / "staging" / "output" / "dataset" / "smoke"
+        staged.parent.mkdir(parents=True)
+        staged.symlink_to(persistent, target_is_directory=True)
+        raw = yaml.safe_load(path.read_text())
+        raw["paths"]["run_dir"] = str(staged)
+        path.write_text(yaml.safe_dump(raw))
     config = load_optimization_config(path, require_api_keys=False)
+    if persistent_output_link:
+        assert config.run_dir == staged and config.run_dir.is_symlink()
+    if metadata_failure:
+        from src.artifact_policy import PRIVATE_ARTIFACT_MARKER
+        original_open = Path.open
+        def metadata_denied(path, *args, **kwargs):
+            if path.name in {PRIVATE_ARTIFACT_MARKER, ".gitignore"}:
+                raise PermissionError("synthetic metadata-only write failure")
+            return original_open(path, *args, **kwargs)
+        monkeypatch.setattr(Path, "open", metadata_denied)
     monkeypatch.setenv("DEEPSEEK_API_KEY", "test-only")
     monkeypatch.setattr(runtime, "require_evidence_sif", lambda config: None)
     monkeypatch.setattr("src.environment.repository_history.RepositoryHistoryCache.validate", lambda *a, **kw: (tmp_path / "bundle", {}))
@@ -98,7 +120,14 @@ def test_verified_end_to_end_and_audit_detects_lost_evidence(tmp_path, monkeypat
     monkeypatch.setattr(SWEVerifiedPCERunner, "run", run)
     def agent(**kw):
         root = Path(kw["evidence_dir"])
-        role = json.loads((root / "manifest.json").read_text())["role"]
+        manifest = json.loads((root / "manifest.json").read_text())
+        from src.artifact_policy import PRIVATE_ARTIFACT_MARKER
+        assert not list(root.rglob(PRIVATE_ARTIFACT_MARKER))
+        assert not list(root.rglob(".gitignore"))
+        assert PRIVATE_ARTIFACT_MARKER not in json.dumps(manifest)
+        assert PRIVATE_ARTIFACT_MARKER not in kw["system"]
+        assert PRIVATE_ARTIFACT_MARKER not in kw["instance_template"]
+        role = manifest["role"]
         parent = json.loads((root / "counted_playbook.json").read_text())
         if role == "reflector":
             record = json.loads((root / "record.json").read_text())
@@ -136,6 +165,12 @@ def test_verified_end_to_end_and_audit_detects_lost_evidence(tmp_path, monkeypat
         return outputs
     monkeypatch.setattr(SlurmTaskBatch, "run", scheduler)
     run_hybrid_optimization(config)
+    if persistent_output_link:
+        from src.artifact_policy import PRIVATE_ARTIFACT_MARKER
+        assert staged.is_symlink()
+        assert (persistent / PRIVATE_ARTIFACT_MARKER).is_file() is (not metadata_failure)
+        assert (persistent / "gepa_state.bin").is_file()
+        assert json.loads((persistent / "controller_status.json").read_text())["status"] == "completed"
     result = audit(path)
     assert result["structural_fidelity"] == "passed"
     assert result["physical_records"] == 6

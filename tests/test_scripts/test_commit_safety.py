@@ -41,11 +41,99 @@ def test_metadata_preserves_existing_payload_and_is_inherited(repo):
 
 
 def test_marker_refuses_checkout_root_including_parent_traversal(repo):
-    with pytest.raises(ValueError, match="checkout root"):
-        mark_private_artifact_dir(repo)
-    with pytest.raises(ValueError, match="checkout root"):
-        mark_private_artifact_dir(repo / "output" / "..")
+    assert mark_private_artifact_dir(repo) is False
+    assert mark_private_artifact_dir(repo / "output" / "..") is False
     assert not (repo / PRIVATE_ARTIFACT_MARKER).exists()
+
+
+@pytest.mark.parametrize("link_layout", ["run", "output_parent"])
+def test_marker_supports_persistent_output_links_without_changing_payload(tmp_path, link_layout):
+    persistent = tmp_path / "run_state" / "output"
+    target = persistent / "dataset" / "run"
+    target.mkdir(parents=True)
+    raw = b'{"plan": "original bytes"}\n'
+    payload = target / "plan.json"
+    payload.write_bytes(raw)
+    staging = tmp_path / "staging"
+    staging.mkdir()
+    if link_layout == "run":
+        visible = staging / "output" / "dataset" / "run"
+        visible.parent.mkdir(parents=True)
+        visible.symlink_to(target, target_is_directory=True)
+        link = visible
+    else:
+        link = staging / "output"
+        link.symlink_to(persistent, target_is_directory=True)
+        visible = link / "dataset" / "run"
+    mark_private_artifact_dir(visible)
+    mark_private_artifact_dir(visible)
+    atomic_json(visible / "nested" / "result.json", {"status": "completed"})
+    JsonlLogger(visible / "audit.jsonl").write("accepted")
+    assert link.is_symlink() and visible.resolve() == target
+    assert payload.read_bytes() == raw
+    assert (target / PRIVATE_ARTIFACT_MARKER).read_text() == "private_experiment_artifacts_v1\n"
+    assert (target / ".gitignore").read_text().endswith("*\n")
+    assert (target / "nested" / "result.json").is_file()
+    assert (target / "audit.jsonl").is_file()
+    assert not (tmp_path / PRIVATE_ARTIFACT_MARKER).exists()
+
+
+@pytest.mark.parametrize("unsafe_target", ["checkout", "home", "filesystem_root"])
+def test_resolved_link_target_is_checked_before_metadata_writes(repo, unsafe_target):
+    target = {"checkout": repo, "home": Path.home(), "filesystem_root": Path("/")}[
+        unsafe_target]
+    link = repo / "result-link"
+    link.symlink_to(target, target_is_directory=True)
+    assert mark_private_artifact_dir(link) is False
+    assert link.is_symlink()
+    assert not (repo / PRIVATE_ARTIFACT_MARKER).exists()
+
+
+def test_existing_directory_metadata_is_preserved_through_output_link(tmp_path):
+    target = tmp_path / "persistent"
+    target.mkdir()
+    marker, ignore = target / PRIVATE_ARTIFACT_MARKER, target / ".gitignore"
+    marker.write_text("existing private metadata\n")
+    ignore.write_text("existing ignore policy\n")
+    link = tmp_path / "output-link"
+    link.symlink_to(target, target_is_directory=True)
+    mark_private_artifact_dir(link)
+    assert marker.read_text() == "existing private metadata\n"
+    assert ignore.read_text() == "existing ignore policy\n"
+
+
+@pytest.mark.parametrize("filename", [PRIVATE_ARTIFACT_MARKER, ".gitignore"])
+def test_marker_io_failure_does_not_block_scientific_writers(tmp_path, monkeypatch, filename):
+    original = Path.open
+    def metadata_denied(path, *args, **kwargs):
+        if path.name == filename:
+            raise PermissionError("synthetic metadata-only write failure")
+        return original(path, *args, **kwargs)
+    monkeypatch.setattr(Path, "open", metadata_denied)
+    root = tmp_path / "output" / "dataset" / "run"
+    assert mark_private_artifact_dir(root) is False
+    atomic_json(root / "result.json", {"plan": "unchanged", "status": "completed"})
+    JsonlLogger(root / "audit.jsonl").write("completed")
+    assert (root / "result.json").read_bytes() == b'{\n  "plan": "unchanged",\n  "status": "completed"\n}\n'
+    assert (root / "audit.jsonl").is_file()
+
+
+def test_marker_resolution_failure_is_nonblocking(tmp_path, monkeypatch):
+    def unavailable(path, *args, **kwargs):
+        raise OSError("synthetic path metadata failure")
+    monkeypatch.setattr(Path, "resolve", unavailable)
+    assert mark_private_artifact_dir(tmp_path / "results") is False
+
+
+def test_scientific_output_write_failure_is_not_silently_swallowed(tmp_path, monkeypatch):
+    original = Path.open
+    def result_denied(path, *args, **kwargs):
+        if path.name == "result.json.tmp":
+            raise PermissionError("synthetic scientific output failure")
+        return original(path, *args, **kwargs)
+    monkeypatch.setattr(Path, "open", result_denied)
+    with pytest.raises(PermissionError, match="scientific output failure"):
+        atomic_json(tmp_path / "output" / "dataset" / "result.json", {"plan": "original"})
 
 
 def test_index_marker_remains_effective_after_working_marker_removed(repo):

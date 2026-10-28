@@ -17,6 +17,13 @@ import no old outputs. At most six PCE evaluations and eighteen no-model
 preparation elements precede retries; Refiner and candidate validation remain
 conditional. This binding does not authorize the separate formal 3it.
 
+RPG smoke v5 (`20261028`) preserves v4's cases, prompts, models, resources and
+budget, with fresh inputs/output paths. Its acceptance contract additionally
+covers persistent-output links and nonblocking directory publication metadata
+outside Agent inputs. It imports no v4 output and requires separate launch
+authorization. No single-file registry or extra credential-access restriction
+is introduced.
+
 New supervisor identities should start from `hpc_supervisor.example.yaml`.
 Completed and superseded launch identities should move under
 `archive/supervisor_launches/`; they are separated from runtime configs because

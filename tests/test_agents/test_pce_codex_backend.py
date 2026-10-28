@@ -268,6 +268,15 @@ def test_real_verified_worker_and_runner_native_handoff_and_resume(tmp_path, mon
     assert output["plan_trajectory"][-1]["content"].endswith("Provider trailer")
     assert calls[0]["container"].repository_dir != calls[1]["container"].repository_dir
     assert calls[0]["container"].evidence_dir != calls[1]["container"].evidence_dir
+    from src.artifact_policy import PRIVATE_ARTIFACT_MARKER
+    for call in calls:
+        boundary = call["container"]
+        assert not list(boundary.evidence_dir.rglob(PRIVATE_ARTIFACT_MARKER))
+        assert not list(boundary.evidence_dir.rglob(".gitignore"))
+        assert not (boundary.repository_dir / PRIVATE_ARTIFACT_MARKER).exists()
+        assert not (boundary.repository_dir / ".gitignore").exists()
+        assert PRIVATE_ARTIFACT_MARKER not in call["system"] + call["user"]
+        assert (call["attempt_dir"].parent / PRIVATE_ARTIFACT_MARKER).is_file()
     assert PLAN in calls[1]["system"]
     assert execute_pce(config, "swe_verified_pce", [case], backend="local")[0]["patch"] == PATCH
     assert len(calls) == 2 and seen == [PATCH]

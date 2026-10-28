@@ -713,6 +713,10 @@ authorities, not experiment outputs. Do not move, scan, stage or delete them
 as result cleanup. Preserve the existing per-call auth lifecycle and the
 documented `/codex-state` visibility limitation above; SIF isolation is not a
 claim that shell tools cannot read their own call's auth snapshot.
+Authorized Codex maintenance may inspect private credential state when needed.
+That access is not permission to publish it, echo secrets into diagnostics, or
+add credentials to scientific input bundles; credentials stay on local/HPC
+private storage, outside Git.
 
 Host audit persistence uses `audit_record`: scientific outputs, raw exports,
 errors, counters and token statistics are copied without credential-shaped
@@ -737,11 +741,39 @@ The shared artifact policy adds `.vibe-private-artifacts` directory metadata.
 All descendants inherit private status; retain this marker when copying result
 directories. The marker and a local ignore file are separate from scientific
 payloads: no Plan, patch, JSON or trajectory bytes are annotated or rewritten.
+This is best-effort publication bookkeeping, never experiment validation.
+Missing/unwritable metadata and unsuitable targets return without raising or
+changing Agent inputs, scores, retries, checkpoints or learning decisions.
+Scientific writers create their required directories independently and retain
+normal errors if the actual scientific output cannot be written.
 Shared task-batch creation, PCE attempt/checkpoint roots, audit/JSON writers at
 conventional output paths, learning run creation, Safe PCE input preparation
 and Supervisor log creation use this module. Custom
 result writers must call `mark_private_artifact_dir` on their exact output
 directory. Existing historical directories are not retroactively certified.
+
+Persistent-output directory links are part of the established HPC staging
+contract. Resolve their target before adding private metadata; do not reject
+the run merely because its configured output directory is a symlink. Apply
+the existing home/filesystem/checkout-root exclusions to that resolved target
+before writing; unsuitable targets are skipped, not run failures. Preserve the
+link and any existing metadata, and keep all
+scientific payloads unchanged. Regression tests must cover this layout through
+the real PCE/ACE entry and checkpoint path, not only standalone marker calls.
+
+Keep publication metadata outside Agent-mounted evidence and repository roots.
+It is not a required/optional evidence entry, prompt field, learning record or
+candidate attribute. Test actual P/C transport inputs, learning evidence bundles
+and SIF bind sources, including marker-write failures. Do not filter raw Agent
+text merely because it mentions a marker or an ignore file.
+
+Directory metadata travels only with its directory. Moving a single unmarked
+JSON or patch elsewhere does not preserve that protection; global log filename
+patterns still apply. This directory-level protection is intentionally sufficient
+for the project's accidental-publication threat model; no moved-file registry
+is added. Git ignore is path-based and cannot reject an already committed
+payload at push time. There is no installed pre-push gate here, and the runtime
+marker must not be described as one.
 
 Before every commit, inspect the staged diff and run
 `conda run -n mini-swe python scripts/tools/check_commit_safety.py` in that

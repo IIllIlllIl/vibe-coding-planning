@@ -94,6 +94,7 @@ def run_behavioral_optimization(
 ) -> Any:
     if config.hybrid.enabled and adapter_factory is BehavioralGEPAAdapter:
         raise ValueError("hybrid runs require run_hybrid_optimization; do not use the legacy proposer/adapter")
+    config.run_dir.mkdir(parents=True, exist_ok=True)
     mark_private_artifact_dir(config.run_dir)
     with _controller_lock(config):
         return _run_locked(

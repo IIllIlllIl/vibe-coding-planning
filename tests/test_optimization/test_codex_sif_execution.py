@@ -36,6 +36,14 @@ def _inputs(tmp_path):
 @pytest.mark.parametrize("with_repository", [False, True])
 def test_every_codex_process_is_inside_task_scoped_sif(tmp_path, monkeypatch, with_repository):
     sif, evidence, repository, model = _inputs(tmp_path)
+    from src.artifact_policy import PRIVATE_ARTIFACT_MARKER, mark_private_artifact_dir
+    attempt = tmp_path / "attempt"
+    attempt.mkdir()
+    assert mark_private_artifact_dir(tmp_path)
+    assert mark_private_artifact_dir(attempt)
+    assert not (evidence / PRIVATE_ARTIFACT_MARKER).exists()
+    assert not (evidence / ".gitignore").exists()
+    assert not (repository / PRIVATE_ARTIFACT_MARKER).exists()
     boundary = runtime.CodexSIFExecution(
         sif, evidence, repository if with_repository else None,
     )
@@ -68,6 +76,11 @@ def test_every_codex_process_is_inside_task_scoped_sif(tmp_path, monkeypatch, wi
         assert f"{repository}:/testbed:ro" in mounts if with_repository else all(":/testbed:" not in mount for mount in mounts)
         assert all(not mount.startswith(str(tmp_path) + ":") for mount in mounts)
         private = {mount.split(":")[1]: Path(mount.split(":")[0]) for mount in mounts}
+        # Host publication metadata and its ignore policy are outside every
+        # Agent-visible input, repository and private-output bind.
+        assert not any((source / PRIVATE_ARTIFACT_MARKER).exists()
+                       or (source / ".gitignore").exists()
+                       for source in private.values() if source.is_dir())
         transient_paths.extend(private[target] for target in ("/tmp", "/codex-state", "/agent-output"))
         transient_paths.append(Path(command[command.index("--home") + 1].split(":")[0]))
         assert (private["/codex-state"] / "auth.json").is_file()

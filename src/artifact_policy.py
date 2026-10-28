@@ -38,15 +38,21 @@ def conventional_private_root(path: Path) -> Path | None:
     return None
 
 
-def mark_private_artifact_dir(directory: Path) -> None:
-    """Mark one private directory; never read or rewrite any result file."""
-    directory = directory.absolute()
-    if directory.is_symlink():
-        raise ValueError("Private artifact root must not be a symbolic link")
-    directory = directory.resolve()
-    if directory in {Path(directory.anchor), Path.home().resolve()} or (directory / ".git").exists():
-        raise ValueError("Select a specific private artifact directory, not a home or checkout root")
-    directory.mkdir(parents=True, exist_ok=True)
+def mark_private_artifact_dir(directory: Path) -> bool:
+    """Best-effort publication metadata, never a runtime acceptance condition.
+
+    False means metadata could not be fully recorded. Callers must continue
+    unchanged; scientific output writes retain their own normal I/O errors.
+    """
+    try:
+        # HPC staging exposes persistent run_state output through directory links.
+        directory = directory.resolve()
+        if directory in {Path(directory.anchor), Path.home().resolve()} or (directory / ".git").exists():
+            return False
+        directory.mkdir(parents=True, exist_ok=True)
+    except (OSError, RuntimeError, ValueError):
+        return False
+    recorded = True
     for name, content in ((PRIVATE_ARTIFACT_MARKER, "private_experiment_artifacts_v1\n"),
                           (".gitignore", "# Private experiment artifacts; never commit.\n*\n")):
         try:
@@ -54,9 +60,15 @@ def mark_private_artifact_dir(directory: Path) -> None:
                 handle.write(content)
         except FileExistsError:
             pass  # Existing metadata and scientific payloads remain untouched.
+        except (OSError, RuntimeError, ValueError):
+            recorded = False  # Metadata failure must not affect the experiment.
+    return recorded
 
 
 def mark_artifact_path(path: Path) -> None:
-    root = conventional_private_root(path)
+    try:
+        root = conventional_private_root(path)
+    except (OSError, RuntimeError, ValueError):
+        return
     if root is not None:
         mark_private_artifact_dir(root)
