@@ -42,6 +42,7 @@ offline GEPA, and production failures:
 | [`knowledge/checkpoint-and-retry.md`](knowledge/checkpoint-and-retry.md) | Changing resume, retries, or batch takeover |
 | [`knowledge/isolation-and-artifacts.md`](knowledge/isolation-and-artifacts.md) | Changing Agent visibility, workspaces, or evidence flow |
 | [`knowledge/learning-evidence-fidelity-audit-20261022.md`](knowledge/learning-evidence-fidelity-audit-20261022.md) | Auditing Plan preservation, raw-evidence identity projection, partial learning evidence, and legacy fallback truncation |
+| [`knowledge/rpg-smoke-v6-dataflow-audit-20261028.md`](knowledge/rpg-smoke-v6-dataflow-audit-20261028.md) | Terminal RPG P/C/E/Ref/Cur handoffs, replay-versus-execution accounting, actual required/optional reads and remaining coverage limits |
 | [`knowledge/cleanup-lifecycle.md`](knowledge/cleanup-lifecycle.md) | Changing repository/SIF/workspace cleanup |
 | [`knowledge/hpc-result-retention.md`](knowledge/hpc-result-retention.md) | Choosing current result/staging/dataset/SIF roots or locating retained historical evidence |
 | [`knowledge/methodology-lessons.md`](knowledge/methodology-lessons.md) | Comparing Online GEPA with PCT, PCC, or offline GEPA |

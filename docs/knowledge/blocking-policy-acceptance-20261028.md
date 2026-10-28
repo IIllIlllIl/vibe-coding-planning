@@ -2,8 +2,10 @@
 
 ## Result and scope
 
-The Post callback dependency is removed and accepted without a model-backed
-smoke. The follow-up repairs the Supervisor's staging/workspace cleanup stops
+The Post callback dependency was initially accepted with no-model checks. The
+subsequent [completed RPG v6 smoke audit](rpg-smoke-v6-dataflow-audit-20261028.md)
+adds compute-node P/C/E/Ref/Cur acceptance and records its reading/coverage limits.
+The follow-up repairs the Supervisor's staging/workspace cleanup stops
 and makes optional usage/cleanup logging nonblocking. The recovery-policy
 follow-up retains Stop correction but removes successful Stop delivery as an
 additional completion gate. Independent Plan/patch/staged-hash checks remain

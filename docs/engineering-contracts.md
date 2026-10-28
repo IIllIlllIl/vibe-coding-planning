@@ -104,6 +104,15 @@ File existence, hashes and a submitted answer do not prove complete reading.
 Do not solve truncation by Host summarization, deleting evidence, or adding a
 mandatory read-receipt subsystem.
 
+Append-only evaluation logs may record the same completed execution again during
+Controller replay. Log-row count is not a model-call or sample count. Audit
+replay using the actual Worker execution identity and unchanged output bytes,
+then reconcile metric calls, reflective case manifests and committed history.
+Do not delete raw rows or collapse genuinely independent repetitions by task
+and candidate alone. The [RPG v6 terminal audit](knowledge/rpg-smoke-v6-dataflow-audit-20261028.md)
+demonstrates 13 logged observations but five executions without extra learning
+credit. Stored equality and recorded core reads are distinct from comprehension.
+
 Playbook and hybrid Workers share CLI parsing, archived retry feedback, output
 envelopes and failure classification in `hpc/worker_contract.py`. Role dispatch,
 input authority and scientific validation remain role-owned. Preserve raw Agent

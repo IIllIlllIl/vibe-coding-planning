@@ -117,30 +117,37 @@ Prepare the ignored GEPA input snapshot with the existing tool:
 
 ```bash
 conda run -n mini-swe python -m scripts.tools.prepare_safe_pce_ace_gepa \
-  --learning-config configs/gepa_safe_pce_rpg_codex_smoke_v2_20261025.yaml \
-  --pce-config configs/safe_pce_ace_rpg_codex_formal3_source_v1_20261025.yaml \
-  --split-selection configs/frozen_safe_pce_ace/rpg_threeway_v1_20261025/split-selection.json \
-  --snapshot output/SWE-RPG/safe-pce-ace-rpg-codex-formal3-inputs-v1-20261025 \
-  --run-dir output/SWE-RPG/safe-pce-ace-rpg-codex-formal3-v1-20261025 \
+  --learning-config configs/gepa_safe_pce_rpg_codex_smoke_v6_20261028.yaml \
+  --pce-config configs/safe_pce_ace_rpg_codex_nodiag3_source_v8_20261028.yaml \
+  --split-selection configs/frozen_safe_pce_ace/rpg_clean61_v1_20261026/split-selection.json \
+  --snapshot output/SWE-RPG/safe-pce-ace-rpg-codex-nodiag3-v8-20261028-inputs \
+  --run-dir output/SWE-RPG/safe-pce-ace-rpg-codex-nodiag3-v8-20261028 \
   --output-config .local/operations/rpg-formal3-preparation/generated-learning.yaml \
-  --max-iterations 3 --minibatch-size 16 --max-metric-calls 156
+  --max-iterations 3 --minibatch-size 16 --max-metric-calls 156 \
+  --planner-prompt configs/prompts/safe_pce_rules_planner_v2.yaml \
+  --initial-guideline configs/prompts/safe_pce_hybrid_seed_v2.json
 ```
 
 The generated YAML is a preparation receipt, not the reviewed launch config;
 the checked-in formal config adds its explicit experiment contract. Source
 rows, bundled PCE config and snapshot hashes are the same. Do not launch the
-temporary YAML or overwrite the reviewed runtime config.
+temporary YAML or overwrite the reviewed runtime config. The historical tool
+default resets the learning bundle to v1; the reviewed config explicitly selects
+`safe_pce_hybrid_ace_v2.yaml` and verifies its effective prompts against smoke v6.
+Use a fresh snapshot when regenerating with a different preparation baseline;
+existing manifests are immutable, not overwrite targets.
 
 ## Three-proposal learning contract
 
 Runtime/source/Supervisor identities are:
 
-- `configs/gepa_safe_pce_rpg_codex_formal3_v1_20261025.yaml`;
-- `configs/safe_pce_ace_rpg_codex_formal3_source_v1_20261025.yaml`;
-- `configs/safe_pce_ace_rpg_codex_formal3_supervisor_v1_20261025.yaml`.
+- `configs/gepa_safe_pce_rpg_codex_nodiag3_v8_20261028.yaml`;
+- `configs/safe_pce_ace_rpg_codex_nodiag3_source_v8_20261028.yaml`;
+- `configs/safe_pce_ace_rpg_codex_nodiag3_supervisor_v8_20261028.yaml`.
 
-The completed RPG v2 smoke at source commit `847376d` is the immediate execution
-baseline. The formal identity starts from the same minimal seed, not its learned
+The completed RPG v6 smoke at source commit `8999024` is the immediate execution
+baseline; NoDiag v7 preserves the reviewed experimental design. The fresh
+formal identity starts from the same minimal seed, not the smoke's learned
 proposal. It uses three proposals, 16 distinct training tasks per minibatch,
 one PCE execution per task and the same seed 42. Parent and proposal are compared
 on the same task IDs. Candidate validation still requires strict minibatch
@@ -162,7 +169,7 @@ Coder calls; 156 is not a total LLM-call budget. Iris remains 1 CPU / 4G per
 Controller/Worker, 60-minute PCE and 30-minute learning Worker limits.
 Historical v1 source configs explicitly capped PCE arrays at three; the
 inherited twelve-element learning cap was later found to contradict the
-configuration loader's no-throttle policy. Current NoDiag v5 below has neither
+configuration loader's no-throttle policy. The NoDiag v8 binding has neither
 cap and leaves ready arrays to Slurm. The shared Supervisor uses eight-minute Controller slices and
 up to 60 submissions, matching the earlier three-proposal operational bound.
 
@@ -180,18 +187,18 @@ freezing a split does not certify every evaluator or authorize jobs.
 The downstream source reserves data for later PCE/PCCE configuration; it does
 not claim that a separate RPG PCCE integration or test launch has been accepted.
 
-### Audited NoDiag v5 execution binding
+### Audited NoDiag v8 execution binding
 
-`gepa_safe_pce_rpg_codex_nodiag3_v5_20261027.yaml`, matching
-`safe_pce_ace_rpg_codex_nodiag3_source_v5_20261027.yaml` and Supervisor reuse
-completed smoke v3 (`ddb4203`) and the existing clean-61 eligibility overlay.
-The split is 46 train / 15 validation / 16 downstream test. Models, reviewed
-v2 P/C task prompts, placeholder seed, limits, sampler, official metric and the
-156-slot upper bound are unchanged from NoDiag v4. PCE and learning arrays
-have no project-level concurrency suffix. The run has a fresh snapshot,
-output root and history; it imports no smoke candidates or counters and adds
-no original intermediate references. The separate downstream payload remains
-outside learning inputs. This binding does not launch either diagnostic arm.
+The NoDiag v8 learning/source/Supervisor identities reuse completed smoke v6
+and the existing clean-61 eligibility overlay. The split is 46 train / 15
+validation / 16 downstream test. Effective Planner/seed v2, Coder v3 and learning
+bundle v2, models, limits, sampler, official metric and 156-slot upper bound
+match the reviewed NoDiag v7 science. Shared separate workspace preparation,
+PreToolUse execution coverage, independent Plan/patch acceptance and existing
+bounded recovery match completed smoke v6. PCE and learning arrays have no
+project-level concurrency suffix. Fresh input/output/history identities import
+no previous candidates, checkpoints or counters and add no original intermediate
+references. The downstream payload remains outside learning inputs.
 
 The learning bundle `safe_pce_hybrid_ace_v2.yaml` changes only Reflector's
 evidence-reading paragraph from v1; Curator/Refiner tasks and Ref's learning
@@ -200,7 +207,10 @@ Plans/patches, all model messages and command/file-change events, outcomes and
 non-passing tests. Long output bodies and duplicate records are referenced in
 the unchanged optional original archive. The layout is mechanical, not a Host
 summary. Both original smoke Ref payloads passed local no-model replay;
-new-layout model-backed reading is not yet verified. See the
+the [v6 runtime audit](knowledge/rpg-smoke-v6-dataflow-audit-20261028.md) additionally
+checks actual Ref/Cur reads. Cur read its full required core; Ref inspected
+messages/actions and failure evidence but not every required metadata entry.
+Complete required reading or model comprehension is not certified. See the
 [Ref input acceptance](knowledge/rpg-native-python-startup-20261025.md#ref-requiredoptional-input-acceptance).
 
 The [v3 audit](knowledge/rpg-native-python-startup-20261025.md#completed-v3-transport-and-visibility-audit)
@@ -223,25 +233,29 @@ no model or container and do not certify full-dataset runtime acceptance.
 
 ## Training-diagnostic ablation
 
-Two fresh three-proposal identities compare original retrospective diagnostic
-availability, not Planner access to reference answers:
+The two-arm comparison concerns original retrospective diagnostic availability,
+not Planner access to reference answers:
 
-| Arm | Learning config | Original intermediate references |
+| Arm | Reproducibility binding | Original intermediate references |
 |---|---|---|
-| No diagnostics | `gepa_safe_pce_rpg_codex_nodiag3_v3_20261026.yaml` | Absent from the learning snapshot and evidence |
-| Training diagnostics | `gepa_safe_pce_rpg_codex_diag3_v3_20261026.yaml` | Two original files per eligible training task: requirement clarification and planning |
+| No diagnostics | `gepa_safe_pce_rpg_codex_nodiag3_v8_20261028.yaml` | Absent from the learning snapshot and evidence |
+| Training diagnostics | A separately frozen counterpart with the same effective prompts, code and execution policies | Two original files per eligible training task: requirement clarification and planning |
 
-Both retain the same eligible split/order, seed, minimal initial artifact, prompts,
+Both must retain the same eligible split/order, seed, minimal initial artifact, prompts,
 models, limits, selection, metric budget and P/C/E policies from the formal3
 baseline. Each has a separate snapshot, run root, optimizer and counter history;
 neither imports the other's outputs. The upper bound is 156 PCE slots per arm,
-312 across both, before retries. Both matching Supervisor configs use the
-existing resume service. Their existence does not authorize formal launch.
+312 across both, before retries. Both Supervisor configs use the existing resume
+service. Historical `diag3_v3`/`v4` configs predate later transport/prompt changes
+and are not matched counterparts for NoDiag v8. Config existence does not
+authorize formal launch.
 
 The original diagnostic authority is
 [`rpg_diagnostics_train47_v1_20261025/manifest.json`](../configs/frozen_safe_pce_ace/rpg_diagnostics_train47_v1_20261025/manifest.json):
 94 unmodified UTF-8 YAML files, 340943 bytes, verified against the acquired source
-manifest. Only the 47 training IDs occur. Validation/test references and gold
+manifest. Only the original 47 training IDs occur; the clean-61 comparison uses
+92 files for its 46 eligible training tasks, excluding Pylint 9728 consistently.
+Validation/test references and gold
 patches are not added by this option. Files live under `learning_diagnostics/`,
 not the independently mounted PCE source. The learning snapshot manifest binds
 their paths, hashes and source revision. A missing, modified or split-mismatched

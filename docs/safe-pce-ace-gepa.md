@@ -110,6 +110,16 @@ Coder or learning calls. See the
 Compute-node verification is a separate prerequisite, not a claim made by
 local tests or configuration generation, and does not authorize formal training.
 
+The terminal [RPG smoke v6 dataflow audit](knowledge/rpg-smoke-v6-dataflow-audit-20261028.md)
+verifies this preparation boundary and the subsequent P/C/E/Ref/Cur chain under
+the nonblocking auxiliary/receipt policy. `nodiag3_v8_20261028` preserves that
+completed smoke's effective prompts, Agent settings and shared execution path,
+with the reviewed 46/15/16 split and three-proposal budget. It starts from the
+placeholder seed, never smoke candidates or counters. The development smoke
+does not certify 16-case reading capacity, conditional Refiner or candidate
+validation. Its recorded Ref reads are substantive but not exhaustive; retain
+that distinction when evaluating larger-batch learning.
+
 Other retained projections are mechanical and separately testable: local
 references map declared learning-envelope fields only, leaving raw P/C/E
 objects and tool traces opaque; evidence files preserve every
@@ -369,6 +379,13 @@ paths and a dedicated run directory are required for the standard HPC wrapper.
 The controller uses `container.runtime: none`; PCE and learning Agents keep
 their respective established outer isolation. Missing prepared history fails
 before a production PCE wave rather than rebuilding in Agents.
+
+The historical preparation default selects learning prompt bundle v1 even when
+the supplied baseline uses v2. Treat generated YAML as a preparation receipt:
+explicitly review/select the versioned learning bundle and compare **effective**
+bundled P/C prompts with the completed baseline before freezing a new config.
+The RPG NoDiag v8 binding selects `safe_pce_hybrid_ace_v2.yaml`; its config tests
+assert equality with completed smoke v6 rather than trusting the CLI defaults.
 
 Each candidate has an immutable `effective_pce.yaml` binding its Planner-only
 input. Actual PCE arrays use the top-level `run_dir/hpc_tasks/pce/<fingerprint>`

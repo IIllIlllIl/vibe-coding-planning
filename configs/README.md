@@ -3,11 +3,14 @@
 This branch treats configuration files as three different classes. A file being
 tracked does not authorize its execution.
 
-The RPG `nodiag3_v7_20261027` learning/source/supervisor configs retain the v6
-scientific design, prompts and paired Native command receipts, while selecting
-the shared no-model workspace preparation boundary with a fresh private input
-snapshot. The v6 inputs remain immutable inline-preparation provenance. Launch
-prerequisites are explicit; configuration preparation is not execution authority.
+The RPG `nodiag3_v8_20261028` learning/source/Supervisor configs retain NoDiag
+v7's reviewed 46/15/16 split, mini-16, three proposals and 156-slot upper bound.
+They reuse completed smoke v6's effective prompts, shared workspace preparation
+and recovery/acceptance path, with fresh private inputs and no output/history
+import. The [terminal dataflow audit](../docs/knowledge/rpg-smoke-v6-dataflow-audit-20261028.md)
+records exact persisted handoffs, replay accounting and actual Ref/Cur reading
+limits. Earlier configs remain immutable reproduction authorities. Configuration
+preparation is not launch authorization.
 
 RPG smoke v4 (`20261027`) is the small acceptance binding for that shared
 preparation boundary and paired Native receipt policy. It retains completed
@@ -91,7 +94,7 @@ The NoDiag three-proposal v5 binding (`20261027`) reuses that completed smoke,
 the clean 46/15/16 split, reviewed prompts/seed and mini-16 / 156-slot budget.
 Its matching PCE source and Supervisor have fresh paths and no project-level
 concurrency cap; no original training references or smoke outputs are imported.
-See the [RPG data contract](../docs/swe-rpg-learning-data.md#audited-nodiag-v5-execution-binding)
+See the [RPG data contract](../docs/swe-rpg-learning-data.md#audited-nodiag-v8-execution-binding)
 and its linked transport/tool-view audit. Configuration existence is not launch
 authorization.
 The opt-in Native Codex parallel regression configuration is
