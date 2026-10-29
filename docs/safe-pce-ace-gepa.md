@@ -120,6 +120,17 @@ does not certify 16-case reading capacity, conditional Refiner or candidate
 validation. Its recorded Ref reads are substantive but not exhaustive; retain
 that distinction when evaluating larger-batch learning.
 
+The `nodiag3_v9_20261029` binding reduces the learning minibatch to eight and
+explicitly selects `execution.pce_window_size: 8` in the PCE source. These are
+separate parameters: the unchanged 15-case validation is executed as 8+7, while
+GEPA still receives all 15 observations together. Three proposals have a
+108-slot PCE upper bound, 324 no-model preparation elements before retries,
+and at most 24 Reflector calls. All prompts, labels, limits, models, source
+bytes and 46/15/16 membership remain unchanged. The existing shared PCE
+transport owns every window's retry/resume; full-batch task/output/checkpoint
+paths remain intact. This does not import v8 outputs or certify scratch
+capacity. See the [storage audit](knowledge/rpg-workspace-window-storage-audit-20261029.md).
+
 Other retained projections are mechanical and separately testable: local
 references map declared learning-envelope fields only, leaving raw P/C/E
 objects and tool traces opaque; evidence files preserve every

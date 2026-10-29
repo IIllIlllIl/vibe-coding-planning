@@ -3,6 +3,26 @@
 This branch treats configuration files as three different classes. A file being
 tracked does not authorize its execution.
 
+The RPG window-control smoke is `gepa_safe_pce_rpg_codex_smoke_v7_20261029.yaml`
+with its matching source and Supervisor configs. It reuses completed smoke
+v6's three development cases, prompts, models, seed and 1it/mini-2/5–6-PCE
+budget. Only the explicit PCE execution window is reduced to one case to force
+the two-case minibatch across a real window boundary. This verifies scheduling,
+handoff and resume under the original P/C/E/Ref/Cur flow; it does not certify
+the formal window-8 inode footprint. Formal v9 remains mini 8 / window 8.
+Fresh input packages import no previous execution or history. Separate launch
+authorization is required.
+
+The RPG `nodiag3_v9_20261029` learning/source/Supervisor binding retains v8's
+NoDiag 46/15/16 split, prompts, seed, models and score semantics. It changes
+only the learning minibatch to 8 (108 PCE slots before cache/retries) and the
+independent `execution.pce_window_size` to eight physical PCE units. Validation
+remains 15 cases, executed as 8+7 with unchanged full-batch identities. The
+window does not certify Lustre capacity; see the
+[storage/window audit](../docs/knowledge/rpg-workspace-window-storage-audit-20261029.md).
+Fresh inputs contain no earlier outputs/history. This binding is not launch
+authorization; historical configs remain immutable.
+
 The RPG `nodiag3_v8_20261028` learning/source/Supervisor configs retain NoDiag
 v7's reviewed 46/15/16 split, mini-16, three proposals and 156-slot upper bound.
 They reuse completed smoke v6's effective prompts, shared workspace preparation

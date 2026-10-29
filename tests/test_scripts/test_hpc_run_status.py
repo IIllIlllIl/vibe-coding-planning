@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 from pathlib import Path
 import subprocess
+import sys
 
 from scripts import hpc_run_status
 
@@ -53,3 +54,33 @@ def test_query_uses_read_only_ssh_and_parses_json(tmp_path: Path, monkeypatch) -
     assert payload["totals"]["outputs"] == 3
     assert calls[0][:4] == ["ssh", "-p", "8022", "tester@example.invalid"]
     assert "output/run/evaluator_repairs/repair-one" in calls[0][-1]
+
+
+def test_remote_summary_counts_window_tasks_at_original_authority(tmp_path, monkeypatch, capsys):
+    batch = tmp_path / "hpc_tasks/pce/fingerprint"
+    def write(path, value):
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(json.dumps(value))
+    for index in range(15):
+        write(batch / "tasks" / f"task_{index:04d}.json", {"task_index": index})
+        if index < 9:
+            write(batch / "outputs" / f"task_{index:04d}.json", {"status": "completed"})
+    write(batch / "execution_windows/window_0000_0008/task_state.json", {"phase": "COMPLETE"})
+    write(batch / "execution_windows/window_0008_0015/task_state.json", {"phase": "SUBMITTED"})
+    write(batch / "attempts/task_0009/attempt_01/failure.json", {"status": "failed"})
+    ordinary = tmp_path / "hpc_tasks/reflector/other"
+    write(ordinary / "task_state.json", {"phase": "COMPLETE"})
+    for index in range(2):
+        write(ordinary / "tasks" / f"task_{index:04d}.json", {})
+    write(ordinary / "outputs/task_0000.json", {})
+    before = {str(p): p.read_bytes() for p in tmp_path.rglob("*.json")}
+    monkeypatch.setattr(sys, "argv", ["status", str(tmp_path), "tester"])
+    monkeypatch.setattr(subprocess, "run", lambda command, **kwargs:
+                        subprocess.CompletedProcess(command, 0, stdout="", stderr=""))
+    exec(compile(hpc_run_status.REMOTE_SCRIPT, "<remote-status>", "exec"), {})
+    payload = json.loads(capsys.readouterr().out)
+    windows = [row for row in payload["batches"] if "execution_windows" in row["path"]]
+    assert [(row["tasks"], row["outputs"], row["failure_records"]) for row in windows] == [(8, 8, 0), (7, 1, 1)]
+    assert all(row["logical_batch_tasks"] == 15 for row in windows)
+    assert payload["totals"]["tasks"] == 17 and payload["totals"]["outputs"] == 10
+    assert before == {str(p): p.read_bytes() for p in tmp_path.rglob("*.json")}

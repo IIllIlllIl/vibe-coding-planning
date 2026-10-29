@@ -1,0 +1,80 @@
+schema_version: 1
+mode: swe_rpg_pce
+purpose: three_iteration_learning_without_original_training_reference_diagnostics
+paths:
+  dataset_snapshot: output/SWE-RPG/threeway-readable-clean61-v1-20261026/gepa-source
+  image_manifest: output/SWE-RPG/threeway-readable-clean61-v1-20261026/gepa-source/images.json
+  selection_manifest: output/SWE-RPG/threeway-readable-clean61-v1-20261026/gepa-source/selection.json
+  prompt_source_config: configs/polybench_pce_hpc_formal_clean_20260825.yaml
+  plan_prompt_source_config: configs/prompts/swe_verified_safe_pce_planner_v6_anchor_ablation_20260913.yaml
+  code_prompt_source_config: configs/prompts/safe_pce_native_codex_code_v3.yaml
+  run_dir: output/SWE-RPG/safe-pce-ace-rpg-codex-nodiag3-v9-20261029/pce_evaluations
+plan:
+  executor: codex_cli
+  model: gpt-6-sol
+  reasoning_effort: high
+  codex_binary: ${HOME}/.local/lib/vibe-codex/0.160.1/bin/codex
+  codex_auth_file: ${HOME}/.codex/auth.json
+  codex_version: 0.160.1
+  max_steps: 0
+  cost_limit: 0.0
+  timeout: 1800
+  max_attempts: 3
+  submission_protocol: direct_human_markdown_v5
+code:
+  executor: codex_cli
+  model: gpt-6-sol
+  reasoning_effort: high
+  codex_binary: ${HOME}/.local/lib/vibe-codex/0.160.1/bin/codex
+  codex_auth_file: ${HOME}/.codex/auth.json
+  codex_version: 0.160.1
+  max_steps: 0
+  cost_limit: 0.0
+  timeout: 1800
+  max_attempts: 3
+execution:
+  workspace_preparation: separate_slurm_v1
+  pce_window_size: 8
+docker:
+  workdir: /testbed
+  timeout: 1800
+  min_free_gb: 20
+  max_cached_images: 75
+container:
+  runtime: apptainer
+  module: tools/Apptainer
+  sif_cache_dir: /scratch/users/${USER}/vibe-coding-planning/shared/sif-cache
+  writable_tmpfs: true
+  network_disabled: true
+hpc:
+  submit: true
+  partition: batch
+  cpus_per_task: 1
+  mem: 4G
+  time: '01:00:00'
+  poll_interval_seconds: 120
+  task_output_grace_seconds: 300
+  missing_task_grace_seconds: 600
+  max_task_attempts: 3
+  remote_env_file: ~/.config/vibe-coding-planning/deepseek.env
+  python_module: lang/Python/3.11
+  container_module: tools/Apptainer
+  python_bin: python3
+  job_name_prefix: safe-pce-ace-rpg-codex-nodiag3-v9-20261029-pce
+  worker_config_path: configs/safe_pce_ace_rpg_codex_nodiag3_source_v9_20261029.yaml
+evaluator:
+  slurm_timeout_outcome: unknown
+experiment_contract:
+  launch_authorized: false
+  development_only: false
+  engineering_baseline: configs/safe_pce_ace_rpg_codex_smoke_source_v6_20261028.yaml
+  scientific_design_baseline: configs/safe_pce_ace_rpg_codex_nodiag3_source_v8_20261028.yaml
+  eligibility_manifest: configs/frozen_safe_pce_ace/rpg_clean61_v1_20261026/manifest.json
+  source_audit: pre_decisions_cover_native_execution_events_no_post_gate
+  stop_policy: same_session_correction_with_independent_plan_patch_acceptance
+  official_scoring_unchanged: true
+  reference_artifacts_in_agent_inputs: false
+  no_previous_attempt_or_checkpoint_import: true
+  slurm_schedules_all_ready_array_elements: true
+  model_and_harness_comparison_not_ds_quality_estimate: true
+  resource_evidence: completed_RPG_smoke_v6_MaxRSS_1557932K_at_1CPU_4G

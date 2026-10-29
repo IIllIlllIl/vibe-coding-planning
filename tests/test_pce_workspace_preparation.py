@@ -50,7 +50,7 @@ def prepared_config(tmp_path, native=False, mode="swe_rpg_pce"):
 
 
 def fake_external_systems(monkeypatch, *, code_fails_once=False):
-    observations = {"environments": [], "calls": Counter()}
+    observations = {"environments": [], "calls": Counter(), "live_trees": []}
     class Environment:
         def __init__(self, **kwargs):
             self.kwargs = kwargs
@@ -61,6 +61,10 @@ def fake_external_systems(monkeypatch, *, code_fails_once=False):
                 (self.workspace / "baseline.txt").write_text("original SIF")
             else:
                 assert (self.workspace / "baseline.txt").exists(), "Worker attempted an empty bind"
+            task_root = next(parent for parent in self.workspace.parents if parent.name == "hpc_tasks")
+            handoffs = list(task_root.glob("pce_prepare/*/attempts/task_*/attempt_*/prepared_repository"))
+            phases = list(task_root.glob("*/*/attempts/task_*/attempt_*/workspaces/*"))
+            observations["live_trees"].append(len(handoffs) + len(phases))
         def cleanup(self):
             pass
     monkeypatch.setattr("src.swe_verified_pce.runner.ApptainerEnvironment", Environment)
@@ -119,6 +123,9 @@ def scheduler(monkeypatch):
     submissions = []
     def submit(script):
         batch = script.parent
+        # Window-local task state uses the original full-batch task authority.
+        if not (batch / "tasks").is_dir():
+            batch = batch.parent.parent
         manifests = list((batch / "tasks").glob("*.json"))
         config_path = Path(next(line for line in script.read_text().splitlines()
                                if " -m src.swe_verified_pce.worker " in line).split("--config ", 1)[1].split(" ", 1)[0])
@@ -148,6 +155,202 @@ def finish(executor, cases):
         except ControllerYield:
             pass
     pytest.fail("workflow did not finish within its configured attempts")
+
+
+def with_window(config, size):
+    raw = yaml.safe_load(config.config_path.read_text())
+    raw["execution"]["pce_window_size"] = size
+    config.config_path.write_text(yaml.safe_dump(raw))
+    return replace(config, pce_window_size=size)
+
+
+@pytest.mark.parametrize("native", [False, True])
+@pytest.mark.parametrize("mode", ["swe_verified_pce", "swe_rpg_pce"])
+def test_window8_bounds_live_trees_and_preserves_full_batch_identity(tmp_path, monkeypatch, native, mode):
+    config, cases = prepared_config(tmp_path, native, mode)
+    config = with_window(config, 8)
+    if mode == "swe_rpg_pce":
+        assert load_swe_rpg_pce_config(config.config_path, require_api_keys=False).pce_window_size == 8
+    observations, plan, patch = fake_external_systems(monkeypatch)
+    submissions = scheduler(monkeypatch)
+    original = SWEVerifiedPCERunner.prepare_workspace
+    live_counts = []
+    def prepare(self, case, phase):
+        value = original(self, case, phase)
+        live_counts.append(len(list(config.run_dir.glob(
+            "hpc_tasks/pce_prepare/*/attempts/task_*/attempt_*/prepared_repository"))))
+        return value
+    monkeypatch.setattr(SWEVerifiedPCERunner, "prepare_workspace", prepare)
+    executor = SWEVerifiedPCEHPCExecutor(config, dataset=repository_pce_dataset(mode))
+    # Repetitions cross the window boundary: neither their IDs nor executions
+    # may collapse just because two windows contain the same source cases.
+    results = finish(executor, cases * 5)
+    assert [row["task_index"] for row in results] == list(range(10))
+    assert [row["pce_run_index"] for row in results] == [i // 2 + 1 for i in range(10)]
+    assert [row["instance_id"] for row in results] == [case.instance_id for case in cases * 5]
+    assert all(row["plan"] == plan and row["raw_patch"] == row["patch"] == patch for row in results)
+    assert max(live_counts) == 24
+    assert max(observations["live_trees"]) == 24
+    assert [(op, len(ids)) for op, ids, _, _ in submissions] == [
+        ("prepare_workspace", 24), ("pce", 8), ("prepare_workspace", 6), ("pce", 2)]
+    assert submissions[-1][1] == [8, 9]
+    assert all(count == 5 for count in observations["calls"].values())
+    before = {str(p): p.read_bytes() for p in config.run_dir.glob("hpc_tasks/pce/*/outputs/*.json")}
+    assert executor.evaluate(cases * 5) == results
+    assert len(submissions) == 4
+    assert before == {str(p): p.read_bytes() for p in config.run_dir.glob("hpc_tasks/pce/*/outputs/*.json")}
+    assert not list(config.run_dir.glob("hpc_tasks/pce_prepare/*/attempts/task_*/attempt_*/prepared_repository"))
+    fingerprint = executor.execution_fingerprint(cases * 5)
+    authority = config.run_dir / "hpc_tasks/pce" / fingerprint
+    assert len(list((authority / "tasks").glob("*.json"))) == 10
+    assert len(list((authority / "outputs").glob("*.json"))) == 10
+    assert len(list((authority / "checkpoints").glob("*/plan.json"))) == 10
+    assert len(list((authority / "execution_windows").glob("*/task_state.json"))) == 2
+
+
+def test_identical_cases_in_separate_windows_remain_independent(tmp_path, monkeypatch):
+    config, cases = prepared_config(tmp_path)
+    config = with_window(config, 1)
+    observations, _, _ = fake_external_systems(monkeypatch)
+    submissions = scheduler(monkeypatch)
+    results = finish(SWEVerifiedPCEHPCExecutor(config, dataset=repository_pce_dataset("swe_rpg_pce")),
+                     [cases[0], cases[0]])
+    assert [row["pce_run_index"] for row in results] == [1, 2]
+    assert len({row["fingerprint"] for row in results}) == 1
+    assert [row["task_index"] for row in results] == [0, 1]
+    assert observations["calls"][(cases[0].instance_id, "plan")] == 2
+    assert len(submissions) == 4
+
+
+def test_next_window_waits_for_running_pce_not_just_preparation(tmp_path, monkeypatch):
+    import sys
+    from src.optimization.hpc.slurm import SlurmTaskStatus
+    config, cases = prepared_config(tmp_path)
+    config = with_window(config, 1)
+    observations, _, _ = fake_external_systems(monkeypatch)
+    submissions = scheduler(monkeypatch)
+    original = run_task
+    deferred = []
+    def postpone_first_pce(**kwargs):
+        manifest = json.loads(kwargs["task_manifest_path"].read_text())
+        if manifest.get("operation", "pce") == "pce" and manifest["task_index"] == 0 and not deferred:
+            deferred.append(kwargs)
+            return 0
+        return original(**kwargs)
+    monkeypatch.setattr(sys.modules[__name__], "run_task", postpone_first_pce)
+    monkeypatch.setattr("src.optimization.hpc.task_batch.query_slurm_task_status",
+                        lambda *a: SlurmTaskStatus(state="RUNNING", elapsed_seconds=5))
+    executor = SWEVerifiedPCEHPCExecutor(config, dataset=repository_pce_dataset("swe_rpg_pce"))
+    for _ in range(3):
+        with pytest.raises(ControllerYield):
+            executor.evaluate(cases)
+    assert [op for op, _, _, _ in submissions] == ["prepare_workspace", "pce"]
+    assert not observations["calls"]  # No model work has started in window 2.
+    assert original(**deferred[0]) == 0
+    results = finish(executor, cases)
+    assert len(results) == 2 and all(row["status"] == "completed" for row in results)
+    assert [op for op, _, _, _ in submissions] == ["prepare_workspace", "pce", "prepare_workspace", "pce"]
+
+
+def test_window_retry_reclaims_unused_evaluator_tree_before_repreparing(tmp_path, monkeypatch):
+    config, cases = prepared_config(tmp_path)
+    config = with_window(config, 1)
+    observations, _, _ = fake_external_systems(monkeypatch, code_fails_once=True)
+    submissions = scheduler(monkeypatch)
+    original = SWEVerifiedPCERunner.prepare_workspace
+    counts = []
+    def prepare(self, case, phase):
+        value = original(self, case, phase)
+        counts.append(len(list(config.run_dir.glob(
+            "hpc_tasks/pce_prepare/*/attempts/task_*/attempt_*/prepared_repository"))))
+        return value
+    monkeypatch.setattr(SWEVerifiedPCERunner, "prepare_workspace", prepare)
+    results = finish(SWEVerifiedPCEHPCExecutor(config, dataset=repository_pce_dataset("swe_rpg_pce")), cases[:1])
+    assert results[0]["status"] == "completed" and max(counts) <= 3
+    assert observations["calls"][(cases[0].instance_id, "plan")] == 1
+    assert observations["calls"][(cases[0].instance_id, "code")] == 2
+    assert [attempt for op, _, attempt, _ in submissions if op == "pce"] == [1, 2]
+    assert not list(config.run_dir.glob("hpc_tasks/pce_prepare/*/attempts/task_*/attempt_*/prepared_repository"))
+
+
+def test_failed_window_preserves_noscore_and_continues_independent_windows(tmp_path, monkeypatch):
+    config, cases = prepared_config(tmp_path)
+    config = with_window(config, 1)
+    observations, _, _ = fake_external_systems(monkeypatch)
+    scheduler(monkeypatch)
+    original = SWEVerifiedPCERunner.prepare_workspace
+    def prepare(self, case, phase):
+        if case.instance_id == cases[0].instance_id and phase == "code":
+            raise OSError("synthetic storage failure")
+        return original(self, case, phase)
+    monkeypatch.setattr(SWEVerifiedPCERunner, "prepare_workspace", prepare)
+    results = finish(SWEVerifiedPCEHPCExecutor(config, dataset=repository_pce_dataset("swe_rpg_pce")), cases)
+    assert [row["status"] for row in results] == ["incomplete", "completed"]
+    assert [row["task_index"] for row in results] == [0, 1]
+    assert results[0]["task_outcome"] == "unknown"
+    assert not any(identifier == cases[0].instance_id for identifier, _ in observations["calls"])
+    from src.optimization.safe_pce_learning import outcome_score, IncompletePCEEvaluation
+    with pytest.raises(IncompletePCEEvaluation):
+        outcome_score(results[0], mode="swe_rpg_pce", instance_id=cases[0].instance_id)
+
+
+def test_exhausted_coder_retries_do_not_leave_trees_for_next_window(tmp_path, monkeypatch):
+    config, cases = prepared_config(tmp_path)
+    config = with_window(config, 1)
+    fake_external_systems(monkeypatch)
+    submissions = scheduler(monkeypatch)
+    from src.swe_verified_pce import runner as module
+    adapter = module.agent_runner
+    def failing_adapter(function, **kwargs):
+        original = adapter(function, **kwargs)
+        if kwargs["role"] == "code" and kwargs["case"].instance_id == cases[0].instance_id:
+            return lambda *a, **k: (_ for _ in ()).throw(RuntimeError("synthetic persistent coder failure"))
+        return original
+    monkeypatch.setattr(module, "agent_runner", failing_adapter)
+    results = finish(SWEVerifiedPCEHPCExecutor(config, dataset=repository_pce_dataset("swe_rpg_pce")), cases)
+    assert [row["status"] for row in results] == ["incomplete", "completed"]
+    assert [row["task_index"] for row in results] == [0, 1]
+    assert [attempt for op, ids, attempt, _ in submissions if op == "pce" and ids == [0]] == [1, 2, 3]
+    assert not list(config.run_dir.glob("hpc_tasks/pce_prepare/*/attempts/task_*/attempt_*/prepared_repository"))
+
+
+def test_capacity_reclamation_yields_and_resumes_without_extra_model_attempt(tmp_path, monkeypatch):
+    config, cases = prepared_config(tmp_path)
+    config = with_window(config, 1)
+    observations, _, _ = fake_external_systems(monkeypatch, code_fails_once=True)
+    submissions = scheduler(monkeypatch)
+    from src.swe_verified_pce import workspace_preparation as module
+    original = module.shutil.rmtree
+    refused = []
+    def refuse_once(path, *args, **kwargs):
+        if Path(path).name == "prepared_repository" and not refused:
+            refused.append(str(path))
+            raise OSError("synthetic transient cleanup error")
+        return original(path, *args, **kwargs)
+    monkeypatch.setattr(module.shutil, "rmtree", refuse_once)
+    executor = SWEVerifiedPCEHPCExecutor(config, dataset=repository_pce_dataset("swe_rpg_pce"))
+    reasons = []
+    for _ in range(16):
+        try:
+            results = executor.evaluate(cases[:1])
+            break
+        except ControllerYield as exc:
+            reasons.append(exc.reason)
+    else:
+        pytest.fail("cleanup recovery did not finish")
+    assert "waiting_for_workspace_capacity_reclamation" in reasons
+    assert results[0]["status"] == "completed"
+    assert observations["calls"][(cases[0].instance_id, "plan")] == 1
+    assert observations["calls"][(cases[0].instance_id, "code")] == 2
+    assert [attempt for op, _, attempt, _ in submissions if op == "pce"] == [1, 2]
+
+
+@pytest.mark.parametrize("value", [-1, True, 1.5, "8"])
+def test_window_size_rejects_invalid_config(tmp_path, value):
+    config, _ = prepared_config(tmp_path)
+    with_window(config, value)
+    with pytest.raises(ValueError, match="pce_window_size"):
+        load_swe_rpg_pce_config(config.config_path, require_api_keys=False)
 
 
 @pytest.mark.parametrize("native", [False, True])
@@ -239,6 +442,8 @@ def test_configuration_switch_is_explicit_and_enters_fingerprint(tmp_path):
     a = pce_semantic_sha256(config, include_swebench=False, third_party_identity={})
     b = pce_semantic_sha256(replace(config, workspace_preparation="inline"), include_swebench=False, third_party_identity={})
     assert a != b
+    c = pce_semantic_sha256(replace(config, pce_window_size=8), include_swebench=False, third_party_identity={})
+    assert a != c
 
 
 def test_missing_handoff_cannot_fall_back_to_inline_copy(tmp_path, monkeypatch):

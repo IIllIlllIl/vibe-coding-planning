@@ -214,6 +214,34 @@ evidence that the new handoff ran successfully. No-model tests cover the real
 executor/Worker path, idle cleanup, raw-output fidelity, checkpoint reuse,
 failed-index retry and case-local preparation exhaustion.
 
+Repository PCE may explicitly set `execution.pce_window_size` to a positive
+number of physical case executions; omission/zero preserves the original full
+wave. This approved storage window is independent of GEPA minibatch and
+validation sizes. Prepare at most one window's three phase trees, run its
+existing PCE array to completion/exhaustion, reclaim unused handoffs, then admit
+the next window. Within each window submit every ready index together, without
+adding an array `%N` limit. Return the complete ordered logical batch before
+scoring or learning; no partial counter commit, failed-case omission or label
+imputation is allowed.
+
+Keep the original full-batch task/output/checkpoint paths and repetition IDs.
+Only the existing `SlurmTaskBatch` state/scripts live under
+`pce/<fingerprint>/execution_windows/window_<start>_<stop>/`; preparation identity
+also binds that window's fixed indices, not its changing retry subset. Resume
+validates/reuses completed windows without model calls. Before retry or window
+advancement, reclaim exact unconsumed handoffs from stopped PCE attempts. If
+their removal fails, yield for operational capacity recovery rather than
+accumulating another window or changing saved scientific outputs. Receipts and
+raw evidence remain intact. This is admission backpressure, not a new task
+retry policy or an auxiliary completeness gate.
+
+A case-count window is not a user-quota guarantee: different images have very
+different inode footprints, and SIF-contained virtual environments may be part
+of the copied repository. Check byte and inode headroom for the actual ready
+window plus transient copies, result growth and safety margin. A filesystem
+free-byte check or Slurm CPU/RAM allocation does not check Lustre user quota.
+Do not silently omit environment files or remove caches to make a window fit.
+
 The registered data adapter is not a readiness certificate: image acceptance,
 prepared ancestor history, fresh evaluator calibration and compute-node
 end-to-end validation remain separate. Tests must invoke the real shared Worker

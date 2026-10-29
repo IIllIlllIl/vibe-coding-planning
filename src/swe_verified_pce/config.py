@@ -44,6 +44,7 @@ class SWEVerifiedPCEConfig:
     agent_backends: dict[str, dict[str, str]] = field(default_factory=dict)
     agent_network_disabled: bool = False
     workspace_preparation: str = "inline"
+    pce_window_size: int = 0
 
 
 def _mapping(value: Any, name: str) -> dict[str, Any]:
@@ -262,6 +263,9 @@ def load_repository_pce_config(
     workspace_preparation = execution_raw.get("workspace_preparation", "inline")
     if workspace_preparation not in {"inline", "separate_slurm_v1"}:
         raise ValueError("execution.workspace_preparation must be inline or separate_slurm_v1")
+    pce_window_size = execution_raw.get("pce_window_size", 0)
+    if type(pce_window_size) is not int or pce_window_size < 0:
+        raise ValueError("execution.pce_window_size must be a nonnegative integer (0 means the full wave)")
     execution_manifest_raw = execution_raw.get("manifest")
     if execution_manifest_raw is not None and "pce_runs_per_instance" in execution_raw:
         raise ValueError(
@@ -309,6 +313,7 @@ def load_repository_pce_config(
 
     return config_type(
         workspace_preparation=workspace_preparation,
+        pce_window_size=pce_window_size,
         agent_network_disabled=bool(container_raw.get("network_disabled", False)),
         agent_backends=agent_backends,
         config_path=config_path,

@@ -23,6 +23,7 @@ DEFAULT_REMOTE_RUN_ROOT = "~/hpc_run_state/vibe-coding-planning"
 REMOTE_SCRIPT = r"""
 import json
 import os
+import re
 import subprocess
 import sys
 from collections import Counter
@@ -71,9 +72,16 @@ if run_dir.is_dir():
     for state_path in sorted((run_dir / "hpc_tasks").glob("**/task_state.json")):
         state = read_json(state_path)
         batch_dir = state_path.parent
-        tasks = len(list((batch_dir / "tasks").glob("task_*.json")))
-        outputs = len(list((batch_dir / "outputs").glob("task_*.json")))
-        failures = len(list((batch_dir / "attempts").glob("task_*/attempt_*/failure.json")))
+        window = (re.fullmatch(r"window_(\d+)_(\d+)", batch_dir.name)
+                  if batch_dir.parent.name == "execution_windows" else None)
+        authority = batch_dir.parent.parent if window else batch_dir
+        names = ([f"task_{index:04d}" for index in range(int(window[1]), int(window[2]))]
+                 if window else [path.stem for path in (authority / "tasks").glob("task_*.json")])
+        tasks = sum((authority / "tasks" / (name + ".json")).is_file() for name in names)
+        outputs = (sum((authority / "outputs" / (name + ".json")).is_file() for name in names)
+                   if window else len(list((authority / "outputs").glob("task_*.json"))))
+        failures = (sum(len(list((authority / "attempts" / name).glob("attempt_*/failure.json"))) for name in names)
+                    if window else len(list((authority / "attempts").glob("task_*/attempt_*/failure.json"))))
         active_job = state.get("active_job_id")
         item = {
             "path": str(batch_dir.relative_to(run_dir)),
@@ -85,6 +93,9 @@ if run_dir.is_dir():
             "outputs": outputs,
             "failure_records": failures,
         }
+        if window:
+            item["logical_batch_path"] = str(authority.relative_to(run_dir))
+            item["logical_batch_tasks"] = len(list((authority / "tasks").glob("task_*.json")))
         payload["batches"].append(item)
         totals["batches"] += 1
         totals["tasks"] += tasks

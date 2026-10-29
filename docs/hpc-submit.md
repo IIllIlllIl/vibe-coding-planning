@@ -153,8 +153,10 @@ firewall/DNS state to implement this policy.
   it runs no model and does not source the private provider env file. Capacity
   checks must account for up to three prepared trees per ready PCE case.
 - Repeated executions of one frozen PCE selection remain one workflow: use one
-  Supervisor, one Controller, and one Slurm array. Scientific repetition is a
-  task-manifest field, not a reason to create more supervisors or run roots.
+  Supervisor and one Controller. Scientific repetition is a task-manifest
+  field, not a reason to create more supervisors or run roots. Normally one
+  phase is one Slurm array; an explicitly approved PCE storage window may use
+  sequential bounded arrays within the same logical batch.
 - SWE-chat acquisition: `scripts/tools/login_swe_chat_preheat.py` and
   `scripts/swe_chat_preheat_service.py`.
 
@@ -216,6 +218,15 @@ When measured inode usage requires a peak bound, set
 task in one Slurm array; Slurm's `%N` suffix limits only how many array elements
 may run simultaneously. This is an operational storage throttle, not an
 experimental split or worker-internal parallelism.
+
+With separate PCE preparation, a `%N` throttle alone does not bound all retained
+ready trees: they remain on scratch after their preparation jobs stop. Use the
+explicit `execution.pce_window_size` case window when approved; `8` means at
+most eight physical PCE units / 24 prepared phase trees, including validation
+waves. It does not change GEPA sampling or its all-results learning barrier.
+Retain byte/inode capacity acceptance for the actual window, not just its case
+count. The [RPG storage audit](knowledge/rpg-workspace-window-storage-audit-20261029.md)
+records measured footprints and the limits of that acceptance.
 
 Do not infer a quota defect solely from failures during the ULHPC-announced
 Scratch degradation window (17 September 20:00 through 18 September 10:00).

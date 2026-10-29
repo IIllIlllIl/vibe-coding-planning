@@ -99,7 +99,8 @@ def pce_semantic_sha256(
         {
             "schema": 2,
             **({"workspace_preparation": config.workspace_preparation}
-               if config.workspace_preparation != "inline" else {}),
+               if getattr(config, "workspace_preparation", "inline") != "inline" else {}),
+            **({"pce_window_size": config.pce_window_size} if getattr(config, "pce_window_size", 0) else {}),
             "source": {
                 str(path.relative_to(root)): file_sha256(path) for path in sources
             },
@@ -364,12 +365,33 @@ class SWEVerifiedPCEHPCExecutor:
         fingerprint = self.execution_fingerprint(cases)
         batch_dir = self.config.run_dir / "hpc_tasks" / "pce" / fingerprint
         tasks = self._prepare(batch_dir, fingerprint, cases)
+        window = getattr(self.config, "pce_window_size", 0)
+        if not window:
+            return self._evaluate_wave(batch_dir, fingerprint, tasks)
+        # Only scheduling is partitioned. The original full-batch manifests,
+        # task/repetition IDs, output and checkpoint paths remain unchanged.
+        results = []
+        for start in range(0, len(tasks), window):
+            stop = min(start + window, len(tasks))
+            state_dir = batch_dir / "execution_windows" / f"window_{start:04d}_{stop:04d}"
+            results.extend(self._evaluate_wave(batch_dir, fingerprint, tasks[start:stop], state_dir=state_dir))
+        return results
+
+    def _evaluate_wave(self, batch_dir, fingerprint, tasks, *, state_dir=None):
+        """Reuse the original transport/recovery for one bounded execution wave.
+
+        On Controller resume earlier waves validate/reuse atomic outputs before
+        reaching the unfinished wave. No second scheduler or progress ledger.
+        """
+        state_dir = state_dir or batch_dir
+        window_label = "" if state_dir == batch_dir else "-" + state_dir.name
 
         def write_script(indices: Sequence[int], attempt: int) -> Path:
-            if self.config.workspace_preparation == "separate_slurm_v1":
+            if getattr(self.config, "workspace_preparation", "inline") == "separate_slurm_v1":
                 from src.swe_verified_pce.workspace_preparation import prepare_before_pce
-                prepare_before_pce(self, batch_dir, fingerprint, tasks, indices, attempt)
-            path = batch_dir / f"pce_array_attempt_{attempt:02d}.sbatch"
+                prepare_before_pce(self, batch_dir, fingerprint, tasks, indices, attempt,
+                                  window_indices=[task.index for task in tasks] if getattr(self.config, "pce_window_size", 0) else None)
+            path = state_dir / f"pce_array_attempt_{attempt:02d}.sbatch"
             path.write_text(
                 build_array_script(
                     config=self.config,
@@ -404,19 +426,28 @@ class SWEVerifiedPCEHPCExecutor:
 
         try:
             results = self.runtime.run(
-                batch_dir=batch_dir,
+                batch_dir=state_dir,
                 fingerprint=fingerprint,
                 tasks=tasks,
                 job_name=lambda attempt: (
-                    f"{self.config.hpc.job_name_prefix}-{batch_dir.name[:12]}-a{attempt}"
+                    f"{self.config.hpc.job_name_prefix}-{batch_dir.name[:12]}{window_label}-a{attempt}"
                 ),
                 write_script=write_script,
                 validate_output=validate,
                 **({"finalize_case_failure": self._finalize_preparation_failure}
-                   if self.config.workspace_preparation == "separate_slurm_v1" else {}),
+                   if getattr(self.config, "workspace_preparation", "inline") == "separate_slurm_v1" else {}),
             )
         except TaskAttemptsExhausted:
-            results = self._collect_exhausted(batch_dir, fingerprint, tasks)
+            results = self._collect_exhausted(batch_dir, fingerprint, tasks, audit_dir=state_dir)
+        if getattr(self.config, "pce_window_size", 0) and self.config.workspace_preparation == "separate_slurm_v1":
+            from src.swe_verified_pce.workspace_preparation import reclaim_unconsumed_handoffs
+            if reclaim_unconsumed_handoffs(self.config, tasks,
+                                          attempts=range(1, self.config.hpc.max_task_attempts + 1)):
+                # Complete scientific outputs remain durable and reusable.
+                # Pause admission rather than accumulating the next window.
+                from src.exceptions import ControllerYield
+                raise ControllerYield(batch_dir=str(batch_dir), job_id=None,
+                                      reason="waiting_for_workspace_capacity_reclamation")
         return self._attach_source_access_attempt_index(results, tasks)
 
     @staticmethod
@@ -513,6 +544,8 @@ class SWEVerifiedPCEHPCExecutor:
         batch_dir: Path,
         fingerprint: str,
         tasks: Sequence[TaskFiles],
+        *,
+        audit_dir: Path | None = None,
     ) -> list[dict[str, Any]]:
         results: list[dict[str, Any]] = []
         max_attempts = self.config.hpc.max_task_attempts
@@ -564,7 +597,7 @@ class SWEVerifiedPCEHPCExecutor:
                 }
             )
         atomic_json(
-            batch_dir / "exhausted_collection.json",
+            (audit_dir or batch_dir) / "exhausted_collection.json",
             {
                 "schema_version": 1,
                 "fingerprint": fingerprint,

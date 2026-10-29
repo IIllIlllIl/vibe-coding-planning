@@ -9,6 +9,7 @@ from dataclasses import replace
 from datetime import datetime, timezone
 import hashlib
 import json
+import logging
 from pathlib import Path
 import shutil
 
@@ -18,6 +19,53 @@ from src.optimization.hpc.task_batch import SlurmTaskBatch, TaskAttemptsExhauste
 
 
 PHASES = ("plan", "code", "evaluate")
+
+
+def reclaim_unconsumed_handoffs(config, tasks, *, attempts):
+    """After PCE tasks stop, reclaim only their exact unconsumed handoffs.
+
+    Consumed paths are already absent. Keep receipts, outputs and checkpoints;
+    a retry/next window must not accumulate copies of unused later phases.
+    Return paths whose removal failed, so admission can yield without changing
+    any scientific result or consuming a model/preparation attempt.
+    """
+    remaining = []
+    for task in tasks:
+        for attempt in attempts:
+            directory = task.attempts_dir / f"attempt_{attempt:02d}"
+            receipt_path = directory / "workspace_preparation.json"
+            if not receipt_path.exists():
+                continue
+            try:
+                receipt = json.loads(receipt_path.read_text())
+                parent = json.loads(task.manifest_path.read_text())
+            except (OSError, ValueError):
+                logging.getLogger(__name__).warning("Cannot read workspace reclamation authority: %s", receipt_path)
+                remaining.append(str(receipt_path))
+                continue
+            if (receipt.get("schema_version") != 1
+                    or receipt.get("instance_id") != task.instance_id
+                    or receipt.get("base_commit") != parent["case"]["base_commit"]
+                    or receipt.get("target_attempt_relative_path") != directory.relative_to(config.run_dir).as_posix()):
+                logging.getLogger(__name__).warning("Cannot reclaim a misbound PCE workspace handoff: %s", receipt_path)
+                remaining.append(str(receipt_path))
+                continue
+            for record in receipt["phases"].values():
+                if record["workspace_status"] != "ready":
+                    continue
+                try:
+                    path = prepared_repository_path(config.run_dir, record["prepared_repository_relative_path"])
+                except FatalError:
+                    logging.getLogger(__name__).warning("Cannot reclaim an unsafe PCE workspace path: %s", receipt_path)
+                    remaining.append(str(receipt_path))
+                    continue
+                if path.is_dir():
+                    try:
+                        shutil.rmtree(path)
+                    except OSError:
+                        logging.getLogger(__name__).warning("Workspace reclamation deferred: %s", path)
+                        remaining.append(str(path))
+    return remaining
 
 
 def prepared_repository_path(run_dir: Path, relative: str) -> Path:
@@ -83,7 +131,8 @@ def finalize_preparation_failure(task, value):
     return {**value, "status": "incomplete", "pce_status": "incomplete", "retry_disposition": "no_retry"}
 
 
-def prepare_before_pce(executor, pce_batch, pce_fingerprint, pce_tasks, indices, pce_attempt):
+def prepare_before_pce(executor, pce_batch, pce_fingerprint, pce_tasks, indices, pce_attempt,
+                       *, window_indices=None):
     """Called from the existing write-script boundary, before PCE submission.
 
     A preparation yield does not submit a PCE job or consume a PCE attempt.
@@ -94,9 +143,16 @@ def prepare_before_pce(executor, pce_batch, pce_fingerprint, pce_tasks, indices,
     from src.swe_verified_pce.runner import checkpoint_identity
 
     config = executor.config
+    if config.pce_window_size and pce_attempt > 1:
+        retry_tasks = [task for task in pce_tasks if task.index in indices]
+        if reclaim_unconsumed_handoffs(config, retry_tasks, attempts=range(1, pce_attempt)):
+            raise ControllerYield(batch_dir=str(pce_batch), job_id=None,
+                                  reason="waiting_for_workspace_capacity_reclamation")
     fingerprint = hashlib.sha256(json.dumps(
         {"pce_fingerprint": pce_fingerprint, "pce_attempt": pce_attempt,
-         "operation": "prepare_workspace_v1"}, sort_keys=True).encode()).hexdigest()
+         "operation": "prepare_workspace_v1",
+         **({"window_indices": window_indices} if window_indices is not None else {})},
+        sort_keys=True).encode()).hexdigest()
     batch = config.run_dir / "hpc_tasks" / "pce_prepare" / fingerprint
     binding_path = batch / "manifest.json"
     original_indices = list(indices)
