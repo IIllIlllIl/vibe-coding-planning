@@ -7,6 +7,12 @@ experiment_contract:
   planner_records_application: true
   scientific_design_baseline: configs/gepa_safe_pce_rpg_codex_nodiag3_v8_20261028.yaml
   arm: no_original_diagnostics
+  ablation_group: rpg_training_diagnostics_mini8_window8_v9_20261029
+  comparison_config: configs/gepa_safe_pce_rpg_codex_diag3_v9_20261029.yaml
+  planner_coder_validation_and_test_receive_diagnostics: false
+  completed_window_smoke_run: safe-pce-ace-rpg-codex-smoke-v7-20261029
+  completed_window_smoke_source_commit: 8401c0abf6fe3989fbf3c18e1431111e89458690
+  completed_window_smoke_final_controller: '6258019'
   split_manifest: configs/frozen_safe_pce_ace/rpg_threeway_v1_20261025/manifest.json
   eligibility_manifest: configs/frozen_safe_pce_ace/rpg_clean61_v1_20261026/manifest.json
   split_counts:

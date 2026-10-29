@@ -3,6 +3,15 @@
 This branch treats configuration files as three different classes. A file being
 tracked does not authorize its execution.
 
+The matched RPG mini-8 diagnostic comparison uses
+`gepa_safe_pce_rpg_codex_{nodiag,diag}3_v9_20261029.yaml` and matching
+source/Supervisor bindings. Both have three proposals, PCE window 8, identical
+effective prompts/models and 108 PCE slots before retries. Only Diag adds 92
+original training reference files to Ref/Cur, never to P/C or held-out inputs.
+See the [v7 audit and v9 comparison contract](../docs/knowledge/rpg-window-smoke-v7-ablation-readiness-20261029.md)
+for terminal smoke acceptance, actual-read limits and the unresolved inode
+capacity risk. Historical Diag v4 is not the counterpart for NoDiag v9.
+
 The RPG window-control smoke is `gepa_safe_pce_rpg_codex_smoke_v7_20261029.yaml`
 with its matching source and Supervisor configs. It reuses completed smoke
 v6's three development cases, prompts, models, seed and 1it/mini-2/5–6-PCE

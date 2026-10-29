@@ -52,3 +52,31 @@ PCT/Online runs previously retained full writable repository copies and filled
 home/scratch storage. The durable research artifacts are plans, patches,
 trajectories, evaluator results, manifests, and checkpoints, not working copies
 of benchmark repositories.
+
+## Reversible Cold-Result Consolidation
+
+An explicitly approved cold-result archive is not disposable-workspace cleanup.
+For the 2026-10-29 operation, the cutoff is **before 2026-09-22**, excluding
+that date. The exact 48-run allowlist, per-run receipts and aggregate outcome
+are under the remote project root at
+`run_state/operations/cold-archive-pre-20260922-v1-20261029/`.
+Consult `summary.json` and each `receipt.json`; inclusion in the allowlist does
+not mean that archiving or source reclamation completed.
+
+Each experiment has an uncompressed standard `contents.tar`, a SHA-256 file,
+and a `members.jsonl` index preserving original relative names, types, sizes,
+link targets, metadata, regular-file hashes and byte offsets (end exclusive).
+Only a full archive read, GNU tar comparison against the source and identical
+tree-name inventory permit reclamation. Failed units retain their originals;
+a partially completed reclamation is identified by its receipt and exact
+retirement path. Experimental payloads are never rewritten or merged as text.
+The remaining original-location `COLD_ARCHIVE.json` is a recovery pointer,
+not a resumable experiment checkpoint or a newly empty experiment.
+
+To recover, verify the archive checksum, extract into an empty directory,
+compare the restored tree with the tar, then replace only that experiment's
+archive placeholder with the restored directory. Preserve private-artifact
+markers and archive provenance. Restore before using historical absolute
+result paths for analysis or resume; do not silently rewrite those paths in
+scientific JSON. Current runs, dataset snapshots, SIFs, shared history caches
+and provider credentials are outside this operation's allowlist.

@@ -139,6 +139,15 @@ existing manifests are immutable, not overwrite targets.
 
 ## Three-proposal learning contract
 
+The matched mini-8 binding is the
+[v9 comparison contract](knowledge/rpg-window-smoke-v7-ablation-readiness-20261029.md):
+`gepa_safe_pce_rpg_codex_{nodiag,diag}3_v9_20261029.yaml`, with matching source
+and Supervisor configs. It retains this data contract and changes the earlier
+mini-16 budget to mini 8 / 108 PCE slots per arm (216 across both), with an
+independent eight-case storage window. Only training-reference availability
+differs between the arms. The v8 descriptions below remain historical
+reproduction notes, not the current matched launch binding.
+
 Runtime/source/Supervisor identities are:
 
 - `configs/gepa_safe_pce_rpg_codex_nodiag3_v8_20261028.yaml`;
