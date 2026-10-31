@@ -35,7 +35,7 @@ historical smoke acceptance are not launch or capacity authorization.
 
 The post-layout engineering binding is [RPG smoke v8](gepa_safe_pce_rpg_codex_smoke_v8_20261031.yaml),
 with its [PCE source](safe_pce_ace_rpg_codex_smoke_source_v8_20261031.yaml) and
-[Supervisor](safe_pce_ace_rpg_codex_smoke_supervisor_v8_20261031.yaml).
+[archived Supervisor](archive/supervisor_launches/safe_pce_ace_rpg_codex_smoke_supervisor_v8_20261031.yaml).
 It reuses the completed v7 development cases, prompts, models, limits and
 one-case execution windows with fresh outputs. Its one-proposal acceptance
 does not establish mini-8 capacity or learning quality; it does not authorize

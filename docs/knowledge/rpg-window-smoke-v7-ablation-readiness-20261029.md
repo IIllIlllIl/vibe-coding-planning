@@ -1,4 +1,4 @@
-# RPG window smoke v7 and matched mini-8 ablation
+# RPG window acceptance and matched mini-8 ablation
 
 ## Terminal workflow evidence
 
@@ -50,6 +50,43 @@ introduce a read-receipt gate or rewrite evidence based on this observation.
 The smoke dynamically exercised PCE windows of one case, including real
 prepare/execute/reclaim/resume boundaries. It did not exercise a simultaneous
 eight-case footprint, conditional Refiner, or improved-candidate validation.
+
+## Post-layout smoke v8 terminal audit
+
+`safe-pce-ace-rpg-codex-smoke-v8-20261031`, source
+`a8b711bcd3190448c88a375b78d6d1ffb4203791`, completed one proposal with final
+Controller `6266247` on 2026-10-31 at 19:44:36 UTC. Five PCE executions,
+15 preparation elements, two Reflectors and one Curator completed with zero
+Worker failure records. The seed remained selected. No Refiner or improved
+candidate validation was exercised; this is engineering, not learning-quality,
+acceptance. Its completed Supervisor identity is
+[archived](../../configs/archive/supervisor_launches/safe_pce_ace_rpg_codex_smoke_supervisor_v8_20261031.yaml).
+
+The unchanged dataflow audit passes against a private artifact copy using the
+previous read-only path-translation helper. No scientific bytes were edited.
+Seventeen physical and aggregate rows represent five executions, with replay
+multiplicities 1/7/7/1/1; the training ledger contains two feedback events.
+Original Plan submission and Coder input, patches/checkpoints, scores, candidate
+projection, Ref views, complete required Cur reflection index and decoded
+outputs agree. Downstream-test payloads and original training diagnostics were
+not supplied. The existing offline credential reviewer found zero heuristic
+findings in 624 readable copied files; it does not certify absence of secrets.
+
+Cur read all five required core files and full history, then investigated both
+cases. One optional full patch/evaluator dump produced 374,499 characters;
+the next query selected patch, report counts and failures. Ref queried the
+behavior indexes and selected original commands/failures. These observations
+do not establish complete model visibility or comprehension. Retain the same
+required/optional layout for the matched comparison and inspect reading at
+mini 8 rather than changing evidence or adding a read-receipt gate.
+
+A terminal recheck found no disposable phase workspace, unconsumed prepared
+repository or submission workdir for this smoke. The fixed code snapshot,
+scientific results and logs remain audit authority, not proven duplicate trash.
+Private review receipts are under
+`.local/operations/rpg-nodiag3-prelaunch-review-20261031/`; they are not learner
+inputs. This acceptance leaves the original v9 scientific configurations,
+splits, prompts, model settings and scoring unchanged.
 
 ## Matched experimental binding
 

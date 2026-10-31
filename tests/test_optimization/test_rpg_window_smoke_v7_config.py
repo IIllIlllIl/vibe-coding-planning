@@ -52,7 +52,7 @@ def test_post_layout_launch_uses_shared_supervisor_with_fresh_identity(tmp_path)
     path = Path("configs/gepa_safe_pce_rpg_codex_smoke_v8_20261031.yaml")
     config = load_optimization_config(path, require_api_keys=False)
     session, log, args, program = _load_launch_config(
-        Path("configs/safe_pce_ace_rpg_codex_smoke_supervisor_v8_20261031.yaml"))
+        Path("configs/archive/supervisor_launches/safe_pce_ace_rpg_codex_smoke_supervisor_v8_20261031.yaml"))
     launch = parse_args(args)
     assert program == RESUME_SCRIPT and session == config.run_dir.name and session in log
     assert launch.require_clean_worktree and launch.reclaim_staging and launch.reclaim_workspaces
