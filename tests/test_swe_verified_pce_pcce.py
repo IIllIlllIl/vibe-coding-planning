@@ -499,8 +499,7 @@ def test_safe_pce_audit10_v8_binds_flexible_markdown_smoke() -> None:
 
     supervisor = yaml.safe_load(
         Path(
-            "configs/swe_verified_safe_pce_audit10_v8_claude_plan_"
-            "supervisor_v1_20260913.yaml"
+            'configs/archive/supervisor_launches/swe_verified_safe_pce_audit10_v8_claude_plan_supervisor_v1_20260913.yaml'
         ).read_text(encoding="utf-8")
     )
     arguments = supervisor["arguments"]
@@ -539,8 +538,7 @@ def test_safe_pce_audit10_v9_binds_revised_prompt_diagnostic() -> None:
 
     supervisor = yaml.safe_load(
         Path(
-            "configs/swe_verified_safe_pce_audit10_v9_claude_plan_"
-            "supervisor_v1_20260913.yaml"
+            'configs/archive/supervisor_launches/swe_verified_safe_pce_audit10_v9_claude_plan_supervisor_v1_20260913.yaml'
         ).read_text(encoding="utf-8")
     )
     arguments = supervisor["arguments"]
@@ -597,8 +595,7 @@ def test_safe_pce_anchor_ablation4_v10_changes_only_planning_guidance() -> None:
 
     supervisor = yaml.safe_load(
         Path(
-            "configs/swe_verified_safe_pce_anchor_ablation4_v10_"
-            "supervisor_v1_20260913.yaml"
+            'configs/archive/supervisor_launches/swe_verified_safe_pce_anchor_ablation4_v10_supervisor_v1_20260913.yaml'
         ).read_text(encoding="utf-8")
     )
     arguments = supervisor["arguments"]
@@ -653,7 +650,7 @@ def test_safe_pce_terminal10_v11_combines_selected_final_contracts() -> None:
 
     supervisor = yaml.safe_load(
         Path(
-            "configs/swe_verified_safe_pce_terminal10_v11_supervisor_v1_20260913.yaml"
+            "configs/archive/supervisor_launches/swe_verified_safe_pce_terminal10_v11_supervisor_v1_20260913.yaml"
         ).read_text(encoding="utf-8")
     )
     arguments = supervisor["arguments"]
@@ -724,8 +721,7 @@ def test_safe_pce_human_boundary3_v12_freezes_semantic_boundary_rerun() -> None:
 
     supervisor = yaml.safe_load(
         Path(
-            "configs/swe_verified_safe_pce_human_boundary3_v12_"
-            "supervisor_v1_20260913.yaml"
+            'configs/archive/supervisor_launches/swe_verified_safe_pce_human_boundary3_v12_supervisor_v1_20260913.yaml'
         ).read_text(encoding="utf-8")
     )
     arguments = supervisor["arguments"]
@@ -836,7 +832,7 @@ def test_safe_pce_formal500_v1_freezes_full_input_and_60_minute_budget(
 
     supervisor = yaml.safe_load(
         Path(
-            "configs/swe_verified_safe_pce_formal500_v1_supervisor_20260914.yaml"
+            "configs/archive/supervisor_launches/swe_verified_safe_pce_formal500_v1_supervisor_20260914.yaml"
         ).read_text(encoding="utf-8")
     )
     arguments = supervisor["arguments"]
@@ -918,8 +914,7 @@ def test_safe_pce_formal482_v1_binds_complete_selection_and_images(
 
     supervisor = yaml.safe_load(
         Path(
-            "configs/swe_verified_safe_pce_formal482_v1_"
-            "supervisor_20260914.yaml"
+            'configs/archive/supervisor_launches/swe_verified_safe_pce_formal482_v1_supervisor_20260914.yaml'
         ).read_text(encoding="utf-8")
     )
     arguments = supervisor["arguments"]
@@ -933,8 +928,7 @@ def test_safe_pce_formal482_v1_binds_complete_selection_and_images(
 
     recovery = yaml.safe_load(
         Path(
-            "configs/swe_verified_safe_pce_formal482_v1_"
-            "resume1_supervisor_20260914.yaml"
+            'configs/archive/supervisor_launches/swe_verified_safe_pce_formal482_v1_resume1_supervisor_20260914.yaml'
         ).read_text(encoding="utf-8")
     )
     recovery_arguments = recovery["arguments"]
@@ -1046,7 +1040,7 @@ def test_safe_pce_audit10_freezes_balanced_diverse_development_cases() -> None:
 
     supervisor = yaml.safe_load(
         Path(
-            "configs/swe_verified_safe_pce_audit10_supervisor_v1_20260912.yaml"
+            "configs/archive/supervisor_launches/swe_verified_safe_pce_audit10_supervisor_v1_20260912.yaml"
         ).read_text(encoding="utf-8")
     )
     arguments = supervisor["arguments"]
@@ -1075,7 +1069,7 @@ def test_safe_pce_audit10_v5_prepares_source_boundary_replay() -> None:
 
     supervisor = yaml.safe_load(
         Path(
-            "configs/swe_verified_safe_pce_audit10_supervisor_v3_20260912.yaml"
+            "configs/archive/supervisor_launches/swe_verified_safe_pce_audit10_supervisor_v3_20260912.yaml"
         ).read_text(encoding="utf-8")
     )
     arguments = supervisor["arguments"]
@@ -1138,7 +1132,7 @@ def test_safe_pce_audit10_v7_freezes_repaired_boundary_smoke() -> None:
 
     supervisor = yaml.safe_load(
         Path(
-            "configs/swe_verified_safe_pce_audit10_supervisor_v5_20260913.yaml"
+            "configs/archive/supervisor_launches/swe_verified_safe_pce_audit10_supervisor_v5_20260913.yaml"
         ).read_text(encoding="utf-8")
     )
     arguments = supervisor["arguments"]
@@ -1150,8 +1144,7 @@ def test_safe_pce_audit10_v7_freezes_repaired_boundary_smoke() -> None:
 
     repair_supervisor = yaml.safe_load(
         Path(
-            "configs/swe_verified_safe_pce_audit10_v7_evaluator_repair_"
-            "supervisor_v1_20260913.yaml"
+            'configs/archive/supervisor_launches/swe_verified_safe_pce_audit10_v7_evaluator_repair_supervisor_v1_20260913.yaml'
         ).read_text(encoding="utf-8")
     )
     repair_arguments = repair_supervisor["arguments"]
@@ -2372,7 +2365,7 @@ def test_remaining_fpta_expansion_run_configs_are_launch_authorized() -> None:
         config = load_swe_verified_pce_config(config_path, require_api_keys=False)
         raw = yaml.safe_load(config_path.read_text(encoding="utf-8"))
         supervisor_path = Path(
-            "configs/swe_verified_safe_pce_fpta_mixed58_remaining_"
+            "configs/archive/supervisor_launches/swe_verified_safe_pce_fpta_mixed58_remaining_"
             f"repeat{repeat}_aion_v1_supervisor_20260917.yaml"
         )
         supervisor = yaml.safe_load(supervisor_path.read_text(encoding="utf-8"))
@@ -2497,7 +2490,7 @@ def test_fpta_disagreement_run_configs_are_launch_authorized() -> None:
         config = load_swe_verified_pce_config(config_path, require_api_keys=False)
         raw = yaml.safe_load(config_path.read_text(encoding="utf-8"))
         supervisor_path = Path(
-            "configs/swe_verified_safe_pce_fpta_disagreement22_"
+            "configs/archive/supervisor_launches/swe_verified_safe_pce_fpta_disagreement22_"
             f"repeat{repeat}_aion_v1_supervisor_20260917.yaml"
         )
         supervisor = yaml.safe_load(supervisor_path.read_text(encoding="utf-8"))
@@ -2614,8 +2607,7 @@ def test_fpta_pilot_uses_one_flat_deficit_only_runtime(
 
     supervisor = yaml.safe_load(
         Path(
-            "configs/swe_verified_safe_pce_fpta_deficit116_"
-            "aion_v1_supervisor_20260918.yaml"
+            'configs/archive/supervisor_launches/swe_verified_safe_pce_fpta_deficit116_aion_v1_supervisor_20260918.yaml'
         ).read_text(encoding="utf-8")
     )
     assert supervisor.get("program", "resume") == "resume"
@@ -2635,8 +2627,7 @@ def test_no_thinking20_pilot_changes_only_planner_sampling() -> None:
     contract = raw["experiment_contract"]
     supervisor = yaml.safe_load(
         Path(
-            "configs/swe_verified_safe_pce_no_thinking20_aion_v1_"
-            "supervisor_20260918.yaml"
+            'configs/archive/supervisor_launches/swe_verified_safe_pce_no_thinking20_aion_v1_supervisor_20260918.yaml'
         ).read_text(encoding="utf-8")
     )
 
@@ -2767,8 +2758,7 @@ def test_no_thinking_clean411_target4_freezes_one_flat_deficit_run(
 
     supervisor = yaml.safe_load(
         Path(
-            "configs/swe_verified_safe_pce_no_thinking_clean411_target4_aion_v1_"
-            "supervisor_20260918.yaml"
+            'configs/archive/supervisor_launches/swe_verified_safe_pce_no_thinking_clean411_target4_aion_v1_supervisor_20260918.yaml'
         ).read_text(encoding="utf-8")
     )
     arguments = supervisor["arguments"]
@@ -2837,8 +2827,7 @@ def test_no_thinking_target4_recovery_contains_only_incomplete_units() -> None:
 
     supervisor = yaml.safe_load(
         Path(
-            "configs/swe_verified_safe_pce_no_thinking_clean411_"
-            "target4_recovery379_aion_v1_supervisor_20260919.yaml"
+            'configs/archive/supervisor_launches/swe_verified_safe_pce_no_thinking_clean411_target4_recovery379_aion_v1_supervisor_20260919.yaml'
         ).read_text(encoding="utf-8")
     )
     arguments = supervisor["arguments"]
@@ -2909,8 +2898,7 @@ def test_no_thinking_clean411_completion_freezes_exact_target_four_deficit() -> 
 
     supervisor = yaml.safe_load(
         Path(
-            "configs/swe_verified_safe_pce_no_thinking_clean411_"
-            "completion186_aion_v1_supervisor_20260919.yaml"
+            'configs/archive/supervisor_launches/swe_verified_safe_pce_no_thinking_clean411_completion186_aion_v1_supervisor_20260919.yaml'
         ).read_text(encoding="utf-8")
     )
     arguments = supervisor["arguments"]
@@ -2964,8 +2952,7 @@ def test_clean411_priority_ru7_iris_freezes_only_known_mixed_deficits() -> None:
 
     supervisor = yaml.safe_load(
         Path(
-            "configs/swe_verified_safe_pce_no_thinking_clean411_"
-            "priority_ru7_iris_v1_supervisor_20260919.yaml"
+            'configs/archive/supervisor_launches/swe_verified_safe_pce_no_thinking_clean411_priority_ru7_iris_v1_supervisor_20260919.yaml'
         ).read_text(encoding="utf-8")
     )
     arguments = supervisor["arguments"]

@@ -152,7 +152,7 @@ Runtime/source/Supervisor identities are:
 
 - `configs/gepa_safe_pce_rpg_codex_nodiag3_v8_20261028.yaml`;
 - `configs/safe_pce_ace_rpg_codex_nodiag3_source_v8_20261028.yaml`;
-- `configs/safe_pce_ace_rpg_codex_nodiag3_supervisor_v8_20261028.yaml`.
+- `configs/archive/supervisor_launches/safe_pce_ace_rpg_codex_nodiag3_supervisor_v8_20261028.yaml`.
 
 The completed RPG v6 smoke at source commit `8999024` is the immediate execution
 baseline; NoDiag v7 preserves the reviewed experimental design. The fresh

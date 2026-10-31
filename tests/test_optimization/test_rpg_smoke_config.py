@@ -68,7 +68,7 @@ def test_rpg_smoke_v6_reuses_shared_supervisor_and_unthrottled_phase_arrays(tmp_
     path = Path("configs/gepa_safe_pce_rpg_codex_smoke_v6_20261028.yaml")
     cfg = load_optimization_config(path, require_api_keys=False)
     session, log, args, program = _load_launch_config(Path(
-        "configs/safe_pce_ace_rpg_codex_smoke_supervisor_v6_20261028.yaml"))
+        "configs/archive/supervisor_launches/safe_pce_ace_rpg_codex_smoke_supervisor_v6_20261028.yaml"))
     supervisor = parse_args(args)
     assert program == RESUME_SCRIPT and session == cfg.run_dir.name and session in log
     assert supervisor.ssh_target == "twang@access-iris.uni.lu"
@@ -239,7 +239,7 @@ def test_rpg_smoke_v3_reuses_completed_graph_with_reviewed_prompts_and_placehold
         "configs/safe_pce_ace_rpg_codex_smoke_source_v3_20261027.yaml"))
     assert manifest["planner_prompt_source"]["sha256"] == sha256(planner)
     assert manifest["initial_guideline_source"]["sha256"] == sha256(new.initial_rules_path)
-    launch = Path("configs/safe_pce_ace_rpg_codex_smoke_supervisor_v3_20261027.yaml")
+    launch = Path("configs/archive/supervisor_launches/safe_pce_ace_rpg_codex_smoke_supervisor_v3_20261027.yaml")
     session, log, args, program = _load_launch_config(launch)
     assert program == RESUME_SCRIPT and session == new.run_dir.name and session in log
     assert args[args.index("--gepa-config") + 1] == str(path)

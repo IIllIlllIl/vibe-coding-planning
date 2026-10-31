@@ -68,7 +68,7 @@ also runs before DeepSeek hybrid submission. Regression executes the generated
 formal DeepSeek script with shell doubles, checks its module ordering/credentials,
 and verifies a missing SIF blocks before submission. Forty relevant local tests
 passed. The later mixed-agent smoke exercises the repaired production script; see
-[terminal smoke evidence](knowledge/swe-chat-hybrid-mixed-agent-smoke-20261011.md).
+[terminal smoke evidence](../../knowledge/swe-chat-hybrid-mixed-agent-smoke-20261011.md).
 
 Preserve failed attempts and operational error records. Repair changes affect
 the Checker semantic fingerprint; do not silently overwrite the frozen runtime

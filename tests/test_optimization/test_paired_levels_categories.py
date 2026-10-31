@@ -228,7 +228,7 @@ def test_formal_paired_levels_inputs_and_review_boundary():
     assert "including in temporary\nfiles or memory" in prompt
     assert "Small, read-only probes" not in prompt
     launch = yaml.safe_load(Path(
-        "configs/gepa_verified_paired_levels_categorized_formal24_8it_v1_supervisor_20260921.yaml"
+        "configs/archive/supervisor_launches/gepa_verified_paired_levels_categorized_formal24_8it_v1_supervisor_20260921.yaml"
     ).read_text())
     args = launch["arguments"]
     assert args[args.index("--gepa-config") + 1] == str(path)
@@ -796,7 +796,7 @@ def test_v5_linked_two_phase_smoke_reuses_unchanged_parent_checkers():
     assert replay["inputs"]["validation_instance_ids"] == manual["inputs"]["validation_instance_ids"]
 
     supervisor = yaml.safe_load(Path(
-        "configs/gepa_verified_paired_learning12_smoke_v5_linked_sequence_supervisor_20260923.yaml"
+        "configs/archive/supervisor_launches/gepa_verified_paired_learning12_smoke_v5_linked_sequence_supervisor_20260923.yaml"
     ).read_text())
     assert [run["name"] for run in supervisor["runs"]] == [
         "controlled-linked-reflector-curator-replay",
@@ -849,7 +849,7 @@ def test_v6_binary_ablation_matches_linked_smoke_except_for_levels():
     assert seed["inputs"]["initial_playbook"] != manual["inputs"]["initial_playbook"]
 
     supervisor = yaml.safe_load(Path(
-        "configs/gepa_verified_paired_learning12_smoke_v6_binary_sequence_supervisor_20260924.yaml"
+        "configs/archive/supervisor_launches/gepa_verified_paired_learning12_smoke_v6_binary_sequence_supervisor_20260924.yaml"
     ).read_text())
     assert [run["name"] for run in supervisor["runs"]] == [
         "binary-seed-full-cycle",
@@ -864,8 +864,7 @@ def test_linked_level_manual138_formal_run_is_fresh_and_frozen():
         "20260924.yaml"
     )
     supervisor_path = Path(
-        "configs/gepa_verified_paired_levels_linked_manual138_formal24_8it_v1_"
-        "supervisor_20260924.yaml"
+        'configs/archive/supervisor_launches/gepa_verified_paired_levels_linked_manual138_formal24_8it_v1_supervisor_20260924.yaml'
     )
     raw = yaml.safe_load(path.read_text())
     supervisor = yaml.safe_load(supervisor_path.read_text())
@@ -1175,7 +1174,7 @@ def test_learning12_reflector_curator_replay_uses_v4_and_reuses_only_checkers():
     }
     launch = yaml.safe_load(
         Path(
-            "configs/gepa_verified_paired_learning12_smoke_v2_ref_cur_supervisor_20260922.yaml"
+            "configs/archive/supervisor_launches/gepa_verified_paired_learning12_smoke_v2_ref_cur_supervisor_20260922.yaml"
         ).read_text()
     )
     args = launch["arguments"]
@@ -1222,7 +1221,7 @@ def test_learning12_v3_sequence_freezes_replay_then_manual_full_cycle():
     assert all(bullet.helpful == bullet.harmful == 0 for bullet in manual_book.bullets)
 
     launch = yaml.safe_load(Path(
-        "configs/gepa_verified_paired_learning12_smoke_v3_sequence_supervisor_20260923.yaml"
+        "configs/archive/supervisor_launches/gepa_verified_paired_learning12_smoke_v3_sequence_supervisor_20260923.yaml"
     ).read_text())
     assert launch["program"] == "resume_sequence"
     assert [run["name"] for run in launch["runs"]] == [
@@ -1292,7 +1291,7 @@ def test_learning12_v4_ace_core_sequence_is_launch_ready():
     assert replay["checkpoint_import"]["roles"] == ["paired_repo_checker"]
 
     supervisor_path = Path(
-        "configs/gepa_verified_paired_learning12_smoke_v4_ace_core_sequence_supervisor_20260923.yaml"
+        "configs/archive/supervisor_launches/gepa_verified_paired_learning12_smoke_v4_ace_core_sequence_supervisor_20260923.yaml"
     )
     supervisor = yaml.safe_load(supervisor_path.read_text())
     assert supervisor["program"] == "resume_sequence"
@@ -1445,7 +1444,7 @@ def test_lightweight_smoke_selection_resources_and_launch_contract():
         selected.append({c.task_id for c in rows})
     assert selected[0].isdisjoint(selected[1])
     launch = yaml.safe_load(Path(
-        "configs/gepa_verified_paired_levels_smoke8_v1_supervisor_20260921.yaml"
+        "configs/archive/supervisor_launches/gepa_verified_paired_levels_smoke8_v1_supervisor_20260921.yaml"
     ).read_text())
     args = launch["arguments"]
     assert args[args.index("--gepa-config") + 1] == str(path)

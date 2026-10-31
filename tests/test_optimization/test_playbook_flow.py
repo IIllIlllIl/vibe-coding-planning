@@ -1291,7 +1291,7 @@ def test_safe_pce_smoke32_v2_contract_uses_v6_prompts_and_new_scores() -> None:
 
     supervisor = yaml.safe_load((
         repo_root
-        / "configs/gepa_verified_reject_playbook_safe_pce_smoke32_v2_supervisor_20260915.yaml"
+        / "configs/archive/supervisor_launches/gepa_verified_reject_playbook_safe_pce_smoke32_v2_supervisor_20260915.yaml"
     ).read_text(encoding="utf-8"))
     arguments = supervisor["arguments"]
     assert arguments[arguments.index("--target-iterations") + 1] == "1"
@@ -1347,7 +1347,7 @@ def test_safe_pce_smoke32_v3_uses_one_round_and_atomic_concerns() -> None:
 
     supervisor = yaml.safe_load((
         repo_root
-        / "configs/gepa_verified_reject_playbook_safe_pce_smoke32_v3_supervisor_20260915.yaml"
+        / "configs/archive/supervisor_launches/gepa_verified_reject_playbook_safe_pce_smoke32_v3_supervisor_20260915.yaml"
     ).read_text(encoding="utf-8"))
     arguments = supervisor["arguments"]
     assert arguments[arguments.index("--gepa-config") + 1] == str(
@@ -1395,7 +1395,7 @@ def test_safe_pce_formal_8it_v2_uses_reliable_400_and_one_reflection_round() -> 
 
     supervisor = yaml.safe_load((
         repo_root
-        / "configs/gepa_verified_reject_playbook_safe_pce_formal_8it_v2_supervisor_20260915.yaml"
+        / "configs/archive/supervisor_launches/gepa_verified_reject_playbook_safe_pce_formal_8it_v2_supervisor_20260915.yaml"
     ).read_text(encoding="utf-8"))
     arguments = supervisor["arguments"]
     assert arguments[arguments.index("--target-iterations") + 1] == "8"

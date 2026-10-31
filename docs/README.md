@@ -16,10 +16,7 @@ Read in this order:
 | [`documentation-authority.md`](documentation-authority.md) | Ownership and lifecycle rules for durable documentation and live runtime state |
 | [`branch-scope.md`](branch-scope.md) | Active ACE + Safe PCE systems, retained failure-analysis evidence, and archive boundary |
 | [`../project_issues.md`](../project_issues.md) | Current research decisions and unresolved methodological risks; not a run-progress log |
-| [`offline-gepa-playbook-redesign.md`](offline-gepa-playbook-redesign.md) | Historical reject-playbook development and version-specific execution contracts; not the current prompt template |
 | [`paired-blocking-signal-learning.md`](paired-blocking-signal-learning.md) | Current binary paired blocking-signal target, clean127 derivative, full Checker-to-Reflector evidence, v5 Ref/Cur prompt and frozen iteration-9 diagnostic |
-| [`paired-levels-v1-resume.md`](paired-levels-v1-resume.md) | Hash-pinned in-place recovery of v1's pending seventh proposal; preserves the first six iterations rather than restarting from Seed |
-| [`ace-codex-formal15-candidate-screen-resume.md`](ace-codex-formal15-candidate-screen-resume.md) | Hash-pinned first-proposal recovery that reuses frozen Seed/Reflection/Curator evidence and reruns the complete 48-task Candidate Checker screen |
 | [`engineering-contracts.md`](engineering-contracts.md) | Shared execution requirements: cluster resource ratios, prepared Git history, isolation, artifact persistence, cleanup, and launch checks |
 | [`safe-pce.md`](safe-pce.md) | Current Safe PCE selection, execution reliability, and the frozen within-task Plan-pair derivative |
 | [`safe-pce-ace-gepa.md`](safe-pce-ace-gepa.md) | Opt-in task-only Safe PCE evaluation for the retained hybrid ACE/GEPA learner; Planner-owned application notes |
@@ -88,5 +85,12 @@ are not runtime or experimental authority.
 `archive/` preserves superseded Online/PCT/PCC plans, mixed-design documents,
 Behavioral/Offline methods, PCE/PCCE deployment workflows, reports, and
 migration records. Archive documents are non-authoritative.
+The completed [paired-Level recovery](archive/integration/paired-levels-v1-resume.md),
+[formal15 replay](archive/integration/ace-codex-formal15-candidate-screen-resume.md),
+and SWE-chat [startup](archive/integration/swe-chat-hybrid-smoke-readiness.md) /
+[formal failure](archive/integration/swe-chat-hybrid-formal3-readiness.md) audits
+are historical context, not current launch instructions. The retained
+[Offline playbook redesign](offline-gepa-playbook-redesign.md) is also
+version-specific history, not the current prompt template.
 Reusable decisions must be cited through `knowledge/`, not by making an Agent
 reconstruct the old methodology.

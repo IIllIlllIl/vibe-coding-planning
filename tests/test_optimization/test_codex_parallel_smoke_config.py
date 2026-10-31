@@ -16,7 +16,7 @@ OLD = Path("configs/gepa_safe_pce_verified_codex_smoke_v4_20261023.yaml")
 NEW = Path("configs/gepa_safe_pce_verified_codex_smoke_v5_20261024.yaml")
 OLD_PCE = Path("configs/safe_pce_ace_verified_codex_smoke_source_v4_20261023.yaml")
 NEW_PCE = Path("configs/safe_pce_ace_verified_codex_smoke_source_v5_20261024.yaml")
-SUPERVISOR = Path("configs/safe_pce_ace_verified_codex_smoke_supervisor_v5_20261024.yaml")
+SUPERVISOR = Path("configs/archive/supervisor_launches/safe_pce_ace_verified_codex_smoke_supervisor_v5_20261024.yaml")
 
 
 def configurations():

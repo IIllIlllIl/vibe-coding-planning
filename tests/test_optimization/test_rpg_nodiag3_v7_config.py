@@ -56,7 +56,7 @@ def test_materialized_config_and_preparation_script_keep_resources_and_no_model_
     assert "%" not in spec and len(spec.split("=")[1].split(",")) == 48
     assert "source " not in script and "ENV_FILE" not in script
     assert " -m src.swe_verified_pce.worker " in script
-    session, _, args, _ = _load_launch_config(Path("configs/safe_pce_ace_rpg_codex_nodiag3_supervisor_v7_20261027.yaml"))
+    session, _, args, _ = _load_launch_config(Path("configs/archive/supervisor_launches/safe_pce_ace_rpg_codex_nodiag3_supervisor_v7_20261027.yaml"))
     assert session == config.run_dir.name
     assert args[args.index("--gepa-config") + 1] == str(CONFIG)
     assert {"--require-clean-worktree", "--reclaim-staging", "--reclaim-workspaces"} <= set(args)

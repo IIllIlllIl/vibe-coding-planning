@@ -88,7 +88,7 @@ def test_formal_preserves_shared_wave_supervisor_and_preheat_modules(tmp_path):
         expected += "%" + str(config.hpc.max_running_array_tasks)
     assert expected + "\n" in script
     assert "src.optimization.behavioral_hybrid_worker" in script
-    session, log, args, program = _load_launch_config(Path("configs/safe_pce_ace_rpg_codex_formal3_supervisor_v1_20261025.yaml"))
+    session, log, args, program = _load_launch_config(Path("configs/archive/supervisor_launches/safe_pce_ace_rpg_codex_formal3_supervisor_v1_20261025.yaml"))
     assert program == RESUME_SCRIPT and session == config.run_dir.name and session in log
     assert args[args.index("--gepa-config") + 1] == str(CONFIG)
     assert args[args.index("--max-runs") + 1] == "60"

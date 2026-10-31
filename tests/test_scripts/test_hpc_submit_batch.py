@@ -317,6 +317,7 @@ def test_hpc_submit_batch_fixed_sync_excludes_persistent_and_staged_data(
     logged = command_log.read_text(encoding="utf-8")
     assert "rsync -az --delete" in logged
     assert "--exclude /output" in logged
+    assert "--exclude /.local" in logged
     assert "--exclude output" not in logged
     assert "--exclude frozen_family" in logged
     assert "/scratch/test/fixed-controller/" in logged
@@ -330,9 +331,13 @@ def test_hpc_submit_batch_fixed_sync_excludes_persistent_and_staged_data(
     source, destination = tmp_path / "source", tmp_path / "destination"
     (source / "src/output").mkdir(parents=True)
     (source / "output").mkdir()
+    (source / ".local/archive").mkdir(parents=True)
+    (source / "src/.local").mkdir()
     destination.mkdir()
     (source / "src/output/keep.py").write_text("source\n")
     (source / "output/artifact.bin").write_text("regenerable output\n")
+    (source / ".local/archive/receipt.json").write_text("private maintenance\n")
+    (source / "src/.local/keep.py").write_text("source\n")
     generated = shlex.split(next(line for line in logged.splitlines() if line.startswith("rsync ")))
     filters = []
     for index, value in enumerate(generated):
@@ -342,6 +347,8 @@ def test_hpc_submit_batch_fixed_sync_excludes_persistent_and_staged_data(
                            capture_output=True, text=True, check=True)
     assert "src/output/keep.py" in check.stdout
     assert "output/artifact.bin" not in check.stdout
+    assert ".local/archive/receipt.json" not in check.stdout
+    assert "src/.local/keep.py" in check.stdout
     assert "- output\n" in submit_config.read_text()  # Global input unchanged.
 
 

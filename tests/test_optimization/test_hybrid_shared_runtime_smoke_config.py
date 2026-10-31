@@ -22,7 +22,7 @@ def test_shared_runtime_smoke_keeps_successful_scientific_baseline():
     for name, expected in raw["hybrid"]["dataset_file_sha256"].items():
         assert hashlib.sha256((snapshot / name).read_bytes()).hexdigest() == expected
     assert hashlib.sha256(Path(config.hybrid.prompt_bundle).read_bytes()).hexdigest() == raw["smoke_contract"]["prompt_bundle_sha256"]
-    launch = yaml.safe_load(Path("configs/swe_chat_hybrid_shared_runtime_smoke_supervisor_v1_20261011.yaml").read_text())
+    launch = yaml.safe_load(Path("configs/archive/supervisor_launches/swe_chat_hybrid_shared_runtime_smoke_supervisor_v1_20261011.yaml").read_text())
     args = launch["arguments"]
     assert args[args.index("--gepa-config") + 1] == str(path)
     assert "--require-clean-worktree" in args

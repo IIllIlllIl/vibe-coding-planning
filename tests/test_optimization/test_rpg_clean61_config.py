@@ -156,7 +156,7 @@ def test_supervisors_point_to_new_clean_inputs_without_importing_old_runs(arm):
     assert contract["excluded_from_both_arms"] == [EXCLUDED]
     assert contract["launch_authorized"] is False
     assert contract["start_policy"] == "fresh_seed_no_output_checkpoint_candidate_or_counter_import"
-    path = Path(f"configs/safe_pce_ace_rpg_codex_{arm}3_supervisor_v3_20261026.yaml")
+    path = Path(f"configs/archive/supervisor_launches/safe_pce_ace_rpg_codex_{arm}3_supervisor_v3_20261026.yaml")
     session, log, args, program = _load_launch_config(path)
     assert program == RESUME_SCRIPT
     assert session == result.config.run_dir.name and session in log

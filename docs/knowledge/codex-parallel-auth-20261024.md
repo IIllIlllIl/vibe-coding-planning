@@ -121,7 +121,7 @@ two-call auth diagnostic:
 
 - Learning: [`gepa_safe_pce_verified_codex_smoke_v5_20261024.yaml`](../../configs/gepa_safe_pce_verified_codex_smoke_v5_20261024.yaml).
 - PCE source: [`safe_pce_ace_verified_codex_smoke_source_v5_20261024.yaml`](../../configs/safe_pce_ace_verified_codex_smoke_source_v5_20261024.yaml).
-- Supervisor: [`safe_pce_ace_verified_codex_smoke_supervisor_v5_20261024.yaml`](../../configs/safe_pce_ace_verified_codex_smoke_supervisor_v5_20261024.yaml).
+- Supervisor: [`safe_pce_ace_verified_codex_smoke_supervisor_v5_20261024.yaml`](../../configs/archive/supervisor_launches/safe_pce_ace_verified_codex_smoke_supervisor_v5_20261024.yaml).
 
 Train is still Astropy-13033 and Flask-5014; validation is Pytest-10051. Search
 uses one proposal, mini 2, repetition 1, seed 42, and at most six PCE evaluations

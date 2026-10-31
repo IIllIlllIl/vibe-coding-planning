@@ -36,7 +36,7 @@ def test_formal_v4_contract_reuses_completed_mixed_agent_path(tmp_path):
     validate_candidate(config.initial_rules_path.read_text(), hybrid_limits(config))
     script = build_behavioral_checker_array_script(config=config, batch_dir=tmp_path, task_indices=[0], attempt=2)
     subprocess.run(["bash", "-n"], input=script, text=True, check=True)
-    launch = yaml.safe_load(Path("configs/swe_chat_hybrid_formal3_supervisor_v4_20261011.yaml").read_text())
+    launch = yaml.safe_load(Path("configs/archive/supervisor_launches/swe_chat_hybrid_formal3_supervisor_v4_20261011.yaml").read_text())
     assert str(path) in launch["arguments"]
     assert "--require-clean-worktree" in launch["arguments"]
     assert "--reclaim-staging" in launch["arguments"]

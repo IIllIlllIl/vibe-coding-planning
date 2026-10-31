@@ -4,6 +4,8 @@ Archived configs are preserved for provenance and one-off reproduction. They
 are not current defaults. Before executing one, review its dataset, run
 directory, model budget, historical failure context, and referenced files.
 
+- `supervisor_launches/`: completed, superseded and paused operational launch
+  identities. Their contents are frozen reproduction records, not templates.
 - `online_tests/`: dated Online GEPA smoke, resource, and resume runs.
 - `online_gepa/`: formerly top-level Online GEPA formal, pilot, and supervisor configs.
 - `offline_gepa/`: paused offline GEPA pilots and runtime variants.
@@ -21,5 +23,7 @@ directory, model budget, historical failure context, and referenced files.
   Offline, or PolyBench reachability.
 - `gepa_legacy/`: superseded offline GEPA definitions.
 
-The top-level `configs/README.md` separates active Behavioral acquisition,
-retained Offline/frozen PolyBench foundations, and historical archives.
+The top-level `configs/README.md` separates reviewed next-stage bindings,
+frozen scientific contracts and historical archives. Files moved here retain
+their original bytes and paths inside their contents. Reproduce those paths
+from their original source revision rather than silently rewriting an old run.

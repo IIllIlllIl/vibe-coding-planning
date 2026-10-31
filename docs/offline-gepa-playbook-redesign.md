@@ -34,7 +34,7 @@ or memory, without prompting it to run probes. This is a prompt instruction,
 not a new tool-level command filter.
 
 The original-run lineage recovery is described in
-[`paired-levels-v1-resume.md`](paired-levels-v1-resume.md). It retains v1's
+[`paired-levels-v1-resume.md`](archive/integration/paired-levels-v1-resume.md). It retains v1's
 candidate pool and first six iterations, replays the pending seventh draw and
 completed Agent evidence, then performs the normal eighth iteration. The v2
 Seed-based reconstruction is aborted provenance, not a continuation of v1.
@@ -49,7 +49,7 @@ and commit do not authorize launch.
 ### Lightweight paired smoke contract (2026-09-21)
 
 Runtime: `configs/gepa_verified_paired_levels_smoke8_v1_20260921.yaml`.
-Launcher: `configs/gepa_verified_paired_levels_smoke8_v1_supervisor_20260921.yaml`.
+Launcher: `configs/archive/supervisor_launches/gepa_verified_paired_levels_smoke8_v1_supervisor_20260921.yaml`.
 Selection: `configs/frozen_swe_verified_plan_pairs/20260921_paired_levels_smoke8_v1/selection.json`.
 This separately authorized preparation does not launch jobs or authorize 8it.
 The prompt bundle retains its draft filename but its exact reviewed bytes are
@@ -521,7 +521,7 @@ validation selection, three sequential Reflection rounds, the explicit
 `1/0/-1/1` score table, a 64-token bullet cap, and the 2,048-token playbook cap.
 Its runtime and supervisor configs are
 `configs/gepa_verified_reject_playbook_safe_pce_smoke32_v2_20260915.yaml` and
-`configs/gepa_verified_reject_playbook_safe_pce_smoke32_v2_supervisor_20260915.yaml`.
+`configs/archive/supervisor_launches/gepa_verified_reject_playbook_safe_pce_smoke32_v2_supervisor_20260915.yaml`.
 The v1 authority is retained as a failed operational smoke: both Checker waves
 completed, but the Reflection cache path kept `${USER}` literal and all 32
 Reflector tasks exhausted before model execution. Runtime evidence paths now
@@ -1130,7 +1130,7 @@ a later learning state. The shared supervisor executes phase two only after
 phase one exits successfully. The two run configs and the sequence supervisor
 are `configs/gepa_verified_paired_learning12_smoke_v3_ref_cur_20260923.yaml`,
 `configs/gepa_verified_paired_learning12_smoke_v3_manual_full_20260923.yaml`,
-and `configs/gepa_verified_paired_learning12_smoke_v3_sequence_supervisor_20260923.yaml`.
+and `configs/archive/supervisor_launches/gepa_verified_paired_learning12_smoke_v3_sequence_supervisor_20260923.yaml`.
 These configs are completed development provenance and are not relaunch
 templates.
 
@@ -1183,7 +1183,7 @@ The completed v7 two-phase smoke uses
 `configs/gepa_verified_paired_learning12_smoke_v5_linked_ref_cur_20260923.yaml`,
 `configs/gepa_verified_paired_learning12_smoke_v5_linked_manual_20260923.yaml`,
 and
-`configs/gepa_verified_paired_learning12_smoke_v5_linked_sequence_supervisor_20260923.yaml`.
+`configs/archive/supervisor_launches/gepa_verified_paired_learning12_smoke_v5_linked_sequence_supervisor_20260923.yaml`.
 The v6 and v7 Checker prompt fields are identical. Phase one imports the exact
 frozen Seed parent Checker outputs; phase two imports the exact completed v4
 manual-playbook parent Checker outputs. This fixes the Reflection input when
@@ -1205,7 +1205,7 @@ authority. The configs are
 `configs/gepa_verified_paired_learning12_smoke_v6_binary_seed_20260924.yaml`,
 `configs/gepa_verified_paired_learning12_smoke_v6_binary_manual_20260924.yaml`,
 and
-`configs/gepa_verified_paired_learning12_smoke_v6_binary_sequence_supervisor_20260924.yaml`.
+`configs/archive/supervisor_launches/gepa_verified_paired_learning12_smoke_v6_binary_sequence_supervisor_20260924.yaml`.
 The comparison target is not only aggregate score: audit binary versus Level-2
 pair ordering, linked concerns, Curator operations, resulting readability, and
 Checker context sensitivity.

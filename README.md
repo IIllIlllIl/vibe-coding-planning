@@ -62,60 +62,29 @@ frozen experimental contract. Documentation ownership and runtime-status
 authority are defined in
 [`docs/documentation-authority.md`](docs/documentation-authority.md).
 
-## Active ACE + Safe PCE surface
+## Maintained research and engineering surface
 
-Read these files in order:
+Read the [scope](docs/branch-scope.md),
+[documentation lifecycle](docs/documentation-authority.md),
+[script index](scripts/README.md) and [configuration index](configs/README.md)
+before choosing an entry point.
 
-1. [`docs/branch-scope.md`](docs/branch-scope.md) — current ACE + Safe PCE
-   boundary and historical-reference policy.
-2. [`docs/documentation-authority.md`](docs/documentation-authority.md) — where
-   durable methods, findings, open decisions, and live run state belong.
-3. [`project_issues.md`](project_issues.md) — current decisions and unresolved
-   methodological risks only; it is not a run-progress log.
-4. [`docs/offline-gepa-playbook-redesign.md`](docs/offline-gepa-playbook-redesign.md)
-   — current ACE playbook representation, prompts, scoring, counters, and
-   distributed optimization semantics.
-5. [`docs/safe-pce.md`](docs/safe-pce.md) — current
-   Safe PCE artifact, environment, evaluator, and smoke boundary; its earlier
-   quick50/C4/C5 sections are explicitly historical diagnostics.
-6. [`docs/knowledge/methodology-lessons.md`](docs/knowledge/methodology-lessons.md)
-   — reusable lessons from superseded experiment stages.
-7. [`docs/knowledge/offline-pcce-stage-findings.md`](docs/knowledge/offline-pcce-stage-findings.md)
-   — frozen first-stage PolyBench findings.
-8. [`docs/knowledge/behavioral-gepa-initial-findings.md`](docs/knowledge/behavioral-gepa-initial-findings.md)
-   — frozen first Behavioral search and C4 external-diagnostic findings.
-9. [`docs/knowledge/rq2-c4-safe67-deficiency-reactions.md`](docs/knowledge/rq2-c4-safe67-deficiency-reactions.md),
-   [`docs/knowledge/rq2-c4-blind-discriminator-validation.md`](docs/knowledge/rq2-c4-blind-discriminator-validation.md),
-   and [`docs/knowledge/rq2-c4-pcce-failure-analysis.md`](docs/knowledge/rq2-c4-pcce-failure-analysis.md)
-   — frozen development evidence behind the next GEPA supervision redesign.
-10. Historical PCE/PCCE method documents under `docs/archive/deployment/` only
-    when an explicit failure audit or reproduction requires them.
+- [Safe PCE](docs/safe-pce.md) owns Plan/Code/evaluator separation and evidence.
+- [Task-only ACE/GEPA](docs/safe-pce-ace-gepa.md) owns learning from complete
+  Safe PCE trajectories. [RPG data](docs/swe-rpg-learning-data.md)
+  owns the repository-disjoint training, validation and downstream holdouts.
+- [Paired blocking-signal learning](docs/paired-blocking-signal-learning.md)
+  and [SWE-chat hybrid learning](docs/swe-chat-hybrid-ace-gepa.md) retain their
+  distinct supervision and comparison contracts.
+- Shared execution, Agent backends, isolation, prepared history and storage
+  requirements belong to [engineering contracts](docs/engineering-contracts.md).
+- Frozen findings belong to [knowledge](docs/README.md#reusable-knowledge);
+  operational progress belongs to runtime artifacts.
 
-The current implementation surface is:
-
-- the Offline modules under `src/optimization/`, plus its shared `hpc/`
-  infrastructure;
-- `src/swe_verified_pce/` for the active Safe PCE data-generation path;
-- `src/optimization/playbook_*.py` for the active ACE playbook search path;
-- `src/optimization/repo_playbook.py` and the additive
-  `offline_repo_concern_playbook` mode for repository-aware 0/1/2 concern
-  findings; the prior no-repository playbook mode remains available unchanged;
-- `src/polybench_pce/`, `src/polybench_pcce/`, and historical
-  `src/swe_verified_pcce/` only where code is deliberately reused or audited;
-- `src/offline_check_only/` for additive fixed-guideline evaluation;
-- `src/swe_bench_pro_pce/` for the additive Pro task/image/evaluator adapter
-  that reuses the current SWE PCE phase and retry implementation;
-- `third_party/gepa/` for the existing search implementation, which should not
-  be changed without a concrete experimental need;
-- `tests/test_optimization/test_offline_gepa_regression.py` for the focused,
-  no-LLM historical Offline acceptance suite;
-- `src/optimization/behavioral_*.py` and
-  `tests/test_optimization/test_behavioral_offline_foundation.py` for the
-  Behavioral schema, acceptability Adapter, evidence projection, and disposable
-  temporal-proxy checkout foundation;
-- `configs/gepa_behavioral_acceptability_smoke_v2_20260830.yaml` and
-  `configs/gepa_behavioral_acceptability_formal_8it_v2_20260830.yaml` for the
-  completed smoke and formal Behavioral method identities.
+Completed Supervisor identities, dated launch wrappers and superseded recovery
+instructions are archived. Historical scientific configs and shared modules
+remain reachable where regression tests or provenance require them. Their
+presence is not a new launch instruction.
 
 ## Historical paths
 

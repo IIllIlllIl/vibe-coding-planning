@@ -13,7 +13,7 @@ from src.evaluator.swe_evaluator import derive_image_name
 
 
 CONFIG = Path("configs/gepa_verified_paired_blocking_light_history_smoke4x2_v1_20260928.yaml")
-SUPERVISOR = Path("configs/gepa_verified_paired_blocking_light_history_smoke4x2_v1_supervisor_20260928.yaml")
+SUPERVISOR = Path("configs/archive/supervisor_launches/gepa_verified_paired_blocking_light_history_smoke4x2_v1_supervisor_20260928.yaml")
 
 
 def test_frozen_selection_is_task_disjoint_and_image_authorized():

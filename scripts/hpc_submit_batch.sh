@@ -457,6 +457,8 @@ config = yaml.safe_load(source.read_text(encoding="utf-8")) or {}
 # Normalize only this launch-local copy, never the user's global config.
 excludes = ["/output" if pattern == "output" else pattern
             for pattern in config.get("sync_excludes") or []]
+if "/.local" not in excludes:
+    excludes.append("/.local")
 if dataset_exclude not in excludes:
     excludes.append(dataset_exclude)
 if dataset_family_exclude and dataset_family_exclude not in excludes:

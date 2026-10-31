@@ -589,6 +589,10 @@ Submission filters must distinguish root-level artifacts from source packages:
 an unanchored rsync exclusion `output` also removes `src/output/`. The shared
 batch wrapper normalizes that root-artifact filter to `/output` in its
 launch-local effective config; a real-rsync regression test checks both paths.
+The same effective config excludes `/.local`, including private worktree
+recovery archives and operator evidence. Git ignore rules alone do not control
+this rsync. Keep those files out of code staging, without modifying the
+explicitly staged scientific input snapshot or the user's global config.
 Reuse fixed-worktree staging and the existing `ulhpc-submit --no-sync` path.
 For bounded diagnostic source exports, verify the staged source hash inventory and a
 lightweight entry-point import before compute submission; do not install

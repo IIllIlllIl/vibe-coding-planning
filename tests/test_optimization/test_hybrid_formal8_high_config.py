@@ -15,7 +15,7 @@ from src.optimization.config import load_optimization_config
 
 BASELINE = Path("configs/gepa_swe_chat_hybrid_formal3_v9_20261015.yaml")
 CONFIG = Path("configs/gepa_swe_chat_hybrid_formal8_high_v1_20261016.yaml")
-LAUNCH = Path("configs/swe_chat_hybrid_formal8_high_supervisor_v1_20261016.yaml")
+LAUNCH = Path("configs/archive/supervisor_launches/swe_chat_hybrid_formal8_high_supervisor_v1_20261016.yaml")
 
 
 def test_only_effort_target_budget_and_run_identity_change():

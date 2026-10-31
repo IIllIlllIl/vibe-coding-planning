@@ -42,7 +42,7 @@ def test_missing_history_blocks_wave_before_submission(role, monkeypatch):
 def test_repaired_aion_configuration_preserves_resource_ratio():
     root = Path("configs")
     config = yaml.safe_load((root / "gepa_verified_paired_repo_concern_playbook_formal24_8it_v2_20260920.yaml").read_text())
-    supervisor = yaml.safe_load((root / "gepa_verified_paired_repo_concern_playbook_formal24_8it_v2_supervisor_20260920.yaml").read_text())
+    supervisor = yaml.safe_load((root / 'archive/supervisor_launches/gepa_verified_paired_repo_concern_playbook_formal24_8it_v2_supervisor_20260920.yaml').read_text())
     assert config["hpc"]["cpus_per_task"] == 1
     assert config["hpc"]["mem"] == "1750M"
     args = supervisor["arguments"]

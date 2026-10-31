@@ -61,7 +61,7 @@ def test_v2_smoke_freezes_new_prompts_and_restarts_reflector_boundary():
     assert current['readiness']['runnable'] is True
     assert current['readiness']['launched'] is False
     assert 'before inference during this smoke' in current['readiness']['validation_scope']
-    supervisor = yaml.safe_load(Path('configs/gepa_verified_paired_blocking_it9_smoke24_sol6_high_v2_supervisor_20260927.yaml').read_text())
+    supervisor = yaml.safe_load(Path('configs/archive/supervisor_launches/gepa_verified_paired_blocking_it9_smoke24_sol6_high_v2_supervisor_20260927.yaml').read_text())
     assert str(path) in supervisor['arguments']
     assert '--require-clean-worktree' in supervisor['arguments']
     assert supervisor['session'] == current['run_id']
@@ -190,7 +190,7 @@ def test_v4_smoke_binds_review_and_failure_pattern_prompts_without_changing_draw
     assert current['paths']['run_dir'] != previous['paths']['run_dir']
     assert 'not a matched-Checker comparison' in current['purpose']
     assert current['readiness']['launched'] is False
-    supervisor = yaml.safe_load(Path('configs/gepa_verified_paired_blocking_it9_smoke24_sol6_high_v4_supervisor_20260927.yaml').read_text())
+    supervisor = yaml.safe_load(Path('configs/archive/supervisor_launches/gepa_verified_paired_blocking_it9_smoke24_sol6_high_v4_supervisor_20260927.yaml').read_text())
     assert str(path) in supervisor['arguments']
     assert supervisor['session'] == current['run_id']
     assert '--require-clean-worktree' in supervisor['arguments']

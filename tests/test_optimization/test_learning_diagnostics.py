@@ -47,7 +47,7 @@ def test_both_arms_same_tasks_models_prompts_and_execution_except_identity():
     assert not list(no.pce.dataset_snapshot.rglob("*diagnostic*"))
     assert not list(yes.pce.dataset_snapshot.rglob("*diagnostic*"))
     for arm, item in (("nodiag", no), ("diag", yes)):
-        path = Path(f"configs/safe_pce_ace_rpg_codex_{arm}3_supervisor_v1_20261025.yaml")
+        path = Path(f"configs/archive/supervisor_launches/safe_pce_ace_rpg_codex_{arm}3_supervisor_v1_20261025.yaml")
         session, log, args, program = _load_launch_config(path)
         assert program == RESUME_SCRIPT and session == item.config.run_dir.name
         assert arm + "3" in log

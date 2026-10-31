@@ -59,7 +59,7 @@ def test_formal_preserves_science_and_verified_mixed_agent_path(tmp_path, versio
     assert "module load tools/Apptainer" in script
     assert "failed_outputs/attempt_01" in script
     subprocess.run(["bash", "-n"], input=script, text=True, check=True)
-    launch = yaml.safe_load(Path(f"configs/swe_chat_hybrid_formal3_supervisor_v{version}_{date}.yaml").read_text())
+    launch = yaml.safe_load(Path(f"configs/archive/supervisor_launches/swe_chat_hybrid_formal3_supervisor_v{version}_{date}.yaml").read_text())
     args = launch["arguments"]
     assert args[args.index("--gepa-config") + 1] == str(path)
     assert "--require-clean-worktree" in args

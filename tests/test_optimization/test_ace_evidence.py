@@ -174,7 +174,7 @@ def test_repaired_config_preserves_experiment_design_and_freezes_new_prompt():
     assert new["experiment_contract"]["launch_authorized"] is False
     assert new["experiment_contract"]["prompt_bundle_sha256"] == hashlib.sha256(
         Path(new["hybrid"]["prompt_bundle"]).read_bytes()).hexdigest()
-    launch = yaml.safe_load(Path("configs/swe_chat_hybrid_formal3_supervisor_v9_20261015.yaml").read_text())
+    launch = yaml.safe_load(Path("configs/archive/supervisor_launches/swe_chat_hybrid_formal3_supervisor_v9_20261015.yaml").read_text())
     args = launch["arguments"]
     assert args[args.index("--gepa-config") + 1] == str(new_path)
     assert args[args.index("--job-name") + 1] == new["experiment_contract"]["identity"]

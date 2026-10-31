@@ -155,7 +155,7 @@ They are task descriptions, not replacements for the common shell Agent protocol
 Old SWE-chat and rule-only prompt/config files are unchanged.
 
 Preparation and terminal failure evidence are recorded in
-`docs/swe-chat-hybrid-formal3-readiness.md`; mixed-agent end-to-end evidence is in
+`docs/archive/integration/swe-chat-hybrid-formal3-readiness.md`; mixed-agent end-to-end evidence is in
 `docs/knowledge/swe-chat-hybrid-mixed-agent-smoke-20261011.md`.
 Model-backed execution still requires explicit authorization. Historical run
 authorization is not inherited.

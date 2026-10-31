@@ -59,3 +59,21 @@ useful after the current run and whether an authoritative artifact supports it.
 Prefer links to the single owning document over duplicated summaries. Frozen
 headline results may appear briefly in `README.md`, but their detailed evidence
 and limitations belong in one knowledge or method document.
+
+## Maintained Repository Surface
+
+For one recurring operational goal, maintain one entry point and supply run
+differences as configuration. Archive completed date-specific wrappers rather
+than leaving them beside reusable tools. A missing static reference alone does
+not make a command-line tool obsolete; record its purpose in the owning index.
+
+Relocation must preserve frozen experimental bytes. Update current navigation
+and regression-test paths, but do not rewrite historical inputs to make an old
+experiment appear current. Archived launch identities are reproduced from
+their original source revision, not treated as new execution templates.
+
+Private helpers, diagnostics and source snapshots belong under ignored
+`.local/` directories. Before pruning stale worktree metadata, preserve its
+commit identities and move surviving unique files/results into a private
+recovery archive. Archive and cleanup are not permission to discard research
+evidence or unrelated uncommitted work.

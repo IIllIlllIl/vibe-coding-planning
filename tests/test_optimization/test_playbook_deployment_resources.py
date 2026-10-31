@@ -6,7 +6,7 @@ from src.optimization.playbook_cli import _deployment_resources
 
 
 def test_iris_supervisor_reuses_exact_scientific_config():
-    path = Path("configs/gepa_verified_paired_repo_concern_playbook_formal24_8it_v4_iris_supervisor_20260920.yaml")
+    path = Path("configs/archive/supervisor_launches/gepa_verified_paired_repo_concern_playbook_formal24_8it_v4_iris_supervisor_20260920.yaml")
     args = yaml.safe_load(path.read_text())["arguments"]
     assert args[args.index("--cpus") + 1] == "1"
     assert args[args.index("--mem") + 1] == "4G"

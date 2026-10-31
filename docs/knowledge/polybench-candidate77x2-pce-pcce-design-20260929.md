@@ -18,7 +18,7 @@ disabled. Raw network or evaluator failures must remain visible and be
 quarantined after the run; they must not become silent U labels. Iris was
 selected after a 2026-09-29 queue snapshot and the Aion smoke's
 near-limit memory use. Both worker and controller request 1 CPU / 4G; the
-[formal Supervisor config](../../configs/polybench_safe_pce_candidate77x2_iris_v1_supervisor_20260929.yaml)
+[formal Supervisor config](../../configs/archive/supervisor_launches/polybench_safe_pce_candidate77x2_iris_v1_supervisor_20260929.yaml)
 uses a dedicated Iris fixed worktree, 15-minute controller slices, and the
 shared resume/cleanup path. The explicit scratch staging path is required by
 the existing `--fixed-worktree` wrapper; its generic Supervisor default is a
@@ -120,7 +120,7 @@ workers remain incomplete rather than consuming review rejections.
 The [frozen selection](../../configs/frozen_polybench_pcce_development/20260929_candidate77x2_clean_units_v1/formal40_selection.json)
 contains 15 R/R, 14 U/U, and all 11 R/U sources: 40 source tasks and 80 PCE
 Plan units. It uses no C6 trigger or Checker outcome. The
-[formal sampled-PCCE Supervisor](../../configs/polybench_pcce_c6_candidate77x2_sampled40_v1_supervisor_20260929.yaml)
+[formal sampled-PCCE Supervisor](../../configs/archive/supervisor_launches/polybench_pcce_c6_candidate77x2_sampled40_v1_supervisor_20260929.yaml)
 uses the established PCCE controller, 15-minute slices, Iris 1 CPU / 4G, a
 maximum of 12 simultaneous Agent tasks, and the shared resume/cleanup path.
 Its explicit scratch staging path is required by the existing fixed-worktree

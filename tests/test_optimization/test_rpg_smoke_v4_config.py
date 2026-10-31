@@ -20,7 +20,7 @@ def smoke_binding(request):
     suffix, launch_authorized = request.param
     return (Path(f"configs/gepa_safe_pce_rpg_codex_smoke_{suffix}.yaml"),
             Path(f"configs/safe_pce_ace_rpg_codex_smoke_source_{suffix}.yaml"),
-            Path(f"configs/safe_pce_ace_rpg_codex_smoke_supervisor_{suffix}.yaml"),
+            Path(f"configs/archive/supervisor_launches/safe_pce_ace_rpg_codex_smoke_supervisor_{suffix}.yaml"),
             launch_authorized)
 
 

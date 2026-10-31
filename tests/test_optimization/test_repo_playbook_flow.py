@@ -1078,7 +1078,7 @@ def test_repaired_repo_smoke_has_canonical_import_and_fresh_identity() -> None:
         "configs/gepa_verified_repo_concern_playbook_smoke8_v3_20260915.yaml"
     )
     supervisor_path = Path(
-        "configs/gepa_verified_repo_concern_playbook_smoke8_v3_supervisor_20260915.yaml"
+        "configs/archive/supervisor_launches/gepa_verified_repo_concern_playbook_smoke8_v3_supervisor_20260915.yaml"
     )
     config = yaml.safe_load(config_path.read_text(encoding="utf-8"))
     supervisor = yaml.safe_load(supervisor_path.read_text(encoding="utf-8"))
@@ -1135,8 +1135,7 @@ def test_repo_formal32_eight_iteration_config_is_frozen_and_fresh() -> None:
         "configs/gepa_verified_repo_concern_playbook_formal32_8it_v1_20260916.yaml"
     )
     supervisor_path = Path(
-        "configs/gepa_verified_repo_concern_playbook_formal32_8it_v1_"
-        "supervisor_20260916.yaml"
+        'configs/archive/supervisor_launches/gepa_verified_repo_concern_playbook_formal32_8it_v1_supervisor_20260916.yaml'
     )
     config = yaml.safe_load(config_path.read_text(encoding="utf-8"))
     supervisor = yaml.safe_load(supervisor_path.read_text(encoding="utf-8"))

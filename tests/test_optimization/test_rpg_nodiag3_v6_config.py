@@ -55,7 +55,7 @@ def test_v6_retains_resources_scheduler_control_and_clean_start():
     assert config.hpc.max_running_array_tasks == backend.pce.hpc.max_running_array_tasks == 0
     assert (backend.pce.hpc.cpus_per_task, backend.pce.hpc.mem, backend.pce.hpc.time) == (1, "4G", "01:00:00")
     assert (config.hpc.cpus_per_task, config.hpc.mem, config.hpc.time) == (1, "4G", "00:30:00")
-    session, _, args, _ = _load_launch_config(Path("configs/safe_pce_ace_rpg_codex_nodiag3_supervisor_v6_20261027.yaml"))
+    session, _, args, _ = _load_launch_config(Path("configs/archive/supervisor_launches/safe_pce_ace_rpg_codex_nodiag3_supervisor_v6_20261027.yaml"))
     assert session == config.run_dir.name
     assert args[args.index("--gepa-config") + 1] == str(CONFIG)
     assert {"--require-clean-worktree", "--reclaim-staging", "--reclaim-workspaces"} <= set(args)

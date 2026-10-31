@@ -47,7 +47,7 @@ The frozen selection and exact SIF projection are under
 `configs/frozen_swe_verified_safe_pce/no-thinking20-v1-20260918/`; the runtime
 and single-Supervisor authorities are
 `configs/swe_verified_safe_pce_no_thinking20_aion_v1_20260918.yaml` and
-`configs/swe_verified_safe_pce_no_thinking20_aion_v1_supervisor_20260918.yaml`.
+`configs/archive/supervisor_launches/swe_verified_safe_pce_no_thinking20_aion_v1_supervisor_20260918.yaml`.
 
 The completed pilot produced 17 resolved and three unresolved official
 outcomes. Manual attribution retains `astropy__astropy-13977` as a direct Plan
@@ -106,7 +106,7 @@ It preserves the original Planner/Coder sampling contract and has a distinct
 run identity. The launch-authorized runtime and Supervisor are
 `configs/swe_verified_safe_pce_no_thinking_clean411_target4_recovery379_aion_v1_20260919.yaml`
 and
-`configs/swe_verified_safe_pce_no_thinking_clean411_target4_recovery379_aion_v1_supervisor_20260919.yaml`.
+`configs/archive/supervisor_launches/swe_verified_safe_pce_no_thinking_clean411_target4_recovery379_aion_v1_supervisor_20260919.yaml`.
 
 That recovery retained 198 additional terminal observations and left 181
 operationally incomplete units. Combined with the seven previously known mixed
@@ -125,7 +125,7 @@ incompleteness; only units that still end in OOM are eligible for a later Iris
 4G recovery. The runtime and Supervisor are prepared but not launched:
 `configs/swe_verified_safe_pce_no_thinking_clean411_completion186_aion_v1_20260919.yaml`
 and
-`configs/swe_verified_safe_pce_no_thinking_clean411_completion186_aion_v1_supervisor_20260919.yaml`.
+`configs/archive/supervisor_launches/swe_verified_safe_pce_no_thinking_clean411_completion186_aion_v1_supervisor_20260919.yaml`.
 
 ## FPTA Mixed-Outcome Repeat Pilot
 
@@ -539,7 +539,7 @@ remains `unknown`, and Slurm—not an application concurrency cap—owns array
 scheduling. The runtime authority is
 `configs/swe_verified_safe_pce_formal482_v1_20260914.yaml`; its reviewed
 supervisor invocation is
-`configs/swe_verified_safe_pce_formal482_v1_supervisor_20260914.yaml`.
+`configs/archive/supervisor_launches/swe_verified_safe_pce_formal482_v1_supervisor_20260914.yaml`.
 
 The new selection happens to have the same membership and order as the old
 cleaned-482 dataset, but it is independently reconstructed from the current

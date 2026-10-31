@@ -92,6 +92,13 @@ scoring implementation was changed in this preparation.
 
 ## Capacity boundary
 
+The counts and partial-cleanup findings in this section are the historical
+2026-10-29 snapshot, not a current launch gate or remaining-cleanup list.
+Later ownership, copy-reclamation and cold-archive receipts supersede its
+storage state; consult the maintained [cleanup contract](cleanup-lifecycle.md)
+and fresh quota checks before another launch. The 461,646-inode first-window
+estimate remains a proxy, not full formal-window acceptance.
+
 ### Submission-copy cleanup
 
 The inventory found 24 inactive `.ulhpc_submit/runs/*/workdir` copies containing

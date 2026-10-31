@@ -16,9 +16,7 @@ logs/
 # Local Codex/OpenCode handoff reports and mechanical-task evidence.
 opencode_logs/
 .tmp_hpc_smoke/
-.local/hpc-supervisor/
-.local/recovery-review/
-.local/operations/
+/.local/
 .ulhpc_submit/
 
 # Worktree-local agent instruction files. Project authority belongs in the

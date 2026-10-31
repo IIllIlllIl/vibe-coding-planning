@@ -486,7 +486,7 @@ def test_unlaunched_preparation_can_be_reapplied_from_exact_backup(completed_scr
 
 def test_resume_supervisor_targets_original_scientific_run():
     import yaml
-    path = Path("configs/gepa_verified_paired_levels_categorized_formal24_8it_v1_resume7_supervisor_20260922.yaml")
+    path = Path("configs/archive/supervisor_launches/gepa_verified_paired_levels_categorized_formal24_8it_v1_resume7_supervisor_20260922.yaml")
     launch = yaml.safe_load(path.read_text())
     args = launch["arguments"]
     option = lambda key: args[args.index(key) + 1]
@@ -504,7 +504,7 @@ def test_codex_resume_supervisor_targets_original_formal15_run():
     import yaml
 
     path = Path(
-        "configs/gepa_verified_paired_ace_codex_formal24_15it_v1_resume1_supervisor_20260925.yaml"
+        "configs/archive/supervisor_launches/gepa_verified_paired_ace_codex_formal24_15it_v1_resume1_supervisor_20260925.yaml"
     )
     launch = yaml.safe_load(path.read_text())
     args = launch["arguments"]

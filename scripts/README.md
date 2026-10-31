@@ -1,5 +1,9 @@
 # Script Entry Points
 
+Maintain one entry point per recurring operational goal. Run identity belongs in
+configuration, not a new dated script. Historical launch wrappers are archived;
+no script or configuration here authorizes execution by itself.
+
 ## Safe PCE / ACE Learning Preparation
 
 - `tools/check_commit_safety.py` is the required pre-commit index review; it
@@ -36,7 +40,7 @@
   inputs. It writes JSON to stdout and calls no model/container/scheduler;
   native evidence reading and leakage/noise clearance remain manual review.
 
-## Active Behavioral Source Acquisition
+## Retained Behavioral Source Acquisition
 
 - `tools/freeze_swe_chat_preheat_inputs.py` freezes the complete fixed-revision
   Hub file manifest and the ordered repository request manifest. Formal preheat
@@ -222,6 +226,25 @@ authority is `docs/archive/mixed-design/swe-chat-data-cleaning.md`.
 Completed workflows are not authorized launch defaults. Do not infer a new run
 from the presence of an executable script.
 
+## Indexed Research And Recovery Tools
+
+These are retained parameterized tools, not orphan files merely because they
+are normally invoked manually:
+
+- [`tools/build_rq2_blind_validation_bundle.py`](tools/build_rq2_blind_validation_bundle.py) — Decision-time-only blind feature inputs; see the RQ2 blind-validation knowledge record.
+- [`tools/build_rq2_pcce_failure_analysis.py`](tools/build_rq2_pcce_failure_analysis.py) — Safe67 C4-PCCE analysis records; preserves the frozen research cohort, not a new evaluation selection.
+- [`tools/build_squashfs_repair_tools.sh`](tools/build_squashfs_repair_tools.sh) — Pinned private SquashFS build dependency used by the SIF permission-repair toolchain; not another image downloader.
+- [`tools/freeze_polybench_dependency_cache.py`](tools/freeze_polybench_dependency_cache.py) — Validate and freeze a completed dependency cache; separate from acquiring or repairing packages.
+- [`tools/freeze_swe_verified_pce_incomplete_recovery.py`](tools/freeze_swe_verified_pce_incomplete_recovery.py) — Freeze an explicitly supplied operationally incomplete PCE subset; does not run or relabel cases.
+- [`tools/freeze_swe_verified_pce_recovery_inputs.py`](tools/freeze_swe_verified_pce_recovery_inputs.py) — Freeze reviewed subset or checkpoint-replay inputs with original evidence identities.
+- [`tools/freeze_swe_verified_pce_target_completion.py`](tools/freeze_swe_verified_pce_target_completion.py) — Compute an explicit observation-count deficit from supplied authorities; different from retrying failed units.
+
+The single maintenance operator is
+[`tools/consolidate_cold_results.py`](tools/consolidate_cold_results.py).
+Its ownership, copy-proof and reversible TAR actions share existing lifecycle
+and Slurm modules; see [the cleanup contract](../docs/knowledge/cleanup-lifecycle.md).
+Private one-use probes belong in ignored operator archives, not beside it.
+
 ## Historical Archive
 
 - `../configs/archive/supervisor_launches/` contains completed, superseded,
@@ -231,7 +254,10 @@ from the presence of an executable script.
 - `archive/online_gepa/` contains the former Online resource-pilot preparation,
   worker, and submit scripts.
 - `archive/legacy_entrypoints/` contains superseded checker, retry, migration,
-  and OpenCode entrypoints.
+  OpenCode, fixed-case Behavioral probes and legacy Plan-artifact repair entrypoints.
+- `archive/preheat_launches/` contains dated launch wrappers; the maintained
+  downloader is `tools/login_apptainer_sif_preheat.py` with explicit inputs.
+- `archive/legacy_analysis/` contains the frozen checker PPT generators.
 - `archive/docker_cleanup_daemon/` contains the retired cleanup daemon.
 
 `run_batch.sh` and `long_run_watchdog.py` remain temporarily at top level

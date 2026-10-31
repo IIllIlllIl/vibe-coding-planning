@@ -169,7 +169,7 @@ def test_v4_formal_arms_freeze_reviewed_prompts_seed_and_reference_boundary():
             assert sum(len(item["references"]) for item in backend.learning_diagnostics.values()) == 92
         contract = yaml.safe_load(path.read_text())["experiment_contract"]
         assert contract["launch_authorized"] == (arm == "nodiag")
-        launch = Path(f"configs/safe_pce_ace_rpg_codex_{arm}3_supervisor_v4_20261026.yaml")
+        launch = Path(f"configs/archive/supervisor_launches/safe_pce_ace_rpg_codex_{arm}3_supervisor_v4_20261026.yaml")
         session, log, args, program = _load_launch_config(launch)
         assert program == RESUME_SCRIPT
         assert session == config.run_dir.name and session in log

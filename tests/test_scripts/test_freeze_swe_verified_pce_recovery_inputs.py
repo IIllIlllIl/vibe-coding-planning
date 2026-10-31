@@ -78,7 +78,7 @@ def test_recovery_supervisors_preserve_phase_boundaries() -> None:
     plan_supervisor = yaml.safe_load(
         (
             ROOT
-            / "configs/swe_verified_safe_pce_fpta_mixed24_recovery_repeat2_plan_ce3_aion_v1_supervisor_20260917.yaml"
+            / "configs/archive/supervisor_launches/swe_verified_safe_pce_fpta_mixed24_recovery_repeat2_plan_ce3_aion_v1_supervisor_20260917.yaml"
         ).read_text()
     )
     assert "scripts/hpc_submit_swe_verified_plan_ce_replay.sh" in plan_supervisor[
@@ -89,7 +89,7 @@ def test_recovery_supervisors_preserve_phase_boundaries() -> None:
     eval_supervisor = yaml.safe_load(
         (
             ROOT
-            / "configs/swe_verified_safe_pce_fpta_mixed24_recovery_repeat2_eval2_aion_v1_supervisor_20260917.yaml"
+            / "configs/archive/supervisor_launches/swe_verified_safe_pce_fpta_mixed24_recovery_repeat2_eval2_aion_v1_supervisor_20260917.yaml"
         ).read_text()
     )
     arguments = eval_supervisor["arguments"]

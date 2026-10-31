@@ -16,7 +16,7 @@ from src.swe_verified_pce.hpc_executor import build_array_script
 
 CONFIG = Path("configs/gepa_safe_pce_rpg_codex_nodiag3_v8_20261028.yaml")
 SOURCE = Path("configs/safe_pce_ace_rpg_codex_nodiag3_source_v8_20261028.yaml")
-SUPERVISOR = Path("configs/safe_pce_ace_rpg_codex_nodiag3_supervisor_v8_20261028.yaml")
+SUPERVISOR = Path("configs/archive/supervisor_launches/safe_pce_ace_rpg_codex_nodiag3_supervisor_v8_20261028.yaml")
 SMOKE = Path("configs/gepa_safe_pce_rpg_codex_smoke_v6_20261028.yaml")
 FORMAL = Path("configs/gepa_safe_pce_rpg_codex_nodiag3_v7_20261027.yaml")
 

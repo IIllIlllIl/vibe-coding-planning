@@ -86,7 +86,7 @@ def test_formal_actual_worker_arrays_have_no_concurrency_suffix(tmp_path):
     ref_indices = list(range(16))
     script = HybridPhaseExecutor(config).script_for_wave(tmp_path / "ref", "reflector", ref_indices, 1)
     assert f"#SBATCH --array={','.join(map(str, ref_indices))}\n" in script
-    launch = Path("configs/safe_pce_ace_rpg_codex_nodiag3_supervisor_v5_20261027.yaml")
+    launch = Path("configs/archive/supervisor_launches/safe_pce_ace_rpg_codex_nodiag3_supervisor_v5_20261027.yaml")
     session, _, args, program = _load_launch_config(launch)
     assert program == RESUME_SCRIPT and session == config.run_dir.name
     assert args[args.index("--gepa-config") + 1] == str(CONFIG)

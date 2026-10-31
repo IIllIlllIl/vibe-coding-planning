@@ -676,7 +676,7 @@ def test_ace_codex_terramax_solhigh_resume_is_frozen_and_imports_only_checkers()
         "configs/gepa_verified_paired_ace_codex_smoke12_v3_terramax_solhigh_20260924.yaml"
     )
     supervisor_path = Path(
-        "configs/gepa_verified_paired_ace_codex_smoke12_v3_terramax_solhigh_supervisor_20260924.yaml"
+        "configs/archive/supervisor_launches/gepa_verified_paired_ace_codex_smoke12_v3_terramax_solhigh_supervisor_20260924.yaml"
     )
     raw = yaml.safe_load(config_path.read_text(encoding="utf-8"))
     supervisor = yaml.safe_load(supervisor_path.read_text(encoding="utf-8"))
@@ -722,7 +722,7 @@ def test_ace_codex_isolated_resume_restarts_at_reflector_boundary() -> None:
         "configs/gepa_verified_paired_ace_codex_smoke12_v5_isolated_20260924.yaml"
     )
     supervisor_path = Path(
-        "configs/gepa_verified_paired_ace_codex_smoke12_v5_isolated_supervisor_20260924.yaml"
+        "configs/archive/supervisor_launches/gepa_verified_paired_ace_codex_smoke12_v5_isolated_supervisor_20260924.yaml"
     )
     raw = yaml.safe_load(config_path.read_text(encoding="utf-8"))
     supervisor = yaml.safe_load(supervisor_path.read_text(encoding="utf-8"))
@@ -753,7 +753,7 @@ def test_ace_codex_readability_resume_restarts_at_curator_boundary() -> None:
         "configs/gepa_verified_paired_ace_codex_smoke12_v6_curator_readability_20260924.yaml"
     )
     supervisor_path = Path(
-        "configs/gepa_verified_paired_ace_codex_smoke12_v6_curator_readability_supervisor_20260924.yaml"
+        "configs/archive/supervisor_launches/gepa_verified_paired_ace_codex_smoke12_v6_curator_readability_supervisor_20260924.yaml"
     )
     prompt_path = Path(
         "configs/prompts/offline_gepa_paired_binary_ace_codex_v3_readable_20260924.yaml"
@@ -827,7 +827,7 @@ def test_ace_codex_formal15_is_fresh_clean138_and_launch_bounded() -> None:
         "configs/gepa_verified_paired_ace_codex_formal24_15it_v1_20260925.yaml"
     )
     supervisor_path = Path(
-        "configs/gepa_verified_paired_ace_codex_formal24_15it_v1_supervisor_20260925.yaml"
+        "configs/archive/supervisor_launches/gepa_verified_paired_ace_codex_formal24_15it_v1_supervisor_20260925.yaml"
     )
     selection_path = Path(
         "configs/frozen_swe_verified_plan_pairs/"

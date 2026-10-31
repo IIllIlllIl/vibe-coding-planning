@@ -38,9 +38,9 @@ temperature (unsupported for reasoning-enabled GPT-6.1 Sol).
 - Probe: [`configs/checker_rule_style_probe_a_to_e_codex_sol61_low_3rep_v1_20261006.yaml`](../../configs/checker_rule_style_probe_a_to_e_codex_sol61_low_3rep_v1_20261006.yaml)
 - Runtime: [`configs/checker_rule_style_codex_runtime_v1_20261006.yaml`](../../configs/checker_rule_style_codex_runtime_v1_20261006.yaml)
 - Prompt: [`configs/prompts/checker_rule_style_codex_v1_20261006.yaml`](../../configs/prompts/checker_rule_style_codex_v1_20261006.yaml)
-- Supervisor preparation: [`configs/checker_rule_style_probe_a_to_e_codex_sol61_low_3rep_v1_supervisor_20261006.yaml`](../../configs/checker_rule_style_probe_a_to_e_codex_sol61_low_3rep_v1_supervisor_20261006.yaml)
+- Supervisor preparation: [`configs/archive/supervisor_launches/checker_rule_style_probe_a_to_e_codex_sol61_low_3rep_v1_supervisor_20261006.yaml`](../../configs/archive/supervisor_launches/checker_rule_style_probe_a_to_e_codex_sol61_low_3rep_v1_supervisor_20261006.yaml)
 - Planned runtime authority: `output/checker-rule-style-probe/a-to-e-codex-sol61-low-3rep-v1-20261006/` in the canonical remote run state.
-- Two-task HPC smoke: [`configs/checker_rule_style_probe_codex_sol61_low_hpc_smoke_v1_20261006.yaml`](../../configs/checker_rule_style_probe_codex_sol61_low_hpc_smoke_v1_20261006.yaml), with its own run directory and [supervisor config](../../configs/checker_rule_style_probe_codex_sol61_low_hpc_smoke_v1_supervisor_20261006.yaml).
+- Two-task HPC smoke: [`configs/checker_rule_style_probe_codex_sol61_low_hpc_smoke_v1_20261006.yaml`](../../configs/checker_rule_style_probe_codex_sol61_low_hpc_smoke_v1_20261006.yaml), with its own run directory and [supervisor config](../../configs/archive/supervisor_launches/checker_rule_style_probe_codex_sol61_low_hpc_smoke_v1_supervisor_20261006.yaml).
 
 The probe verifies the reference DeepSeek prompt and model against the
 original arm, validates Codex's model/effort and unchanged review section,
