@@ -101,6 +101,8 @@ def fake_external_systems(monkeypatch, *, code_fails_once=False):
     original_init = SWEVerifiedPCERunner.__init__
     def init(self, config, capacity_window, **kwargs):
         def evaluator(received_patch, case, **options):
+            if options.get("evaluation_started_callback"):
+                options["evaluation_started_callback"]()
             observations["calls"][(case.instance_id, "evaluate")] += 1
             assert received_patch == patch
             assert options["repository_prepared"] is True
@@ -162,6 +164,56 @@ def with_window(config, size):
     raw["execution"]["pce_window_size"] = size
     config.config_path.write_text(yaml.safe_dump(raw))
     return replace(config, pce_window_size=size)
+
+
+def test_current_pce_has_no_evaluator_marker_write_dependency(tmp_path, monkeypatch):
+    config, cases = prepared_config(tmp_path)
+    observations, _, _ = fake_external_systems(monkeypatch)
+    scheduler(monkeypatch)
+    write = Path.write_text
+    writes = []
+    def fail_marker(path, *args, **kwargs):
+        if path.name.startswith("evaluate_started.json"):
+            writes.append(path)
+            raise PermissionError("obsolete marker is not writable")
+        return write(path, *args, **kwargs)
+    monkeypatch.setattr(Path, "write_text", fail_marker)
+    results = finish(SWEVerifiedPCEHPCExecutor(config, dataset=repository_pce_dataset(config.mode)), cases)
+    assert all(row["pce_status"] == "completed" for row in results)
+    assert all(observations["calls"][(case.instance_id, "evaluate")] == 1 for case in cases)
+    assert not writes and not list(config.run_dir.rglob("evaluate_started.json"))
+
+
+def test_unavailable_post_code_check_cannot_become_a_scored_agent_failure(tmp_path, monkeypatch):
+    from src.agents import pce_backend
+    from src.swe_verified_pce import runner as module
+    config, cases = prepared_config(tmp_path)
+    observations, _, _ = fake_external_systems(monkeypatch)
+    submissions = scheduler(monkeypatch)
+    adapter = module.agent_runner
+    checks = []
+    def code_adapter(function, **context):
+        if context["role"] == "plan":
+            return adapter(function, **context)
+        def code(*args, **kwargs):
+            attempt = context["attempt_dir"]
+            (attempt / "submission.json").write_text(json.dumps({"code_patch": "original patch", "test_patch": ""}))
+            checks.append(attempt)
+            env = SimpleNamespace(execute=lambda *a, **k: {"returncode": 127, "output": "sha256sum unavailable"})
+            return pce_backend._run_code(None, "Plan", "Task", env, attempt_dir=attempt,
+                                         submission_protocol="split_code_test_v1")
+        return code
+    monkeypatch.setattr(module, "agent_runner", code_adapter)
+    trajectory = [{"role": "assistant", "content": "Original Code investigation"}]
+    monkeypatch.setattr(pce_backend, "_execute", lambda *a, **k: ("COMPLETE_TASK_AND_SUBMIT_FINAL_OUTPUT", trajectory))
+    executor = SWEVerifiedPCEHPCExecutor(config, dataset=repository_pce_dataset(config.mode))
+    result = finish(executor, cases[:1])[0]
+    assert result["pce_status"] == "incomplete" and "score" not in result
+    assert result["last_worker_output"]["failure_category"] != "agent"
+    assert result["last_worker_output"]["failure_trajectory"] == trajectory
+    assert len(checks) == 3 and observations["calls"][(cases[0].instance_id, "plan")] == 1
+    assert [attempt for op, _, attempt, _ in submissions if op == "pce"] == [1, 2, 3]
+    assert finish(executor, cases[:1]) == [result] and len(checks) == 3
 
 
 @pytest.mark.parametrize("native", [False, True])
@@ -273,7 +325,7 @@ def test_window_retry_reclaims_unused_evaluator_tree_before_repreparing(tmp_path
     assert not list(config.run_dir.glob("hpc_tasks/pce_prepare/*/attempts/task_*/attempt_*/prepared_repository"))
 
 
-def test_preparation_recovers_after_wave_without_synthetic_pce_failure(tmp_path, monkeypatch):
+def test_preparation_recovers_within_budget_without_synthetic_pce_failure(tmp_path, monkeypatch):
     config, cases = prepared_config(tmp_path)
     config = with_window(config, 1)
     observations, _, _ = fake_external_systems(monkeypatch)
@@ -281,7 +333,7 @@ def test_preparation_recovers_after_wave_without_synthetic_pce_failure(tmp_path,
     original = SWEVerifiedPCERunner.prepare_workspace
     failures = []
     def prepare(self, case, phase):
-        if case.instance_id == cases[0].instance_id and phase == "code" and len(failures) < 3:
+        if case.instance_id == cases[0].instance_id and phase == "code" and len(failures) < 2:
             failures.append(phase)
             raise OSError("synthetic storage failure")
         return original(self, case, phase)
@@ -289,13 +341,218 @@ def test_preparation_recovers_after_wave_without_synthetic_pce_failure(tmp_path,
     results = finish(SWEVerifiedPCEHPCExecutor(config, dataset=repository_pce_dataset("swe_rpg_pce")), cases)
     assert [row["status"] for row in results] == ["completed", "completed"]
     assert [row["task_index"] for row in results] == [0, 1]
-    assert len(failures) == 3
+    assert len(failures) == 2
     assert all(count == 1 for count in observations["calls"].values())
     assert all(row["attempt"] == 1 for row in results)  # No PCE attempt spent on preparation.
     assert not list(config.run_dir.glob("hpc_tasks/pce/*/failed_outputs/*/*.json"))
 
 
-def test_exhausted_coder_retries_do_not_leave_trees_for_next_window(tmp_path, monkeypatch):
+def test_preparation_exhaustion_is_durable_and_never_a_synthetic_pce_failure(tmp_path, monkeypatch):
+    from src.exceptions import confirmed_run_stop
+    from src.optimization.hpc.task_batch import TaskAttemptsExhausted, TaskBatchBlocked
+    config, cases = prepared_config(tmp_path)
+    observations, _, _ = fake_external_systems(monkeypatch)
+    submissions = scheduler(monkeypatch)
+    original = SWEVerifiedPCERunner.prepare_workspace
+    def prepare(self, case, phase):
+        if case.instance_id == cases[0].instance_id and phase == "code":
+            raise OSError("persistent preparation failure")
+        return original(self, case, phase)
+    monkeypatch.setattr(SWEVerifiedPCERunner, "prepare_workspace", prepare)
+    for _ in range(2):
+        executor = SWEVerifiedPCEHPCExecutor(config, dataset=repository_pce_dataset("swe_rpg_pce"))
+        with pytest.raises(TaskBatchBlocked) as caught:
+            finish(executor, cases)
+        assert not isinstance(caught.value, TaskAttemptsExhausted)
+        assert confirmed_run_stop(caught.value.failure_record)
+        assert caught.value.failure_record["attempt"] == 3
+    assert [(ids, attempt) for op, ids, attempt, _ in submissions] == [
+        (list(range(6)), 1), ([1], 2), ([1], 3)]
+    assert not observations["calls"]
+    assert not list(config.run_dir.glob("hpc_tasks/pce/*/outputs/*.json"))
+    assert not list(config.run_dir.glob("hpc_tasks/pce/*/windows/*/exhausted_collection.json"))
+
+
+@pytest.mark.parametrize("mode", ["swe_rpg_pce", "swe_verified_pce"])
+@pytest.mark.parametrize("persistent", [False, True])
+def test_split_code_retry_reuses_plan_rebuilds_code_and_preserves_rejections(tmp_path, monkeypatch, mode, persistent):
+    from src.agents.plan_submission import SPLIT_CODE_PROTOCOL
+    from src.swe_verified_pce import runner as module
+    from src.swe_rpg_pce.evaluator import SWERPGEvaluatorOperationalError
+    config, cases = prepared_config(tmp_path, mode=mode)
+    raw = yaml.safe_load(config.config_path.read_text())
+    raw["paths"]["code_prompt_source_config"] = str(Path("configs/prompts/safe_pce_code_split_v1.yaml").resolve())
+    raw["code"]["submission_protocol"] = SPLIT_CODE_PROTOCOL
+    config.config_path.write_text(yaml.safe_dump(raw))
+    config = repository_pce_dataset(mode).load_config(config.config_path, require_api_keys=False)
+    config = with_window(config, 1)
+    assert config.code_submission_protocol == SPLIT_CODE_PROTOCOL
+    observations, plan, patch = fake_external_systems(monkeypatch)
+    monkeypatch.setattr(SWEVerifiedPCERunner, "_capture_code_workspace_evidence",
+                        lambda *a, **k: pytest.fail("split output must not recapture either patch"))
+    submissions = scheduler(monkeypatch)
+    test_patch = "diff --git a/tests.py b/tests.py\n" + "test diagnostic\r\n" * 1000
+    adapter = module.agent_runner
+    feedbacks = []
+    def split_adapter(function, **kwargs):
+        original = adapter(function, **kwargs)
+        if kwargs["role"] != "code":
+            return original
+        def code(*args, **options):
+            assert options["submission_protocol"] == SPLIT_CODE_PROTOCOL
+            feedback = options.get("code_retry_context")
+            if kwargs["case"].instance_id == cases[0].instance_id:
+                feedbacks.append(feedback)
+            value, trajectory = original(*args, **options)
+            if feedback:
+                data = json.loads(feedback)
+                assert set(data) == {"feedback", "code_patch", "test_patch"}
+                assert data["code_patch"] == patch and data["test_patch"] == test_patch
+                assert "HIDDEN_OFFICIAL_TEST" not in feedback
+            return {"code_patch": value, "test_patch": test_patch}, trajectory
+        return code
+    monkeypatch.setattr(module, "agent_runner", split_adapter)
+    original_init = SWEVerifiedPCERunner.__init__
+    evaluations = Counter()
+    def init(self, *args, **kwargs):
+        original_init(self, *args, **kwargs)
+        evaluate = self.evaluator
+        def maybe_reject(received, case, **options):
+            assert received == patch and test_patch not in str(options)
+            evaluations[case.instance_id] += 1
+            if case.instance_id == cases[0].instance_id and (persistent or evaluations[case.instance_id] == 1):
+                evidence = {"terminal_kind": "code_patch_not_applied", "task_outcome": "unresolved",
+                    "stage_exit_codes": {"setup": 0, "test_patch": 0, "code_patch": 1},
+                    "code_patch_attempts": [{"preflight_returncode": 1, "apply_returncode": None}],
+                    "raw_test_output": "HIDDEN_OFFICIAL_TEST.py:337"}
+                if mode == "swe_rpg_pce":
+                    raise SWERPGEvaluatorOperationalError("patch application failed",
+                        outcome_reason="rpg_code_patch_not_applied", retry_disposition="retry_code", evidence=evidence)
+                options["result_callback"](evidence)
+                pytest.fail("a rejected Code patch was checkpointed as a scored evaluation")
+            return evaluate(received, case, **options)
+        self.evaluator = maybe_reject
+    monkeypatch.setattr(SWEVerifiedPCERunner, "__init__", init)
+    executor = SWEVerifiedPCEHPCExecutor(config, dataset=repository_pce_dataset(mode))
+    results = finish(executor, cases)
+    expected = 3 if persistent else 2
+    assert observations["calls"][(cases[0].instance_id, "plan")] == 1
+    assert observations["calls"][(cases[0].instance_id, "code")] == expected
+    assert evaluations[cases[0].instance_id] == expected
+    assert feedbacks[0] is None and all(feedbacks[1:])
+    assert results[0]["plan"] == plan
+    rejected = results[0]["code_rejections"]
+    assert len(rejected) == (3 if persistent else 1)
+    assert len({item["checkpoint_sha256"] for item in rejected}) == len(rejected)
+    assert all(item["submission"]["patch"] == patch and item["submission"]["test_patch"] == test_patch
+               for item in rejected)
+    assert all("HIDDEN_OFFICIAL_TEST" in item["evaluator_evidence"]["raw_test_output"] for item in rejected)
+    if persistent:
+        assert results[0]["pce_status"] == "agent_failed"
+        assert results[0]["agent_failure_attempts"] == [1, 2, 3]
+        assert results[0]["patch"] == ""  # Rejected submissions are evidence, not a valid final patch.
+    else:
+        assert results[0]["pce_status"] == "completed"
+        assert results[0]["test_patch"] == test_patch
+    assert results[1]["pce_status"] == "completed" and results[1]["test_patch"] == test_patch
+    assert [attempt for op, ids, attempt, _ in submissions if op == "pce" and ids == [0]] == list(range(1, expected + 1))
+    handoffs = list(config.run_dir.glob("hpc_tasks/pce/*/attempts/task_0000/attempt_*/workspace_preparation.json"))
+    assert len(handoffs) == expected
+    for path in handoffs:
+        phases = json.loads(path.read_text())["phases"]
+        assert phases["code"]["workspace_status"] == "ready"
+        if path.parent.name != "attempt_01":
+            assert phases["plan"]["workspace_status"] == "checkpoint_reused"
+    before = list(submissions)
+    assert finish(SWEVerifiedPCEHPCExecutor(config, dataset=repository_pce_dataset(mode)), cases) == results
+    assert submissions == before
+    assert not list(config.run_dir.glob("hpc_tasks/pce_prepare/*/attempts/task_*/attempt_*/prepared_repository"))
+    from src.optimization.pce_reflector_evidence import pce_reflector_views
+    record = {"pce_runs": [{"pce_output": results[0]}]}
+    original = json.dumps(record)
+    views, index = pce_reflector_views(record, "raw.json")
+    rejection_view = views[index["runs"][0]["code_rejections"]]
+    assert rejection_view[0]["submission"]["test_patch"] == test_patch
+    assert rejection_view[0]["submission"]["trajectory"] == rejected[0]["submission"]["trajectory"]
+    assert json.dumps(record) == original
+    assert not list(config.run_dir.rglob("code_workspace_evidence.json"))
+    assert not list(config.run_dir.rglob("unstaged_diagnostic_changes.patch"))
+
+
+def test_evaluator_exhaustion_reuses_original_code_and_stops_after_three(tmp_path, monkeypatch):
+    from src.exceptions import confirmed_run_stop
+    from src.swe_rpg_pce.evaluator import SWERPGEvaluatorOperationalError
+    config, cases = prepared_config(tmp_path)
+    config = with_window(config, 1)
+    observations, plan, patch = fake_external_systems(monkeypatch)
+    submissions = scheduler(monkeypatch)
+    original_init = SWEVerifiedPCERunner.__init__
+    seen = []
+    def init(self, *args, **kwargs):
+        original_init(self, *args, **kwargs)
+        evaluate = self.evaluator
+        def failing_evaluation(received, case, **options):
+            if case.instance_id == cases[0].instance_id:
+                seen.append(received)
+                raise SWERPGEvaluatorOperationalError("code_patch_conflict",
+                    outcome_reason="code_patch_failed", retry_disposition="retry_same_phase", evidence={
+                    "stage_exit_codes": {"setup": 0, "test_patch": 0, "code_patch": 1}})
+            return evaluate(received, case, **options)
+        self.evaluator = failing_evaluation
+    monkeypatch.setattr(SWEVerifiedPCERunner, "__init__", init)
+    executor = SWEVerifiedPCEHPCExecutor(config, dataset=repository_pce_dataset("swe_rpg_pce"))
+    results = finish(executor, cases)
+    assert [row["pce_status"] for row in results] == ["incomplete", "completed"]
+    failed = results[0]
+    assert confirmed_run_stop(failed["failure_record"])
+    assert failed["last_worker_output"]["error"] == "code_patch_conflict"
+    assert failed["last_worker_output"]["attempt"] == failed["attempts_exhausted"] == 3
+    assert seen == [patch] * 3
+    assert all(count == 1 for count in observations["calls"].values())
+    checkpoints = {str(path): path.read_bytes() for path in config.run_dir.glob("hpc_tasks/pce/*/checkpoints/*/*.json")}
+    count = len(submissions)
+    assert finish(SWEVerifiedPCEHPCExecutor(config, dataset=repository_pce_dataset("swe_rpg_pce")), cases) == results
+    assert len(submissions) == count and seen == [patch] * 3
+    assert checkpoints == {str(path): path.read_bytes() for path in config.run_dir.glob("hpc_tasks/pce/*/checkpoints/*/*.json")}
+    payloads = [json.loads(raw)["payload"] for raw in checkpoints.values()]
+    assert any(payload.get("plan") == plan for payload in payloads)
+    assert any(payload.get("patch") == patch for payload in payloads)
+    assert [attempt for op, ids, attempt, _ in submissions if op == "pce" and ids == [0]] == [1, 2, 3]
+
+
+@pytest.mark.parametrize("malformed_json", [False, True])
+def test_exhausted_invalid_completion_is_not_reused_as_a_success(tmp_path, malformed_json):
+    from src.optimization.hpc.task_batch import TaskFiles, atomic_json
+    config, cases = prepared_config(tmp_path)
+    executor = SWEVerifiedPCEHPCExecutor(config, dataset=repository_pce_dataset("swe_rpg_pce"))
+    tasks = [TaskFiles(index=i, instance_id=case.instance_id,
+                      manifest_path=tmp_path / f"in-{i}.json", output_path=tmp_path / f"out-{i}.json",
+                      attempts_dir=tmp_path / f"attempts-{i}") for i, case in enumerate(cases)]
+    for task in tasks:
+        atomic_json(task.manifest_path, {"pce_run_index": 1})
+        atomic_json(task.output_path, {"status": "completed", "original": task.instance_id})
+    if malformed_json:
+        tasks[0].output_path.write_text('{"status": "completed", "cut off":')
+    slurm_status = tasks[0].attempts_dir / "attempt_03/slurm_status.json"
+    slurm_status.parent.mkdir(parents=True)
+    slurm_status.write_text('{"also cut off":')
+    original = [task.output_path.read_bytes() for task in tasks]
+    record = {"failure_kind": "task_attempts_exhausted", "attempt": 3, "max_attempts": 3,
+              "details": [{"instance_id": tasks[0].instance_id, "output_path": str(tasks[0].output_path)}]}
+    results = executor._collect_exhausted(tmp_path, "fp", tasks, failure_record=record)
+    assert results[0]["pce_status"] == "incomplete"
+    assert results[0]["failure_record"] == record
+    if malformed_json:
+        assert results[0]["last_worker_output"] is None
+        assert "JSONDecodeError" in results[0]["last_worker_output_read_error"]
+    else:
+        assert results[0]["last_worker_output"] == json.loads(original[0])
+    assert results[1] == json.loads(original[1])
+    assert [task.output_path.read_bytes() for task in tasks] == original
+
+
+@pytest.mark.parametrize("infrastructure_first", [False, True])
+def test_exhausted_coder_retries_do_not_leave_trees_for_next_window(tmp_path, monkeypatch, infrastructure_first):
     config, cases = prepared_config(tmp_path)
     config = with_window(config, 1)
     observations, _, _ = fake_external_systems(monkeypatch)
@@ -309,7 +566,7 @@ def test_exhausted_coder_retries_do_not_leave_trees_for_next_window(tmp_path, mo
         if kwargs["role"] == "code" and kwargs["case"].instance_id == cases[0].instance_id:
             def fail(*a, **k):
                 failures.append(len(failures) + 1)
-                if len(failures) == 1:
+                if infrastructure_first and len(failures) == 1:
                     raise OSError("synthetic transient infrastructure failure")
                 raise AgentTaskError("synthetic rejected Code", phase="code", reason="invalid_submission",
                                      trajectory=[{"role": "assistant", "content": "original invalid patch"}])
@@ -317,13 +574,18 @@ def test_exhausted_coder_retries_do_not_leave_trees_for_next_window(tmp_path, mo
         return original
     monkeypatch.setattr(module, "agent_runner", failing_adapter)
     results = finish(SWEVerifiedPCEHPCExecutor(config, dataset=repository_pce_dataset("swe_rpg_pce")), cases)
-    assert [row["status"] for row in results] == ["completed", "completed"]
-    assert results[0]["pce_status"] == "agent_failed"
-    assert results[0]["agent_failure_attempts"] == [2, 3, 4]
-    assert results[0]["code_trajectory"][-1]["content"] == "original invalid patch"
+    assert results[1]["status"] == "completed"
+    if infrastructure_first:
+        assert results[0]["pce_status"] == "incomplete"  # Only two Agent failures: no fabricated zero.
+        assert results[0]["failure_record"]["max_attempts"] == 3
+        assert results[0]["last_worker_output"]["attempt"] == 3
+    else:
+        assert results[0]["pce_status"] == "agent_failed"
+        assert results[0]["agent_failure_attempts"] == [1, 2, 3]
+        assert results[0]["code_trajectory"][-1]["content"] == "original invalid patch"
     assert observations["calls"][(cases[0].instance_id, "plan")] == 1
     assert [row["task_index"] for row in results] == [0, 1]
-    assert [attempt for op, ids, attempt, _ in submissions if op == "pce" and ids == [0]] == [1, 2, 3, 4]
+    assert [attempt for op, ids, attempt, _ in submissions if op == "pce" and ids == [0]] == [1, 2, 3]
     assert not list(config.run_dir.glob("hpc_tasks/pce_prepare/*/attempts/task_*/attempt_*/prepared_repository"))
 
 
@@ -409,16 +671,16 @@ def test_preparation_retries_only_failed_element_and_does_not_suppress_other_cas
     calls = Counter()
     def prepare(self, case, phase):
         calls[(case.instance_id, phase)] += 1
-        if case.instance_id == cases[0].instance_id and phase == "code" and calls[(case.instance_id, phase)] <= 6:
+        if case.instance_id == cases[0].instance_id and phase == "code" and calls[(case.instance_id, phase)] <= 2:
             raise OSError("synthetic setup failure")
         return original(self, case, phase)
     monkeypatch.setattr(SWEVerifiedPCERunner, "prepare_workspace", prepare)
     results = finish(SWEVerifiedPCEHPCExecutor(config, dataset=repository_pce_dataset("swe_rpg_pce")), cases)
     assert [row["status"] for row in results] == ["completed", "completed"]
-    assert [ids for op, ids, _, _ in submissions if op == "prepare_workspace"] == [list(range(6))] + [[1]] * 6
+    assert [ids for op, ids, _, _ in submissions if op == "prepare_workspace"] == [list(range(6))] + [[1]] * 2
     assert [(ids, attempt) for op, ids, attempt, _ in submissions if op == "pce"] == [([0, 1], 1)]
     assert all(count == 1 for count in observations["calls"].values())
-    assert calls[(cases[0].instance_id, "code")] == 7
+    assert calls[(cases[0].instance_id, "code")] == 3
     assert all(count == 1 for key, count in calls.items() if key != (cases[0].instance_id, "code"))
 
 

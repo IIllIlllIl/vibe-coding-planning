@@ -320,6 +320,38 @@ def test_incomplete_batch_retains_successes_without_partial_learning(tmp_path, m
     assert not (config.run_dir / "global_counter_ledger.json").exists()
 
 
+def test_exhausted_pce_budget_reaches_controller_without_false_missing_plan_error(tmp_path, monkeypatch):
+    from src.exceptions import confirmed_run_stop
+    config = _prepared(tmp_path)
+    backend = SafePCEBackend(config)
+    train, _ = backend.load_snapshot()
+    failure = {"failure_kind": "task_attempts_exhausted", "attempt": 3, "max_attempts": 3}
+    failed = {"status": "incomplete", "pce_status": "incomplete", "attempts_exhausted": 3,
+              "failure_record": failure, "last_worker_output": {
+                  "error_type": "SWERPGEvaluatorOperationalError", "error": "code_patch_conflict"}}
+    def execute(effective, mode, cases, **kwargs):
+        return [_output(cases[0].instance_id), dict(failed, instance_id=cases[1].instance_id)]
+    monkeypatch.setattr("src.optimization.safe_pce_learning.execute_pce", execute)
+    adapter = SafePCEGEPAAdapter(backend.evaluate, limits=LIMITS, run_dir=config.run_dir)
+    with pytest.raises(OfflineReflectionBlocked) as caught:
+        adapter.evaluate(train[:2], {"rules": json.dumps(ARTIFACT)}, capture_traces=True)
+    assert confirmed_run_stop({"failure_record": caught.value.cause.failure_record})
+    rows = [json.loads(line) for line in (config.run_dir / "safe_pce_physical_evaluations.jsonl").read_text().splitlines()]
+    assert [row["status"] for row in rows] == ["scored", "incomplete"]
+    assert "code_patch_conflict" in rows[-1]["error"]
+    assert "lacks the original Plan" not in rows[-1]["error"]
+    assert rows[-1]["pce_output"]["last_worker_output"] == failed["last_worker_output"]
+    assert not (config.run_dir / "safe_pce_evaluations.jsonl").exists()
+    assert not (config.run_dir / "global_counter_ledger.json").exists()
+    phases = SimpleNamespace(call=lambda *args: pytest.fail("incomplete validation must not reach learning"))
+    with pytest.raises(OfflineReflectionBlocked):
+        run_hybrid_optimization(config, phase_executor=phases)
+    status = json.loads((config.run_dir / "controller_status.json").read_text())
+    assert status["status"] == "failed"
+    assert status["error_type"] == "IncompletePCEEvaluation"
+    assert confirmed_run_stop(status)
+
+
 @pytest.mark.parametrize("failure_stage", ["write", "replace"])
 def test_replay_atomic_failure_preserves_previous_rows_and_retry(tmp_path, monkeypatch, failure_stage):
     from src.optimization.safe_pce_learning import _append

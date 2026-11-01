@@ -675,7 +675,14 @@ def test_hpc_resume_loop_resubmits_until_completed(tmp_path: Path) -> None:
     )
 
 
-def test_hpc_resume_loop_stops_on_confirmed_provider_exhaustion(tmp_path: Path) -> None:
+@pytest.mark.parametrize("failure", [
+    {"error_type": "PermanentProviderError"},
+    {"error_type": "IncompletePCEEvaluation", "failure_record": {"details": [
+        {"failure_kind": "task_attempts_exhausted", "attempt": 3, "max_attempts": 3}]}},
+    {"error_type": "TaskBatchBlocked", "failure_record": {
+        "failure_kind": "task_attempts_exhausted", "attempt": 3, "max_attempts": 3}},
+])
+def test_hpc_resume_loop_stops_on_confirmed_exhaustion(tmp_path: Path, failure) -> None:
     fake_bin = tmp_path / "bin"
     fake_bin.mkdir()
     local_root = REPO_ROOT / ".tmp_hpc_smoke" / "test_hpc_resume_loop_failed"
@@ -683,7 +690,7 @@ def test_hpc_resume_loop_stops_on_confirmed_provider_exhaustion(tmp_path: Path) 
     fake_batch = tmp_path / "hpc_submit_batch.sh"
     batch_log = tmp_path / "batch.log"
     statuses = tmp_path / "statuses.txt"
-    statuses.write_text('{"state":"result","status":"failed","error_type":"PermanentProviderError"}\n', encoding="utf-8")
+    statuses.write_text(json.dumps({"state": "result", "status": "failed", **failure}) + "\n", encoding="utf-8")
     _fake_batch_script(fake_batch, batch_log)
     _fake_ssh(fake_bin / "ssh", statuses, tmp_path / "ssh.log")
     result = subprocess.run(

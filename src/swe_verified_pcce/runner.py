@@ -458,13 +458,22 @@ class SWEVerifiedPCCERunner:
             if self.config.dataset_type == "pro"
             else SWEVerifiedPCERunner
         )
-        result = pce_runner(
+        runner = pce_runner(
             self.config.pce,
             self.capacity,
             checkpoint_dir=self.checkpoint_dir,
             checkpoint_identity=identity,
             attempt_dir=self.attempt_dir,
-        ).run(assignment.case.source)
+        )
+        # Only legacy PCCE consumes the start marker for terminal timeout
+        # reporting. Do not impose its persistence on current PCE execution.
+        evaluate = runner.evaluator
+        def legacy_evaluate(*args, **kwargs):
+            kwargs["evaluation_started_callback"] = lambda: _save_checkpoint(
+                self.checkpoint_dir / "evaluate_started.json", identity, "evaluate", {})
+            return evaluate(*args, **kwargs)
+        runner.evaluator = legacy_evaluate
+        result = runner.run(assignment.case.source)
         result["pcce_status"] = "completed"
         result["accepted_review_relpath"] = str(
             assignment.accepted_review_path.relative_to(self.config.run_dir)

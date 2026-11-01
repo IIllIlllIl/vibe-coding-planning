@@ -14,8 +14,14 @@ lifetimes; see [the lifecycle contract](../docs/documentation-authority.md).
   owns the retained Plan-pair experiment semantics.
 - [SWE-chat hybrid learning](../docs/swe-chat-hybrid-ace-gepa.md) owns the
   human-decision supervision and shared-guide/checklist representation.
+- [Split Coder submission](prompts/safe_pce_code_split_v1.yaml) is the opt-in
+  code/test patch contract for new repository-PCE bindings. Reference it through
+  `paths.code_prompt_source_config`; set `code.submission_protocol:
+  split_code_test_v1` when starting from a materialized config that already
+  freezes the old protocol. Both patches are retained; only code is evaluated.
+  Existing frozen runs are not rebound by this addition.
 
-## Current RPG NoDiag mini-8 binding
+## Paused RPG NoDiag mini-8 binding
 
 [NoDiag v10](gepa_safe_pce_rpg_codex_nodiag3_v10_20261101.yaml),
 [PCE source](safe_pce_ace_rpg_codex_nodiag3_source_v10_20261101.yaml) and
@@ -27,6 +33,9 @@ Official evaluator scores are unchanged. Exhausted Agent submission attempts
 follow the separately reviewed Online-zero policy with original last evidence;
 operational failures are retried, not assigned fabricated evaluator outcomes.
 No diagnostic counterpart is bound to this new runtime identity.
+This identity retains the pre-split submission implementation and is not a
+launch default for the new bounded-recovery source; use a new formal binding
+after the engineering smoke is reviewed.
 
 ## Retained RPG mini-8 comparison design
 
@@ -47,6 +56,16 @@ These v9 bindings are scientific provenance, not a matched execution comparison
 against v10 without a separately reviewed code/runtime binding.
 
 ## Necessary-flow engineering smoke
+
+[RPG patch smoke v11](gepa_safe_pce_rpg_codex_smoke_v11_20261101.yaml),
+[PCE source](safe_pce_ace_rpg_codex_smoke_source_v11_20261101.yaml) and
+[Supervisor](safe_pce_ace_rpg_codex_smoke_supervisor_v11_20261101.yaml) bind the
+split-code/test protocol, Code-owned application recovery and optional-diagnostic
+cleanup. The [targeted selection](frozen_safe_pce_ace/rpg_patch_smoke_v11_20261101/README.md)
+keeps OpenAI-454/Pylint-10814 in train and PDM-2795 in validation, preserving the
+formal split. It retains v10's one-proposal, mini-2/window-1, all-Codex high,
+cap-10 and 5–6-slot contract, not its historical outputs. The latest acceptance
+criteria are in the [blocking-policy audit](../docs/knowledge/blocking-policy-acceptance-20261028.md#targeted-patch-smoke-v11).
 
 [RPG smoke v10](gepa_safe_pce_rpg_codex_smoke_v10_20261101.yaml),
 [PCE source](safe_pce_ace_rpg_codex_smoke_source_v10_20261101.yaml) and

@@ -146,13 +146,21 @@ def pce_reflector_views(record, archive):
         output = run["pce_output"]
         output_pointer = pointer + "/pce_output"
         paths = {name: f"{prefix}/{name}.json" for name in (
-            "run", "plan", "patch", "plan_behavior", "code_behavior", "evaluator")}
+            "run", "plan", "patch", "test_patch", "code_rejections", "plan_behavior", "code_behavior", "evaluator")}
         fields = {"plan": "plan", "patch": "patch", "plan_trajectory": "plan_behavior",
-                  "code_trajectory": "code_behavior", "evaluator_result": "evaluator"}
+                  "code_trajectory": "code_behavior", "evaluator_result": "evaluator", "test_patch": "test_patch"}
         indexed = {}
         for key, item in output.items():
             path = _pointer(output_pointer, key)
-            if key in fields:
+            if key == "code_rejections":
+                files[paths[key]] = [{**rejection, "submission": {
+                    **rejection["submission"], "trajectory": _trajectory(rejection["submission"]["trajectory"],
+                        archive, _pointer(_pointer(_pointer(path, i), "submission"), "trajectory"))},
+                    "evaluator_evidence": _evaluator(rejection["evaluator_evidence"], archive,
+                        _pointer(_pointer(path, i), "evaluator_evidence"))}
+                    for i, rejection in enumerate(item)]
+                indexed[key] = {"file": paths[key]}
+            elif key in fields:
                 name = fields[key]
                 files[paths[name]] = (_trajectory(item, archive, path) if key.endswith("_trajectory")
                     else _evaluator(item, archive, path) if key == "evaluator_result" else item)

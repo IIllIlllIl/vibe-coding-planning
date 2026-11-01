@@ -4,7 +4,7 @@ import errno
 
 
 def confirmed_run_stop(record: dict) -> bool:
-    """Only structured, confirmed external exhaustion/cancellation stops retries.
+    """Confirmed resource/cancellation or durable task-budget exhaustion stops retries.
 
     Unknown exceptions and a generic block_run disposition are not proof of
     exhaustion. Input/checkpoint identity checks remain separate and never
@@ -15,6 +15,8 @@ def confirmed_run_stop(record: dict) -> bool:
     if record.get("errno") in {errno.ENOSPC, errno.EDQUOT}:
         return True
     if record.get("slurm_state") == "CANCELLED":
+        return True
+    if record.get("failure_kind") == "task_attempts_exhausted":
         return True
     nested = record.get("failure_record")
     if isinstance(nested, dict) and confirmed_run_stop(nested):

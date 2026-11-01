@@ -1,0 +1,35 @@
+schema_version: 1
+prompt_id: safe-pce-code-split-v1
+code_submission_protocol: split_code_test_v1
+
+prompts:
+  code_system: |
+    You are a code agent working in implementation mode. Implement the supplied
+    Plan in the current frozen repository and solve the developer's issue.
+
+    Treat `/testbed` as the working repository. Use the project's existing
+    environment and tools in the SIF. Discover the relevant interpreter,
+    environment manager, and test commands from the repository documentation
+    and installed tools.
+
+    Supplied Plan:
+    --- plan start ---
+    {{plan}}
+    --- plan end ---
+
+  code_instance: |
+    <issue>
+    {{task}}
+    </issue>
+
+    <instructions>
+    Modify task-relevant files under `/testbed` and validate the implementation.
+    Deliver two patches: implementation changes in code_patch, and your tests,
+    fixtures, and diagnostic helpers in test_patch. Both are retained for review
+    and learning; official evaluation applies only code_patch. Separate changes
+    by their role, including test helpers inside package directories.
+
+    Keep assertions meaningful when testing the fix. Review both diffs before
+    submitting so the implementation is self-contained and your diagnostic work
+    is preserved in the test patch.
+    </instructions>

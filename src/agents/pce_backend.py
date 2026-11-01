@@ -1,18 +1,21 @@
 """Opt-in PCE Agent transport; scheduling, checkpoints and evaluation stay with PCE.
 
 mini-SWE is the default and is returned unchanged. Native Codex uses the shared
-SIF runtime and returns the same exact Plan/patch and trajectory interfaces.
+SIF runtime and returns the same exact Plan, configured patch payload and
+trajectory interfaces.
 """
 from __future__ import annotations
 
 from dataclasses import replace
 from pathlib import Path
+import re
 
 from jinja2 import StrictUndefined, Template
 
 from src.agents.output_contract import AgentOutputContractError
 from src.agents.runtime import codex_options, executor_name, run_agent
-from src.agents.plan_submission import validate_human_plan, validate_code_submission
+from src.agents.plan_submission import (validate_human_plan, validate_code_submission,
+    SPLIT_CODE_PROTOCOL, SPLIT_CODE_CONTRACT, validate_split_code_submission, split_patch_digests)
 from src.environment.source_access import extract_http_urls
 from src.exceptions import AgentTaskError
 from src.optimization.hpc.task_batch import atomic_json
@@ -102,7 +105,7 @@ class _AgentEnvironment:
 
 def _execute(config, issue, env, *, phase, variables, backend, sif_path, workspace,
              attempt_dir, workdir, source_access_path, usage, instance_id, allow_empty_submission=False,
-             tool_network_disabled=False):
+             tool_network_disabled=False, submission_protocol="staged_diff_v1"):
     from src.optimization.codex_cli_runtime import CodexSIFExecution, run_codex_text_agent
     system_template = (config.prompts.plan_generation_prompt if phase == "plan"
                        else config.prompts.code_generation_prompt)
@@ -111,7 +114,12 @@ def _execute(config, issue, env, *, phase, variables, backend, sif_path, workspa
     values = dict(task=issue, nrpv_block=config.prompts.nrpv_block, **variables)
     system = Template(system_template, undefined=StrictUndefined).render(**values)
     user = Template(instance_template, undefined=StrictUndefined).render(**values)
-    user += "\n" + (PLAN_PROTOCOL if phase == "plan" else CODE_PROTOCOL)
+    split = phase == "code" and submission_protocol == SPLIT_CODE_PROTOCOL
+    if variables.get("code_retry_context"):
+        user += "\n<previous_submission>\n" + variables["code_retry_context"] + "\n</previous_submission>"
+    user += "\n" + (PLAN_PROTOCOL if phase == "plan" else
+        SPLIT_CODE_CONTRACT + "\nWrite the completed JSON to /agent-output/submission.json. "
+        "Finish with exactly COMPLETE_TASK_AND_SUBMIT_FINAL_OUTPUT." if split else CODE_PROTOCOL)
     # Only explicit decision-time inputs enter this mount, never a case row,
     # reference patch/test authority, another phase workspace or whole run root.
     evidence = attempt_dir / "inputs"
@@ -124,9 +132,9 @@ def _execute(config, issue, env, *, phase, variables, backend, sif_path, workspa
         tool_network_disabled=tool_network_disabled,
         source_policy={"prompt_urls": list(extract_http_urls(issue)),
                        "submission_contract": {"phase": phase, "allow_empty": allow_empty_submission,
-                                               "workdir": workdir},
+                                               "workdir": workdir, "protocol": submission_protocol},
                        "context": {"phase": phase, "instance_id": instance_id}},
-        output_files=("codex_final_response.txt", "submission.patch") if phase == "code"
+        output_files=("codex_final_response.txt", "submission.json" if split else "submission.patch") if phase == "code"
                      else ("codex_final_response.txt",))
     try:
         raw, trajectory = run_codex_text_agent(model_config=backend, container=boundary,
@@ -162,12 +170,30 @@ def _run_plan(config, issue, env, *, planning_rules="", model_wrapper=None,
 
 
 def _run_code(config, plan, issue, env, *, model_wrapper=None, failure_trajectory_path=None,
-              phase_timeout_seconds=None, allow_empty_submission=False, **context):
+              phase_timeout_seconds=None, allow_empty_submission=False,
+              submission_protocol="staged_diff_v1", code_retry_context="", **context):
     del model_wrapper, failure_trajectory_path
     # Native CLI is owned by the same Worker/Slurm deadline; no nested retry loop.
     del phase_timeout_seconds
-    raw, trajectory = _execute(config, issue, env, phase="code", variables={"plan": plan},
-        allow_empty_submission=allow_empty_submission, **context)
+    raw, trajectory = _execute(config, issue, env, phase="code",
+        variables={"plan": plan, **({"code_retry_context": code_retry_context} if code_retry_context else {})},
+        allow_empty_submission=allow_empty_submission, submission_protocol=submission_protocol, **context)
+    if submission_protocol == SPLIT_CODE_PROTOCOL:
+        path = context["attempt_dir"] / "submission.json"
+        try:
+            if raw.strip() != "COMPLETE_TASK_AND_SUBMIT_FINAL_OUTPUT":
+                raise ValueError("the terminal response must be exactly COMPLETE_TASK_AND_SUBMIT_FINAL_OUTPUT")
+            if not path.is_file() or path.is_symlink():
+                raise ValueError("submission.json must be a regular file with both patches")
+            patches = validate_split_code_submission(path.read_bytes(), allow_empty=allow_empty_submission,
+                                                     digests=split_patch_digests(env))
+        except ValueError as exc:
+            raise AgentTaskError(str(exc), phase="code", reason="code_invalid_split_submission",
+                                 trajectory=trajectory) from exc
+        except (OSError, RuntimeError) as exc:
+            exc.trajectory = trajectory
+            raise
+        return patches, trajectory
     patch_path = context["attempt_dir"] / "submission.patch"
     patch_bytes = patch_path.read_bytes() if patch_path.is_file() and not patch_path.is_symlink() else None
     try:
@@ -176,11 +202,18 @@ def _run_code(config, plan, issue, env, *, model_wrapper=None, failure_trajector
         reason = "code_empty_patch" if patch_bytes is not None and not patch_bytes.strip() else "code_not_submitted"
         raise AgentTaskError(str(exc), phase="code", reason=reason, trajectory=trajectory) from exc
     # A mismatch is rejected, never replaced with a Host-derived diff.
-    diff = env.execute("set -o pipefail; git diff --cached --binary --full-index | sha256sum")
+    try:
+        diff = env.execute("set -o pipefail; git diff --cached --binary --full-index | sha256sum")
+    except Exception as exc:
+        exc.trajectory = trajectory
+        raise
     digest = str(diff.get("stdout", diff.get("output", ""))).split()
-    if diff.get("returncode") != 0 or not digest:
-        raise AgentTaskError("Codex patch differs from its staged submission", phase="code",
-                             reason="code_submission_mismatch", trajectory=trajectory)
+    if (diff.get("returncode") != 0 or not digest
+            or re.fullmatch(r"[0-9a-f]{64}", digest[0]) is None):
+        error = RuntimeError("cannot verify the submitted patch against its staged diff "
+                             f"(returncode={diff.get('returncode')})")
+        error.trajectory = trajectory
+        raise error
     try:
         validate_code_submission(raw, patch_bytes, allow_empty=allow_empty_submission, staged_sha256=digest[0])
     except ValueError as exc:

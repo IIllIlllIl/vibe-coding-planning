@@ -25,7 +25,7 @@ from src.swe_verified_pce.config import SWEVerifiedPCEConfig
 from src.swe_verified_pce.dataset import file_sha256
 from src.swe_verified_pce.models import SWEVerifiedPCECase
 from src.swe_verified_pce.evaluator import _terminal
-from src.swe_verified_pce.runner import SWEVerifiedPCERunner, checkpoint_identity
+from src.swe_verified_pce.runner import SWEVerifiedPCERunner, checkpoint_identity, phase_checkpoint, code_rejections
 from src.agents.runtime import credential_envs
 from src.agents.output_contract import AgentOutputContractError
 
@@ -112,6 +112,7 @@ def pce_semantic_sha256(
             **({"agent_network_disabled": True} if getattr(config, "agent_network_disabled", False) else {}),
             **({"planning_rules": config.planning_rules} if getattr(config, "planning_rules", "") else {}),
             "code": asdict(config.code),
+            "code_submission_protocol": config.code_submission_protocol,
             **({"agent_backends": config.agent_backends} if getattr(config, "agent_backends", {}) else {}),
             "docker": asdict(config.docker),
             "container": {
@@ -443,8 +444,9 @@ class SWEVerifiedPCEHPCExecutor:
                 finalize_case_failure=lambda task, value: self._finalize_agent_failure(
                     task, value, batch_dir=batch_dir, state_dir=state_dir, fingerprint=fingerprint),
             )
-        except TaskAttemptsExhausted:
-            results = self._collect_exhausted(batch_dir, fingerprint, tasks, audit_dir=state_dir)
+        except TaskAttemptsExhausted as exc:
+            results = self._collect_exhausted(batch_dir, fingerprint, tasks, audit_dir=state_dir,
+                                             failure_record=exc.failure_record)
         if getattr(self.config, "pce_window_size", 0) and self.config.workspace_preparation == "separate_slurm_v1":
             from src.swe_verified_pce.workspace_preparation import reclaim_unconsumed_handoffs
             if reclaim_unconsumed_handoffs(self.config, tasks):
@@ -486,13 +488,11 @@ class SWEVerifiedPCEHPCExecutor:
         case = self.case_from_dict(manifest["case"])
         expected = checkpoint_identity(case, execution_fingerprint=fingerprint)
         checkpoints = {}
+        directory = batch_dir / "checkpoints" / f"task_{task.index:04d}"
         for name in ("plan", "code"):
-            path = batch_dir / "checkpoints" / f"task_{task.index:04d}" / f"{name}.json"
-            if path.is_file():
-                record = read_json(path)
-                if record.get("checkpoint_identity") != expected or record.get("phase") != name:
-                    raise ValueError("terminal Agent failure checkpoint identity mismatch")
-                checkpoints[name] = record["payload"]
+            payload = phase_checkpoint(directory, expected, name)
+            if payload is not None:
+                checkpoints[name] = payload
         if phase in checkpoints:
             return None  # A valid atomic phase already exists; resume it, not a zero.
         plan, code = checkpoints.get("plan", {}), checkpoints.get("code", {})
@@ -513,6 +513,9 @@ class SWEVerifiedPCEHPCExecutor:
             "last_worker_output": value, "final_validation_label": None,
             **outcome.to_worker_payload(),
         }
+        rejected = code_rejections(directory, expected)
+        if rejected:
+            result["code_rejections"] = rejected
         # This is a Host outcome envelope, not a rewrite of scientific output.
         atomic_json(task.output_path, result)
         return result
@@ -608,25 +611,36 @@ class SWEVerifiedPCEHPCExecutor:
         tasks: Sequence[TaskFiles],
         *,
         audit_dir: Path | None = None,
+        failure_record: dict[str, Any] | None = None,
     ) -> list[dict[str, Any]]:
         results: list[dict[str, Any]] = []
         max_attempts = self.config.hpc.max_task_attempts
+        rejected_paths = {item.get("output_path") for item in (failure_record or {}).get("details", [])}
         for task in tasks:
             value: dict[str, Any] = {}
-            if task.output_path.is_file():
-                loaded = json.loads(task.output_path.read_text(encoding="utf-8"))
-                if isinstance(loaded, dict):
-                    value = loaded
-            if value.get("status") == "completed":
+            read_error = None
+            try:
+                if task.output_path.is_file():
+                    loaded = json.loads(task.output_path.read_text(encoding="utf-8"))
+                    if isinstance(loaded, dict):
+                        value = loaded
+            except (OSError, ValueError) as exc:
+                if str(task.output_path) not in rejected_paths:
+                    raise
+                # The final rejected output may itself be unreadable. Retain
+                # it in place; do not lose the authoritative exhaustion record.
+                read_error = f"{type(exc).__name__}: {exc}"
+            # A Worker may claim completion but fail Host validation. The
+            # durable batch decision, not that claim, identifies exhausted tasks.
+            if value.get("status") == "completed" and str(task.output_path) not in rejected_paths:
                 results.append(value)
                 continue
-            statuses = list(task.attempts_dir.glob("attempt_*/slurm_status.json"))
-            slurm_path = max(statuses, key=lambda path: int(path.parent.name.split("_")[-1])) if statuses else None
-            slurm = (
-                json.loads(slurm_path.read_text(encoding="utf-8"))
-                if slurm_path is not None
-                else None
-            )
+            slurm = None
+            with optional_diagnostic("exhausted scheduler status read"):
+                statuses = list(task.attempts_dir.glob("attempt_*/slurm_status.json"))
+                slurm_path = max(statuses, key=lambda path: int(path.parent.name.split("_")[-1])) if statuses else None
+                if slurm_path is not None:
+                    slurm = json.loads(slurm_path.read_text(encoding="utf-8"))
             results.append(
                 {
                     "schema_version": 1,
@@ -640,7 +654,9 @@ class SWEVerifiedPCEHPCExecutor:
                         task.manifest_path.read_text(encoding="utf-8")
                     ).get("pce_run_index", 1),
                     "attempts_exhausted": max_attempts,
+                    "failure_record": failure_record or {},
                     "last_worker_output": value or None,
+                    **({"last_worker_output_read_error": read_error} if read_error else {}),
                     "last_slurm_status": slurm,
                     "evidence_root": str(task.attempts_dir),
                     "final_validation_label": None,

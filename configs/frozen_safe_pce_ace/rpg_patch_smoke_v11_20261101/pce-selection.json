@@ -1,0 +1,12 @@
+{
+  "schema_version": 1,
+  "purpose": "development_only_patch_submission_and_recovery_acceptance",
+  "selected_instance_ids": [
+    "openai__openai-agents-python-454",
+    "pylint-dev__pylint-10814",
+    "pdm-project__pdm-2795"
+  ],
+  "selection_source": "configs/frozen_safe_pce_ace/rpg_clean61_v1_20261026/split-selection.json",
+  "selection_rationale": "Retain one completed smoke case, add package-internal test-helper coverage and the recorded NoDiag v10 PDM patch-conflict case. Preserve the formal train/validation assignment; use fresh outputs only.",
+  "formal_split": false
+}

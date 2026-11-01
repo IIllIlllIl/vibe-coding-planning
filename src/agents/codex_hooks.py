@@ -92,7 +92,8 @@ def _append_audit(path, record):
 
 def stop_result(event, context, audit_path, *, output_dir=Path("/agent-output")):
     """Keep an invalid final submission inside the existing Native loop."""
-    from src.agents.plan_submission import validate_human_plan, validate_code_submission, submission_feedback
+    from src.agents.plan_submission import (validate_human_plan, validate_code_submission, submission_feedback,
+        SPLIT_CODE_PROTOCOL, validate_split_code_submission)
     contract = context["submission_contract"]
     phase = contract["phase"]
     raw = event.get("last_assistant_message")
@@ -103,6 +104,23 @@ def stop_result(event, context, audit_path, *, output_dir=Path("/agent-output"))
     try:
         if phase == "plan":
             validate_human_plan(raw)
+        elif contract.get("protocol") == SPLIT_CODE_PROTOCOL:
+            path = output_dir / "submission.json"
+            if not path.is_file() or path.is_symlink():
+                raise ValueError("submission.json must be a regular file with code_patch and test_patch")
+            payload = path.read_bytes()
+            patches = validate_split_code_submission(payload, allow_empty=contract["allow_empty"])
+            validate_code_submission(raw, patches["code_patch"].encode(), allow_empty=contract["allow_empty"])
+            digests = {}
+            for field, options in (("code_patch", ["--cached"]), ("test_patch", [])):
+                diff = subprocess.run(["git", "diff", *options, "--binary", "--full-index"],
+                    cwd=contract["workdir"], capture_output=True, check=False, timeout=30)
+                if diff.returncode:
+                    raise RuntimeError(f"{field} diff verification failed (returncode={diff.returncode})")
+                digests[field] = hashlib.sha256(diff.stdout).hexdigest()
+            validate_split_code_submission(payload, allow_empty=contract["allow_empty"], digests=digests)
+            record["patch_sha256"] = digests["code_patch"]
+            record["test_patch_sha256"] = digests["test_patch"]
         else:
             patch_path = output_dir / "submission.patch"
             patch = patch_path.read_bytes() if patch_path.is_file() and not patch_path.is_symlink() else None
@@ -110,13 +128,18 @@ def stop_result(event, context, audit_path, *, output_dir=Path("/agent-output"))
             staged = subprocess.run(["git", "diff", "--cached", "--binary", "--full-index"],
                 cwd=contract["workdir"], capture_output=True, check=False, timeout=30)
             if staged.returncode:
-                raise ValueError(f"staged diff verification failed (returncode={staged.returncode})")
+                raise RuntimeError(f"staged diff verification failed (returncode={staged.returncode})")
             validate_code_submission(raw, patch, allow_empty=contract["allow_empty"],
                 staged_sha256=hashlib.sha256(staged.stdout).hexdigest())
             record["patch_sha256"] = hashlib.sha256(patch).hexdigest()
     except ValueError as exc:
         record.update(accepted=False, error=str(exc))
         result = {"decision": "block", "reason": submission_feedback(str(exc), phase=phase)}
+    except (OSError, RuntimeError, subprocess.TimeoutExpired) as exc:
+        # Do not ask the model to rewrite output because a Host check failed.
+        # Independent post-turn validation still runs and owns acceptance.
+        record.update(accepted=None, error_type=type(exc).__name__, error=str(exc))
+        result = {}
     else:
         record["accepted"] = True
         result = {}

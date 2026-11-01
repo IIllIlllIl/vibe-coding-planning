@@ -1,13 +1,9 @@
 """Code generation agent.
 
-Aligns with the mini-swe-agent submission protocol: the agent edits files
-in the container with shell commands and finally emits
-``echo COMPLETE_TASK_AND_SUBMIT_FINAL_OUTPUT`` followed by the configured
-``git diff --cached`` command. The Agent owns the semantic choice of staged
-files, including whether locally written diagnostic tests belong in its final
-submission. ``DefaultAgent.has_finished`` strips the marker line and
-``Submitted.exception_msg`` carries the canonical diff output verbatim. The
-Host deliberately does not filter or repair that choice.
+The Agent edits files and emits the shared completion marker followed by its
+configured payload: a staged diff, or JSON containing separate code/test diffs.
+The Agent owns the semantic staging choice. DefaultAgent strips the marker,
+preserving the payload; the Host validates but never filters or repairs it.
 """
 
 from __future__ import annotations
@@ -29,7 +25,8 @@ from src.agents._deps import (
 )
 from src.config import Config
 from src.exceptions import AgentTaskError, CommandTimeoutError
-from src.agents.plan_submission import empty_patch_error, submission_feedback
+from src.agents.plan_submission import (empty_patch_error, submission_feedback,
+    SPLIT_CODE_PROTOCOL, SPLIT_CODE_CONTRACT, validate_split_code_submission, split_patch_digests)
 
 logger = logging.getLogger(__name__)
 
@@ -73,7 +70,7 @@ def _extract_result(
     """Extract the agent's final output based on how it terminated.
 
     Only ``Submitted`` is treated as success — its message is the
-    ``git diff --cached`` output (already with the marker line stripped
+    declared payload (already with the marker line stripped
     by ``DefaultAgent.has_finished``). Any other exit status (e.g.
     ``LimitsExceeded``) means the agent did not produce a real
     submission; raising :class:`TaskError` lets the pipeline record an
@@ -107,7 +104,9 @@ def run(
     phase_timeout_seconds: float | None = None,
     allow_empty_submission: bool = False,
     validate_submission_in_loop: bool = False,
-) -> tuple[str, list[dict[str, Any]]]:
+    submission_protocol: str = "staged_diff_v1",
+    code_retry_context: str = "",
+) -> tuple[str | dict[str, str], list[dict[str, Any]]]:
     """Run the code generation agent.
 
     Args:
@@ -118,10 +117,10 @@ def run(
             execution).
 
     Returns:
-        A tuple of ``(patch_text, trajectory_messages)``. ``patch_text``
-        is the raw ``git diff --cached`` output captured by the submission
-        command. No Host path policy, semantic filtering, or patch repair is
-        applied. Callers may explicitly allow an empty formal submission when
+        A tuple of ``(submission, trajectory_messages)``: the exact staged diff
+        or a dict of exact code_patch/test_patch strings for split_code_test_v1.
+        No Host path policy, semantic filtering, or patch repair is applied.
+        Callers may explicitly allow an empty formal submission when
         the evaluator owns that outcome classification.
 
     Raises:
@@ -139,6 +138,11 @@ def run(
     # Sympy bug plans regularly contain).
     system_template = config.prompts.code_generation_prompt
     instance_template = config.prompts.code_instance_template or None
+    split = submission_protocol == SPLIT_CODE_PROTOCOL
+    if split:
+        instance_template = (instance_template or "{{task}}") + "\n" + SPLIT_CODE_CONTRACT
+    if code_retry_context:
+        instance_template = (instance_template or "{{task}}") + "\n<previous_submission>\n{{code_retry_context}}\n</previous_submission>"
 
     model = build_model(
         LitellmModel,
@@ -152,6 +156,9 @@ def run(
         model = model_wrapper(model)
 
     def validate_patch(payload):
+        if split:
+            return validate_split_code_submission(payload, allow_empty=allow_empty_submission,
+                                                  digests=split_patch_digests(env))
         error = empty_patch_error(payload, allow_empty=allow_empty_submission)
         if error:
             raise ValueError(error)
@@ -166,7 +173,7 @@ def run(
         instance_template=instance_template,
         **({"submission_validator": validate_patch,
             "submission_error_feedback": lambda error: submission_feedback(error, phase="code")}
-           if validate_submission_in_loop else {}),
+           if validate_submission_in_loop or split else {}),
     )
 
     logger.info(
@@ -178,7 +185,8 @@ def run(
     try:
         with _phase_timer(phase_timeout_seconds):
             exception_name, exception_msg = agent.run(
-                task=issue_description, plan=plan
+                task=issue_description, plan=plan,
+                **({"code_retry_context": code_retry_context} if code_retry_context else {})
             )
             raise_for_permanent_provider_error(exception_name, exception_msg)
     except CommandTimeoutError as exc:
@@ -204,11 +212,25 @@ def run(
             str(exc),
         )
         raise
+    except Exception as exc:
+        # Operational verification failures retain the completed investigation
+        # without being reclassified as Agent output errors.
+        exc.trajectory = list(agent.messages)
+        raise
     if exception_name != "Submitted":
         _write_failure_trajectory(
             failure_trajectory_path, agent.messages, exception_name, exception_msg
         )
     patch_text = _extract_result(exception_name, exception_msg, agent.messages)
+    if split:
+        try:
+            return validate_patch(patch_text), agent.messages
+        except ValueError as exc:
+            raise AgentTaskError(str(exc), phase="code", reason="code_invalid_split_submission",
+                                 trajectory=agent.messages) from exc
+        except (OSError, RuntimeError) as exc:
+            exc.trajectory = list(agent.messages)
+            raise
 
     if (not patch_text or not patch_text.strip()) and not allow_empty_submission:
         _write_failure_trajectory(

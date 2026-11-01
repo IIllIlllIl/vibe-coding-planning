@@ -12,6 +12,7 @@ from typing import Any, Callable
 
 from src.agents import code_agent, plan_agent
 from src.agents.pce_backend import agent_runner
+from src.agents.plan_submission import SPLIT_CODE_PROTOCOL
 from src.artifact_policy import mark_private_artifact_dir
 from src.config import AgentConfig, Config, EvaluatorConfig, PromptConfig, SystemConfig
 from src.environment.apptainer_env import ApptainerEnvironment, ApptainerSifCache
@@ -26,7 +27,7 @@ from src.environment.source_access import (
     extract_http_urls,
     summarize_source_access_log,
 )
-from src.exceptions import FatalError
+from src.exceptions import AgentTaskError, FatalError
 from src.optimization.audit import AuditedModel, JsonlLogger, optional_diagnostic
 from src.optimization.hpc.task_batch import atomic_json, read_json
 from src.swe_verified_pce.config import SWEVerifiedPCEConfig
@@ -37,6 +38,34 @@ from src.swe_verified_pce.workspace_preparation import PHASES, claim_workspace
 
 
 Evaluator = Callable[..., dict[str, Any]]
+
+
+def code_rejections(checkpoint_dir: Path, identity: str) -> list[dict]:
+    path = checkpoint_dir / "code_rejections.json"
+    if not path.is_file():
+        return []
+    value = read_json(path)
+    if value.get("checkpoint_identity") != identity:
+        raise FatalError(f"PCE Code rejection identity mismatch: {path}")
+    return value["rejections"]
+
+
+def phase_checkpoint(checkpoint_dir: Path, identity: str, phase: str) -> dict | None:
+    """One validity decision shared by preparation, execution and finalization."""
+    path = checkpoint_dir / f"{phase}.json"
+    if not path.is_file():
+        return None
+    value = read_json(path)
+    if value.get("checkpoint_identity") != identity:
+        raise FatalError(f"PCE checkpoint identity mismatch: {path}")
+    if value.get("phase") != phase or not isinstance(value.get("payload"), dict):
+        raise FatalError(f"invalid PCE checkpoint: {path}")
+    if phase == "code" and any(item["checkpoint_sha256"] == file_sha256(path)
+                              for item in code_rejections(checkpoint_dir, identity)):
+        return None
+    if phase == "evaluate" and value["payload"].get("evaluator_result", {}).get("task_outcome") == "unknown":
+        return None
+    return dict(value["payload"])
 
 
 class SWEVerifiedPCERunner:
@@ -113,21 +142,23 @@ class SWEVerifiedPCERunner:
         )
 
     def _checkpoint(self, phase: str) -> dict[str, Any] | None:
-        path = self.checkpoint_dir / f"{phase}.json"
-        if not path.is_file():
-            return None
-        value = read_json(path)
-        if value.get("checkpoint_identity") != self.checkpoint_identity:
-            raise FatalError(f"PCE checkpoint identity mismatch: {path}")
-        if value.get("phase") != phase or not isinstance(value.get("payload"), dict):
-            raise FatalError(f"invalid PCE checkpoint: {path}")
-        if phase == "evaluate" and value["payload"].get("evaluator_result", {}).get("task_outcome") == "unknown":
-            return None  # Retry only Evaluator; retain valid Plan/Code checkpoints.
-        self.audit.write_optional("pce_phase_resumed", phase=phase, path=str(path))
-        return dict(value["payload"])
+        value = phase_checkpoint(self.checkpoint_dir, self.checkpoint_identity, phase)
+        if value is not None:
+            self.audit.write_optional("pce_phase_resumed", phase=phase,
+                                      path=str(self.checkpoint_dir / f"{phase}.json"))
+        return value
 
     def _save_checkpoint(self, phase: str, payload: dict[str, Any]) -> None:
         result = payload.get("evaluator_result", {})
+        if phase == "evaluate" and result.get("terminal_kind") == "code_patch_not_applied":
+            attempts = result.get("code_patch_attempts", [])
+            rejected = bool(attempts) and all(
+                item.get("preflight_returncode") == 1 or (
+                    item.get("preflight_returncode") == 0 and item.get("apply_returncode") == 1)
+                for item in attempts)
+            raise SWEVerifiedEvaluatorOperationalError("Coder patch could not be applied",
+                outcome_reason="code_patch_not_applied",
+                retry_disposition="retry_code" if rejected else "retry_same_phase", evidence=result)
         if phase == "evaluate" and result.get("task_outcome") == "unknown":
             raise SWEVerifiedEvaluatorOperationalError(
                 "Evaluator produced no usable task outcome", outcome_reason=result.get("outcome_reason", "unknown"),
@@ -139,8 +170,27 @@ class SWEVerifiedPCERunner:
                 "checkpoint_identity": self.checkpoint_identity,
                 "phase": phase,
                 "payload": payload,
+                **({"producer_attempt": str(self.attempt_dir)} if phase == "code" else {}),
             },
         )
+
+    def _reject_code(self, error, code):
+        """Preserve the rejected submission before invalidating its reuse."""
+        feedback = ("Your previous code patch could not be applied to the evaluation repository. "
+                    "Review the patch against the frozen base and submit a corrected implementation.")
+        if self.config.code_submission_protocol == SPLIT_CODE_PROTOCOL:
+            feedback += " Keep diagnostic/test changes in test_patch, separate from code_patch."
+        digest = file_sha256(self.checkpoint_dir / "code.json")
+        history = code_rejections(self.checkpoint_dir, self.checkpoint_identity)
+        if not any(item["checkpoint_sha256"] == digest for item in history):
+            history.append({"checkpoint_sha256": digest, "submission": code,
+                            "feedback": feedback, "evaluator_evidence": error.evidence})
+            atomic_json(self.checkpoint_dir / "code_rejections.json", {
+                "checkpoint_identity": self.checkpoint_identity, "rejections": history})
+        failure = AgentTaskError(feedback, phase="code", reason="code_patch_not_applicable",
+                                 trajectory=code["trajectory"])
+        failure.evidence = error.evidence  # Host/learning evidence, never Coder feedback.
+        raise failure from error
 
     def _verify_sif(self, case: SWEVerifiedPCECase) -> None:
         expected = Path(case.image.sif_path)
@@ -562,7 +612,13 @@ class SWEVerifiedPCERunner:
                         plan_instance_template="",
                     ),
                 )
-                raw_patch, trajectory = agent_runner(code_agent.run, role="code", config=self.config,
+                rejected = code_rejections(self.checkpoint_dir, self.checkpoint_identity)
+                retry_context = (json.dumps({"feedback": rejected[-1]["feedback"],
+                    "code_patch": rejected[-1]["submission"]["patch"],
+                    "test_patch": rejected[-1]["submission"].get("test_patch", "")}, ensure_ascii=False)
+                    if rejected else "")
+                split = self.config.code_submission_protocol == SPLIT_CODE_PROTOCOL
+                submitted, trajectory = agent_runner(code_agent.run, role="code", config=self.config,
                     case=case, workspace=code_workspace, attempt_dir=self.attempt_dir,
                     source_access_path=self.source_access_path, usage=self.usage)(
                     code_config,
@@ -580,9 +636,12 @@ class SWEVerifiedPCERunner:
                     ),
                     failure_trajectory_path=self.attempt_dir / "code_failure.json",
                     phase_timeout_seconds=None,
+                    **({"submission_protocol": SPLIT_CODE_PROTOCOL} if split else {}),
+                    **({"code_retry_context": retry_context} if retry_context else {}),
                 )
+                raw_patch = submitted["code_patch"] if split else submitted
                 submission = {
-                    "policy": "agent_classified_staged_implementation_v1",
+                    "policy": SPLIT_CODE_PROTOCOL if split else "agent_classified_staged_implementation_v1",
                     "patch_sha256": hashlib.sha256(raw_patch.encode()).hexdigest(),
                     "empty_submission": not bool(raw_patch.strip()),
                     "host_patch_transformation": False,
@@ -594,23 +653,27 @@ class SWEVerifiedPCERunner:
                     "patch_submission": submission,
                     "workspace_evidence": {},
                     "trajectory": list(trajectory),
+                    **({"test_patch": submitted["test_patch"],
+                        "test_patch_sha256": hashlib.sha256(submitted["test_patch"].encode()).hexdigest()}
+                       if split else {}),
                 }
                 # The submission is the resume boundary. Evidence collection
                 # and cleanup after this point cannot trigger another Agent.
                 self._save_checkpoint("code", code_checkpoint)
-                try:
-                    workspace_evidence = self._capture_code_workspace_evidence(
-                        env,
-                        submitted_patch=raw_patch,
-                    )
-                    code_checkpoint["workspace_evidence"] = workspace_evidence
-                    self._save_checkpoint("code", code_checkpoint)
-                except Exception as exc:
-                    self.audit.write_optional(
-                        "swe_verified_pce_workspace_evidence_incomplete",
-                        error_type=type(exc).__name__,
-                        error=str(exc),
-                    )
+                if not split:
+                    # Legacy submissions lack a first-class test patch. New
+                    # split submissions already preserve both exact artifacts.
+                    try:
+                        workspace_evidence = self._capture_code_workspace_evidence(
+                            env, submitted_patch=raw_patch,
+                        )
+                        code_checkpoint["workspace_evidence"] = workspace_evidence
+                        self._save_checkpoint("code", code_checkpoint)
+                    except Exception as exc:
+                        self.audit.write_optional(
+                            "swe_verified_pce_workspace_evidence_incomplete",
+                            error_type=type(exc).__name__, error=str(exc),
+                        )
             finally:
                 if env is not None:
                     self._best_effort_environment_cleanup(env, phase="code")
@@ -634,14 +697,6 @@ class SWEVerifiedPCERunner:
                         self.attempt_dir / "repository_baselines" / "evaluate"
                     ),
                     "command_timeout": self.config.plan.timeout,
-                    "evaluation_started_callback": lambda: atomic_json(
-                        self.checkpoint_dir / "evaluate_started.json",
-                        {
-                            "schema_version": 1,
-                            "checkpoint_identity": self.checkpoint_identity,
-                            "phase": "evaluate",
-                        },
-                    ),
                     "result_callback": lambda result: self._save_checkpoint(
                         "evaluate", {"evaluator_result": result}
                     ),
@@ -655,17 +710,22 @@ class SWEVerifiedPCERunner:
                 evaluator_result = self.evaluator(
                     str(code_checkpoint["patch"]), case, **evaluator_options
                 )
+                # Custom evaluators may return without using result_callback.
+                self._save_checkpoint("evaluate", {"evaluator_result": evaluator_result})
+            except SWEVerifiedEvaluatorOperationalError as exc:
+                if exc.retry_disposition == "retry_code":
+                    self._reject_code(exc, code_checkpoint)
+                raise
             finally:
                 self._best_effort_workspace_cleanup(eval_workspace, phase="evaluate")
             evaluator_checkpoint = {"evaluator_result": evaluator_result}
-            # The official evaluator callback writes this before its own cleanup.
-            # Writing the same atomic payload again also supports test/custom
-            # evaluators that do not use the callback.
-            self._save_checkpoint("evaluate", evaluator_checkpoint)
 
         result = self._completed_result(
             plan_checkpoint, code_checkpoint, evaluator_checkpoint
         )
+        rejected = code_rejections(self.checkpoint_dir, self.checkpoint_identity)
+        if rejected:
+            result["code_rejections"] = rejected
         with optional_diagnostic("source-access summary"):
             result["source_access"] = {
                 "policy_version": SOURCE_ACCESS_POLICY_VERSION,
@@ -713,6 +773,8 @@ class SWEVerifiedPCERunner:
             "code_trajectory": list(code_checkpoint["trajectory"]),
             "evaluator_result": dict(evaluator_checkpoint["evaluator_result"]),
             "final_validation_label": None,
+            **({key: code_checkpoint[key] for key in ("test_patch", "test_patch_sha256")}
+               if "test_patch" in code_checkpoint else {}),
         }
         for key in (
             "raw_plan_submission",

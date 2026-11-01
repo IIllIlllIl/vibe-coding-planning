@@ -15,6 +15,7 @@ from src.optimization.config import ContainerConfig, ModelConfig
 from src.optimization.hpc.config import HPCConfig
 from src.swe_verified_pce.dataset import file_sha256
 from src.agents.pce_backend import load_agent_backends
+from src.agents.plan_submission import SPLIT_CODE_PROTOCOL
 
 
 @dataclass(frozen=True)
@@ -45,6 +46,7 @@ class SWEVerifiedPCEConfig:
     agent_network_disabled: bool = False
     workspace_preparation: str = "inline"
     pce_window_size: int = 0
+    code_submission_protocol: str = "staged_diff_v1"
 
 
 def _mapping(value: Any, name: str) -> dict[str, Any]:
@@ -142,6 +144,7 @@ def load_repository_pce_config(
             "plan_instance": str(plan_prompts["plan_instance"]),
         }
     code_prompt_source = paths.get("code_prompt_source_config")
+    code_prompt_raw = {}
     if code_prompt_source:
         code_prompt_raw = (
             yaml.safe_load(resolve(str(code_prompt_source)).read_text(encoding="utf-8"))
@@ -155,6 +158,13 @@ def load_repository_pce_config(
             "code_system": str(code_prompts["code_system"]),
             "code_instance": str(code_prompts["code_instance"]),
         }
+    code_submission_protocol = str(raw["code"].get("submission_protocol",
+        code_prompt_raw.get("code_submission_protocol", "staged_diff_v1")))
+    if code_submission_protocol not in {"staged_diff_v1", SPLIT_CODE_PROTOCOL}:
+        raise ValueError("unsupported Coder submission_protocol")
+    if (code_prompt_raw.get("code_submission_protocol") is not None
+            and code_submission_protocol != code_prompt_raw["code_submission_protocol"]):
+        raise ValueError("Coder submission_protocol conflicts with its prompt bundle")
     container_raw = _mapping(raw.get("container"), "container")
     hpc_raw = _mapping(raw.get("hpc"), "hpc")
     evaluator_raw = _mapping(raw.get("evaluator"), "evaluator")
@@ -338,6 +348,7 @@ def load_repository_pce_config(
         hpc=hpc,
         plan_prompt=str(prompts["plan_system"]),
         plan_instance_template=str(prompts["plan_instance"]),
+        code_submission_protocol=code_submission_protocol,
         code_prompt=str(prompts["code_system"]),
         code_instance_template=str(prompts["code_instance"]),
         nrpv_block=str(prompts.get("nrpv_block", "")),

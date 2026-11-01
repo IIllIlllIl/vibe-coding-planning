@@ -64,7 +64,7 @@ class TaskBatchBlocked(RuntimeError):
 
 
 class TaskAttemptsExhausted(TaskBatchBlocked):
-    """A transport recovery wave ended without all required valid outputs."""
+    """A durable task budget ended without all required valid outputs."""
 
 
 def retry_io(operation):
@@ -89,15 +89,16 @@ def atomic_json(path: Path, value: Any) -> None:
 
 def atomic_text(path: Path, payload: str) -> None:
     """Replace a complete payload using the shared checkpoint I/O retry path."""
+    retry_io(lambda: _atomic_text_once(path, payload))
+
+
+def _atomic_text_once(path: Path, payload: str) -> None:
+    """One storage attempt; only required state callers add retries."""
     temporary = path.with_suffix(path.suffix + ".tmp")
-
-    def save():
-        mark_artifact_path(path)
-        path.parent.mkdir(parents=True, exist_ok=True)
-        temporary.write_text(payload, encoding="utf-8")
-        temporary.replace(path)
-
-    retry_io(save)
+    mark_artifact_path(path)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    temporary.write_text(payload, encoding="utf-8")
+    temporary.replace(path)
 
 
 class SlurmTaskBatch:
@@ -134,12 +135,7 @@ class SlurmTaskBatch:
         )
         phase = str(state["phase"])
         reopen_reason: str | None = None
-        if phase == "EXHAUSTED":
-            # Callers finalize exhausted Agent outcomes. Only unfinished tasks
-            # enter another recovery wave; attempt IDs never overwrite history.
-            state["recovery_attempt_offset"] = int(state["active_attempt"])
-            reopen_reason = "retry_incomplete_tasks"
-        elif phase == "BLOCKED" and not confirmed_run_stop(state.get("terminal_failure", {})):
+        if phase == "BLOCKED" and not confirmed_run_stop(state.get("terminal_failure", {})):
             reopen_reason = "retry_incomplete_tasks"
         if reopen_reason is not None:
             self._reopen_block(
@@ -336,7 +332,7 @@ class SlurmTaskBatch:
             attempt += 1
 
         self._reclaim_attempt_workspaces(pending, attempt=attempt - 1)
-        if attempt > int(state.get("recovery_attempt_offset", 0)) + self.hpc.max_task_attempts:
+        if attempt > self.hpc.max_task_attempts:
             instance_ids = ", ".join(task.instance_id for task in pending)
             error = (
                 "Slurm Agent tasks failed without valid atomic output after "
@@ -349,6 +345,7 @@ class SlurmTaskBatch:
                 error=error,
                 failure_kind="task_attempts_exhausted",
                 attempt=attempt - 1,
+                max_attempts=self.hpc.max_task_attempts,
                 job_id=str(job_id) if job_id else None,
                 details=[
                     {
@@ -358,7 +355,7 @@ class SlurmTaskBatch:
                     for task in pending
                 ],
             )
-            raise TaskAttemptsExhausted(error)
+            raise TaskAttemptsExhausted(error, failure_record=state["terminal_failure"])
         if not self.hpc.submit:
             raise RuntimeError(
                 f"Slurm task batch prepared at {batch_dir}; set hpc.submit=true"
@@ -564,11 +561,11 @@ class SlurmTaskBatch:
         elapsed_seconds: int | None,
         raw: str,
     ) -> None:
-        atomic_json(
-            task.attempts_dir
-            / f"attempt_{attempt:02d}"
-            / "slurm_status.json",
-            {
+        # Scheduler state is already observed above and persisted in task_state.
+        # This compatibility diagnostic must not delay that state transition.
+        with optional_diagnostic("Slurm status copy"):
+            path = task.attempts_dir / f"attempt_{attempt:02d}" / "slurm_status.json"
+            value = {
                 "schema_version": 1,
                 "observed_at": datetime.now(timezone.utc).isoformat(),
                 "job_id": job_id,
@@ -577,8 +574,9 @@ class SlurmTaskBatch:
                 "state": state,
                 "elapsed_seconds": elapsed_seconds,
                 "raw": raw,
-            },
-        )
+            }
+            _atomic_text_once(path, json.dumps(value, indent=2, ensure_ascii=False,
+                                             sort_keys=True) + "\n")
 
     @staticmethod
     def _save_terminal_state(
@@ -591,6 +589,7 @@ class SlurmTaskBatch:
         attempt: int,
         job_id: str | None,
         details: list[dict[str, Any]],
+        max_attempts: int | None = None,
     ) -> None:
         state["last_job_id"] = job_id
         state["terminal_failure"] = {
@@ -599,6 +598,8 @@ class SlurmTaskBatch:
             "attempt": attempt,
             "details": details,
         }
+        if max_attempts is not None:
+            state["terminal_failure"]["max_attempts"] = max_attempts
         SlurmTaskBatch._save_state(
             path,
             state,

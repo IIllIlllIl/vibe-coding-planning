@@ -242,9 +242,11 @@ def test_shared_slurm_retries_unusable_output_preserves_original_and_feedback(tm
     assert tasks[1].output_path.read_bytes() == retained and archived.read_bytes() == broken
 
 
+@pytest.mark.parametrize("status_write_fails", [False, True])
 def test_shared_slurm_records_terminal_status_and_exhaustion(
     tmp_path,
     monkeypatch,
+    status_write_fails,
 ):
     task = TaskFiles(
         index=0,
@@ -286,8 +288,17 @@ def test_shared_slurm_records_terminal_status_and_exhaustion(
     workspace_file.parent.mkdir(parents=True)
     workspace_file.write_text("disposable", encoding="utf-8")
     evidence_file.write_text("retained", encoding="utf-8")
+    writes = []
+    if status_write_fails:
+        original = Path.write_text
+        def write(path, *args, **kwargs):
+            if path.name == "slurm_status.json.tmp":
+                writes.append(path)
+                raise PermissionError("diagnostic-only failure")
+            return original(path, *args, **kwargs)
+        monkeypatch.setattr(Path, "write_text", write)
 
-    with pytest.raises(TaskAttemptsExhausted, match="1 attempt"):
+    with pytest.raises(TaskAttemptsExhausted, match="1 attempt") as first:
         runtime.run(
             batch_dir=tmp_path,
             fingerprint="fingerprint",
@@ -302,15 +313,20 @@ def test_shared_slurm_records_terminal_status_and_exhaustion(
     assert state["active_job_id"] is None
     assert state["last_job_id"] == "123"
     assert state["terminal_failure"]["failure_kind"] == "task_attempts_exhausted"
+    assert first.value.failure_record == state["terminal_failure"]
+    assert first.value.failure_record["max_attempts"] == 1
     assert not (task.attempts_dir / "attempt_01/workspaces").exists()
     assert evidence_file.read_text(encoding="utf-8") == "retained"
-    slurm_status = json.loads(
-        (task.attempts_dir / "attempt_01" / "slurm_status.json").read_text()
-    )
-    assert slurm_status["state"] == "TIMEOUT"
-    assert slurm_status["raw"] == "123_0|TIMEOUT|00:05:00"
+    status_path = task.attempts_dir / "attempt_01" / "slurm_status.json"
+    if status_write_fails:
+        assert len(writes) == 1  # Diagnostics do not use storage retries.
+        assert not status_path.exists()
+    else:
+        slurm_status = json.loads(status_path.read_text())
+        assert slurm_status["state"] == "TIMEOUT"
+        assert slurm_status["raw"] == "123_0|TIMEOUT|00:05:00"
 
-    with pytest.raises(ControllerYield):
+    with pytest.raises(TaskAttemptsExhausted) as resumed:
         runtime.run(
             batch_dir=tmp_path,
             fingerprint="fingerprint",
@@ -320,7 +336,57 @@ def test_shared_slurm_records_terminal_status_and_exhaustion(
             validate_output=lambda files, output: None,
         )
 
-    assert json.loads((tmp_path / "task_state.json").read_text())["active_attempt"] == 2
+    assert resumed.value.failure_record == first.value.failure_record
+    assert json.loads((tmp_path / "task_state.json").read_text()) == state
+
+
+@pytest.mark.parametrize("succeeds_on_last", [False, True])
+def test_task_attempt_cap_survives_controller_resume_and_old_wave_offset(tmp_path, succeeds_on_last):
+    tasks = [TaskFiles(index=i, instance_id=f"case-{i}", manifest_path=tmp_path / f"in-{i}.json",
+                       output_path=tmp_path / f"out-{i}.json", attempts_dir=tmp_path / f"attempts-{i}")
+             for i in range(2)]
+    for task in tasks:
+        atomic_json(task.manifest_path, {"instance_id": task.instance_id})
+    submissions = []
+    def write_script(indices, attempt):
+        submissions.append((list(indices), attempt))
+        return tmp_path / "batch.sh"
+    def submit(_):
+        indices, attempt = submissions[-1]
+        for index in indices:
+            atomic_json(tasks[index].output_path, {
+                "status": "completed" if index == 1 or (succeeds_on_last and attempt == 3) else "retryable_failed",
+                "attempt": attempt, "original": f"case-{index}",
+            })
+        return str(attempt)
+    def run():
+        # A new Controller process reconstitutes the runtime each time.
+        return SlurmTaskBatch(HPCConfig(submit=True, max_task_attempts=3), submitter=submit).run(
+            batch_dir=tmp_path, fingerprint="fixed", tasks=tasks,
+            job_name=lambda attempt: f"job-{attempt}", write_script=write_script,
+            validate_output=lambda task, value: None)
+    for attempt in (1, 2, 3):
+        with pytest.raises(ControllerYield):
+            run()
+        state_path = tmp_path / "task_state.json"
+        state = json.loads(state_path.read_text())
+        state["recovery_attempt_offset"] = 100  # Obsolete fields cannot reset the budget.
+        atomic_json(state_path, state)
+    retained = tasks[1].output_path.read_bytes()
+    last_failed = tasks[0].output_path.read_bytes()
+    if succeeds_on_last:
+        assert [row["attempt"] for row in run()] == [3, 1]
+        assert [row["attempt"] for row in run()] == [3, 1]
+    else:
+        for _ in range(2):
+            with pytest.raises(TaskAttemptsExhausted) as caught:
+                run()
+            assert caught.value.failure_record["attempt"] == 3
+            assert caught.value.failure_record["max_attempts"] == 3
+        assert tasks[0].output_path.read_bytes() == last_failed
+    assert submissions == [([0, 1], 1), ([0], 2), ([0], 3)]
+    assert tasks[1].output_path.read_bytes() == retained
+    assert len(list((tmp_path / "failed_outputs").glob("*/out-0.json"))) == 2
 
 
 def test_hpc_reflection_exhaustion_remains_an_ordinary_proposal_failure(tmp_path):

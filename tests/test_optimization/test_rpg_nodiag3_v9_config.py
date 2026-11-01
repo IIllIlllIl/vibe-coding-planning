@@ -147,3 +147,63 @@ def test_v10_fresh_formal_binding_preserves_v9_science_and_completed_smoke_runti
     assert raw["budget"]["no_model_workspace_preparation_elements_without_retries_upper_bound"] == 324
     assert raw["budget"]["reflector_calls_upper_bound"] == 24
     assert raw["budget"]["curator_calls_upper_bound"] == 3
+
+
+def test_patch_smoke_v11_preserves_learning_contract_and_exercises_split_submission(tmp_path):
+    path = Path("configs/gepa_safe_pce_rpg_codex_smoke_v11_20261101.yaml")
+    new = load_optimization_config(path, require_api_keys=False)
+    old = load_optimization_config(Path("configs/gepa_safe_pce_rpg_codex_smoke_v10_20261101.yaml"),
+                                   require_api_keys=False)
+    verify_hybrid_snapshot(new)
+    assert new.search == old.search and new.reflection == old.reflection
+    assert new.task == old.task and new.initial_rules_path == old.initial_rules_path
+    assert new.hybrid == replace(old.hybrid, dataset_file_sha256=new.hybrid.dataset_file_sha256)
+    assert new.run_dir != old.run_dir and new.dataset_snapshot != old.dataset_snapshot
+    a, b = backend(new), backend(old)
+    train, val = a.load_snapshot()
+    selection = json.loads(Path("configs/frozen_safe_pce_ace/rpg_patch_smoke_v11_20261101/split-selection.json").read_text())
+    formal = json.loads(Path("configs/frozen_safe_pce_ace/rpg_clean61_v1_20261026/split-selection.json").read_text())
+    assert (len(train), len(val)) == (2, 1) and a.learning_diagnostics == {}
+    assert selection["validation"] == ["pdm-project__pdm-2795"]
+    for split in ("train", "validation"):
+        actual = [json.loads(line)["instance_id"] for line in (new.dataset_snapshot / (split + ".jsonl")).read_text().splitlines()]
+        assert actual == selection[split] and set(actual) <= set(formal[split])
+    assert a.pce.code_submission_protocol == "split_code_test_v1"
+    assert b.pce.code_submission_protocol == "staged_diff_v1"
+    prompts = yaml.safe_load(Path("configs/prompts/safe_pce_code_split_v1.yaml").read_text())["prompts"]
+    assert a.pce.code_prompt == prompts["code_system"]
+    assert a.pce.code_instance_template == prompts["code_instance"]
+    for field in ("plan", "code", "agent_backends", "plan_prompt", "plan_instance_template",
+                  "container", "docker", "agent_network_disabled", "workspace_preparation",
+                  "slurm_evaluator_timeout_outcome"):
+        assert getattr(a.pce, field) == getattr(b.pce, field)
+    assert a.pce.hpc.max_task_attempts == 3 and new.hpc.max_task_attempts == 2
+    assert a.pce.pce_window_size == b.pce.pce_window_size == 1
+    source = Path("configs/safe_pce_ace_rpg_codex_smoke_source_v11_20261101.yaml")
+    manifest = json.loads((new.dataset_snapshot / "manifest.json").read_text())
+    assert manifest["source_pce_config_sha256"] == sha256(source)
+    assert manifest["engineering_baseline_config_sha256"] == sha256(Path("configs/gepa_safe_pce_rpg_codex_smoke_v10_20261101.yaml"))
+    authority = Path("output/SWE-RPG/threeway-readable-clean61-v1-20261026/gepa-source")
+    for name in ("manifest.json", "instances.jsonl", "images.json", "evaluation/evaluate_docker.py"):
+        assert (a.pce.dataset_snapshot / name).read_bytes() == (authority / name).read_bytes()
+    assert not (new.dataset_snapshot / "learning_diagnostics").exists()
+    supervisor = Path("configs/safe_pce_ace_rpg_codex_smoke_supervisor_v11_20261101.yaml")
+    session, log, args, program = _load_launch_config(supervisor)
+    launch = parse_args(args)
+    assert program == RESUME_SCRIPT and session == new.run_dir.name and session in log
+    assert launch.require_clean_worktree and launch.reclaim_staging and launch.reclaim_workspaces
+    assert args[args.index("--gepa-config") + 1] == str(path)
+    assert launch.slice_time == "00:08:00"
+    effective = materialize_pce_config(a.pce, json.loads(new.initial_rules_path.read_text()),
+        tmp_path / "effective", run_dir=new.run_dir)
+    assert effective.code_submission_protocol == "split_code_test_v1"
+    for preparation, count in ((True, 3), (False, 1)):
+        script = build_array_script(config=effective, batch_dir=tmp_path,
+            indices=list(range(count)), attempt=1, preparation_only=preparation)
+        assert "#SBATCH --array=" + ",".join(map(str, range(count))) + "\n" in script
+        assert "#SBATCH --time=01:00:00" in script and "#SBATCH --mem=4G" in script
+        if preparation:
+            assert "ENV_FILE" not in script and "source " not in script
+    raw = yaml.safe_load(path.read_text())["experiment_contract"]
+    assert raw["launch_authorized"] and not raw["previous_output_import"]
+    assert raw["budget"]["pce_evaluation_slots_without_cache"] == {"minimum": 5, "maximum": 6}

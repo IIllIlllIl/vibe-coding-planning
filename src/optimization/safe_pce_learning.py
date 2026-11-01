@@ -34,6 +34,10 @@ class SafePCELearningCase:
 class IncompletePCEEvaluation(RuntimeError):
     """An auditable incomplete observation, never a scored unresolved task."""
 
+    def __init__(self, message: str, *, failure_record: dict | None = None):
+        super().__init__(message)
+        self.failure_record = failure_record or {}
+
 
 def outcome_score(output: dict, *, mode: str, instance_id: str) -> float:
     evaluator = output.get("evaluator_result", {})
@@ -96,9 +100,11 @@ def _validate_learning_evidence(output: dict) -> None:
             raise IncompletePCEEvaluation(f"PCE learning evidence lacks recorded {field}")
     if not isinstance(output.get("patch"), str):
         raise IncompletePCEEvaluation("PCE learning evidence lacks the original patch")
-    for field in ("plan", "patch"):
+    if output.get("patch_submission", {}).get("policy") == "split_code_test_v1" and not isinstance(output.get("test_patch"), str):
+        raise IncompletePCEEvaluation("PCE learning evidence lacks the original test patch")
+    for field in ("plan", "patch", "test_patch"):
         expected = output.get(f"{field}_sha256")
-        if expected and expected != hashlib.sha256(output[field].encode()).hexdigest():
+        if expected and (not isinstance(output.get(field), str) or expected != hashlib.sha256(output[field].encode()).hexdigest()):
             raise IncompletePCEEvaluation(f"PCE learning evidence {field} hash mismatch")
 
 
@@ -305,6 +311,12 @@ class SafePCEGEPAAdapter:
                 entry = {"candidate_sha256": digest, "instance_id": case.instance_id, "split": case.split,
                          "repetition": repetition, "pce_output": output}
                 try:
+                    if output.get("pce_status") == "incomplete":
+                        last = output.get("last_worker_output") or {}
+                        raise IncompletePCEEvaluation(
+                            f"{case.instance_id}: PCE incomplete after "
+                            f"{output.get('attempts_exhausted')} allowed attempts; "
+                            f"{last.get('error_type', 'missing worker output')}: {last.get('error', '')}")
                     _validate_learning_evidence(output)
                     score = outcome_score(output, mode=self.mode, instance_id=case.instance_id)
                 except (IncompletePCEEvaluation, ValueError, KeyError) as exc:
@@ -324,7 +336,9 @@ class SafePCEGEPAAdapter:
                             [row for rows in physical for row in rows])
             raise OfflineReflectionBlocked(IncompletePCEEvaluation(
                 f"{len(failures)} incomplete Safe PCE observations; batch scores/learning withheld. "
-                "Inspect safe_pce_physical_evaluations.jsonl and existing PCE worker artifacts."))
+                "Inspect safe_pce_physical_evaluations.jsonl and existing PCE worker artifacts.",
+                failure_record={"details": [row["pce_output"]["failure_record"] for row in failures
+                                            if row["pce_output"].get("failure_record")]}))
         outputs, scores, traces, log = [], [], [], []
         for index, case in enumerate(batch):
             runs = [rows[index] for rows in physical]

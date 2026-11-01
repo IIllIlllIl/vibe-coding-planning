@@ -82,6 +82,8 @@ def resolved_pce_payload(base):
     raw["prompts"] = {"plan_system": base.plan_prompt, "plan_instance": base.plan_instance_template,
                       "code_system": base.code_prompt, "code_instance": base.code_instance_template,
                       "nrpv_block": base.nrpv_block}
+    if hasattr(base, "code_submission_protocol"):
+        raw["code"]["submission_protocol"] = base.code_submission_protocol
     return raw
 
 

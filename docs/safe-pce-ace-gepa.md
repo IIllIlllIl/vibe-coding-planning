@@ -48,6 +48,18 @@ the complete, byte-preserved Plan in its own freshly restored workspace;
 the evaluator retains its existing authority and isolation. Test/gold patches,
 historical outcomes and full source rows do not enter Planner inputs.
 
+The opt-in [split Coder contract](../configs/prompts/safe_pce_code_split_v1.yaml)
+adds an explicit diagnostic/test patch alongside the implementation patch.
+Coder chooses the split; Host validates and preserves both, while only the
+implementation reaches official evaluation. The test patch and rejected Code
+attempts remain required learning evidence through the existing Ref views.
+On a confirmed implementation-patch application failure before tests, the
+existing task retry resumes Coder in a fresh workspace with the original Plan.
+Only its own prior patches and generic failure feedback return to Coder;
+official test contents/paths remain evaluator-only. Historical single-patch
+bindings are not silently changed. See the
+[shared recovery/transport contract](engineering-contracts.md).
+
 The candidate uses the existing checklist representation: `schema_version: 1`
 and `checklist` items with `id`, `condition`, and `guide`.
 `hybrid.shared_guide_enabled: false` disables the shared guide in this backend;
@@ -273,8 +285,11 @@ the existing HPC submit tool for its authorized compute-node invocation.
 
 Keep the official resolved rule, including its treatment of missing/skipped
 tests. Stage exit codes, all stage logs, parsed statuses and the native report
-are retained independently. Missing command/parser/test evidence, failed patch
-application and interrupted execution are operationally incomplete, not scored U.
+are retained independently. Missing command/parser/test evidence, official-test
+patch failures and interrupted execution are operationally incomplete, not scored U.
+Confirmed submitted-Code application failures return to Coder. If all three
+allowed attempts fail in that Agent phase, the separate Online Agent-failure
+zero retains original evidence; it is not an official test outcome.
 A parsed outcome can still contain environment or Coder noise and needs audit.
 No official-score correction or automatic post-run cleaning is introduced.
 
@@ -343,6 +358,17 @@ task-correct or task-incorrect planning decision about the item's concern, or
 neither established contribution. An evaluator outcome alone does not assign
 credit to every item. The counter algorithm and training-only ledger boundary
 remain unchanged.
+
+Learning targets general planning quality, not the mechanics of the benchmark
+or submission harness. A Coder patch/export mistake can explain a failed run
+without supporting a change to the Plan checklist. Ref may use its original
+failure evidence to separate responsibilities; reusable insights require a
+supported flaw in the proposed approach, grounded in decision-time task and
+repository evidence. Curator maintains cross-task knowledge, not instructions
+for patch splitting, submission formatting or compensating for the evaluator.
+The frozen v2 Ref/Cur prompts already require this attribution distinction and
+exclude fixed submission instructions from learned guides. No scoring change
+or rewrite of those frozen prompts is implied by preserving failure logs.
 
 A new-mode sampler subclass retains GEPA's queue/RNG serialization and corrects
 duplicate IDs in epoch-tail padding. It requires enough distinct training tasks

@@ -13,10 +13,10 @@ not the current command-receipt/scoring/stop contract.
 | Source/isolation | Keep frozen mounts and pre-execution source decisions; delete native command/receipt matching and Stop-receipt validation. Optional logs cannot veto a valid submission. |
 | Plan/Code failure | Reuse Online `scored_agent_failure` after three recorded failures in the same Agent phase; score 0, evaluator explicitly not run, last rejected trajectory and successful prior checkpoints retained. |
 | Environment/evaluation failure | Remains unscored. Retry unfinished phase, preserving successful Plans/patches. Unknown evaluation checkpoints do not suppress re-evaluation. |
-| Worker transport | Retry unusable output and ordinary failures; preserve originals and feedback. Exhausted recovery waves reopen with monotonic attempt IDs, not overwritten history. |
+| Worker transport | Retry unusable output and ordinary failures within the persistent `hpc.max_task_attempts` budget (initial execution included). Exhaustion never automatically opens another wave. Preserve originals, feedback and successful siblings. |
 | Learning inputs | Full raw archive plus existing required/optional views. The terminal failure reason and last Agent trajectory are visible; duplicate Worker envelope is an archive reference. |
 | Persistence | Shared atomic JSON writer retries the same serialized payload. Supervisor retains a submitted job ID in memory while retrying its state save. |
-| Supervisor | Ordinary Controller/startup/staging failures retry; active/unknown jobs wait. Confirmed provider exhaustion, disk/inode exhaustion and explicit cancellation stop. Frozen identity changes remain disallowed. |
+| Supervisor | Ordinary Controller/startup/staging failures retry; active/unknown jobs wait. Confirmed provider exhaustion, disk/inode exhaustion, explicit cancellation and durable task-budget exhaustion stop. Frozen identity changes remain disallowed. |
 | Non-consuming diagnostics | Best effort only; use the existing event stream / combined Slurm output. No extra receipt framework. |
 
 Removed production code includes the native coverage matcher (including vendor-
@@ -77,8 +77,171 @@ then audit the source stop/retry paths against those observations and identify
 any remaining components without a downstream experiment consumer. A successful
 happy path does not certify unexercised error branches or the formal window 8.
 
-## Post-v9 recovery and duplicate-output review (2026-11-01)
+## NoDiag v10 patch conflict and bounded recovery (2026-11-01)
 
+Runtime authority: `safe-pce-ace-rpg-codex-nodiag3-v10-20261101`, frozen
+commit `54f85f8`, PCE task `pdm-project__pdm-2795` in batch
+`248edfb4664953786de23d52957309141f7b4cf58b0ea497dd7215a207ba4f92`,
+`task_0001`. The 16:30 UTC observation recorded attempt 24; this is a
+time-specific observation, not an assertion about any later attempt count.
+
+The task's durable `checkpoints/task_0001/code.json` contains the actual prompt,
+trajectory and unchanged patch. The prompt explicitly requires diagnostic
+tests/fixtures/helpers to remain unstaged. Coder nevertheless announced that it
+would stage the fix, regression test and news fragment, then executed
+`git add src/pdm/core.py tests/test_project.py news/2788.bugfix.md` and exported
+the staged diff. Host verified the exported patch against that diff; it neither
+added nor removed test changes. The trace establishes noncompliance with the
+staging instruction, not the model's unobservable reason for prioritizing a
+regression-test bundle. Successful local regression tests do not make this
+submission compatible with the evaluator-only official test patch.
+
+The official test patch applied successfully; applying the Coder patch then
+failed at `tests/test_project.py:337`, before tests ran. Attempts 1 and 24
+reused the same patch SHA-256
+`c20ae6367438f8f261b5d69a1f7abee1cf8da8d7e07c01fda242ec1de8d4e4f8`.
+This is a real input conflict, not a diagnostic-receipt failure, OOM or a
+confirmed storage-capacity failure. It remains incomplete/NoScore, not U.
+
+The old recovery policy reopened `EXHAUSTED` every three attempts using
+`recovery_attempt_offset`. Since Code's valid checkpoint remained reusable,
+only evaluation retried, receiving the identical conflicting patch each time.
+The learning error about a missing original Plan described the incomplete
+Worker envelope, although the original Plan checkpoint still existed.
+
+The replacement reuses the shared task batch: enforce its existing absolute
+attempt budget, persist exhaustion through Controller resumes, and propagate
+that record through PCE and the learning adapter to Supervisor. PCE/preparation
+allows three attempts including the initial execution; learning-role budgets
+already set to two remain unchanged. A preparation budget cannot be mislabeled
+as a failed Agent rollout. Three proven Agent failures can still use the
+existing Online zero-outcome policy; infrastructure failures cannot supply the
+missing Agent evidence. No original Plan, patch, prompt or frozen input is
+rewritten. The patch conflict itself is not repaired by imposing a retry cap.
+
+Local fault tests cover third-attempt success, no fourth attempt after resume,
+obsolete wave offsets, unchanged successful siblings/checkpoints, evaluator-only
+retries, preparation exhaustion, Agent-versus-infrastructure outcomes, and
+propagation through the real learning Controller and Supervisor. External
+models, containers and Slurm are mocked; this is not a new HPC acceptance.
+Final bounded-recovery regression: **301 passed** across ten test files
+(`--no-cov`); `git diff --check` passed. This also covers a malformed final
+Worker JSON and a damaged scheduler diagnostic: neither can erase the recorded
+exhaustion or promote rejected output to a valid score. No model, container or
+HPC job was launched, and no historical output was rewritten.
+
+### Follow-up: split Coder output and Code-owned recovery
+
+The user approved explicit code/test output rather than Host-side test
+stripping. `safe_pce_code_split_v1.yaml` and the shared
+`split_code_test_v1` validator preserve both exact Agent diffs in one JSON
+submission envelope. Native Stop and mini-SWE's existing validation callback
+provide in-session correction. The evaluator receives code only; Ref receives
+both via its existing required-view/original-archive organization.
+
+RPG's setup=0/test_patch=0/code_patch=1 failure now rejects the Code checkpoint
+for reuse. Verified's equivalent requires recorded patch-rejection exit codes;
+unknown or unavailable command results remain evaluator failures. A single
+checkpoint rejection history preserves original patches, Code behavior and
+evaluation evidence. The same validity check drives workspace preparation,
+execution and Agent-failure finalization. Subsequent attempts retain Plan and
+re-run Code in a fresh workspace; only safe generic feedback and its own prior
+patches reach Code. Official-test contents/paths do not.
+
+The absolute three-attempt budget above remains in force. Three evidenced
+Code failures follow the existing Agent-failure zero policy, not an invented
+official U. Successful sibling tasks and original artifacts are preserved.
+No active frozen launch configuration or remote result was edited.
+
+Local acceptance covers both submission backends, real Worker/checkpoint and
+preparation handoffs, both repository datasets, three failed Code attempts,
+successful replacement Code, unchanged Plan/siblings, literal retry inputs,
+no official-test feedback, full test-patch/rejection evidence, and the ACE
+required-view dataflow: **412 passed, 7 deselected** across eleven test files
+(`--no-cov`); the final shared submission-feedback suite also passed all 17
+tests, and `git diff --check` passed. The broader regression contains seven historical
+reproduction checks outside this acceptance: six need absent local private
+Verified artifacts; one compares today's source hash with a September frozen
+hash and also differs when computed from unmodified HEAD sources. Their frozen
+inputs/expectations were not edited or silently replaced. This is local
+mock-boundary validation, not an HPC or model-behavior acceptance.
+
+### Follow-up: remove diagnostic gates without changing learning targets
+
+Post-Code Git/digest verification is not pre-Slurm SIF preparation. An
+unavailable verification command now remains operationally incomplete instead
+of being counted toward the three Agent failures that can produce score zero.
+Actual schema/diff mismatches retain the existing correction contract. Native
+Stop defers operational checking errors to mandatory post-turn validation.
+
+Current PCE no longer writes `evaluate_started.json`; its only retained
+timeout-reporting consumer, legacy PCCE, owns the evaluator callback. Shared
+Slurm status observation and task-state persistence remain authoritative.
+The extra `slurm_status.json` copy has one best-effort atomic write, without
+storage retries and without vetoing attempt advancement or exhaustion.
+
+Explicit split submissions bypass the five-command legacy workspace recapture
+and its two diagnostic files. Both exact patches remain in the Code checkpoint.
+Single-patch historical compatibility retains that evidence capture.
+
+RPG Code rejection records now include available original stage logs, which
+reach Ref through the existing required index and raw archive. Missing or
+unreadable failure logs cannot replace the original failure; unavailable reads
+are identified. Generic Coder feedback still excludes official-test details.
+These logs support attribution, not a new learning objective: patch-submission
+mistakes alone do not justify Planner guide changes. Existing frozen Ref/Cur
+prompts, scores, candidate limits and split membership are unchanged.
+
+Local fault-injection and regression acceptance: **336 passed** (`--no-cov`),
+including both Agent backends, preserved trajectories on unavailable verification,
+three-attempt operational NoScore, split-patch checkpoints, original RPG failure
+logs reaching Ref, optional Scheduler-copy failure, current PCE marker removal
+and legacy PCCE marker compatibility. `git diff --check` passed. Three broader
+historical reproduction checks require absent local private input artifacts;
+they are not counted as passed. No HPC, container or model call was made for
+this follow-up; runtime acceptance remains outstanding.
+
+### Targeted patch smoke v11
+
+Binding: `configs/gepa_safe_pce_rpg_codex_smoke_v11_20261101.yaml`; reuse the
+completed v10 Supervisor/Worker/preparation/ACE phase graph with a fresh run and
+private input snapshot. OpenAI-454 is the completed-smoke control; Pylint-10814
+covers package-internal test helpers; PDM-2795 is the recorded v10 patch conflict.
+Keep their formal train/train/validation membership. PDM evidence does not enter
+Ref/Cur, and no downstream holdout case or prior Agent result is imported.
+
+Use one proposal, mini 2, window 1, 5–6 PCE slots before retries, two Reflectors
+and one Curator; Refiner and proposal validation remain conditional. Every role
+uses the existing Native Codex / gpt-6-sol / high binding. Iris remains 1 CPU /
+4G: completed v10 PCE MaxRSS peaked at 2,821,360 KiB; this supports the retained
+request, not a guarantee for every test-process tail. PCE and preparation have
+three total task attempts; learning roles retain two. Controller slices remain
+eight minutes, PCE elements one hour and learning elements thirty minutes.
+
+The only prompt change is the reviewed explicit Code/test split. Planner,
+Ref/Cur/Refiner, placeholder seed, scoring and caps retain v10. Inspect both
+exact submitted patches, evaluator code-only input and lossless Ref views. If a
+real application failure occurs, inspect Code-only retry, unchanged Plan, generic
+feedback, original failure evidence and bounded attempts. Do not inject a failure
+or change selection/refinement gates to claim coverage. Optional Scheduler-copy
+failure and unavailable verification remain local fault-test coverage unless
+naturally observed on HPC. Review learned text for Coder-error attribution rather
+than benchmark/submission instructions; a successful smoke is not learning-quality
+acceptance or a formal eight-case-window capacity test.
+
+Prelaunch acceptance: **337 local tests passed**, including the new binding's
+effective prompts, exact frozen source bytes, preserved split assignment,
+generated unthrottled arrays and shared Supervisor arguments. The actual
+Supervisor dry-run resolves independent Scratch staging/dataset/result roots.
+Read-only checks matched all three SIF and ancestor-bundle hashes; private auth
+contents were not read. Scratch used 349,050 / 1,000,000 soft-limit inodes and
+2.284 TiB / 10 TiB at the prelaunch check. These measurements and local tests do
+not substitute for the pending dynamic smoke acceptance.
+
+## Post-v9 recovery and duplicate-output review (2026-11-01, historical)
+
+The unlimited-wave behavior below is superseded by the bounded-recovery review
+above. Other retained atomic-storage and duplicate-output changes still apply.
 This follow-up is a local implementation review, not another HPC acceptance.
 The completed v9 happy path did not exercise the failures below.
 

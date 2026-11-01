@@ -52,6 +52,8 @@ def _audit_worker_evidence(root, output):
                else ("plan_sha256", "patch_sha256"))
     for key in fields:
         _equal(output[key], worker[key], f"worker -> physical: {key}")
+    for key in ("test_patch", "test_patch_sha256", "code_rejections"):
+        _equal(output.get(key), worker.get(key), f"worker -> physical: {key}")
     if failed:
         phase = output["terminal_phase"]
         _equal(output[phase + "_trajectory"], output["last_worker_output"]["failure_trajectory"],
@@ -69,6 +71,11 @@ def _audit_worker_evidence(root, output):
         for field, expected in (("patch", code["patch"]), ("code_trajectory", code["trajectory"]),
                                 ("evaluator_result", evaluation["evaluator_result"])):
             _equal(output[field], expected, "checkpoint -> output: " + field)
+        for field in ("test_patch", "test_patch_sha256"):
+            _equal(output.get(field), code.get(field), "checkpoint -> output: " + field)
+    rejection_path = checkpoints / "code_rejections.json"
+    if rejection_path.is_file():
+        _equal(output.get("code_rejections"), _json(rejection_path)["rejections"], "rejected Code -> learning")
     plan = _json(checkpoints / "plan.json")["payload"]
     _equal(output["plan"], plan["plan"], "checkpoint -> output: plan")
     _equal(output["plan_trajectory"], plan["trajectory"], "checkpoint -> output: plan_trajectory")

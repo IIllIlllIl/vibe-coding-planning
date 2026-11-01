@@ -69,9 +69,21 @@ def evaluate_swe_rpg_apptainer(patch, case, *, snapshot, container, capacity_win
     outputs.mkdir()
     _inputs(inputs, case, patch, official)
     env = None
-    def incomplete(reason, **details):
+    def incomplete(reason, *, retry_disposition="retry_same_phase", **details):
+        # Failure logs are learning evidence, not Coder retry instructions.
+        # Read available originals once; a missing/unreadable log must not
+        # replace the actual failure or create a diagnostic retry loop.
+        logs, unavailable = {}, {}
+        for stage in ("test_patch", "code_patch", "rebuild", "test", "print", "parser"):
+            try:
+                logs[stage] = (outputs / (stage + ".log")).read_text(errors="replace")
+            except FileNotFoundError:
+                pass  # The stage may not have run.
+            except OSError as exc:
+                unavailable[stage] = type(exc).__name__
         raise SWERPGEvaluatorOperationalError(reason, outcome_reason=reason,
-            retry_disposition="retry_same_phase", evidence={"evidence_dir": str(directory), **details})
+            retry_disposition=retry_disposition, evidence={"evidence_dir": str(directory),
+                "stage_logs": logs, **({"unavailable_stage_logs": unavailable} if unavailable else {}), **details})
     if patch is not None and not patch.strip():
         incomplete("rpg_empty_generation")
     try:
@@ -93,6 +105,8 @@ def evaluate_swe_rpg_apptainer(patch, case, *, snapshot, container, capacity_win
         codes_path = outputs / "stage_exit_codes.tsv"
         codes = dict(line.split("\t", 1) for line in codes_path.read_text().splitlines()) if codes_path.exists() else {}
         codes = {key: int(value) for key, value in codes.items()}
+        if codes.get("setup") == codes.get("test_patch") == 0 and codes.get("code_patch") == 1:
+            incomplete("rpg_code_patch_not_applied", retry_disposition="retry_code", stage_exit_codes=codes)
         required = {"setup", "test_patch", "code_patch", "rebuild", "test", "print", "parser"}
         if not required.issubset(codes):
             incomplete("rpg_stages_incomplete", stage_exit_codes=codes)

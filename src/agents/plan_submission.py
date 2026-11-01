@@ -1,6 +1,53 @@
-"""Pure Plan submission checks shared by both existing Agent loops."""
+"""Pure PCE submission checks shared by both existing Agent loops."""
 import re
 import hashlib
+import json
+
+
+SPLIT_CODE_PROTOCOL = "split_code_test_v1"
+SPLIT_CODE_CONTRACT = """Submit one JSON object with exactly two string fields:
+code_patch: the complete implementation diff from git diff --cached --binary --full-index.
+test_patch: the complete diagnostic/test diff from git diff --binary --full-index.
+Stage implementation changes and leave diagnostic/test changes unstaged. Include
+new diagnostic files in the unstaged diff using git add -N. Classify changes by
+their purpose, including test helpers inside package directories. Both patches
+are retained; only code_patch is applied for official evaluation. test_patch may
+be an empty string when there are no diagnostic changes. Use tools to JSON-encode
+the exact diff outputs; preserve their complete contents and trailing newlines.
+"""
+
+
+def validate_split_code_submission(payload, *, allow_empty=False, digests=None):
+    """Decode two Agent-selected patches without filtering or rewriting either."""
+    value = json.loads(payload)
+    if not isinstance(value, dict) or set(value) != {"code_patch", "test_patch"}:
+        raise ValueError("submission must contain exactly code_patch and test_patch")
+    if any(not isinstance(patch, str) for patch in value.values()):
+        raise ValueError("code_patch and test_patch must both be strings")
+    error = empty_patch_error(value["code_patch"], allow_empty=allow_empty)
+    if error:
+        raise ValueError(error)
+    if digests is not None:
+        for field in ("code_patch", "test_patch"):
+            if hashlib.sha256(value[field].encode()).hexdigest() != digests[field]:
+                raise ValueError(f"{field} differs from its {'staged' if field == 'code_patch' else 'unstaged'} diff")
+    return value
+
+
+def split_patch_digests(env):
+    """Mechanical equality check over the same Agent-selected Git boundaries."""
+    digests = {}
+    for field, options in (("code_patch", "--cached "), ("test_patch", "")):
+        result = env.execute(f"set -o pipefail; git diff {options}--binary --full-index | sha256sum")
+        words = str(result.get("stdout", result.get("output", ""))).split()
+        if (result.get("returncode") != 0 or not words
+                or re.fullmatch(r"[0-9a-f]{64}", words[0]) is None):
+            # Unavailable verification is not evidence of a bad submission.
+            # Only a completed comparison may raise the Agent's ValueError.
+            raise RuntimeError(f"cannot verify {field} against the repository diff "
+                               f"(returncode={result.get('returncode')})")
+        digests[field] = words[0]
+    return digests
 
 DIRECT_MARKDOWN_PLAN_PLACEHOLDER = "[[TASK_SPECIFIC_MARKDOWN_PLAN]]"
 _DIRECT_PLAN_HEADINGS = (
@@ -94,7 +141,7 @@ def validate_code_submission(raw, patch, *, allow_empty=False, staged_sha256=Non
 def submission_feedback(error, *, phase):
     instructions = ("Return the complete corrected Plan between exact START_PLAN and END_PLAN lines, "
                     "starting the Plan with '# Plan' and a newline." if phase == "plan" else
-                    "Select the implementation in Git staging and submit its complete staged diff "
+                    "Correct the indicated error and submit the complete artifact "
                     "using the Coder submission protocol from the task.")
     return (f"Host rejected the submission: {error}.\n{instructions}\n"
             "The task is not complete. Earlier observations remain available; "

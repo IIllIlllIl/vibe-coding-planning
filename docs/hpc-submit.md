@@ -65,9 +65,13 @@ diagnosing Iris, VPN, SSH, or credentials.
 
 The maintained experiment Supervisor has no `--max-runs` or
 `--recover-controller-error-type-once` option. Ordinary Controller/staging
-failures retry after active-job and identity checks. Only confirmed external
-exhaustion/cancellation stops automatic recovery; source/config identity
-changes still prohibit silently submitting a different experiment.
+failures retry after active-job and identity checks. Confirmed external
+exhaustion/cancellation and exhausted Worker task budgets stop automatic recovery;
+source/config identity changes still prohibit silently submitting a different experiment.
+`hpc.max_task_attempts` includes the initial execution and persists across
+Controller resumes. Repository PCE/preparation currently allows three attempts;
+existing lower learning-role budgets remain unchanged. Waiting/yield/resume is
+not another Worker attempt. An exhausted batch cannot automatically reopen.
 Unavailable status waits rather than authorizing a duplicate. Required state
 save failures retry the same payload, keeping an acknowledged job ID in memory.
 See the [current acceptance contract](knowledge/blocking-policy-acceptance-20261028.md).

@@ -16,7 +16,7 @@ import shutil
 from src.exceptions import ControllerYield, FatalError
 from src.optimization.audit import JsonlLogger
 from src.optimization.hpc.phase_wave import prepare_phase_wave
-from src.optimization.hpc.task_batch import SlurmTaskBatch, TaskAttemptsExhausted, atomic_json
+from src.optimization.hpc.task_batch import SlurmTaskBatch, TaskAttemptsExhausted, TaskBatchBlocked, atomic_json
 
 
 PHASES = ("plan", "code", "evaluate")
@@ -187,10 +187,9 @@ def prepare_before_pce(executor, pce_batch, pce_fingerprint, pce_tasks, indices,
             job_name=lambda attempt: f"{prep_config.hpc.job_name_prefix}-{fingerprint[:12]}-a{attempt}")
     except TaskAttemptsExhausted as exc:
         # Preparation is infrastructure, not a failed Agent observation.
-        # The shared task batch reopens the recovery wave on resume and keeps
-        # successful elements. Do not invent a PCE output or discard its trees.
-        raise ControllerYield(batch_dir=str(batch), job_id=None,
-                              reason="workspace_preparation_retry") from exc
+        # Preserve its budget evidence without letting the enclosing PCE batch
+        # collect this as exhaustion of a PCE task that never ran.
+        raise TaskBatchBlocked(str(exc), failure_record=exc.failure_record) from exc
     grouped = {index: {} for index in original_indices}
     for value in results:
         grouped[value["pce_task_index"]][value["prepared_phase"]] = value

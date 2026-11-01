@@ -99,6 +99,21 @@ def test_optional_native_usage_failure_does_not_discard_submission(tmp_path, mon
     assert not (context["attempt_dir"] / "trajectory.json").exists()
 
 
+@pytest.mark.parametrize("split", [False, True])
+@pytest.mark.parametrize("returncode", [0, 127])
+def test_native_unavailable_diff_verification_is_not_an_agent_failure(tmp_path, monkeypatch, split, returncode):
+    _completion(monkeypatch)
+    context = _context(tmp_path)
+    if split:
+        context["attempt_dir"].mkdir()
+        (context["attempt_dir"] / "submission.json").write_text(json.dumps({"code_patch": PATCH, "test_patch": ""}))
+    env = SimpleNamespace(execute=lambda *a, **kw: {"returncode": returncode, "output": "not a valid digest"})
+    with pytest.raises(RuntimeError, match="cannot verify") as caught:
+        backend._run_code(_config(), PLAN, "Issue", env,
+            submission_protocol="split_code_test_v1" if split else "staged_diff_v1", **context)
+    assert caught.value.trajectory[-1]["role"] == "assistant"
+
+
 @pytest.mark.parametrize("change", [{"executor": "typo"}, {"codex_version": ""},
     {"codex_binary": ""}, {"reasoning_effort": "typo"}, {"api_key": "must-not-stage"}])
 def test_invalid_backend_fails_before_inference(change):
@@ -145,6 +160,27 @@ def test_raw_patch_not_final_message_or_host_reconstruction(tmp_path, monkeypatc
     assert trace[-1]["content"] == "COMPLETE_TASK_AND_SUBMIT_FINAL_OUTPUT\n"
     assert (tmp_path / "attempt/submission.patch").read_bytes() == submitted.encode()
     assert not (tmp_path / "attempt/submission.json").exists()
+
+
+@pytest.mark.parametrize("test_patch", ["", "diagnostic diff\r\n{{template}}\n\n"])
+def test_native_split_submission_retains_two_exact_patches_and_safe_context(tmp_path, monkeypatch, test_patch):
+    from src.agents.plan_submission import SPLIT_CODE_PROTOCOL
+    patches = {"code_patch": PATCH, "test_patch": test_patch}
+    calls = []
+    def run(**kwargs):
+        calls.append(kwargs)
+        kwargs["attempt_dir"].mkdir(parents=True, exist_ok=True)
+        (kwargs["attempt_dir"] / "submission.json").write_text(json.dumps(patches))
+        return "COMPLETE_TASK_AND_SUBMIT_FINAL_OUTPUT", [{"role": "user", "content": kwargs["user"]}]
+    monkeypatch.setattr(runtime, "run_codex_text_agent", run)
+    env = SimpleNamespace(execute=lambda command: _diff_result(patches["code_patch" if "--cached" in command else "test_patch"]))
+    output, trace = backend._run_code(_config(), PLAN, "Issue", env, submission_protocol=SPLIT_CODE_PROTOCOL,
+        code_retry_context='Own rejected patch {{literal}}', **_context(tmp_path))
+    assert output == patches
+    assert calls[0]["container"].output_files == ("codex_final_response.txt", "submission.json")
+    assert calls[0]["container"].source_policy["submission_contract"]["protocol"] == SPLIT_CODE_PROTOCOL
+    assert "Own rejected patch {{literal}}" in calls[0]["user"]
+    assert json.loads((tmp_path / "attempt/submission.json").read_text()) == patches
 
 
 @pytest.mark.parametrize("problem", ["missing_patch", "missing_marker", "mismatched_diff", "empty_patch", "symlink"])

@@ -25,8 +25,10 @@ Everything outside this whitelist must identify a real main-flow consumer
 before becoming a prerequisite. Otherwise it is a best-effort diagnostic,
 offline export, or unused code to remove—not a new acceptance gate.
 Do not introduce a second workflow/receipt framework to enforce this list.
-Host validation feedback is the next Agent's input; Slurm attempt status
-participates in exhausted-evaluator recovery. These are not disposable logs.
+Host validation feedback is the next Agent's input. Live Slurm observations
+and durable task state drive recovery; the separate `slurm_status.json` copy is
+best effort, written once without retries. Retained legacy consumers can use
+that copy when available but must not fabricate an outcome when it is absent.
 A second copy of that failure, a rendered tree, or a source-access summary is
 not needed to deliver a valid result.
 
@@ -66,27 +68,60 @@ task through the existing attempt mechanism. Missing Stop delivery or diagnostic
 receipts alone cannot invalidate a Plan/patch that passes the independent role
 checks. Keep Stop's same-session correction and the original Plan, patch-file
 and staged-diff-hash validation; never turn retry into Host repair.
+Diff verification occurs after Code submission, not during pre-Slurm environment
+preparation. An unavailable Git/hash command is an operational failure, not
+proof of an invalid Agent patch. Only a completed comparison can attribute a
+mismatch to the Agent. Native Stop defers an unavailable check to independent
+post-turn validation rather than asking the model to rewrite its submission.
 
 Classify errors only as far as needed to choose recovery. Reject incompatible
 inputs without using or repairing them. Regenerate an unusable Worker output
 through its existing task attempt, retaining the original and feedback.
 A generic exception name or `block_run` flag is not evidence that recovery
 cannot continue. Confirmed provider authentication/credit exhaustion, ENOSPC /
-EDQUOT and explicit cancellation stop automatic retries. Frozen launch identity
-changes still prevent submitting a different experiment under the same run.
+EDQUOT, explicit cancellation and durable task-budget exhaustion stop automatic
+retries. Frozen launch identity changes still prevent submitting a different
+experiment under the same run.
 
 The current repository Safe PCE path reuses Online's `scored_agent_failure`:
 after three recorded failures in the same Planner/Coder phase, produce a
 distinct `pce_status=agent_failed` outcome with score 0, last raw failure and
 all available successful checkpoints. Evaluator is explicitly `not_run`;
 never invent an empty successful Plan or patch. Environment/setup/parser/storage
-failures are not Agent failures and remain unscored while recovering.
+failures are not Agent failures and remain unscored while recovering and after
+exhaustion. Infrastructure attempts do not count toward the three evidenced
+Agent failures required to assign an Agent-failure zero.
 Unknown evaluator checkpoints are not reused as completed evaluations.
 Only the first unfinished phase retries; successful Agent outputs remain intact.
-Transport exhaustion starts another recovery wave with monotonically increasing
-attempt IDs. Learning-role exhaustion retries, never invents a Ref or candidate.
-Workspace-preparation exhaustion likewise resumes the shared recovery wave,
-preserving already prepared elements; it does not synthesize a PCE failure.
+An explicitly rejected Code application is unfinished Code, not an invitation
+to replay the same evaluator input. RPG routes setup=0/test_patch=0/code_patch=1
+to Coder; Verified requires recorded patch-rejection return codes. Missing
+commands, official-test-patch/setup/parser errors stay with evaluator recovery.
+Before retry, preserve the rejected Code payload and evaluation evidence in one
+`code_rejections.json` next to its checkpoint. A shared checkpoint predicate
+prevents execution, preparation or terminal finalization from reusing that
+rejected checkpoint; the original Plan remains reusable. The replacement Code
+gets a fresh workspace, its own previous patches and generic application-failure
+feedback, never hidden official-test contents or paths. This uses the existing
+Worker/task attempt, not an extra Coder loop. Three evidenced Code submission
+failures use the existing Agent-failure zero, explicitly distinct from official U.
+RPG rejection evidence includes the original available stage logs in the existing
+learning archive. Unreadable failure logs are identified explicitly without
+replacing the original failure or adding a diagnostic retry. They remain absent
+from the Coder feedback. Current PCE does not write an evaluator-start marker;
+legacy PCCE owns that callback for its retained timeout-reporting consumer.
+`hpc.max_task_attempts` is an absolute task budget including the initial
+execution, not a per-recovery-wave allowance. Repository PCE/preparation uses
+three attempts; existing lower learning-role budgets remain unchanged.
+Normal Controller wait/yield/resume does not consume or reset that budget.
+An exhausted task batch stays exhausted across resume and carries its structured
+failure through the learning adapter and Controller to Supervisor. No automatic
+fourth PCE attempt or substitute Ref/candidate is allowed. PCE retains completed
+siblings and continues unaffected later windows; incomplete evaluation withholds
+the fixed batch's learning scores. Preparation exhaustion preserves successful
+preparations and stops before dependent PCE submission, without synthesizing
+an Agent failure. Restarting after a repair needs explicit authorization and
+the usual frozen-identity checks.
 Fixed comparison membership and atomic training history remain unchanged.
 
 Keep diagnostic file counts bounded: one append-only event stream per
@@ -100,6 +135,10 @@ not a copied tree after handoff. These rules do not authorize deletion or
 rewriting of historical scientific artifacts.
 For current repository PCE, the Code checkpoint already retains the exact patch
 and trajectory; do not require an extra raw-patch sidecar before that checkpoint.
+For `split_code_test_v1`, it also retains the exact test patch. Skip legacy
+post-submission Git recapture and duplicate workspace-evidence/unstaged-patch
+files. Historical single-patch execution still needs that diagnostic capture;
+preserve its compatibility rather than deleting historical test evidence.
 Native PCE returns its complete trajectory to the same checkpoint/failure
 envelope without another standalone trajectory copy. Successful learning
 batches need only their required replay records; the optional physical index
@@ -260,9 +299,9 @@ Preparation yield must preserve the previous failed PCE output until a retry
 script is ready. A successful phase checkpoint skips that phase's repository
 preparation on retry, without rerunning the Agent or rewriting its checkpoint.
 Preparation retries have their own existing task-batch attempts and do not
-consume a PCE attempt or a model call. A case whose preparation exhausts is
-operationally incomplete/NoScore, while prepared cases continue. Preserve all
-failure and timing evidence. Routine idle cleanup retains unconsumed handoffs;
+consume a PCE attempt or a model call. Exhaustion stops the dependent PCE wave;
+already prepared elements remain reusable evidence, not scored observations.
+Preserve all failure and timing evidence. Routine idle cleanup retains unconsumed handoffs;
 after terminal failure/completion and no active jobs, explicitly include them
 in the same exact-path reclamation helper. Source arrays remain visible in the
 top-level phase journal for Supervisor active-job detection.
@@ -404,6 +443,21 @@ completion condition. Missing source-command decisions remain an integrity
 failure; missing Stop delivery does not invalidate otherwise valid content.
 No new backend retry loop or extra PCE attempt is introduced for correction.
 
+Repository PCE's opt-in `split_code_test_v1` contract has the Agent submit
+one JSON envelope containing two exact strings, `code_patch` and `test_patch`.
+The Agent stages implementation and leaves diagnostic/test changes unstaged;
+new diagnostic files use Git intent-to-add. Both mini-SWE and Native Codex use
+the same content validator and compare each string with its staged/unstaged
+diff. Semantic classification belongs to the Agent: Host does not strip files,
+merge patches, or reinterpret a file as a test by its path.
+The complete test patch is retained beside the implementation in the Code
+checkpoint/Worker output and required Ref view; only code_patch reaches the
+official evaluator. Failed submissions and trajectories remain available for
+learning. The transport does not introduce another log per patch or retry loop.
+Use `configs/prompts/safe_pce_code_split_v1.yaml` for a new reviewed binding;
+materialized configs freeze `code.submission_protocol` explicitly. Historical
+`staged_diff_v1` configs remain readable and are not silently migrated.
+
 Current Safe PCE (`direct_human_markdown_v5`) disables Host Agent step/cost,
 command and whole-phase limits for both backends at the common PCE role
 adapter. Record the effective policy in usage evidence. Retain the Worker/Slurm
@@ -529,7 +583,8 @@ Supervisor must inspect the recorded Controller job before cleanup or another
 submission. A terminal failed/OOM/completed-before-initialization job is retryable;
 CANCELLED is respected. Pending, running or unavailable accounting waits without
 submission. Supervisor retries ordinary Controller and staging errors, preserving
-the same frozen launch identity. Confirmed provider/capacity exhaustion stops.
+the same frozen launch identity. Confirmed provider/capacity or task-budget
+exhaustion stops.
 There is no total-submission cap or one-shot named recovery exception.
 A Supervisor state-write retry retains the acknowledged job ID in memory and
 retries only that save, never repeats the submission.

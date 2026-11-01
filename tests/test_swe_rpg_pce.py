@@ -192,7 +192,7 @@ def test_generated_rpg_shell_records_real_tsv(tmp_path, patch):
     assert (outputs / "stage_exit_codes.tsv").read_bytes() == b"setup\t0\ntest\t1\n"
 
 
-@pytest.mark.parametrize("bad_stage", [None, "test_patch", "rebuild", "parser", "missing_tests"])
+@pytest.mark.parametrize("bad_stage", [None, "test_patch", "code_patch", "code_patch_unreadable_log", "rebuild", "parser", "missing_tests"])
 @pytest.mark.parametrize("repository_prepared", [False, True])
 def test_rpg_evaluator_preserves_patch_and_uses_shared_environment(tmp_path, monkeypatch, bad_stage, repository_prepared):
     snapshot, images, _, _ = rpg_source(tmp_path)
@@ -211,6 +211,7 @@ def test_rpg_evaluator_preserves_patch_and_uses_shared_environment(tmp_path, mon
             assert "FUTURE" not in self.inputs.joinpath("task.json").read_text()
             (self.outputs / "print.log").write_text("fail")
             (self.outputs / "test.log").write_text("original log")
+            (self.outputs / "code_patch.log").write_text("EXACT_FAILURE: patch failed: tests/target.py:337\n")
             from src.swe_rpg_pce.eval_driver import grade
             parsed = grade(self.inputs, self.outputs)
             if bad_stage == "missing_tests":
@@ -219,18 +220,46 @@ def test_rpg_evaluator_preserves_patch_and_uses_shared_environment(tmp_path, mon
             codes = dict(setup=0, test_patch=0, code_patch=0, rebuild=0, test=1, print=0, parser=0)
             if bad_stage in codes:
                 codes[bad_stage] = 127 if bad_stage == "rebuild" else 1
+            if bad_stage and bad_stage.startswith("code_patch"):
+                codes["code_patch"] = 1
+                codes = {key: codes[key] for key in ("setup", "test_patch", "code_patch")}
             (self.outputs / "stage_exit_codes.tsv").write_text("".join(f"{k}\t{v}\n" for k, v in codes.items()))
             return {"returncode": 0, "output": ""}
         def cleanup(self):
             observed["cleaned"] = True
     monkeypatch.setattr("src.swe_rpg_pce.evaluator.ApptainerEnvironment", Environment)
     monkeypatch.setattr("src.swe_rpg_pce.evaluator.verify_swebench_evaluator_repository", lambda *a, **k: {})
+    if bad_stage == "code_patch_unreadable_log":
+        read = Path.read_text
+        def unreadable(path, *a, **kw):
+            if path.name == "code_patch.log":
+                raise PermissionError("retained but temporarily unreadable log")
+            return read(path, *a, **kw)
+        monkeypatch.setattr(Path, "read_text", unreadable)
     kwargs = dict(snapshot=snapshot, container=SimpleNamespace(sif_cache_dir=tmp_path, writable_tmpfs=True),
         capacity_window=SimpleNamespace(), workdir=case.working_directory,
         phase_workdir=tmp_path / "workspace", command_timeout=30, repository_prepared=repository_prepared)
     if bad_stage:
-        with pytest.raises(SWERPGEvaluatorOperationalError):
+        with pytest.raises(SWERPGEvaluatorOperationalError) as caught:
             evaluate_swe_rpg_apptainer("Agent patch\n\n", case, **kwargs)
+        assert caught.value.retry_disposition == ("retry_code" if bad_stage.startswith("code_patch") else "retry_same_phase")
+        if bad_stage == "code_patch_unreadable_log":
+            assert caught.value.evidence["unavailable_stage_logs"] == {"code_patch": "PermissionError"}
+        elif bad_stage == "code_patch":
+            evidence = caught.value.evidence
+            assert evidence["stage_logs"]["code_patch"] == "EXACT_FAILURE: patch failed: tests/target.py:337\n"
+            from src.optimization.behavioral_hybrid_evidence import write_hybrid_evidence
+            record = {"task_semantics": "safe_pce_resolution_v1", "pce_runs": [{"pce_output": {
+                "code_rejections": [{"submission": {"patch": "Agent patch\n\n", "trajectory": []},
+                                     "evaluator_evidence": evidence}]}}]}
+            staged = tmp_path / "ref_inputs"
+            manifest = write_hybrid_evidence(staged, "reflector", {"parent": {}, "record": record})
+            archive = json.loads((staged / manifest["optional_files"][0]).read_text())
+            assert archive[0]["pce_output"]["code_rejections"][0]["evaluator_evidence"] == evidence
+            required = json.loads((staged / "record/pce/run-01/code_rejections.json").read_text())
+            ref = required[0]["evaluator_evidence"]["stage_logs"]["evidence_ref"]
+            assert ref["file"] == manifest["optional_files"][0]
+            assert ref["json_pointer"].endswith("/evaluator_evidence/stage_logs")
     else:
         results = []
         result = evaluate_swe_rpg_apptainer("Agent patch\n\n", case, result_callback=results.append, **kwargs)
@@ -240,6 +269,25 @@ def test_rpg_evaluator_preserves_patch_and_uses_shared_environment(tmp_path, mon
     assert observed["isolate_tmp"] is True
     assert observed["initialize_host_workdir"] is (not repository_prepared)
     assert ":/rpg-eval-input:ro" in " ".join(observed["run_args"])
+
+
+def test_split_protocol_is_frozen_with_prompts_and_rejects_contradictory_binding(tmp_path):
+    from src.optimization.safe_pce_execution import resolved_pce_payload
+    path = rpg_pce_config(tmp_path)
+    raw = yaml.safe_load(path.read_text())
+    raw["paths"]["code_prompt_source_config"] = str(Path("configs/prompts/safe_pce_code_split_v1.yaml").resolve())
+    path.write_text(yaml.safe_dump(raw))
+    config = load_swe_rpg_pce_config(path, require_api_keys=False)
+    assert config.code_submission_protocol == "split_code_test_v1"
+    materialized = resolved_pce_payload(config)
+    assert materialized["code"]["submission_protocol"] == "split_code_test_v1"
+    assert "code_prompt_source_config" not in materialized["paths"]
+    path.write_text(yaml.safe_dump(materialized))
+    assert load_swe_rpg_pce_config(path, require_api_keys=False).code_submission_protocol == config.code_submission_protocol
+    raw["code"]["submission_protocol"] = "staged_diff_v1"
+    path.write_text(yaml.safe_dump(raw))
+    with pytest.raises(ValueError, match="conflicts with its prompt"):
+        load_swe_rpg_pce_config(path, require_api_keys=False)
 
 
 def test_rpg_config_import_does_not_require_gepa():

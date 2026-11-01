@@ -253,6 +253,9 @@ def test_atomic_storage_retry_does_not_reinvoke_agent_or_change_payload(tmp_path
     ({"error_type": "PermanentProviderError"}, True),
     ({"errno": 28}, True),
     ({"slurm_state": "CANCELLED"}, True),
+    ({"failure_kind": "task_attempts_exhausted", "attempt": 3, "max_attempts": 3}, True),
+    ({"failure_record": {"details": [{"failure_kind": "task_attempts_exhausted", "attempt": 3}]}}, True),
+    ({"error_type": "TaskAttemptsExhausted", "error": "an exception name alone is not proof"}, False),
     ({"error_type": "TimeoutError"}, False),
     ({"error_type": "CodexConfigurationError", "retry_disposition": "block_run"}, False),
     ({"error_type": "ValueError", "error": "example mentions quota"}, False),
@@ -260,6 +263,27 @@ def test_atomic_storage_retry_does_not_reinvoke_agent_or_change_payload(tmp_path
 def test_stop_policy_requires_specific_evidence(record, stop):
     from src.exceptions import confirmed_run_stop
     assert confirmed_run_stop(record) is stop
+
+
+@pytest.mark.parametrize("attempts,disposition", [
+    ([{"preflight_returncode": 1, "apply_returncode": None}], "retry_code"),
+    ([{"preflight_returncode": 0, "apply_returncode": 1}], "retry_code"),
+    ([{"preflight_returncode": 127, "apply_returncode": None}], "retry_same_phase"),
+    ([{"preflight_returncode": 0, "apply_returncode": 126}], "retry_same_phase"),
+    ([], "retry_same_phase"),
+])
+def test_patch_failure_requires_evidence_before_retrying_code(tmp_path, attempts, disposition):
+    from src.swe_verified_pce.runner import SWEVerifiedPCERunner
+    from src.swe_verified_pce.evaluator import SWEVerifiedEvaluatorOperationalError
+    runner = object.__new__(SWEVerifiedPCERunner)
+    runner.checkpoint_dir = tmp_path
+    result = {"terminal_kind": "code_patch_not_applied", "task_outcome": "unresolved",
+              "code_patch_attempts": attempts}
+    with pytest.raises(SWEVerifiedEvaluatorOperationalError) as caught:
+        runner._save_checkpoint("evaluate", {"evaluator_result": result})
+    assert caught.value.retry_disposition == disposition
+    assert caught.value.evidence == result
+    assert not (tmp_path / "evaluate.json").exists()
 
 
 def test_unknown_evaluation_is_retried_not_reused_as_checkpoint(tmp_path):

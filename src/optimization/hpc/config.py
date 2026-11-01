@@ -22,7 +22,7 @@ class HPCConfig:
     poll_interval_seconds: int = 300
     task_output_grace_seconds: int = 300
     missing_task_grace_seconds: int = 600
-    max_task_attempts: int = 2
+    max_task_attempts: int = 2  # Includes initial execution; never resets on Controller resume.
     python_module: str = "lang/Python/3.11"
     container_module: str = "tools/Apptainer"
     python_bin: str = "python3"

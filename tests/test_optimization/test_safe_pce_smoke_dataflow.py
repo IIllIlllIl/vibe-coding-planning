@@ -61,6 +61,9 @@ def test_verified_end_to_end_and_audit_detects_lost_evidence(
     else:
         from tests.test_swe_rpg_pce import rpg_pce_config
         pce_path = rpg_pce_config(tmp_path)
+        pce_raw = yaml.safe_load(pce_path.read_text())
+        pce_raw["paths"]["code_prompt_source_config"] = str(Path("configs/prompts/safe_pce_code_split_v1.yaml").resolve())
+        pce_path.write_text(yaml.safe_dump(pce_raw))
         path = tmp_path / "learning.yaml"
         prepare(learning_config=Path("configs/gepa_swe_chat_hybrid_formal8_high_v1_20261016.yaml"),
             pce_config=pce_path, selection={"train": ["owner__repo-1", "owner__repo-2"], "validation": ["owner__repo-3"]},
@@ -102,6 +105,7 @@ def test_verified_end_to_end_and_audit_detects_lost_evidence(
     monkeypatch.setattr(SWEVerifiedPCERunner, "_environment", lambda *a, **kw:
         SimpleNamespace(cleanup=lambda: None, execute=execute))
     agent_calls = {"plan": 0, "code": 0}
+    test_patch = "diff --git a/tests.py b/tests.py\n" + "preserved diagnostics\r\n" * 1000
     plan = " \n# Plan\n\n```python\nx = 1\n```\n" + ("Evidence.\n" * 4000) + "Rule 1: inspect requirements.\nDecisive tail.\n\n"
     def planner(agent_config, issue, env, **kw):
         agent_calls["plan"] += 1
@@ -112,7 +116,11 @@ def test_verified_end_to_end_and_audit_detects_lost_evidence(
         agent_calls["code"] += 1
         assert received == plan
         assert "planning_rules" not in kw
-        return _diff("src/module.py"), [{"role": "user", "content": "Issue\n" + received}]
+        submission = _diff("src/module.py")
+        if dataset_mode == "swe_rpg_pce":
+            assert kw["submission_protocol"] == "split_code_test_v1"
+            submission = {"code_patch": submission, "test_patch": test_patch}
+        return submission, [{"role": "user", "content": "Issue\n" + received}]
     monkeypatch.setattr("src.swe_verified_pce.runner.plan_agent.run", planner)
     monkeypatch.setattr("src.swe_verified_pce.runner.code_agent.run", coder)
     original = SWEVerifiedPCERunner.run
@@ -141,6 +149,12 @@ def test_verified_end_to_end_and_audit_detects_lost_evidence(
         parent = json.loads((root / "counted_playbook.json").read_text())
         if role == "reflector":
             record = json.loads((root / "record.json").read_text())
+            if dataset_mode == "swe_rpg_pce":
+                runs = json.loads((root / record["fields"]["pce_runs"]).read_text())
+                assert all(run["pce_output"]["test_patch"] == test_patch for run in runs)
+                required_tests = [name for name in manifest["required_files"] if name.endswith("/test_patch.json")]
+                assert required_tests
+                assert all(json.loads((root / name).read_text()) == test_patch for name in required_tests)
             return review(parent, record), []
         assert role == "curator"
         records = json.loads((root / "records.json").read_text())

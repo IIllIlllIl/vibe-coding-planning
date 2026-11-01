@@ -69,6 +69,33 @@ from scripts import resume_swe_verified_pce_evaluator as evaluator_resume_script
 REPO_ROOT = Path(__file__).resolve().parents[1]
 
 
+@pytest.mark.parametrize("dataset_type", ["verified", "pro"])
+def test_legacy_pcce_owns_evaluator_start_marker(tmp_path, monkeypatch, dataset_type):
+    from src.swe_verified_pcce import runner as module
+    from src.swe_verified_pcce.models import CEAssignment
+    _, _, case = _snapshot(tmp_path)
+    monkeypatch.setattr(module, "_verify_sif", lambda *a: None)
+    class PCE:
+        def __init__(self, *a, **kw):
+            self.evaluator = lambda *a, **kw: kw["evaluation_started_callback"]()
+        def run(self, source):
+            assert source is case
+            assert not (tmp_path / "cp/evaluate_started.json").exists()
+            self.evaluator("patch", source)
+            return {"patch": "patch"}
+    monkeypatch.setattr(module, "SWEVerifiedPCERunner", PCE)
+    monkeypatch.setattr(module, "SWEBenchProPCERunner", PCE)
+    runner = object.__new__(module.SWEVerifiedPCCERunner)
+    runner.config = SimpleNamespace(dataset_type=dataset_type, pce=object(), run_dir=tmp_path)
+    runner.capacity = None
+    runner.checkpoint_dir, runner.attempt_dir = tmp_path / "cp", tmp_path / "attempt"
+    assignment = CEAssignment(PCCECase(case, "Plan", True, "hash"), tmp_path / "review.json", "Plan")
+    assert runner.run_ce(assignment, fingerprint="fp")["patch"] == "patch"
+    marker = json.loads((runner.checkpoint_dir / "evaluate_started.json").read_text())
+    assert marker["checkpoint_identity"] == checkpoint_identity(case, execution_fingerprint="fp")
+    assert marker["phase"] == "evaluate"
+
+
 def test_safe_pce_only_shared_input_failures_block_the_run() -> None:
     error = FatalError("case-local repository preparation failed")
     assert pce_retry_disposition(error, stage="pce_execution") == "retry_same_phase"

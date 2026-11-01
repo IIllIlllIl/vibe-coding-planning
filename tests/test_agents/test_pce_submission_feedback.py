@@ -11,10 +11,107 @@ from src.agents import code_agent, plan_agent, pce_backend
 from src.agents.codex_hooks import stop_result
 from src.config import Config, PromptConfig
 from src.optimization.audit import JsonlLogger
+from src.agents.plan_submission import SPLIT_CODE_PROTOCOL, validate_split_code_submission
 
 PLAN = "START_PLAN\n# Plan\nInspect {{data}} and implement the requested change.\nEND_PLAN\n"
 BAD = "START_PLAN\n# Plan\nEND_PLAN"
 PATCH = "diff --git a/a b/a\n--- a/a\n+++ b/a\n@@ -1 +1 @@\n-old\n+new\n"
+
+
+@pytest.mark.parametrize("test_patch", ["", "test diff\r\n{{literal}}\n\n"])
+def test_split_patch_validator_preserves_both_artifacts(test_patch):
+    payload = {"code_patch": PATCH, "test_patch": test_patch}
+    original = json.dumps(payload)
+    assert validate_split_code_submission(original) == payload
+    for bad in ({"code_patch": PATCH}, dict(payload, extra="field"), dict(payload, test_patch=None)):
+        with pytest.raises(ValueError):
+            validate_split_code_submission(json.dumps(bad))
+    with pytest.raises(ValueError, match="test_patch differs"):
+        validate_split_code_submission(original, digests={"code_patch": hashlib.sha256(PATCH.encode()).hexdigest(),
+                                                        "test_patch": "wrong"})
+
+
+def test_real_miniswe_split_submission_corrects_schema_without_losing_test_patch(monkeypatch):
+    from minisweagent.agents.default import DefaultAgent
+    model = ScriptedModel(["```bash\nsubmit_bad\n```", "```bash\nsubmit_good\n```"])
+    patches = {"code_patch": PATCH, "test_patch": "test diff\r\n{{data}}\n\n"}
+    monkeypatch.setattr(code_agent, "import_minisweagent", lambda: (DefaultAgent, object, object))
+    monkeypatch.setattr(code_agent, "build_model", lambda *a, **kw: model)
+    def execute(command):
+        if command.startswith("submit_"):
+            payload = patches if command == "submit_good" else {"code_patch": PATCH}
+            return {"returncode": 0, "output": "COMPLETE_TASK_AND_SUBMIT_FINAL_OUTPUT\n" + json.dumps(payload)}
+        field = "code_patch" if "--cached" in command else "test_patch"
+        return {"returncode": 0, "output": hashlib.sha256(patches[field].encode()).hexdigest() + "  -\n"}
+    env = SimpleNamespace(get_template_vars=lambda: {}, execute=execute)
+    result, trace = code_agent.run(config(), "Plan", "Task", env, submission_protocol=SPLIT_CODE_PROTOCOL,
+                                   code_retry_context='Own earlier patch with {{literal}}')
+    assert result == patches and model.n_calls == 2
+    assert "exactly code_patch and test_patch" in model.inputs[1][-1]["content"]
+    assert "Own earlier patch with {{literal}}" in json.dumps(model.inputs[0])
+    assert any(json.dumps(patches) in str(message.get("content", "")) for message in trace)
+
+
+@pytest.mark.parametrize("returncode,output", [(127, "sha256sum unavailable"), (0, "malformed digest")])
+def test_miniswe_unavailable_diff_check_is_not_agent_feedback(monkeypatch, returncode, output):
+    from minisweagent.agents.default import DefaultAgent
+    model = ScriptedModel(["```bash\nsubmit\n```"])
+    monkeypatch.setattr(code_agent, "import_minisweagent", lambda: (DefaultAgent, object, object))
+    monkeypatch.setattr(code_agent, "build_model", lambda *a, **kw: model)
+    payload = json.dumps({"code_patch": PATCH, "test_patch": ""})
+    def execute(command):
+        if command == "submit":
+            return {"returncode": 0, "output": "COMPLETE_TASK_AND_SUBMIT_FINAL_OUTPUT\n" + payload}
+        return {"returncode": returncode, "output": output}
+    env = SimpleNamespace(get_template_vars=lambda: {}, execute=execute)
+    with pytest.raises(RuntimeError, match="cannot verify") as caught:
+        code_agent.run(config(), "Plan", "Task", env, submission_protocol=SPLIT_CODE_PROTOCOL)
+    assert model.n_calls == 1  # No instruction to rewrite valid output.
+    assert any(payload in str(item.get("content", "")) for item in caught.value.trajectory)
+
+
+@pytest.mark.parametrize("split", [False, True])
+def test_native_stop_defers_unavailable_diff_check_to_host(tmp_path, monkeypatch, split):
+    context = {"submission_contract": {"phase": "code", "workdir": str(tmp_path), "allow_empty": False}}
+    if split:
+        context["submission_contract"]["protocol"] = SPLIT_CODE_PROTOCOL
+        submission = tmp_path / "submission.json"
+        submission.write_text(json.dumps({"code_patch": PATCH, "test_patch": ""}))
+    else:
+        submission = tmp_path / "submission.patch"
+        submission.write_text(PATCH)
+    before = submission.read_bytes()
+    monkeypatch.setattr(subprocess, "run", lambda *a, **kw: SimpleNamespace(returncode=128, stdout=b""))
+    assert stop_result({"hook_event_name": "Stop", "last_assistant_message": "COMPLETE_TASK_AND_SUBMIT_FINAL_OUTPUT"},
+        context, tmp_path / "audit.jsonl", output_dir=tmp_path) == {}
+    assert submission.read_bytes() == before
+    assert json.loads((tmp_path / "audit.jsonl").read_text())["accepted"] is None
+
+
+def test_native_split_stop_validates_staged_and_unstaged_without_changing_either(tmp_path):
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    subprocess.run(["git", "init", "-q", str(repo)], check=True)
+    (repo / "file.py").write_text("implementation\n")
+    (repo / "test_file.py").write_text("test\n")
+    subprocess.run(["git", "-C", str(repo), "add", "file.py"], check=True)
+    subprocess.run(["git", "-C", str(repo), "add", "-N", "test_file.py"], check=True)
+    patches = {key: subprocess.run(["git", "-C", str(repo), "diff", *args, "--binary", "--full-index"],
+               capture_output=True, check=True).stdout.decode()
+               for key, args in (("code_patch", ["--cached"]), ("test_patch", []))}
+    assert "test_file.py" not in patches["code_patch"] and "test_file.py" in patches["test_patch"]
+    submission = tmp_path / "submission.json"
+    context = {"submission_contract": {"phase": "code", "protocol": SPLIT_CODE_PROTOCOL,
+                                        "workdir": str(repo), "allow_empty": False}}
+    event = {"hook_event_name": "Stop", "last_assistant_message": "COMPLETE_TASK_AND_SUBMIT_FINAL_OUTPUT"}
+    assert "regular file" in stop_result(event, context, tmp_path / "audit.jsonl", output_dir=tmp_path)["reason"]
+    submission.write_text(json.dumps(patches))
+    original = submission.read_bytes()
+    assert stop_result(event, context, tmp_path / "audit.jsonl", output_dir=tmp_path) == {}
+    assert submission.read_bytes() == original
+    (repo / "test_file.py").write_text("test changed\n")
+    assert "test_patch differs" in stop_result(event, context, tmp_path / "audit.jsonl", output_dir=tmp_path)["reason"]
+    assert submission.read_bytes() == original
 
 
 class ScriptedModel:
