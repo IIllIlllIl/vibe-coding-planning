@@ -88,7 +88,62 @@ Private review receipts are under
 inputs. This acceptance leaves the original v9 scientific configurations,
 splits, prompts, model settings and scoring unchanged.
 
-## Matched experimental binding
+## Atomic replay smoke v10 terminal audit
+
+`safe-pce-ace-rpg-codex-smoke-v10-20261101`, source
+`79551246bc7657c6dd6b2d560a9b70835a14d070`, completed at
+2026-11-01 13:12:35 UTC, final Controller `6267907`. The Supervisor stopped
+and the queue was empty at the terminal recheck. Fifteen preparation elements,
+five PCE executions, two Reflectors and one Curator completed on their first
+attempt, with no Worker failure records. Seed validation remained 0/1;
+parent/proposal minibatches were both 0/2, so the strict-improvement gate kept
+the seed and did not run proposal validation. Refiner was not needed.
+
+The maintained dataflow audit passes against remote authoritative artifacts:
+five replay rows represent five distinct physical executions, with no duplicate
+rows on Controller resume. Original Plan/patch/trajectory/checkpoint handoffs,
+full required Ref/Cur views, decoded outputs, scores and training history agree.
+The redundant successful physical-index file is absent. No disposable phase
+workspace or unused prepared repository remained in the completed smoke.
+
+Cur read every required file in full, then task details, complete history and
+selected original PCE evidence. Both Ref agents read all required file paths;
+they inspected behavior views and raw P/C events selectively and in chunks.
+All inspected tool commands succeeded, with no explicit truncation notices.
+The largest observed Ref output was 61,148 characters: this is read evidence,
+not a guarantee of model comprehension, complete context retention, or a
+full semantic leakage audit. Retain the evidence layout and inspect it again
+at mini 8; do not add a read-receipt gate.
+
+The smoke did not dynamically exercise terminal Agent failure, storage
+exhaustion, conditional refinement or an eight-case storage window. Those
+boundaries retain their existing tests and operational caveats.
+
+The fresh `gepa_safe_pce_rpg_codex_nodiag3_v10_20261101.yaml` binding preserves
+v9's 46/15/16 split, mini 8, PCE window 8, prompts, all-Codex high, cap 10 and
+108-slot budget. It uses the completed v10 engineering baseline, no imported
+outputs and no training diagnostics. A later diagnostic arm must bind the same
+code, retry/outcome semantics and evidence layout for a matched comparison;
+the older v9 Diag file alone does not establish this.
+
+Focused validation of the new binding and existing smoke, window and dataflow
+components passes 65 tests. Two historical v9 source-fingerprint tests are
+reported separately: their frozen manifest binds source SHA-256
+`fa97b453f9d656efeb302a908be7dc39034176bd9d6b69789b630b7a3ef147b6`
+from `b8f5213`; the later `e805f83` cleanup removed only inactive
+`max_steps: 0` / `cost_limit: 0.0` fields from that source YAML. The new v10
+package is freshly fingerprinted and its exact-source assertion passes. No
+historical manifest is rewritten to make an old raw-text assertion pass.
+The shared submission-wrapper dry-run also passes without submitting a job.
+
+At the 2026-11-01 prelaunch check Scratch used 342,091 / 1,000,000 soft-limit
+inodes and 2.284 TiB / 10 TiB. Adding the previously measured 461,646-inode
+first-training-window proxy leaves approximately 196k inodes before other
+overhead. This is headroom evidence, not an exact bound for unmeasured
+validation repositories. Consult fresh quota and runtime evidence, not these
+historical numbers, for subsequent launches.
+
+## Historical matched experimental binding
 
 The reviewed configuration family is `gepa_safe_pce_rpg_codex_{nodiag,diag}3_v9_20261029.yaml`,
 with matching `safe_pce_ace_rpg_codex_{nodiag,diag}3_{source,supervisor}_v9_20261029.yaml`.

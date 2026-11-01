@@ -70,12 +70,13 @@ def test_frozen_bytes_references_and_holdout_separation():
 def test_existing_supervisor_and_source_fingerprints():
     for arm in ('nodiag', 'diag'):
         config, _, _, _ = load(arm)
-        path = Path(f'configs/safe_pce_ace_rpg_codex_{arm}3_supervisor_v9_20261029.yaml')
+        prefix = 'configs/archive/supervisor_launches' if arm == 'nodiag' else 'configs'
+        path = Path(f'{prefix}/safe_pce_ace_rpg_codex_{arm}3_supervisor_v9_20261029.yaml')
         session, log, args, program = _load_launch_config(path)
         launch = parse_args(args)
         assert program == RESUME_SCRIPT and session == config.run_dir.name and session in log
         assert launch.require_clean_worktree and launch.reclaim_staging and launch.reclaim_workspaces
-        assert launch.slice_time == '00:08:00' and launch.max_runs == 60
+        assert launch.slice_time == '00:08:00' and not hasattr(launch, 'max_runs')
         manifest = json.loads((config.dataset_snapshot/'manifest.json').read_text())
         source = Path(f'configs/safe_pce_ace_rpg_codex_{arm}3_source_v9_20261029.yaml')
         assert manifest['source_pce_config_sha256'] == hashlib.sha256(source.read_bytes()).hexdigest()

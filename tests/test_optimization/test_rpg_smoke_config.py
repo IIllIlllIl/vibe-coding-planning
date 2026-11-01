@@ -63,7 +63,7 @@ def test_rpg_smoke_preserves_effective_science_and_freezes_fresh_inputs(version,
     assert raw["budget"]["pce_evaluation_slots_without_cache"] == {"minimum": 5, "maximum": 6}
 
 
-@pytest.mark.parametrize("version,prefix", [("v6_20261028", "configs/archive/supervisor_launches"), ("v9_20261101", "configs/archive/supervisor_launches"), ("v10_20261101", "configs")])
+@pytest.mark.parametrize("version,prefix", [("v6_20261028", "configs/archive/supervisor_launches"), ("v9_20261101", "configs/archive/supervisor_launches"), ("v10_20261101", "configs/archive/supervisor_launches")])
 def test_rpg_smoke_reuses_shared_supervisor_and_unthrottled_phase_arrays(tmp_path, version, prefix):
     from scripts.hpc_supervisor_service import _load_launch_config, RESUME_SCRIPT
     from scripts.hpc_resume_loop import parse_args
