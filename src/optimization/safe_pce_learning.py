@@ -12,7 +12,7 @@ from gepa.core.adapter import EvaluationBatch
 from src.exceptions import OfflineReflectionBlocked
 from src.optimization.audit import optional_diagnostic
 from src.optimization.behavioral_hybrid import validate_candidate
-from src.optimization.hpc.task_batch import atomic_json
+from src.optimization.hpc.task_batch import atomic_json, atomic_text, retry_io
 from src.optimization.safe_pce_execution import (
     execute_pce, load_pce_config, materialize_pce_config, pce_cases, sha256, validate_learning_source,
 )
@@ -103,10 +103,24 @@ def _validate_learning_evidence(output: dict) -> None:
 
 
 def _append(path: Path, records):
-    path.parent.mkdir(parents=True, exist_ok=True)
-    with path.open("a", encoding="utf-8") as handle:
-        for record in records:
-            handle.write(json.dumps(record, ensure_ascii=False, sort_keys=True) + "\n")
+    """Persist replay rows atomically; omit only exact cached-row repeats.
+
+    The Controller is the sole writer. Distinct physical outputs/repetitions
+    remain distinct, even for the same case and candidate. Existing malformed
+    evidence is reported, never silently truncated or repaired.
+    """
+    previous = retry_io(lambda: path.read_text(encoding="utf-8")) if path.exists() else ""
+    encode = lambda row: json.dumps(row, ensure_ascii=False, sort_keys=True)
+    seen = {encode(json.loads(line)) for line in previous.splitlines() if line.strip()}
+    added = []
+    for record in records:
+        line = encode(record)
+        if line not in seen:
+            seen.add(line)
+            added.append(line)
+    if added:
+        separator = "\n" if previous and not previous.endswith("\n") else ""
+        atomic_text(path, previous + separator + "\n".join(added) + "\n")
 
 
 class SafePCEBackend:
@@ -300,10 +314,14 @@ class SafePCEGEPAAdapter:
                     entry.update(status="scored", score=score)
                 rows.append(entry)
             physical.append(rows)
-            if self.run_dir is not None:
-                with optional_diagnostic("physical PCE observation index"):
-                    _append(self.run_dir / "safe_pce_physical_evaluations.jsonl", rows)
         if failures:
+            if self.run_dir is not None:
+                # Successful batches already retain every raw output in the
+                # required replay input. Keep this optional copy only when an
+                # incomplete batch cannot enter that input.
+                with optional_diagnostic("incomplete PCE observation index"):
+                    _append(self.run_dir / "safe_pce_physical_evaluations.jsonl",
+                            [row for rows in physical for row in rows])
             raise OfflineReflectionBlocked(IncompletePCEEvaluation(
                 f"{len(failures)} incomplete Safe PCE observations; batch scores/learning withheld. "
                 "Inspect safe_pce_physical_evaluations.jsonl and existing PCE worker artifacts."))

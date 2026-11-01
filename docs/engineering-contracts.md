@@ -42,6 +42,12 @@ active-job checks. Record errors without changing a completed run or preventing
 an otherwise valid resume. Required result/checkpoint writes retry the same
 serialized payload before propagating an error; do not invoke an Agent to retry
 an already-produced output's save.
+Atomic saving is a storage primitive, not a new Slurm phase: serialize once,
+write a sibling temporary file and replace the destination only on success.
+JSON checkpoints and the single-writer Safe PCE replay JSONL reuse the same
+writer. A failed write leaves the previous replay input intact. Omit only
+exact cached-row repeats; never collapse distinct task executions or repair
+an existing malformed scientific record.
 `JsonlLogger.write_optional` and `optional_diagnostic` in the existing audit
 module are for **all non-consuming diagnostics**, not just billing/cleanup.
 Their construction/writes/computation cannot mask success, original failure or
@@ -79,6 +85,8 @@ Unknown evaluator checkpoints are not reused as completed evaluations.
 Only the first unfinished phase retries; successful Agent outputs remain intact.
 Transport exhaustion starts another recovery wave with monotonically increasing
 attempt IDs. Learning-role exhaustion retries, never invents a Ref or candidate.
+Workspace-preparation exhaustion likewise resumes the shared recovery wave,
+preserving already prepared elements; it does not synthesize a PCE failure.
 Fixed comparison membership and atomic training history remain unchanged.
 
 Keep diagnostic file counts bounded: one append-only event stream per
@@ -90,6 +98,12 @@ Agent completions retained separately; no second resolved-completion file is
 needed. Preparation baseline evidence stays at its original preparation path,
 not a copied tree after handoff. These rules do not authorize deletion or
 rewriting of historical scientific artifacts.
+For current repository PCE, the Code checkpoint already retains the exact patch
+and trajectory; do not require an extra raw-patch sidecar before that checkpoint.
+Native PCE returns its complete trajectory to the same checkpoint/failure
+envelope without another standalone trajectory copy. Successful learning
+batches need only their required replay records; the optional physical index
+is reserved for incomplete batches that cannot enter replay.
 
 ## Adaptation baseline and phase-graph checks
 

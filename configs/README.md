@@ -33,11 +33,12 @@ historical smoke acceptance are not launch or capacity authorization.
 
 ## Necessary-flow engineering smoke
 
-[RPG smoke v9](gepa_safe_pce_rpg_codex_smoke_v9_20261101.yaml),
-[PCE source](safe_pce_ace_rpg_codex_smoke_source_v9_20261101.yaml) and
-[Supervisor](safe_pce_ace_rpg_codex_smoke_supervisor_v9_20261101.yaml) bind the
-2026-11-01 recovery/diagnostic simplification to a fresh one-proposal run.
-It retains completed v8's three development tasks, effective prompts, all-Codex
+[RPG smoke v10](gepa_safe_pce_rpg_codex_smoke_v10_20261101.yaml),
+[PCE source](safe_pce_ace_rpg_codex_smoke_source_v10_20261101.yaml) and
+[Supervisor](safe_pce_ace_rpg_codex_smoke_supervisor_v10_20261101.yaml) bind the
+post-v9 atomic replay, preparation recovery and duplicate-output changes to a
+fresh one-proposal run.
+It retains completed v9's three development tasks, effective prompts, all-Codex
 high, mini 2, window 1, cap 10 and 5–6 PCE slots. Terminal Agent failures follow
 the reviewed Online-zero policy; no old outputs or counters are imported.
 This authorizes only the requested smoke, not formal training.
@@ -49,6 +50,10 @@ report unobserved branches separately. See the
 [current policy audit](../docs/knowledge/blocking-policy-acceptance-20261028.md).
 
 ## Frozen contracts and reproduction
+
+The preceding necessary-flow binding is [RPG smoke v9](gepa_safe_pce_rpg_codex_smoke_v9_20261101.yaml),
+with its [PCE source](safe_pce_ace_rpg_codex_smoke_source_v9_20261101.yaml) and
+[archived Supervisor](archive/supervisor_launches/safe_pce_ace_rpg_codex_smoke_supervisor_v9_20261101.yaml).
 
 The post-layout engineering binding is [RPG smoke v8](gepa_safe_pce_rpg_codex_smoke_v8_20261031.yaml),
 with its [PCE source](safe_pce_ace_rpg_codex_smoke_source_v8_20261031.yaml) and

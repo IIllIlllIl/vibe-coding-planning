@@ -19,7 +19,7 @@ SUPERVISOR = Path("configs/archive/supervisor_launches/safe_pce_ace_rpg_codex_sm
 FROZEN = Path("configs/frozen_safe_pce_ace/rpg_smoke_v1_20261024")
 
 
-@pytest.mark.parametrize("version,baseline", [("v6_20261028", "v5_20261028"), ("v9_20261101", "v8_20261031")])
+@pytest.mark.parametrize("version,baseline", [("v6_20261028", "v5_20261028"), ("v9_20261101", "v8_20261031"), ("v10_20261101", "v9_20261101")])
 def test_rpg_smoke_preserves_effective_science_and_freezes_fresh_inputs(version, baseline):
     from src.optimization.safe_pce_learning import SafePCEBackend
     from src.optimization.safe_pce_execution import sha256
@@ -49,7 +49,7 @@ def test_rpg_smoke_preserves_effective_science_and_freezes_fresh_inputs(version,
     assert new_backend.pce.hpc.worker_config_path == str(new.safe_pce_config.relative_to(Path.cwd()))
     for field in ("plan", "code", "agent_backends", "plan_prompt", "plan_instance_template",
                   "code_prompt", "code_instance_template", "container", "docker", "agent_network_disabled",
-                  "workspace_preparation"):
+                  "workspace_preparation", "pce_window_size"):
         assert getattr(new_backend.pce, field) == getattr(old_backend.pce, field)
     for field in ("partition", "cpus_per_task", "mem", "time", "max_task_attempts", "max_running_array_tasks"):
         assert getattr(new_backend.pce.hpc, field) == getattr(old_backend.pce.hpc, field)
@@ -63,7 +63,7 @@ def test_rpg_smoke_preserves_effective_science_and_freezes_fresh_inputs(version,
     assert raw["budget"]["pce_evaluation_slots_without_cache"] == {"minimum": 5, "maximum": 6}
 
 
-@pytest.mark.parametrize("version,prefix", [("v6_20261028", "configs/archive/supervisor_launches"), ("v9_20261101", "configs")])
+@pytest.mark.parametrize("version,prefix", [("v6_20261028", "configs/archive/supervisor_launches"), ("v9_20261101", "configs/archive/supervisor_launches"), ("v10_20261101", "configs")])
 def test_rpg_smoke_reuses_shared_supervisor_and_unthrottled_phase_arrays(tmp_path, version, prefix):
     from scripts.hpc_supervisor_service import _load_launch_config, RESUME_SCRIPT
     from scripts.hpc_resume_loop import parse_args

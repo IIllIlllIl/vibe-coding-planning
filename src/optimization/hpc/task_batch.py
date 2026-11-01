@@ -64,7 +64,7 @@ class TaskBatchBlocked(RuntimeError):
 
 
 class TaskAttemptsExhausted(TaskBatchBlocked):
-    """All configured fresh-Agent attempts ended without valid output."""
+    """A transport recovery wave ended without all required valid outputs."""
 
 
 def retry_io(operation):
@@ -84,6 +84,11 @@ def read_json(path: Path):
 
 def atomic_json(path: Path, value: Any) -> None:
     payload = json.dumps(value, indent=2, ensure_ascii=False, sort_keys=True) + "\n"
+    atomic_text(path, payload)
+
+
+def atomic_text(path: Path, payload: str) -> None:
+    """Replace a complete payload using the shared checkpoint I/O retry path."""
     temporary = path.with_suffix(path.suffix + ".tmp")
 
     def save():

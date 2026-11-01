@@ -447,8 +447,7 @@ class SWEVerifiedPCEHPCExecutor:
             results = self._collect_exhausted(batch_dir, fingerprint, tasks, audit_dir=state_dir)
         if getattr(self.config, "pce_window_size", 0) and self.config.workspace_preparation == "separate_slurm_v1":
             from src.swe_verified_pce.workspace_preparation import reclaim_unconsumed_handoffs
-            if reclaim_unconsumed_handoffs(self.config, tasks,
-                                          attempts=range(1, self.config.hpc.max_task_attempts + 1)):
+            if reclaim_unconsumed_handoffs(self.config, tasks):
                 # Complete scientific outputs remain durable and reusable.
                 # Pause admission rather than accumulating the next window.
                 from src.exceptions import ControllerYield

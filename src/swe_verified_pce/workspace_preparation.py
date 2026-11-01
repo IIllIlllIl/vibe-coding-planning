@@ -22,7 +22,7 @@ from src.optimization.hpc.task_batch import SlurmTaskBatch, TaskAttemptsExhauste
 PHASES = ("plan", "code", "evaluate")
 
 
-def reclaim_unconsumed_handoffs(config, tasks, *, attempts):
+def reclaim_unconsumed_handoffs(config, tasks, *, attempts=None):
     """After PCE tasks stop, reclaim only their exact unconsumed handoffs.
 
     Consumed paths are already absent. Keep receipts, outputs and checkpoints;
@@ -32,8 +32,9 @@ def reclaim_unconsumed_handoffs(config, tasks, *, attempts):
     """
     remaining = []
     for task in tasks:
-        for attempt in attempts:
-            directory = task.attempts_dir / f"attempt_{attempt:02d}"
+        directories = (sorted(task.attempts_dir.glob("attempt_*")) if attempts is None
+                       else [task.attempts_dir / f"attempt_{attempt:02d}" for attempt in attempts])
+        for directory in directories:
             receipt_path = directory / "workspace_preparation.json"
             if not receipt_path.exists():
                 continue
@@ -180,49 +181,20 @@ def prepare_before_pce(executor, pce_batch, pce_fingerprint, pce_tasks, indices,
             if path != expected:
                 raise ValueError("prepared workspace does not belong to its preparation attempt")
 
-    results = []
     try:
         results = SlurmTaskBatch(config.hpc).run(batch_dir=batch, fingerprint=fingerprint,
             tasks=tasks, write_script=write_script, validate_output=validate,
             job_name=lambda attempt: f"{prep_config.hpc.job_name_prefix}-{fingerprint[:12]}-a{attempt}")
-    except TaskAttemptsExhausted:
-        for task in tasks:
-            if task.output_path.exists():
-                value = json.loads(task.output_path.read_text())
-                if value.get("status") == "completed":
-                    validate(task, value)
-                    results.append(value)
+    except TaskAttemptsExhausted as exc:
+        # Preparation is infrastructure, not a failed Agent observation.
+        # The shared task batch reopens the recovery wave on resume and keeps
+        # successful elements. Do not invent a PCE output or discard its trees.
+        raise ControllerYield(batch_dir=str(batch), job_id=None,
+                              reason="workspace_preparation_retry") from exc
     grouped = {index: {} for index in original_indices}
     for value in results:
         grouped[value["pce_task_index"]][value["prepared_phase"]] = value
-    failed = [index for index in original_indices if set(grouped[index]) != set(PHASES)]
-    newly_failed = False
-    for index in failed:
-        task = by_index[index]
-        if task.output_path.exists():
-            continue
-        atomic_json(task.output_path, {
-            "schema_version": 1, "status": "blocking_failed", "mode": executor.mode,
-            "fingerprint": pce_fingerprint, "task_index": index, "instance_id": task.instance_id,
-            "pce_run_index": json.loads(task.manifest_path.read_text()).get("pce_run_index", 1),
-            "task_outcome": "unknown", "final_validation_label": None,
-            "outcome_reason": "workspace_preparation_exhausted", "operational_failure_scope": "case",
-            "preparation_evidence": {"batch_relative_path": batch.relative_to(config.run_dir).as_posix(),
-                                     "phases_completed": list(grouped[index])},
-        })
-        newly_failed = True
-        # No PCE task can have consumed these trees: its job was not submitted.
-        for value in grouped[index].values():
-            if value["workspace_status"] == "ready":
-                path = prepared_repository_path(config.run_dir, value["prepared_repository_relative_path"])
-                if path.is_dir():
-                    shutil.rmtree(path)
-    if newly_failed:
-        raise ControllerYield(batch_dir=str(pce_batch), job_id=None,
-                              reason="workspace_preparation_case_failures_recorded")
     for index in indices:
-        if index in failed:
-            raise ValueError("failed preparation was not finalized before PCE submission")
         task = by_index[index]
         case = executor.case_from_dict(json.loads(task.manifest_path.read_text())["case"])
         target = task.attempts_dir / f"attempt_{pce_attempt:02d}"

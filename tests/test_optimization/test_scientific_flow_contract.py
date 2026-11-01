@@ -22,7 +22,7 @@ def fail(*args, **kwargs):
 
 
 @pytest.mark.parametrize("fault", [
-    "events", "proposal_trace", "reports", "physical_index", "source_summary",
+    "events", "proposal_trace", "reports", "source_summary", "raw_patch_sidecar",
     "source_initialization",
 ])
 def test_optional_failures_preserve_complete_scientific_flow(tmp_path, monkeypatch, fault):
@@ -45,13 +45,13 @@ def test_optional_failures_preserve_complete_scientific_flow(tmp_path, monkeypat
                 fail()
             return atomic(path, value)
         monkeypatch.setattr(safe_pce_learning, "atomic_json", export)
-    elif fault == "physical_index":
-        append = safe_pce_learning._append
-        def record(path, rows):
-            if path.name == "safe_pce_physical_evaluations.jsonl":
+    elif fault == "raw_patch_sidecar":
+        write = Path.write_text
+        def record(path, *args, **kwargs):
+            if path.name == "raw_code_submission.patch":
                 fail()
-            return append(path, rows)
-        monkeypatch.setattr(safe_pce_learning, "_append", record)
+            return write(path, *args, **kwargs)
+        monkeypatch.setattr(Path, "write_text", record)
     elif fault == "source_summary":
         for module in (runner, hpc_executor):
             original = module.file_sha256
@@ -80,6 +80,8 @@ def test_optional_failures_preserve_complete_scientific_flow(tmp_path, monkeypat
     assert not list(root.rglob("usage.jsonl"))
     assert not list(root.rglob("patch_submission.json"))
     assert not list(root.rglob("failure.json"))
+    assert not list(root.rglob("raw_code_submission.patch"))
+    assert not (root / "safe_pce_physical_evaluations.jsonl").exists()
 
 
 def test_optional_logger_constructs_without_writable_parent(tmp_path):

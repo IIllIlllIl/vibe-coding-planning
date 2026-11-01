@@ -1,7 +1,7 @@
 # Workspace And Cache Cleanup Lifecycle
 
 > Knowledge status: current storage reliability principle
-> Last reviewed: 2026-10-31
+> Last reviewed: 2026-11-01
 
 ## Minimum Safe Lifetimes
 
@@ -39,6 +39,12 @@ runtime derives the staging root from the unique job name. Reclamation runs only
 remote status reports no active Controller and no active worker, and removes
 only `.ulhpc_submit/runs/*/workdir` below that exact directory. Submission logs
 and metadata remain available for diagnosis.
+
+Window completion reclaims unconsumed preparation handoffs across **all actual
+attempt directories**, not only the first configured recovery wave. Attempt
+numbers can exceed three after infrastructure recovery. Before a specific
+retry, only its earlier attempts are eligible. Preserve every receipt and
+checkpoint; validate the existing exact-path handoff authority before removal.
 
 Canonical new result authority is
 `/scratch/users/$USER/vibe-coding-planning/run_state`. Frozen datasets and the

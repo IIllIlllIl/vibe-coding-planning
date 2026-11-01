@@ -320,6 +320,68 @@ def test_incomplete_batch_retains_successes_without_partial_learning(tmp_path, m
     assert not (config.run_dir / "global_counter_ledger.json").exists()
 
 
+@pytest.mark.parametrize("failure_stage", ["write", "replace"])
+def test_replay_atomic_failure_preserves_previous_rows_and_retry(tmp_path, monkeypatch, failure_stage):
+    from src.optimization.safe_pce_learning import _append
+    from src.optimization.hpc import task_batch
+    monkeypatch.setattr(task_batch.time, "sleep", lambda _: None)
+    path = tmp_path / "safe_pce_evaluations.jsonl"
+    first = {"candidate_sha256": "same", "instance_id": "same", "output": {"plan": "original\n"}}
+    second = dict(first, output={"plan": "different physical output\n"})
+    _append(path, [first])
+    original = path.read_bytes()
+    write, replace_file = Path.write_text, Path.replace
+    attempts = []
+    def interrupted_write(target, content, *args, **kwargs):
+        if target == path.with_suffix(".jsonl.tmp"):
+            attempts.append(content)
+            write(target, content[:7], *args, **kwargs)
+            raise OSError("interrupted temporary write")
+        return write(target, content, *args, **kwargs)
+    def interrupted_replace(source, target):
+        if target == path:
+            attempts.append(source.read_text())
+            raise OSError("interrupted replace")
+        return replace_file(source, target)
+    with monkeypatch.context() as fault:
+        fault.setattr(Path, "write_text" if failure_stage == "write" else "replace",
+                      interrupted_write if failure_stage == "write" else interrupted_replace)
+        with pytest.raises(OSError):
+            _append(path, [first, second])
+    assert len(attempts) == 3 and len(set(attempts)) == 1
+    assert path.read_bytes() == original
+    _append(path, [first, second])
+    _append(path, [first, second])  # Same cached observations, not new executions.
+    assert [json.loads(line) for line in path.read_text().splitlines()] == [first, second]
+    assert not path.with_suffix(".jsonl.tmp").exists()
+
+
+def test_replay_refuses_to_silently_repair_existing_corruption(tmp_path):
+    from src.optimization.safe_pce_learning import _append
+    path = tmp_path / "safe_pce_evaluations.jsonl"
+    original = '{"original": true}\n{"partial":'
+    path.write_text(original)
+    with pytest.raises(json.JSONDecodeError):
+        _append(path, [{"next": True}])
+    assert path.read_text() == original
+
+
+def test_incomplete_observation_log_failure_is_not_a_new_experiment_error(tmp_path, monkeypatch):
+    from src.optimization import safe_pce_learning
+    config = _prepared(tmp_path)
+    backend = SafePCEBackend(config)
+    train, _ = backend.load_snapshot()
+    adapter = SafePCEGEPAAdapter(backend.evaluate, limits=LIMITS, run_dir=config.run_dir)
+    adapter.evaluator = lambda *args: []
+    def fail(*args, **kwargs):
+        raise OSError("optional observation index unavailable")
+    monkeypatch.setattr(safe_pce_learning, "_append", fail)
+    with pytest.raises(OfflineReflectionBlocked) as caught:
+        adapter.evaluate(train[:2], {"rules": json.dumps(ARTIFACT)})
+    assert isinstance(caught.value.cause, IncompletePCEEvaluation)
+    assert "wave count/length" in str(caught.value.cause)
+
+
 @pytest.mark.parametrize("field", ["plan", "plan_trajectory", "code_trajectory", "patch"])
 def test_completed_outcome_cannot_hide_missing_learning_evidence(tmp_path, monkeypatch, field):
     config = _prepared(tmp_path)

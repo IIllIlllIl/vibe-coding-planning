@@ -77,6 +77,53 @@ then audit the source stop/retry paths against those observations and identify
 any remaining components without a downstream experiment consumer. A successful
 happy path does not certify unexercised error branches or the formal window 8.
 
+## Post-v9 recovery and duplicate-output review (2026-11-01)
+
+This follow-up is a local implementation review, not another HPC acceptance.
+The completed v9 happy path did not exercise the failures below.
+
+- Required replay JSONL now uses the same temporary-file replacement and I/O
+  retry primitive as phase checkpoints. Interrupted writes preserve the prior
+  readable replay. Exact cached rows are not appended again; distinct physical
+  outputs/repetitions remain intact. Existing corrupt evidence is not repaired.
+- Workspace preparation no longer manufactures a parent PCE failure after one
+  exhausted recovery wave. The shared task batch retries only unfinished
+  preparation elements; successful trees remain available.
+- Window reclamation discovers actual handoffs, including attempt 4 and later.
+  It no longer truncates the search at the configured per-wave attempt count.
+- Removed repository PCE's pre-checkpoint raw-patch sidecar and Native PCE's
+  standalone trajectory duplicate. Their original payloads remain in phase
+  checkpoints, Worker outputs and failure envelopes.
+- Successful learning batches no longer write a second complete physical
+  observation index. Incomplete batches retain that optional diagnostic, while
+  successful original observations remain in the required replay input.
+
+No prompt, split, scoring policy, model or scientific output is rewritten.
+Existing historical files are retained. Future deployment needs a new frozen
+source identity; the completed v9 artifacts are not a test of this revision.
+
+[RPG smoke v10](../../configs/gepa_safe_pce_rpg_codex_smoke_v10_20261101.yaml)
+binds this revision to fresh inputs/output with v9's unchanged scientific
+configuration and 5–6 PCE-slot budget. Review atomic replay, original learning
+evidence, absence of successful-batch duplicates and actual handoff cleanup.
+Fault-injection coverage remains local; do not force runtime failures.
+
+Local regression, including the v10 configuration binding: **427 passed,
+7 deselected** across 13 test files
+(`--no-cov`). The same six historical private-input tests and one historical
+source-fingerprint assertion described above were excluded, not passed.
+Supervisor tests initially hit the local filesystem sandbox; all 49 passed
+when rerun with permission to write their ignored test directory. Fault tests
+cover partial temporary writes, failed replacement, intact replay on failure,
+exact-row replay idempotence, six preparation failures followed by recovery,
+and infrastructure failure plus three Coder failures reaching attempt 4.
+Models, containers and the scheduler are mocked; no remote experiment was run.
+
+Idle cleanup inspection of completed RPG smoke v8 (2026-10-31) and v9
+(2026-11-01) found no submission workdirs, phase workspaces or unconsumed
+prepared repositories. Both Controllers/Supervisors were completed and the
+user's Slurm queue was empty. No historical results or caches were removed.
+
 ## Earlier recovery-policy acceptance
 
 The Post callback dependency was initially accepted with no-model checks. The

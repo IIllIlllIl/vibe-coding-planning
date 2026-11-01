@@ -82,21 +82,12 @@ def test_backends_default_mixed_and_explicit_pin():
 
 
 @pytest.mark.parametrize("role", ["plan", "code"])
-@pytest.mark.parametrize("fault", ["usage", "duplicate_trajectory"])
-def test_optional_native_usage_failure_does_not_discard_submission(tmp_path, monkeypatch, role, fault):
+def test_optional_native_usage_failure_does_not_discard_submission(tmp_path, monkeypatch, role):
     _completion(monkeypatch)
     context = _context(tmp_path)
     def fail(*args, **kwargs):
         raise PermissionError("synthetic usage-only failure")
-    if fault == "usage":
-        monkeypatch.setattr(context["usage"], "write", fail)
-    else:
-        original = backend.atomic_json
-        def write(path, value):
-            if path.name == "trajectory.json":
-                fail()
-            return original(path, value)
-        monkeypatch.setattr(backend, "atomic_json", write)
+    monkeypatch.setattr(context["usage"], "write", fail)
     if role == "plan":
         result, trace = backend._run_plan(_config(), "Issue", None, **context)
         assert result == PLAN
@@ -105,7 +96,7 @@ def test_optional_native_usage_failure_does_not_discard_submission(tmp_path, mon
         result, trace = backend._run_code(_config(), PLAN, "Issue", env, **context)
         assert result == PATCH
     assert trace[-1]["role"] == "assistant"
-    assert (context["attempt_dir"] / "trajectory.json").is_file() is (fault != "duplicate_trajectory")
+    assert not (context["attempt_dir"] / "trajectory.json").exists()
 
 
 @pytest.mark.parametrize("change", [{"executor": "typo"}, {"codex_version": ""},
@@ -131,7 +122,8 @@ def test_exact_plan_and_template_data_no_reference_projection(tmp_path, monkeypa
     assert task == {"task": "Issue {{literal}}", "planning_rules": '{"rule_number":1}'}
     assert calls[0]["container"].repository_writable
     assert trace[-1]["content"].endswith("Provider trailer")
-    assert "native jsonl" in (tmp_path / "attempt/trajectory.json").read_text()
+    assert "native jsonl" in json.dumps(trace)
+    assert not (tmp_path / "attempt/trajectory.json").exists()
 
 
 @pytest.mark.parametrize("final", ["# Plan\nUnbounded", "START_PLAN\n# Plan\nEND_PLAN", "START_PLAN\ntext\nEND_PLAN"])

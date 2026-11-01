@@ -581,13 +581,8 @@ class SWEVerifiedPCERunner:
                     failure_trajectory_path=self.attempt_dir / "code_failure.json",
                     phase_timeout_seconds=None,
                 )
-                raw_patch_path = self.attempt_dir / "raw_code_submission.patch"
-                raw_patch_path.write_text(raw_patch, encoding="utf-8")
                 submission = {
                     "policy": "agent_classified_staged_implementation_v1",
-                    "patch_relative_path": self._authority_relative_path(
-                        raw_patch_path
-                    ),
                     "patch_sha256": hashlib.sha256(raw_patch.encode()).hexdigest(),
                     "empty_submission": not bool(raw_patch.strip()),
                     "host_patch_transformation": False,

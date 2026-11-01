@@ -16,7 +16,6 @@ from src.agents.plan_submission import validate_human_plan, validate_code_submis
 from src.environment.source_access import extract_http_urls
 from src.exceptions import AgentTaskError
 from src.optimization.hpc.task_batch import atomic_json
-from src.optimization.audit import optional_diagnostic
 
 
 PLAN_PROTOCOL = """Use the native tools to investigate the task. Finish with the
@@ -137,8 +136,6 @@ def _execute(config, issue, env, *, phase, variables, backend, sif_path, workspa
     except AgentOutputContractError as exc:
         raise AgentTaskError(str(exc), phase=phase, reason="missing_final_submission",
                              trajectory=getattr(exc, "trajectory", [])) from exc
-    with optional_diagnostic("native trajectory duplicate"):
-        atomic_json(attempt_dir / "trajectory.json", trajectory)
     usage.write_optional("codex_agent_completed", phase=phase, executor="codex_cli", model=backend["model"],
                 reasoning_effort=backend["reasoning_effort"])
     if any(event.get("type") in {"turn.failed", "error"}
