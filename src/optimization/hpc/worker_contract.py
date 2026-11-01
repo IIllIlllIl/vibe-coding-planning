@@ -34,6 +34,8 @@ def retry_feedback(path):
             feedback += ("\nPrevious raw Agent output (rejected, not a valid artifact):\n"
                          + json.dumps(previous["raw_agent_output"], ensure_ascii=False)
                          + "\nCorrect the reported problems and return the complete required JSON object.")
+        elif isinstance(previous.get("raw_response"), str):
+            feedback += "\nPrevious rejected raw response:\n" + previous["raw_response"]
         return feedback
     return ""
 
@@ -50,5 +52,7 @@ def worker_failure(manifest, started, stage, exc, *, contract_error=False):
     return worker_envelope(manifest, started,
                            "blocking_failed" if disposition == "block_run" else "agent_failed", failure_stage=stage,
                            failure_kind="agent_output_contract" if contract_error else "operational",
-                           error_type=type(exc).__name__, error=str(exc),
+                           error_type=type(exc).__name__, error=str(exc), errno=getattr(exc, "errno", None),
+                           **({"failure_trajectory": exc.trajectory} if hasattr(exc, "trajectory") else {}),
+                           **({"raw_response": exc.raw_response} if hasattr(exc, "raw_response") else {}),
                            **({"retry_disposition": disposition} if disposition else {}))

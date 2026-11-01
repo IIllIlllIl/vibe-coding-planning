@@ -48,10 +48,10 @@ from src.swe_verified_pce.evaluator import (
 )
 from src.swe_verified_pce.evaluator_resume import _prepare as prepare_evaluator_resume
 from src.swe_verified_pce.hpc_executor import (
+    recover_exhausted_evaluator_timeout,
     SWEVerifiedPCEHPCExecutor,
     build_array_script as build_pce_array_script,
     pce_semantic_sha256,
-    recover_exhausted_evaluator_timeout,
 )
 from src.swe_verified_pce.models import FrozenImage, SWEVerifiedPCECase
 from src.swe_verified_pce.runner import checkpoint_identity
@@ -3514,3 +3514,80 @@ def test_evaluator_timeout_recovery_rejects_a_non_three_attempt_policy(
             fingerprint="fp",
             max_attempts=2,
         )
+
+
+def test_exhausted_evaluator_preserves_checkpoints_without_synthetic_outcome(
+    tmp_path: Path,
+) -> None:
+    _, _, case = _snapshot(tmp_path)
+    batch = tmp_path / "batch"
+    manifest = batch / "tasks" / "task_0000.json"
+    output = batch / "outputs" / "task_0000.json"
+    attempts_dir = batch / "attempts" / "task_0000"
+    checkpoint_dir = batch / "checkpoints" / "task_0000"
+    manifest.parent.mkdir(parents=True)
+    checkpoint_dir.mkdir(parents=True)
+    manifest.write_text(
+        json.dumps(
+            {
+                "case": case.to_dict(),
+                "fingerprint": "fp",
+                "task_index": 0,
+            }
+        )
+    )
+    identity = checkpoint_identity(case, execution_fingerprint="fp")
+    for phase, payload in (
+        (
+            "plan",
+            {
+                "plan": "# Plan",
+                "plan_sha256": hashlib.sha256(b"# Plan").hexdigest(),
+                "trajectory": [],
+            },
+        ),
+        (
+            "code",
+            {
+                "raw_patch": "PATCH",
+                "patch": "PATCH",
+                "trajectory": [],
+                "patch_submission": {},
+                "workspace_evidence": {},
+            },
+        ),
+    ):
+        (checkpoint_dir / f"{phase}.json").write_text(
+            json.dumps(
+                {
+                    "checkpoint_identity": identity,
+                    "phase": phase,
+                    "payload": payload,
+                }
+            )
+        )
+    (checkpoint_dir / "evaluate_started.json").write_text(
+        json.dumps({"checkpoint_identity": identity, "phase": "evaluate"})
+    )
+    for attempt in range(1, 4):
+        status = attempts_dir / f"attempt_{attempt:02d}" / "slurm_status.json"
+        status.parent.mkdir(parents=True)
+        status.write_text(
+            json.dumps(
+                {
+                    "state": "TIMEOUT",
+                    "instance_id": case.instance_id,
+                    "task_index": 0,
+                }
+            )
+        )
+    task = TaskFiles(0, case.instance_id, manifest, output, attempts_dir)
+
+    executor = SWEVerifiedPCEHPCExecutor(SimpleNamespace(
+        hpc=SimpleNamespace(max_task_attempts=3)))
+    result = executor._collect_exhausted(batch, "fp", [task])
+    assert result[0]["status"] == "incomplete"
+    assert result[0]["last_slurm_status"]["state"] == "TIMEOUT"
+    assert not (checkpoint_dir / "evaluate.json").exists()
+    assert json.loads((checkpoint_dir / "plan.json").read_text())["payload"]["plan"] == "# Plan"
+    assert json.loads((checkpoint_dir / "code.json").read_text())["payload"]["patch"] == "PATCH"

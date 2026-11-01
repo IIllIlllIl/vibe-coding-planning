@@ -1,6 +1,83 @@
 # Safe PCE blocking-policy acceptance and module audit
 
-## Result and scope
+## Current necessary-flow review (2026-11-01)
+
+Scope: current repository Safe PCE -> ACE/GEPA, shared Native/mini-SWE
+interfaces, task transport and Supervisor. Follow the
+[necessary-flow whitelist](../engineering-contracts.md#necessary-flow-whitelist).
+The sections below "Earlier recovery-policy acceptance" are historical snapshots,
+not the current command-receipt/scoring/stop contract.
+
+| Boundary | Current behavior |
+|---|---|
+| Source/isolation | Keep frozen mounts and pre-execution source decisions; delete native command/receipt matching and Stop-receipt validation. Optional logs cannot veto a valid submission. |
+| Plan/Code failure | Reuse Online `scored_agent_failure` after three recorded failures in the same Agent phase; score 0, evaluator explicitly not run, last rejected trajectory and successful prior checkpoints retained. |
+| Environment/evaluation failure | Remains unscored. Retry unfinished phase, preserving successful Plans/patches. Unknown evaluation checkpoints do not suppress re-evaluation. |
+| Worker transport | Retry unusable output and ordinary failures; preserve originals and feedback. Exhausted recovery waves reopen with monotonic attempt IDs, not overwritten history. |
+| Learning inputs | Full raw archive plus existing required/optional views. The terminal failure reason and last Agent trajectory are visible; duplicate Worker envelope is an archive reference. |
+| Persistence | Shared atomic JSON writer retries the same serialized payload. Supervisor retains a submitted job ID in memory while retrying its state save. |
+| Supervisor | Ordinary Controller/startup/staging failures retry; active/unknown jobs wait. Confirmed provider exhaustion, disk/inode exhaustion and explicit cancellation stop. Frozen identity changes remain disallowed. |
+| Non-consuming diagnostics | Best effort only; use the existing event stream / combined Slurm output. No extra receipt framework. |
+
+Removed production code includes the native coverage matcher (including vendor-
+redaction matching), Stop-receipt validator, unused redaction aliases and
+URL-query substitution, legacy case-specific failure/reopen allowlists,
+Supervisor total-submission limit and one-shot named recovery mechanism.
+There is no new disable flag for these features.
+
+### Zero/disabled-setting audit
+
+- Removed `--max-runs` and `--recover-controller-error-type-once`, their parser,
+  state-identity and decision branches; current formal launch configs no longer
+  supply them. Archived configs retain their historical source contract.
+- Current repository PCE no longer reads/config-validates step/cost limits.
+  Its current source configs omit those keys. The mini-SWE library still needs
+  internal zero sentinels for unlimited execution; these are backend adaptation,
+  not a project-level configurable feature. Worker deadline remains authoritative.
+- Removed the behavioral runner's minimum-successful-proposals completion gate.
+  The historical shared search field remains for other retained optimizers.
+- Keep model temperature, experiment iteration/metric budgets, exact three
+  Agent attempts, rule limits and workspace window 8. They express the approved
+  experiment or capacity policy, not arbitrary disabled features.
+- Zero polling/grace intervals remain useful to deterministic tests; no new
+  production zero polling setting was introduced. Other operational entrypoints
+  (for example preheat) were not silently reconfigured.
+
+This changes terminal-Agent outcome semantics and source identity. Freeze a new
+run identity before deployment; do not silently resume or rewrite historical
+experiments. No prompts, task membership, guide limits or model settings changed.
+The old standalone PolyBench Runner is not re-certified by this review.
+Legacy PCCE still uses its terminal evaluator-timeout reporting helper; current
+PCE no longer calls it or synthesizes an Unknown evaluation checkpoint. This
+compatibility interface is retained because it has a live caller, not as a
+disabled branch in the current PCE path.
+
+### Verification boundary
+
+Local no-model tests cover both Agent prechecks, valid output with absent
+receipts, optional-log failures, shared task recovery, terminal Planner/Coder
+zero outcomes, full last trajectory reaching GEPA/Reflector, Unknown evaluation
+retry, storage retry and Supervisor stop/recovery. External inference,
+containers and scheduling are mocked. This is not HPC acceptance.
+Final targeted regression: **545 passed, 7 deselected** (`--no-cov`, 20 test
+files). Six excluded historical acceptance tests require unavailable private
+frozen inputs/results; one pins a historical source fingerprint rather than the
+changed implementation. They are not counted as passing. The worktree safety
+scan found no private-artifact/credential findings; `git diff --check` passed.
+No HPC job, container or model call was run for this acceptance.
+
+### Dynamic verification contract
+
+The new binding is [RPG smoke v9](../../configs/gepa_safe_pce_rpg_codex_smoke_v9_20261101.yaml).
+Reuse completed v8's tasks, effective prompts, models, resource request and
+one-proposal budget with a fresh seed and output root. Do not force a failure,
+Refiner invocation or proposal validation just to increase coverage.
+Review actual P/C/E/Ref/Cur behavior, durable outputs and any recovery first;
+then audit the source stop/retry paths against those observations and identify
+any remaining components without a downstream experiment consumer. A successful
+happy path does not certify unexercised error branches or the formal window 8.
+
+## Earlier recovery-policy acceptance
 
 The Post callback dependency was initially accepted with no-model checks. The
 subsequent [completed RPG v6 smoke audit](rpg-smoke-v6-dataflow-audit-20261028.md)
@@ -95,10 +172,11 @@ Recovery boundary:
 
 Remaining code-review findings:
 
-- Other role validators that still raise an unclassified exception retain the
-  conservative block path. Review any such actual stop by its reliability
-  consequence before changing it; harmless warning categories need no further
-  taxonomy. Source-policy failures also retain their integrity handling.
+- Unclassified identity/integrity failures retain the conservative block path.
+  Explicit Agent contracts, unreadable Worker output and attempt-local command
+  trace failures retry; none may be accepted as valid scientific evidence.
+  Review any remaining stop by its downstream reliability consequence; harmless
+  warning categories need no further taxonomy.
 - The older PolyBench Runner collects workspace diagnostics before its Code
   checkpoint. Its inventory failure can invalidate that phase. Moving the whole
   collection behind an unrestricted exception handler was not accepted by the
@@ -240,13 +318,13 @@ they execute in the current experiment.
 - Older PolyBench/Verified workspace-inventory implementations duplicate code.
   Consolidation is a maintenance candidate, not a reason to merge their whole
   workflows or alter experiment semantics. No such refactor was performed.
-- The only removed live-code compatibility surface is the two uncalled
+- In the earlier module audit, the removed compatibility surface was two uncalled
   Curator-only mapping wrappers; tests now target the shared mapping module
   directly. No historical result, frozen dataset/config or raw artifact was
   deleted or rewritten.
 - Optional telemetry previously could discard a returned mini-SWE response or
   mask its provider error when its log write failed. `write_optional` now handles
-  only such I/O; required writes retain their existing behavior. Native usage
+  diagnostic failures; required writes retain their existing behavior. Native usage
   and repository-PCE cleanup diagnostics use the same method. mini-SWE evidence
   and repository runtime cleanup also no longer replaces a result/error. The
   PCE source inventories now include `optimization/audit.py`, so a logging-

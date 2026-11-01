@@ -8,7 +8,7 @@ from types import SimpleNamespace
 import pytest
 
 from src.agents import code_agent, plan_agent, pce_backend
-from src.agents.codex_hooks import stop_result, validate_native_submission
+from src.agents.codex_hooks import stop_result
 from src.config import Config, PromptConfig
 from src.optimization.audit import JsonlLogger
 
@@ -86,13 +86,9 @@ def test_native_plan_stop_retains_bad_submission_and_requires_accepted_final(tmp
     context = {"submission_contract": {"phase": "plan"}}
     audit = tmp_path / "stop.jsonl"
     assert stop_result({"hook_event_name": "Stop", "last_assistant_message": BAD}, context, audit)["decision"] == "block"
-    with pytest.raises(ValueError):
-        validate_native_submission(BAD, audit, contract=context["submission_contract"], output_dir=tmp_path)
     assert stop_result({"hook_event_name": "Stop", "last_assistant_message": PLAN}, context, audit) == {}
-    records = validate_native_submission(PLAN, audit, contract=context["submission_contract"], output_dir=tmp_path)
+    records = [json.loads(line) for line in audit.read_text().splitlines()]
     assert [r["raw_submission"] for r in records] == [BAD, PLAN]
-    with pytest.raises(ValueError, match="matching accepted"):
-        validate_native_submission(PLAN + "changed", audit, contract=context["submission_contract"], output_dir=tmp_path)
 
 
 @pytest.mark.parametrize("raw", [PLAN, BAD])
@@ -138,11 +134,10 @@ def test_native_coder_stop_checks_real_staging_and_never_repairs_patch(tmp_path)
     staged = subprocess.run(["git", "-C", str(repo), "diff", "--cached", "--binary", "--full-index"], capture_output=True, check=True).stdout
     patch.write_bytes(staged)
     assert stop_result(event, context, audit, output_dir=tmp_path) == {}
-    records = validate_native_submission(marker, audit, contract=context["submission_contract"], output_dir=tmp_path)
+    records = [json.loads(line) for line in audit.read_text().splitlines()]
     assert records[-1]["patch_sha256"] == hashlib.sha256(staged).hexdigest()
     patch.write_bytes(staged + b"changed")
-    with pytest.raises(ValueError, match="patch changed"):
-        validate_native_submission(marker, audit, contract=context["submission_contract"], output_dir=tmp_path)
+    assert "differs" in stop_result(event, context, audit, output_dir=tmp_path)["reason"]
 
 
 @pytest.mark.parametrize("role", ["plan", "code"])

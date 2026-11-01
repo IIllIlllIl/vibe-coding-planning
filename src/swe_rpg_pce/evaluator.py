@@ -88,7 +88,8 @@ def evaluate_swe_rpg_apptainer(patch, case, *, snapshot, container, capacity_win
         if evaluation_started_callback:
             evaluation_started_callback()
         observation = env.execute("/bin/bash /rpg-eval-input/run.sh", timeout=None)
-        (outputs / "execution.json").write_text(json.dumps(observation, ensure_ascii=False))
+        # The exact observation is retained in evaluator_result below.
+        # A duplicate execution.json is not an evaluation prerequisite.
         codes_path = outputs / "stage_exit_codes.tsv"
         codes = dict(line.split("\t", 1) for line in codes_path.read_text().splitlines()) if codes_path.exists() else {}
         codes = {key: int(value) for key, value in codes.items()}

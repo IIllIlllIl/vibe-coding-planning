@@ -497,16 +497,20 @@ def test_hpc_evaluation_delegates_one_whole_wave_to_pce_executor(tmp_path, monke
     assert len(output) == 3 and len(calls) == 1
 
 
-def test_threshold_failure_sets_terminal_status(tmp_path, monkeypatch):
+def test_proposal_shortfall_is_reported_without_discarding_completed_results(tmp_path, monkeypatch):
     config = _prepared(tmp_path)
     monkeypatch.setattr("src.optimization.safe_pce_learning.execute_pce",
                         lambda effective, mode, cases, **kw: [_output(case.instance_id) for case in cases])
     class Phases:
         def call(self, role, payload):
             pytest.fail("optimization stub must not invoke learning agents")
-    with pytest.raises(RuntimeError, match="threshold"):
-        run_hybrid_optimization(config, phase_executor=Phases(), optimize_fn=lambda **kw: SimpleNamespace())
-    assert json.loads((config.run_dir / "controller_status.json").read_text())["status"] == "failed"
+    reports = []
+    monkeypatch.setattr(SafePCEBackend, "write_report", lambda self, result, validation: reports.append(result))
+    result = SimpleNamespace(total_metric_calls=0, num_candidates=1)
+    assert run_hybrid_optimization(config, phase_executor=Phases(), optimize_fn=lambda **kw: result) is result
+    assert reports == [result]
+    assert json.loads((config.run_dir / "controller_status.json").read_text())["status"] == "completed_with_warnings"
+    assert "proposal_count_below_target" in (config.run_dir / "audit_events.jsonl").read_text()
 
 
 @pytest.mark.parametrize("resolved", [False, True])
@@ -670,3 +674,27 @@ def test_executor_errors_and_yield_keep_existing_abort_boundary(tmp_path, monkey
     monkeypatch.setattr("src.optimization.safe_pce_learning.execute_pce", yield_wave)
     with pytest.raises(ControllerYield):
         adapter.evaluate(train[:2], {"rules": json.dumps(ARTIFACT)}, capture_traces=True)
+
+
+def test_terminal_planner_failure_enters_gepa_and_reflector_without_fabricated_plan(tmp_path, monkeypatch):
+    from src.optimization.online_models import scored_agent_failure, ONLINE_OUTCOME_POLICY_VERSION
+    config = _prepared(tmp_path)
+    backend = SafePCEBackend(config)
+    train, _ = backend.load_snapshot()
+    def execute(effective, mode, cases, **kwargs):
+        return [dict(status="completed", pce_status="agent_failed", instance_id=case.instance_id,
+            outcome_policy_version=ONLINE_OUTCOME_POLICY_VERSION, agent_failure_attempts=[1, 2, 3],
+            last_worker_output={"failure_category": "agent", "terminal_phase": "plan", "instance_id": case.instance_id},
+            **scored_agent_failure(phase="plan", reason="invalid_submission",
+                evidence={"plan_trajectory": [{"role": "assistant", "content": "last rejected output"}]}).to_worker_payload())
+            for case in cases]
+    monkeypatch.setattr("src.optimization.safe_pce_learning.execute_pce", execute)
+    adapter = SafePCEGEPAAdapter(backend.evaluate, limits=LIMITS, run_dir=config.run_dir)
+    candidate = {"rules": json.dumps(ARTIFACT)}
+    batch = adapter.evaluate(train[:2], candidate, capture_traces=True)
+    assert batch.scores == [0.0, 0.0]
+    reflected = adapter.make_reflective_dataset(candidate, batch, ["rules"])
+    assert len(reflected["rules"]) == 2
+    output = reflected["rules"][0]["pce_runs"][0]["pce_output"]
+    assert output["plan"] == "" and output["evaluator_result"]["status"] == "not_run"
+    assert output["plan_trajectory"][0]["content"] == "last rejected output"

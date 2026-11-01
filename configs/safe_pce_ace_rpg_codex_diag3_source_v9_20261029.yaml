@@ -16,8 +16,6 @@ plan:
   codex_binary: ${HOME}/.local/lib/vibe-codex/0.160.1/bin/codex
   codex_auth_file: ${HOME}/.codex/auth.json
   codex_version: 0.160.1
-  max_steps: 0
-  cost_limit: 0.0
   timeout: 1800
   max_attempts: 3
   submission_protocol: direct_human_markdown_v5
@@ -28,8 +26,6 @@ code:
   codex_binary: ${HOME}/.local/lib/vibe-codex/0.160.1/bin/codex
   codex_auth_file: ${HOME}/.codex/auth.json
   codex_version: 0.160.1
-  max_steps: 0
-  cost_limit: 0.0
   timeout: 1800
   max_attempts: 3
 execution:

@@ -5,6 +5,31 @@ design, experiment outcomes, and changing run progress belong in other documents
 
 ## Research-prototype acceptance boundary
 
+### Necessary-flow whitelist
+
+Classify a component by its **downstream experiment consumer**, not its filename
+or whether it is called a log. Keep one implementation of each responsibility:
+
+| Necessary responsibility | Main-flow consumer / retained authority |
+|---|---|
+| Frozen task/split, prompt/model/config identity, SIF/base/ancestor history and visibility | Worker setup and isolated Agent/evaluator execution |
+| Task + rules -> original Plan; task + exact Plan -> original implementation patch | Coder, official evaluator and subsequent learning |
+| Complete Agent investigations and official test evidence/outcome | Reflector inputs; a scalar score cannot replace these bodies |
+| Complete physical observations, unchanged repetitions and scores | GEPA comparison, validation, seed replay; `safe_pce_evaluations.jsonl` is a **main-flow record** |
+| Required views and optional raw evidence archive, deterministic reference mapping | Actual Agent inputs and decoding; optional *reading* is not optional *preservation* |
+| Complete Ref wave -> Cur -> conditional Refiner -> validated candidate and training-only counters/history | Existing ACE transaction and GEPA candidate evaluation |
+| Atomic outputs, task/submission state, phase checkpoints, GEPA state and its RNG/sampler companion | Existing retry, reconciliation, yield/resume and duplicate-launch prevention |
+| Prepared workspace identity and bounded live-workspace admission | Correct phase isolation and continued capacity for later tasks |
+
+Everything outside this whitelist must identify a real main-flow consumer
+before becoming a prerequisite. Otherwise it is a best-effort diagnostic,
+offline export, or unused code to remove—not a new acceptance gate.
+Do not introduce a second workflow/receipt framework to enforce this list.
+Host validation feedback is the next Agent's input; Slurm attempt status
+participates in exhausted-evaluator recovery. These are not disposable logs.
+A second copy of that failure, a rendered tree, or a source-access summary is
+not needed to deliver a valid result.
+
 Preserve the smallest authoritative path from original Agent outputs to official
 evaluation and learning. Reject missing, misbound or contaminated scientific
 inputs; do not repair them, impute outcomes, or commit partial learning history.
@@ -14,9 +39,17 @@ that the workflow stops: follow its caller and test the actual Worker path.
 
 Supervisor staging/workspace cleanup is best effort after the established
 active-job checks. Record errors without changing a completed run or preventing
-an otherwise valid resume. Required result/checkpoint writes still fail normally.
-`JsonlLogger.write_optional` is only for usage and optional cleanup diagnostics;
-it must not be used for Agent completions, Plans, patches, scores or history.
+an otherwise valid resume. Required result/checkpoint writes retry the same
+serialized payload before propagating an error; do not invoke an Agent to retry
+an already-produced output's save.
+`JsonlLogger.write_optional` and `optional_diagnostic` in the existing audit
+module are for **all non-consuming diagnostics**, not just billing/cleanup.
+Their construction/writes/computation cannot mask success, original failure or
+`ControllerYield`. Never wrap required Agent completions, Plans, patches,
+scores, history, source decisions or checkpoints in these helpers.
+GEPA catches ordinary callback exceptions: companion checkpoint failures must
+reach the established `OfflineReflectionBlocked` boundary, not be swallowed
+as a warning while later iterations advance.
 Keep auxiliary publication metadata outside Agent inputs. Current exceptions
 and the evidence-transform inventory are recorded in the
 [blocking-policy/module audit](knowledge/blocking-policy-acceptance-20261028.md).
@@ -28,14 +61,35 @@ receipts alone cannot invalidate a Plan/patch that passes the independent role
 checks. Keep Stop's same-session correction and the original Plan, patch-file
 and staged-diff-hash validation; never turn retry into Host repair.
 
-Classify errors only as far as needed to choose safe recovery. A hard-stop
-decision needs a specific reliability reason, such as wrong frozen identity,
-unverifiable isolation/source access, unusable required persistence, or exhausted
-recovery without complete scientific evidence. Do not add a detailed taxonomy
-for harmless warnings. Auxiliary issues may be skipped with a record; failed
-scientific observations remain NoScore. Finish independent work, but do not drop
-failed cases from a fixed comparison, impute zero, or commit incomplete learning
-history. Retry budgets are operational limits, not scientific outcomes.
+Classify errors only as far as needed to choose recovery. Reject incompatible
+inputs without using or repairing them. Regenerate an unusable Worker output
+through its existing task attempt, retaining the original and feedback.
+A generic exception name or `block_run` flag is not evidence that recovery
+cannot continue. Confirmed provider authentication/credit exhaustion, ENOSPC /
+EDQUOT and explicit cancellation stop automatic retries. Frozen launch identity
+changes still prevent submitting a different experiment under the same run.
+
+The current repository Safe PCE path reuses Online's `scored_agent_failure`:
+after three recorded failures in the same Planner/Coder phase, produce a
+distinct `pce_status=agent_failed` outcome with score 0, last raw failure and
+all available successful checkpoints. Evaluator is explicitly `not_run`;
+never invent an empty successful Plan or patch. Environment/setup/parser/storage
+failures are not Agent failures and remain unscored while recovering.
+Unknown evaluator checkpoints are not reused as completed evaluations.
+Only the first unfinished phase retries; successful Agent outputs remain intact.
+Transport exhaustion starts another recovery wave with monotonically increasing
+attempt IDs. Learning-role exhaustion retries, never invents a Ref or candidate.
+Fixed comparison membership and atomic training history remain unchanged.
+
+Keep diagnostic file counts bounded: one append-only event stream per
+run/attempt, one combined Slurm stdout/stderr file per array element, and
+bounded optional source/trace indexes. Worker failure envelopes retain original
+errors and trajectories; do not also write per-role and per-attempt copies of
+the same failure. Canonical learning outputs live in Worker outputs, with raw
+Agent completions retained separately; no second resolved-completion file is
+needed. Preparation baseline evidence stays at its original preparation path,
+not a copied tree after handoff. These rules do not authorize deletion or
+rewriting of historical scientific artifacts.
 
 ## Adaptation baseline and phase-graph checks
 
@@ -311,27 +365,20 @@ Keep allowed tool inputs and all scientific output unchanged.
 
 Native hooks load a read-only, Host-generated bundle containing the existing
 classifier and its frozen parser dependency; they do not install dependencies
-in a case SIF. Hook receipts live outside the Agent-writable repository/output
-roots. Preflight the bundle and pinned CLI hook configuration before inference;
-validate original-command PreToolUse decisions against native execution events
-before checkpointing. Do not collect PostToolUse callbacks or require Pre/Post
-pairing: callback completion is not an experimental output. Historical Post
-records remain unchanged and are ignored for acceptance, including partial or
-duplicate coverage. Hook tool-call IDs and public JSONL item IDs are different
-namespaces. CLI exports may redact command text. Match exact exports first;
-remaining exports need a complete one-to-one cover by the original checked
-commands, never a guessed replacement or a command-count-only waiver. Identical
-redacted views do not imply identical original inputs. Preserve exports and hook
-inputs unchanged.
-Record blocked attempts as `executed=false`, not completed acquisition. A
-receipt/trace failure blocks completion without discarding the raw output or
-silently repairing it. Pre-execution hook exceptions explicitly deny; missing
-source decisions for executed commands remain an operational failure. Missing
-Post callbacks do not invalidate a Plan, patch or scientific checkpoint. This
-is partial source-command enforcement, not a general network firewall: dynamic execution and input to
-already running shell sessions are not equivalent to a newly checked command.
-See the [official hook contract](https://learn.chatgpt.com/docs/hooks) and
-[parity acceptance audit](knowledge/agent-command-policy-parity-audit-20261023.md).
+in a case SIF. Preflight the bundle and pinned CLI hook configuration before
+inference. The PreToolUse decision governs the command before execution.
+Hook logs are best-effort private diagnostics: missing logs, malformed receipts
+or vendor-redacted CLI command exports do not invalidate a scientific output.
+There is no post-execution command/receipt matching or Stop-receipt validator.
+Raw native events and final responses remain unchanged; the existing role
+validator still checks the actual Plan / patch / staged diff.
+Policy execution errors explicitly deny the command with feedback, while
+recording errors cannot change an allow/deny decision.
+This is partial source-command enforcement, not a general network firewall:
+dynamic execution and input to an existing shell are not equivalent to a newly
+checked command. Inspect source concerns in a separate post-run review.
+See the [parity audit](knowledge/agent-command-policy-parity-audit-20261023.md)
+for historical engineering evidence, not current receipt acceptance rules.
 
 Safe PCE final-submission errors are recoverable inside each backend's existing
 loop: mini-SWE raises its non-terminating format error, while Native uses a
@@ -465,12 +512,13 @@ pinned revision, tracked-modification or incomplete-source checks.
 
 A missing runtime manifest after Controller submission is not a fresh run.
 Supervisor must inspect the recorded Controller job before cleanup or another
-submission. FAILED, OOM, CANCELLED, and successful exit without runtime authority
-block with the job identity, diagnostic log paths and a repair action. Pending,
-running or unavailable accounting waits without submission. Before initialization,
-NODE_FAIL/BOOT_FAIL/PREEMPTED/TIMEOUT permit only one bounded recovery, counted
-in preserved transport state and the existing total submission budget. Once
-runtime authority exists, retain the ordinary checkpoint/slice recovery policy.
+submission. A terminal failed/OOM/completed-before-initialization job is retryable;
+CANCELLED is respected. Pending, running or unavailable accounting waits without
+submission. Supervisor retries ordinary Controller and staging errors, preserving
+the same frozen launch identity. Confirmed provider/capacity exhaustion stops.
+There is no total-submission cap or one-shot named recovery exception.
+A Supervisor state-write retry retains the acknowledged job ID in memory and
+retries only that save, never repeats the submission.
 
 Curator lineage is historical provenance, not a list of currently active rules.
 An unchanged retained bullet must preserve its content, counters, category and
@@ -811,9 +859,9 @@ private storage, outside Git.
 
 Host audit persistence uses `audit_record`: scientific outputs, raw exports,
 errors, counters and token statistics are copied without credential-shaped
-keyword/value substitutions or content-based completion rejection. Old
-`redact_sensitive`/`redact_agent_record` imports are compatibility aliases with
-the same preservation semantics. CLI vendor redaction is not undone. Neither
+keyword/value substitutions or content-based completion rejection. The old
+`redact_sensitive`/`redact_agent_record` aliases and URL-query substitution
+have been removed; private raw records stay private. CLI vendor redaction is not undone. Neither
 this policy nor private log retention certifies absence of credential exposure.
 
 Keep results under `output/<dataset>/<run>/` (remote authority:

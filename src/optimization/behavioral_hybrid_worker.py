@@ -3,7 +3,7 @@ from pathlib import Path
 import json
 from datetime import datetime, timezone
 
-from src.optimization.audit import audit_record
+from src.optimization.audit import audit_record, JsonlLogger, optional_diagnostic
 from src.optimization.behavioral_hybrid_runtime import run_local_phase, phase_identity
 from src.optimization.config import load_optimization_config
 from src.optimization.hpc.task_batch import atomic_json
@@ -47,13 +47,19 @@ def run_task(*, config_path, manifest_path, output_path, attempt_dir, previous_o
             contract_error=stage == "agent_output_validation" or isinstance(exc, PlaybookAgentOutputContractError)))
         if stage == "agent_output_validation":
             completion = attempt_dir / "completion.json"
-            if completion.is_file():
-                value["raw_agent_output"] = json.loads(completion.read_text())["agent_output"]
+            # The exception already carries the rejected Agent result when
+            # available. A second diagnostic read must not suppress feedback.
+            if hasattr(exc, "raw_agent_output"):
+                value["raw_agent_output"] = exc.raw_agent_output
+            with optional_diagnostic("rejected completion copy"):
+                if "raw_agent_output" not in value and completion.is_file():
+                    value["raw_agent_output"] = json.loads(completion.read_text())["agent_output"]
             if hasattr(exc, "violations"):
                 value["validation_violations"] = exc.violations
             value = audit_record(value)
-        atomic_json(attempt_dir / "failure.json", value)
         atomic_json(output_path, value)
+        JsonlLogger(attempt_dir / "audit_events.jsonl").write_optional(
+            "worker_failed", failure_stage=stage, error_type=type(exc).__name__)
         return 1
 
 

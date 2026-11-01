@@ -9,7 +9,7 @@ from pathlib import Path
 import re
 import shlex
 from typing import Any
-from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
+from urllib.parse import urlsplit, urlunsplit
 
 import bashlex
 
@@ -378,24 +378,15 @@ def _decision(
     urls: tuple[str, ...],
     prompt_urls: frozenset[str],
 ) -> dict[str, Any]:
-    audited_urls = [_audit_url(url) for url in urls]
     return {
         "policy_version": SOURCE_ACCESS_POLICY_VERSION,
         "decision": decision,
         "reason": reason,
         "client": client,
-        "urls": audited_urls,
+        "urls": list(urls),
         "url_sha256": [hashlib.sha256(url.encode()).hexdigest() for url in urls],
         "prompt_url_match": [url in prompt_urls for url in urls],
     }
-
-
-def _audit_url(url: str) -> str:
-    """Retain an auditable location without logging query values or fragments."""
-
-    parsed = urlsplit(url)
-    query = urlencode([(key, "<redacted>") for key, _ in parse_qsl(parsed.query)])
-    return urlunsplit((parsed.scheme, parsed.netloc, parsed.path, query, ""))
 
 
 def append_source_access_event(
@@ -406,11 +397,16 @@ def append_source_access_event(
 ) -> None:
     """Append audit evidence without duplicating raw command text."""
 
-    path.parent.mkdir(parents=True, exist_ok=True)
     record = dict(event)
-    record["command_sha256"] = hashlib.sha256(command.encode()).hexdigest()
-    with path.open("a", encoding="utf-8") as handle:
-        handle.write(json.dumps(record, ensure_ascii=False, sort_keys=True) + "\n")
+    record.setdefault("command_sha256", hashlib.sha256(command.encode()).hexdigest())
+    # The decision is enforced by the caller; this is only a derived index.
+    # Keep this helper dependency-free for the frozen native hook bundle.
+    try:
+        path.parent.mkdir(parents=True, exist_ok=True)
+        with path.open("a", encoding="utf-8") as handle:
+            handle.write(json.dumps(record, ensure_ascii=False, sort_keys=True) + "\n")
+    except OSError:
+        pass
 
 
 def summarize_source_access_logs(paths: Iterable[Path]) -> dict[str, Any]:

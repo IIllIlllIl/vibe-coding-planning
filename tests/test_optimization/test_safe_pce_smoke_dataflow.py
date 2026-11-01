@@ -215,6 +215,36 @@ def test_smoke_config_reuses_models_prompts_limits_and_budget():
     assert pce.plan_instance_template == baseline.plan_instance_template
 
 
+@pytest.mark.parametrize("phase", ["plan", "code"])
+def test_post_run_audit_accepts_terminal_agent_failure_without_invented_eval(tmp_path, phase):
+    from scripts.tools.audit_safe_pce_ace_dataflow import _audit_worker_evidence
+    from src.optimization.hpc.task_batch import atomic_json
+    from src.optimization.online_models import ONLINE_OUTCOME_POLICY_VERSION
+    plan = "# Exact original Plan\n"
+    plan_trace = [{"role": "assistant", "content": "START_PLAN\n" + plan + "END_PLAN"}]
+    failed_trace = [{"role": "user", "content": plan}, {"role": "assistant", "content": "invalid submission"}]
+    output = dict(instance_id="case", fingerprint="fp", task_index=0, pce_run_index=1,
+        pce_status="agent_failed", terminal_phase=phase, terminal_reason="invalid_submission",
+        outcome_policy_version=ONLINE_OUTCOME_POLICY_VERSION, agent_failure_attempts=[1, 2, 3],
+        last_worker_output={"failure_trajectory": failed_trace},
+        evaluator_result={"status": "not_run", "reason": "agent_failed_before_evaluation"},
+        plan=plan if phase == "code" else "", patch="",
+        plan_trajectory=plan_trace if phase == "code" else failed_trace,
+        code_trajectory=failed_trace if phase == "code" else [])
+    batch = tmp_path / "hpc_tasks/pce/fp"
+    atomic_json(batch / "outputs/task_0000.json", output)
+    if phase == "code":
+        atomic_json(batch / "checkpoints/task_0000/plan.json", {"payload": {
+            "plan": plan, "trajectory": plan_trace,
+            "plan_sha256": hashlib.sha256(plan.encode()).hexdigest(),
+            "raw_plan_submission": "START_PLAN\n" + plan + "END_PLAN"}})
+    _audit_worker_evidence(tmp_path, output)
+    assert not (batch / "checkpoints/task_0000/evaluate.json").exists()
+    output[phase + "_trajectory"] = [{"content": "silently changed"}]
+    with pytest.raises(ValueError, match="worker -> physical"):
+        _audit_worker_evidence(tmp_path, output)
+
+
 def test_smoke_supervisor_and_generated_worker_scripts_match_reviewed_config(tmp_path):
     from scripts.hpc_supervisor_service import _load_launch_config
     from scripts.hpc_resume_loop import parse_args
@@ -223,10 +253,14 @@ def test_smoke_supervisor_and_generated_worker_scripts_match_reviewed_config(tmp
     from src.swe_verified_pce.hpc_executor import build_array_script
     launch = Path("configs/archive/supervisor_launches/safe_pce_ace_verified_smoke_supervisor_v1_20261022.yaml")
     _, _, arguments, _ = _load_launch_config(launch)
-    supervisor = parse_args(arguments)  # Parsing only: no submit or remote probe.
+    # Adapt historical arguments without changing the frozen launch file.
+    offset = arguments.index("--max-runs")
+    arguments = arguments[:offset] + arguments[offset + 2:]
+    supervisor = parse_args(arguments)  # No submit or remote probe.
     config = load_optimization_config(supervisor.runtime_config, require_api_keys=False)
     assert supervisor.ssh_target == "twang@access-iris.uni.lu"
-    assert supervisor.slice_time == "00:08:00" and supervisor.max_runs == 24
+    assert supervisor.slice_time == "00:08:00"
+    assert not hasattr(supervisor, "max_runs")
     assert supervisor.require_clean_worktree and supervisor.reclaim_workspaces
     assert supervisor.remote_run_snapshot == (
         "/scratch/users/twang/vibe-coding-planning/run_state/" + str(config.run_dir.relative_to(Path.cwd())))

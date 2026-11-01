@@ -14,6 +14,7 @@ from pathlib import Path
 import shutil
 
 from src.exceptions import ControllerYield, FatalError
+from src.optimization.audit import JsonlLogger
 from src.optimization.hpc.phase_wave import prepare_phase_wave
 from src.optimization.hpc.task_batch import SlurmTaskBatch, TaskAttemptsExhausted, atomic_json
 
@@ -102,33 +103,11 @@ def claim_workspace(runner, case, phase: str, target: Path) -> None:
         raise FatalError("prepared workspace is missing, already consumed, or target is occupied")
     target.parent.mkdir(parents=True, exist_ok=True)
     source.rename(target)  # Same scratch filesystem; never fall back to a bulk copy.
-    baseline = source.parent / "repository_baselines" / phase
-    if baseline.is_dir():
-        shutil.copytree(baseline, runner.attempt_dir / "repository_baselines" / phase)
-    atomic_json(runner.attempt_dir / "workspace_claims" / f"{phase}.json", {
-        "schema_version": 1, "phase": phase,
-        "claimed_at": datetime.now(timezone.utc).isoformat(),
-        "source_relative_path": record["prepared_repository_relative_path"],
-        "target_relative_path": target.relative_to(runner.config.run_dir).as_posix(),
-    })
-
-
-def finalize_preparation_failure(task, value):
-    """A recorded, exhausted setup failure is NoScore, never an unresolved Plan."""
-    if value.get("outcome_reason") != "workspace_preparation_exhausted":
-        return SlurmTaskBatch._finalize_known_case_failure(
-            task, value, fingerprint=json.loads(task.manifest_path.read_text())["fingerprint"])
-    manifest = json.loads(task.manifest_path.read_text())
-    if (value.get("status") != "blocking_failed"
-            or value.get("fingerprint") != manifest["fingerprint"]
-            or value.get("mode") != manifest["mode"]
-            or value.get("task_index") != task.index
-            or value.get("instance_id") != task.instance_id
-            or value.get("task_outcome") != "unknown"
-            or value.get("final_validation_label") is not None
-            or not value.get("preparation_evidence")):
-        return None
-    return {**value, "status": "incomplete", "pce_status": "incomplete", "retry_disposition": "no_retry"}
+    # Keep baseline evidence with the preparation Worker, not a second tree.
+    JsonlLogger(runner.attempt_dir / "audit_events.jsonl").write_optional(
+        "workspace_claimed", phase=phase,
+        source_relative_path=record["prepared_repository_relative_path"],
+        target_relative_path=target.relative_to(runner.config.run_dir).as_posix())
 
 
 def prepare_before_pce(executor, pce_batch, pce_fingerprint, pce_tasks, indices, pce_attempt,

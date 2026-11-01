@@ -3,7 +3,7 @@
 > Authority: credential, FairShare, storage, and launch safety for ACE + Safe
 > PCE; older workflow entries are retained reproduction notes
 >
-> Last reviewed: 2026-10-31
+> Last reviewed: 2026-11-01
 
 ## Scope
 
@@ -60,6 +60,19 @@ errors retain their established operational failure handling.
 Sandbox DNS, timeout, or SSH failures are not evidence of a real ULHPC problem.
 Repeat an important read-only check with approved network access before
 diagnosing Iris, VPN, SSH, or credentials.
+
+## Recovery, not submission-count limits
+
+The maintained experiment Supervisor has no `--max-runs` or
+`--recover-controller-error-type-once` option. Ordinary Controller/staging
+failures retry after active-job and identity checks. Only confirmed external
+exhaustion/cancellation stops automatic recovery; source/config identity
+changes still prohibit silently submitting a different experiment.
+Unavailable status waits rather than authorizing a duplicate. Required state
+save failures retry the same payload, keeping an acknowledged job ID in memory.
+See the [current acceptance contract](knowledge/blocking-policy-acceptance-20261028.md).
+Archived launch files retain historical arguments for provenance and must be
+adapted before use with the current entry point.
 
 ## SWE-chat Login Preheat
 

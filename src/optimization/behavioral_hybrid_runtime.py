@@ -155,34 +155,32 @@ def run_local_phase(config, role, payload, attempt_dir, *, retry_feedback=""):
                          "and submit its contents using the shared Agent protocol.\n")
                       + "{{ retry_feedback }}"),
                   evidence_dir=str(evidence), retry_feedback=retry_feedback, attempt_dir=attempt_dir)
-    try:
-        if role == "reflector":
-            task = ({"task": "Analyze the planning rules using the complete Planner, Coder, and evaluator evidence."}
-                    if config.task.semantics == "safe_pce_resolution_v1" else {})
-            output, trajectory = run_evidence_reflector(**common, internal_playbook=json.dumps(agent_payload["parent"]), **task)
-        elif role == "curator":
-            output, trajectory = run_evidence_curator(**common, counted_internal_playbook=json.dumps(agent_payload["parent"]),
-                                                      case_count=len(payload.get("records", [])), maximum_rules=config.hybrid.max_items,
-                                                      task="Maintain the generalized checklist and investigation guides.")
-        elif role == "refiner":
-            output, trajectory = run_evidence_curator(**common, counted_internal_playbook=json.dumps(agent_payload["draft"]),
-                                                      case_count=0, maximum_rules=config.hybrid.max_items,
-                                                      task="Refine the supplied checklist and guides within the given limits.")
-        else:
-            raise ValueError("unsupported hybrid phase")
-    except Exception as exc:
-        atomic_json(attempt_dir / "completion_error.json", audit_record({
-            "error": str(exc), "raw_response": getattr(exc, "raw_response", None),
-            "trajectory": getattr(exc, "trajectory", [])}))
-        raise
+    if role == "reflector":
+        task = ({"task": "Analyze the planning rules using the complete Planner, Coder, and evaluator evidence."}
+                if config.task.semantics == "safe_pce_resolution_v1" else {})
+        output, trajectory = run_evidence_reflector(**common, internal_playbook=json.dumps(agent_payload["parent"]), **task)
+    elif role == "curator":
+        output, trajectory = run_evidence_curator(**common, counted_internal_playbook=json.dumps(agent_payload["parent"]),
+                                                  case_count=len(payload.get("records", [])), maximum_rules=config.hybrid.max_items,
+                                                  task="Maintain the generalized checklist and investigation guides.")
+    elif role == "refiner":
+        output, trajectory = run_evidence_curator(**common, counted_internal_playbook=json.dumps(agent_payload["draft"]),
+                                                  case_count=0, maximum_rules=config.hybrid.max_items,
+                                                  task="Refine the supplied checklist and guides within the given limits.")
+    else:
+        raise ValueError("unsupported hybrid phase")
     # Preserve the raw completion BEFORE validating it. Never repair it here.
+    raw_output = output
     try:
         atomic_json(attempt_dir / "completion.json", audit_record({"agent_output": output, "trajectory": trajectory}))
         output = decode_phase_output(role, output, case_refs, item_refs)
-        atomic_json(attempt_dir / "resolved_completion.json", {"agent_output": output})
+        # The Worker output is the canonical resolved result. Its raw
+        # completion and deterministic reference map remain available.
         validate_phase(role, payload, output, config)
     except Exception as exc:
         exc.worker_failure_stage = "agent_output_validation"
+        exc.raw_agent_output = raw_output
+        exc.trajectory = trajectory
         raise
     return output, trajectory
 

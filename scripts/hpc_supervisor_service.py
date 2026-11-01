@@ -17,6 +17,7 @@ if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
 
 from src.artifact_policy import mark_private_artifact_dir
+from src.optimization.audit import diagnostic_print as print, optional_diagnostic
 RESUME_SCRIPT = REPO_ROOT / "scripts" / "hpc_resume_loop.py"
 RESUME_SEQUENCE_SCRIPT = REPO_ROOT / "scripts" / "hpc_resume_sequence.py"
 
@@ -112,9 +113,10 @@ def main(argv: list[str] | None = None) -> int:
     log_path = Path(log).expanduser()
     if not log_path.is_absolute():
         log_path = REPO_ROOT / log_path
-    log_path = log_path.resolve()
-    mark_private_artifact_dir(log_path.parent)
-    log_path.parent.mkdir(parents=True, exist_ok=True)
+    log_path = log_path.absolute()
+    with optional_diagnostic("supervisor log directory"):
+        mark_private_artifact_dir(log_path.parent)
+        log_path.parent.mkdir(parents=True, exist_ok=True)
     command = [
         "exec",
         "caffeinate",
@@ -132,11 +134,13 @@ def main(argv: list[str] | None = None) -> int:
     shell_command = (
         "cd "
         + shlex.quote(str(REPO_ROOT))
-        + " && "
+        + " && { "
+        # Test only log opening, not the Supervisor command. A failed log
+        # redirect must never rerun a Supervisor that has already executed.
+        + "if { : >> " + shlex.quote(str(log_path)) + "; } 2>/dev/null; then "
+        + "exec >> " + shlex.quote(str(log_path)) + " 2>&1 || true; fi; "
         + " ".join(shlex.quote(part) for part in command)
-        + " >> "
-        + shlex.quote(str(log_path))
-        + " 2>&1"
+        + "; }"
     )
     result = _run(
         ["tmux", "new-session", "-d", "-s", session, shell_command]

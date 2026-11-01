@@ -7,17 +7,16 @@ from collections import Counter
 from dataclasses import asdict
 import hashlib
 import json
-import os
 from pathlib import Path
 import pickle
 import random
-import tempfile
 from typing import Any
 
 from gepa.core.state import GEPAState
 from gepa.strategies.batch_sampler import EpochShuffledBatchSampler
 from gepa.strategies.candidate_selector import ParetoCandidateSelector
 
+from src.optimization.hpc.task_batch import atomic_json as _atomic_json
 from src.optimization.audit import text_sha256
 from src.optimization.config import OptimizationConfig
 from src.optimization.models import GEPACase
@@ -28,19 +27,6 @@ RESUME_STATE_VERSION = 1
 
 class IncompatibleOptimizationRun(ValueError):
     """Raised when a run directory cannot be resumed reproducibly."""
-
-
-def _atomic_json(path: Path, value: Any) -> None:
-    path.parent.mkdir(parents=True, exist_ok=True)
-    fd, temp_name = tempfile.mkstemp(dir=path.parent, prefix=f".{path.name}.")
-    try:
-        with os.fdopen(fd, "w", encoding="utf-8") as handle:
-            json.dump(value, handle, indent=2, ensure_ascii=False, sort_keys=True)
-            handle.write("\n")
-        os.replace(temp_name, path)
-    finally:
-        if os.path.exists(temp_name):
-            os.unlink(temp_name)
 
 
 def _file_sha256(path: Path) -> str:

@@ -99,13 +99,13 @@ def test_raw_scientific_objects_are_opaque_to_identity_projection(role):
 
 
 def test_credential_shaped_text_does_not_rewrite_or_block_learning_outputs(monkeypatch):
-    from src.optimization.audit import audit_record, redact_agent_record, redact_sensitive
+    from src.optimization.audit import audit_record
     monkeypatch.setenv("TEST_ONLY_API_TOKEN", "synthetic-credential-never-real")
     original = {"agent_output": {"reasoning": "Keep the exact Plan", "operations": []},
                 "metadata": {"api_key": "synthetic-credential-never-real"}}
     original["agent_output"]["reasoning"] = "synthetic-credential-never-real"
     original["metadata"].update(input_tokens=256, maximum_guide_tokens=96)
-    for preserve in (audit_record, redact_agent_record, redact_sensitive):
+    for preserve in (audit_record,):
         result = preserve(original)
         assert result == original and result is not original
         assert result["agent_output"] is not original["agent_output"]

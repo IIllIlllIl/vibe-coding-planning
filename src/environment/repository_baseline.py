@@ -8,6 +8,7 @@ import shlex
 from typing import Any
 
 from src.exceptions import FatalError
+from src.optimization.audit import optional_diagnostic
 
 
 def _run(env: Any, command: str, *, timeout: int | None) -> dict[str, Any]:
@@ -20,14 +21,15 @@ def _run(env: Any, command: str, *, timeout: int | None) -> dict[str, Any]:
 
 
 def _write_evidence(path: Path, evidence: dict[str, Any]) -> None:
-    path.mkdir(parents=True, exist_ok=True)
-    temporary = path / "repository_baseline.json.tmp"
-    destination = path / "repository_baseline.json"
-    temporary.write_text(
-        json.dumps(evidence, indent=2, ensure_ascii=False, sort_keys=True),
-        encoding="utf-8",
-    )
-    temporary.replace(destination)
+    with optional_diagnostic("repository baseline diagnostic"):
+        path.mkdir(parents=True, exist_ok=True)
+        temporary = path / "repository_baseline.json.tmp"
+        destination = path / "repository_baseline.json"
+        temporary.write_text(
+            json.dumps(evidence, indent=2, ensure_ascii=False, sort_keys=True),
+            encoding="utf-8",
+        )
+        temporary.replace(destination)
 
 
 def restore_repository_to_base(

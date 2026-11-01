@@ -17,14 +17,17 @@ from src.optimization.hpc.task_batch import (
     TaskAttemptsExhausted,
     TaskFiles,
     atomic_json,
+    read_json,
 )
 from src.environment.source_access import summarize_source_access_logs
+from src.optimization.audit import optional_diagnostic
 from src.swe_verified_pce.config import SWEVerifiedPCEConfig
 from src.swe_verified_pce.dataset import file_sha256
 from src.swe_verified_pce.models import SWEVerifiedPCECase
 from src.swe_verified_pce.evaluator import _terminal
 from src.swe_verified_pce.runner import SWEVerifiedPCERunner, checkpoint_identity
 from src.agents.runtime import credential_envs
+from src.agents.output_contract import AgentOutputContractError
 
 
 def _credential_envs(config):
@@ -85,6 +88,7 @@ def pce_semantic_sha256(
         root / "src" / "optimization" / "hpc" / "slurm.py",
         root / "src" / "optimization" / "hpc" / "task_batch.py",
         root / "src" / "optimization" / "audit.py",
+        root / "src" / "optimization" / "online_models.py",
         *([root / "src" / "optimization" / name for name in
            ("codex_cli_runtime.py", "codex_private_mount.py")]
           if getattr(config, "agent_backends", {}) else []),
@@ -180,7 +184,7 @@ def recover_exhausted_evaluator_timeout(
     case_from_dict: Any = SWEVerifiedPCECase.from_dict,
     runner_class: Any = SWEVerifiedPCERunner,
 ) -> dict[str, Any] | None:
-    """Convert only three evidenced evaluator Slurm timeouts to unknown."""
+    """Legacy PCCE terminal reporting; current PCE retries evaluation instead."""
 
     if max_attempts != 3:
         raise ValueError("evaluator Slurm-timeout recovery requires three attempts")
@@ -283,8 +287,8 @@ def build_array_script(
     index_spec = ",".join(str(index) for index in indices)
     if hpc.max_running_array_tasks:
         index_spec = f"{index_spec}%{hpc.max_running_array_tasks}"
-    log_dir = batch_dir / "slurm_logs" / f"attempt_{attempt:02d}"
-    log_dir.mkdir(parents=True, exist_ok=True)
+    # Use the already-required batch directory; no auxiliary setup gate.
+    log_dir = batch_dir
     job_name = f"{hpc.job_name_prefix}-{batch_dir.name[:12]}-a{attempt}"
     lines = [
         "#!/usr/bin/env bash",
@@ -295,7 +299,7 @@ def build_array_script(
         f"#SBATCH --time={hpc.time}",
         f"#SBATCH --array={index_spec}",
         f"#SBATCH --output={log_dir}/%x-%A_%a.out",
-        f"#SBATCH --error={log_dir}/%x-%A_%a.err",
+        # Slurm merges stderr into the configured stdout file by default.
         "set -euo pipefail",
         "set +x",
         f"module load {shlex.quote(hpc.python_module)}",
@@ -419,8 +423,10 @@ class SWEVerifiedPCEHPCExecutor:
                 "pce_run_index", 1
             ):
                 raise ValueError(f"{self.label} output PCE run index mismatch")
-            if value.get("pce_status") != "completed":
-                raise ValueError("completed worker output lacks completed PCE evidence")
+            if value.get("pce_status") not in {"completed", "agent_failed"}:
+                raise AgentOutputContractError("completed worker output lacks completed PCE evidence")
+            if value.get("evaluator_result", {}).get("task_outcome") == "unknown":
+                raise AgentOutputContractError("retry incomplete Evaluator without rerunning Plan/Code")
             if value.get("final_validation_label") is not None:
                 raise ValueError("PCE generation must not assign a validation label")
 
@@ -434,8 +440,8 @@ class SWEVerifiedPCEHPCExecutor:
                 ),
                 write_script=write_script,
                 validate_output=validate,
-                **({"finalize_case_failure": self._finalize_preparation_failure}
-                   if getattr(self.config, "workspace_preparation", "inline") == "separate_slurm_v1" else {}),
+                finalize_case_failure=lambda task, value: self._finalize_agent_failure(
+                    task, value, batch_dir=batch_dir, state_dir=state_dir, fingerprint=fingerprint),
             )
         except TaskAttemptsExhausted:
             results = self._collect_exhausted(batch_dir, fingerprint, tasks, audit_dir=state_dir)
@@ -448,12 +454,69 @@ class SWEVerifiedPCEHPCExecutor:
                 from src.exceptions import ControllerYield
                 raise ControllerYield(batch_dir=str(batch_dir), job_id=None,
                                       reason="waiting_for_workspace_capacity_reclamation")
-        return self._attach_source_access_attempt_index(results, tasks)
+        with optional_diagnostic("source-access attempt index"):
+            return self._attach_source_access_attempt_index(results, tasks)
+        return list(results)
 
-    @staticmethod
-    def _finalize_preparation_failure(task, value):
-        from src.swe_verified_pce.workspace_preparation import finalize_preparation_failure
-        return finalize_preparation_failure(task, value)
+    def _finalize_agent_failure(self, task, value, *, batch_dir, state_dir, fingerprint):
+        """Reuse Online's terminal outcome, without scoring infrastructure faults."""
+        from src.optimization.online_models import scored_agent_failure, ONLINE_OUTCOME_POLICY_VERSION
+        phase = value.get("terminal_phase")
+        if value.get("failure_category") != "agent" or phase not in {"plan", "code"}:
+            return None
+        manifest = read_json(task.manifest_path)
+        def same_task(item):
+            return isinstance(item, dict) and all(item.get(key) == manifest.get(key)
+                       for key in ("fingerprint", "task_index", "instance_id", "mode")) and (
+                           item.get("pce_run_index", 1) == manifest.get("pce_run_index", 1))
+        if not same_task(value) or value.get("fingerprint") != fingerprint:
+            raise ValueError("terminal Agent failure identity mismatch")
+        prior = []
+        for path in sorted((state_dir / "failed_outputs").glob("attempt_*/" + task.output_path.name)):
+            try:
+                prior.append(read_json(path))
+            except ValueError:
+                # An unreadable Worker envelope is not proof of an Agent
+                # failure. Preserve its bytes; do not count it toward zero.
+                continue
+        failures = {item["attempt"]: item for item in [*prior, value]
+                    if same_task(item) and item.get("failure_category") == "agent"
+                    and item.get("terminal_phase") == phase and isinstance(item.get("attempt"), int)}
+        if len(failures) < getattr(self.config, phase).max_attempts:
+            return None
+        case = self.case_from_dict(manifest["case"])
+        expected = checkpoint_identity(case, execution_fingerprint=fingerprint)
+        checkpoints = {}
+        for name in ("plan", "code"):
+            path = batch_dir / "checkpoints" / f"task_{task.index:04d}" / f"{name}.json"
+            if path.is_file():
+                record = read_json(path)
+                if record.get("checkpoint_identity") != expected or record.get("phase") != name:
+                    raise ValueError("terminal Agent failure checkpoint identity mismatch")
+                checkpoints[name] = record["payload"]
+        if phase in checkpoints:
+            return None  # A valid atomic phase already exists; resume it, not a zero.
+        plan, code = checkpoints.get("plan", {}), checkpoints.get("code", {})
+        evidence = {"plan": plan.get("plan", ""), "patch": code.get("patch", ""),
+                    "plan_trajectory": plan.get("trajectory", []),
+                    "code_trajectory": code.get("trajectory", [])}
+        # Preserve the last failed phase's raw trajectory, including any
+        # rejected submission. Never invent a valid Plan or patch.
+        evidence[phase + "_trajectory"] = value.get("failure_trajectory", [])
+        outcome = scored_agent_failure(phase=phase, reason=value["terminal_reason"], evidence=evidence)
+        result = {
+            "schema_version": 1, "status": "completed", "pce_status": "agent_failed",
+            "outcome_policy_version": ONLINE_OUTCOME_POLICY_VERSION,
+            "mode": self.mode, "fingerprint": fingerprint,
+            "task_index": task.index, "instance_id": task.instance_id,
+            "pce_run_index": manifest.get("pce_run_index", 1),
+            "attempt": value["attempt"], "agent_failure_attempts": sorted(failures),
+            "last_worker_output": value, "final_validation_label": None,
+            **outcome.to_worker_payload(),
+        }
+        # This is a Host outcome envelope, not a rewrite of scientific output.
+        atomic_json(task.output_path, result)
+        return result
 
     def _attach_source_access_attempt_index(
         self,
@@ -558,23 +621,11 @@ class SWEVerifiedPCEHPCExecutor:
             if value.get("status") == "completed":
                 results.append(value)
                 continue
-            recovered = recover_exhausted_evaluator_timeout(
-                batch_dir=batch_dir,
-                task=task,
-                fingerprint=fingerprint,
-                max_attempts=max_attempts,
-                case_from_dict=self.case_from_dict,
-                runner_class=self.runner_class,
-            )
-            if recovered is not None:
-                results.append(recovered)
-                continue
-            slurm_path = (
-                task.attempts_dir / f"attempt_{max_attempts:02d}" / "slurm_status.json"
-            )
+            statuses = list(task.attempts_dir.glob("attempt_*/slurm_status.json"))
+            slurm_path = max(statuses, key=lambda path: int(path.parent.name.split("_")[-1])) if statuses else None
             slurm = (
                 json.loads(slurm_path.read_text(encoding="utf-8"))
-                if slurm_path.is_file()
+                if slurm_path is not None
                 else None
             )
             results.append(
@@ -596,16 +647,17 @@ class SWEVerifiedPCEHPCExecutor:
                     "final_validation_label": None,
                 }
             )
-        atomic_json(
-            (audit_dir or batch_dir) / "exhausted_collection.json",
-            {
-                "schema_version": 1,
-                "fingerprint": fingerprint,
-                "incomplete_instance_ids": [
-                    item["instance_id"]
-                    for item in results
-                    if item["status"] == "incomplete"
-                ],
-            },
-        )
+        with optional_diagnostic("exhausted collection summary"):
+            atomic_json(
+                (audit_dir or batch_dir) / "exhausted_collection.json",
+                {
+                    "schema_version": 1,
+                    "fingerprint": fingerprint,
+                    "incomplete_instance_ids": [
+                        item["instance_id"]
+                        for item in results
+                        if item["status"] == "incomplete"
+                    ],
+                },
+            )
         return results

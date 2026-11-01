@@ -80,8 +80,18 @@ if run_dir.is_dir():
         tasks = sum((authority / "tasks" / (name + ".json")).is_file() for name in names)
         outputs = (sum((authority / "outputs" / (name + ".json")).is_file() for name in names)
                    if window else len(list((authority / "outputs").glob("task_*.json"))))
-        failures = (sum(len(list((authority / "attempts" / name).glob("attempt_*/failure.json"))) for name in names)
-                    if window else len(list((authority / "attempts").glob("task_*/attempt_*/failure.json"))))
+        # Current Workers keep failure evidence in their primary retry
+        # envelopes, not a second failure.json. Retain legacy read support.
+        failures = 0
+        for name in names:
+            envelopes = list((authority / "failed_outputs").glob("attempt_*/" + name + ".json"))
+            current = authority / "outputs" / (name + ".json")
+            if current.is_file():
+                envelopes.append(current)
+            recorded = sum(read_json(path).get("status") not in {None, "completed"}
+                           for path in envelopes)
+            legacy = len(list((authority / "attempts" / name).glob("attempt_*/failure.json")))
+            failures += max(recorded, legacy)
         active_job = state.get("active_job_id")
         item = {
             "path": str(batch_dir.relative_to(run_dir)),

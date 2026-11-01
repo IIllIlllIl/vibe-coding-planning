@@ -118,7 +118,7 @@ def test_actual_worker_role_payload_and_validation(tmp_path, monkeypatch, role):
         assert "refine" in calls[0]["task"].lower()
     assert (tmp_path / "attempt/completion.json").exists()
     assert json.loads((tmp_path / "attempt/completion.json").read_text())["agent_output"] == agent_expected
-    assert json.loads((tmp_path / "attempt/resolved_completion.json").read_text())["agent_output"] == expected
+    assert not (tmp_path / "attempt/resolved_completion.json").exists()
     evidence = tmp_path / "attempt/inputs"
     staged = json.loads((evidence / "manifest.json").read_text())
     assert not (evidence / "input.json").exists()
@@ -225,7 +225,8 @@ def test_refiner_worker_rejects_invalid_full_artifact(tmp_path, monkeypatch):
     assert failure["failure_kind"] == "agent_output_contract"
     assert failure["schema_version"] == 1
     assert (tmp_path / "attempt/completion.json").exists()
-    assert (tmp_path / "attempt/failure.json").exists()
+    assert failure["raw_agent_output"] == {"shared_guide": "bad"}
+    assert not (tmp_path / "attempt/failure.json").exists()
 
 
 def test_refiner_size_retry_receives_raw_previous_output_and_all_counts(tmp_path, monkeypatch):

@@ -17,7 +17,7 @@ Read in this order:
 | [`branch-scope.md`](branch-scope.md) | Active ACE + Safe PCE systems, retained failure-analysis evidence, and archive boundary |
 | [`../project_issues.md`](../project_issues.md) | Current research decisions and unresolved methodological risks; not a run-progress log |
 | [`paired-blocking-signal-learning.md`](paired-blocking-signal-learning.md) | Current binary paired blocking-signal target, clean127 derivative, full Checker-to-Reflector evidence, v5 Ref/Cur prompt and frozen iteration-9 diagnostic |
-| [`engineering-contracts.md`](engineering-contracts.md) | Shared execution requirements: cluster resource ratios, prepared Git history, isolation, artifact persistence, cleanup, and launch checks |
+| [`engineering-contracts.md`](engineering-contracts.md) | Necessary-flow whitelist; shared execution, isolation, retry/checkpoint, nonblocking diagnostics and low-file-count logging |
 | [`safe-pce.md`](safe-pce.md) | Current Safe PCE selection, execution reliability, and the frozen within-task Plan-pair derivative |
 | [`safe-pce-ace-gepa.md`](safe-pce-ace-gepa.md) | Opt-in task-only Safe PCE evaluation for the retained hybrid ACE/GEPA learner; Planner-owned application notes |
 | [`swe-rpg-learning-data.md`](swe-rpg-learning-data.md) | Frozen RPG repository-disjoint train/validation/downstream holdouts, source-byte preservation, formal learning contract and comparison with Verified |
@@ -37,6 +37,7 @@ offline GEPA, and production failures:
 |---|---|
 | [`knowledge/agent-budgeting.md`](knowledge/agent-budgeting.md) | Changing steps, command timeouts, phase deadlines, or Slurm limits |
 | [`knowledge/checkpoint-and-retry.md`](knowledge/checkpoint-and-retry.md) | Changing resume, retries, or batch takeover |
+| [`knowledge/blocking-policy-acceptance-20261028.md`](knowledge/blocking-policy-acceptance-20261028.md) | Whitelist-based Safe PCE/ACE audit, diagnostic-failure injection and retained integrity boundaries |
 | [`knowledge/isolation-and-artifacts.md`](knowledge/isolation-and-artifacts.md) | Changing Agent visibility, workspaces, or evidence flow |
 | [`knowledge/learning-evidence-fidelity-audit-20261022.md`](knowledge/learning-evidence-fidelity-audit-20261022.md) | Auditing Plan preservation, raw-evidence identity projection, partial learning evidence, and legacy fallback truncation |
 | [`knowledge/rpg-smoke-v6-dataflow-audit-20261028.md`](knowledge/rpg-smoke-v6-dataflow-audit-20261028.md) | Terminal RPG P/C/E/Ref/Cur handoffs, replay-versus-execution accounting, actual required/optional reads and remaining coverage limits |

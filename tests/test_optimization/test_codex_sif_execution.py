@@ -1,3 +1,4 @@
+import json
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -326,7 +327,9 @@ def test_image_interpreter_reaches_every_native_process(tmp_path, monkeypatch, r
     with runtime._isolated_codex_environment(model) as environment:
         with boundary.launch(model, environment, attempt) as (prefix, _, _, _):
             assert prefix[-2:] == ["/usr/local/bin/python3", "/opt/vibe-codex/private_mount.py"]
-    assert (attempt / "codex_sif_interpreter.json").is_file()
+    events = [json.loads(line) for line in (attempt / "audit_events.jsonl").read_text().splitlines()]
+    assert any(row["event"] == "sif_interpreter_probe" for row in events)
+    assert not (attempt / "codex_sif_interpreter.json").exists()
 
 
 @pytest.mark.parametrize("returncode,stdout,stderr", [(127, "", "python3: not found"),

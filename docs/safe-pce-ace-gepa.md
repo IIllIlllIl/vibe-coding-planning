@@ -2,6 +2,18 @@
 
 ## Method and interpretation
 
+Engineering scope follows the [necessary-flow whitelist](engineering-contracts.md#necessary-flow-whitelist).
+Original Plans, patches, P/C/E trajectories, learning inputs, scores and recovery
+state are the main flow. Derived diagnostics never gate that flow. This includes
+the distinction between the mandatory `safe_pce_evaluations.jsonl` replay record
+and the optional duplicate `safe_pce_physical_evaluations.jsonl` index; file
+extensions do not determine authority. Agent errors use the shared bounded
+retry path. The repository PCE backend now reuses Online's terminal Agent-failure
+policy: three failures in one Planner/Coder phase yield 0 with explicit
+`agent_failed` / evaluator `not_run`, the last original failure trajectory,
+and any completed earlier phase. Infrastructure/evaluation failures remain
+unscored and retry the unfinished phase; they are not imputed as U.
+
 This opt-in backend learns **reusable Plan blockers and their investigation
 guides from implementation outcomes**. A blocker is a flaw in a proposed
 approach that materially threatens correct implementation or critical task
@@ -16,7 +28,8 @@ The engineering baseline is the completed hybrid ACE flow represented by
 Safe PCE P/C/E execution components used by the PolyBench candidate77x2 run.
 SWE-Verified uses its existing Safe PCE implementation through the same adapter.
 Historical run configs identify proven components, not approved new datasets
-or launch budgets. The older Online optimizer is not the execution baseline.
+or launch budgets. The older Online optimizer is not the execution baseline. Its existing
+`scored_agent_failure` data constructor is reused, not its scheduling loop.
 
 ```text
 task + frozen repository + candidate
@@ -156,10 +169,10 @@ substitution or keyword-based rejection. Private credential isolation,
 ignored result roots and a separate post-run review replace scattered log
 filtering; see the [shared contract](engineering-contracts.md#private-results-and-post-run-credential-review).
 Vendor-redacted Native exports remain unchanged and are not execution-input
-hash authorities. Original PreToolUse command records supply that evidence;
-PostToolUse callbacks are neither collected nor required for completion. These
-source changes require a fresh execution identity; historical outputs and
-checkpoints are not rewritten or re-certified by the new policy.
+hash authorities. PreToolUse checks remain in force before execution. Command/receipt coverage
+comparison has been deleted; optional hook logs do not gate completion.
+Source and terminal-Agent scoring changes require a fresh execution identity;
+historical outputs and checkpoints are not rewritten or re-certified.
 
 ## Scores, evidence and selection
 
@@ -334,8 +347,9 @@ remain unchanged.
 A new-mode sampler subclass retains GEPA's queue/RNG serialization and corrects
 duplicate IDs in epoch-tail padding. It requires enough distinct training tasks
 for a full minibatch. Historical modes keep their original sampling semantics.
-Post-search proposal-threshold/report failures now enter the controller's
-existing failed-status path instead of leaving stale `running` authority.
+A proposal-count shortfall is a completion warning, not a gate that discards
+available results. Required result persistence still uses Controller recovery;
+optional report/export failures remain diagnostic.
 
 ## Configuration and preparation
 
@@ -365,7 +379,7 @@ these still need experiment-specific review. It uses a new run identity and
 never imports an old optimizer state or ledger.
 Explicit `--max-iterations`, `--minibatch-size`, and `--max-metric-calls`
 can reduce a proven formal baseline to a smoke without copying its controller.
-The iteration override also sets the required proposal count; the projected
+The iteration override also sets the diagnostic proposal target; the projected
 metric cost is recalculated for the actual split, repetitions and budget.
 
 The resulting snapshot has:

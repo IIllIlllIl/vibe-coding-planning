@@ -6,16 +6,17 @@ SIF runtime and returns the same exact Plan/patch and trajectory interfaces.
 from __future__ import annotations
 
 from dataclasses import replace
-import hashlib
 from pathlib import Path
 
 from jinja2 import StrictUndefined, Template
 
+from src.agents.output_contract import AgentOutputContractError
 from src.agents.runtime import codex_options, executor_name, run_agent
 from src.agents.plan_submission import validate_human_plan, validate_code_submission
 from src.environment.source_access import extract_http_urls
 from src.exceptions import AgentTaskError
 from src.optimization.hpc.task_batch import atomic_json
+from src.optimization.audit import optional_diagnostic
 
 
 PLAN_PROTOCOL = """Use the native tools to investigate the task. Finish with the
@@ -61,6 +62,9 @@ def agent_runner(default, *, role, config, case, workspace, attempt_dir,
             agent_config = replace(args[0], agent=replace(args[0].agent,
                 max_steps=0, cost_limit=0.0, timeout=0))
             args = (agent_config, *args[1:])
+            # The Worker persists failure trajectories in its retry envelope.
+            # Do not maintain separate Plan/Code failure copies in Safe PCE.
+            kwargs = dict(kwargs, failure_trajectory_path=None)
             if role == "code":
                 kwargs = dict(kwargs, phase_timeout_seconds=None)
             usage.write_optional("agent_execution_policy", phase=role, executor=executor_name(backend),
@@ -123,7 +127,6 @@ def _execute(config, issue, env, *, phase, variables, backend, sif_path, workspa
                        "submission_contract": {"phase": phase, "allow_empty": allow_empty_submission,
                                                "workdir": workdir},
                        "context": {"phase": phase, "instance_id": instance_id}},
-        source_access_log=source_access_path,
         output_files=("codex_final_response.txt", "submission.patch") if phase == "code"
                      else ("codex_final_response.txt",))
     try:
@@ -131,12 +134,11 @@ def _execute(config, issue, env, *, phase, variables, backend, sif_path, workspa
             working_directory=workspace, attempt_dir=attempt_dir, system=system, user=user,
             task="Prepare the Plan." if phase == "plan" else "Implement the supplied Plan.",
             evidence_manifest_path=evidence / "manifest.json")
-    except Exception as exc:
-        trajectory = getattr(exc, "trajectory", [])
-        atomic_json(attempt_dir / "failure.json", {"error_type": type(exc).__name__,
-                    "error": str(exc), "trajectory": trajectory})
-        raise
-    atomic_json(attempt_dir / "trajectory.json", trajectory)
+    except AgentOutputContractError as exc:
+        raise AgentTaskError(str(exc), phase=phase, reason="missing_final_submission",
+                             trajectory=getattr(exc, "trajectory", [])) from exc
+    with optional_diagnostic("native trajectory duplicate"):
+        atomic_json(attempt_dir / "trajectory.json", trajectory)
     usage.write_optional("codex_agent_completed", phase=phase, executor="codex_cli", model=backend["model"],
                 reasoning_effort=backend["reasoning_effort"])
     if any(event.get("type") in {"turn.failed", "error"}
@@ -186,6 +188,5 @@ def _run_code(config, plan, issue, env, *, model_wrapper=None, failure_trajector
         validate_code_submission(raw, patch_bytes, allow_empty=allow_empty_submission, staged_sha256=digest[0])
     except ValueError as exc:
         raise AgentTaskError(str(exc), phase="code", reason="code_submission_mismatch", trajectory=trajectory) from exc
-    atomic_json(context["attempt_dir"] / "submission.json", {
-        "patch_sha256": hashlib.sha256(patch_bytes).hexdigest(), "host_patch_transformation": False})
+    # PCE's code checkpoint records the verified hash and unchanged patch.
     return patch_bytes.decode("utf-8"), trajectory

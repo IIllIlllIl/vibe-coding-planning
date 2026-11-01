@@ -31,6 +31,23 @@ The [RPG data contract](../docs/swe-rpg-learning-data.md) and
 own eligibility, budgets and interpretation boundaries. Configuration and
 historical smoke acceptance are not launch or capacity authorization.
 
+## Necessary-flow engineering smoke
+
+[RPG smoke v9](gepa_safe_pce_rpg_codex_smoke_v9_20261101.yaml),
+[PCE source](safe_pce_ace_rpg_codex_smoke_source_v9_20261101.yaml) and
+[Supervisor](safe_pce_ace_rpg_codex_smoke_supervisor_v9_20261101.yaml) bind the
+2026-11-01 recovery/diagnostic simplification to a fresh one-proposal run.
+It retains completed v8's three development tasks, effective prompts, all-Codex
+high, mini 2, window 1, cap 10 and 5–6 PCE slots. Terminal Agent failures follow
+the reviewed Online-zero policy; no old outputs or counters are imported.
+This authorizes only the requested smoke, not formal training.
+
+Acceptance is behavior-first: inspect real attempts, unchanged Agent evidence,
+Evaluator/learning handoffs and Supervisor recovery before another static audit
+of remaining stop/retry gates. A clean run does not exercise every failure path;
+report unobserved branches separately. See the
+[current policy audit](../docs/knowledge/blocking-policy-acceptance-20261028.md).
+
 ## Frozen contracts and reproduction
 
 The post-layout engineering binding is [RPG smoke v8](gepa_safe_pce_rpg_codex_smoke_v8_20261031.yaml),

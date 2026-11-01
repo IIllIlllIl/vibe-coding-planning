@@ -62,14 +62,12 @@ def _model(value: dict[str, Any], *, temperature: float) -> ModelConfig:
         api_base="" if value.get("executor") == "codex_cli" else str(value["api_base"]),
         api_key_env="" if value.get("executor") == "codex_cli" else str(value.get("api_key_env", "DEEPSEEK_API_KEY")),
         temperature=float(value.get("temperature", temperature)),
-        max_steps=int(value.get("max_steps", 0)),
-        cost_limit=float(value.get("cost_limit", 0.0)),
+        max_steps=0,
+        cost_limit=0.0,
         timeout=int(value.get("timeout", 1800)),
         max_attempts=int(value.get("max_attempts", 3)),
         thinking=thinking,
     )
-    if model.max_steps != 0 or model.cost_limit != 0.0:
-        raise ValueError("SWE-Verified Agent step and cost limits must be disabled")
     if model.max_attempts != 3:
         raise ValueError("SWE-Verified Agent task attempts must be three")
     return model

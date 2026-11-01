@@ -14,6 +14,7 @@ from types import SimpleNamespace
 import pytest
 
 import scripts.hpc_resume_loop as resume_loop
+import scripts.hpc_supervisor_service as supervisor_service
 from scripts.hpc_resume_loop import (
     AION_REMOTE_EMBEDDED_PYTHON,
     REMOTE_EMBEDDED_PYTHON,
@@ -31,14 +32,62 @@ SERVICE_SCRIPT = REPO_ROOT / "scripts" / "hpc_supervisor_service.py"
 SEQUENCE_SCRIPT = REPO_ROOT / "scripts" / "hpc_resume_sequence.py"
 
 
+def test_submit_slice_retains_job_id_when_console_is_broken(monkeypatch):
+    submissions = []
+    monkeypatch.setattr(resume_loop, "_batch_command", lambda *args, **kwargs: ["fake-submit"])
+    def submit(command):
+        submissions.append(command)
+        return subprocess.CompletedProcess(command, 0, '{"job_id": "12345"}', "warning")
+    monkeypatch.setattr(resume_loop, "run_command", submit)
+    def broken_console(*args, **kwargs):
+        raise BrokenPipeError("diagnostic stdout unavailable")
+    monkeypatch.setattr("builtins.print", broken_console)
+    assert resume_loop.submit_slice(SimpleNamespace()) == "12345"
+    assert submissions == [["fake-submit"]]
+
+
+@pytest.mark.parametrize("blocked_log,missing_checkout", [(False, False), (True, False), (True, True)])
+def test_supervisor_log_is_optional_but_checkout_is_required(tmp_path, monkeypatch, blocked_log, missing_checkout):
+    """Execute only a harmless shell stub, never tmux, a model or Slurm."""
+    root = tmp_path / "checkout"
+    if not missing_checkout:
+        root.mkdir()
+    log_path = tmp_path / "log-target"
+    if blocked_log:
+        log_path.mkdir()  # Cannot redirect output to a directory.
+    fake_bin = tmp_path / "bin"
+    fake_bin.mkdir()
+    counter = tmp_path / "executions"
+    stub = fake_bin / "caffeinate"
+    stub.write_text("#!/bin/sh\nprintf 'once\\n' >> " + shlex.quote(str(counter)) + "\nexit 7\n")
+    stub.chmod(0o755)
+    monkeypatch.setattr(supervisor_service, "REPO_ROOT", root)
+    monkeypatch.setattr(supervisor_service, "_has_session", lambda session: False)
+    monkeypatch.setattr(supervisor_service, "mark_private_artifact_dir", lambda path: None)
+    commands = []
+    monkeypatch.setattr(supervisor_service, "_run", lambda command:
+                        commands.append(command) or subprocess.CompletedProcess(command, 0, "", ""))
+    assert supervisor_service.main(["start", "--session", "synthetic", "--log", str(log_path),
+                                    "--gepa-config", "not-executed.yaml"]) == 0
+    assert len(commands) == 1
+    result = subprocess.run(["/bin/bash", "-c", commands[0][-1]], capture_output=True, text=True,
+                            env={**os.environ, "PATH": f"{fake_bin}{os.pathsep}{os.environ['PATH']}"})
+    if missing_checkout:
+        assert result.returncode != 0
+        assert not counter.exists()
+    else:
+        assert result.returncode == 7
+        assert counter.read_text() == "once\n"
+
+
 @pytest.mark.parametrize("cleanup", ["staging", "workspace"])
 @pytest.mark.parametrize("completed", [True, False])
 def test_optional_cleanup_failure_preserves_completed_run(monkeypatch, cleanup, completed):
     """Policy acceptance, not an assertion that today's hard stop is correct."""
     state = {"submissions": 1}
     config = SimpleNamespace(submit=True, slice_time="00:08:00", poll_interval_seconds=0,
-        target_iterations=0, max_runs=60, remote_run_snapshot="synthetic-private-run",
-        recover_controller_error_types_once=(), once=True)
+        target_iterations=0, remote_run_snapshot="synthetic-private-run",
+        once=True)
     monkeypatch.setattr(resume_loop, "_supervisor_lock", lambda config: nullcontext())
     monkeypatch.setattr(resume_loop, "_load_supervisor_state", lambda config: state)
     monkeypatch.setattr(resume_loop, "_save_supervisor_state", lambda *args: None)
@@ -596,8 +645,6 @@ def test_hpc_resume_loop_resubmits_until_completed(tmp_path: Path) -> None:
             "0",
             "--poll-interval",
             "0",
-            "--max-runs",
-            "3",
             "--batch-script",
             str(fake_batch),
             "--state-file",
@@ -628,7 +675,7 @@ def test_hpc_resume_loop_resubmits_until_completed(tmp_path: Path) -> None:
     )
 
 
-def test_hpc_resume_loop_stops_on_failed_result(tmp_path: Path) -> None:
+def test_hpc_resume_loop_stops_on_confirmed_provider_exhaustion(tmp_path: Path) -> None:
     fake_bin = tmp_path / "bin"
     fake_bin.mkdir()
     local_root = REPO_ROOT / ".tmp_hpc_smoke" / "test_hpc_resume_loop_failed"
@@ -636,7 +683,7 @@ def test_hpc_resume_loop_stops_on_failed_result(tmp_path: Path) -> None:
     fake_batch = tmp_path / "hpc_submit_batch.sh"
     batch_log = tmp_path / "batch.log"
     statuses = tmp_path / "statuses.txt"
-    statuses.write_text('{"state":"result","status":"failed"}\n', encoding="utf-8")
+    statuses.write_text('{"state":"result","status":"failed","error_type":"PermanentProviderError"}\n', encoding="utf-8")
     _fake_batch_script(fake_batch, batch_log)
     _fake_ssh(fake_bin / "ssh", statuses, tmp_path / "ssh.log")
     result = subprocess.run(
@@ -668,7 +715,7 @@ def test_hpc_resume_loop_stops_on_failed_result(tmp_path: Path) -> None:
     assert not batch_log.exists()
 
 
-def test_hpc_resume_loop_allows_one_named_controller_failure_recovery(
+def test_hpc_resume_loop_retries_controller_failure_without_named_exception(
     tmp_path: Path,
 ) -> None:
     fake_bin = tmp_path / "bin"
@@ -696,8 +743,6 @@ def test_hpc_resume_loop_allows_one_named_controller_failure_recovery(
             "0",
             "--state-file",
             str(state_file),
-            "--recover-controller-error-type-once",
-            "TaskBatchBlocked",
             "--batch-script",
             str(fake_batch),
             "--config",
@@ -712,7 +757,7 @@ def test_hpc_resume_loop_allows_one_named_controller_failure_recovery(
     )
 
     assert result.returncode == 0, result.stderr
-    assert "allowing one audited Controller recovery" in result.stdout
+    assert "retrying incomplete Controller work" in result.stdout
     assert batch_log.is_file()
     state = json.loads(state_file.read_text(encoding="utf-8"))
     assert state["controller_failure_recoveries"] == 1
@@ -845,7 +890,7 @@ def test_hpc_supervisor_stops_after_sync_disk_full(tmp_path: Path) -> None:
     assert state["submissions"] == 0
 
 
-def test_hpc_supervisor_stops_after_staging_error(tmp_path: Path) -> None:
+def test_hpc_supervisor_retries_staging_error(tmp_path: Path) -> None:
     fake_bin = tmp_path / "bin"
     fake_bin.mkdir()
     local_root = REPO_ROOT / ".tmp_hpc_smoke" / "test_staging_error"
@@ -882,10 +927,9 @@ def test_hpc_supervisor_stops_after_staging_error(tmp_path: Path) -> None:
         env=_env(fake_bin),
     )
 
-    assert result.returncode == 1
+    assert result.returncode == 0
     state = json.loads(state_path.read_text(encoding="utf-8"))
-    assert state["status"] == "blocked_submission_error"
-    assert state["last_submission_error"]["marker"] == "STAGING_ERROR"
+    assert state["status"] == "waiting_after_submission_failure"
 
 
 def test_hpc_supervisor_blocks_when_runtime_config_changes(tmp_path: Path) -> None:
@@ -907,8 +951,6 @@ def test_hpc_supervisor_blocks_when_runtime_config_changes(tmp_path: Path) -> No
             str(SCRIPT),
             "--poll-interval",
             "1",
-            "--max-runs",
-            "2",
             "--state-file",
             str(tmp_path / "state.json"),
             "--batch-script",

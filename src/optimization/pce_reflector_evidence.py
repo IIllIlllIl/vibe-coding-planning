@@ -157,7 +157,7 @@ def pce_reflector_views(record, archive):
                 files[paths[name]] = (_trajectory(item, archive, path) if key.endswith("_trajectory")
                     else _evaluator(item, archive, path) if key == "evaluator_result" else item)
                 indexed[key] = {"file": paths[name]}
-            elif key in {"raw_plan_submission", "raw_patch", "code_workspace_evidence",
+            elif key in {"raw_plan_submission", "raw_patch", "code_workspace_evidence", "last_worker_output",
                          "source_access", "patch_submission"}:
                 indexed[key] = _ref(archive, path, item)
             else:

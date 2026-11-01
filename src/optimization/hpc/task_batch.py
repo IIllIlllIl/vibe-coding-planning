@@ -9,14 +9,15 @@ from __future__ import annotations
 from dataclasses import dataclass
 from datetime import datetime, timezone
 import json
+import errno
 import os
 from pathlib import Path
 import shutil
 import time
 from typing import Any, Callable, Sequence
 
-from src.exceptions import ControllerYield
-from src.agents.output_contract import AgentOutputContractError
+from src.exceptions import ControllerYield, confirmed_run_stop
+from src.optimization.audit import optional_diagnostic
 from src.artifact_policy import mark_artifact_path, mark_private_artifact_dir
 from src.optimization.hpc.config import HPCConfig
 from src.optimization.hpc.slurm import (
@@ -44,31 +45,6 @@ TERMINAL_STATES = {
     "TIMEOUT",
 }
 
-# Compatibility for worker outputs written before the PCCE contract-error
-# inheritance bug was discovered. CheckerOutputContractError is a ValueError,
-# so those workers labelled a recoverable malformed Agent submission as
-# blocking. The Controller owns the final task-attempt decision and may safely
-# retry this one evidence-rich Agent failure without changing method inputs.
-RETRYABLE_WORKER_ERROR_TYPES = {"CheckerOutputContractError"}
-
-# These legacy worker outputs predate the explicit distinction between a
-# case-local operational failure and a run-integrity failure.  They are safe to
-# report as incomplete because the worker preserved an identity-bound output
-# and no scientific outcome was assigned.  Keep this allowlist deliberately
-# narrow; malformed output and shared-runtime failures must still block.
-CASE_LOCAL_OPERATIONAL_FAILURES = {
-    (
-        "swe_verified_pce",
-        "SWEVerifiedEvaluatorOperationalError",
-        "evaluator_sif_preparation_mismatch",
-    ),
-    (
-        "swe_verified_pce",
-        "SWEVerifiedEvaluatorOperationalError",
-        "test_spec_failed",
-    ),
-}
-
 
 @dataclass(frozen=True)
 class TaskFiles:
@@ -80,22 +56,43 @@ class TaskFiles:
 
 
 class TaskBatchBlocked(RuntimeError):
-    """A task batch reached a durable blocking terminal state."""
+    """An attempt cannot advance; retained evidence determines recovery."""
+
+    def __init__(self, message, *, failure_record=None):
+        super().__init__(message)
+        self.failure_record = failure_record or {}
 
 
 class TaskAttemptsExhausted(TaskBatchBlocked):
     """All configured fresh-Agent attempts ended without valid output."""
 
 
+def retry_io(operation):
+    """Retry the same storage operation, never the Agent that produced it."""
+    for attempt in range(3):
+        try:
+            return operation()
+        except OSError as exc:
+            if exc.errno in {errno.ENOSPC, errno.EDQUOT} or attempt == 2:
+                raise
+            time.sleep(0.1 * (attempt + 1))
+
+
+def read_json(path: Path):
+    return retry_io(lambda: json.loads(path.read_text(encoding="utf-8")))
+
+
 def atomic_json(path: Path, value: Any) -> None:
-    mark_artifact_path(path)
-    path.parent.mkdir(parents=True, exist_ok=True)
+    payload = json.dumps(value, indent=2, ensure_ascii=False, sort_keys=True) + "\n"
     temporary = path.with_suffix(path.suffix + ".tmp")
-    temporary.write_text(
-        json.dumps(value, indent=2, ensure_ascii=False, sort_keys=True) + "\n",
-        encoding="utf-8",
-    )
-    temporary.replace(path)
+
+    def save():
+        mark_artifact_path(path)
+        path.parent.mkdir(parents=True, exist_ok=True)
+        temporary.write_text(payload, encoding="utf-8")
+        temporary.replace(path)
+
+    retry_io(save)
 
 
 class SlurmTaskBatch:
@@ -125,13 +122,6 @@ class SlurmTaskBatch:
     ) -> list[dict[str, Any]]:
         """Return validated outputs or yield after durable asynchronous work."""
         mark_private_artifact_dir(batch_dir)
-        if finalize_case_failure is None:
-            def finalize_case_failure(task: TaskFiles, value: dict[str, Any]):
-                return self._finalize_known_case_failure(
-                    task,
-                    value,
-                    fingerprint=fingerprint,
-                )
         state_path = batch_dir / "task_state.json"
         state = self._load_or_create_state(
             state_path,
@@ -139,14 +129,13 @@ class SlurmTaskBatch:
         )
         phase = str(state["phase"])
         reopen_reason: str | None = None
-        if phase == "BLOCKED" and self._is_recoverable_contract_block(state):
-            reopen_reason = "recoverable_checker_output_contract_misclassification"
-        elif phase == "BLOCKED" and self._is_finalizable_case_failure_block(
-            state,
-            tasks,
-            finalize_case_failure,
-        ):
-            reopen_reason = "case_local_failure_deferred_for_final_report"
+        if phase == "EXHAUSTED":
+            # Callers finalize exhausted Agent outcomes. Only unfinished tasks
+            # enter another recovery wave; attempt IDs never overwrite history.
+            state["recovery_attempt_offset"] = int(state["active_attempt"])
+            reopen_reason = "retry_incomplete_tasks"
+        elif phase == "BLOCKED" and not confirmed_run_stop(state.get("terminal_failure", {})):
+            reopen_reason = "retry_incomplete_tasks"
         if reopen_reason is not None:
             self._reopen_block(
                 state_path,
@@ -167,7 +156,7 @@ class SlurmTaskBatch:
                 if phase == "EXHAUSTED"
                 else TaskBatchBlocked
             )
-            raise error_type(error)
+            raise error_type(error, failure_record=state.get("terminal_failure"))
 
         attempt = int(state["active_attempt"])
         outputs, failed, blocking = self._inspect_outputs(
@@ -202,7 +191,7 @@ class SlurmTaskBatch:
                 job_id=state.get("active_job_id"),
                 details=details,
             )
-            raise TaskBatchBlocked(error)
+            raise TaskBatchBlocked(error, failure_record=state.get("terminal_failure"))
         if len(outputs) == len(tasks):
             self._save_state(
                 state_path,
@@ -301,6 +290,9 @@ class SlurmTaskBatch:
                     continue
                 missing_since.pop(key, None)
                 normalized = normalize_slurm_state(status.state)
+                if normalized == "CANCELLED":
+                    raise TaskBatchBlocked("Slurm task cancelled; explicit restart required",
+                        failure_record={"slurm_state": normalized, "job_id": str(job_id)})
                 if normalized in TERMINAL_STATES:
                     self._save_slurm_status(
                         task,
@@ -339,7 +331,7 @@ class SlurmTaskBatch:
             attempt += 1
 
         self._reclaim_attempt_workspaces(pending, attempt=attempt - 1)
-        if attempt > self.hpc.max_task_attempts:
+        if attempt > int(state.get("recovery_attempt_offset", 0)) + self.hpc.max_task_attempts:
             instance_ids = ", ".join(task.instance_id for task in pending)
             error = (
                 "Slurm Agent tasks failed without valid atomic output after "
@@ -351,7 +343,7 @@ class SlurmTaskBatch:
                 phase="EXHAUSTED",
                 error=error,
                 failure_kind="task_attempts_exhausted",
-                attempt=self.hpc.max_task_attempts,
+                attempt=attempt - 1,
                 job_id=str(job_id) if job_id else None,
                 details=[
                     {
@@ -450,23 +442,21 @@ class SlurmTaskBatch:
                 )
                 failed.append(task)
                 continue
-            if (
-                value.get("status") == "blocking_failed"
-                and value.get("error_type") not in RETRYABLE_WORKER_ERROR_TYPES
-            ):
-                finalized = (
-                    finalize_case_failure(task, value)
-                    if finalize_case_failure is not None
-                    else None
-                )
+            if value.get("status") != "completed" and finalize_case_failure is not None:
+                finalized = finalize_case_failure(task, value)
                 if finalized is not None:
                     outputs[task.index] = finalized
                     continue
+            if (
+                value.get("status") != "completed"
+                and confirmed_run_stop(value)
+            ):
                 blocking.append(
                     (
                         task,
                         {
                             "failure_stage": "worker_execution",
+                            "errno": value.get("errno"),
                             "error_type": str(
                                 value.get("error_type", "WorkerBlockingFailure")
                             ),
@@ -490,104 +480,13 @@ class SlurmTaskBatch:
                     stage="host_output_validation",
                     exc=exc,
                 )
-                if isinstance(exc, AgentOutputContractError):
-                    failed.append(task)
+                if confirmed_run_stop({"error_type": type(exc).__name__, "errno": getattr(exc, "errno", None)}):
+                    blocking.append((task, {**failure, "errno": getattr(exc, "errno", None)}))
                 else:
-                    # Callers keep input identity/integrity failures distinct
-                    # from explicitly retryable Agent output contracts.
-                    blocking.append((task, failure))
+                    failed.append(task)
                 continue
             outputs[task.index] = value
         return outputs, failed, blocking
-
-    @staticmethod
-    def _is_recoverable_contract_block(state: dict[str, Any]) -> bool:
-        failure = state.get("terminal_failure")
-        if not isinstance(failure, dict):
-            return False
-        if failure.get("failure_kind") != "blocking_task_output":
-            return False
-        details = failure.get("details")
-        return bool(details) and all(
-            isinstance(item, dict)
-            and item.get("error_type") in RETRYABLE_WORKER_ERROR_TYPES
-            for item in details
-        )
-
-    @staticmethod
-    def _finalize_known_case_failure(
-        task: TaskFiles,
-        value: dict[str, Any],
-        *,
-        fingerprint: str,
-    ) -> dict[str, Any] | None:
-        identity = (
-            str(value.get("mode", "")),
-            str(value.get("error_type", "")),
-            str(value.get("outcome_reason", "")),
-        )
-        if identity not in CASE_LOCAL_OPERATIONAL_FAILURES:
-            return None
-        if value.get("status") != "blocking_failed":
-            return None
-        if (
-            value.get("fingerprint") != fingerprint
-            or value.get("instance_id") != task.instance_id
-            or value.get("task_index") != task.index
-            or value.get("task_outcome") != "unknown"
-            or value.get("final_validation_label") is not None
-        ):
-            return None
-        return {
-            "schema_version": 1,
-            "status": "incomplete",
-            "pce_status": "incomplete",
-            "mode": value["mode"],
-            "fingerprint": fingerprint,
-            "task_index": task.index,
-            "instance_id": task.instance_id,
-            "task_outcome": "unknown",
-            "outcome_reason": value["outcome_reason"],
-            "retry_disposition": "no_retry",
-            "operational_failure_scope": "case",
-            "last_worker_output": dict(value),
-            "final_validation_label": None,
-        }
-
-    @staticmethod
-    def _is_finalizable_case_failure_block(
-        state: dict[str, Any],
-        tasks: Sequence[TaskFiles],
-        finalize_case_failure: (
-            Callable[[TaskFiles, dict[str, Any]], dict[str, Any] | None] | None
-        ),
-    ) -> bool:
-        if finalize_case_failure is None:
-            return False
-        failure = state.get("terminal_failure")
-        if not isinstance(failure, dict):
-            return False
-        if failure.get("failure_kind") != "blocking_task_output":
-            return False
-        details = failure.get("details")
-        if not isinstance(details, list) or not details:
-            return False
-        tasks_by_instance = {task.instance_id: task for task in tasks}
-        for item in details:
-            if not isinstance(item, dict):
-                return False
-            task = tasks_by_instance.get(str(item.get("instance_id", "")))
-            if task is None or not task.output_path.is_file():
-                return False
-            try:
-                value = json.loads(task.output_path.read_text(encoding="utf-8"))
-            except Exception:
-                return False
-            if not isinstance(value, dict):
-                return False
-            if finalize_case_failure(task, value) is None:
-                return False
-        return True
 
     @staticmethod
     def _reopen_block(
@@ -609,10 +508,10 @@ class SlurmTaskBatch:
                 "VIBE_CONTROLLER_GIT_HEAD"
             ),
         }
-        evidence_path.parent.mkdir(parents=True, exist_ok=True)
-        with evidence_path.open("a", encoding="utf-8") as handle:
-            handle.write(json.dumps(record, ensure_ascii=False, sort_keys=True) + "\n")
-            handle.flush()
+        with optional_diagnostic("historical task reclassification log"):
+            evidence_path.parent.mkdir(parents=True, exist_ok=True)
+            with evidence_path.open("a", encoding="utf-8") as handle:
+                handle.write(json.dumps(record, ensure_ascii=False, sort_keys=True) + "\n")
         state.pop("terminal_failure", None)
         SlurmTaskBatch._save_state(
             state_path,

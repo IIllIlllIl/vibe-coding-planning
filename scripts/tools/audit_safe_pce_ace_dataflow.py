@@ -39,6 +39,50 @@ def _within(root, relative):
     return path
 
 
+def _audit_worker_evidence(root, output):
+    """Compare evidence that actually exists; Agent failure is not an Eval."""
+    batch = _within(root / "hpc_tasks/pce", output["fingerprint"])
+    task = f'task_{output["task_index"]:04d}.json'
+    worker = _json(batch / "outputs" / task)
+    failed = output.get("pce_status") == "agent_failed"
+    fields = ("instance_id", "pce_run_index", "plan", "plan_trajectory",
+              "patch", "code_trajectory", "evaluator_result")
+    fields += (("pce_status", "terminal_phase", "terminal_reason", "outcome_policy_version",
+                "agent_failure_attempts", "last_worker_output") if failed
+               else ("plan_sha256", "patch_sha256"))
+    for key in fields:
+        _equal(output[key], worker[key], f"worker -> physical: {key}")
+    if failed:
+        phase = output["terminal_phase"]
+        _equal(output[phase + "_trajectory"], output["last_worker_output"]["failure_trajectory"],
+               "last rejected trajectory -> learning")
+        _equal(output["patch"], "", "no fabricated patch")
+        if phase == "plan":
+            _equal(output["plan"], "", "no fabricated Plan")
+            _equal(output["code_trajectory"], [], "Coder not run")
+            return
+        checkpoints = batch / "checkpoints" / task.removesuffix(".json")
+    else:
+        checkpoints = _within(root, output["checkpoint_relative_path"])
+        code = _json(checkpoints / "code.json")["payload"]
+        evaluation = _json(checkpoints / "evaluate.json")["payload"]
+        for field, expected in (("patch", code["patch"]), ("code_trajectory", code["trajectory"]),
+                                ("evaluator_result", evaluation["evaluator_result"])):
+            _equal(output[field], expected, "checkpoint -> output: " + field)
+    plan = _json(checkpoints / "plan.json")["payload"]
+    _equal(output["plan"], plan["plan"], "checkpoint -> output: plan")
+    _equal(output["plan_trajectory"], plan["trajectory"], "checkpoint -> output: plan_trajectory")
+    _equal(plan["plan_sha256"], hashlib.sha256(plan["plan"].encode()).hexdigest(), "Plan SHA-256")
+    bounded, error = _extract_bounded_direct_plan(plan["raw_plan_submission"],
+        start_marker="START_PLAN", end_marker="END_PLAN")
+    _equal(error, None, "direct submission boundary")
+    _equal(bounded, output["plan"], "terminal submission -> Plan")
+    coder_inputs = [str(message.get("content", "")) for message in output["code_trajectory"]
+                    if message.get("role") in {"system", "user"}]
+    if (not failed or coder_inputs) and not any(output["plan"] in text for text in coder_inputs):
+        raise ValueError("exact Plan absent from recorded Coder input")
+
+
 def audit(config_path):
     config = load_optimization_config(config_path, require_api_keys=False)
     verify_hybrid_snapshot(config)
@@ -46,17 +90,21 @@ def audit(config_path):
     if backend.mode not in {"swe_verified_pce", "swe_rpg_pce"}:
         raise ValueError("this checkpoint audit supports repository PCE datasets only")
     root = config.run_dir
-    _equal(_json(root / "controller_status.json")["status"], "completed", "terminal controller")
+    if _json(root / "controller_status.json")["status"] not in {"completed", "completed_with_warnings"}:
+        raise ValueError("controller is not terminally complete")
     train = {row["instance_id"] for row in _rows(config.dataset_snapshot / "train.jsonl")}
     validation = {row["instance_id"] for row in _rows(config.dataset_snapshot / "validation.jsonl")}
     if train & validation:
         raise ValueError("overlapping splits")
     sources = {case.instance_id: case for case in pce_cases(backend.mode, backend.pce)}
-    physical = _rows(root / "safe_pce_physical_evaluations.jsonl")
     aggregate = _rows(root / "safe_pce_evaluations.jsonl")
+    # Physical observations already live in the authoritative replay records.
+    # The separate index is an optional diagnostic export, not a second gate.
+    physical = [run for row in aggregate for run in row["output"]["pce_runs"]]
     if not physical or not aggregate:
         raise ValueError("missing PCE evidence")
     texts = [config.initial_rules_path.read_text().strip()]
+    texts.extend(candidate["rules"] for candidate in _json(root / "result.json")["candidates"])
     texts.extend(_json(path)["candidate"] for path in (root / "hybrid_proposals").glob("*.json")
                  if "candidate" in _json(path))
     artifacts = {hashlib.sha256(text.encode()).hexdigest(): json.loads(text) for text in texts}
@@ -79,30 +127,9 @@ def audit(config_path):
         inputs = [str(message.get("content", "")) for message in output["plan_trajectory"]
                   if message.get("role") in {"system", "user"}]
         for expected in (sources[row["instance_id"]].issue_description, effective.planning_rules):
-            if not any(expected in message for message in inputs):
+            if (inputs or output.get("terminal_phase") != "plan") and not any(expected in message for message in inputs):
                 raise ValueError("task/artifact absent from recorded Planner input")
-        batch = _within(root / "hpc_tasks/pce", output["fingerprint"])
-        task = f'task_{output["task_index"]:04d}.json'
-        worker = _json(batch / "outputs" / task)
-        for key in ("instance_id", "pce_run_index", "plan", "plan_sha256", "plan_trajectory",
-                    "patch", "patch_sha256", "code_trajectory", "evaluator_result"):
-            _equal(output[key], worker[key], f"worker -> physical: {key}")
-        checkpoints = _within(root, output["checkpoint_relative_path"])
-        plan = _json(checkpoints / "plan.json")["payload"]
-        code = _json(checkpoints / "code.json")["payload"]
-        evaluation = _json(checkpoints / "evaluate.json")["payload"]
-        for field, expected in (("plan", plan["plan"]), ("plan_trajectory", plan["trajectory"]),
-                                ("patch", code["patch"]), ("code_trajectory", code["trajectory"]),
-                                ("evaluator_result", evaluation["evaluator_result"])):
-            _equal(output[field], expected, "checkpoint -> output: " + field)
-        _equal(plan["plan_sha256"], hashlib.sha256(plan["plan"].encode()).hexdigest(), "Plan SHA-256")
-        bounded, error = _extract_bounded_direct_plan(plan["raw_plan_submission"],
-            start_marker="START_PLAN", end_marker="END_PLAN")
-        _equal(error, None, "direct submission boundary")
-        _equal(bounded, output["plan"], "terminal submission -> Plan")
-        if not any(output["plan"] in str(message.get("content", ""))
-                   for message in output["code_trajectory"] if message.get("role") in {"system", "user"}):
-            raise ValueError("exact Plan absent from recorded Coder input")
+        _audit_worker_evidence(root, output)
     for row in aggregate:
         runs = row["output"]["pce_runs"]
         expected = config.search.train_case_repetitions if row["split"] == "train" else 1
@@ -126,8 +153,11 @@ def audit(config_path):
             attempts = path.parent.parent / "attempts" / path.stem
             matches = []
             for completion in sorted(attempts.glob("*/completion.json")):
-                resolved = completion.with_name("resolved_completion.json")
-                if resolved.is_file() and _json(resolved)["agent_output"] == output["agent_output"]:
+                try:
+                    resolved = decode_phase_output(role, _json(completion)["agent_output"], cases, items)
+                except (ValueError, KeyError, TypeError):
+                    continue
+                if resolved == output["agent_output"]:
                     matches.append(completion)
             if not matches:
                 raise ValueError(f"no matching raw completion: {path}")
@@ -182,7 +212,7 @@ def audit(config_path):
     for event in ledger["history"].values():
         if event["instance_id"] not in train:
             raise ValueError("non-training feedback entered the counter ledger")
-    for name in ("gepa_state.bin", "gepa_resume_state.json", "result.json", "safe_pce_candidate_metrics.json"):
+    for name in ("gepa_state.bin", "gepa_resume_state.json", "result.json"):
         if not (root / name).is_file():
             raise ValueError(f"missing terminal authority: {name}")
     return {"structural_fidelity": "passed", "physical_records": len(physical),

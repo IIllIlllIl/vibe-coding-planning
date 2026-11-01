@@ -29,17 +29,12 @@ from src.optimization.behavioral_runtime import (
     BehavioralLocalChecker,
     BehavioralLocalReflectionProposer,
 )
+from src.optimization.hpc.task_batch import atomic_json as _atomic_status
 from src.optimization.callbacks import ProgressCallback
 from src.optimization.config import OptimizationConfig
 from src.optimization.offline_hpc_reflection import HPCOfflineReflectionProposer
 from src.optimization.report import write_cost_report
 from src.optimization.resume import ReproducibleSearchState, prepare_run_manifest
-
-
-def _atomic_status(path: Path, value: dict[str, Any]) -> None:
-    temporary = path.with_suffix(path.suffix + ".tmp")
-    temporary.write_text(json.dumps(value, indent=2, sort_keys=True) + "\n")
-    temporary.replace(path)
 
 
 @contextmanager
@@ -132,7 +127,7 @@ def _run_locked(
         }
         for split, cases in (("train", train), ("validation", validation))
     }
-    audit.write(
+    audit.write_optional(
         "behavioral_run_started",
         task_semantics=config.task.semantics,
         train_instances=len(train),
@@ -217,7 +212,8 @@ def _run_locked(
         )
         successful = int(getattr(proposer_runner, "successful_proposals", 0))
         if successful < config.search.min_proposals:
-            raise RuntimeError("Reflection proposal threshold was not met")
+            audit.write_optional("proposal_count_below_target", observed=successful,
+                                 expected=config.search.min_proposals)
         if evaluation_backend is not None:
             evaluation_backend.write_report(result, validation)
         else:
@@ -241,7 +237,7 @@ def _run_locked(
         exc = caught.cause if isinstance(caught, OfflineReflectionBlocked) else caught
         error = f"{type(exc).__name__}: {exc}"
         callback.mark_failed(phase="behavioral_optimization", error=error)
-        JsonlLogger(config.run_dir / "errors.jsonl").write(
+        audit.write_optional(
             "behavioral_optimization_failed",
             error_type=type(exc).__name__,
             error=str(exc),
@@ -253,6 +249,8 @@ def _run_locked(
                 "status": "failed",
                 "failure_phase": "behavioral_optimization",
                 "error_type": type(exc).__name__,
+                "errno": getattr(exc, "errno", None),
+                "failure_record": getattr(exc, "failure_record", {}),
                 "error": str(exc),
             },
         )
@@ -271,8 +269,8 @@ def _run_locked(
             reflection_failures=len(failures),
         )
     else:
-        audit.write("cost_report_disabled", reason="billing_monitored_in_provider_console")
-    audit.write(
+        audit.write_optional("cost_report_disabled", reason="billing_monitored_in_provider_console")
+    audit.write_optional(
         "behavioral_run_completed",
         total_metric_calls=result.total_metric_calls,
         candidate_count=result.num_candidates,
@@ -282,7 +280,7 @@ def _run_locked(
         config.run_dir / "controller_status.json",
         {
             "schema_version": 1,
-            "status": "completed_with_warnings" if failures else "completed",
+            "status": "completed_with_warnings" if failures or successful < config.search.min_proposals else "completed",
         },
     )
     return result

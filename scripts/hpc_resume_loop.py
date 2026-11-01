@@ -32,6 +32,14 @@ except ModuleNotFoundError:
 
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
+if str(REPO_ROOT) not in sys.path:
+    sys.path.insert(0, str(REPO_ROOT))
+# Local console output is diagnostic. Embedded remote scripts still use their
+# own builtin print for required JSON IPC, untouched by this Host-only alias.
+from src.optimization.audit import diagnostic_print as print
+from src.exceptions import confirmed_run_stop
+from src.optimization.hpc.task_batch import atomic_json
+
 DEFAULT_BATCH_SCRIPT = REPO_ROOT / "scripts" / "hpc_submit_batch.sh"
 OFFLINE_TARGET_EXTENSION_SCRIPT = (
     REPO_ROOT / "scripts" / "internal" / "offline_iteration_target.py"
@@ -80,7 +88,6 @@ class SupervisorConfig:
     slice_time: str
     check_interval_seconds: int
     poll_interval_seconds: int
-    max_runs: int
     submit: bool
     remote_run_snapshot: str
     job_name: str
@@ -95,7 +102,6 @@ class SupervisorConfig:
     require_clean_worktree: bool
     repo_commit: str | None
     offline_gepa: bool
-    recover_controller_error_types_once: tuple[str, ...]
     reclaim_staging: bool
     reclaim_workspaces: bool
     remote_staging_root: str | None
@@ -312,22 +318,6 @@ def parse_args(argv: list[str]) -> SupervisorConfig:
         ),
     )
     parser.add_argument(
-        "--max-runs",
-        type=int,
-        default=0,
-        help="Maximum submitted slices; 0 means unlimited.",
-    )
-    parser.add_argument(
-        "--recover-controller-error-type-once",
-        action="append",
-        default=[],
-        help=(
-            "Permit one Controller submission from a named blocking "
-            "controller error. Intended only for an audited operational "
-            "repair launch identity. May be repeated for distinct types."
-        ),
-    )
-    parser.add_argument(
         "--reclaim-staging",
         action="store_true",
         help=(
@@ -349,8 +339,6 @@ def parse_args(argv: list[str]) -> SupervisorConfig:
         default=os.environ.get("VIBE_HPC_SUBMIT_BATCH", str(DEFAULT_BATCH_SCRIPT)),
     )
     known, batch_args = parser.parse_known_args(argv)
-    if known.max_runs < 0:
-        raise SystemExit("--max-runs must be non-negative")
     if known.target_iterations < 0:
         raise SystemExit("--target-iterations must be non-negative")
     gepa_config_raw = _take_option(batch_args, "--gepa-config")
@@ -395,7 +383,6 @@ def parse_args(argv: list[str]) -> SupervisorConfig:
         slice_time=known.slice_time,
         check_interval_seconds=parse_duration(known.check_interval),
         poll_interval_seconds=parse_duration(known.poll_interval),
-        max_runs=known.max_runs,
         submit=submit,
         remote_run_snapshot=_remote_run_snapshot(batch_args, runtime_config),
         job_name=job_name,
@@ -410,9 +397,6 @@ def parse_args(argv: list[str]) -> SupervisorConfig:
         require_clean_worktree=known.require_clean_worktree,
         repo_commit=_git_output("rev-parse", "HEAD"),
         offline_gepa=offline_gepa,
-        recover_controller_error_types_once=tuple(
-            sorted(set(known.recover_controller_error_type_once))
-        ),
         reclaim_staging=known.reclaim_staging,
         reclaim_workspaces=known.reclaim_workspaces,
         remote_staging_root=remote_staging_root,
@@ -561,19 +545,11 @@ def startup_controller_status(config: SupervisorConfig, state: dict[str, Any]) -
     if job_state not in TERMINAL_JOB_STATES:
         payload.update(state="startup_waiting",
                        action="Wait for Controller/accounting visibility; do not submit a duplicate.")
-    elif (job_state in {"NODE_FAIL", "BOOT_FAIL", "PREEMPTED", "TIMEOUT"}
-          and int(state.get("startup_failure_recoveries", 0)) < 1):
+    elif job_state != "CANCELLED":
         payload.update(state="startup_retryable",
-                       action="Allow one bounded infrastructure/slice recovery before runtime initialization.")
+                       action="Retry after the previous Controller is confirmed terminal; preserve its logs.")
     else:
-        payload.update(state="startup_failed",
-                       action="Inspect Controller logs and fix startup; preserve state before an explicitly approved restart.")
-        payload["diagnosis"] = {
-            "FAILED": "Controller exited before initializing runtime authority; inspect dependency/config/entrypoint errors.",
-            "OUT_OF_MEMORY": "Controller was killed for memory; inspect sacct usage before changing resources.",
-            "COMPLETED": "Controller exited successfully but produced no runtime authority; inspect command and output paths.",
-            "CANCELLED": "Controller was cancelled; do not undo cancellation through automatic resubmission.",
-        }.get(job_state, "Startup recovery exhausted or terminal Slurm failure; inspect the recorded job.")
+        payload.update(state="startup_failed", action="Respect explicit Slurm cancellation.")
     return payload
 
 
@@ -656,6 +632,8 @@ if controller_status_path.is_file():
         if controller_status.get("status") == "failed":
             payload["state"] = "controller_failed"
             payload["error_type"] = controller_status.get("error_type")
+            payload["errno"] = controller_status.get("errno")
+            payload["failure_record"] = controller_status.get("failure_record", {})
         elif controller_status.get("status") == "retryable_failed":
             payload["state"] = "resumable"
             payload["retryable_controller_error_type"] = controller_status.get("error_type")
@@ -739,7 +717,10 @@ print(json.dumps(payload, sort_keys=True))
             "returncode": result.returncode,
             "stderr": result.stderr.strip(),
         }
-    return json.loads(result.stdout.strip().splitlines()[-1])
+    try:
+        return json.loads(result.stdout.strip().splitlines()[-1])
+    except (ValueError, IndexError) as exc:
+        return {"state": "status_check_failed", "error_type": type(exc).__name__}
 
 
 def reclaim_remote_staging(config: SupervisorConfig) -> dict[str, Any]:
@@ -891,9 +872,6 @@ def _load_supervisor_state(config: SupervisorConfig) -> dict[str, Any]:
             "target_iterations": config.target_iterations,
             "runtime_config_sha256": config.runtime_config_sha256,
             "repo_commit": config.repo_commit,
-            "recover_controller_error_types_once": list(
-                config.recover_controller_error_types_once
-            ),
             "reclaim_staging": config.reclaim_staging,
             "reclaim_workspaces": config.reclaim_workspaces,
             "remote_staging_root": config.remote_staging_root,
@@ -916,18 +894,12 @@ def _load_supervisor_state(config: SupervisorConfig) -> dict[str, Any]:
         "target_iterations": config.target_iterations,
         "runtime_config_sha256": config.runtime_config_sha256,
         "repo_commit": config.repo_commit,
-        "recover_controller_error_types_once": list(
-            config.recover_controller_error_types_once
-        ),
         "reclaim_staging": config.reclaim_staging,
         "reclaim_workspaces": config.reclaim_workspaces,
         "remote_staging_root": config.remote_staging_root,
     }
     for key, value in expected.items():
         actual = state.get(key)
-        if key == "recover_controller_error_types_once" and actual is None:
-            actual = []
-            state[key] = actual
         if key == "reclaim_staging" and actual is None:
             actual = False
             state[key] = actual
@@ -943,12 +915,19 @@ def _load_supervisor_state(config: SupervisorConfig) -> dict[str, Any]:
 
 
 def _save_supervisor_state(config: SupervisorConfig, state: dict[str, Any]) -> None:
-    config.state_file.parent.mkdir(parents=True, exist_ok=True)
-    temp = config.state_file.with_suffix(config.state_file.suffix + ".tmp")
-    temp.write_text(
-        json.dumps(state, indent=2, sort_keys=True) + "\n", encoding="utf-8"
-    )
-    temp.replace(config.state_file)
+    while True:
+        try:
+            atomic_json(config.state_file, state)
+            return
+        except OSError as exc:
+            if confirmed_run_stop({"errno": exc.errno}):
+                raise
+            # Retain the submitted job ID in memory. Restarting the decision
+            # loop here could lose an acknowledged submission.
+            print(f"[hpc-resume] state save unavailable ({type(exc).__name__}); retrying the same save",
+                  file=sys.stderr)
+            time.sleep(max(1, config.poll_interval_seconds))
+
 
 
 @contextmanager
@@ -1000,7 +979,6 @@ def run_loop(config: SupervisorConfig) -> int:
             "[hpc-resume] starting supervisor "
             f"slice_time={config.slice_time} poll_interval={config.poll_interval_seconds}s "
             f"cumulative_target_iterations={config.target_iterations} "
-            f"max_runs={config.max_runs} "
             f"remote_run_snapshot={config.remote_run_snapshot}"
         )
         while True:
@@ -1090,10 +1068,7 @@ def run_loop(config: SupervisorConfig) -> int:
                 )
 
             workspace_cleanup: dict[str, Any] = {"removed": 0}
-            recoverable_controller_error = (
-                status.get("error_type") in config.recover_controller_error_types_once
-                and int(state.get("controller_failure_recoveries", 0)) < 1
-            )
+            recoverable_controller_error = is_failed(status) and not confirmed_run_stop(status)
             if status.get("state") != "missing":
                 try:
                     terminal_cleanup = is_completed(status) or (
@@ -1128,7 +1103,7 @@ def run_loop(config: SupervisorConfig) -> int:
                 state["status"] = "recovering_controller_failure"
                 _save_supervisor_state(config, state)
                 print(
-                    "[hpc-resume] allowing one audited Controller recovery "
+                    "[hpc-resume] retrying incomplete Controller work "
                     f"for error_type={status.get('error_type')}"
                 )
 
@@ -1177,11 +1152,6 @@ def run_loop(config: SupervisorConfig) -> int:
                 return 0
 
             submissions = int(state.get("submissions", 0))
-            if config.max_runs != 0 and submissions >= config.max_runs:
-                state["status"] = "max_runs_reached"
-                _save_supervisor_state(config, state)
-                print("[hpc-resume] max runs reached", file=sys.stderr)
-                return 2
             identity_error = _submission_identity_error(config)
             if identity_error is not None:
                 state["status"] = "blocked_identity_mismatch"
@@ -1201,8 +1171,6 @@ def run_loop(config: SupervisorConfig) -> int:
                         marker
                         for marker in (
                             "SYNC_DISK_FULL",
-                            "SYNC_INTEGRITY_ERROR",
-                            "STAGING_ERROR",
                         )
                         if marker in str(exc)
                     ),

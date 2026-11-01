@@ -5,6 +5,7 @@ import json
 from pathlib import Path
 
 import yaml
+import pytest
 
 from src.optimization.behavioral_hybrid_runtime import HybridPhaseExecutor, verify_hybrid_snapshot
 from src.optimization.config import load_optimization_config
@@ -18,11 +19,12 @@ SUPERVISOR = Path("configs/archive/supervisor_launches/safe_pce_ace_rpg_codex_sm
 FROZEN = Path("configs/frozen_safe_pce_ace/rpg_smoke_v1_20261024")
 
 
-def test_rpg_smoke_v6_preserves_effective_science_and_freezes_fresh_inputs():
+@pytest.mark.parametrize("version,baseline", [("v6_20261028", "v5_20261028"), ("v9_20261101", "v8_20261031")])
+def test_rpg_smoke_preserves_effective_science_and_freezes_fresh_inputs(version, baseline):
     from src.optimization.safe_pce_learning import SafePCEBackend
     from src.optimization.safe_pce_execution import sha256
-    path = Path("configs/gepa_safe_pce_rpg_codex_smoke_v6_20261028.yaml")
-    old = load_optimization_config("configs/gepa_safe_pce_rpg_codex_smoke_v5_20261028.yaml",
+    path = Path(f"configs/gepa_safe_pce_rpg_codex_smoke_{version}.yaml")
+    old = load_optimization_config(f"configs/gepa_safe_pce_rpg_codex_smoke_{baseline}.yaml",
                                    require_api_keys=False)
     new = load_optimization_config(path, require_api_keys=False)
     assert new.search == old.search and new.reflection == old.reflection
@@ -54,25 +56,32 @@ def test_rpg_smoke_v6_preserves_effective_science_and_freezes_fresh_inputs():
         assert getattr(new.hpc, field) == getattr(old.hpc, field)
     manifest = json.loads((new.dataset_snapshot / "manifest.json").read_text())
     assert manifest["source_pce_config_sha256"] == sha256(Path(
-        "configs/safe_pce_ace_rpg_codex_smoke_source_v6_20261028.yaml"))
+        f"configs/safe_pce_ace_rpg_codex_smoke_source_{version}.yaml"))
     assert "learning_diagnostics" not in manifest
     raw = yaml.safe_load(path.read_text())["experiment_contract"]
     assert raw["launch_authorized"] is True and raw["previous_output_import"] is False
     assert raw["budget"]["pce_evaluation_slots_without_cache"] == {"minimum": 5, "maximum": 6}
 
 
-def test_rpg_smoke_v6_reuses_shared_supervisor_and_unthrottled_phase_arrays(tmp_path):
+@pytest.mark.parametrize("version,prefix", [("v6_20261028", "configs/archive/supervisor_launches"), ("v9_20261101", "configs")])
+def test_rpg_smoke_reuses_shared_supervisor_and_unthrottled_phase_arrays(tmp_path, version, prefix):
     from scripts.hpc_supervisor_service import _load_launch_config, RESUME_SCRIPT
     from scripts.hpc_resume_loop import parse_args
     from src.swe_verified_pce.hpc_executor import build_array_script
-    path = Path("configs/gepa_safe_pce_rpg_codex_smoke_v6_20261028.yaml")
+    path = Path(f"configs/gepa_safe_pce_rpg_codex_smoke_{version}.yaml")
     cfg = load_optimization_config(path, require_api_keys=False)
     session, log, args, program = _load_launch_config(Path(
-        "configs/archive/supervisor_launches/safe_pce_ace_rpg_codex_smoke_supervisor_v6_20261028.yaml"))
+        f"{prefix}/safe_pce_ace_rpg_codex_smoke_supervisor_{version}.yaml"))
+    if version == "v6_20261028":
+        # Adapt historical invocation to the current API; do not edit its frozen file.
+        offset = args.index("--max-runs")
+        args = args[:offset] + args[offset + 2:]
+    else:
+        assert "--max-runs" not in args and "--recover-controller-error-type-once" not in args
     supervisor = parse_args(args)
     assert program == RESUME_SCRIPT and session == cfg.run_dir.name and session in log
     assert supervisor.ssh_target == "twang@access-iris.uni.lu"
-    assert supervisor.slice_time == "00:08:00" and supervisor.max_runs == 60
+    assert supervisor.slice_time == "00:08:00" and not hasattr(supervisor, "max_runs")
     assert supervisor.require_clean_worktree and supervisor.reclaim_workspaces
     assert args[args.index("--gepa-config") + 1] == str(path)
     assert supervisor.remote_staging_root.endswith("/staging/" + session)

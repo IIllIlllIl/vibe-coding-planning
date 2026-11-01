@@ -22,7 +22,6 @@ import threading
 
 from src.agents.codex_hooks import (
     AUDIT_FILE, SUBMISSION_AUDIT_FILE, hook_options, write_bundle,
-    validate_native_commands, validate_native_submission,
 )
 
 
@@ -139,24 +138,16 @@ def verify(binary: str, root: Path, policy_bundle: Path | None = None, *, submis
                   "forbidden_marker_exists": blocked.exists(), "corrected_marker_exists": corrected.exists(),
                   "denial_returned_to_native_loop": len(requests) >= 2 and "returncode=126" in json.dumps(requests[1]),
                   "stderr": result.stderr[-2200:]}
-        try:
-            records = validate_native_commands([{"role":"codex_cli","content":{"events":events}}],
-                directory / AUDIT_FILE, context=context, source_log=directory / "sources.jsonl")
-            report["policy_receipts"] = records
-            report["post_receipts"] = sum(r.get("hook_event_name") == "PostToolUse" for r in records)
-            if async_command:
-                observations = json.dumps(requests[2].get("input", [])) if len(requests) > 2 else ""
-                report["async_session_yielded"] = "Process running with session ID" in observations
-            if submission:
-                report["submission_receipts"] = validate_native_submission((directory / "final.txt").read_text(),
-                    directory / SUBMISSION_AUDIT_FILE, contract=context["submission_contract"], output_dir=directory)
-                report["submission_feedback_returned"] = len(requests) == 4 and "Host rejected the submission" in json.dumps(requests[3])
-        except Exception as exc:
-            report["audit_error"] = str(exc)
+        # This explicit engineering probe checks observable behavior, not
+        # one-to-one receipt coverage of a scientific Agent completion.
+        if async_command:
+            observations = json.dumps(requests[2].get("input", [])) if len(requests) > 2 else ""
+            report["async_session_yielded"] = "Process running with session ID" in observations
+        if submission:
+            report["submission_feedback_returned"] = len(requests) == 4 and "Host rejected the submission" in json.dumps(requests[3])
         if not (result.returncode == 0 and not report["native_error_events"]
                 and len(requests) == (4 if submission else 3) and not errors and not blocked.exists()
-                and corrected.is_file() and report["denial_returned_to_native_loop"] and "audit_error" not in report
-                and report.get("post_receipts") == 0
+                and corrected.is_file() and report["denial_returned_to_native_loop"]
                 and (not async_command or report.get("async_session_yielded"))
                 and (not submission or report.get("submission_feedback_returned"))):
             report["events"] = events

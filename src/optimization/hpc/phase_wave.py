@@ -49,14 +49,16 @@ def build_phase_array_script(*, hpc: HPCConfig, batch_dir: Path, indices: Sequen
     spec = ",".join(map(str, indices))
     if hpc.max_running_array_tasks > 0 and len(indices) > hpc.max_running_array_tasks:
         spec += f"%{hpc.max_running_array_tasks}"
-    logs = batch_dir / "slurm_logs" / f"attempt_{attempt:02d}"
-    logs.mkdir(parents=True, exist_ok=True)
+    # The batch directory already holds required task/script state. Avoid an
+    # auxiliary directory-creation gate and one directory per attempt.
+    logs = batch_dir
     lines = [
         "#!/usr/bin/env bash", f"#SBATCH --job-name={job_name}",
         f"#SBATCH --partition={hpc.partition}", f"#SBATCH --cpus-per-task={hpc.cpus_per_task}",
         f"#SBATCH --mem={hpc.mem}", f"#SBATCH --time={hpc.time}", f"#SBATCH --array={spec}",
         *(["#SBATCH --export=ALL"] if export_all else []),
-        f"#SBATCH --output={logs}/%x-%A_%a.out", f"#SBATCH --error={logs}/%x-%A_%a.err",
+        # Slurm defaults stderr to stdout: one diagnostic stream per task.
+        f"#SBATCH --output={logs}/%x-%A_%a.out",
         "set -euo pipefail", "set +x",
         *(['export PATH="$HOME/.local/bin:$PATH"'] if add_user_bin else []),
         *[f"module load {shlex.quote(module)}" for module in modules],

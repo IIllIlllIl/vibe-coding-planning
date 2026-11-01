@@ -11,6 +11,7 @@ from typing import Any
 from src.environment.docker_env import configure_docker_capacity
 from src.exceptions import AgentTaskError, FatalError
 from src.optimization.hpc.task_batch import atomic_json
+from src.optimization.audit import JsonlLogger
 from src.swe_verified_pce.config import load_swe_verified_pce_config
 from src.swe_verified_pce.evaluator import SWEVerifiedEvaluatorOperationalError
 from src.swe_verified_pce.models import SWEVerifiedPCECase
@@ -201,6 +202,7 @@ def run_task(
             "outcome_reason": outcome_reason,
             "retry_disposition": retry_disposition,
             "error_type": type(exc).__name__,
+            "errno": getattr(exc, "errno", None),
             "error": str(exc),
             "final_validation_label": None,
         }
@@ -210,8 +212,9 @@ def run_task(
         evaluator_evidence = getattr(exc, "evidence", None)
         if isinstance(evaluator_evidence, dict):
             failure["evaluator_evidence"] = evaluator_evidence
-        atomic_json(attempt_dir / "failure.json", failure)
         atomic_json(output_path, failure)
+        JsonlLogger(attempt_dir / "audit_events.jsonl").write_optional(
+            "worker_failed", failure_stage=stage, error_type=type(exc).__name__)
         return 1
 
 

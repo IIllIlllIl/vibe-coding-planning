@@ -229,19 +229,19 @@ def test_curl_proxy_option_is_not_mistaken_for_mutating_request() -> None:
     assert result["decision"] == "allow_but_review"
 
 
-def test_audit_log_redacts_url_query_values(tmp_path) -> None:
+def test_private_audit_log_preserves_url_query_values(tmp_path) -> None:
     command = "curl 'https://docs.example/page?token=secret&view=raw'"
     result = classify_source_access(command, prompt_urls=frozenset())
     assert result is not None
-    assert "secret" not in str(result)
+    assert "secret" in str(result)
     assert result["urls"] == [
-        "https://docs.example/page?token=%3Credacted%3E&view=%3Credacted%3E"
+        "https://docs.example/page?token=secret&view=raw"
     ]
 
     path = tmp_path / "source_access.jsonl"
     append_source_access_event(path, result, command=command)
     logged = path.read_text(encoding="utf-8")
-    assert "secret" not in logged
+    assert "secret" in logged
     assert command not in logged
 
 

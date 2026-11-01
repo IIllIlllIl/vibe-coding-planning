@@ -581,7 +581,6 @@ def _run_repository_json_agent(
                         source_policy={"prompt_urls": list(extract_http_urls(source_access_issue)),
                                        "context": {"instance_id": repository["instance_id"],
                                                    "phase": repository_config.get("phase", "repo_checker")}},
-                        source_access_log=source_access_path,
                         masked_paths=tuple(repository_config.get(
                             "masked_container_paths", ["/opt/miniconda3/pkgs"]
                         )),

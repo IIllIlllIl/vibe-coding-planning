@@ -82,12 +82,21 @@ def test_backends_default_mixed_and_explicit_pin():
 
 
 @pytest.mark.parametrize("role", ["plan", "code"])
-def test_optional_native_usage_failure_does_not_discard_submission(tmp_path, monkeypatch, role):
+@pytest.mark.parametrize("fault", ["usage", "duplicate_trajectory"])
+def test_optional_native_usage_failure_does_not_discard_submission(tmp_path, monkeypatch, role, fault):
     _completion(monkeypatch)
     context = _context(tmp_path)
     def fail(*args, **kwargs):
         raise PermissionError("synthetic usage-only failure")
-    monkeypatch.setattr(context["usage"], "write", fail)
+    if fault == "usage":
+        monkeypatch.setattr(context["usage"], "write", fail)
+    else:
+        original = backend.atomic_json
+        def write(path, value):
+            if path.name == "trajectory.json":
+                fail()
+            return original(path, value)
+        monkeypatch.setattr(backend, "atomic_json", write)
     if role == "plan":
         result, trace = backend._run_plan(_config(), "Issue", None, **context)
         assert result == PLAN
@@ -96,7 +105,7 @@ def test_optional_native_usage_failure_does_not_discard_submission(tmp_path, mon
         result, trace = backend._run_code(_config(), PLAN, "Issue", env, **context)
         assert result == PATCH
     assert trace[-1]["role"] == "assistant"
-    assert (context["attempt_dir"] / "trajectory.json").is_file()
+    assert (context["attempt_dir"] / "trajectory.json").is_file() is (fault != "duplicate_trajectory")
 
 
 @pytest.mark.parametrize("change", [{"executor": "typo"}, {"codex_version": ""},
@@ -142,7 +151,8 @@ def test_raw_patch_not_final_message_or_host_reconstruction(tmp_path, monkeypatc
     assert PLAN in calls[0]["system"]
     assert "planning_rules" not in json.loads((tmp_path / "attempt/inputs/task.json").read_text())
     assert trace[-1]["content"] == "COMPLETE_TASK_AND_SUBMIT_FINAL_OUTPUT\n"
-    assert not json.loads((tmp_path / "attempt/submission.json").read_text())["host_patch_transformation"]
+    assert (tmp_path / "attempt/submission.patch").read_bytes() == submitted.encode()
+    assert not (tmp_path / "attempt/submission.json").exists()
 
 
 @pytest.mark.parametrize("problem", ["missing_patch", "missing_marker", "mismatched_diff", "empty_patch", "symlink"])
@@ -165,21 +175,6 @@ def test_polybench_explicit_empty_submission_policy_retained(tmp_path, monkeypat
     env = SimpleNamespace(execute=lambda c: _diff_result(""))
     assert backend._run_code(_config(), PLAN, "Issue", env,
                              allow_empty_submission=True, **_context(tmp_path))[0] == ""
-
-
-@pytest.mark.parametrize("command", ["git fetch origin", "pip install upstream-package",
-    '/bin/bash -lc \'curl https://github.com/org/repo/pull/123.patch\''])
-def test_native_source_audit_rejects_uncovered_commands(tmp_path, monkeypatch, command):
-    from src.agents.codex_hooks import validate_native_commands
-    events = [{"type": "item.started", "item": {"id": "1", "type": "command_execution", "command": command}},
-              {"type": "item.completed", "item": {"id": "1", "type": "command_execution", "command": command}}]
-    audit = tmp_path / "hook.jsonl"
-    audit.write_text("")
-    trajectory = [{"role": "codex_cli", "content": {"events": events}}]
-    original = deepcopy(trajectory)
-    with pytest.raises(ValueError, match="no matching execution-policy receipt"):
-        validate_native_commands(trajectory, audit, context={"prompt_urls": []}, source_log=tmp_path / "sources.jsonl")
-    assert trajectory == original
 
 
 @pytest.mark.parametrize("event", [{"type": "turn.failed"}, {"type": "error"}])

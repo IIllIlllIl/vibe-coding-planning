@@ -27,11 +27,11 @@ from src.environment.source_access import (
     summarize_source_access_log,
 )
 from src.exceptions import FatalError
-from src.optimization.audit import AuditedModel, JsonlLogger
-from src.optimization.hpc.task_batch import atomic_json
+from src.optimization.audit import AuditedModel, JsonlLogger, optional_diagnostic
+from src.optimization.hpc.task_batch import atomic_json, read_json
 from src.swe_verified_pce.config import SWEVerifiedPCEConfig
 from src.swe_verified_pce.dataset import file_sha256
-from src.swe_verified_pce.evaluator import evaluate_swe_verified_apptainer
+from src.swe_verified_pce.evaluator import evaluate_swe_verified_apptainer, SWEVerifiedEvaluatorOperationalError
 from src.swe_verified_pce.models import SWEVerifiedPCECase
 from src.swe_verified_pce.workspace_preparation import PHASES, claim_workspace
 
@@ -59,10 +59,11 @@ class SWEVerifiedPCERunner:
         mark_private_artifact_dir(attempt_dir)
         mark_private_artifact_dir(checkpoint_dir)
         self.audit = JsonlLogger(attempt_dir / "audit_events.jsonl")
-        self.usage = JsonlLogger(attempt_dir / "usage.jsonl")
+        self.usage = self.audit
         self.source_access_path = attempt_dir / "source_access.jsonl"
-        self.source_access_path.parent.mkdir(parents=True, exist_ok=True)
-        self.source_access_path.touch(exist_ok=True)
+        with optional_diagnostic("source-access index initialization"):
+            self.source_access_path.parent.mkdir(parents=True, exist_ok=True)
+            self.source_access_path.touch(exist_ok=True)
 
     def _authority_relative_path(self, path: Path) -> str:
         """Represent retained artifacts relative to the canonical run root."""
@@ -115,15 +116,22 @@ class SWEVerifiedPCERunner:
         path = self.checkpoint_dir / f"{phase}.json"
         if not path.is_file():
             return None
-        value = json.loads(path.read_text(encoding="utf-8"))
+        value = read_json(path)
         if value.get("checkpoint_identity") != self.checkpoint_identity:
             raise FatalError(f"PCE checkpoint identity mismatch: {path}")
         if value.get("phase") != phase or not isinstance(value.get("payload"), dict):
             raise FatalError(f"invalid PCE checkpoint: {path}")
-        self.audit.write("pce_phase_resumed", phase=phase, path=str(path))
+        if phase == "evaluate" and value["payload"].get("evaluator_result", {}).get("task_outcome") == "unknown":
+            return None  # Retry only Evaluator; retain valid Plan/Code checkpoints.
+        self.audit.write_optional("pce_phase_resumed", phase=phase, path=str(path))
         return dict(value["payload"])
 
     def _save_checkpoint(self, phase: str, payload: dict[str, Any]) -> None:
+        result = payload.get("evaluator_result", {})
+        if phase == "evaluate" and result.get("task_outcome") == "unknown":
+            raise SWEVerifiedEvaluatorOperationalError(
+                "Evaluator produced no usable task outcome", outcome_reason=result.get("outcome_reason", "unknown"),
+                retry_disposition="retry_same_phase", evidence=result)
         atomic_json(
             self.checkpoint_dir / f"{phase}.json",
             {
@@ -201,7 +209,7 @@ class SWEVerifiedPCERunner:
             bundle=history_bundle,
             base_commit=case.base_commit,
         )
-        atomic_json(evidence_dir / "repository_history_install.json", install_evidence)
+        self.audit.write_optional("repository_history_installed", phase=phase, evidence=install_evidence)
         restore_repository_to_base(
             env,
             case.base_commit,
@@ -372,8 +380,7 @@ class SWEVerifiedPCERunner:
             initialized = time.monotonic()
             if phase != "evaluate":
                 bundle, manifest = self._ensure_repository_history(case)
-                atomic_json(self.attempt_dir / "repository_history_artifact.json",
-                            {**manifest, "bundle": str(bundle)})
+                self.audit.write_optional("repository_history_artifact", evidence={**manifest, "bundle": str(bundle)})
                 self._restore_agent_repository(env, case, phase=phase, host_workdir=workspace,
                     evidence_dir=self.attempt_dir / "repository_baselines" / phase,
                     timeout=self.config.plan.timeout, history_bundle=bundle)
@@ -393,7 +400,7 @@ class SWEVerifiedPCERunner:
                      "environment_initialization": initialized - verified,
                      "repository_preparation": restored - initialized,
                      "total": time.monotonic() - started}}
-        atomic_json(self.attempt_dir / "preparation_result.json", result)
+        # Worker output is the preparation handoff; do not duplicate it here.
         return result
 
     def run(self, case: SWEVerifiedPCECase) -> dict[str, Any]:
@@ -404,13 +411,7 @@ class SWEVerifiedPCERunner:
         history_bundle: Path | None = None
         if not prepared and (plan_checkpoint is None or code_checkpoint is None):
             history_bundle, history_manifest = self._ensure_repository_history(case)
-            atomic_json(
-                self.attempt_dir / "repository_history_artifact.json",
-                {
-                    **history_manifest,
-                    "bundle": str(history_bundle),
-                },
-            )
+            self.audit.write_optional("repository_history_artifact", evidence={**history_manifest, "bundle": str(history_bundle)})
         if plan_checkpoint is None:
             assert prepared or history_bundle is not None
             plan_workspace = self.attempt_dir / "workspaces" / "plan"
@@ -591,7 +592,7 @@ class SWEVerifiedPCERunner:
                     "empty_submission": not bool(raw_patch.strip()),
                     "host_patch_transformation": False,
                 }
-                atomic_json(self.attempt_dir / "patch_submission.json", submission)
+                # Submission metadata is retained in the code checkpoint.
                 code_checkpoint = {
                     "raw_patch": raw_patch,
                     "patch": raw_patch,
@@ -670,14 +671,15 @@ class SWEVerifiedPCERunner:
         result = self._completed_result(
             plan_checkpoint, code_checkpoint, evaluator_checkpoint
         )
-        result["source_access"] = {
-            "policy_version": SOURCE_ACCESS_POLICY_VERSION,
-            "log_relative_path": self._authority_relative_path(
-                self.source_access_path
-            ),
-            "log_sha256": file_sha256(self.source_access_path),
-            "summary": summarize_source_access_log(self.source_access_path),
-        }
+        with optional_diagnostic("source-access summary"):
+            result["source_access"] = {
+                "policy_version": SOURCE_ACCESS_POLICY_VERSION,
+                "log_relative_path": self._authority_relative_path(
+                    self.source_access_path
+                ),
+                "log_sha256": file_sha256(self.source_access_path),
+                "summary": summarize_source_access_log(self.source_access_path),
+            }
         return result
 
     @staticmethod

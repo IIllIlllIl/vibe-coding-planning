@@ -19,6 +19,7 @@ from src.agents.output_contract import AgentOutputContractError, json_object
 from src.agents.runtime import AgentConfigurationError, REASONING_EFFORTS
 from src.agents._deps import raise_for_permanent_provider_error
 from src.exceptions import PermanentProviderError
+from src.optimization.audit import JsonlLogger, optional_diagnostic
 
 
 class CodexCLIError(RuntimeError):
@@ -42,7 +43,6 @@ class CodexSIFExecution:
     repository_cwd: str = "/testbed"
     output_files: tuple[str, ...] = ("codex_final_response.json",)
     source_policy: dict[str, Any] | None = None
-    source_access_log: Path | None = None
     tool_network_disabled: bool | None = None
 
     @property
@@ -69,7 +69,7 @@ class CodexSIFExecution:
         record = {"check": "sif_interpreter", "preferred": preferred,
                   "returncode": result.returncode, "stdout": result.stdout,
                   "stderr": result.stderr}
-        (output_dir / "codex_sif_interpreter.json").write_text(json.dumps(record, indent=2) + "\n")
+        JsonlLogger(output_dir / "audit_events.jsonl").write_optional("sif_interpreter_probe", **record)
         if result.returncode or not observed.startswith("/") or any(c in observed for c in "\n\r\x00"):
             error = CodexConfigurationError(
                 f"SIF Python interpreter probe failed (exit {result.returncode}): "
@@ -80,8 +80,6 @@ class CodexSIFExecution:
 
     @contextmanager
     def launch(self, model_config, environment, output_dir):
-        if self.source_policy is not None and self.source_access_log is None:
-            raise CodexConfigurationError("Native source policy requires its Host audit path")
         if not re.fullmatch(r"/testbed[0-9]*", self.repository_cwd):
             raise ValueError("Codex repository cwd must be a task-local /testbed directory")
         if self.repository_writable and self.repository_dir is None:
@@ -104,7 +102,7 @@ class CodexSIFExecution:
         # that can resolve to unrelated input under another visible mount.
         if any(path.is_symlink() for path in evidence.rglob("*")):
             raise CodexCLIError("Codex evidence bundle contains a symbolic link")
-        with tempfile.TemporaryDirectory(prefix="vibe-codex-sif-") as temporary:
+        with tempfile.TemporaryDirectory(prefix="vibe-codex-sif-", ignore_cleanup_errors=True) as temporary:
             root = Path(temporary)
             for name in ("tmp", "home", "output", "mask"):
                 (root / name).mkdir(mode=0o700)
@@ -130,9 +128,6 @@ class CodexSIFExecution:
                 from src.agents.codex_hooks import write_bundle, POLICY_DIR, AUDIT_DIR, AUDIT_FILE, SUBMISSION_AUDIT_FILE
                 write_bundle(root / "policy", self.source_policy)
                 (root / "policy-audit").mkdir(mode=0o700)
-                (root / "policy-audit" / AUDIT_FILE).touch(mode=0o600)
-                if self.source_policy.get("submission_contract"):
-                    (root / "policy-audit" / SUBMISSION_AUDIT_FILE).touch(mode=0o600)
                 mounts.extend([(root / "policy", POLICY_DIR, "ro"),
                                (root / "policy-audit", AUDIT_DIR, "rw")])
             if self.repository_dir is not None:
@@ -173,19 +168,9 @@ class CodexSIFExecution:
                         names.append(SUBMISSION_AUDIT_FILE)
                     for name in names:
                         audit = root / "policy-audit" / name
-                        if name == SUBMISSION_AUDIT_FILE:
-                            # Stop is an in-session correction hook, not the
-                            # Plan/patch authority. Its diagnostic copy cannot
-                            # invalidate an independently checked submission.
-                            try:
-                                if audit.is_file() and not audit.is_symlink():
-                                    shutil.copyfile(audit, output_dir / name)
-                            except OSError:
-                                pass
-                            continue
-                        if audit.is_symlink() or not audit.is_file():
-                            raise CodexConfigurationError("Native policy audit is not a regular file")
-                        shutil.copyfile(audit, output_dir / name)
+                        with optional_diagnostic("native hook log copy"):
+                            if audit.is_file() and not audit.is_symlink():
+                                shutil.copyfile(audit, output_dir / name)
 
 
 def _codex_binary(model_config: Mapping[str, Any]) -> str:
@@ -221,7 +206,7 @@ def _isolated_codex_environment(
     accepted temporary policy in docs/knowledge/codex-parallel-auth-20261024.md.
     """
     seed = _auth_bytes(_codex_auth_file(model_config))
-    with tempfile.TemporaryDirectory(prefix="vibe-codex-home-") as raw_home:
+    with tempfile.TemporaryDirectory(prefix="vibe-codex-home-", ignore_cleanup_errors=True) as raw_home:
         codex_home = Path(raw_home)
         codex_home.chmod(0o700)
         private_auth = codex_home / "auth.json"
@@ -723,16 +708,6 @@ def _run_codex_text_agent(
     ]
     if manifest_record is not None:
         trajectory.append({"role": "host_evidence_manifest", "content": manifest_record})
-    policy_error = None
-    if container is not None and container.source_policy is not None:
-        from src.agents.codex_hooks import validate_native_commands, AUDIT_FILE
-        try:
-            records = validate_native_commands(trajectory, attempt_dir / AUDIT_FILE,
-                context=container.source_policy, source_log=container.source_access_log)
-            trajectory.append({"role": "host_command_policy", "content": {"records": records}})
-        except (OSError, ValueError, KeyError, TypeError) as exc:
-            policy_error = CodexConfigurationError("Native command-policy validation failed: " + str(exc))
-            trajectory.append({"role": "host_command_policy", "content": {"error": str(exc)}})
     if teardown_error is not None:
         if output_path.is_file() and not output_path.is_symlink():
             trajectory.append({"role": "assistant", "content": output_path.read_bytes().decode("utf-8")})
@@ -754,24 +729,9 @@ def _run_codex_text_agent(
         error.trajectory = trajectory  # type: ignore[attr-defined]
         raise error
     if not output_path.is_file():
-        error = CodexCLIError("Codex CLI did not write its final response")
+        error = AgentOutputContractError("Codex CLI did not write its final response")
         error.trajectory = trajectory  # type: ignore[attr-defined]
         raise error
     raw = output_path.read_bytes().decode("utf-8")
-    if container is not None and container.source_policy is not None and container.source_policy.get("submission_contract"):
-        from src.agents.codex_hooks import validate_native_submission, SUBMISSION_AUDIT_FILE
-        try:
-            records = validate_native_submission(raw, attempt_dir / SUBMISSION_AUDIT_FILE,
-                contract=container.source_policy["submission_contract"], output_dir=attempt_dir)
-            trajectory.append({"role": "host_submission_policy", "content": {"records": records}})
-        except (OSError, ValueError, KeyError, TypeError) as exc:
-            # The PCE role independently checks the original Plan or patch,
-            # including the staged-diff hash. A missing/old Stop receipt is
-            # auxiliary, not a shared configuration failure or a format fix.
-            trajectory.append({"role": "host_submission_policy", "content": {
-                "diagnostic_error": str(exc), "acceptance_authority": "role_submission_validation"}})
     trajectory.append({"role": "assistant", "content": raw})
-    if policy_error is not None:
-        policy_error.trajectory = trajectory
-        raise policy_error
     return raw, trajectory

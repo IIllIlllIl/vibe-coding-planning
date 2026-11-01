@@ -1,11 +1,33 @@
 """Custom exception classes for the plan-code-test system."""
 
+import errno
+
+
+def confirmed_run_stop(record: dict) -> bool:
+    """Only structured, confirmed external exhaustion/cancellation stops retries.
+
+    Unknown exceptions and a generic block_run disposition are not proof of
+    exhaustion. Input/checkpoint identity checks remain separate and never
+    authorize consuming incompatible evidence.
+    """
+    if record.get("error_type") == "PermanentProviderError":
+        return True
+    if record.get("errno") in {errno.ENOSPC, errno.EDQUOT}:
+        return True
+    if record.get("slurm_state") == "CANCELLED":
+        return True
+    nested = record.get("failure_record")
+    if isinstance(nested, dict) and confirmed_run_stop(nested):
+        return True
+    return any(confirmed_run_stop(item) for item in record.get("details", [])
+               if isinstance(item, dict))
+
 
 class FatalError(Exception):
     """Fatal error that prevents the system from continuing any task.
 
-    Examples: API 401/429, disk full, Docker daemon crash, config parse failure.
-    The system must stop immediately, but already collected data is preserved.
+    Historical error family; recovery depends on evidence, not this name.
+    Permanent provider failures are explicit; transient 429/node failures retry.
     """
 
 

@@ -10,7 +10,7 @@ from src.optimization.playbook import (
 from src.optimization.paired_playbook import validate_ace_paired_reflector_review
 from src.optimization.playbook_adapter import GlobalPlaybookCounters
 from src.optimization.hpc.task_batch import atomic_json
-from src.optimization.audit import audit_record
+from src.optimization.audit import audit_record, optional_diagnostic
 from src.exceptions import ControllerYield, OfflineReflectionBlocked
 from src.optimization.ace_transaction import run_ace_transaction
 
@@ -112,7 +112,8 @@ class IncrementalHybridACEProposer:
             trace_path = self.trace_dir / f"{identity}.json"
         def persist(status):
             if trace_path is not None:
-                atomic_json(trace_path, audit_record(dict(self.last_trace, status=status)))
+                with optional_diagnostic("proposal trace"):
+                    atomic_json(trace_path, audit_record(dict(self.last_trace, status=status)))
         def reflect(rows):
             return (list(self.batch_reflector(parent, rows))
                           if self.batch_reflector is not None
@@ -120,7 +121,6 @@ class IncrementalHybridACEProposer:
         def validate_review(raw, record):
             review, trajectory = raw
             self.last_trace["reflector"].append({"review": review, "trajectory": trajectory})
-            persist("reflecting")
             return validate_ace_paired_reflector_review(review, instance_id=record["instance_id"],
                                                       playbook=book, output_contract="ace_v2")
         def curate(counted, reviews, rows, history):
@@ -129,7 +129,6 @@ class IncrementalHybridACEProposer:
                 for b in counted.bullets])
             delta, trajectory = self.curator(curator_parent, reviews, rows, history, vars(self.limits))
             self.last_trace.update(curator_delta=delta, curator_trajectory=trajectory, history=history)
-            persist("validating")
             return delta
         def finalize(counted, delta, history):
             if self.refiner is not None:
@@ -142,7 +141,6 @@ class IncrementalHybridACEProposer:
                 except ValueError:
                     refined, refinement_trace = self.refiner(json.loads(draft), vars(self.limits))
                     self.last_trace.update(refiner_output=refined, refiner_trajectory=refinement_trace)
-                    persist("refining")
                     proposed = json.dumps(refined, ensure_ascii=False)
                     validate_candidate(proposed, self.limits)
                 else:
@@ -155,7 +153,6 @@ class IncrementalHybridACEProposer:
                 reflect=reflect, validate_review=validate_review, curate=curate,
                 finalize=finalize, include_inactive=True)
         except ControllerYield:
-            persist("yielded")
             raise
         except Exception as exc:
             self.failures.append({"error_type": type(exc).__name__, "error": str(exc)})

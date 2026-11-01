@@ -3,12 +3,12 @@
 from __future__ import annotations
 
 import json
-import os
-import tempfile
 from pathlib import Path
 from typing import Any
 
-from src.optimization.audit import JsonlLogger, text_sha256
+from src.optimization.audit import JsonlLogger, text_sha256, optional_diagnostic
+from src.optimization.hpc.task_batch import atomic_json
+from src.exceptions import OfflineReflectionBlocked
 
 
 def completed_iterations_at_optimization_end(event: dict[str, Any]) -> int:
@@ -17,16 +17,7 @@ def completed_iterations_at_optimization_end(event: dict[str, Any]) -> int:
 
 
 def _atomic_json(path: Path, value: Any) -> None:
-    path.parent.mkdir(parents=True, exist_ok=True)
-    fd, temp_name = tempfile.mkstemp(dir=path.parent, prefix=f".{path.name}.")
-    try:
-        with os.fdopen(fd, "w", encoding="utf-8") as handle:
-            json.dump(value, handle, indent=2, ensure_ascii=False, default=str)
-            handle.write("\n")
-        os.replace(temp_name, path)
-    finally:
-        if os.path.exists(temp_name):
-            os.unlink(temp_name)
+    atomic_json(path, json.loads(json.dumps(value, default=str)))
 
 
 class ProgressCallback:
@@ -67,7 +58,22 @@ class ProgressCallback:
         )
 
     def _save(self) -> None:
-        _atomic_json(self.run_dir / "progress.json", self.progress)
+        with optional_diagnostic("display progress"):
+            _atomic_json(self.run_dir / "progress.json", self.progress)
+
+    def _checkpoint_completed(self, state_i: int, *, event: str) -> None:
+        # GEPA swallows ordinary callback exceptions. Recovery state is not a
+        # log: a failed save must reach the existing resumable failure boundary,
+        # not let later iterations use an unmatched RNG/ledger checkpoint.
+        try:
+            if self.checkpoint is not None:
+                self.checkpoint.save(
+                    gepa_state_i=state_i, proposer=self.proposer,
+                    accepted_candidates=self.progress["accepted_candidates"],
+                )
+            self._save_iteration_progress(max(0, state_i + 1), event=event)
+        except Exception as exc:
+            raise OfflineReflectionBlocked(exc) from exc
 
     def _save_iteration_progress(
         self,
@@ -94,7 +100,7 @@ class ProgressCallback:
             trainset_size=event["trainset_size"],
             valset_size=event["valset_size"],
         )
-        self.audit.write(
+        self.audit.write_optional(
             "gepa_optimization_started",
             trainset_size=event["trainset_size"],
             valset_size=event["valset_size"],
@@ -107,7 +113,7 @@ class ProgressCallback:
 
     def on_iteration_start(self, event: dict[str, Any]) -> None:
         self.progress["iteration"] = event["iteration"]
-        self.audit.write("gepa_iteration_started", iteration=event["iteration"])
+        self.audit.write_optional("gepa_iteration_started", iteration=event["iteration"])
         self._save()
 
     def on_evaluation_start(self, event: dict[str, Any]) -> None:
@@ -122,7 +128,7 @@ class ProgressCallback:
             evaluation_kind = "baseline_validation"
         elif event["batch_size"] == self.valset_size:
             evaluation_kind = "full_validation"
-        self.audit.write(
+        self.audit.write_optional(
             "gepa_evaluation_started",
             iteration=event["iteration"],
             candidate_idx=event["candidate_idx"],
@@ -134,7 +140,7 @@ class ProgressCallback:
         )
 
     def on_evaluation_end(self, event: dict[str, Any]) -> None:
-        self.audit.write(
+        self.audit.write_optional(
             "gepa_evaluation_completed",
             iteration=event["iteration"],
             candidate_idx=event["candidate_idx"],
@@ -144,7 +150,7 @@ class ProgressCallback:
         )
 
     def on_evaluation_skipped(self, event: dict[str, Any]) -> None:
-        self.audit.write(
+        self.audit.write_optional(
             "gepa_evaluation_skipped",
             iteration=event["iteration"],
             candidate_idx=event["candidate_idx"],
@@ -153,7 +159,7 @@ class ProgressCallback:
         )
 
     def on_minibatch_sampled(self, event: dict[str, Any]) -> None:
-        self.audit.write(
+        self.audit.write_optional(
             "gepa_minibatch_sampled",
             iteration=event["iteration"],
             minibatch_ids=event["minibatch_ids"],
@@ -162,7 +168,7 @@ class ProgressCallback:
 
     def on_proposal_start(self, event: dict[str, Any]) -> None:
         parent = event["parent_candidate"]["rules"]
-        self.audit.write(
+        self.audit.write_optional(
             "gepa_proposal_started",
             iteration=event["iteration"],
             parent_candidate_sha256=text_sha256(parent),
@@ -172,7 +178,7 @@ class ProgressCallback:
 
     def on_proposal_end(self, event: dict[str, Any]) -> None:
         proposed = event["new_instructions"]["rules"]
-        self.audit.write(
+        self.audit.write_optional(
             "gepa_proposal_completed",
             iteration=event["iteration"],
             proposed_candidate_sha256=text_sha256(proposed),
@@ -183,7 +189,7 @@ class ProgressCallback:
     def on_candidate_accepted(self, event: dict[str, Any]) -> None:
         self.progress["accepted_candidates"] += 1
         self.progress["latest_candidate_idx"] = event["new_candidate_idx"]
-        self.audit.write(
+        self.audit.write_optional(
             "gepa_candidate_accepted",
             iteration=event["iteration"],
             new_candidate_idx=event["new_candidate_idx"],
@@ -194,7 +200,7 @@ class ProgressCallback:
         self._save()
 
     def on_candidate_rejected(self, event: dict[str, Any]) -> None:
-        self.audit.write(
+        self.audit.write_optional(
             "gepa_candidate_rejected",
             iteration=event["iteration"],
             old_minibatch_score=event["old_score"],
@@ -204,7 +210,7 @@ class ProgressCallback:
         )
 
     def on_valset_evaluated(self, event: dict[str, Any]) -> None:
-        self.audit.write(
+        self.audit.write_optional(
             "gepa_validation_completed",
             iteration=event["iteration"],
             candidate_idx=event["candidate_idx"],
@@ -220,7 +226,7 @@ class ProgressCallback:
     def on_budget_updated(self, event: dict[str, Any]) -> None:
         self.progress["metric_calls_used"] = event["metric_calls_used"]
         self.progress["metric_calls_remaining"] = event["metric_calls_remaining"]
-        self.audit.write(
+        self.audit.write_optional(
             "gepa_budget_updated",
             iteration=event["iteration"],
             metric_calls_used=event["metric_calls_used"],
@@ -230,25 +236,16 @@ class ProgressCallback:
         self._save()
 
     def on_state_saved(self, event: dict[str, Any]) -> None:
-        self.audit.write(
+        self.audit.write_optional(
             "gepa_state_saved",
             iteration=event["iteration"],
             run_dir=event["run_dir"],
             state_file="gepa_state.bin",
         )
-        if self.checkpoint is not None:
-            self.checkpoint.save(
-                gepa_state_i=event["iteration"] - 1,
-                proposer=self.proposer,
-                accepted_candidates=self.progress["accepted_candidates"],
-            )
-        self._save_iteration_progress(
-            int(event["iteration"]),
-            event="state_saved",
-        )
+        self._checkpoint_completed(event["iteration"] - 1, event="state_saved")
 
     def on_error(self, event: dict[str, Any]) -> None:
-        JsonlLogger(self.run_dir / "errors.jsonl").write(
+        self.audit.write_optional(
             "gepa_error",
             iteration=event["iteration"],
             error=repr(event["exception"]),
@@ -271,7 +268,7 @@ class ProgressCallback:
         )
         if failure_kind is not None:
             self.progress["failure_kind"] = failure_kind
-        self.audit.write(
+        self.audit.write_optional(
             "gepa_optimization_failed",
             phase=phase,
             error=error,
@@ -291,7 +288,7 @@ class ProgressCallback:
             warning=warning,
             reflection_failures=reflection_failures,
         )
-        self.audit.write(
+        self.audit.write_optional(
             "gepa_optimization_completed_with_warnings",
             warning=warning,
             reflection_failures=reflection_failures,
@@ -306,20 +303,11 @@ class ProgressCallback:
             total_iterations=completed_iterations,
             metric_calls_used=event["total_metric_calls"],
         )
-        self.audit.write(
+        self.audit.write_optional(
             "gepa_optimization_completed",
             best_candidate_idx=event["best_candidate_idx"],
             total_iterations=completed_iterations,
             total_metric_calls=event["total_metric_calls"],
         )
-        if self.checkpoint is not None:
-            self.checkpoint.save(
-                gepa_state_i=event["final_state"].i,
-                proposer=self.proposer,
-                accepted_candidates=self.progress["accepted_candidates"],
-            )
-        self._save_iteration_progress(
-            completed_iterations,
-            event="optimization_completed",
-        )
+        self._checkpoint_completed(event["final_state"].i, event="optimization_completed")
         self._save()

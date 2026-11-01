@@ -6,6 +6,8 @@ import hashlib
 import json
 import threading
 import time
+import logging
+from contextlib import contextmanager
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
@@ -16,8 +18,31 @@ _PATH_LOCKS: dict[Path, threading.Lock] = {}
 _PATH_LOCKS_GUARD = threading.Lock()
 
 
+@contextmanager
+def optional_diagnostic(label: str):
+    """A derived log/export cannot decide whether scientific work succeeded.
+
+    Use only around work with no downstream experiment consumer. Do not wrap
+    Agent execution, evidence, checkpoints, policy decisions or task state.
+    Control-flow BaseExceptions (including ControllerYield) still propagate.
+    """
+    try:
+        yield
+    except Exception as exc:
+        try:
+            logging.getLogger(__name__).warning("%s unavailable (%s)", label, type(exc).__name__)
+        except Exception:
+            pass
+
+
 def text_sha256(text: str) -> str:
     return hashlib.sha256(text.encode("utf-8")).hexdigest()
+
+
+def diagnostic_print(*args, **kwargs):
+    """Console-only output; never use for a machine-readable IPC response."""
+    with optional_diagnostic("diagnostic console"):
+        print(*args, **kwargs)
 
 
 def audit_record(value: Any) -> Any:
@@ -39,26 +64,17 @@ def audit_record(value: Any) -> Any:
     return preserve(value)
 
 
-def redact_agent_record(value: dict[str, Any]) -> dict[str, Any]:
-    """Compatibility name; records are preserved, never redacted or rejected."""
-    return audit_record(value)
-
-
-def redact_sensitive(value: Any) -> Any:
-    """Compatibility name for old callers; no credential substitution occurs."""
-    return audit_record(value)
-
-
 class JsonlLogger:
     """Thread-safe append-only JSONL logger."""
 
     def __init__(self, path: Path) -> None:
         self.path = path
-        mark_artifact_path(path)
-        self.path.parent.mkdir(parents=True, exist_ok=True)
-        resolved = path.resolve()
+        # Construction must not perform I/O: optional diagnostics may be
+        # unavailable without preventing a scientific operation from starting.
+        resolved = path.absolute()
         with _PATH_LOCKS_GUARD:
             self._lock = _PATH_LOCKS.setdefault(resolved, threading.Lock())
+        self._prepared = False
 
     def write(self, event: str, **fields: Any) -> None:
         record = {
@@ -66,23 +82,26 @@ class JsonlLogger:
             "event": event,
             **fields,
         }
-        with self._lock, self.path.open("a", encoding="utf-8") as handle:
-            handle.write(
-                json.dumps(
-                    record,
-                    ensure_ascii=False,
-                    sort_keys=True,
-                    default=str,
+        with self._lock:
+            if not self._prepared:
+                mark_artifact_path(self.path)
+                self.path.parent.mkdir(parents=True, exist_ok=True)
+                self._prepared = True
+            with self.path.open("a", encoding="utf-8") as handle:
+                handle.write(
+                    json.dumps(
+                        record,
+                        ensure_ascii=False,
+                        sort_keys=True,
+                        default=str,
+                    )
+                    + "\n"
                 )
-                + "\n"
-            )
 
     def write_optional(self, event: str, **fields: Any) -> None:
-        """Telemetry/cleanup only; required scientific persistence uses write."""
-        try:
+        """Best-effort diagnostics, never an input to experiment decisions."""
+        with optional_diagnostic(str(self.path)):
             self.write(event, **fields)
-        except OSError:
-            pass
 
 
 def _usage_value(usage: dict[str, Any], *names: str) -> int:

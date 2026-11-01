@@ -10,6 +10,7 @@ from pathlib import Path
 from gepa.core.adapter import EvaluationBatch
 
 from src.exceptions import OfflineReflectionBlocked
+from src.optimization.audit import optional_diagnostic
 from src.optimization.behavioral_hybrid import validate_candidate
 from src.optimization.hpc.task_batch import atomic_json
 from src.optimization.safe_pce_execution import (
@@ -38,6 +39,22 @@ def outcome_score(output: dict, *, mode: str, instance_id: str) -> float:
     evaluator = output.get("evaluator_result", {})
     if mode not in {"polybench_pce", "swe_verified_pce", "swe_rpg_pce"}:
         raise ValueError(f"unsupported Safe PCE scoring mode: {mode}")
+    if output.get("pce_status") == "agent_failed":
+        from src.optimization.online_models import ONLINE_OUTCOME_POLICY_VERSION
+        failure = output.get("last_worker_output", {})
+        attempts = output.get("agent_failure_attempts", [])
+        if (output.get("status") != "completed"
+                or output.get("outcome_policy_version") != ONLINE_OUTCOME_POLICY_VERSION
+                or output.get("terminal_phase") not in {"plan", "code"}
+                or failure.get("failure_category") != "agent"
+                or failure.get("terminal_phase") != output.get("terminal_phase")
+                or failure.get("instance_id") != instance_id
+                or not isinstance(attempts, list)
+                or not all(type(attempt) is int and attempt > 0 for attempt in attempts)
+                or len(set(attempts)) < 3
+                or evaluator != {"status": "not_run", "reason": "agent_failed_before_evaluation"}):
+            raise IncompletePCEEvaluation(f"{instance_id}: invalid terminal Agent failure evidence")
+        return 0.0
     allowed = ({"tests_parsed"} if mode == "polybench_pce" else
                {"rpg_tests_resolved", "rpg_tests_unresolved"} if mode == "swe_rpg_pce" else
                {"official_tests_resolved", "official_tests_unresolved"})
@@ -71,7 +88,8 @@ def outcome_score(output: dict, *, mode: str, instance_id: str) -> float:
 
 def _validate_learning_evidence(output: dict) -> None:
     """A score cannot substitute for the recorded Plan and execution evidence."""
-    if not isinstance(output.get("plan"), str) or not output["plan"].strip():
+    if not isinstance(output.get("plan"), str) or (not output["plan"].strip()
+            and not (output.get("pce_status") == "agent_failed" and output.get("terminal_phase") == "plan")):
         raise IncompletePCEEvaluation("PCE learning evidence lacks the original Plan")
     for field in ("plan_trajectory", "code_trajectory"):
         if not isinstance(output.get(field), list):
@@ -199,11 +217,18 @@ class SafePCEBackend:
                             "primary_metric": "resolved_rate", "validation_score": score,
                             "resolved": sum(row["score"] == 1 for row in rows.values()),
                             "unresolved": sum(row["score"] == 0 for row in rows.values()),
+                            "agent_failed": sum(any(run["pce_output"].get("pce_status") == "agent_failed"
+                                for run in row["output"]["pce_runs"]) for row in rows.values()),
                             "total": len(rows), "parents": result.parents[index]})
         atomic_json(self.config.run_dir / "result.json", json.loads(json.dumps(result.to_dict(), default=list)))
-        atomic_json(self.config.run_dir / "safe_pce_candidate_metrics.json", metrics)
-        (self.config.run_dir / "best_guideline.txt").write_text(result.best_candidate["rules"] + "\n")
-        (self.config.run_dir / "candidate_tree.html").write_text(result.candidate_tree_html())
+        # result.json is the retained scientific result. These views are
+        # reproducible from it and the scored evaluation records.
+        with optional_diagnostic("candidate metrics export"):
+            atomic_json(self.config.run_dir / "safe_pce_candidate_metrics.json", metrics)
+        with optional_diagnostic("best candidate export"):
+            (self.config.run_dir / "best_guideline.txt").write_text(result.best_candidate["rules"] + "\n")
+        with optional_diagnostic("candidate tree export"):
+            (self.config.run_dir / "candidate_tree.html").write_text(result.candidate_tree_html())
 
 
 class SafePCEGEPAAdapter:
@@ -253,10 +278,11 @@ class SafePCEGEPAAdapter:
         if (not isinstance(waves, list) or len(waves) != count
                 or any(not isinstance(wave, list) or len(wave) != len(batch) for wave in waves)):
             if self.run_dir is not None:
-                _append(self.run_dir / "safe_pce_physical_evaluations.jsonl", [{
-                    "candidate_sha256": digest, "status": "incomplete_batch",
-                    "instance_ids": [case.instance_id for case in batch],
-                    "expected_repetitions": count, "raw_pce_waves": waves}])
+                with optional_diagnostic("incomplete PCE observation index"):
+                    _append(self.run_dir / "safe_pce_physical_evaluations.jsonl", [{
+                        "candidate_sha256": digest, "status": "incomplete_batch",
+                        "instance_ids": [case.instance_id for case in batch],
+                        "expected_repetitions": count, "raw_pce_waves": waves}])
             raise OfflineReflectionBlocked(IncompletePCEEvaluation(
                 "Safe PCE evidence wave count/length mismatch; raw observations retained, no score produced"))
         for repetition, outputs in enumerate(waves, 1):
@@ -275,7 +301,8 @@ class SafePCEGEPAAdapter:
                 rows.append(entry)
             physical.append(rows)
             if self.run_dir is not None:
-                _append(self.run_dir / "safe_pce_physical_evaluations.jsonl", rows)
+                with optional_diagnostic("physical PCE observation index"):
+                    _append(self.run_dir / "safe_pce_physical_evaluations.jsonl", rows)
         if failures:
             raise OfflineReflectionBlocked(IncompletePCEEvaluation(
                 f"{len(failures)} incomplete Safe PCE observations; batch scores/learning withheld. "
@@ -295,7 +322,12 @@ class SafePCEGEPAAdapter:
             log.append({"candidate_sha256": digest, "instance_id": case.instance_id, "split": case.split,
                         "score": score, "primary_metric": "resolved_rate", "output": output})
         if self.run_dir is not None:
-            _append(self.run_dir / "safe_pce_evaluations.jsonl", log)
+            try:
+                # This is a replay input, not a log: retain exact physical
+                # outputs and scores before returning them to GEPA.
+                _append(self.run_dir / "safe_pce_evaluations.jsonl", log)
+            except Exception as exc:
+                raise OfflineReflectionBlocked(exc) from exc
         return EvaluationBatch(outputs=outputs, scores=scores, trajectories=traces if capture_traces else None)
 
     def make_reflective_dataset(self, candidate, eval_batch, components_to_update):

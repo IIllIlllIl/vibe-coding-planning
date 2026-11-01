@@ -162,7 +162,7 @@ def test_offline_reflection_block_bypasses_gepa_exception_boundary():
     assert not issubclass(OfflineReflectionBlocked, Exception)
 
 
-def test_shared_slurm_blocks_and_records_host_validation_failure(tmp_path):
+def test_shared_slurm_retries_and_records_host_validation_failure(tmp_path):
     task = TaskFiles(
         index=0,
         instance_id="case",
@@ -172,9 +172,9 @@ def test_shared_slurm_blocks_and_records_host_validation_failure(tmp_path):
     )
     atomic_json(task.manifest_path, {"case": "case"})
     atomic_json(task.output_path, {"status": "completed", "fingerprint": "wrong"})
-    runtime = SlurmTaskBatch(HPCConfig(submit=True))
+    runtime = SlurmTaskBatch(HPCConfig(submit=True), submitter=lambda _: "456")
 
-    with pytest.raises(TaskBatchBlocked, match="blocking Slurm Agent"):
+    with pytest.raises(ControllerYield):
         runtime.run(
             batch_dir=tmp_path,
             fingerprint="fingerprint",
@@ -187,8 +187,8 @@ def test_shared_slurm_blocks_and_records_host_validation_failure(tmp_path):
         )
 
     state = json.loads((tmp_path / "task_state.json").read_text())
-    assert state["phase"] == "BLOCKED"
-    assert state["active_job_id"] is None
+    assert state["phase"] == "SUBMITTED"
+    assert state["active_job_id"] == "456"
     failure = json.loads(
         (task.attempts_dir / "attempt_01" / "host_validation_failure.json").read_text()
     )
@@ -279,7 +279,7 @@ def test_shared_slurm_records_terminal_status_and_exhaustion(
             submit=True,
             max_task_attempts=1,
             task_output_grace_seconds=0,
-        )
+        ), submitter=lambda _: "456"
     )
     workspace_file = task.attempts_dir / "attempt_01/workspaces/code/repository.py"
     evidence_file = task.attempts_dir / "attempt_01/slurm-owned-evidence.json"
@@ -310,7 +310,7 @@ def test_shared_slurm_records_terminal_status_and_exhaustion(
     assert slurm_status["state"] == "TIMEOUT"
     assert slurm_status["raw"] == "123_0|TIMEOUT|00:05:00"
 
-    with pytest.raises(TaskAttemptsExhausted, match="1 attempt"):
+    with pytest.raises(ControllerYield):
         runtime.run(
             batch_dir=tmp_path,
             fingerprint="fingerprint",
@@ -319,6 +319,8 @@ def test_shared_slurm_records_terminal_status_and_exhaustion(
             write_script=lambda indices, attempt: tmp_path / "unused.sbatch",
             validate_output=lambda files, output: None,
         )
+
+    assert json.loads((tmp_path / "task_state.json").read_text())["active_attempt"] == 2
 
 
 def test_hpc_reflection_exhaustion_remains_an_ordinary_proposal_failure(tmp_path):
@@ -579,7 +581,7 @@ def test_shared_slurm_reopens_misclassified_checker_contract_block(tmp_path):
     assert records[0]["new_phase"] == "SUBMITTED"
 
 
-def test_shared_slurm_reports_case_local_failure_and_retries_siblings(tmp_path):
+def test_shared_slurm_retries_case_local_failure_and_siblings(tmp_path):
     local_failure = TaskFiles(
         index=0,
         instance_id="sympy__sympy-21379",
@@ -650,7 +652,7 @@ def test_shared_slurm_reports_case_local_failure_and_retries_siblings(tmp_path):
         return "456"
 
     def write_script(indices, attempt):
-        assert list(indices) == [1]
+        assert list(indices) == [0, 1]
         assert attempt == 2
         path = tmp_path / "attempt_02.sbatch"
         path.write_text("#!/bin/sh\n", encoding="utf-8")
@@ -671,7 +673,7 @@ def test_shared_slurm_reports_case_local_failure_and_retries_siblings(tmp_path):
         )
 
     assert yielded.value.job_id == "456"
-    assert local_failure.output_path.is_file()
+    assert not local_failure.output_path.exists()
     assert not retryable.output_path.exists()
     archived = tmp_path / "failed_outputs/attempt_01/task_0001.json"
     assert json.loads(archived.read_text())["status"] == "retryable_failed"
@@ -681,10 +683,10 @@ def test_shared_slurm_reports_case_local_failure_and_retries_siblings(tmp_path):
     record = json.loads(
         (tmp_path / "operational_reclassifications.jsonl").read_text().splitlines()[0]
     )
-    assert record["reason"] == "case_local_failure_deferred_for_final_report"
+    assert record["reason"] == "retry_incomplete_tasks"
 
 
-def test_shared_slurm_still_blocks_run_scoped_evaluator_failure(tmp_path):
+def test_shared_slurm_retries_evaluator_failure_without_fabricating_score(tmp_path):
     task = TaskFiles(
         index=0,
         instance_id="case",
@@ -705,8 +707,8 @@ def test_shared_slurm_still_blocks_run_scoped_evaluator_failure(tmp_path):
         },
     )
 
-    with pytest.raises(TaskBatchBlocked, match="blocking Slurm Agent"):
-        SlurmTaskBatch(HPCConfig(submit=True)).run(
+    with pytest.raises(ControllerYield):
+        SlurmTaskBatch(HPCConfig(submit=True), submitter=lambda _: "456").run(
             batch_dir=tmp_path,
             fingerprint="fingerprint",
             tasks=[task],
