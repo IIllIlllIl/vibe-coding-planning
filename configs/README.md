@@ -21,11 +21,24 @@ lifetimes; see [the lifecycle contract](../docs/documentation-authority.md).
   freezes the old protocol. Both patches are retained; only code is evaluated.
   Existing frozen runs are not rebound by this addition.
 
-## Paused RPG NoDiag mini-8 binding
+## RPG NoDiag mini-8 binding
+
+[NoDiag v11](gepa_safe_pce_rpg_codex_nodiag3_v11_20261101.yaml),
+[PCE source](safe_pce_ace_rpg_codex_nodiag3_source_v11_20261101.yaml) and
+[Supervisor](safe_pce_ace_rpg_codex_nodiag3_supervisor_v11_20261101.yaml) bind
+the unchanged 46/15/16 split, three proposals, mini 8 and PCE window 8 to
+completed smoke v11's code/test split and bounded Code-owned recovery.
+All effective prompts, models, rule caps and seed match that smoke. The
+108-slot upper budget, official scoring and NoDiag evidence boundary retain
+v10. No previous Plan, patch, candidate, checkpoint or counter is imported;
+the old single-patch run is not resumed under changed source. A later Diag
+comparison requires the same code and evidence layout and separate approval.
+
+### Retained pre-split binding
 
 [NoDiag v10](gepa_safe_pce_rpg_codex_nodiag3_v10_20261101.yaml),
 [PCE source](safe_pce_ace_rpg_codex_nodiag3_source_v10_20261101.yaml) and
-[Supervisor](safe_pce_ace_rpg_codex_nodiag3_supervisor_v10_20261101.yaml) bind
+[archived Supervisor](archive/supervisor_launches/safe_pce_ace_rpg_codex_nodiag3_supervisor_v10_20261101.yaml) bind
 three proposals, mini 8 and PCE window 8 to the completed smoke-v10 runtime.
 The v9 split, effective prompts, models, seed and budget are unchanged; inputs
 are frozen under a fresh identity and no old output or counter is imported.
@@ -34,8 +47,7 @@ follow the separately reviewed Online-zero policy with original last evidence;
 operational failures are retried, not assigned fabricated evaluator outcomes.
 No diagnostic counterpart is bound to this new runtime identity.
 This identity retains the pre-split submission implementation and is not a
-launch default for the new bounded-recovery source; use a new formal binding
-after the engineering smoke is reviewed.
+launch default for the new bounded-recovery source.
 
 ## Retained RPG mini-8 comparison design
 
@@ -59,7 +71,7 @@ against v10 without a separately reviewed code/runtime binding.
 
 [RPG patch smoke v11](gepa_safe_pce_rpg_codex_smoke_v11_20261101.yaml),
 [PCE source](safe_pce_ace_rpg_codex_smoke_source_v11_20261101.yaml) and
-[Supervisor](safe_pce_ace_rpg_codex_smoke_supervisor_v11_20261101.yaml) bind the
+[archived Supervisor](archive/supervisor_launches/safe_pce_ace_rpg_codex_smoke_supervisor_v11_20261101.yaml) bind the
 split-code/test protocol, Code-owned application recovery and optional-diagnostic
 cleanup. The [targeted selection](frozen_safe_pce_ace/rpg_patch_smoke_v11_20261101/README.md)
 keeps OpenAI-454/Pylint-10814 in train and PDM-2795 in validation, preserving the

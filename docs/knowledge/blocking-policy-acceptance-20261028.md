@@ -235,8 +235,32 @@ generated unthrottled arrays and shared Supervisor arguments. The actual
 Supervisor dry-run resolves independent Scratch staging/dataset/result roots.
 Read-only checks matched all three SIF and ancestor-bundle hashes; private auth
 contents were not read. Scratch used 349,050 / 1,000,000 soft-limit inodes and
-2.284 TiB / 10 TiB at the prelaunch check. These measurements and local tests do
-not substitute for the pending dynamic smoke acceptance.
+2.284 TiB / 10 TiB at the prelaunch check. These measurements and local tests
+did not substitute for dynamic acceptance. The terminal evidence follows.
+
+#### Terminal patch-smoke evidence
+
+Runtime authority: `safe-pce-ace-rpg-codex-smoke-v11-20261101`, source
+`bfc8b41d123314df70f7e456903b809d52660192`; final Controller `6269153`.
+The run completed one proposal on 2026-11-01 at 20:47:24 UTC, after about
+84 minutes. All 27 Worker elements completed on their first attempt:
+18 preparation, six PCE, two Reflector and one Curator. No Refiner was needed.
+PCE MaxRSS peaked at 1,381,968 KiB under the unchanged 1 CPU / 4G allocation.
+
+The maintained read-only dataflow audit passed all six physical/aggregate
+observations, both Reflections and the Curator handoff. It verified exact
+Plan/code/test-patch/checkpoint/trajectory equality, unchanged scoring, complete
+Ref inputs and training-only feedback history. Both submitted patches remain
+in evidence; only code enters evaluation. PDM and Pylint succeeded under both
+seed and proposal; OpenAI changed from unresolved to resolved. Mini scores
+were 1/2 and 2/2; validation was 1/1 for both. These three development tasks are
+not evidence of general learning quality.
+
+No application failure occurred, so Code-owned retry and the persistent
+three-attempt ceiling retain local fault-test coverage rather than new dynamic
+coverage. Structural equality is not proof of model comprehension, complete
+tool-read coverage, or a full semantic leakage/noise audit. The mini-2/window-1
+smoke also does not establish every formal eight-case window's capacity.
 
 ## Post-v9 recovery and duplicate-output review (2026-11-01, historical)
 
