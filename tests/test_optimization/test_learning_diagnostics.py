@@ -18,8 +18,8 @@ from tests.test_optimization.test_safe_pce_learning import LIMITS, ARTIFACT
 from tests.test_optimization.test_behavioral_hybrid_runtime import review
 
 
-def backend(arm):
-    config = load_optimization_config(f"configs/gepa_safe_pce_rpg_codex_{arm}3_v1_20261025.yaml", require_api_keys=False)
+def backend(arm, config_path=None):
+    config = load_optimization_config(config_path or f"configs/gepa_safe_pce_rpg_codex_{arm}3_v1_20261025.yaml", require_api_keys=False)
     config = replace(config, execution=replace(config.execution, backend="local"))
     result = SafePCEBackend(config)
     train, validation = result.load_snapshot()
@@ -95,8 +95,13 @@ def test_modified_diagnostic_is_rejected_instead_of_silently_omitted(tmp_path):
         load_learning_diagnostics(tmp_path, manifest, [identifier], source_revision=manifest["learning_diagnostics"]["source_revision"])
 
 
-def test_only_reflective_dataset_receives_diagnostics_without_rewriting_raw_evidence(tmp_path):
-    yes, train, val = backend("diag")
+@pytest.mark.parametrize("config_path", [
+    None,
+    "configs/gepa_safe_pce_rpg_codex_diag3_v11_20261102.yaml",
+    "configs/gepa_safe_pce_rpg_codex_diag_smoke_v1_20261102.yaml",
+])
+def test_only_reflective_dataset_receives_diagnostics_without_rewriting_raw_evidence(tmp_path, config_path):
+    yes, train, val = backend("diag", config_path)
     adapter = SafePCEGEPAAdapter(yes.evaluate, limits=LIMITS)
     raw = [{"instance_id": train[0].instance_id, "split": "train", "planner_input": train[0].planner_input(),
             "pce_runs": [{"pce_output": {"plan": "Exact original Plan\n", "patch": "Exact patch\n"}}], "score": 0}]

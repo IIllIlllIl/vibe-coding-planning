@@ -21,18 +21,50 @@ lifetimes; see [the lifecycle contract](../docs/documentation-authority.md).
   freezes the old protocol. Both patches are retained; only code is evaluated.
   Existing frozen runs are not rebound by this addition.
 
-## RPG NoDiag mini-8 binding
+## RPG matched mini-8 reference comparison
+
+| Binding | No original references | Training references |
+|---|---|---|
+| Learning | [NoDiag v11](gepa_safe_pce_rpg_codex_nodiag3_v11_20261101.yaml) | [Diag v11](gepa_safe_pce_rpg_codex_diag3_v11_20261102.yaml) |
+| PCE source | [NoDiag source](safe_pce_ace_rpg_codex_nodiag3_source_v11_20261101.yaml) | [Diag source](safe_pce_ace_rpg_codex_diag3_source_v11_20261102.yaml) |
+| Supervisor | [Archived NoDiag launch](archive/supervisor_launches/safe_pce_ace_rpg_codex_nodiag3_supervisor_v11_20261101.yaml) | [Diag launch](safe_pce_ace_rpg_codex_diag3_supervisor_v11_20261102.yaml) |
+
+The Diag binding uses the completed NoDiag source revision `2c315d6`, with
+unchanged runtime components, effective prompts, models, seed, split, scoring
+and budgets. It adds 92 original requirement/planning files for the 46 training
+tasks only. Ref receives each task's references as required evidence; Cur can
+look up the complete originals alongside its required Ref diagnoses. Planner,
+Coder, Refiner and held-out evaluations receive no original reference files.
+Each arm starts independently from the placeholder seed. No Plan, patch,
+evaluation, candidate, checkpoint or counter is imported from NoDiag.
+Preparation is not launch authorization; use the existing shared Supervisor
+only after explicit approval and fresh runtime/capacity checks.
+
+### Training-reference dataflow smoke
+
+[Diag smoke](gepa_safe_pce_rpg_codex_diag_smoke_v1_20261102.yaml),
+[PCE source](safe_pce_ace_rpg_codex_diag_smoke_source_v1_20261102.yaml) and
+[Supervisor](safe_pce_ace_rpg_codex_diag_smoke_supervisor_v1_20261102.yaml)
+reuse completed smoke v11's exact two training tasks and one validation task.
+One proposal, mini 2/window 1 and 5–6 PCE slots exercise the formal Diag
+reference boundary with four original training files, unchanged prompts and
+fresh outputs. Inspect required Ref reads, complete Ref-to-Cur evidence and
+optional original-reference lookup after completion. Do not force Refiner or
+candidate validation for coverage. This is not mini-8 capacity or learning-quality
+acceptance, and its launch does not authorize the formal three-proposal arm.
+
+### NoDiag execution baseline
 
 [NoDiag v11](gepa_safe_pce_rpg_codex_nodiag3_v11_20261101.yaml),
 [PCE source](safe_pce_ace_rpg_codex_nodiag3_source_v11_20261101.yaml) and
-[Supervisor](safe_pce_ace_rpg_codex_nodiag3_supervisor_v11_20261101.yaml) bind
+[archived Supervisor](archive/supervisor_launches/safe_pce_ace_rpg_codex_nodiag3_supervisor_v11_20261101.yaml) bind
 the unchanged 46/15/16 split, three proposals, mini 8 and PCE window 8 to
 completed smoke v11's code/test split and bounded Code-owned recovery.
 All effective prompts, models, rule caps and seed match that smoke. The
 108-slot upper budget, official scoring and NoDiag evidence boundary retain
 v10. No previous Plan, patch, candidate, checkpoint or counter is imported;
-the old single-patch run is not resumed under changed source. A later Diag
-comparison requires the same code and evidence layout and separate approval.
+the old single-patch run is not resumed under changed source. The matched Diag
+binding above retains its code and evidence layout.
 
 ### Retained pre-split binding
 
@@ -55,7 +87,7 @@ launch default for the new bounded-recovery source.
 |---|---|---|
 | Learning | [NoDiag v9](gepa_safe_pce_rpg_codex_nodiag3_v9_20261029.yaml) | [Diag v9](gepa_safe_pce_rpg_codex_diag3_v9_20261029.yaml) |
 | PCE source | [NoDiag source](safe_pce_ace_rpg_codex_nodiag3_source_v9_20261029.yaml) | [Diag source](safe_pce_ace_rpg_codex_diag3_source_v9_20261029.yaml) |
-| Supervisor | [Archived NoDiag launch](archive/supervisor_launches/safe_pce_ace_rpg_codex_nodiag3_supervisor_v9_20261029.yaml) | [Diag launch](safe_pce_ace_rpg_codex_diag3_supervisor_v9_20261029.yaml) |
+| Supervisor | [Archived NoDiag launch](archive/supervisor_launches/safe_pce_ace_rpg_codex_nodiag3_supervisor_v9_20261029.yaml) | [Archived Diag launch](archive/supervisor_launches/safe_pce_ace_rpg_codex_diag3_supervisor_v9_20261029.yaml) |
 
 Both bindings use three proposals, minibatch eight, PCE window eight and the
 same 46/15/16 repository-disjoint split. Diag adds original training reference

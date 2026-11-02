@@ -139,14 +139,17 @@ existing manifests are immutable, not overwrite targets.
 
 ## Three-proposal learning contract
 
-The matched mini-8 binding is the
-[v9 comparison contract](knowledge/rpg-window-smoke-v7-ablation-readiness-20261029.md):
-`gepa_safe_pce_rpg_codex_{nodiag,diag}3_v9_20261029.yaml`, with matching source
-and Supervisor configs. It retains this data contract and changes the earlier
+The matched mini-8 bindings are
+`gepa_safe_pce_rpg_codex_nodiag3_v11_20261101.yaml` and
+`gepa_safe_pce_rpg_codex_diag3_v11_20261102.yaml`, with their matching source
+and Supervisor configs in the [configuration index](../configs/README.md).
+They retain the completed NoDiag runtime at source revision `2c315d6` and this
+data contract. The mini-8 design changes the earlier
 mini-16 budget to mini 8 / 108 PCE slots per arm (216 across both), with an
 independent eight-case storage window. Only training-reference availability
-differs between the arms. The v8 descriptions below remain historical
-reproduction notes, not the current matched launch binding.
+differs between the arms. The [v9 comparison contract](knowledge/rpg-window-smoke-v7-ablation-readiness-20261029.md)
+and v8 descriptions below remain historical reproduction notes, not the
+current matched launch binding.
 
 Runtime/source/Supervisor identities are:
 
@@ -247,17 +250,18 @@ not Planner access to reference answers:
 
 | Arm | Reproducibility binding | Original intermediate references |
 |---|---|---|
-| No diagnostics | `gepa_safe_pce_rpg_codex_nodiag3_v8_20261028.yaml` | Absent from the learning snapshot and evidence |
-| Training diagnostics | A separately frozen counterpart with the same effective prompts, code and execution policies | Two original files per eligible training task: requirement clarification and planning |
+| No diagnostics | `gepa_safe_pce_rpg_codex_nodiag3_v11_20261101.yaml` | Absent from the learning snapshot and evidence |
+| Training diagnostics | `gepa_safe_pce_rpg_codex_diag3_v11_20261102.yaml` | Two original files per eligible training task: requirement clarification and planning |
 
 Both must retain the same eligible split/order, seed, minimal initial artifact, prompts,
 models, limits, selection, metric budget and P/C/E policies from the formal3
 baseline. Each has a separate snapshot, run root, optimizer and counter history;
-neither imports the other's outputs. The upper bound is 156 PCE slots per arm,
-312 across both, before retries. Both Supervisor configs use the existing resume
-service. Historical `diag3_v3`/`v4` configs predate later transport/prompt changes
-and are not matched counterparts for NoDiag v8. Config existence does not
-authorize formal launch.
+neither imports the other's outputs. The upper bound is 108 PCE slots per arm,
+216 across both, before retries, with at most 24 Reflections and three Curators
+per arm. Conditional Refiner follows the same rule/token limits. Both
+Supervisor configs use the existing resume service. Historical `diag3_v3`/`v4`
+and `v9` configs predate later submission/recovery changes and are not matched
+counterparts for NoDiag v11. Config existence does not authorize formal launch.
 
 The original diagnostic authority is
 [`rpg_diagnostics_train47_v1_20261025/manifest.json`](../configs/frozen_safe_pce_ace/rpg_diagnostics_train47_v1_20261025/manifest.json):
