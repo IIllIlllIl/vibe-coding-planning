@@ -21,13 +21,34 @@ lifetimes; see [the lifecycle contract](../docs/documentation-authority.md).
   freezes the old protocol. Both patches are retained; only code is evaluated.
   Existing frozen runs are not rebound by this addition.
 
-## RPG matched mini-8 reference comparison
+## RPG six-proposal reference extension
+
+[Learning](gepa_safe_pce_rpg_codex_diag6_v1_20261102.yaml),
+[PCE source](safe_pce_ace_rpg_codex_diag6_source_v1_20261102.yaml) and
+[Supervisor](safe_pce_ace_rpg_codex_diag6_supervisor_v1_20261102.yaml)
+extend the reference-enabled design to six proposals with mini 8/window 8.
+The completed reference smoke at `423a818` is the execution baseline.
+The 46/15/16 split, seed, effective prompts, models, official scoring, caps,
+retry policies and reference visibility are unchanged. Each run starts from
+the placeholder seed; no smoke or NoDiag outputs/counters are imported.
+The upper budget is 201 PCE slots, 603 no-model preparation elements, 48 Ref
+and six Cur calls before retries; Refiner remains conditional.
+
+This is not an equal-budget six-proposal ablation against NoDiag three.
+Only its first three proposals provide an equal-iteration comparison with
+the retained NoDiag binding, still subject to stochasticity. The
+[dataset contract](../docs/swe-rpg-learning-data.md#six-proposal-reference-extension)
+owns the interpretation boundary. Configuration preparation is not permission
+to launch; fresh capacity/authentication checks and explicit approval remain
+required.
+
+## Retained RPG matched mini-8 reference comparison
 
 | Binding | No original references | Training references |
 |---|---|---|
 | Learning | [NoDiag v11](gepa_safe_pce_rpg_codex_nodiag3_v11_20261101.yaml) | [Diag v11](gepa_safe_pce_rpg_codex_diag3_v11_20261102.yaml) |
 | PCE source | [NoDiag source](safe_pce_ace_rpg_codex_nodiag3_source_v11_20261101.yaml) | [Diag source](safe_pce_ace_rpg_codex_diag3_source_v11_20261102.yaml) |
-| Supervisor | [Archived NoDiag launch](archive/supervisor_launches/safe_pce_ace_rpg_codex_nodiag3_supervisor_v11_20261101.yaml) | [Diag launch](safe_pce_ace_rpg_codex_diag3_supervisor_v11_20261102.yaml) |
+| Supervisor | [Archived NoDiag launch](archive/supervisor_launches/safe_pce_ace_rpg_codex_nodiag3_supervisor_v11_20261101.yaml) | [Archived Diag launch](archive/supervisor_launches/safe_pce_ace_rpg_codex_diag3_supervisor_v11_20261102.yaml) |
 
 The Diag binding uses the completed NoDiag source revision `2c315d6`, with
 unchanged runtime components, effective prompts, models, seed, split, scoring
@@ -44,14 +65,15 @@ only after explicit approval and fresh runtime/capacity checks.
 
 [Diag smoke](gepa_safe_pce_rpg_codex_diag_smoke_v1_20261102.yaml),
 [PCE source](safe_pce_ace_rpg_codex_diag_smoke_source_v1_20261102.yaml) and
-[Supervisor](safe_pce_ace_rpg_codex_diag_smoke_supervisor_v1_20261102.yaml)
+[Archived Supervisor](archive/supervisor_launches/safe_pce_ace_rpg_codex_diag_smoke_supervisor_v1_20261102.yaml)
 reuse completed smoke v11's exact two training tasks and one validation task.
 One proposal, mini 2/window 1 and 5–6 PCE slots exercise the formal Diag
 reference boundary with four original training files, unchanged prompts and
-fresh outputs. Inspect required Ref reads, complete Ref-to-Cur evidence and
-optional original-reference lookup after completion. Do not force Refiner or
-candidate validation for coverage. This is not mini-8 capacity or learning-quality
-acceptance, and its launch does not authorize the formal three-proposal arm.
+fresh outputs. The [terminal audit](../docs/knowledge/rpg-window-smoke-v7-ablation-readiness-20261029.md#training-reference-smoke-terminal-audit)
+records actual required reads, complete Ref-to-Cur evidence and original-reference
+lookup, including a remaining selective-reading gap. Refiner was not forced.
+This is not mini-8 capacity or generalization acceptance; its launch does not
+authorize a formal run.
 
 ### NoDiag execution baseline
 

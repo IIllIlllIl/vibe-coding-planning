@@ -79,7 +79,7 @@ def test_existing_supervisor_and_source_fingerprints(versions):
     for arm in ('nodiag', 'diag'):
         config, _, _, _ = load(arm, versions)
         version = versions[0 if arm == 'nodiag' else 1]
-        prefix = 'configs' if arm == 'diag' and version == 'v11_20261102' else 'configs/archive/supervisor_launches'
+        prefix = 'configs/archive/supervisor_launches'
         path = Path(f'{prefix}/safe_pce_ace_rpg_codex_{arm}3_supervisor_{version}.yaml')
         session, log, args, program = _load_launch_config(path)
         launch = parse_args(args)
@@ -145,7 +145,7 @@ def test_reference_smoke_matches_completed_smoke_and_formal_diagnostic_contract(
     assert manifest['source_pce_config_sha256'] == hashlib.sha256(source.read_bytes()).hexdigest()
     assert manifest['engineering_baseline_config_sha256'] == hashlib.sha256(Path(
         'configs/gepa_safe_pce_rpg_codex_diag3_v11_20261102.yaml').read_bytes()).hexdigest()
-    supervisor = Path('configs/safe_pce_ace_rpg_codex_diag_smoke_supervisor_v1_20261102.yaml')
+    supervisor = Path('configs/archive/supervisor_launches/safe_pce_ace_rpg_codex_diag_smoke_supervisor_v1_20261102.yaml')
     session, log, args, program = _load_launch_config(supervisor)
     launch = parse_args(args)
     assert program == RESUME_SCRIPT and session == config.run_dir.name and session in log
@@ -158,3 +158,71 @@ def test_reference_smoke_matches_completed_smoke_and_formal_diagnostic_contract(
     assert contract['budget']['pce_evaluation_slots_without_cache'] == {'minimum': 5, 'maximum': 6}
     assert yaml.safe_load(Path('configs/gepa_safe_pce_rpg_codex_diag3_v11_20261102.yaml').read_text())[
         'experiment_contract']['launch_authorized'] is False
+
+
+def test_six_proposal_reference_extension_preserves_science_and_frozen_inputs():
+    path = Path('configs/gepa_safe_pce_rpg_codex_diag6_v1_20261102.yaml')
+    config = load_optimization_config(path, require_api_keys=False)
+    verify_hybrid_snapshot(config)
+    instance = backend(config)
+    train, val = instance.load_snapshot()
+    old, previous, old_train, old_val = load('diag', VERSIONS[1])
+    assert config.search == replace(old.search, max_iterations=6, min_proposals=6,
+        max_metric_calls=201, projection_metric_calls=201)
+    assert config.reflection == old.reflection and config.task == old.task
+    assert config.initial_rules_path == old.initial_rules_path
+    assert replace(config.hybrid, dataset_file_sha256={}) == replace(old.hybrid, dataset_file_sha256={})
+    assert [c.planner_input() for c in train + val] == [c.planner_input() for c in old_train + old_val]
+    assert (len(train), len(val)) == (46, 15)
+    assert config.dataset_snapshot != old.dataset_snapshot
+    assert config.run_dir != old.run_dir and not config.run_dir.exists()
+    assert instance.learning_diagnostics == previous.learning_diagnostics
+    assert sum(len(x['references']) for x in instance.learning_diagnostics.values()) == 92
+    assert all(instance.learning_diagnostics_for(c.instance_id) is None for c in val)
+    assert not list(instance.pce.dataset_snapshot.rglob('*diagnostic*'))
+    assert not list(config.dataset_snapshot.rglob('*downstream*'))
+    for name in ('train.jsonl', 'validation.jsonl', 'pce_source/manifest.json',
+                 'pce_source/instances.jsonl', 'pce_source/images.json',
+                 'pce_source/evaluation/evaluate_docker.py'):
+        assert (config.dataset_snapshot / name).read_bytes() == (old.dataset_snapshot / name).read_bytes()
+    for field in ('plan', 'code', 'agent_backends', 'plan_prompt', 'code_prompt',
+                  'plan_instance_template', 'code_instance_template', 'container', 'docker',
+                  'workspace_preparation', 'agent_network_disabled', 'pce_window_size',
+                  'code_submission_protocol', 'slurm_evaluator_timeout_outcome'):
+        assert getattr(instance.pce, field) == getattr(previous.pce, field)
+    assert replace(instance.pce.hpc, job_name_prefix='', worker_config_path='') == replace(
+        previous.pce.hpc, job_name_prefix='', worker_config_path='')
+    frozen = json.loads((config.dataset_snapshot / 'manifest.json').read_text())
+    assert frozen['source_pce_config_sha256'] == hashlib.sha256(Path(
+        'configs/safe_pce_ace_rpg_codex_diag6_source_v1_20261102.yaml').read_bytes()).hexdigest()
+    assert frozen['engineering_baseline_config_sha256'] == hashlib.sha256(Path(
+        'configs/gepa_safe_pce_rpg_codex_diag_smoke_v1_20261102.yaml').read_bytes()).hexdigest()
+    for entries in frozen['learning_diagnostics']['records'].values():
+        for entry in entries:
+            assert hashlib.sha256((config.dataset_snapshot / entry['path']).read_bytes()).hexdigest() == entry['sha256']
+
+
+def test_six_proposal_budget_and_launch_match_reviewed_authorization():
+    path = Path('configs/gepa_safe_pce_rpg_codex_diag6_v1_20261102.yaml')
+    config = load_optimization_config(path, require_api_keys=False)
+    contract = yaml.safe_load(path.read_text())['experiment_contract']
+    budget = contract['budget']
+    assert budget['pce_evaluation_slots_without_cache_upper_bound'] == 15 + 6 * (2 * 8 + 15) == 201
+    assert budget['no_model_workspace_preparation_elements_without_retries_upper_bound'] == 3 * 201
+    assert budget['reflector_calls_upper_bound'] == 6 * 8
+    assert budget['curator_calls_upper_bound'] == 6
+    assert contract['launch_authorized'] is True
+    assert contract['previous_output_import'] is False
+    assert contract['split_counts'] == {'train': 46, 'validation': 15, 'test': 16}
+    assert contract['full_six_iteration_run_is_matched_ablation'] is False
+    assert contract['comparison_scope'] == 'first_three_proposals_only_equal_iteration_budget'
+    assert contract['prompt_delta_from_completed_reference_smoke'] == 'none'
+    assert contract['completed_smoke_source_commit'] == '423a81847e3c6db3bf9536b20f83b501d2e20a14'
+    assert contract['completed_smoke_run'] == 'safe-pce-ace-rpg-codex-diag-smoke-v1-20261102'
+    supervisor = Path('configs/safe_pce_ace_rpg_codex_diag6_supervisor_v1_20261102.yaml')
+    session, log, args, program = _load_launch_config(supervisor)
+    launch = parse_args(args)
+    assert program == RESUME_SCRIPT and session == config.run_dir.name and session in log
+    assert args[args.index('--gepa-config') + 1] == str(path)
+    assert launch.require_clean_worktree and launch.reclaim_staging and launch.reclaim_workspaces
+    assert launch.slice_time == '00:08:00' and not hasattr(launch, 'max_runs')

@@ -99,6 +99,7 @@ def test_modified_diagnostic_is_rejected_instead_of_silently_omitted(tmp_path):
     None,
     "configs/gepa_safe_pce_rpg_codex_diag3_v11_20261102.yaml",
     "configs/gepa_safe_pce_rpg_codex_diag_smoke_v1_20261102.yaml",
+    "configs/gepa_safe_pce_rpg_codex_diag6_v1_20261102.yaml",
 ])
 def test_only_reflective_dataset_receives_diagnostics_without_rewriting_raw_evidence(tmp_path, config_path):
     yes, train, val = backend("diag", config_path)

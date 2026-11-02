@@ -76,7 +76,9 @@ def test_frozen_input_bytes_and_no_diagnostics_or_downstream_leakage():
     (Path("configs/gepa_safe_pce_rpg_codex_nodiag3_v11_20261101.yaml"),
      Path("configs/archive/supervisor_launches/safe_pce_ace_rpg_codex_nodiag3_supervisor_v11_20261101.yaml")),
     (Path("configs/gepa_safe_pce_rpg_codex_diag3_v11_20261102.yaml"),
-     Path("configs/safe_pce_ace_rpg_codex_diag3_supervisor_v11_20261102.yaml")),
+     Path("configs/archive/supervisor_launches/safe_pce_ace_rpg_codex_diag3_supervisor_v11_20261102.yaml")),
+    (Path("configs/gepa_safe_pce_rpg_codex_diag6_v1_20261102.yaml"),
+     Path("configs/safe_pce_ace_rpg_codex_diag6_supervisor_v1_20261102.yaml")),
 ])
 def test_supervisor_and_effective_config_reuse_existing_unthrottled_workers(tmp_path, config_path, supervisor_path):
     config = load_optimization_config(config_path, require_api_keys=False)

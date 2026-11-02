@@ -243,6 +243,33 @@ files and every source-subset hash exactly. Python compilation, diff whitespace
 checks and the shared HPC wrapper's local dry-run passed. These checks invoke
 no model or container and do not certify full-dataset runtime acceptance.
 
+## Six-proposal reference extension
+
+`configs/gepa_safe_pce_rpg_codex_diag6_v1_20261102.yaml` extends the same
+reference-enabled contract to six proposals, mini 8 and PCE window 8.
+The completed reference smoke at source `423a818` verifies the new evidence
+boundary; the completed NoDiag three-proposal run supplies the formal-scale
+execution baseline. Split/order, Planner/Coder/learning prompts, seed 42,
+models, 10-item cap, 48/96-token limits, official scoring and retry policies
+remain unchanged. The new input package preserves all source rows/evaluator
+bytes and the same 92 training-only reference files, with fresh identities
+and no prior scientific output or counter import.
+
+The upper bound before retries is
+`15 + 6 × (2 × 8 + 15) = 201` PCE slots, at most 603 separate no-model
+workspace-preparation elements, 48 Ref and six Cur calls. Cache reuse and
+the strict minibatch-improvement gate may reduce actual executions; Refiner
+remains conditional. The 16 downstream test tasks are not used by GEPA.
+
+The full six-proposal run is not matched in budget to NoDiag three.
+Compare the first three proposals for an equal-iteration diagnostic contrast,
+and interpret the remaining proposals as a learning-duration extension.
+Actual data reads and attribution quality remain post-run audit questions,
+not new receipt gates or Host rewriting. See the
+[reference-smoke audit](knowledge/rpg-window-smoke-v7-ablation-readiness-20261029.md#training-reference-smoke-terminal-audit)
+for evidence limits; a small successful smoke does not certify all future
+storage windows, complete Agent reading, or generalization.
+
 ## Training-diagnostic ablation
 
 The two-arm comparison concerns original retrospective diagnostic availability,
