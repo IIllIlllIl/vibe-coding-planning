@@ -7,6 +7,7 @@ No Agent or scheduler is invoked by preparation.
 from __future__ import annotations
 
 from copy import deepcopy
+import hashlib
 import json
 from pathlib import Path
 
@@ -19,6 +20,105 @@ from src.optimization.safe_pce_execution import (
 )
 
 ROOT = Path(__file__).resolve().parents[2]
+
+
+def prepare_historical_replay(*, learning_config, proposal_path, evaluations_path,
+                              snapshot, run_dir, output_config):
+    """Freeze one historical training draw for a fresh subagent learning pilot.
+
+    Original current Ref/Cur and candidate outputs are deliberately excluded.
+    Prior training reports seed the same ACE ledger; validation stays evaluator-only.
+    """
+    from src.optimization.behavioral_hybrid_ace import _playbook
+    from src.optimization.playbook_adapter import GlobalPlaybookCounters
+    from src.optimization.safe_pce_learning import _iter_records
+    raw = deepcopy(yaml.safe_load(Path(learning_config).read_text()))
+    source = Path(raw["paths"]["dataset_snapshot"])
+    if not source.is_absolute():
+        source = ROOT / source
+    proposal = json.loads(Path(proposal_path).read_text())
+    records = proposal["records"]
+    ids = [record["instance_id"] for record in records]
+    if len(ids) != len(set(ids)) or any(record.get("split") != "train" for record in records):
+        raise ValueError("replay requires distinct original training records")
+    seed = Path(raw["paths"]["initial_guideline"])
+    if not seed.is_absolute():
+        seed = ROOT / seed
+    parent_rules = seed.read_text().strip()
+    if json.loads(parent_rules) != proposal["parent"]:
+        raise ValueError("this one-proposal pilot requires the original seed parent")
+    digest = hashlib.sha256(parent_rules.encode()).hexdigest()
+    validation_ids = {json.loads(line)["instance_id"] for line in (source / "validation.jsonl").open() if line.strip()}
+    train_rows, validation_rows = {}, {}
+    by_id = {record["instance_id"]: record for record in records}
+    for row in _iter_records(Path(evaluations_path)):
+        if row["candidate_sha256"] != digest:
+            continue
+        if row["split"] == "validation" and row["instance_id"] in validation_ids:
+            validation_rows[row["instance_id"]] = row
+        elif row["split"] == "train" and row["instance_id"] in by_id:
+            if row["output"]["pce_runs"] == by_id[row["instance_id"]]["pce_runs"]:
+                train_rows[row["instance_id"]] = row
+    if set(train_rows) != set(ids) or set(validation_rows) != validation_ids:
+        raise ValueError("original parent training/seed-validation observations are incomplete")
+    history = deepcopy(proposal["history"])
+    history["events"] = {key: event for key, event in history["events"].items() if event["instance_id"] not in set(ids)}
+    reports = {event["reflection_sha256"] for event in history["events"].values()}
+    contexts = {event["checker_context_sha256"] for event in history["events"].values()}
+    history["reports"] = {key: history["reports"][key] for key in reports}
+    history["contexts"] = {key: history["contexts"][key] for key in contexts}
+    ledger = GlobalPlaybookCounters()
+    book = ledger.hydrate(_playbook(proposal["parent"]))
+    identities = {bullet.text.casefold() for bullet in book.bullets}
+    if any(item["text"].casefold() not in identities for context in history["contexts"].values() for item in context):
+        raise ValueError("pilot prior history contains another artifact; use an explicitly frozen ledger")
+    counted, pending = ledger.apply_reviews(book, list(history["reports"].values()))
+    ledger.commit(counted, pending, feedback=history)
+    replay = {"schema_version": 1, "parent": {"rules": parent_rules}, "records": records,
+        "trace": {"i": 0, "selected_program_candidate": 0, "subsample_ids": ids,
+                  "subsample_scores": [train_rows[identifier]["score"] for identifier in ids]},
+        "parent_rows": [train_rows[identifier] for identifier in ids],
+        "validation": [validation_rows[identifier] for identifier in sorted(validation_ids)],
+        "ledger": ledger.export(), "provenance": {
+            "source_proposal_sha256": sha256(Path(proposal_path)),
+            "source_evaluations_sha256": sha256(Path(evaluations_path)),
+            "source_config_sha256": sha256(Path(learning_config)),
+            "reuse": "unchanged parent PCE, seed validation and prior training history only"}}
+    snapshot, run_dir, output_config = Path(snapshot), Path(run_dir), Path(output_config)
+    mark_private_artifact_dir(snapshot)
+    for path in source.rglob("*"):
+        relative = path.relative_to(source)
+        if path.is_file() and str(relative) not in {"manifest.json", "pce_source/base_pce.yaml"}:
+            _write_once(snapshot / relative, path.read_bytes())
+    base = yaml.safe_load((source / "pce_source/base_pce.yaml").read_text())
+    old_prefix, new_prefix = _path(source), _path(snapshot)
+    for key, value in base["paths"].items():
+        if isinstance(value, str) and value.startswith(old_prefix + "/"):
+            base["paths"][key] = new_prefix + value[len(old_prefix):]
+    base["paths"]["run_dir"] = _path(run_dir / "pce_evaluations")
+    _write_once(snapshot / "pce_source/base_pce.yaml", yaml.safe_dump(base, sort_keys=False).encode())
+    _write_once(snapshot / "training_replay.json", (json.dumps(replay, ensure_ascii=False) + "\n").encode())
+    manifest = json.loads((source / "manifest.json").read_text())
+    manifest["training_replay"] = {"path": "training_replay.json", "sha256": sha256(snapshot / "training_replay.json")}
+    _write_once(snapshot / "manifest.json", (json.dumps(manifest, sort_keys=True, indent=2) + "\n").encode())
+    raw["experiment_contract"] = {"identity": output_config.stem, "engineering_baseline_config": _path(Path(learning_config)),
+        "purpose": "one-proposal historical-minibatch autonomous-reading subagent pilot",
+        "source_proposal_sha256": replay["provenance"]["source_proposal_sha256"],
+        "unchanged": ["PCE prompts/models", "official scoring", "46/15/16 split", "cap10 and token limits", "ACE counters/operations"],
+        "reading": "complete file inventory; no required/optional classification",
+        "validation": "seed replay and candidate selection only; never learning evidence"}
+    raw["paths"].update(dataset_snapshot=_path(snapshot), safe_pce_config=_path(snapshot / "pce_source/base_pce.yaml"), run_dir=_path(run_dir))
+    raw["hybrid"].update(learning_mode="codex_subagents", prompt_bundle="configs/prompts/safe_pce_hybrid_subagents_v1.yaml",
+        dataset_file_sha256={name: sha256(snapshot / name) for name in ("manifest.json", "train.jsonl", "validation.jsonl")})
+    raw["hybrid"].pop("prompt_bundle_sha256", None)
+    budget = 2 * len(validation_ids) + 2 * len(ids)
+    raw["search"].update(max_iterations=1, min_proposals=1, reflection_minibatch_size=len(ids),
+                         max_metric_calls=budget, projection_metric_calls=budget)
+    for key in ("remote_project_dir", "remote_task_dir"):
+        raw["hpc"][key] = str(Path(raw["hpc"][key]).parent / output_config.stem)
+    raw["hpc"].update(worker_config_path=_path(output_config), job_name_prefix=output_config.stem)
+    _write_once(output_config, yaml.safe_dump(raw, sort_keys=False).encode())
+    return output_config
 
 
 def _path(path):

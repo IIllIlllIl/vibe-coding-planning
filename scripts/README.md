@@ -21,6 +21,9 @@ no script or configuration here authorizes execution by itself.
 - `tools/prepare_safe_pce_ace_gepa.py` prepares explicit task-only splits and a
   new hybrid learning config around an existing Safe PCE config. It calls no
   model or scheduler; see [`../docs/safe-pce-ace-gepa.md`](../docs/safe-pce-ace-gepa.md).
+  Its `--replay-proposal` / `--replay-evaluations` mode freezes one historical
+  training draw, prior training ledger and seed validation for a fresh pilot;
+  new candidate PCE is not replayed. It is the same maintained preparation entry.
 - `tools/freeze_swe_rpg_threeway.py` freezes whole-repository/duplicate task
   groups with development exposure protection, reusing the shared historical
   partition and original RPG loaders/writers. It keeps downstream source rows

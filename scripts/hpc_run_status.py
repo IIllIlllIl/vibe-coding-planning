@@ -15,12 +15,16 @@ from typing import Any
 
 import yaml
 
+try:
+    from scripts.hpc_runtime import remote_embedded_python
+except ModuleNotFoundError:  # Direct ``python scripts/hpc_run_status.py``.
+    from hpc_runtime import remote_embedded_python
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 DEFAULT_ULHPC_CONFIG = REPO_ROOT / "configs" / "ulhpc_submit.yaml"
 DEFAULT_REMOTE_RUN_ROOT = "~/hpc_run_state/vibe-coding-planning"
 
-REMOTE_SCRIPT = r"""
+REMOTE_SCRIPT = (REPO_ROOT / "scripts/hpc_runtime.py").read_text(encoding="utf-8") + r"""
 import json
 import os
 import re
@@ -69,7 +73,7 @@ if run_dir.is_dir():
     if (run_dir / "controller_status.json").is_file():
         payload["controller_status"] = read_json(run_dir / "controller_status.json")
     totals = Counter()
-    for state_path in sorted((run_dir / "hpc_tasks").glob("**/task_state.json")):
+    for state_path in task_state_paths(run_dir):
         state = read_json(state_path)
         batch_dir = state_path.parent
         window = (re.fullmatch(r"window_(\d+)_(\d+)", batch_dir.name)
@@ -181,7 +185,7 @@ def query(
     command.extend(
         [
             target,
-            "python3 -c "
+            remote_embedded_python(target) + " -c "
             + shlex.quote(REMOTE_SCRIPT)
             + " "
             + shlex.quote(remote_path)

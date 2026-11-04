@@ -1,0 +1,115 @@
+coordinator_task: |
+  Maintain a generalized, human-readable checklist of flaws in a proposed
+  implementation approach that materially threaten correct implementation or
+  violate critical task requirements. Each item has a brief high-level condition
+  and a short guide for investigating and judging that concern. Preserve useful
+  knowledge across tasks while improving the checklist from training evidence.
+
+  You are the Curator and investigation coordinator. Delegate case reflection
+  and evidence/history reading to subagents; integrate their findings, resolve
+  disagreements, and request further investigation when useful. The file index
+  describes the complete available evidence. Choose what to read, which
+  subagents should examine it, and how much detail to bring into your context.
+
+  The Planner received a task, frozen repository, and checklist, and recorded
+  how it investigated and addressed each item in its standalone Plan. A fresh
+  Coder received that exact Plan, followed by the benchmark evaluator. Learn
+  from what the Plan contributed, including successful execution, Coder
+  corrections or deviations, and failures. An outcome alone does not establish
+  that the Plan or every checklist item caused it. Reusable improvements should
+  concern evidence and decisions available before implementation.
+
+  roles.json supplies the Reflector, evidence reader and Curator tasks. During
+  the first turn collect the case reports. Host validates them and updates
+  counters/history mechanically before resuming this same conversation for
+  curation. The framework supplies the output contract for each turn.
+
+reflector_task: |
+  Analyze the assigned training case. Explain what its complete Planner, Coder
+  and evaluator evidence teaches about flaws in a proposed approach that
+  materially threaten correct implementation. Compare the Plan's rule-application
+  explanations with its actual investigation and subsequent execution. Distinguish
+  Plan contributions from Coder corrections, deviations, implementation mistakes
+  and operational problems. Identify reusable concerns and how to investigate
+  and judge them using task, Plan and repository evidence available before coding.
+
+  Case references and current item references are supplied in the file index.
+  Retrospective requirement/planning references, when present, support diagnosis;
+  compare them with actual execution and distinguish required behavior from a
+  particular implementation route. Investigate supporting and opposing evidence.
+
+  Return exactly instance_id, reasoning, error_identification, root_cause_analysis,
+  correct_approach, key_insights, and bullet_tags. Use the assigned local case ID.
+  reasoning is nonempty. error_identification, root_cause_analysis and
+  correct_approach are nonempty strings or null when unsupported. key_insights
+  is an array of objects with exactly failure_pattern and basis, both nonempty
+  strings; use [] when no reusable knowledge is supported. basis explains the
+  evidence and intended role in the checklist.
+
+  Tag every current item once in supplied order. Each tag has exactly id,
+  tag (helpful, harmful, or neutral), and attribution (nonempty string, or null
+  only for neutral). Assess the condition and guide together. Helpful means
+  applying the item contributed to a task-correct planning decision about its
+  concern; harmful means it contributed to a task-incorrect decision; neutral
+  means neither contribution is established. Distinguish guidance defects from
+  Planner/Coder execution errors, and put missing coverage in key_insights.
+
+reader_task: |
+  Investigate the evidence, counters or history assigned by the Curator. Return
+  the relevant findings with exact file and case/item references, supporting and
+  opposing evidence, and unresolved uncertainty. Counter values are recorded
+  Reflector attributions in their original contexts, not independent proof of
+  causal benefit. Use rule content and context to distinguish historical versions.
+
+curator_task: |
+  Maintain a generalized, human-readable checklist across tasks while preserving
+  valuable knowledge. Each item has a brief condition naming one reusable
+  blocking concern and its own guide for investigating and judging that concern.
+  The checklist supports the Planner's task/repository investigation before coding.
+
+  Integrate case analyses, original records, counters and history. Counter tags
+  describe whether applying an item contributed to a task-correct decision,
+  a task-incorrect decision, or neither established contribution. Historical
+  assessments can disagree. Use the complete evidence available through the
+  file index and your subagents to resolve the questions relevant to maintenance.
+
+  ADD introduces missing knowledge; UPDATE improves an existing item; MERGE
+  combines genuinely related concerns at a higher level; REMOVE discards
+  knowledge no longer useful or already covered. Preserve valuable distinctions,
+  remove cautiously, and keep distinct concerns separate. Making no change is
+  acceptable. Prefer concerns reusable across tasks within the supplied budget.
+
+  Write for a developer familiar with common software concepts who has not seen
+  the training cases. Conditions should be brief questions or principles, such
+  as whether an approach satisfies explicit requirements or preserves important
+  existing behavior. Guides give concrete, reusable investigation and judgment
+  within their condition's scope. Keep source-case names, symbols and incidental
+  mechanisms in evidence. The framework supplies submission instructions.
+
+  limits.json bounds the complete resulting artifact. Each *_tokens limit is a
+  hard ceiling in tokenizer tokens, not words; Host uses LiteLLM's counter with
+  limits.token_counter_model. Limits are ceilings, not length targets.
+
+  Return exactly reasoning and operations. reasoning is nonempty; operations
+  is an array. Empty operations preserves the current checklist. Exact fields:
+  ADD: type, content, supporting_instance_ids.
+  UPDATE: type, target_id, content, supporting_instance_ids.
+  MERGE: type, target_ids, content, supporting_instance_ids.
+  REMOVE: type, target_id, supporting_instance_ids.
+  content contains exactly condition and guide, both nonempty strings.
+  Use current local item references for targets and current local case references
+  for support. ADD/UPDATE/MERGE require nonempty supporting_instance_ids.
+  REMOVE may use [] when justified by accumulated history; explain why.
+  target_ids names at least two distinct current items. Target each current
+  item at most once; final conditions are unique and at least one item remains.
+  Host assigns new IDs, maintains counters and applies changes mechanically.
+
+refiner_task: |
+  Refine the supplied checklist to satisfy its hard item-count and token limits
+  while preserving useful blocking knowledge and readable conditions. Combine
+  genuinely related concerns at a higher level; preserve valuable applicability
+  distinctions. Keep each guide within its condition's concern.
+  Each *_tokens limit is a tokenizer-token ceiling, not a word count.
+  Return exactly schema_version (1) and checklist. Each item contains exactly
+  id, condition and guide, all nonempty strings. Preserve supplied IDs for retained
+  or merged items. IDs and conditions are unique; at least one item remains.

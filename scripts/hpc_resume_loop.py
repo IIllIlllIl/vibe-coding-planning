@@ -21,9 +21,15 @@ from typing import Any
 import yaml
 
 try:
-    from scripts.hpc_runtime import HpcLayout
+    from scripts.hpc_runtime import (
+        HpcLayout, REMOTE_EMBEDDED_PYTHON, AION_REMOTE_EMBEDDED_PYTHON,
+        remote_embedded_python,
+    )
 except ModuleNotFoundError:  # Direct ``python scripts/hpc_resume_loop.py``.
-    from hpc_runtime import HpcLayout
+    from hpc_runtime import (
+        HpcLayout, REMOTE_EMBEDDED_PYTHON, AION_REMOTE_EMBEDDED_PYTHON,
+        remote_embedded_python,
+    )
 
 try:
     from scripts.internal.gepa_source_preflight import validate_gepa_source
@@ -45,14 +51,6 @@ OFFLINE_TARGET_EXTENSION_SCRIPT = (
     REPO_ROOT / "scripts" / "internal" / "offline_iteration_target.py"
 )
 HPC_RUNTIME_SCRIPT = REPO_ROOT / "scripts" / "hpc_runtime.py"
-# Iris exposes Python 3.6 as ``python3`` on non-interactive login shells.  The
-# shared lifecycle modules use current Python syntax, so embedded module calls
-# must select the available modern interpreter explicitly.
-REMOTE_EMBEDDED_PYTHON = "python3.11"
-AION_REMOTE_EMBEDDED_PYTHON = (
-    "/opt/apps/easybuild/systems/aion/rhel810-20250803/2023b/epyc/"
-    "software/Python/3.11.5-GCCcore-13.2.0/bin/python3"
-)
 TERMINAL_JOB_STATES = {
     "BOOT_FAIL",
     "CANCELLED",
@@ -677,7 +675,7 @@ for path in (run_dir / "hpc_rollout_batches").glob("batch_*/batch_state.json"):
         continue
     if batch_state.get("active_job_id"):
         worker_ids.add(str(batch_state["active_job_id"]))
-for path in (run_dir / "hpc_tasks").glob("**/task_state.json"):
+for path in task_state_paths(run_dir):
     try:
         task_state = json.loads(path.read_text(encoding="utf-8"))
     except Exception:
@@ -693,8 +691,9 @@ payload["active_workers"] = [
 ]
 print(json.dumps(payload, sort_keys=True))
 """
+    script = HPC_RUNTIME_SCRIPT.read_text(encoding="utf-8") + "\n" + script
     remote_command = (
-        "printf VIBE_HPC_RUN_STATUS >/dev/null; python3 -c "
+        "printf VIBE_HPC_RUN_STATUS >/dev/null; " + _remote_embedded_python(config) + " -c "
         + shlex.quote(script)
         + " "
         + shlex.quote(config.remote_run_snapshot)
@@ -796,9 +795,7 @@ print(json.dumps(reclaim_disposable_phase_workspaces(
 def _remote_embedded_python(config: SupervisorConfig) -> str:
     """Select the modern login-node interpreter for the target cluster."""
 
-    if "@access-aion." in config.ssh_target:
-        return AION_REMOTE_EMBEDDED_PYTHON
-    return REMOTE_EMBEDDED_PYTHON
+    return remote_embedded_python(config.ssh_target)
 
 
 def extend_completed_offline_target(

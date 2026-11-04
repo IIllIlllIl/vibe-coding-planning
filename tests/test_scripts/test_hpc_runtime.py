@@ -6,6 +6,7 @@ from scripts.hpc_runtime import (
     HpcLayout,
     reclaim_disposable_phase_workspaces,
     reclaim_submission_workdirs,
+    task_state_paths,
 )
 
 
@@ -17,6 +18,30 @@ def test_layout_uses_canonical_scratch_root() -> None:
     assert layout.sif_cache == Path(
         "/scratch/users/twang/vibe-coding-planning/shared/sif-cache"
     )
+
+
+def test_task_state_paths_are_bounded_to_batches_and_execution_windows(tmp_path, monkeypatch):
+    import os
+
+    root = tmp_path / "hpc_tasks"
+    expected = [root / "reflector/ordinary/task_state.json",
+                root / "pce/windowed/execution_windows/window_0000_0008/task_state.json"]
+    ignored = [root / "pce/windowed/attempts/task_0000/attempt_01/workspaces/repo/.venv/task_state.json",
+               root / "pce/windowed/prepared_repository/task_state.json"]
+    for path in expected + ignored:
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text("{}")
+    (ignored[0].parent / "cycle").symlink_to(root, target_is_directory=True)
+    original_scandir = os.scandir
+
+    def bounded_scandir(path):
+        if isinstance(path, (str, Path)) and Path(path).is_relative_to(root):
+            assert not {"attempts", "prepared_repository"}.intersection(Path(path).relative_to(root).parts)
+        return original_scandir(path)
+
+    monkeypatch.setattr(os, "scandir", bounded_scandir)
+    assert set(task_state_paths(tmp_path)) == set(expected)
+    assert list(task_state_paths(tmp_path / "missing")) == []
 
 
 def test_reclaim_removes_only_staged_workdirs(tmp_path: Path) -> None:

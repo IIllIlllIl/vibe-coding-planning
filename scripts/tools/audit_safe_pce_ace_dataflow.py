@@ -7,6 +7,7 @@ import argparse
 import hashlib
 import json
 from pathlib import Path
+import yaml
 
 from src.agents.plan_agent import _extract_bounded_direct_plan
 from src.optimization.agent_references import phase_references, decode_phase_output
@@ -105,6 +106,16 @@ def audit(config_path):
         raise ValueError("overlapping splits")
     sources = {case.instance_id: case for case in pce_cases(backend.mode, backend.pce)}
     aggregate = _rows(root / "safe_pce_evaluations.jsonl")
+    from src.optimization.pending_playbook_resume import load_training_replay
+    replay = load_training_replay(config)
+    original_runs = {}
+    if replay is not None:
+        baseline = yaml.safe_load(Path(config_path).read_text())["experiment_contract"]["engineering_baseline_config"]
+        source_config = load_optimization_config(baseline, require_api_keys=False)
+        source_root = root.resolve().parent / source_config.run_dir.name
+        for row in [*replay["parent_rows"], *replay["validation"]]:
+            for run in row["output"]["pce_runs"]:
+                original_runs[hashlib.sha256(json.dumps(run, sort_keys=True).encode()).hexdigest()] = source_root
     # Physical observations already live in the authoritative replay records.
     # The separate index is an optional diagnostic export, not a second gate.
     physical = [run for row in aggregate for run in row["output"]["pce_runs"]]
@@ -116,6 +127,7 @@ def audit(config_path):
                  if "candidate" in _json(path))
     artifacts = {hashlib.sha256(text.encode()).hexdigest(): json.loads(text) for text in texts}
     for row in physical:
+        origin = original_runs.get(hashlib.sha256(json.dumps(row, sort_keys=True).encode()).hexdigest(), root)
         _equal(row["status"], "scored", "physical completion")
         output = row["pce_output"]
         _validate_learning_evidence(output)
@@ -127,7 +139,7 @@ def audit(config_path):
         repetitions = config.search.train_case_repetitions if row["split"] == "train" else 1
         effective_key = hashlib.sha256(json.dumps({"artifact": artifact,
             "repetitions": repetitions}, sort_keys=True).encode()).hexdigest()
-        _, effective = load_pce_config(root / "pce_evaluations" / effective_key / "effective_pce.yaml")
+        _, effective = load_pce_config(origin / "pce_evaluations" / effective_key / "effective_pce.yaml")
         _equal(json.loads(effective.planning_rules), checker_projection(artifact), "candidate -> Planner projection")
         for field in ("code_prompt", "code_instance_template", "plan_prompt"):
             _equal(getattr(effective, field), getattr(backend.pce, field), "fixed prompt: " + field)
@@ -136,7 +148,7 @@ def audit(config_path):
         for expected in (sources[row["instance_id"]].issue_description, effective.planning_rules):
             if (inputs or output.get("terminal_phase") != "plan") and not any(expected in message for message in inputs):
                 raise ValueError("task/artifact absent from recorded Planner input")
-        _audit_worker_evidence(root, output)
+        _audit_worker_evidence(origin, output)
     for row in aggregate:
         runs = row["output"]["pce_runs"]
         expected = config.search.train_case_repetitions if row["split"] == "train" else 1
@@ -213,7 +225,32 @@ def audit(config_path):
             phases[role] += 1
             manual.append({"role": role, "completion": str(completion),
                            "required_files": manifest["required_files"]})
-    if not phases["reflector"] or not phases["curator"]:
+    if config.hybrid.learning_mode == "codex_subagents":
+        from src.optimization.coordinated_ace import verify_coordinator_evidence
+        from src.optimization.behavioral_hybrid_runtime import hybrid_limits
+        phases["coordinator"] = 0
+        for path in sorted((root / "hpc_tasks/hybrid_coordinator").glob("*/outputs/task_*.json")):
+            output = _json(path)
+            payload = _json(path.parent.parent / "tasks" / path.name)["payload"]
+            if output.get("status") != "completed":
+                raise ValueError("incomplete coordinator output")
+            validate_phase("coordinator", payload, output["agent_output"], config)
+            attempts = path.parent.parent / "attempts" / path.stem
+            candidates = [attempt for attempt in sorted(attempts.glob("attempt_*"))
+                          if (attempt / "curator_response.json").is_file()]
+            if not candidates:
+                raise ValueError("coordinator raw completion is absent")
+            verify_coordinator_evidence(candidates[-1], payload, output["agent_output"], hybrid_limits(config))
+            for record in payload["records"]:
+                if record["instance_id"] not in train or record["split"] != "train":
+                    raise ValueError("non-training coordinator evidence")
+                _equal(record["planner_input"], sources[record["instance_id"]].agent_projection(), "source -> coordinator input")
+                if any(run not in physical for run in record["pce_runs"]):
+                    raise ValueError("coordinator changed PCE evidence")
+            phases["coordinator"] += 1
+            manual.append({"role": "coordinator", "attempt": str(candidates[-1]),
+                           "scope": "Native delegation, child traces, autonomous reading and retained uncertainty"})
+    if not phases.get("coordinator") and (not phases["reflector"] or not phases["curator"]):
         raise ValueError("learning phases missing")
     ledger = _json(root / "global_counter_ledger.json")
     for event in ledger["history"].values():

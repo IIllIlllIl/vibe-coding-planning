@@ -94,10 +94,19 @@ def atomic_text(path: Path, payload: str) -> None:
 
 def _atomic_text_once(path: Path, payload: str) -> None:
     """One storage attempt; only required state callers add retries."""
+    _atomic_write_once(path, lambda temporary: temporary.write_text(payload, encoding="utf-8"))
+
+
+def atomic_write(path: Path, write_temporary: Callable[[Path], Any]) -> None:
+    """Stream a required payload through the same atomic replacement/retry path."""
+    retry_io(lambda: _atomic_write_once(path, write_temporary))
+
+
+def _atomic_write_once(path: Path, write_temporary: Callable[[Path], Any]) -> None:
     temporary = path.with_suffix(path.suffix + ".tmp")
     mark_artifact_path(path)
     path.parent.mkdir(parents=True, exist_ok=True)
-    temporary.write_text(payload, encoding="utf-8")
+    write_temporary(temporary)
     temporary.replace(path)
 
 

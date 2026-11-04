@@ -21,6 +21,21 @@ lifetimes; see [the lifecycle contract](../docs/documentation-authority.md).
   freezes the old protocol. Both patches are retained; only code is evaluated.
   Existing frozen runs are not rebound by this addition.
 
+## RPG autonomous-reading subagent pilot
+
+[Learning](gepa_safe_pce_rpg_codex_subagents_pilot1_v1_20261104.yaml) and
+[Supervisor](safe_pce_ace_rpg_codex_subagents_pilot1_supervisor_v1_20261104.yaml)
+bind one real GEPA proposal to the reference-enabled run's second eight-task
+training minibatch and its prior training history. Historical parent PCE and
+seed validation are replayed unchanged; old current Ref/Cur and candidate
+outputs are not imported. New candidate PCE remains unchanged and is scored
+normally, with the existing strict minibatch gate before validation.
+The 46/15/16 split, cap10/48/96-token limits and gpt-6-sol/high remain fixed.
+This is a local learning-step comparison, not a new matched multi-iteration arm.
+The [coordinator contract](../docs/safe-pce-ace-gepa.md#native-subagent-coordinator)
+owns the evidence, counter and session boundaries. Configuration existence
+does not authorize execution.
+
 ## RPG six-proposal reference extension
 
 [Learning](gepa_safe_pce_rpg_codex_diag6_v1_20261102.yaml),

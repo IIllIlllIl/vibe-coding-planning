@@ -59,6 +59,34 @@ requires the outcome audit described in the PCE cleaning record.
 History preheat has separately reached approximately 4 GiB; do not use that
 measurement as an Agent inference estimate.
 
+## Safe PCE replay aggregation measurement (2026-11-03)
+
+The paused `safe-pce-ace-rpg-codex-diag6-v1-20261102` run, source `3518509`,
+had confirmed Controller OOMs in jobs `6273409` and `6273420`: `.batch` MaxRSS
+was 4,193,120 K and 4,193,124 K respectively under a 4G allocation. Its replay
+was 202,171,874 bytes and optimizer checkpoint 195,886,476 bytes. The completed
+NoDiag3 baseline (`2c315d6`) used the same production `src/`, `scripts/` and
+vendored GEPA code; the failure exposed an accumulated-history scaling limit,
+not a demonstrated effect of diagnostic reference text alone.
+
+Profiling private copies on macOS/Python 3.12 found that the old append retained
+an 808 MB Unicode history string, 580 MB of canonical row strings and a 907 MB
+assembled payload, in addition to parsed optimizer/evaluation state. Peak RSS
+reached 2.938 GiB before the final write. With streaming replay and reusable
+UTF-8 bytes for newly appended rows, the same saved checkpoint, seed validation
+and eight completed outputs peaked at 0.878 GiB through actual append, byte
+comparison and an idempotent repeated append. All 94 original rows were preserved
+byte-for-byte and all eight appended payloads matched their original outputs.
+Original evidence copies and remote scientific files were not rewritten.
+
+These local peaks are diagnostic comparisons, not Linux cgroup acceptance or
+a guarantee of future 4G headroom. Some eight-minute Controller timeouts had
+low RSS and little CPU; their exact blocking read/import was not stack-sampled
+and must not all be attributed to OOM. Recursive status traversal was a separate
+confirmed defect: it entered disposable repositories and could race cleanup.
+The shared fixed-depth status query passed a read-only remote check in 2.628 s
+after the fix; no model or new Slurm job was launched for that check.
+
 ## What consumes RAM
 
 Models execute remotely; these jobs do not load LLM weights locally. Memory

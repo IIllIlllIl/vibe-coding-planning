@@ -150,7 +150,7 @@ def test_remote_status_short_circuits_a_missing_run_without_child_probes(
 
     def execute_embedded_script(command, *, check=False, timeout_seconds=None):
         assert timeout_seconds == 60
-        arguments = shlex.split(command[-1].split("; python3 -c ", 1)[1])
+        arguments = shlex.split(command[-1].split("; " + REMOTE_EMBEDDED_PYTHON + " -c ", 1)[1])
         environment = {**os.environ, "PATH": f"{fake_bin}{os.pathsep}{os.environ['PATH']}"}
         result = subprocess.run(
             [sys.executable, "-c", *arguments],
@@ -192,6 +192,53 @@ def test_remote_status_timeout_is_retryable_without_submitting(monkeypatch) -> N
         "error_type": "remote_status_timeout",
         "stderr": "read-only remote status check exceeded 60 seconds",
     }
+
+
+def test_remote_status_queries_only_authoritative_batch_and_window_jobs(tmp_path, monkeypatch, capsys):
+    states = {
+        "hpc_tasks/reflector/ordinary/task_state.json": {"phase": "SUBMITTED", "active_job_id": "123"},
+        "hpc_tasks/curator/completed/task_state.json": {"phase": "COMPLETE", "active_job_id": "999"},
+        "hpc_tasks/pce/fp/execution_windows/window_0000_0008/task_state.json": {
+            "phase": "SUBMITTED", "active_job_id": "456"},
+        "hpc_tasks/pce/fp/attempts/task_0000/attempt_01/workspaces/repo/task_state.json": {
+            "phase": "SUBMITTED", "active_job_id": "777"},
+    }
+    for relative, state in states.items():
+        path = tmp_path / relative
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(json.dumps(state))
+    config = SimpleNamespace(remote_run_snapshot=str(tmp_path), job_name="frozen-run",
+                             ssh_port="8022", ssh_key="", ssh_target="tester@access-iris.uni.lu")
+    queried = []
+
+    def slurm(command, **kwargs):
+        assert command[0] == "squeue"
+        if "-j" in command:
+            job = command[command.index("-j") + 1]
+            queried.append(job)
+            return subprocess.CompletedProcess(command, 0, "RUNNING\n" if job == "123" else "PENDING\n", "")
+        return subprocess.CompletedProcess(command, 0, "", "")
+
+    def execute(command, **kwargs):
+        arguments = shlex.split(command[-1].split("; python3.11 -c ", 1)[1])
+        monkeypatch.setattr(sys, "argv", ["status", *arguments[1:]])
+        exec(compile(arguments[0], "<supervisor-status>", "exec"), {})
+        return subprocess.CompletedProcess(command, 0, capsys.readouterr().out, "")
+
+    original_scandir = os.scandir
+
+    def bounded_scandir(path):
+        if isinstance(path, (str, Path)) and Path(path).is_relative_to(tmp_path):
+            assert "attempts" not in Path(path).relative_to(tmp_path).parts
+        return original_scandir(path)
+
+    monkeypatch.setattr(os, "scandir", bounded_scandir)
+    monkeypatch.setattr(subprocess, "run", slurm)
+    monkeypatch.setattr(resume_loop, "run_command", execute)
+    result = resume_loop.remote_run_status(config)
+    assert queried == ["123", "456"]
+    assert result["worker_states"] == {"123": "RUNNING", "456": "PENDING"}
+    assert result["active_workers"] == ["123", "456"]
 
 
 def test_first_missing_run_skips_only_unneeded_staging_reclamation() -> None:

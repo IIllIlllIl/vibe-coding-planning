@@ -13,6 +13,25 @@ from pathlib import Path
 import shutil
 
 
+REMOTE_EMBEDDED_PYTHON = "python3.11"
+AION_REMOTE_EMBEDDED_PYTHON = (
+    "/opt/apps/easybuild/systems/aion/rhel810-20250803/2023b/epyc/"
+    "software/Python/3.11.5-GCCcore-13.2.0/bin/python3"
+)
+
+
+def remote_embedded_python(ssh_target: str) -> str:
+    """Use the established modern login interpreter on each cluster."""
+    return AION_REMOTE_EMBEDDED_PYTHON if "@access-aion." in ssh_target else REMOTE_EMBEDDED_PYTHON
+
+
+def task_state_paths(run_dir: Path):
+    """Enumerate batch/window state, never descend into Agent repositories."""
+    root = run_dir / "hpc_tasks"
+    for pattern in ("*/*/task_state.json", "*/*/execution_windows/window_*/task_state.json"):
+        yield from sorted(root.glob(pattern))
+
+
 @dataclass(frozen=True)
 class HpcLayout:
     """Canonical project storage locations for one ULHPC user."""

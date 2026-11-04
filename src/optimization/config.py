@@ -77,6 +77,7 @@ class BehavioralRepositoryConfig:
 @dataclass(frozen=True)
 class BehavioralHybridConfig:
     enabled: bool = False
+    learning_mode: str = "independent"
     max_items: int = 10
     shared_guide_words: int = 200
     condition_words: int = 40
@@ -195,6 +196,10 @@ def load_optimization_config(
     if type(hybrid.enabled) is not bool:
         raise ValueError("hybrid.enabled must be a boolean")
     if hybrid.enabled:
+        if hybrid.learning_mode not in {"independent", "codex_subagents"}:
+            raise ValueError("hybrid.learning_mode must be independent or codex_subagents")
+        if hybrid.learning_mode == "codex_subagents" and hybrid.curator_model.get("executor") != "codex_cli":
+            raise ValueError("codex_subagents requires a Native Codex Curator")
         from src.optimization.behavioral_hybrid import HybridLimits
         HybridLimits(hybrid.max_items, hybrid.shared_guide_words,
                      hybrid.condition_words, hybrid.item_guide_words,

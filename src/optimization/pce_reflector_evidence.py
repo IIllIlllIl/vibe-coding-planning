@@ -137,11 +137,11 @@ def _evaluator(value, archive, pointer):
     return result
 
 
-def pce_reflector_views(record, archive):
+def pce_reflector_views(record, archive, *, view_prefix="record/pce"):
     """Return required view files and their index; perform no IO or mutation."""
     files, runs = {}, []
     for number, run in enumerate(record["pce_runs"]):
-        prefix = f"record/pce/run-{number + 1:02d}"
+        prefix = f"{view_prefix}/run-{number + 1:02d}"
         pointer = f"/{number}"
         output = run["pce_output"]
         output_pointer = pointer + "/pce_output"

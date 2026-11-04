@@ -230,7 +230,17 @@ class GlobalPlaybookCounters:
         if self.path is None:
             return
         self.path.parent.mkdir(parents=True, exist_ok=True)
-        payload = {
+        payload = self.export()
+        temporary = self.path.with_suffix(self.path.suffix + ".tmp")
+        temporary.write_text(
+            json.dumps(payload, ensure_ascii=False, indent=2, sort_keys=True) + "\n",
+            encoding="utf-8",
+        )
+        temporary.replace(self.path)
+
+    def export(self) -> dict[str, Any]:
+        """The unchanged ledger schema, also used by isolated learning tasks."""
+        return {
             "schema_version": 2,
             "counts": self.snapshot(),
             "observations": self._observations,
@@ -239,12 +249,6 @@ class GlobalPlaybookCounters:
             "reports": self._reports,
             "contexts": self._contexts,
         }
-        temporary = self.path.with_suffix(self.path.suffix + ".tmp")
-        temporary.write_text(
-            json.dumps(payload, ensure_ascii=False, indent=2, sort_keys=True) + "\n",
-            encoding="utf-8",
-        )
-        temporary.replace(self.path)
 
     def snapshot(self) -> dict[str, dict[str, int]]:
         return {

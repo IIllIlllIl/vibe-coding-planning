@@ -210,6 +210,53 @@ and patch field. Missing learning evidence or incomplete physical repetitions
 cannot be hidden by a completed evaluator outcome. Raw observations are retained
 and comparison/learning is withheld.
 
+## Native subagent coordinator
+
+`hybrid.learning_mode: independent` remains the default completed-formal path.
+The opt-in `codex_subagents` mode gives the main Curator a complete file inventory
+and field/path descriptions with no required/optional reading classification.
+It delegates case reflection and evidence/history reading to Native subagents,
+can request follow-up investigation, and integrates their findings. Original
+P/C/E and training-reference bytes remain available through existing lossless
+views and archives. The main Agent, not Host, chooses reading and delegation.
+
+One isolated conversation has two turns. It first submits one Ref report per
+training case. Host reuses the existing Ref validators, local-ID mapping,
+`GlobalPlaybookCounters.apply_reviews` and `feedback_for`, then resumes that
+same conversation with updated counts/history for Curator operations. Controller
+validation/finalization and the atomic ACE ledger commit remain unchanged;
+the model never performs authoritative mechanical bookkeeping. A Reader Agent
+interprets counters/history, not changes their values. Conditional Refiner still
+uses the existing independent phase.
+The existing task manifest pins the original request by proposal ordinal. If
+candidate evaluation yields after the controller ledger commits, resume reuses
+that request/result instead of scheduling a second learning session with the
+newly incremented ledger.
+
+This coordinated learning unit is one Slurm Worker, with Native subthreads
+inside the same SIF and permission boundary rather than separate Ref array
+elements. Its attempt is atomic at the coordinated result boundary. A failed
+attempt retains original available evidence and uses the existing task retry;
+it does not promise independent resumption of each Native subthread. The normal
+independent mode retains its earlier per-Ref checkpoints and scheduling.
+Only this mode persists task-private CLI session state between turns. Exact
+main responses and available root/child session JSONL are retained; authentication,
+configuration and state databases are not exported from the private CLI home.
+The existing ephemeral transport is unchanged for other roles and P/C/E.
+
+The maintained preparation entry's historical replay mode freezes a single
+source proposal's original training PCE and prior training history, excluding
+that proposal's old Ref/Cur answers and candidate. Seed validation is kept in
+the evaluator-only replay, never mounted into learning evidence. A fresh real
+GEPA run uses the frozen parent/draw, generates a new candidate, then executes
+normal candidate PCE and the unchanged strict validation gate. Replay source
+hashes, exact observations and the explicit one-proposal scope are frozen in
+the snapshot manifest. This is not resuming the old run under changed code.
+The RPG pilot retains mini8/window8, cap10/48/96 tokens and gpt-6-sol/high;
+up to eight new training PCE and fifteen conditional validation PCE executions
+are possible before retries. The 46 logical metric-slot ceiling also includes
+the 23 replayed parent/seed observations.
+
 ## Dataset compatibility
 
 The registered backends are PolyBench, SWE-Verified and Python SWE-RPG. Dataset acquisition,

@@ -190,26 +190,28 @@ def _run_locked(
     )
     stopper = MaxCandidateProposalsStopper(config.search.max_iterations)
     try:
-        result = optimize_fn(
-            seed_candidate={"rules": initial_rules},
-            trainset=train_loader,
-            valset=validation_loader,
-            adapter=adapter,
-            reflection_lm=None,
-            candidate_selection_strategy=state.selector,
-            frontier_type="instance",
-            batch_sampler=state.sampler,
-            reflection_minibatch_size=None,
-            perfect_score=1.0,
-            skip_perfect_score=config.search.skip_perfect_score,
-            max_metric_calls=config.search.max_metric_calls,
-            stop_callbacks=stopper,
-            run_dir=str(config.run_dir),
-            cache_evaluation=True,
-            track_best_outputs=True,
-            callbacks=[callback],
-            seed=config.search.seed,
-        )
+        from src.optimization.pending_playbook_resume import replay_safe_pce_training
+        with replay_safe_pce_training(config, state, adapter) as (selector, sampler):
+            result = optimize_fn(
+                seed_candidate={"rules": initial_rules},
+                trainset=train_loader,
+                valset=validation_loader,
+                adapter=adapter,
+                reflection_lm=None,
+                candidate_selection_strategy=selector,
+                frontier_type="instance",
+                batch_sampler=sampler,
+                reflection_minibatch_size=None,
+                perfect_score=1.0,
+                skip_perfect_score=config.search.skip_perfect_score,
+                max_metric_calls=config.search.max_metric_calls,
+                stop_callbacks=stopper,
+                run_dir=str(config.run_dir),
+                cache_evaluation=True,
+                track_best_outputs=True,
+                callbacks=[callback],
+                seed=config.search.seed,
+            )
         successful = int(getattr(proposer_runner, "successful_proposals", 0))
         if successful < config.search.min_proposals:
             audit.write_optional("proposal_count_below_target", observed=successful,

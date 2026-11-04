@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from contextlib import contextmanager, nullcontext
+from contextlib import ExitStack, contextmanager, nullcontext
 from dataclasses import dataclass
 import hashlib
 import json
@@ -490,6 +490,8 @@ def _codex_command(
     repository_writable: bool = False,
     command_hook_options: tuple[str, ...] = (),
     tool_network_disabled: bool | None = None,
+    persistent: bool = False,
+    session_id: str | None = None,
 ) -> list[str]:
     if model_config.get("executor") != "codex_cli":
         raise ValueError("Codex runtime requires executor: codex_cli")
@@ -503,7 +505,7 @@ def _codex_command(
     return [
         binary,
         "exec",
-        "--ephemeral",
+        *([] if persistent else ["--ephemeral"]),
         "--ignore-user-config",
         "--ignore-rules",
         *command_hook_options,
@@ -519,13 +521,55 @@ def _codex_command(
         f"model_reasoning_effort={json.dumps(effort)}",
         "--config",
         "project_doc_max_bytes=0",
+        *(["--config", "features.multi_agent=true", "--config",
+           f"agents.default_subagent_model={json.dumps(model)}", "--config",
+           f"agents.default_subagent_reasoning_effort={json.dumps(effort)}"] if persistent else []),
         *(["--config", 'web_search="disabled"'] if repository_writable or command_hook_options or tool_network_disabled else []),
         "--cd",
         str(working_directory.resolve()),
         "--output-last-message",
         str(output_path.resolve()),
+        *(["resume", session_id] if session_id else []),
         "-",
     ]
+
+
+class CodexConversation:
+    """One task-private, resumable Native conversation in the existing SIF.
+
+    Authentication stays in its private temporary home. Only session JSONL
+    evidence, never auth/config/database files, is exported to scientific traces.
+    """
+    def __init__(self, *, model_config, container, attempt_dir):
+        self.model_config, self.container = model_config, container
+        self.attempt_dir = Path(attempt_dir)
+        self.session_id = None
+        self._stack = ExitStack()
+
+    def __enter__(self):
+        self.attempt_dir.mkdir(parents=True, exist_ok=True)
+        try:
+            self.environment = self._stack.enter_context(_isolated_codex_environment(self.model_config))
+            self.transport = self._stack.enter_context(
+                self.container.launch(self.model_config, self.environment, self.attempt_dir))
+        except BaseException:
+            self._stack.close()
+            raise
+        return self
+
+    def __exit__(self, *exception):
+        return self._stack.__exit__(*exception)
+
+    def call_json(self, *, system, user, task, output_filename):
+        return run_codex_json_agent(container=self.container, model_config=self.model_config,
+            working_directory=self.container.evidence_dir, attempt_dir=self.attempt_dir,
+            system=system, user=user, task=task, output_filename=output_filename,
+            conversation=self)
+
+    def session_evidence(self):
+        root = Path(self.environment["CODEX_HOME"]) / "sessions"
+        return [{"path": str(path.relative_to(root)), "text": path.read_bytes().decode("utf-8")}
+                for path in sorted(root.rglob("*.jsonl")) if path.is_file() and not path.is_symlink()]
 
 
 def run_codex_json_agent(*, container: CodexSIFExecution, **kwargs):
@@ -576,11 +620,14 @@ def _run_codex_text_agent(
     evidence_manifest_path: Path | None = None,
     container: CodexSIFExecution | None = None,
     output_filename: str = "codex_final_response.json",
+    conversation: CodexConversation | None = None,
 ) -> tuple[str, list[dict[str, Any]]]:
-    """Run one ephemeral Codex session and retain its exact final text.
+    """Run a Codex turn and retain exact final text; ephemeral by default.
 
     Production sessions use the verified SIF boundary plus Codex's inner
     role-scoped sandbox. Neither silently falls back to Host execution.
+    A supplied CodexConversation keeps only this task's private transport open
+    across turns; its session ID never selects an unrelated previous chat.
 
     The prompt is passed on stdin so task contents never enter the process
     command line. Slurm owns the complete session deadline; this function does
@@ -608,10 +655,12 @@ def _run_codex_text_agent(
     completed = None
     teardown_error = None
     try:
-        with _isolated_codex_environment(model_config) as environment:
+        with (nullcontext(conversation.environment) if conversation is not None
+              else _isolated_codex_environment(model_config)) as environment:
             # Bare transport remains available for isolated CLI unit tests. All
             # playbook role dispatchers must supply the SIF execution boundary.
             transport = (
+                nullcontext(conversation.transport) if conversation is not None else
                 container.launch(model_config, environment, attempt_dir)
                 if container is not None
                 else nullcontext(([], environment, model_config, attempt_dir))
@@ -662,11 +711,19 @@ def _run_codex_text_agent(
                     repository_writable=container is not None and container.repository_writable,
                     command_hook_options=command_hooks,
                     tool_network_disabled=container.tool_network_disabled if container is not None else None,
+                    persistent=conversation is not None,
+                    session_id=conversation.session_id if conversation is not None else None,
                 )]
                 completed = subprocess.run(
                     command, input=prompt, text=True, capture_output=True,
                     check=False, env=launch_env,
                 )
+                if conversation is not None:
+                    # Preserve this exact response while the shared mount stays
+                    # open for the subsequent Host-bookkeeping/Curator turn.
+                    source = _output_dir / output_filename
+                    if source.is_file() and not source.is_symlink():
+                        shutil.copyfile(source, output_path)
     except Exception as exc:
         if completed is None:
             raise
@@ -696,7 +753,7 @@ def _run_codex_text_agent(
                 "events": events,
                 "malformed_event_lines": malformed_events,
                 "stderr": completed.stderr,
-                "ephemeral": True,
+                "ephemeral": conversation is None,
                 "sandbox": "workspace-write" if container and container.repository_writable else "read-only",
                 "inner_sandbox": True,
                 "effective_prompt": prompt,
@@ -706,6 +763,13 @@ def _run_codex_text_agent(
             },
         },
     ]
+    if conversation is not None and conversation.session_id is None:
+        conversation.session_id = next((event.get("thread_id") for event in events
+                                        if event.get("type") == "thread.started"), None)
+        if not conversation.session_id:
+            error = AgentOutputContractError("Persistent Codex response lacks a thread.started identity")
+            error.trajectory = trajectory
+            raise error
     if manifest_record is not None:
         trajectory.append({"role": "host_evidence_manifest", "content": manifest_record})
     if teardown_error is not None:

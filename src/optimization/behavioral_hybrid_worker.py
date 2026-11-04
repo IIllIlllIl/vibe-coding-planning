@@ -21,8 +21,10 @@ def run_task(*, config_path, manifest_path, output_path, attempt_dir, previous_o
         if manifest["mode"] != "behavioral_hybrid_phase":
             raise ValueError("invalid hybrid worker mode")
         config = load_optimization_config(config_path)
-        if manifest["role"] not in {"reflector", "curator", "refiner"} or not config.hybrid.enabled:
+        if manifest["role"] not in {"reflector", "curator", "refiner", "coordinator"} or not config.hybrid.enabled:
             raise ValueError("unsupported hybrid role or disabled hybrid configuration")
+        if manifest["role"] == "coordinator" and config.hybrid.learning_mode != "codex_subagents":
+            raise ValueError("coordinator requires explicitly enabled codex_subagents mode")
         payload = manifest["payload"]
         if manifest["fingerprint"] != phase_identity(config, manifest["role"], payload):
             raise ValueError("hybrid worker config/source/input fingerprint mismatch")

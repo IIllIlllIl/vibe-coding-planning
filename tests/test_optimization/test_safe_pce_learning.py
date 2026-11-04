@@ -355,6 +355,7 @@ def test_exhausted_pce_budget_reaches_controller_without_false_missing_plan_erro
 @pytest.mark.parametrize("failure_stage", ["write", "replace"])
 def test_replay_atomic_failure_preserves_previous_rows_and_retry(tmp_path, monkeypatch, failure_stage):
     from src.optimization.safe_pce_learning import _append
+    from src.optimization import safe_pce_learning
     from src.optimization.hpc import task_batch
     monkeypatch.setattr(task_batch.time, "sleep", lambda _: None)
     path = tmp_path / "safe_pce_evaluations.jsonl"
@@ -362,22 +363,24 @@ def test_replay_atomic_failure_preserves_previous_rows_and_retry(tmp_path, monke
     second = dict(first, output={"plan": "different physical output\n"})
     _append(path, [first])
     original = path.read_bytes()
-    write, replace_file = Path.write_text, Path.replace
+    copy, replace_file = safe_pce_learning.shutil.copyfileobj, Path.replace
     attempts = []
-    def interrupted_write(target, content, *args, **kwargs):
-        if target == path.with_suffix(".jsonl.tmp"):
-            attempts.append(content)
-            write(target, content[:7], *args, **kwargs)
+    def interrupted_copy(source, target, *args, **kwargs):
+        if Path(target.name) == path.with_suffix(".jsonl.tmp"):
+            target.write(b"partial")
+            attempts.append(b"partial")
             raise OSError("interrupted temporary write")
-        return write(target, content, *args, **kwargs)
+        return copy(source, target, *args, **kwargs)
     def interrupted_replace(source, target):
         if target == path:
             attempts.append(source.read_text())
             raise OSError("interrupted replace")
         return replace_file(source, target)
     with monkeypatch.context() as fault:
-        fault.setattr(Path, "write_text" if failure_stage == "write" else "replace",
-                      interrupted_write if failure_stage == "write" else interrupted_replace)
+        if failure_stage == "write":
+            fault.setattr(safe_pce_learning.shutil, "copyfileobj", interrupted_copy)
+        else:
+            fault.setattr(Path, "replace", interrupted_replace)
         with pytest.raises(OSError):
             _append(path, [first, second])
     assert len(attempts) == 3 and len(set(attempts)) == 1
@@ -386,6 +389,95 @@ def test_replay_atomic_failure_preserves_previous_rows_and_retry(tmp_path, monke
     _append(path, [first, second])  # Same cached observations, not new executions.
     assert [json.loads(line) for line in path.read_text().splitlines()] == [first, second]
     assert not path.with_suffix(".jsonl.tmp").exists()
+
+
+@pytest.mark.parametrize("ending", [b"", b"\r\n"])
+def test_replay_streaming_preserves_prefix_bytes_and_canonical_duplicate_identity(tmp_path, ending):
+    from src.optimization.safe_pce_learning import _append
+    path = tmp_path / "replay.jsonl"
+    first = {"instance_id": "same", "output": {"plan": "🔎 original\r\n\u2028tail"}, "score": 1}
+    prefix = json.dumps(first, ensure_ascii=False).encode() + ending
+    path.write_bytes(prefix)
+    reordered = dict(reversed(list(first.items())))
+    second = dict(first, output={"plan": "distinct original output"})
+    _append(path, [reordered, second, second])
+    assert path.read_bytes().startswith(prefix)
+    assert [json.loads(line) for line in path.open(encoding="utf-8")] == [first, second]
+    saved = path.read_bytes()
+    _append(path, [first, second])
+    assert path.read_bytes() == saved
+
+
+def test_replay_streaming_memory_is_bounded_by_record_not_history(tmp_path, monkeypatch):
+    import tracemalloc
+    from src.optimization.safe_pce_learning import _append
+    path = tmp_path / "replay.jsonl"
+    with path.open("w", encoding="utf-8") as stream:
+        for index in range(80):
+            stream.write(json.dumps({"index": index, "plan": "x" * 32768 + "🔎"}, ensure_ascii=False) + "\n")
+    original_read = Path.read_text
+    def no_whole_replay_read(target, *args, **kwargs):
+        if target == path:
+            pytest.fail("main-flow replay must be streamed, not read_text")
+        return original_read(target, *args, **kwargs)
+    monkeypatch.setattr(Path, "read_text", no_whole_replay_read)
+    tracemalloc.start()
+    try:
+        _append(path, [{"index": 80, "plan": "new original Plan"}])
+        _, peak = tracemalloc.get_traced_memory()
+    finally:
+        tracemalloc.stop()
+    assert peak < 8 * 1024 * 1024
+    with path.open(encoding="utf-8") as stream:
+        assert [json.loads(line)["index"] for line in stream] == list(range(81))
+
+
+def test_seed_replay_reads_once_and_retains_only_matching_validation(tmp_path, monkeypatch):
+    backend = SafePCEBackend.__new__(SafePCEBackend)
+    backend.config = SimpleNamespace(run_dir=tmp_path)
+    seed = "exact seed"
+    digest = hashlib.sha256(seed.encode()).hexdigest()
+    rows = [
+        {"candidate_sha256": digest, "instance_id": "train", "split": "train", "output": {"plan": "training"}, "score": 0},
+        {"candidate_sha256": "other", "instance_id": "val", "split": "validation", "output": {"plan": "other candidate"}, "score": 0},
+        {"candidate_sha256": digest, "instance_id": "val", "split": "validation", "output": {"plan": "exact original 🔎\r\n"}, "score": 1},
+    ]
+    path = tmp_path / "safe_pce_evaluations.jsonl"
+    path.write_text("".join(json.dumps(row, ensure_ascii=False) + "\n" for row in rows))
+    original = path.read_bytes()
+    monkeypatch.setattr(Path, "read_text", lambda *a, **kw: pytest.fail("replay must be streamed"))
+    records = backend._records()
+    assert iter(records) is records
+    assert list(records) == rows
+    replay = backend.seed_replay([SimpleNamespace(instance_id="val")], seed)
+    assert replay == {"val": (rows[-1]["output"], 1)}
+    assert path.read_bytes() == original
+
+
+def test_report_streams_once_for_multiple_candidates_without_retaining_training(tmp_path):
+    backend = SafePCEBackend.__new__(SafePCEBackend)
+    backend.config = SimpleNamespace(run_dir=tmp_path)
+    candidates = [{"rules": "seed"}, {"rules": "proposal"}]
+    rows = [{"split": "train", "instance_id": "train", "output": {"plan": "not a report input"}},
+            {"split": "validation", "candidate_sha256": "not in result candidates"}]
+    for index, candidate in enumerate(candidates):
+        for identifier in ("a", "b"):
+            failed = index == 1 and identifier == "b"
+            rows.append({"split": "validation", "instance_id": identifier,
+                "candidate_sha256": hashlib.sha256(candidate["rules"].encode()).hexdigest(),
+                "score": float(not failed), "output": {"pce_runs": [
+                    {"pce_output": {"pce_status": "agent_failed" if failed else "completed"}}]}})
+    path = tmp_path / "safe_pce_evaluations.jsonl"
+    path.write_text("".join(json.dumps(row) + "\n" for row in rows))
+    original = path.read_bytes()
+    result = SimpleNamespace(candidates=candidates, val_aggregate_scores=[1.0, 0.5],
+        parents=[[], [0]], best_candidate=candidates[0], to_dict=lambda: {"candidates": candidates},
+        candidate_tree_html=lambda: "<html></html>")
+    backend.write_report(result, [SimpleNamespace(instance_id=x) for x in ("a", "b")])
+    metrics = json.loads((tmp_path / "safe_pce_candidate_metrics.json").read_text())
+    assert [(row["validation_score"], row["resolved"], row["unresolved"], row["agent_failed"])
+            for row in metrics] == [(1.0, 2, 0, 0), (0.5, 1, 1, 1)]
+    assert path.read_bytes() == original
 
 
 def test_replay_refuses_to_silently_repair_existing_corruption(tmp_path):

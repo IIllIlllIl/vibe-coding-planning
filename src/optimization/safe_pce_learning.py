@@ -6,13 +6,14 @@ import hashlib
 import json
 import math
 from pathlib import Path
+import shutil
 
 from gepa.core.adapter import EvaluationBatch
 
 from src.exceptions import OfflineReflectionBlocked
 from src.optimization.audit import optional_diagnostic
 from src.optimization.behavioral_hybrid import validate_candidate
-from src.optimization.hpc.task_batch import atomic_json, atomic_text, retry_io
+from src.optimization.hpc.task_batch import atomic_json, atomic_write, retry_io
 from src.optimization.safe_pce_execution import (
     execute_pce, load_pce_config, materialize_pce_config, pce_cases, sha256, validate_learning_source,
 )
@@ -108,25 +109,46 @@ def _validate_learning_evidence(output: dict) -> None:
             raise IncompletePCEEvaluation(f"PCE learning evidence {field} hash mismatch")
 
 
+def _iter_records(path: Path):
+    if path.exists():
+        with path.open(encoding="utf-8") as stream:
+            for line in stream:
+                if line.strip():
+                    yield json.loads(line)
+
+
 def _append(path: Path, records):
     """Persist replay rows atomically; omit only exact cached-row repeats.
 
     The Controller is the sole writer. Distinct physical outputs/repetitions
     remain distinct, even for the same case and candidate. Existing malformed
-    evidence is reported, never silently truncated or repaired.
+    evidence is reported, never silently truncated or repaired. Retain hashes,
+    not serialized history strings; copy the existing prefix byte-for-byte.
     """
-    previous = retry_io(lambda: path.read_text(encoding="utf-8")) if path.exists() else ""
     encode = lambda row: json.dumps(row, ensure_ascii=False, sort_keys=True)
-    seen = {encode(json.loads(line)) for line in previous.splitlines() if line.strip()}
+    identity = lambda row: hashlib.sha256(encode(row).encode("utf-8")).digest()
+    seen = retry_io(lambda: {identity(row) for row in _iter_records(path)})
     added = []
     for record in records:
-        line = encode(record)
-        if line not in seen:
-            seen.add(line)
+        line = encode(record).encode("utf-8")
+        key = hashlib.sha256(line).digest()
+        if key not in seen:
+            seen.add(key)
             added.append(line)
     if added:
-        separator = "\n" if previous and not previous.endswith("\n") else ""
-        atomic_text(path, previous + separator + "\n".join(added) + "\n")
+        def write_temporary(temporary):
+            with temporary.open("wb") as target:
+                if path.exists():
+                    with path.open("rb") as source:
+                        shutil.copyfileobj(source, target, length=1024 * 1024)
+                        if source.tell():
+                            source.seek(-1, 2)
+                            if source.read(1) != b"\n":
+                                target.write(b"\n")
+                for line in added:
+                    target.write(line)
+                    target.write(b"\n")
+        atomic_write(path, write_temporary)
 
 
 class SafePCEBackend:
@@ -219,26 +241,32 @@ class SafePCEBackend:
 
     def _records(self):
         path = self.config.run_dir / "safe_pce_evaluations.jsonl"
-        return [json.loads(line) for line in path.read_text().splitlines() if line.strip()] if path.exists() else []
+        return _iter_records(path)
 
     def write_report(self, result, validation):
-        records = self._records()
+        candidate_digests = [hashlib.sha256(candidate["rules"].encode()).hexdigest()
+                             for candidate in result.candidates]
+        wanted = set(candidate_digests)
+        validation_rows = {}
+        for row in self._records():
+            if row["split"] == "validation" and row["candidate_sha256"] in wanted:
+                failed = any(run["pce_output"].get("pce_status") == "agent_failed"
+                             for run in row["output"]["pce_runs"])
+                validation_rows.setdefault(row["candidate_sha256"], {})[row["instance_id"]] = (row["score"], failed)
         metrics = []
         expected = {case.instance_id for case in validation}
-        for index, candidate in enumerate(result.candidates):
-            digest = hashlib.sha256(candidate["rules"].encode()).hexdigest()
-            rows = {row["instance_id"]: row for row in records if row["candidate_sha256"] == digest and row["split"] == "validation"}
+        for index, digest in enumerate(candidate_digests):
+            rows = validation_rows.get(digest, {})
             if set(rows) != expected:
                 raise ValueError("Safe PCE validation evidence differs from the frozen split")
-            score = sum(row["score"] for row in rows.values()) / len(rows)
+            score = sum(row[0] for row in rows.values()) / len(rows)
             if not math.isclose(score, result.val_aggregate_scores[index], abs_tol=1e-12):
                 raise ValueError("Safe PCE validation score mismatch")
             metrics.append({"candidate_idx": index, "candidate_sha256": digest,
                             "primary_metric": "resolved_rate", "validation_score": score,
-                            "resolved": sum(row["score"] == 1 for row in rows.values()),
-                            "unresolved": sum(row["score"] == 0 for row in rows.values()),
-                            "agent_failed": sum(any(run["pce_output"].get("pce_status") == "agent_failed"
-                                for run in row["output"]["pce_runs"]) for row in rows.values()),
+                            "resolved": sum(row[0] == 1 for row in rows.values()),
+                            "unresolved": sum(row[0] == 0 for row in rows.values()),
+                            "agent_failed": sum(row[1] for row in rows.values()),
                             "total": len(rows), "parents": result.parents[index]})
         atomic_json(self.config.run_dir / "result.json", json.loads(json.dumps(result.to_dict(), default=list)))
         # result.json is the retained scientific result. These views are

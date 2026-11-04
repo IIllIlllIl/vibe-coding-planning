@@ -3,7 +3,7 @@
 > Authority: credential, FairShare, storage, and launch safety for ACE + Safe
 > PCE; older workflow entries are retained reproduction notes
 >
-> Last reviewed: 2026-11-01
+> Last reviewed: 2026-11-03
 
 ## Scope
 
@@ -176,6 +176,12 @@ firewall/DNS state to implement this policy.
   sequential bounded arrays within the same logical batch.
 - SWE-chat acquisition: `scripts/tools/login_swe_chat_preheat.py` and
   `scripts/swe_chat_preheat_service.py`.
+
+Supervisor and read-only status use the shared fixed-depth batch/window state
+enumerator in `hpc_runtime.py`; do not recursively glob `hpc_tasks`, which also
+contains disposable repositories and virtual environments. Both use the
+existing cluster-specific modern login interpreter, not bare Iris `python3`.
+Status unavailability retains the existing wait/no-duplicate-submission policy.
 
 Authenticated SWE-chat repository recovery uses the same login-node supervisor,
 not Slurm. Iris must provide a mode-600 private file at

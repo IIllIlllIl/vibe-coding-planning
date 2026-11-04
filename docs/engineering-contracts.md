@@ -24,6 +24,12 @@ or whether it is called a log. Keep one implementation of each responsibility:
 Everything outside this whitelist must identify a real main-flow consumer
 before becoming a prerequisite. Otherwise it is a best-effort diagnostic,
 offline export, or unused code to remove—not a new acceptance gate.
+The opt-in Native subagent learning coordinator is one explicitly declared
+Agent unit: its subthreads share the SIF and its two turns preserve the existing
+Host Ref-validation/counter/Cur boundary. It does not change generic Slurm
+submission, retry or checkpoint ownership. Evidence-reading priority is an
+experimental adapter choice, not a Supervisor policy; see the
+[coordinator contract](safe-pce-ace-gepa.md#native-subagent-coordinator).
 Do not introduce a second workflow/receipt framework to enforce this list.
 Host validation feedback is the next Agent's input. Live Slurm observations
 and durable task state drive recovery; the separate `slurm_status.json` copy is
@@ -44,12 +50,17 @@ active-job checks. Record errors without changing a completed run or preventing
 an otherwise valid resume. Required result/checkpoint writes retry the same
 serialized payload before propagating an error; do not invoke an Agent to retry
 an already-produced output's save.
-Atomic saving is a storage primitive, not a new Slurm phase: serialize once,
-write a sibling temporary file and replace the destination only on success.
-JSON checkpoints and the single-writer Safe PCE replay JSONL reuse the same
-writer. A failed write leaves the previous replay input intact. Omit only
+Atomic saving is a storage primitive, not a new Slurm phase: serialize each
+payload once, write a sibling temporary file and replace the destination only
+on success. JSON checkpoints and the single-writer Safe PCE replay JSONL reuse
+the same atomic replacement/retry implementation. Replay scans retain canonical
+row hashes rather than full serialized history; stream-copy its original bytes
+before appending new observations. Seed replay retains only matching seed
+validation outputs; reporting retains scalar validation metrics, not training
+trajectories. A failed write leaves the previous replay input intact. Omit only
 exact cached-row repeats; never collapse distinct task executions or repair
-an existing malformed scientific record.
+an existing malformed scientific record. Whole-file Unicode reads and repeated
+history concatenation can exceed Controller RAM well before byte quotas fill.
 `JsonlLogger.write_optional` and `optional_diagnostic` in the existing audit
 module are for **all non-consuming diagnostics**, not just billing/cleanup.
 Their construction/writes/computation cannot mask success, original failure or
@@ -588,6 +599,12 @@ exhaustion stops.
 There is no total-submission cap or one-shot named recovery exception.
 A Supervisor state-write retry retains the acknowledged job ID in memory and
 retries only that save, never repeats the submission.
+Supervisor and read-only status share `hpc_runtime.task_state_paths`: enumerate
+ordinary batch state and execution-window state at their fixed depths, never
+recursively search disposable repositories or environments. Status runs with
+the same cluster-specific modern login interpreter as lifecycle helpers;
+Iris's bare `python3` is not that interpreter. Test both transport layouts and
+concurrent workspace disappearance without adding a second state authority.
 
 Curator lineage is historical provenance, not a list of currently active rules.
 An unchanged retained bullet must preserve its content, counters, category and

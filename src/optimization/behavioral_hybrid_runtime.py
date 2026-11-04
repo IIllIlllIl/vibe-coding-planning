@@ -42,6 +42,9 @@ def phase_identity(config, role, payload):
                                        "ace_transaction.py", "agent_references.py",
                                        "ace_evidence.py", "behavioral_hybrid_evidence.py",
                                        "pce_reflector_evidence.py", "audit.py")}
+    if config.hybrid.learning_mode == "codex_subagents":
+        for name in ("coordinated_ace.py", "playbook_adapter.py"):
+            identity["source"][name] = hashlib.sha256((root / name).read_bytes()).hexdigest()
     identity["source"]["agent_protocol"] = hashlib.sha256(
         (root.parent / "agents" / "_deps.py").read_bytes()).hexdigest()
     for name in ("runtime.py", "output_contract.py", "codex_hooks.py", "plan_submission.py"):
@@ -86,7 +89,11 @@ def verify_hybrid_snapshot(config):
 
 
 def validate_phase(role, payload, output, config):
-    if role == "reflector":
+    if role == "coordinator":
+        from .coordinated_ace import validate_coordinated_output
+        limits = hybrid_limits(config)
+        validate_coordinated_output(payload, output, limits.relaxed() if config.hybrid.refiner_enabled else limits)
+    elif role == "reflector":
         validate_ace_paired_reflector_review(output, instance_id=payload["record"]["instance_id"],
                                   playbook=_playbook(payload["parent"]), output_contract="ace_v2")
     elif role == "curator":
@@ -102,6 +109,9 @@ def validate_phase(role, payload, output, config):
 
 def run_local_phase(config, role, payload, attempt_dir, *, retry_feedback=""):
     """Reuse isolated ACE evidence runners, including their Native Codex support."""
+    if role == "coordinator":
+        from .coordinated_ace import run_coordinated_phase
+        return run_coordinated_phase(config, payload, attempt_dir, retry_feedback=retry_feedback)
     bundle_bytes = Path(config.hybrid.prompt_bundle).read_bytes()
     if config.hybrid.prompt_bundle_sha256 and hashlib.sha256(bundle_bytes).hexdigest() != config.hybrid.prompt_bundle_sha256:
         raise ValueError("hybrid prompt bundle changed after config loading")
@@ -195,7 +205,7 @@ class HybridPhaseExecutor:
         return f"{self.config.hpc.job_name_prefix}-hybrid-{role}-{fingerprint[:12]}-a{attempt}"
 
     def script_for_wave(self, batch_dir, role, indices, attempt):
-        model = getattr(self.config.hybrid, f"{role}_model")
+        model = getattr(self.config.hybrid, f"{'curator' if role == 'coordinator' else role}_model")
         credentials = credential_envs([{"api_key_env": self.config.reflection.api_key_env, **model}])
         credential = credentials[0] if credentials else None
         return build_phase_array_script(hpc=self.config.hpc, batch_dir=batch_dir,
@@ -207,12 +217,30 @@ class HybridPhaseExecutor:
             credential_env=credential)
 
     def run_wave(self, role, payloads):
-        if role not in {"reflector", "curator", "refiner"} or not payloads:
+        if role not in {"reflector", "curator", "refiner", "coordinator"} or not payloads:
             raise ValueError("hybrid wave requires a supported role and nonempty payloads")
         require_evidence_sif(self.config)
+        pinned_directory = None
+        if role == "coordinator":
+            if len(payloads) != 1 or type(payloads[0].get("proposal_index")) is not int or payloads[0]["proposal_index"] < 0:
+                raise ValueError("one coordinator task requires its nonnegative proposal index")
+            pinned_directory = self.config.run_dir / "hpc_tasks/hybrid_coordinator" / f"proposal-{payloads[0]['proposal_index']:04d}"
+            existing = pinned_directory / "tasks/task_0000.json"
+            if existing.exists():
+                saved = json.loads(existing.read_text())
+                original = saved["payload"]
+                if (saved.get("role") != role or saved.get("mode") != "behavioral_hybrid_phase"
+                        or {k: v for k, v in original.items() if k != "ledger"}
+                        != {k: v for k, v in payloads[0].items() if k != "ledger"}
+                        or saved["fingerprint"] != phase_identity(self.config, role, original)):
+                    raise ValueError("coordinator proposal request/source changed")
+                # The original request is the existing task checkpoint. The
+                # controller ledger may already contain this atomic transaction
+                # when candidate PCE yields before GEPA saves its iteration.
+                payloads = [original]
         identities = [phase_identity(self.config, role, payload) for payload in payloads]
         fingerprint = hashlib.sha256(json.dumps(identities).encode()).hexdigest()
-        batch_dir = self.config.run_dir / "hpc_tasks" / f"hybrid_{role}" / fingerprint
+        batch_dir = pinned_directory or self.config.run_dir / "hpc_tasks" / f"hybrid_{role}" / fingerprint
         manifests = [dict(mode="behavioral_hybrid_phase", fingerprint=identity, role=role, payload=payload)
                      for identity, payload in zip(identities, payloads, strict=True)]
         tasks = prepare_phase_wave(batch_dir=batch_dir, role=role, fingerprint=fingerprint,
@@ -259,6 +287,12 @@ def run_hybrid_optimization(config, *, phase_executor=None, checker=None, optimi
     if phase_executor is None:
         verify_hybrid_snapshot(config)
     executor = phase_executor or HybridPhaseExecutor(config)
+    if config.safe_pce_config is not None:
+        from .pending_playbook_resume import load_training_replay
+        replay = load_training_replay(config)
+        ledger_path = config.run_dir / "global_counter_ledger.json"
+        if replay is not None and not ledger_path.exists():
+            atomic_json(ledger_path, replay["ledger"])
     proposer = IncrementalHybridACEProposer(
         lambda parent, record: executor.call("reflector", {"parent": parent, "record": record}),
         lambda parent, reviews, records, history, caps: executor.call("curator", {
@@ -269,7 +303,10 @@ def run_hybrid_optimization(config, *, phase_executor=None, checker=None, optimi
         abort_on_failure=isinstance(executor, HybridPhaseExecutor),
         trace_dir=config.run_dir / "hybrid_proposals",
         refiner=(lambda draft, caps: executor.call("refiner", {"draft": draft, "limits": caps, "split": "train"}))
-                if config.hybrid.refiner_enabled else None)
+                if config.hybrid.refiner_enabled else None,
+        coordinator=(lambda parent, records, ledger, index: executor.call("coordinator", {
+            "parent": parent, "records": records, "ledger": ledger, "proposal_index": index}))
+                    if config.hybrid.learning_mode == "codex_subagents" else None)
     kwargs = dict(checker=checker, proposer=proposer,
                   adapter_factory=partial(HybridBehavioralAdapter, limits=limits))
     if config.task.semantics == "safe_pce_resolution_v1":

@@ -84,7 +84,7 @@ class IncrementalHybridACEProposer:
     """
     def __init__(self, reflector, curator, limits, *, ledger_path: Path | None = None,
                  trace_dir: Path | None = None, refiner=None, batch_reflector=None,
-                 abort_on_failure=False):
+                 abort_on_failure=False, coordinator=None):
         self.reflector, self.curator, self.limits = reflector, curator, limits
         self.ledger = GlobalPlaybookCounters(ledger_path)
         self.successful_proposals = self.proposal_failures = 0
@@ -92,6 +92,7 @@ class IncrementalHybridACEProposer:
         self.trace_dir = trace_dir
         self.refiner = refiner
         self.batch_reflector = batch_reflector
+        self.coordinator = coordinator
         self.abort_on_failure = abort_on_failure
         self.failures = []
 
@@ -114,7 +115,17 @@ class IncrementalHybridACEProposer:
             if trace_path is not None:
                 with optional_diagnostic("proposal trace"):
                     atomic_json(trace_path, audit_record(dict(self.last_trace, status=status)))
+        coordinated = None
         def reflect(rows):
+            nonlocal coordinated
+            if self.coordinator is not None:
+                coordinated, trajectory = self.coordinator(parent, rows, self.ledger.export(),
+                                                            self.successful_proposals)
+                self.last_trace["coordinator_trajectory"] = trajectory
+                return [(review, [{"role": "coordinator_subagent_reference",
+                                   "content": {"case": review["instance_id"],
+                                               "archive": "coordinator_trajectory"}}])
+                        for review in coordinated["reviews"]]
             return (list(self.batch_reflector(parent, rows))
                           if self.batch_reflector is not None
                           else [self.reflector(parent, record) for record in rows])
@@ -127,7 +138,10 @@ class IncrementalHybridACEProposer:
             curator_parent = dict(parent, counters=[
                 {"id": b.id, "helpful": b.helpful, "harmful": b.harmful, "neutral": b.neutral}
                 for b in counted.bullets])
-            delta, trajectory = self.curator(curator_parent, reviews, rows, history, vars(self.limits))
+            if coordinated is not None:
+                delta, trajectory = coordinated["curator_delta"], []
+            else:
+                delta, trajectory = self.curator(curator_parent, reviews, rows, history, vars(self.limits))
             self.last_trace.update(curator_delta=delta, curator_trajectory=trajectory, history=history)
             return delta
         def finalize(counted, delta, history):
